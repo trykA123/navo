@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::{Location, Tab};
 
@@ -7,8 +7,8 @@ use super::prompt::PromptKind;
 use crate::prelude::*;
 use crate::settings::{Change, Field};
 
-type Resolve = Rc<dyn Fn(&str) -> Result<String, String>>;
-type OpenWith = Rc<dyn Fn(&str, &Location) -> Result<(), String>>;
+type Resolve = Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>;
+type OpenWith = Arc<dyn Fn(&str, &Location) -> Result<(), String> + Send + Sync>;
 
 pub struct EditorHooks {
     pub suggestion: Option<String>,
@@ -21,26 +21,49 @@ impl EditorHooks {
     pub fn none() -> Self {
         Self {
             suggestion: None,
-            resolve: Rc::new(|_| Err("Editors are not set up.".to_owned())),
-            open: Rc::new(|_, _| Err("Editors are not set up.".to_owned())),
+            resolve: Arc::new(|_| Err("Editors are not set up.".to_owned())),
+            open: Arc::new(|_, _| Err("Editors are not set up.".to_owned())),
         }
     }
 }
 
 impl FerriteWindow {
-    pub(super) fn edit_row(&mut self, row: u64, choose: bool) {
+    pub(super) fn edit_row(
+        &mut self,
+        (row, choose): (u64, bool),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let tab = self.browser.state().active_tab();
-        let target = edit_target(tab, row);
-        let Some(target) = target else {
+        let Some(target) = edit_target(tab, row) else {
             return;
         };
         match self.values.editor_path().filter(|_| !choose) {
-            Some(program) => {
-                if let Err(error) = (self.editor.open)(&program, &target) {
-                    self.ask_editor(target, Some(error));
-                }
-            }
+            Some(program) => self.open_in_editor((program, target), window, cx),
             None => self.ask_editor(target, None),
+        }
+    }
+
+    fn open_in_editor(
+        &mut self,
+        (program, target): (String, Location),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let open = self.editor.open.clone();
+        self.run_off_thread(
+            Box::new(move || {
+                let opened = open(&program, &target);
+                Box::new(move |view, _, _| view.editor_started(target, opened))
+            }),
+            window,
+            cx,
+        );
+    }
+
+    fn editor_started(&mut self, target: Location, opened: Result<(), String>) {
+        if let Err(error) = opened {
+            self.ask_editor(target, Some(error));
         }
     }
 
@@ -61,15 +84,59 @@ impl FerriteWindow {
 
     pub(super) fn choose_editor(
         &mut self,
-        (program, target): (&str, &Location),
+        (program, target): (&str, Location),
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Result<(), Option<String>> {
-        let program = (self.editor.resolve)(program).map_err(Some)?;
-        let opened = (self.editor.open)(&program, target).map_err(Some);
-        self.change_setting(Change::text(Field::EditorPath, program), window, cx);
-        opened
+    ) {
+        let Some(prompt) = self.prompt.as_mut().filter(|prompt| !prompt.is_pending) else {
+            return;
+        };
+        prompt.is_pending = true;
+        let prompt = prompt.id;
+        let (resolve, open) = (self.editor.resolve.clone(), self.editor.open.clone());
+        let program = program.to_owned();
+        self.run_off_thread(
+            Box::new(move || {
+                let result = resolve(&program).map(|path| {
+                    let opened = open(&path, &target);
+                    (path, opened)
+                });
+                let chosen = Chosen {
+                    prompt,
+                    target,
+                    result,
+                };
+                Box::new(move |view, window, cx| view.editor_chosen(chosen, window, cx))
+            }),
+            window,
+            cx,
+        );
     }
+
+    fn editor_chosen(&mut self, chosen: Chosen, window: &mut Window, cx: &mut Context<Self>) {
+        let is_open = self.prompt.as_ref().is_some_and(|p| p.id == chosen.prompt);
+        let (program, opened) = match chosen.result {
+            Ok(started) => started,
+            Err(problem) => {
+                if let Some(prompt) = self.prompt.as_mut().filter(|_| is_open) {
+                    prompt.error = Some(problem.into());
+                    prompt.is_pending = false;
+                }
+                return;
+            }
+        };
+        self.change_setting(Change::text(Field::EditorPath, program), window, cx);
+        if is_open {
+            self.close_prompt(window, cx);
+        }
+        self.editor_started(chosen.target, opened);
+    }
+}
+
+struct Chosen {
+    prompt: u64,
+    target: Location,
+    result: Result<(String, Result<(), String>), String>,
 }
 
 fn edit_target(tab: &Tab, row: u64) -> Option<Location> {

@@ -21,6 +21,7 @@ mod index_activity;
 mod input_trace;
 mod jobs;
 mod keys;
+mod lane;
 mod layout;
 mod layout_mode;
 mod layout_switcher;
@@ -209,6 +210,7 @@ pub struct FerriteWindow {
     job_ui: jobs::JobUi,
     keymap: user_keymap::KeymapState,
     clipboard: clipboard::ClipboardState,
+    lane: lane::Lane,
     crash: crash::CrashState,
     command_center: command_center::CommandCenterState,
     multi_rename: multi_rename::MultiRenameState,
@@ -265,6 +267,7 @@ impl FerriteWindow {
             job_ui: jobs::JobUi::new(window, cx),
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
+            lane: lane::Lane::default(),
             crash: crash::CrashState::new(options.crash_report, cx),
             multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),

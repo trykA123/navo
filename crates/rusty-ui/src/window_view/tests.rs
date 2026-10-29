@@ -43,6 +43,7 @@ mod look_up;
 mod marks;
 mod mouse_marks;
 mod multi_rename;
+mod off_thread;
 mod offline;
 mod one_pane;
 mod pane_popups;
@@ -523,26 +524,30 @@ fn editor_window(
 ) -> (
     AnyWindowHandle,
     Entity<FerriteWindow>,
-    Rc<std::cell::RefCell<EditorLog>>,
+    Arc<std::sync::Mutex<EditorLog>>,
 ) {
-    let log = Rc::new(std::cell::RefCell::new(EditorLog::default()));
+    let log = Arc::new(std::sync::Mutex::new(EditorLog::default()));
     let (remembered, opened) = (log.clone(), log.clone());
     let fs = fake();
     let state = home_beside_dest(&fs);
     let options = StartOptions {
         editor: super::EditorHooks {
             suggestion: Some("code.exe".to_owned()),
-            resolve: Rc::new(move |program| {
+            resolve: Arc::new(move |program| {
                 if program.ends_with(".exe") {
-                    remembered.borrow_mut().remembered.push(program.to_owned());
+                    remembered
+                        .lock()
+                        .unwrap()
+                        .remembered
+                        .push(program.to_owned());
                     Ok(program.to_owned())
                 } else {
                     Err("No program at that path.".to_owned())
                 }
             }),
-            open: Rc::new(move |program, file| {
+            open: Arc::new(move |program, file| {
                 let entry = (program.to_owned(), file.as_str().to_owned());
-                opened.borrow_mut().opened.push(entry);
+                opened.lock().unwrap().opened.push(entry);
                 Ok(())
             }),
         },
@@ -569,10 +574,10 @@ fn f4_without_an_editor_asks_once_then_opens_directly(cx: &mut TestAppContext) {
     assert!(prompt_open(cx, &view));
     press(cx, window, &view, "enter");
     assert!(!prompt_open(cx, &view));
-    assert_eq!(log.borrow().remembered, ["code.exe"]);
+    assert_eq!(log.lock().unwrap().remembered, ["code.exe"]);
     press(cx, window, &view, "f4");
     assert!(!prompt_open(cx, &view));
-    let opened = log.borrow().opened.clone();
+    let opened = log.lock().unwrap().opened.clone();
     assert_eq!(opened.len(), 2);
     assert!(
         opened
@@ -596,7 +601,7 @@ fn f4_uses_the_editor_set_in_settings(cx: &mut TestAppContext) {
     press(cx, window, &view, "down");
     press(cx, window, &view, "f4");
     assert!(!prompt_open(cx, &view));
-    let opened = log.borrow().opened.clone();
+    let opened = log.lock().unwrap().opened.clone();
     assert_eq!(opened.len(), 1);
     assert_eq!(opened[0].0, "vim.exe");
 }
@@ -609,7 +614,7 @@ fn a_program_that_is_not_there_keeps_the_prompt_open(cx: &mut TestAppContext) {
     type_in(cx, window, &view, "nothing-here");
     press(cx, window, &view, "enter");
     assert!(prompt_open(cx, &view));
-    assert!(log.borrow().opened.is_empty());
+    assert!(log.lock().unwrap().opened.is_empty());
 }
 
 #[gpui_kit::test]
@@ -617,7 +622,7 @@ fn shift_f4_lets_you_change_the_editor_and_f4_opens_folders_too(cx: &mut TestApp
     let (window, view, log) = editor_window(cx, Some("vim.exe"));
     press(cx, window, &view, "f4");
     assert!(!prompt_open(cx, &view));
-    let opened = log.borrow().opened.clone();
+    let opened = log.lock().unwrap().opened.clone();
     assert_eq!(opened.len(), 1);
     assert_eq!(opened[0].0, "vim.exe");
     press(cx, window, &view, "down");

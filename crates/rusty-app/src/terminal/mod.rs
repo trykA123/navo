@@ -1,8 +1,8 @@
 use std::iter::Peekable;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::rc::Rc;
 use std::str::Chars;
+use std::sync::Arc;
 
 use rusty_ui::settings::{Field, Value, Values};
 use rusty_ui::window_view::TerminalHooks;
@@ -199,7 +199,7 @@ pub fn hooks(values: &Values) -> TerminalHooks {
         _ => None,
     };
     TerminalHooks {
-        open: Rc::new(move |folder| {
+        open: Arc::new(move |folder| {
             let mut command =
                 launch_command(provider, template.as_deref(), Path::new(folder.as_str()))?;
             #[cfg(windows)]

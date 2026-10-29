@@ -19,9 +19,10 @@ pub(super) enum PromptKind {
 }
 
 pub(super) struct Prompt {
-    id: u64,
+    pub(super) id: u64,
     kind: PromptKind,
     pub(super) error: Option<SharedString>,
+    pub(super) is_pending: bool,
 }
 
 const NEW_FOLDER: &str = "New folder";
@@ -114,6 +115,7 @@ impl FerriteWindow {
             id: self.next_prompt,
             kind,
             error: None,
+            is_pending: false,
         });
     }
 
@@ -164,7 +166,8 @@ impl FerriteWindow {
             PromptKind::Select { add } => self.mark_pattern(*add, value),
             PromptKind::ChooseEditor { target, .. } => {
                 let target = target.clone();
-                self.choose_editor((value, &target), window, cx)
+                self.choose_editor((value, target), window, cx);
+                return;
             }
         };
         match result {
@@ -194,7 +197,7 @@ impl FerriteWindow {
         }
     }
 
-    fn close_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn close_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.prompt = None;
         self.focus_core_pane(window, cx);
         cx.notify();

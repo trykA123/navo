@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use rusty_core::Location;
 use rusty_ui::window_view::EditorHooks;
@@ -31,8 +31,8 @@ pub fn hooks(var: impl Fn(&str) -> Option<String>) -> EditorHooks {
     };
     EditorHooks {
         suggestion: suggest(&var),
-        resolve: Rc::new(move |program| found(program, &search)),
-        open: Rc::new(|program, file| open(&clean(program), file)),
+        resolve: Arc::new(move |program| found(program, &search)),
+        open: Arc::new(|program, file| open(&clean(program), file)),
     }
 }
 

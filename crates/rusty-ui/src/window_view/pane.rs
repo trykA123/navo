@@ -178,12 +178,12 @@ impl FerriteWindow {
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
         let root = super::workspace_keys::workspace_keys(root, cx);
         column_keys(super::tab_keys::tab_keys(root, cx), cx)
-            .on_action(
-                cx.listener(|this: &mut Self, _: &super::keys::OpenTerminal, _, cx| {
-                    this.open_terminal();
+            .on_action(cx.listener(
+                |this: &mut Self, _: &super::keys::OpenTerminal, window, cx| {
+                    this.open_terminal(window, cx);
                     cx.notify();
-                }),
-            )
+                },
+            ))
             .on_action(
                 cx.listener(|this: &mut Self, _: &DriveMenuFirst, window, cx| {
                     this.open_drive_menu(0, window, cx);
@@ -275,7 +275,7 @@ impl FerriteWindow {
             FileListAction::NewFile => self.ask_new_file(),
             FileListAction::CopyPath => self.copy_full_paths(cx),
             FileListAction::SelectPattern { add } => self.ask_pattern(*add),
-            FileListAction::Edit { row, choose } => self.edit_row(*row, *choose),
+            FileListAction::Edit { row, choose } => self.edit_row((*row, *choose), window, cx),
             FileListAction::View(row) => return self.view_or_preview(*row, window, cx),
             FileListAction::Sort(by) => {
                 self.browser.sort_by(*by);
