@@ -117,3 +117,10 @@ settings-theme-help = { PLATFORM() ->
     [windows] Follow Windows, or keep light or dark
    *[other] Follow system, or keep light or dark
 }
+settings-keep-in-tray = Keep in tray
+settings-keep-in-tray-help = Closing the window keeps Navo in the tray
+settings-summon-key = Show Navo key
+settings-summon-key-help = Shows Navo from anywhere; leave empty for none
+settings-summon-key-unknown-modifier = Use Win, Ctrl, Alt or Shift before the key.
+settings-summon-key-no-modifier = Add Win, Ctrl, Alt or Shift, like Win+Alt+N.
+settings-summon-key-bad-key = End with one letter or digit, like Win+Alt+N.

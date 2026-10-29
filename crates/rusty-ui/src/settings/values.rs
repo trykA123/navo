@@ -119,6 +119,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::PreviewLargestFiles => Value::Flag(true),
         Field::SearchRemember | Field::RetainDeletes | Field::RetainOverwrites => Value::Flag(true),
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
+        Field::SummonKey => text("Win+Alt+N"),
         Field::WindowFkeyBar => Value::Flag(false),
         field if field.is_window_part() => Value::Flag(true),
         _ => match spec.control {
@@ -280,6 +281,17 @@ impl Values {
 
     pub fn show_system(&self) -> bool {
         self.flag(Field::ShowSystem)
+    }
+
+    pub fn keeps_in_tray(&self) -> bool {
+        self.flag(Field::KeepInTray)
+    }
+
+    pub fn summon_key(&self) -> &str {
+        match self.get(Field::SummonKey) {
+            Value::Text(text) => text,
+            _ => "",
+        }
     }
 
     pub fn folders_first(&self) -> bool {

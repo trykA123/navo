@@ -11,6 +11,22 @@ fn automotive_modules_are_a_typed_list() {
     assert!(parse("[automotive]\nmodules = [1]\n").is_err());
 }
 
+#[test]
+fn an_older_file_without_tray_loads_the_tray_defaults() {
+    let (settings, unknown) = parse("[files]\nsort = \"size\"\n").unwrap();
+    assert!(unknown.is_empty());
+    assert!(!settings.tray.keep_running);
+    assert_eq!(settings.tray.summon_key, "Win+Alt+N");
+    assert_eq!(
+        settings.value_at("tray.keep-running"),
+        Some(SettingValue::Bool(false))
+    );
+    assert_eq!(
+        settings.value_at("tray.summon-key"),
+        Some(SettingValue::Text("Win+Alt+N".into()))
+    );
+}
+
 fn parsed(text: &str) -> Settings {
     parse(text).unwrap().0
 }

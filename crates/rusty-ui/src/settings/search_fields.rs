@@ -53,7 +53,11 @@ impl Field {
     pub fn is_windows_only(self) -> bool {
         matches!(
             self,
-            Self::SearchDrives | Self::SearchRemovable | Self::ShowSystem
+            Self::SearchDrives
+                | Self::SearchRemovable
+                | Self::ShowSystem
+                | Self::KeepInTray
+                | Self::SummonKey
         )
     }
 }

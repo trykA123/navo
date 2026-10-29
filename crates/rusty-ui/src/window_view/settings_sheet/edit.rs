@@ -4,7 +4,7 @@ use gpui_kit::{Focusable, Role, Subscription};
 
 use crate::prelude::*;
 use crate::primitives::{TextField, TextFieldState, text_field_state};
-use crate::settings::{CancelEdit, Change, Control, FIELD_CONTEXT, Field, Value};
+use crate::settings::{CancelEdit, Change, Control, FIELD_CONTEXT, Field, Value, parse_summon_key};
 use crate::tokens::Theme;
 use crate::window_view::FerriteWindow;
 
@@ -26,13 +26,16 @@ fn joined(text: &str) -> String {
     items.join(", ")
 }
 
-fn parsed(field: Field, text: &str) -> Result<Value, &'static str> {
+fn parsed(field: Field, text: &str) -> Result<Value, SharedString> {
     let text = text.trim();
     match field.spec().control {
         Control::Number => match text.parse::<u16>() {
             Ok(number) if number > 0 => Ok(Value::Number(number.into())),
-            _ => Err(NUMBER_PROBLEM),
+            _ => Err(NUMBER_PROBLEM.into()),
         },
+        _ if field == Field::SummonKey => parse_summon_key(text)
+            .map(|_| Value::Text(text.to_owned().into()))
+            .map_err(|error| error.message().into()),
         _ if field.is_list() => Ok(Value::Text(joined(text).into())),
         _ => Ok(Value::Text(text.to_owned().into())),
     }
@@ -73,7 +76,7 @@ impl FerriteWindow {
                 self.focus_settings(window, cx);
                 self.set_from_sheet(Change { field, value }, window, cx);
             }
-            Err(problem) => edit.error = Some(problem.into()),
+            Err(problem) => edit.error = Some(problem),
         }
         cx.notify();
     }

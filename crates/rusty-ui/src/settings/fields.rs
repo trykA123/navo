@@ -1,5 +1,6 @@
 use super::general_fields::GENERAL;
 use super::search_fields::SEARCH_ROWS;
+use super::tray_fields::TRAY_FIELDS;
 use super::viewer_fields::VIEWER_FIELDS;
 use super::window_fields::WINDOW_FIELDS;
 use crate::prelude::SharedString;
@@ -16,12 +17,13 @@ pub enum Section {
     Safety,
     Search,
     Display,
+    Tray,
     Diagnostics,
     Help,
 }
 
 impl Section {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
@@ -31,6 +33,7 @@ impl Section {
         Self::Safety,
         Self::Search,
         Self::Display,
+        Self::Tray,
         Self::Diagnostics,
         Self::Help,
     ];
@@ -46,6 +49,7 @@ impl Section {
             Self::Safety => "settings-safety",
             Self::Search => "Search",
             Self::Display => "Display",
+            Self::Tray => "Tray",
             Self::Diagnostics => "settings-diagnostics",
             Self::Help => "settings-help",
         }
@@ -66,6 +70,7 @@ impl Section {
             Self::Safety => IconName::Undo2,
             Self::Search => IconName::Search,
             Self::Display => IconName::Eye,
+            Self::Tray => IconName::PanelBottom,
             Self::Diagnostics => IconName::Eye,
             Self::Help => IconName::BookOpen,
         }
@@ -138,6 +143,8 @@ pub enum Field {
     AutomotiveUsageBars,
     AutomotiveWhoUses,
     AutomotiveModules,
+    KeepInTray,
+    SummonKey,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -240,9 +247,15 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 64] = join([&GENERAL, &SEARCH_ROWS, &WINDOW_FIELDS, &VIEWER_FIELDS]);
+pub const FIELDS: [FieldSpec; 66] = join([
+    &GENERAL,
+    &SEARCH_ROWS,
+    &WINDOW_FIELDS,
+    &VIEWER_FIELDS,
+    &TRAY_FIELDS,
+]);
 
-const fn join<const N: usize>(parts: [&[FieldSpec]; 4]) -> [FieldSpec; N] {
+const fn join<const N: usize>(parts: [&[FieldSpec]; 5]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];
     let mut at = 0;
     let mut part = 0;

@@ -202,7 +202,7 @@ fn space_flips_a_toggle(cx: &mut TestAppContext) {
 fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    let sections = [
+    let mut sections = vec![
         "Files",
         "Selection",
         "Terminal",
@@ -211,16 +211,16 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         "Safety net",
         "Search",
         "Display",
-        "Diagnostics",
-        "Help",
-        "Shortcuts",
-        "Appearance",
     ];
+    if cfg!(windows) {
+        sections.push("Tray");
+    }
+    sections.extend(["Diagnostics", "Help", "Shortcuts", "Appearance"]);
     for (step, name) in sections.iter().enumerate() {
         rig.press(cx, "tab");
         let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
         assert!(in_sheet, "after tab {step}");
-        let current = (0..12usize).find(|index| {
+        let current = (0..13usize).find(|index| {
             cx.update_window(rig.window, |_, window, cx| {
                 window.render_frame(cx);
                 window.find(("settings-section", *index)).selected() == Some(true)
@@ -230,7 +230,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         let shown = current.and_then(|index| label(cx, &rig, ("settings-section", index)));
         assert_eq!(shown.as_deref(), Some(*name));
     }
-    for _ in 0..4 {
+    for _ in 0..4 + usize::from(cfg!(windows)) {
         rig.press(cx, "shift-tab");
     }
     assert_eq!(

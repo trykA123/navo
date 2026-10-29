@@ -25,6 +25,7 @@ pub struct Settings {
     pub retention: super::retention::RetentionSettings,
     pub search: Search,
     pub automotive: Automotive,
+    pub tray: Tray,
     pub experimental: BTreeMap<String, bool>,
 }
 
@@ -253,6 +254,22 @@ impl Default for Search {
             network: false,
             removable: false,
             remember: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct Tray {
+    pub keep_running: bool,
+    pub summon_key: String,
+}
+
+impl Default for Tray {
+    fn default() -> Self {
+        Self {
+            keep_running: false,
+            summon_key: "Win+Alt+N".to_owned(),
         }
     }
 }

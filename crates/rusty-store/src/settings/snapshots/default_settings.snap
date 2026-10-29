@@ -104,4 +104,8 @@ row-bars = false
 usage-bars = false
 who-uses = false
 
+[tray]
+keep-running = false
+summon-key = "Win+Alt+N"
+
 [experimental]

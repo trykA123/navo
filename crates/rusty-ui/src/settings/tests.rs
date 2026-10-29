@@ -527,3 +527,21 @@ fn the_sort_choice_for_extensions_is_not_called_kind() {
     assert!(SORTS.iter().all(|choice| choice.text() != "Kind"));
     assert_eq!(SORTS[3].text(), "Extension");
 }
+
+#[test]
+fn the_tray_defaults_are_off_and_win_alt_n() {
+    let values = Values::default();
+    assert!(!values.keeps_in_tray());
+    assert_eq!(values.summon_key(), "Win+Alt+N");
+}
+
+#[test]
+fn the_tray_settings_are_windows_only() {
+    for field in [Field::KeepInTray, Field::SummonKey] {
+        assert_eq!(Filter::new("").admits(spec(field)), cfg!(windows));
+    }
+    assert_eq!(
+        Filter::default().first_in(Section::Tray).is_some(),
+        cfg!(windows)
+    );
+}
