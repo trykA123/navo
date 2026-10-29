@@ -7,6 +7,9 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 
 mod budget;
 mod connection;
+mod content_hash;
+
+pub use content_hash::{CONTENT_HASH_BUDGET, ContentKey};
 
 const DEFAULT_BUDGET: u64 = 64 * 1024 * 1024;
 const MAX_PENDING_ACCESSES: usize = 4096;
@@ -154,13 +157,15 @@ impl CacheDb {
         let clock = conn.query_row("SELECT COALESCE(MAX(accessed), 0) FROM blob", [], |row| {
             row.get(0)
         })?;
-        Ok(Self {
+        let mut cache = Self {
             conn,
             budgets: HashMap::new(),
             clock: Cell::new(clock),
             budget_error: Cell::new(None),
             accesses: RefCell::new(HashMap::new()),
-        })
+        };
+        content_hash::configure(&mut cache);
+        Ok(cache)
     }
 
     fn next_access(&self) -> Result<i64, CacheError> {

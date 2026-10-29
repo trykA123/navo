@@ -8,6 +8,7 @@ use super::*;
 
 mod basic;
 mod budget;
+mod content_hash;
 mod open;
 mod props;
 

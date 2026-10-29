@@ -13,7 +13,7 @@ mod settings;
 mod text_layout;
 
 pub use atomic_write::{backup_path, replace_atomic, replace_entry_atomic, write_atomic};
-pub use cache_db::{CacheDb, CacheError, CacheOpen};
+pub use cache_db::{CONTENT_HASH_BUDGET, CacheDb, CacheError, CacheOpen, ContentKey};
 pub use db::{
     Collection, CollectionItem, CollectionKind, Db, DbError, FileMemory, Frecent, NewCollection,
     OpenReport, RenamePreset, RenamePresets, Stamp,
