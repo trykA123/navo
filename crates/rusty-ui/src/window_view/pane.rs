@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
@@ -12,7 +13,6 @@ use super::keys::{
     ShowHiddenPath, ShowHiddenTabs,
 };
 use super::list_columns::{column_keys, list_parts, user_widths};
-use super::status::status_of;
 use crate::FocusHandle;
 use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
 use crate::pane_chrome::{PaneTabs, pane_card, path_segments, target_outline};
@@ -148,12 +148,20 @@ impl FerriteWindow {
             .summary(self.find_status(pane))
     }
 
-    fn pane_status(&self, pane: PaneId, tab: &Tab, rows: &[rusty_fs::FsEntry]) -> StatusBarProps {
+    fn pane_status(
+        &self,
+        pane: PaneId,
+        tab: &Tab,
+        rows: &Arc<[rusty_fs::FsEntry]>,
+    ) -> StatusBarProps {
         StatusBarProps {
             free_bytes: self.free_on_drive(pane),
             mark: self.listing_mark(tab),
             hidden_marks: self.browser.hidden_marks(tab.id()),
-            ..status_of(rows, tab.selection())
+            ..self
+                .totals
+                .borrow_mut()
+                .status_of(tab.id(), rows, tab.selection())
         }
     }
 

@@ -94,6 +94,13 @@ impl Selection {
         rows
     }
 
+    pub fn marked_rows(&self) -> impl Iterator<Item = u64> + '_ {
+        (0..)
+            .step_by(64)
+            .zip(&self.bits)
+            .flat_map(|(base, word)| word_rows(base, *word))
+    }
+
     #[must_use]
     pub fn anchor(&self) -> Option<u64> {
         self.anchor
@@ -230,6 +237,17 @@ pub(crate) fn extension(name: &str) -> Option<&str> {
     name.rfind('.')
         .filter(|dot| *dot > 0 && dot + 1 < name.len())
         .map(|dot| &name[dot + 1..])
+}
+
+fn word_rows(base: u64, mut rest: u64) -> impl Iterator<Item = u64> {
+    std::iter::from_fn(move || {
+        if rest == 0 {
+            return None;
+        }
+        let row = base + u64::from(rest.trailing_zeros());
+        rest &= rest - 1;
+        Some(row)
+    })
 }
 
 #[cfg(test)]

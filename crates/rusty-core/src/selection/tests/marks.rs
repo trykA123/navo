@@ -207,3 +207,27 @@ fn clear_keeps_the_len() {
     selection.clear();
     assert_eq!(selection.len(), 5);
 }
+
+#[test]
+fn marked_rows_of_empty_selection_is_empty() {
+    assert_eq!(Selection::new(0).marked_rows().count(), 0);
+    assert_eq!(Selection::new(100).marked_rows().count(), 0);
+}
+
+#[test]
+fn marked_rows_within_one_word() {
+    let mut selection = Selection::new(10);
+    selection.mark_rows([1, 4, 9]);
+    assert_eq!(selection.marked_rows().collect::<Vec<_>>(), vec![1, 4, 9]);
+}
+
+#[test]
+fn marked_rows_across_word_boundary() {
+    let mut selection = Selection::new(200);
+    selection.mark_rows([0, 63, 64, 65, 130, 199]);
+    assert_eq!(
+        selection.marked_rows().collect::<Vec<_>>(),
+        selection.marked()
+    );
+    assert_eq!(selection.marked_rows().count(), 6);
+}

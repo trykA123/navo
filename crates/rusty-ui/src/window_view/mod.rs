@@ -74,6 +74,7 @@ mod window_menu;
 mod workspace_keys;
 mod workspace_tray;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -226,6 +227,7 @@ pub struct FerriteWindow {
     start: Option<start_watch::Watching>,
     chrome: chrome_state::Chromes,
     cached: cached_views::CachedViews,
+    totals: RefCell<status::TotalsCache>,
     workspace_keys: workspace_keys::WorkspaceKeys,
     _watches: [Subscription; 7],
 }
@@ -286,6 +288,7 @@ impl FerriteWindow {
             start: options.start_watch.map(start_watch::Watching::built),
             chrome: chrome_state::Chromes::default(),
             cached: cached_views::CachedViews::new(cx),
+            totals: RefCell::default(),
             workspace_keys: workspace_keys::WorkspaceKeys::new(window, cx),
             _watches: Self::watches(window, cx),
         };
