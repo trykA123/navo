@@ -21,11 +21,12 @@ pub(crate) struct Start {
     pub(crate) view: Option<PathBuf>,
     pub(crate) profile: Option<PathBuf>,
     pub(crate) metrics: Option<PathBuf>,
+    pub(crate) trace: Option<PathBuf>,
     pub(crate) left: Option<PathBuf>,
     pub(crate) right: Option<PathBuf>,
 }
 
-pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
+pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
 
 const STANDALONE: [&str; 6] = [
     "--version",
@@ -35,7 +36,14 @@ const STANDALONE: [&str; 6] = [
     "--index-service",
     "--bench",
 ];
-const WINDOW_FLAGS: [&str; 5] = ["--view", "--profile", "--metrics", "--left", "--right"];
+const WINDOW_FLAGS: [&str; 6] = [
+    "--view",
+    "--profile",
+    "--metrics",
+    "--trace",
+    "--left",
+    "--right",
+];
 
 impl Command {
     pub(crate) fn uses_console(&self) -> bool {
@@ -61,6 +69,7 @@ impl Default for Start {
             view: None,
             profile: None,
             metrics: None,
+            trace: None,
             left: None,
             right: None,
         }
@@ -85,6 +94,7 @@ impl Start {
             "--view" => Some(&mut self.view),
             "--profile" => Some(&mut self.profile),
             "--metrics" => Some(&mut self.metrics),
+            "--trace" => Some(&mut self.trace),
             "--left" => Some(&mut self.left),
             "--right" => Some(&mut self.right),
             _ => None,

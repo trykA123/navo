@@ -115,12 +115,13 @@ fn it_shows_the_title_five_paths_the_rest_as_a_count_and_the_summary(cx: &mut Te
 }
 
 #[gpui_kit::test]
-fn a_long_path_is_cut_in_the_middle_and_keeps_its_file_name(cx: &mut TestAppContext) {
+fn a_long_path_is_cut_in_the_middle_but_read_out_in_full(cx: &mut TestAppContext) {
     let long = r"C:\Users\admin\Documents\clients\acme\project\crates\core\src\main.rs";
     let mut shown = props(1, 0);
     shown.lines = vec![long.into()];
     let (window, _) = open_dialog(cx, shown);
-    let line = label(window, ("line", 0usize), cx).expect("line");
+    assert_eq!(label(window, ("line", 0usize), cx).as_deref(), Some(long));
+    let line = super::elide::middle(long, super::LINE_CHARS);
     assert!(line.starts_with(r"C:\Users\"), "{line}");
     assert!(line.ends_with(r"\src\main.rs"), "{line}");
     assert!(line.contains('…'), "{line}");

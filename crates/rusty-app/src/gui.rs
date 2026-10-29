@@ -11,7 +11,7 @@ use rusty_store::StoreDirs;
 use rusty_ui::browser::Operations;
 use rusty_ui::tokens::Mode;
 use rusty_ui::window_view::{
-    BackgroundSaveSession, OpenHooks, OpenInbox, OpenRequest, OpenSender, SaveSession,
+    BackgroundSaveSession, OpenHooks, OpenInbox, OpenRequest, OpenSender, RunHooks, SaveSession,
     StartOptions, StartWatch, run,
 };
 
@@ -31,6 +31,7 @@ const EXIT_WRITE: Duration = Duration::from_millis(300);
 const EXIT_CLOSE: Duration = Duration::from_secs(1);
 
 pub(crate) struct Launch {
+    pub(crate) trace: Option<rusty_ui::window_view::InputTrace>,
     pub(crate) experimental_retention: bool,
     pub(crate) path: Option<PathBuf>,
     pub(crate) view: Option<PathBuf>,
@@ -111,22 +112,27 @@ fn session_state(
     state
 }
 
-fn local_provider() -> Arc<dyn ProviderOps> {
+fn local_provider(trace: Option<&rusty_ui::window_view::InputTrace>) -> Arc<dyn ProviderOps> {
     let slow_fs_ms = std::env::var("NAVO_SLOW_FS_MS").ok();
     let local: Arc<dyn ProviderOps> = Arc::new(LocalFs::new());
-    match SlowFs::parse_delay_ms(slow_fs_ms.as_deref()) {
+    let local = match SlowFs::parse_delay_ms(slow_fs_ms.as_deref()) {
         Some(delay) => Arc::new(SlowFs::new(local, delay)),
+        None => local,
+    };
+    match trace {
+        Some(trace) => trace.provider(local),
         None => local,
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "one field per window service")]
 pub(crate) fn open(mut launch: Launch) {
     let dirs = launch.dirs;
     let settings_start = settings::start_from(dirs.as_ref(), launch.experimental_retention);
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
-    let local = local_provider();
+    let local = local_provider(launch.trace.as_ref());
     let services = profile_services(dirs.as_ref(), &home, launch.experimental_retention, &local);
     let keys = CacheKeys::new(Arc::new(drive_identity));
     let (cache, disk) = listing_cache(dirs.as_ref(), &keys, &state);
@@ -168,8 +174,11 @@ pub(crate) fn open(mut launch: Launch) {
             retained: services.retained,
         },
         Rc::new(rusty_shell::display_scale),
-        quitter(disk, launch.cleanup, launch.running, services.maintenance),
-        autosave,
+        RunHooks {
+            on_quit: quitter(disk, launch.cleanup, launch.running, services.maintenance),
+            on_autosave: autosave,
+            trace: launch.trace,
+        },
     );
 }
 

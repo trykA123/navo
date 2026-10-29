@@ -194,6 +194,7 @@ fn every_window_flag_is_read_in_any_order() {
             view: None,
             profile: Some(PathBuf::from("p")),
             metrics: Some(PathBuf::from("m.json")),
+            trace: None,
             left: Some(PathBuf::from("fixture/flat")),
             right: Some(PathBuf::from("fixture/nested")),
         }
@@ -336,4 +337,35 @@ fn index_bench_rejects_missing_modes_and_unrelated_arguments() {
     ] {
         assert!(parse_strs(&args).is_err(), "{args:?}");
     }
+}
+
+#[test]
+fn trace_takes_a_path() {
+    assert_eq!(
+        start(&["--trace", "keys.jsonl"]).trace,
+        Some(PathBuf::from("keys.jsonl"))
+    );
+}
+
+#[test]
+fn trace_without_a_path_is_refused() {
+    assert!(refusal(&["--trace"]).contains("--trace needs a value"));
+}
+
+#[test]
+fn trace_is_refused_instead_of_forwarded_to_a_running_instance() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = rusty_store::StoreDirs::in_profile(root.path());
+    let acquired = crate::instance::acquire(&dirs.data).unwrap();
+    let Some(crate::instance::Acquired::First(_guard)) = acquired else {
+        panic!("expected the first instance");
+    };
+    let profile = crate::profile::Profile::Folder(dirs);
+    let (sender, _) = rusty_ui::window_view::open_requests();
+    let reply =
+        crate::prepare_instance(&start(&["--trace", "keys.jsonl"]), &profile, sender).unwrap();
+    assert!(matches!(
+        reply,
+        std::ops::ControlFlow::Break(std::process::ExitCode::FAILURE)
+    ));
 }

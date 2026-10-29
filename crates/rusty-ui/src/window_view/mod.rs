@@ -18,6 +18,7 @@ mod font_settings;
 mod hand_off;
 mod hints;
 mod index_activity;
+mod input_trace;
 mod jobs;
 mod keys;
 mod layout;
@@ -94,6 +95,7 @@ pub use fkeys::{
     layer_keys, layer_keys_in, settings_labels_in,
 };
 pub use hand_off::{OpenHooks, OpenInbox, OpenRequest, OpenSender, open_requests};
+pub use input_trace::InputTrace;
 pub use keys::bind_keys;
 pub(crate) use keys::{bind_app_keys, rebind_app_keys};
 pub use layout_switcher::{
@@ -116,7 +118,7 @@ pub use shell_menu::{
     BackgroundLook, MenuTarget, Reply, ScreenSpot, ShellHealth, ShellMenuProvider,
     ShellMenuSession, merged_background_menu, merged_file_menu,
 };
-pub use start::run;
+pub use start::{RunHooks, run};
 pub use start_watch::{StartReport, StartWatch};
 pub use terminal::TerminalHooks;
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
@@ -344,6 +346,7 @@ impl FerriteWindow {
 
 impl Render for FerriteWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let trace = input_trace::frame(window, cx);
         self.sync_workspaces(window, cx);
         let frame = self.perf_frame(window);
         self.watch_start(window, cx);
@@ -363,6 +366,7 @@ impl Render for FerriteWindow {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height)
+            .children(trace)
             .child(self.title_bar(cx))
             .child(below_title_bar)
             .on_modifiers_changed(

@@ -188,10 +188,18 @@ fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &
 }
 
 fn label(id: impl Into<ElementId>, text: SharedString) -> ObservedElement<Stateful<Div>> {
+    spoken_label(id, text.clone(), text)
+}
+
+fn spoken_label(
+    id: impl Into<ElementId>,
+    text: SharedString,
+    spoken: SharedString,
+) -> ObservedElement<Stateful<Div>> {
     div()
         .id(id)
         .role(Role::Label)
-        .aria_label(text.clone())
+        .aria_label(spoken)
         .test_support()
         .min_w_0()
         .truncate()
@@ -218,11 +226,13 @@ fn heading(t: &Theme, props: &ConfirmProps) -> Div {
 
 fn paths(t: &Theme, props: &ConfirmProps) -> Div {
     let hidden = props.hidden();
-    let lines = props
-        .shown()
-        .iter()
-        .enumerate()
-        .map(|(index, line)| label(("line", index), elide::middle(line, LINE_CHARS).into()));
+    let lines = props.shown().iter().enumerate().map(|(index, line)| {
+        spoken_label(
+            ("line", index),
+            elide::middle(line, LINE_CHARS).into(),
+            line.clone(),
+        )
+    });
     div()
         .flex()
         .flex_col()

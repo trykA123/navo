@@ -198,11 +198,12 @@ fn open_window(
     install_reporters(profile, &diagnostics);
     let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
     let store = check_store(profile, pending_crash.is_some(), &start);
-    let run = start
-        .metrics
-        .clone()
-        .map(|path| metrics::Run::new(path, clock));
+    let (run, trace) = match instrumentation(&start, clock) {
+        Ok(started) => started,
+        Err(code) => return code,
+    };
     open(gui::Launch {
+        trace,
         experimental_retention: start.retention,
         path: start.path,
         view: start.view,
@@ -226,6 +227,33 @@ fn open_window(
         return ExitCode::FAILURE;
     }
     run.map_or(ExitCode::SUCCESS, |run| run.exit_code())
+}
+
+fn instrumentation(
+    start: &Start,
+    clock: ProcessClock,
+) -> Result<
+    (
+        Option<metrics::Run>,
+        Option<rusty_ui::window_view::InputTrace>,
+    ),
+    ExitCode,
+> {
+    let trace = start
+        .trace
+        .clone()
+        .map(rusty_ui::window_view::InputTrace::new)
+        .transpose()
+        .map_err(|error| {
+            console::attach();
+            eprintln!("navo: cannot start input tracing: {error}");
+            ExitCode::FAILURE
+        })?;
+    let run = start
+        .metrics
+        .clone()
+        .map(|path| metrics::Run::new(path, clock));
+    Ok((run, trace))
 }
 
 fn install_reporters(profile: &Profile, diagnostics: &logging::Diagnostics) {
@@ -326,6 +354,11 @@ fn prepare_instance_with_notice(
             Ok(first(Some(guard)))
         }
         instance::Acquired::Second(client) => {
+            if start.trace.is_some() {
+                console::attach();
+                eprintln!("navo: close the running Navo before starting --trace");
+                return Ok(ControlFlow::Break(ExitCode::FAILURE));
+            }
             if start.legacy_retention_flag {
                 let _diagnostics = install_logging(profile);
                 start.log_deprecated_flags();
