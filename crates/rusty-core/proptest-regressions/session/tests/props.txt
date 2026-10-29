@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b0f9aac2fa1bd26e3fefbd0bc39cb463a3475f927ab1f9c7493652e18fc6f56a # shrinks to steps = [Run(LayoutSplit { direction: Right }), Run(LayoutSplit { direction: Up }), Run(LayoutFocus { direction: Left }), Run(LayoutSplit { direction: Up })], rows_per_pane = 0
