@@ -153,11 +153,15 @@ fn open_samples_on(cx: &mut TestAppContext, fs: FakeFs) -> (Rig, Arc<FakeFs>) {
     (rig, fs)
 }
 
-fn shown_kind(cx: &mut TestAppContext, rig: &Rig) -> Option<(&'static str, bool)> {
-    rig.read(cx, |view| match view.preview.shown()? {
+fn kind_of(view: &crate::window_view::FerriteWindow) -> Option<(&'static str, bool)> {
+    match view.preview.shown()? {
         Shown::File(file) => Some((file.kind.as_ref()?.id(), file.body.is_some())),
         _ => None,
-    })
+    }
+}
+
+fn shown_kind(cx: &mut TestAppContext, rig: &Rig) -> Option<(&'static str, bool)> {
+    rig.read(cx, kind_of)
 }
 
 #[gpui_kit::test]
@@ -173,6 +177,7 @@ fn every_file_kind_shows_its_body_read_only_in_the_sheet(cx: &mut TestAppContext
             rig.rest(cx);
         }
         let name = samples()[index].0;
+        rig.wait_until(cx, |view| kind_of(view) == Some((*kind, true)));
         assert_eq!(rig.shown_name(cx).as_deref(), Some(name));
         assert_eq!(shown_kind(cx, &rig), Some((*kind, true)), "{name}");
         assert!(rig.shows(cx, "preview-body"), "{name} body");
