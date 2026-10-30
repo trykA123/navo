@@ -21,20 +21,11 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
         if awaits_unreadable_row(job, step, held) {
             continue;
         }
-        let verified = if job.plan.kind == OpKind::Rename {
-            super::rename::verified(seq, step, ctx)
+        let result = if is_plain_move(job.plan.kind, step, held) {
+            super::moved::undo_move(ctx.ops, &*ctx.log, (seq, step))
         } else {
-            Ok(true)
+            checked_undo(job, (seq, step), held, ctx)
         };
-        let result = verified.and_then(|verified| {
-            if !verified {
-                Ok(StepOutcome::Skipped)
-            } else if unsure {
-                undo_unsure(ctx.ops, step)
-            } else {
-                undo(job, step, held, ctx)
-            }
-        });
         let logged = match result {
             Ok(outcome) => ctx.log.undone(seq, outcome),
             Err(error) => {
@@ -50,6 +41,31 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
         }
     }
     first.unwrap_or(JobOutcome::Done)
+}
+
+fn is_plain_move(kind: OpKind, step: &Step, held: Option<&HeldFile>) -> bool {
+    kind == OpKind::Move && held.is_none() && matches!(step, Step::Rename { .. })
+}
+
+fn checked_undo(
+    job: &Journaled<'_>,
+    (seq, step): (u32, &Step),
+    held: Option<&HeldFile>,
+    ctx: &mut JobContext<'_>,
+) -> Result<StepOutcome, FsError> {
+    let unsure = job.unsure == Some(seq) && !job.done.contains(&seq) && held.is_none();
+    let verified = if job.plan.kind == OpKind::Rename {
+        super::rename::verified(seq, step, ctx)?
+    } else {
+        true
+    };
+    if !verified {
+        Ok(StepOutcome::Skipped)
+    } else if unsure {
+        undo_unsure(ctx.ops, step)
+    } else {
+        undo(job, step, held, ctx)
+    }
 }
 
 pub(super) fn held_for<'h>(step: &Step, held: &'h [HeldFile]) -> Option<&'h HeldFile> {

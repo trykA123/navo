@@ -102,7 +102,7 @@ fn ran(workers: usize, fs: &FakeFs, request: &PlanRequest) -> OperationPlan {
 }
 
 #[test]
-fn roll_back_renames_back() {
+fn roll_back_leaves_a_move_without_a_recorded_identity_in_place() {
     for workers in MODES {
         let fs = fixture(&[("src/a.txt", BIG)]);
         let request = PlanRequest {
@@ -110,10 +110,14 @@ fn roll_back_renames_back() {
             ..request(&fs, OpKind::Move, &["src/a.txt"], "dst")
         };
         let plan = ran(workers, &fs, &request);
-        let _ = Harness::default().roll_back(&fs, &plan, &[0]);
+        let outcome = Harness::default().roll_back(&fs, &plan, &[0]);
+        assert!(matches!(
+            outcome,
+            JobOutcome::Failed { seq: 0, ref error } if error.kind == FsErrorKind::IdentityUnavailable
+        ));
         assert_eq!(
             (size(&fs, "src/a.txt"), exists(&fs, "dst/a.txt")),
-            (Some(BIG), false)
+            (None, true)
         );
     }
 }

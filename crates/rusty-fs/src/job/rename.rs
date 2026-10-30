@@ -5,6 +5,7 @@ use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 use crate::FileIdentity;
 
 use super::aside::presence;
+use super::copy::overwrites;
 use super::{
     HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, StepOutcome, roll_back, run,
 };
@@ -150,24 +151,36 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
 
 pub(super) fn prepare(
     seq: u32,
-    step: (OpKind, &Step),
+    (plan, step): (&OperationPlan, &Step),
     ctx: &mut JobContext<'_>,
 ) -> Result<(), FsError> {
-    let (OpKind::Rename, Step::Rename { source, .. }) = step else {
+    let Step::Rename { source, target } = step else {
         return Ok(());
     };
-    let identity = match ctx.ops.file_identity(source)? {
-        Some(identity) => identity,
-        None => {
-            let entry = ctx.ops.metadata(source)?;
-            FileIdentity::fingerprint(
-                entry.size,
-                entry.modified_ms,
-                entry.kind == crate::EntryKind::Folder,
-            )
+    match plan.kind {
+        OpKind::Rename => {
+            let identity = match ctx.ops.file_identity(source)? {
+                Some(identity) => identity,
+                None => fingerprint(&ctx.ops.metadata(source)?),
+            };
+            ctx.log.prepare_rename(seq, identity)
         }
-    };
-    ctx.log.prepare_rename(seq, identity)
+        OpKind::Move if !overwrites(plan, target) && !ctx.log.preserve_overwrites() => {
+            match super::moved::durable_proof(ctx.ops, source) {
+                Some(proof) => ctx.log.prepare_move(seq, proof),
+                None => Ok(()),
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
+fn fingerprint(entry: &crate::FsEntry) -> FileIdentity {
+    FileIdentity::fingerprint(
+        entry.size,
+        entry.modified_ms,
+        entry.kind == crate::EntryKind::Folder,
+    )
 }
 
 pub(super) fn verified(seq: u32, step: &Step, ctx: &JobContext<'_>) -> Result<bool, FsError> {

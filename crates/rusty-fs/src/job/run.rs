@@ -137,7 +137,7 @@ fn attempt_step(
     if holds_kept(step, kept) {
         return Ok(StepOutcome::Skipped);
     }
-    prepare(seq, (job.plan.kind, step), ctx).and_then(|()| apply(job, (seq, step), ctx, progress))
+    prepare(seq, (job.plan, step), ctx).and_then(|()| apply(job, (seq, step), ctx, progress))
 }
 
 fn step_failure(

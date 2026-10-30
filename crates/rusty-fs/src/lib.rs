@@ -32,9 +32,9 @@ pub use io_queue::{
 };
 pub use job::{
     CopyMode, FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOutcome, Journaled,
-    PlacedFile, Progress, RenameOutcome, StepOutcome, TEMP_SUFFIX, WorkerCounts, clean_up,
-    copy_workers, is_rename_temporary, job_workers, release_held, roll_back, run_job,
-    run_job_parallel, run_rename,
+    PlacedFile, PreparedMove, Progress, RenameOutcome, StepOutcome, TEMP_SUFFIX, WorkerCounts,
+    clean_up, copy_workers, is_rename_temporary, job_workers, recorded_proof, release_held,
+    roll_back, run_job, run_job_parallel, run_rename, settle_prepared_move, undo_move,
 };
 pub use local::{
     AutoTuning, LocalFs, MutationLocations, make_link, mutation_location, native_identity,
@@ -51,8 +51,8 @@ pub use paged::{
 pub use protection::{ResolvedPlan, check_mutation, check_relocation, check_resolved_mutation};
 pub use provider::{
     AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
-    EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, LinkKey, ListSink, OwnedCopy,
-    Provider, ProviderOps, SizeEntry, UnixAccess,
+    EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, LinkKey, ListSink, MoveProof,
+    OwnedCopy, Provider, ProviderOps, RenameSkip, SizeEntry, UnixAccess, VerifiedRename,
 };
 pub use scan::{existing_at, scan};
 pub use slow::SlowFs;

@@ -9,6 +9,7 @@ const NOW: i64 = 1_000;
 fn kinds() -> UndoKinds<'static> {
     UndoKinds {
         rename: "rename",
+        moves: "move",
         retained: &[DELETE, COPY],
         now_ms: NOW,
     }
@@ -216,4 +217,59 @@ fn a_fully_undone_restore_pending_job_does_not_hide_an_older_live_job() {
     let newer = with_done_step(&mut journal, "rename", 200, JobState::RestorePending);
     journal.mark_undone(newer, 0).unwrap();
     assert_eq!(job_of(newest(&journal)), Some(older));
+}
+
+fn moved(journal: &mut JobJournal, at: i64, state: JobState, details: &[Option<&[u8]>]) -> JobId {
+    let steps = u32::try_from(details.len()).unwrap();
+    let job = journal.create_job("move", b"plan", steps, at).unwrap();
+    journal.finish(job, state).unwrap();
+    for (seq, detail) in (0_u32..).zip(details) {
+        journal
+            .mark_step(job, seq, StepState::Done, *detail)
+            .unwrap();
+    }
+    job
+}
+
+#[test]
+fn a_move_with_an_identity_on_every_done_step_is_offered_with_its_plan() {
+    let mut journal = journal();
+    with_done_step(&mut journal, "rename", 100, JobState::Done);
+    let mut offered = Vec::new();
+    for (at, state) in [
+        (200, JobState::Done),
+        (300, JobState::Failed),
+        (400, JobState::Cancelled),
+        (500, JobState::RestorePending),
+    ] {
+        let job = moved(
+            &mut journal,
+            at,
+            state,
+            &[Some(b"identity"), Some(b"identity")],
+        );
+        let Some(Undoable::Rename(found)) = newest(&journal) else {
+            panic!("a move offer");
+        };
+        offered.push((found.id == job, found.plan == b"plan".to_vec()));
+    }
+    assert_eq!(offered, vec![(true, true); 4]);
+}
+
+#[test]
+fn a_move_with_a_done_step_lacking_an_identity_is_never_offered() {
+    let mut journal = journal();
+    let rename = with_done_step(&mut journal, "rename", 100, JobState::Done);
+    moved(
+        &mut journal,
+        200,
+        JobState::Done,
+        &[Some(b"identity"), None],
+    );
+    moved(&mut journal, 300, JobState::Done, &[None]);
+    let undone = moved(&mut journal, 400, JobState::Done, &[Some(b"identity")]);
+    journal.mark_undone(undone, 0).unwrap();
+    moved(&mut journal, 500, JobState::Running, &[Some(b"identity")]);
+    moved(&mut journal, 600, JobState::Undone, &[Some(b"identity")]);
+    assert_eq!(job_of(newest(&journal)), Some(rename));
 }

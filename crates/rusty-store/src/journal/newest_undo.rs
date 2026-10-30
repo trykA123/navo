@@ -10,6 +10,7 @@ const LIVE_ENTRY: &str = "e.state NOT IN ('restored', 'purged', 'aborted')
 #[derive(Debug, Clone, Copy)]
 pub struct UndoKinds<'a> {
     pub rename: &'a str,
+    pub moves: &'a str,
     pub retained: &'a [&'a str],
     pub now_ms: i64,
 }
@@ -48,18 +49,26 @@ impl JobJournal {
     }
 
     fn newest_job(&self, kinds: UndoKinds<'_>) -> Result<Option<Newest>, JournalError> {
-        let marks = (4..kinds.retained.len() + 4)
+        let marks = (5..kinds.retained.len() + 5)
             .map(|at| format!("?{at}"))
             .collect::<Vec<_>>()
             .join(", ");
         let sql = format!(
-            "SELECT j.id, CASE WHEN j.kind = ?1 THEN j.plan END, j.created_at, j.state = 'restore_pending'
+            "SELECT j.id, CASE WHEN j.kind IN (?1, ?4) THEN j.plan END, j.created_at, j.state = 'restore_pending'
              FROM job j
              WHERE (j.kind = ?1
                 AND j.state IN ('done', 'restore_pending', 'failed')
                 AND EXISTS
                     (SELECT 1 FROM job_step s WHERE s.job_id = j.id AND s.state = 'done'
                         AND (s.detail IS NULL OR s.detail <> ?3)))
+                OR (j.kind = ?4
+                AND j.state IN ('done', 'restore_pending', 'failed', 'cancelled')
+                AND EXISTS
+                    (SELECT 1 FROM job_step s WHERE s.job_id = j.id AND s.state = 'done'
+                        AND s.detail IS NOT NULL AND s.detail <> ?3)
+                AND NOT EXISTS
+                    (SELECT 1 FROM job_step s WHERE s.job_id = j.id AND s.state = 'done'
+                        AND s.detail IS NULL))
                 OR (j.state = 'done' AND j.kind IN ({marks}) AND EXISTS
                     (SELECT 1 FROM retained_entry e WHERE e.job_id = j.id AND {LIVE_ENTRY}))
              ORDER BY j.created_at DESC, j.id DESC LIMIT 1"
@@ -68,6 +77,7 @@ impl JobJournal {
             Value::from(kinds.rename.to_owned()),
             Value::from(kinds.now_ms),
             Value::Blob(b"undone".to_vec()),
+            Value::from(kinds.moves.to_owned()),
         ];
         values.extend(
             kinds

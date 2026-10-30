@@ -13,7 +13,7 @@ fn step_state(outcome: StepOutcome) -> StepState {
 }
 
 fn keeps_detail(log: &JournalLog) -> bool {
-    log.renames || log.retained.is_some() || log.overwrites.is_some()
+    log.renames || log.moves || log.retained.is_some() || log.overwrites.is_some()
 }
 
 pub(super) fn mark(log: &JournalLog, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {

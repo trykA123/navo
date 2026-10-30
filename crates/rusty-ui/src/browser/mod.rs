@@ -16,12 +16,12 @@ pub(crate) use measure::{Measured, folder_bytes};
 use message::Message;
 pub(crate) use open::Seen;
 pub use operate::*;
+use rename_batch::run_batch;
 pub use rename_batch::{
     DeletePreset, LastRename, ListPresets, NamedPreset, RenameHooks, RenameLogStatus,
     RenamePresetList, RenameReport, RetireUndo, SavePreset, UndoKind, UndoLogFactory, UndoOffer,
-    WriteRenameLog,
+    WriteRenameLog, run_undo,
 };
-use rename_batch::{run_batch, run_undo};
 pub use retained::{NoRetained, RetainedHooks, RetainedKind, RetainedRow, RetainedState};
 pub use {naming::NameProblem, offline::Offline};
 

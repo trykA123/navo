@@ -1,5 +1,5 @@
 use rusty_core::{FsError, FsErrorKind};
-use rusty_fs::{FileIdentity, FileIdentityKind};
+use rusty_fs::{FileIdentity, FileIdentityKind, FileStamp};
 use rusty_store::{JobId, StepState};
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +15,15 @@ struct Record {
     legacy_windows_index: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     fingerprint: Option<Shape>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stamp: Option<Stamp>,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Stamp {
+    size: u64,
+    modified_ms: Option<i64>,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -29,6 +38,14 @@ pub(super) fn record(
     job: JobId,
     (seq, identity): (u32, FileIdentity),
 ) -> Result<(), FsError> {
+    record_stamped(journal, job, (seq, identity, None))
+}
+
+pub(super) fn record_stamped(
+    journal: &SharedJournal,
+    job: JobId,
+    (seq, identity, stamp): (u32, FileIdentity, Option<FileStamp>),
+) -> Result<(), FsError> {
     let fingerprint = match identity.kind {
         FileIdentityKind::Fingerprint { folder: true } => Some(Shape::Folder),
         FileIdentityKind::Fingerprint { folder: false } => Some(Shape::File),
@@ -40,6 +57,10 @@ pub(super) fn record(
         file: identity.file,
         legacy_windows_index: identity.kind == FileIdentityKind::WindowsIndex,
         fingerprint,
+        stamp: stamp.map(|stamp| Stamp {
+            size: stamp.size,
+            modified_ms: stamp.modified_ms,
+        }),
     })
     .map_err(|_| failure())?;
     lock(journal)
@@ -56,6 +77,25 @@ pub(super) fn read(
         return Ok(None);
     };
     decode(&bytes)
+}
+
+pub(super) fn read_stamp(
+    journal: &SharedJournal,
+    job: JobId,
+    seq: u32,
+) -> Result<Option<FileStamp>, FsError> {
+    let Some(bytes) = lock(journal).step_detail(job, seq).map_err(|_| failure())? else {
+        return Ok(None);
+    };
+    if bytes == b"undone" {
+        return Ok(None);
+    }
+    decode(&bytes)?;
+    let record: Record = serde_json::from_slice(&bytes).map_err(|_| failure())?;
+    Ok(record.stamp.map(|stamp| FileStamp {
+        size: stamp.size,
+        modified_ms: stamp.modified_ms,
+    }))
 }
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Option<FileIdentity>, FsError> {

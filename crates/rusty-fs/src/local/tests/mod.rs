@@ -31,6 +31,7 @@ mod perf;
 mod rename_batch;
 mod replace;
 mod verbatim;
+mod verified;
 #[cfg(windows)]
 mod windows;
 

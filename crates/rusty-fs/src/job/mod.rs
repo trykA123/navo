@@ -3,6 +3,7 @@ mod copy;
 mod hold;
 mod link;
 mod marks;
+mod moved;
 mod parallel;
 mod pool;
 mod remove;
@@ -18,6 +19,7 @@ use rusty_core::{FsError, Location, OpKind, OperationPlan};
 use crate::{CancelToken, FileIdentity, ProviderOps};
 
 pub use aside::HELD_PREFIX;
+pub use moved::{PreparedMove, recorded_proof, settle_prepared_move, undo_move};
 pub use rename::{RenameOutcome, is_temporary as is_rename_temporary};
 pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
 
@@ -84,6 +86,12 @@ pub trait JobLog {
         Ok(())
     }
     fn rename_identity(&self, _seq: u32) -> Result<Option<FileIdentity>, FsError> {
+        Ok(None)
+    }
+    fn prepare_move(&mut self, seq: u32, proof: crate::MoveProof) -> Result<(), FsError> {
+        self.prepare_rename(seq, proof.identity())
+    }
+    fn rename_stamp(&self, _seq: u32) -> Result<Option<FileStamp>, FsError> {
         Ok(None)
     }
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;

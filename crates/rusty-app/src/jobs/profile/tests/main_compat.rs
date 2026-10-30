@@ -207,11 +207,12 @@ fn main_compat_legacy_recovery_uses_a_real_profile_data_path() {
         .mark_step(job, 0, rusty_store::StepState::Done, None)
         .unwrap();
     let report = crate::jobs::recover_profile(&journal, &fs, (&dirs.data, &[]), false).unwrap();
-    assert!(report.pending.is_empty());
+    assert_eq!(report.pending.len(), 1);
     assert_eq!(
         crate::jobs::lock(&journal).read_job(job).unwrap().0,
-        rusty_store::JobState::RolledBack
+        rusty_store::JobState::RestorePending
     );
+    assert!(fs.metadata(&fs.location("dest/a")).is_ok());
 }
 
 #[test]

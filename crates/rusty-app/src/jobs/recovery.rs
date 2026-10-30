@@ -7,6 +7,7 @@ use rusty_store::{JobId, JobState, JournalError, UnfinishedJob};
 use super::{SharedJournal, StillPending, held, lock, pending};
 
 mod legacy;
+mod moves;
 use legacy::undo;
 
 pub struct RecoveryReport {
@@ -102,7 +103,12 @@ fn has_retention(bytes: &[u8]) -> bool {
 fn has_unrecognized_detail(job: &UnfinishedJob) -> bool {
     let renames = serde_json::from_slice::<rusty_core::OperationPlan>(&job.plan)
         .ok()
-        .filter(|plan| plan.kind == rusty_core::OpKind::Rename);
+        .filter(|plan| {
+            matches!(
+                plan.kind,
+                rusty_core::OpKind::Rename | rusty_core::OpKind::Move
+            )
+        });
     job.steps.iter().any(|step| {
         let Some(bytes) = step.detail.as_deref() else {
             return false;

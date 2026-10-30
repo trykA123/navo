@@ -1,6 +1,6 @@
 use rusty_core::{FsError, FsErrorKind, Location};
 
-use super::{CancelToken, CopyControl, EntryKind, OwnedCopy, Provider};
+use super::{CancelToken, CopyControl, EntryKind, MoveProof, OwnedCopy, Provider, VerifiedRename};
 
 pub use rusty_core::{FileIdentity, FileIdentityKind};
 
@@ -120,6 +120,14 @@ pub trait ProviderOps: Provider {
         cancel: &CancelToken,
     ) -> Result<u64, FsError>;
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError>;
+    fn rename_verified(
+        &self,
+        from: &Location,
+        to: &Location,
+        expect: &MoveProof,
+    ) -> Result<VerifiedRename, FsError> {
+        super::verified::by_path(self, (from, to), expect)
+    }
     fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError>;
     fn remove_file(&self, location: &Location) -> Result<(), FsError>;
     fn remove_link(&self, location: &Location) -> Result<(), FsError>;

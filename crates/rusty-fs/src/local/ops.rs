@@ -194,6 +194,16 @@ impl ProviderOps for LocalFs {
             .map_err(|e| io_error(&e, source))
     }
 
+    #[cfg(any(unix, windows))]
+    fn rename_verified(
+        &self,
+        from: &Location,
+        to: &Location,
+        expect: &crate::MoveProof,
+    ) -> Result<crate::VerifiedRename, FsError> {
+        super::verified::rename(from, to, expect)
+    }
+
     fn remove_file(&self, location: &Location) -> Result<(), FsError> {
         let path = os_path(location)?;
         let result = fs::remove_file(&path);

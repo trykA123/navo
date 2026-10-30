@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
-use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Step};
+use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 use rusty_fs::{
     HeldFile, JobContext, JobLog, JobOutcome, Progress, ProviderOps, RenameOutcome, StepOutcome,
-    is_rename_temporary, run_rename,
+    is_rename_temporary, run_rename, undo_move,
 };
 
 use super::hooks::{RenameReport, is_item};
@@ -54,6 +54,10 @@ impl JobLog for Counting<'_> {
         self.inner.rename_identity(seq)
     }
 
+    fn rename_stamp(&self, seq: u32) -> Result<Option<rusty_fs::FileStamp>, FsError> {
+        self.inner.rename_stamp(seq)
+    }
+
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         self.inner.step(seq, outcome)
     }
@@ -80,7 +84,7 @@ impl JobLog for Counting<'_> {
     }
 }
 
-pub(in crate::browser) fn run_undo(
+pub fn run_undo(
     plan: &OperationPlan,
     done: &[u32],
     ctx: &mut JobContext<'_>,
@@ -107,20 +111,13 @@ pub(in crate::browser) fn run_undo(
     let mut first = None;
     let steps: Vec<(u32, &Step)> = (0_u32..).zip(&plan.steps).collect();
     for &(seq, step) in steps.iter().rev() {
-        let Step::Rename { source, target } = step else {
-            continue;
-        };
-        if !done.contains(&seq) {
+        if !matches!(step, Step::Rename { .. }) || !done.contains(&seq) {
             continue;
         }
-        let result = match still_undoable(ops, &counting, (seq, source, target)) {
-            Ok(true) => ops.rename(target, source).map(|()| StepOutcome::Done),
-            Ok(false) => {
-                skipped += usize::from(is_item(step));
-                Ok(StepOutcome::Skipped)
-            }
-            Err(error) => Err(error),
-        };
+        let result = undo_step(ops, &counting, (seq, step));
+        if matches!(result, Ok(StepOutcome::Skipped)) {
+            skipped += usize::from(is_item(step));
+        }
         first = logged(seq, result, &mut counting);
         if first.is_some() {
             break;
@@ -134,6 +131,24 @@ pub(in crate::browser) fn run_undo(
     };
     let outcome = first.or(unsure).unwrap_or(JobOutcome::Done);
     (outcome, report)
+}
+
+fn undo_step(
+    ops: &dyn ProviderOps,
+    log: &Counting<'_>,
+    (seq, step): (u32, &Step),
+) -> Result<StepOutcome, FsError> {
+    let Step::Rename { source, target } = step else {
+        return Ok(StepOutcome::Skipped);
+    };
+    if log.plan.kind == OpKind::Move {
+        return undo_move(ops, log, (seq, step));
+    }
+    if still_undoable(ops, log, (seq, source, target))? {
+        ops.rename(target, source).map(|()| StepOutcome::Done)
+    } else {
+        Ok(StepOutcome::Skipped)
+    }
 }
 
 fn logged(

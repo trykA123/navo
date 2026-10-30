@@ -12,6 +12,7 @@ mod claim;
 pub(crate) use claim::claim_undo;
 
 const KIND: &str = "rename";
+const MOVE_KIND: &str = "move";
 const RETAINED: [&str; 3] = [RETAINED_DELETE_KIND, COPY_RETAINED_KIND, MOVE_RETAINED_KIND];
 
 pub fn profile_hooks(
@@ -74,6 +75,7 @@ fn no_database() -> String {
 fn offer(journal: &SharedJournal) -> Result<Option<UndoOffer>, String> {
     let kinds = UndoKinds {
         rename: KIND,
+        moves: MOVE_KIND,
         retained: &RETAINED,
         now_ms: now_ms(),
     };

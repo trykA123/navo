@@ -6,7 +6,8 @@ use rusty_core::{FsError, Location, ProviderId};
 
 use crate::{
     CancelToken, Capabilities, CopyControl, FileDetails, FileIdentity, FsEntry, ListSink,
-    OwnedCopy, Provider, ProviderOps, SizeEntry, UnixAccess, Watch, WatchSink,
+    MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UnixAccess, VerifiedRename, Watch,
+    WatchSink,
 };
 
 pub struct SlowFs {
@@ -190,6 +191,16 @@ impl ProviderOps for SlowFs {
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
         self.sleep();
         self.inner.rename(source, target)
+    }
+
+    fn rename_verified(
+        &self,
+        from: &Location,
+        to: &Location,
+        expect: &MoveProof,
+    ) -> Result<VerifiedRename, FsError> {
+        self.sleep();
+        self.inner.rename_verified(from, to, expect)
     }
 
     fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {

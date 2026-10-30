@@ -1,8 +1,8 @@
 use super::super::{SharedJournal, held, identity, lock};
 use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan};
 use rusty_fs::{
-    CancelToken, FileIdentity, HeldFile, JobContext, JobLog, JobOutcome, Journaled, ProviderOps,
-    StepOutcome, clean_up, roll_back,
+    CancelToken, FileIdentity, FileStamp, HeldFile, JobContext, JobLog, JobOutcome, Journaled,
+    ProviderOps, StepOutcome, clean_up, roll_back,
 };
 use rusty_store::{JobId, JobState, JournalError, StepState, UnfinishedJob};
 
@@ -10,11 +10,17 @@ struct Recovery<'a> {
     journal: &'a SharedJournal,
     job: JobId,
     kept_beside: u32,
+    plain_moves: Vec<u32>,
+    refused: u32,
 }
 
 impl JobLog for Recovery<'_> {
     fn rename_identity(&self, seq: u32) -> Result<Option<FileIdentity>, FsError> {
         identity::read(self.journal, self.job, seq)
+    }
+
+    fn rename_stamp(&self, seq: u32) -> Result<Option<FileStamp>, FsError> {
+        identity::read_stamp(self.journal, self.job, seq)
     }
 
     fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
@@ -23,6 +29,10 @@ impl JobLog for Recovery<'_> {
 
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         if outcome == StepOutcome::Failed {
+            return Ok(());
+        }
+        if outcome == StepOutcome::Skipped && self.plain_moves.contains(&seq) {
+            self.refused += 1;
             return Ok(());
         }
         lock(self.journal)
@@ -70,17 +80,22 @@ fn roll_back_job(
     let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
         return unrestored(&held.files, false);
     };
-    let renames = plan.kind == OpKind::Rename;
+    let renames = plan.kind == OpKind::Rename || super::moves::has_plain_moves(&plan);
     if experimental && rusty_fs::check_mutation(&plan, ops, &CancelToken::new()).is_err() {
         return JobState::RestorePending;
     }
-    let done = left_to_undo(job);
+    let mut done = left_to_undo(job);
     let _ = clean_up(&plan, &done, ops);
     let mut log = Recovery {
         journal,
         job: job.id,
         kept_beside: 0,
+        plain_moves: super::moves::plain_moves(&plan, &held.files),
+        refused: 0,
     };
+    let settled = super::moves::settle_pending((&plan, job), &held.files, (&log, ops));
+    done.extend(&settled.completed);
+    done.sort_unstable();
     let outcome = roll_back(
         &Journaled {
             plan: &plan,
@@ -105,7 +120,8 @@ fn roll_back_job(
         );
     }
     match outcome {
-        JobOutcome::Done => JobState::RolledBack,
+        JobOutcome::Done if settled.unresolved == 0 && log.refused == 0 => JobState::RolledBack,
+        JobOutcome::Done => JobState::RestorePending,
         JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(&held.files, renames),
     }
 }

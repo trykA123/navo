@@ -4,7 +4,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusty_core::{FsError, FsErrorKind, OpKind, OperationPlan};
-use rusty_fs::{FileIdentity, HeldFile, JobLog, JobOutcome, PlacedFile, ProviderOps, StepOutcome};
+use rusty_fs::{
+    FileIdentity, FileStamp, HeldFile, JobLog, JobOutcome, PlacedFile, ProviderOps, StepOutcome,
+};
 use rusty_store::{JobId, JobJournal, JobState, JournalError};
 use rusty_ui::browser::OpLog;
 
@@ -123,6 +125,11 @@ fn create_log(
         .map_err(|error| error.to_string())?;
     let mut log = JournalLog::new(Arc::clone(journal), job, kind);
     log.renames = plan.kind == OpKind::Rename;
+    log.moves = plan.kind == OpKind::Move
+        && plan
+            .steps
+            .iter()
+            .all(|step| matches!(step, rusty_core::Step::Rename { .. }));
     log.retained = retained;
     Ok(log)
 }
@@ -142,6 +149,7 @@ struct JournalLog {
     put_back_failed: bool,
     undoing: bool,
     renames: bool,
+    moves: bool,
     retained: Option<deletion::RetainedJob>,
     delete_policy: Option<rusty_core::retention::RetentionPolicy>,
     overwrites: Option<overwrite::WriteJob>,
@@ -162,6 +170,7 @@ impl JournalLog {
             put_back_failed: false,
             undoing: false,
             renames: false,
+            moves: false,
             retained: None,
             delete_policy: None,
             overwrites: None,
@@ -247,8 +256,23 @@ impl JobLog for JournalLog {
         identity::record(&self.journal, self.job, (seq, identity))
     }
 
+    fn prepare_move(&mut self, seq: u32, proof: rusty_fs::MoveProof) -> Result<(), FsError> {
+        if !self.moves {
+            return Ok(());
+        }
+        identity::record_stamped(
+            &self.journal,
+            self.job,
+            (seq, proof.identity(), proof.stamp()),
+        )
+    }
+
     fn rename_identity(&self, seq: u32) -> Result<Option<FileIdentity>, FsError> {
         identity::read(&self.journal, self.job, seq)
+    }
+
+    fn rename_stamp(&self, seq: u32) -> Result<Option<FileStamp>, FsError> {
+        identity::read_stamp(&self.journal, self.job, seq)
     }
 
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
@@ -352,6 +376,9 @@ mod held_tests;
 
 #[cfg(test)]
 mod move_over_tests;
+
+#[cfg(test)]
+mod move_undo_tests;
 
 #[cfg(test)]
 mod undo_guard_tests;

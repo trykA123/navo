@@ -1,6 +1,6 @@
 use rusty_store::{JobId, JobState, UndoKinds, Undoable};
 
-use super::{KIND, RETAINED};
+use super::{KIND, MOVE_KIND, RETAINED};
 use crate::files::now_ms;
 use crate::jobs::{SharedJournal, lock};
 
@@ -13,6 +13,7 @@ pub(crate) fn claim_undo(
     let latest = journal
         .newest_undoable(UndoKinds {
             rename: KIND,
+            moves: MOVE_KIND,
             retained: &RETAINED,
             now_ms: now_ms(),
         })

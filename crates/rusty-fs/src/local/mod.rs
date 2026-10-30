@@ -26,6 +26,8 @@ mod ops;
 mod space;
 #[cfg(any(windows, test))]
 mod verbatim;
+#[cfg(any(unix, windows))]
+mod verified;
 #[cfg(windows)]
 mod win_copy;
 #[cfg(windows)]
@@ -36,6 +38,8 @@ mod win_list;
 mod win_lock;
 #[cfg(windows)]
 mod win_owner;
+#[cfg(windows)]
+mod win_rename_handle;
 #[cfg(windows)]
 mod win_replace;
 #[cfg(windows)]

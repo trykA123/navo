@@ -266,7 +266,8 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             let result = if holds_kept(step, &self.kept) {
                 Ok(StepOutcome::Skipped)
             } else {
-                apply(self.job, (seq, step), self.ctx, &mut self.progress)
+                super::rename::prepare(seq, (self.job.plan, step), self.ctx)
+                    .and_then(|()| apply(self.job, (seq, step), self.ctx, &mut self.progress))
             };
             self.settle(seq, step, result);
             return;

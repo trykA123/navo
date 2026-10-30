@@ -13,7 +13,8 @@ pub use hooks::{
     RenamePresetList, RenameReport, RetireUndo, SavePreset, UndoKind, UndoLogFactory, UndoOffer,
     WriteRenameLog,
 };
-pub(super) use run::{run_batch, run_undo};
+pub(super) use run::run_batch;
+pub use run::run_undo;
 
 #[derive(Default)]
 pub(super) struct RenameSettings {
@@ -143,7 +144,7 @@ impl Browser {
     pub fn renaming(&self) -> bool {
         self.jobs
             .iter()
-            .any(|job| job.kind == OpKind::Rename && job.status.is_active())
+            .any(|job| (job.kind == OpKind::Rename || job.undo) && job.status.is_active())
     }
 
     pub(super) fn land_on(&mut self, tab: TabId, folder: &Location, name: String) {
