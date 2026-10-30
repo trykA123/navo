@@ -12,6 +12,7 @@ image = { version = "=0.25.10", default-features = false }
 image-compare = "=0.5.0"
 imara-diff = "=0.2.0"
 rusty-core = { path = "../rusty-core" }
+similar = "=3.2.0"
 
 [dev-dependencies]
 proptest = "1.12.0"

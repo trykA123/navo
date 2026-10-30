@@ -7194,6 +7194,7 @@ dependencies = [
  "imara-diff",
  "proptest",
  "rusty-core",
+ "similar 3.2.0",
 ]
 
 [[package]]

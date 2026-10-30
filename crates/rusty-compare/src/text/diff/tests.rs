@@ -142,6 +142,30 @@ fn a_change_is_a_run_of_deletes_then_inserts() {
 }
 
 #[test]
+fn diff_fills_changed_rows_from_pairs() {
+    let left = View::utf8(lines(&[("let value = 1;", LineEnding::Lf)]));
+    let right = View::utf8(lines(&[("let value = 2;", LineEnding::Lf)]));
+    let alignment = diff_lines(left.set(), right.set(), &Options::default());
+
+    assert_eq!(alignment.rows, vec![Row::Changed { left: 0, right: 0 }]);
+}
+
+#[test]
+fn rows_keep_unmatched_right_lines_before_a_pair() {
+    let left = View::utf8(lines(&[("let value = 1;", LineEnding::Lf)]));
+    let right = View::utf8(lines(&[
+        ("ZZZZZZZZZZZZZZ", LineEnding::Lf),
+        ("let value = 2;", LineEnding::Lf),
+    ]));
+    let alignment = diff_lines(left.set(), right.set(), &Options::default());
+
+    assert_eq!(
+        alignment.rows,
+        vec![inserted(0), Row::Changed { left: 0, right: 1 }]
+    );
+}
+
+#[test]
 fn a_moved_line_becomes_two_apart_hunks() {
     let left = View::utf8(lines(&[
         ("a", LineEnding::Lf),

@@ -6,19 +6,20 @@ use imara_diff::{Algorithm, Diff as ImaraDiff, InternedInput, TokenSource};
 use crate::model::CaseRule;
 
 use super::normalise::{Options, Whitespace};
+use super::pair::{self, Subhunk};
 use super::side::{DIFF_TOKEN_LIMIT, Line, LineSet};
 
 const HASH_BYTES: usize = 16;
 
-/// One aligned visual row. `E8` emits `Equal`, `Deleted` and `Inserted`;
-/// `Changed` is left for E9's similarity pairing.
+/// One aligned visual row. E9 fills `Changed` from the similarity pairs;
+/// unpaired lines stay `Deleted` or `Inserted` and face a filler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Row {
     Equal {
         left: usize,
         right: usize,
     },
-    /// A paired changed line. E9 fills these; E8 keeps deletes and inserts apart.
+    /// A paired changed line.
     Changed {
         left: usize,
         right: usize,
@@ -114,20 +115,20 @@ fn diff_with_limit(
     let diff = ImaraDiff::compute(Algorithm::Histogram, &input);
     build_alignment(
         SideInfo {
-            len: left.lines.len(),
             starts: left.starts,
+            lines: left.lines,
         },
         SideInfo {
-            len: right.lines.len(),
             starts: right.starts,
+            lines: right.lines,
         },
         &diff,
     )
 }
 
 struct SideInfo<'a> {
-    len: usize,
     starts: &'a [u64],
+    lines: &'a [Line],
 }
 
 fn build_alignment(
@@ -148,12 +149,12 @@ fn build_alignment(
             left += 1;
             right += 1;
         }
-        for index in left_start..left_end {
-            rows.push(Row::Deleted { left: index });
-        }
-        for index in right_start..right_end {
-            rows.push(Row::Inserted { right: index });
-        }
+        push_hunk(
+            &mut rows,
+            &left_info.lines[left_start..left_end],
+            &right_info.lines[right_start..right_end],
+            (left_start, right_start),
+        );
         hunks.push(Hunk {
             left_lines: left_start..left_end,
             right_lines: right_start..right_end,
@@ -163,7 +164,7 @@ fn build_alignment(
         left = left_end;
         right = right_end;
     }
-    while left < left_info.len && right < right_info.len {
+    while left < left_info.lines.len() && right < right_info.lines.len() {
         rows.push(Row::Equal { left, right });
         left += 1;
         right += 1;
@@ -174,6 +175,43 @@ fn build_alignment(
         raw_equal: false,
         display_equal: false,
         fallback: None,
+    }
+}
+
+fn push_hunk(rows: &mut Vec<Row>, left: &[Line], right: &[Line], starts: (usize, usize)) {
+    let selected = pair::pair_lines(Subhunk { left, right });
+    let (mut left_index, mut right_index) = (0, 0);
+    for (pair_left, pair_right) in selected {
+        while left_index < pair_left {
+            rows.push(Row::Deleted {
+                left: starts.0 + left_index,
+            });
+            left_index += 1;
+        }
+        while right_index < pair_right {
+            rows.push(Row::Inserted {
+                right: starts.1 + right_index,
+            });
+            right_index += 1;
+        }
+        rows.push(Row::Changed {
+            left: starts.0 + pair_left,
+            right: starts.1 + pair_right,
+        });
+        left_index = pair_left + 1;
+        right_index = pair_right + 1;
+    }
+    while left_index < left.len() {
+        rows.push(Row::Deleted {
+            left: starts.0 + left_index,
+        });
+        left_index += 1;
+    }
+    while right_index < right.len() {
+        rows.push(Row::Inserted {
+            right: starts.1 + right_index,
+        });
+        right_index += 1;
     }
 }
 
