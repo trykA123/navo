@@ -1,4 +1,5 @@
-#![cfg(windows)]
+#![cfg(all(windows, feature = "tester"))]
+//! The diagnostic report exists only in tester builds; checks.yml runs this with `--features tester`.
 
 use std::fs::File;
 use std::io::Read;

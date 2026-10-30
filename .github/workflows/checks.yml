@@ -66,6 +66,7 @@ jobs:
         shell: pwsh
         run: ./.github/scripts/fetch-pdfium.ps1 -Destination target/debug
       - run: cargo nextest run --workspace --profile ci
+      - run: cargo nextest run -p rusty-app --features tester --profile ci --test dpi_awareness_windows
       - run: cargo test -p gpui-pre-windows --lib
       - run: cargo test --workspace --doc
       - name: Copy benchmark (informational)

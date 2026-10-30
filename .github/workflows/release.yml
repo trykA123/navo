@@ -96,11 +96,12 @@ jobs:
         run: |
           $out = (& target/release/navo.exe --version | Out-String).Trim()
           if ($out -ne 'navo 0.0.1') { throw "unexpected output: $out" }
-      - name: Stage navo.exe, pdfium.dll and licences
+      - name: Stage navo.exe with its PDB, pdfium.dll and licences
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item -LiteralPath target/release/navo.exe -Destination dist
+          Copy-Item -LiteralPath target/release/navo.pdb -Destination dist
           ./.github/scripts/fetch-pdfium.ps1 -Destination dist -Licenses dist/licenses/pdfium
       - name: Verify release crash backtrace from the staged distribution
         timeout-minutes: 2
