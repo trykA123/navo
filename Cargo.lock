@@ -7642,6 +7642,7 @@ dependencies = [
  "rusty-core",
  "similar 3.2.0",
  "tempfile",
+ "xxhash-rust",
 ]
 
 [[package]]

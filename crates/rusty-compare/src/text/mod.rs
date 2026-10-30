@@ -2,6 +2,7 @@ pub mod diff;
 pub mod intraline;
 pub mod normalise;
 pub mod pair;
+pub mod scan;
 pub mod side;
 
 pub use diff::{Alignment, Fallback, Hunk, Row, diff_lines};
