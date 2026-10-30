@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod anchor;
 pub mod bytes;
 pub mod content;
 pub mod image;
