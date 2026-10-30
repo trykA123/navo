@@ -63,6 +63,7 @@ impl Fixture {
 
     fn init(&self) {
         self.git_ok(&["init", "-b", "main"]);
+        self.git_ok(&["config", "core.autocrlf", "false"]);
     }
 
     fn write(&self, relative: &str, bytes: &[u8]) {
