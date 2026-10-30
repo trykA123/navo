@@ -7,9 +7,11 @@ use std::time::Instant;
 use rusty_cache::{DiskListings, DiskStats, ListingCache};
 use rusty_diag::{
     BuildInfo, CacheRegistry, CacheSize, DiskKind, DiskUse, DpiAwareness, EventRing, Identity,
-    MemoryProbe, Redactor, ReportAttachments, ReportInput, ReportSummary, Salt, SystemInfo,
-    TaskCounters, memory_report, scan_disk_use, write_report_bundle, write_report_with_crashes,
+    MemoryProbe, Redactor, ReportInput, ReportSummary, Salt, SystemInfo, TaskCounters,
+    memory_report, scan_disk_use, write_report_with_crashes,
 };
+#[cfg(feature = "tester")]
+use rusty_diag::{ReportAttachments, write_report_bundle};
 
 use crate::logging::Diagnostics;
 
@@ -24,6 +26,7 @@ pub fn write(
     write_with_crashes(path, started, diagnostics, &[])
 }
 
+#[cfg(feature = "tester")]
 pub fn write_on_demand(
     path: &Path,
     started: Instant,
@@ -55,6 +58,7 @@ pub(crate) fn write_with_crashes(
     write_report_with_crashes(path, &input, &diagnostics.redactor, crashes)
 }
 
+#[cfg(feature = "tester")]
 pub(crate) fn write_with_extras(
     path: &Path,
     started: Instant,
@@ -92,6 +96,7 @@ pub(crate) fn disk_use(data: Option<&Path>, redactor: &Redactor) -> DiskUse {
             locations.push((DiskKind::Index, index));
         }
     }
+    #[cfg(feature = "tester")]
     if let Some(desktop) = crate::crash::desktop_dir() {
         locations.push((DiskKind::PerformanceRecordings, desktop));
     }

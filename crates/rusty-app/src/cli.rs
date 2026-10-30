@@ -5,12 +5,17 @@ use std::path::PathBuf;
 pub(crate) enum Command {
     Open(Start),
     Version,
+    #[cfg(feature = "tester")]
     DiagReport(PathBuf),
     CrashTest(PathBuf),
     PdfHelper,
     IndexService(crate::index_service::Action),
+    #[cfg(feature = "tester")]
     Bench(crate::bench::Options),
-    BenchIndex { json: bool },
+    #[cfg(feature = "tester")]
+    BenchIndex {
+        json: bool,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -26,8 +31,12 @@ pub(crate) struct Start {
     pub(crate) right: Option<PathBuf>,
 }
 
+#[cfg(feature = "tester")]
 pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
+#[cfg(not(feature = "tester"))]
+pub(crate) const USAGE: &str = "usage: navo [--version | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [<path>]]";
 
+#[cfg(feature = "tester")]
 const STANDALONE: [&str; 6] = [
     "--version",
     "--diag-report",
@@ -36,6 +45,14 @@ const STANDALONE: [&str; 6] = [
     "--index-service",
     "--bench",
 ];
+#[cfg(not(feature = "tester"))]
+const STANDALONE: [&str; 4] = [
+    "--version",
+    "--pdf-helper",
+    "--crash-test",
+    "--index-service",
+];
+#[cfg(feature = "tester")]
 const WINDOW_FLAGS: [&str; 6] = [
     "--view",
     "--profile",
@@ -44,17 +61,17 @@ const WINDOW_FLAGS: [&str; 6] = [
     "--left",
     "--right",
 ];
+#[cfg(not(feature = "tester"))]
+const WINDOW_FLAGS: [&str; 4] = ["--view", "--profile", "--left", "--right"];
 
 impl Command {
     pub(crate) fn uses_console(&self) -> bool {
         match self {
             Self::Open(start) => start.is_metrics(),
             Self::PdfHelper | Self::IndexService(_) => false,
-            Self::Version
-            | Self::DiagReport(_)
-            | Self::CrashTest(_)
-            | Self::Bench(_)
-            | Self::BenchIndex { .. } => true,
+            Self::Version | Self::CrashTest(_) => true,
+            #[cfg(feature = "tester")]
+            Self::DiagReport(_) | Self::Bench(_) | Self::BenchIndex { .. } => true,
         }
     }
 }
@@ -92,7 +109,9 @@ impl Start {
         match flag {
             "--view" => Some(&mut self.view),
             "--profile" => Some(&mut self.profile),
+            #[cfg(feature = "tester")]
             "--metrics" => Some(&mut self.metrics),
+            #[cfg(feature = "tester")]
             "--trace" => Some(&mut self.trace),
             "--left" => Some(&mut self.left),
             "--right" => Some(&mut self.right),
@@ -110,6 +129,7 @@ fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
     let mut is_first = true;
     while let Some(arg) = args.next() {
         let flag = arg.to_string_lossy();
+        #[cfg(feature = "tester")]
         if is_first && flag == "bench" {
             return crate::bench::parse(args).map(Command::Bench);
         }
@@ -141,6 +161,7 @@ fn read(mut args: impl Iterator<Item = OsString>) -> Result<Command, String> {
 }
 
 fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Command, String> {
+    #[cfg(feature = "tester")]
     if flag == "--bench" {
         return crate::bench::index::parse(rest).map(|json| Command::BenchIndex { json });
     }
@@ -153,7 +174,9 @@ fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Co
                 .ok_or("--index-service needs a mode")?,
         )?),
         "--crash-test" => Command::CrashTest(value(flag, rest.next())?),
-        _ => Command::DiagReport(value(flag, rest.next())?),
+        #[cfg(feature = "tester")]
+        "--diag-report" => Command::DiagReport(value(flag, rest.next())?),
+        _ => return Err(format!("unknown argument {flag}")),
     };
     let Some(extra) = rest.next() else {
         return Ok(command);
@@ -178,3 +201,34 @@ fn value(flag: &str, next: Option<OsString>) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, not(feature = "tester")))]
+mod release_tests {
+    use super::*;
+
+    fn refused(args: &[&str]) -> bool {
+        parse(args.iter().map(OsString::from)).is_err()
+    }
+
+    #[test]
+    fn tester_flags_are_refused_in_a_release_build() {
+        for args in [
+            &["--metrics", "m.json"][..],
+            &["--trace", "t.jsonl"],
+            &["--bench", "index"],
+            &["bench", "--root", "fixture"],
+            &["--diag-report", "r.zip"],
+        ] {
+            assert!(refused(args), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn the_window_flags_still_parse() {
+        assert!(!refused(&["--left", "a", "--right", "b", "--view", "f"]));
+        assert!(matches!(
+            parse([OsString::from("--version")]),
+            Ok(Command::Version)
+        ));
+    }
+}

@@ -8,6 +8,7 @@ pub(super) fn resolve() -> Option<PathBuf> {
     fallback(home(), "Downloads")
 }
 
+#[cfg(feature = "tester")]
 pub(super) fn resolve_desktop() -> Option<PathBuf> {
     #[cfg(windows)]
     if let Some(path) = windows::known(&windows::FOLDERID_Desktop).filter(|path| path.is_dir()) {

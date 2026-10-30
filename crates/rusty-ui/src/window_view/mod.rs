@@ -5,6 +5,7 @@ mod clipboard;
 mod closing;
 mod command_center;
 mod crash;
+mod diagnostics_refresh;
 mod dialog_input;
 mod drag_hover;
 mod drive_menu;
@@ -37,6 +38,10 @@ mod pane_header;
 mod pane_strip;
 mod pane_swap;
 mod path_edit;
+#[cfg(feature = "tester")]
+mod perf_recording;
+#[cfg(not(feature = "tester"))]
+#[path = "perf_off.rs"]
 mod perf_recording;
 mod placement;
 mod preset_edit;

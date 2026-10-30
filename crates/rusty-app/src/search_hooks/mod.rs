@@ -7,6 +7,7 @@ pub(crate) use visits::Visits;
 mod index;
 
 pub use index::hooks as index_hooks;
+#[cfg(feature = "tester")]
 pub(crate) use index::search_table;
 pub(crate) use service::add_upgrade_notice;
 

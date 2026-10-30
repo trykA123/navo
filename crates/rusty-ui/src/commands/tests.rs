@@ -133,6 +133,7 @@ fn every_ferrite_action_has_a_command(cx: &mut TestAppContext) {
     let missing: Vec<&str> = ours(cx)
         .into_iter()
         .filter(|action| for_action(action).is_none())
+        .filter(|action| cfg!(feature = "tester") || !TESTER_ACTIONS.contains(action))
         .collect();
     assert_eq!(missing, Vec::<&str>::new());
 }
@@ -258,6 +259,7 @@ fn no_command_toggles_the_preview() {
 #[test]
 fn the_command_list_matches_the_snapshot() {
     let lines: Vec<String> = all()
+        .filter(|spec| !TESTER_ONLY.contains(&spec.name))
         .map(|spec| {
             let label = tr(spec.label).replace("Trash", "Recycle Bin");
             format!("{} | {} | {}", spec.name, label, spec.context)
@@ -449,6 +451,7 @@ fn every_cmd_message_in_the_files_belongs_to_a_command() {
         .flat_map(|(_, source)| source.lines())
         .filter_map(|line| line.split(" =").next())
         .filter(|id| id.starts_with("cmd-") && !labels.contains(id))
+        .filter(|id| cfg!(feature = "tester") || !TESTER_LABELS.contains(id))
         .collect();
     assert_eq!(orphans, Vec::<&str>::new());
 }
@@ -510,6 +513,7 @@ fn every_hidden_name_is_a_registered_command() {
 fn the_palette_entries_match_the_snapshot() {
     let lines: Vec<String> = entries()
         .iter()
+        .filter(|entry| !TESTER_ONLY.contains(&entry.spec.name))
         .map(|entry| {
             format!(
                 "{} | {} | {}",
@@ -535,6 +539,25 @@ fn the_command_box_copy_path_key_stays_out_of_the_palette() {
     assert_eq!((hidden, shown), (Some(false), Some(true)));
 }
 
+const TESTER_ONLY: [&str; 3] = ["app.save_diagnostic_report", "perf.record", "perf.stop"];
+const TESTER_ACTIONS: [&str; 3] = [
+    "settings_sheet::SaveDiagnosticReport",
+    "ferrite_window::RecordPerformance",
+    "ferrite_window::StopRecording",
+];
+const TESTER_LABELS: [&str; 3] = [
+    "cmd-app-save-diagnostic-report",
+    "cmd-perf-record",
+    "cmd-perf-stop",
+];
+
+#[test]
+fn tester_commands_exist_only_in_a_tester_build() {
+    let present = all().any(|spec| TESTER_ONLY.contains(&spec.name));
+    assert_eq!(present, cfg!(feature = "tester"));
+}
+
+#[cfg(feature = "tester")]
 #[gpui_kit::test]
 fn diagnostic_report_is_in_the_palette_without_a_default_key(cx: &mut TestAppContext) {
     let entry = entries()

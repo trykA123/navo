@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [features]
 mimalloc = ["dep:mimalloc"]
+tester = ["rusty-ui/tester"]
 tracy = ["rusty-diag/tracy"]
 
 [dependencies]

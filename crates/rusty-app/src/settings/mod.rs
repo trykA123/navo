@@ -1,8 +1,10 @@
 use rusty_cache::DiskListings;
 use rusty_diag::{DiskKind, Redactor};
+use std::fs;
+#[cfg(feature = "tester")]
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
-use std::{fs, io};
 
 use rusty_core::Location;
 use rusty_fs::Watch;
@@ -313,14 +315,23 @@ pub(crate) fn wire_diagnostics(
     crash: &crate::crash_report::CrashStart,
     dirs: Option<&rusty_store::StoreDirs>,
 ) {
-    let started = crash.started;
-    let diagnostics = &crash.diagnostics;
     let data = dirs.map(|dirs| dirs.data.clone());
+    let scan_diagnostics = crash.diagnostics.clone();
     let scan_data = data.clone();
-    let scan_diagnostics = diagnostics.clone();
     hooks.disk_use =
         Arc::new(move || diagnostic_rows(scan_data.as_deref(), &scan_diagnostics.redactor));
-    let diagnostics = diagnostics.clone();
+    #[cfg(feature = "tester")]
+    wire_report(hooks, crash, data);
+}
+
+#[cfg(feature = "tester")]
+fn wire_report(
+    hooks: &mut rusty_ui::window_view::SettingsHooks,
+    crash: &crate::crash_report::CrashStart,
+    data: Option<PathBuf>,
+) {
+    let started = crash.started;
+    let diagnostics = crash.diagnostics.clone();
     hooks.save_diagnostic_report = Arc::new(move || {
         let folder =
             crate::crash::desktop_dir().ok_or_else(|| rusty_l10n::tr("diagnostics-no-desktop"))?;
@@ -364,6 +375,7 @@ fn diagnostic_rows(
         .collect()
 }
 
+#[cfg(feature = "tester")]
 fn save_on_desktop(
     folder: &Path,
     stamp: &str,

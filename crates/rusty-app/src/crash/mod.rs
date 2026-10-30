@@ -102,6 +102,7 @@ pub(crate) fn downloads_dir() -> Option<PathBuf> {
     downloads::resolve()
 }
 
+#[cfg(feature = "tester")]
 pub(crate) fn desktop_dir() -> Option<PathBuf> {
     downloads::resolve_desktop()
 }

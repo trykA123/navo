@@ -1,6 +1,7 @@
 use super::Group;
 use super::contexts::GLOBAL;
 
+#[cfg(feature = "tester")]
 pub(super) const GROUPS: [Group; 1] = [Group {
     context: GLOBAL,
     commands: &[
@@ -20,4 +21,10 @@ pub(super) const GROUPS: [Group; 1] = [Group {
             "cmd-perf-stop",
         ),
     ],
+}];
+
+#[cfg(not(feature = "tester"))]
+pub(super) const GROUPS: [Group; 1] = [Group {
+    context: GLOBAL,
+    commands: &[],
 }];

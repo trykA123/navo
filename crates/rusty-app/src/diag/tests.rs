@@ -219,6 +219,7 @@ fn the_report_shows_cache_db_against_its_budget() {
     );
 }
 
+#[cfg(feature = "tester")]
 #[test]
 fn the_on_demand_report_reads_cache_db_from_the_data_folder() {
     let diagnostics = diagnostics(&Opened::default());

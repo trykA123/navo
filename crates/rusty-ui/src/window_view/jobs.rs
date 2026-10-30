@@ -20,6 +20,7 @@ pub(super) struct JobUi {
     pub(super) meter: SpeedMeter,
     pub(super) activity: Activity,
     pub(super) strip: StripUi,
+    #[cfg(feature = "tester")]
     pub(super) perf: super::perf_recording::PerfUi,
     pub(super) is_restoring: bool,
     is_sampling: bool,
@@ -32,6 +33,7 @@ impl JobUi {
             meter: SpeedMeter::default(),
             activity: Activity::default(),
             strip: StripUi::new(window, cx),
+            #[cfg(feature = "tester")]
             perf: super::perf_recording::PerfUi::default(),
             is_restoring: false,
             is_sampling: false,

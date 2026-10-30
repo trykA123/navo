@@ -92,7 +92,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --release -p rusty-app
+      - run: cargo build --release -p rusty-app --features tester
       - run: cargo build --release --locked -p xtask
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -147,7 +147,7 @@ jobs:
           name: navo-windows-x64-${{ github.sha }}
           path: dist/
       - name: Build the mimalloc A/B exe
-        run: cargo build --release -p rusty-app --features mimalloc --target-dir target/mimalloc
+        run: cargo build --release -p rusty-app --features mimalloc,tester --target-dir target/mimalloc
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: navo-windows-x64-mimalloc-${{ github.sha }}

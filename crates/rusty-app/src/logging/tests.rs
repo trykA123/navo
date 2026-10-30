@@ -1,3 +1,5 @@
+#![cfg(feature = "tester")]
+
 use std::path::PathBuf;
 
 use rusty_diag::{Identity, Salt};

@@ -23,6 +23,10 @@ pub mod modifier_hints;
 pub mod multi_rename;
 mod name_match;
 pub mod pane_chrome;
+#[cfg(feature = "tester")]
+pub mod perf;
+#[cfg(not(feature = "tester"))]
+#[path = "perf_off.rs"]
 pub mod perf;
 pub mod prelude;
 pub mod primitives;

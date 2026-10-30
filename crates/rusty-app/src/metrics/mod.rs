@@ -6,6 +6,7 @@ mod run;
 
 pub(crate) use clock::ProcessClock;
 pub(crate) use marks::mark;
+#[cfg(feature = "tester")]
 pub(crate) use memory::Memory;
 pub(crate) use run::Run;
 
@@ -22,6 +23,6 @@ use unix as platform;
 #[cfg(windows)]
 use windows as platform;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "tester"))]
 pub(crate) use marks::all;
 pub(crate) use platform::process_age;

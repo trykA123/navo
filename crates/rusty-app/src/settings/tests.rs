@@ -447,6 +447,7 @@ fn search_lists_land_in_the_file_as_arrays_and_come_back_as_text() {
     assert!(text.contains("drives = [\"C:\", \"D:\"]"), "{text}");
 }
 
+#[cfg(feature = "tester")]
 #[test]
 fn diagnostic_report_uses_the_slug_and_preserves_existing_reports() {
     let root = tempfile::tempdir().unwrap();

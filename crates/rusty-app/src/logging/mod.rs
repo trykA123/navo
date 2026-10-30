@@ -8,11 +8,22 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
+#[cfg(feature = "tester")]
 pub const ENV_VAR: &str = "NAVO_LOG";
+#[cfg(feature = "tester")]
 pub const LEGACY_ENV_VAR: &str = "FERRITE_LOG";
+#[cfg(feature = "tester")]
 const DEFAULT_LEVEL: &str = "info";
+#[cfg(feature = "tester")]
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
+#[cfg(feature = "tester")]
 const FILES: usize = 5;
+#[cfg(not(feature = "tester"))]
+const DEFAULT_LEVEL: &str = "warn";
+#[cfg(not(feature = "tester"))]
+const MAX_FILE_BYTES: u64 = 256 * 1024;
+#[cfg(not(feature = "tester"))]
+const FILES: usize = 2;
 
 static FLUSH: OnceLock<rusty_diag::LogFlush> = OnceLock::new();
 
@@ -68,10 +79,13 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
     if let Some(error) = &opened.file_error {
         eprintln!("navo: cannot open the log folder ({error}); logging to memory only");
     }
+    #[cfg(feature = "tester")]
     let (filter, warnings) = level(
         std::env::var(ENV_VAR).ok(),
         std::env::var(LEGACY_ENV_VAR).ok(),
     );
+    #[cfg(not(feature = "tester"))]
+    let filter = EnvFilter::new(DEFAULT_LEVEL);
     let misses = opened.misses();
     let flush = opened.layer.as_ref().map(LogLayer::flush_handle);
     #[cfg(not(feature = "tracy"))]
@@ -85,6 +99,7 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
     } else if let Some(flush) = flush {
         let _ = FLUSH.set(flush);
     }
+    #[cfg(feature = "tester")]
     warn_all(&warnings);
     let caches = CacheRegistry::default();
     crate::diag::register_events(&caches, &ring);
@@ -130,6 +145,7 @@ pub fn open(config: LogConfig, redactor: &Arc<Redactor>, ring: &Arc<EventRing>) 
     }
 }
 
+#[cfg(feature = "tester")]
 pub fn env_value(
     current: Option<String>,
     legacy: Option<String>,
@@ -141,6 +157,7 @@ pub fn env_value(
     }
 }
 
+#[cfg(feature = "tester")]
 pub fn level(current: Option<String>, legacy: Option<String>) -> (EnvFilter, Vec<String>) {
     let (value, var) = env_value(current, legacy);
     let mut warnings = Vec::new();
@@ -152,12 +169,14 @@ pub fn level(current: Option<String>, legacy: Option<String>) -> (EnvFilter, Vec
     (filter, warnings)
 }
 
+#[cfg(feature = "tester")]
 pub fn warn_all(warnings: &[String]) {
     for warning in warnings {
         tracing::warn!("{warning}");
     }
 }
 
+#[cfg(feature = "tester")]
 pub fn filter(value: Option<&str>, var: &str) -> (EnvFilter, Option<String>) {
     let Some(directives) = value.map(str::trim).filter(|text| !text.is_empty()) else {
         return (EnvFilter::new(DEFAULT_LEVEL), None);
@@ -173,3 +192,18 @@ pub fn filter(value: Option<&str>, var: &str) -> (EnvFilter, Option<String>) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, not(feature = "tester")))]
+mod release_tests {
+    use super::*;
+
+    #[test]
+    fn release_logs_hold_only_warnings_in_a_small_capped_file() {
+        let config = log_config(Some(Path::new("data")));
+        assert_eq!((config.max_file_bytes, config.files), (256 * 1024, 2));
+        assert_eq!(
+            EnvFilter::new(DEFAULT_LEVEL).max_level_hint(),
+            Some(tracing::level_filters::LevelFilter::WARN)
+        );
+    }
+}

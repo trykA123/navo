@@ -76,11 +76,6 @@ fn controls(t: &Theme, send: Option<&Handler>) -> AnyElement {
             send(&SheetEvent::RefreshDiagnostics, window, cx);
         }
     });
-    let save = Button::new(
-        "settings-diagnostics-save",
-        rusty_l10n::tr("cmd-app-save-diagnostic-report"),
-    )
-    .on_click(|_, window, cx| window.dispatch_action(Box::new(super::SaveDiagnosticReport), cx));
     div()
         .flex()
         .flex_wrap()
@@ -88,8 +83,26 @@ fn controls(t: &Theme, send: Option<&Handler>) -> AnyElement {
         .px(t.spacing.xl)
         .py(t.spacing.md)
         .child(refresh)
-        .child(save)
+        .children(save_button())
         .into_any_element()
+}
+
+#[cfg(feature = "tester")]
+fn save_button() -> Option<Button> {
+    Some(
+        Button::new(
+            "settings-diagnostics-save",
+            rusty_l10n::tr("cmd-app-save-diagnostic-report"),
+        )
+        .on_click(|_, window, cx| {
+            window.dispatch_action(Box::new(super::SaveDiagnosticReport), cx)
+        }),
+    )
+}
+
+#[cfg(not(feature = "tester"))]
+fn save_button() -> Option<Button> {
+    None
 }
 
 pub(super) fn render(look: &super::view::Look) -> Vec<AnyElement> {

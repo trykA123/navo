@@ -185,6 +185,7 @@ fn pane_folders_refuse_files() {
     );
 }
 
+#[cfg(feature = "tester")]
 #[test]
 fn settings_read_is_marked_after_loading_finishes() {
     let mut completed = None;

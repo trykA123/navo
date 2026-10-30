@@ -95,10 +95,12 @@ pub(super) struct SettingsPanel {
     service_action_pending: bool,
     index_upgrade_due: bool,
     pub(super) disk_use: Arc<dyn Fn() -> Vec<crate::settings::DiagnosticRow> + Send + Sync>,
+    #[cfg(feature = "tester")]
     pub(super) save_diagnostic_report:
         Arc<dyn Fn() -> Result<std::path::PathBuf, String> + Send + Sync>,
     pub(super) diagnostics: Vec<crate::settings::DiagnosticRow>,
     pub(super) diagnostics_generation: u64,
+    #[cfg(feature = "tester")]
     pub(super) is_saving_report: bool,
     pub(super) take_guide_hint: Arc<dyn Fn() -> bool + Send + Sync>,
     pub(super) news: Option<SettingsInbox>,
@@ -118,6 +120,7 @@ impl SettingsPanel {
             Self {
                 news: hooks.news,
                 disk_use: hooks.disk_use,
+                #[cfg(feature = "tester")]
                 save_diagnostic_report: hooks.save_diagnostic_report,
                 take_guide_hint: hooks.take_guide_hint,
                 search: search.clone(),
@@ -154,10 +157,12 @@ impl SettingsPanel {
             index_upgrade_due: false,
             news: None,
             disk_use: Arc::new(Vec::new),
+            #[cfg(feature = "tester")]
             save_diagnostic_report: SettingsHooks::none().save_diagnostic_report,
             take_guide_hint: SettingsHooks::none().take_guide_hint,
             diagnostics: Vec::new(),
             diagnostics_generation: 0,
+            #[cfg(feature = "tester")]
             is_saving_report: false,
         }
     }

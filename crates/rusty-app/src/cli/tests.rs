@@ -1,3 +1,5 @@
+#![cfg(feature = "tester")]
+
 use super::*;
 
 fn parse_strs(args: &[&str]) -> Result<Command, String> {

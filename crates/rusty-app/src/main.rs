@@ -6,6 +6,7 @@
 )]
 
 mod app_menu;
+#[cfg(feature = "tester")]
 mod bench;
 mod cli;
 mod clipboard;
@@ -19,6 +20,7 @@ mod drives;
 mod editor;
 mod files;
 mod gui;
+#[cfg(feature = "tester")]
 mod heap;
 mod index_service;
 mod installer;
@@ -30,6 +32,7 @@ mod logging;
 mod metrics;
 mod migration;
 mod pdf_helper;
+#[cfg(feature = "tester")]
 mod perf;
 mod profile;
 mod rename_hooks;
@@ -47,6 +50,7 @@ mod watch_file;
 mod windows_memory;
 
 use std::ops::ControlFlow;
+#[cfg(feature = "tester")]
 use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
@@ -58,8 +62,13 @@ use rusty_core::Location;
 use rusty_store::StoreDirs;
 use rusty_ui::window_view::{OpenSender, open_requests};
 
+#[cfg(all(feature = "mimalloc", not(feature = "tester")))]
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() -> ExitCode {
     installer::run();
+    #[cfg(feature = "tester")]
     heap::install();
     let result = execute(std::env::args_os().skip(1), StoreDirs::detect);
     logging::shutdown();
@@ -79,7 +88,9 @@ fn execute(
     let command = match parsed {
         Ok(Command::PdfHelper) => return pdf_helper::run(),
         Ok(Command::IndexService(action)) => return index_service::run(action),
+        #[cfg(feature = "tester")]
         Ok(Command::Bench(options)) => return bench::run(&options),
+        #[cfg(feature = "tester")]
         Ok(Command::BenchIndex { json }) => return bench::index::run(json),
         Ok(command) => command,
         Err(usage) => {
@@ -133,11 +144,14 @@ fn execute_command(
             println!("navo {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
+        #[cfg(feature = "tester")]
         Command::DiagReport(path) => write_report(&path, started, &profile),
         Command::CrashTest(_) => crash_test(&profile),
         Command::PdfHelper => pdf_helper::run(),
         Command::IndexService(action) => index_service::run(action),
+        #[cfg(feature = "tester")]
         Command::Bench(options) => bench::run(&options),
+        #[cfg(feature = "tester")]
         Command::BenchIndex { json } => bench::index::run(json),
     }
 }
@@ -151,6 +165,7 @@ fn crash_test(profile: &Profile) -> ExitCode {
     }
     let diagnostics = install_logging(profile);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
+    tracing::warn!("crash test about to panic");
     panic!("Navo CI crash test");
 }
 
@@ -161,6 +176,7 @@ fn install_logging(profile: &Profile) -> logging::Diagnostics {
     diagnostics
 }
 
+#[cfg(feature = "tester")]
 fn write_report(path: &Path, started: Instant, profile: &Profile) -> ExitCode {
     let diagnostics = install_logging(profile);
     let data = profile.dirs().map(|dirs| dirs.data.as_path());
@@ -295,6 +311,7 @@ fn instrumentation(
 fn install_reporters(profile: &Profile, diagnostics: &logging::Diagnostics) {
     let data = profile.dirs().map(|dirs| dirs.data.as_path());
     crash::install(data, diagnostics);
+    #[cfg(feature = "tester")]
     perf::install(Instant::now(), diagnostics, data);
 }
 

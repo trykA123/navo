@@ -6,7 +6,9 @@ use super::memory::Memory;
 use super::report::{Build, Measured, Report};
 use super::unix::{age_from_proc, parse_peak};
 use super::windows::age_from_file_times;
-use super::{ProcessClock, Run, mark, marks};
+use super::{ProcessClock, Run};
+#[cfg(feature = "tester")]
+use super::{mark, marks};
 
 const STATUS: &str = "Name:\tferrite\nVmPeak:\t  900000 kB\nVmHWM:\t   81920 kB\nVmRSS:\t   61440 kB\nRssAnon:\t   40960 kB\n";
 
@@ -157,6 +159,7 @@ fn memory_is_measured_in_this_process() {
     assert!(private > 0 && working > 0 && peak > 0);
 }
 
+#[cfg(feature = "tester")]
 #[test]
 fn marks_keep_their_order() {
     mark("test mark one");
