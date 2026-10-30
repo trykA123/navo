@@ -10,6 +10,7 @@ blake3 = "=1.8.7"
 ignore = "=0.4.34"
 image = { version = "=0.25.10", default-features = false }
 image-compare = "=0.5.0"
+imara-diff = "=0.2.0"
 rusty-core = { path = "../rusty-core" }
 
 [dev-dependencies]

@@ -155,6 +155,7 @@ fn keys_are_produced_per_line() {
     let whole = Whole {
         layout: TextLayout::default(),
         lines: vec![line("a", LineEnding::Lf), line("b", LineEnding::None)],
+        starts: vec![0, 2, 3],
         lossless: true,
     };
     let keys = whole.keys(&Options::default());

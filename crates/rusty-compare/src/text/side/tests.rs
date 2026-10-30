@@ -365,3 +365,33 @@ fn a_multibyte_character_cut_at_the_sniff_boundary_still_detects_utf8() {
     assert!(!whole.lines[0].text.contains('\u{FFFD}'));
     assert!(whole.lines[0].text.ends_with("étail"));
 }
+
+#[test]
+fn source_starts_count_the_bom_and_stored_endings() {
+    let (side, _) = decode_with(&utf16("a\nb\n", true, true), fallback());
+    let TextSide::Whole(decoded) = side else {
+        panic!("expected whole text");
+    };
+    assert_eq!(decoded.starts, [2, 6, 10]);
+    assert_eq!(decoded.line_set().starts, [2, 6, 10]);
+
+    let utf8_bom = [&[0xEF, 0xBB, 0xBF][..], b"a\nb\n"].concat();
+    let decoded = whole(&utf8_bom);
+    assert_eq!(decoded.starts, [3, 5, 7]);
+
+    let windows = whole(b"\xE9\nb\n");
+    assert_eq!(windows.layout.text.encoding, fallback());
+    assert_eq!(windows.starts, [0, 2, 4]);
+}
+
+#[test]
+fn a_bom_only_side_has_only_its_end_start() {
+    let bom_only = whole(&[0xEF, 0xBB, 0xBF]);
+    assert!(bom_only.lines.is_empty());
+    assert!(bom_only.layout.text.bom);
+    assert_eq!(bom_only.starts, [3]);
+
+    let empty = whole(b"");
+    assert!(!empty.layout.text.bom);
+    assert_eq!(empty.starts, [0]);
+}

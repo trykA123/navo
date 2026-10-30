@@ -7191,6 +7191,7 @@ dependencies = [
  "ignore",
  "image",
  "image-compare",
+ "imara-diff",
  "proptest",
  "rusty-core",
 ]
