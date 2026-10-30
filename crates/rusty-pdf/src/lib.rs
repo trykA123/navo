@@ -16,12 +16,12 @@ pub const PDFIUM_VERSION: &str = "chromium/8076";
 #[cfg(test)]
 mod tests {
     #[test]
-    fn the_version_matches_the_pdfium_pinned_in_ci() {
-        let workflow = include_str!("../../../.github/workflows/ci.yml");
+    fn the_version_matches_the_pdfium_pinned_in_the_release() {
+        let workflow = include_str!("../../../.github/workflows/release.yml");
         let pin = format!("PDFIUM_TAG: {}", super::PDFIUM_VERSION);
         assert!(
             workflow.lines().any(|line| line.trim() == pin),
-            "ci.yml must pin {pin}"
+            "release.yml must pin {pin}"
         );
     }
 }

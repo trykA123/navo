@@ -1,12 +1,7 @@
 name: bench
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    paths:
-      - "crates/rusty-fs/**"
-      - "crates/rusty-core/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,6 +30,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
+          BASE_SHA="${BASE_SHA:-$(git rev-parse HEAD~1)}"
           git checkout --force "$BASE_SHA"
           if [ -f crates/rusty-fs/benches/listing.rs ]; then
             cargo bench -p rusty-fs --bench listing -- --save-baseline=base

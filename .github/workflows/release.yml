@@ -1,0 +1,148 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example alpha-2026-10-30c"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  PDFIUM_TAG: chromium/8076
+  PDFIUM_SHA256: 808d36da9bc5a3104315fb307c80998121f565ee53953633bf33e80d7429e5ac
+  KEEP_RELEASES: 5
+
+jobs:
+  check-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tag name is valid and unused
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$TAG" =~ ^(alpha|beta|v)[A-Za-z0-9.-]+$ ]] || { echo "bad tag: $TAG"; exit 1; }
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "release $TAG exists"; exit 1; fi
+
+  clippy-windows:
+    needs: check-tag
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  gate-windows:
+    needs: check-tag
+    runs-on: windows-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+      NAVO_EXPECT_PDFIUM: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest@0.9.148
+      - name: Put pdfium.dll next to the test build of navo.exe
+        shell: pwsh
+        run: ./.github/scripts/fetch-pdfium.ps1 -Destination target/debug
+      - run: cargo nextest run --workspace --profile ci
+      - run: cargo test -p gpui-pre-windows --lib
+      - run: cargo test --workspace --doc
+
+  build-windows:
+    needs: check-tag
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo build --release -p rusty-app
+      - name: Binary size
+        run: cargo xtask binsize target/release/navo.exe
+      - shell: pwsh
+        run: |
+          $out = (& target/release/navo.exe --version | Out-String).Trim()
+          if ($out -ne 'navo 0.0.1') { throw "unexpected output: $out" }
+      - name: Stage navo.exe with its PDB, pdfium.dll and licences
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -LiteralPath target/release/navo.exe -Destination dist
+          Copy-Item -LiteralPath target/release/navo.pdb -Destination dist
+          ./.github/scripts/fetch-pdfium.ps1 -Destination dist -Licenses dist/licenses/pdfium
+      - name: Verify release crash backtrace from the staged distribution
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          $crashProfile = Join-Path $env:RUNNER_TEMP ('navo-crash-' + [guid]::NewGuid())
+          $env:NAVO_CRASH_TEST = '1'
+          $exe = (Resolve-Path -LiteralPath dist/navo.exe).Path
+          Rename-Item -LiteralPath target/release/navo.pdb -NewName navo.pdb.saved
+          try {
+            $probe = Start-Process -FilePath $exe -ArgumentList @('--crash-test', "`"$crashProfile`"") -Wait -PassThru -NoNewWindow
+          } finally {
+            Rename-Item -LiteralPath target/release/navo.pdb.saved -NewName navo.pdb
+          }
+          if ($probe.ExitCode -ne 101) { throw "unexpected crash probe exit: $($probe.ExitCode)" }
+          $records = @(Get-ChildItem -LiteralPath "$crashProfile/data/logs" -Filter 'crash-*.json')
+          if ($records.Count -ne 1) { throw "expected one crash record, got $($records.Count)" }
+          $record = Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json
+          if ($record.message -ne 'Navo CI crash test') { throw 'unexpected panic message' }
+          if ($record.backtrace -notmatch 'navo::crash_test\r?\n\s+at [^\r\n]*main\.rs:\d+') { throw 'release backtrace has no Navo crash_test frame with its source location' }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: navo-windows-x64-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: [clippy-windows, gate-windows, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: navo-windows-x64-${{ github.sha }}
+          path: navo
+      - name: Zip the distribution
+        run: |
+          cp navo/navo.exe navo.exe
+          (cd navo && zip -qr ../navo-windows-x64.zip .)
+      - name: Create the pre-release
+        run: |
+          gh release create "$TAG" navo.exe navo-windows-x64.zip \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "$TAG" --notes "Build ${GITHUB_SHA::8}. Notes follow."
+      - name: Keep the newest releases
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[(env.KEEP_RELEASES | tonumber):] | .[].tagName' |
+          while read -r old; do
+            gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done
