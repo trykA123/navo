@@ -54,6 +54,7 @@ pub enum GitError {
         path: PathBuf,
     },
     Timeout,
+    UnrepresentablePath,
     Protocol {
         detail: String,
     },
@@ -106,6 +107,7 @@ impl fmt::Display for GitError {
                 )
             }
             Self::Timeout => formatter.write_str("git did not answer before the deadline"),
+            Self::UnrepresentablePath => formatter.write_str("path is not representable"),
             Self::Protocol { detail } => write!(formatter, "unexpected git output: {detail}"),
             Self::SessionBusy => formatter.write_str("the git cat-file session is busy"),
             Self::SessionClosed => formatter.write_str("the git cat-file session closed"),
@@ -289,6 +291,17 @@ pub struct IndexEntry {
 
 pub type BlobReader = Box<dyn Read + Send>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FilterNotice {
+    Lfs { detail: String },
+    Filter { detail: String },
+}
+
+pub struct WorktreeBlob {
+    pub reader: BlobReader,
+    pub reason: Option<FilterNotice>,
+}
+
 pub trait GitSource: Send + Sync {
     fn resolve(&self, name: &str) -> Result<Option<ObjectId>, GitError>;
 
@@ -298,7 +311,7 @@ pub trait GitSource: Send + Sync {
 
     fn read_blob(&self, id: &ObjectId) -> Result<BlobReader, GitError>;
 
-    fn read_blob_worktree_form(&self, rev: &str, path: &GitPath) -> Result<BlobReader, GitError>;
+    fn read_blob_worktree_form(&self, rev: &str, path: &GitPath) -> Result<WorktreeBlob, GitError>;
 
     fn changes(&self, a: &str, target: Target<'_>) -> Result<Vec<Change>, GitError>;
 

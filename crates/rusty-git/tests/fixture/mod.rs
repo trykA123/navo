@@ -32,6 +32,10 @@ pub struct Fixture {
     repo: PathBuf,
 }
 
+#[allow(
+    dead_code,
+    reason = "each integration test binary uses only some fixture helpers"
+)]
 impl Fixture {
     pub fn new() -> Result<Self, String> {
         let git = resolve_git(find_git().ok_or_else(|| "git was not found on PATH".to_owned())?);

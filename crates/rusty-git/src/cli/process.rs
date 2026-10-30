@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -135,7 +135,10 @@ pub(super) fn base_command(spec: &CommandSpec<'_>) -> Command {
     command
 }
 
-pub(super) fn run_process(spec: &CommandSpec<'_>, args: &[&str]) -> Result<Output, GitError> {
+pub(super) fn run_process<S: AsRef<OsStr>>(
+    spec: &CommandSpec<'_>,
+    args: &[S],
+) -> Result<Output, GitError> {
     let Spawned {
         mut child,
         stdout,
@@ -193,10 +196,10 @@ impl Reader {
     }
 }
 
-fn spawn(spec: &CommandSpec<'_>, args: &[&str]) -> Result<Spawned, GitError> {
+fn spawn<S: AsRef<OsStr>>(spec: &CommandSpec<'_>, args: &[S]) -> Result<Spawned, GitError> {
     let mut command = base_command(spec);
     command
-        .args(args)
+        .args(args.iter())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command

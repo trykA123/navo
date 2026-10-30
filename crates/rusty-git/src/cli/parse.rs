@@ -113,7 +113,7 @@ fn parse_tree_record(record: &[u8]) -> Result<TreeEntry, GitError> {
     })
 }
 
-fn tree_kind(mode: &[u8]) -> TreeKind {
+pub(super) fn tree_kind(mode: &[u8]) -> TreeKind {
     match mode {
         b"120000" => TreeKind::Link,
         b"160000" => TreeKind::Submodule,

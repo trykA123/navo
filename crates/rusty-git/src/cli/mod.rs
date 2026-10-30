@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -7,10 +7,12 @@ use std::time::Duration;
 
 use crate::{
     BlobReader, Change, GitError, GitPath, GitRef, GitSource, IndexEntry, ObjectId, OtherPath,
-    Others, Stage, Target, TreeEntry,
+    Others, Stage, Target, TreeEntry, WorktreeBlob,
 };
 
 mod batch;
+mod changes;
+mod filters;
 mod parse;
 mod process;
 
@@ -85,7 +87,7 @@ impl CliGit {
         Ok(cli)
     }
 
-    fn run(&self, args: &[&str]) -> Result<Output, GitError> {
+    fn run<S: AsRef<OsStr>>(&self, args: &[S]) -> Result<Output, GitError> {
         let spec = CommandSpec {
             git: &self.git,
             repo: Some(&self.repo),
@@ -95,7 +97,7 @@ impl CliGit {
         run_process(&spec, args)
     }
 
-    fn run_ok(&self, args: &[&str]) -> Result<Output, GitError> {
+    fn run_ok<S: AsRef<OsStr>>(&self, args: &[S]) -> Result<Output, GitError> {
         let output = self.run(args)?;
         if output.status.success() {
             Ok(output)
@@ -104,15 +106,20 @@ impl CliGit {
         }
     }
 
-    fn command_error(&self, args: &[&str], output: &Output) -> GitError {
+    fn command_error<S: AsRef<OsStr>>(&self, args: &[S], output: &Output) -> GitError {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         if stderr.contains("detected dubious ownership") {
             return GitError::UnsafeDirectory {
                 path: self.repo.clone(),
             };
         }
+        let args = args
+            .iter()
+            .map(|arg| arg.as_ref().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ");
         GitError::Command {
-            args: args.join(" "),
+            args,
             status: output.status.code(),
             stderr,
         }
@@ -206,12 +213,12 @@ impl GitSource for CliGit {
         }
     }
 
-    fn read_blob_worktree_form(&self, _rev: &str, _path: &GitPath) -> Result<BlobReader, GitError> {
-        Err(unsupported("read_blob_worktree_form"))
+    fn read_blob_worktree_form(&self, rev: &str, path: &GitPath) -> Result<WorktreeBlob, GitError> {
+        filters::read_worktree_form(self, rev, path)
     }
 
-    fn changes(&self, _a: &str, _target: Target<'_>) -> Result<Vec<Change>, GitError> {
-        Err(unsupported("changes"))
+    fn changes(&self, a: &str, target: Target<'_>) -> Result<Vec<Change>, GitError> {
+        changes::read_changes(self, a, target)
     }
 
     fn merge_base(&self, a: &str, b: &str) -> Result<Option<ObjectId>, GitError> {
@@ -226,17 +233,11 @@ impl GitSource for CliGit {
         Err(self.command_error(&args, &output))
     }
 
-    fn index_entries(&self, _stage: Stage) -> Result<Vec<IndexEntry>, GitError> {
-        Err(unsupported("index_entries"))
+    fn index_entries(&self, stage: Stage) -> Result<Vec<IndexEntry>, GitError> {
+        changes::read_index_entries(self, stage)
     }
 
-    fn others(&self, _which: Others) -> Result<Vec<OtherPath>, GitError> {
-        Err(unsupported("others"))
-    }
-}
-
-fn unsupported(operation: &str) -> GitError {
-    GitError::Unsupported {
-        operation: operation.to_owned(),
+    fn others(&self, which: Others) -> Result<Vec<OtherPath>, GitError> {
+        filters::read_others(self, which)
     }
 }
