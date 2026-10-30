@@ -256,6 +256,7 @@ impl Status {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
+    pub id: u64,
     pub left: Option<Arc<SideEntry>>,
     pub right: Option<Arc<SideEntry>>,
     pub raw_status: Status,
@@ -303,6 +304,10 @@ pub struct ContentKey {
 
 pub trait SideSource: Send + Sync {
     fn provider(&self) -> &ProviderId;
+
+    fn volume(&self, _rel: &RelPath) -> u64 {
+        0
+    }
 
     fn list(
         &self,

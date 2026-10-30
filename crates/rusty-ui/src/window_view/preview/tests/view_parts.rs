@@ -53,6 +53,7 @@ fn is_done(view: &FerriteWindow) -> bool {
 }
 
 fn parts(cx: &mut TestAppContext, values: Values) -> Parts {
+    cx.executor().allow_parking();
     let fs = Arc::new(project());
     let saved: Arc<Mutex<Vec<Change>>> = Arc::default();
     let failure: Arc<Mutex<Option<String>>> = Arc::default();

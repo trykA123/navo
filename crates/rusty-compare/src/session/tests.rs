@@ -1,6 +1,7 @@
 mod fake;
 mod memory;
 mod robustness;
+mod settle;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -113,13 +114,18 @@ fn batches_arrive_structure_first_and_final_last() {
     for name in ["same.txt", "diff.txt", "sub/child.txt"] {
         let mut seen_checking = false;
         let mut seen_final = false;
+        let mut row_ids = Vec::new();
         for (_, row) in batches_with_row(&batches, name) {
+            row_ids.push(row.id);
             if row.raw_status == Status::Checking {
                 seen_checking = true;
             } else if seen_checking {
                 seen_final = true;
             }
         }
+        row_ids.sort_unstable();
+        row_ids.dedup();
+        assert_eq!(row_ids.len(), 1, "{name} changed its row id");
         assert!(seen_checking, "{name} was never checking");
         assert!(seen_final, "{name} never reached a final status");
     }
@@ -173,12 +179,24 @@ fn refresh_bumps_the_generation_and_drops_old_batches() {
     let new_generation = session.generation();
     assert!(new_generation > old_generation);
 
-    let batches = collect(&session);
+    let new_first = session
+        .batches()
+        .recv_timeout(Duration::from_secs(20))
+        .expect("new initial batch");
+    assert!(new_first.rows.iter().all(|row| row.id > old_row.id));
+    assert!(!session.stop_row(old_row.id));
+    assert!(!session.focus(&[old_row.id]));
+
+    let mut batches = vec![new_first];
+    batches.extend(collect(&session));
     assert!(
         batches
             .iter()
             .all(|batch| batch.generation == new_generation)
     );
+    let final_batch = batches.last().expect("final batch");
+    assert_eq!(final_batch.totals.same, 32);
+    assert_eq!(final_batch.totals.not_checked, 0);
     assert_eq!(
         session.write_allowed(&old_row, old_generation),
         Err(Refusal::StaleGeneration)
@@ -280,6 +298,7 @@ fn generation_with(generation: Generation, status: Status, kind: EntryKind) -> R
         None,
     ));
     Row {
+        id: 0,
         left: Some(Arc::clone(&entry)),
         right: Some(entry),
         raw_status: status,

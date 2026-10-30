@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::JoinHandle;
 
@@ -6,6 +7,7 @@ use crate::model::{
     CancelToken, EntryKind, Generation, HashCache, ReadHint, Reason, Row, SideEntry, SideSource,
     Status,
 };
+use crate::queue::{self, Progress, Queue};
 use crate::rules::IgnoreRules;
 
 mod classify;
@@ -136,6 +138,7 @@ impl Totals {
 pub struct RowBatch {
     pub generation: Generation,
     pub rows: Vec<Row>,
+    pub progress: Vec<Progress>,
     pub totals: Totals,
     pub is_final: bool,
     pub problem: Option<Reason>,
@@ -163,6 +166,11 @@ pub struct Session {
     right: Arc<dyn SideSource>,
     options: SessionOptions,
     shared: Arc<shared::Shared>,
+    queue: Arc<Queue>,
+    next_row_id: Arc<AtomicU64>,
+    row_id_base: u64,
+    #[cfg(test)]
+    settle_hook: Option<run::SettleHook>,
     cancel: CancelToken,
     receiver: Receiver<RowBatch>,
     handles: Vec<JoinHandle<()>>,
@@ -176,15 +184,48 @@ impl Session {
         right: Arc<dyn SideSource>,
         options: SessionOptions,
     ) -> Self {
+        #[cfg(test)]
+        {
+            Self::build(left, right, options, None)
+        }
+        #[cfg(not(test))]
+        {
+            Self::build(left, right, options)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn start_with_settle_hook(
+        left: Arc<dyn SideSource>,
+        right: Arc<dyn SideSource>,
+        options: SessionOptions,
+        settle_hook: run::SettleHook,
+    ) -> Self {
+        Self::build(left, right, options, Some(settle_hook))
+    }
+
+    fn build(
+        left: Arc<dyn SideSource>,
+        right: Arc<dyn SideSource>,
+        options: SessionOptions,
+        #[cfg(test)] settle_hook: Option<run::SettleHook>,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel();
         let generation = Generation::new(1);
         let shared = Arc::new(shared::Shared::new(sender, generation));
+        let queue = Arc::new(Queue::new(queue::worker_limit()));
+        let next_row_id = Arc::new(AtomicU64::new(0));
         let cancel = CancelToken::new();
         let mut session = Self {
             left,
             right,
             options,
             shared,
+            queue,
+            next_row_id,
+            row_id_base: 0,
+            #[cfg(test)]
+            settle_hook,
             cancel,
             receiver,
             handles: Vec::new(),
@@ -206,18 +247,43 @@ impl Session {
 
     pub fn cancel(&self) {
         self.cancel.cancel();
+        self.queue.stop_all();
+        self.queue.close();
+    }
+
+    pub fn stop_row(&self, id: u64) -> bool {
+        if id < self.row_id_base {
+            return false;
+        }
+        self.queue.stop(id)
+    }
+
+    pub fn stop_all(&self) {
+        self.queue.stop_all();
+    }
+
+    pub fn focus(&self, row_ids: &[u64]) -> bool {
+        if row_ids.iter().any(|id| *id < self.row_id_base) {
+            return false;
+        }
+        self.queue.focus(row_ids);
+        true
     }
 
     pub fn refresh(&mut self) {
         self.cancel.cancel();
+        self.queue.stop_all();
+        self.queue.close();
         let next = Generation::new(self.generation.get().saturating_add(1));
         self.shared.begin(next);
         let joined = self.join();
         while self.receiver.try_recv().is_ok() {}
         self.shared.reset(next);
-        self.shared.reset_rows();
+        self.row_id_base = self.next_row_id.load(Ordering::Acquire);
+        self.shared.reset_rows(self.row_id_base);
         self.generation = next;
         self.cancel = CancelToken::new();
+        self.queue = Arc::new(Queue::new(queue::worker_limit()));
         if !joined {
             self.shared.report_problem(next, Reason::WorkerPanicked);
         }
@@ -257,6 +323,10 @@ impl Session {
             generation: self.generation,
             cancel: self.cancel.clone(),
             shared: Arc::clone(&self.shared),
+            queue: Arc::clone(&self.queue),
+            next_row_id: Arc::clone(&self.next_row_id),
+            #[cfg(test)]
+            settle_hook: self.settle_hook.clone(),
         });
     }
 
@@ -274,6 +344,8 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.cancel.cancel();
+        self.queue.stop_all();
+        self.queue.close();
         if !self.join() {
             self.shared.close();
         }

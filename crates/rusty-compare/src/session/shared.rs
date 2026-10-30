@@ -1,13 +1,16 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::model::{Generation, Reason, Row};
+use crate::queue::Progress;
 
 use super::{RowBatch, Totals};
 
 pub(super) struct Shared {
     state: Mutex<State>,
     rows: Mutex<Vec<Option<Row>>>,
+    id_base: AtomicU64,
 }
 
 struct State {
@@ -31,6 +34,7 @@ impl Shared {
                 sender,
             }),
             rows: Mutex::new(Vec::new()),
+            id_base: AtomicU64::new(0),
         }
     }
 
@@ -55,7 +59,8 @@ impl Shared {
         state.closed = false;
     }
 
-    pub(super) fn reset_rows(&self) {
+    pub(super) fn reset_rows(&self, id_base: u64) {
+        self.id_base.store(id_base, Ordering::Release);
         *self.rows() = Vec::new();
     }
 
@@ -67,19 +72,28 @@ impl Shared {
         self.state().closed
     }
 
-    pub(super) fn store_rows(&self, rows: Vec<Row>) -> Vec<u64> {
+    pub(super) fn store_rows(&self, rows: Vec<Row>) {
+        let base = self.id_base.load(Ordering::Acquire);
         let mut store = self.rows();
-        let base = store.len();
-        let mut ids = Vec::with_capacity(rows.len());
-        for (offset, row) in rows.into_iter().enumerate() {
-            ids.push(u64::try_from(base + offset).unwrap_or(u64::MAX));
-            store.push(Some(row));
+        for row in rows {
+            let Some(offset) = row.id.checked_sub(base) else {
+                continue;
+            };
+            let Ok(index) = usize::try_from(offset) else {
+                continue;
+            };
+            if store.len() <= index {
+                store.resize(index.saturating_add(1), None);
+            }
+            if let Some(slot) = store.get_mut(index) {
+                *slot = Some(row);
+            }
         }
-        ids
     }
 
     pub(super) fn take_row(&self, id: u64) -> Option<Row> {
-        let index = usize::try_from(id).ok()?;
+        let offset = id.checked_sub(self.id_base.load(Ordering::Acquire))?;
+        let index = usize::try_from(offset).ok()?;
         self.rows().get_mut(index)?.take()
     }
 
@@ -117,6 +131,22 @@ impl Shared {
         state.totals.resolve(row.raw_status);
         let is_final = final_batch(&mut state);
         send(&mut state, vec![row], is_final, None)
+    }
+
+    pub(super) fn emit_progress(&self, generation: Generation, progress: Progress) -> bool {
+        let mut state = self.state();
+        if state.generation != generation || state.closed {
+            return false;
+        }
+        let batch = RowBatch {
+            generation: state.generation,
+            rows: Vec::new(),
+            progress: vec![progress],
+            totals: state.totals,
+            is_final: false,
+            problem: None,
+        };
+        send_batch(&mut state, batch)
     }
 
     pub(super) fn finish(&self, generation: Generation) -> bool {
@@ -202,10 +232,15 @@ fn send(state: &mut State, rows: Vec<Row>, is_final: bool, problem: Option<Reaso
     let batch = RowBatch {
         generation: state.generation,
         rows,
+        progress: Vec::new(),
         totals: state.totals,
         is_final,
         problem,
     };
+    send_batch(state, batch)
+}
+
+fn send_batch(state: &mut State, batch: RowBatch) -> bool {
     match state.sender.send(batch) {
         Ok(()) => true,
         Err(_) => {

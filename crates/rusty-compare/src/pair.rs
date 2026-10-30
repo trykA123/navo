@@ -127,6 +127,7 @@ fn single_row(entry: SideEntry, status: Status) -> Row {
 
 fn row(left: Option<SideEntry>, right: Option<SideEntry>, status: Status) -> Row {
     Row {
+        id: 0,
         left: left.map(Arc::new),
         right: right.map(Arc::new),
         raw_status: status,

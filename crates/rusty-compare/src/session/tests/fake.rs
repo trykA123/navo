@@ -33,6 +33,12 @@ pub(super) struct ReadTracking {
     pub after: Arc<AtomicU64>,
 }
 
+#[derive(Clone)]
+pub(super) struct ReadGate {
+    pub started: Arc<AtomicBool>,
+    pub release: Arc<AtomicBool>,
+}
+
 pub(super) struct FakeSource {
     provider: ProviderId,
     root: ProviderPath,
@@ -46,6 +52,7 @@ pub(super) struct FakeSource {
     panic_list_once: Arc<AtomicBool>,
     read_delay: Option<Duration>,
     read_marker: Option<Arc<AtomicBool>>,
+    read_gate: Option<ReadGate>,
     reads_total: Arc<AtomicU64>,
     reads_after: Arc<AtomicU64>,
     case_sensitive: bool,
@@ -66,6 +73,7 @@ impl FakeSource {
             panic_list_once: Arc::new(AtomicBool::new(false)),
             read_delay: None,
             read_marker: None,
+            read_gate: None,
             reads_total: Arc::new(AtomicU64::new(0)),
             reads_after: Arc::new(AtomicU64::new(0)),
             case_sensitive,
@@ -139,6 +147,10 @@ impl FakeSource {
         self.reads_after = tracking.after;
     }
 
+    pub(super) fn block_first_read(&mut self, gate: ReadGate) {
+        self.read_gate = Some(gate);
+    }
+
     fn push_entry(&mut self, entry: SideEntry) {
         let full = entry.rel.as_path().to_text();
         let folder = full.rsplit_once('/').map_or("", |(folder, _)| folder);
@@ -203,6 +215,7 @@ impl SideSource for FakeSource {
             position: 0,
             delay: self.read_delay,
             marker: self.read_marker.clone(),
+            gate: self.read_gate.clone(),
             total: Arc::clone(&self.reads_total),
             after: Arc::clone(&self.reads_after),
         }))
@@ -245,6 +258,7 @@ struct FakeReader {
     position: usize,
     delay: Option<Duration>,
     marker: Option<Arc<AtomicBool>>,
+    gate: Option<ReadGate>,
     total: Arc<AtomicU64>,
     after: Arc<AtomicU64>,
 }
@@ -260,6 +274,12 @@ fn slow_tick(slow: &SlowListing, index: usize) {
 
 impl Read for FakeReader {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        if let Some(gate) = self.gate.take() {
+            gate.started.store(true, Ordering::Release);
+            while !gate.release.load(Ordering::Acquire) {
+                thread::yield_now();
+            }
+        }
         if self
             .marker
             .as_ref()

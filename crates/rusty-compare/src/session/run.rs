@@ -1,25 +1,25 @@
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 
-use crate::content::{self, CheckOptions, Side};
+use crate::content::{self, CheckOptions, ContentProgress, Side};
 use crate::model::{
     CancelToken, CaseRule, ContentClass, EntryKind, Generation, Reason, RelPath, Row, SideEntry,
     SideSource, Status,
 };
 use crate::pair::pair;
+use crate::queue::{CheckEvent, Job, JobSpec, Queue, Settlement};
 use crate::rules::IgnoreRules;
 
 use super::SessionOptions;
 use super::classify::classify;
 use super::shared::Shared;
 
-pub(super) const MAX_WORKERS: usize = 4;
-pub(super) const JOB_QUEUE: usize = 64;
+#[cfg(test)]
+pub(super) type SettleHook = Arc<dyn Fn(bool, u64) + Send + Sync>;
 
 pub(super) struct Run {
     pub(super) left: Arc<dyn SideSource>,
@@ -28,6 +28,10 @@ pub(super) struct Run {
     pub(super) generation: Generation,
     pub(super) cancel: CancelToken,
     pub(super) shared: Arc<Shared>,
+    pub(super) queue: Arc<Queue>,
+    pub(super) next_row_id: Arc<AtomicU64>,
+    #[cfg(test)]
+    pub(super) settle_hook: Option<SettleHook>,
 }
 
 struct Context {
@@ -37,10 +41,10 @@ struct Context {
     generation: Generation,
     cancel: CancelToken,
     shared: Arc<Shared>,
-}
-
-struct FileJob {
-    id: u64,
+    queue: Arc<Queue>,
+    next_row_id: Arc<AtomicU64>,
+    #[cfg(test)]
+    settle_hook: Option<SettleHook>,
 }
 
 #[derive(Clone)]
@@ -57,6 +61,7 @@ enum SideId {
 }
 
 pub(super) fn spawn(run: Run) -> Vec<JoinHandle<()>> {
+    let workers = run.queue.workers();
     let context = Arc::new(Context {
         left: run.left,
         right: run.right,
@@ -64,21 +69,23 @@ pub(super) fn spawn(run: Run) -> Vec<JoinHandle<()>> {
         generation: run.generation,
         cancel: run.cancel,
         shared: run.shared,
+        queue: run.queue,
+        next_row_id: run.next_row_id,
+        #[cfg(test)]
+        settle_hook: run.settle_hook,
     });
-    let (job_sender, job_receiver) = mpsc::sync_channel(JOB_QUEUE);
-    let job_receiver = Arc::new(Mutex::new(job_receiver));
-    let mut handles = Vec::with_capacity(MAX_WORKERS + 1);
-    for _ in 0..MAX_WORKERS {
+    let mut handles = Vec::with_capacity(workers + 1);
+    for _ in 0..workers {
         let context = Arc::clone(&context);
-        let jobs = Arc::clone(&job_receiver);
-        handles.push(thread::spawn(move || worker(&context, &jobs)));
+        handles.push(thread::spawn(move || worker(&context)));
     }
     let walker = Arc::clone(&context);
     handles.push(thread::spawn(move || {
         let inner = Arc::clone(&walker);
-        let walked = catch_unwind(AssertUnwindSafe(move || walk(&inner, job_sender)));
+        let walked = catch_unwind(AssertUnwindSafe(move || walk(&inner)));
         if walked.is_err() {
             walker.cancel.cancel();
+            walker.queue.close();
             walker
                 .shared
                 .finish_problem(walker.generation, Reason::WorkerPanicked);
@@ -87,50 +94,93 @@ pub(super) fn spawn(run: Run) -> Vec<JoinHandle<()>> {
     handles
 }
 
-fn worker(context: &Context, jobs: &Mutex<Receiver<FileJob>>) {
+#[cfg(test)]
+fn call_settle_hook(context: &Context, after_complete: bool, id: u64) {
+    if let Some(hook) = &context.settle_hook {
+        hook(after_complete, id);
+    }
+}
+
+fn worker(context: &Context) {
     loop {
         if context.cancel.is_cancelled() {
             break;
         }
-        let job = {
-            let receiver = jobs.lock().unwrap_or_else(PoisonError::into_inner);
-            receiver.recv()
-        };
-        let Ok(job) = job else {
+        let Some(event) = context.queue.next() else {
             break;
         };
-        let Some(row) = context.shared.take_row(job.id) else {
-            break;
-        };
-        if context.cancel.is_cancelled() {
-            break;
-        }
-        let checked = catch_unwind(AssertUnwindSafe(|| check_row(context, row.clone())));
-        let row = match checked {
-            Ok(row) => row,
-            Err(_) => {
-                let mut row = row;
-                row.raw_status = Status::Unavailable(Reason::WorkerPanicked);
+        match event {
+            CheckEvent::Job(job) => {
+                if !run_job(context, job) {
+                    break;
+                }
+            }
+            CheckEvent::Stopped(id) => {
+                let Some(mut row) = context.shared.take_row(id) else {
+                    continue;
+                };
+                row.raw_status = Status::NotChecked(Reason::Stopped);
                 row.display_status = row.raw_status;
                 row.content = ContentClass::Unknown;
-                row
+                if !context.shared.emit_final(context.generation, row) {
+                    break;
+                }
             }
-        };
-        if !context.shared.emit_final(context.generation, row) {
-            break;
         }
     }
 }
 
-fn check_row(context: &Context, mut row: Row) -> Row {
+fn run_job(context: &Context, job: Job) -> bool {
+    let Some(row) = context.shared.take_row(job.id) else {
+        context.queue.complete(job.id);
+        return false;
+    };
+    if context.cancel.is_cancelled() {
+        context.queue.complete(job.id);
+        return false;
+    }
+    let checked = catch_unwind(AssertUnwindSafe(|| check_row(context, row.clone(), &job)));
+    let mut row = match checked {
+        Ok(row) => row,
+        Err(_) => {
+            let mut row = row;
+            row.raw_status = Status::Unavailable(Reason::WorkerPanicked);
+            row.display_status = row.raw_status;
+            row.content = ContentClass::Unknown;
+            row
+        }
+    };
+    #[cfg(test)]
+    call_settle_hook(context, false, job.id);
+    let settlement = context.queue.complete(job.id);
+    #[cfg(test)]
+    call_settle_hook(context, true, job.id);
+    if settlement == Settlement::Stopped {
+        row.raw_status = Status::NotChecked(Reason::Stopped);
+        row.display_status = row.raw_status;
+        row.content = ContentClass::Unknown;
+    }
+    context.shared.emit_final(context.generation, row)
+}
+
+fn check_row(context: &Context, mut row: Row, job: &Job) -> Row {
     let (Some(left_entry), Some(right_entry)) = (row.left.as_deref(), row.right.as_deref()) else {
         return row;
     };
     let options = CheckOptions {
         cache: &*context.options.cache,
-        cancel: &context.cancel,
-        read_hint: context.options.read_hint,
+        cancel: &job.cancel,
+        read_hint: job.read_hint,
         known_same: false,
+    };
+    let mut report = |progress: ContentProgress| {
+        if let Some(progress) =
+            context
+                .queue
+                .progress(job.id, progress.bytes_done, progress.bytes_total)
+        {
+            context.shared.emit_progress(context.generation, progress);
+        }
     };
     let result = content::check(
         Side {
@@ -142,7 +192,7 @@ fn check_row(context: &Context, mut row: Row) -> Row {
             source: &*context.right,
         },
         &options,
-        &mut |_| {},
+        &mut report,
     );
     row.raw_status = result.status;
     row.display_status = result.status;
@@ -150,7 +200,7 @@ fn check_row(context: &Context, mut row: Row) -> Row {
     row
 }
 
-fn walk(context: &Context, jobs: SyncSender<FileJob>) {
+fn walk(context: &Context) {
     let mut tasks = VecDeque::new();
     tasks.push_back(WalkTask {
         left: Some(RelPath::root()),
@@ -161,19 +211,14 @@ fn walk(context: &Context, jobs: SyncSender<FileJob>) {
         if context.cancel.is_cancelled() || context.shared.is_closed() {
             break;
         }
-        if !walk_folder(context, task, &mut tasks, &jobs) {
+        if !walk_folder(context, task, &mut tasks) {
             break;
         }
     }
     context.shared.finish(context.generation);
 }
 
-fn walk_folder(
-    context: &Context,
-    task: WalkTask,
-    tasks: &mut VecDeque<WalkTask>,
-    jobs: &SyncSender<FileJob>,
-) -> bool {
+fn walk_folder(context: &Context, task: WalkTask, tasks: &mut VecDeque<WalkTask>) -> bool {
     if context.cancel.is_cancelled() {
         return false;
     }
@@ -202,16 +247,34 @@ fn walk_folder(
     let Some(checking) = classify_rows(context, &mut rows, tasks) else {
         return false;
     };
-    let ids = context.shared.store_rows(checking);
-    if !context.shared.emit_initial(context.generation, rows) {
-        return false;
+    publish_checking(context, rows, checking)
+}
+
+fn publish_checking(context: &Context, rows: Vec<Row>, checking: Vec<Row>) -> bool {
+    let jobs: Vec<JobSpec> = checking.iter().map(|row| job_spec(context, row)).collect();
+    context.queue.pause();
+    context.shared.store_rows(checking);
+    context.queue.push_batch(&jobs);
+    let emitted = context.shared.emit_initial(context.generation, rows);
+    context.queue.resume();
+    emitted
+}
+
+fn job_spec(context: &Context, row: &Row) -> JobSpec {
+    let left = row.left.as_deref();
+    let right = row.right.as_deref();
+    let size = left
+        .map_or(0, |entry| entry.size)
+        .max(right.map_or(0, |entry| entry.size));
+    let volumes = (
+        left.map_or(0, |entry| context.left.volume(&entry.rel)),
+        right.map_or(0, |entry| context.right.volume(&entry.rel)),
+    );
+    JobSpec {
+        id: row.id,
+        size,
+        volumes,
     }
-    for id in ids {
-        if !send_job(jobs, FileJob { id }, &context.cancel) {
-            return false;
-        }
-    }
-    true
 }
 
 fn classify_rows(
@@ -224,6 +287,7 @@ fn classify_rows(
         if index.is_multiple_of(1024) && context.cancel.is_cancelled() {
             return None;
         }
+        row.id = context.next_row_id.fetch_add(1, Ordering::Relaxed);
         row.generation = context.generation;
         classify(row, context.options.check_mode);
         push_folders(tasks, row, &context.options.rules);
@@ -232,22 +296,6 @@ fn classify_rows(
         }
     }
     Some(checking)
-}
-
-fn send_job(jobs: &SyncSender<FileJob>, mut job: FileJob, cancel: &CancelToken) -> bool {
-    loop {
-        if cancel.is_cancelled() {
-            return false;
-        }
-        match jobs.try_send(job) {
-            Ok(()) => return true,
-            Err(TrySendError::Full(returned)) => {
-                job = returned;
-                thread::sleep(Duration::from_millis(1));
-            }
-            Err(TrySendError::Disconnected(_)) => return false,
-        }
-    }
 }
 
 fn fail_folder(context: &Context, task: &WalkTask, side: SideId, reason: Reason) -> bool {
@@ -259,7 +307,8 @@ fn fail_folder(context: &Context, task: &WalkTask, side: SideId, reason: Reason)
         let Some(folder) = folder else {
             return true;
         };
-        let row = folder_error(context.generation, folder, side, reason);
+        let mut row = folder_error(context.generation, folder, side, reason);
+        row.id = context.next_row_id.fetch_add(1, Ordering::Relaxed);
         return context.shared.emit_initial(context.generation, vec![row]);
     };
     let previous = row.raw_status;
@@ -319,6 +368,7 @@ fn folder_error(generation: Generation, folder: &RelPath, side: SideId, reason: 
         SideId::Right => (None, Some(entry)),
     };
     Row {
+        id: 0,
         left,
         right,
         raw_status: Status::Unavailable(reason),
@@ -337,34 +387,19 @@ fn push_folders(tasks: &mut VecDeque<WalkTask>, row: &Row, rules: &IgnoreRules) 
         .right
         .as_deref()
         .filter(|entry| entry.kind == EntryKind::Folder);
-    match (left, right) {
-        (Some(left), Some(right)) => {
-            if rules.enters(&left.rel) {
-                tasks.push_back(WalkTask {
-                    left: Some(left.rel.clone()),
-                    right: Some(right.rel.clone()),
-                    row: Some(row.clone()),
-                });
-            }
-        }
-        (Some(left), None) => {
-            if rules.enters(&left.rel) {
-                tasks.push_back(WalkTask {
-                    left: Some(left.rel.clone()),
-                    right: None,
-                    row: Some(row.clone()),
-                });
-            }
-        }
-        (None, Some(right)) => {
-            if rules.enters(&right.rel) {
-                tasks.push_back(WalkTask {
-                    left: None,
-                    right: Some(right.rel.clone()),
-                    row: Some(row.clone()),
-                });
-            }
-        }
-        (None, None) => {}
+    let (left, right) = match (left, right) {
+        (Some(left), right) => (Some(left.rel.clone()), right.map(|entry| entry.rel.clone())),
+        (None, Some(right)) => (None, Some(right.rel.clone())),
+        (None, None) => return,
+    };
+    let Some(folder) = left.as_ref().or(right.as_ref()) else {
+        return;
+    };
+    if rules.enters(folder) {
+        tasks.push_back(WalkTask {
+            left,
+            right,
+            row: Some(row.clone()),
+        });
     }
 }

@@ -144,6 +144,7 @@ fn a_hundred_thousand_paired_rows_fit_in_fifty_megabytes() {
             bytes_rel.clone()
         };
         rows.push(Row {
+            id: u64::try_from(index).unwrap(),
             left: Some(Arc::new(entry(&left))),
             right: Some(Arc::new(entry(&wide_rel))),
             raw_status: Status::Same,
