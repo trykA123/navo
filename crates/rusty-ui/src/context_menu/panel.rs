@@ -18,9 +18,9 @@ use crate::tokens::Theme;
 
 pub(super) const RADIUS: f32 = 10.;
 
-fn shadow() -> Vec<BoxShadow> {
+fn shadow(t: &Theme) -> Vec<BoxShadow> {
     vec![BoxShadow {
-        color: gpui_kit::black().opacity(0.18),
+        color: t.shadows.ink.opacity(0.18),
         offset: point(px(0.), px(8.)),
         blur_radius: px(24.),
         spread_radius: px(0.),
@@ -41,7 +41,7 @@ pub(super) fn chrome(t: &Theme, level: usize) -> ObservedElement<Stateful<Div>> 
         .border_1()
         .border_color(t.colors.line)
         .bg(t.colors.surface)
-        .shadow(shadow())
+        .shadow(shadow(t))
         .text_color(t.colors.text)
         .text_size(t.typography.body)
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())

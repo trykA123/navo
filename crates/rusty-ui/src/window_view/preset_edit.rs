@@ -135,7 +135,7 @@ fn scrim(dialog: impl IntoElement, reduce_motion: bool, cx: &App) -> AnyElement 
         .flex()
         .items_center()
         .justify_center()
-        .bg(gpui_kit::black().opacity(0.4))
+        .bg(crate::tokens::current(cx).surfaces.scrim)
         .occlude()
         .child(dialog);
     if reduce_motion {

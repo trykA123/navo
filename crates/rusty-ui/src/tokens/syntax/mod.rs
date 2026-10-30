@@ -48,7 +48,7 @@ pub(super) fn role(name: &'static str, color: Hsla, style: Style) -> Role {
     Role { name, color, style }
 }
 
-fn roles(syntax: SyntaxTheme, mode: Mode, colors: &Colors) -> Vec<Role> {
+pub(super) fn roles(syntax: SyntaxTheme, mode: Mode, colors: &Colors) -> Vec<Role> {
     let named = match (syntax, mode) {
         (SyntaxTheme::OxidisedIron, Mode::Light) => iron::light(colors),
         (SyntaxTheme::OxidisedIron, Mode::Dark) => iron::dark(colors),

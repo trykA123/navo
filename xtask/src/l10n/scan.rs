@@ -67,7 +67,7 @@ fn calls(tokens: &[Spanned]) -> Vec<Found> {
     found
 }
 
-fn live_tokens(tokens: Vec<Spanned>) -> Vec<Spanned> {
+pub(crate) fn live_tokens(tokens: Vec<Spanned>) -> Vec<Spanned> {
     let mut live = Vec::with_capacity(tokens.len());
     let mut index = 0;
     while index < tokens.len() {

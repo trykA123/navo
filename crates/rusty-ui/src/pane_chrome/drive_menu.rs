@@ -208,9 +208,9 @@ fn row_body(drive: &DriveInfo, props: RowProps) -> impl InteractiveElement + Int
         )
 }
 
-fn shadow() -> Vec<BoxShadow> {
+fn shadow(t: &Theme) -> Vec<BoxShadow> {
     vec![BoxShadow {
-        color: gpui_kit::black().opacity(0.16),
+        color: t.shadows.ink.opacity(0.16),
         offset: point(px(0.), px(4.)),
         blur_radius: px(14.),
         spread_radius: px(0.),
@@ -317,7 +317,7 @@ impl RenderOnce for DriveMenu {
             .border_1()
             .border_color(c.line)
             .bg(c.surface)
-            .when(!t.is_contrast, |menu| menu.shadow(shadow()))
+            .when(!t.is_contrast, |menu| menu.shadow(shadow(t)))
             .text_color(c.text)
             .text_size(t.typography.small)
             .children(rows)

@@ -11,7 +11,7 @@ fn steps_without_coverage_follow_the_exact_order() {
     .into_iter()
     .map(|step| (step.name, step.program, step.args))
     .collect();
-    let expected: [(&str, &str, &[&str]); 10] = [
+    let expected: [(&str, &str, &[&str]); 11] = [
         ("fmt", "cargo", &["fmt", "--all", "--check"]),
         (
             "clippy",
@@ -29,6 +29,7 @@ fn steps_without_coverage_follow_the_exact_order() {
         ("typos", "typos", &[]),
         ("size", "cargo", &["xtask", "size"]),
         ("l10n", "cargo", &["xtask", "l10n"]),
+        ("colors", "cargo", &["xtask", "colors"]),
         ("deny", "cargo", &["deny", "check"]),
         ("audit", "cargo", &["audit"]),
         (
@@ -78,24 +79,24 @@ fn no_step_repeats() {
 }
 
 #[test]
-fn steps_without_coverage_have_ten_steps() {
+fn steps_without_coverage_have_eleven_steps() {
     assert_eq!(
         steps(&GateOptions {
             with_coverage: false,
         })
         .len(),
-        10
+        11
     );
 }
 
 #[test]
-fn steps_with_coverage_have_eleven_steps() {
+fn steps_with_coverage_have_twelve_steps() {
     assert_eq!(
         steps(&GateOptions {
             with_coverage: true,
         })
         .len(),
-        11
+        12
     );
 }
 
@@ -225,6 +226,7 @@ fn check_steps_for_one_crate_follow_the_exact_order() {
         ("typos", "typos", strings(&[])),
         ("size", "cargo", strings(&["xtask", "size"])),
         ("l10n", "cargo", strings(&["xtask", "l10n"])),
+        ("colors", "cargo", strings(&["xtask", "colors"])),
         (
             "nextest",
             "cargo",
@@ -242,7 +244,7 @@ fn check_steps_for_two_crates_repeat_the_package_flag() {
         strings(&["clippy", "-p", "a", "-p", "b"])
     );
     assert_eq!(
-        steps[6].args,
+        steps[7].args,
         strings(&["nextest", "run", "-p", "a", "-p", "b", "--profile", "ci"])
     );
 }

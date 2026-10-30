@@ -42,9 +42,9 @@ fn text_width(window: &Window, t: &Theme, text: &SharedString, weight: FontWeigh
     f32::from(line.width) + f32::from(t.spacing.xs) * 2.
 }
 
-fn menu_shadow() -> Vec<BoxShadow> {
+fn menu_shadow(t: &Theme) -> Vec<BoxShadow> {
     vec![BoxShadow {
-        color: gpui_kit::black().opacity(0.16),
+        color: t.shadows.ink.opacity(0.16),
         offset: point(px(0.), px(4.)),
         blur_radius: px(14.),
         spread_radius: px(0.),
@@ -148,7 +148,7 @@ pub(super) fn hidden_menu(hidden: Hidden, t: &Theme, cx: &App) -> AnyElement {
         .border_1()
         .border_color(c.line)
         .bg(c.surface)
-        .when(!t.is_contrast, |menu| menu.shadow(menu_shadow()))
+        .when(!t.is_contrast, |menu| menu.shadow(menu_shadow(t)))
         .text_color(c.text)
         .text_size(t.typography.small)
         .children(rows);

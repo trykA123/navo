@@ -1,7 +1,7 @@
 mod check;
 mod ftl;
-mod scan;
-mod tokens;
+pub(crate) mod scan;
+pub(crate) mod tokens;
 
 #[cfg(test)]
 mod tests;
@@ -110,7 +110,7 @@ fn name_of(path: &Path) -> String {
         .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
 }
 
-fn files_with(dir: &Path, extension: &str) -> io::Result<Vec<PathBuf>> {
+pub(crate) fn files_with(dir: &Path, extension: &str) -> io::Result<Vec<PathBuf>> {
     let mut found = Vec::new();
     let mut pending = vec![dir.to_path_buf()];
     while let Some(next) = pending.pop() {
@@ -127,7 +127,7 @@ fn files_with(dir: &Path, extension: &str) -> io::Result<Vec<PathBuf>> {
     Ok(found)
 }
 
-fn is_test_path(path: &Path) -> bool {
+pub(crate) fn is_test_path(path: &Path) -> bool {
     path.iter().any(|part| {
         let part = part.to_string_lossy();
         let stem = part.strip_suffix(".rs").unwrap_or(&part);

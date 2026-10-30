@@ -6,6 +6,7 @@ use super::{
     apply_with, current,
 };
 
+mod light_dark;
 mod surfaces;
 
 const MODES: [Mode; 2] = [Mode::Light, Mode::Dark];

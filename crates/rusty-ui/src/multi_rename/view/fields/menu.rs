@@ -5,7 +5,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, BoxShadow, ClickEvent, Div, ElementId, Entity, FontWeight, InteractiveElement,
     IntoElement, ParentElement, RenderOnce, Role, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Window, black, div, point, px,
+    StatefulInteractiveElement, Styled, Window, div, point, px,
 };
 use rusty_l10n::tr;
 
@@ -80,9 +80,9 @@ impl FieldMenu {
     }
 }
 
-fn shadow() -> Vec<BoxShadow> {
+fn shadow(t: &Theme) -> Vec<BoxShadow> {
     vec![BoxShadow {
-        color: black().opacity(0.18),
+        color: t.shadows.ink.opacity(0.18),
         offset: point(px(0.), px(8.)),
         blur_radius: px(24.),
         spread_radius: px(0.),
@@ -157,7 +157,7 @@ impl RenderOnce for FieldMenu {
             .border_1()
             .border_color(t.colors.line)
             .bg(t.colors.surface)
-            .when(!t.is_contrast, |menu| menu.shadow(shadow()))
+            .when(!t.is_contrast, |menu| menu.shadow(shadow(&t)))
             .text_color(t.colors.text)
             .text_size(t.typography.small)
             .children(filter)

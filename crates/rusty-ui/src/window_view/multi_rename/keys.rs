@@ -102,7 +102,7 @@ impl FerriteWindow {
             Some(menu) => panel.presets_menu(menu),
             None => panel,
         };
-        let root = crate::multi_rename::scrim()
+        let root = crate::multi_rename::scrim(tokens::current(cx))
             .id("multi-rename-scrim")
             .occlude()
             .key_context(contexts(&["MultiRename", "Dialog"]))

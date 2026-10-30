@@ -179,7 +179,7 @@ impl Render for MultiRenameToolPage {
             .flex_1()
             .min_h_0()
             .child(self.window.clone())
-            .child(scrim().child(panel))
+            .child(scrim(rusty_ui::tokens::current(cx)).child(panel))
     }
 }
 

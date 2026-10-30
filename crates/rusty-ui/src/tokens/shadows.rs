@@ -5,6 +5,7 @@ use super::{Mode, Surfaces};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Shadows {
+    pub ink: Hsla,
     pub card: Vec<BoxShadow>,
     pub card_active: Vec<BoxShadow>,
     pub job_card: Vec<BoxShadow>,
@@ -53,6 +54,13 @@ fn shadow(layers: impl IntoIterator<Item = Layer>) -> Vec<BoxShadow> {
         .collect()
 }
 
+pub(super) fn ink(mode: Mode) -> Hsla {
+    match mode {
+        Mode::Light => ok(20., 0.02, 250.),
+        Mode::Dark => ok(0., 0., 0.),
+    }
+}
+
 struct Depth {
     card: [Layer; 2],
     pop: Layer,
@@ -65,7 +73,7 @@ struct Depth {
 fn depth(mode: Mode) -> Depth {
     match mode {
         Mode::Light => {
-            let (ink, ui) = (ok(20., 0.02, 250.), ok(21., 0.012, 260.));
+            let (ink, ui) = (ink(mode), ok(21., 0.012, 260.));
             Depth {
                 card: [
                     drop(ink.opacity(0.08), 1., 2., 0.),
@@ -85,7 +93,7 @@ fn depth(mode: Mode) -> Depth {
             }
         }
         Mode::Dark => {
-            let black = ok(0., 0., 0.);
+            let black = ink(mode);
             Depth {
                 card: [
                     drop(black.opacity(0.4), 1., 2., 0.),
@@ -111,6 +119,7 @@ pub(super) fn shadows(mode: Mode, s: &Surfaces) -> Shadows {
     let d = depth(mode);
     let sheet = [d.sheet, ring(s.card_edge, 1.)];
     Shadows {
+        ink: ink(mode),
         card: shadow([ring(s.card_edge, 1.)]),
         card_active: shadow(d.card.into_iter().chain([ring(s.card_ring, 1.)])),
         job_card: shadow([d.pop, ring(s.card_edge, 1.)]),

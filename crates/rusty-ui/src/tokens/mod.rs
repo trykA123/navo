@@ -1,6 +1,7 @@
 mod contrast;
 mod density;
 mod design_b;
+mod diff;
 mod kit;
 mod marks;
 mod memory;
@@ -10,6 +11,7 @@ mod shadows;
 mod surfaces;
 mod syntax;
 mod system_palette;
+mod treemap;
 
 #[cfg(test)]
 mod tests;
@@ -20,6 +22,7 @@ use gpui_kit::{App, Global, Hsla, Pixels, SharedString};
 
 pub use contrast::{contrast_ratio, relative_luminance};
 pub use density::{Density, Rows};
+pub use diff::{DiffColors, DiffTone};
 pub use kit::{ThemeLook, apply, apply_look, apply_with};
 pub use marks::MarkColors;
 pub use memory::{MemColors, MemKind};
@@ -32,6 +35,7 @@ pub use system_palette::{
     SystemPalette, contrast_theme, from_colorref, set_system_palette_reader, system_palette,
 };
 pub(crate) use system_palette::{map_contrast_colors, with_system_palette};
+pub use treemap::{TreemapLook, treemap_look};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Mode {
@@ -187,6 +191,7 @@ pub struct Theme {
     pub radii: Radii,
     pub marks: MarkColors,
     pub mem: MemColors,
+    pub diff: DiffColors,
     pub surfaces: Surfaces,
     pub shadows: Shadows,
     pub motion: Motion,
@@ -229,6 +234,7 @@ impl Theme {
             radii: design_b::radii(),
             marks: marks::mark_colors(mode),
             mem: memory::mem_colors(mode),
+            diff: diff::diff_colors(mode),
             shadows: shadows::shadows(mode, &surfaces),
             surfaces,
             motion: motion::motion(),

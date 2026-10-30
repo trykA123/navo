@@ -41,6 +41,21 @@ pub fn contrast_theme(base: &Theme, p: &SystemPalette) -> Theme {
         free: p.window,
         free_line: p.window_text,
     };
+    let tone = super::DiffTone {
+        text: p.window_text,
+        mark: p.hot_light,
+        fill: p.window,
+        wash: p.window,
+    };
+    theme.diff = super::DiffColors {
+        delete: tone,
+        add: tone,
+        change: tone,
+        moved: tone,
+        conflict: tone,
+        auto_merged: tone,
+        gap_hatch: p.window_text,
+    };
     theme
 }
 
@@ -111,6 +126,7 @@ fn contrast_surfaces(p: &SystemPalette) -> super::Surfaces {
 
 fn contrast_shadows(p: &SystemPalette) -> super::Shadows {
     super::Shadows {
+        ink: p.window,
         card: vec![],
         card_active: vec![],
         job_card: vec![],

@@ -116,7 +116,7 @@ The app icon and wordmark live in `assets/brand/`. After editing an SVG there, r
 
 `cargo xtask gate` runs the whole quality gate. `cargo xtask gate --coverage` adds the coverage floors.
 
-Workers run `cargo xtask check -p <crate> [-p <crate>...]` on the crates they changed. It runs fmt, clippy, taplo, typos, size, l10n and the nextest run for those crates only. The full gate runs on `main` after merging.
+Workers run `cargo xtask check -p <crate> [-p <crate>...]` on the crates they changed. It runs fmt, clippy, taplo, typos, size, l10n, colors and the nextest run for those crates only. The full gate runs on `main` after merging.
 
 The gate runs, in order:
 
@@ -126,13 +126,14 @@ The gate runs, in order:
 4. typos
 5. size limits
 6. l10n: the Fluent files parse, every literal message id exists and is used, and the count of hard-coded texts (capitalised literals of two or more words in non-test code of `rusty-ui` and `rusty-app`) matches `xtask/l10n-allow.txt`
-7. cargo-deny
-8. cargo-audit
-9. nextest
-10. doc tests
-11. coverage (only with `--coverage`)
+7. colors: no colour is built outside the theme token layer (`rgb(`, `hsla(`, `Hsla {`, `black()`, SVG `fill="#`), except the files listed with a reason in `xtask/colors-allow.txt`
+8. cargo-deny
+9. cargo-audit
+10. nextest
+11. doc tests
+12. coverage (only with `--coverage`)
 
-Other subcommands: `cargo xtask size`, `cargo xtask l10n [--list]`, `cargo xtask coverage`, `cargo xtask binsize <path>`, `cargo xtask bench-copy` and `cargo xtask perf-fixture`.
+Other subcommands: `cargo xtask size`, `cargo xtask l10n [--list]`, `cargo xtask colors`, `cargo xtask coverage`, `cargo xtask binsize <path>`, `cargo xtask bench-copy` and `cargo xtask perf-fixture`.
 
 CI is Windows-first. Every push runs clippy, nextest and the doc tests on Windows, and builds `navo.exe` with its PDB and `pdfium.dll` as an artifact. Pushes to `main` also run a start-up and memory benchmark, described in [docs/perf.md](docs/perf.md). The full gate on Linux runs only when started by hand. The binary size and copy speed checks are informational for now.
 

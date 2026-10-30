@@ -1,0 +1,3 @@
+crates/rusty-ui/src/tokens/** | the token layer builds every colour the rest of the app reads
+crates/rusty-ui/src/window_view/viewer/image/fixtures.rs | test image whose SVG source carries its own colours
+assets/brand/** | the logo keeps its brand colours

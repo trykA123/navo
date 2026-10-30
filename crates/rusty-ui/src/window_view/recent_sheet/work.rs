@@ -181,7 +181,7 @@ impl FerriteWindow {
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(gpui_kit::black().opacity(0.4))
+                .bg(crate::tokens::current(cx).surfaces.scrim)
                 .occlude()
                 .child(dialog)
                 .into_any_element(),

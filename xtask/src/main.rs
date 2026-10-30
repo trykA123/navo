@@ -10,6 +10,7 @@ mod bench_diff;
 mod bench_large;
 mod bench_walk;
 mod binsize;
+mod colors;
 mod coverage;
 mod gate;
 mod l10n;
@@ -29,6 +30,7 @@ fn main() -> ExitCode {
         Some("gate") => gate::run(rest),
         Some("check") => gate::check(rest),
         Some("l10n") => l10n::run(rest),
+        Some("colors") => colors::run(rest),
         Some("perf-fixture") => perf::fixture(rest),
         Some("perf-summary") => perf::summary(rest),
         Some("bench-copy") => bench_copy::run(rest),
@@ -37,7 +39,7 @@ fn main() -> ExitCode {
         Some("bench-walk") => bench_walk::run(rest),
         _ => {
             eprintln!(
-                "usage: cargo xtask <size | coverage | binsize <path> | gate [--coverage] | check -p <crate> [-p <crate>...] | l10n [--list] | perf-fixture <dir> | perf-summary <reports-dir> <summary-file> | bench-copy <target-folder> [--runs N] [--sets small,medium,large] | bench-diff [--quick] [--json <path>] | bench-large [--quick] [--huge] [--json <path>] | bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size]>"
+                "usage: cargo xtask <size | coverage | binsize <path> | gate [--coverage] | check -p <crate> [-p <crate>...] | l10n [--list] | colors | perf-fixture <dir> | perf-summary <reports-dir> <summary-file> | bench-copy <target-folder> [--runs N] [--sets small,medium,large] | bench-diff [--quick] [--json <path>] | bench-large [--quick] [--huge] [--json <path>] | bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size]>"
             );
             ExitCode::from(2)
         }

@@ -1,6 +1,7 @@
 use gpui_kit::{Background, ColorSpace, Hsla, linear_color_stop, linear_gradient};
 
-use super::palette::{Tokens, lch};
+use super::palette::Tokens;
+use super::shadows::ink;
 use super::{Colors, Mode};
 
 const MICA_ANGLE: f32 = 135.;
@@ -125,13 +126,8 @@ fn build(c: &Colors, t: &Tokens, scrim: Hsla) -> Surfaces {
     }
 }
 
+const SCRIM_ALPHA: f32 = 0.4;
+
 pub(super) fn surfaces(mode: Mode, colors: &Colors, tokens: &Tokens) -> Surfaces {
-    match mode {
-        Mode::Light => build(colors, tokens, colors.text.opacity(0.16)),
-        Mode::Dark => build(
-            colors,
-            tokens,
-            lch(5., tokens.bg.c / 2., tokens.bg.h).color().opacity(0.42),
-        ),
-    }
+    build(colors, tokens, ink(mode).opacity(SCRIM_ALPHA))
 }

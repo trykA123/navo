@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{BoxShadow, RenderOnce, Role, Size, black, deferred};
+use gpui_kit::{BoxShadow, RenderOnce, Role, Size, deferred};
 use rusty_l10n::{t, tr};
 
 use super::fields::Fields;
@@ -73,14 +73,14 @@ pub fn rename_title(count: usize, folder: &str) -> String {
 }
 
 #[must_use]
-pub fn scrim() -> Div {
+pub fn scrim(t: &Theme) -> Div {
     div()
         .absolute()
         .inset_0()
         .flex()
         .items_center()
         .justify_center()
-        .bg(black().opacity(0.4))
+        .bg(t.surfaces.scrim)
 }
 
 #[must_use]
@@ -101,9 +101,9 @@ fn pressed(handler: Option<Pressed>) -> impl Fn(&ClickEvent, &mut Window, &mut A
     }
 }
 
-fn shadow() -> Vec<BoxShadow> {
+fn shadow(t: &Theme) -> Vec<BoxShadow> {
     vec![BoxShadow {
-        color: black().opacity(0.24),
+        color: t.shadows.ink.opacity(0.24),
         offset: point(px(0.), px(12.)),
         blur_radius: px(32.),
         spread_radius: px(0.),
@@ -188,7 +188,7 @@ impl RenderOnce for RenamePanel {
             .border_1()
             .border_color(t.colors.line)
             .bg(t.colors.surface)
-            .shadow(shadow())
+            .shadow(shadow(&t))
             .overflow_hidden()
             .text_color(t.colors.text)
             .text_size(t.typography.body)

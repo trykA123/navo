@@ -1,17 +1,17 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum Token {
+pub(crate) enum Token {
     Ident(String),
     Punct(char),
     Str(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Spanned {
+pub(crate) struct Spanned {
     pub token: Token,
     pub line: usize,
 }
 
-pub(super) fn tokenize(source: &str) -> Vec<Spanned> {
+pub(crate) fn tokenize(source: &str) -> Vec<Spanned> {
     let mut lexer = Lexer {
         chars: source.chars().collect(),
         pos: 0,

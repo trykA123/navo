@@ -1,37 +1,11 @@
 use gpui_kit::Hsla;
-use gpui_kit::component::theme::oklch;
 
 use crate::tokens::Mode;
+use crate::tokens::treemap_look as look;
 
 const START_HUE: f32 = 40.;
 const GOLDEN_ANGLE: f32 = 137.508;
 const LEVELS: [f32; 4] = [1., -1., 0.5, -0.5];
-const CHROMA_STEP: f32 = 0.01;
-
-#[derive(Clone, Copy, Debug)]
-struct Look {
-    lightness: f32,
-    chroma: f32,
-    amplitude: f32,
-    ink: (f32, f32),
-}
-
-fn look(mode: Mode) -> Look {
-    match mode {
-        Mode::Light => Look {
-            lightness: 0.89,
-            chroma: 0.05,
-            amplitude: 0.035,
-            ink: (0.3, 0.03),
-        },
-        Mode::Dark => Look {
-            lightness: 0.36,
-            chroma: 0.055,
-            amplitude: 0.045,
-            ink: (0.93, 0.02),
-        },
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shade {
@@ -63,12 +37,8 @@ impl GroupColours {
     fn shade(self, level: f32) -> Shade {
         let look = look(self.mode);
         Shade {
-            bg: oklch(
-                look.lightness + look.amplitude * level,
-                look.chroma + CHROMA_STEP * level,
-                self.hue,
-            ),
-            ink: oklch(look.ink.0, look.ink.1, self.hue),
+            bg: look.fill(level, self.hue),
+            ink: look.ink(self.hue),
         }
     }
 }
