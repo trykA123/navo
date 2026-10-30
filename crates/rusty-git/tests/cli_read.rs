@@ -282,11 +282,18 @@ mod cli_read {
             return;
         };
         fixture.init(&["-b", "main"]);
+        // CI machines may set safe.directory globally; read no system or user config here.
+        let global = fixture.repo().with_file_name("empty-global-config");
+        std::fs::write(&global, "").unwrap();
         let options = CliOptions {
-            env: vec![(
-                OsString::from("GIT_TEST_ASSUME_DIFFERENT_OWNER"),
-                OsString::from("1"),
-            )],
+            env: vec![
+                (
+                    OsString::from("GIT_TEST_ASSUME_DIFFERENT_OWNER"),
+                    OsString::from("1"),
+                ),
+                (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
+                (OsString::from("GIT_CONFIG_GLOBAL"), global.into_os_string()),
+            ],
             ..CliOptions::default()
         };
         match CliGit::with_options(fixture.repo(), &options) {
