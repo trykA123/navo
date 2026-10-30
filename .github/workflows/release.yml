@@ -20,6 +20,9 @@ env:
   PDFIUM_TAG: chromium/8076
   PDFIUM_SHA256: 808d36da9bc5a3104315fb307c80998121f565ee53953633bf33e80d7429e5ac
   KEEP_RELEASES: 5
+  VPK_VERSION: 1.2.161
+  PACK_ID: NavoApp
+  CHANNEL: win
 
 jobs:
   check-tag:
@@ -72,7 +75,15 @@ jobs:
   build-windows:
     needs: check-tag
     runs-on: windows-latest
+    env:
+      TAG: ${{ inputs.tag }}
     steps:
+      - name: Tag maps to a Velopack prerelease
+        shell: pwsh
+        run: |
+          if (-not ($env:TAG -cmatch '^(alpha|beta)-(\d{4})-(\d{2})-(\d{2})([a-z])$')) {
+            throw "tag $env:TAG does not map to a Velopack version: use alpha-YYYY-MM-DDx or beta-YYYY-MM-DDx with one lowercase letter"
+          }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -85,12 +96,11 @@ jobs:
         run: |
           $out = (& target/release/navo.exe --version | Out-String).Trim()
           if ($out -ne 'navo 0.0.1') { throw "unexpected output: $out" }
-      - name: Stage navo.exe with its PDB, pdfium.dll and licences
+      - name: Stage navo.exe, pdfium.dll and licences
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item -LiteralPath target/release/navo.exe -Destination dist
-          Copy-Item -LiteralPath target/release/navo.pdb -Destination dist
           ./.github/scripts/fetch-pdfium.ps1 -Destination dist -Licenses dist/licenses/pdfium
       - name: Verify release crash backtrace from the staged distribution
         timeout-minutes: 2
@@ -111,10 +121,49 @@ jobs:
           $record = Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json
           if ($record.message -ne 'Navo CI crash test') { throw 'unexpected panic message' }
           if ($record.backtrace -notmatch 'navo::crash_test\r?\n\s+at [^\r\n]*main\.rs:\d+') { throw 'release backtrace has no Navo crash_test frame with its source location' }
+      - name: Install vpk
+        shell: pwsh
+        run: |
+          dotnet tool install vpk --version $env:VPK_VERSION --tool-path "$env:RUNNER_TEMP/vpk"
+          if ($LASTEXITCODE -ne 0) { throw "vpk install failed with $LASTEXITCODE" }
+      - name: Pack with Velopack
+        shell: pwsh
+        run: |
+          # Velopack needs semver: the Cargo version that navo prints, plus a prerelease from the tag.
+          # alpha-2026-10-30c becomes 0.0.1-alpha.20261030c and beta-2026-11-02a becomes 0.0.1-beta.20261102a.
+          # The letter keeps the identifier alphanumeric, so builds sort by date, then by letter.
+          $banner = (& dist/navo.exe --version | Out-String).Trim()
+          if ($banner -notmatch '^navo (\d+\.\d+\.\d+)$') { throw "unexpected version output: $banner" }
+          $base = $Matches[1]
+          if (-not ($env:TAG -cmatch '^(alpha|beta)-(\d{4})-(\d{2})-(\d{2})([a-z])$')) { throw "bad tag: $env:TAG" }
+          $version = "$base-$($Matches[1]).$($Matches[2])$($Matches[3])$($Matches[4])$($Matches[5])"
+          Write-Output "package version $version"
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          & "$env:RUNNER_TEMP/vpk/vpk.exe" pack --packId $env:PACK_ID --packVersion $version --packTitle Navo --packDir dist --mainExe navo.exe --icon assets/brand/navo.ico --channel $env:CHANNEL --runtime win-x64 --outputDir out
+          if ($LASTEXITCODE -ne 0) { throw "vpk pack failed with $LASTEXITCODE" }
+          Copy-Item -LiteralPath dist/navo.exe -Destination out
+          Compress-Archive -LiteralPath target/release/navo.pdb -DestinationPath out/navo-windows-x64-pdb.zip
+          Get-ChildItem out | Format-Table Name, Length
+      - name: Verify the portable package
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          $portable = Join-Path $env:RUNNER_TEMP 'portable'
+          Expand-Archive -LiteralPath "out/$env:PACK_ID-$env:CHANNEL-Portable.zip" -DestinationPath $portable
+          $app = Join-Path $portable 'current'
+          foreach ($path in 'navo.exe', 'pdfium.dll', 'licenses/pdfium/LICENSE') {
+            if (-not (Test-Path -LiteralPath (Join-Path $app $path))) { throw "$path is missing from the portable package" }
+          }
+          $out = (& (Join-Path $app 'navo.exe') --version | Out-String).Trim()
+          if ($out -ne 'navo 0.0.1') { throw "unexpected output from the portable package: $out" }
+          foreach ($name in "$env:PACK_ID-$env:CHANNEL-Setup.exe", "releases.$env:CHANNEL.json", 'RELEASES', 'navo.exe', 'navo-windows-x64-pdb.zip') {
+            if (-not (Test-Path -LiteralPath "out/$name")) { throw "missing out/$name" }
+          }
+          if (-not (Get-ChildItem -LiteralPath out -Filter '*-full.nupkg')) { throw 'missing the full nupkg' }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: navo-windows-x64-${{ github.sha }}
-          path: dist/
+          path: out/
           if-no-files-found: error
 
   publish:
@@ -130,13 +179,13 @@ jobs:
         with:
           name: navo-windows-x64-${{ github.sha }}
           path: navo
-      - name: Zip the distribution
-        run: |
-          cp navo/navo.exe navo.exe
-          (cd navo && zip -qr ../navo-windows-x64.zip .)
+      - name: Write the checksums
+        working-directory: navo
+        run: sha256sum -- * > SHA256SUMS.txt
       - name: Create the pre-release
+        working-directory: navo
         run: |
-          gh release create "$TAG" navo.exe navo-windows-x64.zip \
+          gh release create "$TAG" ./* \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "$TAG" --notes "Build ${GITHUB_SHA::8}. Notes follow."
       - name: Keep the newest releases

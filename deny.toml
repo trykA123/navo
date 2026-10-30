@@ -9,6 +9,10 @@ ignore = [
     { id = "RUSTSEC-2026-0370", reason = "zvariant: unmaintained (merged into zbus 6), not vulnerable; transitive through gpui-kit 0.7.3 (accesskit_unix, atspi); recheck on every gpui-kit update" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names: unmaintained (merged into zbus 6), not vulnerable; transitive through gpui-kit 0.7.3 (accesskit_unix, atspi); recheck on every gpui-kit update" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: unmaintained (merged into zbus 6), not vulnerable; transitive through gpui-kit 0.7.3 (accesskit_unix, atspi); recheck on every gpui-kit update" },
+    { id = "RUSTSEC-2024-0388", reason = "derivative: unmaintained, not vulnerable; transitive through velopack 1.2.161; recheck on every velopack update" },
+    { id = "RUSTSEC-2026-0367", reason = "zip 8.6.0 extract() symlink and permission handling; velopack 1.2.161 pins zip 8, Navo only runs the startup hooks and never extracts a package; remove when velopack moves to zip 9" },
+    { id = "RUSTSEC-2026-0368", reason = "zip 8.6.0 extract() symlink and permission handling; velopack 1.2.161 pins zip 8, Navo only runs the startup hooks and never extracts a package; remove when velopack moves to zip 9" },
+    { id = "RUSTSEC-2026-0369", reason = "zip 8.6.0 extract() symlink and permission handling; velopack 1.2.161 pins zip 8, Navo only runs the startup hooks and never extracts a package; remove when velopack moves to zip 9" },
 ]
 
 [licenses]
@@ -25,6 +29,7 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "BSL-1.0",
+    "CDLA-Permissive-2.0",
 ]
 unused-allowed-license = "allow"
 
