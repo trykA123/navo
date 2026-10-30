@@ -7,22 +7,64 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use rusty_compare::model::ObjectId;
+pub use rusty_compare::model::ObjectId;
 
+pub mod cli;
 pub mod format;
 
+pub use cli::{CliGit, CliOptions, DEFAULT_TIMEOUT};
 pub use format::{ObjectFormat, RefStorage, RepoFormat};
 
 #[derive(Debug)]
 pub enum GitError {
-    Io { path: PathBuf, kind: io::ErrorKind },
-    NotARepository { path: PathBuf },
-    InvalidRepositoryFile { path: PathBuf, detail: String },
-    InvalidConfig { path: PathBuf, detail: String },
-    UnsupportedObjectFormat { value: String },
-    UnsupportedRefStorage { value: String },
-    Unsupported { operation: String },
-    DuplicateEngine { id: String },
+    Io {
+        path: PathBuf,
+        kind: io::ErrorKind,
+    },
+    NotARepository {
+        path: PathBuf,
+    },
+    InvalidRepositoryFile {
+        path: PathBuf,
+        detail: String,
+    },
+    InvalidConfig {
+        path: PathBuf,
+        detail: String,
+    },
+    UnsupportedObjectFormat {
+        value: String,
+    },
+    UnsupportedRefStorage {
+        value: String,
+    },
+    Unsupported {
+        operation: String,
+    },
+    GitNotFound,
+    GitTooOld {
+        version: String,
+    },
+    Command {
+        args: String,
+        status: Option<i32>,
+        stderr: String,
+    },
+    UnsafeDirectory {
+        path: PathBuf,
+    },
+    Timeout,
+    Protocol {
+        detail: String,
+    },
+    SessionBusy,
+    SessionClosed,
+    MissingObject {
+        id: ObjectId,
+    },
+    DuplicateEngine {
+        id: String,
+    },
 }
 
 impl fmt::Display for GitError {
@@ -47,6 +89,27 @@ impl fmt::Display for GitError {
             Self::Unsupported { operation } => {
                 write!(formatter, "the Git engine does not support {operation}")
             }
+            Self::GitNotFound => formatter.write_str("git was not found on PATH"),
+            Self::GitTooOld { version } => {
+                write!(formatter, "git {version} is older than 2.36")
+            }
+            Self::Command {
+                args,
+                status,
+                stderr,
+            } => write!(formatter, "git {args} exited with {status:?}: {stderr}"),
+            Self::UnsafeDirectory { path } => {
+                write!(
+                    formatter,
+                    "git refuses to use a directory owned by someone else: {}",
+                    path.display()
+                )
+            }
+            Self::Timeout => formatter.write_str("git did not answer before the deadline"),
+            Self::Protocol { detail } => write!(formatter, "unexpected git output: {detail}"),
+            Self::SessionBusy => formatter.write_str("the git cat-file session is busy"),
+            Self::SessionClosed => formatter.write_str("the git cat-file session closed"),
+            Self::MissingObject { id } => write!(formatter, "git object is missing: {id:?}"),
             Self::DuplicateEngine { id } => {
                 write!(
                     formatter,
