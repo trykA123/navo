@@ -15,7 +15,7 @@ pub mod format;
 pub use cli::{CliGit, CliOptions, DEFAULT_TIMEOUT};
 pub use format::{ObjectFormat, RefStorage, RepoFormat};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum GitError {
     Io {
         path: PathBuf,

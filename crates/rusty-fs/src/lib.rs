@@ -6,6 +6,7 @@ mod drive_class;
 mod exists;
 mod fake;
 pub mod find;
+pub mod git;
 pub mod hash;
 pub mod hostile_names;
 mod io_queue;

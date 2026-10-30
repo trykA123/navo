@@ -13,6 +13,7 @@ lzma-rust2 = { version = "=0.22.0", default-features = false, features = ["optim
 md-5 = "=0.10.6"
 ruzstd = { version = "=0.9.1", default-features = false, features = ["std"] }
 rusty-core = { path = "../rusty-core" }
+rusty-git = { path = "../rusty-git" }
 sevenz-rust2 = { version = "=0.24.0", default-features = false }
 sha2 = "=0.10.9"
 tar = { version = "=0.4.46", default-features = false }
