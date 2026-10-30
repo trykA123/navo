@@ -69,15 +69,23 @@ fn building_volumes_report_incomplete_totals() {
     let volume = volume();
     let paths = ["C:\\folder".into(), "C:\\missing".into()];
     volume.shared.write().unwrap().status.progress = Some(0);
-    let reply = answer(std::slice::from_ref(&volume), &paths)
-        .totals
-        .unwrap();
+    let reply = answer_before(
+        std::slice::from_ref(&volume),
+        &paths,
+        Instant::now() + Duration::from_secs(30),
+    )
+    .totals
+    .unwrap();
     assert!(!reply.totals[0].as_ref().unwrap().complete);
     assert!(!reply.totals[1].as_ref().unwrap().complete);
     volume.shared.write().unwrap().index = None;
-    let reply = answer(std::slice::from_ref(&volume), &paths)
-        .totals
-        .unwrap();
+    let reply = answer_before(
+        std::slice::from_ref(&volume),
+        &paths,
+        Instant::now() + Duration::from_secs(30),
+    )
+    .totals
+    .unwrap();
     assert_eq!(reply.totals[0], Some(FolderTotals::default()));
 }
 

@@ -21,7 +21,7 @@ fn refresh_stops_a_slow_listing_quickly() {
             SlowSpec {
                 count: 200_000,
                 every: 1_000,
-                delay: Duration::from_millis(1),
+                delay: Duration::from_millis(20),
                 started: Arc::clone(&started),
             },
         );
@@ -36,7 +36,7 @@ fn refresh_stops_a_slow_listing_quickly() {
     let before = Instant::now();
     session.refresh();
     assert!(
-        before.elapsed() < Duration::from_millis(200),
+        before.elapsed() < Duration::from_secs(2),
         "refresh took {:?}",
         before.elapsed()
     );

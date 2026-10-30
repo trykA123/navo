@@ -148,7 +148,7 @@ fn a_pathological_pair_hits_the_deadline() {
         .collect();
     let left = line(&left_text);
     let right = line(&right_text);
-    let result = intraline_with_deadline(pair(&left, &right), Duration::from_micros(1));
+    let result = intraline_with_deadline(pair(&left, &right), Duration::ZERO);
 
     assert!(result.words.is_empty());
     assert!(result.chars.is_empty());

@@ -1,5 +1,5 @@
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::*;
 
@@ -118,6 +118,7 @@ fn progress_events_are_limited_to_four_per_second() {
     queue.push(1, LARGE_FILE + 1, (0, 0));
     let running = job(queue.next().expect("large job"));
     let total = LARGE_FILE + 1;
+    let started = Instant::now();
     let first = queue
         .progress(running.id, 1, total)
         .expect("first progress");
@@ -125,8 +126,12 @@ fn progress_events_are_limited_to_four_per_second() {
     for _ in 0..10 {
         assert!(queue.progress(running.id, 2, total).is_none());
     }
-    thread::sleep(Duration::from_millis(260));
-    assert!(queue.progress(running.id, 3, total).is_some());
+    let deadline = started + Duration::from_secs(5);
+    while queue.progress(running.id, 3, total).is_none() {
+        assert!(Instant::now() < deadline, "progress stayed rate-limited");
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(started.elapsed() >= PROGRESS_INTERVAL);
 }
 
 #[test]

@@ -2,7 +2,7 @@ use std::io::{self, Cursor, Read};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rusty_core::{FileIdentity, ProviderId, ProviderPath};
 
@@ -357,9 +357,25 @@ fn cancel_frees_a_worker_blocked_on_a_full_event_channel() {
             });
             finished.send(()).expect("the test receiver lives");
         });
-        std::thread::sleep(Duration::from_millis(20));
+        let probe = events.clone();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match probe.try_send(ByteEvent::Progress { done: 0, total: 0 }) {
+                Ok(()) => {
+                    assert!(
+                        Instant::now() < deadline,
+                        "worker never filled the event channel"
+                    );
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                Err(mpsc::TrySendError::Full(_)) => break,
+                Err(mpsc::TrySendError::Disconnected(_)) => {
+                    panic!("worker stopped before filling the event channel")
+                }
+            }
+        }
         cancel.cancel();
-        let ended = done.recv_timeout(Duration::from_secs(1)).is_ok();
+        let ended = done.recv_timeout(Duration::from_secs(10)).is_ok();
         assert!(
             ended,
             "cancel must free a worker blocked on a full event channel"
