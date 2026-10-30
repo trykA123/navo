@@ -97,7 +97,8 @@ fn preparing_the_instance_creates_no_profile_folder_before_the_migration() {
     };
     let profile = crate::profile::Profile::User(Some(dirs.clone()));
     let (sender, _) = rusty_ui::window_view::open_requests();
-    let prepared = super::prepare_instance(&crate::cli::Start::default(), &profile, sender);
+    let prepared =
+        crate::instance_start::prepare_instance(&crate::cli::Start::default(), &profile, sender);
     assert!(matches!(prepared, Ok(std::ops::ControlFlow::Continue(_))));
     assert!(!dirs.config.exists() && !dirs.data.exists());
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
@@ -114,7 +115,7 @@ fn a_second_instance_in_another_retention_mode_is_refused_with_a_message() {
         };
         let (sender, _requests) = rusty_ui::window_view::open_requests();
         let Ok(std::ops::ControlFlow::Continue((guard, mut splash))) =
-            super::prepare_instance(&first, &profile, sender)
+            crate::instance_start::prepare_instance(&first, &profile, sender)
         else {
             panic!("expected the first instance");
         };
@@ -127,9 +128,14 @@ fn a_second_instance_in_another_retention_mode_is_refused_with_a_message() {
             };
             let shown = Cell::new(None);
             let (sender, _) = rusty_ui::window_view::open_requests();
-            let reply = super::prepare_instance_with_notice(&start, &profile, sender, |message| {
-                shown.set(Some(message.to_owned()));
-            })
+            let reply = crate::instance_start::prepare_instance_with_notice(
+                &start,
+                &profile,
+                sender,
+                |message| {
+                    shown.set(Some(message.to_owned()));
+                },
+            )
             .unwrap();
             let std::ops::ControlFlow::Break(code) = reply else {
                 panic!("a second instance must exit");
