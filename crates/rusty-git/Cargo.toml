@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 gix-config = { version = "=0.62.0", default-features = false, features = ["sha1", "sha256"] }
 gix-discover = { version = "=0.57.0", default-features = false, features = ["sha1", "sha256"] }
+gix = { version = "=0.89.0", default-features = false, features = ["sha1", "revision"] }
 rusty-compare = { path = "../rusty-compare" }
 
 [lints]

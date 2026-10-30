@@ -11,9 +11,11 @@ pub use rusty_compare::model::ObjectId;
 
 pub mod cli;
 pub mod format;
+pub mod gix_source;
 
 pub use cli::{CliGit, CliOptions, DEFAULT_TIMEOUT};
 pub use format::{ObjectFormat, RefStorage, RepoFormat};
+pub use gix_source::GixGit;
 
 #[derive(Debug, Clone)]
 pub enum GitError {
