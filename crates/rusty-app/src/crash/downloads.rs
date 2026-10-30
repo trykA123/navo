@@ -37,8 +37,10 @@ mod windows {
     use std::path::PathBuf;
 
     use windows_sys::Win32::System::Com::CoTaskMemFree;
+    #[cfg(feature = "tester")]
+    pub(super) use windows_sys::Win32::UI::Shell::FOLDERID_Desktop;
+    pub(super) use windows_sys::Win32::UI::Shell::FOLDERID_Downloads;
     use windows_sys::Win32::UI::Shell::SHGetKnownFolderPath;
-    pub(super) use windows_sys::Win32::UI::Shell::{FOLDERID_Desktop, FOLDERID_Downloads};
     use windows_sys::core::GUID;
 
     pub(super) fn known(folder: &GUID) -> Option<PathBuf> {
