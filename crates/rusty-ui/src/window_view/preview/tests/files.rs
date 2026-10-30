@@ -193,6 +193,7 @@ fn a_file_header_shows_the_name_the_size_and_the_kind_chip(cx: &mut TestAppConte
         rig.key(cx, "down");
     }
     rig.rest(cx);
+    rig.wait_until(cx, |view| kind_of(view) == Some(("table", true)));
     assert_eq!(rig.label(cx, "preview-name").as_deref(), Some("sales.csv"));
     assert_eq!(rig.label(cx, "preview-kind").as_deref(), Some("Table"));
     let size = crate::format::size(samples()[8].1.len() as u64);
@@ -259,6 +260,7 @@ fn browsing_a_file_preview_gives_focus_to_its_body(cx: &mut TestAppContext) {
     rig.key(cx, "down");
     rig.key(cx, "down");
     rig.rest(cx);
+    rig.wait_until(cx, |view| kind_of(view) == Some(("tree", true)));
     assert_eq!(shown_kind(cx, &rig), Some(("tree", true)));
     rig.key(cx, "ctrl-shift-q");
     assert!(body_has_focus(cx, &rig));
