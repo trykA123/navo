@@ -17,6 +17,7 @@ pub(super) struct Stats {
     opens: AtomicU64,
     bytes: AtomicU64,
     hints: Mutex<Vec<ReadHint>>,
+    read_sizes: Mutex<Vec<usize>>,
 }
 
 impl Stats {
@@ -30,6 +31,10 @@ impl Stats {
 
     pub(super) fn hints(&self) -> Vec<ReadHint> {
         self.hints.lock().unwrap().clone()
+    }
+
+    pub(super) fn read_sizes(&self) -> Vec<usize> {
+        self.read_sizes.lock().unwrap().clone()
     }
 }
 
@@ -150,6 +155,7 @@ struct CountedReader {
 
 impl Read for CountedReader {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        self.stats.read_sizes.lock().unwrap().push(out.len());
         if self.fail_at.is_some_and(|fail| self.position >= fail) {
             return Err(io::Error::other("fake read error"));
         }

@@ -6,12 +6,13 @@ use crate::model::{
     CancelToken, ContentClass, ContentKey, HashCache, ReadHint, Reason, Stamp, Status,
 };
 
+use super::hash::{block_for, update};
 use super::read::{
     changed, check_kinds, check_object_ids, class, content_key, different, different_class,
     finish_side, first_difference, open_pair, outcome, read_block, read_pair, stamp_matches,
     stopped, unavailable,
 };
-use super::{CONTENT_BLOCK, CheckOptions, ContentProgress, ContentResult, Side};
+use super::{CheckOptions, ContentProgress, ContentResult, LARGE_CONTENT_THRESHOLD, Side};
 
 type CachedHashes = (Option<[u8; 32]>, Option<[u8; 32]>);
 
@@ -65,11 +66,12 @@ struct Step {
 impl Stream {
     fn open(sides: Sides<'_>, hint: ReadHint) -> Result<Self, ContentResult> {
         let (left_reader, right_reader) = open_pair(sides.left, sides.right, hint)?;
+        let block = block_for(sides.left.entry.size);
         Ok(Self {
             left_reader,
             right_reader,
-            left_buffer: vec![0u8; CONTENT_BLOCK],
-            right_buffer: vec![0u8; CONTENT_BLOCK],
+            left_buffer: vec![0u8; block],
+            right_buffer: vec![0u8; block],
             left_counts: Counts::new(sides.left.entry.size),
             right_counts: Counts::new(sides.right.entry.size),
         })
@@ -241,7 +243,9 @@ impl Checker<'_, '_> {
         let mut counts = Counts::new(read.entry.size);
         let mut hasher = Hasher::new();
         let mut saw_nul = false;
-        let mut buffer = vec![0u8; CONTENT_BLOCK];
+        let block = block_for(read.entry.size);
+        let parallel = read.entry.size > LARGE_CONTENT_THRESHOLD;
+        let mut buffer = vec![0u8; block];
         loop {
             if self.cancel.is_cancelled() {
                 return stopped();
@@ -261,7 +265,7 @@ impl Checker<'_, '_> {
                 return self.finish_one(sides, cached, digest);
             }
             saw_nul |= buffer[..read_bytes].contains(&0);
-            hasher.update(&buffer[..read_bytes]);
+            update(&mut hasher, &buffer[..read_bytes], parallel);
             self.report(counts.done, counts.total);
         }
     }
@@ -275,6 +279,7 @@ impl Checker<'_, '_> {
         let mut right_hasher = Hasher::new();
         let mut saw_nul = false;
         let mut offset = 0u64;
+        let parallel = sides.left.entry.size > LARGE_CONTENT_THRESHOLD;
         loop {
             if self.cancel.is_cancelled() {
                 return stopped();
@@ -285,8 +290,12 @@ impl Checker<'_, '_> {
             };
             saw_nul |= stream.left_buffer[..step.left].contains(&0)
                 || stream.right_buffer[..step.right].contains(&0);
-            left_hasher.update(&stream.left_buffer[..step.left]);
-            right_hasher.update(&stream.right_buffer[..step.right]);
+            update(&mut left_hasher, &stream.left_buffer[..step.left], parallel);
+            update(
+                &mut right_hasher,
+                &stream.right_buffer[..step.right],
+                parallel,
+            );
             let block = step.left.max(step.right);
             let done = offset.saturating_add(u64::try_from(block).unwrap_or(u64::MAX));
             self.report(done, stream.left_counts.total);

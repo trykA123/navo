@@ -1,4 +1,6 @@
+mod bench;
 mod fake;
+mod large;
 mod stamps;
 
 use fake::{FakeCache, assert_reads, entry, kind_entry, options, side, source};

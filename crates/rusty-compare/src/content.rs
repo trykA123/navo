@@ -1,11 +1,15 @@
 use crate::model::{CancelToken, ContentClass, HashCache, ReadHint, SideEntry, SideSource, Status};
 
 mod checker;
+mod hash;
 mod read;
 
 pub use checker::check;
 
 pub const CONTENT_BLOCK: usize = 1024 * 1024;
+const LARGE_CONTENT_THRESHOLD: u64 = 128 * 1024 * 1024;
+/// Two 16 MiB buffers per uncached pair; large files run one per volume (L7).
+const PARALLEL_CONTENT_BLOCK: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy)]
 pub struct Side<'a> {
