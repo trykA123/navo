@@ -5,8 +5,9 @@
 //   set_drop_effect, drag_key_state and drag_allowed_effects.
 // - window.rs, events.rs: set_external_drag_handler registers the drag source; a posted message
 //   starts it outside input dispatch, then sends FileDropEvent::Ended after the handler returns.
-// - vsync.rs, platform.rs, events.rs: the VSync thread parks while every window is hidden or
-//   minimised; showing, restoring, activating or stopping wakes it.
+// - vsync.rs, vsync_park.rs, platform.rs, events.rs: the VSync thread parks while every window is
+//   hidden or minimised or idle; showing, restoring, activating or stopping wakes it, a park lasts
+//   at most 250 ms, and the first frame after a park sleeps one interval instead of DwmFlush.
 #![cfg(target_os = "windows")]
 
 mod clipboard;
@@ -26,6 +27,7 @@ mod system_notifications;
 mod system_settings;
 mod util;
 mod vsync;
+mod vsync_park;
 mod window;
 mod wrapper;
 
@@ -44,6 +46,7 @@ pub(crate) use system_notifications::*;
 pub(crate) use system_settings::*;
 pub(crate) use util::*;
 pub(crate) use vsync::*;
+pub(crate) use vsync_park::*;
 pub(crate) use window::*;
 pub(crate) use wrapper::*;
 
