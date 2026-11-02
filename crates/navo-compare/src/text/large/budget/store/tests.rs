@@ -4,10 +4,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use navo_core::paging::LineIndex;
 
 use crate::model::{Budget, CancelToken};
-use crate::text::large::tests::side;
+use crate::text::large::tests::{collect, side};
+use crate::text::large::{
+    Covered, DiffEvent, Driver, EVENT_BUFFER, Progress, Stage, Summary, Tuning,
+};
 
 use super::super::{Kind, Ledger, Part};
 use super::*;
+mod finish;
 use crate::text::large::batch::{Context, SideData};
 
 fn seq() -> Arc<AtomicU64> {
@@ -71,9 +75,11 @@ fn metadata_failure_reports_counts_only_without_storing_sections() {
         },
     );
     let parts = [part(1, Kind::Detail), part(2, Kind::Coarse)];
-    let recorded = store.record(&parts, 0, 0);
+    let charge = ledger.reserve(HUNK_SIZE).unwrap();
+    let recorded = store.record(&parts, 0, (1, charge));
     assert!(matches!(recorded, Recorded::CountsOnly));
     assert!(store.find(&(0..1)).is_none(), "no metadata was stored");
+    assert_eq!(ledger.used(), 0, "counts-only retains no batch charge");
 }
 
 #[test]
@@ -90,7 +96,7 @@ fn an_eviction_charge_lasts_until_the_view_acknowledges_it() {
         },
     );
     let parts = [part(4, Kind::Detail)];
-    let Recorded::Evictions(evictions) = store.record(&parts, u64::MAX, 0) else {
+    let Recorded::Evictions(evictions) = store.record(&parts, u64::MAX, (0, ledger.empty())) else {
         panic!("the eviction event fits");
     };
     let held = ledger.used();
@@ -164,7 +170,7 @@ fn an_empty_hunk_vector_is_charged_by_capacity() {
     );
     let before = ledger.used();
     let parts = [part(0, Kind::Detail)];
-    let _recorded = store.record(&parts, 0, 4);
+    let _recorded = store.record(&parts, 0, (4, ledger.empty()));
     assert_eq!(store.spare_bytes, bytes_of::<Hunk>(4));
     assert!(ledger.used() >= before + bytes_of::<Hunk>(4));
 }
@@ -199,8 +205,8 @@ fn evicting_one_entry_releases_only_its_own_spare() {
         end: 1,
         kind: Kind::Detail,
     };
-    let _first = store.record(&[first], 0, 2);
-    let _second = store.record(&[second], 0, 2);
+    let _first = store.record(&[first], 0, (2, ledger.empty()));
+    let _second = store.record(&[second], 0, (2, ledger.empty()));
     assert_eq!(store.spare_bytes, bytes_of::<Hunk>(2));
     store.reach = 0;
     let evicted = store.page(0);

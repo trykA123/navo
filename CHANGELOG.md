@@ -19,6 +19,10 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - Shift+drag on a pane header swaps two panes. Dragging a divider shows a guide line. Double-click a divider to even it. Ctrl+Alt+0 resets the split.
 - Narrow windows show one pane with a strip of pane buttons. Editing the path moved from Ctrl+L to Alt+D.
 
+### Fixed
+
+- After a crash, Navo puts a file back that an interrupted copy, move or save had set aside, and it now writes that step to disk before it forgets the undo record. A power loss at that moment can no longer leave the original stranded.
+
 ### Backend branch
 
 - Startup preserves damaged databases, recovers verified saved data and operations, and keeps a recovery notice with access to preserved files. Native Windows verification remains pending.

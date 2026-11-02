@@ -133,7 +133,12 @@ impl Store {
     }
 
     /// Records emitted parts; counts-only when the metadata cannot be reserved.
-    pub(crate) fn record(&mut self, parts: &[Part], focus: u64, hunk_capacity: usize) -> Recorded {
+    pub(crate) fn record(
+        &mut self,
+        parts: &[Part],
+        focus: u64,
+        (hunk_capacity, charge): (usize, Charge),
+    ) -> Recorded {
         let detailed = parts
             .iter()
             .filter(|part| part.kind == Kind::Detail)
@@ -167,6 +172,7 @@ impl Store {
                 spare,
             });
         }
+        self.hunks_charge.absorb(charge);
         self.count();
         if self.detailed_bytes.saturating_add(self.spare_bytes) > self.share {
             self.paging.store(true, Ordering::Release);
@@ -277,10 +283,47 @@ impl Store {
             .find(|entry| entry.pair.left == *left)
             .map(|entry| entry.pair.clone())
     }
+
+    fn restore(
+        &mut self,
+        section: &Range<u64>,
+        rediff: &super::Rediff,
+        charge: Charge,
+    ) -> Result<(), Reason> {
+        let super::Rediff::Hunks(hunks) = rediff else {
+            return Ok(());
+        };
+        let index = self
+            .entries
+            .iter()
+            .position(|entry| entry.pair.left == *section)
+            .ok_or(Reason::Unsupported)?;
+        let entry = &mut self.entries[index];
+        if entry.detailed {
+            self.detailed_bytes = self.detailed_bytes.saturating_sub(entry.hunks * HUNK_SIZE);
+        } else {
+            if !grow_vec(&mut self.detailed, 1, &mut self.entries_charge) {
+                return Err(Reason::Unsupported);
+            }
+            self.detailed.push(index);
+        }
+        self.spare_bytes = self.spare_bytes.saturating_sub(entry.spare);
+        entry.hunks = u64::try_from(hunks.len()).unwrap_or(u64::MAX);
+        entry.spare = bytes_of::<Hunk>(hunks.capacity().saturating_sub(hunks.len()));
+        entry.detailed = true;
+        self.detailed_bytes = self.detailed_bytes.saturating_add(entry.hunks * HUNK_SIZE);
+        self.spare_bytes = self.spare_bytes.saturating_add(entry.spare);
+        self.hunks_charge.absorb(charge);
+        self.count();
+        if self.detailed_bytes.saturating_add(self.spare_bytes) > self.share {
+            self.paging.store(true, Ordering::Release);
+        }
+        Ok(())
+    }
 }
 
 impl LargeDiff {
-    /// Line hunks of one emitted section, found by its exact left range.
+    /// Replaces one emitted section's hunks; the store charges them until eviction is acknowledged.
     pub fn hunks_for(&self, section: Range<u64>) -> Result<super::Rediff, Reason> {
         if self.cancel.is_cancelled() {
             return Err(Reason::Stopped);
@@ -291,7 +334,7 @@ impl LargeDiff {
             let pair = store.find(&section).ok_or(Reason::Unsupported)?;
             (Arc::clone(&store.context), pair, store.watchdog)
         };
-        rediff(
+        let (rediff, charge) = rediff(
             &context,
             &pair,
             &self.ledger,
@@ -299,7 +342,14 @@ impl LargeDiff {
                 cancel: &self.cancel,
                 watchdog,
             },
-        )
+        )?;
+        let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        let store = store.as_mut().ok_or(Reason::Unsupported)?;
+        if !Arc::ptr_eq(&context, &store.context) {
+            return Err(Reason::ChangedOnDisk);
+        }
+        store.restore(&section, &rediff, charge)?;
+        Ok(rediff)
     }
 
     #[must_use]

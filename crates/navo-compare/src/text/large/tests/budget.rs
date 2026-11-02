@@ -7,7 +7,7 @@ use std::time::Duration;
 use navo_core::paging::{ByteSource, LineIndex, TextLayout};
 
 use super::super::batch::{Context, SideData};
-use super::super::budget::{Ceiling, Ledger, Stall, rediff};
+use super::super::budget::{Ceiling, Ledger, Stall, bytes_of, rediff};
 use super::super::*;
 use super::{
     Swap, assert_tiles, collect, covered, generate, hunks, line_ranges, reference, side, summary,
@@ -422,6 +422,58 @@ fn paged_hunks_diffed_again_equal_the_first_run() {
 }
 
 #[test]
+fn rediffed_sections_are_counted_and_page_out_again() {
+    let (left, right) = dense(800_000);
+    let tuning = Tuning {
+        batch_lines: 512,
+        ..slow()
+    };
+    let budget = Budget::from_mib(32);
+    let diff = LargeDiff::start_tuned(
+        request_budget(side(left.as_bytes()), side(right.as_bytes()), 0, budget),
+        &CancelToken::new(),
+        tuning,
+    );
+    let events = collect(&diff);
+    summary(&events);
+    let mut view = View::default();
+    events.iter().for_each(|event| view.apply(event));
+    let chosen: Vec<_> = view
+        .paged
+        .iter()
+        .filter(|p| p.left.end < 100_000)
+        .take(8)
+        .collect();
+    assert_eq!(chosen.len(), 8, "enough sections were paged near the start");
+    let before = diff.memory_used();
+    let mut held = Vec::new();
+    for paged in &chosen {
+        let Rediff::Hunks(again) = diff.hunks_for(paged.left.clone()).unwrap() else {
+            panic!("a successful re-diff is not coarse");
+        };
+        held.push(again);
+    }
+    let hunks: usize = held.iter().map(Vec::len).sum();
+    let block = bytes_of::<Hunk>(1) + bytes_of::<Paged>(1);
+    assert!(
+        diff.memory_used() >= before + bytes_of::<Hunk>(hunks) - 8 * block,
+        "the returned hunks are counted"
+    );
+    let evictions = diff.set_focus(700_000);
+    for paged in &chosen {
+        assert!(
+            evictions.paged().iter().any(|e| e.left == paged.left),
+            "a re-diffed section pages out again"
+        );
+    }
+    let charged = diff.memory_used();
+    held.clear();
+    evictions.acknowledge();
+    assert!(diff.memory_used() + bytes_of::<Hunk>(hunks) <= charged + 8 * block);
+    assert_within(&diff, budget);
+}
+
+#[test]
 fn moving_the_focus_pages_out_the_sections_left_behind() {
     let (left, right) = dense(800_000);
     let (gate, wait) = mpsc::channel::<()>();
@@ -644,7 +696,7 @@ fn a_rediff_budget_failure_is_a_classified_coarse_result() {
     let large = side(b"a\n");
     let ledger = Arc::new(Ledger::new(Budget::from_bytes(1)));
     let (context, pair) = rediff_context(&large.source, &ledger);
-    let result = rediff(
+    let (result, _charge) = rediff(
         &context,
         &pair,
         &ledger,
@@ -668,7 +720,7 @@ fn a_rediff_deadline_is_a_classified_coarse_result() {
     let large = side(b"a\n");
     let ledger = Arc::new(Ledger::new(Budget::default()));
     let (context, pair) = rediff_context(&large.source, &ledger);
-    let result = rediff(
+    let (result, _charge) = rediff(
         &context,
         &pair,
         &ledger,
