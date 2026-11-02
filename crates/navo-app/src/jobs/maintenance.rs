@@ -60,7 +60,8 @@ fn scope(log: &JournalLog) -> Option<(&Path, Vec<Location>)> {
         .filter_map(|step| match step {
             Step::CopyFile { target, .. }
             | Step::Rename { target, .. }
-            | Step::MakeFolder { target } => target.parent(),
+            | Step::MakeFolder { target }
+            | Step::WriteFile { target, .. } => target.parent(),
             _ => None,
         })
         .collect();

@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use super::{ByteSource, TextLayout, read_full, span};
 
 const SCAN_BUF: usize = 64 * 1024;
@@ -104,6 +106,11 @@ impl LineIndex {
     #[must_use]
     pub fn marks(&self) -> usize {
         self.starts.len()
+    }
+
+    #[must_use]
+    pub fn allocated_bytes(&self) -> usize {
+        (self.starts.capacity() + self.points.capacity()) * size_of::<Mark>()
     }
 
     pub fn line_count<S: ByteSource + ?Sized>(&self, src: &S) -> Result<u64, String> {

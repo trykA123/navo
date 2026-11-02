@@ -2,6 +2,21 @@
 mod fixture;
 
 #[cfg(test)]
+#[cfg(unix)]
+#[path = "cli_filters/streaming.rs"]
+mod streaming;
+
+#[cfg(windows)]
+#[test]
+fn unix_filter_streaming_scripts_are_skipped() {
+    std::io::Write::write_all(
+        &mut std::io::stderr(),
+        b"skipping Unix streaming scripts: they require sh, kill, and /dev/zero\n",
+    )
+    .unwrap();
+}
+
+#[cfg(test)]
 mod cli_filters {
     use std::ffi::OsString;
     use std::fs;
@@ -47,6 +62,7 @@ mod cli_filters {
         assert!(form.reason.is_none());
         let mut bytes = Vec::new();
         form.reader.read_to_end(&mut bytes).unwrap();
+        assert!(form.finish().unwrap().is_empty());
         bytes
     }
 
@@ -75,6 +91,7 @@ mod cli_filters {
             .unwrap();
         let mut trait_bytes = Vec::new();
         trait_blob.reader.read_to_end(&mut trait_bytes).unwrap();
+        assert!(trait_blob.finish().unwrap().is_empty());
         assert_eq!(trait_bytes, checked_out);
     }
 
@@ -261,12 +278,14 @@ mod cli_filters {
         let mut blob = cli
             .read_blob_worktree_form("HEAD", &GitPath::from("data.txt"))
             .unwrap();
-        let FilterNotice::Filter { detail } = blob.reason.unwrap() else {
+        assert!(blob.reason.is_none());
+        let mut bytes = Vec::new();
+        blob.reader.read_to_end(&mut bytes).unwrap();
+        let notices = blob.finish().unwrap();
+        let [FilterNotice::Filter { detail }] = notices.as_slice() else {
             panic!("the optional filter failure did not carry a notice");
         };
         assert!(!detail.trim().is_empty());
-        let mut bytes = Vec::new();
-        blob.reader.read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, b"raw payload\n");
     }
 

@@ -1,10 +1,12 @@
 use std::ffi::OsString;
-use std::io::Cursor;
+use std::io::{self, Cursor, Read};
 
 use crate::{BlobReader, FilterNotice, GitError, GitPath, OtherPath, Others, WorktreeBlob};
 
 use super::CliGit;
+use super::filtered_stream::FilteredStream;
 use super::parse::protocol;
+use super::process::CommandSpec;
 
 const LFS_MISSING: &str = "git-lfs is not installed; showing the LFS pointer";
 
@@ -14,23 +16,73 @@ pub(super) fn read_worktree_form(
     path: &GitPath,
 ) -> Result<WorktreeBlob, GitError> {
     let args = filtered_args(rev, path)?;
-    let output = cli.run(&args)?;
-    if output.status.success() {
-        return Ok(WorktreeBlob {
-            reason: filter_reason(cli, path, &output.stdout, &output.stderr)?,
-            reader: boxed(output.stdout),
-        });
-    }
+    let spec = CommandSpec {
+        git: &cli.git,
+        repo: Some(&cli.repo),
+        env: &cli.env,
+        timeout: cli.timeout,
+    };
+    let mut stream = FilteredStream::start(&spec, &args)?;
+    let prefix = match read_prefix(&mut stream) {
+        Ok(prefix) => prefix,
+        Err(error) => return failed_read(cli, (rev, path), &stream, error),
+    };
+    let reason = filter_reason(cli, path, &prefix)?;
+    let finish = Some(stream.finisher());
+    Ok(WorktreeBlob {
+        reader: Box::new(Cursor::new(prefix).chain(stream)),
+        reason,
+        finish,
+    })
+}
+
+fn failed_read(
+    cli: &CliGit,
+    (rev, path): (&str, &GitPath),
+    stream: &FilteredStream,
+    error: io::Error,
+) -> Result<WorktreeBlob, GitError> {
+    let output = match stream.output() {
+        Some(Ok(output)) if !output.status.success() => output,
+        Some(Err(error)) => return Err(error),
+        _ => {
+            return Err(GitError::Io {
+                path: cli.git.clone(),
+                kind: error.kind(),
+            });
+        }
+    };
     let raw = cli.run(&raw_blob_args(rev, path)?)?;
     if !raw.status.success() || !is_lfs_pointer(&raw.stdout) || !has_lfs_filter(cli, path)? {
-        return Err(cli.command_error(&args, &output));
+        return Err(cli.command_error(&filtered_args(rev, path)?, &output));
     }
     Ok(WorktreeBlob {
         reader: boxed(raw.stdout),
         reason: Some(FilterNotice::Lfs {
             detail: lfs_detail(&output.stderr),
         }),
+        finish: None,
     })
+}
+
+fn read_prefix(stream: &mut FilteredStream) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::with_capacity(1023);
+    let mut chunk = [0; 1023];
+    loop {
+        let read = match stream.read(&mut chunk[..1023 - bytes.len()]) {
+            Err(_) if !bytes.is_empty() => return Ok(bytes),
+            result => result?,
+        };
+        bytes.extend_from_slice(&chunk[..read]);
+        let version = b"version https://git-lfs.github.com/spec/v1\n";
+        if read == 0
+            || bytes.len() == 1023
+            || is_lfs_pointer(&bytes)
+            || !bytes.iter().zip(version).all(|(left, right)| left == right)
+        {
+            return Ok(bytes);
+        }
+    }
 }
 
 fn filtered_args(rev: &str, path: &GitPath) -> Result<Vec<OsString>, GitError> {
@@ -71,19 +123,13 @@ fn filter_reason(
     cli: &CliGit,
     path: &GitPath,
     content: &[u8],
-    stderr: &[u8],
 ) -> Result<Option<FilterNotice>, GitError> {
-    let detail = String::from_utf8_lossy(stderr).trim().to_owned();
     if is_lfs_pointer(content) && has_lfs_filter(cli, path)? {
         return Ok(Some(FilterNotice::Lfs {
-            detail: lfs_detail(stderr),
+            detail: LFS_MISSING.to_owned(),
         }));
     }
-    if detail.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(FilterNotice::Filter { detail }))
-    }
+    Ok(None)
 }
 
 fn lfs_detail(stderr: &[u8]) -> String {

@@ -297,6 +297,7 @@ pub struct IndexEntry {
 }
 
 pub type BlobReader = Box<dyn Read + Send>;
+pub type WorktreeFinish = Box<dyn FnOnce() -> io::Result<Vec<FilterNotice>> + Send>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterNotice {
@@ -307,6 +308,16 @@ pub enum FilterNotice {
 pub struct WorktreeBlob {
     pub reader: BlobReader,
     pub reason: Option<FilterNotice>,
+    pub finish: Option<WorktreeFinish>,
+}
+
+impl WorktreeBlob {
+    pub fn finish(&mut self) -> io::Result<Vec<FilterNotice>> {
+        match self.finish.take() {
+            Some(finish) => finish(),
+            None => Ok(Vec::new()),
+        }
+    }
 }
 
 pub trait GitSource: Send + Sync {

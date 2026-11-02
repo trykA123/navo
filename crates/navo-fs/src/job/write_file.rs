@@ -24,9 +24,6 @@ pub(super) fn run(
     ctx: &mut JobContext<'_>,
     write: &Write<'_>,
 ) -> Result<StepOutcome, FsError> {
-    if ctx.log.preserve_overwrites() {
-        return Err(failure(FsErrorKind::NotSupportedYet, write.target));
-    }
     let ops = ctx.ops;
     check_stamp(ops, write)?;
     let staged = check_staged(ops, write)?;

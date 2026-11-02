@@ -5,9 +5,13 @@ use crate::{OpKind, OperationPlan, Step};
 
 pub const COPY_RETAINED_KIND: &str = "copy-retained-v1";
 pub const MOVE_RETAINED_KIND: &str = "move-retained-v1";
+pub const SAVE_RETAINED_KIND: &str = "save-retained-v1";
 
 pub fn is_retained_write(kind: &str) -> bool {
-    matches!(kind, COPY_RETAINED_KIND | MOVE_RETAINED_KIND)
+    matches!(
+        kind,
+        COPY_RETAINED_KIND | MOVE_RETAINED_KIND | SAVE_RETAINED_KIND
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,16 +34,21 @@ struct WriteData {
 
 impl RetainedWritePlan {
     pub fn new(plan: OperationPlan, policy: RetentionPolicy) -> Result<Self, RetentionError> {
-        if !matches!(plan.kind, OpKind::Copy | OpKind::Move) || plan.steps.len() > MAX_NODES {
+        let save = plan.kind == OpKind::Save;
+        if !matches!(plan.kind, OpKind::Copy | OpKind::Move | OpKind::Save)
+            || plan.steps.len() > MAX_NODES
+            || (save && plan.steps.len() != 1)
+        {
             return Err(RetentionError::Invalid("invalid retained write plan"));
         }
         for step in &plan.steps {
             let valid = match step {
-                Step::MakeFolder { .. } | Step::CopyFile { .. } => true,
+                Step::MakeFolder { .. } | Step::CopyFile { .. } => !save,
                 Step::Rename { .. }
                 | Step::RemoveFile { .. }
                 | Step::RemoveLink { .. }
                 | Step::RemoveFolder { .. } => plan.kind == OpKind::Move,
+                Step::WriteFile { .. } => save,
                 _ => false,
             };
             if !valid {
@@ -70,10 +79,10 @@ impl RetainedWritePlan {
         self.policy
     }
     pub fn journal_kind(&self) -> &'static str {
-        if self.plan.kind == OpKind::Copy {
-            COPY_RETAINED_KIND
-        } else {
-            MOVE_RETAINED_KIND
+        match self.plan.kind {
+            OpKind::Copy => COPY_RETAINED_KIND,
+            OpKind::Save => SAVE_RETAINED_KIND,
+            _ => MOVE_RETAINED_KIND,
         }
     }
 }

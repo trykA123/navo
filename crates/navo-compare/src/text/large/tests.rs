@@ -7,11 +7,12 @@ use imara_diff::{Algorithm, Diff, InternedInput};
 use navo_core::paging::{ByteSource, TextLayout};
 
 use super::*;
-use crate::model::{CancelToken, Reason};
+use crate::model::{Budget, CancelToken, Reason};
 use crate::text::diff::diff_lines;
 use crate::text::scan::Candidate as Scanned;
 use crate::text::side::{Line, LineEnding, LineSet, detect};
 
+mod budget;
 mod cancel;
 mod review;
 
@@ -78,6 +79,7 @@ pub(super) fn request(left: LargeSide, right: LargeSide, focus: u64) -> Request 
         right,
         options: Options::default(),
         focus,
+        budget: Budget::default(),
     }
 }
 
@@ -104,6 +106,7 @@ pub(super) fn run(request: Request, tuning: Tuning) -> Vec<DiffEvent> {
 pub(super) fn tuning(batch_lines: u64) -> Tuning {
     Tuning {
         batch_lines,
+        watchdog: Duration::from_secs(60),
         ..Tuning::default()
     }
 }
@@ -392,6 +395,8 @@ fn a_forced_hash_collision_drops_the_anchor_and_stays_exact() {
             Tuning {
                 batch_lines,
                 forge: Some(forge_at(left_line, right_line)),
+                watchdog: Duration::from_secs(60),
+                ..Tuning::default()
             },
         );
         let done = summary(&events);
@@ -418,6 +423,8 @@ fn a_collision_on_the_focused_batch_boundary_stays_exact() {
         Tuning {
             batch_lines: 1,
             forge: Some(forge_at(left_line, right_line)),
+            watchdog: Duration::from_secs(60),
+            ..Tuning::default()
         },
     );
     assert_eq!(summary(&events).dropped_anchors, 1);
@@ -552,6 +559,8 @@ fn a_source_shrinking_during_the_sections_restarts() {
         Tuning {
             batch_lines: 1_000,
             forge: Some(forge),
+            watchdog: Duration::from_secs(60),
+            ..Tuning::default()
         },
     );
     let restarted = events
@@ -722,6 +731,8 @@ fn cancel_during_the_sections_stops_within_one_block() {
         Tuning {
             batch_lines: u64::MAX,
             forge: Some(arm(&watch)),
+            watchdog: Duration::from_secs(60),
+            ..Tuning::default()
         },
     );
     let events = collect(&diff);
@@ -742,6 +753,8 @@ fn a_panicking_worker_ends_the_diff() {
         Tuning {
             batch_lines: 500,
             forge: Some(arm(&watch)),
+            watchdog: Duration::from_secs(60),
+            ..Tuning::default()
         },
     );
     assert_eq!(failure(&events), Reason::WorkerPanicked);

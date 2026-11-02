@@ -18,7 +18,10 @@ pub use policy::{
     select_purge_inventory,
 };
 pub use temporary::{CopyTemporary, copy_temporary};
-pub use writing::{COPY_RETAINED_KIND, MOVE_RETAINED_KIND, RetainedWritePlan, is_retained_write};
+pub use writing::{
+    COPY_RETAINED_KIND, MOVE_RETAINED_KIND, RetainedWritePlan, SAVE_RETAINED_KIND,
+    is_retained_write,
+};
 
 pub const CONTAINER_PREFIX: &str = crate::brand::RETAINED_PREFIX;
 pub const ADOPTED_CONTAINER_PREFIX: &str = crate::brand::HELD_PREFIX;

@@ -1,7 +1,8 @@
-use std::io::Read;
+use std::io::{self, Read};
+use std::sync::Arc;
 
 use navo_core::{FsError, FsErrorKind, Location, ProviderPath};
-use navo_git::{GitPath, TreeEntry, TreeKind, WorktreeBlob};
+use navo_git::{BlobReader, GitPath, TreeEntry, TreeKind, WorktreeBlob};
 
 use crate::{Attributes, EntryKind, FsEntry};
 
@@ -93,7 +94,7 @@ pub(super) fn read(git: &GitFs, location: &Location) -> Result<WorktreeBlob, FsE
                 .read_blob_worktree_form(&super::cache::hex(resolved.commit), &path)
                 .map_err(|error| git.fail(location, error))?;
             if let Some(reason) = &blob.reason {
-                git.record_filter(location, reason.clone());
+                GitFs::record_filter(&git.problems, location, reason.clone());
             }
             Ok(blob)
         }
@@ -104,9 +105,89 @@ pub(super) fn read(git: &GitFs, location: &Location) -> Result<WorktreeBlob, FsE
             .map(|reader| WorktreeBlob {
                 reader,
                 reason: None,
+                finish: None,
             })
             .map_err(|error| git.fail(location, error)),
         TreeKind::Folder | TreeKind::Submodule => Err(errors::unsupported(location)),
+    }
+}
+
+pub(super) fn with_finish(
+    git: &GitFs,
+    location: &Location,
+    blob: WorktreeBlob,
+    for_copy: bool,
+) -> BlobReader {
+    Box::new(FinishRead {
+        blob,
+        problems: Arc::clone(&git.problems),
+        location: location.clone(),
+        for_copy,
+        failed: false,
+    })
+}
+
+struct FinishRead {
+    blob: WorktreeBlob,
+    problems: Arc<super::diagnostics::Problems>,
+    location: Location,
+    for_copy: bool,
+    failed: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct FilterReadError;
+
+impl std::fmt::Display for FilterReadError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Git source filter failed")
+    }
+}
+
+impl std::error::Error for FilterReadError {}
+
+impl Read for FinishRead {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if buffer.is_empty() {
+            return Ok(0);
+        }
+        if self.failed {
+            return Err(io::Error::other(FilterReadError));
+        }
+        let read = self.blob.reader.read(buffer).inspect_err(|error| {
+            if error.kind() != io::ErrorKind::Interrupted {
+                self.failed = true;
+                self.record_error(error);
+            }
+        })?;
+        if read != 0 {
+            return Ok(read);
+        }
+        self.failed = true;
+        let notices = self
+            .blob
+            .finish()
+            .inspect_err(|error| self.record_error(error))?;
+        self.failed = self.for_copy && !notices.is_empty();
+        for notice in notices {
+            GitFs::record_filter(&self.problems, &self.location, notice);
+        }
+        if self.failed {
+            return Err(io::Error::other(FilterReadError));
+        }
+        Ok(0)
+    }
+}
+
+impl FinishRead {
+    fn record_error(&self, error: &io::Error) {
+        if let Some(error) = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<navo_git::GitError>())
+        {
+            self.problems
+                .record(&self.location, super::GitProblem::Git(error.clone()));
+        }
     }
 }
 

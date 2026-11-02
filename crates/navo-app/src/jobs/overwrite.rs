@@ -1,10 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use navo_core::retention::RetainedWritePlan;
+use navo_core::retention::{OverwriteProof, RetainedWritePlan};
+use navo_core::{Location, OpKind, OperationPlan, Step};
 use navo_fs::{CancelToken, ProviderOps};
 use navo_retention::{AdoptJob, RetentionRun, Vault};
-use navo_store::{Db, JobState, UnfinishedJob};
+use navo_store::{Db, JobId, JobState, UnfinishedJob};
 
 use super::{JournalLog, SharedJournal, held, lock, now_ms};
 
@@ -49,9 +50,11 @@ pub(super) fn finish(
     {
         return Ok(());
     }
+    let keep =
+        state == JobState::Failed && stranded(ops, &staged_saves(&log.journal, log.job, &job.plan));
     let (db, _) = crate::crash::open_db(&navo_store::StoreDirs::journal_in(&request.data))
         .map_err(|error| error.to_string())?;
-    if let Err(error) = adopt(db, &log.journal, &job, (state, &request.data, ops)) {
+    if let Err(error) = adopt(db, &log.journal, &job, (state, &request.data, ops, keep)) {
         let (current, _) = lock(&log.journal)
             .read_job(log.job)
             .map_err(|error| error.to_string())?;
@@ -71,23 +74,83 @@ pub(super) fn finish(
     Ok(())
 }
 
+/// Settles a retained write at startup; `true` when a save left its staged bytes stranded.
 pub(super) fn recover(
     journal: &SharedJournal,
     job: &UnfinishedJob,
     (data, ops): (&Path, &dyn ProviderOps),
-) -> JobState {
+) -> (JobState, bool) {
+    let saves = staged_saves(journal, job.id, &job.plan);
+    let keep = stranded(ops, &saves);
     let result = Db::open(&navo_store::StoreDirs::journal_in(data), false)
         .map_err(|error| error.to_string())
         .and_then(|(db, _)| {
             db.defer_checkpoint().map_err(|error| error.to_string())?;
-            adopt(db, journal, job, (JobState::Failed, data, ops))
+            adopt(db, journal, job, (JobState::Failed, data, ops, keep))
         });
     match result {
-        Ok(()) => JobState::Failed,
+        Ok(()) => (JobState::Failed, stranded(ops, &saves)),
         Err(error) => {
             tracing::warn!(job = job.id.0, %error, "overwrite retention recovery remains pending");
-            JobState::RestorePending
+            (JobState::RestorePending, false)
         }
+    }
+}
+
+pub(super) type StagedSave = (Location, Location, OverwriteProof);
+
+pub(super) fn staged_saves(journal: &SharedJournal, job: JobId, plan: &[u8]) -> Vec<StagedSave> {
+    let Ok(plan) = serde_json::from_slice::<RetainedWritePlan>(plan) else {
+        return Vec::new();
+    };
+    if plan.plan().kind != OpKind::Save {
+        return Vec::new();
+    }
+    let Ok(held) = held::held_of(journal, job) else {
+        return Vec::new();
+    };
+    held.proved
+        .into_iter()
+        .filter_map(|(file, proof)| {
+            Some((
+                staged_for(plan.plan(), &file.original)?,
+                file.original,
+                proof,
+            ))
+        })
+        .collect()
+}
+
+pub(super) fn staged_for(plan: &OperationPlan, target: &Location) -> Option<Location> {
+    plan.steps.iter().find_map(|step| match step {
+        Step::WriteFile {
+            target: at, staged, ..
+        } if at.same_place(target) => Some(staged.clone()),
+        _ => None,
+    })
+}
+
+/// `true` while a save's staged bytes may still be the only copy; only a definite answer clears it.
+pub(super) fn stranded(ops: &dyn ProviderOps, saves: &[StagedSave]) -> bool {
+    saves.iter().any(|(staged, target, proof)| {
+        seen(ops, staged, proof.replacement_identity) != Seen::Other
+            && seen(ops, target, proof.node.identity) != Seen::Same
+    })
+}
+
+#[derive(PartialEq)]
+enum Seen {
+    Same,
+    Other,
+    Unknown,
+}
+
+fn seen(ops: &dyn ProviderOps, at: &Location, identity: navo_fs::FileIdentity) -> Seen {
+    match ops.file_identity(at) {
+        Ok(Some(found)) if found == identity => Seen::Same,
+        Ok(Some(_)) => Seen::Other,
+        Err(error) if error.kind == navo_core::FsErrorKind::NotFound => Seen::Other,
+        _ => Seen::Unknown,
     }
 }
 
@@ -95,7 +158,7 @@ fn adopt(
     db: Db,
     journal: &SharedJournal,
     job: &UnfinishedJob,
-    (state, data, ops): (JobState, &Path, &dyn ProviderOps),
+    (state, data, ops, keep_evidence): (JobState, &Path, &dyn ProviderOps, bool),
 ) -> Result<(), String> {
     let plan: RetainedWritePlan =
         serde_json::from_slice(&job.plan).map_err(|error| error.to_string())?;
@@ -116,6 +179,7 @@ fn adopt(
                 files: &held.proved,
                 policy: plan.policy(),
                 created_at: job.created_at,
+                keep_evidence,
             },
             &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}),
         )

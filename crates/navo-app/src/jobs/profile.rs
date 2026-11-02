@@ -69,14 +69,13 @@ pub(super) fn factory(
             } else {
                 settings
             };
-        refuse_retained_save(plan, &settings)?;
         let retained = delete_job(plan, &settings, &dirs)?;
         #[cfg(test)]
         let retained = retained.map(|job| deletion::RetainedJob {
             ceiling: ceiling.clone(),
             ..job
         });
-        let mut log = if matches!(plan.kind, OpKind::Copy | OpKind::Move)
+        let mut log = if matches!(plan.kind, OpKind::Copy | OpKind::Move | OpKind::Save)
             && let Some(policy) = settings.overwrite_policy()
         {
             let plan = navo_core::retention::RetainedWritePlan::new(plan.clone(), policy)
@@ -164,13 +163,6 @@ fn drive_retains(drive: Option<&Drive>, plan: &OperationPlan) -> bool {
         _ => return true,
     };
     probe.is_some_and(|at| navo_retention::can_retain(ops.as_ref(), at))
-}
-
-fn refuse_retained_save(plan: &OperationPlan, settings: &RetentionSettings) -> Result<(), String> {
-    if plan.kind == OpKind::Save && settings.overwrite_policy().is_some() {
-        return Err("saving with overwrite retention is not supported yet".to_owned());
-    }
-    Ok(())
 }
 
 fn retains(kind: OpKind) -> bool {

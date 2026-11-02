@@ -13,7 +13,22 @@ pub(super) enum PumpError {
 impl PumpError {
     pub(super) fn located(self, source: &Location, target: &Location) -> FsError {
         match self {
-            Self::Read(e) => io_error(&e, source),
+            Self::Read(e)
+                if e.get_ref()
+                    .is_some_and(|error| error.is::<crate::git::FilterReadError>()) =>
+            {
+                error(FsErrorKind::SourceFilterFailed, source)
+            }
+            Self::Read(e) => match e
+                .get_ref()
+                .and_then(|e| e.downcast_ref::<navo_git::GitError>())
+            {
+                Some(navo_git::GitError::Timeout) => error(FsErrorKind::Timeout, source),
+                Some(navo_git::GitError::Command { .. }) => {
+                    error(FsErrorKind::SourceFilterFailed, source)
+                }
+                _ => io_error(&e, source),
+            },
             Self::Write(e) => io_error(&e, target),
             Self::Cancelled => error(FsErrorKind::Cancelled, target),
         }

@@ -532,7 +532,7 @@ fn a_file_that_changes_size_or_stamp_is_reported() {
 #[test]
 fn a_sixty_four_mebibyte_line_keeps_bounded_buffers() {
     let options = Options::default();
-    let mut scanner = Scanner::new(TextLayout::default(), &options, 1);
+    let mut scanner = Scanner::new(TextLayout::default(), &options, Sample::from(1));
     let chunk = vec![b'x'; BLOCK];
     for _ in 0..64 {
         scanner.feed(&chunk, false).unwrap();
@@ -541,4 +541,34 @@ fn a_sixty_four_mebibyte_line_keeps_bounded_buffers() {
     let scanned = scanner.finish().unwrap();
     assert_eq!(scanned.lines, 1);
     assert_eq!(scanned.candidates.len(), 1);
+}
+
+#[test]
+fn a_capped_sample_thins_by_whole_keys_and_stays_under_its_cap() {
+    let mut text = String::new();
+    for line in 0..40_000_u32 {
+        text.push_str(&format!("line {:08x}\n", line % 15_000));
+    }
+    let layout = layout_of(text.as_bytes());
+    let full = scan_bytes(text.as_bytes(), layout, &DEFAULT, 1);
+    for cap in [0, 1, 500, 4_000] {
+        let sample = Sample { rate: 1, cap };
+        let capped = scan(
+            text.as_bytes(),
+            layout,
+            &DEFAULT,
+            sample,
+            &CancelToken::new(),
+            &mut |_| {},
+        )
+        .unwrap();
+        assert!(capped.candidates.len() <= cap, "cap {cap}");
+        assert!(capped.candidates.capacity() <= cap, "cap {cap}");
+        assert_eq!(capped.lines, full.lines);
+        for kept in &capped.candidates {
+            let count = |set: &[Candidate]| set.iter().filter(|c| c.hash == kept.hash).count();
+            assert_eq!(count(&capped.candidates), count(&full.candidates));
+            assert!(full.candidates.contains(kept));
+        }
+    }
 }

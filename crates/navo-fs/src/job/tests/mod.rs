@@ -45,6 +45,8 @@ mod workers;
 mod write;
 mod write_file;
 mod write_file_races;
+mod write_file_retained;
+mod write_file_retained_crash;
 mod write_file_undo;
 
 const BIG: u64 = 10_000;
@@ -61,6 +63,8 @@ struct Log {
     beside: Vec<navo_core::Location>,
     stranded: Vec<HeldFile>,
     writes: usize,
+    retaining: bool,
+    proofs: Vec<(HeldFile, navo_core::retention::OverwriteProof)>,
 }
 
 fn log_error() -> FsError {
@@ -71,6 +75,22 @@ fn log_error() -> FsError {
 }
 
 impl JobLog for Log {
+    fn preserve_overwrites(&self) -> bool {
+        self.retaining
+    }
+
+    fn journal_proved_held(
+        &mut self,
+        held: &HeldFile,
+        proof: &navo_core::retention::OverwriteProof,
+    ) -> Result<bool, FsError> {
+        if !self.journal_held(held)? {
+            return Ok(false);
+        }
+        self.proofs.push((held.clone(), proof.clone()));
+        Ok(true)
+    }
+
     fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
         if self.fail_on == Some(seq) {
             return Err(log_error());

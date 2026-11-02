@@ -13,6 +13,12 @@ use super::held::held_of;
 use super::held_tests::journal;
 use super::{SharedJournal, lock, log_factory, recover};
 
+mod dying;
+mod recovering;
+mod retained;
+mod spelling;
+mod vault;
+
 struct CancelAtHold<'a> {
     inner: Box<dyn OpLog>,
     fs: &'a FakeFs,
