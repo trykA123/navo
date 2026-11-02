@@ -104,6 +104,8 @@ fn cancelled_reads(setup: &Setup) -> usize {
         Tuning {
             batch_lines: setup.batch_lines,
             forge: Some(forge),
+            watchdog: Duration::from_secs(60),
+            ..Tuning::default()
         },
     );
     let events = collect(&diff);

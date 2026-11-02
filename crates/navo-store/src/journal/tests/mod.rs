@@ -5,6 +5,7 @@ use super::*;
 mod crash;
 mod create;
 mod evidence;
+mod failed;
 mod finish;
 mod held;
 mod mark;

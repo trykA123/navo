@@ -187,6 +187,35 @@ impl JobJournal {
         self.jobs_in(JobState::RestorePending)
     }
 
+    /// Ids and plans of failed jobs of `kind` that still hold undo rows, newest first.
+    pub fn failed_holding(
+        &self,
+        kind: &str,
+        limit: u32,
+    ) -> Result<Vec<(JobId, Vec<u8>)>, JournalError> {
+        let mut jobs = self.db.connection().prepare(
+            "SELECT id, plan FROM job WHERE state = 'failed' AND kind = ?1
+             AND EXISTS (SELECT 1 FROM undo WHERE undo.job_id = job.id)
+             ORDER BY created_at DESC, id DESC LIMIT ?2",
+        )?;
+        let rows = jobs
+            .query_map(rusqlite::params![kind, limit], |row| {
+                Ok((JobId(row.get(0)?), row.get(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn count_failed_holding(&self, kind: &str) -> Result<u32, JournalError> {
+        let count: i64 = self.db.connection().query_row(
+            "SELECT COUNT(*) FROM job WHERE state = 'failed' AND kind = ?1
+             AND EXISTS (SELECT 1 FROM undo WHERE undo.job_id = job.id)",
+            [kind],
+            |row| row.get(0),
+        )?;
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
+    }
+
     pub fn read_job(&self, id: JobId) -> Result<(JobState, UnfinishedJob), JournalError> {
         let (state, kind, plan, created_at): (String, String, Vec<u8>, i64) = self
             .db

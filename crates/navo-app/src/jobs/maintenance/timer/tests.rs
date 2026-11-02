@@ -10,6 +10,7 @@ use navo_ui::browser::{LoggedOperation, OpLog};
 use super::super::super::mutation_lock::{Mode, Wait, lease};
 use super::{MaintenanceTimer, Pass, Schedule, cycle, pass};
 
+mod save;
 mod startup;
 
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;

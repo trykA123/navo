@@ -35,6 +35,9 @@ pub(super) fn details(
                 Step::CopyFile { source, target, .. } | Step::Rename { source, target } => {
                     left.extend([source.clone(), target.clone()]);
                 }
+                Step::WriteFile { target, staged, .. } => {
+                    left.extend([target.clone(), staged.clone()]);
+                }
                 _ => {}
             }
         }

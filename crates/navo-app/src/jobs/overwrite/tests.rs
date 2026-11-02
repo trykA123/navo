@@ -353,6 +353,7 @@ fn overwrite_adoption_rechecks_prior_payloads_after_progress_callbacks() {
             files: &held.proved,
             policy: Default::default(),
             created_at: job.created_at,
+            keep_evidence: false,
         },
         &mut RetentionRun::new(&CancelToken::new(), &mut |update| {
             if update.current == trigger {

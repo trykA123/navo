@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 
 use crate::content::{self, CheckOptions, ContentProgress, Side};
 use crate::model::{
@@ -17,6 +17,8 @@ use crate::rules::IgnoreRules;
 use super::SessionOptions;
 use super::classify::classify;
 use super::shared::Shared;
+
+mod threads;
 
 #[cfg(test)]
 pub(super) type SettleHook = Arc<dyn Fn(bool, u64) + Send + Sync>;
@@ -75,22 +77,15 @@ pub(super) fn spawn(run: Run) -> Vec<JoinHandle<()>> {
         settle_hook: run.settle_hook,
     });
     let mut handles = Vec::with_capacity(workers + 1);
+    let mut started = true;
     for _ in 0..workers {
-        let context = Arc::clone(&context);
-        handles.push(thread::spawn(move || worker(&context)));
+        let inner = Arc::clone(&context);
+        started = started && threads::start(&mut handles, move || worker(&inner));
     }
     let walker = Arc::clone(&context);
-    handles.push(thread::spawn(move || {
-        let inner = Arc::clone(&walker);
-        let walked = catch_unwind(AssertUnwindSafe(move || walk(&inner)));
-        if walked.is_err() {
-            walker.cancel.cancel();
-            walker.queue.close();
-            walker
-                .shared
-                .finish_problem(walker.generation, Reason::WorkerPanicked);
-        }
-    }));
+    if !(started && threads::start(&mut handles, move || threads::walk_guarded(&walker))) {
+        threads::stop(&context);
+    }
     handles
 }
 

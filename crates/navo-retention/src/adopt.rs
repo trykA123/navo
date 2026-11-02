@@ -11,6 +11,7 @@ pub struct AdoptJob<'a> {
     pub files: &'a [(HeldFile, OverwriteProof)],
     pub policy: RetentionPolicy,
     pub created_at: i64,
+    pub keep_evidence: bool,
 }
 
 struct Batch {
@@ -31,7 +32,7 @@ impl Vault<'_> {
         }
         for (record, saved) in &batch.returned {
             verify_parent(self.ops, record, saved.proof.mount_identity)?;
-            if !proof::node(self.ops, &record.source, &record.nodes[0])? {
+            if !proof::same_object(self.ops, &record.source, &record.nodes[0])? {
                 return Err(Error::Changed(record.source.clone()));
             }
         }
@@ -49,6 +50,7 @@ impl Vault<'_> {
                 state: request.state,
                 records: &records,
                 returned: &returned,
+                keep_evidence: request.keep_evidence,
             })?)
     }
 
@@ -74,6 +76,7 @@ impl Vault<'_> {
                 state: request.state,
                 records: &records,
                 returned: &[],
+                keep_evidence: request.keep_evidence,
             })?;
         Ok(records)
     }
@@ -95,8 +98,9 @@ impl Vault<'_> {
             return_missing(self.ops, &record, (request.state, evidence.mount_identity))?;
             if request.state != JobState::Done
                 && proof::present(self.ops, &record.held()?)?.is_none()
-                && proof::node(self.ops, &record.source, &record.nodes[0])?
+                && proof::same_object(self.ops, &record.source, &record.nodes[0])?
             {
+                flush_return(self.ops, &record)?;
                 proof::cleanup_record(self.ops, &record)?;
                 batch.returned.push((
                     record,
@@ -131,6 +135,18 @@ fn return_missing(
     }
     verify_record(ops, record, mount)?;
     ops.rename_atomic(&record.held()?, &record.source)?;
+    flush_return(ops, record)
+}
+
+fn flush_return(ops: &dyn navo_fs::ProviderOps, record: &RetentionRecord) -> Result<(), Error> {
+    let parent = record
+        .source
+        .parent()
+        .ok_or_else(|| Error::Changed(record.source.clone()))?;
+    ops.flush(&parent)?;
+    if proof::present(ops, &record.container)?.is_some() {
+        ops.flush(&record.container)?;
+    }
     Ok(())
 }
 

@@ -252,6 +252,29 @@ impl ProviderOps for Crashing<'_> {
         self.alive()?;
         self.fs.flush(location)
     }
+
+    fn supports_atomic_rename(&self) -> bool {
+        self.fs.supports_atomic_rename()
+    }
+
+    fn rename_atomic(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.enter(source, FakeOp::Rename)?;
+        self.fs.rename_atomic(source, target)
+    }
+
+    fn mount_identity(&self, location: &Location) -> Result<Option<u64>, FsError> {
+        self.alive()?;
+        self.fs.mount_identity(location)
+    }
+
+    fn hide_retained(
+        &self,
+        location: &Location,
+        identity: crate::FileIdentity,
+    ) -> Result<(), FsError> {
+        self.enter(location, FakeOp::Secure)?;
+        self.fs.hide_retained(location, identity)
+    }
 }
 
 pub(super) fn crashed(fs: &FakeFs, plan: &OperationPlan, copy_of: &str) -> Vec<u32> {

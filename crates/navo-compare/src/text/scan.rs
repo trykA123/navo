@@ -7,11 +7,16 @@ use crate::model::{CancelToken, CaseRule, Reason};
 use super::normalise::{Options, Whitespace};
 use super::side::LineEnding;
 
+mod sample;
+
+pub use sample::Sample;
+
 pub const BLOCK: usize = 1024 * 1024;
 pub const BUCKETS: u32 = 32;
 pub const PROGRESS_EVERY: u64 = 8 * 1024 * 1024;
 const DECODE_CHUNK: usize = 64 * 1024;
 const MIN_ANCHOR_BYTES: usize = 8;
+const FIRST_CANDIDATES: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Candidate {
@@ -34,7 +39,7 @@ pub fn scan<S: ByteSource + ?Sized>(
     source: &S,
     layout: TextLayout,
     options: &Options,
-    rate: u32,
+    sample: impl Into<Sample>,
     cancel: &CancelToken,
     progress: &mut dyn FnMut(u64),
 ) -> Result<ScanResult, Reason> {
@@ -42,7 +47,7 @@ pub fn scan<S: ByteSource + ?Sized>(
     if cancel.is_cancelled() {
         return Err(Reason::Stopped);
     }
-    let mut scanner = Scanner::new(layout, options, rate.max(1));
+    let mut scanner = Scanner::new(layout, options, sample.into());
     let mut buffer = vec![0_u8; BLOCK];
     let mut at = 0_u64;
     let mut next = PROGRESS_EVERY;
@@ -109,6 +114,7 @@ struct Scanner<'a> {
     layout: TextLayout,
     options: &'a Options,
     rate: u64,
+    cap: usize,
     index: LineIndex,
     candidates: Vec<Candidate>,
     lines: u64,
@@ -118,11 +124,12 @@ struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
-    fn new(layout: TextLayout, options: &'a Options, rate: u32) -> Self {
+    fn new(layout: TextLayout, options: &'a Options, sample: Sample) -> Self {
         Self {
             layout,
             options,
-            rate: u64::from(rate),
+            rate: u64::from(sample.rate.max(1)),
+            cap: sample.cap,
             index: LineIndex::with_layout(layout),
             candidates: Vec::new(),
             lines: 0,
@@ -184,11 +191,34 @@ impl<'a> Scanner<'a> {
         let (hash, nonblank) = normaliser.finish(terminated);
         if nonblank >= MIN_ANCHOR_BYTES && hash.is_multiple_of(self.rate) {
             let line = u32::try_from(self.lines).map_err(|_| Reason::Unsupported)?;
-            self.candidates.push(Candidate { hash, line });
+            self.keep(Candidate { hash, line });
         }
         self.lines += 1;
         self.line_open = false;
         Ok(())
+    }
+
+    fn keep(&mut self, candidate: Candidate) {
+        while self.candidates.len() >= self.cap && self.rate <= u64::MAX / 2 {
+            self.rate *= 2;
+            let rate = self.rate;
+            self.candidates
+                .retain(|kept| kept.hash.is_multiple_of(rate));
+        }
+        if self.candidates.len() >= self.cap {
+            self.candidates.clear();
+            self.cap = 0;
+            return;
+        }
+        if !candidate.hash.is_multiple_of(self.rate) {
+            return;
+        }
+        if self.candidates.len() == self.candidates.capacity() {
+            let room = self.cap - self.candidates.len();
+            let grow = self.candidates.capacity().max(FIRST_CANDIDATES).min(room);
+            self.candidates.reserve_exact(grow);
+        }
+        self.candidates.push(candidate);
     }
 
     fn finish(mut self) -> Result<ScanResult, Reason> {

@@ -13,6 +13,9 @@ impl Aside {
         write: &Write<'_>,
         checked: &Checked,
     ) -> Result<(), FsError> {
+        if ctx.log.preserve_overwrites() {
+            return self.write_retained(ctx, write, checked);
+        }
         let ops = ctx.ops;
         let placed = Some(FileStamp {
             size: checked.staged.size,
@@ -36,7 +39,7 @@ impl Aside {
     }
 }
 
-fn check_hold(
+pub(super) fn check_hold(
     ctx: &JobContext<'_>,
     (write, checked): (&Write<'_>, &Checked),
     held: &HeldFile,

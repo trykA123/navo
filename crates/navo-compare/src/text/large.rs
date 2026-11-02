@@ -1,31 +1,37 @@
 use std::ops::Range;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, OnceLock};
-use std::thread;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use navo_core::paging::{ByteSource, TextLayout};
 
-use crate::anchor;
-use crate::model::{CancelToken, Reason};
+use crate::model::{Budget, CancelToken, DiffStep, Reason};
 
-use super::diff::{Hunk, diff_lines};
+use super::diff::Hunk;
+#[cfg(test)]
+use super::diff::diff_lines;
 use super::normalise::Options;
-use super::scan::{self, BUCKETS, ScanResult};
+#[cfg(test)]
+use super::scan;
 
 mod batch;
+mod budget;
+mod plan;
 mod read;
 mod schedule;
 
-use batch::{Batch, Context, SideData};
-use schedule::{Schedule, group};
+pub use budget::{Evictions, Paged, PagedState, Rediff, StepReason};
+use budget::{Ledger, Store};
+pub(crate) use plan::{Forge, Tuning};
 
 pub const WORKERS: usize = 4;
 pub const PROVISIONAL_BYTES: u64 = 4 * 1024 * 1024;
 pub const BATCH_LINES: u64 = 16 * 1024;
 pub const MAX_RESTARTS: u32 = 4;
+const PROVISIONAL_LINES: u64 = 32 * 1024;
 const AHEAD: usize = 4 * WORKERS;
 const EVENT_BUFFER: usize = 64;
 const FULL_WAIT: Duration = Duration::from_millis(5);
@@ -44,6 +50,7 @@ pub struct Request {
     pub options: Options,
     /// Left line in view; its batch is diffed and sent first.
     pub focus: u64,
+    pub budget: Budget,
 }
 
 /// Hunks for one batch of sections; batches tile both sides once.
@@ -52,12 +59,17 @@ pub struct Covered {
     pub left: Range<u64>,
     pub right: Range<u64>,
     pub hunks: Vec<Hunk>,
+    /// Left line ranges of hunks emitted as coarse or paged blocks.
+    pub coarse: Vec<Range<usize>>,
+    /// Sections kept as counts; `state` says whether `hunks_for` can re-diff.
+    pub paged: Vec<Paged>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
     Scan,
     Sections,
+    Waiting,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +86,7 @@ pub struct Summary {
     pub sections: usize,
     pub dropped_anchors: usize,
     pub restarts: u32,
+    pub extra_workers: u32,
 }
 
 /// After `Restarted`, every earlier `Provisional` and `Hunks` is stale.
@@ -82,37 +95,36 @@ pub enum DiffEvent {
     Provisional(Vec<Hunk>),
     Hunks(Covered),
     Progress(Progress),
+    Step {
+        step: DiffStep,
+        section: Range<u64>,
+        lines: u64,
+        reason: StepReason,
+    },
+    /// An emitted section drops its line hunks and keeps this count.
+    Paged {
+        paged: Paged,
+        seq: u64,
+    },
     Done(Result<Summary, Reason>),
     Restarted,
 }
 
 type Settled = Arc<OnceLock<Result<Summary, Reason>>>;
 
-pub(crate) type Forge =
-    Arc<dyn Fn(&mut Vec<scan::Candidate>, &mut Vec<scan::Candidate>) + Send + Sync>;
-
-#[derive(Clone)]
-pub(crate) struct Tuning {
-    pub(crate) batch_lines: u64,
-    pub(crate) forge: Option<Forge>,
-}
-
-impl Default for Tuning {
-    fn default() -> Self {
-        Self {
-            batch_lines: BATCH_LINES,
-            forge: None,
-        }
-    }
-}
-
 /// Dropping it cancels the token it was started with.
 pub struct LargeDiff {
     events: Receiver<DiffEvent>,
     focus: Arc<AtomicU64>,
+    focus_gate: Arc<Mutex<()>>,
     cancel: CancelToken,
     outcome: Settled,
+    store: Shared,
+    ledger: Arc<Ledger>,
+    done: Arc<AtomicBool>,
 }
+
+type Shared = Arc<Mutex<Option<Store>>>;
 
 impl LargeDiff {
     #[must_use]
@@ -124,6 +136,11 @@ impl LargeDiff {
         let (events, receive) = mpsc::sync_channel(EVENT_BUFFER);
         let focus = Arc::new(AtomicU64::new(request.focus));
         let outcome = Settled::default();
+        let store = Shared::default();
+        let ledger = Arc::new(Ledger::new(request.budget));
+        let done = Arc::new(AtomicBool::new(false));
+        let focus_gate = Arc::new(Mutex::new(()));
+        let seq = Arc::new(AtomicU64::new(0));
         let fallback = events.clone();
         let driver = Driver {
             left: request.left,
@@ -132,8 +149,15 @@ impl LargeDiff {
             cancel: cancel.clone(),
             events,
             focus: Arc::clone(&focus),
+            focus_gate: Arc::clone(&focus_gate),
+            seq: Arc::clone(&seq),
             outcome: Arc::clone(&outcome),
             tuning,
+            store: Arc::clone(&store),
+            ledger: Arc::clone(&ledger),
+            extras: Arc::default(),
+            lingering: Mutex::default(),
+            done: Arc::clone(&done),
         };
         let spawned = thread::Builder::new()
             .name("large-diff".to_owned())
@@ -148,8 +172,12 @@ impl LargeDiff {
         Self {
             events: receive,
             focus,
+            focus_gate,
             cancel: cancel.clone(),
             outcome,
+            store,
+            ledger,
+            done,
         }
     }
 
@@ -164,8 +192,21 @@ impl LargeDiff {
         self.outcome.get().cloned()
     }
 
-    pub fn set_focus(&self, line: u64) {
+    /// The caller must apply the returned evictions, then acknowledge them.
+    pub fn set_focus(&self, line: u64) -> Evictions {
         self.focus.store(line, Ordering::Relaxed);
+        let _gate = self
+            .focus_gate
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if !self.done.load(Ordering::Acquire) {
+            return Evictions::empty(self.ledger.empty());
+        }
+        let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        match store.as_mut() {
+            Some(store) => store.page(line),
+            None => Evictions::empty(self.ledger.empty()),
+        }
     }
 }
 
@@ -182,15 +223,15 @@ struct Driver {
     cancel: CancelToken,
     events: SyncSender<DiffEvent>,
     focus: Arc<AtomicU64>,
+    focus_gate: Arc<Mutex<()>>,
+    seq: Arc<AtomicU64>,
     outcome: Settled,
     tuning: Tuning,
-}
-
-struct Plan {
-    context: Context,
-    batches: Vec<Batch>,
-    left_lines: u64,
-    right_lines: u64,
+    store: Shared,
+    ledger: Arc<Ledger>,
+    extras: Arc<AtomicU32>,
+    lingering: Mutex<Vec<JoinHandle<()>>>,
+    done: Arc<AtomicBool>,
 }
 
 impl Driver {
@@ -205,13 +246,57 @@ impl Driver {
             if !restart {
                 let settled = self.settle(attempt, restarts);
                 let _first = self.outcome.set(settled.clone());
-                self.post(DiffEvent::Done(settled));
+                self.before_done();
+                self.finish(settled);
                 return;
             }
             restarts += 1;
             if !self.post(DiffEvent::Restarted) {
                 let _first = self.outcome.set(Err(Reason::Stopped));
+                self.done.store(true, Ordering::Release);
+                self.reap(false);
                 return;
+            }
+        }
+    }
+
+    fn before_done(&self) {
+        if let Some(before) = &self.tuning.before_done {
+            before(&self.focus);
+        }
+    }
+
+    fn finish(&self, settled: Result<Summary, Reason>) {
+        let gate = self
+            .focus_gate
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let focus = self.focus.load(Ordering::Relaxed);
+        let evictions = self.page(focus);
+        let (paged, first) = self.defer(evictions);
+        self.done.store(true, Ordering::Release);
+        drop(gate);
+        let _sent = schedule::paged::send(self, &paged, first);
+        let _done = self.post(DiffEvent::Done(settled));
+        self.reap(false);
+    }
+
+    fn page(&self, focus: u64) -> Evictions {
+        let mut store = self.store_slot();
+        match store.as_mut() {
+            Some(store) => store.page(focus),
+            None => Evictions::empty(self.ledger.empty()),
+        }
+    }
+
+    fn defer(&self, evictions: Evictions) -> (Vec<Paged>, u64) {
+        let mut store = self.store_slot();
+        match store.as_mut() {
+            Some(store) => store.defer(evictions),
+            None => {
+                let (paged, hold) = evictions.into_parts();
+                drop(hold);
+                (paged, 0)
             }
         }
     }
@@ -228,105 +313,54 @@ impl Driver {
     }
 
     fn attempt(&self) -> Result<Summary, Reason> {
+        self.reap(false);
+        self.store_slot().take();
         for side in [&self.left, &self.right] {
             let _stale = side.source.take_changed() | side.source.take_rewritten();
         }
         let (left, right) = self.scan_phase()?;
         let plan = self.plan(left, right);
-        let mut schedule = Schedule::new(plan.batches);
-        self.sections_phase(&plan.context, &mut schedule)?;
+        let mut schedule = plan.schedule;
+        self.sections_phase(&plan.context, &mut schedule, plan.limits)?;
         for side in [&plan.context.left, &plan.context.right] {
             side.source.probe_end().map_err(|_| Reason::ReadError)?;
             batch::unchanged(side)?;
         }
         Ok(Summary {
-            left_lines: plan.left_lines,
-            right_lines: plan.right_lines,
+            left_lines: plan.context.left.lines,
+            right_lines: plan.context.right.lines,
             sections: schedule.counts.sections,
             dropped_anchors: schedule.counts.dropped,
             restarts: 0,
+            extra_workers: self.extras.load(Ordering::Acquire),
         })
     }
 
-    fn scan_phase(&self) -> Result<(ScanResult, ScanResult), Reason> {
-        let total = self
-            .left
-            .source
-            .len()
-            .saturating_add(self.right.source.len());
-        let meter = Meter {
-            scanned: [AtomicU64::new(0), AtomicU64::new(0)],
-            total,
-        };
-        thread::scope(|scope| {
-            let left = scope.spawn(|| self.scan_side(&self.left, &meter, 0));
-            let right = scope.spawn(|| self.scan_side(&self.right, &meter, 1));
-            let provisional = self.provisional();
-            let left = left.join().unwrap_or(Err(Reason::WorkerPanicked));
-            let right = right.join().unwrap_or(Err(Reason::WorkerPanicked));
-            provisional?;
-            Ok((left?, right?))
-        })
+    fn store_slot(&self) -> std::sync::MutexGuard<'_, Option<Store>> {
+        self.store.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn scan_side(
-        &self,
-        side: &LargeSide,
-        meter: &Meter,
-        slot: usize,
-    ) -> Result<ScanResult, Reason> {
-        let mut progress = |at: u64| {
-            meter.scanned[slot].store(at, Ordering::Relaxed);
-            let [left, right] = &meter.scanned;
-            let done = left.load(Ordering::Relaxed) + right.load(Ordering::Relaxed);
-            self.hint(Stage::Scan, done, meter.total);
-        };
-        let source = side.source.as_ref();
-        scan::scan(
-            source,
-            side.layout,
-            &self.options,
-            BUCKETS,
-            &self.cancel,
-            &mut progress,
-        )
+    fn linger(&self, handles: Vec<JoinHandle<()>>) {
+        let mut lingering = self
+            .lingering
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        lingering.extend(handles);
     }
 
-    fn provisional(&self) -> Result<(), Reason> {
-        let stop = || self.cancel.is_cancelled();
-        let left = read::head(&self.left, &stop)?;
-        let right = read::head(&self.right, &stop)?;
-        let left_set = left.set(self.left.layout.text.bom);
-        let right_set = right.set(self.right.layout.text.bom);
-        let hunks = diff_lines(left_set, right_set, &self.options).hunks;
-        self.send(DiffEvent::Provisional(hunks))
-    }
-
-    fn plan(&self, mut left: ScanResult, mut right: ScanResult) -> Plan {
-        if let Some(forge) = &self.tuning.forge {
-            forge(&mut left.candidates, &mut right.candidates);
-        }
-        let anchors = anchor::anchors(&keyed(&left.candidates), &keyed(&right.candidates));
-        let sections = anchor::sections(&anchors, left.lines, right.lines);
-        let terminal = anchors.last().is_some_and(|last| {
-            last.left.saturating_add(1) == left.lines && last.right.saturating_add(1) == right.lines
-        });
-        let (left_lines, right_lines) = (left.lines, right.lines);
-        let side = |side: &LargeSide, scanned: ScanResult| SideData {
-            source: Arc::clone(&side.source),
-            layout: side.layout,
-            len: scanned.index.scanned(),
-            index: scanned.index,
-        };
-        Plan {
-            context: Context {
-                left: side(&self.left, left),
-                right: side(&self.right, right),
-                options: self.options,
-            },
-            batches: group(sections, self.tuning.batch_lines, terminal),
-            left_lines,
-            right_lines,
+    /// Joins finished section workers; with `all`, waits for late ones too.
+    fn reap(&self, all: bool) {
+        let mut lingering = self
+            .lingering
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let (done, late): (Vec<_>, Vec<_>) = std::mem::take(&mut *lingering)
+            .into_iter()
+            .partition(|handle| all || handle.is_finished());
+        *lingering = late;
+        drop(lingering);
+        for handle in done {
+            let _joined = handle.join();
         }
     }
 
@@ -357,21 +391,6 @@ impl Driver {
             thread::sleep(FULL_WAIT);
         }
     }
-}
-
-struct Meter {
-    scanned: [AtomicU64; 2],
-    total: u64,
-}
-
-fn keyed(candidates: &[scan::Candidate]) -> Vec<anchor::Candidate<u64>> {
-    candidates
-        .iter()
-        .map(|candidate| anchor::Candidate {
-            key: candidate.hash,
-            position: u64::from(candidate.line),
-        })
-        .collect()
 }
 
 #[cfg(test)]

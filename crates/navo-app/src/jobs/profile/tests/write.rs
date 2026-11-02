@@ -69,7 +69,7 @@ fn a_write_plan_probes_its_target_for_retention() {
 }
 
 #[test]
-fn a_retaining_drive_refuses_a_save_until_writes_keep_old_versions() {
+fn a_retaining_drive_journals_a_save_as_a_retained_write() {
     let (_root, dirs, journal) = setup();
     let fs = FakeFs::new();
     fs.add_file("dest/a", 9);
@@ -77,9 +77,11 @@ fn a_retaining_drive_refuses_a_save_until_writes_keep_old_versions() {
     let plan = write(&fs, 11);
     let ops: Arc<dyn ProviderOps> = Arc::new(fs);
     let factory = crate::jobs::retaining_factory(journal.clone(), dirs, ops);
-    let Err(message) = factory(&plan) else {
-        panic!("a save ran without keeping the old version");
+    let log = factory(&plan).unwrap();
+    assert!(log.preserve_overwrites());
+    let unfinished = crate::jobs::lock(&journal).unfinished().unwrap();
+    let [job] = unfinished.as_slice() else {
+        panic!("one journalled save");
     };
-    assert!(message.contains("not supported yet"), "{message}");
-    assert!(crate::jobs::lock(&journal).unfinished().unwrap().is_empty());
+    assert_eq!(job.kind, navo_core::retention::SAVE_RETAINED_KIND);
 }

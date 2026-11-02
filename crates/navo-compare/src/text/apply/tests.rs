@@ -292,6 +292,7 @@ fn picks(lines: impl IntoIterator<Item = usize>) -> BTreeSet<usize> {
     lines.into_iter().collect()
 }
 
+mod changed;
 mod limits;
 mod oracle;
 mod rows;

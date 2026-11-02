@@ -12,6 +12,7 @@ use crate::{
 
 mod batch;
 mod changes;
+mod filtered_stream;
 mod filters;
 mod parse;
 mod process;
@@ -68,6 +69,7 @@ impl CliGit {
 
     pub fn with_options(repo: &Path, options: &CliOptions) -> Result<Self, GitError> {
         let git = match &options.git {
+            Some(git) if cfg!(windows) => resolve_git(git, &options.env, options.timeout),
             Some(git) => git.clone(),
             None => resolve_git(&find_git()?, &options.env, options.timeout),
         };

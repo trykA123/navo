@@ -230,6 +230,8 @@ fn refused(outcome: &JobOutcome) -> FsErrorKind {
 
 mod copy;
 mod failures;
+#[cfg(unix)]
+mod git_stream;
 mod immutable;
 #[cfg(unix)]
 mod retained;

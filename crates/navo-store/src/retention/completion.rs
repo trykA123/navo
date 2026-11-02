@@ -4,7 +4,7 @@ use navo_core::retention::{
     MAX_NODES, ProvedOverwrite, RetainedState, RetainedWritePlan, RetentionEntry, RetentionError,
     RetentionId, RetentionRecord,
 };
-use navo_core::{Resolution, Step};
+use navo_core::{Location, OpKind, OperationPlan, Resolution, Step};
 
 use super::{RetentionStoreError, RetentionTransaction, transaction::encode};
 use crate::{JobId, JobState};
@@ -16,6 +16,8 @@ pub struct RetainedCompletion<'a> {
     pub state: JobState,
     pub records: &'a [RetentionRecord],
     pub returned: &'a [ProvedOverwrite],
+    /// Keeps the job's proof rows when it settles, for a save whose staged file is stranded.
+    pub keep_evidence: bool,
 }
 
 struct Owner {
@@ -35,7 +37,7 @@ impl RetentionTransaction<'_> {
             "UPDATE job SET state = ?2 WHERE id = ?1",
             rusqlite::params![request.job.0, state_text(request.state)?],
         )?;
-        if request.state != JobState::RestorePending {
+        if request.state != JobState::RestorePending && !request.keep_evidence {
             self.inner
                 .execute("DELETE FROM undo WHERE job_id = ?1", [request.job.0])?;
         }
@@ -254,9 +256,7 @@ fn validate_records(
     let mut held = std::collections::HashSet::new();
     for record in records {
         record.validate()?;
-        let allowed = plan.plan().steps.iter().any(|step| matches!(step,
-            Step::CopyFile { target, .. } | Step::Rename { target, .. } if target.same_place(&record.source)))
-            && plan.plan().conflicts.iter().any(|conflict| conflict.resolution == Resolution::Overwrite && conflict.target.same_place(&record.source));
+        let allowed = overwrites(plan.plan(), &record.source);
         if record.version != 2
             || !allowed
             || record.created_at != created_at
@@ -269,6 +269,20 @@ fn validate_records(
         }
     }
     Ok(())
+}
+
+fn overwrites(plan: &OperationPlan, source: &Location) -> bool {
+    if plan.kind == OpKind::Save {
+        return plan.steps.iter().any(
+            |step| matches!(step, Step::WriteFile { target, .. } if target.same_place(source)),
+        );
+    }
+    plan.steps.iter().any(|step| {
+        matches!(step,
+        Step::CopyFile { target, .. } | Step::Rename { target, .. } if target.same_place(source))
+    }) && plan.conflicts.iter().any(|conflict| {
+        conflict.resolution == Resolution::Overwrite && conflict.target.same_place(source)
+    })
 }
 
 #[cfg(test)]

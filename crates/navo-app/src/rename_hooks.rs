@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use navo_core::OperationPlan;
-use navo_core::retention::{COPY_RETAINED_KIND, MOVE_RETAINED_KIND, RETAINED_DELETE_KIND};
+use navo_core::retention::{
+    COPY_RETAINED_KIND, MOVE_RETAINED_KIND, RETAINED_DELETE_KIND, SAVE_RETAINED_KIND,
+};
 use navo_store::{FinishedJob, JobId, StepState, UndoKinds, Undoable};
 use navo_ui::browser::{NamedPreset, RenameHooks, RenamePresetList, UndoKind, UndoOffer};
 
@@ -13,7 +15,12 @@ pub(crate) use claim::claim_undo;
 
 const KIND: &str = "rename";
 const MOVE_KIND: &str = "move";
-const RETAINED: [&str; 3] = [RETAINED_DELETE_KIND, COPY_RETAINED_KIND, MOVE_RETAINED_KIND];
+const RETAINED: [&str; 4] = [
+    RETAINED_DELETE_KIND,
+    COPY_RETAINED_KIND,
+    MOVE_RETAINED_KIND,
+    SAVE_RETAINED_KIND,
+];
 
 pub fn profile_hooks(
     journal: Option<SharedJournal>,

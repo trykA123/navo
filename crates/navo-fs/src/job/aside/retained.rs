@@ -5,6 +5,8 @@ use navo_core::retention::{OverwriteProof, RetainedKind, RetainedNode};
 use navo_core::{FsError, FsErrorKind, Location};
 use std::sync::PoisonError;
 
+mod write;
+
 pub(in crate::job) struct Replacement<'a> {
     pub source: &'a Location,
     pub target: &'a Location,

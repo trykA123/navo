@@ -48,6 +48,7 @@ fn partial_adoption_cannot_discard_other_durable_overwrite_proofs() {
             files: &held.proved[..1],
             policy: Default::default(),
             created_at: job.created_at,
+            keep_evidence: false,
         },
         &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}),
     );
@@ -234,6 +235,7 @@ fn returned_previously_adopted_entries_settle_even_after_a_lost_completion_commi
                 files: &held.proved,
                 policy: Default::default(),
                 created_at: job.created_at,
+                keep_evidence: false,
             },
             &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}),
         )
@@ -304,6 +306,7 @@ fn a_terminal_owner_cannot_return_another_jobs_proved_version() {
                     files: &held.proved,
                     policy: Default::default(),
                     created_at: lock(&journal).read_job(owner).unwrap().1.created_at,
+                    keep_evidence: false,
                 },
                 &mut RetentionRun::new(&CancelToken::new(), &mut |_| {})
             )
@@ -314,4 +317,76 @@ fn a_terminal_owner_cannot_return_another_jobs_proved_version() {
         fs.file_identity(&file.held).unwrap(),
         Some(proof.node.identity)
     );
+}
+
+fn failed_overwrite_then_touched(kind: OpKind) {
+    let (_root, dirs, journal) = setup();
+    let fs = FakeFs::new();
+    fs.add_file("source/a", 7);
+    fs.add_file("dest/a", 2);
+    fs.fault(
+        "dest/a",
+        navo_fs::FakeOp::Rename,
+        1,
+        navo_fs::Fault::Fail(navo_core::FsErrorKind::Locked),
+    );
+    let original = fs.file_identity(&fs.location("dest/a")).unwrap();
+    let plan = overwrite(&fs, &[fs.location("source/a")], fs.location("dest"), kind);
+    let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+    let outcome = execute(log.as_mut(), &plan, &fs);
+    assert!(matches!(outcome, JobOutcome::Failed { .. }));
+    let target = fs.metadata(&fs.location("dest/a")).unwrap();
+    fs.add_entry(
+        "dest",
+        navo_fs::FsEntry {
+            size: target.size + 1,
+            ..target
+        },
+    );
+    remove_temporaries(&fs);
+    log.retire_temporary(0, &fs).unwrap();
+    let job = lock(&journal).unfinished().unwrap().remove(0);
+    let held = super::super::super::held::held_of(&journal, job.id).unwrap();
+    let (db, _) = Db::open(&dirs.journal_file(), false).unwrap();
+    let mut vault = Vault::new(db, &dirs.data, &fs).unwrap();
+    let adopted = vault.adopt_job(
+        &navo_retention::AdoptJob {
+            job: job.id,
+            state: JobState::Failed,
+            files: &held.proved,
+            policy: Default::default(),
+            created_at: job.created_at,
+            keep_evidence: false,
+        },
+        &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}),
+    );
+    assert!(adopted.unwrap().is_empty());
+    assert_eq!(fs.file_identity(&fs.location("dest/a")).unwrap(), original);
+    assert!(entries(&dirs).is_empty());
+}
+
+#[test]
+fn a_failed_move_adopts_a_returned_original_that_was_touched_after_the_hold() {
+    failed_overwrite_then_touched(OpKind::Move);
+}
+
+#[test]
+fn a_failed_copy_adopts_a_returned_original_that_was_touched_after_the_hold() {
+    failed_overwrite_then_touched(OpKind::Copy);
+}
+
+fn remove_temporaries(fs: &FakeFs) {
+    let mut names = Vec::new();
+    let mut sink = |batch: navo_fs::EntryBatch| {
+        names.extend(batch.entries.into_iter().map(|entry| entry.name.to_text()));
+        std::ops::ControlFlow::Continue(())
+    };
+    fs.list(&fs.location("dest"), &mut sink, &CancelToken::new())
+        .unwrap();
+    for name in names
+        .into_iter()
+        .filter(|name| name.starts_with(".navo-part"))
+    {
+        fs.remove(&format!("dest/{name}"));
+    }
 }

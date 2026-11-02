@@ -116,3 +116,50 @@ fn owned_temporary_names_stay_bounded_for_a_maximum_length_destination_name() {
     assert!(temporary.name().unwrap().to_text().len() < 255);
     assert_eq!(temporary.parent(), target.parent());
 }
+
+fn save() -> OperationPlan {
+    crate::write_plan(
+        &Location::new("/dest/a.txt").unwrap(),
+        &Location::new("/dest/.a.txt.part").unwrap(),
+        crate::FileStamp {
+            size: 3,
+            modified_ms: Some(1_000),
+            hash: [1; 32],
+        },
+        11,
+    )
+}
+
+#[test]
+fn a_save_with_one_write_step_has_its_own_retained_kind_and_round_trips() {
+    let retained = RetainedWritePlan::new(save(), RetentionPolicy::default())
+        .unwrap()
+        .with_temporary_namespace("ab-12".into())
+        .unwrap();
+    assert_eq!(retained.journal_kind(), SAVE_RETAINED_KIND);
+    assert!(is_retained_write(SAVE_RETAINED_KIND));
+    let bytes = serde_json::to_vec(&retained).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<RetainedWritePlan>(&bytes).unwrap(),
+        retained
+    );
+    assert_eq!(
+        serde_json::from_slice::<OperationPlan>(&bytes).unwrap(),
+        save()
+    );
+}
+
+#[test]
+fn a_save_with_other_or_extra_steps_and_a_copy_with_a_write_are_refused() {
+    let mut twice = save();
+    twice.steps.push(twice.steps[0].clone());
+    let mut copying = save();
+    copying.steps = plan(OpKind::Copy).steps;
+    let mut empty = save();
+    empty.steps.clear();
+    let mut copy = plan(OpKind::Copy);
+    copy.steps = save().steps;
+    for refused in [twice, copying, empty, copy] {
+        assert!(RetainedWritePlan::new(refused, RetentionPolicy::default()).is_err());
+    }
+}

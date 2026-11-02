@@ -107,7 +107,11 @@ impl ByteDiff {
                 });
             });
         if spawned.is_err() {
-            offset::post(&fallback, &cancel, ByteEvent::Failed(Reason::ReadError));
+            offset::post(
+                &fallback,
+                &cancel,
+                ByteEvent::Failed(Reason::WorkerPanicked),
+            );
         }
         Self {
             events: receive,

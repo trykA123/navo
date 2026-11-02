@@ -8,7 +8,12 @@ use super::{SharedJournal, StillPending, held, lock, pending};
 
 mod legacy;
 mod moves;
+pub(super) mod stranded;
 use legacy::undo;
+
+type Outcome = (UnfinishedJob, JobState, bool);
+
+pub(super) const FAILED_SAVES_LISTED: u32 = 200;
 
 pub struct RecoveryReport {
     pub unfinished: u32,
@@ -34,7 +39,7 @@ fn recover_in(
     let mut outcomes = BTreeMap::new();
     for &id in expected {
         let (state, job) = lock(journal).read_job(id)?;
-        outcomes.insert(id, (job, state));
+        outcomes.insert(id, (job, state, false));
     }
     for job in unfinished.iter().rev() {
         recover_one(journal, (ops, data, experimental), (job, &mut outcomes))?;
@@ -49,32 +54,36 @@ fn recover_in(
         restored: Vec::new(),
         pending: Vec::new(),
     };
-    for (id, (job, state)) in outcomes {
+    for (id, (job, state, stranded)) in outcomes {
+        let settled = state == JobState::Failed
+            && navo_core::retention::is_retained_write(&job.kind)
+            && !stranded;
         match state {
             JobState::RolledBack | JobState::Undone => report.restored.push(id),
-            JobState::Failed if navo_core::retention::is_retained_write(&job.kind) => (),
+            _ if settled => (),
             _ => report.pending.push(pending::details(journal, &job)?),
         }
     }
+    stranded::list(journal, ops, &mut report.pending)?;
     Ok(report)
 }
 
 fn recover_one(
     journal: &SharedJournal,
     (ops, data, experimental): (&dyn ProviderOps, &Path, bool),
-    (job, outcomes): (
-        &UnfinishedJob,
-        &mut BTreeMap<JobId, (UnfinishedJob, JobState)>,
-    ),
+    (job, outcomes): (&UnfinishedJob, &mut BTreeMap<JobId, Outcome>),
 ) -> Result<(), JournalError> {
     let retained = job.kind == navo_core::retention::RETAINED_DELETE_KIND
         || navo_core::retention::is_retained_write(&job.kind);
+    let mut stranded = false;
     let state = if retained && !experimental {
         JobState::RestorePending
     } else if job.kind == navo_core::retention::RETAINED_DELETE_KIND {
         super::deletion::recover(journal, job, (data, ops))
     } else if navo_core::retention::is_retained_write(&job.kind) {
-        super::overwrite::recover(journal, job, (data, ops))
+        let recovered = super::overwrite::recover(journal, job, (data, ops));
+        stranded = recovered.1;
+        recovered.0
     } else if has_retention(&job.plan)
         || has_unrecognized_detail(job)
         || super::held::has_proof(journal, job.id)?
@@ -86,7 +95,7 @@ fn recover_one(
         undo(journal, job, ops, experimental)?
     };
     lock(journal).finish(job.id, state)?;
-    outcomes.insert(job.id, (job.clone(), state));
+    outcomes.insert(job.id, (job.clone(), state, stranded));
     Ok(())
 }
 

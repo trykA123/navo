@@ -1,310 +1,395 @@
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, SyncSender};
-use std::sync::{Mutex, PoisonError};
-use std::thread;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::{Arc, PoisonError};
 
-use crate::anchor::SectionPair;
 use crate::model::Reason;
 
-use super::batch::{self, Batch, Context, Counts, Outcome, Stop};
-use super::{AHEAD, Covered, DiffEvent, Driver, Stage, WORKERS};
+use super::batch::{Context, Outcome};
+use super::budget::{
+    Evictions, Kind, Limits, MAX_EXTRA_WORKERS, Out, Paged, PagedState, Part, Recorded, StepInfo,
+    WATCH_POLL,
+};
+use super::{Covered, DiffEvent, Driver, Progress, Stage, WORKERS};
+use paged::step_event;
+use pool::{Common, Pool, Reply, StopFn};
+use slots::State;
+
+mod group;
+pub(super) mod paged;
+mod pool;
+mod slots;
+
+pub(super) use group::group;
+pub(super) use pool::{Beat, Finished};
+pub(crate) use slots::Schedule;
 
 impl Driver {
     pub(super) fn sections_phase(
         &self,
-        context: &Context,
+        context: &Arc<Context>,
         schedule: &mut Schedule,
+        limits: Arc<Limits>,
     ) -> Result<(), Reason> {
-        let halt = AtomicBool::new(false);
-        let stop = || self.cancel.is_cancelled() || halt.load(Ordering::Acquire);
-        let (jobs, job_receiver) = mpsc::sync_channel::<Job>(WORKERS);
-        let (replies, reply_receiver) = mpsc::sync_channel::<Reply>(WORKERS);
-        let job_receiver = Mutex::new(job_receiver);
-        thread::scope(|scope| {
-            let started = (0..WORKERS.min(schedule.slots.len())).try_for_each(|_| {
-                let replies = replies.clone();
-                let (jobs, stop) = (&job_receiver, &stop);
-                thread::Builder::new()
-                    .name("large-diff-section".to_owned())
-                    .spawn_scoped(scope, move || worker(context, jobs, &replies, stop))
-                    .map(drop)
-            });
-            drop(replies);
-            let result = match started {
-                Ok(()) => self.schedule(schedule, &jobs, &reply_receiver),
-                Err(_) => Err(Reason::WorkerPanicked),
+        let halt = Arc::new(AtomicBool::new(false));
+        let cancel = self.cancel.clone();
+        let signal = Arc::clone(&halt);
+        let stop: StopFn =
+            Arc::new(move || cancel.is_cancelled() || signal.load(Ordering::Acquire));
+        let common = Common {
+            context: Arc::clone(context),
+            limits: Arc::clone(&limits),
+            halt: stop,
+            finished: self.tuning.finished.clone(),
+        };
+        let _held = if self.tuning.hold_all {
+            limits.ledger.reserve(limits.ledger.available())
+        } else if self.tuning.hold_available {
+            let room = limits
+                .ledger
+                .available()
+                .saturating_sub(Out::block_bytes().saturating_add(1024));
+            limits.ledger.reserve(room)
+        } else {
+            None
+        };
+        let workers = WORKERS + MAX_EXTRA_WORKERS as usize;
+        let (replies, receiver) = mpsc::sync_channel::<Reply>(workers);
+        let mut pool = Pool::new(common, replies, Arc::clone(&self.extras));
+        let started = (0..WORKERS.min(schedule.slots.len())).try_for_each(|_| pool.spawn());
+        let result = started.and_then(|()| {
+            let mut run = Run {
+                driver: self,
+                state: schedule,
+                replies: &receiver,
+                pool: &mut pool,
+                limits: &limits,
             };
-            halt.store(true, Ordering::Release);
-            drop(jobs);
-            drop(reply_receiver);
-            result
-        })
+            run.run()
+        });
+        halt.store(true, Ordering::Release);
+        drop(receiver);
+        self.linger(pool.close());
+        result
     }
+}
 
-    fn schedule(
-        &self,
-        state: &mut Schedule,
-        jobs: &SyncSender<Job>,
-        replies: &Receiver<Reply>,
-    ) -> Result<(), Reason> {
+struct Run<'a> {
+    driver: &'a Driver,
+    state: &'a mut Schedule,
+    replies: &'a Receiver<Reply>,
+    pool: &'a mut Pool,
+    limits: &'a Limits,
+}
+
+impl Run<'_> {
+    fn run(&mut self) -> Result<(), Reason> {
         loop {
-            self.flush(state)?;
-            self.fill(state, jobs)?;
-            if state.in_flight == 0 {
-                return state.finished();
-            }
-            let reply = replies.recv().map_err(|_| Reason::WorkerPanicked)?;
-            state.in_flight -= 1;
-            self.handle(state, reply)?;
-        }
-    }
-
-    fn fill(&self, state: &mut Schedule, jobs: &SyncSender<Job>) -> Result<(), Reason> {
-        while state.in_flight < WORKERS {
-            if self.cancel.is_cancelled() {
+            if self.driver.cancel.is_cancelled() {
                 return Err(Reason::Stopped);
             }
-            let Some(index) = state.pick(self.focus.load(Ordering::Relaxed)) else {
+            if self.limits.ledger.take_wake() {
+                self.state.wake();
+            }
+            self.follow_focus()?;
+            self.flush()?;
+            self.fill()?;
+            self.watch()?;
+            self.recover()?;
+            if self.state.live() == 0 && self.state.next_emit == self.state.slots.len() {
+                return Ok(());
+            }
+            if self.state.live() == 0 && self.state.flights.is_empty() && !self.state.has_pending()
+            {
+                return Err(Reason::WorkerPanicked);
+            }
+            match self.replies.recv_timeout(WATCH_POLL) {
+                Ok(reply) => self.handle(reply)?,
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => return Err(Reason::WorkerPanicked),
+            }
+            self.pool.reap();
+        }
+    }
+
+    fn fill(&mut self) -> Result<(), Reason> {
+        while self.state.live() < WORKERS {
+            if self.driver.cancel.is_cancelled() {
+                return Err(Reason::Stopped);
+            }
+            let Some(worker) = self.pool.idle() else {
                 break;
             };
-            let job = state.dispatch(index);
-            jobs.send(job).map_err(|_| Reason::WorkerPanicked)?;
+            let focus = self.driver.focus.load(Ordering::Relaxed);
+            let Some(index) = self.state.pick(focus) else {
+                break;
+            };
+            let job = self.state.dispatch(index, worker);
+            let id = job.id;
+            if !self.pool.dispatch(worker, job)? {
+                self.state.undo(id);
+                break;
+            }
         }
         Ok(())
     }
 
-    fn handle(&self, state: &mut Schedule, reply: Reply) -> Result<(), Reason> {
-        let focused = state.focus_job == Some(reply.id);
-        if focused {
-            state.focus_job = None;
+    fn watch(&mut self) -> Result<(), Reason> {
+        let limit = self.driver.tuning.watchdog;
+        let overdue: Vec<_> = self
+            .state
+            .flights
+            .iter()
+            .filter(|flight| flight.live)
+            .filter_map(|flight| {
+                let pair = self.pool.overdue(flight.worker, flight.job, limit)?;
+                Some((flight.worker, flight.job, pair))
+            })
+            .collect();
+        for (worker, id, pair) in overdue {
+            self.state.expire(id, pair);
+            self.pool.abandon(worker, id);
+            if let Some(expired) = self.pool.expired() {
+                expired(id);
+            }
+            let _spawned = self.pool.spawn_extra()?;
         }
-        let Some(index) = state.running(reply.id) else {
+        Ok(())
+    }
+
+    fn recover(&mut self) -> Result<(), Reason> {
+        if self.state.live() != 0 || self.pool.idle().is_some() || !self.state.has_pending() {
+            return Ok(());
+        }
+        while self.pool.recovering() < WORKERS {
+            let Some(index) = self.state.pending() else {
+                break;
+            };
+            let job = self.state.dispatch_recovery(index);
+            self.pool.recover_job(job)?;
+        }
+        self.state.clear_waits();
+        Ok(())
+    }
+
+    fn handle(&mut self, reply: Reply) -> Result<(), Reason> {
+        self.pool.free(reply.worker, reply.id);
+        let Some(flight) = self.state.take_flight(reply.id) else {
             return Ok(());
         };
+        let Some(index) = self.state.slot_of(&flight).filter(|_| flight.live) else {
+            return Ok(());
+        };
+        let focused = self.state.focus_job == Some(reply.id);
+        if focused {
+            self.state.focus_job = None;
+        }
         match reply.outcome? {
-            Outcome::Covered { covered, counts } => {
-                state.slots[index].state = State::Ready(covered, counts);
+            Outcome::Covered { out, counts } => {
+                self.state.slots[index].state = State::Ready(out, counts);
                 if focused {
-                    self.emit(state, index)?;
+                    self.emit(index)?;
                 }
             }
-            Outcome::Collision { start, end } => {
-                if end {
-                    state.merge(index)?;
-                }
-                let merged = if start {
-                    index.checked_sub(1).ok_or(Reason::ChangedOnDisk)?
-                } else {
-                    index
+            Outcome::Collision { start, end } => self.collide(index, (start, end), focused)?,
+            Outcome::Retry => {
+                self.state.retry(index);
+                let progress = Progress {
+                    stage: Stage::Waiting,
+                    done: self.state.emitted,
+                    total: self.state.total,
                 };
-                if start {
-                    state.merge(merged)?;
-                }
+                self.driver.send(DiffEvent::Progress(progress))?;
                 if focused {
-                    state.refocus = Some(merged);
+                    self.state.refocus(index);
                 }
             }
         }
         Ok(())
     }
 
-    fn flush(&self, state: &mut Schedule) -> Result<(), Reason> {
-        if state.focus_job.is_some() || state.refocus.is_some() {
+    fn collide(
+        &mut self,
+        index: usize,
+        (start, end): (bool, bool),
+        focused: bool,
+    ) -> Result<(), Reason> {
+        self.state.slots[index].state = State::Pending;
+        let mut given_up = Vec::new();
+        if end && let Some(given) = self.merge_or_drop(index)? {
+            given_up.extend(given);
+        }
+        let merged = if start {
+            index.checked_sub(1).ok_or(Reason::ChangedOnDisk)?
+        } else {
+            index
+        };
+        if start && let Some(given) = self.merge_or_drop(merged)? {
+            given_up.extend(given);
+        }
+        for (worker, id) in given_up {
+            self.pool.abandon(worker, id);
+        }
+        if focused {
+            self.state.refocus(merged);
+        }
+        Ok(())
+    }
+
+    fn merge_or_drop(&mut self, index: usize) -> Result<Option<Vec<(usize, u64)>>, Reason> {
+        match self.state.merge(index) {
+            Ok(given_up) => Ok(Some(given_up)),
+            Err(Reason::Unsupported) => {
+                self.state.slots[index].batch.end_anchor = false;
+                self.state.slots[index].batch.terminal = false;
+                if let Some(next) = self.state.slots.get_mut(index + 1) {
+                    next.batch.start_anchor = false;
+                }
+                Ok(None)
+            }
+            Err(reason) => Err(reason),
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), Reason> {
+        if self.state.waits_for_focus() {
             return Ok(());
         }
-        while let Some(slot) = state.slots.get(state.next_emit) {
+        while let Some(slot) = self.state.slots.get(self.state.next_emit) {
             match slot.state {
-                State::Ready(..) => self.emit(state, state.next_emit)?,
+                State::Ready(..) => self.emit(self.state.next_emit)?,
                 State::Emitted => {}
                 State::Pending | State::Running(_) => return Ok(()),
             }
-            state.next_emit += 1;
+            self.state.next_emit += 1;
         }
         Ok(())
     }
 
-    fn emit(&self, state: &mut Schedule, index: usize) -> Result<(), Reason> {
-        let slot = &mut state.slots[index];
-        let State::Ready(covered, counts) = std::mem::replace(&mut slot.state, State::Emitted)
-        else {
+    fn emit(&mut self, index: usize) -> Result<(), Reason> {
+        let slot = &mut self.state.slots[index];
+        let State::Ready(out, counts) = std::mem::replace(&mut slot.state, State::Emitted) else {
             return Ok(());
         };
-        state.counts.sections += counts.sections;
-        state.counts.dropped += counts.dropped;
-        state.emitted = state.emitted.saturating_add(slot.batch.lines());
-        self.send(DiffEvent::Hunks(covered))?;
-        self.hint(Stage::Sections, state.emitted, state.total);
+        let (left, right, lines) = (slot.batch.left(), slot.batch.right(), slot.batch.lines());
+        self.state.counts.sections += counts.sections;
+        self.state.counts.dropped += counts.dropped;
+        self.state.emitted = self.state.emitted.saturating_add(lines);
+        let focus = self.driver.focus.load(Ordering::Relaxed);
+        let (mut covered, steps, parts) = cover(out, left, right);
+        let recorded = self.record(&parts, focus, covered.hunks.capacity());
+        if matches!(&recorded, Recorded::CountsOnly) {
+            for paged in &mut covered.paged {
+                paged.state = PagedState::CountsOnly;
+            }
+        }
+        for step in &steps {
+            self.driver.send(step_event(step))?;
+        }
+        self.driver.send(DiffEvent::Hunks(covered))?;
+        match recorded {
+            Recorded::Evictions(evictions) => {
+                let (paged, first) = self.defer(evictions);
+                paged::send(self.driver, &paged, first)?;
+            }
+            Recorded::CountsOnly => self.send_counts(&parts)?,
+        }
+        self.driver
+            .hint(Stage::Sections, self.state.emitted, self.state.total);
         Ok(())
+    }
+
+    fn follow_focus(&mut self) -> Result<(), Reason> {
+        let focus = self.driver.focus.load(Ordering::Relaxed);
+        let evictions = self.store(|store| Ok(store.page(focus)))?;
+        let (paged, first) = self.defer(evictions);
+        paged::send(self.driver, &paged, first)?;
+        Ok(())
+    }
+
+    fn send_counts(&self, parts: &[Part]) -> Result<(), Reason> {
+        paged::send_counts(self.driver, parts)
+    }
+
+    fn record(&self, parts: &[Part], focus: u64, hunk_capacity: usize) -> Recorded {
+        let mut store = self
+            .driver
+            .store
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match store.as_mut() {
+            Some(store) => store.record(parts, focus, hunk_capacity),
+            None => Recorded::CountsOnly,
+        }
+    }
+
+    fn store(
+        &self,
+        act: impl FnOnce(&mut super::budget::Store) -> Result<Evictions, Reason>,
+    ) -> Result<Evictions, Reason> {
+        let mut store = self
+            .driver
+            .store
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match store.as_mut() {
+            Some(store) => act(store),
+            None => Ok(Evictions::empty(self.driver.ledger.empty())),
+        }
+    }
+
+    fn defer(&self, evictions: Evictions) -> (Vec<Paged>, u64) {
+        let mut store = self
+            .driver
+            .store
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        match store.as_mut() {
+            Some(store) => store.defer(evictions),
+            None => {
+                let (paged, hold) = evictions.into_parts();
+                drop(hold);
+                (paged, 0)
+            }
+        }
     }
 }
 
-pub(super) fn group(sections: Vec<SectionPair>, limit: u64, terminal: bool) -> Vec<Batch> {
-    let mut batches = Vec::new();
-    let mut current = Vec::new();
-    let mut size = 0_u64;
-    for section in sections {
-        let lines =
-            (section.left.end - section.left.start).max(section.right.end - section.right.start);
-        if !current.is_empty() && size.saturating_add(lines) > limit {
-            batches.push(Batch {
-                sections: std::mem::take(&mut current),
-                start_anchor: !batches.is_empty(),
-                end_anchor: true,
-                terminal: false,
+fn cover(
+    out: Out,
+    left: std::ops::Range<u64>,
+    right: std::ops::Range<u64>,
+) -> (Covered, Vec<StepInfo>, Vec<Part>) {
+    let mut coarse = Vec::new();
+    let mut paged = Vec::new();
+    for (index, part) in out.parts.iter().enumerate() {
+        if part.kind == Kind::Detail {
+            continue;
+        }
+        let hunks = out.hunks_of(index);
+        if let Some(hunk) = out.hunks.get(hunks.start) {
+            coarse.push(hunk.left_lines.clone());
+        }
+        if let Kind::Paged(count) = part.kind {
+            paged.push(Paged {
+                left: part.pair.left.clone(),
+                right: part.pair.right.clone(),
+                hunks: count,
+                state: PagedState::Rediffable,
             });
-            size = 0;
-        }
-        size = size.saturating_add(lines);
-        current.push(section);
-    }
-    if !current.is_empty() {
-        batches.push(Batch {
-            sections: current,
-            start_anchor: !batches.is_empty(),
-            end_anchor: false,
-            terminal,
-        });
-    }
-    batches
-}
-
-struct Job {
-    id: u64,
-    batch: Batch,
-}
-
-struct Reply {
-    id: u64,
-    outcome: Result<Outcome, Reason>,
-}
-
-fn worker(
-    context: &Context,
-    jobs: &Mutex<Receiver<Job>>,
-    replies: &SyncSender<Reply>,
-    stop: Stop<'_>,
-) {
-    while !stop() {
-        let job = jobs.lock().unwrap_or_else(PoisonError::into_inner).recv();
-        let Ok(job) = job else {
-            return;
-        };
-        let outcome = catch_unwind(AssertUnwindSafe(|| batch::run(context, &job.batch, stop)))
-            .unwrap_or(Err(Reason::WorkerPanicked));
-        if replies
-            .send(Reply {
-                id: job.id,
-                outcome,
-            })
-            .is_err()
-        {
-            return;
         }
     }
-}
-
-enum State {
-    Pending,
-    Running(u64),
-    Ready(Covered, Counts),
-    Emitted,
-}
-
-struct Slot {
-    batch: Batch,
-    state: State,
-}
-
-pub(super) struct Schedule {
-    slots: Vec<Slot>,
-    next_emit: usize,
-    focus_job: Option<u64>,
-    refocus: Option<usize>,
-    next_id: u64,
-    in_flight: usize,
-    pub(super) counts: Counts,
-    emitted: u64,
-    total: u64,
-}
-
-impl Schedule {
-    pub(super) fn new(batches: Vec<Batch>) -> Self {
-        let total = batches.iter().map(Batch::lines).sum();
-        Self {
-            slots: batches
-                .into_iter()
-                .map(|batch| Slot {
-                    batch,
-                    state: State::Pending,
-                })
-                .collect(),
-            next_emit: 0,
-            focus_job: None,
-            refocus: None,
-            next_id: 0,
-            in_flight: 0,
-            counts: Counts::default(),
-            emitted: 0,
-            total,
-        }
-    }
-
-    fn pick(&mut self, focus: u64) -> Option<usize> {
-        if let Some(index) = self.refocus.take() {
-            self.focus_job = Some(self.next_id);
-            return Some(index);
-        }
-        let last = self.slots.len().checked_sub(1)?;
-        let focused = self
-            .slots
-            .partition_point(|slot| slot.batch.left().end <= focus)
-            .min(last);
-        if self.focus_job.is_none() && matches!(self.slots[focused].state, State::Pending) {
-            self.focus_job = Some(self.next_id);
-            return Some(focused);
-        }
-        let end = self.slots.len().min(self.next_emit + AHEAD);
-        (self.next_emit..end).find(|&index| matches!(self.slots[index].state, State::Pending))
-    }
-
-    fn finished(&self) -> Result<(), Reason> {
-        if self.next_emit == self.slots.len() {
-            Ok(())
-        } else {
-            Err(Reason::WorkerPanicked)
-        }
-    }
-
-    fn dispatch(&mut self, index: usize) -> Job {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.in_flight += 1;
-        let slot = &mut self.slots[index];
-        slot.state = State::Running(id);
-        Job {
-            id,
-            batch: slot.batch.clone(),
-        }
-    }
-
-    fn running(&self, id: u64) -> Option<usize> {
-        self.slots
-            .iter()
-            .position(|slot| matches!(slot.state, State::Running(running) if running == id))
-    }
-
-    fn merge(&mut self, index: usize) -> Result<(), Reason> {
-        let emitted = |slot: &Slot| matches!(slot.state, State::Emitted);
-        if index + 1 >= self.slots.len() || self.slots[index..=index + 1].iter().any(emitted) {
-            return Err(Reason::ChangedOnDisk);
-        }
-        let next = self.slots.remove(index + 1);
-        let slot = &mut self.slots[index];
-        slot.batch.sections.extend(next.batch.sections);
-        slot.batch.end_anchor = next.batch.end_anchor;
-        slot.batch.terminal = next.batch.terminal;
-        slot.state = State::Pending;
-        Ok(())
-    }
+    let Out {
+        hunks,
+        parts,
+        steps,
+        ..
+    } = out;
+    let covered = Covered {
+        left,
+        right,
+        hunks,
+        coarse,
+        paged,
+    };
+    (covered, steps, parts)
 }

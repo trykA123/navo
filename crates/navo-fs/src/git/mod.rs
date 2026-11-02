@@ -11,6 +11,7 @@ mod tests;
 
 pub use diagnostics::GitProblem;
 pub use location::location;
+pub(crate) use reading::FilterReadError;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -33,7 +34,7 @@ pub const READ_ONLY: &str = "Git refs are read-only";
 pub struct GitFs {
     factory: Arc<Open>,
     cache: Cache,
-    problems: diagnostics::Problems,
+    problems: Arc<diagnostics::Problems>,
 }
 
 struct Resolved {
@@ -55,7 +56,7 @@ impl GitFs {
         Self {
             factory,
             cache: Cache::default(),
-            problems: diagnostics::Problems::default(),
+            problems: Arc::new(diagnostics::Problems::default()),
         }
     }
 
@@ -82,7 +83,8 @@ impl GitFs {
     }
 
     pub fn read(&self, location: &Location) -> Result<BlobReader, FsError> {
-        reading::read(self, location).map(|blob| blob.reader)
+        let blob = reading::read(self, location)?;
+        Ok(reading::with_finish(self, location, blob, false))
     }
 
     pub(crate) fn read_for_copy(&self, location: &Location) -> Result<BlobReader, FsError> {
@@ -90,11 +92,11 @@ impl GitFs {
         if blob.reason.is_some() {
             return Err(errors::at(FsErrorKind::SourceFilterFailed, location));
         }
-        Ok(blob.reader)
+        Ok(reading::with_finish(self, location, blob, true))
     }
 
-    pub(super) fn record_filter(&self, location: &Location, notice: FilterNotice) {
-        self.problems.record(location, GitProblem::Filter(notice));
+    fn record_filter(problems: &diagnostics::Problems, location: &Location, notice: FilterNotice) {
+        problems.record(location, GitProblem::Filter(notice));
     }
 
     pub(super) fn fail(&self, location: &Location, error: GitError) -> FsError {

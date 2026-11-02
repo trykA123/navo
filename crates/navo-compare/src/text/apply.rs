@@ -11,8 +11,10 @@ use super::side::LineEnding;
 
 mod rows;
 mod source;
+mod stable;
 mod target;
 
+use stable::Stable;
 use target::{BUFFER, Target, Writer, copy_raw, copy_target};
 
 /// The direction a copy runs: the source lines move onto the target side.
@@ -43,6 +45,7 @@ pub enum ApplyError {
     Write(std::io::Error),
     Encode(EncodeError),
     Malformed,
+    Changed,
 }
 
 impl fmt::Display for ApplyError {
@@ -53,6 +56,7 @@ impl fmt::Display for ApplyError {
             Self::Write(error) => write!(formatter, "writing the result failed: {error}"),
             Self::Encode(error) => write!(formatter, "{error}"),
             Self::Malformed => formatter.write_str("the source text is not valid in its encoding"),
+            Self::Changed => formatter.write_str("a file changed since the comparison"),
         }
     }
 }
@@ -62,7 +66,7 @@ impl std::error::Error for ApplyError {
         match self {
             Self::Write(error) => Some(error),
             Self::Encode(error) => Some(error),
-            Self::Range | Self::Read(_) | Self::Malformed => None,
+            Self::Range | Self::Read(_) | Self::Malformed | Self::Changed => None,
         }
     }
 }
@@ -93,6 +97,7 @@ pub struct Picked<'a> {
 }
 
 /// Writes `target` with one whole hunk replaced by the matching source lines.
+/// `out` is staging: on `Err` it may hold a partial result the caller discards.
 #[expect(
     clippy::too_many_arguments,
     reason = "the J6 contract fixes this signature"
@@ -123,7 +128,19 @@ pub fn apply_hunk(
 }
 
 /// Writes `target` with only the picked source lines copied; an empty set copies whole hunks.
+/// `out` is staging: on `Err` it may hold a partial result the caller discards.
 pub fn apply_picked(
+    target: &dyn ByteSource,
+    source: &dyn ByteSource,
+    picked: Picked<'_>,
+    out: &mut dyn Write,
+) -> Result<(), ApplyError> {
+    let stable = Stable::start(target, source)?;
+    let result = write_picked(target, source, picked, out);
+    stable.finish(result)
+}
+
+fn write_picked(
     target: &dyn ByteSource,
     source: &dyn ByteSource,
     picked: Picked<'_>,

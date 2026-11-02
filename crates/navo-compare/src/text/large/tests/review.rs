@@ -200,7 +200,7 @@ impl ByteSource for Slow {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
-        if self.armed.load(Ordering::SeqCst) && self.hold.contains(&offset) {
+        if self.armed.load(Ordering::SeqCst) && self.hold.contains(&offset) && buf.len() >= 1024 {
             std::thread::sleep(Duration::from_millis(300));
         }
         self.bytes.as_slice().read_at(offset, buf)
@@ -235,6 +235,8 @@ fn a_focused_batch_with_a_boundary_collision_still_arrives_first() {
         Tuning {
             batch_lines: 1,
             forge: Some(forge),
+            watchdog: Duration::from_secs(60),
+            ..Tuning::default()
         },
     );
     let done = summary(&events);
@@ -313,6 +315,8 @@ fn a_forged_terminal_anchor_is_checked_and_dropped() {
             Tuning {
                 batch_lines,
                 forge: Some(forge_at(left_last, right_last)),
+                watchdog: Duration::from_secs(60),
+                ..Tuning::default()
             },
         );
         let done = summary(&events);
@@ -353,6 +357,8 @@ fn only_emitted_batches_count_sections_and_dropped_anchors() {
             Tuning {
                 batch_lines,
                 forge: Some(forge_many(&forged)),
+                watchdog: Duration::from_secs(60),
+                ..Tuning::default()
             },
         );
         let done = summary(&events);

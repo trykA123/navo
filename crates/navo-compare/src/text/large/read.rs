@@ -25,11 +25,11 @@ impl Lines {
     }
 }
 
-pub(super) fn head(side: &LargeSide, stop: Stop<'_>) -> Result<Lines, Reason> {
+pub(super) fn head(side: &LargeSide, lines: u64, stop: Stop<'_>) -> Result<Lines, Reason> {
     let len = side.source.len();
     let until = Until {
         offset: 0,
-        lines: u64::MAX,
+        lines,
         end: len.min(PROVISIONAL_BYTES),
         len,
     };

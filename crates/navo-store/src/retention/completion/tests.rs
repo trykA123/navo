@@ -48,6 +48,7 @@ fn refuses_completion(path: &std::path::Path, job: JobId) {
                 state: JobState::Done,
                 records: &[],
                 returned: &[],
+                keep_evidence: false,
             })
             .is_err()
     );
@@ -95,4 +96,35 @@ fn completion_preserves_pending_temporaries_in_running_and_terminal_owners() {
             Some(b"pending temporary".to_vec())
         );
     }
+}
+
+#[test]
+fn a_save_owns_only_its_write_target_and_a_copy_still_needs_an_overwrite_conflict() {
+    let target = Location::new("/dest/a.txt").unwrap();
+    let save = navo_core::write_plan(
+        &target,
+        &Location::new("/dest/.a.txt.part").unwrap(),
+        navo_core::FileStamp {
+            size: 3,
+            modified_ms: Some(1_000),
+            hash: [1; 32],
+        },
+        11,
+    );
+    assert!(overwrites(&save, &target));
+    assert!(!overwrites(
+        &save,
+        &Location::new("/dest/.a.txt.part").unwrap()
+    ));
+    assert!(!overwrites(&save, &Location::new("/dest/b.txt").unwrap()));
+    let copy = OperationPlan {
+        kind: OpKind::Copy,
+        steps: vec![Step::CopyFile {
+            source: Location::new("/source/a.txt").unwrap(),
+            target: target.clone(),
+            size: 7,
+        }],
+        ..save
+    };
+    assert!(!overwrites(&copy, &target));
 }
