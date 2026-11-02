@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use super::{
     Cancellation, Client, MemoryPart, MemoryReport, PIPE_NAME, PipeError, Query, QueryTerm,
-    Request, Response, platform, session,
+    Request, Response, VolumeMemory, platform, session,
 };
 use crate::ntfs::NtfsIndex;
 use crate::table::NameTable;
@@ -77,6 +77,10 @@ impl MemoryReport {
 
     pub fn add_index(&mut self, index: &NtfsIndex) {
         self.add_table(&index.table);
+        self.volumes.get_or_insert_default().push(VolumeMemory {
+            slots: u64::from(index.table.slots()),
+            live: index.table.len() as u64,
+        });
         self.add(Part::FileIds, index.ids.memory_bytes(), index.ids.len());
         let renames = index.pending_renames();
         self.add(Part::Journal, renames.memory_bytes(), renames.len());

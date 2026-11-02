@@ -22,6 +22,8 @@ mod files;
 mod gui;
 #[cfg(feature = "tester")]
 mod heap;
+#[cfg(feature = "tester")]
+mod index_memory;
 mod index_service;
 mod installer;
 mod instance;
@@ -94,6 +96,8 @@ fn execute(
         Ok(Command::Bench(options)) => return bench::run(&options),
         #[cfg(feature = "tester")]
         Ok(Command::BenchIndex { json }) => return bench::index::run(json),
+        #[cfg(feature = "tester")]
+        Ok(Command::IndexMemory) => return index_memory::run(),
         Ok(command) => command,
         Err(usage) => {
             eprintln!("{usage}");
@@ -155,6 +159,8 @@ fn execute_command(
         Command::Bench(options) => bench::run(&options),
         #[cfg(feature = "tester")]
         Command::BenchIndex { json } => bench::index::run(json),
+        #[cfg(feature = "tester")]
+        Command::IndexMemory => index_memory::run(),
     }
 }
 

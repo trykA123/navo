@@ -1,8 +1,10 @@
 param(
     [Parameter(Mandatory)][string]$Folder,
+    [Parameter(Mandatory)][string]$Exe,
     [int]$Waves = 6,
     [int]$Live = 50000,
     [int]$Churn = 250000,
+    [int]$HoldSeconds = 60,
     [int]$SettleSeconds = 30,
     [string]$Service = 'Navo Index',
     [string]$Out = ''
@@ -18,14 +20,21 @@ function ServiceProcess {
 
 function Sample($wave, $phase) {
     $p = ServiceProcess
+    $json = & $Exe --index-memory --json
+    if ($LASTEXITCODE -ne 0) { throw "index memory sample failed (exit $LASTEXITCODE)" }
+    $memory = $json | ConvertFrom-Json
+    if ($null -eq $script:firstPid) { $script:firstPid = $p.Id }
+    $pidMismatch = $null -ne $memory.service_process_id -and $memory.service_process_id -ne $p.Id
     [pscustomobject]@{
         wave = $wave
         pid = $p.Id
+        restartedSinceBaseline = ($p.Id -ne $script:firstPid) -or $pidMismatch
         phase = $phase
         privateMB = [math]::Round($p.PrivateMemorySize64 / 1MB, 1)
         workingSetMB = [math]::Round($p.WorkingSet64 / 1MB, 1)
         peakWorkingSetMB = [math]::Round($p.PeakWorkingSet64 / 1MB, 1)
         handles = $p.HandleCount
+        indexMemory = $memory
         time = (Get-Date).ToString('o')
     }
 }
@@ -48,6 +57,7 @@ foreach ($wave in 1..$Waves) {
     New-Item -ItemType Directory -Force -Path $scratch | Out-Null
     MakeFiles $scratch $next $Churn
     $next += $Churn
+    Start-Sleep -Seconds $HoldSeconds
     $samples += Sample $wave 'created'
     Remove-Item -LiteralPath $scratch -Recurse -Force
     Start-Sleep -Seconds $SettleSeconds
@@ -55,4 +65,4 @@ foreach ($wave in 1..$Waves) {
 }
 
 $samples | Format-Table -AutoSize
-if ($Out) { $samples | ConvertTo-Json | Set-Content -LiteralPath $Out }
+if ($Out) { $samples | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $Out }

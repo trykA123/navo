@@ -16,6 +16,8 @@ pub(crate) enum Command {
     BenchIndex {
         json: bool,
     },
+    #[cfg(feature = "tester")]
+    IndexMemory,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -32,18 +34,19 @@ pub(crate) struct Start {
 }
 
 #[cfg(feature = "tester")]
-pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
+pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | --index-memory [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
 #[cfg(not(feature = "tester"))]
 pub(crate) const USAGE: &str = "usage: navo [--version | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [<path>]]";
 
 #[cfg(feature = "tester")]
-const STANDALONE: [&str; 6] = [
+const STANDALONE: [&str; 7] = [
     "--version",
     "--diag-report",
     "--pdf-helper",
     "--crash-test",
     "--index-service",
     "--bench",
+    "--index-memory",
 ];
 #[cfg(not(feature = "tester"))]
 const STANDALONE: [&str; 4] = [
@@ -71,7 +74,9 @@ impl Command {
             Self::PdfHelper | Self::IndexService(_) => false,
             Self::Version | Self::CrashTest(_) => true,
             #[cfg(feature = "tester")]
-            Self::DiagReport(_) | Self::Bench(_) | Self::BenchIndex { .. } => true,
+            Self::DiagReport(_) | Self::Bench(_) | Self::BenchIndex { .. } | Self::IndexMemory => {
+                true
+            }
         }
     }
 }
@@ -165,6 +170,14 @@ fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Co
     if flag == "--bench" {
         return crate::bench::index::parse(rest).map(|json| Command::BenchIndex { json });
     }
+    #[cfg(feature = "tester")]
+    if flag == "--index-memory" {
+        let extra = rest.next();
+        if extra.is_some_and(|arg| arg != "--json") || rest.next().is_some() {
+            return Err("--index-memory accepts only --json and stands alone".into());
+        }
+        return Ok(Command::IndexMemory);
+    }
     let command = match flag {
         "--version" => Command::Version,
         "--pdf-helper" => Command::PdfHelper,
@@ -202,6 +215,9 @@ fn value(flag: &str, next: Option<OsString>) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests;
 
+#[cfg(all(test, feature = "tester"))]
+mod memory_tests;
+
 #[cfg(all(test, not(feature = "tester")))]
 mod release_tests {
     use super::*;
@@ -212,12 +228,16 @@ mod release_tests {
 
     #[test]
     fn tester_flags_are_refused_in_a_release_build() {
+        assert!(!USAGE.contains("--index-memory"));
+        assert!(!STANDALONE.contains(&"--index-memory"));
         for args in [
             &["--metrics", "m.json"][..],
             &["--trace", "t.jsonl"],
             &["--bench", "index"],
             &["bench", "--root", "fixture"],
             &["--diag-report", "r.zip"],
+            &["--index-memory"],
+            &["--index-memory", "--json"],
         ] {
             assert!(refused(args), "{args:?}");
         }

@@ -1,6 +1,7 @@
 mod cancel;
 pub mod frames;
 mod memory;
+mod memory_wire;
 mod session;
 mod totals;
 #[cfg(not(windows))]
@@ -46,7 +47,7 @@ pub enum PipeError {
 
 pub use frames::{
     FolderTotals, FolderTotalsReply, Hit, MemoryPart, MemoryReport, Query, QueryTerm, Reply,
-    Request, Response, Status, VolumeStatus,
+    Request, Response, Status, VolumeMemory, VolumeStatus,
 };
 pub use memory::Part;
 

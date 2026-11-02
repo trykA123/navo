@@ -131,9 +131,21 @@ pub struct MemoryPart {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    from = "super::memory_wire::WireReport",
+    into = "super::memory_wire::WireReport"
+)]
 pub struct MemoryReport {
     pub parts: Vec<MemoryPart>,
     pub busy: bool,
+    pub process_id: Option<u32>,
+    pub volumes: Option<Vec<VolumeMemory>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VolumeMemory {
+    pub slots: u64,
+    pub live: u64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
