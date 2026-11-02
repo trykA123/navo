@@ -192,7 +192,7 @@ impl LargeDiff {
         self.outcome.get().cloned()
     }
 
-    /// The caller must apply the returned evictions, then acknowledge them.
+    /// Drain events through `Done` before applying and acknowledging returned evictions.
     pub fn set_focus(&self, line: u64) -> Evictions {
         self.focus.store(line, Ordering::Relaxed);
         let _gate = self
@@ -266,19 +266,45 @@ impl Driver {
         }
     }
 
+    /// Late focus evictions are sent before `Done`, so they follow the `Hunks` they refer to.
     fn finish(&self, settled: Result<Summary, Reason>) {
-        let gate = self
-            .focus_gate
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        let focus = self.focus.load(Ordering::Relaxed);
-        let evictions = self.page(focus);
-        let (paged, first) = self.defer(evictions);
-        self.done.store(true, Ordering::Release);
-        drop(gate);
-        let _sent = schedule::paged::send(self, &paged, first);
-        let _done = self.post(DiffEvent::Done(settled));
+        loop {
+            let gate = self
+                .focus_gate
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            let evictions = self.page(self.focus.load(Ordering::Relaxed));
+            let (paged, first) = self.defer(evictions);
+            let finished = paged.is_empty() && self.queue_done(&settled);
+            drop(gate);
+            if finished || !self.again(&paged, first) {
+                break;
+            }
+        }
         self.reap(false);
+    }
+
+    /// True once `Done` is queued or the view is gone; `done` is set only then.
+    fn queue_done(&self, settled: &Result<Summary, Reason>) -> bool {
+        match self.events.try_send(DiffEvent::Done(settled.clone())) {
+            Ok(()) => {
+                self.done.store(true, Ordering::Release);
+                true
+            }
+            Err(TrySendError::Disconnected(_)) => true,
+            Err(TrySendError::Full(_)) => false,
+        }
+    }
+
+    fn again(&self, paged: &[Paged], first: u64) -> bool {
+        if paged.is_empty() {
+            if self.cancel.is_cancelled() {
+                return false;
+            }
+            thread::sleep(FULL_WAIT);
+            return true;
+        }
+        schedule::paged::send(self, paged, first).is_ok()
     }
 
     fn page(&self, focus: u64) -> Evictions {

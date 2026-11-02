@@ -4,8 +4,15 @@ use std::fmt;
 
 use ignore::Match;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use navo_core::{ProviderPath, WindowsFoldKey};
 
 use crate::model::{CaseRule, RelPath};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum FolderKey {
+    Exact(String),
+    Folded(WindowsFoldKey),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleSource {
@@ -60,7 +67,7 @@ pub enum IgnoreSource {
 
 #[derive(Debug, Clone)]
 pub struct IgnoreRules {
-    levels: HashMap<Vec<String>, Gitignore>,
+    levels: HashMap<Vec<FolderKey>, Gitignore>,
     user: Option<Gitignore>,
     show_ignored: bool,
     case: CaseRule,
@@ -74,7 +81,7 @@ struct FolderBuild {
 struct RuleBuilder<'a> {
     case: CaseRule,
     problems: &'a mut Vec<RuleProblem>,
-    folders: HashMap<Vec<String>, FolderBuild>,
+    folders: HashMap<Vec<FolderKey>, FolderBuild>,
 }
 
 impl IgnoreRules {
@@ -140,7 +147,7 @@ impl IgnoreRules {
         self.matches(path, &normalized, is_dir)
     }
 
-    fn matches(&self, path: &[String], normalized: &[String], is_dir: bool) -> bool {
+    fn matches(&self, path: &[String], normalized: &[FolderKey], is_dir: bool) -> bool {
         let mut ignored = false;
         for depth in 0..path.len() {
             if let Some(matcher) = self.levels.get(&normalized[..depth]) {
@@ -175,7 +182,7 @@ impl<'a> RuleBuilder<'a> {
 
     fn add(
         &mut self,
-        key: Vec<String>,
+        key: Vec<FolderKey>,
         source: RuleSource,
         contents: &str,
     ) -> Result<(), RuleError> {
@@ -191,7 +198,7 @@ impl<'a> RuleBuilder<'a> {
         Ok(())
     }
 
-    fn finish(self) -> Result<HashMap<Vec<String>, Gitignore>, RuleError> {
+    fn finish(self) -> Result<HashMap<Vec<FolderKey>, Gitignore>, RuleError> {
         let mut levels = HashMap::with_capacity(self.folders.len());
         for (key, folder) in self.folders {
             match folder.builder.build() {
@@ -275,14 +282,16 @@ fn apply<T>(ignored: &mut bool, matched: Match<T>) {
     }
 }
 
-fn folder_key(path: &[String], case: CaseRule) -> Vec<String> {
+fn folder_key(path: &[String], case: CaseRule) -> Vec<FolderKey> {
     path.iter().map(|segment| fold(segment, case)).collect()
 }
 
-fn fold(segment: &str, case: CaseRule) -> String {
+fn fold(segment: &str, case: CaseRule) -> FolderKey {
     match case {
-        CaseRule::Sensitive => segment.to_owned(),
-        CaseRule::Insensitive => segment.to_ascii_lowercase(),
+        CaseRule::Sensitive => FolderKey::Exact(segment.to_owned()),
+        CaseRule::Insensitive => {
+            FolderKey::Folded(ProviderPath::from_text(segment).windows_fold_key())
+        }
     }
 }
 

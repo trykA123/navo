@@ -6,8 +6,8 @@ use crate::model::Reason;
 
 use super::batch::{Context, Outcome};
 use super::budget::{
-    Evictions, Kind, Limits, MAX_EXTRA_WORKERS, Out, Paged, PagedState, Part, Recorded, StepInfo,
-    WATCH_POLL,
+    Charge, Evictions, Kind, Limits, MAX_EXTRA_WORKERS, Out, Paged, PagedState, Part, Recorded,
+    StepInfo, WATCH_POLL,
 };
 use super::{Covered, DiffEvent, Driver, Progress, Stage, WORKERS};
 use paged::step_event;
@@ -275,8 +275,8 @@ impl Run<'_> {
         self.state.counts.dropped += counts.dropped;
         self.state.emitted = self.state.emitted.saturating_add(lines);
         let focus = self.driver.focus.load(Ordering::Relaxed);
-        let (mut covered, steps, parts) = cover(out, left, right);
-        let recorded = self.record(&parts, focus, covered.hunks.capacity());
+        let (mut covered, steps, parts, charge) = cover(out, left, right);
+        let recorded = self.record(&parts, focus, (covered.hunks.capacity(), charge));
         if matches!(&recorded, Recorded::CountsOnly) {
             for paged in &mut covered.paged {
                 paged.state = PagedState::CountsOnly;
@@ -310,14 +310,14 @@ impl Run<'_> {
         paged::send_counts(self.driver, parts)
     }
 
-    fn record(&self, parts: &[Part], focus: u64, hunk_capacity: usize) -> Recorded {
+    fn record(&self, parts: &[Part], focus: u64, allocation: (usize, Charge)) -> Recorded {
         let mut store = self
             .driver
             .store
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         match store.as_mut() {
-            Some(store) => store.record(parts, focus, hunk_capacity),
+            Some(store) => store.record(parts, focus, allocation),
             None => Recorded::CountsOnly,
         }
     }
@@ -358,7 +358,7 @@ fn cover(
     out: Out,
     left: std::ops::Range<u64>,
     right: std::ops::Range<u64>,
-) -> (Covered, Vec<StepInfo>, Vec<Part>) {
+) -> (Covered, Vec<StepInfo>, Vec<Part>, Charge) {
     let mut coarse = Vec::new();
     let mut paged = Vec::new();
     for (index, part) in out.parts.iter().enumerate() {
@@ -382,6 +382,7 @@ fn cover(
         hunks,
         parts,
         steps,
+        charge,
         ..
     } = out;
     let covered = Covered {
@@ -391,5 +392,8 @@ fn cover(
         coarse,
         paged,
     };
-    (covered, steps, parts)
+    (covered, steps, parts, charge)
 }
+
+#[cfg(test)]
+mod tests;

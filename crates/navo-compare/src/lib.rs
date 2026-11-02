@@ -41,14 +41,14 @@
 //!    `SourceFilterFailed` when the filter writes anything to stderr. The
 //!    failure comes at open, or at the end of a streamed read as an I/O error
 //!    that the copy job maps to the same kind.
-//! 9. `text::apply::apply_hunk` and `apply_picked` refuse with
+//! 9. No save screen ships before the byte check of plan decision D101 (F1b)
+//!    lands. Today `text::apply::apply_hunk` and `apply_picked` refuse with
 //!    `ApplyError::Changed` when a source or the target changed since the
-//!    diff. The guard compares against the baseline of the source instance
-//!    it is given, so a screen must open the apply sources when the diff
-//!    starts and leave them unread until the copy: an instance opened at
-//!    click time sees no change. After `Changed`, discard both sources and
-//!    the diff and start the diff again; a second apply on the same
-//!    instances would copy old byte ranges from the new file. `out` is
+//!    diff, but the guard only compares against the baseline of the source
+//!    instance it is given: a cached page, an empty source range or a
+//!    same-length edit can pass it. Until F1b lands, open the apply sources
+//!    when the diff starts and leave them unread until the copy. After
+//!    `Changed`, discard both sources and the diff and start again. `out` is
 //!    staging: write the real target only after `Ok`, from a temporary file
 //!    that the caller discards on `Err`. This covers every caller of those
 //!    functions and every compare save.

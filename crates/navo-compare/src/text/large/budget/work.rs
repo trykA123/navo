@@ -193,41 +193,38 @@ pub(crate) fn rediff(
     pair: &SectionPair,
     ledger: &Arc<Ledger>,
     ceiling: Ceiling<'_>,
-) -> Result<Rediff, Reason> {
+) -> Result<(Rediff, Charge), Reason> {
     let cancel = || ceiling.cancel.is_cancelled();
     let cancel: Stop<'_> = &cancel;
     let detail = detail(context, pair, cancel)?;
+    let coarse = |reason| {
+        Ok((
+            Rediff::Coarse {
+                hunk: coarse_hunk(&detail),
+                reason,
+            },
+            ledger.empty(),
+        ))
+    };
     if let Some(reason) = over_cap(&detail) {
-        return Ok(Rediff::Coarse {
-            hunk: coarse_hunk(&detail),
-            reason,
-        });
+        return coarse(reason);
     }
     let Some(mut charge) = ledger.reserve(work_estimate(detail.lines(), detail.bytes())) else {
-        return Ok(Rediff::Coarse {
-            hunk: coarse_hunk(&detail),
-            reason: StepReason::Budget,
-        });
+        return coarse(StepReason::Budget);
     };
     let started = std::time::Instant::now();
     let stop = || ceiling.cancel.is_cancelled() || started.elapsed() >= ceiling.watchdog;
     let stop: Stop<'_> = &stop;
     match read_diff(context, &detail, &mut charge, stop) {
-        Ok(Some(hunks)) if started.elapsed() < ceiling.watchdog => Ok(Rediff::Hunks(hunks)),
+        Ok(Some(hunks)) if started.elapsed() < ceiling.watchdog => {
+            charge.settle(bytes_of::<Hunk>(hunks.capacity()));
+            Ok((Rediff::Hunks(hunks), charge))
+        }
         Ok(Some(_)) if ceiling.cancel.is_cancelled() => Err(Reason::Stopped),
-        Ok(Some(_)) => Ok(Rediff::Coarse {
-            hunk: coarse_hunk(&detail),
-            reason: StepReason::Watchdog,
-        }),
+        Ok(Some(_)) => coarse(StepReason::Watchdog),
         Err(Reason::Stopped) if ceiling.cancel.is_cancelled() => Err(Reason::Stopped),
-        Err(Reason::Stopped) => Ok(Rediff::Coarse {
-            hunk: coarse_hunk(&detail),
-            reason: StepReason::Watchdog,
-        }),
-        Ok(None) => Ok(Rediff::Coarse {
-            hunk: coarse_hunk(&detail),
-            reason: StepReason::TokenCap,
-        }),
+        Err(Reason::Stopped) => coarse(StepReason::Watchdog),
+        Ok(None) => coarse(StepReason::TokenCap),
         Err(reason) => Err(reason),
     }
 }

@@ -130,6 +130,27 @@ fn an_insensitive_rule_folds_case() {
 }
 
 #[test]
+fn unicode_paired_folders_share_gitignore_rules() {
+    let rules = rules(&[("Ärger", "*.log\n")], &[], false, CaseRule::Insensitive);
+    assert!(rel("Ärger").as_path().windows_eq(rel("ärger").as_path()));
+    assert!(rules.is_ignored(&rel("ärger/drop.log"), false));
+    assert!(rules.is_ignored(&rel("ÄRGER/drop.log"), false));
+    assert!(!rules.is_ignored(&rel("ärger/keep.txt"), false));
+    let sensitive = IgnoreRules::new(
+        [IgnoreSource::Gitignore {
+            folder: rel("Ärger"),
+            contents: "*.log\n".to_owned(),
+        }],
+        &[],
+        false,
+        CaseRule::Sensitive,
+    )
+    .unwrap()
+    .0;
+    assert!(!sensitive.is_ignored(&rel("ärger/drop.log"), false));
+}
+
+#[test]
 fn a_literal_backslash_is_not_a_separator() {
     let rules = rules(&[("", "/a/b\n")], &[], false, CaseRule::Sensitive);
 
