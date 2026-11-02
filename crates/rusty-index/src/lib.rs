@@ -2,6 +2,8 @@
 
 pub mod file;
 pub mod fuzzy;
+#[cfg(test)]
+mod heap_probe;
 pub mod host;
 pub mod ntfs;
 pub mod pipe;

@@ -1,7 +1,12 @@
-use std::{fs::File, io::Read as _, path::Path};
+use std::fs::File;
+use std::io::{BufReader, Read as _};
+use std::path::Path;
 
 use crate::table::NameTable;
 use crate::usn::FrnMap;
+
+mod stream;
+use stream::{Body, CheckedReader, ChecksumSink};
 
 pub const FORMAT_VERSION: u16 = 3;
 const MAGIC: &[u8; 16] = b"FERRITE-INDEX\0\0\0";
@@ -54,25 +59,28 @@ pub fn save_with_ids(
         entries: table.slots(),
         references: u32::try_from(ids.len()).map_err(|_| FileError::BadLength)?,
     };
-    let capacity = lengths
-        .body_bytes()?
-        .checked_add(HEADER_LEN)
-        .ok_or(FileError::BadLength)?;
-    let mut bytes = Vec::new();
-    bytes.try_reserve_exact(capacity)?;
-    encode_header(&mut bytes, header, &lengths);
-    encode_table(&mut bytes, table);
-    for (&reference, &id) in ids {
-        bytes.extend_from_slice(&reference.to_le_bytes());
-        bytes.extend_from_slice(&id.to_le_bytes());
+    let body_bytes = lengths.body_bytes()?;
+    let body = Body {
+        root: &header.root,
+        table,
+        ids,
+    };
+    let mut prefix = encode_header(header, &lengths);
+    let mut checksum = ChecksumSink(crc32fast::Hasher::new());
+    checksum.0.update(&prefix[..CHECKSUM_START]);
+    if body.write_to(&mut checksum)? != body_bytes as u64 {
+        return Err(FileError::BadLength);
     }
-    let checksum = checksum(&bytes[..CHECKSUM_START], &bytes[HEADER_LEN..]);
-    bytes[CHECKSUM_START..HEADER_LEN].copy_from_slice(&checksum.to_le_bytes());
-    rusty_store::write_atomic(path, &bytes)?;
+    prefix[CHECKSUM_START..].copy_from_slice(&checksum.0.finalize().to_le_bytes());
+    rusty_store::write_atomic_streamed(path, &|out| {
+        out.write_all(&prefix)?;
+        body.write_to(out).map(drop)
+    })?;
     Ok(())
 }
 
-fn encode_header(bytes: &mut Vec<u8>, header: &Header, lengths: &Lengths) {
+fn encode_header(header: &Header, lengths: &Lengths) -> [u8; HEADER_LEN] {
+    let mut bytes = Vec::with_capacity(HEADER_LEN);
     bytes.extend_from_slice(MAGIC);
     bytes.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
     bytes.extend_from_slice(&header.volume_serial.to_le_bytes());
@@ -84,29 +92,9 @@ fn encode_header(bytes: &mut Vec<u8>, header: &Header, lengths: &Lengths) {
     bytes.extend_from_slice(&lengths.entries.to_le_bytes());
     bytes.extend_from_slice(&lengths.references.to_le_bytes());
     bytes.extend_from_slice(&0u32.to_le_bytes());
-    bytes.extend_from_slice(header.root.as_bytes());
-}
-
-fn encode_table(bytes: &mut Vec<u8>, table: &NameTable) {
-    let (names, offsets, parents, flags) = table.raw_parts();
-    bytes.extend_from_slice(names.as_bytes());
-    for &offset in offsets {
-        bytes.extend_from_slice(&offset.to_le_bytes());
-    }
-    for &parent in parents {
-        bytes.extend_from_slice(&parent.to_le_bytes());
-    }
-    for &flag in flags {
-        bytes.extend_from_slice(&flag.to_le_bytes());
-    }
-    let (sizes, counts) = table.stored_totals();
-    for &size in sizes {
-        bytes.extend_from_slice(&size.to_le_bytes());
-    }
-    for [files, folders] in counts {
-        bytes.extend_from_slice(&files.to_le_bytes());
-        bytes.extend_from_slice(&folders.to_le_bytes());
-    }
+    let mut prefix = [0; HEADER_LEN];
+    prefix.copy_from_slice(&bytes);
+    prefix
 }
 
 pub fn load(path: &Path) -> Result<(Header, NameTable), FileError> {
@@ -123,49 +111,38 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
     if file.metadata()?.len() != HEADER_LEN as u64 + body_len as u64 {
         return Err(FileError::BadLength);
     }
-    let mut body = Vec::new();
-    body.try_reserve_exact(body_len)?;
-    file.take(body_len as u64).read_to_end(&mut body)?;
-    if body.len() != body_len {
-        return Err(FileError::BadLength);
-    }
-    if checksum(&prefix[..CHECKSUM_START], &body) != expected_checksum {
-        return Err(FileError::BadChecksum);
-    }
-    let mut input = body.as_slice();
-    header.root = read_string(&mut input, lengths.root)?;
-    let names = read_string(&mut input, lengths.names)?;
-    let offsets = read_values(&mut input, lengths.entries, u32::from_le_bytes)?;
-    let parents = read_values(&mut input, lengths.entries, u32::from_le_bytes)?;
-    let flags = read_values(&mut input, lengths.entries, u16::from_le_bytes)?;
-    let sizes = read_values(&mut input, lengths.entries, u64::from_le_bytes)?;
-    let counts = read_values(&mut input, lengths.entries, |bytes: [u8; 8]| {
+    let mut input = CheckedReader::new(BufReader::new(file), &prefix[..CHECKSUM_START]);
+    let root = input.bytes(lengths.root)?;
+    let names = input.bytes(lengths.names)?;
+    let offsets = input.values(lengths.entries, u32::from_le_bytes)?;
+    let parents = input.values(lengths.entries, u32::from_le_bytes)?;
+    let flags = input.values(lengths.entries, u16::from_le_bytes)?;
+    let sizes = input.values(lengths.entries, u64::from_le_bytes)?;
+    let counts = input.values(lengths.entries, |[a, b, c, d, e, f, g, h]: [u8; 8]| {
         [
-            u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
-            u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+            u32::from_le_bytes([a, b, c, d]),
+            u32::from_le_bytes([e, f, g, h]),
         ]
     })?;
-    let table = NameTable::from_raw_parts(names, (offsets, parents, flags), (sizes, counts))
+    let (ids, repeated) = input.ids(lengths.references)?;
+    if input.checksum() != expected_checksum {
+        return Err(FileError::BadChecksum);
+    }
+    header.root = utf8(root)?;
+    let table = NameTable::from_raw_parts(utf8(names)?, (offsets, parents, flags), (sizes, counts))
         .ok_or(FileError::InvalidData(
             "invalid name table or subtree totals",
         ))?;
     validate_root(&header, &table)?;
-    let ids = decode_ids(&mut input, lengths.references)?;
+    if repeated {
+        return Err(FileError::InvalidData("duplicate file reference"));
+    }
     validate_ids(&table, &ids)?;
     Ok((header, table, ids))
 }
 
-fn decode_ids(input: &mut &[u8], count: u32) -> Result<FrnMap, FileError> {
-    let mut ids = FrnMap::new();
-    ids.try_reserve(count as usize)?;
-    for _ in 0..count {
-        let reference = u128::from_le_bytes(read_array(input)?);
-        let id = u32::from_le_bytes(read_array(input)?);
-        if ids.insert(reference, id).is_some() {
-            return Err(FileError::InvalidData("duplicate file reference"));
-        }
-    }
-    Ok(ids)
+fn utf8(bytes: Vec<u8>) -> Result<String, FileError> {
+    String::from_utf8(bytes).map_err(|_| FileError::InvalidData("index text is not UTF-8"))
 }
 
 pub(crate) fn validate_ids(table: &NameTable, ids: &FrnMap) -> Result<(), FileError> {
@@ -251,42 +228,10 @@ fn decode_header(prefix: &[u8]) -> Result<(Header, Lengths, u32), FileError> {
     Ok((header, lengths, checksum))
 }
 
-fn checksum(prefix: &[u8], body: &[u8]) -> u32 {
-    let mut checksum = crc32fast::Hasher::new();
-    checksum.update(prefix);
-    checksum.update(body);
-    checksum.finalize()
-}
-
-fn take<'a>(input: &mut &'a [u8], length: usize) -> Result<&'a [u8], FileError> {
-    let (head, rest) = input.split_at_checked(length).ok_or(FileError::BadLength)?;
-    *input = rest;
-    Ok(head)
-}
-
 fn read_array<const N: usize>(input: &mut &[u8]) -> Result<[u8; N], FileError> {
-    take(input, N)?.try_into().map_err(|_| FileError::BadLength)
-}
-
-fn read_values<const N: usize, T>(
-    input: &mut &[u8],
-    count: u32,
-    decode: fn([u8; N]) -> T,
-) -> Result<Vec<T>, FileError> {
-    let mut values = Vec::new();
-    values.try_reserve_exact(count as usize)?;
-    let bytes = take(input, count as usize * N)?;
-    values.extend(bytes.as_chunks::<N>().0.iter().copied().map(decode));
-    Ok(values)
-}
-
-fn read_string(input: &mut &[u8], count: u32) -> Result<String, FileError> {
-    let value = std::str::from_utf8(take(input, count as usize)?)
-        .map_err(|_| FileError::InvalidData("index text is not UTF-8"))?;
-    let mut text = String::new();
-    text.try_reserve_exact(value.len())?;
-    text.push_str(value);
-    Ok(text)
+    let (head, rest) = input.split_first_chunk().ok_or(FileError::BadLength)?;
+    *input = rest;
+    Ok(*head)
 }
 
 #[cfg(test)]

@@ -6,7 +6,6 @@ use super::{
 };
 use crate::ntfs::NtfsIndex;
 use crate::table::NameTable;
-use crate::usn::FrnMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Part {
@@ -78,7 +77,7 @@ impl MemoryReport {
 
     pub fn add_index(&mut self, index: &NtfsIndex) {
         self.add_table(&index.table);
-        self.add(Part::FileIds, file_ids_bytes(&index.ids), index.ids.len());
+        self.add(Part::FileIds, index.ids.memory_bytes(), index.ids.len());
         let renames = index.pending_renames();
         self.add(Part::Journal, renames.memory_bytes(), renames.len());
     }
@@ -87,10 +86,6 @@ impl MemoryReport {
         let (bytes, open) = session::memory();
         self.add(Part::Sessions, bytes, open);
     }
-}
-
-fn file_ids_bytes(ids: &FrnMap) -> usize {
-    ids.capacity() * (size_of::<(u128, u32)>() + 1)
 }
 
 impl Request {

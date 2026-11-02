@@ -65,7 +65,7 @@ fn names(index: &NtfsIndex) -> Vec<(u128, Option<String>, Option<u64>)> {
     let mut rows: Vec<_> = index
         .ids
         .iter()
-        .map(|(&file, &id)| (file, index.table.path(id), index.table.size(id)))
+        .map(|(file, id)| (file, index.table.path(id), index.table.size(id)))
         .collect();
     rows.sort();
     rows
@@ -92,8 +92,8 @@ fn whole_records_only(index: &NtfsIndex) -> bool {
         index
             .ids
             .iter()
-            .filter(|&(&file, _)| file >= 100)
-            .all(|(_, &id)| index.table.size(id) == Some(7))
+            .filter(|&(file, _)| file >= 100)
+            .all(|(_, id)| index.table.size(id) == Some(7))
     );
     true
 }

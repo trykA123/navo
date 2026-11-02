@@ -87,6 +87,9 @@ pub(super) fn enumerate_volume(
         return Err(NtfsError::Cancelled);
     }
     JournalState::parse(&volume.query_journal()?)?.check(state.position)?;
+    // Growth by doubling leaves up to half of each array unused; a build happens once, so trim it.
+    index.table.shrink_to_fit();
+    index.ids.shrink_to_fit();
     Ok(Enumeration {
         index,
         unresolved: pending.finish(),

@@ -87,7 +87,7 @@ fn view(index: &NtfsIndex) -> Vec<Row> {
     let mut rows: Vec<_> = index
         .ids
         .iter()
-        .map(|(&file_id, &id)| {
+        .map(|(file_id, id)| {
             (
                 file_id,
                 index.table.path_with(id, '\\'),

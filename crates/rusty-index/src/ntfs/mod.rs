@@ -353,6 +353,8 @@ fn recover_rename(index: &NtfsIndex, change: TableChange) -> TableChange {
 
 #[cfg(test)]
 mod batch_tests;
+#[cfg(test)]
+mod memory_tests;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]

@@ -88,7 +88,7 @@ impl NameTable {
     }
 
     pub fn forget_removed(&self, ids: &mut FrnMap) {
-        ids.retain(|_, id| self.is_live(*id));
+        ids.retain(|_, &id| self.is_live(id));
     }
 
     fn upsert(
