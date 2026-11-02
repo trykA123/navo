@@ -1,10 +1,11 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use rusty_core::ProviderPath;
 
 use crate::table::{Flags, TableChange};
 
-pub type FrnMap = HashMap<u128, u32>;
+mod frn_map;
+pub use frn_map::FrnMap;
 
 const FILE_CREATE: u32 = 0x100;
 const FILE_DELETE: u32 = 0x200;

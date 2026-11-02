@@ -127,7 +127,7 @@ impl NameTable {
             .filter(|&&bits| bits & Flags::DELETED == 0)
             .count();
         let mut table = Self {
-            bytes: vec![0; offsets.len()],
+            bytes: Vec::new(),
             counts: Vec::new(),
             names,
             offsets,

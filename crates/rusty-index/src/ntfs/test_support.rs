@@ -3,31 +3,22 @@
     reason = "test-support fixtures fail immediately on invalid data or broken coordination"
 )]
 
-use std::collections::VecDeque;
-
 use super::volume_io::{VolumeIo, enumerate_volume};
 use super::{Enumeration, JournalPosition, NtfsError};
 use crate::pipe::CancelToken;
 
+/// A synthetic MFT that hands out one 64 KiB enumeration buffer per call, like the volume does.
 pub struct MftFixture {
-    buffers: VecDeque<Vec<u8>>,
+    entries: u32,
+    next: u32,
     journal_id: u64,
 }
 
 impl MftFixture {
     pub fn new(entries: u32, journal_id: u64) -> Self {
-        let mut buffers = VecDeque::new();
-        for start in (1..entries).step_by(512) {
-            let end = (start + 512).min(entries);
-            let mut bytes = u64::from(end).to_le_bytes().to_vec();
-            for number in start..end {
-                append_record(&mut bytes, number, entries);
-            }
-            assert!(bytes.len() <= 64 * 1024);
-            buffers.push_back(bytes);
-        }
         Self {
-            buffers,
+            entries,
+            next: 1,
             journal_id,
         }
     }
@@ -46,7 +37,17 @@ impl VolumeIo for MftFixture {
     }
 
     fn enumerate(&mut self, _: u64) -> Result<Option<Vec<u8>>, NtfsError> {
-        Ok(self.buffers.pop_front())
+        if self.next >= self.entries {
+            return Ok(None);
+        }
+        let end = (self.next + 512).min(self.entries);
+        let mut bytes = u64::from(end).to_le_bytes().to_vec();
+        for number in self.next..end {
+            append_record(&mut bytes, number, self.entries);
+        }
+        assert!(bytes.len() <= 64 * 1024);
+        self.next = end;
+        Ok(Some(bytes))
     }
 
     fn read_journal(&mut self, _: JournalPosition) -> Result<Vec<u8>, NtfsError> {

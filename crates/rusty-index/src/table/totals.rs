@@ -105,20 +105,23 @@ impl NameTable {
 
     pub(crate) fn restore_totals(&mut self, bytes: Vec<u64>, counts: Vec<[u32; 2]>) -> bool {
         self.bytes = bytes;
-        let expected = self.bytes.clone();
+        // Only live folders get rebuilt, so only their stored sums need keeping for the check.
+        let folders: Vec<u32> = self.counted_folders().collect();
+        let stored: Vec<u64> = folders.iter().map(|&id| self.bytes[id as usize]).collect();
         self.rebuild_totals();
-        self.bytes == expected
+        folders.iter().map(|&id| self.bytes[id as usize]).eq(stored)
             && (0..self.slots())
                 .map(|id| self.folder_counts(id))
                 .eq(counts)
     }
 
-    pub(super) fn rebuild_totals(&mut self) {
-        self.counts = self
-            .live_ids()
+    fn counted_folders(&self) -> impl Iterator<Item = u32> + '_ {
+        self.live_ids()
             .filter(|&id| self.flags[id as usize] & Flags::FOLDER.bits() != 0)
-            .map(|id| (id, [0; 2]))
-            .collect();
+    }
+
+    pub(super) fn rebuild_totals(&mut self) {
+        self.counts = self.counted_folders().map(|id| (id, [0; 2])).collect();
         for id in 0..self.slots() {
             if self
                 .flags(id)

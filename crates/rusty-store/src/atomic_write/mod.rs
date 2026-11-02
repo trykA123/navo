@@ -32,9 +32,22 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_atomic_with(path, bytes, |_| Ok(()))
 }
 
+/// Like `write_atomic`, but `write` streams the content, so a large file never sits in memory.
+pub fn write_atomic_streamed(
+    path: &Path,
+    write: &dyn Fn(&mut dyn io::Write) -> io::Result<()>,
+) -> io::Result<()> {
+    let payload = Payload {
+        body: Body::Streamed(write),
+        backup: true,
+        follow_links: true,
+    };
+    write_payload(path, &payload, &mut |_| Ok(())).and_then(WriteOutcome::into_result)
+}
+
 pub fn replace_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let payload = Payload {
-        bytes,
+        body: Body::Bytes(bytes),
         backup: false,
         follow_links: true,
     };
@@ -43,15 +56,20 @@ pub fn replace_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 
 pub fn replace_entry_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let payload = Payload {
-        bytes,
+        body: Body::Bytes(bytes),
         backup: false,
         follow_links: false,
     };
     write_payload(path, &payload, &mut |_| Ok(())).and_then(WriteOutcome::into_result)
 }
 
+enum Body<'a> {
+    Bytes(&'a [u8]),
+    Streamed(&'a dyn Fn(&mut dyn io::Write) -> io::Result<()>),
+}
+
 struct Payload<'a> {
-    bytes: &'a [u8],
+    body: Body<'a>,
     backup: bool,
     follow_links: bool,
 }
@@ -70,7 +88,7 @@ pub(crate) fn write_checked(
     mut check: impl FnMut() -> io::Result<()>,
 ) -> io::Result<WriteOutcome> {
     let payload = Payload {
-        bytes,
+        body: Body::Bytes(bytes),
         backup,
         follow_links: true,
     };
@@ -86,7 +104,7 @@ pub(crate) fn write_atomic_with(
     mut hook: impl FnMut(Stage) -> io::Result<()>,
 ) -> io::Result<()> {
     let payload = Payload {
-        bytes,
+        body: Body::Bytes(bytes),
         backup: true,
         follow_links: true,
     };
@@ -128,7 +146,10 @@ fn replace(
     hook: &mut impl FnMut(Stage) -> io::Result<()>,
 ) -> io::Result<WriteOutcome> {
     let mut file = OpenOptions::new().write(true).create_new(true).open(temp)?;
-    file.write_all(payload.bytes)?;
+    match payload.body {
+        Body::Bytes(bytes) => file.write_all(bytes)?,
+        Body::Streamed(write) => write(&mut file)?,
+    }
     if let Ok(old) = fs::metadata(path) {
         fs::set_permissions(temp, old.permissions())?;
     }

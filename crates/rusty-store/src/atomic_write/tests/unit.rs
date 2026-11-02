@@ -184,3 +184,32 @@ fn replace_atomic_creates_no_backup_for_a_fresh_save() {
     replace_atomic(&target, b"new").unwrap();
     assert!(!backup_path(&target).exists());
 }
+
+#[test]
+fn streamed_write_replaces_the_target_and_keeps_a_backup() {
+    let dir = tmp();
+    let target = dir.path().join("volume.index");
+    fs::write(&target, b"old").unwrap();
+    write_atomic_streamed(&target, &|out| {
+        out.write_all(b"ne")?;
+        out.write_all(b"w")
+    })
+    .unwrap();
+    assert_eq!(fs::read(&target).unwrap(), b"new");
+    assert_eq!(fs::read(backup_path(&target)).unwrap(), b"old");
+}
+
+#[test]
+fn a_failing_stream_keeps_the_old_file_and_leaves_no_temp() {
+    let dir = tmp();
+    let target = dir.path().join("volume.index");
+    fs::write(&target, b"old").unwrap();
+    let error = write_atomic_streamed(&target, &|out| {
+        out.write_all(b"partial")?;
+        Err(io::Error::new(INJECTED, "encoder failed"))
+    })
+    .unwrap_err();
+    assert_eq!(error.kind(), INJECTED);
+    assert_eq!(fs::read(&target).unwrap(), b"old");
+    assert_eq!(temp_files(dir.path()), Vec::<String>::new());
+}
