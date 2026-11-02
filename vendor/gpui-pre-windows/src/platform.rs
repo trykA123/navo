@@ -472,8 +472,8 @@ impl WindowsPlatform {
                     });
                     !VSYNC_WAKE.should_park(has_visible_window, std::time::Instant::now())
                 };
-                run_vsync_loop(&VSYNC_WAKE, &stop, wanted, || {
-                    let signal_source = vsync_provider.wait_for_vsync();
+                run_vsync_loop(&VSYNC_WAKE, &stop, PARK_TIMEOUT, wanted, |start| {
+                    let signal_source = vsync_provider.wait(start);
                     let signal_at = PlatformFrameSignal::capture(scheduler::Instant::now);
                     if stop.load(Ordering::Acquire) {
                         return ControlFlow::Break(());
