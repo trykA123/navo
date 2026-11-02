@@ -183,7 +183,7 @@ impl NavoWindow {
         match resolve((step, value), &here) {
             Err(message) => self.argument_error(message.into(), window, cx),
             Ok((command, Some(location))) => {
-                self.check_argument((step.name, command, location), window, cx)
+                self.check_argument((step.name, command, location), window, cx);
             }
             Ok((command, None)) => self.finish_argument((step.name, &command), window, cx),
         }

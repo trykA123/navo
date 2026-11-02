@@ -405,5 +405,11 @@ pub fn native_rename_atomic(
     platform::rename_atomic(source, target)
 }
 
+/// Moves `source` over `target` in one rename; on Windows the move is write-through, and a
+/// target another process holds open falls back to a plain rename. A read-only target is refused.
+pub fn native_replace(source: &Path, target: &Path) -> io::Result<()> {
+    platform::replace_write_through(source, target)
+}
+
 #[cfg(test)]
 mod tests;

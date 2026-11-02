@@ -507,7 +507,7 @@ fn keep_shows_saving_while_the_save_runs(cx: &mut TestAppContext) {
     parts.toggle(cx, "Type bars");
     parts.rig.key(cx, "alt-v");
     cx.update_window(parts.rig.window, |_, window, cx| {
-        window.input("Keep as default", cx)
+        window.input("Keep as default", cx);
     })
     .expect("window");
     cx.run_until_parked();
@@ -522,7 +522,7 @@ fn keep_shows_saving_while_the_save_runs(cx: &mut TestAppContext) {
 
 fn dispatch(parts: &Parts, cx: &mut TestAppContext, action: Box<dyn gpui_kit::Action>) {
     cx.update_window(parts.rig.window, |_, window, cx| {
-        window.dispatch_action(action, cx)
+        window.dispatch_action(action, cx);
     })
     .expect("window");
     cx.run_until_parked();

@@ -192,7 +192,7 @@ impl NavoWindow {
         gpui_kit::canvas(
             |_, _, _| (),
             move |_, _, window, _| {
-                Self::listen_drop_lifecycle(view.clone(), window);
+                Self::listen_drop_lifecycle(view, window);
             },
         )
         .absolute()

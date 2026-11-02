@@ -356,7 +356,7 @@ fn tab_in_the_delete_dialog_moves_focus_to_the_delete_button(cx: &mut TestAppCon
 fn a_finished_job_row_goes_away_after_a_moment(cx: &mut TestAppContext) {
     let fs = fake();
     let state = home_beside_dest(&fs);
-    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    let (window, view) = open_with(cx, fs, state, Rc::default());
     press(cx, window, &view, "f5");
     press(cx, window, &view, "enter");
     settle(cx, &view);
@@ -438,7 +438,7 @@ fn f7_creates_a_folder_named_by_default(cx: &mut TestAppContext) {
 fn a_bad_name_keeps_the_prompt_open_with_its_error(cx: &mut TestAppContext) {
     let fs = fake();
     let state = home_beside_dest(&fs);
-    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    let (window, view) = open_with(cx, fs, state, Rc::default());
     press(cx, window, &view, "f7");
     type_in(cx, window, &view, "docs");
     press(cx, window, &view, "enter");

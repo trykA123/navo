@@ -256,7 +256,7 @@ impl NavoWindow {
         let weak = cx.weak_entity();
         let tabs = tabs.on_menu(move |index, position, window, cx| {
             let _ = weak.update(cx, |this, cx| {
-                this.open_tab_menu(pane, index, position, window, cx)
+                this.open_tab_menu(pane, index, position, window, cx);
             });
         });
         Self::wire_tab_drops(tabs, pane, cx)
@@ -300,7 +300,7 @@ impl NavoWindow {
                 self.browser.sort_by(*by);
             }
             FileListAction::ResizeColumn { by, width } => {
-                self.resize_column((*by, *width), window, cx)
+                self.resize_column((*by, *width), window, cx);
             }
             FileListAction::ContextMenu { .. }
             | FileListAction::BackgroundMenu { .. }

@@ -6,6 +6,7 @@ use navo_fs::{CancelToken, FsEntry};
 
 use super::Browser;
 use super::sort::listing_of;
+use super::view_jobs::ViewChange;
 use crate::name_match::{Needle, Scratch};
 
 mod marks;
@@ -22,7 +23,7 @@ pub(super) struct Full {
     pub(super) details: Arc<[FsEntry]>,
 }
 
-struct Shown {
+pub(super) struct Shown {
     listing: Listing,
     details: Arc<[FsEntry]>,
 }
@@ -30,33 +31,30 @@ struct Shown {
 impl Browser {
     #[must_use]
     pub fn shows_hidden(&self) -> bool {
-        self.show_hidden
+        self.shows.hidden
     }
 
     #[must_use]
     pub fn shows_system(&self) -> bool {
-        self.show_system
+        self.shows.system
     }
 
     pub fn set_show_hidden(&mut self, show: bool) {
-        if self.show_hidden != show {
-            self.show_hidden = show;
+        if self.shows.hidden != show {
+            self.shows.hidden = show;
             self.reshow_all();
         }
     }
 
     pub fn set_show_system(&mut self, show: bool) {
-        if self.show_system != show {
-            self.show_system = show;
+        if self.shows.system != show {
+            self.shows.system = show;
             self.reshow_all();
         }
     }
 
-    fn visibility(&self) -> Visibility {
-        Visibility {
-            hidden: self.show_hidden,
-            system: self.show_system,
-        }
+    pub(super) fn visibility(&self) -> Visibility {
+        self.shows
     }
 
     fn reshow_all(&mut self) {
@@ -108,7 +106,7 @@ impl Browser {
         let tab = self.state.active_tab().id();
         let mut text = self.filter_text(tab).unwrap_or_default().to_owned();
         text.push(ch);
-        self.set_filter(tab, text) && self.land_cursor(tab)
+        self.set_filter(tab, text) && self.land_unless_pending(tab)
     }
 
     pub fn filter_pop(&mut self) -> bool {
@@ -117,7 +115,7 @@ impl Browser {
             return false;
         };
         text.pop();
-        self.set_filter(tab, text) && self.land_cursor(tab)
+        self.set_filter(tab, text) && self.land_unless_pending(tab)
     }
 
     pub fn filter_clear(&mut self) -> bool {
@@ -125,7 +123,11 @@ impl Browser {
         self.filter_text(tab).is_some() && self.set_filter(tab, String::new())
     }
 
-    fn land_cursor(&mut self, tab: TabId) -> bool {
+    fn land_unless_pending(&mut self, tab: TabId) -> bool {
+        self.views_off_thread(tab) || self.land_cursor(tab)
+    }
+
+    pub(super) fn land_cursor(&mut self, tab: TabId) -> bool {
         let Some(text) = self.filter_text(tab).filter(|text| !text.is_empty()) else {
             return true;
         };
@@ -161,6 +163,7 @@ impl Browser {
         if shown.is_none() {
             self.filters.remove(&tab);
         }
+        self.view_jobs.cancel(tab);
         let shown = shown
             .or_else(|| self::shown(&full, "", self.visibility()))
             .unwrap_or_else(|| Shown {
@@ -179,10 +182,12 @@ impl Browser {
         if hidden {
             self.filters.remove(&tab);
         }
+        self.view_jobs.cancel(tab);
     }
 
     pub(super) fn drop_stale_filters(&mut self) {
         self.drop_hidden_marks();
+        self.view_jobs.drop_stale(&self.state);
         let state = &self.state;
         self.filters.retain(|tab, filter| {
             state
@@ -204,7 +209,10 @@ impl Browser {
         let mut rows = full.details.to_vec();
         if let Some(entry) = rows.iter_mut().find(|e| e.name.to_text() == name) {
             entry.size = bytes;
-            full.details = rows.into();
+            let rows: Arc<[FsEntry]> = rows.into();
+            self.view_jobs
+                .resized(tab, (&full.details, &rows), (name, bytes));
+            full.details = rows;
         }
     }
 
@@ -216,18 +224,30 @@ impl Browser {
             return false;
         }
         let location = t.location().clone();
+        if self.views_off_thread(tab) {
+            return self.request_view(tab, ViewChange::Text(text));
+        }
         let Some(full) = self.full.get(&tab) else {
             return false;
         };
         let Some(shown) = shown(full, &text, self.visibility()) else {
             return false;
         };
+        self.store_filter(tab, &location, text);
+        self.show_filtered(tab, location, shown);
+        true
+    }
+
+    pub(super) fn store_filter(&mut self, tab: TabId, location: &Location, text: String) {
         if text.is_empty() {
             self.filters.remove(&tab);
         } else {
             let location = location.clone();
             self.filters.insert(tab, Filter { location, text });
         }
+    }
+
+    pub(super) fn show_filtered(&mut self, tab: TabId, location: Location, shown: Shown) {
         self.details.insert(tab, shown.details);
         self.hide_marks(tab, &shown.listing);
         self.event(Event::ListingFiltered {
@@ -236,14 +256,20 @@ impl Browser {
             listing: shown.listing,
         });
         self.remark_hidden(tab);
-        true
     }
 }
 
-#[derive(Clone, Copy)]
-struct Visibility {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) struct Visibility {
     hidden: bool,
     system: bool,
+}
+
+impl Visibility {
+    pub(super) const ALL: Self = Self {
+        hidden: true,
+        system: true,
+    };
 }
 
 fn is_reserved(entry: &Entry) -> bool {
@@ -251,6 +277,15 @@ fn is_reserved(entry: &Entry) -> bool {
 }
 
 fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
+    shown_until(full, text, shows, &CancelToken::new())
+}
+
+pub(super) fn shown_until(
+    full: &Full,
+    text: &str,
+    shows: Visibility,
+    cancel: &CancelToken,
+) -> Option<Shown> {
     let has_reserved = full.listing.entries().iter().any(is_reserved);
     if text.is_empty() && shows.hidden && shows.system && !has_reserved {
         return Some(Shown {
@@ -265,7 +300,7 @@ fn shown(full: &Full, text: &str, shows: Visibility) -> Option<Shown> {
         show_system: shows.system,
     };
     let identity: Vec<u32> = (0..u32::try_from(full.details.len()).ok()?).collect();
-    let keep = filter_order(&full.details, &identity, &filter, &CancelToken::new())?;
+    let keep = filter_order(&full.details, &identity, &filter, cancel)?;
     if keep.is_empty() && needle.is_some() {
         return None;
     }

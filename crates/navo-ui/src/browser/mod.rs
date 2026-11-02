@@ -61,8 +61,7 @@ pub struct Browser {
     filters: HashMap<TabId, filter::Filter>,
     hidden_marks: HashMap<TabId, filter::HiddenMarks>,
     full: HashMap<TabId, filter::Full>,
-    show_hidden: bool,
-    show_system: bool,
+    shows: filter::Visibility,
     measures_folders: bool,
     folder_totals: FolderTotalsQuery,
     default_sort: crate::file_list::SortKey,
@@ -83,6 +82,7 @@ pub struct Browser {
     stalls: offline::Stalls,
     prefetches: prefetch::Prefetches,
     hooks: retained::HookSlots,
+    view_jobs: view_jobs::ViewJobs,
 }
 
 impl Browser {
@@ -127,8 +127,7 @@ impl Browser {
             filters: HashMap::new(),
             hidden_marks: HashMap::new(),
             full: HashMap::new(),
-            show_hidden: true,
-            show_system: true,
+            shows: filter::Visibility::ALL,
             measures_folders: true,
             folder_totals: no_folder_totals(),
             default_sort: crate::file_list::SortKey::default(),
@@ -149,6 +148,7 @@ impl Browser {
             stalls: offline::Stalls::default(),
             prefetches: prefetch::Prefetches::default(),
             hooks: retained::HookSlots::default(),
+            view_jobs: view_jobs::ViewJobs::default(),
         }
     }
 
@@ -211,6 +211,7 @@ impl Browser {
             changed |= match message {
                 Message::Loaded(loaded) => self.accept(loaded),
                 Message::CachedSorted(early) => self.accept_cached_sorted(early),
+                Message::Viewed(viewed) => self.accept_viewed(viewed),
                 Message::Measured(owner, measured) => self.accept_size(owner, &measured),
                 Message::Found(tab, owner, update) => self.accept_find(tab, owner, update),
                 Message::Job(update) => self.accept_job(update),
@@ -401,4 +402,5 @@ mod retained;
 mod sort;
 #[cfg(test)]
 mod tests;
+mod view_jobs;
 mod watched;

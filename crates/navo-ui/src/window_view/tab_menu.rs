@@ -205,7 +205,7 @@ impl NavoWindow {
             menu
         });
         let events = cx.subscribe_in(&view, window, move |this, _, event, window, cx| {
-            this.tab_menu_event(id, event, window, cx)
+            this.tab_menu_event(id, event, window, cx);
         });
         self.tab_menu = TabMenu(Some((view, events)));
         cx.notify();

@@ -8,7 +8,7 @@ use std::io;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
-use windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED;
+use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION};
 use windows_sys::Win32::Storage::FileSystem::{
     MOVE_FILE_FLAGS, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
 };
@@ -43,6 +43,19 @@ fn replace_read_only(from: &Path, to: &Path, denied: io::Error) -> io::Result<()
 
 pub(super) fn rename_new(from: &Path, to: &Path) -> io::Result<()> {
     move_with(from, to, MOVEFILE_WRITE_THROUGH)
+}
+
+pub(super) fn replace_write_through(from: &Path, to: &Path) -> io::Result<()> {
+    match move_over(from, to) {
+        Err(first) if is_held_open(&first) => fs::rename(from, to).map_err(|_| first),
+        other => other,
+    }
+}
+
+fn is_held_open(error: &io::Error) -> bool {
+    [ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION]
+        .into_iter()
+        .any(|code| error.raw_os_error() == Some(code.cast_signed()))
 }
 
 fn move_over(from: &Path, to: &Path) -> io::Result<()> {

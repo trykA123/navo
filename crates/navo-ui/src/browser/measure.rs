@@ -253,7 +253,7 @@ impl Browser {
         }
     }
 
-    fn show_size_of(&mut self, tab: TabId, name: &str, bytes: u64) -> bool {
+    pub(super) fn show_size_of(&mut self, tab: TabId, name: &str, bytes: u64) -> bool {
         self.remember_size(tab, name, bytes);
         let Some(tab_state) = self.state.tab(tab) else {
             return false;

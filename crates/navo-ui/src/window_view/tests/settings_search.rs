@@ -193,7 +193,7 @@ fn rendering_uses_cached_status_and_each_search_open_refreshes_once(cx: &mut Tes
     let view = rig.view.clone();
     cx.update_window(rig.window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.open_settings_at(Field::SearchIndex, window, cx)
+            view.open_settings_at(Field::SearchIndex, window, cx);
         });
     })
     .expect("window");
@@ -257,7 +257,7 @@ fn held_journal_lock_does_not_block_clear_history_on_the_ui_thread(cx: &mut Test
     let rig = rig_search(cx, Values::default(), None, search);
     cx.update_window(rig.window, |_, window, cx| {
         rig.view.update(cx, |view, cx| {
-            view.open_settings_at(Field::SearchIndex, window, cx)
+            view.open_settings_at(Field::SearchIndex, window, cx);
         });
     })
     .unwrap();

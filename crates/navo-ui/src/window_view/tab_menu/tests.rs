@@ -220,8 +220,8 @@ fn clone_action_uses_the_inactive_tab(cx: &mut TestAppContext) {
     let (window, view) = open_options(cx, options_for(fs.clone(), state));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.run_tab_menu(target, "tab.clone", window, cx)
-        })
+            view.run_tab_menu(target, "tab.clone", window, cx);
+        });
     })
     .unwrap();
     view.read_with(cx, |view, _| {
@@ -233,6 +233,6 @@ fn clone_action_uses_the_inactive_tab(cx: &mut TestAppContext) {
                 .active()
                 .location(),
             &fs.location("home")
-        )
+        );
     });
 }

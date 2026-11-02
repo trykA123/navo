@@ -175,7 +175,7 @@ fn sort_row(cx: &mut TestAppContext, rig: &Rig) {
     let view = rig.view.clone();
     cx.update_window(rig.window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.open_settings_at(Field::Sort, window, cx)
+            view.open_settings_at(Field::Sort, window, cx);
         });
     })
     .expect("window");

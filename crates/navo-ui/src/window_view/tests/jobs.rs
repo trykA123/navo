@@ -291,7 +291,7 @@ fn with_reduced_motion_an_ended_job_stays_visible_until_it_leaves(cx: &mut TestA
 
 fn set_done(cx: &mut TestAppContext, view: &Entity<NavoWindow>, bytes: u64) {
     view.update(cx, |view, _| {
-        view.browser.jobs_mut()[0].progress.bytes_done = bytes
+        view.browser.jobs_mut()[0].progress.bytes_done = bytes;
     });
 }
 

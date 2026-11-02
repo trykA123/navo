@@ -6,6 +6,7 @@ use navo_fs::{CancelToken, EntryKind, FsEntry};
 
 use super::Browser;
 use super::filter::Full;
+use super::view_jobs::ViewChange;
 pub use crate::file_list::{SortBy, SortKey};
 
 impl Browser {
@@ -36,6 +37,9 @@ impl Browser {
     }
 
     pub(super) fn resort(&mut self, tab: TabId) -> bool {
+        if self.views_off_thread(tab) {
+            return self.request_view(tab, ViewChange::Sort);
+        }
         let key = self.sort_key(tab);
         let Some(full) = self.full.remove(&tab) else {
             return false;

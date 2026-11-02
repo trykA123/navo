@@ -360,7 +360,7 @@ impl NavoWindow {
                 self.run_selected(way, window, cx);
             }
             CommandCenterEvent::ToggleContentFlag(regex) => {
-                self.toggle_content_flag(*regex, window, cx)
+                self.toggle_content_flag(*regex, window, cx);
             }
             CommandCenterEvent::ScopeRemoved => {
                 let Some(open) = self.command_center.open.as_mut() else {

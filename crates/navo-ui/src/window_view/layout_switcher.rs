@@ -165,7 +165,7 @@ impl LayoutSwitcher {
                 t.colors.text
             })
             .on_click(move |_, window, cx| {
-                on_action(&LayoutSwitcherAction::Apply(index), window, cx)
+                on_action(&LayoutSwitcherAction::Apply(index), window, cx);
             })
             .child(self.card_content(t, index))
             .into_any_element()
@@ -364,7 +364,7 @@ impl NavoWindow {
             self.switcher_presets(),
             layout.to_tiles(),
             cx.listener(|view, action: &LayoutSwitcherAction, window, cx| {
-                view.switch_layout(*action, window, cx)
+                view.switch_layout(*action, window, cx);
             }),
         )
         .focused(self.switcher_focus(state))

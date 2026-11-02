@@ -141,7 +141,7 @@ fn undo_reply_after_a_job_started_is_silent(cx: &mut TestAppContext) {
     );
     key(cx, rig.window, "ctrl-z");
     rig.view.update(cx, |view, _| {
-        view.browser.rename("a.txt", "kept.txt").unwrap()
+        view.browser.rename("a.txt", "kept.txt").unwrap();
     });
     settle(cx, &rig.view);
     assert!(rig.notice(cx).is_none());
@@ -157,7 +157,7 @@ fn undo_reply_after_a_job_finished_is_silent(cx: &mut TestAppContext) {
         slow_hooks(Arc::default()),
     );
     rig.view.update(cx, |view, _| {
-        view.browser.rename("a.txt", "kept.txt").unwrap()
+        view.browser.rename("a.txt", "kept.txt").unwrap();
     });
     key(cx, rig.window, "ctrl-z");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

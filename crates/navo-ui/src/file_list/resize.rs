@@ -176,7 +176,7 @@ fn listen(zone: Stateful<Div>, by: SortBy, ctx: &Rc<ListContext>) -> Stateful<Di
         }
     })
     .on_mouse_up(MouseButton::Left, move |_, window, cx| {
-        up.end_resize(window, cx)
+        up.end_resize(window, cx);
     })
     .on_mouse_up_out(MouseButton::Left, move |_, window, cx| {
         out.end_resize(window, cx);

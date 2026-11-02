@@ -2,11 +2,12 @@ use navo_core::{Location, TabId};
 use navo_fs::WatchEvent;
 
 use super::operate::JobUpdate;
-use super::{Loaded, cached, find, measure, naming};
+use super::{Loaded, cached, find, measure, naming, view_jobs};
 
 pub(super) enum Message {
     Loaded(Loaded),
     CachedSorted(cached::CachedSorted),
+    Viewed(view_jobs::Viewed),
     Measured(navo_fs::OwnerId, measure::Measured),
     Found(TabId, navo_fs::OwnerId, find::Update),
     Job(JobUpdate),
@@ -29,6 +30,7 @@ impl Message {
                 | Self::Recheck(_)
                 | Self::Prefetched(_)
                 | Self::CachedSorted(_)
+                | Self::Viewed(_)
         )
     }
 }

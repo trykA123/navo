@@ -355,6 +355,7 @@ fn prepare_crash(
     let Some(dirs) = profile.dirs() else {
         return (None, None);
     };
+    remove_orphan_temps(dirs);
     let pending = crash::pending(&dirs.data);
     let running = match crash::Running::start(&dirs.data) {
         Ok(running) => Some(running),
@@ -364,6 +365,16 @@ fn prepare_crash(
         }
     };
     (pending, running)
+}
+
+fn remove_orphan_temps(dirs: &StoreDirs) {
+    match dirs.remove_orphan_temps() {
+        Ok(0) => {}
+        Ok(count) => tracing::info!(count, "removed temp files left by interrupted saves"),
+        Err(error) => {
+            tracing::warn!(%error, "cannot look for temp files left by interrupted saves")
+        }
+    }
 }
 
 #[cfg(test)]

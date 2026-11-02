@@ -147,7 +147,7 @@ async fn deliver(
             is_hand_off,
         };
         let taken = this.update_in(cx, |view, window, cx| {
-            view.take_arrival(arrival, window, cx)
+            view.take_arrival(arrival, window, cx);
         });
         if taken.is_err() {
             return;

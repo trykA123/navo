@@ -62,10 +62,10 @@ impl NavoWindow {
                     view.toggle_cursor_row(window, cx);
                 }))
                 .on_action(cx.listener(|view, _: &mr::MoveRowUp, window, cx| {
-                    view.move_rename_row(false, window, cx)
+                    view.move_rename_row(false, window, cx);
                 }))
                 .on_action(cx.listener(|view, _: &mr::MoveRowDown, window, cx| {
-                    view.move_rename_row(true, window, cx)
+                    view.move_rename_row(true, window, cx);
                 }))
                 .flex_col()
                 .children(self.rename_names_editor(cx))

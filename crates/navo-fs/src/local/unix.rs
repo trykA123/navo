@@ -286,6 +286,10 @@ pub(super) fn replace(from: &Path, to: &Path) -> io::Result<()> {
     fs::rename(from, to)
 }
 
+pub(super) fn replace_write_through(from: &Path, to: &Path) -> io::Result<()> {
+    fs::rename(from, to)
+}
+
 #[cfg(target_os = "linux")]
 pub(super) fn rename_atomic(from: &Path, to: &Path) -> io::Result<()> {
     use rustix::fs::{CWD, RenameFlags, renameat_with};
