@@ -172,3 +172,42 @@ fn cut_cleanup_keeps_identical_paths_and_effect_from_a_new_sequence() {
     assert!(!super::model::matches_write(&cut, &cut, Some(0), Some(0)));
     assert!(super::model::matches_write(&cut, &cut, Some(7), Some(7)));
 }
+
+#[test]
+fn history_marker_refuses_zero_and_unreadable_values() {
+    use super::capture::admits_history;
+    assert!(admits_history(None));
+    assert!(admits_history(Some(&1u32.to_le_bytes())));
+    assert!(!admits_history(Some(&0u32.to_le_bytes())));
+    assert!(!admits_history(Some(&[1, 0])));
+}
+
+#[test]
+fn clipboard_text_stops_at_the_first_nul() {
+    let mut bytes: Vec<u8> = "a 🦀\0junk"
+        .encode_utf16()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    bytes.push(7);
+    assert_eq!(super::capture::text_from_bytes(&bytes), "a 🦀");
+    assert_eq!(super::capture::text_from_bytes(&[0x41]), "");
+}
+
+#[test]
+fn owner_exe_is_the_image_file_stem() {
+    let stem = |path: &str| super::capture::exe_stem(&path.encode_utf16().collect::<Vec<_>>());
+    assert_eq!(
+        stem(r"C:\Program Files\KeePass\KeePass.exe"),
+        Some("KeePass".to_owned())
+    );
+    assert_eq!(stem(r"C:\tools\my.app.exe"), Some("my.app".to_owned()));
+    assert_eq!(stem(r"C:\tools\.hidden"), Some(".hidden".to_owned()));
+    assert_eq!(stem(r"C:\tools\"), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn watcher_is_unsupported_off_windows() {
+    let started = super::Watcher::start(Box::new(|_| {}));
+    assert!(matches!(started, Err(ClipboardError::Unsupported)));
+}

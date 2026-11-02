@@ -106,6 +106,47 @@ Linux result, 26 October 2026, release build of 6873ea0 with the bench added, 14
 
 The path fragment is the slowest query, because it builds the full path of every candidate. Sorting and filtering the 500,000-file folder take a visible 0.1–0.6 s per step.
 
+## Walk and index timing
+
+`cargo xtask bench-walk` times folder listing, folder walking and the Ctrl+K index pieces without opening a window. It is informational only: it never fails a build and never blocks a merge.
+
+Run it from the repository root:
+
+```
+cargo xtask bench-walk <dir> [--targets list,size] [--runs N] [--warmup N] [--prepare "<command>"]
+```
+
+- `<dir>` is required and comes first. The command creates its test folders inside it and reuses them on later runs.
+- `--targets` is a comma-separated list. The default is `list,size`. `index` is short for `walk,search,save,load`.
+- `--runs` is the number of recorded runs (default 10, at least 1).
+- `--warmup` is the number of unrecorded runs before the recorded ones (default 2, may be 0).
+- `--prepare` is a shell command that runs before each cold run, for example a cache flush.
+
+What each target measures:
+
+| Target | What is timed |
+| --- | --- |
+| `list` | Listing one folder with 5,000 files through the file provider. |
+| `size` | Computing the size of a generated tree of 100,000 files in 1,000 folders. |
+| `walk` | Walking that same tree with Navo's own folder walker. |
+| `walk-dua` | Walking that tree with the `dua` walker, for comparison. |
+| `walk-ignore` | Walking that tree with the `ignore` walker, for comparison. |
+| `search` | Five fixed Ctrl+K queries over an in-memory index of 1,000,000 names. |
+| `save` | Writing that index to a file. |
+| `load` | Reading that index back from a file. |
+
+How to read the table: each target gets one table with a cold row and a warm row. Times are in milliseconds. The columns are:
+
+- **Mean ± σ:** the average and its spread. A large σ means unstable runs.
+- **Median:** the middle run. Prefer it to the mean when outliers exist.
+- **Min** and **Max:** the fastest and slowest run.
+- **Outliers:** runs far from the median (modified Z-score above 3.5 on the median absolute deviation). One slow run from a busy disk shows up here.
+- **Files/s:** files per second at the median, for the walk targets only.
+
+Warm and cold are not the same thing. A warm run reads folders the operating system already cached. Without `--prepare`, the cold row is a single run on a freshly generated test folder, and the table says "cache not flushed". That run is only roughly cold. With `--prepare`, the command runs before each cold run and the cold row has one sample per run. Navo does not flush caches itself. A cold row is only as cold as your command makes it, and the command needs rights to do so. If the folder already exists, the cold row is empty and says "fixture reused".
+
+On CI the Windows test job runs `bench-walk` with `--runs 3` and adds the table to the job summary. Treat those numbers as a trend on shared hardware, not as a reference.
+
 ## Profiling with Tracy
 
 Build with `cargo build --release -p rusty-app --features tracy`. The build marks every frame and sends spans at `debug` level to Tracy. Open it with the Tracy viewer that matches `tracy-client-sys` 0.30.1 (Tracy v0.14.1 per the version table in that crate's README). For sampling without a viewer, run `samply record navo.exe`.
