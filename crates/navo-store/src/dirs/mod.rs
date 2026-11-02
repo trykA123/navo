@@ -116,6 +116,11 @@ impl StoreDirs {
         std::fs::create_dir_all(&self.config)?;
         std::fs::create_dir_all(&self.data)
     }
+
+    /// Removes temp files that interrupted atomic writes left in the config and data folders.
+    pub fn remove_orphan_temps(&self) -> io::Result<usize> {
+        Ok(crate::remove_orphan_temps(&self.config)? + crate::remove_orphan_temps(&self.data)?)
+    }
 }
 
 #[cfg(test)]

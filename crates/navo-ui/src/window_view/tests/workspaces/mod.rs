@@ -286,7 +286,7 @@ fn alt_left_and_right_keep_back_and_forward(cx: &mut TestAppContext) {
     let location = fake().location("home/docs");
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.apply(&Command::PaneNavigate { location }, window, cx)
+            view.apply(&Command::PaneNavigate { location }, window, cx);
         });
     })
     .expect("window");

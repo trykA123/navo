@@ -108,7 +108,7 @@ impl NavoWindow {
                 found,
             };
             let _ = this.update_in(cx, |view, window, cx| {
-                view.path_checked(checked, window, cx)
+                view.path_checked(checked, window, cx);
             });
         });
         if let Some(edit) = &mut self.path_edit {

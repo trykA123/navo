@@ -88,7 +88,7 @@ fn switching_modes_cancels_the_search_and_rejects_queued_results(cx: &mut TestAp
     rig.view.update(cx, |view, _| {
         view.command_center
             .sources
-            .push(Arc::new(Observe(cancels.clone())))
+            .push(Arc::new(Observe(cancels.clone())));
     });
     rig.press(cx, "ctrl-k");
     super::late::input_unsettled(cx, &rig, "switch pane");

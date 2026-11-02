@@ -96,7 +96,7 @@ impl Rig {
     fn start(&self, cx: &mut TestAppContext) -> TabId {
         self.press(cx, "alt-f7");
         cx.update_window(self.window, |_, window, cx| {
-            window.input("needle ext:rs size:>1KB", cx)
+            window.input("needle ext:rs size:>1KB", cx);
         })
         .unwrap();
         self.press(cx, "ctrl-enter");
@@ -154,7 +154,7 @@ fn ctrl_enter_opens_query_chrome_with_filters(cx: &mut TestAppContext) {
         );
     });
     rig.view.read_with(cx, |view, _| {
-        assert!(view.command_center_generation().is_none())
+        assert!(view.command_center_generation().is_none());
     });
     assert_eq!(rig.label(cx, 1usize), "needle");
     assert_eq!(

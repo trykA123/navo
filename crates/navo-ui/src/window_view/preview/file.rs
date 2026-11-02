@@ -100,7 +100,7 @@ impl NavoWindow {
                 .await
                 .unwrap_or_else(|_| Err(navo_l10n::tr("preview-load-failed")));
             let _ = this.update_in(cx, |view, window, cx| {
-                view.preview_opened(opened, window, cx)
+                view.preview_opened(opened, window, cx);
             });
         });
         FilePreview {

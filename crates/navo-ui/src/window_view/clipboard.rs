@@ -224,7 +224,7 @@ impl NavoWindow {
         };
         match self.browser.drop_into(request) {
             Ok(id) if files.effect == ClipboardEffect::Move => {
-                self.clipboard.cuts.push((id, files))
+                self.clipboard.cuts.push((id, files));
             }
             Ok(_) => {}
             Err(refused) => self.clipboard.notice = Some(info(refusal_text(refused))),

@@ -14,7 +14,7 @@ use crate::file_list::SortKey;
 pub(in crate::browser) use early::{CachedSorted, Early};
 
 const KEEP_SORTED: usize = 2;
-const SYNC_ROWS: usize = 20_000;
+pub(super) const SYNC_ROWS: usize = 20_000;
 
 pub(super) struct WorkerSorted {
     pub(super) key: SortKey,
@@ -87,7 +87,7 @@ impl Fetch {
         let progress = &self.progress;
         let snapshot =
             load_folder_reporting(self.provider.as_ref(), &self.location, cancel, &mut || {
-                progress.answered()
+                progress.answered();
             })?;
         let rows: Arc<[FsEntry]> = snapshot.details.into();
         let unchanged = self

@@ -280,7 +280,7 @@ impl NavoWindow {
             self.restart_index_activity(cx);
         }
         cx.spawn_in(window, async move |this, cx| {
-            Stream { round, scope, this }.go(cx).await
+            Stream { round, scope, this }.go(cx).await;
         })
         .detach();
     }

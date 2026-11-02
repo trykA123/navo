@@ -64,7 +64,7 @@ impl NavoWindow {
         )
         .on_action(cx.listener(|view, _: &mr::CopyNames, _, cx| view.copy_rename_names(cx)))
         .on_action(cx.listener(|view, _: &mr::CounterPerFolder, window, cx| {
-            view.toggle_folder_counter(window, cx)
+            view.toggle_folder_counter(window, cx);
         }))
     }
 }

@@ -324,7 +324,7 @@ impl NavoWindow {
                 self.rules_changed(window, cx);
             }
             FieldsEvent::Tokens(mask) => {
-                self.open_rename_menu(menu::Kind::Tokens(mask), window, cx)
+                self.open_rename_menu(menu::Kind::Tokens(mask), window, cx);
             }
             FieldsEvent::NameCase => self.open_rename_menu(menu::Kind::NameCase, window, cx),
             FieldsEvent::ExtensionCase => self.open_rename_menu(menu::Kind::ExtCase, window, cx),

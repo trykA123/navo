@@ -1,7 +1,34 @@
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+
+mod backup;
+mod temp;
+
+use temp::TempFile;
+pub use temp::remove_orphan_temps;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Op {
+    Write,
+    Sync,
+    BackupLink,
+    LinkSync,
+    BackupCopy,
+    BackupSync,
+    BackupRename,
+    BackupFolderSync,
+    Rename,
+    FolderSync,
+}
+
+#[cfg(test)]
+use tests::before as step;
+
+#[cfg(not(test))]
+fn step(_: Op) -> io::Result<()> {
+    Ok(())
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Stage {
@@ -25,8 +52,6 @@ impl WriteOutcome {
         }
     }
 }
-
-static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_atomic_with(path, bytes, |_| Ok(()))
@@ -127,55 +152,49 @@ fn write_payload(
             format!("{} is a directory", path.display()),
         ));
     }
-    let temp = temp_path(path);
-    let result = replace(path, &temp, payload, &mut |stage| {
+    replace(path, payload, &mut |stage| {
         #[cfg(test)]
         tests::at_stage(path, stage)?;
         hook(stage)
-    });
-    if result.is_err() {
-        let _ = fs::remove_file(&temp);
-    }
-    result
+    })
 }
 
 fn replace(
     path: &Path,
-    temp: &Path,
     payload: &Payload<'_>,
     hook: &mut impl FnMut(Stage) -> io::Result<()>,
 ) -> io::Result<WriteOutcome> {
-    let mut file = OpenOptions::new().write(true).create_new(true).open(temp)?;
-    match payload.body {
-        Body::Bytes(bytes) => file.write_all(bytes)?,
-        Body::Streamed(write) => write(&mut file)?,
-    }
+    let (temp, mut file) = TempFile::create(path)?;
+    write_body(&mut file, &payload.body)?;
     if let Ok(old) = fs::metadata(path) {
-        fs::set_permissions(temp, old.permissions())?;
+        fs::set_permissions(temp.path(), old.permissions())?;
     }
     hook(Stage::TempWritten)?;
+    step(Op::Sync)?;
     file.sync_all()?;
     drop(file);
     hook(Stage::TempSynced)?;
     if payload.backup && fs::symlink_metadata(path).is_ok() {
-        make_backup(path);
+        backup::make(path)?;
         hook(Stage::BackupMade)?;
     }
     hook(Stage::BeforeRename)?;
-    fs::rename(temp, path)?;
-    Ok(
-        match hook(Stage::Replaced).and_then(|()| sync_folder(folder_of(path))) {
-            Ok(()) => WriteOutcome::Durable,
-            Err(error) => WriteOutcome::Committed(error),
-        },
-    )
+    temp.commit(path, Op::Rename)?;
+    let settled = hook(Stage::Replaced)
+        .and_then(|()| step(Op::FolderSync))
+        .and_then(|()| sync_folder(folder_of(path)));
+    Ok(match settled {
+        Ok(()) => WriteOutcome::Durable,
+        Err(error) => WriteOutcome::Committed(error),
+    })
 }
 
-fn make_backup(path: &Path) {
-    let staged = temp_path(path);
-    let linked = fs::hard_link(path, &staged).or_else(|_| fs::copy(path, &staged).map(|_| ()));
-    let _ = linked.and_then(|()| fs::rename(&staged, backup_path(path)));
-    let _ = fs::remove_file(&staged);
+fn write_body(file: &mut File, body: &Body<'_>) -> io::Result<()> {
+    step(Op::Write)?;
+    match body {
+        Body::Bytes(bytes) => file.write_all(bytes),
+        Body::Streamed(write) => write(file),
+    }
 }
 
 fn resolve_symlink(path: &Path) -> PathBuf {
@@ -183,12 +202,6 @@ fn resolve_symlink(path: &Path) -> PathBuf {
         Ok(target) => folder_of(path).join(target),
         Err(_) => path.to_owned(),
     }
-}
-
-fn temp_path(path: &Path) -> PathBuf {
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    path.with_file_name(format!(".{name}.tmp-{}-{n}", std::process::id()))
 }
 
 fn folder_of(path: &Path) -> &Path {
