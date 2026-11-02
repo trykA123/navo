@@ -1,6 +1,6 @@
-# gpui-kit 0.7.3 notes for Ferrite (atom S1, plan P2)
+# gpui-kit 0.7.3 notes for Navo (atom S1, plan P2)
 
-Paths: CR = ~/.cargo/registry/src/index.crates.io-*/. Prototype = <worktrees>/rusty-gpui-b-variants/spikes/gpui-b-variants (PT).
+Paths: CR = ~/.cargo/registry/src/index.crates.io-*/. Prototype = <worktrees>/navo-gpui-b-variants/spikes/gpui-b-variants (PT).
 
 ## 1. Dependency, re-exports, bootstrap
 `gpui-kit` is a facade. `gpui_kit::*` is GPUI itself, which is the crate `gpui-pre` 0.3.9, a snapshot republish of Zed's gpui (gpui-kit-0.7.3/Cargo.toml:404-407, `package = "gpui-pre"`, `=0.3.9`). Layers: `gpui_kit::platform` (gpui-pre-platform), `base` (gpui-base 0.7.3), `component` (gpui-component 0.7.3), `assets` (gpui-kit-assets) (gpui-kit-0.7.3/src/lib.rs:1-20). Default features: `component`, `assets`. Others: `test-support` (dev-dep only), `inspector`, `profiler`, `gpui-fast` (alternative backend), `speech`, `decimal`, tree-sitter-*. No direct `gpui` dep is needed.
@@ -18,7 +18,7 @@ Risk: PT does NOT use DataTable; it hand-builds rows (good for file-manager cont
 ## 3. Dock
 `gpui_kit::component::dock` re-exports gpui-base dock: `DockArea`, `DockSkin` (chrome), `DockLayout`, `PaneTree`, `TabGroup`, `PanelRegistry`, `register_panel`, `Panel`/`BasePanel` traits (gpui-component-0.7.3/src/dock/mod.rs:1-60). Build: `DockSkin::dock_area("id", version, window, cx)` -> (area, skin); `DockLayout::tabs().panel_view(handle, cx)`; `area.set_center(layout, window, cx)`; panel styles via `skin.set_panel_style(PanelStyle::TabBar, cx)` (gpui-kit tests/dock.rs:77-90). Splits are "stack" nodes with axis + sizes; tabs; left/right/bottom docks with open/size; zoom (ToggleZoom action); drag tabs between groups (tests/dock.rs:117).
 Serialisation: `DockArea::dump(cx) -> DockAreaState` and `DockArea::load(state, window, cx) -> Result` (gpui-base-0.7.3/src/dock/dock_area.rs:895, 817). `DockAreaState` is serde: `{version: Option<usize>, center: PanelState, left_dock/right_dock/bottom_dock: Option<DockState{panel,placement,size,open}>}`; `PanelState{panel_name, children, info}`; `PanelInfo` = `stack{sizes,axis}` | `tabs{active_index}` | `panel(json)` (dock/state.rs:9-85). Restore rebuilds panels through `PanelRegistry` by `panel_name`; unknown panels become placeholders that keep their state. 0.7.1 added `DockArea::set_split_sizes`.
-Risk: Ferrite's three panes fit a horizontal stack of 3 tab groups. Panels must be registered and have serialisable `panel(json)` info; entity-bound state (cwd, sort) goes in that json. Dock is skinned in gpui-component styling; PT used its own pane chrome, so we may only need the layout/persist half (`DockArea` with no `DockSkin` renders no chrome, mod.rs:15-17).
+Risk: Navo's three panes fit a horizontal stack of 3 tab groups. Panels must be registered and have serialisable `panel(json)` info; entity-bound state (cwd, sort) goes in that json. Dock is skinned in gpui-component styling; PT used its own pane chrome, so we may only need the layout/persist half (`DockArea` with no `DockSkin` renders no chrome, mod.rs:15-17).
 
 ## 4. Theme format
 Runtime theme is `gpui_kit::component::theme::Theme` (global). PT sets colours directly: `KitTheme::change(mode, None, cx)` then `KitTheme::update(cx, |kit| { kit.colors.background = ..})` (PT/src/tokens/kit.rs:1-54). Oklch helper `theme::oklch(l, c, h)` (PT tokens/mod.rs:5, 148).

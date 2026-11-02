@@ -486,7 +486,7 @@ const m = (size, date) => ({ size, date });
 const TREE = [
   D('.cargo', 'same', [F('config.toml', 'same', m('412 B', '10-02 09:14'), m('412 B', '10-02 09:14'))]),
   D('crates', 'diff', [
-    D('rusty-app', 'diff', [
+    D('navo-app', 'diff', [
       D('src', 'diff', [
         D('compare', 'ro', [F('mod.rs', 'ro', null, m('6.1 KB', '10-20 13:40')), F('session.rs', 'ro', null, m('9.8 KB', '10-20 13:52'))]),
         F('main.rs', 'diff', m('3.4 KB', '10-18 21:05'), m('3.6 KB', '10-20 13:41'), { delta: '+9 −2' }),
@@ -494,12 +494,12 @@ const TREE = [
       ]),
       F('Cargo.toml', 'diff', m('1.2 KB', '10-18 21:05'), m('1.3 KB', '10-20 13:41'), { delta: '+1 −0' }),
     ]),
-    D('rusty-compare', 'ro', [
+    D('navo-compare', 'ro', [
       D('src', 'ro', [F('lib.rs', 'ro', null, m('1.9 KB', '10-20 12:10')), F('pair.rs', 'ro', null, m('7.4 KB', '10-20 12:31')), F('content.rs', 'ro', null, m('5.2 KB', '10-20 12:48')), F('text.rs', 'ro', null, m('11.0 KB', '10-20 13:02'))]),
       F('Cargo.toml', 'ro', null, m('640 B', '10-20 12:10')),
     ]),
-    D('rusty-core', 'same', [D('src', 'same', [F('lib.rs', 'same', m('2.2 KB', '10-11 08:30'), m('2.2 KB', '10-11 08:30')), F('op_plan.rs', 'same', m('18.5 KB', '10-16 17:02'), m('18.5 KB', '10-16 17:02'))]), F('Cargo.toml', 'same', m('702 B', '10-11 08:30'), m('702 B', '10-11 08:30'))]),
-    D('rusty-fs', 'diff', [
+    D('navo-core', 'same', [D('src', 'same', [F('lib.rs', 'same', m('2.2 KB', '10-11 08:30'), m('2.2 KB', '10-11 08:30')), F('op_plan.rs', 'same', m('18.5 KB', '10-16 17:02'), m('18.5 KB', '10-16 17:02'))]), F('Cargo.toml', 'same', m('702 B', '10-11 08:30'), m('702 B', '10-11 08:30'))]),
+    D('navo-fs', 'diff', [
       D('src', 'diff', [
         D('git', 'ro', [F('mod.rs', 'ro', null, m('4.4 KB', '10-20 11:58')), F('provider.rs', 'ro', null, m('8.9 KB', '10-20 12:20'))]),
         D('job', 'diff', [
@@ -513,7 +513,7 @@ const TREE = [
       ]),
       F('Cargo.toml', 'diff', m('980 B', '10-14 10:02'), m('1.0 KB', '10-20 11:58'), { delta: '+3 −1' }),
     ]),
-    D('rusty-ui', 'diff', [
+    D('navo-ui', 'diff', [
       D('src', 'diff', [F('pane.rs', 'diff', m('22.4 KB', '10-19 20:15'), m('23.9 KB', '10-20 13:58'), { delta: '+51 −8' }), F('viewer.rs', 'same', m('31.0 KB', '10-18 09:44'), m('31.0 KB', '10-18 09:44'))]),
       D('assets', 'diff', [F('icons.bin', 'diff', m('2.4 MB', '10-12 14:00'), m('2.4 MB', '10-20 10:31'), { bin: true, open: 'hex' })]),
     ]),
@@ -542,11 +542,11 @@ const TREE = [
   }
 })(TREE, '', 0);
 
-const DEFAULT_OPEN = ['crates', 'crates/rusty-fs', 'crates/rusty-fs/src', 'crates/rusty-fs/src/job', 'tests', 'tests/fixtures', 'crates/rusty-compare'];
+const DEFAULT_OPEN = ['crates', 'crates/navo-fs', 'crates/navo-fs/src', 'crates/navo-fs/src/job', 'tests', 'tests/fixtures', 'crates/navo-compare'];
 
 const FILES = {
-  left: { label: 'D:\\src\\ferrite', short: 'ferrite', kind: 'folder', rev: 'main · working tree' },
-  right: { label: 'ferrite @ feature/compare', short: 'feature/compare', kind: 'ref', rev: 'a3f9c21 · read-only' },
+  left: { label: 'D:\\src\\navo', short: 'navo', kind: 'folder', rev: 'main · working tree' },
+  right: { label: 'navo @ feature/compare', short: 'feature/compare', kind: 'ref', rev: 'a3f9c21 · read-only' },
 };
 
 const COPY_BLOCKS = [
@@ -589,8 +589,8 @@ const MERGE_REGIONS = [
 ];
 
 const SIDES = {
-  file: { left: 'D:\\src\\ferrite\\crates\\rusty-fs\\src\\job\\copy.rs', right: 'D:\\src\\ferrite-p42\\crates\\rusty-fs\\src\\job\\copy.rs', lshort: 'ferrite', rshort: 'ferrite-p42' },
-  merge: { base: 'merge base 7c1e04b', left: 'main (ours)', right: 'feature/compare (theirs)', path: 'crates/rusty-fs/src/job/journal.rs' },
+  file: { left: 'D:\\src\\navo\\crates\\navo-fs\\src\\job\\copy.rs', right: 'D:\\src\\navo-p42\\crates\\navo-fs\\src\\job\\copy.rs', lshort: 'navo', rshort: 'navo-p42' },
+  merge: { base: 'merge base 7c1e04b', left: 'main (ours)', right: 'feature/compare (theirs)', path: 'crates/navo-fs/src/job/journal.rs' },
 };
 
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
@@ -690,11 +690,11 @@ let S;
 function freshState(dir, scn) {
   return {
     dir, scn: scn || 'folders', layout: 'split', hide: false, intra: true, moved: true, ignWs: false, lineNo: true, preset: 'rich',
-    filter: 'all', open: new Set(DEFAULT_OPEN), sel: 'crates/rusty-fs/src/job/copy.rs', showIgn: false, gitignore: true,
+    filter: 'all', open: new Set(DEFAULT_OPEN), sel: 'crates/navo-fs/src/job/copy.rs', showIgn: false, gitignore: true,
     blocks: clone(COPY_BLOCKS), regions: clone(MERGE_REGIONS).map((r) => (r.t === 'conf' ? { ...r, pick: null } : r)),
     undo: [], dirty: { L: false, R: false }, drawer: null, menu: null, toast: null, enter: new Set(), prog: 0.22, largeTab: 'text',
     region: 1, hashP: { 'tests/fixtures/big_trace.asc': 0.34, 'tests/fixtures/flash_dump.hex': 0.71 }, cur: -1, side: 'L', navFolder: null,
-    expanded: new Set(['crates/rusty-fs/src/job/copy.rs']), narrow: false, saved: false,
+    expanded: new Set(['crates/navo-fs/src/job/copy.rs']), narrow: false, saved: false,
     lsel: null, lastSel: null,
   };
 }
@@ -1314,7 +1314,7 @@ function drawerHTML() {
     <h3>Rules</h3><label><input type="checkbox" data-act="rule" data-v="gitignore" ${S.gitignore ? 'checked' : ''}> Use .gitignore</label><label><input type="checkbox" data-act="rule" data-v="showIgn" ${S.showIgn ? 'checked' : ''}> Show ignored items</label><label for="ign">Also ignore</label><textarea id="ign">*.orig\n.vs/\n**/node_modules/</textarea>
     <h3>Contents</h3><p class="mu" style="margin:0">Sizes first, then Git object ids, then BLAKE3 in 64 KiB chunks. Files over 64 MiB hash in the background.</p>${Object.entries(S.hashP).map(([p, v]) => `<div class="hp" style="justify-content:space-between">${esc(p.split('/').pop())}<span class="bar" style="width:120px"><i style="--p:${Math.min(1, v)}"></i></span>${Math.round(Math.min(1, v) * 100)}%</div>`).join('')}`;
   } else if (S.scn === 'merge') {
-    body = `<h3>Sides</h3><dl class="kv"><dt>Base</dt><dd>${SIDES.merge.base}</dd><dt>Left</dt><dd>${SIDES.merge.left}</dd><dt>Right</dt><dd>${SIDES.merge.right}</dd><dt>Result</dt><dd class="mono">${SIDES.merge.path}</dd></dl><h3>Summary</h3><dl class="kv"><dt>Auto-merged</dt><dd>3 blocks</dd><dt>Conflicts</dt><dd>3 (1 whitespace only)</dd><dt>Unsolved</dt><dd>${unsolved()}</dd></dl><p class="mu" style="margin:0">Ferrite never stages. After saving, it shows the git add command to mark the file resolved.</p>`;
+    body = `<h3>Sides</h3><dl class="kv"><dt>Base</dt><dd>${SIDES.merge.base}</dd><dt>Left</dt><dd>${SIDES.merge.left}</dd><dt>Right</dt><dd>${SIDES.merge.right}</dd><dt>Result</dt><dd class="mono">${SIDES.merge.path}</dd></dl><h3>Summary</h3><dl class="kv"><dt>Auto-merged</dt><dd>3 blocks</dd><dt>Conflicts</dt><dd>3 (1 whitespace only)</dd><dt>Unsolved</dt><dd>${unsolved()}</dd></dl><p class="mu" style="margin:0">Navo never stages. After saving, it shows the git add command to mark the file resolved.</p>`;
   } else {
     body = `<h3>Files</h3><dl class="kv"><dt>Left</dt><dd class="mono">${esc(SIDES.file.left)}</dd><dt>Right</dt><dd class="mono">${esc(SIDES.file.right)}</dd><dt>Encoding</dt><dd>UTF-8 · UTF-8</dd><dt>Line ends</dt><dd>CRLF · LF</dd><dt>Sizes</dt><dd>3.1 KB · 3.5 KB</dd></dl><h3>Rules</h3><label><input type="checkbox" data-act="toggle-cb" data-v="ignWs" ${S.ignWs ? 'checked' : ''}> Ignore whitespace</label><label><input type="checkbox" checked disabled> Ignore line endings</label>`;
   }
@@ -1387,12 +1387,12 @@ const folderKeys = () => keys([['Enter', 'Open'], ['Alt+↓', 'Next difference']
 const fileKeys = () => keys([['Alt+↓', 'Next'], ['F7', 'Next', 1], ['Ctrl+Alt+←/→', 'Copy block', 1], ['Ctrl+Z', 'Undo', 1], ['Alt+V', 'View', 1], ['Esc', 'Back']]);
 const mergeKeys = () => keys([['Alt+↓', 'Next conflict'], ['Alt+1/2/3', 'Left / Right / Both', 1], ['Ctrl+Z', 'Undo', 1], ['Ctrl+B', 'Base', 1], ['Ctrl+S', 'Save']]);
 const statusLine = (left, k) => `<footer class="st">${left}<span class="grow"></span>${k}</footer>`;
-const fileHead = (extra = '') => `<div class="vh">${ic('code', 'sm ic-file')}<span class="vh-name">copy.rs</span><span class="vh-meta hide-n">crates/rusty-fs/src/job · ferrite ↔ ferrite-p42 · both editable</span><span class="grow"></span>${navBtns()}${extra}${saveFileBtn()}</div>`;
+const fileHead = (extra = '') => `<div class="vh">${ic('code', 'sm ic-file')}<span class="vh-name">copy.rs</span><span class="vh-meta hide-n">crates/navo-fs/src/job · navo ↔ navo-p42 · both editable</span><span class="grow"></span>${navBtns()}${extra}${saveFileBtn()}</div>`;
 const mergeHead = (extra = '') => `<div class="vh">${ic('merge', 'sm')}<span class="vh-name">journal.rs</span><span class="vh-meta hide-n">main ← feature/compare · base 7c1e04b</span>${counterChip()}<span class="grow"></span>${wsBtn()}${navBtns()}${extra}${saveBtn()}</div>`;
 const largeHead = (extra = '') => `<div class="vh">${largeTabs()}<span class="grow"></span>${S.largeTab === 'hex' ? hexRegionBar() : navBtns()}${extra}</div>`;
 const largeStatus = () => statusLine(S.largeTab === 'hex' ? `<span>icons.bin · ${HEX.size} each · 64 KiB blocks · ${HEX.regions.length} regions differ</span>` : `<span class="hp" data-progline>${progressLine()}</span>`, keys([['Alt+↓', S.largeTab === 'hex' ? 'Next region' : 'Next'], ['Esc', S.largeTab === 'hex' ? 'Back' : 'Stop', 1]]));
 const paneHead = (icon, title, sub, extra = '') => `<div class="pane-h">${icon}<span class="t">${title}</span><span class="hide-n">${sub}</span><span style="flex:1"></span>${extra}</div>`;
-const fileSides = () => `<div class="r split" style="font-family:var(--font-ui);font-size:var(--fs-12);border-bottom:1px solid var(--border);background:var(--rail);min-height:30px;align-items:center"><span></span><span class="tx" style="display:flex;gap:8px;align-items:center">${ic('folder', 'sm ic-dir')}<b>ferrite</b><span class="mu hide-n">D:\\src\\ferrite</span>${dirtyMark('L')}</span><span></span><span></span><span class="tx" style="display:flex;gap:8px;align-items:center">${ic('folder', 'sm ic-dir')}<b>ferrite-p42</b><span class="mu hide-n">D:\\src\\ferrite-p42</span>${dirtyMark('R')}</span></div>`;
+const fileSides = () => `<div class="r split" style="font-family:var(--font-ui);font-size:var(--fs-12);border-bottom:1px solid var(--border);background:var(--rail);min-height:30px;align-items:center"><span></span><span class="tx" style="display:flex;gap:8px;align-items:center">${ic('folder', 'sm ic-dir')}<b>navo</b><span class="mu hide-n">D:\\src\\navo</span>${dirtyMark('L')}</span><span></span><span></span><span class="tx" style="display:flex;gap:8px;align-items:center">${ic('folder', 'sm ic-dir')}<b>navo-p42</b><span class="mu hide-n">D:\\src\\navo-p42</span>${dirtyMark('R')}</span></div>`;
 
 const DIRS = [
   {
@@ -1411,7 +1411,7 @@ const DIRS = [
     },
     merge() {
       if (S.narrow) return `${mergeHead(viewBtn())}<div class="body"><div class="scroller" id="sc" data-nav>${mergeResult()}</div>${mapEl('sc', { lanes: 'one' })}</div>${statusLine('', mergeKeys())}`;
-      return `${mergeHead(viewBtn())}<div class="body" style="flex-direction:column"><div class="col" style="flex:1 1 52%;position:relative"><div class="r split" style="font-family:var(--font-ui);font-size:var(--fs-12);background:var(--rail);border-bottom:1px solid var(--border);min-height:30px;align-items:center;grid-template-columns:1fr var(--mid-w) 1fr"><span class="tx">${ic('branch', 'sm')} <b>Left</b> · main (ours)</span><span></span><span class="tx">${ic('branch', 'sm')} <b>Right</b> · feature/compare (theirs)</span></div><div style="position:relative;flex:1;min-height:0;display:flex"><div class="scroller" id="mt" data-follow><div style="display:grid;grid-template-columns:minmax(0,1fr) var(--mid-w) minmax(0,1fr)">${mergeSide('L')}<span></span>${mergeSide('R')}</div></div>${mapEl('mt', { spine: true, lanes: 'one', style: spineStyle })}</div></div><div class="col" style="flex:1 1 48%;border-top:2px solid var(--border)">${paneHead(ic('pen', 'sm'), 'Result', ' · crates/rusty-fs/src/job/journal.rs · editable')}<div style="flex:1;min-height:0;display:flex"><div class="scroller" id="sc" data-nav>${mergeResult({ compact: true })}</div>${mapEl('sc', { lanes: 'one' })}</div></div></div>${statusLine('<span>Auto-merged 3 blocks · conflicts show on both panes above</span>', mergeKeys())}`;
+      return `${mergeHead(viewBtn())}<div class="body" style="flex-direction:column"><div class="col" style="flex:1 1 52%;position:relative"><div class="r split" style="font-family:var(--font-ui);font-size:var(--fs-12);background:var(--rail);border-bottom:1px solid var(--border);min-height:30px;align-items:center;grid-template-columns:1fr var(--mid-w) 1fr"><span class="tx">${ic('branch', 'sm')} <b>Left</b> · main (ours)</span><span></span><span class="tx">${ic('branch', 'sm')} <b>Right</b> · feature/compare (theirs)</span></div><div style="position:relative;flex:1;min-height:0;display:flex"><div class="scroller" id="mt" data-follow><div style="display:grid;grid-template-columns:minmax(0,1fr) var(--mid-w) minmax(0,1fr)">${mergeSide('L')}<span></span>${mergeSide('R')}</div></div>${mapEl('mt', { spine: true, lanes: 'one', style: spineStyle })}</div></div><div class="col" style="flex:1 1 48%;border-top:2px solid var(--border)">${paneHead(ic('pen', 'sm'), 'Result', ' · crates/navo-fs/src/job/journal.rs · editable')}<div style="flex:1;min-height:0;display:flex"><div class="scroller" id="sc" data-nav>${mergeResult({ compact: true })}</div>${mapEl('sc', { lanes: 'one' })}</div></div></div>${statusLine('<span>Auto-merged 3 blocks · conflicts show on both panes above</span>', mergeKeys())}`;
     },
     large() {
       if (S.largeTab === 'hex') {
@@ -1635,15 +1635,15 @@ function save() {
   if (S.scn === 'merge') {
     const u = unsolved();
     if (u) { toast(`Save is locked: ${u} unsolved conflict${u > 1 ? 's' : ''}. Alt+↓ goes to the next one.`); render(); return; }
-    toast('Saved journal.rs. <code>git add crates/rusty-fs/src/job/journal.rs</code> marks it resolved', false, `<button class="btn" data-act="noop">${ic('copy', 'sm')}Copy</button>`);
+    toast('Saved journal.rs. <code>git add crates/navo-fs/src/job/journal.rs</code> marks it resolved', false, `<button class="btn" data-act="noop">${ic('copy', 'sm')}Copy</button>`);
     render(); return;
   }
   if (S.scn === 'file') {
     if (!S.dirty.L && !S.dirty.R) { toast('Nothing to save'); render(); return; }
-    const which = [S.dirty.L && 'ferrite', S.dirty.R && 'ferrite-p42'].filter(Boolean).join(' and ');
+    const which = [S.dirty.L && 'navo', S.dirty.R && 'navo-p42'].filter(Boolean).join(' and ');
     S.dirty = { L: false, R: false };
     S.undo.push({ type: 'save' });
-    toast(`Saved copy.rs in ${which}. The old version is kept until Ferrite closes.`, false, `<button class="btn" data-act="undo">${ic('undo', 'sm')}Restore previous version</button>`);
+    toast(`Saved copy.rs in ${which}. The old version is kept until Navo closes.`, false, `<button class="btn" data-act="undo">${ic('undo', 'sm')}Restore previous version</button>`);
     render();
   }
 }
@@ -1710,7 +1710,7 @@ stage.addEventListener('click', (e) => {
     case 'layout': S.layout = v; S.preset = 'custom'; S.menu = null; render(); break;
     case 'toggle': S[v] = !S[v]; S.preset = 'custom'; render(); break;
     case 'preset': S.preset = v; if (v === 'simple') Object.assign(S, { intra: false, moved: false, hide: false, layout: 'inline' }); if (v === 'rich') Object.assign(S, { intra: true, moved: true, hide: false, layout: 'split' }); render(); break;
-    case 'keep-default': S.menu = null; toast('Saved as the default in ferrite.toml under [compare.view]'); render(); break;
+    case 'keep-default': S.menu = null; toast('Saved as the default in navo.toml under [compare.view]'); render(); break;
     case 'menu': S.menu = S.menu ? null : v; if (S.menu) S.enter.add('menu'); render(); break;
     case 'drawer': S.drawer = S.drawer === v ? null : v; if (S.drawer) S.enter.add('drawer'); render(); break;
     case 'pick': pick(+a.dataset.r, v); break;
@@ -1733,7 +1733,7 @@ stage.addEventListener('dblclick', (e) => {
   const tx = e.target.closest('.tx[data-side]');
   if (tx && S.scn === 'file') {
     tx.contentEditable = 'true'; tx.focus();
-    tx.addEventListener('blur', () => { tx.contentEditable = 'false'; S.dirty[tx.dataset.side] = true; toast(`Edited ${tx.dataset.side === 'L' ? 'ferrite' : 'ferrite-p42'} side · Ctrl+S saves`, false); render(); }, { once: true });
+    tx.addEventListener('blur', () => { tx.contentEditable = 'false'; S.dirty[tx.dataset.side] = true; toast(`Edited ${tx.dataset.side === 'L' ? 'navo' : 'navo-p42'} side · Ctrl+S saves`, false); render(); }, { once: true });
   }
 });
 stage.addEventListener('focusout', (e) => {

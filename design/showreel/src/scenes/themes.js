@@ -19,7 +19,7 @@ function themeWindow(id) {
     <div class="sh-head"><div class="sh-icon">${icon('palette')}</div><div class="sh-name">Appearance</div><span class="sh-close kbd">Esc</span></div>
     <h3><span>Colour theme</span><span>live preview</span></h3><div class="thlist"><div class="thsel"></div>${rows}</div>
     <div class="srow"><div><div class="sl">Follow Windows</div><div class="sd">Light by day, dark at night</div></div><span class="tog on"><i></i></span></div>
-    <div class="srow"><div><div class="sl">Icon theme</div><div class="sd">File-type icons by extension</div></div><div class="seg"><span class="on">Ferrite</span><span>Lucide line</span></div></div>
+    <div class="srow"><div><div class="sl">Icon theme</div><div class="sd">File-type icons by extension</div></div><div class="seg"><span class="on">Navo</span><span>Lucide line</span></div></div>
     <div class="srow"><div><div class="sl">Density</div><div class="sd">Row height in the file lists</div></div><div class="seg"><span class="on">Compact</span><span>Comfortable</span></div></div>
     <div class="srow"><div><div class="sl">Theme files</div><div class="sd mono">themes\\*.toml · reloads when saved</div></div><span class="chip">Open folder</span></div>`);
   left.ring.style.opacity = '1';

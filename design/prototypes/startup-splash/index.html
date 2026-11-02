@@ -164,7 +164,7 @@ h1 { font-size: var(--fs-24); margin: 0; line-height: 1.2; }
     <button class="act" id="replay" type="button">Replay start-up</button>
   </div>
   <div class="desk" id="desk" aria-label="Mock desktop">
-    <div class="main-win" id="main" aria-hidden="true"><div class="tb"><i></i><span class="mname">Ferrite</span></div>
+    <div class="main-win" id="main" aria-hidden="true"><div class="tb"><i></i><span class="mname">Navo</span></div>
       <div class="panes"><div class="pane"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div><div class="pane"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div></div></div>
     <div class="slot"><div class="splash" id="splash" role="status" aria-live="polite"></div></div>
   </div>
@@ -172,7 +172,7 @@ h1 { font-size: var(--fs-24); margin: 0; line-height: 1.2; }
   <div class="rules" id="rules"></div>
 </div>
 <script>
-const BRAND = { name: "Ferrite", mark: "fe", cursor: true, version: "0.9.2-alpha" };
+const BRAND = { name: "Navo", mark: "fe", cursor: true, version: "0.9.2-alpha" };
 const RULES = { threshold: 200, minVisible: 700, slowAfter: 3000, fastStart: 120, normalStart: 1900, slowStart: 6500, errorAt: 2300 };
 const STEPS = ["Opening session", "Reading drives", "Restoring tabs"];
 const RECOVERY = "Recovering an interrupted copy…";
@@ -278,7 +278,7 @@ function run() {
   }, id);
   if (st === "error") at(R.errorAt, () => {
     if (shownAt === null) return;
-    sp.classList.add("is-error"); setStatus("Could not read session file. Ferrite stays open with defaults.", "err");
+    sp.classList.add("is-error"); setStatus("Could not read session file. Navo stays open with defaults.", "err");
     const f = $("#splash [data-fill]"); if (f) f.style.transform = "scaleX(1)";
     log("start-up error: splash stays, shows message and buttons, never auto-closes");
   }, id);

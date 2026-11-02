@@ -179,13 +179,13 @@ fn malformed_toml_is_rejected() {
 
 #[test]
 fn files_named_tests_rs_are_skipped() {
-    let files = [file("crates/rusty-core/src/tests.rs", code(900))];
+    let files = [file("crates/navo-core/src/tests.rs", code(900))];
     assert!(check_files(&files, &[]).is_empty());
 }
 
 #[test]
 fn files_under_a_tests_folder_are_skipped() {
-    let files = [file("crates/rusty-core/tests/big.rs", code(900))];
+    let files = [file("crates/navo-core/tests/big.rs", code(900))];
     assert!(check_files(&files, &[]).is_empty());
 }
 
@@ -290,10 +290,8 @@ impl TestTree {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "rusty-size-{}-{timestamp}-{id}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("navo-size-{}-{timestamp}-{id}", std::process::id()));
         std::fs::create_dir(&root).unwrap();
         std::fs::create_dir(root.join("crates")).unwrap();
         std::fs::create_dir(root.join("xtask")).unwrap();

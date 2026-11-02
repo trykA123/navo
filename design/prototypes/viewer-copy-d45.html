@@ -1,6 +1,6 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Ferrite Viewer and Copy</title>
+<title>Navo Viewer and Copy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Chakra+Petch:wght@500;600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -407,7 +407,7 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
 
 <div class="page">
   <header class="head">
-    <h1>Ferrite viewer and copy: marks, outline, small copy mode</h1>
+    <h1>Navo viewer and copy: marks, outline, small copy mode</h1>
     <p>Built on direction B (D42). Top: three ways to reach the outline and the marks in the F3 viewer without a permanent rail, each with its closed and open state. Bottom: the copy job card and its small mode in the F-key bar. Click a mockup to give it the keyboard.</p>
   </header>
 
@@ -530,7 +530,7 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
     F("bios-x670e-3201", "zip", "33.0 MB", "2026-10-01 21:40", "arc"),
     F("desktop", "ini", "282 B", "2026-03-02 09:11", "faint", { hidden: true }),
     F("Everything-1.5.0.1391a.x64-Setup", "exe", "2.2 MB", "2026-10-09 21:40", "exe"),
-    F("ferrite-0.4.2-win64", "zip", "18.4 MB", "2026-10-15 07:30", "arc"),
+    F("navo-0.4.2-win64", "zip", "18.4 MB", "2026-10-15 07:30", "arc"),
     F("IMG_4131", "jpg", "4.8 MB", "2026-10-12 18:22", "img"),
     F("invoice-2026-10", "pdf", "180 KB", "2026-10-13 16:40", "pdf"),
     F("kernel-6.17.4.tar", "xz", "148 MB", "2026-10-14 10:05", "arc", { mk: true }),
@@ -583,16 +583,16 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
   ];
 
   const PANES = {
-    L: { drive: "C", label: "System", kind: "hdd", free: "128 GB free", freePct: .87, path: ["C:", "Users", "admin", "Downloads"], win: "C:\\Users\\admin\\Downloads\\", tabs: ["Downloads", "ferrite", "Steam"], files: DOWNLOADS },
+    L: { drive: "C", label: "System", kind: "hdd", free: "128 GB free", freePct: .87, path: ["C:", "Users", "admin", "Downloads"], win: "C:\\Users\\admin\\Downloads\\", tabs: ["Downloads", "navo", "Steam"], files: DOWNLOADS },
     R: { drive: "Z", label: "media", kind: "net", unc: "\\\\nas\\media", free: "1.92 TB free", freePct: .58, path: ["Z:", "archive", "2026-10"], win: "Z:\\archive\\2026-10\\", tabs: ["2026-10", "photos"], files: ARCHIVE },
   };
-  const JOBS_PANE = { drive: "D", label: "Work", kind: "hdd", free: "28.0 GB free", freePct: .93, path: ["D:", "work", "ferrite", "crates", "rusty-core", "src", "jobs"], win: "D:\\work\\ferrite\\crates\\rusty-core\\src\\jobs\\", tabs: ["Downloads", "jobs", "Steam"], tabOn: 1, files: JOBS };
+  const JOBS_PANE = { drive: "D", label: "Work", kind: "hdd", free: "28.0 GB free", freePct: .93, path: ["D:", "work", "navo", "crates", "navo-core", "src", "jobs"], win: "D:\\work\\navo\\crates\\navo-core\\src\\jobs\\", tabs: ["Downloads", "jobs", "Steam"], tabOn: 1, files: JOBS };
 
   const CODE = [
     "use std::sync::Arc;",
     "use crossbeam_channel::{Receiver, Sender};",
     "",
-    "use crate::error::{FerriteError, Recovery};",
+    "use crate::error::{NavoError, Recovery};",
     "use crate::jobs::plan::{JobPlan, PlanStep, StepKind};",
     "use crate::jobs::progress::{Progress, Throughput};",
     "",
@@ -604,10 +604,10 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
     "}",
     "",
     "impl JobEngine {",
-    "    pub fn submit(&self, plan: JobPlan) -> Result<JobId, FerriteError> {",
+    "    pub fn submit(&self, plan: JobPlan) -> Result<JobId, NavoError> {",
     "        let id = self.queue.next_id();",
     "        if plan.steps.is_empty() {",
-    "            return Err(FerriteError::EmptyPlan { id });",
+    "            return Err(NavoError::EmptyPlan { id });",
     "        }",
     "        self.events.send(JobEvent::Queued { id, bytes: plan.total_bytes() })?;",
     "        self.queue.push(id, plan);",
@@ -615,7 +615,7 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
     "        Ok(id)",
     "    }",
     "",
-    "    fn run_step(&self, step: &PlanStep, progress: &mut Progress) -> Result<(), FerriteError> {",
+    "    fn run_step(&self, step: &PlanStep, progress: &mut Progress) -> Result<(), NavoError> {",
     "        let started = Throughput::start(self.limit.unwrap_or(0));",
     "        match step.kind {",
     "            StepKind::Copy { verify } => self.copy(step, verify, progress),",
@@ -673,7 +673,7 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
   };
   const LAYER_KEY = { Shift: "Shift", Ctrl: "Ctrl", Alt: "Alt" };
   const ctl = () => `<span class="ctl" aria-hidden="true"><span>${ic("min", "sm")}</span><span>${ic("max", "sm")}</span><span>${ic("x", "sm")}</span></span>`;
-  const appBtn = (wm = "Ferrite") => `<span class="appbtn">${LOGO}<span class="wm">${wm}</span>${ic("chevD", "sm")}</span>`;
+  const appBtn = (wm = "Navo") => `<span class="appbtn">${LOGO}<span class="wm">${wm}</span>${ic("chevD", "sm")}</span>`;
   const search = () => `<span class="search">${ic("search", "sm")}<span class="ph ellip">Search files, folders and commands</span><span class="kbdc">Ctrl K</span></span>`;
   const crumbs = (p, sep = ic("chevR", "sm"), cls = "seg-c") => p.path.map((s, i) => `<span class="${cls}${i === p.path.length - 1 ? " last" : ""}">${esc(s)}</span>`).join(sep);
   const enter = (cls) => (state.entering ? cls : "");
@@ -698,7 +698,7 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
   ];
   const MARKS = [
     { ln: 16, c: 1, t: "pub fn submit(&self, plan: JobPlan)" },
-    { ln: 19, c: 3, t: "return Err(FerriteError::EmptyPlan { id })" },
+    { ln: 19, c: 3, t: "return Err(NavoError::EmptyPlan { id })" },
     { ln: 27, c: 2, t: "fn run_step(&self, step: &PlanStep, …)" },
     { ln: 34, c: 1, t: "progress.finish_step(started.elapsed(), 4_096)" },
     { ln: 2436, c: 1, t: "fn verify_hash(&self, path: &Path)" },
@@ -849,7 +849,7 @@ i.mk.m1 { background: var(--mk1-solid); } i.mk.m2 { background: var(--mk2-solid)
     const v = state.v, open = state.open;
     const crumb = v === 3 ? `<button type="button" class="symcrumb${open ? " on" : ""}" id="symcrumb" data-act="toggle" aria-expanded="${open}" aria-haspopup="dialog" aria-label="Current symbol: impl JobEngine, fn submit. Go to symbol (Ctrl+O)"><span class="k">impl</span>JobEngine<span class="sep">${ic("chevR", "sm")}</span><span class="k">fn</span><b>submit</b>${ic("chevD", "sm")}<span class="kbdc">Ctrl O</span></button>` : "";
     const inspBtn = v === 2 ? `<button type="button" class="hbtn${open ? " on" : ""}" data-act="toggle" aria-pressed="${open}">${ic("panelR", "sm")}Outline<span class="cnt">${OUTLINE.length}</span>· Marks<span class="cnt">${MARKS.length}</span><span class="kbdc">Ctrl I</span></button>` : "";
-    const path = v === 3 ? "" : '<span class="muted ellip">D:\\work\\ferrite\\crates\\rusty-core\\src\\jobs</span>';
+    const path = v === 3 ? "" : '<span class="muted ellip">D:\\work\\navo\\crates\\navo-core\\src\\jobs</span>';
     let body;
     if (v === 1) body = `<div class="vbody">${findB().replace('class="findw"', `class="findw" style="right:${state.open ? 394 : 34}px"`)}${v1Code()}</div>`;
     else if (v === 2) body = `<div class="vbody"><div class="code" style="position:relative">${findB()}${linesHtml()}${ticksB()}</div>${open ? v2Insp() : ""}</div>`;

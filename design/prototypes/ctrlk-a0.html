@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ferrite: Ctrl+K command center (P40 A0) prototype</title>
+<title>Navo: Ctrl+K command center (P40 A0) prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -470,7 +470,7 @@ kbd {
 <main id="stage">
   <div class="win" id="win">
     <div class="titlebar">
-      <span class="brand"><span class="brand-mark" aria-hidden="true"></span>Ferrite</span>
+      <span class="brand"><span class="brand-mark" aria-hidden="true"></span>Navo</span>
       <button class="search" id="tbSearch" type="button" aria-label="Search files and commands (Ctrl+K)"></button>
       <button class="tb-btn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">View</span><kbd>Alt+V</kbd></button>
     </div>
@@ -527,7 +527,7 @@ const CMDS = [
   ['Switch to other pane', 'Window', 'Tab'], ['Refresh', 'File list', 'Ctrl+R'], ['Open terminal here', 'Window', 'Ctrl+Shift+`'], ['Show in Explorer', 'File list', ''],
   ['Toggle side drawer', 'Window', 'Ctrl+B'], ['Toggle info drawer', 'Window', 'Ctrl+I'], ['View menu', 'Window', 'Alt+V'], ['Settings', 'Window', 'Ctrl+,'],
   ['Keyboard shortcuts', 'Window', 'Ctrl+/'], ['Toggle key hints', 'Window', ''], ['Toggle title search', 'Window', ''], ['Bookmark this folder', 'File list', 'Ctrl+D'],
-  ['Show bookmarks', 'Window', 'Ctrl+Shift+D'], ['New window', 'Window', 'Ctrl+N'], ['Empty recycle bin', 'Window', ''], ['Quit Ferrite', 'Window', 'Alt+F4']
+  ['Show bookmarks', 'Window', 'Ctrl+Shift+D'], ['New window', 'Window', 'Ctrl+N'], ['Empty recycle bin', 'Window', ''], ['Quit Navo', 'Window', 'Alt+F4']
 ].map(([name, ctx, key, arg], i) => ({ k: 'cmd', id: 'c' + i, name, ctx, key, arg: arg || null, use: 0 }));
 const USE = { 'Go to folder…': 9, 'Toggle hidden files': 7, 'Compare folders': 6, 'Pack into archive': 5, 'Copy path': 8, 'Multi-rename': 3, 'Synchronise folders': 2 };
 CMDS.forEach((c) => { c.use = USE[c.name] || 0; });
@@ -538,9 +538,9 @@ const DIRS = [
   ['C:\\Users', 4], [U, 30], ['C:\\Users\\Public', 1], ['C:\\Users\\Default', 0], [U + '\\Documents', 70], [U + '\\Downloads', 80], [U + '\\Pictures', 25], [U + '\\Music', 6], [U + '\\Videos', 5], [U + '\\Desktop', 20],
   [U + '\\Documents\\Invoices', 60], [U + '\\Documents\\Taxes 2025', 22], [U + '\\Documents\\Contracts', 18], [U + '\\Documents\\Budget', 35],
   [U + '\\Pictures\\Copenhagen trip 2025', 30], [U + '\\Pictures\\Screenshots', 12], [U + '\\Pictures\\Scans', 8], [U + '\\Downloads\\installers', 6], [U + '\\Desktop\\proj notes', 9],
-  ['C:\\Projects', 65], ['C:\\Projects\\ferrite-fw', 90], ['C:\\Projects\\ferrite-fw\\src', 40], ['C:\\Projects\\ferrite-fw\\build', 15], ['C:\\Projects\\ferrite-fw\\docs', 14], ['C:\\Projects\\ferrite-fw\\tools', 10],
+  ['C:\\Projects', 65], ['C:\\Projects\\navo-fw', 90], ['C:\\Projects\\navo-fw\\src', 40], ['C:\\Projects\\navo-fw\\build', 15], ['C:\\Projects\\navo-fw\\docs', 14], ['C:\\Projects\\navo-fw\\tools', 10],
   ['C:\\Projects\\copper-gauge', 45], ['C:\\Projects\\copper-gauge\\src', 12], ['C:\\Projects\\copper-gauge\\docs', 4], ['C:\\Projects\\project-atlas', 50], ['C:\\Projects\\project-atlas\\assets', 11], ['C:\\Projects\\project-atlas\\reports', 16],
-  ['C:\\Projects\\scope-logger', 13], ['C:\\Program Files', 3], ['C:\\Program Files\\Ferrite', 2], ['C:\\Program Files\\Toolbench', 2], ['C:\\Temp', 7],
+  ['C:\\Projects\\scope-logger', 13], ['C:\\Program Files', 3], ['C:\\Program Files\\Navo', 2], ['C:\\Program Files\\Toolbench', 2], ['C:\\Temp', 7],
   ['D:\\Backup', 20], ['D:\\Backup\\firmware', 55], ['D:\\Backup\\copies 2024', 5], ['D:\\Backup\\Photos', 6], ['D:\\Media', 8], ['D:\\Media\\Films', 4], ['D:\\Media\\Podcasts', 6],
   ['E:\\Archive', 6], ['E:\\Archive\\2025', 5], ['E:\\Archive\\Projects old', 3]
 ];
@@ -555,17 +555,17 @@ const FILES = {
   [U + '\\Pictures\\Copenhagen trip 2025']: [...range(20, (i) => `IMG_${4100 + i}.jpg`), 'copenhagen_route.gpx', 'trip_budget.xlsx'],
   [U + '\\Pictures\\Screenshots']: range(9, (i) => `Screenshot 2026-10-${pad(i + 9)} 09${pad(i * 6)}.png`),
   [U + '\\Pictures\\Scans']: [...range(7, (i) => `scan_${pad(i, 4)}.pdf`), 'passport_copy.pdf'],
-  [U + '\\Downloads']: ['toolbench-setup-3.2.exe', 'ferrite-alpha-0.9.zip', 'copier_manual.pdf', 'scope_firmware_v2.bin', 'project_brief.pdf', 'budget_template.xlsx', 'podcast_ep41.mp3', 'copenhagen_map.pdf', 'fonts_pack.zip'],
+  [U + '\\Downloads']: ['toolbench-setup-3.2.exe', 'navo-alpha-0.9.zip', 'copier_manual.pdf', 'scope_firmware_v2.bin', 'project_brief.pdf', 'budget_template.xlsx', 'podcast_ep41.mp3', 'copenhagen_map.pdf', 'fonts_pack.zip'],
   [U + '\\Downloads\\installers']: ['hexview-2.4.msi', 'serial-term-1.9.exe', 'cad-viewer-11.exe', 'net-probe-0.7.msi', 'diff-tool-5.exe'],
   [U + '\\Music']: ['morning_set.flac', 'copper_lines.mp3', 'field_recording_03.wav', 'piano_sketch.mp3'],
   [U + '\\Videos']: ['drone_harbour.mp4', 'project_demo_v3.mp4', 'talk_rehearsal.mkv'],
   [U + '\\Desktop']: ['todo.txt', 'proj_timeline.xlsx', 'copy_list.txt'],
   [U + '\\Desktop\\proj notes']: ['atlas_kickoff.md', 'gauge_ideas.md'],
-  'C:\\Projects\\ferrite-fw': ['CMakeLists.txt', 'README.md', 'fw_release.elf', 'fw_release.hex', 'fw_release.map', 'linker.lsl', 'memory.mdf', 'calibration.a2l', 'can_trace_2026-10-14.asc', 'bootloader.hex'],
-  'C:\\Projects\\ferrite-fw\\src': ['main.c', 'scheduler.c', 'scheduler.h', 'can_driver.c', 'can_driver.h', 'copy_engine.c', 'crc32.c', 'project_config.h', 'uart.c', 'watchdog.c'],
-  'C:\\Projects\\ferrite-fw\\docs': ['architecture.md', 'flash_layout.png', 'copy_protocol.md', 'project_plan.docx', 'release_notes.md'],
-  'C:\\Projects\\ferrite-fw\\tools': ['flash.py', 'decode_trace.py', 'copy_artifacts.ps1', 'proj_env.bat'],
-  'C:\\Projects\\ferrite-fw\\build': ['build_log.txt', 'compile_commands.json'],
+  'C:\\Projects\\navo-fw': ['CMakeLists.txt', 'README.md', 'fw_release.elf', 'fw_release.hex', 'fw_release.map', 'linker.lsl', 'memory.mdf', 'calibration.a2l', 'can_trace_2026-10-14.asc', 'bootloader.hex'],
+  'C:\\Projects\\navo-fw\\src': ['main.c', 'scheduler.c', 'scheduler.h', 'can_driver.c', 'can_driver.h', 'copy_engine.c', 'crc32.c', 'project_config.h', 'uart.c', 'watchdog.c'],
+  'C:\\Projects\\navo-fw\\docs': ['architecture.md', 'flash_layout.png', 'copy_protocol.md', 'project_plan.docx', 'release_notes.md'],
+  'C:\\Projects\\navo-fw\\tools': ['flash.py', 'decode_trace.py', 'copy_artifacts.ps1', 'proj_env.bat'],
+  'C:\\Projects\\navo-fw\\build': ['build_log.txt', 'compile_commands.json'],
   'C:\\Projects\\copper-gauge': ['README.md', 'gauge.kicad_pro', 'copper_layers.pdf', 'bom.csv'],
   'C:\\Projects\\copper-gauge\\src': ['gauge.rs', 'copper.rs', 'main.rs'],
   'C:\\Projects\\copper-gauge\\docs': ['calibration_notes.md'],
@@ -573,7 +573,7 @@ const FILES = {
   'C:\\Projects\\project-atlas\\assets': ['logo.svg', 'cover.png', 'map_tiles.zip'],
   'C:\\Projects\\project-atlas\\reports': ['q1_report.pdf', 'q2_report.pdf', 'q3_report.pdf', 'budget_review.xlsx'],
   'C:\\Projects\\scope-logger': ['scope_capture_01.png', 'scope_capture_02.png', 'scope_capture_03.png', 'scope_logger.py', 'config.toml', 'captures.csv'],
-  'C:\\Program Files\\Ferrite': ['ferrite.exe', 'keymap.toml', 'settings.toml'],
+  'C:\\Program Files\\Navo': ['navo.exe', 'keymap.toml', 'settings.toml'],
   'C:\\Program Files\\Toolbench': ['toolbench.exe', 'license.txt'],
   'C:\\Temp': ['copy_test.tmp', 'install_log.txt'],
   'D:\\Backup\\firmware': ['release_1.4.2.zip', 'release_1.4.3.zip', 'checksums.sha256', 'notes.txt', 'fw_release.hex'],
@@ -761,7 +761,7 @@ const LEFT = [['..', 'folder', '', ''], ['build', 'folder', '', '2026-10-19'], [
 const RIGHT = [['..', 'folder', '', ''], ['2026-09', 'folder', '', '2026-09-30'], ['2026-10', 'folder', '', '2026-10-20'], ['nightly', 'folder', '', '2026-10-20'], ['release_1.4.2.zip', 'archive', '11.8 MB', '2026-09-22'], ['release_1.4.3.zip', 'archive', '12.0 MB', '2026-10-09'], ['checksums.sha256', 'file', '1.1 KB', '2026-10-09'], ['notes.txt', 'file', '3.9 KB', '2026-10-09'], ['fw_release.hex', 'code', '1.3 MB', '2026-10-20']];
 const paneRows = (list) => list.map(([n, k, s, d, cur]) => `<div class="row"${cur ? ' data-cursor' : ''}><span class="name">${svg(k === 'folder' ? 'folder' : k === 'image' ? 'image' : k === 'archive' ? 'archive' : k === 'code' ? 'code' : 'file', 'k-' + k)}<span>${n}</span></span><span class="sz">${s}</span><span class="dt">${d}</span></div>`).join('');
 document.getElementById('panes').innerHTML = `
-  <section class="pane" data-active aria-label="Left pane"><div class="pathbar"><span class="drive">C:</span><span class="crumbs">Projects \\ <b>ferrite-fw</b></span></div><div class="cols"><span>Name</span><span>Size</span><span>Modified</span></div><div class="list" id="leftList" tabindex="0" aria-label="Files in C:\\Projects\\ferrite-fw">${paneRows(LEFT)}</div><div class="status"><span>1 of 12 files selected · 4.8 MB</span><span>209.0 GB free</span></div></section>
+  <section class="pane" data-active aria-label="Left pane"><div class="pathbar"><span class="drive">C:</span><span class="crumbs">Projects \\ <b>navo-fw</b></span></div><div class="cols"><span>Name</span><span>Size</span><span>Modified</span></div><div class="list" id="leftList" tabindex="0" aria-label="Files in C:\\Projects\\navo-fw">${paneRows(LEFT)}</div><div class="status"><span>1 of 12 files selected · 4.8 MB</span><span>209.0 GB free</span></div></section>
   <section class="pane" aria-label="Right pane"><div class="pathbar"><span class="drive">D:</span><span class="crumbs">Backup \\ <b>firmware</b></span></div><div class="cols"><span>Name</span><span>Size</span><span>Modified</span></div><div class="list" tabindex="0" aria-label="Files in D:\\Backup\\firmware">${paneRows(RIGHT)}</div><div class="status"><span>5 files, 3 folders · 26.4 MB</span><span>1.42 TB free</span></div></section>`;
 const tbSearch = document.getElementById('tbSearch');
 tbSearch.innerHTML = `${svg('search')}<span>Search files and commands</span><kbd>Ctrl+K</kbd>`;

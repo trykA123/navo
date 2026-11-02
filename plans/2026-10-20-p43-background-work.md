@@ -4,7 +4,7 @@ Status: drafting (Q1–Q3 open) · Repo: `<repo>` · Branch: `p43-<atom>` per at
 
 ## Goal
 
-Ferrite never waits on slow work. Listings, previews and folder sizes run in their own pools with priorities, and anything the user has moved past is cancelled. Folder sizes show apparent size or size on disk and count hard links once. A benchmark command measures listing, walk and index timing, warm and cold, for `docs/perf.md`.
+Navo never waits on slow work. Listings, previews and folder sizes run in their own pools with priorities, and anything the user has moved past is cancelled. Folder sizes show apparent size or size on disk and count hard links once. A benchmark command measures listing, walk and index timing, warm and cold, for `docs/perf.md`.
 
 Source: D71 items 1, 7, 8 and 10 (ideas from yazi, broot, dua-cli and dust, hyperfine). Copy the designs, not the code.
 
@@ -14,22 +14,22 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 ## What exists today (checked at f8e7655)
 
-- **I/O queue.** `rusty-fs/src/io_queue/`: `IoQueue` (runner.rs) over `Scheduler` (scheduler.rs). Per-volume worker limit from `VolumeKind::limit` (Ssd 8, Network 4, Removable 2, Hdd/Unknown 1), `Priority { Idle, Prefetch, Visible }`, `OwnerGuard` that cancels its jobs on drop, a `CancelToken` per running job, panics caught. Workers start on demand and exit when idle.
+- **I/O queue.** `navo-fs/src/io_queue/`: `IoQueue` (runner.rs) over `Scheduler` (scheduler.rs). Per-volume worker limit from `VolumeKind::limit` (Ssd 8, Network 4, Removable 2, Hdd/Unknown 1), `Priority { Idle, Prefetch, Visible }`, `OwnerGuard` that cancels its jobs on drop, a `CancelToken` per running job, panics caught. Workers start on demand and exit when idle.
 - **`set_volume` is never called outside tests**, so every volume is `Unknown` and each queue runs one job per volume.
-- **Five separate queues, uncoordinated:** `Browser.queue` (listings, Visible) and `Browser.sizes` (Space folder sizes, Idle) in `rusty-ui/src/browser/mod.rs:56-59`; `Prefetches.queue` (Prefetch) in `browser/prefetch/mod.rs:63`; `Preview.reads` and `Preview.scans` in `window_view/preview/mod.rs:72-73`.
+- **Five separate queues, uncoordinated:** `Browser.queue` (listings, Visible) and `Browser.sizes` (Space folder sizes, Idle) in `navo-ui/src/browser/mod.rs:56-59`; `Prefetches.queue` (Prefetch) in `browser/prefetch/mod.rs:63`; `Preview.reads` and `Preview.scans` in `window_view/preview/mod.rs:72-73`.
 - **File previews skip the queue.** `preview/file.rs:69-110` runs `sniff_and_load` on the GPUI background executor with a `CancelOnDrop` flag. A new cursor target replaces `Shown`, which drops the flag: cancel-on-supersede already works for file and folder previews (`preview/mod.rs:166-201`, `folder.rs:81-117`).
 - **Folder sizes on Space are never cancelled on leave.** `browser/measure.rs:20-46` submits under one `sizes_owner` that lives as long as the `Browser`; `show_folder_size` only drops the result when the tab moved.
-- **File operations are their own engine** (D18): one `ferrite-job` thread per job (`browser/operate/mod.rs:288-304`), copy workers per drive class inside (`rusty-fs/src/job/workers.rs`, `parallel.rs`). Jobs never wait for each other.
-- **Copy into itself is refused before submission.** `rusty-core/src/op_plan/build/mod.rs:238-242` (`inside_itself`, Windows case rules via `same_place`) gives the plan no steps, tested in `op_plan/tests/risks.rs:202-240`. The earlier UI check `drop_refusal` (`browser/operate/paste.rs:18-37`) compares with `contains`, which is case-sensitive: `C:\A` dropped on `c:\a\b` passes it and reaches the plan, which refuses it with no steps, so the user misses the drop refusal text.
-- **Folder size walk.** `rusty-fs/src/measure/walk.rs` (depth-first, one thread, `Visit` trait) feeds `folder_size` and `FolderProfile`. `FolderSize { bytes, files, folders, skipped }`. Links are not followed. No size on disk, no hard link handling.
+- **File operations are their own engine** (D18): one `navo-job` thread per job (`browser/operate/mod.rs:288-304`), copy workers per drive class inside (`navo-fs/src/job/workers.rs`, `parallel.rs`). Jobs never wait for each other.
+- **Copy into itself is refused before submission.** `navo-core/src/op_plan/build/mod.rs:238-242` (`inside_itself`, Windows case rules via `same_place`) gives the plan no steps, tested in `op_plan/tests/risks.rs:202-240`. The earlier UI check `drop_refusal` (`browser/operate/paste.rs:18-37`) compares with `contains`, which is case-sensitive: `C:\A` dropped on `c:\a\b` passes it and reaches the plan, which refuses it with no steps, so the user misses the drop refusal text.
+- **Folder size walk.** `navo-fs/src/measure/walk.rs` (depth-first, one thread, `Visit` trait) feeds `folder_size` and `FolderProfile`. `FolderSize { bytes, files, folders, skipped }`. Links are not followed. No size on disk, no hard link handling.
 - **Listing data.** `FsEntry { name, kind, size, modified_ms, attributes }`, about 80 struct literals in the workspace. Windows lists with `FindFirstFileExW` (`local/win_list.rs`): no file id, no allocation size. Unix reads `Metadata` per entry (`local/unix.rs:28`): `blocks`, `ino`, `nlink` cost nothing more.
 - **Dates already come with the listing.** Ctrl+K index rows fetch size and date lazily (P40 D24).
-- **Benchmarks.** `xtask bench-copy` (`xtask/src/bench_copy/`): N runs, median only, no warm-up, no cold runs, no outliers; informational step in Windows CI (`.github/workflows/ci.yml:75-82`). `xtask perf-fixture` makes 5,000 files. `rusty-index` has a timing test (`search/tests.rs:189`), no bench target.
+- **Benchmarks.** `xtask bench-copy` (`xtask/src/bench_copy/`): N runs, median only, no warm-up, no cold runs, no outliers; informational step in Windows CI (`.github/workflows/ci.yml:75-82`). `xtask perf-fixture` makes 5,000 files. `navo-index` has a timing test (`search/tests.rs:189`), no bench target.
 - **No hash or module jobs exist yet.** Their pools are defined here; the first users come with P42 (content compare) and plugins.
 
 ## Decisions
 
-- **D1 — Pools, not a new engine.** `rusty-fs::io_queue::Pools` holds one `Arc<IoQueue>` per `JobKind { Listing, Preview, Size, Hash, Module }`, created once per process (`Pools::shared()`, a `OnceLock`). Listings and prefetches share `Listing`, so a visible listing goes before a prefetch. File operations keep their engine (D18); Q1 decides whether they queue.
+- **D1 — Pools, not a new engine.** `navo-fs::io_queue::Pools` holds one `Arc<IoQueue>` per `JobKind { Listing, Preview, Size, Hash, Module }`, created once per process (`Pools::shared()`, a `OnceLock`). Listings and prefetches share `Listing`, so a visible listing goes before a prefetch. File operations keep their engine (D18); Q1 decides whether they queue.
 - **D2 — Worker limits per pool and volume kind** (`Limits { ssd, hdd, network, removable }`): Listing 8/1/4/2 (today's), Preview 2/1/2/1, Size 2/1/1/1, Hash 2/1/1/1, Module 1/1/1/1. Unknown counts as hdd. Constants in `pools.rs`, one-line changes later.
 - **D3 — Volume kind on first use, off the UI thread.** A volume starts `Unknown` (limit 1). The worker that takes its first job calls the queue's classifier, default `drive_class` on `VolumeId::root()`, and sets the kind; later jobs get the real limit. Tests inject a classifier.
 - **D4 — The cancel race.** `IoQueue::submit_then(slot, work: FnOnce(&CancelToken) -> T, deliver: FnOnce(T))`: after `work` returns, the worker checks the token under the queue lock and calls `deliver` only if it was not cancelled. A cancelled job's result never reaches the UI, even when it finished in the same instant. Cancellation stays cooperative; a job stuck in a system call keeps its worker until the call returns.
@@ -56,7 +56,7 @@ After the alpha, except four small atoms that help alpha features in progress: *
 | `provider::list_sizes` | adapter | `SizeEntry` stream; default from `list`; `FakeFs` fields | new | `fake/tests/` |
 | `local` sizes | adapter | Unix `Metadata`; Windows `GetFileInformationByHandleEx` | new | `local/tests/listing.rs`, `windows.rs` |
 | `measure::walk` | lib | `FolderSize { …, on_disk, links_merged, links_unchecked }` | change | `measure/tests/mod.rs` |
-| `[files]` size keys | store | `size_mode`, `measure_shown_folders` | change | `rusty-store` settings tests |
+| `[files]` size keys | store | `size_mode`, `measure_shown_folders` | change | `navo-store` settings tests |
 | `xtask::stats` | tool | `samples → Summary { mean, sd, median, min, max, outliers }` | new | `xtask/src/stats.rs` tests |
 | `xtask::bench_walk` | tool | `bench-walk <dir> [--targets] [--warmup] [--runs] [--prepare]` | new | `xtask/src/bench_walk/tests.rs` |
 
@@ -64,25 +64,25 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 | Atom | Component | Role | Effort | After | Check | Status | Cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| J0 | `paste` drop refusal (alpha) | patcher (Sonnet) | medium | — | `cargo nextest run -p rusty-ui browser::operate::tests::drop` | done | |
-| J1 | `io_queue` limits and classifier | api-builder (Sonnet) | high | — | `cargo nextest run -p rusty-fs io_queue` | done | |
-| J2 | `io_queue::submit_then` | api-builder (Sonnet) | high | J1 | `cargo nextest run -p rusty-fs io_queue::tests::runner` | done | |
-| J3 | `io_queue::pools` | api-builder (Sonnet) | medium | J1 | `cargo nextest run -p rusty-fs io_queue::tests::pools` | done | |
-| J4 | `browser` on `Pools` | ui-builder (Sonnet) | medium | J3 | `cargo nextest run -p rusty-ui browser` | done | |
-| J5 | size owner per tab | ui-builder (Sonnet) | high | J4 | `cargo nextest run -p rusty-ui browser::tests` | done | |
-| J6 | preview folder reads on `Pools` | ui-builder (Sonnet) | medium | J3 | `cargo nextest run -p rusty-ui window_view::preview` | done | |
-| J7 | preview file loads on `Pools` | ui-builder-high (Opus) | high | J2, J6 | `cargo nextest run -p rusty-ui window_view::preview` | done | |
-| J8 | file jobs wait on a shared slow drive | ui-builder (Sonnet) | high | Q1 | `cargo nextest run -p rusty-ui browser::operate` | done | |
+| J0 | `paste` drop refusal (alpha) | patcher (Sonnet) | medium | — | `cargo nextest run -p navo-ui browser::operate::tests::drop` | done | |
+| J1 | `io_queue` limits and classifier | api-builder (Sonnet) | high | — | `cargo nextest run -p navo-fs io_queue` | done | |
+| J2 | `io_queue::submit_then` | api-builder (Sonnet) | high | J1 | `cargo nextest run -p navo-fs io_queue::tests::runner` | done | |
+| J3 | `io_queue::pools` | api-builder (Sonnet) | medium | J1 | `cargo nextest run -p navo-fs io_queue::tests::pools` | done | |
+| J4 | `browser` on `Pools` | ui-builder (Sonnet) | medium | J3 | `cargo nextest run -p navo-ui browser` | done | |
+| J5 | size owner per tab | ui-builder (Sonnet) | high | J4 | `cargo nextest run -p navo-ui browser::tests` | done | |
+| J6 | preview folder reads on `Pools` | ui-builder (Sonnet) | medium | J3 | `cargo nextest run -p navo-ui window_view::preview` | done | |
+| J7 | preview file loads on `Pools` | ui-builder-high (Opus) | high | J2, J6 | `cargo nextest run -p navo-ui window_view::preview` | done | |
+| J8 | file jobs wait on a shared slow drive | ui-builder (Sonnet) | high | Q1 | `cargo nextest run -p navo-ui browser::operate` | done | |
 | J9 | review Part J | reviewer (Opus) | high | J5, J7, J8 | review notes; `cargo xtask gate`; Windows CI | blocked | |
 | S0 | Windows size facts | researcher (Sonnet) | medium | — | answers with sources, in the Log | done | |
-| S1 | `provider::list_sizes` + `FakeFs` | api-builder (Sonnet) | medium | — | `cargo nextest run -p rusty-fs fake` | done | |
-| S2 | Unix `list_sizes` | api-builder (Sonnet) | medium | S1 | `cargo nextest run -p rusty-fs local::tests::listing` | done | |
-| S3 | Windows `list_sizes` | api-builder (Opus) | high | S0, S2 | Windows CI `cargo nextest run -p rusty-fs local::tests::windows` | done | |
-| S4 | `measure::walk` on disk and links | api-builder (Sonnet) | high | S1 | `cargo nextest run -p rusty-fs measure` | done | |
-| S5 | `[files]` size keys | api-builder (Sonnet) | medium | — | `cargo nextest run -p rusty-store settings` | done | |
-| S6 | size mode in the list and settings | ui-builder (Sonnet) | medium | S4, S5, J4 | `cargo nextest run -p rusty-ui browser settings` | ready | |
-| S7 | measure shown folders | ui-builder (Opus) | high | S6, J5, Q2 | `cargo nextest run -p rusty-ui browser::tests` | blocked | |
-| S8 | preview: on disk and link note | ui-builder (Sonnet) | medium | S4, S5 | `cargo nextest run -p rusty-ui window_view::preview`; gallery shots | ready | |
+| S1 | `provider::list_sizes` + `FakeFs` | api-builder (Sonnet) | medium | — | `cargo nextest run -p navo-fs fake` | done | |
+| S2 | Unix `list_sizes` | api-builder (Sonnet) | medium | S1 | `cargo nextest run -p navo-fs local::tests::listing` | done | |
+| S3 | Windows `list_sizes` | api-builder (Opus) | high | S0, S2 | Windows CI `cargo nextest run -p navo-fs local::tests::windows` | done | |
+| S4 | `measure::walk` on disk and links | api-builder (Sonnet) | high | S1 | `cargo nextest run -p navo-fs measure` | done | |
+| S5 | `[files]` size keys | api-builder (Sonnet) | medium | — | `cargo nextest run -p navo-store settings` | done | |
+| S6 | size mode in the list and settings | ui-builder (Sonnet) | medium | S4, S5, J4 | `cargo nextest run -p navo-ui browser settings` | ready | |
+| S7 | measure shown folders | ui-builder (Opus) | high | S6, J5, Q2 | `cargo nextest run -p navo-ui browser::tests` | blocked | |
+| S8 | preview: on disk and link note | ui-builder (Sonnet) | medium | S4, S5 | `cargo nextest run -p navo-ui window_view::preview`; gallery shots | ready | |
 | S9 | review Part S | reviewer (Opus) | high | S3, S7, S8 | review notes; gate; Windows CI | blocked | |
 | B1 | `xtask::stats` (alpha) | api-builder (Sonnet) | medium | — | `cargo nextest run -p xtask stats bench_copy` | done | |
 | B2 | `bench-walk`: list and size (alpha) | api-builder (Sonnet) | medium | B1 | `cargo nextest run -p xtask bench_walk`; `cargo xtask bench-walk <tmp> --runs 3` prints the table | done | |
@@ -91,14 +91,14 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 ### J0 — drop refusal follows Windows case rules
 
-- **Read:** `crates/rusty-ui/src/browser/operate/paste.rs:1-40`; `rusty-core/src/location/mod.rs:120-131` (`same_place`); `browser/operate/tests/drop.rs`.
+- **Read:** `crates/navo-ui/src/browser/operate/paste.rs:1-40`; `navo-core/src/location/mod.rs:120-131` (`same_place`); `browser/operate/tests/drop.rs`.
 - **Change:** in `drop_refusal`, compare with `same_place`: `sources.iter().any(|s| s.same_place(&location))` and the same for `AlreadyHere` with the parent.
 - **Check:** new tests `C:\A` on `c:\a\b` → `IntoItself`; `C:\A\x` on `c:\a` → `AlreadyHere`; Linux paths stay case-sensitive.
 - **Stop if:** any other caller relies on the exact compare.
 
 ### J1 — limits and classifier
 
-- **Read:** `rusty-fs/src/io_queue/mod.rs`, `scheduler.rs`, `runner.rs:60-130`, `drive_class.rs:1-40`, `io_queue/tests/scheduler.rs`, `volume.rs`.
+- **Read:** `navo-fs/src/io_queue/mod.rs`, `scheduler.rs`, `runner.rs:60-130`, `drive_class.rs:1-40`, `io_queue/tests/scheduler.rs`, `volume.rs`.
 - **Change:** `Limits { ssd, hdd, network, removable }` with `Limits::LISTING` equal to today's `VolumeKind::limit`; `Scheduler` keeps a `Limits`; `IoQueue::with(limits, classifier)` where `Classifier = Arc<dyn Fn(&VolumeId) -> VolumeKind + Send + Sync>`; `IoQueue::new()` keeps today's limits and the `drive_class` classifier. `VolumeId::root() -> Option<Location>`. The worker taking the first job of an `Unknown` volume classifies it before running the job (D3), then spawns more workers if the new limit allows.
 - **Check:** limits per kind; a fake classifier raises a volume from 1 to 8 workers after the first job; the classifier runs once per volume and never on the submitting thread.
 - **Stop if:** `drive_class` can block for seconds on a network root; report the time.
@@ -111,7 +111,7 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 ### J3 — pools
 
-- **Read:** `io_queue/mod.rs`, J1's `Limits`, `rusty-fs/src/lib.rs:20-30`.
+- **Read:** `io_queue/mod.rs`, J1's `Limits`, `navo-fs/src/lib.rs:20-30`.
 - **Change:** `io_queue/pools.rs`: `JobKind`, the D2 table, `Pools::shared()`, `queue(kind)`; export from `lib.rs`.
 - **Check:** each kind has its own queue and limits; `shared()` returns the same instance; a Size job does not wait behind a running Listing job on the same volume.
 
@@ -119,7 +119,7 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 - **Read:** `browser/mod.rs:53-130,255-285`, `browser/measure.rs`, `browser/prefetch/mod.rs:55-75,180-205`.
 - **Change:** listings and prefetch use `Pools::shared().queue(Listing)`, sizes use `Size`; owners stay per `Browser`. Remove the three own `IoQueue` fields.
-- **Check:** `cargo nextest run -p rusty-ui browser` passes unchanged.
+- **Check:** `cargo nextest run -p navo-ui browser` passes unchanged.
 
 ### J5 — size owner per tab
 
@@ -129,7 +129,7 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 ### J6 — preview folder reads
 
-- **Read:** `preview/mod.rs:60-100`, `preview/folder.rs:66-130`, `rusty-fs/src/measure/live/mod.rs:60-90`.
+- **Read:** `preview/mod.rs:60-100`, `preview/folder.rs:66-130`, `navo-fs/src/measure/live/mod.rs:60-90`.
 - **Change:** `reads` and `scans` become `Pools::shared().queue(Preview)`; owners as today.
 - **Check:** preview tests pass unchanged.
 
@@ -141,7 +141,7 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 ### J8 — file jobs on a shared slow drive (only if Q1 is yes)
 
-- **Read:** `browser/operate/mod.rs:250-320`, `rusty-fs/src/job/workers.rs`, P39 strip states.
+- **Read:** `browser/operate/mod.rs:250-320`, `navo-fs/src/job/workers.rs`, P39 strip states.
 - **Change:** a new job whose source or target shares an Hdd or removable volume with a running job waits as "Queued" in the strip and starts when that job ends; cancel works while queued. Text in `.ftl`.
 - **Check:** two fake jobs on one Hdd run in order; on Ssd they run at once; cancelling a queued job never touches files.
 
@@ -158,7 +158,7 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 ### S5–S8 — settings and screens
 
-- **S5:** `rusty-store/src/settings/model.rs` `Files`: `size_mode: SizeMode { Apparent, OnDisk }`, `measure_shown_folders: bool`, defaults per D7–D8, round trip and unknown-value tests.
+- **S5:** `navo-store/src/settings/model.rs` `Files`: `size_mode: SizeMode { Apparent, OnDisk }`, `measure_shown_folders: bool`, defaults per D7–D8, round trip and unknown-value tests.
 - **S6:** `browser/measure.rs` keeps the whole `FolderSize` per row and shows the mode's number; `window_view/settings_save.rs` passes the mode; two settings sheet rows in `settings/fields.rs` with one sentence each (D58). Text in `.ftl`.
 - **S7:** when `measure_shown_folders` is on, a loaded listing submits D7 jobs through J5's owner; D6 for sorting. Check: 600 fake folders submit 500; a network volume submits none; sorting by size does not move rows while sizes arrive.
 - **S8:** `preview/stats.rs`: the size card shows the mode's number, the other one as its sub-line, and "N hard links counted once" or the D9 cap note. Gallery shots light and dark.
@@ -167,7 +167,7 @@ After the alpha, except four small atoms that help alpha features in progress: *
 
 - **B1:** `xtask/src/stats.rs`: `Summary::of(&[f64])` per D11; `bench_copy/report.rs` uses it (median stays, mean ± σ and outliers added). Tests: known samples, one outlier flagged, two samples, empty input refused.
 - **B2:** `xtask/src/bench_walk/{mod,options}.rs`, `main.rs` registration: targets `list` (`LocalFs::list` of the 5,000-file `perf-fixture` folder) and `size` (`folder_size` on a generated tree of 100,000 entries in 1,000 folders); warm-up, runs, `--prepare` per D12. Options parsing tests like `bench_copy/options.rs`.
-- **B3:** `bench_walk/index.rs`, `xtask/Cargo.toml` (`rusty-index`): targets `walk` (`walker::walk` of the tree), `search` (five fixed queries on 1,000,000 synthetic names, as in `search/tests.rs:189`), `save` and `load` (`rusty-index::file`).
+- **B3:** `bench_walk/index.rs`, `xtask/Cargo.toml` (`navo-index`): targets `walk` (`walker::walk` of the tree), `search` (five fixed queries on 1,000,000 synthetic names, as in `search/tests.rs:189`), `save` and `load` (`navo-index::file`).
 - **B4:** `docs/perf.md` section "Walk and index timing" with how to run it; a Windows CI step after the copy benchmark, `continue-on-error: true`, `timeout-minutes: 10`, `--runs 3`, table to the step summary.
 
 ## Done when
@@ -196,6 +196,6 @@ All three answered 2026-10-20: the owner accepted the recommendations.
 - 2026-10-30 — Part lead Yavanna took over. Found on main: J0 (drop_refusal uses `same_place`, case tests in `operate/tests/drop.rs`), S3 (`local/win_sizes.rs`, fc4879cc, 9d7c3604) and B3 (`bench_walk/index.rs`, 1a23fdce) are done; no S3/B3 worker is running. S3's Windows tests (hard link, sparse file) still need one VM CI run. Ready now: S6, S8, B4. Order: S6 → S7 → J9; S8 → S9; B4.
 - 2026-10-30 — B4 done: `docs/perf.md` section "Walk and index timing" and an informational Windows step in `checks.yml` (`continue-on-error`, 10 min, `--runs 3`). The step has not run on CI yet.
 - 2026-10-30 — S3 verified: its hard-link, folder and sparse-file tests passed on Windows in the VM CI of c531a642, which contains fc4879cc and 9d7c3604.
-- 2026-10-30 — Stopped by the weekly usage rule. In progress, on their own branches and not on the part branch: S6 (`beta-s6`, worktree `rusty-beta-s6`) and S8 (`beta-s8`, worktree `rusty-beta-s8`); each worker was told to commit if green or leave a `STOP-backup.patch` in its worktree. Next: land S6 and S8 after reading their diffs, then S7 (after S6), then the J9 and S9 reviews. Windows tests are unrun for B4's CI step and for S3 beyond c531a642.
-- 2026-10-30 — Stop details. S6 (`rusty-beta-s6`): code done, 508 `browser`/`settings` tests passed, `xtask check` not run, nothing committed; `STOP-backup.patch` in the worktree. It edited `preview/folder.rs` (one line, `Measured.bytes` became `size`), which S8 may also touch; in on-disk mode a folder preview shows the apparent number until S8 passes the full `FolderSize`. S8 (`rusty-beta-s8`): `preview/size_card.rs` with four tests, strings, `Preview.size_mode`; the last check failed on one clippy error (`#[allow(dead_code)]` on `SizeMode::OnDisk` needs a reason); no screenshots yet; `STOP-backup.patch` in the worktree. Both S6 and S8 define their own `SizeMode` inside `rusty-ui` because `rusty-ui` does not depend on `rusty-store`: on resume, keep one definition (S6's `values.rs`), have `Preview.size_mode` set from the `files.size-mode` setting, and drop the allow.
+- 2026-10-30 — Stopped by the weekly usage rule. In progress, on their own branches and not on the part branch: S6 (`beta-s6`, worktree `navo-beta-s6`) and S8 (`beta-s8`, worktree `navo-beta-s8`); each worker was told to commit if green or leave a `STOP-backup.patch` in its worktree. Next: land S6 and S8 after reading their diffs, then S7 (after S6), then the J9 and S9 reviews. Windows tests are unrun for B4's CI step and for S3 beyond c531a642.
+- 2026-10-30 — Stop details. S6 (`navo-beta-s6`): code done, 508 `browser`/`settings` tests passed, `xtask check` not run, nothing committed; `STOP-backup.patch` in the worktree. It edited `preview/folder.rs` (one line, `Measured.bytes` became `size`), which S8 may also touch; in on-disk mode a folder preview shows the apparent number until S8 passes the full `FolderSize`. S8 (`navo-beta-s8`): `preview/size_card.rs` with four tests, strings, `Preview.size_mode`; the last check failed on one clippy error (`#[allow(dead_code)]` on `SizeMode::OnDisk` needs a reason); no screenshots yet; `STOP-backup.patch` in the worktree. Both S6 and S8 define their own `SizeMode` inside `navo-ui` because `navo-ui` does not depend on `navo-store`: on resume, keep one definition (S6's `values.rs`), have `Preview.size_mode` set from the `files.size-mode` setting, and drop the allow.
 

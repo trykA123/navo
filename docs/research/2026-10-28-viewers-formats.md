@@ -30,7 +30,7 @@ Versions and dates come from the crates.io API on 2026-10-28. Navo uses gpui-kit
 ## Notes
 
 - Zed ships extension grammars as `.wasm` under wasmtime (tree-sitter `wasm` feature). UNVERIFIED: binary size and start-up cost; measure in the spike.
-- KEEP OURS (no change): paged `ByteSource`/`LineIndex`, rusty-syntax lexer, hex view, Intel HEX/S-record, csv, DBC (can-dbc), Office text. `image` already gives zune-jpeg and image-webp.
+- KEEP OURS (no change): paged `ByteSource`/`LineIndex`, navo-syntax lexer, hex view, Intel HEX/S-record, csv, DBC (can-dbc), Office text. `image` already gives zune-jpeg and image-webp.
 - No Go helper beats Rust here.
 
 ## Top 5 picks, in order

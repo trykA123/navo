@@ -1,6 +1,6 @@
-# Ferrite showreel
+# Navo showreel
 
-A 148-second product film that presents Ferrite as the roadmap plans it, from the alpha to 2.0. It is built from the feature specs, the design prototypes and the app's Design B dark tokens. It is not a screen recording, and every file name, folder, host and size in it is invented.
+A 148-second product film that presents Navo as the roadmap plans it, from the alpha to 2.0. It is built from the feature specs, the design prototypes and the app's Design B dark tokens. It is not a screen recording, and every file name, folder, host and size in it is invented.
 
 Much of the film shows features that are not built yet. Their captions carry a "Planned" tag with the phase (beta, 1.0 or 2.0), and the closing card says so too.
 
@@ -25,7 +25,7 @@ Much of the film shows features that are not built yet. Their captions carry a "
 
 `index.html` builds every scene once. `window.reel.frame(n)` then sets every property from the frame number alone, so a frame always looks the same however it is reached. There are no CSS transitions or timers.
 
-Each scene in `src/scenes/` exports its length, captions, key presses, a `build()` and a `render(refs, t)` that takes the time inside the scene. `src/timeline.js` lines the scenes up and joins them with a soft cut: a 0.8 s cross-fade with a light blur. `render.mjs` opens the page in headless Chromium, screenshots each frame to `frames/`, and encodes the frames with ffmpeg. The fonts come from `crates/rusty-ui/fonts`.
+Each scene in `src/scenes/` exports its length, captions, key presses, a `build()` and a `render(refs, t)` that takes the time inside the scene. `src/timeline.js` lines the scenes up and joins them with a soft cut: a 0.8 s cross-fade with a light blur. `render.mjs` opens the page in headless Chromium, screenshots each frame to `frames/`, and encodes the frames with ffmpeg. The fonts come from `crates/navo-ui/fonts`.
 
 | File | Holds |
 | --- | --- |

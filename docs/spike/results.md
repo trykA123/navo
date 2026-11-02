@@ -34,7 +34,7 @@ Spike: `spikes/gpui-b` (design B, variant 1 of D27, three panes of 100,000 rows 
 ### Start-up
 
 - On a Windows PC the first frame is dominated by D3D11 device creation on the NVIDIA GPU (250–310 ms). On the Intel GPU it is ~70 ms, which brought the variants prototype from ~600 ms to 376 ms.
-- The spike now prefers the low-power GPU (vendored `gpui-pre-windows`, `EnumAdapterByGpuPreference(MINIMUM_POWER)`); `FERRITE_GPU=default` restores GPUI's order for comparison.
+- The spike now prefers the low-power GPU (vendored `gpui-pre-windows`, `EnumAdapterByGpuPreference(MINIMUM_POWER)`); `NAVO_GPU=default` restores GPUI's order for comparison.
 - The other start-up phases on Windows: platform and DirectWrite ~170 ms, window and first render ~130–145 ms. The warm target (≤ 150 ms) likely needs a resident (tray) process on Windows; to be decided after the Windows run.
 
 ### Memory
@@ -64,8 +64,8 @@ Spike: `spikes/gpui-b` (design B, variant 1 of D27, three panes of 100,000 rows 
 Proposed: **go for GPUI (D2), with three follow-ups.**
 
 1. Cold start meets the target on a Windows PC thanks to the low-power GPU patch; offer the patch upstream and keep it vendored until then.
-2. Warm start needs a resident mode: Ferrite stays in the tray after its window closes and shows a pre-built hidden window (a plan item for after PoC 2).
-3. Measure private bytes on Windows (the P5 memory probe in `rusty-app`) and a 60-second scroll on a Windows PC, to settle the memory target and the Intel frame drops.
+2. Warm start needs a resident mode: Navo stays in the tray after its window closes and shows a pre-built hidden window (a plan item for after PoC 2).
+3. Measure private bytes on Windows (the P5 memory probe in `navo-app`) and a 60-second scroll on a Windows PC, to settle the memory target and the Intel frame drops.
 
 Owner's view of smoothness (2026-10-15): scrolling feels smooth on the 60 Hz monitor.
 

@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn generated_pairs_are_deterministic_and_clean_up() {
-        let root = std::env::temp_dir().join("rusty-bench-large-gen-test");
+        let root = std::env::temp_dir().join("navo-bench-large-gen-test");
         {
             let corpus = Corpus::prepare(root.clone()).unwrap();
             let first = log_pair(&corpus, "log", 2 * BLOCK as u64, false).unwrap();

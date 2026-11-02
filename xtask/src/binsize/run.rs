@@ -1,7 +1,7 @@
 use std::fs;
 use std::process::ExitCode;
 
-use super::{RUSTY_EXE_LIMIT, check_size};
+use super::{NAVO_EXE_LIMIT, check_size};
 
 pub fn run(args: &[String]) -> ExitCode {
     let [path] = args else {
@@ -16,8 +16,8 @@ pub fn run(args: &[String]) -> ExitCode {
         }
     };
     let bytes = metadata.len();
-    println!("{path}: {bytes} bytes (limit {RUSTY_EXE_LIMIT})");
-    if check_size(bytes, RUSTY_EXE_LIMIT).is_ok() {
+    println!("{path}: {bytes} bytes (limit {NAVO_EXE_LIMIT})");
+    if check_size(bytes, NAVO_EXE_LIMIT).is_ok() {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE

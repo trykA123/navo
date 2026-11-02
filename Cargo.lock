@@ -5591,6 +5591,362 @@ dependencies = [
 ]
 
 [[package]]
+name = "navo-app"
+version = "0.0.1"
+dependencies = [
+ "chrono",
+ "embed-resource",
+ "encoding_rs",
+ "gpui-kit",
+ "gpui-pre-windows",
+ "insta",
+ "libc",
+ "mimalloc",
+ "navo-cache",
+ "navo-core",
+ "navo-diag",
+ "navo-fs",
+ "navo-index",
+ "navo-l10n",
+ "navo-pdf",
+ "navo-retention",
+ "navo-shell",
+ "navo-store",
+ "navo-ui",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "tracing-subscriber",
+ "tray-icon",
+ "velopack",
+ "windows-sys 0.61.2",
+ "zip 9.0.3",
+]
+
+[[package]]
+name = "navo-automotive"
+version = "0.0.1"
+dependencies = [
+ "a2lfile",
+ "can-dbc",
+ "cpp_demangle",
+ "encoding_rs",
+ "flate2",
+ "gimli",
+ "navo-automotive",
+ "object",
+ "proptest",
+ "rustc-demangle",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "navo-cache"
+version = "0.0.1"
+dependencies = [
+ "crc32fast",
+ "lz4_flex",
+ "navo-core",
+ "navo-diag",
+ "navo-fs",
+ "navo-store",
+ "proptest",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "navo-clipboard"
+version = "0.0.1"
+dependencies = [
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "navo-compare"
+version = "0.0.1"
+dependencies = [
+ "blake3",
+ "fastcdc",
+ "ignore",
+ "image",
+ "image-compare",
+ "imara-diff",
+ "navo-core",
+ "proptest",
+ "similar 3.2.0",
+ "tempfile",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "navo-core"
+version = "0.0.1"
+dependencies = [
+ "aho-corasick",
+ "chardetng",
+ "encoding_rs",
+ "insta",
+ "memchr",
+ "postcard",
+ "proptest",
+ "regex",
+ "serde",
+ "serde_json",
+ "similar 2.7.0",
+ "thiserror 2.0.21",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "navo-diag"
+version = "0.0.1"
+dependencies = [
+ "insta",
+ "proptest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-tracy",
+ "tracy-client",
+ "zip 9.0.3",
+]
+
+[[package]]
+name = "navo-fs"
+version = "0.0.1"
+dependencies = [
+ "blake3",
+ "crc32fast",
+ "encoding_rs",
+ "flate2",
+ "gungraun",
+ "inotify",
+ "lzma-rust2",
+ "md-5",
+ "navo-core",
+ "navo-git",
+ "proptest",
+ "rustix",
+ "ruzstd",
+ "same-file",
+ "sevenz-rust2",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "trash",
+ "windows 0.62.2",
+ "windows-sys 0.61.2",
+ "zip 9.0.3",
+]
+
+[[package]]
+name = "navo-git"
+version = "0.0.1"
+dependencies = [
+ "gix",
+ "gix-config",
+ "gix-discover",
+ "navo-compare",
+]
+
+[[package]]
+name = "navo-index"
+version = "0.0.1"
+dependencies = [
+ "crc32fast",
+ "navo-core",
+ "navo-fs",
+ "navo-store",
+ "nucleo-matcher",
+ "postcard",
+ "rayon",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "navo-l10n"
+version = "0.0.1"
+dependencies = [
+ "fluent-bundle",
+ "thiserror 2.0.21",
+ "tracing",
+ "unic-langid",
+]
+
+[[package]]
+name = "navo-pdf"
+version = "0.0.1"
+dependencies = [
+ "pdfium-render",
+ "proptest",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "navo-plugins"
+version = "0.0.1"
+
+[[package]]
+name = "navo-retention"
+version = "0.0.1"
+dependencies = [
+ "navo-core",
+ "navo-fs",
+ "navo-store",
+ "rustix",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "navo-shell"
+version = "0.0.1"
+dependencies = [
+ "navo-core",
+ "rustix",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "windows 0.62.2",
+ "windows-sys 0.61.2",
+ "zip 9.0.3",
+]
+
+[[package]]
+name = "navo-store"
+version = "0.0.1"
+dependencies = [
+ "crc32fast",
+ "insta",
+ "navo-core",
+ "navo-fs",
+ "postcard",
+ "proptest",
+ "rusqlite",
+ "serde",
+ "serde_ignored",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.8+spec-1.1.0",
+ "toml_edit 0.25.17+spec-1.1.0",
+ "tracing",
+]
+
+[[package]]
+name = "navo-structured"
+version = "0.0.1"
+dependencies = [
+ "csv",
+ "csv-core",
+ "pulldown-cmark",
+ "quick-xml",
+ "saphyr-parser",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "navo-syntax"
+version = "0.0.1"
+dependencies = [
+ "proptest",
+ "quick-xml",
+ "serde",
+ "serde_ignored",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "navo-term"
+version = "0.0.1"
+
+[[package]]
+name = "navo-ui"
+version = "0.0.1"
+dependencies = [
+ "chrono",
+ "codebook-tree-sitter-latex",
+ "flate2",
+ "futures",
+ "gpui-kit",
+ "image",
+ "insta",
+ "kamadak-exif",
+ "lofty",
+ "navo-automotive",
+ "navo-cache",
+ "navo-core",
+ "navo-diag",
+ "navo-fs",
+ "navo-index",
+ "navo-l10n",
+ "navo-pdf",
+ "navo-retention",
+ "navo-structured",
+ "navo-syntax",
+ "object",
+ "proptest",
+ "raw-window-handle",
+ "resvg 0.46.0",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml 1.1.8+spec-1.1.0",
+ "tracing",
+ "tree-sitter",
+ "tree-sitter-asm",
+ "tree-sitter-batch",
+ "tree-sitter-c",
+ "tree-sitter-containerfile",
+ "tree-sitter-ini",
+ "tree-sitter-json5-orchard",
+ "tree-sitter-language",
+ "tree-sitter-objc",
+ "tree-sitter-powershell",
+ "tree-sitter-properties",
+ "tree-sitter-r",
+ "tree-sitter-sequel",
+ "tree-sitter-xml",
+ "ts-parser-perl",
+ "ttf-parser",
+ "url",
+ "windows-version",
+]
+
+[[package]]
+name = "navo-ui-gallery"
+version = "0.0.1"
+dependencies = [
+ "chrono",
+ "gpui-kit",
+ "image",
+ "navo-automotive",
+ "navo-core",
+ "navo-fs",
+ "navo-pdf",
+ "navo-ui",
+]
+
+[[package]]
 name = "ndk-sys"
 version = "0.6.0+11769913"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7575,134 +7931,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
-name = "rusty-app"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "embed-resource",
- "encoding_rs",
- "gpui-kit",
- "gpui-pre-windows",
- "insta",
- "libc",
- "mimalloc",
- "rusty-cache",
- "rusty-core",
- "rusty-diag",
- "rusty-fs",
- "rusty-index",
- "rusty-l10n",
- "rusty-pdf",
- "rusty-retention",
- "rusty-shell",
- "rusty-store",
- "rusty-ui",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "tracing-subscriber",
- "tray-icon",
- "velopack",
- "windows-sys 0.61.2",
- "zip 9.0.3",
-]
-
-[[package]]
-name = "rusty-automotive"
-version = "0.0.1"
-dependencies = [
- "a2lfile",
- "can-dbc",
- "cpp_demangle",
- "encoding_rs",
- "flate2",
- "gimli",
- "object",
- "proptest",
- "rustc-demangle",
- "rusty-automotive",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "rusty-cache"
-version = "0.0.1"
-dependencies = [
- "crc32fast",
- "lz4_flex",
- "proptest",
- "rusty-core",
- "rusty-diag",
- "rusty-fs",
- "rusty-store",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "rusty-clipboard"
-version = "0.0.1"
-dependencies = [
- "sha2 0.10.9",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "rusty-compare"
-version = "0.0.1"
-dependencies = [
- "blake3",
- "fastcdc",
- "ignore",
- "image",
- "image-compare",
- "imara-diff",
- "proptest",
- "rusty-core",
- "similar 3.2.0",
- "tempfile",
- "xxhash-rust",
-]
-
-[[package]]
-name = "rusty-core"
-version = "0.0.1"
-dependencies = [
- "aho-corasick",
- "chardetng",
- "encoding_rs",
- "insta",
- "memchr",
- "postcard",
- "proptest",
- "regex",
- "serde",
- "serde_json",
- "similar 2.7.0",
- "thiserror 2.0.21",
- "unicode-normalization",
-]
-
-[[package]]
-name = "rusty-diag"
-version = "0.0.1"
-dependencies = [
- "insta",
- "proptest",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
- "tracing-subscriber",
- "tracing-tracy",
- "tracy-client",
- "zip 9.0.3",
-]
-
-[[package]]
 name = "rusty-fork"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7712,234 +7940,6 @@ dependencies = [
  "quick-error 1.2.3",
  "tempfile",
  "wait-timeout",
-]
-
-[[package]]
-name = "rusty-fs"
-version = "0.0.1"
-dependencies = [
- "blake3",
- "crc32fast",
- "encoding_rs",
- "flate2",
- "gungraun",
- "inotify",
- "lzma-rust2",
- "md-5",
- "proptest",
- "rustix",
- "rusty-core",
- "rusty-git",
- "ruzstd",
- "same-file",
- "sevenz-rust2",
- "sha2 0.10.9",
- "tar",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "trash",
- "windows 0.62.2",
- "windows-sys 0.61.2",
- "zip 9.0.3",
-]
-
-[[package]]
-name = "rusty-git"
-version = "0.0.1"
-dependencies = [
- "gix",
- "gix-config",
- "gix-discover",
- "rusty-compare",
-]
-
-[[package]]
-name = "rusty-index"
-version = "0.0.1"
-dependencies = [
- "crc32fast",
- "nucleo-matcher",
- "postcard",
- "rayon",
- "rusty-core",
- "rusty-fs",
- "rusty-store",
- "serde",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "rusty-l10n"
-version = "0.0.1"
-dependencies = [
- "fluent-bundle",
- "thiserror 2.0.21",
- "tracing",
- "unic-langid",
-]
-
-[[package]]
-name = "rusty-pdf"
-version = "0.0.1"
-dependencies = [
- "pdfium-render",
- "proptest",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "rusty-plugins"
-version = "0.0.1"
-
-[[package]]
-name = "rusty-retention"
-version = "0.0.1"
-dependencies = [
- "rustix",
- "rusty-core",
- "rusty-fs",
- "rusty-store",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "rusty-shell"
-version = "0.0.1"
-dependencies = [
- "rustix",
- "rusty-core",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "windows 0.62.2",
- "windows-sys 0.61.2",
- "zip 9.0.3",
-]
-
-[[package]]
-name = "rusty-store"
-version = "0.0.1"
-dependencies = [
- "crc32fast",
- "insta",
- "postcard",
- "proptest",
- "rusqlite",
- "rusty-core",
- "rusty-fs",
- "serde",
- "serde_ignored",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.1.8+spec-1.1.0",
- "toml_edit 0.25.17+spec-1.1.0",
- "tracing",
-]
-
-[[package]]
-name = "rusty-structured"
-version = "0.0.1"
-dependencies = [
- "csv",
- "csv-core",
- "pulldown-cmark",
- "quick-xml",
- "saphyr-parser",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "rusty-syntax"
-version = "0.0.1"
-dependencies = [
- "proptest",
- "quick-xml",
- "serde",
- "serde_ignored",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.1.8+spec-1.1.0",
-]
-
-[[package]]
-name = "rusty-term"
-version = "0.0.1"
-
-[[package]]
-name = "rusty-ui"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "codebook-tree-sitter-latex",
- "flate2",
- "futures",
- "gpui-kit",
- "image",
- "insta",
- "kamadak-exif",
- "lofty",
- "object",
- "proptest",
- "raw-window-handle",
- "resvg 0.46.0",
- "rusty-automotive",
- "rusty-cache",
- "rusty-core",
- "rusty-diag",
- "rusty-fs",
- "rusty-index",
- "rusty-l10n",
- "rusty-pdf",
- "rusty-retention",
- "rusty-structured",
- "rusty-syntax",
- "serde",
- "serde_json",
- "tempfile",
- "toml 1.1.8+spec-1.1.0",
- "tracing",
- "tree-sitter",
- "tree-sitter-asm",
- "tree-sitter-batch",
- "tree-sitter-c",
- "tree-sitter-containerfile",
- "tree-sitter-ini",
- "tree-sitter-json5-orchard",
- "tree-sitter-language",
- "tree-sitter-objc",
- "tree-sitter-powershell",
- "tree-sitter-properties",
- "tree-sitter-r",
- "tree-sitter-sequel",
- "tree-sitter-xml",
- "ts-parser-perl",
- "ttf-parser",
- "url",
- "windows-version",
-]
-
-[[package]]
-name = "rusty-ui-gallery"
-version = "0.0.1"
-dependencies = [
- "chrono",
- "gpui-kit",
- "image",
- "rusty-automotive",
- "rusty-core",
- "rusty-fs",
- "rusty-pdf",
- "rusty-ui",
 ]
 
 [[package]]
@@ -11415,9 +11415,9 @@ dependencies = [
  "ignore",
  "imara-diff",
  "memmap2",
- "rusty-core",
- "rusty-fs",
- "rusty-index",
+ "navo-core",
+ "navo-fs",
+ "navo-index",
  "serde",
  "serde_json",
  "similar 3.2.0",

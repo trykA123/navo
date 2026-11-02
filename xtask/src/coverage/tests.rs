@@ -9,11 +9,11 @@ use super::{
 const REPORT: &str = r#"{
   "data": [{
     "files": [
-      {"filename": "/home/u/rusty/crates/rusty-core/src/a.rs",
+      {"filename": "/home/u/navo/crates/navo-core/src/a.rs",
        "summary": {"lines": {"count": 10, "covered": 5, "percent": 50.0}}},
-      {"filename": "/home/u/rusty/crates/rusty-core/src/b.rs",
+      {"filename": "/home/u/navo/crates/navo-core/src/b.rs",
        "summary": {"lines": {"count": 90, "covered": 90, "percent": 100.0}}},
-      {"filename": "/home/u/rusty/xtask/src/main.rs",
+      {"filename": "/home/u/navo/xtask/src/main.rs",
        "summary": {"lines": {"count": 4, "covered": 3, "percent": 75.0}}},
       {"filename": "/home/u/.cargo/registry/src/dep/lib.rs",
        "summary": {"lines": {"count": 10, "covered": 0, "percent": 0.0}}}
@@ -29,7 +29,7 @@ fn map(entries: &[(&str, f64)]) -> BTreeMap<String, f64> {
 #[test]
 fn line_coverage_sums_counts_per_crate() {
     let got = crate_line_coverage(REPORT).unwrap();
-    assert!((got["rusty-core"] - 95.0).abs() < 1e-9);
+    assert!((got["navo-core"] - 95.0).abs() < 1e-9);
     assert!((got["xtask"] - 75.0).abs() < 1e-9);
 }
 
@@ -41,11 +41,11 @@ fn line_coverage_ignores_files_outside_known_crates() {
 
 #[test]
 fn coverage_in_a_checkout_under_crates_uses_repo_relative_paths() {
-    let report = REPORT.replace("/home/u/rusty", "/home/u/crates/rusty");
-    for root in ["/home/u/crates/rusty", "/home/u/crates/rusty/"] {
+    let report = REPORT.replace("/home/u/navo", "/home/u/crates/navo");
+    for root in ["/home/u/crates/navo", "/home/u/crates/navo/"] {
         assert_eq!(
             crate_line_coverage_in(&report, Path::new(root)).unwrap(),
-            map(&[("rusty-core", 95.0), ("xtask", 75.0)])
+            map(&[("navo-core", 95.0), ("xtask", 75.0)])
         );
     }
 }
@@ -53,11 +53,11 @@ fn coverage_in_a_checkout_under_crates_uses_repo_relative_paths() {
 #[test]
 fn coverage_in_a_repo_ignores_outside_files_and_similar_root_prefixes() {
     let report = r#"{"data":[{"files":[
-        {"filename":"/home/u/other/crates/rusty-core/src/a.rs"},
-        {"filename":"/home/u/rusty-other/xtask/src/main.rs"},
-        {"filename":"/home/u/rusty"}]}]}"#;
+        {"filename":"/home/u/other/crates/navo-core/src/a.rs"},
+        {"filename":"/home/u/navo-other/xtask/src/main.rs"},
+        {"filename":"/home/u/navo"}]}]}"#;
     assert!(
-        crate_line_coverage_in(report, Path::new("/home/u/rusty"))
+        crate_line_coverage_in(report, Path::new("/home/u/navo"))
             .unwrap()
             .is_empty()
     );
@@ -66,14 +66,14 @@ fn coverage_in_a_repo_ignores_outside_files_and_similar_root_prefixes() {
 #[test]
 fn coverage_in_a_windows_checkout_normalizes_roots_and_filenames() {
     let report = r#"{"data":[{"files":[
-        {"filename":"C:\\work\\xtask\\rusty\\crates\\rusty-core\\src\\a.rs",
+        {"filename":"C:\\work\\xtask\\navo\\crates\\navo-core\\src\\a.rs",
          "summary":{"lines":{"count":4,"covered":3}}},
-        {"filename":"C:/work/xtask/rusty/xtask/src/main.rs",
+        {"filename":"C:/work/xtask/navo/xtask/src/main.rs",
          "summary":{"lines":{"count":2,"covered":1}}}]}]}"#;
-    for root in [r"C:\work\xtask\rusty", r"C:\work\xtask\rusty\"] {
+    for root in [r"C:\work\xtask\navo", r"C:\work\xtask\navo\"] {
         assert_eq!(
             crate_line_coverage_in(report, Path::new(root)).unwrap(),
-            map(&[("rusty-core", 75.0), ("xtask", 50.0)])
+            map(&[("navo-core", 75.0), ("xtask", 50.0)])
         );
     }
 }
@@ -96,31 +96,31 @@ fn report_without_data_is_an_error() {
 
 #[test]
 fn floors_accept_integer_and_float_values() {
-    let got = parse_floors("[floors]\nrusty-core = 90\nxtask = 72.5\n").unwrap();
-    assert_eq!(got, map(&[("rusty-core", 90.0), ("xtask", 72.5)]));
+    let got = parse_floors("[floors]\nnavo-core = 90\nxtask = 72.5\n").unwrap();
+    assert_eq!(got, map(&[("navo-core", 90.0), ("xtask", 72.5)]));
 }
 
 #[test]
 fn malformed_floors_toml_is_an_error() {
     assert!(matches!(
-        parse_floors("[floors\nrusty-core = "),
+        parse_floors("[floors\nnavo-core = "),
         Err(CoverageError::InvalidFloors(_))
     ));
 }
 
 #[test]
 fn crate_exactly_at_floor_is_not_a_miss() {
-    let got = misses(&map(&[("rusty-core", 90.0)]), &map(&[("rusty-core", 90.0)]));
+    let got = misses(&map(&[("navo-core", 90.0)]), &map(&[("navo-core", 90.0)]));
     assert_eq!(got, vec![]);
 }
 
 #[test]
 fn crate_below_floor_is_a_miss() {
-    let got = misses(&map(&[("rusty-core", 89.9)]), &map(&[("rusty-core", 90.0)]));
+    let got = misses(&map(&[("navo-core", 89.9)]), &map(&[("navo-core", 90.0)]));
     assert_eq!(
         got,
         vec![FloorMiss {
-            crate_name: "rusty-core".to_string(),
+            crate_name: "navo-core".to_string(),
             actual: Some(89.9),
             floor: 90.0
         }]
@@ -129,11 +129,11 @@ fn crate_below_floor_is_a_miss() {
 
 #[test]
 fn crate_with_floor_and_no_data_is_a_miss() {
-    let got = misses(&map(&[]), &map(&[("rusty-core", 90.0)]));
+    let got = misses(&map(&[]), &map(&[("navo-core", 90.0)]));
     assert_eq!(
         got,
         vec![FloorMiss {
-            crate_name: "rusty-core".to_string(),
+            crate_name: "navo-core".to_string(),
             actual: None,
             floor: 90.0
         }]
@@ -142,18 +142,18 @@ fn crate_with_floor_and_no_data_is_a_miss() {
 
 #[test]
 fn crate_with_data_and_no_floor_is_ignored() {
-    let got = misses(&map(&[("rusty-core", 10.0)]), &map(&[]));
+    let got = misses(&map(&[("navo-core", 10.0)]), &map(&[]));
     assert_eq!(got, vec![]);
 }
 
 #[test]
 fn crate_with_zero_lines_counts_as_fully_covered() {
     let report = r#"{"data": [{"files": [
-      {"filename": "/home/u/rusty/crates/rusty-ui/src/lib.rs",
+      {"filename": "/home/u/navo/crates/navo-ui/src/lib.rs",
        "summary": {"lines": {"count": 0, "covered": 0, "percent": 0.0}}}
     ]}]}"#;
     let got = crate_line_coverage(report).unwrap();
-    assert!((got["rusty-ui"] - 100.0).abs() < 1e-9);
+    assert!((got["navo-ui"] - 100.0).abs() < 1e-9);
 }
 
 #[test]
@@ -213,22 +213,22 @@ fn report_paths_without_a_crate_name_are_ignored() {
 
 #[test]
 fn report_paths_with_windows_separators_identify_the_crate() {
-    let report = r#"{"data":[{"files":[{"filename":"C:\\repo\\crates\\rusty-core\\src\\lib.rs",
+    let report = r#"{"data":[{"files":[{"filename":"C:\\repo\\crates\\navo-core\\src\\lib.rs",
         "summary":{"lines":{"count":4,"covered":3}}}]}]}"#;
     assert_eq!(
         crate_line_coverage(report).unwrap(),
-        map(&[("rusty-core", 75.0)])
+        map(&[("navo-core", 75.0)])
     );
 }
 
 #[test]
 fn passing_report_prints_each_floor_in_name_order() {
-    let floors = "[floors]\nxtask = 72.5\nrusty-core = 95\n";
+    let floors = "[floors]\nxtask = 72.5\nnavo-core = 95\n";
     assert_eq!(
         super::run::evaluate_report(REPORT, floors).unwrap(),
         (
             vec![
-                "rusty-core: 95.0% (floor 95%)".to_owned(),
+                "navo-core: 95.0% (floor 95%)".to_owned(),
                 "xtask: 75.0% (floor 72.5%)".to_owned(),
             ],
             true
@@ -238,16 +238,16 @@ fn passing_report_prints_each_floor_in_name_order() {
 
 #[test]
 fn failing_report_prints_floors_then_measured_and_missing_crate_misses() {
-    let floors = "[floors]\nxtask = 75\nrusty-core = 96\nrusty-fs = 85\n";
+    let floors = "[floors]\nxtask = 75\nnavo-core = 96\nnavo-fs = 85\n";
     assert_eq!(
         super::run::evaluate_report(REPORT, floors).unwrap(),
         (
             vec![
-                "rusty-core: 95.0% (floor 96%)".to_owned(),
-                "rusty-fs: no data (floor 85%)".to_owned(),
+                "navo-core: 95.0% (floor 96%)".to_owned(),
+                "navo-fs: no data (floor 85%)".to_owned(),
                 "xtask: 75.0% (floor 75%)".to_owned(),
-                "rusty-core: 95.0% < 96%".to_owned(),
-                "rusty-fs: no data < 85%".to_owned(),
+                "navo-core: 95.0% < 96%".to_owned(),
+                "navo-fs: no data < 85%".to_owned(),
             ],
             false
         )
@@ -291,7 +291,7 @@ impl TestReport {
             .unwrap()
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "rusty-coverage-{}-{timestamp}-{id}",
+            "navo-coverage-{}-{timestamp}-{id}",
             std::process::id()
         ));
         std::fs::create_dir(&root).unwrap();
@@ -301,7 +301,7 @@ impl TestReport {
         let prefix = root.to_string_lossy().replace('\\', "/");
         for file in report["data"][0]["files"].as_array_mut().unwrap() {
             let filename = file["filename"].as_str().unwrap();
-            file["filename"] = filename.replace("/home/u/rusty", &prefix).into();
+            file["filename"] = filename.replace("/home/u/navo", &prefix).into();
         }
         std::fs::write(root.join("target/llvm-cov.json"), report.to_string()).unwrap();
         std::fs::write(root.join("xtask/coverage-floors.toml"), floors).unwrap();

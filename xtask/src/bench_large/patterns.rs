@@ -162,7 +162,7 @@ pub(super) fn format_log_line(line: LogLine, output: &mut Vec<u8>) {
     use std::io::Write as _;
     if write!(
         output,
-        "2026-10-20 {hour:02}:{minute:02}:{second:02}.{millis:03} INFO  worker-{worker:02} id={id:010} path=/var/log/ferrite/service.log msg={kind} completed in {} ms{suffix}",
+        "2026-10-20 {hour:02}:{minute:02}:{second:02}.{millis:03} INFO  worker-{worker:02} id={id:010} path=/var/log/navo/service.log msg={kind} completed in {} ms{suffix}",
         id % 97
     )
     .is_err()

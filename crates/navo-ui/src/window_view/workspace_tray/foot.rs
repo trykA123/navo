@@ -1,0 +1,163 @@
+use navo_core::Command;
+use navo_l10n::{t, tr};
+
+use super::super::NavoWindow;
+use super::super::strip::undo_key;
+use super::card::{OnTrayAction, TrayAction};
+use super::rename::Deleted;
+use crate::commands::active;
+use crate::prelude::*;
+use crate::primitives::{IconButton, IconName, Kbd};
+use crate::status_bar::StatusNotice;
+use crate::tokens::Theme;
+
+pub(super) struct Foot<'a> {
+    pub(super) n: usize,
+    pub(super) name: &'a str,
+    pub(super) count: usize,
+}
+
+pub(super) fn run(
+    act: &OnTrayAction,
+    action: TrayAction,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    let act = act.clone();
+    move |_, window, cx| act(&action, window, cx)
+}
+
+fn tools_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
+    let n = foot.n;
+    let mover = |id: &'static str, icon, by: i8, is_disabled: bool| {
+        IconButton::new((id, n), icon, tr(id))
+            .disabled(is_disabled)
+            .on_click(run(act, TrayAction::Move { n, by }))
+    };
+    div()
+        .flex()
+        .items_center()
+        .justify_end()
+        .gap(t.spacing.xxs)
+        .min_w_0()
+        .child(
+            IconButton::new(
+                ("workspace-rename", n),
+                IconName::Pencil,
+                t!("workspace-rename", name = foot.name.to_owned()),
+            )
+            .on_click(run(act, TrayAction::Rename(n))),
+        )
+        .child(mover(
+            "workspace-move-left",
+            IconName::ChevronLeft,
+            -1,
+            n == 1,
+        ))
+        .child(mover(
+            "workspace-move-right",
+            IconName::ChevronRight,
+            1,
+            n == foot.count,
+        ))
+        .child(
+            IconButton::new(
+                ("workspace-delete", n),
+                IconName::Trash,
+                t!("workspace-delete", name = foot.name.to_owned()),
+            )
+            .disabled(foot.count <= 1)
+            .on_click(run(act, TrayAction::Delete(n))),
+        )
+}
+
+pub(super) fn card_foot(t: &Theme, foot: &Foot, act: &OnTrayAction) -> Div {
+    tools_foot(t, foot, act).px(t.spacing.xs)
+}
+
+impl NavoWindow {
+    fn workspace_count(&self) -> usize {
+        let state = self.browser.state();
+        state
+            .window(state.focused_window())
+            .map_or(0, |core| core.workspaces().len())
+    }
+
+    fn last_undo_job(&self) -> Option<u64> {
+        let last = self.browser.rename_hooks()?.last.clone();
+        last().ok().flatten().map(|offer| offer.job)
+    }
+
+    pub(in crate::window_view) fn delete_workspace(
+        &mut self,
+        n: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let count = self.workspace_count();
+        let Some(name) = self.workspace_name(n).filter(|_| count > 1) else {
+            return;
+        };
+        let after_job = self.last_undo_job();
+        self.apply(&Command::WorkspaceDelete { n }, window, cx);
+        if self.workspace_count() == count {
+            return;
+        }
+        self.workspace_keys.edit.deleted = Some(Deleted { after_job });
+        let text = match undo_key(cx) {
+            Some(key) => t!("workspace-deleted-key", name = name, key = key.to_string()),
+            None => t!("workspace-deleted", name = name),
+        };
+        self.show_notice(StatusNotice {
+            text: text.into(),
+            is_error: false,
+        });
+        cx.notify();
+    }
+
+    pub(in crate::window_view) fn create_workspace(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let count = self.workspace_count();
+        self.apply(&Command::WorkspaceNew { name: None }, window, cx);
+        let n = self.workspace_count();
+        let Some(name) = self.workspace_name(n).filter(|_| n > count) else {
+            return;
+        };
+        let text = match preview_key(n, cx) {
+            Some(key) => t!("workspace-created-key", name = name, key = key.to_string()),
+            None => t!("workspace-created", name = name),
+        };
+        self.show_notice(StatusNotice {
+            text: text.into(),
+            is_error: false,
+        });
+        cx.notify();
+    }
+
+    pub(in crate::window_view) fn workspace_undo_after(&self) -> Option<Option<u64>> {
+        self.workspace_keys
+            .edit
+            .deleted
+            .as_ref()
+            .map(|deleted| deleted.after_job)
+    }
+
+    pub(in crate::window_view) fn restore_workspace(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.workspace_keys.edit.deleted = None;
+        self.apply(&Command::WorkspaceRestore, window, cx);
+    }
+}
+
+fn preview_key(n: usize, cx: &App) -> Option<SharedString> {
+    const ORDINALS: [&str; 9] = [
+        "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+    ];
+    let command = format!("workspace.preview_{}", ORDINALS.get(n.checked_sub(1)?)?);
+    let key = active(cx).keys_of(&command).next()?;
+    Kbd::new("workspace-created-key", key).map(|kbd| kbd.text().into())
+}

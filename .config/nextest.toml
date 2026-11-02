@@ -8,12 +8,12 @@ filter = "binary(clipboard_windows) | binary(clipboard_watch_windows) | binary(s
 test-group = "clipboard"
 
 [[profile.default.overrides]]
-filter = "binary(shell_menu_pages_windows) | (package(rusty-app) & test(/^shell_menu::/))"
+filter = "binary(shell_menu_pages_windows) | (package(navo-app) & test(/^shell_menu::/))"
 test-group = "shell"
 retries = 2
 
 [[profile.default.overrides]]
-filter = "package(rusty-app) & (test(/^index_service::timing_tests::/) | test(/^jobs::profile::timing_tests::/))"
+filter = "package(navo-app) & (test(/^index_service::timing_tests::/) | test(/^jobs::profile::timing_tests::/))"
 test-group = "timing"
 
 [profile.default]
@@ -21,7 +21,7 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 
 [profile.ci]
 fail-fast = false
-default-filter = "not (package(rusty-app) & (test(/^index_service::timing_tests::/) | test(/^jobs::profile::timing_tests::/)))"
+default-filter = "not (package(navo-app) & (test(/^index_service::timing_tests::/) | test(/^jobs::profile::timing_tests::/)))"
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 [profile.ci.junit]

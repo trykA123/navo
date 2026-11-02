@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const fonts = path.resolve(here, '../../crates/rusty-ui/fonts');
+const fonts = path.resolve(here, '../../crates/navo-ui/fonts');
 const framesDir = path.join(here, 'frames');
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
 const workers = Number(args.workers ?? 3);

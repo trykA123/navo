@@ -358,7 +358,7 @@ const HIST0 = [
   { k: "text", v: "Flash with TASKING 6.3r1; 6.2 breaks the .mdf import", src: "Teams", t: "1 min" },
   { k: "files", v: ["ecu_a2_main.elf", "ecu_a2_main.map", "ecu_a2.mdf"], dir: "D:\\Projects\\ecu-a2\\build\\out", src: "Navo", t: "4 min" },
   { k: "path", v: "D:\\Projects\\ecu-a2\\build\\out\\ecu_a2_main.elf", src: "Navo", t: "6 min" },
-  { k: "command", v: "cargo xtask check -p rusty-index", src: "Terminal", t: "12 min" },
+  { k: "command", v: "cargo xtask check -p navo-index", src: "Terminal", t: "12 min" },
   { k: "text", v: "https://ci.example.lan/job/ecu-a2/1482/console", src: "Edge", t: "25 min" },
   { k: "text", v: "0x8000_4A10  .text.CanIf_RxIndication  1 284 B", src: "Navo F3", t: "40 min" },
   { k: "files", v: ["DBC_PT_CAN_v14.dbc", "A2L_ecu_a2_r7.a2l"], dir: "\\\\fileserver\\calib\\r7", src: "Navo", t: "1 h" },
@@ -367,7 +367,7 @@ const HIST0 = [
   { k: "path", v: "\\\\fileserver\\calib\\r7\\A2L_ecu_a2_r7.a2l", src: "Navo", t: "Yesterday" },
 ];
 const SAVED0 = [
-  { k: "command", title: "Check the index crate", v: "cargo xtask check -p rusty-index", t: "Today", scope: "global" },
+  { k: "command", title: "Check the index crate", v: "cargo xtask check -p navo-index", t: "Today", scope: "global" },
   { k: "command", title: "Flash ECU A2 over CAN", v: "tricore-flash --port PCAN_USB1 --baud 500k build\\out\\ecu_a2_main.hex", t: "2 days", scope: HERE },
   { k: "path", title: "ECU A2 build output", v: "D:\\Projects\\ecu-a2\\build\\out", t: "Today", scope: "global" },
   { k: "path", title: "Calibration share", v: "\\\\fileserver\\calib\\r7", t: "Last week", scope: "global" },

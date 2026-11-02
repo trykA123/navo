@@ -13,9 +13,9 @@ use std::process::ExitCode;
 
 use check::{ALLOW_FILE, Source, evaluate};
 
-const LOCALES: &str = "crates/rusty-l10n/locales/en-US";
-const RATCHET_CRATES: [&str; 2] = ["rusty-ui", "rusty-app"];
-const OWN_CRATE: &str = "rusty-l10n";
+const LOCALES: &str = "crates/navo-l10n/locales/en-US";
+const RATCHET_CRATES: [&str; 2] = ["navo-ui", "navo-app"];
+const OWN_CRATE: &str = "navo-l10n";
 
 pub fn run(args: &[String]) -> ExitCode {
     let list = match args {

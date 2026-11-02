@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Ferrite modifier hints: four structures behind one picker (keys 1-4 outside the window).
+  Navo modifier hints: four structures behind one picker (keys 1-4 outside the window).
   A Drawer: a shelf rises above the F-key bar with grouped columns; the active list slides up if the cursor row would be covered.
   B Side sheet: an opaque sheet fills the passive pane only, a menu-style list with labels and keys; the active pane is never touched.
   C Key map: the F-key bar grows into a compact keyboard; every key shows what it does on the held layer, in place.
@@ -10,7 +10,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Ferrite modifier hints: four directions</title>
+<title>Navo modifier hints: four directions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -279,7 +279,7 @@ button { font: inherit; color: inherit; }
 <div class="page">
   <header class="head">
     <h1>Modifier hints: what does Ctrl, Shift or Alt do here?</h1>
-    <p>Hold a modifier for 400 ms and Ferrite shows every shortcut on that layer, then hides it on release. A quick tap or a chord such as Ctrl+C never shows it. The F-key bar keeps switching labels as today. Every direction has the same settings row: <span style="font-family:var(--font-mono)">appearance.modifier_hints</span>.</p>
+    <p>Hold a modifier for 400 ms and Navo shows every shortcut on that layer, then hides it on release. A quick tap or a chord such as Ctrl+C never shows it. The F-key bar keeps switching labels as today. Every direction has the same settings row: <span style="font-family:var(--font-mono)">appearance.modifier_hints</span>.</p>
   </header>
   <nav class="toolbar" aria-label="Prototype controls">
     <div class="group"><span class="group-label" id="lbl-d">Direction</span>
@@ -554,7 +554,7 @@ button { font: inherit; color: inherit; }
       <div class="ssec">Appearance</div>
       <div class="srow"><div class="st">Theme<span class="sp"></span><span class="kbdc">System</span></div><div class="sk">appearance.theme</div></div>
       <div class="srow cur"><div class="st">${ic("kb", "sm")}Modifier hints<span class="sp"></span></div>
-        <div class="sd">Hold Ctrl, Shift or Alt and Ferrite shows what it does. Off keeps the F-key bar fixed; F-keys only switches the bar labels, as before; All shortcuts also shows every key on that layer.</div>
+        <div class="sd">Hold Ctrl, Shift or Alt and Navo shows what it does. Off keeps the F-key bar fixed; F-keys only switches the bar labels, as before; All shortcuts also shows every key on that layer.</div>
         <div class="vals" role="group" aria-label="Modifier hints">${[["off", "Off"], ["fkeys", "F-keys only"], ["all", "All shortcuts"]].map(([k, t]) => `<button type="button" data-set="${k}" aria-pressed="${v === k}">${t}</button>`).join("")}</div>
         <div class="sk">appearance.modifier_hints = "${v}"</div></div>
       <div class="srow"><div class="st">Hint delay<span class="sp"></span><span class="kbdc">400 ms</span></div><div class="sd">How long a modifier must be held before the hint opens. Taps and chords such as Ctrl+C never open it.</div><div class="sk">appearance.modifier_hints_delay_ms</div></div>
@@ -565,8 +565,8 @@ button { font: inherit; color: inherit; }
     const d = isD();
     const hint = S.v === 1 ? drawerA() : S.v === 3 ? kmapC() : "";
     const left = d ? `<div class="dleft"><span class="ti"><span class="tip chip" data-l="ctrl" data-sc="${T("ctrl", "j")}">Ctrl+J</span>jobs</span><span class="ti"><span class="tip chip" data-l="ctrl" data-sc="${T("ctrl", "[")}">Ctrl+[ ]</span>sheet</span><button type="button" class="offbtn" data-act="settings">${ic("eyeOff", "sm")}Turn off</button></div>` : "";
-    return `<div class="win d${S.v}" id="win" tabindex="0" aria-label="Ferrite window mock" role="application">
-      <div class="tb"><button type="button" class="appbtn">${LOGO}<span class="wm">Ferrite</span>${ic("chevD", "sm")}${d ? tip("ctrl", ", <i>settings</i>", "inl", T("ctrl", ",")) : ""}</button>
+    return `<div class="win d${S.v}" id="win" tabindex="0" aria-label="Navo window mock" role="application">
+      <div class="tb"><button type="button" class="appbtn">${LOGO}<span class="wm">Navo</span>${ic("chevD", "sm")}${d ? tip("ctrl", ", <i>settings</i>", "inl", T("ctrl", ",")) : ""}</button>
         <button type="button" class="search" data-act="palette">${ic("search", "sm")}<span class="ph">Find anywhere: files, folders, commands</span><span class="kbdc" data-sc="${T("ctrl", "k")}">Ctrl+K</span></button>
         <div class="ctl"><span>${ic("max", "sm")}</span><span>${ic("x", "sm")}</span></div></div>
       <div class="body">${card("L")}${card("R")}${d ? `<span class="split-tip">${tip("ctrl+shift", "0 <i>reset split</i>", "mid", T("ctrl+shift", "0"))}</span>` : ""}${S.sheet ? settingsSheet() : ""}</div>

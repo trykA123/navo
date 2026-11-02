@@ -6,15 +6,15 @@ P35's storage APIs and startup workflow are implemented on `backend/beta-recover
 
 ## Startup ownership
 
-Startup acquires `ferrite.startup-lock` before the existing `ferrite.lock` database-session lock. Only a sole session may check, quarantine or recover. Another live session permits ordinary database use only when no pending workflow or failed-check sentinel exists and the database is present.
+Startup acquires `navo.startup-lock` before the existing `navo.lock` database-session lock. Only a sole session may check, quarantine or recover. Another live session permits ordinary database use only when no pending workflow or failed-check sentinel exists and the database is present.
 
 The sole session checks integrity after an unclean exit or failed-check sentinel. SQLite `CORRUPT` and `NOTADB` errors trigger quarantine. Busy, I/O and future-schema errors stop startup recovery without quarantining files. Every application database connection retains the session lease until SQLite closes, including background settings connections.
 
-Startup downgrades exclusive session ownership while still holding the startup lock. A failed downgrade retains startup ownership through the connection leases. A per-profile access gate blocks later opens after a failed preflight, even when writing `ferrite.db.check-failed` also fails.
+Startup downgrades exclusive session ownership while still holding the startup lock. A failed downgrade retains startup ownership through the connection leases. A per-profile access gate blocks later opens after a failed preflight, even when writing `navo.db.check-failed` also fails.
 
 ## Quarantine
 
-`quarantine_database(path)` preserves a closed database as `ferrite.db.corrupt-N`, followed by its `-wal` and `-shm` files. The caller must own the profile exclusively and close all SQLite connections first. The recovery lock serializes recovery callers; it does not lock ordinary SQLite connections.
+`quarantine_database(path)` preserves a closed database as `navo.db.corrupt-N`, followed by its `-wal` and `-shm` files. The caller must own the profile exclusively and close all SQLite connections first. The recovery lock serializes recovery callers; it does not lock ordinary SQLite connections.
 
 The lowest completely unused slot is chosen. Strict native no-replace rename is preferred; hard-link publication remains the fallback when native rename is unavailable. Existing destinations are never replaced. This removes the hard-link requirement on supported native filesystems. Symbolic links and directories are refused.
 
@@ -42,7 +42,7 @@ SQLite's partial integrity check does not validate foreign keys or cross-table p
 
 The versioned `store-recovery.json` records Preserve, Build, Promote and Recover phases. Records have a 1 MiB limit and validated numeric identifiers. Malformed, unsupported or conflicting records stop recovery. File mutations use fixed filenames; symbolic links and nonregular files are refused.
 
-Build creates a new `ferrite-rebuild-CASE-ATTEMPT.db` for every attempt. Interrupted candidates remain available. The candidate uses DELETE journaling, receives verified salvage, and is closed and synced before promotion. `ferrite-recovery-CASE-ATTEMPT.jsonl` stores the full salvage report and readable manual-recovery paths before promotion.
+Build creates a new `navo-rebuild-CASE-ATTEMPT.db` for every attempt. Interrupted candidates remain available. The candidate uses DELETE journaling, receives verified salvage, and is closed and synced before promotion. `navo-recovery-CASE-ATTEMPT.jsonl` stores the full salvage report and readable manual-recovery paths before promotion.
 
 Promotion prefers strict native no-replace rename, with hard-link publication as fallback. Neither path replaces an existing file. The workflow records the candidate's volume, file identity and native/legacy identity domain. Old native records retain their representation. A retry recognizes its own interrupted promotion by identity; a different replacement file, even with identical bytes, stops recovery. Unexpected sidecars also prevent promotion. Successful native rename consumes the stage, so a replacement appearing at its former name is never cleaned up. Fallback and resumed cleanup recheck the remaining stage identity before removal.
 
@@ -62,4 +62,4 @@ The notice survives clean restarts until explicitly dismissed. Damaged database 
 
 Linux tests exercise real corrupted SQLite files, lease lifetime, interrupted phases, source/replacement identity checks, untrusted journals, failed rollback and persistent notices. Native Linux screenshots cover both themes at normal and minimum window widths. Native Windows sharing, interruption and notice behavior still require a Windows runner; no release sign-off is implied.
 
-The ignored linkless-filesystem tests require an explicit isolated `FERRITE_QUARANTINE_TEST_ROOT`. They verify that the selected filesystem rejects hard links before exercising quarantine or full recovery. Run the store `quarantine_succeeds_on_a_native_filesystem_without_hard_links` test and app `complete_recovery_supports_a_native_filesystem_without_hard_links` test with `-- --ignored`. Full recovery also requires a stable file identity. These manual filesystem cases have not run on this Linux host; Windows FAT identities remain conservatively unsupported as documented in the alpha identity report.
+The ignored linkless-filesystem tests require an explicit isolated `NAVO_QUARANTINE_TEST_ROOT`. They verify that the selected filesystem rejects hard links before exercising quarantine or full recovery. Run the store `quarantine_succeeds_on_a_native_filesystem_without_hard_links` test and app `complete_recovery_supports_a_native_filesystem_without_hard_links` test with `-- --ignored`. Full recovery also requires a stable file identity. These manual filesystem cases have not run on this Linux host; Windows FAT identities remain conservatively unsupported as documented in the alpha identity report.

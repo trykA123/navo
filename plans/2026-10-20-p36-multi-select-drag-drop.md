@@ -4,7 +4,7 @@ Status: ready (owner answered Q1–Q4 on 2026-10-20) · Repo: `<repo>` · Branch
 
 ## Goal
 
-The user can mark files from the keyboard and the mouse the way Windows and Total Commander users expect: Shift ranges that grow and shrink, Ctrl+A, unmark all, restore the last marks, mark by extension, Ctrl+click and Shift+click. The user can drag files inside Ferrite onto the other pane, a folder row, a tab, a breadcrumb or the drive pill, then drag files in from Explorer and the desktop, and drag files out to Explorer and other programs. Every drop into Ferrite runs through the planner, the job journal and the copy card, like F5/F6.
+The user can mark files from the keyboard and the mouse the way Windows and Total Commander users expect: Shift ranges that grow and shrink, Ctrl+A, unmark all, restore the last marks, mark by extension, Ctrl+click and Shift+click. The user can drag files inside Navo onto the other pane, a folder row, a tab, a breadcrumb or the drive pill, then drag files in from Explorer and the desktop, and drag files out to Explorer and other programs. Every drop into Navo runs through the planner, the job journal and the copy card, like F5/F6.
 
 ## What exists today (checked at 9d36589)
 
@@ -24,8 +24,8 @@ The user can mark files from the keyboard and the mouse the way Windows and Tota
   - Drops also work on Linux, on both X11 and Wayland (`gpui-pre-linux`).
 - **GPUI drag out.** gpui-pre 0.3.9 already has the API: `external_drag_payload` on `on_drag`. When the pointer leaves the viewport with the left button down, GPUI calls `start_external_drag` (`window.rs:5763-5792`). When the drag comes back over the window, `restore_platform_drag` restores the internal drag. macOS and Wayland implement `start_external_drag`. The Windows crate does not.
 - **Mouse capture.** The Windows crate calls `SetCapture` on mouse down (`events.rs:476`), so moves outside the window still arrive.
-- **COM and threads.** The GPUI UI thread is already STA: `OleInitialize` at `vendor/gpui-pre-windows/src/platform.rs:183`. `rusty-shell` has a PIDL helper (`shell_menu/win/selection.rs`), `CF_HDROP` encode/decode (`clipboard/model.rs`) and a separate STA worker for the shell menu.
-- **Explorer clipboard (P24).** `FileClipboardService` in `window_view/clipboard.rs` and `rusty-app/src/clipboard.rs` (`path_location`, `without_verbatim`, `rusty_fs::os_path`). `Browser::paste` is the closest model for a drop: an explicit source list, the target is the active folder, `asks: false`.
+- **COM and threads.** The GPUI UI thread is already STA: `OleInitialize` at `vendor/gpui-pre-windows/src/platform.rs:183`. `navo-shell` has a PIDL helper (`shell_menu/win/selection.rs`), `CF_HDROP` encode/decode (`clipboard/model.rs`) and a separate STA worker for the shell menu.
+- **Explorer clipboard (P24).** `FileClipboardService` in `window_view/clipboard.rs` and `navo-app/src/clipboard.rs` (`path_location`, `without_verbatim`, `navo_fs::os_path`). `Browser::paste` is the closest model for a drop: an explicit source list, the target is the active folder, `asks: false`.
 
 ## Decisions
 
@@ -33,7 +33,7 @@ Final. The owner answered Q1–Q4 on 2026-10-20 (see the Log). Workers never reo
 
 - **D1 — Three shippable parts, in this order.** Each part ends in a gate (`cargo xtask gate`, Windows CI, an Opus high review, merge, an alpha build).
   - Part K: keyboard and mouse multi-select.
-  - Part D: drag and drop inside Ferrite.
+  - Part D: drag and drop inside Navo.
   - Part X: Explorer in (X-in), then Explorer out (X-out).
   - The plan has 31 atoms. Under the about-15-atoms rule, the orchestrator may save the parts as `p36a-multi-select`, `p36b-drag-drop` and `p36c-explorer-drag`, with the decisions shared.
 - **D2 — The Total Commander mark model stays (D15).** Marks are separate from the cursor; a plain click and plain arrows never change marks. Every new gesture adds or removes marks. Only an explicit unmark-all and the empty-space click (D7) clear them, and both save the marks first (D5).
@@ -60,7 +60,7 @@ Final. The owner answered Q1–Q4 on 2026-10-20 (see the Log). Workers never reo
 - **D8 — Right-drag stays Total Commander range marking.** 
   - D15 gets finished: right-drag paints rows in D3 span mode. It marks, or unmarks when the start row was marked, and shrinks when the pointer moves back. A release after a drag does not toggle.
   - Windows uses right-drag for a drop menu, but GPUI starts drags only on the left button. Right-button file drags would need our own drag machinery and could never be promoted to an OLE drag.
-  - Ferrite shows the Windows drop menu when a *right-button drag from Explorer* drops on Ferrite (X-in, D16).
+  - Navo shows the Windows drop menu when a *right-button drag from Explorer* drops on Navo (X-in, D16).
   - An Explorer-style right-drag setting comes later if the owner asks.
 - **D9 — What a drag carries.**
   - If the pressed row is marked, the drag carries all visible marked rows. Otherwise it carries only the pressed row. Marks do not change.
@@ -77,13 +77,13 @@ Final. The owner answered Q1–Q4 on 2026-10-20 (see the Log). Workers never reo
 
   - Refused drops: the source's own folder ("Already in this folder"), and a folder into itself or below itself ("Cannot drop a folder into itself"). These are the `PasteRefusal` rules.
   - Refused targets show a muted badge, and a release does nothing.
-- **D11 — Operation rule (Windows).** `rusty_core::drop_op(same_volume, DropKeys) -> DropOp`:
+- **D11 — Operation rule (Windows).** `navo_core::drop_op(same_volume, DropKeys) -> DropOp`:
   - Alt, or Ctrl+Shift → Link (a shortcut);
   - Ctrl → Copy;
   - Shift → Move;
   - no modifier → Move on the same volume, Copy otherwise.
   - Same volume means `volume_of` is equal, as for F6 and paste. Other providers count as another volume.
-  - There is no `.exe` exception. Explorer links `.exe` files by default; Ferrite does not.
+  - There is no `.exe` exception. Explorer links `.exe` files by default; Navo does not.
   - The planner checks the volume serial again before it plans a rename (V1).
 - **D12 — Badge.** The GPUI drag view follows the pointer.
   - First line: the icon and "Move 3 items to Projects", "Copy 1 item to D:\" or "Create 3 shortcuts in Desktop".
@@ -115,30 +115,30 @@ Final. The owner answered Q1–Q4 on 2026-10-20 (see the Log). Workers never reo
   - The vendored drop target is patched:
     1. It stores `grfKeyState` per window.
     2. It dispatches the GPUI event first, then reads the drop-effect hint the app set, and returns that hint from `DragEnter` / `DragOver` (`DROPEFFECT_NONE` when no target accepts).
-    3. `Drop` never returns `DROPEFFECT_MOVE`, so the source never deletes. Ferrite does every move itself through the planner. B0 confirms whether `NONE` or `COPY` is returned for a move.
+    3. `Drop` never returns `DROPEFFECT_MOVE`, so the source never deletes. Navo does every move itself through the planner. B0 confirms whether `NONE` or `COPY` is returned for a move.
     4. It exports `drag_key_state(hwnd)` and `set_drop_effect(hwnd, effect)`.
-  - A right-button drag from Explorer opens Ferrite's drop menu: Copy here, Move here, Create shortcuts here, Cancel.
+  - A right-button drag from Explorer opens Navo's drop menu: Copy here, Move here, Create shortcuts here, Cancel.
   - Virtual files (Outlook attachments, zip contents, phones) carry no `CF_HDROP` and are refused, as in P24 D4.
 - **D17 — Drag out (X-out).**
-  - The OLE work lives in `rusty-shell::drag_out`:
-    - `data_object(paths)` builds a shell data object with `SHCreateDataObject(parent PIDL, child PIDLs)`, reusing the `Pidl` type, which moves to `rusty-shell/src/pidl.rs`;
+  - The OLE work lives in `navo-shell::drag_out`:
+    - `data_object(paths)` builds a shell data object with `SHCreateDataObject(parent PIDL, child PIDLs)`, reusing the `Pidl` type, which moves to `navo-shell/src/pidl.rs`;
     - `drag_files(hwnd, paths)` runs `SHDoDragDrop` with no drop source (the shell's default source and drag image) and allows COPY | MOVE | LINK.
   - The vendored crate gets a thin hook:
     - `can_start_external_drag()` returns true when a handler is registered;
     - `start_external_drag(payload)` stores the payload and posts `WM_USER + 11` to its own window;
-    - the message handler calls the handler that rusty-app registered, then sends `FileDropEvent::Ended`.
+    - the message handler calls the handler that navo-app registered, then sends `FileDropEvent::Ended`.
   - Threading:
     - Everything runs on GPUI's UI thread, which is STA and already initialized with OLE.
     - `SHDoDragDrop` is modal and pumps messages, so it starts from the posted message and never inside GPUI's event dispatch. Inside the dispatch it would re-enter borrowed App state.
     - The shell-menu STA worker is not used, because its thread does not own the mouse capture.
   - Effects:
-    - Ferrite never deletes after a drag out. The target (Explorer) copies or moves and keeps its own undo.
+    - Navo never deletes after a drag out. The target (Explorer) copies or moves and keeps its own undo.
     - When the drag ends, the source pane is refreshed for folders without a watcher.
-    - A drag that comes back over Ferrite becomes internal again (`restore_platform_drag`).
+    - A drag that comes back over Navo becomes internal again (`restore_platform_drag`).
 - **D18 — Linux (secondary, D30).**
   - Works: keyboard and mouse marks, the internal drag, drops in from file managers on X11 and Wayland, drag out on Wayland (GPUI's own code), Link as a symlink.
   - Does not work:
-    - modifiers during drops from other apps (no key state reaches Ferrite, so the default rule applies);
+    - modifiers during drops from other apps (no key state reaches Navo, so the default rule applies);
     - drag out on X11;
     - the Explorer drop menu.
   - V1 fixes the cross-device move. Before V1, the default on Linux is always Move.
@@ -183,7 +183,7 @@ Later, not in P36:
 
 | Component | Layer | Contract (in → out) | New / change | Test |
 | --- | --- | --- | --- | --- |
-| `selection` span and extension | core lib | `Selection::extend(cursor, to, unmark)`, `end_span()`, `mark_extension(&Listing, ext, on)` | change | `rusty-core/src/selection/tests/span.rs` (unit + proptest) |
+| `selection` span and extension | core lib | `Selection::extend(cursor, to, unmark)`, `end_span()`, `mark_extension(&Listing, ext, on)` | change | `navo-core/src/selection/tests/span.rs` (unit + proptest) |
 | `command` text forms | core | `SelectionExtend { to: CursorMove, mode: SpanMode }`, `SelectionExtension { mark: bool }`, `SelectionRestore` ↔ text | change | command round-trip tests + insta |
 | `apply::select` | core | commands → `AppState` (span end, `last_marks`, all with folders) | change | `apply/tests/select_span.rs` |
 | `browser::filter` hidden marks | ui controller | refilter keeps hidden names; `hidden_marks(tab) -> u64` | change | `browser/filter/marks_tests.rs` |
@@ -199,11 +199,11 @@ Later, not in P36:
 | `pane_chrome` targets | ui | tab, crumb and pill accept `DropPayload` → `Location` | change | `pane_chrome/tests.rs` |
 | planner same-volume check (V1) | ui controller | `plan_for` checks `volume_serial` before renaming | change | `browser/operate` tests |
 | `OpKind::Link` plan | core | `Step::MakeLink { target_of, at }` | change | `op_plan` tests |
-| `ProviderOps::make_link` | fs adapter | `(target_of, at) → Result<(), FsError>`, job step, undo | new | `rusty-fs` job tests, Windows CI |
+| `ProviderOps::make_link` | fs adapter | `(target_of, at) → Result<(), FsError>`, job step, undo | new | `navo-fs` job tests, Windows CI |
 | vendored drop target | platform (vendor) | key state + effect hint, never MOVE | change | Windows build, owner check |
 | `DropPlatform` bridge | ui contract, app adapter | `keys()`, `set_effect(Option<DropOp>)`, `locations(&[PathBuf])`, `paths(&[Location])` | new | `window_view/tests/drop_external.rs` (fake) |
 | drop menu | ui | right-button external drop → 4 items | new | `window_view/tests/drop_external.rs` |
-| `rusty-shell::drag_out` | shell adapter | `data_object(&[PathBuf])`, `drag_files(hwnd, &[PathBuf])` | new | `rusty-shell/tests/drag_out_windows.rs` |
+| `navo-shell::drag_out` | shell adapter | `data_object(&[PathBuf])`, `drag_files(hwnd, &[PathBuf])` | new | `navo-shell/tests/drag_out_windows.rs` |
 | vendored drag-source hook | platform (vendor) | `set_external_drag_handler(fn)`, posted start, `Ended` | change | Windows build, owner check |
 | drag-out wiring | ui + app | `external_drag_payload` from the session | change | `window_view/tests/drag_out.rs` (TestPlatform result) |
 
@@ -211,37 +211,37 @@ Later, not in P36:
 
 | Atom | Component | Role | Effort | After | Check | Status | Cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| K1 | `selection` span and extension | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-core selection` | done (e921926) | |
-| K2a | `command` text forms | api-builder (Sol 6.1) | xhigh | K1 | `cargo nextest run -p rusty-core command`; insta reviewed | done (e921926) | |
-| K2b | `apply::select` | api-builder (Sol 6.1) | xhigh | K2a | `cargo nextest run -p rusty-core apply` | done (e921926) | |
-| K3 | `browser::filter` hidden marks | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-ui browser::filter` | done (`Event::MarksRestored`) | |
-| K4a | `file_list` key actions | ui-builder (Sonnet) | medium | K2b | `cargo nextest run -p rusty-ui file_list` | done | |
-| K4b | bindings, registry, labels, key tests | ui-builder (Sonnet) | medium | K4a | `cargo nextest run -p rusty-ui file_list commands`; `cargo xtask gate` (l10n) | done | |
-| K5 | `file_list` mouse | ui-builder (Opus) | medium | K4b | `cargo nextest run -p rusty-ui file_list window_view::tests::shell_menu` | done | |
-| K5b | `file_list` left-drag lasso (D20) | ui-builder (Opus) | medium | K5 | `cargo nextest run -p rusty-ui file_list::tests::lasso` | done | |
-| K6 | status bar hidden count | ui-builder (Sonnet) | medium | K3, K4b | `cargo nextest run -p rusty-ui status_bar window_view` | done (7ddacda) | |
+| K1 | `selection` span and extension | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-core selection` | done (e921926) | |
+| K2a | `command` text forms | api-builder (Sol 6.1) | xhigh | K1 | `cargo nextest run -p navo-core command`; insta reviewed | done (e921926) | |
+| K2b | `apply::select` | api-builder (Sol 6.1) | xhigh | K2a | `cargo nextest run -p navo-core apply` | done (e921926) | |
+| K3 | `browser::filter` hidden marks | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-ui browser::filter` | done (`Event::MarksRestored`) | |
+| K4a | `file_list` key actions | ui-builder (Sonnet) | medium | K2b | `cargo nextest run -p navo-ui file_list` | done | |
+| K4b | bindings, registry, labels, key tests | ui-builder (Sonnet) | medium | K4a | `cargo nextest run -p navo-ui file_list commands`; `cargo xtask gate` (l10n) | done | |
+| K5 | `file_list` mouse | ui-builder (Opus) | medium | K4b | `cargo nextest run -p navo-ui file_list window_view::tests::shell_menu` | done | |
+| K5b | `file_list` left-drag lasso (D20) | ui-builder (Opus) | medium | K5 | `cargo nextest run -p navo-ui file_list::tests::lasso` | done | |
+| K6 | status bar hidden count | ui-builder (Sonnet) | medium | K3, K4b | `cargo nextest run -p navo-ui status_bar window_view` | done (7ddacda) | |
 | K7 | review Part K | reviewer (Opus) | high | K5, K6 | review notes; gate; Windows CI | done (0a44f5c) | |
-| D1 | `op_plan::drop_op` | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-core op_plan::drop` | done (1fe41f4) | |
-| D2 | `Browser::drop_into` | api-builder (Sol 6.1) | xhigh | D1 | `cargo nextest run -p rusty-ui browser::operate` | done (39299b2) | |
-| D3 | `drop-confirm` setting | ui-builder (Sonnet) | medium | — | `cargo nextest run -p rusty-store settings`, `-p rusty-ui settings` | done | |
-| D4 | `drag` badge | ui-builder (Sonnet) | medium | D1 | `cargo nextest run -p rusty-ui drag`; gallery shot | done | |
-| D5 | `file_list` drag source and targets | ui-builder (Opus) | medium | D4, K5 | `cargo nextest run -p rusty-ui file_list::tests::drag` | done | |
-| D6 | `window_view::drop` | ui-builder (Opus) | medium | D2, D3, D5 | `cargo nextest run -p rusty-ui window_view::tests::drop` | done | |
-| D7a | tab and crumb targets | ui-builder (Sonnet) | medium | D6 | `cargo nextest run -p rusty-ui pane_chrome window_view::tests::drop` | done | |
+| D1 | `op_plan::drop_op` | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-core op_plan::drop` | done (1fe41f4) | |
+| D2 | `Browser::drop_into` | api-builder (Sol 6.1) | xhigh | D1 | `cargo nextest run -p navo-ui browser::operate` | done (39299b2) | |
+| D3 | `drop-confirm` setting | ui-builder (Sonnet) | medium | — | `cargo nextest run -p navo-store settings`, `-p navo-ui settings` | done | |
+| D4 | `drag` badge | ui-builder (Sonnet) | medium | D1 | `cargo nextest run -p navo-ui drag`; gallery shot | done | |
+| D5 | `file_list` drag source and targets | ui-builder (Opus) | medium | D4, K5 | `cargo nextest run -p navo-ui file_list::tests::drag` | done | |
+| D6 | `window_view::drop` | ui-builder (Opus) | medium | D2, D3, D5 | `cargo nextest run -p navo-ui window_view::tests::drop` | done | |
+| D7a | tab and crumb targets | ui-builder (Sonnet) | medium | D6 | `cargo nextest run -p navo-ui pane_chrome window_view::tests::drop` | done | |
 | D7b | drive pill target | ui-builder (Sonnet) | medium | D7a | same | done | |
-| V1 | planner same-volume check | api-builder (Sol 6.1) | xhigh | D2 | `cargo nextest run -p rusty-ui browser::operate`; Linux cross-device test | done (e4f06a1) | |
-| D8 | auto-scroll, spring-loaded targets (optional) | ui-builder (Opus) | medium | D7b | `cargo nextest run -p rusty-ui window_view::tests::drop` | done | |
-| L1 | `OpKind::Link` plan | api-builder (Sol 6.1) | xhigh | D2 | `cargo nextest run -p rusty-core op_plan` | done | |
-| L2 | `ProviderOps::make_link` + job step + undo | api-builder (Sol 6.1) | xhigh | L1 | `cargo nextest run -p rusty-fs job`; Windows CI `test-windows` | done | |
-| L3 | Link in drop and badge | ui-builder (Sonnet) | medium | L2, D7b | `cargo nextest run -p rusty-ui window_view::tests::drop drag` | done | |
+| V1 | planner same-volume check | api-builder (Sol 6.1) | xhigh | D2 | `cargo nextest run -p navo-ui browser::operate`; Linux cross-device test | done (e4f06a1) | |
+| D8 | auto-scroll, spring-loaded targets (optional) | ui-builder (Opus) | medium | D7b | `cargo nextest run -p navo-ui window_view::tests::drop` | done | |
+| L1 | `OpKind::Link` plan | api-builder (Sol 6.1) | xhigh | D2 | `cargo nextest run -p navo-core op_plan` | done | |
+| L2 | `ProviderOps::make_link` + job step + undo | api-builder (Sol 6.1) | xhigh | L1 | `cargo nextest run -p navo-fs job`; Windows CI `test-windows` | done | |
+| L3 | Link in drop and badge | ui-builder (Sonnet) | medium | L2, D7b | `cargo nextest run -p navo-ui window_view::tests::drop drag` | done | |
 | D9 | review Part D | reviewer (Opus) | high | D7b, V1, L3 (D8 if run) | review notes; gate; Windows CI | blocked | |
 | X0 | OLE facts | researcher (Sonnet) | medium | — | answers with sources, in the Log | done (Log) | |
 | X1 | vendored drop target | api-builder (Opus) | medium | X0 | `cargo build --target x86_64-pc-windows-msvc` in CI; unit test of the key-state mapping | done (Windows CI); owner check pending | |
-| X2 | `DropPlatform` bridge, external drops | ui-builder (Opus) | medium | X1, D9 | `cargo test -p rusty-ui drop --lib` | done (Linux); Windows pending | |
+| X2 | `DropPlatform` bridge, external drops | ui-builder (Opus) | medium | X1, D9 | `cargo test -p navo-ui drop --lib` | done (Linux); Windows pending | |
 | X3 | drop menu | ui-builder (Sonnet) | medium | X2 | same | done (Linux); Windows pending | |
-| X4 | `rusty-shell::drag_out` | api-builder (Opus) | medium | X0 | `cargo nextest run -p rusty-shell drag_out` (Windows CI) | done | |
+| X4 | `navo-shell::drag_out` | api-builder (Opus) | medium | X0 | `cargo nextest run -p navo-shell drag_out` (Windows CI) | done | |
 | X5 | vendored drag-source hook | api-builder (Opus) | medium | X1, X4 | Windows CI build; owner check | done (Windows CI); owner check pending | |
-| X6 | drag-out wiring | ui-builder (Opus) | medium | X5, X2 | `cargo test -p rusty-ui drop --lib` | done (Linux); Windows pending | |
+| X6 | drag-out wiring | ui-builder (Opus) | medium | X5, X2 | `cargo test -p navo-ui drop --lib` | done (Linux); Windows pending | |
 | X7 | review Part X | reviewer (Opus) | high | X3, X6 | review notes; gate; Windows CI; owner check list | blocked | |
 
 Parallel lanes:
@@ -251,7 +251,7 @@ Parallel lanes:
 
 ### K1 — span and extension marks in `Selection`
 
-- **Read:** `crates/rusty-core/src/selection/mod.rs:1-175`, `selection/tests/mod.rs`, `selection/tests/bulk.rs` (style), `crates/rusty-ui/src/file_list/kind.rs` (`split_name`: the extension rule to copy).
+- **Read:** `crates/navo-core/src/selection/mod.rs:1-175`, `selection/tests/mod.rs`, `selection/tests/bulk.rs` (style), `crates/navo-ui/src/file_list/kind.rs` (`split_name`: the extension rule to copy).
 - **Change:**
   - Add a private `Span { anchor: u64, base: Vec<u64>, unmark: bool }` and `span: Option<Span>` to `Selection`.
   - `pub fn extend(&mut self, from_cursor: u64, to: u64, unmark: bool)`: it starts a span when none exists, saving the bits and taking `from_cursor` as the anchor. It then recomputes bits = base, and sets or clears [min(anchor, to), max(anchor, to)], clamped to `len`.
@@ -259,7 +259,7 @@ Parallel lanes:
   - `pub fn mark_extension(&mut self, listing: &Listing, ext: Option<&str>, on: bool)`: files only, last extension, case-insensitive. `None` means no extension.
   - `clear()` also ends the span.
   - `new()` starts with no span, so `set_listing` ends it.
-- **Check:** `cargo nextest run -p rusty-core selection`. New tests in `selection/tests/span.rs`:
+- **Check:** `cargo nextest run -p navo-core selection`. New tests in `selection/tests/span.rs`:
   - grow, shrink, crossing the anchor, unmark mode;
   - the base is kept outside the span;
   - clamping at `len`;
@@ -270,17 +270,17 @@ Parallel lanes:
 
 ### K2a — command variants and text forms
 
-- **Read:** `crates/rusty-core/src/command/mod.rs:1-120`, `command/id.rs`, `command/parse.rs:100-180`, `command/print.rs:30-60`, the command tests and snapshots.
+- **Read:** `crates/navo-core/src/command/mod.rs:1-120`, `command/id.rs`, `command/parse.rs:100-180`, `command/print.rs:30-60`, the command tests and snapshots.
 - **Change:**
   - Add `SelectionExtend { to: CursorMove, unmark: bool }`, `SelectionExtension { mark: bool }` and `SelectionRestore`.
   - Text forms: `selection.extend to=down unmark=false` (`to` takes the `CursorMove` keywords or a row number, like `PaneCursorMove`), `selection.extension mark=true`, `selection.restore`.
   - This is four files of one component, about 70 lines. The orchestrator accepts that overrun.
-- **Check:** `cargo nextest run -p rusty-core command`. Round-trip tests for every new form and for bad arguments; the insta snapshot shows only the new ids.
-- **Stop if:** `CommandId` lists are generated or snapshotted elsewhere (rusty-ui `command_registry.snap`). Report it; do not edit rusty-ui.
+- **Check:** `cargo nextest run -p navo-core command`. Round-trip tests for every new form and for bad arguments; the insta snapshot shows only the new ids.
+- **Stop if:** `CommandId` lists are generated or snapshotted elsewhere (navo-ui `command_registry.snap`). Report it; do not edit navo-ui.
 
 ### K2b — apply rules
 
-- **Read:** `crates/rusty-core/src/apply/mod.rs:66-110`, `apply/select.rs`, `state/mod.rs:18-23`, `state/tab.rs:205-260` (`keep_by_name`, `set_listing`, `leave`), `apply/tests/`.
+- **Read:** `crates/navo-core/src/apply/mod.rs:66-110`, `apply/select.rs`, `state/mod.rs:18-23`, `state/tab.rs:205-260` (`keep_by_name`, `set_listing`, `leave`), `apply/tests/`.
 - **Change:**
   - `extend`: calls `Selection::extend(cursor, target)`, where the target is resolved like `PaneCursorMove` (use the same helper), then sets the cursor and calls `reveal_cursor`.
   - At the top of `apply`, every command except `SelectionExtend` calls `end_span()` on the active tab.
@@ -289,7 +289,7 @@ Parallel lanes:
   - `AppState.last_marks: Option<Vec<String>>`, capped at 100,000 names. It is saved by `SelectionClear` when marks exist and by `Tab::leave` (pass it through the existing navigation path).
   - `SelectionRestore` marks the matching names and returns `CommandError::NothingToRestore` when none match.
   - Not saved in the session.
-- **Check:** `cargo nextest run -p rusty-core apply`. Tests:
+- **Check:** `cargo nextest run -p navo-core apply`. Tests:
   - Shift sequence grow and shrink;
   - a toggle ends the span;
   - a listing reload ends it;
@@ -302,14 +302,14 @@ Parallel lanes:
 
 ### K3 — marks survive the filter (D6)
 
-- **Read:** `crates/rusty-ui/src/browser/filter/mod.rs:1-265`, `browser/filter/tests.rs:1-60`, `crates/rusty-core/src/state/tab.rs:185-240`.
+- **Read:** `crates/navo-ui/src/browser/filter/mod.rs:1-265`, `browser/filter/tests.rs:1-60`, `crates/navo-core/src/state/tab.rs:185-240`.
 - **Change:**
   - `Browser` keeps `hidden_marks: HashMap<TabId, HashSet<String>>`.
   - Before a refilter event, collect the marked names that the new shown listing lacks and add them to the set.
   - After the event, mark the set's names that are now visible (`Command`-free: use the existing event path plus `SelectionAddPattern` is wrong; add a crate-internal `Browser::remark(tab, names)` through an `Event::MarksRestored { tab, names }` only if the core lacks one, otherwise stop and report).
   - Navigation and `SelectionClear` empty the set.
   - Add `pub fn hidden_marks(&self, tab) -> u64`.
-- **Check:** `cargo nextest run -p rusty-ui browser::filter`. In `marks_tests.rs`:
+- **Check:** `cargo nextest run -p navo-ui browser::filter`. In `marks_tests.rs`:
   - filter, then Ctrl+A-equivalent, then another filter, then clear: both groups are marked;
   - `selected_sources` never contains hidden rows;
   - navigating away empties the set.
@@ -317,21 +317,21 @@ Parallel lanes:
 
 ### K4a — key actions
 
-- **Read:** `crates/rusty-ui/src/file_list/keys.rs:1-198`, `file_list/mod.rs:161-235`.
+- **Read:** `crates/navo-ui/src/file_list/keys.rs:1-198`, `file_list/mod.rs:161-235`.
 - **Change:**
   - New actions: `ExtendUp`, `ExtendDown`, `ExtendPageUp`, `ExtendPageDown`, `ExtendFirst`, `ExtendLast`, `MarkAll`, `UnmarkAll`, `RestoreMarks`, `MarkExtension`, `UnmarkExtension`. They send the K2 commands.
   - `RestoreMarks` always restores. It does not take the `mark_key` filter path, because no name contains `/`.
-- **Check:** `cargo nextest run -p rusty-ui file_list` (existing tests stay green); it compiles with no unbound actions warned by `bind_namespace`.
+- **Check:** `cargo nextest run -p navo-ui file_list` (existing tests stay green); it compiles with no unbound actions warned by `bind_namespace`.
 - **Stop if:** an action name is already registered in another namespace.
 
 ### K4b — bindings, registry, labels, key tests
 
-- **Read:** `crates/rusty-ui/src/commands/keymap.toml:190-335`, `commands/window.rs:220-330`, `crates/rusty-l10n/locales/en-US/commands.ftl:50-80`, `file_list/tests/input.rs:1-120`.
+- **Read:** `crates/navo-ui/src/commands/keymap.toml:190-335`, `commands/window.rs:220-330`, `crates/navo-l10n/locales/en-US/commands.ftl:50-80`, `file_list/tests/input.rs:1-120`.
 - **Change:**
   - The table's keys go into `keymap.toml` under `# FileList`.
   - Registry rows go into `commands/window.rs`, and `cmd-files-*` labels into `commands.ftl`.
   - Update `bound_keys.snap`, `bound_order.snap` and `command_registry.snap`. Only the new rows may appear.
-- **Check:** `cargo nextest run -p rusty-ui file_list commands`, then `cargo xtask gate`. Tests:
+- **Check:** `cargo nextest run -p navo-ui file_list commands`, then `cargo xtask gate`. Tests:
   - Shift+Down ×3 marks rows 0–3, and Shift+Up shrinks to 0–2;
   - Ctrl+A marks folders too;
   - Ctrl+Shift+A clears, and `/` brings the marks back;
@@ -343,7 +343,7 @@ Parallel lanes:
 
 ### K5 — mouse
 
-- **Read:** `crates/rusty-ui/src/file_list/press.rs:1-163`, `file_list/mod.rs:262-300` and `368-418`, `window_view/tests/shell_menu.rs:200-300` and `760-800`, `file_list/tests/input.rs:40-120`.
+- **Read:** `crates/navo-ui/src/file_list/press.rs:1-163`, `file_list/mod.rs:262-300` and `368-418`, `window_view/tests/shell_menu.rs:200-300` and `760-800`, `file_list/tests/input.rs:40-120`.
 - **Change:**
   - Row: with Ctrl or Shift held, mouse-down does not move the cursor. `on_click` (mouse up, no drag) does Ctrl → cursor plus toggle, and Shift → `SelectionExtend { to: Row(r) }`.
   - Empty click: a left mouse-down on the list area whose y is below the last row's bottom (from `list_bounds`, the scroll position and the row count) sends `SelectionClear`.
@@ -352,7 +352,7 @@ Parallel lanes:
     - `drag_over` sends `SelectionExtend { to: Row(r), unmark: start_marked }` on every row change;
     - `right_up` toggles only when no drag happened.
   - `file_list/mod.rs` is near the 400-line gate, so move `render_row` and `render_rows` into `file_list/rows.rs` if needed.
-- **Check:** `cargo nextest run -p rusty-ui file_list window_view::tests::shell_menu`. Tests:
+- **Check:** `cargo nextest run -p navo-ui file_list window_view::tests::shell_menu`. Tests:
   - Ctrl+click toggles two rows;
   - Shift+click from the cursor marks the range;
   - an empty click clears and `/` restores;
@@ -365,14 +365,14 @@ Parallel lanes:
 
 - **Read:** D3, D7, D9, D20; `file_list/press.rs`, `file_list/mod.rs`.
 - **Change:** a left drag that starts on empty space draws a lasso rectangle and applies D3 span marks to the rows it crosses (Ctrl toggles); a drag that starts on a name or icon stays a file drag; a click without movement on empty space keeps D7.
-- **Check:** `cargo nextest run -p rusty-ui file_list::tests::lasso`: lasso marks the crossed rows, shrinks when moved back, keeps earlier marks, Ctrl+lasso unmarks, a drag on a name does not lasso.
+- **Check:** `cargo nextest run -p navo-ui file_list::tests::lasso`: lasso marks the crossed rows, shrinks when moved back, keeps earlier marks, Ctrl+lasso unmarks, a drag on a name does not lasso.
 - **Stop if:** GPUI cannot tell a drag start on empty space inside a row from one on the name.
 
 ### K6 — hidden-mark count in the footer
 
-- **Read:** `crates/rusty-ui/src/status_bar.rs`, `status_bar/` tests, `window_view/pane.rs:80-110`.
+- **Read:** `crates/navo-ui/src/status_bar.rs`, `status_bar/` tests, `window_view/pane.rs:80-110`.
 - **Change:** `StatusBarProps.hidden_marks: u64`, filled from `browser.hidden_marks(tab)`. It renders as "· N hidden by filter" next to the marked totals; the text is in `files.ftl`.
-- **Check:** `cargo nextest run -p rusty-ui status_bar window_view`.
+- **Check:** `cargo nextest run -p navo-ui status_bar window_view`.
 - **Stop if:** the footer layout has no slot next to the marked totals.
 
 ### K7 — review Part K
@@ -388,14 +388,14 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
 
 ### D1 — drop operation rule
 
-- **Read:** `crates/rusty-core/src/op_plan/mod.rs:1-70`.
+- **Read:** `crates/navo-core/src/op_plan/mod.rs:1-70`.
 - **Change:** new `op_plan/drop.rs`. `DropKeys { ctrl, shift, alt }` (Default), `DropOp { Copy, Move, Link }` and `pub fn drop_op(same_volume: bool, keys: DropKeys) -> DropOp`, following D11. Re-export it.
-- **Check:** `cargo nextest run -p rusty-core op_plan::drop`: a table test of all 16 combinations.
+- **Check:** `cargo nextest run -p navo-core op_plan::drop`: a table test of all 16 combinations.
 - **Stop if:** none expected.
 
 ### D2 — `Browser::drop_into`
 
-- **Read:** `crates/rusty-ui/src/browser/operate/mod.rs:200-280`, `operate/paste.rs`, `operate/types.rs:100-128`, `operate/tests/` (rig).
+- **Read:** `crates/navo-ui/src/browser/operate/mod.rs:200-280`, `operate/paste.rs`, `operate/types.rs:100-128`, `operate/tests/` (rig).
 - **Change:**
   - `pub struct DropRequest { kind: OpKind, sources: Vec<Location>, target: Location, confirm: DropConfirm }`.
   - `pub enum DropConfirm { Never, Moves, Always }`.
@@ -406,7 +406,7 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
     - `source_tab` is the tab that holds the sources' parent if open, else the active tab.
   - `paste` calls `drop_into` with the active folder and `Never`.
   - `pub fn same_volume(a, b) -> bool` for the badge.
-- **Check:** `cargo nextest run -p rusty-ui browser::operate`. Tests:
+- **Check:** `cargo nextest run -p navo-ui browser::operate`. Tests:
   - a drop into another folder starts a Move on the same fake volume;
   - Copy keeps the sources;
   - into itself and already-here are refused;
@@ -417,31 +417,31 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
 
 ### D3 — `drop-confirm` setting
 
-- **Read:** `crates/rusty-store/src/settings/model.rs:84-110`, `crates/rusty-ui/src/settings/values.rs:200-240`, `settings/fields.rs` (a `Files` enum field such as `hidden-files`).
+- **Read:** `crates/navo-store/src/settings/model.rs:84-110`, `crates/navo-ui/src/settings/values.rs:200-240`, `settings/fields.rs` (a `Files` enum field such as `hidden-files`).
 - **Change:**
   - `Files.drop_confirm: DropConfirm` (kebab-case, default `moves`).
   - A field row in the Files section with one sentence: "Ask before a dragged move runs".
   - Text goes in `settings.ftl`.
-- **Check:** `cargo nextest run -p rusty-store settings` and `-p rusty-ui settings`. The default is written to `ferrite.toml`, and D56's ledger records it.
+- **Check:** `cargo nextest run -p navo-store settings` and `-p navo-ui settings`. The default is written to `navo.toml`, and D56's ledger records it.
 - **Stop if:** the settings schema needs a migration.
 
 ### D4 — drag badge
 
-- **Read:** `crates/rusty-ui/src/side_sheet/view.rs:20-55` (drag view pattern), `tokens/`, `crates/rusty-ui/src/job_card/` (look), `crates/rusty-l10n/locales/en-US/files.ftl`.
+- **Read:** `crates/navo-ui/src/side_sheet/view.rs:20-55` (drag view pattern), `tokens/`, `crates/navo-ui/src/job_card/` (look), `crates/navo-l10n/locales/en-US/files.ftl`.
 - **Change:**
-  - New `crates/rusty-ui/src/drag/`, with `mod.rs`, `badge.rs` and `tests.rs`.
+  - New `crates/navo-ui/src/drag/`, with `mod.rs`, `badge.rs` and `tests.rs`.
   - `FileDrag { pane: PaneId, row: u64 }` (Clone).
   - `DragState { count, first_name, hover: Option<Hover { target_label, op: Option<DropOp>, refusal: Option<SharedString> }>, keys_line: bool }`.
   - `DragBadge` is an `Entity` view that renders from `Entity<DragState>` (D12) with theme tokens only.
   - Strings: `drag-move`, `drag-copy`, `drag-link`, `drag-keys`, `drag-refused-*`, with Fluent plurals.
   - A gallery story shows the states.
-- **Check:** `cargo nextest run -p rusty-ui drag`: label per op, count plural, refused look, keys line hidden when `keys_line` is false. Plus one gallery screenshot (`timeout 300`, fresh folder).
+- **Check:** `cargo nextest run -p navo-ui drag`: label per op, count plural, refused look, keys line hidden when `keys_line` is false. Plus one gallery screenshot (`timeout 300`, fresh folder).
 - **Stop if:** gpui-kit's theme lacks a token the badge needs.
 
 ### D5 — file list as drag source and drop target
 
 - **Read:**
-  - `crates/rusty-ui/src/file_list/mod.rs:40-130` and `262-300`;
+  - `crates/navo-ui/src/file_list/mod.rs:40-130` and `262-300`;
   - `gpui-pre-0.3.9/src/elements/div.rs:560-660` (in `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/`);
   - `gpui-pre-0.3.9/src/interactive.rs:690-760`;
   - `side_sheet/mod.rs:215-230`.
@@ -454,7 +454,7 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
   - The row cell gets an id (`("cell", row)`) and `.on_drag(FileDrag { pane, row }, …)`, only when `on_drag_start` is set.
   - Folder rows get `drag_over` styling (accent outline from tokens), `on_drag_move` for hover, and `on_drop` for both payload types.
   - The list background accepts drops as `Folder`.
-- **Check:** `cargo nextest run -p rusty-ui file_list::tests::drag`. With a recording host:
+- **Check:** `cargo nextest run -p navo-ui file_list::tests::drag`. With a recording host:
   - a left drag from row 2 calls `on_drag_start` with row 2;
   - a drop on a folder row emits `Row(n)`;
   - a drop below the rows emits `Folder`;
@@ -464,7 +464,7 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
 
 ### D6 — window drop glue
 
-- **Read:** `crates/rusty-ui/src/window_view/pane.rs:260-347`, `window_view/clipboard.rs:140-180`, `window_view/hints.rs:20-40` (modifier observation), `browser/operate/mod.rs:200-245`, `window_view/tests/clipboard.rs` (rig).
+- **Read:** `crates/navo-ui/src/window_view/pane.rs:260-347`, `window_view/clipboard.rs:140-180`, `window_view/hints.rs:20-40` (modifier observation), `browser/operate/mod.rs:200-245`, `window_view/tests/clipboard.rs` (rig).
 - **Change:**
   - New `window_view/drop.rs`:
     - `DragSession { sources: Vec<Location>, source_pane, state: Entity<DragState> }`, frozen in `on_drag_start` by D9 (`selected_sources` when the pressed row is marked, else that row);
@@ -475,7 +475,7 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
     - the badge re-renders on modifier change.
   - Wire `FileList` in `pane.rs`.
   - `pub(super) fn drop_on(&mut self, target: Location, payload, window, cx)` is reused by D7.
-- **Check:** `cargo nextest run -p rusty-ui window_view::tests::drop`, with `FakeFs` and two panes:
+- **Check:** `cargo nextest run -p navo-ui window_view::tests::drop`, with `FakeFs` and two panes:
   - drag `home/a.txt` onto the right pane → Move job, file in `dest`;
   - Ctrl held → Copy;
   - 3 marked, drag a marked row → 3 sources;
@@ -484,32 +484,32 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
   - onto its own folder → no job plus a notice;
   - Esc → no job;
   - `drop-confirm = moves` → dialog for Move.
-- **Stop if:** the badge constructor cannot reach `FerriteWindow` without re-entering its update.
+- **Stop if:** the badge constructor cannot reach `NavoWindow` without re-entering its update.
 
 ### D7a — tab and breadcrumb targets
 
-- **Read:** `crates/rusty-ui/src/pane_chrome/mod.rs:30-131`, `pane_chrome/path_bar.rs`, `pane_chrome/segments.rs`, `window_view/pane.rs:230-262`, `window_view/drop.rs` (from D6).
+- **Read:** `crates/navo-ui/src/pane_chrome/mod.rs:30-131`, `pane_chrome/path_bar.rs`, `pane_chrome/segments.rs`, `window_view/pane.rs:230-262`, `window_view/drop.rs` (from D6).
 - **Change:**
   - `PaneTabs` and `PathBar` take `on_drop(Fn(&(usize | Location), &DropPayload, …))` and `on_hover`, with `drag_over` styling.
   - `pane.rs` maps tab i to that tab's location and a segment to its location, then calls `drop_on`.
-- **Check:** `cargo nextest run -p rusty-ui pane_chrome window_view::tests::drop`: a drop on tab 2 copies into tab 2's folder without activating it; a drop on the root crumb targets the root.
+- **Check:** `cargo nextest run -p navo-ui pane_chrome window_view::tests::drop`: a drop on tab 2 copies into tab 2's folder without activating it; a drop on the root crumb targets the root.
 - **Stop if:** tab titles have no stable per-tab element id.
 
 ### D7b — drive pill target
 
-- **Read:** `crates/rusty-ui/src/pane_chrome/drive_pill.rs`, `pane_chrome/drives.rs` (`current_drive`), `window_view/drives.rs`.
+- **Read:** `crates/navo-ui/src/pane_chrome/drive_pill.rs`, `pane_chrome/drives.rs` (`current_drive`), `window_view/drives.rs`.
 - **Change:** the pill accepts drops; the target is the root of the drive the pill shows. The rest follows D7a.
 - **Check:** same command. A drop on the pill targets `<drive root>`; a refusal when the sources are that root.
 - **Stop if:** the pill has no drive location on Linux. Then it is not a target there; note that in the test.
 
 ### V1 — the planner checks the volume serial
 
-- **Read:** `crates/rusty-ui/src/browser/operate/work.rs:1-80`, `crates/rusty-fs/src/provider/ops.rs`, `rusty-fs/src/local/ops.rs:125-137`.
+- **Read:** `crates/navo-ui/src/browser/operate/work.rs:1-80`, `crates/navo-fs/src/provider/ops.rs`, `navo-fs/src/local/ops.rs:125-137`.
 - **Change:**
   - `plan_for` takes `&dyn ProviderOps`.
   - When `request.same_volume` is true, compare `volume_serial` of the first source's parent and of the target. If both are `Some` and they differ, plan as another volume (copy plus delete).
   - This runs on the planner thread, never on the UI thread.
-- **Check:** `cargo nextest run -p rusty-ui browser::operate`:
+- **Check:** `cargo nextest run -p navo-ui browser::operate`:
   - a fake provider with two serials plans `CopyFile` steps;
   - equal serials plan `Rename`;
   - on Linux CI, a tmpfs (`/dev/shm`) to `$TMPDIR` move succeeds when the devices differ (skip when they are equal).
@@ -523,42 +523,42 @@ Then: gate, Windows CI, merge, an alpha build, and the owner checks the key tabl
   - Hover timers for D15 targets: they are cancelled by leaving the target, by Esc and by the drop.
   - Drive menu rows accept drops.
   - All of it is off with `reduce-motion`.
-- **Check:** `cargo nextest run -p rusty-ui window_view::tests::drop`, with a test clock: an 800 ms hover opens the folder; leaving at 700 ms does not.
+- **Check:** `cargo nextest run -p navo-ui window_view::tests::drop`, with a test clock: an 800 ms hover opens the folder; leaving at 700 ms does not.
 - **Stop if:** the drive menu cannot open while a drag is active.
 
 ### L1 — `OpKind::Link` in the planner
 
-- **Read:** `crates/rusty-core/src/op_plan/{mod,build,names,risks}.rs`, `op_plan/tests/`.
+- **Read:** `crates/navo-core/src/op_plan/{mod,build,names,risks}.rs`, `op_plan/tests/`.
 - **Change:**
   - `OpKind::Link`; `Step::MakeLink { target_of: Location, at: Location }`.
   - Names: `<name> - Shortcut.lnk` on Windows targets, `<name>` on Unix, with `(2)` numbering through `names.rs`.
   - No walk into folders. Totals count links.
   - Add an arm to every `match` on `OpKind` the compiler reports, with labels "Create shortcuts".
   - The journal reads old plans unchanged.
-- **Check:** `cargo nextest run -p rusty-core op_plan`. Tests: names, conflicts, folders as one link, a journal round-trip of a Link plan, an old plan JSON fixture still parses.
-- **Stop if:** a `match` sits outside rusty-core and rusty-ui (report the list).
+- **Check:** `cargo nextest run -p navo-core op_plan`. Tests: names, conflicts, folders as one link, a journal round-trip of a Link plan, an old plan JSON fixture still parses.
+- **Stop if:** a `match` sits outside navo-core and navo-ui (report the list).
 
 ### L2 — make links in the job engine
 
-- **Read:** `crates/rusty-fs/src/provider/ops.rs`, `rusty-fs/src/job/{run,undo}.rs`, `rusty-fs/src/fake/`, `rusty-fs/src/local/{unix,ops}.rs`.
+- **Read:** `crates/navo-fs/src/provider/ops.rs`, `navo-fs/src/job/{run,undo}.rs`, `navo-fs/src/fake/`, `navo-fs/src/local/{unix,ops}.rs`.
 - **Change:**
   - `ProviderOps::make_link(&self, target_of, at) -> Result<(), FsError>` (required).
   - Fake: records a link entry.
   - Unix: `std::os::unix::fs::symlink`.
   - Windows: `IShellLinkW::SetPath` plus `IPersistFile::Save`, with `CoInitializeEx(COINIT_APARTMENTTHREADED)` on the job thread for the duration of the step.
   - The job step journals the created path. Undo and recovery remove it with `remove_file` (Windows) or `remove_link` (Unix).
-- **Check:** `cargo nextest run -p rusty-fs job`. Tests:
+- **Check:** `cargo nextest run -p navo-fs job`. Tests:
   - the fake creates and undoes the link;
   - a conflict fails the step without touching the existing file;
   - Unix temp-dir symlink test;
   - a Windows CI test resolves the `.lnk` target with `IShellLinkW::GetPath`.
-- **Stop if:** `windows` crate features for `IShellLinkW` are missing in rusty-fs (add them only to rusty-fs).
+- **Stop if:** `windows` crate features for `IShellLinkW` are missing in navo-fs (add them only to navo-fs).
 
 ### L3 — Link in drops and the badge
 
 - **Read:** `window_view/drop.rs`, `drag/badge.rs`, `window_view/operate/mod.rs:1-60`.
 - **Change:** `DropOp::Link` maps to `OpKind::Link`; the badge shows "Create N shortcuts in X"; `confirm_props` and the job card show it.
-- **Check:** `cargo nextest run -p rusty-ui window_view::tests::drop drag`: Alt and Ctrl+Shift drops create links on `FakeFs`.
+- **Check:** `cargo nextest run -p navo-ui window_view::tests::drop drag`: Alt and Ctrl+Shift drops create links on `FakeFs`.
 - **Stop if:** none expected.
 
 ### D9 — review Part D
@@ -591,7 +591,7 @@ The answers go into the Log; X1, X4 and X5 follow them.
   - `DragEnter` and `DragOver`: store `grfKeyState`, dispatch the GPUI event first, then write `*pdweffect = hint.unwrap_or(COPY)` (`NONE` when the app set "none"), then call the helper.
   - `Drop`: dispatch first, then return the hint mapped by X0's rule. It is never `DROPEFFECT_MOVE`.
   - Export `pub fn set_drop_effect(hwnd: isize, effect: Option<u32>)` and `pub fn drag_key_state(hwnd: isize) -> u32`, found through `GWLP_USERDATA`, the way the window procedure finds its inner state.
-  - A header comment lists the Ferrite patches.
+  - A header comment lists the Navo patches.
   - Add a line to `docs/dev-tools.md`.
 - **Check:**
   - Windows CI builds.
@@ -601,38 +601,38 @@ The answers go into the Log; X1, X4 and X5 follow them.
 
 ### X2 — `DropPlatform` bridge and external drops
 
-- **Read:** `crates/rusty-app/src/clipboard.rs` (adapter pattern), `rusty-app/src/gui.rs` (StartOptions wiring), `window_view/drop.rs`, `gpui-pre-0.3.9/src/window.rs:8780-8960` (tests that dispatch `FileDropEvent`).
+- **Read:** `crates/navo-app/src/clipboard.rs` (adapter pattern), `navo-app/src/gui.rs` (StartOptions wiring), `window_view/drop.rs`, `gpui-pre-0.3.9/src/window.rs:8780-8960` (tests that dispatch `FileDropEvent`).
 - **Change:**
-  - In rusty-ui, `pub trait DropPlatform { fn keys(&self) -> DropKeys; fn right_button(&self) -> bool; fn set_effect(&self, op: Option<DropOp>); fn locations(&self, paths: &[PathBuf]) -> Result<Vec<Location>, String>; fn paths(&self, items: &[Location]) -> Vec<(PathBuf, bool)>; }`, given in `StartOptions`. The default `NoPlatform` uses the window modifiers.
-  - In rusty-app: on Windows it uses the X1 functions with the window's HWND (`shell_menu/targets.rs:56` shows how to get it), `startup::path_location` and `rusty_fs::os_path` + `without_verbatim`. On Unix, keys are empty and `set_effect` does nothing.
+  - In navo-ui, `pub trait DropPlatform { fn keys(&self) -> DropKeys; fn right_button(&self) -> bool; fn set_effect(&self, op: Option<DropOp>); fn locations(&self, paths: &[PathBuf]) -> Result<Vec<Location>, String>; fn paths(&self, items: &[Location]) -> Vec<(PathBuf, bool)>; }`, given in `StartOptions`. The default `NoPlatform` uses the window modifiers.
+  - In navo-app: on Windows it uses the X1 functions with the window's HWND (`shell_menu/targets.rs:56` shows how to get it), `startup::path_location` and `navo_fs::os_path` + `without_verbatim`. On Unix, keys are empty and `set_effect` does nothing.
   - `window_view/drop.rs` handles `DropPayload::External`: paths → Locations, hover → `set_effect`, keys from the platform.
-- **Check:** `cargo nextest run -p rusty-ui window_view::tests::drop_external`, with a fake platform:
+- **Check:** `cargo nextest run -p navo-ui window_view::tests::drop_external`, with a fake platform:
   - `Entered` / `Pending` / `Submit` over the right pane → Copy job from the paths;
   - fake Shift → Move;
   - fake "same folder" → refused, and `set_effect(None)` was called;
   - a path that `locations` rejects → notice, no job.
-- **Stop if:** `StartOptions` cannot carry another service without changing `rusty-app` tests widely.
+- **Stop if:** `StartOptions` cannot carry another service without changing `navo-app` tests widely.
 
 ### X3 — drop menu for right-button drags from Explorer
 
-- **Read:** `crates/rusty-ui/src/context_menu/` (component), `window_view/drop.rs`.
+- **Read:** `crates/navo-ui/src/context_menu/` (component), `window_view/drop.rs`.
 - **Change:**
   - When `platform.right_button()` was true during the drag, a drop opens the context-menu component at the drop point with four items: Copy here, Move here, Create shortcuts here (when Link exists), Cancel.
   - The chosen item calls `drop_into`. Esc cancels.
   - Text goes in `files.ftl`.
-- **Check:** `cargo nextest run -p rusty-ui window_view::tests::drop_external`: fake right button → the menu opens; "Move here" → Move job; Esc → no job.
-- **Stop if:** the context menu cannot open without a shell session (use its Ferrite-only section).
+- **Check:** `cargo nextest run -p navo-ui window_view::tests::drop_external`: fake right button → the menu opens; "Move here" → Move job; Esc → no job.
+- **Stop if:** the context menu cannot open without a shell session (use its Navo-only section).
 
-### X4 — `rusty-shell::drag_out`
+### X4 — `navo-shell::drag_out`
 
-- **Read:** `crates/rusty-shell/src/shell_menu/win/selection.rs:1-83`, `shell_menu/win/sta.rs:45-60`, `clipboard/{mod,model,windows}.rs`, `crates/rusty-shell/Cargo.toml`, X0's answers.
+- **Read:** `crates/navo-shell/src/shell_menu/win/selection.rs:1-83`, `shell_menu/win/sta.rs:45-60`, `clipboard/{mod,model,windows}.rs`, `crates/navo-shell/Cargo.toml`, X0's answers.
 - **Change:**
   - Move `Pidl` to `src/pidl.rs` (`pub(crate)`); `shell_menu` uses it from there.
   - New `drag_out/{mod,windows,unix}.rs`:
     - `pub fn data_object(paths: &[PathBuf]) -> Result<IDataObject, DragError>` (Windows only; same parent required, otherwise `DragError::MixedFolders`);
     - `pub fn drag_files(hwnd: isize, paths: &[PathBuf]) -> Result<DropOutcome, DragError>`, which calls `SHDoDragDrop(hwnd, data, None, COPY|MOVE|LINK)` and must run on the window's UI thread (documented on the fn);
     - Unix returns `Unsupported`.
-- **Check:** `cargo nextest run -p rusty-shell drag_out`. A Windows CI test with two temp files: the data object's `CF_HDROP` decodes (`decode_drop_files`) to the same paths, and `Shell IDList Array` is offered. Shell-menu tests stay green.
+- **Check:** `cargo nextest run -p navo-shell drag_out`. A Windows CI test with two temp files: the data object's `CF_HDROP` decodes (`decode_drop_files`) to the same paths, and `Shell IDList Array` is offered. Shell-menu tests stay green.
 - **Stop if:** `SHCreateDataObject` is missing from the pinned `windows` 0.62.2 features.
 
 ### X5 — vendored drag-source hook
@@ -644,17 +644,17 @@ The answers go into the Log; X1, X4 and X5 follow them.
   - `start_external_drag` stores the payload in the window state, posts `WM_GPUI_EXTERNAL_DRAG = WM_USER + 11` and returns true.
   - `handle_msg` handles it without holding any `state` borrow while the handler runs, then sends `FileDropEvent::Ended` through the input callback.
   - Add to the patch header and `docs/dev-tools.md`.
-- **Check:** Windows CI builds; owner check: drag two files from Ferrite to the desktop (copy on another drive, move on the same drive, Ctrl, Shift), and drag out and back in to the other pane.
+- **Check:** Windows CI builds; owner check: drag two files from Navo to the desktop (copy on another drive, move on the same drive, Ctrl, Shift), and drag out and back in to the other pane.
 - **Stop if:** the modal loop re-enters the GPUI input callback while it is borrowed (report the stack; do not add global locks).
 
 ### X6 — drag-out wiring
 
-- **Read:** `file_list/drop.rs`, `window_view/drop.rs`, `rusty-app/src/gui.rs`, `gpui-pre-0.3.9/src/platform/test/window.rs` (`set_start_external_drag_result`).
+- **Read:** `file_list/drop.rs`, `window_view/drop.rs`, `navo-app/src/gui.rs`, `gpui-pre-0.3.9/src/platform/test/window.rs` (`set_start_external_drag_result`).
 - **Change:**
   - The rows add `.external_drag_payload::<FileDrag>(…)`, which returns `ExternalDragPayload::Files(FileDragPaths::new(platform.paths(&session.sources)))`. Non-local sources return `None`.
   - On `FileDropEvent::Ended` the session is cleared and the source tab runs `PaneRefresh` when it has no watcher.
-  - rusty-app registers `rusty_shell::drag_files` with `set_external_drag_handler` at start on Windows.
-- **Check:** `cargo nextest run -p rusty-ui window_view::tests::drag_out`:
+  - navo-app registers `navo_shell::drag_files` with `set_external_drag_handler` at start on Windows.
+- **Check:** `cargo nextest run -p navo-ui window_view::tests::drag_out`:
   - with the test platform accepting, dragging past the window edge hands the drag to the platform with the frozen paths;
   - re-entering restores it, and a drop on the other pane plans a job;
   - an archive or fake source offers no payload.
@@ -664,7 +664,7 @@ The answers go into the Log; X1, X4 and X5 follow them.
 
 Opus high, on X1–X6 and both vendor patches. Focus:
 - `Drop` never returns MOVE;
-- Ferrite never deletes after a drag out;
+- Navo never deletes after a drag out;
 - the posted-message start, with no App borrow;
 - PIDL lifetimes;
 - `unsafe` comments.
@@ -687,9 +687,9 @@ Then: gate, Windows CI, merge, an alpha build, and the owner check list (D16, D1
   - Refusals and Esc start no job.
   - Checked by the D6, D7 and L3 tests, Windows CI, and the owner check.
 - **Part X.**
-  - Files dragged from Explorer or the desktop drop into Ferrite with the Windows default and modifiers, the cursor shows the true effect, and Explorer never deletes anything.
+  - Files dragged from Explorer or the desktop drop into Navo with the Windows default and modifiers, the cursor shows the true effect, and Explorer never deletes anything.
   - A right-drag from Explorer opens the drop menu.
-  - Files dragged from Ferrite drop into Explorer, the desktop and mail clients as copies, moves or shortcuts.
+  - Files dragged from Navo drop into Explorer, the desktop and mail clients as copies, moves or shortcuts.
   - Linux matches D18.
   - Checked by X2, X3, X4 and X6 tests, Windows CI, and the owner's check list.
 - After every part: `cargo xtask gate` and Windows CI are green, the Opus high review is approved, and the part is merged and released as an alpha.
@@ -726,8 +726,8 @@ Then: gate, Windows CI, merge, an alpha build, and the owner check list (D16, D1
 
 ## Questions for the owner (answered 2026-10-20)
 
-**Q1 — Right-drag.** Should right-drag stay Total Commander range marking (finished properly), with Windows' drop menu only for right-button drags that come from Explorer? Or should right-drag in Ferrite become the Windows drop menu?
-*Recommended:* keep Total Commander marking (D8). GPUI drags only start on the left button, so Explorer-style right-drag out of Ferrite would need our own drag code and could never reach Explorer. The Explorer-to-Ferrite menu is cheap and covers the Windows habit. We can add a setting later.
+**Q1 — Right-drag.** Should right-drag stay Total Commander range marking (finished properly), with Windows' drop menu only for right-button drags that come from Explorer? Or should right-drag in Navo become the Windows drop menu?
+*Recommended:* keep Total Commander marking (D8). GPUI drags only start on the left button, so Explorer-style right-drag out of Navo would need our own drag code and could never reach Explorer. The Explorer-to-Navo menu is cheap and covers the Windows habit. We can add a setting later.
 
 **Q2 — Confirmation for drops.** `[files] drop-confirm`: `never` (like Explorer), `moves`, or `always` (like Total Commander's default)?
 *Recommended:* `moves` until Ctrl+Z for jobs ships with the multi-rename and safety-net work, then `never` automatically through D56's default-follow. Copies and shortcuts never ask, and protected folders always ask.
@@ -751,26 +751,26 @@ Answers (2026-10-20): Q1 yes, Total Commander right-drag marking. Q2 `never`, as
   - Footer text is now "N marked not shown", since show-hidden/show-system also hide marks.
 - 2026-10-20 — Table brought up to date: K6, K7, D1, D2 and V1 had merged without their rows changing.
 - 2026-10-20 — X0 answers (Microsoft Learn and The Old New Thing; worth a Windows check):
-  - Drop from Explorer that Ferrite moves itself: return `DROPEFFECT_NONE` from `Drop` and `SetData` `CFSTR_PERFORMEDDROPEFFECT = DROPEFFECT_NONE` (an optimized move). Explorer deletes the sources only when it sees `DROPEFFECT_MOVE`. `Logical Performed DropEffect` is read by the source; the target need not set it. Sources: learn.microsoft.com/windows/win32/shell/datascenarios, devblogs.microsoft.com/oldnewthing/20041208-00/?p=37093.
+  - Drop from Explorer that Navo moves itself: return `DROPEFFECT_NONE` from `Drop` and `SetData` `CFSTR_PERFORMEDDROPEFFECT = DROPEFFECT_NONE` (an optimized move). Explorer deletes the sources only when it sees `DROPEFFECT_MOVE`. `Logical Performed DropEffect` is read by the source; the target need not set it. Sources: learn.microsoft.com/windows/win32/shell/datascenarios, devblogs.microsoft.com/oldnewthing/20041208-00/?p=37093.
   - `SHCreateDataObject` takes one parent PIDL plus child PIDLs, so all children share one parent. It documents `CFSTR_SHELLIDLIST`, not `CF_HDROP`; the shell's object is believed to render `CF_HDROP` lazily (unconfirmed: X4 tests it with `GetData`). For several folders use `SHCreateDataObject` with a null parent and absolute PIDLs, or `GetUIObjectOf` (unconfirmed).
   - `SHDoDragDrop` with a null `IDropSource` creates the default source (Vista+) and a generic image when none is stored; a custom image goes in through `IDragSourceHelper`.
   - `DoDragDrop` is a modal loop on the STA thread; our window procedure and our own drop target can run nested inside it. Hold no `RefCell` borrow, lock or `&mut` app state across the call; re-read state after it; expect our own window as a target. Start it only from a real mouse message with the button down (not touch or pen).
 - 2026-10-20 — D3 done on `p36-d3`: `[files] drop-confirm = never | moves | always`, default `never`, with a Settings row.
-- 2026-10-20 — D4 done on `p36-d4`: `rusty-ui::drag` badge (DragState, DragBadge, Refusal), `drag-*` strings, gallery page `p36-d4-drag-badge`.
+- 2026-10-20 — D4 done on `p36-d4`: `navo-ui::drag` badge (DragState, DragBadge, Refusal), `drag-*` strings, gallery page `p36-d4-drag-badge`.
 - 2026-10-20 — L1 done: `OpKind::Link` and `Step::MakeLink { target_of, at }` in the planner (`op_plan/build/link.rs`); `<name> - Shortcut.lnk` on Windows-style targets, `<name>` elsewhere, always numbered on a clash, one link per top item, totals count links. Running or undoing a `MakeLink` fails with `FsErrorKind::NotSupportedYet` until L2; activity, job card and confirm texts have Link arms.
 - 2026-10-20 — D5 done on `p36-d5`: `FileList::pane/on_drag_start/on_drop/on_hover`; the drag source is a `grip` around the icon and name text, not the whole cell, so gap presses still lasso; folder rows take drops as `Row(n)` with an accent ring, the list background as `Folder`; `on_hover` reports every drag move (caller dedupes); GPUI clears pending clicks on redraw during a drag, and a drag start also swallows the source row's click for a release before the redraw.
-- 2026-10-20 — L2 done: `ProviderOps::make_link` (a provided method that refuses with `NotSupportedYet`, so the rusty-ui test providers stay untouched; FakeFs and LocalFs implement it) makes a symlink on Unix and a `.lnk` on Windows and never replaces an existing name. Undo and recovery remove only a symlink (Unix, fake) or a `.lnk` file (Windows) at the step's path and skip anything else. Recovery treats a Link job's first step as unsure only while it is still `pending`, so a link that failed on a clash is never removed.
+- 2026-10-20 — L2 done: `ProviderOps::make_link` (a provided method that refuses with `NotSupportedYet`, so the navo-ui test providers stay untouched; FakeFs and LocalFs implement it) makes a symlink on Unix and a `.lnk` on Windows and never replaces an existing name. Undo and recovery remove only a symlink (Unix, fake) or a `.lnk` file (Windows) at the step's path and skip anything else. Recovery treats a Link job's first step as unsure only while it is still `pending`, so a link that failed on a clash is never removed.
 - 2026-10-20 — L2 review fixes: `ProviderOps::link_target` (provided, default `None`; Unix `read_link`, Windows shell link `GetPath`, FakeFs from its links, which `rename` now carries) lets undo and recovery remove a link only when it still points at the step's target. Windows links use the `\?\` form for the place, the temp folder and the no-replace move, and a failed save reports the final name. `DriveFs` forwards `make_link` and `link_target`.
 - 2026-10-20 — D6 done on `p36-d6`: `window_view/drop.rs` freezes the sources at drag start (all marks when the pressed row is marked, else that row), focuses the source pane, and keeps it focused after the drop; hover reports are tracked per pane and only change the badge when the hover differs; the op comes from the modifiers on release; refusals and Alt drops ("Shortcuts from a drop come next", `drag-link-later`) show a notice and run nothing; external payloads are ignored. Escape is a keystroke interceptor owned by the drag session, because the Escape key binding wins over key-down listeners. `Values::drop_confirm` maps the setting; `browser::drop_refusal` is public for the badge. The window's three observers moved to `window_view/watches.rs` to keep `mod.rs` under 400 lines. The badge's keys line shows unless modifier hints are off.
 - 2026-10-20 — D7a done on `p36-d7a`: `drag::Landing<T>` adds the accent ring, drop and hover handlers to any element for internal and external payloads; `Tabs`, `PaneTabs` and `PathBar` take `on_drop(&target, &payload)` and `on_hover(&target, inside)`. `window_view/drop.rs` maps tab i to that tab's folder and a crumb to its own location, then reuses `drop_on`, so the badge, refusals and Esc are the same; a tab drop never activates the tab. The hover target is now `Over::{Spot, Tab, Crumb}`.
 - 2026-10-20 — D7b done on `p36-d7b`: `DrivePill` takes `Landing<Location>` (`on_drop`, `on_hover`) and is a target only while its drive is connected; the target is that drive's root. `Over::Drive(pane, root)` reuses `drop_on`, so badge, refusals and Esc match the other targets. Spring-loading the pill dropdown and drops on its rows stay in D8.
 - 2026-10-20 — L3 done on `p36-l3`: `run_drop` maps `DropOp::Link` to `OpKind::Link` and goes through `drop_into` like Copy and Move (no confirm for links unless the setting is Always or the target is protected); the badge, confirm and activity texts already existed from L1; `drag-link-later` and its notice are gone. Alt and Ctrl+Shift drops of one and of marked rows make links on `FakeFs`; a shortcut into the source's own folder is refused like any drop.
-- 2026-10-21 — X4 built on `p36-x4`, waits for Windows CI: `Pidl` moved to `rusty-shell/src/pidl.rs` (parent through `ILClone` + `ILRemoveLastID`); `drag_out::{data_object, drag_files}` with `DragError` (`Empty`, `MixedFolders`, `Path`, `Shell`, `Unsupported`) and `DropOutcome` (`Copied`, `Moved`, `Linked`, `NoEffect`, which also covers an optimized move); the same-folder rule reuses the shell menu's `folder_key` and is checked before the platform, so Unix refuses mixed folders and returns `Unsupported` otherwise; `tests/drag_out_windows.rs` checks `CF_HDROP` and `Shell IDList Array` on Windows only.
-- 2026-10-21 — X1 built on `p36-x1`, waits for Windows CI: the drop target stores `grfKeyState` (Drop keeps the buttons from the last DragOver, so a right-button drag still reads as one), dispatches first, returns the app's hint (default Copy) and `Drop` turns Move into None and sets `Performed DropEffect` = None; `set_drop_effect` and `drag_key_state` accept only this thread's GPUI windows. `rusty_core::DropKeys::from_key_state` and `right_button_drag` map the key state.
+- 2026-10-21 — X4 built on `p36-x4`, waits for Windows CI: `Pidl` moved to `navo-shell/src/pidl.rs` (parent through `ILClone` + `ILRemoveLastID`); `drag_out::{data_object, drag_files}` with `DragError` (`Empty`, `MixedFolders`, `Path`, `Shell`, `Unsupported`) and `DropOutcome` (`Copied`, `Moved`, `Linked`, `NoEffect`, which also covers an optimized move); the same-folder rule reuses the shell menu's `folder_key` and is checked before the platform, so Unix refuses mixed folders and returns `Unsupported` otherwise; `tests/drag_out_windows.rs` checks `CF_HDROP` and `Shell IDList Array` on Windows only.
+- 2026-10-21 — X1 built on `p36-x1`, waits for Windows CI: the drop target stores `grfKeyState` (Drop keeps the buttons from the last DragOver, so a right-button drag still reads as one), dispatches first, returns the app's hint (default Copy) and `Drop` turns Move into None and sets `Performed DropEffect` = None; `set_drop_effect` and `drag_key_state` accept only this thread's GPUI windows. `navo_core::DropKeys::from_key_state` and `right_button_drag` map the key state.
 - 2026-10-21 — X1 review (orchestrator): the drop target masks the app's hint with the effects the source allows (the incoming `*pdwEffect`); a hint the source does not allow gives None. X2 must refuse a Move the source does not allow, not only change the cursor.
 - 2026-10-21 — X5 built, waits for Windows CI: the drag-source hook stores one handler, posts the payload to its window, takes it before the modal call without borrowing state or taking the input callback, then sends `FileDropEvent::Ended`; the Linux UI check passed (7 steps; 2172 tests passed, 1 skipped). Handler registration and Explorer checks remain for the next atom and Windows.
 - 2026-10-21 — X1 and X5 pass Windows CI (run 39536709862): the vendored drop target and drag-source hook compile; key-state test green. Owner checks wait for X2 and X6.
-- 2026-10-21 — Owner on 21c: dragging files from Ferrite into other apps (VS Code and others) does not work; Total Commander does it. Owner: this comes before the Follow bug. Order now: finish Ctrl+K (21d), then X6 drag-out wiring (X2 external drops with it if X6 needs the bridge), then X7 review.
+- 2026-10-21 — Owner on 21c: dragging files from Navo into other apps (VS Code and others) does not work; Total Commander does it. Owner: this comes before the Follow bug. Order now: finish Ctrl+K (21d), then X6 drag-out wiring (X2 external drops with it if X6 needs the bridge), then X7 review.
 
 - 2026-10-23 — X2/X3/X6 integration: `DropPlatform` carries native keys, allowed effects, path conversion and native source paths. Incoming hover freezes paths and uses the planner's conservative self/descendant rules without filesystem reads. Source restrictions and modal blocking apply before job planning. Windows records the allowed-effect mask before dispatch and refuses when no target sets a hint; incoming moves still return None to prevent source deletion.
 - 2026-10-23 — Right-button drops use the existing context menu with Copy, Move, shortcuts and Cancel. Permissions and the target are frozen for the menu; Esc restores focus. Hovered tabs snapshot pane, index, tab id and location, so navigation or replacement refuses the release. Linux external drops are safely Copy-only until native modifiers are available; this tightens D18's earlier default-operation fallback.

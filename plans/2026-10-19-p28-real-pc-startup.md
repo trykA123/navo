@@ -8,7 +8,7 @@ Meet the v1.0 targets on the owner's PC (cold ≤ 400 ms, warm ≤ 150 ms, RAM <
 
 ## Findings (2026-10-19, build 5844556, Intel UHD Graphics)
 
-- Process start to `main`: 76–739 ms (CI 16 ms). Suspect antivirus scanning an unsigned 89 MB exe on each launch; the exe is large mostly because ~50 tree-sitter grammars are compiled in. Owner confirmed (2026-10-19): a work laptop with corporate antivirus and CrowdStrike, where every program loads slowly; so part of the pre-`main` time is outside Ferrite's control, and a smaller, signed exe is the lever.
+- Process start to `main`: 76–739 ms (CI 16 ms). Suspect antivirus scanning an unsigned 89 MB exe on each launch; the exe is large mostly because ~50 tree-sitter grammars are compiled in. Owner confirmed (2026-10-19): a work laptop with corporate antivirus and CrowdStrike, where every program loads slowly; so part of the pre-`main` time is outside Navo's control, and a smaller, signed exe is the lever.
 - GPUI start (window opening → app running): 212–248 ms (CI 62 ms): D3D device, DirectComposition, DirectWrite fonts.
 - Window build: 70–97 ms; databases and settings ≈ 45 ms.
 - Private bytes ≈ 140 MB with a real GPU (CI 67 MB with the software renderer); ours versus the driver's is unknown.

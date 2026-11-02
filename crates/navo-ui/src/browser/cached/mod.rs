@@ -1,0 +1,370 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use navo_cache::{CacheKey, CacheKeys, CachedListing, Change, ListingCache};
+use navo_core::{Event, FsError, FsErrorKind, Listing, Location, ProviderPath, TabId};
+use navo_fs::{CancelToken, FsEntry, ProviderOps, WatchChange, load_folder_reporting};
+
+use super::filter::Full;
+use super::offline::Progress;
+use super::sort::sorted_full;
+use super::{Browser, Message};
+use crate::file_list::SortKey;
+pub(in crate::browser) use early::{CachedSorted, Early};
+
+const KEEP_SORTED: usize = 2;
+const SYNC_ROWS: usize = 20_000;
+
+pub(super) struct WorkerSorted {
+    pub(super) key: SortKey,
+    pub(super) folders_first: bool,
+    pub(super) full: Full,
+}
+
+pub(super) enum Fresh {
+    Rows {
+        rows: Arc<[FsEntry]>,
+        full: Option<WorkerSorted>,
+    },
+    Unchanged,
+}
+
+fn fresh_rows(rows: Arc<[FsEntry]>, sort: Option<(SortKey, bool)>) -> Fresh {
+    let full = sort.map(|(key, folders_first)| WorkerSorted {
+        key,
+        folders_first,
+        full: sorted_full(&rows, key, folders_first),
+    });
+    Fresh::Rows { rows, full }
+}
+
+pub(super) struct Fetch {
+    pub(super) provider: Arc<dyn ProviderOps>,
+    pub(super) cache: ListingCache,
+    pub(super) keys: CacheKeys,
+    pub(super) location: Location,
+    pub(super) shown: Option<Arc<CachedListing>>,
+    pub(super) touched: Option<Vec<WatchChange>>,
+    pub(super) is_watched: bool,
+    pub(super) is_kept_on_disk: bool,
+    pub(super) progress: Progress,
+    pub(super) sort: Option<(SortKey, bool)>,
+    pub(super) early: Option<Early>,
+}
+
+impl Fetch {
+    pub(super) fn run(mut self, cancel: &CancelToken) -> Result<Fresh, FsError> {
+        let _span = tracing::debug_span!("listing.load").entered();
+        if let Some(early) = self.early.take().filter(|_| !cancel.is_cancelled()) {
+            early.send(cancel);
+        }
+        let read_at = SystemTime::now();
+        let folder = self.provider.metadata(&self.location).ok();
+        if folder.is_some() {
+            self.progress.answered();
+        }
+        let folder_changed = folder
+            .and_then(|folder| folder.modified_ms)
+            .and_then(|ms| u64::try_from(ms).ok())
+            .map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
+        if self.is_watched
+            && folder_changed.is_some()
+            && self
+                .shown
+                .as_ref()
+                .is_some_and(|shown| shown.folder_changed == folder_changed)
+        {
+            return Ok(Fresh::Unchanged);
+        }
+        if let Some(rows) = self
+            .touched
+            .as_deref()
+            .and_then(|changes| self.patched(changes))
+        {
+            return Ok(fresh_rows(rows, self.sort));
+        }
+        let progress = &self.progress;
+        let snapshot =
+            load_folder_reporting(self.provider.as_ref(), &self.location, cancel, &mut || {
+                progress.answered()
+            })?;
+        let rows: Arc<[FsEntry]> = snapshot.details.into();
+        let unchanged = self
+            .shown
+            .as_ref()
+            .filter(|shown| shown.rows[..] == rows[..])
+            .map(|shown| Arc::clone(&shown.rows));
+        self.store(CachedListing {
+            rows: Arc::clone(unchanged.as_ref().unwrap_or(&rows)),
+            read_at,
+            folder_changed,
+            complete: true,
+        });
+        Ok(match unchanged {
+            Some(_) => Fresh::Unchanged,
+            None => fresh_rows(rows, self.sort),
+        })
+    }
+
+    fn store(&self, listing: CachedListing) {
+        let Some(key) = self.keys.key(&self.location) else {
+            return;
+        };
+        self.cache.put(key.clone(), listing);
+        persist_if(&self.cache, &key, self.is_kept_on_disk);
+    }
+
+    fn patched(&self, changes: &[WatchChange]) -> Option<Arc<[FsEntry]>> {
+        let key = self.keys.key(&self.location)?;
+        self.cache.get(&key)?;
+        let changed_at = SystemTime::now();
+        let mut patch = Vec::with_capacity(changes.len());
+        for change in changes {
+            match change {
+                WatchChange::Removed(name) => patch.push(Change::Removed(name.clone())),
+                WatchChange::Renamed { from, to } => {
+                    patch.push(Change::Removed(from.clone()));
+                    patch.push(self.stat(to)?);
+                }
+                WatchChange::Created(name) | WatchChange::Modified(name) => {
+                    patch.push(self.stat(name)?);
+                }
+            }
+        }
+        self.cache.patch(&key, changed_at, patch);
+        self.cache
+            .get(&key)
+            .map(|listing| Arc::clone(&listing.rows))
+    }
+
+    fn stat(&self, name: &ProviderPath) -> Option<Change> {
+        let location = self.location.join(name).ok()?;
+        match self.provider.metadata(&location) {
+            Ok(entry) => Some(Change::Modified(entry)),
+            Err(error) if error.kind == FsErrorKind::NotFound => {
+                Some(Change::Removed(name.clone()))
+            }
+            Err(_) => None,
+        }
+    }
+}
+
+fn persist_if(cache: &ListingCache, key: &CacheKey, is_kept_on_disk: bool) {
+    if is_kept_on_disk {
+        cache.persist(key);
+    }
+}
+
+pub(super) struct Sorted {
+    source: Arc<[FsEntry]>,
+    key: SortKey,
+    full: Full,
+}
+
+impl Browser {
+    pub fn set_listing_cache(&mut self, cache: ListingCache, keys: CacheKeys) {
+        self.release_pins();
+        self.cache = cache;
+        self.keys = keys;
+        self.sync_pins();
+    }
+
+    #[must_use]
+    pub fn is_cached(&self, tab: TabId) -> bool {
+        self.cached.get(&tab).is_some_and(|request| {
+            self.state
+                .tab(tab)
+                .is_some_and(|t| t.pending_request() == Some(*request))
+        })
+    }
+
+    pub(super) fn fetch(&mut self, tab: TabId, location: &Location, request: u64) -> Fetch {
+        let is_arriving = self.state.tab(tab).is_some_and(|t| t.listing().is_none());
+        let cached = is_arriving
+            .then(|| self.keys.key(location))
+            .flatten()
+            .and_then(|key| self.cache.get(&key));
+        let (shown, early) = match cached {
+            Some(cached) if cached.rows.len() > SYNC_ROWS => {
+                let (sender, wake) = (self.sender.clone(), Arc::clone(&self.wake));
+                let early = Early {
+                    cached: Arc::clone(&cached),
+                    sort: (self.sort_key(tab), self.folders_first),
+                    notify: Box::new(move |rows, sorted| {
+                        let _ = sender.send(Message::CachedSorted(CachedSorted {
+                            tab,
+                            request,
+                            rows,
+                            sorted,
+                        }));
+                        wake();
+                    }),
+                };
+                (Some(cached), Some(early))
+            }
+            Some(cached) => (
+                Some(cached).filter(|cached| self.show_cached(tab, request, &cached.rows)),
+                None,
+            ),
+            None => (None, None),
+        };
+        Fetch {
+            provider: Arc::clone(&self.provider),
+            cache: self.cache.clone(),
+            keys: self.keys.clone(),
+            location: location.clone(),
+            shown,
+            touched: self.take_patch(tab),
+            is_watched: self.is_settled(location),
+            is_kept_on_disk: true,
+            progress: self.stalls.progress(tab),
+            sort: Some((self.sort_key(tab), self.folders_first)),
+            early,
+        }
+    }
+
+    pub(super) fn fresh_listing(
+        &mut self,
+        tab: TabId,
+        location: &Location,
+        fresh: Fresh,
+    ) -> Listing {
+        match fresh {
+            Fresh::Rows { rows, full } => {
+                let full = self.adopt(tab, &rows, full);
+                let (listing, details) = self.narrow(tab, location, full);
+                self.details.insert(tab, details);
+                listing
+            }
+            Fresh::Unchanged => match self.state.tab(tab).and_then(|t| t.listing().cloned()) {
+                Some(listing) => listing,
+                None => self.rebuild_unchanged(tab, location),
+            },
+        }
+    }
+
+    fn rebuild_unchanged(&mut self, tab: TabId, location: &Location) -> Listing {
+        let rows = self
+            .keys
+            .key(location)
+            .and_then(|key| self.cache.get(&key))
+            .map(|cached| Arc::clone(&cached.rows));
+        let Some(rows) = rows else {
+            return Listing::new(Vec::new());
+        };
+        let full = self.sorted_full(tab, &rows);
+        let (listing, details) = self.narrow(tab, location, full);
+        self.details.insert(tab, details);
+        listing
+    }
+
+    pub(super) fn sorted_full(&mut self, tab: TabId, rows: &Arc<[FsEntry]>) -> Full {
+        let key = self.sort_key(tab);
+        let memo = self.sorted.entry(tab).or_default();
+        if let Some(at) = memo
+            .iter()
+            .position(|sorted| sorted.key == key && Arc::ptr_eq(&sorted.source, rows))
+        {
+            let hit = memo.remove(at);
+            let full = hit.full.clone();
+            memo.insert(0, hit);
+            return full;
+        }
+        let full = self.full_of(tab, rows);
+        self.remember(
+            tab,
+            Sorted {
+                source: Arc::clone(rows),
+                key,
+                full: full.clone(),
+            },
+        );
+        full
+    }
+
+    pub(super) fn remember(&mut self, tab: TabId, sorted: Sorted) {
+        let memo = self.sorted.entry(tab).or_default();
+        memo.insert(0, sorted);
+        memo.truncate(KEEP_SORTED);
+    }
+
+    fn show_cached(&mut self, tab: TabId, request: u64, rows: &Arc<[FsEntry]>) -> bool {
+        let full = self.sorted_full(tab, rows);
+        self.show_cached_full(tab, request, full)
+    }
+
+    pub(super) fn show_cached_full(&mut self, tab: TabId, request: u64, full: Full) -> bool {
+        let Some(location) = self.state.tab(tab).map(|t| t.location().clone()) else {
+            return false;
+        };
+        let (listing, details) = self.narrow(tab, &location, full);
+        self.details.insert(tab, details);
+        self.errors.remove(&tab);
+        self.event(Event::ListingCached {
+            tab,
+            location,
+            request,
+            listing,
+        });
+        self.remark_hidden(tab);
+        let is_shown = self.state.tab(tab).is_some_and(|t| t.listing().is_some());
+        if is_shown {
+            self.cached.insert(tab, request);
+            self.restore_focus(tab);
+        }
+        is_shown
+    }
+
+    pub(super) fn sync_pins(&mut self) {
+        let wanted: HashSet<CacheKey> = self
+            .state
+            .window_ids()
+            .into_iter()
+            .filter_map(|window| self.state.window(window))
+            .flat_map(|window| window.panes())
+            .map(|pane| pane.active().location())
+            .flat_map(|location| std::iter::once(location.clone()).chain(location.parent()))
+            .filter_map(|location| self.keys.key(&location))
+            .collect();
+        if wanted == self.pins {
+            return;
+        }
+        wanted
+            .difference(&self.pins)
+            .for_each(|key| self.cache.pin(key));
+        self.pins
+            .difference(&wanted)
+            .for_each(|key| self.cache.unpin(key));
+        self.pins = wanted;
+    }
+
+    pub(super) fn sync_disk_folders(&self) {
+        let state = &self.state;
+        let tabs = state
+            .window_ids()
+            .into_iter()
+            .filter_map(|window| state.window(window))
+            .flat_map(|window| window.panes())
+            .flat_map(|pane| pane.tabs());
+        self.cache.keep_on_disk(tabs.map(|tab| tab.location()));
+    }
+
+    pub(super) fn release_pins(&mut self) {
+        let pins = std::mem::take(&mut self.pins);
+        pins.iter().for_each(|key| self.cache.unpin(key));
+    }
+}
+
+impl Drop for Browser {
+    fn drop(&mut self) {
+        self.release_pins();
+        self.release_watches();
+    }
+}
+
+mod early;
+#[cfg(test)]
+pub(crate) mod tests;
+#[cfg(test)]
+mod tests_early;

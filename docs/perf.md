@@ -149,7 +149,7 @@ On CI the Windows test job runs `bench-walk` with `--runs 3` and adds the table 
 
 ## Profiling with Tracy
 
-Build with `cargo build --release -p rusty-app --features tracy`. The build marks every frame and sends spans at `debug` level to Tracy. Open it with the Tracy viewer that matches `tracy-client-sys` 0.30.1 (Tracy v0.14.1 per the version table in that crate's README). For sampling without a viewer, run `samply record navo.exe`.
+Build with `cargo build --release -p navo-app --features tracy`. The build marks every frame and sends spans at `debug` level to Tracy. Open it with the Tracy viewer that matches `tracy-client-sys` 0.30.1 (Tracy v0.14.1 per the version table in that crate's README). For sampling without a viewer, run `samply record navo.exe`.
 
 ## History
 

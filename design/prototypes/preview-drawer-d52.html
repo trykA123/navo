@@ -426,7 +426,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
 <body>
 <div class="page">
   <header class="head">
-    <h1>Ferrite preview drawer: four directions (D52)</h1>
+    <h1>Navo preview drawer: four directions (D52)</h1>
     <p>A live preview of whatever is under the cursor in the active pane, without leaving the panes. Folders show a background size count, counts, last change, types, the 10 largest files and a collapsible tree. Files show the F3 views read-only. The preview follows the cursor after a 150 ms pause, so holding an arrow key loads only where you stop.</p>
   </header>
 
@@ -535,24 +535,24 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
   const FOLD = {
     work: { path: "D:\\work", total: "31.6G", files: 212480, dirs: 18902, changed: "2026-10-16 09:41", dur: 5200,
       types: [["rlib", 4210, "11.2G"], ["pdb", 380, "8.4G"], ["mp4", 14, "5.2G"], ["exe", 96, "4.1G"], ["png", 2210, "1.3G"], ["rs", 18240, "212M"]],
-      largest: ["sites/recordings/demo-0.4-4k.mp4:1.9G", "sites/recordings/demo-0.3-4k.mp4:1.4G", "ferrite/target/release/ferrite.pdb:612M", "scratch/vm/win11-test.vhdx:588M", "ferrite/target/debug/ferrite.pdb:540M", "ferrite/target/debug/deps/libgpui-3c1e.rlib:418M", "ferrite/target/release/deps/libgpui-9a02.rlib:396M", "sites/recordings/tab-switch.mp4:322M", "ferrite/target/debug/deps/libwindows-77f1.rlib:301M", "scratch/dumps/ferrite-crash-1012.dmp:244M"],
-      tree: [["ferrite", "7.3G", [["target", "6.84G", null], ["assets", "412M", null], ["crates", "38.4M", null], ["docs", "6.1M", null]]], ["sites", "20.6G", [["recordings", "18.9G", null], ["blog", "1.7G", null]]], ["scratch", "1.8G", null], ["notes", "22M", null], ["todo.md", "3.2K"]] },
-    assets: { path: "D:\\work\\ferrite\\assets", total: "412.3M", files: 1284, dirs: 46, changed: "2026-10-15 22:41", dur: 1500,
+      largest: ["sites/recordings/demo-0.4-4k.mp4:1.9G", "sites/recordings/demo-0.3-4k.mp4:1.4G", "navo/target/release/navo.pdb:612M", "scratch/vm/win11-test.vhdx:588M", "navo/target/debug/navo.pdb:540M", "navo/target/debug/deps/libgpui-3c1e.rlib:418M", "navo/target/release/deps/libgpui-9a02.rlib:396M", "sites/recordings/tab-switch.mp4:322M", "navo/target/debug/deps/libwindows-77f1.rlib:301M", "scratch/dumps/navo-crash-1012.dmp:244M"],
+      tree: [["navo", "7.3G", [["target", "6.84G", null], ["assets", "412M", null], ["crates", "38.4M", null], ["docs", "6.1M", null]]], ["sites", "20.6G", [["recordings", "18.9G", null], ["blog", "1.7G", null]]], ["scratch", "1.8G", null], ["notes", "22M", null], ["todo.md", "3.2K"]] },
+    assets: { path: "D:\\work\\navo\\assets", total: "412.3M", files: 1284, dirs: 46, changed: "2026-10-15 22:41", dur: 1500,
       types: [["png", 612, "198M"], ["jpg", 88, "141M"], ["ttf", 24, "38M"], ["svg", 401, "8.2M"], ["ico", 12, "1.1M"]],
       largest: ["screens/hero-dark-5k.png:24.1M", "screens/hero-light-5k.png:23.8M", "photos/sinaia-ridge.jpg:9.6M", "photos/bucegi-dawn.jpg:8.9M", "screens/panes-1440-dark.png:6.2M", "screens/panes-1440-light.png:6.1M", "screens/settings-sheet.png:4.9M", "photos/omu-fog.jpg:4.4M", "fonts/Archivo-Variable.ttf:812K", "fonts/Inter-Variable.ttf:804K"],
-      tree: [["screens", "221M", [["hero-dark-5k.png", "24.1M"], ["hero-light-5k.png", "23.8M"], ["panes-1440-dark.png", "6.2M"], ["settings-sheet.png", "4.9M"]], 118], ["photos", "141M", [["sinaia-ridge.jpg", "9.6M"], ["bucegi-dawn.jpg", "8.9M"]], 86], ["fonts", "38M", null], ["icons", "9.3M", [["lucide", "8.2M", null], ["app", "1.1M", [["ferrite.ico", "412K"], ["ferrite-256.png", "88K"]]]]], ["cursors", "1.4M", null], ["LICENSE-assets.txt", "2.1K"]] },
-    crates: { path: "D:\\work\\ferrite\\crates", total: "38.4M", files: 1902, dirs: 214, changed: "2026-10-16 09:12", dur: 1100,
+      tree: [["screens", "221M", [["hero-dark-5k.png", "24.1M"], ["hero-light-5k.png", "23.8M"], ["panes-1440-dark.png", "6.2M"], ["settings-sheet.png", "4.9M"]], 118], ["photos", "141M", [["sinaia-ridge.jpg", "9.6M"], ["bucegi-dawn.jpg", "8.9M"]], 86], ["fonts", "38M", null], ["icons", "9.3M", [["lucide", "8.2M", null], ["app", "1.1M", [["navo.ico", "412K"], ["navo-256.png", "88K"]]]]], ["cursors", "1.4M", null], ["LICENSE-assets.txt", "2.1K"]] },
+    crates: { path: "D:\\work\\navo\\crates", total: "38.4M", files: 1902, dirs: 214, changed: "2026-10-16 09:12", dur: 1100,
       types: [["rs", 1240, "21.2M"], ["snap", 310, "11.8M"], ["json", 120, "3.4M"], ["md", 88, "1.1M"], ["toml", 64, "212K"]],
-      largest: ["rusty-ui/tests/snapshots/main_window__dark.snap:1.9M", "rusty-ui/tests/snapshots/main_window__light.snap:1.9M", "rusty-preview/tests/fixtures/big.json:1.2M", "rusty-core/src/jobs/engine.rs:214K", "rusty-ui/src/pane/list.rs:188K", "rusty-fs/src/win/shell_menu.rs:142K", "rusty-preview/src/syntax/rust.rs:131K", "rusty-keymap/src/default.rs:96K", "rusty-ui/src/viewer/text.rs:91K", "rusty-core/src/jobs/tests.rs:62K"],
-      tree: [["rusty-core", "6.2M", [["src", "5.8M", [["jobs", "1.1M", null], ["lib.rs", "4.1K"], ["config.rs", "22K"]]], ["Cargo.toml", "1.2K"]]], ["rusty-ui", "21.4M", [["src", "4.9M", null], ["tests", "16.5M", null], ["Cargo.toml", "1.6K"]]], ["rusty-preview", "5.1M", null], ["rusty-fs", "3.9M", null], ["rusty-keymap", "1.8M", null]] },
-    docs: { path: "D:\\work\\ferrite\\docs", total: "6.1M", files: 142, dirs: 12, changed: "2026-10-16 08:55", dur: 800,
+      largest: ["navo-ui/tests/snapshots/main_window__dark.snap:1.9M", "navo-ui/tests/snapshots/main_window__light.snap:1.9M", "navo-preview/tests/fixtures/big.json:1.2M", "navo-core/src/jobs/engine.rs:214K", "navo-ui/src/pane/list.rs:188K", "navo-fs/src/win/shell_menu.rs:142K", "navo-preview/src/syntax/rust.rs:131K", "navo-keymap/src/default.rs:96K", "navo-ui/src/viewer/text.rs:91K", "navo-core/src/jobs/tests.rs:62K"],
+      tree: [["navo-core", "6.2M", [["src", "5.8M", [["jobs", "1.1M", null], ["lib.rs", "4.1K"], ["config.rs", "22K"]]], ["Cargo.toml", "1.2K"]]], ["navo-ui", "21.4M", [["src", "4.9M", null], ["tests", "16.5M", null], ["Cargo.toml", "1.6K"]]], ["navo-preview", "5.1M", null], ["navo-fs", "3.9M", null], ["navo-keymap", "1.8M", null]] },
+    docs: { path: "D:\\work\\navo\\docs", total: "6.1M", files: 142, dirs: 12, changed: "2026-10-16 08:55", dur: 800,
       types: [["png", 31, "3.6M"], ["md", 96, "2.2M"], ["svg", 9, "212K"]],
       largest: ["img/panes-dark.png:612K", "img/panes-light.png:598K", "img/viewer.png:441K", "decisions.md:188K", "img/copy-pill.png:212K", "plans/P20-tree-folds.md:96K", "plans/P17-context-menu.md:88K", "roadmap.md:61K", "img/settings.png:58K", "keymap.md:41K"],
       tree: [["plans", "640K", [["P17-context-menu.md", "88K"], ["P20-tree-folds.md", "96K"]], 21], ["img", "3.8M", null], ["decisions.md", "188K"], ["roadmap.md", "61K"], ["keymap.md", "41K"]] },
-    target: { path: "D:\\work\\ferrite\\target", total: "6.84G", files: 64210, dirs: 3120, changed: "2026-10-16 09:40", dur: 3800,
+    target: { path: "D:\\work\\navo\\target", total: "6.84G", files: 64210, dirs: 3120, changed: "2026-10-16 09:40", dur: 3800,
       types: [["rlib", 3480, "3.1G"], ["pdb", 42, "1.6G"], ["rmeta", 3480, "1.2G"], ["exe", 18, "412M"], ["d", 3480, "18M"]],
-      largest: ["release/ferrite.pdb:612M", "debug/ferrite.pdb:540M", "debug/deps/libgpui-3c1e.rlib:418M", "release/deps/libgpui-9a02.rlib:396M", "debug/deps/libwindows-77f1.rlib:301M", "debug/ferrite.exe:188M", "release/deps/libwindows-1b0e.rlib:162M", "debug/incremental/ferrite-2q9x/s-h1.bin:141M", "debug/deps/libtree_sitter-e2.rlib:96M", "release/ferrite.exe:41M"],
-      tree: [["debug", "4.9G", [["deps", "3.4G", null], ["incremental", "1.2G", null], ["build", "112M", null], ["ferrite.exe", "188M"], ["ferrite.pdb", "540M"]]], ["release", "1.8G", [["deps", "1.1G", null], ["ferrite.exe", "41M"], ["ferrite.pdb", "612M"]]], [".rustc_info.json", "1.2K"], ["CACHEDIR.TAG", "177"]] },
+      largest: ["release/navo.pdb:612M", "debug/navo.pdb:540M", "debug/deps/libgpui-3c1e.rlib:418M", "release/deps/libgpui-9a02.rlib:396M", "debug/deps/libwindows-77f1.rlib:301M", "debug/navo.exe:188M", "release/deps/libwindows-1b0e.rlib:162M", "debug/incremental/navo-2q9x/s-h1.bin:141M", "debug/deps/libtree_sitter-e2.rlib:96M", "release/navo.exe:41M"],
+      tree: [["debug", "4.9G", [["deps", "3.4G", null], ["incremental", "1.2G", null], ["build", "112M", null], ["navo.exe", "188M"], ["navo.pdb", "540M"]]], ["release", "1.8G", [["deps", "1.1G", null], ["navo.exe", "41M"], ["navo.pdb", "612M"]]], [".rustc_info.json", "1.2K"], ["CACHEDIR.TAG", "177"]] },
     zarch: { path: "Z:\\archive", total: "1.31T", files: 418220, dirs: 9880, changed: "2026-10-15 08:12", dur: 7000,
       types: [["cr3", 61200, "702G"], ["mp4", 1840, "391G"], ["jpg", 210400, "148G"], ["7z", 96, "61G"], ["iso", 31, "88G"]],
       largest: ["video/2025-wedding-cam-a.mp4:62G", "video/2025-wedding-cam-b.mp4:58G", "video/sinaia-drone-raw.mp4:41G", "old-phones/pixel6-backup.7z:28G", "2026-10/Sinaia-2026-10.7z:2.4G", "iso/Windows11_25H2_x64.iso:5.4G", "iso/ubuntu-26.04.iso:6.1G", "2026-09/raw/DSCF2201.cr3:61M", "2026-09/raw/DSCF2202.cr3:61M", "2026-09/raw/DSCF2203.cr3:60M"],
@@ -568,7 +568,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
     shots: { path: "Z:\\archive\\2026-10\\screenshots", total: "742M", files: 611, dirs: 4, changed: "2026-10-14 21:20", dur: 900,
       types: [["png", 588, "731M"], ["jpg", 23, "11M"]],
       largest: ["2026-10-14 211845.png:6.1M", "2026-10-14 211802.png:5.9M", "2026-10-13 223010.png:4.8M", "2026-10-12 101510.png:4.4M", "2026-10-11 184402.png:3.9M", "2026-10-10 093311.png:3.6M", "2026-10-09 212201.png:3.2M", "2026-10-08 120012.png:2.9M", "2026-10-07 080808.png:2.7M", "2026-10-05 161616.png:2.4M"],
-      tree: [["ferrite", "402M", null], ["games", "288M", null], ["misc", "52M", null]] },
+      tree: [["navo", "402M", null], ["games", "288M", null], ["misc", "52M", null]] },
   };
   for (const f of Object.values(FOLD)) {
     f.totalB = b(f.total);
@@ -589,7 +589,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
       E("target", "", "folder", "dir", "", "2026-10-16 09:40", { dir: true, fid: "target" }),
       E("Archivo-Variable", "ttf", "font", "font", "812K", "2026-09-02 10:14"),
       E("config", "json", "json", "code", "2.4K", "2026-10-16 08:02"),
-      E("ferrite", "exe", "hex", "exe", "41.2M", "2026-10-16 09:40"),
+      E("navo", "exe", "hex", "exe", "41.2M", "2026-10-16 09:40"),
       E("hero-2560", "jpg", "image", "img", "1.9M", "2026-10-12 07:41", { hue: 240 }),
       E("main", "rs", "code", "code", "1.1K", "2026-10-16 09:31"),
       E("README", "md", "md", "doc", "4.0K", "2026-10-15 21:10"),
@@ -610,7 +610,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
     ],
   };
   const PANE = {
-    L: { drive: "D", label: "Work", kind: "hdd", path: ["D:", "work", "ferrite"], win: "D:\\work\\ferrite", tabs: ["ferrite", "Downloads"], free: "28.0 GB free" },
+    L: { drive: "D", label: "Work", kind: "hdd", path: ["D:", "work", "navo"], win: "D:\\work\\navo", tabs: ["navo", "Downloads"], free: "28.0 GB free" },
     R: { drive: "Z", label: "media", kind: "net", path: ["Z:", "archive", "2026-10"], win: "Z:\\archive\\2026-10", tabs: ["2026-10", "photos"], free: "1.92 TB free" },
   };
 
@@ -753,8 +753,8 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
   function winHtml() {
     const cls = ["win", `d${state.d}`, narrow() ? "narrow" : "", xnarrow() ? "xnarrow" : "", state.open ? "open" : ""].join(" ");
     const gut = state.d === 3 && state.open ? `<div class="grip v gut" data-grip="d3" role="separator" aria-orientation="vertical" aria-label="Pane splitter"></div>` : "";
-    return `<div class="${cls}" id="win" tabindex="0" role="application" aria-roledescription="window mockup" aria-label="Ferrite window, direction ${state.d}. Arrow keys move the cursor, Tab switches panes, Q toggles the preview." style="width:${state.ww}px;height:${WH}px">
-      <header class="tb"><span class="appbtn">${LOGO}<span class="wm">Ferrite</span>${ic("chevD", "sm")}</span><span class="search">${ic("search", "sm")}<span class="ph ellip">Search files, folders and commands</span><span class="kbdc">Ctrl K</span></span><span class="ctl" aria-hidden="true"><span>${ic("min", "sm")}</span><span>${ic("max", "sm")}</span><span>${ic("x", "sm")}</span></span></header>
+    return `<div class="${cls}" id="win" tabindex="0" role="application" aria-roledescription="window mockup" aria-label="Navo window, direction ${state.d}. Arrow keys move the cursor, Tab switches panes, Q toggles the preview." style="width:${state.ww}px;height:${WH}px">
+      <header class="tb"><span class="appbtn">${LOGO}<span class="wm">Navo</span>${ic("chevD", "sm")}</span><span class="search">${ic("search", "sm")}<span class="ph ellip">Search files, folders and commands</span><span class="kbdc">Ctrl K</span></span><span class="ctl" aria-hidden="true"><span>${ic("min", "sm")}</span><span>${ic("max", "sm")}</span><span>${ic("x", "sm")}</span></span></header>
       <div class="body" id="body">${card("L")}${card("R")}${sheet()}${gut}</div>
       ${bottom()}
       ${fkeys()}
@@ -919,8 +919,8 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
   }
   const MAIN_RS = [
     "use std::path::PathBuf;",
-    "use ferrite_core::{App, Config, PaneSide};",
-    "use ferrite_ui::window::MainWindow;",
+    "use navo_core::{App, Config, PaneSide};",
+    "use navo_ui::window::MainWindow;",
     "",
     "/// Entry point: load config, open both panes, run.",
     "fn main() -> anyhow::Result<()> {",
@@ -953,7 +953,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
   ];
   const codeHtml = () => `<div class="code"><div class="gut-n">${MAIN_RS.map((_, i) => `<div>${i + 1}</div>`).join("")}</div><pre>${MAIN_RS.map((l) => hl(l) || " ").join("\n")}</pre></div>`;
 
-  const CONFIG = { theme: "auto", density: "compact", panes: { left: "D:\\work\\ferrite", right: "Z:\\archive\\2026-10", sort: ["name", "asc"], show_hidden: false }, preview: { enabled: true, side: "passive", debounce_ms: 150, max_text_kb: 512, folder_scan: { background: true, max_parallel: 2 } }, keys: { "Ctrl+Q": "preview.toggle", F3: "view", F4: "edit" } };
+  const CONFIG = { theme: "auto", density: "compact", panes: { left: "D:\\work\\navo", right: "Z:\\archive\\2026-10", sort: ["name", "asc"], show_hidden: false }, preview: { enabled: true, side: "passive", debounce_ms: 150, max_text_kb: 512, folder_scan: { background: true, max_parallel: 2 } }, keys: { "Ctrl+Q": "preview.toggle", F3: "view", F4: "edit" } };
   function jval(v) {
     if (typeof v === "string") return `<span class="str">"${esc(v.replace(/\\/g, "\\\\"))}"</span>`;
     if (typeof v === "number") return `<span class="nu">${v}</span>`;
@@ -975,7 +975,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
   }
   const CSV = [["2026-07-01", "North", 1204, "48,160.00"], ["2026-07-01", "South", 988, "39,520.00"], ["2026-07-08", "North", 1311, "52,440.00"], ["2026-07-08", "West", 640, "25,600.00"], ["2026-07-15", "East", 1022, "40,880.00"], ["2026-07-15", "South", 1090, "43,600.00"], ["2026-07-22", "North", 1418, "56,720.00"], ["2026-07-22", "West", 702, "28,080.00"], ["2026-07-29", "East", 1150, "46,000.00"], ["2026-08-05", "North", 1376, "55,040.00"], ["2026-08-05", "South", 1012, "40,480.00"], ["2026-08-12", "West", 733, "29,320.00"], ["2026-08-12", "East", 1201, "48,040.00"], ["2026-08-19", "North", 1455, "58,200.00"]];
   const csvHtml = () => `<table class="csv"><thead><tr><th>#</th><th>date</th><th>region</th><th class="n">units</th><th class="n">revenue</th></tr></thead><tbody>${CSV.map((r, i) => `<tr><td class="num">${i + 1}</td><td class="num">${r[0]}</td><td>${r[1]}</td><td class="n">${fmt(r[2])}</td><td class="n">${r[3]}</td></tr>`).join("")}</tbody></table><p class="subnote">Showing 14 of 1,204 rows. F3 opens the full table with sorting.</p>`;
-  const mdHtml = () => `<article class="md"><h1>Ferrite</h1><p>A keyboard-first dual-pane file manager for Windows. Total Commander's habits, a 2027 look.</p><h2>Keys</h2><ul><li><code>Tab</code> switches panes, <code>Ctrl+Q</code> shows the preview.</li><li><code>F3</code> views, <code>F4</code> edits, <code>F5</code> copies to the other pane.</li><li><code>Ctrl+K</code> finds any file, folder or command.</li></ul><h2>Build</h2><pre>cargo build --release -p ferrite</pre><blockquote>Linux builds are manual for now; Windows is the target.</blockquote></article>`;
+  const mdHtml = () => `<article class="md"><h1>Navo</h1><p>A keyboard-first dual-pane file manager for Windows. Total Commander's habits, a 2027 look.</p><h2>Keys</h2><ul><li><code>Tab</code> switches panes, <code>Ctrl+Q</code> shows the preview.</li><li><code>F3</code> views, <code>F4</code> edits, <code>F5</code> copies to the other pane.</li><li><code>Ctrl+K</code> finds any file, folder or command.</li></ul><h2>Build</h2><pre>cargo build --release -p navo</pre><blockquote>Linux builds are manual for now; Windows is the target.</blockquote></article>`;
   function imageHtml(f) {
     const h = f.hue || 240;
     const sky1 = `oklch(70% 0.09 ${h})`, sky2 = "oklch(88% 0.07 70)", m1 = `oklch(62% 0.05 ${h + 10})`, m2 = `oklch(47% 0.05 ${h - 10})`, m3 = `oklch(33% 0.04 ${h - 40})`, sun = "oklch(96% 0.07 90)";
@@ -984,10 +984,10 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
       <figcaption><span><b>2560 × 1440</b></span><span>JPEG · sRGB</span><span>Fit · ${f.hue === 150 ? "18" : "24"} %</span></figcaption>
       <dl class="exif"><dt>Camera</dt><dd>Fujifilm X-T5</dd><dt>Lens</dt><dd>XF 16–55 mm f/2.8 at 23 mm</dd><dt>Exposure</dt><dd>1/250 s · f/8 · ISO 200</dd><dt>Taken</dt><dd>${f.d}</dd></dl></figure>`;
   }
-  const ARCH = [["dir", "ferrite-0.4.2/", "", ""], ["exe", "ferrite-0.4.2/ferrite.exe", "41.2M", "16.1M"], ["faint", "ferrite-0.4.2/ferrite.pdb", "9.8M", "2.2M"], ["doc", "ferrite-0.4.2/README.md", "4.0K", "1.8K"], ["doc", "ferrite-0.4.2/LICENSE", "1.1K", "640"], ["dir", "ferrite-0.4.2/themes/", "", ""], ["code", "ferrite-0.4.2/themes/default.toml", "3.4K", "1.2K"], ["code", "ferrite-0.4.2/themes/contrast.toml", "3.1K", "1.1K"], ["dir", "ferrite-0.4.2/fonts/", "", ""], ["font", "ferrite-0.4.2/fonts/Archivo-Variable.ttf", "812K", "511K"], ["font", "ferrite-0.4.2/fonts/JetBrainsMono.ttf", "300K", "164K"]];
+  const ARCH = [["dir", "navo-0.4.2/", "", ""], ["exe", "navo-0.4.2/navo.exe", "41.2M", "16.1M"], ["faint", "navo-0.4.2/navo.pdb", "9.8M", "2.2M"], ["doc", "navo-0.4.2/README.md", "4.0K", "1.8K"], ["doc", "navo-0.4.2/LICENSE", "1.1K", "640"], ["dir", "navo-0.4.2/themes/", "", ""], ["code", "navo-0.4.2/themes/default.toml", "3.4K", "1.2K"], ["code", "navo-0.4.2/themes/contrast.toml", "3.1K", "1.1K"], ["dir", "navo-0.4.2/fonts/", "", ""], ["font", "navo-0.4.2/fonts/Archivo-Variable.ttf", "812K", "511K"], ["font", "navo-0.4.2/fonts/JetBrainsMono.ttf", "300K", "164K"]];
   const archiveHtml = () => `<div class="asum"><span><b>38</b> entries</span><span><b>18.4 MB</b> packed</span><span><b>52.1 MB</b> unpacked</span><span>Deflate · no password</span></div>
     <div class="arch"><div class="arow h"><span></span><span>Path</span><span class="num">Size</span><span class="num">Packed</span></div>${ARCH.map(([t, p, s, z]) => { const cut = p.replace(/\/$/, "").lastIndexOf("/"); return `<div class="arow"><span class="t-${t}" style="display:contents">${ic(t === "dir" ? "dir" : t, "sm")}</span><span class="p"><span>${esc(p.slice(0, cut + 1))}</span>${esc(p.slice(cut + 1))}</span><span class="num">${s ? fmtB(b(s)) : ""}</span><span class="num m">${z ? fmtB(b(z)) : ""}</span></div>`; }).join("")}</div><p class="subnote">Enter opens the archive as a folder; F3 lists all 38 entries.</p>`;
-  const fontHtml = () => `<div class="fontp"><div class="f1">Ferrite moves files</div><div class="f2">The quick brown fox jumps over the lazy dog</div><div class="f3">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 ăâîșț ĂÂÎȘȚ &amp;@#%?!</div>
+  const fontHtml = () => `<div class="fontp"><div class="f1">Navo moves files</div><div class="f2">The quick brown fox jumps over the lazy dog</div><div class="f3">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 ăâîșț ĂÂÎȘȚ &amp;@#%?!</div>
     <div class="wts"><span style="font-weight:200">Thin</span><span style="font-weight:400">Regular</span><span style="font-weight:600">Semibold</span><span style="font-weight:800">Black</span><span style="font-stretch:70%">Condensed</span><span style="font-stretch:125%">Expanded</span></div>
     <div class="axes"><span>Archivo Variable</span><span>wght 100–900</span><span>wdth 62–125</span><span>1,042 glyphs</span><span>OFL 1.1</span></div></div>`;
   function hexHtml() {
@@ -1009,7 +1009,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); }
     }
     return `<div class="hex">${lines.join("\n")}</div><p class="subnote">PE header at 0x80 · machine x64 · 7 sections. F3 opens the full hex view.</p>`;
   }
-  const LOG = [["09:41:02.118", "in", "INFO", "config loaded from ferrite.toml"], ["09:41:02.140", "in", "INFO", "left pane D:\\work\\ferrite (14 items)"], ["09:41:02.162", "in", "INFO", "right pane Z:\\archive\\2026-10 (9 items)"], ["09:41:02.410", "wn", "WARN", "Z: is a network drive, folder scans run at low priority"], ["09:41:03.002", "in", "INFO", "preview: debounce 150 ms, 2 scans max"], ["09:41:07.880", "in", "INFO", "scan D:\\work\\ferrite\\target done in 3.8 s"], ["09:42:11.505", "in", "INFO", "copy job #12 queued (3 files, 2.4 GB)"], ["09:42:40.020", "in", "INFO", "copy job #12 done, verified"], ["09:44:15.311", "wn", "WARN", "shell menu: 7-Zip handler took 212 ms"]];
+  const LOG = [["09:41:02.118", "in", "INFO", "config loaded from navo.toml"], ["09:41:02.140", "in", "INFO", "left pane D:\\work\\navo (14 items)"], ["09:41:02.162", "in", "INFO", "right pane Z:\\archive\\2026-10 (9 items)"], ["09:41:02.410", "wn", "WARN", "Z: is a network drive, folder scans run at low priority"], ["09:41:03.002", "in", "INFO", "preview: debounce 150 ms, 2 scans max"], ["09:41:07.880", "in", "INFO", "scan D:\\work\\navo\\target done in 3.8 s"], ["09:42:11.505", "in", "INFO", "copy job #12 queued (3 files, 2.4 GB)"], ["09:42:40.020", "in", "INFO", "copy job #12 done, verified"], ["09:44:15.311", "wn", "WARN", "shell menu: 7-Zip handler took 212 ms"]];
   const textHtml = () => `<div class="txt">${LOG.map(([t, c, l, m]) => `<span class="ts">${t}</span> <span class="${c}">${l.padEnd(5)}</span> ${esc(m)}`).join("\n")}</div>`;
 
   /* ---------- render and interaction ---------- */

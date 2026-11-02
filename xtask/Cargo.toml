@@ -13,9 +13,9 @@ fluent-syntax = "0.12.0"
 ignore = "=0.4.34"
 imara-diff = "=0.2.0"
 memmap2 = "=0.9.11"
-rusty-core = { path = "../crates/rusty-core" }
-rusty-fs = { path = "../crates/rusty-fs" }
-rusty-index = { path = "../crates/rusty-index" }
+navo-core = { path = "../crates/navo-core" }
+navo-fs = { path = "../crates/navo-fs" }
+navo-index = { path = "../crates/navo-index" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 similar = "=3.2.0"

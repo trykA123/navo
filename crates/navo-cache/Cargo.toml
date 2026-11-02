@@ -1,0 +1,23 @@
+[package]
+name = "navo-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+crc32fast = "1.5.2"
+lz4_flex = { version = "0.14.0", default-features = false, features = ["std", "safe-encode", "safe-decode", "checked-decode"] }
+navo-core = { path = "../navo-core" }
+navo-fs = { path = "../navo-fs" }
+navo-store = { path = "../navo-store" }
+thiserror = "2.0.21"
+tracing = "0.1.44"
+
+[dev-dependencies]
+proptest = "1.12.0"
+navo-diag = { path = "../navo-diag" }
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

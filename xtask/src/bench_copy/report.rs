@@ -1,4 +1,4 @@
-use rusty_fs::DriveClass;
+use navo_fs::DriveClass;
 
 use crate::stats::Summary;
 

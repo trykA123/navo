@@ -96,7 +96,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --release -p rusty-app
+      - run: cargo build --release -p navo-app
       - name: Binary size
         run: cargo xtask binsize target/release/navo.exe
       - shell: pwsh

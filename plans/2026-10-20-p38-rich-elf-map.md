@@ -9,13 +9,13 @@ Today the Rich and Simple modes of the ELF and MAP viewers look the same: the Ri
 ## What exists today (checked at 9636e33)
 
 - **Parts and View menu.** `AUTOMOTIVE` and `AUTOMOTIVE_TABLE` part sets (`viewer/parts/mod.rs:82-117`) with the fields Inspector, Memory strip, Charts and Row bars (`settings/fields.rs:93-97`, `settings/viewer_fields.rs:62-110`). ELF and MAP use `AUTOMOTIVE_TABLE`, so their View menu lists only "Open the inspector". `show_parts` passes only `opens_inspector` to the bodies. No body draws a strip, a bar or a chart.
-- **ELF model** (`rusty-automotive/src/elf/mod.rs`). `Elf { header, sections, segments, symbols, problems, totals }`. `Section` has `kind`, `flags`, `address`, `size`, `offset`; `Symbol` has `value`, `size`, `kind`, `bind`, `place`. `Lines` maps addresses to source lines. `Query`/`select` sort and filter the symbol table; there is no noise filter.
+- **ELF model** (`navo-automotive/src/elf/mod.rs`). `Elf { header, sections, segments, symbols, problems, totals }`. `Section` has `kind`, `flags`, `address`, `size`, `offset`; `Symbol` has `value`, `size`, `kind`, `bind`, `place`. `Lines` maps addresses to source lines. `Query`/`select` sort and filter the symbol table; there is no noise filter.
 - **ELF fixture builder.** `src/elf/sample/mod.rs` (`Spec`, `text`, `data`, `bss`, `func`, `object`, `line_program`, `build`) builds 32/64-bit, little/big-endian ELF with or without symbols and DWARF. `tests/elf_large.rs` reads a 10 MB, 55,000-symbol file.
 - **MAP model** (`src/map/model.rs`). `MapModel { regions, sections, contributions, symbols, discarded, problems, skipped_sections }`. Only the TASKING flavour exists. `MemoryRegion.origin` is `None` for TASKING (its Memory Usage table has no origin).
-- **Tables.** ELF (`elf/draw.rs:16-60`), MAP (`map/draw.rs:16-45`, heads in `map/select.rs:35-105`) and CSV (`table/draw.rs:16-170`) each copy `CHAR_WIDTH = 7.2` and fixed character widths. The CSV view computes content widths (`rusty-structured` `column_widths`). The CAN trace draws each row as one formatted string (`trace/text.rs:16-21`, `138-160`). No column can be resized.
+- **Tables.** ELF (`elf/draw.rs:16-60`), MAP (`map/draw.rs:16-45`, heads in `map/select.rs:35-105`) and CSV (`table/draw.rs:16-170`) each copy `CHAR_WIDTH = 7.2` and fixed character widths. The CSV view computes content widths (`navo-structured` `column_widths`). The CAN trace draws each row as one formatted string (`trace/text.rs:16-21`, `138-160`). No column can be resized.
 - **HEX/MOT.** `Layout` (`src/layout.rs`) has a fixed `ROW_BYTES = 16`. Every gap between two ranges becomes a gap row.
 - **Sibling files.** `FileHooks.bytes` and `FileHooks.range` (`viewer/files.rs:108-128`) read any `Location`; `Location::parent` and `Location::join` build a sibling path.
-- **Text.** New UI text goes into `.ftl` files (D59): `rusty-l10n/locales/en-US/viewer.ftl` and `settings.ftl`.
+- **Text.** New UI text goes into `.ftl` files (D59): `navo-l10n/locales/en-US/viewer.ftl` and `settings.ftl`.
 
 ### Measured on the owner's files (counts only; the files stay private)
 
@@ -86,7 +86,7 @@ Final once the owner answers Q1–Q3. Workers never reopen them; a worker that f
   - A stripped ELF (no symbol table) has sections and segments only. "Who uses the flash" shows a note instead of the treemap: "This file has no symbol table, so bytes cannot be traced to modules."
 - **D10 — Grouping.** A switch with Module, Source file, Object file and Section. The default is the first one in that order that yields more than one group. An option without data is disabled and its tooltip says why.
   - **Module:** from the owner's name (object file stem, else section name without its leading kind part, else symbol name), without leading `.` or `_`. Rules, first match wins (owner, Q1: "the best way to cover everything"):
-    1. the user's list `[automotive] modules = ["Com", "Dio_Cfg"]` in `ferrite.toml`: the longest listed prefix that the name starts with, followed by `_`, `.` or the end of the name;
+    1. the user's list `[automotive] modules = ["Com", "Dio_Cfg"]` in `navo.toml`: the longest listed prefix that the name starts with, followed by `_`, `.` or the end of the name;
     2. AUTOSAR two-part prefixes: `Rte_<X>` and `SchM_<X>` group as `Rte_<X>` and `SchM_<X>`;
     3. the text up to the first `_` or `.`.
     - Grouping ignores case and shows the first spelling met. Names that leave nothing go to "(other)". The list reloads live like other settings (P22), and the Rich header's provenance line says "modules: N from your list" when the list matched anything.
@@ -203,40 +203,40 @@ Final once the owner answers Q1–Q3. Workers never reopen them; a worker that f
 
 | Atom | Component | Role | Effort | After | Check | Status | Cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A1 | `fit_name` | ui-builder (Sonnet) | medium | — | `cargo nextest run -p rusty-ui columns::fit` | done | |
-| A2 | `columns` primitive | ui-builder (Opus) | medium | A1 | `cargo nextest run -p rusty-ui primitives::columns`; gallery shot | done | |
-| A3 | ELF table on `columns` | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p rusty-ui viewer::elf` | done | |
-| A4 | MAP table on `columns` | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p rusty-ui viewer::map` | done | |
-| A5 | CSV table on `columns` | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p rusty-ui viewer::table` | moved to beta (D74/D75) | orchestrator 2026-10-26 |
-| A6 | CAN trace rows as cells | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p rusty-ui viewer::trace viewer::tests::can_trace` | moved to beta (D74/D75) | orchestrator 2026-10-26 |
-| A7 | ELF noise filter (model) | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-automotive elf_query` | done | |
-| A8 | ELF noise filter (UI) | ui-builder (Sonnet) | medium | A7, A3 | `cargo nextest run -p rusty-ui viewer::elf`; `cargo xtask gate` (l10n) | done | |
-| A9 | MAP headers, Space, sizes (model) | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-automotive map` | done | |
-| A10 | MAP status and Size column (UI) | ui-builder (Sonnet) | medium | A9, A4 | `cargo nextest run -p rusty-ui viewer::map` | done | |
-| A11 | `Layout` options (model) | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-automotive layout memory` | done | |
-| A12 | HEX/MOT 32-byte rows and folded gaps (UI) | ui-builder (Sonnet) | medium | A11 | `cargo nextest run -p rusty-ui viewer::memory` | done | |
+| A1 | `fit_name` | ui-builder (Sonnet) | medium | — | `cargo nextest run -p navo-ui columns::fit` | done | |
+| A2 | `columns` primitive | ui-builder (Opus) | medium | A1 | `cargo nextest run -p navo-ui primitives::columns`; gallery shot | done | |
+| A3 | ELF table on `columns` | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p navo-ui viewer::elf` | done | |
+| A4 | MAP table on `columns` | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p navo-ui viewer::map` | done | |
+| A5 | CSV table on `columns` | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p navo-ui viewer::table` | moved to beta (D74/D75) | orchestrator 2026-10-26 |
+| A6 | CAN trace rows as cells | ui-builder (Sonnet) | medium | A2 | `cargo nextest run -p navo-ui viewer::trace viewer::tests::can_trace` | moved to beta (D74/D75) | orchestrator 2026-10-26 |
+| A7 | ELF noise filter (model) | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-automotive elf_query` | done | |
+| A8 | ELF noise filter (UI) | ui-builder (Sonnet) | medium | A7, A3 | `cargo nextest run -p navo-ui viewer::elf`; `cargo xtask gate` (l10n) | done | |
+| A9 | MAP headers, Space, sizes (model) | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-automotive map` | done | |
+| A10 | MAP status and Size column (UI) | ui-builder (Sonnet) | medium | A9, A4 | `cargo nextest run -p navo-ui viewer::map` | done | |
+| A11 | `Layout` options (model) | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-automotive layout memory` | done | |
+| A12 | HEX/MOT 32-byte rows and folded gaps (UI) | ui-builder (Sonnet) | medium | A11 | `cargo nextest run -p navo-ui viewer::memory` | done | |
 | A13 | review Part A | reviewer (Opus) | high | A3–A6, A8, A10, A12 | review notes; gate; Windows CI | done: one Opus review for A13 and C11; fixes in the review fix round | |
-| B1 | `mdf` parser | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-automotive mdf` | done | |
-| B2 | `space::kind` and regions | api-builder (Sol 6.1) | xhigh | B1 | `cargo nextest run -p rusty-automotive space_regions` | done | |
-| B3 | `space::owners_elf` | api-builder (Sol 6.1) | xhigh | B2 | `cargo nextest run -p rusty-automotive space_owners` | done | |
-| B2b | Fill kind (D7) in kinds, regions and owners | api-builder (Sonnet) | high | B3 | `cargo nextest run -p rusty-automotive space_regions space_owners` | done | |
-| B4 | `space::owners_map` and groups | api-builder (Sonnet) | high | B3, B2b | `cargo nextest run -p rusty-automotive space_groups` | done | |
-| B5 | `space::strip` | api-builder (Sol 6.1) | xhigh | B2 | `cargo nextest run -p rusty-automotive space_strip` | done | |
-| B5b | `strip::inner` (D17 inner cells from owners) | api-builder (Sonnet) | medium | B5, B3 | `cargo nextest run -p rusty-automotive space_strip` | done | |
-| B6 | `space::treemap` | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p rusty-automotive space_treemap` | done | |
-| B7 | fixtures and budget | api-builder (Sol 6.1) | xhigh | B4, B5, B6, A7 | `cargo nextest run --release -p rusty-automotive --test elf_rich_large --run-ignored all` | done | |
-| B8 | `.mdf` viewer | ui-builder (Sonnet) | medium | B1, A2 | `cargo nextest run -p rusty-ui viewer::mdf`; gallery shot | done | |
+| B1 | `mdf` parser | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-automotive mdf` | done | |
+| B2 | `space::kind` and regions | api-builder (Sol 6.1) | xhigh | B1 | `cargo nextest run -p navo-automotive space_regions` | done | |
+| B3 | `space::owners_elf` | api-builder (Sol 6.1) | xhigh | B2 | `cargo nextest run -p navo-automotive space_owners` | done | |
+| B2b | Fill kind (D7) in kinds, regions and owners | api-builder (Sonnet) | high | B3 | `cargo nextest run -p navo-automotive space_regions space_owners` | done | |
+| B4 | `space::owners_map` and groups | api-builder (Sonnet) | high | B3, B2b | `cargo nextest run -p navo-automotive space_groups` | done | |
+| B5 | `space::strip` | api-builder (Sol 6.1) | xhigh | B2 | `cargo nextest run -p navo-automotive space_strip` | done | |
+| B5b | `strip::inner` (D17 inner cells from owners) | api-builder (Sonnet) | medium | B5, B3 | `cargo nextest run -p navo-automotive space_strip` | done | |
+| B6 | `space::treemap` | api-builder (Sol 6.1) | xhigh | — | `cargo nextest run -p navo-automotive space_treemap` | done | |
+| B7 | fixtures and budget | api-builder (Sol 6.1) | xhigh | B4, B5, B6, A7 | `cargo nextest run --release -p navo-automotive --test elf_rich_large --run-ignored all` | done | |
+| B8 | `.mdf` viewer | ui-builder (Sonnet) | medium | B1, A2 | `cargo nextest run -p navo-ui viewer::mdf`; gallery shot | done | |
 | B9 | review Part B | reviewer (Opus) | high | B7, B8 | review notes; gate; Windows CI | done | |
-| C1 | memory-kind tokens | ui-builder (Sonnet) | medium | — | `cargo nextest run -p rusty-ui tokens` | done | |
-| C2 | `AUTOMOTIVE_LAYOUT` parts and settings | ui-builder (Sonnet) | medium | — | `cargo nextest run -p rusty-ui parts settings viewer::tests::view_parts`; `cargo xtask gate` (l10n) | done | |
-| C3 | `space::sibling` loader | ui-builder (Opus) | medium | B2, B4 | `cargo nextest run -p rusty-ui viewer::space::sibling` | done | |
-| C4 | bars, legend, File bytes | ui-builder (Sonnet) | medium | C1, B2 | `cargo nextest run -p rusty-ui viewer::space::bars`; gallery shots | done | |
-| C5 | `MemoryStrip` element | ui-builder (Opus) | medium | C1, B5 | `cargo nextest run -p rusty-ui viewer::space::strip`; gallery shots | done | |
-| C6 | `Treemap` element | ui-builder (Sonnet) | medium | C1, B6 | `cargo nextest run -p rusty-ui viewer::space::treemap`; gallery shots | done | |
-| C7 | Rich container in the ELF view | ui-builder (Opus) | medium | C2–C6, A8, B9 | `cargo nextest run -p rusty-ui viewer::space viewer::elf`; screenshots | done | |
-| C8 | Rich container in the MAP view | ui-builder (Sonnet) | medium | C7, A10 | `cargo nextest run -p rusty-ui viewer::space viewer::map`; screenshots | done | |
-| C9 | strip, treemap and Alt keys | ui-builder (Opus) | medium | C8 | `cargo nextest run -p rusty-ui viewer::space::keys commands`; `cargo xtask gate` | done | |
-| C10 | large-file UI check | ui-builder (Opus) | medium | C9, B7 | `cargo nextest run --release -p rusty-ui viewer::space::large --run-ignored all` | done | |
+| C1 | memory-kind tokens | ui-builder (Sonnet) | medium | — | `cargo nextest run -p navo-ui tokens` | done | |
+| C2 | `AUTOMOTIVE_LAYOUT` parts and settings | ui-builder (Sonnet) | medium | — | `cargo nextest run -p navo-ui parts settings viewer::tests::view_parts`; `cargo xtask gate` (l10n) | done | |
+| C3 | `space::sibling` loader | ui-builder (Opus) | medium | B2, B4 | `cargo nextest run -p navo-ui viewer::space::sibling` | done | |
+| C4 | bars, legend, File bytes | ui-builder (Sonnet) | medium | C1, B2 | `cargo nextest run -p navo-ui viewer::space::bars`; gallery shots | done | |
+| C5 | `MemoryStrip` element | ui-builder (Opus) | medium | C1, B5 | `cargo nextest run -p navo-ui viewer::space::strip`; gallery shots | done | |
+| C6 | `Treemap` element | ui-builder (Sonnet) | medium | C1, B6 | `cargo nextest run -p navo-ui viewer::space::treemap`; gallery shots | done | |
+| C7 | Rich container in the ELF view | ui-builder (Opus) | medium | C2–C6, A8, B9 | `cargo nextest run -p navo-ui viewer::space viewer::elf`; screenshots | done | |
+| C8 | Rich container in the MAP view | ui-builder (Sonnet) | medium | C7, A10 | `cargo nextest run -p navo-ui viewer::space viewer::map`; screenshots | done | |
+| C9 | strip, treemap and Alt keys | ui-builder (Opus) | medium | C8 | `cargo nextest run -p navo-ui viewer::space::keys commands`; `cargo xtask gate` | done | |
+| C10 | large-file UI check | ui-builder (Opus) | medium | C9, B7 | `cargo nextest run --release -p navo-ui viewer::space::large --run-ignored all` | done | |
 | C11 | review Part C | reviewer (Opus) | high | C10 | review notes; gate; Windows CI; owner check list | done: one Opus review for A13 and C11; fixes in the review fix round | |
 
 Parallel lanes:
@@ -246,97 +246,97 @@ Parallel lanes:
 
 ### A1 — `fit_name`
 
-- **Read:** D12; `crates/rusty-ui/src/primitives/mod.rs`; `crates/rusty-ui/src/format.rs` (style).
+- **Read:** D12; `crates/navo-ui/src/primitives/mod.rs`; `crates/navo-ui/src/format.rs` (style).
 - **Change:** new `primitives/columns/mod.rs` (module stub that only declares `fit`) and `primitives/columns/fit.rs`:
   - `pub struct Fitted { pub prefix: String, pub rest: String }`;
   - `pub fn fit_name(prefix: &str, rest: &str, chars: usize) -> Fitted` following D12, counting `char`s, never splitting a UTF-8 code point;
   - `pub fn map_prefix(name: &str) -> (&str, &str)` and `pub fn symbol_prefix(name: &str) -> (&str, &str)` for the two prefix rules.
-- **Check:** `cargo nextest run -p rusty-ui columns::fit`. Tests: fits unchanged; long rest cut in the middle at 45 %; long prefix shortened to `ab….`; minimum 6; non-ASCII names; a proptest that the result never exceeds `max(chars, 6)` and keeps the first and last character of `rest`.
+- **Check:** `cargo nextest run -p navo-ui columns::fit`. Tests: fits unchanged; long rest cut in the middle at 45 %; long prefix shortened to `ab….`; minimum 6; non-ASCII names; a proptest that the result never exceeds `max(chars, 6)` and keeps the first and last character of `rest`.
 - **Stop if:** `primitives` has a module-size or export rule that forbids a nested folder.
 
 ### A2 — `columns` primitive
 
-- **Read:** D11; `primitives/splitter.rs` (drag handling, `DragMoveEvent`); `viewer/table/draw.rs:100-170` (head cells, content widths); `viewer/elf/draw.rs:16-60`; `rusty-structured/src/table/mod.rs:105-125` (`column_widths`).
+- **Read:** D11; `primitives/splitter.rs` (drag handling, `DragMoveEvent`); `viewer/table/draw.rs:100-170` (head cells, content widths); `viewer/elf/draw.rs:16-60`; `navo-structured/src/table/mod.rs:105-125` (`column_widths`).
 - **Change:** in `primitives/columns/`:
   - `ColumnSpec { id, title, align, min_chars, max_chars, flex: bool }`.
   - `ColumnSet` with `new(specs)`, `fit_content(header, rows: impl Iterator<Item = Vec<String>>)` (first 200 rows), `width(at) -> Pixels`, `set_width(at, Pixels)`, `fit(at)`, `reset()`. The character width is measured once from the mono font through the window's text system; 7.2 px is the fallback.
   - `ColumnHead` element: header cells, a 6 px handle at each right edge with the resize cursor, live drag, double-click fits. It emits `ColumnEvent::Sort(at)` on a title click and `ColumnEvent::Resized`.
   - A gallery page `columns` with a five-column table.
-- **Check:** `cargo nextest run -p rusty-ui primitives::columns`. Tests: content widths clamp to the spec; the flex column takes the rest and keeps its minimum; a drag of +40 px widens one column; a double-click fits; reset restores the initial widths; a title click emits `Sort`. Gallery shot in both themes.
+- **Check:** `cargo nextest run -p navo-ui primitives::columns`. Tests: content widths clamp to the spec; the flex column takes the rest and keeps its minimum; a drag of +40 px widens one column; a double-click fits; reset restores the initial widths; a title click emits `Sort`. Gallery shot in both themes.
 - **Stop if:** GPUI cannot report a drag on a child of a header cell without starting a parent click; report it and do not add timers.
 
 ### A3 — ELF table on `columns`
 
 - **Read:** `viewer/elf/draw.rs` (whole), `viewer/elf/mod.rs:79-140`, A2's `columns` API.
 - **Change:** remove `CHAR_WIDTH`, `chars()` and fixed widths. `ElfView` holds `Entity<ColumnSet>` built after the index from the first 200 rows. Name cells use `fit_name` with `symbol_prefix`; the accessibility label keeps the full name. Header clicks keep today's sort keys.
-- **Check:** `cargo nextest run -p rusty-ui viewer::elf`. New tests: widths follow content; a resize changes the row cell width; a long name keeps its prefix and the label keeps the full name; Ctrl+F3 sorting still works.
+- **Check:** `cargo nextest run -p navo-ui viewer::elf`. New tests: widths follow content; a resize changes the row cell width; a long name keeps its prefix and the label keeps the full name; Ctrl+F3 sorting still works.
 - **Stop if:** `elf/draw.rs` needs more than 150 changed lines; split the head into `elf/head.rs` first and report.
 
 ### A4 — MAP table on `columns`
 
 - **Read:** `viewer/map/draw.rs` (whole), `viewer/map/select.rs:30-110`, A2's API.
 - **Change:** as A3, with one `ColumnSet` per table (Memory, Sections, Symbols) kept while the file is open. Section names use `map_prefix`; symbols use `symbol_prefix`.
-- **Check:** `cargo nextest run -p rusty-ui viewer::map`. Tests: each table keeps its own widths across Alt+T; long names keep their prefix; sort keys unchanged.
+- **Check:** `cargo nextest run -p navo-ui viewer::map`. Tests: each table keeps its own widths across Alt+T; long names keep their prefix; sort keys unchanged.
 - **Stop if:** `select.rs` heads carry widths that other code reads; report the readers.
 
 ### A5 — CSV table on `columns`
 
 - **Read:** `viewer/table/draw.rs`, `viewer/table/mod.rs`, `viewer/table/jobs.rs:120-140`, A2's API.
 - **Change:** the CSV view uses `ColumnSet` widths seeded from `column_widths`. It keeps its own horizontal paging (`left`, `visible_columns`, `shows_column`), now on pixel widths.
-- **Check:** `cargo nextest run -p rusty-ui viewer::table`. Tests: a resize changes paging; a wide file still pages; existing tests stay green.
+- **Check:** `cargo nextest run -p navo-ui viewer::table`. Tests: a resize changes paging; a wide file still pages; existing tests stay green.
 - **Stop if:** paging needs the column set to own scrolling; report it (D11 keeps paging in the view).
 
 ### A6 — CAN trace rows as cells
 
 - **Read:** `viewer/trace/text.rs:1-60` and `130-218`, `viewer/trace/draw.rs:60-140`, A2's API.
 - **Change:** `row()` returns `Vec<String>` cells for Time, Ch, ID, Dir, Type, DLC, Data plus the tone; `column_titles()` becomes the specs. Data is the flex column. Error rows keep their tone and left border. `trace_label` stays one string for accessibility.
-- **Check:** `cargo nextest run -p rusty-ui viewer::trace viewer::tests::can_trace`. Tests: cells for a frame, an error frame and an "other" line; resize; follow mode still keeps the last row in view.
+- **Check:** `cargo nextest run -p navo-ui viewer::trace viewer::tests::can_trace`. Tests: cells for a frame, an error frame and an "other" line; resize; follow mode still keeps the last row in view.
 - **Stop if:** an "other" line (comments, events) cannot fit the cell model; report its shape.
 
 ### A7 — ELF noise filter (model)
 
-- **Read:** D9 rule 4, D13; `rusty-automotive/src/elf/query.rs` (whole), `src/elf/mod.rs:85-130`, `tests/elf_query.rs`.
+- **Read:** D9 rule 4, D13; `navo-automotive/src/elf/query.rs` (whole), `src/elf/mod.rs:85-130`, `tests/elf_query.rs`.
 - **Change:** `Query.hide_noise: bool` (default `true`). `select` returns `Selection { rows: Vec<u32>, hidden: u64 }`. Hidden means: size 0 and no estimate, ABS place, or FILE or SECTION kind. Add `pub fn estimated_size(elf, at) -> Option<u64>` for D9 rule 4 (GLOBAL or WEAK FUNC or OBJECT, up to the next symbol address in the same section). Update callers inside the crate only.
-- **Check:** `cargo nextest run -p rusty-automotive elf_query`. Tests: counts on a fixture with labels, ABS, FILE and sized symbols; an estimated global is shown; a LOCAL zero-size label is hidden; `hide_noise = false` shows every symbol.
+- **Check:** `cargo nextest run -p navo-automotive elf_query`. Tests: counts on a fixture with labels, ABS, FILE and sized symbols; an estimated global is shown; a LOCAL zero-size label is hidden; `hide_noise = false` shows every symbol.
 - **Stop if:** the UI crate's callers break in a way that needs more than renaming `rows` to `selection.rows`; list them for A8.
 
 ### A8 — ELF noise filter (UI)
 
-- **Read:** D13; `viewer/elf/jobs.rs:20-137`, `viewer/elf/text.rs`, `viewer/elf/go_to.rs`, `viewer/elf/keys.rs:1-60`, `commands/keymap.toml` (Elf context), `rusty-l10n/locales/en-US/viewer.ftl`, `commands.ftl`.
+- **Read:** D13; `viewer/elf/jobs.rs:20-137`, `viewer/elf/text.rs`, `viewer/elf/go_to.rs`, `viewer/elf/keys.rs:1-60`, `commands/keymap.toml` (Elf context), `navo-l10n/locales/en-US/viewer.ftl`, `commands.ftl`.
 - **Change:** the hidden count goes into the status line in every mode. Alt+H toggles `hide_noise` for this file through a new `elf_view::ToggleNoise` action, `elf.toggle_noise` command, `cmd-` label and key. Ctrl+G on a hidden symbol sets the D13 note. The Rich noise bar comes in C7.
-- **Check:** `cargo nextest run -p rusty-ui viewer::elf`, then `cargo xtask gate`. Tests: status shows the count; Alt+H shows all; Ctrl+G to a hidden label gives the note.
+- **Check:** `cargo nextest run -p navo-ui viewer::elf`, then `cargo xtask gate`. Tests: status shows the count; Alt+H shows all; Ctrl+G to a hidden label gives the note.
 - **Stop if:** Alt+H is taken in a parent context that the Elf context inherits.
 
 ### A9 — MAP headers, Space, sizes (model)
 
-- **Read:** D14; `rusty-automotive/src/map/parts.rs`, `map/tasking.rs:1-120`, `map/rows.rs:44-60`, `map/model.rs`, `tests/map.rs`, `tests/map_tolerance.rs`.
+- **Read:** D14; `navo-automotive/src/map/parts.rs`, `map/tasking.rs:1-120`, `map/rows.rs:44-60`, `map/model.rs`, `tests/map.rs`, `tests/map_tolerance.rs`.
 - **Change:**
   - `parts::header` accepts only the D14 header shapes. A `* Title` line counts only when the next line is `=` only, so `Tasking::take` keeps one line of look-behind for the title.
   - `skipped_sections: u64` becomes `skipped_parts: Vec<String>` (titles, deduped, at most 32).
   - Ditto space inside one Symbols table.
   - `MapModel::has_symbol_sizes() -> bool`.
-- **Check:** `cargo nextest run -p rusty-automotive map`. Red first, with invented fixtures: 50 call-graph lines give zero unread parts; three titled parts give three names; a Symbols table with one Space cell gives that space on every row; a table without a size column gives `has_symbol_sizes() == false`. The `map_wrap` fixtures stay green.
+- **Check:** `cargo nextest run -p navo-automotive map`. Red first, with invented fixtures: 50 call-graph lines give zero unread parts; three titled parts give three names; a Symbols table with one Space cell gives that space on every row; a table without a size column gives `has_symbol_sizes() == false`. The `map_wrap` fixtures stay green.
 - **Stop if:** a TASKING fixture in the tests uses a header shape that D14 does not list; report it.
 
 ### A10 — MAP status and Size column (UI)
 
 - **Read:** D14; `viewer/map/text.rs:180-210`, `viewer/map/select.rs:35-110`, `viewer/map/nav.rs`, `viewer.ftl`.
 - **Change:** status "Not read: <first three titles> +N more" and "This map lists no symbol sizes"; the navigator gets a "Not read" group with every title; the Symbols table drops Size when `has_symbol_sizes()` is false.
-- **Check:** `cargo nextest run -p rusty-ui viewer::map`. Tests for each text and for the hidden column.
+- **Check:** `cargo nextest run -p navo-ui viewer::map`. Tests for each text and for the hidden column.
 - **Stop if:** the navigator's item enum cannot hold a non-selectable row; report.
 
 ### A11 — `Layout` options (model)
 
-- **Read:** D15; `rusty-automotive/src/layout.rs`, `src/image.rs:55-120`, `tests/layout.rs`.
+- **Read:** D15; `navo-automotive/src/layout.rs`, `src/image.rs:55-120`, `tests/layout.rs`.
 - **Change:** `LayoutOptions { row_bytes: u64 (16 or 32), fold_under: u64 (256) }`; `Layout::new(&ranges, options)`; `Row::Data` gains `missing: Vec<Range<u64>>` or an equivalent that marks folded bytes; `Layout::folded() -> u64`; `row_bytes()`. Keep `ROW_BYTES` only as the default.
-- **Check:** `cargo nextest run -p rusty-automotive layout`. Tests: 198 ranges with 16-byte gaps fold to 2 blocks; a 300-byte gap stays a gap row; 32-byte rows; `row_of` and `windows` agree for both widths (proptest).
+- **Check:** `cargo nextest run -p navo-automotive layout`. Tests: 198 ranges with 16-byte gaps fold to 2 blocks; a 300-byte gap stays a gap row; 32-byte rows; `row_of` and `windows` agree for both widths (proptest).
 - **Stop if:** a folded gap overlapping a row start breaks `windows`; report the case.
 
 ### A12 — HEX/MOT 32-byte rows and folded gaps (UI)
 
 - **Read:** D15; `viewer/memory/mod.rs:1-215`, `memory/jobs.rs:55-70`, `memory/draw.rs:1-160`, `memory/text.rs`, `memory/drawers.rs` (navigator rows).
 - **Change:** pick `row_bytes` from the content width (measured mono width) and rebuild the layout on change, keeping the cursor address. The column header is built from `row_bytes`. Folded bytes draw `--` in the faint colour. Navigator: "N padding gaps" on folded ranges. Status: "N folded".
-- **Check:** `cargo nextest run -p rusty-ui viewer::memory`. Tests: wide window → 32 per row; narrow → 16; resize keeps the address; folded bytes render `--`.
+- **Check:** `cargo nextest run -p navo-ui viewer::memory`. Tests: wide window → 32 per row; narrow → 16; resize keeps the address; folded bytes render `--`.
 - **Stop if:** the layout must be rebuilt in `render`; move it to the resize observer or report.
 
 ### A13 — review Part A
@@ -345,13 +345,13 @@ Opus high on A1–A12: column widths against content, prefix truncation on non-A
 
 ### B1 — `mdf` parser
 
-- **Read:** D16 and the `.mdf` facts above; `rusty-automotive/src/lib.rs`, `src/map/mod.rs` (module style), `src/map/model.rs` (problem style).
+- **Read:** D16 and the `.mdf` facts above; `navo-automotive/src/lib.rs`, `src/map/mod.rs` (module style), `src/map/model.rs` (problem style).
 - **Change:** `src/mdf/mod.rs` and `parse.rs`:
   - `Mdf { spaces: Vec<Space { name, id, mau }>, chips: Vec<Chip { name, id, mau, size, kind: ChipKind }>, maps: Vec<MapLine { space, start, size, chip, chip_start }>, problems: Vec<MdfProblem> }`.
   - `parse_mdf(&str) -> Mdf`: tabs or spaces, decimal or `0x` numbers, `#` comments, at most 10,000 lines.
   - `sniff_mdf(head: &[u8]) -> bool`.
   - `Mdf::regions() -> RegionTable` (`RegionTable` defined here, reused by B2): name, start, size, rom or ram, per mapped chip.
-- **Check:** `cargo nextest run -p rusty-automotive mdf`. Invented fixtures: three chips mapped; an unknown chip id; an overlap; hex numbers; an MDF4 head is rejected; 10,001 lines stop with a problem.
+- **Check:** `cargo nextest run -p navo-automotive mdf`. Invented fixtures: three chips mapped; an unknown chip id; an overlap; hex numbers; an MDF4 head is rejected; 10,001 lines stop with a problem.
 - **Stop if:** none expected.
 
 ### B2 — `space::kind` and regions
@@ -364,35 +364,35 @@ Opus high on A1–A12: column widths against content, prefix truncation on non-A
   - `regions_for_map(&MapModel, Option<&RegionTable>)`.
   - `RegionTable::from_map(&MapModel)` and `merge(map, mdf)`.
   - `outside: u64` counts ELF sections outside every region.
-- **Check:** `cargo nextest run -p rusty-automotive space_regions`. Tests: kinds for every flag mix; `.mdf` regions; `.map` regions with estimated start; clusters with no free figure; a section outside the regions is counted.
+- **Check:** `cargo nextest run -p navo-automotive space_regions`. Tests: kinds for every flag mix; `.mdf` regions; `.map` regions with estimated start; clusters with no free figure; a section outside the regions is counted.
 - **Stop if:** an ELF section spans two regions; report how many in the fixtures and do not split it.
 
 ### B3 — `space::owners_elf`
 
 - **Read:** D9; B2's types; `src/elf/lines.rs` public API; `src/elf/query.rs` (`estimated_size` from A7, or write the same rule here if A7 has not landed and report).
 - **Change:** `src/space/owners_elf.rs`: `Owners { items: Vec<Owner { start, size, name: NameRef, kind, object, source_file, section, estimated: bool }>, provenance: Provenance }` built in D9 order; "(not attributed)" fillers; FILE symbols only with real extensions; stripped files give section owners only. `Provenance` names each source and counts estimates.
-- **Check:** `cargo nextest run -p rusty-automotive space_owners`. Fixtures from `elf_build`: per-function sections; merged sections with LOCAL labels; a global zero-size function estimated; stripped; a sibling MAP model giving objects. The sum of owners equals used bytes per region.
+- **Check:** `cargo nextest run -p navo-automotive space_owners`. Fixtures from `elf_build`: per-function sections; merged sections with LOCAL labels; a global zero-size function estimated; stripped; a sibling MAP model giving objects. The sum of owners equals used bytes per region.
 - **Stop if:** the work needs more than 150 changed lines; split fillers into B3b and report.
 
 ### B4 — `space::owners_map` and groups
 
 - **Read:** D7 (MAP kinds), D10; `src/map/query.rs` (`object_totals`), B2 and B3 types.
 - **Change:** `owners_of_map(&MapModel)`; `Grouping { Module, SourceFile, ObjectFile, Section }`; `group(&Owners, Grouping, region) -> Vec<Group { name, by_kind, bytes, children }>` sorted by bytes; `default_grouping`; `flash_region(&Space)`.
-- **Check:** `cargo nextest run -p rusty-automotive space_groups`. Tests: the module rule on invented names (`Com_Main.o` → `Com`, `.text.Lamp.Read` → `Lamp`, `_start` → `start`, `.L12` → `(other)`); default falls through when Module yields one group; Object disabled without a MAP; the flash region pick.
+- **Check:** `cargo nextest run -p navo-automotive space_groups`. Tests: the module rule on invented names (`Com_Main.o` → `Com`, `.text.Lamp.Read` → `Lamp`, `_start` → `start`, `.L12` → `(other)`); default falls through when Module yields one group; Object disabled without a MAP; the flash region pick.
 - **Stop if:** none expected.
 
 ### B5 — `space::strip`
 
 - **Read:** D17; B2's `Region`; the prototype rules restated in D17.
 - **Change:** `src/space/strip.rs`: `ScaleMode { Compressed, True }`; `Scale::new(&Region, mode, view: Option<Range<u64>>)` with `x(offset)`, `offset(x)` and breaks; `cells(&Region, &Scale, width_px) -> Vec<Cell { x0, x1, kind, blocks: Range<usize>, bytes }>` merging sub-pixel blocks; `inner(&Owners, block, &Scale, width_px)` for D17 inner cells.
-- **Check:** `cargo nextest run -p rusty-automotive space_strip`. Tests: compression of a 50 % gap; true scale; merging gives at most one cell per pixel; `offset(x(o)) ≈ o` (proptest); zoom view clips blocks; a cluster region has no breaks.
+- **Check:** `cargo nextest run -p navo-automotive space_strip`. Tests: compression of a 50 % gap; true scale; merging gives at most one cell per pixel; `offset(x(o)) ≈ o` (proptest); zoom view clips blocks; a cluster region has no breaks.
 - **Stop if:** none expected.
 
 ### B6 — `space::treemap`
 
 - **Read:** D10.
 - **Change:** `src/space/treemap.rs`: `squarify(&[Item { id, value }], Rect) -> Vec<Tile>` (the squarified algorithm), `top(values, 22) -> Vec<Item>` with the "N more" item.
-- **Check:** `cargo nextest run -p rusty-automotive space_treemap`. Tests: tile areas proportional within 0.5 %; no overlap; tiles cover the rectangle; zero values dropped; 23+ groups give 22 plus "more".
+- **Check:** `cargo nextest run -p navo-automotive space_treemap`. Tests: tile areas proportional within 0.5 %; no overlap; tiles cover the rectangle; zero values dropped; 23+ groups give 22 plus "more".
 - **Stop if:** none expected.
 
 ### B7 — fixtures and budget
@@ -402,14 +402,14 @@ Opus high on A1–A12: column widths against content, prefix truncation on non-A
   - `tests/elf_build` gains `merged_layout(symbols)` and `split_layout(symbols)` with invented module names (`Com`, `Lamp`, `Seat`, `Horn`, …, 40 modules).
   - Small fixtures: stripped, 32/64, little/big, with and without DWARF, plus invented sibling `demo.map` and `demo.mdf` texts.
   - `tests/elf_rich_large.rs`: `#[ignore]` tests that build both ~30 MB files and time parse, lines, regions, owners, groups, strip cells at 1,600 px, treemap and `select`, asserting the D20 budgets in release builds only (`cfg(not(debug_assertions))`). It prints the timings.
-- **Check:** `cargo nextest run --release -p rusty-automotive --test elf_rich_large --run-ignored all`; paste the printed timings into the Log.
+- **Check:** `cargo nextest run --release -p navo-automotive --test elf_rich_large --run-ignored all`; paste the printed timings into the Log.
 - **Stop if:** a budget fails by more than 2×; report the timings and do not tune code in this atom.
 
 ### B8 — `.mdf` viewer
 
 - **Read:** D16; `viewer/kinds.rs` and `viewer/kinds/` (how ELF and MAP kinds register and sniff), `viewer/map/mod.rs:140-209` (body shape), A2's `columns`.
 - **Change:** a new kind `mdf` and `viewer/mdf/{mod.rs, draw.rs}`: parse in a background job, a chips table on `columns`, spaces in the header detail, problems in the status line, `AUTOMOTIVE_TABLE` parts. Add a gallery sample with an invented `demo.mdf`.
-- **Check:** `cargo nextest run -p rusty-ui viewer::mdf`; gallery shot in both themes.
+- **Check:** `cargo nextest run -p navo-ui viewer::mdf`; gallery shot in both themes.
 - **Stop if:** `.mdf` is already claimed by another kind's sniffer; report which.
 
 ### B9 — review Part B
@@ -420,42 +420,42 @@ Opus high: kind rules, D8 source order and the outside count, D9 owner order and
 
 - **Read:** D19; `tokens/mod.rs:90-110` and `230-280`, `tokens/contrast.rs`, `tokens/tests.rs`; `~/.agents/rules/web-ui.md` colour section.
 - **Change:** generate the scales with `palette.mjs` (hues 40, 82, 210, 238, 60), add `mem_*` tokens in both themes, add contrast tests for every pair in D19.
-- **Check:** `cargo nextest run -p rusty-ui tokens`; `contrast.mjs` output pasted in the Log.
+- **Check:** `cargo nextest run -p navo-ui tokens`; `contrast.mjs` output pasted in the Log.
 - **Stop if:** a pair cannot reach its ratio inside the hue family; report the pair and the best step.
 
 ### C2 — `AUTOMOTIVE_LAYOUT` parts and settings
 
-- **Read:** D5; `viewer/parts/mod.rs:1-120`, `parts/tests.rs`, `viewer/view_menu.rs:143-172`, `settings/fields.rs:90-100` and `400-415`, `settings/viewer_fields.rs:62-110`, `settings/values.rs:266-280`, `commands/viewer.rs`, `rusty-ui-gallery/src/viewer_menu_page.rs:140-160`, `settings.ftl`.
+- **Read:** D5; `viewer/parts/mod.rs:1-120`, `parts/tests.rs`, `viewer/view_menu.rs:143-172`, `settings/fields.rs:90-100` and `400-415`, `settings/viewer_fields.rs:62-110`, `settings/values.rs:266-280`, `commands/viewer.rs`, `navo-ui-gallery/src/viewer_menu_page.rs:140-160`, `settings.ftl`.
 - **Change:** fields `AutomotiveUsageBars` and `AutomotiveWhoUses` with keys `automotive.view.usage-bars` and `automotive.view.who-uses`, default off; actions `ToggleUsageBars` and `ToggleWhoUses`; the `AUTOMOTIVE_LAYOUT` set; `family` widened to all six fields for every automotive set; ELF and MAP bodies return `AUTOMOTIVE_LAYOUT`; `show_parts` passes a `LayoutParts { strip, bars, who, row_bars }` struct to both bodies (stored, not drawn yet).
-- **Check:** `cargo nextest run -p rusty-ui parts settings viewer::tests::view_parts`, then `cargo xtask gate`. Tests: Rich turns all on; a toggle makes Custom; Keep as default writes the two new keys; the View menu lists five rows for ELF and MAP and four for HEX.
+- **Check:** `cargo nextest run -p navo-ui parts settings viewer::tests::view_parts`, then `cargo xtask gate`. Tests: Rich turns all on; a toggle makes Custom; Keep as default writes the two new keys; the View menu lists five rows for ELF and MAP and four for HEX.
 - **Stop if:** the store's settings schema needs a migration for the new keys.
 
 ### C3 — `space::sibling` loader
 
-- **Read:** D8; `viewer/files.rs:100-130`, `viewer/background.rs:1-80`, `viewer/elf/jobs.rs:37-75`, `rusty-core/src/location/mod.rs:77-100`, `location/parent.rs`; B1 and B2 APIs; `rusty_automotive::map` reader entry (`src/map/mod.rs`).
+- **Read:** D8; `viewer/files.rs:100-130`, `viewer/background.rs:1-80`, `viewer/elf/jobs.rs:37-75`, `navo-core/src/location/mod.rs:77-100`, `location/parent.rs`; B1 and B2 APIs; `navo_automotive::map` reader entry (`src/map/mod.rs`).
 - **Change:** `viewer/space/{mod.rs (stub), sibling.rs}`: `start_siblings(host, stem_of(location)) -> Job` that tries the D8 names through `hooks.bytes` with the limits, parses the `.mdf` and the `.map` (TASKING sniff first), and sends `Siblings { mdf: Option<Mdf>, map: Option<Arc<MapModel>>, names, problems }`. Unreadable files count as absent.
-- **Check:** `cargo nextest run -p rusty-ui viewer::space::sibling`. Tests with fake hooks: `.mdf` only; `.MAP` upper case; a non-TASKING `.map` ignored; a 65 MiB `.map` refused; no sibling.
+- **Check:** `cargo nextest run -p navo-ui viewer::space::sibling`. Tests with fake hooks: `.mdf` only; `.MAP` upper case; a non-TASKING `.map` ignored; a 65 MiB `.map` refused; no sibling.
 - **Stop if:** `hooks.bytes` reads the whole file before checking the limit; report and use `hooks.range` with a size probe only if the brief's owner agrees.
 
 ### C4 — bars, legend, File bytes
 
 - **Read:** D2, D19; prototype rules for `ubar`, `uline`, `legend` and `fileBar` restated in D2; `rich_header.rs`; C1 tokens; B2 `Region`.
 - **Change:** `viewer/space/bars.rs`: `UsageBar` (kind segments over a free track, accessibility label "name: N % used, X free"), `UsageLine`, `Legend`, `FileBytesBar` (loaded, DWARF, notes, symbols and strings, other, from `Elf.sections`), `RegionHead` (name, large percent). A cluster region shows "free not known" text instead of free figures. Gallery page with an invented three-region file.
-- **Check:** `cargo nextest run -p rusty-ui viewer::space::bars`; gallery shots at 390 px and desktop width in both themes.
+- **Check:** `cargo nextest run -p navo-ui viewer::space::bars`; gallery shots at 390 px and desktop width in both themes.
 - **Stop if:** none expected.
 
 ### C5 — `MemoryStrip` element
 
-- **Read:** D17; B5 API; `primitives/tooltip.rs`; a custom-paint example in the crate (`grep -rn "canvas(" crates/rusty-ui/src`); C1 tokens.
+- **Read:** D17; B5 API; `primitives/tooltip.rs`; a custom-paint example in the crate (`grep -rn "canvas(" crates/navo-ui/src`); C1 tokens.
 - **Change:** `viewer/space/strip.rs`: paints cells (one quad per cell), break marks, inner cells, the caret and dimmed cells. Hover maps x to a block and shows the tooltip. A click emits `StripEvent::Pick(block)`. Focus ring when focused. Cells come from a cache keyed by D17.
-- **Check:** `cargo nextest run -p rusty-ui viewer::space::strip`. Tests: hover at x shows the right block; click picks; dimmed set; caret position; cache reused when only the selection changes. Gallery shots: compressed, true scale, zoomed, merged sub-pixel.
+- **Check:** `cargo nextest run -p navo-ui viewer::space::strip`. Tests: hover at x shows the right block; click picks; dimmed set; caret position; cache reused when only the selection changes. Gallery shots: compressed, true scale, zoomed, merged sub-pixel.
 - **Stop if:** GPUI cannot paint 2,000 quads per strip within one frame in the gallery; report the frame time.
 
 ### C6 — `Treemap` element
 
 - **Read:** D10; B6 API; C1 tokens; A1 `fit_name`.
 - **Change:** `viewer/space/treemap.rs`: tiles as absolutely placed elements with name, size and share when large enough, inner tiles, a kind bar, a "N more" tile, a selected outline in the accent colour, and `TreemapEvent::Pick(group)`. A stripped file shows the D9 note.
-- **Check:** `cargo nextest run -p rusty-ui viewer::space::treemap`; gallery shots at three sizes, both themes.
+- **Check:** `cargo nextest run -p navo-ui viewer::space::treemap`; gallery shots at three sizes, both themes.
 - **Stop if:** none expected.
 
 ### C7 — Rich container in the ELF view
@@ -467,7 +467,7 @@ Opus high: kind rules, D8 source order and the outside count, D9 owner order and
   - The provenance line, the noise bar above the table, and the Share column when row bars are on.
   - The inspector shows blocks, groups and symbols with full names; the status line shows the selection's full name.
   - Simple renders exactly as before; a test compares its element tree with the pre-P38 snapshot.
-- **Check:** `cargo nextest run -p rusty-ui viewer::space viewer::elf`. Screenshots of an invented ELF in Simple, Rich and Custom (each part off once) at 390 px, 1,280 px and 1,920 px, both themes, with the inspector open over the content.
+- **Check:** `cargo nextest run -p navo-ui viewer::space viewer::elf`. Screenshots of an invented ELF in Simple, Rich and Custom (each part off once) at 390 px, 1,280 px and 1,920 px, both themes, with the inspector open over the content.
 - **Stop if:** `elf/mod.rs` or `elf/draw.rs` would pass 400 lines; move the Rich branch into `viewer/space/layout.rs` and report.
 
 ### C8 — Rich container in the MAP view
@@ -475,21 +475,21 @@ Opus high: kind rules, D8 source order and the outside count, D9 owner order and
 - **Read:** C7's diff; `viewer/map/mod.rs`, `map/draw.rs`, `map/jobs.rs`, `map/loaded.rs`.
 - **Change:** reuse `RichSpace` and the layout with MAP owners, Object file grouping, "reserved" in the usage line, and Located sections in the table.
 - **Known gap (B9 review):** D7's "MAP kind from the sibling ELF section with the same name and address" is not built. `regions_for_map` and `owners_of_map` take no ELF and C3 loads no sibling ELF, so MAP kinds come from section names only and the provenance line says "kinds from section names". Add the ELF parameter here if the MAP view should show ELF kinds.
-- **Check:** `cargo nextest run -p rusty-ui viewer::space viewer::map`; the same screenshot set with the invented gallery map.
+- **Check:** `cargo nextest run -p navo-ui viewer::space viewer::map`; the same screenshot set with the invented gallery map.
 - **Stop if:** the MAP view needs a container change that C7 did not provide; report rather than fork the container.
 
 ### C9 — strip, treemap and Alt keys
 
 - **Read:** D18; `viewer/elf/keys.rs`, `viewer/map/keys.rs`, `commands/keymap.toml`, `commands/viewer.rs`, `commands.ftl`, `viewer/body.rs:60-125` (`keys()` hints).
 - **Change:** `viewer/space/keys.rs` with the D18 actions in a `space_view` namespace for the Elf and Map contexts; registry rows, `cmd-` labels, F-key bar hints per focused part; Backspace zooms out only when a zoomed strip has focus.
-- **Check:** `cargo nextest run -p rusty-ui viewer::space::keys commands`, then `cargo xtask gate`. Tests: Tab cycle; arrows move the selection and the inspector follows; Enter zooms and Backspace zooms out; Backspace on the table still edits the filter; Alt+G, Alt+Z and Alt+H; letters still type into the filter; `bound_keys.snap` shows only the new rows.
+- **Check:** `cargo nextest run -p navo-ui viewer::space::keys commands`, then `cargo xtask gate`. Tests: Tab cycle; arrows move the selection and the inspector follows; Enter zooms and Backspace zooms out; Backspace on the table still edits the filter; Alt+G, Alt+Z and Alt+H; letters still type into the filter; `bound_keys.snap` shows only the new rows.
 - **Stop if:** Tab is consumed by the focus system before the Elf context sees it.
 
 ### C10 — large-file UI check
 
 - **Read:** D20; B7 fixtures; `crate::test_window`.
 - **Change:** `viewer/space/large.rs` (test only): an `#[ignore]` release test that opens both ~30 MB fixtures in a headless window, waits for the index, switches to Rich, and times the first Rich frame and ten selection moves along a strip.
-- **Check:** `cargo nextest run --release -p rusty-ui viewer::space::large --run-ignored all`; timings in the Log.
+- **Check:** `cargo nextest run --release -p navo-ui viewer::space::large --run-ignored all`; timings in the Log.
 - **Stop if:** a frame exceeds 2× the budget; report where the time goes (model, cells or layout) without tuning.
 
 ### C11 — review Part C
@@ -505,7 +505,7 @@ Opus high on C1–C10: Simple unchanged, drawers over the content, provenance tr
 The original questions:
 
 
-- **Q1 — Module names.** Is "the text before the first `_` or `.`" right for your module names, or do you want an editable prefix list in `ferrite.toml` (for example `[automotive] modules = ["Com", "Dio_Cfg"]`)?
+- **Q1 — Module names.** Is "the text before the first `_` or `.`" right for your module names, or do you want an editable prefix list in `navo.toml` (for example `[automotive] modules = ["Com", "Dio_Cfg"]`)?
 - **Q2 — Where the `.map` and `.mdf` live.** Are they always beside the `.elf` with the same name? If not, where do your builds put them?
 - **Q3 — Simple gets three table changes.** Resizable columns, names that keep their prefix, and the zero-size filter (with "N hidden" in the status line) apply in Simple too. Is that what you want, or should Simple keep today's fixed columns and every symbol?
 
@@ -529,7 +529,7 @@ The original questions:
 - 2026-10-20 — B2b done: `Kind::Fill` (ELF sections named `$fill*`, MAP entries `*fill*` or `$fill*`). `Region.used` leaves Fill out, `by_kind` and blocks keep it, owners skip Fill sections so owner sums still equal `used`.
 - 2026-10-20 — B5 done: `space::strip` has `Scale` (gap compression, true scale, zoom view, breaks) and `cells` (sub-pixel merge, at most one cell per pixel column, 1 px minimum). `inner` for D17 inner cells waits for B3 owners.
 - 2026-10-20 — A4 done: the MAP tables (Memory, Sections, Symbols) render through `columns`, one `ColumnSet` per table kept while the file is open; section names use `map_prefix`, symbols `symbol_prefix`.
-- 2026-10-20 — B4 done: `owners_of_map` (one owner per located contribution, gaps "(not attributed)", Fill skipped), `group`/`Grouping`/`GroupBy`/`Origin`, `top`, `available`, `default_grouping`, `flash_region`, `Region::span`. Decisions taken: the module list is a `&[String]` parameter (the `ferrite.toml` setting is wired in C); module candidates are object stem, then section name without its kind part, then owner name, and `.L<caps/digits>` labels leave nothing; "(other)" for missing keys, "(not attributed)" keeps its own group in Module and Object; groups count load images in `bytes` and `by_kind` and report them in `image`; children are object files for a MAP Module group, owner names otherwise (all of them, sorted; the UI cuts at 14); `top` cuts groups at 22 with "N more" (B6 `top` works on items); `flash_region` ranks rom chips with code first, then code+rodata, then used; MAP section names lose their ` (n)` suffix before the kind lookup (fixes `regions_for_map` kinds on TASKING maps).
+- 2026-10-20 — B4 done: `owners_of_map` (one owner per located contribution, gaps "(not attributed)", Fill skipped), `group`/`Grouping`/`GroupBy`/`Origin`, `top`, `available`, `default_grouping`, `flash_region`, `Region::span`. Decisions taken: the module list is a `&[String]` parameter (the `navo.toml` setting is wired in C); module candidates are object stem, then section name without its kind part, then owner name, and `.L<caps/digits>` labels leave nothing; "(other)" for missing keys, "(not attributed)" keeps its own group in Module and Object; groups count load images in `bytes` and `by_kind` and report them in `image`; children are object files for a MAP Module group, owner names otherwise (all of them, sorted; the UI cuts at 14); `top` cuts groups at 22 with "N more" (B6 `top` works on items); `flash_region` ranks rom chips with code first, then code+rodata, then used; MAP section names lose their ` (n)` suffix before the kind lookup (fixes `regions_for_map` kinds on TASKING maps).
 - 2026-10-20 — B6 done: `space::treemap` (`layout(&[Item], Rect) -> Vec<Tile>`): squarified layout, top 22 plus one "N more" tile (last), zero weights dropped, order by size then input order, text flag above 64 × 34, inner tiles above 150 × 110 (top 14 parts plus "N more", laid out below an 18 px header and above the 4 px kind bar). Release timing for 22 × 14 tiles is under 1 ms.
 - 2026-10-20 — B5b done: `space::inner(&Owners, &Block, &Scale, width_px)` returns inner cells for one block from its owners, in strip pixel coordinates; empty when the block is 64 px wide or less or holds fewer than two owners. It shares the `cells` merge rules (1 px minimum, dominant kind, no overlaps); `Cell.blocks` indexes `Owners.items`.
 - 2026-10-20 — B7 done: generated split ELF (29.36 MB, 3,317 sections, 3,309 LOAD segments, 56,000 indexed symbols, nine `$fill` sections), merged ELF (29.60 MB, 111 sections, 50 LOAD segments, 99,000 indexed symbols, 88,000 zero-size LOCAL labels, 5,000 sized symbols), synthetic MAP/MDF and 16 small class/endian/stripped/DWARF variants with sibling combinations. The existing `object` writer supports owned section names in test support; non-allocated synthetic payload sets file size. Release timings, split/merged in ms: parse 2.107/2.806, DWARF 23.923/8.103, combined 26.031/10.909; Rich ELF model 6.857/8.769, split ELF+MAP 4.821, MAP 3.775 (MAP parse 3.614); strip maximum 0.056/0.003 at 1,600 px in both scales; treemap maximum 0.092/0.148 across all groupings; `select` with `hide_noise` 0.376/4.264; peak RSS including generation 72.016/79.667 MB on Linux. All budgets and owner/group sums passed; owner sums exclude load-image copies, group sums include them. The timing helper uses `black_box`; budgets assert only in release. Three release tests passed; gate ended "all 10 steps passed" (6,214 workspace tests passed, 11 skipped).
@@ -537,7 +537,7 @@ The original questions:
 - 2026-10-20 — C2 done: `AUTOMOTIVE_LAYOUT` (five parts) for ELF and MAP, settings `automotive.view.usage-bars` and `who-uses` (default off, store fields, ledger count 44), toggle actions and commands, `LayoutParts { strip, bars, who, row_bars }` stored on both bodies (not drawn yet). `family` is all six fields for every automotive set. No migration needed.
 - 2026-10-20 — C5 done: `MemoryStrip` entity (`viewer/space/strip/`) paints cells, breaks, inner cells, dimmed cells and a caret from a layout cached per width (8 px steps), scale mode and zoom; caret, lit set and hover reuse it. Hover shows the block, merged count or inner symbol in the tooltip and emits `Hover`; a click focuses and emits `Pick`. `step`, `zoom_in` and `zoom_out` (false when not zoomed) are ready for C9's keys; steps stay inside a zoomed block. All quads go in one paint layer: 2,096 cells paint in about 0.7 ms (debug), 125 ms without the layer. Gallery page `p38-c5-memory-strip`.
 - 2026-10-20 — C6 done: `Treemap` element (`viewer/space/treemap.rs`) draws `layout` tiles placed absolutely: tint and text from the biggest kind in `Theme.mem`, a kind bar of strong segments, text only where the layout flag is set, inner tiles with part names, a neutral "N more" tile last that picks nothing, an accent outline for the selected group, `TreemapEvent::Pick(group)` on click, and the D9 note when stripped. The caller gives `TreemapGroup` names, kind bytes and part names by id. Gallery page `p38-c6-treemap` shows three sizes. Texts are in `viewer.ftl`.
-- 2026-10-20 — C3 done: `viewer/space/sibling.rs` finds `<stem>.mdf`/`.MDF` and `<stem>.map`/`.MAP` beside the open file, probes size and sniffs with `hooks.head` before `hooks.bytes` (1 MiB, 64 MiB), never loads the open file itself, and reports too large, not recognised and unreadable siblings as typed problems; the "only .mdf here" fallback waits for a folder-listing hook. 13 tests; `xtask check -p rusty-ui` ended "all 7 steps passed".
+- 2026-10-20 — C3 done: `viewer/space/sibling.rs` finds `<stem>.mdf`/`.MDF` and `<stem>.map`/`.MAP` beside the open file, probes size and sniffs with `hooks.head` before `hooks.bytes` (1 MiB, 64 MiB), never loads the open file itself, and reports too large, not recognised and unreadable siblings as typed problems; the "only .mdf here" fallback waits for a folder-listing hook. 13 tests; `xtask check -p navo-ui` ended "all 7 steps passed".
 - 2026-10-20 — C3 review (orchestrator): D8's fallback (the only .mdf/.map in the folder) is not built; `FileHooks` cannot list a folder. C7 adds a folder-list hook or leaves the fallback for later and says so.
 - 2026-10-20 — C4 done: `viewer/space/bars.rs` has `UsageBar` (kind segments over a free track, linker fill as a tint, label "name: N % used, X free"), `UsageLine` (used, free, reserved, total; a cluster says "free not known" and shows no free figure), `RegionHead` (name, large percent), `Legend` (reuses `space-kind-*`, adds free) and `FileBytesBar` (`FileBytes::of(&elf.sections)`: loaded, DWARF, notes, symbols and strings, other; NOBITS and null sections have no file bytes). Gallery page `p38-c4-bars`. Fill is not hatched yet.
 - 2026-10-20 — C4 review (orchestrator): for C7/C8: linker fill must be hatched in the bars (D7; it is a plain tint now); percent is written without a space ("62%", as D67's amendment); File bytes reuse kind colours, so keep its named chips.

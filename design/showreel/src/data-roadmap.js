@@ -226,8 +226,8 @@ export const MODULES = [
 ];
 
 export const THEMES = [
-  { id: 'dark', name: 'Ferrite Dark', sw: ['oklch(16% 0.008 260)', 'oklch(72% 0.13 262)', 'oklch(80% 0.11 85)'] },
+  { id: 'dark', name: 'Navo Dark', sw: ['oklch(16% 0.008 260)', 'oklch(72% 0.13 262)', 'oklch(80% 0.11 85)'] },
   { id: 'graphite', name: 'Graphite', sw: ['oklch(17% 0.004 60)', 'oklch(72% 0.12 50)', 'oklch(80% 0.09 85)'] },
   { id: 'patina', name: 'Patina', sw: ['oklch(17% 0.02 200)', 'oklch(74% 0.1 185)', 'oklch(80% 0.1 85)'] },
-  { id: 'light', name: 'Ferrite Light', sw: ['oklch(98.5% 0.004 260)', 'oklch(52% 0.17 262)', 'oklch(62% 0.13 75)'] },
+  { id: 'light', name: 'Navo Light', sw: ['oklch(98.5% 0.004 260)', 'oklch(52% 0.17 262)', 'oklch(62% 0.13 75)'] },
 ];

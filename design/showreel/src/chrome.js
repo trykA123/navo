@@ -10,7 +10,7 @@ export const PANE_TOP = 64;
 
 export function appWindow(extraClass = '') {
   const node = el(`<div class="window ${extraClass}" style="left:${WIN.x}px;top:${WIN.y}px;width:${WIN.w}px;height:${WIN.h}px">
-    <header class="titlebar"><div class="app">${logo('mini-logo')}Ferrite</div>
+    <header class="titlebar"><div class="app">${logo('mini-logo')}Navo</div>
       <div class="search">${icon('search')}<span class="grow">Search files, folders and commands</span><span class="kbd">Ctrl K</span></div>
       <div class="winctl">${icon('minus')}${icon('square')}${icon('x')}</div></header></div>`);
   return node;

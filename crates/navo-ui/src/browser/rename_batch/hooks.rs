@@ -1,0 +1,119 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use navo_core::retention::RetentionId;
+use navo_core::{Location, OpKind, OperationPlan, Step, Totals};
+use navo_fs::is_rename_temporary;
+
+use crate::browser::OpLog;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UndoOffer {
+    pub job: u64,
+    pub plan: OperationPlan,
+    pub done: Vec<u32>,
+    pub created_at: i64,
+    pub restore_pending: bool,
+    pub kind: UndoKind,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum UndoKind {
+    #[default]
+    Rename,
+    Retained(Vec<RetentionId>),
+}
+
+impl UndoOffer {
+    #[must_use]
+    pub fn retained(job: u64, created_at: i64, ids: Vec<RetentionId>) -> Self {
+        Self {
+            job,
+            plan: OperationPlan {
+                kind: OpKind::Delete,
+                steps: Vec::new(),
+                totals: Totals {
+                    files: 0,
+                    folders: 0,
+                    bytes: 0,
+                },
+                conflicts: Vec::new(),
+                risks: Vec::new(),
+            },
+            done: Vec::new(),
+            created_at,
+            restore_pending: false,
+            kind: UndoKind::Retained(ids),
+        }
+    }
+
+    #[must_use]
+    pub fn items(&self) -> usize {
+        self.item_targets().count()
+    }
+
+    pub(super) fn item_targets(&self) -> impl Iterator<Item = &Location> {
+        let done: HashSet<u32> = self.done.iter().copied().collect();
+        (0_u32..)
+            .zip(&self.plan.steps)
+            .filter(move |(seq, step)| done.contains(seq) && is_item(step))
+            .filter_map(|(_, step)| match step {
+                Step::Rename { target, .. } => Some(target),
+                _ => None,
+            })
+    }
+}
+
+pub(super) fn is_item(step: &Step) -> bool {
+    matches!(step, Step::Rename { target, .. } if !is_rename_temporary(target))
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RenameReport {
+    pub left: Vec<Location>,
+    pub applied: Vec<u32>,
+    pub skipped: usize,
+    pub log_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NamedPreset {
+    pub name: String,
+    pub rules: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RenamePresetList {
+    pub named: Vec<NamedPreset>,
+    pub last_used: Option<String>,
+}
+
+pub type LastRename = Arc<dyn Fn() -> Result<Option<UndoOffer>, String> + Send + Sync>;
+/// Opens the log for undoing `offer.job`. The journal must mark that job restore-pending before
+/// this returns, so a crash mid-undo is finished at start. `undone(seq, Done | Skipped)` marks the
+/// step undone; `undone(seq, Failed)` leaves it. `finish(Done)` marks the job undone; any other
+/// end, or a failed step, leaves it restore-pending.
+pub type RetireUndo = Arc<dyn Fn(&UndoOffer) -> Result<(), String> + Send + Sync>;
+pub type UndoLogFactory = Arc<dyn Fn(&UndoOffer) -> Result<Box<dyn OpLog>, String> + Send + Sync>;
+pub type ListPresets = Arc<dyn Fn() -> Result<RenamePresetList, String> + Send + Sync>;
+pub type SavePreset = Arc<dyn Fn(&str, &str) -> Result<(), String> + Send + Sync>;
+pub type DeletePreset = Arc<dyn Fn(&str) -> Result<(), String> + Send + Sync>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenameLogStatus {
+    Complete,
+    Incomplete,
+}
+
+pub type WriteRenameLog =
+    Arc<dyn Fn(&OperationPlan, RenameLogStatus) -> Result<(), String> + Send + Sync>;
+
+#[derive(Clone)]
+pub struct RenameHooks {
+    pub last: LastRename,
+    pub undo_log: UndoLogFactory,
+    pub retire: RetireUndo,
+    pub presets: ListPresets,
+    pub save: SavePreset,
+    pub delete: DeletePreset,
+    pub log: Option<WriteRenameLog>,
+}

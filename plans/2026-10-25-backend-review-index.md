@@ -26,11 +26,11 @@ Detailed plans:
 
 ## Contracts to review
 
-- `rusty-core::retention`: bounded records, validated policy and versioned retained-delete/write plans.
-- `rusty-store::{RetentionCatalog, RetentionTransaction}`: durable states, active-owner pins and narrowly authorized rollback.
-- `rusty-retention::Vault`: native atomic no-replace capture, identity/mount verification, collision-safe restore and purge reconciliation.
-- `rusty-app::jobs::{deletion, overwrite, held, profile, mutation_lock, recovery}`: root intents before capture, owner rollback before completion, cross-profile coordination and refusal of ambiguous recovery.
-- `rusty-fs::{mutation_location, save_location, check_mutation}`: private-path protection, alias-aware save destinations and whole-tree relocation checks.
+- `navo-core::retention`: bounded records, validated policy and versioned retained-delete/write plans.
+- `navo-store::{RetentionCatalog, RetentionTransaction}`: durable states, active-owner pins and narrowly authorized rollback.
+- `navo-retention::Vault`: native atomic no-replace capture, identity/mount verification, collision-safe restore and purge reconciliation.
+- `navo-app::jobs::{deletion, overwrite, held, profile, mutation_lock, recovery}`: root intents before capture, owner rollback before completion, cross-profile coordination and refusal of ambiguous recovery.
+- `navo-fs::{mutation_location, save_location, check_mutation}`: private-path protection, alias-aware save destinations and whole-tree relocation checks.
 - App/editor and UI worker adapters: journal/lease acquisition, creation and save coverage, cancellation while waiting, finish-error propagation and deferred undo state changes.
 - P35 salvage/reporting: rejected typed payloads preserve evidence and readable manual source/container paths.
 

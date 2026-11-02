@@ -26,9 +26,9 @@ The F-key bar is off by default (D67). Its row becomes the activity strip, direc
 
 | Id | Atom | Role | Effort | Depends | Check | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| S1 | `fkey-bar` default off | ui-builder (Sonnet) | medium | — | `cargo nextest run -p rusty-store settings`, `-p rusty-ui settings window_view` | ready | |
-| S2 | `activity` model: items, rank, Done timer, from job infos | ui-builder (Opus) | medium | — | `cargo nextest run -p rusty-ui activity` | ready | pure model, no drawing |
-| S3 | strip line, chips, fill, Alt+J drawer, keys; replaces the pill | ui-builder (Opus) | medium | S1, S2 | `cargo nextest run -p rusty-ui window_view::tests::activity`; gallery shots | done | job card hidden by default; Ctrl+J shows it; Show on a failure opens it |
+| S1 | `fkey-bar` default off | ui-builder (Sonnet) | medium | — | `cargo nextest run -p navo-store settings`, `-p navo-ui settings window_view` | ready | |
+| S2 | `activity` model: items, rank, Done timer, from job infos | ui-builder (Opus) | medium | — | `cargo nextest run -p navo-ui activity` | ready | pure model, no drawing |
+| S3 | strip line, chips, fill, Alt+J drawer, keys; replaces the pill | ui-builder (Opus) | medium | S1, S2 | `cargo nextest run -p navo-ui window_view::tests::activity`; gallery shots | done | job card hidden by default; Ctrl+J shows it; Show on a failure opens it |
 | S4 | review | reviewer (Opus) | high | S3 | review notes; gate; Windows CI | blocked | |
 
 Drag and Background items get producers later (P36 D4/D6; the search index).

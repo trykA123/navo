@@ -1,6 +1,6 @@
-# Rusty: product and design discussion
+# Navo: product and design discussion
 
-Record of the conversation that started the project, 13 October 2026. Working name in the prototypes: “Commander”. Project name: **Rusty**.
+Record of the conversation that started the project, 13 October 2026. Working name in the prototypes: “Commander”. Project name: **Navo**.
 
 ## The idea
 
@@ -101,7 +101,7 @@ Chosen direction, with these changes (built into the prototype):
 ## Open questions
 
 - Global index: Everything SDK dependency vs own MFT/USN indexer (admin rights). Proposed: Everything first.
-- Distribution: portable .exe only, or also an installer with shell integration (“Open in Rusty”, default folder handler).
+- Distribution: portable .exe only, or also an installer with shell integration (“Open in Navo”, default folder handler).
 - Code signing for running builds on a corporate machine.
 
 Answered since: UI framework is GPUI (spike pending), Windows testing happens at work, plugins are defined in [plugins.md](plugins.md), and the terminal can be Windows Terminal. See [decisions.md](decisions.md).
@@ -118,12 +118,12 @@ Total Commander is a native Windows app written in Pascal (Delphi; Lazarus/Free 
 - **A safe plugin model.** Total Commander's plugins are native DLLs in its own process: powerful, but a buggy plugin can crash it, and every plugin has full access. Rust's mature WebAssembly runtime (wasmtime is written in Rust) makes sandboxed plugins with permissions practical.
 - **The ecosystem:** Microsoft's own `windows` crate for the Win32 and COM APIs, `nucleo` (Helix's fuzzy matcher), `ignore` (ripgrep's walker), `alacritty_terminal`, `gix` for git, `serde`, `tokio`, GPUI from Zed.
 - **Tooling:** Cargo, built-in tests, Clippy, fuzzing for parsers, property tests, cross-compiling from Linux, and reproducible builds with a lockfile.
-- **Portability:** one self-contained executable, and a core that also runs on Linux and macOS if Rusty ever goes there.
+- **Portability:** one self-contained executable, and a core that also runs on Linux and macOS if Navo ever goes there.
 
 Limits to keep in mind:
 
 - Rust does not make I/O faster by itself; speed comes from parallel work, caching and doing less.
 - Windows shell integration (context menus, thumbnails, drag and drop) is COM and needs `unsafe` code, so it stays small, isolated and reviewed.
-- Total Commander has decades of edge cases behind it; Rusty has to earn them with tests.
+- Total Commander has decades of edge cases behind it; Navo has to earn them with tests.
 - Compile times are longer, and GPUI is younger than Delphi's VCL.
-- An option worth keeping open: running Total Commander's content and lister plugins in a separate helper process, so existing plugins could work without sharing Rusty's memory.
+- An option worth keeping open: running Total Commander's content and lister plugins in a separate helper process, so existing plugins could work without sharing Navo's memory.

@@ -12,11 +12,11 @@ On Windows, mount a dedicated blank exFAT test image and set NAVO_EXFAT_ROOT to 
 
 ```powershell
 $env:NAVO_EXFAT_ROOT = 'X:\'
-cargo test -p rusty-fs native_exfat_renames_without_a_proved_identity -- --ignored --nocapture
+cargo test -p navo-fs native_exfat_renames_without_a_proved_identity -- --ignored --nocapture
 $env:NAVO_FAT32_ROOT = 'Y:\'
-cargo test -p rusty-fs native_fat32_renames_without_a_proved_identity -- --ignored --nocapture
+cargo test -p navo-fs native_fat32_renames_without_a_proved_identity -- --ignored --nocapture
 $env:NAVO_SMB_ROOT = '\\server\test-share'
-cargo test -p rusty-fs native_smb_identity_and_batch_rename -- --ignored --nocapture
+cargo test -p navo-fs native_smb_identity_and_batch_rename -- --ignored --nocapture
 ```
 
 To check by hand, rename a file on a FAT32 or exFAT USB stick with F2 and with multi-rename, then press Ctrl+Z: the old name returns. Rename again, change the file (save it in an editor), then press Ctrl+Z: the file keeps its new name and the activity line says it had changed.

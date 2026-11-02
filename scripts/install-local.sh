@@ -9,12 +9,12 @@ data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
 brand="$root/assets/brand"
 
 if ! /lib/ld-linux-x86-64.so.2 --help 2>/dev/null | grep -q -- "$level (supported"; then
-    echo "This CPU does not support $level; use: cargo build --release -p rusty-app" >&2
+    echo "This CPU does not support $level; use: cargo build --release -p navo-app" >&2
     exit 1
 fi
 
 echo "Building navo for $level into $target_dir"
-RUSTFLAGS="-C target-cpu=$level" cargo build --release -p rusty-app --manifest-path "$root/Cargo.toml" --target-dir "$target_dir"
+RUSTFLAGS="-C target-cpu=$level" cargo build --release -p navo-app --manifest-path "$root/Cargo.toml" --target-dir "$target_dir"
 
 echo "Installing $dest"
 install -Dm755 -- "$target_dir/release/navo" "$dest"

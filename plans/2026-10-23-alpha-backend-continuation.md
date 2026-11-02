@@ -1,6 +1,6 @@
 # Remaining alpha backend work
 
-Status: implementation complete and verified on Linux — native Windows checks and Windows measurements remain · Repo: `rusty-backend` · Branch: `backend/rename-undo-safety` · Started: 2026-10-23
+Status: implementation complete and verified on Linux — native Windows checks and Windows measurements remain · Repo: `navo-backend` · Branch: `backend/rename-undo-safety` · Started: 2026-10-23
 
 ## Goal
 

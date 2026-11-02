@@ -1,6 +1,6 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Ferrite Menus Round 2</title>
+<title>Navo Menus Round 2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -577,7 +577,7 @@ kbd { font-family: var(--font-mono); font-size: var(--fs-12); border: 1px solid 
     <div>
       <div class="brand">
         <span class="logo" aria-hidden="true" style="width:32px;height:32px;font-size:15px"><span>fe</span></span>
-        <h1>Ferrite: menus and settings, round 2</h1>
+        <h1>Navo: menus and settings, round 2</h1>
       </div>
       <p class="lede">Four directions for one system: the app button and its menu, the F-key bar with Shift, Ctrl and Alt layers, and settings as a modern dialog that applies changes live. The mockups are interactive: click categories, toggles and segments, and the panes update. Keys: <kbd>1</kbd>–<kbd>4</kbd> direction, <kbd>W</kbd> window, <kbd>M</kbd> app menu, <kbd>S</kbd> settings. Hold <kbd>Shift</kbd>, <kbd>Ctrl</kbd> or <kbd>Alt</kbd> to see that layer of the F-key bar.</p>
     </div>
@@ -660,8 +660,8 @@ const LEFT = [
   f("Cargo", "lock", 41267, "40.3 KB", "2026-10-15 09:41", "code"),
   f("Cargo", "toml", 2150, "2.1 KB", "2026-10-15 09:41", "code", { g: "M" }),
   f("deny", "toml", 812, "812 B", "2026-10-13 21:05", "code"),
-  f("ferrite-0.4.2-win64", "zip", 19293798, "18.4 MB", "2026-10-15 07:30", "archive", { g: "I" }),
-  f("ferrite", "exe", 64172851, "61.2 MB", "2026-10-15 07:29", "app", { g: "I" }),
+  f("navo-0.4.2-win64", "zip", 19293798, "18.4 MB", "2026-10-15 07:30", "archive", { g: "I" }),
+  f("navo", "exe", 64172851, "61.2 MB", "2026-10-15 07:29", "app", { g: "I" }),
   f("LICENSE", "", 1126, "1.1 KB", "2026-10-13 20:40", "file"),
   f("README", "md", 4096, "4.0 KB", "2026-10-14 22:40", "file", { g: "M" }),
   f("rust-toolchain", "toml", 92, "92 B", "2026-10-13 20:40", "code"),
@@ -716,7 +716,7 @@ function pane({ active, tabs, drive, crumbs, list, cur, marks = [], git = false 
     <div class="cols" style="grid-template-columns:${tpl}">${head.join("")}</div><div class="rows">${rows}</div>
     <div class="status"><span>${status}</span><span class="num">212 GB free</span></div></section>`;
 }
-const leftPane = () => pane({ active: true, tabs: [["ferrite", true], ["Downloads", false]], drive: "D:", crumbs: ["work", "ferrite"], list: LEFT, cur: "Cargo.toml", marks: ["ferrite-0.4.2-win64.zip", "ferrite.exe"], git: true });
+const leftPane = () => pane({ active: true, tabs: [["navo", true], ["Downloads", false]], drive: "D:", crumbs: ["work", "navo"], list: LEFT, cur: "Cargo.toml", marks: ["navo-0.4.2-win64.zip", "navo.exe"], git: true });
 const rightPane = () => pane({ tabs: [["Downloads", true], ["homelab", false]], drive: "C:", crumbs: ["Users", "admin", "Downloads"], list: RIGHT, cur: "Everything-1.5.0.1391a.x64-Setup.exe" });
 const body = () => `<div class="body">${leftPane()}${rightPane()}</div>`;
 
@@ -740,8 +740,8 @@ const SET = {
   Appearance: [
     { grp: "Theme" },
     { id: "theme", i: "contrast", l: "Theme", d: "Follow Windows, or keep light or dark", key: "appearance.mode", c: { seg: ["System", "Light", "Dark"] }, p: "theme" },
-    { id: "light", i: "sun", l: "Light theme", d: "Used when the theme is light", key: "appearance.light-theme", c: { sel: ["Ferrite Light"] } },
-    { id: "dark", i: "moon", l: "Dark theme", d: "Used when the theme is dark", key: "appearance.dark-theme", c: { sel: ["Ferrite Dark"] } },
+    { id: "light", i: "sun", l: "Light theme", d: "Used when the theme is light", key: "appearance.light-theme", c: { sel: ["Navo Light"] } },
+    { id: "dark", i: "moon", l: "Dark theme", d: "Used when the theme is dark", key: "appearance.dark-theme", c: { sel: ["Navo Dark"] } },
     { id: "backdrop", i: "window", l: "Window material", d: "Mica tints the title bar with your wallpaper", key: "appearance.backdrop", c: { seg: ["Solid", "Mica", "Mica Alt"] }, p: "backdrop", isNew: true },
     { grp: "Text and layout" },
     { id: "font", i: "type", l: "Interface font", d: "File lists, menus and dialogs", key: "appearance.ui-font", c: { sel: ["Archivo", "13 px"] } },
@@ -795,7 +795,7 @@ function winWrap(dir, st, inner) {
 
 /* ---------------- A ---------------- */
 function renderA(st) {
-  const menu = st.view !== "menu" ? "" : `<div class="menuA ov" role="menu" aria-label="Ferrite menu">
+  const menu = st.view !== "menu" ? "" : `<div class="menuA ov" role="menu" aria-label="Navo menu">
     <div class="qs"><span class="lb"><span>Theme</span><span>applies now</span></span>${control(SET.Appearance[1])}</div>
     <div class="msep"></div>
     <button type="button" class="mi">${ic("cmd")}<span>Command palette</span><span class="sc">Ctrl+K</span></button>
@@ -809,7 +809,7 @@ function renderA(st) {
     <button type="button" class="mi">${ic("help")}<span>Help and key map</span><span class="sc">F1</span></button>
     <button type="button" class="mi">${ic("power")}<span>Quit</span><span class="sc">Alt+F4</span></button>
     <div class="mfoot"><span>F10 opens this menu</span><span>Esc closes</span></div></div>`;
-  const tb = `<header class="tbar"><button type="button" class="appbtn ${st.view === "menu" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Ferrite menu">${logo}<span class="appname">Ferrite</span>${ic("down", "sm")}</button>
+  const tb = `<header class="tbar"><button type="button" class="appbtn ${st.view === "menu" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Navo menu">${logo}<span class="appname">Navo</span>${ic("down", "sm")}</button>
     <div class="tsearch">${ic("search")}<span class="grow">Search files, commands and settings</span>${k("Ctrl+K")}</div>
     <span class="tbtn">${ic(P.theme === "Dark" ? "moon" : "sun")}</span>${winbtns}</header>`;
   let sheet = "";
@@ -820,7 +820,7 @@ function renderA(st) {
     sheet = `<aside class="sheetA ov slow" role="dialog" aria-label="Settings">
       <div class="sh"><h3>Settings</h3><div class="field">${ic("search")}<span class="grow">Find a setting</span>${k("Ctrl+F")}</div><button type="button" class="esc" data-go="window">${k("Esc")}${ic("x")}</button></div>
       <div class="sb"><nav>${cats(st)}</nav><div class="content">${rows}</div></div>
-      <div class="sf"><span class="ok">${ic("check", "sm")}Applied live</span><span>Saved to ferrite.toml</span><span class="sp">${n} changed from default</span><span>${k("Ctrl+Z")} undo</span></div></aside>
+      <div class="sf"><span class="ok">${ic("check", "sm")}Applied live</span><span>Saved to navo.toml</span><span class="sp">${n} changed from default</span><span>${k("Ctrl+Z")} undo</span></div></aside>
       <div class="livechip ov"><span class="dot"></span>Live preview in the active pane</div>`;
   }
   const list = fkList(st);
@@ -835,8 +835,8 @@ function renderB(st) {
   const tile = (i, label, val, on, set, v = "toggle") => `<button type="button" class="tile ${on ? "on" : ""}" data-set="${set}" data-v="${v}">${ic(i)}<small>${label}</small><b>${val}</b></button>`;
   const nextTheme = { System: "Light", Light: "Dark", Dark: "System" }[P.theme];
   const nextDens = { Compact: "Normal", Normal: "Comfortable", Comfortable: "Compact" }[P.density];
-  const menu = st.view !== "menu" ? "" : `<div class="qpB ov" role="menu" aria-label="Ferrite menu">
-    <div class="id">${logo}<div><b>Ferrite 0.4.2</b><small>Portable · D:\\Apps\\Ferrite</small></div></div>
+  const menu = st.view !== "menu" ? "" : `<div class="qpB ov" role="menu" aria-label="Navo menu">
+    <div class="id">${logo}<div><b>Navo 0.4.2</b><small>Portable · D:\\Apps\\Navo</small></div></div>
     <div class="tiles">
       ${tile("contrast", "Theme", P.theme, P.theme !== "System", "theme", nextTheme)}
       ${tile("rows", "Density", P.density, P.density !== "Normal", "density", nextDens)}
@@ -851,8 +851,8 @@ function renderB(st) {
     <button type="button" class="mi">${ic("help")}<span>Help and key map</span><span class="sc">F1</span></button>
     <button type="button" class="mi">${ic("power")}<span>Quit</span><span class="sc">Alt+F4</span></button>
     <button type="button" class="mi pri" data-go="settings">${ic("sliders")}<span>All settings</span><span class="sc">Ctrl+,</span></button></div>`;
-  const tb = `<header class="tbar"><button type="button" class="logobtn ${st.view === "menu" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Ferrite menu">${logo}</button>
-    <span class="ttl">Ferrite <span>· D:\\work\\ferrite</span></span>
+  const tb = `<header class="tbar"><button type="button" class="logobtn ${st.view === "menu" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Navo menu">${logo}</button>
+    <span class="ttl">Navo <span>· D:\\work\\navo</span></span>
     <div class="tsearch">${ic("search")}<span class="grow">Search or run a command</span>${k("Ctrl+K")}</div><span class="spacer"></span>
     <span class="tbtn">${ic(P.theme === "Dark" ? "moon" : "sun")}</span>${winbtns}</header>`;
   let sheet = "";
@@ -890,19 +890,19 @@ function renderB(st) {
 /* ---------------- C ---------------- */
 function renderC(st) {
   const act = (i, n, key, hl, go = "", cat = "") => `<button type="button" class="act ${hl ? "hl" : ""}" ${go ? `data-go="${go}"` : ""} ${cat ? `data-gocat="${cat}"` : ""}>${ic(i, "lg")}<b>${n}</b><small>${key}</small></button>`;
-  const menu = st.view !== "menu" ? "" : `<div class="lnC ov" role="dialog" aria-label="Ferrite launcher">
+  const menu = st.view !== "menu" ? "" : `<div class="lnC ov" role="dialog" aria-label="Navo launcher">
     <div class="in">${ic("search", "lg")}<span class="caret"></span><span class="ph">Type a command, a setting or a path</span>${k("Esc")}</div>
-    <div class="lb"><div class="acts"><div class="grp" style="padding-inline:0">Ferrite</div><div class="grid">
+    <div class="lb"><div class="acts"><div class="grp" style="padding-inline:0">Navo</div><div class="grid">
       ${act("sliders", "Settings", "Ctrl+,", true, "settings")}${act("keyboard", "Shortcuts", "Ctrl+K S", false, "settings", "Keys")}${act("layers", "Modules", "6 on", false, "settings", "Modules")}
-      ${act("palette", "Themes", "Ferrite Dark", false, "settings", "Appearance")}${act("window", "New window", "Ctrl+N")}${act("help", "Help and key map", "F1")}</div></div>
+      ${act("palette", "Themes", "Navo Dark", false, "settings", "Appearance")}${act("window", "New window", "Ctrl+N")}${act("help", "Help and key map", "F1")}</div></div>
       <div class="ws"><div class="grp" style="padding-inline:var(--s4)">Workspaces</div>
-        <div class="wsr on"><span>Rusty dev</span><small>D:\\work · 4 tabs</small>${ic("check")}</div>
+        <div class="wsr on"><span>Navo dev</span><small>D:\\work · 4 tabs</small>${ic("check")}</div>
         <div class="wsr"><span>Photo sorting</span><small>E:\\Photos · 2 tabs</small></div>
         <div class="wsr"><span>Homelab ops</span><small>sftp://nas · 3 tabs</small></div>
         <div class="wsr"><span class="muted">New workspace</span><small>Ctrl+Alt+N</small></div></div></div>
-    <div class="lf"><span>About Ferrite 0.4.2</span><span>Diagnostic report</span><span>Quit ${k("Alt+F4")}</span><span class="sp">${k("↑↓←→")} move · ${k("Enter")} open · typing searches every command</span></div></div>`;
-  const tb = `<header class="tbar"><button type="button" class="appbtn ${st.view === "menu" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Ferrite launcher">${logo}<span class="wm">ferrite</span>${ic("down", "sm")}</button>
-    <span class="wschip">Workspace <b>Rusty dev</b>${ic("down", "sm")}</span>
+    <div class="lf"><span>About Navo 0.4.2</span><span>Diagnostic report</span><span>Quit ${k("Alt+F4")}</span><span class="sp">${k("↑↓←→")} move · ${k("Enter")} open · typing searches every command</span></div></div>`;
+  const tb = `<header class="tbar"><button type="button" class="appbtn ${st.view === "menu" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Navo launcher">${logo}<span class="wm">navo</span>${ic("down", "sm")}</button>
+    <span class="wschip">Workspace <b>Navo dev</b>${ic("down", "sm")}</span>
     <div class="tsearch">${ic("search")}<span class="grow">Search</span>${k("Ctrl+K")}</div>
     <span class="tbtn">${ic(P.theme === "Dark" ? "moon" : "sun")}</span>${winbtns}</header>`;
   let studio = "";
@@ -911,11 +911,11 @@ function renderC(st) {
     const rows = SET[st.cat] ? SET[st.cat].map((s) => s.grp ? `<div class="grp">${s.grp}</div>` : `<div class="srowC ${s.id === cid ? "cur" : ""}"><div class="t"><b>${title(s)}</b><small>${s.d}</small><span class="skey">${s.key}</span></div>${control(s)}</div>`).join("") : notMocked;
     const ch = SET.Appearance.concat(SET.Files).filter((s) => !s.grp && changed(s));
     const diff = ch.length ? ch.map((s) => `<div class="dr"><span>${s.l} · <b>${fmt(P[s.p])}</b></span><small>Default: ${fmt(DEF[s.p])}</small><button type="button" data-reset="${s.p}">${ic("undo", "sm")}Reset</button></div>`).join("") : `<span class="none">Everything is at its default.</span>`;
-    const sub = { Appearance: "How Ferrite looks. Changes apply as you make them.", Files: "How folders are listed and how marking works.", Modules: "Native, WASM and data modules. Each one turns off at runtime." }[st.cat] || "";
+    const sub = { Appearance: "How Navo looks. Changes apply as you make them.", Files: "How folders are listed and how marking works.", Modules: "Native, WASM and data modules. Each one turns off at runtime." }[st.cat] || "";
     studio = `<section class="stC ov slow" role="dialog" aria-label="Settings">
       <nav class="l"><h3>Settings</h3><div class="field">${ic("search")}<span class="grow">Search</span>${k("Ctrl+F")}</div>${cats(st)}</nav>
       <div class="m"><h4>${st.cat}</h4><p class="sub">${sub}</p>${rows}</div>
-      <aside class="p"><span class="cap"><span class="dot"></span>Live preview of D:\\work\\ferrite</span>
+      <aside class="p"><span class="cap"><span class="dot"></span>Live preview of D:\\work\\navo</span>
         <div class="mini" aria-hidden="true"><div class="mini-in">${body()}</div></div>
         <span class="cap">Changed from default</span><div class="diff">${diff}</div>
         <span class="cap" style="margin-top:auto">${k("Esc")} back to the panes · ${k("Ctrl+Z")} undo</span></aside></section>`;
@@ -932,13 +932,13 @@ function renderC(st) {
 /* ---------------- D ---------------- */
 function renderD(st) {
   const col = (h, letter, items) => `<div class="col"><div class="ch"><span>${h}</span><u>${letter}</u></div>${items.map(([i, l, s, hl, go, cat]) => `<button type="button" class="mi ${hl ? "hl" : ""}" ${go ? `data-go="${go}"` : ""} ${cat ? `data-gocat="${cat}"` : ""}>${ic(i)}<span>${l}</span><span class="sc">${s}</span></button>`).join("")}</div>`;
-  const menu = st.view !== "menu" ? "" : `<div class="megaD ov" role="menu" aria-label="Ferrite menu">
-    ${col("Ferrite", "F", [["sliders", "Settings", "Ctrl+,", true, "settings"], ["keyboard", "Keyboard shortcuts", "Ctrl+K S", 0, "settings", "Keys"], ["layers", "Modules", "", 0, "settings", "Modules"], ["palette", "Themes", ic("chev", "sm")], ["cmd", "Command palette", "Ctrl+K"]])}
+  const menu = st.view !== "menu" ? "" : `<div class="megaD ov" role="menu" aria-label="Navo menu">
+    ${col("Navo", "F", [["sliders", "Settings", "Ctrl+,", true, "settings"], ["keyboard", "Keyboard shortcuts", "Ctrl+K S", 0, "settings", "Keys"], ["layers", "Modules", "", 0, "settings", "Modules"], ["palette", "Themes", ic("chev", "sm")], ["cmd", "Command palette", "Ctrl+K"]])}
     ${col("Window", "W", [["window", "New window", "Ctrl+N"], ["layers", "Workspaces", ic("chev", "sm")], ["columns", "Swap panes", "Ctrl+U"], ["rows", "Drawer", "F9"], ["monitor", "Full screen", "F11"]])}
-    ${col("Help", "H", [["keyboard", "Key map", "F1"], ["history", "What's new in 0.4.2", ""], ["file-text", "Diagnostic report", ""], ["help", "About Ferrite", ""], ["power", "Quit", "Alt+F4"]])}
+    ${col("Help", "H", [["keyboard", "Key map", "F1"], ["history", "What's new in 0.4.2", ""], ["file-text", "Diagnostic report", ""], ["help", "About Navo", ""], ["power", "Quit", "Alt+F4"]])}
     <div class="mf"><span>F10 opens</span><span>←→ column</span><span>↑↓ item</span><span>F W H jump</span><span style="margin-left:auto">Enter runs · Esc closes</span></div></div>`;
-  const tb = `<header class="tbar"><button type="button" class="appbtn ${st.view !== "window" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Ferrite menu">${logo}${ic("down", "sm")}</button>
-    <span class="crumbs">${st.view === "settings" ? "<b>Settings</b> › " + st.cat : "D:\\work\\<b>ferrite</b> · main"}</span>
+  const tb = `<header class="tbar"><button type="button" class="appbtn ${st.view !== "window" ? "on" : ""}" data-go="${st.view === "menu" ? "window" : "menu"}" aria-label="Navo menu">${logo}${ic("down", "sm")}</button>
+    <span class="crumbs">${st.view === "settings" ? "<b>Settings</b> › " + st.cat : "D:\\work\\<b>navo</b> · main"}</span>
     <span class="cmdbtn">${ic("cmd", "sm")}Commands${k("Ctrl+K")}</span><div class="jobs"><span>2 jobs</span><span class="meter"><i></i></span><span class="num">34%</span></div>${winbtns}</header>`;
   let sheet = "";
   if (st.view === "settings") {
@@ -948,7 +948,7 @@ function renderD(st) {
       <nav class="l"><div class="field">${ic("search")}<span class="grow">Filter settings</span>${k("/")}</div>${cats(st)}</nav>
       <div class="m"><div class="thD"><span>Setting</span><span>Value</span><span>Default</span></div><div class="rows-d">${rows}</div>
         <div class="hint"><span>${k("Enter")} edit</span><span>${k("F3")} line in TOML</span><span>${k("F8")} reset</span><span style="margin-left:auto">${k("Esc")} slides up</span></div></div>
-      <aside class="toml"><div class="th">ferrite.toml<span>D:\\Apps\\Ferrite · portable</span></div><pre>${toml(st)}</pre></aside></section>`;
+      <aside class="toml"><div class="th">navo.toml<span>D:\\Apps\\Navo · portable</span></div><pre>${toml(st)}</pre></aside></section>`;
   }
   const layer = hold || st.layer;
   const list = fkList(st);
@@ -959,7 +959,7 @@ function renderD(st) {
 function toml(st) {
   const kv = (key, v, p) => ({ t: `<span class="tk">${key}</span> <span class="tc">=</span> ${typeof v === "string" ? `<span class="tv">"${v.toLowerCase()}"</span>` : `<span class="tb">${v}</span>`}`, ch: p && DEF[p] !== undefined && P[p] !== DEF[p], just: p === lastSet });
   const L = {
-    Appearance: [{ t: '<span class="tt">[appearance]</span>' }, kv("mode", P.theme, "theme"), kv("light-theme", "Ferrite Light"), kv("dark-theme", "Ferrite Dark"), kv("backdrop", P.backdrop.replace(" ", "-"), "backdrop"), kv("ui-font", "Archivo"), kv("ui-font-size", 13), kv("mono-font", "JetBrains Mono"), kv("density", P.density, "density")],
+    Appearance: [{ t: '<span class="tt">[appearance]</span>' }, kv("mode", P.theme, "theme"), kv("light-theme", "Navo Light"), kv("dark-theme", "Navo Dark"), kv("backdrop", P.backdrop.replace(" ", "-"), "backdrop"), kv("ui-font", "Archivo"), kv("ui-font-size", 13), kv("mono-font", "JetBrains Mono"), kv("density", P.density, "density")],
     Files: [{ t: '<span class="tt">[files]</span>' }, kv("sort", P.sort, "sort"), kv("folders-first", P.foldersFirst, "foldersFirst"), kv("show-hidden", P.showHidden, "showHidden"), kv("show-system", P.showSystem, "showSystem"), { t: "" }, { t: '<span class="tt">[selection]</span>' }, kv("model", P.selModel, "selModel"), kv("space-measures-folders", P.spaceMeasures, "spaceMeasures")],
     Modules: [{ t: '<span class="tt">[modules]</span>' }, ...Object.entries(P.mods).map(([m, v]) => kv(m, v)), { t: "" }, { t: '<span class="tc"># permissions are asked for once</span>' }, { t: '<span class="tt">[modules.sftp]</span>' }, kv("allow-network", true)],
   }[st.cat] || [{ t: '<span class="tc"># not mocked</span>' }];
@@ -985,10 +985,10 @@ const DIRS = [
     ["Keyboard flow", "F10 opens the launcher with focus in its input; arrows move through the tiles, and typing searches commands. Ctrl+, opens the studio: typing filters at once, ↑↓ move rows, Ctrl+↑↓ change category, Space or ←→ change a value. Ctrl+Z undoes, Esc goes back to the panes exactly where you were."],
     ["GPUI build cost", "Medium. GPUI cannot scale an element tree, so the miniature is a second, small list view rendered from the same model (small rows and font), not a scaled copy. Lists are data-driven, so this is cheap. GPUI fonts have no variable axes, so the Archivo width-112 headings need a bundled static font file. Chips need text measuring, which GPUI does. Studio enter and leave is an opacity and offset animation."],
   ] },
-  { t: "Drop sheet with TOML, mega menu, lamp strip", r: renderD, q: "Settings drop down from the title bar and push the panes down. A dense table sits beside the live ferrite.toml, the app menu is a three-column mega menu, and the F-keys are a lamp strip.", n: [
+  { t: "Drop sheet with TOML, mega menu, lamp strip", r: renderD, q: "Settings drop down from the title bar and push the panes down. A dense table sits beside the live navo.toml, the app menu is a three-column mega menu, and the F-keys are a lamp strip.", n: [
     ["Strengths", "The panes stay visible and live under the sheet: sort, folders first, hidden files and density show in their top rows. The TOML panel makes the portable file the source of truth, and each change lights its line. The table shows the default next to the value. The mega menu shows every app-level command at once, with no submenus. The 40 px strip shows the modifier lamps next to the keys; job progress sits in the title bar."],
     ["Weaknesses", "It has the most technical look and the least first-run appeal. The 372 px sheet is short for long pages, and pushing the panes down hides their lower half. The mega menu is wide (780 px), and the TOML panel takes room that labels could use."],
-    ["Keyboard flow", "F10 opens the mega menu: ←→ switch columns, ↑↓ items, and F, W or H jump to a column. Enter on Settings turns the same surface into the drop sheet. In the sheet, / filters, ↑↓ move rows, Enter or F2 edits in place, F3 highlights the row's line in the TOML panel, F4 opens ferrite.toml in the editor, F8 resets, and Esc slides the sheet up."],
+    ["Keyboard flow", "F10 opens the mega menu: ←→ switch columns, ↑↓ items, and F, W or H jump to a column. Enter on Settings turns the same surface into the drop sheet. In the sheet, / filters, ↑↓ move rows, Enter or F2 edits in place, F3 highlights the row's line in the TOML panel, F4 opens navo.toml in the editor, F8 resets, and Esc slides the sheet up."],
     ["GPUI build cost", "Low to medium. Everything is opaque with no blur. The drop and the pane push are animated top offsets. The TOML panel reuses the viewer's tree-sitter highlighting (the TOML grammar is built in, D38). The mega menu is three lists that share one focus model. This is the cheapest direction that still looks new."],
   ] },
 ];
@@ -1046,7 +1046,7 @@ function setActive(i) {
   const url = new URL(location);
   url.searchParams.set("v", i + 1);
   history.replaceState(null, "", url);
-  store.set("ferrite-r2-dir", String(i));
+  store.set("navo-r2-dir", String(i));
   const d = DIRS[i];
   document.getElementById("dir-letter").textContent = "ABCD"[i];
   document.getElementById("dir-title").textContent = d.t;
@@ -1063,7 +1063,7 @@ function setView(v, cat) {
 function setTheme(t) {
   if (t === "system") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme", t);
-  store.set("ferrite-r2-theme", t);
+  store.set("navo-r2-theme", t);
   document.querySelectorAll("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === t)));
 }
 
@@ -1137,12 +1137,12 @@ document.addEventListener("keyup", (e) => {
 window.addEventListener("blur", () => { clearTimeout(holdTimer); if (hold) { hold = ""; draw("bar"); } });
 
 const themeParam = params.get("theme");
-setTheme(["light", "dark", "system"].includes(themeParam) ? themeParam : (store.get("ferrite-r2-theme") || "system"));
+setTheme(["light", "dark", "system"].includes(themeParam) ? themeParam : (store.get("navo-r2-theme") || "system"));
 const viewParam = params.get("view");
 if (["window", "menu", "settings"].includes(viewParam)) ST.forEach((s) => { s.view = viewParam; });
 const layerParam = params.get("layer");
 if (["shift", "ctrl", "alt"].includes(layerParam)) ST.forEach((s) => { s.layer = layerParam; });
-setActive((parseInt(params.get("v"), 10) || (parseInt(store.get("ferrite-r2-dir"), 10) + 1) || 1) - 1);
+setActive((parseInt(params.get("v"), 10) || (parseInt(store.get("navo-r2-dir"), 10) + 1) || 1) - 1);
 requestAnimationFrame(() => requestAnimationFrame(() => picker.setAttribute("data-ready", "")));
 </script>
 

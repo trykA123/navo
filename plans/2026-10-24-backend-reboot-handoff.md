@@ -47,19 +47,19 @@ Open work:
 
 ## Relevant contracts and pitfalls
 
-- `crates/rusty-retention/src/lib.rs`: `Vault::new(Db, profile, ops)` owns a read/write `retention.lock` for its lifetime. Capture accepts `CaptureRequest { source, policy, created_at, job }`. Restore, purge and reconciliation already have cancellation/progress contracts.
-- `crates/rusty-core/src/retention/`: validated V1 records require a sibling `.ferrite-retained-*` container and fixed `payload` child. Do not change held paths without versioning and recovery compatibility. Policy fields are private and currently have no serde implementation or getters.
-- `crates/rusty-store/src/retention/transaction.rs`: live job ownership pins restore and purge. Any authorized owner-rollback extension must also enforce the owner in the store transaction, not only in the service.
-- `crates/rusty-store/src/recovery/salvage/journal.rs`: unfinished plans are currently decoded as `OperationPlan`. A new job envelope or policy table must also be validated here. Rejected records must keep manual recovery paths.
-- `crates/rusty-app/src/jobs/mod.rs`: `log_factory` creates the durable job; `JournalLog::finish` currently returns nothing and releases A8 backups. `undo_log` marks rename undo restore-pending. `Recovery` and `roll_back_job` implement legacy startup rollback.
-- `crates/rusty-app/src/jobs/held.rs`: A8 records preserve original/held paths and stamps, but do not yet persist stable old/new object identities for retention adoption.
-- `crates/rusty-app/src/jobs/recovery.rs` and `pending.rs`: recovery reports need retained-job support and readable retained paths.
-- `crates/rusty-ui/src/browser/operate/{types,work}.rs`: `OpLog` currently exposes only `finish`; normal execution calls `run_job_parallel`. Backend hooks can be added here without changing rendering.
-- `crates/rusty-app/src/gui.rs`: `operations` currently falls back to unlogged operations when the journal cannot open. An enabled retention policy must fail closed instead. Protect private backup paths even when capture is disabled.
-- `crates/rusty-app/src/rename_hooks.rs`: profile-aware rename undo must share the mutation lease.
-- `crates/rusty-app/src/crash/store/workflow.rs`: sole-session startup recovery runs before normal DB access is allowed. A retention DB connection here must use the authorized raw `Db::open` path; runtime uses guarded `crash::open_db`.
-- `crates/rusty-store/src/settings/`: settings completion derives keys from serialized defaults. Update defaults snapshot, property-test constructors, parsing and save/reload tests when adding a section.
-- `crates/rusty-fs/src/provider/cancel.rs`: cancellation already has a condition variable; use it if implementing cancellable lock waits.
+- `crates/navo-retention/src/lib.rs`: `Vault::new(Db, profile, ops)` owns a read/write `retention.lock` for its lifetime. Capture accepts `CaptureRequest { source, policy, created_at, job }`. Restore, purge and reconciliation already have cancellation/progress contracts.
+- `crates/navo-core/src/retention/`: validated V1 records require a sibling `.navo-retained-*` container and fixed `payload` child. Do not change held paths without versioning and recovery compatibility. Policy fields are private and currently have no serde implementation or getters.
+- `crates/navo-store/src/retention/transaction.rs`: live job ownership pins restore and purge. Any authorized owner-rollback extension must also enforce the owner in the store transaction, not only in the service.
+- `crates/navo-store/src/recovery/salvage/journal.rs`: unfinished plans are currently decoded as `OperationPlan`. A new job envelope or policy table must also be validated here. Rejected records must keep manual recovery paths.
+- `crates/navo-app/src/jobs/mod.rs`: `log_factory` creates the durable job; `JournalLog::finish` currently returns nothing and releases A8 backups. `undo_log` marks rename undo restore-pending. `Recovery` and `roll_back_job` implement legacy startup rollback.
+- `crates/navo-app/src/jobs/held.rs`: A8 records preserve original/held paths and stamps, but do not yet persist stable old/new object identities for retention adoption.
+- `crates/navo-app/src/jobs/recovery.rs` and `pending.rs`: recovery reports need retained-job support and readable retained paths.
+- `crates/navo-ui/src/browser/operate/{types,work}.rs`: `OpLog` currently exposes only `finish`; normal execution calls `run_job_parallel`. Backend hooks can be added here without changing rendering.
+- `crates/navo-app/src/gui.rs`: `operations` currently falls back to unlogged operations when the journal cannot open. An enabled retention policy must fail closed instead. Protect private backup paths even when capture is disabled.
+- `crates/navo-app/src/rename_hooks.rs`: profile-aware rename undo must share the mutation lease.
+- `crates/navo-app/src/crash/store/workflow.rs`: sole-session startup recovery runs before normal DB access is allowed. A retention DB connection here must use the authorized raw `Db::open` path; runtime uses guarded `crash::open_db`.
+- `crates/navo-store/src/settings/`: settings completion derives keys from serialized defaults. Update defaults snapshot, property-test constructors, parsing and save/reload tests when adding a section.
+- `crates/navo-fs/src/provider/cancel.rs`: cancellation already has a condition variable; use it if implementing cancellable lock waits.
 - Generic filesystem `rename` may have replacing fallbacks. Retention must use `rename_atomic`; unsupported providers must refuse. Mount and stable file identities are required. Never traverse links or bind mounts.
 - Existing retained containers anchor ownership to the original source parent. Moving a parent that contains live backups needs an explicit policy; current engine refuses nested retained containers. Do not relocate or delete these implicitly.
 

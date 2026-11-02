@@ -25,7 +25,7 @@ export default {
     const groups = DELETED.map((g) => `<h3><span>${g.group}</span><span>${g.items.length}</span></h3>${g.items.map((it) => `<div class="drow" data-i="${n++}">
       <span class="k-${it.kind}">${icon(it.kind)}</span><span class="dn">${it.name}</span><span class="df mono">${it.from}</span><span class="ds mono">${it.size}</span><span class="dt mono">${it.at}</span></div>`).join('')}`).join('');
     const sh = sheet('delsheet', { x: RIGHT_X, w: 782 }, `
-      <div class="sh-head"><div class="sh-icon trash">${icon('trash')}</div><div><div class="sh-name">Recently deleted</div><div class="sh-path">Only what Ferrite deleted. Kept for 7 days, then purged.</div></div><span class="sh-close kbd">Esc</span></div>
+      <div class="sh-head"><div class="sh-icon trash">${icon('trash')}</div><div><div class="sh-name">Recently deleted</div><div class="sh-path">Only what Navo deleted. Kept for 7 days, then purged.</div></div><span class="sh-close kbd">Esc</span></div>
       <div class="cap"><div class="capbar"><i></i></div><span class="mono">1.4 GB of 20 GB on D:</span></div>
       <div class="dlist"><div class="dsel"></div>${groups}</div>
       <div class="dkeys"><span><span class="kbd">Enter</span> restore</span><span><span class="kbd">Shift+Enter</span> restore to…</span><span><span class="kbd">Del</span> purge now</span></div>`);

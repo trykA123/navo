@@ -4,17 +4,17 @@ Status: done (G6 passed 2026-10-15) · Branch: `p6-fs` · After: G5 for merging
 
 ## Goal
 
-Rusty reads folders through providers instead of raw paths. A fake file system with fault injection and a corpus of hostile names prove the behaviour on Linux CI; the local provider lists real folders on Linux and Windows in streamed batches; I/O queues keep each disk and share within limits; one error model describes every failure.
+Navo reads folders through providers instead of raw paths. A fake file system with fault injection and a corpus of hostile names prove the behaviour on Linux CI; the local provider lists real folders on Linux and Windows in streamed batches; I/O queues keep each disk and share within limits; one error model describes every failure.
 
 ## Decisions
 
 - D19 (drives, network), D21 (locations, fake file system, hostile names, error model, I/O queues).
 - From G3 review (2026-10-15): `Effect::ListFolder` and `Event::ListingLoaded` get a request number; the tab keeps the pending number and accepts only the matching answer, so a late answer for the same folder cannot overwrite a newer one. A refresh of the same folder (watcher) keeps the marks by matching names instead of resetting the selection. Change the event form in F2/F3, before logs from users exist.
-- `Location { provider: ProviderId, path: ProviderPath }` lives in `rusty-core`; `ProviderPath` keeps Windows names as WTF-16 so invalid UTF-16 survives.
-- The `Provider` trait lives in `rusty-fs`: `capabilities()`, `list(location, sink)`, `metadata(location)`; operations come in P8.
+- `Location { provider: ProviderId, path: ProviderPath }` lives in `navo-core`; `ProviderPath` keeps Windows names as WTF-16 so invalid UTF-16 survives.
+- The `Provider` trait lives in `navo-fs`: `capabilities()`, `list(location, sink)`, `metadata(location)`; operations come in P8.
 - Windows listing uses `FindFirstFileExW` with `FindExInfoBasic` and `FIND_FIRST_EX_LARGE_FETCH`, `\\?\` paths, batches of 512 entries.
 - I/O queue priorities: visible, prefetch, idle. Limits per volume: SSD 8, HDD 1, network 4, removable 2; drive type from the seek-penalty query on Windows, from `/sys/block` on Linux.
-- Coverage floor `rusty-fs = 80` added in F3.
+- Coverage floor `navo-fs = 80` added in F3.
 
 ## Components
 
@@ -33,9 +33,9 @@ Rusty reads folders through providers instead of raw paths. A fake file system w
 | Atom | Component | Tier | Role | Effort | After | Check |
 | --- | --- | --- | --- | --- | --- | --- |
 | F1 | `location`, `error_model` Red | T2 | checker | high | G5 | tests compile, fail |
-| F2 | `location`, `error_model` Green | T4 | orchestrator | high | F1 | `cargo nextest run -p rusty-core location error` |
+| F2 | `location`, `error_model` Green | T4 | orchestrator | high | F1 | `cargo nextest run -p navo-core location error` |
 | F3 | `provider` contract + `fake_fs` Red | T2 | checker | high | F2 | tests compile, fail |
-| F4 | `fake_fs` Green | T3 | api-builder | xhigh | F3 | `cargo nextest run -p rusty-fs fake` |
+| F4 | `fake_fs` Green | T3 | api-builder | xhigh | F3 | `cargo nextest run -p navo-fs fake` |
 | F5 | `hostile_names` | T2 | checker | high | F4 | corpus tests pass on `fake_fs` |
 | F6 | `local_provider` Red | T2 | checker | high | F5 | tests compile, fail |
 | F7 | `local_provider` Linux Green | T3 | api-builder | xhigh | F6 | `… local` on Linux |
@@ -58,7 +58,7 @@ F9–F10 run in parallel with F5–F8.
 
 - The hostile-name corpus round-trips on the fake and the local provider, on Linux and Windows.
 - Faults produce the right `FsError` and recovery actions.
-- `rusty-fs` coverage ≥ 80 %.
+- `navo-fs` coverage ≥ 80 %.
 
 ## Log
 

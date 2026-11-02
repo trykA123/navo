@@ -11,7 +11,7 @@ The owner works in automotive and opens large embedded and vehicle-network files
 - the signals in a DBC or A2L;
 - a CAN trace as a filterable table.
 
-Every view works on files of hundreds of MB without freezing. This is Ferrite's first real module pack ("Automotive", D13), built on P15's viewer kinds.
+Every view works on files of hundreds of MB without freezing. This is Navo's first real module pack ("Automotive", D13), built on P15's viewer kinds.
 
 Input: the crate research of 2026-10-15 (summary under Decisions).
 
@@ -54,7 +54,7 @@ Input: the crate research of 2026-10-15 (summary under Decisions).
 - **D10 — Performance contract.** Every view opens a 500 MB file within 1 s to first content and stays under 200 MB of memory. Indexes are built in the background with progress, and only the visible part is decoded. Each format gets a benchmark fixture in CI.
 
 - **D11 — Layout: direction B, "inspector" (owner, 2026-10-19).** From the Opus prototype (`<worktrees>/prototypes/automotive/opus`, shots `B-*`): a navigator on the left (ranges, sections, messages or IDs with counts), the content in the middle (hex on real addresses, symbol or signal table, virtualised trace), an inspector on the right for the selected item (size, position, records by type, checks, decoded signals). Text, hex and the rich view stay on Alt+1/3/5. **Navigator and inspector are drawers over the content (owner, 2026-10-19):** the content always keeps the full width; each drawer slides in over it from its side, with the same frame and motion as the preview side sheet, and closes with Esc or its key. Opening the inspector does not move the content's columns.
-- **D12 — Simple by default, rich parts opt-in (owner, 2026-10-19).** The owner wants a calm default and full control over the rich parts. The rich view opens in **Simple** mode: navigator as a plain list (name, address, size), content, a one-line status with the checks (checksum errors, EOF, gaps) and no charts. Each rich part is a setting under `[automotive.view]` in `ferrite.toml`, live like every setting, and shown as a toggle group in the settings sheet's Automotive section:
+- **D12 — Simple by default, rich parts opt-in (owner, 2026-10-19).** The owner wants a calm default and full control over the rich parts. The rich view opens in **Simple** mode: navigator as a plain list (name, address, size), content, a one-line status with the checks (checksum errors, EOF, gaps) and no charts. Each rich part is a setting under `[automotive.view]` in `navo.toml`, live like every setting, and shown as a toggle group in the settings sheet's Automotive section:
   - `inspector` — the right-hand drawer opens by itself when an item is selected (default off; the drawer is still available on its key);
   - `memory_strip` — the address-map strip beside the navigator and the position bar (default off);
   - `charts` — bars, sparklines, bus load and signal curves, wherever they appear (default off);

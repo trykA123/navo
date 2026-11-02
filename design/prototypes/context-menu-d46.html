@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ferrite Context Menu</title>
+<title>Navo Context Menu</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet">
@@ -66,7 +66,7 @@ kbd { font: 500 var(--fs-xs)/1 var(--font-mono); padding: 2px 5px; border-radius
 .stage-scroll { overflow-x: auto; overflow-y: hidden; padding: var(--s-6) var(--s-4); scrollbar-width: thin; }
 .stage { width: var(--win-w); margin-inline: auto; }
 
-/* Ferrite window */
+/* Navo window */
 .win { position: relative; width: var(--win-w); height: var(--win-h); display: grid; grid-template-rows: var(--title-h) minmax(0, 1fr) var(--keys-h); background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--r-lg); overflow: hidden; box-shadow: 0 30px 80px -40px oklch(20% 0.03 260 / 0.45); font-variant-numeric: tabular-nums; user-select: none; }
 .title { display: flex; align-items: center; gap: var(--s-3); padding-inline: var(--s-3) 0; background: var(--mica); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: var(--s-2); font-weight: 700; font-stretch: 100%; width: 190px; }
@@ -225,7 +225,7 @@ kbd { font: 500 var(--fs-xs)/1 var(--font-mono); padding: 2px 5px; border-radius
 </head>
 <body>
 <header class="bar">
-  <h1>Ferrite <span>· shell context menu</span></h1>
+  <h1>Navo <span>· shell context menu</span></h1>
   <div class="seg" role="group" aria-label="Variant" id="vseg">
     <button data-v="1">Variant 1 <kbd>1</kbd></button>
     <button data-v="2">Variant 2 <kbd>2</kbd></button>
@@ -258,8 +258,8 @@ const LEFT = [
   ["docs", "dir", "", "&lt;DIR&gt;", "2026-10-15 21:05"],
   ["Cargo", "code", "lock", "40.3 KB", "2026-10-15 21:05"],
   ["Cargo", "code", "toml", "812 B", "2026-10-15 21:05"],
-  ["ferrite", "app", "exe", "14.2 MB", "2026-10-16 08:51"],
-  ["ferrite-0.4.2-win64", "archive", "zip", "6.8 MB", "2026-10-16 08:52"],
+  ["navo", "app", "exe", "14.2 MB", "2026-10-16 08:51"],
+  ["navo-0.4.2-win64", "archive", "zip", "6.8 MB", "2026-10-16 08:52"],
   ["logo", "image", "png", "47.1 KB", "2026-10-08 22:40"],
   ["notes", "doc", "md", "2.0 KB", "2026-10-11 22:40"],
   ["README", "doc", "md", "4.1 KB", "2026-10-14 18:02"],
@@ -269,8 +269,8 @@ const LEFT = [
 const RIGHT = [
   ["2026-09", "dir", "", "&lt;DIR&gt;", "2026-09-30 23:59"],
   ["2026-10", "dir", "", "&lt;DIR&gt;", "2026-10-16 03:00"],
-  ["ferrite-0.4.1-win64", "archive", "zip", "6.6 MB", "2026-10-12 19:20"],
-  ["ferrite-0.4.0-win64", "archive", "zip", "6.5 MB", "2026-10-09 11:02"],
+  ["navo-0.4.1-win64", "archive", "zip", "6.6 MB", "2026-10-12 19:20"],
+  ["navo-0.4.0-win64", "archive", "zip", "6.5 MB", "2026-10-09 11:02"],
   ["musique-db", "archive", "7z", "312 MB", "2026-10-16 03:00"],
   ["restore", "doc", "md", "1.8 KB", "2026-10-02 10:14"],
   ["snapshots", "doc", "txt", "9.4 KB", "2026-10-16 03:01"],
@@ -307,8 +307,8 @@ const SH = [
 ];
 const SUBS = {
   "7zip": { t: "7-Zip", items: [
-    { t: "Open archive", def: true }, { t: "Extract files…" }, { t: "Extract Here" }, { t: 'Extract to "ferrite-0.4.2-win64\\"' }, { t: "Test archive" }, "-",
-    { t: "Add to archive…" }, { t: "Compress and email…" }, { t: 'Add to "ferrite-0.4.2-win64.7z"' }, { t: 'Add to "ferrite-0.4.2-win64.zip"', off: true }] },
+    { t: "Open archive", def: true }, { t: "Extract files…" }, { t: "Extract Here" }, { t: 'Extract to "navo-0.4.2-win64\\"' }, { t: "Test archive" }, "-",
+    { t: "Add to archive…" }, { t: "Compress and email…" }, { t: 'Add to "navo-0.4.2-win64.7z"' }, { t: 'Add to "navo-0.4.2-win64.zip"', off: true }] },
   sendto: { t: "Send to", items: [
     { t: "Bluetooth device", ic: "bluetooth" }, { t: "Compressed (zipped) folder", ic: "file-archive" }, { t: "Desktop (create shortcut)", ic: "monitor" },
     { t: "Documents", ic: "folder" }, { t: "Mail recipient", ic: "mail" }, "-", { t: "DVD RW Drive (E:)", ic: "hard-drive", off: true }, { t: "nas-media (Z:)", ic: "hard-drive" }] },
@@ -374,7 +374,7 @@ function v1Items() {
       return mi({ ...h.it, sub: h.crumb ? null : h.it.sub }, { label, hot: i === 0, focus: i === 0 && S.s === "kbd", tag: h.tag });
     }).join("");
   }
-  let html = '<div class="grp">Ferrite</div>' + feItems(multi).map((f) => mi({ ...f, fe: true })).join("");
+  let html = '<div class="grp">Navo</div>' + feItems(multi).map((f) => mi({ ...f, fe: true })).join("");
   html += '<div class="grp">Windows</div>';
   const list = shItems(multi).filter((x) => !x.hidden && x.g !== "rare");
   let g = null;
@@ -387,7 +387,7 @@ function v1Hint() {
 }
 function v1() {
   const multi = S.s === "multi";
-  const ctx = multi ? `${ic("files")}<b>3 files</b><span>· 21.0 MB</span>` : `${ic("file-archive", "k-archive")}<b>ferrite-0.4.2-win64.zip</b><span>· 6.8 MB</span>`;
+  const ctx = multi ? `${ic("files")}<b>3 files</b><span>· 21.0 MB</span>` : `${ic("file-archive", "k-archive")}<b>navo-0.4.2-win64.zip</b><span>· 6.8 MB</span>`;
   const main = `<div class="menu v1" role="menu" aria-label="Context menu">
     <label class="flt ${S.s === "kbd" ? "on" : ""}">${ic("search")}<input id="v1q" aria-label="Filter commands" placeholder="Type to filter commands" value="${esc(S.q)}" autocomplete="off"><kbd>Esc</kbd></label>
     <div class="ctx">${ctx}</div>
@@ -399,7 +399,7 @@ function v1() {
 /* Variant 2: action strip + fold */
 function v2() {
   const multi = S.s === "multi";
-  const who = multi ? `${ic("files")}<b>3 files</b><span class="tag">21.0 MB</span>` : `${ic("file-archive", "k-archive")}<b>ferrite-0.4.2-win64.zip</b>`;
+  const who = multi ? `${ic("files")}<b>3 files</b><span class="tag">21.0 MB</span>` : `${ic("file-archive", "k-archive")}<b>navo-0.4.2-win64.zip</b>`;
   const fe = feItems(multi);
   const order = ["cpath", "cname", "ren", "cmp", "other", "props"];
   const focusId = S.s === "kbd" ? "ren" : null;
@@ -408,7 +408,7 @@ function v2() {
     return `<button class="sb ${focusId === id ? "focus" : ""}" aria-label="${esc(f.t)}" data-cap="${esc(f.t)}" data-k="${f.off ? f.k2 : f.k}" ${f.off ? 'aria-disabled="true"' : ""}>${ic(f.ic)}</button>`;
   }).join("");
   const capF = fe.find((x) => x.id === (focusId || "cpath"));
-  const cap = focusId ? `<b>${esc(capF.t)}</b><kbd>${capF.k}</kbd>` : `<span>Ferrite actions</span><span><kbd>Tab</kbd></span>`;
+  const cap = focusId ? `<b>${esc(capF.t)}</b><kbd>${capF.k}</kbd>` : `<span>Navo actions</span><span><kbd>Tab</kbd></span>`;
   const sh = shItems(multi).filter((x) => !x.hidden);
   const pinned = ["Open", "Open with", "Extract All…", "7-Zip", "Send to", "Share"];
   const top = sh.filter((x) => pinned.includes(x.t));
@@ -422,7 +422,7 @@ function v2() {
   const more = `<button class="mi more" role="menuitem" aria-expanded="${S.fold}" data-fold><span class="lead">${ic("ellipsis")}</span><span class="t">${S.fold ? "Fewer options" : `More options · ${rest.length}`}</span>${ic("chevron-down", "chev")}</button>`;
   const main = `<div class="menu v2" role="menu" aria-label="Context menu">
     <div class="who">${who}</div>
-    <div class="strip" role="toolbar" aria-label="Ferrite actions">${strip}</div>
+    <div class="strip" role="toolbar" aria-label="Navo actions">${strip}</div>
     <div class="cap2" id="cap2">${cap}</div>
     ${sep}${topHtml}${sep}${more}
     ${S.fold ? `<div class="fold">${foldHtml}</div>` : ""}
@@ -440,7 +440,7 @@ function v3() {
   const sec = (title, items, fe) => `<h3>${title}</h3>` + items.map((x) => mi(fe ? { ...x, fe: true } : x, { ak: x.ak || "", focus: kbd && x.id === "other" })).join("");
   const head = multi
     ? `<div class="stack"><span class="fic">${ic("app-window", "k-app")}</span><span class="fic">${ic("file-archive", "k-archive")}</span><span class="fic">${ic("image", "k-image")}</span></div><div class="hmeta"><b>3 files</b><span>exe, zip, png · 21.0 MB</span></div>`
-    : `<span class="fic">${ic("file-archive", "k-archive")}</span><div class="hmeta"><b>ferrite-0.4.2-win64.zip</b><span>ZIP archive · 6.8 MB · D:\\work\\ferrite\\dist</span></div>`;
+    : `<span class="fic">${ic("file-archive", "k-archive")}</span><div class="hmeta"><b>navo-0.4.2-win64.zip</b><span>ZIP archive · 6.8 MB · D:\\work\\navo\\dist</span></div>`;
   if (S.drill) {
     const d = SUBS[S.drill];
     const items = d.items.filter((x) => x !== "-");
@@ -448,7 +448,7 @@ function v3() {
     const keys = "1234567890";
     const col = (arr, off) => `<div class="col">${arr.map((x, i) => mi(x, { ak: keys[off + i] || "", hot: off + i === 0 })).join("")}</div>`;
     return `<div class="menu v3" role="menu" aria-label="${esc(d.t)}"><div class="page ${S.back ? "back-in" : ""}">
-      <div class="head"><button class="back" aria-label="Back" data-back>${ic("chevron-left")}</button><div class="hmeta"><b>${esc(d.t)}</b><span>ferrite-0.4.2-win64.zip · filled when opened</span></div></div>
+      <div class="head"><button class="back" aria-label="Back" data-back>${ic("chevron-left")}</button><div class="hmeta"><b>${esc(d.t)}</b><span>navo-0.4.2-win64.zip · filled when opened</span></div></div>
       <div class="subcols">${col(items.slice(0, half), 0)}${col(items.slice(half), half)}</div>
       <div class="mhint"><span><kbd>←</kbd> back</span><span><kbd>1–9</kbd> run</span><span class="end"><kbd>Esc</kbd> close</span></div></div></div>`;
   }
@@ -457,7 +457,7 @@ function v3() {
   return `<div class="menu v3 ${kbd ? "akeys" : ""}" role="menu" aria-label="Context menu"><div class="page ${S.back ? "back-in" : ""}">
     <div class="head">${head}</div>
     <div class="cols">
-      <div class="col">${sec("Ferrite", feItems(multi), true)}${sec("Open", by("open"))}</div>
+      <div class="col">${sec("Navo", feItems(multi), true)}${sec("Open", by("open"))}</div>
       <div class="col">${sec("Share", by("share"))}${sec("Edit", by("clip"))}${sec("Shell extensions", by("ext"))}</div>
     </div>
     ${foldRows}
@@ -485,12 +485,12 @@ function pane(o) {
 }
 function windowHtml() {
   const multi = S.s === "multi";
-  const left = pane({ label: "Left pane", active: true, drives: ["C", "D", "Z"], drive: "D", path: ["D:", "work", "ferrite", "dist"], rows: LEFT, cur: CUR, marked: multi ? MARKED : null,
+  const left = pane({ label: "Left pane", active: true, drives: ["C", "D", "Z"], drive: "D", path: ["D:", "work", "navo", "dist"], rows: LEFT, cur: CUR, marked: multi ? MARKED : null,
     stat: multi ? "<b>3 of 9 files</b> · 21.0 MB selected" : "9 files, 3 folders · 28.5 MB" });
   const right = pane({ label: "Right pane", drives: ["C", "D", "Z"], drive: "D", path: ["D:", "backup", "2026"], rows: RIGHT, stat: "5 files, 2 folders · 331 MB" });
   const caps = [["F3", "View"], ["F4", "Edit"], ["F5", "Copy"], ["F6", "Move"], ["F7", "New folder"], ["F8", "Delete"], ["F9", "Drawer"], ["F10", "Menu"]]
     .map(([k, t]) => `<span class="cap"><kbd>${k}</kbd>${t}</span>`).join("");
-  return `<header class="title"><span class="brand">${BRAND}Ferrite</span>
+  return `<header class="title"><span class="brand">${BRAND}Navo</span>
       <span class="find">${ic("search")}<span>Find anywhere: files, folders, commands</span><kbd>Ctrl+K</kbd></span>
       <span class="tright"><span class="tbtn">${ic(document.documentElement.dataset.theme === "dark" ? "moon" : "sun")}</span>
       <span class="winctl"><span>${ic("minus")}</span><span>${ic("square")}</span><span>${ic("x")}</span></span></span></header>
@@ -546,12 +546,12 @@ const NOTES = {
     keys: "Menu key or Shift+F10 opens with the filter focused. Typing filters, ↑↓ move, Enter runs, → opens a submenu, ← closes it, Esc clears the filter, then closes.",
     cost: "Low to medium. One list view, the existing text input and the palette's fuzzy matcher; background enumeration of submenus with a 150 ms budget." },
   2: { name: "Variant 2", sub: "Action strip and fold",
-    plus: "Windows 11 shape users already know. Ferrite's six actions sit one click away; the list stays short because rare items and clipboard verbs fold under More options.",
+    plus: "Windows 11 shape users already know. Navo's six actions sit one click away; the list stays short because rare items and clipboard verbs fold under More options.",
     minus: "Icon-only strip needs the caption line to be learnable. Two focus zones. Disabled icons in a multi-selection are easy to miss. No search, so long shell menus still mean scanning.",
     keys: "Opens with focus on the default verb. Tab moves to the strip, ←→ walk it, ↓ or Tab returns to the list. Space on More options unfolds it in place.",
-    cost: "Medium. Toolbar plus list with two focus zones, a caption bound to focus, the fold, and a per-entry pinned/folded/hidden setting in ferrite.toml." },
+    cost: "Medium. Toolbar plus list with two focus zones, a caption bound to focus, the fold, and a per-entry pinned/folded/hidden setting in navo.toml." },
   3: { name: "Variant 3", sub: "Sectioned sheet",
-    plus: "Clear groups (Ferrite, Open, Share, Edit, Shell extensions) and visible access keys: one letter runs a command. Submenus drill in, so nothing cascades off the window edge.",
+    plus: "Clear groups (Navo, Open, Share, Edit, Shell extensions) and visible access keys: one letter runs a command. Submenus drill in, so nothing cascades off the window edge.",
     minus: "540 px wide: covers much of the passive pane, more eye travel. Needs a classifier for unknown verbs (they fall into Shell extensions) and stable access-key assignment.",
     keys: "Letters run items, Tab jumps to the next section, → or Enter drills into a submenu, ← or Backspace goes back, 1–9 run submenu items, Esc closes.",
     cost: "Medium to high. Two-column layout, verb classifier, access-key allocator with collision rules, drill-in transition and its back stack." },
@@ -563,7 +563,7 @@ function renderNotes() {
       <dt>Strengths</dt><dd>${n.plus}</dd><dt>Weaknesses</dt><dd>${n.minus}</dd><dt>Keyboard flow</dt><dd>${n.keys}</dd><dt>GPUI build cost</dt><dd>${n.cost}</dd></dl></article>`;
   }).join("");
   const rec = `<article class="note rec"><h2>Recommendation <small>· Variant 1, with two borrowings</small></h2><dl>
-    <dd>Ferrite is keyboard-first, and the filter list is the only direction where typing beats scanning, including inside submenus. Take Variant 3's quiet section headers for the unfiltered list, and Variant 2's More fold for rare verbs, so mouse users still get a short, ordered menu. Keep cascading submenus; drill-in is a later option if cascades clip at narrow widths.</dd></dl></article>`;
+    <dd>Navo is keyboard-first, and the filter list is the only direction where typing beats scanning, including inside submenus. Take Variant 3's quiet section headers for the unfiltered list, and Variant 2's More fold for rare verbs, so mouse users still get a short, ordered menu. Keep cascading submenus; drill-in is a later option if cascades clip at narrow widths.</dd></dl></article>`;
   document.getElementById("notes").innerHTML = cards + rec;
 }
 

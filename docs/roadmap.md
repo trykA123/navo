@@ -1,4 +1,4 @@
-# Rusty roadmap
+# Navo roadmap
 
 Updated 30 October 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
 
@@ -53,7 +53,7 @@ Merged after that release: six built-in colour themes. They are Open sea (the de
 
 ### Merged since that release
 
-- **Navo.** The app has a new name and the `n_` icon. Your Ferrite profile (settings, tabs, history) moves to Navo once, safely, with crash recovery. The old folder is renamed to "Ferrite.migrated-to-navo". An installed Ferrite Index service is upgraded from a one-time notice.
+- **Navo.** The app has a new name and the `n_` icon. Your Navo profile (settings, tabs, history) moves to Navo once, safely, with crash recovery. The old folder is renamed to "Navo.migrated-to-navo". An installed Navo Index service is upgraded from a one-time notice.
 - **Start-up splash.** A small native Windows window with the `n_` icon and the "navo" wordmark. It shows only when start-up takes longer than half a second, and fades out. It does not appear on Linux.
 - **New right-click menu.** The real Windows shell menu in Navo's style. The filter sits at the top. Submenus open in place, with a back row. Shift adds the extended items. If anything fails, the classic Windows menu opens instead.
 - **Fixes from the final reviews** of the Ctrl+K index service and of Rich ELF and MAP.
@@ -101,7 +101,7 @@ Exit: no open data-safety bugs; start-up and memory targets met in CI.
 
 Replaces Total Commander for daily work (D39). Parity features are built to beat TC, not copy it.
 
-1. core: compare and sync, better than Beyond Compare where it counts (D40): folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `rusty-compare` crate.
+1. core: compare and sync, better than Beyond Compare where it counts (D40): folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `navo-compare` crate.
 2. infra: signed portable `.exe` and the NSIS installer (D73), whose uninstaller also removes the index service; user guide; soak test; steadier Windows tests.
 3. core: optional default file manager (Win+E).
 4. core: inspector column with preview and properties, thumbnails, archives as folders (zip, 7z, tar with gz, xz and zst). File details, owner and hashes are done.
@@ -134,7 +134,7 @@ Exit: every target is met on a clean Windows 11 machine, and a week of work runs
 - Jenkins links to network folders; optional built-in web view; workflows and automations; a visual workflow builder.
 - module: Everything (optional), embedded terminal (ConPTY).
 
-Exit: a third-party plugin is built, installed and updated without touching Rusty's code.
+Exit: a third-party plugin is built, installed and updated without touching Navo's code.
 
 ## Later
 

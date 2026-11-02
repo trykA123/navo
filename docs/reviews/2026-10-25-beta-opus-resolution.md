@@ -62,7 +62,7 @@ Durable evidence: the local evidence folder. It contains red-probe output, affec
 
 Created `backend/beta-retention-on-main` from `2294facb` and fetched `origin/main` at `e077fb5a`. Replayed only the seven beta commits after `b75cd273`. The original `backend/beta-recovery-retention` ref remains at `2294facb`; V8 remains parked separately.
 
-Resolved conflicts in `CHANGELOG.md`, `docs/roadmap.md`, `crates/rusty-fs/src/provider/ops.rs` and `crates/rusty-app/src/jobs/identity.rs`. The provider import conflict recurred when retained-copy ownership was replayed. Released alpha notes and Navo roadmap priority remain intact.
+Resolved conflicts in `CHANGELOG.md`, `docs/roadmap.md`, `crates/navo-fs/src/provider/ops.rs` and `crates/navo-app/src/jobs/identity.rs`. The provider import conflict recurred when retained-copy ownership was replayed. Released alpha notes and Navo roadmap priority remain intact.
 
 The shared core identity now includes main's fingerprint domain. Its constructor receives size, modification time and folder kind, preserving the same bytes, domain distinction and exact one-hour tolerance without a core-to-filesystem dependency. FAT/exFAT and unknown filesystems still refuse native-ID proof before either native-ID query; rename uses the existing fingerprint fallback. Retention continues to require proved identities. The app decoder preserves journal v1/v2 compatibility and reusable decoding for beta recovery.
 

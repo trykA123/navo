@@ -1,4 +1,4 @@
-# Rusty architecture
+# Navo architecture
 
 Status: proposal for review, 13 October 2026. Decisions are logged in [decisions.md](decisions.md); plugins have their own document, [plugins.md](plugins.md).
 
@@ -16,20 +16,20 @@ A Cargo workspace; dependencies point down the table.
 
 | Crate | Job | Platform |
 | --- | --- | --- |
-| `rusty-core` | Pure model and logic: paths, entries, panes, tabs, layout tree, workspaces, pins, selection, sort/filter, the command set, operation planning. No I/O. | any |
-| `rusty-store` | Settings (TOML), session snapshot (`postcard`), SQLite databases `navo.db` and `cache.db`; atomic writes, versions, migrations, recovery. Built in the Foundation phase | any |
-| `rusty-fs` | Listing, metadata, watching, the job engine (copy, move, recycle, delete) with progress, cancel, verification and the undo journal | Windows first, Linux for development |
-| `rusty-cache` | Bounded caches: listings, icons, thumbnails, enrichments; budgets and eviction | any |
-| `rusty-index` | Fuzzy matching (`nucleo`), folder search (`ignore`), global search through Rusty's own index and the `rusty-indexd` service (D23) | Windows for global |
-| `rusty-shell` | Windows shell: icons, thumbnails, native context menu, Properties, Recycle Bin, drag and drop, Mark-of-the-Web, ShellExecute | Windows |
-| `rusty-term` | Terminal providers: Windows Terminal, external command templates, embedded ConPTY + `alacritty_terminal` | Windows |
-| `rusty-plugins` | WASM component host, capability checks, plugin lifecycle | any |
-| `rusty-ui` | Rusty's component library and views on `gpui-kit`, styled with the design tokens from the prototype; draws state, sends commands (see UI components) | any |
-| `rusty-l10n` | Fluent files (`locales/en-US/*.ftl`) embedded in one process-wide bundle; `t!`, `tr` and `tr_args` return text by message id. Depends on no other Rusty crate | any |
-| `rusty-diag` | Logging setup, redaction, in-memory event ring, memory statistics, diagnostic reports. Built in the Foundation phase | any |
-| `rusty-app` | The binary: wiring, single instance, tray, global hotkey, crash handling | Windows |
+| `navo-core` | Pure model and logic: paths, entries, panes, tabs, layout tree, workspaces, pins, selection, sort/filter, the command set, operation planning. No I/O. | any |
+| `navo-store` | Settings (TOML), session snapshot (`postcard`), SQLite databases `navo.db` and `cache.db`; atomic writes, versions, migrations, recovery. Built in the Foundation phase | any |
+| `navo-fs` | Listing, metadata, watching, the job engine (copy, move, recycle, delete) with progress, cancel, verification and the undo journal | Windows first, Linux for development |
+| `navo-cache` | Bounded caches: listings, icons, thumbnails, enrichments; budgets and eviction | any |
+| `navo-index` | Fuzzy matching (`nucleo`), folder search (`ignore`), global search through Navo's own index and the `navo-indexd` service (D23) | Windows for global |
+| `navo-shell` | Windows shell: icons, thumbnails, native context menu, Properties, Recycle Bin, drag and drop, Mark-of-the-Web, ShellExecute | Windows |
+| `navo-term` | Terminal providers: Windows Terminal, external command templates, embedded ConPTY + `alacritty_terminal` | Windows |
+| `navo-plugins` | WASM component host, capability checks, plugin lifecycle | any |
+| `navo-ui` | Navo's component library and views on `gpui-kit`, styled with the design tokens from the prototype; draws state, sends commands (see UI components) | any |
+| `navo-l10n` | Fluent files (`locales/en-US/*.ftl`) embedded in one process-wide bundle; `t!`, `tr` and `tr_args` return text by message id. Depends on no other Navo crate | any |
+| `navo-diag` | Logging setup, redaction, in-memory event ring, memory statistics, diagnostic reports. Built in the Foundation phase | any |
+| `navo-app` | The binary: wiring, single instance, tray, global hotkey, crash handling | Windows |
 
-`rusty-core`, `rusty-store`, `rusty-cache`, `rusty-index` (matching) and `rusty-plugins` build and test on Linux, so most work happens on the development machine. Windows-only crates sit behind traits with a fake implementation for tests.
+`navo-core`, `navo-store`, `navo-cache`, `navo-index` (matching) and `navo-plugins` build and test on Linux, so most work happens on the development machine. Windows-only crates sit behind traits with a fake implementation for tests.
 
 ## One command system
 
@@ -60,18 +60,18 @@ Structure that is cheap now and expensive to add later (D21). Most of it is type
 
 Small core features that depend on these:
 
-- **Explorer clipboard:** copy and cut in Rusty, paste in Explorer and back (`CF_HDROP`, preferred drop effect). Alpha.
+- **Explorer clipboard:** copy and cut in Navo, paste in Explorer and back (`CF_HDROP`, preferred drop effect). Alpha.
 - **Who locks a file:** the Restart Manager names the process ("used by WINWORD.EXE") in the error dialog. Alpha.
-- **Command line:** `rusty <path>`, `rusty --new-tab <path>`, `rusty cmd <command>` sent to the running instance over its pipe. Alpha.
+- **Command line:** `navo <path>`, `navo --new-tab <path>`, `navo cmd <command>` sent to the running instance over its pipe. Alpha.
 - **Per-monitor DPI:** each monitor keeps its own scale; window placement is saved per monitor setup. Alpha.
 - **Accessibility:** everything works from the keyboard, focus is always visible, a high-contrast theme exists, the UI scales. Screen-reader support depends on GPUI and is checked in the spike.
-- **Default file manager:** optional; Win+E and "Open folder" open Rusty, with a clean way back to Explorer. v1.0.
+- **Default file manager:** optional; Win+E and "Open folder" open Navo, with a clean way back to Explorer. v1.0.
 
 ## State
 
 ### One owner, one direction
 
-- `AppState` in `rusty-core` is plain data: workspaces, panes, tabs, selection, drawer, pins, settings. It is changed only by `apply(command) -> Result<Effects>`, a pure function that can be unit- and property-tested on Linux.
+- `AppState` in `navo-core` is plain data: workspaces, panes, tabs, selection, drawer, pins, settings. It is changed only by `apply(command) -> Result<Effects>`, a pure function that can be unit- and property-tested on Linux.
 - Effects (list a folder, start a job, write the session) run in the runtime. Their results come back as events, which are applied the same way.
 - GPUI entities hold view state only and read `AppState`. They never own file-system data.
 
@@ -99,7 +99,7 @@ Small core features that depend on these:
 - **Failed integrity check:** a corrupt database writes a sticky `navo.db.check-failed` file next to it; while it exists every start runs the check and no job is recovered or journaled; only a passing check removes it.
 - **Single writer:** one process per user session (a named mutex); a second launch hands its arguments to the first instance and exits.
 - **Migrations:** each format has a version (`PRAGMA user_version` for SQLite); migrations are pure functions with fixture tests for every old version.
-- **SQLite from the start:** `rusqlite` with bundled SQLite is part of `rusty-store` from the Foundation phase, so every later feature stores its data in the same place.
+- **SQLite from the start:** `rusqlite` with bundled SQLite is part of `navo-store` from the Foundation phase, so every later feature stores its data in the same place.
 - **Crashes:** a panic hook writes a redacted crash report (see Diagnostics) and the last session; the next start offers to restore it and to save the report.
 
 Storage lives in `%APPDATA%\Navo` (settings, `navo.db`), `%LOCALAPPDATA%\Navo` (session, `cache.db`, index). **Portable mode:** if `navo.toml` sits next to the executable, everything lives beside it instead.
@@ -135,7 +135,7 @@ Targets are measured with `tracing` spans in every build and checked by a start-
 | Listings (memory) | path + volume serial | 64 MB, LRU | File watcher for open panes; folder change time on revisit |
 | Listings (`cache.db`) | same | pinned and workspace folders only, 32 MB, `lz4` compressed | Same; never trusted without revalidation |
 | Icons (memory and `cache.db`) | extension, or file for `.exe`, `.lnk`, `.ico` | 8 MB | Icon theme change, or the file's change time; the Windows shell is not touched before the first frame |
-| Thumbnails (`cache.db` blobs) | path + size + change time | 256 MB, LRU | Key change; purged when the file is deleted through Rusty |
+| Thumbnails (`cache.db` blobs) | path + size + change time | 256 MB, LRU | Key change; purged when the file is deleted through Navo |
 | Enrichments (git, folder sizes) | path + change time | 16 MB | Watcher events |
 
 - **Stale while revalidating:** a cached listing shows at once and is replaced by a diff when fresh data arrives; selection and scroll position are kept.
@@ -146,7 +146,7 @@ Targets are measured with `tracing` spans in every build and checked by a start-
 ### Pre-warming
 
 - The cursor resting on a folder for 150 ms prefetches its listing (at most two prefetches at once).
-- After start-up goes idle: pins and workspace folders are listed, the connection to `rusty-indexd` is opened, and fonts and icons for the visible panes are loaded.
+- After start-up goes idle: pins and workspace folders are listed, the connection to `navo-indexd` is opened, and fonts and icons for the visible panes are loaded.
 - A terminal is pre-started only if the drawer's terminal view was open in the last session.
 
 ## Runtime and libraries
@@ -168,7 +168,7 @@ Main libraries (versions are pinned and checked in the Foundation plan):
 | --- | --- |
 | UI | `gpui-kit` (pins the matching `gpui` and re-exports `gpui-base` and `gpui-component`) |
 | Windows API | `windows` |
-| Errors | `thiserror` in libraries, `anyhow` only in `rusty-app` |
+| Errors | `thiserror` in libraries, `anyhow` only in `navo-app` |
 | Logging and timing | `tracing`, `tracing-subscriber`, `tracing-appender` (size-limited) |
 | Serialisation | `serde`, `toml`, `postcard`, `rkyv` |
 | Database | `rusqlite` (bundled SQLite) |
@@ -195,16 +195,16 @@ Reusable components from the first screen (D25). Rule: the app is assembled from
 | Layer | Contents | Rule |
 | --- | --- | --- |
 | Tokens | Colours, type, spacing, radii, motion from the active theme (D16), mapped onto the `gpui-kit` theme | No literal colour or size outside the theme |
-| Primitives | `Button`, `IconButton`, `Input`, `Toggle`, `Menu`, `Popover`, `Tabs`, `Table`, `VirtualList`, `Splitter`, `Tooltip`, `Kbd` | Thin wrappers over `gpui-kit` with Rusty's variants; the rest of the app never imports `gpui-kit` directly |
-| Rusty components | `FileList`, `PaneTabs`, `PathBar`, `DriveBar`, `Rail`, `Palette`, `Drawer`, `JobRow`, `StatusBar`, `FKeyBar`, `ErrorDialog`, `ConfirmDialog`, `SettingsForm` (generated from a schema), `WidgetHost` (renders plugin widgets) | Props in, commands out; no file-system access, no stored state |
+| Primitives | `Button`, `IconButton`, `Input`, `Toggle`, `Menu`, `Popover`, `Tabs`, `Table`, `VirtualList`, `Splitter`, `Tooltip`, `Kbd` | Thin wrappers over `gpui-kit` with Navo's variants; the rest of the app never imports `gpui-kit` directly |
+| Navo components | `FileList`, `PaneTabs`, `PathBar`, `DriveBar`, `Rail`, `Palette`, `Drawer`, `JobRow`, `StatusBar`, `FKeyBar`, `ErrorDialog`, `ConfirmDialog`, `SettingsForm` (generated from a schema), `WidgetHost` (renders plugin widgets) | Props in, commands out; no file-system access, no stored state |
 | Views | `Window`, `Pane`, `Workspace`, `SettingsWindow` | Containers: read `AppState`, own tasks, render components |
 
 - **One primitive per concept** with variants (size, tone, density), never a copy per screen.
 - **`ConfirmDialog` is core-only.** Plugin widgets render through `WidgetHost`, which cannot produce it.
 - **Plugin widgets are a subset of these components**, so plugins look and behave like the app.
-- **Component gallery:** a `rusty-ui-gallery` binary shows every component in every state, both themes and three densities. It is the review surface for design changes and the fixture for headless UI tests (input, focus, layout, accessibility names).
+- **Component gallery:** a `navo-ui-gallery` binary shows every component in every state, both themes and three densities. It is the review surface for design changes and the fixture for headless UI tests (input, focus, layout, accessibility names).
 - **Accessibility through AccessKit:** every interactive component has a role, a name and keyboard access; tests check them.
-- Wrapping `gpui-kit` behind Rusty's primitives keeps a way out: if a `gpui-kit` component does not fit, it is replaced in one place.
+- Wrapping `gpui-kit` behind Navo's primitives keeps a way out: if a `gpui-kit` component does not fit, it is replaced in one place.
 
 ## Safety
 
@@ -212,7 +212,7 @@ Reusable components from the first screen (D25). Rule: the app is assembled from
 
 - **Delete goes to the Recycle Bin** (`IFileOperation` with recycle flags). **Shift+Del deletes permanently** after a warning that lists the count, total size and first paths; Enter on the warning is never the default action.
 - **Plan, then act.** Every copy, move, rename or delete builds a plan first: sources, targets, conflicts, totals. Large or risky plans (over 100 items, over 1 GB, anything permanent, anything in a protected location) are shown before they run.
-- **Protected locations** (drive roots, `C:\Windows`, `Program Files`, the user profile root, Rusty's own folders) need a typed confirmation.
+- **Protected locations** (drive roots, `C:\Windows`, `Program Files`, the user profile root, Navo's own folders) need a typed confirmation.
 - **Links are never followed when deleting or moving.** Symlinks and junctions are removed as links; recursive operations stop at reparse points.
 - **Re-check at execution.** Paths are canonicalised and re-validated just before each step, so a changed folder can't redirect an operation.
 - **Copies are safe:** written to a temporary name, verified (size, `xxh3` or SHA-256; see Copy engine), then renamed. Conflicts follow an explicit policy (ask, skip, rename, overwrite older).
@@ -233,9 +233,9 @@ Reusable components from the first screen (D25). Rule: the app is assembled from
 
 ## Global search
 
-Rusty's own index is the main path (D11, D23); it works like Everything.
+Navo's own index is the main path (D11, D23); it works like Everything.
 
-- **`rusty-indexd`**, a small Windows service, reads each NTFS volume's file table (MFT) at first start and then follows the USN change journal. It saves the last journal position, so a restart only catches up; if the journal wrapped, it rescans.
+- **`navo-indexd`**, a small Windows service, reads each NTFS volume's file table (MFT) at first start and then follows the USN change journal. It saves the last journal position, so a restart only catches up; if the journal wrapped, it rescans.
 - **Memory layout:** one name buffer per volume, a parent index and a few fields (size, change time, attributes) per entry; paths are rebuilt from the parent chain. Budget about 80–100 MB for 2 million entries.
 - **Search:** substring, wildcards and regex, run in parallel over the name buffer (SIMD); `nucleo` ranks fuzzy results in Ctrl+K. Target: under 50 ms on 2 million entries.
 - **Filter syntax:** `ext:jpg`, `size:>10mb`, `dm:today`, `path:proiecte`, quotes and `regex:`; metadata providers (D24) can add their own keys.
@@ -298,9 +298,9 @@ From the Foundation phase, so problems found in testing come with evidence (D20)
 
 | Part | Content |
 | --- | --- |
-| Build and system | Rusty version and commit, Windows version, CPU count, RAM, GPU adapter class, display scale |
+| Build and system | Navo version and commit, Windows version, CPU count, RAM, GPU adapter class, display scale |
 | Configuration | Enabled modules and their versions; settings that differ from the defaults, with paths redacted |
-| Errors | Error kind, Windows error code, the operation and a backtrace of Rusty's own functions |
+| Errors | Error kind, Windows error code, the operation and a backtrace of Navo's own functions |
 | Panics and crashes | Message, thread, backtrace, the last events before the crash |
 | Recent events | The in-memory ring of the last structured events (bounded, about 2 MB) |
 | Memory | Process working set and private bytes, allocator statistics, every cache's size against its budget, task and channel counts per owner |
@@ -310,7 +310,7 @@ From the Foundation phase, so problems found in testing come with evidence (D20)
 
 - Paths are logged only through a `RedactedPath` type. It keeps the shape and drops the names: `C:\<user>\<d:3fa2>\<d:91bc>\<f:07e1>.jpg`, with the drive type (local, network, removable), depth, length class, long-path and non-ASCII flags. Tokens are salted per report, so the same folder gets the same token inside one report and cannot be matched across reports.
 - UNC servers and shares become `\\<server:1>\<share:1>`. User, computer and domain names are replaced.
-- Windows error texts that embed paths are not stored; the error code and Rusty's own message are.
+- Windows error texts that embed paths are not stored; the error code and Navo's own message are.
 - No file contents, clipboard data, search queries, file names typed by the user or credentials, ever.
 - A test runs a session with canary values (a user name, paths, a server name, a search query) and fails if any of them appears in the logs or the report.
 

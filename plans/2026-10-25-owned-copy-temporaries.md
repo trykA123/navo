@@ -45,11 +45,11 @@ Resolve Opus M3. A failed or cancelled retained copy can be retried immediately.
 
 ## Implementation reads
 
-- Core: `crates/rusty-core/src/retention/writing.rs`, `mod.rs`, validation and existing tests.
-- Persistence: `crates/rusty-store/src/journal/held.rs`, retention completion coverage and salvage journal decoding.
-- Providers: `crates/rusty-fs/src/provider/ops.rs`, local copy/identity and fake copy/state implementations.
-- Coordination: `crates/rusty-fs/src/job/{copy,run,pool,parallel,aside}.rs` and retained placement.
-- App: `crates/rusty-app/src/jobs/{overwrite,held,recovery,pending,mod}.rs` and retained-write test fixtures.
+- Core: `crates/navo-core/src/retention/writing.rs`, `mod.rs`, validation and existing tests.
+- Persistence: `crates/navo-store/src/journal/held.rs`, retention completion coverage and salvage journal decoding.
+- Providers: `crates/navo-fs/src/provider/ops.rs`, local copy/identity and fake copy/state implementations.
+- Coordination: `crates/navo-fs/src/job/{copy,run,pool,parallel,aside}.rs` and retained placement.
+- App: `crates/navo-app/src/jobs/{overwrite,held,recovery,pending,mod}.rs` and retained-write test fixtures.
 
 ## Done when
 

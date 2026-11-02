@@ -1,6 +1,6 @@
 # Experimental retention activation boundary
 
-Status: done · Repo: `rusty-beta-opus-fixes` · Branch: `backend/beta-recovery-retention` · Started: 2026-10-26
+Status: done · Repo: `navo-beta-opus-fixes` · Branch: `backend/beta-recovery-retention` · Started: 2026-10-26
 
 ## Goal
 

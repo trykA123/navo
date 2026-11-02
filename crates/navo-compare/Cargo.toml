@@ -1,0 +1,24 @@
+[package]
+name = "navo-compare"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+blake3 = { version = "=1.8.7", features = ["rayon"] }
+fastcdc = "=4.0.1"
+ignore = "=0.4.34"
+image = { version = "=0.25.10", default-features = false }
+image-compare = "=0.5.0"
+imara-diff = "=0.2.0"
+navo-core = { path = "../navo-core" }
+similar = "=3.2.0"
+xxhash-rust = { version = "=0.8.18", features = ["xxh3"] }
+
+[dev-dependencies]
+proptest = "1.12.0"
+tempfile = "=3.27.0"
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 # Rename undo identity checks
 
-Status: done (Linux gate; Windows checks pending) · Repo: `rusty-backend` · Branch: `backend/rename-undo-safety` · Started: 2026-10-23
+Status: done (Linux gate; Windows checks pending) · Repo: `navo-backend` · Branch: `backend/rename-undo-safety` · Started: 2026-10-23
 
 ## Goal
 

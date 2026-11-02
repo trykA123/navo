@@ -1,6 +1,6 @@
 # Navo rename: names, profile migration, index service upgrade
 
-Status: built, waiting for Windows CI and the owner check · Repo: `rusty` · Branch: `feature/navo-rename` (new worktree from `main` e077fb5a) · Started: 2026-10-26
+Status: built, waiting for Windows CI and the owner check · Repo: `navo` · Branch: `feature/navo-rename` (new worktree from `main` e077fb5a) · Started: 2026-10-26
 
 ## Goal
 The product the user sees is Navo (D78): `navo.exe`, the window, the icon, the profile folders, the
@@ -11,7 +11,7 @@ The first Navo start moves them over once, survives a crash at any step, and lea
 1,725 hits in 437 files: crates 1,264 in 366 files (163 are test files), plans 173/36, design 135/10,
 docs 73/15, CHANGELOG 30, `.github` 28/1, scripts 10/2, README 5, xtask 4/4, assets 3/1 (+15 file names).
 
-- **Binary/package:** `crates/rusty-app/Cargo.toml` `[[bin]] name = "ferrite"`; `build.rs` icon path,
+- **Binary/package:** `crates/navo-app/Cargo.toml` `[[bin]] name = "ferrite"`; `build.rs` icon path,
   `ferrite.rc`, version info (FileDescription, InternalName, OriginalFilename, ProductName);
   `cli.rs` USAGE; 11 `ferrite:` prefixes in `main.rs`; `CARGO_BIN_EXE_ferrite` in 4 tests.
   CI: `ferrite.exe/.pdb` staging, `--version` = `ferrite 0.0.1`, artifacts `ferrite-windows-x64-<sha>`,
@@ -38,8 +38,8 @@ docs 73/15, CHANGELOG 30, `.github` 28/1, scripts 10/2, README 5, xtask 4/4, ass
 - **Env vars:** `FERRITE_LOG` (user), `FERRITE_CRASH_TEST` (CI), `FERRITE_COMMIT` (build-internal),
   test-only `FERRITE_EXPECT_PDFIUM`, `_EXFAT_ROOT`, `_FAT32_ROOT`, `_SMB_ROOT`, `_LOCK_TEST_PATH`,
   `_SAMPLE_FONT`, `_BIN_DIR`. `RUSTY_EXE_LIMIT` stays.
-- **Strings:** Fluent 2 (`settings.ftl:41`, `viewer.ftl:13`); about 30 Rust literals in rusty-ui, rusty-app,
-  rusty-core, rusty-store, rusty-fs, rusty-diag, rusty-shell, rusty-index.
+- **Strings:** Fluent 2 (`settings.ftl:41`, `viewer.ftl:13`); about 30 Rust literals in navo-ui, navo-app,
+  navo-core, navo-store, navo-fs, navo-diag, navo-shell, navo-index.
 - **Assets:** `assets/brand/ferrite{,-16,-24,-32,-48,-wordmark}.svg`, `ferrite.ico`, 7 PNG files, `ferrite.desktop`;
   `scripts/build-icons.sh`, `scripts/install-local.sh`.
 - **Codename leaks:** none in Fluent, window, assets or version info. Only the gallery (dev tool),
@@ -77,7 +77,7 @@ docs 73/15, CHANGELOG 30, `.github` 28/1, scripts 10/2, README 5, xtask 4/4, ass
   The folder rename is the last step after the new profile is verified; a crash before it resumes it.
 ### Migration protocol (atoms A4, A5)
 
-Journal `Navo-migration.json` beside the Navo data root, written with `rusty_store::write_atomic`.
+Journal `Navo-migration.json` beside the Navo data root, written with `navo_store::write_atomic`.
 Phases: `detached → staged → committed → retired → done`.
 
 1. **Guard.** Hold the Navo instance lock and `Navo-migration.lock`. Probe the old Ferrite: open
@@ -122,16 +122,16 @@ the walk index (Auto already falls back).
 ## Components
 | Component | Layer | Contract (in → out) | New / change | Test |
 | --- | --- | --- | --- | --- |
-| `brand` | lib (rusty-core) | consts `NAME`, `SLUG`, `LEGACY_NAME`, `LEGACY_SLUG`, temp prefixes | new | `brand/tests.rs` |
-| `temp-names` | lib (rusty-core, rusty-fs) | new prefixes; `is_temp(name)` accepts both | change | `op_plan`, `job/rename` tests |
-| `store-dirs` | adapter (rusty-store) | `resolve` → Navo roots; `legacy()` → Ferrite roots; file-name methods | change | `dirs/tests.rs` |
-| `migration` | service (rusty-app) | `(old, new: StoreDirs, Fs) → Migrated \| Skipped \| Blocked \| Failed` | new | `migration/tests.rs` |
-| `legacy-probe` | adapter (rusty-app) | `old data dir → Running \| Closed` | new | `migration/probe_tests.rs`, Windows CI |
-| `start-order` | app (rusty-app main) | migration between instance and logging; dialogs | change | `main` tests |
-| `instance-names` | adapter (rusty-app) | Navo mutex, pipe, socket names | change | `instance` tests |
-| `index-service` | adapter (rusty-app, rusty-index) | Navo names; legacy detect, upgrade, remove | change | `index_service` tests |
+| `brand` | lib (navo-core) | consts `NAME`, `SLUG`, `LEGACY_NAME`, `LEGACY_SLUG`, temp prefixes | new | `brand/tests.rs` |
+| `temp-names` | lib (navo-core, navo-fs) | new prefixes; `is_temp(name)` accepts both | change | `op_plan`, `job/rename` tests |
+| `store-dirs` | adapter (navo-store) | `resolve` → Navo roots; `legacy()` → Ferrite roots; file-name methods | change | `dirs/tests.rs` |
+| `migration` | service (navo-app) | `(old, new: StoreDirs, Fs) → Migrated \| Skipped \| Blocked \| Failed` | new | `migration/tests.rs` |
+| `legacy-probe` | adapter (navo-app) | `old data dir → Running \| Closed` | new | `migration/probe_tests.rs`, Windows CI |
+| `start-order` | app (navo-app main) | migration between instance and logging; dialogs | change | `main` tests |
+| `instance-names` | adapter (navo-app) | Navo mutex, pipe, socket names | change | `instance` tests |
+| `index-service` | adapter (navo-app, navo-index) | Navo names; legacy detect, upgrade, remove | change | `index_service` tests |
 | `env-bin` | app | `navo` bin, version info, `NAVO_*` vars with D11 fallback | change | `cli`, `logging` tests |
-| `legacy-values` | adapter (rusty-store, rusty-ui) | theme and keymap context aliases | change | settings, keymap tests |
+| `legacy-values` | adapter (navo-store, navo-ui) | theme and keymap context aliases | change | settings, keymap tests |
 | `ui-strings` | ui | every user-visible "Ferrite" → "Navo" | change | snapshots, l10n ratchet |
 | `brand-assets` | assets | `n_` variant A SVGs, hand-hinted 16 px PNG, `navo.ico`, `navo.desktop` | new | `build-icons.sh` output |
 | `ci-scripts` | ops | workflow, scripts, xtask perf, test env vars | change | CI run |
@@ -143,38 +143,38 @@ Mechanical word swaps (A11, A12, A14, A15) may touch more than 3 files; each edi
 
 | Atom | Component | Role | Effort | After | Check | Status | Cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A1 | `brand`, `temp-names` (core) | patcher | medium | — | `cargo xtask check -p rusty-core` | done | |
-| A2 | `temp-names` (fs) | patcher | medium | A1 | `cargo xtask check -p rusty-fs` | done | |
-| A3 | `store-dirs` | api-builder | medium | A1 | `cargo xtask check -p rusty-store` | done | |
-| A4 | `migration` | senior (Opus) | medium | A3 | `cargo xtask check -p rusty-app` | done | |
-| A5 | `legacy-probe`, `start-order` | senior (Opus) | medium | A4, A6 | `cargo xtask check -p rusty-app` + Windows CI | done | |
-| A6 | `instance-names` | patcher | medium | A1 | `cargo xtask check -p rusty-app` | done | |
-| A7 | `index-service` names | patcher | medium | A1 | `cargo xtask check -p rusty-app -p rusty-index` | done | |
-| A8 | `index-service` upgrade | senior (Opus) | medium | A7 | `cargo xtask check -p rusty-app` + Windows CI | done | |
-| A9 | `env-bin` | patcher | medium | A1 | `cargo xtask check -p rusty-app` | done | |
-| A10 | `legacy-values` | api-builder | medium | A3, `ui/navo-themes` merged | `cargo xtask check -p rusty-store -p rusty-ui` | done | |
-| A11 | `ui-strings` (rusty-ui) | ui-builder | medium | A10 | `cargo xtask check -p rusty-ui` | done | |
-| A12 | `ui-strings` (other crates, Fluent) | patcher | medium | A9 | `cargo xtask check -p rusty-app -p rusty-core -p rusty-store -p rusty-fs -p rusty-diag -p rusty-shell -p rusty-index -p rusty-l10n` | done | |
+| A1 | `brand`, `temp-names` (core) | patcher | medium | — | `cargo xtask check -p navo-core` | done | |
+| A2 | `temp-names` (fs) | patcher | medium | A1 | `cargo xtask check -p navo-fs` | done | |
+| A3 | `store-dirs` | api-builder | medium | A1 | `cargo xtask check -p navo-store` | done | |
+| A4 | `migration` | senior (Opus) | medium | A3 | `cargo xtask check -p navo-app` | done | |
+| A5 | `legacy-probe`, `start-order` | senior (Opus) | medium | A4, A6 | `cargo xtask check -p navo-app` + Windows CI | done | |
+| A6 | `instance-names` | patcher | medium | A1 | `cargo xtask check -p navo-app` | done | |
+| A7 | `index-service` names | patcher | medium | A1 | `cargo xtask check -p navo-app -p navo-index` | done | |
+| A8 | `index-service` upgrade | senior (Opus) | medium | A7 | `cargo xtask check -p navo-app` + Windows CI | done | |
+| A9 | `env-bin` | patcher | medium | A1 | `cargo xtask check -p navo-app` | done | |
+| A10 | `legacy-values` | api-builder | medium | A3, `ui/navo-themes` merged | `cargo xtask check -p navo-store -p navo-ui` | done | |
+| A11 | `ui-strings` (navo-ui) | ui-builder | medium | A10 | `cargo xtask check -p navo-ui` | done | |
+| A12 | `ui-strings` (other crates, Fluent) | patcher | medium | A9 | `cargo xtask check -p navo-app -p navo-core -p navo-store -p navo-fs -p navo-diag -p navo-shell -p navo-index -p navo-l10n` | done | |
 | A13 | `brand-assets` | ui-builder | medium | `ui/navo-splash` merged | `scripts/build-icons.sh` | done | |
 | A14 | `ci-scripts` | patcher | medium | A9, A13 | `cargo xtask gate` (once, by orchestrator) | done | |
 | A15 | `docs` | patcher | medium | A1–A14 | grep below | done | |
 ### A1 — Brand constants and core temp names
-- **Read:** `rusty-core/src/lib.rs`, `op_plan/mod.rs:1-30`, `op_plan/names.rs`, `rename/order.rs:180-200`.
-- **Change:** new `rusty-core/src/brand.rs` (D2 names, legacy names, `TEMP_SUFFIX = ".navo-part"`,
+- **Read:** `navo-core/src/lib.rs`, `op_plan/mod.rs:1-30`, `op_plan/names.rs`, `rename/order.rs:180-200`.
+- **Change:** new `navo-core/src/brand.rs` (D2 names, legacy names, `TEMP_SUFFIX = ".navo-part"`,
   `LEGACY_TEMP_SUFFIX`, rename prefix and legacy prefix); `order.rs` uses the new prefix.
 - **Check:** crate check passes; a test proves both prefixes are recognised.
-- **Stop if:** a temp name is matched by prefix outside `rusty-core` and `rusty-fs`.
+- **Stop if:** a temp name is matched by prefix outside `navo-core` and `navo-fs`.
 ### A2 — fs temp names
-- **Read:** `rusty-fs/src/job/aside.rs`, `job/rename.rs:1-40`, `local/link/windows.rs:30-45`.
+- **Read:** `navo-fs/src/job/aside.rs`, `job/rename.rs:1-40`, `local/link/windows.rs:30-45`.
 - **Change:** write `.navo-held-`, `.navo-rename-`, `.navo-link-`; `rename.rs:32` accepts both prefixes. **Check:** crate check; a test renames over a leftover `.ferrite-rename-*` and treats it as temp.
 ### A3 — Store dirs
-- **Read:** `rusty-store/src/dirs/mod.rs`, `dirs/tests.rs`.
+- **Read:** `navo-store/src/dirs/mod.rs`, `dirs/tests.rs`.
 - **Change:** D2 roots; `legacy(windows, var)` returning Ferrite roots; methods `settings_file`
   (`navo.toml`), `journal_file`, `lock_file`, `legacy_settings_file`, `legacy_journal_file`.
 - **Check:** tests for Windows and XDG resolution, new and legacy, empty variables.
 ### A4 — Migration engine (senior)
-- **Read:** this plan's protocol, `rusty-store/src/atomic_write/mod.rs`, `dirs/mod.rs`, `profile/mod.rs`.
-- **Change:** `rusty-app/src/migration/{mod.rs,journal.rs,tests.rs}`; the file system behind a trait so
+- **Read:** this plan's protocol, `navo-store/src/atomic_write/mod.rs`, `dirs/mod.rs`, `profile/mod.rs`.
+- **Change:** `navo-app/src/migration/{mod.rs,journal.rs,tests.rs}`; the file system behind a trait so
   tests inject faults. Hidden exit hook `NAVO_MIGRATION_TEST_EXIT=<phase>`, honoured only with `NAVO_CRASH_TEST=1`.
 - **Check:** tests prove: fault at every copy, flush, rename and journal write; crash between each two
   writes then resume to one profile; rollback before commit restores the old files byte for byte;
@@ -190,7 +190,7 @@ Mechanical word swaps (A11, A12, A14, A15) may touch more than 3 files; each edi
 - **Read:** `instance/{windows.rs,unix.rs,runtime.rs,server.rs}`, `instance/windows_tests.rs:50-60`.
 - **Change:** `Navo-` mutex and pipe, `navo-{uid}`, `navo-{hash}`, thread names. **Check:** crate check; tests assert the new names.
 ### A7 — Index service names
-- **Read:** `scm/windows.rs:20`, `install_plan.rs:10-20,165-175,265-275`, `config.rs:65-75`, `rusty-index/src/pipe/mod.rs:21`.
+- **Read:** `scm/windows.rs:20`, `install_plan.rs:10-20,165-175,265-275`, `config.rs:65-75`, `navo-index/src/pipe/mod.rs:21`.
 - **Change:** D2 names; `ferrite.exe.` nonce pattern becomes `navo.exe.`. Magic unchanged (D3). **Check:** crate checks; install-plan tests assert Navo paths.
 ### A8 — Index service upgrade (senior)
 - **Read:** `installation/windows.rs`, `installation/configuration.rs`, `install_plan.rs`, `storage/windows.rs`, `search_hooks/service.rs`.
@@ -199,15 +199,15 @@ Mechanical word swaps (A11, A12, A14, A15) may touch more than 3 files; each edi
 - **Check:** `install_rollback_tests.rs`/`reliability_tests.rs` gain cases: old present, crash after new
   install, old delete fails, both removed. Windows CI passes.
 ### A9 — Binary, CLI, env
-- **Read:** `rusty-app/Cargo.toml`, `build.rs`, `cli.rs:20-30`, `main.rs`, `logging/mod.rs:1-80`, 4 `env!("FERRITE_COMMIT")` sites.
+- **Read:** `navo-app/Cargo.toml`, `build.rs`, `cli.rs:20-30`, `main.rs`, `logging/mod.rs:1-80`, 4 `env!("FERRITE_COMMIT")` sites.
 - **Change:** `[[bin]] name = "navo"`, version info `Navo`/`navo.exe`, `navo:` prefixes (icon path moves in A13),
   `NAVO_COMMIT`, `NAVO_CRASH_TEST`, D11 log fallback, tests use `CARGO_BIN_EXE_navo`.
 - **Check:** crate check; `navo --version` prints `navo 0.0.1`; log fallback test.
 ### A10 — Legacy setting values
-- **Read:** `settings/model.rs:40-50`, `settings/snapshots/default_settings.snap`, `keymap_file/patch.rs`, `rusty-ui/src/window_view/keys.rs:6`, `ui/settings/values.rs:95-100`.
+- **Read:** `settings/model.rs:40-50`, `settings/snapshots/default_settings.snap`, `keymap_file/patch.rs`, `navo-ui/src/window_view/keys.rs:6`, `ui/settings/values.rs:95-100`.
 - **Change:** D12 aliases on read; context string `NavoPane`; snapshots updated. **Check:** tests: old theme value loads the new default and saves the new name; old keymap context binds.
-### A11 — rusty-ui strings
-- title, `app_id`, About, menu label, context header, crash title, viewer and settings messages, preview font family. **Check:** crate check; `git grep -n '"[^"]*Ferrite' crates/rusty-ui/src` lists only test fixtures and A10 aliases.
+### A11 — navo-ui strings
+- title, `app_id`, About, menu label, context header, crash title, viewer and settings messages, preview font family. **Check:** crate check; `git grep -n '"[^"]*Ferrite' crates/navo-ui/src` lists only test fixtures and A10 aliases.
 ### A12 — Other strings and Fluent
 - literals listed in the inventory; 2 Fluent strings; crash zip and metrics prefixes; window classes; diag summary. **Check:** crate checks; the same grep over those crates lists only legacy constants and D3 markers.
 ### A13 — Brand assets
@@ -253,7 +253,7 @@ A1 → (A2, A3, A6, A7, A9 in parallel) → A4 → A5; A7 → A8; A10 after `ui/
 
 ## Log
 - 2026-10-26 — Plan drafted from the inventory at e077fb5a.
-- 2026-10-26 — A1 done: `rusty-core::brand` (names, temp prefixes, `is_part_name`, `is_rename_temp`); `TEMP_SUFFIX` now `.navo-part`, rename temps `.navo-rename-`.
+- 2026-10-26 — A1 done: `navo-core::brand` (names, temp prefixes, `is_part_name`, `is_rename_temp`); `TEMP_SUFFIX` now `.navo-part`, rename temps `.navo-rename-`.
 - 2026-10-26 — `ui/navo-splash`: native Win32 splash (D79) on its own thread, timing core tested; masks from `scripts/build-splash.sh` in `assets/brand/splash`. A13 can start after it merges.
 - 2026-10-26 — A7 done: service `Navo Index`, pipe `navo-index`, `%ProgramFiles%\Navo\Index\navo.exe` with `navo.exe.<nonce>` temporaries, `%ProgramData%\Navo\index`; index magic unchanged.
 - 2026-10-26 — A8 done: `install` carries the Ferrite `service.json`, installs Navo Index, waits up to 30 s for `navo-index`, then removes Ferrite Index and its trusted folders; a crash or failed delete keeps the old one detected for the next install. `remove` handles both names. Status has `legacy_present`; a quiet notice offers Upgrade until dismissed (marker `index-upgrade-dismissed` in the data root). Windows CI must still compile the SCM glue.

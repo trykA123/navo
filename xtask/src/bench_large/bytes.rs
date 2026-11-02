@@ -4,7 +4,7 @@ use std::path::Path;
 
 use blake3::Hasher;
 use fastcdc::v2020::StreamCDC;
-use rusty_core::paging::ByteSource;
+use navo_core::paging::ByteSource;
 use similar::utils::diff_slices;
 use similar::{Algorithm, ChangeTag};
 
@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn offset_merges_runs_closer_than_sixteen_bytes() {
-        let root = std::env::temp_dir().join("rusty-bench-large-offset-test");
+        let root = std::env::temp_dir().join("navo-bench-large-offset-test");
         let old = root.join("old");
         let new = root.join("new");
         std::fs::create_dir_all(&root).unwrap();

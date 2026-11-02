@@ -67,7 +67,7 @@ The `[search]` section has these keys:
 - No network, no telemetry. Queries are never logged.
 - The key keeps its old name internally. The label is now "Command center".
 - On NTFS, a Windows service called Navo Index keeps the file list current. You install it with one click and one admin prompt. Only you and administrators can talk to it.
-- A Ferrite Index service from an older version is upgraded to Navo Index. A one-time notice offers an Upgrade button.
+- A Navo Index service from an older version is upgraded to Navo Index. A one-time notice offers an Upgrade button.
 - Elsewhere (network drives, non-NTFS, Linux), Navo walks the folders instead.
 - Size and date sorting, and the `size:`, `dm:` and `regex:` filters, come after the alpha.
 - Targets: commands in under 5 ms, first file results in under 50 ms on 1 million entries, file changes visible within 2 s.

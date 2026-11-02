@@ -49,4 +49,4 @@ A bounded worker pass purges eligible versions in policy order, verifies every p
 
 - 2026-10-25 — Final `cargo xtask gate` passed all 10 steps in 183.3 seconds: 7,240 tests passed, 14 skipped, plus documentation tests. The native temporary-tree maintenance test verified expired-payload removal while preserving new user bytes. Read-only Sol 6.1 xhigh review has no remaining concrete findings. Final log: a local verification log. Periodic scheduling, terminal metadata pruning, Recently deleted and native Windows runtime checks remain explicit. The next task is the owner's Opus review, not another feature stage.
 
-- 2026-10-25 — Final binary build passed with `cargo build -p rusty-app --bin ferrite` (29.27 seconds).
+- 2026-10-25 — Final binary build passed with `cargo build -p navo-app --bin navo` (29.27 seconds).

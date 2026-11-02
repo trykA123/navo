@@ -52,22 +52,22 @@ Quality: intended target's 1-based rank over all 2M paths; deterministic input-o
 
 | Kind | Query | Intended target | nucleo | frizbee | frizbee+typos |
 |---|---|---|---:|---:|---:|
-| abbreviation | `fbr` | `/projects/Ferrite/docs/fuzzy_bench_report.md` | 1 | 1 | 1 |
-| substitution | `fuzzy_bench_reporx` | `/projects/Ferrite/docs/fuzzy_bench_report.md` | not in top 100 | not in top 100 | 1 |
-| substitution | `cargp.toml` | `/projects/Ferrite/Cargo.toml` | not in top 100 | not in top 100 | 1 |
+| abbreviation | `fbr` | `/projects/Navo/docs/fuzzy_bench_report.md` | 1 | 1 | 1 |
+| substitution | `fuzzy_bench_reporx` | `/projects/Navo/docs/fuzzy_bench_report.md` | not in top 100 | not in top 100 | 1 |
+| substitution | `cargp.toml` | `/projects/Navo/Cargo.toml` | not in top 100 | not in top 100 | 1 |
 | numbers | `rpt2026` | `D:/Documents/Reports/Annual_Report_2026.docx` | 4 | 4 | 4 |
-| path fragment | `src/main` | `/projects/Ferrite/src/main.rs` | not in top 100 | not in top 100 | not in top 100 |
-| camel case | `RI` | `/projects/Ferrite/src/RustyIndex.rs` | 1 | 1 | 1 |
-| camel case | `FDlg` | `/projects/Ferrite/ui/FileDialog.rs` | not in top 100 | not in top 100 | not in top 100 |
-| dashes | `fuzzy-bench/cargo` | `/projects/Ferrite/spikes/fuzzy-bench/Cargo.toml` | 1 | 1 | 1 |
+| path fragment | `src/main` | `/projects/Navo/src/main.rs` | not in top 100 | not in top 100 | not in top 100 |
+| camel case | `RI` | `/projects/Navo/src/NavoIndex.rs` | 1 | 1 | 1 |
+| camel case | `FDlg` | `/projects/Navo/ui/FileDialog.rs` | not in top 100 | not in top 100 | not in top 100 |
+| dashes | `fuzzy-bench/cargo` | `/projects/Navo/spikes/fuzzy-bench/Cargo.toml` | 1 | 1 | 1 |
 | snake case | `appcfg` | `/projects/Atlas/config/app_config.toml` | not in top 100 | not in top 100 | not in top 100 |
 | transposition | `downlaodtask` | `/projects/Atlas/src/DownloadTaskHandler.rs` | not in top 100 | not in top 100 | not in top 100 |
 | path fragment | `img/hero` | `/projects/Website/img/hero-banner.png` | 1 | 1 | 1 |
 | spaces | `launchplan` | `D:/Documents/Product Launch Plan.docx` | 1 | 1 | 1 |
 | path fragment | `db/mig` | `/projects/Atlas/db/migrations/2026-10-01-init.sql` | 1 | 1 | 1 |
 | path abbreviation | `jellycomp` | `/srv/jellyfin/docker-compose.yml` | 1 | 1 | 1 |
-| snake case | `testparse` | `/projects/Ferrite/tests/parser_cases.rs` | 1 | not in top 100 | not in top 100 |
-| extra character | `readmme` | `/projects/Ferrite/README.md` | not in top 100 | not in top 100 | not in top 100 |
+| snake case | `testparse` | `/projects/Navo/tests/parser_cases.rs` | 1 | not in top 100 | not in top 100 |
+| extra character | `readmme` | `/projects/Navo/README.md` | not in top 100 | not in top 100 | not in top 100 |
 | abbreviation | `tascfg` | `/projects/Atlas/tsconfig.json` | not in top 100 | not in top 100 | not in top 100 |
 | Unicode Latin | `résumé` | `D:/Documents/résumé_2026.docx` | not in top 100 | not in top 100 | not in top 100 |
 | Unicode CJK | `東京` | `/media/Photos/東京-trip-2026.png` | 1 | 1 | 1 |

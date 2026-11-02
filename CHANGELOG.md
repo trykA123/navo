@@ -28,7 +28,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### New
 
-- You can drag files from Ferrite into Explorer and other apps, and from them into Ferrite.
+- You can drag files from Navo into Explorer and other apps, and from them into Navo.
 - Drop with the right mouse button to choose copy, move or shortcut.
 - The file list scrolls by itself when you drag near its top or bottom edge.
 - Folders, tabs and drives open when you hold a drag over them.
@@ -70,7 +70,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### Known problems
 
-- Dragging files from Ferrite into other apps (VS Code, Explorer) does not work yet. It comes next.
+- Dragging files from Navo into other apps (VS Code, Explorer) does not work yet. It comes next.
 
 ## alpha-2026-10-21c — 2026-10-21
 
@@ -133,7 +133,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - Multi-rename finds and replaces text, changes case and adds a counter.
 - The preview shows old and new names. A clash shows "Already exists", also for hidden files.
 - Press Del to leave a row out of the rename.
-- Enter renames exactly what the preview shows. If the folder changed, Ferrite checks again first.
+- Enter renames exactly what the preview shows. If the folder changed, Navo checks again first.
 - Ctrl+S saves a set of rules as a preset. Ctrl+O opens the preset list.
 - Multi-rename remembers the last pattern you used.
 - Rich ELF view: in Rich mode (View menu, Alt+V), memory regions show their usage, an address strip and a treemap of flash use.
@@ -158,7 +158,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 ### Built but not switched on yet
 
 - Multi-rename: the undo journal keeps each batch, also after a restart. Ctrl+Z to undo a batch comes next.
-- Drag and drop with Explorer: Ferrite can take files dropped from Explorer. It can drag files out to Explorer. Explorer never deletes what Ferrite moves. The file list does not use this yet.
+- Drag and drop with Explorer: Navo can take files dropped from Explorer. It can drag files out to Explorer. Explorer never deletes what Navo moves. The file list does not use this yet.
 - File index: each drive's index saves its file ids. After a restart it only catches up on changes. The index service comes next.
 
 ## alpha-2026-10-21a — 2026-10-21
@@ -179,7 +179,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### Fixed
 
-- Drag and drop: if the list changes during a drag, Ferrite refuses the drop. It says "The list changed during the drag. Nothing was moved." Before, a drop could move a different file or go into another folder.
+- Drag and drop: if the list changes during a drag, Navo refuses the drop. It says "The list changed during the drag. Nothing was moved." Before, a drop could move a different file or go into another folder.
 - Drag and drop: on Windows, the badge treats upper and lower case as the same, as the copy does.
 - Ctrl+K: key hints no longer sit under the scrollbar. Hints show Ctrl+V and Alt+Left.
 - A security update to a network library.
@@ -188,7 +188,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 - Multi-rename: the pattern, find and replace and case fields, and the preview table with its summary are in. The window that holds them comes next.
 - Rich ELF and MAP view: used flash now counts initialised data copies. TASKING ROM copies count once, under their module. A chip mapped twice gets numbered names. The screens come next.
-- File index: on Windows, Ferrite reads NTFS volumes and their change journal directly. This needs admin. A folder keeps its contents when it is renamed between two journal reads. It is not connected to Ctrl+K yet.
+- File index: on Windows, Navo reads NTFS volumes and their change journal directly. This needs admin. A folder keeps its contents when it is renamed between two journal reads. It is not connected to Ctrl+K yet.
 
 ## alpha-2026-10-20r — 2026-10-20
 
@@ -334,7 +334,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 ### Fixed
 
 - TASKING linker maps with long, wrapped names parse cleanly.
-- A newer session file is never overwritten by an older Ferrite.
+- A newer session file is never overwritten by an older Navo.
 - The database is checked after a crash.
 
 ## alpha-2026-10-20g — 2026-10-20
@@ -450,10 +450,10 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### New
 
-- Crash report: if Ferrite crashes, it keeps a redacted crash record. The record holds no user names, paths or server names.
-- At the next start, a notice says "Ferrite closed unexpectedly last time." It has Save report and Dismiss. Esc dismisses it.
+- Crash report: if Navo crashes, it keeps a redacted crash record. The record holds no user names, paths or server names.
+- At the next start, a notice says "Navo closed unexpectedly last time." It has Save report and Dismiss. Esc dismisses it.
 - Ctrl+Shift+R moves focus to the notice.
-- Save report writes a zip file whose name starts with ferrite-report- into Downloads, and opens a tab on it. Nothing is sent anywhere.
+- Save report writes a zip file whose name starts with navo-report- into Downloads, and opens a tab on it. Nothing is sent anywhere.
 - A hard kill or power loss also counts as an unclean exit. The notice shows even without a crash record.
 - The notice shows once per crash.
 
@@ -473,12 +473,12 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### New
 
-- Only one Ferrite runs per profile. Starting Ferrite again brings the running window to the front.
-- `ferrite <path>` opens a folder in a new tab in the active pane. It opens a file in a tab on its folder, with the cursor on the file.
-- A missing path shows a "was not found" message. Ferrite then starts as usual.
-- With Ferrite already running, the path opens in the running window.
-- If the running Ferrite does not answer within 2 s, the second start prints "ferrite: the running Ferrite did not answer" and exits.
-- Runs with --profile or --metrics stay separate from your normal Ferrite.
+- Only one Navo runs per profile. Starting Navo again brings the running window to the front.
+- `navo <path>` opens a folder in a new tab in the active pane. It opens a file in a tab on its folder, with the cursor on the file.
+- A missing path shows a "was not found" message. Navo then starts as usual.
+- With Navo already running, the path opens in the running window.
+- If the running Navo does not answer within 2 s, the second start prints "navo: the running Navo did not answer" and exits.
+- Runs with --profile or --metrics stay separate from your normal Navo.
 
 ## alpha-2026-10-19a — 2026-10-19
 
@@ -499,7 +499,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 ### New
 
 - Delete and Recycle dialogs: Enter and Space press the focused button. This also works after Tab moves the focus.
-- ferrite.toml is safer to edit while Ferrite runs. If you delete the file and then save from the settings sheet, Ferrite writes a complete new file.
+- navo.toml is safer to edit while Navo runs. If you delete the file and then save from the settings sheet, Navo writes a complete new file.
 - An interrupted write is recovered at the next start.
 - A hand edit to a setting is never overwritten by a retry.
 - New command-line option `--left <folder>` and `--right <folder>` open the panes in that folder. A missing folder is refused with a message.
@@ -508,7 +508,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### Fixed
 
-- Comments at the end of ferrite.toml stay under their own section. This fixes the known issue in the previous build.
+- Comments at the end of navo.toml stay under their own section. This fixes the known issue in the previous build.
 
 ## alpha-2026-10-17c — 2026-10-17
 
@@ -516,30 +516,30 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 - Shortcuts page in Settings (Ctrl+, then Shortcuts). Search by name or key. Press Enter to record a new key. Conflicts show before you save, including across nested areas, such as F10. Ctrl+R resets a row. Your comments in keymap.toml stay.
 - Your own keys always win over built-in keys in the same place.
-- ferrite.toml lists every setting. Missing settings are added at start with their default. Values you set never change. Defaults you never touched follow future versions.
-- ferrite.toml reloads live when you edit it by hand. A mistake shows its line and column. The last good settings keep working.
+- navo.toml lists every setting. Missing settings are added at start with their default. Values you set never change. Defaults you never touched follow future versions.
+- navo.toml reloads live when you edit it by hand. A mistake shows its line and column. The last good settings keep working.
 - Preview on a folder stays live while files change inside it. Totals update a few times per second. "Counted at" shows when they were counted. Ctrl+R recounts.
 - F3 on a folder opens the preview. Esc closes it.
 
 ### Known problems
 
-- When Ferrite adds a missing section to ferrite.toml, comments at the very end can move under the new section. A backup copy of the file from before the session is kept next to it. The fix comes in the next build.
+- When Navo adds a missing section to navo.toml, comments at the very end can move under the new section. A backup copy of the file from before the session is kept next to it. The fix comes in the next build.
 
 ## alpha-2026-10-17b — 2026-10-17
 
 ### New
 
-- Your own shortcuts: put a keymap.toml next to ferrite.toml, with only the keys you change. It applies when you save, with no restart.
+- Your own shortcuts: put a keymap.toml next to navo.toml, with only the keys you change. It applies when you save, with no restart.
 - `keys = []` removes a shortcut.
 - A key that another command uses moves to your command. The status line says which command lost it.
-- A mistake in keymap.toml shows in the status line, with its line number. The working shortcuts keep working. Ferrite never rewrites the file.
+- A mistake in keymap.toml shows in the status line, with its line number. The working shortcuts keep working. Navo never rewrites the file.
 - The "Delete for good" warning on the F-key bar follows whatever key you give to delete.
 
 ## alpha-2026-10-17a — 2026-10-17
 
 ### New
 
-- Settings sheet (Ctrl+,): each setting applies at once, or says it is not applied yet. Undo is available. F3 jumps to the matching line in ferrite.toml.
+- Settings sheet (Ctrl+,): each setting applies at once, or says it is not applied yet. Undo is available. F3 jumps to the matching line in navo.toml.
 - Saves keep your comments, line endings and unknown keys. A failed save never loses your changes.
 - A network share stops answering: the tab shows Offline and keeps its cached rows. It retries on its own. Ctrl+R retries at once.
 - A copy or rename elsewhere no longer wipes an offline tab.
@@ -562,7 +562,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### Fixed
 
-- The Windows menu refuses names that Windows would rewrite: a trailing dot or space, or a device name such as NUL. A Windows action can then never hit another file. Ferrite's own actions still work there.
+- The Windows menu refuses names that Windows would rewrite: a trailing dot or space, or a device name such as NUL. A Windows action can then never hit another file. Navo's own actions still work there.
 - Quick right-clicks no longer queue Windows menu work.
 - Copy value on a huge JSON array stays fast.
 
@@ -634,9 +634,9 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 ### New
 
 - Context menu: hold the right button on a file for about 0.4 s. You can also press the Menu key or Shift+F10.
-- Ferrite's own actions come first, then the Windows items, such as Open with, 7-Zip and Send to. Type to filter the menu.
+- Navo's own actions come first, then the Windows items, such as Open with, 7-Zip and Send to. Type to filter the menu.
 - The context menu opens in one piece, with a short motion. A long press on an unmarked file marks it first.
-- The app menu opens with F10 or the "Ferrite ▾" button. It has Theme, Density and Hidden files tiles. They apply at once and are saved.
+- The app menu opens with F10 or the "Navo ▾" button. It has Theme, Density and Hidden files tiles. They apply at once and are saved.
 - Tabs: Ctrl+Tab and Ctrl+Shift+Tab, or Ctrl+PageDown and Ctrl+PageUp. Ctrl+1 to Ctrl+8 pick a tab. Ctrl+9 picks the last tab. Ctrl+W closes a tab.
 - Panes return to the middle when you double-click the gap between them, or press Ctrl+Shift+0.
 - The F-key bar is more compact, with full labels. F10 is now Menu.
@@ -660,7 +660,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 ### New
 
 - New look: the two panes are cards on a Mica background. The active pane has an accent ring.
-- The app button reads "Ferrite ▾". The search box is centred. One drive pill has a dropdown.
+- The app button reads "Navo ▾". The search box is centred. One drive pill has a dropdown.
 - "+" or Ctrl+T opens a new tab.
 - The F-key bar uses keycaps. Holding Shift, Ctrl or Alt lights that key and shows its layer.
 - Faster folders: the native Windows listing loads folders quickly. Folders you visited come back at once, so Back is instant. They refresh in the background.
@@ -707,14 +707,14 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - Search shows "3 of 1,248". Find All lists every hit. The scrollbar shows where the hits are.
 - Colour marks (Ctrl+1 to Ctrl+8) and bookmarks.
 - Follow for growing log files.
-- Marks, bookmarks and search history are remembered after you close Ferrite.
+- Marks, bookmarks and search history are remembered after you close Navo.
 - Hostile files, such as huge or deeply nested images, show a message instead of freezing or crashing.
 
 ## alpha-2026-10-15e — 2026-10-15
 
 ### New
 
-- Text files open in their real encoding. Ferrite checks the byte order mark, then an XML or HTML declaration, then UTF-8, then guesses, then uses the Windows ANSI code page.
+- Text files open in their real encoding. Navo checks the byte order mark, then an XML or HTML declaration, then UTF-8, then guesses, then uses the Windows ANSI code page.
 - UTF-16 files, big-endian or little-endian, with or without a byte order mark, open as text.
 - Windows-1252 and other code pages show their accents.
 - The encoding shows in the viewer header.

@@ -1,6 +1,6 @@
 # Alpha fixes from Opus review
 
-Status: done on Linux; native Windows checks pending · Repo: `rusty-alpha-opus-fixes` · Branch: `backend/alpha-opus-fixes` · Base: `e3fbd8a5` · Started: 2026-10-25
+Status: done on Linux; native Windows checks pending · Repo: `navo-alpha-opus-fixes` · Branch: `backend/alpha-opus-fixes` · Base: `e3fbd8a5` · Started: 2026-10-25
 
 ## Goal
 

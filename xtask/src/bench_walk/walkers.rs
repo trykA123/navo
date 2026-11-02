@@ -9,8 +9,8 @@ use std::{
     time::Instant,
 };
 
-use rusty_fs::{CancelToken, LocalFs};
-use rusty_index::walker::{self, Limits, Outcome};
+use navo_fs::{CancelToken, LocalFs};
+use navo_index::walker::{self, Limits, Outcome};
 
 use super::{Options, Target, fixture, location, markdown, samples};
 

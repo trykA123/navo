@@ -29,9 +29,9 @@ Enter activates the focused button in the real delete dialog. Cancelling keeps e
 
 ### R1 — Reproduce Enter on each delete-dialog button
 
-- **Read:** `docs/bugs.md`; `confirm_dialog/`, `prompt_dialog/`, `dialog_focus.rs`, `commands/bind.rs`, and the window tests under `crates/rusty-ui/src/`.
+- **Read:** `docs/bugs.md`; `confirm_dialog/`, `prompt_dialog/`, `dialog_focus.rs`, `commands/bind.rs`, and the window tests under `crates/navo-ui/src/`.
 - **Change:** regression tests only; exercise the production binding setup and use the existing fake filesystem.
-- **Check:** targeted `cargo nextest run -p rusty-ui` filters; record exact failures and logs outside the repository.
+- **Check:** targeted `cargo nextest run -p navo-ui` filters; record exact failures and logs outside the repository.
 - **Stop if:** the report cannot be reproduced, production code needs editing, or a missing decision changes keyboard behaviour.
 
 ### G1 — Fix the proven cause

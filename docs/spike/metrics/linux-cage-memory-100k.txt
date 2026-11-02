@@ -23,7 +23,7 @@ Swap:                  0 kB
 SwapPss:               0 kB
 Locked:                0 kB
 == top mappings by Rss (kB)
-25880 <targets>/rusty-spike/release/gpui-b
+25880 <targets>/navo-spike/release/gpui-b
 15476 /usr/lib/libLLVM.so.23.1
 15272 [heap]
 8328 /usr/lib/libgallium-26.2.4-arch3.1.so
