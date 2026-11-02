@@ -4,8 +4,8 @@
     reason = "memory budget tests fail on broken fixtures and print the measured numbers"
 )]
 
-use super::NtfsIndex;
 use super::test_support::MftFixture;
+use super::{COMPACT_MIN_SLOTS, NtfsIndex};
 use crate::file::{self, Header};
 use crate::heap_probe::{MIB, Measured, Probe};
 use crate::table::{Flags, NO_PARENT, NameTable};
@@ -125,4 +125,99 @@ fn loading_holds_only_the_loaded_index() {
     let index_bytes = held(index, &probe);
     report("load", ENTRIES, measured, index_bytes);
     assert!(measured.peak <= index_bytes + ENTRIES as usize * LOAD_CHECK_BUDGET);
+}
+
+const LIVE_SET: u32 = 50_000;
+const CHURN_OPS: u32 = 500_000;
+const CHURN_BATCH: u32 = 5_000;
+const CHURN_WAVES: u32 = 3;
+const CHURN_ROOT: u128 = (5 << 48) | 5;
+
+fn churn_record(file_id: u128, reason: u32, name: &str) -> crate::usn::UsnRecord {
+    crate::usn::UsnRecord {
+        file_id,
+        parent_id: CHURN_ROOT,
+        usn: 100,
+        reason,
+        flags: Flags::NONE,
+        name: name.into(),
+        size: Some(7),
+    }
+}
+
+fn churn_batch(index: &NtfsIndex, records: Vec<crate::usn::UsnRecord>) -> crate::usn::UsnBatch {
+    crate::usn::UsnBatch {
+        next_usn: index.position.next_usn + 1,
+        records,
+    }
+}
+
+/// Creates, then deletes, `CHURN_BATCH` files per round through `apply_batch`, so the live set never grows.
+fn churn(index: &mut NtfsIndex, operations: u32, wave: u32) {
+    let mut next = 1_000_000_000u128 * u128::from(wave + 1);
+    for _ in 0..operations / (2 * CHURN_BATCH) {
+        let first = next;
+        let created = (0..CHURN_BATCH)
+            .map(|n| {
+                churn_record(
+                    first + u128::from(n),
+                    0x100,
+                    &format!("tmp-{}.txt", first + u128::from(n)),
+                )
+            })
+            .collect();
+        next += u128::from(CHURN_BATCH);
+        let batch = churn_batch(index, created);
+        index.apply_batch(batch).unwrap();
+        let removed = (0..CHURN_BATCH)
+            .map(|n| churn_record(first + u128::from(n), 0x200, "tmp.txt"))
+            .collect();
+        let batch = churn_batch(index, removed);
+        index.apply_batch(batch).unwrap();
+    }
+}
+
+#[test]
+fn memory_after_churn_returns_near_the_live_set_size() {
+    let mut index = NtfsIndex::restore(
+        {
+            let mut table = NameTable::new();
+            let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+            let mut ids = FrnMap::new();
+            ids.insert(5, root);
+            for number in 1..LIVE_SET {
+                let id = table
+                    .push(root, &format!("entry-{number:07}.txt"), Flags::NONE)
+                    .unwrap();
+                ids.insert(u128::from(number) + 100, id);
+            }
+            table.shrink_to_fit();
+            (header(), table, ids)
+        },
+        42,
+        7,
+    )
+    .unwrap();
+    // Between compactions a table holds up to twice its live set, plus one batch, plus the floor.
+    let slot_bound = (2 * LIVE_SET + CHURN_BATCH + COMPACT_MIN_SLOTS) as usize;
+    for wave in 0..CHURN_WAVES {
+        churn(&mut index, CHURN_OPS, wave);
+        let (slots, live) = (index.table.slots() as usize, index.table.len());
+        let (table, ids) = (index.table.memory_bytes(), index.ids.memory_bytes());
+        println!("IX11 wave {wave}: slots {slots}, live {live}, table {table} B, ids {ids} B");
+        assert_eq!(live, LIVE_SET as usize);
+        assert_eq!(index.ids.len(), live);
+        assert!(
+            slots <= slot_bound,
+            "wave {wave}: {slots} slots for {live} live"
+        );
+        assert!(
+            table <= slot_bound * TABLE_BUDGET,
+            "wave {wave}: table {table} bytes"
+        );
+        assert!(
+            ids <= slot_bound * FILE_ID_BUDGET,
+            "wave {wave}: ids {ids} bytes"
+        );
+    }
 }

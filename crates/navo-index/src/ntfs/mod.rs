@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::io;
 
+mod compact;
 #[cfg(any(windows, test))]
 mod record_size;
 mod snapshot;
@@ -26,6 +27,7 @@ use crate::{
 
 #[cfg(windows)]
 mod windows;
+pub use compact::COMPACT_MIN_SLOTS;
 #[cfg(windows)]
 pub use windows::Volume;
 
@@ -173,6 +175,7 @@ impl BatchApply {
     pub fn finish(mut self, index: &mut NtfsIndex) -> Result<Vec<UnresolvedChange>, NtfsError> {
         while self.step(index, usize::MAX)? {}
         index.position.next_usn = self.next_usn;
+        index.compact_if_sparse(COMPACT_MIN_SLOTS);
         Ok(self.pending.finish())
     }
 }

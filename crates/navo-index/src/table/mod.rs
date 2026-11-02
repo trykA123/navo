@@ -289,14 +289,18 @@ impl NameTable {
             fresh.parents.push(parent);
             fresh.flags.push(self.flags[id as usize]);
             fresh.bytes.push(self.bytes[id as usize]);
-            if self.flags[id as usize] & Flags::FOLDER.bits() != 0 {
-                fresh
-                    .counts
-                    .push((fresh.slots() - 1, self.folder_counts(id)));
+            if let Ok(at) = self.counts.binary_search_by_key(&id, |&(slot, _)| slot) {
+                fresh.counts.push((fresh.slots() - 1, self.counts[at].1));
             }
         }
         fresh.live = next as usize;
-        fresh.relink();
+        match self.children.remapped(&map, &fresh.parents) {
+            Some(children) => fresh.children = children,
+            None => {
+                tracing::error!("child lists disagree with parents during compaction; rebuilt");
+                fresh.relink();
+            }
+        }
         fresh.shrink_to_fit();
         *self = fresh;
         map

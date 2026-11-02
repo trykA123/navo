@@ -28,7 +28,7 @@ impl NtfsIndex {
         }
         validate_root(&header, &table)?;
         validate_ids(&table, &ids)?;
-        Ok(Self {
+        let mut index = Self {
             table,
             ids,
             position: JournalPosition {
@@ -36,7 +36,9 @@ impl NtfsIndex {
                 next_usn: header.next_usn,
             },
             renames: PendingRenames::default(),
-        })
+        };
+        index.compact_if_sparse(super::COMPACT_MIN_SLOTS);
+        Ok(index)
     }
 }
 

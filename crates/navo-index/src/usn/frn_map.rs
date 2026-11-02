@@ -78,6 +78,13 @@ impl FrnMap {
         self.wide.retain(|&key, id| keep(key, id));
     }
 
+    /// Rewrites every id through a `NameTable::compact` map and drops references to removed entries.
+    pub fn remap(&mut self, map: &[Option<u32>]) {
+        self.narrow.retain(|_, id| remapped(map, id));
+        self.wide.retain(|_, id| remapped(map, id));
+        self.shrink_to_fit();
+    }
+
     pub fn clear(&mut self) {
         self.narrow.clear();
         self.wide.clear();
@@ -101,6 +108,16 @@ impl FrnMap {
     pub fn memory_bytes(&self) -> usize {
         table_bytes::<(u64, u32)>(self.narrow.capacity())
             + table_bytes::<(u128, u32)>(self.wide.capacity())
+    }
+}
+
+fn remapped(map: &[Option<u32>], id: &mut u32) -> bool {
+    match map.get(*id as usize).copied().flatten() {
+        Some(moved) => {
+            *id = moved;
+            true
+        }
+        None => false,
     }
 }
 
@@ -173,6 +190,13 @@ mod tests {
         let mut pairs: Vec<_> = map.iter().collect();
         pairs.sort_unstable();
         assert_eq!(pairs, [(u128::from(u64::MAX), 2), (WIDE, 4)]);
+    }
+
+    #[test]
+    fn remap_rewrites_both_widths_and_drops_removed_entries() {
+        let mut map: FrnMap = [(5, 0), (WIDE, 3), (9, 1), (10, 2), (11, 7)].into();
+        map.remap(&[Some(0), None, Some(1), Some(2)]);
+        assert_eq!(map, [(5, 0), (WIDE, 2), (10, 1)].into());
     }
 
     #[test]
