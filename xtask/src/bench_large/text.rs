@@ -1,8 +1,8 @@
 use std::ops::Range;
 
 use imara_diff::{Algorithm, Diff, InternedInput};
-use rusty_core::paging::{ByteSource, LineIndex, read_full};
-use rusty_fs::PagedFile;
+use navo_core::paging::{ByteSource, LineIndex, read_full};
+use navo_fs::PagedFile;
 
 use super::anchor::{self, Anchor};
 use super::scan::{self, BUCKETS};

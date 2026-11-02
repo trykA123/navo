@@ -1,0 +1,429 @@
+mod args;
+mod content;
+mod keys;
+mod open;
+mod run;
+mod search;
+
+use std::cell::Cell;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use gpui_kit::{Bounds, FocusHandle, Pixels, Subscription, point, px, size};
+
+#[cfg(test)]
+pub(super) use search::Update;
+
+use super::{NavoWindow, SearchHooks};
+use crate::command_center::{
+    Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
+    CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource, Mode,
+    PathListings, PathsSource, RESULTS_MEMORY, RecentSource, ResultSource, Results, Row, Selection,
+    TabsSnapshot, TabsSource,
+};
+use crate::commands::{self, ArgKind};
+use crate::modifier_hints::HintsMode;
+use crate::prelude::*;
+use crate::tokens;
+use navo_diag::components::Held;
+
+pub(super) type Anchor = Rc<Cell<Option<Bounds<Pixels>>>>;
+
+pub(super) struct CommandCenterState {
+    open: Option<Open>,
+    pub(super) content_source: crate::command_center::ContentSource,
+    leaving: Option<Entity<CommandCenter>>,
+    pub(super) anchor: Anchor,
+    pub(super) sources: Vec<Arc<dyn ResultSource>>,
+    pub(super) hooks: SearchHooks,
+    pub(super) visits: super::visits::Visits,
+    pub(super) here: HereWalks,
+    listings: PathListings,
+    generation: u64,
+    index_options: Option<IndexOptions>,
+    pub(super) index_activity: super::index_activity::Activity,
+}
+
+impl CommandCenterState {
+    pub(super) fn is_open(&self) -> bool {
+        self.open.is_some()
+    }
+
+    pub(super) fn new(mut hooks: SearchHooks, provider: &Arc<dyn navo_fs::ProviderOps>) -> Self {
+        let index_activity = super::index_activity::Activity::new(&mut hooks.index);
+        Self {
+            open: None,
+            content_source: Default::default(),
+            leaving: None,
+            anchor: Anchor::default(),
+            sources: Vec::new(),
+            hooks,
+            visits: super::visits::Visits::default(),
+            here: HereWalks::new(provider.clone()),
+            listings: PathListings::new(provider.clone()),
+            generation: 0,
+            index_options: None,
+            index_activity,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Step {
+    name: &'static str,
+    kind: ArgKind,
+    label: SharedString,
+    previous: SharedString,
+}
+
+struct Open {
+    mode: Mode,
+    content: crate::command_center::ContentQuery,
+    case: bool,
+    regex: bool,
+    content_flight: Option<content::Flight>,
+    scope: Option<navo_core::Location>,
+    center: Entity<CommandCenter>,
+    rows: Rc<[Row]>,
+    selection: Selection,
+    step: Option<Step>,
+    checking: Option<args::Checking>,
+    error: Option<SharedString>,
+    indexing: Option<SharedString>,
+    anchor: Bounds<Pixels>,
+    keys: HintKeys,
+    restore: Option<FocusHandle>,
+    search: search::Search,
+    run_when_shown: Option<open::Way>,
+    rows_memory: Held,
+    _events: Subscription,
+}
+
+impl Open {
+    fn kept_selection(&self, generation: u64, rows: &[Row]) -> Selection {
+        let start = Selection::start(rows);
+        let moved = self.selection != Selection::start(&self.rows);
+        if self.search.shown != generation || !moved {
+            return start;
+        }
+        let target = |row: &Row| match row {
+            Row::TopHit(hit) | Row::Hit(hit) => Some((hit.source, hit.target.clone())),
+            _ => None,
+        };
+        let Some(chosen) = self.selection.row(&self.rows).and_then(target) else {
+            return start;
+        };
+        rows.iter()
+            .position(|row| target(row).as_ref() == Some(&chosen))
+            .map_or(start, |at| Selection::at(rows, at))
+    }
+
+    fn props(&self, has_key_hints: bool) -> CommandCenterProps {
+        CommandCenterProps {
+            mode: self.mode,
+            content: self.content.clone(),
+            scope: self.scope.clone(),
+            rows: self.rows.clone(),
+            selection: self.selection,
+            argument: self.step.as_ref().map(|step| Argument {
+                label: step.label.clone(),
+                kind: step.kind,
+            }),
+            note: self
+                .checking
+                .as_ref()
+                .and_then(args::Checking::note)
+                .or_else(|| self.indexing.clone()),
+            error: self.error.clone(),
+            anchor: self.anchor,
+            key_hints: has_key_hints.then(|| self.keys.clone()),
+            is_leaving: false,
+        }
+    }
+}
+
+fn focused_contexts(window: &Window) -> Vec<String> {
+    window
+        .context_stack()
+        .iter()
+        .filter_map(|context| context.primary().map(|entry| entry.key.to_string()))
+        .collect()
+}
+
+impl NavoWindow {
+    pub(super) fn prepare_index(&mut self, window: &mut Window) {
+        let options = IndexOptions::of(&self.values);
+        if self.command_center.index_options.as_ref() == Some(&options) {
+            return;
+        }
+        let state = self.browser.state();
+        if !self.panes().iter().all(|pane| {
+            state
+                .pane(*pane)
+                .is_some_and(|pane| pane.active().listing().is_some())
+        }) {
+            return;
+        }
+        self.command_center.index_options = Some(options.clone());
+        let start = self.command_center.hooks.index.start.clone();
+        window.on_next_frame(move |_, cx| {
+            cx.background_executor()
+                .spawn(async move {
+                    start(&options);
+                })
+                .detach();
+        });
+    }
+
+    pub(super) fn toggle_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.command_center.open.is_some() {
+            return self.close_command_center(window, cx);
+        }
+        if self.prompt.is_some() || self.browser.pending().is_some() || self.is_multi_rename_open()
+        {
+            return;
+        }
+        if self.app_menu.is_some() {
+            self.close_app_menu(window, cx);
+        }
+        self.open_command_center(window, cx);
+    }
+
+    fn file_sources(
+        &self,
+        snapshot: &Arc<CommandsSnapshot>,
+    ) -> (Vec<Arc<dyn ResultSource>>, Arc<RecentSource>) {
+        let hooks = &self.command_center.hooks;
+        let mut sources: Vec<Arc<dyn ResultSource>> = vec![Arc::new(CommandsSource::with_use(
+            snapshot.clone(),
+            hooks.command_use.clone(),
+        ))];
+        let recent = Arc::new(RecentSource::new(hooks.frecent.clone()));
+        sources.push(recent.clone());
+        sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(
+            self.browser.state(),
+        ))));
+        sources.push(Arc::new(IndexSource::new(
+            IndexOptions::of(&self.values),
+            hooks.index.clone(),
+            hooks.frecent.clone(),
+        )));
+        let listings = self.command_center.listings.clone();
+        let tab = self.browser.state().active_tab().id();
+        let is_pane_offline = self.browser.offline(tab).is_some();
+        let walked = listings.clone();
+        sources.push(Arc::new(
+            HereSource::new(self.command_center.here.clone()).skipping(Arc::new(move |root| {
+                is_pane_offline || walked.is_unreachable(root)
+            })),
+        ));
+        sources.push(Arc::new(PathsSource::new(
+            listings,
+            Arc::new(|name| std::env::var(name).ok()),
+        )));
+        sources.extend(self.command_center.sources.iter().cloned());
+        (sources, recent)
+    }
+
+    fn open_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.browser.dialog_opened();
+        crate::perf::begin(crate::perf::Latency::CommandCenterOpen);
+        let restore = window.focused(cx);
+        let stack = focused_contexts(window);
+        let stack: Vec<&str> = stack.iter().map(String::as_str).collect();
+        let keymap = commands::active(cx);
+        let snapshot = CommandsSnapshot::build(&commands::entries(), &stack, keymap);
+        let keys = HintKeys::of(keymap);
+        let snapshot = Arc::new(snapshot);
+        let (sources, recent) = self.file_sources(&snapshot);
+        let generation = self.command_center.generation + 1;
+        let rows: Rc<[Row]> = search::recent(Vec::new(), Vec::new()).into();
+        let anchor = self.command_center_anchor(window, cx);
+        let props = initial_props(
+            rows.clone(),
+            anchor,
+            self.has_key_hints().then(|| keys.clone()),
+        );
+        let center = cx.new(|cx| CommandCenter::new(props, window, cx));
+        let events = cx.subscribe_in(&center, window, |view, _, event, window, cx| {
+            view.command_center_event(event, window, cx);
+        });
+        self.command_center.leaving = None;
+        let rows_memory = RESULTS_MEMORY.hold(Results::memory_use(&rows));
+        self.command_center.open = Some(Open {
+            mode: Mode::Names,
+            content: Default::default(),
+            case: false,
+            regex: false,
+            content_flight: None,
+            scope: None,
+            center,
+            selection: Selection::start(&rows),
+            rows,
+            step: None,
+            checking: None,
+            error: None,
+            indexing: None,
+            anchor,
+            keys,
+            restore,
+            search: search::Search::new(sources, (recent, snapshot), generation),
+            run_when_shown: None,
+            rows_memory,
+            _events: events,
+        });
+        self.load_recent(window, cx);
+        cx.notify();
+    }
+
+    fn command_center_anchor(&self, window: &Window, cx: &App) -> Bounds<Pixels> {
+        self.search_anchor(cx).unwrap_or_else(|| {
+            let top = tokens::current(cx).spacing.header_height;
+            let width = window.viewport_size().width;
+            Bounds::new(point(px(0.), top), size(width, px(INPUT_ROW)))
+        })
+    }
+
+    fn has_key_hints(&self) -> bool {
+        self.values.modifier_hints() != HintsMode::Off
+    }
+
+    pub(super) fn close_command_center(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(mut open) = self.command_center.open.take() else {
+            return;
+        };
+        open.search.cancel();
+        open.content_flight = None;
+        self.command_center.generation = open.search.generation();
+        if self.settings.is_open() {
+            self.focus_settings(window, cx);
+        } else if self.recent.is_open() {
+            self.focus_recent(window, cx);
+        } else {
+            match &open.restore {
+                Some(handle) => window.focus(handle, cx),
+                None => self.focus_core_pane(window, cx),
+            }
+        }
+        if !cx.reduce_motion() {
+            self.leave(open, window, cx);
+        }
+        cx.notify();
+    }
+
+    fn leave(&mut self, open: Open, window: &mut Window, cx: &mut Context<Self>) {
+        let props = CommandCenterProps {
+            is_leaving: true,
+            ..open.props(self.has_key_hints())
+        };
+        let center = open.center;
+        center.update(cx, |center, cx| center.set_props(props, window, cx));
+        self.command_center.leaving = Some(center.clone());
+        let timer = cx
+            .background_executor()
+            .timer(tokens::current(cx).motion.fade);
+        cx.spawn(async move |this, cx| {
+            timer.await;
+            let _ = this.update(cx, |view, cx| view.forget_leaving(&center, cx));
+        })
+        .detach();
+    }
+
+    fn forget_leaving(&mut self, center: &Entity<CommandCenter>, cx: &mut Context<Self>) {
+        let leaving = &mut self.command_center.leaving;
+        if leaving.as_ref() == Some(center) {
+            *leaving = None;
+            cx.notify();
+        }
+    }
+
+    fn command_center_event(
+        &mut self,
+        event: &CommandCenterEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            CommandCenterEvent::QueryChanged(query) => self.mode_query_changed(query, window, cx),
+            CommandCenterEvent::ModeChanged(mode) => self.change_mode(*mode, window, cx),
+            CommandCenterEvent::Moved(index) => {
+                if let Some(open) = self.command_center.open.as_mut() {
+                    open.selection = Selection::at(&open.rows, *index);
+                }
+                self.push_command_center(window, cx);
+            }
+            CommandCenterEvent::Run(index, modifiers) => {
+                if let Some(open) = self.command_center.open.as_mut() {
+                    open.selection = Selection::at(&open.rows, *index);
+                }
+                let way = self.click_way(*modifiers);
+                self.run_selected(way, window, cx);
+            }
+            CommandCenterEvent::ToggleContentFlag(regex) => {
+                self.toggle_content_flag(*regex, window, cx)
+            }
+            CommandCenterEvent::ScopeRemoved => {
+                let Some(open) = self.command_center.open.as_mut() else {
+                    return;
+                };
+                open.scope = None;
+                let query = open.center.read(cx).query(cx);
+                self.mode_query_changed(&query, window, cx);
+            }
+            CommandCenterEvent::Dismissed => self.close_command_center(window, cx),
+        }
+    }
+
+    fn push_command_center(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(open) = self.command_center.open.as_ref() else {
+            return;
+        };
+        let props = open.props(self.has_key_hints());
+        open.center
+            .update(cx, |center, cx| center.set_props(props, window, cx));
+    }
+
+    pub(super) fn command_center_view(&self) -> Option<Entity<CommandCenter>> {
+        let open = self.command_center.open.as_ref();
+        open.map(|open| open.center.clone())
+            .or_else(|| self.command_center.leaving.clone())
+    }
+}
+
+#[cfg(test)]
+impl NavoWindow {
+    pub(super) fn command_center_selection(&self) -> Option<usize> {
+        let open = self.command_center.open.as_ref()?;
+        open.selection.index()
+    }
+
+    pub(super) fn command_center_generation(&self) -> Option<u64> {
+        let open = self.command_center.open.as_ref()?;
+        Some(open.search.generation())
+    }
+
+    pub(super) fn command_center_query(&self, cx: &App) -> Option<String> {
+        let open = self.command_center.open.as_ref()?;
+        Some(open.center.read(cx).query(cx).to_string())
+    }
+}
+
+fn initial_props(
+    rows: Rc<[Row]>,
+    anchor: Bounds<Pixels>,
+    key_hints: Option<HintKeys>,
+) -> CommandCenterProps {
+    CommandCenterProps {
+        mode: Mode::Names,
+        content: Default::default(),
+        scope: None,
+        selection: Selection::start(&rows),
+        rows,
+        argument: None,
+        note: None,
+        error: None,
+        anchor,
+        key_hints,
+        is_leaving: false,
+    }
+}

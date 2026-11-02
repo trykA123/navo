@@ -1,0 +1,784 @@
+use std::cell::Cell;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{
+    AnyWindowHandle, AppContext as _, Bounds, Entity, Point, TestAppContext, VisualTestContext,
+    WindowBounds, WindowOptions, px, size,
+};
+use navo_core::{AppState, Command, Direction, OpKind, apply};
+use navo_fs::FakeFs;
+use navo_fs::Provider;
+
+use super::{NavoWindow, StartOptions};
+
+mod activity;
+mod app_menu;
+mod app_menu_save;
+mod applied;
+mod cached;
+mod cards;
+pub(in crate::window_view) mod clipboard;
+mod column_widths;
+mod command_center;
+mod crash_notice;
+mod cursor_follow;
+mod delete_dialog;
+mod disk_start;
+mod drive_fs;
+mod drives;
+mod drop;
+mod find;
+mod first_key;
+mod fkeys;
+mod hand_off;
+pub(in crate::window_view) mod held;
+mod hints;
+mod jobs;
+mod keymap;
+mod layout_switcher;
+mod layout_widths;
+mod look_up;
+mod marks;
+pub(in crate::window_view) mod mouse_cost;
+mod mouse_marks;
+mod multi_rename;
+mod off_thread;
+mod offline;
+mod one_pane;
+mod pane_popups;
+mod pane_swap;
+#[cfg(feature = "tester")]
+mod perf_recording;
+mod placement;
+mod prefetch;
+mod recent_sheet;
+mod settings_find;
+mod settings_help;
+mod settings_layer;
+mod settings_news;
+mod settings_search;
+mod settings_sheet;
+mod settings_state;
+mod settings_upgrade;
+mod shell_menu;
+pub(in crate::window_view) mod shortcuts;
+mod start_watch;
+mod tab_close;
+mod tab_drag;
+mod tabs;
+mod terminal;
+mod tiles;
+mod tray;
+mod typed;
+mod undo;
+mod undo_retained;
+mod visits;
+mod watched;
+mod window_menu;
+mod window_parts;
+mod workspaces;
+use crate::browser::Operations;
+use crate::settings::{Change, Field, Value, Values};
+use crate::tokens::{self, Mode};
+
+pub(crate) fn two_panes(fs: &FakeFs) -> AppState {
+    let mut state = AppState::new(fs.location("home"));
+    let _ = apply(
+        &mut state,
+        &Command::LayoutSplit {
+            direction: Direction::Right,
+        },
+    );
+    state
+}
+
+pub(crate) fn fake() -> Arc<FakeFs> {
+    let fs = FakeFs::new();
+    fs.add_folder("home/docs");
+    fs.add_file("home/docs/report.txt", 7);
+    fs.add_file("home/a.txt", 3);
+    fs.add_folder("dest");
+    Arc::new(fs)
+}
+
+fn open(cx: &mut TestAppContext, saves: Rc<Cell<usize>>) -> (AnyWindowHandle, Entity<NavoWindow>) {
+    let fs = fake();
+    let state = two_panes(&fs);
+    open_with(cx, fs, state, saves)
+}
+
+fn open_with(
+    cx: &mut TestAppContext,
+    fs: Arc<FakeFs>,
+    state: AppState,
+    saves: Rc<Cell<usize>>,
+) -> (AnyWindowHandle, Entity<NavoWindow>) {
+    let options = StartOptions {
+        on_save: Rc::new(move |_| saves.set(saves.get() + 1)),
+        ..options_for(fs, state)
+    };
+    open_options(cx, options)
+}
+
+pub(super) fn with_fkey_bar(values: Values) -> Values {
+    values.with(&Change {
+        field: Field::WindowFkeyBar,
+        value: Value::Flag(true),
+    })
+}
+
+pub(crate) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
+    StartOptions {
+        state,
+        provider: fs,
+        on_save: Rc::new(|_| {}),
+        mode: Mode::Light,
+        operations: Operations::unlogged(),
+        launcher: Arc::new(|_| {}),
+        editor: super::EditorHooks::none(),
+        terminal: super::TerminalHooks::none(),
+        files: super::FileHooks::none(),
+        kinds: super::Kinds::builtin(),
+        drives: super::DriveHooks::none(),
+        app_menu: super::AppMenuHooks::none(),
+        settings: super::SettingsHooks {
+            values: with_fkey_bar(Values::default()),
+            ..super::SettingsHooks::none()
+        },
+        keymap: crate::window_view::KeymapHooks::none(),
+        view: None,
+        listing_cache: navo_cache::ListingCache::default(),
+        cache_keys: navo_cache::CacheKeys::default(),
+        shell_menu: None,
+        file_clipboard: None,
+        drop_platform: None,
+        start_watch: None,
+        open: super::OpenHooks::none(),
+        crash_report: None,
+        search: crate::window_view::SearchHooks::none(),
+        rename: None,
+        retained: Arc::new(crate::browser::NoRetained),
+    }
+}
+
+pub(crate) fn open_options(
+    cx: &mut TestAppContext,
+    options: StartOptions,
+) -> (AnyWindowHandle, Entity<NavoWindow>) {
+    open_options_sized(cx, options, px(1000.))
+}
+
+pub(super) fn open_options_sized(
+    cx: &mut TestAppContext,
+    options: StartOptions,
+    width: gpui_kit::Pixels,
+) -> (AnyWindowHandle, Entity<NavoWindow>) {
+    let handle = open_unsettled(cx, options, width);
+    let view = handle.1.clone();
+    settle(cx, &view);
+    handle
+}
+
+pub(super) fn open_unsettled(
+    cx: &mut TestAppContext,
+    options: StartOptions,
+    width: gpui_kit::Pixels,
+) -> (AnyWindowHandle, Entity<NavoWindow>) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        tokens::apply(Mode::Light, cx);
+        super::bind_app_keys(cx);
+        let window_options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Point::default(),
+                size: size(width, px(600.)),
+            })),
+            ..Default::default()
+        };
+        gpui_kit::open_window(window_options, cx, |window, cx| {
+            cx.new(|cx| NavoWindow::new(options, window, cx))
+        })
+        .expect("open window")
+    })
+}
+
+pub(super) fn settle(cx: &mut TestAppContext, view: &Entity<NavoWindow>) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        view.update(cx, |view, cx| view.wake(cx));
+        cx.run_until_parked();
+        let loading = view.read_with(cx, |view, _| {
+            view.browser.loading() || view.browser.running() || view.lane.is_pending()
+        });
+        if !loading || Instant::now() > deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+#[gpui_kit::test]
+fn both_panes_show_their_rows(cx: &mut TestAppContext) {
+    let (window, view) = open(cx, Rc::default());
+    let panes = view.read_with(cx, |view, _| view.panes());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        for pane in &panes {
+            let list = window.within(("list", pane.get()));
+            assert!(list.find(("row", 0usize)).visible());
+        }
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn tab_switches_the_focused_pane(cx: &mut TestAppContext) {
+    let (window, view) = open(cx, Rc::default());
+    let before = view.read_with(cx, |view, _| view.browser.state().focused_pane());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("tab", cx);
+    })
+    .expect("window");
+    let after = view.read_with(cx, |view, _| view.browser.state().focused_pane());
+    assert_ne!(before, after);
+}
+
+#[gpui_kit::test]
+fn closing_the_window_saves_the_session(cx: &mut TestAppContext) {
+    let saves = Rc::new(Cell::new(0));
+    let (window, _) = open(cx, saves.clone());
+    let mut visual = VisualTestContext::from_window(window, cx);
+    visual.simulate_close();
+    assert_eq!(saves.get(), 1);
+}
+
+#[test]
+fn every_system_appearance_maps_to_a_theme_mode() {
+    use gpui_kit::WindowAppearance as A;
+    assert_eq!(super::font_settings::mode_of(A::Light), Mode::Light);
+    assert_eq!(super::font_settings::mode_of(A::VibrantLight), Mode::Light);
+    assert_eq!(super::font_settings::mode_of(A::Dark), Mode::Dark);
+    assert_eq!(super::font_settings::mode_of(A::VibrantDark), Mode::Dark);
+}
+
+pub(super) fn home_beside_dest(fs: &FakeFs) -> AppState {
+    let mut state = two_panes(fs);
+    let location = fs.location("dest");
+    let _ = apply(&mut state, &Command::PaneNavigate { location });
+    let dest = state.focused_pane();
+    for direction in Direction::ALL {
+        if state.focused_pane() != dest {
+            break;
+        }
+        let _ = apply(&mut state, &Command::LayoutFocus { direction });
+    }
+    state
+}
+
+pub(crate) fn press(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<NavoWindow>,
+    key: &str,
+) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.press(key, cx);
+    })
+    .expect("window");
+    settle(cx, view);
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("window");
+    cx.run_until_parked();
+}
+
+pub(super) fn close_in(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<NavoWindow>,
+) -> bool {
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close(window, cx))
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn f5_copies_the_cursor_row_into_the_other_pane(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "f5");
+    let kind = view.read_with(cx, |view, _| view.browser.pending().map(|p| p.plan.kind));
+    assert_eq!(kind, Some(OpKind::Copy));
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert!(fs.metadata(&fs.location("dest/docs/report.txt")).is_ok());
+    assert!(fs.metadata(&fs.location("home/docs/report.txt")).is_ok());
+}
+
+#[gpui_kit::test]
+fn shift_delete_asks_with_danger_and_escape_deletes_nothing(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "shift-delete");
+    let danger = view.read_with(cx, |view, _| {
+        view.browser
+            .pending()
+            .map(|p| super::operate::confirm_props(p).danger)
+    });
+    assert_eq!(danger, Some(true));
+    press(cx, window, &view, "escape");
+    let pending = view.read_with(cx, |view, _| view.browser.pending().is_some());
+    assert!(!pending);
+    assert!(view.read_with(cx, |view, _| view.browser.jobs().is_empty()));
+    assert!(fs.metadata(&fs.location("home/docs")).is_ok());
+}
+
+#[gpui_kit::test]
+fn tab_in_the_delete_dialog_moves_focus_to_the_delete_button(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "shift-delete");
+    press(cx, window, &view, "tab");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert!(fs.metadata(&fs.location("home/docs")).is_err());
+}
+
+#[gpui_kit::test]
+fn a_finished_job_row_goes_away_after_a_moment(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "f5");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert_eq!(view.read_with(cx, |view, _| view.browser.jobs().len()), 1);
+    cx.executor().advance_clock(Duration::from_secs(5));
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |view, _| view.browser.jobs().is_empty()));
+}
+
+fn shown(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> Vec<String> {
+    view.read_with(cx, |view, _| {
+        view.browser
+            .state()
+            .active_tab()
+            .listing()
+            .map(|l| l.entries().iter().map(|e| e.name.clone()).collect())
+            .unwrap_or_default()
+    })
+}
+
+#[gpui_kit::test]
+fn typing_in_a_pane_filters_it_and_escape_brings_everything_back(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "d");
+    assert_eq!(shown(cx, &view), ["docs"]);
+    cx.update_window(window, |_, window, _| {
+        assert!(window.find("filter").visible());
+    })
+    .expect("window");
+    press(cx, window, &view, "escape");
+    assert_eq!(shown(cx, &view), ["docs", "a.txt"]);
+}
+
+pub(super) fn type_in(
+    cx: &mut TestAppContext,
+    window: AnyWindowHandle,
+    view: &Entity<NavoWindow>,
+    text: &str,
+) {
+    cx.update_window(window, |_, window, cx| window.input(text, cx))
+        .expect("window");
+    settle(cx, view);
+}
+
+fn prompt_open(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> bool {
+    view.read_with(cx, |view, _| view.prompt.is_some())
+}
+
+#[gpui_kit::test]
+fn f2_renames_the_cursor_row(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f2");
+    assert!(prompt_open(cx, &view));
+    type_in(cx, window, &view, "b");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert!(!prompt_open(cx, &view));
+    assert!(fs.metadata(&fs.location("home/b.txt")).is_ok());
+    assert!(fs.metadata(&fs.location("home/a.txt")).is_err());
+}
+
+#[gpui_kit::test]
+fn f7_creates_a_folder_named_by_default(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "f7");
+    press(cx, window, &view, "enter");
+    settle(cx, &view);
+    assert!(fs.metadata(&fs.location("home/New folder")).is_ok());
+}
+
+#[gpui_kit::test]
+fn a_bad_name_keeps_the_prompt_open_with_its_error(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs.clone(), state, Rc::default());
+    press(cx, window, &view, "f7");
+    type_in(cx, window, &view, "docs");
+    press(cx, window, &view, "enter");
+    assert!(prompt_open(cx, &view));
+    cx.update_window(window, |_, window, _| {
+        assert!(window.find("error").visible());
+    })
+    .expect("window");
+    press(cx, window, &view, "escape");
+    assert!(!prompt_open(cx, &view));
+}
+
+#[test]
+fn the_rename_selection_stops_before_the_extension() {
+    use super::prompt::stem_end;
+    assert_eq!(stem_end("report.txt"), 6);
+    assert_eq!(stem_end("archive.tar.gz"), 11);
+    assert_eq!(stem_end(".gitignore"), 10);
+    assert_eq!(stem_end("Makefile"), 8);
+}
+
+#[gpui_kit::test]
+fn letters_do_not_filter_while_a_prompt_is_open(cx: &mut TestAppContext) {
+    use crate::file_list::FilterEdit;
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "f7");
+    view.update(cx, |view, _| view.filter(FilterEdit::Push('d')));
+    let tab = view.read_with(cx, |view, _| view.browser.state().active_tab().id());
+    assert!(view.read_with(cx, |view, _| view.browser.filter_text(tab).is_none()));
+}
+
+#[gpui_kit::test]
+fn plus_marks_by_pattern_and_star_inverts(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "+");
+    type_in(cx, window, &view, "*.txt");
+    press(cx, window, &view, "enter");
+    let marked = |cx: &mut TestAppContext| {
+        view.read_with(cx, |view, _| {
+            view.browser.state().active_tab().selection().marked()
+        })
+    };
+    assert_eq!(marked(cx), [1]);
+    press(cx, window, &view, "*");
+    assert!(marked(cx).is_empty());
+}
+
+#[gpui_kit::test]
+fn an_empty_pattern_keeps_the_prompt_open(cx: &mut TestAppContext) {
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "-");
+    press(cx, window, &view, "backspace");
+    press(cx, window, &view, "enter");
+    assert!(prompt_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn ctrl_f6_sorts_the_pane_by_size(cx: &mut TestAppContext) {
+    use crate::file_list::SortBy;
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let (window, view) = open_with(cx, fs, state, Rc::default());
+    press(cx, window, &view, "ctrl-f6");
+    let tab = view.read_with(cx, |view, _| view.browser.state().active_tab().id());
+    let key = view.read_with(cx, |view, _| view.browser.sort_key(tab));
+    assert_eq!(key.by, SortBy::Size);
+}
+
+#[derive(Default)]
+struct EditorLog {
+    remembered: Vec<String>,
+    opened: Vec<(String, String)>,
+}
+
+fn editor_window(
+    cx: &mut TestAppContext,
+    chosen: Option<&str>,
+) -> (
+    AnyWindowHandle,
+    Entity<NavoWindow>,
+    Arc<std::sync::Mutex<EditorLog>>,
+) {
+    let log = Arc::new(std::sync::Mutex::new(EditorLog::default()));
+    let (remembered, opened) = (log.clone(), log.clone());
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let options = StartOptions {
+        editor: super::EditorHooks {
+            suggestion: Arc::new(|| Some("code.exe".to_owned())),
+            resolve: Arc::new(move |program| {
+                if program.ends_with(".exe") {
+                    remembered
+                        .lock()
+                        .unwrap()
+                        .remembered
+                        .push(program.to_owned());
+                    Ok(program.to_owned())
+                } else {
+                    Err("No program at that path.".to_owned())
+                }
+            }),
+            open: Arc::new(move |program, file| {
+                let entry = (program.to_owned(), file.as_str().to_owned());
+                opened.lock().unwrap().opened.push(entry);
+                Ok(())
+            }),
+        },
+        settings: super::SettingsHooks {
+            values: chosen.map_or_else(crate::settings::Values::default, |program| {
+                crate::settings::Values::default().with(&crate::settings::Change::text(
+                    crate::settings::Field::EditorPath,
+                    program.to_owned(),
+                ))
+            }),
+            ..super::SettingsHooks::none()
+        },
+        ..options_for(fs, state)
+    };
+    let (window, view) = open_options(cx, options);
+    (window, view, log)
+}
+
+#[gpui_kit::test]
+fn f4_without_an_editor_asks_once_then_opens_directly(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, None);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f4");
+    assert!(prompt_open(cx, &view));
+    press(cx, window, &view, "enter");
+    assert!(!prompt_open(cx, &view));
+    assert_eq!(log.lock().unwrap().remembered, ["code.exe"]);
+    press(cx, window, &view, "f4");
+    assert!(!prompt_open(cx, &view));
+    let opened = log.lock().unwrap().opened.clone();
+    assert_eq!(opened.len(), 2);
+    assert!(
+        opened
+            .iter()
+            .all(|(program, file)| program == "code.exe" && file.ends_with("a.txt"))
+    );
+}
+
+#[gpui_kit::test]
+fn f4_uses_the_editor_set_in_settings(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, Some("code.exe"));
+    press(cx, window, &view, "ctrl-,");
+    for _ in 0..4 {
+        press(cx, window, &view, "tab");
+    }
+    press(cx, window, &view, "enter");
+    press(cx, window, &view, "ctrl-a");
+    type_in(cx, window, &view, "vim.exe");
+    press(cx, window, &view, "enter");
+    press(cx, window, &view, "escape");
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f4");
+    assert!(!prompt_open(cx, &view));
+    let opened = log.lock().unwrap().opened.clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, "vim.exe");
+}
+
+#[gpui_kit::test]
+fn a_program_that_is_not_there_keeps_the_prompt_open(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, None);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f4");
+    type_in(cx, window, &view, "nothing-here");
+    press(cx, window, &view, "enter");
+    assert!(prompt_open(cx, &view));
+    assert!(log.lock().unwrap().opened.is_empty());
+}
+
+#[gpui_kit::test]
+fn shift_f4_lets_you_change_the_editor_and_f4_opens_folders_too(cx: &mut TestAppContext) {
+    let (window, view, log) = editor_window(cx, Some("vim.exe"));
+    press(cx, window, &view, "f4");
+    assert!(!prompt_open(cx, &view));
+    let opened = log.lock().unwrap().opened.clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, "vim.exe");
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "shift-f4");
+    assert!(prompt_open(cx, &view));
+}
+
+type Written = Arc<std::sync::Mutex<Vec<String>>>;
+
+fn hello_head() -> super::Head {
+    super::Head {
+        bytes: b"hello\n".to_vec(),
+        len: 6,
+    }
+}
+
+fn viewer_window(
+    cx: &mut TestAppContext,
+    read: Result<&str, &str>,
+    changed_once: bool,
+) -> (AnyWindowHandle, Entity<NavoWindow>, Written) {
+    let written = Written::default();
+    let saved = written.clone();
+    let refuse = std::sync::atomic::AtomicBool::new(changed_once);
+    let read = read.map(str::to_owned).map_err(str::to_owned);
+    let fs = fake();
+    let state = home_beside_dest(&fs);
+    let options = StartOptions {
+        files: super::FileHooks {
+            read: Arc::new(move |_| {
+                read.clone().map(|text| super::FileText {
+                    stamp: Some(super::FileStamp {
+                        len: 6,
+                        modified_ms: 1,
+                    }),
+                    ..super::FileText::plain(text)
+                })
+            }),
+            write: Arc::new(move |_, save| {
+                if save.expected.is_some()
+                    && refuse.swap(false, std::sync::atomic::Ordering::Relaxed)
+                {
+                    return Err(super::SaveError::Changed);
+                }
+                saved.lock().expect("log").push(save.text.to_owned());
+                Ok(None.into())
+            }),
+            head: Arc::new(|_| Ok(hello_head())),
+            paged: Arc::new(|_| Err("No paged view here.".to_owned())),
+            ..super::FileHooks::none()
+        },
+        ..options_for(fs, state)
+    };
+    let (window, view) = open_options(cx, options);
+    (window, view, written)
+}
+
+fn written(log: &Written) -> Vec<String> {
+    log.lock().expect("log").clone()
+}
+
+pub(super) fn viewer_open(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> bool {
+    view.read_with(cx, |view, _| view.viewer.is_some())
+}
+
+#[gpui_kit::test]
+fn f3_opens_the_file_and_escape_closes_it(cx: &mut TestAppContext) {
+    let (window, view, _) = viewer_window(cx, Ok("hello\n"), false);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    assert!(viewer_open(cx, &view));
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn ctrl_s_saves_what_was_typed(cx: &mut TestAppContext) {
+    let (window, view, log) = viewer_window(cx, Ok("hello\n"), false);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
+    type_in(cx, window, &view, "say ");
+    press(cx, window, &view, "ctrl-s");
+    assert_eq!(written(&log), ["say hello\n"]);
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn unsaved_changes_need_a_second_escape(cx: &mut TestAppContext) {
+    let (window, view, log) = viewer_window(cx, Ok("hello\n"), false);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
+    type_in(cx, window, &view, "x");
+    press(cx, window, &view, "escape");
+    assert!(viewer_open(cx, &view));
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+    assert!(written(&log).is_empty());
+}
+
+#[gpui_kit::test]
+fn a_file_that_cannot_be_read_says_why(cx: &mut TestAppContext) {
+    let (window, view, _) = viewer_window(cx, Err("This looks like a binary file."), false);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    cx.update_window(window, |_, window, _| {
+        assert!(window.find("viewer-message").visible());
+    })
+    .expect("window");
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+}
+
+#[test]
+fn extensions_pick_their_language() {
+    use crate::languages::detect;
+    assert_eq!(detect("main.rs", b""), "rust");
+    assert_eq!(detect("App.TSX", b""), "tsx");
+    assert_eq!(detect("Main.JAVA", b""), "java");
+    assert_eq!(detect("Makefile", b""), "make");
+    assert_eq!(detect("mix.exs", b""), "elixir");
+    assert_eq!(detect("notes.md", b""), "markdown");
+    assert_eq!(detect("config.yml", b""), "yaml");
+    assert_eq!(detect("Cargo.toml", b""), "toml");
+    assert_eq!(detect("run.sh", b""), "bash");
+    assert_eq!(detect("readme", b""), "text");
+    assert_eq!(detect(".bashrc", b""), "text");
+    assert_eq!(detect("app.log", b""), "text");
+}
+
+#[gpui_kit::test]
+fn a_file_changed_on_disk_needs_a_second_save(cx: &mut TestAppContext) {
+    let (window, view, log) = viewer_window(cx, Ok("hello\n"), true);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
+    type_in(cx, window, &view, "x");
+    press(cx, window, &view, "ctrl-s");
+    assert!(written(&log).is_empty());
+    press(cx, window, &view, "ctrl-s");
+    assert_eq!(written(&log), ["xhello\n"]);
+}
+
+#[gpui_kit::test]
+fn closing_the_window_with_unsaved_edits_warns_first(cx: &mut TestAppContext) {
+    let (window, view, _) = viewer_window(cx, Ok("hello\n"), false);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    press(cx, window, &view, "ctrl-e");
+    type_in(cx, window, &view, "x");
+    let first = close_in(cx, window, &view);
+    assert!(!first);
+    assert!(viewer_open(cx, &view));
+    let second = close_in(cx, window, &view);
+    assert!(second);
+}

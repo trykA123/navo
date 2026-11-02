@@ -1,8 +1,8 @@
 [floors]
-rusty-core = 90
-rusty-fs = 80
-rusty-store = 85
-rusty-cache = 85
-rusty-ui = 60
+navo-core = 90
+navo-fs = 80
+navo-store = 85
+navo-cache = 85
+navo-ui = 60
 xtask = 85
-rusty-diag = 85
+navo-diag = 85

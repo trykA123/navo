@@ -1,0 +1,116 @@
+---
+source: crates/navo-store/src/settings/tests/snapshot.rs
+expression: to_toml(&Settings::default())
+---
+[appearance]
+mode = "system"
+color-theme = "open-sea"
+light-theme = "Navo Light"
+dark-theme = "Navo Dark"
+font = "Inter"
+font-size = 13
+ui-scale = 100
+density = "normal"
+modifier-hints = "all"
+modifier-hints-delay-ms = 400
+
+[files]
+hidden-files = "shown"
+show-system = false
+folders-first = true
+sort = "name"
+sort-descending = false
+size-mode = "apparent"
+measure-shown-folders = false
+drop-confirm = "never"
+rename-log = false
+
+[selection]
+space-measures-folders = true
+patterns-select-folders = false
+
+[terminal]
+provider = "system"
+
+[editor]
+
+[window.view]
+tabs-with-one = true
+path-bar = true
+drive-button = true
+title-search = true
+fkey-bar = false
+icons = true
+ext-column = true
+size-column = true
+date-column = true
+free-space = true
+marked-totals = true
+contents = true
+ext-width = 0
+size-width = 0
+date-width = 0
+
+[layout]
+
+[text.view]
+line-numbers = true
+line-ends = false
+syntax-theme = "oxidised-iron"
+
+[image.view]
+details = false
+
+[markdown.view]
+preview-split = true
+
+[preview]
+inspector = false
+inspector-width = 360
+inspector-properties = true
+
+[preview.view]
+type-bars = true
+largest-files = true
+
+[copy]
+mode = "auto"
+
+[retention]
+retain-deletes = true
+retain-overwrites = true
+days = 3
+max-volume-mib = 1024
+min-free-mib = 256
+
+[search]
+index = "auto"
+drives = []
+walk-roots = []
+exclude = ["$Recycle.Bin", "System Volume Information"]
+network = false
+removable = false
+remember = true
+
+[automotive]
+modules = []
+
+[automotive.view]
+preset = "simple"
+inspector = false
+memory-strip = false
+charts = false
+row-bars = false
+usage-bars = false
+who-uses = false
+
+[tray]
+keep-running = false
+summon-key = "Win+Alt+N"
+
+[clipboard]
+enabled = true
+record-history = true
+summon-key = "Win+Alt+V"
+
+[experimental]

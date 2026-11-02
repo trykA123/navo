@@ -7,7 +7,7 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
 
-    const RUSTY_EXE_LIMIT: u64 = 160 * 1024 * 1024;
+    const NAVO_EXE_LIMIT: u64 = 160 * 1024 * 1024;
 
     struct TestFile(PathBuf);
 
@@ -20,7 +20,7 @@ mod tests {
                 .unwrap()
                 .as_nanos();
             let path = std::env::temp_dir().join(format!(
-                "rusty-binsize-{}-{timestamp}-{id}",
+                "navo-binsize-{}-{timestamp}-{id}",
                 std::process::id()
             ));
             File::create_new(&path).unwrap().set_len(bytes).unwrap();
@@ -64,13 +64,13 @@ mod tests {
         assert!(output.stderr.is_empty());
         assert_eq!(
             String::from_utf8(output.stdout).unwrap(),
-            format!("{}: 5 bytes (limit {RUSTY_EXE_LIMIT})\n", file.0.display())
+            format!("{}: 5 bytes (limit {NAVO_EXE_LIMIT})\n", file.0.display())
         );
     }
 
     #[test]
     fn binsize_rejects_a_sparse_file_one_byte_over_the_limit() {
-        let bytes = RUSTY_EXE_LIMIT + 1;
+        let bytes = NAVO_EXE_LIMIT + 1;
         let file = TestFile::new(bytes);
         let output = invoke(&file.0);
         assert_eq!(output.status.code(), Some(1));
@@ -78,7 +78,7 @@ mod tests {
         assert_eq!(
             String::from_utf8(output.stdout).unwrap(),
             format!(
-                "{}: {bytes} bytes (limit {RUSTY_EXE_LIMIT})\n",
+                "{}: {bytes} bytes (limit {NAVO_EXE_LIMIT})\n",
                 file.0.display()
             )
         );

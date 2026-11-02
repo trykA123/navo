@@ -1,0 +1,21 @@
+[package]
+name = "navo-ui-gallery"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false }
+image = { version = "=0.25.10", default-features = false, features = ["png"] }
+navo-automotive = { path = "../navo-automotive", features = ["sample"] }
+navo-core = { path = "../navo-core" }
+navo-fs = { path = "../navo-fs" }
+navo-pdf = { path = "../navo-pdf" }
+navo-ui = { path = "../navo-ui" }
+
+[dev-dependencies]
+gpui-kit = { version = "=0.7.3", features = ["test-support"] }
+
+[lints]
+workspace = true

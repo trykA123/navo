@@ -127,8 +127,8 @@ fn measure_text(pair: &generate::Pair) -> Result<TextMeasure, String> {
     let anchor_count = first_anchors.anchors.len();
     let anchors = first_anchors.anchors.clone();
     let anchors_timing = measure_anchors(&scanned_old, &scanned_new)?;
-    let old_file = rusty_fs::PagedFile::open(&pair.old)?;
-    let new_file = rusty_fs::PagedFile::open(&pair.new)?;
+    let old_file = navo_fs::PagedFile::open(&pair.old)?;
+    let new_file = navo_fs::PagedFile::open(&pair.new)?;
     let sides = text_sides(&old_file, &new_file, &scanned_old, &scanned_new);
     let (sections_timing, (plan, diff)) = sample_sections(&sides, &anchors)?;
     let provisional = sample(|| text::provisional(&old_file, &new_file, PROVISIONAL_BYTES))
@@ -167,8 +167,8 @@ fn measure_text(pair: &generate::Pair) -> Result<TextMeasure, String> {
 }
 
 fn text_sides<'a>(
-    old_file: &'a rusty_fs::PagedFile,
-    new_file: &'a rusty_fs::PagedFile,
+    old_file: &'a navo_fs::PagedFile,
+    new_file: &'a navo_fs::PagedFile,
     old: &'a scan::Scanned,
     new: &'a scan::Scanned,
 ) -> text::Sides<'a> {

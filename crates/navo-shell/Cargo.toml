@@ -1,0 +1,55 @@
+[package]
+name = "navo-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+navo-core = { path = "../navo-core" }
+thiserror = "2.0.21"
+tracing = "0.1.44"
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.5", features = ["event", "fs", "pipe"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_NetworkManagement_WNet",
+  "Win32_Storage_FileSystem",
+  "Win32_Security",
+  "Win32_System_DataExchange",
+  "Win32_System_JobObjects",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_System_Ole",
+  "Win32_System_Threading",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+  "Win32_UI_WindowsAndMessaging",
+] }
+windows = { version = "=0.62.2", features = [
+  "Win32_Graphics_Gdi",
+  "Win32_System_Com",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Ole",
+  "Win32_System_Threading",
+  "Win32_UI_Controls",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(windows)'.dev-dependencies]
+tempfile = "3.27.0"
+windows = { version = "=0.62.2", features = [
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_DataExchange",
+] }
+zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
+
+[lints]
+workspace = true

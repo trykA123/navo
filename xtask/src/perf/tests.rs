@@ -2,7 +2,7 @@ use super::report::{Report, guard, markdown, parse};
 
 fn sample() -> serde_json::Value {
     let snapshot =
-        include_str!("../../../crates/rusty-app/src/metrics/snapshots/metrics_report.snap");
+        include_str!("../../../crates/navo-app/src/metrics/snapshots/metrics_report.snap");
     let json = snapshot.splitn(3, "---").nth(2).unwrap();
     serde_json::from_str(json).unwrap()
 }

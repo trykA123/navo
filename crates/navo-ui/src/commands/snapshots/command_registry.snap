@@ -1,0 +1,415 @@
+---
+source: crates/navo-ui/src/commands/tests.rs
+expression: "lines.join(\"\\n\")"
+---
+workspace.preview_first | Preview workspace 1 | FileList
+workspace.preview_second | Preview workspace 2 | FileList
+workspace.preview_third | Preview workspace 3 | FileList
+workspace.preview_fourth | Preview workspace 4 | FileList
+workspace.preview_fifth | Preview workspace 5 | FileList
+workspace.preview_sixth | Preview workspace 6 | FileList
+workspace.preview_seventh | Preview workspace 7 | FileList
+workspace.preview_eighth | Preview workspace 8 | FileList
+workspace.preview_ninth | Preview workspace 9 | FileList
+workspace.cancel_preview | Cancel workspace preview | FileList
+workspace.new | New workspace from current layout | FileList
+workspace.save | Save workspace | FileList
+workspace.move_left | Move workspace left | FileList
+workspace.move_right | Move workspace right | FileList
+layout.switcher | Switch layout | FileList
+layout.focus_pane_first | Go to pane 1 | FileList
+layout.focus_pane_second | Go to pane 2 | FileList
+layout.focus_pane_third | Go to pane 3 | FileList
+layout.focus_pane_fourth | Go to pane 4 | FileList
+layout.split_right | Split pane right | FileList
+layout.split_below | Split pane below | FileList
+layout.close_pane | Close pane | FileList
+layout.save | Save layout as… | FileList
+app_menu.toggle | App menu | global
+settings.toggle | All settings | global
+jobs.toggle | Show or hide jobs | global
+sheet.narrower | Narrower side sheet | global
+sheet.wider | Wider side sheet | global
+app.command_palette | Command center | global
+help.key_map | Help and key map | global
+help.user_guide | User guide | global
+tab.next | Next tab | NavoPane
+tab.previous | Previous tab | NavoPane
+tab.close | Close tab | NavoPane
+tab.clone | Clone tab to other pane | NavoPane
+tab.go_to_first | Go to tab 1 | NavoPane
+tab.go_to_second | Go to tab 2 | NavoPane
+tab.go_to_third | Go to tab 3 | NavoPane
+tab.go_to_fourth | Go to tab 4 | NavoPane
+tab.go_to_fifth | Go to tab 5 | NavoPane
+tab.go_to_sixth | Go to tab 6 | NavoPane
+tab.go_to_seventh | Go to tab 7 | NavoPane
+tab.go_to_eighth | Go to tab 8 | NavoPane
+tab.go_to_last | Go to last tab | NavoPane
+tab.new | New tab | NavoPane
+pane.drive_menu_first | Drives of pane 1 | NavoPane
+pane.drive_menu_second | Drives of pane 2 | NavoPane
+pane.edit_path | Edit path | NavoPane
+window.view_menu | Window view menu | NavoPane
+pane.reset_split | Reset pane split | NavoPane
+tabs.show_hidden | Show hidden tabs | NavoPane
+path.show_hidden | Show hidden path folders | NavoPane
+preview.browse | Browse in preview | NavoPane
+crash_notice.focus | Go to the crash notice | NavoPane
+activity.focus | Go to the activity strip | NavoPane
+files.open_terminal | Open terminal here | NavoPane
+files.reset_column_widths | Reset column widths | NavoPane
+crash_notice.open_folder | Open the recovery folder | CrashNotice
+crash_notice.save | Save crash report | CrashNotice
+crash_notice.dismiss | Dismiss crash notice | CrashNotice
+pane.leave_waiting | Stop waiting | PaneWaiting
+pane.retry_listing | Retry listing | PaneWaiting
+preview.cursor_up | Up | PreviewBrowse
+preview.cursor_down | Down | PreviewBrowse
+preview.fold | Fold folder | PreviewBrowse
+preview.unfold | Unfold folder | PreviewBrowse
+preview.unfold_all | Unfold everything below | PreviewBrowse
+preview.fold_all | Fold everything below | PreviewBrowse
+preview.open | Open in preview | PreviewBrowse
+preview.go_to | Open in pane | PreviewBrowse
+preview.open_parent | Up one folder | PreviewBrowse
+preview.toggle_mark | Mark and count | PreviewBrowse
+preview.view | View file | PreviewBrowse
+preview.leave | Close preview | PreviewBrowse
+preview.leave_and_switch | Leave preview, switch pane | PreviewBrowse
+preview.recount | Recount folder | PreviewBrowse
+preview.view_menu | Preview view menu | PreviewBrowse
+preview.type_bars | Show or hide type bars | PreviewBrowse
+preview.largest_files | Show or hide the largest files | PreviewBrowse
+command_center.find_content | Search inside files | FileList
+files.cursor_up | Up | FileList
+files.cursor_down | Down | FileList
+files.page_up | Page up | FileList
+files.page_down | Page down | FileList
+files.cursor_first | First row | FileList
+files.cursor_last | Last row | FileList
+files.toggle_mark | Mark | FileList
+files.toggle_mark_down | Mark and move down | FileList
+files.open | Open | FileList
+files.open_parent | Open parent folder | FileList
+pane.switch | Switch pane | FileList
+pane.switch_back | Switch to previous pane | FileList
+files.copy | Copy | FileList
+files.move | Move | FileList
+files.clipboard_copy | Copy to clipboard | FileList
+files.clipboard_cut | Cut to clipboard | FileList
+files.paste | Paste | FileList
+files.recycle | Move to Recycle Bin | FileList
+files.delete | Delete permanently | FileList
+pane.go_back | Back | FileList
+pane.go_forward | Forward | FileList
+files.clear_filter | Clear filter | FileList
+files.rename | Rename | FileList
+files.multi_rename | Rename several items | FileList
+files.undo | Undo the last rename | FileList
+files.new_folder | New folder | FileList
+files.new_file | New file | FileList
+files.mark_pattern | Mark by pattern | FileList
+files.unmark_pattern | Unmark by pattern | FileList
+files.invert_marks | Invert marks | FileList
+files.sort_by_name | Sort by name | FileList
+files.sort_by_extension | Sort by extension | FileList
+files.sort_by_date | Sort by date | FileList
+files.sort_by_size | Sort by size | FileList
+files.edit | Edit | FileList
+files.edit_with | Edit with | FileList
+files.view | View | FileList
+files.refresh | Refresh | FileList
+files.context_menu | Context menu | FileList
+path_input.cancel | Cancel path edit | PathInput
+drive_menu.up | Up | DriveMenu
+drive_menu.down | Down | DriveMenu
+drive_menu.open | Open drive | DriveMenu
+drive_menu.close | Close drive menu | DriveMenu
+tab.toggle_pin | Pin or unpin tab | NavoPane
+tab.duplicate | Duplicate tab | NavoPane
+tab.close_others | Close other tabs | NavoPane
+tab.close_right | Close tabs to the right | NavoPane
+tab.reopen_closed | Reopen closed tab | NavoPane
+tab.move_to_new_workspace | Move tab to new workspace | NavoPane
+tab.move_to_new_pane | Move tab to new pane | NavoPane
+tab.copy_path | Copy tab folder path | NavoPane
+popup_menu.up | Up | PopupMenu
+popup_menu.down | Down | PopupMenu
+popup_menu.choose | Choose | PopupMenu
+popup_menu.close | Close menu | PopupMenu
+files.extend_up | Extend marks up | FileList
+files.extend_down | Extend marks down | FileList
+files.extend_page_up | Extend marks a page up | FileList
+files.extend_page_down | Extend marks a page down | FileList
+files.extend_first | Extend marks to the first row | FileList
+files.extend_last | Extend marks to the last row | FileList
+files.mark_all | Mark all | FileList
+files.unmark_all | Unmark all | FileList
+files.restore_marks | Restore last marks | FileList
+files.mark_extension | Mark files with this extension | FileList
+files.unmark_extension | Unmark files with this extension | FileList
+files.copy_path | Copy full path | FileList
+context_menu.up | Up | ContextMenu
+context_menu.down | Down | ContextMenu
+context_menu.first | First item | ContextMenu
+context_menu.last | Last item | ContextMenu
+context_menu.page_up | Page up | ContextMenu
+context_menu.page_down | Page down | ContextMenu
+context_menu.choose | Choose item | ContextMenu
+context_menu.open_submenu | Open submenu | ContextMenu
+context_menu.close_submenu | Back one page | ContextMenu
+context_menu.back | Clear, back or close | ContextMenu
+context_menu.show_classic | Classic menu | ContextMenu
+command_center.up | Up | CommandCenter
+command_center.down | Down | CommandCenter
+command_center.page_up | Page up | CommandCenter
+command_center.page_down | Page down | CommandCenter
+command_center.first | First result | CommandCenter
+command_center.last | Last result | CommandCenter
+command_center.next_mode | Next mode | CommandCenter
+command_center.previous_mode | Previous mode | CommandCenter
+command_center.next_group | Next group | CommandCenter
+command_center.previous_group | Previous group | CommandCenter
+command_center.run | Run or open | CommandCenter
+command_center.run_in_new_tab | Open in new tab | CommandCenter
+command_center.reveal | Show in its folder | CommandCenter
+command_center.other_pane | Open in the other pane | CommandCenter
+command_center.copy_path | Copy full path | CommandCenter
+command_center.back | Clear, back or close | CommandCenter
+app_menu.focus_left | Left | AppMenu
+app_menu.focus_right | Right | AppMenu
+app_menu.focus_up | Up | AppMenu
+app_menu.focus_down | Down | AppMenu
+app_menu.activate | Choose item | AppMenu
+app_menu.close | Close app menu | AppMenu
+settings.row_up | Up | SettingsSheet
+settings.row_down | Down | SettingsSheet
+settings.previous_value | Previous value | SettingsSheet
+settings.next_value | Next value | SettingsSheet
+settings.flip_value | Turn on or off | SettingsSheet
+settings.next_section | Next section | SettingsSheet
+settings.previous_section | Previous section | SettingsSheet
+settings.edit_value | Edit value | SettingsSheet
+settings.show_in_file | Show in settings file | SettingsSheet
+settings.reset_value | Reset to default | SettingsSheet
+settings.undo | Undo change | SettingsSheet
+settings.find | Find a setting | SettingsSheet
+settings.close | Close settings | SettingsSheet
+settings.cancel_edit | Cancel edit | SettingsField
+settings.clear_find | Clear the search | SettingsFind
+settings.find_to_list | Back to the list | SettingsFind
+shortcuts.previous_row | Previous shortcut | Shortcuts
+shortcuts.next_row | Next shortcut | Shortcuts
+shortcuts.record | Record a new key | Shortcuts
+shortcuts.cancel | Cancel the new key | Shortcuts
+shortcuts.reset | Reset to the default key | Shortcuts
+dialog.next_field | Next field | Dialog
+dialog.previous_field | Previous field | Dialog
+dialog.next_button | Next button | DialogButton
+dialog.previous_button | Previous button | DialogButton
+dialog.press | Press button | DialogButton
+confirm.cancel | Cancel | ConfirmDialog
+prompt.cancel | Cancel | PromptDialog
+activity.previous | Previous activity button | ActivityStrip
+activity.next | Next activity button | ActivityStrip
+activity.pause | Pause or resume the job | ActivityStrip
+activity.remove | Cancel the job or dismiss the item | ActivityStrip
+activity.act | Press the activity button | ActivityStrip
+activity.leave | Back to the file list | ActivityStrip
+activity.previous_item | Previous activity | ActivityDrawer
+activity.next_item | Next activity | ActivityDrawer
+viewer.save | Save | Viewer
+viewer.close | Close viewer | Viewer
+viewer.edit | Edit file | Viewer
+viewer.show_text | Show as text | Viewer
+viewer.show_hex | Show as hex | Viewer
+viewer.show_rich | Show rich view | Viewer
+lister.show_text | Show as text (Lister) | Viewer
+lister.show_hex | Show as hex (Lister) | Viewer
+lister.show_rich | Show rich view (Lister) | Viewer
+lister.find_next | Find next (Lister) | Viewer
+lister.page_or_next_image | Page down or next image | Viewer
+lister.previous_image | Previous image | Viewer
+viewer.next_file | Next file | Viewer
+viewer.previous_file | Previous file | Viewer
+viewer.line_up | Line up | Viewer
+viewer.line_down | Line down | Viewer
+viewer.page_up | Page up | Viewer
+viewer.page_down | Page down | Viewer
+viewer.go_to_start | Go to start | Viewer
+viewer.go_to_end | Go to end | Viewer
+viewer.scroll_left | Scroll left | Viewer
+viewer.scroll_right | Scroll right | Viewer
+viewer.go_to_line | Go to line | Viewer
+viewer.back | Back | Viewer
+viewer.show_line_ends | Show line ends | Viewer
+viewer.follow | Follow the end of the file | Viewer
+viewer.context_menu | Context menu | Viewer
+viewer.view_menu | View menu | Viewer
+viewer.encoding | Choose the text encoding | Viewer
+view.left_drawer | Left drawer | Viewer
+view.right_drawer | Right drawer | Viewer
+view.line_numbers | Show or hide line numbers | Viewer
+view.opens_inspector | Open the inspector on pick | Viewer
+view.memory_strip | Show or hide the memory strip | Viewer
+view.charts | Show or hide charts | Viewer
+view.row_bars | Show or hide row bars | Viewer
+view.usage_bars | Show or hide the used and free bars | Viewer
+view.who_uses | Show or hide who uses the flash | Viewer
+view.simple | Simple view | Viewer
+view.rich | Rich view | Viewer
+view.custom | Custom view | Viewer
+view.keep_as_default | Keep the view as default | Viewer
+view.reset_to_defaults | Reset the view to the defaults | Viewer
+viewer.copy_path_line | Copy path:line | Viewer
+find.open | Find | Viewer
+find.next | Find next | Viewer
+find.previous | Find previous | Viewer
+find.selection | Find selection | Viewer
+find.match_case | Match case | Viewer
+mark.colour_one | Mark 1 | Viewer
+mark.colour_two | Mark 2 | Viewer
+mark.colour_three | Mark 3 | Viewer
+mark.colour_four | Mark 4 | Viewer
+mark.colour_five | Mark 5 | Viewer
+mark.colour_six | Mark 6 | Viewer
+mark.colour_seven | Mark 7 | Viewer
+mark.colour_eight | Mark 8 | Viewer
+mark.clear | Clear marks | Viewer
+bookmark.toggle | Bookmark | Viewer
+bookmark.next | Next bookmark | Viewer
+bookmark.previous | Previous bookmark | Viewer
+editor.toggle_preview | Show or hide Markdown preview | Viewer
+editor.focus_preview | Focus Markdown preview | Viewer
+editor.leave_preview | Leave Markdown preview | MarkdownPreview
+find.older_search | Older search | ViewerFind
+find.newer_search | Newer search | ViewerFind
+find.all | Find all | ViewerFind
+find.result_up | Previous result | FindAll
+find.result_down | Next result | FindAll
+find.go_to_result | Go to result | FindAll
+find.close_results | Close results | FindAll
+image.fit | Fit to window | Image
+image.actual_size | Actual size | Image
+image.zoom_in | Zoom in | Image
+image.zoom_out | Zoom out | Image
+image.toggle_info | Show or hide image info | Image
+image.copy | Copy image | Image
+image.copy_path | Copy path | Image
+space.next_part | Move focus to the next part: table, memory strips, treemap | Space
+space.previous_part | Move focus to the previous part | Space
+space.previous_item | Select the previous block or tile | Space
+space.next_item | Select the next block or tile | Space
+space.region_above | Move to the strip of the region above | Space
+space.region_below | Move to the strip of the region below | Space
+space.first_block | Select the first block in the strip | Space
+space.last_block | Select the last block in the strip | Space
+space.zoom_in | Zoom into the selected block | Space
+space.zoom_out | Zoom out of the block | Space
+space.pick_group | Select the group of the tile | Space
+space.next_grouping | Group the treemap by the next grouping | Space
+space.toggle_scale | Switch between Compress gaps and True scale | Space
+tree.expand_branch | Open branch | Tree
+tree.collapse_branch | Fold branch | Tree
+tree.expand_all | Open all | Tree
+tree.collapse_all | Fold all | Tree
+tree.expand_branch_or_type | Open branch or type * | Tree
+tree.collapse_all_or_type | Fold all or type - | Tree
+tree.show_depth_one | Show depth 1 | Tree
+tree.show_depth_two | Show depth 2 | Tree
+tree.show_depth_three | Show depth 3 | Tree
+tree.show_depth_four | Show depth 4 | Tree
+tree.show_depth_five | Show depth 5 | Tree
+tree.show_depth_six | Show depth 6 | Tree
+tree.show_depth_seven | Show depth 7 | Tree
+tree.show_depth_eight | Show depth 8 | Tree
+tree.show_depth_nine | Show depth 9 | Tree
+tree.copy_value | Copy value | Tree
+tree.copy_key | Copy key | Tree
+tree.copy_path | Copy path | Tree
+tree.filter_backspace | Delete last filter character | Tree
+tree.type_n | Type n while filtering | Tree
+tree.type_p | Type p while filtering | Tree
+tree.type_one | Type 1 while filtering | Tree
+tree.type_three | Type 3 while filtering | Tree
+tree.type_five | Type 5 while filtering | Tree
+table.first_cell | First cell in row | Table
+table.last_cell | Last cell in row | Table
+table.copy_cell | Copy cell | Table
+table.copy_row | Copy row | Table
+table.copy_column | Copy column | Table
+table.sort_by_column | Sort by this column | Table
+markdown.open_link | Open link | Markdown
+markdown.next_link | Next link | Markdown
+markdown.previous_link | Previous link | Markdown
+markdown.copy_block | Copy block | Markdown
+markdown.copy_link | Copy link | Markdown
+memory.go_to_item | Go to the picked range | MemoryImage
+elf.pick_item | Show the picked section's symbols, or inspect the symbol | Elf
+elf.sort_by_name | Sort symbols by name | Elf
+elf.sort_by_section | Sort symbols by section | Elf
+elf.sort_by_address | Sort symbols by address | Elf
+elf.sort_by_size | Sort symbols by size | Elf
+elf.toggle_noise | Show or hide zero-size, ABS, file and section symbols | Elf
+elf.type_n | Type n in the filter | ElfTable
+elf.type_p | Type p in the filter | ElfTable
+elf.type_one | Type 1 in the filter | ElfTable
+elf.type_three | Type 3 in the filter | ElfTable
+elf.type_five | Type 5 in the filter | ElfTable
+map.pick_item | Show only the picked region or object, or inspect the row | Map
+map.next_table | Show the next table: memory, sections, symbols | Map
+map.sort_by_name | Sort the table by name | Map
+map.sort_by_second | Sort the table by used %, region or space | Map
+map.sort_by_address | Sort the table by address | Map
+map.sort_by_size | Sort the table by size | Map
+map.type_n | Type n in the filter | MapTable
+map.type_p | Type p in the filter | MapTable
+map.type_one | Type 1 in the filter | MapTable
+map.type_three | Type 3 in the filter | MapTable
+map.type_five | Type 5 in the filter | MapTable
+trace.filter_by_id | Filter by the picked ID | CanTrace
+trace.sort_ids | Sort IDs by count or ID | CanTrace
+trace.type_one | Type 1 in the ID filter | CanTrace
+trace.type_three | Type 3 in the ID filter | CanTrace
+trace.type_five | Type 5 in the ID filter | CanTrace
+trace.type_n | Type n in the ID filter | CanTrace
+trace.type_p | Type p in the ID filter | CanTrace
+trace.filter_backspace | Erase in the ID filter | CanTrace
+pdf.fit | Fit to width | Pdf
+pdf.actual_size | Actual size | Pdf
+pdf.zoom_in | Zoom in | Pdf
+pdf.zoom_out | Zoom out | Pdf
+pdf.whole_word | Whole word | Pdf
+pdf.all_hits | All hits | Pdf
+pdf.pages | Pages | Pdf
+pdf.copy | Copy selected text | Pdf
+pdf.link_next | Next link | Pdf
+pdf.link_previous | Previous link | Pdf
+pdf.link_follow | Follow link | Pdf
+pdf.trail_back | Back | Pdf
+pdf.trail_forward | Forward | Pdf
+multi_rename.rename | Rename the items | MultiRename
+multi_rename.close | Close without renaming | MultiRename
+multi_rename.token_menu | Insert a token | MultiRename
+multi_rename.focus_preview | Go to the preview | MultiRename
+multi_rename.focus_fields | Back to the fields | MultiRename
+multi_rename.page_up | Scroll the preview up | MultiRename
+multi_rename.page_down | Scroll the preview down | MultiRename
+multi_rename.next_problem | Next problem | MultiRename
+multi_rename.previous_problem | Previous problem | MultiRename
+multi_rename.save_preset | Save a preset | MultiRename
+multi_rename.open_presets | Open a preset | MultiRename
+multi_rename.reset | Reset every field | MultiRename
+multi_rename.edit_names | Edit names | MultiRename
+multi_rename.load_names | Load names from a file | MultiRename
+multi_rename.paste_names | Paste names | MultiRename
+multi_rename.copy_names | Copy new names | MultiRename
+multi_rename.counter_per_folder | Restart the counter in each folder | MultiRename
+multi_rename.toggle_row | Exclude or include the row | MultiRenamePreview
+multi_rename.move_row_up | Move the row up | MultiRenamePreview
+multi_rename.move_row_down | Move the row down | MultiRenamePreview
+files.recently_deleted | Recently deleted | global
+window.new | New window | global
+workspace.list | Workspaces | global
+app.quit | Quit | global

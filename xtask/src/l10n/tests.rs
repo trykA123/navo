@@ -12,7 +12,7 @@ fn ftl(text: &str) -> Vec<(String, String)> {
 
 fn source(text: &str) -> Source {
     Source {
-        path: String::from("crates/rusty-ui/src/x.rs"),
+        path: String::from("crates/navo-ui/src/x.rs"),
         text: text.to_owned(),
         in_ratchet: true,
     }
@@ -57,7 +57,7 @@ fn line_numbers_follow_newlines() {
 
 #[test]
 fn calls_find_literal_ids_in_the_macro_and_the_functions() {
-    let code = "let a = t!(\"one\"); let b = tr(\"two\"); let c = rusty_l10n::tr_args(\"three\", &x); \
+    let code = "let a = t!(\"one\"); let b = tr(\"two\"); let c = navo_l10n::tr_args(\"three\", &x); \
                 let d = t!(\"four\", n = 1); let e = tr(name); let f = other(\"five\");";
     let ids: Vec<String> = scan(code)
         .calls
@@ -155,7 +155,7 @@ fn a_literal_id_that_is_not_defined_fails_with_its_place() {
     );
     assert_eq!(
         outcome.errors,
-        ["crates/rusty-ui/src/x.rs:3: unknown message id files-close"]
+        ["crates/navo-ui/src/x.rs:3: unknown message id files-close"]
     );
 }
 

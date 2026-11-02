@@ -8,7 +8,7 @@ A keyboard-first file manager for Windows, written in Rust.
 
 The still above links to a two-and-a-half-minute product film ([`design/showreel/navo-showreel.mp4`](design/showreel/navo-showreel.mp4)). The film shows the planned product, not only what is built today. Many of its scenes are on the roadmap and not built yet: tiled panes, saved sets of panes, pins, find by content, archives as folders, the recently deleted view, the drawer with transfers, clipboard and a terminal, compare, CAN traces decoded with a DBC file, plugins and colour themes. Each of those scenes carries a "Planned" tag with its phase. The film is drawn from the feature specs and design prototypes, with invented file names. It is not a recording of the app. The [status](#status) section says what works today.
 
-Navo is the product name. Rusty is the project's codename, so crates and plans still use it.
+Navo is the product and codebase name. Crates use the `navo-` prefix.
 
 Navo was called Ferrite before. An existing Ferrite profile moves to Navo on first start, and the old folder is renamed to `Ferrite.migrated-to-navo`.
 
@@ -66,47 +66,47 @@ The full list, with each item's kind and exit criteria, is in [docs/roadmap.md](
 
 Navo is a Cargo workspace. The UI is drawn with GPUI, the GPU-accelerated framework from the Zed editor, through `gpui-kit`. There is no async runtime in the core.
 
-State has one owner and moves in one direction. `AppState` in `rusty-core` is plain data. It changes only through `apply(command)`, a pure function that returns effects. The runtime carries out those effects (list a folder, start a job, save the session) and feeds the results back as events.
+State has one owner and moves in one direction. `AppState` in `navo-core` is plain data. It changes only through `apply(command)`, a pure function that returns effects. The runtime carries out those effects (list a folder, start a job, save the session) and feeds the results back as events.
 
 ```mermaid
 flowchart LR
     input["Keys, menus, Ctrl+K,<br/>drag and drop"] --> cmd["Typed command"]
-    cmd --> core["rusty-core<br/>validate, plan, apply"]
+    cmd --> core["navo-core<br/>validate, plan, apply"]
     core -->|effects| run["Runtime"]
-    run --> fs["rusty-fs<br/>listing, jobs, journal"]
-    run --> store["rusty-store<br/>settings, session, SQLite"]
-    run --> index["rusty-index<br/>fuzzy search, disk index"]
-    run --> shell["rusty-shell<br/>Windows shell"]
+    run --> fs["navo-fs<br/>listing, jobs, journal"]
+    run --> store["navo-store<br/>settings, session, SQLite"]
+    run --> index["navo-index<br/>fuzzy search, disk index"]
+    run --> shell["navo-shell<br/>Windows shell"]
     fs & store & index & shell -->|events| core
-    core --> ui["rusty-ui<br/>draws state"]
+    core --> ui["navo-ui<br/>draws state"]
 ```
 
 The main crates:
 
 | Crate | Job |
 | --- | --- |
-| `rusty-core` | Model and logic with no I/O: panes, tabs, layout, selection, sorting, commands, operation plans |
-| `rusty-fs` | Listing, watching, and the job engine for copy, move, rename, recycle and delete |
-| `rusty-store` | Settings in TOML, the session snapshot, the `navo.db` and `cache.db` SQLite databases, migrations |
-| `rusty-index` | Fuzzy matching with `nucleo`, folder walks, and the NTFS index behind Ctrl+K |
-| `rusty-shell` | Windows shell: icons, context menu, Recycle Bin, clipboard, drag and drop |
-| `rusty-ui` | The component library and every view, on design tokens |
-| `rusty-automotive`, `rusty-pdf`, `rusty-structured`, `rusty-syntax` | Readers and models behind the F3 viewer |
-| `rusty-cache`, `rusty-diag`, `rusty-l10n` | Bounded caches, redacted diagnostics, Fluent translations |
-| `rusty-app` | The `navo` binary: wiring, single instance, crash handling, the index service |
+| `navo-core` | Model and logic with no I/O: panes, tabs, layout, selection, sorting, commands, operation plans |
+| `navo-fs` | Listing, watching, and the job engine for copy, move, rename, recycle and delete |
+| `navo-store` | Settings in TOML, the session snapshot, the `navo.db` and `cache.db` SQLite databases, migrations |
+| `navo-index` | Fuzzy matching with `nucleo`, folder walks, and the NTFS index behind Ctrl+K |
+| `navo-shell` | Windows shell: icons, context menu, Recycle Bin, clipboard, drag and drop |
+| `navo-ui` | The component library and every view, on design tokens |
+| `navo-automotive`, `navo-pdf`, `navo-structured`, `navo-syntax` | Readers and models behind the F3 viewer |
+| `navo-cache`, `navo-diag`, `navo-l10n` | Bounded caches, redacted diagnostics, Fluent translations |
+| `navo-app` | The `navo` binary: wiring, single instance, crash handling, the index service |
 
-`rusty-plugins` and `rusty-term` are placeholders for later phases. [docs/architecture.md](docs/architecture.md) covers state, storage, caching, start-up and safety in depth.
+`navo-plugins` and `navo-term` are placeholders for later phases. [docs/architecture.md](docs/architecture.md) covers state, storage, caching, start-up and safety in depth.
 
 ## Build and run
 
 You need Rust 1.99.0, which `rust-toolchain.toml` pins, and the tools listed in [docs/dev-tools.md](docs/dev-tools.md).
 
 ```sh
-cargo run -p rusty-app --release     # the app, navo
-cargo run -p rusty-ui-gallery        # the component gallery
+cargo run -p navo-app --release     # the app, navo
+cargo run -p navo-ui-gallery        # the component gallery
 ```
 
-`rusty-ui-gallery --screenshot <dir> --pages <stem,stem,...>` shoots only the listed gallery pages.
+`navo-ui-gallery --screenshot <dir> --pages <stem,stem,...>` shoots only the listed gallery pages.
 
 On Linux, `scripts/install-local.sh` builds an `x86-64-v3` binary (as CachyOS does) into `target/x86-64-v3/`. It installs it as `~/.local/bin/navo`, with its icons and a `.desktop` entry under `~/.local/share`.
 
@@ -125,7 +125,7 @@ The gate runs, in order:
 3. taplo (TOML check)
 4. typos
 5. size limits
-6. l10n: the Fluent files parse, every literal message id exists and is used, and the count of hard-coded texts (capitalised literals of two or more words in non-test code of `rusty-ui` and `rusty-app`) matches `xtask/l10n-allow.txt`
+6. l10n: the Fluent files parse, every literal message id exists and is used, and the count of hard-coded texts (capitalised literals of two or more words in non-test code of `navo-ui` and `navo-app`) matches `xtask/l10n-allow.txt`
 7. colors: no colour is built outside the theme token layer (`rgb(`, `hsla(`, `Hsla {`, `black()`, SVG `fill="#`), except the files listed with a reason in `xtask/colors-allow.txt`
 8. cargo-deny
 9. cargo-audit

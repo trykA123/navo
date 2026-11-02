@@ -105,7 +105,10 @@ fn get_dxgi_factory(debug_layer_available: bool) -> Result<IDXGIFactory6> {
 
 // Ferrite spike patch: prefer the low-power GPU; FERRITE_GPU=default|high-performance overrides.
 fn gpu_preference() -> DXGI_GPU_PREFERENCE {
-    match std::env::var("FERRITE_GPU").as_deref() {
+    match std::env::var("NAVO_GPU")
+        .or_else(|_| std::env::var("FERRITE_GPU"))
+        .as_deref()
+    {
         Ok("default") => DXGI_GPU_PREFERENCE_UNSPECIFIED,
         Ok("high-performance") => DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
         _ => DXGI_GPU_PREFERENCE_MINIMUM_POWER,

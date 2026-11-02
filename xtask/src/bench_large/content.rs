@@ -2,7 +2,7 @@ use std::fs::File;
 use std::time::Instant;
 
 use blake3::Hasher;
-use rusty_core::paging::ByteSource;
+use navo_core::paging::ByteSource;
 
 use super::generate::Pair;
 use super::scan::{BLOCK, FileSource, map_file, read_file_at};

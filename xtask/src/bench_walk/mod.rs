@@ -10,8 +10,8 @@ use std::{
     time::Instant,
 };
 
-use rusty_core::{Location, ProviderPath};
-use rusty_fs::{CancelToken, LocalFs, Provider};
+use navo_core::{Location, ProviderPath};
+use navo_fs::{CancelToken, LocalFs, Provider};
 
 use crate::stats::Summary;
 use options::{Options, Target};
@@ -111,7 +111,7 @@ fn measure(target: Target, location: &Location) -> Result<f64, String> {
             },
             &cancel,
         ),
-        Target::Size => rusty_fs::folder_size(&provider, location, &cancel).map(|size| {
+        Target::Size => navo_fs::folder_size(&provider, location, &cancel).map(|size| {
             std::hint::black_box(size);
         }),
         _ => return Err("expected a filesystem target".to_owned()),
@@ -292,7 +292,7 @@ mod tests {
         check_count(&path.join("size-tree"), 2).unwrap();
         check_count(&path.join("size-tree/folder-000"), 3).unwrap();
         let tree = location(&path.join("size-tree")).unwrap();
-        let size = rusty_fs::folder_size(&LocalFs::new(), &tree, &CancelToken::new()).unwrap();
+        let size = navo_fs::folder_size(&LocalFs::new(), &tree, &CancelToken::new()).unwrap();
         assert_eq!((size.files, size.folders, size.skipped), (6, 2, 0));
         assert_eq!(
             benchmark(&options, (5, 2, 3), 10)

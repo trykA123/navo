@@ -123,10 +123,8 @@ impl TestRoot {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "rusty-gate-{}-{timestamp}-{id}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("navo-gate-{}-{timestamp}-{id}", std::process::id()));
         std::fs::create_dir(&root).unwrap();
         Self(root)
     }
@@ -190,7 +188,7 @@ fn failing_step_propagates_its_exit_code() {
 #[test]
 fn unspawnable_step_returns_failure() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let steps = [Step::new("unspawnable", "rusty-gate-no-such-program", &[])];
+    let steps = [Step::new("unspawnable", "navo-gate-no-such-program", &[])];
     assert_eq!(
         super::run::run_steps(root, &steps),
         std::process::ExitCode::FAILURE
@@ -203,7 +201,7 @@ fn strings(list: &[&str]) -> Vec<String> {
 
 #[test]
 fn check_steps_for_one_crate_follow_the_exact_order() {
-    let actual: Vec<_> = super::check::check_steps(&["rusty-core"])
+    let actual: Vec<_> = super::check::check_steps(&["navo-core"])
         .into_iter()
         .map(|step| (step.name, step.program, step.args))
         .collect();
@@ -215,7 +213,7 @@ fn check_steps_for_one_crate_follow_the_exact_order() {
             strings(&[
                 "clippy",
                 "-p",
-                "rusty-core",
+                "navo-core",
                 "--all-targets",
                 "--",
                 "-D",
@@ -230,7 +228,7 @@ fn check_steps_for_one_crate_follow_the_exact_order() {
         (
             "nextest",
             "cargo",
-            strings(&["nextest", "run", "-p", "rusty-core", "--profile", "ci"]),
+            strings(&["nextest", "run", "-p", "navo-core", "--profile", "ci"]),
         ),
     ];
     assert_eq!(actual, expected);

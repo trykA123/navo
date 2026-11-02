@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use rusty_fs::DriveClass;
+use navo_fs::DriveClass;
 
 use super::{
     fixture::{self, DATA_SETS},

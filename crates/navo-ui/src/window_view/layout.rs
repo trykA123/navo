@@ -1,0 +1,79 @@
+use super::NavoWindow;
+use crate::prelude::*;
+use crate::title_bar::{GradientLayer, system_backdrop};
+use crate::tokens;
+use navo_core::PaneId;
+
+pub(super) const ONE_PANE_BELOW: Pixels = px(900.);
+
+impl NavoWindow {
+    pub(super) fn shown_panes(&self, window: &Window) -> Vec<PaneId> {
+        let panes = self.panes();
+        if panes.len() < 2
+            || (window.viewport_size().width >= ONE_PANE_BELOW
+                && self.tiles.fits(&self.tiles_layout()))
+        {
+            return panes;
+        }
+        let shown = self
+            .drive_menu
+            .as_ref()
+            .map(|menu| menu.pane)
+            .unwrap_or_else(|| self.browser.state().focused_pane());
+        match panes.contains(&shown) {
+            true => vec![shown],
+            false => panes.into_iter().take(1).collect(),
+        }
+    }
+
+    fn panes_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let body = self.tiles_view(window, cx);
+        self.viewer_view(window, cx).unwrap_or(body)
+    }
+
+    pub(super) fn body_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        self.end_finished_drag(cx);
+        let t = tokens::current(cx).clone();
+        let body = self.panes_view(window, cx);
+        let has_strip = self.fkey_strip_height(&t) > px(0.);
+        div()
+            .relative()
+            .flex()
+            .flex_1()
+            .min_h_0()
+            .px(t.spacing.xs)
+            .when(!has_strip, |area| area.pb(t.spacing.md))
+            .child(body)
+            .on_action(
+                cx.listener(|view, _: &super::keys::OpenRecentlyDeleted, window, cx| {
+                    view.open_recently_deleted(window, cx);
+                }),
+            )
+            .children(self.job_card_layer(cx))
+            .children(self.preview_layer(window, cx))
+            .children(self.settings_layer(window, cx))
+            .children(self.recent_layer(window, cx))
+            .children(self.hints_layer(window, cx))
+            .children(self.workspace_tray(cx))
+            .children(self.activity_drawer_layer(window, cx))
+            .children(self.layout_switcher_view(cx))
+            .children(self.preset_dialog_view(cx))
+    }
+
+    pub(super) fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let theme = tokens::current(cx);
+        let mica = theme.surfaces.mica();
+        let has_mica =
+            !theme.is_contrast && system_backdrop().gradient == GradientLayer::BelowTitleBar;
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .when(has_mica, |below| below.bg(mica))
+            .children(self.crash_notice_view(window, cx))
+            .children(self.index_upgrade_view(cx))
+            .child(self.body_area(window, cx))
+            .children(self.fkey_bar(window, cx))
+    }
+}

@@ -1,6 +1,6 @@
 use std::{fs, hint::black_box, path::Path, time::Instant};
 
-use rusty_index::{
+use navo_index::{
     file::{self, Header},
     search::{self, Term},
     table::{Flags, NO_PARENT, NameTable},

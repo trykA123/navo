@@ -2,8 +2,8 @@ use std::fs::File;
 use std::path::Path;
 
 use memmap2::Mmap;
-use rusty_core::paging::{ByteSource, LineIndex, read_full};
-use rusty_fs::PagedFile;
+use navo_core::paging::{ByteSource, LineIndex, read_full};
+use navo_fs::PagedFile;
 use xxhash_rust::xxh3::xxh3_64;
 
 pub const BLOCK: usize = 1024 * 1024;

@@ -1,8 +1,8 @@
-use super::{RUSTY_EXE_LIMIT, TooLarge, check_size};
+use super::{NAVO_EXE_LIMIT, TooLarge, check_size};
 
 #[test]
 fn limit_is_160_mebibytes() {
-    assert_eq!(RUSTY_EXE_LIMIT, 167_772_160);
+    assert_eq!(NAVO_EXE_LIMIT, 167_772_160);
 }
 
 #[test]

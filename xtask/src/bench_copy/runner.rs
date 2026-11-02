@@ -1,7 +1,7 @@
 use std::{path::Path, time::Instant};
 
-use rusty_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan};
-use rusty_fs::{
+use navo_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan};
+use navo_fs::{
     AutoTuning, CancelToken, HeldFile, JobContext, JobLog, JobOutcome, LocalFs, StepOutcome,
     WorkerCounts, copy_workers, drive_class, existing_at, run_job, run_job_parallel, scan,
 };
@@ -111,7 +111,7 @@ impl Benchmark<'_> {
     fn run_copy(&self, plan: &OperationPlan, method: Method) -> Result<(), String> {
         let cancel = CancelToken::new();
         let mut log = BenchLog;
-        let mut progress = |_: &rusty_fs::Progress| {};
+        let mut progress = |_: &navo_fs::Progress| {};
         let mut context = JobContext {
             ops: &self.ops,
             log: &mut log,
@@ -169,23 +169,23 @@ fn location(path: &Path) -> Result<Location, String> {
     #[cfg(unix)]
     let provider_path = {
         use std::os::unix::ffi::OsStrExt;
-        rusty_core::ProviderPath::from_bytes(path.as_os_str().as_bytes())
+        navo_core::ProviderPath::from_bytes(path.as_os_str().as_bytes())
     };
     #[cfg(windows)]
     let provider_path = {
         use std::os::windows::ffi::OsStrExt;
-        rusty_core::ProviderPath::from_wide(&path.as_os_str().encode_wide().collect::<Vec<_>>())
+        navo_core::ProviderPath::from_wide(&path.as_os_str().encode_wide().collect::<Vec<_>>())
     };
     Location::local(provider_path).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 #[cfg(windows)]
 fn robocopy(plan: &OperationPlan, workspace: &Workspace) -> Result<(), String> {
-    let Some(rusty_core::Step::MakeFolder { target }) = plan.steps.first() else {
+    let Some(navo_core::Step::MakeFolder { target }) = plan.steps.first() else {
         return Err("benchmark plan must start with a data set folder".to_owned());
     };
     let destination =
-        super::workspace::simplified(&rusty_fs::os_path(target).map_err(|error| error.message())?);
+        super::workspace::simplified(&navo_fs::os_path(target).map_err(|error| error.message())?);
     let name = destination
         .file_name()
         .ok_or_else(|| "data set folder has no name".to_owned())?;

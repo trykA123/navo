@@ -32,8 +32,8 @@ jobs:
         run: |
           BASE_SHA="${BASE_SHA:-$(git rev-parse HEAD~1)}"
           git checkout --force "$BASE_SHA"
-          if [ -f crates/rusty-fs/benches/listing.rs ]; then
-            cargo bench -p rusty-fs --bench listing -- --save-baseline=base
+          if [ -f crates/navo-fs/benches/listing.rs ]; then
+            cargo bench -p navo-fs --bench listing -- --save-baseline=base
             echo "BASE_MEASURED=1" >> "$GITHUB_ENV"
           fi
       - name: Compare the head commit
@@ -42,7 +42,7 @@ jobs:
         run: |
           git checkout --force "$HEAD_SHA"
           if [ "${BASE_MEASURED:-0}" = "1" ]; then
-            cargo bench -p rusty-fs --bench listing -- --baseline=base
+            cargo bench -p navo-fs --bench listing -- --baseline=base
           else
-            cargo bench -p rusty-fs --bench listing -- --save-baseline=base
+            cargo bench -p navo-fs --bench listing -- --save-baseline=base
           fi
