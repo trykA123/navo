@@ -112,11 +112,9 @@ fn a_writer_that_outwaits_the_deadline_reports_busy_not_access_denied() {
 }
 
 #[test]
-fn safe_mode_writers_take_no_lease_and_never_wait() {
+fn safe_mode_writers_ignore_the_exclusive_experimental_lease() {
     let (root, dirs, _journal) = setup();
     let _held = hold(&dirs);
     let target = crate::startup::path_location(&root.path().join("new.txt")).unwrap();
-    let started = Instant::now();
-    assert!(claim_write(&dirs, &target, false).unwrap().is_none());
-    assert!(started.elapsed() < Duration::from_secs(1));
+    let _write = write_lease(&dirs, &target, false, short()).unwrap();
 }

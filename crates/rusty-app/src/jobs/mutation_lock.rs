@@ -75,7 +75,7 @@ impl Wait<'_> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Mode {
     Shared,
     Exclusive,
@@ -101,7 +101,15 @@ impl super::JournalLog {
         &mut self,
         operation: &mut rusty_ui::browser::LoggedOperation<'_>,
     ) -> Result<(), String> {
-        if !self.experimental_retention || self.global_lease.is_some() {
+        if !self.experimental_retention {
+            if self.default_hold.is_none()
+                && let Some(dirs) = &self.profile
+            {
+                self.default_hold = Some(super::default_lock::operation(&dirs.data, operation)?);
+            }
+            return Ok(());
+        }
+        if self.global_lease.is_some() {
             return Ok(());
         }
         let Some(dirs) = &self.profile else {
@@ -121,27 +129,45 @@ impl super::JournalLog {
         } else {
             Mode::Shared
         };
-        let wait = Wait {
-            cancel: Some(operation.cancel),
-            waiting: Some(&mut *operation.waiting),
-            limit: WAIT,
-        };
-        self.global_lease = Some(lease(&dirs.data, mode, wait)?);
+        self.global_lease = Some(lease_operation(&dirs.data, mode, operation)?);
         Ok(())
     }
 }
 
-fn acquire(file: File, mode: Mode, mut wait: Wait<'_>) -> Result<File, LeaseError> {
+pub(super) fn lease_operation(
+    data: &Path,
+    mode: Mode,
+    operation: &mut rusty_ui::browser::LoggedOperation<'_>,
+) -> Result<File, String> {
+    let wait = Wait {
+        cancel: Some(operation.cancel),
+        waiting: Some(&mut *operation.waiting),
+        limit: WAIT,
+    };
+    lease(data, mode, wait).map_err(String::from)
+}
+
+fn acquire(file: File, mode: Mode, wait: Wait<'_>) -> Result<File, LeaseError> {
+    wait_for(wait, || {
+        try_lock(&file, mode).map_err(|error| LeaseError::Failed(error.to_string()))
+    })?;
+    Ok(file)
+}
+
+pub(super) fn wait_for(
+    mut wait: Wait<'_>,
+    mut attempt: impl FnMut() -> Result<bool, LeaseError>,
+) -> Result<(), LeaseError> {
     let deadline = Instant::now() + wait.limit;
     let mut is_announced = false;
     let result = loop {
         if wait.cancel.is_some_and(CancelToken::is_cancelled) {
             break Err(LeaseError::Cancelled);
         }
-        match try_lock(&file, mode) {
+        match attempt() {
             Ok(true) => break Ok(()),
             Ok(false) => {}
-            Err(error) => break Err(LeaseError::Failed(error.to_string())),
+            Err(error) => break Err(error),
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
@@ -156,7 +182,7 @@ fn acquire(file: File, mode: Mode, mut wait: Wait<'_>) -> Result<File, LeaseErro
     if is_announced {
         wait.announce(false);
     }
-    result.map(|()| file)
+    result
 }
 
 fn try_lock(file: &File, mode: Mode) -> io::Result<bool> {

@@ -268,7 +268,7 @@ fn safe_mode_file_creation_refuses_containers_and_the_profile() {
         assert!(write(&at(&path)).is_err(), "{path:?}");
     }
     let ordinary = at(&rig.files.join("made.txt"));
-    assert!(claim_write(&rig.dirs, &ordinary, false).unwrap().is_none());
+    assert!(claim_write(&rig.dirs, &ordinary, false).unwrap().is_some());
     let _lease = write(&ordinary).unwrap();
     LocalFs::new().create_file(&ordinary).unwrap();
     container_kept(&rig);

@@ -59,7 +59,11 @@ fn quit_checkpoints_the_shared_journal_after_flushing_visits() {
     assert!(visits.is_some());
     (search.record_visit)("/pending", true);
     let quit = super::super::quitter(
-        (None, visits, Some(journal.clone())),
+        (
+            None,
+            visits,
+            Some(jobs::SessionHolds::new(journal.clone(), dirs.clone())),
+        ),
         crate::profile::Cleanup::default(),
         None,
         crate::jobs::maintenance::MaintenanceTimer::default(),

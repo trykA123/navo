@@ -78,6 +78,7 @@ fn recover_one(
     } else if has_retention(&job.plan)
         || has_unrecognized_detail(job)
         || super::held::has_proof(journal, job.id)?
+        || super::held::is_restoring(journal, job.id)?
         || !lock(journal).retained_paths(job.id)?.is_empty()
     {
         JobState::RestorePending

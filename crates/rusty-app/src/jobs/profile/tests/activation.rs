@@ -1,7 +1,19 @@
 use super::*;
 
+fn check_without_waiting(log: &mut dyn OpLog, plan: &OperationPlan, fs: &FakeFs) {
+    log.check(LoggedOperation {
+        plan,
+        ops: fs,
+        cancel: &CancelToken::new(),
+        progress: &mut |_| {},
+        waiting: &mut |waiting| assert!(!waiting, "default jobs must ignore the lease"),
+        retain_deletes: None,
+    })
+    .unwrap();
+}
+
 #[test]
-fn default_jobs_never_acquire_a_user_wide_lease() {
+fn default_jobs_ignore_the_experimental_lease() {
     let (_root, dirs, journal) = setup();
     let fs = FakeFs::new();
     let copy = copy(&fs);
@@ -31,14 +43,23 @@ fn default_jobs_never_acquire_a_user_wide_lease() {
         },
     ];
     for plan in plans {
-        let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
-        check(log.as_mut(), &plan, &fs, &CancelToken::new()).unwrap();
-        let other = super::super::super::mutation_lock::test_file(&dirs.data);
-        assert!(
-            other.try_lock().is_ok(),
-            "default {:?} held a global lease",
-            plan.kind
-        );
+        for factory in [
+            profile_factory(journal.clone(), dirs.clone()),
+            crate::jobs::guard_factory(Some(dirs.clone())),
+        ] {
+            let mut log = factory(&plan).unwrap();
+            let other = super::super::super::mutation_lock::test_file(&dirs.data);
+            other.try_lock().unwrap();
+            check_without_waiting(log.as_mut(), &plan, &fs);
+            drop(other);
+            assert!(
+                crate::jobs::test_mutation_file(&dirs.data)
+                    .try_lock()
+                    .is_ok(),
+                "default {:?} acquired the experimental lease",
+                plan.kind
+            );
+        }
     }
 }
 
@@ -53,14 +74,21 @@ fn default_guard_ignores_unavailable_profile_directories_and_database() {
 }
 
 #[test]
-fn default_writers_and_recovery_ignore_an_exclusive_experimental_lease() {
+fn default_writers_ignore_an_exclusive_experimental_lease() {
     let (root, dirs, _journal) = setup();
     let exclusive = crate::jobs::test_mutation_file(&dirs.data);
     exclusive.try_lock().unwrap();
     let target = crate::startup::path_location(&root.path().join("new.txt")).unwrap();
-    assert!(claim_write(&dirs, &target, false).unwrap().is_none());
+    let _save = write_lease(&dirs, &target, false, waiting::short()).unwrap();
+    assert!(claim_write(&dirs, &target, false).unwrap().is_some());
     let _create = write_factory(dirs.clone(), false)(&target).unwrap();
     LocalFs::new().create_file(&target).unwrap();
+    drop(exclusive);
+    assert!(
+        crate::jobs::test_mutation_file(&dirs.data)
+            .try_lock()
+            .is_ok()
+    );
     assert!(
         crate::jobs::claim_recovery(&dirs.data, false)
             .unwrap()
@@ -101,7 +129,7 @@ fn experimental_mode_protects_reserved_directories() {
 }
 
 #[test]
-fn default_rename_undo_never_acquires_a_user_wide_lease() {
+fn default_rename_undo_ignores_the_experimental_lease() {
     let (_root, dirs, journal) = setup();
     let fs = FakeFs::new();
     let mut plan = copy(&fs);
@@ -120,7 +148,10 @@ fn default_rename_undo_never_acquires_a_user_wide_lease() {
         .finish(job, rusty_store::JobState::Done)
         .unwrap();
     let mut undo = crate::jobs::profile_undo(&journal, job, &dirs, false).unwrap();
-    check(undo.as_mut(), &plan, &fs, &CancelToken::new()).unwrap();
+    let exclusive = crate::jobs::test_mutation_file(&dirs.data);
+    exclusive.try_lock().unwrap();
+    check_without_waiting(undo.as_mut(), &plan, &fs);
+    drop(exclusive);
     assert!(
         crate::jobs::test_mutation_file(&dirs.data)
             .try_lock()

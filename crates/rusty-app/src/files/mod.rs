@@ -64,7 +64,8 @@ pub fn profile_hooks(
             result.write = Arc::new(move |location, save| {
                 let target = rusty_fs::save_location(location)
                     .map_err(|error| SaveError::Failed(error.message()))?;
-                crate::jobs::claim_write(&dirs, &target, false).map_err(SaveError::Failed)?;
+                let _hold =
+                    crate::jobs::claim_write(&dirs, &target, false).map_err(SaveError::Failed)?;
                 write(location, save)
             });
         }
