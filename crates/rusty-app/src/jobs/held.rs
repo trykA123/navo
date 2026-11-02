@@ -1,7 +1,7 @@
 use rusty_core::retention::{OverwriteProof, ProvedOverwrite};
 use rusty_core::{FsError, FsErrorKind, Location};
 use rusty_fs::{FileStamp, HeldFile, PlacedFile, ProviderOps, release_held};
-use rusty_store::{JobId, JournalError};
+use rusty_store::{JobId, JobState, JournalError};
 use serde::{Deserialize, Serialize};
 
 use super::{SharedJournal, lock, now_ms};
@@ -20,6 +20,8 @@ struct HeldRecord {
     proof: Option<OverwriteProof>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     placed_hash: Option<[u8; 32]>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    restoring: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -61,6 +63,23 @@ pub(super) fn record_placed(
 }
 
 pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Result<(), FsError> {
+    write_record(journal, job, (held, false))
+}
+
+#[cfg(test)]
+pub(super) fn record_restoring(
+    journal: &SharedJournal,
+    job: JobId,
+    held: &HeldFile,
+) -> Result<(), FsError> {
+    write_record(journal, job, (held, true))
+}
+
+fn write_record(
+    journal: &SharedJournal,
+    job: JobId,
+    (held, restoring): (&HeldFile, bool),
+) -> Result<(), FsError> {
     let record = HeldRecord {
         original: held.original.clone(),
         held: held.held.clone(),
@@ -69,6 +88,7 @@ pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Re
         volume: held.volume,
         proof: None,
         placed_hash: held.placed_hash,
+        restoring,
     };
     let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
     lock(journal)
@@ -138,10 +158,18 @@ pub(super) fn held_of(journal: &SharedJournal, job: JobId) -> Result<Held, Journ
 }
 
 pub(super) fn has_proof(journal: &SharedJournal, job: JobId) -> Result<bool, JournalError> {
+    has_key(journal, job, "proof")
+}
+
+pub(super) fn is_restoring(journal: &SharedJournal, job: JobId) -> Result<bool, JournalError> {
+    has_key(journal, job, "restoring")
+}
+
+fn has_key(journal: &SharedJournal, job: JobId, key: &str) -> Result<bool, JournalError> {
     Ok(lock(journal).held(job)?.iter().any(|bytes| {
         serde_json::from_slice::<serde_json::Value>(bytes)
             .ok()
-            .is_some_and(|value| value.get("proof").is_some())
+            .is_some_and(|value| value.get(key).is_some())
     }))
 }
 
@@ -166,14 +194,98 @@ pub(super) fn release_finished(
 ) -> Result<(), JournalError> {
     let jobs = lock(journal).finished_holding()?;
     for job in jobs {
-        let held = held_of(journal, job)?;
-        let (_, stored) = lock(journal).read_job(job)?;
-        if has_proof(journal, job)? || rusty_core::retention::is_retained_write(&stored.kind) {
+        release_job(journal, job, ops)?;
+    }
+    Ok(())
+}
+
+pub(super) fn release_job(
+    journal: &SharedJournal,
+    job: JobId,
+    ops: &dyn ProviderOps,
+) -> Result<(), JournalError> {
+    let held = held_of(journal, job)?;
+    let (state, stored) = lock(journal).read_job(job)?;
+    if matches!(state, JobState::Running | JobState::RestorePending)
+        || has_proof(journal, job)?
+        || rusty_core::retention::is_retained_write(&stored.kind)
+    {
+        return Ok(());
+    }
+    if held.unreadable == 0 {
+        if state == JobState::Undone && !discard_restoring(journal, job, ops)? {
+            return Ok(());
+        }
+        release(journal, job, &held.files, ops)?;
+    }
+    Ok(())
+}
+
+fn discard_restoring(
+    journal: &SharedJournal,
+    job: JobId,
+    ops: &dyn ProviderOps,
+) -> Result<bool, JournalError> {
+    let rows = lock(journal).held(job)?;
+    for row in rows {
+        let Ok(record) = serde_json::from_slice::<HeldRecord>(&row) else {
+            continue;
+        };
+        if !record.restoring {
             continue;
         }
-        if held.unreadable == 0 {
-            release(journal, job, &held.files, ops)?;
+        if let Err(error) = ops.remove_file(&record.held)
+            && error.kind != FsErrorKind::NotFound
+        {
+            tracing::warn!(job = job.0, error = ?error.kind, "discarded version not released");
+            return Ok(false);
         }
     }
+    Ok(true)
+}
+
+pub(super) fn hash_placed(
+    journal: &SharedJournal,
+    job: JobId,
+    ops: &dyn ProviderOps,
+) -> Result<(), String> {
+    let rows = lock(journal).held(job).map_err(|error| error.to_string())?;
+    for row in rows {
+        let Row::Held(mut record) =
+            serde_json::from_slice::<Row>(&row).map_err(|error| error.to_string())?
+        else {
+            continue;
+        };
+        let hash = ops
+            .content_hash(&record.original, &rusty_fs::CancelToken::new())
+            .map_err(|error| error.message())?;
+        record.placed_hash = Some(hash);
+        let bytes = serde_json::to_vec(&record).map_err(|error| error.to_string())?;
+        lock(journal)
+            .database()
+            .connection()
+            .execute(
+                "UPDATE undo SET inverse = ?3 WHERE job_id = ?1 AND inverse = ?2",
+                (job.0, row.as_slice(), bytes.as_slice()),
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn settle_restore(journal: &SharedJournal, job: JobId) -> Result<(), JournalError> {
+    let journal = lock(journal);
+    let transaction = journal.database().connection().unchecked_transaction()?;
+    transaction.execute("UPDATE job SET state = 'done' WHERE id = ?1", [job.0])?;
+    for row in journal.held(job)? {
+        if serde_json::from_slice::<HeldRecord>(&row).is_ok_and(|record| record.restoring) {
+            transaction.execute(
+                "DELETE FROM undo WHERE job_id = ?1 AND inverse = ?2",
+                (job.0, row.as_slice()),
+            )?;
+        }
+    }
+    transaction.commit()?;
     Ok(())
 }

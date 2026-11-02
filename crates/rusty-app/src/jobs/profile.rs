@@ -9,38 +9,47 @@ use rusty_store::{RetentionCatalog, RetentionSettings, SettingsError, StoreDirs}
 use rusty_ui::browser::{LogFactory, OpLog, WriteFactory};
 
 use super::mutation_lock::{self, LeaseError, Mode, Wait};
-use super::{JournalLog, SharedJournal, create_log, deletion, overwrite};
+use super::{
+    JournalLog, SessionHolds, SharedJournal, create_log, default_lock, deletion, overwrite,
+};
 
+#[cfg(test)]
 pub fn profile_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
-    factory(journal, dirs, None)
+    factory(journal, dirs, None, None)
 }
 
+#[cfg(test)]
 pub fn retaining_factory(
     journal: SharedJournal,
     dirs: StoreDirs,
     drive: Arc<dyn ProviderOps>,
 ) -> LogFactory {
-    factory(journal, dirs, Some(Drive::Probed(drive)))
+    factory(journal, dirs, Some(Drive::Probed(drive)), None)
 }
 
 #[cfg(test)]
 pub fn experimental_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
-    factory(journal, dirs, Some(Drive::Unprobed(None)))
+    factory(journal, dirs, Some(Drive::Unprobed(None)), None)
 }
 
 #[cfg(test)]
 pub fn confined_factory(journal: SharedJournal, dirs: StoreDirs, ceiling: Location) -> LogFactory {
-    factory(journal, dirs, Some(Drive::Unprobed(Some(ceiling))))
+    factory(journal, dirs, Some(Drive::Unprobed(Some(ceiling))), None)
 }
 
 #[derive(Clone)]
-enum Drive {
+pub(super) enum Drive {
     Probed(Arc<dyn ProviderOps>),
     #[cfg(test)]
     Unprobed(Option<Location>),
 }
 
-fn factory(journal: SharedJournal, dirs: StoreDirs, drive: Option<Drive>) -> LogFactory {
+pub(super) fn factory(
+    journal: SharedJournal,
+    dirs: StoreDirs,
+    drive: Option<Drive>,
+    session: Option<SessionHolds>,
+) -> LogFactory {
     let experimental = drive.is_some();
     #[cfg(test)]
     let ceiling = match &drive {
@@ -83,6 +92,7 @@ fn factory(journal: SharedJournal, dirs: StoreDirs, drive: Option<Drive>) -> Log
             create_log(&journal, plan, retained)?
         };
         log.profile = Some(dirs.clone());
+        log.session = session.clone().filter(|holds| holds.marks(plan));
         log.experimental_retention = experimental;
         log.delete_policy = settings
             .delete_policy()
@@ -183,11 +193,22 @@ fn overwritten_target(plan: &OperationPlan) -> Option<&Location> {
         })
 }
 
+#[derive(Debug)]
+pub(crate) struct WritePermit {
+    _guard: WriteGuard,
+}
+
+#[derive(Debug)]
+enum WriteGuard {
+    Experimental { _lease: File },
+    Default { _hold: default_lock::Hold },
+}
+
 pub(crate) fn claim_write(
     dirs: &StoreDirs,
     target: &Location,
     experimental: bool,
-) -> Result<Option<File>, String> {
+) -> Result<Option<WritePermit>, String> {
     write_lease(dirs, target, experimental, Wait::bounded()).map_err(String::from)
 }
 
@@ -196,14 +217,20 @@ fn write_lease(
     target: &Location,
     experimental: bool,
     wait: Wait<'_>,
-) -> Result<Option<File>, LeaseError> {
-    let lease = experimental
-        .then(|| mutation_lock::lease(&dirs.data, Mode::Shared, wait))
-        .transpose()?;
+) -> Result<Option<WritePermit>, LeaseError> {
+    let permit = if experimental {
+        WriteGuard::Experimental {
+            _lease: mutation_lock::lease(&dirs.data, Mode::Shared, wait)?,
+        }
+    } else {
+        WriteGuard::Default {
+            _hold: default_lock::acquire(&dirs.data, Mode::Shared, wait)?,
+        }
+    };
     let resolved =
         rusty_fs::mutation_location(target).map_err(|error| LeaseError::Failed(error.message()))?;
     guard_paths(&[resolved], dirs, experimental).map_err(LeaseError::Failed)?;
-    Ok(lease)
+    Ok(Some(WritePermit { _guard: permit }))
 }
 
 pub(crate) fn write_factory(dirs: StoreDirs, experimental: bool) -> WriteFactory {

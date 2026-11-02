@@ -14,6 +14,7 @@ pub(super) struct ProfileServices {
     pub(super) operations: Operations,
     pub(super) rename: rusty_ui::browser::RenameHooks,
     pub(super) retained: Arc<dyn rusty_ui::browser::RetainedHooks>,
+    pub(super) sessions: Option<jobs::SessionHolds>,
     pub(super) maintenance: MaintenanceTimer,
 }
 
@@ -23,7 +24,8 @@ pub(super) fn profile_services(
     experimental: bool,
     local: &Arc<dyn ProviderOps>,
 ) -> ProfileServices {
-    let (operations, journal) = operations((dirs, journal), home, experimental, local);
+    let (operations, sessions) = operations((dirs, journal), home, experimental, local);
+    let journal = sessions.as_ref().map(jobs::SessionHolds::journal);
     let memory = journal.clone();
     let files = files::profile_hooks(memory.clone(), dirs, experimental);
     let rename = rename_hooks::profile_hooks(journal, memory.clone(), dirs, experimental);
@@ -34,6 +36,7 @@ pub(super) fn profile_services(
         operations,
         rename,
         retained: retained_hooks::hooks(dirs, experimental, local.clone()),
+        sessions,
         maintenance: MaintenanceTimer::start_with_memory(
             (dirs, memory),
             experimental,
@@ -47,7 +50,7 @@ pub(super) fn operations(
     home: &Location,
     experimental: bool,
     local: &Arc<dyn ProviderOps>,
-) -> (Operations, Option<jobs::SharedJournal>) {
+) -> (Operations, Option<jobs::SessionHolds>) {
     let mut protected = vec![home.clone()];
     let Some(dirs) = dirs else {
         let unavailable =
@@ -77,20 +80,17 @@ pub(super) fn operations(
         return (unavailable, None);
     };
     let retention_dirs = dirs.clone();
+    let sessions = jobs::SessionHolds::new(journal, dirs.clone());
     let logged = Operations {
         retain_deletes: experimental.then(|| {
             Arc::new(move || jobs::retains_deletes(&retention_dirs))
                 as Arc<dyn Fn() -> Option<rusty_core::retention::RetentionPolicy> + Send + Sync>
         }),
         write: Some(jobs::write_factory(dirs.clone(), experimental)),
-        log: if experimental {
-            jobs::retaining_factory(Arc::clone(&journal), dirs.clone(), local.clone())
-        } else {
-            jobs::profile_factory(Arc::clone(&journal), dirs.clone())
-        },
+        log: sessions.factory(experimental.then(|| local.clone())),
         protected,
     };
-    (logged, Some(journal))
+    (logged, Some(sessions))
 }
 
 fn unavailable_operations(

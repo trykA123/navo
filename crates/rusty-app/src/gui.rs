@@ -166,7 +166,7 @@ pub(crate) fn open(mut launch: Launch) {
         .map(|sender| crate::resident::ResidentHandle::start(sender, &settings.values));
     let (search, visits) = search_hooks(services.memory.clone(), remember, dirs.as_ref(), &local);
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
-    let exit = (disk, visits, services.memory.clone());
+    let exit = (disk, visits, services.sessions);
     files::prewarm_pdf(PDF_WARM_DELAY);
     run(
         StartOptions {

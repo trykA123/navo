@@ -5,12 +5,15 @@ use rusty_fs::{HeldFile, JobLog, JobOutcome, ProviderOps, StepOutcome};
 use rusty_store::StoreDirs;
 use rusty_ui::browser::{LogFactory, LoggedOperation, OpLog, WriteFactory};
 
-use super::profile;
+use super::{default_lock, profile};
 
 pub(crate) fn guard_factory(dirs: Option<StoreDirs>) -> LogFactory {
     Arc::new(move |plan| {
         guard(plan, dirs.as_ref())?;
-        Ok(Box::new(GuardLog { dirs: dirs.clone() }) as Box<dyn OpLog>)
+        Ok(Box::new(GuardLog {
+            dirs: dirs.clone(),
+            hold: None,
+        }) as Box<dyn OpLog>)
     })
 }
 
@@ -33,6 +36,7 @@ fn guard(plan: &OperationPlan, dirs: Option<&StoreDirs>) -> Result<(), String> {
 
 struct GuardLog {
     dirs: Option<StoreDirs>,
+    hold: Option<default_lock::Hold>,
 }
 
 impl JobLog for GuardLog {
@@ -50,7 +54,12 @@ impl JobLog for GuardLog {
 }
 
 impl OpLog for GuardLog {
-    fn check(&mut self, operation: LoggedOperation<'_>) -> Result<(), String> {
+    fn check(&mut self, mut operation: LoggedOperation<'_>) -> Result<(), String> {
+        if self.hold.is_none()
+            && let Some(dirs) = &self.dirs
+        {
+            self.hold = Some(default_lock::operation(&dirs.data, &mut operation)?);
+        }
         guard(operation.plan, self.dirs.as_ref())?;
         rusty_fs::check_relocation(operation.plan, operation.ops, operation.cancel)
             .map_err(|error| error.message())

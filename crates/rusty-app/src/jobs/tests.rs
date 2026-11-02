@@ -11,6 +11,7 @@ use rusty_store::{Db, JobJournal, StepState};
 use super::{SharedJournal, lock, log_factory, open, recover};
 
 mod salvage;
+mod session_hold;
 
 fn journal() -> SharedJournal {
     let db = Db::open_in_memory().unwrap();

@@ -10,6 +10,8 @@ use rusty_fs::{
 use rusty_store::{JobId, JobJournal, JobState, JournalError};
 use rusty_ui::browser::OpLog;
 
+mod completion;
+mod default_lock;
 mod deletion;
 mod guard_log;
 mod held;
@@ -24,6 +26,7 @@ mod overwrite;
 mod pending;
 mod profile;
 mod recovery;
+mod session;
 mod temporary;
 
 pub(crate) use guard_log::{guard_factory, guard_write};
@@ -32,9 +35,11 @@ pub use pending::StillPending;
 pub use pending::still_pending;
 pub(crate) use profile::{claim_write, read_retention, retains_deletes, write_factory};
 #[cfg(test)]
-pub use profile::{confined_factory, experimental_factory};
-pub use profile::{profile_factory, retaining_factory};
+pub use profile::{confined_factory, experimental_factory, profile_factory, retaining_factory};
 pub use recovery::{RecoveryReport, recover_profile};
+pub use session::SessionHolds;
+#[cfg(test)]
+pub use session::{PreviousVersion, RestoreError};
 #[cfg(test)]
 mod default_profile;
 #[cfg(test)]
@@ -154,9 +159,11 @@ struct JournalLog {
     delete_policy: Option<rusty_core::retention::RetentionPolicy>,
     overwrites: Option<overwrite::WriteJob>,
     global_lease: Option<File>,
+    default_hold: Option<default_lock::Hold>,
     experimental_retention: bool,
     deferred_undo: bool,
     profile: Option<rusty_store::StoreDirs>,
+    session: Option<SessionHolds>,
 }
 
 impl JournalLog {
@@ -175,43 +182,11 @@ impl JournalLog {
             delete_policy: None,
             overwrites: None,
             global_lease: None,
+            default_hold: None,
             experimental_retention: false,
             deferred_undo: false,
             profile: None,
-        }
-    }
-}
-
-impl JournalLog {
-    fn complete(&self, state: JobState, ops: &dyn ProviderOps) -> Result<(), String> {
-        if self.overwrites.is_some() {
-            return overwrite::finish(self, state, ops);
-        }
-        if !self.experimental_retention {
-            self.complete_like_main(state, ops);
-            return Ok(());
-        }
-        lock(&self.journal)
-            .finish(self.job, state)
-            .map_err(|error| error.to_string())?;
-        if !self.stranded {
-            held::release(&self.journal, self.job, &self.held, ops)
-                .map_err(|error| error.to_string())?;
-        }
-        Ok(())
-    }
-}
-
-impl JournalLog {
-    fn complete_like_main(&self, state: JobState, ops: &dyn ProviderOps) {
-        if let Err(error) = lock(&self.journal).finish(self.job, state) {
-            tracing::error!(job = self.job.0, %error, "recording the finished job failed");
-            return;
-        }
-        if !self.stranded
-            && let Err(error) = held::release(&self.journal, self.job, &self.held, ops)
-        {
-            tracing::warn!(job = self.job.0, %error, "releasing held files failed");
+            session: None,
         }
     }
 }

@@ -40,6 +40,7 @@ fn operations_mode(
             as std::sync::Arc<dyn rusty_fs::ProviderOps>),
     );
     start.share();
+    let journal = journal.as_ref().map(jobs::SessionHolds::journal);
     (operations, dirs.map(|_| start), journal)
 }
 
