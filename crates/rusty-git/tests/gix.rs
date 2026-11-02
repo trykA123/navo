@@ -9,7 +9,7 @@ mod gix {
     use std::time::SystemTime;
 
     use rusty_git::{
-        CliGit, GitError, GitPath, GitSource, GixGit, ObjectId, Others, Stage, Target, TreeKind,
+        CliGit, GitError, GitSource, GixGit, ObjectId, Others, Stage, Target, TreeKind,
     };
 
     use super::fixture::Fixture;
@@ -444,11 +444,6 @@ mod gix {
         };
         tree_fixture(&fixture);
         let gix = GixGit::new(fixture.repo()).unwrap();
-        let path = GitPath::from("a.txt");
-        assert!(matches!(
-            gix.read_blob_worktree_form("main", &path),
-            Err(GitError::Unsupported { .. })
-        ));
         assert!(matches!(
             gix.changes("main", Target::Worktree),
             Err(GitError::Unsupported { .. })

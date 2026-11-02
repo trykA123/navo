@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use rusty_core::{FsError, FsErrorKind, Location, ProviderPath};
-use rusty_git::{BlobReader, GitPath, TreeEntry, TreeKind};
+use rusty_git::{GitPath, TreeEntry, TreeKind, WorktreeBlob};
 
 use crate::{Attributes, EntryKind, FsEntry};
 
@@ -82,7 +82,7 @@ pub(super) fn metadata(git: &GitFs, location: &Location) -> Result<FsEntry, FsEr
     Err(errors::not_found(location))
 }
 
-pub(super) fn read(git: &GitFs, location: &Location) -> Result<BlobReader, FsError> {
+pub(super) fn read(git: &GitFs, location: &Location) -> Result<WorktreeBlob, FsError> {
     let (found, entry) = open_entry(git, location)?;
     match entry.kind {
         TreeKind::File => {
@@ -90,17 +90,21 @@ pub(super) fn read(git: &GitFs, location: &Location) -> Result<BlobReader, FsErr
             let path = GitPath::new(found.inner.clone());
             let blob = resolved
                 .source
-                .read_blob_worktree_form(&found.rev, &path)
+                .read_blob_worktree_form(&super::cache::hex(resolved.commit), &path)
                 .map_err(|error| git.fail(location, error))?;
-            if let Some(reason) = blob.reason {
-                git.record_filter(location, reason);
+            if let Some(reason) = &blob.reason {
+                git.record_filter(location, reason.clone());
             }
-            Ok(blob.reader)
+            Ok(blob)
         }
         TreeKind::Link => git
             .resolved(&found)?
             .source
             .read_blob(&entry.id)
+            .map(|reader| WorktreeBlob {
+                reader,
+                reason: None,
+            })
             .map_err(|error| git.fail(location, error)),
         TreeKind::Folder | TreeKind::Submodule => Err(errors::unsupported(location)),
     }

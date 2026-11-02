@@ -133,7 +133,7 @@ impl<K: Eq + Hash + Clone, V: Clone> Lru<K, V> {
     }
 }
 
-fn hex(id: ObjectId) -> String {
+pub(super) fn hex(id: ObjectId) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut text = String::with_capacity(id.byte_len() * 2);
     for byte in id.as_bytes() {

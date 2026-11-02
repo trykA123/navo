@@ -11,6 +11,7 @@ pub(super) struct Copier<'a> {
     pub strict: bool,
     pub namespace: Option<&'a str>,
     pub removals: &'a super::remove::Removals<'a>,
+    pub sources: Option<&'a super::Sources>,
 }
 
 pub(super) struct CopyStep<'a> {
@@ -51,13 +52,28 @@ impl Copier<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Copied {
     Skipped,
-    Placed(FileStamp),
+    Placed {
+        stamp: FileStamp,
+        flush: bool,
+    },
     Ready {
+        bytes: u64,
+        flush: bool,
         overwrite: bool,
         temporary: Location,
         identity: Option<FileIdentity>,
         seq: u32,
     },
+}
+
+impl Copied {
+    pub(super) fn bytes(&self) -> Option<u64> {
+        match self {
+            Self::Skipped => None,
+            Self::Placed { stamp, .. } => Some(stamp.size),
+            Self::Ready { bytes, .. } => Some(*bytes),
+        }
+    }
 }
 
 pub(super) fn copy(
@@ -77,9 +93,12 @@ pub(super) fn copy(
     } else {
         remove_if_present(copier.ops, &temp)?;
     }
+    let flush = super::stream::crosses(step);
     let result = write(copier, (step, &temp), &mut hooks).and_then(|(stamp, identity)| {
         if exists || copier.strict {
             Ok(Copied::Ready {
+                bytes: stamp.size,
+                flush,
                 overwrite: !copier.strict || overwrites(copier.plan, step.target),
                 temporary: temp.clone(),
                 identity,
@@ -89,7 +108,7 @@ pub(super) fn copy(
             copier
                 .ops
                 .rename(&temp, step.target)
-                .map(|()| Copied::Placed(stamp))
+                .map(|()| Copied::Placed { stamp, flush })
         }
     });
     if result.is_err() && !copier.strict {
@@ -106,12 +125,17 @@ pub(super) fn place(
 ) -> Result<StepOutcome, FsError> {
     match copied {
         Copied::Skipped => Ok(StepOutcome::Skipped),
-        Copied::Placed(stamp) => journal_placed(ctx, target, stamp).map(|()| StepOutcome::Done),
+        Copied::Placed { stamp, flush } => {
+            journal_placed(ctx, target, stamp)?;
+            flush_folder(ctx.ops, flush, target).map(|()| StepOutcome::Done)
+        }
         Copied::Ready {
+            flush,
             overwrite,
             temporary,
             identity,
             seq,
+            ..
         } => {
             let placed = aside.place_over(
                 ctx,
@@ -129,7 +153,7 @@ pub(super) fn place(
             if identity.is_some() {
                 ctx.log.retire_temporary(seq, ctx.ops)?;
             }
-            Ok(StepOutcome::Done)
+            flush_folder(ctx.ops, flush, target).map(|()| StepOutcome::Done)
         }
     }
 }
@@ -157,26 +181,12 @@ fn write(
         identity = Some(found);
         Ok(())
     };
-    let written = if copier.strict {
-        ops.copy_file_owned(
-            OwnedCopy {
-                source: step.source,
-                target: temp,
-                created: &mut created,
-            },
-            CopyControl {
-                progress: hooks.progress,
-                cancel,
-            },
-        )?
-    } else {
-        ops.copy_file(step.source, temp, hooks.progress, cancel)?
-    };
+    let written = transfer(copier, (step, temp), hooks.progress, &mut created)?;
     if cancel.is_cancelled() {
         return Err(failure(FsErrorKind::Cancelled, step.target));
     }
     let on_disk = ops.metadata(temp)?;
-    if written != step.size || on_disk.size != written {
+    if (!super::stream::crosses(step) && written != step.size) || on_disk.size != written {
         return Err(failure(FsErrorKind::Unknown, step.target));
     }
     if copier.strict && !ops.matches_identity(temp, identity)? {
@@ -189,6 +199,42 @@ fn write(
         },
         identity,
     ))
+}
+
+fn transfer(
+    copier: &Copier<'_>,
+    (step, temp): (&CopyStep<'_>, &Location),
+    progress: &mut dyn FnMut(u64),
+    created: &mut dyn FnMut(FileIdentity) -> Result<(), FsError>,
+) -> Result<u64, FsError> {
+    let Copier {
+        ops,
+        cancel,
+        strict,
+        ..
+    } = *copier;
+    if super::stream::crosses(step) {
+        return super::stream::stream(copier, (step, temp), progress, created);
+    }
+    if !strict {
+        return ops.copy_file(step.source, temp, progress, cancel);
+    }
+    ops.copy_file_owned(
+        OwnedCopy {
+            source: step.source,
+            target: temp,
+            created,
+        },
+        CopyControl { progress, cancel },
+    )
+}
+
+fn flush_folder(ops: &dyn ProviderOps, flush: bool, target: &Location) -> Result<(), FsError> {
+    if !flush {
+        return Ok(());
+    }
+    let folder = target.parent().ok_or_else(|| invalid(target))?;
+    ops.flush(&folder)
 }
 
 pub(super) fn overwrites(plan: &OperationPlan, target: &Location) -> bool {

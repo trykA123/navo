@@ -26,6 +26,14 @@ impl ProviderOps for LocalFs {
         super::owned::copy(request, control)
     }
 
+    fn write_new(
+        &self,
+        request: crate::StreamWrite<'_>,
+        control: crate::CopyControl<'_>,
+    ) -> Result<u64, FsError> {
+        super::stream::write_new(request, control)
+    }
+
     #[cfg(windows)]
     fn remove_owned_file(
         &self,

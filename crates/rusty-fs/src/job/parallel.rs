@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{Builder, scope};
 
 use rusty_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::Aside;
-use super::copy::{Copied, Copier, CopyStep, failure, place};
+use super::copy::{Copier, CopyStep, failure};
 use super::marks::{Marks, is_removal};
 use super::pool::{Event, Task, work};
 use super::remove::Removals;
-use super::run::{Job, apply, counted, current_of, holds_kept, note_kept};
-use super::{JobContext, JobOutcome, Progress, StepOutcome};
+use super::run::{Job, apply, copier_of, counted, current_of, holds_kept, namespace_of, note_kept};
+use super::{JobContext, JobOutcome, Progress, Sources, StepOutcome};
+
+mod events;
 
 pub(super) fn run(
     plan: &OperationPlan,
@@ -19,28 +21,26 @@ pub(super) fn run(
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
+    run_with((plan, None), done, ctx, workers)
+}
+
+pub(super) fn run_with(
+    (plan, sources): (&OperationPlan, Option<&Sources>),
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+    workers: usize,
+) -> JobOutcome {
     let aside = Aside::new();
     let removals = Removals::of(plan);
-    let namespace = if ctx.log.preserve_overwrites() {
-        ctx.log.temporary_namespace()
-    } else {
-        None
-    };
+    let namespace = namespace_of(ctx);
     let job = Job {
         plan,
         aside: &aside,
         namespace: namespace.as_deref(),
         removals: &removals,
+        sources,
     };
-    let copier = Copier {
-        plan,
-        ops: ctx.ops,
-        cancel: ctx.cancel,
-        strict: ctx.log.preserve_overwrites(),
-        namespace: namespace.as_deref(),
-        removals: &removals,
-    };
-    coordinate((job, copier), ctx, done, workers)
+    coordinate((job, copier_of(job, ctx)), ctx, done, workers)
 }
 
 fn coordinate<'p>(
@@ -64,7 +64,7 @@ fn coordinate<'p>(
         }
         drop(events);
         if started == 0 {
-            return super::run::run(plan, done, ctx);
+            return super::run::run_with((plan, job.sources), done, ctx);
         }
         let pool = Pool {
             tasks,
@@ -150,7 +150,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         let plan = self.job.plan;
         for (seq, step) in (0_u32..).zip(&plan.steps) {
             if done.contains(&seq) {
-                self.count(step);
+                self.count(step, counted(self.job.plan.kind, step).0);
                 continue;
             }
             self.wait_for_room((seq, step));
@@ -269,7 +269,8 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
                 super::rename::prepare(seq, (self.job.plan, step), self.ctx)
                     .and_then(|()| apply(self.job, (seq, step), self.ctx, &mut self.progress))
             };
-            self.settle(seq, step, result);
+            let bytes = counted(self.job.plan.kind, step).0;
+            self.settle(seq, step, result.map(|outcome| (outcome, bytes)));
             return;
         };
         let copy = CopyStep {
@@ -293,90 +294,6 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         }
     }
 
-    fn receive(&mut self) {
-        let event = match self.marks.due_in() {
-            Some(wait) => self.pool.events.recv_timeout(wait),
-            None => self
-                .pool
-                .events
-                .recv()
-                .map_err(|_| RecvTimeoutError::Disconnected),
-        };
-        match event {
-            Ok(Event::Created { seq, identity, ack }) => {
-                let result = self
-                    .ctx
-                    .log
-                    .created_temporary((seq, identity), self.ctx.ops);
-                let _ = ack.send(result);
-            }
-            Ok(Event::Bytes { seq, bytes }) => {
-                if let Some(entry) = self.in_flight.get_mut(&seq) {
-                    entry.1 = bytes;
-                }
-                self.report();
-            }
-            Ok(Event::Finished { seq, result }) => {
-                if let Some((step, _)) = self.in_flight.remove(&seq) {
-                    let result = result.and_then(|copied| self.place(step, copied));
-                    self.settle(seq, step, result);
-                }
-            }
-            Ok(Event::Removed { seq, result }) => {
-                if let Some((step, _)) = self.in_flight.remove(&seq) {
-                    self.settle(seq, step, result);
-                }
-            }
-            Err(RecvTimeoutError::Timeout) => self.flush_marks(),
-            Err(RecvTimeoutError::Disconnected) => {
-                let lost: Vec<u32> = self.in_flight.drain().map(|(seq, _)| seq).collect();
-                for seq in lost {
-                    self.fail(seq, FsError::new(FsErrorKind::Unknown));
-                }
-            }
-        }
-    }
-
-    fn place(&mut self, step: &Step, copied: Copied) -> Result<StepOutcome, FsError> {
-        let Step::CopyFile { target, .. } = step else {
-            return Err(FsError::new(FsErrorKind::Unknown));
-        };
-        place(self.job.aside, self.ctx, copied, target)
-    }
-
-    fn settle(&mut self, seq: u32, step: &Step, result: Result<StepOutcome, FsError>) {
-        match result {
-            Ok(outcome) => {
-                note_kept(step, outcome, &mut self.kept);
-                if let Err((seq, error)) = self.marks.record(self.ctx.log, (seq, step), outcome) {
-                    self.fail(seq, error);
-                    return;
-                }
-                self.count(step);
-                self.report();
-            }
-            Err(error)
-                if error.kind == FsErrorKind::Cancelled || self.ctx.cancel.is_cancelled() =>
-            {
-                self.cancelled = true;
-            }
-            Err(error) => self.settle_failure(seq, error),
-        }
-    }
-
-    fn settle_failure(&mut self, seq: u32, error: FsError) {
-        if error.kind == FsErrorKind::Cancelled || self.ctx.cancel.is_cancelled() {
-            self.cancelled = true;
-            return;
-        }
-        self.marks.failed(self.ctx.log, seq);
-        if self.job.plan.kind == OpKind::Recycle {
-            self.note_failure(seq, error);
-            return;
-        }
-        self.fail(seq, error);
-    }
-
     fn note_failure(&mut self, seq: u32, error: FsError) {
         if self.partial.as_ref().is_none_or(|(first, _)| seq < *first) {
             self.partial = Some((seq, error));
@@ -389,8 +306,8 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         }
     }
 
-    fn count(&mut self, step: &Step) {
-        let (bytes, files) = counted(self.job.plan.kind, step);
+    fn count(&mut self, step: &Step, bytes: u64) {
+        let files = counted(self.job.plan.kind, step).1;
         self.settled += bytes;
         self.progress.files_done += files;
     }

@@ -1,6 +1,9 @@
 use rusty_core::{FsError, FsErrorKind, Location};
 
-use super::{CancelToken, CopyControl, EntryKind, MoveProof, OwnedCopy, Provider, VerifiedRename};
+use super::{
+    CancelToken, CopyControl, EntryKind, MoveProof, OwnedCopy, Provider, StreamWrite,
+    VerifiedRename,
+};
 
 pub use rusty_core::{FileIdentity, FileIdentityKind};
 
@@ -23,6 +26,17 @@ pub trait ProviderOps: Provider {
     fn copy_file_owned(
         &self,
         request: OwnedCopy<'_>,
+        _control: CopyControl<'_>,
+    ) -> Result<u64, FsError> {
+        Err(FsError {
+            location: Some(request.target.clone()),
+            ..FsError::new(FsErrorKind::NotSupportedYet)
+        })
+    }
+    /// Writes a stream into a new file and makes it durable; returns the bytes written.
+    fn write_new(
+        &self,
+        request: StreamWrite<'_>,
         _control: CopyControl<'_>,
     ) -> Result<u64, FsError> {
         Err(FsError {

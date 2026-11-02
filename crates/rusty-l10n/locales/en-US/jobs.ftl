@@ -23,3 +23,4 @@ job-delete-retained-help = Kept in Recently deleted for { $days ->
 }
 job-retention-changed = This delete can no longer run as you confirmed it. Nothing was deleted. Check the retention settings, then delete again.
 job-queued = Queued
+job-source-filter-failed = The source content filter failed. Check Git filters and Git LFS, then try again.

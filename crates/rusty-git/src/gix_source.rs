@@ -6,8 +6,8 @@ use gix::bstr::ByteSlice;
 
 use crate::format::{ObjectFormat, RefStorage, RepoFormat};
 use crate::{
-    BlobReader, Change, GitError, GitPath, GitRef, GitSource, IndexEntry, ObjectId, OtherPath,
-    Others, RefKind, Stage, Target, TreeEntry, TreeKind, WorktreeBlob,
+    BlobReader, Change, CliGit, GitError, GitPath, GitRef, GitSource, IndexEntry, ObjectId,
+    OtherPath, Others, RefKind, Stage, Target, TreeEntry, TreeKind, WorktreeBlob,
 };
 
 mod peel;
@@ -159,12 +159,8 @@ impl GitSource for GixGit {
         Ok(Box::new(Cursor::new(object.detach().data)))
     }
 
-    fn read_blob_worktree_form(
-        &self,
-        _rev: &str,
-        _path: &GitPath,
-    ) -> Result<WorktreeBlob, GitError> {
-        Err(unsupported("read_blob_worktree_form"))
+    fn read_blob_worktree_form(&self, rev: &str, path: &GitPath) -> Result<WorktreeBlob, GitError> {
+        CliGit::new(&self.repo)?.read_blob_worktree_form(rev, path)
     }
 
     fn changes(&self, _a: &str, _target: Target<'_>) -> Result<Vec<Change>, GitError> {

@@ -16,6 +16,7 @@ mod conflicts;
 mod copy;
 mod crash;
 mod crashing;
+mod cross_provider;
 mod delete;
 mod delete_races;
 mod faults;

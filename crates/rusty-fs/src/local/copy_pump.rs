@@ -20,8 +20,8 @@ impl PumpError {
     }
 }
 
-pub(super) fn pump(
-    input: &mut File,
+pub(super) fn pump<R: Read + ?Sized>(
+    input: &mut R,
     output: &mut File,
     control: &mut crate::CopyControl<'_>,
 ) -> Result<u64, PumpError> {
@@ -31,7 +31,10 @@ pub(super) fn pump(
         if control.cancel.is_cancelled() {
             return Err(PumpError::Cancelled);
         }
-        let read = input.read(&mut buffer).map_err(PumpError::Read)?;
+        let read = match input.read(&mut buffer) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            result => result.map_err(PumpError::Read)?,
+        };
         if read == 0 {
             return Ok(total);
         }
