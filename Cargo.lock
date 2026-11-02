@@ -7643,6 +7643,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-clipboard"
+version = "0.0.1"
+dependencies = [
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "rusty-compare"
 version = "0.0.1"
 dependencies = [

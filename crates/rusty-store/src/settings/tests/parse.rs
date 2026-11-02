@@ -27,6 +27,23 @@ fn an_older_file_without_tray_loads_the_tray_defaults() {
     );
 }
 
+#[test]
+fn an_older_file_without_clipboard_loads_the_clipboard_defaults() {
+    let (settings, unknown) = parse("[files]\nsort = \"size\"\n").unwrap();
+    assert!(unknown.is_empty());
+    assert!(settings.clipboard.enabled);
+    assert!(settings.clipboard.record_history);
+    assert_eq!(settings.clipboard.summon_key, "Win+Alt+V");
+    assert_eq!(
+        settings.value_at("clipboard.record-history"),
+        Some(SettingValue::Bool(true))
+    );
+    assert_eq!(
+        settings.value_at("clipboard.summon-key"),
+        Some(SettingValue::Text("Win+Alt+V".into()))
+    );
+}
+
 fn parsed(text: &str) -> Settings {
     parse(text).unwrap().0
 }

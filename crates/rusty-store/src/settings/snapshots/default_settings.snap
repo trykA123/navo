@@ -108,4 +108,9 @@ who-uses = false
 keep-running = false
 summon-key = "Win+Alt+N"
 
+[clipboard]
+enabled = true
+record-history = true
+summon-key = "Win+Alt+V"
+
 [experimental]

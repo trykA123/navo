@@ -26,6 +26,7 @@ pub struct Settings {
     pub search: Search,
     pub automotive: Automotive,
     pub tray: Tray,
+    pub clipboard: Clipboard,
     pub experimental: BTreeMap<String, bool>,
 }
 
@@ -270,6 +271,24 @@ impl Default for Tray {
         Self {
             keep_running: false,
             summon_key: "Win+Alt+N".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct Clipboard {
+    pub enabled: bool,
+    pub record_history: bool,
+    pub summon_key: String,
+}
+
+impl Default for Clipboard {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            record_history: true,
+            summon_key: "Win+Alt+V".to_owned(),
         }
     }
 }

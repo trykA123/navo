@@ -57,17 +57,25 @@ impl Drop for Owner {
     }
 }
 
-struct Clipboard;
+pub(super) struct Clipboard;
 
 impl Clipboard {
     fn open(owner: windows_sys::Win32::Foundation::HWND) -> Result<Self, ClipboardError> {
-        for attempt in 0..10 {
+        Self::open_with(owner, 10, Duration::from_millis(10))
+    }
+
+    pub(super) fn open_with(
+        owner: windows_sys::Win32::Foundation::HWND,
+        attempts: u32,
+        delay: Duration,
+    ) -> Result<Self, ClipboardError> {
+        for attempt in 0..attempts {
             // SAFETY: owner is null for reads or a live window owned by this thread.
             if unsafe { OpenClipboard(owner) } != 0 {
                 return Ok(Self);
             }
-            if attempt < 9 {
-                std::thread::sleep(Duration::from_millis(10));
+            if attempt + 1 < attempts {
+                std::thread::sleep(delay);
             }
         }
         Err(ClipboardError::Busy)
@@ -176,7 +184,7 @@ fn sequence() -> u32 {
     unsafe { GetClipboardSequenceNumber() }
 }
 
-fn read_open() -> Result<Option<FileClipboard>, ClipboardError> {
+pub(super) fn read_open() -> Result<Option<FileClipboard>, ClipboardError> {
     let Some(bytes) = read_data(u32::from(CF_HDROP))? else {
         return Ok(None);
     };
@@ -189,8 +197,8 @@ fn read_open() -> Result<Option<FileClipboard>, ClipboardError> {
     Ok(Some(FileClipboard { paths, effect }))
 }
 
-fn read_data(format: u32) -> Result<Option<Vec<u8>>, ClipboardError> {
-    // SAFETY: format is a registered identifier or CF_HDROP.
+pub(super) fn read_data(format: u32) -> Result<Option<Vec<u8>>, ClipboardError> {
+    // SAFETY: format is a registered identifier or a standard format; the query takes no pointers.
     if unsafe { IsClipboardFormatAvailable(format) } == 0 {
         return Ok(None);
     }
@@ -199,7 +207,7 @@ fn read_data(format: u32) -> Result<Option<Vec<u8>>, ClipboardError> {
     if handle.is_null() {
         return Err(os_error("Reading clipboard data"));
     }
-    // SAFETY: both supported formats store their data in an HGLOBAL returned by GetClipboardData.
+    // SAFETY: every format read here (CF_HDROP, CF_UNICODETEXT, DWORD markers) is an HGLOBAL.
     let size = unsafe { GlobalSize(handle) };
     if size == 0 || size > isize::MAX as usize {
         return Err(ClipboardError::Malformed);
