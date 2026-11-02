@@ -6,7 +6,7 @@ use super::hold::hold;
 use super::marks::Marks;
 use super::remove::{Removals, remove};
 use super::rename::{is_temporary, prepare};
-use super::{JobContext, JobOutcome, Progress, StepOutcome};
+use super::{JobContext, JobOutcome, Progress, Sources, StepOutcome};
 
 pub(super) fn current_of(step: &Step) -> Location {
     match step {
@@ -51,23 +51,49 @@ pub(super) struct Job<'p> {
     pub aside: &'p Aside,
     pub namespace: Option<&'p str>,
     pub removals: &'p Removals<'p>,
+    pub sources: Option<&'p Sources>,
 }
 
 pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
+    run_with((plan, None), done, ctx)
+}
+
+pub(super) fn run_with(
+    (plan, sources): (&OperationPlan, Option<&Sources>),
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+) -> JobOutcome {
     let aside = Aside::new();
     let removals = Removals::of(plan);
-    let namespace = if ctx.log.preserve_overwrites() {
-        ctx.log.temporary_namespace()
-    } else {
-        None
-    };
+    let namespace = namespace_of(ctx);
     let job = Job {
         plan,
         aside: &aside,
         namespace: namespace.as_deref(),
         removals: &removals,
+        sources,
     };
     walk(job, done, ctx)
+}
+
+pub(super) fn namespace_of(ctx: &JobContext<'_>) -> Option<String> {
+    if ctx.log.preserve_overwrites() {
+        ctx.log.temporary_namespace()
+    } else {
+        None
+    }
+}
+
+pub(super) fn copier_of<'p, 'a: 'p>(job: Job<'p>, ctx: &JobContext<'a>) -> Copier<'p> {
+    Copier {
+        plan: job.plan,
+        ops: ctx.ops,
+        cancel: ctx.cancel,
+        strict: ctx.log.preserve_overwrites(),
+        namespace: job.namespace,
+        removals: job.removals,
+        sources: job.sources,
+    }
 }
 
 fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
@@ -113,8 +139,12 @@ fn walk_marking(
                 if let Err((seq, error)) = marks.record(ctx.log, (seq, step), outcome) {
                     return JobOutcome::Failed { seq, error };
                 }
-                progress.bytes_done = start;
-                advance(&mut progress, plan.kind, step);
+                if matches!(step, Step::CopyFile { .. }) && outcome == StepOutcome::Done {
+                    progress.files_done += 1;
+                } else {
+                    progress.bytes_done = start;
+                    advance(&mut progress, plan.kind, step);
+                }
                 (ctx.progress)(&progress);
             }
             Err(error) => {
@@ -255,17 +285,14 @@ fn copy_in_order(
     progress: &mut Progress,
 ) -> Result<StepOutcome, FsError> {
     super::temporary::prepare(ctx, step, job.namespace)?;
-    let copier = Copier {
-        plan: job.plan,
-        ops: ctx.ops,
-        cancel: ctx.cancel,
-        strict: ctx.log.preserve_overwrites(),
-        namespace: job.namespace,
-        removals: job.removals,
-    };
+    let copier = copier_of(job, ctx);
     let base = progress.bytes_done;
+    let mut estimate = step.size;
     let (cancel, report) = (ctx.cancel, &mut *ctx.progress);
     let mut on_bytes = |bytes: u64| {
+        let total = estimate.max(bytes);
+        progress.adjust_total(estimate, total);
+        estimate = total;
         progress.bytes_done = base + bytes;
         report(progress);
         hold(cancel, progress, report);
@@ -279,6 +306,9 @@ fn copy_in_order(
             created: &mut created,
         },
     )?;
+    let written = copied.bytes().unwrap_or(step.size);
+    progress.adjust_total(estimate, written);
+    progress.bytes_done = base + written;
     place(job.aside, ctx, copied, step.target)
 }
 

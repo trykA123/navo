@@ -82,7 +82,15 @@ impl GitFs {
     }
 
     pub fn read(&self, location: &Location) -> Result<BlobReader, FsError> {
-        reading::read(self, location)
+        reading::read(self, location).map(|blob| blob.reader)
+    }
+
+    pub(crate) fn read_for_copy(&self, location: &Location) -> Result<BlobReader, FsError> {
+        let blob = reading::read(self, location)?;
+        if blob.reason.is_some() {
+            return Err(errors::at(FsErrorKind::SourceFilterFailed, location));
+        }
+        Ok(blob.reader)
     }
 
     pub(super) fn record_filter(&self, location: &Location, notice: FilterNotice) {

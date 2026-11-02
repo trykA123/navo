@@ -10,6 +10,8 @@ mod remove;
 mod rename;
 mod restore;
 mod run;
+mod source;
+mod stream;
 mod temporary;
 mod undo;
 mod workers;
@@ -22,6 +24,7 @@ use crate::{CancelToken, FileIdentity, ProviderOps};
 pub use aside::HELD_PREFIX;
 pub use moved::{PreparedMove, recorded_proof, settle_prepared_move, undo_move};
 pub use rename::{RenameOutcome, is_temporary as is_rename_temporary};
+pub use source::{SourceIdentity, SourceMetadata, SourceOps, Sources};
 pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
 
 pub use rusty_core::TEMP_SUFFIX;
@@ -122,6 +125,13 @@ pub struct Progress {
 }
 
 impl Progress {
+    pub(super) fn adjust_total(&mut self, previous: u64, actual: u64) {
+        self.bytes_total = self
+            .bytes_total
+            .saturating_sub(previous)
+            .saturating_add(actual);
+    }
+
     pub fn start(plan: &OperationPlan) -> Self {
         Self {
             bytes_done: 0,
@@ -173,6 +183,31 @@ pub fn run_job_parallel(
         return run::run(plan, done, ctx);
     }
     parallel::run(plan, done, ctx, workers)
+}
+
+/// Runs a plan whose copies may read from the providers in `sources`.
+#[must_use]
+pub fn run_job_with_sources(
+    plan: &OperationPlan,
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+    sources: &Sources,
+) -> JobOutcome {
+    run::run_with((plan, Some(sources)), done, ctx)
+}
+
+/// Parallel form of [`run_job_with_sources`].
+#[must_use]
+pub fn run_job_parallel_with_sources(
+    (plan, sources): (&OperationPlan, &Sources),
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+    workers: usize,
+) -> JobOutcome {
+    if workers <= 1 || plan.kind == OpKind::Rename {
+        return run::run_with((plan, Some(sources)), done, ctx);
+    }
+    parallel::run_with((plan, Some(sources)), done, ctx, workers)
 }
 
 #[must_use]

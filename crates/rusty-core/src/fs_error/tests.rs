@@ -3,7 +3,7 @@ use crate::ProviderPath;
 use FsErrorKind::*;
 use RecoveryAction::*;
 
-const ALL_KINDS: [FsErrorKind; 14] = [
+const ALL_KINDS: [FsErrorKind; 15] = [
     NotFound,
     AccessDenied,
     SharingViolation,
@@ -17,6 +17,7 @@ const ALL_KINDS: [FsErrorKind; 14] = [
     IdentityUnavailable,
     JournalWriteFailed,
     ChangedOnDisk,
+    SourceFilterFailed,
     Unknown,
 ];
 
@@ -101,7 +102,7 @@ fn errno_values_map_to_their_kind() {
 
 #[test]
 fn every_kind_has_its_recovery_actions() {
-    let expected: [(FsErrorKind, &[RecoveryAction]); 14] = [
+    let expected: [(FsErrorKind, &[RecoveryAction]); 15] = [
         (NotFound, &[Skip, SkipAll, Cancel]),
         (AccessDenied, &[RetryAsAdmin, Skip, SkipAll, Cancel]),
         (SharingViolation, &[Retry, Skip, SkipAll, Cancel]),
@@ -115,6 +116,7 @@ fn every_kind_has_its_recovery_actions() {
         (IdentityUnavailable, &[Skip, SkipAll, Cancel]),
         (JournalWriteFailed, &[Retry, Cancel]),
         (ChangedOnDisk, &[Cancel]),
+        (SourceFilterFailed, &[Retry, Skip, SkipAll, Cancel]),
         (Unknown, &[Retry, Skip, Cancel]),
     ];
     let got: Vec<(FsErrorKind, &[RecoveryAction])> = ALL_KINDS

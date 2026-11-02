@@ -1,4 +1,3 @@
-#[cfg(not(windows))]
 mod copy_pump;
 mod flush;
 mod guard;
@@ -26,6 +25,7 @@ mod windows;
 use windows as platform;
 mod ops;
 mod space;
+mod stream;
 #[cfg(any(windows, test))]
 mod verbatim;
 #[cfg(any(unix, windows))]

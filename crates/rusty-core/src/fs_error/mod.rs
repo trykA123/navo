@@ -16,6 +16,7 @@ pub enum FsErrorKind {
     IdentityUnavailable,
     JournalWriteFailed,
     ChangedOnDisk,
+    SourceFilterFailed,
     Unknown,
 }
 
@@ -124,6 +125,7 @@ impl FsError {
                 &[Skip, SkipAll, Cancel]
             }
             FsErrorKind::ChangedOnDisk => &[Cancel],
+            FsErrorKind::SourceFilterFailed => &[Retry, Skip, SkipAll, Cancel],
             FsErrorKind::Unknown => &[Retry, Skip, Cancel],
         }
     }
@@ -188,6 +190,11 @@ fn with_location(kind: FsErrorKind, place: &str) -> String {
         FsErrorKind::ChangedOnDisk => {
             format!("\u{201c}{place}\u{201d} changed after it was opened.")
         }
+        FsErrorKind::SourceFilterFailed => {
+            format!(
+                "The source content filter failed for “{place}”. Check Git filters and Git LFS, then try again."
+            )
+        }
         FsErrorKind::Unknown => format!("Something went wrong with \u{201c}{place}\u{201d}."),
     }
 }
@@ -208,6 +215,9 @@ fn without_location(kind: FsErrorKind) -> &'static str {
         FsErrorKind::IdentityUnavailable => "This drive cannot confirm file identity.",
         FsErrorKind::JournalWriteFailed => "Navo could not save the job's progress to its journal.",
         FsErrorKind::ChangedOnDisk => "The file changed after it was opened.",
+        FsErrorKind::SourceFilterFailed => {
+            "The source content filter failed. Check Git filters and Git LFS, then try again."
+        }
         FsErrorKind::Unknown => "Something went wrong.",
     }
 }

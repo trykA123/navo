@@ -28,5 +28,7 @@ JournalWriteFailed: Navo could not save the job's progress to its journal.
 JournalWriteFailed: Navo could not save the job's progress to its journal.
 ChangedOnDisk: The file changed after it was opened.
 ChangedOnDisk: “C:\Data\report.xlsx” changed after it was opened.
+SourceFilterFailed: The source content filter failed. Check Git filters and Git LFS, then try again.
+SourceFilterFailed: The source content filter failed for “C:\Data\report.xlsx”. Check Git filters and Git LFS, then try again.
 Unknown: Something went wrong.
 Unknown: Something went wrong with “C:\Data\report.xlsx”.

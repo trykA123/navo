@@ -32,9 +32,11 @@ pub use io_queue::{
 };
 pub use job::{
     CopyMode, FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOutcome, Journaled,
-    PlacedFile, PreparedMove, Progress, RenameOutcome, StepOutcome, TEMP_SUFFIX, WorkerCounts,
-    clean_up, copy_workers, is_rename_temporary, job_workers, recorded_proof, release_held,
-    roll_back, run_job, run_job_parallel, run_rename, settle_prepared_move, undo_move, undo_write,
+    PlacedFile, PreparedMove, Progress, RenameOutcome, SourceIdentity, SourceMetadata, SourceOps,
+    Sources, StepOutcome, TEMP_SUFFIX, WorkerCounts, clean_up, copy_workers, is_rename_temporary,
+    job_workers, recorded_proof, release_held, roll_back, run_job, run_job_parallel,
+    run_job_parallel_with_sources, run_job_with_sources, run_rename, settle_prepared_move,
+    undo_move, undo_write,
 };
 pub use local::{
     AutoTuning, LocalFs, MutationLocations, make_link, mutation_location, native_identity,
@@ -52,7 +54,8 @@ pub use protection::{ResolvedPlan, check_mutation, check_relocation, check_resol
 pub use provider::{
     AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
     EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, LinkKey, ListSink, MoveProof,
-    OwnedCopy, Provider, ProviderOps, RenameSkip, SizeEntry, UnixAccess, VerifiedRename,
+    OwnedCopy, Provider, ProviderOps, RenameSkip, SizeEntry, StreamWrite, UnixAccess,
+    VerifiedRename,
 };
 pub use scan::{existing_at, scan};
 pub use slow::SlowFs;
