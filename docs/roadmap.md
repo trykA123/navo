@@ -1,6 +1,6 @@
 # Navo roadmap
 
-Updated 30 October 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
+Updated 2 November 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
@@ -42,10 +42,10 @@ All four alpha features are built. They are in the pre-release alpha-2026-10-26.
 
 | Feature | Built | Still open |
 | --- | --- | --- |
-| Multi-select and drag and drop | Marking, drops between panes, folders, tabs, path crumbs and drives, Alt-drop shortcuts, drag to and from Explorer, right-button drop choices, auto-scroll near list edges, and folders, tabs and drives that open on hover | Owner check of Explorer drag on a Windows PC. Linux external drops are Copy-only. |
+| Multi-select and drag and drop | Marking, drops between panes, folders, tabs, path crumbs and drives, Alt-drop shortcuts, drag to and from Explorer, right-button drop choices, auto-scroll near list edges, and folders, tabs and drives that open on hover | Checked by the owner on a Windows PC. Linux external drops are Copy-only. |
 | Rich ELF and MAP | Rich views, memory models, companion discovery and live module prefixes | Final review and Windows checks |
-| Ctrl+K command center | Commands, recent files, tabs, folder and path sources, disk index, Search settings and the optional Windows service | Owner check of the index service on a Windows PC |
-| Multi-rename | Journaled rename with safe undo and crash recovery; edited, imported, pasted and copied names; sorting, ordering and folder counters; optional rename log. Rename works on FAT and exFAT drives; undo there checks size and time first. | Owner check of rename on a FAT or exFAT USB stick |
+| Ctrl+K command center | Commands, recent files, tabs, folder and path sources, disk index, Search settings and the optional Windows service | Works on a Windows PC; the owner checks again with the leaner index service |
+| Multi-rename | Journaled rename with safe undo and crash recovery; edited, imported, pasted and copied names; sorting, ordering and folder counters; optional rename log. Rename works on FAT and exFAT drives; undo there checks size and time first. | Checked by the owner on a Windows PC. The FAT and exFAT check is set aside for now. |
 
 Windows CI is green: 7,118 tests passed. Linux passed all 10 gate steps.
 
@@ -68,7 +68,7 @@ Done since 27 October: the fixes from the owner's testing (pane keys, self-savin
 
 Still open for alpha sign-off:
 
-- Owner checks on a Windows PC: Explorer drag, the index service, rename on a FAT or exFAT USB stick, the Rich ELF and MAP views, the profile move to Navo, and the splash.
+- Owner checks on a Windows PC: the leaner index service, the Rich ELF and MAP views, the profile move to Navo, and the splash. Explorer drag and multi-rename are checked; the FAT or exFAT USB stick check is set aside for now.
 - A heavy benchmark: millions of indexed files, search latency, long lists, memory, and animation smoothness recorded on a Windows PC.
 - Two weeks of daily use with no lost or damaged files.
 
