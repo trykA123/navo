@@ -34,6 +34,7 @@ mod verbatim;
 mod verified;
 #[cfg(windows)]
 mod windows;
+mod write_file;
 
 #[cfg(unix)]
 fn location_of(path: &Path) -> Location {

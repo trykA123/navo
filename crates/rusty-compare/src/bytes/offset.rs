@@ -2,8 +2,9 @@ use std::io::{self, Read};
 use std::sync::mpsc::{SyncSender, TrySendError};
 use std::time::Duration;
 
-use crate::model::{CancelToken, ReadHint, Reason};
+use crate::model::{Budget, CancelToken, ReadHint, Reason};
 
+use super::budget::Regions;
 use super::{Align, ByteEvent, ByteRegion, ByteSide};
 
 pub(super) const BLOCK: usize = 1024 * 1024;
@@ -13,17 +14,14 @@ pub(super) struct Job<'a> {
     pub left: ByteSide,
     pub right: ByteSide,
     pub align: Align,
+    pub budget: Budget,
     pub cancel: &'a CancelToken,
     pub events: &'a SyncSender<ByteEvent>,
 }
 
 pub(super) fn run(job: Job<'_>) {
     if job.align == Align::Content {
-        post(
-            job.events,
-            job.cancel,
-            ByteEvent::Failed(Reason::Unsupported),
-        );
+        super::content::run(job);
         return;
     }
     if job.cancel.is_cancelled() {
@@ -43,7 +41,7 @@ pub(super) fn run(job: Job<'_>) {
             return;
         }
     };
-    let mut scanner = Scanner::new(job.events, job.cancel);
+    let mut scanner = Scanner::new(job.events, job.cancel, job.budget);
     let mut stream = Stream::new(left, right, job.left.entry.size, job.right.entry.size);
     if let Err(reason) = stream.run(job.cancel, &mut scanner) {
         post(job.events, job.cancel, ByteEvent::Failed(reason));
@@ -112,10 +110,8 @@ impl Stream {
             if cancel.is_cancelled() {
                 return Ok(());
             }
-            let left = read_block(&mut *self.left, &mut self.left_buffer)
-                .map_err(|_| Reason::ReadError)?;
-            let right = read_block(&mut *self.right, &mut self.right_buffer)
-                .map_err(|_| Reason::ReadError)?;
+            let left = read_block(&mut *self.left, &mut self.left_buffer, cancel)?;
+            let right = read_block(&mut *self.right, &mut self.right_buffer, cancel)?;
             self.left_seen = self.left_seen.saturating_add(offset(left));
             self.right_seen = self.right_seen.saturating_add(offset(right));
             scan_block(
@@ -222,15 +218,17 @@ struct OpenRegion {
 struct Scanner<'a> {
     events: &'a SyncSender<ByteEvent>,
     cancel: &'a CancelToken,
+    regions: Regions,
     open: Option<OpenRegion>,
     closed: bool,
 }
 
 impl<'a> Scanner<'a> {
-    fn new(events: &'a SyncSender<ByteEvent>, cancel: &'a CancelToken) -> Self {
+    fn new(events: &'a SyncSender<ByteEvent>, cancel: &'a CancelToken, budget: Budget) -> Self {
         Self {
             events,
             cancel,
+            regions: Regions::new(budget),
             open: None,
             closed: false,
         }
@@ -266,6 +264,15 @@ impl<'a> Scanner<'a> {
 
     fn finish(&mut self) {
         self.finish_open();
+        if self.closed {
+            return;
+        }
+        while let Some(region) = self.regions.finish() {
+            if !post(self.events, self.cancel, ByteEvent::Region(region)) {
+                self.closed = true;
+                return;
+            }
+        }
     }
 
     fn done(&mut self) {
@@ -288,19 +295,17 @@ impl<'a> Scanner<'a> {
         let Some(open) = self.open.take() else {
             return;
         };
-        let region = ByteRegion {
-            left: open.start..open.left_end,
-            right: open.start..open.right_end,
-        };
-        if !post(self.events, self.cancel, ByteEvent::Region(region)) {
-            self.closed = true;
-        }
+        let region = ByteRegion::single(open.start..open.left_end, open.start..open.right_end);
+        self.regions.push(region);
     }
 }
 
-fn post(events: &SyncSender<ByteEvent>, cancel: &CancelToken, event: ByteEvent) -> bool {
+pub(super) fn post(events: &SyncSender<ByteEvent>, cancel: &CancelToken, event: ByteEvent) -> bool {
     let mut pending = event;
     loop {
+        if cancel.is_cancelled() {
+            return false;
+        }
         match events.try_send(pending) {
             Ok(()) => return true,
             Err(TrySendError::Disconnected(_)) => return false,
@@ -319,14 +324,21 @@ fn offset(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
-fn read_block(reader: &mut dyn Read, buffer: &mut [u8]) -> io::Result<usize> {
+fn read_block(
+    reader: &mut dyn Read,
+    buffer: &mut [u8],
+    cancel: &CancelToken,
+) -> Result<usize, Reason> {
     let mut filled = 0;
     while filled < buffer.len() {
+        if cancel.is_cancelled() {
+            return Err(Reason::Stopped);
+        }
         match reader.read(&mut buffer[filled..]) {
             Ok(0) => break,
             Ok(count) => filled += count,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => return Err(error),
+            Err(_) => return Err(Reason::ReadError),
         }
     }
     Ok(filled)

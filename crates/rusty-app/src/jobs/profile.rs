@@ -49,18 +49,18 @@ fn factory(journal: SharedJournal, dirs: StoreDirs, drive: Option<Drive>) -> Log
     };
     Arc::new(move |plan| {
         guard(plan, &dirs, experimental)?;
-        let settings =
-            if experimental && matches!(plan.kind, OpKind::Copy | OpKind::Move | OpKind::Delete) {
-                retention_for(plan, &dirs)?
-            } else {
-                RetentionSettings::off()
-            };
+        let settings = if experimental && retains(plan.kind) {
+            retention_for(plan, &dirs)?
+        } else {
+            RetentionSettings::off()
+        };
         let settings =
             if settings.maintenance_policy().is_some() && !drive_retains(drive.as_ref(), plan) {
                 RetentionSettings::off()
             } else {
                 settings
             };
+        refuse_retained_save(plan, &settings)?;
         let retained = delete_job(plan, &settings, &dirs)?;
         #[cfg(test)]
         let retained = retained.map(|job| deletion::RetainedJob {
@@ -145,19 +145,42 @@ fn drive_retains(drive: Option<&Drive>, plan: &OperationPlan) -> bool {
             | Step::RemoveFolder { location } => Some(location),
             _ => None,
         }),
-        OpKind::Copy | OpKind::Move => {
-            let overwritten = plan
-                .conflicts
-                .iter()
-                .find(|conflict| conflict.resolution == Resolution::Overwrite);
-            let Some(conflict) = overwritten else {
+        OpKind::Copy | OpKind::Move | OpKind::Save => {
+            let Some(target) = overwritten_target(plan) else {
                 return true;
             };
-            Some(&conflict.target)
+            Some(target)
         }
         _ => return true,
     };
     probe.is_some_and(|at| rusty_retention::can_retain(ops.as_ref(), at))
+}
+
+fn refuse_retained_save(plan: &OperationPlan, settings: &RetentionSettings) -> Result<(), String> {
+    if plan.kind == OpKind::Save && settings.overwrite_policy().is_some() {
+        return Err("saving with overwrite retention is not supported yet".to_owned());
+    }
+    Ok(())
+}
+
+fn retains(kind: OpKind) -> bool {
+    matches!(
+        kind,
+        OpKind::Copy | OpKind::Move | OpKind::Delete | OpKind::Save
+    )
+}
+
+fn overwritten_target(plan: &OperationPlan) -> Option<&Location> {
+    plan.conflicts
+        .iter()
+        .find(|conflict| conflict.resolution == Resolution::Overwrite)
+        .map(|conflict| &conflict.target)
+        .or_else(|| {
+            plan.steps.iter().find_map(|step| match step {
+                Step::WriteFile { target, .. } => Some(target),
+                _ => None,
+            })
+        })
 }
 
 pub(crate) fn claim_write(
@@ -210,11 +233,7 @@ pub(crate) fn retains_deletes(dirs: &StoreDirs) -> Option<rusty_core::retention:
 
 fn retention_for(plan: &OperationPlan, dirs: &StoreDirs) -> Result<RetentionSettings, String> {
     settings(dirs).or_else(|error| {
-        let overwrites = plan
-            .conflicts
-            .iter()
-            .any(|conflict| conflict.resolution == Resolution::Overwrite);
-        if plan.kind == OpKind::Delete || overwrites {
+        if plan.kind == OpKind::Delete || overwritten_target(plan).is_some() {
             Err(error)
         } else {
             Ok(RetentionSettings::off())

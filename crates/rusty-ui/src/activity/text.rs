@@ -43,6 +43,7 @@ pub(super) fn job_title(job: &JobInfo) -> String {
         OpKind::Recycle => t!("activity-recycling", count = count, files = files),
         OpKind::Delete => t!("activity-deleting", count = count, files = files),
         OpKind::Rename => t!("activity-renaming", count = count, files = files),
+        OpKind::Save => t!("activity-saving", target = target_of(job)),
         OpKind::Link => t!(
             "activity-linking",
             count = count,
@@ -85,6 +86,7 @@ pub(super) fn failure_title(job: &JobInfo) -> String {
         OpKind::Recycle => "activity-recycle-failed",
         OpKind::Delete => "activity-delete-failed",
         OpKind::Rename => "activity-rename-failed",
+        OpKind::Save => "activity-save-failed",
         OpKind::Link => "activity-link-failed",
     };
     t!(id, count = count, files = files)
@@ -112,6 +114,7 @@ pub(super) fn done_title(job: &JobInfo) -> String {
         OpKind::Recycle => t!("activity-recycled", count = count, items = items),
         OpKind::Delete => t!("activity-deleted", count = count, items = items),
         OpKind::Rename => t!("activity-renamed", count = count, items = items),
+        OpKind::Save => t!("activity-saved", target = target),
         OpKind::Link => t!(
             "activity-linked",
             count = count,
@@ -148,6 +151,7 @@ pub(super) fn job_chip(job: &JobInfo) -> String {
         OpKind::Recycle => "activity-chip-recycle",
         OpKind::Delete => "activity-chip-delete",
         OpKind::Rename => "activity-chip-rename",
+        OpKind::Save => "activity-chip-save",
         OpKind::Link => "activity-chip-link",
     };
     let chip = t!(id, percent = percent(job.fraction()));
@@ -165,6 +169,7 @@ pub(super) fn failure_chip(job: &JobInfo) -> String {
         OpKind::Recycle => "activity-chip-recycle-failed",
         OpKind::Delete => "activity-chip-delete-failed",
         OpKind::Rename => "activity-chip-rename-failed",
+        OpKind::Save => "activity-chip-save-failed",
         OpKind::Link => "activity-chip-link-failed",
     })
 }
@@ -178,6 +183,7 @@ pub(super) fn done_chip(job: &JobInfo) -> String {
         OpKind::Recycle => "activity-chip-recycled",
         OpKind::Delete => "activity-chip-deleted",
         OpKind::Rename => "activity-chip-renamed",
+        OpKind::Save => "activity-chip-saved",
         OpKind::Link => "activity-chip-linked",
     };
     t!(id, count = count, items = items)

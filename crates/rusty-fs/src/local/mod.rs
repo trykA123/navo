@@ -1,6 +1,8 @@
 #[cfg(not(windows))]
 mod copy_pump;
+mod flush;
 mod guard;
+mod hash;
 #[cfg(windows)]
 mod hidden;
 mod identity;

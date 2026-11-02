@@ -9,10 +9,15 @@ use std::sync::Arc;
 
 pub use rusty_compare::model::ObjectId;
 
+pub mod choose;
 pub mod cli;
 pub mod format;
 pub mod gix_source;
 
+pub use choose::{
+    CLI_ENGINE_ID, Choice, EngineKind, EngineSetting, GIX_ENGINE_ID, GitFound, INSTALL_GIT_NOTE,
+    MERGE_BASE_GIX_NOTE, NO_GIT_NOTE, UNSUPPORTED_FORMAT_NOTE, Work, choose,
+};
 pub use cli::{CliGit, CliOptions, DEFAULT_TIMEOUT};
 pub use format::{ObjectFormat, RefStorage, RepoFormat};
 pub use gix_source::GixGit;

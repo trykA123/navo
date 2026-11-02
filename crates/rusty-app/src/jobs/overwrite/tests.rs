@@ -1,5 +1,7 @@
 use rusty_core::retention::{RetainedState, RetentionEntry};
-use rusty_core::{ConflictPolicy, Location, OpKind, OperationPlan, PlanRequest, plan};
+use rusty_core::{
+    ConflictPolicy, FileStamp, Location, OpKind, OperationPlan, PlanRequest, Step, plan,
+};
 use rusty_fs::{
     CancelToken, FakeFs, JobContext, JobOutcome, LocalFs, Provider, ProviderOps, existing_at,
     run_job_parallel, scan,
@@ -23,6 +25,34 @@ fn setup() -> (tempfile::TempDir, StoreDirs, SharedJournal) {
     .unwrap();
     let journal = open(&dirs.journal_file()).unwrap();
     (root, dirs, journal)
+}
+
+#[test]
+fn a_staged_name_is_checked_for_generated_temporary_collisions() {
+    let fs = FakeFs::new();
+    let prefix = format!("{}-x-", rusty_fs::TEMP_SUFFIX);
+    let step = Step::WriteFile {
+        target: fs.location("dest/a"),
+        staged: fs.location(&format!("dest/{prefix}stage")),
+        staged_len: 0,
+        expect: FileStamp {
+            size: 0,
+            modified_ms: None,
+            hash: [0_u8; 32],
+        },
+    };
+    assert!(super::collides(&step, &prefix));
+    let other = Step::WriteFile {
+        target: fs.location("dest/a"),
+        staged: fs.location("dest/other"),
+        staged_len: 0,
+        expect: FileStamp {
+            size: 0,
+            modified_ms: None,
+            hash: [0_u8; 32],
+        },
+    };
+    assert!(!super::collides(&other, &prefix));
 }
 
 fn overwrite(

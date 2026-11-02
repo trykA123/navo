@@ -10,6 +10,7 @@ mod move_;
 mod planned;
 mod props;
 mod risks;
+mod write;
 
 fn loc(text: &str) -> Location {
     Location::new(text).unwrap()

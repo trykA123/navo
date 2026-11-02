@@ -31,6 +31,7 @@ activity-linking = Creating { $count ->
     [one] { $files } shortcut
    *[other] { $files } shortcuts
 } in { $target }
+activity-saving = Saving { $target }
 activity-progress = { $done } of { $total }
 activity-left = { $time } left
 activity-pausing = Pausing…
@@ -87,6 +88,7 @@ activity-link-failed = { $count ->
     [one] { $files } shortcut could not be created
    *[other] { $files } shortcuts could not be created
 }
+activity-save-failed = The file could not be saved
 activity-copied = Copied { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -111,6 +113,7 @@ activity-linked = Created { $count ->
     [one] { $items } shortcut
    *[other] { $items } shortcuts
 } in { $target }
+activity-saved = Saved { $target }
 activity-dragging = Dragging { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -122,6 +125,11 @@ files-keep-structure = Keep folder structure
 link-verb = Create shortcuts for
 link-verb-running = Creating shortcuts for
 link-verb-done = Created shortcuts for
+save-verb = Save
+save-verb-running = Saving
+save-verb-done = Saved
+files-save-confirm = Save { $target }?
+files-save-label = Save
 files-rename-confirm = Rename { $items }?
 activity-percent = { $percent }%
 activity-chip-copy = Copy { $percent }
@@ -130,6 +138,7 @@ activity-chip-delete = Delete { $percent }
 activity-chip-recycle = Recycle { $percent }
 activity-chip-rename = Rename { $percent }
 activity-chip-link = Shortcuts { $percent }
+activity-chip-save = Save { $percent }
 activity-chip-paused = { $chip } · Paused
 activity-chip-copy-failed = Copy failed
 activity-chip-move-failed = Move failed
@@ -137,6 +146,7 @@ activity-chip-delete-failed = Delete failed
 activity-chip-recycle-failed = Recycle failed
 activity-chip-rename-failed = Rename failed
 activity-chip-link-failed = Shortcuts failed
+activity-chip-save-failed = Save failed
 activity-chip-copied = Copied { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -161,6 +171,7 @@ activity-chip-linked = Created { $count ->
     [one] { $items } shortcut
    *[other] { $items } shortcuts
 }
+activity-chip-saved = Saved
 activity-strip = Activity
 activity-pause = Pause
 activity-resume = Resume

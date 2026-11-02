@@ -254,7 +254,7 @@ impl Browser {
         let target = match kind {
             OpKind::Copy | OpKind::Move | OpKind::Link => Some(self.other_location()?),
             OpKind::Recycle | OpKind::Delete => None,
-            OpKind::Rename => return None,
+            OpKind::Rename | OpKind::Save => return None,
         };
         if sources.is_empty()
             || self.operate_refusal(kind).is_some()

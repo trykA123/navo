@@ -12,6 +12,7 @@ pub(super) fn current_of(step: &Step) -> Location {
     match step {
         Step::MakeFolder { target } => target.clone(),
         Step::MakeLink { at, .. } => at.clone(),
+        Step::WriteFile { target, .. } => target.clone(),
         Step::CopyFile { source, .. } | Step::Rename { source, .. } => source.clone(),
         Step::Recycle { location }
         | Step::RemoveFile { location }
@@ -23,6 +24,7 @@ pub(super) fn current_of(step: &Step) -> Location {
 pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
     match step {
         Step::CopyFile { size, .. } => (*size, 1),
+        Step::WriteFile { staged_len, .. } => (*staged_len, 1),
         Step::RemoveFile { .. } | Step::MakeLink { .. } | Step::Recycle { .. } => (0, 1),
         Step::Rename { target, .. } if kind == OpKind::Rename && !is_temporary(target) => (0, 1),
         _ => (0, 0),
@@ -213,6 +215,20 @@ pub(super) fn apply(
             remove(ops, job.removals, step)
         }
         Step::MakeLink { target_of, at } => done(ops.make_link(target_of, at)),
+        Step::WriteFile {
+            target,
+            staged,
+            staged_len,
+            expect,
+        } => {
+            let write = super::write_file::Write {
+                target,
+                staged,
+                staged_len: *staged_len,
+                expect,
+            };
+            super::write_file::run(job.aside, ctx, &write)
+        }
     }
 }
 

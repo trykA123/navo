@@ -23,7 +23,11 @@ pub(super) struct Crashing<'a> {
     inside: bool,
     fatal: bool,
     takes: Option<String>,
+    cancels: Option<CancelToken>,
+    meddles: Option<Meddle>,
 }
+
+type Meddle = Box<dyn Fn(&FakeFs) + Send + Sync>;
 
 impl<'a> Crashing<'a> {
     pub(super) fn new(fs: &'a FakeFs, path: &str, op: FakeOp) -> Self {
@@ -35,6 +39,8 @@ impl<'a> Crashing<'a> {
             inside: false,
             fatal: true,
             takes: None,
+            cancels: None,
+            meddles: None,
         }
     }
 
@@ -42,6 +48,24 @@ impl<'a> Crashing<'a> {
         Self {
             inside: true,
             ..Self::new(fs, HELD_PREFIX, op)
+        }
+    }
+
+    pub(super) fn cancelling(fs: &'a FakeFs, path: &str, op: FakeOp, token: &CancelToken) -> Self {
+        Self {
+            cancels: Some(token.clone()),
+            ..Self::new(fs, path, op)
+        }
+    }
+
+    pub(super) fn meddling(
+        fs: &'a FakeFs,
+        (path, op): (&str, FakeOp),
+        meddle: impl Fn(&FakeFs) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            meddles: Some(Box::new(meddle)),
+            ..Self::new(fs, path, op)
         }
     }
 
@@ -101,6 +125,14 @@ impl<'a> Crashing<'a> {
     fn enter(&self, location: &Location, op: FakeOp) -> Result<(), FsError> {
         self.alive()?;
         if self.hits(location, op) {
+            if let Some(meddle) = &self.meddles {
+                meddle(self.fs);
+                return Ok(());
+            }
+            if let Some(token) = &self.cancels {
+                token.cancel();
+                return Ok(());
+            }
             if let Some(taken) = &self.takes {
                 self.fs.add_file(taken, 1);
             }
@@ -204,6 +236,21 @@ impl ProviderOps for Crashing<'_> {
 
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         self.fs.volume_serial(location)
+    }
+
+    fn content_hash(&self, location: &Location, cancel: &CancelToken) -> Result<[u8; 32], FsError> {
+        self.enter(location, FakeOp::Read)?;
+        self.fs.content_hash(location, cancel)
+    }
+
+    fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
+        self.alive()?;
+        self.fs.file_identity(location)
+    }
+
+    fn flush(&self, location: &Location) -> Result<(), FsError> {
+        self.alive()?;
+        self.fs.flush(location)
     }
 }
 

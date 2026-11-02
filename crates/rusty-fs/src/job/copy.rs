@@ -1,4 +1,4 @@
-use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution};
+use rusty_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution, Step};
 
 use super::aside::Aside;
 use super::{FileStamp, JobContext, PlacedFile, StepOutcome};
@@ -195,6 +195,10 @@ pub(super) fn overwrites(plan: &OperationPlan, target: &Location) -> bool {
     plan.conflicts
         .iter()
         .any(|c| c.resolution == Resolution::Overwrite && c.target.same_place(target))
+        || plan
+            .steps
+            .iter()
+            .any(|step| matches!(step, Step::WriteFile { target: at, .. } if at.same_place(target)))
 }
 
 pub(super) fn remove_if_present(

@@ -116,6 +116,7 @@ fn a_job_whose_old_file_could_not_be_put_back_is_not_released_and_stays_pending(
         held: fs.location("dest/docs/report.txt"),
         placed: None,
         volume: None,
+        placed_hash: None,
     };
     log.held_stranded(&stuck);
     let failed = JobOutcome::Failed {

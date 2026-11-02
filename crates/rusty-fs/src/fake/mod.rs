@@ -33,6 +33,8 @@ pub enum FakeOp {
     Recycle,
     Secure,
     Watch,
+    Read,
+    Flush,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +54,7 @@ type CallKey = (String, FakeOp);
 struct SizeMetadata {
     on_disk: Option<u64>,
     link: Option<LinkKey>,
+    hash: Option<[u8; 32]>,
 }
 
 #[derive(Debug)]
@@ -203,6 +206,12 @@ impl FakeFs {
     pub fn set_on_disk(&self, path: &str, bytes: u64) {
         if let Some(id) = self.tree().identity(path) {
             lock(&self.sizes).entry(id).or_default().on_disk = Some(bytes);
+        }
+    }
+
+    pub fn set_hash(&self, path: &str, hash: [u8; 32]) {
+        if let Some(id) = self.tree().identity(normalize(path)) {
+            lock(&self.sizes).entry(id).or_default().hash = Some(hash);
         }
     }
 
@@ -391,7 +400,7 @@ impl Provider for FakeFs {
                 batch.entries.into_iter().try_for_each(|entry| {
                     let child = format!("{path}/{}", entry.name.to_text());
                     let id = self.tree().identity(&child);
-                    let SizeMetadata { on_disk, link } = id
+                    let SizeMetadata { on_disk, link, .. } = id
                         .and_then(|id| lock(&self.sizes).get(&id).copied())
                         .unwrap_or_default();
                     sink(SizeEntry {

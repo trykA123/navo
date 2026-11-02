@@ -1,10 +1,13 @@
+pub mod apply;
 pub mod diff;
 pub mod intraline;
+pub mod large;
 pub mod normalise;
 pub mod pair;
 pub mod scan;
 pub mod side;
 
+pub use apply::{ApplyError, Direction, Picked, PickedHunk, TargetFacts, apply_hunk, apply_picked};
 pub use diff::{Alignment, Fallback, Hunk, Row, diff_lines};
 pub use intraline::{
     INTRALINE_DEADLINE, INTRALINE_MAX_CHARS, Intraline, IntralineFallback, LinePair, Span,

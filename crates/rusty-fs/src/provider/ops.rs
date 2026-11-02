@@ -148,4 +148,19 @@ pub trait ProviderOps: Provider {
     fn volume_serial(&self, _location: &Location) -> Result<Option<u64>, FsError> {
         Ok(None)
     }
+    /// Makes a file's bytes, or a folder's entries, durable on disk.
+    fn flush(&self, _location: &Location) -> Result<(), FsError> {
+        Ok(())
+    }
+    /// BLAKE3 of the file's bytes; stops with `Cancelled` when the token is cancelled.
+    fn content_hash(
+        &self,
+        location: &Location,
+        _cancel: &CancelToken,
+    ) -> Result<[u8; 32], FsError> {
+        Err(FsError {
+            location: Some(location.clone()),
+            ..FsError::new(FsErrorKind::NotSupportedYet)
+        })
+    }
 }

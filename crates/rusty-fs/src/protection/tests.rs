@@ -1,4 +1,4 @@
-use rusty_core::{FsErrorKind, OpKind, OperationPlan, Step, Totals};
+use rusty_core::{FileStamp, FsErrorKind, OpKind, OperationPlan, Step, Totals};
 
 use super::*;
 use crate::{FakeFs, FakeOp, Fault};
@@ -40,6 +40,32 @@ fn moves(fs: &FakeFs, source: &str) -> Vec<OperationPlan> {
             }],
         ),
     ]
+}
+
+fn write_step(fs: &FakeFs, target: &str, staged: &str) -> Step {
+    Step::WriteFile {
+        target: fs.location(target),
+        staged: fs.location(staged),
+        staged_len: 4,
+        expect: FileStamp {
+            size: 2,
+            modified_ms: Some(1_000),
+            hash: [0_u8; 32],
+        },
+    }
+}
+
+#[test]
+fn a_staged_path_inside_a_reserved_location_is_refused() {
+    let fs = FakeFs::new();
+    let plan = plan(
+        OpKind::Copy,
+        vec![write_step(&fs, "home/docs/a", "home/.navo-held-1/a")],
+    );
+    let Err(error) = ResolvedPlan::new(&plan) else {
+        panic!("a reserved staged path was allowed");
+    };
+    assert_eq!(error.kind, FsErrorKind::AccessDenied);
 }
 
 #[test]

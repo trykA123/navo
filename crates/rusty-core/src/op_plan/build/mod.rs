@@ -1,7 +1,9 @@
 mod keep;
 mod link;
+mod write;
 
 pub use keep::relative_folders;
+pub use write::write_plan;
 
 use std::collections::HashMap;
 

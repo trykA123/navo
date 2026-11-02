@@ -41,6 +41,10 @@ mod replace;
 mod roll_back;
 mod volume_proof;
 mod workers;
+mod write;
+mod write_file;
+mod write_file_races;
+mod write_file_undo;
 
 const BIG: u64 = 10_000;
 const MODES: [usize; 2] = [0, 4];

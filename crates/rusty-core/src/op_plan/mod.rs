@@ -6,7 +6,7 @@ mod risks;
 
 use serde::{Deserialize, Serialize};
 
-pub use build::relative_folders;
+pub use build::{relative_folders, write_plan};
 pub use drop::{DropKeys, DropOp, drop_op, right_button_drag};
 pub use protect::is_protected;
 
@@ -20,6 +20,7 @@ pub enum OpKind {
     Delete,
     Rename,
     Link,
+    Save,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,10 +67,74 @@ pub struct PlanRequest {
     pub protected: Vec<Location>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FileStamp {
+    pub size: u64,
+    pub modified_ms: Option<i64>,
+    #[serde(with = "hash_hex")]
+    pub hash: [u8; 32],
+}
+
+mod hash_hex {
+    use serde::de::Error as _;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+
+    fn nibble(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    pub(super) fn serialize<S: Serializer>(
+        hash: &[u8; 32],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut text = String::with_capacity(64);
+        for byte in hash {
+            text.push(char::from(HEX[usize::from(byte >> 4)]));
+            text.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+        serializer.serialize_str(&text)
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; 32], D::Error> {
+        let text = String::deserialize(deserializer)?;
+        if text.len() != 64 {
+            return Err(D::Error::invalid_length(
+                text.len(),
+                &"a 64-character hex hash",
+            ));
+        }
+        let bytes = text.as_bytes();
+        let mut hash = [0_u8; 32];
+        for (at, slot) in hash.iter_mut().enumerate() {
+            let high = nibble(bytes[at * 2])
+                .ok_or_else(|| D::Error::custom("the file stamp hash is not hex"))?;
+            let low = nibble(bytes[at * 2 + 1])
+                .ok_or_else(|| D::Error::custom("the file stamp hash is not hex"))?;
+            *slot = (high << 4) | low;
+        }
+        Ok(hash)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Step {
     MakeFolder {
         target: Location,
+    },
+    WriteFile {
+        target: Location,
+        staged: Location,
+        staged_len: u64,
+        expect: FileStamp,
     },
     CopyFile {
         source: Location,
@@ -117,6 +182,7 @@ pub struct Conflict {
 pub enum Risk {
     Permanent,
     Protected(Location),
+    Overwrite(Location),
     ManyItems(u64),
     Large(u64),
     LinksSkipped(u64),
@@ -169,7 +235,8 @@ fn plan_with(request: &PlanRequest, base: Option<&Location>) -> OperationPlan {
         (OpKind::Delete, _) => {
             walk.steps = request.items.iter().rev().map(build::removal).collect();
         }
-        (OpKind::Copy | OpKind::Move | OpKind::Link, None) | (OpKind::Rename, _) => {}
+        (OpKind::Copy | OpKind::Move | OpKind::Link, None) | (OpKind::Rename | OpKind::Save, _) => {
+        }
     }
     let totals = risks::totals(request, &walk.steps, &walk.moved);
     let risks = risks::risks(request, &walk, &totals);

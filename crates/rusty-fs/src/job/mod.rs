@@ -13,6 +13,7 @@ mod run;
 mod temporary;
 mod undo;
 mod workers;
+mod write_file;
 
 use rusty_core::{FsError, Location, OpKind, OperationPlan};
 
@@ -44,6 +45,7 @@ pub struct HeldFile {
     pub held: Location,
     pub placed: Option<FileStamp>,
     pub volume: Option<u64>,
+    pub placed_hash: Option<[u8; 32]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,6 +192,11 @@ pub struct Journaled<'a> {
 #[must_use]
 pub fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
     undo::roll_back(job, ctx)
+}
+
+/// Undoes a finished save: restores the held old file only while the target is the exact placed file.
+pub fn undo_write(held: &HeldFile, ctx: &mut JobContext<'_>) -> Result<StepOutcome, FsError> {
+    aside::undo_write(held, ctx)
 }
 
 pub fn release_held(held: &[HeldFile], ops: &dyn ProviderOps) -> Result<(), FsError> {
