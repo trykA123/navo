@@ -114,6 +114,7 @@ fn codes_and_labels_are_stable_and_unknown_codes_are_skipped() {
             },
         ],
         busy: false,
+        ..MemoryReport::default()
     };
     let known: Vec<_> = report.known().map(|(part, _)| part).collect();
     assert_eq!(known, [Part::Process]);
@@ -125,6 +126,7 @@ fn a_memory_answer_round_trips_on_the_wire() {
     report.add(Part::Process, 64 << 20, 0);
     report.add_sessions();
     report.busy = true;
+    report.process_id = Some(42);
     let response = Response::MemoryV1 {
         generation: 1,
         report: report.clone(),
@@ -211,4 +213,68 @@ fn an_old_service_refuses_a_memory_request_instead_of_misreading_it() {
     };
     let bytes = frames::encode(&query).unwrap();
     assert!(frames::decode::<OldQuery>(&bytes).is_err());
+}
+
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct OldMemoryReport {
+    parts: Vec<MemoryPart>,
+    busy: bool,
+}
+
+#[test]
+fn a_new_memory_client_accepts_an_old_service_without_optional_metadata() {
+    let old = OldMemoryReport {
+        parts: report(5).parts,
+        busy: true,
+    };
+    let decoded: MemoryReport = frames::decode(&frames::encode(&old).unwrap()).unwrap();
+    assert_eq!(decoded.parts, old.parts);
+    assert!(decoded.busy);
+    assert_eq!(decoded.process_id, None);
+    assert_eq!(decoded.volumes, None);
+    assert_eq!(
+        frames::encode(&decoded).unwrap(),
+        frames::encode(&old).unwrap()
+    );
+}
+
+#[test]
+fn an_old_memory_client_accepts_a_new_service_and_skips_unknown_parts() {
+    let mut report = report(5);
+    report.process_id = Some(42);
+    let decoded: OldMemoryReport = frames::decode(&frames::encode(&report).unwrap()).unwrap();
+    let known: Vec<_> = decoded
+        .parts
+        .into_iter()
+        .filter(|part| Part::from_code(part.part).is_some())
+        .collect();
+    assert_eq!(known, report.parts);
+    assert_eq!(decoded.busy, report.busy);
+}
+
+#[test]
+fn memory_counts_preserve_slots_after_deletes_for_each_volume() {
+    let mut first = index(10);
+    first
+        .apply_batch(UsnBatch {
+            next_usn: 120,
+            records: vec![record(100, 0x200, "file-0.txt")],
+        })
+        .unwrap();
+    let mut report = MemoryReport::default();
+    report.add_index(&first);
+    report.add_index(&index(20));
+    assert_eq!(
+        report.volumes,
+        Some(vec![
+            VolumeMemory {
+                slots: 11,
+                live: 10
+            },
+            VolumeMemory {
+                slots: 21,
+                live: 21
+            },
+        ])
+    );
 }

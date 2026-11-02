@@ -18,7 +18,10 @@ pub(super) fn answer(volumes: &[SharedVolume]) -> Reply {
 }
 
 fn report_before(volumes: &[SharedVolume], deadline: Instant) -> MemoryReport {
-    let mut report = MemoryReport::default();
+    let mut report = MemoryReport {
+        process_id: Some(std::process::id()),
+        ..MemoryReport::default()
+    };
     for volume in volumes {
         match read_before(&volume.shared, deadline) {
             Some(state) => {
@@ -68,6 +71,7 @@ mod tests {
         assert!(reply.hits.is_empty() && reply.totals.is_none());
         let memory = reply.memory.as_ref().unwrap();
         assert!(!memory.busy);
+        assert_eq!(memory.process_id, Some(std::process::id()));
         assert!(bytes(&reply, Part::Sessions).is_some());
         #[cfg(target_os = "linux")]
         assert!(bytes(&reply, Part::Process).is_some_and(|private| private > 0));
