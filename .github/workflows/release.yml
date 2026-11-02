@@ -7,6 +7,11 @@ on:
         description: "Release tag, for example alpha-2026-10-30c"
         required: true
         type: string
+      full-checks:
+        description: "Also run Windows clippy and tests here (main is already checked in the Windows VM before every push)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,6 +43,7 @@ jobs:
 
   clippy-windows:
     needs: check-tag
+    if: inputs.full-checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +57,7 @@ jobs:
 
   gate-windows:
     needs: check-tag
+    if: inputs.full-checks
     runs-on: windows-latest
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
@@ -169,6 +176,11 @@ jobs:
 
   publish:
     needs: [clippy-windows, gate-windows, build-windows]
+    # Skipped checks count as passed; a failed or cancelled one stops the release.
+    if: >-
+      always() && needs.build-windows.result == 'success'
+      && contains(fromJSON('["success","skipped"]'), needs.clippy-windows.result)
+      && contains(fromJSON('["success","skipped"]'), needs.gate-windows.result)
     runs-on: ubuntu-latest
     permissions:
       contents: write
