@@ -311,6 +311,7 @@ fn strand_original(interrupted: &mut Interrupted) -> rusty_core::retention::Over
             modified_ms: None,
         }),
         volume: Some(parent.volume),
+        placed_hash: None,
     };
     let evidence = rusty_core::retention::OverwriteProof {
         parent_identity: parent,

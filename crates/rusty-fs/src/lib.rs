@@ -34,7 +34,7 @@ pub use job::{
     CopyMode, FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOutcome, Journaled,
     PlacedFile, PreparedMove, Progress, RenameOutcome, StepOutcome, TEMP_SUFFIX, WorkerCounts,
     clean_up, copy_workers, is_rename_temporary, job_workers, recorded_proof, release_held,
-    roll_back, run_job, run_job_parallel, run_rename, settle_prepared_move, undo_move,
+    roll_back, run_job, run_job_parallel, run_rename, settle_prepared_move, undo_move, undo_write,
 };
 pub use local::{
     AutoTuning, LocalFs, MutationLocations, make_link, mutation_location, native_identity,

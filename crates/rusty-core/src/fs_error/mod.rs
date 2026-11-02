@@ -15,6 +15,7 @@ pub enum FsErrorKind {
     NotSupportedYet,
     IdentityUnavailable,
     JournalWriteFailed,
+    ChangedOnDisk,
     Unknown,
 }
 
@@ -122,6 +123,7 @@ impl FsError {
             FsErrorKind::NotSupportedYet | FsErrorKind::IdentityUnavailable => {
                 &[Skip, SkipAll, Cancel]
             }
+            FsErrorKind::ChangedOnDisk => &[Cancel],
             FsErrorKind::Unknown => &[Retry, Skip, Cancel],
         }
     }
@@ -183,6 +185,9 @@ fn with_location(kind: FsErrorKind, place: &str) -> String {
             format!("This drive cannot confirm file identity for “{place}”.")
         }
         FsErrorKind::JournalWriteFailed => without_location(kind).to_owned(),
+        FsErrorKind::ChangedOnDisk => {
+            format!("\u{201c}{place}\u{201d} changed after it was opened.")
+        }
         FsErrorKind::Unknown => format!("Something went wrong with \u{201c}{place}\u{201d}."),
     }
 }
@@ -202,6 +207,7 @@ fn without_location(kind: FsErrorKind) -> &'static str {
         FsErrorKind::NotSupportedYet => "This is not supported yet.",
         FsErrorKind::IdentityUnavailable => "This drive cannot confirm file identity.",
         FsErrorKind::JournalWriteFailed => "Navo could not save the job's progress to its journal.",
+        FsErrorKind::ChangedOnDisk => "The file changed after it was opened.",
         FsErrorKind::Unknown => "Something went wrong.",
     }
 }

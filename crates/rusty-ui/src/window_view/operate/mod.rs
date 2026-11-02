@@ -52,6 +52,10 @@ fn question(pending: &PendingOp) -> (String, String) {
             t!("files-rename-confirm", items = count.as_str()),
             "Rename".to_owned(),
         ),
+        OpKind::Save => (
+            t!("files-save-confirm", target = target),
+            tr("files-save-label"),
+        ),
         OpKind::Link => (
             t!(
                 "files-link-confirm",

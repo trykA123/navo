@@ -268,6 +268,16 @@ impl ProviderOps for LocalFs {
             .map(Some)
             .map_err(|e| io_error(&e, location))
     }
+
+    fn flush(&self, location: &Location) -> Result<(), FsError> {
+        super::flush::flush(&os_path(location)?).map_err(|e| io_error(&e, location))
+    }
+
+    fn content_hash(&self, location: &Location, cancel: &CancelToken) -> Result<[u8; 32], FsError> {
+        super::hash::blake3_of(&os_path(location)?, cancel)
+            .map_err(|e| io_error(&e, location))?
+            .ok_or_else(|| error(FsErrorKind::Cancelled, location))
+    }
 }
 
 #[cfg(test)]

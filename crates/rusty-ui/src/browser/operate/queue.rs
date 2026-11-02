@@ -62,6 +62,7 @@ fn plan_places(plan: &OperationPlan) -> impl Iterator<Item = &Location> {
                 [Some(source), Some(target)]
             }
             Step::MakeLink { target_of, at } => [Some(target_of), Some(at)],
+            Step::WriteFile { target, staged, .. } => [Some(target), Some(staged)],
             Step::MakeFolder { target } => [Some(target), None],
             Step::Recycle { location }
             | Step::RemoveFile { location }

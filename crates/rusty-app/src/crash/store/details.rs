@@ -126,6 +126,10 @@ fn paths(job: &UnrecoveredJob) -> Vec<String> {
                     paths.insert(target_of.as_str().to_owned());
                     paths.insert(at.as_str().to_owned());
                 }
+                Step::WriteFile { target, staged, .. } => {
+                    paths.insert(target.as_str().to_owned());
+                    paths.insert(staged.as_str().to_owned());
+                }
                 Step::MakeFolder { target }
                 | Step::RemoveFile { location: target }
                 | Step::RemoveFolder { location: target }

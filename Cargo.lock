@@ -7647,6 +7647,7 @@ name = "rusty-compare"
 version = "0.0.1"
 dependencies = [
  "blake3",
+ "fastcdc",
  "ignore",
  "image",
  "image-compare",
@@ -7709,6 +7710,7 @@ dependencies = [
 name = "rusty-fs"
 version = "0.0.1"
 dependencies = [
+ "blake3",
  "crc32fast",
  "encoding_rs",
  "flate2",

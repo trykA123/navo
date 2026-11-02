@@ -69,8 +69,11 @@ fn checked_undo(
 }
 
 pub(super) fn held_for<'h>(step: &Step, held: &'h [HeldFile]) -> Option<&'h HeldFile> {
-    let (Step::CopyFile { target, .. } | Step::Rename { target, .. }) = step else {
-        return None;
+    let target = match step {
+        Step::CopyFile { target, .. }
+        | Step::Rename { target, .. }
+        | Step::WriteFile { target, .. } => target,
+        _ => return None,
     };
     held.iter()
         .find(|file| file.original == *target)
@@ -84,6 +87,7 @@ fn awaits_unreadable_row(job: &Journaled<'_>, step: &Step, held: Option<&HeldFil
     match step {
         Step::CopyFile { .. } => true,
         Step::Rename { target, .. } => overwrites(job.plan, target),
+        Step::WriteFile { .. } => true,
         _ => false,
     }
 }
@@ -127,6 +131,7 @@ fn undo(
             None => undo_rename(ops, source, target),
         },
         Step::MakeLink { at, target_of } => undo_link(ops, at, target_of),
+        Step::WriteFile { .. } => super::write_file::recover(ctx, held),
         Step::Recycle { .. }
         | Step::RemoveFile { .. }
         | Step::RemoveLink { .. }
@@ -228,7 +233,7 @@ fn source_gone(
     gone_or_folder_deleted(ops, source, held.and_then(|file| file.volume))
 }
 
-fn settle(
+pub(super) fn settle(
     restored: Restored,
     held: &HeldFile,
     ctx: &mut JobContext<'_>,

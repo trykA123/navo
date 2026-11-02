@@ -26,5 +26,7 @@ IdentityUnavailable: This drive cannot confirm file identity.
 IdentityUnavailable: This drive cannot confirm file identity for “C:\Data\report.xlsx”.
 JournalWriteFailed: Navo could not save the job's progress to its journal.
 JournalWriteFailed: Navo could not save the job's progress to its journal.
+ChangedOnDisk: The file changed after it was opened.
+ChangedOnDisk: “C:\Data\report.xlsx” changed after it was opened.
 Unknown: Something went wrong.
 Unknown: Something went wrong with “C:\Data\report.xlsx”.

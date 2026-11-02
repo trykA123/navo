@@ -165,6 +165,7 @@ fn mutated(step: &Step) -> Vec<&Location> {
     match step {
         Step::Rename { source, target } => vec![source, target],
         Step::CopyFile { target, .. } | Step::MakeFolder { target } => vec![target],
+        Step::WriteFile { target, .. } => vec![target],
         Step::MakeLink { at, .. } => vec![at],
         Step::Recycle { location }
         | Step::RemoveFile { location }

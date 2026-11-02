@@ -154,6 +154,7 @@ fn collides(step: &rusty_core::Step, prefix: &str) -> bool {
             matches(source) || matches(target)
         }
         Step::MakeFolder { target } | Step::MakeLink { at: target, .. } => matches(target),
+        Step::WriteFile { target, staged, .. } => matches(target) || matches(staged),
         Step::Recycle { location }
         | Step::RemoveFile { location }
         | Step::RemoveLink { location }

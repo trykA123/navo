@@ -61,6 +61,7 @@ fn places(step: &Step) -> Vec<&Location> {
             vec![source, target]
         }
         Step::MakeFolder { target } => vec![target],
+        Step::WriteFile { target, staged, .. } => vec![target, staged],
         Step::RemoveFile { location }
         | Step::RemoveFolder { location }
         | Step::RemoveLink { location }

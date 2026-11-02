@@ -18,6 +18,8 @@ struct HeldRecord {
     volume: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     proof: Option<OverwriteProof>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    placed_hash: Option<[u8; 32]>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -66,6 +68,7 @@ pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Re
         placed_modified_ms: held.placed.and_then(|stamp| stamp.modified_ms),
         volume: held.volume,
         proof: None,
+        placed_hash: held.placed_hash,
     };
     let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
     lock(journal)
@@ -111,6 +114,7 @@ pub(super) fn held_of(journal: &SharedJournal, job: JobId) -> Result<Held, Journ
                         modified_ms: record.placed_modified_ms,
                     }),
                     volume: record.volume,
+                    placed_hash: record.placed_hash,
                 };
                 if let Some(proof) = record.proof {
                     held.proved.push((file.clone(), proof));

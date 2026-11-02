@@ -159,8 +159,9 @@ impl Budget {
         Self(mib as u64 * Self::BYTES_PER_MIB)
     }
 
+    #[cfg(test)]
     #[must_use]
-    pub const fn from_bytes(bytes: u64) -> Self {
+    pub(crate) const fn from_bytes(bytes: u64) -> Self {
         Self(bytes)
     }
 

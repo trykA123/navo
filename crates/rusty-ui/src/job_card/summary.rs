@@ -52,6 +52,7 @@ fn verbs(kind: OpKind, is_undo: bool) -> [String; 3] {
         OpKind::Recycle => ["Recycle", "Recycling", "Recycled"],
         OpKind::Delete => ["Delete", "Deleting", "Deleted"],
         OpKind::Rename => ["Rename", "Renaming", "Renamed"],
+        OpKind::Save => return ["save-verb", "save-verb-running", "save-verb-done"].map(tr),
         OpKind::Link => return ["link-verb", "link-verb-running", "link-verb-done"].map(tr),
     }
     .map(str::to_owned)

@@ -21,6 +21,7 @@ fn current_of(step: &Step) -> Option<rusty_core::Location> {
     match step {
         Step::MakeFolder { target } => Some(target.clone()),
         Step::MakeLink { at, .. } => Some(at.clone()),
+        Step::WriteFile { target, .. } => Some(target.clone()),
         Step::CopyFile { source, .. } | Step::Rename { source, .. } => Some(source.clone()),
         Step::Recycle { location }
         | Step::RemoveFile { location }

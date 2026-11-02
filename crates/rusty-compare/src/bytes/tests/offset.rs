@@ -1,16 +1,17 @@
 use std::io::{self, Cursor, Read};
 use std::ops::ControlFlow;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use rusty_core::{FileIdentity, ProviderId, ProviderPath};
 
 use crate::model::{
-    CancelToken, EntryKind, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource, Stamp,
+    Budget, CancelToken, EntryKind, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource,
+    Stamp,
 };
 
-use crate::bytes::{Align, ByteDiff, ByteEvent, ByteRegion, ByteSide};
+use crate::bytes::{Align, ByteDiff, ByteEvent, ByteRegion, ByteSide, Request};
 
 use super::{BLOCK, Job, run};
 
@@ -137,12 +138,18 @@ fn broken_side(len: usize) -> ByteSide {
     side(len, || Box::new(BrokenRead) as Box<dyn Read + Send>)
 }
 
-fn start(left: ByteSide, right: ByteSide, align: Align) -> Receiver<ByteEvent> {
-    ByteDiff::start(left, right, align, &CancelToken::new())
+fn start(left: ByteSide, right: ByteSide, align: Align) -> ByteDiff {
+    let request = Request {
+        left,
+        right,
+        align,
+        budget: Budget::default(),
+    };
+    ByteDiff::start(request, &CancelToken::new())
 }
 
 fn events(left: ByteSide, right: ByteSide) -> Vec<ByteEvent> {
-    start(left, right, Align::Offset).iter().collect()
+    start(left, right, Align::Offset).events().iter().collect()
 }
 
 fn regions(events: &[ByteEvent]) -> Vec<ByteRegion> {
@@ -158,10 +165,7 @@ fn regions(events: &[ByteEvent]) -> Vec<ByteRegion> {
 fn region(start: usize, end: usize) -> ByteRegion {
     let start = u64::try_from(start).unwrap();
     let end = u64::try_from(end).unwrap();
-    ByteRegion {
-        left: start..end,
-        right: start..end,
-    }
+    ByteRegion::single(start..end, start..end)
 }
 
 fn patched(len: usize, ranges: &[(usize, usize)]) -> (Vec<u8>, Vec<u8>) {
@@ -220,10 +224,7 @@ fn a_longer_right_side_gets_an_empty_left_tail() {
     let left = vec![0u8; 128];
     let mut right = left.clone();
     right.extend_from_slice(&[1, 2, 3, 4]);
-    let tail = ByteRegion {
-        left: 128..128,
-        right: 128..132,
-    };
+    let tail = ByteRegion::single(128..128, 128..132);
     assert_eq!(
         regions(&events(memory_side(left), memory_side(right))),
         vec![tail]
@@ -235,10 +236,7 @@ fn a_tail_longer_than_a_block_keeps_the_short_side_empty() {
     let left = vec![0u8; 100];
     let mut right = left.clone();
     right.resize(2 * BLOCK + 100, 1);
-    let tail = ByteRegion {
-        left: 100..100,
-        right: 100..u64::try_from(right.len()).unwrap(),
-    };
+    let tail = ByteRegion::single(100..100, 100..u64::try_from(right.len()).unwrap());
     assert_eq!(
         regions(&events(memory_side(left), memory_side(right))),
         vec![tail]
@@ -250,10 +248,7 @@ fn a_longer_left_side_gets_an_empty_right_tail() {
     let right = vec![0u8; 128];
     let mut left = right.clone();
     left.extend_from_slice(&[1, 2, 3, 4]);
-    let tail = ByteRegion {
-        left: 128..132,
-        right: 128..128,
-    };
+    let tail = ByteRegion::single(128..132, 128..128);
     assert_eq!(
         regions(&events(memory_side(left), memory_side(right))),
         vec![tail]
@@ -266,10 +261,7 @@ fn a_tail_merges_with_a_change_under_sixteen_away() {
     let mut right = left.clone();
     right[120..123].fill(9);
     right.extend_from_slice(&[1, 2, 3, 4]);
-    let merged = ByteRegion {
-        left: 120..128,
-        right: 120..132,
-    };
+    let merged = ByteRegion::single(120..128, 120..132);
     assert_eq!(
         regions(&events(memory_side(left), memory_side(right))),
         vec![merged]
@@ -282,10 +274,7 @@ fn a_tail_sixteen_from_a_change_stays_separate() {
     let mut right = left.clone();
     right[110..112].fill(9);
     right.extend_from_slice(&[1, 2, 3, 4]);
-    let tail = ByteRegion {
-        left: 128..128,
-        right: 128..132,
-    };
+    let tail = ByteRegion::single(128..128, 128..132);
     assert_eq!(
         regions(&events(memory_side(left), memory_side(right))),
         vec![region(110, 112), tail]
@@ -306,30 +295,42 @@ fn cancel_stops_within_one_block_without_done() {
     let cancel = CancelToken::new();
     let data = vec![0u8; 3 * BLOCK];
     let left = cancelling_side(data.clone(), cancel.clone());
-    let right = memory_side(data);
-    let events: Vec<ByteEvent> = ByteDiff::start(left, right, Align::Offset, &cancel)
-        .iter()
-        .collect();
-    assert!(!events.contains(&ByteEvent::Done));
-    let progress = events
-        .iter()
-        .filter(|event| matches!(event, ByteEvent::Progress { .. }))
-        .count();
-    assert_eq!(progress, 1);
+    let right_reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let right = side(data.len(), {
+        let reads = Arc::clone(&right_reads);
+        let cancel = cancel.clone();
+        move || {
+            Box::new(InterruptedRead {
+                reads: Arc::clone(&reads),
+                cancel: cancel.clone(),
+            })
+        }
+    });
+    let request = Request {
+        left,
+        right,
+        align: Align::Offset,
+        budget: Budget::default(),
+    };
+    let events: Vec<ByteEvent> = ByteDiff::start(request, &cancel).events().iter().collect();
+    assert!(
+        events.is_empty(),
+        "a cancelled read sends no progress and no Done"
+    );
+    assert_eq!(right_reads.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
 
 #[test]
 fn cancel_before_start_emits_nothing() {
     let cancel = CancelToken::new();
     cancel.cancel();
-    let events: Vec<ByteEvent> = ByteDiff::start(
-        memory_side(vec![1; 64]),
-        memory_side(vec![2; 64]),
-        Align::Offset,
-        &cancel,
-    )
-    .iter()
-    .collect();
+    let request = Request {
+        left: memory_side(vec![1; 64]),
+        right: memory_side(vec![2; 64]),
+        align: Align::Offset,
+        budget: Budget::default(),
+    };
+    let events: Vec<ByteEvent> = ByteDiff::start(request, &cancel).events().iter().collect();
     assert!(events.is_empty());
 }
 
@@ -352,6 +353,7 @@ fn cancel_frees_a_worker_blocked_on_a_full_event_channel() {
                 left,
                 right,
                 align: Align::Offset,
+                budget: Budget::default(),
                 cancel: cancel_ref,
                 events: events_ref,
             });
@@ -404,10 +406,7 @@ fn a_grown_side_against_the_listed_size_fails() {
     assert!(!events.contains(&ByteEvent::Done));
     assert_eq!(
         regions(&events),
-        vec![ByteRegion {
-            left: 128..140,
-            right: 128..128,
-        }]
+        vec![ByteRegion::single(128..140, 128..128)]
     );
 }
 
@@ -417,10 +416,90 @@ fn a_read_error_becomes_failed_without_done() {
     assert_eq!(events, vec![ByteEvent::Failed(Reason::ReadError)]);
 }
 
+struct InterruptedRead {
+    reads: Arc<std::sync::atomic::AtomicUsize>,
+    cancel: CancelToken,
+}
+
+impl Read for InterruptedRead {
+    fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {
+        let count = self.reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if count == 2 {
+            self.cancel.cancel();
+        }
+        Err(io::ErrorKind::Interrupted.into())
+    }
+}
+
 #[test]
-fn content_alignment_is_unsupported_for_now() {
-    let events = start(memory_side(vec![1]), memory_side(vec![2]), Align::Content)
-        .iter()
-        .collect::<Vec<_>>();
-    assert_eq!(events, vec![ByteEvent::Failed(Reason::Unsupported)]);
+fn interrupted_offset_reads_stop_before_retry_or_the_other_side() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let cancel = CancelToken::new();
+    let reads = Arc::new(AtomicUsize::new(0));
+    let left = side(1, {
+        let cancel = cancel.clone();
+        let reads = Arc::clone(&reads);
+        move || {
+            Box::new(InterruptedRead {
+                reads: Arc::clone(&reads),
+                cancel: cancel.clone(),
+            })
+        }
+    });
+    let right_reads = Arc::new(AtomicUsize::new(0));
+    let right = side(1, {
+        let reads = Arc::clone(&right_reads);
+        let cancel = cancel.clone();
+        move || {
+            Box::new(InterruptedRead {
+                reads: Arc::clone(&reads),
+                cancel: cancel.clone(),
+            })
+        }
+    });
+    let request = Request {
+        left,
+        right,
+        align: Align::Offset,
+        budget: Budget::default(),
+    };
+    let diff = ByteDiff::start(request, &cancel);
+    assert_eq!(
+        diff.events().recv_timeout(Duration::from_secs(5)),
+        Err(mpsc::RecvTimeoutError::Disconnected)
+    );
+    assert_eq!(reads.load(Ordering::SeqCst), 3);
+    assert_eq!(right_reads.load(Ordering::SeqCst), 0);
+}
+
+fn panicking_side(cancel: CancelToken, cancelled: bool) -> ByteSide {
+    side(1, move || {
+        if cancelled {
+            cancel.cancel();
+        }
+        panic!("source open panicked");
+    })
+}
+
+#[test]
+fn worker_panics_become_failed_unless_cancelled() {
+    for align in [Align::Offset, Align::Content] {
+        for cancelled in [false, true] {
+            let cancel = CancelToken::new();
+            let left = panicking_side(cancel.clone(), cancelled);
+            let request = Request {
+                left,
+                right: memory_side(vec![0]),
+                align,
+                budget: Budget::default(),
+            };
+            let diff = ByteDiff::start(request, &cancel);
+            let found: Vec<_> = diff.events().iter().collect();
+            if cancelled {
+                assert!(found.is_empty());
+            } else {
+                assert_eq!(found, vec![ByteEvent::Failed(Reason::WorkerPanicked)]);
+            }
+        }
+    }
 }

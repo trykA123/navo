@@ -339,8 +339,10 @@ impl OpLog for JournalLog {
             JobOutcome::Done if self.undoing => JobState::Undone,
             _ if self.undoing => JobState::RestorePending,
             JobOutcome::Done => JobState::Done,
+            JobOutcome::Cancelled | JobOutcome::Failed { .. } if self.stranded => {
+                JobState::RestorePending
+            }
             JobOutcome::Cancelled => JobState::Cancelled,
-            JobOutcome::Failed { .. } if self.stranded => JobState::RestorePending,
             JobOutcome::Failed { .. } => JobState::Failed,
         };
         if let JobOutcome::Failed { seq, error } = outcome {
@@ -394,6 +396,9 @@ mod rename_tests;
 
 #[cfg(test)]
 mod link_tests;
+
+#[cfg(test)]
+mod save_tests;
 
 #[cfg(test)]
 mod delete_bench;

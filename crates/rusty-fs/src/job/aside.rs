@@ -11,7 +11,11 @@ use super::restore::{Restored, keep};
 use super::{FileStamp, HeldFile, JobContext};
 use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, ProviderOps};
 mod retained;
+mod write;
+mod write_undo;
 pub(super) use retained::Replacement;
+pub(super) use write::kept_back;
+pub(super) use write_undo::undo_write;
 
 pub const HELD_PREFIX: &str = rusty_core::retention::ADOPTED_CONTAINER_PREFIX;
 
@@ -56,6 +60,7 @@ impl Aside {
             held,
             placed,
             volume,
+            placed_hash: None,
         })
     }
 

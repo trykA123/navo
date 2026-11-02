@@ -323,6 +323,30 @@ impl ProviderOps for FakeFs {
         Ok(nearest.map_or(Some(DEFAULT_VOLUME), |(_, serial)| *serial))
     }
 
+    fn flush(&self, location: &Location) -> Result<(), FsError> {
+        let path = self.write_call(location, FakeOp::Flush)?;
+        if self.tree().metadata(&path).is_none() {
+            return Err(error(FsErrorKind::NotFound, location));
+        }
+        Ok(())
+    }
+
+    fn content_hash(&self, location: &Location, cancel: &CancelToken) -> Result<[u8; 32], FsError> {
+        let path = self.write_call(location, FakeOp::Read)?;
+        if cancel.is_cancelled() {
+            return Err(error(FsErrorKind::Cancelled, location));
+        }
+        let tree = self.tree();
+        if existing_kind(&tree, &path).map_err(|kind| error(kind, location))? != EntryKind::File {
+            return Err(error(FsErrorKind::NameInvalid, location));
+        }
+        let id = tree.identity(&path);
+        drop(tree);
+        Ok(id
+            .and_then(|id| lock(&self.sizes).get(&id).and_then(|found| found.hash))
+            .unwrap_or_default())
+    }
+
     fn recycle(&self, location: &Location) -> Result<(), FsError> {
         let path = self.write_call(location, FakeOp::Recycle)?;
         let mut tree = self.tree();

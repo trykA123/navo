@@ -44,9 +44,9 @@ pub use location::{
 };
 pub use name::{NameError, check_name};
 pub use op_plan::{
-    Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, ItemKind, OpKind, OperationPlan,
-    PlanRequest, Resolution, Risk, ScannedItem, Step, Totals, drop_op, is_protected, plan,
-    plan_keeping, relative_folders, right_button_drag,
+    Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, FileStamp, ItemKind, OpKind,
+    OperationPlan, PlanRequest, Resolution, Risk, ScannedItem, Step, Totals, drop_op, is_protected,
+    plan, plan_keeping, relative_folders, right_button_drag, write_plan,
 };
 pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection, SpanMode};
