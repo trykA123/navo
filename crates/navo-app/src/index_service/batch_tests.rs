@@ -176,3 +176,71 @@ fn a_batch_without_an_index_changes_nothing() {
     assert!(apply_batch(&shared, creates()).unwrap().is_empty());
     assert!(published(&shared).is_none());
 }
+
+#[test]
+#[ignore = "IX11b: reader Arc deep copy, decision pending"]
+fn a_batch_while_a_reader_holds_the_index_does_not_deep_copy_it() {
+    let shared = shared(Some(index()));
+    apply_batch(&shared, creates()).unwrap();
+    let reader = published(&shared).unwrap();
+    let held = reader.table.memory_bytes() + reader.ids.memory_bytes();
+    let batch = UsnBatch {
+        next_usn: 300,
+        records: vec![record(900_000, 5, 0x100, "late.txt")],
+    };
+    apply_batch(&shared, batch).unwrap();
+    let after = published(&shared).unwrap();
+    println!(
+        "IX11 reader holds {held} bytes; live copy shares storage: {}",
+        Arc::ptr_eq(&reader, &after)
+    );
+    assert!(
+        Arc::ptr_eq(&reader, &after),
+        "one record copied the whole index ({held} bytes) because a reader held it"
+    );
+}
+
+fn churn_files(count: u32, reason: u32, next_usn: i64) -> UsnBatch {
+    UsnBatch {
+        next_usn,
+        records: (0..count)
+            .map(|number| {
+                record(
+                    u128::from(number) + 100,
+                    6,
+                    reason,
+                    &format!("c{number}.txt"),
+                )
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn ids_a_reader_took_before_a_compacting_batch_still_name_the_same_files() {
+    let files = navo_index::ntfs::COMPACT_MIN_SLOTS + 1_000;
+    let shared = shared(Some(index()));
+    assert!(
+        apply_batch(&shared, churn_files(files, 0x100, 200))
+            .unwrap()
+            .is_empty()
+    );
+    let reader = published(&shared).unwrap();
+    let kept = u128::from(files - 1) + 100;
+    let held = reader.ids[&kept];
+    let path = reader.table.path(held);
+    assert!(
+        path.as_deref()
+            .is_some_and(|path| path.ends_with(&format!("c{}.txt", files - 1)))
+    );
+    apply_batch(&shared, churn_files(files - 10, 0x200, 300)).unwrap();
+    let after = published(&shared).unwrap();
+    assert_eq!(
+        after.table.slots() as usize,
+        after.table.len(),
+        "the batch compacted"
+    );
+    assert_ne!(after.ids[&kept], held);
+    assert_eq!(reader.table.path(held), path);
+    assert_eq!(after.table.path(after.ids[&kept]), path);
+}

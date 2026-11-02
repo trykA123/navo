@@ -33,6 +33,50 @@ impl Children {
         children
     }
 
+    /// Renumbers through a `NameTable::compact` map, keeping each parent's child order.
+    /// Returns `None` when the lists disagree with `parents`, so the caller rebuilds instead.
+    pub(super) fn remapped(&self, map: &[Option<u32>], parents: &[u32]) -> Option<Self> {
+        let mut fresh = Self::with_capacity(parents.len());
+        for links in [&mut fresh.first, &mut fresh.next, &mut fresh.previous] {
+            links.resize(parents.len(), NO_LINK);
+        }
+        let mut linked = 0;
+        for (old, new) in (0u32..)
+            .zip(map)
+            .filter_map(|(old, new)| Some((old, (*new)?)))
+        {
+            let children = self.of(old).filter_map(|child| *map.get(child as usize)?);
+            linked += fresh.append_list(new, children, parents)?;
+        }
+        (linked
+            == parents
+                .iter()
+                .filter(|&&parent| parent != NO_PARENT)
+                .count())
+        .then_some(fresh)
+    }
+
+    fn append_list(
+        &mut self,
+        parent: u32,
+        children: impl Iterator<Item = u32>,
+        parents: &[u32],
+    ) -> Option<usize> {
+        let (mut tail, mut linked) = (NO_LINK, 0);
+        for child in children {
+            if parents.get(child as usize) != Some(&parent) {
+                return None;
+            }
+            match tail {
+                NO_LINK => self.first[parent as usize] = child,
+                _ => self.next[tail as usize] = child,
+            }
+            self.previous[child as usize] = tail;
+            (tail, linked) = (child, linked + 1);
+        }
+        Some(linked)
+    }
+
     pub(super) fn memory_bytes(&self) -> usize {
         (self.first.capacity()
             + self.next.capacity()
@@ -114,5 +158,15 @@ impl Children {
             self.previous[head as usize] = child;
         }
         self.first[parent as usize] = child;
+    }
+}
+
+#[cfg(test)]
+impl super::NameTable {
+    pub(crate) fn child_names(&self, parent: u32) -> Vec<&str> {
+        self.children
+            .of(parent)
+            .filter_map(|child| self.name(child))
+            .collect()
     }
 }
