@@ -213,3 +213,79 @@ fn measurement_resolves_a_results_folder_under_its_base() {
     assert_eq!(browser.details(tab.id())[0].size, 13);
     assert_eq!(fs.calls("base/sub/a.txt", FakeOp::List), 1);
 }
+
+fn sized_row(bytes: u64, on_disk: Option<u64>) -> (Browser, TabId, String) {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    let name = browser.state().active_tab().listing().unwrap().entries()[0]
+        .name
+        .to_string();
+    let folder = browser.state().active_tab().location().clone();
+    let size = rusty_fs::FolderSize {
+        bytes,
+        on_disk: on_disk.unwrap_or_default(),
+        on_disk_known: on_disk.is_some(),
+        ..rusty_fs::FolderSize::default()
+    };
+    assert!(browser.show_folder_size(&Measured {
+        tab,
+        folder,
+        name: name.clone(),
+        size: Some(size),
+    }));
+    (browser, tab, name)
+}
+
+#[test]
+fn a_measured_row_shows_the_number_of_the_current_mode() {
+    let (mut browser, tab, _) = sized_row(100, Some(4096));
+    assert_eq!(browser.details(tab)[0].size, 100);
+    browser.set_size_mode(SizeMode::OnDisk);
+    assert_eq!(browser.details(tab)[0].size, 4096);
+    browser.set_size_mode(SizeMode::Apparent);
+    assert_eq!(browser.details(tab)[0].size, 100);
+}
+
+#[test]
+fn on_disk_falls_back_to_the_apparent_size_when_unknown() {
+    let (mut browser, tab, _) = sized_row(100, None);
+    browser.set_size_mode(SizeMode::OnDisk);
+    assert_eq!(browser.details(tab)[0].size, 100);
+}
+
+#[test]
+fn a_size_arriving_in_on_disk_mode_shows_the_on_disk_number() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    browser.set_size_mode(SizeMode::OnDisk);
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    let folder = browser.state().active_tab().location().clone();
+    let name = browser.state().active_tab().listing().unwrap().entries()[0]
+        .name
+        .to_string();
+    let size = rusty_fs::FolderSize {
+        bytes: 10,
+        on_disk: 8192,
+        on_disk_known: true,
+        ..rusty_fs::FolderSize::default()
+    };
+    browser.show_folder_size(&Measured {
+        tab,
+        folder,
+        name,
+        size: Some(size),
+    });
+    assert_eq!(browser.details(tab)[0].size, 8192);
+}
+
+#[test]
+fn changing_the_mode_keeps_unmeasured_rows_and_starts_no_walk() {
+    let (mut browser, tab, _) = sized_row(100, Some(4096));
+    let other = browser.details(tab)[1].size;
+    browser.set_size_mode(SizeMode::OnDisk);
+    assert_eq!(browser.details(tab)[1].size, other);
+    assert!(!browser.measuring());
+}

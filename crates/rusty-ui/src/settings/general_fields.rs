@@ -1,6 +1,6 @@
 use super::fields::{
     COLOR_THEMES, COPY_MODES, Choice, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec, HIDDEN,
-    HINTS, Look, S, SORTS, THEMES, choice, spec,
+    HINTS, Look, S, SIZE_MODES, SORTS, THEMES, choice, spec,
 };
 
 const TERMINAL_PROVIDERS: [Choice; 5] = [
@@ -14,7 +14,7 @@ const TERMINAL_PROVIDERS: [Choice; 5] = [
     choice("settings-terminal-provider-custom", "custom"),
 ];
 
-pub(super) const GENERAL: [FieldSpec; 28] = [
+pub(super) const GENERAL: [FieldSpec; 30] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "settings-theme-help"),
@@ -95,6 +95,23 @@ pub(super) const GENERAL: [FieldSpec; 28] = [
     spec(
         (F::SortDescending, S::Files, "files.sort-descending"),
         ("Descending", "Largest, newest or Z first"),
+        Control::Toggle,
+    ),
+    spec(
+        (F::SizeMode, S::Files, "files.size-mode"),
+        ("settings-size-mode", "settings-size-mode-help"),
+        Control::Choices(&SIZE_MODES, Look::Segments),
+    ),
+    spec(
+        (
+            F::MeasureShownFolders,
+            S::Files,
+            "files.measure-shown-folders",
+        ),
+        (
+            "settings-measure-shown-folders",
+            "settings-measure-shown-folders-help",
+        ),
         Control::Toggle,
     ),
     spec(

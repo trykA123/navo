@@ -11,7 +11,7 @@ use rusty_core::{
 use rusty_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
 
 pub use find::FindResults;
-pub use measure::{FolderTotals, FolderTotalsQuery, no_folder_totals};
+pub use measure::{FolderTotals, FolderTotalsQuery, SizeMode, no_folder_totals};
 pub(crate) use measure::{Measured, folder_bytes};
 use message::Message;
 pub(crate) use open::Seen;
@@ -43,7 +43,7 @@ pub struct Browser {
     size_owners: HashMap<TabId, OwnerGuard>,
     finds: HashMap<TabId, find::FindResults>,
     find_walk: find::FindWalk,
-    size_work: HashMap<TabId, measure::SizeWork>,
+    sizes: measure::SizeView,
     sender: Sender<Message>,
     receiver: Receiver<Message>,
     wake: Waker,
@@ -109,7 +109,7 @@ impl Browser {
             size_owners: HashMap::new(),
             finds: HashMap::new(),
             find_walk: find::walker(),
-            size_work: HashMap::new(),
+            sizes: measure::SizeView::default(),
             sender,
             receiver,
             wake,

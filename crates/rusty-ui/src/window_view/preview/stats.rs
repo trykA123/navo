@@ -4,6 +4,8 @@ use rusty_fs::FolderProfile;
 
 use super::folder::FolderPreview;
 use super::scan::{Phase, Scan};
+use super::size_card::SizeLines;
+use crate::browser::SizeMode;
 use crate::file_list::row::inset_ring;
 use crate::format;
 use crate::prelude::*;
@@ -12,6 +14,11 @@ use crate::tokens::Theme;
 use crate::window_view::FerriteWindow;
 
 const MINI_HEIGHT: f32 = 22.;
+
+pub(super) struct StatsLook {
+    pub is_row: bool,
+    pub mode: SizeMode,
+}
 
 fn card(t: &Theme, label: &str, value: String) -> Div {
     div()
@@ -175,7 +182,7 @@ impl FerriteWindow {
 
     pub(super) fn stats(
         folder: &FolderPreview,
-        is_row: bool,
+        StatsLook { is_row, mode }: StatsLook,
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -187,11 +194,18 @@ impl FerriteWindow {
         } else {
             "Total size so far"
         };
-        let size = card(t, size_label, format::size(totals.bytes))
+        let lines = SizeLines::new(&totals, mode, is_done || folder.index.is_none());
+        let size = card(t, size_label, format::size(lines.bytes))
             .id("preview-total")
-            .aria_label(format::bytes(totals.bytes))
+            .aria_label(format::bytes(lines.bytes))
             .test_support()
             .text_size(t.typography.body * 1.5)
+            .children(
+                lines
+                    .texts()
+                    .into_iter()
+                    .map(|text| sub(t, text.to_string())),
+            )
             .child(Self::scan_line(t, &folder.scan, cx))
             .children(live_marks(t, &folder.scan));
         let mut folders_sub = format!("{} at top", folder.contents.top_folders());
