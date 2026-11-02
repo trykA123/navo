@@ -141,6 +141,7 @@ pub(super) fn steer(values: &Values, browser: &mut Browser) {
     browser.set_show_system(values.show_system());
     browser.set_default_sort(values.sort_key(), values.folders_first());
     browser.set_space_measures_folders(values.space_measures_folders());
+    browser.set_size_mode(values.size_mode());
     browser.set_copy_mode(values.copy_mode());
     browser.set_rename_logging(values.flag(Field::RenameLog));
 }
@@ -164,6 +165,7 @@ impl FerriteWindow {
             self.apply_theme(window, cx);
         }
         steer(&self.values, &mut self.browser);
+        self.preview.set_size_mode(self.values.size_mode());
         if let Some(resident) = &self.resident {
             resident.apply(&self.values);
         }

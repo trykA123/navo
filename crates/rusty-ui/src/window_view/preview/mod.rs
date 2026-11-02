@@ -11,6 +11,7 @@ mod marks;
 mod nest;
 mod scan;
 mod sheet;
+mod size_card;
 mod spot;
 mod stats;
 mod summary;
@@ -23,7 +24,7 @@ use std::time::Duration;
 use gpui_kit::{FocusHandle, Task};
 use rusty_fs::{IoQueue, JobKind, PROGRESS_EVERY, Pools};
 
-use crate::browser::{FolderTotalsQuery, Waker};
+use crate::browser::{FolderTotalsQuery, SizeMode, Waker};
 
 use super::FerriteWindow;
 use crate::prelude::*;
@@ -76,6 +77,7 @@ pub(in crate::window_view) struct Preview {
     inbox: inbox::Inbox,
     totals: FolderTotalsQuery,
     every: Duration,
+    size_mode: SizeMode,
     ids: u64,
     loads: u64,
 }
@@ -108,9 +110,18 @@ impl Preview {
             inbox: inbox::Inbox::new(wake),
             totals,
             every: PROGRESS_EVERY,
+            size_mode: SizeMode::default(),
             ids: 0,
             loads: 0,
         }
+    }
+
+    pub(super) fn size_mode(&self) -> SizeMode {
+        self.size_mode
+    }
+
+    pub(super) fn set_size_mode(&mut self, mode: SizeMode) {
+        self.size_mode = mode;
     }
 
     pub(super) fn is_open(&self) -> bool {

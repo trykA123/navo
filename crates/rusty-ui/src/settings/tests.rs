@@ -404,6 +404,31 @@ fn files_has_the_drop_confirm_row_defaulting_to_never() {
 }
 
 #[test]
+fn files_has_the_size_mode_and_measure_rows() {
+    let row = spec(Field::SizeMode);
+    assert_eq!(row.section, Section::Files);
+    assert_eq!(row.key, "files.size-mode");
+    let Control::Choices(options, Look::Segments) = row.control else {
+        panic!("size mode is not segments: {:?}", row.control);
+    };
+    let toml: Vec<&str> = options.iter().map(|option| option.toml).collect();
+    assert_eq!(toml, ["apparent", "on-disk"]);
+    assert_eq!(
+        Values::default().size_mode(),
+        crate::browser::SizeMode::Apparent
+    );
+    let on_disk = Values::default().with(&Change {
+        field: Field::SizeMode,
+        value: Value::Pick(1),
+    });
+    assert_eq!(on_disk.size_mode(), crate::browser::SizeMode::OnDisk);
+    let row = spec(Field::MeasureShownFolders);
+    assert_eq!(row.key, "files.measure-shown-folders");
+    assert!(matches!(row.control, Control::Toggle));
+    assert!(!Values::default().flag(Field::MeasureShownFolders));
+}
+
+#[test]
 fn the_terminal_provider_defaults_to_the_system_default_listed_first() {
     let row = spec(Field::TerminalProvider);
     let Control::Choices(options, Look::Segments) = row.control else {

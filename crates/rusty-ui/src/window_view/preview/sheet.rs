@@ -5,6 +5,7 @@ use super::Shown;
 use super::file::FilePreview;
 use super::header::{title_of, title_view};
 use super::nest::breadcrumb;
+use super::stats::StatsLook;
 use super::summary::{Picks, Sections, summary};
 use super::view::view_button;
 use crate::prelude::*;
@@ -171,6 +172,13 @@ impl FerriteWindow {
         }
     }
 
+    fn stats_look(&self, summary_width: Pixels) -> StatsLook {
+        StatsLook {
+            is_row: summary_width >= px(ROW_STATS),
+            mode: self.preview.size_mode(),
+        }
+    }
+
     fn folder_body(
         &self,
         t: &Theme,
@@ -189,7 +197,7 @@ impl FerriteWindow {
         };
         let sections = Sections {
             show: self.preview_shown(),
-            stats: Self::stats(folder, summary_width >= px(ROW_STATS), t, cx),
+            stats: Self::stats(folder, self.stats_look(summary_width), t, cx),
             profile: folder.scan.profile.clone(),
             scroll: folder.summary_scroll.clone(),
             picks: Picks {

@@ -93,6 +93,8 @@ pub enum Field {
     FoldersFirst,
     Sort,
     SortDescending,
+    SizeMode,
+    MeasureShownFolders,
     DropConfirm,
     RenameLog,
     SpaceMeasuresFolders,
@@ -190,6 +192,10 @@ pub const SYNTAX_THEMES: [Choice; 2] = [
     choice("settings-syntax-theme-oxidised-iron", "oxidised-iron"),
     choice("settings-syntax-theme-mocha", "mocha"),
 ];
+pub const SIZE_MODES: [Choice; 2] = [
+    choice("settings-size-mode-apparent", "apparent"),
+    choice("settings-size-mode-on-disk", "on-disk"),
+];
 pub const DROP_CONFIRMS: [Choice; 3] = [
     choice("settings-drop-confirm-never", "never"),
     choice("settings-drop-confirm-moves", "moves"),
@@ -246,7 +252,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 66] = join([
+pub const FIELDS: [FieldSpec; 68] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &WINDOW_FIELDS,

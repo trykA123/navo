@@ -179,7 +179,7 @@ impl FerriteWindow {
             .profiles()
             .get(&target.location, target.changed_ms());
         if let Some(profile) = &cached {
-            self.show_size(target, profile.totals.bytes);
+            self.show_size(target, profile.totals);
         }
         let base = cached.map(|profile| FolderProfile::clone(&profile));
         let run = self.preview.next_id();
@@ -300,17 +300,17 @@ impl FerriteWindow {
                     profile.clone(),
                 );
             }
-            self.show_size(&target, profile.totals.bytes);
+            self.show_size(&target, profile.totals);
         }
         true
     }
 
-    pub(super) fn show_size(&mut self, target: &Target, bytes: u64) {
+    pub(super) fn show_size(&mut self, target: &Target, size: rusty_fs::FolderSize) {
         let _ = self.browser.show_folder_size(&Measured {
             tab: target.tab,
             folder: target.folder.clone(),
             name: target.name(),
-            bytes: Some(bytes),
+            size: Some(size),
         });
     }
 

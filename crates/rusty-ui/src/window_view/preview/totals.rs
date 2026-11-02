@@ -75,7 +75,13 @@ impl FerriteWindow {
         let bytes = totals.bytes;
         folder.index = Some(totals);
         if let Some(target) = target {
-            self.show_size(&target, bytes);
+            self.show_size(
+                &target,
+                FolderSize {
+                    bytes,
+                    ..FolderSize::default()
+                },
+            );
         }
         true
     }

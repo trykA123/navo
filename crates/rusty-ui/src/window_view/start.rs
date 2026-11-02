@@ -105,6 +105,7 @@ impl FerriteWindow {
         cx: &mut Context<Self>,
     ) -> Self {
         settings_save::steer(&self.values, &mut self.browser);
+        self.preview.set_size_mode(self.values.size_mode());
         self.browser.start();
         self.browser.set_rename_hooks(rename);
         self.listen_files(keymap, window, cx);
