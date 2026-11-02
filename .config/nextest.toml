@@ -4,7 +4,7 @@ shell = { max-threads = 1 }
 timing = { max-threads = 1 }
 
 [[profile.default.overrides]]
-filter = "binary(clipboard_windows) | binary(clipboard_watch_windows) | binary(shell_menu_windows)"
+filter = "binary(clipboard_windows) | binary(clipboard_watch_windows) | binary(clipboard_text_windows) | binary(shell_menu_windows)"
 test-group = "clipboard"
 
 [[profile.default.overrides]]

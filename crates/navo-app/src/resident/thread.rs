@@ -4,6 +4,8 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use navo_shell::Foreground;
+use navo_ui::settings::SummonKey;
 use windows_sys::Win32::System::Threading::GetCurrentThreadId;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetMessageW, MSG, PM_NOREMOVE, PeekMessageW, PostThreadMessageW,
@@ -11,7 +13,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 use super::events::{ResidentConfig, Sink};
-use super::keys::{Input, event_for};
+use super::keys::{CLIPBOARD_ID, HOTKEY_ID, Input, event_for};
 use super::{hotkey, tray};
 
 const START_WAIT: Duration = Duration::from_secs(2);
@@ -19,8 +21,7 @@ const STOP_WAIT: Duration = Duration::from_secs(2);
 
 pub(crate) struct Resident {
     running: Option<Running>,
-    taken: Arc<AtomicBool>,
-    tray: Arc<AtomicBool>,
+    flags: Flags,
 }
 
 struct Running {
@@ -31,26 +32,25 @@ struct Running {
 
 impl Resident {
     pub(crate) fn start(config: ResidentConfig, sink: Sink) -> Self {
-        let taken = Arc::new(AtomicBool::new(false));
-        let tray = Arc::new(AtomicBool::new(false));
+        let flags = Flags::default();
         let running = if config.is_idle() {
             None
         } else {
-            spawn(config, sink, Flags(taken.clone(), tray.clone()))
+            spawn(config, sink, flags.clone())
         };
-        Self {
-            running,
-            taken,
-            tray,
-        }
+        Self { running, flags }
     }
 
     pub(crate) fn has_tray(&self) -> bool {
-        self.tray.load(Ordering::Acquire)
+        self.flags.tray.load(Ordering::Acquire)
     }
 
     pub(crate) fn key_taken(&self) -> bool {
-        self.taken.load(Ordering::Acquire)
+        self.flags.taken.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn clipboard_key_taken(&self) -> bool {
+        self.flags.clipboard_taken.load(Ordering::Acquire)
     }
 
     #[cfg(test)]
@@ -84,7 +84,12 @@ impl Drop for Resident {
     }
 }
 
-struct Flags(Arc<AtomicBool>, Arc<AtomicBool>);
+#[derive(Clone, Default)]
+struct Flags {
+    taken: Arc<AtomicBool>,
+    clipboard_taken: Arc<AtomicBool>,
+    tray: Arc<AtomicBool>,
+}
 
 fn spawn(config: ResidentConfig, sink: Sink, flags: Flags) -> Option<Running> {
     let (ready, ready_rx) = mpsc::sync_channel(1);
@@ -110,6 +115,12 @@ fn spawn(config: ResidentConfig, sink: Sink, flags: Flags) -> Option<Running> {
     }
 }
 
+fn register_key(id: i32, key: Option<SummonKey>, taken: &AtomicBool) -> Option<hotkey::Hotkey> {
+    let hotkey = key.and_then(|key| hotkey::Hotkey::register(id, key));
+    taken.store(key.is_some() && hotkey.is_none(), Ordering::Release);
+    hotkey
+}
+
 fn run(config: ResidentConfig, sink: &Sink, flags: &Flags, ready: &mpsc::SyncSender<u32>) {
     let mut message = MSG::default();
     // SAFETY: `message` is a live MSG; PM_NOREMOVE only creates this thread's message queue.
@@ -122,24 +133,30 @@ fn run(config: ResidentConfig, sink: &Sink, flags: &Flags, ready: &mpsc::SyncSen
             PM_NOREMOVE,
         )
     };
-    let hotkey = config.summon_key.and_then(hotkey::Hotkey::register);
-    flags.0.store(
-        config.summon_key.is_some() && hotkey.is_none(),
-        Ordering::Release,
-    );
+    let summon = register_key(HOTKEY_ID, config.summon_key, &flags.taken);
+    let clipboard = register_key(CLIPBOARD_ID, config.clipboard_key, &flags.clipboard_taken);
     let icon = if config.keep_in_tray {
         tray::create()
     } else {
         None
     };
-    flags.1.store(icon.is_some(), Ordering::Release);
+    flags.tray.store(icon.is_some(), Ordering::Release);
     tray::drain(|_| {});
     // SAFETY: GetCurrentThreadId has no preconditions.
     if ready.send(unsafe { GetCurrentThreadId() }).is_err() {
         return;
     }
+    pump(sink);
+    drop(icon);
+    drop(clipboard);
+    drop(summon);
+}
+
+fn pump(sink: &Sink) {
+    let mut message = MSG::default();
     let deliver = |input: Input<'_>| {
-        if let Some(event) = event_for(input, Instant::now()) {
+        let previous = Foreground::now();
+        if let Some(event) = event_for(input, Instant::now(), previous) {
             sink(event);
         }
     };
@@ -160,8 +177,6 @@ fn run(config: ResidentConfig, sink: &Sink, flags: &Flags, ready: &mpsc::SyncSen
         }
         tray::drain(deliver);
     }
-    drop(icon);
-    drop(hotkey);
 }
 
 #[cfg(test)]

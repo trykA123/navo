@@ -35,6 +35,10 @@ keys = ["f1"]
 command = "help.user_guide"
 keys = ["shift-f1"]
 
+[[bind]]
+command = "clipboard.open"
+keys = ["ctrl-shift-v"]
+
 # NavoPane
 
 [[bind]]
@@ -1869,3 +1873,131 @@ keys = ["ctrl-n"]
 [[bind]]
 command = "app.quit"
 keys = ["alt-f4"]
+
+# ClipPalette
+
+[[bind]]
+command = "clip_palette.next_mode"
+keys = ["tab"]
+
+[[bind]]
+command = "clip_palette.next_mode"
+keys = ["tab"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.previous_mode"
+keys = ["shift-tab"]
+
+[[bind]]
+command = "clip_palette.previous_mode"
+keys = ["shift-tab"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.up"
+keys = ["up"]
+
+[[bind]]
+command = "clip_palette.up"
+keys = ["up"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.down"
+keys = ["down"]
+
+[[bind]]
+command = "clip_palette.down"
+keys = ["down"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.choose"
+keys = ["enter"]
+
+[[bind]]
+command = "clip_palette.choose"
+keys = ["enter"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.back"
+keys = ["escape"]
+
+[[bind]]
+command = "clip_palette.back"
+keys = ["escape"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.open_actions"
+keys = ["ctrl-k"]
+
+[[bind]]
+command = "clip_palette.open_actions"
+keys = ["ctrl-k"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.copy_only"
+keys = ["ctrl-c"]
+
+[[bind]]
+command = "clip_palette.copy_only"
+keys = ["ctrl-c"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.paste_files"
+keys = ["ctrl-v"]
+
+[[bind]]
+command = "clip_palette.paste_files"
+keys = ["ctrl-v"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.toggle_reveal"
+keys = ["alt-r"]
+
+[[bind]]
+command = "clip_palette.toggle_reveal"
+keys = ["alt-r"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.copy_user"
+keys = ["alt-u"]
+
+[[bind]]
+command = "clip_palette.copy_user"
+keys = ["alt-u"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.save_row"
+keys = ["ctrl-s"]
+
+[[bind]]
+command = "clip_palette.save_row"
+keys = ["ctrl-s"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.delete_row"
+keys = ["delete"]
+
+[[bind]]
+command = "clip_palette.delete_row"
+keys = ["delete"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.manage"
+keys = ["f2"]
+
+[[bind]]
+command = "clip_palette.manage"
+keys = ["f2"]
+context = "ClipPalette > Input"

@@ -7,7 +7,7 @@ use super::kinds::{Kinds, Tally};
 use super::largest::{LargeFile, Largest, Ranking};
 use super::now_ms;
 use super::walk::{Visit, Walk};
-use crate::{CancelToken, FsEntry, Provider};
+use crate::{CancelToken, Provider, SizeEntry};
 
 pub const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
@@ -79,7 +79,11 @@ impl Profiler<'_> {
 }
 
 impl Visit for Profiler<'_> {
-    fn file(&mut self, folder: &Location, entry: &FsEntry) {
+    fn needs_fs_entries(&self) -> bool {
+        false
+    }
+
+    fn sized_file(&mut self, folder: &Location, entry: &SizeEntry) {
         self.newest_ms = self.newest_ms.max(entry.modified_ms);
         self.kinds.add(&entry.name.to_text(), entry.size);
         if self.largest.admits(entry.size) {

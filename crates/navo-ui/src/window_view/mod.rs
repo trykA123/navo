@@ -2,6 +2,7 @@ mod app_menu;
 mod cached_views;
 mod chrome_state;
 mod clipboard;
+mod clipboard_palette;
 mod closing;
 mod command_center;
 mod crash;
@@ -92,6 +93,7 @@ use navo_fs::ProviderOps;
 
 use crate::app_menu::Identity;
 use crate::browser::{Browser, Launcher, Operations, RenameHooks, RetainedHooks, Waker};
+use crate::clip_palette::ClipboardHooks;
 use crate::prelude::*;
 use crate::settings::Values;
 use crate::tokens::Mode;
@@ -107,9 +109,10 @@ pub use fkeys::{
     DELETE_WARNING, FKey, Labels, delete_warning_in, key_labels, key_labels_in, keys_in_layer,
     layer_keys, layer_keys_in, settings_labels_in,
 };
+pub(crate) use hand_off::raw_handle;
 pub use hand_off::{
-    OpenHooks, OpenInbox, OpenRequest, OpenSender, RawWindowHandle, ResidentHooks, WindowShown,
-    open_requests,
+    ClipboardSummon, OpenHooks, OpenInbox, OpenRequest, OpenSender, PasteTarget, RawWindowHandle,
+    ResidentHooks, WindowShown, open_requests,
 };
 pub use input_trace::InputTrace;
 pub use keys::bind_keys;
@@ -183,6 +186,7 @@ pub struct StartOptions {
     pub search: SearchHooks,
     pub rename: Option<RenameHooks>,
     pub retained: Arc<dyn RetainedHooks>,
+    pub clipboard: Option<Arc<dyn ClipboardHooks>>,
 }
 
 pub struct NavoWindow {
@@ -230,6 +234,7 @@ pub struct NavoWindow {
     job_ui: jobs::JobUi,
     keymap: user_keymap::KeymapState,
     clipboard: clipboard::ClipboardState,
+    clip: clipboard_palette::ClipboardPanel,
     lane: lane::Lane,
     crash: crash::CrashState,
     command_center: command_center::CommandCenterState,
@@ -294,6 +299,7 @@ impl NavoWindow {
             job_ui: jobs::JobUi::new(window, cx),
             keymap: user_keymap::KeymapState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
+            clip: clipboard_palette::ClipboardPanel::new(options.clipboard),
             lane: lane::Lane::new(window, cx),
             crash: crash::CrashState::new(options.crash_report, cx),
             multi_rename: multi_rename::MultiRenameState::default(),

@@ -1,3 +1,4 @@
+use super::clipboard_fields::CLIPBOARD_FIELDS;
 use super::general_fields::GENERAL;
 use super::search_fields::SEARCH_ROWS;
 use super::tray_fields::TRAY_FIELDS;
@@ -18,12 +19,13 @@ pub enum Section {
     Search,
     Display,
     Tray,
+    Clipboard,
     Diagnostics,
     Help,
 }
 
 impl Section {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
@@ -34,6 +36,7 @@ impl Section {
         Self::Search,
         Self::Display,
         Self::Tray,
+        Self::Clipboard,
         Self::Diagnostics,
         Self::Help,
     ];
@@ -50,6 +53,7 @@ impl Section {
             Self::Search => "Search",
             Self::Display => "Display",
             Self::Tray => "Tray",
+            Self::Clipboard => "Clipboard",
             Self::Diagnostics => "settings-diagnostics",
             Self::Help => "settings-help",
         }
@@ -71,6 +75,7 @@ impl Section {
             Self::Search => IconName::Search,
             Self::Display | Self::Diagnostics => IconName::Eye,
             Self::Tray => IconName::PanelBottom,
+            Self::Clipboard => IconName::Clipboard,
             Self::Help => IconName::BookOpen,
         }
     }
@@ -146,6 +151,9 @@ pub enum Field {
     AutomotiveModules,
     KeepInTray,
     SummonKey,
+    ClipboardOn,
+    ClipboardRecord,
+    ClipboardKey,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -252,15 +260,16 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 68] = join([
+pub const FIELDS: [FieldSpec; 71] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &WINDOW_FIELDS,
     &VIEWER_FIELDS,
     &TRAY_FIELDS,
+    &CLIPBOARD_FIELDS,
 ]);
 
-const fn join<const N: usize>(parts: [&[FieldSpec]; 5]) -> [FieldSpec; N] {
+const fn join<const N: usize>(parts: [&[FieldSpec]; 6]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];
     let mut at = 0;
     let mut part = 0;

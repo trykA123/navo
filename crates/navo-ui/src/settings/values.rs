@@ -120,9 +120,12 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::PreviewLargestFiles
         | Field::SearchRemember
         | Field::RetainDeletes
-        | Field::RetainOverwrites => Value::Flag(true),
+        | Field::RetainOverwrites
+        | Field::ClipboardOn
+        | Field::ClipboardRecord => Value::Flag(true),
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
         Field::SummonKey => text("Win+Alt+N"),
+        Field::ClipboardKey => text("Win+Alt+V"),
         Field::WindowFkeyBar => Value::Flag(false),
         field if field.is_window_part() => Value::Flag(true),
         _ => match spec.control {

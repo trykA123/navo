@@ -371,6 +371,7 @@ impl NavoWindow {
             .diagnostics(self.settings.diagnostics.clone())
             .version(self.identity.version.clone())
             .summon_key_taken(self.summon_key_taken())
+            .clipboard_key_taken(self.clipboard_key_taken())
             .error(error)
             .filter(self.settings.filter.clone())
             .find(self.find_bar(&t, cx))

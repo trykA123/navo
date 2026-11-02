@@ -211,3 +211,17 @@ fn watcher_is_unsupported_off_windows() {
     let started = super::Watcher::start(Box::new(|_| {}));
     assert!(matches!(started, Err(ClipboardError::Unsupported)));
 }
+
+#[cfg(unix)]
+#[test]
+fn text_writes_are_unsupported_off_windows() {
+    assert_eq!(super::write_text("text"), Err(ClipboardError::Unsupported));
+    assert_eq!(
+        super::write_private_text("secret"),
+        Err(ClipboardError::Unsupported)
+    );
+    assert_eq!(
+        super::clear_if_sequence(7),
+        Err(ClipboardError::Unsupported)
+    );
+}

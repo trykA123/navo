@@ -12,7 +12,7 @@ pub(super) struct Walk {
 }
 
 impl Walk {
-    fn finish(self, wait_cancelled: bool) -> bool {
+    pub(super) fn finish(self, wait_cancelled: bool) -> bool {
         self.release.send(wait_cancelled).unwrap();
         self.observed.recv_timeout(WAIT).unwrap()
     }
@@ -208,7 +208,11 @@ fn measurement_resolves_a_results_folder_under_its_base() {
     settle(&mut browser);
     let mut tab = browser.state().active_tab().clone();
     tab.set_base(Some(fs.location("base")));
-    browser.measure_entry(&tab, r"sub\a.txt".to_owned());
+    browser.measure_entry(
+        &tab,
+        r"sub\a.txt".to_owned(),
+        crate::browser::measure::Asker::Space,
+    );
     settle(&mut browser);
     assert_eq!(browser.details(tab.id())[0].size, 13);
     assert_eq!(fs.calls("base/sub/a.txt", FakeOp::List), 1);
@@ -288,4 +292,79 @@ fn changing_the_mode_keeps_unmeasured_rows_and_starts_no_walk() {
     browser.set_size_mode(SizeMode::OnDisk);
     assert_eq!(browser.details(tab)[1].size, other);
     assert!(!browser.measuring());
+}
+
+#[test]
+fn an_index_total_shows_its_bytes_in_on_disk_mode() {
+    let fs = fake();
+    let docs = fs.location("home/docs");
+    let mut browser = browser_at(&fs, "home");
+    browser.set_size_mode(SizeMode::OnDisk);
+    browser.set_folder_totals(Arc::new(move |asked| {
+        (asked == &docs).then_some(FolderTotals {
+            bytes: 42,
+            files: 1,
+            folders: 0,
+            complete: true,
+        })
+    }));
+    settle(&mut browser);
+    browser.command(&Command::SelectionToggle).unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    assert_eq!(browser.details(tab)[0].size, 42);
+}
+
+#[test]
+fn an_apparent_only_size_keeps_a_known_size_on_disk_in_the_list() {
+    let (mut browser, tab, name) = sized_row(100, Some(4096));
+    browser.set_size_mode(SizeMode::OnDisk);
+    let folder = browser.state().active_tab().location().clone();
+    browser.show_folder_size(&Measured {
+        tab,
+        folder,
+        name,
+        size: Some(navo_fs::FolderSize::apparent_only(100)),
+    });
+    assert_eq!(browser.details(tab)[0].size, 4096);
+    browser.set_size_mode(SizeMode::Apparent);
+    assert_eq!(browser.details(tab)[0].size, 100);
+}
+
+#[test]
+fn a_drain_of_500_sizes_copies_the_listing_once_per_view() {
+    let fs = FakeFs::new();
+    for n in 0..5_000 {
+        fs.add_folder(&format!("many/f{n:04}"));
+    }
+    let fs = Arc::new(fs);
+    let mut browser = browser_at(&fs, "many");
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    let folder = browser.state().active_tab().location().clone();
+    let owner = browser.size_owners[&tab].id();
+    for n in 0..500 {
+        let size = navo_fs::FolderSize::apparent_only(n + 1);
+        let measured = Measured {
+            tab,
+            folder: folder.clone(),
+            name: format!("f{n:04}"),
+            size: Some(size),
+        };
+        browser
+            .sender
+            .send(Message::Measured(owner, measured))
+            .unwrap();
+    }
+    super::super::size_rows::COPIES.with(|copies| copies.set(0));
+    assert!(browser.poll());
+    assert_eq!(
+        super::super::size_rows::COPIES.with(std::cell::Cell::get),
+        2
+    );
+    let details = browser.details(tab);
+    assert_eq!(
+        (details[0].size, details[499].size, details[500].size),
+        (1, 500, 0)
+    );
 }

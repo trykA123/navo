@@ -13,7 +13,8 @@ pub(super) trait Visit {
         true
     }
 
-    fn file(&mut self, folder: &Location, entry: &FsEntry);
+    fn file(&mut self, _folder: &Location, _entry: &FsEntry) {}
+    fn sized_file(&mut self, _folder: &Location, _entry: &SizeEntry) {}
     fn batch_end(&mut self, totals: &FolderSize);
     fn folder(&mut self, _parent: &Location, _entry: &FsEntry) {}
 }
@@ -125,7 +126,6 @@ impl Links {
             totals.links_merged += 1;
             return true;
         }
-        totals.links_unchecked |= self.keys.len() == self.limit;
         false
     }
 }
@@ -146,7 +146,7 @@ impl Folder<'_> {
                 self.visit.folder(self.location, entry);
                 self.children.extend(self.location.join(&entry.name).ok());
             } else {
-                self.count_file(entry.size, None, None);
+                self.count_file(entry.size, on_disk_of(entry.kind, None), None);
                 self.visit.file(self.location, entry);
             }
         }
@@ -158,7 +158,12 @@ impl Folder<'_> {
             self.totals.folders += 1;
             self.children.extend(self.location.join(&entry.name).ok());
         } else {
-            self.count_file(entry.size, entry.on_disk, entry.link);
+            self.count_file(
+                entry.size,
+                on_disk_of(entry.kind, entry.on_disk),
+                entry.link,
+            );
+            self.visit.sized_file(self.location, entry);
         }
         self.visit.batch_end(self.totals);
     }
@@ -171,6 +176,14 @@ impl Folder<'_> {
         self.totals.bytes = self.totals.bytes.saturating_add(size);
         self.totals.on_disk = self.totals.on_disk.saturating_add(on_disk.unwrap_or(size));
         self.totals.on_disk_known &= on_disk.is_some();
+    }
+}
+
+fn on_disk_of(kind: EntryKind, on_disk: Option<u64>) -> Option<u64> {
+    if kind == EntryKind::Link {
+        on_disk.or(Some(0))
+    } else {
+        on_disk
     }
 }
 

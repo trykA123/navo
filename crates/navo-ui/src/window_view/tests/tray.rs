@@ -127,6 +127,10 @@ impl ResidentHooks for FakeResident {
         false
     }
 
+    fn clipboard_key_taken(&self) -> bool {
+        false
+    }
+
     fn has_tray(&self) -> bool {
         self.tray
     }

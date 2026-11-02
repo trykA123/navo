@@ -1,3 +1,4 @@
+mod clip_palette;
 mod command_center;
 mod recovery;
 mod table;
@@ -135,8 +136,26 @@ pub enum Page {
     LayoutRemove,
     RecentlyDeleted,
     RecentlyDeletedPhone,
+    ClipPalette,
+    ClipPalette390,
+    ClipPaletteMenu,
+    ClipPaletteMenu390,
+    ClipPaletteSecret,
+    ClipPaletteSecret390,
+    ClipPaletteShown,
+    ClipPaletteShown390,
+    ClipPaletteCountdown,
+    ClipPaletteCountdown390,
+    ClipPaletteSecretMenu,
+    ClipPaletteSecretMenu390,
+    ClipPopUp,
+    ClipPopUp390,
+    ClipPopUpMenu,
+    ClipManage,
+    ClipManage390,
 }
 
+#[derive(Clone, Copy)]
 pub struct PageInfo {
     pub page: Page,
     pub label: &'static str,
@@ -182,4 +201,19 @@ pub(super) const fn info(
         stem,
         in_switch,
     }
+}
+
+/// The pages of `head` followed by those of `tail`; a length that does not add up fails the build.
+pub(super) const fn join<const N: usize>(head: &[PageInfo], tail: &[PageInfo]) -> [PageInfo; N] {
+    let mut all = [head[0]; N];
+    let mut at = 0;
+    while at < N {
+        all[at] = if at < head.len() {
+            head[at]
+        } else {
+            tail[at - head.len()]
+        };
+        at += 1;
+    }
+    all
 }

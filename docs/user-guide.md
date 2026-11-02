@@ -11,6 +11,7 @@ This guide is for people who try Navo for the first time. You do not need to kno
 - [Safety net and undo](#safety-net-and-undo)
 - [Viewing and editing](#viewing-and-editing)
 - [Layouts, panes and workspaces](#layouts-panes-and-workspaces)
+- [Clipboard history](#clipboard-history)
 - [Settings and themes](#settings-and-themes)
 - [Tips for Total Commander users](#tips-for-total-commander-users)
 - [Reporting a problem](#reporting-a-problem)
@@ -290,6 +291,23 @@ A workspace is a saved arrangement of panes, tabs and folders. Use one per task.
 
 Workspaces save themselves. They come back when you restart Navo.
 
+## Clipboard history
+
+Navo keeps what you copy on this PC: text, links and file lists. It is on by default. Copies that password managers or Windows mark as private are never recorded. The history stays in your profile folder and keeps the newest 500 entries.
+
+| Key | What it does |
+| --- | --- |
+| `Ctrl+Shift+V` | Open the clipboard palette in the Navo window |
+| `Win+Alt+V` | Open the palette over any app; `Enter` pastes back into that app |
+| `Tab`, `Shift+Tab` | Switch tabs |
+| `Enter` | Use the entry |
+| `Ctrl+C` | Copy the entry without pasting |
+| `Ctrl+K` | Actions for the entry |
+| `Delete` | Remove the entry |
+| `Esc` | Clear the search, then close |
+
+Type "clipboard" in `Ctrl+K` to pause the history, clear it or delete all clipboard data. Delete all cannot be undone. Turn the history off in Settings under Clipboard. See [Clipboard history](features/clipboard.md) for the details.
+
 ## Settings and themes
 
 Press `Ctrl+,` to open Settings. Each change applies at once.
@@ -307,7 +325,7 @@ Settings are stored in a plain text file, `navo.toml`. You can edit it by hand. 
 
 Under Colour theme you can choose Open sea, Red bill, Black cap, Fine mesh, Grain or Ink and amber. Each has a light and a dark version. You can follow the system, or keep light or dark. A separate Syntax theme sets the colours of code in the viewer and the editor.
 
-Other sections cover the file index for `Ctrl+K`, rename options, the safety net and diagnostics.
+Other sections cover the file index for `Ctrl+K`, rename options, the clipboard, the safety net and diagnostics.
 
 ## Tips for Total Commander users
 

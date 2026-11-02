@@ -215,12 +215,18 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
     if cfg!(windows) {
         sections.push("Tray");
     }
-    sections.extend(["Diagnostics", "Help", "Shortcuts", "Appearance"]);
+    sections.extend([
+        "Clipboard",
+        "Diagnostics",
+        "Help",
+        "Shortcuts",
+        "Appearance",
+    ]);
     for (step, name) in sections.iter().enumerate() {
         rig.press(cx, "tab");
         let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
         assert!(in_sheet, "after tab {step}");
-        let current = (0..13usize).find(|index| {
+        let current = (0..14usize).find(|index| {
             cx.update_window(rig.window, |_, window, cx| {
                 window.render_frame(cx);
                 window.find(("settings-section", *index)).selected() == Some(true)
@@ -230,7 +236,7 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
         let shown = current.and_then(|index| label(cx, &rig, ("settings-section", index)));
         assert_eq!(shown.as_deref(), Some(*name));
     }
-    for _ in 0..4 + usize::from(cfg!(windows)) {
+    for _ in 0..5 + usize::from(cfg!(windows)) {
         rig.press(cx, "shift-tab");
     }
     assert_eq!(

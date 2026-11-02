@@ -20,14 +20,15 @@ use windows_sys::Win32::System::Memory::{
 use windows_sys::Win32::System::Ole::CF_HDROP;
 use windows_sys::Win32::UI::Shell::SHAnsiToUnicode;
 
+use super::text_buffer::wipe;
 use super::{ClipboardError, Effect, FileClipboard, decode_drop_files, encode_drop_files};
 
 static WRITTEN_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 
-struct Owner(HWND);
+pub(super) struct Owner(pub(super) HWND);
 
 impl Owner {
-    fn new() -> Result<Self, ClipboardError> {
+    pub(super) fn new() -> Result<Self, ClipboardError> {
         // SAFETY: STATIC is a system class; the invisible window belongs to this thread.
         let window = unsafe {
             CreateWindowExW(
@@ -89,42 +90,104 @@ impl Drop for Clipboard {
     }
 }
 
-struct GlobalBlock(HGLOBAL);
+const LOCK_ATTEMPTS: u32 = 3;
+
+/// Movable clipboard memory this process still owns. It stays locked from creation until it
+/// is handed to the clipboard, and is zeroed before it is freed.
+pub(super) struct GlobalBlock {
+    handle: HGLOBAL,
+    data: *mut u8,
+    size: usize,
+    locked: bool,
+}
 
 impl GlobalBlock {
-    fn new(bytes: &[u8]) -> Result<Self, ClipboardError> {
+    pub(super) fn new(bytes: &[u8]) -> Result<Self, ClipboardError> {
         // SAFETY: the requested allocation is nonzero and movable; zeroing covers allocator padding.
         let handle = unsafe { GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes.len()) };
         if handle.is_null() {
             return Err(os_error("Allocating clipboard memory"));
         }
-        let block = Self(handle);
-        // SAFETY: the handle is a live allocation owned by block.
-        let data = unsafe { GlobalLock(handle) };
+        // SAFETY: the handle is a live allocation owned by this function.
+        let data = unsafe { GlobalLock(handle) }.cast::<u8>();
         if data.is_null() {
-            return Err(os_error("Locking clipboard memory"));
+            let error = os_error("Locking clipboard memory");
+            // SAFETY: the block is unlocked, holds nothing yet and was never shared.
+            unsafe { GlobalFree(handle) };
+            return Err(error);
         }
+        // SAFETY: the handle is live and locked by this thread.
+        let size = unsafe { GlobalSize(handle) }.max(bytes.len());
         // SAFETY: data holds at least bytes.len() bytes and does not overlap the source.
-        unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), data.cast(), bytes.len()) };
-        // SAFETY: this thread successfully locked this handle once.
-        unsafe { GlobalUnlock(handle) };
-        Ok(block)
+        unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len()) };
+        Ok(Self {
+            handle,
+            data,
+            size,
+            locked: true,
+        })
     }
 
-    fn publish(self, format: u32) -> Result<(), ClipboardError> {
-        // SAFETY: the clipboard is open, and self owns an unlocked movable memory block.
-        if unsafe { SetClipboardData(format, self.0) }.is_null() {
-            return Err(os_error("Writing clipboard data"));
-        }
+    pub(super) fn publish(mut self, format: u32) -> Result<(), ClipboardError> {
+        self.hand_over(format)?;
         std::mem::forget(self);
         Ok(())
+    }
+
+    /// Unlocks and passes the block to the open clipboard; on failure it is locked again.
+    fn hand_over(&mut self, format: u32) -> Result<(), ClipboardError> {
+        self.unlock();
+        // SAFETY: the clipboard is open, and self owns an unlocked movable memory block.
+        if unsafe { SetClipboardData(format, self.handle) }.is_null() {
+            let error = os_error("Writing clipboard data");
+            self.relock();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn unlock(&mut self) {
+        if self.locked {
+            // SAFETY: self holds exactly one lock on its live handle.
+            unsafe { GlobalUnlock(self.handle) };
+            self.locked = false;
+        }
+    }
+
+    /// Locks again after a failed hand-over. If every attempt fails the block is freed
+    /// unwiped: an unlocked movable block has no valid address to write through.
+    fn relock(&mut self) {
+        for _ in 0..LOCK_ATTEMPTS {
+            // SAFETY: the handle is live, owned by self and not locked by it.
+            let data = unsafe { GlobalLock(self.handle) }.cast::<u8>();
+            if !data.is_null() {
+                self.data = data;
+                self.locked = true;
+                return;
+            }
+        }
+    }
+
+    fn zero(&mut self) {
+        if !self.locked {
+            self.relock();
+        }
+        if !self.locked {
+            return;
+        }
+        // SAFETY: the block is locked by self, so data spans size bytes at a valid address and
+        // nothing else refers to them.
+        let bytes = unsafe { std::slice::from_raw_parts_mut(self.data, self.size) };
+        wipe(bytes);
     }
 }
 
 impl Drop for GlobalBlock {
     fn drop(&mut self) {
-        // SAFETY: this handle was never transferred to Windows and is no longer locked.
-        unsafe { GlobalFree(self.0) };
+        self.zero();
+        self.unlock();
+        // SAFETY: the handle is unlocked, owned by self and was never handed to Windows.
+        unsafe { GlobalFree(self.handle) };
     }
 }
 
@@ -179,7 +242,7 @@ pub fn clear_if_same(files: &FileClipboard) -> Result<bool, ClipboardError> {
     Ok(true)
 }
 
-fn sequence() -> u32 {
+pub(super) fn sequence() -> u32 {
     // SAFETY: the sequence query takes no pointers and does not render clipboard data.
     unsafe { GetClipboardSequenceNumber() }
 }
@@ -224,7 +287,7 @@ pub(super) fn read_data(format: u32) -> Result<Option<Vec<u8>>, ClipboardError> 
     Ok(Some(bytes))
 }
 
-fn empty() -> Result<(), ClipboardError> {
+pub(super) fn empty() -> Result<(), ClipboardError> {
     // SAFETY: the current thread holds the clipboard open.
     if unsafe { EmptyClipboard() } == 0 {
         return Err(os_error("Emptying the clipboard"));
@@ -257,4 +320,39 @@ pub(super) fn decode_ansi(bytes: &[u8]) -> Result<PathBuf, ClipboardError> {
         .filter(|count| *count > 0 && *count <= wide.len())
         .ok_or(ClipboardError::Malformed)?;
     Ok(OsString::from_wide(&wide[..count - 1]).into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GlobalBlock;
+
+    const CANARY: &[u8] = b"canary-secret";
+
+    fn held(block: &GlobalBlock) -> &[u8] {
+        // SAFETY: the block is locked and spans size bytes.
+        unsafe { std::slice::from_raw_parts(block.data, block.size) }
+    }
+
+    #[test]
+    fn a_failed_hand_over_leaves_the_block_locked_and_it_zeroes_through_that_lock() {
+        let mut block = GlobalBlock::new(CANARY).unwrap();
+        assert!(held(&block).starts_with(CANARY));
+        assert!(block.hand_over(1).is_err(), "the clipboard is not open");
+        assert!(block.locked);
+        // SAFETY: hand_over re-locked the owned block and refreshed data after the failed call.
+        unsafe { std::ptr::copy_nonoverlapping(CANARY.as_ptr(), block.data, CANARY.len()) };
+        assert!(held(&block).starts_with(CANARY));
+        block.zero();
+        assert!(held(&block).iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn a_new_block_stays_locked_with_its_bytes_and_zeroed_padding() {
+        let block = GlobalBlock::new(CANARY).unwrap();
+        assert!(block.locked);
+        assert!(block.size >= CANARY.len());
+        let (text, padding) = held(&block).split_at(CANARY.len());
+        assert_eq!(text, CANARY);
+        assert!(padding.iter().all(|byte| *byte == 0));
+    }
 }

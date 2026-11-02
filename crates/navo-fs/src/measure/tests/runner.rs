@@ -56,3 +56,45 @@ fn dropping_the_handle_stops_the_profile() {
     let state = wait_finished.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(state, ProfileState::Stopped);
 }
+
+#[test]
+fn a_preview_scan_runs_before_queued_background_sizes() {
+    use crate::{JobSlot, Limits, Priority, volume_of};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let (queue, fs) = (IoQueue::with_limits(Limits::BACKGROUND), fs());
+    let location = fs.location("d");
+    let background = queue.owner();
+    let (release, gate) = mpsc::channel::<()>();
+    let ran = Arc::new(AtomicUsize::new(0));
+    let slot = || JobSlot {
+        volume: volume_of(&location),
+        priority: Priority::Idle,
+        owner: background.id(),
+    };
+    queue.submit(
+        slot(),
+        Box::new(move |_| {
+            let _ = gate.recv_timeout(Duration::from_secs(10));
+        }),
+    );
+    for _ in 0..500 {
+        let ran = Arc::clone(&ran);
+        queue.submit(
+            slot(),
+            Box::new(move |_| {
+                ran.fetch_add(1, Ordering::SeqCst);
+            }),
+        );
+    }
+    let (send, receive) = mpsc::channel();
+    let counted = Arc::clone(&ran);
+    let provider: Arc<dyn Provider> = fs;
+    let _handle = spawn_profile(&queue, provider, location, move |p: &FolderProfile| {
+        if p.state.is_final() {
+            let _ = send.send(counted.load(Ordering::SeqCst));
+        }
+    });
+    release.send(()).unwrap();
+    let before = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(before, 0);
+}

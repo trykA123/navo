@@ -11,6 +11,8 @@ gpui_kit::actions!(
     navo_window,
     [
         BrowsePreview,
+        ClearClipboardHistory,
+        DeleteClipboardData,
         DismissCrashNotice,
         DriveMenuFirst,
         DriveMenuSecond,
@@ -19,12 +21,14 @@ gpui_kit::actions!(
         FocusCrashNotice,
         LeaveWaiting,
         NewTab,
+        OpenClipboard,
         OpenKeyMap,
         OpenRecentlyDeleted,
         OpenRecoveryFolder,
         OpenTerminal,
         OpenUserGuide,
         OpenViewMenu,
+        PauseClipboard,
         RecordPerformance,
         ResetColumnWidths,
         ResetSplit,
@@ -70,6 +74,7 @@ pub fn bind_keys(cx: &mut App) {
     super::tab_keys::bind_keys(cx);
     crate::side_sheet::bind_keys(cx);
     crate::command_center::bind_keys(cx);
+    crate::clip_palette::bind_keys(cx);
     crate::activity_strip::bind_keys(cx);
     super::preview::bind_keys(cx);
     crate::commands::bind_namespace(cx, "navo_window");

@@ -1,4 +1,5 @@
 mod bind;
+mod clipboard;
 mod contexts;
 mod keymap;
 mod marks;
@@ -97,9 +98,15 @@ const ARGUMENT_COMMANDS: [(&str, &str, &str, ArgKind); 5] = [
 
 #[must_use]
 pub fn entries() -> Vec<CommandEntry> {
+    entries_with(true)
+}
+
+/// The entries when the clipboard commands are enabled or not (no clipboard hooks).
+#[must_use]
+pub fn entries_with(has_clipboard: bool) -> Vec<CommandEntry> {
     let bound = all().map(|spec| CommandEntry {
         spec,
-        enabled: true,
+        enabled: has_clipboard || !clipboard::needs_hooks(spec.name),
         in_palette: !palette_hidden::HIDDEN.contains(&spec.name),
         arg: None,
     });
@@ -132,6 +139,7 @@ pub fn all() -> impl Iterator<Item = CommandSpec> {
         multi_rename::GROUPS.as_slice(),
         perf::GROUPS.as_slice(),
         retained::GROUPS.as_slice(),
+        clipboard::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group

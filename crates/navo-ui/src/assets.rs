@@ -92,6 +92,7 @@ icon_assets!(
         RotateCcw,
         Rows3,
         Search,
+        Shield,
         SlidersHorizontal,
         SquareChevronRight,
         SquareMenu,

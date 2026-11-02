@@ -19,7 +19,7 @@ pub fn spawn_profile(
     let owner = queue.owner();
     let slot = JobSlot {
         volume: volume_of(&folder),
-        priority: Priority::Idle,
+        priority: Priority::Visible,
         owner: owner.id(),
     };
     queue.submit(

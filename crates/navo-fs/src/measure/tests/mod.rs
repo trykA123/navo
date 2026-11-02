@@ -155,6 +155,52 @@ fn reaching_the_link_cap_stops_merging_and_marks_the_result() {
 }
 
 #[test]
+fn exactly_the_link_cap_of_keys_leaves_the_result_checked() {
+    let fs = FakeFs::new();
+    for (name, key) in [('a', 1), ('b', 2)] {
+        let path = format!("d/{name}");
+        fs.add_file(&path, 10);
+        fs.set_link(&path, LinkKey(key, 1));
+    }
+    let mut size = FolderSize::default();
+    let root = fs.location("d");
+    let cancel = CancelToken::new();
+    Walk {
+        provider: &fs,
+        root: &root,
+        cancel: &cancel,
+    }
+    .run_with_link_limit(&mut size, &mut SizeOnly, 2)
+    .unwrap();
+    assert_eq!(size.files, 2);
+    assert!(!size.links_unchecked);
+}
+
+#[test]
+fn a_symlink_keeps_the_size_on_disk_known() {
+    let fs = tree();
+    for path in ["d/a.bin", "d/sub/b.bin", "d/sub/deeper/c.bin"] {
+        fs.set_on_disk(path, 8);
+    }
+    fs.add_entry(
+        "d",
+        FsEntry {
+            name: ProviderPath::from_text("shortcut"),
+            kind: EntryKind::Link,
+            size: 0,
+            modified_ms: None,
+            attributes: Attributes::default(),
+        },
+    );
+    let size = measure(&fs, "d").unwrap();
+    assert_eq!((size.files, size.on_disk), (4, 24));
+    assert!(size.on_disk_known);
+    let cancel = CancelToken::new();
+    let profiled = folder_profile(&fs, &fs.location("d"), &cancel, &mut |_: &FolderProfile| {});
+    assert_eq!(profiled.totals, size);
+}
+
+#[test]
 fn cancellation_during_size_streaming_stops_before_the_next_entry() {
     struct Stop<'a>(&'a CancelToken);
 

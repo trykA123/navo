@@ -12,6 +12,7 @@ use crate::automotive_sample::{
     ELF_NAME, ELF_STEPS, MEMORY_NAME, MEMORY_STEPS, TRACE_NAME, TRACE_STEPS, elf, memory, trace,
 };
 use crate::bars_page::{self, DragTreemapBars, drag_treemap_bars};
+use crate::clip_palette_page::ClipPalettePage;
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
 use crate::drives_page::{DrivesPage, Shows};
@@ -101,6 +102,7 @@ pub struct Gallery {
     parts_windows: [Entity<WindowPage>; 3],
     preview_windows: [Entity<WindowPage>; 4],
     recent: [Entity<RecentPage>; 2],
+    clip_palettes: [Entity<ClipPalettePage>; crate::clip_palette_page::COUNT],
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -156,6 +158,7 @@ impl Gallery {
             parts_windows: parts_windows(cx),
             preview_windows: preview_windows(cx),
             recent: crate::recent_page::pages(cx),
+            clip_palettes: crate::clip_palette_page::pages(window, cx),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -324,6 +327,7 @@ impl Render for Gallery {
             .window_page()
             .or_else(|| crate::tray_page::element(self.page, &t))
             .or_else(|| crate::recent_page::element(self.page, &self.recent))
+            .or_else(|| crate::clip_palette_page::element(self.page, &self.clip_palettes))
         {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);

@@ -23,12 +23,19 @@ impl SettingsBody {
             scroll: None,
             on_event: None,
             summon_key_taken: false,
+            clipboard_key_taken: false,
         }
     }
 
     #[must_use]
     pub fn summon_key_taken(mut self, taken: bool) -> Self {
         self.summon_key_taken = taken;
+        self
+    }
+
+    #[must_use]
+    pub fn clipboard_key_taken(mut self, taken: bool) -> Self {
+        self.clipboard_key_taken = taken;
         self
     }
 

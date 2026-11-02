@@ -44,6 +44,46 @@ impl Default for LookUps {
 
 impl Global for LookUps {}
 
+/// The window a clipboard paste goes back to. `paste` may block: call it off the UI thread.
+/// Its error is a fixed phrase that names no content.
+pub trait PasteTarget: Send + Sync {
+    fn paste(&self) -> Result<(), String>;
+    /// True when the window is Navo's own: then the palette only copies.
+    fn is_own(&self) -> bool;
+}
+
+/// A clipboard summon: when the key was pressed, the window that had focus and the display
+/// under the cursor, if known.
+#[derive(Clone)]
+pub struct ClipboardSummon {
+    pub at: Instant,
+    pub previous: Option<Arc<dyn PasteTarget>>,
+    pub display: Option<u64>,
+}
+
+impl std::fmt::Debug for ClipboardSummon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClipboardSummon")
+            .field("at", &self.at)
+            .field("has_previous", &self.previous.is_some())
+            .field("display", &self.display)
+            .finish()
+    }
+}
+
+impl PartialEq for ClipboardSummon {
+    fn eq(&self, other: &Self) -> bool {
+        let same_target = match (&self.previous, &other.previous) {
+            (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+            (None, None) => true,
+            _ => false,
+        };
+        self.at == other.at && same_target && self.display == other.display
+    }
+}
+
+impl Eq for ClipboardSummon {}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OpenRequest {
     pub path: Option<Location>,
@@ -52,6 +92,7 @@ pub struct OpenRequest {
     pub view: Option<Location>,
     pub quit: bool,
     pub summoned_at: Option<Instant>,
+    pub clipboard: Option<ClipboardSummon>,
 }
 
 #[derive(Clone, Debug)]
@@ -71,11 +112,19 @@ pub fn open_requests() -> (OpenSender, OpenInbox) {
     (OpenSender(sender), OpenInbox(receiver))
 }
 
+/// Shows or hides a native window; false when it could not.
 pub type WindowShown = Arc<dyn Fn(Option<RawWindowHandle>, bool) -> bool + Send + Sync>;
+
+pub(crate) fn raw_handle(window: &Window) -> Option<RawWindowHandle> {
+    HasWindowHandle::window_handle(window)
+        .ok()
+        .map(|handle| handle.as_raw())
+}
 
 pub trait ResidentHooks {
     fn apply(&self, values: &crate::settings::Values);
     fn key_taken(&self) -> bool;
+    fn clipboard_key_taken(&self) -> bool;
     fn has_tray(&self) -> bool;
 }
 
@@ -195,13 +244,16 @@ impl NavoWindow {
             .is_some_and(|resident| resident.key_taken())
     }
 
+    pub(super) fn clipboard_key_taken(&self) -> bool {
+        self.resident
+            .as_ref()
+            .is_some_and(|resident| resident.clipboard_key_taken())
+    }
+
     pub(super) fn set_window_shown(&self, window: &Window, shown: bool) -> bool {
-        let handle = HasWindowHandle::window_handle(window)
-            .ok()
-            .map(|handle| handle.as_raw());
         self.window_shown
             .as_ref()
-            .is_some_and(|hook| hook(handle, shown))
+            .is_some_and(|hook| hook(raw_handle(window), shown))
     }
 
     fn take_arrival(&mut self, arrival: Arrival, window: &mut Window, cx: &mut Context<Self>) {
@@ -212,6 +264,10 @@ impl NavoWindow {
         } = arrival;
         if request.quit {
             self.quit_on_request(window, cx);
+            return;
+        }
+        if let Some(summon) = request.clipboard {
+            self.summon_clipboard(summon, cx);
             return;
         }
         self.navigate_sides([request.left, request.right]);

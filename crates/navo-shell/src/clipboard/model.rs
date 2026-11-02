@@ -42,9 +42,9 @@ pub struct FileClipboard {
 pub enum ClipboardError {
     #[error("The clipboard is in use by another program")]
     Busy,
-    #[error("The file clipboard works on Windows only")]
+    #[error("The clipboard works on Windows only")]
     Unsupported,
-    #[error("The clipboard contains malformed file data")]
+    #[error("Malformed clipboard data")]
     Malformed,
     #[error("{0}")]
     Os(String),

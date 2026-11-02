@@ -27,7 +27,7 @@ mod reload;
 mod skipped;
 mod start;
 
-pub(crate) use guide_hint::wire as wire_guide_hint;
+pub(crate) use guide_hint::{take as take_marker, wire as wire_guide_hint};
 pub use reload::Reloader;
 pub use start::{Loaded, start_from};
 #[cfg(test)]

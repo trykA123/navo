@@ -33,7 +33,7 @@ fn parsed(field: Field, text: &str) -> Result<Value, SharedString> {
             Ok(number) if number > 0 => Ok(Value::Number(number.into())),
             _ => Err(NUMBER_PROBLEM.into()),
         },
-        _ if field == Field::SummonKey => parse_summon_key(text)
+        _ if matches!(field, Field::SummonKey | Field::ClipboardKey) => parse_summon_key(text)
             .map(|_| Value::Text(text.to_owned().into()))
             .map_err(|error| error.message().into()),
         _ if field.is_list() => Ok(Value::Text(joined(text).into())),
@@ -116,5 +116,23 @@ impl NavoWindow {
             .child(TextField::new("settings-input", &edit.input, spec.label()))
             .children(error);
         Some(bar.into_any_element())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bad_clipboard_key_shows_the_parser_message() {
+        let message = parsed(Field::ClipboardKey, "N").err();
+        assert_eq!(
+            message,
+            Some(SharedString::from(
+                crate::settings::SummonKeyError::NoModifier.message()
+            ))
+        );
+        assert!(parsed(Field::ClipboardKey, "Win+Alt+V").is_ok());
+        assert!(parsed(Field::ClipboardKey, "").is_ok());
     }
 }

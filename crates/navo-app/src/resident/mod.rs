@@ -60,6 +60,10 @@ impl Resident {
         false
     }
 
+    fn clipboard_key_taken(&self) -> bool {
+        false
+    }
+
     fn has_tray(&self) -> bool {
         false
     }
@@ -72,6 +76,10 @@ impl Resident {
 impl Running for Resident {
     fn key_taken(&self) -> bool {
         Resident::key_taken(self)
+    }
+
+    fn clipboard_key_taken(&self) -> bool {
+        Resident::clipboard_key_taken(self)
     }
 
     fn has_tray(&self) -> bool {

@@ -50,10 +50,10 @@ impl FolderPreview {
         match &self.index {
             Some(index) if !self.is_walked() => {
                 let totals = FolderSize {
-                    bytes: index.bytes,
                     files: index.files.into(),
                     folders: index.folders.into(),
-                    ..walked
+                    skipped: walked.skipped,
+                    ..FolderSize::apparent_only(index.bytes)
                 };
                 (totals, index.complete)
             }
@@ -75,13 +75,7 @@ impl NavoWindow {
         let bytes = totals.bytes;
         folder.index = Some(totals);
         if let Some(target) = target {
-            self.show_size(
-                &target,
-                FolderSize {
-                    bytes,
-                    ..FolderSize::default()
-                },
-            );
+            self.show_size(&target, FolderSize::apparent_only(bytes));
         }
         true
     }

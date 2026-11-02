@@ -30,8 +30,8 @@ type OnChange = Box<dyn Fn(ShellCapture) + Send>;
 
 const CHANGED: u32 = WM_APP + 1;
 const STOP: u32 = WM_APP + 2;
-const BUSY_ATTEMPTS: u32 = 5;
-const BUSY_DELAY: Duration = Duration::from_millis(20);
+pub(super) const BUSY_ATTEMPTS: u32 = 5;
+pub(super) const BUSY_DELAY: Duration = Duration::from_millis(20);
 const START_WAIT: Duration = Duration::from_secs(5);
 const STOP_WAIT: Duration = Duration::from_secs(2);
 const IMAGE_UNITS: usize = 32_768;
@@ -204,7 +204,7 @@ fn sequence() -> u32 {
     unsafe { GetClipboardSequenceNumber() }
 }
 
-fn register(name: &str) -> Result<u32, ClipboardError> {
+pub(super) fn register(name: &str) -> Result<u32, ClipboardError> {
     let wide = wide(name);
     // SAFETY: wide is a live NUL-terminated UTF-16 string.
     let format = unsafe { RegisterClipboardFormatW(wide.as_ptr()) };

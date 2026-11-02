@@ -54,14 +54,14 @@ impl ViewJobs {
         &mut self,
         tab: TabId,
         (from, to): (&Arc<[FsEntry]>, &Arc<[FsEntry]>),
-        size: (&str, u64),
+        sizes: &[(String, u64)],
     ) {
         let Some(job) = self.jobs.get_mut(&tab) else {
             return;
         };
         if Arc::ptr_eq(&job.rows, from) {
             job.rows = Arc::clone(to);
-            job.resized.push((size.0.to_owned(), size.1));
+            job.resized.extend_from_slice(sizes);
         }
     }
 
@@ -257,9 +257,7 @@ impl Browser {
         }
         self.store_filter(tab, &stamp.location, text);
         self.show_filtered(tab, stamp.location, shown);
-        for (name, bytes) in job.resized {
-            self.show_size_of(tab, &name, bytes);
-        }
+        self.show_sizes(tab, &job.resized);
         #[cfg(test)]
         counters::bump(&counters::APPLIED);
         if job.carry.lands {

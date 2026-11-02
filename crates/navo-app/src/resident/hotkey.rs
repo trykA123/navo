@@ -3,27 +3,27 @@ use std::ptr::null_mut;
 use navo_ui::settings::SummonKey;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey};
 
-use super::keys::{HOTKEY_ID, hotkey_code};
+use super::keys::hotkey_code;
 
-pub(super) struct Hotkey;
+pub(super) struct Hotkey(i32);
 
 impl Hotkey {
-    pub(super) fn register(key: SummonKey) -> Option<Self> {
+    pub(super) fn register(id: i32, key: SummonKey) -> Option<Self> {
         let (modifiers, code) = hotkey_code(key);
         // SAFETY: a null window binds the hotkey to this thread's message queue; no pointers are passed.
-        if unsafe { RegisterHotKey(null_mut(), HOTKEY_ID, modifiers, code) } == 0 {
+        if unsafe { RegisterHotKey(null_mut(), id, modifiers, code) } == 0 {
             let error = std::io::Error::last_os_error();
-            tracing::warn!(%error, ?key, "the summon key is taken by another app");
+            tracing::warn!(%error, id, ?key, "the hotkey is taken by another app");
             return None;
         }
-        Some(Self)
+        Some(Self(id))
     }
 }
 
 impl Drop for Hotkey {
     fn drop(&mut self) {
-        // SAFETY: drops on the thread that registered HOTKEY_ID with a null window.
-        unsafe { UnregisterHotKey(null_mut(), HOTKEY_ID) };
+        // SAFETY: drops on the thread that registered this id with a null window.
+        unsafe { UnregisterHotKey(null_mut(), self.0) };
     }
 }
 

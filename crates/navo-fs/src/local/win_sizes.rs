@@ -13,7 +13,8 @@ use std::ptr;
 
 use navo_core::{FsError, FsErrorKind, Location, ProviderPath};
 use windows_sys::Win32::Foundation::{
-    ERROR_INVALID_LEVEL, ERROR_INVALID_PARAMETER, ERROR_NO_MORE_FILES, INVALID_HANDLE_VALUE,
+    ERROR_INVALID_LEVEL, ERROR_INVALID_PARAMETER, ERROR_NO_MORE_FILES, FILETIME,
+    INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_REPARSE_POINT,
@@ -24,11 +25,12 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 use super::LocalFs;
-use super::win_list::kind_of;
+use super::win_list::{kind_of, modified_ms};
 use crate::{CancelToken, EntryBatch, EntryKind, LinkKey, Provider, SizeEntry};
 
 const BUFFER_BYTES: u32 = 64 * 1024;
 const DOT: u16 = 0x2E;
+const WRITE_TIME: usize = offset_of!(FILE_ID_EXTD_DIR_INFO, LastWriteTime);
 
 struct Directory {
     handle: OwnedHandle,
@@ -55,6 +57,7 @@ pub(super) fn list_sizes(
                     name: entry.name,
                     kind: entry.kind,
                     size: entry.size,
+                    modified_ms: entry.modified_ms,
                     on_disk: None,
                     link: None,
                 })
@@ -230,6 +233,10 @@ impl Directory {
             } else {
                 0
             },
+            modified_ms: modified_ms(FILETIME {
+                dwLowDateTime: u32::from_le_bytes(read(bytes, WRITE_TIME)?),
+                dwHighDateTime: u32::from_le_bytes(read(bytes, WRITE_TIME + 4)?),
+            }),
             on_disk: if file {
                 Some(read_size(
                     bytes,

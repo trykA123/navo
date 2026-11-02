@@ -570,3 +570,20 @@ fn the_tray_settings_are_windows_only() {
         cfg!(windows)
     );
 }
+
+#[test]
+fn the_clipboard_defaults_are_on_and_win_alt_v() {
+    let values = Values::default();
+    assert!(values.clipboard_on());
+    assert!(values.records_clipboard());
+    assert_eq!(values.clipboard_key(), "Win+Alt+V");
+}
+
+#[test]
+fn only_the_clipboard_switch_shows_off_windows() {
+    let shown = |field| Filter::new("").admits(spec(field));
+    assert!(shown(Field::ClipboardOn));
+    assert_eq!(shown(Field::ClipboardRecord), cfg!(windows));
+    assert_eq!(shown(Field::ClipboardKey), cfg!(windows));
+    assert!(Filter::default().first_in(Section::Clipboard).is_some());
+}
