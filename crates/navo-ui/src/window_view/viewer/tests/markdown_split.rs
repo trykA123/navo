@@ -75,6 +75,24 @@ fn wait(cx: &mut TestAppContext, millis: u64) {
 const NOTES: &str = "# Notes\n\nSome **bold** text.\n";
 
 #[gpui_kit::test]
+fn a_global_clipboard_binding_yields_to_the_viewer_split_action(cx: &mut TestAppContext) {
+    let (window, view) = open_editing(cx, "notes.md", NOTES);
+    cx.update(|cx| {
+        cx.bind_keys([
+            gpui_kit::KeyBinding::new("ctrl-shift-v", super::super::TogglePreview, None),
+            gpui_kit::KeyBinding::new(
+                "ctrl-shift-v",
+                crate::window_view::keys::OpenClipboard,
+                None,
+            ),
+        ]);
+    });
+    press(cx, window, &view, "ctrl-shift-v");
+    assert!(!shows_preview(cx, window));
+    assert!(!view.read_with(cx, |view, _| view.clip.is_open()));
+}
+
+#[gpui_kit::test]
 fn markdown_opens_split_while_editing_with_a_rendered_preview(cx: &mut TestAppContext) {
     let (window, view) = open_editing(cx, "notes.md", NOTES);
     assert!(shows_preview(cx, window));

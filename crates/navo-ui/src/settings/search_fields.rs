@@ -58,6 +58,8 @@ impl Field {
                 | Self::ShowSystem
                 | Self::KeepInTray
                 | Self::SummonKey
+                | Self::ClipboardRecord
+                | Self::ClipboardKey
         )
     }
 }

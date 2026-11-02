@@ -484,3 +484,27 @@ fn queued_undo_revalidates_the_offer_before_execution() {
     assert!(!exists(&fs, "home/original.txt"));
     assert_eq!(fs.calls("home/renamed.txt", FakeOp::Rename), 0);
 }
+
+#[test]
+fn a_failing_slow_drive_check_does_not_stall_the_queue() {
+    let fs = fake();
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    browser.set_slow_volume(Arc::new(|_| panic!("drive check failed")));
+    let (gate, started) = gated(&mut browser, false);
+    copy(&mut browser, &fs, "home/docs");
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    let second = copy(&mut browser, &fs, "home/a.txt");
+    wait_for(&mut browser, |browser| !browser.loading());
+    assert_eq!(browser.jobs()[1].status, JobStatus::Queued);
+    gate.release();
+    settle(&mut browser);
+    let status = |id| {
+        browser
+            .jobs()
+            .iter()
+            .find(|job| job.id == id)
+            .map(|job| job.status.clone())
+    };
+    assert_eq!(status(second), Some(JobStatus::Done));
+    assert!(exists(&fs, "dest/a.txt"));
+}

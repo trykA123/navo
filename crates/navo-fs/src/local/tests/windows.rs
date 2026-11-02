@@ -158,6 +158,36 @@ mod sizes {
     }
 
     #[test]
+    fn a_junction_keeps_the_folder_size_on_disk_known() {
+        let (dir, folder) = temp();
+        write_file(dir.path(), "plain", 11);
+        fs::create_dir(dir.path().join("target")).unwrap();
+        let output = Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(dir.path().join("junction"))
+            .arg(dir.path().join("target"))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let entries = list(&folder);
+        assert_eq!(entries[0].kind, EntryKind::Link);
+        let size = crate::folder_size(&LocalFs::new(), &folder, &CancelToken::new()).unwrap();
+        assert_eq!((size.files, size.bytes), (2, 11));
+        assert!(size.on_disk_known);
+    }
+
+    #[test]
+    fn a_size_entry_has_the_listing_modified_time() {
+        let (dir, folder) = temp();
+        write_file(dir.path(), "plain", 11);
+        let listed = LocalFs::new()
+            .metadata(&folder.join(&ProviderPath::from_text("plain")).unwrap())
+            .unwrap();
+        assert!(listed.modified_ms.is_some());
+        assert_eq!(list(&folder)[0].modified_ms, listed.modified_ms);
+    }
+
+    #[test]
     fn cancellation_before_listing_sends_no_entries() {
         let (_dir, folder) = with_files(3);
         let cancel = CancelToken::new();

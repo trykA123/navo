@@ -6,8 +6,13 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 sha2 = "=0.10.9"
 thiserror = "2.0.21"
+zeroize = "=1.9.1"
+
+[dev-dependencies]
+tempfile = "3.27.0"
 
 [lints]
 workspace = true

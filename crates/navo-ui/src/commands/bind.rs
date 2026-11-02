@@ -63,7 +63,11 @@ fn bindings_of(bind: &Bind, cx: &App, expand: fn(&str) -> Vec<String>) -> Vec<Ke
     else {
         return Vec::new();
     };
-    let predicate = match bind.context.as_str() {
+    let context = match bind.context.as_str() {
+        GLOBAL if bind.spec.name == "clipboard.open" => "!Viewer",
+        context => context,
+    };
+    let predicate = match context {
         GLOBAL => None,
         context => match KeyBindingContextPredicate::parse(context) {
             Ok(predicate) => Some(Rc::new(predicate)),

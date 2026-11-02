@@ -205,6 +205,7 @@ fn default_list_sizes_preserves_every_entry_without_extra_metadata() {
             name: entry.name,
             kind: entry.kind,
             size: entry.size,
+            modified_ms: entry.modified_ms,
             on_disk: None,
             link: None,
         })

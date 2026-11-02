@@ -5603,6 +5603,7 @@ dependencies = [
  "libc",
  "mimalloc",
  "navo-cache",
+ "navo-clipboard",
  "navo-core",
  "navo-diag",
  "navo-fs",
@@ -5662,8 +5663,11 @@ dependencies = [
 name = "navo-clipboard"
 version = "0.0.1"
 dependencies = [
+ "rusqlite",
  "sha2 0.10.9",
+ "tempfile",
  "thiserror 2.0.21",
+ "zeroize",
 ]
 
 [[package]]

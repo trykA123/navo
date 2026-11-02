@@ -202,32 +202,6 @@ impl Browser {
         self.run(effects);
     }
 
-    pub fn poll(&mut self) -> bool {
-        let mut changed = false;
-        while let Ok(message) = self.receiver.try_recv() {
-            if message.is_queued() {
-                self.in_flight = self.in_flight.saturating_sub(1);
-            }
-            changed |= match message {
-                Message::Loaded(loaded) => self.accept(loaded),
-                Message::CachedSorted(early) => self.accept_cached_sorted(early),
-                Message::Viewed(viewed) => self.accept_viewed(viewed),
-                Message::Measured(owner, measured) => self.accept_size(owner, &measured),
-                Message::Found(tab, owner, update) => self.accept_find(tab, owner, update),
-                Message::Job(update) => self.accept_job(update),
-                Message::Named(named) => self.accept_named(named),
-                Message::Watched(location, event) => self.accept_watched(&location, event),
-                Message::Recheck(location) => self.accept_recheck(&location),
-                Message::Prefetched(id) => self.prefetched(id),
-                Message::Left(tab, gone) => self.accept_left(tab, &gone),
-            };
-        }
-        if changed && crate::perf::is_recording() {
-            self.note_folder_shown();
-        }
-        changed
-    }
-
     #[must_use]
     pub fn profiles(&self) -> &ProfileCache {
         &self.profiles
@@ -363,6 +337,8 @@ impl Browser {
         });
         self.remark_hidden(tab);
         self.cached.remove(&tab);
+        self.reshow_sizes(tab);
+        self.plan_shown_sizes(tab);
         self.restore_focus(tab);
         self.drain_refresh(tab);
         true
@@ -399,6 +375,8 @@ mod operate;
 mod prefetch;
 mod rename_batch;
 mod retained;
+mod shown_sizes;
+mod size_rows;
 mod sort;
 #[cfg(test)]
 mod tests;

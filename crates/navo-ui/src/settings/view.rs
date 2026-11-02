@@ -31,6 +31,7 @@ pub(super) struct Look<'a> {
     pub page: &'a SearchPage,
     pub send: Option<Handler>,
     pub summon_key_taken: bool,
+    pub clipboard_key_taken: bool,
 }
 
 fn send_on_click<E: StatefulInteractiveElement>(
@@ -255,7 +256,11 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
                 .text_color(t.colors.muted)
                 .child(spec.help()),
         )
-        .children(row_state::notes(t, spec.field, look.summon_key_taken))
+        .children(row_state::notes(
+            t,
+            spec.field,
+            (look.summon_key_taken, look.clipboard_key_taken),
+        ))
         .child(key_line(t, spec, index == look.row))
 }
 

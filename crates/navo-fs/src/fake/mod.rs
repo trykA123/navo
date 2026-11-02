@@ -407,6 +407,7 @@ impl Provider for FakeFs {
                         name: entry.name,
                         kind: entry.kind,
                         size: entry.size,
+                        modified_ms: entry.modified_ms,
                         on_disk,
                         link,
                     })

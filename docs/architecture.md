@@ -22,6 +22,7 @@ A Cargo workspace; dependencies point down the table.
 | `navo-cache` | Bounded caches: listings, icons, thumbnails, enrichments; budgets and eviction | any |
 | `navo-index` | Fuzzy matching (`nucleo`), folder search (`ignore`), global search through Navo's own index and the `navo-indexd` service (D23) | Windows for global |
 | `navo-shell` | Windows shell: icons, thumbnails, native context menu, Properties, Recycle Bin, drag and drop, Mark-of-the-Web, ShellExecute | Windows |
+| `navo-clipboard` | Clipboard history: model, admit rules, size limits, its own `clipboard.db`, search, and a service on a worker thread that records and serves snapshots. `navo-app` wires it; `navo-ui` sees only a hooks trait. `navo-shell` supplies the clipboard watcher, private write and paste back; `navo-ui` draws the palette and commands | any |
 | `navo-term` | Terminal providers: Windows Terminal, external command templates, embedded ConPTY + `alacritty_terminal` | Windows |
 | `navo-plugins` | WASM component host, capability checks, plugin lifecycle | any |
 | `navo-ui` | Navo's component library and views on `gpui-kit`, styled with the design tokens from the prototype; draws state, sends commands (see UI components) | any |

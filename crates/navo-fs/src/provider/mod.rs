@@ -99,6 +99,7 @@ pub struct SizeEntry {
     pub name: ProviderPath,
     pub kind: EntryKind,
     pub size: u64,
+    pub modified_ms: Option<i64>,
     pub on_disk: Option<u64>,
     pub link: Option<LinkKey>,
 }
@@ -150,6 +151,7 @@ pub trait Provider: Send + Sync {
                         name: entry.name,
                         kind: entry.kind,
                         size: entry.size,
+                        modified_ms: entry.modified_ms,
                         on_disk: None,
                         link: None,
                     })

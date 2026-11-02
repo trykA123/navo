@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
 use navo_core::{Location, OperationPlan, Step};
@@ -47,11 +48,28 @@ pub(in crate::browser) fn slow_class(class: DriveClass) -> bool {
     }
 }
 
+/// A panicking check counts every volume as slow, so a job still starts, one at a time.
 pub(super) fn slow_volumes<'a>(
     places: impl Iterator<Item = &'a Location>,
     slow: &SlowVolume,
 ) -> SlowVolumes {
-    places.filter(|place| slow(place)).map(volume_of).collect()
+    let places: Vec<&Location> = places.collect();
+    catch_unwind(AssertUnwindSafe(|| {
+        places
+            .iter()
+            .filter(|place| slow(place))
+            .map(|place| volume_of(place))
+            .collect()
+    }))
+    .unwrap_or_else(|_| places.into_iter().map(volume_of).collect())
+}
+
+fn job_places(pending: &PendingOp) -> impl Iterator<Item = &Location> {
+    pending
+        .sources
+        .iter()
+        .chain(pending.target.iter())
+        .chain(plan_places(&pending.plan))
 }
 
 fn plan_places(plan: &OperationPlan) -> impl Iterator<Item = &Location> {
@@ -131,14 +149,7 @@ impl Browser {
         self.pools.queue(JobKind::Listing).submit(
             slot,
             Box::new(move |_| {
-                let volumes = slow_volumes(
-                    pending
-                        .sources
-                        .iter()
-                        .chain(pending.target.iter())
-                        .chain(plan_places(&pending.plan)),
-                    &slow,
-                );
+                let volumes = slow_volumes(job_places(&pending), &slow);
                 let _ = sender.send(Message::Job(JobUpdate::Classified {
                     id: pending.id,
                     volumes,
@@ -167,14 +178,7 @@ impl Browser {
         while index < self.job_queue.waiting.len() {
             let pending = &self.job_queue.waiting[index].pending;
             let Some(volumes) = pending.slow_volumes.as_ref() else {
-                blocked.extend(
-                    pending
-                        .sources
-                        .iter()
-                        .chain(pending.target.iter())
-                        .chain(plan_places(&pending.plan))
-                        .map(volume_of),
-                );
+                blocked.extend(job_places(pending).map(volume_of));
                 index += 1;
                 continue;
             };

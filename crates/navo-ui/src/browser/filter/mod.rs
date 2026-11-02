@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use navo_core::{Command, CursorMove, Entry, Event, Listing, Location, TabId};
@@ -202,18 +203,30 @@ impl Browser {
         self.sorted.retain(|tab, _| is_open(tab));
     }
 
-    pub(super) fn remember_size(&mut self, tab: TabId, name: &str, bytes: u64) {
+    pub(super) fn remember_sizes(&mut self, tab: TabId, sizes: &[(String, u64)]) {
         let Some(full) = self.full.get_mut(&tab) else {
             return;
         };
+        let wanted: HashMap<&str, u64> = sizes
+            .iter()
+            .map(|(name, bytes)| (name.as_str(), *bytes))
+            .collect();
         let mut rows = full.details.to_vec();
-        if let Some(entry) = rows.iter_mut().find(|e| e.name.to_text() == name) {
-            entry.size = bytes;
-            let rows: Arc<[FsEntry]> = rows.into();
-            self.view_jobs
-                .resized(tab, (&full.details, &rows), (name, bytes));
-            full.details = rows;
+        super::size_rows::count_copy();
+        let mut found = Vec::new();
+        for entry in &mut rows {
+            let name = entry.name.to_text();
+            if let Some(&bytes) = wanted.get(name.as_str()) {
+                entry.size = bytes;
+                found.push((name, bytes));
+            }
         }
+        if found.is_empty() {
+            return;
+        }
+        let rows: Arc<[FsEntry]> = rows.into();
+        self.view_jobs.resized(tab, (&full.details, &rows), &found);
+        full.details = rows;
     }
 
     pub(super) fn set_filter(&mut self, tab: TabId, text: String) -> bool {

@@ -18,6 +18,9 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - Ctrl+Shift+1 to 4 focus a pane. Tab switches to the target pane. The target has a dashed outline for F5 and F6.
 - Shift+drag on a pane header swaps two panes. Dragging a divider shows a guide line. Double-click a divider to even it. Ctrl+Alt+0 resets the split.
 - Narrow windows show one pane with a strip of pane buttons. Editing the path moved from Ctrl+L to Alt+D.
+- Clipboard history: Navo records the text, links and file lists you copy on this PC. Ctrl+Shift+V opens a palette in the window. Win+Alt+V opens it over any app, and Enter pastes back into that app.
+- Search the history, copy an entry again, or delete one. Ctrl+K has commands to pause the history, clear it or delete all clipboard data. Settings › Clipboard turns it off.
+- Copies that password managers or Windows mark as private are never recorded. The history keeps the newest 500 entries and stays on this PC.
 
 ### Fixed
 

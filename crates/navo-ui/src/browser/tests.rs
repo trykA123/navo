@@ -520,6 +520,7 @@ fn a_link_to_a_file_is_not_opened_as_a_folder() {
 
 mod measure;
 mod rename_batch;
+mod shown_sizes;
 
 #[test]
 fn a_refresh_of_the_same_folder_is_not_a_new_visit() {

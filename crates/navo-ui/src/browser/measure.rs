@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use navo_core::{Location, Tab, TabId};
 use navo_fs::{
-    CancelToken, FolderSize, JobKind, JobSlot, OwnerId, Priority, Provider, folder_size, volume_of,
+    CancelToken, FolderSize, JobId, JobKind, JobSlot, OwnerGuard, OwnerId, Priority, Provider,
+    folder_size, volume_of,
 };
 pub use navo_index::pipe::FolderTotals;
 
@@ -59,10 +60,7 @@ pub(crate) fn folder_measure(
     cancel: &CancelToken,
 ) -> Option<FolderSize> {
     complete_bytes(query, folder)
-        .map(|bytes| FolderSize {
-            bytes,
-            ..FolderSize::default()
-        })
+        .map(FolderSize::apparent_only)
         .or_else(|| folder_size(provider, folder, cancel).ok())
 }
 
@@ -79,16 +77,65 @@ pub(super) struct SizeView {
     pub(super) mode: SizeMode,
     pub(super) work: HashMap<TabId, SizeWork>,
     pub(super) remembered: HashMap<TabId, Remembered>,
+    pub(super) shown: super::shown_sizes::ShownSizes,
 }
 
 pub(super) struct Remembered {
-    folder: Location,
-    sizes: HashMap<String, FolderSize>,
+    pub(super) folder: Location,
+    pub(super) sizes: HashMap<String, FolderSize>,
+}
+
+/// Who asked for a size: a Space press, the shown-folder sizes (D7), or both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Asker {
+    Space,
+    Shown,
+    ShownThenSpace,
+}
+
+pub(super) struct Asked {
+    job: JobId,
+    pub(super) asker: Asker,
 }
 
 pub(super) struct SizeWork {
-    location: Location,
-    pending: usize,
+    pub(super) location: Location,
+    pub(super) pending: usize,
+    pub(super) shown_planned: bool,
+    pub(super) shown_owner: Option<OwnerGuard>,
+    pub(super) shown_pending: usize,
+    pub(super) asked: HashMap<String, Asked>,
+}
+
+impl Asker {
+    fn priority(self) -> Priority {
+        if self == Self::Space {
+            Priority::Visible
+        } else {
+            Priority::Idle
+        }
+    }
+}
+
+impl SizeWork {
+    fn count_asked(&mut self, asker: Asker) {
+        if asker == Asker::Space {
+            self.pending += 1;
+        } else {
+            self.shown_pending += 1;
+        }
+    }
+
+    fn owner_for(&self, asker: Asker, space: &OwnerGuard) -> Option<OwnerId> {
+        match asker {
+            Asker::Space => Some(space.id()),
+            Asker::Shown | Asker::ShownThenSpace => self.shown_owner.as_ref().map(OwnerGuard::id),
+        }
+    }
+
+    pub(super) fn owns(&self, owner: OwnerId) -> bool {
+        self.shown_owner.as_ref().map(OwnerGuard::id) == Some(owner)
+    }
 }
 
 impl Browser {
@@ -139,140 +186,95 @@ impl Browser {
             SizeWork {
                 location: location.clone(),
                 pending: 0,
+                shown_planned: false,
+                shown_owner: None,
+                shown_pending: 0,
+                asked: HashMap::new(),
             },
         );
     }
 
     pub(super) fn measuring(&self) -> bool {
-        self.sizes.work.values().any(|work| work.pending > 0)
+        self.sizes
+            .work
+            .values()
+            .any(|work| work.pending + work.shown_pending > 0)
     }
 
     pub(super) fn measure(&mut self, tab: TabId, name: String) {
         let Some(tab) = self.state.tab(tab).cloned() else {
             return;
         };
-        self.measure_entry(&tab, name);
+        if !self.promote(tab.id(), &name) {
+            self.measure_entry(&tab, name, Asker::Space);
+        }
     }
 
-    pub(super) fn measure_entry(&mut self, tab: &Tab, name: String) {
+    /// A Space on a folder the shown sizes already asked for moves that job ahead instead of walking twice.
+    fn promote(&mut self, tab: TabId, name: &str) -> bool {
+        let Some(asked) = self
+            .sizes
+            .work
+            .get_mut(&tab)
+            .and_then(|work| work.asked.get_mut(name))
+        else {
+            return false;
+        };
+        if asked.asker == Asker::Shown {
+            asked.asker = Asker::ShownThenSpace;
+        }
+        let _ = self
+            .pools
+            .queue(JobKind::Size)
+            .reprioritise(asked.job, Priority::Visible);
+        true
+    }
+
+    pub(super) fn measure_entry(&mut self, tab: &Tab, name: String, asker: Asker) {
         let Ok(target) = tab.entry_location(&name) else {
             return;
         };
         let folder = tab.location().clone();
         let tab = tab.id();
-        let (Some(owner), Some(work)) = (self.size_owners.get(&tab), self.sizes.work.get_mut(&tab))
+        let (Some(space), Some(work)) = (self.size_owners.get(&tab), self.sizes.work.get_mut(&tab))
         else {
             return;
         };
-        let owner = owner.id();
+        let Some(owner) = work.owner_for(asker, space) else {
+            return;
+        };
+        if asker == Asker::Shown && work.asked.contains_key(&name) {
+            return;
+        }
         let (provider, sender, wake) = (
             Arc::clone(&self.provider),
             self.sender.clone(),
             Arc::clone(&self.wake),
         );
         let totals = Arc::clone(&self.folder_totals);
+        let key = name.clone();
         let slot = JobSlot {
             volume: volume_of(&target),
-            priority: Priority::Idle,
+            priority: asker.priority(),
             owner,
         };
-        work.pending += 1;
-        self.pools.queue(JobKind::Size).submit_then(
+        work.count_asked(asker);
+        let job = self.pools.queue(JobKind::Size).submit_then(
             slot,
-            move |cancel| {
-                let size = catch_unwind(AssertUnwindSafe(|| {
+            move |cancel| Measured {
+                tab,
+                folder,
+                size: catch_unwind(AssertUnwindSafe(|| {
                     folder_measure(&totals, provider.as_ref(), &target, cancel).unwrap_or_default()
                 }))
-                .ok();
-                Measured {
-                    tab,
-                    folder,
-                    name,
-                    size,
-                }
+                .ok(),
+                name,
             },
             move |measured| {
                 let _ = sender.send(Message::Measured(owner, measured));
                 wake();
             },
         );
-    }
-
-    pub(super) fn accept_size(&mut self, owner: OwnerId, measured: &Measured) -> bool {
-        if self.size_owners.get(&measured.tab).map(|o| o.id()) != Some(owner) {
-            return false;
-        }
-        if let Some(work) = self.sizes.work.get_mut(&measured.tab) {
-            work.pending = work.pending.saturating_sub(1);
-        }
-        self.show_folder_size(measured)
-    }
-
-    pub(crate) fn show_folder_size(&mut self, measured: &Measured) -> bool {
-        let here = self
-            .state
-            .tab(measured.tab)
-            .is_some_and(|tab| tab.location() == &measured.folder);
-        let (true, Some(size)) = (here, measured.size) else {
-            return false;
-        };
-        let remembered = self
-            .sizes
-            .remembered
-            .entry(measured.tab)
-            .or_insert_with(|| Remembered {
-                folder: measured.folder.clone(),
-                sizes: HashMap::new(),
-            });
-        if remembered.folder != measured.folder {
-            remembered.folder = measured.folder.clone();
-            remembered.sizes.clear();
-        }
-        remembered.sizes.insert(measured.name.clone(), size);
-        self.show_size_of(measured.tab, &measured.name, self.sizes.mode.shown(&size))
-    }
-
-    fn reshow_sizes(&mut self, tab: TabId) {
-        let Some(remembered) = self.sizes.remembered.get(&tab) else {
-            return;
-        };
-        let here = self
-            .state
-            .tab(tab)
-            .is_some_and(|t| t.location() == &remembered.folder);
-        if !here {
-            return;
-        }
-        let shown: Vec<(String, u64)> = remembered
-            .sizes
-            .iter()
-            .map(|(name, size)| (name.clone(), self.sizes.mode.shown(size)))
-            .collect();
-        for (name, bytes) in shown {
-            self.show_size_of(tab, &name, bytes);
-        }
-    }
-
-    pub(super) fn show_size_of(&mut self, tab: TabId, name: &str, bytes: u64) -> bool {
-        self.remember_size(tab, name, bytes);
-        let Some(tab_state) = self.state.tab(tab) else {
-            return false;
-        };
-        let Some(row) = tab_state
-            .listing()
-            .and_then(|l| l.entries().iter().position(|e| e.name == name))
-        else {
-            return false;
-        };
-        let Some(details) = self.details.get(&tab) else {
-            return false;
-        };
-        let mut rows = details.to_vec();
-        let Some(entry) = rows.get_mut(row) else {
-            return false;
-        };
-        entry.size = bytes;
-        self.details.insert(tab, rows.into());
-        true
+        work.asked.insert(key, Asked { job, asker });
     }
 }

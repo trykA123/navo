@@ -1,4 +1,6 @@
 mod body;
+mod clipboard_fields;
+mod clipboard_values;
 mod controls;
 mod diagnostics_page;
 mod fields;
@@ -168,6 +170,7 @@ pub struct SettingsBody {
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
     summon_key_taken: bool,
+    clipboard_key_taken: bool,
 }
 
 impl SettingsBody {
@@ -297,6 +300,7 @@ impl RenderOnce for SettingsBody {
             version: &self.version,
             send: self.on_event.clone(),
             summon_key_taken: self.summon_key_taken,
+            clipboard_key_taken: self.clipboard_key_taken,
         };
         let shown = self.shortcuts.is_none().then_some(section);
         let notice = shown

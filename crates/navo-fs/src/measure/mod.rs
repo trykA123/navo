@@ -53,6 +53,19 @@ impl Default for FolderSize {
     }
 }
 
+impl FolderSize {
+    /// A size from a source that knows only the apparent bytes, such as the index.
+    #[must_use]
+    pub fn apparent_only(bytes: u64) -> Self {
+        Self {
+            bytes,
+            on_disk: bytes,
+            on_disk_known: false,
+            ..Self::default()
+        }
+    }
+}
+
 struct SizeOnly;
 
 impl Visit for SizeOnly {

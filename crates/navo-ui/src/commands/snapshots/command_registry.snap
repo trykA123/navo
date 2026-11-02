@@ -410,6 +410,24 @@ multi_rename.toggle_row | Exclude or include the row | MultiRenamePreview
 multi_rename.move_row_up | Move the row up | MultiRenamePreview
 multi_rename.move_row_down | Move the row down | MultiRenamePreview
 files.recently_deleted | Recently deleted | global
+clipboard.open | Open clipboard history | global
+clipboard.pause | Pause or resume clipboard history | global
+clipboard.clear_history | Clear clipboard history | global
+clipboard.delete_all | Delete all clipboard data | global
+clip_palette.next_mode | Next mode | ClipPalette
+clip_palette.previous_mode | Previous mode | ClipPalette
+clip_palette.up | Up | ClipPalette
+clip_palette.down | Down | ClipPalette
+clip_palette.choose | Choose | ClipPalette
+clip_palette.back | Clear, back or close | ClipPalette
+clip_palette.open_actions | Actions | ClipPalette
+clip_palette.copy_only | Copy only | ClipPalette
+clip_palette.paste_files | Paste files into the pane | ClipPalette
+clip_palette.toggle_reveal | Show or hide secret | ClipPalette
+clip_palette.copy_user | Copy user name | ClipPalette
+clip_palette.save_row | Save item | ClipPalette
+clip_palette.delete_row | Delete item | ClipPalette
+clip_palette.manage | Manage clipboard library | ClipPalette
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global

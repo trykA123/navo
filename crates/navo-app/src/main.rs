@@ -9,6 +9,7 @@ mod app_menu;
 #[cfg(feature = "tester")]
 mod bench;
 mod cli;
+mod clip_module;
 mod clipboard;
 mod console;
 mod contrast;

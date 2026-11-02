@@ -6,10 +6,11 @@ use navo_l10n::{FILES, catalog, tr};
 use super::{GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 28] = [
+const NAMESPACES: [&str; 29] = [
     "activity_strip",
     "app_menu",
     "can_trace",
+    "clip_palette",
     "command_center",
     "confirm_dialog",
     "context_menu",
@@ -156,6 +157,7 @@ fn bindings_sit_in_their_command_context(cx: &mut TestAppContext) {
             let spec = for_action(binding.action)?;
             let fits = if spec.context == GLOBAL {
                 binding.context == GLOBAL
+                    || (spec.name == "clipboard.open" && binding.context == "!Viewer")
             } else {
                 is_within(&binding.context, spec.context)
             };

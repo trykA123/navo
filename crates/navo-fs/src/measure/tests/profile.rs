@@ -252,3 +252,20 @@ fn links_and_junctions_are_counted_but_never_followed() {
     assert_eq!(fs.calls("d/loop", FakeOp::List), 0);
     assert_eq!(profile.state, ProfileState::Done);
 }
+
+#[test]
+fn a_profile_counts_hard_links_once_and_knows_the_size_on_disk() {
+    use crate::LinkKey;
+    let fs = FakeFs::new();
+    for path in ["d/a.bin", "d/sub/same.bin"] {
+        fs.add_file(path, 100);
+        fs.set_on_disk(path, 64);
+        fs.set_link(path, LinkKey(7, 1));
+    }
+    fs.add_file("d/b.bin", 10);
+    fs.set_on_disk("d/b.bin", 4096);
+    let totals = profile(&fs, "d").totals;
+    assert_eq!((totals.bytes, totals.on_disk, totals.files), (110, 4160, 2));
+    assert_eq!(totals.links_merged, 1);
+    assert!(totals.on_disk_known);
+}

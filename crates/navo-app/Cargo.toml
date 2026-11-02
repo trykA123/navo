@@ -19,6 +19,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 encoding_rs = "0.8.42"
 mimalloc = { version = "=0.1.52", optional = true, default-features = false }
 navo-cache = { path = "../navo-cache" }
+navo-clipboard = { path = "../navo-clipboard" }
 navo-core = { path = "../navo-core" }
 navo-diag = { path = "../navo-diag" }
 navo-fs = { path = "../navo-fs" }
@@ -55,6 +56,7 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_IO",
   "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
   "Win32_System_Pipes",
   "Win32_System_ProcessStatus",
   "Win32_System_RemoteDesktop",

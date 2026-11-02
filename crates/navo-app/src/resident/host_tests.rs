@@ -2,6 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
+use navo_shell::Foreground;
 use navo_ui::settings::{Change, Field, Value, Values};
 use navo_ui::window_view::{OpenRequest, ResidentHooks};
 
@@ -13,6 +14,7 @@ type Log = Rc<RefCell<Vec<String>>>;
 struct Fake {
     id: usize,
     taken: bool,
+    clipboard_taken: bool,
     stuck: Rc<Cell<bool>>,
     log: Log,
 }
@@ -20,6 +22,10 @@ struct Fake {
 impl Running for Fake {
     fn key_taken(&self) -> bool {
         self.taken
+    }
+
+    fn clipboard_key_taken(&self) -> bool {
+        self.clipboard_taken
     }
 
     fn has_tray(&self) -> bool {
@@ -55,6 +61,7 @@ fn host_with(values: &Values, stuck: Rc<Cell<bool>>) -> (Host<Fake>, Log) {
         Fake {
             id,
             taken: config.keep_in_tray,
+            clipboard_taken: config.clipboard_key.is_some(),
             stuck: stuck.clone(),
             log: starts.clone(),
         }
@@ -103,6 +110,35 @@ fn key_taken_comes_from_the_running_resident() {
     assert!(!host.key_taken());
     host.apply(&keep_in_tray(&values, true));
     assert!(host.key_taken());
+}
+
+#[test]
+fn key_taken_is_reported_per_key() {
+    let values = Values::default();
+    let (host, _) = host(&values);
+    assert!(!host.key_taken());
+    assert!(host.clipboard_key_taken());
+    let off = values.with(&Change {
+        field: Field::ClipboardOn,
+        value: Value::Flag(false),
+    });
+    host.apply(&keep_in_tray(&off, true));
+    assert!(host.key_taken());
+    assert!(!host.clipboard_key_taken());
+}
+
+#[test]
+fn a_clipboard_event_becomes_a_request_with_the_window_to_paste_into() {
+    let at = Instant::now();
+    let request = request_for(ResidentEvent::Clipboard {
+        at,
+        previous: Foreground::now(),
+    });
+    let summon = request.clipboard.expect("a clipboard request");
+    assert_eq!(summon.at, at);
+    assert!(summon.previous.is_some_and(|previous| !previous.is_own()));
+    assert_eq!(request.summoned_at, None);
+    assert!(!request.quit);
 }
 
 #[test]

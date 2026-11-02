@@ -49,6 +49,26 @@ impl NavoWindow {
                     view.open_recently_deleted(window, cx);
                 }),
             )
+            .on_action(
+                cx.listener(|view, _: &super::keys::OpenClipboard, window, cx| {
+                    view.open_clipboard(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|view, _: &super::keys::PauseClipboard, window, cx| {
+                    view.pause_clipboard(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|view, _: &super::keys::ClearClipboardHistory, window, cx| {
+                    view.ask_clipboard(false, window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|view, _: &super::keys::DeleteClipboardData, window, cx| {
+                    view.ask_clipboard(true, window, cx);
+                }),
+            )
             .children(self.job_card_layer(cx))
             .children(self.preview_layer(window, cx))
             .children(self.settings_layer(window, cx))
@@ -58,6 +78,7 @@ impl NavoWindow {
             .children(self.activity_drawer_layer(window, cx))
             .children(self.layout_switcher_view(cx))
             .children(self.preset_dialog_view(cx))
+            .children(self.clipboard_layer(cx))
     }
 
     pub(super) fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {

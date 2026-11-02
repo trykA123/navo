@@ -234,6 +234,12 @@ fn owners_get_distinct_ids() {
 }
 
 #[test]
+fn owner_ids_are_unique_across_queues() {
+    let (first, second) = (IoQueue::new(), IoQueue::new());
+    assert_ne!(first.owner().id(), second.owner().id());
+}
+
+#[test]
 fn panicking_job_does_not_stop_later_jobs() {
     let queue = queue_with(VolumeKind::Hdd);
     submit(&queue, Priority::Visible, A, |_| {

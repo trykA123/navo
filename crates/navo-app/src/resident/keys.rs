@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use navo_shell::Foreground;
 use navo_ui::settings::SummonKey;
 
 use super::events::ResidentEvent;
@@ -7,6 +8,7 @@ use super::events::ResidentEvent;
 pub(crate) const OPEN_ID: &str = "navo-open";
 pub(crate) const QUIT_ID: &str = "navo-quit";
 pub(crate) const HOTKEY_ID: i32 = 1;
+pub(crate) const CLIPBOARD_ID: i32 = 2;
 
 pub(crate) const MOD_ALT: u32 = 0x1;
 pub(crate) const MOD_CONTROL: u32 = 0x2;
@@ -21,11 +23,16 @@ pub(crate) enum Input<'a> {
     LeftClick,
 }
 
-pub(crate) fn event_for(input: Input<'_>, at: Instant) -> Option<ResidentEvent> {
+pub(crate) fn event_for(
+    input: Input<'_>,
+    at: Instant,
+    previous: Foreground,
+) -> Option<ResidentEvent> {
     match input {
         Input::Hotkey(HOTKEY_ID) | Input::Menu(OPEN_ID) | Input::LeftClick => {
             Some(ResidentEvent::Summon(at))
         }
+        Input::Hotkey(CLIPBOARD_ID) => Some(ResidentEvent::Clipboard { at, previous }),
         Input::Menu(QUIT_ID) => Some(ResidentEvent::Quit),
         Input::Hotkey(_) | Input::Menu(_) => None,
     }

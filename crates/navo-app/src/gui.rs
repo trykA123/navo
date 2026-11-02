@@ -81,6 +81,7 @@ fn open_request(request: &crate::instance::Request) -> OpenRequest {
         view: location(&request.view),
         quit: false,
         summoned_at: None,
+        clipboard: None,
     }
 }
 
@@ -164,6 +165,7 @@ pub(crate) fn open(mut launch: Launch) {
         .resident
         .take()
         .map(|sender| crate::resident::ResidentHandle::start(sender, &settings.values));
+    let clip = crate::clip_module::ClipModule::start(dirs.as_ref(), &settings.values);
     let (search, visits) = search_hooks(services.memory.clone(), remember, dirs.as_ref(), &local);
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     let exit = (disk, visits, services.sessions);
@@ -194,18 +196,22 @@ pub(crate) fn open(mut launch: Launch) {
             drop_platform: Some(crate::drag::service()),
             start_watch: launch.start_watch,
             open: OpenHooks {
-                resident: resident
-                    .as_ref()
-                    .map(crate::resident::ResidentHandle::hooks),
+                resident: Some(crate::clip_module::follow(
+                    &clip,
+                    resident
+                        .as_ref()
+                        .map(crate::resident::ResidentHandle::hooks),
+                )),
                 ..open_hooks(launch.path, launch.instance_requests, launch.splash)
             },
             rename: Some(services.rename),
             retained: services.retained,
+            clipboard: Some(clip.clone()),
         },
         Rc::new(navo_shell::display_scale),
         RunHooks {
             on_quit: stop_first(
-                resident,
+                (resident, clip),
                 quitter(exit, launch.cleanup, launch.running, services.maintenance),
             ),
             on_autosave: autosave,
@@ -215,13 +221,17 @@ pub(crate) fn open(mut launch: Launch) {
 }
 
 fn stop_first(
-    resident: Option<crate::resident::ResidentHandle>,
+    (resident, clip): (
+        Option<crate::resident::ResidentHandle>,
+        Arc<crate::clip_module::ClipModule>,
+    ),
     on_quit: Rc<dyn Fn()>,
 ) -> Rc<dyn Fn()> {
     Rc::new(move || {
         if let Some(resident) = &resident {
             resident.stop();
         }
+        clip.stop();
         on_quit();
     })
 }

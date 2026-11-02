@@ -108,10 +108,26 @@ pub(super) fn live_chip(t: &Theme) -> impl IntoElement + use<> {
         .child(LIVE)
 }
 
+/// The element id and string of the note for a key the OS refused; only the field whose key
+/// was refused gets one.
+fn taken_note(
+    field: Field,
+    (summon, clipboard): (bool, bool),
+) -> Option<(&'static str, &'static str)> {
+    match field {
+        Field::SummonKey if summon => Some(("settings-summon-taken", "settings-summon-key-taken")),
+        Field::ClipboardKey if clipboard => {
+            Some(("settings-clipboard-taken", "settings-clipboard-key-taken"))
+        }
+        _ => None,
+    }
+}
+
+/// `taken` says whether the summon key and the clipboard key were refused.
 pub(super) fn notes(
     t: &Theme,
     field: Field,
-    key_taken: bool,
+    taken: (bool, bool),
 ) -> impl Iterator<Item = AnyElement> + use<> {
     let pending = (!field.is_applied()).then(|| {
         note(
@@ -121,10 +137,8 @@ pub(super) fn notes(
             t.colors.muted,
         )
     });
-    let taken = (field == Field::SummonKey && key_taken).then(|| {
-        let text = navo_l10n::tr("settings-summon-key-taken").into();
-        note(t, "settings-summon-taken", text, t.colors.mark)
-    });
+    let taken = taken_note(field, taken)
+        .map(|(id, key)| note(t, id, navo_l10n::tr(key).into(), t.colors.mark));
     [pending, taken].into_iter().flatten()
 }
 
@@ -138,4 +152,21 @@ fn note(t: &Theme, id: &'static str, text: SharedString, color: Hsla) -> AnyElem
         .text_color(color)
         .child(text)
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_refused_key_notes_only_its_own_field() {
+        let clipboard = Some(("settings-clipboard-taken", "settings-clipboard-key-taken"));
+        let summon = Some(("settings-summon-taken", "settings-summon-key-taken"));
+        assert_eq!(taken_note(Field::ClipboardKey, (false, true)), clipboard);
+        assert_eq!(taken_note(Field::SummonKey, (true, false)), summon);
+        assert_eq!(taken_note(Field::ClipboardKey, (true, false)), None);
+        assert_eq!(taken_note(Field::SummonKey, (false, true)), None);
+        assert_eq!(taken_note(Field::ClipboardKey, (false, false)), None);
+        assert_eq!(taken_note(Field::Font, (true, true)), None);
+    }
 }

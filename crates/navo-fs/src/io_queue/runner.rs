@@ -34,7 +34,6 @@ struct Shared {
     state: Mutex<State>,
     delivery: Mutex<()>,
     idle: Condvar,
-    next_owner: AtomicU64,
     classifier: Classifier,
 }
 
@@ -46,6 +45,8 @@ pub struct OwnerGuard {
     shared: Arc<Shared>,
     id: OwnerId,
 }
+
+static NEXT_OWNER: AtomicU64 = AtomicU64::new(0);
 
 thread_local! {
     static DELIVERING: Cell<*const Shared> = const { Cell::new(ptr::null()) };
@@ -166,7 +167,6 @@ impl IoQueue {
                 }),
                 delivery: Mutex::new(()),
                 idle: Condvar::new(),
-                next_owner: AtomicU64::new(0),
                 classifier,
             }),
         }
@@ -182,7 +182,7 @@ impl IoQueue {
 
     #[must_use]
     pub fn owner(&self) -> OwnerGuard {
-        let id = self.shared.next_owner.fetch_add(1, Ordering::Relaxed);
+        let id = NEXT_OWNER.fetch_add(1, Ordering::Relaxed);
         OwnerGuard {
             shared: Arc::clone(&self.shared),
             id: OwnerId(u64::MAX - id),

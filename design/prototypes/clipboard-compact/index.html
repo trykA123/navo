@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navo: clipboard and saved items, compact (R12 v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --bg: oklch(99.2% 0.002 260);
+  --rail: oklch(96.2% 0.005 260);
+  --zebra: oklch(97.6% 0.004 260);
+  --line: oklch(88% 0.008 260);
+  --text: oklch(21% 0.012 260);
+  --muted: oklch(46% 0.02 260);
+  --faint: oklch(60% 0.016 260);
+  --hover: oklch(95% 0.008 260);
+  --sel-bg: oklch(93% 0.035 262);
+  --accent: oklch(50% 0.18 262);
+  --accent-text: oklch(46% 0.17 262);
+  --on-accent: oklch(99.2% 0.002 260);
+  --folder: oklch(55% 0.13 80);
+  --k-code: oklch(50% 0.15 262);
+  --k-doc: oklch(51% 0.13 235);
+  --k-sheet: oklch(48% 0.12 165);
+  --ok-text: oklch(46% 0.13 150);
+  --warn-text: oklch(45% 0.11 70);
+  --warn-wash: oklch(96% 0.035 80);
+  --raised: oklch(99.8% 0.001 260);
+  --field: oklch(96.5% 0.006 250);
+  --cap: oklch(99.8% 0.001 260);
+  --cap-edge: oklch(84% 0.01 260);
+  --page: oklch(96.2% 0.005 260);
+  --desk: oklch(90% 0.012 250);
+  --scrim: oklch(21% 0.012 260 / 0.12);
+  --shadow-2: 0 2px 6px oklch(21% 0.012 260 / 0.08), 0 8px 20px -10px oklch(21% 0.012 260 / 0.2);
+  --shadow-3: 0 18px 44px -12px oklch(21% 0.012 260 / 0.28), 0 2px 6px oklch(21% 0.012 260 / 0.06), 0 0 0 1px var(--line);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: oklch(16% 0.008 260); --rail: oklch(19% 0.01 260); --zebra: oklch(18% 0.009 260); --line: oklch(28% 0.012 260);
+    --text: oklch(93% 0.006 260); --muted: oklch(72% 0.016 260); --faint: oklch(58% 0.014 260); --hover: oklch(22% 0.012 260);
+    --sel-bg: oklch(30% 0.07 262); --accent: oklch(72% 0.13 262); --accent-text: oklch(78% 0.11 262); --on-accent: oklch(16% 0.008 260);
+    --folder: oklch(80% 0.11 85); --k-code: oklch(76% 0.1 262); --k-doc: oklch(75% 0.1 235); --k-sheet: oklch(75% 0.1 165);
+    --ok-text: oklch(76% 0.13 150); --warn-text: oklch(80% 0.12 75); --warn-wash: oklch(24% 0.035 75);
+    --raised: oklch(20.5% 0.011 260); --field: oklch(17.5% 0.01 250); --cap: oklch(24% 0.012 260); --cap-edge: oklch(11% 0.008 260);
+    --page: oklch(12% 0.008 260); --desk: oklch(22% 0.02 250); --scrim: oklch(5% 0.005 260 / 0.35);
+    --shadow-2: 0 2px 6px oklch(0% 0 0 / 0.35), 0 10px 24px -10px oklch(0% 0 0 / 0.6);
+    --shadow-3: 0 22px 48px -12px oklch(0% 0 0 / 0.7), 0 0 0 1px var(--line);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: oklch(16% 0.008 260); --rail: oklch(19% 0.01 260); --zebra: oklch(18% 0.009 260); --line: oklch(28% 0.012 260);
+  --text: oklch(93% 0.006 260); --muted: oklch(72% 0.016 260); --faint: oklch(58% 0.014 260); --hover: oklch(22% 0.012 260);
+  --sel-bg: oklch(30% 0.07 262); --accent: oklch(72% 0.13 262); --accent-text: oklch(78% 0.11 262); --on-accent: oklch(16% 0.008 260);
+  --folder: oklch(80% 0.11 85); --k-code: oklch(76% 0.1 262); --k-doc: oklch(75% 0.1 235); --k-sheet: oklch(75% 0.1 165);
+  --ok-text: oklch(76% 0.13 150); --warn-text: oklch(80% 0.12 75); --warn-wash: oklch(24% 0.035 75);
+  --raised: oklch(20.5% 0.011 260); --field: oklch(17.5% 0.01 250); --cap: oklch(24% 0.012 260); --cap-edge: oklch(11% 0.008 260);
+  --page: oklch(12% 0.008 260); --desk: oklch(22% 0.02 250); --scrim: oklch(5% 0.005 260 / 0.35);
+  --shadow-2: 0 2px 6px oklch(0% 0 0 / 0.35), 0 10px 24px -10px oklch(0% 0 0 / 0.6);
+  --shadow-3: 0 22px 48px -12px oklch(0% 0 0 / 0.7), 0 0 0 1px var(--line);
+}
+:root {
+  --font-ui: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --fs-12: 0.75rem; --fs-13: 0.8125rem; --fs-14: 0.875rem; --fs-16: 1rem; --fs-20: 1.25rem;
+  --s1: 2px; --s2: 4px; --s3: 6px; --s4: 8px; --s5: 10px; --s6: 12px; --s7: 16px; --s8: 24px; --s9: 32px;
+  --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px; --r-pill: 999px;
+  --bar: 36px; --task: 40px;
+  /* compact palette sizes */
+  --row-c: 28px; --lh-row: 18px; --lh-12: 16px; --hd: 44px; --ft: 28px; --tabs: 28px;
+  --w-1: 520px; --h-1: 380px;
+  --w-2: 720px; --h-2: 400px; --list-w: 264px;
+  --w-3: 560px; --h-3: 330px;
+  --w-4: 480px; --h-4: 420px; --rail-w: 64px; --dock-h: 128px;
+  --menu-w: 248px; --gap-edge: 8px;
+  --z-sheet: 10; --z-menu: 20; --z-toast: 30; --z-picker: 40;
+  --fade: 80ms;
+  --pk-bg: oklch(18% 0.01 260 / 0.9); --pk-ring: oklch(100% 0 0 / 0.08); --pk-shadow: oklch(0% 0 0 / 0.24);
+  --pk-text: oklch(100% 0 0 / 0.66); --pk-text-hi: oklch(100% 0 0); --pk-on: oklch(100% 0 0 / 0.14); --pk-focus: oklch(100% 0 0 / 0.6);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--text); font-family: var(--font-ui); font-size: var(--fs-13); line-height: 1.4; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ic { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic.sm { width: 13px; height: 13px; }
+.mono { font-family: var(--font-mono); font-size: 0.94em; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+mark { background: none; color: var(--accent-text); font-weight: 600; }
+kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding-inline: var(--s2); border-radius: var(--r-sm); background: var(--cap); box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 var(--cap-edge); color: var(--accent-text); font-family: var(--font-ui); font-size: var(--fs-12); font-weight: 600; line-height: 1; white-space: nowrap; flex: none; }
+.fade { animation: fade var(--fade) ease-out; }
+@keyframes fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .fade { animation: none; } }
+.ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cnt { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 400; }
+.kd-text { color: var(--muted); } .kd-files, .kd-path { color: var(--folder); } .kd-command { color: var(--k-code); }
+.kd-snippet { color: var(--k-doc); } .kd-secret { color: var(--warn-text); } .kd-note { color: var(--k-sheet); }
+.kd-all, .kd-history, .kd-saved { color: inherit; }
+
+/* harness */
+.page { max-width: 1440px; margin-inline: auto; padding: var(--s7) var(--s7) 96px; display: grid; gap: var(--s6); }
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s6); }
+h1 { margin: 0; font-size: var(--fs-20); font-weight: 700; line-height: 1.2; }
+.lede { margin: var(--s2) 0 0; color: var(--muted); max-width: 90ch; }
+.ctl { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s6); align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); padding: var(--s1); gap: var(--s1); }
+.seg-l { font-size: var(--fs-12); color: var(--muted); font-weight: 600; margin-right: var(--s2); }
+.seg button { padding: var(--s2) var(--s6); border-radius: var(--r-sm); color: var(--muted); min-height: 28px; font-size: var(--fs-13); }
+.seg button[aria-pressed="true"] { background: var(--sel-bg); color: var(--text); font-weight: 600; }
+.dirhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s4) var(--s6); }
+.dirhead h2 { margin: 0; font-size: var(--fs-16); font-weight: 600; }
+.dirhead .n { font-family: var(--font-mono); color: var(--accent-text); font-weight: 500; }
+.dirhead p { margin: 0; color: var(--muted); }
+.notes { display: grid; grid-template-columns: max-content 1fr; gap: var(--s3) var(--s7); margin: 0; padding: var(--s7); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.notes dt { font-weight: 600; } .notes dd { margin: 0; max-width: 100ch; }
+@media (max-width: 560px) { .page { padding-inline: var(--s4); } .notes { grid-template-columns: 1fr; } .notes dd { margin-bottom: var(--s4); } }
+
+/* scene */
+.scene { position: relative; container: scene / inline-size; height: clamp(540px, calc(100dvh - 210px), 720px); border: 1px solid var(--line); border-radius: var(--r-xl); overflow: hidden; background: var(--bg); box-shadow: var(--shadow-2); }
+.scene.tray { background: var(--desk); }
+.navo { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.tbar { flex: none; height: var(--bar); display: flex; align-items: center; gap: var(--s4); padding-inline: var(--s6); border-bottom: 1px solid var(--line); background: var(--rail); font-weight: 600; min-width: 0; }
+.tbar .path { font-family: var(--font-mono); font-weight: 400; color: var(--muted); font-size: var(--fs-12); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbar .sp { flex: 1; }
+.logo { width: 18px; height: 18px; border-radius: var(--r-sm); background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: var(--fs-12); font-weight: 700; flex: none; }
+.panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.pane { border-right: 1px solid var(--line); overflow: hidden; }
+.pane:last-child { border-right: 0; }
+.frow { height: 24px; display: flex; align-items: center; gap: var(--s4); padding-inline: var(--s6); color: var(--muted); white-space: nowrap; overflow: hidden; }
+.frow:nth-child(even) { background: var(--zebra); }
+.frow .ic { color: var(--folder); }
+.frow .sz { margin-left: auto; font-variant-numeric: tabular-nums; }
+@container scene (width < 720px) { .panes { grid-template-columns: 1fr; } .pane + .pane { display: none; } .tbar .hk { display: none; } }
+.desk { position: absolute; inset: 0 0 var(--task) 0; }
+.otherapp { position: absolute; left: 6%; top: 8%; width: min(560px, 80%); height: 56%; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-2); overflow: hidden; }
+.otherapp .tbar { font-weight: 500; }
+.otherapp pre { margin: 0; padding: var(--s6); color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-12); white-space: pre-wrap; }
+.taskbar { position: absolute; inset: auto 0 0 0; height: var(--task); background: var(--rail); border-top: 1px solid var(--line); display: flex; align-items: center; gap: var(--s4); padding-inline: var(--s6); }
+.taskbar .sp { flex: 1; }
+.tray-ico { display: inline-flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s4); border-radius: var(--r-md); background: var(--sel-bg); font-size: var(--fs-12); font-weight: 600; white-space: nowrap; }
+.taskbar .clock { font-size: var(--fs-12); color: var(--muted); font-variant-numeric: tabular-nums; }
+.closed { position: absolute; inset: 40% 0 auto 0; display: flex; justify-content: center; padding-inline: var(--s4); }
+.closed button { display: inline-flex; gap: var(--s4); align-items: center; padding: var(--s4) var(--s6); border-radius: var(--r-pill); background: var(--raised); box-shadow: var(--shadow-3); }
+
+/* shared palette parts */
+.pal { position: absolute; z-index: var(--z-sheet); top: 12%; inset-inline: 0; margin-inline: auto; display: flex; flex-direction: column; background: var(--raised); border-radius: var(--r-xl); box-shadow: var(--shadow-3); font-size: var(--fs-13); }
+.scene.tray .pal { top: 16%; }
+.pal kbd { height: 16px; min-width: 16px; background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-weight: 500; }
+.q { flex: none; display: flex; align-items: center; gap: var(--s4); height: var(--hd); padding-inline: var(--s6) var(--s4); color: var(--muted); min-width: 0; }
+.q input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: var(--fs-14); }
+.q input::placeholder { color: var(--muted); opacity: 1; }
+.pal:has(#q:focus-visible) { box-shadow: var(--shadow-3), 0 0 0 2px var(--accent); }
+.hair { flex: none; height: 1px; background: var(--line); margin-inline: var(--s6); }
+.list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--s2) var(--s2); scrollbar-width: thin; }
+.grp { display: flex; align-items: center; gap: var(--s3); height: 24px; padding: var(--s2) var(--s4) 0; color: var(--muted); font-size: var(--fs-12); font-weight: 500; }
+.row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; column-gap: var(--s4); padding: calc((var(--row-c) - var(--lh-row)) / 2) var(--s4); border-radius: var(--r-md); line-height: var(--lh-row); cursor: default; }
+.row:hover { background: var(--hover); }
+.row[aria-selected="true"] { background: var(--sel-bg); }
+.ib { height: var(--lh-row); display: flex; align-items: center; justify-content: center; }
+.row .m { display: flex; align-items: center; gap: var(--s3); height: var(--lh-row); color: var(--muted); font-size: var(--fs-12); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { display: inline-flex; align-items: center; gap: var(--s1); height: 16px; padding-inline: var(--s2); border-radius: var(--r-sm); color: var(--accent-text); background: color-mix(in oklch, var(--accent) 12%, transparent); font-size: var(--fs-12); font-weight: 500; white-space: nowrap; }
+.mask { letter-spacing: 0.12em; color: var(--muted); }
+.ft { flex: none; display: flex; align-items: center; gap: var(--s6); height: var(--ft); padding-inline: var(--s6) var(--s4); border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-12); white-space: nowrap; min-width: 0; }
+.ft .st { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ft .h { display: inline-flex; align-items: center; gap: var(--s2); flex: none; }
+.ft .h b { color: var(--text); font-weight: 500; }
+.ft button.h { height: 22px; padding-inline: var(--s2); border-radius: var(--r-sm); }
+.ft button.h:hover, .ft button.h[aria-expanded="true"] { background: var(--hover); }
+.emp { padding: var(--s7) var(--s6); display: grid; gap: var(--s2); color: var(--muted); font-size: var(--fs-12); line-height: var(--lh-12); }
+.emp b { color: var(--text); font-size: var(--fs-13); font-weight: 600; }
+.emp .k { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: center; margin-top: var(--s2); }
+
+/* actions menu (Ctrl+K inside the palette) */
+.menu { position: absolute; z-index: var(--z-menu); right: var(--gap-edge); bottom: calc(var(--ft) + var(--s2)); width: min(var(--menu-w), calc(100% - 2 * var(--gap-edge))); padding: var(--s2); background: var(--raised); border-radius: var(--r-lg); box-shadow: var(--shadow-3); }
+.menu .mh { padding: var(--s2) var(--s4) var(--s3); color: var(--muted); font-size: var(--fs-12); }
+.menu .mi { width: 100%; display: flex; align-items: center; gap: var(--s4); height: 26px; padding-inline: var(--s4); border-radius: var(--r-sm); }
+.menu .mi:hover { background: var(--hover); }
+.menu .mi[data-on="true"] { background: var(--sel-bg); }
+.menu .mi .l { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu .mi .ks { display: inline-flex; gap: var(--s1); }
+.menu hr { border: 0; height: 1px; background: var(--line); margin: var(--s2) var(--s4); }
+
+/* 1 · slim column */
+.p1 { width: min(var(--w-1), calc(100% - 2 * var(--gap-edge))); max-height: min(var(--h-1), calc(100% - 12% - var(--s4))); }
+.scene.tray .p1 { max-height: min(var(--h-1), calc(100% - 16% - var(--task) - var(--s4))); }
+.p1 .mp { display: inline-flex; align-items: center; gap: var(--s3); height: 24px; padding-inline: var(--s4) var(--s2); border-radius: var(--r-pill); background: var(--field); color: var(--text); font-size: var(--fs-12); font-weight: 500; flex: none; }
+.p1 .mp:hover { background: var(--hover); }
+.p1 .pv { grid-column: 2 / -1; margin-top: var(--s1); color: var(--muted); font-size: var(--fs-12); line-height: var(--lh-12); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; }
+.p1 .pv.mono { font-size: var(--fs-12); }
+@container scene (width < 520px) { .p1 .row .m .src { display: none; } }
+
+/* 2 · split */
+.p2 { container: p2 / inline-size; width: min(var(--w-2), calc(100% - 2 * var(--gap-edge))); height: min(var(--h-2), calc(100% - 12% - var(--s4))); }
+.scene.tray .p2 { height: min(var(--h-2), calc(100% - 16% - var(--task) - var(--s4))); }
+.p2 .tabs { flex: none; display: flex; gap: var(--s6); height: var(--tabs); padding-inline: var(--s6); align-items: stretch; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); }
+.p2 .tab { position: relative; display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--fs-12); font-weight: 500; white-space: nowrap; }
+.p2 .tab[aria-selected="true"] { color: var(--text); font-weight: 600; }
+.p2 .tab[aria-selected="true"]::after { content: ""; position: absolute; inset: auto 0 -1px 0; height: 2px; background: var(--accent); border-radius: var(--r-sm); }
+.p2 .tabs .sp { flex: 1; }
+.p2 .tabs .tk { align-self: center; }
+.p2 .body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--list-w) minmax(0, 1fr); }
+.p2 .list { border-right: 1px solid var(--line); }
+.prev { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s4); padding: var(--s6) var(--s7); }
+.prev .ph { display: flex; align-items: center; gap: var(--s4); font-weight: 600; min-width: 0; line-height: var(--lh-row); }
+.prev .pc { font-family: var(--font-ui); flex: 1 1 auto; min-height: 0; margin: 0; overflow: auto; color: var(--text); font-size: var(--fs-13); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin; }
+.prev .pc.mono { font-family: var(--font-mono); font-size: var(--fs-12); line-height: 1.6; }
+.p2 .row .m .src, .p4 .row .m .src { display: none; }
+.prev .note { color: var(--muted); font-size: var(--fs-12); line-height: var(--lh-12); display: flex; gap: var(--s3); align-items: flex-start; }
+.prev .note .ic { margin-top: var(--s1); color: var(--warn-text); }
+.prev dl { flex: none; margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s2) var(--s7); padding-top: var(--s4); border-top: 1px solid var(--line); font-size: var(--fs-12); }
+.prev dt { color: var(--muted); }
+.prev dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container p2 (width < 560px) {
+  .p2 .body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) var(--dock-h); }
+  .p2 .list { border-right: 0; border-bottom: 1px solid var(--line); }
+  .p2 .prev { padding: var(--s4) var(--s6); gap: var(--s2); }
+  .p2 .prev dl, .p2 .prev .note { display: none; }
+  .p2 .tabs .tk { display: none; }
+}
+
+/* 3 · strip */
+.p3 { width: min(var(--w-3), calc(100% - 2 * var(--gap-edge))); max-height: min(var(--h-3), calc(100% - 12% - var(--s4))); }
+.scene.tray .p3 { top: 22%; }
+.p3 .mc { display: inline-flex; align-items: center; height: 22px; padding-inline: var(--s4); border-radius: var(--r-sm); background: var(--sel-bg); color: var(--accent-text); font-size: var(--fs-12); font-weight: 600; flex: none; }
+.p3 .last { display: inline-flex; align-items: center; gap: var(--s3); max-width: 46%; min-width: 0; color: var(--muted); font-size: var(--fs-12); flex: 0 1 auto; }
+.p3 .last .ellip { max-width: 100%; }
+.p3:not(.open) .menu { bottom: auto; top: calc(100% + var(--s2)); }
+.p3 .row .m .src { color: var(--muted); }
+@container scene (width < 520px) { .p3 .last .ellip, .p3 .row .m .src { display: none; } }
+
+/* 4 · rail and dock */
+.p4 { width: min(var(--w-4), calc(100% - 2 * var(--gap-edge))); height: min(var(--h-4), calc(100% - 12% - var(--s4))); }
+.scene.tray .p4 { height: min(var(--h-4), calc(100% - 16% - var(--task) - var(--s4))); }
+.p4 .core { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+.p4 .rl { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s2) var(--s2); border-right: 1px solid var(--line); }
+.p4 .rb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1); height: 44px; border-radius: var(--r-md); color: var(--muted); font-size: var(--fs-12); font-weight: 500; }
+.p4 .rb:hover { background: var(--hover); }
+.p4 .rb[aria-selected="true"] { background: var(--sel-bg); color: var(--accent-text); font-weight: 600; }
+.p4 .col { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.p4 .dock { flex: none; height: var(--dock-h); display: flex; flex-direction: column; gap: var(--s2); padding: var(--s4) var(--s6); border-top: 1px solid var(--line); background: var(--field); }
+.p4 .dock .dh { display: flex; align-items: center; gap: var(--s4); font-size: var(--fs-12); color: var(--muted); line-height: var(--lh-row); min-width: 0; }
+.p4 .dock .dh b { flex: none; max-width: 60%; color: var(--text); font-weight: 600; font-size: var(--fs-13); }
+.p4 .dock .dh .dm { flex: 1 1 0; text-align: end; }
+.p4 .dock .dh .sp { flex: 1; }
+.p4 .dock .pc { font-family: var(--font-ui); flex: 1 1 auto; min-height: 0; margin: 0; overflow: hidden; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.p4 .dock .pc.mono { font-family: var(--font-mono); font-size: var(--fs-12); }
+.p4 .menu { bottom: calc(var(--ft) + var(--dock-h) + var(--s2)); }
+
+/* toast */
+.toast { position: absolute; left: 50%; bottom: var(--s8); z-index: var(--z-toast); width: max-content; max-width: calc(100% - 2 * var(--s7)); transform: translateX(-50%); display: flex; align-items: center; gap: var(--s4); padding: var(--s3) var(--s6); border-radius: var(--r-lg); background: var(--raised); box-shadow: var(--shadow-3); font-size: var(--fs-12); }
+.scene.tray .toast { bottom: calc(var(--task) + var(--s6)); }
+.toast .ic { color: var(--ok-text); }
+.toast.secret .ic { color: var(--warn-text); }
+.toast .t { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* picker */
+.proto-picker { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: var(--z-picker); display: flex; align-items: center; gap: var(--s1); padding: var(--s2); border-radius: var(--r-pill); background: var(--pk-bg); box-shadow: 0 0 0 1px var(--pk-ring) inset, 0 8px 24px var(--pk-shadow); font-size: var(--fs-13); user-select: none; }
+.proto-picker button { height: 28px; min-width: 36px; padding: 0 var(--s6); border-radius: var(--r-pill); color: var(--pk-text); text-align: center; }
+.proto-picker button:hover { color: var(--pk-text-hi); }
+.proto-picker button[aria-current="true"] { background: var(--pk-on); color: var(--pk-text-hi); font-weight: 600; }
+.proto-picker button:focus-visible { outline: 2px solid var(--pk-focus); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div>
+      <h1>Clipboard and saved items, compact <span class="cnt">R12 v2 · B9</span></h1>
+      <p class="lede">Four smaller shapes for the same behaviour (D21c–D21h). Keys 1–4 switch the direction outside a text field; letters start a search. Live keys: ↑ ↓, Enter, Tab, Ctrl+K actions, Ctrl+C, Ctrl+S, Ctrl+N, F2, Del, Alt+R, Alt+U, Esc.</p>
+    </div>
+    <div class="ctl">
+      <div><span class="seg-l">Theme</span><span class="seg" role="group" aria-label="Theme"><button data-theme-set="light">Light</button><button data-theme-set="dark">Dark</button></span></div>
+      <div><span class="seg-l">Data</span><span class="seg" role="group" aria-label="Data"><button data-data="normal">Filled</button><button data-data="empty">Empty</button><button data-data="long">Long list</button></span></div>
+      <div><span class="seg-l">Opened</span><span class="seg" role="group" aria-label="Opened from"><button data-ctx="navo">Inside Navo</button><button data-ctx="tray">From any app</button></span></div>
+    </div>
+  </header>
+  <div class="dirhead"><span class="n" id="dir-n">1</span><h2 id="dir-t"></h2><p id="dir-q"></p></div>
+  <main class="scene" id="scene" aria-label="Prototype scene"></main>
+  <dl class="notes" id="notes"></dl>
+</div>
+<nav class="proto-picker" aria-label="Directions">
+  <button data-dir="0">1</button><button data-dir="1">2</button><button data-dir="2">3</button><button data-dir="3">4</button>
+</nav>
+<div class="sr" role="status" id="live"></div>
+<script>
+const IC = {
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  text: '<path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/>',
+  files: '<path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8z"/><path d="M15 2v6h6"/><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.7-1"/>',
+  path: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  command: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+  snippet: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+  secret: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  note: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  saved: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+  all: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+};
+const ic = (n, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
+const K = (k) => k.split(" ").map((x) => `<kbd>${x}</kbd>`).join("");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function hl(s, q) {
+  if (!q) return esc(s);
+  const i = s.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return esc(s);
+  return esc(s.slice(0, i)) + "<mark>" + esc(s.slice(i, i + q.length)) + "</mark>" + esc(s.slice(i + q.length));
+}
+const KIND = { text: "Text", files: "Files", path: "Path", command: "Command", snippet: "Snippet", secret: "Secret", note: "Note" };
+const HERE = "D:\\Projects\\ecu-a2";
+const MONO = new Set(["path", "command", "files"]);
+
+const HIST0 = [
+  { k: "text", v: "Flash with TASKING 6.3r1; 6.2 breaks the .mdf import", src: "Teams", t: "1 min" },
+  { k: "files", v: ["ecu_a2_main.elf", "ecu_a2_main.map", "ecu_a2.mdf"], dir: "D:\\Projects\\ecu-a2\\build\\out", src: "Navo", t: "4 min" },
+  { k: "path", v: "D:\\Projects\\ecu-a2\\build\\out\\ecu_a2_main.elf", src: "Navo", t: "6 min" },
+  { k: "command", v: "cargo xtask check -p navo-index", src: "Terminal", t: "12 min" },
+  { k: "text", v: "https://ci.example.lan/job/ecu-a2/1482/console", src: "Edge", t: "25 min" },
+  { k: "text", v: "0x8000_4A10  .text.CanIf_RxIndication  1 284 B", src: "Navo F3", t: "40 min" },
+  { k: "files", v: ["DBC_PT_CAN_v14.dbc", "A2L_ecu_a2_r7.a2l"], dir: "\\\\fileserver\\calib\\r7", src: "Navo", t: "1 h" },
+  { k: "command", v: "git log --oneline -20 origin/main", src: "Terminal", t: "2 h" },
+  { k: "text", v: "Review notes for the CAN gateway: timeouts at 50 ms, not 20.", src: "Outlook", t: "Yesterday" },
+  { k: "path", v: "\\\\fileserver\\calib\\r7\\A2L_ecu_a2_r7.a2l", src: "Navo", t: "Yesterday" },
+];
+const SAVED0 = [
+  { k: "command", title: "Check the index crate", v: "cargo xtask check -p navo-index", t: "Today", scope: "global" },
+  { k: "command", title: "Flash ECU A2 over CAN", v: "tricore-flash --port PCAN_USB1 --baud 500k build\\out\\ecu_a2_main.hex", t: "2 days", scope: HERE },
+  { k: "path", title: "ECU A2 build output", v: "D:\\Projects\\ecu-a2\\build\\out", t: "Today", scope: "global" },
+  { k: "path", title: "Calibration share", v: "\\\\fileserver\\calib\\r7", t: "Last week", scope: "global" },
+  { k: "snippet", title: "Review reply", v: "Thanks, merged. The flash script now checks the .mdf version first.", t: "3 days", scope: "global" },
+  { k: "snippet", title: "Signature", v: "Regards,\nadmin", t: "Today", scope: "global" },
+  { k: "secret", title: "Build server SSH", v: "k7#Qm2-vX9!pLr4e", user: "admin", t: "Today", scope: "global" },
+  { k: "secret", title: "Artifactory token", v: "AKCp8ihxR2b9TqWm4sLkZ7", user: "ci-bot", t: "Last week", scope: "global" },
+  { k: "note", title: "Release checklist", v: "1. Tag the commit\n2. Build both targets\n3. Upload the zip and the map files", t: "Last week", scope: "global" },
+  { k: "note", title: "ECU A2: flashing", v: "Use TASKING 6.3r1. 6.2 breaks the .mdf import.\nPower-cycle after flashing; the bootloader keeps the old CRC.", t: "Today", scope: HERE },
+];
+function longHist() {
+  const out = [];
+  const units = ["min", "h", "days"];
+  for (let i = 0; i < 500; i++) {
+    const b = HIST0[i % HIST0.length];
+    const n = Math.floor(i / HIST0.length);
+    const v = Array.isArray(b.v) ? b.v.map((f) => (n ? f.replace(".", `_${n}.`) : f)) : n ? `${b.v} (${n})` : b.v;
+    out.push({ ...b, v, t: i < 10 ? b.t : `${1 + Math.floor(i / 70)} ${units[Math.min(2, Math.floor(i / 60))]}` });
+  }
+  return out;
+}
+function longSaved() {
+  const out = [];
+  for (let i = 0; i < 140; i++) {
+    const b = SAVED0[i % SAVED0.length];
+    const n = Math.floor(i / SAVED0.length);
+    out.push({ ...b, title: n ? `${b.title} ${n + 1}` : b.title });
+  }
+  return out;
+}
+const DATA = { normal: () => ({ hist: HIST0, saved: SAVED0 }), empty: () => ({ hist: [], saved: [] }), long: () => ({ hist: longHist(), saved: longSaved() }) };
+
+const MODES = [["all", "All", "all"], ["recent", "Recent", "history"], ["saved", "Saved", "saved"], ["secrets", "Secrets", "secret"], ["notes", "Notes", "note"]];
+const MODE_IDS = MODES.map((m) => m[0]);
+const modeLabel = (id) => MODES.find((m) => m[0] === id)[1];
+
+const G = { dir: 0, theme: "light", data: "normal", ctx: "navo" };
+const fresh = () => ({ mode: "all", sel: 0, q: "", rev: null, closed: false, menu: false, msel: 0, open: false });
+const ST = [fresh(), fresh(), fresh(), fresh()];
+let D = DATA.normal();
+let animate = true;
+
+const title = (it) => it.title || (Array.isArray(it.v) ? `${it.v.length} files from ${it.dir.split("\\").pop()}` : it.v.split("\n")[0]);
+const vtext = (it) => (Array.isArray(it.v) ? it.v.join("\n") : it.v);
+const match = (it, q) => !q || (title(it) + " " + (it.k === "secret" ? it.user || "" : vtext(it))).toLowerCase().includes(q.toLowerCase());
+const hist = () => D.hist.map((x, i) => ({ ...x, id: "h" + i, from: "hist" }));
+const saved = () => D.saved.map((x, i) => ({ ...x, id: "s" + i, from: "saved" }));
+const isHere = (it) => it.scope === HERE && G.ctx === "navo";
+const mask = () => `<span class="mask" aria-label="hidden">••••••••••</span>`;
+
+function listFor(s) {
+  const h = hist(), sv = saved();
+  let notes = sv.filter((x) => x.k === "note");
+  if (G.ctx === "navo") notes = [...notes.filter((x) => x.scope === HERE), ...notes.filter((x) => x.scope !== HERE)];
+  const pick = { all: [...h, ...sv.filter((x) => x.k !== "note"), ...notes], recent: h, saved: sv.filter((x) => x.k !== "secret" && x.k !== "note"), secrets: sv.filter((x) => x.k === "secret"), notes }[s.mode];
+  return pick.filter((x) => match(x, s.q));
+}
+function counts(s) {
+  const r = {}; MODE_IDS.forEach((m) => (r[m] = listFor({ ...s, mode: m }).length)); return r;
+}
+function primary(it, s) {
+  if (it.from === "saved") return hl(it.title, s.q);
+  const v = Array.isArray(it.v) ? `${it.v.length} files · ${it.v.join(", ")}` : it.v;
+  return MONO.has(it.k) ? `<span class="mono">${hl(v, s.q)}</span>` : hl(v, s.q);
+}
+function contentText(it, s) {
+  if (it.k === "secret") return s.rev === it.id ? esc(it.v) : mask();
+  if (it.k === "files") return esc(it.dir + "\n" + it.v.map((f) => "  " + f).join("\n"));
+  return hl(vtext(it), s.q);
+}
+function sizeOf(it) { return it.k === "files" ? `${it.v.length} files` : it.k === "secret" ? "Hidden" : `${vtext(it).length} characters`; }
+function metaPairs(it) {
+  if (it.from === "hist") return [["Kind", KIND[it.k]], ["From", it.src], ["Copied", it.t], ["Size", sizeOf(it)]];
+  const p = [["Kind", KIND[it.k]], ["Folder", it.scope === "global" ? "Global" : it.scope], ["Used", it.t]];
+  if (it.k === "secret") p.push(["User", it.user]);
+  else p.push(["Size", sizeOf(it)]);
+  return p;
+}
+const enterLabel = (it) => !it ? "" : G.ctx === "tray" ? (it.k === "secret" ? "Paste, hidden" : "Paste") : it.k === "secret" ? "Copy, hidden" : it.k === "path" ? "Go to" : "Copy";
+function rowMeta(it, s) {
+  if (isHere(it)) return `<span class="tag">${ic("path", "sm")}This folder</span>`;
+  if (it.from === "hist") return `<span class="src">${esc(it.src)}</span><span>${esc(it.t)}</span>`;
+  if (it.k === "secret") return `<span class="src mono">${esc(it.user)}</span>`;
+  return `<span>${esc(it.t)}</span>`;
+}
+function rowHtml(it, i, s, extra = "") {
+  return `<div class="row" role="option" id="o${i}" aria-selected="${i === s.sel}" data-i="${i}"><span class="ib">${ic(it.k, "kd-" + it.k)}</span><span class="t">${primary(it, s)}</span><span class="m">${rowMeta(it, s)}</span>${extra}</div>`;
+}
+
+function actionsFor(it, s) {
+  const A = [];
+  if (it) {
+    A.push({ a: "copy", l: enterLabel(it), k: "↵" });
+    if (G.ctx === "tray" && it.k !== "secret") A.push({ a: "copyonly", l: "Copy only", k: "Ctrl+C" });
+    if (G.ctx === "navo" && it.k === "path") A.push({ a: "copyonly", l: "Copy path", k: "Ctrl+C" });
+    if (G.ctx === "navo" && it.k === "files") A.push({ a: "pastehere", l: "Paste into the active pane", k: "Ctrl+V" });
+    if (it.k === "secret") A.push({ a: "reveal", l: s.rev === it.id ? "Hide" : "Show", k: "Alt+R" }, { a: "copyuser", l: "Copy user name", k: "Alt+U" });
+    A.push(it.from === "hist" ? { a: "save", l: "Save…", k: "Ctrl+S" } : { a: "edit", l: "Edit…", k: "F2" });
+    A.push({ a: "del", l: "Delete", k: "Del" }, { sep: true });
+  }
+  A.push({ a: "new", l: "New saved item…", k: "Ctrl+N" });
+  A.push({ a: "manage", l: "Manage library…", k: it && it.from === "saved" ? "" : "F2" });
+  return A;
+}
+function menuHtml(it, s) {
+  if (!s.menu) return "";
+  let n = -1;
+  const items = actionsFor(it, s).map((x) => x.sep ? "<hr>" : (n++, `<button class="mi" role="menuitem" data-on="${n === s.msel}" data-act="${x.a}"><span class="l">${esc(x.l)}</span>${x.k ? `<span class="ks">${K(x.k)}</span>` : ""}</button>`)).join("");
+  return `<div class="menu fade" role="menu" aria-label="Actions">${it ? `<div class="mh ellip">${esc(title(it).slice(0, 60))}</div>` : ""}${items}</div>`;
+}
+function emptyHtml(s) {
+  const M = {
+    hist: ["Nothing copied yet", "Text and file lists you copy in any app appear here, newest first. Copies that apps mark private are never recorded.", `${K("Ctrl+N")} New saved item`],
+    saved: ["Nothing saved yet", "Keep snippets, commands and paths here.", `${K("Ctrl+S")} Save from history ${K("Ctrl+N")} New`],
+    secrets: ["No secrets yet", "Secrets stay masked, are stored encrypted on this PC and leave the clipboard after 30 s.", `${K("Ctrl+N")} New secret`],
+    notes: ["No notes yet", G.ctx === "navo" ? `Write a note for ${esc(HERE)} or a global one. A folder note shows on top here.` : "Write a global note, or one for a folder.", `${K("Ctrl+N")} New note`],
+    search: ["No matches", "Nothing in history or saved items has this text. Secrets match by name and user only.", `${K("Esc")} Clear search`],
+  }[s.q ? "search" : { all: "hist", recent: "hist", saved: "saved", secrets: "secrets", notes: "notes" }[s.mode]];
+  return `<div class="emp fade"><b>${M[0]}</b><span>${M[1]}</span><span class="k">${M[2]}</span></div>`;
+}
+const summonKey = () => (G.ctx === "tray" ? "Win+Alt+V" : "Ctrl+Shift+V");
+function footStatus(s, list) {
+  if (s.mode === "secrets") return `${ic("shield", "sm")} Encrypted on this PC`;
+  if (s.q) return `${list.length} matches`;
+  if (s.mode === "all" || s.mode === "recent") return `${D.hist.length} of 500 kept`;
+  return `${list.length} items`;
+}
+function footHtml(s, list, it, extra = "") {
+  return `<div class="ft"><span class="st">${footStatus(s, list)}</span>${extra}${it ? `<span class="h"><b>${enterLabel(it)}</b>${K("↵")}</span>` : ""}<button class="h" data-act="menu" aria-haspopup="menu" aria-expanded="${s.menu}">Actions ${K("Ctrl+K")}</button></div>`;
+}
+const searchInput = (s, ph) => `<span class="sr" id="ql">Search</span><input id="q" aria-labelledby="ql" role="combobox" aria-controls="list" aria-expanded="true" ${listFor(s)[s.sel] ? `aria-activedescendant="o${s.sel}"` : ""} value="${esc(s.q)}" placeholder="${ph}" autocomplete="off" spellcheck="false">`;
+
+/* ---------- 1 · slim column with inline preview ---------- */
+function p1(s) {
+  const list = listFor(s);
+  const it = list[s.sel];
+  let body, last = "";
+  if (!list.length) body = emptyHtml(s);
+  else body = list.map((x, i) => {
+    let g = "";
+    if (s.mode === "all" && !s.q) { const k = x.from === "hist" ? "Recent" : x.k === "note" ? "Notes" : "Saved"; if (k !== last) { g = `<div class="grp">${k}</div>`; last = k; } }
+    let pv = "";
+    if (i === s.sel) {
+      const txt = x.k === "secret" ? `${s.rev === x.id ? esc(x.v) : mask()} · Alt+R to show` : x.k === "files" ? esc(x.dir) : x.from === "saved" ? hl(x.v, s.q) : vtext(x).length > 56 ? hl(vtext(x), s.q) : `${KIND[x.k]} · ${sizeOf(x)} · copied in ${esc(x.src)}`;
+      pv = `<span class="pv ${MONO.has(x.k) || x.k === "secret" ? "mono" : ""}">${txt}</span>`;
+    }
+    return g + rowHtml(x, i, s, pv);
+  }).join("");
+  const c = counts(s);
+  return `<section class="pal p1 ${animate ? "fade" : ""}" role="dialog" aria-label="Clipboard and saved items">
+    <div class="q">${ic("search")}${searchInput(s, "Search clipboard and saved")}<button class="mp" data-act="nextmode" aria-label="Mode ${modeLabel(s.mode)}, Tab for next">${modeLabel(s.mode)} <span class="cnt">${c[s.mode]}</span>${K("Tab")}</button></div>
+    <div class="hair"></div>
+    <div class="list ${animate ? "fade" : ""}" role="listbox" id="list" aria-label="${modeLabel(s.mode)}">${body}</div>
+    ${footHtml(s, list, it)}${menuHtml(it, s)}
+  </section>`;
+}
+
+/* ---------- 2 · list and preview pane ---------- */
+function previewPane(it, s) {
+  if (!it) return `<aside class="prev" aria-label="Preview"></aside>`;
+  const mono = MONO.has(it.k) || it.k === "secret";
+  const head = isHere(it) ? `Note for ${esc(HERE.split("\\").pop())}` : it.from === "hist" ? `${KIND[it.k]} from ${esc(it.src)}` : esc(title(it));
+  const note = it.k === "secret" ? `<p class="note">${ic("shield", "sm")}<span>User <span class="mono">${esc(it.user)}</span>. Copied without showing; cleared from the clipboard after 30 s; never in history.</span></p>` : "";
+  return `<aside class="prev ${animate ? "fade" : ""}" aria-label="Preview"><div class="ph"><span class="ib">${ic(it.k, "kd-" + it.k)}</span><span class="ellip">${head}</span></div><pre class="pc ${mono ? "mono" : ""}">${contentText(it, s)}</pre>${note}<dl>${metaPairs(it).filter(([a]) => !(it.from === "hist" && (a === "Kind" || a === "From"))).map(([a, b]) => `<dt>${a}</dt><dd class="${a === "Folder" && b !== "Global" ? "mono" : ""}" title="${esc(b)}">${esc(b)}</dd>`).join("")}</dl></aside>`;
+}
+function p2(s) {
+  const list = listFor(s);
+  const it = list[s.sel];
+  const c = counts(s);
+  const tabs = MODES.map(([id, l]) => `<button class="tab" role="tab" aria-selected="${s.mode === id}" data-mode="${id}">${l} <span class="cnt">${c[id]}</span></button>`).join("");
+  const body = list.length ? list.map((x, i) => rowHtml(x, i, s)).join("") : emptyHtml(s);
+  return `<section class="pal p2 ${animate ? "fade" : ""}" role="dialog" aria-label="Clipboard and saved items">
+    <div class="q">${ic("search")}${searchInput(s, "Search clipboard and saved")}${K(summonKey())}</div>
+    <div class="tabs" role="tablist">${tabs}<span class="sp"></span><span class="tk">${K("Tab")}</span></div>
+    <div class="body"><div class="list ${animate ? "fade" : ""}" role="listbox" id="list" aria-label="${modeLabel(s.mode)}">${body}</div>${previewPane(it, s)}</div>
+    ${footHtml(s, list, it)}${menuHtml(it, s)}
+  </section>`;
+}
+
+/* ---------- 3 · strip that grows on search ---------- */
+function p3(s) {
+  const list = listFor(s);
+  const it = list[s.sel];
+  const open = s.open || !!s.q;
+  const chip = s.mode !== "all" ? `<span class="mc">${modeLabel(s.mode)}</span>` : "";
+  const top = list[0];
+  const last = !open && top ? `<span class="last">${K("↵")}<span class="ellip">${esc(title(top))}</span>${K("↓")}</span>` : !open ? `<span class="last">${K("Tab")}</span>` : "";
+  let body = "";
+  if (open) {
+    const rows = list.length ? list.map((x, i) => rowHtml(x, i, s)).join("") : emptyHtml(s);
+    const sel = it ? `<span class="st ellip ${MONO.has(it.k) ? "mono" : ""}">${it.k === "secret" ? `${s.rev === it.id ? esc(it.v) : mask()} · ${esc(it.user)}` : it.k === "files" ? esc(it.dir) : esc(vtext(it).split("\n").join(" · "))}</span>` : `<span class="st">${footStatus(s, list)}</span>`;
+    body = `<div class="hair"></div><div class="list ${animate || s.justOpened ? "fade" : ""}" role="listbox" id="list" aria-label="${modeLabel(s.mode)}">${rows}</div>
+      <div class="ft">${sel}${it ? `<span class="h"><b>${enterLabel(it)}</b>${K("↵")}</span>` : ""}<button class="h" data-act="menu" aria-haspopup="menu" aria-expanded="${s.menu}">Actions ${K("Ctrl+K")}</button></div>`;
+  }
+  s.justOpened = false;
+  return `<section class="pal p3 ${open ? "open" : ""} ${animate ? "fade" : ""}" role="dialog" aria-label="Clipboard and saved items">
+    <div class="q">${ic("search")}${chip}${searchInput(s, top ? "Search clipboard and saved" : "Nothing copied yet · Ctrl+N new item")}${last}</div>${body}${menuHtml(it, s)}
+  </section>`;
+}
+
+/* ---------- 4 · mode rail and preview dock ---------- */
+function p4(s) {
+  const list = listFor(s);
+  const it = list[s.sel];
+  const rail = MODES.map(([id, l, icn]) => `<button class="rb" role="tab" aria-selected="${s.mode === id}" data-mode="${id}">${ic(icn, "kd-" + icn)}<span>${l}</span></button>`).join("");
+  const body = list.length ? list.map((x, i) => rowHtml(x, i, s)).join("") : emptyHtml(s);
+  let dock = `<div class="dock"></div>`;
+  if (it) {
+    const m = metaPairs(it).filter(([a]) => a !== "Kind").map(([, b]) => esc(b.length > 28 ? "…" + b.slice(-26) : b)).join(" · ");
+    dock = `<section class="dock ${animate ? "fade" : ""}" aria-label="Preview"><div class="dh"><b class="ellip">${isHere(it) ? `Note for ${esc(HERE.split("\\").pop())}` : esc(KIND[it.k])}</b><span class="ellip dm" title="${m}">${m}</span></div><pre class="pc ${MONO.has(it.k) || it.k === "secret" ? "mono" : ""}">${contentText(it, s)}</pre></section>`;
+  }
+  return `<section class="pal p4 ${animate ? "fade" : ""}" role="dialog" aria-label="Clipboard and saved items">
+    <div class="q">${ic("search")}${searchInput(s, "Search " + modeLabel(s.mode).toLowerCase())}</div>
+    <div class="core"><div class="rl" role="tablist" aria-orientation="vertical" aria-label="Modes">${rail}</div><div class="col"><div class="list ${animate ? "fade" : ""}" role="listbox" id="list" aria-label="${modeLabel(s.mode)}">${body}</div>${dock}</div></div>
+    ${footHtml(s, list, it)}${menuHtml(it, s)}
+  </section>`;
+}
+
+const DIRS = [
+  { t: "Slim column", q: "One narrow list; the selected row shows one or two preview lines under itself.", r: p1,
+    n: [["Size", "520 × up to 380 px (was 680 × up to about 600). Rows 28 px, search 44 px, footer 28 px; 11 rows visible."],
+      ["Opens", "Ctrl+Shift+V at the top of the Navo window; Win+Alt+V over any app. Esc clears the search, then closes."],
+      ["Shape", "Search field with the mode as one small pill on its right (Tab and Shift+Tab cycle All, Recent, Saved, Secrets, Notes). Under the selected row, one muted preview line. Actions only in Ctrl+K."],
+      ["Strengths", "Smallest list-first shape; nothing moves sideways. Closest to today's direction 1, so the build changes little."],
+      ["Costs", "Two preview lines are not enough for long snippets or notes; F2 opens them. The current mode is less visible than with tabs."]] },
+  { t: "List and preview pane", q: "Compact list on the left, a quiet preview with details on the right, actions in Ctrl+K.", r: p2,
+    n: [["Size", "720 × 400 px, fixed height so nothing jumps. List 264 px, rows 28 px. Below 560 px wide the preview docks under the list (128 px)."],
+      ["Opens", "Same keys and place as direction 1. The pop-up window from the tray is 720 × 400."],
+      ["Shape", "Search, then text-only mode tabs with counts (Tab cycles). The preview shows the full value, then Kind, From or Folder, When and Size. Secrets stay masked until Alt+R."],
+      ["Strengths", "Full value of every item without opening anything; best for notes, multi-line snippets and file lists. Stable layout; the folder note reads well."],
+      ["Costs", "Widest of the four; at 390 px the preview becomes a strip. Two areas to scan instead of one."]] },
+  { t: "Strip that grows", q: "A single search strip; the list appears only after you type, press ↓ or Tab.", r: p3,
+    n: [["Size", "560 × 44 px when idle; 560 × up to 330 px with results."],
+      ["Opens", "As a strip under the top edge. Enter at once pastes or copies the newest item (shown greyed on the right). Esc clears the search and folds the list, then closes."],
+      ["Shape", "Search field, a mode chip after Tab, and the newest copy as a hint. The results list has no preview; the footer shows the selected item's full value on one line."],
+      ["Strengths", "Lightest possible summon; the screen stays visible. Win+Alt+V then Enter repeats the last copy in two keys."],
+      ["Costs", "No real preview; secrets and notes need Ctrl+K or F2. Browsing without a search takes one extra key (↓)."]] },
+  { t: "Mode rail and preview dock", q: "Modes as a small labelled rail on the left; the selected item's preview docks under the list.", r: p4,
+    n: [["Size", "480 × 420 px. Rail 64 px, rows 28 px, dock 128 px (4 lines)."],
+      ["Opens", "Same keys and place as direction 1. The narrow shape suits the tray pop-up window."],
+      ["Shape", "Labelled modes always visible on the left (Tab cycles, a click picks). List on the right; under it a preview dock with four lines and Folder, When and Size on one line."],
+      ["Strengths", "Mode always visible; preview without the width of direction 2. Works the same at 390 px."],
+      ["Costs", "Fewer rows visible (about 7). The rail spends width on five labels that Tab already reaches."]] },
+];
+
+function background() {
+  if (G.ctx === "tray") {
+    return `<div class="desk"><div class="otherapp"><div class="tbar">Notepad <span class="path">release-notes.txt</span></div><pre>Release 0.9.3\n\n- Index: memory by part\n- Store: collections\n\n|</pre></div></div>
+    <div class="taskbar"><span class="cnt">Taskbar</span><span class="sp"></span><span class="tray-ico"><span class="logo">N</span>${K("Win+Alt+V")}</span><span class="clock">21:40</span></div>`;
+  }
+  const names = ["build", "docs", "src", "tools", "ecu_a2.mdf", "ecu_a2_main.elf", "ecu_a2_main.map", "CMakeLists.txt", "README.md", "flash.ps1", "notes.txt", "release.toml"];
+  const rows = (o) => Array.from({ length: 30 }, (_, i) => { const n = names[(i + o) % names.length]; return `<div class="frow">${ic(n.includes(".") ? "note" : "path", "sm")}<span>${n}</span><span class="sz">${n.includes(".") ? ((i * 37) % 900) + 12 + " KB" : "&lt;DIR&gt;"}</span></div>`; }).join("");
+  return `<div class="navo"><div class="tbar"><span class="logo">N</span>Navo <span class="path">${esc(HERE)}</span><span class="sp"></span><span class="hk">${K("Ctrl+Shift+V")}</span></div><div class="panes"><div class="pane">${rows(0)}</div><div class="pane">${rows(5)}</div></div></div>`;
+}
+const closedBtn = () => `<div class="closed"><button data-act="open">Open clipboard and saved items ${K(summonKey())}</button></div>`;
+
+const scene = document.getElementById("scene");
+let toastTimer = null, tick = null;
+function toast(html, secret = false, secs = 0) {
+  clearTimeout(toastTimer); clearInterval(tick);
+  let el = scene.querySelector(".toast");
+  if (!el) { el = document.createElement("div"); el.setAttribute("role", "status"); scene.appendChild(el); }
+  el.className = "toast fade" + (secret ? " secret" : "");
+  const paint = () => { el.innerHTML = `${ic(secret ? "shield" : "check", "sm")}<span>${html}</span>${secs ? `<span class="t">Clears in ${secs} s</span>` : ""}`; };
+  paint();
+  if (secs) tick = setInterval(() => { secs -= 1; if (secs <= 0) { clearInterval(tick); html = "Clipboard cleared."; secs = 0; } paint(); }, 1000);
+  toastTimer = setTimeout(() => { clearInterval(tick); el.remove(); }, secret ? 31000 : 2600);
+}
+
+function render() {
+  const s = ST[G.dir];
+  const qf = document.activeElement && document.activeElement.id === "q";
+  const caret = qf ? document.activeElement.selectionStart : 0;
+  const listEl = document.getElementById("list");
+  const top = listEl ? listEl.scrollTop : 0;
+  const t = scene.querySelector(".toast");
+  s.sel = Math.min(s.sel, Math.max(0, listFor(s).length - 1));
+  scene.className = "scene " + (G.ctx === "tray" ? "tray" : "navo-mode");
+  scene.innerHTML = background() + (s.closed ? closedBtn() : DIRS[G.dir].r(s));
+  if (t) scene.appendChild(t);
+  const nl = document.getElementById("list");
+  if (nl) { nl.scrollTop = animate ? 0 : top; const se = nl.querySelector('[aria-selected="true"]'); if (se) se.scrollIntoView({ block: "nearest" }); }
+  const tb = scene.querySelector(".p2 .tabs"); const ta = tb && tb.querySelector('[aria-selected="true"]'); if (ta) tb.scrollLeft = Math.max(0, ta.offsetLeft - tb.clientWidth / 2);
+  if (qf) { const q = document.getElementById("q"); if (q) { q.focus(); q.setSelectionRange(caret, caret); } }
+  animate = false;
+}
+function syncHarness() {
+  document.documentElement.dataset.theme = G.theme;
+  document.querySelectorAll("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === G.theme)));
+  document.querySelectorAll("[data-data]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.data === G.data)));
+  document.querySelectorAll("[data-ctx]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.ctx === G.ctx)));
+  document.querySelectorAll("[data-dir]").forEach((b) => b.setAttribute("aria-current", String(+b.dataset.dir === G.dir)));
+  const d = DIRS[G.dir];
+  document.getElementById("dir-n").textContent = G.dir + 1;
+  document.getElementById("dir-t").textContent = d.t;
+  document.getElementById("dir-q").textContent = d.q;
+  document.getElementById("notes").innerHTML = d.n.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("");
+  const u = new URL(location); u.searchParams.set("v", G.dir + 1); u.searchParams.set("theme", G.theme); u.searchParams.set("data", G.data); u.searchParams.set("ctx", G.ctx); history.replaceState(null, "", u);
+}
+function setDir(i) { G.dir = i; animate = true; syncHarness(); render(); }
+function cur() { const s = ST[G.dir]; return listFor(s)[s.sel]; }
+function setMode(m) { const s = ST[G.dir]; s.mode = m; s.sel = 0; s.rev = null; s.menu = false; if (G.dir === 2) { s.open = true; s.justOpened = true; } render(); document.getElementById("live").textContent = modeLabel(m); }
+function stepMode(back) { const s = ST[G.dir]; const i = MODE_IDS.indexOf(s.mode); setMode(MODE_IDS[(i + (back ? MODE_IDS.length - 1 : 1)) % MODE_IDS.length]); }
+
+function doAct(a) {
+  const s = ST[G.dir];
+  if (a === "open") { s.closed = false; animate = true; render(); return; }
+  if (a === "close") { s.closed = true; s.menu = false; s.open = false; render(); return; }
+  if (a === "menu") { s.menu = !s.menu; s.msel = 0; render(); return; }
+  if (a === "nextmode") { stepMode(false); return; }
+  s.menu = false;
+  if (a === "new") { render(); toast("New item: pick a kind, then type. Not built in this prototype."); return; }
+  if (a === "manage") { render(); toast("F2 Manage opens the two-column library (D21h). Not part of this round."); return; }
+  const it = cur();
+  if (!it) { render(); return; }
+  const name = esc(title(it).slice(0, 40));
+  if (a === "copy" || a === "copyonly") {
+    if (it.k === "secret") toast(`${a === "copy" && G.ctx === "tray" ? "Pasted" : "Copied"} “${name}” without showing it. Not in history.`, true, 30);
+    else if (a === "copy" && it.k === "path" && G.ctx === "navo") toast(`Opened <span class="mono">${esc(it.v)}</span> in the active pane.`);
+    else toast(`${a === "copy" && G.ctx === "tray" ? "Pasted into Notepad" : "Copied"}: ${name}`);
+    if (a === "copy" && G.ctx === "tray") { s.closed = true; s.open = false; }
+  } else if (a === "pastehere" && it.k === "files" && G.ctx === "navo") toast(`Copying ${it.v.length} files into <span class="mono">${esc(HERE)}</span>.`);
+  else if (a === "reveal" && it.k === "secret") s.rev = s.rev === it.id ? null : it.id;
+  else if (a === "copyuser" && it.k === "secret") toast(`Copied user name <span class="mono">${esc(it.user)}</span>.`);
+  else if (a === "save" && it.from === "hist") toast(`Saved as ${KIND[it.k === "text" ? "snippet" : it.k === "files" ? "path" : it.k]}. ${K("F2")} rename, ${K("Ctrl+Z")} undo.`);
+  else if (a === "edit") toast("Edit opens the item in an editor. Not built in this prototype.");
+  else if (a === "del") toast(`Deleted “${name}”. ${K("Ctrl+Z")} Undo.`);
+  render();
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button, [data-i]");
+  if (!t) { const s = ST[G.dir]; if (s.menu && !e.target.closest(".menu")) { s.menu = false; render(); } return; }
+  if (t.closest(".ctl")) t.blur();
+  if (t.dataset.themeSet) { G.theme = t.dataset.themeSet; syncHarness(); return; }
+  if (t.dataset.data) { G.data = t.dataset.data; D = DATA[G.data](); ST.forEach((s) => { s.sel = 0; s.q = ""; s.menu = false; }); animate = true; syncHarness(); render(); return; }
+  if (t.dataset.ctx) { G.ctx = t.dataset.ctx; ST.forEach((s) => { s.closed = false; s.menu = false; }); animate = true; syncHarness(); render(); return; }
+  if (t.dataset.dir) { t.blur(); setDir(+t.dataset.dir); return; }
+  if (t.dataset.mode) { setMode(t.dataset.mode); return; }
+  if (t.dataset.act) { doAct(t.dataset.act); return; }
+  if (t.dataset.i !== undefined) { const s = ST[G.dir]; s.sel = +t.dataset.i; s.rev = null; s.menu = false; render(); }
+});
+document.addEventListener("input", (e) => { if (e.target.id === "q") { const s = ST[G.dir]; const was = s.q; s.q = e.target.value; s.sel = 0; if (G.dir === 2 && !was && s.q) s.justOpened = true; if (G.dir === 2 && !s.q) s.open = false; render(); } });
+document.addEventListener("keydown", (e) => {
+  const s = ST[G.dir];
+  const tg = e.target;
+  const inQ = tg.id === "q";
+  const inText = !inQ && (tg.tagName === "TEXTAREA" || tg.tagName === "INPUT");
+  if (inText) return;
+  const k = e.key, kl = k.toLowerCase();
+  if (!inQ && !e.ctrlKey && !e.altKey && !e.metaKey && /^[1-4]$/.test(k)) { setDir(+k - 1); e.preventDefault(); return; }
+  if (s.closed) {
+    if ((e.ctrlKey && e.shiftKey && kl === "v") || k === "Enter") { e.preventDefault(); doAct("open"); }
+    return;
+  }
+  if (s.menu) {
+    const acts = actionsFor(cur(), s).filter((x) => !x.sep);
+    if (k === "ArrowDown") { s.msel = (s.msel + 1) % acts.length; render(); }
+    else if (k === "ArrowUp") { s.msel = (s.msel + acts.length - 1) % acts.length; render(); }
+    else if (k === "Enter") doAct(acts[s.msel].a);
+    else if (k === "Escape" || (e.ctrlKey && kl === "k")) { s.menu = false; render(); }
+    else if (k === "Tab") { s.menu = false; render(); }
+    else return;
+    e.preventDefault(); return;
+  }
+  const n = listFor(s).length;
+  const onMain = inQ || tg === document.body || !!tg.closest?.(".pal");
+  if (!onMain) return;
+  if (k === "ArrowDown") { if (G.dir === 2 && !s.open && !s.q) { s.open = true; s.justOpened = true; } else s.sel = Math.min(n - 1, s.sel + 1); s.rev = null; render(); e.preventDefault(); }
+  else if (k === "ArrowUp") { s.sel = Math.max(0, s.sel - 1); s.rev = null; render(); e.preventDefault(); }
+  else if (k === "Tab" && (inQ || tg === document.body)) { stepMode(e.shiftKey); e.preventDefault(); const q = document.getElementById("q"); if (q && inQ) q.focus(); }
+  else if (e.ctrlKey && kl === "k") { doAct("menu"); e.preventDefault(); }
+  else if (k === "Enter") { doAct("copy"); e.preventDefault(); }
+  else if (e.ctrlKey && kl === "c" && !(inQ && tg.selectionStart !== tg.selectionEnd)) { doAct("copyonly"); e.preventDefault(); }
+  else if (e.ctrlKey && kl === "v" && !e.shiftKey && cur()?.k === "files" && G.ctx === "navo") { doAct("pastehere"); e.preventDefault(); }
+  else if (e.ctrlKey && kl === "s") { doAct("save"); e.preventDefault(); }
+  else if (e.ctrlKey && kl === "n") { doAct("new"); e.preventDefault(); }
+  else if (e.altKey && kl === "r") { doAct("reveal"); e.preventDefault(); }
+  else if (e.altKey && kl === "u") { doAct("copyuser"); e.preventDefault(); }
+  else if (k === "F2") { doAct(cur()?.from === "saved" ? "edit" : "manage"); e.preventDefault(); }
+  else if (k === "Delete" && !(inQ && s.q)) { doAct("del"); e.preventDefault(); }
+  else if (k === "Escape") { if (s.q) { s.q = ""; s.sel = 0; s.open = false; render(); } else if (G.dir === 2 && s.open) { s.open = false; render(); } else doAct("close"); e.preventDefault(); }
+  else if (!inQ && k.length === 1 && /[a-z]/i.test(k) && !e.ctrlKey && !e.altKey && !e.metaKey) { const q = document.getElementById("q"); if (q) q.focus(); }
+});
+
+const P = new URLSearchParams(location.search);
+G.dir = Math.min(3, Math.max(0, (+P.get("v") || 1) - 1));
+G.theme = P.get("theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+G.data = DATA[P.get("data")] ? P.get("data") : "normal";
+G.ctx = P.get("ctx") === "tray" ? "tray" : "navo";
+if (P.get("mode") && MODE_IDS.includes(P.get("mode"))) ST[G.dir].mode = P.get("mode");
+if (P.get("sel")) ST[G.dir].sel = +P.get("sel");
+if (P.get("q")) ST[G.dir].q = P.get("q");
+if (P.get("menu")) ST[G.dir].menu = true;
+if (P.get("open")) ST[G.dir].open = true;
+D = DATA[G.data]();
+syncHarness();
+render();
+</script>
+</body>
+</html>

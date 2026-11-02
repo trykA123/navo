@@ -21,6 +21,8 @@ mod applied;
 mod cached;
 mod cards;
 pub(in crate::window_view) mod clipboard;
+mod clipboard_palette;
+mod clipboard_palette_popup;
 mod column_widths;
 mod command_center;
 mod crash_notice;
@@ -161,6 +163,7 @@ pub(crate) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         search: crate::window_view::SearchHooks::none(),
         rename: None,
         retained: Arc::new(crate::browser::NoRetained),
+        clipboard: None,
     }
 }
 

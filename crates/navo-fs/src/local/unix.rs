@@ -251,6 +251,7 @@ pub(super) fn size_entry(entry: FsEntry, metadata: Option<&Metadata>) -> SizeEnt
         name: entry.name,
         kind: entry.kind,
         size: entry.size,
+        modified_ms: entry.modified_ms,
         on_disk: metadata.map(|metadata| metadata.blocks() * 512),
         link: metadata
             .filter(|metadata| metadata.nlink() > 1)

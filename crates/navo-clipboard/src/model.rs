@@ -102,7 +102,19 @@ pub enum Scope {
     Folder(PathBuf),
 }
 
-/// A saved item. A secret body is sealed before it is stored.
+/// Secret bytes the OS already sealed; the store never sees the plain secret.
+/// Sealed bytes are larger than the plain text, so the caller must leave headroom below
+/// `max_saved_bytes`.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Sealed(pub Vec<u8>);
+
+impl fmt::Debug for Sealed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Sealed(len {})", self.0.len())
+    }
+}
+
+/// A saved item. A secret has no `body`, only `sealed` bytes.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Saved {
     pub id: i64,
@@ -110,6 +122,7 @@ pub struct Saved {
     pub title: String,
     pub body: Option<String>,
     pub user: Option<String>,
+    pub sealed: Option<Sealed>,
     pub scope: Scope,
     pub created_ms: i64,
     pub updated_ms: i64,
@@ -121,6 +134,24 @@ impl fmt::Debug for Saved {
             .field("id", &self.id)
             .field("kind", &self.kind)
             .field("body_len", &self.body.as_ref().map(String::len))
+            .field("sealed", &self.sealed)
+            .finish_non_exhaustive()
+    }
+}
+
+/// One folder note, or the global note. `scope` is the folder path as last written.
+#[derive(Clone, PartialEq, Eq)]
+pub struct NoteRow {
+    pub scope: Scope,
+    pub body: String,
+    pub updated_ms: i64,
+}
+
+impl fmt::Debug for NoteRow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NoteRow")
+            .field("body_len", &self.body.len())
+            .field("updated_ms", &self.updated_ms)
             .finish_non_exhaustive()
     }
 }
@@ -150,11 +181,17 @@ mod tests {
             title: "canary-title".into(),
             body: Some(text),
             user: Some("canary-user".into()),
-            scope: Scope::Global,
+            sealed: Some(Sealed(b"canary-sealed".to_vec())),
+            scope: Scope::Folder("canary-folder".into()),
             created_ms: 1,
             updated_ms: 1,
         };
-        let shown = format!("{captured:?} {entry:?} {saved:?}");
+        let note = NoteRow {
+            scope: saved.scope.clone(),
+            body: "canary-note".into(),
+            updated_ms: 1,
+        };
+        let shown = format!("{captured:?} {entry:?} {saved:?} {note:?}");
         assert!(!shown.contains("canary"), "{shown}");
         assert!(shown.contains("Text(len 11)"));
     }

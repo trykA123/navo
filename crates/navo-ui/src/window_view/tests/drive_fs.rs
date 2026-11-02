@@ -286,6 +286,7 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         search: crate::window_view::SearchHooks::none(),
         rename: None,
         retained: std::sync::Arc::new(crate::browser::NoRetained),
+        clipboard: None,
     };
     let (window, view) = open_options(cx, options);
     Rig {

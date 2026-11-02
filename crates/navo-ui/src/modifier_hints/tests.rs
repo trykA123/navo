@@ -144,6 +144,7 @@ fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
             "files.unmark_all",
             "pane.reset_split",
             "preview.browse",
+            "clipboard.open",
             "tab.clone",
             "tab.reopen_closed",
             "crash_notice.focus",
@@ -151,6 +152,7 @@ fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
         ]
     );
     assert_eq!(ctrl.more[0].keys, ["Tab"]);
+    assert_eq!(ctrl.more[4].keys, ["V"]);
     assert!(layer_in(Keymap::builtin(), Combo::SHIFT).more.is_empty());
     assert!(
         layer_in(Keymap::builtin(), Combo::CTRL_SHIFT)
@@ -388,7 +390,7 @@ fn a_numbered_run_folds_into_one_row() {
         .find(|e| e.label == "Go to tab 1–8")
         .expect("run");
     assert_eq!(run.keys, ["1–8"]);
-    assert_eq!(layer.rows(), 8);
+    assert_eq!(layer.rows(), 9);
 }
 
 #[test]

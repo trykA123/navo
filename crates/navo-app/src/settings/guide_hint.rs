@@ -10,7 +10,8 @@ pub(crate) fn wire(hooks: &mut SettingsHooks, dirs: Option<&navo_store::StoreDir
     hooks.take_guide_hint = Arc::new(move || marker.as_deref().is_some_and(take));
 }
 
-fn take(marker: &Path) -> bool {
+/// True once per marker file: writes the marker, then reports that the hint is due.
+pub(crate) fn take(marker: &Path) -> bool {
     if marker.try_exists().unwrap_or(true) {
         return false;
     }
