@@ -6,7 +6,7 @@ use navo_l10n::{t, tr};
 
 use super::NavoWindow;
 use crate::activity::ActivityId;
-use crate::browser::{PendingOp, UndoOffer};
+use crate::browser::{KeepOld, PendingOp, UndoOffer};
 use crate::confirm_dialog::{Choice, ConfirmDialog, ConfirmProps};
 use crate::format;
 use crate::prelude::*;
@@ -30,6 +30,12 @@ fn oversized_retained_delete(pending: &PendingOp) -> bool {
 fn question(pending: &PendingOp) -> (String, String) {
     let count = items(pending.sources.len());
     let target = target_text(pending.target.as_ref());
+    if pending.keep_old == KeepOld::Skip {
+        return (
+            tr("job-retention-unknown-title"),
+            tr("job-retention-unknown-label"),
+        );
+    }
     match pending.plan.kind {
         OpKind::Copy => (format!("Copy {count} to {target}?"), "Copy".to_owned()),
         OpKind::Move => (format!("Move {count} to {target}?"), "Move".to_owned()),
@@ -92,6 +98,11 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
             .collect(),
         more: 0,
         summary: match pending.retain_deletes {
+            _ if pending.keep_old == KeepOld::Skip => format!(
+                "{} · {}",
+                summary(&pending.plan, protected),
+                tr("job-retention-unknown-help")
+            ),
             _ if oversized_retained_delete(pending) => capacity_warning(pending),
             Some(policy) if pending.plan.kind == OpKind::Delete => format!(
                 "{} · {}",
@@ -107,7 +118,9 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
         }
         .into(),
         confirm_label: label.into(),
-        danger: pending.plan.kind == OpKind::Delete || protected,
+        danger: pending.plan.kind == OpKind::Delete
+            || protected
+            || pending.keep_old == KeepOld::Skip,
         typed: protected.then(|| "DELETE".into()),
         mode: None,
         choice: pending.structure.as_ref().map(|structure| Choice {

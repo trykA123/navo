@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use navo_core::retention::{
-    MAX_NODES, PurgeRequest, RetentionId, RetentionPolicy, RetentionSummary, VolumeSpace,
-    select_purge_inventory,
+    MAX_NODES, PurgePlan, PurgeRequest, RetainedState, RetentionId, RetentionPolicy,
+    RetentionSummary, VolumeSpace, select_purge_inventory,
 };
 use navo_core::{FileIdentity, Location};
 
@@ -72,24 +72,29 @@ impl Vault<'_> {
                     now: request.now,
                 },
             )?;
-            let resume = inventory
-                .iter()
-                .find(|entry| entry.resumes_purge(space.volume))
-                .map(|entry| entry.id());
-            let next = resume.or_else(|| plan.choices.first().map(|choice| choice.id));
-            let Some(id) = next.filter(|_| attempts < request.max_purges) else {
+            let next = next_attempt(&inventory, &plan, space.volume);
+            let Some(next) = next.filter(|_| attempts < request.max_purges) else {
                 let mut result = report(purged, &inventory, (request, space, next.is_some()));
                 result.skipped = skipped;
                 result.cleanup_pending = !self.catalog.pending_cleanup(space.volume, 1)?.is_empty();
                 return Ok(result);
             };
             attempts += 1;
-            if self.expire(id, resume.is_some(), run)? {
-                purged.push(id);
-                inventory.retain(|entry| entry.id() != id);
-            } else {
-                skipped.push(id);
-                exclude_from_selection(&mut inventory, id);
+            self.catalog.begin_maintenance_attempt(next.id())?;
+            let attempt = self.expire(next.id(), next.resumes(space.volume), run);
+            if attempt.as_ref().is_err_and(|error| cancelled(error, run)) {
+                self.catalog.cancel_maintenance_attempt(next.id())?;
+            }
+            match attempt? {
+                Attempt::Purged => {
+                    purged.push(next.id());
+                    inventory.retain(|entry| entry.id() != next.id());
+                }
+                Attempt::Settled => self.refresh(&mut inventory, next)?,
+                Attempt::Skipped => {
+                    skipped.push(next.id());
+                    exclude_from_selection(&mut inventory, next.id());
+                }
             }
         }
     }
@@ -118,17 +123,36 @@ impl Vault<'_> {
         id: RetentionId,
         resume: bool,
         run: &mut RetentionRun<'_>,
-    ) -> Result<bool, Error> {
+    ) -> Result<Attempt, Error> {
         let completed = if resume {
             self.reconcile(id, run)
         } else {
             self.purge(id, run)
         };
         match completed {
-            Ok(entry) if entry.state == navo_core::retention::RetainedState::Purged => Ok(true),
-            Ok(_) => skip(id, Error::State(id), run).map(|()| false),
-            Err(error) => skip(id, error, run).map(|()| false),
+            Ok(entry) if entry.state == RetainedState::Purged => Ok(Attempt::Purged),
+            Ok(entry) if resume && entry.state != RetainedState::Purging => Ok(Attempt::Settled),
+            Ok(_) => skip(id, Error::State(id), run).map(|()| Attempt::Skipped),
+            Err(error) => skip(id, error, run).map(|()| Attempt::Skipped),
         }
+    }
+
+    fn refresh(
+        &self,
+        inventory: &mut [RetentionSummary],
+        settled: RetentionSummary,
+    ) -> Result<(), Error> {
+        let entry = self.catalog.get(settled.id())?;
+        let mut fresh =
+            RetentionSummary::try_from(&entry)?.with_attempts(settled.attempts().saturating_add(1));
+        fresh.protect();
+        for slot in inventory
+            .iter_mut()
+            .filter(|slot| slot.id() == settled.id())
+        {
+            *slot = fresh;
+        }
+        Ok(())
     }
 
     fn cleanup_terminal(
@@ -211,14 +235,48 @@ impl Observation<'_> {
     }
 }
 
+fn cancelled(error: &Error, run: &RetentionRun<'_>) -> bool {
+    run.cancel.is_cancelled()
+        || matches!(error, Error::Fs(fs) if fs.kind == navo_core::FsErrorKind::Cancelled)
+}
+
 pub(super) fn skip(id: RetentionId, error: Error, run: &RetentionRun<'_>) -> Result<(), Error> {
-    let cancelled = run.cancel.is_cancelled()
-        || matches!(&error, Error::Fs(fs) if fs.kind == navo_core::FsErrorKind::Cancelled);
-    if cancelled || matches!(error, Error::Catalog(_) | Error::Lock(_)) {
+    if cancelled(&error, run) || matches!(error, Error::Catalog(_) | Error::Lock(_)) {
         return Err(error);
     }
-    tracing::warn!(id = id.0, %error, "retained entry skipped by maintenance");
+    tracing::warn!(
+        id = id.0,
+        error_kind = error.kind(),
+        "retained entry skipped by maintenance"
+    );
     Ok(())
+}
+
+enum Attempt {
+    Purged,
+    Settled,
+    Skipped,
+}
+
+/// Interrupted work resumes first unless a fresh purge choice has fewer failed attempts.
+fn next_attempt(
+    inventory: &[RetentionSummary],
+    plan: &PurgePlan,
+    volume: u64,
+) -> Option<RetentionSummary> {
+    let resume = inventory
+        .iter()
+        .filter(|entry| entry.resumes(volume))
+        .min_by_key(|entry| entry.attempts());
+    let choice = plan
+        .choices
+        .first()
+        .and_then(|choice| inventory.iter().find(|entry| entry.id() == choice.id));
+    match (resume, choice) {
+        (Some(resume), Some(choice)) if choice.attempts() < resume.attempts() => Some(*choice),
+        (Some(resume), _) => Some(*resume),
+        (None, choice) => choice.copied(),
+    }
 }
 
 fn exclude_from_selection(inventory: &mut [RetentionSummary], id: RetentionId) {

@@ -15,6 +15,7 @@ fn retaining(fs: &Arc<FakeFs>, retaining: &Arc<AtomicBool>) -> (Browser, Arc<Mut
     let setting = Arc::clone(retaining);
     let mut browser = browser(fs, home_beside_dest(fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: Some(Arc::new(move || {
             setting
                 .load(Ordering::Acquire)

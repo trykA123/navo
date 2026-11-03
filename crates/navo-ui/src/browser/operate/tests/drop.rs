@@ -20,6 +20,7 @@ fn a_drop_into_another_folder_moves_on_the_same_volume() {
     let record = Arc::new(Mutex::new(Record::default()));
     let shared = Arc::clone(&record);
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: Arc::new(move |plan| {

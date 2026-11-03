@@ -18,7 +18,7 @@ fn checked(
     operations: &navo_ui::browser::Operations,
     plan: &navo_core::OperationPlan,
 ) -> Result<(), String> {
-    let mut log = (operations.log)(plan)?;
+    let mut log = (operations.log)(plan).map_err(navo_ui::browser::LogRefusal::message)?;
     log.check(navo_ui::browser::LoggedOperation {
         plan,
         ops: &navo_fs::LocalFs::new(),

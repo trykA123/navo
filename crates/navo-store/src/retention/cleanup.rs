@@ -39,6 +39,37 @@ impl RetentionCatalog {
         tx.commit()
     }
 
+    /// Counted before the attempt runs, so a crash mid-attempt still sends the entry to the back of the queue.
+    pub fn begin_maintenance_attempt(
+        &mut self,
+        id: RetentionId,
+    ) -> Result<(), RetentionStoreError> {
+        let tx = self.transaction()?;
+        if tx.get(id)?.state.is_terminal() {
+            return Err(RetentionError::Invalid("only live entries can be attempted").into());
+        }
+        tx.inner.execute(
+            "UPDATE retained_entry
+             SET maintenance_attempts = MIN(maintenance_attempts + 1, 4294967295) WHERE id = ?1",
+            [id.0],
+        )?;
+        tx.commit()
+    }
+
+    /// Takes back a counted attempt that was cancelled; a crash before this keeps the count.
+    pub fn cancel_maintenance_attempt(
+        &mut self,
+        id: RetentionId,
+    ) -> Result<(), RetentionStoreError> {
+        let tx = self.transaction()?;
+        tx.inner.execute(
+            "UPDATE retained_entry SET maintenance_attempts = MAX(maintenance_attempts - 1, 0)
+             WHERE id = ?1",
+            [id.0],
+        )?;
+        tx.commit()
+    }
+
     pub fn acknowledge_cleanup(&mut self, id: RetentionId) -> Result<(), RetentionStoreError> {
         let tx = self.transaction()?;
         if !tx.get(id)?.state.is_terminal() {

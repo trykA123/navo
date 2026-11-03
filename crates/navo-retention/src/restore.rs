@@ -9,6 +9,11 @@ impl Vault<'_> {
         request: &RestoreRequest<'_>,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
+        if let Some(settled) = self.settle_interrupted_restore(request.id, run)?
+            && settled.state == RetainedState::Restored
+        {
+            return Ok(settled);
+        }
         self.restore_authorized(request, None, run)
     }
 
@@ -20,18 +25,21 @@ impl Vault<'_> {
     ) -> Result<RetentionEntry, Error> {
         self.catalog.transaction()?.authorize_rollback(id, owner)?;
         let before = self.get(id)?;
+        // A Conflict left by an earlier rollback is checked again by `reconcile`.
+        let rechecked = before.state == RetainedState::Conflict && before.target.is_some();
         if before
             .target
             .as_ref()
             .is_some_and(|target| target.location != before.record.source)
-            || !matches!(
-                before.state,
-                RetainedState::Preparing
-                    | RetainedState::Ready
-                    | RetainedState::Restoring
-                    | RetainedState::Restored
-                    | RetainedState::Aborted
-            )
+            || !(rechecked
+                || matches!(
+                    before.state,
+                    RetainedState::Preparing
+                        | RetainedState::Ready
+                        | RetainedState::Restoring
+                        | RetainedState::Restored
+                        | RetainedState::Aborted
+                ))
         {
             return Err(Error::State(id));
         }

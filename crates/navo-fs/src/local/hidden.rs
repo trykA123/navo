@@ -7,12 +7,13 @@ use std::ptr;
 
 use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Security::Authorization::{
-    ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1, SE_FILE_OBJECT,
-    SetSecurityInfo,
+    ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityInfo, SDDL_REVISION_1,
+    SE_FILE_OBJECT, SetSecurityInfo,
 };
 use windows_sys::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, PROTECTED_DACL_SECURITY_INFORMATION,
-    PSECURITY_DESCRIPTOR,
+    ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce, GetSecurityDescriptorControl,
+    GetSecurityDescriptorDacl, IsValidAcl, PROTECTED_DACL_SECURITY_INFORMATION,
+    PSECURITY_DESCRIPTOR, SE_DACL_PROTECTED,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_SYSTEM,
@@ -33,17 +34,19 @@ pub(super) fn set(path: &Path, expected: crate::FileIdentity) -> io::Result<()> 
     }
     match apply(&file) {
         Err(error) if error.kind() == io::ErrorKind::NotADirectory => return Err(error),
-        result => warn_failed(path, "hide", result),
+        result => warn_failed(expected, result),
     }
-    if super::win_owner::keeps_acls(&file).unwrap_or(false) {
-        warn_failed(path, "protect", protect(&file));
-    }
-    Ok(())
+    super::vault_protection::require_private(super::win_owner::keeps_acls(&file), || protect(&file))
 }
 
-fn warn_failed(path: &Path, step: &str, result: io::Result<()>) {
+fn warn_failed(identity: crate::FileIdentity, result: io::Result<()>) {
     if let Err(error) = result {
-        tracing::warn!(path = %path.display(), step, %error, "retention container step failed");
+        tracing::warn!(
+            volume_id = identity.volume,
+            file_id = ?identity.file,
+            error_kind = ?error.kind(),
+            "retention container hiding failed"
+        );
     }
 }
 
@@ -96,7 +99,7 @@ pub(super) struct Descriptor(pub(super) PSECURITY_DESCRIPTOR);
 impl Drop for Descriptor {
     #[allow(unsafe_code, reason = "the descriptor is a LocalAlloc allocation")]
     fn drop(&mut self) {
-        // SAFETY: this guard owns the LocalAlloc allocation from the SDDL conversion, or NULL.
+        // SAFETY: this guard owns the LocalAlloc allocation, or NULL.
         unsafe { LocalFree(self.0) };
     }
 }
@@ -106,7 +109,29 @@ impl Drop for Descriptor {
     reason = "protected DACLs require Win32 security descriptors"
 )]
 fn protect(file: &std::fs::File) -> io::Result<()> {
-    let sddl: Vec<u16> = PRIVATE_DACL.encode_utf16().chain(Some(0)).collect();
+    let descriptor = descriptor(PRIVATE_DACL)?;
+    let dacl = dacl(&descriptor)?;
+    // SAFETY: the live handle has WRITE_DAC and dacl points into the guarded descriptor.
+    let status = unsafe {
+        SetSecurityInfo(
+            file.as_raw_handle(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            dacl,
+            ptr::null(),
+        )
+    };
+    if status != 0 {
+        return Err(io::Error::from_raw_os_error(status.cast_signed()));
+    }
+    verify_private(file, dacl)
+}
+
+#[allow(unsafe_code, reason = "SDDL conversion allocates a native descriptor")]
+fn descriptor(sddl: &str) -> io::Result<Descriptor> {
+    let sddl: Vec<u16> = sddl.encode_utf16().chain(Some(0)).collect();
     let mut descriptor = Descriptor(ptr::null_mut());
     // SAFETY: sddl is NUL-terminated; the guard owns the allocation written to descriptor.0.
     let ok = unsafe {
@@ -120,6 +145,11 @@ fn protect(file: &std::fs::File) -> io::Result<()> {
     if ok == 0 {
         return Err(io::Error::last_os_error());
     }
+    Ok(descriptor)
+}
+
+#[allow(unsafe_code, reason = "DACLs point into native security descriptors")]
+fn dacl(descriptor: &Descriptor) -> io::Result<*mut ACL> {
     let (mut present, mut defaulted) = (0, 0);
     let mut dacl: *mut ACL = ptr::null_mut();
     // SAFETY: the descriptor is valid while the guard lives; the outputs are writable locals.
@@ -136,22 +166,86 @@ fn protect(file: &std::fs::File) -> io::Result<()> {
             "vault DACL is missing from its descriptor",
         ));
     }
-    // SAFETY: the live handle has WRITE_DAC and dacl points into the guarded descriptor.
+    Ok(dacl)
+}
+
+#[allow(
+    unsafe_code,
+    reason = "DACL verification requires native handle queries"
+)]
+fn verify_private(file: &std::fs::File, expected: *const ACL) -> io::Result<()> {
+    let mut found = Descriptor(ptr::null_mut());
+    let mut dacl: *mut ACL = ptr::null_mut();
+    // SAFETY: the live handle has READ_CONTROL; the guard owns the returned descriptor and DACL.
     let status = unsafe {
-        SetSecurityInfo(
+        GetSecurityInfo(
             file.as_raw_handle(),
             SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            DACL_SECURITY_INFORMATION,
             ptr::null_mut(),
             ptr::null_mut(),
-            dacl,
-            ptr::null(),
+            &raw mut dacl,
+            ptr::null_mut(),
+            &raw mut found.0,
         )
     };
     if status != 0 {
         return Err(io::Error::from_raw_os_error(status.cast_signed()));
     }
+    let (mut control, mut revision) = (0u16, 0u32);
+    // SAFETY: a successful query returned a descriptor owned by found.
+    let ok = unsafe { GetSecurityDescriptorControl(found.0, &raw mut control, &raw mut revision) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if control & SE_DACL_PROTECTED == 0 || !same_acl(dacl, expected)? {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "vault DACL is not private",
+        ));
+    }
     Ok(())
+}
+
+#[allow(
+    unsafe_code,
+    reason = "validated ACLs contain variable length native ACEs"
+)]
+fn same_acl(found: *const ACL, expected: *const ACL) -> io::Result<bool> {
+    if found.is_null() || expected.is_null() {
+        return Ok(false);
+    }
+    // SAFETY: both non-null pointers live in descriptors owned by the caller.
+    let valid = unsafe { IsValidAcl(found) != 0 && IsValidAcl(expected) != 0 };
+    if !valid {
+        return Ok(false);
+    }
+    // SAFETY: both ACL headers passed IsValidAcl.
+    let count = unsafe { (*expected).AceCount };
+    // SAFETY: found passed IsValidAcl.
+    if unsafe { (*found).AceCount } != count {
+        return Ok(false);
+    }
+    for index in 0..u32::from(count) {
+        let (mut left, mut right) = (ptr::null_mut(), ptr::null_mut());
+        // SAFETY: the ACLs are valid and index is below both ACE counts.
+        if unsafe {
+            GetAce(found, index, &raw mut left) == 0 || GetAce(expected, index, &raw mut right) == 0
+        } {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: GetAce returned ACEs in validated ACLs; AceSize bounds each ACE's bytes.
+        let equal = unsafe {
+            let left_size = usize::from((*left.cast::<ACE_HEADER>()).AceSize);
+            let right_size = usize::from((*right.cast::<ACE_HEADER>()).AceSize);
+            std::slice::from_raw_parts(left.cast::<u8>(), left_size)
+                == std::slice::from_raw_parts(right.cast::<u8>(), right_size)
+        };
+        if !equal {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -222,5 +316,37 @@ mod tests {
         // SAFETY: GetSecurityInfo returned a DACL inside the guarded descriptor.
         let aces = unsafe { (*dacl).AceCount };
         assert_eq!(aces, 3, "owner, SYSTEM and Administrators only");
+    }
+
+    #[test]
+    fn dacl_readback_rejects_broad_permissions_even_with_three_entries() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("vault");
+        std::fs::create_dir(&path).unwrap();
+        let file = OpenOptions::new()
+            .access_mode(READ_CONTROL | WRITE_DAC)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(&path)
+            .unwrap();
+        let private = descriptor(PRIVATE_DACL).unwrap();
+        let expected = dacl(&private).unwrap();
+        let broad = descriptor("D:P(A;OICI;FA;;;WD)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)").unwrap();
+        let broad_acl = dacl(&broad).unwrap();
+        // SAFETY: the handle has WRITE_DAC; the ACL lives in the guarded descriptor.
+        let status = unsafe {
+            SetSecurityInfo(
+                file.as_raw_handle(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                broad_acl,
+                ptr::null(),
+            )
+        };
+        assert_eq!(status, 0);
+        assert!(verify_private(&file, expected).is_err());
+        protect(&file).unwrap();
+        verify_private(&file, expected).unwrap();
     }
 }

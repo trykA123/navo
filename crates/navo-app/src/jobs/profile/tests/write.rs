@@ -30,9 +30,10 @@ fn unreadable_retention_settings_refuse_a_write_plan() {
     let fs = FakeFs::new();
     let plan = write(&fs, 11);
     let factory = crate::jobs::experimental_factory(journal.clone(), dirs.clone());
-    let Err(message) = factory(&plan) else {
+    let Err(refusal) = factory(&plan) else {
         panic!("a write plan was allowed with a broken navo.toml");
     };
+    let message = refusal.message();
     let file = dirs.settings_file().display().to_string();
     assert!(message.contains(&file), "{message}");
     assert!(crate::jobs::lock(&journal).unfinished().unwrap().is_empty());
@@ -58,14 +59,14 @@ fn a_write_plan_probes_its_target_for_retention() {
     fs.set_volume_serial("dest", None);
     let plan = write(&fs, 11);
     let ops: Arc<dyn ProviderOps> = Arc::new(fs);
-    assert!(!drive_retains(Some(&Drive::Probed(ops)), &plan));
+    assert!(!drive_retains(Some(&Drive::Probed(ops)), &plan).unwrap());
 
     let fs = FakeFs::new();
     fs.add_file("dest/a", 9);
     fs.set_volume_serial("dest", Some(7));
     let plan = write(&fs, 11);
     let ops: Arc<dyn ProviderOps> = Arc::new(fs);
-    assert!(drive_retains(Some(&Drive::Probed(ops)), &plan));
+    assert!(drive_retains(Some(&Drive::Probed(ops)), &plan).unwrap());
 }
 
 #[test]

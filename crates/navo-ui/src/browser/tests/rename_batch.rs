@@ -154,6 +154,7 @@ impl Journal {
     fn operations(&self) -> Operations {
         let journal = self.clone();
         Operations {
+            log_without_retention: None,
             retain_deletes: None,
             write: None,
             log: Arc::new(move |plan: &OperationPlan| {

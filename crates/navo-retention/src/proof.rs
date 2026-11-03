@@ -1,5 +1,5 @@
 use navo_core::retention::{RetainedKind, RetainedNode, RetentionEntry, RetentionRecord};
-use navo_core::{FileIdentity, FsErrorKind, Location};
+use navo_core::{FileIdentity, FsError, FsErrorKind, Location};
 use navo_fs::{EntryKind, FsEntry, ProviderOps};
 
 use crate::Error;
@@ -35,10 +35,28 @@ pub(super) fn present(ops: &dyn ProviderOps, at: &Location) -> Result<Option<FsE
 
 #[must_use]
 pub fn can_retain(ops: &dyn ProviderOps, at: &Location) -> bool {
-    let has_identity = |at: &Location| matches!(ops.file_identity(at), Ok(Some(_)));
-    ops.supports_atomic_rename()
-        && has_identity(at)
-        && at.parent().is_some_and(|parent| has_identity(&parent))
+    check_retention_support(ops, at).unwrap_or(false)
+}
+
+pub fn check_retention_support(ops: &dyn ProviderOps, at: &Location) -> Result<bool, FsError> {
+    Ok(check_target_support(ops, at)?.unwrap_or(false))
+}
+
+/// Like `check_retention_support`, but `None` when `at` itself does not exist.
+pub fn check_target_support(ops: &dyn ProviderOps, at: &Location) -> Result<Option<bool>, FsError> {
+    if !ops.supports_atomic_rename() {
+        return Ok(Some(false));
+    }
+    match ops.file_identity(at) {
+        Ok(None) => return Ok(Some(false)),
+        Err(error) if error.kind == FsErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+        Ok(Some(_)) => {}
+    }
+    let Some(parent) = at.parent() else {
+        return Ok(Some(false));
+    };
+    Ok(Some(ops.file_identity(&parent)?.is_some()))
 }
 
 pub(super) fn identity(ops: &dyn ProviderOps, at: &Location) -> Result<FileIdentity, Error> {

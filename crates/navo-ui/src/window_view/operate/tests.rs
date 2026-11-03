@@ -3,7 +3,7 @@ use navo_fs::{CancelToken, Progress};
 
 use super::super::jobs::job_info;
 use super::{confirm_props, mode_label};
-use crate::browser::{JobStatus, JobView, PendingOp, RenameReport, Structure};
+use crate::browser::{JobStatus, JobView, KeepOld, PendingOp, RenameReport, Structure};
 use crate::job_row::JobRowState;
 use navo_fs::CopyMode;
 
@@ -39,6 +39,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         plan,
         retain_deletes: None,
         cannot_retain: false,
+        keep_old: KeepOld::AsSet,
         source_tab: AppState::new(at("/home")).active_tab().id(),
         undo: None,
         slow_volumes: None,
@@ -89,6 +90,29 @@ fn a_drive_that_cannot_retain_says_so_in_the_permanent_delete_dialog() {
     assert_eq!(props.confirm_label, "Delete permanently");
     assert!(props.summary.contains(line.as_str()));
     assert!(!plain.summary.contains(line.as_str()));
+}
+
+#[test]
+fn unknown_retention_asks_to_run_without_old_versions() {
+    for kind in [OpKind::Delete, OpKind::Copy, OpKind::Move] {
+        let props = confirm_props(&PendingOp {
+            keep_old: KeepOld::Skip,
+            cannot_retain: true,
+            ..pending(plan(kind), Some(at("/dest")))
+        });
+        assert_eq!(props.title, navo_l10n::tr("job-retention-unknown-title"));
+        assert_eq!(
+            props.confirm_label,
+            navo_l10n::tr("job-retention-unknown-label")
+        );
+        assert!(
+            props
+                .summary
+                .contains(navo_l10n::tr("job-retention-unknown-help").as_str())
+        );
+        assert!(props.danger, "focus starts on Cancel");
+        assert!(props.typed.is_none());
+    }
 }
 
 #[test]

@@ -8,6 +8,7 @@ use super::*;
 
 mod budget;
 mod capture;
+mod interrupted;
 mod legacy;
 mod local;
 mod maintenance;
@@ -16,6 +17,7 @@ mod placement;
 mod privacy;
 mod purge;
 mod restart;
+mod rotation;
 mod vault;
 
 fn open<'a>(profile: &Path, ops: &'a dyn ProviderOps) -> Vault<'a> {

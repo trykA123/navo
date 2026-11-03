@@ -106,7 +106,11 @@ fn unavailable_journal_and_profile_notices_offer_safe_mode() {
         let Err(message) = (operations.log)(&plan) else {
             panic!("file changes must remain blocked");
         };
-        assert!(message.ends_with(&navo_l10n::tr("retention-safe-mode-help")));
+        assert!(
+            message
+                .message()
+                .ends_with(&navo_l10n::tr("retention-safe-mode-help"))
+        );
     }
 }
 

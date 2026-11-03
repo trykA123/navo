@@ -341,3 +341,82 @@ fn compact_inventory_keeps_policy_ordering_and_quota_results() {
         );
     }
 }
+
+#[test]
+fn entries_with_more_failed_attempts_go_behind_fresh_ones_in_every_selection() {
+    let entries = [entry(1, 7, 100), entry(2, 11, 200), entry(3, 13, 300)];
+    let inventory: Vec<_> = entries
+        .iter()
+        .zip([2, 0, 1])
+        .map(|(entry, attempts)| {
+            RetentionSummary::try_from(entry)
+                .unwrap()
+                .with_attempts(attempts)
+        })
+        .collect();
+    for (now, cap) in [(4 * DAY_MS, 1000), (0, 1)] {
+        let plan = select_purge_inventory(
+            &inventory,
+            RetentionPolicy::new(1, cap, 0).unwrap(),
+            PurgeRequest {
+                now,
+                space: VolumeSpace {
+                    volume: 7,
+                    free_bytes: 100,
+                },
+            },
+        )
+        .unwrap();
+        let ids: Vec<_> = plan.choices.iter().map(|choice| choice.id.0).collect();
+        assert_eq!(ids, [2, 3, 1]);
+    }
+}
+
+fn failed_expired_and_fresh_unexpired(free_bytes: u64, cap: u64) -> Vec<(i64, PurgeReason)> {
+    let entries = [entry(1, 7, 100), entry(2, 11, 200)];
+    let inventory: Vec<_> = entries
+        .iter()
+        .zip([1, 0])
+        .map(|(entry, attempts)| {
+            RetentionSummary::try_from(entry)
+                .unwrap()
+                .with_attempts(attempts)
+        })
+        .collect();
+    let plan = select_purge_inventory(
+        &inventory,
+        RetentionPolicy::new(1, cap, 10).unwrap(),
+        PurgeRequest {
+            now: 150 + DAY_MS,
+            space: VolumeSpace {
+                volume: 7,
+                free_bytes,
+            },
+        },
+    )
+    .unwrap();
+    plan.choices
+        .iter()
+        .map(|choice| (choice.id.0, choice.reason))
+        .collect()
+}
+
+#[test]
+fn quota_counts_expired_bytes_of_failed_entries_before_choosing_a_fresh_one() {
+    assert_eq!(
+        failed_expired_and_fresh_unexpired(100, 11),
+        [(1, PurgeReason::Expired)]
+    );
+    assert_eq!(
+        failed_expired_and_fresh_unexpired(100, 10),
+        [(1, PurgeReason::Expired), (2, PurgeReason::Quota)]
+    );
+}
+
+#[test]
+fn low_space_never_adds_a_fresh_entry_when_a_failed_entry_has_expired() {
+    assert_eq!(
+        failed_expired_and_fresh_unexpired(0, 1000),
+        [(1, PurgeReason::Expired)]
+    );
+}

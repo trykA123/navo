@@ -101,7 +101,11 @@ pub(super) fn ensure_chain(
                 });
             }
             Err(error) => {
-                tracing::debug!(vault = folder.as_str(), %error, "vault candidate skipped");
+                tracing::debug!(
+                    volume_id = scope.volume,
+                    error_kind = error.kind(),
+                    "vault candidate skipped"
+                );
                 return None;
             }
         }
@@ -114,7 +118,12 @@ pub(super) fn discard(ops: &dyn ProviderOps, created: &Created) {
         let removed = proof::folder(ops, folder, *identity)
             .and_then(|()| Ok(ops.remove_empty_folder(folder)?));
         if let Err(error) = removed {
-            tracing::debug!(vault = folder.as_str(), %error, "unused vault kept");
+            tracing::debug!(
+                volume_id = identity.volume,
+                file_id = ?identity.file,
+                error_kind = error.kind(),
+                "unused vault kept"
+            );
         }
     }
 }
@@ -166,8 +175,7 @@ fn acceptable(ops: &dyn ProviderOps, folder: &Location, made: bool) -> Result<bo
     }
     if let Err(error) = ops.restrict_to_owner(folder) {
         tracing::debug!(
-            vault = folder.as_str(),
-            ?error,
+            error_kind = ?error.kind,
             "vault could not be made private"
         );
         return Ok(false);

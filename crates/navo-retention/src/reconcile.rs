@@ -1,4 +1,4 @@
-use navo_core::retention::{RetainedState, RetentionEntry, RetentionId};
+use navo_core::retention::{RestoreTarget, RetainedState, RetentionEntry, RetentionId};
 
 use crate::{Error, RetentionRun, Vault, proof, snapshot};
 
@@ -11,7 +11,11 @@ impl Vault<'_> {
         let entry = self.get(id)?;
         match entry.state {
             RetainedState::Preparing => self.settle_preparing(id, run),
-            RetainedState::Restoring => self.settle_restoring(id, run),
+            RetainedState::Restoring => self.settle_restoring(id, RetainedState::Restoring, run),
+            // A Conflict with a target came from an interrupted restore and is checked again.
+            RetainedState::Conflict if entry.target.is_some() => {
+                self.settle_restoring(id, RetainedState::Conflict, run)
+            }
             RetainedState::Purging => self.purge(id, run),
             state if state.is_terminal() => {
                 self.cleanup(&entry)?;
@@ -43,44 +47,111 @@ impl Vault<'_> {
         Ok(entry)
     }
 
-    fn settle_restoring(
+    /// Settles an unpinned restore left in `Restoring`; `None` when there was nothing to settle.
+    pub(crate) fn settle_interrupted_restore(
         &mut self,
         id: RetentionId,
         run: &mut RetentionRun<'_>,
+    ) -> Result<Option<RetentionEntry>, Error> {
+        let entry = self.get(id)?;
+        if entry.state != RetainedState::Restoring || entry.pinned {
+            return Ok(None);
+        }
+        self.settle_restoring(id, RetainedState::Restoring, run)
+            .map(Some)
+    }
+
+    /// Settles an entry in `from` (Restoring, or a Conflict it left) from the files on disk.
+    fn settle_restoring(
+        &mut self,
+        id: RetentionId,
+        from: RetainedState,
+        run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
-        let mut entry = self.catalog.get(id)?;
-        let target = entry.target.as_ref().ok_or(Error::State(id))?;
-        let parent = target
-            .location
-            .parent()
-            .ok_or_else(|| Error::Changed(target.location.clone()))?;
-        proof::folder(self.ops, &parent, target.parent_identity)?;
+        let before = self.catalog.get(id)?;
+        if before.state != from {
+            return Err(Error::State(id));
+        }
+        let mut entry = before.clone();
+        match self.restoring_outcome(&mut entry, run) {
+            Ok(state) => entry.state = state,
+            Err(error) if needs_attention(&error, run) => {
+                tracing::warn!(
+                    id = id.0,
+                    error_kind = error.kind(),
+                    "interrupted restore cannot settle"
+                );
+                entry = before.clone();
+                entry.state = RetainedState::Conflict;
+            }
+            Err(error) => return Err(error),
+        }
+        if entry.state == RetainedState::Conflict && from == RetainedState::Conflict {
+            return Ok(before);
+        }
+        let mut tx = self.catalog.checked_transaction(&before)?;
+        tx.save(&entry, from)?;
+        tx.commit()?;
+        tracing::info!(
+            id = id.0,
+            state = entry.state.as_str(),
+            "interrupted restore settled"
+        );
+        if entry.state.is_terminal() {
+            self.cleanup(&entry)?;
+        }
+        Ok(entry)
+    }
+
+    fn restoring_outcome(
+        &self,
+        entry: &mut RetentionEntry,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<RetainedState, Error> {
+        let target = entry.target.as_ref().ok_or(Error::State(entry.id))?;
         let held = entry.record.held()?;
         run.visit(&held)?;
         proof::owned(self.ops, &entry.record)?;
         let held_exists = proof::present(self.ops, &held)?.is_some();
+        // A missing destination folder means the destination does not exist either.
         let target_exists = proof::present(self.ops, &target.location)?.is_some();
-        let before = entry.clone();
-        entry.state = match (held_exists, target_exists) {
+        Ok(match (held_exists, target_exists) {
             (true, false) => {
                 snapshot::verify(self.ops, &entry.record, (&held, false), run)?;
                 entry.target = None;
                 RetainedState::Ready
             }
             (false, true)
-                if proof::same_object(self.ops, &target.location, &entry.record.nodes[0])? =>
+                if same_folder(self.ops, target)?
+                    && proof::same_object(self.ops, &target.location, &entry.record.nodes[0])? =>
             {
                 RetainedState::Restored
             }
             _ => RetainedState::Conflict,
-        };
-        let mut tx = self.catalog.checked_transaction(&before)?;
-        tx.save(&entry, RetainedState::Restoring)?;
-        tx.commit()?;
-        if entry.state.is_terminal() {
-            self.cleanup(&entry)?;
+        })
+    }
+}
+
+/// A definite proof failure, or a vanished holding or anchor folder; cancel, other I/O, lock and
+/// catalog errors may pass and are retried instead.
+fn needs_attention(error: &Error, run: &RetentionRun<'_>) -> bool {
+    !run.cancel.is_cancelled()
+        && match error {
+            Error::Changed(_) | Error::Unsupported(_) | Error::Invalid(_) => true,
+            Error::Fs(error) => error.kind == navo_core::FsErrorKind::NotFound,
+            _ => false,
         }
-        Ok(entry)
+}
+
+fn same_folder(ops: &dyn navo_fs::ProviderOps, target: &RestoreTarget) -> Result<bool, Error> {
+    let Some(parent) = target.location.parent() else {
+        return Ok(false);
+    };
+    match proof::folder(ops, &parent, target.parent_identity) {
+        Ok(()) => Ok(true),
+        Err(Error::Changed(_)) => Ok(false),
+        Err(Error::Fs(error)) if error.kind == navo_core::FsErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
     }
 }
 

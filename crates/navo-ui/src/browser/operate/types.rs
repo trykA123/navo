@@ -73,13 +73,40 @@ impl Default for Copying {
     }
 }
 
-pub type LogFactory = Arc<dyn Fn(&OperationPlan) -> Result<Box<dyn OpLog>, String> + Send + Sync>;
+/// Why a job's log was not made; the job is refused before anything is touched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LogRefusal {
+    /// The drive's retention support could not be determined; the user may run without it.
+    RetentionUnknown,
+    Failed(String),
+}
+
+impl LogRefusal {
+    #[must_use]
+    pub fn message(self) -> String {
+        match self {
+            Self::RetentionUnknown => navo_l10n::tr("job-retention-probe-failed"),
+            Self::Failed(message) => message,
+        }
+    }
+}
+
+impl From<String> for LogRefusal {
+    fn from(message: String) -> Self {
+        Self::Failed(message)
+    }
+}
+
+pub type LogFactory =
+    Arc<dyn Fn(&OperationPlan) -> Result<Box<dyn OpLog>, LogRefusal> + Send + Sync>;
 pub type RetainDeletes = Arc<dyn Fn() -> Option<RetentionPolicy> + Send + Sync>;
 pub type WriteFactory = Arc<dyn Fn(&Location) -> Result<Box<dyn Send>, FsError> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Operations {
     pub log: LogFactory,
+    /// Builds a job that keeps no old versions, for one job the user agreed to run so.
+    pub log_without_retention: Option<LogFactory>,
     pub write: Option<WriteFactory>,
     pub retain_deletes: Option<RetainDeletes>,
     pub protected: Vec<Location>,
@@ -90,6 +117,7 @@ impl Operations {
     pub fn unlogged() -> Self {
         Self {
             log: Arc::new(|_| Ok(Box::new(NoLog))),
+            log_without_retention: None,
             write: None,
             retain_deletes: None,
             protected: Vec::new(),
@@ -127,12 +155,21 @@ pub struct PendingOp {
     pub plan: OperationPlan,
     pub retain_deletes: Option<RetentionPolicy>,
     pub cannot_retain: bool,
+    pub keep_old: KeepOld,
     pub(crate) source_tab: TabId,
     pub undo: Option<UndoOffer>,
     pub(crate) slow_volumes: Option<SlowVolumes>,
     pub structure: Option<Structure>,
     /// Set when the files come from another program without paths.
     pub stream: Option<StreamPaste>,
+}
+
+/// Whether a job keeps old versions as the settings say, or skips them once at the user's word.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum KeepOld {
+    #[default]
+    AsSet,
+    Skip,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -252,6 +289,10 @@ pub(in crate::browser) enum JobUpdate {
     Done {
         id: u64,
         ended: Ended,
+    },
+    RetentionUnknown {
+        id: u64,
+        pending: Box<PendingOp>,
     },
 }
 

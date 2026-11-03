@@ -51,7 +51,7 @@ fn stale_holder_steps(kind: OpKind, fs: &FakeFs) -> Vec<Step> {
 
 fn refusal(dirs: &StoreDirs, journal: SharedJournal, plan: &OperationPlan, fs: &FakeFs) -> String {
     match profile_factory(journal, dirs.clone())(plan) {
-        Err(error) => error,
+        Err(refusal) => refusal.message(),
         Ok(mut log) => check(log.as_mut(), plan, fs, &CancelToken::new()).unwrap_err(),
     }
 }

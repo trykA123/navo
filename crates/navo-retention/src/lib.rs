@@ -21,7 +21,7 @@ use navo_core::retention::{RetentionEntry, RetentionError, RetentionId, Retentio
 use navo_core::{FsError, Location};
 use navo_fs::{CancelToken, ProviderOps};
 use navo_store::{Db, JobId, RetentionCatalog, RetentionStoreError};
-pub use proof::can_retain;
+pub use proof::{can_retain, check_retention_support, check_target_support};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -41,6 +41,21 @@ pub enum Error {
     State(RetentionId),
     #[error("retention entry {0:?} is pinned by an active job")]
     Pinned(RetentionId),
+}
+
+impl Error {
+    pub fn kind(&self) -> String {
+        match self {
+            Self::Fs(error) => format!("{:?}", error.kind),
+            Self::Lock(error) => format!("{:?}", error.kind()),
+            Self::Catalog(_) => "Catalog".to_owned(),
+            Self::Invalid(_) => "Invalid".to_owned(),
+            Self::Changed(_) => "Changed".to_owned(),
+            Self::Unsupported(_) => "Unsupported".to_owned(),
+            Self::State(_) => "State".to_owned(),
+            Self::Pinned(_) => "Pinned".to_owned(),
+        }
+    }
 }
 
 impl From<FsError> for Error {

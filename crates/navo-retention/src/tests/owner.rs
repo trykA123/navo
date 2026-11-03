@@ -124,3 +124,41 @@ fn repinning_the_owner_during_purge_verification_prevents_the_next_delete() {
     assert_eq!(fs.metadata(&held).unwrap().size, 3);
     assert!(vault.get(entry.id).unwrap().pinned);
 }
+
+#[test]
+fn owner_rollback_of_a_changed_payload_needs_attention_and_retries_after_restart() {
+    let profile = tempfile::tempdir().unwrap();
+    let fs = FakeFs::new();
+    fs.add_file("home/a", 3);
+    let job = owner(profile.path());
+    let mut vault = open(profile.path(), &fs);
+    let entry = owned(&mut vault, job, &fs.location("home/a"));
+    let payload = entry.record.held().unwrap().path().to_text();
+    fs.fault(
+        &payload,
+        FakeOp::Rename,
+        1,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    assert!(run(|run| vault.rollback(entry.id, job, run)).is_err());
+    assert_eq!(vault.get(entry.id).unwrap().state, RetainedState::Restoring);
+    fs.rename_entry(&payload, "home/moved");
+    fs.add_file(&payload, 9);
+    assert!(run(|run| vault.rollback(entry.id, job, run)).is_err());
+    let conflicted = vault.get(entry.id).unwrap();
+    assert_eq!(conflicted.state, RetainedState::Conflict);
+    assert!(
+        conflicted.pinned,
+        "the job keeps its entry while it is pending"
+    );
+    assert!(fs.metadata(&entry.record.source).is_err());
+    drop(vault);
+    fs.remove(&payload);
+    fs.rename_entry("home/moved", &payload);
+    let mut vault = open(profile.path(), &fs);
+    assert_eq!(
+        run(|run| vault.rollback(entry.id, job, run)).unwrap().state,
+        RetainedState::Restored
+    );
+    assert_eq!(fs.metadata(&entry.record.source).unwrap().size, 3);
+}

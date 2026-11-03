@@ -13,6 +13,9 @@ use navo_ui::browser::{
 use super::hooks;
 use crate::jobs::{SharedJournal, experimental_factory};
 
+mod interrupted;
+mod privacy;
+
 struct Profile {
     _root: tempfile::TempDir,
     dirs: StoreDirs,

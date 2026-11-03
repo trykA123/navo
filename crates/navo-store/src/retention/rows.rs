@@ -6,7 +6,8 @@ use rusqlite::{Connection, OptionalExtension, Row};
 use super::RetentionStoreError;
 
 const SELECT: &str = "SELECT e.id, e.job_id, e.state, e.record, e.target,
-    e.job_id IS NOT NULL AND (j.state IS NULL OR j.state NOT IN ('done', 'failed', 'cancelled', 'rolled_back', 'undone'))
+    e.job_id IS NOT NULL AND (j.state IS NULL OR j.state NOT IN ('done', 'failed', 'cancelled', 'rolled_back', 'undone')),
+    e.maintenance_attempts
     FROM retained_entry e LEFT JOIN job j ON j.id = e.job_id";
 
 struct Raw {
@@ -94,7 +95,8 @@ pub(super) fn summaries(
     let mut rows = statement.query(rusqlite::params![after, limit])?;
     let mut inventory = Vec::new();
     while let Some(row) = rows.next()? {
-        inventory.push(RetentionSummary::try_from(&decode(read(row)?)?)?);
+        let attempts = row.get(6)?;
+        inventory.push(RetentionSummary::try_from(&decode(read(row)?)?)?.with_attempts(attempts));
     }
     Ok(inventory)
 }

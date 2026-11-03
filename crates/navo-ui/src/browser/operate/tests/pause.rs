@@ -4,6 +4,7 @@ pub(super) fn gated(browser: &mut Browser) -> Arc<AtomicBool> {
     let gate = Arc::new(AtomicBool::new(false));
     let open = Arc::clone(&gate);
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: Arc::new(move |_: &OperationPlan| {
@@ -144,6 +145,7 @@ fn a_job_waiting_for_another_operation_shows_it_until_cancelled() {
     let fs = fake();
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: Arc::new(|_: &OperationPlan| Ok(Box::new(WaitingLog) as Box<dyn OpLog>)),
