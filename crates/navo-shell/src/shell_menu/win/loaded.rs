@@ -29,6 +29,7 @@ pub(super) struct LoadedMenu {
     pub(super) menu: IContextMenu,
     pub(super) hmenu: HMENU,
     pub(super) command_count: u32,
+    pub(super) paths: MenuPaths,
     submenus: HashMap<Vec<usize>, SubmenuRef>,
 }
 
@@ -44,6 +45,7 @@ impl LoadedMenu {
             menu,
             hmenu,
             command_count: 0,
+            paths: source.paths.clone(),
             submenus: HashMap::new(),
         };
         let extended = if source.extended {

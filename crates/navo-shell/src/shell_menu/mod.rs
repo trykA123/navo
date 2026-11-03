@@ -5,6 +5,8 @@ mod error;
 mod fill;
 #[cfg(any(windows, test))]
 mod idle;
+#[cfg(any(windows, test))]
+mod invoke_plan;
 mod pending;
 #[cfg(any(windows, test))]
 mod pixels;
