@@ -6,7 +6,7 @@ use super::mode::{deliver, select, selected, start, visible};
 use super::{browser, row, rows, sides};
 use crate::browser::{
     Browser, CompareFilter, CompareRefusal, CompareRow, CompareTotals, CompareUpdate, RowStatus,
-    StopBound, bar_view,
+    StopBound, Tone, bar_view, pane_rows,
 };
 use crate::settings::Values;
 
@@ -157,6 +157,54 @@ fn a_folder_that_holds_a_difference_stays_under_the_differences_filter() {
     deliver(&mut browser, &calls, nested_change());
     browser.compare_filter(CompareFilter::Differences);
     assert_eq!(visible(&browser), ["a"]);
+}
+
+#[test]
+fn folders_with_nested_differences_get_a_distinct_mark_and_status() {
+    let (mut browser, calls) = started();
+    deliver(&mut browser, &calls, nested_change());
+    for side in [0, 1] {
+        let mode = browser.compare_mode().expect("compare mode");
+        let views = pane_rows(mode, side);
+        let changed = views.iter().find(|row| row.path == "a").expect("folder");
+        let same = views.iter().find(|row| row.path == "c").expect("folder");
+        assert_ne!(changed.mark, "=");
+        assert_ne!(changed.mark, "≠");
+        assert_eq!(changed.tone, Tone::Change);
+        assert_eq!(
+            changed.status,
+            navo_l10n::tr("compare-status-contains-differences")
+        );
+        assert_eq!(same.mark, "=");
+        assert!(same.status.is_empty());
+    }
+    select(&mut browser, "a");
+    assert!(browser.compare_enter());
+    let mode = browser.compare_mode().expect("compare mode");
+    assert_ne!(pane_rows(mode, 0)[0].mark, "=");
+}
+
+#[test]
+fn nested_differences_preserve_one_sided_and_checking_folder_marks() {
+    let (mut browser, calls) = started();
+    for (status, side) in [
+        (RowStatus::OnlyLeft, 0),
+        (RowStatus::OnlyRight, 1),
+        (RowStatus::Checking, 0),
+        (RowStatus::NotChecked("compare-reason-stopped"), 0),
+        (RowStatus::Unavailable("compare-reason-read-error"), 0),
+    ] {
+        let folder = CompareRow {
+            contains_differences: true,
+            ..row(1, "a", status)
+        };
+        deliver(&mut browser, &calls, rows(1, vec![folder]));
+        let mode = browser.compare_mode().expect("compare mode");
+        let view = &pane_rows(mode, side)[0];
+        let (tone, mark) = super::super::view::look_of(status);
+        assert_eq!((view.tone, view.mark), (tone, mark));
+        assert_eq!(view.status, super::super::view::status_text(status, None));
+    }
 }
 
 #[test]

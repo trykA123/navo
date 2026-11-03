@@ -132,7 +132,13 @@ fn side_view(side: CompareSide) -> SideView {
 }
 
 fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> RowView {
-    let (tone, mark) = look_of(row.status);
+    let contains_differences =
+        row.is_folder_pair() && row.contains_differences && row.status.is_same();
+    let (tone, mark) = if contains_differences {
+        (Tone::Change, "⊃")
+    } else {
+        look_of(row.status)
+    };
     let here = if side == 0 { row.left } else { row.right };
     RowView {
         path: row.path.clone(),
@@ -140,10 +146,12 @@ fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> Row
         side: here.map(side_view),
         tone,
         mark,
-        status: if here.is_some() {
-            status_text(row.status, progress)
-        } else {
+        status: if here.is_none() {
             String::new()
+        } else if contains_differences {
+            tr("compare-status-contains-differences")
+        } else {
+            status_text(row.status, progress)
         },
     }
 }
