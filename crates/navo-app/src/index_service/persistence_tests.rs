@@ -135,7 +135,7 @@ fn fallback_after_damage(damage: impl FnOnce(&mut [u8])) {
             fixed: true,
             ntfs: true,
         },
-        || {
+        |_| {
             enumerated = true;
             Ok(index())
         },

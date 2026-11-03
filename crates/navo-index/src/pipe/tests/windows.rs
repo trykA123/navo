@@ -52,6 +52,7 @@ fn pipe_round_trip_returns_top_500_paths_flags_and_status_in_order() {
                 entries: 501,
                 progress: None,
                 errors: Vec::new(),
+                total_files: None,
             }],
         },
     };

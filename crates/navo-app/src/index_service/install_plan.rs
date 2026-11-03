@@ -261,6 +261,7 @@ pub(super) enum Step {
     DiscardCopy,
     RestoreConfiguration,
     DeleteOld,
+    Verify,
 }
 
 pub(super) fn install_steps(exists: bool) -> &'static [Step] {
@@ -274,9 +275,18 @@ pub(super) fn install_steps(exists: bool) -> &'static [Step] {
             BackupSettings,
             Configure,
             Start,
+            Verify,
         ]
     } else {
-        &[Copy, RenameOld, Replace, BackupSettings, Configure, Start]
+        &[
+            Copy,
+            RenameOld,
+            Replace,
+            BackupSettings,
+            Configure,
+            Start,
+            Verify,
+        ]
     }
 }
 
@@ -307,7 +317,7 @@ fn recover(
     let mut failures = Vec::new();
     let replaced = completed.contains(&Step::Replace);
     let mut rollback = Vec::new();
-    if exists && replaced {
+    if replaced && (exists || completed.contains(&Step::Start)) {
         rollback.push((Step::Stop, "stopping the replacement service"));
     }
     if completed.contains(&Step::BackupSettings) {
@@ -390,7 +400,15 @@ mod tests {
         use Step::*;
         assert_eq!(
             install_steps(false),
-            &[Copy, RenameOld, Replace, BackupSettings, Configure, Start]
+            &[
+                Copy,
+                RenameOld,
+                Replace,
+                BackupSettings,
+                Configure,
+                Start,
+                Verify
+            ]
         );
         assert_eq!(
             install_steps(true),
@@ -401,7 +419,8 @@ mod tests {
                 Stop,
                 BackupSettings,
                 Configure,
-                Start
+                Start,
+                Verify
             ]
         );
     }

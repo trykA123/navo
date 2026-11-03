@@ -43,7 +43,7 @@ impl StartupFixture {
             ntfs: true,
         };
         let started = Instant::now();
-        let index = restore_or_enumerate(file::load_with_ids(&self.path), drive, || {
+        let index = restore_or_enumerate(file::load_with_ids(&self.path), drive, |_| {
             panic!("a valid snapshot must be published before catch-up")
         })
         .unwrap();

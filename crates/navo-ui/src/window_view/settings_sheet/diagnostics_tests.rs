@@ -5,7 +5,7 @@ use gpui_kit::TestAppContext;
 use gpui_kit::test::TestWindowExt;
 
 use super::*;
-use crate::settings::DiagnosticRow;
+use crate::settings::{DiagnosticRow, FIELDS};
 use crate::window_view::tests::{fake, open_options, options_for, two_panes};
 
 #[gpui_kit::test]

@@ -59,6 +59,17 @@ pub fn moved(filter: &Filter, row: usize, down: bool) -> usize {
 pub const DIAGNOSTICS_ROW: usize = FIELDS.len();
 pub const HELP_ROW: usize = FIELDS.len() + 1;
 
+impl Field {
+    /// The sheet row that shows this field; the Help toggle lives on the Help page row.
+    pub fn row(self) -> usize {
+        if self == Self::CheckUpdates {
+            HELP_ROW
+        } else {
+            self.index()
+        }
+    }
+}
+
 pub fn section_of(row: usize) -> Section {
     if row == DIAGNOSTICS_ROW {
         return Section::Diagnostics;

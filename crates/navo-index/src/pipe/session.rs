@@ -9,7 +9,7 @@ use std::{
 
 use super::{
     CancelToken, Cancellation, MAX_HITS, PipeError, QUERY_TIMEOUT, Query, Reply, Request, Response,
-    Status, VolumeStatus, frames, platform,
+    SERVICE_REVISION, Status, VolumeStatus, build_id, frames, platform,
 };
 
 #[derive(Default)]
@@ -165,17 +165,7 @@ fn send_replies(
     events: &mpsc::Receiver<()>,
 ) -> Result<(), PipeError> {
     while !session.stopped.is_cancelled() {
-        let next = {
-            let mut state = session
-                .pending
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner);
-            state
-                .query
-                .take()
-                .map(|query| (query, state.cancel.clone()))
-        };
-        let Some((query, cancel)) = next else {
+        let Some((query, cancel)) = take_next(session) else {
             if events.recv().is_err() {
                 break;
             }
@@ -184,6 +174,16 @@ fn send_replies(
         if cancel.is_cancelled() || session.stopped.is_cancelled() {
             continue;
         }
+        if query.request.wants_version() {
+            let version = Response::VersionV1 {
+                generation: query.generation,
+                revision: SERVICE_REVISION,
+                build: build_id().into(),
+            };
+            pipe.write_response(&version, Instant::now() + QUERY_TIMEOUT)?;
+            continue;
+        }
+        let detailed_status = query.request.wants_status();
         let (reply, answered) = mpsc::sync_channel(1);
         answers
             .send(Job {
@@ -195,9 +195,28 @@ fn send_replies(
         let Some(reply) = wait_for_reply(&answered, &cancel, session) else {
             continue;
         };
-        write_reply(pipe, query.generation, reply)?;
+        if detailed_status {
+            let status = Response::StatusV1 {
+                generation: query.generation,
+                status: reply.status,
+            };
+            pipe.write_response(&status, Instant::now() + QUERY_TIMEOUT)?;
+        } else {
+            write_reply(pipe, query.generation, reply)?;
+        }
     }
     Ok(())
+}
+
+fn take_next(session: &Session) -> Option<(Query, CancelToken)> {
+    let mut state = session
+        .pending
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    state
+        .query
+        .take()
+        .map(|query| (query, state.cancel.clone()))
 }
 
 fn write_reply(pipe: &impl Transport, generation: u64, mut reply: Reply) -> Result<(), PipeError> {

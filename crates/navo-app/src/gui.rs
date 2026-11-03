@@ -180,6 +180,8 @@ pub(crate) fn open(mut launch: Launch) {
         .map(|sender| crate::resident::ResidentHandle::start(sender, &settings.values));
     let clip = crate::clip_module::ClipModule::start(dirs.as_ref(), &settings.values);
     let (search, visits) = search_hooks(services.memory.clone(), remember, dirs.as_ref(), &local);
+    #[cfg(windows)]
+    crate::index_service::start_version_step(dirs.as_ref().map(|dirs| dirs.data.as_path()));
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     let exit = (disk, visits, services.sessions);
     files::prewarm_pdf(PDF_WARM_DELAY);

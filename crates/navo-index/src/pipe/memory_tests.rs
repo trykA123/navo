@@ -180,6 +180,7 @@ fn an_old_status_frame_still_decodes() {
                 entries: 3,
                 progress: Some(41),
                 errors: vec!["x".into()],
+                total_files: None,
             }],
         },
     };
@@ -277,4 +278,57 @@ fn memory_counts_preserve_slots_after_deletes_for_each_volume() {
             },
         ])
     );
+}
+
+fn builds() -> Vec<crate::pipe::VolumeBuilds> {
+    vec![
+        crate::pipe::VolumeBuilds {
+            full_builds: 3,
+            last_reason: Some(crate::pipe::BuildReason::UnresolvedChanges),
+            last_duration_ms: 41_000,
+            unresolved_batches: 9,
+            deferred_rebuilds: 2,
+            dropped_changes: 17,
+        },
+        crate::pipe::VolumeBuilds::default(),
+    ]
+}
+
+#[test]
+fn build_counters_round_trip_for_each_volume_in_order() {
+    let mut report = report(5);
+    report.process_id = Some(42);
+    report.builds = Some(builds());
+    let decoded: MemoryReport = frames::decode(&frames::encode(&report).unwrap()).unwrap();
+    assert_eq!(decoded, report);
+}
+
+#[test]
+fn an_old_memory_client_skips_build_counters() {
+    let mut report = report(5);
+    report.builds = Some(builds());
+    let decoded: OldMemoryReport = frames::decode(&frames::encode(&report).unwrap()).unwrap();
+    let known: Vec<_> = decoded
+        .parts
+        .into_iter()
+        .filter(|part| Part::from_code(part.part).is_some())
+        .collect();
+    assert_eq!(known, report.parts);
+}
+
+#[test]
+fn build_reason_codes_and_labels_are_stable() {
+    use crate::pipe::BuildReason;
+    for (code, label) in [
+        (1, "snapshot_missing"),
+        (2, "snapshot_invalid"),
+        (3, "snapshot_stale"),
+        (4, "journal_reset"),
+        (5, "unresolved_changes"),
+    ] {
+        let reason = BuildReason::from_code(code).unwrap();
+        assert_eq!((reason.code(), reason.label()), (code, label));
+    }
+    assert_eq!(BuildReason::from_code(0), None);
+    assert_eq!(BuildReason::from_code(99), None);
 }

@@ -127,6 +127,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::RetainOverwrites
         | Field::ClipboardOn
         | Field::ClipboardRecord
+        | Field::CheckUpdates
         | Field::CompareRespectGitignore => Value::Flag(true),
         Field::CompareBudgetMib => Value::Number(1024),
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),

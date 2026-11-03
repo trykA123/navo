@@ -2,17 +2,19 @@ use navo_ui::git::ToolRow;
 use navo_ui::prelude::*;
 use navo_ui::primitives::TextFieldState;
 use navo_ui::settings::{
-    self, Change, DefaultShift, FIELDS, Field, Filter, GitPage, IndexProgress, Moved, SearchPage,
+    self, Change, DefaultShift, Field, Filter, GitPage, IndexProgress, Moved, SearchPage,
     ServiceStatus, SettingsBody, Values, VolumeProgress, find_field,
 };
 use navo_ui::side_sheet::{SheetFrame, SheetState, SideSheet};
 use navo_ui::tokens::{Mode, Theme, ThemeChoice};
+use navo_ui::window_view::UpdateView;
 
 #[derive(Clone, Default)]
 pub struct Extras {
     pub has_notice: bool,
     pub find: Option<(Entity<TextFieldState>, &'static str)>,
     pub is_scrolled_to_end: bool,
+    pub update: Option<UpdateView>,
 }
 
 pub struct Shown<'a> {
@@ -104,10 +106,7 @@ pub fn sheet(t: &Theme, state: &Entity<SheetState>, frame: SheetFrame, shown: &S
         .with(&Change::theme(theme))
         .with(&Change::text(Field::EditorPath, r"C:\Tools\code.exe"));
     let (values, git) = git_sample(values, shown.field);
-    let row = FIELDS
-        .iter()
-        .position(|spec| spec.field == shown.field)
-        .unwrap_or_default();
+    let row = shown.field.row();
     let page = SearchPage {
         status: ServiceStatus::NotAvailable,
         is_windows: true,
@@ -116,7 +115,9 @@ pub fn sheet(t: &Theme, state: &Entity<SheetState>, frame: SheetFrame, shown: &S
     let body = SettingsBody::new(values, row)
         .search_page(page)
         .git_page(git)
-        .index_progress(index_sample());
+        .index_progress(index_sample())
+        .version("0.3.0".into())
+        .update(shown.extras.update.clone().unwrap_or(UpdateView::Hidden));
     let body = if shown.extras.is_scrolled_to_end {
         let scroll = ScrollHandle::new();
         scroll.set_offset(point(px(0.), px(-10_000.)));

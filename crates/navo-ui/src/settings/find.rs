@@ -33,6 +33,9 @@ impl Filter {
 
     #[must_use]
     pub fn admits(&self, spec: &FieldSpec) -> bool {
+        if spec.section == Section::Help {
+            return false;
+        }
         if (spec.field.is_windows_only() && !cfg!(windows))
             || self.hidden == Some(spec.field)
             || !spec.section.is_shown()

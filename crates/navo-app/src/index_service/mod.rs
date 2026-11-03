@@ -19,11 +19,15 @@ mod elevation;
 #[cfg(any(windows, test))]
 mod elevation_result;
 #[cfg(any(windows, test))]
+mod heartbeat;
+#[cfg(any(windows, test))]
 mod memory;
 #[cfg(any(windows, test))]
 mod totals;
 #[cfg(any(windows, test))]
 pub(crate) use elevation_result::ElevationError;
+#[cfg(any(windows, test))]
+mod install_check;
 #[cfg(any(windows, test))]
 mod install_plan;
 #[cfg(windows)]
@@ -37,6 +41,8 @@ mod ownership;
 #[cfg(any(windows, test))]
 mod policy;
 #[cfg(any(windows, test))]
+mod rebuild;
+#[cfg(any(windows, test))]
 mod removal;
 #[cfg(windows)]
 mod runtime;
@@ -45,6 +51,8 @@ mod runtime;
 mod scm;
 #[cfg(any(windows, test))]
 mod search;
+#[cfg(any(windows, test))]
+mod service_log;
 #[cfg(windows)]
 #[path = "session/windows.rs"]
 mod session;
@@ -53,9 +61,13 @@ mod session;
 mod storage;
 #[cfg(any(windows, test))]
 mod upgrade;
+#[cfg(any(windows, test))]
+mod version_step;
 #[cfg(windows)]
 #[path = "volumes/windows.rs"]
 mod volumes;
+#[cfg(windows)]
+mod worker;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Action {
@@ -80,9 +92,17 @@ pub(crate) fn run(action: Action) -> std::process::ExitCode {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("navo: index service: {error}");
-            std::process::ExitCode::FAILURE
+            std::process::ExitCode::from(failure_code(&error))
         }
     }
+}
+
+#[cfg(any(windows, test))]
+use elevation_result::failure_code;
+
+#[cfg(not(any(windows, test)))]
+fn failure_code(_: &std::io::Error) -> u8 {
+    1
 }
 
 #[cfg(windows)]
@@ -91,18 +111,45 @@ pub(crate) fn request_elevation(action: Action) -> Result<(), ElevationError> {
 }
 
 #[cfg(any(windows, test))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ServiceQuery {
     pub running: Option<bool>,
+    /// What a running service answers; `None` when it is not running or did not answer.
+    pub version: Option<navo_index::pipe::ServiceVersion>,
     pub legacy_present: bool,
 }
 
 #[cfg(windows)]
 pub(crate) fn query() -> std::io::Result<ServiceQuery> {
+    let running = scm::query_running(install_plan::NAVO)?;
     Ok(ServiceQuery {
-        running: scm::query_running(install_plan::NAVO)?,
+        running,
+        version: (running == Some(true)).then(running_version).flatten(),
         legacy_present: scm::query_running(install_plan::LEGACY_PRODUCT)?.is_some(),
     })
+}
+
+#[cfg(windows)]
+fn running_version() -> Option<navo_index::pipe::ServiceVersion> {
+    const WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+    match navo_index::pipe::Client::version(std::time::Instant::now() + WAIT) {
+        Ok(version) => Some(version),
+        Err(error) => {
+            tracing::debug!(%error, "index service: no version answer");
+            None
+        }
+    }
+}
+
+#[cfg(any(windows, test))]
+pub(crate) use version_step::is_older;
+
+/// Starts the D22f update check off the UI thread; off without a data folder to remember a decline.
+#[cfg(windows)]
+pub(crate) fn start_version_step(data: Option<&std::path::Path>) {
+    if let Some(data) = data {
+        version_step::start(data.join(version_step::DECLINED));
+    }
 }
 
 #[cfg(any(windows, test))]
@@ -171,6 +218,8 @@ fn execute(_: Action) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod install_replace_tests;
 #[cfg(test)]
 mod install_rollback_tests;
 #[cfg(test)]

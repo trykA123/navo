@@ -4,6 +4,7 @@ use super::general_fields::GENERAL;
 use super::git_fields::GIT_FIELDS;
 use super::search_fields::SEARCH_ROWS;
 use super::tray_fields::TRAY_FIELDS;
+use super::update_fields::UPDATE_FIELDS;
 use super::viewer_fields::VIEWER_FIELDS;
 use super::window_fields::WINDOW_FIELDS;
 use crate::prelude::SharedString;
@@ -181,6 +182,7 @@ pub enum Field {
     CompareRespectGitignore,
     CompareBudgetMib,
     CompareContentCheck,
+    CheckUpdates,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -289,7 +291,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 83] = join([
+pub const FIELDS: [FieldSpec; 84] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &GIT_FIELDS,
@@ -298,9 +300,10 @@ pub const FIELDS: [FieldSpec; 83] = join([
     &TRAY_FIELDS,
     &CLIPBOARD_FIELDS,
     &COMPARE_FIELDS,
+    &UPDATE_FIELDS,
 ]);
 
-const fn join<const N: usize>(parts: [&[FieldSpec]; 8]) -> [FieldSpec; N] {
+const fn join<const N: usize>(parts: [&[FieldSpec]; 9]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];
     let mut at = 0;
     let mut part = 0;

@@ -21,6 +21,7 @@ fn every_key_is_unique_and_lives_in_its_section() {
         let home = match spec.section {
             Section::Display => spec.group().map(str::to_lowercase),
             Section::Safety => Some("retention".to_owned()),
+            Section::Help => Some("updates".to_owned()),
             section => Some(section.label().to_lowercase()),
         };
         assert_eq!(Some(spec.table().to_owned()), home, "{}", spec.key);
@@ -45,7 +46,7 @@ fn sections_run_in_order_without_gaps() {
         seen,
         Section::ALL
             .into_iter()
-            .filter(|section| !matches!(section, Section::Diagnostics | Section::Help))
+            .filter(|section| *section != Section::Diagnostics)
             .collect::<Vec<_>>()
     );
 }
@@ -116,7 +117,7 @@ fn tab_jumps_to_the_next_section_and_wraps() {
         Section::Help
     );
     assert_eq!(
-        section_of(next_section(&Filter::default(), FIELDS.len() - 1, true)),
+        section_of(next_section(&Filter::default(), FIELDS.len() - 2, true)),
         Section::Diagnostics
     );
     assert_eq!(
@@ -761,6 +762,14 @@ fn only_the_clipboard_switch_shows_off_windows() {
     assert_eq!(shown(Field::ClipboardRecord), cfg!(windows));
     assert_eq!(shown(Field::ClipboardKey), cfg!(windows));
     assert!(Filter::default().first_in(Section::Clipboard).is_some());
+}
+
+#[test]
+fn an_older_service_can_be_updated_and_removed() {
+    use super::search_page::ServiceStatus;
+    assert!(ServiceStatus::Outdated.can_install());
+    assert!(ServiceStatus::Outdated.can_remove());
+    assert!(!ServiceStatus::Running.can_install());
 }
 
 #[test]

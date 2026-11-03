@@ -1,4 +1,4 @@
-use super::{Change, FIELDS, NavoWindow};
+use super::{Change, NavoWindow};
 use crate::prelude::*;
 
 impl NavoWindow {
@@ -20,9 +20,7 @@ impl NavoWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if let Some(row) = FIELDS.iter().position(|spec| spec.field == change.field) {
-            self.select_setting(row, window, cx);
-        }
+        self.select_setting(change.field.row(), window, cx);
         let old = self.values.change_of(change.field);
         if old == change {
             return false;
@@ -36,9 +34,7 @@ impl NavoWindow {
         let Some(old) = self.settings.undo.pop() else {
             return;
         };
-        if let Some(row) = FIELDS.iter().position(|spec| spec.field == old.field) {
-            self.select_setting(row, window, cx);
-        }
+        self.select_setting(old.field.row(), window, cx);
         self.change_setting(old, window, cx);
     }
 }

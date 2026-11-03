@@ -1,5 +1,6 @@
 #[cfg(any(windows, test))]
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(any(windows, test))]
 use std::sync::mpsc;
 #[cfg(any(windows, test))]
@@ -15,13 +16,23 @@ use navo_store::StoreDirs;
 #[cfg(windows)]
 const REMOVE_BUDGET: Duration = Duration::from_secs(25);
 
+static RESTARTED: AtomicBool = AtomicBool::new(false);
+
+/// Runs Velopack's start-up hooks. Staged packages apply only through `updater::apply`.
 pub(crate) fn run() {
-    let mut app = velopack::VelopackApp::build();
+    let mut app = velopack::VelopackApp::build()
+        .set_auto_apply_on_startup(false)
+        .on_restarted(|_| RESTARTED.store(true, Ordering::Relaxed));
     #[cfg(windows)]
     {
         app = app.on_before_uninstall_fast_callback(|_| remove_index_service());
     }
     app.run();
+}
+
+/// True when Velopack started this process right after applying a package.
+pub(crate) fn restarted() -> bool {
+    RESTARTED.load(Ordering::Relaxed)
 }
 
 #[cfg(any(windows, test))]

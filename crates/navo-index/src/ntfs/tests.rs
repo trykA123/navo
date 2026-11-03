@@ -933,3 +933,17 @@ fn malformed_record_uses_the_current_file_size_when_available() {
     assert_eq!(volume.fallback_reads, [20]);
     assert_eq!(built.sizes_unknown, 0);
 }
+
+#[test]
+fn mft_records_divide_the_valid_mft_length_by_the_record_size() {
+    let mut data = vec![0; 96];
+    data[48..52].copy_from_slice(&1024u32.to_le_bytes());
+    data[56..64].copy_from_slice(&(1024i64 * 300_000).to_le_bytes());
+    assert_eq!(mft_records(&data).unwrap(), 300_000);
+    data[56..64].copy_from_slice(&(-1i64).to_le_bytes());
+    assert!(mft_records(&data).is_err());
+    data[48..52].copy_from_slice(&100u32.to_le_bytes());
+    assert!(mft_records(&data).is_err());
+    data[48..52].copy_from_slice(&1024u32.to_le_bytes());
+    assert!(mft_records(&data[..60]).is_err());
+}

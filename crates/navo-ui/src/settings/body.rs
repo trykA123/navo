@@ -7,6 +7,7 @@ use super::{
     SheetEvent, Values,
 };
 use crate::prelude::*;
+use crate::window_view::UpdateView;
 
 impl SettingsBody {
     pub fn new(values: Values, row: usize) -> Self {
@@ -24,6 +25,7 @@ impl SettingsBody {
             index: IndexProgress::default(),
             diagnostics: Vec::new(),
             version: SharedString::default(),
+            update: UpdateView::Hidden,
             focus: None,
             scroll: None,
             on_event: None,
@@ -107,6 +109,12 @@ impl SettingsBody {
     #[must_use]
     pub fn version(mut self, version: SharedString) -> Self {
         self.version = version;
+        self
+    }
+
+    #[must_use]
+    pub fn update(mut self, update: UpdateView) -> Self {
+        self.update = update;
         self
     }
 

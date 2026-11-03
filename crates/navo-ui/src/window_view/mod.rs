@@ -74,6 +74,7 @@ mod tiles;
 mod title;
 mod undo;
 mod undo_retained;
+mod update_hooks;
 mod user_keymap;
 mod viewer;
 mod visits;
@@ -130,7 +131,8 @@ pub use preset_edit::{
 };
 pub use preview::folder_summary;
 pub use search_hooks::{
-    CommandUse, Frecent, Frecents, RecentCommands, SearchHooks, ServiceHooks, ServiceStatus,
+    CommandUse, Frecent, Frecents, RecentCommands, SearchHooks, ServiceHooks, ServiceOutcome,
+    ServiceStatus,
 };
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};
@@ -143,6 +145,7 @@ pub use shell_menu::{
 pub use start::{RunHooks, run};
 pub use start_watch::{StartReport, StartWatch};
 pub use terminal::TerminalHooks;
+pub use update_hooks::{UpdateFailure, UpdateHooks, UpdateView};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,

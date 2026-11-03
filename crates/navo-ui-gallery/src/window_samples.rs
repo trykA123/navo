@@ -5,6 +5,7 @@ use navo_ui::prelude::*;
 use navo_ui::primitives::text_field_state;
 use navo_ui::settings::{Field, WindowParts};
 use navo_ui::side_sheet::Side;
+use navo_ui::window_view::{UpdateFailure, UpdateView};
 
 use crate::gallery::Page;
 use crate::settings_sample::Extras;
@@ -104,6 +105,7 @@ pub fn settings_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage
                     has_notice,
                     find,
                     is_scrolled_to_end,
+                    update: None,
                 },
                 shortcuts: None,
             };
@@ -125,6 +127,45 @@ pub fn settings_element(page: Page, windows: &[Entity<WindowPage>; 7]) -> Option
         _ => return None,
     };
     Some(shown.clone().into_any_element())
+}
+
+pub fn help_windows(cx: &mut App) -> [Entity<WindowPage>; 3] {
+    let downloading = UpdateView::Downloading {
+        version: "0.4.0".into(),
+        percent: 40,
+    };
+    let limited = UpdateView::Failed(UpdateFailure::RateLimited {
+        next_try: "14:30".into(),
+    });
+    [
+        (None, downloading),
+        (Some(PHONE), limited),
+        (None, UpdateView::Hidden),
+    ]
+    .map(|(window_width, update)| {
+        let shows = SheetShows {
+            active: Side::Left,
+            window_width,
+            is_ringed: false,
+            settings: Some(Field::CheckUpdates),
+            extras: Extras {
+                update: Some(update),
+                ..Extras::default()
+            },
+            shortcuts: None,
+        };
+        cx.new(|cx| WindowPage::with_sheet(shows, cx))
+    })
+}
+
+pub fn help_element(page: Page, windows: &[Entity<WindowPage>; 3]) -> Option<AnyElement> {
+    let [desktop, phone, unpackaged] = windows;
+    match page {
+        Page::SettingsHelpUpdates => Some(desktop.clone().into_any_element()),
+        Page::SettingsHelpUpdatesPhone => Some(fixed(PHONE, phone)),
+        Page::SettingsHelpUnpackaged => Some(unpackaged.clone().into_any_element()),
+        _ => None,
+    }
 }
 
 pub fn hint_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {

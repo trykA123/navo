@@ -21,6 +21,7 @@ mod search_page;
 mod steps;
 mod summon_key;
 mod tray_fields;
+mod update_fields;
 mod upgrade;
 mod values;
 mod view;
@@ -58,6 +59,7 @@ pub use window::WindowParts;
 use crate::prelude::*;
 use crate::side_sheet::{SheetFrame, SheetState, SideSheet};
 use crate::tokens;
+use crate::window_view::UpdateView;
 
 pub use diagnostics_page::DiagnosticRow;
 
@@ -107,6 +109,7 @@ pub enum SheetEvent {
     DismissUpgrade,
     RefreshDiagnostics,
     OpenGuide,
+    CheckUpdates,
     ClearHistory,
     InstallService,
     RemoveService,
@@ -177,6 +180,7 @@ pub struct SettingsBody {
     index: IndexProgress,
     diagnostics: Vec<DiagnosticRow>,
     version: SharedString,
+    update: UpdateView,
     focus: Option<FocusHandle>,
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
@@ -186,6 +190,9 @@ pub struct SettingsBody {
 
 impl SettingsBody {
     fn shown_spec(&self) -> Option<&'static FieldSpec> {
+        if self.row == HELP_ROW && self.shortcuts.is_none() {
+            return Some(Field::CheckUpdates.spec());
+        }
         FIELDS.get(self.row).filter(|spec| self.filter.admits(spec))
     }
 
@@ -318,6 +325,7 @@ impl RenderOnce for SettingsBody {
             index: &self.index,
             diagnostics: &self.diagnostics,
             version: &self.version,
+            update: &self.update,
             send: self.on_event.clone(),
             summon_key_taken: self.summon_key_taken,
             clipboard_key_taken: self.clipboard_key_taken,
@@ -343,12 +351,7 @@ impl RenderOnce for SettingsBody {
             .min_w_0()
             .child(nav::nav(&look, shown))
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .min_h_0()
+                column()
                     .children(self.error.map(|message| view::error_line(&t, message)))
                     .children(notice)
                     .child(content)
@@ -358,14 +361,10 @@ impl RenderOnce for SettingsBody {
     }
 }
 
+fn column() -> Div {
+    div().flex().flex_col().flex_1().min_h_0().min_w_0()
+}
+
 fn framed(find: Option<AnyElement>, body: impl IntoElement, editor: Option<AnyElement>) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_h_0()
-        .min_w_0()
-        .children(find)
-        .child(body)
-        .children(editor)
+    column().children(find).child(body).children(editor)
 }

@@ -297,3 +297,66 @@ fn assert_legacy_reply(client: &Client) {
         });
     }
 }
+
+#[test]
+fn status_v1_answers_in_one_frame_with_totals_then_a_plain_query_still_works() {
+    use crate::pipe::{QueryTerm, Request, Status, VolumeStatus};
+    let (pipe, listener) = fixture();
+    let client = connect(&listener);
+    let cancel = CancelToken::new();
+    let stopped = CancelToken::new();
+    let status = Status {
+        volumes: vec![VolumeStatus {
+            root: "C:".into(),
+            entries: 4,
+            progress: Some(0),
+            total_files: Some(10),
+            ..VolumeStatus::default()
+        }],
+    };
+    let handler = |_: &Request, _: &CancelToken| Reply {
+        status: status.clone(),
+        ..Reply::default()
+    };
+    thread::scope(|scope| {
+        let _cancel = StopOnDrop(cancel.clone());
+        let worker = scope.spawn(|| serve_instance(&pipe, &handler, &cancel, &stopped));
+        let request = Request {
+            terms: vec![QueryTerm::StatusV1],
+        };
+        send_query(
+            &client,
+            &Query {
+                request,
+                generation: 1,
+            },
+        );
+        assert_eq!(
+            receive_response(&client),
+            Response::StatusV1 {
+                generation: 1,
+                status: status.clone(),
+            }
+        );
+        send_query(&client, &super::query(2));
+        let plain = receive_plain_status(&client);
+        assert_eq!(plain.volumes[0].total_files, None);
+        assert_eq!(plain.volumes[0].entries, 4);
+        cancel.cancel();
+        worker.join().unwrap().unwrap();
+    });
+}
+
+fn receive_plain_status(client: &Client) -> crate::pipe::Status {
+    let Response::Hits { generation: 2, .. } = receive_response(client) else {
+        panic!("a plain query answers hits first");
+    };
+    let Response::Status {
+        generation: 2,
+        status,
+    } = receive_response(client)
+    else {
+        panic!("a plain query answers the status second");
+    };
+    status
+}

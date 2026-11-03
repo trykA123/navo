@@ -28,6 +28,10 @@ fn report_before(volumes: &[SharedVolume], deadline: Instant) -> MemoryReport {
                 if let Some(index) = &state.index {
                     report.add_index(index);
                 }
+                report
+                    .builds
+                    .get_or_insert_default()
+                    .push(state.builds.clone());
             }
             None => report.busy = true,
         }

@@ -55,6 +55,8 @@ pub enum QueryTerm {
     Ext(Vec<String>),
     FolderTotalsV1(Vec<String>),
     MemoryV1,
+    StatusV1,
+    VersionV1,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,6 +84,9 @@ pub struct VolumeStatus {
     pub entries: u64,
     pub progress: Option<u8>,
     pub errors: Vec<String>,
+    /// MFT records counted when the last build started; only `Response::StatusV1` carries it.
+    #[serde(skip)]
+    pub total_files: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,6 +111,16 @@ pub enum Response {
     MemoryV1 {
         generation: u64,
         report: MemoryReport,
+    },
+    StatusV1 {
+        generation: u64,
+        #[serde(with = "super::status_wire")]
+        status: Status,
+    },
+    VersionV1 {
+        generation: u64,
+        revision: u32,
+        build: String,
     },
 }
 
@@ -140,6 +155,7 @@ pub struct MemoryReport {
     pub busy: bool,
     pub process_id: Option<u32>,
     pub volumes: Option<Vec<VolumeMemory>>,
+    pub builds: Option<Vec<super::VolumeBuilds>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

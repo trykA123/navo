@@ -1,7 +1,7 @@
 use super::{Page, PageInfo, info};
 
 /// The pages that follow `HEAD` in the table, in order.
-pub(super) const ALL: [PageInfo; 52] = [
+pub(super) const ALL: [PageInfo; 55] = [
     info(
         Page::SettingsUpgrade,
         "Settings, upgrade notice",
@@ -19,6 +19,24 @@ pub(super) const ALL: [PageInfo; 52] = [
         Page::IndexProgress,
         "Index progress",
         "ix9-index-progress",
+        false,
+    ),
+    info(
+        Page::SettingsHelpUpdates,
+        "Settings, Help updates",
+        "settings-help-updates",
+        false,
+    ),
+    info(
+        Page::SettingsHelpUpdatesPhone,
+        "Settings, Help updates, 390 px",
+        "settings-help-updates-390",
+        false,
+    ),
+    info(
+        Page::SettingsHelpUnpackaged,
+        "Settings, Help, copy that does not update",
+        "settings-help-updates-unpackaged",
         false,
     ),
     info(Page::MouseMarks, "Mouse marks", "p36-k5-mouse-marks", false),

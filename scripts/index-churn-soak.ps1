@@ -18,11 +18,27 @@ function ServiceProcess {
     Get-Process -Id $svc.ProcessId
 }
 
+# The exe is a GUI-subsystem binary: `&` captures nothing, so read its stdout through a process object.
+function IndexMemory {
+    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo($Exe, '--index-memory --json')
+        $psi.RedirectStandardOutput = $true
+        $psi.UseShellExecute = $false
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        $out = $proc.StandardOutput.ReadToEnd()
+        $proc.WaitForExit()
+        if ($proc.ExitCode -eq 0 -and $out.Trim()) {
+            $parsed = $out | ConvertFrom-Json
+            if ($null -ne $parsed.volumes) { return $parsed }
+        }
+        Start-Sleep -Seconds 1
+    }
+    throw 'index memory sample failed after retries'
+}
+
 function Sample($wave, $phase) {
     $p = ServiceProcess
-    $json = & $Exe --index-memory --json
-    if ($LASTEXITCODE -ne 0) { throw "index memory sample failed (exit $LASTEXITCODE)" }
-    $memory = $json | ConvertFrom-Json
+    $memory = IndexMemory
     if ($null -eq $script:firstPid) { $script:firstPid = $p.Id }
     $pidMismatch = $null -ne $memory.service_process_id -and $memory.service_process_id -ne $p.Id
     [pscustomobject]@{

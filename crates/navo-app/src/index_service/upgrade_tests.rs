@@ -8,6 +8,7 @@ fn query(legacy_present: bool) -> impl FnOnce() -> io::Result<ServiceQuery> {
     move || {
         Ok(ServiceQuery {
             running: None,
+            version: None,
             legacy_present,
         })
     }
