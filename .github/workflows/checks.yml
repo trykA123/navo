@@ -126,7 +126,8 @@ jobs:
       - shell: pwsh
         run: |
           $out = (& target/release/navo.exe --version | Out-String).Trim()
-          if ($out -ne 'navo 0.0.1') { throw "unexpected output: $out" }
+          $want = (cargo pkgid -p navo-app) -replace '.*[@#]', ''
+          if ($out -ne "navo $want") { throw "unexpected output: $out" }
       - name: Stage navo.exe with its PDB, pdfium.dll and licences
         shell: pwsh
         run: |
@@ -245,7 +246,7 @@ jobs:
       - name: Binary size (informational until the alpha features are in)
         continue-on-error: true
         run: cargo xtask binsize target/release/navo
-      - run: test "$(target/release/navo --version)" = "navo 0.0.1"
+      - run: test "$(target/release/navo --version)" = "navo $(cargo pkgid -p navo-app | sed 's/.*[@#]//')"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: navo-linux-x64-${{ github.sha }}

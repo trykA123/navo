@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, for example alpha-2026-10-30c"
+        description: "Release tag vX.Y.Z, equal to the workspace version in Cargo.toml, for example v0.1.0"
         required: true
         type: string
       full-checks:
@@ -38,7 +38,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          [[ "$TAG" =~ ^(alpha|beta|v)[A-Za-z0-9.-]+$ ]] || { echo "bad tag: $TAG"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad tag: $TAG (use vX.Y.Z)"; exit 1; }
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "release $TAG exists"; exit 1; fi
 
   clippy-windows:
@@ -85,12 +85,10 @@ jobs:
     env:
       TAG: ${{ inputs.tag }}
     steps:
-      - name: Tag maps to a Velopack prerelease
+      - name: Tag is vX.Y.Z
         shell: pwsh
         run: |
-          if (-not ($env:TAG -cmatch '^(alpha|beta)-(\d{4})-(\d{2})-(\d{2})([a-z])$')) {
-            throw "tag $env:TAG does not map to a Velopack version: use alpha-YYYY-MM-DDx or beta-YYYY-MM-DDx with one lowercase letter"
-          }
+          if (-not ($env:TAG -cmatch '^v\d+\.\d+\.\d+$')) { throw "tag $env:TAG is not vX.Y.Z" }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -104,7 +102,8 @@ jobs:
       - shell: pwsh
         run: |
           $out = (& target/release/navo.exe --version | Out-String).Trim()
-          if ($out -ne 'navo 0.0.1') { throw "unexpected output: $out" }
+          # The tag must match the workspace version, so the app, the package and the tag agree.
+          if ($out -ne "navo $($env:TAG.Substring(1))") { throw "navo prints '$out' but the tag is $env:TAG: bump the workspace version first" }
       - name: Stage navo.exe with its PDB, pdfium.dll and licences
         shell: pwsh
         run: |
@@ -139,14 +138,10 @@ jobs:
       - name: Pack with Velopack
         shell: pwsh
         run: |
-          # Velopack needs semver: the Cargo version that navo prints, plus a prerelease from the tag.
-          # alpha-2026-10-30c becomes 0.0.1-alpha.20261030c and beta-2026-11-02a becomes 0.0.1-beta.20261102a.
-          # The letter keeps the identifier alphanumeric, so builds sort by date, then by letter.
+          # The package version is the Cargo version that navo prints; the build step checked it equals the tag.
           $banner = (& dist/navo.exe --version | Out-String).Trim()
           if ($banner -notmatch '^navo (\d+\.\d+\.\d+)$') { throw "unexpected version output: $banner" }
-          $base = $Matches[1]
-          if (-not ($env:TAG -cmatch '^(alpha|beta)-(\d{4})-(\d{2})-(\d{2})([a-z])$')) { throw "bad tag: $env:TAG" }
-          $version = "$base-$($Matches[1]).$($Matches[2])$($Matches[3])$($Matches[4])$($Matches[5])"
+          $version = $Matches[1]
           Write-Output "package version $version"
           "PACK_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           New-Item -ItemType Directory -Force -Path out | Out-Null
@@ -181,7 +176,7 @@ jobs:
             if (-not (Test-Path -LiteralPath (Join-Path $app $path))) { throw "$path is missing from the portable package" }
           }
           $out = (& (Join-Path $app 'navo.exe') --version | Out-String).Trim()
-          if ($out -ne 'navo 0.0.1') { throw "unexpected output from the portable package: $out" }
+          if ($out -ne "navo $env:PACK_VERSION") { throw "unexpected output from the portable package: $out" }
           foreach ($name in "$env:PACK_ID-$env:CHANNEL-Setup.exe", "releases.$env:CHANNEL.json", 'RELEASES', 'navo.exe', 'navo-windows-x64-pdb.zip') {
             if (-not (Test-Path -LiteralPath "out/$name")) { throw "missing out/$name" }
           }
