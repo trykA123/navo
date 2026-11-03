@@ -158,24 +158,28 @@ impl Folder<'_> {
             self.totals.folders += 1;
             self.children.extend(self.location.join(&entry.name).ok());
         } else {
-            self.count_file(
+            let is_merged = self.count_file(
                 entry.size,
                 on_disk_of(entry.kind, entry.on_disk),
                 entry.link,
             );
-            self.visit.sized_file(self.location, entry);
+            if !is_merged {
+                self.visit.sized_file(self.location, entry);
+            }
         }
         self.visit.batch_end(self.totals);
     }
 
-    fn count_file(&mut self, size: u64, on_disk: Option<u64>, link: Option<LinkKey>) {
+    /// Returns true when the file is another name of one already counted.
+    fn count_file(&mut self, size: u64, on_disk: Option<u64>, link: Option<LinkKey>) -> bool {
         if self.links.merge(link, self.totals) {
-            return;
+            return true;
         }
         self.totals.files += 1;
         self.totals.bytes = self.totals.bytes.saturating_add(size);
         self.totals.on_disk = self.totals.on_disk.saturating_add(on_disk.unwrap_or(size));
         self.totals.on_disk_known &= on_disk.is_some();
+        false
     }
 }
 

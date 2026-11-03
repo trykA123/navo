@@ -160,3 +160,30 @@ pub(super) fn modified_ms(time: FILETIME) -> Option<i64> {
     let ticks = (i128::from(time.dwHighDateTime) << 32) | i128::from(time.dwLowDateTime);
     i64::try_from((ticks - UNIX_EPOCH_TICKS) / TICKS_PER_MS).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const REPARSE: u32 = FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY;
+    const SYMLINK_TAG: u32 = 0xA000_000C;
+    const MOUNT_POINT_TAG: u32 = 0xA000_0003;
+    const CLOUD_FILES_TAG: u32 = 0x9000_001A;
+
+    #[test]
+    fn symlinks_junctions_and_mounted_volumes_are_links_the_walk_never_enters() {
+        assert_eq!(kind_of(REPARSE, SYMLINK_TAG), EntryKind::Link);
+        assert_eq!(kind_of(REPARSE, MOUNT_POINT_TAG), EntryKind::Link);
+    }
+
+    #[test]
+    fn other_reparse_points_stay_ordinary_folders_and_files() {
+        assert_eq!(kind_of(REPARSE, CLOUD_FILES_TAG), EntryKind::Folder);
+        assert_eq!(
+            kind_of(FILE_ATTRIBUTE_REPARSE_POINT, CLOUD_FILES_TAG),
+            EntryKind::File
+        );
+        assert_eq!(kind_of(FILE_ATTRIBUTE_DIRECTORY, 0), EntryKind::Folder);
+        assert_eq!(kind_of(0, 0), EntryKind::File);
+    }
+}

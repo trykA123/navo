@@ -269,3 +269,22 @@ fn a_profile_counts_hard_links_once_and_knows_the_size_on_disk() {
     assert_eq!(totals.links_merged, 1);
     assert!(totals.on_disk_known);
 }
+
+#[test]
+fn a_merged_hard_link_is_not_tallied_or_ranked_twice() {
+    use crate::LinkKey;
+    let fs = FakeFs::new();
+    for path in ["d/a.iso", "d/sub/same.iso"] {
+        fs.add_file(path, 100);
+        fs.set_link(path, LinkKey(7, 1));
+    }
+    let profile = profile(&fs, "d");
+    assert_eq!(profile.largest.len(), 1);
+    let counted: u64 = profile
+        .kinds
+        .iter()
+        .map(|(_, tally)| tally.files)
+        .sum::<u64>()
+        + profile.other.files;
+    assert_eq!(counted, 1);
+}
