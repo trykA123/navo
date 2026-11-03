@@ -119,16 +119,37 @@ impl NavoWindow {
         let state = self.browser.state();
         let pane = state.focused_pane();
         let tab = state.pane(pane)?.active();
-        let name = tab.listing()?.get(row)?.name.clone();
+        let name = tab
+            .listing()
+            .and_then(|rows| rows.get(row))
+            .map(|e| e.name.clone());
         let badges = self.git_badges.badges(pane)?;
-        let mut badge = badges.by_name.get(&name)?.clone();
-        let repo = tab.entry_location(&name).ok()?;
         let tool = hooks.tools().into_iter().find(|tool| tool.selected);
+        let (repo, mut badge, mut head) =
+            match name.as_ref().and_then(|name| badges.by_name.get(name)) {
+                Some(badge) => (
+                    tab.entry_location(name.as_ref()?).ok()?,
+                    badge.clone(),
+                    None,
+                ),
+                None => {
+                    // No badge on this row: use the repository the listed folder sits in.
+                    let root = badges.roots.iter().min_by_key(|(name, _)| *name)?.1;
+                    (tab.location().clone(), root.badge.clone(), Some(&root.name))
+                }
+            };
         let mut menu = hooks.menu(&repo);
         // A folder inside a repository gets the repository's menu, not its own empty counts.
-        if let Some(root) = badges.roots.get(&name).filter(|_| !badge.is_root) {
+        if let Some(root) = name
+            .as_ref()
+            .and_then(|name| badges.roots.get(name))
+            .filter(|_| !badge.is_root)
+        {
             badge = root.badge.clone();
-            menu.head = root.name.clone();
+            head = Some(&root.name);
+        }
+        if let Some(head) = head {
+            menu.head = head.clone();
         }
         let parts = Parts {
             menu,
@@ -156,7 +177,12 @@ impl NavoWindow {
     ) {
         self.git_menu.cache = None;
         let Some(open) = self.git_menu_target(target) else {
-            return;
+            let text = match self.git_badges.hooks() {
+                Some(_) => t!("git-menu-no-repo"),
+                None => t!("git-menu-off"),
+            };
+            self.git_notice(text, false);
+            return cx.notify();
         };
         self.close_popups(window, cx);
         self.git_menu.open = Some(open);

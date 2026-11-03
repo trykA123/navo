@@ -471,3 +471,70 @@ fn a_folder_inside_a_repository_gets_the_repository_menu(cx: &mut TestAppContext
     assert_eq!(title, "navo");
     assert_eq!(commit, Some(true));
 }
+
+fn focus_list(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<NavoWindow>) {
+    view.update(cx, |view, cx| {
+        let pane = view.browser.state().focused_pane();
+        let handle = view.handle(pane, cx);
+        let _ = window.update(cx, |_, window, cx| window.focus(&handle, cx));
+    });
+}
+
+#[gpui_kit::test]
+fn alt_g_on_a_file_inside_a_repository_opens_the_repository_menu(cx: &mut TestAppContext) {
+    let below = RepoBadge {
+        is_root: false,
+        ..badge(BadgeKind::Clean)
+    };
+    let git = Fake::new(menu_items(false), below.clone()).inside("navo", modified(), below);
+    let (window, view) = open(cx, &git);
+    focus_list(cx, window, &view);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "alt-g");
+    assert!(is_open(cx, &view));
+    let title = view.read_with(cx, |view, _| {
+        view.git_menu
+            .open
+            .as_ref()
+            .expect("open")
+            .model
+            .head
+            .title
+            .clone()
+    });
+    assert_eq!(title, "navo");
+    assert_eq!(git.log.lock().unwrap().menus, [local(r"C:\home")]);
+}
+
+#[gpui_kit::test]
+fn alt_g_outside_a_repository_says_so(cx: &mut TestAppContext) {
+    let git = Fake::new(menu_items(false), modified());
+    let (window, view) = open(cx, &git);
+    focus_list(cx, window, &view);
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "alt-g");
+    assert!(!is_open(cx, &view));
+    assert_eq!(
+        notice(cx, &view),
+        Some(("No Git repository here".to_owned(), false))
+    );
+}
+
+#[gpui_kit::test]
+fn alt_g_with_git_off_points_to_settings(cx: &mut TestAppContext) {
+    let state = AppState::new(local(r"C:\home"));
+    let mut options = options_for(fake(), state);
+    options.provider = Arc::new(DriveFs::new(None));
+    let (window, view) = open_options(cx, options);
+    settle(cx, &view);
+    focus_list(cx, window, &view);
+    press(cx, window, &view, "alt-g");
+    assert!(!is_open(cx, &view));
+    assert_eq!(
+        notice(cx, &view),
+        Some((
+            "Git status is off — turn it on in Settings → Git".to_owned(),
+            false
+        ))
+    );
+}
