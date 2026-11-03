@@ -35,14 +35,14 @@ use crate::structured_sample::{
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
-    help_windows, hint_windows, job_element, job_windows, parts_element, parts_windows,
-    preview_element, preview_windows, settings_element, settings_windows, sheet_windows,
-    window_element,
+    help_windows, hint_windows, job_windows, parts_windows, preview_windows, settings_element,
+    settings_windows, sheet_windows,
 };
 use crate::{
     image_sample, pdf_sample, rich_sample, sections, shortcuts_sample, tokens_page, viewer_sample,
 };
 
+mod lookup;
 mod samples;
 
 use samples::image_keys;
@@ -374,32 +374,6 @@ impl Render for Gallery {
 }
 
 impl Gallery {
-    fn git_page(&self) -> Option<AnyElement> {
-        crate::git_badges_page::element(self.page, &self.git_badges)
-            .or_else(|| crate::git_menu_page::element(self.page, &self.git_menu))
-    }
-
-    fn window_page(&self) -> Option<AnyElement> {
-        parts_element(self.page, &self.parts_windows)
-            .or_else(|| preview_element(self.page, &self.preview_windows))
-            .or_else(|| job_element(self.page, &self.job_windows))
-            .or_else(|| window_element(self.page, self.windows()))
-    }
-
-    fn viewer_menu(&self) -> Option<Entity<ViewerMenuPage>> {
-        match self.page {
-            Page::ViewerMenuText => Some(self.viewer_menus[0].clone()),
-            Page::ViewerMenuTree => Some(self.viewer_menus[1].clone()),
-            Page::ViewMenuText => Some(self.viewer_menus[2].clone()),
-            Page::ViewerEncoding => Some(self.viewer_menus[3].clone()),
-            Page::ViewMenuAutomotive => Some(self.viewer_menus[4].clone()),
-            Page::ViewMenuElf => Some(self.viewer_menus[5].clone()),
-            Page::ViewMenuTrace => Some(self.viewer_menus[6].clone()),
-            Page::ViewMenuMarkdown => Some(self.viewer_menus[7].clone()),
-            _ => None,
-        }
-    }
-
     fn menu_page(&self, page: Page) -> Option<Entity<MenuPage>> {
         self.menus
             .iter()
