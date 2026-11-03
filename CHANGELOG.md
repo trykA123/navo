@@ -21,6 +21,12 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - Clipboard history: Navo records the text, links and file lists you copy on this PC. Ctrl+Shift+V opens a palette in the window. Win+Alt+V opens it over any app, and Enter pastes back into that app.
 - Search the history, copy an entry again, or delete one. Ctrl+K has commands to pause the history, clear it or delete all clipboard data. Settings › Clipboard turns it off.
 - Copies that password managers or Windows mark as private are never recorded. The history keeps the newest 500 entries and stays on this PC.
+- Saved items: Ctrl+N in the clipboard palette makes a snippet or a path item. Ctrl+S on a history row saves that entry as one.
+- Secrets: a secret is stored encrypted with Windows user protection. It shows masked and is copied without showing. It never enters the history. It leaves the clipboard after 30 seconds, or when Navo quits.
+- Folder notes: a note belongs to a folder, and there is also a global note. Notes save as you type.
+- The manage view (F2) lists and edits history, snippets, paths, secrets and notes in one place.
+- The Win+Alt+V pop-up now takes keyboard focus, also over other apps.
+- Clear history and Delete all report only what they really removed. Delete all also removes the set-aside copies of a damaged database.
 
 ### Fixed
 

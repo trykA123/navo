@@ -293,7 +293,7 @@ Workspaces save themselves. They come back when you restart Navo.
 
 ## Clipboard history
 
-Navo keeps what you copy on this PC: text, links and file lists. It is on by default. Copies that password managers or Windows mark as private are never recorded. The history stays in your profile folder and keeps the newest 500 entries.
+Navo keeps what you copy on this PC: text, links and file lists. It also keeps saved items, secrets (stored encrypted, shown masked, cleared from the clipboard after 30 s) and folder notes. Secrets need Windows. It is on by default. Copies that password managers or Windows mark as private are never recorded. The history stays in your profile folder and keeps the newest 500 entries.
 
 | Key | What it does |
 | --- | --- |
@@ -304,6 +304,9 @@ Navo keeps what you copy on this PC: text, links and file lists. It is on by def
 | `Ctrl+C` | Copy the entry without pasting |
 | `Ctrl+K` | Actions for the entry |
 | `Delete` | Remove the entry |
+| `Ctrl+N` | New saved item or secret |
+| `Ctrl+S` | Save a history row as a snippet or path item |
+| `F2` | Manage view: list and edit everything |
 | `Esc` | Clear the search, then close |
 
 Type "clipboard" in `Ctrl+K` to pause the history, clear it or delete all clipboard data. Delete all cannot be undone. Turn the history off in Settings under Clipboard. See [Clipboard history](features/clipboard.md) for the details.
