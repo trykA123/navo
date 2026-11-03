@@ -24,6 +24,7 @@ pub(super) struct Discovered {
     pub listing: Arc<Listing>,
     pub bindings: Vec<Binding>,
     pub roots: Vec<PathBuf>,
+    pub parent: Option<PathBuf>,
     /// The probe gave up on a slow drive.
     pub slow: bool,
 }
@@ -34,6 +35,7 @@ impl Discovered {
             listing,
             bindings: Vec::new(),
             roots: Vec::new(),
+            parent: None,
             slow: false,
         }
     }
@@ -97,13 +99,14 @@ pub(super) fn discover(
         return found;
     }
     let start = probe.now();
-    let parent = find_parent(
+    found.parent = find_parent(
         &found.listing.path,
         probe,
         &found.listing,
         start + limits.probe_timeout,
     );
-    let mut roots = HashSet::new();
+    let mut roots: HashSet<_> = found.parent.iter().cloned().collect();
+    found.roots.extend(found.parent.iter().cloned());
     for row in &found.listing.rows {
         if found.listing.cancelled.is_cancelled()
             || probe.now().duration_since(start) >= limits.probe_timeout
@@ -117,7 +120,7 @@ pub(super) fn discover(
         let root = if own_repo {
             Some(&path)
         } else {
-            parent.as_ref()
+            found.parent.as_ref()
         };
         let Some(root) = root else {
             continue;

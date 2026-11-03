@@ -52,6 +52,7 @@ pub struct FolderBadges {
     /// The scanner gave up on this listing because its drive answered too slowly.
     pub slow_drive: bool,
     pub by_name: HashMap<String, RepoBadge>,
+    pub repository: Option<RepoRoot>,
     /// For a row inside a repository: the repository's folder name and root badge.
     pub roots: HashMap<String, RepoRoot>,
 }

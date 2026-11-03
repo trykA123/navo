@@ -45,6 +45,26 @@ fn folders_inside_a_repository_get_subtree_badges_without_repository_counts() {
 }
 
 #[test]
+fn an_empty_folder_discovers_its_parent_repository() {
+    let h = Harness::new(probe(&["fixture/repo"]));
+    h.observe("fixture/repo/empty", 1, &[]);
+    assert_eq!(h.next().0, PathBuf::from("fixture/repo"));
+    h.reply(Ok(status_with(b"? elsewhere.txt\0")));
+    let badges = h.wait("fixture/repo/empty", |b| b.repository.is_some());
+    assert!(badges.by_name.is_empty());
+    assert!(badges.roots.is_empty());
+    let repository = badges.repository.as_ref().unwrap();
+    assert_eq!(repository.name, "repo");
+    assert_eq!(repository.badge.branch.as_deref(), Some("main"));
+    assert_eq!(repository.badge.untracked, 1);
+    h.observe("fixture/outside", 2, &[]);
+    let outside = h.wait("fixture/outside", |b| b.revision >= 2);
+    assert!(outside.repository.is_none());
+    assert!(h.calls.try_recv().is_err());
+    assert!(h.scan.stop());
+}
+
+#[test]
 fn capped_status_makes_subfolders_unknown() {
     let h = Harness::new(probe(&["fixture/repo"]));
     h.observe("fixture/repo", 1, &["src"]);

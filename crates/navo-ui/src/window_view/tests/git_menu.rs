@@ -62,17 +62,16 @@ impl Fake {
 
     /// Makes the `docs` row a folder inside the repository `name`, whose root badge is `root`.
     pub(super) fn inside(self, name: &str, root: RepoBadge, below: RepoBadge) -> Self {
-        let roots = HashMap::from([(
-            "docs".to_owned(),
-            RepoRoot {
-                name: name.to_owned(),
-                badge: root,
-            },
-        )]);
+        let repository = RepoRoot {
+            name: name.to_owned(),
+            badge: root,
+        };
+        let roots = HashMap::from([("docs".to_owned(), repository.clone())]);
         *self.badges.lock().unwrap() = Arc::new(FolderBadges {
             revision: 1,
             by_name: HashMap::from([("docs".to_owned(), below)]),
             roots,
+            repository: Some(repository),
             ..FolderBadges::default()
         });
         self
@@ -112,6 +111,7 @@ impl GitHooks for Fake {
                 slow_drive: badges.slow_drive,
                 by_name: badges.by_name.clone(),
                 roots: badges.roots.clone(),
+                repository: badges.repository.clone(),
             });
         }
         Some(Arc::clone(&badges))
@@ -508,17 +508,70 @@ fn alt_g_on_a_file_inside_a_repository_opens_the_repository_menu(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
+fn alt_g_in_an_empty_folder_inside_a_repository_opens_the_repository_menu(cx: &mut TestAppContext) {
+    let git = Fake::new(menu_items(false), modified());
+    *git.badges.lock().unwrap() = Arc::new(FolderBadges {
+        revision: 1,
+        repository: Some(RepoRoot {
+            name: "navo".to_owned(),
+            badge: modified(),
+        }),
+        ..FolderBadges::default()
+    });
+    let state = AppState::new(local(r"D:\work"));
+    let mut options = options_for(fake(), state);
+    options.provider = Arc::new(DriveFs::new(None));
+    options.git = Some(Arc::new(git.clone()));
+    let (window, view) = open_options(cx, options);
+    settle(cx, &view);
+    wait_for_badges(cx, &view);
+    assert!(view.read_with(cx, |view, _| {
+        let state = view.browser.state();
+        state
+            .pane(state.focused_pane())
+            .unwrap()
+            .active()
+            .listing()
+            .unwrap()
+            .is_empty()
+    }));
+    focus_list(cx, window, &view);
+    press(cx, window, &view, "alt-g");
+    assert!(is_open(cx, &view));
+    let title = view.read_with(cx, |view, _| {
+        view.git_menu
+            .open
+            .as_ref()
+            .expect("open")
+            .model
+            .head
+            .title
+            .clone()
+    });
+    assert_eq!(title, "navo");
+    assert_eq!(git.log.lock().unwrap().menus, [local(r"D:\work")]);
+}
+
+#[gpui_kit::test]
 fn alt_g_outside_a_repository_says_so(cx: &mut TestAppContext) {
     let git = Fake::new(menu_items(false), modified());
-    let (window, view) = open(cx, &git);
-    focus_list(cx, window, &view);
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "alt-g");
-    assert!(!is_open(cx, &view));
-    assert_eq!(
-        notice(cx, &view),
-        Some(("No Git repository here".to_owned(), false))
-    );
+    for folder in [r"C:\home", r"D:\work"] {
+        let state = AppState::new(local(folder));
+        let mut options = options_for(fake(), state);
+        options.provider = Arc::new(DriveFs::new(None));
+        options.git = Some(Arc::new(git.clone()));
+        let (window, view) = open_options(cx, options);
+        settle(cx, &view);
+        wait_for_badges(cx, &view);
+        focus_list(cx, window, &view);
+        press(cx, window, &view, "down");
+        press(cx, window, &view, "alt-g");
+        assert!(!is_open(cx, &view));
+        assert_eq!(
+            notice(cx, &view),
+            Some(("No Git repository here".to_owned(), false))
+        );
+    }
 }
 
 #[gpui_kit::test]
