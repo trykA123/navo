@@ -131,3 +131,13 @@ git-tool-auto-resolved = Auto — { $tool }
 git-tool-git-cli = Git command line
 git-tool-other = Other…
 git-tool-none = None
+
+git-tool-tortoise-git = TortoiseGit
+git-tool-fork = Fork
+git-tool-github-desktop = GitHub Desktop
+git-tool-source-tree = SourceTree
+git-tool-git-kraken = GitKraken
+git-tool-sublime-merge = Sublime Merge
+git-tool-vs-code = VS Code
+git-tool-git-command-line = Git command line
+git-tool-custom = Custom command

@@ -89,7 +89,7 @@ impl FetchTimer {
         match finished.recv_timeout(STOP_WAIT) {
             Ok(()) => thread.join().is_ok(),
             Err(error) => {
-                tracing::warn!(%error, "Git fetch timer did not stop cleanly");
+                tracing::warn!(%error, "git fetch timer did not stop cleanly");
                 false
             }
         }
@@ -103,7 +103,7 @@ impl Drop for FetchTimer {
 }
 
 fn log_spawn(error: &io::Error) {
-    tracing::warn!(%error, "the Git fetch timer did not start");
+    tracing::warn!(%error, "the git fetch timer did not start");
 }
 
 fn run(mut engine: Engine, wake: &Wake, cancel: &Cancel) {

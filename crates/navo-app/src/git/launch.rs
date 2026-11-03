@@ -34,7 +34,7 @@ pub(crate) enum LaunchError {
     #[error("the repository path cannot be passed to a tool")]
     BadPath,
     #[error("{0} cannot do this action")]
-    Unsupported(&'static str),
+    Unsupported(String),
     #[error("the custom Git command is empty")]
     EmptyCommand,
     #[error("the custom Git command needs a {{path}} argument")]
@@ -65,20 +65,20 @@ pub(crate) fn plan(
 ) -> Result<Launch, LaunchError> {
     check_repo(repo)?;
     let kind = tool.kind;
-    let unsupported = LaunchError::Unsupported(kind.label());
+    let unsupported = || LaunchError::Unsupported(kind.label());
     if !allows(kind, action) {
-        return Err(unsupported);
+        return Err(unsupported());
     }
     match kind {
         ToolKind::GitCli => Ok(Launch::Terminal {
             repo: repo.to_owned(),
         }),
         ToolKind::Custom => {
-            let name = action_name(action).ok_or(unsupported)?;
+            let name = action_name(action).ok_or_else(unsupported)?;
             custom::expand(template, name, repo).map(Launch::Process)
         }
         ToolKind::TortoiseGit => {
-            let command = tortoise_command(action).ok_or(unsupported)?;
+            let command = tortoise_command(action).ok_or_else(unsupported)?;
             let args = vec![
                 Arg::Plain(format!("/command:{command}")),
                 Arg::Raw(format!("/path:\"{}\"", tortoise_path(repo))),

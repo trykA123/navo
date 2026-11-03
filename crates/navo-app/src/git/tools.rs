@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use navo_l10n::tr;
 use navo_store::GitSettings;
 
 pub(crate) mod env;
@@ -63,18 +64,18 @@ impl ToolKind {
         }
     }
 
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::TortoiseGit => "TortoiseGit",
-            Self::Fork => "Fork",
-            Self::GitHubDesktop => "GitHub Desktop",
-            Self::SourceTree => "SourceTree",
-            Self::GitKraken => "GitKraken",
-            Self::SublimeMerge => "Sublime Merge",
-            Self::VsCode => "VS Code",
-            Self::GitCli => "Git command line",
-            Self::Custom => "Custom command",
-        }
+    pub(crate) fn label(self) -> String {
+        tr(match self {
+            Self::TortoiseGit => "git-tool-tortoise-git",
+            Self::Fork => "git-tool-fork",
+            Self::GitHubDesktop => "git-tool-github-desktop",
+            Self::SourceTree => "git-tool-source-tree",
+            Self::GitKraken => "git-tool-git-kraken",
+            Self::SublimeMerge => "git-tool-sublime-merge",
+            Self::VsCode => "git-tool-vs-code",
+            Self::GitCli => "git-tool-git-command-line",
+            Self::Custom => "git-tool-custom",
+        })
     }
 
     /// The `[git] tool` value that names this tool.
@@ -115,7 +116,7 @@ impl ToolKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DetectedTool {
     pub kind: ToolKind,
-    pub label: &'static str,
+    pub label: String,
     pub exe: PathBuf,
 }
 
