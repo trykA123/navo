@@ -24,3 +24,7 @@ mod gix_status_safety;
 #[cfg(test)]
 #[path = "gix_status/measure.rs"]
 mod gix_status_measure;
+
+#[cfg(test)]
+#[path = "gix_status/lfs.rs"]
+mod gix_status_lfs;

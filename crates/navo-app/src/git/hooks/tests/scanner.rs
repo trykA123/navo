@@ -1,4 +1,5 @@
 use super::*;
+use navo_git::trust::Refusal;
 
 #[test]
 fn badges_off_starts_nothing_and_publishes_nothing() {
@@ -24,7 +25,12 @@ fn a_fake_status_reaches_badges() {
 fn source_errors_reach_badges_as_unknown_with_their_reason() {
     for (error, reason) in [
         (ScanError::NoGit, BadgeReason::NoGit),
-        (ScanError::NotTrusted, BadgeReason::NotTrusted),
+        (ScanError::Refused(Refusal::Guard), BadgeReason::Guard),
+        (ScanError::Refused(Refusal::Filter), BadgeReason::Filter),
+        (
+            ScanError::Refused(Refusal::Ownership),
+            BadgeReason::Ownership,
+        ),
     ] {
         let rig = rig(&settings(true));
         *rig.source.reply.lock().unwrap() = Some(Err(error));

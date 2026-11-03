@@ -201,18 +201,42 @@ impl fmt::Debug for Values {
     }
 }
 
+/// Why a status read refused to run, as the badge and its text tell it apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    /// Git does not trust the folder's owner (`safe.directory`).
+    Ownership,
+    /// A filter driver other than the standard git-lfs one is in use.
+    Filter,
+    /// The config names a program such as fsmonitor.
+    Program,
+    /// A config file could not be read safely, so the guard blocked every call.
+    Guard,
+}
+
+/// The refusal behind `error`, when it is one.
+#[must_use]
+pub fn refusal(error: &GitError) -> Option<Refusal> {
+    match error {
+        GitError::UnsafeDirectory { .. } => Some(Refusal::Ownership),
+        GitError::FilterRefused { .. } => Some(Refusal::Filter),
+        GitError::ProgramConfigured { .. } => Some(Refusal::Program),
+        GitError::NotTrusted { .. } => Some(Refusal::Guard),
+        GitError::Command { stderr, .. }
+            if stderr.contains("detected dubious ownership")
+                || stderr.contains("unsafe repository") =>
+        {
+            Some(Refusal::Ownership)
+        }
+        _ => None,
+    }
+}
+
 /// `Unknown(NotTrusted)` when Git refused the repository as an unsafe directory, or the guard
-/// blocked every background call.
+/// blocked every background call, or the built-in engine refused a filter or program.
 #[must_use]
 pub fn untrusted_reason(error: &GitError) -> Option<Reason> {
-    let refused = match error {
-        GitError::UnsafeDirectory { .. } | GitError::NotTrusted { .. } => true,
-        GitError::Command { stderr, .. } => {
-            stderr.contains("detected dubious ownership") || stderr.contains("unsafe repository")
-        }
-        _ => false,
-    };
-    refused.then_some(Reason::NotTrusted)
+    refusal(error).map(|_| Reason::NotTrusted)
 }
 
 /// The `section.subsection` prefix Git flattens a header to, so `[filter.a "b"]` is `filter.a.b`.

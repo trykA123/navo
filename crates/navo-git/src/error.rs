@@ -43,8 +43,18 @@ pub enum GitError {
     UnsafeDirectory {
         path: PathBuf,
     },
-    /// The repository config can run a program the guard cannot neutralise; no background call ran.
+    /// The guard is blocked (a config file could not be read or parsed); no background call ran.
     NotTrusted {
+        path: PathBuf,
+    },
+    /// A filter driver other than the standard git-lfs one is in use, so the built-in engine
+    /// would have to start a program. The Git command line neutralises it.
+    FilterRefused {
+        path: PathBuf,
+        filter: String,
+    },
+    /// The repository config names a program (fsmonitor) the built-in engine must not start.
+    ProgramConfigured {
         path: PathBuf,
     },
     /// The repository config names a program, so the background fetch was not run.
@@ -131,9 +141,11 @@ impl fmt::Display for GitError {
                 status,
                 stderr,
             } => write!(formatter, "git {args} exited with {status:?}: {stderr}"),
-            Self::UnsafeDirectory { path } | Self::NotTrusted { path } | Self::Guarded { path } => {
-                write_refusal(formatter, self, path)
-            }
+            Self::UnsafeDirectory { path }
+            | Self::NotTrusted { path }
+            | Self::FilterRefused { path, .. }
+            | Self::ProgramConfigured { path }
+            | Self::Guarded { path } => write_refusal(formatter, self, path),
             Self::Interrupted { lock, moved } => write!(
                 formatter,
                 "pull was stopped while git ran (index.lock left: {lock}, HEAD moved: {moved})"
@@ -182,7 +194,19 @@ fn plain_text(error: &GitError) -> &'static str {
 
 fn write_refusal(formatter: &mut fmt::Formatter<'_>, error: &GitError, path: &Path) -> fmt::Result {
     let reason = match error {
-        GitError::NotTrusted { .. } => "its config could run a program, so git was not started",
+        GitError::FilterRefused { filter, .. } => {
+            return write!(
+                formatter,
+                "the Git filter {filter:?} would start a program, so the built-in engine did not run: {}",
+                path.display()
+            );
+        }
+        GitError::NotTrusted { .. } => {
+            "its config could not be read safely, so git was not started"
+        }
+        GitError::ProgramConfigured { .. } => {
+            "its config names a program (fsmonitor), so the built-in engine did not run"
+        }
         GitError::Guarded { .. } => "its config names a program, so fetch was not run",
         _ => "git refuses to use a directory owned by someone else",
     };

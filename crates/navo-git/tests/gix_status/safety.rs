@@ -2,7 +2,7 @@ use std::fs;
 use std::time::{Duration, SystemTime};
 
 use navo_git::status::{GitStatus, Reason};
-use navo_git::trust::{Guard, untrusted_reason};
+use navo_git::trust::{Guard, Refusal, refusal, untrusted_reason};
 use navo_git::{Cancel, GitError, GixGit};
 
 use super::fixture::Fixture;
@@ -58,6 +58,25 @@ fn assert_program_is_live(fixture: &Fixture) {
 fn assert_not_trusted(error: &GitError) {
     assert!(matches!(error, GitError::NotTrusted { .. }), "{error:?}");
     assert_eq!(untrusted_reason(error), Some(Reason::NotTrusted));
+    assert_eq!(refusal(error), Some(Refusal::Guard));
+}
+
+fn assert_filter_refused(error: &GitError, name: &str) {
+    assert!(
+        matches!(error, GitError::FilterRefused { filter, .. } if filter == name),
+        "{error:?}"
+    );
+    assert_eq!(untrusted_reason(error), Some(Reason::NotTrusted));
+    assert_eq!(refusal(error), Some(Refusal::Filter));
+}
+
+#[cfg(unix)]
+fn assert_program_refused(error: &GitError) {
+    assert!(
+        matches!(error, GitError::ProgramConfigured { .. }),
+        "{error:?}"
+    );
+    assert_eq!(refusal(error), Some(Refusal::Program));
 }
 
 #[cfg(unix)]
@@ -72,7 +91,7 @@ fn a_clean_filter_in_the_repository_config_is_not_trusted_and_never_runs() {
     let gix = GixGit::new_isolated(fixture.repo()).unwrap();
     let guard = gix.guard().unwrap();
     let error = gix.status(&guard, &Cancel::default()).unwrap_err();
-    assert_not_trusted(&error);
+    assert_filter_refused(&error, "evil");
     assert!(!marker(&fixture).exists(), "a filter driver ran");
 }
 
@@ -104,7 +123,7 @@ fn a_filter_driver_in_the_repository_config_is_not_trusted() {
     assert!(!guard.is_guarded());
     fixture.git_ok(&["config", "filter.evil.clean", "cat"]);
     let error = gix.status(&guard, &Cancel::default()).unwrap_err();
-    assert_not_trusted(&error);
+    assert_filter_refused(&error, "evil");
 }
 
 #[cfg(unix)]
@@ -118,7 +137,7 @@ fn an_fsmonitor_program_is_not_trusted_and_never_runs() {
     let gix = GixGit::new_isolated(fixture.repo()).unwrap();
     let guard = gix.guard().unwrap();
     let error = gix.status(&guard, &Cancel::default()).unwrap_err();
-    assert_not_trusted(&error);
+    assert_program_refused(&error);
     assert!(!marker(&fixture).exists(), "fsmonitor ran");
 }
 

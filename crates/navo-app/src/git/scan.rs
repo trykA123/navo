@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use navo_core::Location;
 use navo_fs::DriveClass;
 use navo_git::status::RepoStatus;
+use navo_git::trust::Refusal;
 use navo_store::GitSettings;
 use navo_ui::git::FolderBadges;
 
@@ -49,8 +50,8 @@ pub(crate) enum ScanError {
     TimedOut,
     #[error("Git is unavailable")]
     NoGit,
-    #[error("repository is not trusted")]
-    NotTrusted,
+    #[error("repository refused: {0:?}")]
+    Refused(Refusal),
     #[error("repository status failed")]
     Failed,
     #[error("repository status was cancelled")]

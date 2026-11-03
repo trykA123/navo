@@ -7,6 +7,7 @@ use std::thread;
 use navo_core::ProviderPath;
 use navo_fs::DriveClass;
 use navo_git::status::{Badge, Head, Reason, RepoStatus};
+use navo_git::trust::Refusal;
 use navo_ui::git::{BadgeKind, BadgeReason, RepoBadge};
 
 use super::cache::{Cached, State};
@@ -213,7 +214,7 @@ fn state(badge: Badge) -> State {
     let reason = match badge {
         Badge::Unknown(Reason::TimedOut) => Some(BadgeReason::TimedOut),
         Badge::Unknown(Reason::NoGit) => Some(BadgeReason::NoGit),
-        Badge::Unknown(Reason::NotTrusted) => Some(BadgeReason::NotTrusted),
+        Badge::Unknown(Reason::NotTrusted) => Some(BadgeReason::Guard),
         Badge::Unknown(Reason::Failed) => Some(BadgeReason::Failed),
         _ => None,
     };
@@ -224,7 +225,10 @@ fn reason(error: ScanError) -> BadgeReason {
     match error {
         ScanError::TimedOut => BadgeReason::TimedOut,
         ScanError::NoGit => BadgeReason::NoGit,
-        ScanError::NotTrusted => BadgeReason::NotTrusted,
+        ScanError::Refused(Refusal::Ownership) => BadgeReason::Ownership,
+        ScanError::Refused(Refusal::Filter) => BadgeReason::Filter,
+        ScanError::Refused(Refusal::Program) => BadgeReason::Program,
+        ScanError::Refused(Refusal::Guard) => BadgeReason::Guard,
         ScanError::Failed | ScanError::Cancelled => BadgeReason::Failed,
     }
 }

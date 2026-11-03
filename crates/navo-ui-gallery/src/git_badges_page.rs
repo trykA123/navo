@@ -109,7 +109,7 @@ fn synced_repos() -> [Named; 6] {
         (
             "vendor-sdk",
             RepoBadge {
-                reason: Some(BadgeReason::NotTrusted),
+                reason: Some(BadgeReason::Filter),
                 ..root(BadgeKind::Unknown)
             },
         ),

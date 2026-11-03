@@ -228,7 +228,7 @@ fn repositories_without_a_usable_state_are_skipped() {
         "untrusted",
         RepoBadge {
             kind: BadgeKind::Unknown,
-            reason: Some(BadgeReason::NotTrusted),
+            reason: Some(BadgeReason::Guard),
             ..badge()
         },
     );

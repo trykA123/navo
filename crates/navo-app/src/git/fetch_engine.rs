@@ -87,6 +87,12 @@ fn fetchable(badge: &RepoBadge) -> bool {
     badge.upstream.is_some()
         && !matches!(
             badge.reason,
-            Some(BadgeReason::NoGit | BadgeReason::NotTrusted)
+            Some(
+                BadgeReason::NoGit
+                    | BadgeReason::Ownership
+                    | BadgeReason::Filter
+                    | BadgeReason::Program
+                    | BadgeReason::Guard
+            )
         )
 }
