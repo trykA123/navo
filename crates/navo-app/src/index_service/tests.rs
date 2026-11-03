@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use navo_index::file::{self, Header};
 use navo_index::ntfs::NtfsIndex;
+use navo_index::pipe::BuildReason;
 use navo_index::table::{Flags, NO_PARENT, NameTable};
 use navo_index::usn::{UsnBatch, UsnRecord};
 use navo_store::Search;
@@ -135,7 +136,7 @@ fn snapshot() -> (Header, NameTable, navo_index::usn::FrnMap) {
 
 #[test]
 fn valid_snapshot_restores_and_resumes_without_enumeration() {
-    let mut result = restore_or_enumerate(Ok(snapshot()), DRIVE, || {
+    let mut result = restore_or_enumerate(Ok(snapshot()), DRIVE, |_| {
         panic!("a valid snapshot must resume")
     })
     .unwrap();
@@ -170,10 +171,31 @@ fn invalid_old_or_changed_snapshots_enumerate() {
             supported: 2,
         }),
     ] {
-        let result =
-            restore_or_enumerate(saved, DRIVE, || NtfsIndex::restore(snapshot(), 42, 7)).unwrap();
+        let result = restore_or_enumerate(saved, DRIVE, |reason| {
+            assert_eq!(reason, BuildReason::SnapshotInvalid);
+            NtfsIndex::restore(snapshot(), 42, 7)
+        })
+        .unwrap();
         assert_eq!(result.position.next_usn, 100);
     }
+    let missing = Err(file::FileError::Io(std::io::ErrorKind::NotFound.into()));
+    restore_or_enumerate(missing, DRIVE, |reason| {
+        assert_eq!(reason, BuildReason::SnapshotMissing);
+        NtfsIndex::restore(snapshot(), 42, 7)
+    })
+    .unwrap();
+    let other_root = restore_or_enumerate(
+        Ok(snapshot()),
+        Drive {
+            letter: 'D',
+            ..DRIVE
+        },
+        |reason| {
+            assert_eq!(reason, BuildReason::SnapshotInvalid);
+            NtfsIndex::restore(snapshot(), 42, 7)
+        },
+    );
+    assert!(other_root.is_ok());
     let mut enumerated = false;
     restore_or_enumerate(
         Ok(snapshot()),
@@ -181,7 +203,8 @@ fn invalid_old_or_changed_snapshots_enumerate() {
             serial: 43,
             ..DRIVE
         },
-        || {
+        |reason| {
+            assert_eq!(reason, BuildReason::SnapshotStale);
             enumerated = true;
             NtfsIndex::restore(snapshot(), 42, 7)
         },

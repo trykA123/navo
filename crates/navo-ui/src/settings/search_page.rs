@@ -14,6 +14,7 @@ pub enum ServiceStatus {
     NotInstalled,
     Running,
     Stopped,
+    Outdated,
     #[default]
     NotAvailable,
 }
@@ -25,6 +26,7 @@ impl ServiceStatus {
             Self::NotInstalled => "settings-search-service-not-installed",
             Self::Running => "settings-search-service-running",
             Self::Stopped => "settings-search-service-stopped",
+            Self::Outdated => "settings-search-service-outdated",
             Self::NotAvailable => "settings-search-service-not-available",
         };
         navo_l10n::tr(id).into()
@@ -32,12 +34,12 @@ impl ServiceStatus {
 
     #[must_use]
     pub fn can_install(self) -> bool {
-        self == Self::NotInstalled
+        matches!(self, Self::NotInstalled | Self::Outdated)
     }
 
     #[must_use]
     pub fn can_remove(self) -> bool {
-        matches!(self, Self::Running | Self::Stopped)
+        matches!(self, Self::Running | Self::Stopped | Self::Outdated)
     }
 }
 
@@ -99,7 +101,9 @@ pub(super) fn row(
 fn status_chip(t: &Theme, status: ServiceStatus) -> impl IntoElement + use<> {
     let color = match status {
         ServiceStatus::Running => t.colors.ok,
-        ServiceStatus::NotInstalled | ServiceStatus::Stopped => t.colors.accent,
+        ServiceStatus::NotInstalled | ServiceStatus::Stopped | ServiceStatus::Outdated => {
+            t.colors.accent
+        }
         ServiceStatus::NotAvailable => t.colors.muted,
     };
     let text = status.text();
@@ -139,11 +143,13 @@ fn button(
 
 fn service_row(t: &Theme, page: SearchPage, send: Option<&Handler>) -> AnyElement {
     let status = page.status;
+    let install_label = if status == ServiceStatus::Outdated {
+        "settings-search-service-update"
+    } else {
+        "settings-search-service-install"
+    };
     let install = button(
-        (
-            "settings-service-install",
-            "settings-search-service-install",
-        ),
+        ("settings-service-install", install_label),
         status.can_install(),
         SheetEvent::InstallService,
         send,

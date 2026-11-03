@@ -3,7 +3,7 @@ use navo_ui::window_view::ServiceHooks;
 #[cfg(any(windows, test))]
 use crate::index_service::ElevationError;
 #[cfg(any(windows, test))]
-use navo_ui::window_view::ServiceStatus;
+use navo_ui::window_view::{ServiceOutcome, ServiceStatus};
 
 pub(super) fn hooks() -> ServiceHooks {
     #[cfg(windows)]
@@ -47,11 +47,21 @@ const UPGRADE_DISMISSED: &str = "index-upgrade-dismissed";
 
 #[cfg(any(windows, test))]
 fn status_from_query(query: std::io::Result<crate::index_service::ServiceQuery>) -> ServiceStatus {
-    match query.map(|query| query.running) {
-        Ok(None) => ServiceStatus::NotInstalled,
-        Ok(Some(true)) => ServiceStatus::Running,
-        Ok(Some(false)) => ServiceStatus::Stopped,
-        Err(_) => ServiceStatus::NotAvailable,
+    use crate::index_service::is_older;
+    use navo_index::pipe::SERVICE_REVISION;
+
+    let Ok(query) = query else {
+        return ServiceStatus::NotAvailable;
+    };
+    let is_running_older = query
+        .version
+        .as_ref()
+        .is_some_and(|version| is_older(version, SERVICE_REVISION));
+    match query.running {
+        None => ServiceStatus::NotInstalled,
+        Some(true) if is_running_older => ServiceStatus::Outdated,
+        Some(true) => ServiceStatus::Running,
+        Some(false) => ServiceStatus::Stopped,
     }
 }
 
@@ -63,11 +73,23 @@ fn action_outcome(result: Result<(), ElevationError>) -> Result<(), ElevationErr
     }
 }
 
-#[cfg(windows)]
-fn elevate(action: crate::index_service::Action) {
-    if let Err(error) = action_outcome(crate::index_service::request_elevation(action)) {
-        eprintln!("navo: index service: {error}");
+#[cfg(any(windows, test))]
+fn report(
+    action: crate::index_service::Action,
+    result: Result<(), ElevationError>,
+) -> ServiceOutcome {
+    match action_outcome(result) {
+        Ok(()) => ServiceOutcome::Done,
+        Err(error) => {
+            tracing::warn!(?action, %error, "index service change failed");
+            ServiceOutcome::Failed
+        }
     }
+}
+
+#[cfg(windows)]
+fn elevate(action: crate::index_service::Action) -> ServiceOutcome {
+    report(action, crate::index_service::request_elevation(action))
 }
 
 #[cfg(test)]
@@ -80,6 +102,7 @@ mod tests {
             let query = |running| {
                 Ok(crate::index_service::ServiceQuery {
                     running,
+                    version: None,
                     legacy_present,
                 })
             };
@@ -90,6 +113,46 @@ mod tests {
                 ServiceStatus::Stopped
             );
         }
+    }
+
+    #[test]
+    fn a_running_service_that_answers_older_is_outdated_not_running() {
+        use navo_index::pipe::{SERVICE_REVISION, ServiceVersion};
+
+        let query = |version| {
+            Ok(crate::index_service::ServiceQuery {
+                running: Some(true),
+                version: Some(version),
+                legacy_present: false,
+            })
+        };
+        let known = |revision| ServiceVersion::Known {
+            revision,
+            build: "test".into(),
+        };
+        assert_eq!(
+            status_from_query(query(ServiceVersion::Older)),
+            ServiceStatus::Outdated
+        );
+        assert_eq!(
+            status_from_query(query(known(SERVICE_REVISION - 1))),
+            ServiceStatus::Outdated
+        );
+        assert_eq!(
+            status_from_query(query(known(SERVICE_REVISION))),
+            ServiceStatus::Running
+        );
+        assert!(ServiceStatus::Outdated.can_install());
+    }
+
+    #[test]
+    fn a_failed_change_is_reported_and_a_cancelled_one_is_not() {
+        use crate::index_service::Action;
+
+        let failed = report(Action::Install, Err(ElevationError::Failed(3)));
+        assert_eq!(failed, ServiceOutcome::Failed);
+        let cancelled = report(Action::Install, Err(ElevationError::Cancelled));
+        assert_eq!(cancelled, ServiceOutcome::Done);
     }
 
     #[test]
@@ -131,8 +194,8 @@ mod tests {
             assert_eq!((service.status)(), ServiceStatus::NotAvailable);
             assert!(!(service.status)().can_install());
             assert!(!(service.status)().can_remove());
-            (service.install)();
-            (service.remove)();
+            assert_eq!((service.install)(), ServiceOutcome::Done);
+            assert_eq!((service.remove)(), ServiceOutcome::Done);
             assert_eq!((service.status)(), ServiceStatus::NotAvailable);
         }
     }

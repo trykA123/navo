@@ -1,16 +1,21 @@
+mod builds;
 mod cancel;
 pub mod frames;
 mod memory;
 mod memory_wire;
 mod session;
+mod status;
+mod status_wire;
 mod totals;
 #[cfg(not(windows))]
 mod unix;
+mod version;
 #[cfg(windows)]
 mod windows;
 
 use std::time::Instant;
 
+pub use builds::{BuildReason, VolumeBuilds};
 pub use cancel::CancelToken;
 use cancel::Cancellation;
 use session::StopOnDrop;
@@ -50,6 +55,7 @@ pub use frames::{
     Request, Response, Status, VolumeMemory, VolumeStatus,
 };
 pub use memory::Part;
+pub use version::{SERVICE_REVISION, ServiceVersion, build_id};
 
 pub use totals::folder_paths_within_limits;
 
@@ -65,13 +71,16 @@ impl Request {
         if let Some(paths) = self.folder_paths() {
             return folder_paths_within_limits(paths);
         }
-        if self.wants_memory() {
+        if self.wants_memory() || self.wants_status() || self.wants_version() {
             return true;
         }
         self.terms.len() <= 64
             && self.terms.iter().all(|term| match term {
                 QueryTerm::Name(text) | QueryTerm::Path(text) => text.len() <= 1024,
-                QueryTerm::FolderTotalsV1(_) | QueryTerm::MemoryV1 => false,
+                QueryTerm::FolderTotalsV1(_)
+                | QueryTerm::MemoryV1
+                | QueryTerm::StatusV1
+                | QueryTerm::VersionV1 => false,
                 QueryTerm::Ext(extensions) => {
                     extensions.len() <= 1024
                         && extensions.iter().map(String::len).sum::<usize>()
@@ -89,7 +98,10 @@ impl Request {
                     QueryTerm::Name(text) => crate::search::Term::Name(text),
                     QueryTerm::Path(text) => crate::search::Term::Path(text),
                     QueryTerm::Ext(extensions) => crate::search::Term::Ext(extensions),
-                    QueryTerm::FolderTotalsV1(_) | QueryTerm::MemoryV1 => return None,
+                    QueryTerm::FolderTotalsV1(_)
+                    | QueryTerm::MemoryV1
+                    | QueryTerm::StatusV1
+                    | QueryTerm::VersionV1 => return None,
                 })
             })
             .collect()

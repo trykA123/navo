@@ -27,6 +27,7 @@ pub struct Settings {
     pub automotive: Automotive,
     pub tray: Tray,
     pub clipboard: Clipboard,
+    pub updates: Updates,
     pub compare: super::compare::Compare,
     pub git: super::git::GitSettings,
     pub experimental: BTreeMap<String, bool>,
@@ -274,6 +275,18 @@ impl Default for Tray {
             keep_running: false,
             summon_key: "Win+Alt+N".to_owned(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct Updates {
+    pub check: bool,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Self { check: true }
     }
 }
 

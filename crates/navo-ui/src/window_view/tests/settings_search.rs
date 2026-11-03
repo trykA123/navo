@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -7,7 +7,7 @@ use gpui_kit::{AppContext as _, ElementId, TestAppContext};
 
 use super::app_menu::{Rig, rig_search};
 use crate::settings::{Field, Values};
-use crate::window_view::{SearchHooks, ServiceHooks, ServiceStatus};
+use crate::window_view::{SearchHooks, ServiceHooks, ServiceOutcome, ServiceStatus};
 
 #[derive(Default)]
 struct Calls {
@@ -17,6 +17,7 @@ struct Calls {
     dismiss: AtomicUsize,
     status_calls: AtomicUsize,
     status: Mutex<ServiceStatus>,
+    is_failing: AtomicBool,
 }
 
 fn hooks(calls: &Arc<Calls>) -> SearchHooks {
@@ -33,11 +34,16 @@ fn hooks(calls: &Arc<Calls>) -> SearchHooks {
             }),
             install: Arc::new(move || {
                 install.install.fetch_add(1, Ordering::SeqCst);
+                if install.is_failing.load(Ordering::SeqCst) {
+                    return ServiceOutcome::Failed;
+                }
                 *install.status.lock().unwrap() = ServiceStatus::Running;
+                ServiceOutcome::Done
             }),
             remove: Arc::new(move || {
                 remove.remove.fetch_add(1, Ordering::SeqCst);
                 *remove.status.lock().unwrap() = ServiceStatus::NotInstalled;
+                ServiceOutcome::Done
             }),
             ..ServiceHooks::none()
         },
@@ -134,6 +140,21 @@ fn remove_works_while_the_service_runs_or_is_stopped(cx: &mut TestAppContext) {
         rig.click(cx, "settings-service-remove");
         assert_eq!(count(&calls.remove), 1);
     }
+}
+
+#[gpui_kit::test]
+fn a_failed_update_says_so_and_keeps_the_update_button(cx: &mut TestAppContext) {
+    let (rig, calls) = open_search(cx, ServiceStatus::Outdated, true);
+    calls.is_failing.store(true, Ordering::SeqCst);
+    assert!(label(cx, &rig, "settings-error").is_none());
+    rig.click(cx, "settings-service-install");
+    cx.run_until_parked();
+    assert_eq!(count(&calls.install), 1);
+    assert!(label(cx, &rig, "settings-error").is_some());
+    assert_eq!(
+        label(cx, &rig, "settings-service-status"),
+        Some(ServiceStatus::Outdated.text().to_string())
+    );
 }
 
 #[gpui_kit::test]

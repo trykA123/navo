@@ -1,11 +1,39 @@
+use std::io;
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ElevationError {
     #[error("index service elevation was cancelled")]
     Cancelled,
-    #[error("index service operation failed (exit code {0})")]
+    #[error("index service operation failed: {reason} (exit code {0})", reason = reason(*.0))]
     Failed(u32),
     #[error("index service elevation: {0}")]
     Launch(#[from] std::io::Error),
+}
+
+const OTHER: u8 = 1;
+const NOT_REPLACED: u8 = 3;
+const TIMED_OUT: u8 = 4;
+const DENIED: u8 = 5;
+
+/// The exit code of an elevated run, so the app that asked can log why it failed.
+pub(super) fn failure_code(error: &io::Error) -> u8 {
+    if super::install_check::is_mismatch(error) {
+        return NOT_REPLACED;
+    }
+    match error.kind() {
+        io::ErrorKind::TimedOut => TIMED_OUT,
+        io::ErrorKind::PermissionDenied => DENIED,
+        _ => OTHER,
+    }
+}
+
+fn reason(code: u32) -> &'static str {
+    match u8::try_from(code) {
+        Ok(NOT_REPLACED) => "the service does not run the new image, so the old one was kept",
+        Ok(TIMED_OUT) => "the service did not stop or start in time",
+        Ok(DENIED) => "access was denied",
+        _ => "the elevated run's output has the details",
+    }
 }
 
 pub(super) fn from_exit_code(code: u32) -> Result<(), ElevationError> {
@@ -24,5 +52,14 @@ mod tests {
         assert!(from_exit_code(0).is_ok());
         assert!(matches!(from_exit_code(7), Err(ElevationError::Failed(7))));
         assert!(!ElevationError::Cancelled.to_string().is_empty());
+    }
+
+    #[test]
+    fn a_service_left_on_the_old_image_gets_its_own_exit_code_and_reason() {
+        let mismatch = io::Error::other(super::super::install_check::Mismatch::OldProcess);
+        let code = failure_code(&mismatch);
+        assert_ne!(code, failure_code(&io::Error::other("anything else")));
+        let text = ElevationError::Failed(u32::from(code)).to_string();
+        assert!(text.contains("old one was kept"), "{text}");
     }
 }

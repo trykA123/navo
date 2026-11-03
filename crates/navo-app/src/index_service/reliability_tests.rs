@@ -18,7 +18,7 @@ fn record(exists: bool, failed: Option<Step>) -> (Vec<Step>, io::Result<()>) {
 }
 
 #[test]
-fn reinstall_cleans_leftovers_then_deletes_the_old_image_after_start() {
+fn reinstall_cleans_leftovers_then_deletes_the_old_image_after_the_check() {
     use Step::*;
     let (calls, result) = record(true, None);
     result.unwrap();
@@ -34,6 +34,7 @@ fn reinstall_cleans_leftovers_then_deletes_the_old_image_after_start() {
             BackupSettings,
             Configure,
             Start,
+            Verify,
             DeleteOld
         ]
     );
@@ -183,7 +184,7 @@ fn execute_install_step(
         }
         RestoreConfiguration => *configuration = previous_service_configuration(),
         DiscardCopy => plan.discard_copy()?,
-        BackupSettings | RestoreSettings | RemoveFresh => {}
+        BackupSettings | RestoreSettings | RemoveFresh | Verify => {}
         DeleteOld => plan.delete_old()?,
     }
     Ok(())

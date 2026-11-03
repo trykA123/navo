@@ -37,3 +37,33 @@ fn cli_index_memory_accepts_missing_optional_metadata_from_an_old_service() {
 fn cli_index_memory_returns_two_when_the_service_is_absent() {
     assert_eq!(finish(Err(PipeError::NotAvailable)), ExitCode::from(2));
 }
+
+#[test]
+fn cli_index_memory_shows_build_counters_per_volume() {
+    let report = MemoryReport {
+        builds: Some(vec![VolumeBuilds {
+            full_builds: 2,
+            last_reason: Some(navo_index::pipe::BuildReason::JournalReset),
+            last_duration_ms: 900,
+            unresolved_batches: 4,
+            deferred_rebuilds: 1,
+            dropped_changes: 6,
+        }]),
+        ..MemoryReport::default()
+    };
+    let json: serde_json::Value =
+        serde_json::from_str(&format_sample(&report, "now").unwrap()).unwrap();
+    assert_eq!(
+        json["builds"],
+        serde_json::json!([{
+            "full_builds_since_start": 2,
+            "last_build_reason": "journal_reset",
+            "last_build_duration_ms": 900,
+            "unresolved_batches": 4,
+            "deferred_rebuilds": 1,
+            "dropped_changes": 6
+        }])
+    );
+    let old = format_sample(&MemoryReport::default(), "now").unwrap();
+    assert!(serde_json::from_str::<serde_json::Value>(&old).unwrap()["builds"].is_null());
+}

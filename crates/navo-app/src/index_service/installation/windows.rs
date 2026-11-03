@@ -38,6 +38,7 @@ use super::upgrade::{UpgradeStep, await_answer, remove_both, run_upgrade};
 
 mod configuration;
 mod legacy;
+mod verify;
 
 const ANSWER_WAIT: (Duration, Duration) = (Duration::from_secs(30), Duration::from_millis(250));
 
@@ -101,10 +102,10 @@ fn install_with(
     let previous = exists
         .then(|| configuration::Configuration::read(&service))
         .transpose()?;
-    let mut settings = None;
+    let (mut settings, mut started_after) = (None, None);
     let result = run_install(exists, was_running, |step| match step {
         Step::RecoverOld => fresh.recover_executable(plan),
-        Step::Stop => stop(&service),
+        Step::Stop => stop(&service).map(|()| started_after = Some(verify::now())),
         Step::Copy => plan.copy_from(&std::env::current_exe()?),
         Step::RenameOld => plan.rename_old(),
         Step::Replace => plan.replace(),
@@ -117,7 +118,11 @@ fn install_with(
         Step::Configure => update(&service, &command)
             .and_then(|()| configure_recovery(&service))
             .and_then(|()| storage.write_config(config)),
-        Step::Start => start(&service),
+        Step::Start => {
+            started_after.get_or_insert_with(verify::now);
+            start(&service)
+        }
+        Step::Verify => verify::installed(&service, plan, &command, started_after),
         Step::Restore => plan.restore(),
         Step::RestoreSettings => settings.as_ref().map_or(Ok(()), SettingsBackup::restore),
         Step::RemoveFresh => fresh.remove_executable(plan),

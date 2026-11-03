@@ -11,7 +11,15 @@ pub type RecordVisit = Arc<dyn Fn(&str, bool) + Send + Sync>;
 pub type ClearSearch = Arc<dyn Fn() + Send + Sync>;
 pub type ServiceState = Arc<dyn Fn() -> ServiceStatus + Send + Sync>;
 pub type ServiceAction = Arc<dyn Fn() + Send + Sync>;
+pub type ServiceChange = Arc<dyn Fn() -> ServiceOutcome + Send + Sync>;
 pub type UpgradeDue = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// How an install, update or remove ended; a cancelled prompt counts as `Done`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServiceOutcome {
+    Done,
+    Failed,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frecent {
@@ -23,8 +31,8 @@ pub struct Frecent {
 #[derive(Clone)]
 pub struct ServiceHooks {
     pub status: ServiceState,
-    pub install: ServiceAction,
-    pub remove: ServiceAction,
+    pub install: ServiceChange,
+    pub remove: ServiceChange,
     pub upgrade_due: UpgradeDue,
     pub dismiss_upgrade: ServiceAction,
 }
@@ -34,8 +42,8 @@ impl ServiceHooks {
     pub fn none() -> Self {
         Self {
             status: Arc::new(|| ServiceStatus::NotAvailable),
-            install: Arc::new(|| {}),
-            remove: Arc::new(|| {}),
+            install: Arc::new(|| ServiceOutcome::Done),
+            remove: Arc::new(|| ServiceOutcome::Done),
             upgrade_due: Arc::new(|| false),
             dismiss_upgrade: Arc::new(|| {}),
         }

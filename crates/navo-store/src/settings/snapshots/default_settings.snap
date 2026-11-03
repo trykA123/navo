@@ -113,6 +113,9 @@ enabled = true
 record-history = true
 summon-key = "Win+Alt+V"
 
+[updates]
+check = true
+
 [compare]
 git-engine = "git"
 ignore-list = []

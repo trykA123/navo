@@ -69,6 +69,7 @@ mod settings_news;
 mod settings_search;
 mod settings_sheet;
 mod settings_state;
+mod settings_updates;
 mod settings_upgrade;
 mod shell_menu;
 pub(in crate::window_view) mod shortcuts;

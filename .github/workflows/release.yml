@@ -97,6 +97,8 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build --release -p navo-app
+        env:
+          NAVO_BUILD: ${{ inputs.tag }}
       - name: Binary size
         run: cargo xtask binsize target/release/navo.exe
       - shell: pwsh
@@ -146,12 +148,28 @@ jobs:
           if (-not ($env:TAG -cmatch '^(alpha|beta)-(\d{4})-(\d{2})-(\d{2})([a-z])$')) { throw "bad tag: $env:TAG" }
           $version = "$base-$($Matches[1]).$($Matches[2])$($Matches[3])$($Matches[4])$($Matches[5])"
           Write-Output "package version $version"
+          "PACK_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           New-Item -ItemType Directory -Force -Path out | Out-Null
           & "$env:RUNNER_TEMP/vpk/vpk.exe" pack --packId $env:PACK_ID --packVersion $version --packTitle Navo --packDir dist --mainExe navo.exe --icon assets/brand/navo.ico --channel $env:CHANNEL --runtime win-x64 --outputDir out
           if ($LASTEXITCODE -ne 0) { throw "vpk pack failed with $LASTEXITCODE" }
           Copy-Item -LiteralPath dist/navo.exe -Destination out
           Compress-Archive -LiteralPath target/release/navo.pdb -DestinationPath out/navo-windows-x64-pdb.zip
           Get-ChildItem out | Format-Table Name, Length
+      - name: Check the release feed
+        shell: pwsh
+        run: |
+          $feed = Get-Content -LiteralPath "out/releases.$env:CHANNEL.json" -Raw | ConvertFrom-Json
+          $assets = @($feed.Assets)
+          if ($assets.Count -ne 1) { throw "expected one feed asset, got $($assets.Count)" }
+          $asset = $assets[0]
+          if ($asset.Type -ne 'Full') { throw "feed asset type is $($asset.Type), not Full" }
+          if ($asset.Version -ne $env:PACK_VERSION) { throw "feed version $($asset.Version) is not $env:PACK_VERSION" }
+          $pkg = Join-Path out $asset.FileName
+          if (-not (Test-Path -LiteralPath $pkg)) { throw "feed names a missing package: $($asset.FileName)" }
+          $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash
+          if ($asset.SHA256 -ne $hash) { throw "feed SHA256 $($asset.SHA256) does not match the package $hash" }
+          $size = (Get-Item -LiteralPath $pkg).Length
+          if ($asset.Size -ne $size) { throw "feed size $($asset.Size) does not match the package $size" }
       - name: Verify the portable package
         timeout-minutes: 2
         shell: pwsh

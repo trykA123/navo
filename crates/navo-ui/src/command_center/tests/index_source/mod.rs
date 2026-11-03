@@ -180,6 +180,7 @@ fn indexing_note_uses_the_count_without_a_percentage() {
                 entries: 12_345,
                 progress: Some(0),
                 errors: Vec::new(),
+                total_files: None,
             }],
         },
         ..Reply::default()

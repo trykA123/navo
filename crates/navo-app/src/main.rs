@@ -51,6 +51,7 @@ mod shell_menu;
 mod splash;
 mod startup;
 mod terminal;
+mod updater;
 mod watch_file;
 #[cfg(windows)]
 mod windows_memory;
@@ -88,7 +89,8 @@ fn execute(
 ) -> ExitCode {
     let started = Instant::now();
     metrics::mark("main");
-    let parsed = cli::parse(args);
+    let args: Vec<std::ffi::OsString> = args.into_iter().collect();
+    let parsed = cli::parse(args.iter().cloned());
     if parsed.as_ref().map_or(true, Command::uses_console) {
         console::attach();
     }
@@ -109,7 +111,10 @@ fn execute(
     };
     let opening = match &command {
         Command::Open(start) => match gui::pane_folders(start) {
-            Ok(panes) => Opening { panes },
+            Ok(panes) => {
+                updater::apply::at_start(&command, &args);
+                Opening { panes }
+            }
             Err(message) => {
                 console::attach();
                 eprintln!("navo: {message}\n{}", cli::USAGE);

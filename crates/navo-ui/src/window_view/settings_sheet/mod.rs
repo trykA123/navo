@@ -9,6 +9,7 @@ mod locate;
 mod service;
 mod shortcuts;
 mod undo;
+mod updates;
 mod upgrade;
 
 use std::sync::{Arc, Mutex, PoisonError};
@@ -21,8 +22,8 @@ use super::settings_save::{SaveReport, SaveSettings, Saver};
 use super::{NavoWindow, SearchHooks};
 use crate::prelude::*;
 use crate::settings::{
-    Change, FIELDS, Field, Filter, HELP_ROW, SearchPage, Section, ServiceStatus, SettingsBody,
-    SheetEvent, Values, child_of, section_of,
+    Change, Field, Filter, HELP_ROW, SearchPage, Section, ServiceStatus, SettingsBody, SheetEvent,
+    Values, child_of, section_of,
 };
 use crate::side_sheet::SheetState;
 use crate::tokens;
@@ -46,6 +47,7 @@ pub struct SettingsHooks {
     pub save_diagnostic_report: Arc<dyn Fn() -> Result<std::path::PathBuf, String> + Send + Sync>,
     pub take_guide_hint: Arc<dyn Fn() -> bool + Send + Sync>,
     pub edit_layout: super::EditLayout,
+    pub updates: super::UpdateHooks,
 }
 
 impl SettingsHooks {
@@ -68,6 +70,7 @@ impl SettingsHooks {
             save_diagnostic_report: Arc::new(|| Err(navo_l10n::tr("diagnostics-unavailable"))),
             take_guide_hint: Arc::new(|| false),
             edit_layout: super::no_layout_edits(),
+            updates: super::UpdateHooks::none(),
         }
     }
 }
@@ -109,6 +112,7 @@ pub(super) struct SettingsPanel {
     pub(super) is_saving_report: bool,
     pub(super) take_guide_hint: Arc<dyn Fn() -> bool + Send + Sync>,
     pub(super) news: Option<SettingsInbox>,
+    updates: updates::Updates,
 }
 
 impl SettingsPanel {
@@ -124,6 +128,7 @@ impl SettingsPanel {
             saver,
             Self {
                 news: hooks.news,
+                updates: updates::Updates::new(hooks.updates),
                 disk_use: hooks.disk_use,
                 #[cfg(feature = "tester")]
                 save_diagnostic_report: hooks.save_diagnostic_report,
@@ -163,6 +168,7 @@ impl SettingsPanel {
             service_action_pending: false,
             index_upgrade_due: false,
             news: None,
+            updates: updates::Updates::new(super::UpdateHooks::none()),
             disk_use: Arc::new(Vec::new),
             #[cfg(feature = "tester")]
             save_diagnostic_report: SettingsHooks::none().save_diagnostic_report,
@@ -227,6 +233,9 @@ impl NavoWindow {
         if section_of(self.settings.row) == Section::Diagnostics {
             self.refresh_diagnostics(cx);
         }
+        if section_of(self.settings.row) == Section::Help {
+            self.refresh_updates(cx);
+        }
         self.prepare_find(window, cx);
         self.settings.undo.clear();
         self.settings.notice = None;
@@ -242,9 +251,8 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         self.open_settings(window, cx);
-        let row = FIELDS.iter().position(|spec| spec.field == field);
-        if let Some(row) = row.filter(|_| self.settings.is_open) {
-            self.select_setting(row, window, cx);
+        if self.settings.is_open {
+            self.select_setting(field.row(), window, cx);
         }
     }
 
@@ -288,6 +296,7 @@ impl NavoWindow {
             SheetEvent::DismissUpgrade => self.dismiss_upgrade(),
             SheetEvent::RefreshDiagnostics => self.refresh_diagnostics(cx),
             SheetEvent::OpenGuide => self.open_guide_from_settings(window, cx),
+            SheetEvent::CheckUpdates => self.check_updates_now(cx),
             SheetEvent::ClearHistory => self.clear_search_history(),
             SheetEvent::InstallService => self.install_index_service(cx),
             SheetEvent::RemoveService => self.remove_index_service(cx),
@@ -323,6 +332,11 @@ impl NavoWindow {
         {
             self.refresh_diagnostics(cx);
         }
+        if section_of(self.settings.row) == Section::Help
+            && (from != Section::Help || was_shortcuts)
+        {
+            self.refresh_updates(cx);
+        }
         if let Some(child) = child_of(&self.settings_filter(), row) {
             self.settings.scroll.scroll_to_item(child);
         }
@@ -346,6 +360,7 @@ impl NavoWindow {
         let body = SettingsBody::new(self.values.clone(), self.settings.row)
             .diagnostics(self.settings.diagnostics.clone())
             .version(self.identity.version.clone())
+            .update(self.settings.updates.view.clone())
             .summon_key_taken(self.summon_key_taken())
             .clipboard_key_taken(self.clipboard_key_taken())
             .error(error)

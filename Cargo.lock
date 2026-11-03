@@ -5774,6 +5774,7 @@ dependencies = [
  "navo-shell",
  "navo-store",
  "navo-ui",
+ "navo-update",
  "rusqlite",
  "serde",
  "serde_json",
@@ -6114,6 +6115,14 @@ dependencies = [
  "navo-fs",
  "navo-pdf",
  "navo-ui",
+]
+
+[[package]]
+name = "navo-update"
+version = "0.0.1"
+dependencies = [
+ "semver",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -34,8 +34,9 @@ use crate::structured_sample::{
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
-    hint_windows, job_element, job_windows, parts_element, parts_windows, preview_element,
-    preview_windows, settings_element, settings_windows, sheet_windows, window_element,
+    help_windows, hint_windows, job_element, job_windows, parts_element, parts_windows,
+    preview_element, preview_windows, settings_element, settings_windows, sheet_windows,
+    window_element,
 };
 use crate::{
     image_sample, pdf_sample, rich_sample, sections, shortcuts_sample, tokens_page, viewer_sample,
@@ -98,6 +99,7 @@ pub struct Gallery {
     job_windows: [Entity<WindowPage>; 7],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
+    help_windows: [Entity<WindowPage>; 3],
     settings_windows: [Entity<WindowPage>; 7],
     hint_windows: [Entity<WindowPage>; 4],
     notice_windows: [Entity<WindowPage>; 2],
@@ -157,6 +159,7 @@ impl Gallery {
             menu_window: cx.new(WindowPage::with_menu),
             sheet_windows: sheet_windows(window, cx),
             settings_windows: settings_windows(window, cx),
+            help_windows: help_windows(cx),
             hint_windows: hint_windows(cx),
             notice_windows: crate::window_samples::notice_windows(cx),
             parts_windows: parts_windows(cx),
@@ -326,6 +329,7 @@ impl Render for Gallery {
         }
         if let Some(page) = self
             .window_page()
+            .or_else(|| crate::window_samples::help_element(self.page, &self.help_windows))
             .or_else(|| crate::tray_page::element(self.page, &t))
             .or_else(|| crate::recent_page::element(self.page, &self.recent))
             .or_else(|| self.git_page())

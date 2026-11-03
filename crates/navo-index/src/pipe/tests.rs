@@ -40,6 +40,7 @@ fn frames_round_trip() {
                     entries: 1234,
                     progress: Some(41),
                     errors: vec!["volume unavailable".into()],
+                    total_files: None,
                 }],
             },
         },

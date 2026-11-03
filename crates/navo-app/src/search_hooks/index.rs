@@ -187,6 +187,7 @@ impl Hosts {
                     as u64,
                 progress: pending.then_some(0),
                 errors: root.status.errors.clone(),
+                total_files: None,
             });
             reply.hits.extend(search_root(
                 &root.location,

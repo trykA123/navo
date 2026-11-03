@@ -114,8 +114,9 @@ pub(super) fn reset_after_actions(
         let original = action.clone();
         let reset = reset.clone();
         *action = std::sync::Arc::new(move || {
-            original();
+            let outcome = original();
             reset();
+            outcome
         });
     }
 }
@@ -225,13 +226,25 @@ mod action_tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let action = events.clone();
         let mut service = navo_ui::window_view::ServiceHooks::none();
-        service.install = Arc::new(move || action.lock().unwrap().push("install"));
+        service.install = Arc::new(move || {
+            action.lock().unwrap().push("install");
+            navo_ui::window_view::ServiceOutcome::Failed
+        });
         let action = events.clone();
-        service.remove = Arc::new(move || action.lock().unwrap().push("remove"));
+        service.remove = Arc::new(move || {
+            action.lock().unwrap().push("remove");
+            navo_ui::window_view::ServiceOutcome::Done
+        });
         let reset = events.clone();
         reset_after_actions(&mut service, move || reset.lock().unwrap().push("reset"));
-        (service.install)();
-        (service.remove)();
+        assert_eq!(
+            (service.install)(),
+            navo_ui::window_view::ServiceOutcome::Failed
+        );
+        assert_eq!(
+            (service.remove)(),
+            navo_ui::window_view::ServiceOutcome::Done
+        );
         assert_eq!(
             *events.lock().unwrap(),
             ["install", "reset", "remove", "reset"]

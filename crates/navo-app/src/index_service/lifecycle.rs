@@ -4,7 +4,7 @@ use super::config::Drive;
 
 use navo_index::file::{self, FileError, Header};
 use navo_index::ntfs::{NtfsError, NtfsIndex};
-use navo_index::pipe::CancelToken;
+use navo_index::pipe::{BuildReason, CancelToken};
 use navo_index::table::NameTable;
 use navo_index::usn::FrnMap;
 
@@ -14,6 +14,13 @@ pub(super) const SAVE_FAILURE: &str = "saving volume index: ";
 
 pub(super) fn clear_failures(errors: &mut Vec<String>, prefix: &str) {
     errors.retain(|message| !message.starts_with(prefix));
+}
+
+/// Marks a full build as started; `total_files` stays unknown when the MFT count could not be read.
+pub(super) fn begin_build(status: &mut navo_index::pipe::VolumeStatus, total_files: Option<u64>) {
+    status.progress = Some(0);
+    status.total_files = total_files;
+    clear_failures(&mut status.errors, UNRESOLVED);
 }
 
 pub(super) fn report_unknown_sizes(errors: &mut Vec<String>, count: u64) {
@@ -45,22 +52,28 @@ pub(super) fn guard_worker(
     }
 }
 
+/// Restores the saved index, or builds one and tells `enumerate` why the snapshot was not used.
 pub(super) fn restore_or_enumerate(
     saved: Result<(Header, NameTable, FrnMap), FileError>,
     drive: Drive,
-    enumerate: impl FnOnce() -> Result<NtfsIndex, NtfsError>,
+    enumerate: impl FnOnce(BuildReason) -> Result<NtfsIndex, NtfsError>,
 ) -> Result<NtfsIndex, NtfsError> {
-    let restored = saved
-        .ok()
-        .filter(|(header, _, _)| header.root == format!("{}:", drive.letter))
-        .and_then(|saved| {
+    let reason = match saved {
+        Err(FileError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            BuildReason::SnapshotMissing
+        }
+        Err(_) => BuildReason::SnapshotInvalid,
+        Ok(saved) if saved.0.root != format!("{}:", drive.letter) => BuildReason::SnapshotInvalid,
+        Ok(saved) => {
             let journal_id = saved.0.journal_id;
-            NtfsIndex::restore(saved, drive.serial, journal_id).ok()
-        });
-    if let Some(index) = restored {
-        return Ok(index);
-    }
-    enumerate()
+            match NtfsIndex::restore(saved, drive.serial, journal_id) {
+                Ok(index) => return Ok(index),
+                Err(NtfsError::Reenumerate) => BuildReason::SnapshotStale,
+                Err(_) => BuildReason::SnapshotInvalid,
+            }
+        }
+    };
+    enumerate(reason)
 }
 
 #[derive(Default)]

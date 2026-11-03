@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 use navo_index::ntfs::NtfsIndex;
-use navo_index::pipe::{self, CancelToken, Hit, Reply, Request, VolumeStatus};
+use navo_index::pipe::{self, CancelToken, Hit, Reply, Request, VolumeBuilds, VolumeStatus};
 
 use super::search::SearchIndex;
 
@@ -15,6 +15,7 @@ pub(super) struct State {
     pub(super) index: Option<Arc<NtfsIndex>>,
     pub(super) status: VolumeStatus,
     pub(super) search: SearchIndex,
+    pub(super) builds: VolumeBuilds,
 }
 
 pub(super) type Shared = Arc<RwLock<State>>;
@@ -80,8 +81,11 @@ fn search(
     let mut status = state.status.clone();
     if let Some(index) = &state.index {
         status.entries = index.table.len() as u64;
-        hits.extend(state.search.hits(&index.table, request, cancel));
+        if !request.wants_status() {
+            hits.extend(state.search.hits(&index.table, request, cancel));
+        }
     }
+    status.clamp_total();
     status
 }
 
@@ -162,5 +166,54 @@ mod tests {
         );
         let (reply, _) = answer_while_writing(&volume);
         assert_eq!(reply.status.volumes[0].entries, 7);
+    }
+
+    fn building_volume() -> SharedVolume {
+        SharedVolume::new(State {
+            status: VolumeStatus {
+                root: "C:".into(),
+                ..VolumeStatus::default()
+            },
+            ..State::default()
+        })
+    }
+
+    fn status_of(volume: &SharedVolume) -> VolumeStatus {
+        let request = Request {
+            terms: vec![pipe::QueryTerm::StatusV1],
+        };
+        let reply = answer(std::slice::from_ref(volume), &request, &CancelToken::new());
+        assert!(reply.hits.is_empty(), "a status request never searches");
+        reply.status.volumes[0].clone()
+    }
+
+    #[test]
+    fn the_total_is_unknown_until_a_build_starts_and_never_below_the_entries() {
+        let volume = building_volume();
+        assert_eq!(status_of(&volume).total_files, None);
+        super::super::lifecycle::begin_build(&mut volume.shared.write().unwrap().status, Some(10));
+        let building = status_of(&volume);
+        assert_eq!(
+            (building.progress, building.total_files),
+            (Some(0), Some(10))
+        );
+        let index = navo_index::ntfs::test_support::MftFixture::new(40, 7)
+            .read()
+            .index;
+        let entries = index.table.len() as u64;
+        volume.shared.write().unwrap().index = Some(Arc::new(index));
+        let built = status_of(&volume);
+        assert_eq!((built.entries, built.total_files), (entries, Some(entries)));
+        assert!(entries > 10, "the fixture must outgrow the estimate");
+    }
+
+    #[test]
+    fn a_failed_count_leaves_the_total_unknown() {
+        let volume = building_volume();
+        let mut state = volume.shared.write().unwrap();
+        state.status.total_files = Some(5);
+        super::super::lifecycle::begin_build(&mut state.status, None);
+        drop(state);
+        assert_eq!(status_of(&volume).total_files, None);
     }
 }

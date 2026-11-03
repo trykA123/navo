@@ -77,6 +77,11 @@ impl Volume {
         read_volume_journal(self, saved)
     }
 
+    /// MFT record slots right now; read again at each build since the MFT only grows.
+    pub fn mft_records(&self) -> Result<u64, NtfsError> {
+        super::mft_records(&self.control(FSCTL_GET_NTFS_VOLUME_DATA, &[], 96)?)
+    }
+
     pub fn serial(&self) -> Result<u64, NtfsError> {
         let mut serial = 0;
         // SAFETY: the volume handle is live; serial is writable; optional buffers are NULL.

@@ -12,6 +12,7 @@ use super::values::{Value, Values};
 use super::{Handler, SheetEvent};
 use crate::prelude::*;
 use crate::tokens::Theme;
+use crate::window_view::UpdateView;
 
 const ROW_MIN: f32 = 48.;
 const NO_MATCH: &str = "No setting matches";
@@ -24,6 +25,7 @@ pub(super) struct Look<'a> {
     pub filter: &'a Filter,
     pub diagnostics: &'a [super::DiagnosticRow],
     pub version: &'a SharedString,
+    pub update: &'a UpdateView,
     pub page: &'a SearchPage,
     pub git: &'a GitPage,
     pub index: &'a super::IndexProgress,
@@ -184,7 +186,7 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
         .child(key_line(t, spec, index == look.row))
 }
 
-fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
+pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     let t = look.theme;
     let is_current = index == look.row;
     let theme = t.selected_content(is_current);

@@ -9,7 +9,9 @@ use super::{NavoWindow, StartOptions, fake, open_options, press, settle, two_pan
 use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
-use crate::window_view::{AppMenuHooks, SaveReport, SearchHooks, SettingsHooks, SettingsSender};
+use crate::window_view::{
+    AppMenuHooks, SaveReport, SearchHooks, SettingsHooks, SettingsSender, UpdateHooks,
+};
 
 pub(super) fn values_of(settings: QuickSettings) -> Values {
     Values::default()
@@ -135,7 +137,12 @@ pub(super) fn rig_search(
     load_error: Option<&str>,
     search: SearchHooks,
 ) -> Rig {
-    rig_built(cx, (values, load_error), (search, None))
+    rig_built(
+        cx,
+        (values, load_error),
+        (search, None),
+        UpdateHooks::none(),
+    )
 }
 
 pub(super) fn rig_git(
@@ -143,13 +150,28 @@ pub(super) fn rig_git(
     values: Values,
     git: Arc<dyn crate::git::GitHooks>,
 ) -> Rig {
-    rig_built(cx, (values, None), (SearchHooks::none(), Some(git)))
+    rig_built(
+        cx,
+        (values, None),
+        (SearchHooks::none(), Some(git)),
+        UpdateHooks::none(),
+    )
+}
+
+pub(super) fn rig_updates(cx: &mut TestAppContext, updates: UpdateHooks) -> Rig {
+    let values = values_of(QuickSettings {
+        theme: ThemeChoice::System,
+        density: Density::Normal,
+        show_hidden: true,
+    });
+    rig_built(cx, (values, None), (SearchHooks::none(), None), updates)
 }
 
 fn rig_built(
     cx: &mut TestAppContext,
     (values, load_error): (Values, Option<&str>),
     (search, git): (SearchHooks, Option<Arc<dyn crate::git::GitHooks>>),
+    updates: UpdateHooks,
 ) -> Rig {
     let fs = rig_fs();
     let state = two_panes(&fs);
@@ -163,6 +185,7 @@ fn rig_built(
         values,
         load_error: load_error.map(Into::into),
         save: Arc::new(move |changes| fake_store.save(changes)),
+        updates,
         ..SettingsHooks::none()
     }
     .channel();

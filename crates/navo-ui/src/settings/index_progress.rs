@@ -128,6 +128,7 @@ mod tests {
                     entries: *entries,
                     progress: *progress,
                     errors: Vec::new(),
+                    total_files: None,
                 })
                 .collect(),
         }
@@ -150,6 +151,7 @@ mod tests {
             busy: false,
             process_id: None,
             volumes: None,
+            builds: None,
         }
     }
 

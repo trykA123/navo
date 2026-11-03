@@ -124,6 +124,7 @@ mod tests {
                     entries: 1234,
                     progress: Some(0),
                     errors: Vec::new(),
+                    total_files: None,
                 }],
             },
             ..Reply::default()
@@ -141,6 +142,7 @@ mod tests {
                 busy: false,
                 process_id: None,
                 volumes: None,
+                builds: None,
             }),
             ..Reply::default()
         }

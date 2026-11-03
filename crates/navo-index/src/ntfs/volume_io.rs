@@ -220,6 +220,17 @@ pub(super) fn field<const N: usize>(bytes: &[u8], offset: usize) -> Result<[u8; 
         .ok_or(NtfsError::InvalidResponse("truncated metadata field"))
 }
 
+/// MFT record slots (used and free) from an `NTFS_VOLUME_DATA_BUFFER`: an upper estimate of the file count.
+pub(super) fn mft_records(data: &[u8]) -> Result<u64, NtfsError> {
+    let record_size = u32::from_le_bytes(field(data, 48)?);
+    if !(512..=65536).contains(&record_size) {
+        return Err(NtfsError::InvalidResponse("invalid MFT record size"));
+    }
+    let valid = u64::try_from(i64::from_le_bytes(field(data, 56)?))
+        .map_err(|_| NtfsError::InvalidResponse("invalid MFT length"))?;
+    Ok(valid / u64::from(record_size))
+}
+
 pub(super) fn volume_path(drive: char) -> Result<Vec<u16>, NtfsError> {
     if !drive.is_ascii_alphabetic() {
         return Err(NtfsError::InvalidVolume);

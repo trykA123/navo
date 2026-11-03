@@ -29,6 +29,9 @@ impl From<MemoryReport> for WireReport {
                 items: volume.live,
             }));
         }
+        if let Some(builds) = report.builds {
+            super::builds::encode(builds, &mut parts);
+        }
         Self {
             parts,
             busy: report.busy,
@@ -43,6 +46,9 @@ impl From<WireReport> for MemoryReport {
             ..Self::default()
         };
         for part in wire.parts {
+            if super::builds::decode(part, &mut report.builds) {
+                continue;
+            }
             match part.part {
                 PROCESS_ID => report.process_id = u32::try_from(part.bytes).ok(),
                 VOLUME => report.volumes.get_or_insert_default().push(VolumeMemory {
