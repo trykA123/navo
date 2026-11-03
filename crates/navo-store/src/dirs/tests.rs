@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::*;
 
@@ -166,4 +166,95 @@ fn legacy_unix_roots_follow_xdg_then_home() {
 fn legacy_with_empty_or_missing_variables_has_no_dirs() {
     assert!(StoreDirs::legacy(false, env(&[("HOME", "")])).is_none());
     assert!(StoreDirs::legacy(true, env(&[("LOCALAPPDATA", r"C:\x")])).is_none());
+}
+
+fn windows_vars(root: &Path) -> impl Fn(&str) -> Option<String> {
+    let vars = HashMap::from([
+        (
+            "APPDATA".to_owned(),
+            root.join("Roaming").to_string_lossy().into_owned(),
+        ),
+        (
+            "LOCALAPPDATA".to_owned(),
+            root.join("Local").to_string_lossy().into_owned(),
+        ),
+    ]);
+    move |name| vars.get(name).cloned()
+}
+
+fn user_dirs(root: &Path) -> StoreDirs {
+    StoreDirs::resolve(true, windows_vars(root)).unwrap()
+}
+
+fn install_exe(install: &Path) -> PathBuf {
+    std::fs::create_dir_all(install.join("current")).unwrap();
+    std::fs::write(install.join("Update.exe"), b"").unwrap();
+    install.join("current/navo.exe")
+}
+
+#[test]
+fn an_installed_exe_uses_the_user_folders() {
+    let root = tempfile::tempdir().unwrap();
+    let exe = install_exe(&root.path().join("Local/NavoApp"));
+    assert_eq!(
+        StoreDirs::detect_for(&exe, true, windows_vars(root.path())),
+        Some(user_dirs(root.path()))
+    );
+}
+
+#[test]
+fn a_plain_exe_from_any_folder_uses_the_same_user_folders() {
+    let root = tempfile::tempdir().unwrap();
+    let exe = root.path().join("Downloads/navo.exe");
+    assert_eq!(
+        StoreDirs::detect_for(&exe, true, windows_vars(root.path())),
+        Some(user_dirs(root.path()))
+    );
+}
+
+#[test]
+fn an_installed_exe_ignores_a_settings_file_next_to_it() {
+    let root = tempfile::tempdir().unwrap();
+    let exe = install_exe(&root.path().join("Local/NavoApp"));
+    std::fs::write(exe.with_file_name("navo.toml"), b"").unwrap();
+    assert_eq!(
+        StoreDirs::detect_for(&exe, true, windows_vars(root.path())),
+        Some(user_dirs(root.path()))
+    );
+}
+
+#[test]
+fn a_settings_file_beside_a_plain_exe_keeps_the_profile_there() {
+    let root = tempfile::tempdir().unwrap();
+    let portable = root.path().join("Portable");
+    std::fs::create_dir_all(&portable).unwrap();
+    std::fs::write(portable.join("navo.toml"), b"").unwrap();
+    let dirs = StoreDirs::detect_for(&portable.join("navo.exe"), true, |_| None).unwrap();
+    assert_eq!(dirs.config, portable);
+    assert_eq!(dirs.data, dirs.config);
+    assert_eq!(dirs.settings_file(), dirs.data.join("navo.toml"));
+}
+
+#[test]
+fn a_marked_velopack_portable_root_keeps_one_profile_at_the_root() {
+    let root = tempfile::tempdir().unwrap();
+    let package = root.path().join("package");
+    let exe = install_exe(&package);
+    std::fs::write(package.join(".portable"), b"").unwrap();
+    std::fs::write(exe.with_file_name("navo.toml"), b"").unwrap();
+    let dirs = StoreDirs::detect_for(&exe, true, |_| None).unwrap();
+    assert_eq!(dirs.config, package);
+    assert_eq!(dirs.data, dirs.config);
+}
+
+#[test]
+fn a_velopack_portable_copy_without_a_settings_marker_keeps_the_user_folders() {
+    let root = tempfile::tempdir().unwrap();
+    let package = root.path().join("package");
+    let exe = install_exe(&package);
+    std::fs::write(package.join(".portable"), b"").unwrap();
+    assert_eq!(
+        StoreDirs::detect_for(&exe, true, windows_vars(root.path())),
+        Some(user_dirs(root.path()))
+    );
 }
