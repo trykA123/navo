@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -26,6 +27,7 @@ pub(super) struct Log {
     pub(super) refusal: Option<String>,
 }
 
+type Notify = Arc<Mutex<Option<Arc<dyn Fn() + Send + Sync>>>>;
 type Held = Vec<(Location, Box<dyn FnOnce(Previewed) + Send>)>;
 
 #[derive(Clone)]
@@ -33,7 +35,11 @@ pub(super) struct Fake {
     pub(super) log: Arc<Mutex<Log>>,
     held: Arc<Mutex<Held>>,
     items: Vec<GitMenuItem>,
-    badges: Arc<FolderBadges>,
+    badges: Arc<Mutex<Arc<FolderBadges>>>,
+    /// The highest generation `observe` was given: the badges carry it as their revision,
+    /// as the real hooks do, so a listing that reloads never outdates them.
+    generation: Arc<AtomicU64>,
+    notify: Notify,
 }
 
 impl Fake {
@@ -43,10 +49,12 @@ impl Fake {
             log: Arc::default(),
             held: Arc::default(),
             items,
-            badges: Arc::new(FolderBadges {
+            badges: Arc::new(Mutex::new(Arc::new(FolderBadges {
                 revision: 1,
                 by_name,
-            }),
+            }))),
+            generation: Arc::new(AtomicU64::new(1)),
+            notify: Arc::default(),
         }
     }
 
@@ -66,12 +74,29 @@ impl Fake {
 }
 
 impl GitHooks for Fake {
-    fn observe(&self, _: &Location, _: u64, _: Vec<String>) {}
+    fn observe(&self, _: &Location, generation: u64, _: Vec<String>) {
+        if self.generation.fetch_max(generation, Ordering::SeqCst) < generation {
+            let notify = self.notify.lock().unwrap().clone();
+            if let Some(notify) = notify {
+                notify();
+            }
+        }
+    }
     fn forget(&self, _: &Location) {}
     fn badges(&self, _: &Location) -> Option<Arc<FolderBadges>> {
-        Some(self.badges.clone())
+        let revision = self.generation.load(Ordering::SeqCst);
+        let mut badges = self.badges.lock().unwrap();
+        if badges.revision != revision {
+            *badges = Arc::new(FolderBadges {
+                revision,
+                by_name: badges.by_name.clone(),
+            });
+        }
+        Some(Arc::clone(&badges))
     }
     fn subscribe(&self, notify: Box<dyn Fn() + Send + Sync>) {
+        let notify: Arc<dyn Fn() + Send + Sync> = Arc::from(notify);
+        *self.notify.lock().unwrap() = Some(Arc::clone(&notify));
         notify();
     }
     fn rescan(&self, listing: &Location) {
