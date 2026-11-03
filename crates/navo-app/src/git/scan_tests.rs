@@ -18,6 +18,8 @@ mod lifecycle;
 mod limits;
 #[path = "scan_tests/results.rs"]
 mod results;
+#[path = "scan_tests/saved_restart.rs"]
+mod saved_restart;
 
 #[derive(Default)]
 struct FakeProbe {
@@ -96,7 +98,8 @@ struct Harness {
 impl Harness {
     fn new(probe: Arc<FakeProbe>) -> Self {
         Self::build(probe, |ports, notify| {
-            GitScan::start(ports, &GitSettings::default(), notify).unwrap()
+            GitScan::start_with_limits(ports, &GitSettings::default(), notify, Limits::default())
+                .unwrap()
         })
     }
 
@@ -107,6 +110,21 @@ impl Harness {
     }
 
     fn build(probe: Arc<dyn Probe>, start: impl FnOnce(Ports, Notify) -> GitScan) -> Self {
+        Self::build_saved(probe, None, start)
+    }
+
+    fn with_saved(probe: Arc<FakeProbe>, saved: Arc<dyn SavedBadges>) -> Self {
+        Self::build_saved(probe, Some(saved), |ports, notify| {
+            let (settings, limits) = (GitSettings::default(), Limits::default());
+            GitScan::start_with_limits(ports, &settings, notify, limits).unwrap()
+        })
+    }
+
+    fn build_saved(
+        probe: Arc<dyn Probe>,
+        saved: Option<Arc<dyn SavedBadges>>,
+        start: impl FnOnce(Ports, Notify) -> GitScan,
+    ) -> Self {
         let (started, calls) = mpsc::channel();
         let (notify, notices) = mpsc::channel();
         let source = Arc::new(FakeSource::default());
@@ -114,6 +132,7 @@ impl Harness {
         let ports = Ports {
             probe,
             source: source.clone(),
+            saved,
         };
         let scan = start(
             ports,

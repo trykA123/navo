@@ -158,7 +158,12 @@ pub(crate) fn open(mut launch: Launch) {
     crate::diag::register_listings(&launch.crash.diagnostics.caches, &cache, disk.as_ref());
     metrics::mark("listing cache read");
     let remember = crate::search_hooks::Remember::default();
-    let git = crate::git::hooks::Hooks::system(&navo_store::GitSettings::default());
+    let git = crate::git::hooks::Hooks::system(
+        &navo_store::GitSettings::default(),
+        disk.as_ref()
+            .zip(dirs.as_ref())
+            .map(|(_, dirs)| dirs.data.join("cache.db")),
+    );
     let updater = crate::updater::launch();
     let follow = settings::Follow {
         remember: remember.clone(),

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
@@ -12,7 +13,7 @@ use super::launch;
 use super::launch::start::Ports as LaunchPorts;
 use super::previews::Previews;
 use super::run::{Job, Rescan};
-use super::scan::{GitScan, Ports, Row, SystemProbe};
+use super::scan::{DbSaved, GitScan, Ports, Row, SavedBadges, SystemProbe};
 use super::source::{CliBackend, GitSource, GixBackend};
 use super::wiring::Tools;
 
@@ -73,10 +74,13 @@ pub(crate) struct Hooks {
 }
 
 impl Hooks {
-    pub(crate) fn system(settings: &GitSettings) -> Arc<Self> {
-        let factory: Factory = Box::new(|settings| Ports {
+    /// `badge_db` is the profile's cache database, where the last badges are kept.
+    pub(crate) fn system(settings: &GitSettings, badge_db: Option<PathBuf>) -> Arc<Self> {
+        let saved = badge_db.map(|path| Arc::new(DbSaved::at(path)));
+        let factory: Factory = Box::new(move |settings| Ports {
             source: Arc::new(GitSource::new(CliBackend, GixBackend, settings.engine)),
             probe: Arc::new(SystemProbe),
+            saved: saved.clone().map(|saved| saved as Arc<dyn SavedBadges>),
         });
         let hooks = Arc::new(Self::new(
             settings,

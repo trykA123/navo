@@ -17,6 +17,7 @@ mod filtered_stream;
 mod filters;
 mod locate;
 pub(crate) mod parse;
+mod probe_cache;
 mod process;
 mod process_cap;
 mod process_tree;
@@ -30,7 +31,7 @@ mod sync_read;
 use batch::{Batch, BlobStream};
 use locate::find_git;
 use parse::{missing_revision, parse_oid, parse_refs, parse_tree};
-use process::{CommandSpec, base_command, command_io, resolve_git, run_process, version_of};
+use process::{CommandSpec, base_command, command_io, run_process};
 
 pub use process_cap::{ProcessOptions, ProcessOutput};
 pub use process_watch::{Cancel, ProcessOutcome};
@@ -64,6 +65,8 @@ pub struct CliGit {
     repo: PathBuf,
     timeout: Duration,
     env: Vec<(OsString, OsString)>,
+    /// Output of `rev-parse --absolute-git-dir`, read once when the repository is opened.
+    git_dir_output: Vec<u8>,
     session: Arc<Mutex<Option<Batch>>>,
     next_generation: AtomicU64,
 }
@@ -84,24 +87,25 @@ impl CliGit {
     }
 
     pub fn with_options(repo: &Path, options: &CliOptions) -> Result<Self, GitError> {
-        let git = match &options.git {
-            Some(git) if cfg!(windows) => resolve_git(git, &options.env, options.timeout),
-            Some(git) => git.clone(),
-            None => resolve_git(&find_git(repo)?, &options.env, options.timeout),
+        let (requested, resolve) = match &options.git {
+            Some(git) => (git.clone(), cfg!(windows)),
+            None => (find_git(repo)?, true),
         };
-        let (version, text) = version_of(&git, &options.env, options.timeout)?;
+        let (git, version, text) =
+            probe_cache::probe(&requested, resolve, &options.env, options.timeout)?;
         if (version.major, version.minor) < MIN_GIT_VERSION {
             return Err(GitError::GitTooOld { version: text });
         }
-        let cli = Self {
+        let mut cli = Self {
             git,
             repo: repo.to_path_buf(),
             timeout: options.timeout,
             env: options.env.clone(),
+            git_dir_output: Vec::new(),
             session: Arc::new(Mutex::new(None)),
             next_generation: AtomicU64::new(0),
         };
-        cli.run_ok(&["rev-parse", "--git-dir"])?;
+        cli.git_dir_output = cli.run_ok(&["rev-parse", "--absolute-git-dir"])?.stdout;
         Ok(cli)
     }
 
@@ -127,8 +131,7 @@ impl CliGit {
         if self.env.iter().any(|(key, _)| sets_home(key)) {
             return Ok(Guard::unreadable());
         }
-        let git_dir = self.run_ok(&["rev-parse", "--absolute-git-dir"])?;
-        let reader = Guard::read_reported(&git_dir.stdout)?;
+        let reader = Guard::read_reported(&self.git_dir_output)?;
         if reader.has_special_file() {
             return Ok(reader);
         }

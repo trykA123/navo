@@ -4,6 +4,8 @@ mod cache;
 mod listing;
 #[path = "scan_queue.rs"]
 mod queue;
+#[path = "scan_saved.rs"]
+mod saved;
 #[path = "scan_slots.rs"]
 mod slots;
 #[path = "scan_view.rs"]
@@ -24,6 +26,7 @@ use navo_ui::git::FolderBadges;
 
 pub(crate) use navo_fs::CancelToken as Cancel;
 use queue::{Listing, Shared};
+pub(crate) use saved::{DbSaved, SavedBadges};
 pub(crate) use slots::Slots;
 pub(crate) use view::{ScanRepo, ScanView};
 
@@ -31,7 +34,8 @@ const QUEUE_CAP: usize = 256;
 const CACHE_CAP: usize = 256;
 const ROW_CAP: usize = 2000;
 const REPO_CAP: usize = 64;
-const PROCESS_CAP: usize = 2;
+const MIN_PROCESSES: usize = 2;
+const MAX_PROCESSES: usize = 4;
 const CACHE_BYTES: usize = 1024 * 1024;
 const QUEUE_BYTES: usize = 1024 * 1024;
 const STOP_WAIT: Duration = Duration::from_secs(2);
@@ -82,6 +86,8 @@ impl Probe for SystemProbe {
 pub(crate) struct Ports {
     pub source: Arc<dyn StatusSource>,
     pub probe: Arc<dyn Probe>,
+    /// Keeps the last statuses across restarts of Navo and of the scanner.
+    pub saved: Option<Arc<dyn SavedBadges>>,
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +100,8 @@ pub(crate) struct Row {
 struct Limits {
     status_timeout: Duration,
     probe_timeout: Duration,
+    /// Git processes at once.
+    processes: usize,
 }
 
 impl Default for Limits {
@@ -101,8 +109,14 @@ impl Default for Limits {
         Self {
             status_timeout: Duration::from_secs(10),
             probe_timeout: Duration::from_millis(500),
+            processes: MIN_PROCESSES,
         }
     }
+}
+
+/// Git processes at once: half the cores, from two to four.
+fn process_cap(cores: usize) -> usize {
+    (cores / 2).clamp(MIN_PROCESSES, MAX_PROCESSES)
 }
 
 pub(crate) struct GitScan {
@@ -113,7 +127,12 @@ pub(crate) struct GitScan {
 
 impl GitScan {
     pub(crate) fn start(ports: Ports, settings: &GitSettings, notify: Notify) -> io::Result<Self> {
-        Self::start_with_limits(ports, settings, notify, Limits::default())
+        let cores = std::thread::available_parallelism().map_or(1, usize::from);
+        let limits = Limits {
+            processes: process_cap(cores),
+            ..Limits::default()
+        };
+        Self::start_with_limits(ports, settings, notify, limits)
     }
 
     fn start_with_limits(
@@ -123,7 +142,7 @@ impl GitScan {
         limits: Limits,
     ) -> io::Result<Self> {
         let shared = Arc::new((Mutex::new(Shared::default()), Condvar::new()));
-        let slots = Slots::new(PROCESS_CAP);
+        let slots = Slots::new(limits.processes);
         let running = if settings.badges {
             Some(worker::spawn(
                 shared.clone(),

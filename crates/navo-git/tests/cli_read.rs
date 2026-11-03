@@ -263,7 +263,7 @@ mod cli_read {
             "#!/bin/sh\n\
              case \"$*\" in\n\
              *--version*) echo 'git version 2.56.0' ;;\n\
-             *rev-parse*--git-dir*) echo .git ;;\n\
+             *rev-parse*git-dir*) echo .git ;;\n\
              *ls-tree*) (sleep 2) & echo started; exit 0 ;;\n\
              *) exit 1 ;;\n\
              esac\n",
@@ -321,7 +321,7 @@ mod cli_read {
             "#!/bin/sh\n\
              case \"$*\" in\n\
              *--version*) echo 'git version 2.56.0' ;;\n\
-             *rev-parse*--git-dir*) echo .git ;;\n\
+             *rev-parse*git-dir*) echo .git ;;\n\
              *ls-tree*) exec sleep 5 ;;\n\
              *cat-file*) exec sleep 5 ;;\n\
              *) echo unexpected >&2; exit 1 ;;\n\
@@ -351,7 +351,7 @@ mod cli_read {
             "#!/bin/sh\n\
              case \"$*\" in\n\
              *--version*) echo 'git version 2.56.0' ;;\n\
-             *rev-parse*--git-dir*) echo .git ;;\n\
+             *rev-parse*git-dir*) echo .git ;;\n\
              *cat-file*) echo 'cat-file exploded' >&2; exit 1 ;;\n\
              *) echo unexpected >&2; exit 1 ;;\n\
              esac\n",

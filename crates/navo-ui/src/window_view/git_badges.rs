@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::unbounded;
@@ -8,6 +9,7 @@ use navo_fs::{EntryKind, FsEntry};
 use navo_l10n::t;
 
 use super::NavoWindow;
+use super::git_throttle::{Admit, Throttle};
 use super::lane::Reply;
 use crate::git::{FolderBadges, GitHooks};
 use crate::prelude::*;
@@ -25,6 +27,7 @@ pub(super) struct GitBadgeStore {
     seen: HashMap<PaneId, Seen>,
     latest: HashMap<PaneId, Arc<FolderBadges>>,
     generation: u64,
+    throttle: Throttle,
 }
 
 fn folder_names(rows: &[FsEntry]) -> Vec<String> {
@@ -44,6 +47,7 @@ impl GitBadgeStore {
             seen: HashMap::new(),
             latest: HashMap::new(),
             generation: 0,
+            throttle: Throttle::default(),
         }
     }
 
@@ -184,7 +188,29 @@ impl NavoWindow {
         }));
     }
 
+    /// Reads the badges at once for the first result of a burst, then at most once per interval.
     fn git_changed(&mut self, cx: &mut Context<Self>) {
+        let now = cx.background_executor().now();
+        match self.git_badges.throttle.admit(now) {
+            Admit::Now => self.git_poll(cx),
+            Admit::Later(delay) => Self::git_poll_later(delay, cx),
+            Admit::Covered => {}
+        }
+    }
+
+    fn git_poll_later(delay: Duration, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(delay).await;
+            let _ = this.update(cx, |view, cx| {
+                let now = cx.background_executor().now();
+                view.git_badges.throttle.fired(now);
+                view.git_poll(cx);
+            });
+        })
+        .detach();
+    }
+
+    fn git_poll(&mut self, cx: &mut Context<Self>) {
         let Some(hooks) = self.git_badges.hooks.clone() else {
             return;
         };

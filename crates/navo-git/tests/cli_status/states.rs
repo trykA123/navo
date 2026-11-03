@@ -132,3 +132,80 @@ fn a_repository_without_commits_is_unborn() {
     let status = cli.status(&guard, &Cancel::default()).unwrap();
     assert_eq!(status.head, Head::Unborn("main".to_owned()));
 }
+
+#[cfg(unix)]
+#[test]
+fn a_status_probe_asks_git_for_the_git_dir_once_and_still_reads_the_config() {
+    let Some(fixture) = repo() else { return };
+    let (cli, log) = super::cli_status_support::wrapped(&fixture, "");
+    let guard = cli.guard().unwrap();
+    cli.status(&guard, &Cancel::default()).unwrap();
+    let calls = std::fs::read_to_string(log).unwrap();
+    let count = |word: &str| calls.lines().filter(|line| line.contains(word)).count();
+    assert_eq!(count("rev-parse"), 1, "{calls}");
+    assert_eq!(count("config --list"), 1, "{calls}");
+    assert_eq!(count(" status "), 1, "{calls}");
+}
+
+#[cfg(unix)]
+fn open_with(git: &std::path::Path, repo: &std::path::Path) {
+    let options = navo_git::CliOptions {
+        git: Some(git.to_path_buf()),
+        ..navo_git::CliOptions::default()
+    };
+    CliGit::with_options(repo, &options).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn probing_many_repositories_asks_git_for_its_version_once() {
+    let Some(fixture) = repo() else { return };
+    let log = sibling(&fixture, "once.log");
+    let script = format!(
+        "#!/bin/sh\necho \"$*\" >> '{}'\nexec git \"$@\"\n",
+        log.display()
+    );
+    let git = fixture.script("git-once", &script);
+    for name in ["r1", "r2", "r3"] {
+        let other = sibling(&fixture, name);
+        fixture.git_ok(&["init", "-b", "main", other.to_str().unwrap()]);
+        open_with(&git, &other);
+    }
+    open_with(&git, fixture.repo());
+    let calls = std::fs::read_to_string(log).unwrap();
+    let count = |word: &str| calls.lines().filter(|line| line.contains(word)).count();
+    assert_eq!(count("--version"), 1, "{calls}");
+    assert_eq!(count("--exec-path"), 0, "{calls}");
+    assert_eq!(count("rev-parse"), 4, "{calls}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_changed_git_executable_is_probed_again() {
+    let Some(fixture) = repo() else { return };
+    let log = sibling(&fixture, "changed.log");
+    let script = |note: &str| {
+        format!(
+            "#!/bin/sh\n# {note}\necho \"$*\" >> '{}'\nexec git \"$@\"\n",
+            log.display()
+        )
+    };
+    let git = fixture.script("git-changed", &script("one"));
+    open_with(&git, fixture.repo());
+    open_with(&git, fixture.repo());
+    fixture.script("git-changed", &script("two"));
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    std::fs::File::options()
+        .write(true)
+        .open(&git)
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+    open_with(&git, fixture.repo());
+    let calls = std::fs::read_to_string(log).unwrap();
+    let versions = calls
+        .lines()
+        .filter(|line| line.contains("--version"))
+        .count();
+    assert_eq!(versions, 2, "{calls}");
+}

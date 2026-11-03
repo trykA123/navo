@@ -23,6 +23,7 @@ mod font_settings;
 mod git_badges;
 mod git_menu;
 mod git_previews;
+mod git_throttle;
 mod hand_off;
 mod help;
 mod hints;

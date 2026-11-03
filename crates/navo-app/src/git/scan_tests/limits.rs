@@ -212,6 +212,7 @@ fn a_probe_stuck_on_a_network_share_does_not_block_the_scanner() {
     let ports = Ports {
         probe,
         source: source.clone(),
+        saved: None,
     };
     let scan = GitScan::start_with_limits(ports, &settings, Box::new(|_| {}), limits).unwrap();
     let rows = |name: &str| {
@@ -274,4 +275,10 @@ fn a_fast_network_listing_is_not_marked_slow() {
     let badges = h.wait("fixture", |b| b.revision >= 1);
     assert!(!badges.slow_drive);
     assert!(h.scan.stop());
+}
+
+#[test]
+fn git_processes_run_at_half_the_cores_from_two_to_four() {
+    let caps: Vec<usize> = [1, 2, 4, 6, 8, 64].map(process_cap).into();
+    assert_eq!(caps, [2, 2, 2, 3, 4, 4]);
 }

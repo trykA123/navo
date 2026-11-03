@@ -8,8 +8,10 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 mod budget;
 mod connection;
 mod content_hash;
+mod git_badges;
 
 pub use content_hash::{CONTENT_HASH_BUDGET, ContentKey};
+pub use git_badges::GIT_BADGES_BUDGET;
 
 const DEFAULT_BUDGET: u64 = 64 * 1024 * 1024;
 const MAX_PENDING_ACCESSES: usize = 4096;
@@ -165,6 +167,7 @@ impl CacheDb {
             accesses: RefCell::new(HashMap::new()),
         };
         content_hash::configure(&mut cache);
+        git_badges::configure(&mut cache);
         Ok(cache)
     }
 
