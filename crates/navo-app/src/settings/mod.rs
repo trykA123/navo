@@ -1,5 +1,5 @@
 use navo_cache::DiskListings;
-use navo_diag::{DiskKind, Redactor};
+use navo_diag::{DiskKind, DiskState};
 use std::fs;
 #[cfg(feature = "tester")]
 use std::io;
@@ -306,14 +306,12 @@ mod tests;
 
 pub(crate) fn wire_diagnostics(
     hooks: &mut navo_ui::window_view::SettingsHooks,
-    crash: &crate::crash_report::CrashStart,
+    #[cfg_attr(not(feature = "tester"), allow(unused_variables))] crash: &crate::crash_report::CrashStart,
     dirs: Option<&navo_store::StoreDirs>,
 ) {
     let data = dirs.map(|dirs| dirs.data.clone());
-    let scan_diagnostics = crash.diagnostics.clone();
     let scan_data = data.clone();
-    hooks.disk_use =
-        Arc::new(move || diagnostic_rows(scan_data.as_deref(), &scan_diagnostics.redactor));
+    hooks.disk_use = Arc::new(move || diagnostic_rows(scan_data.as_deref()));
     #[cfg(feature = "tester")]
     wire_report(hooks, crash, data);
 }
@@ -337,12 +335,9 @@ fn wire_report(
     });
 }
 
-fn diagnostic_rows(
-    data: Option<&Path>,
-    redactor: &Redactor,
-) -> Vec<navo_ui::settings::DiagnosticRow> {
+fn diagnostic_rows(data: Option<&Path>) -> Vec<navo_ui::settings::DiagnosticRow> {
     let mut stats = data.and_then(|data| DiskListings::stored(&data.join("cache.db")));
-    crate::diag::disk_use(data, redactor)
+    crate::diag::disk_use(data)
         .locations
         .into_iter()
         .map(|location| {
@@ -359,9 +354,9 @@ fn diagnostic_rows(
                 .flatten();
             navo_ui::settings::DiagnosticRow {
                 name: navo_l10n::tr(id).into(),
-                path: location.path.into(),
+                path: location.path.to_string_lossy().into_owned().into(),
                 bytes: location.usage.bytes,
-                at_least: location.usage.at_least,
+                at_least: location.usage.state == DiskState::AtLeast,
                 entries: stats.map(|stats| stats.entries),
                 budget: stats.map(|stats| stats.budget),
             }

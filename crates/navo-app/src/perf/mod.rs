@@ -134,7 +134,7 @@ impl PerfService for PerfReports {
         let json = perf_json(&document).map_err(|error| error.to_string())?;
         let text = threads_text(&report, redactor);
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
-        let disk_use = crate::diag::disk_use(self.data.as_deref(), &self.diagnostics.redactor);
+        let disk_use = crate::diag::disk_use(self.data.as_deref());
         save_zip(folder, &stamp, |path| {
             crate::diag::write_with_extras(
                 path,

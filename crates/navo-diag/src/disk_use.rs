@@ -1,10 +1,14 @@
-use std::fmt::Write;
-use std::fs::{self, Metadata};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::{DriveKind, PathKind, Redactor};
+use crate::PathKind;
+
+mod report;
+
+pub(crate) use report::DiskExport;
 
 const FILE_LIMIT: u64 = 200_000;
 
@@ -32,129 +36,257 @@ impl DiskKind {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone)]
+pub struct DiskLocation {
+    kind: DiskKind,
+    path: PathBuf,
+    side_files: Vec<PathBuf>,
+}
+
+impl DiskLocation {
+    #[must_use]
+    pub fn new(kind: DiskKind, path: PathBuf) -> Self {
+        Self {
+            kind,
+            path,
+            side_files: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn sqlite(kind: DiskKind, path: PathBuf) -> Self {
+        let side_files = ["-wal", "-shm"]
+            .into_iter()
+            .map(|suffix| side_path(&path, suffix))
+            .collect();
+        Self {
+            kind,
+            path,
+            side_files,
+        }
+    }
+
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+fn side_path(path: &Path, suffix: &str) -> PathBuf {
+    let mut file = path.as_os_str().to_owned();
+    file.push(suffix);
+    PathBuf::from(file)
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct DiskUse {
     pub locations: Vec<DiskLocationUse>,
     pub total: DiskTotals,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct DiskLocationUse {
     pub kind: DiskKind,
-    pub path: String,
-    #[serde(flatten)]
+    pub path: PathBuf,
+    pub parts: Vec<DiskPart>,
     pub usage: DiskTotals,
+    path_kind: PathKind,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiskPart {
+    pub path: PathBuf,
+    pub usage: DiskTotals,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiskState {
+    #[default]
+    Complete,
+    AtLeast,
+    NotReadable,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct DiskTotals {
     pub files: u64,
     pub bytes: u64,
-    pub at_least: bool,
+    pub state: DiskState,
 }
 
-pub fn scan_disk_use(locations: &[(DiskKind, PathBuf)], redactor: &Redactor) -> DiskUse {
-    scan_with_limit(locations, redactor, FILE_LIMIT)
+impl DiskTotals {
+    fn add(&mut self, other: &Self) {
+        self.files = self.files.saturating_add(other.files);
+        self.bytes = self.bytes.saturating_add(other.bytes);
+    }
+
+    fn mark_partial(&mut self) {
+        if self.state == DiskState::Complete {
+            self.state = DiskState::AtLeast;
+        }
+    }
+
+    fn mark_unreadable(&mut self) {
+        self.state = DiskState::NotReadable;
+    }
+
+    fn is_empty(&self) -> bool {
+        self.files == 0 && self.bytes == 0 && self.state == DiskState::Complete
+    }
 }
 
-fn scan_with_limit(locations: &[(DiskKind, PathBuf)], redactor: &Redactor, limit: u64) -> DiskUse {
+pub fn scan_disk_use(locations: &[DiskLocation]) -> DiskUse {
+    scan_with_limit(locations, FILE_LIMIT)
+}
+
+fn scan_with_limit(locations: &[DiskLocation], limit: u64) -> DiskUse {
+    scan_with_reader(locations, limit, &FsReader)
+}
+
+fn scan_with_reader(locations: &[DiskLocation], limit: u64, reader: &dyn DiskReader) -> DiskUse {
     let mut disk = DiskUse::default();
-    for (kind, path) in locations {
-        let usage = measure(path, *kind, limit);
+    for location in locations {
+        let usage = measure(&location.path, location.kind, limit, reader);
+        let parts: Vec<DiskPart> = location
+            .side_files
+            .iter()
+            .filter_map(|path| {
+                let usage = measure(path, location.kind, limit, reader);
+                (!usage.is_empty()).then(|| DiskPart {
+                    path: path.clone(),
+                    usage,
+                })
+            })
+            .collect();
+        let usage = grouped(usage, &parts);
         disk.total.files = disk.total.files.saturating_add(usage.files);
         disk.total.bytes = disk.total.bytes.saturating_add(usage.bytes);
-        disk.total.at_least |= usage.at_least;
-        let path_kind = if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file()) {
-            PathKind::File
-        } else {
-            PathKind::Folder
-        };
+        if usage.state != DiskState::Complete {
+            disk.total.mark_partial();
+        }
         disk.locations.push(DiskLocationUse {
-            kind: *kind,
-            path: redactor
-                .path(&path.to_string_lossy(), path_kind, DriveKind::Unknown)
-                .to_string(),
+            kind: location.kind,
+            path: location.path.clone(),
+            parts,
             usage,
+            path_kind: path_kind(reader, &location.path),
         });
     }
     disk
 }
 
-#[derive(Default)]
-struct Scan {
-    usage: DiskTotals,
-    pending: Vec<PathBuf>,
-    visited: u64,
-}
-
-fn measure(path: &Path, kind: DiskKind, limit: u64) -> DiskTotals {
-    let mut scan = Scan::default();
-    if path
-        .ancestors()
-        .any(|ancestor| fs::symlink_metadata(ancestor).is_ok_and(|metadata| is_link(&metadata)))
+fn grouped(mut usage: DiskTotals, parts: &[DiskPart]) -> DiskTotals {
+    let state = if usage.state == DiskState::NotReadable {
+        DiskState::NotReadable
+    } else if usage.state == DiskState::AtLeast
+        || parts
+            .iter()
+            .any(|part| part.usage.state != DiskState::Complete)
     {
-        return scan.usage;
-    }
-    scan.pending.push(path.to_path_buf());
-    while let Some(path) = scan.pending.pop() {
-        let metadata = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(_) => {
-                scan.usage.at_least = true;
-                continue;
-            }
-        };
-        if is_link(&metadata) {
-            continue;
-        }
-        if metadata.is_file() {
-            scan.usage.files += 1;
-            scan.usage.bytes = scan.usage.bytes.saturating_add(metadata.len());
-            if scan.usage.files >= limit {
-                scan.usage.at_least = true;
-                break;
-            }
-        } else if metadata.is_dir() {
-            collect_entries(&path, kind, &mut scan);
-        }
-    }
-    scan.usage
-}
-
-fn collect_entries(path: &Path, kind: DiskKind, scan: &mut Scan) {
-    if scan.visited >= FILE_LIMIT {
-        scan.usage.at_least = true;
-        return;
-    }
-    let Ok(entries) = fs::read_dir(path) else {
-        scan.usage.at_least = true;
-        return;
+        DiskState::AtLeast
+    } else {
+        DiskState::Complete
     };
-    for entry in entries {
-        scan.visited += 1;
-        match entry {
-            Ok(entry) if matches!(kind, DiskKind::PerformanceRecordings) => {
-                let name = entry.file_name();
-                let name = name.to_string_lossy();
-                if name.starts_with("navo-performance-")
-                    && name.ends_with(".zip")
-                    && entry.file_type().is_ok_and(|kind| kind.is_file())
-                {
-                    scan.pending.push(entry.path());
-                }
-            }
-            Ok(entry) => scan.pending.push(entry.path()),
-            Err(_) => scan.usage.at_least = true,
-        }
-        if scan.visited >= FILE_LIMIT {
-            scan.usage.at_least = true;
-            break;
-        }
+    for part in parts {
+        usage.add(&part.usage);
+    }
+    usage.state = state;
+    usage
+}
+
+fn path_kind(reader: &dyn DiskReader, path: &Path) -> PathKind {
+    match reader.metadata(path) {
+        Ok(info) if info.kind == EntryKind::File => PathKind::File,
+        _ => PathKind::Folder,
     }
 }
 
-fn is_link(metadata: &Metadata) -> bool {
+trait DiskReader {
+    fn metadata(&self, path: &Path) -> io::Result<EntryInfo>;
+    fn folder(&self, path: &Path) -> io::Result<Listing>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EntryKind {
+    File,
+    Folder,
+    Link,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EntryInfo {
+    kind: EntryKind,
+    len: u64,
+}
+
+#[derive(Debug, Clone)]
+struct Entry {
+    path: PathBuf,
+    kind: Option<EntryKind>,
+}
+
+#[derive(Debug, Clone)]
+struct Listing {
+    entries: Vec<Entry>,
+    complete: bool,
+}
+
+struct FsReader;
+
+impl DiskReader for FsReader {
+    fn metadata(&self, path: &Path) -> io::Result<EntryInfo> {
+        let metadata = fs::symlink_metadata(path)?;
+        Ok(EntryInfo {
+            kind: metadata_kind(&metadata),
+            len: metadata.len(),
+        })
+    }
+
+    fn folder(&self, path: &Path) -> io::Result<Listing> {
+        let mut listing = Listing {
+            entries: Vec::new(),
+            complete: true,
+        };
+        for entry in fs::read_dir(path)? {
+            match entry {
+                Ok(entry) => listing.entries.push(Entry {
+                    path: entry.path(),
+                    kind: entry.file_type().ok().map(file_type_kind),
+                }),
+                Err(_) => listing.complete = false,
+            }
+        }
+        Ok(listing)
+    }
+}
+
+fn metadata_kind(metadata: &fs::Metadata) -> EntryKind {
+    if is_link(metadata) {
+        EntryKind::Link
+    } else if metadata.is_file() {
+        EntryKind::File
+    } else if metadata.is_dir() {
+        EntryKind::Folder
+    } else {
+        EntryKind::Other
+    }
+}
+
+fn file_type_kind(kind: fs::FileType) -> EntryKind {
+    if kind.is_symlink() {
+        EntryKind::Link
+    } else if kind.is_file() {
+        EntryKind::File
+    } else if kind.is_dir() {
+        EntryKind::Folder
+    } else {
+        EntryKind::Other
+    }
+}
+
+fn is_link(metadata: &fs::Metadata) -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
@@ -164,110 +296,103 @@ fn is_link(metadata: &Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
-impl DiskUse {
-    pub(crate) fn summary(&self) -> String {
-        let mut text = String::from("\nDisk use:\n");
-        for location in &self.locations {
-            let _ = writeln!(
-                text,
-                "  {}: {}: {}{} bytes, {} files",
-                location.kind.label(),
-                location.path,
-                lower_bound(&location.usage),
-                location.usage.bytes,
-                location.usage.files,
-            );
+struct Scan {
+    usage: DiskTotals,
+    pending: Vec<PathBuf>,
+    visited: u64,
+    root: PathBuf,
+}
+
+fn measure(path: &Path, kind: DiskKind, limit: u64, reader: &dyn DiskReader) -> DiskTotals {
+    let mut scan = Scan {
+        usage: DiskTotals::default(),
+        pending: Vec::new(),
+        visited: 0,
+        root: path.to_path_buf(),
+    };
+    if path.ancestors().any(|ancestor| {
+        reader
+            .metadata(ancestor)
+            .is_ok_and(|info| info.kind == EntryKind::Link)
+    }) {
+        return scan.usage;
+    }
+    scan.pending.push(path.to_path_buf());
+    while let Some(current) = scan.pending.pop() {
+        let info = match reader.metadata(&current) {
+            Ok(info) => info,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) if denied(&error, &current, &scan) => {
+                scan.usage.mark_unreadable();
+                return scan.usage;
+            }
+            Err(_) => {
+                scan.usage.mark_partial();
+                continue;
+            }
+        };
+        match info.kind {
+            EntryKind::Link => continue,
+            EntryKind::File => {
+                scan.usage.files = scan.usage.files.saturating_add(1);
+                scan.usage.bytes = scan.usage.bytes.saturating_add(info.len);
+                if scan.usage.files >= limit {
+                    scan.usage.mark_partial();
+                    return scan.usage;
+                }
+            }
+            EntryKind::Folder => collect_entries(&current, kind, &mut scan, reader),
+            EntryKind::Other => {}
         }
-        let _ = writeln!(
-            text,
-            "Total: {}{} bytes, {} files",
-            lower_bound(&self.total),
-            self.total.bytes,
-            self.total.files,
-        );
-        text
+    }
+    scan.usage
+}
+
+fn denied(error: &io::Error, path: &Path, scan: &Scan) -> bool {
+    error.kind() == io::ErrorKind::PermissionDenied && path == scan.root
+}
+
+fn collect_entries(path: &Path, kind: DiskKind, scan: &mut Scan, reader: &dyn DiskReader) {
+    if scan.visited >= FILE_LIMIT {
+        scan.usage.mark_partial();
+        return;
+    }
+    let listing = match reader.folder(path) {
+        Ok(listing) => listing,
+        Err(error) if denied(&error, path, scan) => {
+            scan.usage.mark_unreadable();
+            return;
+        }
+        Err(_) => {
+            scan.usage.mark_partial();
+            return;
+        }
+    };
+    if !listing.complete {
+        scan.usage.mark_partial();
+    }
+    for entry in listing.entries {
+        scan.visited = scan.visited.saturating_add(1);
+        let keep = if matches!(kind, DiskKind::PerformanceRecordings) {
+            entry.kind == Some(EntryKind::File) && is_recording(&entry.path)
+        } else {
+            true
+        };
+        if keep {
+            scan.pending.push(entry.path);
+        }
+        if scan.visited >= FILE_LIMIT {
+            scan.usage.mark_partial();
+            break;
+        }
     }
 }
 
-fn lower_bound(usage: &DiskTotals) -> &'static str {
-    if usage.at_least { "at least " } else { "" }
+fn is_recording(path: &Path) -> bool {
+    path.file_name()
+        .map(|name| name.to_string_lossy())
+        .is_some_and(|name| name.starts_with("navo-performance-") && name.ends_with(".zip"))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{Identity, Salt};
-
-    fn redactor() -> Redactor {
-        Redactor::new(Salt::from_bytes([7; 16]), Identity::default())
-    }
-
-    #[test]
-    fn sums_known_files_in_each_location_and_total() {
-        let profile = tempfile::tempdir().unwrap();
-        let data = profile.path().join("private-profile");
-        fs::create_dir_all(data.join("index/nested")).unwrap();
-        fs::write(data.join("cache.db"), [0; 7]).unwrap();
-        fs::write(data.join("index/one"), [0; 11]).unwrap();
-        fs::write(data.join("index/nested/two"), [0; 13]).unwrap();
-        let disk = scan_disk_use(
-            &[
-                (DiskKind::ListingCache, data.join("cache.db")),
-                (DiskKind::Index, data.join("index")),
-            ],
-            &redactor(),
-        );
-        assert_eq!((disk.total.files, disk.total.bytes), (3, 31));
-        assert_eq!(disk.locations[1].usage.bytes, 24);
-        assert!(!disk.total.at_least);
-        assert!(
-            !serde_json::to_string(&disk)
-                .unwrap()
-                .contains("private-profile")
-        );
-    }
-
-    #[test]
-    fn file_cap_marks_the_location_and_total_as_lower_bounds() {
-        let root = tempfile::tempdir().unwrap();
-        for name in ["one", "two", "three"] {
-            fs::write(root.path().join(name), [0; 5]).unwrap();
-        }
-        let disk = scan_with_limit(&[(DiskKind::Index, root.path().to_owned())], &redactor(), 2);
-        assert_eq!((disk.total.files, disk.total.bytes), (2, 10));
-        assert!(disk.locations[0].usage.at_least && disk.total.at_least);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn skips_symlinked_files_folders_and_location_ancestors() {
-        let root = tempfile::tempdir().unwrap();
-        let outside = tempfile::tempdir().unwrap();
-        fs::write(outside.path().join("secret"), [0; 19]).unwrap();
-        std::os::unix::fs::symlink(outside.path(), root.path().join("link")).unwrap();
-        std::os::unix::fs::symlink(outside.path().join("secret"), root.path().join("file"))
-            .unwrap();
-        for path in [root.path().to_owned(), root.path().join("link/secret")] {
-            let disk = scan_disk_use(&[(DiskKind::Index, path)], &redactor());
-            assert_eq!((disk.total.files, disk.total.bytes), (0, 0));
-        }
-    }
-
-    #[test]
-    fn recordings_include_only_navo_performance_zips() {
-        let root = tempfile::tempdir().unwrap();
-        fs::write(root.path().join("navo-performance-test.zip"), [0; 9]).unwrap();
-        fs::write(root.path().join("personal.zip"), [0; 19]).unwrap();
-        fs::create_dir(root.path().join("folder")).unwrap();
-        fs::write(
-            root.path().join("folder/navo-performance-test.zip"),
-            [0; 29],
-        )
-        .unwrap();
-        let disk = scan_disk_use(
-            &[(DiskKind::PerformanceRecordings, root.path().to_owned())],
-            &redactor(),
-        );
-        assert_eq!((disk.total.files, disk.total.bytes), (1, 9));
-    }
-}
+mod tests;

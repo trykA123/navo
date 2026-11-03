@@ -447,6 +447,26 @@ fn search_lists_land_in_the_file_as_arrays_and_come_back_as_text() {
     assert!(text.contains("drives = [\"C:\", \"D:\"]"), "{text}");
 }
 
+#[test]
+fn diagnostics_rows_keep_real_paths_and_group_sqlite_side_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+    fs::create_dir(&data).unwrap();
+    fs::write(data.join("cache.db-wal"), [0; 7]).unwrap();
+    fs::write(data.join("cache.db-shm"), [0; 3]).unwrap();
+    let rows = super::diagnostic_rows(Some(&data));
+    let listing = rows
+        .iter()
+        .find(|row| row.name.as_ref() == navo_l10n::tr("diagnostics-listings"))
+        .unwrap();
+    assert_eq!(
+        listing.path.as_ref(),
+        data.join("cache.db").to_string_lossy().as_ref()
+    );
+    assert_eq!(listing.bytes, 10);
+    assert!(!rows.iter().any(|row| row.path.as_ref().ends_with("-wal")));
+}
+
 #[cfg(feature = "tester")]
 #[test]
 fn diagnostic_report_uses_the_slug_and_preserves_existing_reports() {
