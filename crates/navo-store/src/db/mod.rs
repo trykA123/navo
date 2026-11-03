@@ -13,6 +13,7 @@ mod frecency;
 mod migrations;
 mod rename_presets;
 mod settings_defaults;
+mod vacuum;
 mod viewer;
 
 pub use collections::{Collection, CollectionItem, CollectionKind, NewCollection};
@@ -33,6 +34,8 @@ pub enum DbError {
     Encode(String),
     #[error("a rename preset needs a name")]
     BlankPresetName,
+    #[error("VACUUM finished but incremental auto_vacuum is still off")]
+    VacuumIncomplete,
     #[error("a collection name must contain 1–60 characters and cannot be blank")]
     InvalidCollectionName,
 }
@@ -178,6 +181,11 @@ impl Db {
     }
 
     fn configure(&self) -> Result<(), DbError> {
+        // On an existing file this pragma takes a write lock, so only an empty file gets it.
+        if self.count_pragma("page_count")? == 0 {
+            self.conn
+                .execute_batch("PRAGMA auto_vacuum = INCREMENTAL;")?;
+        }
         self.conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;

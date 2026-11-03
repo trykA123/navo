@@ -46,7 +46,7 @@ fn recover(
         super::super::unclean::open_legacy(&navo_store::StoreDirs::journal_in(data), unclean)?;
     let journal = Arc::new(Mutex::new(JobJournal::new(db)?));
     let report = crate::jobs::recover_profile(&journal, ops, (data, &[]), false)?;
-    crate::jobs::lock(&journal).prune(crate::jobs::KEEP_FINISHED)?;
+    crate::jobs::trim_at_startup(&journal, data, ops)?;
     for pending in report.pending {
         tracing::warn!(
             job = pending.job.0,

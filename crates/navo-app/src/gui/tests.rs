@@ -236,7 +236,7 @@ fn a_recorded_failed_integrity_check_preserves_the_original_and_opens_a_fresh_jo
     one_running_job(&dirs);
     let db = dirs.journal_file();
     crate::crash::test_damage::fill_history(&db);
-    crate::crash::test_damage::corrupt_middle_page(&db);
+    crate::crash::test_damage::corrupt_last_page(&db);
     let bytes = std::fs::read(&db).unwrap();
     let sentinel = crate::crash::sentinel_path(&db);
     std::fs::write(&sentinel, b"").unwrap();

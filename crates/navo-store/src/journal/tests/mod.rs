@@ -8,11 +8,13 @@ mod evidence;
 mod failed;
 mod finish;
 mod held;
+mod limits;
 mod mark;
 mod newest_undo;
 mod prune;
 mod settings;
 mod undoable;
+mod vacuum;
 
 fn journal() -> JobJournal {
     JobJournal::new(Db::open_in_memory().unwrap()).unwrap()

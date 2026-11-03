@@ -28,6 +28,7 @@ mod profile;
 mod recovery;
 mod session;
 mod temporary;
+mod trim;
 
 pub(crate) use guard_log::{guard_factory, guard_write};
 pub use pending::StillPending;
@@ -40,12 +41,11 @@ pub use recovery::{RecoveryReport, recover_profile};
 pub use session::SessionHolds;
 #[cfg(test)]
 pub use session::{PreviousVersion, RestoreError};
+pub(crate) use trim::at_startup as trim_at_startup;
 #[cfg(test)]
 mod default_profile;
 #[cfg(test)]
 pub use default_profile::{log_factory, recover};
-
-pub(crate) const KEEP_FINISHED: u32 = 50;
 
 pub type SharedJournal = Arc<Mutex<JobJournal>>;
 
@@ -338,6 +338,7 @@ impl OpLog for JournalLog {
         }
         self.complete(state, ops)?;
         maintenance::after(self, state, ops);
+        trim::after_job(&self.journal);
         Ok(())
     }
 }

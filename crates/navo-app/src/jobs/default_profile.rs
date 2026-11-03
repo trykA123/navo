@@ -5,7 +5,7 @@ use navo_fs::ProviderOps;
 use navo_store::{JournalError, StoreDirs};
 use navo_ui::browser::LogFactory;
 
-use super::{KEEP_FINISHED, SharedJournal, lock, profile_factory, recover_profile};
+use super::{SharedJournal, profile_factory, recover_profile, trim};
 
 fn dirs() -> &'static StoreDirs {
     static DIRS: OnceLock<StoreDirs> = OnceLock::new();
@@ -24,6 +24,6 @@ pub fn log_factory(journal: SharedJournal) -> LogFactory {
 
 pub fn recover(journal: &SharedJournal, ops: &dyn ProviderOps) -> Result<u32, JournalError> {
     let report = recover_profile(journal, ops, (&dirs().data, &[]), false)?;
-    lock(journal).prune(KEEP_FINISHED)?;
+    trim::at_startup(journal, &dirs().data, ops)?;
     Ok(report.unfinished)
 }

@@ -23,6 +23,27 @@ pub(super) fn roots(
     explicit: Vec<String>,
     service: Service<'_>,
 ) -> Vec<Location> {
+    let mut roots = Vec::new();
+    for root in configured(options, available, explicit, service) {
+        if is_allowed(options, &root, available)
+            && !covered(&root, service.reply)
+            && !service.indexes(&root)
+            && !roots.iter().any(|old: &Location| contains(old, &root))
+        {
+            roots.retain(|old| !contains(&root, old));
+            roots.push(root);
+        }
+    }
+    roots
+}
+
+/// Every root the options ask for, before service coverage and drive rules filter them.
+pub(super) fn configured(
+    options: &IndexOptions,
+    available: &[Drive],
+    explicit: Vec<String>,
+    service: Service<'_>,
+) -> Vec<Location> {
     let requested = if !explicit.is_empty() {
         explicit
     } else if !options.drives.is_empty() {
@@ -47,21 +68,10 @@ pub(super) fn roots(
                 .to_owned(),
         ]
     };
-    let mut roots = Vec::new();
-    for root in requested {
-        let Ok(root) = Location::new(root) else {
-            continue;
-        };
-        if is_allowed(options, &root, available)
-            && !covered(&root, service.reply)
-            && !service.indexes(&root)
-            && !roots.iter().any(|old: &Location| contains(old, &root))
-        {
-            roots.retain(|old| !contains(&root, old));
-            roots.push(root);
-        }
-    }
-    roots
+    requested
+        .into_iter()
+        .filter_map(|root| Location::new(root).ok())
+        .collect()
 }
 
 pub(super) fn is_allowed(options: &IndexOptions, root: &Location, available: &[Drive]) -> bool {
@@ -80,7 +90,7 @@ pub(super) fn is_allowed(options: &IndexOptions, root: &Location, available: &[D
         && !matches!(kind, Some(DriveKind::Removable) if !options.removable)
 }
 
-fn contains(parent: &Location, child: &Location) -> bool {
+pub(super) fn contains(parent: &Location, child: &Location) -> bool {
     std::iter::successors(Some(child.clone()), Location::parent).any(|path| path.same_place(parent))
 }
 

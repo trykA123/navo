@@ -58,6 +58,18 @@ Open folder reveals the profile data directory without dismissing the notice. Ct
 
 The notice survives clean restarts until explicitly dismissed. Damaged database files, interrupted candidates and detail reports remain available after dismissal. Recovery details are not automatically included in diagnostic ZIPs because they contain original paths and journal records.
 
+## Journal retention
+
+Jobs that are running or restore-pending are never pruned. Of the rest, the 50 newest stay; older ones go once they are 30 days old, and the oldest go while plan and step bytes exceed 32 MiB. Renames and moves are exempt from the age and byte limits, so their undo data survives; only the 50-job limit applies to them.
+
+The trim runs 5 seconds after the last job ends, as a maintenance pass on a background thread. It runs only when no one else holds the journal and never waits for the database write lock: when another connection holds it, the trim is skipped and tried again later. Startup trim still waits up to the normal 5 second busy timeout.
+
+Startup converts an older database once to incremental vacuum mode with a full `VACUUM`. It does so only when no job is running or restore-pending and free disk space is at least twice the database size. Afterwards, the trim returns freed pages with incremental vacuum.
+
+## Walk snapshot cleanup
+
+Each start deletes a walk index snapshot only when the settings name the roots and the snapshot's root is no longer among them. A configured root whose drive is unplugged or whose share is unreachable keeps its snapshot, so it is not walked again in full on return. When the settings name no roots, the drives present decide the roots and no snapshot is deleted for being absent. If the settings cannot be read at a start (for example a sharing violation), nothing is deleted for being unconfigured. A snapshot is also deleted after a healthy index service has covered its root for three starts in a row; a start where the service does not reply breaks the run.
+
 ## Verification boundary
 
 Linux tests exercise real corrupted SQLite files, lease lifetime, interrupted phases, source/replacement identity checks, untrusted journals, failed rollback and persistent notices. Native Linux screenshots cover both themes at normal and minimum window widths. Native Windows sharing, interruption and notice behavior still require a Windows runner; no release sign-off is implied.

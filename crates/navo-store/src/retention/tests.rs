@@ -130,7 +130,7 @@ fn owned_captures_pin_active_jobs_and_prevent_journal_pruning() {
         .unwrap();
     assert!(!catalog.get(entry.id).unwrap().pinned);
     let mut journal = crate::JobJournal::new(catalog.db).unwrap();
-    assert_eq!(journal.prune(0).unwrap(), 0);
+    assert_eq!(journal.prune(crate::PruneLimits::keep(0)).unwrap(), 0);
 }
 
 #[test]

@@ -107,7 +107,9 @@ fn proofs(saving: &Saving) -> usize {
 }
 
 fn cleaned_up(saving: &Saving) {
-    lock(&saving.journal).prune(0).unwrap();
+    lock(&saving.journal)
+        .prune(navo_store::PruneLimits::keep(0))
+        .unwrap();
     super::super::held::release_finished(&saving.journal, saving.fs.as_ref()).unwrap();
 }
 

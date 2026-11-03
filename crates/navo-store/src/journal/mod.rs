@@ -4,11 +4,13 @@ use rusqlite::OptionalExtension;
 mod evidence;
 mod held;
 mod newest_undo;
+mod prune;
 mod retained;
 mod undoable;
 
 pub use evidence::StepEvidence;
 pub use newest_undo::{UndoKinds, Undoable};
+pub use prune::{PruneLimits, VacuumOnce};
 pub use undoable::FinishedJob;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -68,6 +70,19 @@ pub enum JournalError {
 }
 
 impl JournalError {
+    fn is_busy(&self) -> bool {
+        let busy = |error: &rusqlite::Error| {
+            matches!(
+                error.sqlite_error_code(),
+                Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+            )
+        };
+        match self {
+            Self::Sqlite(error) | Self::Db(DbError::Sqlite(error)) => busy(error),
+            _ => false,
+        }
+    }
+
     #[must_use]
     pub fn is_corruption(&self) -> bool {
         match self {
@@ -78,9 +93,6 @@ impl JournalError {
         }
     }
 }
-
-const RENAME_KIND: &str = "rename";
-const KEEP_RENAME_UNDO: u32 = 20;
 
 pub struct JobJournal {
     db: Db,
@@ -271,25 +283,6 @@ impl JobJournal {
                 Ok(job)
             })
             .collect()
-    }
-
-    pub fn prune(&mut self, keep_finished: u32) -> Result<u32, JournalError> {
-        let deleted = self.db.connection().execute(
-            "DELETE FROM job WHERE state NOT IN ('running', 'restore_pending')
-             AND id NOT IN (SELECT job_id FROM retained_entry WHERE job_id IS NOT NULL
-                 AND state NOT IN ('restored', 'purged', 'aborted'))
-             AND id NOT IN (SELECT job_id FROM undo WHERE job_id IS NOT NULL)
-             AND id NOT IN (
-                 SELECT id FROM job WHERE state != 'running'
-                 ORDER BY created_at DESC, id DESC LIMIT ?1
-             )
-             AND id NOT IN (
-                 SELECT id FROM job WHERE state = 'done' AND kind = ?2
-                 ORDER BY created_at DESC, id DESC LIMIT ?3
-             )",
-            rusqlite::params![keep_finished, RENAME_KIND, KEEP_RENAME_UNDO],
-        )?;
-        Ok(u32::try_from(deleted).unwrap_or(u32::MAX))
     }
 
     pub(super) fn steps(&self, job: JobId) -> Result<Vec<JournalStep>, JournalError> {

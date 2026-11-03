@@ -399,3 +399,29 @@ fn viewer_memory_prunes_after_the_startup_delay_without_retention(
     );
     assert_eq!(count(), 10000);
 }
+
+#[test]
+fn a_scheduled_pass_trims_the_journal_and_keeps_the_timer_running_without_retention() {
+    let profile = Profile::new();
+    let old = {
+        let mut journal = crate::jobs::lock(&profile.journal);
+        let old = journal.create_job("copy", b"plan", 1, 1).unwrap();
+        journal.finish(old, navo_store::JobState::Done).unwrap();
+        let newest = journal.create_job("copy", b"plan", 1, START_MS).unwrap();
+        journal.finish(newest, navo_store::JobState::Done).unwrap();
+        old
+    };
+    let mut schedule = Schedule {
+        journal: Some(profile.journal.clone()),
+        retention: false,
+        ..schedule(START_MS)
+    };
+    let token = CancelToken::new();
+    super::scheduled_pass(
+        (&profile.dirs, profile.fs.as_ref()),
+        &mut schedule,
+        (START_MS, &token),
+    );
+    assert!(crate::jobs::lock(&profile.journal).read_job(old).is_err());
+    assert!(!token.is_cancelled());
+}

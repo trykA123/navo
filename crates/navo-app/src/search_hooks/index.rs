@@ -4,9 +4,9 @@ mod memory;
 mod presence;
 mod retirement;
 mod roots;
+mod snapshots;
 mod status;
 
-use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::Instant;
@@ -26,7 +26,8 @@ use config::{Configured, same_options};
 use drives::DriveCache;
 use presence::{Selection, ServicePresence};
 use retirement::Retirements;
-use roots::{Service, exclusions, is_allowed, roots};
+use roots::{Service, configured, exclusions, is_allowed, roots};
+use snapshots::{Snapshots, Sweep};
 
 struct Root {
     location: Location,
@@ -45,6 +46,7 @@ struct Hosts {
     configured: Configured,
     retirement: Retirements,
     presence: ServicePresence,
+    snapshots: Snapshots,
 }
 
 pub fn hooks(
@@ -104,9 +106,11 @@ fn create_hosts(
     dirs: Option<StoreDirs>,
     provider: Arc<dyn Provider>,
 ) -> std::io::Result<Arc<Mutex<Hosts>>> {
+    let folder = dirs.as_ref().map(|dirs| dirs.data.join("index"));
     Ok(Arc::new(Mutex::new(Hosts {
         provider,
         dirs,
+        snapshots: Snapshots::new(folder),
         options: None,
         queue: Arc::new(IoQueue::with_limits(IoLimits::BACKGROUND)),
         roots: Vec::new(),
@@ -237,14 +241,19 @@ impl Hosts {
             IndexMode::Auto => self.presence.volumes(&Selection::of(options)),
             _ => Some(None),
         };
-        let desired = match (options.mode, &volumes) {
-            (IndexMode::Off | IndexMode::Service, _) | (_, None) => Vec::new(),
+        let mut listed = false;
+        let (desired, wanted) = match (options.mode, &volumes) {
+            (IndexMode::Off | IndexMode::Service, _) | (_, None) => (Vec::new(), None),
             (_, Some(volumes)) => {
                 let service = Service {
                     reply: service,
                     volumes: volumes.as_deref(),
                 };
-                roots(options, &available, self.walk_roots(), service)
+                let read = self.walk_roots();
+                let explicit = read.clone().unwrap_or_default();
+                listed = read.is_some() && (!explicit.is_empty() || !options.drives.is_empty());
+                let wanted = configured(options, &available, explicit.clone(), service);
+                (roots(options, &available, explicit, service), Some(wanted))
             }
         };
         let unchanged = self
@@ -258,6 +267,16 @@ impl Hosts {
             self.desired = desired;
         }
         self.exclude = exclusions(options, &available);
+        if let Some(configured) = wanted {
+            let mut in_use = self.retirement.retiring();
+            in_use.extend(self.roots.iter().map(|root| root.location.clone()));
+            self.snapshots.sweep(&Sweep {
+                configured: &configured,
+                listed,
+                in_use: &in_use,
+                service,
+            });
+        }
         if volumes.is_some() {
             self.configured.settle(options, service, now);
         }
@@ -293,37 +312,30 @@ impl Hosts {
         }
     }
 
-    fn walk_roots(&self) -> Vec<String> {
+    /// The roots named in the settings; `None` when the settings cannot be read now.
+    fn walk_roots(&self) -> Option<Vec<String>> {
         let Some(path) = self.dirs.as_ref().map(StoreDirs::settings_file) else {
-            return Vec::new();
+            return Some(Vec::new());
         };
         match std::fs::read_to_string(path) {
             Ok(text) => match navo_store::parse_settings(&text) {
-                Ok((settings, _)) => settings.search.walk_roots,
+                Ok((settings, _)) => Some(settings.search.walk_roots),
                 Err(error) => {
                     tracing::warn!(%error, "cannot read walk index roots");
-                    Vec::new()
+                    None
                 }
             },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(Vec::new()),
             Err(error) => {
                 tracing::warn!(%error, "cannot read walk index settings");
-                Vec::new()
+                None
             }
         }
     }
 
     fn snapshot(&self, root: &Location) -> Option<PathBuf> {
-        let mut hash = std::collections::hash_map::DefaultHasher::new();
-        root.as_str().hash(&mut hash);
-        let name = format!("{:016x}", hash.finish());
-        Some(
-            self.dirs
-                .as_ref()?
-                .data
-                .join("index")
-                .join(format!("walk-{name}.index")),
-        )
+        let name = snapshots::file_name(root);
+        Some(self.dirs.as_ref()?.data.join("index").join(name))
     }
 
     fn retire(&mut self) {

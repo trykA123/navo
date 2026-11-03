@@ -31,6 +31,6 @@ fn failed_holding_lists_failed_jobs_of_the_kind_with_undo_rows_newest_first_up_t
     assert!(journal.failed_holding("move", 10).unwrap().is_empty());
     assert_eq!(journal.count_failed_holding("save").unwrap(), 3);
     assert_eq!(journal.count_failed_holding("move").unwrap(), 0);
-    journal.prune(0).unwrap();
+    journal.prune(PruneLimits::keep(0)).unwrap();
     assert_eq!(journal.failed_holding("save", 10).unwrap().len(), 3);
 }
