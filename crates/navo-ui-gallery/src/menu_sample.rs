@@ -152,6 +152,7 @@ pub fn folder_menu() -> ShellMenu {
         sort: SortKey::default(),
         can_paste: false,
         has_properties: false,
+        can_compare: false,
     };
     merged_background_menu(&folder_items(), &look)
 }

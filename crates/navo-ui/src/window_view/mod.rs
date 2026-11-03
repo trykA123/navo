@@ -5,6 +5,8 @@ mod clipboard;
 mod clipboard_palette;
 mod closing;
 mod command_center;
+mod compare_keys;
+mod compare_view;
 mod crash;
 mod diagnostics_refresh;
 mod dialog_input;
@@ -250,6 +252,7 @@ pub struct NavoWindow {
     multi_rename: multi_rename::MultiRenameState,
     start: Option<start_watch::Watching>,
     chrome: chrome_state::Chromes,
+    compare: compare_view::CompareView,
     cached: cached_views::CachedViews,
     git_badges: git_badges::GitBadgeStore,
     git_menu: git_menu::GitMenuState,
@@ -317,6 +320,7 @@ impl NavoWindow {
             multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
             chrome: chrome_state::Chromes::default(),
+            compare: compare_view::CompareView::default(),
             cached: cached_views::CachedViews::new(cx),
             git_badges: git_badges::GitBadgeStore::new(options.git, cx),
             git_menu: git_menu::GitMenuState::new(cx),
@@ -349,7 +353,7 @@ impl NavoWindow {
     }
 
     fn wake(&mut self, cx: &mut Context<Self>) {
-        let polled = self.browser.poll();
+        let polled = self.browser.poll() | self.show_compare_notice();
         self.note_seen(cx);
         self.clear_finished_cuts();
         self.sync_git();

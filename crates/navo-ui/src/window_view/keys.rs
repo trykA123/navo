@@ -77,5 +77,6 @@ pub fn bind_keys(cx: &mut App) {
     crate::clip_palette::bind_keys(cx);
     crate::activity_strip::bind_keys(cx);
     super::preview::bind_keys(cx);
+    super::compare_keys::bind_keys(cx);
     crate::commands::bind_namespace(cx, "navo_window");
 }

@@ -15,6 +15,7 @@ pub mod list_text;
 mod location;
 pub mod marks;
 mod name;
+mod network_walk;
 mod op_plan;
 pub mod paging;
 pub mod placement;
@@ -44,6 +45,9 @@ pub use location::{
     AncestorMemo, Location, LocationError, ProviderId, ProviderPath, WindowsFoldKey, typed_location,
 };
 pub use name::{NameError, check_name};
+pub use network_walk::{
+    NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME, NetworkStop, NetworkWalkBudget,
+};
 pub use op_plan::{
     Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, FileStamp, ItemKind, OpKind,
     OperationPlan, PlanRequest, Resolution, Risk, ScannedItem, Step, Totals, drop_op, is_protected,

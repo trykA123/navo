@@ -24,7 +24,7 @@ use crate::compare::settings::CompareSettings;
 
 const WAIT: Duration = Duration::from_secs(20);
 
-struct NoCache;
+pub(super) struct NoCache;
 
 impl HashCache for NoCache {
     fn get(&self, _key: &ContentKey) -> Option<[u8; 32]> {
@@ -34,7 +34,7 @@ impl HashCache for NoCache {
     fn put(&self, _key: &ContentKey, _hash: [u8; 32]) {}
 }
 
-fn start(left: &Path, right: &Path) -> (CompareHandle, Receiver<CompareEvent>) {
+pub(super) fn start(left: &Path, right: &Path) -> (CompareHandle, Receiver<CompareEvent>) {
     let (sender, receiver) = mpsc::channel();
     let request = CompareStart {
         left: CompareTarget::Local(location(left)),
@@ -59,6 +59,7 @@ pub(super) fn finish(receiver: &Receiver<CompareEvent>) -> (Vec<Row>, Totals, Ge
                 last = totals;
             }
             CompareEvent::Finished { generation } => return (rows, last, generation),
+            CompareEvent::StoppedAtLimit { .. } | CompareEvent::Continued { .. } => {}
             CompareEvent::Failed(error) => panic!("compare failed: {error:?}"),
         }
     }
@@ -75,7 +76,7 @@ pub(super) fn final_status(rows: &[Row], name: &str) -> Status {
         .unwrap()
 }
 
-fn two_trees() -> (tempfile::TempDir, tempfile::TempDir) {
+pub(super) fn two_trees() -> (tempfile::TempDir, tempfile::TempDir) {
     let (left, right) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     for (root, other) in [(left.path(), "left only"), (right.path(), "right only")] {
         write(root, "same.txt", b"same bytes");
@@ -255,6 +256,7 @@ fn sleepy_handle(listing: Listing) -> Probe {
             cache: Arc::new(NoCache),
             read_hint: ReadHint::Buffered,
             check_mode: CheckMode::Content,
+            network_cap: None,
         };
         Ok(Opened {
             session: Session::start(side(), side(), options),

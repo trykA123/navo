@@ -102,6 +102,7 @@ pub enum Page {
     MouseMarks,
     FileKinds,
     Columns,
+    Compare,
     CommandCenter,
     CommandCenterRecent,
     CommandCenterCommands,

@@ -1,7 +1,6 @@
 use super::Group;
 use super::contexts::GLOBAL;
 
-// No handlers yet: U4 adds the Compare contexts and binds this namespace.
 gpui_kit::actions!(
     compare,
     [
@@ -16,6 +15,7 @@ gpui_kit::actions!(
         Exit,
         Save,
         StopChecking,
+        Continue,
         ViewBytes,
         ViewText
     ]
@@ -65,6 +65,11 @@ pub(super) const GROUPS: [Group; 4] = [
                 "compare.stop_checking",
                 "cmd-compare-stop-checking",
             ),
+            (
+                "compare::Continue",
+                "compare.continue",
+                "cmd-compare-continue",
+            ),
         ],
     },
     Group {
@@ -85,7 +90,19 @@ pub(super) const GROUPS: [Group; 4] = [
     },
 ];
 
-/// Whether `name` is a compare command, hidden while Compare is not visible.
+/// Commands whose atoms have not landed: out of menus, palette and keymap while Compare is on.
+const NOT_BUILT: &[&str] = &[
+    "compare.refs",
+    "compare.copy_left",
+    "compare.copy_right",
+    "compare.save",
+    "compare.view_bytes",
+    "compare.view_text",
+];
+
+/// Whether `name` is a compare command that is not offered: all while Compare is off,
+/// and the ones still to be built while it is on.
 pub(crate) fn is_hidden(name: &str) -> bool {
-    name.starts_with("compare.") && !crate::compare_visible::compare_visible()
+    name.starts_with("compare.")
+        && (!crate::compare_visible::compare_visible() || NOT_BUILT.contains(&name))
 }

@@ -200,6 +200,7 @@ fn space_flips_a_toggle(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) {
+    let _hidden = crate::compare_visible::hide_compare();
     walk_sections(cx, false);
 }
 

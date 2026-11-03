@@ -6,6 +6,7 @@ mod clip_palette_page;
 mod clip_sample;
 mod columns_page;
 mod command_center_page;
+mod compare_page;
 mod drag_page;
 mod drives_page;
 mod gallery;

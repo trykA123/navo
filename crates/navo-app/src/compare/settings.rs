@@ -3,10 +3,19 @@
 use std::path::Path;
 
 use navo_compare::model::Budget;
-use navo_compare::session::CheckMode;
+use navo_compare::session::{CheckMode, NetworkCap};
+use navo_fs::{NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME};
 use navo_git::cli::MIN_GIT_VERSION;
 use navo_git::{Choice, CliGit, EngineKind, EngineSetting, GitFound, RepoFormat, choose};
 use navo_store::{Compare, CompareGitEngine, ContentCheck};
+
+/// The shared network-walk bound (D103) as the compare engine takes it.
+pub(crate) fn network_cap() -> NetworkCap {
+    NetworkCap {
+        entries: NETWORK_WALK_MAX_ENTRIES,
+        duration: NETWORK_WALK_MAX_TIME,
+    }
+}
 
 /// The `[compare]` settings as the compare backend reads them.
 #[derive(Debug, Clone, PartialEq, Eq)]

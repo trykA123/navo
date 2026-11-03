@@ -237,6 +237,20 @@ pub enum Status {
 }
 
 impl Status {
+    /// True for a row a difference filter shows: different, orphan, conflict or unavailable.
+    #[must_use]
+    pub const fn is_difference(self) -> bool {
+        matches!(
+            self,
+            Self::Different { .. }
+                | Self::OnlyLeft
+                | Self::OnlyRight
+                | Self::TypeConflict
+                | Self::CaseConflict
+                | Self::Unavailable(_)
+        )
+    }
+
     #[must_use]
     pub const fn fluent_id(self) -> FluentId {
         FluentId::new(match self {
@@ -264,6 +278,9 @@ pub struct Row {
     pub display_status: Status,
     pub generation: Generation,
     pub content: ContentClass,
+    /// Folder rows only: the subtree holds a different, orphan, conflict or unavailable row.
+    /// The folder keeps its own `raw_status`; the session re-sends the row when this turns on.
+    pub contains_differences: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -330,6 +347,11 @@ pub trait SideSource: Send + Sync {
     fn case_sensitive(&self) -> bool;
 
     fn read_only(&self) -> bool;
+
+    /// True when listing this side crosses a network; the walk then honours `network_cap`.
+    fn is_network(&self) -> bool {
+        false
+    }
 }
 
 pub trait HashCache: Send + Sync {

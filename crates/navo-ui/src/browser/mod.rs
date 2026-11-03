@@ -10,6 +10,12 @@ use navo_core::{
 };
 use navo_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
 
+pub use compare::{
+    BarView, CompareControl, CompareFilter, CompareHooks, CompareKind, CompareMode, CompareRefusal,
+    CompareRow, CompareSide, CompareSink, CompareTotals, CompareUpdate, FILTERS, FileDiffRequest,
+    RowProgress, RowStatus, RowView, SideView, StopBound, Tone, Total, bar_view, empty_text,
+    pane_rows,
+};
 pub use find::FindResults;
 pub use measure::{FolderTotals, FolderTotalsQuery, SizeMode, no_folder_totals};
 pub(crate) use measure::{Measured, folder_bytes};
@@ -362,6 +368,7 @@ impl Browser {
 }
 
 mod cached;
+mod compare;
 #[cfg(test)]
 pub(crate) use cached::tests::gated::Gated as GatedFs;
 mod filter;

@@ -7,13 +7,13 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use navo_compare::model::{Generation, HashCache, ReadHint, Reason, SideSource};
-use navo_compare::session::{RowBatch, Session, SessionOptions, Totals};
+use navo_compare::session::{RowBatch, Session, SessionOptions, StopBound, Totals};
 use navo_core::Location;
 
 use super::git_side::GitSide;
 use super::local::LocalSide;
 use super::rules;
-use super::settings::{CompareSettings, engine_for};
+use super::settings::{CompareSettings, engine_for, network_cap};
 
 const POLL: Duration = Duration::from_millis(10);
 
@@ -48,6 +48,15 @@ pub(crate) enum CompareEvent {
         generation: Generation,
         totals: Totals,
     },
+    /// The walk waits at the network limit; `continue_walk` resumes it.
+    /// `entries` were listed so far (both sides together); the rows found stay valid.
+    StoppedAtLimit {
+        generation: Generation,
+        entries: u64,
+        bound: StopBound,
+    },
+    /// The walk left the stopped state, because of `continue_walk`.
+    Continued { generation: Generation },
     /// The last batch of this generation arrived.
     Finished { generation: Generation },
     /// The compare did not start; nothing follows.
@@ -59,6 +68,7 @@ enum Command {
     StopRow(u64),
     StopAll,
     Refresh,
+    ContinueWalk,
     Cancel,
 }
 
@@ -121,6 +131,11 @@ impl CompareHandle {
         let _ = self.commands.send(Command::Focus(row_ids));
     }
 
+    /// Resumes a walk that stopped at the network limit.
+    pub(crate) fn continue_walk(&self) {
+        let _ = self.commands.send(Command::ContinueWalk);
+    }
+
     /// Starts the compare again under a new generation.
     pub(crate) fn refresh(&self) {
         let _ = self.commands.send(Command::Refresh);
@@ -158,6 +173,7 @@ fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
         cache: request.cache,
         read_hint: ReadHint::Buffered,
         check_mode: request.settings.content_check,
+        network_cap: Some(network_cap()),
     };
     let session = Session::start(left, right, options);
     Ok(Opened { session, git_sides })
@@ -182,13 +198,14 @@ fn open_side(
 /// Runs until `Cancel`, a closed command channel or a closed event channel.
 /// Leaving drops the session here, which joins its workers off the UI thread.
 fn pump(mut opened: Opened, events: &Sender<CompareEvent>, inbox: &Receiver<Command>) {
+    let mut stopped = None;
     loop {
         if !run_commands(&mut opened, inbox) {
             return;
         }
         match opened.session.batches().recv_timeout(POLL) {
             Ok(batch) => {
-                if !forward(events, batch) {
+                if !forward_limit(events, &mut stopped, &batch) || !forward(events, batch) {
                     return;
                 }
             }
@@ -215,6 +232,9 @@ fn run_commands(opened: &mut Opened, inbox: &Receiver<Command>) -> bool {
                 }
                 opened.session.refresh();
             }
+            Ok(Command::ContinueWalk) => {
+                opened.session.continue_walk();
+            }
             Ok(Command::Cancel) | Err(mpsc::TryRecvError::Disconnected) => {
                 opened.session.cancel();
                 return false;
@@ -222,6 +242,34 @@ fn run_commands(opened: &mut Opened, inbox: &Receiver<Command>) -> bool {
             Err(mpsc::TryRecvError::Empty) => return true,
         }
     }
+}
+
+/// Sends `StoppedAtLimit` or `Continued` when the batch changes the stopped state.
+/// `stopped` holds the generation that is stopped; a new generation starts not stopped.
+/// Returns false when the receiver is gone.
+fn forward_limit(
+    events: &Sender<CompareEvent>,
+    stopped: &mut Option<Generation>,
+    batch: &RowBatch,
+) -> bool {
+    let generation = batch.generation;
+    let was_stopped = *stopped == Some(generation);
+    let event = match batch.limit {
+        Some(limit) if !was_stopped => CompareEvent::StoppedAtLimit {
+            generation,
+            entries: limit.entries,
+            bound: limit.bound,
+        },
+        None if was_stopped => CompareEvent::Continued { generation },
+        _ => {
+            if batch.limit.is_none() {
+                *stopped = None;
+            }
+            return true;
+        }
+    };
+    *stopped = batch.limit.map(|_| generation);
+    events.send(event).is_ok()
 }
 
 /// Returns false when the receiver is gone.

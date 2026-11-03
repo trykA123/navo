@@ -25,6 +25,7 @@ mod clipboard_palette;
 mod clipboard_palette_popup;
 mod column_widths;
 mod command_center;
+mod compare;
 mod crash_notice;
 mod cursor_follow;
 mod delete_dialog;

@@ -1,7 +1,7 @@
 use super::{Page, PageInfo, info};
 
 /// The pages that follow `HEAD` in the table, in order.
-pub(super) const ALL: [PageInfo; 55] = [
+pub(super) const ALL: [PageInfo; 56] = [
     info(
         Page::SettingsUpgrade,
         "Settings, upgrade notice",
@@ -42,6 +42,7 @@ pub(super) const ALL: [PageInfo; 55] = [
     info(Page::MouseMarks, "Mouse marks", "p36-k5-mouse-marks", false),
     info(Page::FileKinds, "File types", "p36-file-kinds", false),
     info(Page::Columns, "Columns", "p38-columns", false),
+    info(Page::Compare, "Compare", "p42-compare", false),
     super::command_center::MIXED,
     super::command_center::RECENT,
     super::command_center::COMMANDS,

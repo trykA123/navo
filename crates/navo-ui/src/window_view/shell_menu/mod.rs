@@ -82,6 +82,7 @@ impl NavoWindow {
             sort: self.browser.sort_key(tab.id()),
             can_paste: self.has_files_to_paste(),
             has_properties: false,
+            can_compare: crate::compare_visible::compare_visible() && self.browser.can_compare(),
         };
         let has_shell = self.shell_menus.is_some();
         let target = MenuTarget::Background(folder);

@@ -1,16 +1,28 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use crate::model::{Generation, Reason, Row};
 use crate::queue::Progress;
 
-use super::{RowBatch, Totals};
+use super::rollup::Rollup;
+use super::{LimitStop, RowBatch, Totals};
+
+/// How often a stopped walk re-checks for cancel when no wake-up arrives.
+const STOP_RECHECK: Duration = Duration::from_millis(250);
 
 pub(super) struct Shared {
     state: Mutex<State>,
-    rows: Mutex<Vec<Option<Row>>>,
+    resumed: Condvar,
+    rows: Mutex<Vec<Option<Pending>>>,
     id_base: AtomicU64,
+}
+
+/// A row waiting for its content check, with the folder row it was listed under.
+struct Pending {
+    row: Row,
+    parent: Option<u64>,
 }
 
 struct State {
@@ -19,6 +31,8 @@ struct State {
     walk_done: bool,
     final_emitted: bool,
     closed: bool,
+    stopped: Option<LimitStop>,
+    rollup: Rollup,
     sender: Sender<RowBatch>,
 }
 
@@ -31,8 +45,11 @@ impl Shared {
                 walk_done: false,
                 final_emitted: false,
                 closed: false,
+                stopped: None,
+                rollup: Rollup::default(),
                 sender,
             }),
+            resumed: Condvar::new(),
             rows: Mutex::new(Vec::new()),
             id_base: AtomicU64::new(0),
         }
@@ -42,7 +59,7 @@ impl Shared {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn rows(&self) -> MutexGuard<'_, Vec<Option<Row>>> {
+    fn rows(&self) -> MutexGuard<'_, Vec<Option<Pending>>> {
         self.rows.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -57,6 +74,8 @@ impl Shared {
         state.walk_done = false;
         state.final_emitted = false;
         state.closed = false;
+        state.stopped = None;
+        state.rollup = Rollup::default();
     }
 
     pub(super) fn reset_rows(&self, id_base: u64) {
@@ -72,7 +91,7 @@ impl Shared {
         self.state().closed
     }
 
-    pub(super) fn store_rows(&self, rows: Vec<Row>) {
+    pub(super) fn store_rows(&self, rows: Vec<Row>, parent: Option<u64>) {
         let base = self.id_base.load(Ordering::Acquire);
         let mut store = self.rows();
         for row in rows {
@@ -83,27 +102,38 @@ impl Shared {
                 continue;
             };
             if store.len() <= index {
-                store.resize(index.saturating_add(1), None);
+                store.resize_with(index.saturating_add(1), || None);
             }
             if let Some(slot) = store.get_mut(index) {
-                *slot = Some(row);
+                *slot = Some(Pending { row, parent });
             }
         }
     }
 
-    pub(super) fn take_row(&self, id: u64) -> Option<Row> {
+    /// The row waiting under `id` and the folder row it was listed under.
+    pub(super) fn take_row(&self, id: u64) -> Option<(Row, Option<u64>)> {
         let offset = id.checked_sub(self.id_base.load(Ordering::Acquire))?;
         let index = usize::try_from(offset).ok()?;
-        self.rows().get_mut(index)?.take()
+        let pending = self.rows().get_mut(index)?.take()?;
+        Some((pending.row, pending.parent))
     }
 
-    pub(super) fn emit_initial(&self, generation: Generation, rows: Vec<Row>) -> bool {
+    /// Sends the rows listed under the folder row `parent`, plus the ancestors they newly flag.
+    pub(super) fn emit_initial(
+        &self,
+        generation: Generation,
+        rows: Vec<Row>,
+        parent: Option<u64>,
+    ) -> bool {
         let counts = Totals::tally(&rows);
         let mut state = self.state();
         if state.generation != generation || state.closed {
             return false;
         }
         state.totals.merge(counts);
+        let mut rows = rows;
+        let flagged = state.rollup.add_batch(&rows, parent);
+        rows.extend(flagged);
         let is_final = final_batch(&mut state);
         send(&mut state, rows, is_final, None)
     }
@@ -111,7 +141,7 @@ impl Shared {
     pub(super) fn emit_update(
         &self,
         generation: Generation,
-        row: Row,
+        mut row: Row,
         previous: crate::model::Status,
     ) -> bool {
         let mut state = self.state();
@@ -119,18 +149,24 @@ impl Shared {
             return false;
         }
         state.totals.replace(previous, row.raw_status);
+        let flagged = state.rollup.update_folder(&mut row, previous);
         let is_final = final_batch(&mut state);
-        send(&mut state, vec![row], is_final, None)
+        let mut rows = vec![row];
+        rows.extend(flagged);
+        send(&mut state, rows, is_final, None)
     }
 
-    pub(super) fn emit_final(&self, generation: Generation, row: Row) -> bool {
+    pub(super) fn emit_final(&self, generation: Generation, row: Row, parent: Option<u64>) -> bool {
         let mut state = self.state();
         if state.generation != generation || state.closed {
             return false;
         }
         state.totals.resolve(row.raw_status);
+        let flagged = state.rollup.resolve(parent, row.raw_status);
         let is_final = final_batch(&mut state);
-        send(&mut state, vec![row], is_final, None)
+        let mut rows = vec![row];
+        rows.extend(flagged);
+        send(&mut state, rows, is_final, None)
     }
 
     pub(super) fn emit_progress(&self, generation: Generation, progress: Progress) -> bool {
@@ -145,8 +181,52 @@ impl Shared {
             totals: state.totals,
             is_final: false,
             problem: None,
+            limit: state.stopped,
         };
         send_batch(&mut state, batch)
+    }
+
+    /// Marks the walk as stopped at the limit and tells the receiver.
+    pub(super) fn stop_at_limit(&self, generation: Generation, stop: LimitStop) -> bool {
+        let mut state = self.state();
+        if state.generation != generation || state.closed {
+            return false;
+        }
+        state.stopped = Some(stop);
+        send(&mut state, Vec::new(), false, None)
+    }
+
+    /// Waits until `resume`. False when `abandon` says the walk is over or the session closed.
+    pub(super) fn wait_resumed(&self, generation: Generation, abandon: impl Fn() -> bool) -> bool {
+        let mut state = self.state();
+        while state.stopped.is_some() {
+            if abandon() || state.closed || state.generation != generation {
+                return false;
+            }
+            state = self
+                .resumed
+                .wait_timeout(state, STOP_RECHECK)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+        !state.closed && state.generation == generation
+    }
+
+    /// Ends a stop; false when the walk of `generation` is not stopped.
+    pub(super) fn resume(&self, generation: Generation) -> bool {
+        let mut state = self.state();
+        if state.generation != generation || state.closed || state.stopped.take().is_none() {
+            return false;
+        }
+        let sent = send(&mut state, Vec::new(), false, None);
+        self.resumed.notify_all();
+        sent
+    }
+
+    /// Wakes a stopped walk so it sees a cancel.
+    pub(super) fn wake(&self) {
+        let _state = self.state();
+        self.resumed.notify_all();
     }
 
     pub(super) fn finish(&self, generation: Generation) -> bool {
@@ -155,6 +235,7 @@ impl Shared {
             return false;
         }
         state.walk_done = true;
+        state.stopped = None;
         if state.totals.checking > 0 || state.final_emitted {
             return true;
         }
@@ -193,8 +274,8 @@ impl Shared {
     #[cfg(test)]
     pub(super) fn retained_bytes(&self) -> usize {
         let store = self.rows();
-        let mut bytes = store.capacity() * std::mem::size_of::<Option<Row>>();
-        for row in store.iter().flatten() {
+        let mut bytes = store.capacity() * std::mem::size_of::<Option<Pending>>();
+        for row in store.iter().flatten().map(|pending| &pending.row) {
             for entry in [row.left.as_deref(), row.right.as_deref()]
                 .into_iter()
                 .flatten()
@@ -236,6 +317,7 @@ fn send(state: &mut State, rows: Vec<Row>, is_final: bool, problem: Option<Reaso
         totals: state.totals,
         is_final,
         problem,
+        limit: state.stopped,
     };
     send_batch(state, batch)
 }

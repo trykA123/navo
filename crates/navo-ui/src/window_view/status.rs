@@ -4,7 +4,16 @@ use std::sync::{Arc, Weak};
 use navo_core::{Selection, TabId};
 use navo_fs::{EntryKind, FsEntry};
 
-use crate::status_bar::StatusBarProps;
+use crate::settings::WindowParts;
+use crate::status_bar::{FooterParts, StatusBarProps};
+
+pub(super) fn footer_parts(parts: WindowParts) -> FooterParts {
+    FooterParts {
+        free_space: parts.free_space,
+        marked_totals: parts.marked_totals,
+        contents: parts.contents,
+    }
+}
 
 #[derive(Clone, Copy, Default)]
 struct Totals {

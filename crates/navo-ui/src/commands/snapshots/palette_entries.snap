@@ -1,6 +1,5 @@
 ---
 source: crates/navo-ui/src/commands/tests.rs
-assertion_line: 525
 expression: "lines.join(\"\\n\")"
 ---
 workspace.preview_first | FileList | false
@@ -449,6 +448,14 @@ clip_palette.pick_sixth | ClipPalette | false
 clip_palette.pick_seventh | ClipPalette | false
 clip_palette.pick_eighth | ClipPalette | false
 clip_palette.pick_ninth | ClipPalette | false
+compare.with_other_pane | FileList | true
+compare.next_difference | Compare | true
+compare.previous_difference | Compare | true
+compare.enter | Compare | false
+compare.up | Compare | false
+compare.exit | Compare | true
+compare.stop_checking | Compare | true
+compare.continue | Compare | true
 window.new | global | true
 workspace.list | global | true
 app.quit | global | true

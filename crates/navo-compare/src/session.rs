@@ -11,127 +11,19 @@ use crate::queue::{self, Progress, Queue};
 use crate::rules::IgnoreRules;
 
 mod classify;
+mod limit;
+mod rollup;
 mod run;
 mod shared;
+mod totals;
+
+pub use limit::{LimitStop, NetworkCap, StopBound};
+pub use totals::Totals;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckMode {
     Content,
     SizeTime,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Totals {
-    pub rows: u64,
-    pub same: u64,
-    pub different: u64,
-    pub only_left: u64,
-    pub only_right: u64,
-    pub conflicts: u64,
-    pub checking: u64,
-    pub same_size_time: u64,
-    pub unavailable: u64,
-    pub not_checked: u64,
-}
-
-impl Totals {
-    pub(super) fn record(&mut self, status: Status, first: bool) {
-        if first {
-            self.rows = self.rows.saturating_add(1);
-        }
-        match status {
-            Status::Same | Status::SameAfterRules => {
-                self.same = self.same.saturating_add(1);
-            }
-            Status::Different { .. } => {
-                self.different = self.different.saturating_add(1);
-            }
-            Status::OnlyLeft => {
-                self.only_left = self.only_left.saturating_add(1);
-            }
-            Status::OnlyRight => {
-                self.only_right = self.only_right.saturating_add(1);
-            }
-            Status::TypeConflict | Status::CaseConflict => {
-                self.conflicts = self.conflicts.saturating_add(1);
-            }
-            Status::Checking => {
-                self.checking = self.checking.saturating_add(1);
-            }
-            Status::SameSizeTime => {
-                self.same_size_time = self.same_size_time.saturating_add(1);
-            }
-            Status::Unavailable(_) => {
-                self.unavailable = self.unavailable.saturating_add(1);
-            }
-            Status::NotChecked(_) => {
-                self.not_checked = self.not_checked.saturating_add(1);
-            }
-        }
-    }
-
-    pub(super) fn resolve(&mut self, status: Status) {
-        self.checking = self.checking.saturating_sub(1);
-        self.record(status, false);
-    }
-
-    pub(super) fn tally(rows: &[Row]) -> Self {
-        let mut totals = Self::default();
-        for row in rows {
-            totals.record(row.raw_status, true);
-        }
-        totals
-    }
-
-    pub(super) fn merge(&mut self, other: Self) {
-        self.rows = self.rows.saturating_add(other.rows);
-        self.same = self.same.saturating_add(other.same);
-        self.different = self.different.saturating_add(other.different);
-        self.only_left = self.only_left.saturating_add(other.only_left);
-        self.only_right = self.only_right.saturating_add(other.only_right);
-        self.conflicts = self.conflicts.saturating_add(other.conflicts);
-        self.checking = self.checking.saturating_add(other.checking);
-        self.same_size_time = self.same_size_time.saturating_add(other.same_size_time);
-        self.unavailable = self.unavailable.saturating_add(other.unavailable);
-        self.not_checked = self.not_checked.saturating_add(other.not_checked);
-    }
-
-    pub(super) fn replace(&mut self, previous: Status, next: Status) {
-        self.remove(previous);
-        self.record(next, false);
-    }
-
-    fn remove(&mut self, status: Status) {
-        match status {
-            Status::Same | Status::SameAfterRules => {
-                self.same = self.same.saturating_sub(1);
-            }
-            Status::Different { .. } => {
-                self.different = self.different.saturating_sub(1);
-            }
-            Status::OnlyLeft => {
-                self.only_left = self.only_left.saturating_sub(1);
-            }
-            Status::OnlyRight => {
-                self.only_right = self.only_right.saturating_sub(1);
-            }
-            Status::TypeConflict | Status::CaseConflict => {
-                self.conflicts = self.conflicts.saturating_sub(1);
-            }
-            Status::Checking => {
-                self.checking = self.checking.saturating_sub(1);
-            }
-            Status::SameSizeTime => {
-                self.same_size_time = self.same_size_time.saturating_sub(1);
-            }
-            Status::Unavailable(_) => {
-                self.unavailable = self.unavailable.saturating_sub(1);
-            }
-            Status::NotChecked(_) => {
-                self.not_checked = self.not_checked.saturating_sub(1);
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +34,8 @@ pub struct RowBatch {
     pub totals: Totals,
     pub is_final: bool,
     pub problem: Option<Reason>,
+    /// Set on every batch while the walk waits for `Session::continue_walk`.
+    pub limit: Option<LimitStop>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,6 +73,8 @@ pub struct SessionOptions {
     pub cache: Arc<dyn HashCache>,
     pub read_hint: ReadHint,
     pub check_mode: CheckMode,
+    /// Bounds a walk when a side is on a network drive; `None` means unlimited.
+    pub network_cap: Option<NetworkCap>,
 }
 
 pub struct Session {
@@ -269,6 +165,13 @@ impl Session {
         self.cancel.cancel();
         self.queue.stop_all();
         self.queue.close();
+        self.shared.wake();
+    }
+
+    /// Resumes a walk that stopped at the network limit, where it stopped.
+    /// Returns false when the walk is not stopped.
+    pub fn continue_walk(&self) -> bool {
+        self.shared.resume(self.generation)
     }
 
     pub fn stop_row(&self, id: u64) -> bool {
@@ -296,6 +199,7 @@ impl Session {
         self.queue.close();
         let next = Generation::new(self.generation.get().saturating_add(1));
         self.shared.begin(next);
+        self.shared.wake();
         let joined = self.join();
         while self.receiver.try_recv().is_ok() {}
         self.shared.reset(next);
@@ -348,6 +252,7 @@ impl Drop for Session {
         self.cancel.cancel();
         self.queue.stop_all();
         self.queue.close();
+        self.shared.wake();
         if !self.join() {
             self.shared.close();
         }

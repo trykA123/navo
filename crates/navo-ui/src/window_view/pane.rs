@@ -12,12 +12,13 @@ use super::keys::{
     ShowHiddenPath, ShowHiddenTabs,
 };
 use super::list_columns::{column_keys, list_parts, user_widths};
+use super::status::footer_parts;
 use crate::FocusHandle;
 use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
 use crate::pane_chrome::{PaneTabs, pane_card, path_segments, target_outline};
 use crate::prelude::*;
 use crate::settings::WindowParts;
-use crate::status_bar::{FooterParts, StatusBar, StatusBarProps};
+use crate::status_bar::{StatusBar, StatusBarProps};
 use crate::tokens;
 
 pub(super) fn title_of(tab: &Tab) -> SharedString {
@@ -40,14 +41,6 @@ fn error_line(t: &tokens::Theme, pane: PaneId, message: SharedString) -> impl In
         .py(t.spacing.sm)
         .text_color(t.colors.mark)
         .child(message)
-}
-
-fn footer_parts(parts: WindowParts) -> FooterParts {
-    FooterParts {
-        free_space: parts.free_space,
-        marked_totals: parts.marked_totals,
-        contents: parts.contents,
-    }
 }
 
 impl NavoWindow {
@@ -99,9 +92,10 @@ impl NavoWindow {
         let chrome = self.ensure_chrome(pane, window, cx);
         let parts = WindowParts::of(&self.values);
         let path = self.path_row(pane, parts, cx);
-        let list = match waited {
-            Some(waited) => Self::waiting_view(&waited, &focus, cx),
-            None => self
+        let list = match (self.compare_list(pane, &focus, cx), waited) {
+            (Some(list), _) => list,
+            (None, Some(waited)) => Self::waiting_view(&waited, &focus, cx),
+            (None, None) => self
                 .file_list((pane, props), &focus, cx)
                 .parts(list_parts(parts))
                 .column_widths(user_widths(&self.values))
@@ -192,6 +186,7 @@ impl NavoWindow {
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
         let root = super::workspace_keys::workspace_keys(root, cx);
+        let root = super::compare_keys::compare_keys(root, cx);
         column_keys(super::tab_keys::tab_keys(root, cx), cx)
             .on_action(cx.listener(
                 |this: &mut Self, _: &super::keys::OpenTerminal, window, cx| {
@@ -328,7 +323,12 @@ impl NavoWindow {
             .map(crate::browser::FindResults::running);
         let list = FileList::new(("list", pane.get()), props)
             .track_focus(focus)
-            .find_results(find);
+            .find_results(find)
+            .in_compare(
+                self.browser
+                    .compare_mode()
+                    .is_some_and(|m| m.has_pane(pane)),
+            );
         Self::wire_drops(list, pane, cx)
             .on_command(
                 cx.listener(move |this: &mut Self, command: &Command, window, cx| {

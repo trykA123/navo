@@ -13,13 +13,13 @@ fn error_of(text: &str) -> Option<KeymapError> {
 fn the_built_in_keymap_parses_and_validates() {
     let parsed = Keymap::parse(BUILTIN);
     assert_eq!(parsed.as_ref().err(), None);
-    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(487));
+    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(497));
 }
 
 #[test]
 fn the_built_in_keymap_is_parsed_once() {
     assert!(std::ptr::eq(Keymap::builtin(), Keymap::builtin()));
-    assert_eq!(Keymap::builtin().binds().len(), 487);
+    assert_eq!(Keymap::builtin().binds().len(), 497);
 }
 
 #[test]
@@ -250,6 +250,7 @@ fn compare_binds(keymap: &Keymap) -> Vec<(&'static str, String, Vec<String>)> {
 
 #[test]
 fn hidden_compare_binds_are_left_out_of_the_built_in_and_user_keymaps() {
+    let _hidden = crate::compare_visible::hide_compare();
     let builtin = Keymap::parse(BUILTIN).expect("keymap");
     assert_eq!(compare_binds(&builtin), []);
     let user = one("compare.exit", "\"escape\"", None) + &one("compare.nope", "\"f1\"", None);
@@ -268,7 +269,7 @@ fn visible_compare_binds_follow_the_key_table() {
             .flat_map(|(_, _, keys)| keys)
             .collect()
     };
-    assert_eq!(compare_binds(&keymap).len(), 14);
+    assert_eq!(compare_binds(&keymap).len(), 10);
     assert_eq!(
         keyed("compare.with_other_pane", "FileList"),
         ["ctrl-shift-d"]
@@ -284,8 +285,10 @@ fn visible_compare_binds_follow_the_key_table() {
     );
     assert_eq!(keyed("compare.enter", "Compare"), ["enter"]);
     assert_eq!(keyed("compare.up", "Compare"), ["backspace"]);
+    assert_eq!(keyed("compare.continue", "Compare"), ["ctrl-f7"]);
     assert_eq!(keyed("compare.exit", "CompareView"), ["escape"]);
-    assert_eq!(keyed("compare.save", "CompareView"), ["ctrl-s"]);
+    assert_eq!(keyed("compare.save", "CompareView"), Vec::<String>::new());
+    assert_eq!(keyed("compare.copy_right", "Compare"), Vec::<String>::new());
     assert_eq!(keyed("compare.enter", "CompareView"), Vec::<String>::new());
 }
 
@@ -294,5 +297,5 @@ fn visible_compare_binds_build_gpui_key_bindings(cx: &mut gpui_kit::TestAppConte
     let _shown = crate::compare_visible::show_compare();
     let keymap = Keymap::parse(BUILTIN).expect("keymap");
     let built = cx.update(|cx| crate::commands::key_bindings(&keymap, cx, Some("compare")));
-    assert_eq!(built.len(), 16);
+    assert_eq!(built.len(), 12);
 }

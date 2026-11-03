@@ -62,6 +62,12 @@
 //!    caller of those functions and every compare save.
 //! 10. `Whole` keeps the raw bytes of both sides (up to the whole-file cap)
 //!     while it lives.
+//! 11. When a side reports `is_network` and `SessionOptions::network_cap` is set, the walk
+//!     stops between folders at the entry or time bound and sends a batch with
+//!     `limit: Some(LimitStop)` (also on every later batch while it waits). Rows stay valid.
+//!     Show "stopped at the limit: continue?" and call `Session::continue_walk` (same
+//!     generation, no rescan, fresh bounds), `cancel` or `refresh`. No `is_final` comes
+//!     while the walk is stopped.
 
 #![forbid(unsafe_code)]
 

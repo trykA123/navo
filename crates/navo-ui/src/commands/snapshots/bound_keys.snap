@@ -111,6 +111,18 @@ command_center.run_in_new_tab | alt-enter | CommandCenter
 command_center.run_in_new_tab | alt-enter | CommandCenter > Input
 command_center.up | up | CommandCenter
 command_center.up | up | CommandCenter > Input
+compare.continue | ctrl-f7 | Compare
+compare.enter | enter | Compare
+compare.exit | escape | Compare
+compare.exit | escape | CompareView
+compare.next_difference | alt-down | Compare
+compare.next_difference | alt-down | CompareView
+compare.next_difference | f7 | CompareView
+compare.previous_difference | alt-up | Compare
+compare.previous_difference | alt-up | CompareView
+compare.previous_difference | shift-f7 | CompareView
+compare.up | backspace | Compare
+compare.with_other_pane | ctrl-shift-d | FileList
 confirm.cancel | escape | ConfirmDialog
 context_menu.back | escape | ContextMenu
 context_menu.back | escape | ContextMenu > Input
