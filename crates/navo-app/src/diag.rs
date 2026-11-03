@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use navo_cache::{DiskListings, DiskStats, ListingCache};
 use navo_diag::{
-    BuildInfo, CacheRegistry, CacheSize, DiskKind, DiskUse, DpiAwareness, EventRing, Identity,
-    MemoryProbe, Redactor, ReportInput, ReportSummary, Salt, SystemInfo, TaskCounters,
+    BuildInfo, CacheRegistry, CacheSize, DiskKind, DiskLocation, DiskUse, DpiAwareness, EventRing,
+    Identity, MemoryProbe, Redactor, ReportInput, ReportSummary, Salt, SystemInfo, TaskCounters,
     memory_report, scan_disk_use, write_report_with_crashes,
 };
 #[cfg(feature = "tester")]
@@ -42,7 +42,7 @@ pub fn write_on_demand(
         &input,
         &diagnostics.redactor,
         &ReportAttachments {
-            disk_use: disk_use(data, &diagnostics.redactor),
+            disk_use: disk_use(data),
             ..ReportAttachments::default()
         },
     )
@@ -69,22 +69,19 @@ pub(crate) fn write_with_extras(
     write_report_bundle(path, &input, &diagnostics.redactor, attachments).map(drop)
 }
 
-pub(crate) fn disk_use(data: Option<&Path>, redactor: &Redactor) -> DiskUse {
+pub(crate) fn disk_use(data: Option<&Path>) -> DiskUse {
     let mut locations = Vec::new();
     if let Some(data) = data {
         let journal = format!("{}.db", navo_core::brand::SLUG);
-        for (kind, name) in [
-            (DiskKind::ListingCache, "cache.db"),
-            (DiskKind::Journal, journal.as_str()),
-        ] {
-            for suffix in ["", "-wal", "-shm"] {
-                locations.push((kind, data.join(format!("{name}{suffix}"))));
-            }
-        }
+        locations.push(DiskLocation::sqlite(
+            DiskKind::ListingCache,
+            data.join("cache.db"),
+        ));
+        locations.push(DiskLocation::sqlite(DiskKind::Journal, data.join(journal)));
         locations.extend([
-            (DiskKind::Session, data.join("session.bin")),
-            (DiskKind::Index, data.join("index")),
-            (DiskKind::LogsAndCrashes, data.join("logs")),
+            DiskLocation::new(DiskKind::Session, data.join("session.bin")),
+            DiskLocation::new(DiskKind::Index, data.join("index")),
+            DiskLocation::new(DiskKind::LogsAndCrashes, data.join("logs")),
         ]);
     }
     #[cfg(windows)]
@@ -92,15 +89,18 @@ pub(crate) fn disk_use(data: Option<&Path>, redactor: &Redactor) -> DiskUse {
         let index = PathBuf::from(root)
             .join(navo_core::brand::NAME)
             .join("index");
-        if !locations.iter().any(|(_, path)| path == &index) {
-            locations.push((DiskKind::Index, index));
+        if !locations
+            .iter()
+            .any(|location| location.path() == index.as_path())
+        {
+            locations.push(DiskLocation::new(DiskKind::Index, index));
         }
     }
     #[cfg(feature = "tester")]
     if let Some(desktop) = crate::crash::desktop_dir() {
-        locations.push((DiskKind::PerformanceRecordings, desktop));
+        locations.push(DiskLocation::new(DiskKind::PerformanceRecordings, desktop));
     }
-    scan_disk_use(&locations, redactor)
+    scan_disk_use(&locations)
 }
 
 fn filled_input(started: Instant, diagnostics: &Diagnostics) -> ReportInput {

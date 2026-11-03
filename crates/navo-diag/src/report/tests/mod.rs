@@ -188,7 +188,11 @@ fn disk_section_contains_redacted_locations_in_text_and_json() {
     let root = tempfile::tempdir().unwrap();
     let source = root.path().join("private-profile.db");
     fs::write(&source, [0; 17]).unwrap();
-    let disk = crate::scan_disk_use(&[(crate::DiskKind::Journal, source)], &redactor());
+    let disk = crate::scan_disk_use(&[crate::DiskLocation::new(
+        crate::DiskKind::Journal,
+        source.clone(),
+    )]);
+    assert_eq!(disk.locations[0].path, source);
     let path = root.path().join("report.zip");
     let summary = crate::write_report_bundle(
         &path,
@@ -209,5 +213,60 @@ fn disk_section_contains_redacted_locations_in_text_and_json() {
     for text in [text, report_text(&path)] {
         assert!(!text.contains("private-profile"));
         assert!(!text.contains(&root.path().to_string_lossy().into_owned()));
+    }
+}
+
+#[test]
+fn bundle_redacts_sqlite_part_paths_and_keeps_not_readable() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("private-profile");
+    fs::create_dir(&profile).unwrap();
+    let db = profile.join("cache.db");
+    fs::write(&db, [0; 7]).unwrap();
+    fs::write(profile.join("cache.db-wal"), [0; 11]).unwrap();
+    let mut locations = vec![crate::DiskLocation::sqlite(
+        crate::DiskKind::ListingCache,
+        db,
+    )];
+    // A mode-000 folder is the only portable way to make the OS deny a root.
+    #[cfg(unix)]
+    let denied = {
+        use std::os::unix::fs::PermissionsExt;
+        let denied = root.path().join("private-profile-denied");
+        fs::create_dir(&denied).unwrap();
+        fs::set_permissions(&denied, fs::Permissions::from_mode(0o000)).unwrap();
+        locations.push(crate::DiskLocation::new(
+            crate::DiskKind::Index,
+            denied.clone(),
+        ));
+        denied
+    };
+    let disk = crate::scan_disk_use(&locations);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&denied, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let path = root.path().join("report.zip");
+    crate::write_report_bundle(
+        &path,
+        &input(),
+        &redactor(),
+        &crate::ReportAttachments {
+            disk_use: disk,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let json = report_json(&path);
+    let compact = serde_json::to_string(&json).unwrap();
+    assert!(
+        compact.contains(r#""parts":[{"#),
+        "the -wal part is exported"
+    );
+    #[cfg(unix)]
+    assert!(compact.contains(r#""state":"not_readable""#));
+    for text in [compact, summary_text(&path), report_text(&path)] {
+        assert!(!text.contains("private-profile"));
     }
 }

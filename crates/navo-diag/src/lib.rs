@@ -11,7 +11,10 @@ pub mod profiling;
 mod redact;
 mod report;
 
-pub use disk_use::{DiskKind, DiskLocationUse, DiskTotals, DiskUse, scan_disk_use};
+pub use disk_use::{
+    DiskKind, DiskLocation, DiskLocationUse, DiskPart, DiskState, DiskTotals, DiskUse,
+    scan_disk_use,
+};
 pub use event_ring::{EventRing, RingStats};
 pub use log_layer::{LogConfig, LogFlush, LogLayer, RedactionMisses, is_redacted_path};
 pub use memory::{

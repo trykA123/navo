@@ -7,6 +7,7 @@ use serde::Serialize;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
+use crate::disk_use::DiskExport;
 use crate::{DiskUse, MemoryReport, Redactor};
 
 mod document;
@@ -124,7 +125,7 @@ pub struct ReportAttachments<'a> {
 struct DiskDocument<'a> {
     #[serde(flatten)]
     report: Document,
-    disk_use: &'a DiskUse,
+    disk_use: &'a DiskExport,
 }
 
 pub fn write_report_bundle(
@@ -133,13 +134,14 @@ pub fn write_report_bundle(
     redactor: &Redactor,
     attachments: &ReportAttachments<'_>,
 ) -> io::Result<ReportSummary> {
+    let disk = attachments.disk_use.report(redactor);
     let report = serde_json::to_vec_pretty(&DiskDocument {
         report: Document::new(input, redactor),
-        disk_use: &attachments.disk_use,
+        disk_use: &disk.export,
     })?;
     let mut summary = summary_text(input, redactor);
     let privacy = summary.rfind("\n\n").unwrap_or(summary.len());
-    summary.insert_str(privacy, attachments.disk_use.summary().trim_end());
+    summary.insert_str(privacy, disk.summary.trim_end());
     if fs::symlink_metadata(path).is_ok() {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,

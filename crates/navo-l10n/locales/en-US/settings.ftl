@@ -101,6 +101,7 @@ settings-update-busy = Another Navo is updating
 settings-diagnostics-empty = No cache or store locations are available.
 settings-diagnostics-refresh = Refresh
 settings-diagnostics-at-least = at least
+settings-diagnostics-not-readable = Not readable without admin
 settings-diagnostics-entries = Entries
 settings-diagnostics-budget = Budget
 cmd-app-save-diagnostic-report = Save a diagnostic report
