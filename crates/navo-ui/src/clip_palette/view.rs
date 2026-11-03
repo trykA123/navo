@@ -287,16 +287,8 @@ impl ClipPalette {
         self.choose(cx);
     }
 
-    /// The pop-up fills its window; in Navo's window the palette keeps a margin.
     fn frame(&self, window: &Window) -> (Pixels, Pixels) {
-        let viewport = window.viewport_size();
-        let margin = match self.place {
-            Place::Window => px(MARGIN) * 2.,
-            Place::Anywhere => px(0.),
-        };
-        let width = (self.width.unwrap_or(viewport.width) - margin).max(px(0.));
-        let height = (viewport.height - margin).max(px(0.));
-        (width.min(px(WIDTH)), height.min(px(HEIGHT)))
+        frame_of(self.place, window.viewport_size(), self.width)
     }
 
     fn body(
@@ -351,6 +343,21 @@ impl ClipPalette {
     }
 }
 
+/// The pop-up fills its window; in Navo's window the palette keeps a margin and a size cap.
+fn frame_of(
+    place: Place,
+    viewport: gpui_kit::Size<Pixels>,
+    width: Option<Pixels>,
+) -> (Pixels, Pixels) {
+    if place == Place::Anywhere {
+        return (width.unwrap_or(viewport.width), viewport.height);
+    }
+    let margin = px(MARGIN) * 2.;
+    let width = (width.unwrap_or(viewport.width) - margin).max(px(0.));
+    let height = (viewport.height - margin).max(px(0.));
+    (width.min(px(WIDTH)), height.min(px(HEIGHT)))
+}
+
 impl Render for ClipPalette {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.hide_stray_secret();
@@ -402,5 +409,34 @@ impl Render for ClipPalette {
                 .children(self.actions_menu(&t, cx))
         };
         fade_in(panel.children(self.status_line(&t, is_docked, cx)), &t, cx)
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use gpui_kit::Size;
+
+    use super::*;
+
+    fn viewport(width: f32, height: f32) -> Size<Pixels> {
+        gpui_kit::size(px(width), px(height))
+    }
+
+    #[test]
+    fn the_pop_up_follows_its_viewport() {
+        let frame = frame_of(Place::Anywhere, viewport(1100., 700.), None);
+        assert_eq!(frame, (px(1100.), px(700.)));
+        let frame = frame_of(Place::Anywhere, viewport(560., 320.), None);
+        assert_eq!(frame, (px(560.), px(320.)));
+    }
+
+    #[test]
+    fn navo_window_keeps_its_margin_and_cap() {
+        let frame = frame_of(Place::Window, viewport(1100., 700.), None);
+        assert_eq!(frame, (px(WIDTH), px(HEIGHT)));
+        let frame = frame_of(Place::Window, viewport(500., 300.), None);
+        assert_eq!(frame, (px(484.), px(284.)));
+        let frame = frame_of(Place::Window, viewport(1100., 700.), Some(px(300.)));
+        assert_eq!(frame.0, px(284.));
     }
 }

@@ -94,6 +94,7 @@ pub(crate) fn request_for(event: ResidentEvent) -> OpenRequest {
                 at,
                 previous: Some(Arc::new(ForegroundTarget(previous))),
                 display: navo_shell::display_under_cursor(),
+                cursor: navo_shell::cursor_position(),
             }),
             ..OpenRequest::default()
         },

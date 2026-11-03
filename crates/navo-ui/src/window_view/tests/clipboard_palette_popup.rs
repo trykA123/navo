@@ -169,6 +169,7 @@ impl Rig {
             at: Instant::now(),
             previous: Some(Arc::new(target)),
             display: None,
+            cursor: None,
         };
         self.send(
             cx,

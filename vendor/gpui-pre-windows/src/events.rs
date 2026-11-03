@@ -779,6 +779,10 @@ impl WindowsWindowInner {
         if !self.hide_title_bar || self.state.is_fullscreen() || wparam.0 == 0 {
             return None;
         }
+        if self.is_resizable_popup {
+            // The whole window is client area: no system frame is drawn.
+            return Some(0);
+        }
 
         unsafe {
             let params = lparam.0 as *mut NCCALCSIZE_PARAMS;
@@ -990,6 +994,23 @@ impl WindowsWindowInner {
 
         if !self.hide_title_bar {
             // If the OS draws the title bar, we don't need to handle hit test messages.
+            return drag_area;
+        }
+
+        if self.is_resizable_popup && !self.state.is_maximized() {
+            let mut cursor = POINT {
+                x: lparam.signed_loword().into(),
+                y: lparam.signed_hiword().into(),
+            };
+            let mut rect = Default::default();
+            unsafe {
+                ScreenToClient(handle, &mut cursor).ok().log_err();
+                GetClientRect(handle, &mut rect).log_err();
+            }
+            let band = (POPUP_RESIZE_BAND * unsafe { GetDpiForWindow(handle) } as f32 / 96.) as i32;
+            if let Some(code) = popup_edge_hit(cursor, (rect.right, rect.bottom), band) {
+                return Some(code as isize);
+            }
             return drag_area;
         }
 
@@ -1777,6 +1798,28 @@ pub(crate) fn current_capslock() -> Capslock {
 // borders on Windows:
 // - SM_CXSIZEFRAME: The resize handle.
 // - SM_CXPADDEDBORDER: Additional border space that isn't part of the resize handle.
+/// Width of a resizable pop-up's edge band, in logical pixels.
+const POPUP_RESIZE_BAND: f32 = 6.;
+
+/// The sizing hit-test code for a point within `band` of an edge of a `size` client area.
+fn popup_edge_hit(point: POINT, size: (i32, i32), band: i32) -> Option<u32> {
+    let left = point.x < band;
+    let right = point.x >= size.0 - band;
+    let top = point.y < band;
+    let bottom = point.y >= size.1 - band;
+    match (left, right, top, bottom) {
+        (true, _, true, _) => Some(HTTOPLEFT),
+        (_, true, true, _) => Some(HTTOPRIGHT),
+        (true, _, _, true) => Some(HTBOTTOMLEFT),
+        (_, true, _, true) => Some(HTBOTTOMRIGHT),
+        (true, ..) => Some(HTLEFT),
+        (_, true, ..) => Some(HTRIGHT),
+        (_, _, true, _) => Some(HTTOP),
+        (.., true) => Some(HTBOTTOM),
+        _ => None,
+    }
+}
+
 fn get_frame_thicknessx(dpi: u32) -> i32 {
     let resize_frame_thickness = unsafe { GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi) };
     let padding_thickness = unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) };

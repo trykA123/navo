@@ -8,16 +8,14 @@ use std::time::Instant;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext as _, Bounds, Context, DisplayId, Entity, Focusable, Global,
     IntoElement, ParentElement, Render, SharedString, Styled, Subscription, Window, WindowBounds,
-    WindowKind, WindowOptions, div, px, size,
+    WindowKind, WindowOptions, div, point, px, size,
 };
 
 use super::ClipboardHooks;
 use super::note_editor::FolderProbe;
+use super::placement::{MIN_SIZE, PopUpPosition, Rect, Remembered, open_size, place};
 use super::view::{ClipPalette, ClipPaletteEvent, ClipPaletteProps, Place};
 use crate::window_view::{ClipboardSummon, PasteTarget, WindowShown, raw_handle};
-
-const WIDTH: f32 = 720.;
-const HEIGHT: f32 = 400.;
 
 /// What a clipboard summon needs to show the pop-up.
 #[derive(Clone)]
@@ -29,7 +27,14 @@ pub struct PopUpRequest {
     pub folder_probe: Option<FolderProbe>,
     /// Hides and shows the native window; without it, hiding closes the window.
     pub window_shown: Option<WindowShown>,
+    pub position: PopUpPosition,
 }
+
+/// Size and place of the pop-up when it last closed; kept for this run only.
+#[derive(Default)]
+struct LastPlace(Option<Remembered>);
+
+impl Global for LastPlace {}
 
 #[derive(Default)]
 struct Slot(Option<(AnyWindowHandle, Entity<ClipPopUp>)>);
@@ -50,19 +55,72 @@ pub fn summon(request: PopUpRequest, cx: &mut App) {
     open(request, cx);
 }
 
+/// The display and rectangle a summon should open on.
+struct Plan {
+    display: Option<DisplayId>,
+    rect: Rect,
+}
+
+fn plan(request: &PopUpRequest, cx: &App) -> Plan {
+    let last = cx.try_global::<LastPlace>().and_then(|last| last.0);
+    let exists = |id: DisplayId| cx.find_display(id).is_some();
+    let last_here = last
+        .filter(|_| request.position == PopUpPosition::Last)
+        .filter(|last| last.display.is_some_and(exists));
+    let display = last_here.and_then(|last| last.display).or_else(|| {
+        let cursor = request.summon.display.map(DisplayId::new);
+        cursor.filter(|id| exists(*id))
+    });
+    let shown = display
+        .and_then(|id| cx.find_display(id))
+        .or_else(|| cx.primary_display());
+    let visible = shown.map_or(
+        Rect {
+            x: 0.,
+            y: 0.,
+            width: 1920.,
+            height: 1080.,
+        },
+        |shown| rect_of(shown.visible_bounds()),
+    );
+    let cursor = request.summon.cursor.map(|(x, y)| (x as f32, y as f32));
+    let origin = last_here.map(|last| (last.rect.x, last.rect.y));
+    Plan {
+        display,
+        rect: place(
+            request.position,
+            open_size(last, visible),
+            visible,
+            (cursor, origin),
+        ),
+    }
+}
+
+fn rect_of(bounds: Bounds<gpui_kit::Pixels>) -> Rect {
+    Rect {
+        x: f32::from(bounds.origin.x),
+        y: f32::from(bounds.origin.y),
+        width: f32::from(bounds.size.width),
+        height: f32::from(bounds.size.height),
+    }
+}
+
+fn bounds_of(rect: Rect) -> Bounds<gpui_kit::Pixels> {
+    Bounds::new(
+        point(px(rect.x), px(rect.y)),
+        size(px(rect.width), px(rect.height)),
+    )
+}
+
 fn open(request: PopUpRequest, cx: &mut App) {
-    let display = request
-        .summon
-        .display
-        .map(DisplayId::new)
-        .filter(|id| cx.find_display(*id).is_some());
-    let bounds = Bounds::centered(display, size(px(WIDTH), px(HEIGHT)), cx);
+    let Plan { display, rect } = plan(&request, cx);
     let options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_bounds: Some(WindowBounds::Windowed(bounds_of(rect))),
+        window_min_size: Some(size(px(MIN_SIZE.width), px(MIN_SIZE.height))),
         titlebar: None,
         kind: WindowKind::PopUp,
-        is_movable: false,
-        is_resizable: false,
+        is_movable: true,
+        is_resizable: true,
         is_minimizable: false,
         display_id: display,
         app_id: Some(navo_core::brand::SLUG.into()),
@@ -146,9 +204,11 @@ impl ClipPopUp {
         cx: &mut Context<Self>,
     ) -> bool {
         let here = window.display(cx).map(|display| display.id());
-        if let Some(wanted) = request.summon.display
-            && here.is_some_and(|here| here != DisplayId::new(wanted))
-        {
+        let plan = plan(request, cx);
+        let on_other_display = plan.display.is_some_and(|wanted| here != Some(wanted));
+        let is_elsewhere =
+            request.position != PopUpPosition::Last && !rect_of(window.bounds()).same_as(plan.rect);
+        if on_other_display || is_elsewhere {
             self.previous = None;
             self.palette
                 .update(cx, |palette, cx| palette.reset(window, cx));
@@ -217,6 +277,11 @@ impl ClipPopUp {
     /// Forgets the paste target and the search, then hides the native window; false when
     /// there is no way to hide it.
     fn conceal(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let display = window.display(cx).map(|display| display.id());
+        cx.set_global(LastPlace(Some(Remembered {
+            display,
+            rect: rect_of(window.bounds()),
+        })));
         self.is_shown = false;
         self.was_active = false;
         self.previous = None;

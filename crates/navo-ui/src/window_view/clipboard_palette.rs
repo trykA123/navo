@@ -204,6 +204,7 @@ impl NavoWindow {
             key_cap: Some(key.into()),
             folder_probe: Some(self.folder_probe()),
             window_shown: self.window_shown.clone(),
+            position: self.values.popup_position(),
         };
         cx.defer(move |cx| crate::clip_palette::summon(request, cx));
     }

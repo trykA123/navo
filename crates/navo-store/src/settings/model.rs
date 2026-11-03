@@ -296,6 +296,7 @@ pub struct Clipboard {
     pub enabled: bool,
     pub record_history: bool,
     pub summon_key: String,
+    pub popup_position: PopUpPosition,
 }
 
 impl Default for Clipboard {
@@ -304,8 +305,20 @@ impl Default for Clipboard {
             enabled: true,
             record_history: true,
             summon_key: "Win+Alt+V".to_owned(),
+            popup_position: PopUpPosition::default(),
         }
     }
+}
+
+/// Where the clipboard pop-up opens.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PopUpPosition {
+    /// Where it was last closed, when that display still exists.
+    #[default]
+    Last,
+    Cursor,
+    Center,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
