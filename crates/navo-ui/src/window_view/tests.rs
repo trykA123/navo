@@ -221,7 +221,10 @@ pub(super) fn settle(cx: &mut TestAppContext, view: &Entity<NavoWindow>) {
         view.update(cx, |view, cx| view.wake(cx));
         cx.run_until_parked();
         let loading = view.read_with(cx, |view, _| {
-            view.browser.loading() || view.browser.running() || view.lane.is_pending()
+            view.browser.loading()
+                || view.browser.running()
+                || view.lane.is_pending()
+                || view.paste_lane.is_pending()
         });
         if !loading || Instant::now() > deadline {
             break;

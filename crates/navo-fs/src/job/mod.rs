@@ -24,7 +24,7 @@ use crate::{CancelToken, FileIdentity, ProviderOps};
 pub use aside::HELD_PREFIX;
 pub use moved::{PreparedMove, recorded_proof, settle_prepared_move, undo_move};
 pub use rename::{RenameOutcome, is_temporary as is_rename_temporary};
-pub use source::{SourceIdentity, SourceMetadata, SourceOps, Sources};
+pub use source::{SourceContent, SourceIdentity, SourceMetadata, SourceOps, Sources, TempCreated};
 pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
 
 pub use navo_core::TEMP_SUFFIX;

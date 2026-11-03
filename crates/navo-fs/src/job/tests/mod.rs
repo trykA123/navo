@@ -20,6 +20,7 @@ mod cross_provider;
 mod delete;
 mod delete_races;
 mod faults;
+mod hostile_sizes;
 mod journal;
 mod kept_aside;
 mod kept_aside_crash;

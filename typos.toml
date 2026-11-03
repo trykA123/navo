@@ -15,6 +15,7 @@ flate = "flate"
 recomandation = "recomandation"
 alege = "alege"
 rela = "rela"
+ptd = "ptd"
 
 [default.extend-identifiers]
 BA = "BA"

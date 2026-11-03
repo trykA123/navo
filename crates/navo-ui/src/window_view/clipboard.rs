@@ -4,7 +4,7 @@ use navo_core::{CommandError, LayoutError, Location, OpKind, StateError};
 
 use super::NavoWindow;
 use super::shell_menu::put_paths_on_clipboard;
-use crate::browser::{JobStatus, PasteRefusal};
+use crate::browser::{JobStatus, PasteRefusal, StreamPaste};
 use crate::format;
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
@@ -63,6 +63,27 @@ pub trait FileClipboardService: Send + Sync {
     /// Never blocks: only asks whether files are offered, without reading them.
     fn has_files(&self) -> bool;
     fn clear_if_same(&self, files: &ClipboardFiles) -> Result<bool, ClipboardFault>;
+    /// Files offered without paths (Remote Desktop, Outlook, zip folders). May block until the
+    /// source sends its file list, so only call it off the UI thread.
+    fn read_virtual(&self) -> Result<Option<StreamPaste>, ClipboardFault> {
+        Ok(None)
+    }
+    /// Never blocks: only asks whether files without paths are offered.
+    fn has_virtual_files(&self) -> bool {
+        false
+    }
+}
+
+enum Pasted {
+    Files(ClipboardFiles),
+    Virtual(StreamPaste),
+}
+
+/// Real paths win; files without paths are read only when there are none.
+fn read_real_paths(
+    service: &dyn FileClipboardService,
+) -> Result<Option<ClipboardFiles>, ClipboardFault> {
+    Ok(service.read()?.filter(|files| !files.items.is_empty()))
 }
 
 #[derive(Default)]
@@ -186,26 +207,50 @@ impl NavoWindow {
 
     pub(super) fn has_files_to_paste(&self) -> bool {
         self.file_clipboard()
-            .is_ok_and(|service| service.has_files())
+            .is_ok_and(|service| service.has_files() || service.has_virtual_files())
     }
 
     pub(super) fn paste(&mut self) {
         let service = self.file_clipboard();
         let target = self.browser.state().active_tab().location().clone();
         self.lane.push(Box::new(move || {
-            let read = service.and_then(|service| service.read());
+            let read = service
+                .clone()
+                .and_then(|service| read_real_paths(service.as_ref()));
+            Box::new(move |view, _, _| view.real_paths_read(target, read, service.ok()))
+        }));
+    }
+
+    /// Without real paths, the virtual files are read on their own lane: the source may take a
+    /// minute to answer, and that must not hold up the window's other clipboard work.
+    fn real_paths_read(
+        &mut self,
+        target: Location,
+        read: Result<Option<ClipboardFiles>, ClipboardFault>,
+        service: Option<Arc<dyn FileClipboardService>>,
+    ) {
+        let service = match (read, service) {
+            (Ok(Some(files)), _) => {
+                return self.clipboard_read(target, Ok(Some(Pasted::Files(files))));
+            }
+            (Err(error), _) => return self.clipboard_read(target, Err(error)),
+            (Ok(None), None) => return self.clipboard_read(target, Ok(None)),
+            (Ok(None), Some(service)) => service,
+        };
+        self.clipboard.notice = Some(info(navo_l10n::tr("paste-virtual-reading")));
+        self.paste_lane.push(Box::new(move || {
+            let read = service
+                .read_virtual()
+                .map(|found| found.map(Pasted::Virtual));
             Box::new(move |view, _, _| view.clipboard_read(target, read))
         }));
     }
 
-    fn clipboard_read(
-        &mut self,
-        target: Location,
-        read: Result<Option<ClipboardFiles>, ClipboardFault>,
-    ) {
+    fn clipboard_read(&mut self, target: Location, read: Result<Option<Pasted>, ClipboardFault>) {
         let files = match read {
-            Ok(Some(files)) if !files.items.is_empty() => files,
-            Ok(_) => {
+            Ok(Some(Pasted::Files(files))) => files,
+            Ok(Some(Pasted::Virtual(paste))) => return self.paste_virtual(target, paste),
+            Ok(None) => {
                 self.clipboard.notice = Some(info(NOTHING_TO_PASTE));
                 return;
             }
@@ -228,6 +273,14 @@ impl NavoWindow {
             }
             Ok(_) => {}
             Err(refused) => self.clipboard.notice = Some(info(refusal_text(refused))),
+        }
+    }
+
+    /// Always a copy: Navo never removes anything at a source it has no path for.
+    fn paste_virtual(&mut self, target: Location, paste: StreamPaste) {
+        self.clipboard.notice = None;
+        if let Err(refused) = self.browser.paste_stream(paste, target) {
+            self.clipboard.notice = Some(info(refusal_text(refused)));
         }
     }
 

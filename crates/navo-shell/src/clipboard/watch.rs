@@ -214,7 +214,16 @@ pub(super) fn register(name: &str) -> Result<u32, ClipboardError> {
     Ok(format)
 }
 
-fn owner_exe() -> Option<String> {
+pub(super) fn owner_exe() -> Option<String> {
+    exe_stem(&owner_image()?)
+}
+
+/// The clipboard owner's full image path, best effort.
+pub(super) fn owner_exe_path() -> Option<String> {
+    Some(String::from_utf16_lossy(&owner_image()?))
+}
+
+fn owner_image() -> Option<Vec<u16>> {
     // SAFETY: the owner query takes no arguments; the clipboard is open, so the owner is stable.
     let owner = unsafe { GetClipboardOwner() };
     if owner.is_null() {
@@ -238,7 +247,8 @@ fn owner_exe() -> Option<String> {
     if named == 0 {
         return None;
     }
-    exe_stem(image.get(..units as usize)?)
+    image.truncate(units as usize);
+    Some(image)
 }
 
 struct Process(HANDLE);

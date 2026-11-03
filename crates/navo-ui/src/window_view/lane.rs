@@ -16,9 +16,16 @@ pub(super) struct Lane {
 }
 
 impl Lane {
-    pub(super) fn new(window: &mut Window, cx: &mut Context<NavoWindow>) -> Self {
+    /// `own` finds this lane again inside the window, to count its jobs down.
+    pub(super) fn new(
+        window: &mut Window,
+        cx: &mut Context<NavoWindow>,
+        own: fn(&mut NavoWindow) -> &mut Lane,
+    ) -> Self {
         let (sender, jobs) = unbounded::<Job>();
-        let task = cx.spawn_in(window, async move |this, cx| drain(jobs, this, cx).await);
+        let task = cx.spawn_in(window, async move |this, cx| {
+            drain(jobs, own, this, cx).await
+        });
         Self {
             sender,
             _task: task,
@@ -46,13 +53,14 @@ impl NavoWindow {
 
 async fn drain(
     mut jobs: UnboundedReceiver<Job>,
+    own: fn(&mut NavoWindow) -> &mut Lane,
     this: WeakEntity<NavoWindow>,
     cx: &mut AsyncWindowContext,
 ) {
     while let Some(job) = jobs.next().await {
         let reply = cx.background_executor().spawn(async move { job() }).await;
         let shown = this.update_in(cx, |view, window, cx| {
-            view.lane.pending -= 1;
+            own(view).pending -= 1;
             reply(view, window, cx);
             cx.notify();
         });

@@ -167,6 +167,7 @@ impl Browser {
             undo: None,
             slow_volumes: None,
             structure: None,
+            stream: None,
         }
     }
 }

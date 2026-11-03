@@ -19,8 +19,7 @@ pub(super) fn totals(request: &PlanRequest, steps: &[Step], moved: &[bool]) -> T
                 .items
                 .iter()
                 .filter(|i| i.kind == ItemKind::File)
-                .map(|i| i.size)
-                .sum(),
+                .fold(0u64, |bytes, i| bytes.saturating_add(i.size)),
         },
         OpKind::Link => Totals {
             files: count(|s| matches!(s, Step::MakeLink { .. })),
@@ -30,13 +29,10 @@ pub(super) fn totals(request: &PlanRequest, steps: &[Step], moved: &[bool]) -> T
         _ => Totals {
             files: count(|s| matches!(s, Step::CopyFile { .. })),
             folders: count(|s| matches!(s, Step::MakeFolder { .. })),
-            bytes: steps
-                .iter()
-                .map(|s| match s {
-                    Step::CopyFile { size, .. } => *size,
-                    _ => 0,
-                })
-                .sum(),
+            bytes: steps.iter().fold(0, |bytes, s| match s {
+                Step::CopyFile { size, .. } => bytes.saturating_add(*size),
+                _ => bytes,
+            }),
         },
     }
 }
@@ -59,7 +55,7 @@ fn scanned_totals(request: &PlanRequest, moved: &[bool]) -> Totals {
             ItemKind::Folder => totals.folders += 1,
             ItemKind::File => {
                 totals.files += 1;
-                totals.bytes += item.size;
+                totals.bytes = totals.bytes.saturating_add(item.size);
             }
             ItemKind::Link => {}
         }

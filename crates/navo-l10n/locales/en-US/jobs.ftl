@@ -23,3 +23,28 @@ job-delete-retained-help = Kept in Recently deleted for { $days ->
 }
 job-retention-changed = This delete can no longer run as you confirmed it. Nothing was deleted. Check the retention settings, then delete again.
 job-queued = Queued
+paste-virtual-refused = { $count ->
+    [one] Not pasted because its name was refused: { $names }
+   *[other] Not pasted because their names were refused: { $names }
+}
+paste-virtual-reading = Reading the pasted files…
+paste-virtual-stalled = The remote session stopped sending data for “{ $name }”.
+paste-virtual-failed = “{ $name }” could not be read from the other program: { $error }
+paste-virtual-short = “{ $name }” ended before all of it arrived, so it was not saved.
+paste-virtual-mark-failed = “{ $name }” was not saved because Navo could not mark it as a file from the internet: { $error }
+paste-virtual-damaged = The file list on the clipboard is damaged.
+paste-virtual-same-name = Another pasted item has the same name
+paste-name-not-unicode = The name is not valid Unicode
+paste-name-empty = The name is empty
+paste-name-absolute = The name is an absolute path
+paste-name-drive = The name points to a drive
+paste-name-stream = The name points to an alternate data stream
+paste-name-traversal = The name leaves the target folder
+paste-name-empty-part = The name has an empty folder part
+paste-name-character = The name contains { $char }
+paste-name-dot = A name cannot be . or ..
+paste-name-trailing = The name ends with a space or a dot
+paste-name-reserved = Windows reserves this name
+paste-name-too-long = The name is too long
+paste-virtual-list-stalled = The other program stopped sending the list of pasted files.
+paste-virtual-list-failed = Navo could not read the list of pasted files: { $error }

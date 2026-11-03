@@ -57,6 +57,7 @@ impl Browser {
             source_tab: pending.source_tab,
             asks: true,
             structure: Some(structure.clone()),
+            stream: pending.stream.clone(),
         };
         self.submit_plan(request)
     }

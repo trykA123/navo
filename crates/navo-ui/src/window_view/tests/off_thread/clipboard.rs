@@ -6,6 +6,7 @@ use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
 use navo_fs::Provider as _;
 
 use super::{SLOW, key};
+use crate::browser::StreamPaste;
 use crate::window_view::tests::clipboard::FakeClipboard;
 use crate::window_view::tests::{fake, home_beside_dest, open_options, options_for, press, settle};
 use crate::window_view::{
@@ -157,4 +158,70 @@ fn copy_path_waits_for_the_earlier_file_clipboard_write(cx: &mut TestAppContext)
             .to_string()),
         "Copied path"
     );
+}
+
+/// A clipboard with no real paths, so a paste goes on to read virtual files.
+struct NoPaths {
+    inner: FakeClipboard,
+}
+
+impl FileClipboardService for NoPaths {
+    fn write(&self, files: &ClipboardFiles) -> Result<(), ClipboardFault> {
+        self.inner.write(files)
+    }
+
+    fn read(&self) -> Result<Option<ClipboardFiles>, ClipboardFault> {
+        Ok(None)
+    }
+
+    fn has_files(&self) -> bool {
+        false
+    }
+
+    fn clear_if_same(&self, files: &ClipboardFiles) -> Result<bool, ClipboardFault> {
+        self.inner.clear_if_same(files)
+    }
+
+    fn read_virtual(&self) -> Result<Option<StreamPaste>, ClipboardFault> {
+        Ok(None)
+    }
+}
+
+fn notice(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> Option<String> {
+    view.read_with(cx, |view, _| {
+        view.status_notice().map(|notice| notice.text.to_string())
+    })
+}
+
+/// The test scheduler runs every job on the test thread, so a read cannot really block here.
+/// The test stops between two scheduler steps instead, while the virtual read is queued.
+#[gpui_kit::test]
+fn the_virtual_read_has_its_own_lane_and_shows_a_notice_while_it_runs(cx: &mut TestAppContext) {
+    let clipboard = Arc::new(NoPaths {
+        inner: FakeClipboard::default(),
+    });
+    let fs = fake();
+    let mut options = options_for(fs.clone(), home_beside_dest(&fs));
+    options.file_clipboard = Some(clipboard.clone());
+    let (window, view) = open_options(cx, options);
+    key(cx, window, "ctrl-v");
+    let mut ticks = 0;
+    while notice(cx, &view).as_deref() != Some("Reading the pasted files…") {
+        ticks += 1;
+        assert!(ticks < 10_000 && cx.executor().tick(), "no reading notice");
+    }
+    let busy = |cx: &mut TestAppContext| {
+        view.read_with(cx, |view, _| {
+            (view.lane.is_pending(), view.paste_lane.is_pending())
+        })
+    };
+    assert_eq!(busy(cx), (false, true), "only the paste lane is reading");
+    key(cx, window, "down");
+    key(cx, window, "ctrl-c");
+    assert_eq!(busy(cx), (true, true), "a copy queues beside the read");
+    settle(cx, &view);
+    assert_eq!(clipboard.inner.writes.lock().unwrap().len(), 1);
+    assert_eq!(busy(cx), (false, false));
+    let ended = notice(cx, &view);
+    assert_ne!(ended.as_deref(), Some("Reading the pasted files…"));
 }

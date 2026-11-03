@@ -54,6 +54,7 @@ fn add_running_copy(cx: &mut TestAppContext, rig: &Rig) {
             undo: false,
             report: RenameReport::default(),
             first_new: None,
+            refused: Vec::new(),
         });
         view.refresh_activity(cx);
     });

@@ -91,6 +91,7 @@ impl Browser {
             source_tab,
             asks,
             structure: None,
+            stream: None,
         };
         let id = request.id;
         if self.submit_plan(request) {

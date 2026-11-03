@@ -65,6 +65,7 @@ pub(super) fn add(cx: &mut TestAppContext, view: &Entity<NavoWindow>, job: Fake)
             undo: false,
             report: RenameReport::default(),
             first_new: None,
+            refused: Vec::new(),
         });
         view.refresh_activity(cx);
     });

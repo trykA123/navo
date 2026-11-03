@@ -28,6 +28,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 - The manage view (F2) lists and edits history, snippets, paths, secrets and notes in one place.
 - The Win+Alt+V pop-up now takes keyboard focus, also over other apps.
 - Clear history and Delete all report only what they really removed. Delete all also removes the set-aside copies of a damaged database.
+- Paste now works for files copied in a Remote Desktop session, Outlook attachments and mails, Explorer zip folders and older programs. Navo copies them into the folder like any other paste, asks about names already there before it reads anything, and lists names it cannot accept. Files from mail get the same "from the internet" mark that Explorer gives them.
 
 ### Fixed
 

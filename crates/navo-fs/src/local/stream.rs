@@ -14,6 +14,7 @@ pub(super) fn write_new(
         source,
         target,
         created,
+        modified,
     } = request;
     if control.cancel.is_cancelled() {
         return Err(error(FsErrorKind::Cancelled, target));
@@ -31,6 +32,11 @@ pub(super) fn write_new(
     }
     let total = copy_pump::pump(bytes, &mut output, &mut control)
         .map_err(|failure| failure.located(source, target))?;
+    if let Some(modified) = modified {
+        output
+            .set_modified(modified)
+            .map_err(|failure| io_error(&failure, target))?;
+    }
     output
         .sync_all()
         .map_err(|failure| io_error(&failure, target))?;
