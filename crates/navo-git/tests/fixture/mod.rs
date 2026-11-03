@@ -216,6 +216,10 @@ fn drain(mut pipe: impl Read + Send + 'static) -> JoinHandle<Vec<u8>> {
 /// Marks every inherited descriptor above stderr close-on-exec (a cargo lock among them),
 /// so no git child holds it.
 #[cfg(unix)]
+#[allow(
+    unsafe_code,
+    reason = "the listed descriptors are marked close-on-exec"
+)]
 fn close_inherited_on_exec() {
     use rustix::fd::BorrowedFd;
     use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
