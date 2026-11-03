@@ -154,7 +154,9 @@ fn leaving_the_folder_forgets_it(cx: &mut TestAppContext) {
     go(cx, &view, r"C:\home\docs");
     let log = git.0.lock().unwrap();
     assert_eq!(log.forgotten, [local(r"C:\home")]);
-    assert_eq!(log.observed.len(), 1);
+    assert_eq!(log.observed.len(), 2);
+    assert_eq!(log.observed[1].0, local(r"C:\home\docs"));
+    assert!(log.observed[1].2.is_empty());
 }
 
 #[gpui_kit::test]

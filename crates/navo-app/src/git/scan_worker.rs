@@ -327,6 +327,9 @@ fn primed(saved: Option<&dyn SavedBadges>) -> Cache {
 }
 
 fn fill(badges: &mut FolderBadges, found: &Discovered, root: &Path, cached: &Cached) {
+    if found.parent.as_deref() == Some(root) {
+        badges.repository = Some(cached.repo());
+    }
     for binding in found.bindings.iter().filter(|b| b.root == root) {
         if let Some(badge) = cached.row(&binding.relative) {
             if !badge.is_root {

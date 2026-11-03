@@ -133,8 +133,7 @@ impl NavoWindow {
                     None,
                 ),
                 None => {
-                    // No badge on this row: use the repository the listed folder sits in.
-                    let root = badges.roots.iter().min_by_key(|(name, _)| *name)?.1;
+                    let root = badges.repository.as_ref()?;
                     (tab.location().clone(), root.badge.clone(), Some(&root.name))
                 }
             };

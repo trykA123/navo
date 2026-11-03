@@ -145,19 +145,16 @@ impl NavoWindow {
             return;
         };
         let location = tab.location().clone();
+        let loaded = tab.listing().is_some();
         let rows = self.browser.details(tab.id());
         if self.git_badges.unchanged(pane, &location, &rows) {
             return;
         }
-        let names = if location.is_local() {
-            folder_names(&rows)
-        } else {
-            Vec::new()
-        };
         self.git_leave(pane, hooks);
-        if names.is_empty() {
+        if !location.is_local() || !loaded {
             return;
         }
+        let names = folder_names(&rows);
         self.git_badges.generation += 1;
         let generation = self.git_badges.generation;
         let seen = Seen {
