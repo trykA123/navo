@@ -90,6 +90,7 @@ impl GitHooks for Fake {
         if badges.revision != revision {
             *badges = Arc::new(FolderBadges {
                 revision,
+                slow_drive: badges.slow_drive,
                 by_name: badges.by_name.clone(),
             });
         }
