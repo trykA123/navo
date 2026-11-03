@@ -125,6 +125,51 @@ pub(super) const GROUPS: [Group; 2] = [
                 "clip_palette.next_choice",
                 "cmd-clip-palette-next-choice",
             ),
+            (
+                "clip_palette::PickRow1",
+                "clip_palette.pick_first",
+                "cmd-clip-palette-pick-first",
+            ),
+            (
+                "clip_palette::PickRow2",
+                "clip_palette.pick_second",
+                "cmd-clip-palette-pick-second",
+            ),
+            (
+                "clip_palette::PickRow3",
+                "clip_palette.pick_third",
+                "cmd-clip-palette-pick-third",
+            ),
+            (
+                "clip_palette::PickRow4",
+                "clip_palette.pick_fourth",
+                "cmd-clip-palette-pick-fourth",
+            ),
+            (
+                "clip_palette::PickRow5",
+                "clip_palette.pick_fifth",
+                "cmd-clip-palette-pick-fifth",
+            ),
+            (
+                "clip_palette::PickRow6",
+                "clip_palette.pick_sixth",
+                "cmd-clip-palette-pick-sixth",
+            ),
+            (
+                "clip_palette::PickRow7",
+                "clip_palette.pick_seventh",
+                "cmd-clip-palette-pick-seventh",
+            ),
+            (
+                "clip_palette::PickRow8",
+                "clip_palette.pick_eighth",
+                "cmd-clip-palette-pick-eighth",
+            ),
+            (
+                "clip_palette::PickRow9",
+                "clip_palette.pick_ninth",
+                "cmd-clip-palette-pick-ninth",
+            ),
         ],
     },
 ];

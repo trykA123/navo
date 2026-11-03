@@ -29,6 +29,26 @@ pub(super) struct Place {
     pub shows_source: bool,
     /// A note whose folder is gone: the row says so in place of its age.
     pub is_missing: bool,
+    /// The row's index in the results, when the list shows Alt+digit numbers.
+    pub slot: Option<usize>,
+}
+
+/// The Alt+digit shortcut of the results row at `slot`: 1 to 9, then none.
+pub(super) fn digit(slot: usize) -> Option<char> {
+    u32::try_from(slot + 1)
+        .ok()
+        .filter(|n| (1..=9).contains(n))
+        .and_then(|n| char::from_digit(n, 10))
+}
+
+/// A fixed-width cell so titles line up whether or not the row has a number.
+fn number(t: &Theme, slot: usize) -> Div {
+    div()
+        .flex_none()
+        .w(t.spacing.lg)
+        .text_size(t.typography.small)
+        .text_color(t.colors.muted)
+        .child(digit(slot).map(String::from).unwrap_or_default())
 }
 
 pub(super) fn kind_icon(t: &Theme, kind: ClipKind) -> (IconName, Hsla) {
@@ -199,7 +219,22 @@ pub(super) fn row(theme: &Theme, row: &ClipRow, place: Place) -> RowElement {
                 .bg(t.colors.selection)
                 .text_color(t.colors.on_selection)
         })
+        .children(place.slot.map(|slot| number(t, slot)))
         .child(icon(name, t.spacing.icon, color))
         .child(title(t, row))
         .child(meta(t, row, place))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::digit;
+
+    #[test]
+    fn only_the_first_nine_rows_have_a_digit() {
+        let shown: Vec<Option<char>> = (0..11).map(digit).collect();
+        assert_eq!(shown[0], Some('1'));
+        assert_eq!(shown[8], Some('9'));
+        assert_eq!(shown[9], None);
+        assert_eq!(shown[10], None);
+    }
 }

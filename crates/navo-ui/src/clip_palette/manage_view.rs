@@ -228,6 +228,7 @@ impl Sheet {
             gutter: Scrollbar::width(),
             shows_source: true,
             is_missing: false,
+            slot: None,
         };
         let (moved, chosen) = (self.view.clone(), self.view.clone());
         let hover = move |_: &MouseMoveEvent, _: &mut Window, cx: &mut App| {

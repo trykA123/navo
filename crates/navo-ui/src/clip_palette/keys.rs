@@ -27,7 +27,16 @@ gpui_kit::actions!(
         NewItem,
         SaveForm,
         PreviousChoice,
-        NextChoice
+        NextChoice,
+        PickRow1,
+        PickRow2,
+        PickRow3,
+        PickRow4,
+        PickRow5,
+        PickRow6,
+        PickRow7,
+        PickRow8,
+        PickRow9
     ]
 );
 
@@ -62,8 +71,24 @@ fn on_form_keys(panel: RowElement, cx: &mut Context<ClipPalette>) -> RowElement 
         .on_action(cx.listener(|this, _: &NextChoice, window, cx| this.step_choice(1, window, cx)))
 }
 
+/// Alt+1 to Alt+9: Enter on the 1st to 9th row in view.
+fn on_pick_keys(panel: RowElement, cx: &mut Context<ClipPalette>) -> RowElement {
+    macro_rules! pick {
+        ($panel:expr, $($action:ident => $n:expr),*) => {
+            $panel$(.on_action(cx.listener(|this, _: &$action, window, cx| {
+                this.pick_row($n, window, cx)
+            })))*
+        };
+    }
+    pick!(
+        panel,
+        PickRow1 => 1, PickRow2 => 2, PickRow3 => 3, PickRow4 => 4, PickRow5 => 5,
+        PickRow6 => 6, PickRow7 => 7, PickRow8 => 8, PickRow9 => 9
+    )
+}
+
 pub(super) fn on_keys(panel: RowElement, cx: &mut Context<ClipPalette>) -> RowElement {
-    let panel = on_form_keys(panel, cx);
+    let panel = on_pick_keys(on_form_keys(panel, cx), cx);
     let panel = passing::<NextMode>(
         panel,
         cx,

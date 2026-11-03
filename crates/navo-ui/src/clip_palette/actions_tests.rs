@@ -222,3 +222,30 @@ fn from_anywhere_the_menu_offers_paste_and_copy_only() {
     let secret = row(5, ClipKind::Secret, "server", Origin::Saved);
     assert_eq!(labels(&secret)[..2], ["Paste, hidden", "Show"]);
 }
+
+#[gpui_kit::test]
+fn alt_digit_picks_that_row_like_enter(cx: &mut TestAppContext) {
+    let fake = Fake::new(vec![ClipMode::All], history());
+    let palette = open(cx, fake.clone());
+    palette.press("alt-3", cx);
+    assert_eq!(calls(&fake), [Call::Copy(ClipId(3), How::Copy)]);
+}
+
+#[gpui_kit::test]
+fn alt_digit_past_the_last_row_does_nothing(cx: &mut TestAppContext) {
+    let fake = Fake::new(vec![ClipMode::All], history());
+    let palette = open(cx, fake.clone());
+    palette.press("alt-9", cx);
+    assert!(calls(&fake).is_empty());
+    assert!(palette.events.borrow().is_empty());
+}
+
+#[gpui_kit::test]
+fn alt_digit_is_ignored_while_the_menu_is_open(cx: &mut TestAppContext) {
+    let fake = Fake::new(vec![ClipMode::All], history());
+    let palette = open(cx, fake.clone());
+    palette.press("ctrl-k", cx);
+    palette.press("alt-3", cx);
+    assert!(calls(&fake).is_empty());
+    assert_eq!(menu_at(&palette, cx), Some(0));
+}
