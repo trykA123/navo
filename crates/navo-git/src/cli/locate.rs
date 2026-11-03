@@ -119,6 +119,14 @@ mod tests {
 
     use super::*;
 
+    /// Test paths are written Unix-style; on Windows they get a drive so they are absolute there too.
+    fn abs(text: &str) -> PathBuf {
+        match (cfg!(windows), text.starts_with('/')) {
+            (true, true) => PathBuf::from(format!("C:{text}")),
+            _ => PathBuf::from(text),
+        }
+    }
+
     #[derive(Default)]
     struct Machine {
         windows: bool,
@@ -145,14 +153,14 @@ mod tests {
         }
 
         fn find(&self, repo: &str) -> Result<PathBuf, GitError> {
-            let var = |name: &str| self.vars.get(name).map(OsString::from);
+            let var = |name: &str| self.vars.get(name).map(|text| abs(text).into_os_string());
             let registry = |hive: Hive, key: &str, value: &str| {
                 assert_eq!(value, "InstallPath", "only InstallPath is read");
                 let found = self
                     .registry
                     .iter()
                     .find(|((h, k), _)| *h == hive && *k == key);
-                found.map(|(_, text)| (*text).to_owned())
+                found.map(|(_, text)| abs(text).to_string_lossy().into_owned())
             };
             let is_file = |path: &Path| self.is_file(path);
             locate(
@@ -163,13 +171,13 @@ mod tests {
                     registry: &registry,
                     is_file: &is_file,
                 },
-                Path::new(repo),
+                &abs(repo),
             )
         }
     }
 
     fn git_in(base: &str) -> PathBuf {
-        Path::new(base).join("cmd").join("git.exe")
+        abs(base).join("cmd").join("git.exe")
     }
 
     #[test]
@@ -221,17 +229,17 @@ mod tests {
     #[test]
     fn path_wins_over_the_registry_and_the_folders() {
         let mut machine = Machine::windows();
-        machine.path = Some(OsString::from("/missing:/on/path"));
+        machine.path = Some(std::env::join_paths([abs("/missing"), abs("/on/path")]).unwrap());
         machine
             .registry
             .push(((Hive::LocalMachine, GIT_KEY), "/apps/Git"));
         machine.vars.insert("ProgramFiles", "/pf");
-        machine.files.insert(Path::new("/on/path").join("git.exe"));
+        machine.files.insert(abs("/on/path").join("git.exe"));
         machine.files.insert(git_in("/apps/Git"));
         machine.files.insert(git_in("/pf/Git"));
         assert_eq!(
             machine.find("/work/repo").unwrap(),
-            Path::new("/on/path").join("git.exe")
+            abs("/on/path").join("git.exe")
         );
     }
 
@@ -306,19 +314,16 @@ mod tests {
             machine.find("/work/repo"),
             Err(GitError::GitNotFound)
         ));
-        machine.path = Some(OsString::from("/bin"));
-        machine.files.insert(Path::new("/bin").join("git"));
-        assert_eq!(
-            machine.find("/work/repo").unwrap(),
-            Path::new("/bin").join("git")
-        );
+        machine.path = Some(abs("/bin").into_os_string());
+        machine.files.insert(abs("/bin").join("git"));
+        assert_eq!(machine.find("/work/repo").unwrap(), abs("/bin").join("git"));
     }
 
     #[test]
     fn a_path_entry_that_cannot_be_read_is_an_io_error() {
         let mut machine = Machine::windows();
-        machine.path = Some(OsString::from("/locked"));
-        machine.broken.insert(Path::new("/locked").join("git.exe"));
+        machine.path = Some(abs("/locked").into_os_string());
+        machine.broken.insert(abs("/locked").join("git.exe"));
         assert!(matches!(
             machine.find("/work/repo"),
             Err(GitError::Io { .. })
