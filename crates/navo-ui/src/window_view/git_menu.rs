@@ -120,11 +120,18 @@ impl NavoWindow {
         let pane = state.focused_pane();
         let tab = state.pane(pane)?.active();
         let name = tab.listing()?.get(row)?.name.clone();
-        let badge = self.git_badges.badges(pane)?.by_name.get(&name)?.clone();
+        let badges = self.git_badges.badges(pane)?;
+        let mut badge = badges.by_name.get(&name)?.clone();
         let repo = tab.entry_location(&name).ok()?;
         let tool = hooks.tools().into_iter().find(|tool| tool.selected);
+        let mut menu = hooks.menu(&repo);
+        // A folder inside a repository gets the repository's menu, not its own empty counts.
+        if let Some(root) = badges.roots.get(&name).filter(|_| !badge.is_root) {
+            badge = root.badge.clone();
+            menu.head = root.name.clone();
+        }
         let parts = Parts {
-            menu: hooks.menu(&repo),
+            menu,
             badge,
             tool: tool.map(|tool| tool.label),
             can_diff: hooks.can_diff(&repo),

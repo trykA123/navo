@@ -8,5 +8,5 @@ mod tests;
 
 pub use hooks::{
     BadgeKind, BadgeReason, FolderBadges, GitAction, GitHooks, GitMenu, GitMenuItem, GitStarted,
-    NoGit, Previewed, RepoBadge, Shown, ToolRow,
+    NoGit, Previewed, RepoBadge, RepoRoot, Shown, ToolRow,
 };

@@ -39,6 +39,16 @@ fn no_tool_gives_choose_tool_only() {
 }
 
 #[test]
+fn auto_with_only_the_command_line_gives_its_rows() {
+    use GitAction::{Commit, Log, Pull, Push};
+    let wired = wired("auto", &[ToolKind::GitCli]);
+    assert_eq!(
+        wired.actions(),
+        [Commit, Pull, Push, Log, GitAction::ChooseTool]
+    );
+}
+
+#[test]
 fn tools_lists_the_found_tools_and_marks_the_chosen_one() {
     let wired = wired("auto", &[ToolKind::Fork, ToolKind::GitCli]);
     let rows = wired.rig.hooks.tools();

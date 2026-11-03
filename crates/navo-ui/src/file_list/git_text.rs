@@ -62,24 +62,22 @@ fn unknown_detail(reason: Option<BadgeReason>) -> String {
     })
 }
 
-fn modified_detail(badge: &RepoBadge) -> String {
+/// A folder inside a repository has no counts: the scan only knows its worst state.
+fn modified_detail(badge: &RepoBadge) -> Option<String> {
     if !badge.is_root {
-        return t!(
-            "git-detail-changed-below",
-            count = badge.changed + badge.untracked
-        );
+        return None;
     }
     let changed = t!(
         "git-detail-modified",
         count = badge.changed + badge.untracked
     );
     if badge.untracked == 0 {
-        return changed;
+        return Some(changed);
     }
-    format!(
+    Some(format!(
         "{changed}, {}",
         t!("git-detail-new", count = badge.untracked)
-    )
+    ))
 }
 
 pub(crate) fn detail(badge: &RepoBadge) -> Option<String> {
@@ -87,7 +85,7 @@ pub(crate) fn detail(badge: &RepoBadge) -> Option<String> {
         BadgeKind::Conflict => {
             (badge.conflicted > 0).then(|| t!("git-detail-conflict", count = badge.conflicted))
         }
-        BadgeKind::Modified => Some(modified_detail(badge)),
+        BadgeKind::Modified => modified_detail(badge),
         BadgeKind::Ahead | BadgeKind::Behind | BadgeKind::Diverged => {
             Some(ahead_behind(badge).join(", "))
         }

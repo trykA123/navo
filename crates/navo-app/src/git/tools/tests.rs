@@ -281,7 +281,7 @@ fn detection_lists_tools_in_the_auto_order_with_git_last() {
 }
 
 #[test]
-fn auto_picks_the_first_gui_tool_and_never_git_or_an_editor() {
+fn auto_picks_the_first_gui_tool_then_git_and_never_an_editor() {
     let found = detect(&all_installed());
     let pick = choose(&settings("auto", None), &found).unwrap();
     assert_eq!(pick.kind, ToolKind::TortoiseGit);
@@ -298,7 +298,11 @@ fn auto_picks_the_first_gui_tool_and_never_git_or_an_editor() {
             .file(LOCAL, r"Programs\Microsoft VS Code\Code.exe"),
     );
     assert_eq!(kinds(&git_and_editor).len(), 2);
-    assert_eq!(choose(&settings("auto", None), &git_and_editor), None);
+    let pick = choose(&settings("auto", None), &git_and_editor).unwrap();
+    assert_eq!(pick.kind, ToolKind::GitCli);
+
+    let editor_only = detect(&Fake::windows().file(LOCAL, r"Programs\Microsoft VS Code\Code.exe"));
+    assert_eq!(choose(&settings("auto", None), &editor_only), None);
 }
 
 #[test]

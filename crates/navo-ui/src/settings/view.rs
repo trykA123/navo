@@ -15,6 +15,8 @@ use crate::tokens::Theme;
 use crate::window_view::UpdateView;
 
 const ROW_MIN: f32 = 48.;
+/// The title column asks for this much; a control that no longer fits beside it drops below.
+const TITLE_BASIS: f32 = 240.;
 const NO_MATCH: &str = "No setting matches";
 pub(super) const DIMMED: f32 = 0.45;
 
@@ -157,18 +159,29 @@ fn command_problem(look: &Look, field: Field) -> Option<AnyElement> {
     Some(git_page::problem_note(look.theme, problem))
 }
 
-fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
+fn title(look: &Look, index: usize, spec: &FieldSpec) -> impl IntoElement + use<> {
     let t = look.theme;
     let name = div()
         .flex()
         .items_baseline()
         .gap(t.spacing.md)
-        .child(div().font_weight(FontWeight::MEDIUM).child(spec.label()))
+        .child(
+            div()
+                .id(("settings-label", index))
+                .test_support()
+                .min_w_0()
+                .font_weight(FontWeight::MEDIUM)
+                .child(spec.label()),
+        )
         .child(row_state::tag(t, index, look.values.is_changed(spec.field)));
     div()
+        .id(("settings-title", index))
+        .test_support()
         .flex()
         .flex_col()
-        .flex_1()
+        .flex_grow(1.)
+        .flex_shrink(1.)
+        .flex_basis(px(TITLE_BASIS))
         .min_w_0()
         .child(name)
         .child(
@@ -186,6 +199,34 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
         .child(key_line(t, spec, index == look.row))
 }
 
+/// The title, then the Reset button and the control. The tail wraps under the title when it
+/// does not fit beside it.
+fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div {
+    let t = look.theme;
+    let reset = look
+        .values
+        .is_changed(spec.field)
+        .then(|| row_state::reset(index, spec.field, look.send.as_ref()).into_any_element());
+    let tail: Vec<AnyElement> = reset.into_iter().chain(control(look, spec)).collect();
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap_x(t.spacing.xl)
+        .gap_y(t.spacing.md)
+        .child(title(content_look, index, spec))
+        .when(!tail.is_empty(), |line| {
+            line.child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(t.spacing.xl)
+                    .children(tail),
+            )
+        })
+}
+
 pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     let t = look.theme;
     let is_current = index == look.row;
@@ -196,17 +237,7 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         ..*look
     };
     let value = look.values.get(spec.field);
-    let reset = look
-        .values
-        .is_changed(spec.field)
-        .then(|| row_state::reset(index, spec.field, look.send.as_ref()));
-    let line = div()
-        .flex()
-        .items_center()
-        .gap(t.spacing.xl)
-        .child(title(&content_look, index, spec))
-        .children(reset)
-        .children(control(look, spec));
+    let line = line(look, &content_look, index, spec);
     let row = div()
         .id(("settings-row", index))
         .role(Role::ListItem)

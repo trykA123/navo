@@ -10,6 +10,7 @@ use crate::cli::{Cancel, StatusLimits};
 use crate::status::{GitStatus, RepoStatus, fetched_ms, operation};
 use crate::trust::Guard;
 
+mod filters;
 mod refs;
 mod tally;
 mod watch;
@@ -48,7 +49,7 @@ impl GixGit {
             return Err(GitError::Cancelled);
         }
         let repo = self.open()?;
-        if has_filter_driver(&repo) {
+        if filters::refused(&repo) {
             return Err(self.not_trusted());
         }
         let watch = Watch::start(cancel, limits.timeout).map_err(|error| GitError::Io {
@@ -75,19 +76,6 @@ fn refuses(guard: &Guard) -> bool {
             .keys()
             .iter()
             .any(|key| key.starts_with("filter.") || REFUSED_KEYS.contains(key))
-}
-
-/// Any filter driver with a command, from any config level, since gix would run it.
-fn has_filter_driver(repo: &gix::Repository) -> bool {
-    let snapshot = repo.config_snapshot();
-    let Some(mut sections) = snapshot.plumbing().sections_by_name("filter") else {
-        return false;
-    };
-    sections.any(|section| {
-        ["clean", "smudge", "process"]
-            .iter()
-            .any(|key| section.value(*key).is_some())
-    })
 }
 
 fn read_status(repo: &gix::Repository, watch: &Watch, cap: usize) -> Result<RepoStatus, GitError> {

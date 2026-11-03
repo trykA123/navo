@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, ElementId, TestAppContext};
+use gpui_kit::{AppContext as _, Bounds, ElementId, Pixels, TestAppContext, px};
 
-use super::app_menu::{Rig, rig_git};
+use super::app_menu::{Rig, rig_git, rig_git_sized};
 use super::git_menu::{Fake, menu_items, modified};
 use crate::settings::{Change, FIELDS, Field, Values};
 
@@ -116,4 +116,61 @@ fn opening_settings_refreshes_the_tools_once(cx: &mut TestAppContext) {
         label(cx, &rig, ("settings-tool", AUTO));
     }
     assert_eq!(git.log.lock().unwrap().refreshes, 1);
+}
+
+const NARROW: f32 = 480.;
+
+fn open_sized(cx: &mut TestAppContext, width: f32) -> Rig {
+    let rig = rig_git_sized(cx, Values::default(), Arc::new(fake()), px(width));
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings_at(Field::GitBadges, window, cx)
+        });
+    })
+    .expect("window");
+    cx.executor().advance_clock(Duration::from_secs(1));
+    cx.run_until_parked();
+    rig
+}
+
+/// The badges row at `width`: its row, label, title and toggle boxes.
+fn badges_row(cx: &mut TestAppContext, width: f32) -> [Bounds<Pixels>; 4] {
+    let rig = open_sized(cx, width);
+    let at = FIELDS
+        .iter()
+        .position(|spec| spec.field == Field::GitBadges)
+        .expect("row");
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        let toggle = window.within(("settings-row", at)).find("settings-toggle");
+        [
+            window.find(("settings-row", at)).bounds(),
+            window.find(("settings-label", at)).bounds(),
+            window.find(("settings-title", at)).bounds(),
+            toggle.bounds(),
+        ]
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn at_480_px_the_toggle_drops_under_the_title_and_the_label_wraps(cx: &mut TestAppContext) {
+    let [row, label, title, toggle] = badges_row(cx, NARROW);
+    assert!(toggle.top() >= title.bottom(), "{toggle:?} {title:?}");
+    assert!(label.right() <= row.right(), "{label:?} {row:?}");
+    assert!(title.right() <= row.right(), "{title:?} {row:?}");
+    assert!(
+        label.size.height > px(24.),
+        "the label did not wrap: {label:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn at_normal_width_the_toggle_stays_beside_the_title(cx: &mut TestAppContext) {
+    let [row, label, title, toggle] = badges_row(cx, 1400.);
+    assert!(toggle.top() < title.bottom(), "{toggle:?} {title:?}");
+    assert!(toggle.left() > title.right(), "{toggle:?} {title:?}");
+    assert!(label.size.height < px(24.), "{label:?}");
+    assert!(toggle.right() <= row.right());
 }

@@ -3,9 +3,9 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext, px};
 
-use super::{NavoWindow, StartOptions, fake, open_options, press, settle, two_panes};
+use super::{NavoWindow, StartOptions, fake, press, settle, two_panes};
 use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
@@ -142,6 +142,7 @@ pub(super) fn rig_search(
         (values, load_error),
         (search, None),
         UpdateHooks::none(),
+        px(1000.),
     )
 }
 
@@ -155,6 +156,7 @@ pub(super) fn rig_git(
         (values, None),
         (SearchHooks::none(), Some(git)),
         UpdateHooks::none(),
+        px(1000.),
     )
 }
 
@@ -164,7 +166,28 @@ pub(super) fn rig_updates(cx: &mut TestAppContext, updates: UpdateHooks) -> Rig 
         density: Density::Normal,
         show_hidden: true,
     });
-    rig_built(cx, (values, None), (SearchHooks::none(), None), updates)
+    rig_built(
+        cx,
+        (values, None),
+        (SearchHooks::none(), None),
+        updates,
+        px(1000.),
+    )
+}
+
+pub(super) fn rig_git_sized(
+    cx: &mut TestAppContext,
+    values: Values,
+    git: Arc<dyn crate::git::GitHooks>,
+    width: gpui_kit::Pixels,
+) -> Rig {
+    rig_built(
+        cx,
+        (values, None),
+        (SearchHooks::none(), Some(git)),
+        UpdateHooks::none(),
+        width,
+    )
 }
 
 fn rig_built(
@@ -172,6 +195,7 @@ fn rig_built(
     (values, load_error): (Values, Option<&str>),
     (search, git): (SearchHooks, Option<Arc<dyn crate::git::GitHooks>>),
     updates: UpdateHooks,
+    width: gpui_kit::Pixels,
 ) -> Rig {
     let fs = rig_fs();
     let state = two_panes(&fs);
@@ -203,7 +227,7 @@ fn rig_built(
         git,
         ..super::options_for(fs, state)
     };
-    let (window, view) = open_options(cx, options);
+    let (window, view) = super::open_options_sized(cx, options, width);
     Rig {
         window,
         view,

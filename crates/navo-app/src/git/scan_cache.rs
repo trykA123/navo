@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 
-use navo_ui::git::{BadgeKind, BadgeReason, RepoBadge};
+use navo_ui::git::{BadgeKind, BadgeReason, RepoBadge, RepoRoot};
 
 use super::{CACHE_BYTES, CACHE_CAP};
 
@@ -10,6 +10,8 @@ pub(super) type State = (BadgeKind, Option<BadgeReason>);
 #[derive(Clone)]
 pub(super) struct Cached {
     pub root: RepoBadge,
+    /// The repository folder's name.
+    pub root_name: String,
     pub dirs: BTreeMap<String, State>,
     pub stale: bool,
 }
@@ -32,8 +34,19 @@ impl Cached {
         Some(badge)
     }
 
+    /// The repository itself, for the menu of a folder inside it.
+    pub fn repo(&self) -> RepoRoot {
+        let mut badge = self.root.clone();
+        badge.stale = self.stale;
+        RepoRoot {
+            name: self.root_name.clone(),
+            badge,
+        }
+    }
+
     pub fn bytes(&self) -> usize {
-        let text = self.root.branch.as_ref().map_or(0, String::capacity)
+        let text = self.root_name.capacity()
+            + self.root.branch.as_ref().map_or(0, String::capacity)
             + self.root.upstream.as_ref().map_or(0, String::capacity);
         text + self
             .dirs
