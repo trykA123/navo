@@ -49,6 +49,6 @@ pub use hooks::{
 };
 pub use keys::bind_keys;
 pub use note_editor::FolderProbe;
-pub use placement::PopUpPosition;
+pub use placement::{PopUpPlacement, PopUpPosition, PopUpRect};
 pub use view::{ClipPalette, ClipPaletteEvent, ClipPaletteProps, Place};
 pub use window::{PopUpRequest, summon};

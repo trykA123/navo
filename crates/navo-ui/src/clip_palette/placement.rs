@@ -2,6 +2,7 @@
 //! position, and the three placements. Pure geometry in logical pixels.
 
 use gpui_kit::DisplayId;
+use serde::{Deserialize, Serialize};
 
 pub(super) const DEFAULT_SIZE: Size = Size {
     width: 960.,
@@ -30,13 +31,16 @@ pub(super) struct Size {
     pub height: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct Rect {
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PopUpRect {
     pub x: f32,
     pub y: f32,
     pub width: f32,
     pub height: f32,
 }
+
+pub(super) use PopUpRect as Rect;
 
 impl Rect {
     fn size(self) -> Size {
@@ -56,10 +60,24 @@ impl Rect {
 }
 
 /// Where the pop-up was when it last closed.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct Remembered {
-    pub display: Option<DisplayId>,
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PopUpPlacement {
+    pub display: Option<[u8; 16]>,
     pub rect: Rect,
+}
+
+pub(super) use PopUpPlacement as Remembered;
+
+pub(super) fn remembered_display(
+    last: Option<Remembered>,
+    displays: &[(DisplayId, [u8; 16])],
+) -> Option<DisplayId> {
+    let uuid = last?.display?;
+    displays
+        .iter()
+        .find(|(_, found)| *found == uuid)
+        .map(|(id, _)| *id)
 }
 
 /// `wanted` kept within 90 % of the display's visible area, and at least the minimum size

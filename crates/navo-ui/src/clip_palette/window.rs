@@ -13,7 +13,9 @@ use gpui_kit::{
 
 use super::ClipboardHooks;
 use super::note_editor::FolderProbe;
-use super::placement::{MIN_SIZE, PopUpPosition, Rect, Remembered, open_size, place};
+use super::placement::{
+    MIN_SIZE, PopUpPosition, Rect, Remembered, open_size, place, remembered_display,
+};
 use super::view::{ClipPalette, ClipPaletteEvent, ClipPaletteProps, Place};
 use crate::window_view::{ClipboardSummon, PasteTarget, WindowShown, raw_handle};
 
@@ -29,12 +31,6 @@ pub struct PopUpRequest {
     pub window_shown: Option<WindowShown>,
     pub position: PopUpPosition,
 }
-
-/// Size and place of the pop-up when it last closed; kept for this run only.
-#[derive(Default)]
-struct LastPlace(Option<Remembered>);
-
-impl Global for LastPlace {}
 
 #[derive(Default)]
 struct Slot(Option<(AnyWindowHandle, Entity<ClipPopUp>)>);
@@ -62,12 +58,17 @@ struct Plan {
 }
 
 fn plan(request: &PopUpRequest, cx: &App) -> Plan {
-    let last = cx.try_global::<LastPlace>().and_then(|last| last.0);
+    let last = request.hooks.popup_placement();
     let exists = |id: DisplayId| cx.find_display(id).is_some();
-    let last_here = last
-        .filter(|_| request.position == PopUpPosition::Last)
-        .filter(|last| last.display.is_some_and(exists));
-    let display = last_here.and_then(|last| last.display).or_else(|| {
+    let displays = cx
+        .displays()
+        .iter()
+        .filter_map(|display| Some((display.id(), *display.uuid().ok()?.as_bytes())))
+        .collect::<Vec<_>>();
+    let remembered =
+        remembered_display(last, &displays).filter(|_| request.position == PopUpPosition::Last);
+    let last_here = last.filter(|_| remembered.is_some());
+    let display = remembered.or_else(|| {
         let cursor = request.summon.display.map(DisplayId::new);
         cursor.filter(|id| exists(*id))
     });
@@ -112,6 +113,16 @@ fn bounds_of(rect: Rect) -> Bounds<gpui_kit::Pixels> {
     )
 }
 
+fn remember(window: &Window, cx: &App) -> Remembered {
+    Remembered {
+        display: window
+            .display(cx)
+            .and_then(|display| display.uuid().ok())
+            .map(|uuid| *uuid.as_bytes()),
+        rect: rect_of(window.bounds()),
+    }
+}
+
 fn open(request: PopUpRequest, cx: &mut App) {
     let Plan { display, rect } = plan(&request, cx);
     let options = WindowOptions {
@@ -151,18 +162,20 @@ fn log_summon(at: Instant, window: &Window) {
 
 pub(crate) struct ClipPopUp {
     palette: Entity<ClipPalette>,
+    hooks: Arc<dyn ClipboardHooks>,
+    placement: Remembered,
     previous: Option<Arc<dyn PasteTarget>>,
     window_shown: Option<WindowShown>,
     is_shown: bool,
     /// Set once the window was active after a show, so only a real focus loss hides it.
     was_active: bool,
-    _watch: [Subscription; 2],
+    _watch: [Subscription; 3],
 }
 
 impl ClipPopUp {
     fn new(request: PopUpRequest, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let props = ClipPaletteProps {
-            hooks: request.hooks,
+            hooks: request.hooks.clone(),
             place: Place::Anywhere,
             folder: None,
             key_cap: request.key_cap,
@@ -171,29 +184,50 @@ impl ClipPopUp {
             folder_probe: request.folder_probe,
         };
         let palette = cx.new(|cx| ClipPalette::new(props, window, cx));
-        let events = cx.subscribe_in(&palette, window, |this, _, event, window, cx| {
-            this.palette_event(event, window, cx);
-        });
-        let activation = cx.observe_window_activation(window, |this, window, cx| {
-            this.activation_changed(window, cx);
-        });
-        let this = cx.weak_entity();
-        window.on_window_should_close(cx, move |window, cx| {
-            this.update(cx, |pop_up, cx| !pop_up.conceal(window, cx))
-                .unwrap_or(true)
-        });
+        let watch = Self::watch(&palette, window, cx);
         log_summon(request.summon.at, window);
         if let Some(hook) = &request.window_shown {
             hook(raw_handle(window), true);
         }
         Self {
             palette,
+            hooks: request.hooks,
+            placement: remember(window, cx),
             previous: request.summon.previous,
             window_shown: request.window_shown,
             is_shown: true,
             was_active: window.is_window_active(),
-            _watch: [events, activation],
+            _watch: watch,
         }
+    }
+
+    fn watch(
+        palette: &Entity<ClipPalette>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> [Subscription; 3] {
+        let events = cx.subscribe_in(palette, window, |this, _, event, window, cx| {
+            this.palette_event(event, window, cx);
+        });
+        let activation = cx.observe_window_activation(window, |this, window, cx| {
+            this.activation_changed(window, cx);
+        });
+        let bounds = cx.observe_window_bounds(window, |this, window, cx| {
+            this.placement = remember(window, cx);
+        });
+        cx.on_app_quit(|this, _| {
+            if this.is_shown {
+                this.hooks.save_popup_placement(this.placement);
+            }
+            std::future::ready(())
+        })
+        .detach();
+        let this = cx.weak_entity();
+        window.on_window_should_close(cx, move |window, cx| {
+            this.update(cx, |pop_up, cx| !pop_up.conceal(window, cx))
+                .unwrap_or(true)
+        });
+        [events, activation, bounds]
     }
 
     /// False when the window was closed because the cursor is on another display.
@@ -206,8 +240,8 @@ impl ClipPopUp {
         let here = window.display(cx).map(|display| display.id());
         let plan = plan(request, cx);
         let on_other_display = plan.display.is_some_and(|wanted| here != Some(wanted));
-        let is_elsewhere =
-            request.position != PopUpPosition::Last && !rect_of(window.bounds()).same_as(plan.rect);
+        let is_elsewhere = (request.position != PopUpPosition::Last || !self.is_shown)
+            && !rect_of(window.bounds()).same_as(plan.rect);
         if on_other_display || is_elsewhere {
             self.previous = None;
             self.palette
@@ -277,11 +311,8 @@ impl ClipPopUp {
     /// Forgets the paste target and the search, then hides the native window; false when
     /// there is no way to hide it.
     fn conceal(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let display = window.display(cx).map(|display| display.id());
-        cx.set_global(LastPlace(Some(Remembered {
-            display,
-            rect: rect_of(window.bounds()),
-        })));
+        self.placement = remember(window, cx);
+        self.hooks.save_popup_placement(self.placement);
         self.is_shown = false;
         self.was_active = false;
         self.previous = None;

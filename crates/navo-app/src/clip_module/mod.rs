@@ -27,6 +27,7 @@ use navo_clipboard::{ClipService, Ports, Snapshot, SystemClock};
 use navo_core::Location;
 use navo_shell::{ClipboardError, ShellCapture};
 use navo_store::StoreDirs;
+use navo_ui::clip_palette::PopUpPlacement;
 use navo_ui::settings::Values;
 
 use intro::Intro;
@@ -118,6 +119,7 @@ pub(crate) struct ClipModule {
     listeners: Arc<Listeners>,
     jobs: Jobs,
     intro: Intro,
+    popup: Mutex<Option<PopUpPlacement>>,
 }
 
 impl ClipModule {
@@ -134,6 +136,7 @@ impl ClipModule {
     fn new(data: Option<PathBuf>, backends: Backends) -> Self {
         Self {
             intro: Intro::new(data.as_deref()),
+            popup: Mutex::new(Self::load_popup(data.as_deref())),
             db: data.map(|data| data.join(DB_NAME)),
             backends,
             state: Mutex::new(State {

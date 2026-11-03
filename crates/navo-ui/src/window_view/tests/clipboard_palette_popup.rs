@@ -9,7 +9,7 @@ use super::{fake, open_options, options_for, press, settle, two_panes};
 use crate::clip_palette::window::{ClipPopUp, current};
 use crate::clip_palette::{
     ClipCounts, ClipId, ClipKind, ClipMode, ClipResults, ClipRow, ClipboardHooks, How, Origin,
-    SavedDraft, SavedEdit, Scope, SecretText,
+    PopUpPlacement, PopUpRect, SavedDraft, SavedEdit, Scope, SecretText,
 };
 use crate::window_view::{
     ClipboardSummon, NavoWindow, OpenRequest, OpenSender, PasteTarget, WindowShown, open_requests,
@@ -25,6 +25,7 @@ fn note(log: &Log, entry: &'static str) {
 struct Board {
     log: Log,
     copies: Mutex<Vec<How>>,
+    placements: Mutex<Vec<PopUpPlacement>>,
 }
 
 fn refused<T>() -> Result<T, String> {
@@ -32,6 +33,12 @@ fn refused<T>() -> Result<T, String> {
 }
 
 impl ClipboardHooks for Board {
+    fn popup_placement(&self) -> Option<PopUpPlacement> {
+        self.placements.lock().unwrap().last().copied()
+    }
+    fn save_popup_placement(&self, placement: PopUpPlacement) {
+        self.placements.lock().unwrap().push(placement);
+    }
     fn counts(&self) -> Option<ClipCounts> {
         Some(ClipCounts::default())
     }
@@ -136,6 +143,7 @@ fn rig(cx: &mut TestAppContext) -> Rig {
     let board = Arc::new(Board {
         log: log.clone(),
         copies: Mutex::default(),
+        placements: Mutex::default(),
     });
     let fs = fake();
     let (sender, inbox) = open_requests();
@@ -231,6 +239,63 @@ fn escape_hides_the_pop_up_and_a_second_request_reuses_it(cx: &mut TestAppContex
     assert_eq!(cx.windows().len(), 2);
     assert_eq!(rig.pop_up_state(cx), (true, true));
     assert_eq!(rig.log(), ["show", "hide", "show"]);
+}
+
+#[gpui_kit::test]
+fn popup_bounds_save_on_hide_and_restore_in_a_new_window(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.summon(cx, false);
+    let (window, _) = rig.pop_up(cx);
+    cx.simulate_window_resize(
+        window,
+        gpui_kit::size(gpui_kit::px(1100.), gpui_kit::px(650.)),
+    );
+    cx.run_until_parked();
+    assert!(rig.board.placements.lock().unwrap().is_empty());
+    let expected = cx
+        .update_window(window, |_, window, _| window.bounds())
+        .unwrap();
+    rig.press_in_pop_up(cx, "escape");
+    let saved = rig.board.popup_placement().unwrap();
+    assert_eq!(saved.rect.width, f32::from(expected.size.width));
+    assert_eq!(saved.rect.height, f32::from(expected.size.height));
+    cx.update_window(window, |_, window, _| window.remove_window())
+        .unwrap();
+    rig.summon(cx, false);
+    let (reopened, _) = rig.pop_up(cx);
+    assert_ne!(window, reopened);
+    let restored = cx
+        .update_window(reopened, |_, window, _| window.bounds())
+        .unwrap();
+    assert_eq!(restored, expected);
+}
+
+#[gpui_kit::test]
+fn a_missing_popup_monitor_centres_on_the_active_display_and_keeps_its_size(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig(cx);
+    rig.board.placements.lock().unwrap().push(PopUpPlacement {
+        display: Some([0; 16]),
+        rect: PopUpRect {
+            x: -1800.,
+            y: 100.,
+            width: 1200.,
+            height: 700.,
+        },
+    });
+    rig.summon(cx, false);
+    let (window, _) = rig.pop_up(cx);
+    cx.update_window(window, |_, window, cx| {
+        let bounds = window.bounds();
+        let area = window.display(cx).unwrap().visible_bounds();
+        assert_eq!(
+            bounds.size,
+            gpui_kit::size(gpui_kit::px(1200.), gpui_kit::px(700.))
+        );
+        assert_eq!(bounds.center(), area.center());
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

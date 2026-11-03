@@ -3,6 +3,8 @@ use std::ops::Range;
 
 use navo_core::Location;
 
+use super::PopUpPlacement;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ClipId(pub u64);
 
@@ -221,6 +223,12 @@ pub trait ClipboardHooks: Send + Sync {
     fn take_intro(&self) -> bool {
         false
     }
+
+    fn popup_placement(&self) -> Option<PopUpPlacement> {
+        None
+    }
+
+    fn save_popup_placement(&self, _placement: PopUpPlacement) {}
 }
 
 #[derive(Debug, Clone, Copy, Default)]
