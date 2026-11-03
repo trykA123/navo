@@ -406,7 +406,7 @@ fn close_joins_the_writer_and_releases_its_database() {
     let work = folder(r"C:\work");
     cache.keep_on_disk([&work]);
     put_and_persist(&cache, &settled(&keys, &work), listing(&["a"]));
-    assert!(disk.close(Duration::from_secs(1)));
+    assert!(disk.close(PATIENT));
     assert!(other.close(Duration::ZERO));
     let renamed = dir.path().join("closed.db");
     std::fs::rename(&path, &renamed).unwrap();
@@ -425,7 +425,7 @@ fn close_is_bounded_and_can_finish_after_a_stalled_writer_is_released() {
     assert!(!disk.close(Duration::from_millis(30)));
     assert!(started.elapsed() < Duration::from_secs(1));
     release.send(()).unwrap();
-    assert!(disk.close(Duration::from_secs(1)));
+    assert!(disk.close(PATIENT));
 }
 
 #[test]
