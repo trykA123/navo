@@ -35,6 +35,16 @@ pub(super) struct RecentPanel {
 }
 
 impl RecentPanel {
+    /// How many restores or purges are under way.
+    pub(super) fn working_count(&self) -> usize {
+        self.working.len()
+    }
+
+    #[cfg(test)]
+    pub(super) fn start_work_for_test(&mut self, id: i64) {
+        Rc::make_mut(&mut self.working).push(RetentionId(id));
+    }
+
     pub(super) fn new(cx: &mut App) -> Self {
         Self {
             sheet: cx.new(|_| SheetState::new()),

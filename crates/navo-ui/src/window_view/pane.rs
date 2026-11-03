@@ -134,9 +134,15 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) -> StatusBar {
         let is_active = self.browser.state().focused_pane() == pane;
+        let notice = self
+            .restart_wait_notice()
+            .or_else(|| self.status_notice())
+            .filter(|_| is_active);
+        let action = self.restart_notice_action(notice.as_ref(), cx);
         StatusBar::new(("status", pane.get()), status)
             .parts(footer_parts(WindowParts::of(&self.values)))
-            .notice(self.status_notice().filter(|_| is_active))
+            .notice(notice)
+            .notice_action(action)
             .note(self.slow_drive_note(pane))
             .workspace(is_active.then(|| self.workspace_button(cx)).flatten())
             .summary(self.find_status(pane))

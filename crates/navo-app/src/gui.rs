@@ -173,9 +173,10 @@ pub(crate) fn open(mut launch: Launch) {
         },
         auto_updates: {
             let updater = updater.clone();
-            Arc::new(move |auto| {
+            Arc::new(move |auto, tray| {
                 if let Some(updater) = &updater {
                     updater.set_auto(auto);
+                    updater.set_keep_in_tray(tray);
                 }
             })
         },

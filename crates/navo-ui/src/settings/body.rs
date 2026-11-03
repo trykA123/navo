@@ -26,6 +26,7 @@ impl SettingsBody {
             diagnostics: Vec::new(),
             version: SharedString::default(),
             update: UpdateView::Hidden,
+            restart_offered: false,
             focus: None,
             scroll: None,
             on_event: None,
@@ -112,9 +113,11 @@ impl SettingsBody {
         self
     }
 
+    /// The update state; `restart_offered` shows the Restart button beside a ready update.
     #[must_use]
-    pub fn update(mut self, update: UpdateView) -> Self {
+    pub fn update(mut self, update: UpdateView, restart_offered: bool) -> Self {
         self.update = update;
+        self.restart_offered = restart_offered;
         self
     }
 

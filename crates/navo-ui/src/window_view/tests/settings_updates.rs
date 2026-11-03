@@ -67,7 +67,7 @@ fn cases() -> Vec<(UpdateView, &'static str)> {
             UpdateView::Ready {
                 version: "0.4.0".into(),
             },
-            "Navo 0.4.0 is ready. It updates when you next start Navo.",
+            "Navo 0.4.0 is ready.",
         ),
         (
             UpdateView::Failed(UpdateFailure::Offline),
@@ -168,6 +168,36 @@ fn the_ready_notice_shows_once_per_version_and_goes_on_the_next_command(cx: &mut
     rig.press(cx, "down");
     let gone = rig.view.read_with(cx, |view, _| view.update_notice());
     assert_eq!(gone, None);
+}
+
+#[gpui_kit::test]
+fn ready_lines_of_an_installed_copy_offer_restart_whatever_the_tray_setting(
+    cx: &mut TestAppContext,
+) {
+    let (mut updates, _, _) = hooks(UpdateView::Ready {
+        version: "0.4.0".into(),
+    });
+    let notice = Arc::new(Mutex::new(Some(SharedString::from("0.4.0"))));
+    updates.take_ready_notice = Arc::new(move || notice.lock().expect("notice").take());
+    let rig = rig_updates(cx, updates);
+    open_help(cx, &rig);
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(6));
+    cx.run_until_parked();
+    for keep in [true, false] {
+        rig.view.update(cx, |view, cx| {
+            view.values = view.values.with(&crate::settings::Change {
+                field: Field::KeepInTray,
+                value: crate::settings::Value::Flag(keep),
+            });
+            cx.notify();
+        });
+        assert_eq!(status(cx, &rig).as_deref(), Some("Navo 0.4.0 is ready."));
+        let ready = rig.view.read_with(cx, |view, _| {
+            view.update_notice().expect("ready").text.to_string()
+        });
+        assert_eq!(ready, "Navo 0.4.0 is ready.");
+    }
 }
 
 #[gpui_kit::test]

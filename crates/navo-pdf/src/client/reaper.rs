@@ -10,6 +10,8 @@ use super::pool::Pool;
 
 const TICK: Duration = Duration::from_millis(10);
 const REAP_LIMIT: Duration = Duration::from_secs(30);
+/// How long a shutdown keeps waiting for killed helpers to exit once its deadline passed.
+pub(super) const KILL_WAIT: Duration = Duration::from_secs(2);
 
 enum Job {
     Dispose(Child, Arc<AtomicU64>),
@@ -41,6 +43,7 @@ struct Shutdown {
     launcher: Arc<AtomicU64>,
     deadline: Instant,
     done: Sender<()>,
+    killed_again: bool,
 }
 
 static WORKER: OnceLock<Option<Sender<Job>>> = OnceLock::new();
@@ -128,6 +131,7 @@ fn run(jobs: &Receiver<Job>) {
                     launcher,
                     deadline,
                     done,
+                    killed_again: false,
                 });
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -135,7 +139,7 @@ fn run(jobs: &Receiver<Job>) {
         }
         advance_recycling(&mut recycling, &mut reaping);
         advance_reaping(&mut reaping);
-        advance_shutdowns(&mut shutdowns, &reaping);
+        advance_shutdowns(&mut shutdowns, &mut reaping);
     }
 }
 
@@ -155,12 +159,26 @@ fn stop_recycling(
     *recycling = waiting;
 }
 
-fn advance_shutdowns(shutdowns: &mut Vec<Shutdown>, reaping: &[Reaping]) {
-    shutdowns.retain(|shutdown| {
-        let pending = reaping
-            .iter()
-            .any(|entry| Arc::ptr_eq(&entry.launcher, &shutdown.launcher));
-        if pending && Instant::now() < shutdown.deadline {
+/// A shutdown ends once its helpers have exited. Past the deadline it kills the ones left and
+/// waits `KILL_WAIT` more for them.
+fn advance_shutdowns(shutdowns: &mut Vec<Shutdown>, reaping: &mut [Reaping]) {
+    shutdowns.retain_mut(|shutdown| {
+        let mine = |entry: &Reaping| Arc::ptr_eq(&entry.launcher, &shutdown.launcher);
+        if !reaping.iter().any(mine) {
+            let _ = shutdown.done.send(());
+            return false;
+        }
+        let now = Instant::now();
+        if now < shutdown.deadline {
+            return true;
+        }
+        if !shutdown.killed_again {
+            shutdown.killed_again = true;
+            for entry in reaping.iter_mut().filter(|entry| mine(entry)) {
+                let _ = entry.child.kill();
+            }
+        }
+        if now < shutdown.deadline + KILL_WAIT {
             return true;
         }
         let _ = shutdown.done.send(());

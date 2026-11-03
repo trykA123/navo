@@ -33,6 +33,7 @@ fn wait_for(updater: &Arc<Updater>, wanted: impl Fn(&UpdateView) -> bool) -> Upd
 }
 
 const LONG: Duration = Duration::from_secs(3600);
+const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[test]
 fn a_portable_copy_stays_hidden_and_asks_nothing() {
@@ -143,4 +144,134 @@ fn the_version_is_the_packages_when_installed_else_the_build() {
         "0.0.1-alpha.20261103c"
     );
     assert_eq!(Updater::version_text(None), env!("CARGO_PKG_VERSION"));
+}
+
+#[test]
+fn automatic_checks_repeat_daily_and_catch_up_once_after_sleep() {
+    let fake = feed(InstallKind::Installed);
+    let updater = Updater::start(fake.clone(), LONG);
+    updater.set_keep_in_tray(true);
+    let mut timer = Schedule::new(Duration::ZERO, START_DELAY);
+    updater.tick(&mut timer, START_DELAY - Duration::from_secs(1));
+    assert_eq!(fake.check_calls(), 0);
+    for (now, calls) in [(START_DELAY, 1), (START_DELAY + DAY, 2), (DAY * 4, 3)] {
+        fake.answer_check(Ok(Found::Nothing));
+        updater.tick(&mut timer, now);
+        wait_for(&updater, |view| {
+            *view == UpdateView::UpToDate && fake.check_calls() == calls
+        });
+        updater.tick(&mut timer, now);
+        assert!(!timer.take_due(now + DAY - Duration::from_secs(1)));
+        updater.tick(&mut timer, now + DAY - Duration::from_secs(1));
+        assert_eq!(fake.check_calls(), calls);
+    }
+}
+
+#[test]
+fn automatic_checks_skip_disabled_tray_off_and_portable_copies() {
+    for (kind, auto, tray) in [
+        (InstallKind::Installed, false, true),
+        (InstallKind::Installed, true, false),
+        (InstallKind::Portable, true, true),
+    ] {
+        let fake = feed(kind);
+        let updater = Updater::start(fake.clone(), LONG);
+        updater.set_auto(auto);
+        updater.set_keep_in_tray(tray);
+        let mut timer = Schedule::new(Duration::ZERO, Duration::ZERO);
+        assert!(timer.take_due(Duration::ZERO));
+        updater.tick(&mut timer, DAY);
+        assert_eq!(fake.check_calls(), 0);
+        assert!(lock(&updater.runner).is_none());
+    }
+}
+
+#[test]
+fn a_failed_automatic_check_retries_at_the_next_daily_tick() {
+    let fake = feed(InstallKind::Installed);
+    let updater = Updater::start(fake.clone(), LONG);
+    updater.set_keep_in_tray(true);
+    let mut timer = Schedule::new(Duration::ZERO, Duration::ZERO);
+    fake.answer_check(Err(FeedError::Offline));
+    updater.tick(&mut timer, Duration::ZERO);
+    wait_for(&updater, |view| matches!(view, UpdateView::Failed(_)));
+    updater.tick(&mut timer, DAY - Duration::from_secs(1));
+    assert_eq!(fake.check_calls(), 1);
+    fake.answer_check(Ok(Found::Nothing));
+    updater.tick(&mut timer, DAY);
+    wait_for(&updater, |view| *view == UpdateView::UpToDate);
+    assert_eq!(fake.check_calls(), 2);
+}
+
+#[test]
+fn daily_ticks_do_not_overlap_a_check_or_download() {
+    let fake = feed(InstallKind::Installed);
+    let held = fake.hold_check();
+    let download = fake.hold_download();
+    let updater = Updater::start(fake.clone(), LONG);
+    updater.set_keep_in_tray(true);
+    let mut timer = Schedule::new(Duration::ZERO, Duration::ZERO);
+    updater.tick(&mut timer, Duration::ZERO);
+    wait_for(&updater, |view| *view == UpdateView::Checking);
+    updater.tick(&mut timer, DAY);
+    held.send(Ok(release("0.4.0"))).expect("check answer");
+    wait_for(&updater, |view| {
+        matches!(view, UpdateView::Downloading { .. })
+    });
+    updater.tick(&mut timer, DAY * 2);
+    download
+        .send(DownloadStep::Done(Ok(())))
+        .expect("download answer");
+    wait_for(&updater, |view| matches!(view, UpdateView::Ready { .. }));
+    assert_eq!(fake.check_calls(), 1);
+    assert_eq!(fake.download_calls(), 1);
+}
+
+#[test]
+fn restart_handoff_failure_uses_the_existing_failure_view() {
+    use navo_ui::window_view::UpdateFailure;
+    let fake = Arc::new(
+        FakeFeed::new(InstallKind::Installed, version("0.0.1-alpha.20261103c"))
+            .with_staged(version("0.0.1-alpha.20261104a")),
+    );
+    let updater = Updater::start(fake, Duration::ZERO);
+    wait_for(&updater, |view| matches!(view, UpdateView::Ready { .. }));
+    assert_eq!(
+        updater.restart_with(|| Err(UpdateFailure::Busy)),
+        Err(UpdateFailure::Busy)
+    );
+    assert_eq!(view_of(&updater), UpdateView::Failed(UpdateFailure::Busy));
+}
+
+#[test]
+fn restart_handoff_rejects_portable_and_not_ready_without_applying() {
+    for kind in [
+        InstallKind::Portable,
+        InstallKind::Unpackaged,
+        InstallKind::Installed,
+    ] {
+        let updater = Updater::start(feed(kind), LONG);
+        assert!(updater.restart_with(|| panic!("must not apply")).is_err());
+    }
+}
+
+#[test]
+fn a_daily_check_clears_a_restart_failure() {
+    use navo_ui::window_view::UpdateFailure;
+    let fake = Arc::new(
+        FakeFeed::new(InstallKind::Installed, version("0.0.1-alpha.20261103c"))
+            .with_staged(version("0.0.1-alpha.20261104a")),
+    );
+    let updater = Updater::start(fake.clone(), LONG);
+    updater.set_keep_in_tray(true);
+    let mut timer = Schedule::new(Duration::ZERO, Duration::ZERO);
+    updater.tick(&mut timer, Duration::ZERO);
+    wait_for(&updater, |view| matches!(view, UpdateView::Ready { .. }));
+    let _ = updater.restart_with(|| Err(UpdateFailure::Apply));
+    assert_eq!(view_of(&updater), UpdateView::Failed(UpdateFailure::Apply));
+    updater.tick(&mut timer, DAY - Duration::from_secs(1));
+    assert_eq!(view_of(&updater), UpdateView::Failed(UpdateFailure::Apply));
+    fake.answer_check(Ok(Found::Nothing));
+    updater.tick(&mut timer, DAY);
+    assert!(!matches!(view_of(&updater), UpdateView::Failed(_)));
 }

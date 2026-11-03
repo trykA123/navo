@@ -112,7 +112,7 @@ pub(super) struct SettingsPanel {
     pub(super) is_saving_report: bool,
     pub(super) take_guide_hint: Arc<dyn Fn() -> bool + Send + Sync>,
     pub(super) news: Option<SettingsInbox>,
-    updates: updates::Updates,
+    pub(super) updates: updates::Updates,
 }
 
 impl SettingsPanel {
@@ -195,7 +195,7 @@ impl SettingsPanel {
 
 impl NavoWindow {
     pub(super) fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.viewer.is_some() {
+        if self.viewer.is_some() || self.restart_applying() {
             return;
         }
         if self.settings.is_open {
@@ -297,6 +297,7 @@ impl NavoWindow {
             SheetEvent::RefreshDiagnostics => self.refresh_diagnostics(cx),
             SheetEvent::OpenGuide => self.open_guide_from_settings(window, cx),
             SheetEvent::CheckUpdates => self.check_updates_now(cx),
+            SheetEvent::RestartUpdate => self.request_restart(window, cx),
             SheetEvent::OpenReleases => cx.open_url(updates::RELEASES_URL),
             SheetEvent::ClearHistory => self.clear_search_history(),
             SheetEvent::InstallService => self.install_index_service(cx),
@@ -361,7 +362,7 @@ impl NavoWindow {
         let body = SettingsBody::new(self.values.clone(), self.settings.row)
             .diagnostics(self.settings.diagnostics.clone())
             .version(self.identity.version.clone())
-            .update(self.settings.updates.view.clone())
+            .update(self.settings.updates.view.clone(), self.restart_offered())
             .summon_key_taken(self.summon_key_taken())
             .clipboard_key_taken(self.clipboard_key_taken())
             .error(error)

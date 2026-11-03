@@ -80,6 +80,8 @@ impl Launcher {
         self.pool.wait_for_idle(wait)
     }
 
+    /// Stops every pooled and recycling helper and returns once they have exited. A helper still
+    /// running after `SHUTDOWN_WAIT` is killed again and waited for, at most `KILL_WAIT` more.
     pub fn shutdown(&self) {
         let deadline = Instant::now() + SHUTDOWN_WAIT;
         self.shutdowns.fetch_add(1, Ordering::SeqCst);
@@ -88,7 +90,8 @@ impl Launcher {
         self.pool
             .settle(deadline.saturating_duration_since(Instant::now()));
         if let Some(finished) = finished {
-            let _ = finished.recv_timeout(deadline.saturating_duration_since(Instant::now()));
+            let limit = deadline + reaper::KILL_WAIT;
+            let _ = finished.recv_timeout(limit.saturating_duration_since(Instant::now()));
         }
     }
 
