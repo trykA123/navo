@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, TestAppContext};
+use gpui_kit::{AppContext as _, SharedString, TestAppContext};
 
 use super::app_menu::{Rig, rig_updates};
 use crate::settings::{Field, Section};
@@ -109,14 +109,65 @@ fn every_state_has_its_line(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_copy_that_cannot_update_says_why_and_has_no_button(cx: &mut TestAppContext) {
+fn a_copy_that_cannot_update_says_why_and_offers_the_installer(cx: &mut TestAppContext) {
     let rig = rig_updates(cx, UpdateHooks::none());
     open_help(cx, &rig);
     assert_eq!(
         status(cx, &rig).as_deref(),
-        Some("This copy does not update itself. Get the installer from GitHub.")
+        Some("This copy does not update itself.")
     );
     assert!(!has(cx, &rig, "settings-update-check"));
+    assert!(has(cx, &rig, "settings-update-installer"));
+    assert!(has(cx, &rig, "settings-update-auto-unavailable"));
+}
+
+#[gpui_kit::test]
+fn the_installer_button_opens_the_latest_release(cx: &mut TestAppContext) {
+    let rig = rig_updates(cx, UpdateHooks::none());
+    open_help(cx, &rig);
+    rig.click(cx, "settings-update-installer");
+    assert_eq!(
+        cx.opened_url().as_deref(),
+        Some("https://github.com/trykA123/navo/releases/latest")
+    );
+}
+
+#[gpui_kit::test]
+fn the_toggle_is_off_on_a_copy_that_cannot_update(cx: &mut TestAppContext) {
+    let rig = rig_updates(cx, UpdateHooks::none());
+    open_help(cx, &rig);
+    rig.click(cx, "settings-toggle");
+    rig.press(cx, "space");
+    let stored = rig
+        .store
+        .stored
+        .lock()
+        .expect("stored")
+        .flag(Field::CheckUpdates);
+    assert!(stored);
+}
+
+#[gpui_kit::test]
+fn the_ready_notice_shows_once_per_version_and_goes_on_the_next_command(cx: &mut TestAppContext) {
+    let (mut updates, _, _) = hooks(UpdateView::UpToDate);
+    let versions = Arc::new(Mutex::new(vec![SharedString::from("0.4.0")]));
+    let queue = versions.clone();
+    updates.take_ready_notice = Arc::new(move || queue.lock().expect("queue").pop());
+    let rig = rig_updates(cx, updates);
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(6));
+    cx.run_until_parked();
+    let text = rig.view.read_with(cx, |view, _| {
+        view.update_notice().map(|notice| notice.text.to_string())
+    });
+    assert_eq!(
+        text.as_deref(),
+        Some("Navo 0.4.0 is ready. It updates when you next start Navo.")
+    );
+    assert!(versions.lock().expect("queue").is_empty());
+    rig.press(cx, "down");
+    let gone = rig.view.read_with(cx, |view, _| view.update_notice());
+    assert_eq!(gone, None);
 }
 
 #[gpui_kit::test]
@@ -135,7 +186,8 @@ fn check_now_calls_the_hook_and_is_off_while_busy(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn the_toggle_writes_updates_check(cx: &mut TestAppContext) {
-    let rig = rig_updates(cx, UpdateHooks::none());
+    let (updates, _, _) = hooks(UpdateView::UpToDate);
+    let rig = rig_updates(cx, updates);
     open_help(cx, &rig);
     let on = rig
         .view
@@ -154,7 +206,8 @@ fn the_toggle_writes_updates_check(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn the_toggle_is_reached_by_keys_on_the_help_page(cx: &mut TestAppContext) {
-    let rig = rig_updates(cx, UpdateHooks::none());
+    let (updates, _, _) = hooks(UpdateView::UpToDate);
+    let rig = rig_updates(cx, updates);
     open_help(cx, &rig);
     rig.press(cx, "space");
     let stored = rig

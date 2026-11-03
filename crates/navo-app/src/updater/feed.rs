@@ -1,7 +1,5 @@
 //! Update feed over the GitHub releases of Navo, through Velopack (D89).
 
-#![expect(dead_code, reason = "the runner wiring follows in IX8o")]
-
 use std::io;
 use std::sync::mpsc;
 use std::sync::{Mutex, PoisonError};

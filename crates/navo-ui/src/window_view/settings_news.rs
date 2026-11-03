@@ -93,5 +93,6 @@ impl NavoWindow {
             .or_else(|| self.keymap_notice())
             .or_else(|| self.upgrade_notice())
             .or_else(|| self.saver.font_notice.clone())
+            .or_else(|| self.update_notice())
     }
 }

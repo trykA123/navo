@@ -110,6 +110,7 @@ pub enum SheetEvent {
     RefreshDiagnostics,
     OpenGuide,
     CheckUpdates,
+    OpenReleases,
     ClearHistory,
     InstallService,
     RemoveService,
@@ -198,7 +199,7 @@ impl SettingsBody {
 
     fn event_for(&self, nudge: Nudge) -> Option<SheetEvent> {
         let spec = self.shown_spec()?;
-        if !self.values.is_enabled(spec.field) {
+        if !self.is_enabled(spec.field) {
             return None;
         }
         let value = match spec.control {
@@ -209,6 +210,10 @@ impl SettingsBody {
             field: spec.field,
             value,
         }))
+    }
+
+    fn is_enabled(&self, field: Field) -> bool {
+        view::is_row_enabled(&self.values, &self.update, field)
     }
 
     fn flip_event(&self) -> Option<SheetEvent> {
@@ -250,8 +255,8 @@ impl SettingsBody {
 
     fn edit_event(&self) -> Option<SheetEvent> {
         let spec = self.shown_spec()?;
-        let is_editable = matches!(spec.control, Control::Text | Control::Number)
-            && self.values.is_enabled(spec.field);
+        let is_editable =
+            matches!(spec.control, Control::Text | Control::Number) && self.is_enabled(spec.field);
         is_editable.then_some(SheetEvent::Edit(spec.field))
     }
 }

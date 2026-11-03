@@ -70,12 +70,15 @@ pub(super) fn receive_late(receiver: Option<Receiver<Started>>, delivery: Arc<Mu
 pub struct Follow {
     pub remember: Remember,
     pub git: Arc<dyn Fn(&GitSettings) + Send + Sync>,
+    /// Gets `updates.check`.
+    pub auto_updates: Arc<dyn Fn(bool) + Send + Sync>,
 }
 
 impl Follow {
     pub(super) fn apply(&self, settings: &Settings) {
         self.remember.set(settings.search.remember);
         (self.git)(&settings.git);
+        (self.auto_updates)(settings.updates.check);
     }
 }
 
@@ -215,6 +218,7 @@ mod tests {
         let follow = Follow {
             remember: Remember::default(),
             git: Arc::new(move |git| log.lock().unwrap().push(git.badges)),
+            auto_updates: Arc::new(|_| {}),
         };
         let reloader = Reloader::new(store.clone(), None).following(Some(follow));
         (reloader, seen)
@@ -228,6 +232,25 @@ mod tests {
         let store = Arc::new(Mutex::new(SettingsStore::load(&path).0));
         let (mut reloader, seen) = following(&store);
         std::fs::write(&path, "[git]\nbadges = false\n").unwrap();
+        assert!(reloader.reload().is_some());
+        assert_eq!(*seen.lock().unwrap(), [false]);
+    }
+
+    #[test]
+    fn an_outside_updates_edit_reaches_the_update_follower() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("navo.toml");
+        std::fs::write(&path, "[updates]\ncheck = true\n").unwrap();
+        let store = Arc::new(Mutex::new(SettingsStore::load(&path).0));
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
+        let follow = Follow {
+            remember: Remember::default(),
+            git: Arc::new(|_| {}),
+            auto_updates: Arc::new(move |auto| log.lock().unwrap().push(auto)),
+        };
+        let mut reloader = Reloader::new(store, None).following(Some(follow));
+        std::fs::write(&path, "[updates]\ncheck = false\n").unwrap();
         assert!(reloader.reload().is_some());
         assert_eq!(*seen.lock().unwrap(), [false]);
     }

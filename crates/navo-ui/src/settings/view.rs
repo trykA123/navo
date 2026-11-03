@@ -36,6 +36,18 @@ pub(super) struct Look<'a> {
     pub clipboard_key_taken: bool,
 }
 
+/// False for a row whose controlling setting is off, or the update check on a copy that
+/// cannot update.
+pub(super) fn is_row_enabled(values: &Values, update: &UpdateView, field: Field) -> bool {
+    values.is_enabled(field) && !(field == Field::CheckUpdates && *update == UpdateView::Hidden)
+}
+
+impl Look<'_> {
+    pub(super) fn is_enabled(&self, field: Field) -> bool {
+        is_row_enabled(self.values, self.update, field)
+    }
+}
+
 pub(super) fn send_on_click<E: StatefulInteractiveElement>(
     element: E,
     send: Option<&Handler>,
@@ -96,7 +108,10 @@ fn control(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
             };
             Some(controls::segments(&picks).into_any_element())
         }
-        (Control::Toggle, Value::Flag(on)) => Some(controls::toggle(t, *on, send, spec.field)),
+        (Control::Toggle, Value::Flag(on)) => {
+            let send = send.filter(|_| look.is_enabled(spec.field));
+            Some(controls::toggle(t, *on, send, spec.field))
+        }
         (Control::Text | Control::Number, value) => {
             Some(controls::value_box(t, &spoken(spec, value)))
         }
@@ -249,9 +264,7 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .flex_col()
         .flex_none()
         .min_h(px(ROW_MIN))
-        .when(!look.values.is_enabled(spec.field), |row| {
-            row.opacity(DIMMED)
-        })
+        .when(!look.is_enabled(spec.field), |row| row.opacity(DIMMED))
         .px(t.spacing.xl)
         .py(t.spacing.md)
         .rounded(t.radii.md)
