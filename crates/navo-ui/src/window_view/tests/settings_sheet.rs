@@ -7,7 +7,7 @@ use super::app_menu::{Rig, rig};
 use super::drive_fs::{Setup, drive_window};
 use super::press;
 use crate::app_menu::{Item, MenuCommand, index_of};
-use crate::settings::{Change, FIELDS, Field, Value};
+use crate::settings::{Change, FIELDS, Field, Section, Value};
 use crate::tokens::{self, Density, ThemeChoice};
 
 fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
@@ -200,6 +200,18 @@ fn space_flips_a_toggle(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) {
+    walk_sections(cx, false);
+}
+
+#[gpui_kit::test]
+fn tab_also_visits_compare_once_it_is_visible(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    walk_sections(cx, true);
+}
+
+fn walk_sections(cx: &mut TestAppContext, with_compare: bool) {
+    let tab_exists =
+        |index: usize| with_compare || Section::ALL.get(index) != Some(&Section::Compare);
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     let mut sections = vec![
@@ -215,28 +227,28 @@ fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) 
     if cfg!(windows) {
         sections.push("Tray");
     }
-    sections.extend([
-        "Clipboard",
-        "Diagnostics",
-        "Help",
-        "Shortcuts",
-        "Appearance",
-    ]);
+    sections.push("Clipboard");
+    if with_compare {
+        sections.push("Compare");
+    }
+    sections.extend(["Diagnostics", "Help", "Shortcuts", "Appearance"]);
     for (step, name) in sections.iter().enumerate() {
         rig.press(cx, "tab");
         let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
         assert!(in_sheet, "after tab {step}");
-        let current = (0..14usize).find(|index| {
-            cx.update_window(rig.window, |_, window, cx| {
-                window.render_frame(cx);
-                window.find(("settings-section", *index)).selected() == Some(true)
-            })
-            .expect("window")
-        });
+        let current = (0..15usize)
+            .filter(|index| tab_exists(*index))
+            .find(|index| {
+                cx.update_window(rig.window, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.find(("settings-section", *index)).selected() == Some(true)
+                })
+                .expect("window")
+            });
         let shown = current.and_then(|index| label(cx, &rig, ("settings-section", index)));
         assert_eq!(shown.as_deref(), Some(*name));
     }
-    for _ in 0..5 + usize::from(cfg!(windows)) {
+    for _ in 0..5 + usize::from(with_compare) + usize::from(cfg!(windows)) {
         rig.press(cx, "shift-tab");
     }
     assert_eq!(

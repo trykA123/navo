@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use navo_core::Location;
+use navo_core::list_text::{join_list, split_list};
 use navo_fs::Watch;
 use navo_store::{
     Saved, SettingValue, Settings, SettingsError, SettingsStore, settings_key_line,
@@ -252,14 +253,6 @@ fn stored_value(change: &Change) -> Option<SettingValue> {
     }
 }
 
-fn split_list(text: &str) -> Vec<String> {
-    text.split(',')
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .map(str::to_owned)
-        .collect()
-}
-
 pub fn values_of(store: &SettingsStore) -> Values {
     let defaults = Values::default();
     let settings = store.current();
@@ -287,7 +280,7 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
         (Control::Toggle, Some(SettingValue::Bool(flag))) => Some(Value::Flag(flag)),
         (Control::Number, Some(SettingValue::Integer(number))) => Some(Value::Number(number)),
         (Control::Text, Some(SettingValue::List(items))) => {
-            Some(Value::Text(items.join(", ").into()))
+            Some(Value::Text(join_list(&items).into()))
         }
         (Control::Text, Some(SettingValue::Text(text))) => Some(Value::Text(text.into())),
         (Control::Text, None) => Some(Value::Text("".into())),

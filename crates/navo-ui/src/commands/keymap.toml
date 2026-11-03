@@ -2036,3 +2036,68 @@ keys = ["left"]
 [[bind]]
 command = "clip_palette.next_choice"
 keys = ["right"]
+
+# Compare
+
+[[bind]]
+command = "compare.with_other_pane"
+keys = ["ctrl-shift-d"]
+
+[[bind]]
+command = "compare.next_difference"
+keys = ["alt-down"]
+
+[[bind]]
+command = "compare.previous_difference"
+keys = ["alt-up"]
+
+[[bind]]
+command = "compare.copy_right"
+keys = ["ctrl-alt-right"]
+
+[[bind]]
+command = "compare.copy_left"
+keys = ["ctrl-alt-left"]
+
+[[bind]]
+command = "compare.enter"
+keys = ["enter"]
+
+[[bind]]
+command = "compare.up"
+keys = ["backspace"]
+
+[[bind]]
+command = "compare.exit"
+keys = ["escape"]
+
+# CompareView
+
+[[bind]]
+command = "compare.next_difference"
+keys = ["alt-down", "f7"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.previous_difference"
+keys = ["alt-up", "shift-f7"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.copy_right"
+keys = ["ctrl-alt-right"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.copy_left"
+keys = ["ctrl-alt-left"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.exit"
+keys = ["escape"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.save"
+keys = ["ctrl-s"]

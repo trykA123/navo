@@ -3,15 +3,18 @@ use std::collections::HashSet;
 use gpui_kit::{App, TestAppContext};
 use navo_l10n::{FILES, catalog, tr};
 
-use super::{GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings};
+use super::{
+    GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings, registry,
+};
 use crate::app_menu::MenuCommand;
 
-const NAMESPACES: [&str; 29] = [
+const NAMESPACES: [&str; 30] = [
     "activity_strip",
     "app_menu",
     "can_trace",
     "clip_palette",
     "command_center",
+    "compare",
     "confirm_dialog",
     "context_menu",
     "dialog_focus",
@@ -447,7 +450,7 @@ fn every_command_label_exists_in_the_bundle() {
 
 #[test]
 fn every_cmd_message_in_the_files_belongs_to_a_command() {
-    let labels: HashSet<&str> = all().map(|spec| spec.label).collect();
+    let labels: HashSet<&str> = registry().map(|spec| spec.label).collect();
     let orphans: Vec<&str> = FILES
         .iter()
         .flat_map(|(_, source)| source.lines())
@@ -502,7 +505,7 @@ fn the_command_center_toggle_is_a_hidden_global_command() {
 
 #[test]
 fn every_hidden_name_is_a_registered_command() {
-    let known: HashSet<&str> = all().map(|spec| spec.name).collect();
+    let known: HashSet<&str> = registry().map(|spec| spec.name).collect();
     let unknown: Vec<&str> = super::palette_hidden::HIDDEN
         .iter()
         .copied()

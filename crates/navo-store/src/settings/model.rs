@@ -27,6 +27,7 @@ pub struct Settings {
     pub automotive: Automotive,
     pub tray: Tray,
     pub clipboard: Clipboard,
+    pub compare: super::compare::Compare,
     pub experimental: BTreeMap<String, bool>,
 }
 

@@ -113,6 +113,7 @@ pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + u
     let sections = Section::ALL
         .iter()
         .enumerate()
+        .filter(|(_, section)| section.is_shown())
         .map(|(index, section)| NavItem {
             index,
             label: section_label(*section),

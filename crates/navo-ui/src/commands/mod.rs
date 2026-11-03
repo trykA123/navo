@@ -1,5 +1,6 @@
 mod bind;
 mod clipboard;
+mod compare;
 mod contexts;
 mod keymap;
 mod marks;
@@ -16,6 +17,8 @@ mod viewer;
 mod window;
 
 #[cfg(test)]
+mod compare_tests;
+#[cfg(test)]
 mod tests;
 
 use gpui_kit::{App, Global};
@@ -25,6 +28,7 @@ use crate::app_menu::MenuCommand;
 #[cfg(test)]
 use bind::key_bindings;
 pub(crate) use bind::{bind_namespace, bind_user_keys, shifted_digit};
+pub(crate) use compare::is_hidden;
 pub use contexts::{GLOBAL, is_within};
 pub use keymap::{
     Bind, Keymap, KeymapError, KeymapWarning, Overlaid, UserKeymapError, normal_key, shown,
@@ -126,7 +130,13 @@ pub fn entries_with(has_clipboard: bool) -> Vec<CommandEntry> {
     bound.chain(asking).collect()
 }
 
+/// The commands a user can see: the registry without the hidden Compare commands.
 pub fn all() -> impl Iterator<Item = CommandSpec> {
+    registry().filter(|spec| !is_hidden(spec.name))
+}
+
+/// Every registered command, including the hidden ones.
+fn registry() -> impl Iterator<Item = CommandSpec> {
     let bound = [
         window::GROUPS.as_slice(),
         tab_menu::GROUPS.as_slice(),
@@ -140,6 +150,7 @@ pub fn all() -> impl Iterator<Item = CommandSpec> {
         perf::GROUPS.as_slice(),
         retained::GROUPS.as_slice(),
         clipboard::GROUPS.as_slice(),
+        compare::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group
@@ -163,12 +174,12 @@ pub fn all() -> impl Iterator<Item = CommandSpec> {
 
 #[must_use]
 pub fn for_action(action: &str) -> Option<CommandSpec> {
-    all().find(|spec| spec.action == Some(action))
+    registry().find(|spec| spec.action == Some(action))
 }
 
 #[must_use]
 pub fn by_name(name: &str) -> Option<CommandSpec> {
-    all().find(|spec| spec.name == name)
+    registry().find(|spec| spec.name == name)
 }
 
 #[must_use]

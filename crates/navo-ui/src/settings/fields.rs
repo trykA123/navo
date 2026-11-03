@@ -1,4 +1,5 @@
 use super::clipboard_fields::CLIPBOARD_FIELDS;
+use super::compare_fields::COMPARE_FIELDS;
 use super::general_fields::GENERAL;
 use super::search_fields::SEARCH_ROWS;
 use super::tray_fields::TRAY_FIELDS;
@@ -20,12 +21,13 @@ pub enum Section {
     Display,
     Tray,
     Clipboard,
+    Compare,
     Diagnostics,
     Help,
 }
 
 impl Section {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
@@ -37,6 +39,7 @@ impl Section {
         Self::Display,
         Self::Tray,
         Self::Clipboard,
+        Self::Compare,
         Self::Diagnostics,
         Self::Help,
     ];
@@ -54,9 +57,15 @@ impl Section {
             Self::Display => "Display",
             Self::Tray => "Tray",
             Self::Clipboard => "Clipboard",
+            Self::Compare => "Compare",
             Self::Diagnostics => "settings-diagnostics",
             Self::Help => "settings-help",
         }
+    }
+
+    /// False for Compare while the compare feature is hidden.
+    pub fn is_shown(self) -> bool {
+        self != Self::Compare || crate::compare_visible::compare_visible()
     }
 
     pub fn is_translated(self) -> bool {
@@ -76,6 +85,7 @@ impl Section {
             Self::Display | Self::Diagnostics => IconName::Eye,
             Self::Tray => IconName::PanelBottom,
             Self::Clipboard => IconName::Clipboard,
+            Self::Compare => IconName::GitCompare,
             Self::Help => IconName::BookOpen,
         }
     }
@@ -154,6 +164,11 @@ pub enum Field {
     ClipboardOn,
     ClipboardRecord,
     ClipboardKey,
+    GitEngine,
+    CompareIgnoreList,
+    CompareRespectGitignore,
+    CompareBudgetMib,
+    CompareContentCheck,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -260,16 +275,17 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 71] = join([
+pub const FIELDS: [FieldSpec; 76] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &WINDOW_FIELDS,
     &VIEWER_FIELDS,
     &TRAY_FIELDS,
     &CLIPBOARD_FIELDS,
+    &COMPARE_FIELDS,
 ]);
 
-const fn join<const N: usize>(parts: [&[FieldSpec]; 6]) -> [FieldSpec; N] {
+const fn join<const N: usize>(parts: [&[FieldSpec]; 7]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];
     let mut at = 0;
     let mut part = 0;

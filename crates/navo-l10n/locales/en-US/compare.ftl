@@ -1,0 +1,13 @@
+cmd-compare-with-other-pane = Compare with the other pane
+cmd-compare-refs = Compare branches…
+cmd-compare-next-difference = Next difference
+cmd-compare-previous-difference = Previous difference
+cmd-compare-copy-right = Copy to the right
+cmd-compare-copy-left = Copy to the left
+cmd-compare-enter = Open in both panes
+cmd-compare-up = Up in both panes
+cmd-compare-exit = Leave compare
+cmd-compare-save = Save edited side
+cmd-compare-stop-checking = Stop checking contents
+cmd-compare-view-bytes = Show bytes
+cmd-compare-view-text = Show text

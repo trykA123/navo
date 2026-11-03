@@ -1,6 +1,7 @@
 mod body;
 mod clipboard_fields;
 mod clipboard_values;
+mod compare_fields;
 mod controls;
 mod diagnostics_page;
 mod fields;

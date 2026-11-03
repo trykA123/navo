@@ -9,6 +9,7 @@ use super::complete::{
 use super::*;
 use crate::{Db, backup_path};
 
+mod compare;
 mod complete;
 mod complete_props;
 mod complete_store;

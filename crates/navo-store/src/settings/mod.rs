@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::DbError;
 use crate::atomic_write::{WriteOutcome, write_checked};
 
+mod compare;
 mod complete;
 mod edit;
 mod following;
@@ -19,6 +20,7 @@ mod retention;
 mod saving;
 mod view;
 
+pub use compare::{Compare, ContentCheck, GitEngine};
 pub use complete::DefaultChange;
 use complete::{Ledger, reconcile};
 pub use edit::{SettingValue, key_line, section_line};

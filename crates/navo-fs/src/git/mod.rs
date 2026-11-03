@@ -48,7 +48,10 @@ impl GitFs {
         Self::with_factory(|repo| Ok(Box::new(CliGit::new(repo)?)))
     }
 
-    fn with_factory<F>(factory: F) -> Self
+    /// A provider whose repositories open through `factory`, for another engine or a test.
+    /// The factory runs once per repository open, can run on a compare thread, and must be `Send + Sync`.
+    #[must_use]
+    pub fn with_factory<F>(factory: F) -> Self
     where
         F: Fn(&Path) -> Result<Box<dyn GitSource>, GitError> + Send + Sync + 'static,
     {

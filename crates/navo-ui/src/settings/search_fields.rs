@@ -46,7 +46,10 @@ impl Field {
     pub fn is_list(self) -> bool {
         matches!(
             self,
-            Self::SearchDrives | Self::SearchExclude | Self::AutomotiveModules
+            Self::SearchDrives
+                | Self::SearchExclude
+                | Self::AutomotiveModules
+                | Self::CompareIgnoreList
         )
     }
 
