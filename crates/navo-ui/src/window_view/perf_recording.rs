@@ -98,6 +98,7 @@ fn service_name(status: ServiceStatus) -> &'static str {
     match status {
         ServiceStatus::NotInstalled => "not_installed",
         ServiceStatus::Running => "running",
+        ServiceStatus::Outdated => "outdated",
         ServiceStatus::Stopped => "stopped",
         ServiceStatus::NotAvailable => "not_available",
     }
