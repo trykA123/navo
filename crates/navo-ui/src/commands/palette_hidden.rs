@@ -11,6 +11,8 @@ pub(super) const HIDDEN: &[&str] = &[
     "workspace.cancel_preview",
     "crash_notice.open_folder",
     "app.command_palette",
+    "compare.enter",
+    "compare.up",
     "clip_palette.next_mode",
     "clip_palette.previous_mode",
     "clip_palette.up",

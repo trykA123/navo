@@ -2,6 +2,8 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::{Focusable, Role, Subscription};
 
+use navo_core::list_text::{join_list, split_list};
+
 use crate::prelude::*;
 use crate::primitives::{TextField, TextFieldState, text_field_state};
 use crate::settings::{CancelEdit, Change, Control, FIELD_CONTEXT, Field, Value, parse_summon_key};
@@ -18,12 +20,7 @@ pub(super) struct TextEdit {
 }
 
 fn joined(text: &str) -> String {
-    let items: Vec<&str> = text
-        .split(',')
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .collect();
-    items.join(", ")
+    join_list(&split_list(text))
 }
 
 fn parsed(field: Field, text: &str) -> Result<Value, SharedString> {

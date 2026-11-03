@@ -6,7 +6,7 @@ use serde::Deserialize;
 use toml::Spanned;
 
 use super::Bind;
-use crate::commands::{CommandSpec, GLOBAL, by_name, is_within};
+use crate::commands::{CommandSpec, GLOBAL, by_name, is_hidden, is_within};
 
 const LEGACY_PANE: &str = "FerritePane";
 
@@ -119,6 +119,7 @@ pub(super) fn entries(text: &str) -> Result<Vec<Entry>, Located> {
     })?;
     file.bind
         .into_iter()
+        .filter(|raw| !is_hidden(&raw.get_ref().command))
         .map(|raw| {
             let line = line_at(text, raw.span().start);
             resolve(raw.into_inner())

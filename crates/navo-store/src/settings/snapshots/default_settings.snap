@@ -113,4 +113,11 @@ enabled = true
 record-history = true
 summon-key = "Win+Alt+V"
 
+[compare]
+git-engine = "git"
+ignore-list = []
+respect-gitignore = true
+memory-budget-mib = 1024
+content-check = "content"
+
 [experimental]

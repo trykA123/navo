@@ -9,6 +9,7 @@ pub mod browser;
 pub mod clip_palette;
 pub mod command_center;
 pub mod commands;
+mod compare_visible;
 pub mod confirm_dialog;
 pub mod context_menu;
 pub mod crash_notice;

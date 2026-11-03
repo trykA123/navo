@@ -1,5 +1,6 @@
 use super::*;
 use crate::app_menu::Setting;
+use crate::compare_visible::show_compare;
 use crate::modifier_hints::HintsMode;
 use crate::tokens::{Density, ThemeChoice};
 
@@ -586,4 +587,95 @@ fn only_the_clipboard_switch_shows_off_windows() {
     assert_eq!(shown(Field::ClipboardRecord), cfg!(windows));
     assert_eq!(shown(Field::ClipboardKey), cfg!(windows));
     assert!(Filter::default().first_in(Section::Clipboard).is_some());
+}
+
+#[test]
+fn the_compare_section_lists_its_five_fields_in_order() {
+    let keys: Vec<&str> = FIELDS
+        .iter()
+        .filter(|spec| spec.section == Section::Compare)
+        .map(|spec| spec.key)
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            "compare.git-engine",
+            "compare.ignore-list",
+            "compare.respect-gitignore",
+            "compare.memory-budget-mib",
+            "compare.content-check",
+        ]
+    );
+    assert_eq!(Section::Compare.label(), "Compare");
+    let _shown = show_compare();
+    assert!(Filter::default().first_in(Section::Compare).is_some());
+}
+
+#[test]
+fn the_compare_defaults_match_the_store() {
+    let values = Values::default();
+    assert_eq!(values.get(Field::GitEngine), &Value::Pick(0));
+    assert_eq!(
+        values.get(Field::CompareIgnoreList),
+        &Value::Text("".into())
+    );
+    assert!(values.flag(Field::CompareRespectGitignore));
+    assert_eq!(values.get(Field::CompareBudgetMib), &Value::Number(1024));
+    assert_eq!(values.get(Field::CompareContentCheck), &Value::Pick(0));
+}
+
+#[test]
+fn the_compare_choices_use_the_stored_names() {
+    let names = |field| match spec(field).control {
+        Control::Choices(options, _) => options.iter().map(|option| option.toml).collect(),
+        _ => Vec::new(),
+    };
+    assert_eq!(names(Field::GitEngine), ["git", "gix", "auto"]);
+    assert_eq!(names(Field::CompareContentCheck), ["content", "size-time"]);
+}
+
+#[test]
+fn the_compare_rows_have_texts_and_the_ignore_list_is_a_list() {
+    for spec in FIELDS
+        .iter()
+        .filter(|spec| spec.section == Section::Compare)
+    {
+        assert!(!spec.label().starts_with("settings-"), "{}", spec.key);
+        assert!(!spec.help().starts_with("settings-"), "{}", spec.key);
+    }
+    assert!(Field::CompareIgnoreList.is_list());
+    assert!(!Field::GitEngine.is_list());
+}
+
+#[test]
+fn the_search_finds_the_compare_rows_on_every_platform() {
+    let _shown = show_compare();
+    let found = |query: &str, field| Filter::new(query).admits(spec(field));
+    assert!(found("git engine", Field::GitEngine));
+    assert!(found("gitignore", Field::CompareRespectGitignore));
+    assert!(found("memory", Field::CompareBudgetMib));
+    assert!(found("ignore", Field::CompareIgnoreList));
+    assert!(found("content", Field::CompareContentCheck));
+}
+
+#[test]
+fn a_hidden_compare_section_has_no_rows_hits_or_lines() {
+    let hit = |query: &str| Filter::new(query).first_row().map(section_of);
+    assert_eq!(Filter::default().first_in(Section::Compare), None);
+    assert_eq!(hit("git engine"), None);
+    assert_eq!(hit("memory budget"), None);
+    let shown: Vec<Line> = lines(&Filter::new("compare"), Section::Appearance);
+    assert!(!shown.contains(&Line::Section(Section::Compare)));
+    let walked = next_section(&Filter::default(), first_row(Section::Clipboard), true);
+    assert_eq!(section_of(walked), Section::Diagnostics);
+}
+
+#[test]
+fn a_visible_compare_section_has_rows_hits_and_a_stop_in_the_walk() {
+    let _shown = show_compare();
+    let hit = Filter::new("git engine").first_row().map(section_of);
+    assert_eq!(hit, Some(Section::Compare));
+    let walked = next_section(&Filter::default(), first_row(Section::Clipboard), true);
+    assert_eq!(section_of(walked), Section::Compare);
+    assert!(lines(&Filter::default(), Section::Compare).contains(&Line::Section(Section::Compare)));
 }

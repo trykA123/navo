@@ -41,6 +41,7 @@ fn find_needs_every_word_and_an_empty_find_keeps_all_rows() {
     let here = FIELDS
         .iter()
         .filter(|spec| cfg!(windows) || !spec.field.is_windows_only())
+        .filter(|spec| spec.section.is_shown())
         .count();
     assert_eq!(matching("   ").len(), here);
     assert!(matching("zzzz").is_empty());

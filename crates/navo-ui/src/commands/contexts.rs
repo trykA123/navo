@@ -2,8 +2,9 @@ pub const GLOBAL: &str = "global";
 
 const VIEWER: &str = "Viewer";
 
-const PARENTS: [(&str, &str); 26] = [
+const PARENTS: [(&str, &str); 27] = [
     ("Archive", VIEWER),
+    ("CompareView", "Compare"),
     ("Elf", "Space"),
     ("ElfTable", "Elf"),
     ("CanTrace", VIEWER),

@@ -122,7 +122,9 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::RetainDeletes
         | Field::RetainOverwrites
         | Field::ClipboardOn
-        | Field::ClipboardRecord => Value::Flag(true),
+        | Field::ClipboardRecord
+        | Field::CompareRespectGitignore => Value::Flag(true),
+        Field::CompareBudgetMib => Value::Number(1024),
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
         Field::SummonKey => text("Win+Alt+N"),
         Field::ClipboardKey => text("Win+Alt+V"),

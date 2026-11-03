@@ -19,7 +19,7 @@ impl Filter {
 
     #[must_use]
     pub fn admits(&self, spec: &FieldSpec) -> bool {
-        if spec.field.is_windows_only() && !cfg!(windows) {
+        if (spec.field.is_windows_only() && !cfg!(windows)) || !spec.section.is_shown() {
             return false;
         }
         if self.is_empty() {

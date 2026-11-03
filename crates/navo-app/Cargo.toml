@@ -20,9 +20,11 @@ encoding_rs = "0.8.42"
 mimalloc = { version = "=0.1.52", optional = true, default-features = false }
 navo-cache = { path = "../navo-cache" }
 navo-clipboard = { path = "../navo-clipboard" }
+navo-compare = { path = "../navo-compare" }
 navo-core = { path = "../navo-core" }
 navo-diag = { path = "../navo-diag" }
 navo-fs = { path = "../navo-fs" }
+navo-git = { path = "../navo-git" }
 navo-index = { path = "../navo-index" }
 navo-l10n = { path = "../navo-l10n" }
 navo-pdf = { path = "../navo-pdf" }

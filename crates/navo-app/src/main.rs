@@ -11,6 +11,7 @@ mod bench;
 mod cli;
 mod clip_module;
 mod clipboard;
+mod compare;
 mod console;
 mod contrast;
 mod crash;
