@@ -167,6 +167,22 @@ fn prune_then_reclaim_shrinks_the_file() {
 }
 
 #[test]
+fn one_reclaim_call_returns_up_to_the_requested_pages() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("navo.db");
+    let mut journal = open(&path);
+    fill(&mut journal, 40);
+    journal.prune(PruneLimits::keep(5)).unwrap();
+    let free = u64::try_from(pragma(&journal, "freelist_count")).unwrap();
+    assert!(free > 1024, "only {free} free pages");
+    assert_eq!(journal.reclaim(1024).unwrap(), free - 1024);
+    assert_eq!(
+        u64::try_from(pragma(&journal, "freelist_count")).unwrap(),
+        free - 1024
+    );
+}
+
+#[test]
 fn reclaim_does_nothing_on_a_database_not_yet_converted() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("navo.db");
