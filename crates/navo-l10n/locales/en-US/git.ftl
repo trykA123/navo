@@ -10,7 +10,6 @@ git-state-checking = Checking
 git-spoken = Git: { $state }
 git-spoken-ahead = { $count } ahead
 git-spoken-behind = { $count } behind
-git-column = Git
 
 git-inside = Inside a repository
 git-slow-drive = Git status skipped: slow drive

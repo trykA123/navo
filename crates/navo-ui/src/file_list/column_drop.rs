@@ -22,12 +22,7 @@ pub(super) fn name_min_width(t: &Theme, parts: ListParts) -> Pixels {
 
 pub(super) fn needed(t: &Theme, parts: ListParts, widths: ColumnWidths) -> Pixels {
     let s = &t.spacing;
-    let gutter = if widths.gutter() > px(0.) {
-        widths.gutter() + s.md
-    } else {
-        px(0.)
-    };
-    let frame = s.xs * 2. + t.rows.inset + s.xxl + check_column(t) + s.md + gutter;
+    let frame = s.xs * 2. + t.rows.inset + s.xxl + check_column(t) + s.md;
     let columns = DROP_ORDER
         .into_iter()
         .filter(|by| parts.shows(*by))

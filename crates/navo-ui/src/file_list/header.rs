@@ -160,9 +160,6 @@ pub(super) fn header(t: &Theme, sort: SortKey, ctx: &Rc<ListContext>) -> Div {
         .text_size(t.typography.small)
         .text_color(c.muted)
         .child(div().w(check_column(t)).flex_none())
-        .when(ctx.widths.gutter() > px(0.), |header| {
-            header.child(super::git_cell::header_cell(t))
-        })
         .child(cell(t, all[0], &sorted, ctx))
         .when(ctx.find_results.is_some(), |header| {
             header.child(super::find::folder_header(t))

@@ -10,7 +10,6 @@ use gpui_kit::{
 use navo_fs::{EntryKind, FsEntry};
 
 use super::git_cell::{self, GitSlot};
-use super::git_text;
 use super::widths::ColumnWidths;
 use super::{ListParts, SortBy, kind};
 use crate::name_match::{Needle, Scratch};
@@ -158,9 +157,13 @@ fn name_label(look: &RowLook, text: String, runs: Vec<Run>) -> impl IntoElement 
         })
 }
 
-fn counts_text(look: &RowLook) -> Option<impl IntoElement + use<>> {
-    let badge = look.git?.badge?;
-    git_text::counts(badge).map(|text| git_cell::counts_label(look.theme, text))
+fn row_ground(look: &RowLook) -> Hsla {
+    let s = &look.theme.surfaces;
+    if look.is_cursor && look.is_active_pane {
+        s.current
+    } else {
+        s.card
+    }
 }
 
 fn name_cell(
@@ -183,6 +186,10 @@ fn name_cell(
             d.opacity(HIDDEN_ICON_OPACITY)
         })
         .child(icon(glyph, t.spacing.icon - px(1.), glyph_color));
+    let glyph = div().relative().flex_none().child(glyph).children(
+        look.git
+            .map(|slot| git_cell::overlay(t, &slot, row_ground(look))),
+    );
     div()
         .id(("cell", 0usize))
         .test_support()
@@ -200,8 +207,7 @@ fn name_cell(
                 .min_w_0()
                 .h_full()
                 .when(look.parts.icons, |d| d.child(glyph))
-                .child(name_label(look, text, runs))
-                .children(counts_text(look)),
+                .child(name_label(look, text, runs)),
         )
         .child(zone.flex_1().h_full())
 }
@@ -289,7 +295,6 @@ pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
         })
         .when(is_idle_cursor, |d| d.shadow(inset_ring(c.line)))
         .child(check_cell(look))
-        .children(look.git.map(|slot| git_cell::cell(t, &slot)))
         .child(name_cell(look, (name, extension), zones))
         .when(look.is_find, |d| {
             d.child(super::find::folder_cell("find-folder", folder, t))
