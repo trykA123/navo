@@ -166,6 +166,7 @@ fn shared(badges: impl IntoIterator<Item = Named>) -> Arc<FolderBadges> {
     Arc::new(FolderBadges {
         revision: 1,
         by_name,
+        ..FolderBadges::default()
     })
 }
 

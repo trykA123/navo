@@ -13,6 +13,7 @@ git-spoken-behind = { $count } behind
 git-column = Git
 
 git-inside = Inside a repository
+git-slow-drive = Git status skipped: slow drive
 git-branch-upstream = { $branch } → { $upstream }
 git-detail-conflict = { $count ->
     [one] 1 conflict

@@ -141,7 +141,10 @@ impl Scanner {
             return;
         }
         let found = self.discover(&listing);
-        let mut badges = FolderBadges::default();
+        let mut badges = FolderBadges {
+            slow_drive: found.slow,
+            ..FolderBadges::default()
+        };
         for root in &found.roots {
             if let Some(mut cached) = self.cache.get(root) {
                 cached.stale = true;

@@ -41,6 +41,7 @@ fn with_git(mut shown: FileListProps, badges: &[(&str, RepoBadge)]) -> FileListP
     shown.git = Some(Arc::new(FolderBadges {
         revision: 1,
         by_name,
+        ..FolderBadges::default()
     }));
     shown
 }

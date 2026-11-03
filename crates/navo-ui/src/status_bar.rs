@@ -13,7 +13,7 @@ use crate::tokens;
 mod chips;
 mod workspace;
 
-use chips::{marked_chip, marked_part, notice_text};
+use chips::{marked_chip, marked_part, notice_text, quiet_note};
 pub use workspace::{WorkspaceButton, WorkspaceSummary};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -133,6 +133,7 @@ pub struct StatusBar {
     id: ElementId,
     props: StatusBarProps,
     notice: Option<StatusNotice>,
+    note: Option<SharedString>,
     parts: FooterParts,
     workspace: Option<WorkspaceButton>,
     summary: Option<SharedString>,
@@ -144,6 +145,7 @@ impl StatusBar {
             id: id.into(),
             props,
             notice: None,
+            note: None,
             parts: FooterParts::default(),
             workspace: None,
             summary: None,
@@ -172,12 +174,22 @@ impl StatusBar {
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.summary.is_none() && self.props.text_in(self.parts).is_empty() && self.notice.is_none()
+        self.summary.is_none()
+            && self.props.text_in(self.parts).is_empty()
+            && self.notice.is_none()
+            && self.note.is_none()
     }
 
     #[must_use]
     pub fn notice(mut self, notice: Option<StatusNotice>) -> Self {
         self.notice = notice;
+        self
+    }
+
+    /// A quiet note that fades in; a notice replaces it, so the two never stack.
+    #[must_use]
+    pub fn note(mut self, note: Option<SharedString>) -> Self {
+        self.note = note;
         self
     }
 
@@ -196,9 +208,13 @@ impl StatusBar {
             .summary
             .as_ref()
             .map_or_else(|| self.props.contents_text(), |text| text.to_string());
-        let label = match &self.notice {
-            Some(notice) if text.is_empty() => notice.text.to_string(),
-            Some(notice) => format!("{} · {}", notice.text, text),
+        let first = match (&self.notice, &self.note) {
+            (Some(notice), _) => Some(notice.text.clone()),
+            (None, note) => note.clone(),
+        };
+        let label = match first {
+            Some(first) if text.is_empty() => first.to_string(),
+            Some(first) => format!("{first} · {text}"),
             None => text,
         };
         (label, contents)
@@ -214,6 +230,8 @@ impl RenderOnce for StatusBar {
         let (label, contents) = self.text();
         let more = parts.contents || props.mark.text().is_some() || parts.free_space;
         let hidden = props.hidden_text().filter(|_| parts.marked_totals);
+        let note = self.note.filter(|_| self.notice.is_none());
+        let still = cx.reduce_motion();
         div()
             .id(self.id)
             .role(Role::Status)
@@ -230,6 +248,7 @@ impl RenderOnce for StatusBar {
             .border_t_1()
             .border_color(t.surfaces.card_edge)
             .when_some(self.notice, |d, notice| d.child(notice_text(t, notice)))
+            .when_some(note, |d, note| d.child(quiet_note(t, note, still)))
             .when_some(
                 props.marked_text().filter(|_| parts.marked_totals),
                 |d, marked| d.child(marked_chip(c.mark, marked, more || hidden.is_some())),

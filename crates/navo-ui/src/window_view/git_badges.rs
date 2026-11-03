@@ -5,6 +5,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::unbounded;
 use navo_core::{Location, PaneId};
 use navo_fs::{EntryKind, FsEntry};
+use navo_l10n::t;
 
 use super::NavoWindow;
 use super::lane::Reply;
@@ -212,6 +213,12 @@ impl NavoWindow {
         if self.git_badges.accept_all(read) {
             self.queue_cached_refresh(window, cx);
         }
+    }
+
+    /// The quiet footer note for a pane whose listing the Git scanner skipped as too slow.
+    pub(super) fn slow_drive_note(&self, pane: PaneId) -> Option<SharedString> {
+        let badges = self.git_badges.badges(pane)?;
+        badges.slow_drive.then(|| t!("git-slow-drive").into())
     }
 
     fn no_reply() -> Reply {

@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use gpui_kit::AppContext as _;
+use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, Entity, TestAppContext, VisualTestContext};
 use navo_core::{AppState, Command, Location};
 
 use super::drive_fs::{DriveFs, local};
 use super::{fake, open_options, options_for, settle};
 use crate::git::{FolderBadges, GitHooks, NoGit};
+use crate::status_bar::StatusNotice;
 use crate::window_view::NavoWindow;
 
 #[derive(Default)]
@@ -23,9 +26,14 @@ struct Fake(Arc<Mutex<Log>>);
 
 impl Fake {
     fn publish(&self, at: &Location, revision: u64) {
+        self.publish_with(at, revision, false);
+    }
+
+    fn publish_with(&self, at: &Location, revision: u64, slow_drive: bool) {
         let mut log = self.0.lock().unwrap();
         let badges = Arc::new(FolderBadges {
             revision,
+            slow_drive,
             ..FolderBadges::default()
         });
         log.published.insert(at.as_str().to_owned(), badges);
@@ -199,4 +207,65 @@ fn window_activation_tells_the_hooks_once(cx: &mut TestAppContext) {
     visual.update(|window, _| window.activate_window());
     visual.run_until_parked();
     assert_eq!(git.0.lock().unwrap().focused, before + 1);
+}
+
+const SLOW: &str = "Git status skipped: slow drive";
+
+fn footer(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<NavoWindow>) -> String {
+    let pane = view.read_with(cx, |view, _| view.browser.state().focused_pane());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .find(("status", pane.get()))
+            .label()
+            .map(str::to_owned)
+    })
+    .expect("window")
+    .unwrap_or_default()
+}
+
+#[gpui_kit::test]
+fn a_slow_drive_note_shows_in_the_pane_status_and_clears_on_navigation(cx: &mut TestAppContext) {
+    let git = Fake::default();
+    let (window, view) = open_window(cx, Arc::new(git.clone()));
+    assert!(!footer(cx, window, &view).contains(SLOW));
+    git.publish_with(&local(r"C:\home"), 5, true);
+    settle(cx, &view);
+    assert!(footer(cx, window, &view).contains(SLOW));
+    go(cx, &view, r"C:\home\docs");
+    assert!(!footer(cx, window, &view).contains(SLOW));
+}
+
+#[gpui_kit::test]
+fn the_slow_drive_note_follows_the_hooks_and_a_normal_listing_never_shows_it(
+    cx: &mut TestAppContext,
+) {
+    let git = Fake::default();
+    let (window, view) = open_window(cx, Arc::new(git.clone()));
+    let home = local(r"C:\home");
+    git.publish_with(&home, 5, false);
+    settle(cx, &view);
+    assert!(!footer(cx, window, &view).contains(SLOW));
+    git.publish_with(&home, 6, true);
+    settle(cx, &view);
+    assert!(footer(cx, window, &view).contains(SLOW));
+    git.unpublish(&home);
+    settle(cx, &view);
+    assert!(!footer(cx, window, &view).contains(SLOW));
+}
+
+#[gpui_kit::test]
+fn a_status_notice_replaces_the_slow_drive_note(cx: &mut TestAppContext) {
+    let git = Fake::default();
+    let (window, view) = open_window(cx, Arc::new(git.clone()));
+    git.publish_with(&local(r"C:\home"), 5, true);
+    settle(cx, &view);
+    view.update(cx, |view, _| {
+        view.show_notice(StatusNotice {
+            text: "Copied".into(),
+            is_error: false,
+        });
+    });
+    let label = footer(cx, window, &view);
+    assert!(label.contains("Copied") && !label.contains(SLOW));
 }

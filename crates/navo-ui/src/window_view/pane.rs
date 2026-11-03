@@ -143,6 +143,7 @@ impl NavoWindow {
         StatusBar::new(("status", pane.get()), status)
             .parts(footer_parts(WindowParts::of(&self.values)))
             .notice(self.status_notice().filter(|_| is_active))
+            .note(self.slow_drive_note(pane))
             .workspace(is_active.then(|| self.workspace_button(cx)).flatten())
             .summary(self.find_status(pane))
     }
