@@ -68,6 +68,8 @@ git-menu-nothing-to-push = Nothing to push
 git-menu-pull-first = Pull first: histories diverged
 git-menu-this-folder = this folder
 git-menu-working-tree = working tree
+git-menu-no-repo = No Git repository here
+git-menu-off = Git status is off — turn it on in Settings → Git
 git-menu-started = { $action } sent to { $tool }
 
 git-item-commit = Commit…
