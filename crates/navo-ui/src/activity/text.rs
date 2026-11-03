@@ -206,7 +206,7 @@ fn count_of(left: &[SharedString]) -> u64 {
 
 pub(super) fn done_detail(job: &JobInfo, undo_key: Option<&SharedString>) -> Option<String> {
     if job.kind != OpKind::Rename {
-        return None;
+        return refused_text(&job.rename.refused);
     }
     if !job.rename.undo {
         let parts: Vec<_> = [
@@ -244,10 +244,18 @@ pub(super) fn failure_detail(job: &JobInfo, message: &SharedString) -> String {
     } else {
         "activity-rename-left"
     };
-    match left_text(id, &job.rename.left) {
-        Some(left) => format!("{message} · {left}"),
-        None => message.to_string(),
-    }
+    let parts = [
+        left_text(id, &job.rename.left),
+        refused_text(&job.rename.refused),
+    ];
+    std::iter::once(message.to_string())
+        .chain(parts.into_iter().flatten())
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+fn refused_text(refused: &[SharedString]) -> Option<String> {
+    left_text("paste-virtual-refused", refused)
 }
 
 fn left_text(id: &str, left: &[SharedString]) -> Option<String> {

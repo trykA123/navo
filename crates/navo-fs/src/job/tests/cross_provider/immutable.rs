@@ -19,6 +19,7 @@ impl SourceOps for Immutable {
         Ok(SourceMetadata {
             kind: EntryKind::File,
             identity: SourceIdentity::Object(navo_git::ObjectId::Sha1([id; 20])),
+            modified: None,
         })
     }
 

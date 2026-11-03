@@ -2,10 +2,16 @@ use std::sync::Arc;
 
 use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
 use navo_core::{Location, OpKind};
-use navo_fs::{FakeFs, Provider};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use navo_core::{FsError, FsErrorKind, ItemKind, ProviderId, ScannedItem};
+use navo_fs::{
+    CancelToken, EntryKind, FakeFs, Provider, SourceContent, SourceIdentity, SourceMetadata,
+    SourceOps, Sources, TempCreated,
+};
 
 use super::{fake, home_beside_dest, open_options, options_for, press};
-use crate::browser::{JobStatus, Operations};
+use crate::browser::{JobStatus, Operations, StreamPaste};
 use crate::window_view::{
     ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService, NavoWindow,
 };
@@ -16,6 +22,7 @@ pub(in crate::window_view) struct FakeClipboard {
     pub writes: std::sync::Mutex<Vec<ClipboardFiles>>,
     pub clears: std::sync::Mutex<Vec<ClipboardFiles>>,
     pub unsupported: bool,
+    pub virtual_files: std::sync::Mutex<Option<StreamPaste>>,
 }
 
 impl FileClipboardService for FakeClipboard {
@@ -51,6 +58,49 @@ impl FileClipboardService for FakeClipboard {
             *held = None;
         }
         Ok(is_same)
+    }
+
+    fn read_virtual(&self) -> Result<Option<StreamPaste>, ClipboardFault> {
+        Ok(self.virtual_files.lock().unwrap().take())
+    }
+
+    fn has_virtual_files(&self) -> bool {
+        self.virtual_files.lock().unwrap().is_some()
+    }
+}
+
+/// A source that writes each pasted file itself, as a mail would, and counts the opens.
+struct Pasted {
+    fs: Arc<FakeFs>,
+    opened: AtomicUsize,
+}
+
+impl SourceOps for Pasted {
+    fn id(&self) -> ProviderId {
+        ProviderId::new("pasted").unwrap()
+    }
+
+    fn metadata(&self, _: &Location) -> Result<SourceMetadata, FsError> {
+        Ok(SourceMetadata {
+            kind: EntryKind::File,
+            identity: SourceIdentity::Advisory,
+            modified: None,
+        })
+    }
+
+    fn open_read(&self, _: &Location) -> Result<Box<dyn std::io::Read + Send>, FsError> {
+        Err(FsError::new(FsErrorKind::NotSupportedYet))
+    }
+
+    fn open_into(
+        &self,
+        _: &Location,
+        (temp, _): (&Location, TempCreated<'_>),
+        _: &CancelToken,
+    ) -> Result<SourceContent, FsError> {
+        self.opened.fetch_add(1, Ordering::Relaxed);
+        self.fs.add_file(&temp.path().to_text(), 3);
+        Ok(SourceContent::Written)
     }
 }
 
@@ -333,4 +383,38 @@ fn f9_in_an_empty_folder_copies_nothing(cx: &mut TestAppContext) {
     rig.press(cx, "f9");
     assert_eq!(copied_text(cx), None);
     assert_eq!(rig.notice(cx), None);
+}
+
+#[gpui_kit::test]
+fn ctrl_v_with_only_virtual_files_copies_them_into_the_active_folder(cx: &mut TestAppContext) {
+    let rig = rig(cx, FakeClipboard::default());
+    let source = Arc::new(Pasted {
+        fs: Arc::clone(&rig.fs),
+        opened: AtomicUsize::new(0),
+    });
+    let item = Location::provider_root(source.id())
+        .join(&navo_core::ProviderPath::from_text("mail.msg"))
+        .unwrap();
+    *rig.clipboard.virtual_files.lock().unwrap() = Some(StreamPaste {
+        sources: Sources::new().with(source.clone()),
+        items: vec![ScannedItem {
+            location: item,
+            depth: 0,
+            kind: ItemKind::File,
+            size: 0,
+            modified_ms: None,
+        }],
+        refused: Vec::new(),
+        items_only: true,
+        explain: None,
+    });
+    rig.press(cx, "tab");
+    rig.press(cx, "ctrl-v");
+    assert!(!rig.has_pending(cx));
+    assert_eq!(
+        rig.jobs(cx),
+        [(OpKind::Copy, Some(rig.at("dest")), JobStatus::Done)]
+    );
+    assert!(rig.exists("dest/mail.msg"));
+    assert_eq!(source.opened.load(Ordering::Relaxed), 1);
 }

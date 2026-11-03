@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::time::SystemTime;
 
 use navo_core::{FileIdentity, FsError, Location};
 
@@ -21,4 +22,6 @@ pub struct StreamWrite<'a> {
     pub source: &'a Location,
     pub target: &'a Location,
     pub created: Option<&'a mut dyn FnMut(FileIdentity) -> Result<(), FsError>>,
+    /// Set on the new file after its last byte.
+    pub modified: Option<SystemTime>,
 }

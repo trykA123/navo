@@ -9,12 +9,15 @@ use super::{Browser, Message, RenameReport};
 mod keep;
 mod paste;
 pub(in crate::browser) mod queue;
+mod reporter;
 mod retain;
+mod stream;
 mod types;
 mod work;
 
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
 pub use queue::SlowVolume;
+pub use stream::{Explain, Refused, StreamPaste};
 use types::PlannedOp;
 pub use types::*;
 pub(in crate::browser) use work::Run;
@@ -60,7 +63,7 @@ impl Browser {
     }
 
     fn submit_plan(&mut self, request: OpRequest) -> bool {
-        let Some(volume) = request.sources.first().map(volume_of) else {
+        let Some(volume) = planned_on(&request).map(volume_of) else {
             return false;
         };
         if !request.structure.as_ref().is_some_and(|s| s.planning) {
@@ -99,7 +102,10 @@ impl Browser {
                         ),
                     }
                 });
-                let _ = sender.send(Message::Job(JobUpdate::Planned { request, result }));
+                let _ = sender.send(Message::Job(JobUpdate::Planned {
+                    request: Box::new(request),
+                    result,
+                }));
                 wake();
             }),
         );
@@ -137,7 +143,11 @@ impl Browser {
         let view = JobView {
             id: pending.id,
             kind: pending.plan.kind,
-            from: pending.sources.first().and_then(Location::parent),
+            from: pending
+                .sources
+                .first()
+                .filter(|_| pending.stream.is_none())
+                .and_then(Location::parent),
             target: pending.target.clone(),
             sources: pending.sources.len(),
             progress: start_progress(&pending.plan),
@@ -148,6 +158,11 @@ impl Browser {
             undo: matches!(run, Run::Undo { .. }),
             report: RenameReport::default(),
             first_new,
+            refused: pending
+                .stream
+                .as_ref()
+                .map(|stream| stream.refused.clone())
+                .unwrap_or_default(),
         };
         self.jobs.push(view);
         if matches!(run, Run::Plain) {
@@ -231,7 +246,7 @@ impl Browser {
 
     pub(super) fn accept_job(&mut self, update: JobUpdate) -> bool {
         match update {
-            JobUpdate::Planned { request, result } => self.accept_plan(request, result),
+            JobUpdate::Planned { request, result } => self.accept_plan(*request, result),
             JobUpdate::Classified { id, volumes } => self.accept_classified(id, volumes),
             JobUpdate::Progress { id, progress } => {
                 self.with_job(id, |job| job.progress = progress)
@@ -280,6 +295,7 @@ impl Browser {
             source_tab,
             asks: true,
             structure,
+            stream: None,
         })
     }
 
@@ -310,8 +326,10 @@ impl Browser {
                         planning: false,
                         ..s
                     }),
+                    stream: request.stream,
                 };
-                let asks = request.asks || pending.is_protected();
+                let conflicts = pending.stream.is_some() && !pending.plan.conflicts.is_empty();
+                let asks = request.asks || pending.is_protected() || conflicts;
                 self.dialog_opened();
                 self.pending = Some(pending);
                 if !asks {
@@ -379,6 +397,14 @@ impl Browser {
         self.check_left(id);
         self.release_job(id);
         true
+    }
+}
+
+/// Plans list the sources, except a paste without paths, which only lists its target.
+fn planned_on(request: &OpRequest) -> Option<&Location> {
+    match &request.stream {
+        Some(_) => request.target.as_ref(),
+        None => request.sources.first(),
     }
 }
 

@@ -22,6 +22,8 @@ pub struct RenameNote {
     pub skipped: usize,
     pub left: Vec<SharedString>,
     pub log_error: Option<SharedString>,
+    /// Pasted names refused before the job ran, each with its reason.
+    pub refused: Vec<SharedString>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -39,10 +39,9 @@ pub(super) fn progress_files(plan: &OperationPlan) -> u64 {
 }
 
 pub(super) fn moved_bytes(plan: &OperationPlan) -> u64 {
-    plan.steps
-        .iter()
-        .map(|step| counted(plan.kind, step).0)
-        .sum()
+    plan.steps.iter().fold(0u64, |sum, step| {
+        sum.saturating_add(counted(plan.kind, step).0)
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -212,7 +211,7 @@ pub(super) fn holds_kept(step: &Step, kept: &[Location]) -> bool {
 
 fn advance(progress: &mut Progress, kind: OpKind, step: &Step) {
     let (bytes, files) = counted(kind, step);
-    progress.bytes_done += bytes;
+    progress.bytes_done = progress.bytes_done.saturating_add(bytes);
     progress.files_done += files;
 }
 
@@ -293,7 +292,7 @@ fn copy_in_order(
         let total = estimate.max(bytes);
         progress.adjust_total(estimate, total);
         estimate = total;
-        progress.bytes_done = base + bytes;
+        progress.bytes_done = base.saturating_add(bytes);
         report(progress);
         hold(cancel, progress, report);
     };
@@ -308,7 +307,7 @@ fn copy_in_order(
     )?;
     let written = copied.bytes().unwrap_or(step.size);
     progress.adjust_total(estimate, written);
-    progress.bytes_done = base + written;
+    progress.bytes_done = base.saturating_add(written);
     place(job.aside, ctx, copied, step.target)
 }
 

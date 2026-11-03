@@ -77,3 +77,64 @@ fn a_retaining_overwrite_from_another_provider_reports_its_temporary_and_holds_t
         OLD
     );
 }
+
+/// A source that writes the temporary file itself and dies halfway.
+struct Dies;
+
+impl SourceOps for Dies {
+    fn id(&self) -> ProviderId {
+        memory_id()
+    }
+
+    fn metadata(&self, _: &Location) -> Result<SourceMetadata, FsError> {
+        Ok(SourceMetadata {
+            kind: EntryKind::File,
+            identity: crate::SourceIdentity::Advisory,
+            modified: None,
+        })
+    }
+
+    fn open_read(&self, location: &Location) -> Result<Box<dyn Read + Send>, FsError> {
+        Err(crate::job::copy::failure(
+            FsErrorKind::NotSupportedYet,
+            location,
+        ))
+    }
+
+    fn open_into(
+        &self,
+        location: &Location,
+        (temp, created): (&Location, crate::TempCreated<'_>),
+        _: &CancelToken,
+    ) -> Result<crate::SourceContent, FsError> {
+        std::fs::write(crate::os_path(temp)?, b"half").unwrap();
+        created()?;
+        Err(crate::job::copy::failure(FsErrorKind::Locked, location))
+    }
+}
+
+fn dying_run() -> (Retaining, JobOutcome) {
+    let scene = Scene::new(Feed::Whole, None);
+    let sources = Sources::new().with(Arc::new(Dies));
+    let mut log = Retaining::default();
+    let outcome = run_job_with_sources(
+        &scene.plan,
+        &[],
+        &mut JobContext {
+            ops: &LocalFs::new(),
+            log: &mut log,
+            cancel: &CancelToken::new(),
+            progress: &mut |_| {},
+        },
+        &sources,
+    );
+    (log, outcome)
+}
+
+#[cfg(unix)]
+#[test]
+fn a_strict_job_records_a_source_written_temporary_as_soon_as_the_source_announces_it() {
+    let (log, outcome) = dying_run();
+    assert!(matches!(outcome, JobOutcome::Failed { .. }), "{outcome:?}");
+    assert_eq!(log.created, [0], "recorded before the source failed");
+}

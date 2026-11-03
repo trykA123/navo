@@ -3,21 +3,20 @@ use navo_core::{
 };
 use navo_fs::{
     AutoTuning, CancelToken, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
-    WorkerCounts, existing_at, job_workers, run_job_parallel, scan,
+    WorkerCounts, existing_at, job_workers, run_job_parallel, run_job_parallel_with_sources, scan,
 };
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
-use std::time::{Duration, Instant};
 
 use super::keep::existing_kept;
+use super::reporter::Reporter;
+use super::stream::StreamPaste;
 use super::{Copying, Ended, JobUpdate, LogFactory, LoggedOperation, OpLog, OpRequest};
 use crate::browser::{
     Message, RenameReport, UndoLogFactory, UndoOffer, Waker, WriteRenameLog, run_batch, run_undo,
 };
-
-const PROGRESS_EVERY: Duration = Duration::from_millis(50);
 
 pub(super) fn lands_inside(target: &Location, folder: &Location, sources: &[Location]) -> bool {
     if target == folder {
@@ -42,7 +41,10 @@ pub(super) fn plan_for(
     request: &OpRequest,
     cancel: &CancelToken,
 ) -> Result<OperationPlan, FsError> {
-    let items = scan(provider, &request.sources, cancel)?;
+    let items = match &request.stream {
+        Some(stream) => stream.items.clone(),
+        None => scan(provider, &request.sources, cancel)?,
+    };
     let kept = request
         .structure
         .as_ref()
@@ -112,6 +114,7 @@ pub(super) struct JobWork {
     pub id: u64,
     pub copying: Copying,
     pub source: Option<Location>,
+    pub stream: Option<StreamPaste>,
     pub target: Option<Location>,
     pub plan: OperationPlan,
     pub ops: Arc<dyn ProviderOps>,
@@ -123,52 +126,21 @@ pub(super) struct JobWork {
     pub wake: Waker,
 }
 
-struct Reporter<'a> {
-    id: u64,
-    sender: &'a Sender<Message>,
-    wake: &'a Waker,
-    sent: Instant,
-    last: Option<Progress>,
-}
-
-impl Reporter<'_> {
-    fn report(&mut self, progress: &Progress) {
-        let was_paused = self.last.as_ref().is_some_and(|last| last.paused);
-        self.last = Some(progress.clone());
-        if progress.paused == was_paused && self.sent.elapsed() < PROGRESS_EVERY {
-            return;
-        }
-        self.sent = Instant::now();
-        let progress = progress.clone();
-        let id = self.id;
-        let _ = self
-            .sender
-            .send(Message::Job(JobUpdate::Progress { id, progress }));
-        (self.wake)();
-    }
-}
-
 impl JobWork {
     pub(super) fn run(self) {
-        let mut reporter = Reporter {
-            id: self.id,
-            sender: &self.sender,
-            wake: &self.wake,
-            sent: Instant::now(),
-            last: None,
-        };
+        let mut reporter = Reporter::new(self.id, self.stream.as_ref(), (&self.sender, &self.wake));
         let outcome = catch_unwind(AssertUnwindSafe(|| {
             self.execute(&mut |progress| reporter.report(progress))
         }))
         .unwrap_or_else(|_| Err("The job stopped unexpectedly".to_owned()));
         let (outcome, report) = match outcome {
-            Ok((outcome, report)) => (Ok(outcome), report),
+            Ok((outcome, report)) => (self.explained(outcome), report),
             Err(message) => (Err(message), RenameReport::default()),
         };
         let _ = self.sender.send(Message::Job(JobUpdate::Done {
             id: self.id,
             ended: Ended {
-                progress: reporter.last,
+                progress: reporter.into_last(),
                 outcome,
                 report,
             },
@@ -241,7 +213,23 @@ impl JobWork {
         }
     }
 
+    /// A failed paste says what its source reported, when that is clearer than the file error.
+    fn explained(&self, outcome: JobOutcome) -> Result<JobOutcome, String> {
+        let explain = self
+            .stream
+            .as_ref()
+            .and_then(|stream| stream.explain.as_ref());
+        match (&outcome, explain) {
+            (JobOutcome::Failed { .. }, Some(explain)) => explain().map_or(Ok(outcome), Err),
+            _ => Ok(outcome),
+        }
+    }
+
     fn run_plain(&self, ctx: &mut JobContext<'_>) -> JobOutcome {
+        if let Some(stream) = &self.stream {
+            // Items are served one at a time, so one worker reads them.
+            return run_job_parallel_with_sources((&self.plan, &stream.sources), &[], ctx, 1);
+        }
         let workers = worker_count(
             self.copying,
             self.plan.kind,
@@ -316,6 +304,7 @@ mod tests {
             source_tab: state.active_tab().id(),
             asks: true,
             structure: None,
+            stream: None,
         };
         plan_for(&fs, &request, &CancelToken::new()).unwrap()
     }
@@ -368,6 +357,7 @@ mod tests {
         use std::os::unix::ffi::OsStrExt;
         use std::path::Path;
         use std::sync::mpsc;
+        use std::time::{Duration, Instant};
 
         use navo_core::ProviderPath;
         use navo_fs::LocalFs;

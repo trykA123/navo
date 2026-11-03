@@ -502,3 +502,31 @@ fn an_expired_done_item_is_no_longer_shown() {
     activity.tick(now + DONE_FOR);
     assert!(!activity.shows_batch(3));
 }
+
+#[test]
+fn a_paste_lists_the_names_it_refused_when_done_or_failed() {
+    let note = RenameNote {
+        refused: vec!["a:b (The name points to an alternate data stream)".into()],
+        ..RenameNote::default()
+    };
+    let pasted = JobInfo {
+        rename: note.clone(),
+        ..done(1)
+    };
+    let mut activity = Activity::default();
+    activity.sync(&[pasted], Instant::now());
+    assert_eq!(
+        primary(&activity).detail.as_deref(),
+        Some(
+            "Not pasted because its name was refused: a:b (The name points to an alternate data stream)"
+        )
+    );
+    let failed = JobInfo {
+        rename: note,
+        ..failed(2)
+    };
+    let mut activity = Activity::default();
+    activity.sync(&[failed], Instant::now());
+    let detail = primary(&activity).detail.clone().unwrap();
+    assert!(detail.starts_with("Access denied · Not pasted"), "{detail}");
+}

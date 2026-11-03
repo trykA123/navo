@@ -51,6 +51,27 @@ fn recycling_more_than_a_gib_is_large() {
 }
 
 #[test]
+fn hostile_sizes_saturate_instead_of_overflowing() {
+    let items = || {
+        vec![
+            file(r"C:\a\x.bin", 0, u64::MAX),
+            file(r"C:\a\y.bin", 0, u64::MAX),
+        ]
+    };
+    let kinds = [
+        copy_into(items(), r"D:\d"),
+        request(OpKind::Delete, items(), None),
+        request(OpKind::Recycle, items(), None),
+    ];
+    for request in kinds {
+        let kind = request.kind;
+        let plan = plan(&request);
+        assert_eq!(plan.totals.bytes, u64::MAX, "{kind:?}");
+        assert!(plan.risks.contains(&Risk::Large(u64::MAX)), "{kind:?}");
+    }
+}
+
+#[test]
 fn a_drive_root_is_protected() {
     assert!(protected(r"C:\"));
 }

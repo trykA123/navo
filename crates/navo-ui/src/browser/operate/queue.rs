@@ -95,7 +95,12 @@ impl Browser {
         let work = JobWork {
             id: pending.id,
             copying: self.copying,
-            source: pending.sources.first().cloned(),
+            source: pending
+                .sources
+                .first()
+                .filter(|_| pending.stream.is_none())
+                .cloned(),
+            stream: pending.stream,
             target: pending.target,
             plan: pending.plan,
             ops: Arc::clone(&self.provider),

@@ -8,6 +8,7 @@ use navo_fs::{
 use std::sync::Arc;
 
 use super::queue::SlowVolumes;
+use super::stream::{Refused, StreamPaste};
 use crate::browser::{RenameReport, UndoOffer};
 
 pub(in crate::browser) struct PlannedOp {
@@ -130,6 +131,8 @@ pub struct PendingOp {
     pub undo: Option<UndoOffer>,
     pub(crate) slow_volumes: Option<SlowVolumes>,
     pub structure: Option<Structure>,
+    /// Set when the files come from another program without paths.
+    pub stream: Option<StreamPaste>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,6 +188,8 @@ pub struct JobView {
     pub undo: bool,
     pub report: RenameReport,
     pub(crate) first_new: Option<String>,
+    /// Pasted items whose names were refused, so nothing was written for them.
+    pub refused: Vec<Refused>,
 }
 
 impl JobView {
@@ -192,7 +197,11 @@ impl JobView {
         Self {
             id: request.id,
             kind: request.kind,
-            from: request.sources.first().and_then(Location::parent),
+            from: request
+                .sources
+                .first()
+                .filter(|_| request.stream.is_none())
+                .and_then(Location::parent),
             target: request.target,
             sources: request.sources.len(),
             progress: Progress {
@@ -210,6 +219,10 @@ impl JobView {
             undo: false,
             report: RenameReport::default(),
             first_new: None,
+            refused: request
+                .stream
+                .map(|stream| stream.refused)
+                .unwrap_or_default(),
         }
     }
 
@@ -221,7 +234,7 @@ impl JobView {
 
 pub(in crate::browser) enum JobUpdate {
     Planned {
-        request: OpRequest,
+        request: Box<OpRequest>,
         result: Result<PlannedOp, FsError>,
     },
     Classified {
@@ -258,4 +271,5 @@ pub(in crate::browser) struct OpRequest {
     pub(super) source_tab: TabId,
     pub(super) asks: bool,
     pub(super) structure: Option<Structure>,
+    pub(super) stream: Option<StreamPaste>,
 }

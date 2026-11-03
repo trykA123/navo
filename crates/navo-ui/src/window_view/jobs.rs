@@ -82,6 +82,11 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
             skipped: job.report.skipped,
             left: job.report.left.iter().filter_map(name_of).collect(),
             log_error: job.report.log_error.clone().map(Into::into),
+            refused: job
+                .refused
+                .iter()
+                .map(|item| format!("{} ({})", item.name, item.reason).into())
+                .collect(),
         },
     }
 }

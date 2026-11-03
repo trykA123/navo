@@ -52,6 +52,7 @@ mod splash;
 mod startup;
 mod terminal;
 mod updater;
+mod virtual_paste;
 mod watch_file;
 #[cfg(windows)]
 mod windows_memory;

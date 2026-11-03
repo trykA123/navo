@@ -43,6 +43,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         undo: None,
         slow_volumes: None,
         structure: None,
+        stream: None,
     }
 }
 
@@ -138,6 +139,7 @@ fn job(kind: OpKind, status: JobStatus) -> JobView {
         undo: false,
         report: RenameReport::default(),
         first_new: None,
+        refused: Vec::new(),
     }
 }
 
