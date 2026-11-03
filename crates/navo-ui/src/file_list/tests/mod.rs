@@ -1,5 +1,6 @@
 mod density;
 mod drag;
+mod git;
 mod input;
 mod kinds;
 mod lasso;
@@ -64,6 +65,7 @@ pub(super) fn props(rows: Arc<[FsEntry]>) -> FileListProps {
         is_active: true,
         filter: None,
         sort: crate::file_list::SortKey::default(),
+        git: None,
     }
 }
 

@@ -1,6 +1,9 @@
+mod change;
 mod edit;
 mod find;
+mod git;
 mod history;
+mod index_progress;
 mod index_upgrade;
 mod locate;
 mod service;
@@ -91,6 +94,8 @@ pub(super) struct SettingsPanel {
     is_windows: bool,
     is_history_cleared: bool,
     service_status: ServiceStatus,
+    index_progress: crate::settings::IndexProgress,
+    index_poll: index_progress::Poll,
     service_generation: u64,
     service_action_pending: bool,
     index_upgrade_due: bool,
@@ -152,6 +157,8 @@ impl SettingsPanel {
             is_windows: cfg!(windows),
             is_history_cleared: false,
             service_status: ServiceStatus::NotAvailable,
+            index_progress: crate::settings::IndexProgress::default(),
+            index_poll: None,
             service_generation: 0,
             service_action_pending: false,
             index_upgrade_due: false,
@@ -212,8 +219,10 @@ impl NavoWindow {
         }
         self.browser.dialog_opened();
         self.settings.is_open = true;
+        self.refresh_git_tools();
         if section_of(self.settings.row) == Section::Search {
             self.refresh_index_service(cx);
+            self.start_index_progress(cx);
         }
         if section_of(self.settings.row) == Section::Diagnostics {
             self.refresh_diagnostics(cx);
@@ -241,6 +250,7 @@ impl NavoWindow {
 
     fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settings.is_open = false;
+        self.stop_index_progress();
         self.settings.edit = None;
         self.settings.waiting_locate = None;
         self.settings.is_history_cleared = false;
@@ -306,53 +316,19 @@ impl NavoWindow {
             && (from != Section::Search || was_shortcuts)
         {
             self.refresh_index_service(cx);
+            self.start_index_progress(cx);
         }
         if section_of(self.settings.row) == Section::Diagnostics
             && (from != Section::Diagnostics || was_shortcuts)
         {
             self.refresh_diagnostics(cx);
         }
-        if let Some(child) = child_of(&self.settings.filter, row) {
+        if let Some(child) = child_of(&self.settings_filter(), row) {
             self.settings.scroll.scroll_to_item(child);
         }
         if self.settings.edit.is_none() {
             self.focus_settings(window, cx);
         }
-    }
-
-    fn set_from_sheet(&mut self, change: Change, window: &mut Window, cx: &mut Context<Self>) {
-        let field = change.field;
-        if self.apply_from_sheet(change, window, cx) {
-            self.settings.upgrade.forget(field);
-        }
-    }
-
-    fn apply_from_sheet(
-        &mut self,
-        change: Change,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if let Some(row) = FIELDS.iter().position(|spec| spec.field == change.field) {
-            self.select_setting(row, window, cx);
-        }
-        let old = self.values.change_of(change.field);
-        if old == change {
-            return false;
-        }
-        self.settings.undo.push(old);
-        self.change_setting(change, window, cx);
-        true
-    }
-
-    fn undo_setting(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(old) = self.settings.undo.pop() else {
-            return;
-        };
-        if let Some(row) = FIELDS.iter().position(|spec| spec.field == old.field) {
-            self.select_setting(row, window, cx);
-        }
-        self.change_setting(old, window, cx);
     }
 
     pub(super) fn settings_layer(
@@ -376,6 +352,8 @@ impl NavoWindow {
             .filter(self.settings.filter.clone())
             .find(self.find_bar(&t, cx))
             .upgrade(self.settings.upgrade.items())
+            .index_progress(self.settings.index_progress.clone())
+            .git_page(self.git_page())
             .search_page(SearchPage {
                 status: self.settings.service_status,
                 is_windows: self.settings.is_windows,

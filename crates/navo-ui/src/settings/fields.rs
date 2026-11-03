@@ -1,6 +1,7 @@
 use super::clipboard_fields::CLIPBOARD_FIELDS;
 use super::compare_fields::COMPARE_FIELDS;
 use super::general_fields::GENERAL;
+use super::git_fields::GIT_FIELDS;
 use super::search_fields::SEARCH_ROWS;
 use super::tray_fields::TRAY_FIELDS;
 use super::viewer_fields::VIEWER_FIELDS;
@@ -18,6 +19,7 @@ pub enum Section {
     Copy,
     Safety,
     Search,
+    Git,
     Display,
     Tray,
     Clipboard,
@@ -27,7 +29,7 @@ pub enum Section {
 }
 
 impl Section {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Appearance,
         Self::Files,
         Self::Selection,
@@ -36,6 +38,7 @@ impl Section {
         Self::Copy,
         Self::Safety,
         Self::Search,
+        Self::Git,
         Self::Display,
         Self::Tray,
         Self::Clipboard,
@@ -54,6 +57,7 @@ impl Section {
             Self::Copy => "Copy",
             Self::Safety => "settings-safety",
             Self::Search => "Search",
+            Self::Git => "Git",
             Self::Display => "Display",
             Self::Tray => "Tray",
             Self::Clipboard => "Clipboard",
@@ -82,6 +86,7 @@ impl Section {
             Self::Copy => IconName::Copy,
             Self::Safety => IconName::Undo2,
             Self::Search => IconName::Search,
+            Self::Git => IconName::GitBranch,
             Self::Display | Self::Diagnostics => IconName::Eye,
             Self::Tray => IconName::PanelBottom,
             Self::Clipboard => IconName::Clipboard,
@@ -129,6 +134,13 @@ pub enum Field {
     SearchNetwork,
     SearchRemovable,
     SearchRemember,
+    GitBadges,
+    GitTool,
+    GitToolCommand,
+    GitEngine,
+    GitFetch,
+    GitFetchMinutes,
+    GitNetwork,
     WindowTabsWithOne,
     WindowPathBar,
     WindowDriveButton,
@@ -164,7 +176,7 @@ pub enum Field {
     ClipboardOn,
     ClipboardRecord,
     ClipboardKey,
-    GitEngine,
+    CompareGitEngine,
     CompareIgnoreList,
     CompareRespectGitignore,
     CompareBudgetMib,
@@ -245,6 +257,8 @@ pub enum Control {
     Toggle,
     Text,
     Number,
+    /// One tool of the Git page, stored as its id.
+    Tool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -275,9 +289,10 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 76] = join([
+pub const FIELDS: [FieldSpec; 83] = join([
     &GENERAL,
     &SEARCH_ROWS,
+    &GIT_FIELDS,
     &WINDOW_FIELDS,
     &VIEWER_FIELDS,
     &TRAY_FIELDS,
@@ -285,7 +300,7 @@ pub const FIELDS: [FieldSpec; 76] = join([
     &COMPARE_FIELDS,
 ]);
 
-const fn join<const N: usize>(parts: [&[FieldSpec]; 7]) -> [FieldSpec; N] {
+const fn join<const N: usize>(parts: [&[FieldSpec]; 8]) -> [FieldSpec; N] {
     let mut all = [parts[0][0]; N];
     let mut at = 0;
     let mut part = 0;

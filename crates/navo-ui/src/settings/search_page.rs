@@ -51,7 +51,7 @@ pub struct SearchPage {
 pub(super) const SERVICE_WORDS: &str = "index service install remove";
 pub(super) const HISTORY_WORDS: &str = "search history clear remember";
 
-fn heading(t: &Theme, id: &'static str) -> AnyElement {
+pub(super) fn heading(t: &Theme, id: &'static str) -> AnyElement {
     let text = navo_l10n::tr(id);
     div()
         .flex_none()
@@ -64,7 +64,7 @@ fn heading(t: &Theme, id: &'static str) -> AnyElement {
         .into_any_element()
 }
 
-fn row(
+pub(super) fn row(
     t: &Theme,
     id: &'static str,
     (title, help): (&'static str, &'static str),

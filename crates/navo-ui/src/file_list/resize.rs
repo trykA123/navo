@@ -41,12 +41,18 @@ impl Render for Ghost {
 
 pub(super) fn shown(
     (state, known): (&Entity<ListState>, Option<&KnownWidth>),
-    (parts, user): (ListParts, UserWidths),
+    (parts, user, has_gutter): (ListParts, UserWidths, bool),
     window: &Window,
     cx: &mut App,
 ) -> (ListParts, ColumnWidths) {
     let t = tokens::current(cx).clone();
-    let widths = live(state, ColumnWidths::resolve(user, &t, window, cx), cx);
+    let gutter = if has_gutter {
+        super::git_cell::width(&t)
+    } else {
+        px(0.)
+    };
+    let resolved = ColumnWidths::resolve(user, &t, window, cx).with_gutter(gutter);
+    let widths = live(state, resolved, cx);
     let width = column_drop::list_width(state, known, cx);
     (column_drop::fit(width, parts, (&t, widths)), widths)
 }

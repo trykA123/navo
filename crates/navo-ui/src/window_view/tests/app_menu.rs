@@ -135,6 +135,22 @@ pub(super) fn rig_search(
     load_error: Option<&str>,
     search: SearchHooks,
 ) -> Rig {
+    rig_built(cx, (values, load_error), (search, None))
+}
+
+pub(super) fn rig_git(
+    cx: &mut TestAppContext,
+    values: Values,
+    git: Arc<dyn crate::git::GitHooks>,
+) -> Rig {
+    rig_built(cx, (values, None), (SearchHooks::none(), Some(git)))
+}
+
+fn rig_built(
+    cx: &mut TestAppContext,
+    (values, load_error): (Values, Option<&str>),
+    (search, git): (SearchHooks, Option<Arc<dyn crate::git::GitHooks>>),
+) -> Rig {
     let fs = rig_fs();
     let state = two_panes(&fs);
     let store = Arc::new(FakeStore {
@@ -161,6 +177,7 @@ pub(super) fn rig_search(
         },
         settings,
         search,
+        git,
         ..super::options_for(fs, state)
     };
     let (window, view) = open_options(cx, options);

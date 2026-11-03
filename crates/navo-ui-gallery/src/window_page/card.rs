@@ -24,6 +24,7 @@ impl WindowPage {
             is_active: index == self.active_index(),
             filter: None,
             sort: self.sort,
+            git: None,
         };
         let parts = self.parts;
         FileList::new(("list", index), props).parts(ListParts {

@@ -2,6 +2,9 @@ mod action;
 mod column_drop;
 mod drop;
 mod find;
+pub(crate) mod git_cell;
+mod git_keys;
+pub(crate) mod git_text;
 mod header;
 mod icons;
 mod keys;
@@ -35,6 +38,7 @@ use navo_fs::FsEntry;
 
 pub use action::{FileListAction, FilterEdit};
 pub use drop::{DropEvent, DropPayload, DropSpot, ListEdge};
+pub(crate) use git_keys::OpenGitMenu;
 pub use keys::bind_keys;
 pub(crate) use keys::{
     ClearFilter, CopyItems, EditItem, MoveItems, MultiRename, NewFile, NewFolder, OpenRow, Paste,
@@ -61,6 +65,7 @@ pub struct FileListProps {
     pub is_active: bool,
     pub filter: Option<SharedString>,
     pub sort: SortKey,
+    pub git: Option<Arc<crate::git::FolderBadges>>,
 }
 
 #[derive(IntoElement)]
@@ -105,6 +110,10 @@ impl FileList {
         self
     }
 
+    fn has_gutter(&self) -> bool {
+        git_cell::present(self.props.git.as_ref(), self.find_results)
+    }
+
     fn fit_columns(
         &self,
         state: &Entity<ListState>,
@@ -117,7 +126,7 @@ impl FileList {
         }
         resize::shown(
             (state, self.known_width.as_ref()),
-            (parts, self.user_widths),
+            (parts, self.user_widths, self.has_gutter()),
             window,
             cx,
         )

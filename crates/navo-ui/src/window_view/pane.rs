@@ -92,7 +92,7 @@ impl NavoWindow {
         let is_active = state.focused_pane() == pane;
         let error = self.pane_error(pane, tab);
         let has_cursor = is_active && !self.preview.is_browsing(window, cx);
-        let props = self.list_props(tab, has_cursor);
+        let props = self.list_props(pane, tab, has_cursor);
         let cover = self.hint_cover(window, cx).filter(|_| has_cursor);
         let status = self.pane_status(pane, tab, &props.rows);
         let focus = self.handle(pane, cx);
@@ -164,7 +164,7 @@ impl NavoWindow {
         }
     }
 
-    fn list_props(&self, tab: &Tab, is_active: bool) -> FileListProps {
+    fn list_props(&self, pane: PaneId, tab: &Tab, is_active: bool) -> FileListProps {
         FileListProps {
             folder: self.tab_title(tab),
             rows: self.browser.details(tab.id()),
@@ -176,6 +176,7 @@ impl NavoWindow {
                 .filter_text(tab.id())
                 .map(|text| text.to_owned().into()),
             sort: self.browser.sort_key(tab.id()),
+            git: self.git_badges.badges(pane),
         }
     }
 
@@ -305,7 +306,9 @@ impl NavoWindow {
             FileListAction::ContextMenu { .. }
             | FileListAction::BackgroundMenu { .. }
             | FileListAction::MenuPrefetch { .. }
-            | FileListAction::MenuCancel => {}
+            | FileListAction::MenuCancel
+            | FileListAction::GitMenu { .. }
+            | FileListAction::GitRun { .. } => {}
         }
         true
     }

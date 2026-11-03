@@ -6,7 +6,7 @@ pub(super) fn missing_revision(stderr: &str) -> bool {
         || stderr.contains("ambiguous argument")
 }
 
-pub(super) fn parse_oid(output: &[u8]) -> Result<ObjectId, GitError> {
+pub(crate) fn parse_oid(output: &[u8]) -> Result<ObjectId, GitError> {
     let token = output
         .split(|byte| byte.is_ascii_whitespace())
         .find(|token| !token.is_empty())

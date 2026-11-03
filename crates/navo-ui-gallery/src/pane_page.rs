@@ -103,7 +103,9 @@ impl PanePage {
             | FileListAction::ContextMenu { .. }
             | FileListAction::BackgroundMenu { .. }
             | FileListAction::MenuPrefetch { .. }
-            | FileListAction::MenuCancel => None,
+            | FileListAction::MenuCancel
+            | FileListAction::GitMenu { .. }
+            | FileListAction::GitRun { .. } => None,
         };
         if let Some(location) = target {
             self.run(&Command::PaneNavigate { location });
@@ -129,6 +131,7 @@ impl PanePage {
             is_active: true,
             filter: None,
             sort: navo_ui::file_list::SortKey::default(),
+            git: None,
         }
     }
 

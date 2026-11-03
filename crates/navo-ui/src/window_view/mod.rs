@@ -20,6 +20,9 @@ mod find_tab;
 mod first_keys;
 mod fkeys;
 mod font_settings;
+mod git_badges;
+mod git_menu;
+mod git_previews;
 mod hand_off;
 mod help;
 mod hints;
@@ -186,6 +189,7 @@ pub struct StartOptions {
     pub search: SearchHooks,
     pub rename: Option<RenameHooks>,
     pub retained: Arc<dyn RetainedHooks>,
+    pub git: Option<Arc<dyn crate::git::GitHooks>>,
     pub clipboard: Option<Arc<dyn ClipboardHooks>>,
 }
 
@@ -242,6 +246,8 @@ pub struct NavoWindow {
     start: Option<start_watch::Watching>,
     chrome: chrome_state::Chromes,
     cached: cached_views::CachedViews,
+    git_badges: git_badges::GitBadgeStore,
+    git_menu: git_menu::GitMenuState,
     totals: RefCell<status::TotalsCache>,
     workspace_keys: workspace_keys::WorkspaceKeys,
     _watches: [Subscription; 7],
@@ -306,6 +312,8 @@ impl NavoWindow {
             start: options.start_watch.map(start_watch::Watching::built),
             chrome: chrome_state::Chromes::default(),
             cached: cached_views::CachedViews::new(cx),
+            git_badges: git_badges::GitBadgeStore::new(options.git, cx),
+            git_menu: git_menu::GitMenuState::new(cx),
             totals: RefCell::default(),
             workspace_keys: workspace_keys::WorkspaceKeys::new(window, cx),
             _watches: Self::watches(window, cx),
@@ -338,6 +346,7 @@ impl NavoWindow {
         let polled = self.browser.poll();
         self.note_seen(cx);
         self.clear_finished_cuts();
+        self.sync_git();
         self.jobs_woke(cx);
         if polled {
             self.drag_list_changed(cx);

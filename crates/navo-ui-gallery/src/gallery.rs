@@ -16,6 +16,8 @@ use crate::clip_palette_page::ClipPalettePage;
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
 use crate::drives_page::{DrivesPage, Shows};
+use crate::git_badges_page::GitBadgesPage;
+use crate::git_menu_page::GitMenuPage;
 use crate::kinds_page::KindsPage;
 use crate::map_sample::{MAP_NAME, MAP_STEPS, MAP_UNREAD_STEPS, map, map_unread};
 use crate::menu_page::{MenuPage, Shows as MenuShows};
@@ -33,7 +35,7 @@ use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
     hint_windows, job_element, job_windows, parts_element, parts_windows, preview_element,
-    preview_windows, settings_windows, sheet_windows, window_element,
+    preview_windows, settings_element, settings_windows, sheet_windows, window_element,
 };
 use crate::{
     image_sample, pdf_sample, rich_sample, sections, shortcuts_sample, tokens_page, viewer_sample,
@@ -96,12 +98,14 @@ pub struct Gallery {
     job_windows: [Entity<WindowPage>; 7],
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
-    settings_windows: [Entity<WindowPage>; 4],
+    settings_windows: [Entity<WindowPage>; 7],
     hint_windows: [Entity<WindowPage>; 4],
     notice_windows: [Entity<WindowPage>; 2],
     parts_windows: [Entity<WindowPage>; 3],
     preview_windows: [Entity<WindowPage>; 4],
     recent: [Entity<RecentPage>; 2],
+    git_badges: [Entity<GitBadgesPage>; 2],
+    git_menu: [Entity<GitMenuPage>; 2],
     clip_palettes: [Entity<ClipPalettePage>; crate::clip_palette_page::COUNT],
     tab: usize,
     clicks: usize,
@@ -158,6 +162,8 @@ impl Gallery {
             parts_windows: parts_windows(cx),
             preview_windows: preview_windows(cx),
             recent: crate::recent_page::pages(cx),
+            git_badges: crate::git_badges_page::pages(cx),
+            git_menu: crate::git_menu_page::pages(cx),
             clip_palettes: crate::clip_palette_page::pages(window, cx),
             tab: 1,
             clicks: 0,
@@ -315,18 +321,14 @@ impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let root = root(&t);
-        let [display, upgrade, find, search] = &self.settings_windows;
-        match self.page {
-            Page::SettingsDisplay => return root.child(display.clone()),
-            Page::SettingsUpgrade => return root.child(upgrade.clone()),
-            Page::SettingsFind => return root.child(find.clone()),
-            Page::SearchSettings => return root.child(search.clone()),
-            _ => {}
+        if let Some(sheet) = settings_element(self.page, &self.settings_windows) {
+            return root.child(sheet);
         }
         if let Some(page) = self
             .window_page()
             .or_else(|| crate::tray_page::element(self.page, &t))
             .or_else(|| crate::recent_page::element(self.page, &self.recent))
+            .or_else(|| self.git_page())
             .or_else(|| crate::clip_palette_page::element(self.page, &self.clip_palettes))
         {
             let is_narrow = matches!(self.page, Page::WindowNarrow | Page::SheetNarrow);
@@ -366,6 +368,11 @@ impl Render for Gallery {
 }
 
 impl Gallery {
+    fn git_page(&self) -> Option<AnyElement> {
+        crate::git_badges_page::element(self.page, &self.git_badges)
+            .or_else(|| crate::git_menu_page::element(self.page, &self.git_menu))
+    }
+
     fn window_page(&self) -> Option<AnyElement> {
         parts_element(self.page, &self.parts_windows)
             .or_else(|| preview_element(self.page, &self.preview_windows))

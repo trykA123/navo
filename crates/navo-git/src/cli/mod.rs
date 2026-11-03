@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::trust::Guard;
 use crate::{
     BlobReader, Change, GitError, GitPath, GitRef, GitSource, IndexEntry, ObjectId, OtherPath,
     Others, Stage, Target, TreeEntry, WorktreeBlob,
@@ -14,14 +15,29 @@ mod batch;
 mod changes;
 mod filtered_stream;
 mod filters;
-mod parse;
+mod locate;
+pub(crate) mod parse;
 mod process;
+mod process_cap;
+mod process_tree;
+mod process_watch;
+mod remote;
+mod status;
+mod sync;
+mod sync_check;
+mod sync_read;
 
 use batch::{Batch, BlobStream};
+use locate::find_git;
 use parse::{missing_revision, parse_oid, parse_refs, parse_tree};
-use process::{
-    CommandSpec, base_command, command_io, find_git, resolve_git, run_process, version_of,
-};
+use process::{CommandSpec, base_command, command_io, resolve_git, run_process, version_of};
+
+pub use process_cap::{ProcessOptions, ProcessOutput};
+pub use process_watch::{Cancel, ProcessOutcome};
+pub use status::StatusLimits;
+pub use sync::{SYNC_TIMEOUT, SyncKind, SyncPreview, SyncSummary, SyncTarget};
+pub use sync_check::RemoteBinding;
+pub use sync_read::Tracking;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const MIN_GIT_VERSION: (u32, u32) = (2, 36);
@@ -71,7 +87,7 @@ impl CliGit {
         let git = match &options.git {
             Some(git) if cfg!(windows) => resolve_git(git, &options.env, options.timeout),
             Some(git) => git.clone(),
-            None => resolve_git(&find_git()?, &options.env, options.timeout),
+            None => resolve_git(&find_git(repo)?, &options.env, options.timeout),
         };
         let (version, text) = version_of(&git, &options.env, options.timeout)?;
         if (version.major, version.minor) < MIN_GIT_VERSION {
@@ -87,6 +103,40 @@ impl CliGit {
         };
         cli.run_ok(&["rev-parse", "--git-dir"])?;
         Ok(cli)
+    }
+
+    /// Captures bounded output and joins every reader before returning.
+    pub fn run_cancellable<S: AsRef<OsStr>>(
+        &self,
+        args: &[S],
+        cancel: &Cancel,
+        options: &ProcessOptions,
+    ) -> Result<ProcessOutput, GitError> {
+        let spec = CommandSpec {
+            git: &self.git,
+            repo: Some(&self.repo),
+            env: &self.env,
+            timeout: options.timeout,
+        };
+        process_cap::run_cancellable(&spec, args, cancel, options)
+    }
+
+    /// The D100e guard for background calls on this `CliGit`: Git resolves the includes with the
+    /// same cwd and environment, and the reader cross-checks it. Blocked when `env` sets a home.
+    pub fn guard(&self) -> Result<Guard, GitError> {
+        if self.env.iter().any(|(key, _)| sets_home(key)) {
+            return Ok(Guard::unreadable());
+        }
+        let git_dir = self.run_ok(&["rev-parse", "--absolute-git-dir"])?;
+        let reader = Guard::read_reported(&git_dir.stdout)?;
+        if reader.has_special_file() {
+            return Ok(reader);
+        }
+        match self.run_ok(&["config", "--list", "-z", "--show-scope", "--includes"]) {
+            Ok(listed) => Ok(reader.cross_check(&listed.stdout)),
+            Err(error @ GitError::UnsafeDirectory { .. }) => Err(error),
+            Err(_) => Ok(Guard::unreadable()),
+        }
     }
 
     fn run<S: AsRef<OsStr>>(&self, args: &[S]) -> Result<Output, GitError> {
@@ -146,6 +196,13 @@ impl CliGit {
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
         Batch::new(child, self.repo.clone(), generation)
     }
+}
+
+/// `~/` includes resolve against Navo's own home, so the child must inherit it unchanged.
+fn sets_home(key: &OsStr) -> bool {
+    ["HOME", "USERPROFILE"]
+        .iter()
+        .any(|home| key.eq_ignore_ascii_case(home))
 }
 
 impl GitSource for CliGit {

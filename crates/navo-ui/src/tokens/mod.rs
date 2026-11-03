@@ -2,6 +2,7 @@ mod contrast;
 mod density;
 mod design_b;
 mod diff;
+mod git;
 mod kit;
 mod marks;
 mod memory;
@@ -23,6 +24,7 @@ use gpui_kit::{App, Global, Hsla, Pixels, SharedString};
 pub use contrast::{contrast_ratio, relative_luminance};
 pub use density::{Density, Rows};
 pub use diff::{DiffColors, DiffTone};
+pub use git::GitColors;
 pub use kit::{ThemeLook, apply, apply_look, apply_with};
 pub use marks::MarkColors;
 pub use memory::{MemColors, MemKind};
@@ -192,6 +194,7 @@ pub struct Theme {
     pub marks: MarkColors,
     pub mem: MemColors,
     pub diff: DiffColors,
+    pub git: GitColors,
     pub surfaces: Surfaces,
     pub shadows: Shadows,
     pub motion: Motion,
@@ -235,6 +238,7 @@ impl Theme {
             marks: marks::mark_colors(mode),
             mem: memory::mem_colors(mode),
             diff: diff::diff_colors(mode),
+            git: git::git_colors(&tokens, mode),
             shadows: shadows::shadows(mode, &surfaces),
             surfaces,
             motion: motion::motion(),

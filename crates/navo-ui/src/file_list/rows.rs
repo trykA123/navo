@@ -8,7 +8,7 @@ use gpui_kit::{
 use navo_core::{Command, CursorMove, SpanMode};
 
 use super::row::{self, RowLook};
-use super::{FileListAction, ListContext, drop, lasso, press, row_number};
+use super::{FileListAction, ListContext, drop, git_cell, lasso, press, row_number};
 use crate::name_match::Needle;
 use crate::tokens::{self, Theme};
 
@@ -29,6 +29,7 @@ fn render_row(
         widths: ctx.widths,
         is_find: ctx.find_results.is_some(),
         needle,
+        git: git_cell::slot(ctx, (entry, row)),
     };
     let (left, right, click) = (ctx.clone(), ctx.clone(), ctx.clone());
     let zones = (drop::grip(ctx, row), lasso::start_zone(ctx, row));

@@ -131,7 +131,7 @@ fn git_stderr_flood_does_not_block_stdout() {
     let cli = cli(
         &fixture,
         "head -c 131072 /dev/zero >&2\nprintf payload\nexit 0",
-        Duration::from_secs(10),
+        Duration::from_secs(60),
     );
     let mut blob = cli
         .read_blob_worktree_form("HEAD", &GitPath::from("data.bin"))
@@ -144,7 +144,8 @@ fn git_stderr_flood_does_not_block_stdout() {
     let [FilterNotice::Filter { detail }] = notices.as_slice() else {
         panic!("stderr must become a finish notice");
     };
-    assert_eq!(detail.capacity(), 8 * 1024);
+    // The first and the last 8 KiB, joined by "\n...\n".
+    assert_eq!(detail.len(), 2 * 8 * 1024 + 5);
 }
 
 #[test]

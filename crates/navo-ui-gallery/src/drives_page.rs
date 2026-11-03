@@ -129,6 +129,7 @@ impl DrivesPage {
             is_active: side == 0,
             filter: None,
             sort: SortKey::default(),
+            git: None,
         };
         FileList::new(("drives-list", side), props).track_focus(&self.focus[side])
     }

@@ -48,14 +48,18 @@ impl NavoWindow {
         if filter == self.settings.filter {
             return;
         }
-        let row = filter.nearest(self.settings.row);
+        let row = filter
+            .clone()
+            .hiding(self.values.hidden_row())
+            .nearest(self.settings.row);
         let from = section_of(self.settings.row);
         self.settings.row = row;
         self.settings.filter = filter;
         if self.settings.is_open && from != Section::Search && section_of(row) == Section::Search {
             self.refresh_index_service(cx);
+            self.start_index_progress(cx);
         }
-        if let Some(child) = child_of(&self.settings.filter, row) {
+        if let Some(child) = child_of(&self.settings_filter(), row) {
             self.settings.scroll.scroll_to_item(child);
         }
         cx.notify();

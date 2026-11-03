@@ -104,6 +104,7 @@ impl NavoWindow {
     }
 
     pub(super) fn close_popups(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_git_menu(window, cx);
         let focused = window.focused(cx);
         let menus: Vec<Entity<PopupMenu>> =
             self.chrome.menus().map(|(_, menu)| menu.clone()).collect();
@@ -121,6 +122,9 @@ impl NavoWindow {
         let Some(focused) = window.focused(cx) else {
             return;
         };
+        if self.git_menu_holds(&focused, cx) {
+            return self.close_git_menu(window, cx);
+        }
         let menu = self
             .chrome
             .menus()

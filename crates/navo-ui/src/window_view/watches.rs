@@ -31,6 +31,9 @@ impl NavoWindow {
             self.apply_theme(window, cx);
             self.browser.revalidate_unwatched();
             self.refresh_drives(cx);
+            if let Some(git) = self.git_badges.hooks() {
+                git.focus_regained();
+            }
             cx.notify();
         }
     }

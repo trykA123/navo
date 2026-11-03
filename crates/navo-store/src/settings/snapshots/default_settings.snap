@@ -120,4 +120,12 @@ respect-gitignore = true
 memory-budget-mib = 1024
 content-check = "content"
 
+[git]
+badges = true
+engine = "auto"
+tool = "auto"
+fetch = false
+fetch-minutes = 15
+network = false
+
 [experimental]

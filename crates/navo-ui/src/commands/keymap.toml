@@ -553,6 +553,10 @@ keys = ["ctrl-r"]
 command = "files.context_menu"
 keys = ["menu", "shift-f10", "alt-m"]
 
+[[bind]]
+command = "git.menu"
+keys = ["alt-g"]
+
 # PathInput
 
 [[bind]]

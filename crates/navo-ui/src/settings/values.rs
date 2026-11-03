@@ -3,6 +3,8 @@ use navo_core::Tiles;
 use navo_fs::CopyMode;
 
 use super::fields::{Control, FIELDS, Field, FieldSpec, PRESETS};
+use super::git_page::AUTO as AUTO_TOOL;
+use super::git_values::DEFAULT_FETCH_MINUTES;
 use crate::app_menu::{QuickSettings, Setting};
 use crate::browser::{DropConfirm, SizeMode};
 use crate::file_list::{SortBy, SortKey};
@@ -106,6 +108,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::DarkTheme => text("Navo Dark"),
         Field::Font => text("Inter"),
         Field::FontSize => Value::Number(13),
+        Field::GitFetchMinutes => Value::Number(DEFAULT_FETCH_MINUTES),
         Field::RetentionDays => Value::Number(3),
         Field::RetentionCapMib => Value::Number(1024),
         Field::RetentionMinFreeMib => Value::Number(256),
@@ -119,6 +122,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         | Field::PreviewTypeBars
         | Field::PreviewLargestFiles
         | Field::SearchRemember
+        | Field::GitBadges
         | Field::RetainDeletes
         | Field::RetainOverwrites
         | Field::ClipboardOn
@@ -135,6 +139,7 @@ fn default_of(spec: &FieldSpec) -> Value {
             Control::Toggle => Value::Flag(false),
             Control::Text => text(""),
             Control::Number => Value::Number(0),
+            Control::Tool => text(AUTO_TOOL),
         },
     }
 }
@@ -223,6 +228,15 @@ impl Values {
         }
     }
 
+    pub(super) fn toml_of(&self, field: Field) -> &'static str {
+        match (self.get(field), field.spec().control) {
+            (Value::Pick(at), Control::Choices(options, _)) => {
+                options.get(*at).map_or("", |option| option.toml)
+            }
+            _ => "",
+        }
+    }
+
     fn pick(&self, field: Field) -> usize {
         match self.get(field) {
             Value::Pick(index) => *index,
@@ -304,6 +318,13 @@ impl Values {
 
     pub fn summon_key(&self) -> &str {
         match self.get(Field::SummonKey) {
+            Value::Text(text) => text,
+            _ => "",
+        }
+    }
+
+    pub(super) fn text_of(&self, field: Field) -> &str {
+        match self.get(field) {
             Value::Text(text) => text,
             _ => "",
         }

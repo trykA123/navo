@@ -78,50 +78,10 @@ fn has_windows_terminal(path: &str) -> bool {
         || alias.is_some_and(|alias| alias.symlink_metadata().is_ok())
 }
 
-#[cfg(windows)]
 fn delegation() -> Option<String> {
-    registry::text(r"Console\%%Startup", "DelegationTerminal")
-}
-
-#[cfg(not(windows))]
-fn delegation() -> Option<String> {
-    None
-}
-
-#[cfg(windows)]
-mod registry {
-    use std::ptr::null_mut;
-
-    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
-    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_SZ, RegGetValueW};
-
-    const UNITS: usize = 128;
-
-    fn wide(text: &str) -> Vec<u16> {
-        text.encode_utf16().chain(Some(0)).collect()
-    }
-
-    pub(super) fn text(key: &str, name: &str) -> Option<String> {
-        let (key, name) = (wide(key), wide(name));
-        let mut buffer = [0_u16; UNITS];
-        let mut size = (UNITS * 2) as u32;
-        // SAFETY: the key and value names are NUL-terminated, and `size` is the byte length of the writable `buffer`.
-        let status = unsafe {
-            RegGetValueW(
-                HKEY_CURRENT_USER,
-                key.as_ptr(),
-                name.as_ptr(),
-                RRF_RT_REG_SZ,
-                null_mut(),
-                buffer.as_mut_ptr().cast(),
-                &raw mut size,
-            )
-        };
-        if status != ERROR_SUCCESS {
-            return None;
-        }
-        let units = (size as usize / 2).min(UNITS);
-        let text = String::from_utf16_lossy(&buffer[..units]);
-        Some(text.trim_end_matches('\0').to_owned())
-    }
+    navo_shell::registry_text(
+        navo_shell::Hive::CurrentUser,
+        r"Console\%%Startup",
+        "DelegationTerminal",
+    )
 }

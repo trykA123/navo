@@ -234,13 +234,8 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 preview,
                 copy,
                 automotive,
-                search: Search::default(),
-                tray: Default::default(),
-                clipboard: Default::default(),
-                compare: Default::default(),
-                retention: Default::default(),
-                layout: Default::default(),
                 experimental,
+                ..Settings::default()
             },
         )
 }

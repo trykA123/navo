@@ -11,7 +11,7 @@ fn names(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
 
 fn open_at(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     rig.press(cx, "ctrl-,");
-    let filter = crate::settings::Filter::default();
+    let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
     let row = crate::settings::FIELDS
         .iter()
         .filter(|spec| filter.admits(spec))

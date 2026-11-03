@@ -269,6 +269,7 @@ impl CommandCenterPage {
             is_active: true,
             filter: None,
             sort: SortKey::default(),
+            git: None,
         };
         FileList::new("command-center-page-list", props).track_focus(&self.focus)
     }

@@ -5,7 +5,9 @@ use gpui_kit::{
 };
 use navo_core::{Command, CursorMove, OpKind, SpanMode};
 
+use super::git_keys::{GitCommit, GitDiff, GitLog, GitPull, GitPush, OpenGitMenu};
 use super::{FileListAction, ListContext, SortBy};
+use crate::git::GitAction;
 
 pub(super) const CONTEXT: &str = "FileList";
 
@@ -116,6 +118,28 @@ fn list_act<A: Action>(
     move |_, window, cx| ctx.act(action, window, cx)
 }
 
+fn git_menu<A: Action>(ctx: &Rc<ListContext>) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    let ctx = ctx.clone();
+    move |_, window, cx| ctx.git_menu_at_cursor(window, cx)
+}
+
+fn git_run<A: Action>(
+    ctx: &Rc<ListContext>,
+    action: GitAction,
+) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+    let ctx = ctx.clone();
+    move |_, window, cx| ctx.git_run_at_cursor(action, window, cx)
+}
+
+fn register_git(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
+    root.on_action(git_menu::<OpenGitMenu>(ctx))
+        .on_action(git_run::<GitCommit>(ctx, GitAction::Commit))
+        .on_action(git_run::<GitPull>(ctx, GitAction::Pull))
+        .on_action(git_run::<GitPush>(ctx, GitAction::Push))
+        .on_action(git_run::<GitLog>(ctx, GitAction::Log))
+        .on_action(git_run::<GitDiff>(ctx, GitAction::Diff))
+}
+
 fn operate<A: Action>(
     ctx: &Rc<ListContext>,
     kind: OpKind,
@@ -150,7 +174,10 @@ pub(super) fn register(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<D
             let ctx = ctx.clone();
             move |_: &ClearFilter, window, cx| ctx.clear_filter(window, cx)
         });
-    register_marks(register_clipboard(register_more(root, ctx), ctx), ctx)
+    register_marks(
+        register_clipboard(register_git(register_more(root, ctx), ctx), ctx),
+        ctx,
+    )
 }
 
 fn register_marks(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {

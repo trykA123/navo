@@ -29,7 +29,7 @@ fn row_of(field: Field) -> usize {
 }
 
 fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
-    let filter = crate::settings::Filter::default();
+    let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
     let steps = FIELDS[..row_of(field)]
         .iter()
         .filter(|spec| filter.admits(spec))

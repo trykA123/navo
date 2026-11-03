@@ -1,5 +1,6 @@
 ---
 source: crates/navo-ui/src/commands/tests.rs
+assertion_line: 525
 expression: "lines.join(\"\\n\")"
 ---
 workspace.preview_first | FileList | false
@@ -410,6 +411,12 @@ multi_rename.toggle_row | MultiRenamePreview | false
 multi_rename.move_row_up | MultiRenamePreview | false
 multi_rename.move_row_down | MultiRenamePreview | false
 files.recently_deleted | global | true
+git.menu | FileList | true
+git.commit | FileList | true
+git.pull | FileList | true
+git.push | FileList | true
+git.log | FileList | true
+git.diff | FileList | true
 clipboard.open | global | true
 clipboard.pause | global | true
 clipboard.clear_history | global | true

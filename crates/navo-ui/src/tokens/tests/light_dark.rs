@@ -35,6 +35,14 @@ fn every_token(theme: &Theme) -> Vec<(String, Hsla)> {
         add(format!("diff.{name}.wash"), tone.wash);
     }
     add("diff.gap_hatch".into(), theme.diff.gap_hatch);
+    for (name, color) in [
+        ("conflict", theme.git.conflict),
+        ("modified", theme.git.modified),
+        ("sync", theme.git.sync),
+        ("quiet", theme.git.quiet),
+    ] {
+        add(format!("git.{name}"), color);
+    }
     add("shadows.ink".into(), theme.shadows.ink);
     let look = treemap_look(theme.mode);
     add("treemap.fill".into(), look.fill(0., 40.));

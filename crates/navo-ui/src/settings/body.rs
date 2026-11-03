@@ -2,21 +2,26 @@ use std::rc::Rc;
 
 use gpui_kit::{FocusHandle, ScrollHandle};
 
-use super::{DiagnosticRow, Filter, HELP_ROW, Moved, SearchPage, SettingsBody, SheetEvent, Values};
+use super::{
+    DiagnosticRow, Filter, GitPage, HELP_ROW, IndexProgress, Moved, SearchPage, SettingsBody,
+    SheetEvent, Values,
+};
 use crate::prelude::*;
 
 impl SettingsBody {
     pub fn new(values: Values, row: usize) -> Self {
         Self {
+            filter: Filter::default().hiding(values.hidden_row()),
             values,
             row: row.min(HELP_ROW),
             error: None,
             editor: None,
             shortcuts: None,
-            filter: Filter::default(),
             find: None,
             upgrade: Vec::new(),
             page: SearchPage::default(),
+            git: GitPage::default(),
+            index: IndexProgress::default(),
             diagnostics: Vec::new(),
             version: SharedString::default(),
             focus: None,
@@ -59,7 +64,7 @@ impl SettingsBody {
 
     #[must_use]
     pub fn filter(mut self, filter: Filter) -> Self {
-        self.filter = filter;
+        self.filter = filter.hiding(self.values.hidden_row());
         self
     }
 
@@ -78,6 +83,18 @@ impl SettingsBody {
     #[must_use]
     pub fn search_page(mut self, page: SearchPage) -> Self {
         self.page = page;
+        self
+    }
+
+    #[must_use]
+    pub fn git_page(mut self, page: GitPage) -> Self {
+        self.git = page;
+        self
+    }
+
+    #[must_use]
+    pub fn index_progress(mut self, progress: IndexProgress) -> Self {
+        self.index = progress;
         self
     }
 

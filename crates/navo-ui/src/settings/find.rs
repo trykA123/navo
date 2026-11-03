@@ -1,37 +1,54 @@
-use super::fields::{FIELDS, FieldSpec, Section};
+use super::fields::{FIELDS, Field, FieldSpec, Section};
 use super::help_page::WORDS;
+use super::index_page::PROGRESS_WORDS;
 use super::search_page::{HISTORY_WORDS, SERVICE_WORDS};
 use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, rows_in};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Filter(Vec<String>);
+pub struct Filter {
+    words: Vec<String>,
+    hidden: Option<Field>,
+}
 
 impl Filter {
     #[must_use]
     pub fn new(text: &str) -> Self {
-        Self(text.split_whitespace().map(str::to_lowercase).collect())
+        Self {
+            words: text.split_whitespace().map(str::to_lowercase).collect(),
+            hidden: None,
+        }
+    }
+
+    /// Hides the row of `field` whatever the words say; `None` hides nothing.
+    #[must_use]
+    pub fn hiding(mut self, field: Option<Field>) -> Self {
+        self.hidden = field;
+        self
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.words.is_empty()
     }
 
     #[must_use]
     pub fn admits(&self, spec: &FieldSpec) -> bool {
-        if (spec.field.is_windows_only() && !cfg!(windows)) || !spec.section.is_shown() {
+        if (spec.field.is_windows_only() && !cfg!(windows))
+            || self.hidden == Some(spec.field)
+            || !spec.section.is_shown()
+        {
             return false;
         }
         if self.is_empty() {
             return true;
         }
         let text = format!("{} {} {}", spec.label(), spec.key, spec.help()).to_lowercase();
-        self.0.iter().all(|word| text.contains(word))
+        self.words.iter().all(|word| text.contains(word))
     }
 
     #[must_use]
     pub fn admits_text(&self, text: &str) -> bool {
-        self.0.iter().all(|word| text.contains(word.as_str()))
+        self.words.iter().all(|word| text.contains(word.as_str()))
     }
 
     #[must_use]
@@ -69,6 +86,7 @@ pub enum Line {
     Section(Section),
     Group(&'static str),
     Row(usize),
+    Progress,
     Service,
     History,
 }
@@ -110,6 +128,7 @@ fn extra_lines(filter: &Filter, section: Section) -> Vec<Line> {
         return Vec::new();
     }
     [
+        (Line::Progress, PROGRESS_WORDS),
         (Line::Service, SERVICE_WORDS),
         (Line::History, HISTORY_WORDS),
     ]

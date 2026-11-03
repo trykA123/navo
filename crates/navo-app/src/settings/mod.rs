@@ -16,7 +16,6 @@ use navo_store::{
 use navo_ui::settings::{Change, Control, FieldSpec, Value, Values};
 use navo_ui::window_view::{FindLine, KeyLine, SaveReport, SettingsHooks, SettingsNews};
 
-use crate::search_hooks::Remember;
 use crate::watch_file::watch_file;
 use ledger::LedgerFile;
 
@@ -29,7 +28,7 @@ mod skipped;
 mod start;
 
 pub(crate) use guide_hint::{take as take_marker, wire as wire_guide_hint};
-pub use reload::Reloader;
+pub use reload::{Follow, Reloader};
 pub use start::{Loaded, start_from};
 #[cfg(test)]
 use start::{follow_defaults, spawn, start, start_sharing, start_waiting};
@@ -44,12 +43,12 @@ pub fn hooks(loaded: Option<Loaded>) -> SettingsHooks {
     parts(loaded).0
 }
 
-pub fn live(loaded: Option<Loaded>, remember: &Remember) -> (SettingsHooks, Option<Watch>) {
+pub fn live(loaded: Option<Loaded>, follow: &Follow) -> (SettingsHooks, Option<Watch>) {
     let (carrier, sender) = SettingsHooks::none().channel();
     if let Some(loaded) = &loaded {
-        remember.set(loaded.store.current().search.remember);
+        follow.apply(loaded.store.current());
     }
-    let (hooks, watching) = watching(loaded, Some(remember.clone()), move |news| {
+    let (hooks, watching) = watching(loaded, Some(follow.clone()), move |news| {
         let _ = sender.send(news);
     });
     let hooks = SettingsHooks {
@@ -69,7 +68,7 @@ pub fn watched(
 
 fn watching(
     mut loaded: Option<Loaded>,
-    remember: Option<Remember>,
+    follow: Option<Follow>,
     on_news: impl FnMut(SettingsNews) + Send + 'static,
 ) -> (SettingsHooks, Option<Watch>) {
     let late = loaded.as_mut().and_then(|loaded| loaded.late.take());
@@ -86,7 +85,7 @@ fn watching(
     let problem = hooks.load_error.as_ref().map(ToString::to_string);
     let problem = problem.filter(|_| skipped.is_none());
     let reloader = Reloader::new(store, problem)
-        .remembering(remember)
+        .following(follow)
         .guarding(guarded)
         .skipping(skipped);
     let reloader = reload::Delivery::new(reloader, on_news);
@@ -282,7 +281,9 @@ fn value_of(spec: &FieldSpec, stored: Option<SettingValue>) -> Option<Value> {
         (Control::Text, Some(SettingValue::List(items))) => {
             Some(Value::Text(join_list(&items).into()))
         }
-        (Control::Text, Some(SettingValue::Text(text))) => Some(Value::Text(text.into())),
+        (Control::Text | Control::Tool, Some(SettingValue::Text(text))) => {
+            Some(Value::Text(text.into()))
+        }
         (Control::Text, None) => Some(Value::Text("".into())),
         _ => None,
     }

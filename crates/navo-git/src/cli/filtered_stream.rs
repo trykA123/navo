@@ -1,18 +1,16 @@
 use std::ffi::OsStr;
 use std::io::{self, Read};
-use std::process::{Child, ChildStderr, ChildStdout, Command, Output, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::process::{ChildStdout, Output, Stdio};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::{FilterNotice, GitError, WorktreeFinish};
 
 use super::process::{CommandSpec, base_command, command_io};
+use super::process_tree::GitTree;
 
-const STDERR_CAPACITY: usize = 8 * 1024;
-type Outcome = Arc<Mutex<Option<Result<Output, GitError>>>>;
-type ChildSlot = Arc<Mutex<Option<Child>>>;
+use super::process_watch::{ChildSlot, Outcome, Watchdog, capture_stderr, stop_shared};
 
 pub(super) struct FilteredStream {
     stdout: ChildStdout,
@@ -32,19 +30,11 @@ impl FilteredStream {
             .args(args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-        let mut child = command
-            .spawn()
-            .map_err(|error| command_io(spec.git, error))?;
-        let pipes = (child.stdout.take(), child.stderr.take());
+        let mut child =
+            GitTree::spawn(&mut command).map_err(|error| command_io(spec.git, error))?;
+        let pipes = child.take_pipes();
         let (Some(stdout), Some(stderr)) = pipes else {
-            return Err(stop_child(&mut child)
-                .err()
-                .unwrap_or(GitError::SessionClosed));
+            return Err(child.stop().err().unwrap_or(GitError::SessionClosed));
         };
         let mut stream = Self {
             stdout,
@@ -63,6 +53,7 @@ impl FilteredStream {
             Arc::clone(&stream.child),
             spec.timeout,
             Arc::clone(&stream.outcome),
+            None,
         )?);
         Ok(stream)
     }
@@ -101,7 +92,7 @@ impl FilteredStream {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .as_mut()
-                .map(Child::try_wait)
+                .map(GitTree::try_wait)
                 .transpose()
                 .map_err(git_io)?
                 .flatten();
@@ -189,123 +180,6 @@ impl Drop for FilteredStream {
     }
 }
 
-struct Watchdog {
-    activity: Arc<Activity>,
-    handle: Option<JoinHandle<Result<(), GitError>>>,
-    outcome: Outcome,
-}
-
-struct Activity {
-    state: Mutex<Idle>,
-    changed: Condvar,
-    timed_out: AtomicBool,
-}
-
-#[derive(Default)]
-struct Idle {
-    since: Option<Instant>,
-    stopped: bool,
-}
-
-impl Watchdog {
-    fn start(child: ChildSlot, timeout: Duration, outcome: Outcome) -> Result<Self, GitError> {
-        let activity = Arc::new(Activity {
-            state: Mutex::new(Idle::default()),
-            changed: Condvar::new(),
-            timed_out: AtomicBool::new(false),
-        });
-        let watched = Arc::clone(&activity);
-        let handle = thread::Builder::new()
-            .name("git-filter-watchdog".to_owned())
-            .spawn(move || watch(watched, child, timeout))
-            .map_err(git_io)?;
-        Ok(Self {
-            activity,
-            handle: Some(handle),
-            outcome,
-        })
-    }
-
-    fn set_active(&self, active: bool) {
-        self.activity
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .since = active.then(Instant::now);
-        self.activity.changed.notify_one();
-    }
-
-    fn timed_out(&self) -> bool {
-        self.activity.timed_out.load(Ordering::Acquire)
-    }
-}
-
-impl Drop for Watchdog {
-    fn drop(&mut self) {
-        self.activity
-            .state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .stopped = true;
-        self.activity.changed.notify_one();
-        if let Some(handle) = self.handle.take() {
-            let result = handle
-                .join()
-                .map_err(|_| GitError::SessionClosed)
-                .and_then(|result| result);
-            if let Err(error) = result {
-                *self.outcome.lock().unwrap_or_else(PoisonError::into_inner) = Some(Err(error));
-            }
-        }
-    }
-}
-
-fn watch(activity: Arc<Activity>, child: ChildSlot, timeout: Duration) -> Result<(), GitError> {
-    let mut state = activity
-        .state
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    loop {
-        if state.stopped {
-            return Ok(());
-        }
-        let Some(since) = state.since else {
-            state = activity
-                .changed
-                .wait(state)
-                .unwrap_or_else(PoisonError::into_inner);
-            continue;
-        };
-        let remaining = timeout.saturating_sub(since.elapsed());
-        if remaining.is_zero() {
-            activity.timed_out.store(true, Ordering::Release);
-            drop(state);
-            return stop_shared(&child);
-        }
-        state = activity
-            .changed
-            .wait_timeout(state, remaining)
-            .unwrap_or_else(PoisonError::into_inner)
-            .0;
-    }
-}
-
-fn capture_stderr(mut stderr: ChildStderr) -> io::Result<Vec<u8>> {
-    let mut bytes = Vec::with_capacity(STDERR_CAPACITY);
-    let mut chunk = [0; 4096];
-    loop {
-        match stderr.read(&mut chunk) {
-            Ok(0) => return Ok(bytes),
-            Ok(read) => {
-                let keep = read.min(STDERR_CAPACITY - bytes.len());
-                bytes.extend_from_slice(&chunk[..keep]);
-            }
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => return Err(error),
-        }
-    }
-}
-
 fn check_status(output: &Output) -> io::Result<()> {
     if output.status.success() {
         return Ok(());
@@ -331,60 +205,4 @@ fn git_io(error: io::Error) -> GitError {
         path: "git filter".into(),
         kind: error.kind(),
     }
-}
-
-fn stop_shared(child: &ChildSlot) -> Result<(), GitError> {
-    let owned = child.lock().unwrap_or_else(PoisonError::into_inner).take();
-    let Some(mut owned) = owned else {
-        return Ok(());
-    };
-    let result = stop_child(&mut owned);
-    *child.lock().unwrap_or_else(PoisonError::into_inner) = Some(owned);
-    result
-}
-
-fn stop_child(child: &mut Child) -> Result<(), GitError> {
-    let descendants = stop_descendants(child.id());
-    let killed = match child.try_wait().map_err(git_io) {
-        Ok(None) => child.kill().map_err(git_io),
-        result => result.map(|_| ()),
-    };
-    let waited = child.wait().map_err(git_io);
-    descendants.and(killed).and(waited.map(|_| ()))
-}
-
-fn stop_descendants(pid: u32) -> Result<(), GitError> {
-    let mut command = tree_kill(pid);
-    let mut killer = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(git_io)?;
-    let started = std::time::Instant::now();
-    while killer.try_wait().map_err(git_io)?.is_none() {
-        if started.elapsed() >= Duration::from_secs(1) {
-            killer.kill().map_err(git_io)?;
-            killer.wait().map_err(git_io)?;
-            break;
-        }
-        thread::sleep(Duration::from_millis(5));
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn tree_kill(pid: u32) -> Command {
-    let mut command = Command::new("kill");
-    command.args(["-KILL", "--", &format!("-{pid}")]);
-    command
-}
-
-#[cfg(windows)]
-fn tree_kill(pid: u32) -> Command {
-    use std::os::windows::process::CommandExt;
-    let mut command = Command::new("taskkill.exe");
-    command.args(["/F", "/T", "/PID", &pid.to_string()]);
-    command.creation_flags(0x0800_0000);
-    command
 }

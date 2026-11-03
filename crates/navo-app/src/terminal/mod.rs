@@ -71,7 +71,7 @@ fn custom_command(template: &str, folder: &str) -> Result<(String, Vec<String>),
     Ok((program, args))
 }
 
-fn program_identity(program: &str) -> String {
+pub(crate) fn program_identity(program: &str) -> String {
     let name = program
         .rsplit(['/', '\\'])
         .next()
@@ -84,7 +84,7 @@ fn program_identity(program: &str) -> String {
         .to_owned()
 }
 
-fn is_shell_program(program: &str) -> bool {
+pub(crate) fn is_shell_program(program: &str) -> bool {
     program
         .trim_end_matches(['.', ' '])
         .rsplit_once('.')
@@ -128,7 +128,7 @@ fn windows_creation_flags(provider: &str) -> u32 {
     console | 0x0000_0200
 }
 
-fn split(template: &str) -> Result<Vec<String>, String> {
+pub(crate) fn split(template: &str) -> Result<Vec<String>, String> {
     let mut chars = template.chars().peekable();
     let mut words = Vec::new();
     loop {

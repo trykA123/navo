@@ -4,9 +4,12 @@ mod dpapi;
 mod drag_out;
 mod drives;
 mod helper_job;
+#[cfg(windows)]
+mod kill_job;
 mod paste_back;
 #[cfg(windows)]
 mod pidl;
+mod registry;
 mod shell_menu;
 
 pub use clipboard::{
@@ -27,7 +30,10 @@ pub use drives::{
 pub use helper_job::HelperLimits;
 #[cfg(windows)]
 pub use helper_job::{HelperJob, confine_helper};
+#[cfg(windows)]
+pub use kill_job::{KillJob, spawn_in_kill_job};
 pub use paste_back::{FOCUS_WAIT, Foreground, PasteError, take_focus};
+pub use registry::{Hive, text as registry_text};
 pub use shell_menu::{
     FILL_BUDGET, InvokeOptions, MenuError, MenuPaths, MenuSession, Pending, ScreenPoint,
     ShellMenuService, Show, WindowHandle, WorkerHealth,

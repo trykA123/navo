@@ -10,7 +10,7 @@ const DEFAULT_BUDGET_MIB: u32 = 1024;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Compare {
-    pub git_engine: GitEngine,
+    pub git_engine: CompareGitEngine,
     pub ignore_list: Vec<String>,
     pub respect_gitignore: bool,
     #[serde(deserialize_with = "budget_mib")]
@@ -21,7 +21,7 @@ pub struct Compare {
 impl Default for Compare {
     fn default() -> Self {
         Self {
-            git_engine: GitEngine::default(),
+            git_engine: CompareGitEngine::default(),
             ignore_list: Vec::new(),
             respect_gitignore: true,
             memory_budget_mib: DEFAULT_BUDGET_MIB,
@@ -33,7 +33,7 @@ impl Default for Compare {
 /// Which engine reads Git repositories; a name nobody knows reads as `auto`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum GitEngine {
+pub enum CompareGitEngine {
     #[default]
     Git,
     Gix,

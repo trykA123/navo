@@ -232,7 +232,7 @@ impl NavoWindow {
         let stack = focused_contexts(window);
         let stack: Vec<&str> = stack.iter().map(String::as_str).collect();
         let keymap = commands::active(cx);
-        let snapshot = CommandsSnapshot::build(&self.command_entries(), &stack, keymap);
+        let snapshot = CommandsSnapshot::build(&self.palette_entries(), &stack, keymap);
         let keys = HintKeys::of(keymap);
         let snapshot = Arc::new(snapshot);
         let (sources, recent) = self.file_sources(&snapshot);

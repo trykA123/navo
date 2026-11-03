@@ -18,6 +18,7 @@ pub mod drag;
 pub mod file_list;
 pub mod fkey_bar;
 mod format;
+pub mod git;
 pub mod job_card;
 pub mod job_row;
 pub mod languages;

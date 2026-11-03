@@ -2,6 +2,7 @@ use gpui_kit::{Pixels, Point};
 use navo_core::OpKind;
 
 use super::SortBy;
+use crate::git::GitAction;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FilterEdit {
@@ -33,4 +34,6 @@ pub enum FileListAction {
     BackgroundMenu { at: Point<Pixels>, extended: bool },
     MenuPrefetch { adds_cursor: bool, extended: bool },
     MenuCancel,
+    GitMenu { row: u64, at: Point<Pixels> },
+    GitRun { row: u64, action: GitAction },
 }
