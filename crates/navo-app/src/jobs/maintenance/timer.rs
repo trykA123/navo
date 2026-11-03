@@ -33,6 +33,7 @@ pub(crate) struct Schedule {
     pub retry: Duration,
     pub now: Clock,
     pub memory: Option<crate::files::SharedDb>,
+    pub journal: Option<crate::jobs::SharedJournal>,
     pub retention: bool,
 }
 
@@ -43,6 +44,7 @@ impl Default for Schedule {
             retry: RETRY,
             now: Arc::new(super::super::now_ms),
             memory: None,
+            journal: None,
             retention: true,
         }
     }
@@ -91,6 +93,7 @@ impl MaintenanceTimer {
             dirs,
             ops,
             Schedule {
+                journal: memory.clone(),
                 memory,
                 retention,
                 ..Schedule::default()
@@ -189,10 +192,15 @@ fn scheduled_pass(
     if let Some(memory) = schedule.memory.take() {
         crate::files::prune_memory(&memory);
     }
+    if let Some(journal) = &schedule.journal {
+        super::super::trim::trim(journal);
+    }
     if schedule.retention {
         return pass(dirs, ops, (now, token));
     }
-    token.cancel();
+    if schedule.journal.is_none() {
+        token.cancel();
+    }
     Pass::Ran {
         volumes: 0,
         purged: 0,

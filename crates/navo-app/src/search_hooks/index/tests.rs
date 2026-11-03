@@ -54,6 +54,7 @@ fn hosts(provider: Arc<dyn Provider>, dirs: Option<StoreDirs>) -> Hosts {
         configured: Configured::default(),
         retirement: Retirements::new().unwrap(),
         presence: ServicePresence::system(),
+        snapshots: Snapshots::default(),
     }
 }
 
@@ -189,4 +190,26 @@ fn auto_walks_nothing_until_the_service_manager_has_answered_in_the_background()
     assert_eq!(provider.starts.load(Ordering::SeqCst), 1);
     release.send(()).unwrap();
     drop(hosts);
+}
+
+#[test]
+fn unreadable_settings_delete_no_snapshot_of_a_configured_root() {
+    let folder = tempfile::tempdir().unwrap();
+    let dirs = StoreDirs::in_profile(folder.path());
+    std::fs::create_dir_all(dirs.settings_file()).unwrap();
+    let index = dirs.data.join("index");
+    std::fs::create_dir_all(&index).unwrap();
+    let share = Location::new("/mnt/share").unwrap();
+    let snapshot = index.join(snapshots::file_name(&share));
+    std::fs::write(&snapshot, b"walk").unwrap();
+    let provider = Arc::new(FakeFs::new());
+    let mut hosts = hosts(provider, Some(dirs));
+    hosts.snapshots = Snapshots::new(Some(index));
+    let options = IndexOptions {
+        mode: IndexMode::Walk,
+        drives: vec!["/mnt/other".into()],
+        ..IndexOptions::default()
+    };
+    hosts.configure(&options, None);
+    assert!(snapshot.exists());
 }

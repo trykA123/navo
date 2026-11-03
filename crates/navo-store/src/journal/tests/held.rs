@@ -63,10 +63,10 @@ fn prune_keeps_a_finished_job_that_still_holds_files() {
     journal.finish(holding, JobState::Done).unwrap();
     let plain = journal.create_job("copy", b"plan", 1, 200).unwrap();
     journal.finish(plain, JobState::Done).unwrap();
-    assert_eq!(journal.prune(0).unwrap(), 1);
+    assert_eq!(journal.prune(PruneLimits::keep(0)).unwrap(), 1);
     assert_eq!(journal.finished_holding().unwrap(), vec![holding]);
     journal.forget_held(holding).unwrap();
-    assert_eq!(journal.prune(0).unwrap(), 1);
+    assert_eq!(journal.prune(PruneLimits::keep(0)).unwrap(), 1);
 }
 
 #[test]

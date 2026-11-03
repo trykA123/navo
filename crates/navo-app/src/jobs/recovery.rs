@@ -35,6 +35,7 @@ fn recover_in(
     ops: &dyn ProviderOps,
     (data, expected, experimental): (&Path, &[JobId], bool),
 ) -> Result<RecoveryReport, JournalError> {
+    let _recovering = super::trim::recovering(journal);
     let unfinished = lock(journal).unfinished()?;
     let mut outcomes = BTreeMap::new();
     for &id in expected {

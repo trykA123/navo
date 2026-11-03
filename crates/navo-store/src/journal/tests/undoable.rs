@@ -116,7 +116,7 @@ fn undo_state_survives_reopen_and_prune() {
     };
     let mut journal = open_at(&path);
     assert_eq!(journal.last_undoable("rename").unwrap().unwrap().id, older);
-    journal.prune(0).unwrap();
+    journal.prune(PruneLimits::keep(0)).unwrap();
     assert_eq!(journal.last_undoable("rename").unwrap().unwrap().id, older);
     assert_eq!(job_state(&journal, older), "done");
     assert_eq!(
@@ -137,7 +137,7 @@ fn prune_keeps_twenty_rename_jobs_among_newer_other_jobs() {
     for at in 1000..1050 {
         finished(&mut journal, "copy", at, JobState::Done);
     }
-    journal.prune(50).unwrap();
+    journal.prune(PruneLimits::keep(50)).unwrap();
     let kept = count(&journal, "SELECT count(*) FROM job WHERE kind = 'rename'");
     assert_eq!(kept, 20);
     assert_eq!(
@@ -165,5 +165,5 @@ fn prune_does_not_protect_undone_rename_jobs() {
         let job = finished(&mut journal, "rename", at, JobState::Done);
         journal.mark_job_undone(job).unwrap();
     }
-    assert_eq!(journal.prune(0).unwrap(), 5);
+    assert_eq!(journal.prune(PruneLimits::keep(0)).unwrap(), 5);
 }

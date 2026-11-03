@@ -29,10 +29,11 @@ pub(crate) fn root_page(db: &Path, table: &str) -> usize {
     usize::try_from(page).unwrap()
 }
 
-pub(crate) fn corrupt_middle_page(db: &Path) {
+// Table roots sit at the front of an auto_vacuum file; `fill_history` writes the last pages.
+pub(crate) fn corrupt_last_page(db: &Path) {
     let pages = fs::read(db).unwrap().len() / PAGE;
     assert!(pages >= 8, "only {pages} pages");
-    corrupt_page(db, pages / 2 + 1);
+    corrupt_page(db, pages);
 }
 
 pub(crate) fn corrupt_page(db: &Path, page: usize) {

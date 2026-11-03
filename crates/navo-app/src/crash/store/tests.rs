@@ -23,7 +23,7 @@ fn damaged(data: &Path) -> Vec<u8> {
         .execute("INSERT INTO tags VALUES ('/sample', 'keep')", [])
         .unwrap();
     drop(db);
-    super::super::test_damage::corrupt_middle_page(&path);
+    super::super::test_damage::corrupt_last_page(&path);
     fs::read(path).unwrap()
 }
 
@@ -395,9 +395,16 @@ fn legacy_startup_rechecks_a_repaired_database_and_clears_its_sentinel() {
 fn legacy_startup_prunes_finished_history_through_the_production_path() {
     let data = tempfile::tempdir().unwrap();
     let journal = crate::jobs::open(&database(data.path())).unwrap();
+    let recent = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis(),
+    )
+    .unwrap();
     for now in 0..55 {
         let job = crate::jobs::lock(&journal)
-            .create_job("copy", b"{}", 0, now)
+            .create_job("copy", b"{}", 0, recent - 55 + now)
             .unwrap();
         crate::jobs::lock(&journal)
             .finish(job, navo_store::JobState::Done)
@@ -410,7 +417,7 @@ fn legacy_startup_prunes_finished_history_through_the_production_path() {
         .connection()
         .query_row("SELECT COUNT(*) FROM job", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(count, crate::jobs::KEEP_FINISHED);
+    assert_eq!(count, navo_store::PruneLimits::KEEP_FINISHED);
 }
 
 #[test]

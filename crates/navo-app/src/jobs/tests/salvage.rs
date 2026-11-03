@@ -12,7 +12,7 @@ fn a_verified_salvaged_journal_rolls_back_the_interrupted_copy() {
     run(&fs, &plan, &journal, false);
     drop(journal);
     crate::crash::test_damage::fill_history(&path);
-    crate::crash::test_damage::corrupt_middle_page(&path);
+    crate::crash::test_damage::corrupt_last_page(&path);
     let backup = quarantine_database(&path)
         .unwrap()
         .unwrap()

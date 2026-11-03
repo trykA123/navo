@@ -51,6 +51,13 @@ impl Retirements {
         }
     }
 
+    pub fn retiring(&self) -> Vec<Location> {
+        self.pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     pub fn pending(&self, location: &Location) -> bool {
         self.pending
             .lock()

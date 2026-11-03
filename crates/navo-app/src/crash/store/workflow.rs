@@ -51,7 +51,7 @@ pub(super) fn run(
             Ok((db, _)) => {
                 let (journal, report) = recover(db, ops, (data, &[]))?;
                 refresh::update(data, &mut state, &report, &journal)?;
-                crate::jobs::lock(&journal).prune(crate::jobs::KEEP_FINISHED)?;
+                crate::jobs::trim_at_startup(&journal, data, ops)?;
                 clear_sentinel(&path)?;
                 return Ok((RecoveryNotice::loaded(data, &state), Some(journal)));
             }
@@ -166,7 +166,7 @@ fn finish(
     state.pending = None;
     state.save(data)?;
     acknowledge_quarantine(&path, slot)?;
-    crate::jobs::lock(&journal).prune(crate::jobs::KEEP_FINISHED)?;
+    crate::jobs::trim_at_startup(&journal, data, ops)?;
     Ok(())
 }
 

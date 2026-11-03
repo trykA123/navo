@@ -155,7 +155,7 @@ fn a_reused_job_identifier_cannot_resolve_an_older_manual_notice() {
     let mut journal = navo_store::JobJournal::new(db).unwrap();
     let (_, original) = journal.read_job(id).unwrap();
     journal.finish(id, navo_store::JobState::Failed).unwrap();
-    assert_eq!(journal.prune(0).unwrap(), 1);
+    assert_eq!(journal.prune(navo_store::PruneLimits::keep(0)).unwrap(), 1);
     let new_id = journal
         .create_job(&original.kind, b"different plan", 0, original.created_at)
         .unwrap();
@@ -188,7 +188,7 @@ fn a_pruned_failed_job_keeps_its_manual_notice_without_blocking_startup() {
     drop(first);
     let (db, _) = Db::open(&database(data.path()), true).unwrap();
     let mut journal = navo_store::JobJournal::new(db).unwrap();
-    assert_eq!(journal.prune(0).unwrap(), 1);
+    assert_eq!(journal.prune(navo_store::PruneLimits::keep(0)).unwrap(), 1);
     drop(journal);
     let second = check_with(Some(data.path()), false, &fs, true);
     assert!(super::super::super::open_db(&database(data.path())).is_ok());

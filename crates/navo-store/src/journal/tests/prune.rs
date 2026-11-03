@@ -25,7 +25,7 @@ fn job_ids(journal: &JobJournal) -> Vec<i64> {
 fn prune_keeps_newest_finished_jobs() {
     let mut journal = journal();
     let jobs = finished_jobs(&mut journal, &[100, 200, 300, 400]);
-    assert_eq!(journal.prune(2).unwrap(), 2);
+    assert_eq!(journal.prune(PruneLimits::keep(2)).unwrap(), 2);
     assert_eq!(job_ids(&journal), vec![jobs[2].0, jobs[3].0]);
 }
 
@@ -35,7 +35,7 @@ fn prune_never_deletes_a_job_waiting_for_its_restore() {
     let pending = journal.create_job("rename", b"plan", 1, 1).unwrap();
     journal.finish(pending, JobState::RestorePending).unwrap();
     finished_jobs(&mut journal, &[100, 200]);
-    assert_eq!(journal.prune(0).unwrap(), 2);
+    assert_eq!(journal.prune(PruneLimits::keep(0)).unwrap(), 2);
     assert_eq!(job_ids(&journal), vec![pending.0]);
 }
 
@@ -44,7 +44,7 @@ fn prune_never_deletes_running_jobs() {
     let mut journal = journal();
     let running = journal.create_job("move", b"plan", 1, 1).unwrap();
     finished_jobs(&mut journal, &[100, 200]);
-    assert_eq!(journal.prune(0).unwrap(), 2);
+    assert_eq!(journal.prune(PruneLimits::keep(0)).unwrap(), 2);
     assert_eq!(job_ids(&journal), vec![running.0]);
 }
 
@@ -52,7 +52,7 @@ fn prune_never_deletes_running_jobs() {
 fn prune_removes_step_rows_of_pruned_jobs() {
     let mut journal = journal();
     finished_jobs(&mut journal, &[100, 200, 300]);
-    journal.prune(1).unwrap();
+    journal.prune(PruneLimits::keep(1)).unwrap();
     assert_eq!(count(&journal, "SELECT count(*) FROM job_step"), 2);
     assert_eq!(
         count(
