@@ -141,8 +141,7 @@ pub(super) fn rig_search(
         cx,
         (values, load_error),
         (search, None),
-        UpdateHooks::none(),
-        px(1000.),
+        (UpdateHooks::none(), px(1000.)),
     )
 }
 
@@ -155,8 +154,7 @@ pub(super) fn rig_git(
         cx,
         (values, None),
         (SearchHooks::none(), Some(git)),
-        UpdateHooks::none(),
-        px(1000.),
+        (UpdateHooks::none(), px(1000.)),
     )
 }
 
@@ -170,8 +168,7 @@ pub(super) fn rig_updates(cx: &mut TestAppContext, updates: UpdateHooks) -> Rig 
         cx,
         (values, None),
         (SearchHooks::none(), None),
-        updates,
-        px(1000.),
+        (updates, px(1000.)),
     )
 }
 
@@ -185,8 +182,7 @@ pub(super) fn rig_git_sized(
         cx,
         (values, None),
         (SearchHooks::none(), Some(git)),
-        UpdateHooks::none(),
-        width,
+        (UpdateHooks::none(), width),
     )
 }
 
@@ -194,8 +190,7 @@ fn rig_built(
     cx: &mut TestAppContext,
     (values, load_error): (Values, Option<&str>),
     (search, git): (SearchHooks, Option<Arc<dyn crate::git::GitHooks>>),
-    updates: UpdateHooks,
-    width: gpui_kit::Pixels,
+    (updates, width): (UpdateHooks, gpui_kit::Pixels),
 ) -> Rig {
     let fs = rig_fs();
     let state = two_panes(&fs);
