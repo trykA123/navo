@@ -1,4 +1,5 @@
 use super::*;
+use navo_git::trust::Refusal;
 use navo_ui::git::BadgeReason;
 
 #[test]
@@ -6,11 +7,11 @@ fn source_errors_publish_unknown_with_their_reason_and_are_not_cached() {
     let h = Harness::new(probe(&["fixture/a"]));
     h.observe("fixture", 1, &["a"]);
     h.next();
-    h.reply(Err(ScanError::NotTrusted));
+    h.reply(Err(ScanError::Refused(Refusal::Guard)));
     let badges = h.wait("fixture", |b| b.by_name.get("a").is_some_and(|b| !b.stale));
     assert_eq!(badges.by_name["a"].kind, BadgeKind::Unknown);
     assert!(badges.by_name["a"].is_root);
-    assert_eq!(badges.by_name["a"].reason, Some(BadgeReason::NotTrusted));
+    assert_eq!(badges.by_name["a"].reason, Some(BadgeReason::Guard));
     h.scan.rescan(&location("fixture"));
     h.next();
     assert!(

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
 use gix::bstr::BString;
@@ -11,10 +12,13 @@ use crate::status::{GitStatus, RepoStatus, fetched_ms, operation};
 use crate::trust::Guard;
 
 mod filters;
+mod lfs;
 mod refs;
 mod tally;
 mod watch;
 
+use filters::Filters;
+use lfs::{Pointers, Verdict};
 use tally::Tally;
 use watch::Watch;
 
@@ -42,46 +46,78 @@ impl GixGit {
         cancel: &Cancel,
         limits: StatusLimits,
     ) -> Result<RepoStatus, GitError> {
-        if refuses(guard) {
-            return Err(self.not_trusted());
+        if let Some(error) = self.guard_refusal(guard) {
+            return Err(error);
         }
         if cancel.is_cancelled() {
             return Err(GitError::Cancelled);
         }
-        let repo = self.open()?;
-        if filters::refused(&repo) {
-            return Err(self.not_trusted());
+        let mut repo = self.open()?;
+        let lfs = match filters::classify(&repo) {
+            Filters::Clear => false,
+            Filters::Lfs => true,
+            Filters::Foreign(filter) => return Err(self.filter_refused(filter)),
+        };
+        if lfs {
+            lfs::drop_driver(&mut repo)?;
         }
         let watch = Watch::start(cancel, limits.timeout).map_err(|error| GitError::Io {
             path: self.repo.clone(),
             kind: error.kind(),
         })?;
-        let result = read_status(&repo, &watch, limits.stdout_cap);
+        let result = read_status(
+            &repo,
+            &watch,
+            limits.stdout_cap,
+            lfs.then_some(self.repo.as_path()),
+        );
         match watch.interruption() {
             Some(error) => Err(error),
             None => result,
         }
     }
 
-    fn not_trusted(&self) -> GitError {
-        GitError::NotTrusted {
+    /// What the repository's own config forbids: a blocked guard, a filter driver or a program.
+    fn guard_refusal(&self, guard: &Guard) -> Option<GitError> {
+        let path = self.repo.clone();
+        if guard.is_blocked() {
+            return Some(GitError::NotTrusted { path });
+        }
+        let keys = guard.keys();
+        if let Some(key) = keys.iter().find(|key| key.starts_with("filter.")) {
+            return Some(self.filter_refused(filter_of(key)));
+        }
+        keys.iter()
+            .any(|key| REFUSED_KEYS.contains(key))
+            .then_some(GitError::ProgramConfigured { path })
+    }
+
+    fn filter_refused(&self, filter: String) -> GitError {
+        GitError::FilterRefused {
             path: self.repo.clone(),
+            filter,
         }
     }
 }
 
-fn refuses(guard: &Guard) -> bool {
-    guard.is_blocked()
-        || guard
-            .keys()
-            .iter()
-            .any(|key| key.starts_with("filter.") || REFUSED_KEYS.contains(key))
+/// The driver name in a guard key such as `filter.crypt.clean`.
+fn filter_of(key: &str) -> String {
+    let rest = key.strip_prefix("filter.").unwrap_or(key);
+    rest.rsplit_once('.')
+        .map_or(rest, |(name, _)| name)
+        .to_owned()
 }
 
-fn read_status(repo: &gix::Repository, watch: &Watch, cap: usize) -> Result<RepoStatus, GitError> {
+/// `lfs_root` is set when the standard git-lfs driver was dropped from `repo`'s config.
+fn read_status(
+    repo: &gix::Repository,
+    watch: &Watch,
+    cap: usize,
+    lfs_root: Option<&Path>,
+) -> Result<RepoStatus, GitError> {
     let head = refs::head(repo)?;
     let upstream = refs::upstream(repo, &head, watch.stopped())?;
-    let (tally, capped) = collect(repo, watch, cap)?;
+    let (tally, capped) = collect(repo, watch, cap, lfs_root)?;
     let mut counts = tally.counts();
     if capped && counts.conflicted == 0 && has_unmerged(repo)? {
         counts.conflicted = 1;
@@ -100,8 +136,14 @@ fn read_status(repo: &gix::Repository, watch: &Watch, cap: usize) -> Result<Repo
     })
 }
 
-fn collect(repo: &gix::Repository, watch: &Watch, cap: usize) -> Result<(Tally, bool), GitError> {
+fn collect(
+    repo: &gix::Repository,
+    watch: &Watch,
+    cap: usize,
+    lfs_root: Option<&Path>,
+) -> Result<(Tally, bool), GitError> {
     let items = status_iter(repo, watch.flag())?;
+    let mut pointers = lfs_root.map(|root| Pointers::new(repo, root)).transpose()?;
     let mut tally = Tally::default();
     for item in items {
         let item = match item {
@@ -109,6 +151,13 @@ fn collect(repo: &gix::Repository, watch: &Watch, cap: usize) -> Result<(Tally, 
             Err(_) if watch.interruption().is_some() => break,
             Err(error) => return Err(gix_command("status", gix::Error::from_error(error))),
         };
+        if let Some(pointers) = pointers.as_mut() {
+            match pointers.verdict(&item, watch.stopped())? {
+                Verdict::Unchanged => continue,
+                Verdict::Stopped => break,
+                Verdict::Modified => {}
+            }
+        }
         if !tally.add(&item, cap) {
             return Ok((tally, true));
         }

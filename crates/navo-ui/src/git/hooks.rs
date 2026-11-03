@@ -19,7 +19,14 @@ pub enum BadgeKind {
 pub enum BadgeReason {
     TimedOut,
     NoGit,
-    NotTrusted,
+    /// Git does not trust the folder's owner.
+    Ownership,
+    /// A filter other than LFS is set and the built-in engine will not run it.
+    Filter,
+    /// The repository config names a program (fsmonitor) the built-in engine will not run.
+    Program,
+    /// A config file could not be read safely, so nothing was started.
+    Guard,
     Failed,
 }
 

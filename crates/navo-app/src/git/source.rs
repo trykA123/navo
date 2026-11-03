@@ -1,11 +1,13 @@
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::thread;
 use std::time::Duration;
 
 use navo_git::cli::{Cancel as GitCancel, CliGit};
 use navo_git::status::{GitStatus, RepoStatus};
-use navo_git::trust::untrusted_reason;
+use navo_git::trust::{Refusal, refusal};
 use navo_git::{GitError, GixGit};
 use navo_store::GitEngine;
 
@@ -41,34 +43,79 @@ impl Reader for CliReader {
     }
 }
 
+/// Repositories remembered on the Git command line before the memory is cleared.
+const CLI_MEMORY: usize = 256;
+
 pub(crate) struct GitSource<C, G> {
     cli: C,
     gix: G,
     engine: GitEngine,
+    on_cli: Mutex<HashSet<PathBuf>>,
 }
 
 impl<C: Backend, G: Backend> GitSource<C, G> {
     pub(crate) fn new(cli: C, gix: G, engine: GitEngine) -> Self {
-        Self { cli, gix, engine }
-    }
-
-    /// `Git` never leaves the CLI; `Auto` falls back to gix only when no usable Git exists.
-    fn open(&self, repo: &Path) -> Result<Box<dyn Reader>, GitError> {
-        match self.engine {
-            GitEngine::Git => self.cli.open(repo),
-            GitEngine::Gix => self.gix.open(repo),
-            GitEngine::Auto => match self.cli.open(repo) {
-                Err(GitError::GitNotFound | GitError::GitTooOld { .. }) => self.gix.open(repo),
-                other => other,
-            },
+        Self {
+            cli,
+            gix,
+            engine,
+            on_cli: Mutex::default(),
         }
     }
+
+    fn read(&self, repo: &Path, git: &GitCancel) -> Result<RepoStatus, GitError> {
+        match self.engine {
+            GitEngine::Git => self.cli.open(repo)?.status(git),
+            GitEngine::Gix => self.gix.open(repo)?.status(git),
+            GitEngine::Auto => self.read_auto(repo, git),
+        }
+    }
+
+    /// Gix first. A repository gix cannot read safely moves to the CLI, and stays there for this
+    /// scan. Without a usable Git the refusal reads as `NoGit`.
+    fn read_auto(&self, repo: &Path, git: &GitCancel) -> Result<RepoStatus, GitError> {
+        if !self.is_on_cli(repo) {
+            let refused = match self.gix.open(repo).and_then(|reader| reader.status(git)) {
+                Err(error) if cli_can_read(&error) => error,
+                other => return other,
+            };
+            tracing::debug!(repo = %repo.display(), %refused, "gix refused, using the Git command line");
+            self.remember_cli(repo);
+        }
+        match self.cli.open(repo) {
+            Err(GitError::GitNotFound | GitError::GitTooOld { .. }) => Err(GitError::GitNotFound),
+            other => other?.status(git),
+        }
+    }
+
+    fn is_on_cli(&self, repo: &Path) -> bool {
+        self.on_cli
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(repo)
+    }
+
+    fn remember_cli(&self, repo: &Path) {
+        let mut chosen = self.on_cli.lock().unwrap_or_else(PoisonError::into_inner);
+        if chosen.len() >= CLI_MEMORY {
+            chosen.clear();
+        }
+        chosen.insert(repo.to_path_buf());
+    }
+}
+
+/// Refusals the Git command line handles: it neutralises filters and fsmonitor, and applies the
+/// user's `safe.directory`. A blocked guard stays refused, since the CLI blocks on it too.
+fn cli_can_read(error: &GitError) -> bool {
+    matches!(
+        refusal(error),
+        Some(Refusal::Ownership | Refusal::Filter | Refusal::Program)
+    ) || matches!(error, GitError::Unsupported { .. })
 }
 
 impl<C: Backend, G: Backend> StatusSource for GitSource<C, G> {
     fn status(&self, repo_root: &Path, cancel: &Cancel) -> Result<RepoStatus, ScanError> {
-        let reader = self.open(repo_root).map_err(|error| scan_error(&error))?;
-        bridged(cancel, |git| reader.status(git)).map_err(|error| scan_error(&error))
+        bridged(cancel, |git| self.read(repo_root, git)).map_err(|error| scan_error(&error))
     }
 }
 
@@ -95,8 +142,7 @@ fn scan_error(error: &GitError) -> ScanError {
         GitError::GitNotFound | GitError::GitTooOld { .. } => ScanError::NoGit,
         GitError::Timeout => ScanError::TimedOut,
         GitError::Cancelled => ScanError::Cancelled,
-        other if untrusted_reason(other).is_some() => ScanError::NotTrusted,
-        _ => ScanError::Failed,
+        other => refusal(other).map_or(ScanError::Failed, ScanError::Refused),
     }
 }
 

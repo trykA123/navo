@@ -1,29 +1,99 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 
 const COMMANDS: [&str; 3] = ["clean", "smudge", "process"];
 const NESTED: &[u8] = b"/.gitattributes";
+const LFS: &str = "lfs";
 
-/// True when a filter driver with a command is named by the repository's attributes. gix would
-/// run it, so the status could not be trusted. A driver nothing refers to is ignored.
-pub(super) fn refused(repo: &gix::Repository) -> bool {
-    let defined = defined(repo);
-    !defined.is_empty() && attribute_files(repo).any(|path| names_one(&path, &defined))
+/// What the repository's attributes ask of filter drivers.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Filters {
+    /// No attribute names a driver that has a command.
+    Clear,
+    /// Only the standard git-lfs driver is named; its pointers are computed natively.
+    Lfs,
+    /// A driver gix would run is named, or the git-lfs driver is not the standard one.
+    Foreign(String),
 }
 
-/// Lowercase names of the filter drivers that have a command, from any config level.
-fn defined(repo: &gix::Repository) -> BTreeSet<String> {
+struct Driver {
+    name: String,
+    commands: Vec<String>,
+}
+
+impl Driver {
+    fn is_standard_lfs(&self) -> bool {
+        self.name == LFS
+            && self
+                .commands
+                .iter()
+                .all(|command| command == "git-lfs" || command.starts_with("git-lfs "))
+    }
+}
+
+/// Classifies the filter drivers named by the repository's attributes. A driver nothing refers
+/// to is ignored; an unreadable attributes file counts as naming the first driver.
+pub(super) fn classify(repo: &gix::Repository) -> Filters {
+    let drivers = defined(repo);
+    let Some(first) = drivers.first() else {
+        return Filters::Clear;
+    };
+    let mut lfs = false;
+    for path in attribute_files(repo) {
+        let text = match fs::read(&path) {
+            Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+            Err(error)
+                if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) =>
+            {
+                continue;
+            }
+            Err(_) => return Filters::Foreign(first.name.clone()),
+        };
+        for name in filter_names(&text) {
+            let mut matching = drivers
+                .iter()
+                .filter(|driver| driver.name.eq_ignore_ascii_case(name))
+                .peekable();
+            if matching.peek().is_none() {
+                continue;
+            }
+            if name == LFS && matching.all(Driver::is_standard_lfs) {
+                lfs = true;
+            } else {
+                return Filters::Foreign(name.to_owned());
+            }
+        }
+    }
+    if lfs { Filters::Lfs } else { Filters::Clear }
+}
+
+/// The drivers that have a command, from any config level, with the commands of every section.
+fn defined(repo: &gix::Repository) -> Vec<Driver> {
     let snapshot = repo.config_snapshot();
     let Some(sections) = snapshot.plumbing().sections_by_name("filter") else {
-        return BTreeSet::new();
+        return Vec::new();
     };
-    sections
-        .filter(|section| COMMANDS.iter().any(|key| section.value(*key).is_some()))
-        .filter_map(|section| section.header().subsection_name())
-        .map(|name| name.to_string().to_ascii_lowercase())
-        .collect()
+    let mut drivers: Vec<Driver> = Vec::new();
+    for section in sections {
+        let commands: Vec<String> = COMMANDS
+            .iter()
+            .filter_map(|key| section.value(*key))
+            .map(|value| value.to_string())
+            .collect();
+        let Some(name) = section.header().subsection_name() else {
+            continue;
+        };
+        if commands.is_empty() {
+            continue;
+        }
+        let name = name.to_string();
+        match drivers.iter_mut().find(|driver| driver.name == name) {
+            Some(driver) => driver.commands.extend(commands),
+            None => drivers.push(Driver { name, commands }),
+        }
+    }
+    drivers
 }
 
 /// The attribute files that apply to the worktree: the root and tracked nested `.gitattributes`,
@@ -52,15 +122,6 @@ fn user_file(repo: &gix::Repository) -> Option<PathBuf> {
             gix::path::env::xdg_config("git/attributes", &mut |name| std::env::var_os(name))
         }
         Err(_) => None,
-    }
-}
-
-/// An unreadable file counts as naming a driver, since its content cannot be ruled out.
-fn names_one(path: &std::path::Path, defined: &BTreeSet<String>) -> bool {
-    match fs::read(path) {
-        Ok(bytes) => filter_names(&String::from_utf8_lossy(&bytes))
-            .any(|name| defined.contains(&name.to_ascii_lowercase())),
-        Err(error) => !matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory),
     }
 }
 

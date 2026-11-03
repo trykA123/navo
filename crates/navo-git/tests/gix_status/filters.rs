@@ -9,9 +9,15 @@ use super::gix_status_support::{commit_file, repo};
 /// Defines the LFS filter in a user config, the way Git for Windows does at the system level.
 /// Set after the fixture's own git runs. Each test is its own process under nextest.
 fn define_lfs_filter(fixture: &Fixture) {
+    define_filter(
+        fixture,
+        "[filter \"lfs\"]\n\tclean = git-lfs clean -- %f\n\tsmudge = git-lfs smudge -- %f\n\
+         \tprocess = git-lfs filter-process\n\trequired = true\n",
+    );
+}
+
+fn define_filter(fixture: &Fixture, text: &str) {
     let config = fixture.repo().with_file_name("global.gitconfig");
-    let text = "[filter \"lfs\"]\n\tclean = git-lfs clean -- %f\n\tsmudge = git-lfs smudge -- %f\n\
-                \tprocess = git-lfs filter-process\n\trequired = true\n";
     fs::write(&config, text).unwrap();
     // SAFETY: the test process runs one test and spawns no thread that reads the environment.
     unsafe {
@@ -36,21 +42,27 @@ fn a_user_lfs_filter_that_no_attribute_names_does_not_stop_the_status() {
 }
 
 #[test]
-fn a_user_lfs_filter_named_by_the_attributes_is_not_trusted() {
+fn a_user_filter_named_by_the_attributes_is_refused_by_name() {
     let Some(fixture) = repo() else { return };
     fixture.write(
         ".gitattributes",
         b"*.bin filter=lfs diff=lfs merge=lfs -text\n",
     );
-    define_lfs_filter(&fixture);
-    assert!(matches!(status(&fixture), Err(GitError::NotTrusted { .. })));
+    define_filter(&fixture, "[filter \"lfs\"]\n\tclean = convert %f\n");
+    assert!(matches!(
+        status(&fixture),
+        Err(GitError::FilterRefused { ref filter, .. }) if filter == "lfs"
+    ));
 }
 
 #[test]
-fn a_user_lfs_filter_named_by_a_tracked_nested_attributes_file_is_not_trusted() {
+fn a_filter_named_by_a_tracked_nested_attributes_file_is_refused() {
     let Some(fixture) = repo() else { return };
     fs::create_dir(fixture.repo().join("art")).unwrap();
     commit_file(&fixture, "art/.gitattributes", "*.psd filter=lfs\n", "art");
-    define_lfs_filter(&fixture);
-    assert!(matches!(status(&fixture), Err(GitError::NotTrusted { .. })));
+    define_filter(&fixture, "[filter \"lfs\"]\n\tclean = convert %f\n");
+    assert!(matches!(
+        status(&fixture),
+        Err(GitError::FilterRefused { .. })
+    ));
 }

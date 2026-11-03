@@ -219,10 +219,13 @@ const KINDS: [(BadgeKind, &str); 8] = [
     (BadgeKind::Checking, "checking"),
 ];
 
-const REASONS: [(BadgeReason, &str); 4] = [
+const REASONS: [(BadgeReason, &str); 7] = [
     (BadgeReason::TimedOut, "timed-out"),
     (BadgeReason::NoGit, "no-git"),
-    (BadgeReason::NotTrusted, "not-trusted"),
+    (BadgeReason::Guard, "not-trusted"),
+    (BadgeReason::Ownership, "ownership"),
+    (BadgeReason::Filter, "filter"),
+    (BadgeReason::Program, "program"),
     (BadgeReason::Failed, "failed"),
 ];
 

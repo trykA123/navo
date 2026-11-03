@@ -132,7 +132,7 @@ fn desktop_scenes() -> Vec<Scene> {
         ..root(BadgeKind::Diverged)
     };
     let unknown = RepoBadge {
-        reason: Some(BadgeReason::NotTrusted),
+        reason: Some(BadgeReason::Filter),
         ..root(BadgeKind::Unknown)
     };
     let tortoise = Some("TortoiseGit");

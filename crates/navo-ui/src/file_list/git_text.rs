@@ -57,7 +57,10 @@ fn unknown_detail(reason: Option<BadgeReason>) -> String {
     tr(match reason {
         Some(BadgeReason::TimedOut) => "git-detail-timed-out",
         Some(BadgeReason::NoGit) => "git-detail-no-git",
-        Some(BadgeReason::NotTrusted) => "git-detail-not-trusted",
+        Some(BadgeReason::Ownership) => "git-detail-ownership",
+        Some(BadgeReason::Filter) => "git-detail-filter",
+        Some(BadgeReason::Program) => "git-detail-program",
+        Some(BadgeReason::Guard) => "git-detail-guard",
         Some(BadgeReason::Failed) | None => "git-detail-failed",
     })
 }
