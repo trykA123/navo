@@ -317,6 +317,9 @@ fn mark_parked(
 fn fill(badges: &mut FolderBadges, found: &Discovered, root: &Path, cached: &Cached) {
     for binding in found.bindings.iter().filter(|b| b.root == root) {
         if let Some(badge) = cached.row(&binding.relative) {
+            if !badge.is_root {
+                badges.roots.insert(binding.name.clone(), cached.repo());
+            }
             badges.by_name.insert(binding.name.clone(), badge);
         }
     }

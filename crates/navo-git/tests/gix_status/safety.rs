@@ -98,6 +98,7 @@ fn a_filter_added_after_the_guard_was_read_still_never_runs() {
 #[test]
 fn a_filter_driver_in_the_repository_config_is_not_trusted() {
     let Some(fixture) = repo() else { return };
+    fixture.write(".gitattributes", b"*.txt filter=evil\n");
     let gix = GixGit::new_isolated(fixture.repo()).unwrap();
     let guard = gix.guard().unwrap();
     assert!(!guard.is_guarded());

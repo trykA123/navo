@@ -35,6 +35,11 @@ fn folders_inside_a_repository_get_subtree_badges_without_repository_counts() {
     assert_eq!(badges.by_name["deep"].untracked, 0);
     assert!(!badges.by_name["deep"].is_root);
     assert_eq!(badges.by_name["deep"].branch.as_deref(), Some("main"));
+    let root = &badges.roots["deep"];
+    assert_eq!(root.name, "repo");
+    assert!(root.badge.is_root);
+    assert_eq!(root.badge.kind, BadgeKind::Modified);
+    assert_eq!(root.badge.untracked, 1);
     assert!(h.scan.stop());
 }
 

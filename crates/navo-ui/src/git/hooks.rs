@@ -45,6 +45,15 @@ pub struct FolderBadges {
     /// The scanner gave up on this listing because its drive answered too slowly.
     pub slow_drive: bool,
     pub by_name: HashMap<String, RepoBadge>,
+    /// For a row inside a repository: the repository's folder name and root badge.
+    pub roots: HashMap<String, RepoRoot>,
+}
+
+/// The repository a folder row sits in, which its menu describes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoRoot {
+    pub name: String,
+    pub badge: RepoBadge,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

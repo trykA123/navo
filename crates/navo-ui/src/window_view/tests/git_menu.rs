@@ -9,9 +9,10 @@ use navo_core::{AppState, Location};
 
 use super::drive_fs::{DriveFs, local};
 use super::{fake, open_options, options_for, press, settle};
+use crate::git::menu::Choice;
 use crate::git::{
     BadgeKind, FolderBadges, GitAction, GitHooks, GitMenu, GitMenuItem, GitStarted, Previewed,
-    RepoBadge, ToolRow,
+    RepoBadge, RepoRoot, ToolRow,
 };
 use crate::window_view::NavoWindow;
 
@@ -59,6 +60,24 @@ impl Fake {
         }
     }
 
+    /// Makes the `docs` row a folder inside the repository `name`, whose root badge is `root`.
+    pub(super) fn inside(self, name: &str, root: RepoBadge, below: RepoBadge) -> Self {
+        let roots = HashMap::from([(
+            "docs".to_owned(),
+            RepoRoot {
+                name: name.to_owned(),
+                badge: root,
+            },
+        )]);
+        *self.badges.lock().unwrap() = Arc::new(FolderBadges {
+            revision: 1,
+            by_name: HashMap::from([("docs".to_owned(), below)]),
+            roots,
+            ..FolderBadges::default()
+        });
+        self
+    }
+
     pub(super) fn requests(&self) -> usize {
         self.held.lock().unwrap().len()
     }
@@ -92,6 +111,7 @@ impl GitHooks for Fake {
                 revision,
                 slow_drive: badges.slow_drive,
                 by_name: badges.by_name.clone(),
+                roots: badges.roots.clone(),
             });
         }
         Some(Arc::clone(&badges))
@@ -427,4 +447,27 @@ fn check_again_rescans_the_listing(cx: &mut TestAppContext) {
     settle(cx, &view);
     assert_eq!(git.log.lock().unwrap().rescans, [local(r"C:\home")]);
     assert!(git.runs().is_empty());
+}
+
+#[gpui_kit::test]
+fn a_folder_inside_a_repository_gets_the_repository_menu(cx: &mut TestAppContext) {
+    let below = RepoBadge {
+        is_root: false,
+        branch: None,
+        upstream: None,
+        ..badge(BadgeKind::Clean)
+    };
+    let git = Fake::new(menu_items(false), below.clone()).inside("navo", modified(), below);
+    let (window, view) = open(cx, &git);
+    click_badge(cx, window, &view);
+    let (title, commit) = view.read_with(cx, |view, _| {
+        let model = &view.git_menu.open.as_ref().expect("open").model;
+        let commit = model
+            .rows
+            .iter()
+            .find(|row| row.choice == Choice::Run(GitAction::Commit));
+        (model.head.title.clone(), commit.map(|row| row.enabled))
+    });
+    assert_eq!(title, "navo");
+    assert_eq!(commit, Some(true));
 }

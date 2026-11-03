@@ -136,7 +136,7 @@ pub(crate) fn detect(env: &impl ToolEnv) -> Vec<DetectedTool> {
         .collect()
 }
 
-/// Applies `[git] tool`. `auto` takes the first GUI tool of the D100h order and never `git-cli`.
+/// Applies `[git] tool`. `auto` takes the first GUI tool of the D100h order, else `git-cli`.
 pub(crate) fn choose(settings: &GitSettings, detected: &[DetectedTool]) -> Option<DetectedTool> {
     let name = settings.tool.trim().to_ascii_lowercase();
     match name.as_str() {
@@ -144,7 +144,9 @@ pub(crate) fn choose(settings: &GitSettings, detected: &[DetectedTool]) -> Optio
             .iter()
             .filter_map(|tool| Some((tool.kind.auto_rank()?, tool)))
             .min_by_key(|(rank, _)| *rank)
-            .map(|(_, tool)| tool.clone()),
+            .map(|(_, tool)| tool)
+            .or_else(|| detected.iter().find(|tool| tool.kind == ToolKind::GitCli))
+            .cloned(),
         "custom" => custom(settings),
         _ => {
             let kind = ToolKind::from_setting(&name)?;

@@ -273,15 +273,9 @@ fn the_tooltip_names_state_branch_counts_and_fetch_time() {
 }
 
 #[test]
-fn a_subfolder_tooltip_says_it_is_inside_a_repository() {
-    let inner = RepoBadge {
-        changed: 7,
-        ..badge(BadgeKind::Modified, false)
-    };
-    assert_eq!(
-        git_text::tooltip(&inner),
-        "Inside a repository\nModified: 7 changed below"
-    );
+fn a_subfolder_tooltip_says_it_is_inside_a_repository_and_gives_no_count() {
+    let inner = badge(BadgeKind::Modified, false);
+    assert_eq!(git_text::tooltip(&inner), "Inside a repository\nModified");
 }
 
 #[test]

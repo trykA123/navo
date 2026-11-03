@@ -192,6 +192,9 @@ pub(super) fn project(
     }
     Cached {
         root: root_badge(result),
+        root_name: root
+            .file_name()
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned()),
         dirs,
         stale: false,
     }

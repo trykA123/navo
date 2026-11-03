@@ -14,6 +14,10 @@ mod gix_status_oracle;
 mod gix_status_limits;
 
 #[cfg(test)]
+#[path = "gix_status/filters.rs"]
+mod gix_status_filters;
+
+#[cfg(test)]
 #[path = "gix_status/safety.rs"]
 mod gix_status_safety;
 
