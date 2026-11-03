@@ -134,3 +134,35 @@ fn rects_within_a_pixel_count_as_the_same() {
     assert!(a.same_as(b));
     assert!(!a.same_as(Rect { x: a.x + 2., ..a }));
 }
+
+#[test]
+fn a_restarted_popup_clamps_to_the_smaller_monitor_work_area() {
+    let last = Some(Remembered {
+        display: Some([1; 16]),
+        rect: Rect {
+            x: 1800.,
+            y: 900.,
+            width: 1200.,
+            height: 700.,
+        },
+    });
+    assert_eq!(
+        remembered_display(last, &[(DisplayId::new(7), [1; 16])]),
+        Some(DisplayId::new(7))
+    );
+    let rect = place(
+        PopUpPosition::Last,
+        open_size(last, SMALL),
+        SMALL,
+        (None, Some((1800., 900.))),
+    );
+    assert_eq!(
+        rect,
+        Rect {
+            x: 80.,
+            y: 50.,
+            width: 720.,
+            height: 450.
+        }
+    );
+}
