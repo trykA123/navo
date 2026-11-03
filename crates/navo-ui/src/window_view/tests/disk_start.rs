@@ -106,6 +106,7 @@ fn open_from_disk(
         search: crate::window_view::SearchHooks::none(),
         rename: None,
         retained: std::sync::Arc::new(crate::browser::NoRetained),
+        git: None,
         clipboard: None,
     };
     let (window, view) = open_unsettled(cx, options, gpui_kit::px(1000.));

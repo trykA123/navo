@@ -1,10 +1,16 @@
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
+use std::sync::Once;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
+static ISOLATE: Once = Once::new();
+
+const GIT_TIMEOUT: Duration = Duration::from_secs(60);
 
 struct TempDir {
     path: PathBuf,
@@ -38,6 +44,7 @@ pub struct Fixture {
 )]
 impl Fixture {
     pub fn new() -> Result<Self, String> {
+        ISOLATE.call_once(close_inherited_on_exec);
         let git = resolve_git(find_git().ok_or_else(|| "git was not found on PATH".to_owned())?);
         let version = version_of(&git)?;
         if version < (2, 36) {
@@ -55,6 +62,10 @@ impl Fixture {
 
     pub fn repo(&self) -> &Path {
         &self.repo
+    }
+
+    pub fn version(&self) -> (u32, u32) {
+        version_of(&self.git).unwrap()
     }
 
     pub fn try_init(&self, args: &[&str]) -> Output {
@@ -81,7 +92,7 @@ impl Fixture {
     }
 
     pub fn git(&self, args: &[&str]) -> Output {
-        self.command().args(args).output().unwrap()
+        run(self.command().args(args), None)
     }
 
     pub fn git_ok(&self, args: &[&str]) -> Output {
@@ -96,18 +107,7 @@ impl Fixture {
     }
 
     pub fn git_stdin(&self, args: &[&str], input: &[u8]) -> Output {
-        let mut child = self
-            .command()
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let mut stdin = child.stdin.take().unwrap();
-        stdin.write_all(input).unwrap();
-        drop(stdin);
-        child.wait_with_output().unwrap()
+        run(self.command().args(args), Some(input.to_vec()))
     }
 
     pub fn git_stdin_ok(&self, args: &[&str], input: &[u8]) -> Output {
@@ -161,10 +161,91 @@ impl Fixture {
     }
 }
 
-fn resolve_git(git: PathBuf) -> PathBuf {
-    let Ok(output) = Command::new(&git).arg("--exec-path").output() else {
-        return git;
+/// Kills and reaps the child when a test panics or times out, so no git outlives the test.
+struct Reaped(Child);
+
+impl Drop for Reaped {
+    fn drop(&mut self) {
+        self.0.kill().unwrap_or_default();
+        self.0.wait().map(drop).unwrap_or_default();
+    }
+}
+
+fn run(command: &mut Command, input: Option<Vec<u8>>) -> Output {
+    let stdin = if input.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
     };
+    command
+        .stdin(stdin)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = Reaped(command.spawn().unwrap());
+    let stdout = drain(child.0.stdout.take().unwrap());
+    let stderr = drain(child.0.stderr.take().unwrap());
+    if let (Some(input), Some(mut pipe)) = (input, child.0.stdin.take()) {
+        thread::spawn(move || pipe.write_all(&input).unwrap_or_default());
+    }
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.0.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            started.elapsed() < GIT_TIMEOUT,
+            "git timed out: {command:?}"
+        );
+        thread::sleep(Duration::from_millis(2));
+    };
+    Output {
+        status,
+        stdout: stdout.join().unwrap(),
+        stderr: stderr.join().unwrap(),
+    }
+}
+
+fn drain(mut pipe: impl Read + Send + 'static) -> JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        pipe.read_to_end(&mut bytes).unwrap_or_default();
+        bytes
+    })
+}
+
+/// Marks every inherited descriptor above stderr close-on-exec (a cargo lock among them),
+/// so no git child holds it.
+#[cfg(unix)]
+fn close_inherited_on_exec() {
+    use rustix::fd::BorrowedFd;
+    use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
+
+    let folder = if cfg!(target_os = "linux") {
+        "/proc/self/fd"
+    } else {
+        "/dev/fd"
+    };
+    let Ok(entries) = fs::read_dir(folder) else {
+        return;
+    };
+    let fds: Vec<i32> = entries
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
+        .filter(|fd| *fd > 2)
+        .collect();
+    for fd in fds {
+        // SAFETY: the descriptor was listed as open and nothing in the tests closes inherited ones.
+        let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+        if let Ok(flags) = fcntl_getfd(fd) {
+            fcntl_setfd(fd, flags | FdFlags::CLOEXEC).unwrap_or_default();
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn close_inherited_on_exec() {}
+
+fn resolve_git(git: PathBuf) -> PathBuf {
+    let output = run(Command::new(&git).arg("--exec-path"), None);
     if !output.status.success() {
         return git;
     }
@@ -197,10 +278,7 @@ fn find_git() -> Option<PathBuf> {
 }
 
 fn version_of(git: &Path) -> Result<(u32, u32), String> {
-    let output = Command::new(git)
-        .arg("--version")
-        .output()
-        .map_err(|error| error.to_string())?;
+    let output = run(Command::new(git).arg("--version"), None);
     if !output.status.success() {
         return Err("git --version failed".to_owned());
     }

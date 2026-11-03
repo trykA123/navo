@@ -6,6 +6,7 @@ use super::{
     apply_with, current,
 };
 
+mod git;
 mod light_dark;
 mod surfaces;
 

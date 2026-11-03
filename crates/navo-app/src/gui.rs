@@ -157,10 +157,23 @@ pub(crate) fn open(mut launch: Launch) {
     crate::diag::register_listings(&launch.crash.diagnostics.caches, &cache, disk.as_ref());
     metrics::mark("listing cache read");
     let remember = crate::search_hooks::Remember::default();
+    let git = crate::git::hooks::Hooks::system(&navo_store::GitSettings::default());
+    let follow = settings::Follow {
+        remember: remember.clone(),
+        git: {
+            let git = git.clone();
+            Arc::new(move |values| git.apply(values))
+        },
+    };
     let (mut settings, _settings_watch) =
-        finish_settings(|| settings_start.finish().into_loaded(), &remember);
+        finish_settings(|| settings_start.finish().into_loaded(), &follow);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
     settings::wire_guide_hint(&mut settings, dirs.as_ref());
+    let terminal = terminal::hooks(&settings.values);
+    git.set_ports(crate::git::launch::start::Ports {
+        terminal: terminal.open.clone(),
+        url: launch::opener(),
+    });
     let resident = launch
         .resident
         .take()
@@ -170,6 +183,7 @@ pub(crate) fn open(mut launch: Launch) {
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     let exit = (disk, visits, services.sessions);
     files::prewarm_pdf(PDF_WARM_DELAY);
+    let quit_git = git.clone();
     run(
         StartOptions {
             state,
@@ -178,7 +192,7 @@ pub(crate) fn open(mut launch: Launch) {
             mode: Mode::Light,
             operations: services.operations,
             launcher: launch::launcher(),
-            terminal: terminal::hooks(&settings.values),
+            terminal,
             editor: editor::hooks(|name| std::env::var(name).ok()),
             search,
             files: services.files,
@@ -206,12 +220,13 @@ pub(crate) fn open(mut launch: Launch) {
             },
             rename: Some(services.rename),
             retained: services.retained,
+            git: Some(git),
             clipboard: Some(clip.clone()),
         },
         Rc::new(navo_shell::display_scale),
         RunHooks {
             on_quit: stop_first(
-                (resident, clip),
+                (resident, clip, quit_git),
                 quitter(exit, launch.cleanup, launch.running, services.maintenance),
             ),
             on_autosave: autosave,
@@ -221,9 +236,10 @@ pub(crate) fn open(mut launch: Launch) {
 }
 
 fn stop_first(
-    (resident, clip): (
+    (resident, clip, git): (
         Option<crate::resident::ResidentHandle>,
         Arc<crate::clip_module::ClipModule>,
+        Arc<crate::git::hooks::Hooks>,
     ),
     on_quit: Rc<dyn Fn()>,
 ) -> Rc<dyn Fn()> {
@@ -232,6 +248,7 @@ fn stop_first(
             resident.stop();
         }
         clip.stop();
+        git.shutdown();
         on_quit();
     })
 }
@@ -276,12 +293,12 @@ fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Sp
 
 fn finish_settings(
     load: impl FnOnce() -> Option<settings::Loaded>,
-    remember: &crate::search_hooks::Remember,
+    follow: &settings::Follow,
 ) -> (navo_ui::window_view::SettingsHooks, Option<navo_fs::Watch>) {
     let loaded = load();
     metrics::mark("settings read");
     navo_ui::tokens::set_system_palette_reader(contrast::system_palette);
-    settings::live(loaded, remember)
+    settings::live(loaded, follow)
 }
 
 fn session_saver(

@@ -6,7 +6,7 @@ use navo_compare::model::Budget;
 use navo_compare::session::CheckMode;
 use navo_git::cli::MIN_GIT_VERSION;
 use navo_git::{Choice, CliGit, EngineKind, EngineSetting, GitFound, RepoFormat, choose};
-use navo_store::{Compare, ContentCheck, GitEngine};
+use navo_store::{Compare, CompareGitEngine, ContentCheck};
 
 /// The `[compare]` settings as the compare backend reads them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,9 +34,9 @@ impl From<&Compare> for CompareSettings {
     fn from(stored: &Compare) -> Self {
         Self {
             git_engine: match stored.git_engine {
-                GitEngine::Git => EngineSetting::Git,
-                GitEngine::Gix => EngineSetting::Gix,
-                GitEngine::Auto => EngineSetting::Auto,
+                CompareGitEngine::Git => EngineSetting::Git,
+                CompareGitEngine::Gix => EngineSetting::Gix,
+                CompareGitEngine::Auto => EngineSetting::Auto,
             },
             ignore_list: stored.ignore_list.clone(),
             respect_gitignore: stored.respect_gitignore,

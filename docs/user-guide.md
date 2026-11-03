@@ -12,6 +12,7 @@ This guide is for people who try Navo for the first time. You do not need to kno
 - [Viewing and editing](#viewing-and-editing)
 - [Layouts, panes and workspaces](#layouts-panes-and-workspaces)
 - [Clipboard history](#clipboard-history)
+- [Git](#git)
 - [Settings and themes](#settings-and-themes)
 - [Tips for Total Commander users](#tips-for-total-commander-users)
 - [Reporting a problem](#reporting-a-problem)
@@ -310,6 +311,10 @@ Navo keeps what you copy on this PC: text, links and file lists. It also keeps s
 | `Esc` | Clear the search, then close |
 
 Type "clipboard" in `Ctrl+K` to pause the history, clear it or delete all clipboard data. Delete all cannot be undone. Turn the history off in Settings under Clipboard. See [Clipboard history](features/clipboard.md) for the details.
+
+## Git
+
+Folders that are Git repositories get a badge in the left column. It shows conflict, changed, ahead, behind, diverged or clean. Click the badge, or press `Alt+G`, to open a menu for your Git tool: Commit, Pull, Push, Log and Diff, as far as the tool supports them. With the Git command line, Navo runs Pull and Push itself. Pull only fast-forwards, Push is never forced, and both ask first. Choose the tool in Settings under Git. See [Git status and menu](features/git.md) for the details.
 
 ## Settings and themes
 

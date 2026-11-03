@@ -28,6 +28,7 @@ pub struct Settings {
     pub tray: Tray,
     pub clipboard: Clipboard,
     pub compare: super::compare::Compare,
+    pub git: super::git::GitSettings,
     pub experimental: BTreeMap<String, bool>,
 }
 

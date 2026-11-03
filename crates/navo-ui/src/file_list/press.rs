@@ -9,6 +9,7 @@ use navo_core::{Command, CursorMove, SpanMode};
 
 use super::row::check_column;
 use super::{FileListAction, ListContext, row_index, row_number};
+use crate::git::GitAction;
 use crate::tokens;
 
 const LONG_PRESS: Duration = Duration::from_millis(400);
@@ -182,6 +183,17 @@ impl ListContext {
             },
         };
         self.act(action, window, cx);
+    }
+
+    pub(super) fn git_menu_at_cursor(&self, window: &mut Window, cx: &mut App) {
+        let at = self.cursor_anchor(cx);
+        let row = self.props.view.cursor;
+        self.act(FileListAction::GitMenu { row, at }, window, cx);
+    }
+
+    pub(super) fn git_run_at_cursor(&self, action: GitAction, window: &mut Window, cx: &mut App) {
+        let row = self.props.view.cursor;
+        self.act(FileListAction::GitRun { row, action }, window, cx);
     }
 
     fn cursor_anchor(&self, cx: &App) -> Point<Pixels> {

@@ -9,6 +9,8 @@ mod command_center_page;
 mod drag_page;
 mod drives_page;
 mod gallery;
+mod git_badges_page;
+mod git_menu_page;
 mod image_sample;
 mod job_sample;
 mod kinds_page;

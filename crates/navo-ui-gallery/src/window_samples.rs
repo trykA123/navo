@@ -73,30 +73,58 @@ pub fn sheet_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 
     })
 }
 
-pub fn settings_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 4] {
+pub fn settings_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 7] {
     let input = text_field_state("Find a setting by name, key or help", window, cx);
     input.update(cx, |state, cx| state.set_value("sort", window, cx));
+    let progress = text_field_state("Find a setting by name, key or help", window, cx);
+    progress.update(cx, |state, cx| state.set_value("progress", window, cx));
     [
-        (Field::AutomotiveModules, false, None, true),
-        (Field::Theme, true, None, false),
-        (Field::Sort, false, Some((input, "sort")), false),
-        (Field::SearchIndex, false, None, true),
+        (Field::AutomotiveModules, false, None, true, None),
+        (Field::Theme, true, None, false, None),
+        (Field::Sort, false, Some((input, "sort")), false, None),
+        (Field::SearchIndex, false, None, true, None),
+        (
+            Field::SearchIndex,
+            false,
+            Some((progress, "progress")),
+            false,
+            None,
+        ),
+        (Field::GitTool, false, None, false, None),
+        (Field::GitToolCommand, false, None, false, Some(MINIMUM)),
     ]
-    .map(|(field, has_notice, find, is_scrolled_to_end)| {
-        let shows = SheetShows {
-            active: Side::Left,
-            window_width: None,
-            is_ringed: false,
-            settings: Some(field),
-            extras: Extras {
-                has_notice,
-                find,
-                is_scrolled_to_end,
-            },
-            shortcuts: None,
-        };
-        cx.new(|cx| WindowPage::with_sheet(shows, cx))
-    })
+    .map(
+        |(field, has_notice, find, is_scrolled_to_end, window_width)| {
+            let shows = SheetShows {
+                active: Side::Left,
+                window_width,
+                is_ringed: false,
+                settings: Some(field),
+                extras: Extras {
+                    has_notice,
+                    find,
+                    is_scrolled_to_end,
+                },
+                shortcuts: None,
+            };
+            cx.new(|cx| WindowPage::with_sheet(shows, cx))
+        },
+    )
+}
+
+pub fn settings_element(page: Page, windows: &[Entity<WindowPage>; 7]) -> Option<AnyElement> {
+    let [display, upgrade, find, search, index, git, git_minimum] = windows;
+    let shown = match page {
+        Page::SettingsDisplay => display,
+        Page::SettingsUpgrade => upgrade,
+        Page::SettingsFind => find,
+        Page::SearchSettings => search,
+        Page::IndexProgress => index,
+        Page::SettingsGit => git,
+        Page::SettingsGitMinimum => return Some(fixed(MINIMUM, git_minimum)),
+        _ => return None,
+    };
+    Some(shown.clone().into_any_element())
 }
 
 pub fn hint_windows(cx: &mut App) -> [Entity<WindowPage>; 4] {
@@ -115,6 +143,7 @@ pub const NARROW: f32 = 1100.;
 pub const WIDE: f32 = 1440.;
 const SIX_WIDE: f32 = 1280.;
 const PHONE: f32 = 390.;
+const MINIMUM: f32 = 480.;
 
 fn fixed(width: f32, window: &Entity<WindowPage>) -> AnyElement {
     div()

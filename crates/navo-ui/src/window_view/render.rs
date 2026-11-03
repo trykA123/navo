@@ -14,6 +14,7 @@ impl Render for NavoWindow {
         super::tests::mouse_cost::note_render();
         let trace = input_trace::frame(window, cx);
         self.sync_workspaces(window, cx);
+        self.sync_git();
         let frame = self.perf_frame(window);
         self.watch_start(window, cx);
         let below_title_bar = self.below_title_bar(window, cx);
@@ -37,6 +38,7 @@ impl Render for NavoWindow {
             .children(self.app_menu_view(cx))
             .children(self.shell_menu_view())
             .children(self.tab_menu_view())
+            .children(self.git_menu_view(window, cx))
             .children(self.viewer_menu_view())
             .children(self.view_menus());
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);

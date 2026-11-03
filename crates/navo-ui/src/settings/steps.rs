@@ -35,9 +35,8 @@ pub fn nudged(spec: &FieldSpec, value: &Value, nudge: Nudge) -> Option<Value> {
                 Nudge::Back => number.checked_sub(step)?,
                 Nudge::Forward | Nudge::Flip => number.checked_add(step)?,
             };
-            (1..=i64::from(u16::MAX))
-                .contains(&to)
-                .then_some(Value::Number(to))
+            let (low, high) = spec.field.number_range();
+            (low..=high).contains(&to).then_some(Value::Number(to))
         }
         _ => None,
     }

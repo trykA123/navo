@@ -2,6 +2,7 @@ mod bind;
 mod clipboard;
 mod compare;
 mod contexts;
+pub(crate) mod git;
 mod keymap;
 mod marks;
 mod multi_rename;
@@ -18,6 +19,8 @@ mod window;
 
 #[cfg(test)]
 mod compare_tests;
+#[cfg(test)]
+mod git_tests;
 #[cfg(test)]
 mod tests;
 
@@ -149,6 +152,7 @@ fn registry() -> impl Iterator<Item = CommandSpec> {
         multi_rename::GROUPS.as_slice(),
         perf::GROUPS.as_slice(),
         retained::GROUPS.as_slice(),
+        git::GROUPS.as_slice(),
         clipboard::GROUPS.as_slice(),
         compare::GROUPS.as_slice(),
     ];

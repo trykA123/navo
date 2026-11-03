@@ -7,7 +7,7 @@ use super::app_menu::{Rig, rig};
 use super::drive_fs::{Setup, drive_window};
 use super::press;
 use crate::app_menu::{Item, MenuCommand, index_of};
-use crate::settings::{Change, FIELDS, Field, Section, Value};
+use crate::settings::{Change, FIELDS, Field, Section, Value, Values};
 use crate::tokens::{self, Density, ThemeChoice};
 
 fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
@@ -63,7 +63,7 @@ fn row_of(field: Field) -> usize {
 }
 
 fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
-    let filter = crate::settings::Filter::default();
+    let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
     let steps = FIELDS[..row_of(field)]
         .iter()
         .filter(|spec| filter.admits(spec))
@@ -222,6 +222,7 @@ fn walk_sections(cx: &mut TestAppContext, with_compare: bool) {
         "Copy",
         "Safety net",
         "Search",
+        "Git",
         "Display",
     ];
     if cfg!(windows) {
@@ -236,7 +237,7 @@ fn walk_sections(cx: &mut TestAppContext, with_compare: bool) {
         rig.press(cx, "tab");
         let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
         assert!(in_sheet, "after tab {step}");
-        let current = (0..15usize)
+        let current = (0..16usize)
             .filter(|index| tab_exists(*index))
             .find(|index| {
                 cx.update_window(rig.window, |_, window, cx| {

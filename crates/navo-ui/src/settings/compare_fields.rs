@@ -12,7 +12,7 @@ const CONTENT_CHECKS: [Choice; 2] = [
 
 pub(super) const COMPARE_FIELDS: [FieldSpec; 5] = [
     spec(
-        (F::GitEngine, S::Compare, "compare.git-engine"),
+        (F::CompareGitEngine, S::Compare, "compare.git-engine"),
         (
             "settings-compare-git-engine",
             "settings-compare-git-engine-help",

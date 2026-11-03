@@ -151,6 +151,10 @@ impl NavoWindow {
                 extended,
             } => self.prefetch_shell_menu(pane, *adds_cursor, *extended),
             FileListAction::MenuCancel => self.drop_prefetch(),
+            FileListAction::GitMenu { row, at } => self.open_git_menu((*row, *at), window, cx),
+            FileListAction::GitRun { row, action } => {
+                self.run_git_command((*row, *action), window, cx);
+            }
             _ => return false,
         }
         true

@@ -35,6 +35,10 @@ mod drop;
 mod find;
 mod first_key;
 mod fkeys;
+mod git_badges;
+mod git_commands;
+mod git_menu;
+mod git_previews;
 mod hand_off;
 pub(in crate::window_view) mod held;
 mod hints;
@@ -58,6 +62,7 @@ mod placement;
 mod prefetch;
 mod recent_sheet;
 mod settings_find;
+mod settings_git;
 mod settings_help;
 mod settings_layer;
 mod settings_news;
@@ -163,6 +168,7 @@ pub(crate) fn options_for(fs: Arc<FakeFs>, state: AppState) -> StartOptions {
         search: crate::window_view::SearchHooks::none(),
         rename: None,
         retained: Arc::new(crate::browser::NoRetained),
+        git: None,
         clipboard: None,
     }
 }

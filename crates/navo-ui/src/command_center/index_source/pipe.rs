@@ -48,12 +48,7 @@ impl PipeQueries {
         }
     }
 
-    pub(super) fn query(
-        &self,
-        options: IndexOptions,
-        query: pipe::Query,
-        cancel: &Cancel,
-    ) -> PipeAnswer {
+    pub fn query(&self, options: IndexOptions, query: pipe::Query, cancel: &Cancel) -> PipeAnswer {
         let deadline = Instant::now() + pipe::CONNECT_TIMEOUT + pipe::QUERY_TIMEOUT;
         if cancel.is_cancelled() {
             return PipeAnswer::Silent;

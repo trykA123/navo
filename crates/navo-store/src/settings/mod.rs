@@ -11,6 +11,7 @@ mod compare;
 mod complete;
 mod edit;
 mod following;
+mod git;
 mod layout;
 mod ledger;
 mod model;
@@ -20,12 +21,13 @@ mod retention;
 mod saving;
 mod view;
 
-pub use compare::{Compare, ContentCheck, GitEngine};
+pub use compare::{Compare, CompareGitEngine, ContentCheck};
 pub use complete::DefaultChange;
 use complete::{Ledger, reconcile};
 pub use edit::{SettingValue, key_line, section_line};
 pub use ledger::SettingsLedger;
 
+pub use git::{GitEngine, GitSettings};
 pub use layout::{
     LayoutPreset, LayoutSettings, remove_layout_preset, replace_layout_preset, save_layout_preset,
 };

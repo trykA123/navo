@@ -2,24 +2,20 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{Role, ScrollHandle};
 
 use super::controls::{self, Picks};
-use super::fields::{Control, FIELDS, FieldSpec, Look as ChoiceLook, Section};
+use super::fields::{Control, FIELDS, Field, FieldSpec, Look as ChoiceLook, Section};
 use super::find::{Filter, Line, lines};
+use super::git_page::{self, GitPage};
+use super::index_page;
 use super::row_state;
 use super::search_page::{self, SearchPage};
-use super::steps::first_row;
 use super::values::{Value, Values};
 use super::{Handler, SheetEvent};
 use crate::prelude::*;
-use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
-const NAV_WIDTH: f32 = 148.;
-const NAV_ITEM: f32 = 30.;
-const MARKER: (f32, f32) = (3., 14.);
 const ROW_MIN: f32 = 48.;
-const SHORTCUTS: &str = "Shortcuts";
 const NO_MATCH: &str = "No setting matches";
-const DIMMED: f32 = 0.45;
+pub(super) const DIMMED: f32 = 0.45;
 
 pub(super) struct Look<'a> {
     pub theme: &'a Theme,
@@ -29,12 +25,14 @@ pub(super) struct Look<'a> {
     pub diagnostics: &'a [super::DiagnosticRow],
     pub version: &'a SharedString,
     pub page: &'a SearchPage,
+    pub git: &'a GitPage,
+    pub index: &'a super::IndexProgress,
     pub send: Option<Handler>,
     pub summon_key_taken: bool,
     pub clipboard_key_taken: bool,
 }
 
-fn send_on_click<E: StatefulInteractiveElement>(
+pub(super) fn send_on_click<E: StatefulInteractiveElement>(
     element: E,
     send: Option<&Handler>,
     event: SheetEvent,
@@ -51,104 +49,6 @@ fn select_on_click<E: StatefulInteractiveElement>(
     row: usize,
 ) -> E {
     send_on_click(element, send, SheetEvent::Select(row))
-}
-
-struct NavItem {
-    index: usize,
-    label: SharedString,
-    glyph: IconName,
-    is_on: bool,
-    is_empty: bool,
-    event: SheetEvent,
-}
-
-fn nav_item(look: &Look, item: NavItem) -> AnyElement {
-    let theme = look.theme.selected_content(item.is_on);
-    let t = &theme;
-    let marker = div()
-        .absolute()
-        .left_0()
-        .top((px(NAV_ITEM) - px(MARKER.1)) / 2.)
-        .w(px(MARKER.0))
-        .h(px(MARKER.1))
-        .rounded(t.radii.full)
-        .bg(t.colors.accent);
-    let tint = if item.is_on {
-        t.colors.accent_text
-    } else {
-        t.colors.muted
-    };
-    let element = div()
-        .id(("settings-section", item.index))
-        .role(Role::Tab)
-        .aria_label(item.label.clone())
-        .aria_selected(item.is_on)
-        .test_support()
-        .relative()
-        .flex()
-        .items_center()
-        .gap(t.spacing.md)
-        .h(px(NAV_ITEM))
-        .px(t.spacing.lg)
-        .rounded(t.radii.md)
-        .cursor_pointer()
-        .whitespace_nowrap()
-        .when(item.is_empty, |element| element.opacity(DIMMED))
-        .hover(|element| element.bg(t.colors.hover))
-        .when(item.is_on, |element| {
-            element
-                .bg(t.colors.selection)
-                .text_color(t.colors.on_selection)
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(marker)
-        })
-        .child(icon(item.glyph, t.spacing.icon, tint))
-        .child(item.label);
-    let send = look.send.as_ref().filter(|_| !item.is_empty);
-    send_on_click(element, send, item.event).into_any_element()
-}
-
-pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + use<> {
-    let t = look.theme;
-    let sections = Section::ALL
-        .iter()
-        .enumerate()
-        .filter(|(_, section)| section.is_shown())
-        .map(|(index, section)| NavItem {
-            index,
-            label: section_label(*section),
-            glyph: section.icon(),
-            is_on: current == Some(*section),
-            is_empty: look.filter.first_in(*section).is_none(),
-            event: SheetEvent::Select(
-                look.filter
-                    .first_in(*section)
-                    .unwrap_or(first_row(*section)),
-            ),
-        });
-    let shortcuts = NavItem {
-        index: Section::ALL.len(),
-        label: SHORTCUTS.into(),
-        glyph: IconName::Keyboard,
-        is_on: current.is_none(),
-        is_empty: false,
-        event: SheetEvent::Shortcuts,
-    };
-    let items = sections.chain([shortcuts]).map(|item| nav_item(look, item));
-    div()
-        .id("settings-nav")
-        .role(Role::TabList)
-        .aria_label("Sections")
-        .test_support()
-        .flex()
-        .flex_col()
-        .flex_none()
-        .gap(t.spacing.xxs)
-        .w(px(NAV_WIDTH))
-        .p(t.spacing.md)
-        .border_r_1()
-        .border_color(t.surfaces.card_edge)
-        .children(items)
 }
 
 pub(super) fn error_line(t: &Theme, message: SharedString) -> impl IntoElement {
@@ -201,6 +101,15 @@ fn control(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
 }
 
 fn pictures(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
+    if spec.control == Control::Tool {
+        let current = look.values.git_tool();
+        return Some(git_page::tool_list(
+            look.theme,
+            look.git,
+            current,
+            look.send.as_ref(),
+        ));
+    }
     let (Control::Choices(options, choice_look), Value::Pick(at)) =
         (spec.control, look.values.get(spec.field))
     else {
@@ -237,6 +146,15 @@ fn key_line(t: &Theme, spec: &FieldSpec, is_current: bool) -> impl IntoElement +
         .into_any_element()
 }
 
+fn command_problem(look: &Look, field: Field) -> Option<AnyElement> {
+    let problem = look
+        .git
+        .problem
+        .as_ref()
+        .filter(|_| field == Field::GitToolCommand)?;
+    Some(git_page::problem_note(look.theme, problem))
+}
+
 fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
     let t = look.theme;
     let name = div()
@@ -262,6 +180,7 @@ fn title(look: &Look, index: usize, spec: &FieldSpec) -> Div {
             spec.field,
             (look.summon_key_taken, look.clipboard_key_taken),
         ))
+        .children(command_problem(look, spec.field))
         .child(key_line(t, spec, index == look.row))
 }
 
@@ -297,6 +216,9 @@ fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .flex_col()
         .flex_none()
         .min_h(px(ROW_MIN))
+        .when(!look.values.is_enabled(spec.field), |row| {
+            row.opacity(DIMMED)
+        })
         .px(t.spacing.xl)
         .py(t.spacing.md)
         .rounded(t.radii.md)
@@ -377,6 +299,7 @@ pub(super) fn content(
                 .map(|spec| row(look, index, spec))
                 .into_iter()
                 .collect(),
+            Line::Progress => index_page::progress_block(t, look.index),
             Line::Service => search_page::service_block(t, *look.page, send),
             Line::History => search_page::history_block(t, *look.page, send),
         })
@@ -408,7 +331,7 @@ fn is_page_shown(look: &Look, section: Section, page: Section) -> bool {
     section == page || (!look.filter.is_empty() && look.filter.first_in(page).is_some())
 }
 
-fn section_label(section: Section) -> SharedString {
+pub(super) fn section_label(section: Section) -> SharedString {
     if section.is_translated() {
         navo_l10n::tr(section.label()).into()
     } else {

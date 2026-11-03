@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navo Git at a glance</title>
+<style>
+:root {
+  color-scheme: light;
+  /* Navo tokens, OpenSea light (navo-ui tokens/palette/light.rs, Colors mapping in palette/mod.rs) */
+  --rail: oklch(95.5% 0.012 225);
+  --bg: oklch(98.5% 0.008 225);
+  --surface: oklch(99.8% 0 225);
+  --line: oklch(89% 0.014 225);
+  --line-strong: oklch(64.8% 0.017 225);
+  --text: oklch(22% 0.014 225);
+  --muted: oklch(48.8% 0.017 225);
+  --selection: oklch(90% 0.046 218);
+  --accent: oklch(52% 0.092 218);
+  --accent-text: oklch(48.8% 0.086 218);
+  --mark: oklch(48.8% 0.144 22);
+  --folder: oklch(49.6% 0.102 80);
+  --ok: oklch(48% 0.108 160);
+  --kind-code: oklch(49.6% 0.12 262);
+  --kind-auto: oklch(49.6% 0.12 120);
+  --kind-archive: oklch(49.6% 0.12 45);
+  --kind-doc: oklch(49.6% 0.12 235);
+  --on-accent: var(--bg);
+  --shadow-menu: 0 18px 44px -12px oklch(21% 0.012 260 / 0.28), 0 2px 6px oklch(21% 0.012 260 / 0.06);
+  --shadow-tip: 0 8px 24px oklch(20% 0.02 250 / 0.18);
+  /* Git state colours: MarkColors ticks and fills (tokens/marks.rs): red 25, orange 55, blue 240 */
+  --st-conflict: oklch(56% 0.2 25);
+  --st-mod: oklch(56% 0.138 55);
+  --st-sync: oklch(56% 0.128 240);
+  --st-conflict-t: oklch(48.8% 0.2 25);
+  --st-mod-t: oklch(48.8% 0.138 55);
+  --st-sync-t: oklch(48.8% 0.128 240);
+  --fill-conflict: oklch(89% 0.056 25);
+  --fill-mod: oklch(89% 0.056 55);
+  --fill-sync: oklch(89% 0.056 240);
+  --on-conflict: oklch(40% 0.15 25);
+  --on-mod: oklch(40% 0.1 55);
+  --on-sync: oklch(40% 0.12 240);
+  --solid-conflict-text: var(--bg);
+
+  --hover: color-mix(in oklch, var(--bg) 50%, var(--selection));
+  --zebra: color-mix(in oklch, var(--bg) 50%, var(--rail));
+  --card-ring: color-mix(in oklch, var(--accent) 80%, var(--bg));
+
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px; --s8: 32px; --s12: 48px;
+  --r-xs: 3px; --r-sm: 4px; --r-md: 6px; --r-card: 8px; --r-menu: 10px; --r-sheet: 12px; --r-full: 999px;
+  --row: 24px; --icon: 15px; --ring: 2px; --mk: 20px; --gut: 20px;
+  --fs-12: 0.75rem; --fs-13: 0.8125rem; --fs-14: 0.875rem; --fs-16: 1rem; --fs-24: 1.5rem;
+  --ui: "Inter", "Inter Variable", system-ui, sans-serif;
+  --display: "Space Grotesk", "Inter", "Inter Variable", sans-serif;
+  --mono: "JetBrains Mono", "JetBrainsMono Nerd Font Mono", ui-monospace, monospace;
+  --fade: 80ms;
+  --z-menu: 20; --z-tip: 40;
+  --win-h: 600px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --rail: oklch(19% 0.014 225);
+  --bg: oklch(22.5% 0.014 225);
+  --surface: oklch(26.5% 0.014 225);
+  --line: oklch(33% 0.014 225);
+  --line-strong: oklch(54.8% 0.017 225);
+  --text: oklch(93.8% 0.014 225);
+  --muted: oklch(72% 0.017 225);
+  --selection: oklch(33% 0.058 218);
+  --accent: oklch(76% 0.11 218);
+  --accent-text: oklch(76% 0.11 218);
+  --mark: oklch(76% 0.166 22);
+  --folder: oklch(82% 0.13 80);
+  --ok: oklch(85% 0.13 160);
+  --kind-code: oklch(76% 0.12 262);
+  --kind-auto: oklch(76% 0.12 120);
+  --kind-archive: oklch(76% 0.12 45);
+  --kind-doc: oklch(76% 0.12 235);
+  --shadow-menu: 0 22px 48px -12px oklch(0% 0 0 / 0.7), 0 0 0 1px oklch(93% 0.006 260 / 0.04);
+  --shadow-tip: 0 8px 24px oklch(0% 0 0 / 0.5);
+  --st-conflict: oklch(72% 0.15 25);
+  --st-mod: oklch(72% 0.15 55);
+  --st-sync: oklch(72% 0.15 240);
+  --st-conflict-t: oklch(72% 0.15 25);
+  --st-mod-t: oklch(72% 0.15 55);
+  --st-sync-t: oklch(72% 0.15 240);
+  --fill-conflict: oklch(38% 0.124 25);
+  --fill-mod: oklch(38% 0.094 55);
+  --fill-sync: oklch(38% 0.086 240);
+  --on-conflict: oklch(90% 0.08 25);
+  --on-mod: oklch(90% 0.08 55);
+  --on-sync: oklch(90% 0.08 240);
+  --solid-conflict-text: var(--bg);
+}
+
+* { box-sizing: border-box; }
+html { background: var(--rail); }
+body { margin: 0; font-family: var(--ui); font-size: var(--fs-14); line-height: 1.5; color: var(--text); background: var(--rail); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: var(--ring) solid var(--accent); outline-offset: 2px; }
+.mono, kbd { font-family: var(--mono); font-variant-ligatures: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.page { max-width: 1440px; margin-inline: auto; padding: var(--s4) var(--s6) var(--s12); display: grid; gap: var(--s4); }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s6); }
+.top h1 { font-family: var(--display); font-size: var(--fs-24); line-height: 1.2; margin: 0; font-weight: 600; margin-inline-end: auto; }
+.ctl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.ctl .lb { color: var(--muted); font-size: var(--fs-12); margin-inline-end: var(--s1); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg); padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: var(--s1) var(--s3); border-radius: var(--r-sm); cursor: pointer; font-size: var(--fs-13); min-height: 32px; min-width: 32px; display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); }
+.seg button:hover { background: var(--hover); }
+.seg button[aria-pressed="true"] { background: var(--selection); font-weight: 600; }
+.picker button { min-width: 44px; font-weight: 600; }
+.hint { color: var(--muted); font-size: var(--fs-12); margin: 0; }
+
+.dir-head { display: grid; gap: var(--s1); }
+.dir-head h2 { font-family: var(--display); font-size: var(--fs-24); line-height: 1.2; margin: 0; font-weight: 600; }
+.dir-head p { margin: 0; max-width: 100ch; }
+.dir-head .m { font-size: var(--fs-16); }
+.dir-head .t, .dir-head .c, .dir-head .f { color: var(--muted); font-size: var(--fs-13); }
+.dir-head b { color: var(--text); font-weight: 600; }
+.keypath { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); color: var(--muted); font-size: var(--fs-13); }
+.keypath .step { display: inline-flex; align-items: center; gap: var(--s1); padding: 2px var(--s2); border-radius: var(--r-full); border: 1px solid transparent; }
+.keypath .step.on { border-color: var(--accent); color: var(--text); background: var(--bg); }
+.keypath .arr { color: var(--line-strong); }
+kbd { font-size: var(--fs-12); line-height: 1; padding: 3px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--r-sm); background: var(--surface); color: var(--text); white-space: nowrap; }
+
+.ic { width: var(--icon); height: var(--icon); flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.ic.s { width: 12px; height: 12px; stroke-width: 2.2; }
+.ic.xs { width: 10px; height: 10px; stroke-width: 2.6; }
+.ic.l { width: 18px; height: 18px; }
+
+/* ---------- window ---------- */
+.win { container: win / inline-size; position: relative; height: var(--win-h); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--rail); border: 1px solid var(--line); border-radius: var(--r-sheet); overflow: hidden; font-size: var(--fs-13); line-height: 1.3; }
+.tb { display: flex; align-items: center; gap: var(--s4); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); min-width: 0; }
+.logo { font-family: var(--display); font-weight: 600; font-size: var(--fs-14); display: inline-flex; gap: var(--s1); align-items: center; }
+.logo i { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); display: inline-block; }
+.tabs { display: flex; gap: 2px; min-width: 0; overflow: hidden; }
+.tab { display: inline-flex; align-items: center; gap: var(--s1); padding: var(--s1) var(--s3); border-radius: var(--r-md); color: var(--muted); white-space: nowrap; }
+.tab.on { background: var(--bg); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1px; background: var(--line); min-height: 0; }
+.pane { container: pane / inline-size; display: flex; flex-direction: column; background: var(--bg); min-width: 0; min-height: 0; position: relative; }
+.path { display: flex; align-items: center; gap: var(--s2); min-height: 28px; padding-inline: var(--s3); border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; }
+.path .cnt { margin-inline-start: auto; color: var(--muted); font-size: var(--fs-12); }
+.path .crumb { color: var(--muted); }
+.path .ic { color: var(--muted); width: 14px; height: 14px; }
+
+.list { overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; min-height: 0; outline: none; position: relative; }
+.row, .hdr { --cols: var(--mk) var(--gut) minmax(0, 1fr) 72px 140px; }
+.win[data-dir="B"] .row, .win[data-dir="B"] .hdr { --cols: var(--mk) var(--gut) minmax(0, 1fr) 236px 72px 140px; }
+.pane.nogut { --gut: 0px; }
+.win .pane.nogut .row, .win .pane.nogut .hdr { --cols: var(--mk) var(--gut) minmax(0, 1fr) 72px 140px; }
+.pane.nogut .c-gitx { display: none; }
+.row, .hdr { display: grid; grid-template-columns: var(--cols); align-items: center; padding-inline: var(--s2) var(--s3); }
+.row { height: var(--row); position: relative; white-space: nowrap; }
+.row > *, .hdr > * { min-width: 0; padding-inline-start: var(--s2); overflow: hidden; text-overflow: ellipsis; }
+.row > .c-mk, .row > .c-git, .hdr > .c-mk, .hdr > .c-git { padding: 0; overflow: visible; }
+.hdr { min-height: 24px; color: var(--muted); font-size: var(--fs-12); border-bottom: 1px solid var(--line); }
+.hdr > :nth-child(n+4), .row > .c-size, .row > .c-date, .row > .c-gitx { text-align: end; }
+.row > .c-gitx { text-align: start; }
+.hdr > .c-gitx { text-align: start; }
+:where(.row:nth-child(even)) { background: var(--zebra); }
+.row .c-size, .row .c-date { color: var(--muted); font-variant-numeric: tabular-nums; }
+.c-mk { display: flex; justify-content: center; align-items: center; color: var(--mark); }
+.c-mk .ic { width: 14px; height: 14px; }
+.c-git { display: flex; justify-content: center; align-items: stretch; height: 100%; }
+.hdr .c-git { align-items: center; }
+.nm { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; max-width: 100%; }
+.nm .t { overflow: hidden; text-overflow: ellipsis; transform: translateY(0.5px); }
+.nm .ab { transform: translateY(0.5px); color: var(--muted); font-size: var(--fs-12); font-variant-numeric: tabular-nums; flex: none; margin-inline-start: var(--s1); }
+.k-folder { color: var(--folder); } .k-code { color: var(--kind-code); } .k-auto { color: var(--kind-auto); }
+.k-archive { color: var(--kind-archive); } .k-doc { color: var(--kind-doc); } .k-plain { color: var(--muted); }
+.row.mk .t { color: var(--mark); font-weight: 600; }
+.row.cur { background: var(--selection); }
+.row.cur::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: var(--r-xs); background: var(--card-ring); }
+.pane:not(.active) .row.cur { background: transparent; }
+.pane:not(.active) .row.cur::before { display: none; }
+
+/* the gutter button */
+.gb { appearance: none; border: 0; background: transparent; padding: 0; margin: 0; width: 100%; min-width: var(--mk); display: grid; place-items: center; border-radius: var(--r-sm); cursor: pointer; transition: opacity var(--fade) linear; position: relative; }
+.gb:hover { background: color-mix(in oklch, var(--text) 9%, transparent); }
+.gb:focus-visible { outline: var(--ring) solid var(--accent); outline-offset: -1px; border-radius: var(--r-md); }
+.gb.stale { opacity: 0.5; }
+.gb.none { cursor: default; }
+.gb .ic { transition: opacity var(--fade) linear; }
+.st-conflict { --sc: var(--st-conflict); --sct: var(--st-conflict-t); --sf: var(--fill-conflict); --so: var(--on-conflict); }
+.st-modified { --sc: var(--st-mod); --sct: var(--st-mod-t); --sf: var(--fill-mod); --so: var(--on-mod); }
+.st-ahead, .st-behind, .st-diverged { --sc: var(--st-sync); --sct: var(--st-sync-t); --sf: var(--fill-sync); --so: var(--on-sync); }
+.st-clean { --sc: var(--ok); --sct: var(--ok); --sf: transparent; --so: var(--ok); }
+.st-unknown, .st-checking { --sc: var(--muted); --sct: var(--muted); --sf: transparent; --so: var(--muted); }
+.st-checking { --sc: var(--line-strong); }
+
+/* A: glyph */
+.g-a .ic { color: var(--sc); }
+/* B: chip */
+.chip { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; background: var(--sf); color: var(--so); font-weight: 700; font-size: 12px; line-height: 1; font-family: var(--ui); }
+.chip.ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ok); }
+.chip.dash { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-strong); color: var(--muted); border-radius: 5px; }
+.chip.dash.dashed { box-shadow: none; border: 1.5px dashed var(--line-strong); }
+.qdot { width: 4px; height: 4px; border-radius: 50%; background: var(--line-strong); }
+.win[data-dir="B"] .row.tint .t { color: var(--sct); }
+.win[data-dir="B"] .row.tint.cur .t { color: var(--sct); }
+.gx { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-12); color: var(--muted); min-width: 0; }
+.gx .br { max-width: 112px; display: inline-flex; align-items: center; gap: var(--s1); font-family: var(--mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gx .br .ic { width: 12px; height: 12px; }
+.gx .f { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gx .f.hot { color: var(--sct); font-weight: 600; }
+/* C: mono glyph + strip */
+.g-c .ic { color: var(--text); }
+.g-c .st-conflict .ic { color: var(--st-conflict); }
+.g-c .st-clean .ic, .g-c .st-unknown .ic { color: var(--muted); }
+.g-c .st-checking .ic { color: var(--line-strong); }
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); padding: var(--s1) var(--s3); border-bottom: 1px solid var(--line); background: var(--rail); font-size: var(--fs-12); }
+.strip .who { display: inline-flex; align-items: center; gap: var(--s1); color: var(--muted); }
+.strip .who .mono { font-size: var(--fs-12); }
+.strip .who b { color: var(--text); font-family: var(--ui); font-weight: 600; font-size: var(--fs-13); }
+.strip .who .ic { width: 13px; height: 13px; }
+.tally { display: inline-flex; align-items: center; gap: var(--s1); padding: 0 var(--s2); min-height: 24px; border: 1px solid var(--line); border-radius: var(--r-full); background: var(--bg); cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tally:hover { background: var(--hover); }
+.tally .ic { width: 12px; height: 12px; stroke-width: 2.2; }
+.tally.st-conflict { border-color: var(--st-conflict); }
+.tally.st-conflict .ic { color: var(--st-conflict); }
+.strip .sp { margin-inline-start: auto; color: var(--muted); display: inline-flex; gap: var(--s1); align-items: center; }
+.strip .warn { display: inline-flex; align-items: center; gap: var(--s1); color: var(--text); }
+.strip .warn .ic { width: 13px; height: 13px; color: var(--muted); }
+/* D: count pill */
+.win[data-dir="D"] .pane { --gut: 56px; }
+.win[data-dir="D"] .pane.nogut { --gut: 0px; }
+.win .pane.nogut .row, .win .pane.nogut .hdr { --cols: var(--mk) var(--gut) minmax(0, 1fr) 72px 140px; }
+.pane.nogut .c-gitx { display: none; }
+.pill { display: inline-flex; align-items: center; gap: 2px; height: 18px; padding-inline: 5px; border-radius: var(--r-full); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; background: color-mix(in oklch, var(--sc) 16%, var(--bg)); color: var(--sct); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--sc) 40%, transparent); white-space: nowrap; }
+.pill .ic { width: 10px; height: 10px; stroke-width: 2.6; }
+.pill.solid { background: var(--sc); color: var(--solid-conflict-text); box-shadow: none; }
+.pill.out { background: transparent; color: var(--ok); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.pill.dashed { background: transparent; color: var(--muted); box-shadow: none; border: 1.5px dashed var(--line-strong); }
+.pill .sep { width: 3px; }
+.dq { color: var(--line-strong); }
+.dq .ic { width: 13px; height: 13px; }
+
+/* ---------- status bar, tooltip ---------- */
+.foot { display: flex; align-items: center; gap: var(--s3); min-height: 28px; padding-inline: var(--s3); border-top: 1px solid var(--line); background: var(--rail); color: var(--muted); font-size: var(--fs-12); white-space: nowrap; overflow: hidden; }
+.foot .msg { overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.foot .sp { margin-inline-start: auto; display: inline-flex; gap: var(--s1); align-items: center; }
+.tip { position: fixed; z-index: var(--z-tip); max-width: 320px; padding: var(--s2) var(--s3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-tip); font-size: var(--fs-12); line-height: 1.4; opacity: 0; pointer-events: none; transition: opacity var(--fade) linear; }
+.tip.on { opacity: 1; }
+.tip b { font-weight: 600; }
+.tip .l2 { color: var(--muted); display: block; }
+
+/* ---------- menu (shared) ---------- */
+.menu { position: absolute; z-index: var(--z-menu); width: 340px; max-width: calc(100% - 16px); display: flex; flex-direction: column; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-menu); box-shadow: var(--shadow-menu); font-size: var(--fs-13); outline: none; }
+.menu.fresh { animation: fade var(--fade) linear; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.mi { display: flex; align-items: center; gap: var(--s2); height: 28px; padding-inline: 6px; border-radius: var(--r-md); white-space: nowrap; cursor: pointer; min-width: 0; }
+.mi .ic { color: var(--accent); }
+.mi .lbl { flex: none; }
+.mi .note { margin-inline-start: auto; color: var(--muted); font-size: var(--fs-12); overflow: hidden; text-overflow: ellipsis; min-width: 0; padding-inline-start: var(--s3); }
+.mi.lead .lbl { font-weight: 700; }
+.mi.sel { background: var(--selection); box-shadow: inset 0 0 0 var(--ring) var(--accent); }
+.mi[aria-disabled="true"] { cursor: default; color: var(--muted); }
+.mi[aria-disabled="true"] .ic { color: var(--line-strong); }
+.mi[aria-disabled="true"] .lbl { opacity: 0.8; }
+.mi.sel[aria-disabled="true"] { box-shadow: none; }
+.mi .ic.tx { color: var(--muted); }
+.mic { width: 20px; display: flex; justify-content: center; flex: none; }
+.mfoot { display: flex; align-items: center; gap: var(--s2); min-height: 30px; margin-top: 4px; padding: 4px 6px 2px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-12); white-space: nowrap; }
+.mfoot .via b { color: var(--text); font-weight: 600; }
+.mfoot .sp { margin-inline-start: auto; display: inline-flex; align-items: center; gap: var(--s1); }
+.mfoot kbd { padding: 2px 4px; }
+.mh .gb { width: auto; }
+.badge-lg { display: grid; place-items: center; width: 20px; flex: none; }
+.state-w { font-weight: 600; color: var(--sct); }
+.mono-b { font-family: var(--mono); font-size: var(--fs-12); color: var(--muted); }
+.trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* A menu head */
+.m-a .mh { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px var(--s2); padding: var(--s2) 6px var(--s2); border-bottom: 1px solid var(--line); margin-bottom: 4px; align-items: center; }
+.m-a .mh .t1 { display: flex; gap: var(--s2); align-items: baseline; min-width: 0; }
+.m-a .mh .t1 b { font-weight: 700; font-size: var(--fs-14); }
+.m-a .mh .t2 { grid-column: 2; color: var(--muted); font-size: var(--fs-12); display: flex; flex-wrap: wrap; gap: 0 var(--s2); }
+.m-a .mh .t2 .state-w { font-weight: 600; }
+/* B menu */
+.m-b .mh { display: flex; align-items: center; gap: var(--s2); height: 32px; padding-inline: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; min-width: 0; }
+.m-b .mh b { font-weight: 700; }
+.m-b .mh .ab { margin-inline-start: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: var(--fs-12); padding-inline-start: var(--s2); white-space: nowrap; }
+.m-b .sub { color: var(--muted); font-size: var(--fs-12); padding: 0 6px 4px 34px; }
+.m-b .mi { height: 30px; }
+.m-b .mi .note { color: var(--muted); font-variant-numeric: tabular-nums; }
+.m-b .mi .note.hot { color: var(--sct, var(--muted)); font-weight: 600; }
+/* C menu */
+.m-c { padding: var(--s2); gap: var(--s2); }
+.m-c .mh { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); padding: 0 2px; }
+.m-c .mh b { font-weight: 700; font-size: var(--fs-14); }
+.m-c .mh .r { margin-inline-start: auto; color: var(--muted); font-size: var(--fs-12); font-variant-numeric: tabular-nums; }
+.m-c .sent { color: var(--muted); font-size: var(--fs-12); padding: 0 2px; display: flex; gap: var(--s2); align-items: center; }
+.m-c .lead-btn { display: flex; align-items: center; gap: var(--s2); min-height: 38px; padding: 0 var(--s3); border-radius: var(--r-md); background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; }
+.m-c .lead-btn .ic { color: var(--on-accent); }
+.m-c .lead-btn .note { margin-inline-start: auto; font-weight: 400; font-size: var(--fs-12); opacity: 0.92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.m-c .lead-btn kbd { background: transparent; color: inherit; border-color: color-mix(in oklch, var(--on-accent) 55%, transparent); }
+.m-c .lead-btn.sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.m-c .oth { display: flex; flex-direction: column; }
+.m-c .oth .lab { color: var(--muted); font-size: var(--fs-12); padding: 2px 6px; }
+.m-c .mfoot { margin-top: 0; padding-inline: 2px; }
+/* D menu */
+.m-d { padding: var(--s3); gap: var(--s2); }
+.m-d .mh { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+.m-d .mh b { font-family: var(--display); font-weight: 600; font-size: var(--fs-16); }
+.m-d .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: var(--s2); }
+.m-d .tile { display: grid; gap: 0; padding: var(--s2) var(--s3); border-radius: var(--r-card); background: color-mix(in oklch, var(--sc) 12%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--sc) 35%, transparent); }
+.m-d .tile .n { font-family: var(--display); font-size: 1.25rem; font-weight: 600; line-height: 1.2; display: inline-flex; align-items: center; gap: var(--s1); font-variant-numeric: tabular-nums; color: var(--sct); }
+.m-d .tile .n .ic { width: 14px; height: 14px; stroke-width: 2.4; }
+.m-d .tile .w { font-size: var(--fs-12); color: var(--muted); }
+.m-d .tile.ok { --sc: var(--ok); }
+.m-d .tile.unk { --sc: var(--muted); }
+.m-d .tile.conflict { background: var(--st-conflict); box-shadow: none; }
+.m-d .tile.conflict .n, .m-d .tile.conflict .w { color: var(--solid-conflict-text); }
+.m-d .list-d { display: flex; flex-direction: column; margin-inline: -6px; }
+.m-d .mi { height: 32px; padding-inline: var(--s3); }
+.m-d .mfoot { margin-top: 0; padding-inline: 0; }
+
+/* ---------- legend ---------- */
+.legend { display: grid; gap: var(--s2); }
+.legend h3 { margin: 0; font-family: var(--display); font-weight: 600; font-size: var(--fs-16); }
+.lg { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s2); }
+.lg .it { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 0 var(--s3); align-items: center; padding: var(--s2) var(--s3); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-card); }
+.lg .sw { display: flex; align-items: center; justify-content: center; height: 28px; }
+.lg .it b { font-weight: 600; }
+.lg .it span { color: var(--muted); font-size: var(--fs-12); }
+.lg .it .txt { display: grid; }
+.lg .sw .gb { pointer-events: none; width: auto; height: 100%; padding-inline: 4px; }
+
+/* ---------- widths ---------- */
+@container pane (max-width: 640px) {
+  .win .row, .win .hdr, .win[data-dir="B"] .row, .win[data-dir="B"] .hdr { --cols: var(--mk) var(--gut) minmax(0, 1fr) 72px; }
+  .c-date, .c-gitx { display: none; }
+}
+@container pane (max-width: 440px) {
+  .win .row, .win .hdr, .win[data-dir="B"] .row, .win[data-dir="B"] .hdr { --cols: var(--mk) var(--gut) minmax(0, 1fr); }
+  .c-size { display: none; }
+}
+@container pane (min-width: 641px) {
+  .win[data-dir="B"] .nm .ab { display: none; }
+}
+.win:not([data-dir="B"]) .c-gitx, .win:not([data-dir="B"]) .hdr .c-gitx { display: none; }
+@container win (max-width: 900px) {
+  .panes { grid-template-columns: minmax(0, 1fr); }
+  .panes .pane.second { display: none; }
+}
+@container win (max-width: 560px) {
+  .tb .tabs .tab:nth-child(n+2) { display: none; }
+}
+@media (max-width: 600px) {
+  :root { --row: 32px; --gut: 28px; --mk: 24px; --win-h: 680px; }
+  .win[data-dir="D"] .pane { --gut: 56px; }
+  .page { padding-inline: var(--s3); }
+  .top h1 { font-size: 1.25rem; }
+  .win { font-size: var(--fs-14); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu.fresh { animation: none; }
+  .gb, .tip, .gb .ic { transition: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+    <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+    <symbol id="i-file-code" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/></symbol>
+    <symbol id="i-file-archive" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 12h2"/><path d="M10 16h2"/><path d="M10 8h2"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+    <symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-circle-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+    <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+    <symbol id="i-arrow-up-down" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></symbol>
+    <symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-circle-dashed" viewBox="0 0 24 24"><path d="M10.1 2.182a10 10 0 0 1 3.8 0"/><path d="M13.9 21.818a10 10 0 0 1-3.8 0"/><path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"/><path d="M2.182 13.9a10 10 0 0 1 0-3.8"/><path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"/><path d="M21.818 10.1a10 10 0 0 1 0 3.8"/><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"/><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"/></symbol>
+    <symbol id="i-commit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="3" x2="9" y1="12" y2="12"/><line x1="15" x2="21" y1="12" y2="12"/></symbol>
+    <symbol id="i-pull" viewBox="0 0 24 24"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></symbol>
+    <symbol id="i-push" viewBox="0 0 24 24"><path d="m18 9-6-6-6 6"/><path d="M12 3v14"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+    <symbol id="i-diff" viewBox="0 0 24 24"><path d="M12 3v14"/><path d="M5 10h14"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+    <symbol id="i-hard-drive" viewBox="0 0 24 24"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <header class="top">
+    <h1>Git at a glance: badge and menu</h1>
+    <div class="ctl">
+      <span class="lb" id="lb-dir">Direction</span>
+      <div class="seg picker" role="group" aria-labelledby="lb-dir" id="picker"></div>
+      <span class="lb" id="lb-theme">Theme</span>
+      <div class="seg" role="group" aria-labelledby="lb-theme" id="theme-seg"></div>
+    </div>
+    <div class="ctl">
+      <span class="lb" id="lb-scn">Listing</span>
+      <div class="seg" role="group" aria-labelledby="lb-scn" id="scn-seg"></div>
+      <span class="lb" id="lb-tool">Git tool</span>
+      <div class="seg" role="group" aria-labelledby="lb-tool" id="tool-seg"></div>
+    </div>
+    <p class="hint">Keys: 1 to 4 direction, T theme, S listing, U tool. In the window: Up/Down, Alt+G, Enter, Esc.</p>
+  </header>
+
+  <section class="dir-head" id="dir-head" aria-live="polite"></section>
+  <div class="keypath" id="keypath" aria-label="Keyboard path"></div>
+  <main id="stage"><div class="win" id="win" data-dir="A"></div></main>
+  <section class="legend" id="legend" aria-label="States"></section>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const ic = (id, cls = "") => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/* ---------- data ---------- */
+const REPOS = {
+  navo: { name: "navo", branch: "merge-index", up: "origin/merge-index", ahead: 1, behind: 0, changed: 5, untracked: 1, conflicted: 2, op: "Merge in progress", fetched: "2 h ago" },
+  cockpit: { name: "cockpit", branch: "main", up: "origin/main", ahead: 2, behind: 0, changed: 4, untracked: 1, conflicted: 0, fetched: "35 min ago" },
+  notes: { name: "homelab-notes", branch: "main", up: "origin/main", ahead: 3, behind: 2, changed: 0, untracked: 0, conflicted: 0, fetched: "1 h ago" },
+  truehl: { name: "truehl", branch: "main", up: "origin/main", ahead: 0, behind: 5, changed: 0, untracked: 0, conflicted: 0, fetched: "20 min ago" },
+  pagepilot: { name: "pagepilot", branch: "feat/sync", up: "origin/feat/sync", ahead: 1, behind: 0, changed: 0, untracked: 0, conflicted: 0, fetched: "4 h ago" },
+  dotfiles: { name: "dotfiles", branch: "main", up: "origin/main", ahead: 0, behind: 0, changed: 0, untracked: 0, conflicted: 0, fetched: "3 days ago" },
+  paperwing: { name: "paperwing", branch: "main", up: "origin/main", ahead: 0, behind: 0, changed: 0, untracked: 0, conflicted: 0, fetched: "1 day ago" },
+  monorepo: { name: "big-monorepo", unknown: "timed", branch: "main" },
+  sdk: { name: "third-party-sdk", unknown: "trust", branch: "?" },
+  old: { name: "old-checkout", first: true, branch: "?" },
+  platform: { name: "platform", branch: "main", up: "origin/main", ahead: 0, behind: 4, changed: 43, untracked: 0, conflicted: 1, capped: true, fetched: "10 min ago" },
+};
+const UNKNOWN_TEXT = {
+  timed: "Timed out after 10 s. Press F5 to try again.",
+  trust: "Git does not trust this folder. Navo never changes that setting.",
+  capped: "Status stopped at 8 MiB, so this folder is not confirmed clean.",
+};
+const file = (n, size, date, kind = "plain", mk = false) => ({ k: "f", n, size, date, kind, mk });
+const dir = (n, date, extra = {}) => ({ k: "d", n, date, ...extra });
+const SCN = {
+  parent: {
+    path: ["~", "Code"], gut: true,
+    rows: () => [
+      dir("big-monorepo", "2026-10-30 18:04", { repo: "monorepo" }),
+      dir("cockpit", "2026-11-02 09:41", { repo: "cockpit" }),
+      dir("dotfiles", "2026-09-12 21:15", { repo: "dotfiles" }),
+      dir("homelab-notes", "2026-11-01 22:30", { repo: "notes" }),
+      dir("navo", "2026-11-02 11:08", { repo: "navo" }),
+      dir("old-checkout", "2026-08-02 07:55", { repo: "old" }),
+      dir("pagepilot", "2026-10-28 16:20", { repo: "pagepilot" }),
+      dir("paperwing", "2026-10-19 13:02", { repo: "paperwing" }),
+      dir("photos-2026", "2026-10-14 08:33"),
+      dir("scratch", "2026-10-31 23:47"),
+      dir("third-party-sdk", "2026-07-21 10:10", { repo: "sdk" }),
+      dir("truehl", "2026-11-02 08:12", { repo: "truehl" }),
+      file("backup-2026-10.zip", "212 MB", "2026-10-31 03:00", "archive"),
+      file("build-notes.md", "4.1 KB", "2026-11-01 20:44", "doc", true),
+      file("todo.txt", "1.2 KB", "2026-10-30 09:12"),
+    ],
+    cur: 3,
+  },
+  inside: {
+    path: ["~", "Code", "navo"], gut: true, repo: "navo",
+    rows: () => [
+      dir(".github", "2026-10-20 12:00", { sub: "navo", below: { c: 0, m: 0 } }),
+      dir("assets", "2026-10-02 17:42", { sub: "navo", below: { c: 0, m: 0 } }),
+      dir("crates", "2026-11-02 11:08", { sub: "navo", below: { c: 2, m: 4 } }),
+      dir("docs", "2026-11-01 19:25", { sub: "navo", below: { c: 0, m: 1 } }),
+      dir("scripts", "2026-09-29 08:40", { sub: "navo", below: { c: 0, m: 0 } }),
+      dir("tests", "2026-10-30 14:16", { sub: "navo", below: { c: 0, m: 1 } }),
+      dir("xtask", "2026-10-11 10:03", { sub: "navo", below: { c: 0, m: 0 } }),
+      file("Cargo.lock", "168 KB", "2026-11-02 10:58", "code"),
+      file("Cargo.toml", "3.4 KB", "2026-11-02 10:58", "code"),
+      file("CLAUDE.md", "6.8 KB", "2026-10-29 21:10", "doc"),
+      file("deny.toml", "1.1 KB", "2026-09-04 09:30", "code"),
+      file("README.md", "5.2 KB", "2026-10-17 15:41", "doc"),
+      file("rust-toolchain.toml", "88 B", "2026-08-12 12:00", "code"),
+    ],
+    cur: 2,
+  },
+  large: {
+    path: ["~", "Work", "platform"], gut: true, repo: "platform",
+    rows: () => [
+      dir("apps", "2026-11-02 10:20", { sub: "platform", below: { c: 0, m: 12 } }),
+      dir("ci", "2026-10-26 09:00", { sub: "platform", unknown: "capped" }),
+      dir("docs", "2026-10-30 13:30", { sub: "platform", unknown: "capped" }),
+      dir("libs", "2026-11-02 09:03", { sub: "platform", below: { c: 1, m: 30 } }),
+      dir("third_party", "2026-09-01 08:00", { sub: "platform", unknown: "capped" }),
+      dir("tools", "2026-10-22 11:11", { sub: "platform", unknown: "capped" }),
+      dir("vendor", "2026-08-15 16:16", { sub: "platform", unknown: "capped" }),
+      file("BUILD.bazel", "9.7 KB", "2026-10-30 12:00", "code"),
+      file("README.md", "2.0 KB", "2026-08-15 16:16", "doc"),
+      file("WORKSPACE", "4.4 KB", "2026-10-02 10:00", "code"),
+    ],
+    cur: 0,
+  },
+};
+const OTHER = [
+  dir("Installers", "2026-10-30 18:01"), dir("Screenshots", "2026-11-01 12:14"), dir("Torrents", "2026-10-28 22:40"),
+  file("invoice-2026-10.pdf", "184 KB", "2026-11-02 08:51", "doc"), file("ubuntu-26.04.iso", "5.8 GB", "2026-10-29 20:00", "archive"),
+  file("wallpaper.png", "3.2 MB", "2026-10-25 14:30"),
+];
+const SCN_NAMES = { parent: "Folder of repositories", inside: "Inside a repository", large: "Inside a large repository" };
+const TOOLS = {
+  tortoise: { label: "TortoiseGit", name: "TortoiseGit", diff: true },
+  cli: { label: "Git CLI", name: "Git command line", diff: false, confirm: true },
+  fork: { label: "Fork (open only)", name: "Fork", open: true },
+  none: { label: "None", name: null, none: true },
+};
+
+const S = { dir: "A", theme: "light", scn: "parent", tool: "tortoise", cur: 0, menu: null, tipFor: null, refresh: {}, msg: "" };
+S.data = {};
+const dataFor = (k) => (S.data[k] ??= { rows: SCN[k].rows(), cur: SCN[k].cur });
+const D = () => dataFor(S.scn);
+const rowsNow = () => D().rows;
+
+/* ---------- state logic ---------- */
+function repoState(r) {
+  if (r.unknown) return "unknown";
+  if (r.first) return "checking";
+  if (r.conflicted > 0 || r.op) return "conflict";
+  if (r.changed + r.untracked > 0) return "modified";
+  if (r.ahead > 0 && r.behind > 0) return "diverged";
+  if (r.ahead > 0) return "ahead";
+  if (r.behind > 0) return "behind";
+  return "clean";
+}
+const repoOf = (row) => REPOS[row.repo || row.sub] || null;
+function stateOf(row) {
+  if (row.k !== "d") return null;
+  if (row.repo) return repoState(REPOS[row.repo]);
+  if (row.sub) {
+    if (row.unknown) return "unknown";
+    if (row.below.c > 0) return "conflict";
+    if (row.below.m > 0) return "modified";
+    return "clean";
+  }
+  return null;
+}
+const isRoot = (row) => !!row.repo;
+const hasBadge = (row) => stateOf(row) !== null;
+function facts(row) {
+  const r = repoOf(row);
+  if (isRoot(row)) return { c: r.conflicted || 0, m: (r.changed || 0) + (r.untracked || 0), a: r.ahead || 0, b: r.behind || 0 };
+  return { c: row.below?.c || 0, m: row.below?.m || 0, a: r.ahead || 0, b: r.behind || 0 };
+}
+function abText(row) {
+  const f = facts(row);
+  return [f.a > 0 ? `${f.a}↑` : "", f.b > 0 ? `${f.b}↓` : ""].filter(Boolean).join(" ");
+}
+const showsAb = (row) => isRoot(row) && !repoOf(row).unknown && !repoOf(row).first;
+const STATE_WORD = { conflict: "Conflict", modified: "Modified", ahead: "Ahead", behind: "Behind", diverged: "Diverged", clean: "Clean", unknown: "Unknown", checking: "Checking" };
+function sentence(row, forRepo = false) {
+  const r = repoOf(row); const st = repoState(r); const f = forRepo || isRoot(row) ? { c: r.conflicted || 0, m: (r.changed || 0) + (r.untracked || 0), a: r.ahead || 0, b: r.behind || 0 } : facts(row);
+  switch (st) {
+    case "conflict": return `${plural(r.conflicted || 0, "conflict", "conflicts")}${r.op ? ", " + r.op.toLowerCase() : ""}`;
+    case "modified": return `${f.m} changed${r.untracked ? `, ${r.untracked} new` : ""}`;
+    case "diverged": return `${f.a} ahead, ${f.b} behind`;
+    case "ahead": return plural(f.a, "commit ahead", "commits ahead");
+    case "behind": return plural(f.b, "commit behind", "commits behind");
+    case "clean": return "Up to date";
+    case "unknown": return r.unknown === "timed" ? "Timed out" : "Not trusted by Git";
+    default: return "First check running";
+  }
+}
+function localFact(row) {
+  const st = stateOf(row);
+  if (st === "conflict") return `${plural(row.below.c, "conflict", "conflicts")}, ${row.below.m} changed below`;
+  if (st === "modified") return `${row.below.m} changed below`;
+  if (st === "clean") return "Nothing changed below";
+  return UNKNOWN_TEXT[row.unknown || "capped"];
+}
+function tipLines(row) {
+  const r = repoOf(row); const st = stateOf(row);
+  if (isRoot(row)) {
+    if (r.first) return [`<b>${esc(r.name)}</b>`, "Checking for the first time"];
+    if (r.unknown) return [`<b>${esc(r.name)}</b> · Unknown`, UNKNOWN_TEXT[r.unknown]];
+    const l2 = `${STATE_WORD[st]}: ${sentence(row)}`;
+    const l3 = [r.ahead ? `${r.ahead} ahead` : "", r.behind ? `${r.behind} behind` : "", `fetched ${r.fetched}`].filter(Boolean).join(" · ");
+    return [`<b>${esc(r.name)}</b> <span class="mono">${esc(r.branch)} → ${esc(r.up)}</span>`, l2, l3];
+  }
+  const head = `<b>${esc(row.n)}</b> · inside ${esc(r.name)}`;
+  return [head, `${STATE_WORD[st]}: ${localFact(row)}`];
+}
+function badgeLabel(row) {
+  const r = repoOf(row); const st = stateOf(row);
+  const rs = isRoot(row) ? `repository ${r.name}` : `folder in ${r.name}`;
+  const txt = tipLines(row).map((s) => s.replace(/<[^>]+>/g, "")).join(". ");
+  return `Git, ${rs}: ${STATE_WORD[st].toLowerCase()}. ${txt}. Open Git menu`;
+}
+
+/* ---------- badges per direction ---------- */
+const refreshing = (row) => row.repo && S.refresh[row.repo];
+function badgeInner(dir, row) {
+  const st = stateOf(row); const f = facts(row); const sub = !isRoot(row);
+  const root = isRoot(row);
+  const num = st === "conflict" ? f.c : st === "modified" ? f.m : 0;
+  const glyph = { conflict: "triangle-alert", modified: "circle-dot", ahead: "arrow-up", behind: "arrow-down", diverged: "arrow-up-down", clean: "circle-check", unknown: "circle-help", checking: "circle-dashed" }[st];
+  if (dir === "A") {
+    if (st === "clean" && sub) return "";
+    return ic(glyph);
+  }
+  if (dir === "B") {
+    switch (st) {
+      case "conflict": return `<span class="chip">!</span>`;
+      case "modified": return `<span class="chip">M</span>`;
+      case "ahead": return `<span class="chip">${ic("arrow-up", "s")}</span>`;
+      case "behind": return `<span class="chip">${ic("arrow-down", "s")}</span>`;
+      case "diverged": return `<span class="chip">${ic("arrow-up-down", "s")}</span>`;
+      case "clean": return sub ? `<span class="qdot"></span>` : `<span class="chip ghost">${ic("check", "s")}</span>`;
+      case "unknown": return `<span class="chip dash">?</span>`;
+      default: return `<span class="chip dash dashed"></span>`;
+    }
+  }
+  if (dir === "C") {
+    if (st === "clean" && sub) return "";
+    return ic(glyph);
+  }
+  switch (st) {
+    case "conflict": return `<span class="pill solid">${ic("triangle-alert")}${num}</span>`;
+    case "modified": return `<span class="pill">${ic("circle-dot")}${num}</span>`;
+    case "ahead": return `<span class="pill">${ic("arrow-up")}${f.a}</span>`;
+    case "behind": return `<span class="pill">${ic("arrow-down")}${f.b}</span>`;
+    case "diverged": return `<span class="pill">${ic("arrow-up")}${f.a}<span class="sep"></span>${ic("arrow-down")}${f.b}</span>`;
+    case "clean": return sub ? `<span class="dq">${ic("check")}</span>` : `<span class="pill out">${ic("check")}</span>`;
+    case "unknown": return `<span class="pill dashed">?</span>`;
+    default: return `<span class="pill dashed">&nbsp;&nbsp;&nbsp;</span>`;
+  }
+}
+function badgeBtn(dir, row, i) {
+  const st = stateOf(row);
+  const stale = refreshing(row);
+  const inner = badgeInner(dir, row);
+  return `<button class="gb st-${st}${stale ? " stale" : ""}${inner ? "" : " empty"}" data-badge="${i}" tabindex="-1" aria-haspopup="menu" aria-expanded="${S.menu && S.menu.i === i}" aria-label="${esc(badgeLabel(row))}"${stale ? ' aria-busy="true"' : ""}>${inner}</button>`;
+}
+function gxCell(row) {
+  if (!hasBadge(row)) return "";
+  const r = repoOf(row); const st = stateOf(row);
+  if (isRoot(row)) {
+    if (r.first || r.unknown) return `<span class="gx"><span class="br">${esc(r.unknown ? STATE_WORD.unknown : "Checking")}</span></span>`;
+    const f = facts(row);
+    const parts = [];
+    if (f.c) parts.push(`<span class="f hot">${f.c} conflict${f.c > 1 ? "s" : ""}</span>`);
+    else if (f.m) parts.push(`<span class="f hot">${f.m} changed</span>`);
+    const ab = abText(row); if (ab) parts.push(`<span class="f">${ab}</span>`);
+    return `<span class="gx"><span class="br">${ic("branch")}${esc(r.branch)}</span>${parts.join("")}</span>`;
+  }
+  if (st === "conflict") return `<span class="gx"><span class="f hot">${row.below.c} conflict${row.below.c > 1 ? "s" : ""}</span><span class="f">${row.below.m} changed</span></span>`;
+  if (st === "modified") return `<span class="gx"><span class="f hot">${row.below.m} changed</span></span>`;
+  if (st === "unknown") return `<span class="gx"><span class="br">Unknown</span></span>`;
+  return "";
+}
+
+/* ---------- rows ---------- */
+function nameInner(dirKey, row) {
+  const icon = row.k === "d" ? ic("folder", "k-folder") : ic({ code: "file-code", doc: "file-text", archive: "file-archive" }[row.kind] || "file", "k-" + row.kind);
+  const brackets = row.k === "d" && (dirKey === "A" || dirKey === "B");
+  const text = brackets ? `[${row.n}]` : row.n;
+  const ab = dirKey !== "D" && dirKey !== "B" ? "" : "";
+  const abv = (dirKey === "A" || dirKey === "C" || dirKey === "B") && hasBadge(row) && showsAb(row) && abText(row) ? `<span class="ab" aria-hidden="true">${abText(row)}</span>` : "";
+  return `<span class="nm">${icon}<span class="t">${esc(text)}</span>${abv}</span>`;
+}
+function rowHTML(dirKey, row, i, gut, cur) {
+  const cls = ["row"];
+  if (cur) cls.push("cur");
+  if (row.mk) cls.push("mk");
+  const st = stateOf(row);
+  if (st === "conflict" || st === "modified") cls.push("tint");
+  const mk = row.mk ? ic("circle-check") : "";
+  const gcell = `<span class="c-git" role="gridcell">${gut && hasBadge(row) ? badgeBtn(dirKey, row, i) : ""}</span>`;
+  return `<div class="${cls.join(" ")}" role="row" id="r${i}" data-row="${i}" aria-selected="${cur}">
+    <span class="c-mk" role="gridcell">${mk}</span>${gcell}
+    <span class="c-name" role="gridcell">${nameInner(dirKey, row)}</span>
+    <span class="c-gitx" role="gridcell">${dirKey === "B" ? gxCell(row) : ""}</span>
+    <span class="c-size" role="gridcell">${row.k === "d" ? "—" : row.size}</span>
+    <span class="c-date" role="gridcell">${row.date}</span></div>`;
+}
+const countFamily = (st) => (st === "ahead" || st === "behind" || st === "diverged" ? "sync" : st);
+function stripHTML(rows) {
+  const sc = SCN[S.scn];
+  const tallies = { conflict: 0, modified: 0, sync: 0, unknown: 0, checking: 0 };
+  let clean = 0;
+  rows.forEach((r) => { const st = stateOf(r); if (!st) return; if (st === "clean") clean++; else tallies[countFamily(st)]++; });
+  const word = { conflict: "conflict", modified: "modified", sync: "out of sync", unknown: "unknown", checking: "checking" };
+  const glyph = { conflict: "triangle-alert", modified: "circle-dot", sync: "arrow-up-down", unknown: "circle-help", checking: "circle-dashed" };
+  const chips = Object.keys(tallies).filter((k) => tallies[k] > 0).map((k) =>
+    `<button class="tally st-${k === "sync" ? "ahead" : k}" data-jump="${k}" aria-label="${tallies[k]} ${word[k]}: jump to next">${ic(glyph[k])}${tallies[k]} ${word[k]}</button>`).join("");
+  let who = "";
+  if (sc.repo) {
+    const r = REPOS[sc.repo]; const ab = [r.ahead ? `${r.ahead}↑` : "", r.behind ? `${r.behind}↓` : ""].filter(Boolean).join(" ");
+    who = `<span class="who">${ic("branch")}<b>${esc(r.name)}</b> <span class="mono">${esc(r.branch)}${ab ? " " + ab : ""}</span></span>`;
+  } else who = `<span class="who">${ic("branch")}<b>${rows.filter((r) => r.repo).length} repos</b>${clean ? ` \u00b7 ${clean} clean` : ""}</span>`;
+  const note = S.scn === "large" ? `<span class="warn">${ic("circle-help")}Status stopped at 8 MiB. Folders without a mark are unconfirmed.</span>`
+    : "";
+  return `<div class="strip" role="group" aria-label="Git summary of this listing">${who}${chips}${note}</div>`;
+}
+function paneLeft(rows, cur) {
+  const sc = SCN[S.scn];
+  const crumbs = sc.path.map((p, i) => (i === sc.path.length - 1 ? `<b>${esc(p)}</b>` : `<span class="crumb">${esc(p)} /</span>`)).join(" ");
+  const cnt = `${rows.length} items`;
+  const gh = `<div class="hdr" role="row"><span class="c-mk"></span><span class="c-git" title="Git" style="color:var(--line-strong)">${ic("branch", "s")}</span><span class="c-name">Name</span><span class="c-gitx">Git</span><span class="c-size">Size</span><span class="c-date">Date</span></div>`;
+  const list = rows.map((r, i) => rowHTML(S.dir, r, i, true, i === cur)).join("");
+  return `<section class="pane active" aria-label="Left pane">
+    <div class="path">${ic("folder")}<span>${crumbs}</span><span class="cnt">${cnt}</span></div>
+    ${S.dir === "C" ? stripHTML(rows) : ""}
+    ${gh}
+    <div class="list" role="grid" aria-label="Files, Git badges in the first column" id="grid" tabindex="0" aria-activedescendant="r${cur}">${list}</div>
+  </section>`;
+}
+function paneRight() {
+  const hdr = `<div class="hdr" role="row"><span class="c-mk"></span><span class="c-git"></span><span class="c-name">Name</span><span class="c-gitx"></span><span class="c-size">Size</span><span class="c-date">Date</span></div>`;
+  const rows = OTHER.map((r, i) => rowHTML("A", r, i, false, false)).join("");
+  return `<section class="pane second nogut" aria-label="Right pane, no repository, no Git column">
+    <div class="path">${ic("folder")}<span><span class="crumb">~ /</span> <b>Downloads</b></span><span class="cnt">${OTHER.length} items</span></div>
+    ${hdr}<div class="list" role="grid" aria-label="Downloads">${rows}</div></section>`;
+}
+
+/* ---------- menu ---------- */
+function menuItems(row) {
+  const r = repoOf(row); const t = TOOLS[S.tool]; const rs = repoState(r);
+  const sub = !isRoot(row);
+  if (t.open) return { items: [{ id: "open", label: `Open in ${t.name}`, icon: "external", lead: true, note: r.name }], footer: `via ${t.name}` };
+  if (t.none) return { items: [{ id: "choose", label: "Choose a Git tool…", icon: "wrench", lead: true, note: "Settings → Git" }], footer: "No Git tool set" };
+  const unk = rs === "unknown" || rs === "checking";
+  const conf = rs === "conflict";
+  const ch = (r.changed || 0) + (r.untracked || 0); const a = r.ahead || 0; const b = r.behind || 0;
+  const div = a > 0 && b > 0;
+  const it = {};
+  it.commit = { id: "commit", label: "Commit…", icon: "commit",
+    enabled: !unk && !conf && ch > 0,
+    note: unk ? "Status unknown" : conf ? `Resolve ${plural(r.conflicted, "conflict", "conflicts")} first` : ch > 0 ? `${ch} changed${r.untracked ? ` · ${r.untracked} new` : ""}` : "Nothing to commit", hot: ch > 0 && !conf };
+  it.pull = { id: "pull", label: t.confirm ? "Pull…" : "Pull", icon: "pull",
+    enabled: !unk && !conf && !(t.confirm && div),
+    note: unk ? "Status unknown" : conf ? "Finish the merge first" : div ? (t.confirm ? "Needs a merge: use a Git tool" : `Diverged: merge needed`) : b > 0 ? `${plural(b, "commit", "commits")} behind${t.confirm ? " · fast-forward" : ""}` : "Fetch and merge", hot: b > 0 };
+  it.push = { id: "push", label: t.confirm ? "Push…" : "Push", icon: "push",
+    enabled: !unk && !conf && a > 0 && b === 0,
+    note: unk ? "Status unknown" : conf ? "Finish the merge first" : div ? "Pull first: histories diverged" : a > 0 ? `${plural(a, "commit", "commits")} ahead` : "Nothing to push", hot: a > 0 && b === 0 };
+  it.log = { id: "log", label: "Log", icon: "history", enabled: true, note: sub ? `this folder` : (r.branch || "") };
+  if (t.diff) it.diff = { id: "diff", label: "Diff", icon: "diff", enabled: true, note: sub ? "this folder" : "working tree" };
+  const lead = unk ? "recheck" : conf ? (t.diff ? "diff" : "log") : ch > 0 ? "commit" : b > 0 ? "pull" : a > 0 ? "push" : "log";
+  const order = ["commit", "pull", "push", "log", "diff"].filter((k) => it[k]);
+  let items = order.map((k) => it[k]);
+  if (unk) items.unshift({ id: "recheck", label: "Check again", icon: "refresh", enabled: true, note: "F5" });
+  const L = items.find((x) => x.id === lead) || items[0];
+  items = [L, ...items.filter((x) => x !== L)];
+  items[0].lead = true;
+  return { items, footer: `via ${t.name}` };
+}
+function menuModel(row) {
+  const r = repoOf(row); const rs = repoState(r); const sub = !isRoot(row);
+  const { items, footer } = menuItems(row);
+  const rf = { c: r.conflicted || 0, m: (r.changed || 0) + (r.untracked || 0), a: r.ahead || 0, b: r.behind || 0 };
+  return { r, rs, sub, items, footer, rf, row };
+}
+function footerHTML(m) {
+  return `<div class="mfoot"><span class="via">${m.footer.replace(/via (.*)/, "via <b>$1</b>")}</span><span class="sp"><kbd>Alt+G</kbd> rebindable</span></div>`;
+}
+function itemHTML(m, it, idx, sel, extra = "") {
+  const dis = it.enabled === false;
+  return `<div class="mi${it.lead ? " lead" : ""}${sel ? " sel" : ""}${extra}" role="menuitem" id="mi${idx}" data-mi="${idx}" aria-disabled="${dis}"${sel ? ' aria-current="true"' : ""}>
+    <span class="mic">${ic(it.icon)}</span><span class="lbl">${esc(it.label)}</span><span class="note${it.hot && !dis ? " hot" : ""}">${esc(it.note || "")}</span></div>`;
+}
+function menuHTML(dirKey, m, sel, fresh) {
+  const r = m.r; const rs = m.rs;
+  const f = m.rf;
+  const ab = [f.a ? `${f.a}↑` : "", f.b ? `${f.b}↓` : ""].filter(Boolean).join(" ");
+  const rowState = stateOf(m.row);
+  const aria = `role="menu" aria-label="Git menu for ${esc(r.name)}" tabindex="-1" aria-activedescendant="mi${sel}"`;
+  const cls = `menu m-${dirKey.toLowerCase()} st-${rs}${fresh ? " fresh" : ""}`;
+  const fake = { ...m.row, repo: m.row.repo || m.row.sub, sub: undefined };
+  const rootRow = { k: "d", n: r.name, repo: Object.keys(REPOS).find((k) => REPOS[k] === r) };
+  const badge = (cls2 = "") => `<span class="gb ${cls2} st-${rs} none" style="pointer-events:none;height:auto">${badgeInner(dirKey, rootRow)}</span>`;
+  const where = m.sub ? `Folder <b>${esc(m.row.n)}</b> inside this repository` : "";
+  const upstream = r.up ? `${esc(r.branch)} → ${esc(r.up)}` : esc(r.branch);
+  const fetched = r.fetched ? `fetched ${r.fetched}` : "";
+  let body = "";
+  if (dirKey === "A") {
+    body = `<div class="mh"><span class="badge-lg">${badge()}</span>
+      <div class="t1"><b class="trunc">${esc(r.name)}</b><span class="mono-b trunc">${upstream}</span></div>
+      <div class="t2"><span class="state-w">${STATE_WORD[rs]}</span><span>${esc(sentence(m.row, true))}</span>${ab && rs !== "ahead" && rs !== "behind" && rs !== "diverged" ? `<span>${ab}</span>` : ""}${fetched ? `<span>${fetched}</span>` : ""}</div></div>
+      ${m.sub ? `<div class="mh" style="padding-top:0;margin-top:-4px"><span></span><div class="t2"><span>in folder ${esc(m.row.n)}: ${esc(localFact(m.row))}</span></div></div>` : ""}
+      ${m.items.map((it, i) => itemHTML(m, it, i, i === sel)).join("")}${footerHTML(m)}`;
+  } else if (dirKey === "B") {
+    body = `<div class="mh"><span class="badge-lg">${badge()}</span><b class="trunc">${esc(r.name)}</b><span class="mono-b trunc">${esc(r.branch)}</span><span class="ab">${ab}</span></div>
+      <div class="sub">${esc(STATE_WORD[rs])}: ${esc(sentence(m.row, true))}${fetched ? " · " + fetched : ""}${m.sub ? ` · folder ${esc(m.row.n)}` : ""}</div>
+      ${m.items.map((it, i) => itemHTML(m, it, i, i === sel)).join("")}${footerHTML(m)}`;
+  } else if (dirKey === "C") {
+    const lead = m.items[0]; const rest = m.items.slice(1);
+    const dis = lead.enabled === false;
+    body = `<div class="mh"><span class="gb st-${rs} none g-c" style="height:auto;pointer-events:none">${badgeInner("C", rootRow)}</span><b class="trunc">${esc(r.name)}</b><span class="mono-b trunc">${esc(r.branch)}</span><span class="r">${ab}${fetched ? " · " + fetched : ""}</span></div>
+      <div class="sent"><span class="state-w" style="color:var(--text)">${STATE_WORD[rs]}</span> ${esc(sentence(m.row, true))}${m.sub ? ` · folder ${esc(m.row.n)}` : ""}</div>
+      <div class="lead-btn${sel === 0 ? " sel" : ""}" role="menuitem" id="mi0" data-mi="0" aria-disabled="${dis}">${ic(lead.icon)}<span>${esc(lead.label)}</span><span class="note">${esc(lead.note || "")}</span><kbd>Enter</kbd></div>
+      ${rest.length ? `<div class="oth"><div class="lab">Other actions</div>${rest.map((it, i) => itemHTML(m, it, i + 1, i + 1 === sel)).join("")}</div>` : ""}
+      ${footerHTML(m)}`;
+  } else {
+    const tiles = [];
+    if (rs === "unknown" || rs === "checking") tiles.push(`<div class="tile unk st-unknown"><span class="n">?</span><span class="w">${rs === "checking" ? "First check running" : "Status unknown"}</span></div>`);
+    else {
+      const lf = m.sub ? { c: m.row.below?.c || 0, m: m.row.below?.m || 0 } : { c: f.c, m: f.m };
+      if (lf.c) tiles.push(`<div class="tile conflict st-conflict"><span class="n">${ic("triangle-alert")}${lf.c}</span><span class="w">${lf.c === 1 ? "conflict" : "conflicts"}${m.sub ? " here" : ""}</span></div>`);
+      if (lf.m) tiles.push(`<div class="tile st-modified"><span class="n">${ic("circle-dot")}${lf.m}</span><span class="w">changed${m.sub ? " here" : ""}</span></div>`);
+      if (f.a) tiles.push(`<div class="tile st-ahead"><span class="n">${ic("arrow-up")}${f.a}</span><span class="w">ahead</span></div>`);
+      if (f.b) tiles.push(`<div class="tile st-behind"><span class="n">${ic("arrow-down")}${f.b}</span><span class="w">behind</span></div>`);
+      if (!tiles.length) tiles.push(`<div class="tile ok st-clean"><span class="n">${ic("check")}0</span><span class="w">nothing to do</span></div>`);
+    }
+    body = `<div class="mh"><b class="trunc">${esc(r.name)}</b><span class="mono-b trunc">${esc(r.branch)}${r.up ? " → " + esc(r.up) : ""}</span></div>
+      <div class="tiles">${tiles.join("")}</div>
+      <div class="hint" style="font-size:var(--fs-12)">${m.sub ? `Folder ${esc(m.row.n)} · ` : ""}${r.fetched ? "fetched " + r.fetched : esc(sentence(m.row, true))}${r.unknown ? " · " + esc(UNKNOWN_TEXT[r.unknown]) : ""}</div>
+      <div class="list-d">${m.items.map((it, i) => itemHTML(m, it, i, i === sel)).join("")}</div>${footerHTML(m)}`;
+  }
+  return `<div class="${cls}" ${aria} id="menu">${body}</div>`;
+}
+
+/* ---------- render ---------- */
+const DIRS = {
+  A: { model: "<b>One Lucide glyph in the gutter.</b> Colour and shape say the state; N↑ M↓ sits after the name. The menu is the Navo popup with a head block.",
+    clean: "<b>Clean subfolders: nothing.</b> A clean repository root shows a check, so the root says “this is a repository” and subfolders only speak up when something is wrong; the gutter stays calm.",
+    trade: "Trade-off: the calmest list and the least new UI, but a folder with nothing shown could also mean “not checked”; the unknown glyph covers that.", free: null },
+  B: { model: "<b>A letter chip in the gutter plus a Git column.</b> Chip is M, !, an arrow or a check; the name takes the state tint; branch and counts sit in a Git column (inline on narrow windows). The menu shows a fact beside each action.",
+    clean: "<b>Clean subfolders: a quiet dot.</b> A faint dot proves the folder was checked and found clean, so an empty gutter always means “no Git”, never “not yet checked”.",
+    trade: "Trade-off: most information per row and the clearest clean-versus-unchecked reading, at the cost of a busier list and a per-folder change count that the scanner must produce.", free: null },
+  C: { model: "<b>Mono glyphs plus a summary strip.</b> Gutter glyphs use text colour; only conflict is red. A strip above the list tallies the listing; each tally jumps to the next such row. The menu leads with one primary button.",
+    clean: "<b>Clean subfolders: nothing.</b> The strip counts the clean ones (“9 clean”), so the rows can stay quiet.",
+    trade: "Trade-off: calmest colour use and a place for “what needs me?”, but a row costs a strip of vertical space and the glyph alone is less loud than a coloured one.",
+    free: "Free direction, because Navo is calm: one colour for the one state that blocks work, and a tally answers “how many repositories need me”, which no single badge can." },
+  D: { model: "<b>A count pill in a wider gutter.</b> The pill carries the shape and the number: 2 conflicts, 4 changed, ↑3, ↓5, ↑3↓2. A subfolder shows how many changes sit below it. The menu opens with stat tiles.",
+    clean: "<b>Clean subfolders: a faint check.</b> Explicit “checked, clean” on every folder, no pill, so counts stand out.",
+    trade: "Trade-off: answers “how much” at a glance and reads well on a phone, but the gutter is 48 px instead of 20 and the scanner must count per folder.",
+    free: "Free direction, because the number is the useful part: “4 changed” tells how big a commit is before opening anything, and a count is a second cue beside colour." },
+};
+const KEYSTEPS = [["↓", "Select a repository row"], ["Alt+G", "Open the Git menu"], ["↑ ↓", "Pick an action"], ["Enter", "Run in the Git tool"], ["Esc", "Close, focus returns to the badge"]];
+function renderHead() {
+  const d = DIRS[S.dir];
+  $("#dir-head").innerHTML = `<h2>Direction ${S.dir}</h2><p class="m">${d.model}</p><p class="c">${d.clean}</p><p class="t">${d.trade}</p>${d.free ? `<p class="f"><b>Why free:</b> ${d.free}</p>` : ""}`;
+  const on = S.menu ? 2 : 0;
+  $("#keypath").innerHTML = KEYSTEPS.map(([k, t], i) => {
+    const kk = k.split(" ").map((x) => `<kbd>${x}</kbd>`).join(" ");
+    return `${i ? '<span class="arr" aria-hidden="true">›</span>' : ""}<span class="step${i === on || (S.menu && i === 1) ? " on" : ""}">${kk} ${t}</span>`;
+  }).join("");
+}
+function renderLegend() {
+  const mk = (st, sub, label, rule, extra = {}) => {
+    const row = { k: "d", n: "x", ...(sub ? { sub: "navo", below: extra.below || { c: 0, m: 0 } } : { repo: extra.repo }) };
+    if (!sub) REPOS.__lg = extra.r;
+    return { st, sub, label, rule, row, extra };
+  };
+  const spec = [
+    ["conflict", false, "Conflict", "Highest. Conflicts, or a merge or rebase in progress.", { r: { name: "x", branch: "b", conflicted: 2, changed: 1, untracked: 0, ahead: 0, behind: 0 } }],
+    ["modified", false, "Modified", "Changed or new files. Subfolders show the worst state below.", { r: { name: "x", branch: "b", conflicted: 0, changed: 4, untracked: 1, ahead: 0, behind: 0 } }],
+    ["diverged", false, "Ahead and behind", "2↑ 3↓ with zeros hidden. Own state only when the tree is clean.", { r: { name: "x", branch: "b", conflicted: 0, changed: 0, untracked: 0, ahead: 2, behind: 3 } }],
+    ["ahead", false, "Ahead only", "Commits not pushed: 2↑.", { r: { name: "x", branch: "b", conflicted: 0, changed: 0, untracked: 0, ahead: 2, behind: 0 } }],
+    ["behind", false, "Behind only", "Commits not pulled since the last fetch: 3↓.", { r: { name: "x", branch: "b", conflicted: 0, changed: 0, untracked: 0, ahead: 0, behind: 3 } }],
+    ["clean", false, "Clean repository", "Shown on the root only.", { r: { name: "x", branch: "b", conflicted: 0, changed: 0, untracked: 0, ahead: 0, behind: 0 } }],
+    ["clean", true, "Clean subfolder", "Direction-specific: see the text above.", {}],
+    ["unknown", false, "Unknown", "Timed out, no Git, not trusted, or the repository is above the caps. The tooltip says why.", { r: { name: "x", unknown: "timed", branch: "?" } }],
+    ["checking", false, "Checking", "First scan, nothing known yet. When a known state is re-checked it stays, faint, until the fresh one arrives.", { r: { name: "x", first: true, branch: "?" } }],
+  ];
+  const html = spec.map(([st, sub, label, rule, extra]) => {
+    const key = "__lg" + label.replace(/\W/g, "");
+    if (!sub) REPOS[key] = extra.r;
+    const row = sub ? { k: "d", n: "x", sub: "navo", below: { c: 0, m: 0 } } : { k: "d", n: "x", repo: key };
+    const inner = badgeInner(S.dir, row);
+    const empty = !inner;
+    return `<div class="it"><span class="sw"><span class="gb ${"st-" + st} none">${empty ? '<span style="color:var(--muted);font-size:11px">none</span>' : inner}</span></span><span class="txt"><b>${label}</b><span>${rule}</span></span></div>`;
+  }).join("");
+  const rows = [["Five visible states", "Conflict, Modified, Ahead/Behind, Clean and Unknown. Diverged is Ahead plus Behind; Checking is a faint placeholder. The worst state wins: conflict, then modified, then ahead and behind, then clean."]];
+  $("#legend").innerHTML = `<h3>Badge states in direction ${S.dir}</h3><div class="lg g-${S.dir.toLowerCase()}" data-dir-legend>${html}</div><p class="hint">${rows[0][1]} Colour is never the only cue: each state has its own shape, ${S.dir === "B" ? "letter" : S.dir === "D" ? "number" : "glyph"} or count.</p>`;
+  Object.keys(REPOS).filter((k) => k.startsWith("__lg")).forEach((k) => delete REPOS[k]);
+}
+function renderWin(opts = {}) {
+  const win = $("#win");
+  const prevScroll = $("#grid")?.scrollTop ?? 0;
+  const d = D(); const rows = d.rows;
+  win.dataset.dir = S.dir;
+  win.className = `win g-${S.dir.toLowerCase()}`;
+  const tool = TOOLS[S.tool];
+  const live = S.msg || `${SCN_NAMES[S.scn]}: ${rows.filter(hasBadge).length} Git badges.`;
+  win.innerHTML = `
+    <div class="tb"><span class="logo"><i></i>Navo</span><div class="tabs"><span class="tab on">${ic("folder")}${esc(SCN[S.scn].path.at(-1))}</span><span class="tab">${ic("folder")}Downloads</span></div></div>
+    <div class="panes">${paneLeft(rows, d.cur)}${paneRight()}</div>
+    <div class="foot"><span class="msg" role="status" aria-live="polite">${esc(live)}</span><span class="sp">Git: ${tool.name ? "via " + esc(tool.name) : "no tool"}</span></div>
+    ${S.menu ? menuHTML(S.dir, menuModel(rows[S.menu.i]), S.menu.sel, S.menu.fresh) : ""}`;
+  const grid = $("#grid");
+  grid.scrollTop = prevScroll;
+  if (!S.menu) { const cr = $(`#r${d.cur}`); if (cr) { const g = grid.getBoundingClientRect(), c = cr.getBoundingClientRect(); if (c.top < g.top) grid.scrollTop -= g.top - c.top; if (c.bottom > g.bottom) grid.scrollTop += c.bottom - g.bottom; } }
+  if (S.menu) { placeMenu(); S.menu.fresh = false; $("#menu").focus({ preventScroll: true }); }
+  else if (opts.focus === "badge") { const b = $(`#r${d.cur} .gb`); (b || grid).focus({ preventScroll: true }); if (b) showTip(b); }
+  else if (opts.focus !== "none") grid.focus({ preventScroll: true });
+  renderHead(); renderLegend();
+}
+function placeMenu() {
+  const win = $("#win"), m = $("#menu"); if (!m) return;
+  const b = $(`#r${D().cur} .gb`) || $(`#r${D().cur}`);
+  const wr = win.getBoundingClientRect(), br = b.getBoundingClientRect();
+  const narrow = wr.width < 560;
+  m.style.width = narrow ? wr.width - 16 + "px" : "";
+  let left = narrow ? 8 : br.left - wr.left - 2;
+  left = Math.max(8, Math.min(left, wr.width - m.offsetWidth - 8));
+  let top = br.bottom - wr.top + 4;
+  if (top + m.offsetHeight > wr.height - 8) top = Math.max(8, br.top - wr.top - m.offsetHeight - 4);
+  m.style.left = left + "px"; m.style.top = top + "px";
+}
+
+/* ---------- tooltip ---------- */
+function showTip(btn) {
+  const i = +btn.dataset.badge; if (isNaN(i) || S.menu) return;
+  const row = rowsNow()[i]; if (!row) return;
+  const tip = $("#tip");
+  const lines = tipLines(row);
+  tip.innerHTML = lines.map((l, k) => (k === 0 ? l : `<span class="l2">${l}</span>`)).join("");
+  const r = btn.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(r.left, innerWidth - 328)) + "px";
+  tip.style.top = r.bottom + 6 + "px";
+  tip.classList.add("on");
+  S.tipFor = i;
+}
+function hideTip() { $("#tip").classList.remove("on"); S.tipFor = null; }
+
+/* ---------- actions ---------- */
+function applyEffect(repoKey, id) {
+  const r = REPOS[repoKey];
+  if (id === "pull") r.behind = 0;
+  if (id === "push") r.ahead = 0;
+  if (id === "commit") { r.changed = 0; r.untracked = 0; Object.values(S.data).forEach((d) => d.rows.forEach((x) => { if (x.sub === repoKey && x.below && x.below.c === 0) x.below.m = 0; })); }
+  if (r.first) { delete r.first; Object.assign(r, { branch: "main", up: "origin/main", ahead: 0, behind: 0, changed: 0, untracked: 0, conflicted: 0, fetched: "just now" }); }
+  if (id === "recheck") { if (r.unknown === "timed") { delete r.unknown; Object.assign(r, { up: "origin/main", ahead: 0, behind: 0, changed: 0, untracked: 0, conflicted: 0, fetched: "just now" }); } }
+}
+function runItem(idx) {
+  const rows = rowsNow(); const row = rows[S.menu.i]; const m = menuModel(row);
+  const it = m.items[idx]; if (!it || it.enabled === false) return;
+  const key = row.repo || row.sub; const tool = TOOLS[S.tool];
+  const where = it.id === "recheck" ? "Navo" : (tool.name || "Navo");
+  S.menu = null;
+  S.msg = it.id === "choose" ? "Opening Settings → Git" : it.id === "recheck" ? `Checking ${m.r.name} again` : `${it.label.replace("…", "")} · ${m.r.name} · started in ${where}`;
+  if (it.id === "choose") { renderWin({ focus: "badge" }); return; }
+  S.refresh[key] = true;
+  renderWin({ focus: "badge" });
+  setTimeout(() => {
+    applyEffect(key, it.id); delete S.refresh[key];
+    S.msg = `Git status refreshed for ${m.r.name}: ${STATE_WORD[repoState(m.r)].toLowerCase()}`;
+    renderWin({ focus: "none" });
+  }, 1200);
+}
+function openMenu(i) {
+  const row = rowsNow()[i];
+  if (!row || !hasBadge(row)) { S.msg = "No Git badge on this row, so Alt+G does nothing here."; renderWin({ focus: "grid" }); return; }
+  hideTip();
+  D().cur = i;
+  const m = menuModel(row);
+  const first = m.items.findIndex((x) => x.enabled !== false);
+  S.menu = { i, sel: Math.max(0, first), fresh: true };
+  S.msg = `Git menu for ${m.r.name}: ${STATE_WORD[m.rs].toLowerCase()}, ${sentence(row, true)}`;
+  renderWin();
+}
+function closeMenu() { S.menu = null; S.msg = ""; renderWin({ focus: "badge" }); }
+function moveMenu(dirn) {
+  const m = menuModel(rowsNow()[S.menu.i]); const n = m.items.length; let k = S.menu.sel;
+  for (let t = 0; t < n; t++) { k = (k + dirn + n) % n; if (m.items[k].enabled !== false) break; }
+  S.menu.sel = k; renderWin();
+}
+function moveCur(delta, abs) {
+  const d = D(); const n = d.rows.length;
+  d.cur = abs !== undefined ? abs : Math.max(0, Math.min(n - 1, d.cur + delta));
+  hideTip(); S.msg = ""; renderWin({ focus: "grid" });
+}
+function jump(kind) {
+  const rows = rowsNow(); const d = D();
+  const fam = (r) => { const st = stateOf(r); return st ? (countFamily(st) === kind ? true : false) : false; };
+  for (let k = 1; k <= rows.length; k++) { const i = (d.cur + k) % rows.length; if (fam(rows[i])) { d.cur = i; break; } }
+  S.msg = `Jumped to the next ${kind === "sync" ? "out of sync" : kind} row`; renderWin({ focus: "grid" });
+}
+
+/* ---------- controls ---------- */
+function seg(el, items, get, set) {
+  el.innerHTML = items.map(([k, label, kbd]) => `<button type="button" data-k="${k}" aria-pressed="${get() === k}">${label}</button>`).join("");
+  el.onclick = (e) => { const b = e.target.closest("button"); if (b) set(b.dataset.k); };
+}
+function setTheme(t) { S.theme = t; document.documentElement.dataset.theme = t; syncControls(); }
+function setDir(k) { S.dir = k; S.menu = S.menu ? { ...S.menu, fresh: false } : null; syncControls(); renderWin(); writeHash(); }
+function setScn(k) { S.scn = k; S.menu = null; S.msg = ""; syncControls(); renderWin(); writeHash(); }
+function setTool(k) { S.tool = k; if (S.menu) S.menu.sel = 0, S.menu.fresh = false; syncControls(); renderWin(); writeHash(); }
+function syncControls() {
+  seg($("#picker"), ["A", "B", "C", "D"].map((k) => [k, k]), () => S.dir, setDir);
+  seg($("#theme-seg"), [["light", "Light"], ["dark", "Dark"]], () => S.theme, setTheme);
+  seg($("#scn-seg"), Object.entries(SCN_NAMES), () => S.scn, setScn);
+  seg($("#tool-seg"), Object.entries(TOOLS).map(([k, v]) => [k, v.label]), () => S.tool, setTool);
+  $("#picker").querySelectorAll("button").forEach((b) => b.setAttribute("aria-label", "Direction " + b.dataset.k));
+}
+function writeHash() { history.replaceState(null, "", `#dir=${S.dir}&theme=${S.theme}&scn=${S.scn}&tool=${S.tool}`); }
+
+document.addEventListener("keydown", (e) => {
+  const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+  if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "g") { e.preventDefault(); if (!S.menu) openMenu(D().cur); return; }
+  if (S.menu) {
+    if (e.key === "Escape") { e.preventDefault(); closeMenu(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); moveMenu(1); return; }
+    if (e.key === "ArrowUp") { e.preventDefault(); moveMenu(-1); return; }
+    if (e.key === "Home") { e.preventDefault(); S.menu.sel = 0; renderWin(); return; }
+    if (e.key === "End") { e.preventDefault(); S.menu.sel = menuModel(rowsNow()[S.menu.i]).items.length - 1; renderWin(); return; }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); runItem(S.menu.sel); return; }
+    if (e.key === "Tab") { e.preventDefault(); return; }
+  }
+  if (!plain) return;
+  if (/^[1-4]$/.test(e.key)) { setDir("ABCD"[+e.key - 1]); return; }
+  const k = e.key.toLowerCase();
+  if (k === "t") { setTheme(S.theme === "light" ? "dark" : "light"); writeHash(); return; }
+  if (k === "s") { const ks = Object.keys(SCN); setScn(ks[(ks.indexOf(S.scn) + 1) % ks.length]); return; }
+  if (k === "u") { const ks = Object.keys(TOOLS); setTool(ks[(ks.indexOf(S.tool) + 1) % ks.length]); return; }
+  if (S.menu || !e.target.closest || !e.target.closest("#win")) return;
+  if (e.key === "ArrowDown") { e.preventDefault(); moveCur(1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); moveCur(-1); }
+  else if (e.key === "Home") { e.preventDefault(); moveCur(0, 0); }
+  else if (e.key === "End") { e.preventDefault(); moveCur(0, rowsNow().length - 1); }
+  else if (e.key === "Escape") hideTip();
+});
+$("#win").addEventListener("click", (e) => {
+  const mi = e.target.closest("[data-mi]");
+  if (mi && S.menu) { runItem(+mi.dataset.mi); return; }
+  if (S.menu && !e.target.closest("#menu")) { const b = e.target.closest("[data-badge]"); S.menu = null; if (!b) { renderWin({ focus: "grid" }); return; } }
+  const b = e.target.closest("[data-badge]");
+  if (b) { openMenu(+b.dataset.badge); return; }
+  const j = e.target.closest("[data-jump]"); if (j) { jump(j.dataset.jump); return; }
+  const r = e.target.closest("[data-row]"); if (r) { D().cur = +r.dataset.row; hideTip(); renderWin({ focus: "grid" }); }
+});
+$("#win").addEventListener("mouseover", (e) => { const b = e.target.closest("[data-badge]"); if (b && !S.menu) showTip(b); });
+$("#win").addEventListener("mouseout", (e) => { if (e.target.closest("[data-badge]")) hideTip(); });
+$("#win").addEventListener("focusin", (e) => { const b = e.target.closest("[data-badge]"); if (b && !S.menu && e.target.matches(":focus-visible")) showTip(b); });
+$("#win").addEventListener("focusout", (e) => { if (e.target.closest("[data-badge]")) hideTip(); });
+addEventListener("resize", () => placeMenu());
+
+/* ---------- start ---------- */
+(function init() {
+  const h = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+  if (h.dir && /^[A-D]$/.test(h.dir)) S.dir = h.dir;
+  if (h.scn && SCN[h.scn]) S.scn = h.scn;
+  if (h.tool && TOOLS[h.tool]) S.tool = h.tool;
+  S.theme = h.theme === "dark" || (!h.theme && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  document.documentElement.dataset.theme = S.theme;
+  syncControls();
+  renderWin({ focus: "none" });
+  if (h.menu !== "0") { const d = D(); openMenu(d.cur); }
+  if (h.menu === "0" && h.focus === "badge") renderWin({ focus: "badge" });
+})();
+</script>
+</body>
+</html>

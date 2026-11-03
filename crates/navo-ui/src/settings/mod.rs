@@ -8,7 +8,13 @@ mod fields;
 mod find;
 mod find_bar;
 mod general_fields;
+mod git_fields;
+mod git_page;
+mod git_values;
 mod help_page;
+mod index_page;
+mod index_progress;
+mod nav;
 mod row_state;
 mod search_fields;
 mod search_page;
@@ -38,6 +44,8 @@ pub use fields::{
 };
 pub use find::{Filter, Line, lines};
 pub use find_bar::find_field;
+pub use git_page::GitPage;
+pub use index_progress::{IndexProgress, IndexState, VolumeProgress};
 pub use search_page::{SearchPage, ServiceStatus};
 pub use steps::{
     HELP_ROW, Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of,
@@ -165,6 +173,8 @@ pub struct SettingsBody {
     find: Option<AnyElement>,
     upgrade: Vec<Moved>,
     page: SearchPage,
+    git: GitPage,
+    index: IndexProgress,
     diagnostics: Vec<DiagnosticRow>,
     version: SharedString,
     focus: Option<FocusHandle>,
@@ -181,7 +191,13 @@ impl SettingsBody {
 
     fn event_for(&self, nudge: Nudge) -> Option<SheetEvent> {
         let spec = self.shown_spec()?;
-        let value = nudged(spec, self.values.get(spec.field), nudge)?;
+        if !self.values.is_enabled(spec.field) {
+            return None;
+        }
+        let value = match spec.control {
+            Control::Tool => self.git.nudged(self.values.git_tool(), nudge)?,
+            _ => nudged(spec, self.values.get(spec.field), nudge)?,
+        };
         Some(SheetEvent::Set(Change {
             field: spec.field,
             value,
@@ -227,8 +243,9 @@ impl SettingsBody {
 
     fn edit_event(&self) -> Option<SheetEvent> {
         let spec = self.shown_spec()?;
-        matches!(spec.control, Control::Text | Control::Number)
-            .then_some(SheetEvent::Edit(spec.field))
+        let is_editable = matches!(spec.control, Control::Text | Control::Number)
+            && self.values.is_enabled(spec.field);
+        is_editable.then_some(SheetEvent::Edit(spec.field))
     }
 }
 
@@ -297,6 +314,8 @@ impl RenderOnce for SettingsBody {
             row: self.row,
             filter: &self.filter,
             page: &self.page,
+            git: &self.git,
+            index: &self.index,
             diagnostics: &self.diagnostics,
             version: &self.version,
             send: self.on_event.clone(),
@@ -322,7 +341,7 @@ impl RenderOnce for SettingsBody {
             .flex_1()
             .min_h_0()
             .min_w_0()
-            .child(view::nav(&look, shown))
+            .child(nav::nav(&look, shown))
             .child(
                 div()
                     .flex()

@@ -24,28 +24,6 @@ pub(super) struct CommandSpec<'a> {
     pub timeout: Duration,
 }
 
-pub(super) fn find_git() -> Result<PathBuf, GitError> {
-    const NAME: &str = if cfg!(windows) { "git.exe" } else { "git" };
-    let Some(paths) = std::env::var_os("PATH") else {
-        return Err(GitError::GitNotFound);
-    };
-    for folder in std::env::split_paths(&paths) {
-        let candidate = folder.join(NAME);
-        match fs::metadata(&candidate) {
-            Ok(metadata) if metadata.is_file() => return Ok(candidate),
-            Ok(_) => {}
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(GitError::Io {
-                    path: candidate,
-                    kind: error.kind(),
-                });
-            }
-        }
-    }
-    Err(GitError::GitNotFound)
-}
-
 pub(super) fn resolve_git(git: &Path, env: &[(OsString, OsString)], timeout: Duration) -> PathBuf {
     let spec = CommandSpec {
         git,

@@ -72,6 +72,7 @@ impl MenuPage {
             is_active: true,
             filter: None,
             sort: SortKey::default(),
+            git: None,
         };
         FileList::new("menu-page-list", props).track_focus(&self.focus)
     }

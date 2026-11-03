@@ -194,7 +194,10 @@ fn settings_read_is_marked_after_loading_finishes() {
             completed = Some(std::time::Instant::now());
             None
         },
-        &crate::search_hooks::Remember::default(),
+        &crate::settings::Follow {
+            remember: crate::search_hooks::Remember::default(),
+            git: std::sync::Arc::new(|_| {}),
+        },
     );
     let at = crate::metrics::all()
         .into_iter()

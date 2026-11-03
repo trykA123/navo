@@ -125,7 +125,7 @@ fn locate(repo: &Path) -> Result<Located, GitError> {
     }
 }
 
-fn common_dir(git_dir: &Path) -> Result<Option<PathBuf>, GitError> {
+pub(crate) fn common_dir(git_dir: &Path) -> Result<Option<PathBuf>, GitError> {
     let path = git_dir.join("commondir");
     let bytes = match fs::read(&path) {
         Ok(bytes) => bytes,
@@ -153,13 +153,11 @@ fn common_dir(git_dir: &Path) -> Result<Option<PathBuf>, GitError> {
 }
 
 fn strip_line_ending(bytes: &[u8]) -> &[u8] {
-    if let Some(value) = bytes.strip_suffix(b"\r\n") {
-        value
-    } else if let Some(value) = bytes.strip_suffix(b"\n") {
-        value
-    } else {
-        bytes
-    }
+    let end = bytes
+        .iter()
+        .rposition(|byte| !matches!(byte, b'\r' | b'\n'))
+        .map_or(0, |last| last + 1);
+    &bytes[..end]
 }
 
 #[cfg(unix)]

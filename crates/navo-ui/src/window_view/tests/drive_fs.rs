@@ -30,7 +30,7 @@ pub(super) struct DriveFs {
 }
 
 impl DriveFs {
-    fn new(slow: Option<&str>) -> Self {
+    pub(super) fn new(slow: Option<&str>) -> Self {
         let fake = FakeFs::new();
         for folder in ["C/home/docs", "D/work", "Z/backup"] {
             fake.add_folder(folder);
@@ -286,6 +286,7 @@ pub(super) fn drive_window(cx: &mut TestAppContext, setup: Setup) -> Rig {
         search: crate::window_view::SearchHooks::none(),
         rename: None,
         retained: std::sync::Arc::new(crate::browser::NoRetained),
+        git: None,
         clipboard: None,
     };
     let (window, view) = open_options(cx, options);

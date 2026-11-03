@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use navo_store::{DefaultChange, SettingsStore};
+use navo_store::{DefaultChange, GitSettings, Settings, SettingsStore};
 use navo_ui::settings::DefaultShift;
 use navo_ui::window_view::SettingsNews;
 
@@ -65,10 +65,24 @@ pub(super) fn receive_late(receiver: Option<Receiver<Started>>, delivery: Arc<Mu
     }
 }
 
+/// App-side services that follow the live settings.
+#[derive(Clone)]
+pub struct Follow {
+    pub remember: Remember,
+    pub git: Arc<dyn Fn(&GitSettings) + Send + Sync>,
+}
+
+impl Follow {
+    pub(super) fn apply(&self, settings: &Settings) {
+        self.remember.set(settings.search.remember);
+        (self.git)(&settings.git);
+    }
+}
+
 pub struct Reloader {
     store: Arc<Mutex<SettingsStore>>,
     problem: Option<String>,
-    remember: Option<Remember>,
+    follow: Option<Follow>,
     guarded: Option<PathBuf>,
     skipped: Option<String>,
 }
@@ -79,15 +93,15 @@ impl Reloader {
         Self {
             store,
             problem,
-            remember: None,
+            follow: None,
             guarded: None,
             skipped: None,
         }
     }
 
     #[must_use]
-    pub(super) fn remembering(mut self, remember: Option<Remember>) -> Self {
-        self.remember = remember;
+    pub(super) fn following(mut self, follow: Option<Follow>) -> Self {
+        self.follow = follow;
         self
     }
 
@@ -112,8 +126,8 @@ impl Reloader {
         let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
         let before = store.current().clone();
         let Some(loaded) = store.reload_watched() else {
-            if let Some(remember) = &self.remember {
-                remember.set(store.current().search.remember);
+            if let Some(follow) = &self.follow {
+                follow.apply(store.current());
             }
             return Vec::new();
         };
@@ -126,8 +140,8 @@ impl Reloader {
             self.problem = Some(message.clone());
             return vec![SettingsNews::Invalid(message)];
         }
-        if let Some(remember) = &self.remember {
-            remember.set(store.current().search.remember);
+        if let Some(follow) = &self.follow {
+            follow.apply(store.current());
         }
         let skipped = skipped::message(&loaded.unknown_keys);
         let was_broken = self.problem.take().is_some();
@@ -193,5 +207,43 @@ mod tests {
             Some(SettingsNews::Applied { .. })
         ));
         assert!(store.lock().unwrap().generation() > saved);
+    }
+
+    fn following(store: &Arc<Mutex<SettingsStore>>) -> (Reloader, Arc<Mutex<Vec<bool>>>) {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
+        let follow = Follow {
+            remember: Remember::default(),
+            git: Arc::new(move |git| log.lock().unwrap().push(git.badges)),
+        };
+        let reloader = Reloader::new(store.clone(), None).following(Some(follow));
+        (reloader, seen)
+    }
+
+    #[test]
+    fn an_outside_git_edit_reaches_the_git_follower() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("navo.toml");
+        std::fs::write(&path, "[git]\nbadges = true\n").unwrap();
+        let store = Arc::new(Mutex::new(SettingsStore::load(&path).0));
+        let (mut reloader, seen) = following(&store);
+        std::fs::write(&path, "[git]\nbadges = false\n").unwrap();
+        assert!(reloader.reload().is_some());
+        assert_eq!(*seen.lock().unwrap(), [false]);
+    }
+
+    #[test]
+    fn an_own_git_save_reaches_the_git_follower_at_the_next_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("navo.toml");
+        let store = Arc::new(Mutex::new(SettingsStore::load(&path).0));
+        let (mut reloader, seen) = following(&store);
+        store
+            .lock()
+            .unwrap()
+            .save_preserving_edits("git.badges", Some(SettingValue::Bool(false)))
+            .unwrap();
+        assert!(reloader.reload().is_none());
+        assert_eq!(*seen.lock().unwrap(), [false]);
     }
 }

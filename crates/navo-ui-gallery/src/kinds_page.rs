@@ -80,6 +80,7 @@ impl Render for KindsPage {
             is_active: true,
             filter: None,
             sort: SortKey::default(),
+            git: None,
         };
         div()
             .flex()

@@ -7,6 +7,7 @@ retained-list-failed = Recently deleted cannot be read: { $error }
 retained-restore-failed = { $name } was not restored: { $error }
 retained-purge-failed = { $name } was not deleted: { $error }
 retained-name-taken = { $name } was not restored: every “(restored)” name in its folder is taken.
+git-off = Git is turned off.
 clipboard-off = The clipboard history is turned off.
 clipboard-busy = The clipboard history is busy. Try again in a moment.
 clipboard-moved-aside = The clipboard history file was damaged. Navo set it aside and started an empty history.

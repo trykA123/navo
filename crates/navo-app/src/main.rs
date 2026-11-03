@@ -21,6 +21,7 @@ mod drag;
 mod drives;
 mod editor;
 mod files;
+mod git;
 mod gui;
 #[cfg(feature = "tester")]
 mod heap;

@@ -1,5 +1,6 @@
 mod clip_palette;
 mod command_center;
+mod later;
 mod recovery;
 mod table;
 mod tray;
@@ -94,6 +95,7 @@ pub enum Page {
     SettingsUpgrade,
     SettingsFind,
     SearchSettings,
+    IndexProgress,
     MouseMarks,
     FileKinds,
     Columns,
@@ -136,6 +138,12 @@ pub enum Page {
     LayoutRemove,
     RecentlyDeleted,
     RecentlyDeletedPhone,
+    GitBadges,
+    GitBadgesMinimum,
+    GitMenu,
+    GitMenuMinimum,
+    SettingsGit,
+    SettingsGitMinimum,
     ClipPalette,
     ClipPalette390,
     ClipPaletteMenu,

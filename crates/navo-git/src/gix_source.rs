@@ -11,15 +11,27 @@ use crate::{
 };
 
 mod peel;
+mod status;
 
 pub const MAX_BLOB: u64 = 256 * 1024 * 1024;
 
 pub struct GixGit {
     repo: PathBuf,
+    permissions: gix::open::Permissions,
 }
 
 impl GixGit {
     pub fn new(repo: &Path) -> Result<Self, GitError> {
+        Self::open_with(repo, gix::open::Permissions::default())
+    }
+
+    /// Like `new`, but reads only the repository's own config: no system, user or environment
+    /// config. For tests that must not depend on the machine's Git setup.
+    pub fn new_isolated(repo: &Path) -> Result<Self, GitError> {
+        Self::open_with(repo, gix::open::Permissions::isolated())
+    }
+
+    fn open_with(repo: &Path, permissions: gix::open::Permissions) -> Result<Self, GitError> {
         let format = RepoFormat::read(repo)?;
         if format.object_format != ObjectFormat::Sha1 {
             return Err(GitError::Unsupported {
@@ -31,14 +43,15 @@ impl GixGit {
                 operation: "reftable references".to_owned(),
             });
         }
-        open_repo(repo)?;
+        open_repo(repo, permissions)?;
         Ok(Self {
             repo: repo.to_path_buf(),
+            permissions,
         })
     }
 
     fn open(&self) -> Result<gix::Repository, GitError> {
-        open_repo(&self.repo)
+        open_repo(&self.repo, self.permissions)
     }
 
     fn commit(&self, name: &str) -> Result<Option<gix::hash::ObjectId>, GitError> {
@@ -190,8 +203,12 @@ impl GitSource for GixGit {
     }
 }
 
-fn open_repo(path: &Path) -> Result<gix::Repository, GitError> {
+fn open_repo(
+    path: &Path,
+    permissions: gix::open::Permissions,
+) -> Result<gix::Repository, GitError> {
     let options = gix::open::Options::default()
+        .permissions(permissions)
         .bail_if_untrusted(true)
         .config_overrides([format!("gitoxide.objects.allocLimit={MAX_BLOB}")]);
     Ok(options

@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use navo_core::Location;
 
-use super::{LaunchRequest, queued, request_for};
+use super::{LaunchRequest, open_with, queued, request_for};
 
 #[test]
 fn a_local_file_launches_in_its_own_folder() {
@@ -54,4 +54,21 @@ fn launching_returns_before_a_slow_start_finishes_and_keeps_order() {
     let wait = Duration::from_secs(5);
     assert_eq!(finished.recv_timeout(wait).unwrap(), "/home/admin/a.txt");
     assert_eq!(finished.recv_timeout(wait).unwrap(), "/home/admin/b.txt");
+}
+
+#[test]
+fn a_shell_target_launches_on_the_worker_without_a_directory() {
+    let (done, finished) = mpsc::channel();
+    let open = open_with(move |request| {
+        let _ = done.send(request);
+    });
+    open("tool://open".to_owned());
+    let request = finished.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(
+        request,
+        LaunchRequest {
+            file: "tool://open".to_owned(),
+            directory: None,
+        }
+    );
 }

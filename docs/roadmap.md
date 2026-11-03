@@ -118,7 +118,7 @@ Exit: every target is met on a clean Windows 11 machine, and a week of work runs
 
 ## v1.2 · Git
 
-- module: Git: status in the file list, history, diff and the usual commands.
+- module: Git: status in the file list, history, diff and the usual commands. Built: status badges on repositories and a menu (click or Alt+G) that hands commit, log and diff to your Git tool, with a safe fast-forward pull and an unforced push; a pass on a real Windows desktop is left.
 
 ## v2.0 · Open platform
 

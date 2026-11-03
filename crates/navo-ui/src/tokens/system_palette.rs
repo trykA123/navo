@@ -56,6 +56,10 @@ pub fn contrast_theme(base: &Theme, p: &SystemPalette) -> Theme {
         auto_merged: tone,
         gap_hatch: p.window_text,
     };
+    theme.git = super::GitColors {
+        quiet: p.gray_text,
+        ..super::GitColors::uniform(p.window_text)
+    };
     theme
 }
 
@@ -180,6 +184,7 @@ impl Theme {
         theme.surfaces.tile = c.selection;
         theme.surfaces.tile_edge = color;
         theme.surfaces.card_ring = color;
+        theme.git = super::GitColors::uniform(color);
         std::borrow::Cow::Owned(theme)
     }
 }

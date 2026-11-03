@@ -5,7 +5,7 @@ fn an_older_file_without_compare_loads_the_compare_defaults() {
     let (settings, unknown) = parse("[files]\nsort = \"size\"\n").unwrap();
     assert!(unknown.is_empty());
     assert_eq!(settings.compare, Compare::default());
-    assert_eq!(settings.compare.git_engine, GitEngine::Git);
+    assert_eq!(settings.compare.git_engine, CompareGitEngine::Git);
     assert!(settings.compare.ignore_list.is_empty());
     assert!(settings.compare.respect_gitignore);
     assert_eq!(settings.compare.memory_budget_mib, 1024);
@@ -35,7 +35,7 @@ fn a_compare_table_round_trips() {
                   respect-gitignore = false\nmemory-budget-mib = 2048\ncontent-check = \"size-time\"\n";
     let (settings, unknown) = parse(source).unwrap();
     assert!(unknown.is_empty());
-    assert_eq!(settings.compare.git_engine, GitEngine::Gix);
+    assert_eq!(settings.compare.git_engine, CompareGitEngine::Gix);
     assert_eq!(settings.compare.ignore_list, ["*.o", "target/"]);
     assert!(!settings.compare.respect_gitignore);
     assert_eq!(settings.compare.memory_budget_mib, 2048);
@@ -46,9 +46,9 @@ fn a_compare_table_round_trips() {
 #[test]
 fn every_git_engine_name_parses() {
     for (name, engine) in [
-        ("git", GitEngine::Git),
-        ("gix", GitEngine::Gix),
-        ("auto", GitEngine::Auto),
+        ("git", CompareGitEngine::Git),
+        ("gix", CompareGitEngine::Gix),
+        ("auto", CompareGitEngine::Auto),
     ] {
         let (settings, _) = parse(&format!("[compare]\ngit-engine = \"{name}\"\n")).unwrap();
         assert_eq!(settings.compare.git_engine, engine, "{name}");
@@ -59,7 +59,7 @@ fn every_git_engine_name_parses() {
 fn an_unknown_git_engine_reads_as_auto() {
     let (settings, unknown) = parse("[compare]\ngit-engine = \"libgit2\"\n").unwrap();
     assert!(unknown.is_empty());
-    assert_eq!(settings.compare.git_engine, GitEngine::Auto);
+    assert_eq!(settings.compare.git_engine, CompareGitEngine::Auto);
 }
 
 #[test]

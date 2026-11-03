@@ -573,6 +573,180 @@ fn the_tray_settings_are_windows_only() {
 }
 
 #[test]
+fn the_git_section_follows_search_with_seven_rows() {
+    let at = |section| Section::ALL.iter().position(|s| *s == section);
+    assert_eq!(at(Section::Git), at(Section::Search).map(|i| i + 1));
+    let keys: Vec<&str> = rows_in(Section::Git).map(|(_, spec)| spec.key).collect();
+    assert_eq!(
+        keys,
+        [
+            "git.badges",
+            "git.tool",
+            "git.tool-command",
+            "git.engine",
+            "git.fetch",
+            "git.fetch-minutes",
+            "git.network"
+        ]
+    );
+}
+
+#[test]
+fn the_git_defaults_match_the_store() {
+    let values = Values::default();
+    assert!(values.git_badges() && !values.git_fetch() && !values.git_network());
+    assert_eq!(values.git_engine(), "auto");
+    assert_eq!(values.git_fetch_minutes(), 15);
+    assert_eq!(values.changed_count(), 0);
+}
+
+#[test]
+fn the_fetch_minutes_show_clamped_and_step_inside_the_range() {
+    let set = |minutes| {
+        Values::default().with(&Change {
+            field: Field::GitFetchMinutes,
+            value: Value::Number(minutes),
+        })
+    };
+    assert_eq!(set(1).git_fetch_minutes(), 5);
+    assert_eq!(set(500).git_fetch_minutes(), 120);
+    let minutes = spec(Field::GitFetchMinutes);
+    assert_eq!(nudged(minutes, &Value::Number(5), Nudge::Back), None);
+    assert_eq!(nudged(minutes, &Value::Number(120), Nudge::Forward), None);
+    assert_eq!(
+        nudged(minutes, &Value::Number(15), Nudge::Forward),
+        Some(Value::Number(16))
+    );
+}
+
+#[test]
+fn the_minutes_row_is_disabled_while_fetch_is_off() {
+    let off = Values::default();
+    assert!(!off.is_enabled(Field::GitFetchMinutes));
+    assert!(off.is_enabled(Field::GitNetwork));
+    let on = off.with(&Change {
+        field: Field::GitFetch,
+        value: Value::Flag(true),
+    });
+    assert!(on.is_enabled(Field::GitFetchMinutes));
+}
+
+#[test]
+fn a_git_choice_round_trips_to_its_toml_name() {
+    let pick = |name: &str| {
+        let Control::Choices(options, _) = spec(Field::GitEngine).control else {
+            return Value::Unset;
+        };
+        options
+            .iter()
+            .position(|option| option.toml == name)
+            .map_or(Value::Unset, Value::Pick)
+    };
+    for name in ["auto", "gix", "git"] {
+        let values = Values::default().with(&Change {
+            field: Field::GitEngine,
+            value: pick(name),
+        });
+        assert_eq!(values.git_engine(), name);
+    }
+}
+
+#[test]
+fn git_rows_are_found_by_their_words() {
+    for (words, field) in [
+        ("git status", Field::GitBadges),
+        ("gix", Field::GitEngine),
+        ("git program menu", Field::GitTool),
+        ("command other path", Field::GitToolCommand),
+        ("remote-tracking", Field::GitFetch),
+        ("every minutes", Field::GitFetchMinutes),
+        ("network drives git", Field::GitNetwork),
+    ] {
+        assert!(Filter::new(words).admits(spec(field)), "{words}");
+    }
+    assert!(Filter::new("git").first_in(Section::Git).is_some());
+}
+
+fn tool_row(id: &str, label: &str, path: &str, selected: bool) -> crate::git::ToolRow {
+    crate::git::ToolRow {
+        id: id.to_owned(),
+        label: label.to_owned(),
+        path: path.to_owned(),
+        selected,
+    }
+}
+
+fn found_tools() -> GitPage {
+    GitPage::new(
+        vec![
+            tool_row("tortoisegit", "TortoiseGit", r"C:\Git\Tortoise.exe", true),
+            tool_row("git-cli", "Git command line", r"C:\Git\git.exe", false),
+            tool_row("custom", "Custom command", "", false),
+        ],
+        None,
+    )
+}
+
+#[test]
+fn the_git_tool_defaults_to_auto_and_hides_the_command() {
+    let values = Values::default();
+    assert_eq!(values.git_tool(), "auto");
+    assert_eq!(values.hidden_row(), Some(Field::GitToolCommand));
+    assert!(
+        !Filter::default()
+            .hiding(values.hidden_row())
+            .admits(spec(Field::GitToolCommand))
+    );
+    let other = values.with(&Change::text(Field::GitTool, "custom"));
+    assert_eq!(other.hidden_row(), None);
+    assert!(
+        Filter::default()
+            .hiding(other.hidden_row())
+            .admits(spec(Field::GitToolCommand))
+    );
+}
+
+#[test]
+fn a_hidden_row_is_skipped_by_the_arrow_keys_and_the_list() {
+    let filter = Filter::default().hiding(Some(Field::GitToolCommand));
+    let tool = Field::GitTool.index();
+    assert_eq!(moved(&filter, tool, true), Field::GitEngine.index());
+    assert!(!lines(&filter, Section::Git).contains(&Line::Row(Field::GitToolCommand.index())));
+}
+
+#[test]
+fn auto_names_the_tool_it_resolved_to_only_while_chosen() {
+    let page = found_tools();
+    assert!(page.options("auto")[0].label.contains("TortoiseGit"));
+    assert!(!page.options("fork")[0].label.contains("TortoiseGit"));
+}
+
+#[test]
+fn the_tool_options_carry_each_path_and_the_fixed_choices() {
+    let options = found_tools().options("auto");
+    let ids: Vec<&str> = options.iter().map(|option| option.id.as_str()).collect();
+    assert_eq!(ids, ["auto", "tortoisegit", "git-cli", "custom", "none"]);
+    assert_eq!(options[1].path, r"C:\Git\Tortoise.exe");
+    assert_eq!(options[2].path, r"C:\Git\git.exe");
+}
+
+#[test]
+fn a_stored_tool_that_is_not_installed_still_has_its_option() {
+    let options = found_tools().options("fork");
+    assert_eq!(options[1].id, "fork");
+}
+
+#[test]
+fn the_arrow_keys_walk_the_tool_options() {
+    let page = found_tools();
+    let text = |id: &str| Some(Value::Text(id.to_owned().into()));
+    assert_eq!(page.nudged("auto", Nudge::Forward), text("tortoisegit"));
+    assert_eq!(page.nudged("auto", Nudge::Back), None);
+    assert_eq!(page.nudged("none", Nudge::Forward), None);
+    assert_eq!(page.nudged("none", Nudge::Flip), text("auto"));
+}
+
+#[test]
 fn the_clipboard_defaults_are_on_and_win_alt_v() {
     let values = Values::default();
     assert!(values.clipboard_on());
@@ -630,7 +804,7 @@ fn the_compare_choices_use_the_stored_names() {
         Control::Choices(options, _) => options.iter().map(|option| option.toml).collect(),
         _ => Vec::new(),
     };
-    assert_eq!(names(Field::GitEngine), ["git", "gix", "auto"]);
+    assert_eq!(names(Field::CompareGitEngine), ["git", "gix", "auto"]);
     assert_eq!(names(Field::CompareContentCheck), ["content", "size-time"]);
 }
 
@@ -651,7 +825,7 @@ fn the_compare_rows_have_texts_and_the_ignore_list_is_a_list() {
 fn the_search_finds_the_compare_rows_on_every_platform() {
     let _shown = show_compare();
     let found = |query: &str, field| Filter::new(query).admits(spec(field));
-    assert!(found("git engine", Field::GitEngine));
+    assert!(found("git revisions", Field::CompareGitEngine));
     assert!(found("gitignore", Field::CompareRespectGitignore));
     assert!(found("memory", Field::CompareBudgetMib));
     assert!(found("ignore", Field::CompareIgnoreList));
@@ -662,7 +836,7 @@ fn the_search_finds_the_compare_rows_on_every_platform() {
 fn a_hidden_compare_section_has_no_rows_hits_or_lines() {
     let hit = |query: &str| Filter::new(query).first_row().map(section_of);
     assert_eq!(Filter::default().first_in(Section::Compare), None);
-    assert_eq!(hit("git engine"), None);
+    assert_eq!(hit("git revisions"), None);
     assert_eq!(hit("memory budget"), None);
     let shown: Vec<Line> = lines(&Filter::new("compare"), Section::Appearance);
     assert!(!shown.contains(&Line::Section(Section::Compare)));
@@ -673,7 +847,7 @@ fn a_hidden_compare_section_has_no_rows_hits_or_lines() {
 #[test]
 fn a_visible_compare_section_has_rows_hits_and_a_stop_in_the_walk() {
     let _shown = show_compare();
-    let hit = Filter::new("git engine").first_row().map(section_of);
+    let hit = Filter::new("git revisions").first_row().map(section_of);
     assert_eq!(hit, Some(Section::Compare));
     let walked = next_section(&Filter::default(), first_row(Section::Clipboard), true);
     assert_eq!(section_of(walked), Section::Compare);

@@ -4,7 +4,7 @@ use navo_git::{
     UNSUPPORTED_FORMAT_NOTE,
 };
 
-use navo_store::{Compare, ContentCheck, GitEngine};
+use navo_store::{Compare, CompareGitEngine, ContentCheck};
 
 use crate::compare::settings::{CompareSettings, choose_engine};
 
@@ -90,7 +90,7 @@ fn the_stored_defaults_map_to_the_plain_defaults() {
 #[test]
 fn every_stored_value_maps_across() {
     let stored = Compare {
-        git_engine: GitEngine::Gix,
+        git_engine: CompareGitEngine::Gix,
         ignore_list: vec!["*.o".to_owned()],
         respect_gitignore: false,
         memory_budget_mib: 4096,
@@ -103,7 +103,7 @@ fn every_stored_value_maps_across() {
     assert_eq!(plain.memory_budget_mib, 4096);
     assert_eq!(plain.content_check, CheckMode::SizeTime);
     let auto = Compare {
-        git_engine: GitEngine::Auto,
+        git_engine: CompareGitEngine::Auto,
         ..Compare::default()
     };
     assert_eq!(CompareSettings::from(&auto).git_engine, EngineSetting::Auto);

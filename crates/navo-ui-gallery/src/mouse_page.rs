@@ -102,6 +102,7 @@ impl MousePage {
             is_active: true,
             filter: None,
             sort: SortKey::default(),
+            git: None,
         };
         let list = FileList::new(("mouse-list", index), props).on_command(cx.listener(
             move |this: &mut Self, command: &Command, _, cx| {
