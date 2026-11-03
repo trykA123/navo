@@ -54,7 +54,7 @@ impl Fake {
                 by_name,
                 ..FolderBadges::default()
             }))),
-            generation: Arc::new(AtomicU64::new(1)),
+            generation: Arc::new(AtomicU64::new(0)),
             notify: Arc::default(),
         }
     }
