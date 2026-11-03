@@ -19,6 +19,7 @@ struct Log {
     focused: usize,
     published: HashMap<String, Arc<FolderBadges>>,
     notify: Option<Box<dyn Fn() + Send + Sync>>,
+    reads: usize,
 }
 
 #[derive(Clone, Default)]
@@ -62,7 +63,8 @@ impl GitHooks for Fake {
         self.0.lock().unwrap().forgotten.push(listing.clone());
     }
     fn badges(&self, listing: &Location) -> Option<Arc<FolderBadges>> {
-        let log = self.0.lock().unwrap();
+        let mut log = self.0.lock().unwrap();
+        log.reads += 1;
         log.published.get(listing.as_str()).cloned()
     }
     fn subscribe(&self, notify: Box<dyn Fn() + Send + Sync>) {
@@ -110,6 +112,13 @@ fn open_window(
     (window, view)
 }
 
+/// Waits out the publish interval, so the next result reads at once.
+fn settle_git(cx: &mut TestAppContext, view: &Entity<NavoWindow>) {
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(100));
+    settle(cx, view);
+}
+
 fn pane_badges(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> Option<Arc<FolderBadges>> {
     view.read_with(cx, |view, _| {
         let pane = view.browser.state().focused_pane();
@@ -154,10 +163,10 @@ fn a_new_revision_reaches_the_props_and_an_older_one_is_dropped(cx: &mut TestApp
     let view = open_local(cx, Arc::new(git.clone()));
     let home = local(r"C:\home");
     git.publish(&home, 5);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert_eq!(pane_badges(cx, &view).map(|b| b.revision), Some(5));
     git.publish(&home, 0);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert_eq!(pane_badges(cx, &view).map(|b| b.revision), Some(5));
 }
 
@@ -167,13 +176,13 @@ fn badges_turned_off_leave_the_gutter_empty_and_turned_on_fill_it_again(cx: &mut
     let view = open_local(cx, Arc::new(git.clone()));
     let home = local(r"C:\home");
     git.publish(&home, 5);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert!(pane_badges(cx, &view).is_some());
     git.unpublish(&home);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert!(pane_badges(cx, &view).is_none());
     git.publish(&home, 6);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert_eq!(pane_badges(cx, &view).map(|b| b.revision), Some(6));
 }
 
@@ -230,7 +239,7 @@ fn a_slow_drive_note_shows_in_the_pane_status_and_clears_on_navigation(cx: &mut 
     let (window, view) = open_window(cx, Arc::new(git.clone()));
     assert!(!footer(cx, window, &view).contains(SLOW));
     git.publish_with(&local(r"C:\home"), 5, true);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert!(footer(cx, window, &view).contains(SLOW));
     go(cx, &view, r"C:\home\docs");
     assert!(!footer(cx, window, &view).contains(SLOW));
@@ -244,13 +253,13 @@ fn the_slow_drive_note_follows_the_hooks_and_a_normal_listing_never_shows_it(
     let (window, view) = open_window(cx, Arc::new(git.clone()));
     let home = local(r"C:\home");
     git.publish_with(&home, 5, false);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert!(!footer(cx, window, &view).contains(SLOW));
     git.publish_with(&home, 6, true);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert!(footer(cx, window, &view).contains(SLOW));
     git.unpublish(&home);
-    settle(cx, &view);
+    settle_git(cx, &view);
     assert!(!footer(cx, window, &view).contains(SLOW));
 }
 
@@ -259,7 +268,7 @@ fn a_status_notice_replaces_the_slow_drive_note(cx: &mut TestAppContext) {
     let git = Fake::default();
     let (window, view) = open_window(cx, Arc::new(git.clone()));
     git.publish_with(&local(r"C:\home"), 5, true);
-    settle(cx, &view);
+    settle_git(cx, &view);
     view.update(cx, |view, _| {
         view.show_notice(StatusNotice {
             text: "Copied".into(),
@@ -268,4 +277,31 @@ fn a_status_notice_replaces_the_slow_drive_note(cx: &mut TestAppContext) {
     });
     let label = footer(cx, window, &view);
     assert!(label.contains("Copied") && !label.contains(SLOW));
+}
+
+#[gpui_kit::test]
+fn results_streaming_in_are_read_once_per_interval_and_the_last_one_wins(cx: &mut TestAppContext) {
+    let git = Fake::default();
+    let view = open_local(cx, Arc::new(git.clone()));
+    let home = local(r"C:\home");
+    settle_git(cx, &view);
+    let before = git.0.lock().unwrap().reads;
+    for revision in 1..=8 {
+        git.publish(&home, revision);
+        cx.run_until_parked();
+    }
+    assert_eq!(
+        git.0.lock().unwrap().reads - before,
+        1,
+        "the first is at once"
+    );
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(150));
+    cx.run_until_parked();
+    assert_eq!(
+        git.0.lock().unwrap().reads - before,
+        2,
+        "one read covers the rest"
+    );
+    assert_eq!(pane_badges(cx, &view).map(|b| b.revision), Some(8));
 }

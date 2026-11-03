@@ -114,8 +114,8 @@ impl CliGit {
     }
 
     pub(super) fn git_dir(&self) -> Result<PathBuf, GitError> {
-        let output = self.run_ok(&["rev-parse", "--absolute-git-dir"])?;
-        let line = output.stdout.strip_suffix(b"\n").unwrap_or(&output.stdout);
+        let stdout = &self.git_dir_output;
+        let line = stdout.strip_suffix(b"\n").unwrap_or(stdout);
         let line = line.strip_suffix(b"\r").unwrap_or(line);
         path_of(line).ok_or_else(super::parse::protocol)
     }

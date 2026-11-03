@@ -9,6 +9,7 @@ use super::*;
 mod basic;
 mod budget;
 mod content_hash;
+mod git_badges;
 mod open;
 mod props;
 

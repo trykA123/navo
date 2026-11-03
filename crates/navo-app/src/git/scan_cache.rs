@@ -5,10 +5,10 @@ use navo_ui::git::{BadgeKind, BadgeReason, RepoBadge, RepoRoot};
 
 use super::{CACHE_BYTES, CACHE_CAP};
 
-pub(super) type State = (BadgeKind, Option<BadgeReason>);
+pub(crate) type State = (BadgeKind, Option<BadgeReason>);
 
 #[derive(Clone)]
-pub(super) struct Cached {
+pub(crate) struct Cached {
     pub root: RepoBadge,
     /// The repository folder's name.
     pub root_name: String,

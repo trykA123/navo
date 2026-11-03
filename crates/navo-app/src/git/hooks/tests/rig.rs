@@ -80,6 +80,7 @@ pub(super) fn rig_with(initial: &GitSettings, tools: Tools) -> Rig {
             Ports {
                 source: source.clone(),
                 probe: Arc::new(FakeProbe),
+                saved: None,
             }
         })
     };

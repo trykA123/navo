@@ -16,7 +16,7 @@ use super::cache::{Cache, Cached};
 use super::listing::{self, Discovered};
 use super::queue::{Listing, Request, Shared};
 use super::slots::Slot;
-use super::{Cancel, Limits, Notify, Ports, STOP_WAIT, ScanError, Slots, TICK};
+use super::{Cancel, Limits, Notify, Ports, STOP_WAIT, SavedBadges, ScanError, Slots, TICK};
 
 type State = Arc<(Mutex<Shared>, Condvar)>;
 
@@ -71,11 +71,12 @@ pub(super) fn spawn(shared: State, ports: Ports, config: Config) -> io::Result<R
     let thread = thread::Builder::new()
         .name("navo-git-scan".into())
         .spawn(move || {
+            let cache = primed(ports.saved.as_deref());
             let mut scanner = Scanner {
                 shared,
                 ports,
                 config,
-                cache: Cache::default(),
+                cache,
                 listings: HashMap::new(),
                 calls: Vec::new(),
                 network_probe: Arc::default(),
@@ -278,6 +279,9 @@ impl Scanner {
             shared.publish(listing, badges)
         };
         if result.is_ok() {
+            if let Some(saved) = &self.ports.saved {
+                saved.save(&root, &cached);
+            }
             self.cache.insert(root, cached);
         }
         self.notify(revision);
@@ -312,6 +316,14 @@ fn mark_parked(
 ) -> std::sync::MutexGuard<'_, Shared> {
     shared.parked = parked;
     shared
+}
+
+fn primed(saved: Option<&dyn SavedBadges>) -> Cache {
+    let mut cache = Cache::default();
+    for (root, cached) in saved.map(SavedBadges::load).unwrap_or_default() {
+        cache.insert(root, cached);
+    }
+    cache
 }
 
 fn fill(badges: &mut FolderBadges, found: &Discovered, root: &Path, cached: &Cached) {

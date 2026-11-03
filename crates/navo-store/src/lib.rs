@@ -16,7 +16,9 @@ pub use atomic_write::{
     backup_path, remove_orphan_temps, replace_atomic, replace_entry_atomic, write_atomic,
     write_atomic_streamed,
 };
-pub use cache_db::{CONTENT_HASH_BUDGET, CacheDb, CacheError, CacheOpen, ContentKey};
+pub use cache_db::{
+    CONTENT_HASH_BUDGET, CacheDb, CacheError, CacheOpen, ContentKey, GIT_BADGES_BUDGET,
+};
 pub use db::{
     Collection, CollectionItem, CollectionKind, Db, DbError, FileMemory, Frecent, NewCollection,
     OpenReport, RenamePreset, RenamePresets, Stamp,
