@@ -12,7 +12,20 @@ pub struct StoreDirs {
 impl StoreDirs {
     #[must_use]
     pub fn detect() -> Option<Self> {
-        Self::resolve(cfg!(windows), |name| std::env::var(name).ok())
+        match std::env::current_exe() {
+            Ok(exe) => Self::detect_for(&exe, cfg!(windows), environment),
+            Err(_) => Self::resolve(cfg!(windows), environment),
+        }
+    }
+
+    fn detect_for(exe: &Path, windows: bool, var: impl Fn(&str) -> Option<String>) -> Option<Self> {
+        if let Some(root) = portable_root(exe) {
+            return Some(Self {
+                config: root.clone(),
+                data: root,
+            });
+        }
+        Self::resolve(windows, var)
     }
 
     #[must_use]
@@ -25,7 +38,7 @@ impl StoreDirs {
 
     #[must_use]
     pub fn detect_legacy() -> Option<Self> {
-        Self::legacy(cfg!(windows), |name| std::env::var(name).ok())
+        Self::legacy(cfg!(windows), environment)
     }
 
     pub fn resolve(windows: bool, var: impl Fn(&str) -> Option<String>) -> Option<Self> {
@@ -121,6 +134,37 @@ impl StoreDirs {
     pub fn remove_orphan_temps(&self) -> io::Result<usize> {
         Ok(crate::remove_orphan_temps(&self.config)? + crate::remove_orphan_temps(&self.data)?)
     }
+}
+
+fn environment(name: &str) -> Option<String> {
+    std::env::var(name).ok()
+}
+
+fn portable_root(exe: &Path) -> Option<PathBuf> {
+    let folder = exe.parent()?;
+    if let Some(root) = velopack_root(exe) {
+        return (portable_marker(folder) && root.join(".portable").exists()).then_some(root);
+    }
+    portable_marker(folder).then_some(folder.to_path_buf())
+}
+
+fn velopack_root(exe: &Path) -> Option<PathBuf> {
+    let folder = exe.parent()?;
+    let root = if folder
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("current"))
+    {
+        folder.parent()?
+    } else {
+        folder
+    };
+    root.join("Update.exe")
+        .exists()
+        .then_some(root.to_path_buf())
+}
+
+fn portable_marker(folder: &Path) -> bool {
+    folder.join(format!("{}.toml", brand::SLUG)).is_file()
 }
 
 #[cfg(test)]
