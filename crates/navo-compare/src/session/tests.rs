@@ -1,6 +1,8 @@
 mod fake;
+mod limit;
 mod memory;
 mod robustness;
+mod rollup;
 mod settle;
 
 use std::sync::Arc;
@@ -35,6 +37,7 @@ fn options(mode: CheckMode) -> SessionOptions {
         cache: Arc::new(NoCache),
         read_hint: ReadHint::Buffered,
         check_mode: mode,
+        network_cap: None,
     }
 }
 
@@ -273,6 +276,7 @@ fn ignored_files_and_folders_are_not_listed_or_entered() {
         cache: Arc::new(NoCache),
         read_hint: ReadHint::Buffered,
         check_mode: CheckMode::Content,
+        network_cap: None,
     };
     let session = Session::start(Arc::new(left), Arc::new(right), options);
     let batches = collect(&session);
@@ -305,5 +309,6 @@ fn generation_with(generation: Generation, status: Status, kind: EntryKind) -> R
         display_status: status,
         generation,
         content: ContentClass::Unknown,
+        contains_differences: false,
     }
 }

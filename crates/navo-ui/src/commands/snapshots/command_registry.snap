@@ -1,6 +1,5 @@
 ---
 source: crates/navo-ui/src/commands/tests.rs
-assertion_line: 269
 expression: "lines.join(\"\\n\")"
 ---
 workspace.preview_first | Preview workspace 1 | FileList
@@ -449,6 +448,14 @@ clip_palette.pick_sixth | Clipboard palette: pick row 6 | ClipPalette
 clip_palette.pick_seventh | Clipboard palette: pick row 7 | ClipPalette
 clip_palette.pick_eighth | Clipboard palette: pick row 8 | ClipPalette
 clip_palette.pick_ninth | Clipboard palette: pick row 9 | ClipPalette
+compare.with_other_pane | Compare with the other pane | FileList
+compare.next_difference | Next difference | Compare
+compare.previous_difference | Previous difference | Compare
+compare.enter | Open in both panes | Compare
+compare.up | Up in both panes | Compare
+compare.exit | Leave compare | Compare
+compare.stop_checking | Stop checking contents | Compare
+compare.continue | Continue the compare on a network drive | Compare
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global

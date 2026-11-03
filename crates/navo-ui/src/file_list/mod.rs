@@ -40,9 +40,11 @@ pub use action::{FileListAction, FilterEdit};
 pub use drop::{DropEvent, DropPayload, DropSpot, ListEdge};
 pub(crate) use git_keys::OpenGitMenu;
 pub use keys::bind_keys;
+pub(crate) use keys::context as list_context;
 pub(crate) use keys::{
-    ClearFilter, CopyItems, EditItem, MoveItems, MultiRename, NewFile, NewFolder, OpenRow, Paste,
-    RecycleItems, Refresh, RenameItem, UndoLast, ViewItem,
+    ClearFilter, CopyItems, CursorDown, CursorFirst, CursorLast, CursorUp, EditItem, MoveItems,
+    MultiRename, NewFile, NewFolder, OpenRow, PageDown, PageUp, Paste, RecycleItems, Refresh,
+    RenameItem, SwitchPane, UndoLast, ViewItem,
 };
 pub use parts::ListParts;
 pub(crate) use row::filter_bar;
@@ -82,6 +84,7 @@ pub struct FileList {
     known_width: Option<KnownWidth>,
     user_widths: UserWidths,
     find_results: Option<bool>,
+    compare: bool,
 }
 
 type KnownWidth = Rc<Cell<Option<Pixels>>>;
@@ -101,7 +104,15 @@ impl FileList {
             known_width: None,
             user_widths: UserWidths::default(),
             find_results: None,
+            compare: false,
         }
+    }
+
+    /// Adds the `Compare` key context, whose Enter, Backspace and Esc win over the list's.
+    #[must_use]
+    pub(crate) fn in_compare(mut self, on: bool) -> Self {
+        self.compare = on;
+        self
     }
 
     #[must_use]
@@ -381,7 +392,7 @@ impl RenderOnce for FileList {
         let area = drop::background(lasso::layer(area, &ctx, &t, cx), &ctx);
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
-            .key_context(keys::CONTEXT)
+            .key_context(keys::context(self.compare))
             .flex()
             .flex_col()
             .flex_1()

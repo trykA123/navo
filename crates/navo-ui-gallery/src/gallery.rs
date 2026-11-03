@@ -15,6 +15,7 @@ use crate::bars_page::{self, DragTreemapBars, drag_treemap_bars};
 use crate::clip_palette_page::ClipPalettePage;
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
+use crate::compare_page;
 use crate::drives_page::{DrivesPage, Shows};
 use crate::git_badges_page::GitBadgesPage;
 use crate::git_menu_page::GitMenuPage;
@@ -352,6 +353,7 @@ impl Render for Gallery {
             Page::TypedPath => root.child(self.typed_path.clone()),
             Page::FileKinds => root.child(self.kinds.clone()),
             Page::Columns => root.child(self.columns.clone()),
+            Page::Compare => root.child(compare_page::page(cx)),
             Page::MemoryStrip => root.child(self.strip.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),

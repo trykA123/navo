@@ -1,6 +1,6 @@
 use super::*;
 use crate::app_menu::Setting;
-use crate::compare_visible::show_compare;
+use crate::compare_visible::{hide_compare, show_compare};
 use crate::modifier_hints::HintsMode;
 use crate::tokens::{Density, ThemeChoice};
 
@@ -843,6 +843,7 @@ fn the_search_finds_the_compare_rows_on_every_platform() {
 
 #[test]
 fn a_hidden_compare_section_has_no_rows_hits_or_lines() {
+    let _hidden = hide_compare();
     let hit = |query: &str| Filter::new(query).first_row().map(section_of);
     assert_eq!(Filter::default().first_in(Section::Compare), None);
     assert_eq!(hit("git revisions"), None);

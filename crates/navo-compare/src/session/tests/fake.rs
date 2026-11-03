@@ -56,6 +56,7 @@ pub(super) struct FakeSource {
     reads_total: Arc<AtomicU64>,
     reads_after: Arc<AtomicU64>,
     case_sensitive: bool,
+    network: bool,
 }
 
 impl FakeSource {
@@ -77,7 +78,12 @@ impl FakeSource {
             reads_total: Arc::new(AtomicU64::new(0)),
             reads_after: Arc::new(AtomicU64::new(0)),
             case_sensitive,
+            network: false,
         }
+    }
+
+    pub(super) fn set_network(&mut self) {
+        self.network = true;
     }
 
     pub(super) fn add_folder(&mut self, rel: &str) {
@@ -250,6 +256,10 @@ impl SideSource for FakeSource {
 
     fn read_only(&self) -> bool {
         false
+    }
+
+    fn is_network(&self) -> bool {
+        self.network
     }
 }
 

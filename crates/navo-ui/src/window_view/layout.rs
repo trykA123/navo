@@ -94,6 +94,7 @@ impl NavoWindow {
             .when(has_mica, |below| below.bg(mica))
             .children(self.crash_notice_view(window, cx))
             .children(self.index_upgrade_view(cx))
+            .children(self.compare_bar(cx))
             .child(self.body_area(window, cx))
             .children(self.fkey_bar(window, cx))
     }

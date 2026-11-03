@@ -13,6 +13,7 @@ mod io_queue;
 mod job;
 mod local;
 mod measure;
+mod network_walk;
 mod paged;
 mod protection;
 mod provider;
@@ -46,6 +47,10 @@ pub use measure::{
     FolderProfile, FolderSize, KIND_LIMIT, LARGEST_LIMIT, LIVE_EVERY, LargeFile, LiveHandle,
     LiveRequest, LiveSink, LiveSnapshot, PROGRESS_EVERY, ProfileHandle, ProfileSink, ProfileState,
     RANKING_LIMIT, Ranking, Tally, folder_profile, folder_size, spawn_live, spawn_profile,
+};
+pub use network_walk::{
+    NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME, NetworkStop, NetworkWalkBudget,
+    needs_network_bound,
 };
 pub use paged::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,

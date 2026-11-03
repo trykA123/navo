@@ -1,6 +1,7 @@
 //! Compare backend for the app: sources, hash cache, settings and the session thread.
 //!
-//! What U4 (pane compare mode) must call:
+//! `pane::PaneCompare` is the window's `CompareHooks`: it reads the settings from the UI values
+//! and forwards events on its own thread. Its steps, for other screens:
 //!
 //! 1. Fill `settings::CompareSettings` from the stored `[compare]` settings with
 //!    `CompareSettings::from(&settings.compare)`.
@@ -19,16 +20,20 @@
 
 #![cfg_attr(
     not(test),
-    expect(dead_code, reason = "pane compare mode (U4) wires this backend next")
+    expect(dead_code, reason = "Git sides (U6) and focus (U5) wire the rest")
 )]
 
+mod convert;
 mod entry;
 pub(crate) mod git_side;
 pub(crate) mod handle;
 pub(crate) mod hash_cache;
 pub(crate) mod local;
+mod pane;
 mod rules;
 pub(crate) mod settings;
+
+pub(crate) use pane::PaneCompare;
 
 #[cfg(test)]
 mod tests;

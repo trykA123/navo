@@ -8,7 +8,10 @@ use navo_compare::model::{
     CancelToken, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource, Stamp,
 };
 use navo_core::{FileIdentity, Location, ProviderId, ProviderPath};
-use navo_fs::{CancelToken as FsCancel, EntryKind as FsKind, LocalFs, Provider, os_path};
+use navo_fs::{
+    CancelToken as FsCancel, DriveClass, EntryKind as FsKind, LocalFs, Provider, drive_class,
+    needs_network_bound, os_path,
+};
 
 use super::entry::{feed, reason_of, segments};
 
@@ -18,11 +21,20 @@ pub(crate) struct LocalSide {
     fs: LocalFs,
     provider: ProviderId,
     volume: u64,
+    network: bool,
 }
 
 impl LocalSide {
     /// Opens a side on `root`; fails with a reason when it is not a readable folder.
     pub(crate) fn new(root: Location) -> Result<Self, Reason> {
+        Self::with_class(root, drive_class)
+    }
+
+    /// Like `new`, with the drive classification given. It runs once, on the session thread.
+    pub(super) fn with_class(
+        root: Location,
+        class_of: impl FnOnce(&Location) -> DriveClass,
+    ) -> Result<Self, Reason> {
         let fs = LocalFs::new();
         let found = fs.metadata(&root).map_err(|error| reason_of(error.kind))?;
         let is_folder = found.kind == FsKind::Folder || found.attributes.link_to_folder;
@@ -33,11 +45,13 @@ impl LocalSide {
             .ok()
             .and_then(|path| navo_fs::native_identity(&path).ok().flatten())
             .map_or(0, |identity| identity.volume);
+        let network = is_network_class(class_of(&root));
         Ok(Self {
             root,
             fs,
             provider: ProviderId::local(),
             volume,
+            network,
         })
     }
 
@@ -119,6 +133,19 @@ impl SideSource for LocalSide {
     fn read_only(&self) -> bool {
         false
     }
+
+    fn is_network(&self) -> bool {
+        self.network
+    }
+}
+
+/// An unknown class counts as not network, so a failed lookup never caps a walk.
+fn is_network_class(class: DriveClass) -> bool {
+    // Off Windows the class is always unknown; only a Windows lookup can fail.
+    if class == DriveClass::Unknown && cfg!(windows) {
+        tracing::warn!("drive type unknown; a compare side is treated as not on a network");
+    }
+    needs_network_bound(class)
 }
 
 fn io_reason(error: &io::Error) -> Reason {

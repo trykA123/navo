@@ -2,7 +2,7 @@ use gpui_kit::{App, TestAppContext};
 use navo_l10n::catalog;
 
 use super::{all, by_name, entries, for_action, registry};
-use crate::compare_visible::show_compare;
+use crate::compare_visible::hide_compare;
 
 fn compare_names() -> Vec<&'static str> {
     registry()
@@ -30,6 +30,7 @@ fn the_compare_commands_are_registered_in_the_planned_contexts() {
             ("compare.up", "Compare"),
             ("compare.exit", "Compare"),
             ("compare.stop_checking", "Compare"),
+            ("compare.continue", "Compare"),
             ("compare.save", "CompareView"),
             ("compare.view_bytes", "CompareView"),
             ("compare.view_text", "CompareView"),
@@ -39,6 +40,7 @@ fn the_compare_commands_are_registered_in_the_planned_contexts() {
 
 #[test]
 fn hidden_compare_commands_stay_out_of_the_lists_and_the_palette() {
+    let _hidden = hide_compare();
     assert_eq!(all().filter(|s| s.name.starts_with("compare.")).count(), 0);
     let shown = entries()
         .iter()
@@ -59,19 +61,50 @@ fn hidden_compare_commands_still_resolve_by_name_and_action() {
     );
 }
 
-#[test]
-fn visible_compare_commands_join_the_lists_and_the_palette() {
-    let _shown = show_compare();
-    let names = compare_names();
-    let listed: Vec<&str> = all().map(|spec| spec.name).collect();
-    assert!(names.iter().all(|name| listed.contains(name)));
-    let palette: Vec<&str> = entries()
+const NOT_BUILT: [&str; 6] = [
+    "compare.refs",
+    "compare.copy_left",
+    "compare.copy_right",
+    "compare.save",
+    "compare.view_bytes",
+    "compare.view_text",
+];
+
+fn palette_names() -> Vec<&'static str> {
+    entries()
         .iter()
         .filter(|entry| entry.spec.name.starts_with("compare.") && entry.in_palette)
         .map(|entry| entry.spec.name)
+        .collect()
+}
+
+#[test]
+fn built_compare_commands_join_the_lists_and_the_palette() {
+    let built: Vec<&str> = compare_names()
+        .into_iter()
+        .filter(|name| !NOT_BUILT.contains(name))
         .collect();
-    assert_eq!(palette.len(), names.len() - 2);
+    let listed: Vec<&str> = all()
+        .map(|spec| spec.name)
+        .filter(|name| name.starts_with("compare."))
+        .collect();
+    assert_eq!(listed, built);
+    let palette = palette_names();
+    assert_eq!(palette.len(), built.len() - 2);
     assert!(!palette.contains(&"compare.enter") && !palette.contains(&"compare.up"));
+    assert!(palette.contains(&"compare.with_other_pane"));
+}
+
+#[test]
+fn commands_still_to_be_built_stay_out_while_compare_is_on() {
+    let listed: Vec<&str> = all().map(|spec| spec.name).collect();
+    let palette = palette_names();
+    for name in NOT_BUILT {
+        assert!(
+            !listed.contains(&name) && !palette.contains(&name),
+            "{name}"
+        );
+    }
 }
 
 #[test]

@@ -10,6 +10,16 @@ use super::{FileListAction, ListContext, SortBy};
 use crate::git::GitAction;
 
 pub(super) const CONTEXT: &str = "FileList";
+const COMPARE: &str = "Compare";
+
+pub(crate) fn context(compare: bool) -> gpui_kit::KeyContext {
+    let mut context = gpui_kit::KeyContext::default();
+    context.add(CONTEXT);
+    if compare {
+        context.add(COMPARE);
+    }
+    context
+}
 
 gpui_kit::actions!(
     file_list,

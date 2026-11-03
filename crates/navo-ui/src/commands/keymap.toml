@@ -2075,6 +2075,10 @@ keys = ["backspace"]
 command = "compare.exit"
 keys = ["escape"]
 
+[[bind]]
+command = "compare.continue"
+keys = ["ctrl-f7"]
+
 # CompareView
 
 [[bind]]

@@ -236,7 +236,7 @@ fn report(message: &str) {
     eprintln!("settings: {message}");
 }
 
-fn stored_value(change: &Change) -> Option<SettingValue> {
+pub(crate) fn stored_value(change: &Change) -> Option<SettingValue> {
     match (&change.value, change.field.spec().control) {
         (Value::Flag(flag), _) => Some(SettingValue::Bool(*flag)),
         (Value::Number(number), _) => Some(SettingValue::Integer(*number)),

@@ -1,6 +1,6 @@
 mod bind;
 mod clipboard;
-mod compare;
+pub(crate) mod compare;
 mod contexts;
 pub(crate) mod git;
 mod keymap;

@@ -9,6 +9,8 @@ pub struct BackgroundLook {
     pub sort: SortKey,
     pub can_paste: bool,
     pub has_properties: bool,
+    /// A compare with the other pane can start from here.
+    pub can_compare: bool,
 }
 
 const SORTS: [(SortBy, &str, &str, &str, char); 4] = [
@@ -89,6 +91,14 @@ fn open_terminal() -> MenuItem {
     )
 }
 
+fn compare_with_other_pane() -> MenuItem {
+    MenuItem::new(
+        ItemId::Action("compare::WithOtherPane"),
+        &navo_l10n::tr("cmd-compare-with-other-pane"),
+        Group::Navo,
+    )
+}
+
 fn copy_folder_path() -> MenuItem {
     navo(NavoAction::CopyPath, "Copy folder path", 'C')
 }
@@ -96,13 +106,15 @@ fn copy_folder_path() -> MenuItem {
 /// With a shell list, Sort by and Refresh lead it and New file follows New ▸, as Explorer places them.
 pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
     if has_shell {
+        let mut top = vec![
+            sort_menu(look.sort),
+            refresh(),
+            copy_folder_path(),
+            open_terminal(),
+        ];
+        top.extend(look.can_compare.then(compare_with_other_pane));
         return Own {
-            top: vec![
-                sort_menu(look.sort),
-                refresh(),
-                copy_folder_path(),
-                open_terminal(),
-            ],
+            top,
             after_new: vec![new_file()],
             hidden: vec![new_folder(), paste(look)],
         };
@@ -116,6 +128,7 @@ pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
         copy_folder_path(),
         open_terminal(),
     ];
+    top.extend(look.can_compare.then(compare_with_other_pane));
     if look.has_properties {
         top.push(navo(NavoAction::Properties, "Properties", 'I'));
     }
@@ -129,4 +142,31 @@ pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
 #[must_use]
 pub fn merged_background_menu(shell: &[MenuItem], look: &BackgroundLook) -> ShellMenu {
     merge::merge(shell, &background_own(look, true)).menu
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn look(can_compare: bool) -> BackgroundLook {
+        BackgroundLook {
+            sort: SortKey::default(),
+            can_paste: false,
+            has_properties: false,
+            can_compare,
+        }
+    }
+
+    fn offers_compare(own: &Own) -> bool {
+        let id = ItemId::Action("compare::WithOtherPane");
+        own.top.iter().any(|item| item.id == id)
+    }
+
+    #[test]
+    fn the_folder_menu_offers_compare_only_when_one_can_start() {
+        for has_shell in [false, true] {
+            assert!(offers_compare(&background_own(&look(true), has_shell)));
+            assert!(!offers_compare(&background_own(&look(false), has_shell)));
+        }
+    }
 }

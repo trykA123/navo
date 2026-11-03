@@ -3,7 +3,8 @@ use std::thread::{self, JoinHandle};
 
 use crate::model::Reason;
 
-use super::{Context, walk};
+use super::Context;
+use super::walk::walk;
 
 /// Starts `body` on a new thread; false when the system refused the thread.
 pub(super) fn start(
@@ -31,6 +32,7 @@ pub(super) fn walk_guarded(context: &Context) {
 pub(super) fn stop(context: &Context) {
     context.cancel.cancel();
     context.queue.close();
+    context.shared.wake();
     context
         .shared
         .finish_problem(context.generation, Reason::WorkerPanicked);

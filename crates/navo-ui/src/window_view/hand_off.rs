@@ -140,6 +140,7 @@ pub struct OpenHooks {
     pub on_shown: Option<Box<dyn FnOnce()>>,
     pub window_shown: Option<WindowShown>,
     pub resident: Option<std::rc::Rc<dyn ResidentHooks>>,
+    pub compare: Option<std::sync::Arc<dyn crate::browser::CompareHooks>>,
 }
 
 impl OpenHooks {

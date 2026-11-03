@@ -1,7 +1,10 @@
 mod cache;
+mod convert;
 mod git;
 mod handle;
+mod limit;
 mod local;
+mod pane;
 mod rules;
 mod settings;
 

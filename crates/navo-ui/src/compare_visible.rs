@@ -1,7 +1,7 @@
-//! The one switch that hides everything Compare until a compare can be opened.
+//! The one switch for everything Compare shows: the Settings section, commands and keys.
 
-/// Flipped to true by U4 when a compare can be opened.
-const COMPARE_VISIBLE: bool = false;
+/// True since U5: a compare can be opened and its rows are drawn.
+const COMPARE_VISIBLE: bool = true;
 
 /// Whether the Compare settings section and the `compare.*` commands and keys are offered.
 #[must_use]
@@ -14,7 +14,7 @@ pub(crate) fn compare_visible() -> bool {
 }
 
 #[cfg(test)]
-pub(crate) use tests::show_compare;
+pub(crate) use tests::{hide_compare, show_compare};
 
 #[cfg(test)]
 mod tests {
@@ -24,27 +24,34 @@ mod tests {
         pub(super) static FORCED: Cell<Option<bool>> = const { Cell::new(None) };
     }
 
-    /// Makes Compare visible on this thread until the guard drops.
-    pub(crate) struct Shown;
+    /// Forces Compare on or off on this thread until the guard drops.
+    pub(crate) struct Forced;
 
-    impl Drop for Shown {
+    impl Drop for Forced {
         fn drop(&mut self) {
             FORCED.with(|forced| forced.set(None));
         }
     }
 
     #[must_use]
-    pub(crate) fn show_compare() -> Shown {
+    pub(crate) fn show_compare() -> Forced {
         FORCED.with(|forced| forced.set(Some(true)));
-        Shown
+        Forced
+    }
+
+    /// For the tests of the off state.
+    #[must_use]
+    pub(crate) fn hide_compare() -> Forced {
+        FORCED.with(|forced| forced.set(Some(false)));
+        Forced
     }
 
     #[test]
-    fn compare_is_hidden_until_the_flag_flips() {
-        assert!(!super::compare_visible());
-        let shown = show_compare();
+    fn compare_is_visible_and_the_seam_can_force_it_off() {
         assert!(super::compare_visible());
-        drop(shown);
+        let hidden = hide_compare();
         assert!(!super::compare_visible());
+        drop(hidden);
+        assert!(super::compare_visible());
     }
 }

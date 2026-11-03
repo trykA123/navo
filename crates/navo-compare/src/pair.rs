@@ -134,6 +134,7 @@ fn row(left: Option<SideEntry>, right: Option<SideEntry>, status: Status) -> Row
         display_status: status,
         generation: Generation::default(),
         content: ContentClass::Unknown,
+        contains_differences: false,
     }
 }
 

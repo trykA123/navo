@@ -2,7 +2,7 @@ use navo_core::{Location, TabId};
 use navo_fs::WatchEvent;
 
 use super::operate::JobUpdate;
-use super::{Browser, Loaded, cached, find, measure, naming, view_jobs};
+use super::{Browser, Loaded, cached, compare, find, measure, naming, view_jobs};
 
 pub(super) enum Message {
     Loaded(Loaded),
@@ -17,6 +17,7 @@ pub(super) enum Message {
     Recheck(Location),
     Prefetched(u64),
     Left(TabId, Vec<Location>),
+    Compare(u64, compare::CompareUpdate),
 }
 
 impl Message {
@@ -33,6 +34,7 @@ impl Message {
                 | Self::Prefetched(_)
                 | Self::CachedSorted(_)
                 | Self::Viewed(_)
+                | Self::Compare(..)
         )
     }
 }
@@ -76,6 +78,7 @@ impl Browser {
             Message::Recheck(location) => self.accept_recheck(&location),
             Message::Prefetched(id) => self.prefetched(id),
             Message::Left(tab, gone) => self.accept_left(tab, &gone),
+            Message::Compare(run, update) => self.accept_compare(run, update),
         }
     }
 }
