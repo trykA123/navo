@@ -23,3 +23,10 @@ BA_ = "BA_"
 BA_DEF_ = "BA_DEF_"
 BA_DEF_DEF_ = "BA_DEF_DEF_"
 flate2 = "flate2"
+
+[type.md.extend-words]
+Durin = "Durin"
+ba = "ba"
+
+[type.rust.extend-identifiers]
+ALPH = "ALPH"

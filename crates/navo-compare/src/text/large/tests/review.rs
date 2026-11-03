@@ -75,16 +75,30 @@ fn the_outcome_survives_a_full_event_channel() {
         }
         std::thread::sleep(Duration::from_millis(5));
     }
+    // The full buffer drains first; a Done may follow once draining makes room.
     let mut drained = 0;
-    loop {
+    while drained < EVENT_BUFFER {
         match diff.events().recv_timeout(Duration::from_secs(30)) {
-            Ok(_) => drained += 1,
+            Ok(event) => {
+                assert!(
+                    !matches!(event, DiffEvent::Done(_)),
+                    "the channel was full at cancel"
+                );
+                drained += 1;
+            }
             Err(RecvTimeoutError::Disconnected) => break,
-            Err(RecvTimeoutError::Timeout) => panic!("the driver must end after cancel"),
+            Err(RecvTimeoutError::Timeout) => panic!("the buffer must arrive after cancel"),
         }
     }
     assert_eq!(drained, EVENT_BUFFER, "the channel was full at cancel");
     assert_eq!(diff.outcome(), Some(Err(Reason::Stopped)));
+    loop {
+        match diff.events().recv_timeout(Duration::from_secs(30)) {
+            Ok(_) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Timeout) => panic!("the driver must end after cancel"),
+        }
+    }
 }
 
 fn utf16_le(text: &str) -> Vec<u8> {

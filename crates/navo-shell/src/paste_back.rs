@@ -194,7 +194,7 @@ mod platform {
     fn send(inputs: &[INPUT]) -> usize {
         let count = u32::try_from(inputs.len()).unwrap_or(0);
         let size = i32::try_from(size_of::<INPUT>()).unwrap_or(0);
-        // SAFETY: inputs holds `count` initialised keyboard INPUTs of `size` bytes each.
+        // SAFETY: inputs holds `count` initialised keyboard INPUT records of `size` bytes each.
         let sent = unsafe { SendInput(count, inputs.as_ptr(), size) };
         usize::try_from(sent).unwrap_or(0)
     }
