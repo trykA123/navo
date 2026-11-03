@@ -365,6 +365,56 @@ fn a_follow_probe_reads_appends_despite_stale_metadata() {
     assert_eq!(file.len(), 110);
 }
 
+fn rewrite_later(path: &Path, bytes: &[u8]) {
+    fs::write(path, bytes).unwrap();
+    let later = SystemTime::now() + Duration::from_secs(60);
+    OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+}
+
+#[test]
+fn an_edit_between_stat_and_read_is_caught_by_revalidate() {
+    let (_dir, path) = file_with(PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    let target = path.clone();
+    file.stat_hook.set(Box::new(move || {
+        let mut bytes = pattern(PAGE);
+        bytes[0] = 0xAA;
+        rewrite_later(&target, &bytes);
+    }));
+
+    assert_eq!(read(&file, 0, 10)[0], 0xAA);
+    assert!(!file.take_changed(), "the stale stat hides the edit");
+    assert!(!file.revalidate().unwrap());
+    assert!(file.revision() > 0);
+}
+
+#[test]
+fn a_cached_page_after_a_truncation_is_caught_by_revalidate() {
+    let (_dir, path) = file_with(PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    assert_eq!(read(&file, 0, 10), expected(0, 10));
+    fs::write(&path, b"short").unwrap();
+    assert_eq!(read(&file, 0, 10), expected(0, 10));
+    assert!(!file.take_changed(), "a cached page skips the stat");
+    assert!(!file.revalidate().unwrap());
+    assert!(file.revision() > 0);
+}
+
+#[test]
+fn an_unchanged_file_revalidates_and_keeps_a_zero_revision() {
+    let (_dir, path) = file_with(PAGE);
+    let file = PagedFile::open(&path).unwrap();
+    assert!(file.revalidate().unwrap());
+    assert_eq!(file.revision(), 0);
+    assert!(file.revalidate().unwrap());
+    assert_eq!(file.revision(), 0);
+}
+
 #[test]
 fn a_follow_probe_resets_read_confirmed_growth_after_truncation() {
     let (_dir, path) = file_with(100);
@@ -382,4 +432,12 @@ fn a_follow_probe_resets_read_confirmed_growth_after_truncation() {
     assert!(file.take_changed());
     assert!(file.take_rewritten());
     assert_eq!(read(&file, 0, 100), b"fresh\n");
+}
+
+#[test]
+fn a_failed_handle_clone_fails_the_open_instead_of_weakening_the_baseline() {
+    let (_dir, path) = file_with(100);
+    baseline::fail_next_clone();
+    assert!(PagedFile::open(&path).is_err());
+    assert!(PagedFile::open(&path).is_ok(), "the hook fires once");
 }

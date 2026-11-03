@@ -1,18 +1,18 @@
 use std::ops::Range;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, PoisonError};
 use std::time::Duration;
 
 use crate::anchor::SectionPair;
 use crate::model::Reason;
 use crate::text::diff::Hunk;
 
-use super::super::LargeDiff;
 use super::super::batch::Context;
 use super::{
-    Ceiling, Charge, HUNK_SIZE, Kind, Limits, Paged, PagedState, Part, bytes_of, grow_vec, near,
-    rediff,
+    Charge, DIGEST_SIZE, HUNK_SIZE, Kind, Limits, Paged, PagedState, Part, bytes_of, grow_vec, near,
 };
+
+mod api;
 
 struct Entry {
     pair: SectionPair,
@@ -137,7 +137,7 @@ impl Store {
         &mut self,
         parts: &[Part],
         focus: u64,
-        (hunk_capacity, charge): (usize, Charge),
+        (hunk_capacity, digest_capacity, charge): (usize, usize, Charge),
     ) -> Recorded {
         let detailed = parts
             .iter()
@@ -149,7 +149,12 @@ impl Store {
             return Recorded::CountsOnly;
         }
         let len = parts.last().map_or(0, |part| part.end);
-        let spare = bytes_of::<Hunk>(hunk_capacity.saturating_sub(len));
+        let detail_hunks = detail_hunks(parts);
+        let spare = bytes_of::<Hunk>(hunk_capacity.saturating_sub(len)).saturating_add(
+            u64::try_from(digest_capacity.saturating_sub(detail_hunks))
+                .unwrap_or(u64::MAX)
+                .saturating_mul(DIGEST_SIZE),
+        );
         let mut start = 0;
         for (at, part) in parts.iter().enumerate() {
             let count = u64::try_from(part.end - start).unwrap_or(u64::MAX);
@@ -162,7 +167,9 @@ impl Store {
             };
             if detailed {
                 self.detailed.push(self.entries.len());
-                self.detailed_bytes = self.detailed_bytes.saturating_add(count * HUNK_SIZE);
+                self.detailed_bytes = self
+                    .detailed_bytes
+                    .saturating_add(count.saturating_mul(HUNK_SIZE.saturating_add(DIGEST_SIZE)));
             }
             self.spare_bytes = self.spare_bytes.saturating_add(spare);
             self.entries.push(Entry {
@@ -195,7 +202,9 @@ impl Store {
                 continue;
             }
             count += 1;
-            released = released.saturating_add(entry.hunks.saturating_sub(1) * HUNK_SIZE);
+            released = released
+                .saturating_add(entry.hunks.saturating_sub(1).saturating_mul(HUNK_SIZE))
+                .saturating_add(entry.hunks.saturating_mul(DIGEST_SIZE));
             spare = spare.saturating_add(entry.spare);
         }
         if count == 0 {
@@ -290,7 +299,7 @@ impl Store {
         rediff: &super::Rediff,
         charge: Charge,
     ) -> Result<(), Reason> {
-        let super::Rediff::Hunks(hunks) = rediff else {
+        let super::Rediff::Hunks { hunks, digests } = rediff else {
             return Ok(());
         };
         let index = self
@@ -300,7 +309,11 @@ impl Store {
             .ok_or(Reason::Unsupported)?;
         let entry = &mut self.entries[index];
         if entry.detailed {
-            self.detailed_bytes = self.detailed_bytes.saturating_sub(entry.hunks * HUNK_SIZE);
+            self.detailed_bytes = self.detailed_bytes.saturating_sub(
+                entry
+                    .hunks
+                    .saturating_mul(HUNK_SIZE.saturating_add(DIGEST_SIZE)),
+            );
         } else {
             if !grow_vec(&mut self.detailed, 1, &mut self.entries_charge) {
                 return Err(Reason::Unsupported);
@@ -309,9 +322,14 @@ impl Store {
         }
         self.spare_bytes = self.spare_bytes.saturating_sub(entry.spare);
         entry.hunks = u64::try_from(hunks.len()).unwrap_or(u64::MAX);
-        entry.spare = bytes_of::<Hunk>(hunks.capacity().saturating_sub(hunks.len()));
+        entry.spare = bytes_of::<Hunk>(hunks.capacity().saturating_sub(hunks.len()))
+            .saturating_add(digests.spare_bytes());
         entry.detailed = true;
-        self.detailed_bytes = self.detailed_bytes.saturating_add(entry.hunks * HUNK_SIZE);
+        self.detailed_bytes = self.detailed_bytes.saturating_add(
+            entry
+                .hunks
+                .saturating_mul(HUNK_SIZE.saturating_add(DIGEST_SIZE)),
+        );
         self.spare_bytes = self.spare_bytes.saturating_add(entry.spare);
         self.hunks_charge.absorb(charge);
         self.count();
@@ -322,54 +340,16 @@ impl Store {
     }
 }
 
-impl LargeDiff {
-    /// Replaces one emitted section's hunks; the store charges them until eviction is acknowledged.
-    pub fn hunks_for(&self, section: Range<u64>) -> Result<super::Rediff, Reason> {
-        if self.cancel.is_cancelled() {
-            return Err(Reason::Stopped);
+fn detail_hunks(parts: &[Part]) -> usize {
+    let mut start = 0;
+    let mut total = 0;
+    for part in parts {
+        if part.kind == Kind::Detail {
+            total += part.end.saturating_sub(start);
         }
-        let (context, pair, watchdog) = {
-            let store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
-            let store = store.as_ref().ok_or(Reason::Unsupported)?;
-            let pair = store.find(&section).ok_or(Reason::Unsupported)?;
-            (Arc::clone(&store.context), pair, store.watchdog)
-        };
-        let (rediff, charge) = rediff(
-            &context,
-            &pair,
-            &self.ledger,
-            Ceiling {
-                cancel: &self.cancel,
-                watchdog,
-            },
-        )?;
-        let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
-        let store = store.as_mut().ok_or(Reason::Unsupported)?;
-        if !Arc::ptr_eq(&context, &store.context) {
-            return Err(Reason::ChangedOnDisk);
-        }
-        store.restore(&section, &rediff, charge)?;
-        Ok(rediff)
+        start = part.end;
     }
-
-    #[must_use]
-    pub fn memory_used(&self) -> u64 {
-        self.ledger.used()
-    }
-
-    #[must_use]
-    pub fn peak_memory(&self) -> u64 {
-        self.ledger.peak()
-    }
-
-    /// Releases streamed eviction charges up to the highest applied event sequence.
-    /// Call only after applying every `Paged` event with `seq <= upto`.
-    pub fn acknowledge_evictions(&self, upto: u64) {
-        let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(store) = store.as_mut() {
-            store.acknowledge(upto);
-        }
-    }
+    total
 }
 
 #[cfg(test)]

@@ -151,6 +151,26 @@ pub enum Refusal {
     Link,
     Submodule,
     Unavailable(Reason),
+    NoRow,
+    MultipleRows,
+    NoSource,
+    NotAFile,
+    ReadOnlyTarget,
+    TypeConflict,
+    CaseConflict,
+    NameUnwritable(NameProblem),
+}
+
+/// Why a name cannot be written on a target side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameProblem {
+    Empty,
+    DotName,
+    Nul,
+    TooLong,
+    TrailingDotOrSpace,
+    Reserved,
+    IllegalCharacter,
 }
 
 #[derive(Clone)]
@@ -291,28 +311,10 @@ impl Session {
     }
 
     pub fn write_allowed(&self, row: &Row, generation: Generation) -> Result<(), Refusal> {
-        if generation != self.generation || row.generation != generation {
+        if generation != self.generation {
             return Err(Refusal::StaleGeneration);
         }
-        if row.raw_status == Status::Checking || row.display_status == Status::Checking {
-            return Err(Refusal::Checking);
-        }
-        if kind_of(row.left.as_deref(), EntryKind::Link)
-            || kind_of(row.right.as_deref(), EntryKind::Link)
-        {
-            return Err(Refusal::Link);
-        }
-        if kind_of(row.left.as_deref(), EntryKind::Submodule)
-            || kind_of(row.right.as_deref(), EntryKind::Submodule)
-        {
-            return Err(Refusal::Submodule);
-        }
-        for status in [row.raw_status, row.display_status] {
-            if let Status::Unavailable(reason) = status {
-                return Err(Refusal::Unavailable(reason));
-            }
-        }
-        Ok(())
+        row_write_allowed(row, generation)
     }
 
     fn spawn(&mut self) {
@@ -350,6 +352,31 @@ impl Drop for Session {
             self.shared.close();
         }
     }
+}
+
+pub(crate) fn row_write_allowed(row: &Row, generation: Generation) -> Result<(), Refusal> {
+    if row.generation != generation {
+        return Err(Refusal::StaleGeneration);
+    }
+    if row.raw_status == Status::Checking || row.display_status == Status::Checking {
+        return Err(Refusal::Checking);
+    }
+    if kind_of(row.left.as_deref(), EntryKind::Link)
+        || kind_of(row.right.as_deref(), EntryKind::Link)
+    {
+        return Err(Refusal::Link);
+    }
+    if kind_of(row.left.as_deref(), EntryKind::Submodule)
+        || kind_of(row.right.as_deref(), EntryKind::Submodule)
+    {
+        return Err(Refusal::Submodule);
+    }
+    for status in [row.raw_status, row.display_status] {
+        if let Status::Unavailable(reason) = status {
+            return Err(Refusal::Unavailable(reason));
+        }
+    }
+    Ok(())
 }
 
 fn kind_of(entry: Option<&SideEntry>, kind: EntryKind) -> bool {

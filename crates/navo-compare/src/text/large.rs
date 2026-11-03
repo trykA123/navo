@@ -8,23 +8,26 @@ use std::time::Duration;
 
 use navo_core::paging::{ByteSource, TextLayout};
 
-use crate::model::{Budget, CancelToken, DiffStep, Reason};
+use crate::model::{Budget, CancelToken, Reason};
 
 use super::diff::Hunk;
 #[cfg(test)]
 use super::diff::diff_lines;
+use super::digest::HunkDigests;
 use super::normalise::Options;
 #[cfg(test)]
 use super::scan;
 
 mod batch;
 mod budget;
+mod event;
 mod plan;
 mod read;
 mod schedule;
 
 pub use budget::{Evictions, Paged, PagedState, Rediff, StepReason};
 use budget::{Ledger, Store};
+pub use event::{DiffEvent, Progress, Stage, Summary};
 pub(crate) use plan::{Forge, Tuning};
 
 pub const WORKERS: usize = 4;
@@ -59,55 +62,12 @@ pub struct Covered {
     pub left: Range<u64>,
     pub right: Range<u64>,
     pub hunks: Vec<Hunk>,
+    /// Digests of the copyable hunks in `hunks`, keyed by hunk id.
+    pub digests: HunkDigests,
     /// Left line ranges of hunks emitted as coarse or paged blocks.
     pub coarse: Vec<Range<usize>>,
     /// Sections kept as counts; `state` says whether `hunks_for` can re-diff.
     pub paged: Vec<Paged>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Stage {
-    Scan,
-    Sections,
-    Waiting,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Progress {
-    pub stage: Stage,
-    pub done: u64,
-    pub total: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Summary {
-    pub left_lines: u64,
-    pub right_lines: u64,
-    pub sections: usize,
-    pub dropped_anchors: usize,
-    pub restarts: u32,
-    pub extra_workers: u32,
-}
-
-/// After `Restarted`, every earlier `Provisional` and `Hunks` is stale.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DiffEvent {
-    Provisional(Vec<Hunk>),
-    Hunks(Covered),
-    Progress(Progress),
-    Step {
-        step: DiffStep,
-        section: Range<u64>,
-        lines: u64,
-        reason: StepReason,
-    },
-    /// An emitted section drops its line hunks and keeps this count.
-    Paged {
-        paged: Paged,
-        seq: u64,
-    },
-    Done(Result<Summary, Reason>),
-    Restarted,
 }
 
 type Settled = Arc<OnceLock<Result<Summary, Reason>>>;
@@ -130,6 +90,23 @@ impl LargeDiff {
     #[must_use]
     pub fn start(request: Request, cancel: &CancelToken) -> Self {
         Self::start_tuned(request, cancel, Tuning::default())
+    }
+
+    #[cfg(feature = "test-hooks")]
+    #[must_use]
+    pub fn start_with_hook(
+        request: Request,
+        cancel: &CancelToken,
+        before_hash: Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
+        Self::start_tuned(
+            request,
+            cancel,
+            Tuning {
+                before_hash: Some(before_hash),
+                ..Tuning::default()
+            },
+        )
     }
 
     pub(crate) fn start_tuned(request: Request, cancel: &CancelToken, tuning: Tuning) -> Self {

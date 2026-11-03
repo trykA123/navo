@@ -156,6 +156,7 @@ fn keys_are_produced_per_line() {
         layout: TextLayout::default(),
         lines: vec![line("a", LineEnding::Lf), line("b", LineEnding::None)],
         starts: vec![0, 2, 3],
+        bytes: b"a\nb".to_vec(),
         lossless: true,
     };
     let keys = whole.keys(&Options::default());

@@ -46,6 +46,7 @@ fn whole(layout: TextLayout, lines: &[(&str, LineEnding)]) -> Whole {
             })
             .collect(),
         starts: Vec::new(),
+        bytes: Vec::new(),
         lossless: true,
     }
 }

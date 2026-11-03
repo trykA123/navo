@@ -3,11 +3,12 @@ use std::io::{self, Write};
 
 use navo_core::paging::ByteSource;
 
-use super::{facts_of, lines, picks, utf16le_view, view};
+use super::{Side, facts_of, hashed, lines, picks, utf16le_view, view};
 use crate::text::diff::{Hunk, Row};
 use crate::text::side::LineEnding;
 use crate::text::{
-    ApplyError, Direction, Picked, PickedHunk, TargetFacts, apply_hunk, apply_picked,
+    ApplyError, Direction, HunkDigest, HunkDigests, Picked, PickedHunk, TargetFacts, apply_hunk,
+    apply_picked,
 };
 
 struct Short<'a> {
@@ -38,11 +39,14 @@ fn a_short_source_read_is_an_error() {
         right_lines: 1..1,
         right_bytes: 2..2,
     };
+    let mut digests = HunkDigests::default();
+    digests.push(&hunk, HunkDigest::of(b"x\n", b""));
     let mut out = Vec::new();
     let result = apply_hunk(
         &view(&target.bytes),
         &source,
         &hunk,
+        &digests,
         Direction::LeftToRight,
         facts_of(&target.lines),
         &mut out,
@@ -57,17 +61,22 @@ fn a_short_target_read_is_an_error() {
         len: 10,
     };
     let source = lines(&[("x", LineEnding::Lf)]);
-    let hunk = Hunk {
-        left_lines: 0..1,
-        left_bytes: 0..2,
-        right_lines: 0..1,
-        right_bytes: 0..0,
-    };
+    let hunk = hashed(
+        Hunk {
+            left_lines: 0..1,
+            left_bytes: 0..2,
+            right_lines: 0..1,
+            right_bytes: 0..0,
+        },
+        &source.bytes,
+        target.bytes,
+    );
     let mut out = Vec::new();
     let result = apply_hunk(
         &target,
         &view(&source.bytes),
         &hunk,
+        &hunk.digests,
         Direction::LeftToRight,
         TargetFacts {
             dominant: LineEnding::Lf,
@@ -137,6 +146,16 @@ fn a_20_mib_line_streams_with_bounded_buffers() {
     let source = vec![b'x'; LINE];
     let target = b"a\n";
     let largest = Cell::new(0);
+    let hunk = hashed(
+        Hunk {
+            left_lines: 0..1,
+            left_bytes: 0..u64::try_from(LINE).unwrap(),
+            right_lines: 1..1,
+            right_bytes: 2..2,
+        },
+        &source,
+        target,
+    );
     let source = CountingSource {
         bytes: &source,
         largest: &largest,
@@ -145,17 +164,12 @@ fn a_20_mib_line_streams_with_bounded_buffers() {
         bytes: target,
         seen: RefCell::new(vec![false; target.len()]),
     };
-    let hunk = Hunk {
-        left_lines: 0..1,
-        left_bytes: 0..u64::try_from(LINE).unwrap(),
-        right_lines: 1..1,
-        right_bytes: 2..2,
-    };
     let mut out = Counter { bytes: 0 };
     apply_hunk(
         &target,
         &source,
         &hunk,
+        &hunk.digests,
         Direction::LeftToRight,
         TargetFacts {
             dominant: LineEnding::Lf,
@@ -174,17 +188,22 @@ fn a_crlf_across_the_buffer_boundary_is_copied_exactly() {
     let mut source = vec![b'x'; 65535];
     source.extend_from_slice(b"\r\n");
     let target = b"a\n";
-    let hunk = Hunk {
-        left_lines: 0..1,
-        left_bytes: 0..65537,
-        right_lines: 1..1,
-        right_bytes: 2..2,
-    };
+    let hunk = hashed(
+        Hunk {
+            left_lines: 0..1,
+            left_bytes: 0..65537,
+            right_lines: 1..1,
+            right_bytes: 2..2,
+        },
+        &source,
+        target,
+    );
     let mut out = Vec::new();
     apply_hunk(
         &view(target),
         &view(&source),
         &hunk,
+        &hunk.digests,
         Direction::LeftToRight,
         TargetFacts {
             dominant: LineEnding::Lf,
@@ -209,17 +228,22 @@ fn a_utf16_surrogate_pair_across_the_buffer_boundary_is_copied_exactly() {
     source.extend_from_slice(&0xDE00u16.to_le_bytes());
     source.extend_from_slice(&0x000Au16.to_le_bytes());
     let target = b"a\n";
-    let hunk = Hunk {
-        left_lines: 0..1,
-        left_bytes: 0..65_540,
-        right_lines: 1..1,
-        right_bytes: 2..2,
-    };
+    let hunk = hashed(
+        Hunk {
+            left_lines: 0..1,
+            left_bytes: 0..65_540,
+            right_lines: 1..1,
+            right_bytes: 2..2,
+        },
+        &source,
+        target,
+    );
     let mut out = Vec::new();
     apply_hunk(
         &view(target),
         &utf16le_view(&source),
         &hunk,
+        &hunk.digests,
         Direction::LeftToRight,
         TargetFacts {
             dominant: LineEnding::Lf,
@@ -259,6 +283,19 @@ impl ByteSource for Sequential<'_> {
     }
 }
 
+fn beyond_end_hunk(source: &Side, line: usize, at: u64) -> super::CopyHunk {
+    hashed(
+        Hunk {
+            left_lines: 0..2,
+            left_bytes: 0..u64::try_from(source.bytes.len()).unwrap(),
+            right_lines: line..line,
+            right_bytes: at..at,
+        },
+        &source.bytes,
+        &[],
+    )
+}
+
 #[test]
 fn a_200_mib_target_reads_once_through_picked_insertions() {
     const LEN: usize = 200 * 1024 * 1024;
@@ -275,16 +312,11 @@ fn a_200_mib_target_reads_once_through_picked_insertions() {
         largest: Cell::new(0),
     };
     let line = usize::try_from(MID / 64).unwrap();
-    let hunk = Hunk {
-        left_lines: 0..2,
-        left_bytes: 0..u64::try_from(source.bytes.len()).unwrap(),
-        right_lines: line..line,
-        right_bytes: MID..MID,
-    };
+    let hunk = beyond_end_hunk(&source, line, MID);
     let rows = [Row::Deleted { left: 0 }, Row::Deleted { left: 1 }];
     let picked = picks([0, 1]);
     let entries = [PickedHunk {
-        hunk: &hunk,
+        hunk: &hunk.hunk,
         rows: &rows,
     }];
     let mut out = Counter { bytes: 0 };
@@ -297,6 +329,7 @@ fn a_200_mib_target_reads_once_through_picked_insertions() {
                 final_newline: true,
             },
             hunks: &entries,
+            digests: &hunk.digests,
             left_starts: &source.starts,
             right_starts: &[],
             lines: &picked,

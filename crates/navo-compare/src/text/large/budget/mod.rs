@@ -7,16 +7,21 @@ use std::time::Duration;
 use crate::anchor::SectionPair;
 use crate::model::{Budget, CancelToken, DiffStep};
 use crate::text::diff::Hunk;
+use crate::text::digest::HUNK_DIGEST_ENTRY_BYTES;
 use crate::text::scan::Candidate;
+
+use super::plan::Hook;
 use crate::text::side::Line;
 
 use super::read::Lines;
 
+mod hash;
 mod out;
 mod sections;
 mod store;
 mod work;
 
+pub(crate) use hash::hash_hunks;
 pub(crate) use out::{Kind, Out, Part};
 pub(crate) use sections::{Planned, plan_sections};
 pub use store::Evictions;
@@ -25,19 +30,22 @@ pub(crate) use store::Store;
 pub(crate) use store::StoreSeed;
 pub use work::Rediff;
 pub(crate) use work::{
-    Ceiling, Detail, coarse_batch, detail, diff_slices, ladder, over_cap, read_lines, rediff,
+    Ceiling, Detail, Hunks, coarse_batch, detail, diff_slices, ladder, over_cap, read_lines, rediff,
 };
 
 pub(crate) const MAX_EXTRA_WORKERS: u32 = 2;
 pub(super) const WATCHDOG: Duration = Duration::from_secs(2);
 pub(super) const WATCH_POLL: Duration = Duration::from_millis(10);
 pub(super) const HUNK_SIZE: u64 = size_of::<Hunk>() as u64;
+pub(super) const DIGEST_SIZE: u64 = HUNK_DIGEST_ENTRY_BYTES;
 const HUNK_BUDGET_DIVISOR: u64 = 4;
 const FOCUS_BATCHES: u64 = 4;
 const CANDIDATE_SHARE: u64 = 8;
 const LINE_WORK: u64 = 320;
 const LINE_HELD: u64 = 80;
 const TEXT_FACTOR: u64 = 2;
+/// The raw bytes a `Lines` keeps for hashing, one copy of the section.
+const RAW_FACTOR: u64 = 1;
 const WORK_FIXED: u64 = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +108,7 @@ pub(super) struct Limits {
     pub(super) cancel: CancelToken,
     pub(super) stall: Option<Stall>,
     pub(super) expired: Option<super::schedule::Finished>,
+    pub(super) before_hash: Option<Hook>,
     pub(super) watchdog: Duration,
     pub(super) reach: u64,
 }
@@ -274,7 +283,7 @@ impl Charge {
     pub(super) fn cover_lines(&mut self, lines: u64, bytes: u64, measured: u64) {
         let allowance = lines
             .saturating_mul(LINE_HELD)
-            .saturating_add(bytes.saturating_mul(TEXT_FACTOR));
+            .saturating_add(byte_work(bytes));
         if measured > allowance {
             self.settle(self.bytes.saturating_add(measured - allowance));
         }
@@ -318,15 +327,26 @@ pub(super) fn lines_bytes(lines: &Lines) -> u64 {
     bytes_of::<Line>(lines.lines.capacity())
         .saturating_add(bytes_of::<u64>(lines.starts.capacity()))
         .saturating_add(u64::try_from(text).unwrap_or(u64::MAX))
+        .saturating_add(raw_bytes(lines))
 }
 
 /// Upper bound of one section diff: decoded lines, key hashes, the Histogram
-/// input and interner, its occurrence lists, the rows and the hunks.
+/// input and interner, its occurrence lists, the rows, the hunks and the raw
+/// bytes kept for the digests.
 pub(super) fn work_estimate(lines: u64, bytes: u64) -> u64 {
     lines
         .saturating_mul(LINE_WORK)
-        .saturating_add(bytes.saturating_mul(TEXT_FACTOR))
+        .saturating_add(byte_work(bytes))
         .saturating_add(WORK_FIXED)
+}
+
+fn byte_work(bytes: u64) -> u64 {
+    bytes.saturating_mul(TEXT_FACTOR + RAW_FACTOR)
+}
+
+/// Bytes the section's raw copy holds; freed once its digests exist.
+pub(super) fn raw_bytes(lines: &Lines) -> u64 {
+    u64::try_from(lines.bytes.capacity()).unwrap_or(u64::MAX)
 }
 
 pub(super) fn span(range: &Range<u64>) -> u64 {

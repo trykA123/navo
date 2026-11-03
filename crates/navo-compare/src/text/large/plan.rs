@@ -20,6 +20,7 @@ use super::{
 pub(crate) type Forge =
     Arc<dyn Fn(&mut Vec<scan::Candidate>, &mut Vec<scan::Candidate>) + Send + Sync>;
 type BeforeDone = Arc<dyn Fn(&AtomicU64) + Send + Sync>;
+pub(crate) type Hook = Arc<dyn Fn() + Send + Sync>;
 
 #[derive(Clone)]
 pub(crate) struct Tuning {
@@ -30,6 +31,7 @@ pub(crate) struct Tuning {
     pub(crate) finished: Option<Finished>,
     pub(crate) expired: Option<Finished>,
     pub(crate) before_done: Option<BeforeDone>,
+    pub(crate) before_hash: Option<Hook>,
     pub(crate) hold_available: bool,
     pub(crate) hold_all: bool,
 }
@@ -44,6 +46,7 @@ impl Default for Tuning {
             finished: None,
             expired: None,
             before_done: None,
+            before_hash: None,
             hold_available: false,
             hold_all: false,
         }
@@ -115,6 +118,7 @@ impl Driver {
             cancel: self.cancel.clone(),
             stall: self.tuning.stall.clone(),
             expired: self.tuning.expired.clone(),
+            before_hash: self.tuning.before_hash.clone(),
             watchdog: self.tuning.watchdog,
             reach: budget::reach(self.tuning.batch_lines),
         }
@@ -188,7 +192,11 @@ impl Driver {
         let left_set = left.set(self.left.layout.text.bom);
         let right_set = right.set(self.right.layout.text.bom);
         let hunks = diff_lines(left_set, right_set, &self.options).hunks;
-        self.send(DiffEvent::Provisional(hunks))
+        let Some((digests, charge)) = budget::hash_hunks(&left, &right, &hunks, &mut held)? else {
+            return Ok(());
+        };
+        held.absorb(charge);
+        self.send(DiffEvent::Provisional { hunks, digests })
     }
 }
 

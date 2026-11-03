@@ -7,6 +7,7 @@ use navo_core::encoding::EncodeError;
 use navo_core::paging::ByteSource;
 
 use super::diff::{Hunk, Row};
+use super::digest::HunkDigests;
 use super::side::LineEnding;
 
 mod rows;
@@ -46,6 +47,7 @@ pub enum ApplyError {
     Encode(EncodeError),
     Malformed,
     Changed,
+    NotCopyable,
 }
 
 impl fmt::Display for ApplyError {
@@ -57,6 +59,7 @@ impl fmt::Display for ApplyError {
             Self::Encode(error) => write!(formatter, "{error}"),
             Self::Malformed => formatter.write_str("the source text is not valid in its encoding"),
             Self::Changed => formatter.write_str("a file changed since the comparison"),
+            Self::NotCopyable => formatter.write_str("this block cannot be copied"),
         }
     }
 }
@@ -66,7 +69,9 @@ impl std::error::Error for ApplyError {
         match self {
             Self::Write(error) => Some(error),
             Self::Encode(error) => Some(error),
-            Self::Range | Self::Read(_) | Self::Malformed | Self::Changed => None,
+            Self::Range | Self::Read(_) | Self::Malformed | Self::Changed | Self::NotCopyable => {
+                None
+            }
         }
     }
 }
@@ -89,6 +94,7 @@ pub struct PickedHunk<'a> {
 pub struct Picked<'a> {
     pub facts: TargetFacts,
     pub hunks: &'a [PickedHunk<'a>],
+    pub digests: &'a HunkDigests,
     pub left_starts: &'a [u64],
     pub right_starts: &'a [u64],
     /// Absolute source-side line numbers to copy.
@@ -100,12 +106,13 @@ pub struct Picked<'a> {
 /// `out` is staging: on `Err` it may hold a partial result the caller discards.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the J6 contract fixes this signature"
+    reason = "the apply contract fixes this signature"
 )]
 pub fn apply_hunk(
     target: &dyn ByteSource,
     source: &dyn ByteSource,
     hunk: &Hunk,
+    digests: &HunkDigests,
     direction: Direction,
     facts: TargetFacts,
     out: &mut dyn Write,
@@ -118,6 +125,7 @@ pub fn apply_hunk(
         Picked {
             facts,
             hunks: &hunks,
+            digests,
             left_starts: &[],
             right_starts: &[],
             lines: &lines,
@@ -136,24 +144,24 @@ pub fn apply_picked(
     out: &mut dyn Write,
 ) -> Result<(), ApplyError> {
     let stable = Stable::start(target, source)?;
-    let result = write_picked(target, source, picked, out);
+    let result = write_picked(&stable, picked, out);
     stable.finish(result)
 }
 
 fn write_picked(
-    target: &dyn ByteSource,
-    source: &dyn ByteSource,
+    stable: &Stable<'_>,
     picked: Picked<'_>,
     out: &mut dyn Write,
 ) -> Result<(), ApplyError> {
-    let target = Target::new(target, picked.facts)?;
+    let target = Target::new(stable.target(), picked.facts)?;
     if picked.lines.is_empty() {
         let whole = Whole {
             target: &target,
-            source,
+            source: stable.source(),
             direction: picked.direction,
         };
         whole.validate(picked.hunks)?;
+        stable.verify_hunks(picked.hunks, picked.digests, picked.direction)?;
         let mut buffer = vec![0u8; BUFFER];
         copy_raw(target.source, 0..target.bom_len, out, &mut buffer)?;
         let mut writer = Writer::new(out, target.layout, &target.dominant);
@@ -161,9 +169,10 @@ fn write_picked(
     } else {
         let rows = rows::Rows {
             target: &target,
-            source,
+            source: stable.source(),
         };
         rows.validate(picked)?;
+        stable.verify_hunks(picked.hunks, picked.digests, picked.direction)?;
         let mut buffer = vec![0u8; BUFFER];
         copy_raw(target.source, 0..target.bom_len, out, &mut buffer)?;
         let mut writer = Writer::new(out, target.layout, &target.dominant);

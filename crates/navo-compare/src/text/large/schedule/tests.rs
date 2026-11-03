@@ -3,11 +3,14 @@ use std::sync::Arc;
 use crate::anchor::SectionPair;
 use crate::model::Budget;
 use crate::text::diff::Hunk;
+use crate::text::digest::HunkDigests;
 use crate::text::large::batch::{Context, SideData};
 use crate::text::large::tests::side;
 use navo_core::paging::LineIndex;
 
-use super::super::budget::{Ledger, Out, Part, Store, StoreSeed, WATCHDOG, bytes_of};
+use super::super::budget::{
+    DIGEST_SIZE, Kind, Ledger, Out, Part, Store, StoreSeed, WATCHDOG, bytes_of,
+};
 use super::*;
 
 fn context(ledger: &Arc<Ledger>) -> Arc<Context> {
@@ -35,6 +38,7 @@ fn limits(ledger: &Arc<Ledger>) -> Limits {
         cancel: crate::model::CancelToken::new(),
         stall: None,
         expired: None,
+        before_hash: None,
         watchdog: WATCHDOG,
         reach: 0,
     }
@@ -50,6 +54,8 @@ fn batch_out(ledger: &Arc<Ledger>) -> Out {
         right_bytes: 0..2,
     };
     out.hunks = vec![hunk; 4];
+    assert!(out.charge.try_add(DIGEST_SIZE * 4));
+    out.digests = HunkDigests::with_capacity(4);
     out.parts = vec![Part {
         pair: SectionPair {
             left: 0..1,
@@ -78,7 +84,11 @@ fn covering_a_batch_keeps_its_reservation_until_recording() {
         ledger.reserve(1).is_none(),
         "the competing worker cannot use live hunk bytes"
     );
-    let _recorded = store.record(&parts, 0, (covered.hunks.capacity(), charge));
+    let _recorded = store.record(
+        &parts,
+        0,
+        (covered.hunks.capacity(), covered.digests.capacity(), charge),
+    );
     assert!(
         ledger.peak() <= budget,
         "recording only settles the charge down"
