@@ -314,3 +314,19 @@ fn deleting_the_folder_note_in_the_library_empties_the_editor(cx: &mut TestAppCo
     palette.wait(600, cx);
     assert!(writes(&fake).is_empty());
 }
+
+#[gpui_kit::test]
+fn a_note_refused_when_the_palette_hides_is_reported_at_the_next_open(cx: &mut TestAppContext) {
+    let (palette, fake) = open_notes(cx, Place::Window, None);
+    palette.press("ctrl-e", cx);
+    palette.type_text(TYPED, cx);
+    fake.refuse_note
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    palette.reset(cx);
+    assert_eq!(palette.label("clip-palette-status", cx), None);
+    palette.wake(cx);
+    assert_eq!(
+        palette.label("clip-palette-status", cx).as_deref(),
+        Some("Your last note change was not saved")
+    );
+}

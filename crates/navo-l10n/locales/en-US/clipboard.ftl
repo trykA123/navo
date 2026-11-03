@@ -36,6 +36,7 @@ clip-note-for = Note for { $name }
 clip-note-empty = Empty
 clip-note-label = Note text
 clip-note-saved = Saved as you type
+clip-note-lost = Your last note change was not saved
 clip-note-saved-age = Saved as you type · { $age }
 clip-note-not-saved = Not saved: { $reason }
 clip-note-unreadable = This note could not be read, so it stays as it is.

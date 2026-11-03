@@ -98,6 +98,8 @@ struct State {
     generation: u64,
     /// Added to the service's revision, so revisions never go back across a stop and start.
     epoch: u64,
+    /// Set by `stop`; later settings changes are ignored.
+    stopped: bool,
 }
 
 /// What the hooks see, read under one lock.
@@ -139,6 +141,7 @@ impl ClipModule {
                 active: Active::Off { notice: None },
                 generation: 0,
                 epoch: 0,
+                stopped: false,
             }),
             listeners: Arc::new(Listeners::default()),
             jobs: Jobs::default(),
