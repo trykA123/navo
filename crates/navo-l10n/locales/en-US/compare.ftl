@@ -43,6 +43,7 @@ compare-status-same = same
 compare-status-same-after-rules = same after rules
 compare-status-same-size-time = same size and time
 compare-status-different = different
+compare-status-contains-differences = contains differences
 compare-status-only-left = only left
 compare-status-only-right = only right
 compare-status-type-conflict = type conflict

@@ -56,6 +56,7 @@ fn a_tree_without_changes_flags_no_folder() {
     let rows = latest(&collect(&start(left, right, CheckMode::Content)));
 
     assert!(rows.values().all(|row| !row.contains_differences));
+    assert_eq!(rows["a"].raw_status, Status::Same);
 }
 
 #[test]
@@ -66,6 +67,34 @@ fn an_orphan_file_flags_its_folders_without_a_content_check() {
 
     assert!(flagged(&rows, "c"));
     assert!(!flagged(&rows, "a"));
+    assert_eq!(rows["c"].raw_status, Status::Same);
+}
+
+#[test]
+fn a_checking_child_does_not_flag_its_folder_until_a_difference_resolves() {
+    let mut rollup = crate::session::rollup::Rollup::default();
+    let folder = generation_with(Generation::new(1), Status::Same, EntryKind::Folder);
+    let child = Row {
+        id: 1,
+        ..generation_with(Generation::new(1), Status::Checking, EntryKind::File)
+    };
+    assert!(
+        rollup
+            .add_batch(std::slice::from_ref(&folder), None)
+            .is_empty()
+    );
+    assert!(rollup.add_batch(&[child], Some(folder.id)).is_empty());
+    assert!(rollup.resolve(Some(folder.id), Status::Checking).is_empty());
+    assert!(rollup.resolve(Some(folder.id), Status::Same).is_empty());
+    let changed = rollup.resolve(
+        Some(folder.id),
+        Status::Different {
+            first_difference: None,
+        },
+    );
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].contains_differences);
+    assert_eq!(changed[0].raw_status, Status::Same);
 }
 
 #[test]
