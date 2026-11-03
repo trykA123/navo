@@ -91,7 +91,19 @@ impl NavoWindow {
         }
     }
 
-    fn run_action(&mut self, name: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::window_view) fn run_action(
+        &mut self,
+        name: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.restart_applying() {
+            return;
+        }
+        if name == "updates::Restart" {
+            self.close_command_center(window, cx);
+            return self.request_restart(window, cx);
+        }
         if name == "command_center::FindContent" {
             return self.open_content(window, cx);
         }

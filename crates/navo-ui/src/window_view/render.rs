@@ -40,7 +40,8 @@ impl Render for NavoWindow {
             .children(self.tab_menu_view())
             .children(self.git_menu_view(window, cx))
             .children(self.viewer_menu_view())
-            .children(self.view_menus());
+            .children(self.view_menus())
+            .children(self.restart_dialog_view(cx));
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);
         let root = Self::dialog_input_on(root, cx);
         let root = self.pane_swap_layer(root, cx);

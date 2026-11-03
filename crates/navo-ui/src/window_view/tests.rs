@@ -654,7 +654,7 @@ fn hello_head() -> super::Head {
     }
 }
 
-fn viewer_window(
+pub(super) fn viewer_window(
     cx: &mut TestAppContext,
     read: Result<&str, &str>,
     changed_once: bool,

@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use navo_ui::window_view::UpdateFailure;
 use navo_update::{InstallKind, Version, parse_version};
 use velopack::{UpdateManager, VelopackAsset, sources::NoneSource};
 
@@ -93,6 +94,60 @@ pub(crate) fn at_start(command: &Command, args: &[OsString]) {
     }
 }
 
+pub(crate) fn restart() -> Result<(), UpdateFailure> {
+    let command =
+        crate::cli::parse(std::env::args_os().skip(1)).map_err(|_| UpdateFailure::Apply)?;
+    let args = restart_args(&command).map_err(|_| UpdateFailure::Apply)?;
+    let manager =
+        UpdateManager::new(NoneSource {}, None, None).map_err(|_| UpdateFailure::Apply)?;
+    let decision = apply_decision(
+        install_kind(&manager),
+        staged(&manager),
+        || others_running(root().as_deref()),
+        &command,
+    );
+    restart_with(decision, crate::files::stop_pdf, |asset| {
+        logging::flush();
+        manager
+            .wait_exit_then_apply_updates(&asset, false, true, &args)
+            .map_err(|error| {
+                tracing::warn!(%error, "update: restart handoff failed");
+                UpdateFailure::Apply
+            })
+    })
+}
+
+/// `stop` ends the child helpers, which run this exe, before the handoff; it runs only for `Now`.
+fn restart_with<A>(
+    decision: Apply<A>,
+    stop: impl FnOnce(),
+    apply: impl FnOnce(A) -> Result<(), UpdateFailure>,
+) -> Result<(), UpdateFailure> {
+    match decision {
+        Apply::Now(asset) => {
+            stop();
+            apply(asset)
+        }
+        Apply::Wait(Reason::OthersRunning) => Err(UpdateFailure::OthersRunning),
+        Apply::Wait(_) => Err(UpdateFailure::Apply),
+    }
+}
+
+fn restart_args(command: &Command) -> io::Result<Vec<OsString>> {
+    let Command::Open(start) = command else {
+        return Err(io::Error::other("restart requires a window"));
+    };
+    let mut args = Vec::new();
+    if let Some(profile) = &start.profile {
+        args.push(OsString::from("--profile"));
+        args.push(std::path::absolute(profile)?.into_os_string());
+    }
+    if !start.retention {
+        args.push(OsString::from("--no-retention"));
+    }
+    Ok(args)
+}
+
 /// Velopack restarts Navo in its own working directory, so a relative value would change
 /// meaning; such a start waits for a launch with plain flags or absolute paths.
 fn has_relative_value(args: &[OsString]) -> bool {
@@ -144,6 +199,12 @@ fn others_running(_root: Option<&Path>) -> io::Result<bool> {
 fn unreadable_counts(name: &str, own: &str) -> bool {
     let name = name.to_lowercase();
     name == own || name.starts_with("navo")
+}
+
+/// This process and its children (the PDF helper) never block a restart.
+#[cfg(any(windows, test))]
+fn is_other(pid: u32, parent: u32, own: u32) -> bool {
+    pid != 0 && pid != own && parent != own
 }
 
 #[cfg(windows)]
@@ -203,8 +264,7 @@ mod processes {
             return Err(io::Error::last_os_error());
         }
         loop {
-            if entry.th32ProcessID != own
-                && entry.th32ProcessID != 0
+            if super::is_other(entry.th32ProcessID, entry.th32ParentProcessID, own)
                 && belongs(&entry, &mut path, &roots, &own_name)
             {
                 return Ok(true);

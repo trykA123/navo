@@ -81,7 +81,7 @@ pub(super) fn update_text(view: &UpdateView) -> SharedString {
             percent = i64::from(*percent)
         )),
         UpdateView::Ready { version } => SharedString::from(navo_l10n::t!(
-            "settings-update-ready",
+            "settings-update-ready-restart",
             version = version.as_ref()
         )),
         UpdateView::Failed(failure) => failure_text(failure),
@@ -99,11 +99,24 @@ fn failure_text(failure: &UpdateFailure) -> SharedString {
         UpdateFailure::Interrupted => navo_l10n::tr("settings-update-interrupted").into(),
         UpdateFailure::Damaged => navo_l10n::tr("settings-update-damaged").into(),
         UpdateFailure::Busy => navo_l10n::tr("settings-update-busy").into(),
+        UpdateFailure::Apply => navo_l10n::tr("settings-update-apply").into(),
+        UpdateFailure::OthersRunning => navo_l10n::tr("settings-update-others-running").into(),
     }
 }
 
 fn is_busy(view: &UpdateView) -> bool {
     matches!(view, UpdateView::Checking | UpdateView::Downloading { .. })
+}
+
+fn restart_button(look: &Look) -> Option<Button> {
+    (look.restart_offered && matches!(look.update, UpdateView::Ready { .. })).then(|| {
+        button(
+            "settings-update-restart",
+            "update-restart",
+            SheetEvent::RestartUpdate,
+            look.send.as_ref(),
+        )
+    })
 }
 
 fn update_line(look: &Look) -> AnyElement {
@@ -153,6 +166,7 @@ fn update_line(look: &Look) -> AnyElement {
         .py(t.spacing.md)
         .child(status)
         .child(action)
+        .children(restart_button(look))
         .into_any_element()
 }
 

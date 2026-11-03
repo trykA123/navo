@@ -1,5 +1,6 @@
 pub(crate) mod apply;
 pub(crate) mod feed;
+mod schedule;
 pub(crate) mod service;
 mod view;
 

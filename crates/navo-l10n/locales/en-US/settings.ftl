@@ -91,13 +91,19 @@ settings-update-idle = Navo has not checked for updates yet.
 settings-update-checking = Checking for updates…
 settings-update-current = Navo is up to date
 settings-update-downloading = Downloading Navo { $version } ({ $percent } %)
-settings-update-ready = Navo { $version } is ready. It updates when you next start Navo.
+settings-update-ready =
+    { $tray ->
+        [yes] Navo { $version } is ready. Quit from the tray to update.
+       *[no] Navo { $version } is ready. It updates when you next start Navo.
+    }
 settings-update-offline = Could not reach GitHub
 settings-update-rate-limited = GitHub asks Navo to wait. Next try after { $time }
 settings-update-bad-feed = The update list could not be read
 settings-update-interrupted = The download stopped. It starts again next time
 settings-update-damaged = The download was damaged and was removed
 settings-update-busy = Another Navo is updating
+settings-update-apply = The update could not start. It installs when you next start Navo
+settings-update-others-running = Another Navo window is open. Close it to restart
 settings-diagnostics-empty = No cache or store locations are available.
 settings-diagnostics-refresh = Refresh
 settings-diagnostics-at-least = at least
@@ -213,3 +219,21 @@ compare-git-no-git = Git is not installed. Navo reads this repository with Gix.
 compare-git-install-git = Install Git to compare this repository.
 compare-git-unsupported-format = Gix cannot read this repository format. Navo uses git for it.
 compare-git-merge-base-gix = Git is not installed. Merge bases may differ from git in rare histories.
+
+settings-update-ready-restart = Navo { $version } is ready.
+update-restart = Restart
+cmd-app-restart-update = Restart to update
+update-restart-jobs = { $count ->
+    [one] { $count } job is running
+   *[other] { $count } jobs are running
+}
+update-restart-summary = Running jobs will finish before Navo restarts.
+update-restart-when-idle = Restart when they finish
+update-restart-waiting = { $count ->
+    [one] Restarting when { $count } job finishes
+   *[other] Restarting when { $count } jobs finish
+}
+update-restart-cancel = Cancel
+update-restarting = Restarting…
+update-restart-stopped-unsaved = Restart stopped: the viewer has unsaved changes. Save or close it, then restart.
+update-restart-stopped-save = Restart stopped: the session could not be saved.

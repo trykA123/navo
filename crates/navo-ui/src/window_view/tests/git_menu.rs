@@ -243,10 +243,19 @@ pub(super) fn behind() -> RepoBadge {
 }
 
 pub(super) fn open(cx: &mut TestAppContext, git: &Fake) -> (AnyWindowHandle, Entity<NavoWindow>) {
+    open_with(cx, git, |_| {})
+}
+
+pub(super) fn open_with(
+    cx: &mut TestAppContext,
+    git: &Fake,
+    tweak: impl FnOnce(&mut crate::window_view::StartOptions),
+) -> (AnyWindowHandle, Entity<NavoWindow>) {
     let state = AppState::new(local(r"C:\home"));
     let mut options = options_for(fake(), state);
     options.provider = Arc::new(DriveFs::new(None));
     options.git = Some(Arc::new(git.clone()));
+    tweak(&mut options);
     let (window, view) = open_options(cx, options);
     settle(cx, &view);
     wait_for_badges(cx, &view);
@@ -591,4 +600,56 @@ fn alt_g_with_git_off_points_to_settings(cx: &mut TestAppContext) {
             false
         ))
     );
+}
+
+fn restarting(
+    calls: &Arc<Mutex<Vec<&'static str>>>,
+) -> impl FnOnce(&mut crate::window_view::StartOptions) {
+    let applies = calls.clone();
+    move |options| {
+        options.app_menu.identity.install = crate::app_menu::Install::Installed;
+        options.settings.updates = crate::window_view::UpdateHooks {
+            state: Arc::new(|| crate::window_view::UpdateView::Ready {
+                version: "0.4.0".into(),
+            }),
+            restart: Arc::new(move || {
+                applies.lock().unwrap().push("apply");
+                Err(crate::window_view::UpdateFailure::Busy)
+            }),
+            ..crate::window_view::UpdateHooks::none()
+        };
+    }
+}
+
+#[gpui_kit::test]
+fn a_git_run_in_flight_holds_a_restart_until_it_ends(cx: &mut TestAppContext) {
+    let git = Fake::new(menu_items(false), behind());
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let (window, view) = open_with(cx, &git, restarting(&calls));
+    let action = cx
+        .update(|cx| cx.build_action("file_list::GitPull", None))
+        .expect("action");
+    view.update(cx, |view, cx| {
+        let pane = view.browser.state().focused_pane();
+        let handle = view.handle(pane, cx);
+        let _ = window.update(cx, |_, window, cx| window.focus(&handle, cx));
+    });
+    cx.update_window(window, |_, window, cx| window.dispatch_action(action, cx))
+        .expect("window");
+    assert!(view.read_with(cx, |view, _| view.restart_busy()));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.request_restart(window, cx));
+    })
+    .expect("window");
+    let held = view.read_with(cx, |view, _| {
+        (view.settings.updates.restart, view.restart_job_count())
+    });
+    assert_eq!(held, (crate::window_view::closing::Restart::Asking, 1));
+    assert!(calls.lock().unwrap().is_empty());
+    settle(cx, &view);
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("window");
+    cx.run_until_parked();
+    assert_eq!(git.runs(), [GitAction::Pull]);
+    assert_eq!(*calls.lock().unwrap(), ["apply"]);
 }

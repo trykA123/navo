@@ -131,6 +131,16 @@ fn shutdown_during_warm_up_returns_within_the_bound_and_the_helper_exits() {
 }
 
 #[test]
+fn shutdown_returns_only_after_the_helper_has_exited() {
+    let watch = Watch::new();
+    let launcher = launcher(&watch, None, Duration::from_secs(10));
+    launcher.prewarm().unwrap();
+    let mut helper = watch.accept(PATIENCE).unwrap();
+    launcher.shutdown();
+    assert!(exited(&mut helper, Duration::from_millis(1)));
+}
+
+#[test]
 fn a_warm_helper_finishing_after_a_cold_one_was_returned_is_disposed() {
     let watch = Watch::new();
     let marker = marker();

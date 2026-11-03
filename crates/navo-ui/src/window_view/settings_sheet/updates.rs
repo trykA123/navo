@@ -14,12 +14,17 @@ const READY_POLL: Duration = Duration::from_secs(5);
 pub(super) const RELEASES_URL: &str = "https://github.com/trykA123/navo/releases/latest";
 
 /// What Settings → Help shows about updates, read from the hooks.
-pub(super) struct Updates {
-    hooks: UpdateHooks,
-    pub(super) view: UpdateView,
+pub(in crate::window_view) struct Updates {
+    pub(in crate::window_view) hooks: UpdateHooks,
+    pub(in crate::window_view) view: UpdateView,
     is_polling: bool,
     /// The version of the ready notice on show.
     ready: Option<SharedString>,
+    pub(in crate::window_view) restart: super::super::closing::Restart,
+    pub(in crate::window_view) restart_dialogs: u64,
+    pub(in crate::window_view) restart_watch: Option<gpui_kit::Subscription>,
+    pub(in crate::window_view) restart_focus: Option<gpui_kit::FocusHandle>,
+    pub(in crate::window_view) restart_task: Option<gpui_kit::Task<()>>,
 }
 
 impl Updates {
@@ -29,6 +34,11 @@ impl Updates {
             hooks,
             is_polling: false,
             ready: None,
+            restart: super::super::closing::Restart::Idle,
+            restart_dialogs: 0,
+            restart_task: None,
+            restart_watch: None,
+            restart_focus: None,
         }
     }
 
@@ -50,11 +60,14 @@ async fn tick(this: &WeakEntity<NavoWindow>, cx: &mut AsyncApp) -> bool {
 /// Waits, then asks for a ready version; false when the window is gone.
 async fn take_ready(this: &WeakEntity<NavoWindow>, hooks: &UpdateHooks, cx: &mut AsyncApp) -> bool {
     cx.background_executor().timer(READY_POLL).await;
-    let take = hooks.take_ready_notice.clone();
-    let ready = cx.background_spawn(async move { take() }).await;
+    let (take, state) = (hooks.take_ready_notice.clone(), hooks.state.clone());
+    let ready = cx
+        .background_spawn(async move { take().map(|version| (version, state())) })
+        .await;
     this.update(cx, |view, cx| {
-        if let Some(version) = ready {
+        if let Some((version, state)) = ready {
             view.settings.updates.ready = Some(version);
+            view.settings.updates.view = state;
             cx.notify();
         }
     })
@@ -65,17 +78,48 @@ impl NavoWindow {
     /// Shows the ready notice once per version, until the user's next command.
     pub(in crate::window_view) fn watch_ready_notice(&mut self, cx: &mut Context<Self>) {
         let hooks = self.settings.updates.hooks.clone();
-        if (hooks.state)() == UpdateView::Hidden {
+        if self.identity.install == crate::app_menu::Install::Portable
+            || (hooks.state)() == UpdateView::Hidden
+        {
             return;
         }
         cx.spawn(async move |this, cx| while take_ready(&this, &hooks, cx).await {})
             .detach();
     }
 
+    pub(in crate::window_view) fn restart_wait_notice(&self) -> Option<StatusNotice> {
+        (self.settings.updates.restart == super::super::closing::Restart::Waiting).then(|| {
+            StatusNotice {
+                text: navo_l10n::t!("update-restart-waiting", count = self.restart_job_count())
+                    .into(),
+                is_error: false,
+            }
+        })
+    }
+
     pub(in crate::window_view) fn update_notice(&self) -> Option<StatusNotice> {
+        if let Some(waiting) = self.restart_wait_notice() {
+            return Some(waiting);
+        }
         let version = self.settings.updates.ready.as_ref()?;
+        if self.restart_available() {
+            return Some(StatusNotice {
+                text: navo_l10n::t!("settings-update-ready-restart", version = version.as_ref())
+                    .into(),
+                is_error: false,
+            });
+        }
         Some(StatusNotice {
-            text: navo_l10n::t!("settings-update-ready", version = version.as_ref()).into(),
+            text: navo_l10n::t!(
+                "settings-update-ready",
+                version = version.as_ref(),
+                tray = if self.values.keeps_in_tray() {
+                    "yes"
+                } else {
+                    "no"
+                }
+            )
+            .into(),
             is_error: false,
         })
     }
@@ -85,7 +129,12 @@ impl NavoWindow {
     }
 
     pub(in crate::window_view) fn refresh_updates(&mut self, cx: &mut Context<Self>) {
-        self.settings.updates.view = (self.settings.updates.hooks.state)();
+        self.settings.updates.view = if self.identity.install == crate::app_menu::Install::Portable
+        {
+            UpdateView::Hidden
+        } else {
+            (self.settings.updates.hooks.state)()
+        };
         self.poll_updates(cx);
         cx.notify();
     }

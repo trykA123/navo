@@ -457,6 +457,7 @@ fn every_cmd_message_in_the_files_belongs_to_a_command() {
         .filter_map(|line| line.split(" =").next())
         .filter(|id| id.starts_with("cmd-") && !labels.contains(id))
         .filter(|id| cfg!(feature = "tester") || !TESTER_LABELS.contains(id))
+        .filter(|id| !WINDOW_ENTRY_LABELS.contains(id))
         .collect();
     assert_eq!(orphans, Vec::<&str>::new());
 }
@@ -550,6 +551,8 @@ const TESTER_ACTIONS: [&str; 3] = [
     "navo_window::RecordPerformance",
     "navo_window::StopRecording",
 ];
+/// Palette entries the window builds itself, so the registry has no command for them.
+const WINDOW_ENTRY_LABELS: [&str; 1] = ["cmd-app-restart-update"];
 const TESTER_LABELS: [&str; 3] = [
     "cmd-app-save-diagnostic-report",
     "cmd-perf-record",

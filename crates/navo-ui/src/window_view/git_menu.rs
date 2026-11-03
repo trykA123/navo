@@ -78,6 +78,8 @@ pub(super) struct GitMenuState {
     asks: u64,
     pub(super) requests: u64,
     pub(super) cache: Option<Cached>,
+    /// Actions sent to the hooks whose result has not come back; a restart waits for them.
+    pub(super) running: usize,
     _watch: Subscription,
 }
 
@@ -100,6 +102,7 @@ impl GitMenuState {
             asks: 0,
             requests: 0,
             cache: None,
+            running: 0,
             _watch: watch,
         }
     }
@@ -232,6 +235,7 @@ impl NavoWindow {
         };
         let mut entries = self.command_entries();
         entries.retain(shown);
+        entries.extend(self.restart_entry());
         entries
     }
 
@@ -361,6 +365,7 @@ impl NavoWindow {
             shown,
             confirm_id,
         } = run;
+        self.git_menu.running += 1;
         let work = cx.background_spawn(async move {
             hooks.run_confirmed(&repo, action, shown.as_deref(), confirm_id.as_deref())
         });
@@ -373,6 +378,7 @@ impl NavoWindow {
 
     fn git_ran(&mut self, label: &str, result: Result<GitStarted, String>, cx: &mut Context<Self>) {
         self.git_menu.cache = None;
+        self.git_menu.running = self.git_menu.running.saturating_sub(1);
         match result {
             Ok(started) => {
                 let text = started

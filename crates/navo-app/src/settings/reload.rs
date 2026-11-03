@@ -70,15 +70,15 @@ pub(super) fn receive_late(receiver: Option<Receiver<Started>>, delivery: Arc<Mu
 pub struct Follow {
     pub remember: Remember,
     pub git: Arc<dyn Fn(&GitSettings) + Send + Sync>,
-    /// Gets `updates.check`.
-    pub auto_updates: Arc<dyn Fn(bool) + Send + Sync>,
+    /// Gets `updates.check` and `tray.keep-running`.
+    pub auto_updates: Arc<dyn Fn(bool, bool) + Send + Sync>,
 }
 
 impl Follow {
     pub(super) fn apply(&self, settings: &Settings) {
         self.remember.set(settings.search.remember);
         (self.git)(&settings.git);
-        (self.auto_updates)(settings.updates.check);
+        (self.auto_updates)(settings.updates.check, settings.tray.keep_running);
     }
 }
 
@@ -218,7 +218,7 @@ mod tests {
         let follow = Follow {
             remember: Remember::default(),
             git: Arc::new(move |git| log.lock().unwrap().push(git.badges)),
-            auto_updates: Arc::new(|_| {}),
+            auto_updates: Arc::new(|_, _| {}),
         };
         let reloader = Reloader::new(store.clone(), None).following(Some(follow));
         (reloader, seen)
@@ -247,12 +247,16 @@ mod tests {
         let follow = Follow {
             remember: Remember::default(),
             git: Arc::new(|_| {}),
-            auto_updates: Arc::new(move |auto| log.lock().unwrap().push(auto)),
+            auto_updates: Arc::new(move |auto, tray| log.lock().unwrap().push((auto, tray))),
         };
         let mut reloader = Reloader::new(store, None).following(Some(follow));
-        std::fs::write(&path, "[updates]\ncheck = false\n").unwrap();
+        std::fs::write(
+            &path,
+            "[updates]\ncheck = false\n[tray]\nkeep-running = true\n",
+        )
+        .unwrap();
         assert!(reloader.reload().is_some());
-        assert_eq!(*seen.lock().unwrap(), [false]);
+        assert_eq!(*seen.lock().unwrap(), [(false, true)]);
     }
 
     #[test]

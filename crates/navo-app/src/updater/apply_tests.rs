@@ -4,7 +4,9 @@ use std::io;
 
 use navo_update::{InstallKind, Version};
 
-use super::{Apply, Reason, Staged, apply_decision, has_relative_value, unreadable_counts};
+use super::{
+    Apply, Reason, Staged, apply_decision, has_relative_value, is_other, unreadable_counts,
+};
 use crate::cli::{Command, Start};
 
 fn open() -> Command {
@@ -150,4 +152,123 @@ fn relative_values_wait_but_flags_and_absolute_paths_do_not() {
     assert!(!has_relative_value(&args(&["--left", "/data/docs"])));
     #[cfg(windows)]
     assert!(!has_relative_value(&args(&["--left", r"C:\data\docs"])));
+}
+
+#[test]
+fn restart_apply_handoff_is_installed_ready_only() {
+    use navo_ui::window_view::UpdateFailure;
+    let decide = |kind, staged, others: fn() -> io::Result<bool>| {
+        apply_decision(kind, staged, others, &open())
+    };
+    for kind in [InstallKind::Portable, InstallKind::Unpackaged] {
+        let called = Cell::new(false);
+        assert_eq!(
+            super::restart_with(
+                decide(kind, newer(), alone),
+                || (),
+                |_| {
+                    called.set(true);
+                    Ok(())
+                }
+            ),
+            Err(UpdateFailure::Apply)
+        );
+        assert!(!called.get());
+    }
+    let called = Cell::new(false);
+    let ready = decide(InstallKind::Installed, newer(), alone);
+    assert_eq!(
+        super::restart_with(
+            ready,
+            || (),
+            |asset| {
+                assert_eq!(asset, "package");
+                called.set(true);
+                Ok(())
+            }
+        ),
+        Ok(())
+    );
+    assert!(called.get());
+    let failing = decide(InstallKind::Installed, newer(), alone);
+    assert_eq!(
+        super::restart_with(failing, || (), |_| Err(UpdateFailure::Apply)),
+        Err(UpdateFailure::Apply)
+    );
+}
+
+#[test]
+fn a_refused_handoff_neither_stops_the_helper_nor_applies() {
+    use navo_ui::window_view::UpdateFailure;
+    let others = apply_decision(InstallKind::Installed, newer(), || Ok(true), &open());
+    assert_eq!(
+        super::restart_with(
+            others,
+            || panic!("must not stop"),
+            |_| panic!("must not apply")
+        ),
+        Err(UpdateFailure::OthersRunning)
+    );
+    let nothing = apply_decision(InstallKind::Installed, None::<Staged<&str>>, alone, &open());
+    assert_eq!(
+        super::restart_with(
+            nothing,
+            || panic!("must not stop"),
+            |_| panic!("must not apply")
+        ),
+        Err(UpdateFailure::Apply)
+    );
+}
+
+#[test]
+fn the_helper_stops_before_the_handoff_and_only_for_one() {
+    let log = std::cell::RefCell::new(Vec::new());
+    let ready = decide_ready();
+    let result = super::restart_with(
+        ready,
+        || log.borrow_mut().push("stop"),
+        |_| {
+            log.borrow_mut().push("apply");
+            Ok(())
+        },
+    );
+    assert_eq!(result, Ok(()));
+    assert_eq!(*log.borrow(), ["stop", "apply"]);
+}
+
+fn decide_ready() -> Apply<&'static str> {
+    apply_decision(InstallKind::Installed, newer(), alone, &open())
+}
+
+#[test]
+fn a_child_process_does_not_block_a_restart() {
+    let own = 4000;
+    assert!(!is_other(own, 1, own));
+    assert!(!is_other(4100, own, own));
+    assert!(!is_other(0, 0, own));
+    assert!(is_other(4200, 1234, own));
+}
+
+#[test]
+fn restart_arguments_restore_the_saved_workspaces_in_the_same_profile() {
+    use std::path::PathBuf;
+    let start = crate::cli::Start {
+        profile: Some(PathBuf::from("profile")),
+        retention: false,
+        left: Some(PathBuf::from("old-left")),
+        right: Some(PathBuf::from("old-right")),
+        path: Some(PathBuf::from("old-path")),
+        view: Some(PathBuf::from("old-file")),
+        ..Default::default()
+    };
+    let args = super::restart_args(&Command::Open(start)).unwrap();
+    assert_eq!(
+        args,
+        [
+            OsString::from("--profile"),
+            std::path::absolute("profile").unwrap().into_os_string(),
+            OsString::from("--no-retention")
+        ]
+    );
+    assert!(super::restart_args(&open()).unwrap().is_empty());
 }

@@ -133,6 +133,7 @@ pub struct StatusBar {
     id: ElementId,
     props: StatusBarProps,
     notice: Option<StatusNotice>,
+    notice_action: Option<crate::primitives::Button>,
     note: Option<SharedString>,
     parts: FooterParts,
     workspace: Option<WorkspaceButton>,
@@ -145,6 +146,7 @@ impl StatusBar {
             id: id.into(),
             props,
             notice: None,
+            notice_action: None,
             note: None,
             parts: FooterParts::default(),
             workspace: None,
@@ -183,6 +185,12 @@ impl StatusBar {
     #[must_use]
     pub fn notice(mut self, notice: Option<StatusNotice>) -> Self {
         self.notice = notice;
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn notice_action(mut self, action: Option<crate::primitives::Button>) -> Self {
+        self.notice_action = action;
         self
     }
 
@@ -248,6 +256,7 @@ impl RenderOnce for StatusBar {
             .border_t_1()
             .border_color(t.surfaces.card_edge)
             .when_some(self.notice, |d, notice| d.child(notice_text(t, notice)))
+            .children(self.notice_action)
             .when_some(note, |d, note| d.child(quiet_note(t, note, still)))
             .when_some(
                 props.marked_text().filter(|_| parts.marked_totals),
