@@ -37,7 +37,7 @@ impl Running {
         match self.done.recv_timeout(STOP_WAIT) {
             Ok(stopped) => self.thread.join().is_ok() && stopped,
             Err(error) => {
-                tracing::warn!(%error, "Git scanner did not stop cleanly");
+                tracing::warn!(%error, "git scanner did not stop cleanly");
                 false
             }
         }
@@ -228,7 +228,7 @@ impl Scanner {
         let call = self.calls.swap_remove(index);
         call.cancel.cancel();
         if call.thread.join().is_err() {
-            tracing::warn!("Git status worker panicked");
+            tracing::warn!("git status worker panicked");
         }
         if !call.timed_out {
             self.finish(&call.listing, call.root, result.as_ref().map_err(|e| *e));
@@ -296,7 +296,7 @@ impl Scanner {
             thread::sleep(TICK.min(deadline.saturating_duration_since(Instant::now())));
         }
         if !self.calls.is_empty() {
-            tracing::warn!("Git status source ignored cancellation; detaching workers");
+            tracing::warn!("git status source ignored cancellation; detaching workers");
         }
         self.calls.is_empty()
     }

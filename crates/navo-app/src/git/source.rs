@@ -109,7 +109,7 @@ pub(super) fn bridged<T>(cancel: &Cancel, run: impl FnOnce(&GitCancel) -> T) -> 
             .name("git-cancel".to_owned())
             .spawn_scoped(scope, || follow(cancel, &git, &done));
         if let Err(error) = &watcher {
-            tracing::warn!(%error, "Git cancel watcher did not start");
+            tracing::warn!(%error, "git cancel watcher did not start");
         }
         let out = run(&git);
         done.store(true, Ordering::Release);

@@ -93,6 +93,10 @@ fn only_capitalised_multi_word_texts_count() {
     assert!(!is_capitalised_multi_word("not found"));
     assert!(!is_capitalised_multi_word("{} items"));
     assert!(!is_capitalised_multi_word(""));
+    assert!(!is_capitalised_multi_word(
+        r"Programs\Sublime Merge\smerge.exe"
+    ));
+    assert!(is_capitalised_multi_word("Sorted by name"));
 }
 
 #[test]

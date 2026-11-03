@@ -33,7 +33,7 @@ pub(super) fn items(tool: Option<&DetectedTool>) -> Vec<GitMenuItem> {
     };
     let caps = tool.kind.capabilities();
     if caps == [Capability::OpenOnly] {
-        let label = t!("git-item-open", tool = tool.label);
+        let label = t!("git-item-open", tool = tool.label.clone());
         return vec![item(GitAction::Open, label)];
     }
     let waits = |action| {

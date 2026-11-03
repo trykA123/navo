@@ -21,8 +21,11 @@ pub(super) fn scan(source: &str) -> Scan {
 }
 
 /// Counted by the ratchet: starts with an ASCII capital and has two or more whitespace-separated words.
+/// A literal with a backslash is a Windows path, not user text, and is never counted.
 pub(super) fn is_capitalised_multi_word(text: &str) -> bool {
-    text.starts_with(|c: char| c.is_ascii_uppercase()) && text.split_whitespace().nth(1).is_some()
+    !text.contains('\\')
+        && text.starts_with(|c: char| c.is_ascii_uppercase())
+        && text.split_whitespace().nth(1).is_some()
 }
 
 fn strings(tokens: &[Spanned]) -> Vec<Found> {
