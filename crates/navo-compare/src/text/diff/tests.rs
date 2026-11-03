@@ -2,6 +2,7 @@ use std::mem::size_of;
 use std::time::{Duration, Instant};
 
 use super::*;
+use crate::text::digest::HunkDigest;
 use crate::text::normalise::{Whitespace, normalise};
 use crate::text::side::LineEnding;
 
@@ -34,6 +35,16 @@ impl View {
             lines: &self.lines,
             starts: &self.starts,
             bom: self.bom,
+            bytes: None,
+        }
+    }
+
+    fn set_bytes<'a>(&'a self, bytes: &'a [u8]) -> LineSet<'a> {
+        LineSet {
+            lines: &self.lines,
+            starts: &self.starts,
+            bom: self.bom,
+            bytes: Some(bytes),
         }
     }
 }
@@ -88,6 +99,32 @@ fn insertion_has_one_hunk_with_exact_ranges() {
             right_bytes: 2..4,
         }]
     );
+}
+
+#[test]
+fn a_copyable_hunk_carries_digests_of_its_source_ranges() {
+    let left = View::utf8(lines(&[("a", LineEnding::Lf), ("c", LineEnding::None)]));
+    let right = View::utf8(lines(&[
+        ("a", LineEnding::Lf),
+        ("b", LineEnding::Lf),
+        ("c", LineEnding::None),
+    ]));
+    let alignment = diff_lines(
+        left.set_bytes(b"a\nc"),
+        right.set_bytes(b"a\nb\nc"),
+        &Options::default(),
+    );
+
+    assert_eq!(alignment.hunks.len(), 1);
+    assert_eq!(
+        alignment.digests.get(&alignment.hunks[0]),
+        Some(HunkDigest::of(b"", b"b\n"))
+    );
+}
+
+#[test]
+fn a_hunk_keeps_the_size_it_had_before_digests() {
+    assert_eq!(size_of::<Hunk>(), 64);
 }
 
 #[test]

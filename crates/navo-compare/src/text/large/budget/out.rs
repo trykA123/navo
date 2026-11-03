@@ -3,8 +3,9 @@ use std::ops::Range;
 use crate::anchor::SectionPair;
 use crate::model::Reason;
 use crate::text::diff::Hunk;
+use crate::text::digest::HunkDigests;
 
-use super::work::{Detail, coarse_hunk};
+use super::work::{Detail, Hunks, coarse_hunk};
 use super::{Charge, Limits, StepInfo, StepReason, bytes_of, grow_vec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,6 +26,7 @@ pub(crate) struct Part {
 /// A batch's result; its charge covers every vector's capacity.
 pub(crate) struct Out {
     pub(crate) hunks: Vec<Hunk>,
+    pub(crate) digests: HunkDigests,
     pub(crate) parts: Vec<Part>,
     pub(crate) steps: Vec<StepInfo>,
     pub(crate) charge: Charge,
@@ -35,6 +37,7 @@ impl Out {
     pub(crate) fn new(charge: Charge) -> Self {
         Self {
             hunks: Vec::new(),
+            digests: HunkDigests::default(),
             parts: Vec::new(),
             steps: Vec::new(),
             charge,
@@ -76,21 +79,32 @@ impl Out {
         &mut self,
         limits: &Limits,
         detail: &Detail,
-        hunks: Vec<Hunk>,
+        hunks: Hunks,
     ) -> Result<(), Reason> {
+        let Hunks {
+            hunks,
+            digests,
+            charge,
+        } = hunks;
         if !self.ensure_block() {
             return Err(Reason::Unsupported);
         }
         if limits.distant(&detail.pair.left) {
             let count = u64::try_from(hunks.len()).unwrap_or(u64::MAX);
-            drop(hunks);
+            drop((hunks, digests, charge));
             return self.block(detail, Kind::Paged(count), StepReason::Paged);
         }
-        if !self.reserve_detail(hunks.len()) {
-            drop(hunks);
+        if !self.reserve_detail(hunks.len(), digests.len()) {
+            drop((hunks, digests, charge));
             return self.coarse(detail, StepReason::Budget);
         }
         self.hunks.extend(hunks);
+        if self.digests.is_empty() {
+            self.digests = digests;
+        } else {
+            self.digests.entries.extend(digests.entries);
+        }
+        self.charge.absorb(charge);
         self.parts.push(Part {
             pair: detail.pair.clone(),
             end: self.hunks.len(),
@@ -117,7 +131,7 @@ impl Out {
         true
     }
 
-    fn reserve_detail(&mut self, hunks: usize) -> bool {
+    fn reserve_detail(&mut self, hunks: usize, digests: usize) -> bool {
         let reserve = self.remaining().saturating_sub(1);
         grow_vec(
             &mut self.hunks,
@@ -128,6 +142,8 @@ impl Out {
             1usize.saturating_add(reserve),
             &mut self.charge,
         ) && grow_vec(&mut self.steps, reserve, &mut self.charge)
+            && (self.digests.is_empty()
+                || grow_vec(&mut self.digests.entries, digests, &mut self.charge))
     }
 
     fn remaining(&self) -> usize {
@@ -175,6 +191,7 @@ mod tests {
             cancel: CancelToken::new(),
             stall: None,
             expired: None,
+            before_hash: None,
             watchdog: Duration::from_secs(1),
             reach: 0,
         }
@@ -212,8 +229,16 @@ mod tests {
         )));
         let limits = limits(&ledger);
         let mut out = Out::with_blocks(&limits, blocks).expect("fallback capacity fits");
-        out.section(&limits, &detail(0), hunks(8))
-            .expect("the pressured detail falls back to coarse");
+        out.section(
+            &limits,
+            &detail(0),
+            Hunks {
+                hunks: hunks(8),
+                digests: HunkDigests::default(),
+                charge: ledger.empty(),
+            },
+        )
+        .expect("the pressured detail falls back to coarse");
         for line in 1..blocks as u64 {
             out.coarse(&detail(line), StepReason::Budget)
                 .expect("a fallback block fits");

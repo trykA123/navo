@@ -10,10 +10,10 @@ use crate::text::side::{Line, LineSet};
 
 use super::Source;
 use super::budget::{
-    self, Charge, Detail, Limits, Out, StepReason, bytes_of, diff_slices, lines_bytes,
+    self, Charge, Detail, Hunks, Limits, Out, StepReason, bytes_of, diff_slices, lines_bytes,
     work_estimate,
 };
-use super::read::{Lines, Until, collect, start_of};
+use super::read::{Lines, Until, collect, end_of, start_of};
 use super::schedule::Beat;
 
 mod bounds;
@@ -303,7 +303,26 @@ fn window_section(
         context.right.layout.text.bom && pair.right.start == 0,
     );
     match diff_slices(context, pair, left, right)? {
-        Some(hunks) => out.section(env.limits, &detail, hunks)?,
+        Some(hunks) => {
+            if let Some(before_hash) = &env.limits.before_hash {
+                before_hash();
+            }
+            let Some((digests, charge)) =
+                budget::hash_hunks(&window.left, &window.right, &hunks, &mut out.charge)?
+            else {
+                out.coarse(&detail, StepReason::Budget)?;
+                return Ok(());
+            };
+            out.section(
+                env.limits,
+                &detail,
+                Hunks {
+                    hunks,
+                    digests,
+                    charge,
+                },
+            )?;
+        }
         None => out.coarse(&detail, StepReason::TokenCap)?,
     }
     Ok(())
@@ -335,6 +354,7 @@ fn slice(lines: &Lines, range: Range<usize>, bom: bool) -> LineSet<'_> {
         lines: &lines.lines[range.clone()],
         starts: &lines.starts[range.start..=range.end],
         bom,
+        bytes: None,
     }
 }
 
@@ -355,7 +375,7 @@ fn read_side(
     let until = Until {
         offset: start_of(side, first, stop)?,
         lines: count,
-        end: side.len,
+        end: end_of(side, lines.end, stop)?,
         len: side.len,
     };
     let read = collect(side.source.as_ref(), side.layout, until, stop)?;

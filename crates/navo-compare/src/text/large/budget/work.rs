@@ -4,12 +4,17 @@ use std::sync::Arc;
 use crate::anchor::SectionPair;
 use crate::model::{CancelToken, Reason};
 use crate::text::diff::{Hunk, diff_lines};
+use crate::text::digest::HunkDigests;
 use crate::text::side::{DIFF_TOKEN_LIMIT, LineSet};
 
 use super::super::batch::{Batch, Context, Env, SideData, Stop, unchanged};
-use super::super::read::{Lines, Until, collect, start_of};
+use super::super::plan::Hook;
+use super::super::read::{Lines, Until, collect, end_of, start_of};
+use super::hash::hash_hunks;
 use super::sections::refine;
-use super::{Charge, Ledger, Out, StepReason, bytes_of, lines_bytes, span, work_estimate};
+use super::{
+    Charge, Ledger, Out, StepReason, bytes_of, lines_bytes, raw_bytes, span, work_estimate,
+};
 
 const SECTION_MAX_LINES: u64 = 1_000_000;
 const SECTION_MAX_BYTES: u64 = 64 * 1024 * 1024;
@@ -139,6 +144,26 @@ fn split(
     Ok(None)
 }
 
+pub(crate) struct Hunks {
+    pub(crate) hunks: Vec<Hunk>,
+    pub(crate) digests: HunkDigests,
+    pub(crate) charge: Charge,
+}
+
+pub(crate) enum ReadDiff {
+    Hunks(Hunks),
+    TokenCap,
+    Budget,
+}
+
+pub(crate) struct Read<'a, 'b> {
+    pub(crate) context: &'a Context,
+    pub(crate) detail: &'a Detail,
+    pub(crate) charge: &'b mut Charge,
+    pub(crate) stop: Stop<'b>,
+    pub(crate) before_hash: Option<&'a Hook>,
+}
+
 fn attempt(env: &Env<'_>, detail: &Detail, out: &mut Out) -> Result<Option<StepReason>, Reason> {
     if let Some(reason) = over_cap(detail) {
         return Ok(Some(reason));
@@ -153,34 +178,67 @@ fn attempt(env: &Env<'_>, detail: &Detail, out: &mut Out) -> Result<Option<StepR
     if let Some(stall) = &env.limits.stall {
         stall(detail.pair.left.start);
     }
-    match read_diff(env.context, detail, &mut charge, env.stop)? {
-        Some(hunks) => out.section(env.limits, detail, hunks)?,
-        None => out.coarse(detail, StepReason::TokenCap)?,
+    let read = Read {
+        context: env.context,
+        detail,
+        charge: &mut charge,
+        stop: env.stop,
+        before_hash: env.limits.before_hash.as_ref(),
+    };
+    match read_diff(read)? {
+        ReadDiff::Hunks(hunks) => out.section(env.limits, detail, hunks)?,
+        ReadDiff::TokenCap => out.coarse(detail, StepReason::TokenCap)?,
+        ReadDiff::Budget => out.coarse(detail, StepReason::Budget)?,
     }
     Ok(None)
 }
 
-fn read_diff(
-    context: &Context,
-    detail: &Detail,
-    charge: &mut Charge,
-    stop: Stop<'_>,
-) -> Result<Option<Vec<Hunk>>, Reason> {
+fn read_diff(read: Read<'_, '_>) -> Result<ReadDiff, Reason> {
+    let Read {
+        context,
+        detail,
+        charge,
+        stop,
+        before_hash,
+    } = read;
     let pair = &detail.pair;
-    let left = read_lines(&context.left, &pair.left, stop)?;
-    let right = read_lines(&context.right, &pair.right, stop)?;
+    let mut left = read_lines(&context.left, &pair.left, stop)?;
+    let mut right = read_lines(&context.right, &pair.right, stop)?;
     let measured = lines_bytes(&left).saturating_add(lines_bytes(&right));
     charge.cover_lines(detail.lines(), detail.bytes(), measured);
     let left_set = left.set(context.left.layout.text.bom && pair.left.start == 0);
     let right_set = right.set(context.right.layout.text.bom && pair.right.start == 0);
-    diff_slices(context, pair, left_set, right_set)
+    let Some(hunks) = diff_slices(context, pair, left_set, right_set)? else {
+        return Ok(ReadDiff::TokenCap);
+    };
+    if let Some(before_hash) = before_hash {
+        before_hash();
+    }
+    let Some((digests, digest_charge)) = hash_hunks(&left, &right, &hunks, charge)? else {
+        return Ok(ReadDiff::Budget);
+    };
+    let raw = raw_bytes(&left).saturating_add(raw_bytes(&right));
+    left.bytes = Vec::new();
+    right.bytes = Vec::new();
+    drop(charge.split(raw));
+    Ok(ReadDiff::Hunks(Hunks {
+        hunks,
+        digests,
+        charge: digest_charge,
+    }))
 }
 
 /// Diffs a stored pair again under the same caps; over them it is one coarse block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rediff {
-    Hunks(Vec<Hunk>),
-    Coarse { hunk: Hunk, reason: StepReason },
+    Hunks {
+        hunks: Vec<Hunk>,
+        digests: HunkDigests,
+    },
+    Coarse {
+        hunk: Hunk,
+        reason: StepReason,
+    },
 }
 
 pub(crate) struct Ceiling<'a> {
@@ -215,16 +273,32 @@ pub(crate) fn rediff(
     let started = std::time::Instant::now();
     let stop = || ceiling.cancel.is_cancelled() || started.elapsed() >= ceiling.watchdog;
     let stop: Stop<'_> = &stop;
-    match read_diff(context, &detail, &mut charge, stop) {
-        Ok(Some(hunks)) if started.elapsed() < ceiling.watchdog => {
-            charge.settle(bytes_of::<Hunk>(hunks.capacity()));
-            Ok((Rediff::Hunks(hunks), charge))
+    let read = Read {
+        context,
+        detail: &detail,
+        charge: &mut charge,
+        stop,
+        before_hash: None,
+    };
+    match read_diff(read) {
+        Ok(ReadDiff::Hunks(hunks)) if started.elapsed() < ceiling.watchdog => {
+            let Hunks {
+                hunks,
+                digests,
+                charge: digest_charge,
+            } = hunks;
+            charge.absorb(digest_charge);
+            charge.settle(
+                bytes_of::<Hunk>(hunks.capacity()).saturating_add(digests.allocated_bytes()),
+            );
+            Ok((Rediff::Hunks { hunks, digests }, charge))
         }
-        Ok(Some(_)) if ceiling.cancel.is_cancelled() => Err(Reason::Stopped),
-        Ok(Some(_)) => coarse(StepReason::Watchdog),
+        Ok(ReadDiff::Hunks(_)) if ceiling.cancel.is_cancelled() => Err(Reason::Stopped),
+        Ok(ReadDiff::Hunks(_)) => coarse(StepReason::Watchdog),
+        Ok(ReadDiff::TokenCap) => coarse(StepReason::TokenCap),
+        Ok(ReadDiff::Budget) => coarse(StepReason::Budget),
         Err(Reason::Stopped) if ceiling.cancel.is_cancelled() => Err(Reason::Stopped),
         Err(Reason::Stopped) => coarse(StepReason::Watchdog),
-        Ok(None) => coarse(StepReason::TokenCap),
         Err(reason) => Err(reason),
     }
 }
@@ -275,13 +349,15 @@ pub(crate) fn read_lines(
         return Ok(Lines {
             lines: Vec::new(),
             starts: vec![at],
+            bytes: Vec::new(),
+            base: at,
         });
     }
     unchanged(side)?;
     let until = Until {
         offset: at,
         lines: span(lines),
-        end: side.len,
+        end: end_of(side, lines.end, stop)?,
         len: side.len,
     };
     let read = collect(side.source.as_ref(), side.layout, until, stop)?;
@@ -314,81 +390,4 @@ fn to_usize(range: &Range<u64>) -> Range<usize> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicU64};
-
-    use navo_core::paging::LineIndex;
-
-    use crate::model::{Budget, CancelToken};
-    use crate::text::large::tests::side;
-
-    use super::super::super::batch::{Batch, Context, Env, Sections, SideData};
-    use super::super::{Ledger, Limits, Out, WATCHDOG};
-    use super::coarse_batch;
-    use crate::text::large::schedule::Beat;
-
-    fn context(ledger: &Arc<Ledger>) -> Context {
-        let large = side(b"a\nb\nc\nd\n");
-        let data = || SideData {
-            source: Arc::clone(&large.source),
-            layout: large.layout,
-            len: 8,
-            lines: 4,
-            index: LineIndex::new(),
-        };
-        Context {
-            left: data(),
-            right: data(),
-            options: Default::default(),
-            _charge: ledger.empty(),
-        }
-    }
-
-    #[test]
-    fn recovery_emits_one_block_when_the_ledger_is_full() {
-        let budget = Out::block_bytes();
-        let ledger = Arc::new(Ledger::new(Budget::from_bytes(budget)));
-        let limits = Limits {
-            ledger: Arc::clone(&ledger),
-            focus: Arc::new(AtomicU64::new(0)),
-            paging: Arc::new(AtomicBool::new(false)),
-            cancel: CancelToken::new(),
-            stall: None,
-            expired: None,
-            watchdog: WATCHDOG,
-            reach: 0,
-        };
-        let list = (0..4)
-            .map(|at| crate::anchor::SectionPair {
-                left: at..at + 1,
-                right: at..at + 1,
-            })
-            .collect();
-        let batch = Batch {
-            sections: Arc::new(Sections {
-                list,
-                charge: ledger.empty(),
-            }),
-            start_anchor: false,
-            end_anchor: false,
-            terminal: false,
-        };
-        let beat = Beat::default();
-        let forced = Vec::new();
-        let stop = || false;
-        let env = Env {
-            context: &context(&ledger),
-            limits: &limits,
-            stop: &stop,
-            beat: &beat,
-            forced: &forced,
-        };
-        let (out, sections) = coarse_batch(&env, &batch)
-            .expect("recovery reads the batch")
-            .expect("one fallback block fits");
-        assert_eq!(sections, 4);
-        assert_eq!(out.parts.len(), 1);
-        assert!(ledger.peak() <= budget);
-    }
-}
+mod tests;

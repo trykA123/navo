@@ -1,13 +1,19 @@
+mod baseline;
+#[cfg(test)]
+mod hook;
 mod identity;
 mod index;
 
 use std::fs::{File, Metadata};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 
 use navo_core::paging::{ByteSource, LineIndex};
+
+use baseline::Baseline;
 
 pub use index::index_lines;
 
@@ -39,11 +45,15 @@ pub struct PagedFile {
     path: PathBuf,
     file: RwLock<Arc<File>>,
     len: AtomicU64,
+    baseline: Baseline,
+    revision: AtomicU64,
     changed: AtomicBool,
     rewritten: AtomicBool,
     path_opens: AtomicU64,
     stats: AtomicU64,
     cache: Mutex<Cache>,
+    #[cfg(test)]
+    stat_hook: hook::StatHook,
 }
 
 struct Stat {
@@ -70,15 +80,21 @@ impl PagedFile {
             end_checked: None,
             read_end: 0,
         };
+        let baseline =
+            Baseline::new(&file, &metadata).map_err(|error| format!("Cannot open it: {error}"))?;
         Ok(Self {
             path: path.to_owned(),
             file: RwLock::new(Arc::new(file)),
             len: AtomicU64::new(metadata.len()),
+            baseline,
+            revision: AtomicU64::new(0),
             changed: AtomicBool::new(false),
             rewritten: AtomicBool::new(false),
             path_opens: AtomicU64::new(0),
             stats: AtomicU64::new(1),
             cache: Mutex::new(cache),
+            #[cfg(test)]
+            stat_hook: hook::StatHook::new(),
         })
     }
 
@@ -100,6 +116,18 @@ impl PagedFile {
 
     fn cache(&self) -> MutexGuard<'_, Cache> {
         self.cache.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn bump_revision(&self) {
+        self.revision.fetch_add(1, Ordering::AcqRel);
+    }
+
+    fn revalidate_now(&self) -> io::Result<bool> {
+        let unchanged = self.baseline.check(&self.path, &self.revision)?;
+        if unchanged {
+            self.cache().pages.clear();
+        }
+        Ok(unchanged)
     }
 
     #[must_use]
@@ -195,6 +223,7 @@ impl PagedFile {
             cache.modified = stat.modified;
             cache.pages.clear();
             self.changed.store(true, Ordering::Release);
+            self.bump_revision();
         }
         true
     }
@@ -221,6 +250,7 @@ impl PagedFile {
             self.len.store(len.max(end), Ordering::Release);
             cache.pages.clear();
             self.changed.store(true, Ordering::Release);
+            self.bump_revision();
         }
         Ok(())
     }
@@ -268,6 +298,8 @@ impl PagedFile {
             return Ok(count);
         }
         let stat = self.stat(false);
+        #[cfg(test)]
+        self.stat_hook.run();
         let mut bytes = vec![0u8; PAGE_SIZE];
         let read = read_file(&self.handle(), number * PAGE, &mut bytes)?;
         bytes.truncate(read);
@@ -308,6 +340,14 @@ impl ByteSource for PagedFile {
 
     fn take_rewritten(&self) -> bool {
         self.rewritten.swap(false, Ordering::AcqRel)
+    }
+
+    fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Acquire)
+    }
+
+    fn revalidate(&self) -> io::Result<bool> {
+        self.revalidate_now()
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {

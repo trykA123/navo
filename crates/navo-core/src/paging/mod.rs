@@ -32,6 +32,17 @@ pub trait ByteSource {
         false
     }
 
+    /// A sticky count of detected changes; never reset and never consumed.
+    fn revision(&self) -> u64 {
+        0
+    }
+
+    /// Freshly checks the source against its open baseline; true when unchanged.
+    /// An implementation may drop cached bytes so later reads are fresh.
+    fn revalidate(&self) -> std::io::Result<bool> {
+        Ok(true)
+    }
+
     fn layout(&self) -> TextLayout {
         TextLayout::default()
     }

@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+test-hooks = []
+
 [dependencies]
 blake3 = { version = "=1.8.7", features = ["rayon"] }
 fastcdc = "=4.0.1"

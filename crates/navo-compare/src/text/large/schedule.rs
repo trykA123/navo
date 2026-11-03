@@ -6,14 +6,16 @@ use crate::model::Reason;
 
 use super::batch::{Context, Outcome};
 use super::budget::{
-    Charge, Evictions, Kind, Limits, MAX_EXTRA_WORKERS, Out, Paged, PagedState, Part, Recorded,
-    StepInfo, WATCH_POLL,
+    Charge, Evictions, Limits, MAX_EXTRA_WORKERS, Out, Paged, PagedState, Part, Recorded,
+    WATCH_POLL,
 };
-use super::{Covered, DiffEvent, Driver, Progress, Stage, WORKERS};
+use super::{DiffEvent, Driver, Progress, Stage, WORKERS};
+use cover::cover;
 use paged::step_event;
 use pool::{Common, Pool, Reply, StopFn};
 use slots::State;
 
+mod cover;
 mod group;
 pub(super) mod paged;
 mod pool;
@@ -276,7 +278,11 @@ impl Run<'_> {
         self.state.emitted = self.state.emitted.saturating_add(lines);
         let focus = self.driver.focus.load(Ordering::Relaxed);
         let (mut covered, steps, parts, charge) = cover(out, left, right);
-        let recorded = self.record(&parts, focus, (covered.hunks.capacity(), charge));
+        let recorded = self.record(
+            &parts,
+            focus,
+            (covered.hunks.capacity(), covered.digests.capacity(), charge),
+        );
         if matches!(&recorded, Recorded::CountsOnly) {
             for paged in &mut covered.paged {
                 paged.state = PagedState::CountsOnly;
@@ -310,7 +316,7 @@ impl Run<'_> {
         paged::send_counts(self.driver, parts)
     }
 
-    fn record(&self, parts: &[Part], focus: u64, allocation: (usize, Charge)) -> Recorded {
+    fn record(&self, parts: &[Part], focus: u64, allocation: (usize, usize, Charge)) -> Recorded {
         let mut store = self
             .driver
             .store
@@ -352,47 +358,6 @@ impl Run<'_> {
             }
         }
     }
-}
-
-fn cover(
-    out: Out,
-    left: std::ops::Range<u64>,
-    right: std::ops::Range<u64>,
-) -> (Covered, Vec<StepInfo>, Vec<Part>, Charge) {
-    let mut coarse = Vec::new();
-    let mut paged = Vec::new();
-    for (index, part) in out.parts.iter().enumerate() {
-        if part.kind == Kind::Detail {
-            continue;
-        }
-        let hunks = out.hunks_of(index);
-        if let Some(hunk) = out.hunks.get(hunks.start) {
-            coarse.push(hunk.left_lines.clone());
-        }
-        if let Kind::Paged(count) = part.kind {
-            paged.push(Paged {
-                left: part.pair.left.clone(),
-                right: part.pair.right.clone(),
-                hunks: count,
-                state: PagedState::Rediffable,
-            });
-        }
-    }
-    let Out {
-        hunks,
-        parts,
-        steps,
-        charge,
-        ..
-    } = out;
-    let covered = Covered {
-        left,
-        right,
-        hunks,
-        coarse,
-        paged,
-    };
-    (covered, steps, parts, charge)
 }
 
 #[cfg(test)]

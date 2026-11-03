@@ -5,6 +5,7 @@ use navo_core::encoding::{DetectedBy, Encoding, TextEncoding};
 use navo_core::paging::{ByteSource, Laid, TextLayout};
 
 use super::super::diff::{Alignment, Hunk, Row};
+use super::super::digest::{HunkDigest, HunkDigests};
 use super::super::side::{Line, LineEnding, LineSet, detect};
 use super::{ApplyError, Direction, Picked, PickedHunk, TargetFacts, apply_hunk, apply_picked};
 
@@ -81,6 +82,7 @@ impl Side {
             lines: &self.lines,
             starts: &self.starts,
             bom: self.bom,
+            bytes: Some(&self.bytes),
         }
     }
 }
@@ -180,21 +182,56 @@ fn line_range(starts: &[u64], lines: Range<usize>) -> Range<u64> {
     starts[lines.start]..starts[lines.end]
 }
 
-fn whole_hunk(
-    left_lines: Range<usize>,
-    left_starts: &[u64],
-    right_lines: Range<usize>,
-    right_starts: &[u64],
-) -> Hunk {
-    Hunk {
-        left_bytes: line_range(left_starts, left_lines.clone()),
-        right_bytes: line_range(right_starts, right_lines.clone()),
-        left_lines,
-        right_lines,
+fn range<'a>(bytes: &'a [u8], range: &Range<u64>) -> &'a [u8] {
+    if range.start == range.end {
+        return &[];
+    }
+    let start = usize::try_from(range.start).unwrap();
+    let end = usize::try_from(range.end).unwrap();
+    &bytes[start..end]
+}
+
+struct CopyHunk {
+    hunk: Hunk,
+    digests: HunkDigests,
+}
+
+impl std::ops::Deref for CopyHunk {
+    type Target = Hunk;
+
+    fn deref(&self) -> &Hunk {
+        &self.hunk
     }
 }
 
-fn apply_whole(left: &Side, right: &Side, hunk: &Hunk, direction: Direction) -> Vec<u8> {
+fn hashed(hunk: Hunk, left: &[u8], right: &[u8]) -> CopyHunk {
+    let mut digests = HunkDigests::default();
+    digests.push(
+        &hunk,
+        HunkDigest::of(
+            range(left, &hunk.left_bytes),
+            range(right, &hunk.right_bytes),
+        ),
+    );
+    CopyHunk { hunk, digests }
+}
+
+fn whole_hunk(
+    left: &Side,
+    left_lines: Range<usize>,
+    right: &Side,
+    right_lines: Range<usize>,
+) -> CopyHunk {
+    let hunk = Hunk {
+        left_bytes: line_range(&left.starts, left_lines.clone()),
+        right_bytes: line_range(&right.starts, right_lines.clone()),
+        left_lines,
+        right_lines,
+    };
+    hashed(hunk, &left.bytes, &right.bytes)
+}
+
+fn apply_whole(left: &Side, right: &Side, hunk: &CopyHunk, direction: Direction) -> Vec<u8> {
     let (target, source) = if direction == Direction::LeftToRight {
         (right, left)
     } else {
@@ -205,6 +242,7 @@ fn apply_whole(left: &Side, right: &Side, hunk: &Hunk, direction: Direction) -> 
         &view(&target.bytes),
         &view(&source.bytes),
         hunk,
+        &hunk.digests,
         direction,
         facts_of(&target.lines),
         &mut out,
@@ -269,6 +307,7 @@ fn apply_to(case: &Case<'_>, out: &mut Vec<u8>) -> Result<(), ApplyError> {
         Picked {
             facts: facts_of(&target.lines),
             hunks: &entries,
+            digests: &case.alignment.digests,
             left_starts: &case.left.starts,
             right_starts: &case.right.starts,
             lines: case.picks,

@@ -13,6 +13,8 @@ const STOPPED: &str = "stopped";
 pub(super) struct Lines {
     pub(super) lines: Vec<Line>,
     pub(super) starts: Vec<u64>,
+    pub(super) bytes: Vec<u8>,
+    pub(super) base: u64,
 }
 
 impl Lines {
@@ -21,6 +23,7 @@ impl Lines {
             lines: &self.lines,
             starts: &self.starts,
             bom,
+            bytes: None,
         }
     }
 }
@@ -34,6 +37,15 @@ pub(super) fn head(side: &LargeSide, lines: u64, stop: Stop<'_>) -> Result<Lines
         len,
     };
     collect(side.source.as_ref(), side.layout, until, stop)
+}
+
+/// Byte offset where `line` starts, or the end of the side when it is past the last line.
+pub(super) fn end_of(side: &SideData, line: u64, stop: Stop<'_>) -> Result<u64, Reason> {
+    if line >= side.lines {
+        Ok(side.len)
+    } else {
+        start_of(side, line, stop)
+    }
 }
 
 pub(super) fn start_of(side: &SideData, line: u64, stop: Stop<'_>) -> Result<u64, Reason> {
@@ -102,6 +114,9 @@ pub(super) fn collect(
     let mut buffer = Vec::new();
     let mut chunk = FIRST_READ;
     let mut at = offset;
+    // The estimate reserved these bytes; growing by doubling would not be counted.
+    let span = usize::try_from(until.end.saturating_sub(offset)).map_err(|_| Reason::ReadError)?;
+    lines.done.bytes.reserve_exact(span);
     while lines.count() < until.lines && at < until.end {
         if stop() {
             return Err(Reason::Stopped);
@@ -113,6 +128,7 @@ pub(super) fn collect(
         if read < want {
             return Err(Reason::ChangedOnDisk);
         }
+        lines.done.bytes.extend_from_slice(&buffer[..read]);
         lines.feed(&buffer, at, until.lines);
         at += u64::try_from(read).map_err(|_| Reason::ReadError)?;
         chunk = (chunk * 2).min(BLOCK);
@@ -138,6 +154,8 @@ impl Collector {
             done: Lines {
                 lines: Vec::new(),
                 starts: vec![offset],
+                bytes: Vec::new(),
+                base: offset,
             },
             pending: Vec::new(),
             bom,

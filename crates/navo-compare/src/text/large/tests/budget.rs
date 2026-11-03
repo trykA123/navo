@@ -17,6 +17,7 @@ use crate::anchor::SectionPair;
 use crate::model::{Budget, CancelToken};
 use crate::text::normalise::Options;
 
+mod raw;
 mod watchdog;
 
 const LINE_BYTES: usize = 18;
@@ -293,8 +294,7 @@ fn a_focus_change_at_completion_still_pages_the_old_view() {
     );
     let events = collect(&diff);
     summary(&events);
-    let mut view = View::default();
-    events.iter().for_each(|event| view.apply(event));
+    let view = collect_view(&diff, &events);
     assert!(view.evicted > 0, "the late focus paged the old view");
     assert!(
         !view.hunks.iter().any(|hunk| hunk.left_lines.start < 2_048),
@@ -359,8 +359,12 @@ impl View {
     fn rebuild(&self, diff: &LargeDiff) -> Vec<Hunk> {
         let mut all = self.hunks.clone();
         for paged in &self.paged {
-            let Rediff::Hunks(again) = diff.hunks_for(paged.left.clone()).unwrap() else {
-                panic!("a successful re-diff is not coarse");
+            let again = match diff.hunks_for(paged.left.clone()) {
+                Ok(Rediff::Hunks { hunks, .. }) => hunks,
+                Ok(Rediff::Coarse { reason, .. }) => {
+                    panic!("a successful re-diff is coarse: {reason:?}")
+                }
+                Err(reason) => panic!("a successful re-diff failed: {reason:?}"),
             };
             assert_eq!(
                 again.len() as u64,
@@ -372,6 +376,19 @@ impl View {
         all.sort_by_key(|hunk| (hunk.left_lines.start, hunk.right_lines.start));
         all
     }
+}
+
+fn collect_view(diff: &LargeDiff, events: &[DiffEvent]) -> View {
+    let mut view = View::default();
+    let mut seq = 0;
+    events.iter().for_each(|event| {
+        view.apply(event);
+        if let DiffEvent::Paged { seq: at, .. } = event {
+            seq = seq.max(*at);
+        }
+    });
+    diff.acknowledge_evictions(seq);
+    view
 }
 
 #[test]
@@ -401,8 +418,7 @@ fn paged_hunks_diffed_again_equal_the_first_run() {
     );
     let events = collect(&diff);
     summary(&events);
-    let mut view = View::default();
-    events.iter().for_each(|event| view.apply(event));
+    let view = collect_view(&diff, &events);
     assert!(
         view.evicted > 0,
         "hunks emitted before paging started are paged out"
@@ -436,8 +452,7 @@ fn rediffed_sections_are_counted_and_page_out_again() {
     );
     let events = collect(&diff);
     summary(&events);
-    let mut view = View::default();
-    events.iter().for_each(|event| view.apply(event));
+    let view = collect_view(&diff, &events);
     let chosen: Vec<_> = view
         .paged
         .iter()
@@ -448,7 +463,7 @@ fn rediffed_sections_are_counted_and_page_out_again() {
     let before = diff.memory_used();
     let mut held = Vec::new();
     for paged in &chosen {
-        let Rediff::Hunks(again) = diff.hunks_for(paged.left.clone()).unwrap() else {
+        let Rediff::Hunks { hunks: again, .. } = diff.hunks_for(paged.left.clone()).unwrap() else {
             panic!("a successful re-diff is not coarse");
         };
         held.push(again);
@@ -536,21 +551,11 @@ fn focus_after_done_pages_the_old_view() {
     );
     let events = collect(&diff);
     summary(&events);
-    let mut view = View::default();
-    events.iter().for_each(|event| view.apply(event));
+    let mut view = collect_view(&diff, &events);
     assert!(
         view.hunks.iter().any(|hunk| hunk.left_lines.start < 2_048),
         "the first view keeps detail"
     );
-    let upto = events
-        .iter()
-        .filter_map(|event| match event {
-            DiffEvent::Paged { seq, .. } => Some(*seq),
-            _ => None,
-        })
-        .max()
-        .unwrap_or(0);
-    diff.acknowledge_evictions(upto);
     let held = diff.memory_used();
     let evictions = diff.set_focus(400_000);
     let during = diff.memory_used();

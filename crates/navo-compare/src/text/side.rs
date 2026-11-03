@@ -27,15 +27,19 @@ pub struct Whole {
     /// Source byte offset of each line, plus the end offset. File-absolute:
     /// the first value includes any BOM, and endings are counted as stored.
     pub starts: Vec<u64>,
+    /// The bytes the lines were decoded from, for hunk hashes.
+    pub bytes: Vec<u8>,
     pub lossless: bool,
 }
 
 /// A line slice with its source byte starts and the side's BOM flag, for `diff_lines`.
+/// `bytes` is the raw source when it is available for hunk hashes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LineSet<'a> {
     pub lines: &'a [Line],
     pub starts: &'a [u64],
     pub bom: bool,
+    pub bytes: Option<&'a [u8]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +115,7 @@ impl TextSide {
             layout,
             lines,
             starts,
+            bytes,
             lossless: decoded.lossless,
         }))
     }
@@ -123,6 +128,7 @@ impl Whole {
             lines: &self.lines,
             starts: &self.starts,
             bom: self.layout.text.bom,
+            bytes: Some(&self.bytes),
         }
     }
 
@@ -134,6 +140,7 @@ impl Whole {
             lines: &self.lines[start..end],
             starts: self.starts.get(start..=end).unwrap_or(&[]),
             bom: self.layout.text.bom && start == 0,
+            bytes: Some(&self.bytes),
         }
     }
 

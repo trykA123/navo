@@ -36,6 +36,7 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Secur
 [dev-dependencies]
 gungraun = "=0.20.0"
 lzma-rust2 = { version = "=0.22.0", default-features = false, features = ["encoder", "std", "xz"] }
+navo-compare = { path = "../navo-compare", features = ["test-hooks"] }
 proptest = "1.12.0"
 sevenz-rust2 = { version = "=0.24.0", default-features = false, features = ["compress"] }
 tempfile = "3.27.0"

@@ -1,11 +1,14 @@
 use std::cell::Cell;
+use std::io;
 
 use navo_core::paging::ByteSource;
 
 use super::{Case, Side, apply_to, facts_of, lines, picks, row_sets, view, whole_hunk};
-use crate::text::diff::{Alignment, Hunk, Row};
+use crate::text::diff::{Alignment, Row};
 use crate::text::side::LineEnding;
-use crate::text::{ApplyError, Direction, Picked, PickedHunk, apply_hunk, apply_picked};
+use crate::text::{
+    ApplyError, Direction, HunkDigests, Picked, PickedHunk, apply_hunk, apply_picked,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Event {
@@ -19,6 +22,7 @@ struct Live {
     changed: Cell<bool>,
     rewritten: Cell<bool>,
     grown: Cell<u64>,
+    revision: Cell<u64>,
     reads: Cell<usize>,
     trigger: Option<(usize, Event)>,
 }
@@ -30,6 +34,7 @@ impl Live {
             changed: Cell::new(false),
             rewritten: Cell::new(false),
             grown: Cell::new(0),
+            revision: Cell::new(0),
             reads: Cell::new(0),
             trigger: None,
         }
@@ -54,6 +59,7 @@ impl Live {
             Event::Rewritten => self.rewritten.set(true),
             Event::Grown => self.grown.set(7),
         }
+        self.revision.set(self.revision.get() + 1);
     }
 }
 
@@ -80,9 +86,17 @@ impl ByteSource for Live {
     fn take_rewritten(&self) -> bool {
         self.rewritten.replace(false)
     }
+
+    fn revision(&self) -> u64 {
+        self.revision.get()
+    }
+
+    fn revalidate(&self) -> io::Result<bool> {
+        Ok(!(self.changed.get() || self.rewritten.get() || self.grown.get() > 0))
+    }
 }
 
-fn pair() -> (Side, Side, Hunk) {
+fn pair() -> (Side, Side, super::CopyHunk) {
     let left = lines(&[
         ("one", LineEnding::Lf),
         ("two", LineEnding::Lf),
@@ -93,7 +107,7 @@ fn pair() -> (Side, Side, Hunk) {
         ("TWO", LineEnding::Lf),
         ("three", LineEnding::Lf),
     ]);
-    let hunk = whole_hunk(1..2, &left.starts, 1..2, &right.starts);
+    let hunk = whole_hunk(&left, 1..2, &right, 1..2);
     (left, right, hunk)
 }
 
@@ -107,6 +121,7 @@ fn copy(
         target,
         source,
         &hunk,
+        &hunk.digests,
         Direction::LeftToRight,
         facts_of(&right.lines),
         out,
@@ -187,6 +202,55 @@ fn an_unchanged_live_source_still_copies() {
 }
 
 #[test]
+fn a_same_length_edit_of_a_copied_range_is_refused() {
+    let (left, right, _) = pair();
+    let mut edited = left.bytes.clone();
+    edited[4] = b'X';
+    let mut out = Vec::new();
+    let result = copy(&view(&right.bytes), &view(&edited), &mut out);
+    assert!(matches!(result, Err(ApplyError::Changed)), "{result:?}");
+    assert!(out.is_empty());
+}
+
+#[test]
+fn the_guard_does_not_consume_a_shared_changed_notice() {
+    let (left, right, _) = pair();
+    let source = Live::flagged(&left.bytes, Event::Changed);
+    let result = copy(&view(&right.bytes), &source, &mut Vec::new());
+    assert!(matches!(result, Err(ApplyError::Changed)), "{result:?}");
+    assert!(source.take_changed(), "the viewer still sees the notice");
+}
+
+#[test]
+fn a_retry_on_the_same_instances_stays_refused() {
+    let (left, right, _) = pair();
+    let source = Live::flagged(&left.bytes, Event::Changed);
+    for _ in 0..2 {
+        let mut out = Vec::new();
+        let result = copy(&view(&right.bytes), &source, &mut out);
+        assert!(matches!(result, Err(ApplyError::Changed)), "{result:?}");
+        assert!(out.is_empty());
+    }
+}
+
+#[test]
+fn a_hunk_without_a_table_entry_is_not_copyable() {
+    let (left, right, hunk) = pair();
+    let mut out = Vec::new();
+    let result = apply_hunk(
+        &view(&right.bytes),
+        &view(&left.bytes),
+        &hunk,
+        &HunkDigests::default(),
+        Direction::LeftToRight,
+        facts_of(&right.lines),
+        &mut out,
+    );
+    assert!(matches!(result, Err(ApplyError::NotCopyable)), "{result:?}");
+    assert!(out.is_empty());
+}
+
+#[test]
 fn picked_lines_from_a_changed_source_are_refused() {
     let (left, right, hunk) = pair();
     let alignment = Alignment {
@@ -195,7 +259,8 @@ fn picked_lines_from_a_changed_source_are_refused() {
             Row::Changed { left: 1, right: 1 },
             Row::Equal { left: 2, right: 2 },
         ],
-        hunks: vec![hunk],
+        hunks: vec![hunk.hunk],
+        digests: hunk.digests,
         raw_equal: false,
         display_equal: false,
         fallback: None,
@@ -220,6 +285,7 @@ fn picked_lines_from_a_changed_source_are_refused() {
     let picked = Picked {
         facts: facts_of(&right.lines),
         hunks: &entries,
+        digests: &alignment.digests,
         left_starts: &left.starts,
         right_starts: &right.starts,
         lines: &chosen,

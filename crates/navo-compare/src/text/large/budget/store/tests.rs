@@ -9,7 +9,7 @@ use crate::text::large::{
     Covered, DiffEvent, Driver, EVENT_BUFFER, Progress, Stage, Summary, Tuning,
 };
 
-use super::super::{Kind, Ledger, Part};
+use super::super::{HUNK_SIZE, Kind, Ledger, Part};
 use super::*;
 mod finish;
 use crate::text::large::batch::{Context, SideData};
@@ -26,6 +26,7 @@ fn limits(ledger: &Arc<Ledger>, paging: bool) -> Limits {
         cancel: CancelToken::new(),
         stall: None,
         expired: None,
+        before_hash: None,
         watchdog: Duration::from_secs(1),
         reach: 0,
     }
@@ -62,7 +63,9 @@ fn part(end: usize, kind: Kind) -> Part {
 #[test]
 fn metadata_failure_reports_counts_only_without_storing_sections() {
     let ledger = Arc::new(Ledger::new(Budget::from_bytes(
-        bytes_of::<Entry>(2).saturating_add(1),
+        bytes_of::<Entry>(2)
+            .saturating_add(HUNK_SIZE)
+            .saturating_add(1),
     )));
     let limits = limits(&ledger, false);
     let mut store = Store::new(
@@ -76,7 +79,7 @@ fn metadata_failure_reports_counts_only_without_storing_sections() {
     );
     let parts = [part(1, Kind::Detail), part(2, Kind::Coarse)];
     let charge = ledger.reserve(HUNK_SIZE).unwrap();
-    let recorded = store.record(&parts, 0, (1, charge));
+    let recorded = store.record(&parts, 0, (1, 0, charge));
     assert!(matches!(recorded, Recorded::CountsOnly));
     assert!(store.find(&(0..1)).is_none(), "no metadata was stored");
     assert_eq!(ledger.used(), 0, "counts-only retains no batch charge");
@@ -96,7 +99,8 @@ fn an_eviction_charge_lasts_until_the_view_acknowledges_it() {
         },
     );
     let parts = [part(4, Kind::Detail)];
-    let Recorded::Evictions(evictions) = store.record(&parts, u64::MAX, (0, ledger.empty())) else {
+    let Recorded::Evictions(evictions) = store.record(&parts, u64::MAX, (0, 0, ledger.empty()))
+    else {
         panic!("the eviction event fits");
     };
     let held = ledger.used();
@@ -170,7 +174,7 @@ fn an_empty_hunk_vector_is_charged_by_capacity() {
     );
     let before = ledger.used();
     let parts = [part(0, Kind::Detail)];
-    let _recorded = store.record(&parts, 0, (4, ledger.empty()));
+    let _recorded = store.record(&parts, 0, (4, 0, ledger.empty()));
     assert_eq!(store.spare_bytes, bytes_of::<Hunk>(4));
     assert!(ledger.used() >= before + bytes_of::<Hunk>(4));
 }
@@ -205,8 +209,8 @@ fn evicting_one_entry_releases_only_its_own_spare() {
         end: 1,
         kind: Kind::Detail,
     };
-    let _first = store.record(&[first], 0, (2, ledger.empty()));
-    let _second = store.record(&[second], 0, (2, ledger.empty()));
+    let _first = store.record(&[first], 0, (2, 0, ledger.empty()));
+    let _second = store.record(&[second], 0, (2, 0, ledger.empty()));
     assert_eq!(store.spare_bytes, bytes_of::<Hunk>(2));
     store.reach = 0;
     let evicted = store.page(0);

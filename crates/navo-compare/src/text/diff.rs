@@ -5,6 +5,7 @@ use imara_diff::{Algorithm, Diff as ImaraDiff, InternedInput, TokenSource};
 
 use crate::model::CaseRule;
 
+use super::digest::{HunkDigest, HunkDigests, digest_range};
 use super::normalise::{Options, Whitespace};
 use super::pair::{self, Subhunk};
 use super::side::{DIFF_TOKEN_LIMIT, Line, LineSet};
@@ -48,10 +49,12 @@ pub struct Hunk {
 }
 
 /// The aligned lines and hunks, with the raw and rule-normalised equality flags.
+/// `digests` holds only copyable hunks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Alignment {
     pub rows: Vec<Row>,
     pub hunks: Vec<Hunk>,
+    pub digests: HunkDigests,
     pub raw_equal: bool,
     pub display_equal: bool,
     pub fallback: Option<Fallback>,
@@ -67,6 +70,7 @@ impl Alignment {
                 })
                 .collect(),
             hunks: Vec::new(),
+            digests: HunkDigests::default(),
             raw_equal,
             display_equal: true,
             fallback: None,
@@ -79,6 +83,7 @@ impl Alignment {
 /// The line and byte ranges are file-absolute when the caller passes the
 /// `Whole` starts; a section can pass a sliced starts list. The BOM is included
 /// in the first start, and line endings are counted as the side stores them.
+/// Digests are kept only when the line sets expose their raw bytes.
 #[must_use]
 pub fn diff_lines(left: LineSet<'_>, right: LineSet<'_>, options: &Options) -> Alignment {
     diff_with_limit(left, right, options, DIFF_TOKEN_LIMIT)
@@ -117,10 +122,12 @@ fn diff_with_limit(
         SideInfo {
             starts: left.starts,
             lines: left.lines,
+            bytes: left.bytes,
         },
         SideInfo {
             starts: right.starts,
             lines: right.lines,
+            bytes: right.bytes,
         },
         &diff,
     )
@@ -129,6 +136,7 @@ fn diff_with_limit(
 struct SideInfo<'a> {
     starts: &'a [u64],
     lines: &'a [Line],
+    bytes: Option<&'a [u8]>,
 }
 
 fn build_alignment(
@@ -138,6 +146,7 @@ fn build_alignment(
 ) -> Alignment {
     let mut rows = Vec::new();
     let mut hunks = Vec::new();
+    let mut digests = HunkDigests::default();
     let (mut left, mut right) = (0, 0);
     for hunk in diff.hunks() {
         let left_start = usize::try_from(hunk.before.start).unwrap_or(usize::MAX);
@@ -155,12 +164,18 @@ fn build_alignment(
             &right_info.lines[right_start..right_end],
             (left_start, right_start),
         );
-        hunks.push(Hunk {
+        let left_bytes = byte_range(left_info.starts, left_start, left_end);
+        let right_bytes = byte_range(right_info.starts, right_start, right_end);
+        let hunk = Hunk {
             left_lines: left_start..left_end,
             right_lines: right_start..right_end,
-            left_bytes: byte_range(left_info.starts, left_start, left_end),
-            right_bytes: byte_range(right_info.starts, right_start, right_end),
-        });
+            left_bytes,
+            right_bytes,
+        };
+        if let Some(digest) = copyable_digest(left_info.bytes, right_info.bytes, &hunk) {
+            digests.push(&hunk, digest);
+        }
+        hunks.push(hunk);
         left = left_end;
         right = right_end;
     }
@@ -172,10 +187,17 @@ fn build_alignment(
     Alignment {
         rows,
         hunks,
+        digests,
         raw_equal: false,
         display_equal: false,
         fallback: None,
     }
+}
+
+fn copyable_digest(left: Option<&[u8]>, right: Option<&[u8]>, hunk: &Hunk) -> Option<HunkDigest> {
+    let left = left.and_then(|bytes| digest_range(bytes, &hunk.left_bytes))?;
+    let right = right.and_then(|bytes| digest_range(bytes, &hunk.right_bytes))?;
+    Some(HunkDigest { left, right })
 }
 
 fn push_hunk(rows: &mut Vec<Row>, left: &[Line], right: &[Line], starts: (usize, usize)) {
@@ -231,6 +253,7 @@ fn fallback(left: LineSet<'_>, right: LineSet<'_>) -> Alignment {
             left_bytes: 0..total_bytes(left.starts),
             right_bytes: 0..total_bytes(right.starts),
         }],
+        digests: HunkDigests::default(),
         raw_equal: false,
         display_equal: false,
         fallback: Some(Fallback::TokenCap),

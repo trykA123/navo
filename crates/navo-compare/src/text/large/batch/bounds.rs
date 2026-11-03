@@ -181,6 +181,7 @@ mod tests {
             cancel: CancelToken::new(),
             stall: None,
             expired: None,
+            before_hash: None,
             watchdog: Duration::from_secs(1),
             reach: 0,
         };

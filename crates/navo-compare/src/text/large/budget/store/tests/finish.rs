@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use crate::text::digest::HunkDigests;
+use crate::text::large::LargeDiff;
+
 use super::*;
 
 fn hunk_event() -> DiffEvent {
@@ -12,6 +15,7 @@ fn hunk_event() -> DiffEvent {
             left_bytes: 0..2,
             right_bytes: 0..2,
         }],
+        digests: HunkDigests::default(),
         coarse: Vec::new(),
         paged: Vec::new(),
     })
@@ -30,7 +34,7 @@ fn two_section_store(ledger: &Arc<Ledger>) -> Store {
         left: 10..11,
         right: 10..11,
     };
-    let _recorded = store.record(&parts, 0, (8, ledger.empty()));
+    let _recorded = store.record(&parts, 0, (8, 0, ledger.empty()));
     store.reach = 0;
     store
 }

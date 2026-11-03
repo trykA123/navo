@@ -268,11 +268,13 @@ fn byte_ranges_match_the_whole_tier_with_bom_and_crlf() {
             lines: &left_lines,
             starts: &left_starts,
             bom: true,
+            bytes: Some(&left),
         },
         LineSet {
             lines: &right_lines,
             starts: &right_starts,
             bom: true,
+            bytes: Some(&right),
         },
         &Options::default(),
     );
@@ -297,7 +299,7 @@ fn focused_section_arrives_first_then_line_order() {
     let done = summary(&events);
     let provisional = events
         .iter()
-        .position(|event| matches!(event, DiffEvent::Provisional(_)))
+        .position(|event| matches!(event, DiffEvent::Provisional { .. }))
         .expect("a provisional top diff comes first");
     let first_hunks = events
         .iter()
@@ -341,7 +343,7 @@ fn provisional_diff_aligns_the_top() {
     let provisional = events
         .iter()
         .find_map(|event| match event {
-            DiffEvent::Provisional(hunks) => Some(hunks.clone()),
+            DiffEvent::Provisional { hunks, .. } => Some(hunks.clone()),
             _ => None,
         })
         .expect("a provisional diff arrives");
@@ -570,7 +572,7 @@ fn a_source_shrinking_during_the_sections_restarts() {
     assert!(
         events[restarted..]
             .iter()
-            .any(|event| matches!(event, DiffEvent::Provisional(_))),
+            .any(|event| matches!(event, DiffEvent::Provisional { .. })),
         "the restarted run aligns the top again"
     );
     assert_eq!(summary(&events).restarts, 1);

@@ -272,6 +272,14 @@ impl<S: ByteSource> ByteSource for Laid<S> {
         self.inner.take_rewritten()
     }
 
+    fn revision(&self) -> u64 {
+        self.inner.revision()
+    }
+
+    fn revalidate(&self) -> std::io::Result<bool> {
+        self.inner.revalidate()
+    }
+
     fn layout(&self) -> TextLayout {
         self.layout
     }
