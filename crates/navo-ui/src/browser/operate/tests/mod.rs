@@ -18,6 +18,7 @@ mod queue;
 mod results;
 mod retention;
 mod slow;
+mod unknown;
 
 #[test]
 fn selected_sources_resolve_a_based_tab_under_its_base() {
@@ -302,9 +303,10 @@ fn a_journal_that_cannot_start_stops_the_job() {
     let fs = fake();
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
-        log: Arc::new(|_: &OperationPlan| Err("journal is read-only".to_owned())),
+        log: Arc::new(|_: &OperationPlan| Err("journal is read-only".to_owned().into())),
         protected: Vec::new(),
     });
     browser.prepare(OpKind::Copy);
@@ -325,6 +327,7 @@ fn every_step_and_the_end_reach_the_log() {
     let shared = Arc::clone(&record);
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: Arc::new(move |_: &OperationPlan| {
@@ -349,6 +352,7 @@ fn a_cancelled_job_stops_before_its_first_step() {
     let open = Arc::clone(&gate);
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: Arc::new(move |_: &OperationPlan| {
@@ -399,6 +403,7 @@ fn shutdown_cancels_a_running_job_and_waits_for_its_end() {
     let shared = Arc::clone(&record);
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: Arc::new(move |_: &OperationPlan| {
@@ -436,11 +441,14 @@ fn a_job_that_panics_ends_as_failed() {
     let fs = fake();
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
-        log: Arc::new(|_: &OperationPlan| -> Result<Box<dyn OpLog>, String> {
-            panic!("journal broke")
-        }),
+        log: Arc::new(
+            |_: &OperationPlan| -> Result<Box<dyn OpLog>, super::LogRefusal> {
+                panic!("journal broke")
+            },
+        ),
         protected: Vec::new(),
     });
     browser.prepare(OpKind::Copy);
@@ -470,9 +478,10 @@ fn a_failed_job_stays_until_dismissed() {
     let fs = fake();
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
-        log: Arc::new(|_: &OperationPlan| Err("journal is read-only".to_owned())),
+        log: Arc::new(|_: &OperationPlan| Err("journal is read-only".to_owned().into())),
         protected: Vec::new(),
     });
     browser.prepare(OpKind::Copy);
@@ -493,6 +502,7 @@ fn a_running_job_is_never_forgotten() {
     let open = Arc::clone(&gate);
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: Arc::new(move |_: &OperationPlan| {

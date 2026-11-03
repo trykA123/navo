@@ -88,6 +88,7 @@ pub(super) fn operations(
         }),
         write: Some(jobs::write_factory(dirs.clone(), experimental)),
         log: sessions.factory(experimental.then(|| local.clone())),
+        log_without_retention: experimental.then(|| sessions.factory_without_retention()),
         protected,
     };
     (logged, Some(sessions))
@@ -110,7 +111,8 @@ fn unavailable_operations(
     Operations {
         retain_deletes: None,
         protected,
-        log: Arc::new(move |_| Err(navo_l10n::tr(message))),
+        log: Arc::new(move |_| Err(navo_l10n::tr(message).into())),
+        log_without_retention: None,
         write: Some(Arc::new(|location| {
             Err(navo_core::FsError {
                 location: Some(location.clone()),

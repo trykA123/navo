@@ -144,7 +144,7 @@ fn validate_change(
     record.container_identity = after.record.container_identity;
     if record != after.record
         || before.job_id != after.job_id
-        || !allowed(before.state, after.state)
+        || !allowed(before.state, after.state, before.target.is_some())
         || (before.record.container_identity.is_some()
             && before.record.container_identity != after.record.container_identity)
         || (before.target.is_some()
@@ -156,15 +156,19 @@ fn validate_change(
     Ok(())
 }
 
-fn allowed(from: RetainedState, to: RetainedState) -> bool {
+/// `restoring` means the entry has a restore target, so a Conflict came from an interrupted restore.
+fn allowed(from: RetainedState, to: RetainedState, restoring: bool) -> bool {
     use RetainedState::{
         Aborted, Conflict, Preparing, Purged, Purging, Ready, Restored, Restoring,
     };
-    matches!(
-        (from, to),
-        (Preparing, Preparing | Ready | Aborted | Conflict)
-            | (Ready, Restoring | Purging | Conflict)
-            | (Restoring, Ready | Restored | Conflict)
-            | (Purging, Purged | Conflict)
-    )
+    match (from, to) {
+        (Conflict, Ready | Restored) => restoring,
+        transition => matches!(
+            transition,
+            (Preparing, Preparing | Ready | Aborted | Conflict)
+                | (Ready, Restoring | Purging | Conflict)
+                | (Restoring, Ready | Restored | Conflict)
+                | (Purging, Purged | Conflict)
+        ),
+    }
 }

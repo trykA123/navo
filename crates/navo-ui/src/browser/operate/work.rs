@@ -12,8 +12,9 @@ use std::sync::mpsc::Sender;
 
 use super::keep::existing_kept;
 use super::reporter::Reporter;
-use super::stream::StreamPaste;
-use super::{Copying, Ended, JobUpdate, LogFactory, LoggedOperation, OpLog, OpRequest};
+use super::{
+    Copying, Ended, JobUpdate, LogFactory, LogRefusal, LoggedOperation, OpLog, OpRequest, PendingOp,
+};
 use crate::browser::{
     Message, RenameReport, UndoLogFactory, UndoOffer, Waker, WriteRenameLog, run_batch, run_undo,
 };
@@ -113,13 +114,9 @@ pub(in crate::browser) enum Run {
 pub(super) struct JobWork {
     pub id: u64,
     pub copying: Copying,
-    pub source: Option<Location>,
-    pub stream: Option<StreamPaste>,
-    pub target: Option<Location>,
-    pub plan: OperationPlan,
+    pub pending: PendingOp,
     pub ops: Arc<dyn ProviderOps>,
     pub factory: LogFactory,
-    pub retain_deletes: Option<navo_core::retention::RetentionPolicy>,
     pub run: Run,
     pub cancel: CancelToken,
     pub sender: Sender<Message>,
@@ -128,14 +125,26 @@ pub(super) struct JobWork {
 
 impl JobWork {
     pub(super) fn run(self) {
-        let mut reporter = Reporter::new(self.id, self.stream.as_ref(), (&self.sender, &self.wake));
+        let mut reporter = Reporter::new(
+            self.id,
+            self.pending.stream.as_ref(),
+            (&self.sender, &self.wake),
+        );
         let outcome = catch_unwind(AssertUnwindSafe(|| {
             self.execute(&mut |progress| reporter.report(progress))
         }))
-        .unwrap_or_else(|_| Err("The job stopped unexpectedly".to_owned()));
+        .unwrap_or_else(|_| Err("The job stopped unexpectedly".to_owned().into()));
         let (outcome, report) = match outcome {
             Ok((outcome, report)) => (self.explained(outcome), report),
-            Err(message) => (Err(message), RenameReport::default()),
+            Err(LogRefusal::RetentionUnknown) if matches!(self.run, Run::Plain) => {
+                let _ = self.sender.send(Message::Job(JobUpdate::RetentionUnknown {
+                    id: self.id,
+                    pending: Box::new(self.pending),
+                }));
+                (self.wake)();
+                return;
+            }
+            Err(refusal) => (Err(refusal.message()), RenameReport::default()),
         };
         let _ = self.sender.send(Message::Job(JobUpdate::Done {
             id: self.id,
@@ -151,22 +160,22 @@ impl JobWork {
     fn execute(
         &self,
         progress: &mut dyn FnMut(&Progress),
-    ) -> Result<(JobOutcome, RenameReport), String> {
+    ) -> Result<(JobOutcome, RenameReport), LogRefusal> {
         let mut log = match &self.run {
             Run::Undo { offer, log } => log(offer)?,
-            Run::Plain | Run::Rename { .. } => (self.factory)(&self.plan)?,
+            Run::Plain | Run::Rename { .. } => (self.factory)(&self.pending.plan)?,
         };
         if !self.check_log(log.as_mut(), progress)? {
             return Ok((JobOutcome::Cancelled, RenameReport::default()));
         }
         let custom = if matches!(self.run, Run::Plain) {
             log.execute(LoggedOperation {
-                plan: &self.plan,
+                plan: &self.pending.plan,
                 ops: self.ops.as_ref(),
                 cancel: &self.cancel,
                 progress,
                 waiting: &mut |is_waiting| self.report_waiting(is_waiting),
-                retain_deletes: self.retain_deletes,
+                retain_deletes: self.pending.retain_deletes,
             })
         } else {
             None
@@ -182,7 +191,7 @@ impl JobWork {
                 custom.unwrap_or_else(|| self.run_plain(&mut ctx)),
                 RenameReport::default(),
             ),
-            Run::Rename { .. } => run_batch(&self.plan, &mut ctx),
+            Run::Rename { .. } => run_batch(&self.pending.plan, &mut ctx),
             Run::Undo { offer, .. } => run_undo(&offer.plan, &offer.done, &mut ctx),
         };
         let finished = log.finish(&outcome, self.ops.as_ref());
@@ -195,18 +204,15 @@ impl JobWork {
         let Run::Rename { log: Some(write) } = &self.run else {
             return;
         };
+        let done = &self.pending.plan;
         if *outcome == JobOutcome::Done {
-            report.log_error = write(&self.plan, crate::browser::RenameLogStatus::Complete).err();
+            report.log_error = write(done, crate::browser::RenameLogStatus::Complete).err();
         } else if !report.applied.is_empty() {
-            let mut plan = self.plan.clone();
+            let mut plan = done.clone();
             plan.steps = report
                 .applied
                 .iter()
-                .filter_map(|seq| {
-                    usize::try_from(*seq)
-                        .ok()
-                        .and_then(|at| self.plan.steps.get(at))
-                })
+                .filter_map(|seq| usize::try_from(*seq).ok().and_then(|at| done.steps.get(at)))
                 .cloned()
                 .collect();
             report.log_error = write(&plan, crate::browser::RenameLogStatus::Incomplete).err();
@@ -216,6 +222,7 @@ impl JobWork {
     /// A failed paste says what its source reported, when that is clearer than the file error.
     fn explained(&self, outcome: JobOutcome) -> Result<JobOutcome, String> {
         let explain = self
+            .pending
             .stream
             .as_ref()
             .and_then(|stream| stream.explain.as_ref());
@@ -226,17 +233,18 @@ impl JobWork {
     }
 
     fn run_plain(&self, ctx: &mut JobContext<'_>) -> JobOutcome {
-        if let Some(stream) = &self.stream {
+        let pending = &self.pending;
+        if let Some(stream) = &pending.stream {
             // Items are served one at a time, so one worker reads them.
-            return run_job_parallel_with_sources((&self.plan, &stream.sources), &[], ctx, 1);
+            return run_job_parallel_with_sources((&pending.plan, &stream.sources), &[], ctx, 1);
         }
         let workers = worker_count(
             self.copying,
-            self.plan.kind,
-            self.source.as_ref(),
-            self.target.as_ref(),
+            pending.plan.kind,
+            pending.sources.first(),
+            pending.target.as_ref(),
         );
-        run_job_parallel(&self.plan, &[], ctx, workers)
+        run_job_parallel(&pending.plan, &[], ctx, workers)
     }
 
     fn report_waiting(&self, is_waiting: bool) {
@@ -253,12 +261,12 @@ impl JobWork {
         progress: &mut dyn FnMut(&Progress),
     ) -> Result<bool, String> {
         let checked = log.check(LoggedOperation {
-            plan: &self.plan,
+            plan: &self.pending.plan,
             ops: self.ops.as_ref(),
             cancel: &self.cancel,
             progress,
             waiting: &mut |is_waiting| self.report_waiting(is_waiting),
-            retain_deletes: self.retain_deletes,
+            retain_deletes: self.pending.retain_deletes,
         });
         let Err(message) = checked else {
             return Ok(true);

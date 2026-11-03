@@ -73,7 +73,7 @@ fn rename(kind: OpKind, source: &Path, target: &Path) -> OperationPlan {
 fn refusal(rig: &Rig, plan: &OperationPlan) -> String {
     let ops = LocalFs::new();
     match profile_factory(rig.journal.clone(), rig.dirs.clone())(plan) {
-        Err(error) => error,
+        Err(refusal) => refusal.message(),
         Ok(mut log) => log
             .check(LoggedOperation {
                 plan,

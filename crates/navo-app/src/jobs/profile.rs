@@ -2,11 +2,12 @@ use std::fs::{self, File};
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use navo_core::{AncestorMemo, Location, OpKind, OperationPlan, ProviderPath, Resolution, Step};
 use navo_fs::ProviderOps;
 use navo_store::{RetentionCatalog, RetentionSettings, SettingsError, StoreDirs};
-use navo_ui::browser::{LogFactory, OpLog, WriteFactory};
+use navo_ui::browser::{LogFactory, LogRefusal, OpLog, WriteFactory};
 
 use super::mutation_lock::{self, LeaseError, Mode, Wait};
 use super::{
@@ -28,6 +29,11 @@ pub fn retaining_factory(
 }
 
 #[cfg(test)]
+pub fn declined_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
+    factory(journal, dirs, Some(Drive::Declined), None)
+}
+
+#[cfg(test)]
 pub fn experimental_factory(journal: SharedJournal, dirs: StoreDirs) -> LogFactory {
     factory(journal, dirs, Some(Drive::Unprobed(None)), None)
 }
@@ -40,6 +46,8 @@ pub fn confined_factory(journal: SharedJournal, dirs: StoreDirs, ceiling: Locati
 #[derive(Clone)]
 pub(super) enum Drive {
     Probed(Arc<dyn ProviderOps>),
+    /// The user chose to run this one job without keeping old versions.
+    Declined,
     #[cfg(test)]
     Unprobed(Option<Location>),
 }
@@ -58,13 +66,14 @@ pub(super) fn factory(
     };
     Arc::new(move |plan| {
         guard(plan, &dirs, experimental)?;
-        let settings = if experimental && retains(plan.kind) {
+        let declined = matches!(drive, Some(Drive::Declined));
+        let settings = if experimental && !declined && retains(plan.kind) {
             retention_for(plan, &dirs)?
         } else {
             RetentionSettings::off()
         };
         let settings =
-            if settings.maintenance_policy().is_some() && !drive_retains(drive.as_ref(), plan) {
+            if settings.maintenance_policy().is_some() && !drive_retains(drive.as_ref(), plan)? {
                 RetentionSettings::off()
             } else {
                 settings
@@ -79,7 +88,7 @@ pub(super) fn factory(
             && let Some(policy) = settings.overwrite_policy()
         {
             let plan = navo_core::retention::RetainedWritePlan::new(plan.clone(), policy)
-                .map_err(|error| error.to_string())?;
+                .map_err(|error| LogRefusal::Failed(error.to_string()))?;
             overwrite::create(
                 &journal,
                 overwrite::WriteJob {
@@ -140,29 +149,67 @@ fn delete_job(
     }
 }
 
-fn drive_retains(drive: Option<&Drive>, plan: &OperationPlan) -> bool {
+fn drive_retains(drive: Option<&Drive>, plan: &OperationPlan) -> Result<bool, LogRefusal> {
     let ops = match drive {
         Some(Drive::Probed(ops)) => ops,
         #[cfg(test)]
-        Some(Drive::Unprobed(_)) => return true,
-        None => return false,
+        Some(Drive::Unprobed(_)) => return Ok(true),
+        Some(Drive::Declined) | None => return Ok(false),
     };
-    let probe = match plan.kind {
-        OpKind::Delete => plan.steps.iter().find_map(|step| match step {
-            Step::RemoveFile { location }
-            | Step::RemoveLink { location }
-            | Step::RemoveFolder { location } => Some(location),
-            _ => None,
-        }),
+    match plan.kind {
+        OpKind::Delete if removed_roots(plan).next().is_none() => Ok(false),
+        OpKind::Delete => first_answer(ops.as_ref(), removed_roots(plan)),
         OpKind::Copy | OpKind::Move | OpKind::Save => {
-            let Some(target) = overwritten_target(plan) else {
-                return true;
-            };
-            Some(target)
+            first_answer(ops.as_ref(), overwritten_targets(plan))
         }
-        _ => return true,
-    };
-    probe.is_some_and(|at| navo_retention::can_retain(ops.as_ref(), at))
+        _ => Ok(true),
+    }
+}
+
+/// At most this many planned paths are probed beyond the confirmed overwrite conflicts.
+const MAX_PLAN_PROBES: usize = 16;
+
+/// The first existing path decides; a vanished path holds nothing, and none left keeps retention.
+fn first_answer<'a>(
+    ops: &dyn ProviderOps,
+    paths: impl Iterator<Item = &'a Location>,
+) -> Result<bool, LogRefusal> {
+    for at in paths {
+        if let Some(supported) = check_support(ops, at)? {
+            return Ok(supported);
+        }
+    }
+    Ok(true)
+}
+
+fn removed_roots(plan: &OperationPlan) -> impl Iterator<Item = &Location> {
+    let removed = plan.steps.iter().filter_map(|step| match step {
+        Step::RemoveFile { location }
+        | Step::RemoveLink { location }
+        | Step::RemoveFolder { location } => Some(location),
+        _ => None,
+    });
+    removed.take(MAX_PLAN_PROBES)
+}
+
+/// Pauses between retention probes: three tries, well under half a second in total.
+const PROBE_PAUSES: [Duration; 2] = [Duration::from_millis(100), Duration::from_millis(250)];
+
+/// `None` when the probed path does not exist.
+fn check_support(ops: &dyn ProviderOps, at: &Location) -> Result<Option<bool>, LogRefusal> {
+    let mut checked = navo_retention::check_target_support(ops, at);
+    for pause in PROBE_PAUSES {
+        let Err(error) = &checked else {
+            break;
+        };
+        tracing::debug!(error_kind = ?error.kind, "retention probe failed; retrying");
+        std::thread::sleep(pause);
+        checked = navo_retention::check_target_support(ops, at);
+    }
+    checked.map_err(|error| {
+        tracing::warn!(error_kind = ?error.kind, "retention support unknown; job refused");
+        LogRefusal::RetentionUnknown
+    })
 }
 
 fn retains(kind: OpKind) -> bool {
@@ -172,17 +219,17 @@ fn retains(kind: OpKind) -> bool {
     )
 }
 
-fn overwritten_target(plan: &OperationPlan) -> Option<&Location> {
-    plan.conflicts
+fn overwritten_targets(plan: &OperationPlan) -> impl Iterator<Item = &Location> {
+    let conflicts = plan
+        .conflicts
         .iter()
-        .find(|conflict| conflict.resolution == Resolution::Overwrite)
-        .map(|conflict| &conflict.target)
-        .or_else(|| {
-            plan.steps.iter().find_map(|step| match step {
-                Step::WriteFile { target, .. } => Some(target),
-                _ => None,
-            })
-        })
+        .filter(|conflict| conflict.resolution == Resolution::Overwrite)
+        .map(|conflict| &conflict.target);
+    let writes = plan.steps.iter().filter_map(|step| match step {
+        Step::WriteFile { target, .. } => Some(target),
+        _ => None,
+    });
+    conflicts.chain(writes.take(MAX_PLAN_PROBES))
 }
 
 #[derive(Debug)]
@@ -231,7 +278,7 @@ pub(crate) fn write_factory(dirs: StoreDirs, experimental: bool) -> WriteFactory
             .map(|lease| Box::new(lease) as Box<dyn Send>)
             .map_err(|error| {
                 let kind = error.kind();
-                tracing::warn!(error = %String::from(error), "file creation refused");
+                tracing::warn!(error_kind = ?kind, "file creation refused");
                 navo_core::FsError {
                     location: Some(target.clone()),
                     ..navo_core::FsError::new(kind)
@@ -243,8 +290,11 @@ pub(crate) fn write_factory(dirs: StoreDirs, experimental: bool) -> WriteFactory
 pub(crate) fn retains_deletes(dirs: &StoreDirs) -> Option<navo_core::retention::RetentionPolicy> {
     match settings(dirs) {
         Ok(settings) => settings.delete_policy(),
-        Err(error) => {
-            tracing::warn!(%error, "delete confirmation cannot read retention settings");
+        Err(_) => {
+            tracing::warn!(
+                error_kind = "settings",
+                "delete confirmation cannot read retention settings"
+            );
             None
         }
     }
@@ -252,7 +302,7 @@ pub(crate) fn retains_deletes(dirs: &StoreDirs) -> Option<navo_core::retention::
 
 fn retention_for(plan: &OperationPlan, dirs: &StoreDirs) -> Result<RetentionSettings, String> {
     settings(dirs).or_else(|error| {
-        if plan.kind == OpKind::Delete || overwritten_target(plan).is_some() {
+        if plan.kind == OpKind::Delete || overwritten_targets(plan).next().is_some() {
             Err(error)
         } else {
             Ok(RetentionSettings::off())

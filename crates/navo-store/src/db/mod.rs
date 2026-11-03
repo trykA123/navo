@@ -91,7 +91,7 @@ impl Db {
         let conn = Connection::open(path)?;
         #[cfg(feature = "test-support")]
         crate::test_support::record_open(path);
-        tracing::debug!(database = %path.display(), "database connection opened");
+        tracing::debug!("database connection opened");
         conn.busy_timeout(BUSY_TIMEOUT)?;
         conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true)?;
         let mut db = Self {

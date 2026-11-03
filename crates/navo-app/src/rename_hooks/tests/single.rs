@@ -20,6 +20,7 @@ fn browser(fs: &Arc<FakeFs>, journal: SharedJournal) -> Browser {
     let provider: Arc<dyn ProviderOps> = fs.clone();
     let mut browser = Browser::new(AppState::new(fs.location("d")), provider, Arc::new(|| {}));
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: None,
         write: None,
         log: log_factory(journal.clone()),

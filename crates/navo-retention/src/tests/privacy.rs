@@ -79,6 +79,24 @@ fn a_vault_of_ours_is_secured_and_used() {
 }
 
 #[test]
+fn a_vault_whose_protection_fails_is_skipped_before_payloads_move() {
+    let profile = tempfile::tempdir().unwrap();
+    let fs = FakeFs::new();
+    fs.add_file("home/docs/a", 7);
+    fs.add_folder(".navo-vault");
+    fs.fault(
+        ".navo-vault",
+        FakeOp::Secure,
+        1,
+        Fault::Fail(FsErrorKind::AccessDenied),
+    );
+    assert_ne!(anchor(&fs, profile.path()), ".navo-vault");
+    assert_eq!(fs.calls(".navo-vault", FakeOp::Create), 0);
+    assert_eq!(fs.calls("home/docs/a", FakeOp::Rename), 1);
+    assert!(fs.metadata(&fs.location(".navo-vault")).is_ok());
+}
+
+#[test]
 fn a_vault_created_now_is_trusted_even_when_a_share_reports_another_owner() {
     let profile = tempfile::tempdir().unwrap();
     let fs = FakeFs::new();

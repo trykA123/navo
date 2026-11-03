@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use navo_core::AppState;
 use navo_shell::BadName;
-use navo_ui::browser::{Browser, JobStatus, Refused};
+use navo_ui::browser::{Browser, JobStatus, KeepOld, LogRefusal, Refused};
 
 use super::*;
 
@@ -104,6 +104,37 @@ fn a_name_already_there_is_asked_before_any_byte_is_read() {
             reason: "The name points to an alternate data stream".into(),
         }]
     );
+}
+
+#[test]
+fn unknown_retention_asks_and_keeps_the_pasted_sources_for_the_rerun() {
+    let dir = tempfile::tempdir().unwrap();
+    let scene = remote(entries(), feeds());
+    let operations = Operations {
+        log: Arc::new(|_: &OperationPlan| Err(LogRefusal::RetentionUnknown)),
+        log_without_retention: Some(Operations::unlogged().log),
+        ..Operations::unlogged()
+    };
+    let mut rig = Rig::new(dir.path(), operations);
+    rig.browser
+        .paste_stream(scene.paste, location(dir.path()))
+        .unwrap();
+    rig.wait_until(|browser| browser.pending().is_some());
+    let pending = rig.browser.pending().unwrap();
+    assert_eq!(pending.keep_old, KeepOld::Skip);
+    assert!(pending.stream.is_some(), "the question keeps the stream");
+    assert!(rig.browser.jobs().is_empty(), "the refused job never ran");
+    assert!(scene.opened.lock().unwrap().is_empty());
+    assert!(tree(dir.path()).is_empty());
+    assert!(rig.browser.confirm());
+    assert_eq!(rig.finish(), JobStatus::Done);
+    assert_eq!(
+        *scene.opened.lock().unwrap(),
+        [0, 1],
+        "each item is read once"
+    );
+    assert_eq!(tree(dir.path()), ["kept.txt", "new.txt"]);
+    assert_eq!(rig.browser.jobs()[0].refused.len(), 1);
 }
 
 #[test]

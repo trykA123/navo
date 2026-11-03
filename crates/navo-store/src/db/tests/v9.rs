@@ -36,7 +36,7 @@ fn migration_from_v8_backfills_terminal_rows_and_leaves_live_rows_empty() {
     let before = sql_now(&conn);
     drop(conn);
     let (db, report) = Db::open(&path, false).unwrap();
-    assert_eq!((report.from_version, report.to_version), (8, 9));
+    assert_eq!((report.from_version, report.to_version), (8, Db::VERSION));
     let after = sql_now(db.connection());
     for (state, stamped) in terminal_times(db.connection()) {
         let terminal = matches!(state.as_str(), "purged" | "restored" | "aborted");

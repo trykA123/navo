@@ -3,7 +3,7 @@ use std::sync::Arc;
 use navo_core::{Location, OpKind, OperationPlan, Step, TabId};
 
 use super::Browser;
-use super::operate::{PendingOp, Run};
+use super::operate::{KeepOld, PendingOp, Run};
 
 mod hooks;
 mod run;
@@ -163,6 +163,7 @@ impl Browser {
             plan,
             retain_deletes: None,
             cannot_retain: false,
+            keep_old: KeepOld::AsSet,
             source_tab: self.state.active_tab().id(),
             undo: None,
             slow_volumes: None,

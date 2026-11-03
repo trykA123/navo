@@ -37,10 +37,10 @@ impl RetainedHooks for VaultHooks {
             return Ok(Vec::new());
         }
         let (db, _) = crate::crash::open_db(&self.dirs.journal_file())
-            .map_err(|error| list_failed(&error))?;
+            .map_err(|error| list_failed(&error, "Database"))?;
         RetentionCatalog::new(db)
             .and_then(|catalog| catalog.live_after(after.map_or(0, |id| id.0), u32::from(limit)))
-            .map_err(|error| list_failed(&error))?
+            .map_err(|error| list_failed(&error, "Catalog"))?
             .iter()
             .map(row)
             .collect()
@@ -55,14 +55,15 @@ impl RetainedHooks for VaultHooks {
             id,
             target: &target,
         };
-        vault
+        let restored = vault
             .restore(
                 request,
                 &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}),
             )
             .map_err(|error| failed("retained-restore-failed", &entry, &error))?;
         tracing::info!(id = id.0, "retained entry restored");
-        Ok(target)
+        // An interrupted restore that had already landed reports where it landed.
+        Ok(restored.target.map_or(target, |landed| landed.location))
     }
 
     fn purge(&self, id: RetentionId) -> Result<(), String> {
@@ -72,12 +73,24 @@ impl RetainedHooks for VaultHooks {
         if entry.pinned {
             return Err(navo_l10n::tr("retained-busy"));
         }
-        if !matches!(entry.state, Stored::Ready | Stored::Purging) {
+        if !matches!(
+            entry.state,
+            Stored::Ready | Stored::Purging | Stored::Restoring
+        ) {
             return Err(navo_l10n::tr("retained-not-ready"));
         }
-        vault
+        let purged = vault
             .purge(id, &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}))
             .map_err(|error| failed("retained-purge-failed", &entry, &error))?;
+        if let Some(landed) = purged.target.filter(|_| purged.state == Stored::Restored) {
+            tracing::info!(id = id.0, "retained entry was already restored");
+            let folder = landed.location.parent().unwrap_or(landed.location);
+            return Err(navo_l10n::t!(
+                "retained-already-restored",
+                name = names::shown(&entry),
+                folder = folder.as_str()
+            ));
+        }
         tracing::info!(id = id.0, "retained entry purged");
         Ok(())
     }
@@ -101,7 +114,10 @@ fn row(entry: &RetentionEntry) -> Result<RetainedRow, String> {
         } else {
             RetainedKind::Delete
         },
-        bytes: entry.record.bytes().map_err(|error| list_failed(&error))?,
+        bytes: entry
+            .record
+            .bytes()
+            .map_err(|error| list_failed(&error, "Invalid"))?,
         deleted_at_ms: entry.record.created_at,
         expires_at_ms: entry.record.expires_at,
         state: state(entry),
@@ -111,13 +127,14 @@ fn row(entry: &RetentionEntry) -> Result<RetainedRow, String> {
 fn state(entry: &RetentionEntry) -> RetainedState {
     match entry.state {
         _ if entry.pinned => RetainedState::Busy,
-        Stored::Ready => RetainedState::Ready,
+        // The action settles an interrupted restore before it runs.
+        Stored::Ready | Stored::Restoring => RetainedState::Ready,
         _ => RetainedState::NeedsAttention,
     }
 }
 
-fn list_failed(error: &dyn std::fmt::Display) -> String {
-    tracing::warn!(%error, "listing retained entries failed");
+fn list_failed(error: &dyn std::fmt::Display, error_kind: &str) -> String {
+    tracing::warn!(error_kind, "listing retained entries failed");
     navo_l10n::t!("retained-list-failed", error = error.to_string())
 }
 
@@ -140,7 +157,11 @@ fn failed(id: &str, entry: &RetentionEntry, error: &Error) -> String {
             refused(error)
         }
         other => {
-            tracing::warn!(id = entry.id.0, error = %other, "retained entry action failed");
+            tracing::warn!(
+                id = entry.id.0,
+                error_kind = other.kind(),
+                "retained entry action failed"
+            );
             navo_l10n::t!(id, name = names::shown(entry), error = other.to_string())
         }
     }

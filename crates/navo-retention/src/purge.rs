@@ -11,6 +11,12 @@ impl Vault<'_> {
         id: RetentionId,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
+        // A restore that had landed already ends here; the caller sees the Restored state.
+        if let Some(settled) = self.settle_interrupted_restore(id, run)?
+            && settled.state == RetainedState::Restored
+        {
+            return Ok(settled);
+        }
         let mut entry = self.get(id)?;
         if entry.pinned {
             return Err(Error::Pinned(id));

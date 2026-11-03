@@ -11,6 +11,8 @@ mod linux_watch;
 mod owned;
 #[cfg(windows)]
 mod owned_windows;
+#[cfg(any(windows, test))]
+mod vault_protection;
 #[cfg(target_os = "linux")]
 use linux_watch as platform_watch;
 #[cfg(any(windows, test))]

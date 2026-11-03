@@ -73,6 +73,16 @@ impl SessionHolds {
         )
     }
 
+    /// The job factory for one job the user agreed to run without keeping old versions.
+    pub fn factory_without_retention(&self) -> LogFactory {
+        profile::factory(
+            Arc::clone(&self.journal),
+            self.dirs.clone(),
+            Some(profile::Drive::Declined),
+            Some(self.clone()),
+        )
+    }
+
     /// Compare saves and whole-file copies keep their old files for the session.
     #[cfg_attr(
         not(test),

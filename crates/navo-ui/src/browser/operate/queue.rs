@@ -8,7 +8,7 @@ use navo_fs::{
 };
 
 use super::work::JobWork;
-use super::{Browser, JobStatus, JobUpdate, PendingOp, Run};
+use super::{Browser, JobStatus, JobUpdate, KeepOld, PendingOp, Run};
 use crate::browser::Message;
 
 pub type SlowVolume = Arc<dyn Fn(&Location) -> bool + Send + Sync>;
@@ -92,20 +92,17 @@ fn plan_places(plan: &OperationPlan) -> impl Iterator<Item = &Location> {
 
 impl Browser {
     fn spawn_job(&self, pending: PendingOp, run: Run, cancel: CancelToken) -> Result<(), String> {
+        let factory = match pending.keep_old {
+            KeepOld::AsSet => Some(&self.operations.log),
+            KeepOld::Skip => self.operations.log_without_retention.as_ref(),
+        };
+        let factory = factory.ok_or_else(|| navo_l10n::tr("job-retention-probe-failed"))?;
         let work = JobWork {
             id: pending.id,
             copying: self.copying,
-            source: pending
-                .sources
-                .first()
-                .filter(|_| pending.stream.is_none())
-                .cloned(),
-            stream: pending.stream,
-            target: pending.target,
-            plan: pending.plan,
+            factory: Arc::clone(factory),
+            pending,
             ops: Arc::clone(&self.provider),
-            factory: Arc::clone(&self.operations.log),
-            retain_deletes: pending.retain_deletes,
             run,
             cancel,
             sender: self.sender.clone(),

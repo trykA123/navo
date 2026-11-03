@@ -296,4 +296,6 @@ fn terminal_cleanup_keeps_neighboring_u64_volumes_exact_above_sqlite_integer_ran
     );
 }
 
+mod attempts;
+mod conflict;
 mod prune;

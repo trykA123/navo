@@ -16,6 +16,7 @@ mod migrations;
 mod props;
 mod rename_presets;
 mod settings_defaults;
+mod v10;
 mod v4;
 mod v5;
 mod v6;

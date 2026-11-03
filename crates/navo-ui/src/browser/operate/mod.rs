@@ -255,6 +255,7 @@ impl Browser {
                 self.with_job(id, |job| job.is_waiting = is_waiting)
             }
             JobUpdate::Done { id, ended } => self.finish_job(id, ended),
+            JobUpdate::RetentionUnknown { id, pending } => self.ask_without_retention(id, *pending),
         }
     }
 
@@ -319,6 +320,7 @@ impl Browser {
                     plan: planned.plan,
                     retain_deletes: planned.retain_deletes,
                     cannot_retain: planned.cannot_retain,
+                    keep_old: KeepOld::AsSet,
                     source_tab: request.source_tab,
                     undo: None,
                     slow_volumes: Some(planned.slow_volumes),

@@ -46,7 +46,7 @@ fn deletion(fs: &FakeFs) -> OperationPlan {
 fn refused(dirs: &StoreDirs, journal: &SharedJournal, plan: &OperationPlan) -> String {
     match experimental_factory(journal.clone(), dirs.clone())(plan) {
         Ok(_) => panic!("{:?} was allowed with a broken navo.toml", plan.kind),
-        Err(message) => message,
+        Err(refusal) => refusal.message(),
     }
 }
 

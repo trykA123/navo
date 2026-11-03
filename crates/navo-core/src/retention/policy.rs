@@ -145,16 +145,18 @@ pub fn select_purge_inventory(
         quota_unmet: false,
         needs_space_check: request.space.free_bytes < policy.min_free_bytes,
     };
-    for entry in &eligible {
-        if entry.expires_at <= request.now {
-            plan.choices.push(PurgeChoice {
-                id: entry.id,
-                reason: PurgeReason::Expired,
-            });
-            plan.remaining_bytes -= u128::from(entry.bytes);
-        }
+    // Entries that failed before go behind fresh ones; all expired bytes count before any limit choice.
+    let (expired, rest): (Vec<Candidate<'_>>, Vec<_>) = eligible
+        .into_iter()
+        .partition(|entry| entry.expires_at <= request.now);
+    for entry in expired {
+        plan.choices.push(PurgeChoice {
+            id: entry.id,
+            reason: PurgeReason::Expired,
+        });
+        plan.remaining_bytes -= u128::from(entry.bytes);
     }
-    fill_limits(&mut plan, &eligible, (policy, request.space));
+    fill_limits(&mut plan, &rest, (policy, request.space));
     plan.quota_unmet = plan.remaining_bytes > u128::from(policy.max_volume_bytes);
     Ok(plan)
 }
@@ -180,7 +182,7 @@ fn candidates(
             eligible.push(entry);
         }
     }
-    eligible.sort_by_key(|entry| (entry.created_at, entry.id));
+    eligible.sort_by_key(|entry| (entry.attempts, entry.created_at, entry.id));
     Ok((eligible, total))
 }
 
@@ -189,12 +191,7 @@ fn fill_limits(
     eligible: &[Candidate<'_>],
     (policy, space): (RetentionPolicy, VolumeSpace),
 ) {
-    let selected: std::collections::HashSet<_> =
-        plan.choices.iter().map(|choice| choice.id).collect();
     for entry in eligible {
-        if selected.contains(&entry.id) {
-            continue;
-        }
         let reason = if plan.remaining_bytes > u128::from(policy.max_volume_bytes) {
             PurgeReason::Quota
         } else if plan.choices.is_empty() && space.free_bytes < policy.min_free_bytes {

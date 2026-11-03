@@ -128,3 +128,37 @@ fn a_cancel_during_a_skipped_entry_stops_the_pass() {
     cancel.cancel();
     assert!(crate::maintenance::skip(id, Error::State(id), &run).is_err());
 }
+
+#[test]
+fn a_purge_cancelled_by_shutdown_does_not_count_as_a_failed_attempt() {
+    let profile = tempfile::tempdir().unwrap();
+    let fs = FakeFs::new();
+    fs.set_available_space("home", Some(u64::MAX));
+    fs.add_file("home/a", 7);
+    let mut vault = open(profile.path(), &fs);
+    let entry = capture(&mut vault, &fs.location("home/a"));
+    let held = entry.record.held().unwrap();
+    let cancel = CancelToken::new();
+    let at = fs.location("home");
+    let result = vault.maintain_volume(
+        &MaintenanceRequest {
+            at: &at,
+            policy: RetentionPolicy::default(),
+            now: 4 * DAY_MS,
+            max_purges: 8,
+        },
+        &mut RetentionRun::new(&cancel, &mut |progress| {
+            if progress.current == held {
+                cancel.cancel();
+            }
+        }),
+    );
+    assert!(result.is_err(), "the cancel must stop the pass");
+    assert_eq!(vault.get(entry.id).unwrap().state, RetainedState::Ready);
+    let summaries = vault.catalog.summaries_after(0, 10).unwrap();
+    assert_eq!(summaries[0].attempts(), 0);
+    stick(&fs, &entry);
+    maintain(&mut vault, &at, RetentionPolicy::default(), 8);
+    let summaries = vault.catalog.summaries_after(0, 10).unwrap();
+    assert_eq!(summaries[0].attempts(), 1, "a real failure still counts");
+}

@@ -42,7 +42,7 @@ fn gated(browser: &mut Browser, fail: bool) -> (Arc<Gate>, mpsc::Receiver<()>) {
             entered.send(()).unwrap();
             wait.wait();
             if fail {
-                return Err("journal failed".to_owned());
+                return Err("journal failed".to_owned().into());
             }
             Ok(Box::new(SharedLog(Arc::default())) as Box<dyn OpLog>)
         }),
@@ -179,6 +179,7 @@ fn local_job(browser: &mut Browser, source: &str, target: Option<&str>) -> u64 {
             },
             retain_deletes: None,
             cannot_retain: false,
+            keep_old: crate::browser::KeepOld::AsSet,
             source_tab: browser.state.active_tab().id(),
             undo: None,
             slow_volumes: None,

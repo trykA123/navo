@@ -508,6 +508,7 @@ fn browser_worker_routes_confirmed_delete_through_the_retention_adapter() {
     );
     let confirming = dirs.clone();
     browser.set_operations(Operations {
+        log_without_retention: None,
         retain_deletes: Some(Arc::new(move || super::super::retains_deletes(&confirming))),
         log: super::super::experimental_factory(journal, dirs.clone()),
         write: Some(super::super::write_factory(dirs.clone(), true)),

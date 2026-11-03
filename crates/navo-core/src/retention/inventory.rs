@@ -9,6 +9,9 @@ pub struct RetentionSummary {
     pub(super) bytes: u64,
     pub(super) created_at: i64,
     pub(super) expires_at: i64,
+    pub(super) attempts: u32,
+    /// A Conflict left by an interrupted restore; maintenance checks it again.
+    pub(super) restoring: bool,
 }
 
 impl TryFrom<&RetentionEntry> for RetentionSummary {
@@ -24,6 +27,8 @@ impl TryFrom<&RetentionEntry> for RetentionSummary {
             bytes: entry.record.bytes()?,
             created_at: entry.record.created_at,
             expires_at: entry.record.expires_at,
+            attempts: 0,
+            restoring: entry.state == RetainedState::Conflict && entry.target.is_some(),
         })
     }
 }
@@ -45,7 +50,24 @@ impl RetentionSummary {
         }
     }
 
-    pub fn resumes_purge(self, volume: u64) -> bool {
-        self.volume == volume && self.state == RetainedState::Purging && !self.pinned
+    /// Maintenance attempts started on this entry; more attempts sort it later.
+    #[must_use]
+    pub fn with_attempts(self, attempts: u32) -> Self {
+        Self { attempts, ..self }
+    }
+
+    pub fn attempts(self) -> u32 {
+        self.attempts
+    }
+
+    /// An interrupted purge or restore that maintenance settles before choosing new purges.
+    pub fn resumes(self, volume: u64) -> bool {
+        self.volume == volume
+            && (self.restoring
+                || matches!(
+                    self.state,
+                    RetainedState::Purging | RetainedState::Restoring
+                ))
+            && !self.pinned
     }
 }
