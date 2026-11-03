@@ -251,8 +251,10 @@ impl Render for ClipPopUp {
 
 impl ClipPalette {
     /// Back to an empty search with no menu, status, shown secret or rows, until `wake`.
-    fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let was_unsaved = self.note.is_dirty();
         self.flush_note(cx);
+        self.note.lost |= was_unsaved && self.note.failure().is_some();
         self.forget_note(window, cx);
         self.note.clear_probes();
         self.overlay.menu = None;
@@ -270,8 +272,11 @@ impl ClipPalette {
     }
 
     /// Searches again after a `reset`, for the next summon.
-    fn wake(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn wake(&mut self, cx: &mut Context<Self>) {
         self.dormant = false;
         self.refresh(false, cx);
+        if std::mem::take(&mut self.note.lost) {
+            self.say(navo_l10n::tr("clip-note-lost"), true, cx);
+        }
     }
 }

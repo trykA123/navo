@@ -336,3 +336,35 @@ fn an_unsupported_watcher_does_not_warn() {
         "{lines:?}"
     );
 }
+
+#[test]
+fn a_start_that_panics_ends_as_a_failed_open_and_can_be_tried_again() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = calls.clone();
+    let watch: StartWatch = Arc::new(move |_| {
+        assert!(seen.fetch_add(1, Ordering::SeqCst) > 0, "first start fails");
+        Ok(Box::new(()) as Box<dyn Send>)
+    });
+    let rig = Rig::with_watch(Some(watch));
+    rig.module.apply_config(on());
+    rig.module.settle();
+    assert_eq!(
+        rig.module.search("", ClipMode::All, None).notice,
+        Some(navo_l10n::tr("clipboard-open-failed"))
+    );
+    rig.module.apply_config(off());
+    rig.module.apply_config(on());
+    rig.module.settle();
+    assert!(!rig.module.modes().is_empty(), "the second start works");
+}
+
+#[test]
+fn settings_changes_after_stop_are_ignored() {
+    let rig = Rig::new();
+    rig.apply(on());
+    rig.module.stop();
+    rig.module.apply_config(on());
+    rig.module.settle();
+    assert!(rig.module.modes().is_empty());
+    assert!(!rig.emit("after quit"));
+}

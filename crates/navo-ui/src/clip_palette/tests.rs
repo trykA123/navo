@@ -95,6 +95,8 @@ pub(super) struct Fake {
     pub edits: Mutex<Vec<(ClipId, Draft)>>,
     /// Makes `save` and `update_saved` refuse.
     pub refuse_save: std::sync::atomic::AtomicBool,
+    /// Makes `set_note` refuse.
+    pub refuse_note: std::sync::atomic::AtomicBool,
     pub note_writes: Mutex<Vec<(Scope, String)>>,
     revision: AtomicU64,
     listeners: Mutex<Vec<Box<dyn Fn() + Send + Sync>>>,
@@ -111,6 +113,7 @@ impl Fake {
             notes: Mutex::default(),
             edits: Mutex::default(),
             refuse_save: std::sync::atomic::AtomicBool::new(false),
+            refuse_note: std::sync::atomic::AtomicBool::new(false),
             note_writes: Mutex::default(),
             revision: AtomicU64::new(1),
             listeners: Mutex::new(Vec::new()),
@@ -262,6 +265,9 @@ impl ClipboardHooks for Fake {
             .lock()
             .expect("note writes")
             .push((scope.clone(), text.clone()));
+        if self.refuse_note.load(Ordering::SeqCst) {
+            return Err("The note could not be saved.".into());
+        }
         let mut notes = self.notes.lock().expect("notes");
         notes.retain(|(at, _)| *at != scope);
         if !text.is_empty() {
@@ -373,6 +379,21 @@ impl Opened {
         cx.run_until_parked();
         cx.update_window(self.window, |_, window, cx| window.render_frame(cx))
             .expect("window");
+    }
+
+    /// Hides the palette as the pop-up does, without closing it.
+    pub fn reset(&self, cx: &mut TestAppContext) {
+        let palette = self.palette.clone();
+        cx.update_window(self.window, |_, window, cx| {
+            palette.update(cx, |palette, cx| palette.reset(window, cx));
+        })
+        .expect("window");
+    }
+
+    /// Shows it again after a `reset`.
+    pub fn wake(&self, cx: &mut TestAppContext) {
+        self.palette.update(cx, |palette, cx| palette.wake(cx));
+        self.settle(cx);
     }
 
     pub fn press(&self, key: &str, cx: &mut TestAppContext) {

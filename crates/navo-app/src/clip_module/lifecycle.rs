@@ -1,3 +1,4 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc::channel;
@@ -37,7 +38,7 @@ impl ClipModule {
     pub(super) fn apply_config(self: &Arc<Self>, config: Config) {
         let changed = {
             let mut state = lock(&self.state);
-            if state.config == Some(config) {
+            if state.stopped || state.config == Some(config) {
                 return;
             }
             state.config = Some(config);
@@ -79,7 +80,10 @@ impl ClipModule {
         let generation = state.generation;
         let module = self.clone();
         self.jobs.run("navo-clipboard-start", move || {
-            let result = Running::start(&db, config.record, &module.backends, &module.listeners);
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                Running::start(&db, config.record, &module.backends, &module.listeners)
+            }))
+            .unwrap_or(Err(ClipError::Malformed("the clipboard start panicked")));
             module.finish_start(generation, result);
         });
         had_notice
@@ -121,6 +125,7 @@ impl ClipModule {
         let running = {
             let mut state = lock(&self.state);
             state.config = None;
+            state.stopped = true;
             match state.active {
                 Active::Off { notice: None } => None,
                 _ => state.retire(Active::Off { notice: None }),

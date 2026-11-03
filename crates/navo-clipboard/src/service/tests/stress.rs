@@ -122,10 +122,22 @@ fn a_panicking_listener_is_counted_and_the_worker_goes_on() {
     h.service.subscribe(Box::new(|_| panic!("listener failed")));
     h.service.captured(text("one", 1));
     wait_for(&h.service, |s| has_text(s, "one"));
-    assert_eq!(h.service.last_error(), Some(FailKind::Thread));
+    wait_until(|| h.service.last_error() == Some(FailKind::Thread));
     h.service.captured(text("two", 2));
     wait_for(&h.service, |s| has_text(s, "two"));
-    assert_eq!(h.service.errors(), 2);
+    wait_until(|| h.service.errors() == 2);
+}
+
+/// The worker records a listener panic after it publishes the snapshot, so poll with a deadline.
+fn wait_until(mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + WAIT;
+    while !done() {
+        assert!(
+            Instant::now() < deadline,
+            "the worker never recorded the panic"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 #[test]

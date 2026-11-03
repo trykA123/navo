@@ -50,6 +50,8 @@ pub(super) struct NoteEditor {
     /// Set when the held note was deleted: the next sync reloads it as empty.
     was_deleted: bool,
     failure: Option<String>,
+    /// A change was still unsaved when the palette hid and the save was refused.
+    pub(super) lost: bool,
     probe: Option<FolderProbe>,
     checked: HashSet<Location>,
     missing: Rc<HashSet<Location>>,
@@ -76,6 +78,7 @@ impl NoteEditor {
             serial: 0,
             was_deleted: false,
             failure: None,
+            lost: false,
             probe,
             checked: HashSet::new(),
             missing: Rc::default(),
