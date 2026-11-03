@@ -469,6 +469,24 @@ clip_palette.save_form | ctrl-enter | ClipPalette
 clip_palette.save_form | ctrl-enter | ClipPalette > Input
 clip_palette.previous_choice | left | ClipPalette
 clip_palette.next_choice | right | ClipPalette
+clip_palette.pick_first | alt-1 | ClipPalette
+clip_palette.pick_first | alt-1 | ClipPalette > Input
+clip_palette.pick_second | alt-2 | ClipPalette
+clip_palette.pick_second | alt-2 | ClipPalette > Input
+clip_palette.pick_third | alt-3 | ClipPalette
+clip_palette.pick_third | alt-3 | ClipPalette > Input
+clip_palette.pick_fourth | alt-4 | ClipPalette
+clip_palette.pick_fourth | alt-4 | ClipPalette > Input
+clip_palette.pick_fifth | alt-5 | ClipPalette
+clip_palette.pick_fifth | alt-5 | ClipPalette > Input
+clip_palette.pick_sixth | alt-6 | ClipPalette
+clip_palette.pick_sixth | alt-6 | ClipPalette > Input
+clip_palette.pick_seventh | alt-7 | ClipPalette
+clip_palette.pick_seventh | alt-7 | ClipPalette > Input
+clip_palette.pick_eighth | alt-8 | ClipPalette
+clip_palette.pick_eighth | alt-8 | ClipPalette > Input
+clip_palette.pick_ninth | alt-9 | ClipPalette
+clip_palette.pick_ninth | alt-9 | ClipPalette > Input
 [activity_strip]
 activity.previous | left | ActivityStrip
 activity.next | right | ActivityStrip

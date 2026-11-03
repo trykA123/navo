@@ -267,6 +267,20 @@ impl ClipPalette {
         cx.notify();
     }
 
+    /// Alt+digit: Enter on the `n`th row in view (1-based). Does nothing without such a row,
+    /// while a form, the manage view or the Ctrl+K menu is open, or in the note editor.
+    pub(super) fn pick_row(&mut self, n: usize, window: &Window, cx: &mut Context<Self>) {
+        let is_busy = self.manage.is_some() || self.form.is_some() || self.overlay.menu.is_some();
+        if is_busy
+            || self.note_has_focus(window, cx)
+            || n == 0
+            || n > self.state.results().rows.len()
+        {
+            return;
+        }
+        self.choose_at(n - 1, cx);
+    }
+
     pub(super) fn choose_at(&mut self, index: usize, cx: &mut Context<Self>) {
         self.repoint = None;
         self.state.select(index);

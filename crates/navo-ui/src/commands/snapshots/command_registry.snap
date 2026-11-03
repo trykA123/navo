@@ -440,6 +440,15 @@ clip_palette.new_item | New saved item | ClipPalette
 clip_palette.save_form | Save the saved item form | ClipPalette
 clip_palette.previous_choice | Previous choice in the saved item form | ClipPalette
 clip_palette.next_choice | Next choice in the saved item form | ClipPalette
+clip_palette.pick_first | Clipboard palette: pick row 1 | ClipPalette
+clip_palette.pick_second | Clipboard palette: pick row 2 | ClipPalette
+clip_palette.pick_third | Clipboard palette: pick row 3 | ClipPalette
+clip_palette.pick_fourth | Clipboard palette: pick row 4 | ClipPalette
+clip_palette.pick_fifth | Clipboard palette: pick row 5 | ClipPalette
+clip_palette.pick_sixth | Clipboard palette: pick row 6 | ClipPalette
+clip_palette.pick_seventh | Clipboard palette: pick row 7 | ClipPalette
+clip_palette.pick_eighth | Clipboard palette: pick row 8 | ClipPalette
+clip_palette.pick_ninth | Clipboard palette: pick row 9 | ClipPalette
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global

@@ -85,6 +85,7 @@ impl Paint {
                         gutter: Scrollbar::width(),
                         shows_source: self.shows_source,
                         is_missing: self.is_missing(data),
+                        slot: Some(index),
                     };
                     let row = rows::row(t, data, place);
                     interactive(row, index, is_selected, &self.view).into_any_element()

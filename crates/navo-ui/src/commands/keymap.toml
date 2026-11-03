@@ -2105,3 +2105,85 @@ context = "CompareView"
 [[bind]]
 command = "compare.save"
 keys = ["ctrl-s"]
+
+
+[[bind]]
+command = "clip_palette.pick_first"
+keys = ["alt-1"]
+
+[[bind]]
+command = "clip_palette.pick_first"
+keys = ["alt-1"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_second"
+keys = ["alt-2"]
+
+[[bind]]
+command = "clip_palette.pick_second"
+keys = ["alt-2"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_third"
+keys = ["alt-3"]
+
+[[bind]]
+command = "clip_palette.pick_third"
+keys = ["alt-3"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_fourth"
+keys = ["alt-4"]
+
+[[bind]]
+command = "clip_palette.pick_fourth"
+keys = ["alt-4"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_fifth"
+keys = ["alt-5"]
+
+[[bind]]
+command = "clip_palette.pick_fifth"
+keys = ["alt-5"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_sixth"
+keys = ["alt-6"]
+
+[[bind]]
+command = "clip_palette.pick_sixth"
+keys = ["alt-6"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_seventh"
+keys = ["alt-7"]
+
+[[bind]]
+command = "clip_palette.pick_seventh"
+keys = ["alt-7"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_eighth"
+keys = ["alt-8"]
+
+[[bind]]
+command = "clip_palette.pick_eighth"
+keys = ["alt-8"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.pick_ninth"
+keys = ["alt-9"]
+
+[[bind]]
+command = "clip_palette.pick_ninth"
+keys = ["alt-9"]
+context = "ClipPalette > Input"

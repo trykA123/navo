@@ -440,6 +440,15 @@ clip_palette.new_item | ClipPalette | false
 clip_palette.save_form | ClipPalette | false
 clip_palette.previous_choice | ClipPalette | false
 clip_palette.next_choice | ClipPalette | false
+clip_palette.pick_first | ClipPalette | false
+clip_palette.pick_second | ClipPalette | false
+clip_palette.pick_third | ClipPalette | false
+clip_palette.pick_fourth | ClipPalette | false
+clip_palette.pick_fifth | ClipPalette | false
+clip_palette.pick_sixth | ClipPalette | false
+clip_palette.pick_seventh | ClipPalette | false
+clip_palette.pick_eighth | ClipPalette | false
+clip_palette.pick_ninth | ClipPalette | false
 window.new | global | true
 workspace.list | global | true
 app.quit | global | true
