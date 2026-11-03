@@ -100,6 +100,31 @@ pub(super) const GROUPS: [Group; 2] = [
                 "clip_palette.manage",
                 "cmd-clip-palette-manage",
             ),
+            (
+                "clip_palette::EditNote",
+                "clip_palette.edit_note",
+                "cmd-clip-palette-edit-note",
+            ),
+            (
+                "clip_palette::NewItem",
+                "clip_palette.new_item",
+                "cmd-clip-palette-new-item",
+            ),
+            (
+                "clip_palette::SaveForm",
+                "clip_palette.save_form",
+                "cmd-clip-palette-save-form",
+            ),
+            (
+                "clip_palette::PreviousChoice",
+                "clip_palette.previous_choice",
+                "cmd-clip-palette-previous-choice",
+            ),
+            (
+                "clip_palette::NextChoice",
+                "clip_palette.next_choice",
+                "cmd-clip-palette-next-choice",
+            ),
         ],
     },
 ];

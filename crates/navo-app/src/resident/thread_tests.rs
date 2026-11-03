@@ -2,6 +2,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
 use navo_ui::settings::parse_summon_key;
+use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 use windows_sys::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_HOTKEY};
 
 use super::super::events::{ResidentConfig, ResidentEvent, Sink};
@@ -78,8 +80,20 @@ fn a_clipboard_hotkey_message_sends_the_clipboard_event() {
     assert!(!resident.key_taken());
 }
 
+/// True in session 0 (ssh, services), which has no desktop and so no hot keys.
+fn in_session_zero() -> bool {
+    let mut session = u32::MAX;
+    // SAFETY: the process id is current and session points to writable u32 storage.
+    let ok = unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session) };
+    ok != 0 && session == 0
+}
+
 #[test]
 fn a_key_held_by_someone_else_is_reported_taken() {
+    if in_session_zero() {
+        eprintln!("skipped: session 0 has no desktop, so hot keys behave differently");
+        return;
+    }
     let (first_sink, _) = sink();
     let (second_sink, _) = sink();
     let first = Resident::start(config("Ctrl+Alt+Shift+Win+9"), first_sink);

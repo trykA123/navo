@@ -20,7 +20,7 @@ const FOOTER: f32 = 28.;
 const TITLE_CHARS: usize = 60;
 
 /// Fades an element in over the theme's fade time; plain when motion is reduced.
-fn fade_in<E>(element: E, id: impl Into<ElementId>, t: &Theme, cx: &App) -> AnyElement
+pub(super) fn fade_in<E>(element: E, id: impl Into<ElementId>, t: &Theme, cx: &App) -> AnyElement
 where
     E: IntoElement + Styled + 'static,
 {
@@ -164,11 +164,13 @@ impl ClipPalette {
             .test_support()
             .absolute()
             .bottom(px(FOOTER) + t.spacing.xl)
-            .left(if is_docked || self.manage.is_some() {
-                px(0.)
-            } else {
-                px(LIST_WIDTH)
-            })
+            .left(
+                if is_docked || self.manage.is_some() || self.form.is_some() {
+                    px(0.)
+                } else {
+                    px(LIST_WIDTH)
+                },
+            )
             .right_0()
             .px(t.spacing.md)
             .flex()

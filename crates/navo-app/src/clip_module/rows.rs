@@ -11,24 +11,46 @@ const DETAIL_BYTES: usize = 4096;
 
 /// History and saved rows have separate id spaces; a saved row's palette id has this bit set.
 const SAVED_BIT: u64 = 1 << 63;
+/// With `SAVED_BIT`, marks a note. Saved row ids stay below it, so the spaces never meet.
+const NOTE_BIT: u64 = 1 << 62;
+const NOTE_KEY: u64 = NOTE_BIT - 1;
 
-/// The row a palette id names.
+/// The row a palette id names. A note has no row id: `Note` holds the hash of its folder key.
 pub(super) enum Target {
     History(i64),
     Saved(i64),
+    Note(u64),
 }
 
 pub(super) fn target(id: ClipId) -> Option<Target> {
-    let row = i64::try_from(id.0 & !SAVED_BIT).ok()?;
-    Some(if id.0 & SAVED_BIT == 0 {
-        Target::History(row)
-    } else {
-        Target::Saved(row)
-    })
+    if id.0 & SAVED_BIT == 0 {
+        return Some(Target::History(i64::try_from(id.0).ok()?));
+    }
+    if id.0 & NOTE_BIT != 0 {
+        return Some(Target::Note(id.0 & NOTE_KEY));
+    }
+    Some(Target::Saved(i64::try_from(id.0 & !SAVED_BIT).ok()?))
 }
 
 pub(super) fn saved_id(row: i64) -> Option<ClipId> {
-    Some(ClipId(u64::try_from(row).ok()? | SAVED_BIT))
+    let row = u64::try_from(row).ok().filter(|row| row & !NOTE_KEY == 0)?;
+    Some(ClipId(row | SAVED_BIT))
+}
+
+/// The palette id of the note for `scope`: a stable 62-bit FNV-1a hash of its folder key.
+pub(super) fn note_id(scope: &navo_clipboard::Scope) -> ClipId {
+    ClipId(SAVED_BIT | NOTE_BIT | note_hash(scope))
+}
+
+pub(super) fn note_hash(scope: &navo_clipboard::Scope) -> u64 {
+    let key = match scope {
+        navo_clipboard::Scope::Global => String::new(),
+        navo_clipboard::Scope::Folder(path) => navo_clipboard::folder_key(path),
+    };
+    let hash = key.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    });
+    hash & NOTE_KEY
 }
 
 /// The palette row of a history or saved match.
@@ -74,7 +96,7 @@ fn saved_kind(kind: SavedKind) -> ClipKind {
     }
 }
 
-fn location(path: &std::path::Path) -> Option<Location> {
+pub(super) fn location(path: &std::path::Path) -> Option<Location> {
     Location::new(path.to_string_lossy().into_owned()).ok()
 }
 
@@ -152,6 +174,28 @@ fn clip_ranges(ranges: &[Range<usize>], span: &Range<usize>) -> Vec<Range<usize>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_saved_and_note_ids_stay_apart() {
+        let saved = saved_id(7).unwrap();
+        let note = note_id(&navo_clipboard::Scope::Folder("/a/b".into()));
+        let global = note_id(&navo_clipboard::Scope::Global);
+        assert!(matches!(target(ClipId(7)), Some(Target::History(7))));
+        assert!(matches!(target(saved), Some(Target::Saved(7))));
+        assert!(matches!(target(note), Some(Target::Note(_))));
+        assert_ne!(note, global);
+        assert!(saved_id(i64::MAX).is_none() && saved_id(-1).is_none());
+        let largest = saved_id(i64::try_from(NOTE_KEY).unwrap()).unwrap();
+        assert!(matches!(target(largest), Some(Target::Saved(_))));
+        assert!(saved_id(i64::try_from(NOTE_BIT).unwrap()).is_none());
+    }
+
+    #[test]
+    fn a_folder_spelling_gives_one_note_id() {
+        let id = |path: &str| note_id(&navo_clipboard::Scope::Folder(path.into()));
+        assert_eq!(id(r"C:\Work\Plans\"), id("c:/work/plans"));
+        assert_ne!(id("/work/a"), id("/work/b"));
+    }
 
     #[test]
     fn the_title_is_the_first_nonblank_line_and_ranges_follow_it() {

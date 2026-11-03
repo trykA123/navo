@@ -78,12 +78,12 @@ fn a_wipe_that_loses_the_store_publishes_an_empty_snapshot_until_it_reopens() {
     assert_eq!(shared.last_error(), Some(FailKind::Store));
     assert_eq!(stored_rows(&real), 1);
 
-    worker.handle(Msg::Delete(0));
+    worker.handle(Msg::Delete(0, std::sync::mpsc::channel().0));
     assert!(shared.snapshot().history.is_empty());
     assert!(shared.errors() >= 2);
 
     worker.path = real.clone();
-    worker.handle(Msg::Delete(0));
+    worker.handle(Msg::Delete(0, std::sync::mpsc::channel().0));
     assert_eq!(shared.snapshot().history.len(), 1);
 }
 
@@ -113,6 +113,6 @@ fn a_wipe_refused_by_the_folder_keeps_the_rows_and_the_files() {
     assert_eq!(snapshot.history.len(), 1);
     assert_eq!(shared.last_error(), Some(FailKind::Store));
     assert_eq!(stored_rows(&real), 1);
-    worker.handle(Msg::Delete(0));
+    worker.handle(Msg::Delete(0, std::sync::mpsc::channel().0));
     assert_eq!(shared.snapshot().history.len(), 1);
 }

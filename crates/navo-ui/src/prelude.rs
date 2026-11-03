@@ -6,6 +6,6 @@ pub use gpui_kit::{
     WindowBounds, WindowOptions, div, px, relative, size,
 };
 pub use gpui_kit::{
-    InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    InputEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
     PlatformInput, ScrollHandle, point,
 };

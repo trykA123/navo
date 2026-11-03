@@ -129,3 +129,93 @@ fn wipe_all_leaves_a_file_with_a_non_utf8_name_alone() {
     store.wipe_all(&db_path(&dir)).unwrap();
     assert_eq!(fs::read(&odd).unwrap(), b"not ours");
 }
+
+fn staged(dir: &TempDir) -> std::path::PathBuf {
+    dir.path().join("clipboard.db.new")
+}
+
+fn store_with_row_and_aside(dir: &TempDir) -> ClipStore {
+    let mut store = ClipStore::open(&db_path(dir), Limits::default()).unwrap();
+    store.record(&text("live row", 1)).unwrap();
+    fs::write(dir.path().join("clipboard.db.corrupt-5"), CANARY).unwrap();
+    store
+}
+
+fn assert_nothing_deleted(dir: &TempDir) {
+    assert!(!staged(dir).exists(), "no staged file stays");
+    let aside = fs::read(dir.path().join("clipboard.db.corrupt-5")).unwrap();
+    assert_eq!(aside, CANARY.as_bytes());
+    let store = ClipStore::open(&db_path(dir), Limits::default()).unwrap();
+    assert_eq!(store.history(10).unwrap().len(), 1);
+}
+
+#[test]
+fn a_failed_seed_of_the_fresh_database_deletes_nothing() {
+    let dir = TempDir::new().unwrap();
+    let store = store_with_row_and_aside(&dir);
+    super::set_fail_seed(true);
+    let result = store.wipe_all(&db_path(&dir));
+    super::set_fail_seed(false);
+    assert!(result.is_err());
+    assert_nothing_deleted(&dir);
+}
+
+#[test]
+fn an_unwritable_staged_name_deletes_nothing() {
+    let dir = TempDir::new().unwrap();
+    let store = store_with_row_and_aside(&dir);
+    fs::create_dir(staged(&dir)).unwrap();
+    assert!(matches!(
+        store.wipe_all(&db_path(&dir)),
+        Err(ClipError::Io(_))
+    ));
+    fs::remove_dir(staged(&dir)).unwrap();
+    assert_nothing_deleted(&dir);
+}
+
+#[test]
+fn a_successful_wipe_leaves_no_staged_file_and_replaces_a_stale_one() {
+    let dir = TempDir::new().unwrap();
+    let store = store_with_row_and_aside(&dir);
+    fs::write(staged(&dir), CANARY).unwrap();
+    let store = store.wipe_all(&db_path(&dir)).unwrap();
+    assert!(store.history(10).unwrap().is_empty());
+    assert!(names(dir.path()).iter().all(|name| !name.contains(".new")));
+    assert_absent_everywhere(dir.path(), CANARY);
+}
+
+#[test]
+fn a_staged_file_left_without_a_database_is_opened_in_its_place() {
+    let dir = TempDir::new().unwrap();
+    let path = db_path(&dir);
+    let mut store = ClipStore::open(&path, Limits::default()).unwrap();
+    for at in 1..=3 {
+        store.record(&text(&format!("row {at}"), at)).unwrap();
+    }
+    let newest = store.history(1).unwrap()[0].id;
+    drop(store.wipe_all(&path).unwrap());
+    fs::rename(&path, staged(&dir)).unwrap();
+    let mut store = ClipStore::open(&path, Limits::default()).unwrap();
+    assert!(!staged(&dir).exists());
+    store.record(&text("after", 9)).unwrap();
+    assert!(
+        store.history(1).unwrap()[0].id > newest,
+        "the marks came along"
+    );
+}
+
+#[test]
+fn a_staged_file_is_ignored_beside_a_database_or_without_a_header() {
+    let dir = TempDir::new().unwrap();
+    let path = db_path(&dir);
+    fs::write(staged(&dir), b"not a database").unwrap();
+    let mut store = ClipStore::open(&path, Limits::default()).unwrap();
+    assert!(store.history(10).unwrap().is_empty());
+    assert_eq!(fs::read(staged(&dir)).unwrap(), b"not a database");
+    store.record(&text("live", 1)).unwrap();
+    drop(store);
+    fs::copy(&path, staged(&dir)).unwrap();
+    let store = ClipStore::open(&path, Limits::default()).unwrap();
+    assert_eq!(store.history(10).unwrap().len(), 1);
+    assert!(staged(&dir).exists(), "a live database is never replaced");
+}

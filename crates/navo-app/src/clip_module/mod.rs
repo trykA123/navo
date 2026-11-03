@@ -1,12 +1,14 @@
 //! The clipboard module: history store, service and watcher behind `ClipboardHooks`.
 
 mod capture;
+mod edit;
 mod follow;
 mod hooks;
 mod intro;
 mod jobs;
 mod lifecycle;
 mod listeners;
+mod notes;
 mod rows;
 mod running;
 mod saved;

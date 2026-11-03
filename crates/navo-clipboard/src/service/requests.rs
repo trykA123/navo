@@ -1,9 +1,11 @@
 //! Requests for saved items, secrets and notes. Each runs on the worker; results show in the
 //! next snapshot and in the reply.
 
+use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};
 
 use crate::model::{Saved, Scope};
+use crate::note_search::NoteSummary;
 use crate::store::NoteListed;
 
 use super::notes::NoteMsg;
@@ -40,9 +42,10 @@ impl ClipService {
         })
     }
 
-    /// Deletes a saved item, also one the snapshot counts as skipped.
-    pub fn delete_saved(&self, id: i64) -> bool {
-        self.send(Msg::Saved(SavedMsg::Delete(id)))
+    /// Deletes a saved item, also one the snapshot counts as skipped. The reply is `Store`
+    /// when the row or its text in the log may still be on disk.
+    pub fn delete_saved(&self, id: i64) -> Reply<()> {
+        self.request(|reply| Msg::Saved(SavedMsg::Delete { id, reply }))
     }
 
     /// Saves a copy of a history row as a global snippet, or a path item for a file list.
@@ -93,6 +96,24 @@ impl ClipService {
     /// Every readable note with its body.
     pub fn notes(&self) -> Reply<NoteListed> {
         self.request(|reply| Msg::Note(NoteMsg::List(reply)))
+    }
+
+    /// The notes whose folder name or text holds `query`, as summaries without text; the note
+    /// of `folder` comes first. `global_title` names the global note and is searched too.
+    pub fn search_notes(
+        &self,
+        query: String,
+        folder: Option<PathBuf>,
+        global_title: String,
+    ) -> Reply<Vec<NoteSummary>> {
+        self.request(|reply| {
+            Msg::Note(NoteMsg::Search {
+                query,
+                folder,
+                global_title,
+                reply,
+            })
+        })
     }
 
     /// Points the note of folder `from` at folder `to`.

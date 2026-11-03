@@ -35,21 +35,34 @@ impl ClipPalette {
             };
         }
         let (title, body, keys) = match mode {
-            ClipMode::All | ClipMode::Recent => {
-                ("clip-empty-history-title", "clip-empty-history-body", None)
-            }
-            // Notes has no mode of its own until its atom lands.
-            ClipMode::Saved | ClipMode::Notes => (
+            ClipMode::All | ClipMode::Recent => (
+                "clip-empty-history-title",
+                "clip-empty-history-body",
+                Vec::new(),
+            ),
+            ClipMode::Saved => (
                 "clip-empty-saved-title",
                 "clip-empty-saved-body",
-                Some(("ctrl-s", "clip-act-save-from-history")),
+                vec![
+                    ("ctrl-s", "clip-act-save-from-history"),
+                    ("ctrl-n", "clip-act-new-saved"),
+                ],
             ),
-            ClipMode::Secrets => ("clip-empty-secrets-title", "clip-empty-secrets-body", None),
+            ClipMode::Notes => (
+                "clip-empty-notes-title",
+                "clip-empty-notes-body",
+                Vec::new(),
+            ),
+            ClipMode::Secrets => (
+                "clip-empty-secrets-title",
+                "clip-empty-secrets-body",
+                vec![("ctrl-n", "clip-act-new-secret")],
+            ),
         };
         Say {
             title: tr(title),
             body: tr(body),
-            keys: keys.into_iter().collect(),
+            keys,
         }
     }
 

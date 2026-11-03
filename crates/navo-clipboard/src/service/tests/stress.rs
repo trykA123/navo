@@ -152,7 +152,7 @@ fn deleting_a_missing_row_does_not_notify() {
     }));
     h.service.captured(text("one", 1));
     wait_for(&h.service, |s| has_text(s, "one"));
-    h.service.delete(9999);
+    assert_eq!(answer(h.service.delete(9999)), Ok(()));
     h.service.captured(text("two", 2));
     wait_for(&h.service, |s| has_text(s, "two"));
     assert_eq!(rx.try_iter().count(), 2);

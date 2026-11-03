@@ -32,6 +32,7 @@ fn mode_label(mode: ClipMode) -> String {
 
 pub(super) fn enter_label(row: &ClipRow, place: Place) -> String {
     tr(match (place, row.kind) {
+        (_, ClipKind::Note) => "clip-act-edit-note",
         (Place::Window, ClipKind::Secret) => "clip-act-copy-hidden",
         (Place::Window, ClipKind::Path) => "clip-act-go",
         (Place::Window, _) => "clip-act-copy",
@@ -210,12 +211,15 @@ impl ClipPalette {
                 .child(icon(IconName::Shield, t.typography.small, t.colors.muted))
                 .child(tr("clip-vault-line")),
             ClipMode::All | ClipMode::Recent => line.child(t!("clip-kept", count = results.kept)),
-            _ => line.child(t!("clip-items", count = results.rows.len())),
+            _ => line.child(t!("clip-items", count = self.state.item_count())),
         }
     }
 
     /// The status, the Enter label and the Actions button, which opens the actions menu.
     pub(super) fn footer(&self, t: &Theme, cx: &mut Context<Self>) -> RowElement {
+        if let Some(ask) = self.repoint_footer(t, cx) {
+            return ask;
+        }
         let enter = self.state.selected_row().map(|row| {
             let label = enter_label(row, self.place);
             hint(t, "clip-palette-enter-key", "enter", label).into_any_element()

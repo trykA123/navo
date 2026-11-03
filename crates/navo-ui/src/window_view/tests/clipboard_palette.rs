@@ -8,8 +8,8 @@ use navo_core::Location;
 use super::undo::{Rig, files};
 use super::{open_options, options_for, press, viewer_open, viewer_window};
 use crate::clip_palette::{
-    ClipCounts, ClipId, ClipMode, ClipResults, ClipboardHooks, How, NoClipboard, SavedDraft, Scope,
-    SecretText,
+    ClipCounts, ClipId, ClipMode, ClipResults, ClipboardHooks, How, NoClipboard, SavedDraft,
+    SavedEdit, Scope, SecretText,
 };
 use crate::commands::entries_with;
 use crate::window_view::clipboard_palette::ClipboardPanel;
@@ -29,6 +29,9 @@ struct Spy {
     wiped: AtomicU32,
     /// Offers no modes, as a history that is turned off.
     idle: bool,
+    /// Offers Notes mode only, and keeps what `set_note` gets.
+    notes: bool,
+    saved_notes: Mutex<Vec<String>>,
     log: Mutex<Vec<&'static str>>,
 }
 
@@ -43,6 +46,8 @@ impl ClipboardHooks for Spy {
     fn modes(&self) -> Vec<ClipMode> {
         if self.idle {
             Vec::new()
+        } else if self.notes {
+            vec![ClipMode::Notes]
         } else {
             vec![ClipMode::All]
         }
@@ -75,11 +80,24 @@ impl ClipboardHooks for Spy {
     fn save(&self, _: SavedDraft) -> Result<ClipId, String> {
         off()
     }
+    fn saved_for_edit(&self, _: ClipId) -> Result<SavedEdit, String> {
+        off()
+    }
+    fn update_saved(&self, _: ClipId, _: SavedDraft) -> Result<(), String> {
+        off()
+    }
+    fn rename_note(&self, _: Scope, _: Scope) -> Result<(), String> {
+        off()
+    }
     fn note_for(&self, _: &Location) -> Option<String> {
         None
     }
-    fn set_note(&self, _: Scope, _: String) -> Result<(), String> {
-        off()
+    fn global_note(&self) -> Option<String> {
+        None
+    }
+    fn set_note(&self, _: Scope, text: String) -> Result<(), String> {
+        self.saved_notes.lock().expect("notes").push(text);
+        Ok(())
     }
     fn reveal(&self, _: ClipId) -> Result<SecretText, String> {
         off()
@@ -262,4 +280,21 @@ fn the_confirms_show_counts_and_name_the_set_aside_copies() {
     assert_eq!(wipe.lines.len(), 3);
     assert_eq!(wipe.lines[1], "3 saved items and secrets");
     assert!(wipe.summary.contains("clipboard.db.corrupt-*"));
+}
+
+#[gpui_kit::test]
+fn quitting_with_the_palette_open_saves_a_note_typed_a_moment_ago(cx: &mut TestAppContext) {
+    let spy = Arc::new(Spy {
+        notes: true,
+        ..Spy::default()
+    });
+    let rig = rig(cx, Some(spy.clone()));
+    press(cx, rig.window, &rig.view, "ctrl-shift-v");
+    press(cx, rig.window, &rig.view, "ctrl-e");
+    cx.update_window(rig.window, |_, window, cx| window.input("last words", cx))
+        .expect("window");
+    cx.run_until_parked();
+    assert!(spy.saved_notes.lock().expect("notes").is_empty());
+    cx.update(|cx| cx.shutdown());
+    assert_eq!(*spy.saved_notes.lock().expect("notes"), ["last words"]);
 }

@@ -14,6 +14,7 @@ fn draft(kind: ClipKind, title: &str, body: &str) -> SavedDraft {
         kind,
         title: title.to_owned(),
         body: SecretText::new(body.to_owned()),
+        user: None,
         scope: Scope::Everywhere,
     }
 }
@@ -217,4 +218,39 @@ fn a_failed_saved_copy_is_reported_not_swallowed() {
     wait_rows(&rig, ClipMode::Saved, 0);
     assert!(rig.module.copy(id, How::Copy).is_err());
     assert!(rig.module.copy_user(id).is_err());
+}
+
+#[test]
+fn a_saved_item_or_secret_that_cannot_be_deleted_reads_not_deleted() {
+    let rig = secrets_rig();
+    let plain = rig
+        .module
+        .save(draft(ClipKind::Text, "kept", "kept text"))
+        .unwrap();
+    let sealed = rig
+        .module
+        .save(draft(ClipKind::Secret, "bank", "hunter2"))
+        .unwrap();
+    rig.refuse_deletes("saved");
+    let not_deleted = Err(navo_l10n::tr("clipboard-not-deleted"));
+    assert_eq!(rig.module.delete(plain), not_deleted);
+    assert_eq!(rig.module.delete(sealed), not_deleted);
+    assert_eq!(wait_rows(&rig, ClipMode::Saved, 1)[0].0, plain);
+    assert_eq!(wait_rows(&rig, ClipMode::Secrets, 1)[0].0, sealed);
+}
+
+#[test]
+fn a_secret_whose_log_stays_busy_reads_not_deleted_not_busy() {
+    let rig = secrets_rig();
+    let sealed = rig
+        .module
+        .save(draft(ClipKind::Secret, "bank", "hunter2"))
+        .unwrap();
+    let reader = rig.pin_reader();
+    rig.module
+        .save(draft(ClipKind::Text, "later", "later text"))
+        .unwrap();
+    let result = rig.module.delete(sealed);
+    drop(reader);
+    assert_eq!(result, Err(navo_l10n::tr("clipboard-not-deleted")));
 }

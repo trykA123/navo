@@ -26,6 +26,19 @@ pub struct Foreground {
     _unsupported: (),
 }
 
+/// Makes `window` (a window handle as a number) the foreground window, or does nothing.
+///
+/// Windows may refuse a plain request from a process that does not own the foreground; the call
+/// joins the front thread's input for the moment of the request.
+pub fn take_focus(window: usize) {
+    platform::take_focus(window);
+}
+
+#[cfg(not(windows))]
+mod platform {
+    pub(super) fn take_focus(_window: usize) {}
+}
+
 #[cfg(not(windows))]
 impl Foreground {
     #[must_use]
@@ -50,6 +63,7 @@ mod platform {
     use std::time::{Duration, Instant};
 
     use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
         INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput,
         VIRTUAL_KEY, VK_CONTROL, VK_V,
@@ -126,6 +140,21 @@ mod platform {
                     (false, false) => std::thread::sleep(POLL),
                 }
             }
+        }
+    }
+
+    pub(super) fn take_focus(window: usize) {
+        let window = window as HWND;
+        // SAFETY: GetCurrentThreadId and GetForegroundWindow have no preconditions.
+        let (own, front) = unsafe { (GetCurrentThreadId(), thread_of(GetForegroundWindow())) };
+        // SAFETY: both ids name live threads or AttachThreadInput fails harmlessly.
+        let attached =
+            front != 0 && front != own && unsafe { AttachThreadInput(own, front, 1) } != 0;
+        // SAFETY: a stale handle makes the call fail harmlessly.
+        unsafe { SetForegroundWindow(window) };
+        if attached {
+            // SAFETY: this thread attached to `front` just above.
+            unsafe { AttachThreadInput(own, front, 0) };
         }
     }
 

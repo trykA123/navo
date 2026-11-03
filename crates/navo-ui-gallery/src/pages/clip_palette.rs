@@ -115,7 +115,49 @@ pub(super) const MANAGE_PHONE: PageInfo = info(
     false,
 );
 
-pub(super) const ALL: [PageInfo; 17] = [
+pub(super) const NOTES: PageInfo = info(
+    Page::ClipNotes,
+    "Clipboard palette, notes",
+    "clip-notes",
+    false,
+);
+
+pub(super) const NOTES_PHONE: PageInfo = info(
+    Page::ClipNotes390,
+    "Clipboard palette, notes, 390",
+    "clip-notes-390",
+    false,
+);
+
+pub(super) const EDIT: PageInfo = info(
+    Page::ClipEdit,
+    "Clipboard palette, edit form",
+    "clip-edit",
+    false,
+);
+
+pub(super) const EDIT_PHONE: PageInfo = info(
+    Page::ClipEdit390,
+    "Clipboard palette, edit form, 390",
+    "clip-edit-390",
+    false,
+);
+
+pub(super) const EDIT_SECRET: PageInfo = info(
+    Page::ClipEditSecret,
+    "Clipboard palette, secret form",
+    "clip-edit-secret",
+    false,
+);
+
+pub(super) const EDIT_SECRET_PHONE: PageInfo = info(
+    Page::ClipEditSecret390,
+    "Clipboard palette, secret form, 390",
+    "clip-edit-secret-390",
+    false,
+);
+
+pub(super) const ALL: [PageInfo; 23] = [
     WIDE,
     PHONE,
     MENU,
@@ -133,4 +175,10 @@ pub(super) const ALL: [PageInfo; 17] = [
     POP_UP_MENU,
     MANAGE,
     MANAGE_PHONE,
+    NOTES,
+    NOTES_PHONE,
+    EDIT,
+    EDIT_PHONE,
+    EDIT_SECRET,
+    EDIT_SECRET_PHONE,
 ];

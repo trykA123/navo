@@ -3,7 +3,7 @@ use std::ptr;
 use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
 
 use super::ClipboardError;
-use super::platform::{Clipboard, GlobalBlock, Owner, empty, sequence};
+use super::platform::{Clipboard, GlobalBlock, Owner, empty, format_available, sequence};
 use super::text_buffer::Utf16Text;
 use super::watch::{BUSY_ATTEMPTS, BUSY_DELAY, register};
 
@@ -24,8 +24,8 @@ pub fn write_text(text: &str) -> Result<(), ClipboardError> {
 }
 
 /// Replaces the clipboard with `text` marked so clipboard history, monitors and cloud sync
-/// skip it, and returns the clipboard sequence read while the clipboard was still open, so
-/// it is ours. On `Err` the clipboard holds nothing from this call, and every copy of the
+/// skip it, and returns the clipboard sequence once the clipboard is closed and the owner
+/// window is gone (both bump it), checked to still hold the private marker. On `Err` the clipboard holds nothing from this call, and every copy of the
 /// text it made is zeroed (the one exception: if Windows refuses every re-lock of a block it never took, the block is freed unwiped). The caller's own `&str` copy of the secret is the caller's to wipe.
 ///
 /// Waits at most about 100 ms (5 attempts of 20 ms) for another program to release the
@@ -33,8 +33,19 @@ pub fn write_text(text: &str) -> Result<(), ClipboardError> {
 pub fn write_private_text(text: &str) -> Result<u32, ClipboardError> {
     let block = text_block(text)?;
     let markers = private_markers()?;
+    let marker = markers.first().map(|(format, _)| *format);
     let owner = Owner::new()?;
-    publish_private(&owner, block, markers)
+    publish_private(&owner, block, markers)?;
+    // Closing the clipboard and destroying the owner each change the sequence, so the one
+    // read while it was open never matches again: take it after both.
+    drop(owner);
+    let settled = sequence();
+    if settled == 0 || !marker.is_some_and(format_available) {
+        return Err(ClipboardError::Os(
+            "The clipboard changed before the private write settled".to_owned(),
+        ));
+    }
+    Ok(settled)
 }
 
 /// Empties the clipboard only when its sequence is still `expected`; returns whether it did.

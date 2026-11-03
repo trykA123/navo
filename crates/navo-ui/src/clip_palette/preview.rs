@@ -22,6 +22,8 @@ pub(super) struct Look<'a> {
     pub is_docked: bool,
     /// The text of a secret that is on show.
     pub secret: Option<&'a str>,
+    /// The note editor has keyboard focus.
+    pub has_note_focus: bool,
 }
 
 fn kind_name(kind: ClipKind) -> String {
@@ -32,6 +34,7 @@ fn kind_name(kind: ClipKind) -> String {
         ClipKind::Files => "clip-kind-files",
         ClipKind::Image => "clip-kind-image",
         ClipKind::Secret => "clip-kind-secret",
+        ClipKind::Note => "clip-kind-note",
     })
 }
 
@@ -71,6 +74,9 @@ pub(super) fn full_text(row: &ClipRow) -> &str {
 
 fn head_text(row: &ClipRow) -> String {
     match (row.from, &row.source_app) {
+        (Origin::Saved, _) if row.kind == ClipKind::Note && row.scope != Scope::Everywhere => {
+            t!("clip-note-for", name = row.title.clone())
+        }
         (Origin::Clipboard, Some(app)) => {
             t!(
                 "clip-preview-from",
@@ -83,7 +89,7 @@ fn head_text(row: &ClipRow) -> String {
     }
 }
 
-fn head(t: &Theme, row: &ClipRow) -> Div {
+pub(super) fn head(t: &Theme, row: &ClipRow) -> Div {
     let (name, color) = kind_icon(t, row.kind);
     div()
         .flex()
@@ -147,9 +153,18 @@ fn note(t: &Theme) -> Div {
 fn size(row: &ClipRow) -> String {
     match row.kind {
         ClipKind::Secret => tr("clip-size-hidden"),
+        ClipKind::Note => row.detail.clone(),
         ClipKind::Files => t!("clip-size-files", count = file_list(&row.detail).1.len()),
         _ => t!("clip-size-chars", count = full_text(row).chars().count()),
     }
+}
+
+fn folder_fact(scope: &Scope) -> (String, String, bool) {
+    let (folder, is_folder) = match scope {
+        Scope::Everywhere => (tr("clip-scope-global"), false),
+        Scope::Folder(location) => (location.as_str().to_owned(), true),
+    };
+    (tr("clip-meta-folder"), folder, is_folder)
 }
 
 fn facts(row: &ClipRow, now_ms: i64) -> Vec<(String, String, bool)> {
@@ -159,14 +174,13 @@ fn facts(row: &ClipRow, now_ms: i64) -> Vec<(String, String, bool)> {
             (tr("clip-meta-copied"), when, false),
             (tr("clip-meta-size"), size(row), false),
         ],
+        (Origin::Saved, scope) if row.kind == ClipKind::Note => {
+            vec![folder_fact(scope), (tr("clip-meta-size"), size(row), false)]
+        }
         (Origin::Saved, scope) => {
-            let (folder, is_folder) = match scope {
-                Scope::Everywhere => (tr("clip-scope-global"), false),
-                Scope::Folder(location) => (location.as_str().to_owned(), true),
-            };
             let mut facts = vec![
                 (tr("clip-meta-kind"), kind_name(row.kind), false),
-                (tr("clip-meta-folder"), folder, is_folder),
+                folder_fact(scope),
                 (tr("clip-meta-used"), when, false),
             ];
             if row.kind != ClipKind::Secret {
@@ -177,7 +191,7 @@ fn facts(row: &ClipRow, now_ms: i64) -> Vec<(String, String, bool)> {
     }
 }
 
-fn details(t: &Theme, row: &ClipRow, now_ms: i64) -> Div {
+pub(super) fn details(t: &Theme, row: &ClipRow, now_ms: i64) -> Div {
     div()
         .flex()
         .flex_col()
@@ -214,9 +228,9 @@ fn details(t: &Theme, row: &ClipRow, now_ms: i64) -> Div {
         )
 }
 
-/// The selected row's full value; empty when nothing is selected.
-pub(super) fn preview(t: &Theme, row: Option<&ClipRow>, look: Look<'_>) -> RowElement {
-    let pane = div()
+/// The empty preview pane, sized for the window or the docked strip.
+pub(super) fn frame(t: &Theme, is_docked: bool) -> RowElement {
+    div()
         .id("clip-palette-preview")
         .role(Role::Group)
         .aria_label(tr("clip-preview-label"))
@@ -226,15 +240,20 @@ pub(super) fn preview(t: &Theme, row: Option<&ClipRow>, look: Look<'_>) -> RowEl
         .min_w_0()
         .min_h_0()
         .overflow_hidden()
-        .when(look.is_docked, |pane| {
+        .when(is_docked, |pane| {
             pane.gap(t.spacing.xxs).px(t.spacing.xl).py(t.spacing.md)
         })
-        .when(!look.is_docked, |pane| {
+        .when(!is_docked, |pane| {
             pane.flex_1()
                 .gap(t.spacing.md)
                 .px(t.spacing.xxl)
                 .py(t.spacing.xl)
-        });
+        })
+}
+
+/// The selected row's full value; empty when nothing is selected.
+pub(super) fn preview(t: &Theme, row: Option<&ClipRow>, look: Look<'_>) -> RowElement {
+    let pane = frame(t, look.is_docked);
     let Some(row) = row else {
         return pane;
     };

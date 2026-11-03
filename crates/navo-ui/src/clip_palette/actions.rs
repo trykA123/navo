@@ -7,6 +7,7 @@ use navo_core::Location;
 use navo_l10n::tr;
 
 use super::chrome::enter_label;
+use super::notes::is_placeholder;
 use super::preview::full_text;
 use super::secret::{Facts, Revealed};
 use super::status::Status;
@@ -49,7 +50,7 @@ fn save_item(row: &ClipRow) -> Option<Item> {
     let label = match row.kind {
         ClipKind::Text | ClipKind::Link => "clip-act-save-snippet",
         ClipKind::Path | ClipKind::Files => "clip-act-save-path",
-        ClipKind::Image | ClipKind::Secret => return None,
+        ClipKind::Image | ClipKind::Secret | ClipKind::Note => return None,
     };
     (row.from == Origin::Clipboard).then(|| item(Action::Save, label, "ctrl-s"))
 }
@@ -69,7 +70,7 @@ pub(super) fn items(row: &ClipRow, facts: Facts) -> Vec<Item> {
         (Place::Window, ClipKind::Files) => {
             Some(item(Action::PasteFiles, "clip-act-paste-here", "ctrl-v"))
         }
-        (Place::Anywhere, kind) if kind != ClipKind::Secret => {
+        (Place::Anywhere, kind) if !matches!(kind, ClipKind::Secret | ClipKind::Note) => {
             Some(item(Action::CopyOnly, "clip-act-copy-only", "ctrl-c"))
         }
         _ => None,
@@ -85,7 +86,7 @@ pub(super) fn items(row: &ClipRow, facts: Facts) -> Vec<Item> {
     });
     let user = (is_secret && facts.has_user)
         .then(|| item(Action::CopyUser, "clip-act-copy-user", "alt-u"));
-    let delete = item(Action::Delete, "clip-act-delete", "delete");
+    let delete = (!is_placeholder(row)).then(|| item(Action::Delete, "clip-act-delete", "delete"));
     let manage_key = if row.from == Origin::Saved { "" } else { "f2" };
     let manage = item(Action::Manage, "clip-act-manage", manage_key);
     std::iter::once(enter)
@@ -93,7 +94,8 @@ pub(super) fn items(row: &ClipRow, facts: Facts) -> Vec<Item> {
         .chain(reveal)
         .chain(user)
         .chain(save_item(row))
-        .chain([delete, manage])
+        .chain(delete)
+        .chain([manage])
         .collect()
 }
 
@@ -117,6 +119,9 @@ enum Done {
     Pasting,
     PastingBack,
     Managing,
+    Editing,
+    /// Nothing to do for this row, as Delete on an empty folder note.
+    Unchanged,
 }
 
 fn folder_of(row: &ClipRow) -> Result<Location, String> {
@@ -128,6 +133,9 @@ impl ClipPalette {
     fn perform(&mut self, action: Action, row: &ClipRow) -> Result<Done, String> {
         let anywhere = self.place == Place::Anywhere;
         match (action, row.kind) {
+            (Action::Enter, ClipKind::Note) => Ok(Done::Editing),
+            (Action::CopyOnly | Action::PasteFiles, ClipKind::Note) => Ok(Done::Unchanged),
+            (Action::Delete, _) if is_placeholder(row) => Ok(Done::Unchanged),
             (Action::Enter, _) if anywhere => self
                 .hooks
                 .copy(row.id, How::Paste)
@@ -147,14 +155,19 @@ impl ClipPalette {
                 .hooks
                 .save_from_history(row.id)
                 .map(|_| Done::Saved(kind)),
-            (Action::Delete, _) => self.hooks.delete(row.id).map(|()| Done::Deleted),
+            (Action::Delete, _) => self.hooks.delete(row.id).map(|()| {
+                if self.note.holds(&row.scope) && row.kind == ClipKind::Note {
+                    self.note.mark_deleted();
+                }
+                Done::Deleted
+            }),
             (Action::Manage, _) => Ok(Done::Managing),
         }
     }
 
     /// Runs an action on the selected row and closes the menu. The palette stays open.
     pub(super) fn run(&mut self, action: Action, cx: &mut Context<Self>) {
-        if self.manage.is_some() {
+        if self.manage.is_some() || self.form.is_some() {
             return;
         }
         self.overlay.menu = None;
@@ -181,6 +194,8 @@ impl ClipPalette {
             Done::CopiedUser => return self.say_clearing(tr("clip-status-copied-user"), cx),
             Done::Toggled => return cx.notify(),
             Done::Managing => return self.open_manage(cx),
+            Done::Editing => return self.focus_note(cx),
+            Done::Unchanged => return cx.notify(),
         };
         self.say(tr(key), false, cx);
         if let Some(event) = event {
@@ -202,7 +217,7 @@ impl ClipPalette {
 
     /// Ctrl+K and the Actions button: opens the menu for the selected row, or closes it.
     pub(super) fn toggle_actions(&mut self, cx: &mut Context<Self>) {
-        if self.manage.is_some() {
+        if self.manage.is_some() || self.form.is_some() {
             return;
         }
         if self.overlay.menu.take().is_none() && self.state.selected_row().is_some() {
@@ -244,6 +259,9 @@ impl ClipPalette {
 
     /// Enter: the highlighted menu item when the menu is open, else the row's own action.
     pub(super) fn choose(&mut self, cx: &mut Context<Self>) {
+        if self.repoint.is_some() {
+            return self.confirm_repoint(cx);
+        }
         let Some(row) = self.state.selected_row() else {
             return;
         };

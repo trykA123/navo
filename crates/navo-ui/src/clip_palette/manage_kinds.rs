@@ -26,13 +26,14 @@ pub(super) const KINDS: [Kind; 6] = [
 
 impl Kind {
     /// The hook mode that lists this kind. Commands are saved text with no kind of their own,
-    /// and notes need a folder-note listing; both have none yet.
+    /// so they have none yet.
     fn mode(self) -> Option<ClipMode> {
         match self {
             Self::History => Some(ClipMode::Recent),
             Self::Snippets | Self::Paths => Some(ClipMode::Saved),
             Self::Secrets => Some(ClipMode::Secrets),
-            Self::Commands | Self::Notes => None,
+            Self::Notes => Some(ClipMode::Notes),
+            Self::Commands => None,
         }
     }
 
@@ -41,7 +42,8 @@ impl Kind {
             Self::History | Self::Secrets => true,
             Self::Snippets => matches!(row.kind, ClipKind::Text | ClipKind::Link),
             Self::Paths => matches!(row.kind, ClipKind::Path | ClipKind::Files),
-            Self::Commands | Self::Notes => false,
+            Self::Notes => row.kind == ClipKind::Note,
+            Self::Commands => false,
         }
     }
 
@@ -79,7 +81,6 @@ pub(super) struct Ask {
 pub(super) struct Answer {
     pub rows: Vec<ClipRow>,
     pub counts: Vec<(Kind, usize)>,
-    pub notes: Option<u32>,
 }
 
 /// Searches each mode once and sorts its rows into kinds. A secret row keeps no user name.
@@ -103,16 +104,7 @@ pub(super) fn gather(hooks: &dyn ClipboardHooks, ask: &Ask) -> Answer {
     for row in rows.iter_mut().filter(|row| row.kind == ClipKind::Secret) {
         row.detail.clear();
     }
-    // Notes cannot be searched yet, so their total shows only when no search narrows the rest.
-    let notes = hooks
-        .counts()
-        .filter(|_| ask.query.is_empty())
-        .map(|counts| counts.notes);
-    Answer {
-        rows,
-        counts,
-        notes,
-    }
+    Answer { rows, counts }
 }
 
 /// The kinds the hooks offer a mode for, in the nav's order.

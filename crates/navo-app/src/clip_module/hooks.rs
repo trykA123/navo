@@ -3,26 +3,19 @@ use std::sync::Arc;
 use navo_clipboard::{ClipService, FailKind, Mode};
 use navo_core::Location;
 use navo_ui::clip_palette::{
-    ClipCounts, ClipId, ClipMode, ClipResults, ClipboardHooks, How, SavedDraft, Scope, SecretText,
+    ClipCounts, ClipId, ClipMode, ClipResults, ClipboardHooks, How, SavedDraft, SavedEdit, Scope,
+    SecretText,
 };
 
 use super::rows::{self, Target};
 use super::running::failed_notice;
-use super::saved::{WIPE_WAIT, item_of, message, now_ms, scope_of, wait};
+use super::saved::{WIPE_WAIT, deleted, deleted_within, item_of, message, now_ms, scope_of, wait};
 use super::{ClipModule, folder_path};
 
 type Refusal = Result<(), String>;
 
 fn off() -> String {
     navo_l10n::tr("clipboard-off")
-}
-
-fn queued(sent: bool) -> Refusal {
-    if sent {
-        Ok(())
-    } else {
-        Err(navo_l10n::tr("clipboard-busy"))
-    }
 }
 
 fn mode_of(mode: ClipMode) -> Mode {
@@ -37,17 +30,12 @@ fn mode_of(mode: ClipMode) -> Mode {
 
 /// A delete-all answer: a refused wipe reads "not deleted", not "failed".
 fn wiped(reply: navo_clipboard::Reply<()>) -> Refusal {
-    match reply.recv_timeout(WIPE_WAIT) {
-        Ok(Err(FailKind::Store)) => Err(navo_l10n::tr("clipboard-not-deleted")),
-        Ok(Err(kind)) => Err(message(kind)),
-        Ok(Ok(())) => Ok(()),
-        Err(_) => Err(message(FailKind::Busy)),
-    }
+    deleted_within(reply, WIPE_WAIT)
 }
 
 impl ClipModule {
     /// The running service; a worker that has died reads as a failed recorder.
-    fn running(&self) -> Result<Arc<ClipService>, String> {
+    pub(super) fn running(&self) -> Result<Arc<ClipService>, String> {
         let (service, _) = self.peek().live.ok_or_else(off)?;
         if service.is_alive() {
             Ok(service)
@@ -70,7 +58,6 @@ impl ClipboardHooks for ClipModule {
         })
     }
 
-    /// Notes is left out: the hooks cannot list folder notes yet.
     fn modes(&self) -> Vec<ClipMode> {
         match self.peek().live {
             Some(_) => vec![
@@ -78,6 +65,7 @@ impl ClipboardHooks for ClipModule {
                 ClipMode::Recent,
                 ClipMode::Saved,
                 ClipMode::Secrets,
+                ClipMode::Notes,
             ],
             None => Vec::new(),
         }
@@ -85,6 +73,9 @@ impl ClipboardHooks for ClipModule {
 
     fn search(&self, query: &str, mode: ClipMode, folder: Option<&Location>) -> ClipResults {
         let view = self.peek();
+        if mode == ClipMode::Notes {
+            return self.note_results(view, query, folder);
+        }
         let Some((_, snapshot)) = view.live else {
             return ClipResults {
                 notice: view.notice,
@@ -115,14 +106,16 @@ impl ClipboardHooks for ClipModule {
         match rows::target(id).ok_or_else(off)? {
             Target::History(row) => wait(service.copy_answered(row, how)),
             Target::Saved(row) => wait(service.copy_saved(row, how)),
+            Target::Note(_) => Err(message(FailKind::Refused)),
         }
     }
 
     fn delete(&self, id: ClipId) -> Refusal {
         let service = self.running()?;
         match rows::target(id).ok_or_else(off)? {
-            Target::History(row) => queued(service.delete(row)),
-            Target::Saved(row) => queued(service.delete_saved(row)),
+            Target::History(row) => deleted(service.delete(row)),
+            Target::Saved(row) => deleted(service.delete_saved(row)),
+            Target::Note(hash) => self.delete_note(&service, hash),
         }
     }
 
@@ -157,8 +150,8 @@ impl ClipboardHooks for ClipModule {
     }
 
     /// The draft's kind picks the saved kind: text and links save as snippets, paths as path
-    /// items; files and images are refused. A secret needs a build that can seal and carries
-    /// no user name yet.
+    /// items; files and images are refused. A secret needs a build that can seal; its user
+    /// name is kept, other kinds drop it.
     fn save(&self, draft: SavedDraft) -> Result<ClipId, String> {
         let service = self.running()?;
         let (item, secret) = item_of(&draft)?;
@@ -169,10 +162,29 @@ impl ClipboardHooks for ClipModule {
         rows::saved_id(saved).ok_or_else(|| message(FailKind::Store))
     }
 
+    fn saved_for_edit(&self, id: ClipId) -> Result<SavedEdit, String> {
+        self.load_for_edit(id)
+    }
+
+    fn update_saved(&self, id: ClipId, draft: SavedDraft) -> Refusal {
+        self.update_from(id, &draft)
+    }
+
+    fn rename_note(&self, from: Scope, to: Scope) -> Refusal {
+        self.move_note_to(&from, &to)
+    }
+
     fn note_for(&self, folder: &Location) -> Option<String> {
         let service = self.running().ok()?;
         let scope = navo_clipboard::Scope::Folder(folder_path(Some(folder))?);
         wait(service.note(scope)).ok().flatten()
+    }
+
+    fn global_note(&self) -> Option<String> {
+        let service = self.running().ok()?;
+        wait(service.note(navo_clipboard::Scope::Global))
+            .ok()
+            .flatten()
     }
 
     fn set_note(&self, scope: Scope, text: String) -> Refusal {

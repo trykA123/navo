@@ -61,7 +61,11 @@ fn privacy_secret_flow_leaves_no_trace() {
         .unwrap();
     assert_clean(SECRET, &stored_bytes(&rig));
     seen.service(&rig);
-    assert!(service.delete_saved(id));
+    service
+        .delete_saved(id)
+        .recv_timeout(WAIT)
+        .unwrap()
+        .unwrap();
     rig.module.stop();
     assert_clean(SECRET, &stored_bytes(&rig));
     finish(&spy, &seen, SECRET);

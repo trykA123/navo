@@ -18,6 +18,7 @@ mod bytes;
 mod check;
 mod controls;
 mod flows;
+mod notes;
 mod secret;
 mod secret_hooks;
 mod spy;
@@ -44,6 +45,7 @@ impl Seen {
             self.note("snapshot", &snapshot);
             self.note("history rows", &snapshot.history);
             self.note("saved rows", &snapshot.saved);
+            self.note("note headers", &snapshot.notes);
             self.note("last failure", &service.last_error());
         }
         let notice = rig.module.search("", ClipMode::All, None).notice;

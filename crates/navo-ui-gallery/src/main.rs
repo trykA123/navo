@@ -3,6 +3,7 @@
 mod automotive_sample;
 mod bars_page;
 mod clip_palette_page;
+mod clip_sample;
 mod columns_page;
 mod command_center_page;
 mod drag_page;
@@ -86,6 +87,7 @@ fn main() -> ExitCode {
         if let Err(error) = navo_ui::init(Mode::Light, cx) {
             report(&error.to_string());
         }
+        navo_ui::clip_palette::bind_keys(cx);
         navo_ui::confirm_dialog::bind_keys(cx);
         navo_ui::prompt_dialog::bind_keys(cx);
         navo_ui::context_menu::bind_keys(cx);

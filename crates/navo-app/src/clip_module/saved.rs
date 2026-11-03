@@ -40,6 +40,21 @@ pub(super) fn wait<T>(reply: Reply<T>) -> Result<T, String> {
     }
 }
 
+/// Waits for a delete; a store failure reads "not deleted", since the text may still be on disk.
+pub(super) fn deleted(reply: Reply<()>) -> Result<(), String> {
+    deleted_within(reply, REPLY_WAIT)
+}
+
+pub(super) fn deleted_within(reply: Reply<()>, limit: Duration) -> Result<(), String> {
+    match reply.recv_timeout(limit) {
+        Ok(Err(FailKind::Store)) => Err(navo_l10n::tr("clipboard-not-deleted")),
+        Ok(result) => result.map_err(message),
+        Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => {
+            Err(message(FailKind::Busy))
+        }
+    }
+}
+
 pub(super) fn now_ms() -> i64 {
     let since = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -56,6 +71,12 @@ pub(super) fn scope_of(scope: &Scope) -> Result<navo_clipboard::Scope, String> {
     }
 }
 
+/// The user name to keep: trimmed, only for a secret, `None` when blank.
+fn user_of(draft: &SavedDraft) -> Option<String> {
+    let user = draft.user.as_deref()?.trim();
+    (draft.kind == ClipKind::Secret && !user.is_empty()).then(|| user.to_owned())
+}
+
 /// The saved item for a draft and, for a secret, the text to seal. The draft's text moves into
 /// the secret buffer, which wipes itself on drop.
 pub(super) fn item_of(draft: &SavedDraft) -> Result<(Saved, Option<SecretBytes>), String> {
@@ -63,7 +84,9 @@ pub(super) fn item_of(draft: &SavedDraft) -> Result<(Saved, Option<SecretBytes>)
         ClipKind::Text | ClipKind::Link => SavedKind::Snippet,
         ClipKind::Path => SavedKind::Path,
         ClipKind::Secret => SavedKind::Secret,
-        ClipKind::Files | ClipKind::Image => return Err(message(FailKind::Refused)),
+        ClipKind::Files | ClipKind::Image | ClipKind::Note => {
+            return Err(message(FailKind::Refused));
+        }
     };
     let title = draft.title.trim();
     if title.is_empty() {
@@ -80,7 +103,7 @@ pub(super) fn item_of(draft: &SavedDraft) -> Result<(Saved, Option<SecretBytes>)
         kind,
         title: title.to_owned(),
         body,
-        user: None,
+        user: user_of(draft),
         sealed: None,
         scope: scope_of(&draft.scope)?,
         created_ms: now,

@@ -1,12 +1,23 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use navo_core::Location;
+
+use super::notes::{is_folder_row, is_placeholder};
 use super::{ClipId, ClipKind, ClipMode, ClipResults, ClipRow, Origin};
 
-/// One line of the list: a group head in All, or a row by index.
+/// The two group heads of Notes mode when the active folder's note leads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum NotesHead {
+    ThisFolder,
+    Others,
+}
+
+/// One line of the list: a group head in All or Notes, or a row by index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Entry {
     Head(Origin),
+    NotesHead(NotesHead),
     Row(usize),
 }
 
@@ -24,6 +35,9 @@ pub(super) struct PaletteState {
     asked: ClipMode,
     shown: ClipMode,
     is_loaded: bool,
+    /// The folder whose note leads Notes mode; none in the pop-up.
+    folder: Option<Location>,
+    has_folder_note: bool,
 }
 
 impl PaletteState {
@@ -46,7 +60,29 @@ impl PaletteState {
             asked: mode,
             shown: mode,
             is_loaded: false,
+            folder: None,
+            has_folder_note: false,
         }
+    }
+
+    pub fn with_folder(mut self, folder: Option<Location>) -> Self {
+        self.folder = folder;
+        self
+    }
+
+    pub fn folder(&self) -> Option<&Location> {
+        self.folder.as_ref()
+    }
+
+    /// The mode the latest request asked for, which the next accepted answer belongs to.
+    pub fn asked(&self) -> ClipMode {
+        self.asked
+    }
+
+    /// Rows that stand for stored items: the placeholder of an empty folder note is none.
+    pub fn item_count(&self) -> usize {
+        let rows = &self.results.rows;
+        rows.len() - usize::from(self.has_folder_note && rows.first().is_some_and(is_placeholder))
     }
 
     pub fn modes(&self) -> &[ClipMode] {
@@ -98,7 +134,7 @@ impl PaletteState {
 
     pub fn count_of(&self, mode: ClipMode) -> Option<usize> {
         if mode == self.shown {
-            return self.is_loaded.then_some(self.results.rows.len());
+            return self.is_loaded.then(|| self.item_count());
         }
         self.counts
             .iter()
@@ -147,6 +183,7 @@ impl PaletteState {
     pub fn clear(&mut self) {
         self.results = Rc::default();
         self.entries = Rc::default();
+        self.has_folder_note = false;
         self.counts.clear();
         self.with_user.clear();
         self.selected = 0;
@@ -174,6 +211,13 @@ impl PaletteState {
         self.results = Rc::new(results);
         self.is_loaded = true;
         self.shown = self.asked;
+        self.has_folder_note = self.shown == ClipMode::Notes
+            && self.folder.as_ref().is_some_and(|folder| {
+                self.results
+                    .rows
+                    .first()
+                    .is_some_and(|row| is_folder_row(row, folder))
+            });
         self.entries = self.build_entries();
         self.selected = self
             .keep
@@ -206,6 +250,15 @@ impl PaletteState {
     fn build_entries(&self) -> Rc<[Entry]> {
         let rows = &self.results.rows;
         let mut entries = Vec::with_capacity(rows.len() + 2);
+        if self.has_folder_note {
+            entries.push(Entry::NotesHead(NotesHead::ThisFolder));
+            entries.push(Entry::Row(0));
+            if rows.len() > 1 {
+                entries.push(Entry::NotesHead(NotesHead::Others));
+            }
+            entries.extend((1..rows.len()).map(Entry::Row));
+            return entries.into();
+        }
         let mut last = None;
         for (index, row) in rows.iter().enumerate() {
             if self.shown == ClipMode::All && last != Some(row.from) {

@@ -1,283 +1,18 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use navo_core::Location;
-use navo_ui::clip_palette::{
-    ClipCounts, ClipId, ClipKind, ClipMode, ClipPalette, ClipPaletteProps, ClipResults, ClipRow,
-    ClipboardHooks, How, Origin, Place, SavedDraft, Scope, SecretText,
-};
+use navo_ui::clip_palette::{ClipMode, ClipPalette, ClipPaletteProps, FolderProbe, Place};
 use navo_ui::prelude::*;
 use navo_ui::tokens;
 
+use crate::clip_sample::{GONE, NOW, PROJECT, SECRET_ROW, SNIPPET_ROW, SampleClipboard};
 use crate::gallery::Page;
 
-const NOW: i64 = 1_793_000_000_000;
-const MINUTE: i64 = 60_000;
-const HOUR: i64 = 60 * MINUTE;
-const DAY: i64 = 24 * HOUR;
 const DESKTOP: f32 = 1280.;
 const PHONE: f32 = 390.;
 const POP_UP: f32 = 720.;
 const FILES_ROW: usize = 1;
-const SECRET_ROW: usize = HISTORY.len() + SAVED.len() - 2;
-const PROJECT: &str = r"D:\Projects\ecu-a2";
-const OUT: &str = r"D:\Projects\ecu-a2\build\out";
-
-type Sample = (ClipKind, &'static str, &'static str, &'static str, i64);
-
-const HISTORY: [Sample; 10] = [
-    (
-        ClipKind::Text,
-        "Flash with TASKING 6.3r1; 6.2 breaks the .mdf import",
-        "",
-        "Teams",
-        MINUTE,
-    ),
-    (
-        ClipKind::Files,
-        "3 files · ecu_a2_main.elf, ecu_a2_main.map, ecu_a2.mdf",
-        "D:\\Projects\\ecu-a2\\build\\out\\ecu_a2_main.elf\nD:\\Projects\\ecu-a2\\build\\out\\ecu_a2_main.map\nD:\\Projects\\ecu-a2\\build\\out\\ecu_a2.mdf",
-        "Navo",
-        4 * MINUTE,
-    ),
-    (
-        ClipKind::Path,
-        r"D:\Projects\ecu-a2\build\out\ecu_a2_main.elf",
-        "",
-        "Navo",
-        6 * MINUTE,
-    ),
-    (
-        ClipKind::Text,
-        "cargo xtask check -p navo-index",
-        "",
-        "Terminal",
-        12 * MINUTE,
-    ),
-    (
-        ClipKind::Link,
-        "https://ci.example.lan/job/ecu-a2/1482/console",
-        "",
-        "Edge",
-        25 * MINUTE,
-    ),
-    (
-        ClipKind::Text,
-        "0x8000_4A10  .text.CanIf_RxIndication  1 284 B",
-        "",
-        "Navo F3",
-        40 * MINUTE,
-    ),
-    (
-        ClipKind::Files,
-        "2 files · DBC_PT_CAN_v14.dbc, A2L_ecu_a2_r7.a2l",
-        "\\\\fileserver\\calib\\r7\\DBC_PT_CAN_v14.dbc\n\\\\fileserver\\calib\\r7\\A2L_ecu_a2_r7.a2l",
-        "Navo",
-        HOUR,
-    ),
-    (
-        ClipKind::Text,
-        "git log --oneline -20 origin/main",
-        "",
-        "Terminal",
-        2 * HOUR,
-    ),
-    (
-        ClipKind::Text,
-        "Review notes for the CAN gateway: timeouts at 50 ms, not 20.",
-        "",
-        "Outlook",
-        DAY + 2 * HOUR,
-    ),
-    (
-        ClipKind::Path,
-        r"\\fileserver\calib\r7\A2L_ecu_a2_r7.a2l",
-        "",
-        "Navo",
-        DAY + 5 * HOUR,
-    ),
-];
-
-const SAVED: [Sample; 8] = [
-    (
-        ClipKind::Text,
-        "Check the index crate",
-        "cargo xtask check -p navo-index",
-        "",
-        0,
-    ),
-    (
-        ClipKind::Text,
-        "Flash ECU A2 over CAN",
-        "tricore-flash --port PCAN_USB1 --baud 500k build\\out\\ecu_a2_main.hex",
-        PROJECT,
-        2 * DAY,
-    ),
-    (ClipKind::Path, "ECU A2 build output", OUT, "", 0),
-    (
-        ClipKind::Path,
-        "Calibration share",
-        r"\\fileserver\calib\r7",
-        "",
-        7 * DAY,
-    ),
-    (
-        ClipKind::Text,
-        "Review reply",
-        "Thanks, merged. The flash script now checks the .mdf version first.",
-        "",
-        3 * DAY,
-    ),
-    (ClipKind::Text, "Signature", "Regards,\nadmin", "", 0),
-    (ClipKind::Secret, "Build server SSH", "admin", "", 0),
-    (ClipKind::Secret, "Artifactory token", "ci-bot", "", 7 * DAY),
-];
-
-/// What `reveal` gives back, by title; a secret row carries only its user name.
-const SECRETS: [(&str, &str); 2] = [
-    ("Build server SSH", "k7#Qm2-vX9!pLr4e"),
-    ("Artifactory token", "AKCp8ihxR2b9TqWm4sLkZ7"),
-];
-
-fn clip_row(id: u64, from: Origin, (kind, title, detail, extra, ago): Sample) -> ClipRow {
-    let (source_app, scope) = match from {
-        Origin::Clipboard => (Some(extra.to_owned()), Scope::Everywhere),
-        Origin::Saved => (
-            None,
-            Location::new(extra).map_or(Scope::Everywhere, Scope::Folder),
-        ),
-    };
-    ClipRow {
-        id: ClipId(id),
-        kind,
-        title: title.to_owned(),
-        detail: detail.to_owned(),
-        source_app,
-        when_ms: NOW - ago,
-        scope,
-        from,
-        ranges: Vec::new(),
-    }
-}
-
-struct SampleClipboard {
-    rows: Vec<ClipRow>,
-    /// The first-open line shows once, as on a first run.
-    intro: AtomicBool,
-}
-
-impl SampleClipboard {
-    fn new(has_intro: bool) -> Arc<Self> {
-        let history = HISTORY.iter().zip(0..);
-        let saved = SAVED.iter().zip(100..);
-        let rows = history
-            .map(|(sample, id)| clip_row(id, Origin::Clipboard, *sample))
-            .chain(saved.map(|(sample, id)| clip_row(id, Origin::Saved, *sample)))
-            .collect();
-        Arc::new(Self {
-            rows,
-            intro: AtomicBool::new(has_intro),
-        })
-    }
-}
-
-fn is_in(mode: ClipMode, row: &ClipRow) -> bool {
-    match mode {
-        ClipMode::All => true,
-        ClipMode::Recent => row.from == Origin::Clipboard,
-        ClipMode::Saved => row.from == Origin::Saved && row.kind != ClipKind::Secret,
-        ClipMode::Secrets => row.kind == ClipKind::Secret,
-        ClipMode::Notes => false,
-    }
-}
-
-impl ClipboardHooks for SampleClipboard {
-    fn counts(&self) -> Option<ClipCounts> {
-        Some(ClipCounts::default())
-    }
-
-    fn modes(&self) -> Vec<ClipMode> {
-        vec![
-            ClipMode::All,
-            ClipMode::Recent,
-            ClipMode::Saved,
-            ClipMode::Secrets,
-        ]
-    }
-
-    fn search(&self, query: &str, mode: ClipMode, _: Option<&Location>) -> ClipResults {
-        let query = query.to_lowercase();
-        let rows = self
-            .rows
-            .iter()
-            .filter(|row| is_in(mode, row) && row.title.to_lowercase().contains(&query))
-            .cloned()
-            .collect();
-        ClipResults {
-            rows,
-            kept: HISTORY.len() as u32,
-            revision: 1,
-            notice: None,
-        }
-    }
-
-    fn copy(&self, _: ClipId, _: How) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn delete(&self, _: ClipId) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn clear_history(&self) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn delete_all(&self) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn set_recording(&self, _: bool) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn subscribe(&self, _: Box<dyn Fn() + Send + Sync>) {}
-
-    fn save_from_history(&self, id: ClipId) -> Result<ClipId, String> {
-        Ok(id)
-    }
-
-    fn save(&self, _: SavedDraft) -> Result<ClipId, String> {
-        Ok(ClipId(0))
-    }
-
-    fn note_for(&self, _: &Location) -> Option<String> {
-        None
-    }
-
-    fn set_note(&self, _: Scope, _: String) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn reveal(&self, id: ClipId) -> Result<SecretText, String> {
-        let row = self.rows.iter().find(|row| row.id == id);
-        let secret = SECRETS
-            .iter()
-            .find(|(title, _)| Some(*title) == row.map(|r| r.title.as_str()));
-        secret
-            .map(|(_, text)| SecretText::new((*text).to_owned()))
-            .ok_or_else(String::new)
-    }
-
-    fn copy_user(&self, _: ClipId) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn take_intro(&self) -> bool {
-        self.intro.swap(false, Ordering::SeqCst)
-    }
-}
 
 /// What a page shows once it is on screen.
 #[derive(Clone, Copy)]
@@ -293,6 +28,12 @@ pub enum Scene {
     PopUpMenu,
     /// The library view in the pop-up window's frame.
     Manage,
+    /// Notes mode in the window, with the folder note in the editor.
+    Notes,
+    /// F2 on a saved snippet: the edit form.
+    Edit,
+    /// F2 on a secret, then a new password typed: the secret form with its masked field.
+    EditSecret,
 }
 
 const SCENES: [(Scene, f32); COUNT] = [
@@ -313,15 +54,21 @@ const SCENES: [(Scene, f32); COUNT] = [
     (Scene::PopUpMenu, POP_UP),
     (Scene::Manage, POP_UP),
     (Scene::Manage, PHONE),
+    (Scene::Notes, DESKTOP),
+    (Scene::Notes, PHONE),
+    (Scene::Edit, DESKTOP),
+    (Scene::Edit, PHONE),
+    (Scene::EditSecret, DESKTOP),
+    (Scene::EditSecret, PHONE),
 ];
 
-pub const COUNT: usize = 17;
+pub const COUNT: usize = 23;
 
 fn stage(
     scene: Scene,
     wants_files: bool,
     palette: &mut ClipPalette,
-    cx: &mut Context<ClipPalette>,
+    (window, cx): (&mut Window, &mut Context<ClipPalette>),
 ) {
     if wants_files && matches!(scene, Scene::Plain | Scene::Menu | Scene::PopUpMenu) {
         palette.select(FILES_ROW, cx);
@@ -329,6 +76,7 @@ fn stage(
     match scene {
         Scene::Plain | Scene::PopUp => {}
         Scene::Manage => palette.open_manage(cx),
+        Scene::Notes => palette.pick_mode(ClipMode::Notes, cx),
         Scene::Menu | Scene::PopUpMenu => palette.open_actions(cx),
         Scene::SecretHidden => palette.select(SECRET_ROW, cx),
         Scene::SecretShown => {
@@ -343,6 +91,30 @@ fn stage(
             palette.select(SECRET_ROW, cx);
             palette.open_actions(cx);
         }
+        Scene::Edit => {
+            palette.select(SNIPPET_ROW, cx);
+            palette.edit_selected(window, cx);
+        }
+        Scene::EditSecret => {
+            palette.select(SECRET_ROW, cx);
+            palette.edit_selected(window, cx);
+        }
+    }
+}
+
+/// Tab to the password field and type a new password, as a user would.
+fn type_password(window: &mut Window, cx: &mut App) {
+    for key in ["tab", "tab"] {
+        if let Ok(stroke) = Keystroke::parse(key) {
+            window.dispatch_keystroke(stroke, cx);
+        }
+    }
+    for typed in "k7#Qm2-vX9!pLr4e".chars() {
+        let text = typed.to_string();
+        if let Ok(mut stroke) = Keystroke::parse(&text) {
+            stroke.key_char = Some(text);
+            window.dispatch_keystroke(stroke, cx);
+        }
     }
 }
 
@@ -355,7 +127,10 @@ pub struct ClipPalettePage {
 impl ClipPalettePage {
     pub fn new((scene, width): (Scene, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
         let props = ClipPaletteProps {
-            hooks: SampleClipboard::new(matches!(scene, Scene::Plain | Scene::PopUp)),
+            hooks: SampleClipboard::new(
+                matches!(scene, Scene::Plain | Scene::PopUp),
+                matches!(scene, Scene::Notes),
+            ),
             place: match scene {
                 Scene::PopUp | Scene::PopUpMenu | Scene::Manage => Place::Anywhere,
                 _ => Place::Window,
@@ -364,6 +139,7 @@ impl ClipPalettePage {
             key_cap: Some("ctrl-shift-v".into()),
             now_ms: Some(NOW),
             width: Some(px(width)),
+            folder_probe: Some(Arc::new(|at: &Location| at.as_str() == GONE) as FolderProbe),
         };
         let palette = cx.new(|cx| ClipPalette::new(props, window, cx));
         Self {
@@ -374,23 +150,37 @@ impl ClipPalettePage {
     }
 
     /// Plays the scene once the page is first drawn, so a countdown starts when it is seen.
-    fn play(&self, scene: Scene, cx: &mut Context<Self>) {
+    fn play(&self, scene: Scene, window: &Window, cx: &mut Context<Self>) {
         let shown = self.palette.clone();
         let wants_files = self.width > PHONE;
-        cx.spawn(async move |_, cx| {
+        cx.spawn_in(window, async move |_, cx| {
             cx.background_executor()
                 .timer(Duration::from_millis(200))
                 .await;
-            shown.update(cx, |palette, cx| stage(scene, wants_files, palette, cx));
+            let _ = shown.update_in(cx, |palette, window, cx| {
+                stage(scene, wants_files, palette, (window, cx));
+            });
+            if matches!(scene, Scene::Notes) {
+                cx.background_executor()
+                    .timer(Duration::from_millis(400))
+                    .await;
+                shown.update(cx, |palette, cx| palette.focus_note(cx));
+            }
+            if matches!(scene, Scene::EditSecret) {
+                cx.background_executor()
+                    .timer(Duration::from_millis(400))
+                    .await;
+                let _ = cx.update(type_password);
+            }
         })
         .detach();
     }
 }
 
 impl Render for ClipPalettePage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(scene) = self.scene.take() {
-            self.play(scene, cx);
+            self.play(scene, window, cx);
         }
         let t = tokens::current(cx).clone();
         div()
@@ -428,6 +218,12 @@ pub fn element(page: Page, pages: &[Entity<ClipPalettePage>; COUNT]) -> Option<A
         Page::ClipPopUpMenu => 14,
         Page::ClipManage => 15,
         Page::ClipManage390 => 16,
+        Page::ClipNotes => 17,
+        Page::ClipNotes390 => 18,
+        Page::ClipEdit => 19,
+        Page::ClipEdit390 => 20,
+        Page::ClipEditSecret => 21,
+        Page::ClipEditSecret390 => 22,
         _ => return None,
     };
     Some(pages[at].clone().into_any_element())

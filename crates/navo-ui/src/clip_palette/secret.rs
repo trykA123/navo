@@ -1,7 +1,7 @@
 //! Showing a secret in the preview. The text lives in one wiped buffer, only while its row
 //! stays selected.
 
-use gpui_kit::Context;
+use gpui_kit::{Context, Window};
 
 use super::actions::{Action, items};
 use super::view::{ClipPalette, ClipPaletteEvent, Place};
@@ -41,6 +41,9 @@ impl ClipPalette {
 
     /// Shows the selected secret, or hides it again; nothing for any other row.
     pub fn toggle_reveal(&mut self, cx: &mut Context<Self>) {
+        if self.form.is_some() {
+            return self.form_reveal(cx);
+        }
         self.run_if_offered(Action::Reveal, cx);
     }
 
@@ -48,7 +51,11 @@ impl ClipPalette {
         self.run_if_offered(Action::CopyUser, cx);
     }
 
-    pub(super) fn save_key(&mut self, cx: &mut Context<Self>) {
+    /// Ctrl+S: saves the form while it is open, else the selected history row.
+    pub(super) fn save_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.form.is_some() {
+            return self.save_form(window, cx);
+        }
         self.run_if_offered(Action::Save, cx);
     }
 

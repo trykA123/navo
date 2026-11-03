@@ -9,7 +9,7 @@ use super::super::{Config, StartWatch};
 use super::{Rig, SLOW, off, on, wait_until_len};
 
 #[test]
-fn enabled_opens_the_file_and_offers_four_modes_without_notes() {
+fn enabled_opens_the_file_and_offers_the_five_modes() {
     let rig = Rig::new();
     rig.apply(on());
     assert!(rig.db().exists());
@@ -19,7 +19,8 @@ fn enabled_opens_the_file_and_offers_four_modes_without_notes() {
             ClipMode::All,
             ClipMode::Recent,
             ClipMode::Saved,
-            ClipMode::Secrets
+            ClipMode::Secrets,
+            ClipMode::Notes
         ]
     );
 }
@@ -98,7 +99,7 @@ fn a_damaged_file_is_set_aside_and_the_notice_has_no_path() {
         })
         .count();
     assert_eq!(asides, 1);
-    assert_eq!(rig.module.modes().len(), 4);
+    assert_eq!(rig.module.modes().len(), 5);
 }
 
 #[test]
@@ -143,7 +144,7 @@ fn a_missing_watcher_leaves_the_module_on() {
     let watch: StartWatch = Arc::new(|_| Err(ClipboardError::Unsupported));
     let rig = Rig::with_watch(Some(watch));
     rig.apply(on());
-    assert_eq!(rig.module.modes().len(), 4);
+    assert_eq!(rig.module.modes().len(), 5);
 }
 
 #[test]
@@ -218,4 +219,19 @@ fn delete_clear_and_delete_all_remove_rows() {
     rig.module.delete_all().unwrap();
     wait_until_len(&rig, 0);
     assert!(rig.db().exists());
+}
+
+#[test]
+fn a_history_row_that_cannot_be_deleted_reads_not_deleted() {
+    let rig = Rig::new();
+    rig.apply(on());
+    rig.emit("kept");
+    rig.wait_for_title("kept");
+    let id = rig.module.search("kept", ClipMode::All, None).rows[0].id;
+    rig.refuse_deletes("clips");
+    assert_eq!(
+        rig.module.delete(id),
+        Err(navo_l10n::tr("clipboard-not-deleted"))
+    );
+    assert_eq!(rig.titles(""), ["kept"]);
 }
