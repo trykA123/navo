@@ -124,7 +124,14 @@ fn update_line(look: &Look) -> AnyElement {
             t.colors.muted
         })
         .child(text);
-    let check = (!matches!(look.update, UpdateView::Hidden)).then(|| {
+    let action = if matches!(look.update, UpdateView::Hidden) {
+        button(
+            "settings-update-installer",
+            "settings-update-get-installer",
+            SheetEvent::OpenReleases,
+            look.send.as_ref(),
+        )
+    } else {
         let send = look.send.clone();
         Button::new(
             "settings-update-check",
@@ -136,7 +143,7 @@ fn update_line(look: &Look) -> AnyElement {
                 send(&SheetEvent::CheckUpdates, window, cx);
             }
         })
-    });
+    };
     div()
         .flex()
         .flex_wrap()
@@ -145,18 +152,36 @@ fn update_line(look: &Look) -> AnyElement {
         .px(t.spacing.xl)
         .py(t.spacing.md)
         .child(status)
-        .children(check)
+        .child(action)
+        .into_any_element()
+}
+
+fn auto_unavailable(t: &Theme) -> AnyElement {
+    let text = SharedString::from(navo_l10n::tr("settings-update-auto-unavailable"));
+    div()
+        .id("settings-update-auto-unavailable")
+        .role(Role::Status)
+        .aria_label(text.clone())
+        .test_support()
+        .px(t.spacing.xl)
+        .text_size(t.typography.small)
+        .text_color(t.colors.muted)
+        .child(text)
         .into_any_element()
 }
 
 pub(super) fn render(look: &Look) -> Vec<AnyElement> {
     let t = look.theme;
     let toggle = super::view::row(look, HELP_ROW, Field::CheckUpdates.spec());
-    vec![
+    let mut page = vec![
         super::view::section_heading(t, Section::Help),
         controls(t, look.send.as_ref()),
         version(t, look.version),
         update_line(look),
         toggle,
-    ]
+    ];
+    if matches!(look.update, UpdateView::Hidden) {
+        page.push(auto_unavailable(t));
+    }
+    page
 }

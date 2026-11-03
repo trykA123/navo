@@ -81,6 +81,7 @@ gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 navo-store = { path = "../navo-store", features = ["test-support"] }
 insta = "1.49.0"
 navo-index = { path = "../navo-index", features = ["test-support"] }
+navo-update = { path = "../navo-update", features = ["test-support"] }
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 

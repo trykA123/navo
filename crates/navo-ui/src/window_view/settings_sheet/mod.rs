@@ -297,6 +297,7 @@ impl NavoWindow {
             SheetEvent::RefreshDiagnostics => self.refresh_diagnostics(cx),
             SheetEvent::OpenGuide => self.open_guide_from_settings(window, cx),
             SheetEvent::CheckUpdates => self.check_updates_now(cx),
+            SheetEvent::OpenReleases => cx.open_url(updates::RELEASES_URL),
             SheetEvent::ClearHistory => self.clear_search_history(),
             SheetEvent::InstallService => self.install_index_service(cx),
             SheetEvent::RemoveService => self.remove_index_service(cx),

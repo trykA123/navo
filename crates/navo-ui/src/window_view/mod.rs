@@ -393,6 +393,7 @@ impl NavoWindow {
         self.drag_list_changed(cx);
         if !matches!(command, Command::PaneScroll { .. }) {
             self.forget_clipboard_notice();
+            self.forget_update_notice();
         }
         self.show_refusal(result);
         self.focus_core_pane(window, cx);

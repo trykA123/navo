@@ -197,6 +197,7 @@ fn settings_read_is_marked_after_loading_finishes() {
         &crate::settings::Follow {
             remember: crate::search_hooks::Remember::default(),
             git: std::sync::Arc::new(|_| {}),
+            auto_updates: std::sync::Arc::new(|_| {}),
         },
     );
     let at = crate::metrics::all()

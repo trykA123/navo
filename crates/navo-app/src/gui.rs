@@ -27,6 +27,7 @@ use crate::search_hooks::{Visits, index_hooks};
 use crate::startup::{
     home_location, initial_state, path_location, place_panes, save, session_folders,
 };
+use crate::updater::service::Updater;
 use crate::{
     app_menu, clipboard, contrast, drives, editor, files, keymap, launch, metrics, settings,
     shell_menu, terminal,
@@ -158,17 +159,29 @@ pub(crate) fn open(mut launch: Launch) {
     metrics::mark("listing cache read");
     let remember = crate::search_hooks::Remember::default();
     let git = crate::git::hooks::Hooks::system(&navo_store::GitSettings::default());
+    let updater = crate::updater::launch();
     let follow = settings::Follow {
         remember: remember.clone(),
         git: {
             let git = git.clone();
             Arc::new(move |values| git.apply(values))
         },
+        auto_updates: {
+            let updater = updater.clone();
+            Arc::new(move |auto| {
+                if let Some(updater) = &updater {
+                    updater.set_auto(auto);
+                }
+            })
+        },
     };
     let (mut settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &follow);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
     settings::wire_guide_hint(&mut settings, dirs.as_ref());
+    if let Some(updater) = &updater {
+        settings.updates = updater.hooks();
+    }
     let terminal = terminal::hooks(&settings.values);
     git.set_ports(crate::git::launch::start::Ports {
         terminal: terminal.open.clone(),
@@ -200,7 +213,10 @@ pub(crate) fn open(mut launch: Launch) {
             files: services.files,
             kinds: navo_ui::window_view::Kinds::builtin(),
             drives: drives::hooks(),
-            app_menu: app_menu::hooks(std::env::current_exe().ok().as_deref()),
+            app_menu: app_menu::hooks(
+                std::env::current_exe().ok().as_deref(),
+                &Updater::version_text(updater.as_deref()),
+            ),
             settings,
             keymap,
             crash_report: finish_startup(&mut launch.store, launch.crash, launch.view.is_some()),
