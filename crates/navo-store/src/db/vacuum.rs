@@ -32,8 +32,14 @@ impl Db {
         if !self.is_incremental_vacuum()? {
             return Ok(0);
         }
-        self.conn
-            .execute_batch(&format!("PRAGMA incremental_vacuum({pages})"))?;
+        {
+            // SQLite frees one page per returned row, so consuming only the first row frees one.
+            let mut statement = self
+                .conn
+                .prepare(&format!("PRAGMA incremental_vacuum({pages})"))?;
+            let mut rows = statement.query([])?;
+            while rows.next()?.is_some() {}
+        }
         self.count_pragma("freelist_count")
     }
 

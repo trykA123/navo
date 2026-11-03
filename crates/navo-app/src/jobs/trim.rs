@@ -214,4 +214,6 @@ fn registry(keys: &Mutex<Vec<usize>>) -> MutexGuard<'_, Vec<usize>> {
 }
 
 #[cfg(test)]
+mod scale_tests;
+#[cfg(test)]
 mod tests;
