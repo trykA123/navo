@@ -227,3 +227,51 @@ fn a_probe_stuck_on_a_network_share_does_not_block_the_scanner() {
     drop(hold);
     assert!(scan.stop());
 }
+
+fn network_limits() -> (GitSettings, Limits) {
+    let settings = GitSettings {
+        network: true,
+        ..GitSettings::default()
+    };
+    let limits = Limits {
+        probe_timeout: Duration::from_millis(20),
+        ..Limits::default()
+    };
+    (settings, limits)
+}
+
+#[test]
+fn a_probe_that_hits_its_deadline_marks_the_listing_slow() {
+    let (hold, release) = mpsc::channel::<()>();
+    let probe = Arc::new(StuckProbe {
+        release: Mutex::new(release),
+    });
+    let (settings, limits) = network_limits();
+    let h = Harness::build(probe, move |ports, notify| {
+        GitScan::start_with_limits(ports, &settings, notify, limits).unwrap()
+    });
+    h.observe("stuck", 1, &["repo"]);
+    h.observe("fixture", 2, &["repo"]);
+    let slow = h.wait("stuck", |b| b.revision >= 1);
+    assert!(slow.slow_drive);
+    assert!(slow.by_name.is_empty());
+    let normal = h.wait("fixture", |b| b.revision >= 2);
+    assert!(!normal.slow_drive);
+    drop(hold);
+    assert!(h.scan.stop());
+}
+
+#[test]
+fn a_fast_network_listing_is_not_marked_slow() {
+    let p = Arc::new(FakeProbe {
+        repos: [PathBuf::from("fixture/a")].into(),
+        network: true,
+        ..FakeProbe::default()
+    });
+    let (settings, _) = network_limits();
+    let h = Harness::configured(p, settings, Limits::default());
+    h.observe("fixture", 1, &["a"]);
+    let badges = h.wait("fixture", |b| b.revision >= 1);
+    assert!(!badges.slow_drive);
+    assert!(h.scan.stop());
+}

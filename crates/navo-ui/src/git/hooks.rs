@@ -42,6 +42,8 @@ pub struct RepoBadge {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FolderBadges {
     pub revision: u64,
+    /// The scanner gave up on this listing because its drive answered too slowly.
+    pub slow_drive: bool,
     pub by_name: HashMap<String, RepoBadge>,
 }
 

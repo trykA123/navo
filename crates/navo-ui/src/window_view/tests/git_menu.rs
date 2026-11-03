@@ -52,6 +52,7 @@ impl Fake {
             badges: Arc::new(Mutex::new(Arc::new(FolderBadges {
                 revision: 1,
                 by_name,
+                ..FolderBadges::default()
             }))),
             generation: Arc::new(AtomicU64::new(1)),
             notify: Arc::default(),

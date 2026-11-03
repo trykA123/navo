@@ -23,6 +23,8 @@ pub(super) struct Discovered {
     pub listing: Arc<Listing>,
     pub bindings: Vec<Binding>,
     pub roots: Vec<PathBuf>,
+    /// The probe gave up on a slow drive.
+    pub slow: bool,
 }
 
 impl Discovered {
@@ -31,6 +33,14 @@ impl Discovered {
             listing,
             bindings: Vec::new(),
             roots: Vec::new(),
+            slow: false,
+        }
+    }
+
+    fn slow(listing: Arc<Listing>) -> Self {
+        Self {
+            slow: true,
+            ..Self::empty(listing)
         }
     }
 }
@@ -54,7 +64,7 @@ pub(super) fn discover_on_helper(
     running: Arc<AtomicBool>,
 ) -> Discovered {
     if running.swap(true, Ordering::SeqCst) {
-        return Discovered::empty(listing);
+        return Discovered::slow(listing);
     }
     let helper = Helper(running);
     let (sender, receiver) = mpsc::sync_channel(1);
@@ -72,7 +82,7 @@ pub(super) fn discover_on_helper(
     }
     receiver
         .recv_timeout(limits.probe_timeout)
-        .unwrap_or_else(|_| Discovered::empty(listing))
+        .unwrap_or_else(|_| Discovered::slow(listing))
 }
 
 pub(super) fn discover(

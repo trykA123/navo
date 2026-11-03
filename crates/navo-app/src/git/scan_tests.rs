@@ -106,7 +106,7 @@ impl Harness {
         })
     }
 
-    fn build(probe: Arc<FakeProbe>, start: impl FnOnce(Ports, Notify) -> GitScan) -> Self {
+    fn build(probe: Arc<dyn Probe>, start: impl FnOnce(Ports, Notify) -> GitScan) -> Self {
         let (started, calls) = mpsc::channel();
         let (notify, notices) = mpsc::channel();
         let source = Arc::new(FakeSource::default());
