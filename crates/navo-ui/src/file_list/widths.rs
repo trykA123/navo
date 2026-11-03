@@ -53,7 +53,6 @@ pub(super) struct ColumnWidths {
     ext: Pixels,
     size: Pixels,
     date: Pixels,
-    gutter: Pixels,
 }
 
 impl ColumnWidths {
@@ -62,7 +61,6 @@ impl ColumnWidths {
             ext: t.spacing.xxl * EXT_COLUMN,
             size: t.spacing.size_column,
             date: t.spacing.date_column + t.spacing.xl,
-            gutter: Pixels::ZERO,
         }
     }
 
@@ -82,16 +80,6 @@ impl ColumnWidths {
             SortBy::Date => Some(self.date),
             SortBy::Name => None,
         }
-    }
-
-    #[must_use]
-    pub(super) fn with_gutter(mut self, gutter: Pixels) -> Self {
-        self.gutter = gutter;
-        self
-    }
-
-    pub(super) fn gutter(self) -> Pixels {
-        self.gutter
     }
 
     #[must_use]
@@ -148,7 +136,6 @@ fn natural(t: &Theme, window: &Window, cx: &mut App) -> ColumnWidths {
         ext: fallback.ext,
         size: usable(size, fallback.size),
         date: usable(date, fallback.date),
-        gutter: Pixels::ZERO,
     }
 }
 

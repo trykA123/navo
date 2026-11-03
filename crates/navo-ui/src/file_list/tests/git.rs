@@ -3,17 +3,13 @@ use std::sync::Arc;
 
 use gpui_kit::AppContext as _;
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{
-    AnyWindowHandle, Context, IntoElement, ParentElement, Pixels, Render, Role, Styled,
-    TestAppContext, Window, div, px,
-};
+use gpui_kit::{AnyWindowHandle, Pixels, Role, TestAppContext};
 use navo_fs::EntryKind;
 
 use super::{actions, entry, open_list, props, sample_rows};
 use crate::file_list::git_cell::{self, Mark};
-use crate::file_list::{FileList, FileListAction, FileListProps, git_text};
+use crate::file_list::{FileListAction, FileListProps, git_text};
 use crate::git::{BadgeKind, FolderBadges, RepoBadge};
-use crate::test_window::open_sized;
 use crate::tokens::{self, ColorTheme, Mode, Theme, contrast_ratio};
 
 fn badge(kind: BadgeKind, is_root: bool) -> RepoBadge {
@@ -54,37 +50,12 @@ fn one_repo() -> FileListProps {
     with_git(props(sample_rows()), &[("src", modified)])
 }
 
-struct Sized(FileListProps);
-
-impl Render for Sized {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(
-            div()
-                .h(px(480.))
-                .flex()
-                .flex_col()
-                .child(FileList::new("left", self.0.clone())),
-        )
-    }
-}
-
-fn gutter_probe(
-    cx: &mut TestAppContext,
-    width: f32,
-    shown: FileListProps,
-) -> (Pixels, Pixels, Pixels, Pixels) {
-    let (window, _) = open_sized(cx, px(width), move |_, _| Sized(shown));
+fn name_left(cx: &mut TestAppContext, shown: FileListProps, row: usize) -> Pixels {
+    let (window, _) = open_list(cx, shown);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let mut list = window.within("left");
-        let header = list.find("git-header").bounds();
-        let badge = list.within(("row", 0usize)).find("git-badge").bounds();
-        (
-            header.left(),
-            header.size.width,
-            badge.left(),
-            badge.size.width,
-        )
+        list.within(("row", row)).find("find-name").bounds().left()
     })
     .expect("window")
 }
@@ -99,39 +70,63 @@ fn has(cx: &mut TestAppContext, window: AnyWindowHandle, row: usize, id: &'stati
 }
 
 #[gpui_kit::test]
-fn the_gutter_is_absent_when_no_row_has_a_badge(cx: &mut TestAppContext) {
-    let (window, _) = open_list(cx, props(sample_rows()));
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert!(window.within("left").try_find("git-header").is_none());
-    })
-    .expect("window");
-    assert!(!has(cx, window, 0, "git-badge"));
-}
-
-#[gpui_kit::test]
-fn the_gutter_is_absent_when_the_badge_list_is_empty(cx: &mut TestAppContext) {
-    let (window, _) = open_list(cx, with_git(props(sample_rows()), &[]));
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert!(window.within("left").try_find("git-header").is_none());
-    })
-    .expect("window");
-}
-
-#[gpui_kit::test]
-fn the_gutter_shows_one_badge_and_leaves_other_rows_empty(cx: &mut TestAppContext) {
+fn no_git_header_is_drawn_and_only_the_badged_row_has_a_mark(cx: &mut TestAppContext) {
     let (window, _) = open_list(cx, one_repo());
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let list = window.within("left");
-        assert!(list.find("git-header").visible());
-        assert_eq!(list.find("git-header").label(), Some("Git"));
+        assert!(window.within("left").try_find("git-header").is_none());
     })
     .expect("window");
     assert!(has(cx, window, 0, "git-badge"));
     assert!(!has(cx, window, 1, "git-badge"));
     assert!(!has(cx, window, 2, "git-badge"));
+}
+
+#[gpui_kit::test]
+fn names_start_at_the_same_x_with_or_without_badges(cx: &mut TestAppContext) {
+    let plain = name_left(cx, props(sample_rows()), 0);
+    assert_eq!(name_left(cx, one_repo(), 0), plain);
+    assert_eq!(name_left(cx, one_repo(), 1), plain);
+    let empty = with_git(props(sample_rows()), &[]);
+    assert_eq!(name_left(cx, empty, 0), plain);
+}
+
+const EVERY_KIND: [BadgeKind; 8] = [
+    BadgeKind::Clean,
+    BadgeKind::Modified,
+    BadgeKind::Ahead,
+    BadgeKind::Behind,
+    BadgeKind::Diverged,
+    BadgeKind::Conflict,
+    BadgeKind::Unknown,
+    BadgeKind::Checking,
+];
+
+#[gpui_kit::test]
+fn every_state_draws_its_mark_on_the_corner_of_the_folder_icon(cx: &mut TestAppContext) {
+    let names: Vec<String> = (0..EVERY_KIND.len()).map(|n| format!("repo{n}")).collect();
+    let rows: Arc<[_]> = names
+        .iter()
+        .map(|name| entry(name, EntryKind::Folder, 0))
+        .collect();
+    let badges: Vec<(&str, RepoBadge)> = names
+        .iter()
+        .zip(EVERY_KIND)
+        .map(|(name, kind)| (name.as_str(), badge(kind, true)))
+        .collect();
+    let (window, _) = open_list(cx, with_git(props(rows), &badges));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let mut list = window.within("left");
+        for row in 0..EVERY_KIND.len() {
+            let row = list.within(("row", row));
+            let icon = row.find("row-icon").bounds();
+            let mark = row.find("git-badge").bounds();
+            assert!(mark.right() > icon.right() && mark.bottom() > icon.bottom());
+            assert!(mark.left() < icon.right() && mark.top() < icon.bottom());
+        }
+    })
+    .expect("window");
 }
 
 #[gpui_kit::test]
@@ -145,17 +140,6 @@ fn the_badge_is_a_button_with_a_spoken_name(cx: &mut TestAppContext) {
         assert_eq!(badge.label(), Some("Git: Modified"));
     })
     .expect("window");
-}
-
-#[gpui_kit::test]
-fn header_and_row_gutters_line_up_at_every_width(cx: &mut TestAppContext) {
-    for width in [480., 800., 1280.] {
-        let (header_left, header_width, badge_left, badge_width) =
-            gutter_probe(cx, width, one_repo());
-        assert_eq!(header_left, badge_left, "{width}");
-        assert_eq!(header_width, badge_width, "{width}");
-        assert!(header_width > px(0.), "{width}");
-    }
 }
 
 #[gpui_kit::test]
@@ -265,6 +249,12 @@ fn the_tooltip_names_state_branch_counts_and_fetch_time() {
         lines[2].starts_with("2 ahead · 0 behind · fetched "),
         "{tip}"
     );
+    let both = RepoBadge {
+        ahead: 1,
+        behind: 2,
+        ..badge(BadgeKind::Diverged, true)
+    };
+    assert!(git_text::tooltip(&both).contains("1 ahead · 2 behind"));
     let unfetched = RepoBadge {
         fetched_ms: None,
         ..badge(BadgeKind::Clean, true)

@@ -171,7 +171,7 @@ fn a_new_revision_reaches_the_props_and_an_older_one_is_dropped(cx: &mut TestApp
 }
 
 #[gpui_kit::test]
-fn badges_turned_off_leave_the_gutter_empty_and_turned_on_fill_it_again(cx: &mut TestAppContext) {
+fn badges_turned_off_clear_the_marks_and_turned_on_show_them_again(cx: &mut TestAppContext) {
     let git = Fake::default();
     let view = open_local(cx, Arc::new(git.clone()));
     let home = local(r"C:\home");

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use navo_core::{ProviderPath, Selection, ViewState};
 use navo_fs::{Attributes, EntryKind, FsEntry};
 use navo_ui::file_list::{FileList, FileListProps, SortKey};
-use navo_ui::git::{BadgeKind, BadgeReason, FolderBadges, RepoBadge};
+use navo_ui::git::{BadgeKind, BadgeReason, FolderBadges, RepoBadge, marked_icon};
 use navo_ui::prelude::*;
 use navo_ui::primitives::{IconName, icon};
 use navo_ui::tokens::{self, ColorTheme, ThemeLook};
@@ -194,23 +194,26 @@ fn themed(color_theme: ColorTheme, mode: tokens::Mode) -> tokens::Theme {
     tokens::Theme::with_look(mode, look)
 }
 
-fn glyphs(t: &tokens::Theme, ground: Hsla) -> Div {
-    let g = &t.git;
-    let marks = [
-        (IconName::TriangleAlert, g.conflict),
-        (IconName::CircleDot, g.modified),
-        (IconName::ArrowUp, g.sync),
-        (IconName::CircleDashed, g.quiet),
-        (IconName::CircleCheck, t.colors.ok),
+fn marked_folders(t: &tokens::Theme, ground: Hsla) -> Div {
+    let kinds = [
+        BadgeKind::Conflict,
+        BadgeKind::Modified,
+        BadgeKind::Ahead,
+        BadgeKind::Diverged,
+        BadgeKind::Clean,
+        BadgeKind::Unknown,
     ];
     div()
         .flex()
         .items_center()
-        .gap(t.spacing.md)
+        .gap(t.spacing.xl)
         .h(t.spacing.row_height)
         .px(t.spacing.md)
         .bg(ground)
-        .children(marks.map(|(name, color)| icon(name, t.spacing.icon - px(1.), color)))
+        .children(kinds.map(|kind| {
+            let folder = icon(IconName::Folder, t.spacing.icon - px(1.), t.colors.folder);
+            marked_icon(t, folder, &root(kind), ground)
+        }))
 }
 
 fn theme_frame(color_theme: ColorTheme, mode: tokens::Mode) -> Div {
@@ -232,8 +235,8 @@ fn theme_frame(color_theme: ColorTheme, mode: tokens::Mode) -> Div {
                 .px(t.spacing.md)
                 .child(color_theme.toml()),
         )
-        .child(glyphs(&t, t.surfaces.card))
-        .child(glyphs(&t, t.colors.selection))
+        .child(marked_folders(&t, t.surfaces.card))
+        .child(marked_folders(&t, t.surfaces.current))
 }
 
 pub struct GitBadgesPage {

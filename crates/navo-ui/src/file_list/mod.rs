@@ -121,10 +121,6 @@ impl FileList {
         self
     }
 
-    fn has_gutter(&self) -> bool {
-        git_cell::present(self.props.git.as_ref(), self.find_results)
-    }
-
     fn fit_columns(
         &self,
         state: &Entity<ListState>,
@@ -137,7 +133,7 @@ impl FileList {
         }
         resize::shown(
             (state, self.known_width.as_ref()),
-            (parts, self.user_widths, self.has_gutter()),
+            (parts, self.user_widths),
             window,
             cx,
         )
