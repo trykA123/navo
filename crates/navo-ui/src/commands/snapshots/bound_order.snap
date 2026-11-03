@@ -460,6 +460,14 @@ clip_palette.delete_row | delete | ClipPalette
 clip_palette.delete_row | delete | ClipPalette > Input
 clip_palette.manage | f2 | ClipPalette
 clip_palette.manage | f2 | ClipPalette > Input
+clip_palette.edit_note | ctrl-e | ClipPalette
+clip_palette.edit_note | ctrl-e | ClipPalette > Input
+clip_palette.new_item | ctrl-n | ClipPalette
+clip_palette.new_item | ctrl-n | ClipPalette > Input
+clip_palette.save_form | ctrl-enter | ClipPalette
+clip_palette.save_form | ctrl-enter | ClipPalette > Input
+clip_palette.previous_choice | left | ClipPalette
+clip_palette.next_choice | right | ClipPalette
 [activity_strip]
 activity.previous | left | ActivityStrip
 activity.next | right | ActivityStrip

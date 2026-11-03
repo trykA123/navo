@@ -115,7 +115,7 @@ fn delete_and_clear_history_change_the_snapshot() {
         h.service.captured(text(body, i64::try_from(n).unwrap()));
     }
     let snapshot = wait_for(&h.service, |s| s.history.len() == 3);
-    h.service.delete(snapshot.history[1].id);
+    assert_eq!(answer(h.service.delete(snapshot.history[1].id)), Ok(()));
     let after_delete = wait_for(&h.service, |s| s.history.len() == 2);
     assert_eq!(bodies(&after_delete), ["three", "one"]);
     assert!(after_delete.revision > snapshot.revision);
@@ -188,4 +188,17 @@ fn the_service_is_alive_until_its_worker_ends() {
     assert!(h.service.is_alive());
     assert!(h.service.stop());
     assert!(!h.service.is_alive());
+}
+
+#[test]
+fn a_refused_history_delete_answers_store_and_keeps_the_row() {
+    let h = plain();
+    h.service.captured(text("kept", 1));
+    let snapshot = wait_for(&h.service, |s| s.history.len() == 1);
+    super::saved::refuse_deletes(&h, "clips");
+    assert_eq!(
+        answer(h.service.delete(snapshot.history[0].id)),
+        Err(FailKind::Store)
+    );
+    assert_eq!(h.service.snapshot().history.len(), 1);
 }

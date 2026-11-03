@@ -11,10 +11,12 @@ use navo_ui::clip_palette::{ClipMode, ClipboardHooks};
 
 use super::{Backends, ClipModule, Config, OnCapture, StartWatch};
 
+mod edit;
 mod follow;
 mod history;
 mod intro;
 mod lifecycle;
+mod notes;
 mod saved;
 
 pub(super) type Slot = Arc<Mutex<Option<OnCapture>>>;
@@ -161,6 +163,26 @@ impl Rig {
     pub(super) fn titles(&self, query: &str) -> Vec<String> {
         let results = self.module.search(query, ClipMode::All, None);
         results.rows.into_iter().map(|row| row.title).collect()
+    }
+
+    /// Makes every delete from `table` fail, the way a locked or read-only file would.
+    pub(super) fn refuse_deletes(&self, table: &str) {
+        let conn = rusqlite::Connection::open(self.db()).unwrap();
+        conn.busy_timeout(Duration::from_secs(5)).unwrap();
+        conn.execute_batch(&format!(
+            "CREATE TRIGGER refuse_delete BEFORE DELETE ON {table}
+             BEGIN SELECT RAISE(ABORT, 'refused'); END;"
+        ))
+        .unwrap();
+    }
+
+    /// A reader holding an old snapshot, so the next log truncate stays busy until dropped.
+    pub(super) fn pin_reader(&self) -> rusqlite::Connection {
+        let reader = rusqlite::Connection::open(self.db()).unwrap();
+        reader
+            .execute_batch("BEGIN; SELECT count(*) FROM saved;")
+            .unwrap();
+        reader
     }
 
     pub(super) fn wait_for_title(&self, title: &str) {

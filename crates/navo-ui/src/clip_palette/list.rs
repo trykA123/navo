@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use gpui_kit::base::Scrollbar;
@@ -7,10 +8,12 @@ use gpui_kit::{
     StatefulInteractiveElement, WeakEntity, px,
 };
 
-use super::ClipResults;
+use navo_core::Location;
+
 use super::rows::{self, Place, ROW, RowElement};
 use super::state::{Entry, PaletteState};
 use super::view::ClipPalette;
+use super::{ClipKind, ClipResults, ClipRow, Scope};
 use crate::primitives::{ListScroll, RowSemantics, VirtualList};
 
 /// Everything the list needs to draw a range of rows from a `'static` closure.
@@ -20,6 +23,7 @@ pub(super) struct Paint {
     selected: usize,
     now_ms: i64,
     shows_source: bool,
+    missing: Rc<HashSet<Location>>,
     view: WeakEntity<ClipPalette>,
 }
 
@@ -53,7 +57,15 @@ impl Paint {
             selected: state.selected(),
             now_ms: palette.now_ms,
             shows_source,
+            missing: palette.missing_folders(),
             view,
+        }
+    }
+
+    fn is_missing(&self, row: &ClipRow) -> bool {
+        match &row.scope {
+            Scope::Folder(at) => row.kind == ClipKind::Note && self.missing.contains(at),
+            Scope::Everywhere => false,
         }
     }
 
@@ -62,16 +74,19 @@ impl Paint {
         range
             .map(|position| match self.entries[position] {
                 Entry::Head(origin) => rows::head(t, origin, position).into_any_element(),
+                Entry::NotesHead(which) => rows::notes_head(t, which, position).into_any_element(),
                 Entry::Row(index) => {
                     let is_selected = index == self.selected;
+                    let data = &self.results.rows[index];
                     let place = Place {
                         index: position,
                         is_selected,
                         now_ms: self.now_ms,
                         gutter: Scrollbar::width(),
                         shows_source: self.shows_source,
+                        is_missing: self.is_missing(data),
                     };
-                    let row = rows::row(t, &self.results.rows[index], place);
+                    let row = rows::row(t, data, place);
                     interactive(row, index, is_selected, &self.view).into_any_element()
                 }
             })
@@ -90,7 +105,7 @@ impl Paint {
         .row_height(px(ROW))
         .label(label)
         .describe_rows(move |position| match entries[position] {
-            Entry::Head(_) => RowSemantics::default(),
+            Entry::Head(_) | Entry::NotesHead(_) => RowSemantics::default(),
             Entry::Row(index) => RowSemantics {
                 label: None,
                 is_selected: Some(index == selected),

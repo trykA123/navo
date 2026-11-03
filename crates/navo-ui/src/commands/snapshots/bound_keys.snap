@@ -35,16 +35,24 @@ clip_palette.delete_row | delete | ClipPalette
 clip_palette.delete_row | delete | ClipPalette > Input
 clip_palette.down | down | ClipPalette
 clip_palette.down | down | ClipPalette > Input
+clip_palette.edit_note | ctrl-e | ClipPalette
+clip_palette.edit_note | ctrl-e | ClipPalette > Input
 clip_palette.manage | f2 | ClipPalette
 clip_palette.manage | f2 | ClipPalette > Input
+clip_palette.new_item | ctrl-n | ClipPalette
+clip_palette.new_item | ctrl-n | ClipPalette > Input
+clip_palette.next_choice | right | ClipPalette
 clip_palette.next_mode | tab | ClipPalette
 clip_palette.next_mode | tab | ClipPalette > Input
 clip_palette.open_actions | ctrl-k | ClipPalette
 clip_palette.open_actions | ctrl-k | ClipPalette > Input
 clip_palette.paste_files | ctrl-v | ClipPalette
 clip_palette.paste_files | ctrl-v | ClipPalette > Input
+clip_palette.previous_choice | left | ClipPalette
 clip_palette.previous_mode | shift-tab | ClipPalette
 clip_palette.previous_mode | shift-tab | ClipPalette > Input
+clip_palette.save_form | ctrl-enter | ClipPalette
+clip_palette.save_form | ctrl-enter | ClipPalette > Input
 clip_palette.save_row | ctrl-s | ClipPalette
 clip_palette.save_row | ctrl-s | ClipPalette > Input
 clip_palette.toggle_reveal | alt-r | ClipPalette

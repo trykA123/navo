@@ -3,6 +3,13 @@ mod actions;
 mod actions_tests;
 mod age;
 mod chrome;
+mod edit_form;
+mod edit_form_actions;
+mod edit_form_choices;
+mod edit_form_keys;
+#[cfg(test)]
+mod edit_form_tests;
+mod edit_form_view;
 mod empty;
 mod hooks;
 #[cfg(test)]
@@ -15,7 +22,15 @@ mod manage_kinds;
 mod manage_tests;
 mod manage_view;
 mod menu;
+mod note_editor;
+mod note_pane;
+mod notes;
+#[cfg(test)]
+mod notes_tests;
+mod password;
 mod preview;
+mod refresh;
+mod repoint;
 mod rows;
 mod secret;
 #[cfg(test)]
@@ -29,8 +44,9 @@ pub(crate) mod window;
 
 pub use hooks::{
     ClipCounts, ClipId, ClipKind, ClipMode, ClipResults, ClipRow, ClipboardHooks, How, NoClipboard,
-    Origin, SavedDraft, Scope, SecretText,
+    Origin, SavedDraft, SavedEdit, Scope, SecretText,
 };
 pub use keys::bind_keys;
+pub use note_editor::FolderProbe;
 pub use view::{ClipPalette, ClipPaletteEvent, ClipPaletteProps, Place};
 pub use window::{PopUpRequest, summon};

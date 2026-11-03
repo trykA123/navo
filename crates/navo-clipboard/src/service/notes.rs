@@ -1,8 +1,10 @@
 //! Folder notes on the worker thread.
 
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
 use crate::model::Scope;
+use crate::note_search::{NoteSummary, search_notes};
 use crate::store::{ClipStore, NoteListed};
 
 use super::FailKind;
@@ -24,6 +26,12 @@ pub(super) enum NoteMsg {
         reply: Answer<()>,
     },
     List(Answer<NoteListed>),
+    Search {
+        query: String,
+        folder: Option<PathBuf>,
+        global_title: String,
+        reply: Answer<Vec<NoteSummary>>,
+    },
     Move {
         from: Scope,
         to: Scope,
@@ -51,6 +59,17 @@ impl Worker {
             }
             NoteMsg::List(reply) => {
                 let result = self.read_store(ClipStore::notes);
+                self.answer(&reply, result);
+            }
+            NoteMsg::Search {
+                query,
+                folder,
+                global_title,
+                reply,
+            } => {
+                let result = self.read_store(ClipStore::notes).map(|listed| {
+                    search_notes(&listed.notes, &query, folder.as_deref(), &global_title)
+                });
                 self.answer(&reply, result);
             }
             NoteMsg::Move {

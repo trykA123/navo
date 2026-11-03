@@ -5614,6 +5614,7 @@ dependencies = [
  "navo-shell",
  "navo-store",
  "navo-ui",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
@@ -5667,6 +5668,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.21",
+ "tracing",
  "zeroize",
 ]
 

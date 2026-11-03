@@ -183,6 +183,9 @@ impl ClipPalette {
 
     /// The count, then Delete for the selected row and the way back.
     pub(super) fn manage_footer(&self, t: &Theme, cx: &mut Context<Self>) -> RowElement {
+        if let Some(ask) = self.repoint_footer(t, cx) {
+            return ask;
+        }
         let Some(manage) = self.manage.as_ref() else {
             return footer_bar(t, div(), Vec::new());
         };
@@ -224,6 +227,7 @@ impl Sheet {
             now_ms: self.now_ms,
             gutter: Scrollbar::width(),
             shows_source: true,
+            is_missing: false,
         };
         let (moved, chosen) = (self.view.clone(), self.view.clone());
         let hover = move |_: &MouseMoveEvent, _: &mut Window, cx: &mut App| {

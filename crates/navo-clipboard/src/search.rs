@@ -228,7 +228,7 @@ impl<'a> Found<'a> {
     }
 }
 
-fn fold(text: &str) -> String {
+pub(crate) fn fold(text: &str) -> String {
     text.chars().flat_map(char::to_lowercase).collect()
 }
 
@@ -262,7 +262,7 @@ impl Folded {
     }
 }
 
-fn find_ranges(text: &str, needle: &str) -> Vec<Range<usize>> {
+pub(crate) fn find_ranges(text: &str, needle: &str) -> Vec<Range<usize>> {
     if needle.is_empty() || text.is_empty() {
         return Vec::new();
     }

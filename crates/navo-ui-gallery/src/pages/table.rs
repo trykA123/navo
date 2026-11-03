@@ -396,4 +396,4 @@ const HEAD: [PageInfo; 128] = [
     ),
 ];
 
-pub const PAGES: [PageInfo; 145] = join(&HEAD, &clip_palette::ALL);
+pub const PAGES: [PageInfo; 151] = join(&HEAD, &clip_palette::ALL);

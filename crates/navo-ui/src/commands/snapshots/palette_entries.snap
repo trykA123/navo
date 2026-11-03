@@ -428,6 +428,11 @@ clip_palette.copy_user | ClipPalette | false
 clip_palette.save_row | ClipPalette | false
 clip_palette.delete_row | ClipPalette | false
 clip_palette.manage | ClipPalette | false
+clip_palette.edit_note | ClipPalette | false
+clip_palette.new_item | ClipPalette | false
+clip_palette.save_form | ClipPalette | false
+clip_palette.previous_choice | ClipPalette | false
+clip_palette.next_choice | ClipPalette | false
 window.new | global | true
 workspace.list | global | true
 app.quit | global | true

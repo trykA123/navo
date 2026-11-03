@@ -11,6 +11,8 @@ clip-mode-secrets = Secrets
 clip-mode-notes = Notes
 clip-head-recent = Recent clipboard
 clip-head-saved = Saved
+clip-head-this-folder = This folder
+clip-head-other-notes = Other notes
 
 clip-manage-kinds-label = Kinds
 clip-manage-history = History
@@ -28,6 +30,23 @@ clip-kind-path = Path
 clip-kind-files = Files
 clip-kind-image = Image
 clip-kind-secret = Secret
+clip-kind-note = Note
+clip-note-global = Global note
+clip-note-for = Note for { $name }
+clip-note-empty = Empty
+clip-note-label = Note text
+clip-note-saved = Saved as you type
+clip-note-saved-age = Saved as you type · { $age }
+clip-note-not-saved = Not saved: { $reason }
+clip-note-unreadable = This note could not be read, so it stays as it is.
+clip-note-folder-missing = Folder not found
+clip-note-detail = { $lines ->
+    [one] { $lines } line
+   *[other] { $lines } lines
+} · { $chars ->
+    [one] { $chars } character
+   *[other] { $chars } characters
+}
 clip-preview-from = { $kind } from { $app }
 clip-meta-copied = Copied
 clip-meta-used = Used
@@ -62,6 +81,8 @@ clip-empty-history-title = Nothing copied yet
 clip-empty-history-body = Text and file lists you copy in any app appear here, newest first. Copies that apps mark private are never recorded.
 clip-empty-saved-title = Nothing saved yet
 clip-empty-saved-body = Keep snippets, commands and paths here.
+clip-empty-notes-title = No notes yet
+clip-empty-notes-body = A note you write for a folder appears here, with the global note.
 clip-empty-secrets-title = No secrets yet
 clip-empty-secrets-body = Secrets stay masked, are stored encrypted on this PC and leave the clipboard after 30 s.
 clip-empty-search-title = No matches
@@ -74,6 +95,7 @@ clip-act-paste = Paste
 clip-act-paste-hidden = Paste, hidden
 clip-act-copy-only = Copy only
 clip-act-actions = Actions
+clip-act-edit-note = Edit note
 clip-act-copy-path = Copy path
 clip-act-paste-here = Paste into the active pane
 clip-act-delete = Delete
@@ -83,6 +105,8 @@ clip-act-copy-user = Copy user name
 clip-act-save-snippet = Save as snippet
 clip-act-save-path = Save as path item
 clip-act-save-from-history = Save from history
+clip-act-new-saved = New saved item
+clip-act-new-secret = New secret
 clip-act-manage = Manage…
 clip-key-clear = Clear search
 
@@ -97,6 +121,41 @@ clip-status-clears = Clears in { $secs } s
 clip-status-cleared = Clipboard cleared
 clip-status-saved-snippet = Saved as snippet
 clip-status-saved-path = Saved as path item
+clip-status-saved-item = Saved
+clip-status-repointed = Note now belongs to { $name }
+clip-status-note-exists = That folder already has a note
+clip-status-no-folder = Open the palette from a Navo window to point a note at its folder
+
+clip-form-new = New saved item
+clip-form-edit = Edit saved item
+clip-form-kind = Kind
+clip-form-kind-snippet = Snippet
+clip-form-kind-path = Path
+clip-form-kind-secret = Secret
+clip-form-title = Title
+clip-form-title-hint = Name it so you can find it
+clip-form-text = Text
+clip-form-path = Path
+clip-form-user = User name
+clip-form-user-hint = Optional
+clip-form-password = Password
+clip-form-password-keep = Empty keeps the saved password
+clip-form-scope = Available in
+clip-form-scope-everywhere = Everywhere
+clip-form-scope-folder = This folder
+clip-form-no-title = Give it a title
+clip-form-title-long = A title has at most { $max } characters
+clip-form-no-password = A new secret needs a password
+clip-form-no-body = Changing a secret into another kind needs its new text
+clip-form-save = Save
+clip-form-cancel = Cancel
+clip-form-discard = Discard changes?
+clip-form-discard-yes = Discard
+clip-form-discard-no = Keep editing
+
+clip-repoint-ask = Point this note at { $name }?
+clip-repoint-yes = Move note
+clip-repoint-no = Cancel
 
 clip-clear-title = Clear clipboard history?
 clip-clear-count = { $count ->

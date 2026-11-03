@@ -3,6 +3,7 @@
 mod admit;
 mod limits;
 mod model;
+mod note_search;
 mod scope;
 mod search;
 mod service;
@@ -14,7 +15,8 @@ pub use limits::{
     MAX_TEXT_BYTES, MAX_TITLE_BYTES,
 };
 pub use model::{Captured, Content, Entry, NoteRow, Saved, SavedKind, Scope, Sealed, Transfer};
-pub use scope::{folder_key, same_folder};
+pub use note_search::{NoteSummary, search_notes};
+pub use scope::{folder_key, folder_name, same_folder};
 pub use search::{Field, Found, Item, Mode, Rows, join_paths, search};
 pub use service::{
     ClipService, ClipSink, Clock, FailKind, How, NoSealer, NoteHeader, Ports, Reply,

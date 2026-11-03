@@ -51,5 +51,5 @@ fn follow_applies_settings_to_the_inner_hooks_and_the_module() {
     hooks.apply(&Values::default());
     rig.module.settle();
     assert_eq!(inner.applied.get(), 1);
-    assert_eq!(rig.module.modes().len(), 4);
+    assert_eq!(rig.module.modes().len(), 5);
 }

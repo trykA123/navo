@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+tracing = "0.1.44"
 sha2 = "=0.10.9"
 thiserror = "2.0.21"
 zeroize = "=1.9.1"

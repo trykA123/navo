@@ -12,6 +12,7 @@ use gpui_kit::{
 };
 
 use super::ClipboardHooks;
+use super::note_editor::FolderProbe;
 use super::view::{ClipPalette, ClipPaletteEvent, ClipPaletteProps, Place};
 use crate::window_view::{ClipboardSummon, PasteTarget, WindowShown, raw_handle};
 
@@ -24,6 +25,8 @@ pub struct PopUpRequest {
     pub summon: ClipboardSummon,
     pub hooks: Arc<dyn ClipboardHooks>,
     pub key_cap: Option<SharedString>,
+    /// Finds the notes whose folder is gone.
+    pub folder_probe: Option<FolderProbe>,
     /// Hides and shows the native window; without it, hiding closes the window.
     pub window_shown: Option<WindowShown>,
 }
@@ -107,6 +110,7 @@ impl ClipPopUp {
             key_cap: request.key_cap,
             now_ms: None,
             width: None,
+            folder_probe: request.folder_probe,
         };
         let palette = cx.new(|cx| ClipPalette::new(props, window, cx));
         let events = cx.subscribe_in(&palette, window, |this, _, event, window, cx| {
@@ -121,6 +125,9 @@ impl ClipPopUp {
                 .unwrap_or(true)
         });
         log_summon(request.summon.at, window);
+        if let Some(hook) = &request.window_shown {
+            hook(raw_handle(window), true);
+        }
         Self {
             palette,
             previous: request.summon.previous,
@@ -245,10 +252,15 @@ impl Render for ClipPopUp {
 impl ClipPalette {
     /// Back to an empty search with no menu, status, shown secret or rows, until `wake`.
     fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.flush_note(cx);
+        self.forget_note(window, cx);
+        self.note.clear_probes();
         self.overlay.menu = None;
         self.overlay.status = None;
         self.overlay.revealed = None;
         self.manage = None;
+        self.form = None;
+        self.repoint = None;
         self.intro = false;
         self.dormant = true;
         self.state.clear();

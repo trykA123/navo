@@ -11,5 +11,8 @@ pub(super) fn set_shown(handle: Option<RawWindowHandle>, shown: bool) -> bool {
     let command = if shown { SW_SHOW } else { SW_HIDE };
     // SAFETY: `hwnd` is the live main window this process created; ShowWindow only changes its visibility.
     unsafe { ShowWindow(hwnd, command) };
+    if shown {
+        navo_shell::take_focus(hwnd as usize);
+    }
     true
 }

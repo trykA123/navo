@@ -15,7 +15,8 @@ use super::preview::file_list;
 use super::state::{Entry, PaletteState};
 use super::{
     ClipCounts, ClipId, ClipKind, ClipMode, ClipPalette, ClipPaletteEvent, ClipPaletteProps,
-    ClipResults, ClipRow, ClipboardHooks, How, Origin, Place, SavedDraft, Scope, SecretText,
+    ClipResults, ClipRow, ClipboardHooks, FolderProbe, How, Origin, Place, SavedDraft, SavedEdit,
+    Scope, SecretText,
 };
 use crate::test_window::open_sized;
 
@@ -46,6 +47,28 @@ fn results(rows: Vec<ClipRow>, revision: u64) -> ClipResults {
     }
 }
 
+/// A draft as the hooks saw it, with the text in the clear for the assertions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Draft {
+    pub kind: ClipKind,
+    pub title: String,
+    pub body: String,
+    pub user: Option<String>,
+    pub scope: Scope,
+}
+
+impl Draft {
+    fn of(draft: &SavedDraft) -> Self {
+        Self {
+            kind: draft.kind,
+            title: draft.title.clone(),
+            body: draft.body.expose().to_owned(),
+            user: draft.user.clone(),
+            scope: draft.scope.clone(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Call {
     Copy(ClipId, How),
@@ -53,6 +76,9 @@ pub(super) enum Call {
     Reveal(ClipId),
     CopyUser(ClipId),
     SaveFromHistory(ClipId),
+    Save(Draft),
+    Update(ClipId, Draft),
+    RenameNote(Scope, Scope),
 }
 
 pub(super) struct Fake {
@@ -63,6 +89,13 @@ pub(super) struct Fake {
     /// The first-open line is due until a palette takes it.
     pub intro: std::sync::atomic::AtomicBool,
     rows: Mutex<Vec<ClipRow>>,
+    /// The stored text of each note by scope, and every `set_note` call in order.
+    pub notes: Mutex<Vec<(Scope, String)>>,
+    /// What `saved_for_edit` gives back, by id.
+    pub edits: Mutex<Vec<(ClipId, Draft)>>,
+    /// Makes `save` and `update_saved` refuse.
+    pub refuse_save: std::sync::atomic::AtomicBool,
+    pub note_writes: Mutex<Vec<(Scope, String)>>,
     revision: AtomicU64,
     listeners: Mutex<Vec<Box<dyn Fn() + Send + Sync>>>,
 }
@@ -75,9 +108,20 @@ impl Fake {
             refuse_copy: std::sync::atomic::AtomicBool::new(false),
             intro: std::sync::atomic::AtomicBool::new(false),
             rows: Mutex::new(rows),
+            notes: Mutex::default(),
+            edits: Mutex::default(),
+            refuse_save: std::sync::atomic::AtomicBool::new(false),
+            note_writes: Mutex::default(),
             revision: AtomicU64::new(1),
             listeners: Mutex::new(Vec::new()),
         })
+    }
+
+    fn note_text(&self, scope: &Scope) -> Option<String> {
+        let notes = self.notes.lock().expect("notes");
+        notes
+            .iter()
+            .find_map(|(at, text)| (at == scope).then(|| text.clone()))
     }
 
     pub fn change(&self, rows: Vec<ClipRow>, revision: u64) {
@@ -108,7 +152,8 @@ impl ClipboardHooks for Fake {
             ClipMode::Recent => row.from == Origin::Clipboard,
             ClipMode::Saved => row.from == Origin::Saved && row.kind != ClipKind::Secret,
             ClipMode::Secrets => row.kind == ClipKind::Secret,
-            ClipMode::All | ClipMode::Notes => true,
+            ClipMode::Notes => row.kind == ClipKind::Note,
+            ClipMode::All => true,
         };
         let rows: Vec<ClipRow> = rows
             .iter()
@@ -130,6 +175,15 @@ impl ClipboardHooks for Fake {
         self.calls.lock().expect("calls").push(Call::Delete(id));
         let rows: Vec<ClipRow> = {
             let mut rows = self.rows.lock().expect("rows").clone();
+            if let Some(gone) = rows
+                .iter()
+                .find(|row| row.id == id && row.kind == ClipKind::Note)
+            {
+                self.notes
+                    .lock()
+                    .expect("notes")
+                    .retain(|(at, _)| *at != gone.scope);
+            }
             rows.retain(|row| row.id != id);
             rows
         };
@@ -159,13 +213,60 @@ impl ClipboardHooks for Fake {
         self.change(rows, self.revision.load(Ordering::SeqCst) + 1);
         Ok(saved)
     }
-    fn save(&self, _: SavedDraft) -> Result<ClipId, String> {
-        Ok(ClipId(0))
+    fn save(&self, draft: SavedDraft) -> Result<ClipId, String> {
+        self.calls
+            .lock()
+            .expect("calls")
+            .push(Call::Save(Draft::of(&draft)));
+        if self.refuse_save.load(Ordering::SeqCst) {
+            return Err("store is busy".to_owned());
+        }
+        Ok(ClipId(900))
     }
-    fn note_for(&self, _: &Location) -> Option<String> {
-        None
+    fn saved_for_edit(&self, id: ClipId) -> Result<SavedEdit, String> {
+        let edits = self.edits.lock().expect("edits");
+        let (_, edit) = edits.iter().find(|(at, _)| *at == id).ok_or("no edit")?;
+        Ok(SavedEdit {
+            kind: edit.kind,
+            title: edit.title.clone(),
+            body: SecretText::new(edit.body.clone()),
+            user: edit.user.clone(),
+            scope: edit.scope.clone(),
+        })
     }
-    fn set_note(&self, _: Scope, _: String) -> Result<(), String> {
+    fn update_saved(&self, id: ClipId, draft: SavedDraft) -> Result<(), String> {
+        self.calls
+            .lock()
+            .expect("calls")
+            .push(Call::Update(id, Draft::of(&draft)));
+        if self.refuse_save.load(Ordering::SeqCst) {
+            return Err("store is busy".to_owned());
+        }
+        Ok(())
+    }
+    fn rename_note(&self, from: Scope, to: Scope) -> Result<(), String> {
+        self.calls
+            .lock()
+            .expect("calls")
+            .push(Call::RenameNote(from, to));
+        Ok(())
+    }
+    fn note_for(&self, folder: &Location) -> Option<String> {
+        self.note_text(&Scope::Folder(folder.clone()))
+    }
+    fn global_note(&self) -> Option<String> {
+        self.note_text(&Scope::Everywhere)
+    }
+    fn set_note(&self, scope: Scope, text: String) -> Result<(), String> {
+        self.note_writes
+            .lock()
+            .expect("note writes")
+            .push((scope.clone(), text.clone()));
+        let mut notes = self.notes.lock().expect("notes");
+        notes.retain(|(at, _)| *at != scope);
+        if !text.is_empty() {
+            notes.push((scope, text));
+        }
         Ok(())
     }
     fn reveal(&self, id: ClipId) -> Result<SecretText, String> {
@@ -182,17 +283,18 @@ impl ClipboardHooks for Fake {
 }
 
 struct Harness {
-    palette: Entity<ClipPalette>,
+    palette: Option<Entity<ClipPalette>>,
 }
 
 impl Render for Harness {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(self.palette.clone())
+        div().size_full().children(self.palette.clone())
     }
 }
 
 pub(super) struct Opened {
     window: AnyWindowHandle,
+    harness: Entity<Harness>,
     pub palette: Entity<ClipPalette>,
     pub events: Rc<RefCell<Vec<ClipPaletteEvent>>>,
 }
@@ -206,28 +308,41 @@ pub(super) fn open_in(
     hooks: Arc<dyn ClipboardHooks>,
     place: Place,
 ) -> Opened {
+    open_at(cx, hooks, (place, None, None))
+}
+
+/// Opens the palette for a folder, with a probe that finds the folders that are gone.
+pub(super) fn open_at(
+    cx: &mut TestAppContext,
+    hooks: Arc<dyn ClipboardHooks>,
+    (place, folder, folder_probe): (Place, Option<Location>, Option<FolderProbe>),
+) -> Opened {
     let events: Rc<RefCell<Vec<ClipPaletteEvent>>> = Rc::default();
     let sink = events.clone();
     let (window, harness) = open_sized(cx, px(1000.), move |window, cx| {
         let props = ClipPaletteProps {
             hooks,
             place,
-            folder: None,
+            folder,
             key_cap: Some("ctrl-shift-v".into()),
             now_ms: Some(NOW),
             width: None,
+            folder_probe,
         };
         let palette = cx.new(|cx| ClipPalette::new(props, window, cx));
         cx.subscribe(&palette, move |_, event: &ClipPaletteEvent, _| {
             sink.borrow_mut().push(event.clone());
         })
         .detach();
-        Harness { palette }
+        Harness {
+            palette: Some(palette),
+        }
     });
     cx.update(super::bind_keys);
-    let palette = harness.read_with(cx, |harness, _| harness.palette.clone());
+    let palette = harness.read_with(cx, |harness, _| harness.palette.clone().expect("open"));
     let opened = Opened {
         window,
+        harness,
         palette,
         events,
     };
@@ -236,6 +351,24 @@ pub(super) fn open_in(
 }
 
 impl Opened {
+    /// Closes the palette as the host does: nothing holds it any more.
+    pub fn close(self, cx: &mut TestAppContext) {
+        self.harness.update(cx, |harness, cx| {
+            harness.palette = None;
+            cx.notify();
+        });
+        self.settle(cx);
+        drop(self.palette);
+        cx.update(|_| ());
+    }
+
+    /// Waits `millis` on the test clock, then lets what was waiting run.
+    pub fn wait(&self, millis: u64, cx: &mut TestAppContext) {
+        cx.executor()
+            .advance_clock(std::time::Duration::from_millis(millis));
+        self.settle(cx);
+    }
+
     pub fn settle(&self, cx: &mut TestAppContext) {
         cx.run_until_parked();
         cx.update_window(self.window, |_, window, cx| window.render_frame(cx))
@@ -246,6 +379,19 @@ impl Opened {
         cx.update_window(self.window, |_, window, cx| window.press(key, cx))
             .expect("window");
         self.settle(cx);
+    }
+
+    /// Reads the palette together with the window, as a focus check needs.
+    pub fn window_read<R>(
+        &self,
+        cx: &mut TestAppContext,
+        read: impl FnOnce(&ClipPalette, &Window, &gpui_kit::App) -> R,
+    ) -> R {
+        let palette = self.palette.clone();
+        cx.update_window(self.window, |_, window, cx| {
+            read(palette.read(cx), window, cx)
+        })
+        .expect("window")
     }
 
     pub fn type_text(&self, text: &str, cx: &mut TestAppContext) {

@@ -428,6 +428,11 @@ clip_palette.copy_user | Copy user name | ClipPalette
 clip_palette.save_row | Save item | ClipPalette
 clip_palette.delete_row | Delete item | ClipPalette
 clip_palette.manage | Manage clipboard library | ClipPalette
+clip_palette.edit_note | Edit note | ClipPalette
+clip_palette.new_item | New saved item | ClipPalette
+clip_palette.save_form | Save the saved item form | ClipPalette
+clip_palette.previous_choice | Previous choice in the saved item form | ClipPalette
+clip_palette.next_choice | Next choice in the saved item form | ClipPalette
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global

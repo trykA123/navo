@@ -18,6 +18,19 @@ pub fn same_folder(left: &Path, right: &Path) -> bool {
     folder_key(left) == folder_key(right)
 }
 
+/// The last component of a folder path, read with `\` or `/`; a root or drive keeps its
+/// whole path.
+pub fn folder_name(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    let trimmed = text.trim_end_matches(['/', '\\']);
+    let name = trimmed.rsplit(['/', '\\']).next().unwrap_or_default();
+    if name.is_empty() || name.ends_with(':') {
+        text.into_owned()
+    } else {
+        name.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -28,6 +41,14 @@ mod tests {
         for spelling in [r"C:/übung/a", r"c:\ÜBUNG\A\", "C:/Übung/a//"] {
             assert_eq!(folder_key(Path::new(spelling)), key, "{spelling}");
         }
+    }
+
+    #[test]
+    fn the_name_is_the_last_component_of_either_spelling() {
+        assert_eq!(folder_name(Path::new(r"C:\Work\Plans\")), "Plans");
+        assert_eq!(folder_name(Path::new("/home/a/b")), "b");
+        assert_eq!(folder_name(Path::new("C:\\")), "C:\\");
+        assert_eq!(folder_name(Path::new("/")), "/");
     }
 
     #[test]

@@ -57,12 +57,12 @@ fn each_kind_counts_its_rows_and_unlisted_kinds_have_none(cx: &mut TestAppContex
     palette.press("f2", cx);
     assert_eq!(
         counts(&palette, cx),
-        [Some(2), Some(2), None, Some(1), Some(1), Some(0)]
+        [Some(2), Some(2), None, Some(1), Some(1), None]
     );
 }
 
 #[gpui_kit::test]
-fn counts_follow_the_search_and_leave_the_notes_total_out(cx: &mut TestAppContext) {
+fn counts_follow_the_search(cx: &mut TestAppContext) {
     let (palette, _) = opened(cx);
     palette.type_text("a", cx);
     palette.press("f2", cx);
@@ -189,4 +189,21 @@ fn hooks_that_offer_no_listed_mode_open_no_library(cx: &mut TestAppContext) {
     let palette = open(cx, fake);
     palette.press("f2", cx);
     assert_eq!(kind(&palette, cx), None);
+}
+
+#[gpui_kit::test]
+fn the_notes_kind_lists_note_rows_and_follows_the_search(cx: &mut TestAppContext) {
+    let mut rows = library();
+    rows.push(row(7, ClipKind::Note, "alpha", Origin::Saved));
+    rows.push(row(8, ClipKind::Note, "Global note", Origin::Saved));
+    let modes = [LIBRARY_MODES.as_slice(), &[ClipMode::Notes]].concat();
+    let palette = open(cx, Fake::new(modes, rows));
+    palette.press("f2", cx);
+    assert_eq!(counts(&palette, cx)[5], Some(2));
+    palette.press("shift-tab", cx);
+    assert_eq!(kind(&palette, cx), Some(Kind::Notes));
+    assert_eq!(titles(&palette, cx), ["alpha", "Global note"]);
+    palette.type_text("Glob", cx);
+    assert_eq!(titles(&palette, cx), ["Global note"]);
+    assert_eq!(counts(&palette, cx)[5], Some(1));
 }

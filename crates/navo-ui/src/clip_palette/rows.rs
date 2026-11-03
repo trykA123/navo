@@ -9,6 +9,7 @@ use gpui_kit::{
 use navo_l10n::tr;
 
 use super::age::age;
+use super::state::NotesHead;
 use super::{ClipKind, ClipRow, Origin};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
@@ -26,6 +27,8 @@ pub(super) struct Place {
     pub now_ms: i64,
     pub gutter: Pixels,
     pub shows_source: bool,
+    /// A note whose folder is gone: the row says so in place of its age.
+    pub is_missing: bool,
 }
 
 pub(super) fn kind_icon(t: &Theme, kind: ClipKind) -> (IconName, Hsla) {
@@ -36,6 +39,7 @@ pub(super) fn kind_icon(t: &Theme, kind: ClipKind) -> (IconName, Hsla) {
         ClipKind::Files => (IconName::Files, t.colors.folder),
         ClipKind::Image => (IconName::FileImage, t.colors.kind_image),
         ClipKind::Secret => (IconName::Lock, t.colors.warn),
+        ClipKind::Note => (IconName::FilePen, t.colors.muted),
     }
 }
 
@@ -90,11 +94,18 @@ fn base(index: usize) -> RowElement {
 
 /// A group head in All: "Recent clipboard" or "Saved".
 pub(super) fn head(t: &Theme, origin: Origin, index: usize) -> RowElement {
-    let label: SharedString = match origin {
-        Origin::Clipboard => tr("clip-head-recent"),
-        Origin::Saved => tr("clip-head-saved"),
-    }
-    .into();
+    head_line(
+        t,
+        tr(match origin {
+            Origin::Clipboard => "clip-head-recent",
+            Origin::Saved => "clip-head-saved",
+        }),
+        index,
+    )
+}
+
+fn head_line(t: &Theme, label: String, index: usize) -> RowElement {
+    let label = SharedString::from(label);
     base(index)
         .role(Role::Heading)
         .aria_label(label.clone())
@@ -105,6 +116,18 @@ pub(super) fn head(t: &Theme, origin: Origin, index: usize) -> RowElement {
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.colors.muted)
         .child(div().min_w_0().truncate().child(label))
+}
+
+/// A group head of Notes mode.
+pub(super) fn notes_head(t: &Theme, which: NotesHead, index: usize) -> RowElement {
+    head_line(
+        t,
+        tr(match which {
+            NotesHead::ThisFolder => "clip-head-this-folder",
+            NotesHead::Others => "clip-head-other-notes",
+        }),
+        index,
+    )
 }
 
 fn title(t: &Theme, row: &ClipRow) -> Div {
@@ -123,6 +146,19 @@ fn title(t: &Theme, row: &ClipRow) -> Div {
         .child(marked(t, &row.title, &row.ranges))
 }
 
+fn folder_missing(t: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(t.spacing.xs)
+        .child(icon(
+            IconName::TriangleAlert,
+            t.typography.small,
+            t.colors.warn,
+        ))
+        .child(tr("clip-note-folder-missing"))
+}
+
 fn meta(t: &Theme, row: &ClipRow, place: Place) -> Div {
     let source = row
         .source_app
@@ -137,7 +173,11 @@ fn meta(t: &Theme, row: &ClipRow, place: Place) -> Div {
         .text_color(t.colors.muted)
         .whitespace_nowrap()
         .children(source.map(SharedString::from))
-        .child(age(place.now_ms, row.when_ms))
+        .children(if place.is_missing {
+            Some(folder_missing(t))
+        } else {
+            (row.when_ms > 0).then(|| div().child(age(place.now_ms, row.when_ms)))
+        })
 }
 
 /// One option: kind icon, title or value, and the age.

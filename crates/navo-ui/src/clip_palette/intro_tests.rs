@@ -43,19 +43,21 @@ fn a_palette_without_a_due_line_shows_none(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn empty_states_advertise_no_key_that_does_nothing_yet(cx: &mut TestAppContext) {
+fn only_the_saved_and_secrets_empty_states_advertise_ctrl_n(cx: &mut TestAppContext) {
     let modes = vec![
         ClipMode::All,
         ClipMode::Recent,
         ClipMode::Saved,
         ClipMode::Secrets,
+        ClipMode::Notes,
     ];
-    let palette = open(cx, Fake::new(modes, Vec::new()));
-    for _ in 0..4 {
+    let palette = open(cx, Fake::new(modes.clone(), Vec::new()));
+    for mode in modes {
         let keys = palette
             .palette
-            .read_with(cx, |palette, _| palette.says(ClipMode::All, false).keys);
-        assert!(keys.iter().all(|(key, _)| *key != "ctrl-n"), "{keys:?}");
-        palette.press("tab", cx);
+            .read_with(cx, |palette, _| palette.says(mode, false).keys);
+        let offers_new = keys.iter().any(|(key, _)| *key == "ctrl-n");
+        let wants_new = matches!(mode, ClipMode::Saved | ClipMode::Secrets);
+        assert_eq!(offers_new, wants_new, "{mode:?}: {keys:?}");
     }
 }

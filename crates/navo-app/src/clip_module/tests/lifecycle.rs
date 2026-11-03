@@ -59,7 +59,7 @@ fn apply_returns_while_the_store_is_still_opening() {
     );
     gate.send(()).unwrap();
     rig.module.settle();
-    assert_eq!(rig.module.modes().len(), 4);
+    assert_eq!(rig.module.modes().len(), 5);
     assert_eq!(counts.live.load(Ordering::SeqCst), 1);
 }
 
@@ -86,7 +86,7 @@ fn quick_on_off_on_ends_on_exactly_once() {
     gate.send(()).unwrap();
     gate.send(()).unwrap();
     rig.module.settle();
-    assert_eq!(rig.module.modes().len(), 4);
+    assert_eq!(rig.module.modes().len(), 5);
     assert_eq!(counts.starts.load(Ordering::SeqCst), 2);
     assert_eq!(counts.live.load(Ordering::SeqCst), 1);
 }
@@ -180,7 +180,7 @@ fn a_watcher_that_fails_keeps_the_module_on_with_a_recording_notice() {
     let watch: StartWatch = Arc::new(|_| Err(ClipboardError::Busy));
     let rig = Rig::with_watch(Some(watch));
     rig.apply(on());
-    assert_eq!(rig.module.modes().len(), 4);
+    assert_eq!(rig.module.modes().len(), 5);
     assert_eq!(
         notice(&rig),
         Some(navo_l10n::tr("clipboard-recording-failed"))

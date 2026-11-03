@@ -242,6 +242,12 @@ pub fn clear_if_same(files: &FileClipboard) -> Result<bool, ClipboardError> {
     Ok(true)
 }
 
+/// Whether the clipboard offers `format`; needs no open clipboard.
+pub(super) fn format_available(format: u32) -> bool {
+    // SAFETY: the query takes no pointers and does not render clipboard data.
+    unsafe { IsClipboardFormatAvailable(format) != 0 }
+}
+
 pub(super) fn sequence() -> u32 {
     // SAFETY: the sequence query takes no pointers and does not render clipboard data.
     unsafe { GetClipboardSequenceNumber() }

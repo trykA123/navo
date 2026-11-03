@@ -64,7 +64,7 @@ fn snippet() -> Saved {
 }
 
 #[test]
-fn a_v1_file_upgrades_to_v2_and_keeps_every_history_row() {
+fn a_v1_file_upgrades_to_v3_and_keeps_every_history_row() {
     let dir = TempDir::new().unwrap();
     let path = v1_file(&dir);
     let store = ClipStore::open(&path, Limits::default()).unwrap();
@@ -76,11 +76,11 @@ fn a_v1_file_upgrades_to_v2_and_keeps_every_history_row() {
     assert!(store.saved().unwrap().items.is_empty());
     assert_eq!(store.note(&Scope::Global).unwrap(), None);
     drop(store);
-    assert_eq!(user_version(&path), 2);
+    assert_eq!(user_version(&path), 3);
 }
 
 #[test]
-fn a_v2_file_reopens_without_migrating_again() {
+fn a_v3_file_reopens_without_migrating_again() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("clipboard.db");
     let store = ClipStore::open(&path, Limits::default()).unwrap();
@@ -94,7 +94,7 @@ fn a_v2_file_reopens_without_migrating_again() {
         Some("kept note")
     );
     drop(store);
-    assert_eq!(user_version(&path), 2);
+    assert_eq!(user_version(&path), 3);
 }
 
 #[test]
@@ -128,11 +128,11 @@ fn a_failed_upgrade_leaves_the_v1_file_and_its_rows_in_place() {
 }
 
 #[test]
-fn a_version_3_file_is_refused_untouched() {
+fn a_version_4_file_is_refused_untouched() {
     let dir = TempDir::new().unwrap();
     let path = v1_file(&dir);
     let conn = Connection::open(&path).unwrap();
-    conn.pragma_update(None, "user_version", 3).unwrap();
+    conn.pragma_update(None, "user_version", 4).unwrap();
     drop(conn);
     let before = fs::read(&path).unwrap();
     let listing = names(dir.path());
@@ -140,8 +140,8 @@ fn a_version_3_file_is_refused_untouched() {
     assert!(matches!(
         result,
         Err(ClipError::TooNew {
-            found: 3,
-            supported: 2
+            found: 4,
+            supported: 3
         })
     ));
     assert_eq!(fs::read(&path).unwrap(), before);
@@ -172,7 +172,7 @@ fn a_v1_wal_file_with_uncheckpointed_rows_upgrades_and_keeps_them() {
     );
     store.save(&snippet()).unwrap();
     drop(store);
-    assert_eq!(user_version(&path), 2);
+    assert_eq!(user_version(&path), 3);
     let reopened = ClipStore::open(&path, Limits::default()).unwrap();
     assert_eq!(reopened.history(10).unwrap().len(), 2);
     assert_eq!(reopened.saved().unwrap().items.len(), 1);

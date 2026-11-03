@@ -25,7 +25,10 @@ pub(super) enum SavedMsg {
         secret: Option<SecretBytes>,
         reply: Answer<()>,
     },
-    Delete(i64),
+    Delete {
+        id: i64,
+        reply: Answer<()>,
+    },
     FromHistory {
         id: i64,
         at_ms: i64,
@@ -83,12 +86,10 @@ impl Worker {
                 let result = self.update(item, secret);
                 self.answer(&reply, result);
             }
-            SavedMsg::Delete(id) => {
+            SavedMsg::Delete { id, reply } => {
                 let result =
                     self.with_store(|store| store.delete_saved(id).map_err(|e| store_fail(&e)));
-                if let Err(kind) = result {
-                    self.shared.fail(kind);
-                }
+                self.answer(&reply, result);
             }
             SavedMsg::FromHistory { id, at_ms, reply } => {
                 let result = self.save_from_history(id, at_ms);

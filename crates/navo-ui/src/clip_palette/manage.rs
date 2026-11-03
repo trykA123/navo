@@ -3,13 +3,13 @@
 
 use std::rc::Rc;
 
-use gpui_kit::{AppContext as _, Context};
+use gpui_kit::{AppContext as _, Context, Window};
 use navo_core::Location;
 use navo_l10n::tr;
 
 use super::manage_kinds::{Answer, Ask, Kind, gather, offered};
 use super::view::ClipPalette;
-use super::{ClipId, ClipRow};
+use super::{ClipId, ClipKind, ClipRow, Origin};
 use crate::primitives::ListScroll;
 
 /// The library's own state; the search text lives in the palette's field.
@@ -18,7 +18,6 @@ pub(super) struct Manage {
     kind: Kind,
     rows: Rc<[ClipRow]>,
     counts: Vec<(Kind, usize)>,
-    notes: Option<u32>,
     selected: usize,
     keep: Option<ClipId>,
     request: u64,
@@ -35,7 +34,6 @@ impl Manage {
             kind,
             rows: Rc::default(),
             counts: Vec::new(),
-            notes: None,
             selected: 0,
             keep: None,
             request: 0,
@@ -70,9 +68,6 @@ impl Manage {
 
     /// Rows of the shown kind that match the search, or the count the last answer gave.
     pub fn count_of(&self, kind: Kind) -> Option<usize> {
-        if kind == Kind::Notes {
-            return self.notes.map(|notes| notes as usize);
-        }
         self.counts
             .iter()
             .find_map(|(listed, count)| (*listed == kind).then_some(*count))
@@ -108,7 +103,6 @@ impl Manage {
         }
         self.rows = answer.rows.into();
         self.counts = answer.counts;
-        self.notes = answer.notes;
         self.is_loaded = true;
         let kept = self
             .keep
@@ -160,7 +154,7 @@ impl Manage {
 impl ClipPalette {
     /// Opens the library on the first kind the hooks list; nothing when it is open or none is.
     pub fn open_manage(&mut self, cx: &mut Context<Self>) {
-        if self.manage.is_some() {
+        if self.manage.is_some() || self.form.is_some() {
             return;
         }
         let Some(manage) = Manage::new(offered(self.state.modes())) else {
@@ -183,14 +177,20 @@ impl ClipPalette {
         }
     }
 
-    /// F2: opens the library, unless a saved row is selected, which F2 will edit.
-    pub(super) fn manage_key(&mut self, cx: &mut Context<Self>) {
-        let edits = self
-            .state
-            .selected_row()
-            .is_some_and(|row| row.from == super::Origin::Saved);
-        if !edits {
-            self.open_manage(cx);
+    /// F2: edits the selected saved row, or offers to re-point a note whose folder is gone;
+    /// on a history row or none it opens the library.
+    pub fn edit_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.form.is_some() || self.repoint.is_some() {
+            return;
+        }
+        let row = match &self.manage {
+            Some(manage) => manage.selected_row(),
+            None => self.state.selected_row(),
+        };
+        match row.cloned() {
+            Some(row) if row.kind == ClipKind::Note => self.offer_repoint(&row, window, cx),
+            Some(row) if row.from == Origin::Saved => self.open_edit(row.id, window, cx),
+            _ => self.open_manage(cx),
         }
     }
 
@@ -249,16 +249,21 @@ impl ClipPalette {
 
     /// Del: deletes the selected row through the hooks. The next snapshot drops it from the list.
     pub(super) fn manage_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self
+        let Some((id, kind, scope)) = self
             .manage
             .as_ref()
             .and_then(|m| m.selected_row())
-            .map(|row| row.id)
+            .map(|row| (row.id, row.kind, row.scope.clone()))
         else {
             return;
         };
         match self.hooks.delete(id) {
-            Ok(()) => self.say(tr("clip-status-deleted"), false, cx),
+            Ok(()) => {
+                if kind == ClipKind::Note && self.note.holds(&scope) {
+                    self.note.mark_deleted();
+                }
+                self.say(tr("clip-status-deleted"), false, cx);
+            }
             Err(message) => self.say(message, true, cx),
         }
     }

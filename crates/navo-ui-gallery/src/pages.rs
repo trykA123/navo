@@ -153,6 +153,12 @@ pub enum Page {
     ClipPopUpMenu,
     ClipManage,
     ClipManage390,
+    ClipNotes,
+    ClipNotes390,
+    ClipEdit,
+    ClipEdit390,
+    ClipEditSecret,
+    ClipEditSecret390,
 }
 
 #[derive(Clone, Copy)]

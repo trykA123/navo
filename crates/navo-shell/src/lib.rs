@@ -27,7 +27,7 @@ pub use drives::{
 pub use helper_job::HelperLimits;
 #[cfg(windows)]
 pub use helper_job::{HelperJob, confine_helper};
-pub use paste_back::{FOCUS_WAIT, Foreground, PasteError};
+pub use paste_back::{FOCUS_WAIT, Foreground, PasteError, take_focus};
 pub use shell_menu::{
     FILL_BUDGET, InvokeOptions, MenuError, MenuPaths, MenuSession, Pending, ScreenPoint,
     ShellMenuService, Show, WindowHandle, WorkerHealth,

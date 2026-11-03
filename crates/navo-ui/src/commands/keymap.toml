@@ -2001,3 +2001,38 @@ keys = ["f2"]
 command = "clip_palette.manage"
 keys = ["f2"]
 context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.edit_note"
+keys = ["ctrl-e"]
+
+[[bind]]
+command = "clip_palette.edit_note"
+keys = ["ctrl-e"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.new_item"
+keys = ["ctrl-n"]
+
+[[bind]]
+command = "clip_palette.new_item"
+keys = ["ctrl-n"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.save_form"
+keys = ["ctrl-enter"]
+
+[[bind]]
+command = "clip_palette.save_form"
+keys = ["ctrl-enter"]
+context = "ClipPalette > Input"
+
+[[bind]]
+command = "clip_palette.previous_choice"
+keys = ["left"]
+
+[[bind]]
+command = "clip_palette.next_choice"
+keys = ["right"]

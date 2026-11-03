@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use super::secrets::secret_item;
+use super::secrets::{secret, secret_item};
 use super::*;
 use crate::model::{Saved, SavedKind};
 use crate::service::FailKind;
@@ -31,7 +31,7 @@ fn save_update_and_delete_show_in_the_next_snapshot() {
     assert_eq!(after.saved[0].body.as_deref(), Some("hello there"));
     assert!(after.revision > snapshot.revision);
 
-    assert!(h.service.delete_saved(id));
+    assert_eq!(answer(h.service.delete_saved(id)), Ok(()));
     wait_for(&h.service, |s| s.saved.is_empty());
 }
 
@@ -128,7 +128,7 @@ fn an_unreadable_saved_row_is_counted_and_can_be_deleted() {
     let snapshot = h.service.snapshot();
     assert_eq!(snapshot.saved.len(), 1);
     assert_eq!(snapshot.saved_skipped, 1);
-    assert!(h.service.delete_saved(50));
+    assert_eq!(answer(h.service.delete_saved(50)), Ok(()));
     wait_for(&h.service, |s| s.saved_skipped == 0);
 }
 
@@ -140,5 +140,53 @@ fn a_request_after_stop_answers_busy() {
         answer(h.service.save(snippet("Late", "x"), None)),
         Err(FailKind::Busy)
     );
-    assert!(!h.service.delete_saved(1));
+    assert_eq!(answer(h.service.delete_saved(1)), Err(FailKind::Busy));
+}
+
+/// Makes every delete from `table` fail, the way a locked or read-only file would.
+pub(super) fn refuse_deletes(h: &Harness, table: &str) {
+    let conn = Connection::open(h.db()).unwrap();
+    conn.busy_timeout(WAIT).unwrap();
+    conn.execute_batch(&format!(
+        "CREATE TRIGGER refuse_delete BEFORE DELETE ON {table}
+         BEGIN SELECT RAISE(ABORT, 'refused'); END;"
+    ))
+    .unwrap();
+}
+
+#[test]
+fn a_refused_delete_of_a_saved_item_or_secret_answers_store_and_keeps_both() {
+    let h = plain();
+    let plain_id = answer(h.service.save(snippet("Greeting", "hello"), None)).unwrap();
+    let secret_id = answer(h.service.save(secret_item("Mail"), secret("pw"))).unwrap();
+    refuse_deletes(&h, "saved");
+    assert_eq!(
+        answer(h.service.delete_saved(plain_id)),
+        Err(FailKind::Store)
+    );
+    assert_eq!(
+        answer(h.service.delete_saved(secret_id)),
+        Err(FailKind::Store)
+    );
+    assert_eq!(h.service.snapshot().saved.len(), 2);
+}
+
+#[test]
+fn a_delete_whose_log_cannot_be_emptied_answers_store() {
+    let h = plain();
+    let id = answer(h.service.save(secret_item("Mail"), secret("pw"))).unwrap();
+    let mut reader = Connection::open(h.db()).unwrap();
+    let pin = reader.transaction().unwrap();
+    let _: i64 = pin
+        .query_row("SELECT count(*) FROM saved", [], |row| row.get(0))
+        .unwrap();
+    answer(h.service.save(snippet("After", "x"), None)).unwrap();
+    let started = std::time::Instant::now();
+    let deleted = h.service.delete_saved(id).recv_timeout(WAIT).unwrap();
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "before the hook gives up"
+    );
+    drop(pin);
+    assert_eq!(deleted, Err(FailKind::Store));
 }

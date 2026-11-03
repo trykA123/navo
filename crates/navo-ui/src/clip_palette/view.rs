@@ -1,30 +1,29 @@
 use std::fmt;
 use std::sync::Arc;
 
-use futures::StreamExt;
-use futures::channel::mpsc::{UnboundedReceiver, unbounded};
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, ParentElement, Pixels, Render, Role, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
+    AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
+    IntoElement, ParentElement, Pixels, Render, Role, SharedString, StatefulInteractiveElement,
+    Styled, Subscription, Window, div, px,
 };
 use navo_core::Location;
 use navo_l10n::tr;
 
 use super::actions::Overlay;
-use super::keys::{
-    Back, CONTEXT, Choose, CopyOnly, CopyUser, DeleteRow, MoveDown, MoveUp, NextMode, OpenActions,
-    OpenManage, PasteFiles, PreviousMode, SaveRow, ToggleReveal,
-};
+use super::edit_form::Form;
+use super::keys::{CONTEXT, on_keys};
 use super::list::Paint;
 use super::manage::Manage;
+use super::note_editor::{FolderProbe, NoteEditor};
 use super::preview::{self, Look};
+use super::refresh::system_now;
+use super::repoint::Repoint;
 use super::rows::RowElement;
 use super::state::PaletteState;
-use super::{ClipMode, ClipResults, ClipboardHooks};
+use super::{ClipMode, ClipboardHooks};
 use crate::primitives::{ListScroll, TextFieldState, text_field_state};
 use crate::tokens::Theme;
 
@@ -34,6 +33,7 @@ const HEIGHT: f32 = 400.;
 pub(super) const LIST_WIDTH: f32 = 264.;
 const DOCK_BELOW: f32 = 560.;
 const DOCK_HEIGHT: f32 = 128.;
+const NOTE_DOCK_HEIGHT: f32 = 168.;
 const MARGIN: f32 = 8.;
 
 /// Where the palette runs: in Navo's window, or in the pop-up over another app, where Enter
@@ -55,6 +55,8 @@ pub struct ClipPaletteProps {
     pub now_ms: Option<i64>,
     /// The width the palette fits into; the window width when `None`.
     pub width: Option<Pixels>,
+    /// Finds the notes whose folder is gone; without it none is tagged.
+    pub folder_probe: Option<FolderProbe>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -87,14 +89,19 @@ pub struct ClipPalette {
     pub(super) place: Place,
     pub(super) folder: Option<Location>,
     pub(super) key_cap: Option<SharedString>,
-    fixed_now: Option<i64>,
+    pub(super) fixed_now: Option<i64>,
     width: Option<Pixels>,
     pub(super) now_ms: i64,
     pub(super) state: PaletteState,
+    pub(super) note: NoteEditor,
     pub(super) field: Entity<TextFieldState>,
     pub(super) overlay: Overlay,
     /// The library, while it replaces the palette body.
     pub(super) manage: Option<Manage>,
+    /// The new or edit form, while it replaces the palette body.
+    pub(super) form: Option<Form>,
+    /// A note waiting for a yes to point at the active folder.
+    pub(super) repoint: Option<Repoint>,
     /// Whether the first-open line shows; it goes when the palette is reset.
     pub(super) intro: bool,
     /// A hidden pop-up keeps no rows and answers no search until it is shown again.
@@ -111,19 +118,6 @@ impl Focusable for ClipPalette {
     }
 }
 
-/// Waits for a change and swallows the ones that piled up behind it; false when the hooks are gone.
-async fn next_change(receiver: &mut UnboundedReceiver<()>) -> bool {
-    if receiver.next().await.is_none() {
-        return false;
-    }
-    while receiver.try_recv().is_ok() {}
-    true
-}
-
-fn system_now() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
-
 impl ClipPalette {
     pub fn new(props: ClipPaletteProps, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let field = text_field_state(tr("clip-search-placeholder"), window, cx);
@@ -134,8 +128,14 @@ impl ClipPalette {
         });
         window.focus(&field.focus_handle(cx), cx);
         let intro = props.hooks.take_intro();
+        let note = NoteEditor::new(props.folder_probe, window, cx);
+        let folder = props
+            .folder
+            .clone()
+            .filter(|_| props.place == Place::Window);
         let mut palette = Self {
-            state: PaletteState::new(props.hooks.modes()),
+            state: PaletteState::new(props.hooks.modes()).with_folder(folder),
+            note,
             hooks: props.hooks,
             place: props.place,
             folder: props.folder,
@@ -146,6 +146,8 @@ impl ClipPalette {
             field,
             overlay: Overlay::default(),
             manage: None,
+            form: None,
+            repoint: None,
             intro,
             dormant: false,
             scroll: ListScroll::new(),
@@ -153,6 +155,13 @@ impl ClipPalette {
         };
         palette.listen(cx);
         palette.refresh(false, cx);
+        cx.on_release(|palette, cx| palette.flush_note(cx)).detach();
+        // The flush runs as the observers are called, before any quit future stops a service.
+        cx.on_app_quit(|palette, cx| {
+            palette.flush_note(cx);
+            std::future::ready(())
+        })
+        .detach();
         palette
     }
 
@@ -171,96 +180,21 @@ impl ClipPalette {
         self.refresh(false, cx);
     }
 
-    fn listen(&self, cx: &mut Context<Self>) {
-        let (sender, mut receiver) = unbounded::<()>();
-        self.hooks.subscribe(Box::new(move || {
-            let _ = sender.unbounded_send(());
-        }));
-        cx.spawn(async move |this, cx| {
-            while next_change(&mut receiver).await
-                && this
-                    .update(cx, |palette, cx| palette.refresh(true, cx))
-                    .is_ok()
-            {}
-        })
-        .detach();
-    }
-
-    /// Asks the hooks again. A refresh keeps the selected row; a new search starts at the top.
-    pub(super) fn refresh(&mut self, is_refresh: bool, cx: &mut Context<Self>) {
-        if self.dormant {
-            return;
-        }
-        self.now_ms = self.fixed_now.unwrap_or_else(system_now);
-        if self.manage.is_some() {
-            return self.refresh_manage(is_refresh, cx);
-        }
-        let request = self.state.begin_request(is_refresh);
-        let query = self.query(cx).to_string();
-        let (hooks, folder) = (self.hooks.clone(), self.folder.clone());
-        let (shown, modes) = (self.state.mode(), self.state.modes().to_vec());
-        let search = {
-            let (hooks, query, folder) = (hooks.clone(), query.clone(), folder.clone());
-            cx.background_spawn(async move { hooks.search(&query, shown, folder.as_ref()) })
-        };
-        cx.spawn(async move |this, cx| {
-            let results = search.await;
-            let _ = this.update(cx, |palette, cx| palette.take_results(request, results, cx));
-        })
-        .detach();
-        if modes.len() < 2 {
-            return;
-        }
-        let tally = cx.background_spawn(async move {
-            modes
-                .into_iter()
-                .map(|mode| (mode, hooks.search(&query, mode, folder.as_ref()).rows.len()))
-                .collect::<Vec<_>>()
-        });
-        cx.spawn(async move |this, cx| {
-            let counts = tally.await;
-            let _ = this.update(cx, |palette, cx| palette.take_counts(request, counts, cx));
-        })
-        .detach();
-    }
-
-    fn take_counts(
-        &mut self,
-        request: u64,
-        counts: Vec<(ClipMode, usize)>,
-        cx: &mut Context<Self>,
-    ) {
-        if self.state.accept_counts(request, counts) {
-            cx.notify();
-        }
-    }
-
-    pub(super) fn take_results(
-        &mut self,
-        request: u64,
-        results: ClipResults,
-        cx: &mut Context<Self>,
-    ) {
-        if self.state.accept(request, results) {
-            self.reveal_selection();
-            cx.notify();
-        }
-    }
-
-    fn reveal_selection(&self) {
+    pub(super) fn reveal_selection(&self) {
         if let Some(position) = self.state.selected_entry() {
             self.scroll.scroll_to(position);
         }
     }
 
-    pub(super) fn pick_mode(&mut self, mode: ClipMode, cx: &mut Context<Self>) {
+    /// Switches to a mode the hooks offer.
+    pub fn pick_mode(&mut self, mode: ClipMode, cx: &mut Context<Self>) {
         if self.state.set_mode(mode) {
             self.refresh(false, cx);
             cx.notify();
         }
     }
 
-    fn cycle_mode(&mut self, backwards: bool, cx: &mut Context<Self>) {
+    pub(super) fn cycle_mode(&mut self, backwards: bool, cx: &mut Context<Self>) {
         if self.manage.is_some() {
             return self.manage_cycle(backwards, cx);
         }
@@ -273,7 +207,8 @@ impl ClipPalette {
         }
     }
 
-    fn step(&mut self, delta: isize, cx: &mut Context<Self>) {
+    pub(super) fn step(&mut self, delta: isize, cx: &mut Context<Self>) {
+        self.repoint = None;
         if self.manage.is_some() {
             return self.manage_step(delta, cx);
         }
@@ -285,7 +220,16 @@ impl ClipPalette {
         cx.notify();
     }
 
-    fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.form.is_some() {
+            return self.form_back(window, cx);
+        }
+        if self.cancel_repoint(cx) {
+            return;
+        }
+        if self.leave_note(window, cx) {
+            return;
+        }
         if self.manage.is_some() {
             return self.close_manage(cx);
         }
@@ -324,6 +268,7 @@ impl ClipPalette {
     }
 
     pub(super) fn choose_at(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.repoint = None;
         self.state.select(index);
         self.choose(cx);
     }
@@ -340,7 +285,12 @@ impl ClipPalette {
         (width.min(px(WIDTH)), height.min(px(HEIGHT)))
     }
 
-    fn body(&self, t: &Theme, is_docked: bool, cx: &mut Context<Self>) -> impl IntoElement {
+    fn body(
+        &self,
+        t: &Theme,
+        (is_docked, has_note_focus): (bool, bool),
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let has_rows = !self.state.results().rows.is_empty();
         let paint = Paint::new(self, is_docked, cx.entity().downgrade());
         let list = div()
@@ -366,9 +316,17 @@ impl ClipPalette {
             now_ms: self.now_ms,
             is_docked,
             secret: row.and_then(|row| self.shown_secret(row)),
+            has_note_focus,
         };
-        let pane = preview::preview(t, row, look)
-            .when(is_docked, |pane| pane.flex_none().h(px(DOCK_HEIGHT)));
+        let note = row.and_then(|row| self.note_pane(t, row, look));
+        let dock = if note.is_some() {
+            NOTE_DOCK_HEIGHT
+        } else {
+            DOCK_HEIGHT
+        };
+        let pane = note
+            .unwrap_or_else(|| preview::preview(t, row, look))
+            .when(is_docked, |pane| pane.flex_none().h(px(dock)));
         div()
             .flex()
             .flex_1()
@@ -379,32 +337,14 @@ impl ClipPalette {
     }
 }
 
-impl ClipPalette {
-    fn on_keys(panel: RowElement, cx: &mut Context<Self>) -> RowElement {
-        panel
-            .on_action(cx.listener(|this, _: &NextMode, _, cx| this.cycle_mode(false, cx)))
-            .on_action(cx.listener(|this, _: &PreviousMode, _, cx| this.cycle_mode(true, cx)))
-            .on_action(cx.listener(|this, _: &MoveUp, _, cx| this.step(-1, cx)))
-            .on_action(cx.listener(|this, _: &MoveDown, _, cx| this.step(1, cx)))
-            .on_action(cx.listener(|this, _: &Choose, _, cx| this.choose(cx)))
-            .on_action(cx.listener(|this, _: &Back, window, cx| this.back(window, cx)))
-            .on_action(cx.listener(|this, _: &OpenActions, _, cx| this.toggle_actions(cx)))
-            .on_action(cx.listener(|this, _: &CopyOnly, window, cx| this.copy_only(window, cx)))
-            .on_action(cx.listener(|this, _: &PasteFiles, window, cx| this.paste_files(window, cx)))
-            .on_action(cx.listener(|this, _: &ToggleReveal, _, cx| this.toggle_reveal(cx)))
-            .on_action(cx.listener(|this, _: &CopyUser, _, cx| this.copy_user_key(cx)))
-            .on_action(cx.listener(|this, _: &SaveRow, _, cx| this.save_key(cx)))
-            .on_action(cx.listener(|this, _: &DeleteRow, window, cx| this.delete_row(window, cx)))
-            .on_action(cx.listener(|this, _: &OpenManage, _, cx| this.manage_key(cx)))
-    }
-}
-
 impl Render for ClipPalette {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.hide_stray_secret();
+        self.sync_note(window, cx);
         let t = crate::tokens::current(cx).clone();
         let (width, height) = self.frame(window);
         let is_docked = width < px(DOCK_BELOW);
+        let has_note_focus = self.note_has_focus(window, cx);
         let floats = self.place == Place::Window;
         let panel = div()
             .id(ROOT)
@@ -429,18 +369,21 @@ impl Render for ClipPalette {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .line_height(t.typography.line_height);
-        let panel = Self::on_keys(panel, cx)
-            .on_mouse_down_out(cx.listener(|this, _, _, cx| this.dismiss(cx)))
-            .child(self.input_row(&t));
-        let panel = if self.manage.is_some() {
+        let panel =
+            on_keys(panel, cx).on_mouse_down_out(cx.listener(|this, _, _, cx| this.dismiss(cx)));
+        let panel = if self.form.is_some() {
+            panel.children(self.form_view(&t, window, cx))
+        } else if self.manage.is_some() {
             panel
+                .child(self.input_row(&t))
                 .child(self.manage_body(&t, is_docked, cx))
                 .child(self.manage_footer(&t, cx))
         } else {
             panel
+                .child(self.input_row(&t))
                 .children(self.tabs(&t, is_docked, cx))
                 .children(self.notices(&t))
-                .child(self.body(&t, is_docked, cx))
+                .child(self.body(&t, (is_docked, has_note_focus), cx))
                 .child(self.footer(&t, cx))
                 .children(self.actions_menu(&t, cx))
         };

@@ -17,7 +17,7 @@ const MAX_ASIDE_ATTEMPTS: u32 = 100;
 const ASIDE_MARK: &str = ".corrupt-";
 // Companions move before the main file, so a crash never leaves an old WAL beside a fresh file.
 // A crash between the -wal move and the main move leaves the WAL under the aside name.
-const SUFFIXES: [&str; 3] = ["-wal", "-shm", ""];
+pub(in crate::store) const SUFFIXES: [&str; 3] = ["-wal", "-shm", ""];
 
 /// How [`ClipStore::open`] found the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,29 +34,7 @@ pub(in crate::store) struct Rename {
 }
 
 impl ClipStore {
-    /// Closes the store, removes the database with its `-wal` and `-shm` and every
-    /// `<name>.corrupt-<stamp>` set-aside copy of a damaged file beside it, and opens it empty.
-    /// Aside copies go first, so a failure to remove one keeps the live database; the first
-    /// failure is returned as [`ClipError::Io`] and the remaining files stay.
-    /// `path` must name the open database; any other path is refused with
-    /// [`ClipError::WrongPath`] before anything is touched.
-    /// This consumes the store. On error the files stay and the caller must reopen the store.
-    pub fn wipe_all(self, path: &Path) -> Result<ClipStore, ClipError> {
-        let open_path = self.open_path(path)?;
-        let limits = self.limits;
-        self.checkpoint()?;
-        self.conn.close().map_err(|(_, error)| error)?;
-        for aside in find_asides(&open_path)? {
-            remove_if_present(&aside)?;
-        }
-        for suffix in SUFFIXES {
-            remove_if_present(&suffixed(&open_path, suffix))?;
-        }
-        sync_parent(&open_path);
-        ClipStore::open(&open_path, limits)
-    }
-
-    fn open_path(&self, claimed: &Path) -> Result<PathBuf, ClipError> {
+    pub(in crate::store) fn open_path(&self, claimed: &Path) -> Result<PathBuf, ClipError> {
         let open = PathBuf::from(self.conn.path().ok_or(ClipError::WrongPath)?);
         let same = open == claimed
             || matches!(
@@ -242,7 +220,7 @@ fn keep_first(first: &mut Option<io::Error>, result: io::Result<()>) {
 }
 
 /// Files beside `path` named exactly as [`move_aside`] names them, with `-wal` or `-shm`.
-fn find_asides(path: &Path) -> io::Result<Vec<PathBuf>> {
+pub(in crate::store) fn find_asides(path: &Path) -> io::Result<Vec<PathBuf>> {
     let Some(file) = path.file_name() else {
         return Ok(Vec::new());
     };
@@ -289,14 +267,14 @@ fn is_aside_tail(tail: &[u8]) -> bool {
     }
 }
 
-fn remove_if_present(path: &Path) -> io::Result<()> {
+pub(in crate::store) fn remove_if_present(path: &Path) -> io::Result<()> {
     match fs::remove_file(path) {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
     }
 }
 
-fn suffixed(path: &Path, suffix: &str) -> PathBuf {
+pub(in crate::store) fn suffixed(path: &Path, suffix: &str) -> PathBuf {
     let mut name = OsString::from(path.as_os_str());
     name.push(suffix);
     PathBuf::from(name)
@@ -309,7 +287,7 @@ fn now_ms() -> u128 {
 }
 
 #[cfg(unix)]
-fn sync_parent(path: &Path) {
+pub(in crate::store) fn sync_parent(path: &Path) {
     if let Some(parent) = path.parent() {
         // Best effort: the renames already happened, and a failed sync must not undo them.
         let _ = fs::File::open(parent).and_then(|folder| folder.sync_all());
@@ -317,4 +295,4 @@ fn sync_parent(path: &Path) {
 }
 
 #[cfg(not(unix))]
-fn sync_parent(_path: &Path) {}
+pub(in crate::store) fn sync_parent(_path: &Path) {}

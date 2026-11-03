@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use gpui_kit::{Focusable, Subscription};
-use navo_core::{Command, Location};
+use navo_core::{Command, FsErrorKind, Location};
 use navo_fs::FsEntry;
 use navo_l10n::t;
 
 use super::path_edit::{is_folder, last_name};
 use super::{ClipboardSummon, NavoWindow};
 use crate::clip_palette::{
-    ClipCounts, ClipPalette, ClipPaletteEvent, ClipPaletteProps, ClipboardHooks, Place,
-    PopUpRequest,
+    ClipCounts, ClipPalette, ClipPaletteEvent, ClipPaletteProps, ClipboardHooks, FolderProbe,
+    Place, PopUpRequest,
 };
 use crate::commands::{CommandEntry, entries_with};
 use crate::confirm_dialog::{ConfirmDialog, ConfirmProps};
@@ -123,6 +123,17 @@ fn notice(text: String, is_error: bool) -> StatusNotice {
 }
 
 impl NavoWindow {
+    /// Finds a note's folder that is gone. Only a plain "not found" counts: an offline share
+    /// or a denied folder may be back.
+    fn folder_probe(&self) -> FolderProbe {
+        let provider = self.provider.clone();
+        Arc::new(move |folder| {
+            provider
+                .metadata(folder)
+                .is_err_and(|error| error.kind == FsErrorKind::NotFound)
+        })
+    }
+
     /// The commands Ctrl+K lists; the clipboard ones need clipboard hooks.
     pub(super) fn command_entries(&self) -> Vec<CommandEntry> {
         entries_with(self.clip.live().is_some())
@@ -168,6 +179,7 @@ impl NavoWindow {
             key_cap: key_cap.map(Into::into),
             now_ms: None,
             width: None,
+            folder_probe: Some(self.folder_probe()),
         };
         let palette = cx.new(|cx| ClipPalette::new(props, window, cx));
         let events = cx.subscribe_in(&palette, window, |view, _, event, window, cx| {
@@ -190,6 +202,7 @@ impl NavoWindow {
             summon,
             hooks,
             key_cap: Some(key.into()),
+            folder_probe: Some(self.folder_probe()),
             window_shown: self.window_shown.clone(),
         };
         cx.defer(move |cx| crate::clip_palette::summon(request, cx));

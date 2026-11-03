@@ -18,7 +18,7 @@ use super::{FailKind, Ports};
 pub(super) enum Msg {
     Captured(Captured),
     Copy(i64, Option<Sender<Result<(), FailKind>>>),
-    Delete(i64),
+    Delete(i64, Sender<Result<(), FailKind>>),
     Clear(Sender<Result<(), FailKind>>),
     Wipe(Sender<Result<(), FailKind>>),
     Saved(SavedMsg),
@@ -108,9 +108,9 @@ impl Worker {
                     None => self.record(written),
                 }
             }
-            Msg::Delete(id) => {
-                let changed = self.change(|store| store.delete(id));
-                self.record(changed);
+            Msg::Delete(id, reply) => {
+                let deleted = self.change(|store| store.delete(id));
+                self.answer(&reply, deleted);
             }
             Msg::Clear(reply) => {
                 let cleared = self.change(|store| store.clear_history());

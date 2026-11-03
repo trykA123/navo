@@ -153,8 +153,10 @@ impl ClipService {
         self.send(Msg::Copy(id, None))
     }
 
-    pub fn delete(&self, id: i64) -> bool {
-        self.send(Msg::Delete(id))
+    /// Deletes a history row. The reply is `Store` when the row or its text in the log may
+    /// still be on disk.
+    pub fn delete(&self, id: i64) -> Reply<()> {
+        self.request(|reply| Msg::Delete(id, reply))
     }
 
     /// Clears the history rows; the reply tells whether the store took it. Saved items stay.
