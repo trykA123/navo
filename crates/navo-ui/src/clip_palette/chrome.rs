@@ -3,7 +3,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Role, SharedString, StatefulInteractiveElement, Styled, div, px,
+    Role, SharedString, StatefulInteractiveElement, Styled, WindowControlArea, div, px,
 };
 use navo_l10n::{t, tr};
 
@@ -58,6 +58,20 @@ pub(super) fn hint(t: &Theme, id: &'static str, key: &str, label: String) -> Div
 }
 
 impl ClipPalette {
+    /// Lets the pop-up be dragged by this part of its header; the search field stays clickable.
+    fn drag_area(&self, area: Div) -> Div {
+        if self.place == Place::Anywhere {
+            area.window_control_area(WindowControlArea::Drag)
+        } else {
+            area
+        }
+    }
+
+    fn drag_handle(&self, content: impl IntoElement, t: &Theme) -> Div {
+        self.drag_area(div().flex().items_center().h_full().pl(t.spacing.xl))
+            .child(content)
+    }
+
     pub(super) fn input_row(&self, t: &Theme) -> Div {
         let input = Input::new(&self.field)
             .id("clip-palette-input")
@@ -75,9 +89,8 @@ impl ClipPalette {
             .items_center()
             .gap(t.spacing.md)
             .h(px(INPUT_ROW))
-            .pl(t.spacing.xl)
             .pr(t.spacing.md)
-            .child(icon(IconName::Search, t.spacing.icon, t.colors.muted))
+            .child(self.drag_handle(icon(IconName::Search, t.spacing.icon, t.colors.muted), t))
             .child(div().flex_1().min_w_0().child(input))
             .children(key)
     }
@@ -168,7 +181,7 @@ impl ClipPalette {
                 .border_b_1()
                 .border_color(t.colors.line)
                 .children(tabs)
-                .child(div().flex_1())
+                .child(self.drag_area(div().flex_1()))
                 .when(has_cycle, |bar| {
                     bar.child(
                         div()

@@ -33,7 +33,8 @@ pub use layout::{
 };
 pub use model::{
     Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles, ModifierHints,
-    Search, SearchIndex, SelectionSettings, Settings, SizeMode, SortKey, Terminal, ThemeMode,
+    PopUpPosition, Search, SearchIndex, SelectionSettings, Settings, SizeMode, SortKey, Terminal,
+    ThemeMode,
 };
 pub use parse::{parse, parse_retention, to_toml};
 pub use retention::RetentionSettings;

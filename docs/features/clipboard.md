@@ -78,13 +78,14 @@ Open Settings with Ctrl+, and choose Clipboard. Turn off "Clipboard and saved it
 
 ## Settings
 
-Settings › Clipboard has three rows. They are stored in `navo.toml` under `[clipboard]`.
+Settings › Clipboard has four rows. They are stored in `navo.toml` under `[clipboard]`.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | Clipboard and saved items (`enabled`) | on | Turns the module on or off |
 | Record clipboard history (`record-history`) | on | Records what you copy; off pauses recording |
 | Open from anywhere (`summon-key`) | Win+Alt+V | Opens the palette over any app; leave empty for none |
+| Pop-up position (`popup-position`) | last | Where the pop-up opens: `last` (where you closed it, same size), `cursor`, or `center` |
 
 If another app already uses the key, the settings row says so.
 

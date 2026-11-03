@@ -112,6 +112,7 @@ summon-key = "Win+Alt+N"
 enabled = true
 record-history = true
 summon-key = "Win+Alt+V"
+popup-position = "last"
 
 [updates]
 check = true

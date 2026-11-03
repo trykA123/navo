@@ -53,12 +53,13 @@ pub trait PasteTarget: Send + Sync {
 }
 
 /// A clipboard summon: when the key was pressed, the window that had focus and the display
-/// under the cursor, if known.
+/// under the cursor and the cursor itself in logical pixels, if known.
 #[derive(Clone)]
 pub struct ClipboardSummon {
     pub at: Instant,
     pub previous: Option<Arc<dyn PasteTarget>>,
     pub display: Option<u64>,
+    pub cursor: Option<(i32, i32)>,
 }
 
 impl std::fmt::Debug for ClipboardSummon {
@@ -67,6 +68,7 @@ impl std::fmt::Debug for ClipboardSummon {
             .field("at", &self.at)
             .field("has_previous", &self.previous.is_some())
             .field("display", &self.display)
+            .field("cursor", &self.cursor)
             .finish()
     }
 }
@@ -78,7 +80,10 @@ impl PartialEq for ClipboardSummon {
             (None, None) => true,
             _ => false,
         };
-        self.at == other.at && same_target && self.display == other.display
+        self.at == other.at
+            && same_target
+            && self.display == other.display
+            && self.cursor == other.cursor
     }
 }
 

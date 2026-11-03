@@ -21,7 +21,7 @@ pub use clipboard::{
 };
 #[cfg(windows)]
 pub use clipboard::{VirtualSource, read_virtual_files_from};
-pub use display::{display_scale, display_under_cursor};
+pub use display::{cursor_position, display_scale, display_under_cursor};
 pub use dpapi::{SealError, SecretBytes, seal, unseal};
 #[cfg(windows)]
 pub use drag_out::data_object;

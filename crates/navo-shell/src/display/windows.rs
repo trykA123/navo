@@ -14,6 +14,23 @@ pub fn display_scale(display: u64) -> Option<f32> {
     (result >= 0 && x > 0).then(|| x as f32 / DEFAULT_DPI)
 }
 
+/// The mouse cursor in GPUI's logical pixels: the physical position over the scale of its monitor.
+#[must_use]
+pub fn cursor_position() -> Option<(i32, i32)> {
+    let mut point = POINT::default();
+    // SAFETY: GetCursorPos writes one POINT through a valid pointer.
+    if unsafe { GetCursorPos(&mut point) } == 0 {
+        return None;
+    }
+    // SAFETY: MonitorFromPoint takes the point by value and has no other preconditions.
+    let monitor = unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST) };
+    let scale = display_scale(monitor as usize as u64)?;
+    Some((
+        (point.x as f32 / scale).round() as i32,
+        (point.y as f32 / scale).round() as i32,
+    ))
+}
+
 /// The monitor the mouse cursor is on, as the GPUI display id (its `HMONITOR`).
 #[must_use]
 pub fn display_under_cursor() -> Option<u64> {

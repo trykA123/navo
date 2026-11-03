@@ -177,6 +177,7 @@ pub enum Field {
     ClipboardOn,
     ClipboardRecord,
     ClipboardKey,
+    ClipboardPosition,
     CompareGitEngine,
     CompareIgnoreList,
     CompareRespectGitignore,
@@ -291,7 +292,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 84] = join([
+pub const FIELDS: [FieldSpec; 85] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &GIT_FIELDS,

@@ -113,6 +113,8 @@ pub(crate) struct WindowsWindowInner {
     pub(crate) hide_title_bar: bool,
     pub(crate) is_movable: bool,
     pub(crate) is_resizable: bool,
+    /// A frameless pop-up the user can resize by its edges.
+    pub(crate) is_resizable_popup: bool,
     pub(crate) is_minimizable: bool,
     pub(crate) executor: ForegroundExecutor,
     pub(crate) validation_number: usize,
@@ -307,6 +309,7 @@ impl WindowsWindowInner {
             hide_title_bar: context.hide_title_bar,
             is_movable: context.is_movable,
             is_resizable: context.is_resizable,
+            is_resizable_popup: context.is_resizable_popup,
             is_minimizable: context.is_minimizable,
             executor: context.executor.clone(),
             validation_number: context.validation_number,
@@ -448,6 +451,7 @@ struct WindowCreateContext {
     display: WindowsDisplay,
     is_movable: bool,
     is_resizable: bool,
+    is_resizable_popup: bool,
     is_minimizable: bool,
     min_size: Option<Size<Pixels>>,
     executor: ForegroundExecutor,
@@ -521,7 +525,13 @@ impl WindowsWindow {
         );
 
         let (mut dwexstyle, dwstyle) = if params.kind == WindowKind::PopUp {
-            (WS_EX_TOOLWINDOW | WS_EX_TOPMOST, WINDOW_STYLE(0x0))
+            // WS_THICKFRAME lets Windows size the pop-up; WM_NCCALCSIZE keeps it frameless.
+            let style = if params.is_resizable {
+                WS_THICKFRAME
+            } else {
+                WINDOW_STYLE(0x0)
+            };
+            (WS_EX_TOOLWINDOW | WS_EX_TOPMOST, style)
         } else {
             let mut dwstyle = WS_SYSMENU;
 
@@ -561,6 +571,7 @@ impl WindowsWindow {
             display,
             is_movable: params.is_movable,
             is_resizable: params.is_resizable,
+            is_resizable_popup: params.kind == WindowKind::PopUp && params.is_resizable,
             is_minimizable: params.is_minimizable,
             min_size: params.window_min_size,
             executor,

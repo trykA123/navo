@@ -42,13 +42,13 @@ pub use settings::{
     Appearance, Automotive, AutomotiveView, ColorTheme, Compare, CompareGitEngine, Completion,
     ContentCheck, CopyMode, CopySettings, DefaultChange, Density, DropConfirm, Editor, Files,
     GitEngine, GitSettings, HiddenFiles, ImageView, ImageViewer, LayoutPreset, LayoutSettings,
-    LoadReport, MarkdownView, MarkdownViewer, ModifierHints, PreviewView, PreviewViewer,
-    RetentionSettings, Saved, Search, SearchIndex, SelectionSettings, SessionBackup, SettingValue,
-    Settings, SettingsError, SettingsLedger, SettingsStore, SizeMode, SortKey, Terminal, TextView,
-    TextViewer, ThemeMode, ViewPreset, WindowSettings, WindowView, key_line as settings_key_line,
-    parse as parse_settings, parse_retention as parse_retention_settings, remove_layout_preset,
-    replace_layout_preset, save_layout_preset, section_line as settings_section_line,
-    to_toml as settings_to_toml,
+    LoadReport, MarkdownView, MarkdownViewer, ModifierHints, PopUpPosition, PreviewView,
+    PreviewViewer, RetentionSettings, Saved, Search, SearchIndex, SelectionSettings, SessionBackup,
+    SettingValue, Settings, SettingsError, SettingsLedger, SettingsStore, SizeMode, SortKey,
+    Terminal, TextView, TextViewer, ThemeMode, ViewPreset, WindowSettings, WindowView,
+    key_line as settings_key_line, parse as parse_settings,
+    parse_retention as parse_retention_settings, remove_layout_preset, replace_layout_preset,
+    save_layout_preset, section_line as settings_section_line, to_toml as settings_to_toml,
 };
 
 #[cfg(feature = "test-support")]

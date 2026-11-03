@@ -63,6 +63,7 @@ impl Field {
                 | Self::SummonKey
                 | Self::ClipboardRecord
                 | Self::ClipboardKey
+                | Self::ClipboardPosition
         )
     }
 }
