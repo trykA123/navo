@@ -270,6 +270,7 @@ fn wait_for_badges(cx: &mut TestAppContext, view: &Entity<NavoWindow>) {
             "the focused pane never got its Git badges"
         );
         view.update(cx, |view, cx| view.wake(cx));
+        cx.executor().advance_clock(Duration::from_millis(100));
         cx.run_until_parked();
         std::thread::sleep(Duration::from_millis(2));
     }

@@ -148,7 +148,8 @@ fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
             "tab.clone",
             "tab.reopen_closed",
             "crash_notice.focus",
-            "layout.focus_pane_first"
+            "layout.focus_pane_first",
+            "compare.with_other_pane"
         ]
     );
     assert_eq!(ctrl.more[0].keys, ["Tab"]);
@@ -390,7 +391,7 @@ fn a_numbered_run_folds_into_one_row() {
         .find(|e| e.label == "Go to tab 1–8")
         .expect("run");
     assert_eq!(run.keys, ["1–8"]);
-    assert_eq!(layer.rows(), 9);
+    assert_eq!(layer.rows(), 10);
 }
 
 #[test]
