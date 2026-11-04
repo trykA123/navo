@@ -57,6 +57,13 @@ impl From<FsEntry> for SourceMetadata {
 pub trait SourceOps: Send + Sync {
     fn id(&self) -> ProviderId;
     fn metadata(&self, location: &Location) -> Result<SourceMetadata, FsError>;
+    fn metadata_with_cancel(
+        &self,
+        location: &Location,
+        _cancel: &CancelToken,
+    ) -> Result<SourceMetadata, FsError> {
+        self.metadata(location)
+    }
     fn open_read(&self, location: &Location) -> Result<Box<dyn Read + Send>, FsError>;
     /// Opens `location` for a copy into the temporary file `temp`. A source may instead create
     /// `temp` itself, never over an existing file, call `created` right after it exists, and

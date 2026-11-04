@@ -22,7 +22,7 @@ pub(super) fn stream(
         .sources
         .and_then(|sources| sources.find(step.source.provider()))
         .ok_or_else(|| failure(FsErrorKind::NotSupportedYet, step.source))?;
-    let entry = reader.metadata(step.source)?;
+    let entry = reader.metadata_with_cancel(step.source, copier.cancel)?;
     if entry.kind != EntryKind::File {
         return Err(failure(FsErrorKind::NotSupportedYet, step.source));
     }
@@ -54,7 +54,7 @@ pub(super) fn stream(
         )?,
         SourceContent::Written => adopt(copier, temp, progress, (announced, created))?,
     };
-    let after = reader.metadata(step.source)?;
+    let after = reader.metadata_with_cancel(step.source, copier.cancel)?;
     if after != entry
         || matches!(entry.identity, SourceIdentity::Stamp(stamp) if written != stamp.size)
     {

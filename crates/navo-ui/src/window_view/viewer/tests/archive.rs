@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
-use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveListing, ENCRYPTED, Stamp};
+use navo_fs::archive::{
+    ArchiveEntry, ArchiveFormat, ArchiveKind, ArchiveListing, ENCRYPTED, Stamp,
+};
 
 use super::find::bottom_keys;
 use super::{Log, Setup, hooks, label, press_only, redraw, text_of, visible, window_with};
@@ -23,8 +25,13 @@ fn entry(name: &str, size: u64) -> ArchiveEntry {
         size,
         packed: Some(size / 2),
         modified: Some(Stamp::UnixMs(1_791_920_400_000)),
-        is_folder: name.ends_with('/'),
+        kind: if name.ends_with('/') {
+            ArchiveKind::Folder
+        } else {
+            ArchiveKind::File
+        },
         is_encrypted: false,
+        header_offset: None,
     }
 }
 

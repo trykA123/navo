@@ -29,7 +29,7 @@ impl Walk<'_> {
         }
         for (index, entry) in listing.entries.into_iter().enumerate() {
             self.check_cancelled()?;
-            if !entry.is_folder {
+            if !entry.kind.is_folder() {
                 let relative = format!(
                     "{}\\{}",
                     found.relative.to_text().replace('/', "\\"),

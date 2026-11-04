@@ -29,7 +29,7 @@ pub(super) fn date(stamp: Option<Stamp>) -> String {
 }
 
 pub(super) fn display_name(entry: &ArchiveEntry) -> &str {
-    if entry.is_folder {
+    if entry.kind.is_folder() {
         let trimmed = entry.name.trim_end_matches('/');
         if trimmed.is_empty() {
             &entry.name
@@ -42,7 +42,7 @@ pub(super) fn display_name(entry: &ArchiveEntry) -> &str {
 }
 
 fn size_text(entry: &ArchiveEntry) -> String {
-    if entry.is_folder {
+    if entry.kind.is_folder() {
         "<DIR>".to_owned()
     } else {
         format::size(entry.size)
@@ -51,13 +51,13 @@ fn size_text(entry: &ArchiveEntry) -> String {
 
 pub(super) fn spoken(entry: &ArchiveEntry) -> String {
     let name = display_name(entry);
-    let mut words = if entry.is_folder {
+    let mut words = if entry.kind.is_folder() {
         format!("{name}, folder")
     } else {
         format!("{name}, {} bytes", format::bytes(entry.size))
     };
     let date = date(entry.modified);
-    if !entry.is_folder && !date.is_empty() {
+    if !entry.kind.is_folder() && !date.is_empty() {
         words.push_str(", ");
         words.push_str(&date);
     }
@@ -71,7 +71,7 @@ fn glyph(t: &Theme, entry: &ArchiveEntry) -> (IconName, Hsla) {
     if entry.is_encrypted {
         return (IconName::Lock, t.colors.warn);
     }
-    let kind = if entry.is_folder {
+    let kind = if entry.kind.is_folder() {
         EntryKind::Folder
     } else {
         EntryKind::File
@@ -117,7 +117,9 @@ fn name_cell(look: &Look) -> Div {
             div()
                 .min_w_0()
                 .truncate()
-                .when(entry.is_folder, |d| d.font_weight(FontWeight::SEMIBOLD))
+                .when(entry.kind.is_folder(), |d| {
+                    d.font_weight(FontWeight::SEMIBOLD)
+                })
                 .when(entry.is_encrypted, |d| d.text_color(t.colors.muted))
                 .child(display_name(entry).to_owned()),
         )
@@ -134,7 +136,7 @@ pub(super) fn cells(look: &Look) -> Div {
     let entry = look.entry;
     let packed = entry
         .packed
-        .filter(|_| !entry.is_folder)
+        .filter(|_| !entry.kind.is_folder())
         .map(format::size)
         .unwrap_or_default();
     let numbers = div()

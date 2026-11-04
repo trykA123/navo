@@ -1,3 +1,9 @@
+files-archive-symlink-refused = This is a symbolic link inside an archive; it cannot be copied out.
+files-archive-hardlink-refused = This is a hard link inside an archive; it cannot be copied out.
+files-archive-character-device-refused = This is a character device inside an archive; it cannot be copied out.
+files-archive-block-device-refused = This is a block device inside an archive; it cannot be copied out.
+files-archive-fifo-refused = This is a named pipe inside an archive; it cannot be copied out.
+
 -bin = { PLATFORM() ->
     [windows] Recycle Bin
    *[other] Trash

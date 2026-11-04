@@ -5,9 +5,10 @@ use sevenz_rust2::{
 };
 
 use super::source::{Fail, Meter, Metered};
+use super::stream::{StreamRequest, drain, pump};
 use super::{
-    ArchiveEntry, ENCRYPTED, EntryAt, Limits, Listed, Stamp, UNPACK_BUDGET, UNSUPPORTED_METHOD,
-    damaged, missing, read_capped,
+    ArchiveEntry, ArchiveKind, ENCRYPTED, EntryAt, Limits, Listed, Stamp, UNPACK_BUDGET,
+    UNSUPPORTED_METHOD, damaged, missing, read_capped,
 };
 
 const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
@@ -78,8 +79,13 @@ fn describe(archive: &Archive, index: usize, entry: &SevenEntry) -> ArchiveEntry
         size: entry.size(),
         packed: (entry.compressed_size > 0).then_some(entry.compressed_size),
         modified: stamp(entry),
-        is_folder: entry.is_directory(),
+        kind: if entry.is_directory() {
+            ArchiveKind::Folder
+        } else {
+            ArchiveKind::File
+        },
         is_encrypted: is_encrypted(archive, index),
+        header_offset: None,
     }
 }
 
@@ -135,4 +141,66 @@ pub(super) fn read<R: Read + Seek>(
         });
     }
     found.ok_or_else(missing)?
+}
+
+pub(super) fn stream<R: Read + Seek>(
+    mut reader: R,
+    request: StreamRequest<'_>,
+) -> Result<(), String> {
+    let archive = Archive::read(&mut reader, &Password::empty()).map_err(failed)?;
+    let entry = archive.files.get(request.at.index).ok_or_else(missing)?;
+    request
+        .at
+        .check(&describe(&archive, request.at.index, entry))?;
+    let block = archive
+        .stream_map
+        .file_block_index
+        .get(request.at.index)
+        .copied()
+        .flatten();
+    let Some(block) = block else {
+        return Ok(());
+    };
+    if needs_too_much_memory(&archive, block) {
+        return Err(TOO_MUCH_MEMORY.to_owned());
+    }
+    decode_block(&archive, block, &mut reader, request)
+}
+
+fn decode_block<R: Read + Seek>(
+    archive: &Archive,
+    block: usize,
+    reader: &mut R,
+    request: StreamRequest<'_>,
+) -> Result<(), String> {
+    let entry = archive.files.get(request.at.index).ok_or_else(missing)?;
+    let password = Password::empty();
+    let decoder = BlockDecoder::new(1, block, archive, &password, reader);
+    let mut failure = None;
+    let mut found = false;
+    let decoded = decoder.for_each_entries(&mut |file, data| {
+        if !std::ptr::eq(file, entry) {
+            if let Err(message) = drain(data, request.cancel, request.gone) {
+                failure = Some(message);
+                return Err(Error::Other("archive stream stopped".into()));
+            }
+            return Ok(true);
+        }
+        found = true;
+        match pump(data, request.sender, request.cancel, request.gone) {
+            Ok(_) => Ok(false),
+            Err(message) => {
+                failure = Some(message);
+                Err(Error::Other("archive stream stopped".into()))
+            }
+        }
+    });
+    if let Some(message) = failure {
+        return Err(message);
+    }
+    match decoded {
+        Ok(_) if found => Ok(()),
+        Ok(_) => Err(missing()),
+        Err(error) => Err(failed(error)),
+    }
 }
