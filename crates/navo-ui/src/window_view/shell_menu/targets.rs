@@ -6,7 +6,7 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use super::provider::ScreenSpot;
 use crate::format;
 
-pub(super) struct Targets {
+pub(in crate::window_view) struct Targets {
     pub items: Vec<Location>,
     pub context: String,
 }

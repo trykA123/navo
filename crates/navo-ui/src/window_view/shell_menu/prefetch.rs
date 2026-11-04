@@ -85,7 +85,7 @@ impl NavoWindow {
         is_usable.then_some(prefetch.reply).and_then(unless_failed)
     }
 
-    pub(super) fn menu_targets(&self, pane: PaneId) -> Option<Targets> {
+    pub(in crate::window_view) fn menu_targets(&self, pane: PaneId) -> Option<Targets> {
         self.targets_with(pane, false)
     }
 

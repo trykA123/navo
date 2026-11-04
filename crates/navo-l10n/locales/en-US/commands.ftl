@@ -424,6 +424,8 @@ command-center-index-busy = Index service is busy · type to try again
 
 cmd-files-open-terminal = Open terminal here
 cmd-files-reset-column-widths = Reset column widths
+cmd-user-commands-run = Run user command
+cmd-user-commands-edit = Edit user commands
 cmd-files-recently-deleted = Recently deleted
 cmd-deleted-restore = Restore the selected deleted item
 cmd-deleted-purge = Delete the selected item for good

@@ -127,7 +127,7 @@ fn hit_hints(hit: &Hit) -> Vec<Hint> {
         }
         Target::ShowAll(_) => vec![SHOW_ALL, NEXT_GROUP],
         Target::Arg(..) => vec![CHOOSE, NEXT_GROUP, CLOSE],
-        Target::Action(_) | Target::Core(_) => vec![RUN, NEXT_GROUP, CLOSE],
+        Target::Action(_) | Target::Core(_) | Target::User(_) => vec![RUN, NEXT_GROUP, CLOSE],
     }
 }
 

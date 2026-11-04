@@ -12,12 +12,14 @@ use navo_core::Location;
 
 use crate::command_center::view::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, Hint, HintKeys,
-    highlight_ranges, hints, place, result_count,
+    highlight_ranges, hints, hit_icon, place, result_count,
 };
 use crate::command_center::{ArgKind, Group, Heading, Hit, Results, Row, Scope, Selection, Target};
 use crate::commands::Keymap;
+use crate::primitives::IconName;
 use crate::test_pointer::{dispatch, down, up};
 use crate::test_window::open_sized;
+use crate::tokens::Theme;
 
 const ROOT: &str = "command-center";
 
@@ -220,6 +222,18 @@ fn a_command_row_shows_its_shortcut_as_key_caps(cx: &mut TestAppContext) {
             .and_then(|key| key.label().map(str::to_owned))
     });
     assert_eq!(key.as_deref(), Some("F5"));
+}
+
+#[test]
+fn a_user_command_shows_the_command_icon_and_the_run_footer() {
+    let mut hit = command("Zip", None);
+    hit.target = Target::User("zip".into());
+    let theme = Theme::new(crate::tokens::Mode::Light);
+    assert_eq!(hit_icon(&theme, &hit).0, IconName::SquareChevronRight);
+    assert_eq!(
+        keys(&hints(Some(&Row::Hit(hit)), None)),
+        ["enter", "ctrl-down", "escape", "tab"]
+    );
 }
 
 #[gpui_kit::test]

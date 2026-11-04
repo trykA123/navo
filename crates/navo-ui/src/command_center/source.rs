@@ -31,6 +31,7 @@ pub enum Target {
         entry: Option<String>,
     },
     GoTo(Location),
+    User(SharedString),
     ShowAll(Group),
 }
 

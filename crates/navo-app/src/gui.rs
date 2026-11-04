@@ -30,7 +30,7 @@ use crate::startup::{
 use crate::updater::service::Updater;
 use crate::{
     app_menu, clipboard, contrast, drives, editor, files, keymap, launch, metrics, settings,
-    shell_menu, terminal,
+    shell_menu, terminal, user_commands,
 };
 
 const START_READ: Duration = Duration::from_millis(50);
@@ -144,6 +144,7 @@ pub(crate) fn open(mut launch: Launch) {
         launch.experimental_retention,
     );
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
+    let (user_commands, _user_commands_watch) = user_commands::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
     let local = local_provider(launch.trace.as_ref());
@@ -234,6 +235,7 @@ pub(crate) fn open(mut launch: Launch) {
             drop_platform: Some(crate::drag::service()),
             start_watch: launch.start_watch,
             open: OpenHooks {
+                user_commands: Some(user_commands),
                 resident: Some(crate::clip_module::follow(
                     &clip,
                     resident
@@ -313,6 +315,7 @@ fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Sp
         window_shown: crate::resident::window_shown(),
         resident: None,
         compare: Some(Arc::new(crate::compare::PaneCompare::default())),
+        user_commands: None,
     }
 }
 

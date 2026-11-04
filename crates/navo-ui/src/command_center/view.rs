@@ -24,7 +24,7 @@ pub use footer::HintKeys;
 pub(crate) use footer::{hints, result_count};
 pub(crate) use place::place;
 #[cfg(test)]
-pub(crate) use row::highlight_ranges;
+pub(crate) use row::{highlight_ranges, hit_icon};
 
 use super::Mode;
 use super::results::Row;

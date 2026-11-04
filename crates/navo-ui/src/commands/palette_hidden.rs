@@ -14,6 +14,7 @@ pub(super) const HIDDEN: &[&str] = &[
     "deleted.purge",
     "crash_notice.open_folder",
     "app.command_palette",
+    "user_commands.run",
     "compare.enter",
     "compare.up",
     "clip_palette.next_mode",

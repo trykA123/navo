@@ -54,6 +54,7 @@ mod splash;
 mod startup;
 mod terminal;
 mod updater;
+mod user_commands;
 mod virtual_paste;
 mod watch_file;
 

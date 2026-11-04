@@ -459,6 +459,8 @@ compare.up | Up in both panes | Compare
 compare.exit | Leave compare | Compare
 compare.stop_checking | Stop checking contents | Compare
 compare.continue | Continue the compare on a network drive | Compare
+user_commands.run | Run user command | FileList
+user_commands.edit | Edit user commands | global
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global

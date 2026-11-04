@@ -87,8 +87,14 @@ impl NavoWindow {
             Target::Core(command) => self.run_core(&command, window, cx),
             Target::Arg(name, kind) => self.choose_argument((name, kind, &title), window, cx),
             Target::ShowAll(group) => self.show_all(group, window, cx),
+            Target::User(name) => self.run_user_from_center(&name, window, cx),
             Target::Content { .. } | Target::Open { .. } | Target::GoTo(_) => {}
         }
+    }
+
+    fn run_user_from_center(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_command_center(window, cx);
+        self.run_user_command(name, cx);
     }
 
     pub(in crate::window_view) fn run_action(

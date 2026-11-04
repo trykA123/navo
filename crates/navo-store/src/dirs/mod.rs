@@ -121,6 +121,11 @@ impl StoreDirs {
     }
 
     #[must_use]
+    pub fn user_commands_file(&self) -> PathBuf {
+        self.config.join("user-commands.toml")
+    }
+
+    #[must_use]
     pub fn session_file(&self) -> PathBuf {
         self.data.join("session.bin")
     }

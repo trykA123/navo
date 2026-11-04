@@ -16,6 +16,8 @@ mod popup;
 mod retained;
 mod structured;
 mod tab_menu;
+mod user_commands;
+mod user_keys;
 mod viewer;
 mod window;
 
@@ -41,6 +43,7 @@ pub use keymap::{
 };
 pub use layout_mode::CONTEXT as LAYOUT_MODE;
 pub use layout_mode::{is_fixed_digit, is_shown_key};
+pub(crate) use user_keys::{RunUserCommand, bind_user_command_keys, set_user_keys, user_keys};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CommandSpec {
@@ -161,6 +164,7 @@ fn registry() -> impl Iterator<Item = CommandSpec> {
         git::GROUPS.as_slice(),
         clipboard::GROUPS.as_slice(),
         compare::GROUPS.as_slice(),
+        user_commands::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group

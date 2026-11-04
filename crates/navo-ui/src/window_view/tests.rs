@@ -84,6 +84,8 @@ mod tray;
 mod typed;
 mod undo;
 mod undo_retained;
+mod user_command_keys;
+mod user_commands;
 mod visits;
 mod watched;
 mod window_menu;
