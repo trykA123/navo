@@ -6,6 +6,7 @@ pub struct RetentionSummary {
     pub(super) volume: u64,
     pub(super) state: RetainedState,
     pub(super) pinned: bool,
+    resume_blocked: bool,
     pub(super) bytes: u64,
     pub(super) created_at: i64,
     pub(super) expires_at: i64,
@@ -24,6 +25,7 @@ impl TryFrom<&RetentionEntry> for RetentionSummary {
             volume: entry.record.parent_identity.volume,
             state: entry.state,
             pinned: entry.pinned,
+            resume_blocked: entry.pinned && !entry.kept,
             bytes: entry.record.bytes()?,
             created_at: entry.record.created_at,
             expires_at: entry.record.expires_at,
@@ -36,6 +38,7 @@ impl TryFrom<&RetentionEntry> for RetentionSummary {
 impl RetentionSummary {
     pub fn protect(&mut self) {
         self.pinned = true;
+        self.resume_blocked = true;
     }
 
     pub fn id(self) -> RetentionId {
@@ -68,6 +71,6 @@ impl RetentionSummary {
                     self.state,
                     RetainedState::Purging | RetainedState::Restoring
                 ))
-            && !self.pinned
+            && !self.resume_blocked
     }
 }

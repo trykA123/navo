@@ -8,6 +8,28 @@ use super::lock;
 pub struct StillPending {
     pub job: JobId,
     pub left: Vec<Location>,
+    /// The job settled and is never retried; its paths need the user's attention.
+    pub attention: bool,
+}
+
+/// Logs each job left after a start; a settled one once with the needs-attention text.
+pub fn log_pending(pending: &[StillPending]) {
+    for job in pending {
+        if job.attention {
+            tracing::warn!(
+                job = job.job.0,
+                files = job.left.len(),
+                note = %navo_l10n::tr("job-recovery-attention"),
+                "retained delete needs attention and will not be retried"
+            );
+        } else {
+            tracing::warn!(
+                job = job.job.0,
+                files = job.left.len(),
+                "files not yet put back after recovery"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -50,7 +72,11 @@ pub(super) fn details(
     left.extend(held.placed.into_iter().map(|file| file.target));
     let mut seen = std::collections::HashSet::new();
     left.retain(|path| seen.insert(path.clone()));
-    Ok(StillPending { job: job.id, left })
+    Ok(StillPending {
+        job: job.id,
+        left,
+        attention: false,
+    })
 }
 
 fn left_renamed(job: &UnfinishedJob) -> Vec<Location> {

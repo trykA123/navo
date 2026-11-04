@@ -31,9 +31,9 @@ mod temporary;
 mod trim;
 
 pub(crate) use guard_log::{guard_factory, guard_write};
-pub use pending::StillPending;
 #[cfg(test)]
 pub use pending::still_pending;
+pub use pending::{StillPending, log_pending};
 pub(crate) use profile::{claim_write, read_retention, retains_deletes, write_factory};
 #[cfg(test)]
 pub use profile::{confined_factory, experimental_factory, profile_factory, retaining_factory};

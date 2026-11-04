@@ -95,7 +95,7 @@ fn pills(t: &Theme, row: &RetainedRow, is_working: bool) -> Vec<Div> {
     } else {
         text::state_label(row.state).map(|label| {
             let color = match row.state {
-                RetainedState::NeedsAttention => t.colors.warn,
+                RetainedState::NeedsAttention | RetainedState::Stuck => t.colors.warn,
                 _ => t.colors.accent_text,
             };
             (label, color)

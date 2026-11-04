@@ -25,6 +25,29 @@ fn interrupted(fault: Fault) -> (tempfile::TempDir, FakeFs, RetentionEntry) {
 }
 
 #[test]
+fn an_interrupted_restore_on_a_vanished_volume_stays_restoring_until_it_returns() {
+    let profile = tempfile::tempdir().unwrap();
+    let fs = FakeFs::new();
+    fs.set_available_space("home", Some(u64::MAX));
+    fs.add_file("home/vol/a", 7);
+    fs.set_volume("home/vol", 3);
+    let mut vault = open(profile.path(), &fs);
+    let target = fs.location("home/vol/a");
+    let entry = capture(&mut vault, &target);
+    assert!(held(&entry).as_str().contains("home/vol/"));
+    fail_next_rename(&fs, &entry, Fault::Fail(FsErrorKind::Locked));
+    assert!(restore(&mut vault, entry.id, &target).is_err());
+    fs.rename_entry("home/vol", "home/unplugged");
+    let error = run(|run| vault.reconcile(entry.id, run)).unwrap_err();
+    assert!(!vault.needs_attention(&error, &entry), "{error}");
+    assert_eq!(vault.get(entry.id).unwrap().state, RetainedState::Restoring);
+    fs.rename_entry("home/unplugged", "home/vol");
+    let restored = restore(&mut vault, entry.id, &target).unwrap();
+    assert_eq!(restored.state, RetainedState::Restored);
+    assert_eq!(fs.metadata(&target).unwrap().size, 7);
+}
+
+#[test]
 fn a_restore_that_failed_before_its_rename_restores_when_retried_after_a_restart() {
     let (profile, fs, entry) = interrupted(Fault::Fail(FsErrorKind::Locked));
     let mut vault = open(profile.path(), &fs);

@@ -256,3 +256,194 @@ fn recovery_resumes_after_sqlite_finished_but_before_the_notice_was_committed() 
     assert_eq!(fs.metadata(&fs.location("dest/a")).unwrap().size, 33);
     assert!(state.pending.is_none());
 }
+
+#[test]
+fn a_job_needing_attention_is_named_in_the_recovery_notice_but_not_saved_in_it() {
+    let data = tempfile::tempdir().unwrap();
+    manual_rename(data.path(), &FakeFs::new());
+    let (db, _) = Db::open(&database(data.path()), true).unwrap();
+    let journal = std::sync::Arc::new(std::sync::Mutex::new(
+        navo_store::JobJournal::new(db).unwrap(),
+    ));
+    let kind = navo_core::retention::RETAINED_DELETE_KIND;
+    let job = crate::jobs::lock(&journal)
+        .create_job(kind, b"{}", 1, 5)
+        .unwrap();
+    let pending = crate::jobs::StillPending {
+        job,
+        left: Vec::new(),
+        attention: true,
+    };
+    let mut state = State::load(data.path()).unwrap();
+    state.notices[0].retry_jobs = super::refresh::retry_jobs(&[pending], &journal).unwrap();
+    state.save(data.path()).unwrap();
+    let saved = fs::read_to_string(State::path(data.path())).unwrap();
+    assert!(!saved.contains("attention"), "{saved}");
+    let attention = navo_l10n::tr("job-recovery-attention");
+    let shown = |journal: Option<&crate::jobs::SharedJournal>| {
+        let state = State::load(data.path()).unwrap();
+        super::notice::RecoveryNotice::loaded(data.path(), &state, journal)
+            .unwrap()
+            .content()
+            .details
+    };
+    assert!(!shown(Some(&journal)).contains(&attention));
+    crate::jobs::lock(&journal)
+        .finish(job, navo_store::JobState::Failed)
+        .unwrap();
+    assert!(shown(Some(&journal)).contains(&attention));
+    assert!(!shown(None).contains(&attention));
+}
+
+#[test]
+fn the_attention_line_survives_after_the_failed_job_is_pruned() {
+    let data = tempfile::tempdir().unwrap();
+    manual_rename(data.path(), &FakeFs::new());
+    let (db, _) = Db::open(&database(data.path()), true).unwrap();
+    let journal = std::sync::Arc::new(std::sync::Mutex::new(
+        navo_store::JobJournal::new(db).unwrap(),
+    ));
+    let kind = navo_core::retention::RETAINED_DELETE_KIND;
+    let job = crate::jobs::lock(&journal)
+        .create_job(kind, b"{}", 1, 5)
+        .unwrap();
+    crate::jobs::lock(&journal)
+        .finish(job, navo_store::JobState::Failed)
+        .unwrap();
+    let pending = crate::jobs::StillPending {
+        job,
+        left: Vec::new(),
+        attention: true,
+    };
+    let mut state = State::load(data.path()).unwrap();
+    state.notices[0].retry_jobs =
+        super::refresh::retry_jobs(std::slice::from_ref(&pending), &journal).unwrap();
+    super::details::recovered(data.path(), &state.notices[0], &[pending]).unwrap();
+    state.save(data.path()).unwrap();
+    let (db, _) = Db::open(&database(data.path()), false).unwrap();
+    db.connection()
+        .execute("DELETE FROM job WHERE id = ?1", [job.0])
+        .unwrap();
+    assert!(crate::jobs::lock(&journal).read_job(job).is_err());
+    let state = State::load(data.path()).unwrap();
+    let details = super::notice::RecoveryNotice::loaded(data.path(), &state, Some(&journal))
+        .unwrap()
+        .content()
+        .details;
+    assert!(
+        details.contains(&navo_l10n::tr("job-recovery-attention")),
+        "{details:?}"
+    );
+}
+
+/// A recovered profile with one retained delete job in its journal.
+fn retained_job(data: &Path) -> (crate::jobs::SharedJournal, navo_store::JobId) {
+    manual_rename(data, &FakeFs::new());
+    let (db, _) = Db::open(&database(data), true).unwrap();
+    let journal = std::sync::Arc::new(std::sync::Mutex::new(
+        navo_store::JobJournal::new(db).unwrap(),
+    ));
+    let kind = navo_core::retention::RETAINED_DELETE_KIND;
+    let job = crate::jobs::lock(&journal)
+        .create_job(kind, b"{}", 1, 5)
+        .unwrap();
+    (journal, job)
+}
+
+#[test]
+fn a_retry_that_turns_into_attention_keeps_its_line_after_the_job_is_pruned() {
+    let data = tempfile::tempdir().unwrap();
+    let (journal, job) = retained_job(data.path());
+    let pending = |attention| crate::jobs::StillPending {
+        job,
+        left: Vec::new(),
+        attention,
+    };
+    let mut state = State::load(data.path()).unwrap();
+    state.notices[0].retry_jobs = super::refresh::retry_jobs(&[pending(false)], &journal).unwrap();
+    super::details::recovered(data.path(), &state.notices[0], &[pending(false)]).unwrap();
+    state.save(data.path()).unwrap();
+    crate::jobs::lock(&journal)
+        .finish(job, navo_store::JobState::Failed)
+        .unwrap();
+    let saved = fs::read(State::path(data.path())).unwrap();
+    let report = crate::jobs::RecoveryReport {
+        unfinished: 1,
+        restored: Vec::new(),
+        pending: vec![pending(true)],
+    };
+    for _ in 0..2 {
+        let mut state = State::load(data.path()).unwrap();
+        super::refresh::update(data.path(), &mut state, &report, &journal).unwrap();
+    }
+    assert_eq!(fs::read(State::path(data.path())).unwrap(), saved);
+    let (db, _) = Db::open(&database(data.path()), false).unwrap();
+    db.connection()
+        .execute("DELETE FROM job WHERE id = ?1", [job.0])
+        .unwrap();
+    let state = State::load(data.path()).unwrap();
+    let details = super::notice::RecoveryNotice::loaded(data.path(), &state, Some(&journal))
+        .unwrap()
+        .content()
+        .details;
+    assert!(
+        details.contains(&navo_l10n::tr("job-recovery-attention")),
+        "{details:?}"
+    );
+    let lines = fs::read_to_string(super::state::details(
+        data.path(),
+        state.notices[0].case,
+        state.notices[0].attempt,
+    ))
+    .unwrap();
+    assert_eq!(lines.matches("\"attention\":true").count(), 1, "{lines}");
+}
+
+#[test]
+fn a_failed_job_missing_from_the_report_still_gets_its_attention_line() {
+    let data = tempfile::tempdir().unwrap();
+    let (journal, job) = retained_job(data.path());
+    let pending = |attention| crate::jobs::StillPending {
+        job,
+        left: Vec::new(),
+        attention,
+    };
+    let mut state = State::load(data.path()).unwrap();
+    state.notices[0].retry_jobs = super::refresh::retry_jobs(&[pending(false)], &journal).unwrap();
+    super::details::recovered(data.path(), &state.notices[0], &[pending(false)]).unwrap();
+    state.save(data.path()).unwrap();
+    crate::jobs::lock(&journal)
+        .finish(job, navo_store::JobState::Failed)
+        .unwrap();
+    let saved = fs::read(State::path(data.path())).unwrap();
+    let report = crate::jobs::RecoveryReport {
+        unfinished: 1,
+        restored: Vec::new(),
+        pending: Vec::new(),
+    };
+    for _ in 0..2 {
+        let mut state = State::load(data.path()).unwrap();
+        super::refresh::update(data.path(), &mut state, &report, &journal).unwrap();
+    }
+    assert_eq!(fs::read(State::path(data.path())).unwrap(), saved);
+    let (db, _) = Db::open(&database(data.path()), false).unwrap();
+    db.connection()
+        .execute("DELETE FROM job WHERE id = ?1", [job.0])
+        .unwrap();
+    let state = State::load(data.path()).unwrap();
+    let details = super::notice::RecoveryNotice::loaded(data.path(), &state, Some(&journal))
+        .unwrap()
+        .content()
+        .details;
+    assert!(
+        details.contains(&navo_l10n::tr("job-recovery-attention")),
+        "{details:?}"
+    );
+    let lines = fs::read_to_string(super::state::details(
+        data.path(),
+        state.notices[0].case,
+        state.notices[0].attempt,
+    ))
+    .unwrap();
+    assert_eq!(lines.matches("\"attention\":true").count(), 1, "{lines}");
+}

@@ -56,6 +56,20 @@ impl Error {
             Self::Pinned(_) => "Pinned".to_owned(),
         }
     }
+
+    /// A definite proof failure, unreadable saved data, or a vanished file or folder on a volume
+    /// that `volume_present` shows is there: retrying cannot help. Other errors may pass.
+    #[must_use]
+    pub fn needs_attention(&self, volume_present: impl FnOnce() -> bool) -> bool {
+        match self {
+            Self::Changed(_)
+            | Self::Unsupported(_)
+            | Self::Invalid(_)
+            | Self::Catalog(RetentionStoreError::Invalid(_) | RetentionStoreError::Json(_)) => true,
+            Self::Fs(error) => error.kind == navo_core::FsErrorKind::NotFound && volume_present(),
+            _ => false,
+        }
+    }
 }
 
 impl From<FsError> for Error {
@@ -143,6 +157,19 @@ impl<'a> Vault<'a> {
         let entry = self.catalog.get(id)?;
         self.check_home(&entry)?;
         Ok(entry)
+    }
+
+    /// `Error::needs_attention` for work on `entry`: a missing file counts only while the vault
+    /// folder holding its copy is there.
+    #[must_use]
+    pub fn needs_attention(&self, error: &Error, entry: &RetentionEntry) -> bool {
+        error.needs_attention(|| proof::vault_present(self.ops, &entry.record))
+    }
+
+    /// The vault folder of `entry` is shown on its recorded volume; a record without one counts.
+    #[must_use]
+    pub fn on_recorded_volume(&self, entry: &RetentionEntry) -> bool {
+        entry.record.anchor().is_none() || proof::vault_present(self.ops, &entry.record)
     }
 
     pub fn limit_vaults_to(&mut self, ceiling: Location) {

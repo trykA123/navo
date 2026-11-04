@@ -18,6 +18,8 @@ struct Header {
     attempt: u64,
 }
 
+const DETAILS_LIMIT: u64 = 64 * 1024 * 1024;
+
 fn header(case: u64, attempt: u64) -> Header {
     Header {
         format: format!("{}-recovery", brand::SLUG),
@@ -74,7 +76,7 @@ pub(super) fn recovered(
     if serde_json::from_slice::<Header>(first)? != header(notice.case, notice.attempt) {
         return Err(Error::Invalid("the recovery detail header changed".into()));
     }
-    let pending = remaining.iter().map(|job| serde_json::json!({ "job": job.job.0, "paths": job.left.iter().map(Location::as_str).collect::<Vec<_>>() })).collect::<Vec<_>>();
+    let pending = remaining.iter().map(|job| serde_json::json!({ "job": job.job.0, "attention": job.attention, "paths": job.left.iter().map(Location::as_str).collect::<Vec<_>>() })).collect::<Vec<_>>();
     let mut bytes = serde_json::to_vec(
         &serde_json::json!({ "event": "recovered", "restored": notice.recovered_jobs, "pending": pending }),
     )?;
@@ -82,6 +84,28 @@ pub(super) fn recovered(
     file.write_all(&bytes)?;
     file.sync_all()?;
     Ok(())
+}
+
+/// The needs-attention flag the last `recovered` event saved for `job`; false when unreadable.
+pub(super) fn attention(data: &Path, notice: &state::Notice, job: i64) -> bool {
+    let path = state::details(data, notice.case, notice.attempt);
+    let Ok(Some(bytes)) = files::read(&path, DETAILS_LIMIT) else {
+        return false;
+    };
+    let mut flag = false;
+    for line in bytes.split(|byte| *byte == b'\n').skip(1) {
+        let Ok(event) = serde_json::from_slice::<serde_json::Value>(line) else {
+            continue;
+        };
+        if event["event"] != "recovered" {
+            continue;
+        }
+        let saved = event["pending"].as_array().into_iter().flatten();
+        if let Some(found) = saved.rev().find(|saved| saved["job"] == job) {
+            flag = found["attention"] == true;
+        }
+    }
+    flag
 }
 
 pub(super) fn manual_paths(report: &SalvageReport) -> Vec<String> {

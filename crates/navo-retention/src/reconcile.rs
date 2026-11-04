@@ -47,14 +47,14 @@ impl Vault<'_> {
         Ok(entry)
     }
 
-    /// Settles an unpinned restore left in `Restoring`; `None` when there was nothing to settle.
+    /// Settles a restore no job owns left in `Restoring`; `None` when there was nothing to settle.
     pub(crate) fn settle_interrupted_restore(
         &mut self,
         id: RetentionId,
         run: &mut RetentionRun<'_>,
     ) -> Result<Option<RetentionEntry>, Error> {
         let entry = self.get(id)?;
-        if entry.state != RetainedState::Restoring || entry.pinned {
+        if entry.state != RetainedState::Restoring || (entry.pinned && !entry.kept) {
             return Ok(None);
         }
         self.settle_restoring(id, RetainedState::Restoring, run)
@@ -75,7 +75,7 @@ impl Vault<'_> {
         let mut entry = before.clone();
         match self.restoring_outcome(&mut entry, run) {
             Ok(state) => entry.state = state,
-            Err(error) if needs_attention(&error, run) => {
+            Err(error) if !run.cancel.is_cancelled() && self.needs_attention(&error, &before) => {
                 tracing::warn!(
                     id = id.0,
                     error_kind = error.kind(),
@@ -130,17 +130,6 @@ impl Vault<'_> {
             _ => RetainedState::Conflict,
         })
     }
-}
-
-/// A definite proof failure, or a vanished holding or anchor folder; cancel, other I/O, lock and
-/// catalog errors may pass and are retried instead.
-fn needs_attention(error: &Error, run: &RetentionRun<'_>) -> bool {
-    !run.cancel.is_cancelled()
-        && match error {
-            Error::Changed(_) | Error::Unsupported(_) | Error::Invalid(_) => true,
-            Error::Fs(error) => error.kind == navo_core::FsErrorKind::NotFound,
-            _ => false,
-        }
 }
 
 fn same_folder(ops: &dyn navo_fs::ProviderOps, target: &RestoreTarget) -> Result<bool, Error> {

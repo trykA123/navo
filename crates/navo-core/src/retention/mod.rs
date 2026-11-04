@@ -191,6 +191,9 @@ pub struct RetentionEntry {
     pub id: RetentionId,
     pub job_id: Option<i64>,
     pub pinned: bool,
+    /// Pinned only because its retained delete failed and needs attention: maintenance keeps it,
+    /// the user may still restore or delete it.
+    pub kept: bool,
     pub state: RetainedState,
     pub record: RetentionRecord,
     pub target: Option<RestoreTarget>,

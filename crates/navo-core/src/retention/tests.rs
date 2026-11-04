@@ -114,6 +114,7 @@ fn entry(id: i64, size: u64, created_at: i64) -> RetentionEntry {
         id: RetentionId(id),
         job_id: None,
         pinned: false,
+        kept: false,
         state: RetainedState::Ready,
         target: None,
         record: RetentionRecord {

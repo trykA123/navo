@@ -133,6 +133,69 @@ fn owned_captures_pin_active_jobs_and_prevent_journal_pruning() {
     assert_eq!(journal.prune(crate::PruneLimits::keep(0)).unwrap(), 0);
 }
 
+fn owned_ready(state: &str, kind: &str) -> (RetentionCatalog, RetentionEntry) {
+    let db = Db::open_in_memory().unwrap();
+    db.connection()
+        .execute(
+            "INSERT INTO job VALUES (1, ?1, 'running', 0, X'00')",
+            [kind],
+        )
+        .unwrap();
+    let mut catalog = RetentionCatalog::new(db).unwrap();
+    let mut tx = catalog.transaction().unwrap();
+    let mut entry = tx.insert(&record(), Some(crate::JobId(1))).unwrap();
+    entry.record.container_identity = Some(entry.record.parent_identity);
+    entry.state = RetainedState::Ready;
+    tx.save(&entry, RetainedState::Preparing).unwrap();
+    tx.commit().unwrap();
+    catalog
+        .db
+        .connection()
+        .execute("UPDATE job SET state = ?1 WHERE id = 1", [state])
+        .unwrap();
+    let entry = catalog.get(entry.id).unwrap();
+    (catalog, entry)
+}
+
+#[test]
+fn a_kept_entry_takes_a_user_delete_or_restore_and_its_failed_job_is_never_pruned() {
+    let kind = navo_core::retention::RETAINED_DELETE_KIND;
+    let (mut catalog, mut entry) = owned_ready("failed", kind);
+    assert!(entry.pinned && entry.kept);
+    entry.state = RetainedState::Purging;
+    let mut tx = catalog.transaction().unwrap();
+    tx.save(&entry, RetainedState::Ready).unwrap();
+    tx.commit().unwrap();
+    let (mut catalog, mut entry) = owned_ready("failed", kind);
+    entry.state = RetainedState::Restoring;
+    entry.target = Some(navo_core::retention::RestoreTarget {
+        location: Location::new("/sample/b").unwrap(),
+        parent_identity: entry.record.parent_identity,
+    });
+    let mut tx = catalog.transaction().unwrap();
+    tx.save(&entry, RetainedState::Ready).unwrap();
+    tx.commit().unwrap();
+    let mut journal = crate::JobJournal::new(catalog.db).unwrap();
+    assert_eq!(journal.prune(crate::PruneLimits::keep(0)).unwrap(), 0);
+}
+
+#[test]
+fn settled_or_other_failed_jobs_release_their_entries() {
+    let kind = navo_core::retention::RETAINED_DELETE_KIND;
+    for (state, kind) in [
+        ("rolled_back", kind),
+        ("undone", kind),
+        ("cancelled", kind),
+        ("done", kind),
+        ("failed", "delete"),
+    ] {
+        let (_, entry) = owned_ready(state, kind);
+        assert!(!entry.pinned && !entry.kept, "{state} {kind}");
+    }
+    let (_, entry) = owned_ready("restore_pending", kind);
+    assert!(entry.pinned && !entry.kept);
+}
+
 #[test]
 fn verified_catalog_records_survive_salvage() {
     let dir = tempfile::tempdir().unwrap();

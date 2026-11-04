@@ -102,6 +102,7 @@ impl RetentionTransaction<'_> {
         }
         validate_change(&before, entry)?;
         if before.pinned
+            && !before.kept
             && owner.is_none()
             && matches!(
                 entry.state,
@@ -145,11 +146,12 @@ fn validate_change(
     if record != after.record
         || before.job_id != after.job_id
         || !allowed(before.state, after.state, before.target.is_some())
+        || (after.state == RetainedState::Purging && before.record.container_identity.is_none())
         || (before.record.container_identity.is_some()
             && before.record.container_identity != after.record.container_identity)
         || (before.target.is_some()
             && before.target != after.target
-            && after.state != RetainedState::Ready)
+            && !matches!(after.state, RetainedState::Ready | RetainedState::Purging))
     {
         return Err(RetentionError::Invalid("invalid retention state transition").into());
     }
@@ -157,6 +159,7 @@ fn validate_change(
 }
 
 /// `restoring` means the entry has a restore target, so a Conflict came from an interrupted restore.
+/// Only the user deletes a Conflict; its restore target is dropped once its held copy is verified.
 fn allowed(from: RetainedState, to: RetainedState, restoring: bool) -> bool {
     use RetainedState::{
         Aborted, Conflict, Preparing, Purged, Purging, Ready, Restored, Restoring,
@@ -169,6 +172,7 @@ fn allowed(from: RetainedState, to: RetainedState, restoring: bool) -> bool {
                 | (Ready, Restoring | Purging | Conflict)
                 | (Restoring, Ready | Restored | Conflict)
                 | (Purging, Purged | Conflict)
+                | (Conflict, Purging)
         ),
     }
 }

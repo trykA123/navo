@@ -14,6 +14,7 @@ use super::hooks;
 use crate::jobs::{SharedJournal, experimental_factory};
 
 mod interrupted;
+mod kept;
 mod privacy;
 
 struct Profile {
@@ -216,6 +217,52 @@ fn purge_of_a_pinned_entry_refuses_with_a_message_and_keeps_it() {
         Err(navo_l10n::tr("retained-busy"))
     );
     assert_eq!(hooks.list(None, 10).unwrap(), rows);
+}
+
+impl Profile {
+    /// Leaves a delete of `paths` for startup recovery after `change` and runs that recovery.
+    fn failed_delete(&self, paths: &[&str], change: impl FnOnce(&FakeFs)) {
+        drop(self.start_delete(paths));
+        let job = crate::jobs::lock(&self.journal).unfinished().unwrap()[0].id;
+        crate::jobs::lock(&self.journal)
+            .finish(job, navo_store::JobState::RestorePending)
+            .unwrap();
+        change(&self.fs);
+        crate::jobs::recover_profile(
+            &self.journal,
+            self.fs.as_ref(),
+            (&self.dirs.data, &[]),
+            true,
+        )
+        .unwrap();
+        let (state, _) = crate::jobs::lock(&self.journal).read_job(job).unwrap();
+        assert_eq!(state, navo_store::JobState::Failed);
+    }
+}
+
+#[test]
+fn an_entry_kept_by_a_failed_delete_lists_as_ready_and_the_user_can_delete_it() {
+    let profile = Profile::new();
+    profile.fs.add_file("home/docs/a", 8);
+    profile.failed_delete(&["home/docs/a"], |fs| fs.remove("home/docs"));
+    let hooks = profile.hooks();
+    let rows = hooks.list(None, 10).unwrap();
+    assert_eq!(rows[0].state, RetainedState::Ready);
+    hooks.purge(rows[0].id).unwrap();
+    assert!(hooks.list(None, 10).unwrap().is_empty());
+}
+
+#[test]
+fn the_user_can_delete_a_conflict_and_its_occupant_stays() {
+    let profile = Profile::new();
+    profile.fs.add_file("home/a", 8);
+    profile.failed_delete(&["home/a"], |fs| fs.add_file("home/a", 99));
+    let hooks = profile.hooks();
+    let rows = hooks.list(None, 10).unwrap();
+    assert_eq!(rows[0].state, RetainedState::NeedsAttention);
+    hooks.purge(rows[0].id).unwrap();
+    assert!(hooks.list(None, 10).unwrap().is_empty());
+    assert_eq!(profile.fs.metadata(&profile.at("home/a")).unwrap().size, 99);
 }
 
 #[test]

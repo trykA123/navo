@@ -5,7 +5,9 @@ use navo_core::Location;
 use navo_ui::crash_notice::RecoveryContent;
 
 use super::{
+    details,
     locks::Locks,
+    refresh,
     state::{Notice, State},
 };
 use navo_core::brand;
@@ -14,15 +16,34 @@ use navo_core::brand;
 pub(crate) struct RecoveryNotice {
     data: PathBuf,
     notices: Vec<Notice>,
+    attention: BTreeSet<i64>,
     error: Option<String>,
     folder: Option<Location>,
 }
 
 impl RecoveryNotice {
-    pub(super) fn loaded(data: &Path, state: &State) -> Option<Self> {
+    /// Without `journal`, no job is shown as needing attention; a pruned job keeps its saved flag.
+    pub(super) fn loaded(
+        data: &Path,
+        state: &State,
+        journal: Option<&crate::jobs::SharedJournal>,
+    ) -> Option<Self> {
+        let attention = journal.map_or_else(BTreeSet::new, |journal| {
+            state
+                .notices
+                .iter()
+                .flat_map(|notice| notice.retry_jobs.iter().map(move |job| (notice, job)))
+                .filter(|(notice, job)| {
+                    refresh::needs_attention(journal, job)
+                        .unwrap_or_else(|| details::attention(data, notice, job.id))
+                })
+                .map(|(_, job)| job.id)
+                .collect()
+        });
         (!state.notices.is_empty()).then(|| Self {
             data: data.to_owned(),
             notices: state.notices.clone(),
+            attention,
             error: None,
             folder: crate::startup::path_location(data),
         })
@@ -32,6 +53,7 @@ impl RecoveryNotice {
         Self {
             data: data.to_owned(),
             notices: Vec::new(),
+            attention: BTreeSet::new(),
             error: Some(error.chars().take(512).collect()),
             folder: crate::startup::path_location(data),
         }
@@ -54,7 +76,7 @@ impl RecoveryNotice {
         }
         let mut details = Vec::new();
         for notice in self.notices.iter().rev().take(3) {
-            details.extend(lines(notice));
+            details.extend(lines(notice, &self.attention));
         }
         if self.notices.len() > 3 {
             details.push(navo_l10n::t!(
@@ -86,7 +108,7 @@ impl RecoveryNotice {
     }
 }
 
-fn lines(notice: &Notice) -> Vec<String> {
+fn lines(notice: &Notice, attention: &BTreeSet<i64>) -> Vec<String> {
     let file = format!("{}.db.corrupt-{}", brand::SLUG, notice.slot);
     let key = if notice.database {
         "store-recovery-preserved"
@@ -111,6 +133,13 @@ fn lines(notice: &Notice) -> Vec<String> {
         restored = notice.recovered_jobs as f64,
         manual = notice.unreadable_jobs as f64
     ));
+    if notice
+        .retry_jobs
+        .iter()
+        .any(|job| attention.contains(&job.id))
+    {
+        lines.push(navo_l10n::tr("job-recovery-attention"));
+    }
     lines.extend(notice.pending_paths.iter().take(4).cloned());
     lines.extend(
         notice

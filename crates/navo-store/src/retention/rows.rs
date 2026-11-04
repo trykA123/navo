@@ -5,9 +5,12 @@ use rusqlite::{Connection, OptionalExtension, Row};
 
 use super::RetentionStoreError;
 
+// A failed retained delete (`kept`, its kind is `RETAINED_DELETE_KIND`) stays pinned until the user acts.
 const SELECT: &str = "SELECT e.id, e.job_id, e.state, e.record, e.target,
-    e.job_id IS NOT NULL AND (j.state IS NULL OR j.state NOT IN ('done', 'failed', 'cancelled', 'rolled_back', 'undone')),
-    e.maintenance_attempts
+    e.job_id IS NOT NULL AND (j.state IS NULL OR j.state NOT IN ('done', 'failed', 'cancelled', 'rolled_back', 'undone')
+        OR (j.state = 'failed' AND j.kind = 'delete-retained-v1')),
+    e.maintenance_attempts,
+    j.state IS 'failed' AND j.kind IS 'delete-retained-v1'
     FROM retained_entry e LEFT JOIN job j ON j.id = e.job_id";
 
 struct Raw {
@@ -17,6 +20,7 @@ struct Raw {
     record: Vec<u8>,
     target: Option<Vec<u8>>,
     pinned: bool,
+    kept: bool,
 }
 
 pub(crate) fn get(
@@ -78,6 +82,7 @@ fn read(row: &Row<'_>) -> Result<Raw, rusqlite::Error> {
         record,
         target,
         pinned: row.get(5)?,
+        kept: row.get(7)?,
     })
 }
 
@@ -121,6 +126,7 @@ fn decode(raw: Raw) -> Result<RetentionEntry, RetentionStoreError> {
         id: RetentionId(raw.id),
         job_id: raw.job_id,
         pinned: raw.pinned,
+        kept: raw.kept,
         state: RetainedState::parse(&raw.state)?,
         record: serde_json::from_slice(&raw.record)?,
         target: raw
@@ -133,8 +139,9 @@ fn decode(raw: Raw) -> Result<RetentionEntry, RetentionStoreError> {
 }
 
 pub(crate) fn validate(conn: &Connection) -> Result<(), RetentionStoreError> {
-    let mut statement = conn
-        .prepare("SELECT id, job_id, state, record, target, 1 FROM retained_entry ORDER BY id")?;
+    let mut statement = conn.prepare(
+        "SELECT id, job_id, state, record, target, 1, 0, 0 FROM retained_entry ORDER BY id",
+    )?;
     let mut rows = statement.query([])?;
     while let Some(row) = rows.next()? {
         decode(read(row)?)?;

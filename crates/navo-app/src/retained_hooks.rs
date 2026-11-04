@@ -69,18 +69,27 @@ impl RetainedHooks for VaultHooks {
     fn purge(&self, id: RetentionId) -> Result<(), String> {
         let _lease = crate::jobs::claim_exclusive(&self.dirs.data)?;
         let mut vault = self.vault()?;
-        let entry = vault.get(id).map_err(|error| refused(&error))?;
-        if entry.pinned {
+        let mut entry = vault.get(id).map_err(|error| refused(&error))?;
+        if entry.pinned && !entry.kept {
             return Err(navo_l10n::tr("retained-busy"));
+        }
+        if entry.state == Stored::Preparing {
+            entry = settle(&mut vault, &entry)?;
+        }
+        if unrecorded_conflict(&entry) {
+            return Err(navo_l10n::tr("retained-stuck"));
+        }
+        if entry.state == Stored::Aborted {
+            return Err(navo_l10n::tr("retained-missing"));
         }
         if !matches!(
             entry.state,
-            Stored::Ready | Stored::Purging | Stored::Restoring
+            Stored::Ready | Stored::Purging | Stored::Restoring | Stored::Conflict
         ) {
-            return Err(navo_l10n::tr("retained-not-ready"));
+            return Err(navo_l10n::tr("retained-not-deletable"));
         }
         let purged = vault
-            .purge(id, &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}))
+            .delete(id, &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}))
             .map_err(|error| failed("retained-purge-failed", &entry, &error))?;
         if let Some(landed) = purged.target.filter(|_| purged.state == Stored::Restored) {
             tracing::info!(id = id.0, "retained entry was already restored");
@@ -124,9 +133,34 @@ fn row(entry: &RetentionEntry) -> Result<RetainedRow, String> {
     })
 }
 
+/// Settles an interrupted capture so the user's delete sees where its files are.
+fn settle(vault: &mut Vault<'_>, entry: &RetentionEntry) -> Result<RetentionEntry, String> {
+    let cancel = CancelToken::new();
+    let mut progress = |_| {};
+    let mut run = RetentionRun::new(&cancel, &mut progress);
+    vault.reconcile(entry.id, &mut run).map_err(|error| {
+        if vault.needs_attention(&error, entry) {
+            tracing::warn!(
+                id = entry.id.0,
+                error_kind = error.kind(),
+                "retained entry cannot settle"
+            );
+            navo_l10n::tr("retained-stuck")
+        } else {
+            failed("retained-purge-failed", entry, &error)
+        }
+    })
+}
+
+/// A Conflict whose holding folder was never recorded: the catalog refuses to purge it.
+fn unrecorded_conflict(entry: &RetentionEntry) -> bool {
+    entry.state == Stored::Conflict && entry.record.container_identity.is_none()
+}
+
 fn state(entry: &RetentionEntry) -> RetainedState {
     match entry.state {
-        _ if entry.pinned => RetainedState::Busy,
+        _ if entry.pinned && !entry.kept => RetainedState::Busy,
+        _ if unrecorded_conflict(entry) => RetainedState::Stuck,
         // The action settles an interrupted restore before it runs.
         Stored::Ready | Stored::Restoring => RetainedState::Ready,
         _ => RetainedState::NeedsAttention,
