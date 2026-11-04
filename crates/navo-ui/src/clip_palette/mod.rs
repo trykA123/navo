@@ -3,6 +3,7 @@ mod actions;
 mod actions_tests;
 mod age;
 mod chrome;
+mod drag;
 mod edit_form;
 mod edit_form_actions;
 mod edit_form_choices;
@@ -43,6 +44,7 @@ mod tests;
 mod view;
 pub(crate) mod window;
 
+pub(crate) use drag::{DraggedPalette, clamp_offset};
 pub use hooks::{
     ClipCounts, ClipId, ClipKind, ClipMode, ClipResults, ClipRow, ClipboardHooks, How, NoClipboard,
     Origin, SavedDraft, SavedEdit, Scope, SecretText,
@@ -50,5 +52,6 @@ pub use hooks::{
 pub use keys::bind_keys;
 pub use note_editor::FolderProbe;
 pub use placement::{PopUpPlacement, PopUpPosition, PopUpRect};
+pub(crate) use view::window_panel;
 pub use view::{ClipPalette, ClipPaletteEvent, ClipPaletteProps, Place};
 pub use window::{PopUpRequest, summon};

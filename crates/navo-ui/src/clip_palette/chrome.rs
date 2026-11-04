@@ -2,13 +2,15 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::input::Input;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    Role, SharedString, StatefulInteractiveElement, Styled, WindowControlArea, div, px,
+    AnyElement, App, AppContext as _, Context, Div, FontWeight, InteractiveElement, IntoElement,
+    MouseButton, MouseDownEvent, ParentElement, Role, SharedString, StatefulInteractiveElement,
+    Styled, WindowControlArea, div, px,
 };
 use navo_l10n::{t, tr};
 
+use super::drag::{DraggedPalette, PaletteGhost};
 use super::rows::RowElement;
-use super::view::{ClipPalette, Place};
+use super::view::{ClipPalette, ClipPaletteEvent, Place};
 use super::{ClipKind, ClipMode, ClipRow};
 use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::Theme;
@@ -59,20 +61,35 @@ pub(super) fn hint(t: &Theme, id: &'static str, key: &str, label: String) -> Div
 
 impl ClipPalette {
     /// Lets the pop-up be dragged by this part of its header; the search field stays clickable.
-    fn drag_area(&self, area: Div) -> Div {
+    fn drag_area(&self, id: &'static str, area: Div, cx: &mut Context<Self>) -> AnyElement {
         if self.place == Place::Anywhere {
-            area.window_control_area(WindowControlArea::Drag)
-        } else {
-            area
+            return area
+                .window_control_area(WindowControlArea::Drag)
+                .into_any_element();
         }
+        area.id(id)
+            .test_support()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, event: &MouseDownEvent, _, cx| {
+                    cx.emit(ClipPaletteEvent::DragStart(event.position));
+                }),
+            )
+            .on_drag(DraggedPalette, |_, _, _, cx| cx.new(|_| PaletteGhost))
+            .into_any_element()
     }
 
-    fn drag_handle(&self, content: impl IntoElement, t: &Theme) -> Div {
-        self.drag_area(div().flex().items_center().h_full().pl(t.spacing.xl))
-            .child(content)
+    fn drag_handle(
+        &self,
+        content: impl IntoElement,
+        t: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let area = div().flex().items_center().h_full().pl(t.spacing.xl);
+        self.drag_area("clip-palette-drag-icon", area.child(content), cx)
     }
 
-    pub(super) fn input_row(&self, t: &Theme) -> Div {
+    pub(super) fn input_row(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
         let input = Input::new(&self.field)
             .id("clip-palette-input")
             .aria_label(tr("clip-search-label"))
@@ -90,7 +107,11 @@ impl ClipPalette {
             .gap(t.spacing.md)
             .h(px(INPUT_ROW))
             .pr(t.spacing.md)
-            .child(self.drag_handle(icon(IconName::Search, t.spacing.icon, t.colors.muted), t))
+            .child(self.drag_handle(
+                icon(IconName::Search, t.spacing.icon, t.colors.muted),
+                t,
+                cx,
+            ))
             .child(div().flex_1().min_w_0().child(input))
             .children(key)
     }
@@ -181,7 +202,7 @@ impl ClipPalette {
                 .border_b_1()
                 .border_color(t.colors.line)
                 .children(tabs)
-                .child(self.drag_area(div().flex_1()))
+                .child(self.drag_area("clip-palette-drag-bar", div().flex_1(), cx))
                 .when(has_cycle, |bar| {
                     bar.child(
                         div()

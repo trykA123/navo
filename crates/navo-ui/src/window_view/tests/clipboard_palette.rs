@@ -2,7 +2,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, TestAppContext};
+use gpui_kit::{
+    AppContext as _, InputEvent as _, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    TestAppContext, VisualTestContext, point, px, size,
+};
 use navo_core::Location;
 
 use super::undo::{Rig, files};
@@ -216,6 +219,70 @@ fn the_open_command_opens_the_palette(cx: &mut TestAppContext) {
     let rig = rig(cx, hooks);
     dispatch(cx, &rig, OpenClipboard);
     assert_eq!(state(cx, &rig), (true, false));
+}
+
+/// Presses the header icon, moves the pointer by (30, 20) in steps and lets go.
+fn drag_header(cx: &mut TestAppContext, rig: &Rig) {
+    let from = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            let from = window
+                .within("clip-palette")
+                .find("clip-palette-drag-icon")
+                .bounds()
+                .center();
+            let down = MouseDownEvent {
+                button: MouseButton::Left,
+                position: from,
+                modifiers: Default::default(),
+                click_count: 1,
+                first_mouse: false,
+            };
+            window.dispatch_event(down.to_platform_input(), cx);
+            from
+        })
+        .expect("window");
+    cx.update_window(rig.window, |_, window, cx| {
+        for step in 1..=6 {
+            let moved = MouseMoveEvent {
+                position: point(
+                    from.x + px(5. * step as f32),
+                    from.y + px(step as f32 * 10. / 3.),
+                ),
+                pressed_button: Some(MouseButton::Left),
+                modifiers: Default::default(),
+            };
+            window.dispatch_event(moved.to_platform_input(), cx);
+            window.draw(cx).clear(cx);
+        }
+        let up = MouseUpEvent {
+            button: MouseButton::Left,
+            position: point(from.x + px(30.), from.y + px(20.)),
+            modifiers: Default::default(),
+            click_count: 1,
+        };
+        window.dispatch_event(up.to_platform_input(), cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn dragging_the_header_moves_the_palette_and_it_reopens_there(cx: &mut TestAppContext) {
+    let (_, hooks) = spy();
+    let rig = rig(cx, hooks);
+    VisualTestContext::from_window(rig.window, cx).simulate_resize(size(px(1400.), px(900.)));
+    cx.run_until_parked();
+    dispatch(cx, &rig, OpenClipboard);
+    drag_header(cx, &rig);
+    let moved = rig.view.read_with(cx, |view, _| view.clip.offset());
+    assert_eq!((moved.x, moved.y), (px(30.), px(20.)));
+    press(cx, rig.window, &rig.view, "escape");
+    dispatch(cx, &rig, OpenClipboard);
+    let again = rig
+        .view
+        .read_with(cx, |view, _| (view.clip.is_open(), view.clip.offset()));
+    assert_eq!(again, (true, moved));
 }
 
 #[gpui_kit::test]
