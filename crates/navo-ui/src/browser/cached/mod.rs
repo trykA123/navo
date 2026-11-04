@@ -10,7 +10,7 @@ use super::filter::Full;
 use super::offline::Progress;
 use super::sort::sorted_full;
 use super::{Browser, Message};
-use crate::file_list::SortKey;
+use crate::file_list::{SortBy, SortKey};
 pub(in crate::browser) use early::{CachedSorted, Early};
 
 const KEEP_SORTED: usize = 2;
@@ -54,6 +54,7 @@ pub(super) struct Fetch {
 }
 
 impl Fetch {
+    #[expect(clippy::too_many_lines, reason = "one listing fetch path")]
     pub(super) fn run(mut self, cancel: &CancelToken) -> Result<Fresh, FsError> {
         let _span = tracing::debug_span!("listing.load").entered();
         if let Some(early) = self.early.take().filter(|_| !cancel.is_cancelled()) {
@@ -84,12 +85,7 @@ impl Fetch {
         {
             return Ok(fresh_rows(rows, self.sort));
         }
-        let progress = &self.progress;
-        let snapshot =
-            load_folder_reporting(self.provider.as_ref(), &self.location, cancel, &mut || {
-                progress.answered();
-            })?;
-        let rows: Arc<[FsEntry]> = snapshot.details.into();
+        let (rows, full) = self.load(cancel)?;
         let unchanged = self
             .shown
             .as_ref()
@@ -103,8 +99,41 @@ impl Fetch {
         });
         Ok(match unchanged {
             Some(_) => Fresh::Unchanged,
-            None => fresh_rows(rows, self.sort),
+            None => match full {
+                Some(full) => Fresh::Rows {
+                    rows,
+                    full: Some(full),
+                },
+                None => fresh_rows(rows, self.sort),
+            },
         })
+    }
+
+    fn load(
+        &self,
+        cancel: &CancelToken,
+    ) -> Result<(Arc<[FsEntry]>, Option<WorkerSorted>), FsError> {
+        let progress = &self.progress;
+        let default_name = self.sort.is_some_and(|(key, folders_first)| {
+            key.by == SortBy::Name && !key.descending && folders_first
+        });
+        let snapshot =
+            load_folder_reporting(self.provider.as_ref(), &self.location, cancel, &mut || {
+                progress.answered();
+            })?;
+        let rows: Arc<[FsEntry]> = snapshot.details.into();
+        let full = default_name.then(|| {
+            let (key, folders_first) = self.sort.unwrap_or_default();
+            WorkerSorted {
+                key,
+                folders_first,
+                full: Full {
+                    listing: snapshot.listing,
+                    details: Arc::clone(&rows),
+                },
+            }
+        });
+        Ok((rows, full))
     }
 
     fn store(&self, listing: CachedListing) {

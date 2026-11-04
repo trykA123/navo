@@ -14,6 +14,7 @@ const LIMIT: usize = 500;
 const RECENT_COMMANDS: usize = 5;
 const RECENT_FOLDERS: usize = 8;
 const FILE_DELAY: Duration = Duration::from_millis(40);
+const COALESCE: Duration = Duration::from_millis(100);
 
 pub(super) fn recent(commands: Vec<Hit>, folders: Vec<Hit>) -> Vec<Row> {
     Results::recent(commands, folders)
@@ -235,6 +236,7 @@ impl Stream {
             if !more.await {
                 return;
             }
+            cx.background_executor().timer(COALESCE).await;
         }
     }
 }

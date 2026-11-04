@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use navo_core::ProviderPath;
 use proptest::prelude::*;
 
@@ -6,11 +8,15 @@ use crate::view::{SortBy, SortKey};
 use crate::{Attributes, CancelToken, EntryKind, FsEntry};
 
 fn entry(name: &str, kind: EntryKind, size: u64, modified_ms: i64) -> FsEntry {
+    entry_at(name, kind, size, Some(modified_ms))
+}
+
+fn entry_at(name: &str, kind: EntryKind, size: u64, modified_ms: Option<i64>) -> FsEntry {
     FsEntry {
         name: ProviderPath::from_text(name),
         kind,
         size,
-        modified_ms: Some(modified_ms),
+        modified_ms,
         attributes: Attributes::default(),
     }
 }
@@ -163,4 +169,75 @@ proptest! {
 
 fn materialize_rows(rows: &[FsEntry], order: &[u32]) -> Vec<FsEntry> {
     crate::view::materialize(rows, order)
+}
+
+fn reference(rows: &[FsEntry], key: SortKey, folders_first: bool) -> Vec<u32> {
+    let mut order: Vec<u32> = (0..u32::try_from(rows.len()).unwrap()).collect();
+    let lower = |entry: &FsEntry| entry.name.display().to_lowercase();
+    let extension = |entry: &FsEntry| {
+        let lower = lower(entry);
+        if entry.kind == EntryKind::Folder {
+            return String::new();
+        }
+        match lower.rsplit_once('.') {
+            Some((stem, ext)) if !stem.is_empty() => ext.to_owned(),
+            _ => String::new(),
+        }
+    };
+    order.sort_by(|&a, &b| {
+        let (a, b) = (&rows[a as usize], &rows[b as usize]);
+        let group = |entry: &FsEntry| entry.kind != EntryKind::Folder;
+        let groups = if folders_first {
+            group(a).cmp(&group(b))
+        } else {
+            Ordering::Equal
+        };
+        let by = match key.by {
+            SortBy::Name => lower(a).cmp(&lower(b)),
+            SortBy::Ext => extension(a)
+                .cmp(&extension(b))
+                .then_with(|| lower(a).cmp(&lower(b))),
+            SortBy::Size => a.size.cmp(&b.size),
+            SortBy::Date => a.modified_ms.cmp(&b.modified_ms),
+        };
+        let by = if key.descending { by.reverse() } else { by };
+        groups
+            .then(by)
+            .then_with(|| lower(a).cmp(&lower(b)))
+            .then_with(|| {
+                let at = |entry: &FsEntry| rows.iter().position(|row| std::ptr::eq(row, entry));
+                at(a).cmp(&at(b))
+            })
+    });
+    order
+}
+
+#[test]
+fn matches_the_reference_order_for_every_key_and_direction() {
+    let rows = vec![
+        entry("b.txt", EntryKind::File, 5, 2),
+        entry("A.TXT", EntryKind::File, 5, 2),
+        entry(".hidden", EntryKind::File, 0, 1),
+        entry("a.", EntryKind::File, 7, 7),
+        entry("a.b.c", EntryKind::File, 5, 3),
+        entry("zeta", EntryKind::Folder, 0, 9),
+        entry("Alpha", EntryKind::Folder, 0, 8),
+        entry("A.TXT", EntryKind::File, 5, 2),
+        entry_at("none.txt", EntryKind::File, 5, None),
+        entry_at("zero.txt", EntryKind::File, 5, Some(0)),
+        entry_at("negative.txt", EntryKind::File, 5, Some(-5)),
+    ];
+    for by in [SortBy::Name, SortBy::Ext, SortBy::Size, SortBy::Date] {
+        for descending in [false, true] {
+            for folders_first in [false, true] {
+                let key = SortKey { by, descending };
+                let order = sort_order(&rows, key, folders_first, &CancelToken::new()).unwrap();
+                assert_eq!(
+                    order,
+                    reference(&rows, key, folders_first),
+                    "{key:?} folders_first={folders_first}"
+                );
+            }
+        }
+    }
 }
