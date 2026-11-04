@@ -41,12 +41,14 @@ jobs:
           save-if: false
       - run: cargo build --release --locked -p navo-bench
       - run: cargo build --release --locked -p navo-app --features tester
+      - run: cargo build --release --locked -p navo-index-service
       - name: Stage the tool
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path bench | Out-Null
           Copy-Item -LiteralPath target/release/navo-bench.exe -Destination bench
           Copy-Item -LiteralPath target/release/navo.exe -Destination bench
+          Copy-Item -LiteralPath target/release/navo-index.exe -Destination bench
           Copy-Item -LiteralPath crates/navo-bench/README.txt -Destination bench
           Compress-Archive -Path bench/* -DestinationPath navo-bench-tester.zip
           (Get-FileHash -Algorithm SHA256 navo-bench-tester.zip).Hash.ToLower() + '  navo-bench-tester.zip' | Set-Content SHA256SUMS.txt

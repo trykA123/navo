@@ -1,5 +1,7 @@
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(windows)]
+mod windows;
 
 use std::collections::BTreeMap;
 use std::io;
@@ -10,6 +12,24 @@ use crate::heap::HeapStats;
 
 #[cfg(target_os = "linux")]
 pub use linux::{ProcStatusProbe, parse_proc_status};
+#[cfg(windows)]
+pub use windows::{peak_working_set, total_ram};
+
+/// The memory probe for this platform.
+#[cfg(target_os = "linux")]
+pub fn probe() -> Box<dyn MemoryProbe> {
+    Box::new(linux::ProcStatusProbe)
+}
+
+#[cfg(windows)]
+pub fn probe() -> Box<dyn MemoryProbe> {
+    Box::new(windows::WindowsProbe)
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+pub fn probe() -> Box<dyn MemoryProbe> {
+    Box::new(FakeProbe(Err(io::ErrorKind::Unsupported.into())))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessMemory {

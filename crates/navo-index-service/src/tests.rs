@@ -7,8 +7,6 @@ use navo_index::table::{Flags, NO_PARENT, NameTable};
 use navo_index::usn::{UsnBatch, UsnRecord};
 use navo_store::Search;
 
-use super::Action;
-
 const DRIVE: Drive = Drive {
     letter: 'C',
     serial: 42,
@@ -17,29 +15,6 @@ const DRIVE: Drive = Drive {
 };
 use super::config::{Config, Drive, index_path, select_volumes};
 use super::lifecycle::{SaveClock, restore_or_enumerate};
-
-#[test]
-fn index_service_arguments_stand_alone() {
-    for (text, action) in [
-        ("run", Action::Run),
-        ("install", Action::Install),
-        ("remove", Action::Remove),
-    ] {
-        let args = ["--index-service", text].map(Into::into);
-        assert_eq!(
-            crate::cli::parse(args).unwrap(),
-            crate::cli::Command::IndexService(action)
-        );
-    }
-    for args in [
-        vec!["--index-service"],
-        vec!["--index-service", "unknown"],
-        vec!["--index-service", "run", "extra"],
-        vec!["C:\\", "--index-service", "run"],
-    ] {
-        assert!(crate::cli::parse(args.into_iter().map(Into::into)).is_err());
-    }
-}
 
 #[test]
 fn config_accepts_only_account_sids() {

@@ -38,5 +38,5 @@ pub(crate) fn process_age() -> Option<Duration> {
 
 #[cfg(windows)]
 pub(super) fn peak_working_set() -> Option<u64> {
-    crate::windows_memory::peak_working_set()
+    navo_diag::peak_working_set()
 }

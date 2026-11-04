@@ -23,7 +23,8 @@ use windows_sys::Win32::UI::Shell::{
 use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
 use super::Action;
-use super::elevation_result::{ElevationError, from_exit_code};
+use super::elevation_result::from_exit_code;
+use crate::ElevationError;
 
 pub(super) fn is_admin() -> bool {
     // SAFETY: IsUserAnAdmin inspects the calling process token without pointer arguments.

@@ -1,7 +1,12 @@
+#![allow(
+    unsafe_code,
+    reason = "reading process memory counters requires Win32 FFI"
+)]
+
 use std::io;
 use std::mem::size_of;
 
-use navo_diag::{MemoryProbe, ProcessMemory};
+use super::{MemoryProbe, ProcessMemory};
 use windows_sys::Win32::System::ProcessStatus::{
     K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
 };
@@ -20,7 +25,7 @@ impl MemoryProbe for WindowsProbe {
     }
 }
 
-pub(crate) fn peak_working_set() -> Option<u64> {
+pub fn peak_working_set() -> Option<u64> {
     counters()
         .ok()
         .map(|counters| counters.PeakWorkingSetSize as u64)
