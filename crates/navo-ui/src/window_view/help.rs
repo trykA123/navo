@@ -20,8 +20,12 @@ impl NavoWindow {
                 return;
             }
             let _ = this.update(cx, |view, cx| {
+                let text = match crate::commands::active(cx).shown_in("help.user_guide", "global") {
+                    Some(key) => navo_l10n::t!("guide-hint", key = key),
+                    None => navo_l10n::t!("guide-hint-unbound"),
+                };
                 view.show_notice(StatusNotice {
-                    text: navo_l10n::tr("guide-hint").into(),
+                    text: text.into(),
                     is_error: false,
                 });
                 cx.notify();

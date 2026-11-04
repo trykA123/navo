@@ -387,6 +387,25 @@ fn the_footer_counts_every_match_and_shows_the_keys(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn the_content_footer_shows_the_user_keys_and_hides_an_unbound_one(cx: &mut TestAppContext) {
+    let bind = |command: &str, keys: &str, context: &str| {
+        format!("[[bind]]\ncommand = \"{command}\"\nkeys = [{keys}]\ncontext = \"{context}\"\n")
+    };
+    let overlay = bind("command_center.run", "\"f4\"", "CommandCenter")
+        + &bind("command_center.other_pane", "", "CommandCenter")
+        + &bind("command_center.other_pane", "", "CommandCenter > Input");
+    let keymap = Keymap::builtin().overlay(&overlay).expect("keymap").keymap;
+    let mut content = props(Vec::new());
+    content.mode = crate::command_center::Mode::Content;
+    content.key_hints = Some(HintKeys::of(&keymap));
+    let center = open(cx, content);
+    assert_eq!(
+        center.label("command-center-content-footer", cx).as_deref(),
+        Some("F4 open hit · Alt+R regex · Alt+C case")
+    );
+}
+
+#[gpui_kit::test]
 fn an_error_replaces_the_count(cx: &mut TestAppContext) {
     let mut failed = props(Vec::new());
     failed.error = Some("No folder at \"C:\\nope\".".into());

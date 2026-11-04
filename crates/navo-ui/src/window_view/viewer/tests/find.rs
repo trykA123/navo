@@ -113,6 +113,18 @@ fn escape_closes_the_search_bar_before_the_viewer(cx: &mut TestAppContext) {
     assert!(!viewer_open(cx, &view));
 }
 
+#[gpui_kit::test]
+fn escape_closes_the_go_to_box_before_the_viewer(cx: &mut TestAppContext) {
+    let (window, view) = paged_window(cx, Setup::new(mixed(4096)));
+    press(cx, window, &view, "ctrl-g");
+    assert!(visible(cx, window, "paged-bar"));
+    press(cx, window, &view, "escape");
+    assert!(!visible(cx, window, "paged-bar"));
+    assert!(viewer_open(cx, &view));
+    press(cx, window, &view, "escape");
+    assert!(!viewer_open(cx, &view));
+}
+
 fn shown(cx: &mut TestAppContext, window: gpui_kit::AnyWindowHandle, id: &'static str) -> String {
     cx.update_window(window, |_, window, _| {
         window

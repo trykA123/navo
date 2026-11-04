@@ -332,8 +332,30 @@ pub(super) fn mode_empty(t: &Theme, mode: Mode) -> impl IntoElement {
         .child(label)
 }
 
-pub(super) fn content_footer(t: &Theme, error: Option<SharedString>) -> Div {
+pub(super) fn content_footer(
+    t: &Theme,
+    error: Option<SharedString>,
+    keys: Option<&HintKeys>,
+) -> impl IntoElement {
+    let key = |command: &str| {
+        let key = Kbd::new("command-center-content-footer-key", keys?.key(command)?)?;
+        Some(key.text())
+    };
+    let text = [
+        key(RUN_COMMAND).map(|key| t!("command-center-content-footer-open", key = key)),
+        key("command_center.other_pane")
+            .map(|key| t!("command-center-content-footer-pane", key = key)),
+        Some(tr("command-center-content-footer-flags")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(SEPARATOR);
     div()
+        .id("command-center-content-footer")
+        .role(Role::Group)
+        .aria_label(text.clone())
+        .test_support()
         .flex_none()
         .flex()
         .flex_wrap()
@@ -348,5 +370,5 @@ pub(super) fn content_footer(t: &Theme, error: Option<SharedString>) -> Div {
         .when_some(error, |footer, error| {
             footer.child(div().text_color(t.colors.mark).child(error))
         })
-        .child(tr("command-center-content-footer"))
+        .child(text)
 }

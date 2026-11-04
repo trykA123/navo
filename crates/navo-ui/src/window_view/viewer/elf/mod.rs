@@ -24,7 +24,7 @@ use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
 use super::parts::{AUTOMOTIVE_LAYOUT, LayoutParts, PartSet};
 use super::search::bar::GO_TO_KEYS;
-use super::space::{FileBytes, NEXT_PART, RichSpace, Siblings};
+use super::space::{FileBytes, RichSpace, Siblings, next_part};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
 use crate::settings::Values;
@@ -103,7 +103,7 @@ pub(in crate::window_view::viewer) struct ElfView {
     navigator: Entity<SheetState>,
     inspector: Entity<SheetState>,
     top_drawer: Drawer,
-    note: Option<SharedString>,
+    note: Option<Note>,
     lines_error: Option<SharedString>,
     go_to: Option<GoTo>,
     go_address: Option<u64>,
@@ -186,9 +186,20 @@ impl ElfView {
     }
 
     fn set_note(&mut self, note: impl Into<SharedString>, cx: &mut Context<Self>) {
-        self.note = Some(note.into());
+        self.note = Some(Note::Text(note.into()));
         cx.notify();
     }
+
+    fn set_hidden_note(&mut self, cx: &mut Context<Self>) {
+        self.note = Some(Note::HiddenLabel);
+        cx.notify();
+    }
+}
+
+/// A header note; the hidden-label one reads its key when drawn.
+enum Note {
+    Text(SharedString),
+    HiddenLabel,
 }
 
 pub(in crate::window_view::viewer) struct ElfBody(pub Entity<ElfView>);
@@ -218,7 +229,7 @@ impl ViewerBody for ElfBody {
             Some(Some(part)) => keys.extend(part),
             rich => {
                 keys.extend([("Ctrl+G", "Go to address"), ("Ctrl+F3", "Sort by name")]);
-                keys.extend(rich.map(|_| NEXT_PART));
+                keys.extend(rich.and_then(|_| next_part(cx)));
             }
         }
         if view.focus_in == Focus::Navigator {

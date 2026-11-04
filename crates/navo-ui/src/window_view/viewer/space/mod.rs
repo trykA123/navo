@@ -20,7 +20,7 @@ pub(in crate::window_view::viewer) use facts::{
     Picked, pick_facts, share_cell, share_head, share_of,
 };
 pub(in crate::window_view::viewer) use keys::{
-    NEXT_PART, Part, bind_keys, host_context, part_keys, space_keys,
+    Part, bind_keys, host_context, next_part, part_keys, space_keys,
 };
 pub(in crate::window_view::viewer) use layout::{RichLook, rich_layout};
 #[cfg(test)]

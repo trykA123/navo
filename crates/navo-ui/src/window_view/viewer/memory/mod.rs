@@ -20,7 +20,8 @@ pub(super) use keys::bind_keys;
 
 use self::entries::{Entry, entry_at};
 use super::background::Job;
-use super::body::{BodyKeys, Host, ViewerBody};
+use super::body::{BodyKeys, Host, Key, ViewerBody};
+use super::keys_bar::{hint, hints};
 use super::parts::{AUTOMOTIVE, PartSet};
 use super::search::bar::GO_TO_KEYS;
 use crate::prelude::*;
@@ -173,6 +174,24 @@ impl MemoryBody {
     }
 }
 
+fn normal_keys(cx: &App, in_navigator: bool) -> Vec<Key> {
+    let mut keys = hints(
+        cx,
+        &[
+            ("view.left_drawer", "Viewer", "Ranges"),
+            ("view.right_drawer", "Viewer", "Inspector"),
+            ("viewer.go_to_line", "Viewer", "Go to address"),
+        ],
+    );
+    if in_navigator {
+        keys.splice(
+            0..0,
+            hint(cx, "memory.go_to_item", "MemoryImage", "Go to range"),
+        );
+    }
+    keys
+}
+
 impl ViewerBody for MemoryBody {
     fn view(&self) -> AnyView {
         self.0.clone().into()
@@ -187,15 +206,7 @@ impl ViewerBody for MemoryBody {
         if view.go_to.is_some() {
             return BodyKeys::Modal(GO_TO_KEYS.to_vec());
         }
-        let mut keys = vec![
-            ("Ctrl+B", "Ranges"),
-            ("Ctrl+I", "Inspector"),
-            ("Ctrl+G", "Go to address"),
-        ];
-        if view.focus_in == Focus::Navigator {
-            keys.insert(0, ("Enter", "Go to range"));
-        }
-        BodyKeys::Normal(keys)
+        BodyKeys::Normal(normal_keys(cx, view.focus_in == Focus::Navigator))
     }
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
@@ -215,5 +226,26 @@ impl ViewerBody for MemoryBody {
     fn show_parts(&self, values: &Values, cx: &mut App) {
         let opens = values.opens_inspector();
         self.0.update(cx, |view, _| view.opens_inspector = opens);
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+    use crate::window_view::viewer::keys_bar::rebind_all;
+    use gpui_kit::TestAppContext;
+
+    #[gpui_kit::test]
+    fn memory_hints_show_user_keys(cx: &mut TestAppContext) {
+        rebind_all(
+            cx,
+            &[
+                ("view.left_drawer", "\"alt-b\""),
+                ("memory.go_to_item", "\"f4\""),
+            ],
+        );
+        let keys = cx.update(|cx| normal_keys(cx, true));
+        assert_eq!(keys[0], ("F4", "Go to range"));
+        assert!(keys.contains(&("Alt+B", "Ranges")));
     }
 }

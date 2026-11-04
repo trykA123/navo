@@ -2,6 +2,7 @@ use navo_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, NavoAction, Shell
 
 use super::merge::{self, Own};
 
+use crate::commands::Keymap;
 use crate::file_list::{SortBy, SortKey};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,16 +15,34 @@ pub struct BackgroundLook {
 }
 
 const SORTS: [(SortBy, &str, &str, &str, char); 4] = [
-    (SortBy::Name, "file_list::SortName", "Name", "Ctrl+F3", 'N'),
+    (
+        SortBy::Name,
+        "file_list::SortName",
+        "Name",
+        "files.sort_by_name",
+        'N',
+    ),
     (
         SortBy::Ext,
         "file_list::SortExt",
         "Extension",
-        "Ctrl+F4",
+        "files.sort_by_extension",
         'E',
     ),
-    (SortBy::Date, "file_list::SortDate", "Date", "Ctrl+F5", 'D'),
-    (SortBy::Size, "file_list::SortSize", "Size", "Ctrl+F6", 'S'),
+    (
+        SortBy::Date,
+        "file_list::SortDate",
+        "Date",
+        "files.sort_by_date",
+        'D',
+    ),
+    (
+        SortBy::Size,
+        "file_list::SortSize",
+        "Size",
+        "files.sort_by_size",
+        'S',
+    ),
 ];
 
 fn navo(action: NavoAction, raw: &str, key: char) -> MenuItem {
@@ -45,12 +64,16 @@ fn sort_label(name: &str, current: Option<SortKey>) -> String {
     }
 }
 
-fn sort_menu(current: SortKey) -> MenuItem {
+fn sort_menu(current: SortKey, keys: &Keymap) -> MenuItem {
     let children = SORTS
         .into_iter()
-        .map(|(by, action, name, keys, key)| {
+        .map(|(by, action, name, command, key)| {
             let shown = (by == current.by).then_some(current);
-            let raw = format!("{}\t{keys}", sort_label(name, shown));
+            let label = sort_label(name, shown);
+            let raw = match keys.shown_in(command, "FileList") {
+                Some(key) => format!("{label}\t{key}"),
+                None => label,
+            };
             MenuItem {
                 access_key: Some(key),
                 checked: shown.is_some(),
@@ -104,10 +127,10 @@ fn copy_folder_path() -> MenuItem {
 }
 
 /// With a shell list, Sort by and Refresh lead it and New file follows New ▸, as Explorer places them.
-pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
+pub(super) fn background_own(look: &BackgroundLook, has_shell: bool, keys: &Keymap) -> Own {
     if has_shell {
         let mut top = vec![
-            sort_menu(look.sort),
+            sort_menu(look.sort, keys),
             refresh(),
             copy_folder_path(),
             open_terminal(),
@@ -124,7 +147,7 @@ pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
         new_file(),
         paste(look),
         refresh(),
-        sort_menu(look.sort),
+        sort_menu(look.sort, keys),
         copy_folder_path(),
         open_terminal(),
     ];
@@ -141,7 +164,7 @@ pub(super) fn background_own(look: &BackgroundLook, has_shell: bool) -> Own {
 /// The folder menu on Windows: Navo's items placed into the shell list.
 #[must_use]
 pub fn merged_background_menu(shell: &[MenuItem], look: &BackgroundLook) -> ShellMenu {
-    merge::merge(shell, &background_own(look, true)).menu
+    merge::merge(shell, &background_own(look, true, Keymap::builtin())).menu
 }
 
 #[cfg(test)]
@@ -165,8 +188,32 @@ mod tests {
     #[test]
     fn the_folder_menu_offers_compare_only_when_one_can_start() {
         for has_shell in [false, true] {
-            assert!(offers_compare(&background_own(&look(true), has_shell)));
-            assert!(!offers_compare(&background_own(&look(false), has_shell)));
+            assert!(offers_compare(&background_own(
+                &look(true),
+                has_shell,
+                Keymap::builtin()
+            )));
+            assert!(!offers_compare(&background_own(
+                &look(false),
+                has_shell,
+                Keymap::builtin()
+            )));
         }
+    }
+
+    #[test]
+    fn the_sort_items_show_the_keys_of_the_keymap() {
+        let text = "[[bind]]\ncommand = \"files.sort_by_date\"\nkeys = [\"ctrl-alt-d\"]\n";
+        let keys = Keymap::builtin().overlay(text).expect("keymap").keymap;
+        let accelerator = |keys: &Keymap, at: usize| match sort_menu(SortKey::default(), keys).kind
+        {
+            ItemKind::Submenu(Submenu::Filled(items)) => items[at].accelerator.clone(),
+            _ => None,
+        };
+        assert_eq!(accelerator(&keys, 2).as_deref(), Some("Ctrl+Alt+D"));
+        assert_eq!(
+            accelerator(Keymap::builtin(), 0).as_deref(),
+            Some("Ctrl+F3")
+        );
     }
 }

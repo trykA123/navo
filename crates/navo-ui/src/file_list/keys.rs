@@ -9,17 +9,7 @@ use super::git_keys::{GitCommit, GitDiff, GitLog, GitPull, GitPush, OpenGitMenu}
 use super::{FileListAction, ListContext, SortBy};
 use crate::git::GitAction;
 
-pub(super) const CONTEXT: &str = "FileList";
-const COMPARE: &str = "Compare";
-
-pub(crate) fn context(compare: bool) -> gpui_kit::KeyContext {
-    let mut context = gpui_kit::KeyContext::default();
-    context.add(CONTEXT);
-    if compare {
-        context.add(COMPARE);
-    }
-    context
-}
+pub(crate) const CONTEXT: &str = "FileList";
 
 gpui_kit::actions!(
     file_list,

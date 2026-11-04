@@ -1,9 +1,10 @@
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{ClickEvent, Role, Stateful, WeakEntity};
+use navo_l10n::t;
 
 use super::keys::{CONTEXT, TABLE_CONTEXT};
 use super::text::{Check, address, is_wide, row_label, status};
-use super::{ElfView, Focus, Index, Phase};
+use super::{ElfView, Focus, Index, Note, Phase};
 use crate::file_list::filter_bar;
 use crate::prelude::*;
 use crate::primitives::VirtualList;
@@ -72,7 +73,7 @@ impl ElfView {
         .label("Symbols")
     }
 
-    fn progress(&self) -> Option<SharedString> {
+    fn progress(&self, cx: &App) -> Option<SharedString> {
         let percent =
             |done: u64, of: u64| (u128::from(done) * 100 / u128::from(of.max(1))).min(100);
         match (&self.index, self.phase) {
@@ -82,11 +83,14 @@ impl ElfView {
             (Index::Ready(_), Phase::Lines(done)) => {
                 Some(format!("Reading DWARF lines… {}%", percent(done, PER_MILLE)).into())
             }
-            _ => self.note.clone(),
+            _ => self.note.as_ref().map(|note| match note {
+                Note::Text(text) => text.clone(),
+                Note::HiddenLabel => hidden_note(cx),
+            }),
         }
     }
 
-    fn header_parts(&self) -> HeaderParts {
+    fn header_parts(&self, cx: &App) -> HeaderParts {
         let detail = self.elf().zip(self.selected()).map(|(elf, (_, symbol))| {
             let at = address(symbol.value, is_wide(elf));
             ("elf-cursor", format!("{} · {at}", elf.name(symbol)).into())
@@ -99,11 +103,11 @@ impl ElfView {
             ),
             len: self.len,
             detail,
-            status: self.progress().map(|text| ("elf-progress", text)),
+            status: self.progress(cx).map(|text| ("elf-progress", text)),
         }
     }
 
-    fn header_view(&self, t: &Theme) -> Div {
+    fn header_view(&self, t: &Theme, cx: &App) -> Div {
         let bar = self.go_to.as_ref().map(|go_to| {
             let look = BarLook {
                 id: "elf-go-to",
@@ -118,7 +122,7 @@ impl ElfView {
             };
             bar_row(t, look, |_, _, _| {})
         });
-        header(t, self.header_parts()).children(bar)
+        header(t, self.header_parts(cx)).children(bar)
     }
 
     fn checks(&self) -> Vec<Check> {
@@ -282,8 +286,16 @@ impl Render for ElfView {
             .size_full()
             .bg(t.colors.surface)
             .text_size(t.typography.body)
-            .child(self.header_view(&t))
+            .child(self.header_view(&t, cx))
             .child(Self::typing(body, cx))
             .child(self.status_line(&t))
     }
+}
+
+fn hidden_note(cx: &App) -> SharedString {
+    match crate::commands::active(cx).shown_in("elf.toggle_noise", "Elf") {
+        Some(key) => t!("elf-hidden-note", key = key),
+        None => t!("elf-hidden-note-unbound"),
+    }
+    .into()
 }

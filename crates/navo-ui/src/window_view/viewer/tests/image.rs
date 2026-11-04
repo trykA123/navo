@@ -10,7 +10,7 @@ use super::find::bottom_keys;
 use super::{Log, editor_text, press_only, redraw, text_of, visible, window_with};
 use crate::format;
 use crate::window_view::NavoWindow;
-use crate::window_view::tests::{fake, press, settle, type_in};
+use crate::window_view::tests::{fake, press, settle, type_in, viewer_open};
 use crate::window_view::viewer::image::ImageBody;
 use crate::window_view::viewer::image::fixtures::{encoded, photo};
 use crate::window_view::viewer::{FileHooks, FileText, Head, Kinds};
@@ -152,13 +152,41 @@ fn the_bottom_bar_leads_with_the_image_keys_and_lists_the_kind_keys_after(cx: &m
         keys,
         [
             "0 Fit",
-            "1 100 %",
+            "Ctrl+1 100 %",
             "+/− Zoom",
             "Arrows/Drag Pan",
             "N/P Space/Bksp Next/Prev",
             "Ctrl+I Details",
             "Alt+V View",
-            "Alt+1 Text",
+            "1 Text",
+            "3 Hex",
+            "Esc Close",
+        ]
+    );
+}
+
+#[gpui_kit::test]
+fn the_image_bar_shows_the_user_keys_and_hides_unbound_ones(cx: &mut TestAppContext) {
+    crate::window_view::viewer::keys_bar::rebind_all(
+        cx,
+        &[
+            ("image.fit", "\"f8\""),
+            ("image.actual_size", ""),
+            ("lister.show_text", "\"f6\""),
+        ],
+    );
+    let rig = rig(cx, &[], &[("a.txt", encoded(ImageFormat::Png, 300, 200))]);
+    open_first(cx, &rig);
+    assert_eq!(
+        bottom_keys(cx, rig.0),
+        [
+            "F8 Fit",
+            "+/− Zoom",
+            "Arrows/Drag Pan",
+            "N/P Space/Bksp Next/Prev",
+            "Ctrl+I Details",
+            "Alt+V View",
+            "F6 Text",
             "3 Hex",
             "Esc Close",
         ]
@@ -178,7 +206,7 @@ fn the_wheel_zooms_without_ctrl_and_a_left_drag_pans(cx: &mut TestAppContext) {
     let rig = rig(cx, &[], &[("a.txt", encoded(ImageFormat::Png, 3000, 2000))]);
     open_first(cx, &rig);
     let (window, view, _) = &rig;
-    press(cx, *window, view, "1");
+    press(cx, *window, view, "ctrl-1");
     cx.update_window(*window, |_, window, cx| {
         window.scroll(
             "image-stage",
@@ -210,7 +238,7 @@ fn fit_actual_size_and_zoom_keys_change_the_zoom(cx: &mut TestAppContext) {
         fitted.starts_with("Fit · ") && fitted != "Fit · 100 %",
         "{fitted}"
     );
-    press(cx, *window, view, "1");
+    press(cx, *window, view, "ctrl-1");
     assert_eq!(zoom(cx), "100 %");
     press(cx, *window, view, "+");
     assert_eq!(zoom(cx), "125 %");
@@ -221,7 +249,7 @@ fn fit_actual_size_and_zoom_keys_change_the_zoom(cx: &mut TestAppContext) {
     assert_eq!(zoom(cx), "100 %");
     press(cx, *window, view, "ctrl-0");
     assert_eq!(zoom(cx), fitted);
-    press(cx, *window, view, "1");
+    press(cx, *window, view, "ctrl-1");
     press(cx, *window, view, "0");
     assert_eq!(zoom(cx), fitted);
 }
@@ -237,7 +265,7 @@ fn arrows_pan_and_stop_at_the_edges(cx: &mut TestAppContext) {
         Point::default(),
         "a fitted image does not pan"
     );
-    press(cx, rig.0, &view, "1");
+    press(cx, rig.0, &view, "ctrl-1");
     presses(cx, &rig, "left", 40);
     let left = pan(cx, &view);
     assert!(left.x > 0., "{left:?}");
@@ -311,6 +339,22 @@ fn i_shows_the_exif_panel_and_the_orientation_is_applied(cx: &mut TestAppContext
     );
     press(cx, *window, view, "i");
     assert!(!visible(cx, *window, "image-info"));
+}
+
+#[gpui_kit::test]
+fn escape_closes_the_info_panel_of_a_zoomed_image_then_the_viewer(cx: &mut TestAppContext) {
+    let rig = rig(cx, &[], &[("a.txt", photo(32, 16, 6))]);
+    open_first(cx, &rig);
+    let (window, view, _) = &rig;
+    press(cx, *window, view, "ctrl-1");
+    press(cx, *window, view, "i");
+    assert!(visible(cx, *window, "image-info"));
+    press(cx, *window, view, "escape");
+    assert!(!visible(cx, *window, "image-info"));
+    assert_eq!(text_of(cx, *window, "image-zoom"), "100 %");
+    assert!(viewer_open(cx, view));
+    press(cx, *window, view, "escape");
+    assert!(!viewer_open(cx, view));
 }
 
 #[gpui_kit::test]

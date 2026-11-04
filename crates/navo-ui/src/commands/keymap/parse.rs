@@ -188,7 +188,17 @@ fn resolve(raw: Raw) -> Result<Bind, KeymapError> {
     })
 }
 
+/// Commands that also take keys in a second, unrelated context.
+const ALSO_IN: [(&str, &str); 1] = [("workspace.new", "WorkspaceTray")];
+
+pub(crate) fn also_in(command: &str, context: &str) -> bool {
+    ALSO_IN.contains(&(command, context))
+}
+
 fn allowed(spec: &CommandSpec, context: &str) -> bool {
+    if also_in(spec.name, context) {
+        return true;
+    }
     if spec.context == GLOBAL || context == GLOBAL {
         return spec.context == context;
     }

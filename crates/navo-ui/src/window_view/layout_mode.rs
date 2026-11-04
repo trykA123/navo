@@ -3,7 +3,9 @@ use gpui_kit::{Animation, AnimationExt, Keystroke, Subscription};
 use navo_core::{Command, Direction, Layout, PaneId};
 
 use super::NavoWindow;
+use super::layout_switcher::LayoutSwitcherAction;
 use super::pane::PaneStep;
+use crate::commands::{Keymap, LAYOUT_MODE, active, is_fixed_digit, is_shown_key};
 use crate::prelude::*;
 use crate::primitives::Kbd;
 use crate::tokens::Theme;
@@ -28,71 +30,107 @@ enum ModeKey {
     SwitchPane,
     Save,
     Remove,
+    Done,
 }
 
-const REMOVE_HINT: usize = 8;
-const RANGE_HINTS: [usize; 2] = [0, 10];
+struct Hint {
+    label: &'static str,
+    commands: &'static [&'static str],
+    range: bool,
+}
 
-const HINTS: [(&[&str], &str); 12] = [
-    (&["1", "9"], "layout-key-apply"),
-    (&["v"], "layout-key-split-right"),
-    (&["s"], "layout-key-split-below"),
-    (&["x"], "layout-key-close"),
-    (&["shift-←", "→"], "layout-key-swap"),
-    (&["ctrl-←", "→"], "layout-key-resize"),
-    (&["="], "layout-key-even"),
-    (&["ctrl-s"], "layout-key-save"),
-    (&["delete"], "layout-key-remove"),
-    (&["tab"], "layout-key-target"),
-    (&["ctrl-shift-1", "4"], "layout-key-pane"),
-    (&["escape"], "layout-key-done"),
+const fn hint(label: &'static str, commands: &'static [&'static str]) -> Hint {
+    Hint {
+        label,
+        commands,
+        range: false,
+    }
+}
+
+const REMOVE: &str = "layout_mode.remove";
+const APPLY_LABEL: &str = "layout-key-apply";
+
+const HINTS: [Hint; 11] = [
+    hint("layout-key-split-right", &["layout_mode.split_right"]),
+    hint("layout-key-split-below", &["layout_mode.split_below"]),
+    hint("layout-key-close", &["layout_mode.close"]),
+    hint(
+        "layout-key-swap",
+        &["layout_mode.swap_left", "layout_mode.swap_right"],
+    ),
+    hint(
+        "layout-key-resize",
+        &["layout_mode.resize_left", "layout_mode.resize_right"],
+    ),
+    hint("layout-key-even", &["layout_mode.even"]),
+    hint("layout-key-save", &["layout_mode.save"]),
+    hint("layout-key-remove", &[REMOVE]),
+    hint("layout-key-target", &["layout_mode.target"]),
+    Hint {
+        label: "layout-key-pane",
+        commands: &[
+            "layout_mode.focus_pane_first",
+            "layout_mode.focus_pane_fourth",
+        ],
+        range: true,
+    },
+    hint("layout-key-done", &["layout_mode.done"]),
 ];
 
-fn direction(key: &str) -> Option<Direction> {
-    match key {
-        "left" => Some(Direction::Left),
-        "right" => Some(Direction::Right),
-        "up" => Some(Direction::Up),
-        "down" => Some(Direction::Down),
-        _ => None,
-    }
+fn core(command: Command) -> ModeKey {
+    ModeKey::Core(command)
 }
 
-fn mode_key(keystroke: &Keystroke) -> Option<ModeKey> {
-    let modifiers = &keystroke.modifiers;
-    let key = keystroke.key.as_str();
-    if modifiers.alt || modifiers.platform || modifiers.function {
+fn split(direction: Direction) -> ModeKey {
+    core(Command::LayoutSplit { direction })
+}
+
+fn swap(direction: Direction) -> ModeKey {
+    core(Command::LayoutSwapToward { direction })
+}
+
+fn resize(direction: Direction) -> ModeKey {
+    core(Command::LayoutResize { direction })
+}
+
+fn pane(n: usize) -> ModeKey {
+    core(Command::LayoutFocusPane { n })
+}
+
+type Verb = (&'static str, fn() -> ModeKey);
+
+/// Each verb of the layout mode with what it does. The digits 1-9 stay fixed.
+const VERBS: [Verb; 20] = [
+    ("layout_mode.split_right", || split(Direction::Right)),
+    ("layout_mode.split_below", || split(Direction::Down)),
+    ("layout_mode.close", || core(Command::LayoutClose)),
+    ("layout_mode.swap_left", || swap(Direction::Left)),
+    ("layout_mode.swap_right", || swap(Direction::Right)),
+    ("layout_mode.swap_up", || swap(Direction::Up)),
+    ("layout_mode.swap_down", || swap(Direction::Down)),
+    ("layout_mode.resize_left", || resize(Direction::Left)),
+    ("layout_mode.resize_right", || resize(Direction::Right)),
+    ("layout_mode.resize_up", || resize(Direction::Up)),
+    ("layout_mode.resize_down", || resize(Direction::Down)),
+    ("layout_mode.even", || core(Command::LayoutEven)),
+    ("layout_mode.save", || ModeKey::Save),
+    (REMOVE, || ModeKey::Remove),
+    ("layout_mode.target", || ModeKey::SwitchPane),
+    ("layout_mode.focus_pane_first", || pane(1)),
+    ("layout_mode.focus_pane_second", || pane(2)),
+    ("layout_mode.focus_pane_third", || pane(3)),
+    ("layout_mode.focus_pane_fourth", || pane(4)),
+    ("layout_mode.done", || ModeKey::Done),
+];
+
+fn mode_key(keymap: &Keymap, keystroke: &Keystroke) -> Option<ModeKey> {
+    if is_fixed_digit(&keystroke.unparse()) {
         return None;
     }
-    let command = match (modifiers.control, modifiers.shift, key) {
-        (false, _, "tab") => return Some(ModeKey::SwitchPane),
-        (true, false, "s") => return Some(ModeKey::Save),
-        (false, false, "delete") => return Some(ModeKey::Remove),
-        (false, _, "=") => Command::LayoutEven,
-        (false, false, "v") => Command::LayoutSplit {
-            direction: Direction::Right,
-        },
-        (false, false, "s") => Command::LayoutSplit {
-            direction: Direction::Down,
-        },
-        (false, false, "x") => Command::LayoutClose,
-        (false, true, key) => Command::LayoutSwapToward {
-            direction: direction(key)?,
-        },
-        (true, false, symbol) if crate::commands::shifted_digit(symbol).is_some() => {
-            Command::LayoutFocusPane {
-                n: crate::commands::shifted_digit(symbol)?,
-            }
-        }
-        (true, false, key) => Command::LayoutResize {
-            direction: direction(key)?,
-        },
-        (true, true, digit) => Command::LayoutFocusPane {
-            n: digit.parse().ok().filter(|n| (1..=4).contains(n))?,
-        },
-        _ => return None,
-    };
-    Some(ModeKey::Core(command))
+    VERBS
+        .iter()
+        .find(|(name, _)| keymap.has_key_in(name, LAYOUT_MODE, keystroke))
+        .map(|(_, key)| key())
 }
 
 fn moved(before: &Layout, after: &Layout) -> Vec<PaneId> {
@@ -153,7 +191,20 @@ impl Fades {
     }
 }
 
-pub(super) fn key_bar(t: &Theme, can_remove: bool) -> Div {
+pub(super) fn key_bar(t: &Theme, can_remove: bool, keymap: &Keymap) -> Div {
+    let apply = Hint {
+        label: APPLY_LABEL,
+        commands: &[],
+        range: true,
+    };
+    let fixed = vec!["1".to_owned(), "9".to_owned()];
+    let verbs = HINTS
+        .iter()
+        .enumerate()
+        .filter(|(_, hint)| can_remove || hint.commands != [REMOVE])
+        .map(|(at, hint)| (at + 1, hint, hint_keys(keymap, hint)))
+        .filter(|(_, _, keys)| !keys.is_empty());
+    let rows = std::iter::once((0, &apply, fixed)).chain(verbs);
     div()
         .flex()
         .flex_wrap()
@@ -162,34 +213,53 @@ pub(super) fn key_bar(t: &Theme, can_remove: bool) -> Div {
         .gap_y(t.spacing.xs)
         .text_size(t.typography.small)
         .text_color(t.colors.muted)
-        .children(
-            HINTS
-                .iter()
-                .enumerate()
-                .filter(move |(index, _)| can_remove || *index != REMOVE_HINT)
-                .map(|(index, hint)| hint_view(t, index, hint)),
-        )
+        .children(rows.map(|(index, hint, keys)| hint_view(t, index, hint, &keys)))
 }
 
-fn hint_view(t: &Theme, index: usize, (keys, label): &(&[&str], &str)) -> Div {
+#[cfg(test)]
+pub(super) fn split_right_hint(cx: &App) -> Option<String> {
+    hint_keys(active(cx), &HINTS[0]).into_iter().next()
+}
+
+/// The keys of a verb, one per shown command (a pair for the ranges); later ones lose the modifiers they share with the first.
+fn hint_keys(keymap: &Keymap, hint: &Hint) -> Vec<String> {
+    let mut keys: Vec<String> = Vec::new();
+    for command in hint.commands {
+        let Some(key) = keymap
+            .keys_in(command, LAYOUT_MODE)
+            .find(|key| is_shown_key(command, key))
+        else {
+            continue;
+        };
+        let shared = keys
+            .first()
+            .and_then(|first| first.rsplit_once('-'))
+            .zip(key.rsplit_once('-'))
+            .filter(|(first, this)| first.0 == this.0)
+            .map(|(_, this)| this.1);
+        keys.push(shared.unwrap_or(key).to_owned());
+    }
+    keys
+}
+
+fn hint_view(t: &Theme, index: usize, hint: &Hint, keys: &[String]) -> Div {
     div()
         .flex()
         .items_center()
         .gap(t.spacing.xxs)
         .children(keys.iter().enumerate().flat_map(|(at, key)| {
-            let dash = (RANGE_HINTS.contains(&index) && at == 1)
-                .then(|| div().child("–").into_any_element());
+            let dash = (hint.range && at == 1).then(|| div().child("–").into_any_element());
             let cap =
                 Kbd::new(("layout-key", index * 2 + at), key).map(IntoElement::into_any_element);
             dash.into_iter().chain(cap)
         }))
-        .child(div().ml(t.spacing.xxs).child(navo_l10n::tr(label)))
+        .child(div().ml(t.spacing.xxs).child(navo_l10n::tr(hint.label)))
 }
 
 pub(super) fn intercept_mode_keys(cx: &mut Context<NavoWindow>) -> Subscription {
     let this = cx.weak_entity();
     cx.intercept_keystrokes(move |event, window, cx| {
-        let Some(key) = mode_key(&event.keystroke) else {
+        let Some(key) = mode_key(active(cx), &event.keystroke) else {
             return;
         };
         let _ = this.update(cx, |view, cx| {
@@ -212,6 +282,7 @@ impl NavoWindow {
         match key {
             ModeKey::Core(command) => self.apply(&command, window, cx),
             ModeKey::SwitchPane => self.step_pane(PaneStep::Target, window, cx),
+            ModeKey::Done => return self.switch_layout(LayoutSwitcherAction::Close, window, cx),
             ModeKey::Save => return self.ask_save_layout(cx),
             ModeKey::Remove => {
                 if let Some(state) = &self.tiles.switcher {

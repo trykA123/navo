@@ -120,6 +120,7 @@ pub enum Field {
     RenameLog,
     SpaceMeasuresFolders,
     PatternsSelectFolders,
+    RightButton,
     TerminalProvider,
     TerminalCommand,
     EditorPath,
@@ -239,6 +240,10 @@ pub const DROP_CONFIRMS: [Choice; 3] = [
     choice("settings-drop-confirm-moves", "moves"),
     choice("settings-drop-confirm-always", "always"),
 ];
+pub const RIGHT_BUTTONS: [Choice; 2] = [
+    choice("settings-right-button-total-commander", "total-commander"),
+    choice("settings-right-button-windows", "windows"),
+];
 pub const SORTS: [Choice; 4] = [
     choice("Name", "name"),
     choice("Size", "size"),
@@ -292,7 +297,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 85] = join([
+pub const FIELDS: [FieldSpec; 86] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &GIT_FIELDS,

@@ -9,7 +9,7 @@ use navo_l10n::t;
 
 use super::cells::{Look, found_style, name_cell, status_cell};
 use super::status::{Kind, Line, lines};
-use super::summary::{Footer, footer};
+use super::summary::{Footer, footer, hints_text};
 use crate::multi_rename::{Item, Preview, Summary};
 use crate::prelude::*;
 use crate::primitives::{
@@ -366,6 +366,7 @@ impl Render for PreviewView {
             &t,
             Footer {
                 summary: self.summary,
+                hints: hints_text(cx),
                 can_run: self.can_run,
                 run: cx.listener(|_, _, _, cx| cx.emit(PreviewEvent::Run)),
                 cancel: cx.listener(|_, _, _, cx| cx.emit(PreviewEvent::Cancel)),

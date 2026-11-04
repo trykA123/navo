@@ -16,23 +16,15 @@ use gpui_kit::{AnyView, FocusHandle, Focusable, RenderImage, Task, point};
 pub use decode::{IMAGE_LIMIT, Picture, decode_image};
 pub use exif::ExifEntry;
 
-use super::body::{BodyKeys, Key, MenuEntry, ViewerBody};
-use super::keys_bar::NEXT_PREVIOUS;
+use super::body::{BodyKeys, MenuEntry, ViewerBody};
+use super::keys_bar::{hint, next_previous, pair};
 use super::parts::{IMAGE, PartSet};
 use crate::prelude::*;
 use crate::settings::{Field, Values};
 use zoom::{STEP, Viewport, Zoom};
 
 const PAN_STEP: f32 = 64.;
-const IMAGE_KEYS: [Key; 6] = [
-    ("0", "Fit"),
-    ("1", "100 %"),
-    ("+/−", "Zoom"),
-    ("Arrows/Drag", "Pan"),
-    NEXT_PREVIOUS,
-    ("Ctrl+I", "Details"),
-];
-
+const IMAGE_CONTEXT: &str = "Image";
 pub struct ImageView {
     title: SharedString,
     picture: Picture,
@@ -47,8 +39,6 @@ pub struct ImageView {
 }
 
 impl ImageView {
-    pub const KEYS: [Key; 6] = IMAGE_KEYS;
-
     pub fn new(
         title: impl Into<SharedString>,
         mut picture: Picture,
@@ -160,8 +150,21 @@ impl ViewerBody for ImageBody {
         self.0.read(cx).focus_handle(cx)
     }
 
-    fn keys(&self, _: &App) -> BodyKeys {
-        BodyKeys::Normal(IMAGE_KEYS.to_vec())
+    fn keys(&self, cx: &App) -> BodyKeys {
+        let keys = [
+            hint(cx, "image.fit", IMAGE_CONTEXT, "Fit"),
+            hint(cx, "image.actual_size", IMAGE_CONTEXT, "100 %"),
+            pair(
+                cx,
+                ("image.zoom_in", "image.zoom_out"),
+                IMAGE_CONTEXT,
+                "Zoom",
+            ),
+            Some(("Arrows/Drag", "Pan")),
+            next_previous(cx),
+            hint(cx, "view.right_drawer", "Viewer", "Details"),
+        ];
+        BodyKeys::Normal(keys.into_iter().flatten().collect())
     }
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}

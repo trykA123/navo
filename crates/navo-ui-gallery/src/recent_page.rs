@@ -128,6 +128,8 @@ impl Render for RecentPage {
             subtitle: summary(self.model.items(), self.model.bytes()).into(),
             status: None,
             has_rows: true,
+            restore_key: Some("enter".into()),
+            purge_key: Some("delete".into()),
         };
         div()
             .relative()

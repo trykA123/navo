@@ -1,6 +1,7 @@
 use super::*;
 use crate::app_menu::Setting;
 use crate::compare_visible::{hide_compare, show_compare};
+use crate::file_list::RightButton;
 use crate::modifier_hints::HintsMode;
 use crate::tokens::{Density, ThemeChoice};
 
@@ -403,6 +404,32 @@ fn files_has_the_drop_confirm_row_defaulting_to_never() {
     let toml: Vec<&str> = options.iter().map(|option| option.toml).collect();
     assert_eq!(toml, ["never", "moves", "always"]);
     assert_eq!(Values::default().get(Field::DropConfirm), &Value::Pick(0));
+}
+
+#[test]
+fn selection_has_the_right_button_row_defaulting_to_total_commander() {
+    let row = spec(Field::RightButton);
+    assert_eq!(row.section, Section::Selection);
+    assert_eq!(row.key, "selection.right-button");
+    let Control::Choices(options, Look::Segments) = row.control else {
+        panic!("right button is not segments: {:?}", row.control);
+    };
+    let toml: Vec<&str> = options.iter().map(|option| option.toml).collect();
+    assert_eq!(toml, ["total-commander", "windows"]);
+    assert_eq!(
+        Values::default().right_button(),
+        RightButton::TotalCommander
+    );
+}
+
+#[test]
+fn the_right_button_getter_follows_the_pick() {
+    let windows = Values::default().with(&Change {
+        field: Field::RightButton,
+        value: Value::Pick(1),
+    });
+    assert_eq!(windows.right_button(), RightButton::Windows);
+    assert!(windows.is_changed(Field::RightButton));
 }
 
 #[test]

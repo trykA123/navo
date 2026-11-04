@@ -378,6 +378,16 @@ command = "workspace.new"
 keys = ["alt-n"]
 
 [[bind]]
+command = "workspace.new"
+keys = ["alt-n"]
+context = "WorkspaceTray"
+
+[[bind]]
+command = "workspace.rename_card"
+keys = ["f2"]
+context = "WorkspaceTray"
+
+[[bind]]
 command = "workspace.save"
 keys = ["ctrl-s"]
 
@@ -1116,7 +1126,7 @@ command = "viewer.save"
 keys = ["ctrl-s"]
 
 [[bind]]
-command = "viewer.close"
+command = "viewer.back"
 keys = ["escape"]
 
 [[bind]]
@@ -1224,26 +1234,6 @@ command = "viewer.go_to_line"
 keys = ["ctrl-g"]
 
 [[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "ViewerGoTo"
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "Paged"
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "ViewerFind"
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "Tree"
-
-[[bind]]
 command = "viewer.show_line_ends"
 keys = ["alt-l"]
 
@@ -1298,38 +1288,92 @@ keys = ["alt-c"]
 [[bind]]
 command = "mark.colour_one"
 keys = ["ctrl-1"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_one"
+keys = ["ctrl-1"]
+context = "Editor"
 
 [[bind]]
 command = "mark.colour_two"
 keys = ["ctrl-2"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_two"
+keys = ["ctrl-2"]
+context = "Editor"
 
 [[bind]]
 command = "mark.colour_three"
 keys = ["ctrl-3"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_three"
+keys = ["ctrl-3"]
+context = "Editor"
 
 [[bind]]
 command = "mark.colour_four"
 keys = ["ctrl-4"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_four"
+keys = ["ctrl-4"]
+context = "Editor"
 
 [[bind]]
 command = "mark.colour_five"
 keys = ["ctrl-5"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_five"
+keys = ["ctrl-5"]
+context = "Editor"
 
 [[bind]]
 command = "mark.colour_six"
 keys = ["ctrl-6"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_six"
+keys = ["ctrl-6"]
+context = "Editor"
 
 [[bind]]
 command = "mark.colour_seven"
 keys = ["ctrl-7"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_seven"
+keys = ["ctrl-7"]
+context = "Editor"
 
 [[bind]]
 command = "mark.colour_eight"
 keys = ["ctrl-8"]
+context = "Paged"
+
+[[bind]]
+command = "mark.colour_eight"
+keys = ["ctrl-8"]
+context = "Editor"
 
 [[bind]]
 command = "mark.clear"
 keys = ["ctrl-0"]
+context = "Paged"
+
+[[bind]]
+command = "mark.clear"
+keys = ["ctrl-0"]
+context = "Editor"
 
 [[bind]]
 command = "bookmark.toggle"
@@ -1399,7 +1443,7 @@ keys = ["0", "ctrl-0"]
 
 [[bind]]
 command = "image.actual_size"
-keys = ["1"]
+keys = ["ctrl-1"]
 
 [[bind]]
 command = "image.zoom_in"
@@ -1412,11 +1456,6 @@ keys = ["-"]
 [[bind]]
 command = "image.toggle_info"
 keys = ["i"]
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "Image"
 
 [[bind]]
 command = "image.copy"
@@ -1436,11 +1475,6 @@ context = "Pdf"
 [[bind]]
 command = "viewer.go_to_end"
 keys = ["end"]
-context = "Pdf"
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
 context = "Pdf"
 
 [[bind]]
@@ -1617,11 +1651,6 @@ keys = ["ctrl-f3"]
 command = "memory.go_to_item"
 keys = ["enter"]
 
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "MemoryImage"
-
 # Elf
 
 [[bind]]
@@ -1647,11 +1676,6 @@ keys = ["ctrl-f6"]
 [[bind]]
 command = "elf.toggle_noise"
 keys = ["alt-h"]
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "Elf"
 
 # ElfTable
 
@@ -1700,11 +1724,6 @@ keys = ["ctrl-f5"]
 [[bind]]
 command = "map.sort_by_size"
 keys = ["ctrl-f6"]
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "Map"
 
 # MapTable
 
@@ -1839,16 +1858,6 @@ keys = ["p"]
 [[bind]]
 command = "trace.filter_backspace"
 keys = ["backspace"]
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "CanTrace"
-
-[[bind]]
-command = "viewer.back"
-keys = ["escape"]
-context = "Mdf"
 
 # Markdown
 
@@ -2191,3 +2200,95 @@ keys = ["alt-9"]
 command = "clip_palette.pick_ninth"
 keys = ["alt-9"]
 context = "ClipPalette > Input"
+
+# LayoutMode
+
+[[bind]]
+command = "layout_mode.split_right"
+keys = ["v"]
+
+[[bind]]
+command = "layout_mode.split_below"
+keys = ["s"]
+
+[[bind]]
+command = "layout_mode.close"
+keys = ["x"]
+
+[[bind]]
+command = "layout_mode.swap_left"
+keys = ["shift-left"]
+
+[[bind]]
+command = "layout_mode.swap_right"
+keys = ["shift-right"]
+
+[[bind]]
+command = "layout_mode.swap_up"
+keys = ["shift-up"]
+
+[[bind]]
+command = "layout_mode.swap_down"
+keys = ["shift-down"]
+
+[[bind]]
+command = "layout_mode.resize_left"
+keys = ["ctrl-left"]
+
+[[bind]]
+command = "layout_mode.resize_right"
+keys = ["ctrl-right"]
+
+[[bind]]
+command = "layout_mode.resize_up"
+keys = ["ctrl-up"]
+
+[[bind]]
+command = "layout_mode.resize_down"
+keys = ["ctrl-down"]
+
+[[bind]]
+command = "layout_mode.even"
+keys = ["=", "shift-="]
+
+[[bind]]
+command = "layout_mode.save"
+keys = ["ctrl-s"]
+
+[[bind]]
+command = "layout_mode.remove"
+keys = ["delete"]
+
+[[bind]]
+command = "layout_mode.target"
+keys = ["tab"]
+
+[[bind]]
+command = "layout_mode.focus_pane_first"
+keys = ["ctrl-shift-1"]
+
+[[bind]]
+command = "layout_mode.focus_pane_second"
+keys = ["ctrl-shift-2"]
+
+[[bind]]
+command = "layout_mode.focus_pane_third"
+keys = ["ctrl-shift-3"]
+
+[[bind]]
+command = "layout_mode.focus_pane_fourth"
+keys = ["ctrl-shift-4"]
+
+[[bind]]
+command = "layout_mode.done"
+keys = ["escape"]
+
+[[bind]]
+command = "deleted.restore"
+keys = ["enter"]
+context = "RecentlyDeleted"
+
+[[bind]]
+command = "deleted.purge"
+keys = ["delete"]
+context = "RecentlyDeleted"

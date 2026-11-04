@@ -159,19 +159,19 @@ impl RenderOnce for CompareList {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         crate::assets::load_mono_fonts(cx);
         let t = tokens::current(cx).clone();
-        let shell = div()
+        let fill = || div().flex().flex_col().flex_1().min_w_0().min_h_0();
+        let shell = fill()
             .id(self.id)
-            .key_context(crate::file_list::list_context(true))
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_w_0()
-            .min_h_0()
+            .key_context(crate::file_list::LIST_CONTEXT)
             .bg(t.surfaces.card)
-            .text_size(t.typography.body)
-            .when_some(self.focus, |shell, focus| shell.track_focus(&focus));
+            .text_size(t.typography.body);
+        // The focused child carries `Compare`, so its keys beat the list's whatever the user binds.
+        let focused = fill()
+            .id("compare-focus")
+            .key_context("Compare")
+            .when_some(self.focus, |node, focus| node.track_focus(&focus));
         if let Some(text) = self.empty {
-            return shell.child(empty_view(&t, text));
+            return shell.child(focused.child(empty_view(&t, text)));
         }
         let rows = std::rc::Rc::new(Rows {
             rows: self.rows,
@@ -189,6 +189,6 @@ impl RenderOnce for CompareList {
         .row_height(t.rows.height)
         .label(self.label)
         .describe_rows(move |index| described.describe(index));
-        shell.child(list)
+        shell.child(focused.child(list))
     }
 }

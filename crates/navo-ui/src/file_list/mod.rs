@@ -14,6 +14,7 @@ mod lift;
 mod parts;
 mod press;
 mod resize;
+mod right_button;
 pub(crate) mod row;
 mod rows;
 mod sort;
@@ -39,14 +40,15 @@ use navo_fs::FsEntry;
 pub use action::{FileListAction, FilterEdit};
 pub use drop::{DropEvent, DropPayload, DropSpot, ListEdge};
 pub(crate) use git_keys::OpenGitMenu;
+pub(crate) use keys::CONTEXT as LIST_CONTEXT;
 pub use keys::bind_keys;
-pub(crate) use keys::context as list_context;
 pub(crate) use keys::{
     ClearFilter, CopyItems, CursorDown, CursorFirst, CursorLast, CursorUp, EditItem, MoveItems,
     MultiRename, NewFile, NewFolder, OpenRow, PageDown, PageUp, Paste, RecycleItems, Refresh,
     RenameItem, SwitchPane, UndoLast, ViewItem,
 };
 pub use parts::ListParts;
+pub use right_button::RightButton;
 pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
 pub use widths::UserWidths;
@@ -84,7 +86,7 @@ pub struct FileList {
     known_width: Option<KnownWidth>,
     user_widths: UserWidths,
     find_results: Option<bool>,
-    compare: bool,
+    right_button: RightButton,
 }
 
 type KnownWidth = Rc<Cell<Option<Pixels>>>;
@@ -104,14 +106,13 @@ impl FileList {
             known_width: None,
             user_widths: UserWidths::default(),
             find_results: None,
-            compare: false,
+            right_button: RightButton::default(),
         }
     }
 
-    /// Adds the `Compare` key context, whose Enter, Backspace and Esc win over the list's.
     #[must_use]
-    pub(crate) fn in_compare(mut self, on: bool) -> Self {
-        self.compare = on;
+    pub(crate) fn right_button(mut self, mode: RightButton) -> Self {
+        self.right_button = mode;
         self
     }
 
@@ -208,6 +209,7 @@ struct ListContext {
     parts: ListParts,
     widths: widths::ColumnWidths,
     find_results: Option<bool>,
+    right_button: RightButton,
     drag: drop::Wiring,
 }
 
@@ -357,7 +359,6 @@ impl RenderOnce for FileList {
         let wanted = (self.props.view.scroll, self.props.rows.len());
         let scroll = watch::follow_scroll(&state, wanted, row_height, cx);
         let lift = lift::lift_for(&state, (self.props.view.cursor, self.cover), row_height, cx);
-        let len = self.props.rows.len();
         let (parts, widths) = self.fit_columns(&state, window, cx);
         let ctx = Rc::new(ListContext {
             props: self.props,
@@ -369,6 +370,7 @@ impl RenderOnce for FileList {
             widths,
             drag: self.drag,
             find_results: self.find_results,
+            right_button: self.right_button,
         });
         let list = virtual_list(&ctx, &scroll, row_height);
         let watch = |state| watch::Watch { state, row_height };
@@ -388,7 +390,7 @@ impl RenderOnce for FileList {
         let area = drop::background(lasso::layer(area, &ctx, &t, cx), &ctx);
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
-            .key_context(keys::context(self.compare))
+            .key_context(keys::CONTEXT)
             .flex()
             .flex_col()
             .flex_1()
@@ -397,7 +399,7 @@ impl RenderOnce for FileList {
             .bg(t.surfaces.card)
             .text_size(t.typography.body)
             .when_some(ctx.props.filter.clone(), |list, text| {
-                list.child(row::filter_bar(&t, text, len))
+                list.child(row::filter_bar(&t, text, ctx.props.rows.len()))
             })
             .child(header::header(&t, ctx.props.sort, &ctx))
             .child(area)

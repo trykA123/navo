@@ -7,7 +7,7 @@ use super::git_page::AUTO as AUTO_TOOL;
 use super::git_values::DEFAULT_FETCH_MINUTES;
 use crate::app_menu::{QuickSettings, Setting};
 use crate::browser::{DropConfirm, SizeMode};
-use crate::file_list::{SortBy, SortKey};
+use crate::file_list::{RightButton, SortBy, SortKey};
 use crate::modifier_hints::HintsMode;
 use crate::tokens::{ColorTheme, Density, SyntaxTheme, ThemeChoice};
 
@@ -18,6 +18,7 @@ const SORT_ORDER: [SortBy; 4] = [SortBy::Name, SortBy::Size, SortBy::Date, SortB
 const COPY_ORDER: [CopyMode; 2] = [CopyMode::Auto, CopyMode::Standard];
 const DROP_CONFIRM_ORDER: [DropConfirm; 3] =
     [DropConfirm::Never, DropConfirm::Moves, DropConfirm::Always];
+const RIGHT_BUTTON_ORDER: [RightButton; 2] = [RightButton::TotalCommander, RightButton::Windows];
 const SIZE_ORDER: [SizeMode; 2] = [SizeMode::Apparent, SizeMode::OnDisk];
 const SHOWN: usize = 0;
 const HIDDEN: usize = 1;
@@ -297,6 +298,13 @@ impl Values {
     pub fn drop_confirm(&self) -> DropConfirm {
         DROP_CONFIRM_ORDER
             .get(self.pick(Field::DropConfirm))
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn right_button(&self) -> RightButton {
+        RIGHT_BUTTON_ORDER
+            .get(self.pick(Field::RightButton))
             .copied()
             .unwrap_or_default()
     }

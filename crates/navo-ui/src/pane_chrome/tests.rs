@@ -493,3 +493,22 @@ fn the_path_menu_opens_just_below_the_ellipsis(cx: &mut TestAppContext) {
 }
 
 mod markers;
+
+#[gpui_kit::test]
+fn target_keys_follow_the_keymap(cx: &mut TestAppContext) {
+    let keys = |cx: &mut TestAppContext| cx.update(|cx| super::target_keys(cx));
+    let set = |cx: &mut TestAppContext, text: &str| {
+        let keymap = crate::commands::Keymap::builtin()
+            .overlay(text)
+            .expect("keymap")
+            .keymap;
+        cx.update(|cx| crate::commands::set_active(cx, keymap));
+    };
+    set(cx, "[[bind]]\ncommand = \"files.copy\"\nkeys = [\"f3\"]\n");
+    assert_eq!(keys(cx).as_deref(), Some("F3/F6"));
+    set(
+        cx,
+        "[[bind]]\ncommand = \"files.copy\"\nkeys = []\n[[bind]]\ncommand = \"files.move\"\nkeys = []\n",
+    );
+    assert_eq!(keys(cx), None);
+}

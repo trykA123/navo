@@ -1,6 +1,6 @@
 use super::fields::{
     COLOR_THEMES, COPY_MODES, Choice, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec, HIDDEN,
-    HINTS, Look, S, SIZE_MODES, SORTS, THEMES, choice, spec,
+    HINTS, Look, RIGHT_BUTTONS, S, SIZE_MODES, SORTS, THEMES, choice, spec,
 };
 
 const TERMINAL_PROVIDERS: [Choice; 5] = [
@@ -14,7 +14,7 @@ const TERMINAL_PROVIDERS: [Choice; 5] = [
     choice("settings-terminal-provider-custom", "custom"),
 ];
 
-pub(super) const GENERAL: [FieldSpec; 30] = [
+pub(super) const GENERAL: [FieldSpec; 31] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "settings-theme-help"),
@@ -147,6 +147,11 @@ pub(super) const GENERAL: [FieldSpec; 30] = [
             "Select with a pattern marks matching folders too",
         ),
         Control::Toggle,
+    ),
+    spec(
+        (F::RightButton, S::Selection, "selection.right-button"),
+        ("settings-right-button", "settings-right-button-help"),
+        Control::Choices(&RIGHT_BUTTONS, Look::Segments),
     ),
     spec(
         (F::TerminalProvider, S::Terminal, "terminal.provider"),

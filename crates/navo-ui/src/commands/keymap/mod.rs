@@ -3,15 +3,22 @@ mod parse;
 mod shown;
 
 #[cfg(test)]
+mod guard_tests;
+#[cfg(test)]
 mod overlay_tests;
 #[cfg(test)]
 mod tests;
 
 use std::sync::OnceLock;
 
+use gpui_kit::Keystroke;
+
 use super::CommandSpec;
+use super::bind::with_shifted_digit_aliases;
 
 pub use overlay::{KeymapWarning, Overlaid, UserKeymapError};
+#[cfg(test)]
+pub(crate) use parse::also_in;
 pub use parse::{KeymapError, normal as normal_key};
 pub use shown::shown;
 
@@ -59,6 +66,35 @@ impl Keymap {
             .iter()
             .filter(move |bind| bind.spec.name == command)
             .flat_map(|bind| bind.keys.iter().map(String::as_str))
+    }
+
+    /// Keys of `command` in one context, after the user overlay.
+    pub fn keys_in<'a>(
+        &'a self,
+        command: &'a str,
+        context: &'a str,
+    ) -> impl Iterator<Item = &'a str> {
+        self.binds
+            .iter()
+            .filter(move |bind| bind.spec.name == command && bind.context == context)
+            .flat_map(|bind| bind.keys.iter().map(String::as_str))
+    }
+
+    /// True when `stroke` is bound to `command` in `context`, with the Linux shifted-digit aliases.
+    #[must_use]
+    pub fn has_key_in(&self, command: &str, context: &str, stroke: &Keystroke) -> bool {
+        let wanted = stroke.unparse();
+        self.keys_in(command, context).any(|bound| {
+            with_shifted_digit_aliases(bound)
+                .iter()
+                .any(|key| parse::normal(key).is_some_and(|key| key == wanted))
+        })
+    }
+
+    /// The first key of `command` in `context`, formatted for display.
+    #[must_use]
+    pub fn shown_in(&self, command: &str, context: &str) -> Option<String> {
+        self.keys_in(command, context).find_map(shown)
     }
 
     #[must_use]

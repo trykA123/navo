@@ -56,7 +56,11 @@ rename-summary = { $changes } to rename · { $unchanged } unchanged · { $proble
    *[other] { $problems } problems
 }
 rename-summary-excluded = { $count } excluded
-rename-hints = Enter rename · Esc close · Ctrl+Space tokens · Alt+↓ next problem · Ctrl+S save preset
+rename-hint-rename = { $key } rename
+rename-hint-close = { $key } close
+rename-hint-tokens = { $key } tokens
+rename-hint-next-problem = { $key } next problem
+rename-hint-save-preset = { $key } save preset
 rename-cancel = Cancel
 rename-run = Rename
 rename-error-token = Unknown token { $token } at position { $position }

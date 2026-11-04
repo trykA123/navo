@@ -23,6 +23,7 @@ gpui_kit::actions!(
         PreviewWorkspace9,
         CancelWorkspacePreview,
         NewWorkspace,
+        RenameWorkspaceCard,
         SaveWorkspace,
         MoveWorkspaceLeft,
         MoveWorkspaceRight

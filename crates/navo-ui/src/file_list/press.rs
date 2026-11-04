@@ -7,8 +7,9 @@ use gpui_kit::{
 };
 use navo_core::{Command, CursorMove, SpanMode};
 
+use super::lasso::THRESHOLD;
 use super::row::check_column;
-use super::{FileListAction, ListContext, row_index, row_number};
+use super::{FileListAction, ListContext, RightButton, row_index, row_number};
 use crate::git::GitAction;
 use crate::tokens;
 
@@ -20,7 +21,10 @@ struct Held {
     row: u64,
     last: u64,
     mode: SpanMode,
+    button: RightButton,
     dragged: bool,
+    at: Point<Pixels>,
+    extended: bool,
 }
 
 #[derive(Default)]
@@ -30,14 +34,21 @@ pub(super) struct Press {
 }
 
 impl Press {
-    fn start(&mut self, row: u64, mode: SpanMode) -> u64 {
+    fn start(
+        &mut self,
+        (row, at, extended): (u64, Point<Pixels>, bool),
+        (mode, button): (SpanMode, RightButton),
+    ) -> u64 {
         self.count += 1;
         self.held = Some(Held {
             press: self.count,
             row,
             last: row,
             mode,
+            button,
             dragged: false,
+            at,
+            extended,
         });
         self.count
     }
@@ -50,16 +61,22 @@ impl Press {
         Some(held.row)
     }
 
-    fn drag(&mut self, row: u64) -> Option<Held> {
-        let held = self.held.as_mut().filter(|held| held.last != row)?;
+    fn drag(&mut self, row: u64, at: Point<Pixels>) -> Option<Held> {
+        let held = self.held.as_mut()?;
+        let slid = held.button == RightButton::Windows
+            && !held.dragged
+            && (at - held.at).magnitude() > THRESHOLD;
+        if held.last == row && !slid {
+            return None;
+        }
         let before = *held;
         held.dragged = true;
         held.last = row;
         Some(before)
     }
 
-    fn release(&mut self) -> bool {
-        self.held.take().is_some_and(|held| !held.dragged)
+    fn take(&mut self) -> Option<Held> {
+        self.held.take()
     }
 }
 
@@ -72,9 +89,15 @@ pub(super) fn drag_over(
         if event.pressed_button != Some(MouseButton::Right) {
             return;
         }
-        let Some(held) = ctx.state.update(cx, |state, _| state.press.drag(row)) else {
+        let Some(held) = ctx
+            .state
+            .update(cx, |state, _| state.press.drag(row, event.position))
+        else {
             return;
         };
+        if held.button == RightButton::Windows {
+            return;
+        }
         if !held.dragged {
             ctx.act(FileListAction::MenuCancel, window, cx);
             let to = CursorMove::Row(held.row);
@@ -102,10 +125,10 @@ pub(super) fn background_down(
 pub(super) fn release_on(root: Stateful<Div>, ctx: &Rc<ListContext>) -> Stateful<Div> {
     let (inside, outside) = (ctx.clone(), ctx.clone());
     root.on_mouse_up(MouseButton::Right, move |_, window, cx| {
-        inside.right_up(window, cx);
+        inside.right_up(true, window, cx);
     })
     .on_mouse_up_out(MouseButton::Right, move |_, window, cx| {
-        outside.right_up(window, cx);
+        outside.right_up(false, window, cx);
     })
 }
 
@@ -122,15 +145,20 @@ impl ListContext {
         } else {
             SpanMode::Mark
         };
-        let press = self
-            .state
-            .update(cx, |state, _| state.press.start(row, mode));
+        let press = self.state.update(cx, |state, _| {
+            state
+                .press
+                .start((row, at, extended), (mode, self.right_button))
+        });
         let adds_cursor = self.adds_pressed_row(row);
         let prefetch = FileListAction::MenuPrefetch {
             adds_cursor,
             extended,
         };
         self.act(prefetch, window, cx);
+        if self.right_button == RightButton::Windows {
+            return;
+        }
         let ctx = self.clone();
         window
             .spawn(cx, async move |cx| {
@@ -149,6 +177,15 @@ impl ListContext {
         let Some(row) = self.state.update(cx, |state, _| state.press.fire(press)) else {
             return;
         };
+        self.open_item_menu((row, at, extended), window, cx);
+    }
+
+    fn open_item_menu(
+        &self,
+        (row, at, extended): (u64, Point<Pixels>, bool),
+        window: &mut Window,
+        cx: &mut App,
+    ) {
         let to = CursorMove::Row(row);
         self.send(Command::PaneCursorMove { to }, window, cx);
         if self.adds_pressed_row(row) {
@@ -157,8 +194,17 @@ impl ListContext {
         self.act(FileListAction::ContextMenu { at, extended }, window, cx);
     }
 
-    fn right_up(&self, window: &mut Window, cx: &mut App) {
-        if self.state.update(cx, |state, _| state.press.release()) {
+    fn right_up(&self, inside: bool, window: &mut Window, cx: &mut App) {
+        let Some(held) = self.state.update(cx, |state, _| state.press.take()) else {
+            return;
+        };
+        if held.button == RightButton::Windows {
+            if inside && !held.dragged {
+                self.open_item_menu((held.row, held.at, held.extended), window, cx);
+            } else {
+                self.act(FileListAction::MenuCancel, window, cx);
+            }
+        } else if !held.dragged {
             self.act(FileListAction::MenuCancel, window, cx);
             self.send(Command::SelectionToggle, window, cx);
         }

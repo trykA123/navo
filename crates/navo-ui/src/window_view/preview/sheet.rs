@@ -8,6 +8,7 @@ use super::nest::breadcrumb;
 use super::stats::StatsLook;
 use super::summary::{Picks, Sections, summary};
 use super::view::view_button;
+use crate::commands::active;
 use crate::prelude::*;
 use crate::side_sheet::{SheetFrame, SideSheet, on_resize_keys};
 use crate::tokens::{self, Theme};
@@ -86,6 +87,7 @@ impl NavoWindow {
         let is_folder = matches!(shown, Some(Shown::Folder(_)));
         let is_browsing = self.preview.is_browsing(window, cx);
         let body = self.preview_body(&t, BodyLook { frame, is_browsing }, cx);
+        let close_key = self.close_key(is_browsing, cx);
         let sheet = SideSheet::new("preview-sheet", &self.preview.sheet, frame)
             .label("Preview")
             .header(title_view(
@@ -94,7 +96,7 @@ impl NavoWindow {
                 is_browsing,
                 is_folder.then(|| view_button(cx.weak_entity()).into_any_element()),
             ))
-            .close("escape", move |window, cx| {
+            .close(close_key.clone().unwrap_or_default(), move |window, cx| {
                 let _ = this.update(cx, |view, cx| {
                     view.close_preview(cx);
                     view.focus_core_pane(window, cx);
@@ -103,7 +105,7 @@ impl NavoWindow {
             })
             .body(self.browse_frame(body, cx))
             .accent_ring(is_browsing);
-        let sheet = self.footer(sheet, is_browsing, is_folder);
+        let sheet = self.footer(sheet, is_browsing, close_key);
         Some(
             div()
                 .absolute()
@@ -116,7 +118,28 @@ impl NavoWindow {
         )
     }
 
-    fn footer(&self, sheet: SideSheet, is_browsing: bool, is_folder: bool) -> SideSheet {
+    /// The key that closes the preview from where focus is, as bound now; `None` when unbound.
+    pub(in crate::window_view) fn close_key(
+        &self,
+        is_browsing: bool,
+        cx: &App,
+    ) -> Option<SharedString> {
+        let keymap = active(cx);
+        let in_body = is_browsing
+            && matches!(self.preview.shown, Some(Shown::File(ref f)) if f.body.is_some());
+        let back = in_body.then(|| keymap.keys_in("viewer.back", VIEWER).next());
+        back.flatten()
+            .or_else(|| keymap.keys_in("preview.leave", "PreviewBrowse").next())
+            .map(|key| key.to_owned().into())
+    }
+
+    fn footer(
+        &self,
+        sheet: SideSheet,
+        is_browsing: bool,
+        close_key: Option<SharedString>,
+    ) -> SideSheet {
+        let is_folder = matches!(self.preview.shown, Some(Shown::Folder(_)));
         let is_nested = !self.preview.trail.is_empty();
         let sheet = match (is_browsing, is_folder) {
             (true, true) => sheet
@@ -131,7 +154,10 @@ impl NavoWindow {
             (true, false, true) => sheet.hint(&["ctrl-r"], "Recount"),
             _ => sheet,
         };
-        let sheet = sheet.hint(&["escape"], "Close");
+        let sheet = match &close_key {
+            Some(key) => sheet.hint(&[key.as_ref()], "Close"),
+            None => sheet,
+        };
         let note = self.preview.view.note().map(|note| note.to_string());
         let summary = self.preview.folder().and_then(|f| f.marks.summary());
         match note.or(summary) {

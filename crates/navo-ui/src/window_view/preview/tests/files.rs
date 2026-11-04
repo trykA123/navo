@@ -500,3 +500,40 @@ fn one_escape_closes_every_file_kind_preview_after_a_viewer_closes(cx: &mut Test
         assert!(body_has_focus(cx, rig), "{name} focus after viewer");
     });
 }
+
+fn rebind_back(cx: &mut TestAppContext, key: &str) {
+    let text =
+        format!("[[bind]]\ncommand = \"viewer.back\"\nkeys = [\"{key}\"]\ncontext = \"Viewer\"\n");
+    let keymap = crate::commands::Keymap::builtin()
+        .overlay(&text)
+        .expect("keymap")
+        .keymap;
+    cx.update(|cx| crate::window_view::rebind_app_keys(keymap, cx));
+}
+
+fn close_key(cx: &mut TestAppContext, rig: &Rig, is_browsing: bool) -> Option<String> {
+    let view = rig.view.clone();
+    cx.update(|cx| {
+        view.read(cx)
+            .close_key(is_browsing, cx)
+            .map(|key| key.to_string())
+    })
+}
+
+#[gpui_kit::test]
+fn a_user_key_for_back_closes_the_preview_from_a_file_body(cx: &mut TestAppContext) {
+    let rig = open_samples(cx);
+    rig.open(cx);
+    rig.rest(cx);
+    assert!(rig.wait_until(cx, has_body));
+    rig.key(cx, "ctrl-shift-q");
+    assert!(body_has_focus(cx, &rig));
+    assert_eq!(close_key(cx, &rig, true).as_deref(), Some("escape"));
+    rebind_back(cx, "ctrl-alt-j");
+    assert_eq!(close_key(cx, &rig, true).as_deref(), Some("ctrl-alt-j"));
+    assert_eq!(close_key(cx, &rig, false).as_deref(), Some("escape"));
+    rig.key(cx, "ctrl-alt-j");
+    assert!(!is_browsing(cx, &rig));
+    assert!(rig.list_has_focus(cx));
+    assert!(!rig.read(cx, |view| view.preview.is_open()));
+}

@@ -55,6 +55,14 @@ fn is_in(bind: &Bind, namespace: Option<&str>) -> bool {
     })
 }
 
+/// The context predicate a bind is registered with.
+pub(crate) fn predicate_of(bind: &Bind) -> &str {
+    match bind.context.as_str() {
+        GLOBAL if bind.spec.name == "clipboard.open" => "!Viewer",
+        context => context,
+    }
+}
+
 fn bindings_of(bind: &Bind, cx: &App, expand: fn(&str) -> Vec<String>) -> Vec<KeyBinding> {
     let Some(action) = bind
         .spec
@@ -63,11 +71,7 @@ fn bindings_of(bind: &Bind, cx: &App, expand: fn(&str) -> Vec<String>) -> Vec<Ke
     else {
         return Vec::new();
     };
-    let context = match bind.context.as_str() {
-        GLOBAL if bind.spec.name == "clipboard.open" => "!Viewer",
-        context => context,
-    };
-    let predicate = match context {
+    let predicate = match predicate_of(bind) {
         GLOBAL => None,
         context => match KeyBindingContextPredicate::parse(context) {
             Ok(predicate) => Some(Rc::new(predicate)),
@@ -89,19 +93,7 @@ fn bindings_of(bind: &Bind, cx: &App, expand: fn(&str) -> Vec<String>) -> Vec<Ke
 const SHIFTED_DIGITS: [(&str, usize); 5] = [("!", 1), ("@", 2), ("\"", 2), ("#", 3), ("$", 4)];
 
 #[cfg(target_os = "linux")]
-pub(crate) fn shifted_digit(symbol: &str) -> Option<usize> {
-    SHIFTED_DIGITS
-        .iter()
-        .find_map(|(shifted, digit)| (*shifted == symbol).then_some(*digit))
-}
-
-#[cfg(not(target_os = "linux"))]
-pub(crate) fn shifted_digit(_symbol: &str) -> Option<usize> {
-    None
-}
-
-#[cfg(target_os = "linux")]
-fn with_shifted_digit_aliases(key: &str) -> Vec<String> {
+pub(super) fn with_shifted_digit_aliases(key: &str) -> Vec<String> {
     let digit = key
         .strip_prefix("ctrl-shift-")
         .and_then(|digit| digit.parse::<usize>().ok());
@@ -113,7 +105,7 @@ fn with_shifted_digit_aliases(key: &str) -> Vec<String> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn with_shifted_digit_aliases(key: &str) -> Vec<String> {
+pub(super) fn with_shifted_digit_aliases(key: &str) -> Vec<String> {
     vec![key.to_owned()]
 }
 

@@ -73,7 +73,7 @@ impl NavoWindow {
         let header = marked_header(&t, pane.get(), marks)
             .children(tabs)
             .when(!shows_tabs, |header| header.child(div().flex_1()))
-            .children(marker_tag(&t, pane.get(), marks));
+            .children(marker_tag(&t, pane.get(), marks, cx));
         Some(header.child(drive))
     }
 }

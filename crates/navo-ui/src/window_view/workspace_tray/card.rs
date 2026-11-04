@@ -3,12 +3,17 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::Selectable;
 use gpui_kit::component::button::{Button as KitButton, ButtonVariants};
-use gpui_kit::{FocusHandle, KeyDownEvent, RenderOnce, Role};
+use gpui_kit::{FocusHandle, RenderOnce, Role};
 
+use super::super::workspace_keys::{NewWorkspace, RenameWorkspaceCard};
 use super::foot::{Foot, card_foot, run as click};
+use crate::commands::active;
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName, Kbd, icon};
 use crate::tokens::{self, Theme};
+
+/// Key context of a focused workspace card.
+const CONTEXT: &str = "WorkspaceTray";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayAction {
@@ -207,21 +212,23 @@ fn workspace_card(
         count,
     };
     let rename = act.clone();
+    let create = act.clone();
     card_frame(t, ("workspace-card", n), card.preview)
         .test_support()
+        .key_context(CONTEXT)
         .when_some(card.focus.as_ref(), |frame, focus| frame.track_focus(focus))
-        .on_key_down(move |event: &KeyDownEvent, window, cx| {
-            if event.keystroke.key == "f2" && !event.keystroke.modifiers.modified() {
-                cx.stop_propagation();
-                rename(&TrayAction::Rename(n), window, cx);
-            }
+        .on_action(move |_: &RenameWorkspaceCard, window, cx| {
+            rename(&TrayAction::Rename(n), window, cx);
+        })
+        .on_action(move |_: &NewWorkspace, window, cx| {
+            create(&TrayAction::New, window, cx);
         })
         .child(main)
         .child(card_foot(t, &foot, act))
         .into_any_element()
 }
 
-fn new_card(t: &Theme, is_previewed: bool, act: &OnTrayAction) -> AnyElement {
+fn new_card(t: &Theme, is_previewed: bool, act: &OnTrayAction, key: Option<&str>) -> AnyElement {
     let label = navo_l10n::tr("workspace-new-from-layout");
     card_frame(t, "workspace-new", is_previewed)
         .test_support()
@@ -245,7 +252,7 @@ fn new_card(t: &Theme, is_previewed: bool, act: &OnTrayAction) -> AnyElement {
                         .size_full()
                         .child(icon(IconName::Plus, t.spacing.icon, t.colors.muted))
                         .child(label)
-                        .children(Kbd::new("workspace-new-key", "alt-n")),
+                        .children(key.and_then(|key| Kbd::new("workspace-new-key", key))),
                 ),
         )
         .into_any_element()
@@ -290,6 +297,7 @@ impl RenderOnce for WorkspaceTray {
         let t = tokens::current(cx).clone();
         let count = self.cards.len();
         let act = self.on_action;
+        let new_key = active(cx).keys_in("workspace.new", CONTEXT).next();
         let cards = self
             .cards
             .into_iter()
@@ -328,7 +336,7 @@ impl RenderOnce for WorkspaceTray {
                     .gap(t.spacing.md)
                     .overflow_x_scroll()
                     .children(cards)
-                    .child(new_card(&t, self.new_preview, &act)),
+                    .child(new_card(&t, self.new_preview, &act, new_key)),
             )
     }
 }

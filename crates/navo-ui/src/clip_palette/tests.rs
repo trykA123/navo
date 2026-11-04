@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Context, Entity, IntoElement, ParentElement, Render, Styled,
-    TestAppContext, Window, div, px,
+    AnyWindowHandle, AppContext as _, Context, ElementId, Entity, IntoElement, ParentElement,
+    Render, Styled, TestAppContext, Window, div, px,
 };
 use navo_core::Location;
 
@@ -394,6 +394,15 @@ impl Opened {
     pub fn wake(&self, cx: &mut TestAppContext) {
         self.palette.update(cx, |palette, cx| palette.wake(cx));
         self.settle(cx);
+    }
+
+    /// The accessible label of the element with `id`.
+    pub fn label_of(&self, id: impl Into<ElementId>, cx: &mut TestAppContext) -> Option<String> {
+        let id = id.into();
+        cx.update_window(self.window, |_, window, _| {
+            window.find(id).label().map(str::to_owned)
+        })
+        .expect("window")
     }
 
     pub fn press(&self, key: &str, cx: &mut TestAppContext) {

@@ -192,11 +192,20 @@ fn markdown_and_preview() -> impl Strategy<Value = (MarkdownViewer, PreviewViewe
     (markdown, preview)
 }
 
-pub(super) fn settings() -> impl Strategy<Value = Settings> {
-    let selection = any::<[bool; 2]>().prop_map(|[space, patterns]| SelectionSettings {
+fn selection() -> impl Strategy<Value = SelectionSettings> {
+    (any::<[bool; 2]>(), any::<bool>()).prop_map(|([space, patterns], windows)| SelectionSettings {
         space_measures_folders: space,
         patterns_select_folders: patterns,
-    });
+        right_button: if windows {
+            RightButton::Windows
+        } else {
+            RightButton::TotalCommander
+        },
+    })
+}
+
+pub(super) fn settings() -> impl Strategy<Value = Settings> {
+    let selection = selection();
     let terminal =
         (TEXT, option::of(TEXT)).prop_map(|(provider, command)| Terminal { provider, command });
     let experimental = btree_map(TEXT, any::<bool>(), 0..4);

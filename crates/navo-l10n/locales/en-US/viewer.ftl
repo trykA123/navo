@@ -100,7 +100,8 @@ elf-noise-shown = { $count } shown
 elf-column-share = Share
 
 elf-hidden = { $count } hidden (zero-size, ABS)
-elf-hidden-note = Hidden by the zero-size filter; Alt+H shows it.
+elf-hidden-note = Hidden by the zero-size filter; { $key } shows it.
+elf-hidden-note-unbound = Hidden by the zero-size filter.
 viewer-map-not-read = Not read: { $names }
 viewer-map-not-read-more = Not read: { $names } +{ $count } more
 viewer-map-no-sizes = This map lists no symbol sizes
@@ -140,5 +141,6 @@ viewer-find-total = { $count ->
 viewer-guide-title = Navo user guide
 viewer-guide-read-only = The user guide is read-only.
 viewer-guide-formatted-only = The user guide opens in the formatted view only.
-guide-hint = New to Navo? Shift+F1 opens the user guide.
+guide-hint = New to Navo? { $key } opens the user guide.
+guide-hint-unbound = New to Navo? The user guide is in the Help menu.
 viewer-markdown-heading-missing = Not found: { $name }

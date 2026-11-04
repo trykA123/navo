@@ -11,7 +11,7 @@ use gpui_kit::base::{Scrollbar, TestSupportExt};
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnchoredPositionMode, AnyElement, App, Bounds, ClickEvent, Context, Div, Entity, EventEmitter,
+    AnchoredPositionMode, AnyElement, App, Bounds, ClickEvent, Context, Entity, EventEmitter,
     FocusHandle, Focusable, InteractiveElement, IntoElement, Modifiers, ParentElement, Pixels,
     Render, Role, ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Subscription,
     WeakEntity, Window, anchored, deferred, div, px,
@@ -314,9 +314,10 @@ impl CommandCenter {
         has_query.then(|| footer::empty_message(&paint.theme, &query, is_path).into_any_element())
     }
 
-    fn footer(&self, t: &Theme, query: &str) -> Div {
+    fn footer(&self, t: &Theme, query: &str) -> AnyElement {
         if self.props.mode == Mode::Content {
-            return footer::content_footer(t, self.props.error.clone());
+            let keys = self.props.key_hints.as_ref();
+            return footer::content_footer(t, self.props.error.clone(), keys).into_any_element();
         }
         let props = &self.props;
         let argument = props.argument.as_ref().map(|argument| argument.kind);
@@ -333,6 +334,7 @@ impl CommandCenter {
             count: (is_counted && !props.rows.is_empty()).then(|| result_count(&props.rows)),
             hints: keys.map(|keys| (hints(selected, argument), keys)),
         })
+        .into_any_element()
     }
 }
 

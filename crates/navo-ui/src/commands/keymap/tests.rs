@@ -1,4 +1,4 @@
-use super::{BUILTIN, Keymap, KeymapError, shown};
+use super::{BUILTIN, Keymap, KeymapError, KeymapWarning, shown};
 
 fn one(command: &str, keys: &str, context: Option<&str>) -> String {
     let context = context.map_or_else(String::new, |context| format!("context = \"{context}\"\n"));
@@ -13,13 +13,13 @@ fn error_of(text: &str) -> Option<KeymapError> {
 fn the_built_in_keymap_parses_and_validates() {
     let parsed = Keymap::parse(BUILTIN);
     assert_eq!(parsed.as_ref().err(), None);
-    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(497));
+    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(519));
 }
 
 #[test]
 fn the_built_in_keymap_is_parsed_once() {
     assert!(std::ptr::eq(Keymap::builtin(), Keymap::builtin()));
-    assert_eq!(Keymap::builtin().binds().len(), 497);
+    assert_eq!(Keymap::builtin().binds().len(), 519);
 }
 
 #[test]
@@ -211,9 +211,12 @@ fn the_view_menu_and_drawer_keys_sit_in_the_viewer_context() {
 }
 
 #[test]
-fn escape_steps_back_in_the_image_view_and_memory_drawers_use_the_shared_keys() {
-    let back = placed("viewer.back");
-    assert!(back.contains(&("Image".to_owned(), vec!["escape".to_owned()])));
+fn escape_is_one_back_key_for_the_viewer_and_memory_drawers_use_the_shared_keys() {
+    assert_eq!(
+        placed("viewer.back"),
+        [("Viewer".to_owned(), vec!["escape".to_owned()])]
+    );
+    assert!(placed("viewer.close").is_empty());
     assert!(placed("memory.toggle_navigator").is_empty());
     assert!(placed("memory.toggle_inspector").is_empty());
     assert_eq!(
@@ -298,4 +301,83 @@ fn visible_compare_binds_build_gpui_key_bindings(cx: &mut gpui_kit::TestAppConte
     let keymap = Keymap::parse(BUILTIN).expect("keymap");
     let built = cx.update(|cx| crate::commands::key_bindings(&keymap, cx, Some("compare")));
     assert_eq!(built.len(), 12);
+}
+
+mod lookups {
+    use gpui_kit::Keystroke;
+
+    use super::{Keymap, one};
+
+    fn keymap() -> Keymap {
+        let text = one("files.open", "\"enter\"", Some("FileList"))
+            + &one("viewer.back", "\"escape\"", Some("Viewer"))
+            + &one("files.open_parent", "\"ctrl-shift-3\"", Some("FileList"));
+        Keymap::parse(&text).expect("keymap")
+    }
+
+    fn stroke(text: &str) -> Keystroke {
+        Keystroke::parse(text).expect("stroke")
+    }
+
+    #[test]
+    fn a_key_is_found_only_in_its_own_context() {
+        let keymap = keymap();
+        assert_eq!(
+            keymap.keys_in("viewer.back", "Viewer").collect::<Vec<_>>(),
+            ["escape"]
+        );
+        assert_eq!(keymap.keys_in("viewer.back", "FileList").count(), 0);
+        assert!(!keymap.has_key_in("viewer.back", "FileList", &stroke("escape")));
+    }
+
+    #[test]
+    fn a_user_override_replaces_the_built_in_key() {
+        let overlaid = keymap()
+            .overlay(&one("viewer.back", "\"ctrl-b\"", Some("Viewer")))
+            .expect("overlay");
+        let keys: Vec<_> = overlaid.keymap.keys_in("viewer.back", "Viewer").collect();
+        assert_eq!(keys, ["ctrl-b"]);
+        assert_eq!(
+            overlaid.keymap.shown_in("viewer.back", "Viewer").as_deref(),
+            Some("Ctrl+B")
+        );
+    }
+
+    #[test]
+    fn has_key_in_matches_modifiers() {
+        let keymap = keymap();
+        assert!(keymap.has_key_in("files.open", "FileList", &stroke("enter")));
+        assert!(!keymap.has_key_in("files.open", "FileList", &stroke("ctrl-enter")));
+        assert!(keymap.has_key_in("files.open_parent", "FileList", &stroke("ctrl-shift-3")));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn has_key_in_matches_a_shifted_digit_symbol_on_linux() {
+        assert!(keymap().has_key_in("files.open_parent", "FileList", &stroke("ctrl-#")));
+    }
+
+    #[test]
+    fn shown_in_of_an_unbound_command_is_none() {
+        assert_eq!(keymap().shown_in("files.open", "Viewer"), None);
+        assert_eq!(keymap().shown_in("nope", "FileList"), None);
+    }
+}
+
+#[test]
+fn a_bare_digit_for_a_layout_verb_warns_and_stays_in_the_keymap() {
+    let text = one("layout_mode.split_right", "\"1\", \"alt-1\"", None);
+    let result = Keymap::builtin().overlay(&text).expect("keymap");
+    let keys: Vec<_> = result
+        .keymap
+        .keys_in("layout_mode.split_right", "LayoutMode")
+        .collect();
+    assert_eq!(keys, ["1", "alt-1"]);
+    let command = "layout_mode.split_right".to_owned();
+    let fixed = KeymapWarning::Fixed {
+        line: 1,
+        key: "1".to_owned(),
+        command,
+    };
+    assert_eq!(result.warnings, [fixed]);
 }

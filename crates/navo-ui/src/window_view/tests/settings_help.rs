@@ -115,3 +115,26 @@ fn the_first_start_notice_shows_once_per_profile(cx: &mut TestAppContext) {
         assert_eq!(notice.as_deref(), expected_text);
     }
 }
+
+#[gpui_kit::test]
+fn the_first_start_notice_shows_the_user_key_or_none(cx: &mut TestAppContext) {
+    let cases = [
+        ("[\"f8\"]", "New to Navo? F8 opens the user guide."),
+        ("[]", "New to Navo? The user guide is in the Help menu."),
+    ];
+    for (keys, expected) in cases {
+        let text = format!("[[bind]]\ncommand = \"help.user_guide\"\nkeys = {keys}\n");
+        let keymap = crate::commands::Keymap::builtin()
+            .overlay(&text)
+            .expect("keymap")
+            .keymap;
+        cx.update(|cx| crate::commands::set_active(cx, keymap));
+        let fs = fake();
+        let mut options = options_for(fs.clone(), two_panes(&fs));
+        options.settings.take_guide_hint = Arc::new(|| true);
+        let (_, view) = open_options(cx, options);
+        cx.run_until_parked();
+        let notice = view.read_with(cx, |view, _| view.status_notice().map(|n| n.text));
+        assert_eq!(notice.as_deref(), Some(expected));
+    }
+}

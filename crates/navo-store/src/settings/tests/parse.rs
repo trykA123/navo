@@ -201,6 +201,25 @@ fn every_drop_confirm_value_parses_and_round_trips() {
 }
 
 #[test]
+fn a_missing_right_button_key_gives_total_commander() {
+    let settings = parsed("[selection]\nspace-measures-folders = false\n");
+    assert_eq!(settings.selection.right_button, RightButton::TotalCommander);
+}
+
+#[test]
+fn every_right_button_value_parses_and_round_trips() {
+    for (text, value) in [
+        ("total-commander", RightButton::TotalCommander),
+        ("windows", RightButton::Windows),
+    ] {
+        let file = format!("[selection]\nright-button = \"{text}\"\n");
+        let settings = parsed(&file);
+        assert_eq!(settings.selection.right_button, value);
+        assert_eq!(parsed(&to_toml(&settings)), settings);
+    }
+}
+
+#[test]
 fn the_legacy_show_hidden_key_is_ignored_quietly() {
     let old = "[files]\nshow-hidden = false\n\n[editor]\npath = \"code\"\n";
     let (settings, unknown) = parse(old).unwrap();

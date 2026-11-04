@@ -9,10 +9,12 @@ use navo_l10n::t;
 
 use super::NavoWindow;
 use crate::browser::{RetainedHooks, RetainedRow};
+use crate::commands::active;
 use crate::prelude::*;
 use crate::primitives::ListScroll;
 use crate::recently_deleted::{
-    Event, MAX_ROWS, Model, PAGE_ROWS, Phase, RecentlyDeletedBody, SheetParts, sheet, summary,
+    CONTEXT, Event, MAX_ROWS, Model, PAGE_ROWS, Phase, RecentlyDeletedBody, SheetParts, sheet,
+    summary,
 };
 use crate::side_sheet::SheetState;
 use crate::tokens;
@@ -262,6 +264,7 @@ impl NavoWindow {
             let _ = weak.update(cx, |view, cx| view.recent_event(event, window, cx));
         });
         let model = &self.recent.model;
+        let keys = active(cx);
         let parts = SheetParts {
             subtitle: if model.is_empty() {
                 SharedString::default()
@@ -270,6 +273,14 @@ impl NavoWindow {
             },
             status: self.recent.status.clone(),
             has_rows: !model.is_empty(),
+            restore_key: keys
+                .keys_in("deleted.restore", CONTEXT)
+                .next()
+                .map(str::to_owned),
+            purge_key: keys
+                .keys_in("deleted.purge", CONTEXT)
+                .next()
+                .map(str::to_owned),
         };
         Some(
             div()

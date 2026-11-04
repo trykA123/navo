@@ -67,7 +67,9 @@ fn close_button(
     on_close: &CloseHandler,
 ) -> impl IntoElement + use<> {
     let on_close: CloseHandler = on_close.clone();
-    let kbd = Kbd::new("side-sheet-close-key", key);
+    let kbd = (!key.is_empty())
+        .then(|| Kbd::new("side-sheet-close-key", key))
+        .flatten();
     let shortcut = kbd.as_ref().map(Kbd::text);
     let hover = (t.surfaces.field, t.colors.text);
     div()

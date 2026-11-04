@@ -12,7 +12,7 @@ use crate::prelude::*;
 use crate::primitives::{RowSemantics, VirtualList};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::{
-    CloseViewer, FindOnEnter, GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ViewerBody as _,
+    Back, FindOnEnter, GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp, ViewerBody as _,
 };
 
 const CHROME_ROWS: f32 = 6.;
@@ -191,7 +191,7 @@ impl ArchiveView {
             .on_action(cx.listener(|view, _: &FindOnEnter, window, cx| {
                 view.open_cursor(window, cx);
             }))
-            .on_action(cx.listener(|view, _: &CloseViewer, window, cx| view.back(window, cx)))
+            .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
             .on_key_down(cx.listener(|view, event: &KeyDownEvent, _, cx| {
                 view.type_key(event, cx);
             }))

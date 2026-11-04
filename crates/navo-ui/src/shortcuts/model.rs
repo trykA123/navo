@@ -1,6 +1,6 @@
 use navo_l10n::tr;
 
-use crate::commands::{CommandSpec, Keymap, all, normal_key, shown};
+use crate::commands::{CommandSpec, Keymap, all, is_shown_key, normal_key, shown};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
@@ -20,7 +20,11 @@ pub fn rows(keymap: &Keymap) -> Vec<Row> {
     all()
         .map(|spec| Row {
             spec,
-            keys: distinct(keymap.keys_of(spec.name)),
+            keys: distinct(
+                keymap
+                    .keys_of(spec.name)
+                    .filter(|key| is_shown_key(spec.name, key)),
+            ),
             is_changed: keymap.is_changed(spec.name),
         })
         .collect()

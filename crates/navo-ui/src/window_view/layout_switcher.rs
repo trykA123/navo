@@ -230,6 +230,7 @@ impl RenderOnce for LayoutSwitcher {
             .child(super::layout_mode::key_bar(
                 t,
                 self.focused >= Tiles::builtin().len(),
+                crate::commands::active(cx),
             ))
     }
 }
@@ -275,7 +276,7 @@ impl NavoWindow {
         cx.notify();
     }
 
-    fn switch_layout(
+    pub(super) fn switch_layout(
         &mut self,
         action: LayoutSwitcherAction,
         window: &mut Window,
@@ -323,7 +324,6 @@ impl NavoWindow {
         cx.stop_propagation();
         let key = &event.keystroke;
         let action = match key.key.as_str() {
-            "escape" => LayoutSwitcherAction::Close,
             _ if key.modifiers.modified() => return,
             "left" | "up" => LayoutSwitcherAction::Move(-1),
             "right" | "down" => LayoutSwitcherAction::Move(1),

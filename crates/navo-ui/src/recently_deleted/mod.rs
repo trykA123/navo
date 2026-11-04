@@ -20,6 +20,11 @@ use crate::primitives::{ListScroll, RowSemantics, VirtualList};
 use crate::side_sheet::{SheetFrame, SheetState, SideSheet};
 use crate::tokens;
 
+gpui_kit::actions!(navo_window, [RestoreDeleted, PurgeDeleted]);
+
+/// Key context of the Recently deleted sheet.
+pub const CONTEXT: &str = "RecentlyDeleted";
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Event {
     Move(bool),
@@ -45,8 +50,6 @@ pub fn event_for_key(key: &str, modifiers: Modifiers) -> Option<Event> {
     match key {
         "up" => Some(Event::Move(false)),
         "down" => Some(Event::Move(true)),
-        "enter" => Some(Event::Restore),
-        "delete" => Some(Event::Delete),
         "escape" => Some(Event::Close),
         _ => None,
     }
@@ -166,8 +169,21 @@ impl RenderOnce for RecentlyDeletedBody {
             Phase::Ready => self.list(&t).into_any_element(),
         };
         let send = self.on_event.clone();
+        let restore = send.clone();
+        let purge = send.clone();
         div()
             .id("recently-deleted-body")
+            .key_context(CONTEXT)
+            .on_action(move |_: &RestoreDeleted, window, cx| {
+                if let Some(send) = &restore {
+                    send(Event::Restore, window, cx);
+                }
+            })
+            .on_action(move |_: &PurgeDeleted, window, cx| {
+                if let Some(send) = &purge {
+                    send(Event::Delete, window, cx);
+                }
+            })
             .role(Role::Group)
             .aria_label(tr("recently-deleted-title"))
             .test_support()
@@ -225,6 +241,8 @@ pub struct SheetParts {
     pub subtitle: SharedString,
     pub status: Option<SharedString>,
     pub has_rows: bool,
+    pub restore_key: Option<String>,
+    pub purge_key: Option<String>,
 }
 
 pub fn sheet(
@@ -246,10 +264,15 @@ pub fn sheet(
         })
         .body(body);
     let sheet = if parts.has_rows {
-        sheet
-            .hint(&["↑", "↓"], "")
-            .hint(&["enter"], tr("recently-deleted-restore"))
-            .hint(&["delete"], tr("recently-deleted-delete"))
+        let sheet = sheet.hint(&["↑", "↓"], "");
+        let sheet = match &parts.restore_key {
+            Some(key) => sheet.hint(&[key], tr("recently-deleted-restore")),
+            None => sheet,
+        };
+        match &parts.purge_key {
+            Some(key) => sheet.hint(&[key], tr("recently-deleted-delete")),
+            None => sheet,
+        }
     } else {
         sheet
     };

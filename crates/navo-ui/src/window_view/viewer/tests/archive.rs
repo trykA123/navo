@@ -8,8 +8,11 @@ use navo_fs::archive::{
 };
 
 use super::find::bottom_keys;
-use super::{Log, Setup, hooks, label, press_only, redraw, text_of, visible, window_with};
+use super::{
+    Log, Setup, hooks, label, options_with, press_only, redraw, text_of, visible, window_with,
+};
 use crate::window_view::NavoWindow;
+use crate::window_view::tests::shortcuts::rig_on;
 use crate::window_view::tests::{fake, press, settle, viewer_open};
 use crate::window_view::viewer::archive::{ArchiveBody, ArchiveView};
 use crate::window_view::viewer::{FileHooks, Kinds, PagedKind};
@@ -150,6 +153,25 @@ fn typing_filters_and_a_binary_entry_opens_as_hex(cx: &mut TestAppContext) {
     assert!(row(cx, window, 0).starts_with("docs, folder"));
     press(cx, window, &view, "escape");
     assert!(!viewer_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn a_user_key_for_close_closes_an_archive_with_a_filter_at_once(cx: &mut TestAppContext) {
+    let fs = fake();
+    fs.add_file("dest/keymap.toml", 40);
+    let file = fs.location("dest/keymap.toml");
+    let files = archive_hooks(Ok(listing()), &Reads::default());
+    let rig = rig_on(cx, options_with(fs, files, Kinds::builtin()), file);
+    rig.open_page(cx);
+    rig.record_on(cx, "viewer.close", "f8");
+    rig.press(cx, "escape");
+    rig.press(cx, "down");
+    rig.press(cx, "f3");
+    redraw(cx, rig.window);
+    rig.press(cx, "d");
+    assert!(text_of(cx, rig.window, "filter").starts_with("Filter d"));
+    rig.press(cx, "f8");
+    assert!(!viewer_open(cx, &rig.view));
 }
 
 #[gpui_kit::test]
@@ -312,4 +334,16 @@ fn space_in_the_archive_list_does_not_open_the_next_file(cx: &mut TestAppContext
     press(cx, window, &view, "space");
     assert_eq!(viewer_title(cx, &view), "a.txt");
     assert!(visible(cx, window, "archive-list"));
+}
+
+#[gpui_kit::test]
+fn the_back_hint_of_an_opened_entry_shows_the_user_key(cx: &mut TestAppContext) {
+    crate::window_view::viewer::keys_bar::rebind(cx, "viewer.back", "\"f8\"");
+    let (window, view, _) = open_zip(cx, Ok(listing()));
+    press(cx, window, &view, "down");
+    press_only(cx, window, "enter");
+    settle(cx, &view);
+    redraw(cx, window);
+    let keys = bottom_keys(cx, window);
+    assert!(keys.contains(&"F8 Back to the list".to_owned()), "{keys:?}");
 }
