@@ -9,7 +9,7 @@ use navo_core::Location;
 use navo_core::marks::{Bookmarks, MarkSet};
 use navo_core::paging::{ByteSource, LineIndex, Needle};
 use navo_fs::FakeFs;
-use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveListing};
+use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveKind, ArchiveListing};
 
 use super::{Rig, open_on};
 use navo_core::encoding::TextEncoding;
@@ -94,8 +94,9 @@ fn listing() -> ArchiveListing {
             size: 24,
             packed: Some(12),
             modified: None,
-            is_folder: false,
+            kind: ArchiveKind::File,
             is_encrypted: false,
+            header_offset: None,
         }],
         truncated: false,
     }

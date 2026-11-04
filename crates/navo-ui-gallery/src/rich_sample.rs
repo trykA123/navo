@@ -1,5 +1,5 @@
 use navo_core::{Location, ProviderId};
-use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveListing, Civil, Stamp};
+use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveKind, ArchiveListing, Civil, Stamp};
 use navo_ui::prelude::*;
 use navo_ui::window_view::{ArchiveSource, ArchiveView, FileHooks, FontFace, FontView};
 
@@ -35,8 +35,13 @@ fn entry((name, size, day): (&str, u64, u8)) -> ArchiveEntry {
             hour: 9 + day % 8,
             minute: day * 4,
         })),
-        is_folder: name.ends_with('/'),
+        kind: if name.ends_with('/') {
+            ArchiveKind::Folder
+        } else {
+            ArchiveKind::File
+        },
         is_encrypted: name.ends_with(".pem"),
+        header_offset: None,
     }
 }
 

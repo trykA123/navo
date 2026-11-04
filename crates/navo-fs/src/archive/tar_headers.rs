@@ -3,7 +3,7 @@ use std::io::Read;
 use tar::{EntryType, Header, PaxExtensions};
 
 use super::source::{Fail, Source};
-use super::{ArchiveEntry, Stamp, damaged};
+use super::{ArchiveEntry, ArchiveKind, Stamp, damaged};
 
 const BLOCK: usize = 512;
 const EXTENSION_LIMIT: u64 = 64 * 1024;
@@ -148,14 +148,34 @@ fn describe(header: &Header, pending: Pending, stored: u64) -> ArchiveEntry {
         size,
         packed: None,
         modified,
-        is_folder: header.entry_type().is_dir(),
+        kind: kind_of(header.entry_type()),
         is_encrypted: false,
+        header_offset: None,
+    }
+}
+
+fn kind_of(kind: EntryType) -> ArchiveKind {
+    if kind.is_dir() {
+        ArchiveKind::Folder
+    } else if kind.is_symlink() {
+        ArchiveKind::Symlink
+    } else if kind.is_hard_link() {
+        ArchiveKind::Hardlink
+    } else if kind.is_character_special() {
+        ArchiveKind::CharDevice
+    } else if kind.is_block_special() {
+        ArchiveKind::BlockDevice
+    } else if kind.is_fifo() {
+        ArchiveKind::Fifo
+    } else {
+        ArchiveKind::File
     }
 }
 
 pub(super) fn next(source: &mut impl Source, sparse: Sparse) -> Result<Option<Found>, Fail> {
     let mut pending = Pending::default();
     loop {
+        let header_offset = source.position();
         let Some(block) = read_block(source)? else {
             return Ok(None);
         };
@@ -185,8 +205,10 @@ pub(super) fn next(source: &mut impl Source, sparse: Sparse) -> Result<Option<Fo
                     None
                 };
                 let stored = pending.size.unwrap_or(declared);
+                let mut entry = describe(header, pending, stored);
+                entry.header_offset = header_offset;
                 return Ok(Some(Found {
-                    entry: describe(header, pending, stored),
+                    entry,
                     stored,
                     sparse_head,
                 }));

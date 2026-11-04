@@ -228,6 +228,7 @@ fn refused(outcome: &JobOutcome) -> FsErrorKind {
     }
 }
 
+mod archive_stream;
 mod copy;
 mod failures;
 #[cfg(unix)]

@@ -4,7 +4,7 @@ use std::time::Duration;
 use gpui_kit::TestAppContext;
 use navo_core::ProviderPath;
 use navo_core::find::{FileHits, LineHit};
-use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveListing};
+use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveKind, ArchiveListing};
 use navo_fs::find::{FindProgress, FoundBatch, FoundFile};
 use navo_fs::{Attributes, EntryKind, FsEntry};
 
@@ -104,8 +104,9 @@ fn listing() -> ArchiveListing {
                 size: 24,
                 packed: None,
                 modified: None,
-                is_folder: false,
+                kind: ArchiveKind::File,
                 is_encrypted: false,
+                header_offset: None,
             })
             .collect(),
         truncated: false,

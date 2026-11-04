@@ -1,10 +1,12 @@
 use std::io::{Cursor, Read, Seek};
+use std::sync::atomic::AtomicBool;
 
 use flate2::read::MultiGzDecoder;
 use lzma_rust2::XzReader;
 use ruzstd::decoding::StreamingDecoder;
 
 use super::source::{Fail, Meter, Seekable, Source, Stream};
+use super::stream::{StreamRequest, pump};
 use super::tar_headers::{Found, Sparse, next};
 use super::{ArchiveFormat, EntryAt, Limits, Listed, damaged, missing, read_capped};
 
@@ -94,4 +96,68 @@ pub(super) fn read<R: Read + Seek>(
         read_from(&mut Stream::new(decompress(format, reader)?, meter), at)
     };
     read.map_err(Fail::into_read_error)
+}
+
+pub(super) fn stream<R: Read + Seek>(
+    format: ArchiveFormat,
+    reader: R,
+    request: StreamRequest<'_>,
+) -> Result<(), String> {
+    let never = AtomicBool::new(false);
+    let streamed = if format == ArchiveFormat::Tar {
+        let mut source = Seekable::new(reader, &never)?;
+        match request.header_offset {
+            Some(offset) => stream_at(&mut source, offset, request),
+            None => stream_from(&mut source, request),
+        }
+    } else {
+        let meter = Meter::new(u64::MAX, &never);
+        stream_from(
+            &mut Stream::new(decompress(format, reader)?, meter),
+            request,
+        )
+    };
+    streamed.map_err(Fail::into_read_error)
+}
+
+fn stream_at(
+    source: &mut impl Source,
+    offset: u64,
+    request: StreamRequest<'_>,
+) -> Result<(), Fail> {
+    source.skip(offset)?;
+    let found = next(source, Sparse::Keep)?.ok_or_else(|| Fail::Damaged(missing()))?;
+    stream_found(found, source, request)
+        .map_err(|message| source.stopped().map_or(Fail::Damaged(message), Fail::Stop))
+}
+
+fn stream_from(source: &mut impl Source, request: StreamRequest<'_>) -> Result<(), Fail> {
+    let mut index = 0;
+    while let Some(found) = next(source, Sparse::Keep)? {
+        if index == request.at.index {
+            return stream_found(found, source, request)
+                .map_err(|message| source.stopped().map_or(Fail::Damaged(message), Fail::Stop));
+        }
+        source.skip(found.padded())?;
+        index += 1;
+    }
+    Err(Fail::Damaged(missing()))
+}
+
+fn stream_found(
+    found: Found,
+    source: &mut impl Source,
+    request: StreamRequest<'_>,
+) -> Result<(), String> {
+    request.at.check(&found.entry)?;
+    let data = source.by_ref().take(found.stored);
+    match found.sparse_head {
+        None => pump(data, request.sender, request.cancel, request.gone).map(drop),
+        Some(head) => {
+            let mut archive = tar::Archive::new(Cursor::new(head).chain(data));
+            let mut entries = archive.entries().map_err(damaged)?;
+            let entry = entries.next().ok_or_else(missing)?.map_err(damaged)?;
+            pump(entry, request.sender, request.cancel, request.gone).map(drop)
+        }
+    }
 }

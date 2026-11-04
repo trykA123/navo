@@ -8,7 +8,7 @@ use image::{ImageFormat, Rgba, RgbaImage};
 use navo_core::Location;
 use navo_core::paging::{ByteSource, LineIndex};
 use navo_diag::components::{MemoryUse, Tally};
-use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveListing};
+use navo_fs::archive::{ArchiveEntry, ArchiveFormat, ArchiveKind, ArchiveListing};
 use navo_pdf::protocol::{Bitmap, Outline, PageLinks, PageText, PdfError, RenderRequest};
 
 use super::press;
@@ -120,8 +120,9 @@ fn listing() -> ArchiveListing {
             size: 24,
             packed: Some(12),
             modified: None,
-            is_folder: false,
+            kind: ArchiveKind::File,
             is_encrypted: false,
+            header_offset: None,
         }],
         truncated: false,
     }

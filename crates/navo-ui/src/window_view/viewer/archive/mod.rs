@@ -217,7 +217,7 @@ impl ArchiveView {
         else {
             return;
         };
-        let refused = if entry.is_folder {
+        let refused = if entry.kind.is_folder() {
             Some(FOLDER_NOTE.to_owned())
         } else if entry.is_encrypted {
             Some(ENCRYPTED.to_owned())

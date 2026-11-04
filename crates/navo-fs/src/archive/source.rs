@@ -82,6 +82,7 @@ impl<R: Read> Read for Metered<'_, '_, R> {
 
 pub(crate) trait Source: Read {
     fn skip(&mut self, bytes: u64) -> Result<(), Fail>;
+    fn position(&mut self) -> Option<u64>;
     fn stopped(&self) -> Option<Stop>;
 
     fn fail(&self, error: impl std::fmt::Display) -> Fail {
@@ -121,6 +122,10 @@ impl<R: Read + Seek> Source for Seekable<'_, R> {
         Ok(())
     }
 
+    fn position(&mut self) -> Option<u64> {
+        self.inner.stream_position().ok()
+    }
+
     fn stopped(&self) -> Option<Stop> {
         self.cancel
             .load(Ordering::Relaxed)
@@ -149,6 +154,10 @@ impl<R: Read> Source for Stream<'_, R> {
     fn skip(&mut self, bytes: u64) -> Result<(), Fail> {
         let copied = io::copy(&mut self.by_ref().take(bytes), &mut io::sink());
         copied.map(drop).map_err(|error| self.fail(error))
+    }
+
+    fn position(&mut self) -> Option<u64> {
+        None
     }
 
     fn stopped(&self) -> Option<Stop> {

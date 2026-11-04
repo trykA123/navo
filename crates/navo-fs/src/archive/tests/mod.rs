@@ -14,6 +14,7 @@ use super::{
 };
 
 mod limits;
+mod provider;
 
 static NEVER: AtomicBool = AtomicBool::new(false);
 
@@ -137,7 +138,7 @@ fn every_format(dir: &TempDir) -> Vec<(ArchiveFormat, PathBuf)> {
 fn names(entries: &[ArchiveEntry]) -> Vec<(&str, bool)> {
     entries
         .iter()
-        .map(|entry| (entry.name.trim_end_matches('/'), entry.is_folder))
+        .map(|entry| (entry.name.trim_end_matches('/'), entry.kind.is_folder()))
         .collect()
 }
 
@@ -208,7 +209,10 @@ fn a_folder_or_a_missing_index_is_not_read() {
     let dir = tempfile::tempdir().unwrap();
     for (_, path) in every_format(&dir) {
         let entries = list_archive(&path).unwrap().entries;
-        let folder = entries.iter().position(|entry| entry.is_folder).unwrap();
+        let folder = entries
+            .iter()
+            .position(|entry| entry.kind.is_folder())
+            .unwrap();
         assert_eq!(
             read_archive_entry(&path, folder, ENTRY_LIMIT).unwrap_err(),
             "This is a folder."
