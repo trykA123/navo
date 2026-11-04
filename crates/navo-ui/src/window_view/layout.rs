@@ -78,7 +78,7 @@ impl NavoWindow {
             .children(self.activity_drawer_layer(window, cx))
             .children(self.layout_switcher_view(cx))
             .children(self.preset_dialog_view(cx))
-            .children(self.clipboard_layer(cx))
+            .children(self.clipboard_layer(window, cx))
     }
 
     pub(super) fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {

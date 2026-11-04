@@ -6,8 +6,8 @@ use gpui_kit::component::input::InputEvent;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
-    IntoElement, ParentElement, Pixels, Render, Role, SharedString, StatefulInteractiveElement,
-    Styled, Subscription, Window, div, px,
+    IntoElement, ParentElement, Pixels, Point, Render, Role, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
 };
 use navo_core::Location;
 use navo_l10n::tr;
@@ -70,6 +70,8 @@ pub enum ClipPaletteEvent {
     /// Enter from anywhere: the item is on the clipboard; the host hides the pop-up and
     /// pastes into the app it came from.
     PasteBack,
+    /// A left press on the header of the in-window palette: a drag may follow.
+    DragStart(Point<Pixels>),
 }
 
 /// `Debug` hides the path of `GoTo`, which came from the clipboard.
@@ -80,6 +82,7 @@ impl fmt::Debug for ClipPaletteEvent {
             Self::GoTo(_) => "GoTo(..)",
             Self::PasteIntoPane => "PasteIntoPane",
             Self::PasteBack => "PasteBack",
+            Self::DragStart(_) => "DragStart",
         })
     }
 }
@@ -358,6 +361,12 @@ fn frame_of(
     (width.min(px(WIDTH)), height.min(px(HEIGHT)))
 }
 
+/// The size of the palette in Navo's window.
+pub(crate) fn window_panel(viewport: gpui_kit::Size<Pixels>) -> gpui_kit::Size<Pixels> {
+    let (width, height) = frame_of(Place::Window, viewport, None);
+    gpui_kit::size(width, height)
+}
+
 impl Render for ClipPalette {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.hide_stray_secret();
@@ -396,12 +405,12 @@ impl Render for ClipPalette {
             panel.children(self.form_view(&t, window, cx))
         } else if self.manage.is_some() {
             panel
-                .child(self.input_row(&t))
+                .child(self.input_row(&t, cx))
                 .child(self.manage_body(&t, is_docked, cx))
                 .child(self.manage_footer(&t, cx))
         } else {
             panel
-                .child(self.input_row(&t))
+                .child(self.input_row(&t, cx))
                 .children(self.tabs(&t, is_docked, cx))
                 .children(self.notices(&t))
                 .child(self.body(&t, (is_docked, has_note_focus), cx))

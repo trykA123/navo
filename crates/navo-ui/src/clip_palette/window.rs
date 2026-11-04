@@ -274,7 +274,9 @@ impl ClipPopUp {
         match event {
             ClipPaletteEvent::Dismissed => self.hide(window, cx),
             ClipPaletteEvent::PasteBack => self.paste_back(window, cx),
-            ClipPaletteEvent::GoTo(_) | ClipPaletteEvent::PasteIntoPane => {}
+            ClipPaletteEvent::GoTo(_)
+            | ClipPaletteEvent::PasteIntoPane
+            | ClipPaletteEvent::DragStart(_) => {}
         }
     }
 

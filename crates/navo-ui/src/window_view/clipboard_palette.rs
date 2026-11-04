@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use gpui_kit::{Focusable, Subscription};
+use gpui_kit::{DragMoveEvent, Focusable, Subscription};
 use navo_core::{Command, FsErrorKind, Location};
 use navo_fs::FsEntry;
 use navo_l10n::t;
@@ -8,8 +8,8 @@ use navo_l10n::t;
 use super::path_edit::{is_folder, last_name};
 use super::{ClipboardSummon, NavoWindow};
 use crate::clip_palette::{
-    ClipCounts, ClipPalette, ClipPaletteEvent, ClipPaletteProps, ClipboardHooks, FolderProbe,
-    Place, PopUpRequest,
+    ClipCounts, ClipPalette, ClipPaletteEvent, ClipPaletteProps, ClipboardHooks, DraggedPalette,
+    FolderProbe, Place, PopUpRequest, clamp_offset, window_panel,
 };
 use crate::commands::{CommandEntry, entries_with};
 use crate::confirm_dialog::{ConfirmDialog, ConfirmProps};
@@ -21,6 +21,13 @@ use crate::status_bar::StatusNotice;
 pub(super) enum Ask {
     Clear(ClipCounts),
     DeleteAll(ClipCounts),
+}
+
+/// A palette drag under way: where the pointer and the offset were at the press.
+#[derive(Clone, Copy)]
+struct Drag {
+    from: Point<Pixels>,
+    base: Point<Pixels>,
 }
 
 struct Open {
@@ -35,6 +42,9 @@ pub(super) struct ClipboardPanel {
     open: Option<Open>,
     ask: Option<Ask>,
     asks: u64,
+    /// How far the palette sits from the window centre; kept for the run, not saved.
+    offset: Point<Pixels>,
+    drag: Option<Drag>,
 }
 
 impl ClipboardPanel {
@@ -59,6 +69,11 @@ impl ClipboardPanel {
     #[cfg(test)]
     pub(super) fn is_open(&self) -> bool {
         self.open.is_some()
+    }
+
+    #[cfg(test)]
+    pub(super) fn offset(&self) -> Point<Pixels> {
+        self.offset
     }
 
     #[cfg(test)]
@@ -226,6 +241,10 @@ impl NavoWindow {
             ClipPaletteEvent::Dismissed | ClipPaletteEvent::PasteBack => {
                 self.close_clipboard(window, cx);
             }
+            ClipPaletteEvent::DragStart(from) => {
+                let base = self.clip.offset;
+                self.clip.drag = Some(Drag { from: *from, base });
+            }
             ClipPaletteEvent::GoTo(location) => {
                 self.close_clipboard(window, cx);
                 self.go_to_clipboard_path(location.clone(), window, cx);
@@ -328,18 +347,52 @@ impl NavoWindow {
         cx.notify();
     }
 
-    pub(super) fn clipboard_layer(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(super) fn clipboard_layer(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let margin = crate::tokens::current(cx).spacing.md;
+        let panel = window_panel(window.viewport_size());
         let palette = self.clip.open.as_ref().map(|open| {
+            let at = clamp_offset(self.clip.offset, panel, window.viewport_size(), margin);
             div()
                 .absolute()
                 .inset_0()
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(open.palette.clone())
+                .on_drag_move(cx.listener(
+                    move |view, event: &DragMoveEvent<DraggedPalette>, window, cx| {
+                        view.drag_clipboard_palette(event.event.position, window, cx);
+                    },
+                ))
+                .child(
+                    div()
+                        .relative()
+                        .left(at.x)
+                        .top(at.y)
+                        .child(open.palette.clone()),
+                )
                 .into_any_element()
         });
         palette.into_iter().chain(self.clipboard_ask(cx)).collect()
+    }
+
+    fn drag_clipboard_palette(
+        &mut self,
+        pointer: Point<Pixels>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(drag) = self.clip.drag else {
+            return;
+        };
+        let margin = crate::tokens::current(cx).spacing.md;
+        let viewport = window.viewport_size();
+        let moved = drag.base + (pointer - drag.from);
+        self.clip.offset = clamp_offset(moved, window_panel(viewport), viewport, margin);
+        cx.notify();
     }
 
     fn clipboard_ask(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
