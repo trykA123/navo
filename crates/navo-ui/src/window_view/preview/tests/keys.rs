@@ -125,18 +125,31 @@ fn escape_in_browse_mode_closes_the_sheet_and_returns_focus_to_the_list(cx: &mut
 }
 
 #[gpui_kit::test]
-fn escape_in_the_list_clears_the_filter_then_closes_the_sheet(cx: &mut TestAppContext) {
+fn escape_in_the_list_closes_the_sheet_then_clears_the_filter(cx: &mut TestAppContext) {
     let (rig, _) = rig_on(cx, project());
     rig.open(cx);
     assert!(rig.wait_until(cx, is_done));
     rig.key(cx, "p");
     assert_eq!(filter(cx, &rig).as_deref(), Some("p"));
     rig.key(cx, "escape");
+    assert!(!is_open(cx, &rig));
+    assert_eq!(filter(cx, &rig).as_deref(), Some("p"));
+    assert!(rig.list_has_focus(cx));
+    rig.key(cx, "escape");
     assert_eq!(filter(cx, &rig), None);
-    assert!(is_open(cx, &rig));
+    assert!(rig.list_has_focus(cx));
+}
+
+#[gpui_kit::test]
+fn one_escape_in_the_list_closes_the_sheet_and_the_list_keeps_focus(cx: &mut TestAppContext) {
+    let (rig, fs) = rig_on(cx, project());
+    rig.open(cx);
+    assert!(rig.wait_until(cx, is_done));
+    assert!(rig.list_has_focus(cx));
     rig.key(cx, "escape");
     assert!(!is_open(cx, &rig));
     assert!(rig.list_has_focus(cx));
+    assert_eq!(location(cx, &rig), fs.location("home").as_str());
 }
 
 #[gpui_kit::test]

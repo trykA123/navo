@@ -160,26 +160,21 @@ fn the_stop_button_stops_the_scan_and_resume_counts_again(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn escape_clears_a_filter_then_closes_the_sheet_while_the_scan_runs(cx: &mut TestAppContext) {
+fn escape_closes_the_sheet_then_clears_a_filter_while_the_scan_runs(cx: &mut TestAppContext) {
     let (rig, gate) = gated(cx);
     rig.key(cx, "p");
-    let filtered = rig.read(cx, |view| {
-        let tab = view.browser.state().active_tab().id();
-        view.browser.filter_text(tab).map(str::to_owned)
-    });
-    assert_eq!(filtered.as_deref(), Some("p"));
-    rig.key(cx, "escape");
-    let filtered = rig.read(cx, |view| {
-        let tab = view.browser.state().active_tab().id();
-        view.browser.filter_text(tab).map(str::to_owned)
-    });
-    assert_eq!(filtered, None);
-    assert!(rig.read(cx, |view| {
-        view.preview.folder().is_some_and(|f| f.scan.is_counting())
-    }));
-    assert!(rig.read(cx, |view| view.preview.is_open()));
+    let filtered = |cx: &mut TestAppContext| {
+        rig.read(cx, |view| {
+            let tab = view.browser.state().active_tab().id();
+            view.browser.filter_text(tab).map(str::to_owned)
+        })
+    };
+    assert_eq!(filtered(cx).as_deref(), Some("p"));
     rig.key(cx, "escape");
     assert!(!rig.read(cx, |view| view.preview.is_open()));
+    assert_eq!(filtered(cx).as_deref(), Some("p"));
+    rig.key(cx, "escape");
+    assert_eq!(filtered(cx), None);
     assert!(rig.list_has_focus(cx));
     gate.release();
 }

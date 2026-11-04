@@ -190,6 +190,14 @@ impl NavoWindow {
         }
     }
 
+    /// Esc in the list closes an open preview before it clears a filter or a find.
+    fn escape_open_preview(&mut self, cx: &mut Context<Self>) {
+        if !self.workspace_keys.pinned && self.preview.is_open() {
+            self.escape_preview(cx);
+            cx.stop_propagation();
+        }
+    }
+
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
         let root = super::workspace_keys::workspace_keys(root, cx);
         let root = super::compare_keys::compare_keys(root, cx);
@@ -225,6 +233,9 @@ impl NavoWindow {
                     this.browse_preview(window, cx);
                 }),
             )
+            .capture_action(cx.listener(|this: &mut Self, _: &ClearFilter, _, cx| {
+                this.escape_open_preview(cx);
+            }))
             .on_action(cx.listener(|this: &mut Self, _: &ClearFilter, _, cx| {
                 this.escape_pane(cx);
             }))

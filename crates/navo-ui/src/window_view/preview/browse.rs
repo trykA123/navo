@@ -48,7 +48,7 @@ impl Preview {
         self.is_open && (self.browse.is_focused(window) || self.browse.contains_focused(window, cx))
     }
 
-    pub(super) fn browse_target(&self, cx: &App) -> FocusHandle {
+    pub(in crate::window_view) fn browse_target(&self, cx: &App) -> FocusHandle {
         match &self.shown {
             Some(Shown::File(file)) => file.body.as_ref().map(|body| body.focus_handle(cx)),
             _ => None,
