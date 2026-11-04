@@ -5750,7 +5750,7 @@ dependencies = [
 
 [[package]]
 name = "navo-app"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "embed-resource",
@@ -5790,7 +5790,7 @@ dependencies = [
 
 [[package]]
 name = "navo-automotive"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "a2lfile",
  "can-dbc",
@@ -5807,7 +5807,7 @@ dependencies = [
 
 [[package]]
 name = "navo-bench"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "aho-corasick",
  "blake3",
@@ -5824,7 +5824,7 @@ dependencies = [
 
 [[package]]
 name = "navo-cache"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "crc32fast",
  "lz4_flex",
@@ -5840,7 +5840,7 @@ dependencies = [
 
 [[package]]
 name = "navo-clipboard"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "rusqlite",
  "sha2 0.10.9",
@@ -5852,7 +5852,7 @@ dependencies = [
 
 [[package]]
 name = "navo-compare"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "blake3",
  "fastcdc",
@@ -5869,7 +5869,7 @@ dependencies = [
 
 [[package]]
 name = "navo-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "aho-corasick",
  "chardetng",
@@ -5888,7 +5888,7 @@ dependencies = [
 
 [[package]]
 name = "navo-diag"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "proptest",
@@ -5904,7 +5904,7 @@ dependencies = [
 
 [[package]]
 name = "navo-fs"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "blake3",
  "crc32fast",
@@ -5936,7 +5936,7 @@ dependencies = [
 
 [[package]]
 name = "navo-git"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "gix",
  "gix-config",
@@ -5950,7 +5950,7 @@ dependencies = [
 
 [[package]]
 name = "navo-index"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "crc32fast",
  "navo-core",
@@ -5968,7 +5968,7 @@ dependencies = [
 
 [[package]]
 name = "navo-l10n"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "fluent-bundle",
  "thiserror 2.0.21",
@@ -5978,7 +5978,7 @@ dependencies = [
 
 [[package]]
 name = "navo-pdf"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "pdfium-render",
  "proptest",
@@ -5987,11 +5987,11 @@ dependencies = [
 
 [[package]]
 name = "navo-plugins"
-version = "0.2.1"
+version = "0.2.2"
 
 [[package]]
 name = "navo-retention"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "navo-core",
  "navo-fs",
@@ -6005,7 +6005,7 @@ dependencies = [
 
 [[package]]
 name = "navo-shell"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "navo-core",
  "rustix",
@@ -6020,7 +6020,7 @@ dependencies = [
 
 [[package]]
 name = "navo-store"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "crc32fast",
  "insta",
@@ -6041,7 +6041,7 @@ dependencies = [
 
 [[package]]
 name = "navo-structured"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "csv",
  "csv-core",
@@ -6055,7 +6055,7 @@ dependencies = [
 
 [[package]]
 name = "navo-syntax"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "proptest",
  "quick-xml",
@@ -6068,11 +6068,11 @@ dependencies = [
 
 [[package]]
 name = "navo-term"
-version = "0.2.1"
+version = "0.2.2"
 
 [[package]]
 name = "navo-ui"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "codebook-tree-sitter-latex",
@@ -6125,7 +6125,7 @@ dependencies = [
 
 [[package]]
 name = "navo-ui-gallery"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "gpui-kit",
@@ -6139,7 +6139,7 @@ dependencies = [
 
 [[package]]
 name = "navo-update"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "semver",
  "thiserror 2.0.21",
@@ -11605,7 +11605,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "blake3",
  "dua-core",
