@@ -112,13 +112,22 @@ impl Shared {
         {
             return;
         }
+        let kept = self
+            .active
+            .get(&listing.folder)
+            .and_then(|old| old.badges.clone());
+        self.replace(listing, kept);
+    }
+
+    /// Swaps in a listing; the old badges stay visible until the new scan publishes.
+    fn replace(&mut self, listing: Arc<Listing>, badges: Option<Arc<FolderBadges>>) {
         self.forget(&listing.folder);
         self.order.push_back(listing.folder.clone());
         self.active.insert(
             listing.folder.clone(),
             Entry {
                 listing: listing.clone(),
-                badges: None,
+                badges,
             },
         );
         while self.active.len() > QUEUE_CAP || self.bytes() > QUEUE_BYTES {
@@ -175,10 +184,22 @@ impl Shared {
             return;
         };
         let listing = Listing::new(folder, old.listing.generation, old.listing.rows.clone());
-        self.forget(folder);
-        if let Some(listing) = listing {
-            self.observe(listing);
+        let kept = old.badges.clone();
+        if self.stopped {
+            return;
         }
+        if let Some(listing) = listing {
+            self.replace(listing, kept);
+        } else {
+            self.forget(folder);
+        }
+    }
+
+    /// The folder already shows badges that a new scan will replace.
+    pub fn shows_badges(&self, listing: &Arc<Listing>) -> bool {
+        self.active
+            .get(&listing.folder)
+            .is_some_and(|entry| entry.badges.is_some())
     }
 
     pub fn is_current(&self, listing: &Arc<Listing>) -> bool {
@@ -230,5 +251,63 @@ fn request_bytes(request: &Request) -> usize {
     match request {
         Request::Probe(_) => 0,
         Request::Status(_, root) => root.as_os_str().len() * 2 + 128,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn listing(generation: u64) -> Arc<Listing> {
+        let folder = Location::new("fixture").unwrap();
+        let rows = vec![Row {
+            name: "a".into(),
+            on_screen: true,
+        }];
+        Listing::new(&folder, generation, rows).unwrap()
+    }
+
+    fn shown(shared: &Shared) -> Option<Arc<FolderBadges>> {
+        let folder = Location::new("fixture").unwrap();
+        shared.active.get(&folder)?.badges.clone()
+    }
+
+    fn published(shared: &mut Shared, first: &Arc<Listing>) -> Arc<FolderBadges> {
+        shared.publish(first, FolderBadges::default()).unwrap();
+        shown(shared).unwrap()
+    }
+
+    #[test]
+    fn rescan_keeps_the_badges_until_the_new_scan_publishes() {
+        let mut shared = Shared::default();
+        let first = listing(1);
+        shared.observe(first.clone());
+        let before = published(&mut shared, &first);
+        shared.rescan(&Location::new("fixture").unwrap());
+        assert!(Arc::ptr_eq(&shown(&shared).unwrap(), &before));
+        let current = shared.active.values().next().unwrap().listing.clone();
+        assert!(!Arc::ptr_eq(&current, &first));
+        assert!(first.cancelled.is_cancelled());
+        assert!(shared.is_current(&current));
+    }
+
+    #[test]
+    fn observing_the_same_folder_again_keeps_its_badges() {
+        let mut shared = Shared::default();
+        let first = listing(1);
+        shared.observe(first.clone());
+        let before = published(&mut shared, &first);
+        shared.observe(listing(2));
+        assert!(Arc::ptr_eq(&shown(&shared).unwrap(), &before));
+    }
+
+    #[test]
+    fn forgetting_the_folder_drops_its_badges() {
+        let mut shared = Shared::default();
+        let first = listing(1);
+        shared.observe(first.clone());
+        published(&mut shared, &first);
+        shared.forget(&Location::new("fixture").unwrap());
+        assert!(shown(&shared).is_none());
     }
 }

@@ -18,7 +18,10 @@ type Read = (PaneId, Location, Option<Arc<FolderBadges>>);
 
 struct Seen {
     location: Location,
+    /// The last rows seen: the same pointer means nothing changed, so no names are built.
     rows: Arc<[FsEntry]>,
+    /// The folder names, sorted: a resort or a size change keeps them equal.
+    names: Vec<String>,
     generation: u64,
 }
 
@@ -30,11 +33,21 @@ pub(super) struct GitBadgeStore {
     throttle: Throttle,
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(in crate::window_view) static NAME_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn folder_names(rows: &[FsEntry]) -> Vec<String> {
-    rows.iter()
+    #[cfg(test)]
+    NAME_BUILDS.with(|builds| builds.set(builds.get() + 1));
+    let mut names: Vec<String> = rows
+        .iter()
         .filter(|row| matches!(row.kind, EntryKind::Folder))
         .map(|row| row.name.to_text())
-        .collect()
+        .collect();
+    names.sort_unstable();
+    names
 }
 
 impl GitBadgeStore {
@@ -82,10 +95,29 @@ impl GitBadgeStore {
         self.latest.get(&pane).cloned()
     }
 
-    fn unchanged(&self, pane: PaneId, location: &Location, rows: &Arc<[FsEntry]>) -> bool {
+    fn same_rows(&self, pane: PaneId, location: &Location, rows: &Arc<[FsEntry]>) -> bool {
         self.seen
             .get(&pane)
             .is_some_and(|s| s.location.same_place(location) && Arc::ptr_eq(&s.rows, rows))
+    }
+
+    fn unchanged(&self, pane: PaneId, location: &Location, names: &[String]) -> bool {
+        self.seen
+            .get(&pane)
+            .is_some_and(|s| s.location.same_place(location) && s.names == names)
+    }
+
+    /// Remembers `rows` so the next frame takes the cheap path.
+    fn remember_rows(&mut self, pane: PaneId, rows: &Arc<[FsEntry]>) {
+        if let Some(seen) = self.seen.get_mut(&pane) {
+            seen.rows = Arc::clone(rows);
+        }
+    }
+
+    fn at(&self, pane: PaneId, location: &Location) -> bool {
+        self.seen
+            .get(&pane)
+            .is_some_and(|s| s.location.same_place(location))
     }
 
     fn shares(&self, location: &Location) -> bool {
@@ -146,20 +178,31 @@ impl NavoWindow {
         };
         let location = tab.location().clone();
         let loaded = tab.listing().is_some();
-        let rows = self.browser.details(tab.id());
-        if self.git_badges.unchanged(pane, &location, &rows) {
+        let same_place = self.git_badges.at(pane, &location);
+        if same_place && !loaded {
             return;
         }
-        self.git_leave(pane, hooks);
+        let rows = self.browser.details(tab.id());
+        if self.git_badges.same_rows(pane, &location, &rows) {
+            return;
+        }
+        if !same_place {
+            self.git_leave(pane, hooks);
+        }
         if !location.is_local() || !loaded {
             return;
         }
         let names = folder_names(&rows);
+        if self.git_badges.unchanged(pane, &location, &names) {
+            self.git_badges.remember_rows(pane, &rows);
+            return;
+        }
         self.git_badges.generation += 1;
         let generation = self.git_badges.generation;
         let seen = Seen {
             location: location.clone(),
             rows,
+            names: names.clone(),
             generation,
         };
         self.git_badges.seen.insert(pane, seen);

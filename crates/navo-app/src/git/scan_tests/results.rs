@@ -14,11 +14,18 @@ fn source_errors_publish_unknown_with_their_reason_and_are_not_cached() {
     assert_eq!(badges.by_name["a"].reason, Some(BadgeReason::Guard));
     h.scan.rescan(&location("fixture"));
     h.next();
+    let shown = h.scan.badges(&location("fixture")).unwrap();
     assert!(
-        h.scan
-            .badges(&location("fixture"))
-            .is_some_and(|b| b.by_name.is_empty())
+        !shown.by_name["a"].stale,
+        "the error is not republished as cached"
     );
+    h.reply(Ok(clean()));
+    let fresh = h.wait("fixture", |b| {
+        b.by_name
+            .get("a")
+            .is_some_and(|b| b.kind == BadgeKind::Clean)
+    });
+    assert!(fresh.revision > shown.revision);
     assert!(h.scan.stop());
 }
 

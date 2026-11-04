@@ -142,6 +142,21 @@ impl Scanner {
             return;
         }
         let found = self.discover(&listing);
+        let keeps = !found.slow && !found.roots.is_empty() && self.lock().shows_badges(&listing);
+        let revision = if keeps {
+            let mut shared = self.lock();
+            if shared.is_current(&listing) {
+                shared.push_all(&listing, &found.roots);
+            }
+            None
+        } else {
+            self.publish_cached(&listing, &found)
+        };
+        self.listings.insert(listing.folder.clone(), found);
+        self.notify(revision);
+    }
+
+    fn publish_cached(&mut self, listing: &Arc<Listing>, found: &Discovered) -> Option<u64> {
         let mut badges = FolderBadges {
             slow_drive: found.slow,
             ..FolderBadges::default()
@@ -149,19 +164,19 @@ impl Scanner {
         for root in &found.roots {
             if let Some(mut cached) = self.cache.get(root) {
                 cached.stale = true;
-                fill(&mut badges, &found, root, &cached);
+                fill(&mut badges, found, root, &cached);
             }
         }
-        let revision = {
-            let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
-            let revision = shared.publish(&listing, badges);
-            if revision.is_some() {
-                shared.push_all(&listing, &found.roots);
-            }
-            revision
-        };
-        self.listings.insert(listing.folder.clone(), found);
-        self.notify(revision);
+        let mut shared = self.lock();
+        let revision = shared.publish(listing, badges);
+        if revision.is_some() {
+            shared.push_all(listing, &found.roots);
+        }
+        revision
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Shared> {
+        self.shared.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn discover(&self, listing: &Arc<Listing>) -> Discovered {
