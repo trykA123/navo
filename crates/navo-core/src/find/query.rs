@@ -13,6 +13,7 @@ pub enum TokenKind {
     Attrs,
     Within,
     Archives,
+    Git,
     Regex,
 }
 
@@ -21,6 +22,14 @@ pub struct TokenSpan {
     pub kind: TokenKind,
     pub span: Range<usize>,
     pub message: Option<String>,
+}
+
+/// Whether find in files skips what `.gitignore` files list (`git:on`, the default) or not (`git:off`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GitRules {
+    #[default]
+    On,
+    Off,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -34,6 +43,7 @@ pub struct FindQuery {
     pub attrs: Vec<AttributeFilter>,
     pub within: Option<String>,
     pub archives: bool,
+    pub git_rules: GitRules,
     pub tokens: Vec<TokenSpan>,
 }
 
@@ -91,6 +101,13 @@ impl FindQuery {
                     _ => return Err("arc: use on or off".to_owned()),
                 };
             }
+            TokenKind::Git => {
+                self.git_rules = match value {
+                    "on" => GitRules::On,
+                    "off" => GitRules::Off,
+                    _ => return Err("git: use on or off".to_owned()),
+                };
+            }
             TokenKind::Regex => self.push_regex(value)?,
             TokenKind::Text => {}
         }
@@ -132,6 +149,7 @@ fn token_kind(word: &str) -> TokenKind {
         "attr" => TokenKind::Attrs,
         "in" => TokenKind::Within,
         "arc" => TokenKind::Archives,
+        "git" => TokenKind::Git,
         "re" => TokenKind::Regex,
         _ => TokenKind::Text,
     }
