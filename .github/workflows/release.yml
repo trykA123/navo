@@ -218,7 +218,7 @@ jobs:
       - name: Keep the newest releases
         run: |
           gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \
-            --jq 'map(select(.tagName | test("^(alpha|beta)-"))) | sort_by(.createdAt) | reverse | .[(env.KEEP_RELEASES | tonumber):] | .[].tagName' |
+            --jq 'map(select(.tagName | test("^((alpha|beta)-|v[0-9])"))) | sort_by(.createdAt) | reverse | .[(env.KEEP_RELEASES | tonumber):] | .[].tagName' |
           while read -r old; do
             gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
           done
