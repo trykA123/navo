@@ -1,6 +1,9 @@
 use std::{fs, path::Path, time::Instant};
 
-use super::{CHECKSUM_START, FORMAT_VERSION, FileError, HEADER_LEN, Header, load, save};
+use super::{
+    CHECKSUM_START, FORMAT_VERSION, FileError, HEADER_LEN, Header, load, load_with_ids, save,
+    save_with_ids,
+};
 use crate::table::{Flags, NO_PARENT, NameTable};
 use crate::usn::FrnMap;
 
@@ -513,4 +516,77 @@ fn corrupted_totals_are_refused_even_with_a_valid_checksum() {
     repair_checksum(&mut bytes);
     fs::write(&path, bytes).unwrap();
     assert!(matches!(load(&path), Err(FileError::InvalidData(_))));
+}
+
+const WIDE_REFERENCE: u128 = (1 << 100) | 8;
+const GOLDEN_HEX: &str = concat!(
+    "464552524954452d494e4445580000000300efcdab89674523011032547698badcfebc9a78563412",
+    "0000803bb16a00000000070000004400000007000000020000001080d6c266697874757265666978",
+    "7475726500557365727300576f726b007265706f72742e747874006e6f7465732e6d64006f6c642e",
+    "74787400676f6e652e7478740072656e616d65642e7478740000000000080000000e000000130000",
+    "001e000000380000002f000000ffffffff0000000000000000010000000200000002000000010000",
+    "0001000100010000000000040012001205000000000000d2040000000000004000000000000000d2",
+    "04000000000000370000000000000009000000000000000000000000000000030000000200000001",
+    "00000000000000020000000000000000000000000000000000000000000000000000000000000000",
+    "00000000000000050000000000000000000000000000000000000008000000000000000000000010",
+    "00000003000000",
+);
+
+fn golden() -> (Header, NameTable, FrnMap) {
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "fixture", Flags::FOLDER).unwrap();
+    let users = table.push(root, "Users", Flags::FOLDER).unwrap();
+    let work = table.push(root, "Work", Flags::FOLDER).unwrap();
+    let report = table.push(users, "report.txt", Flags::NONE).unwrap();
+    let notes = table.push(work, "notes.md", Flags::NONE).unwrap();
+    let renamed = table.push(work, "old.txt", Flags::SYSTEM).unwrap();
+    let gone = table.push(users, "gone.txt", Flags::HIDDEN).unwrap();
+    table.set_size(report, 1_234).unwrap();
+    table.set_size(notes, 55).unwrap();
+    table.set_size(renamed, 9).unwrap();
+    table.set_size(gone, 77).unwrap();
+    table.rename(renamed, work, "renamed.txt").unwrap();
+    table.remove(gone);
+    let ids = FrnMap::from([(5u128, root), (WIDE_REFERENCE, report)]);
+    (header(), table, ids)
+}
+
+fn unhex(hex: &str) -> Vec<u8> {
+    (0..hex.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
+        .collect()
+}
+
+#[test]
+fn format_v3_bytes_are_unchanged() {
+    use std::fmt::Write as _;
+
+    let (header, table, ids) = golden();
+    let folder = tempfile::tempdir().unwrap();
+    let first = folder.path().join("first.index");
+    save_with_ids(&first, &header, &table, &ids).unwrap();
+    let bytes = fs::read(&first).unwrap();
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for byte in &bytes {
+        write!(hex, "{byte:02x}").unwrap();
+    }
+    assert_eq!(hex, GOLDEN_HEX);
+
+    let second = folder.path().join("second.index");
+    save_with_ids(&second, &header, &table, &ids).unwrap();
+    assert_eq!(fs::read(&second).unwrap(), bytes, "save bytes differ");
+
+    let stored = folder.path().join("stored.index");
+    fs::write(&stored, unhex(GOLDEN_HEX)).unwrap();
+    let (loaded_header, loaded_table, loaded_ids) = load_with_ids(&stored).unwrap();
+    assert_eq!(loaded_header, header);
+    assert_eq!(loaded_table.raw_parts(), table.raw_parts());
+    let (sizes, counts) = table.stored_totals();
+    assert_eq!(loaded_table.stored_totals().0, sizes);
+    assert_eq!(
+        loaded_table.stored_totals().1.collect::<Vec<_>>(),
+        counts.collect::<Vec<_>>()
+    );
+    assert_eq!(loaded_ids, ids);
 }

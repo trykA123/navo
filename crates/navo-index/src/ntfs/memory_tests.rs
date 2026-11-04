@@ -14,7 +14,8 @@ use crate::usn::FrnMap;
 const ENTRIES: u32 = 1_000_000;
 // Just past a power of two, where growth by doubling leaves the most unused capacity.
 const GROWN_ENTRIES: u32 = 1_100_000;
-const TABLE_BUDGET: usize = 50;
+// trim_slack keeps up to len / 16 spare per column, about 0.3 B per entry here.
+const TABLE_BUDGET: usize = 51;
 const FILE_ID_BUDGET: usize = 40;
 const STREAM_SLACK: usize = MIB;
 // Restore checks rebuild per-entry counts beside the table; the old full body copy cost about 61.

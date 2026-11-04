@@ -55,10 +55,19 @@ fn step_for(applying: &mut BatchApply, index: &mut NtfsIndex) -> Result<bool, Nt
 
 fn with_index<T>(shared: &Shared, change: impl FnOnce(&mut NtfsIndex) -> T) -> Option<T> {
     let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
-    state
-        .index
-        .as_mut()
-        .map(|index| change(Arc::make_mut(index)))
+    let index = state.index.as_mut()?;
+    let index = match Arc::get_mut(index) {
+        Some(index) => index,
+        None => {
+            tracing::warn!(
+                table_bytes = index.table.memory_bytes(),
+                id_bytes = index.ids.memory_bytes(),
+                "a reader still holds the index; the batch copied it"
+            );
+            Arc::make_mut(index)
+        }
+    };
+    Some(change(index))
 }
 
 #[cfg(test)]

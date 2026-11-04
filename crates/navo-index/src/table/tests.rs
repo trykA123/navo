@@ -2,7 +2,7 @@ use super::{Flags, NO_PARENT, NameTable, TableChange, TableError};
 use crate::fuzzy::Fuzzy;
 use crate::usn::FrnMap;
 
-fn tree() -> (NameTable, [u32; 5]) {
+pub(super) fn tree() -> (NameTable, [u32; 5]) {
     let mut t = NameTable::new();
     let root = t.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
     let users = t.push(root, "Users", Flags::FOLDER).unwrap();
@@ -12,7 +12,7 @@ fn tree() -> (NameTable, [u32; 5]) {
     (t, [root, users, ann, notes, docs])
 }
 
-fn win(t: &NameTable, id: u32) -> Option<String> {
+pub(super) fn win(t: &NameTable, id: u32) -> Option<String> {
     t.path_with(id, '\\')
 }
 
@@ -294,24 +294,6 @@ fn iteration_skips_removed_entries() {
 }
 
 #[test]
-fn compact_drops_removed_rewrites_ids_and_keeps_paths() {
-    let (mut t, [root, users, ann, notes, docs]) = tree();
-    let extra = t.push(users, "bob", Flags::FOLDER).unwrap();
-    t.rename(extra, users, "carol").unwrap();
-    t.remove(ann);
-    let map = t.compact();
-    assert_eq!(map[root as usize], Some(0));
-    assert_eq!(map[users as usize], Some(1));
-    assert_eq!(map[ann as usize], None);
-    assert_eq!(map[notes as usize], None);
-    assert_eq!(map[docs as usize], None);
-    let carol = map[extra as usize].unwrap();
-    assert_eq!(win(&t, carol).as_deref(), Some("C:\\Users\\carol"));
-    assert_eq!((t.len(), t.slots()), (3, 3));
-    assert!(!t.names.contains("bob"));
-}
-
-#[test]
 fn flags_round_trip_and_hide_the_deleted_bit() {
     let mut t = NameTable::new();
     let both = Flags::HIDDEN | Flags::SYSTEM;
@@ -438,22 +420,4 @@ fn a_moved_entry_leaves_with_its_new_folder_and_not_its_old_one() {
     assert_eq!(t.remove(users), 3);
     assert_eq!(t.len(), 1);
     assert_eq!(t.name(root), Some("C:"));
-}
-
-#[test]
-fn removal_finds_the_subtree_after_compaction_and_after_loading_raw_parts() {
-    let (mut t, [_, users, _, notes, _]) = tree();
-    t.remove(notes);
-    let map = t.compact();
-    let (names, offsets, parents, flags) = t.raw_parts();
-    let mut loaded = NameTable::from_raw_parts(
-        names.to_owned(),
-        (offsets.to_vec(), parents.to_vec(), flags.to_vec()),
-        (t.stored_totals().0.to_vec(), t.stored_totals().1.collect()),
-    )
-    .unwrap();
-    let users = map[users as usize].unwrap();
-    assert_eq!(t.remove(users), 3);
-    assert_eq!(loaded.remove(users), 3);
-    assert_eq!((t.len(), loaded.len()), (1, 1));
 }

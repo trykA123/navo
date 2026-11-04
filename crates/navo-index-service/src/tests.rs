@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use navo_index::file::{self, Header};
-use navo_index::ntfs::NtfsIndex;
+use navo_index::ntfs::{NtfsIndex, SizeHint};
 use navo_index::pipe::BuildReason;
 use navo_index::table::{Flags, NO_PARENT, NameTable};
-use navo_index::usn::{UsnBatch, UsnRecord};
+use navo_index::usn::{FrnMap, UsnBatch, UsnRecord};
 use navo_store::Search;
 
 const DRIVE: Drive = Drive {
@@ -14,7 +14,7 @@ const DRIVE: Drive = Drive {
     ntfs: true,
 };
 use super::config::{Config, Drive, index_path, select_volumes};
-use super::lifecycle::{SaveClock, restore_or_enumerate};
+use super::lifecycle::{SaveClock, build_hint, hint_from_counts, restore_or_enumerate};
 
 #[test]
 fn config_accepts_only_account_sids() {
@@ -293,4 +293,114 @@ fn unknown_sizes_are_reported_once_per_volume_with_the_count() {
     assert_eq!(errors, ["unrelated error", "sizes unknown: 7"]);
     super::lifecycle::report_unknown_sizes(&mut errors, 0);
     assert_eq!(errors, ["unrelated error"]);
+}
+
+fn header() -> Header {
+    Header {
+        volume_serial: 42,
+        journal_id: 7,
+        next_usn: 100,
+        root: "C:".into(),
+        built_at: 0,
+    }
+}
+
+fn hinted_index(files: usize, removed: usize) -> NtfsIndex {
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+    let mut ids = FrnMap::with_capacity(files + 1);
+    ids.insert(5, root);
+    for number in 0..files + removed {
+        let id = table
+            .push(root, &format!("file-{number:07}.txt"), Flags::NONE)
+            .unwrap();
+        ids.insert(number as u128 + 100, id);
+    }
+    for number in 0..removed {
+        table.remove(number as u32 + 1);
+        ids.remove(&(number as u128 + 100));
+    }
+    NtfsIndex::restore((header(), table, ids), 42, 7).unwrap()
+}
+
+#[test]
+fn a_first_build_gets_no_hint() {
+    assert_eq!(build_hint(None), SizeHint::default());
+}
+
+#[test]
+fn a_hint_counts_live_entries_not_dead_slots() {
+    let index = hinted_index(1_000, 2_000);
+    assert!(index.table.slots() as usize > 2 * index.table.len());
+    let hint = build_hint(Some(&index));
+    let live = index.table.len();
+    assert_eq!(hint.entries, live + live / 16);
+    assert_eq!(hint.folders, 1);
+    assert_eq!(hint.references, live);
+}
+
+#[test]
+fn a_hint_counts_only_live_folders() {
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+    let mut ids = FrnMap::new();
+    ids.insert(5, root);
+    let mut deleted = Vec::new();
+    for number in 0..9u128 {
+        let id = table
+            .push(root, &format!("gone-folder-{number}"), Flags::FOLDER)
+            .unwrap();
+        ids.insert(number + 100, id);
+        deleted.push((number + 100, id));
+    }
+    for number in 0..10u128 {
+        let id = table
+            .push(root, &format!("file-{number}.txt"), Flags::NONE)
+            .unwrap();
+        ids.insert(number + 200, id);
+    }
+    for (reference, id) in deleted {
+        table.remove(id);
+        ids.remove(&reference);
+    }
+    let index = NtfsIndex::restore((header(), table, ids), 42, 7).unwrap();
+    assert_eq!(build_hint(Some(&index)).folders, 1);
+}
+
+#[test]
+fn a_hint_ignores_renamed_dead_names() {
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+    let file = table
+        .push(root, "old-name-that-is-long.txt", Flags::NONE)
+        .unwrap();
+    table.rename(file, root, "x.txt").unwrap();
+    let ids = [(5u128, root), (100, file)].into();
+    let index = NtfsIndex::restore((header(), table, ids), 42, 7).unwrap();
+    let hint = build_hint(Some(&index));
+    assert_eq!(hint.name_bytes, "C:".len() + 1 + "x.txt".len() + 1);
+}
+
+#[test]
+fn a_hint_does_not_grow_the_file_reference_map_across_a_bucket_class() {
+    for references in [114_687, 114_688, 114_689] {
+        let old: FrnMap = (0..references)
+            .map(|number| (number as u128, number as u32))
+            .collect();
+        let hint = hint_from_counts(references, 0, 0, old.len());
+        assert_eq!(hint.references, references);
+        assert!(
+            FrnMap::with_capacity(hint.references).memory_bytes() <= old.memory_bytes(),
+            "{references} references"
+        );
+    }
+}
+
+#[test]
+fn a_hint_caps_every_total() {
+    let hint = hint_from_counts(usize::MAX, usize::MAX, usize::MAX, usize::MAX);
+    assert_eq!(hint.entries, u32::MAX as usize - 1);
+    assert_eq!(hint.folders, u32::MAX as usize - 1);
+    assert_eq!(hint.name_bytes, u32::MAX as usize);
+    assert_eq!(hint.references, u32::MAX as usize - 1);
 }

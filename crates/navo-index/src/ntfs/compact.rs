@@ -13,7 +13,9 @@ impl NtfsIndex {
             return false;
         }
         let map = self.table.compact();
-        self.ids.remap(&map);
+        self.ids.remap(|id| map.get(id));
+        drop(map);
+        self.ids.shrink_to_fit();
         true
     }
 }

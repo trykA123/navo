@@ -4,13 +4,14 @@ use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use navo_index::file::{self, Header};
-use navo_index::ntfs::{NtfsError, NtfsIndex, UnresolvedChange, Volume};
+use navo_index::ntfs::{NtfsError, NtfsIndex, SizeHint, UnresolvedChange, Volume};
 use navo_index::pipe::CancelToken;
 
 use super::answer::Shared;
+use super::build_permit::{BUILDS, BuildPermit};
 use super::config::{Drive, index_path};
 use super::lifecycle::{
-    SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, clear_failures,
+    SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, build_hint, clear_failures,
     report_unknown_sizes, restore_or_enumerate,
 };
 use super::rebuild::{Cause, Rebuilds, error_kind, file_error_kind};
@@ -98,9 +99,12 @@ impl Worker {
         let mut opened = Volume::open(self.drive.letter)?;
         self.drive.serial = opened.serial()?;
         let mut built = false;
+        let mut permit = None;
         let index = restore_or_enumerate(file::load_with_ids(&self.path), self.drive, |reason| {
             built = true;
-            self.build(&mut opened, Cause::new(reason), cancel)
+            let (index, held) = self.build(&mut opened, Cause::new(reason), cancel)?;
+            permit = Some(held);
+            Ok(index)
         })?;
         if !built {
             let entries = index.table.len();
@@ -110,6 +114,7 @@ impl Worker {
             ));
         }
         self.replace(index);
+        drop(permit);
         Ok(opened)
     }
 
@@ -120,8 +125,9 @@ impl Worker {
         cause: Cause,
         cancel: &CancelToken,
     ) -> Result<(), NtfsError> {
-        let index = self.build(volume, cause, cancel)?;
+        let (index, permit) = self.build(volume, cause, cancel)?;
         self.replace(index);
+        drop(permit);
         Ok(())
     }
 
@@ -156,12 +162,23 @@ impl Worker {
         Ok(unresolved)
     }
 
+    /// Sizes the next build from the index it replaces.
+    fn rebuild_hint(&self) -> SizeHint {
+        build_hint(
+            self.shared
+                .read()
+                .unwrap_or_else(PoisonError::into_inner)
+                .index
+                .as_deref(),
+        )
+    }
+
     fn build(
         &mut self,
         volume: &mut Volume,
         cause: Cause,
         cancel: &CancelToken,
-    ) -> Result<NtfsIndex, NtfsError> {
+    ) -> Result<(NtfsIndex, BuildPermit<'static>), NtfsError> {
         self.rebuilds
             .started(&self.shared, cause, self.started.elapsed());
         // The index being replaced must never reach a snapshot, even when this build fails.
@@ -179,8 +196,22 @@ impl Worker {
                 .status,
             total_files,
         );
+        let hint = self.rebuild_hint();
         self.discard_snapshot()?;
-        let enumerated = volume.enumerate(cancel)?;
+        self.log_line(format_args!("build queued {}:", self.drive.letter));
+        let permit = BUILDS.acquire(cancel)?;
+        self.log_line(format_args!(
+            "build start {}: hint_entries={}",
+            self.drive.letter, hint.entries
+        ));
+        let enumerated = volume.enumerate_sized(hint, cancel)?;
+        self.log_line(format_args!(
+            "build done {}: entries={} blocked_peak={} ms={}",
+            self.drive.letter,
+            enumerated.index.table.len(),
+            enumerated.blocked_peak,
+            started.elapsed().as_millis()
+        ));
         report_unknown_sizes(
             &mut self
                 .shared
@@ -196,7 +227,7 @@ impl Worker {
         let entries = enumerated.index.table.len();
         self.rebuilds
             .finished(&self.shared, entries, started.elapsed());
-        Ok(enumerated.index)
+        Ok((enumerated.index, permit))
     }
 
     fn discard_snapshot(&self) -> Result<(), NtfsError> {

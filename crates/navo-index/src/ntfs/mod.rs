@@ -78,6 +78,16 @@ pub struct Enumeration {
     pub index: NtfsIndex,
     pub unresolved: Vec<UnresolvedChange>,
     pub sizes_unknown: u64,
+    pub blocked_peak: usize,
+}
+
+/// Total capacities a build should reserve. `Default` reserves nothing; first builds use it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SizeHint {
+    pub entries: usize,
+    pub folders: usize,
+    pub name_bytes: usize,
+    pub references: usize,
 }
 
 impl NtfsIndex {
@@ -200,6 +210,7 @@ struct Pending {
     waiters: HashMap<u128, Vec<u128>>,
     reported: Vec<UnresolvedChange>,
     removed_subtree: bool,
+    blocked_peak: usize,
 }
 
 impl Pending {
@@ -210,6 +221,7 @@ impl Pending {
         let file_id = change_file_id(&change);
         if let Some(blocked) = self.blocked.get_mut(&file_id) {
             blocked.changes.push_back(change);
+            self.note_blocked();
             return Ok(());
         }
         let mut ready = VecDeque::from([VecDeque::from([change])]);
@@ -248,12 +260,17 @@ impl Pending {
                     changes.push_front(change);
                     self.blocked.insert(file_id, Blocked { missing, changes });
                     self.waiters.entry(missing).or_default().push(file_id);
+                    self.note_blocked();
                     return Ok(());
                 }
                 Err(error) => return Err(error.into()),
             }
         }
         Ok(())
+    }
+
+    fn note_blocked(&mut self) {
+        self.blocked_peak = self.blocked_peak.max(self.blocked.len());
     }
 
     fn wake(
@@ -358,6 +375,8 @@ fn recover_rename(index: &NtfsIndex, change: TableChange) -> TableChange {
 mod batch_tests;
 #[cfg(test)]
 mod memory_tests;
+#[cfg(test)]
+mod peak_tests;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]

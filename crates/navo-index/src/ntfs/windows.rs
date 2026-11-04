@@ -18,8 +18,9 @@ use windows_sys::Win32::System::Ioctl::{
 };
 
 use super::{
-    Enumeration, JournalPosition, NtfsError, UsnBatch, VolumeIo, enum_request, enumerate_volume,
-    journal_request, read_volume_journal, size_error, volume_path,
+    Enumeration, JournalPosition, NtfsError, SizeHint, UsnBatch, VolumeIo, enum_request,
+    enumerate_volume, enumerate_volume_sized, journal_request, read_volume_journal, size_error,
+    volume_path,
 };
 
 pub struct Volume {
@@ -71,6 +72,15 @@ impl Volume {
     ) -> Result<Enumeration, NtfsError> {
         let drive = self.drive;
         enumerate_volume(self, drive, usize::MAX, cancel)
+    }
+
+    pub fn enumerate_sized(
+        &mut self,
+        hint: SizeHint,
+        cancel: &crate::pipe::CancelToken,
+    ) -> Result<Enumeration, NtfsError> {
+        let drive = self.drive;
+        enumerate_volume_sized(self, drive, usize::MAX, hint, cancel)
     }
 
     pub fn read_journal(&mut self, saved: JournalPosition) -> Result<UsnBatch, NtfsError> {

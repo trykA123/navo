@@ -51,6 +51,7 @@ fn hosts(provider: Arc<dyn Provider>, dirs: Option<StoreDirs>) -> Hosts {
         roots: Vec::new(),
         desired: Vec::new(),
         exclude: Vec::new(),
+        network_drives: Vec::new(),
         configured: Configured::default(),
         retirement: Retirements::new().unwrap(),
         presence: ServicePresence::system(),

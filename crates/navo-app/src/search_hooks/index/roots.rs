@@ -51,6 +51,7 @@ pub(super) fn configured(
     } else if service.reply.is_some() || service.volumes.is_some() {
         available
             .iter()
+            .filter(|drive| !matches!(drive.kind, DriveKind::Network))
             .map(|drive| drive.root.clone())
             .chain(
                 service
@@ -88,6 +89,27 @@ pub(super) fn is_allowed(options: &IndexOptions, root: &Location, available: &[D
     }
     !matches!(kind, Some(DriveKind::Network) if !options.network)
         && !matches!(kind, Some(DriveKind::Removable) if !options.removable)
+}
+
+/// Network comparisons accept both separators; Windows adapters also return `\\?\UNC\`.
+fn network_form(location: &Location) -> String {
+    location.as_str().replace('/', "\\")
+}
+
+/// True for UNC paths and for paths inside a listed network drive.
+pub(super) fn is_network(root: &Location, network_drives: &[Location]) -> bool {
+    let normalized = network_form(root);
+    if normalized.starts_with(r"\\") {
+        return true;
+    }
+    network_drives.iter().any(|drive| {
+        if contains(drive, root) {
+            return true;
+        }
+        let drive = network_form(drive);
+        let drive = drive.trim_end_matches('\\');
+        normalized == drive || normalized.starts_with(&format!("{drive}\\"))
+    })
 }
 
 pub(super) fn contains(parent: &Location, child: &Location) -> bool {
@@ -153,10 +175,7 @@ mod tests {
         };
         assert_eq!(
             roots(&options, &available, Vec::new(), installed),
-            [
-                Location::new(r"D:\").unwrap(),
-                Location::new(r"E:\").unwrap()
-            ]
+            [Location::new(r"D:\").unwrap()]
         );
         let home = vec![r"C:\Users\admin".to_owned()];
         assert!(roots(&options, &available, home, installed).is_empty());
@@ -238,6 +257,81 @@ mod tests {
     }
 
     #[test]
+    fn network_drives_are_not_walked_unless_listed() {
+        let available = navo_shell::assemble(&navo_shell::RawDrives {
+            mask: 0b11100,
+            kinds: vec![
+                ('C', DriveKind::Fixed),
+                ('D', DriveKind::Fixed),
+                ('E', DriveKind::Network),
+            ],
+            ..Default::default()
+        });
+        let status = Status {
+            volumes: vec![VolumeStatus {
+                root: "C:".into(),
+                entries: 10,
+                ..Default::default()
+            }],
+        };
+        let mut options = IndexOptions::default();
+        let found = roots(&options, &available, Vec::new(), replied(&status));
+        assert_eq!(found, [Location::new(r"D:\").unwrap()]);
+        options.network = true;
+        let found = roots(&options, &available, Vec::new(), replied(&status));
+        assert_eq!(found, [Location::new(r"D:\").unwrap()]);
+        options.drives = vec!["E:".into()];
+        let found = roots(&options, &available, Vec::new(), replied(&status));
+        assert_eq!(found, [Location::new(r"E:\").unwrap()]);
+    }
+
+    #[test]
+    fn a_listed_network_folder_is_walked() {
+        let available = navo_shell::assemble(&navo_shell::RawDrives {
+            mask: 0b100,
+            kinds: vec![('C', DriveKind::Fixed)],
+            ..Default::default()
+        });
+        let status = Status {
+            volumes: vec![VolumeStatus {
+                root: "C:".into(),
+                entries: 10,
+                ..Default::default()
+            }],
+        };
+        let options = IndexOptions {
+            network: true,
+            ..Default::default()
+        };
+        let listed = Location::new(r"\\server\share\folder").unwrap();
+        let found = roots(
+            &options,
+            &available,
+            vec![listed.as_str().to_owned()],
+            replied(&status),
+        );
+        assert_eq!(found, [listed]);
+    }
+
+    #[test]
+    fn is_network_recognises_unc_paths_and_listed_drives() {
+        let listed = [Location::new(r"Z:\").unwrap()];
+        assert!(is_network(
+            &Location::new(r"\\server\share\x").unwrap(),
+            &[]
+        ));
+        assert!(is_network(&Location::new(r"Z:\x").unwrap(), &listed));
+        assert!(!is_network(&Location::new(r"C:\x").unwrap(), &listed));
+        assert!(is_network(&Location::new("//srv/share/x").unwrap(), &[]));
+        assert!(is_network(
+            &Location::new(r"\\?\UNC\srv\share\x").unwrap(),
+            &[]
+        ));
+        assert!(is_network(&Location::new("Z:/x").unwrap(), &listed));
+        assert!(!is_network(&Location::new("C:/x").unwrap(), &listed));
+    }
+
+    #[test]
     fn service_coverage_leaves_network_non_ntfs_and_failed_volumes_to_the_walk() {
         let available = navo_shell::assemble(&navo_shell::RawDrives {
             mask: 0b11100,
@@ -273,11 +367,12 @@ mod tests {
         );
         options.network = true;
         let found = roots(&options, &available, Vec::new(), replied(&status));
-        assert_eq!(found.len(), 3);
-        assert!(
-            found
-                .iter()
-                .any(|root| root.same_place(&Location::new(r"E:\").unwrap()))
+        assert_eq!(
+            found,
+            [
+                Location::new(r"D:\").unwrap(),
+                Location::new(r"F:\").unwrap()
+            ]
         );
         options.drives = vec!["D:".into()];
         assert_eq!(

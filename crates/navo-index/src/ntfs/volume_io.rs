@@ -1,9 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Pending, Resume, TableChange,
-    UsnBatch, parse_batch, validate_journal_cursor,
+    Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Pending, Resume, SizeHint,
+    TableChange, UsnBatch, parse_batch, validate_journal_cursor,
 };
+
+#[cfg(test)]
+thread_local! {
+    static RESERVE_FAILURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 pub(super) trait VolumeIo {
     fn query_journal(&mut self) -> Result<Vec<u8>, NtfsError>;
@@ -57,8 +62,23 @@ pub(super) fn enumerate_volume(
     limit: usize,
     cancel: &crate::pipe::CancelToken,
 ) -> Result<Enumeration, NtfsError> {
+    enumerate_volume_sized(volume, drive, limit, SizeHint::default(), cancel)
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the volume, limit, hint and cancel token are separate build inputs"
+)]
+pub(super) fn enumerate_volume_sized(
+    volume: &mut impl VolumeIo,
+    drive: char,
+    limit: usize,
+    hint: SizeHint,
+    cancel: &crate::pipe::CancelToken,
+) -> Result<Enumeration, NtfsError> {
     let state = JournalState::parse(&volume.query_journal()?)?;
     let mut index = NtfsIndex::new(drive, state.position)?;
+    reserve_for_build(&mut index, hint, drive)?;
     let mut pending = Pending::default();
     let mut cursor = 0;
     let mut count = 0;
@@ -87,14 +107,38 @@ pub(super) fn enumerate_volume(
         return Err(NtfsError::Cancelled);
     }
     JournalState::parse(&volume.query_journal()?)?.check(state.position)?;
-    // Growth by doubling leaves up to half of each array unused; a build happens once, so trim it.
-    index.table.shrink_to_fit();
+    // Growth adds an eighth at a time; a build happens once, so trim the leftover slack.
+    index.table.trim_slack();
     index.ids.shrink_to_fit();
+    let blocked_peak = pending.blocked_peak;
     Ok(Enumeration {
         index,
         unresolved: pending.finish(),
         sizes_unknown,
+        blocked_peak,
     })
+}
+
+/// Reserves the hint's total capacities, falling back to a fresh unsized index on allocation failure.
+fn reserve_for_build(index: &mut NtfsIndex, hint: SizeHint, drive: char) -> Result<(), NtfsError> {
+    if hint == SizeHint::default() {
+        return Ok(());
+    }
+    let reserved = index
+        .table
+        .try_reserve_total(hint.entries, hint.folders, hint.name_bytes)
+        .and_then(|()| {
+            index
+                .ids
+                .try_reserve(hint.references.saturating_sub(index.ids.len()))
+        });
+    if let Err(error) = reserved {
+        tracing::warn!(%error, drive = %drive, "index reserve failed; building unsized");
+        #[cfg(test)]
+        RESERVE_FAILURES.with(|count| count.set(count.get() + 1));
+        *index = NtfsIndex::new(drive, index.position)?;
+    }
+    Ok(())
 }
 
 fn add_record(
@@ -253,4 +297,118 @@ pub(super) fn journal_request(position: JournalPosition) -> Vec<u8> {
     bytes[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
     bytes[32..40].copy_from_slice(&position.journal_id.to_le_bytes());
     bytes
+}
+
+#[cfg(test)]
+mod sized_tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::print_stdout,
+        reason = "sized-build tests fail on broken fixtures and print the measured peak"
+    )]
+
+    use super::super::test_support::MftFixture;
+    use super::{RESERVE_FAILURES, enumerate_volume_sized};
+    use crate::heap_probe::{MIB, Probe, fail_allocations_from};
+    use crate::ntfs::{NtfsIndex, SizeHint};
+    use crate::pipe::CancelToken;
+
+    const ENTRIES: u32 = 50_000;
+    const BIG: u32 = 1_100_000;
+
+    fn hint_for(index: &NtfsIndex) -> SizeHint {
+        let entries = index.table.slots() as usize;
+        let folders = index.table.folder_count();
+        let names = index.table.live_name_bytes();
+        let entries = entries + entries / 16;
+        SizeHint {
+            entries,
+            folders: (folders + folders / 16).min(entries),
+            name_bytes: names + names / 16,
+            references: index.ids.len(),
+        }
+    }
+
+    /// Heap bytes the index holds, measured by dropping it.
+    fn held(index: NtfsIndex, probe: &Probe) -> usize {
+        let before = probe.read().retained;
+        drop(index);
+        (before - probe.read().retained).unsigned_abs()
+    }
+
+    #[test]
+    fn a_sized_build_of_one_point_one_million_entries_stays_within_12_bytes() {
+        let first = MftFixture::new(BIG, 7).read();
+        let hint = hint_for(&first.index);
+        drop(first);
+        let probe = Probe::start();
+        let result = enumerate_volume_sized(
+            &mut MftFixture::new(BIG, 7),
+            'C',
+            usize::MAX,
+            hint,
+            &CancelToken::new(),
+        )
+        .unwrap();
+        let measured = probe.read();
+        let index = held(result.index, &probe);
+        let transient = measured.peak.saturating_sub(index);
+        let per_entry = transient / BIG as usize;
+        println!(
+            "sized build: peak {} KiB, held {} KiB, transient {transient} B, per-entry {per_entry} B",
+            measured.peak >> 10,
+            index >> 10
+        );
+        assert!(
+            transient <= BIG as usize * 12,
+            "sized build {transient} B for {BIG} entries"
+        );
+    }
+
+    #[test]
+    fn oversized_hints_fall_back_to_an_unsized_build() {
+        let baseline = MftFixture::new(ENTRIES, 7).read().index;
+        let memory = baseline.table.memory_bytes() + baseline.ids.memory_bytes();
+        for hint in [
+            SizeHint {
+                entries: 100_000_000,
+                folders: 0,
+                name_bytes: 0,
+                references: 0,
+            },
+            SizeHint {
+                entries: 0,
+                folders: 0,
+                name_bytes: 0,
+                references: 100_000_000,
+            },
+        ] {
+            RESERVE_FAILURES.with(|count| count.set(0));
+            let result = {
+                let _failing = fail_allocations_from(64 * MIB);
+                enumerate_volume_sized(
+                    &mut MftFixture::new(ENTRIES, 7),
+                    'C',
+                    usize::MAX,
+                    hint,
+                    &CancelToken::new(),
+                )
+                .unwrap()
+            };
+            assert!(RESERVE_FAILURES.with(std::cell::Cell::get) >= 1);
+            assert_eq!(result.index.table.len(), ENTRIES as usize);
+            assert_eq!(result.index.ids.len(), ENTRIES as usize);
+            let built = result.index.table.memory_bytes() + result.index.ids.memory_bytes();
+            assert!(
+                built <= memory + memory / 10,
+                "{built} bytes, baseline {memory}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unsized_build_leaves_no_slack_above_a_sixteenth() {
+        let result = MftFixture::new(ENTRIES, 7).read();
+        assert!(result.index.table.spares_within_slack());
+    }
 }

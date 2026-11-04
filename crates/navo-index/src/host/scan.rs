@@ -4,6 +4,7 @@ use navo_core::{Location, ProviderPath};
 use navo_fs::{CancelToken, EntryKind, FsEntry, WatchChange, WatchEvent};
 
 use super::Worker;
+use crate::ntfs::COMPACT_MIN_SLOTS;
 use crate::table::{Flags, NO_PARENT, NameTable};
 use crate::walker::{self, Outcome, Progress, WalkResult};
 
@@ -67,13 +68,17 @@ impl Worker {
         if self.cancel.is_cancelled() || result.outcome != Outcome::Complete || incomplete {
             return;
         }
+        let walked = result.table;
         let shared = Arc::clone(&self.table);
         let mut table = shared.write().unwrap_or_else(PoisonError::into_inner);
         if root.same_place(&self.options.root) {
-            *table = result.table;
+            *table = walked;
         } else {
-            match self.merge_subtree(&mut table, root, &result.table) {
-                Ok(true) => {}
+            match self.merge_subtree(&mut table, root, &walked) {
+                Ok(true) => {
+                    drop(walked);
+                    compact_if_sparse(&mut table);
+                }
                 Ok(false) => return,
                 Err(error) => {
                     self.error(format!("updating index: {error}"));
@@ -251,6 +256,13 @@ impl Worker {
 fn contains(parent: &Location, location: &Location) -> bool {
     std::iter::successors(Some(location.clone()), Location::parent)
         .any(|location| parent.same_place(&location))
+}
+
+/// Compacts once dead slots outnumber live ones, as NTFS does after a doubling.
+fn compact_if_sparse(table: &mut NameTable) {
+    if table.slots() >= COMPACT_MIN_SLOTS && table.slots() as usize > 2 * table.len() {
+        drop(table.compact());
+    }
 }
 
 fn append_children(table: &mut NameTable, root: u32, walked: &NameTable) -> Result<(), String> {
