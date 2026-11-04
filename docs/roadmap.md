@@ -1,6 +1,6 @@
 # Navo roadmap
 
-Updated 2 November 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
+Updated 4 November 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
@@ -34,9 +34,11 @@ Goal: prove the stack and build the factory.
 
 Exit: the spike meets the targets on Linux and a Windows PC, otherwise D2 is reopened.
 
-## v1 Alpha · v0.5 · now
+## v1 Alpha · done
 
 Goal: a file manager the owner can use every day on Windows.
+
+Signed off by the owner on 4 November 2026 and released as v0.2.0, together with the navo-bench benchmark tool. The remaining Windows checks and the heavy benchmark happen during daily use. Stage names (alpha, beta) are milestones, not version numbers; versions follow D106.
 
 All four alpha features are built. They are in the pre-release alpha-2026-10-26. Status is shown instead of percentages, because the old percentages mixed building with release checks.
 
@@ -78,7 +80,7 @@ The foundation already includes two panes, tabs, history, session restore, file 
 
 Exit: two weeks of daily use on a Windows PC with no lost or damaged files.
 
-## v1 Beta · v0.9
+## v1 Beta
 
 Goal: fast search, workspaces and tiled panes, safe deletes.
 
@@ -102,7 +104,7 @@ Exit: no open data-safety bugs; start-up and memory targets met in CI.
 Replaces Total Commander for daily work (D39). Parity features are built to beat TC, not copy it.
 
 1. core: compare and sync, better than Beyond Compare where it counts (D40): folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `navo-compare` crate.
-2. infra: signed portable `.exe` and the NSIS installer (D73), whose uninstaller also removes the index service; user guide; soak test; steadier Windows tests.
+2. infra: signed portable `.exe` and the Velopack installer with in-app updates (D89, replaces the NSIS plan in D73), whose uninstaller also removes the index service; user guide; soak test; steadier Windows tests.
 3. core: optional default file manager (Win+E).
 4. core: inspector column with preview and properties, thumbnails, archives as folders (zip, 7z, tar with gz, xz and zst). File details, owner and hashes are done.
 5. core: module registry with runtime on/off and safe mode; settings window generated from module schemas; notifications for long operations.
