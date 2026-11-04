@@ -563,8 +563,9 @@ fn alt_g_in_an_empty_folder_inside_a_repository_opens_the_repository_menu(cx: &m
 
 #[gpui_kit::test]
 fn alt_g_outside_a_repository_says_so(cx: &mut TestAppContext) {
-    let git = Fake::new(menu_items(false), modified());
     for folder in [r"C:\home", r"D:\work"] {
+        // A fresh fake per window: a shared one keeps its generation and never notifies the second.
+        let git = Fake::new(menu_items(false), modified());
         let state = AppState::new(local(folder));
         let mut options = options_for(fake(), state);
         options.provider = Arc::new(DriveFs::new(None));
