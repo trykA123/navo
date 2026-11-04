@@ -13,7 +13,10 @@ This guide is for people who try Navo for the first time. You do not need to kno
 - [Layouts, panes and workspaces](#layouts-panes-and-workspaces)
 - [Clipboard history](#clipboard-history)
 - [Git](#git)
+- [Compare](#compare)
 - [Settings and themes](#settings-and-themes)
+- [Updates](#updates)
+- [Portable copies and profiles](#portable-copies-and-profiles)
 - [Tips for Total Commander users](#tips-for-total-commander-users)
 - [Reporting a problem](#reporting-a-problem)
 
@@ -310,11 +313,21 @@ Navo keeps what you copy on this PC: text, links and file lists. It also keeps s
 | `F2` | Manage view: list and edit everything |
 | `Esc` | Clear the search, then close |
 
+The `Win+Alt+V` pop-up keeps its size and place after a restart. In Settings, under Clipboard, Pop-up position sets where it opens. Choose Last place (the default), At cursor or Center. If the saved screen is gone, the pop-up opens in the middle of the cursor's screen, or of the main screen.
+
 Type "clipboard" in `Ctrl+K` to pause the history, clear it or delete all clipboard data. Delete all cannot be undone. Turn the history off in Settings under Clipboard. See [Clipboard history](features/clipboard.md) for the details.
 
 ## Git
 
 Folders that are Git repositories get a badge in the left column. It shows conflict, changed, ahead, behind, diverged or clean. Click the badge, or press `Alt+G`, to open a menu for your Git tool: Commit, Pull, Push, Log and Diff, as far as the tool supports them. With the Git command line, Navo runs Pull and Push itself. Pull only fast-forwards, Push is never forced, and both ask first. Choose the tool in Settings under Git. See [Git status and menu](features/git.md) for the details.
+
+`Alt+G` also works in an empty folder inside a repository. It opens that repository's menu.
+
+## Compare
+
+Press `Ctrl+Shift+D` to compare the two panes. You can also run "Compare with the other pane" from `Ctrl+K`.
+
+A folder that has a difference somewhere inside it shows the mark `⊃`. Its status says "contains differences".
 
 ## Settings and themes
 
@@ -334,6 +347,34 @@ Settings are stored in a plain text file, `navo.toml`. You can edit it by hand. 
 Under Colour theme you can choose Open sea, Red bill, Black cap, Fine mesh, Grain or Ink and amber. Each has a light and a dark version. You can follow the system, or keep light or dark. A separate Syntax theme sets the colours of code in the viewer and the editor.
 
 Other sections cover the file index for `Ctrl+K`, rename options, the clipboard, the safety net and diagnostics.
+
+## Updates
+
+Navo checks for a new version when an installed copy starts. It checks again every 24 hours. Time that the computer sleeps counts toward the 24 hours.
+
+The 24-hour check runs only when both of these are on:
+
+- Check for updates automatically, in the Help section of Settings.
+- Keep in tray, in the Tray section of Settings.
+
+Check now, in Help, checks at any time. Automatic checks work only in a copy installed with the Navo installer.
+
+When an update is ready, a ready line appears with a Restart button. You find it in Help, in Settings and on the status bar. `Ctrl+K` also has "Restart to update".
+
+A restart never cancels work. Running jobs, undo restores, Recently deleted work and Git actions finish first. Navo then offers two buttons: "Restart when they finish" and "Cancel".
+
+A restart stops if the viewer has unsaved changes. Save or close the viewer, then restart.
+
+Portable copies do not update themselves. They show no Restart button.
+
+## Portable copies and profiles
+
+A profile holds your settings, your clipboard history and your data. Navo picks the profile folder as follows.
+
+- A `navo.toml` file beside `navo.exe` makes that folder the profile. Copy the whole folder to take the profile with you.
+- An installed copy keeps its settings in `%APPDATA%\Navo` and its data in `%LOCALAPPDATA%\Navo`. An update does not move them.
+- To make an installed copy portable, put an empty file named `.portable` beside `Update.exe`.
+- A copy without `navo.toml` shares the app data profile with the installed copy.
 
 ## Tips for Total Commander users
 
@@ -379,6 +420,15 @@ If Navo closed unexpectedly, the next start shows a notice. It offers these acti
 Type "Save a diagnostic report" in `Ctrl+K`, or use the Help entry in the app menu. Navo saves a ZIP file named `navo-report-<date>.zip`, normally on your Desktop. It holds a readable `report.json`. You can open it before you share it.
 
 The crash notice has its own report.
+
+### Disk use
+
+The Diagnostics section of Settings shows the disk space that Navo uses. It lists each part, such as the listing cache, the journal and the logs.
+
+- A database and its side files count as one row.
+- Rows show real paths on screen.
+- Only the saved report hides paths.
+- The saved report marks a folder that you cannot read as not readable.
 
 ### Log files
 
