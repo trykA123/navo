@@ -62,7 +62,12 @@ fn recover_in(
         match state {
             JobState::RolledBack | JobState::Undone => report.restored.push(id),
             _ if settled => (),
-            _ => report.pending.push(pending::details(journal, &job)?),
+            _ => {
+                let mut left = pending::details(journal, &job)?;
+                left.attention = state == JobState::Failed
+                    && job.kind == navo_core::retention::RETAINED_DELETE_KIND;
+                report.pending.push(left);
+            }
         }
     }
     stranded::list(journal, ops, &mut report.pending)?;

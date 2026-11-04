@@ -52,7 +52,9 @@ pub fn state_label(state: RetainedState) -> Option<String> {
     match state {
         RetainedState::Ready => None,
         RetainedState::Busy => Some(tr("recently-deleted-in-use")),
-        RetainedState::NeedsAttention => Some(tr("recently-deleted-attention")),
+        RetainedState::NeedsAttention | RetainedState::Stuck => {
+            Some(tr("recently-deleted-attention"))
+        }
     }
 }
 

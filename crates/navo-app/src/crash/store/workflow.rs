@@ -35,7 +35,7 @@ pub(super) fn run(
                 "another database session prevents recovery; close Navo and restart".into(),
             ));
         }
-        return Ok((RecoveryNotice::loaded(data, &state), None));
+        return Ok((RecoveryNotice::loaded(data, &state, None), None));
     }
     let _mutations = crate::jobs::claim_recovery(data, experimental).map_err(Error::Invalid)?;
     if state.pending.is_none() {
@@ -53,15 +53,18 @@ pub(super) fn run(
                 refresh::update(data, &mut state, &report, &journal)?;
                 crate::jobs::trim_at_startup(&journal, data, ops)?;
                 clear_sentinel(&path)?;
-                return Ok((RecoveryNotice::loaded(data, &state), Some(journal)));
+                return Ok((
+                    RecoveryNotice::loaded(data, &state, Some(&journal)),
+                    Some(journal),
+                ));
             }
             Err(error) if error.is_database_corruption() => state.begin(data)?,
             Err(error) => return Err(error.into()),
         }
     }
-    resume(data, &mut state, ops)?;
+    let journal = resume(data, &mut state, ops)?;
     clear_sentinel(&path)?;
-    Ok((RecoveryNotice::loaded(data, &state), None))
+    Ok((RecoveryNotice::loaded(data, &state, journal.as_ref()), None))
 }
 
 fn artifacts(path: &Path) -> Result<bool, Error> {
@@ -92,7 +95,13 @@ fn clear_completed_receipt(data: &Path, state: &State) -> Result<(), Error> {
     Ok(())
 }
 
-fn resume(data: &Path, state: &mut State, ops: &dyn ProviderOps) -> Result<(), Error> {
+/// Returns the journal of the finished recovery, if this run finished one.
+fn resume(
+    data: &Path,
+    state: &mut State,
+    ops: &dyn ProviderOps,
+) -> Result<Option<crate::jobs::SharedJournal>, Error> {
+    let mut recovered = None;
     while let Some(progress) = state.pending.clone() {
         match progress {
             Progress::Preserve { case } => {
@@ -135,10 +144,10 @@ fn resume(data: &Path, state: &mut State, ops: &dyn ProviderOps) -> Result<(), E
                 notice,
                 identity,
                 attempted,
-            } => finish(data, state, (notice, identity, attempted), ops)?,
+            } => recovered = Some(finish(data, state, (notice, identity, attempted), ops)?),
         }
     }
-    Ok(())
+    Ok(recovered)
 }
 
 fn finish(
@@ -146,7 +155,7 @@ fn finish(
     state: &mut State,
     (mut notice, identity, attempted): (super::state::Notice, super::state::Identity, Vec<i64>),
     ops: &dyn ProviderOps,
-) -> Result<(), Error> {
+) -> Result<crate::jobs::SharedJournal, Error> {
     build::preserved(data, notice.slot)?;
     let path = navo_store::StoreDirs::journal_in(data);
     if !promote::matches(&path, &identity)? {
@@ -167,7 +176,7 @@ fn finish(
     state.save(data)?;
     acknowledge_quarantine(&path, slot)?;
     crate::jobs::trim_at_startup(&journal, data, ops)?;
-    Ok(())
+    Ok(journal)
 }
 
 fn recover(
@@ -184,13 +193,7 @@ fn recover(
         manual = report.pending.len(),
         "journal recovery checked"
     );
-    for job in &report.pending {
-        tracing::warn!(
-            job = job.job.0,
-            files = job.left.len(),
-            "files not yet put back after recovery"
-        );
-    }
+    crate::jobs::log_pending(&report.pending);
     Ok((journal, report))
 }
 

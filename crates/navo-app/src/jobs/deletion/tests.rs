@@ -9,6 +9,7 @@ use super::*;
 
 mod confirmed;
 mod drive;
+mod settling;
 
 fn setup() -> (tempfile::TempDir, StoreDirs, SharedJournal) {
     let profile = tempfile::tempdir().unwrap();
@@ -255,7 +256,7 @@ fn incomplete_job_is_restored_on_profile_recovery() {
 }
 
 #[test]
-fn occupied_original_stays_pending_with_readable_retained_paths_and_can_retry() {
+fn occupied_original_is_reported_once_with_readable_retained_paths_and_kept_for_maintenance() {
     let (_profile, dirs, journal) = setup();
     let fs = FakeFs::new();
     fs.add_file("home/a", 8);
@@ -281,7 +282,9 @@ fn occupied_original_stays_pending_with_readable_retained_paths_and_can_retry() 
             .pending
             .is_empty()
     );
-    assert_eq!(fs.metadata(&source).unwrap().size, 8);
+    let entry = entries(&dirs).remove(0);
+    assert_eq!(entry.state, RetainedState::Conflict);
+    assert_eq!(fs.metadata(&entry.record.held().unwrap()).unwrap().size, 8);
 }
 
 #[test]

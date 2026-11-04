@@ -6,9 +6,28 @@ use navo_store::RetentionCatalog;
 use crate::{Error, RetentionRun, Vault, ancestry::Ancestors, proof, snapshot};
 
 impl Vault<'_> {
+    /// Purges `id` for maintenance; refuses any pinned entry.
     pub fn purge(
         &mut self,
         id: RetentionId,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<RetentionEntry, Error> {
+        self.purge_as(id, false, run)
+    }
+
+    /// Deletes `id` for the user: unlike `purge`, also a Conflict and an entry kept by a failed delete.
+    pub fn delete(
+        &mut self,
+        id: RetentionId,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<RetentionEntry, Error> {
+        self.purge_as(id, true, run)
+    }
+
+    fn purge_as(
+        &mut self,
+        id: RetentionId,
+        user: bool,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetentionEntry, Error> {
         // A restore that had landed already ends here; the caller sees the Restored state.
@@ -18,26 +37,48 @@ impl Vault<'_> {
             return Ok(settled);
         }
         let mut entry = self.get(id)?;
-        if entry.pinned {
+        if entry.pinned && !(user && entry.kept) && entry.state != RetainedState::Purging {
             return Err(Error::Pinned(id));
         }
-        if entry.state == RetainedState::Ready {
-            proof::owned(self.ops, &entry.record)?;
-            snapshot::verify(self.ops, &entry.record, (&entry.record.held()?, false), run)?;
-            let mut tx = self.catalog.checked_transaction(&entry)?;
-            proof::owned(self.ops, &entry.record)?;
-            if !proof::node(self.ops, &entry.record.held()?, &entry.record.nodes[0])? {
-                return Err(Error::Changed(entry.record.held()?));
+        if user && entry.state == RetainedState::Conflict && entry.target.is_some() {
+            entry = self.reconcile(id, run)?;
+            if entry.state == RetainedState::Restored {
+                return Ok(entry);
             }
-            entry.state = RetainedState::Purging;
-            tx.save(&entry, RetainedState::Ready)?;
-            tx.commit()?;
-        } else if entry.state != RetainedState::Purging {
-            return Err(Error::State(id));
+        }
+        match entry.state {
+            RetainedState::Ready => self.begin_purge(entry, RetainedState::Ready, run)?,
+            RetainedState::Conflict if user => {
+                self.begin_purge(entry, RetainedState::Conflict, run)?;
+            }
+            RetainedState::Purging => {}
+            _ => return Err(Error::State(id)),
         }
         self.complete_purge(id, run)
     }
 
+    /// Moves `entry` from `from` to Purging once its whole held copy is proven unchanged.
+    fn begin_purge(
+        &mut self,
+        mut entry: RetentionEntry,
+        from: RetainedState,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<(), Error> {
+        proof::owned(self.ops, &entry.record)?;
+        snapshot::verify(self.ops, &entry.record, (&entry.record.held()?, false), run)?;
+        let mut tx = self.catalog.checked_transaction(&entry)?;
+        proof::owned(self.ops, &entry.record)?;
+        if !proof::node(self.ops, &entry.record.held()?, &entry.record.nodes[0])? {
+            return Err(Error::Changed(entry.record.held()?));
+        }
+        entry.state = RetainedState::Purging;
+        entry.target = None;
+        tx.save(&entry, from)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// A Purging entry was chosen for deletion already, so only an active job stops it.
     fn complete_purge(
         &mut self,
         id: RetentionId,
@@ -47,7 +88,7 @@ impl Vault<'_> {
         if entry.state != RetainedState::Purging {
             return Err(Error::State(id));
         }
-        if entry.pinned {
+        if entry.pinned && !entry.kept {
             return Err(Error::Pinned(id));
         }
         Eraser {

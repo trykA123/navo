@@ -86,6 +86,17 @@ pub(super) fn parent(ops: &dyn ProviderOps, record: &RetentionRecord) -> Result<
     folder(ops, &anchor(record)?, record.parent_identity)
 }
 
+/// The vault folder, or the folder holding it, is there on the recorded volume: the volume is mounted.
+pub(super) fn vault_present(ops: &dyn ProviderOps, record: &RetentionRecord) -> bool {
+    let Some(vault) = record.anchor() else {
+        return false;
+    };
+    let volume = record.parent_identity.volume;
+    let on_volume =
+        |at: &Location| matches!(ops.file_identity(at), Ok(Some(found)) if found.volume == volume);
+    on_volume(&vault) || vault.parent().is_some_and(|up| on_volume(&up))
+}
+
 pub(super) fn owned(ops: &dyn ProviderOps, record: &RetentionRecord) -> Result<Scope, Error> {
     parent(ops, record)?;
     let expected = record

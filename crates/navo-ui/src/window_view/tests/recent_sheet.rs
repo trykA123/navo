@@ -193,10 +193,47 @@ fn busy_and_attention_rows_refuse_with_a_reason(cx: &mut TestAppContext) {
     let (rig, shelf) = opened(cx, needy);
     let status =
         |cx: &mut TestAppContext| rig.view.read_with(cx, |view, _| view.recent_view().status);
+    let asking = |cx: &mut TestAppContext| {
+        rig.view
+            .read_with(cx, |view, _| view.recent_view().is_asking)
+    };
     rig.press(cx, &["enter"]);
     assert_eq!(status(cx), Some(tr("retained-busy")));
-    rig.press(cx, &["down", "delete"]);
+    rig.press(cx, &["delete"]);
+    assert_eq!(status(cx), Some(tr("retained-busy")));
+    assert!(!asking(cx));
+    rig.press(cx, &["down", "enter"]);
     assert_eq!(status(cx), Some(tr("retained-not-ready")));
+    assert!(locked(&shelf.restored).is_empty());
+    assert!(locked(&shelf.purged).is_empty());
+}
+
+#[gpui_kit::test]
+fn an_attention_row_can_still_be_deleted(cx: &mut TestAppContext) {
+    let (rig, shelf) = opened(cx, needy);
+    rig.press(cx, &["down", "delete"]);
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.recent_view().is_asking)
+    );
+    click(cx, &rig, "confirm-button");
+    assert_eq!(*locked(&shelf.purged), [RetentionId(2)]);
+    assert!(locked(&shelf.restored).is_empty());
+}
+
+#[gpui_kit::test]
+fn a_stuck_row_refuses_restore_and_delete_with_its_own_reason(cx: &mut TestAppContext) {
+    let (rig, shelf) = opened(cx, |fs| {
+        let mut rows = three(fs);
+        rows[2].state = RetainedState::Stuck;
+        rows
+    });
+    let status =
+        |cx: &mut TestAppContext| rig.view.read_with(cx, |view, _| view.recent_view().status);
+    for key in ["enter", "delete"] {
+        rig.press(cx, &[key]);
+        assert_eq!(status(cx), Some(tr("retained-stuck")), "{key}");
+    }
     assert!(
         !rig.view
             .read_with(cx, |view, _| view.recent_view().is_asking)

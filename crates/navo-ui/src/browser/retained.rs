@@ -17,6 +17,8 @@ pub enum RetainedState {
     Ready,
     Busy,
     NeedsAttention,
+    /// Needs attention and can be neither restored nor deleted here.
+    Stuck,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

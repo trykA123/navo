@@ -59,19 +59,24 @@ fn a_conflict_without_a_restore_target_stays_conflicted() {
 }
 
 #[test]
-fn a_conflicted_restore_never_moves_to_another_target_or_to_purging() {
+fn a_conflicted_restore_never_moves_to_another_target_or_back_to_restoring() {
     let mut catalog = catalog();
     let entry = conflicted_restore(&mut catalog);
     let mut moved = entry.clone();
     moved.state = RetainedState::Restored;
     moved.target.as_mut().unwrap().location = Location::new("/sample/b").unwrap();
     assert!(!save(&mut catalog, &moved, RetainedState::Conflict));
-    for state in [RetainedState::Restoring, RetainedState::Purging] {
-        let mut next = entry.clone();
-        next.state = state;
-        assert!(
-            !save(&mut catalog, &next, RetainedState::Conflict),
-            "{state:?}"
-        );
-    }
+    let mut next = entry.clone();
+    next.state = RetainedState::Restoring;
+    assert!(!save(&mut catalog, &next, RetainedState::Conflict));
+}
+
+#[test]
+fn a_conflicted_restore_can_be_deleted_by_the_user() {
+    let mut catalog = catalog();
+    let mut entry = conflicted_restore(&mut catalog);
+    entry.state = RetainedState::Purging;
+    entry.target = None;
+    assert!(save(&mut catalog, &entry, RetainedState::Conflict));
+    assert_eq!(catalog.get(entry.id).unwrap().state, RetainedState::Purging);
 }

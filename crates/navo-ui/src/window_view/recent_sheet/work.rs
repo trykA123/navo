@@ -11,21 +11,24 @@ use crate::prelude::*;
 use crate::recently_deleted::{folder_of, name_of};
 use crate::status_bar::StatusNotice;
 
-fn refusal(row: &RetainedRow) -> Option<String> {
+/// An item that needs attention may still be deleted, never restored.
+fn refusal(row: &RetainedRow, restore: bool) -> Option<String> {
     match row.state {
         RetainedState::Ready => None,
         RetainedState::Busy => Some(tr("retained-busy")),
-        RetainedState::NeedsAttention => Some(tr("retained-not-ready")),
+        RetainedState::NeedsAttention if restore => Some(tr("retained-not-ready")),
+        RetainedState::NeedsAttention => None,
+        RetainedState::Stuck => Some(tr("retained-stuck")),
     }
 }
 
 impl NavoWindow {
-    fn actionable(&mut self) -> Option<RetainedRow> {
+    fn actionable(&mut self, restore: bool) -> Option<RetainedRow> {
         let row = self.recent.current()?.clone();
         if self.recent.working.contains(&row.id) {
             return None;
         }
-        if let Some(reason) = refusal(&row) {
+        if let Some(reason) = refusal(&row, restore) {
             self.recent.status = Some(reason.into());
             return None;
         }
@@ -34,7 +37,7 @@ impl NavoWindow {
     }
 
     pub(super) fn restore_current(&mut self, cx: &mut Context<Self>) {
-        let Some(row) = self.actionable() else {
+        let Some(row) = self.actionable(true) else {
             return;
         };
         Rc::make_mut(&mut self.recent.working).push(row.id);
@@ -95,7 +98,7 @@ impl NavoWindow {
     }
 
     pub(super) fn ask_purge_current(&mut self) {
-        if let Some(row) = self.actionable() {
+        if let Some(row) = self.actionable(false) {
             self.recent.asks += 1;
             self.recent.ask = Some(row);
         }

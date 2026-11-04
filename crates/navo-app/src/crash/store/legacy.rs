@@ -47,12 +47,6 @@ fn recover(
     let journal = Arc::new(Mutex::new(JobJournal::new(db)?));
     let report = crate::jobs::recover_profile(&journal, ops, (data, &[]), false)?;
     crate::jobs::trim_at_startup(&journal, data, ops)?;
-    for pending in report.pending {
-        tracing::warn!(
-            job = pending.job.0,
-            files = pending.left.len(),
-            "files not yet put back after recovery"
-        );
-    }
+    crate::jobs::log_pending(&report.pending);
     Ok(journal)
 }

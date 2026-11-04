@@ -41,11 +41,12 @@ impl Vault<'_> {
                         | RetainedState::Aborted
                 ))
         {
-            return Err(Error::State(id));
+            return Err(unrestorable(&before));
         }
         let entry = self.reconcile(id, run)?;
         match entry.state {
             RetainedState::Restored | RetainedState::Aborted => Ok(entry),
+            RetainedState::Conflict => Err(unrestorable(&entry)),
             RetainedState::Ready => self.restore_authorized(
                 &RestoreRequest {
                     id,
@@ -77,16 +78,21 @@ impl Vault<'_> {
         if entry.state != RetainedState::Ready {
             return Err(Error::State(entry.id));
         }
-        if entry.pinned && owner.is_none() {
+        if entry.pinned && !entry.kept && owner.is_none() {
             return Err(Error::Pinned(entry.id));
-        }
-        if proof::present(self.ops, request.target)?.is_some() {
-            return Err(Error::Changed(request.target.clone()));
         }
         entry.target = Some(RestoreTarget {
             location: request.target.clone(),
             parent_identity,
         });
+        if proof::present(self.ops, request.target)?.is_some() {
+            if owner.is_some() {
+                entry.state = RetainedState::Conflict;
+                tx.save(&entry, RetainedState::Ready)?;
+                tx.commit()?;
+            }
+            return Err(Error::Changed(request.target.clone()));
+        }
         entry.state = RetainedState::Restoring;
         match owner {
             Some(owner) => tx.save_rollback(&entry, owner)?,
@@ -106,7 +112,7 @@ impl Vault<'_> {
         if entry.state != RetainedState::Restoring {
             return Err(Error::State(entry.id));
         }
-        if owner.is_none() && entry.pinned {
+        if owner.is_none() && entry.pinned && !entry.kept {
             return Err(Error::Pinned(entry.id));
         }
         proof::owned(self.ops, &entry.record)?;
@@ -136,5 +142,14 @@ impl Vault<'_> {
         tx.commit()?;
         self.cleanup(&entry)?;
         Ok(entry)
+    }
+}
+
+/// A Conflict never settles by retrying; other states may still be in flight.
+fn unrestorable(entry: &RetentionEntry) -> Error {
+    if entry.state == RetainedState::Conflict {
+        Error::Changed(entry.record.source.clone())
+    } else {
+        Error::State(entry.id)
     }
 }

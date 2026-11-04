@@ -15,6 +15,7 @@ job-retention-unknown-title = Navo cannot keep old versions on this drive right 
 job-retention-unknown-label = Run without
 job-retention-unknown-help = Nothing was changed yet. Without old versions, this cannot be undone.
 job-retention-failed = Previous versions were kept for recovery because retention could not be completed: { $error }
+job-recovery-attention = Navo could not put back an interrupted delete and will not try again. Any copy it kept stays in Recently deleted and is not removed while it needs attention.
 job-delete-too-large-title = Too large to keep. Delete permanently?
 job-delete-too-large-help = More than { $limit } items; deletion cannot be undone.
 
