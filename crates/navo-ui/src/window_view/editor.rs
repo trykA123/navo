@@ -38,6 +38,16 @@ impl NavoWindow {
         let Some(target) = edit_target(tab, row) else {
             return;
         };
+        self.open_for_edit((target, choose), window, cx);
+    }
+
+    /// Opens the file in the chosen editor, or asks for one first.
+    pub(super) fn open_for_edit(
+        &mut self,
+        (target, choose): (Location, bool),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match self.values.editor_path().filter(|_| !choose) {
             Some(program) => self.open_in_editor((program, target), window, cx),
             None => self.ask_editor((target, None), window, cx),

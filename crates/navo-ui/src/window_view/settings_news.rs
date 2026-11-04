@@ -90,6 +90,7 @@ impl NavoWindow {
         });
         self.clipboard_notice()
             .or(problem)
+            .or_else(|| self.user_command_notice())
             .or_else(|| self.keymap_notice())
             .or_else(|| self.upgrade_notice())
             .or_else(|| self.saver.font_notice.clone())

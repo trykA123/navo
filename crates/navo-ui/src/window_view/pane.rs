@@ -7,12 +7,14 @@ use navo_core::{Command, PaneId, Tab};
 use super::NavoWindow;
 use super::chrome_state::Hidden;
 use super::clipboard::ClipboardEffect;
+use super::compare_keys::compare_keys;
 use super::keys::{
     BrowsePreview, DriveMenuFirst, DriveMenuSecond, EditPath, NewTab, PANE, ResetSplit,
     ShowHiddenPath, ShowHiddenTabs,
 };
 use super::list_columns::{column_keys, list_parts, user_widths};
 use super::status::footer_parts;
+use super::user_commands::user_command_keys;
 use crate::FocusHandle;
 use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
 use crate::pane_chrome::{PaneTabs, pane_card, path_segments, target_outline};
@@ -200,7 +202,7 @@ impl NavoWindow {
 
     fn pane_keys(root: Div, cx: &mut Context<Self>) -> Div {
         let root = super::workspace_keys::workspace_keys(root, cx);
-        let root = super::compare_keys::compare_keys(root, cx);
+        let root = user_command_keys(compare_keys(root, cx), cx);
         column_keys(super::tab_keys::tab_keys(root, cx), cx)
             .on_action(cx.listener(
                 |this: &mut Self, _: &super::keys::OpenTerminal, window, cx| {

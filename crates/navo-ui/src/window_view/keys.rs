@@ -17,6 +17,7 @@ gpui_kit::actions!(
         DriveMenuFirst,
         DriveMenuSecond,
         EditPath,
+        EditUserCommands,
         FocusActivity,
         FocusCrashNotice,
         LeaveWaiting,
@@ -67,6 +68,7 @@ pub(crate) fn bind_app_keys(cx: &mut App) {
     super::viewer::bind_keys(cx);
     bind_keys(cx);
     crate::commands::bind_user_keys(cx);
+    crate::commands::bind_user_command_keys(cx);
 }
 
 pub fn bind_keys(cx: &mut App) {

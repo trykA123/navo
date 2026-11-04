@@ -10,6 +10,14 @@ use crate::command_center::{Row, Target};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 
+pub(super) fn focused_contexts(window: &Window) -> Vec<String> {
+    window
+        .context_stack()
+        .iter()
+        .filter_map(|context| context.primary().map(|entry| entry.key.to_string()))
+        .collect()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Way {
     Open,

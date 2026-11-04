@@ -12,6 +12,7 @@ pub mod rank;
 mod results;
 mod selection;
 mod source;
+mod user_commands_source;
 mod view;
 
 #[cfg(test)]
@@ -29,6 +30,7 @@ pub use selection::Selection;
 pub use source::{
     Cancel, Capped, Group, Hit, HitSink, Notes, Offline, Request, ResultSource, Scopes, Target,
 };
+pub use user_commands_source::UserCommandsSource;
 pub use view::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, HintKeys, INPUT_ROW,
 };

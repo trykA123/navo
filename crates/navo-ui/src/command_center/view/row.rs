@@ -154,9 +154,9 @@ fn title(t: &Theme, hit: &Hit, text: SharedString) -> Div {
         .child(StyledText::new(text).with_highlights(runs))
 }
 
-fn hit_icon(t: &Theme, hit: &Hit) -> (IconName, Hsla) {
+pub(crate) fn hit_icon(t: &Theme, hit: &Hit) -> (IconName, Hsla) {
     match &hit.target {
-        Target::Action(_) | Target::Core(_) | Target::Arg(..) => {
+        Target::Action(_) | Target::Core(_) | Target::Arg(..) | Target::User(_) => {
             (IconName::SquareChevronRight, t.colors.accent_text)
         }
         Target::Open { folder: true, .. } | Target::GoTo(_) => (IconName::Folder, t.colors.folder),
@@ -171,7 +171,7 @@ fn hit_icon(t: &Theme, hit: &Hit) -> (IconName, Hsla) {
 fn is_command(hit: &Hit) -> bool {
     matches!(
         hit.target,
-        Target::Action(_) | Target::Core(_) | Target::Arg(..)
+        Target::Action(_) | Target::Core(_) | Target::Arg(..) | Target::User(_)
     )
 }
 

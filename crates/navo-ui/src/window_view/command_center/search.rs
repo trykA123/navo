@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::super::NavoWindow;
 use crate::command_center::{
     Cancel, CommandsSnapshot, Group, Hit, HitSink, Mode, Notes, Query, RecentSource, Request,
-    ResultSource, Results, Row, Scope,
+    ResultSource, Results, Row, Scope, UserCommandsSource,
 };
 use crate::commands::ArgKind;
 use crate::prelude::*;
@@ -46,6 +46,16 @@ impl Search {
             shown: generation,
             settled: generation,
         }
+    }
+
+    /// Swaps the user-command source for a fresh one.
+    pub(super) fn replace_source(&mut self, source: Arc<dyn ResultSource>) {
+        let mut sources: Vec<_> = self.sources.iter().cloned().collect();
+        match sources.iter().position(|old| old.id() == source.id()) {
+            Some(at) => sources[at] = source,
+            None => sources.push(source),
+        }
+        self.sources = sources.into();
     }
 
     pub(super) fn cancel(&self) {
@@ -283,6 +293,23 @@ impl NavoWindow {
             Stream { round, scope, this }.go(cx).await;
         })
         .detach();
+    }
+
+    /// Gives an open Ctrl+K the new user commands and reruns its query.
+    pub(in crate::window_view) fn refresh_user_command_source(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let source = Arc::new(UserCommandsSource::new(self.user_command_rows()));
+        let Some(open) = self.command_center.open.as_mut() else {
+            return;
+        };
+        open.search.replace_source(source);
+        let query = open.center.read(cx).query(cx).to_string();
+        if !query.trim().is_empty() {
+            self.query_changed(&query, window, cx);
+        }
     }
 
     pub(super) fn load_recent(&mut self, window: &mut Window, cx: &mut Context<Self>) {

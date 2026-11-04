@@ -14,12 +14,13 @@ use gpui_kit::{Bounds, FocusHandle, Pixels, Subscription, point, px, size};
 #[cfg(test)]
 pub(super) use search::Update;
 
+use self::open::focused_contexts;
 use super::{NavoWindow, SearchHooks};
 use crate::command_center::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, CommandsSnapshot,
     CommandsSource, HereSource, HereWalks, HintKeys, INPUT_ROW, IndexOptions, IndexSource, Mode,
     PathListings, PathsSource, RESULTS_MEMORY, RecentSource, ResultSource, Results, Row, Selection,
-    TabsSnapshot, TabsSource,
+    TabsSnapshot, TabsSource, UserCommandsSource,
 };
 use crate::commands::{self, ArgKind};
 use crate::modifier_hints::HintsMode;
@@ -142,14 +143,6 @@ impl Open {
     }
 }
 
-fn focused_contexts(window: &Window) -> Vec<String> {
-    window
-        .context_stack()
-        .iter()
-        .filter_map(|context| context.primary().map(|entry| entry.key.to_string()))
-        .collect()
-}
-
 impl NavoWindow {
     pub(super) fn prepare_index(&mut self, window: &mut Window) {
         let options = IndexOptions::of(&self.values);
@@ -198,6 +191,7 @@ impl NavoWindow {
             snapshot.clone(),
             hooks.command_use.clone(),
         ))];
+        sources.push(Arc::new(UserCommandsSource::new(self.user_command_rows())));
         let recent = Arc::new(RecentSource::new(hooks.frecent.clone()));
         sources.push(recent.clone());
         sources.push(Arc::new(TabsSource::new(TabsSnapshot::of(

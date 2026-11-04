@@ -78,6 +78,7 @@ mod title;
 mod undo;
 mod undo_retained;
 mod update_hooks;
+mod user_commands;
 mod user_keymap;
 mod viewer;
 mod visits;
@@ -149,6 +150,9 @@ pub use start::{RunHooks, run};
 pub use start_watch::{StartReport, StartWatch};
 pub use terminal::TerminalHooks;
 pub use update_hooks::{UpdateFailure, UpdateHooks, UpdateView};
+pub use user_commands::{
+    UserCommandHooks, UserCommandInfo, UserCommandNews, UserCommandSender, UserInvocation,
+};
 pub use user_keymap::{KeymapHooks, KeymapNews, KeymapSender};
 pub use viewer::{
     ArchiveSource, ArchiveView, Attach, BodyAct, BodyKeys, EDIT_LIMIT, FileHooks, FileStamp,
@@ -243,6 +247,7 @@ pub struct NavoWindow {
     preview: preview::Preview,
     job_ui: jobs::JobUi,
     keymap: user_keymap::KeymapState,
+    user_commands: user_commands::UserCommandState,
     clipboard: clipboard::ClipboardState,
     clip: clipboard_palette::ClipboardPanel,
     lane: lane::Lane,
@@ -312,6 +317,7 @@ impl NavoWindow {
             preview: preview::Preview::new(Self::waker(cx), totals, cx),
             job_ui: jobs::JobUi::new(window, cx),
             keymap: user_keymap::KeymapState::default(),
+            user_commands: user_commands::UserCommandState::default(),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             clip: clipboard_palette::ClipboardPanel::new(options.clipboard),
             lane: lane::Lane::new(window, cx, |view| &mut view.lane),
@@ -397,8 +403,7 @@ impl NavoWindow {
         let result = self.browser.command(command);
         self.drag_list_changed(cx);
         if !matches!(command, Command::PaneScroll { .. }) {
-            self.forget_clipboard_notice();
-            self.forget_update_notice();
+            self.forget_command_notices();
         }
         self.show_refusal(result);
         self.focus_core_pane(window, cx);

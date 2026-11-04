@@ -720,3 +720,7 @@ Each worker runs one gate at a time.
   - `wt` escapes `;` in values (D9);
   - three more literal hints (`keys_bar.rs`, `archive/body.rs`, `space/keys.rs`, now K8a and K8b);
   - the preview sheet's literal Esc (K5b).
+- 2026-11-04 — U1–U7b built; UR review (Opus senior, Sol cross): SHIP WITH FIXES. Two decided deviations, from the earlier security fix rounds:
+  - D9: Windows Terminal (`wt`) commands refuse every placeholder in their arguments (load error pointing to `start-in` and `wt -d .`) instead of escaping `;`.
+  - D11: list files live in a private, checked `%LOCALAPPDATA%\Navo\lists` folder (Unix: `$XDG_RUNTIME_DIR`), not `<StoreDirs.data>/user-commands/`; a portable install writes these short-lived files outside its folder.
+  - Fix rounds: UF-A (navo-app: value shell check, missing program at run, resolved shell at load, `-` names, exit reports, stale pending sidecars, waiter thread first, test release) and UF-B (navo-ui: D14 key-clash warnings, run notices clear, open Ctrl+K refresh).

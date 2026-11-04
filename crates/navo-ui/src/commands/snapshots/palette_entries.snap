@@ -459,6 +459,8 @@ compare.up | Compare | false
 compare.exit | Compare | true
 compare.stop_checking | Compare | true
 compare.continue | Compare | true
+user_commands.run | FileList | false
+user_commands.edit | global | true
 window.new | global | true
 workspace.list | global | true
 app.quit | global | true

@@ -141,6 +141,7 @@ pub struct OpenHooks {
     pub window_shown: Option<WindowShown>,
     pub resident: Option<std::rc::Rc<dyn ResidentHooks>>,
     pub compare: Option<std::sync::Arc<dyn crate::browser::CompareHooks>>,
+    pub user_commands: Option<super::UserCommandHooks>,
 }
 
 impl OpenHooks {
@@ -224,6 +225,7 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         self.window_shown = hooks.window_shown;
+        self.listen_user_commands(hooks.user_commands, window, cx);
         self.resident = hooks.resident;
         if let Some(on_shown) = hooks.on_shown {
             window.on_next_frame(move |window, _| window.on_next_frame(move |_, _| on_shown()));

@@ -84,6 +84,22 @@ fn the_user_keymap_sits_beside_the_settings_file() {
 }
 
 #[test]
+fn the_user_commands_file_sits_beside_the_settings_file() {
+    let dirs = StoreDirs {
+        config: PathBuf::from("/c"),
+        data: PathBuf::from("/d"),
+    };
+    assert_eq!(
+        dirs.user_commands_file(),
+        PathBuf::from("/c/user-commands.toml")
+    );
+    assert_eq!(
+        dirs.user_commands_file().parent(),
+        dirs.settings_file().parent()
+    );
+}
+
+#[test]
 fn ensure_creates_both_dirs() {
     let root = tempfile::tempdir().unwrap();
     let dirs = StoreDirs {
