@@ -163,6 +163,10 @@ pub(in crate::window_view) fn sniff_and_load(
         .ok_or_else(|| "Nothing here can show this file.".to_owned())?;
     let mut picked = load_or_text(&chosen, kind, request.loader(&sniff, turn));
     picked.note = picked.note.or_else(|| kinds.declined(&sniff));
+    let mut chosen = chosen;
+    if picked.kind.id() == PDF_ID {
+        chosen.retain(|kind| kind.slot() != Slot::Text);
+    }
     Ok(Opened {
         head,
         kinds: chosen,
