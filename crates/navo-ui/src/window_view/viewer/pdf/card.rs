@@ -7,7 +7,7 @@ use super::{PdfView, Phase};
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, IconName, TextField, icon};
 use crate::tokens::Theme;
-use crate::window_view::viewer::{CloseViewer, ShowHex, ShowText};
+use crate::window_view::viewer::{CloseViewer, ShowHex};
 
 const CARD_WIDTH: f32 = 480.;
 
@@ -102,10 +102,8 @@ impl PdfView {
             .flex()
             .gap(t.spacing.md)
             .child(
-                action_button("pdf-as-text", "View as Text", ShowText)
-                    .variant(ButtonVariant::Primary),
+                action_button("pdf-as-hex", "View as Hex", ShowHex).variant(ButtonVariant::Primary),
             )
-            .child(action_button("pdf-as-hex", "View as Hex", ShowHex))
             .child(action_button("pdf-close", "Close", CloseViewer).variant(ButtonVariant::Ghost));
         let body = card(t, "pdf-refused")
             .role(Role::Alert)

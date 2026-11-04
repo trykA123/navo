@@ -158,3 +158,44 @@ fn stepping_from_another_viewer_onto_a_refused_pdf_keeps_every_key(cx: &mut Test
     press(cx, window, &view, "escape");
     assert!(!viewer_open(cx, &view));
 }
+
+#[gpui_kit::test]
+fn the_refused_card_offers_hex_and_close_but_no_text(cx: &mut TestAppContext) {
+    let (window, _view) = engineless(cx);
+    redraw(cx, window);
+    assert!(!super::pdf::shown(cx, window, "pdf-as-text"));
+    assert!(super::pdf::shown(cx, window, "pdf-as-hex"));
+    assert!(super::pdf::shown(cx, window, "pdf-close"));
+}
+
+#[gpui_kit::test]
+fn show_text_keeps_an_open_pdf_in_its_pdf_view(cx: &mut TestAppContext) {
+    let rig = super::pdf::rig(cx, "a-book.pdf");
+    assert!(super::pdf::is_pdf(cx, &rig.1));
+    super::pdf::keys(cx, &rig, &["1"]);
+    assert!(super::pdf::is_pdf(cx, &rig.1));
+    super::pdf::keys(cx, &rig, &["alt-1"]);
+    assert!(super::pdf::is_pdf(cx, &rig.1));
+}
+
+#[gpui_kit::test]
+fn a_pdf_offers_no_text_key_or_view_menu_item(cx: &mut TestAppContext) {
+    let rig = super::pdf::rig(cx, "a-book.pdf");
+    let keys = rig.1.read_with(cx, |view, cx| {
+        view.viewer
+            .as_ref()
+            .map(|viewer| viewer.keys(cx))
+            .unwrap_or_default()
+    });
+    assert!(keys.iter().all(|(_, name)| *name != "Text"), "{keys:?}");
+    super::pdf::keys(cx, &rig, &["alt-v"]);
+    let rows: Vec<String> = rig.1.read_with(cx, |view, cx| {
+        view.viewer_menu_view()
+            .map(|menu| {
+                let items = menu.read(cx).menu().items.clone();
+                items.into_iter().map(|item| item.text).collect()
+            })
+            .unwrap_or_default()
+    });
+    assert!(rows.iter().all(|row| !row.contains("Text")), "{rows:?}");
+}
