@@ -7,6 +7,8 @@ use crate::model::{CaseRule, EntryKind, Generation, RelPath, Row, SideEntry, Sta
 use crate::session::{NameProblem, Refusal, row_write_allowed};
 use crate::text::Direction;
 
+pub mod sync;
+
 const MAX_WINDOWS_UNITS: usize = 255;
 const DOS_NAMES: [&str; 22] = [
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",

@@ -16,6 +16,9 @@ recomandation = "recomandation"
 alege = "alege"
 rela = "rela"
 ptd = "ptd"
+fof = "fof"
+filetimes = "filetimes"
+tage = "tage"
 
 [default.extend-identifiers]
 BA = "BA"
