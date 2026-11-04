@@ -7,7 +7,7 @@ use navo_fs::{Attributes, CancelToken, EntryKind, FakeFs, FakeOp, FsEntry, Provi
 
 use super::{Fetch, Fresh, Progress};
 use crate::browser::Browser;
-use crate::file_list::SortBy;
+use crate::file_list::{SortBy, SortKey};
 
 pub(crate) mod gated;
 mod kept;
@@ -396,4 +396,35 @@ fn a_sort_change_during_the_load_still_shows_the_new_order() {
     settle(&mut browser);
     let shown = names(&browser);
     assert_eq!(shown.first().map(String::as_str), Some("f01999.txt"));
+}
+
+#[test]
+fn a_fresh_load_keeps_the_name_sorted_snapshot() {
+    let fs = fake();
+    let mut browser = started(&fs);
+    browser.start();
+    settle(&mut browser);
+    assert_eq!(
+        names(&browser),
+        ["docs", "a.txt", "b.txt", "c.txt", "d.txt"]
+    );
+}
+
+#[test]
+fn another_sort_key_still_gets_the_sorted_snapshot_rows() {
+    let fs = fake();
+    let mut browser = started(&fs);
+    browser.set_default_sort(
+        SortKey {
+            by: SortBy::Size,
+            descending: false,
+        },
+        true,
+    );
+    browser.start();
+    settle(&mut browser);
+    assert_eq!(
+        names(&browser),
+        ["docs", "a.txt", "b.txt", "c.txt", "d.txt"]
+    );
 }

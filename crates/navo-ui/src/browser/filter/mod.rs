@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use navo_core::{Command, CursorMove, Entry, Event, Listing, Location, TabId};
-use navo_fs::view::{ViewFilter, filter_order, materialize};
+use navo_fs::view::{ViewFilter, filter_all, materialize};
 use navo_fs::{CancelToken, FsEntry};
 
 use super::Browser;
@@ -299,7 +299,7 @@ pub(super) fn shown_until(
     shows: Visibility,
     cancel: &CancelToken,
 ) -> Option<Shown> {
-    let has_reserved = full.listing.entries().iter().any(is_reserved);
+    let has_reserved = text.is_empty() && full.listing.entries().iter().any(is_reserved);
     if text.is_empty() && shows.hidden && shows.system && !has_reserved {
         return Some(Shown {
             listing: full.listing.clone(),
@@ -312,8 +312,7 @@ pub(super) fn shown_until(
         show_hidden: shows.hidden,
         show_system: shows.system,
     };
-    let identity: Vec<u32> = (0..u32::try_from(full.details.len()).ok()?).collect();
-    let keep = filter_order(&full.details, &identity, &filter, cancel)?;
+    let keep = filter_all(&full.details, &filter, cancel)?;
     if keep.is_empty() && needle.is_some() {
         return None;
     }

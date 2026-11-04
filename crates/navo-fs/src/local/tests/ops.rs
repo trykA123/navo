@@ -341,3 +341,28 @@ fn recycle_refuses_a_trailing_dot_ancestor_without_touching_it() {
     );
     assert_eq!(fs::read(&verbatim).unwrap(), b"keep");
 }
+
+#[test]
+fn two_pumps_reuse_one_buffer_and_copy_identical_bytes() {
+    let (dir, root) = temp();
+    let cancel = CancelToken::new();
+    let before = super::super::copy_pump::allocations();
+    for (source, target, byte) in [("a.bin", "a.out", 7_u8), ("b.bin", "b.out", 9_u8)] {
+        fs::write(dir.path().join(source), vec![byte; 4096]).unwrap();
+        let mut input = fs::File::open(dir.path().join(source)).unwrap();
+        let mut output = fs::File::create(dir.path().join(target)).unwrap();
+        let mut progress = |_| {};
+        super::super::copy_pump::pump(
+            &mut input,
+            &mut output,
+            &mut crate::CopyControl {
+                progress: &mut progress,
+                cancel: &cancel,
+            },
+        )
+        .unwrap_or_else(|_| panic!("pump failed"));
+        assert_eq!(fs::read(dir.path().join(target)).unwrap(), vec![byte; 4096]);
+    }
+    assert_eq!(super::super::copy_pump::allocations() - before, 1);
+    let _ = root;
+}

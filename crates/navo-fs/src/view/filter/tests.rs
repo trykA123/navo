@@ -1,6 +1,6 @@
 use navo_core::ProviderPath;
 
-use super::{ViewFilter, filter_order, materialize};
+use super::{ViewFilter, filter_all, filter_order, materialize};
 use crate::view::Needle;
 use crate::{Attributes, CancelToken, EntryKind, FsEntry};
 
@@ -102,4 +102,40 @@ fn a_cancelled_token_returns_none() {
         show_system: true,
     };
     assert!(filter_order(&rows(), &[0, 1], &filter, &cancel).is_none());
+}
+
+#[test]
+fn filter_all_keeps_the_same_rows_as_filter_order() {
+    let rows = rows();
+    let needle = Needle::parse("alp");
+    let filter = ViewFilter {
+        needle: Some(&needle),
+        show_hidden: true,
+        show_system: true,
+    };
+    let all = filter_all(&rows, &filter, &CancelToken::new()).unwrap();
+    let order: Vec<u32> = (0..u32::try_from(rows.len()).unwrap()).collect();
+    let ordered = filter_order(&rows, &order, &filter, &CancelToken::new()).unwrap();
+    assert_eq!(all, ordered);
+}
+
+#[test]
+fn wide_names_fall_back_to_the_lossless_text_form() {
+    let rows = vec![FsEntry {
+        name: ProviderPath::from_wide(&[0x61, 0xD800]),
+        kind: EntryKind::File,
+        size: 0,
+        modified_ms: None,
+        attributes: Attributes::default(),
+    }];
+    let needle = Needle::parse("a");
+    let filter = ViewFilter {
+        needle: Some(&needle),
+        show_hidden: true,
+        show_system: true,
+    };
+    assert_eq!(
+        filter_all(&rows, &filter, &CancelToken::new()).unwrap(),
+        [0]
+    );
 }

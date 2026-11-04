@@ -13,6 +13,7 @@ use crate::window_view::command_center::Update;
 use crate::window_view::{Frecent, NavoWindow};
 
 mod args;
+mod coalesce;
 mod content;
 mod late;
 mod modes;
@@ -260,6 +261,7 @@ fn typing_a_file_name_finds_it_in_the_folder_tree_of_the_active_pane(cx: &mut Te
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     while !rig.rows(cx).iter().any(|row| row.starts_with("report.txt")) {
         assert!(std::time::Instant::now() < deadline, "{:?}", rig.rows(cx));
+        cx.executor().advance_clock(Duration::from_millis(100));
         settle(cx, &rig.view);
     }
 }

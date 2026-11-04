@@ -8,7 +8,41 @@ use crate::status_bar::StatusNotice;
 use crate::window_view::{NavoWindow, UpdateHooks, UpdateView};
 
 const POLL: Duration = Duration::from_secs(1);
-const READY_POLL: Duration = Duration::from_secs(5);
+const READY_FAST_POLL: Duration = Duration::from_secs(5);
+const READY_SLOW_POLL: Duration = Duration::from_secs(60);
+const READY_FAST_TRIES: u32 = 12;
+
+struct ReadyPoll {
+    delay: Duration,
+    misses: u32,
+}
+
+impl Default for ReadyPoll {
+    fn default() -> Self {
+        Self {
+            delay: READY_FAST_POLL,
+            misses: 0,
+        }
+    }
+}
+
+impl ReadyPoll {
+    fn delay(&self) -> Duration {
+        self.delay
+    }
+
+    fn miss(&mut self) {
+        self.misses += 1;
+        if self.misses >= READY_FAST_TRIES {
+            self.delay = READY_SLOW_POLL;
+        }
+    }
+
+    fn hit(&mut self) {
+        self.misses = 0;
+        self.delay = READY_FAST_POLL;
+    }
+}
 
 /// Where a copy that cannot update itself gets the installer.
 pub(super) const RELEASES_URL: &str = "https://github.com/trykA123/navo/releases/latest";
@@ -58,20 +92,33 @@ async fn tick(this: &WeakEntity<NavoWindow>, cx: &mut AsyncApp) -> bool {
 }
 
 /// Waits, then asks for a ready version; false when the window is gone.
-async fn take_ready(this: &WeakEntity<NavoWindow>, hooks: &UpdateHooks, cx: &mut AsyncApp) -> bool {
-    cx.background_executor().timer(READY_POLL).await;
+async fn take_ready(
+    this: &WeakEntity<NavoWindow>,
+    hooks: &UpdateHooks,
+    poll: &mut ReadyPoll,
+    cx: &mut AsyncApp,
+) -> bool {
+    cx.background_executor().timer(poll.delay()).await;
     let (take, state) = (hooks.take_ready_notice.clone(), hooks.state.clone());
     let ready = cx
         .background_spawn(async move { take().map(|version| (version, state())) })
         .await;
-    this.update(cx, |view, cx| {
-        if let Some((version, state)) = ready {
-            view.settings.updates.ready = Some(version);
-            view.settings.updates.view = state;
-            cx.notify();
-        }
-    })
-    .is_ok()
+    let found = ready.is_some();
+    let alive = this
+        .update(cx, |view, cx| {
+            if let Some((version, state)) = ready {
+                view.settings.updates.ready = Some(version);
+                view.settings.updates.view = state;
+                cx.notify();
+            }
+        })
+        .is_ok();
+    if found {
+        poll.hit();
+    } else {
+        poll.miss();
+    }
+    alive
 }
 
 impl NavoWindow {
@@ -83,8 +130,13 @@ impl NavoWindow {
         {
             return;
         }
-        cx.spawn(async move |this, cx| while take_ready(&this, &hooks, cx).await {})
-            .detach();
+        let mut poll = ReadyPoll::default();
+        cx.spawn(
+            async move |this, cx| {
+                while take_ready(&this, &hooks, &mut poll, cx).await {}
+            },
+        )
+        .detach();
     }
 
     pub(in crate::window_view) fn restart_wait_notice(&self) -> Option<StatusNotice> {
@@ -166,5 +218,25 @@ impl NavoWindow {
         updates.is_polling = is_shown && updates.is_busy();
         cx.notify();
         updates.is_polling
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ready_poll_backs_off_after_a_minute_and_resets_on_a_hit() {
+        let mut poll = ReadyPoll::default();
+        for _ in 0..READY_FAST_TRIES {
+            assert_eq!(poll.delay(), READY_FAST_POLL);
+            poll.miss();
+        }
+        assert_eq!(poll.delay(), READY_SLOW_POLL);
+        poll.miss();
+        assert_eq!(poll.delay(), READY_SLOW_POLL);
+        poll.hit();
+        assert_eq!(poll.delay(), READY_FAST_POLL);
+        assert_eq!(poll.misses, 0);
     }
 }
