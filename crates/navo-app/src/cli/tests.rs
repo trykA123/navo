@@ -304,7 +304,14 @@ fn bench_is_a_console_subcommand_only_in_first_place() {
         panic!("bench should parse");
     };
     assert!(command.uses_console());
-    assert!(matches!(command, Command::Bench(options) if options.files == 5_000));
+    assert!(matches!(
+        command,
+        Command::Bench(crate::bench::Request::Fixture(options)) if options.files == 5_000
+    ));
+    assert!(matches!(
+        parse_strs(&["bench", "--folder", "f", "--out", "o.json"]),
+        Ok(Command::Bench(crate::bench::Request::Folder(_)))
+    ));
     assert_eq!(
         start(&["--left", "a", "bench"]).path,
         Some(PathBuf::from("bench"))

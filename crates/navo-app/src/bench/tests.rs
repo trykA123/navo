@@ -14,7 +14,7 @@ fn options(root: &Path, out: &Path) -> Options {
 }
 
 fn parsed(args: &[&str]) -> Result<Options, String> {
-    parse(args.iter().map(OsString::from))
+    parse_fixture(args.iter().map(OsString::from))
 }
 
 #[test]
