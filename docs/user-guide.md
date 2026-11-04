@@ -130,6 +130,8 @@ Some commands ask for a value, such as Go to folder or Mark by pattern. The box 
 
 Press `Alt+F7` to search for text inside the files of the current folder. This opens the Content mode of the command center. You can also type your text in Content mode with `Tab`.
 
+Inside a Git repository, the search skips files and folders that `.gitignore` ignores. Add `git:off` to search them too.
+
 ### Recently deleted
 
 Type "Recently deleted" in `Ctrl+K` to see files the safety net still keeps. See [Safety net and undo](#safety-net-and-undo).
