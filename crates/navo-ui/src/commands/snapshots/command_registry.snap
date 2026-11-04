@@ -25,6 +25,7 @@ layout.split_right | Split pane right | FileList
 layout.split_below | Split pane below | FileList
 layout.close_pane | Close pane | FileList
 layout.save | Save layout as… | FileList
+workspace.rename_card | Rename the focused workspace card | WorkspaceTray
 app_menu.toggle | App menu | global
 settings.toggle | All settings | global
 jobs.toggle | Show or hide jobs | global
@@ -410,6 +411,8 @@ multi_rename.toggle_row | Exclude or include the row | MultiRenamePreview
 multi_rename.move_row_up | Move the row up | MultiRenamePreview
 multi_rename.move_row_down | Move the row down | MultiRenamePreview
 files.recently_deleted | Recently deleted | global
+deleted.restore | Restore the selected deleted item | RecentlyDeleted
+deleted.purge | Delete the selected item for good | RecentlyDeleted
 git.menu | Git menu | FileList
 git.commit | Git: Commit | FileList
 git.pull | Git: Pull | FileList
@@ -459,3 +462,23 @@ compare.continue | Continue the compare on a network drive | Compare
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global
+layout_mode.split_right | Layout mode: split right | LayoutMode
+layout_mode.split_below | Layout mode: split below | LayoutMode
+layout_mode.close | Layout mode: close pane | LayoutMode
+layout_mode.swap_left | Layout mode: swap with the pane on the left | LayoutMode
+layout_mode.swap_right | Layout mode: swap with the pane on the right | LayoutMode
+layout_mode.swap_up | Layout mode: swap with the pane above | LayoutMode
+layout_mode.swap_down | Layout mode: swap with the pane below | LayoutMode
+layout_mode.resize_left | Layout mode: resize toward the left | LayoutMode
+layout_mode.resize_right | Layout mode: resize toward the right | LayoutMode
+layout_mode.resize_up | Layout mode: resize upward | LayoutMode
+layout_mode.resize_down | Layout mode: resize downward | LayoutMode
+layout_mode.even | Layout mode: even out panes | LayoutMode
+layout_mode.save | Layout mode: save layout | LayoutMode
+layout_mode.remove | Layout mode: remove saved layout | LayoutMode
+layout_mode.target | Layout mode: move target to the next pane | LayoutMode
+layout_mode.focus_pane_first | Layout mode: go to pane 1 | LayoutMode
+layout_mode.focus_pane_second | Layout mode: go to pane 2 | LayoutMode
+layout_mode.focus_pane_third | Layout mode: go to pane 3 | LayoutMode
+layout_mode.focus_pane_fourth | Layout mode: go to pane 4 | LayoutMode
+layout_mode.done | Layout mode: done | LayoutMode

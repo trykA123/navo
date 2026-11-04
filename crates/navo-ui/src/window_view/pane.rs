@@ -341,11 +341,7 @@ impl NavoWindow {
         let list = FileList::new(("list", pane.get()), props)
             .track_focus(focus)
             .find_results(find)
-            .in_compare(
-                self.browser
-                    .compare_mode()
-                    .is_some_and(|m| m.has_pane(pane)),
-            );
+            .right_button(self.values.right_button());
         Self::wire_drops(list, pane, cx)
             .on_command(
                 cx.listener(move |this: &mut Self, command: &Command, window, cx| {

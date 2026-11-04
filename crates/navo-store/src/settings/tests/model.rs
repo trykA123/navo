@@ -48,6 +48,7 @@ fn selection_defaults() {
     let s = Settings::default().selection;
     assert!(s.space_measures_folders);
     assert!(!s.patterns_select_folders);
+    assert_eq!(s.right_button, crate::RightButton::TotalCommander);
 }
 
 #[test]

@@ -6,8 +6,9 @@ mod workspaces;
 use super::Group;
 use super::contexts::GLOBAL;
 
-pub(super) const GROUPS: [Group; 9] = [
+pub(super) const GROUPS: [Group; 10] = [
     workspaces::GROUP,
+    workspaces::TRAY,
     Group {
         context: GLOBAL,
         commands: &[

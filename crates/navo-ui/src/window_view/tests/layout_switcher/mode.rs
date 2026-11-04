@@ -3,6 +3,7 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use navo_core::{AppState, Command, Direction, PaneId, apply};
 
 use super::super::{fake, open_options, options_for, press, two_panes};
+use crate::commands::{Keymap, set_active};
 use crate::window_view::NavoWindow;
 
 type Rig = (AnyWindowHandle, Entity<NavoWindow>);
@@ -219,5 +220,113 @@ fn linux_shifted_digit_keystroke_jumps_to_the_pane(cx: &mut TestAppContext) {
     for (key, pane) in [("ctrl-!", 0), ("ctrl-@", 1)] {
         press(cx, window, &view, key);
         assert_eq!(focused(cx, &view), panes[pane], "{key}");
+    }
+}
+
+#[gpui_kit::test]
+fn a_user_key_for_split_right_splits_and_the_old_key_does_not(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, |fs| AppState::new(fs.location("home")));
+    let text = "[[bind]]\ncommand = \"layout_mode.split_right\"\nkeys = [\"b\"]\n";
+    let keymap = Keymap::builtin().overlay(text).expect("keymap").keymap;
+    cx.update(|cx| set_active(cx, keymap));
+    press(cx, window, &view, "v");
+    assert_eq!(numbered(cx, &view).len(), 1);
+    press(cx, window, &view, "b");
+    assert_eq!(numbered(cx, &view).len(), 2);
+    assert_eq!(
+        cx.update(|cx| super::super::super::layout_mode::split_right_hint(cx)),
+        Some("b".to_owned())
+    );
+}
+
+#[gpui_kit::test]
+fn ctrl_shift_two_still_focuses_pane_two_in_layout_mode(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, two_panes);
+    let panes = numbered(cx, &view);
+    press(cx, window, &view, "ctrl-shift-2");
+    assert_eq!(focused(cx, &view), panes[1]);
+}
+
+fn with_user_keys(cx: &mut TestAppContext, command: &str, keys: &str) {
+    let text = format!("[[bind]]\ncommand = \"{command}\"\nkeys = [{keys}]\n");
+    let keymap = Keymap::builtin().overlay(&text).expect("keymap").keymap;
+    cx.update(|cx| set_active(cx, keymap));
+}
+
+#[gpui_kit::test]
+fn a_bare_digit_picks_the_layout_even_when_a_raw_keymap_binds_it(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, |fs| AppState::new(fs.location("home")));
+    let builtin = include_str!("../../../commands/keymap.toml");
+    let bound = "command = \"layout_mode.split_right\"\nkeys = [\"1\"]";
+    let text = builtin.replace("\r\n", "\n").replace(
+        "command = \"layout_mode.split_right\"\nkeys = [\"v\"]",
+        bound,
+    );
+    assert!(text.contains(bound));
+    let keymap = Keymap::parse(&text).expect("keymap");
+    cx.update(|cx| set_active(cx, keymap));
+    press(cx, window, &view, "4");
+    assert!(!is_open(cx, &view));
+    assert_eq!(numbered(cx, &view).len(), 4);
+    press(cx, window, &view, "ctrl-l");
+    press(cx, window, &view, "1");
+    assert!(!is_open(cx, &view));
+    assert_eq!(
+        view.read_with(cx, |view, _| view.tiles_layout().to_tiles()),
+        navo_core::Tiles::builtin()[0].tiles
+    );
+}
+
+#[gpui_kit::test]
+fn a_user_bare_digit_on_a_verb_stays_hidden_and_still_picks_the_layout(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, |fs| AppState::new(fs.location("home")));
+    with_user_keys(cx, "layout_mode.split_right", "\"1\", \"f8\"");
+    assert_eq!(
+        cx.update(|cx| super::super::super::layout_mode::split_right_hint(cx)),
+        Some("f8".to_owned())
+    );
+    press(cx, window, &view, "4");
+    assert_eq!(numbered(cx, &view).len(), 4);
+    press(cx, window, &view, "ctrl-l");
+    press(cx, window, &view, "1");
+    assert!(!is_open(cx, &view));
+    assert_eq!(
+        view.read_with(cx, |view, _| view.tiles_layout().to_tiles()),
+        navo_core::Tiles::builtin()[0].tiles
+    );
+}
+
+#[gpui_kit::test]
+fn escape_follows_the_done_key(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, two_panes);
+    with_user_keys(cx, "layout_mode.done", "\"f8\"");
+    press(cx, window, &view, "escape");
+    assert!(is_open(cx, &view));
+    press(cx, window, &view, "f8");
+    assert!(!is_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn escape_does_nothing_when_done_is_unbound(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, two_panes);
+    with_user_keys(cx, "layout_mode.done", "");
+    press(cx, window, &view, "escape");
+    assert!(is_open(cx, &view));
+    press(cx, window, &view, "enter");
+    assert!(!is_open(cx, &view));
+}
+
+#[gpui_kit::test]
+fn equals_with_and_without_shift_evens(cx: &mut TestAppContext) {
+    let (window, view) = open_state(cx, |fs| {
+        let mut state = two_panes(fs);
+        state.focus_number(1).expect("first pane");
+        state
+    });
+    for key in ["=", "shift-="] {
+        press(cx, window, &view, "ctrl-right");
+        assert_eq!(root_ratio(cx, &view), 550, "{key}");
+        press(cx, window, &view, key);
+        assert_eq!(root_ratio(cx, &view), 500, "{key}");
     }
 }

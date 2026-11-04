@@ -20,7 +20,7 @@ use gpui_kit::{
 use navo_core::{Command, ProviderPath, Selection, ViewState};
 use navo_fs::{Attributes, EntryKind, FsEntry};
 
-use super::{FileList, FileListAction, FileListProps};
+use super::{FileList, FileListAction, FileListProps, RightButton};
 use crate::test_window::open;
 
 pub(super) const MODIFIED_MS: i64 = 1_791_920_400_000;
@@ -76,12 +76,14 @@ pub(super) struct Harness {
     pub commands: Vec<Command>,
     pub actions: Vec<FileListAction>,
     pub page_rows: Vec<u64>,
+    pub right_button: RightButton,
 }
 
 impl Render for Harness {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let list = FileList::new("left", self.props.clone())
             .track_focus(&self.focus)
+            .right_button(self.right_button)
             .on_command(cx.listener(|this, command: &Command, _, _| {
                 this.commands.push(command.clone());
             }))
@@ -99,6 +101,14 @@ pub(super) fn open_list(
     cx: &mut TestAppContext,
     props: FileListProps,
 ) -> (AnyWindowHandle, Entity<Harness>) {
+    open_list_with(cx, props, RightButton::TotalCommander)
+}
+
+pub(super) fn open_list_with(
+    cx: &mut TestAppContext,
+    props: FileListProps,
+    right_button: RightButton,
+) -> (AnyWindowHandle, Entity<Harness>) {
     let (window, harness) = open(cx, |_, cx| Harness {
         props,
         focus: cx.focus_handle(),
@@ -106,6 +116,7 @@ pub(super) fn open_list(
         commands: Vec::new(),
         actions: Vec::new(),
         page_rows: Vec::new(),
+        right_button,
     });
     cx.update_window(window, |_, window, cx| {
         let focus = harness.read(cx).focus.clone();

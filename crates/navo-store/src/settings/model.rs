@@ -198,6 +198,16 @@ pub enum SortKey {
 pub struct SelectionSettings {
     pub space_measures_folders: bool,
     pub patterns_select_folders: bool,
+    pub right_button: RightButton,
+}
+
+/// What a right-button press does in the file list.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RightButton {
+    #[default]
+    TotalCommander,
+    Windows,
 }
 
 impl Default for SelectionSettings {
@@ -205,6 +215,7 @@ impl Default for SelectionSettings {
         Self {
             space_measures_folders: true,
             patterns_select_folders: false,
+            right_button: RightButton::default(),
         }
     }
 }

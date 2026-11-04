@@ -58,6 +58,10 @@ struct Rig {
 
 /// Both panes on `home`; the keymap is parsed again so the compare flag of this thread applies.
 fn rig(cx: &mut TestAppContext) -> Rig {
+    rig_with(cx, Keymap::parse(KEYMAP).expect("keymap"))
+}
+
+fn rig_with(cx: &mut TestAppContext, keymap: Keymap) -> Rig {
     let fs = fake();
     let sink = Sink::default();
     let continued = Arc::new(AtomicUsize::new(0));
@@ -69,10 +73,7 @@ fn rig(cx: &mut TestAppContext) -> Rig {
         ..options_for(fs.clone(), two_panes(&fs))
     };
     let (window, view) = open_options(cx, options);
-    cx.update(|cx| {
-        let keymap = Keymap::parse(KEYMAP).expect("keymap");
-        crate::window_view::keys::rebind_app_keys(keymap, cx);
-    });
+    cx.update(|cx| crate::window_view::keys::rebind_app_keys(keymap, cx));
     let docs = fs.location("home/docs").as_str().to_owned();
     Rig {
         window,
@@ -227,6 +228,27 @@ fn the_cursor_keys_walk_the_compare_rows(cx: &mut TestAppContext) {
     assert_eq!(rig.selected(cx).as_deref(), Some("b.txt"));
     rig.press(cx, "home");
     assert_eq!(rig.selected(cx).as_deref(), Some("a.txt"));
+}
+
+/// A user binds Enter to another file-list command; the user keys register after the built-in ones.
+#[gpui_kit::test]
+fn enter_in_compare_beats_a_file_list_enter_the_user_binds(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let user = "[[bind]]\ncommand = \"files.view\"\nkeys = [\"enter\"]\n";
+    let overlaid = Keymap::parse(KEYMAP)
+        .expect("keymap")
+        .overlay(user)
+        .expect("user keymap");
+    assert!(overlaid.keymap.is_user("files.view", "FileList"));
+    assert!(overlaid.keymap.has_key("files.view", "enter"));
+    assert!(!overlaid.keymap.has_key("files.open", "enter"));
+    let rig = rig_with(cx, overlaid.keymap);
+    let before = rig.folders(cx);
+    rig.press(cx, "ctrl-shift-d");
+    rig.send_docs(cx);
+    rig.press(cx, "enter");
+    assert_eq!(rig.folders(cx), [rig.docs.clone(), rig.docs.clone()]);
+    assert_ne!(rig.folders(cx), before);
 }
 
 #[gpui_kit::test]

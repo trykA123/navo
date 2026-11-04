@@ -95,7 +95,7 @@ The owner reordered the beta on 27 October 2026 (D85). Built in this order:
 7. core: background work that never waits: job pools with priorities, folder sizes that cancel when you leave, size on disk, hard links counted once.
 8. core: accessibility basics: Narrator reads lists, dialogs and Ctrl+K, focus visible everywhere, reduced motion, contrast themes, UI scale. Mostly done.
 
-Done earlier in the beta: responsive layout and new fonts (D80), clone a tab into the other pane, open a terminal here, cache sizes in diagnostics, Follow on Windows, the DBC and A2L outline in F3.
+Done earlier in the beta: responsive layout and new fonts (D80), clone a tab into the other pane, open a terminal here, cache sizes in diagnostics, Follow on Windows, the DBC and A2L outline in F3, every shortcut changeable in Shortcuts (conflict checks, hints that show your keys, old keymaps carried over), and a right-button setting for Total Commander or Windows behaviour.
 
 Exit: no open data-safety bugs; start-up and memory targets met in CI.
 
@@ -131,7 +131,7 @@ Exit: every target is met on a clean Windows 11 machine, and a week of work runs
 - package: language packs, Romanian first.
 - core: undo for every job from a history list; per-case confirmations.
 - core: refresh mode per network location, ignore list; Parallel and Large files copy modes, copy options, profiles and rules by destination; date and size formats.
-- package: custom colour themes and icon themes (D16); every shortcut changeable.
+- package: custom colour themes and icon themes (D16).
 - module: more in F3: Raw/Pretty for JSON, XML and YAML; spreadsheets; colouring for m4, OIL and DCM files; CSV and CAN trace column resize.
 - Jenkins links to network folders; optional built-in web view; workflows and automations; a visual workflow builder.
 - module: Everything (optional), embedded terminal (ConPTY).

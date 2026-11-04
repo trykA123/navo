@@ -2,9 +2,10 @@ pub const GLOBAL: &str = "global";
 
 const VIEWER: &str = "Viewer";
 
-const PARENTS: [(&str, &str); 27] = [
+pub(super) const PARENTS: [(&str, &str); 28] = [
     ("Archive", VIEWER),
     ("CompareView", "Compare"),
+    ("Editor", VIEWER),
     ("Elf", "Space"),
     ("ElfTable", "Elf"),
     ("CanTrace", VIEWER),
@@ -32,7 +33,7 @@ const PARENTS: [(&str, &str); 27] = [
     ("SettingsFind", "SettingsSheet"),
 ];
 
-fn parent(context: &str) -> Option<&str> {
+pub(super) fn parent(context: &str) -> Option<&str> {
     if let Some((outer, _)) = context.rsplit_once(" > ") {
         return Some(outer);
     }

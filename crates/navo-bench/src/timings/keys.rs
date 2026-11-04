@@ -16,9 +16,16 @@ mod tests {
     use super::*;
 
     const KEYMAP: &str = include_str!("../../../navo-ui/src/commands/keymap.toml");
-    /// Contexts of viewers and trees; the file list is not among them.
-    const READ_ONLY_PREFIXES: [&str; 7] = [
-        "viewer.", "lister.", "image.", "tree.", "elf.", "map.", "trace.",
+    /// Contexts of viewers, trees and the layout mode (only while its switcher has focus); the file list is not among them.
+    const READ_ONLY_PREFIXES: [&str; 8] = [
+        "viewer.",
+        "lister.",
+        "image.",
+        "tree.",
+        "elf.",
+        "map.",
+        "trace.",
+        "layout_mode.",
     ];
     const WRITE_WORDS: [&str; 10] = [
         "copy", "move", "delete", "rename", "create", "paste", "cut", "trash", "save", "write",

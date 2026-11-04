@@ -132,8 +132,23 @@ fn number_badge(t: &Theme, id: u64, number: usize, is_filled: bool) -> impl Into
         .child(number.to_string())
 }
 
+/// The copy and move keys of the file list as `F5/F6`, or `None` when neither has a key.
 #[must_use]
-pub fn marker_tag(t: &Theme, id: u64, marks: PaneMarks) -> Option<AnyElement> {
+pub fn target_keys(cx: &App) -> Option<String> {
+    let keymap = crate::commands::active(cx);
+    let (copy, mv) = (
+        keymap.shown_in("files.copy", "FileList"),
+        keymap.shown_in("files.move", "FileList"),
+    );
+    match (copy, mv) {
+        (Some(copy), Some(mv)) => Some(format!("{copy}/{mv}")),
+        (one, other) => one.or(other),
+    }
+}
+
+#[must_use]
+pub fn marker_tag(t: &Theme, id: u64, marks: PaneMarks, cx: &App) -> Option<AnyElement> {
+    let keys = target_keys(cx);
     let tag = if marks.is_filled {
         marker_box(t)
             .id(("pane-tag-active", id))
@@ -147,7 +162,10 @@ pub fn marker_tag(t: &Theme, id: u64, marks: PaneMarks) -> Option<AnyElement> {
             .border_dashed()
             .border_color(t.colors.faint)
             .text_color(t.colors.text)
-            .child(navo_l10n::tr("pane-target-here"))
+            .child(match keys {
+                Some(keys) => navo_l10n::t!("pane-target-here", keys = keys),
+                None => navo_l10n::tr("pane-target-here-plain"),
+            })
     } else {
         return None;
     };

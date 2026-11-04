@@ -292,7 +292,7 @@ impl NavoWindow {
         });
         match open {
             Some(field) => self.run_view(ViewOp::Toggle(field), window, cx),
-            None => cx.propagate(),
+            None => self.close_viewer(window, cx),
         }
     }
 

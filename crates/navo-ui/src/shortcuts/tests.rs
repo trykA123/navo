@@ -58,7 +58,7 @@ fn there_is_one_row_per_command_in_registry_order() {
 #[test]
 fn a_key_bound_in_several_contexts_shows_once() {
     let rows = rows(Keymap::builtin());
-    assert_eq!(row(&rows, "viewer.back").keys, ["escape"]);
+    assert_eq!(row(&rows, "viewer.go_to_end").keys, ["ctrl-end", "end"]);
     assert_eq!(row(&rows, "viewer.go_to_start").keys, ["ctrl-home", "home"]);
 }
 
@@ -189,6 +189,64 @@ fn a_key_of_another_context_or_of_the_command_itself_is_free() {
     assert_eq!(conflict(keymap, &proposal("files.sort_by_size", &[])), None);
 }
 
+#[test]
+fn a_compare_key_that_the_file_list_around_it_uses_is_a_conflict_that_would_hide_it() {
+    let found = conflict(Keymap::builtin(), &proposal("compare.up", &["ctrl-r"]));
+    let expected = Conflict {
+        key: "ctrl-r".to_owned(),
+        other: spec("files.refresh"),
+        context: "FileList".to_owned(),
+        reach: Reach::Outer,
+    };
+    assert_eq!(found.as_ref(), Some(&expected));
+}
+
+#[test]
+fn a_find_bar_key_that_a_mark_uses_in_paged_or_editor_is_a_conflict_that_would_hide_it() {
+    for command in ["find.all", "find.result_up"] {
+        let found = conflict(Keymap::builtin(), &proposal(command, &["ctrl-3"]))
+            .unwrap_or_else(|| panic!("{command} has no conflict"));
+        assert_eq!(found.other.name, "mark.colour_three", "{command}");
+        assert_eq!(found.reach, Reach::Outer, "{command}");
+        assert!(
+            ["Paged", "Editor"].contains(&found.context.as_str()),
+            "{command}"
+        );
+    }
+}
+
+#[test]
+fn a_key_for_the_clipboard_palette_asks_when_a_global_command_has_it() {
+    let freed = user(concat!(
+        "[[bind]]\ncommand = \"clip_palette.open_actions\"\nkeys = []\n",
+        "[[bind]]\ncommand = \"clip_palette.open_actions\"\n",
+        "context = \"ClipPalette > Input\"\nkeys = []\n",
+    ));
+    let found = conflict(&freed, &proposal("clip_palette.choose", &["ctrl-k"]));
+    let expected = Conflict {
+        key: "ctrl-k".to_owned(),
+        other: spec("app.command_palette"),
+        context: "global".to_owned(),
+        reach: Reach::Outer,
+    };
+    assert_eq!(found, Some(expected));
+}
+
+#[test]
+fn a_file_list_key_that_the_pane_around_it_uses_is_a_conflict_that_would_hide_it() {
+    let found = conflict(
+        Keymap::builtin(),
+        &proposal("files.sort_by_size", &["ctrl-w"]),
+    );
+    let expected = Conflict {
+        key: "ctrl-w".to_owned(),
+        other: spec("tab.close"),
+        context: "NavoPane".to_owned(),
+        reach: Reach::Outer,
+    };
+    assert_eq!(found.as_ref(), Some(&expected));
+}
+
 fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     Edit::Set {
         command,
@@ -197,36 +255,24 @@ fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     }
 }
 
-const BACK_CONTEXTS: [&str; 11] = [
-    "ViewerGoTo",
-    "Paged",
-    "ViewerFind",
-    "Tree",
-    "Image",
-    "Pdf",
-    "MemoryImage",
-    "Elf",
-    "Map",
-    "CanTrace",
-    "Mdf",
-];
+const END_CONTEXTS: [Option<&str>; 4] = [None, Some("Archive"), Some("Tree"), Some("Pdf")];
 
 #[test]
 fn a_command_bound_in_several_contexts_is_recorded_in_each() {
-    let edits = edits(Keymap::builtin(), &proposal("viewer.back", &["f8"]));
-    let expected: Vec<Edit> = BACK_CONTEXTS
+    let edits = edits(Keymap::builtin(), &proposal("viewer.go_to_end", &["f8"]));
+    let expected: Vec<Edit> = END_CONTEXTS
         .iter()
-        .map(|&context| set_in("viewer.back", Some(context), &["f8"]))
+        .map(|&context| set_in("viewer.go_to_end", context, &["f8"]))
         .collect();
     assert_eq!(edits, expected);
 }
 
 #[test]
 fn an_unbind_clears_every_context_of_the_command() {
-    let edits = edits(Keymap::builtin(), &proposal("viewer.back", &[]));
-    let expected: Vec<Edit> = BACK_CONTEXTS
+    let edits = edits(Keymap::builtin(), &proposal("viewer.go_to_end", &[]));
+    let expected: Vec<Edit> = END_CONTEXTS
         .iter()
-        .map(|&context| set_in("viewer.back", Some(context), &[]))
+        .map(|&context| set_in("viewer.go_to_end", context, &[]))
         .collect();
     assert_eq!(edits, expected);
 }
@@ -252,7 +298,10 @@ fn a_command_bound_nowhere_is_set_in_its_home_context() {
 
 #[test]
 fn a_key_of_any_context_the_command_is_bound_in_is_a_conflict() {
-    let found = conflict(Keymap::builtin(), &proposal("viewer.back", &["alt-left"]));
+    let found = conflict(
+        Keymap::builtin(),
+        &proposal("viewer.go_to_end", &["alt-left"]),
+    );
     let expected = Conflict {
         key: "alt-left".to_owned(),
         other: spec("pdf.trail_back"),
@@ -407,4 +456,24 @@ fn a_modifier_alone_is_not_a_key() {
     assert_eq!(recorded(&stroke("shift")), None);
     assert_eq!(recorded(&stroke("ctrl-control")), None);
     assert_eq!(recorded(&stroke("alt")), None);
+}
+
+#[test]
+fn taking_a_key_from_a_layout_verb_keeps_its_bare_digit_in_the_file() {
+    let keymap = user("[[bind]]\ncommand = \"layout_mode.split_right\"\nkeys = [\"1\", \"f8\"]\n");
+    let edits = edits(&keymap, &proposal("layout_mode.close", &["f8"]));
+    let expected = [
+        set_in("layout_mode.close", None, &["f8"]),
+        set_in("layout_mode.split_right", None, &["1"]),
+    ];
+    assert_eq!(edits, expected);
+}
+
+#[test]
+fn a_layout_verb_row_hides_its_bare_digit() {
+    let keymap = user("[[bind]]\ncommand = \"layout_mode.split_right\"\nkeys = [\"1\", \"f8\"]\n");
+    assert_eq!(
+        row(&rows(&keymap), "layout_mode.split_right").keys,
+        keys(&["f8"])
+    );
 }

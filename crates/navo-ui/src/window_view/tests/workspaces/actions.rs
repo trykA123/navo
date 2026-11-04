@@ -6,6 +6,7 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, Modifiers, TestAppConte
 use super::super::fkeys::hold;
 use super::super::{fake, open_with, press};
 use super::{rig, shape};
+use crate::commands::{Keymap, active, bind_user_keys, set_active};
 use crate::window_view::NavoWindow;
 
 fn show_tray(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<NavoWindow>) {
@@ -160,4 +161,70 @@ fn navigation_keeps_card_tools_visible_and_delete_enabled_with_two_workspaces(
     }
     click(cx, window, 1, "workspace-delete");
     assert_eq!(names(cx, &view).len(), 1);
+}
+
+fn focus_card(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<NavoWindow>) {
+    show_tray(cx, window, view);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            window.focus(&view.workspace_keys.edit.cards[1], cx);
+        });
+    })
+    .expect("window");
+}
+
+fn new_chip(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<String> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .try_find("workspace-new-key")
+            .and_then(|chip| chip.label().map(str::to_owned))
+    })
+    .expect("window")
+}
+
+fn shown(keys: &str) -> Option<String> {
+    crate::primitives::Kbd::new("shown", keys).map(|kbd| kbd.text())
+}
+
+#[gpui_kit::test]
+fn alt_n_on_a_focused_card_creates_a_workspace(cx: &mut TestAppContext) {
+    let (window, view) = rig(cx);
+    focus_card(cx, window, &view);
+    assert_eq!(new_chip(cx, window), shown("alt-n"));
+    assert_eq!(shape(cx, &view).1, 2);
+    press(cx, window, &view, "alt-n");
+    assert_eq!(shape(cx, &view).1, 3);
+}
+
+#[gpui_kit::test]
+fn a_user_key_for_new_workspace_in_the_tray_creates_and_the_chip_stays(cx: &mut TestAppContext) {
+    let (window, view) = rig(cx);
+    let text = "[[bind]]\ncommand = \"workspace.new\"\nkeys = [\"ctrl-alt-w\"]\ncontext = \"WorkspaceTray\"\n";
+    let keymap = Keymap::builtin().overlay(text).expect("keymap").keymap;
+    cx.update(|cx| {
+        set_active(cx, keymap);
+        bind_user_keys(cx);
+    });
+    focus_card(cx, window, &view);
+    assert_eq!(new_chip(cx, window), shown("ctrl-alt-w"));
+    press(cx, window, &view, "ctrl-alt-w");
+    assert_eq!(shape(cx, &view).1, 3);
+    assert_eq!(
+        cx.update(|cx| active(cx)
+            .keys_in("workspace.new", "WorkspaceTray")
+            .next()
+            .map(str::to_owned)),
+        Some("ctrl-alt-w".to_owned())
+    );
+}
+
+#[gpui_kit::test]
+fn an_unbound_new_workspace_key_leaves_the_chip_without_a_key(cx: &mut TestAppContext) {
+    let (window, view) = rig(cx);
+    let text = "[[bind]]\ncommand = \"workspace.new\"\nkeys = []\ncontext = \"WorkspaceTray\"\n";
+    let keymap = Keymap::builtin().overlay(text).expect("keymap").keymap;
+    cx.update(|cx| set_active(cx, keymap));
+    focus_card(cx, window, &view);
+    assert_eq!(new_chip(cx, window), None);
 }

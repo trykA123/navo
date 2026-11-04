@@ -7,9 +7,9 @@ use gpui_kit::{
 };
 use navo_core::{Command, CursorMove, Selection, SpanMode};
 
-use super::{actions, commands, open_list, props, sample_rows};
-use crate::file_list::FileListAction;
-use crate::test_pointer::{self, ctrl, dispatch, down, shift, up};
+use super::{actions, commands, open_list, open_list_with, props, sample_rows};
+use crate::file_list::{FileListAction, RightButton};
+use crate::test_pointer::{self, ctrl, dispatch, down, moved, shift, up};
 
 pub(super) const LAST_ROW: usize = 5;
 
@@ -174,4 +174,121 @@ fn a_right_drag_from_a_marked_row_unmarks(cx: &mut TestAppContext) {
         commands(&harness, cx),
         [cursor(1), cursor(1), extend(3, SpanMode::Unmark)]
     );
+}
+
+fn marked_props(rows: &[u64]) -> crate::file_list::FileListProps {
+    let mut shown = props(sample_rows());
+    let mut selection = Selection::new(6);
+    for row in rows {
+        selection.toggle(*row);
+    }
+    shown.marked = Arc::new(selection);
+    shown
+}
+
+fn prefetch(adds_cursor: bool) -> FileListAction {
+    FileListAction::MenuPrefetch {
+        adds_cursor,
+        extended: false,
+    }
+}
+
+fn menu_at(at: Point<Pixels>) -> FileListAction {
+    FileListAction::ContextMenu {
+        at,
+        extended: false,
+    }
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_a_right_click_opens_the_menu_on_release_only(cx: &mut TestAppContext) {
+    let (window, harness) = open_list_with(cx, props(sample_rows()), RightButton::Windows);
+    let at = row_bounds(cx, window, 2).center();
+    let right = Modifiers::default();
+    dispatch(cx, window, down(MouseButton::Right, at, right));
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(600));
+    cx.run_until_parked();
+    assert_eq!(actions(&harness, cx), [prefetch(false)]);
+    assert_eq!(commands(&harness, cx), [cursor(2)]);
+    dispatch(cx, window, up(MouseButton::Right, at, right));
+    assert_eq!(actions(&harness, cx), [prefetch(false), menu_at(at)]);
+    assert_eq!(commands(&harness, cx), [cursor(2), cursor(2)]);
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_an_unmarked_row_joins_the_marks(cx: &mut TestAppContext) {
+    let (window, harness) = open_list_with(cx, marked_props(&[1]), RightButton::Windows);
+    let at = row_bounds(cx, window, 3).center();
+    let right = Modifiers::default();
+    dispatch(cx, window, down(MouseButton::Right, at, right));
+    dispatch(cx, window, up(MouseButton::Right, at, right));
+    let toggle = Command::SelectionToggle;
+    assert_eq!(commands(&harness, cx), [cursor(3), cursor(3), toggle]);
+    assert_eq!(actions(&harness, cx), [prefetch(true), menu_at(at)]);
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_a_marked_row_does_not_toggle(cx: &mut TestAppContext) {
+    let (window, harness) = open_list_with(cx, marked_props(&[1, 3]), RightButton::Windows);
+    let at = row_bounds(cx, window, 3).center();
+    let right = Modifiers::default();
+    dispatch(cx, window, down(MouseButton::Right, at, right));
+    dispatch(cx, window, up(MouseButton::Right, at, right));
+    assert_eq!(commands(&harness, cx), [cursor(3), cursor(3)]);
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_a_right_drag_marks_nothing_and_opens_no_menu(cx: &mut TestAppContext) {
+    let (window, harness) = open_list_with(cx, props(sample_rows()), RightButton::Windows);
+    right_drag(cx, window, &[1, 3, 2]);
+    assert_eq!(commands(&harness, cx), [cursor(1)]);
+    assert_eq!(
+        actions(&harness, cx),
+        [prefetch(false), FileListAction::MenuCancel]
+    );
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_a_same_row_right_drag_past_the_threshold_opens_no_menu(cx: &mut TestAppContext) {
+    let (window, harness) = open_list_with(cx, props(sample_rows()), RightButton::Windows);
+    let at = row_bounds(cx, window, 2).center();
+    let right = Modifiers::default();
+    let end = at + point(px(12.), px(0.));
+    dispatch(cx, window, down(MouseButton::Right, at, right));
+    dispatch(cx, window, moved(Some(MouseButton::Right), end, right));
+    dispatch(cx, window, up(MouseButton::Right, end, right));
+    let expected = [prefetch(false), FileListAction::MenuCancel];
+    assert_eq!(actions(&harness, cx), expected);
+    assert_eq!(commands(&harness, cx), [cursor(2)]);
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_a_right_wiggle_inside_the_threshold_still_opens_the_menu(
+    cx: &mut TestAppContext,
+) {
+    let (window, harness) = open_list_with(cx, props(sample_rows()), RightButton::Windows);
+    let at = row_bounds(cx, window, 2).center();
+    let right = Modifiers::default();
+    let end = at + point(px(2.), px(1.));
+    dispatch(cx, window, down(MouseButton::Right, at, right));
+    dispatch(cx, window, moved(Some(MouseButton::Right), end, right));
+    dispatch(cx, window, up(MouseButton::Right, end, right));
+    assert_eq!(actions(&harness, cx), [prefetch(false), menu_at(at)]);
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_a_release_outside_the_list_cancels_the_menu(cx: &mut TestAppContext) {
+    let (window, harness) = open_list_with(cx, props(sample_rows()), RightButton::Windows);
+    let at = row_bounds(cx, window, 2).center();
+    let right = Modifiers::default();
+    dispatch(cx, window, down(MouseButton::Right, at, right));
+    dispatch(
+        cx,
+        window,
+        up(MouseButton::Right, point(px(-40.), px(-40.)), right),
+    );
+    let expected = [prefetch(false), FileListAction::MenuCancel];
+    assert_eq!(actions(&harness, cx), expected);
+    assert_eq!(commands(&harness, cx), [cursor(2)]);
 }

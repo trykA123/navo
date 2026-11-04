@@ -5,6 +5,7 @@ use gpui_kit::{AnyView, FocusHandle};
 use super::ArchiveView;
 use crate::prelude::*;
 use crate::window_view::viewer::body::{BodyKeys, Key, ViewerBody};
+use crate::window_view::viewer::keys_bar::hint;
 
 const LISTING: [Key; 2] = [("Enter", "Open"), ("Type", "Filter")];
 const FILTERING: [Key; 3] = [
@@ -12,7 +13,6 @@ const FILTERING: [Key; 3] = [
     ("Backspace", "Erase"),
     ("Esc", "Clear filter"),
 ];
-const BACK: Key = ("Esc", "Back to the list");
 
 pub(in crate::window_view::viewer) struct ArchiveBody(pub Entity<ArchiveView>);
 
@@ -31,7 +31,7 @@ impl ViewerBody for ArchiveBody {
             return match nested.keys(cx) {
                 BodyKeys::Modal(keys) => BodyKeys::Modal(keys),
                 BodyKeys::Normal(mut keys) => {
-                    keys.push(BACK);
+                    keys.extend(hint(cx, "viewer.back", "Viewer", "Back to the list"));
                     BodyKeys::Modal(keys)
                 }
             };

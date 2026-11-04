@@ -44,7 +44,12 @@ pub(super) fn enter_label(row: &ClipRow, place: Place) -> String {
 }
 
 /// A key cap next to the word that says what it does.
-pub(super) fn hint(t: &Theme, id: &'static str, key: &str, label: String) -> Div {
+pub(super) fn hint<'k>(
+    t: &Theme,
+    id: &'static str,
+    key: impl Into<Option<&'k str>>,
+    label: String,
+) -> Div {
     div()
         .flex()
         .flex_none()
@@ -56,7 +61,7 @@ pub(super) fn hint(t: &Theme, id: &'static str, key: &str, label: String) -> Div
                 .font_weight(FontWeight::MEDIUM)
                 .child(label),
         )
-        .children(Kbd::new(id, key))
+        .children(key.into().and_then(|key| Kbd::new(id, key)))
 }
 
 impl ClipPalette {
@@ -287,7 +292,12 @@ pub(super) fn footer_bar(t: &Theme, status: Div, keys: Vec<AnyElement>) -> RowEl
 }
 
 /// A footer button with its key cap; the caller adds the click.
-pub(super) fn footer_button(t: &Theme, id: &'static str, label: String, key: &str) -> RowElement {
+pub(super) fn footer_button<'k>(
+    t: &Theme,
+    id: &'static str,
+    label: String,
+    key: impl Into<Option<&'k str>>,
+) -> RowElement {
     div()
         .id(id)
         .role(Role::Button)
@@ -303,7 +313,7 @@ pub(super) fn footer_button(t: &Theme, id: &'static str, label: String, key: &st
         .cursor_pointer()
         .hover(|button| button.bg(t.colors.hover))
         .child(label)
-        .children(Kbd::new((id, 1usize), key))
+        .children(key.into().and_then(|key| Kbd::new((id, 1usize), key)))
 }
 
 /// A calm band under the tabs. The icon sits on the first text line; `wraps` lets the text

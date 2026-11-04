@@ -279,7 +279,9 @@ recently-deleted-delete-title = Delete { $name } now?
 recently-deleted-delete-summary = { $size } leaves Recently deleted for good. This cannot be undone.
 recently-deleted-delete-confirm = Delete now
 
-command-center-content-footer = Enter open hit · Ctrl+Enter results to pane · Alt+R regex · Alt+C case
+command-center-content-footer-open = { $key } open hit
+command-center-content-footer-pane = { $key } results to pane
+command-center-content-footer-flags = Alt+R regex · Alt+C case
 command-center-content-case = Case
 command-center-content-regex = Regex
 

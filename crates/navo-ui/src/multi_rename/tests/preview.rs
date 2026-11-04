@@ -147,6 +147,17 @@ fn row_label(window: AnyWindowHandle, at: usize, cx: &mut TestAppContext) -> Opt
     .expect("window")
 }
 
+fn hints_label(window: AnyWindowHandle, cx: &mut TestAppContext) -> Option<String> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .within(SCOPE)
+            .try_find("hints")
+            .and_then(|found| found.label().map(str::to_owned))
+    })
+    .expect("window")
+}
+
 fn click(window: AnyWindowHandle, id: impl Into<gpui_kit::ElementId>, cx: &mut TestAppContext) {
     let id = id.into();
     cx.update_window(window, |_, window, cx| window.within(SCOPE).click(id, cx))
@@ -312,4 +323,26 @@ fn a_path_over_260_characters_warns_and_still_renames(cx: &mut TestAppContext) {
     let (window, _) = open_host(cx, batch, false);
     let label = row_label(window, 0, cx).unwrap();
     assert!(label.ends_with("Path is longer than 260 characters"));
+}
+
+#[gpui_kit::test]
+fn the_footer_hints_show_the_user_keys_and_hide_unbound_commands(cx: &mut TestAppContext) {
+    let (window, _) = open_host(cx, crafted(&[("a.txt", "b.txt", CHANGES)]), false);
+    let built_in = hints_label(window, cx).expect("hints");
+    assert!(
+        built_in.starts_with("Enter rename · Esc close · Ctrl+Space tokens"),
+        "{built_in}"
+    );
+    let text = "[[bind]]\ncommand = \"multi_rename.save_preset\"\nkeys = [\"f8\"]\n\n\
+        [[bind]]\ncommand = \"multi_rename.next_problem\"\nkeys = []\n";
+    let keymap = crate::commands::Keymap::builtin()
+        .overlay(text)
+        .expect("keymap")
+        .keymap;
+    cx.update(|cx| crate::commands::set_active(cx, keymap));
+    cx.update_window(window, |_, _, cx| cx.refresh_windows())
+        .expect("window");
+    let hints = hints_label(window, cx).expect("hints");
+    assert!(hints.ends_with("F8 save preset"), "{hints}");
+    assert!(!hints.contains("next problem"), "{hints}");
 }

@@ -352,3 +352,42 @@ fn ctrl_g_to_a_hidden_label_says_how_to_show_it(cx: &mut TestAppContext) {
         "local_label · 0x08000170"
     );
 }
+
+#[gpui_kit::test]
+fn the_hidden_label_note_shows_the_user_key(cx: &mut TestAppContext) {
+    crate::window_view::viewer::keys_bar::rebind(cx, "elf.toggle_noise", "\"f8\"");
+    let (window, view) = open_with_labels(cx);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "8000170");
+    press(cx, window, &view, "enter");
+    settle_motion(cx, window, &view);
+    assert_eq!(
+        text_of(cx, window, "elf-progress"),
+        "Hidden by the zero-size filter; F8 shows it."
+    );
+}
+
+#[gpui_kit::test]
+fn a_keymap_reload_updates_the_hidden_label_note(cx: &mut TestAppContext) {
+    let (window, view) = open_with_labels(cx);
+    press(cx, window, &view, "ctrl-g");
+    type_in(cx, window, &view, "8000170");
+    press(cx, window, &view, "enter");
+    settle_motion(cx, window, &view);
+    assert_eq!(
+        text_of(cx, window, "elf-progress"),
+        "Hidden by the zero-size filter; Alt+H shows it."
+    );
+    crate::window_view::viewer::keys_bar::rebind(cx, "elf.toggle_noise", "\"f8\"");
+    redraw(cx, window);
+    assert_eq!(
+        text_of(cx, window, "elf-progress"),
+        "Hidden by the zero-size filter; F8 shows it."
+    );
+    crate::window_view::viewer::keys_bar::rebind(cx, "elf.toggle_noise", "");
+    redraw(cx, window);
+    assert_eq!(
+        text_of(cx, window, "elf-progress"),
+        "Hidden by the zero-size filter."
+    );
+}

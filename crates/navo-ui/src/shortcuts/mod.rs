@@ -9,9 +9,10 @@ mod tests;
 
 use std::sync::Arc;
 
+pub use crate::commands::Reach;
 pub use model::{Line, Row, area_label, lines, rows};
 pub use page::{ShortcutsEvent, ShortcutsPage};
-pub use proposal::{Conflict, Edit, Proposal, Reach, Recorded, conflict, edits, recorded};
+pub use proposal::{Conflict, Edit, Proposal, Recorded, conflict, edits, recorded};
 
 use crate::commands::Keymap;
 use crate::prelude::*;

@@ -300,3 +300,67 @@ fn past_the_row_cap_the_newest_rows_are_kept() {
     assert_eq!(rows.first().map(|row| row.id), Some(RetentionId(301)));
     assert_eq!(rows.last().map(|row| row.id), Some(RetentionId(extra)));
 }
+
+fn rebind_deleted(cx: &mut TestAppContext) {
+    let text = "[[bind]]\ncommand = \"deleted.restore\"\nkeys = [\"ctrl-alt-r\"]\ncontext = \"RecentlyDeleted\"\n\n[[bind]]\ncommand = \"deleted.purge\"\nkeys = [\"ctrl-alt-p\"]\ncontext = \"RecentlyDeleted\"\n";
+    let keymap = crate::commands::Keymap::builtin()
+        .overlay(text)
+        .expect("keymap")
+        .keymap;
+    cx.update(|cx| crate::window_view::rebind_app_keys(keymap, cx));
+}
+
+#[gpui_kit::test]
+fn user_keys_restore_and_purge_and_purge_still_asks(cx: &mut TestAppContext) {
+    rebind_deleted(cx);
+    let (rig, shelf) = opened(cx, three);
+    rig.press(cx, &["enter"]);
+    assert!(locked(&shelf.restored).is_empty());
+    rig.press(cx, &["ctrl-alt-p"]);
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.recent_view().is_asking)
+    );
+    assert!(locked(&shelf.purged).is_empty());
+    rig.press(cx, &["escape"]);
+    rig.press(cx, &["ctrl-alt-r"]);
+    assert_eq!(*locked(&shelf.restored), [RetentionId(3)]);
+}
+
+fn hint_keys(cx: &mut TestAppContext, rig: &Rig) -> Vec<(String, String)> {
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        (0..4usize)
+            .filter_map(|index| {
+                let hint = window.try_find(("side-sheet-hint", index))?;
+                let key = window
+                    .within(("side-sheet-hint", index))
+                    .try_find(("key", 0usize))?;
+                Some((key.label()?.to_owned(), hint.label()?.to_owned()))
+            })
+            .collect()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn the_footer_names_the_user_keys_for_restore_and_delete(cx: &mut TestAppContext) {
+    rebind_deleted(cx);
+    let (rig, _) = opened(cx, three);
+    let hints = hint_keys(cx, &rig);
+    let keys = |keys: &str| crate::primitives::Kbd::new("shown", keys).map(|kbd| kbd.text());
+    assert!(
+        hints.contains(&(
+            keys("ctrl-alt-r").unwrap_or_default(),
+            tr("recently-deleted-restore")
+        )),
+        "{hints:?}"
+    );
+    assert!(
+        hints.contains(&(
+            keys("ctrl-alt-p").unwrap_or_default(),
+            tr("recently-deleted-delete")
+        )),
+        "{hints:?}"
+    );
+}

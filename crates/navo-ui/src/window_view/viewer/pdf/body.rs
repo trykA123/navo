@@ -31,7 +31,7 @@ impl ViewerBody for PdfBody {
     }
 
     fn keys(&self, cx: &App) -> BodyKeys {
-        self.0.read(cx).keys()
+        self.0.read(cx).keys(cx)
     }
 
     fn find_again(&self, backward: bool, window: &mut Window, cx: &mut App) {

@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use navo_automotive::{Elf, ElfReader, IndexError, Lines, Query, Selection, Source, Watch, select};
-use navo_l10n::t;
 
 use super::{ElfView, Index, NavItem, Phase};
 use crate::prelude::*;
@@ -145,7 +144,7 @@ impl ElfView {
                 self.move_cursor(0, cx);
                 self.scroll.scroll_to_top(0);
                 if wanted.is_some() && self.query.hide_noise {
-                    self.set_note(t!("elf-hidden-note"), cx);
+                    self.set_hidden_note(cx);
                 }
             }
         }

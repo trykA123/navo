@@ -43,24 +43,35 @@ fn filter_tree(rig: &Rig, cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn an_unbound_back_leaves_the_tree_and_a_recorded_key_works_there(cx: &mut TestAppContext) {
+fn escape_clears_the_tree_filter_then_closes_the_viewer(cx: &mut TestAppContext) {
     let fs = fake_with("shop.json", STORE.len() as u64);
     let rig = rig_for(cx, fs, Setup::new(STORE.to_vec()));
-    record_back(&rig, cx, "backspace");
     rig.press(cx, "down");
     open_file(&rig, cx);
     filter_tree(&rig, cx);
     rig.press(cx, "escape");
-    assert!(
-        !viewer_open(cx, &rig.view),
-        "Escape no longer clears the filter"
-    );
+    assert!(!visible(cx, rig.window, "filter"));
+    assert!(viewer_open(cx, &rig.view));
+    rig.press(cx, "escape");
+    assert!(!viewer_open(cx, &rig.view));
+}
+
+#[gpui_kit::test]
+fn a_recorded_back_key_steps_back_in_the_tree_and_escape_no_longer_does(cx: &mut TestAppContext) {
+    let fs = fake_with("shop.json", STORE.len() as u64);
+    let rig = rig_for(cx, fs, Setup::new(STORE.to_vec()));
     record_back(&rig, cx, "f8");
+    rig.press(cx, "down");
     open_file(&rig, cx);
     filter_tree(&rig, cx);
+    rig.press(cx, "escape");
+    assert!(visible(cx, rig.window, "filter"), "Escape is unbound");
+    assert!(viewer_open(cx, &rig.view));
     rig.press(cx, "f8");
     assert!(!visible(cx, rig.window, "filter"));
     assert!(viewer_open(cx, &rig.view));
+    rig.press(cx, "f8");
+    assert!(!viewer_open(cx, &rig.view));
 }
 
 fn focus_paged_body(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<NavoWindow>) {
@@ -81,19 +92,17 @@ fn open_find_bar(rig: &Rig, cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn an_unbound_back_leaves_paged_text_and_a_recorded_key_works_there(cx: &mut TestAppContext) {
+fn a_recorded_back_key_steps_back_in_paged_text_and_escape_no_longer_does(cx: &mut TestAppContext) {
     let rig = rig_for(cx, fake(), Setup::huge(numbered_lines()));
-    record_back(&rig, cx, "backspace");
+    record_back(&rig, cx, "f8");
     rig.press(cx, "down");
     open_find_bar(&rig, cx);
     rig.press(cx, "escape");
-    assert!(
-        !viewer_open(cx, &rig.view),
-        "Escape no longer closes the find bar"
-    );
-    record_back(&rig, cx, "f8");
-    open_find_bar(&rig, cx);
+    assert!(visible(cx, rig.window, "paged-bar"), "Escape is unbound");
+    assert!(viewer_open(cx, &rig.view));
     rig.press(cx, "f8");
     assert!(!visible(cx, rig.window, "paged-bar"));
     assert!(viewer_open(cx, &rig.view));
+    rig.press(cx, "f8");
+    assert!(!viewer_open(cx, &rig.view));
 }

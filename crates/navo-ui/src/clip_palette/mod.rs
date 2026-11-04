@@ -6,6 +6,8 @@ mod chrome;
 mod drag;
 mod edit_form;
 mod edit_form_actions;
+#[cfg(test)]
+mod edit_form_chip_tests;
 mod edit_form_choices;
 mod edit_form_keys;
 #[cfg(test)]

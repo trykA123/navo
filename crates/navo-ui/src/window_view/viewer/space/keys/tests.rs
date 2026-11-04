@@ -239,3 +239,19 @@ fn the_map_view_takes_the_same_keys(cx: &mut TestAppContext) {
     keys(cx, &rig, &["alt-z"]);
     assert!(is_on(cx, window, ("space-scale", 1)));
 }
+
+#[gpui_kit::test]
+fn the_parts_hint_shows_the_user_key(cx: &mut TestAppContext) {
+    crate::window_view::viewer::keys_bar::rebind(cx, "space.next_part", "\"f6\"");
+    let rig = rich_elf(cx);
+    let shown = hints(cx, rig.0);
+    assert!(shown.contains("F6 Parts"), "{shown}");
+}
+
+#[gpui_kit::test]
+fn a_parts_command_with_no_key_hides_its_hint(cx: &mut TestAppContext) {
+    crate::window_view::viewer::keys_bar::rebind(cx, "space.next_part", "");
+    let rig = rich_elf(cx);
+    let shown = hints(cx, rig.0);
+    assert!(!shown.contains("Parts"), "{shown}");
+}

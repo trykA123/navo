@@ -2,8 +2,10 @@ mod bind;
 mod clipboard;
 pub(crate) mod compare;
 mod contexts;
+pub(crate) mod focus_paths;
 pub(crate) mod git;
 mod keymap;
+mod layout_mode;
 mod marks;
 mod multi_rename;
 mod overlays;
@@ -30,12 +32,15 @@ use crate::app_menu::MenuCommand;
 
 #[cfg(test)]
 use bind::key_bindings;
-pub(crate) use bind::{bind_namespace, bind_user_keys, shifted_digit};
+pub(crate) use bind::{bind_namespace, bind_user_keys};
 pub(crate) use compare::is_hidden;
 pub use contexts::{GLOBAL, is_within};
+pub use focus_paths::Reach;
 pub use keymap::{
     Bind, Keymap, KeymapError, KeymapWarning, Overlaid, UserKeymapError, normal_key, shown,
 };
+pub use layout_mode::CONTEXT as LAYOUT_MODE;
+pub use layout_mode::{is_fixed_digit, is_shown_key};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CommandSpec {
@@ -114,7 +119,8 @@ pub fn entries_with(has_clipboard: bool) -> Vec<CommandEntry> {
     let bound = all().map(|spec| CommandEntry {
         spec,
         enabled: has_clipboard || !clipboard::needs_hooks(spec.name),
-        in_palette: !palette_hidden::HIDDEN.contains(&spec.name),
+        in_palette: !palette_hidden::HIDDEN.contains(&spec.name)
+            && !layout_mode::is_mode_command(spec.name),
         arg: None,
     });
     let asking = ARGUMENT_COMMANDS
@@ -173,7 +179,15 @@ fn registry() -> impl Iterator<Item = CommandSpec> {
         context: GLOBAL,
         action: None,
     });
-    actions.chain(menu)
+    let layout_mode = layout_mode::COMMANDS
+        .iter()
+        .map(|&(name, label)| CommandSpec {
+            name,
+            label,
+            context: LAYOUT_MODE,
+            action: None,
+        });
+    actions.chain(menu).chain(layout_mode)
 }
 
 #[must_use]

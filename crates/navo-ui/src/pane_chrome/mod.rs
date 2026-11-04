@@ -24,7 +24,7 @@ use navo_core::Command;
 
 pub use card::{
     PaneMarks, card_header, card_shadow, marked_header, marker_tag, on_accent, pane_card,
-    target_outline,
+    target_keys, target_outline,
 };
 pub use drive_menu::{DriveMenu, DriveMenuEvent, drive_for_key};
 pub use drive_pill::DrivePill;

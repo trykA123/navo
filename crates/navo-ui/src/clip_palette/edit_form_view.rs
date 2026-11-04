@@ -16,7 +16,8 @@ use super::menu::fade_in;
 use super::password::Password;
 use super::rows::{MASK, RowElement};
 use super::view::ClipPalette;
-use crate::primitives::{IconName, icon};
+use crate::commands::active;
+use crate::primitives::{IconName, Kbd, icon};
 use crate::tokens::Theme;
 
 const HEADER: f32 = 44.;
@@ -24,6 +25,13 @@ const FIELD: f32 = 32.;
 const BODY_MIN: f32 = 72.;
 const COLUMN_MIN: f32 = 220.;
 const CARET: f32 = 1.;
+
+/// The first key of a clip palette command that a key chip can draw.
+fn key_of(command: &str, cx: &App) -> Option<String> {
+    let mut keys = active(cx).keys_in(command, "ClipPalette");
+    keys.find(|key| Kbd::new("probe", key).is_some())
+        .map(str::to_owned)
+}
 
 pub(super) fn label(t: &Theme, text: String) -> Div {
     div()
@@ -166,11 +174,16 @@ impl ClipPalette {
         } else {
             "clip-act-show"
         };
-        let toggle = hint(t, "clip-form-reveal-key", "alt-r", tr(label_key))
-            .id("clip-form-reveal")
-            .role(Role::Button)
-            .cursor_pointer()
-            .on_click(cx.listener(|this, _, _, cx| this.form_reveal(cx)));
+        let toggle = hint(
+            t,
+            "clip-form-reveal-key",
+            key_of("clip_palette.toggle_reveal", cx).as_deref(),
+            tr(label_key),
+        )
+        .id("clip-form-reveal")
+        .role(Role::Button)
+        .cursor_pointer()
+        .on_click(cx.listener(|this, _, _, cx| this.form_reveal(cx)));
         let field = framed(t, "clip-form-password", is_focused)
             .role(Role::Group)
             .aria_label(SharedString::from(text.clone()))
@@ -329,8 +342,13 @@ impl ClipPalette {
             Some(Problem::Refused(message)) => Some(problem_line(t, message.clone())),
             _ => None,
         };
-        let save = footer_button(t, "clip-form-save", tr("clip-form-save"), "ctrl-enter")
-            .on_click(cx.listener(|this, _, window, cx| this.save_form(window, cx)));
+        let save = footer_button(
+            t,
+            "clip-form-save",
+            tr("clip-form-save"),
+            key_of("clip_palette.save_form", cx).as_deref(),
+        )
+        .on_click(cx.listener(|this, _, window, cx| this.save_form(window, cx)));
         let cancel = footer_button(t, "clip-form-cancel", tr("clip-form-cancel"), "escape")
             .on_click(cx.listener(|this, _, window, cx| this.form_back(window, cx)));
         footer_bar(

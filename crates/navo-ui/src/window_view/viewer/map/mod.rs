@@ -36,7 +36,7 @@ use super::background::Job;
 use super::body::{BodyKeys, Host, ViewerBody};
 use super::parts::{AUTOMOTIVE_LAYOUT, LayoutParts, PartSet};
 use super::search::bar::GO_TO_KEYS;
-use super::space::{NEXT_PART, RichSpace, Siblings};
+use super::space::{RichSpace, Siblings, next_part};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, TextFieldState};
 use crate::settings::Values;
@@ -206,7 +206,7 @@ impl ViewerBody for MapBody {
                     ("Alt+T", "Table"),
                     ("Ctrl+F3", "Sort by name"),
                 ]);
-                keys.extend(rich.map(|_| NEXT_PART));
+                keys.extend(rich.and_then(|_| next_part(cx)));
             }
         }
         if view.focus_in == Focus::Navigator {

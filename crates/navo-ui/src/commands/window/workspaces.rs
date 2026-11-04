@@ -116,3 +116,13 @@ pub(super) const GROUP: Group = Group {
         ("navo_window::SaveLayout", "layout.save", "cmd-layout-save"),
     ],
 };
+
+/// Keys of a focused workspace card in the tray.
+pub(super) const TRAY: Group = Group {
+    context: "WorkspaceTray",
+    commands: &[(
+        "navo_window::RenameWorkspaceCard",
+        "workspace.rename_card",
+        "cmd-workspace-rename-card",
+    )],
+};

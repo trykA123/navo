@@ -28,6 +28,7 @@ rename-log = false
 [selection]
 space-measures-folders = true
 patterns-select-folders = false
+right-button = "total-commander"
 
 [terminal]
 provider = "system"

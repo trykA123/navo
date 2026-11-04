@@ -7,6 +7,7 @@ use super::overlay::{OverlayLook, overlay};
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
+use crate::window_view::viewer::EDITOR_CONTEXT;
 use crate::window_view::viewer::encoding::encoding_button;
 use crate::window_view::viewer::search::GO_TO_CONTEXT;
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
@@ -210,7 +211,7 @@ impl Render for EditorView {
         self.marking.sync_find_all();
         let rows = self.found_rows(cx);
         let panel = find_all_panel(&t, &self.marking, rows);
-        let root = div().id("editor-view");
+        let root = div().id("editor-view").key_context(EDITOR_CONTEXT);
         Self::preview_keys(Self::list_keys(Self::find_keys(root, cx), cx), cx)
             .flex()
             .flex_col()

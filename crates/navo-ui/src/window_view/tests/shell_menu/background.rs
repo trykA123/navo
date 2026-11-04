@@ -12,6 +12,7 @@ use super::super::clipboard::FakeClipboard;
 use super::super::{fake, options_for, settle, two_panes, type_in};
 use super::{Rig, rig, rig_from, rig_on, rig_with, shell_item};
 use crate::file_list::SortBy;
+use crate::settings::{Change, Field, Value};
 use crate::window_view::{ClipboardEffect, ClipboardFiles, FileClipboardService};
 
 const LOADING_ROWS: [&str; 7] = [
@@ -403,4 +404,98 @@ fn a_new_file_name_that_is_already_here_is_refused(cx: &mut TestAppContext) {
             .map(|e| e.size)
     };
     assert_eq!(size.ok(), Some(3));
+}
+
+impl Rig {
+    fn use_windows_button(&self, cx: &mut TestAppContext) {
+        self.pick_right_button(cx, 1);
+    }
+
+    fn use_tc_button(&self, cx: &mut TestAppContext) {
+        self.pick_right_button(cx, 0);
+    }
+
+    fn pick_right_button(&self, cx: &mut TestAppContext, pick: usize) {
+        self.view.update(cx, |view, cx| {
+            let pick = Change {
+                field: Field::RightButton,
+                value: Value::Pick(pick),
+            };
+            view.values = view.values.with(&pick);
+            cx.notify();
+        });
+        self.frame(cx);
+    }
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_a_right_click_opens_the_item_menu_on_release(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.use_windows_button(cx);
+    rig.right_button(cx, 1, true);
+    rig.wait(cx, 560);
+    assert!(!rig.is_open(cx));
+    rig.right_button(cx, 1, false);
+    rig.wait(cx, 160);
+    assert!(rig.is_open(cx));
+    assert_eq!(
+        *rig.shell.opened.borrow(),
+        [vec![rig.location("home/a.txt")]]
+    );
+    assert!(rig.shell.backgrounds.borrow().is_empty());
+}
+
+#[gpui_kit::test]
+fn in_windows_mode_an_unmarked_row_joins_the_marks_and_a_drag_marks_nothing(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig(cx);
+    rig.use_windows_button(cx);
+    rig.press(cx, "insert");
+    assert_eq!(rig.marked(cx), [0]);
+    rig.right_button(cx, 1, true);
+    rig.right_drag_to(cx, 0);
+    rig.right_button(cx, 0, false);
+    rig.wait(cx, 160);
+    assert!(!rig.is_open(cx));
+    assert_eq!(rig.marked(cx), [0]);
+}
+
+#[gpui_kit::test]
+fn a_settings_reload_does_not_change_a_press_in_progress(cx: &mut TestAppContext) {
+    let tc = rig(cx);
+    tc.right_button(cx, 1, true);
+    tc.use_windows_button(cx);
+    tc.wait(cx, 560);
+    assert!(tc.is_open(cx));
+
+    let windows = rig(cx);
+    windows.use_windows_button(cx);
+    windows.right_button(cx, 1, true);
+    windows.use_tc_button(cx);
+    windows.wait(cx, 560);
+    assert!(!windows.is_open(cx));
+    windows.right_button(cx, 1, false);
+    windows.wait(cx, 160);
+    assert!(windows.is_open(cx));
+}
+
+#[gpui_kit::test]
+fn the_folder_menu_is_the_same_in_both_right_button_modes(cx: &mut TestAppContext) {
+    for windows in [false, true] {
+        let rig = rig(cx);
+        if windows {
+            rig.use_windows_button(cx);
+            let probe = super::rig(cx);
+            probe.use_windows_button(cx);
+            probe.right_button(cx, 1, true);
+            probe.wait(cx, 560);
+            assert!(!probe.is_open(cx), "no long-press menu in Windows mode");
+        }
+        rig.open_background(cx);
+        assert!(rig.is_open(cx));
+        assert_eq!(*rig.shell.backgrounds.borrow(), [rig.location("home")]);
+        assert!(rig.shell.opened.borrow().is_empty());
+        assert_eq!(rig.context_line(cx).as_deref(), Some("home · 2 items"));
+    }
 }

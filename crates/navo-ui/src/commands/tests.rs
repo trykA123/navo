@@ -163,6 +163,7 @@ fn bindings_sit_in_their_command_context(cx: &mut TestAppContext) {
                     || (spec.name == "clipboard.open" && binding.context == "!Viewer")
             } else {
                 is_within(&binding.context, spec.context)
+                    || super::keymap::also_in(spec.name, &binding.context)
             };
             (!fits).then(|| format!("{} in {}", spec.name, binding.context))
         })
@@ -381,7 +382,7 @@ fn every_keymap_command_with_an_action_builds(cx: &mut TestAppContext) {
 }
 
 #[test]
-fn pdf_keys_shadow_only_the_viewer_marks_and_escape() {
+fn pdf_keys_shadow_only_link_follow() {
     let binds = Keymap::builtin().binds();
     let in_context = |context: &str| -> Vec<(String, &'static str)> {
         binds
@@ -404,12 +405,7 @@ fn pdf_keys_shadow_only_the_viewer_marks_and_escape() {
         .collect();
     assert_eq!(
         shadowed,
-        [
-            ("escape".to_owned(), "viewer.close", "viewer.back"),
-            ("ctrl-0".to_owned(), "mark.clear", "pdf.fit"),
-            ("ctrl-1".to_owned(), "mark.colour_one", "pdf.actual_size"),
-            ("enter".to_owned(), "lister.find_next", "pdf.link_follow"),
-        ]
+        [("enter".to_owned(), "lister.find_next", "pdf.link_follow"),]
     );
 }
 

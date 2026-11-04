@@ -175,7 +175,7 @@ context_menu.show_classic | shift-f10 | ContextMenu
 context_menu.show_classic | shift-f10 | ContextMenu > Input
 [viewer]
 viewer.save | ctrl-s | Viewer
-viewer.close | escape | Viewer
+viewer.back | escape | Viewer
 viewer.edit | ctrl-e | Viewer
 viewer.show_text | alt-1 | Viewer
 viewer.show_hex | alt-3 | Viewer
@@ -201,10 +201,6 @@ viewer.go_to_end | end | Tree
 viewer.scroll_left | left | Viewer
 viewer.scroll_right | right | Viewer
 viewer.go_to_line | ctrl-g | Viewer
-viewer.back | escape | ViewerGoTo
-viewer.back | escape | Paged
-viewer.back | escape | ViewerFind
-viewer.back | escape | Tree
 viewer.show_line_ends | alt-l | Viewer
 viewer.follow | alt-f | Viewer
 viewer.view_menu | alt-v | Viewer
@@ -219,15 +215,24 @@ find.next | f3 | Viewer
 find.previous | shift-f3 | Viewer
 find.selection | ctrl-f3 | Viewer
 find.match_case | alt-c | Viewer
-mark.colour_one | ctrl-1 | Viewer
-mark.colour_two | ctrl-2 | Viewer
-mark.colour_three | ctrl-3 | Viewer
-mark.colour_four | ctrl-4 | Viewer
-mark.colour_five | ctrl-5 | Viewer
-mark.colour_six | ctrl-6 | Viewer
-mark.colour_seven | ctrl-7 | Viewer
-mark.colour_eight | ctrl-8 | Viewer
-mark.clear | ctrl-0 | Viewer
+mark.colour_one | ctrl-1 | Paged
+mark.colour_one | ctrl-1 | Editor
+mark.colour_two | ctrl-2 | Paged
+mark.colour_two | ctrl-2 | Editor
+mark.colour_three | ctrl-3 | Paged
+mark.colour_three | ctrl-3 | Editor
+mark.colour_four | ctrl-4 | Paged
+mark.colour_four | ctrl-4 | Editor
+mark.colour_five | ctrl-5 | Paged
+mark.colour_five | ctrl-5 | Editor
+mark.colour_six | ctrl-6 | Paged
+mark.colour_six | ctrl-6 | Editor
+mark.colour_seven | ctrl-7 | Paged
+mark.colour_seven | ctrl-7 | Editor
+mark.colour_eight | ctrl-8 | Paged
+mark.colour_eight | ctrl-8 | Editor
+mark.clear | ctrl-0 | Paged
+mark.clear | ctrl-0 | Editor
 bookmark.toggle | ctrl-f2 | Viewer
 bookmark.next | f2 | Viewer
 bookmark.previous | shift-f2 | Viewer
@@ -244,23 +249,16 @@ find.go_to_result | enter | FindAll
 find.close_results | escape | FindAll
 image.fit | 0 | Image
 image.fit | ctrl-0 | Image
-image.actual_size | 1 | Image
+image.actual_size | ctrl-1 | Image
 image.zoom_in | + | Image
 image.zoom_in | = | Image
 image.zoom_in | shift-= | Image
 image.zoom_out | - | Image
 image.toggle_info | i | Image
-viewer.back | escape | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
 viewer.go_to_start | home | Pdf
 viewer.go_to_end | end | Pdf
-viewer.back | escape | Pdf
-viewer.back | escape | MemoryImage
-viewer.back | escape | Elf
-viewer.back | escape | Map
-viewer.back | escape | CanTrace
-viewer.back | escape | Mdf
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
@@ -557,6 +555,8 @@ workspace.preview_eighth | alt-8 | FileList
 workspace.preview_ninth | alt-9 | FileList
 workspace.cancel_preview | alt-escape | FileList
 workspace.new | alt-n | FileList
+workspace.new | alt-n | WorkspaceTray
+workspace.rename_card | f2 | WorkspaceTray
 workspace.save | ctrl-s | FileList
 workspace.move_left | alt-shift-left | FileList
 workspace.move_right | alt-shift-right | FileList
@@ -569,3 +569,5 @@ layout.split_right | ctrl-alt-v | FileList
 layout.split_below | ctrl-alt-b | FileList
 layout.close_pane | ctrl-alt-w | FileList
 pane.switch_back | shift-tab | FileList
+deleted.restore | enter | RecentlyDeleted
+deleted.purge | delete | RecentlyDeleted

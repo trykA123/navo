@@ -9,12 +9,12 @@ use super::rich::{Pick, RichHost, RichSpace};
 use super::strip::Step;
 use crate::prelude::*;
 use crate::window_view::viewer::body::Key;
+use crate::window_view::viewer::keys_bar::hint;
 use crate::window_view::viewer::parts::LayoutParts;
 
 pub(in crate::window_view::viewer) const CONTEXT: &str = "Space";
 pub(super) const STRIP_CONTEXT: &str = "SpaceStrip";
 pub(super) const TREEMAP_CONTEXT: &str = "SpaceTreemap";
-pub(in crate::window_view::viewer) const NEXT_PART: Key = ("Tab", "Parts");
 static OPEN_MODULE: LazyLock<String> = LazyLock::new(|| tr("space-open-module"));
 static ALL_MODULES: LazyLock<String> = LazyLock::new(|| tr("space-all-modules"));
 
@@ -56,6 +56,11 @@ pub(in crate::window_view::viewer) fn host_context(name: &'static str) -> KeyCon
     context
 }
 
+/// The "Parts" hint with the key bound to `space.next_part`, or `None` without one.
+pub(in crate::window_view::viewer) fn next_part(cx: &App) -> Option<Key> {
+    hint(cx, "space.next_part", CONTEXT, "Parts")
+}
+
 pub(in crate::window_view::viewer) fn part_keys(rich: &RichSpace, cx: &App) -> Option<Vec<Key>> {
     match rich.part {
         Part::Table => None,
@@ -69,16 +74,17 @@ pub(in crate::window_view::viewer) fn part_keys(rich: &RichSpace, cx: &App) -> O
             } else {
                 ("Enter", "Zoom")
             };
-            Some(vec![
+            let mut keys = vec![
                 ("←/→", "Block"),
                 ("↑/↓", "Region"),
                 zoom,
                 ("Alt+Z", "Scale"),
-                NEXT_PART,
-            ])
+            ];
+            keys.extend(next_part(cx));
+            Some(keys)
         }
         Part::Treemap => Some(
-            vec![
+            [
                 ("Arrows", "Tile"),
                 (
                     "Enter",
@@ -94,9 +100,9 @@ pub(in crate::window_view::viewer) fn part_keys(rich: &RichSpace, cx: &App) -> O
                     },
                 ),
                 ("Alt+G", "Grouping"),
-                NEXT_PART,
             ]
             .into_iter()
+            .chain(next_part(cx))
             .chain(rich.module.as_ref().map(|_| ("Bksp", ALL_MODULES.as_str())))
             .collect(),
         ),

@@ -42,7 +42,7 @@ fn stored(kind: ClipKind, title: &str, body: &str) -> Draft {
     }
 }
 
-fn opened(cx: &mut TestAppContext, rows: Vec<ClipRow>) -> (Opened, Arc<Fake>) {
+pub(super) fn opened(cx: &mut TestAppContext, rows: Vec<ClipRow>) -> (Opened, Arc<Fake>) {
     let fake = Fake::new(MODES.to_vec(), rows);
     {
         let mut edits = fake.edits.lock().expect("edits");
@@ -103,7 +103,7 @@ fn focused(palette: &Opened, cx: &mut TestAppContext) -> Option<Field> {
     })
 }
 
-fn pick(palette: &Opened, mode: ClipMode, cx: &mut TestAppContext) {
+pub(super) fn pick(palette: &Opened, mode: ClipMode, cx: &mut TestAppContext) {
     palette.palette.update(cx, |p, cx| p.pick_mode(mode, cx));
     palette.settle(cx);
 }

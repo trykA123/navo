@@ -137,8 +137,19 @@ impl Gallery {
 }
 
 pub(super) fn image_keys() -> FKeyBar {
-    let kinds = [("Alt+1", "Text"), ("3", "Hex"), ("Esc", "Close")];
-    FKeyBar::new("image-keys", ImageView::KEYS.into_iter().chain(kinds))
+    // The live bar reads the keymap; the gallery shows the built-in keys.
+    let keys = [
+        ("0", "Fit"),
+        ("Ctrl+1", "100 %"),
+        ("+/−", "Zoom"),
+        ("Arrows/Drag", "Pan"),
+        ("N/P Space/Bksp", "Next/Prev"),
+        ("Ctrl+I", "Details"),
+        ("Alt+1", "Text"),
+        ("3", "Hex"),
+        ("Esc", "Close"),
+    ];
+    FKeyBar::new("image-keys", keys)
 }
 
 pub(super) fn sample_keys(body: &dyn ViewerBody, cx: &App) -> FKeyBar {

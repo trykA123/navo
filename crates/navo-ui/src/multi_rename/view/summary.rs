@@ -23,8 +23,39 @@ pub(super) fn summary_text(summary: &Summary) -> String {
     )
 }
 
+/// The footer key hints; a command with no key leaves its hint out.
+pub(super) fn hints_text(cx: &App) -> String {
+    let keys = crate::commands::active(cx);
+    let hint = |command: &str, text: fn(String) -> String| {
+        let key = keys.shown_in(command, "MultiRename")?;
+        Some(text(key.replace("Escape", "Esc")))
+    };
+    [
+        hint("multi_rename.rename", |key| {
+            t!("rename-hint-rename", key = key)
+        }),
+        hint("multi_rename.close", |key| {
+            t!("rename-hint-close", key = key)
+        }),
+        hint("multi_rename.token_menu", |key| {
+            t!("rename-hint-tokens", key = key)
+        }),
+        hint("multi_rename.next_problem", |key| {
+            t!("rename-hint-next-problem", key = key)
+        }),
+        hint("multi_rename.save_preset", |key| {
+            t!("rename-hint-save-preset", key = key)
+        }),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ")
+}
+
 pub(super) struct Footer<Run, Cancel> {
     pub summary: Summary,
+    pub hints: String,
     pub can_run: bool,
     pub run: Run,
     pub cancel: Cancel,
@@ -44,6 +75,29 @@ fn line(id: &'static str, text: SharedString, look: (Hsla, Pixels)) -> impl Into
         .child(text)
 }
 
+fn text_column(t: &Theme, summary: &Summary, hints: String) -> Div {
+    let color = if summary.problems > 0 {
+        t.colors.mark
+    } else {
+        t.colors.text
+    };
+    div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_w_0()
+        .child(line(
+            "summary",
+            summary_text(summary).into(),
+            (color, t.typography.body),
+        ))
+        .child(line(
+            "hints",
+            hints.into(),
+            (t.colors.muted, t.typography.tiny),
+        ))
+}
+
 pub(super) fn footer<Run, Cancel>(t: &Theme, footer: Footer<Run, Cancel>) -> Div
 where
     Run: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -51,30 +105,12 @@ where
 {
     let Footer {
         summary,
+        hints,
         can_run,
         run,
         cancel,
     } = footer;
-    let color = if summary.problems > 0 {
-        t.colors.mark
-    } else {
-        t.colors.text
-    };
-    let text = div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_w_0()
-        .child(line(
-            "summary",
-            summary_text(&summary).into(),
-            (color, t.typography.body),
-        ))
-        .child(line(
-            "hints",
-            t!("rename-hints").into(),
-            (t.colors.muted, t.typography.tiny),
-        ));
+    let text = text_column(t, &summary, hints);
     let buttons = div()
         .flex()
         .flex_none()

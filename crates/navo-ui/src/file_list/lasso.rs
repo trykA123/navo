@@ -10,7 +10,7 @@ use navo_core::{Command, CursorMove, SpanMode};
 use super::ListContext;
 use crate::tokens::{self, Theme};
 
-const THRESHOLD: f64 = 4.;
+pub(super) const THRESHOLD: f64 = 4.;
 const FILL_ALPHA: f32 = 0.12;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

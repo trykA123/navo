@@ -112,3 +112,22 @@ fn the_footer_names_every_preview_key(cx: &mut TestAppContext) {
         .expect("window");
     assert_eq!(close_keys, [escape.clone(), escape]);
 }
+
+#[gpui_kit::test]
+fn the_footer_hides_the_close_hint_when_no_key_closes_the_preview(cx: &mut TestAppContext) {
+    let text = "[[bind]]\ncommand = \"viewer.back\"\nkeys = []\ncontext = \"Viewer\"\n\n[[bind]]\ncommand = \"preview.leave\"\nkeys = []\ncontext = \"PreviewBrowse\"\n";
+    let keymap = crate::commands::Keymap::builtin()
+        .overlay(text)
+        .expect("keymap")
+        .keymap;
+    cx.update(|cx| crate::window_view::rebind_app_keys(keymap, cx));
+    let rig = open_fake(cx, &fake());
+    rig.open(cx);
+    assert!(rig.wait_until(cx, is_counted));
+    let hints: Vec<String> = (0..5usize)
+        .filter_map(|index| rig.label(cx, ("side-sheet-hint", index)))
+        .collect();
+    assert_eq!(hints, ["Browse", "Open", "[ ]"]);
+    assert!(rig.label(cx, "side-sheet-close-key").is_none());
+    assert!(rig.shows(cx, "side-sheet-close"));
+}

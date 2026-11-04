@@ -1,7 +1,8 @@
 use gpui_kit::Keystroke;
 use navo_l10n::tr;
 
-use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap, is_within, normal_key, shown};
+use crate::commands::focus_paths::screen_reach;
+use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap, Reach, normal_key, shown};
 
 const MODIFIERS: [&str; 7] = [
     "shift", "control", "ctrl", "alt", "platform", "function", "fn",
@@ -23,13 +24,6 @@ pub enum Edit {
 pub struct Proposal {
     pub spec: CommandSpec,
     pub keys: Vec<String>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Reach {
-    Same,
-    Inner,
-    Outer,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,15 +77,12 @@ fn holds(bind: &Bind, key: &str) -> bool {
         .any(|bound| normal_key(bound).as_deref() == Some(key))
 }
 
+/// A key in a context hides a global one, so a global key is always the outer side.
 fn reach(mine: &str, theirs: &str) -> Option<Reach> {
-    if mine == theirs {
-        Some(Reach::Same)
-    } else if mine == GLOBAL || theirs == GLOBAL || is_within(mine, theirs) {
+    if (mine == GLOBAL) != (theirs == GLOBAL) {
         Some(Reach::Outer)
-    } else if is_within(theirs, mine) {
-        Some(Reach::Inner)
     } else {
-        None
+        screen_reach(mine, theirs)
     }
 }
 
@@ -154,7 +145,7 @@ fn taken<'a>(bind: &'a Bind, mine: &[String], keys: &[String]) -> Option<Taken<'
 pub fn conflict(keymap: &Keymap, proposal: &Proposal) -> Option<Conflict> {
     takers(keymap, proposal)
         .into_iter()
-        .next()
+        .min_by_key(|taken| taken.reach)
         .map(|taken| Conflict {
             key: taken.key,
             other: taken.bind.spec,

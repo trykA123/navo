@@ -1,4 +1,4 @@
-use gpui_kit::FocusHandle;
+use gpui_kit::{FocusHandle, Stateful};
 use navo_core::Command;
 
 use super::contents::Place;
@@ -7,7 +7,7 @@ use super::spot::{Fold, Spot};
 use super::{Preview, Shown};
 use crate::prelude::*;
 use crate::window_view::NavoWindow;
-use crate::window_view::viewer::{BackspaceKey, FilterBack};
+use crate::window_view::viewer::{Back, BackspaceKey, FilterBack};
 
 const BROWSE: &str = "PreviewBrowse";
 
@@ -214,10 +214,6 @@ impl NavoWindow {
             .on_action(cx.listener(|this, _: &BrowseView, window, cx| {
                 this.browse_view(window, cx);
             }))
-            .on_action(cx.listener(|this, _: &LeaveBrowse, window, cx| {
-                this.close_preview(cx);
-                this.leave_browse(window, cx);
-            }))
             .on_action(cx.listener(|this, _: &LeaveAndSwitch, window, cx| {
                 this.leave_browse(window, cx);
                 this.switch_pane(window, cx);
@@ -225,6 +221,19 @@ impl NavoWindow {
             .on_action(cx.listener(|this, _: &Recount, _, cx| this.recount_folder(cx)))
             .on_action(Self::view_menu_listener(cx))
             .child(body);
-        Self::part_actions(frame, cx).into_any_element()
+        Self::part_actions(Self::leave_actions(frame, cx), cx).into_any_element()
+    }
+
+    /// Esc and a user key for Back both close the preview from browse mode.
+    fn leave_actions(frame: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        frame
+            .on_action(cx.listener(|this, _: &LeaveBrowse, window, cx| {
+                this.close_preview(cx);
+                this.leave_browse(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &Back, window, cx| {
+                this.close_preview(cx);
+                this.leave_browse(window, cx);
+            }))
     }
 }

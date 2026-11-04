@@ -77,7 +77,7 @@ fn number_badge(t: &Theme, pane: &StripPane) -> impl IntoElement {
         .child(pane.n.to_string())
 }
 
-fn tag_label(t: &Theme, pane: &StripPane) -> Option<impl IntoElement> {
+fn tag_label(t: &Theme, pane: &StripPane, keys: Option<&str>) -> Option<impl IntoElement> {
     let (id, key, color) = match pane.tag? {
         Tag::Active => (
             "pane-strip-active",
@@ -93,11 +93,20 @@ fn tag_label(t: &Theme, pane: &StripPane) -> Option<impl IntoElement> {
             .flex_none()
             .text_size(t.typography.tiny)
             .text_color(color)
-            .child(navo_l10n::tr(key)),
+            .child(match (pane.tag?, keys) {
+                (Tag::Target, Some(keys)) => navo_l10n::t!("pane-strip-target", keys = keys),
+                (Tag::Target, None) => navo_l10n::tr("pane-strip-target-plain"),
+                (Tag::Active, _) => navo_l10n::tr(key),
+            }),
     )
 }
 
-fn strip_button(t: &Theme, pane: StripPane, cx: &mut Context<NavoWindow>) -> AnyElement {
+fn strip_button(
+    t: &Theme,
+    pane: StripPane,
+    keys: Option<&str>,
+    cx: &mut Context<NavoWindow>,
+) -> AnyElement {
     let n = pane.n;
     let label = navo_l10n::t!("pane-strip-button", n = n, name = pane.name.to_string());
     let is_active = pane.tag == Some(Tag::Active);
@@ -138,7 +147,7 @@ fn strip_button(t: &Theme, pane: StripPane, cx: &mut Context<NavoWindow>) -> Any
                         .truncate()
                         .child(pane.name.clone()),
                 )
-                .children(tag_label(t, &pane)),
+                .children(tag_label(t, &pane, keys)),
         )
         .into_any_element()
 }
@@ -170,10 +179,11 @@ impl NavoWindow {
     pub(super) fn pane_strip(&self, layout: &Layout, cx: &mut Context<Self>) -> AnyElement {
         let t = tokens::current(cx).clone();
         let focused = self.browser.state().focused_pane();
+        let keys = crate::pane_chrome::target_keys(cx);
         let buttons: Vec<_> = self
             .strip_panes(layout)
             .into_iter()
-            .map(|pane| strip_button(&t, pane, cx))
+            .map(|pane| strip_button(&t, pane, keys.as_deref(), cx))
             .collect();
         div()
             .id("pane-strip")

@@ -35,11 +35,12 @@ pub enum Slot {
 }
 
 impl Slot {
-    pub(super) fn key(self) -> &'static str {
+    /// The commands of the plain key and of the Alt key that show this slot.
+    pub(super) fn commands(self) -> (&'static str, &'static str) {
         match self {
-            Self::Text => "1",
-            Self::Hex => "3",
-            Self::Rich => "5",
+            Self::Text => ("lister.show_text", "viewer.show_text"),
+            Self::Hex => ("lister.show_hex", "viewer.show_hex"),
+            Self::Rich => ("lister.show_rich", "viewer.show_rich"),
         }
     }
 

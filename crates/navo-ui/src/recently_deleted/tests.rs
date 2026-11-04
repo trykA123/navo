@@ -109,13 +109,13 @@ fn keys_map_to_events_only_without_modifiers() {
     let none = Modifiers::default();
     assert_eq!(event_for_key("up", none), Some(Event::Move(false)));
     assert_eq!(event_for_key("down", none), Some(Event::Move(true)));
-    assert_eq!(event_for_key("enter", none), Some(Event::Restore));
-    assert_eq!(event_for_key("delete", none), Some(Event::Delete));
+    assert_eq!(event_for_key("enter", none), None);
+    assert_eq!(event_for_key("delete", none), None);
     assert_eq!(event_for_key("escape", none), Some(Event::Close));
     assert_eq!(event_for_key("a", none), None);
     let ctrl = Modifiers {
         control: true,
         ..none
     };
-    assert_eq!(event_for_key("delete", ctrl), None);
+    assert_eq!(event_for_key("up", ctrl), None);
 }
