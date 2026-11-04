@@ -1,8 +1,7 @@
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use navo_core::{FsError, FsErrorKind, Location};
 use tempfile::TempDir;
@@ -17,6 +16,12 @@ use super::*;
 use crate::archive::{
     ArchiveFs, ArchiveKind, ArchiveProblem, READ_ONLY, UnsafeReason, location, provider_id,
     raw_location,
+};
+
+#[cfg(target_os = "linux")]
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
 };
 
 #[cfg(target_os = "linux")]
