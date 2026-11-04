@@ -182,6 +182,7 @@ fn enumeration_uses_header_cursor_and_keeps_children_until_later_buffers() {
     .unwrap();
     assert_eq!(volume.cursors, [0, 70, 200]);
     assert_eq!(result.index.position, POSITION);
+    assert_eq!(result.blocked_peak, 1);
     assert!(result.unresolved.is_empty());
     assert_eq!(
         result
@@ -192,6 +193,27 @@ fn enumeration_uses_header_cursor_and_keeps_children_until_later_buffers() {
         Some("C:\\parent\\child")
     );
     assert_eq!(result.index.ids[&ROOT], result.index.ids[&5]);
+    assert_eq!(result.index.table.len(), 3);
+}
+
+#[test]
+fn enumeration_counts_no_blocked_records_when_parents_come_first() {
+    let mut volume = FakeVolume::new(vec![
+        Some(bytes(
+            70,
+            &[record(ROOT, ROOT, "."), record(90, ROOT, "parent")],
+        )),
+        Some(bytes(130, &[record(80, 90, "child")])),
+        None,
+    ]);
+    let result = enumerate_volume(
+        &mut volume,
+        'c',
+        usize::MAX,
+        &crate::pipe::CancelToken::new(),
+    )
+    .unwrap();
+    assert_eq!(result.blocked_peak, 0);
     assert_eq!(result.index.table.len(), 3);
 }
 

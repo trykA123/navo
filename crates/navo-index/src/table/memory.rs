@@ -64,8 +64,9 @@ mod tests {
 
     #[test]
     fn parts_grow_with_the_table() {
-        let mut last = table(0).memory_parts();
-        for files in [10, 100, 1_000, 10_000] {
+        // Growth by an eighth keeps the first capacities fixed until the minimum steps fill.
+        let mut last = table(1_000).memory_parts();
+        for files in [10_000, 100_000] {
             let next = table(files).memory_parts();
             assert!(next.names > last.names, "names at {files}");
             assert!(next.tree > last.tree, "tree at {files}");

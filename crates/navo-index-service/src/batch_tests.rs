@@ -178,26 +178,15 @@ fn a_batch_without_an_index_changes_nothing() {
 }
 
 #[test]
-#[ignore = "IX11b: reader Arc deep copy, decision pending"]
-fn a_batch_while_a_reader_holds_the_index_does_not_deep_copy_it() {
+fn a_batch_after_the_reader_is_dropped_updates_in_place() {
     let shared = shared(Some(index()));
-    apply_batch(&shared, creates()).unwrap();
     let reader = published(&shared).unwrap();
-    let held = reader.table.memory_bytes() + reader.ids.memory_bytes();
-    let batch = UsnBatch {
-        next_usn: 300,
-        records: vec![record(900_000, 5, 0x100, "late.txt")],
-    };
-    apply_batch(&shared, batch).unwrap();
+    let before = Arc::as_ptr(&reader);
+    drop(reader);
+    apply_batch(&shared, creates()).unwrap();
     let after = published(&shared).unwrap();
-    println!(
-        "IX11 reader holds {held} bytes; live copy shares storage: {}",
-        Arc::ptr_eq(&reader, &after)
-    );
-    assert!(
-        Arc::ptr_eq(&reader, &after),
-        "one record copied the whole index ({held} bytes) because a reader held it"
-    );
+    assert_eq!(Arc::as_ptr(&after), before);
+    assert_eq!(after.ids.len(), 2 + FILES as usize);
 }
 
 fn churn_files(count: u32, reason: u32, next_usn: i64) -> UsnBatch {

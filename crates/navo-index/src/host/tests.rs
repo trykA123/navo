@@ -3,10 +3,10 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
-use navo_core::{FsError, FsErrorKind, ProviderId};
+use navo_core::{FsError, FsErrorKind, ProviderId, ProviderPath};
 use navo_fs::{
-    CancelToken, Capabilities, FakeFs, FakeOp, Fault, FsEntry, ListSink, Watch, WatchChange,
-    WatchSink,
+    Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FakeFs, FakeOp, Fault, FsEntry,
+    ListSink, Watch, WatchChange, WatchSink,
 };
 
 use super::*;
@@ -55,6 +55,21 @@ impl Rig {
 
     fn start(&self) -> Host {
         self.start_provider(self.fs.clone())
+    }
+
+    fn start_with_limit(&self, max_entries: usize) -> Host {
+        self.start_provider_with_limit(self.fs.clone(), max_entries)
+    }
+
+    fn start_provider_with_limit(&self, provider: Arc<dyn Provider>, max_entries: usize) -> Host {
+        let mut options = self.options(provider);
+        options.limits.max_entries = max_entries;
+        let (now, base) = (Arc::clone(&self.now), self.base);
+        Host::start_with_clock(
+            options,
+            Arc::new(move || base + Duration::from_millis(now.load(Ordering::SeqCst))),
+        )
+        .unwrap()
     }
 
     fn start_provider(&self, provider: Arc<dyn Provider>) -> Host {
@@ -110,6 +125,116 @@ impl Rig {
     }
 }
 
+/// Serves `tree/big` from generated names, so a million entries need neither FakeFs's
+/// quadratic insert nor a million test allocations.
+struct Generated {
+    fs: Arc<FakeFs>,
+    files: usize,
+    extra: Mutex<Vec<String>>,
+}
+
+impl Generated {
+    fn new(fs: Arc<FakeFs>, files: usize) -> Self {
+        Self {
+            fs,
+            files,
+            extra: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn add_folder(&self, name: &str) {
+        self.extra.lock().unwrap().push(name.to_owned());
+        self.fs.add_folder(&format!("tree/big/{name}"));
+    }
+
+    fn list_big(&self, sink: &mut dyn ListSink, cancel: &CancelToken) {
+        let extra = self.extra.lock().unwrap().clone();
+        let total = self.files + extra.len();
+        let mut sent = 0;
+        while sent < total && !cancel.is_cancelled() {
+            let count = 16_384.min(total - sent);
+            let entries = (sent..sent + count)
+                .map(|index| self.file_or_folder(index, &extra))
+                .collect();
+            sent += count;
+            let last = sent == total;
+            if sink.batch(EntryBatch { entries, last }).is_break() {
+                break;
+            }
+        }
+    }
+
+    fn file_or_folder(&self, index: usize, extra: &[String]) -> FsEntry {
+        if index < self.files {
+            Self::entry(&format!("file-{index:07}.txt"), EntryKind::File)
+        } else {
+            Self::entry(&extra[index - self.files], EntryKind::Folder)
+        }
+    }
+
+    fn entry(name: &str, kind: EntryKind) -> FsEntry {
+        FsEntry {
+            name: ProviderPath::from_text(name),
+            kind,
+            size: u64::from(kind == EntryKind::File),
+            modified_ms: None,
+            attributes: Attributes::default(),
+        }
+    }
+}
+
+impl Provider for Generated {
+    fn id(&self) -> ProviderId {
+        self.fs.id()
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        self.fs.capabilities()
+    }
+
+    fn list(
+        &self,
+        folder: &Location,
+        sink: &mut dyn ListSink,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        match folder.path().as_str() {
+            Some("tree") => {
+                let _ = sink.batch(EntryBatch {
+                    entries: vec![Self::entry("big", EntryKind::Folder)],
+                    last: true,
+                });
+            }
+            Some("tree/big") => self.list_big(sink, cancel),
+            _ => self.fs.list(folder, sink, cancel)?,
+        }
+        Ok(())
+    }
+
+    fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        match location.path().as_str() {
+            Some("tree") => Ok(Self::entry("tree", EntryKind::Folder)),
+            Some("tree/big") => Ok(Self::entry("big", EntryKind::Folder)),
+            path => match path.and_then(|path| path.strip_prefix("tree/big/")) {
+                Some(name) => {
+                    let folder = self.extra.lock().unwrap().iter().any(|extra| extra == name);
+                    let kind = if folder {
+                        EntryKind::Folder
+                    } else {
+                        EntryKind::File
+                    };
+                    Ok(Self::entry(name, kind))
+                }
+                None => self.fs.metadata(location),
+            },
+        }
+    }
+
+    fn watch_tree(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
+        self.fs.watch_tree(folder, sink)
+    }
+}
+
 fn names(table: &NameTable) -> HashSet<String> {
     table.iter().map(|(_, name)| name.to_owned()).collect()
 }
@@ -121,6 +246,29 @@ fn settled(host: &Host) -> HostStatus {
             return status;
         }
     }
+}
+
+fn spawn_reader(
+    shared: Arc<RwLock<NameTable>>,
+    done: Arc<AtomicBool>,
+    longest: Arc<AtomicU64>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        while !done.load(Ordering::Acquire) {
+            let started = Instant::now();
+            let table = shared.read().unwrap();
+            longest.fetch_max(started.elapsed().as_micros() as u64, Ordering::Relaxed);
+            let _ =
+                crate::search::search(&table, &[crate::search::Term::Name("needle")], 8, &|| false);
+            thread::sleep(Duration::from_millis(1));
+        }
+    })
+}
+
+fn refreshed(host: &Host) -> HostStatus {
+    let wait = Duration::from_secs(120);
+    while host.statuses.recv_timeout(wait).unwrap().progress.is_some() {}
+    settled(host)
 }
 
 fn built(host: &Host) -> HostStatus {
@@ -344,6 +492,35 @@ fn failed_rescan_preserves_the_live_table_and_snapshot() {
 }
 
 #[test]
+fn an_entry_limit_rescan_keeps_the_old_table() {
+    let rig = Rig::new();
+    for number in 0..5 {
+        rig.fs.add_file(&format!("tree/file-{number}.txt"), 1);
+    }
+    let host = rig.start_with_limit(10);
+    let built = built(&host);
+    assert!(built.errors.is_empty());
+    assert_eq!(built.entries, 6);
+    for number in 5..25 {
+        rig.fs.add_file(&format!("tree/file-{number}.txt"), 1);
+    }
+    rig.fs.overflow_watchers("tree");
+    let status = settled(&host);
+    assert!(
+        status
+            .errors
+            .iter()
+            .any(|error| error.contains("index entry limit reached")),
+        "{:?}",
+        status.errors
+    );
+    let expected: HashSet<String> = std::iter::once("tree".to_owned())
+        .chain((0..5).map(|number| format!("file-{number}.txt")))
+        .collect();
+    assert_eq!(names(&host.table().read().unwrap()), expected);
+}
+
+#[test]
 fn close_after_saving_completed_work_does_not_save_again() {
     let rig = Rig::new();
     let host = rig.start();
@@ -415,4 +592,82 @@ fn watch_events_during_rescan_are_applied_after_the_swap() {
     built(&host);
     rig.tick(&host, 0);
     assert!(names(&host.table().read().unwrap()).contains("queued.txt"));
+}
+
+#[test]
+fn a_refreshed_folder_compacts_after_its_dead_slots_double() {
+    let rig = Rig::new();
+    rig.fs.add_folder("tree/big");
+    let provider = Arc::new(Generated::new(Arc::clone(&rig.fs), 60_000));
+    let host = rig.start_provider(provider.clone());
+    built(&host);
+    for refresh in 0..2 {
+        provider.add_folder(&format!("refresh-{refresh}"));
+        refreshed(&host);
+    }
+    let shared = host.table();
+    let table = shared.read().unwrap();
+    assert_eq!(table.slots() as usize, table.len());
+    let mut expected: HashSet<String> = HashSet::from(["tree".to_owned(), "big".to_owned()]);
+    expected.extend((0..60_000).map(|number| format!("file-{number:07}.txt")));
+    expected.insert("refresh-0".to_owned());
+    expected.insert("refresh-1".to_owned());
+    assert_eq!(names(&table), expected);
+}
+
+#[test]
+#[ignore = "timing"]
+#[expect(clippy::print_stdout, reason = "the timing report is the test output")]
+fn host_refresh_timing() {
+    use crate::heap_probe::Probe;
+
+    const FILES: usize = 1_000_000;
+    let rig = Rig::new();
+    rig.fs.add_folder("tree/big");
+    let provider = Arc::new(Generated::new(Arc::clone(&rig.fs), FILES));
+    let host = rig.start_provider_with_limit(provider.clone(), usize::MAX);
+    built(&host);
+
+    provider.add_folder("refresh-0");
+    refreshed(&host);
+    let shared = host.table();
+    let (before, live) = {
+        let table = shared.read().unwrap();
+        (table.memory_bytes(), table.len())
+    };
+    let walked = crate::walker::walk(
+        provider.as_ref(),
+        &rig.fs.location("tree/big"),
+        Limits {
+            max_entries: usize::MAX,
+            exclude: Vec::new(),
+        },
+        &CancelToken::new(),
+        |_, _| {},
+    )
+    .unwrap()
+    .table
+    .memory_bytes();
+
+    let done = Arc::new(AtomicBool::new(false));
+    let longest = Arc::new(AtomicU64::new(0));
+    let reader = spawn_reader(shared, Arc::clone(&done), Arc::clone(&longest));
+
+    let probe = Probe::start();
+    provider.add_folder("refresh-1");
+    refreshed(&host);
+    let measured = probe.read();
+    done.store(true, Ordering::Release);
+    reader.join().unwrap();
+
+    let peak = before + measured.peak;
+    let bound = before + 2 * walked + 48 * live;
+    println!(
+        "host refresh: max read wait {} ms, peak {} KiB, before {} KiB, walked {} KiB",
+        longest.load(Ordering::Relaxed) / 1_000,
+        peak >> 10,
+        before >> 10,
+        walked >> 10
+    );
+    assert!(peak <= bound, "peak {peak} > bound {bound}");
 }

@@ -1,7 +1,9 @@
 mod change;
 mod children;
+mod compact;
 mod flags;
 mod folder_lookup;
+mod growth;
 mod memory;
 mod totals;
 
@@ -201,13 +203,19 @@ impl NameTable {
             return Err(TableError::Cycle(id));
         }
         let offset = self.append_name(clean(name))?;
+        growth::grow_column(&mut self.offsets);
         self.offsets.push(offset);
+        growth::grow_column(&mut self.parents);
         self.parents.push(parent);
+        growth::grow_column(&mut self.flags);
         self.flags.push(Flags::from_stored(flags.bits()).bits());
+        growth::grow_column(&mut self.bytes);
         self.bytes.push(0);
         if flags.contains(Flags::FOLDER) {
+            growth::grow_column(&mut self.counts);
             self.counts.push((id, [0; 2]));
         }
+        self.children.reserve_for_push();
         self.children.add(id, &self.parents);
         self.live += 1;
         let mut descendants = Totals::default();
@@ -261,49 +269,6 @@ impl NameTable {
             }
         }
         removed
-    }
-
-    pub fn compact(&mut self) -> Vec<Option<u32>> {
-        let slots = self.slots();
-        let mut map = vec![None; slots as usize];
-        let mut next = 0u32;
-        for id in 0..slots {
-            if self.is_live(id) {
-                map[id as usize] = Some(next);
-                next += 1;
-            }
-        }
-        let mut fresh = Self::with_capacity(next as usize, self.names.len());
-        for id in 0..slots {
-            if map[id as usize].is_none() {
-                continue;
-            }
-            let parent = map
-                .get(self.parents[id as usize] as usize)
-                .copied()
-                .flatten()
-                .unwrap_or(NO_PARENT);
-            fresh.offsets.push(fresh.names.len() as u32);
-            fresh.names.push_str(self.name_unchecked(id));
-            fresh.names.push(NAME_END);
-            fresh.parents.push(parent);
-            fresh.flags.push(self.flags[id as usize]);
-            fresh.bytes.push(self.bytes[id as usize]);
-            if let Ok(at) = self.counts.binary_search_by_key(&id, |&(slot, _)| slot) {
-                fresh.counts.push((fresh.slots() - 1, self.counts[at].1));
-            }
-        }
-        fresh.live = next as usize;
-        match self.children.remapped(&map, &fresh.parents) {
-            Some(children) => fresh.children = children,
-            None => {
-                tracing::error!("child lists disagree with parents during compaction; rebuilt");
-                fresh.relink();
-            }
-        }
-        fresh.shrink_to_fit();
-        *self = fresh;
-        map
     }
 
     pub fn name(&self, id: u32) -> Option<&str> {
@@ -390,6 +355,7 @@ impl NameTable {
         let offset = u32::try_from(self.names.len()).map_err(|_| TableError::Full)?;
         let end = self.names.len() + name.len() + NAME_END.len_utf8();
         u32::try_from(end).map_err(|_| TableError::Full)?;
+        growth::grow_names(&mut self.names, name.len() + 1);
         self.names.push_str(name);
         self.names.push(NAME_END);
         Ok(offset)

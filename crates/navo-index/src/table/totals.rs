@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{Flags, NameTable, TableError};
+use super::{Flags, NO_PARENT, NameTable, TableError};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Totals {
@@ -108,7 +108,9 @@ impl NameTable {
         // Only live folders get rebuilt, so only their stored sums need keeping for the check.
         let folders: Vec<u32> = self.counted_folders().collect();
         let stored: Vec<u64> = folders.iter().map(|&id| self.bytes[id as usize]).collect();
-        self.rebuild_totals();
+        if !self.rebuild_totals() {
+            return false;
+        }
         folders.iter().map(|&id| self.bytes[id as usize]).eq(stored)
             && (0..self.slots())
                 .map(|id| self.folder_counts(id))
@@ -120,40 +122,87 @@ impl NameTable {
             .filter(|&id| self.flags[id as usize] & Flags::FOLDER.bits() != 0)
     }
 
-    pub(super) fn rebuild_totals(&mut self) {
-        self.counts = self.counted_folders().map(|id| (id, [0; 2])).collect();
-        for id in 0..self.slots() {
-            if self
-                .flags(id)
-                .is_some_and(|flags| flags.contains(Flags::FOLDER))
-            {
-                self.bytes[id as usize] = 0;
+    /// Recomputes folder sums by a post-order walk of the child lists, with no per-slot scratch.
+    /// Returns `false` when the lists do not form one tree over every live entry.
+    pub(super) fn rebuild_totals(&mut self) -> bool {
+        let live_folder =
+            |bits: &u16| bits & (Flags::FOLDER.bits() | Flags::DELETED) == Flags::FOLDER.bits();
+        let folders = self.flags.iter().filter(|bits| live_folder(bits)).count();
+        self.counts.clear();
+        if self.counts.try_reserve_exact(folders).is_err() {
+            return false;
+        }
+        self.counts.extend(
+            (0u32..)
+                .zip(&self.flags)
+                .filter(|(_, bits)| live_folder(bits))
+                .map(|(id, _)| (id, [0; 2])),
+        );
+        for &(id, _) in &self.counts {
+            self.bytes[id as usize] = 0;
+        }
+        if self.slots() == 0 || (!self.is_live(0) && self.live == 0) {
+            return true;
+        }
+        if !self.is_live(0) || self.parents[0] != NO_PARENT {
+            return false;
+        }
+        self.walk_totals()
+    }
+
+    fn walk_totals(&mut self) -> bool {
+        // Each live entry is entered once and left once.
+        let mut steps = 2 * self.offsets.len() + 2;
+        let (mut id, mut visited, mut descend) = (0u32, 0usize, true);
+        while take_step(&mut steps) {
+            match descend.then(|| self.children.first_child(id)).flatten() {
+                Some(child) if self.linked_under(child, id) => {
+                    id = child;
+                    continue;
+                }
+                Some(_) => return false,
+                None => {}
+            }
+            visited += 1;
+            if id == 0 {
+                return visited == self.live;
+            }
+            let parent = self.parents[id as usize];
+            self.add_to_parent(id, parent);
+            match self.children.next_sibling(id) {
+                Some(next) if self.linked_under(next, parent) => (id, descend) = (next, true),
+                Some(_) => return false,
+                None => (id, descend) = (parent, false),
             }
         }
-        let mut remaining: Vec<_> = (0..self.slots())
-            .map(|id| self.children.of(id).count())
-            .collect();
-        let mut ready: Vec<_> = self
-            .live_ids()
-            .filter(|&id| remaining[id as usize] == 0)
-            .collect();
-        while let Some(id) = ready.pop() {
-            let Some(parent) = self.parent(id) else {
-                continue;
-            };
-            let totals = self.contribution(id);
-            let at = parent as usize;
-            self.bytes[at] = self.bytes[at].saturating_add(totals.bytes);
-            if let Some(counts) = self.folder_counts_mut(parent) {
-                counts[0] += totals.files;
-                counts[1] += totals.folders;
-            }
-            remaining[at] -= 1;
-            if remaining[at] == 0 {
-                ready.push(parent);
-            }
+        false
+    }
+
+    fn linked_under(&self, child: u32, parent: u32) -> bool {
+        self.is_live(child) && self.parents[child as usize] == parent
+    }
+
+    /// Saturating, so a corrupt list that revisits entries cannot overflow before it is caught.
+    fn add_to_parent(&mut self, id: u32, parent: u32) {
+        let at = id as usize;
+        let folder = self.flags[at] & Flags::FOLDER.bits() != 0;
+        let [files, folders] = self.folder_counts(id);
+        let bytes = self.bytes[at];
+        self.bytes[parent as usize] = self.bytes[parent as usize].saturating_add(bytes);
+        if let Some(counts) = self.folder_counts_mut(parent) {
+            counts[0] = counts[0]
+                .saturating_add(files)
+                .saturating_add(u32::from(!folder));
+            counts[1] = counts[1]
+                .saturating_add(folders)
+                .saturating_add(u32::from(folder));
         }
     }
+}
+
+fn take_step(steps: &mut usize) -> bool {
+    *steps = steps.saturating_sub(1);
+    *steps > 0
 }
 
 fn adjust_counts(counts: &mut [u32; 2], totals: Totals, add: bool) {

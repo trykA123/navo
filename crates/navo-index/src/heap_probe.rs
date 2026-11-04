@@ -47,6 +47,9 @@ unsafe impl GlobalAlloc for Counting {
     }
 
     unsafe fn realloc(&self, block: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        if new_size >= FAIL_FROM.get() {
+            return std::ptr::null_mut();
+        }
         // SAFETY: `block` came from `System` with `layout`; the caller upholds `realloc`'s contract.
         let moved = unsafe { System.realloc(block, layout, new_size) };
         if !moved.is_null() {

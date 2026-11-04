@@ -26,7 +26,7 @@ use config::{Configured, same_options};
 use drives::DriveCache;
 use presence::{Selection, ServicePresence};
 use retirement::Retirements;
-use roots::{Service, configured, exclusions, is_allowed, roots};
+use roots::{Service, configured, exclusions, is_allowed, is_network, roots};
 use snapshots::{Snapshots, Sweep};
 
 struct Root {
@@ -43,6 +43,7 @@ struct Hosts {
     roots: Vec<Root>,
     desired: Vec<Location>,
     exclude: Vec<String>,
+    network_drives: Vec<Location>,
     configured: Configured,
     retirement: Retirements,
     presence: ServicePresence,
@@ -116,6 +117,7 @@ fn create_hosts(
         roots: Vec::new(),
         desired: Vec::new(),
         exclude: Vec::new(),
+        network_drives: Vec::new(),
         configured: Configured::default(),
         retirement: Retirements::new()?,
         presence: ServicePresence::system(),
@@ -237,6 +239,11 @@ impl Hosts {
         now: Instant,
     ) {
         let available = navo_shell::list_drives();
+        self.network_drives = available
+            .iter()
+            .filter(|drive| matches!(drive.kind, navo_shell::DriveKind::Network))
+            .filter_map(|drive| Location::new(&drive.root).ok())
+            .collect();
         let volumes = match options.mode {
             IndexMode::Auto => self.presence.volumes(&Selection::of(options)),
             _ => Some(None),
@@ -289,13 +296,18 @@ impl Hosts {
         let Some(snapshot) = self.snapshot(&location) else {
             return;
         };
+        let max_entries = if is_network(&location, &self.network_drives) {
+            usize::try_from(navo_fs::NETWORK_WALK_MAX_ENTRIES).unwrap_or(usize::MAX)
+        } else {
+            u32::MAX as usize
+        };
         let started = Host::start(HostOptions {
             provider: self.provider.clone(),
             queue: self.queue.clone(),
             root: location.clone(),
             snapshot,
             limits: Limits {
-                max_entries: u32::MAX as usize,
+                max_entries,
                 exclude: self.exclude.clone(),
             },
         });

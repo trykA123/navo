@@ -64,8 +64,9 @@ fn an_index_with_entries_reports_every_index_part() {
 
 #[test]
 fn index_parts_grow_with_the_index() {
-    let mut last = report(0);
-    for files in [10, 100, 1_000, 10_000] {
+    // Growth by an eighth keeps the first capacities fixed until the minimum steps fill.
+    let mut last = report(1_000);
+    for files in [10_000, 100_000] {
         let next = report(files);
         for wanted in [Part::Names, Part::FileIds, Part::Tree, Part::Totals] {
             assert!(

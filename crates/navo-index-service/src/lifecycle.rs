@@ -3,7 +3,7 @@ use std::time::Duration;
 use super::config::Drive;
 
 use navo_index::file::{self, FileError, Header};
-use navo_index::ntfs::{NtfsError, NtfsIndex};
+use navo_index::ntfs::{NtfsError, NtfsIndex, SizeHint};
 use navo_index::pipe::{BuildReason, CancelToken};
 use navo_index::table::NameTable;
 use navo_index::usn::FrnMap;
@@ -134,4 +134,36 @@ impl SaveClock {
         self.saved();
         Ok(())
     }
+}
+
+/// Capacities for a rebuild: live entries and names plus a sixteenth, folders capped at entries.
+pub(super) fn hint_from_counts(
+    len: usize,
+    folders: usize,
+    live_name_bytes: usize,
+    references: usize,
+) -> SizeHint {
+    const MAX_ENTRIES: usize = u32::MAX as usize - 1;
+    const MAX_NAME_BYTES: usize = u32::MAX as usize;
+    let entries = len.saturating_add(len / 16).min(MAX_ENTRIES);
+    SizeHint {
+        entries,
+        folders: folders.saturating_add(folders / 16).min(entries),
+        name_bytes: live_name_bytes
+            .saturating_add(live_name_bytes / 16)
+            .min(MAX_NAME_BYTES),
+        references: references.min(entries),
+    }
+}
+
+/// The hint a rebuild takes from the index it is about to replace.
+pub(super) fn build_hint(old: Option<&NtfsIndex>) -> SizeHint {
+    old.map_or_else(SizeHint::default, |old| {
+        hint_from_counts(
+            old.table.len(),
+            old.table.folder_count(),
+            old.table.live_name_bytes(),
+            old.ids.len(),
+        )
+    })
 }

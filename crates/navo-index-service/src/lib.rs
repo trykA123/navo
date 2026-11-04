@@ -11,6 +11,8 @@ mod answer;
 mod batch;
 #[cfg(any(windows, test))]
 mod bind_retry;
+#[cfg(any(windows, test))]
+mod build_permit;
 #[cfg_attr(
     not(any(windows, test)),
     allow(

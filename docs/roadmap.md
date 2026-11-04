@@ -86,7 +86,7 @@ Goal: fast search, workspaces and tiled panes, safe deletes.
 
 The owner reordered the beta on 27 October 2026 (D85). Built in this order:
 
-1. core: search index like Everything: Ctrl+K answers at once from the Navo Index service, even while it updates; no folder walks on NTFS drives; the service starts from its saved index; less memory; a benchmark next to Everything. The busy-answer fix is done.
+1. core: search index like Everything: Ctrl+K answers at once from the Navo Index service, even while it updates; no folder walks on NTFS drives; the service starts from its saved index; less memory; a benchmark next to Everything. The busy-answer fix is done. Memory peaks are cut: loading the index and rebuilding it need far less extra memory (load 22 → 8 bytes per file, rebuilds sized from the old index, cleanup a third of before), one drive builds at a time, and network drives are indexed only when you list them, with a cap.
 2. core: delete safety net (D65): Shift+Del and overwrites keep the old files 1–7 days, a "Recently deleted" view, Ctrl+Z restores. On by default since alpha-2026-10-28e; review and docs left.
 3. core: workspaces (Alt+1…9) with the tray: named workspaces, drafts, Save and Discard, rename, move, delete with Ctrl+Z, and a status-bar button. Done.
 4. core: up to four panes, tiled like Hyprland (D80): five layouts and your own on Ctrl+L, split, close, swap and resize from the keyboard, Shift+drag swap, divider drag, a strip in narrow windows. Done.
