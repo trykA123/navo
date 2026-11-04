@@ -2,7 +2,7 @@
 
 Status: **G2 passed (2026-10-15): GO for GPUI (D2)**. Narrator read nothing on the list; it is a follow-up the owner does not need now; the owner found scrolling smooth on the 60 Hz Windows monitor (2026-10-15); the owner decides go or no-go for D2. Windows PC: Intel UHD + NVIDIA T1200 laptop, fat-LTO spike exe from CI run 38677189477, low-power GPU patch.
 
-Spike: `spikes/gpui-b` (design B, variant 1 of D27, three panes of 100,000 rows each, drawer, F-key bar) on `gpui-kit` 0.7.3. Raw numbers: `docs/spike/metrics/`. Plan and log: `plans/2026-10-14-p2-gpui-spike.md`.
+Spike: `spikes/gpui-b` (design B, variant 1 of D27, three panes of 100,000 rows each, drawer, F-key bar) on `gpui-kit` 0.7.3. Raw numbers: `docs/spike/metrics/`. Plan and log: `plans/2026-10-14-p2-gpui-spike.md` (in git history).
 
 ## Targets
 

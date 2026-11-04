@@ -2,39 +2,53 @@
 
 How Navo is built: in plans, each cut into atoms, each atom one worker run. Rules come from `~/.agents/rules/planning.md`, `code-quality.md` and `rust.md`; this file adds Navo's own (D26, D28).
 
-## The plans, in order
+## Open plans
 
-Each plan ends in a gate. The next plan starts only after that gate passes.
+Finished plans were removed on 2026-11-04; they stay in git history. Plans still open:
 
-| Plan | File | Delivers | Gate |
-| --- | --- | --- | --- |
-| P1 | [Workspace, gate and CI](2026-10-14-p1-workspace-gate-ci.md) | Eleven crates, `cargo xtask gate`, CI on Linux and Windows, a portable `.exe` per push | G1 |
-| P2 | [GPUI spike](2026-10-14-p2-gpui-spike.md) | Design B on `gpui-kit` with 100k rows; measured frame time, memory, start-up, fuzzy matching, accessibility | G2: go or no-go for D2 |
-| P3 | [Core model](2026-10-14-p3-core-model.md) | Commands, layout tree, state, `apply()`, TC selection, record and replay | G3 |
-| P4 | [Storage](2026-10-14-p4-storage.md) | Atomic writes, settings, session snapshot, `navo.db`, `cache.db`, migrations | G4 |
-| P5 | [Diagnostics](2026-10-14-p5-diagnostics.md) | Redacted logs, event ring, memory statistics, report, canary test | G5 |
-| P6 | [Locations and file systems](2026-10-14-p6-locations-fs.md) | Locations and providers, fake file system with faults, hostile names, local listing, I/O queues, error model | G6 |
-| P7 | [PoC 1: Browse](2026-10-14-p7-poc-browse.md) | Components and gallery; a window with two panes that browse real folders; session restore | G7: **PoC 1** |
-| P8 | [PoC 2: Operate](2026-10-14-p8-poc-operate.md) | Plans, job journal, copy, move, Recycle Bin, Shift+Del, progress and cancel | G8: **PoC 2** |
+**In progress or with open atoms**
 
-P1 is done (G1, 2026-10-14). P2 is running. P2–P8 list their components, atoms and decided design; each plan's briefs get their exact `Read` line ranges when the previous gate passes, because the code they point at does not exist yet.
+- [2026-10-16-p17-context-menu](2026-10-16-p17-context-menu.md)
+- [2026-10-16-p19-new-look](2026-10-16-p19-new-look.md)
+- [2026-10-19-p29-crash-report](2026-10-19-p29-crash-report.md)
+- [2026-10-19-p30-copy-auto](2026-10-19-p30-copy-auto.md)
+- [2026-10-19-p31-dpi-placement](2026-10-19-p31-dpi-placement.md)
+- [2026-10-20-p39-activity-strip](2026-10-20-p39-activity-strip.md)
+- [2026-10-20-p42-compare](2026-10-20-p42-compare.md)
+- [2026-10-27-beta](2026-10-27-beta.md)
+- [2026-10-28-speed](2026-10-28-speed.md)
+- [2026-10-29-speed-atoms](2026-10-29-speed-atoms.md)
+- [2026-11-04-keys-and-mouse](2026-11-04-keys-and-mouse.md)
 
-The rest of Alpha (workspaces, drive bar, context menu, Explorer clipboard and so on) is planned after PoC 2, from the roadmap.
+**Parked**
 
-## Tiers: which model runs an atom
+- [2026-10-19-p28-real-pc-startup](2026-10-19-p28-real-pc-startup.md)
+- [2026-10-19-p32-fluent-strings](2026-10-19-p32-fluent-strings.md)
 
-| Tier | Model | Roles | Used for |
-| --- | --- | --- | --- |
-| **T1** | Opus 5.5, `medium` | `patcher`, `infra-builder` | Moves, exact edits, small config, scaffolds |
-| **T2** | Opus 5.5, `medium` | `ui-builder`, `checker`, `infra-builder` (large) | UI work, medium implementation, writing the failing tests (Red atoms), CI |
-| **T3** | Opus 5.5, `medium`; `high` for complex work | Claude `general-purpose` agent | Backend Rust outside the core model: store, fs, index, diag, xtask, wiring |
-| **T4** | Opus 5.5, `high`: the orchestrator itself, or `ui-builder-high` for hard UI | orchestrator, `ui-builder-high` | The core and the hardest atoms: every `navo-core` Green atom, everything that can lose user data (`atomic_write`, settings, session, job journal, job engine, standard copy), the spike, `FileList`, the pane view, the I/O queue, hard refactors, cross-cutting changes |
+**Older plans with open atoms to triage**
 
-- **Tiers as of 2026-10-15 (owner):** every editing agent runs on Opus 5.5 `medium`; complex work runs on Opus 5.5 `high`. Read-only `scout` and `researcher` run on Sonnet 5.5 `low` (`medium` for wider searches); `reviewer` runs on Opus `high`. No Haiku, no Sonnet for editing work, no gpt-6.1-sol, Codex or Gemini (D35). Every spawn passes `model` and `effort` explicitly.
-- The tier follows the atom's difficulty, but every `navo-core` Green atom and every data-safety atom is T4. A one-line move elsewhere is T1.
-- Red atoms for T4 components run on Opus `medium` (D34), and the orchestrator reviews their tests against the contract before the Green atom starts.
-- Escalation follows `planning.md`: one retry with the failure output and one effort step more, then one tier up (T1 → T2 → T3 for backend or T4). Every escalation is logged in the plan.
-- Red and Green atoms run in different sessions at different efforts (Red: a `checker` agent on Opus `medium`; Green: the orchestrator on Opus `high`), and the orchestrator reviews every Red test against the contract, so the tests are not shaped by the code that passes them.
+- [2026-10-14-p7-poc-browse](2026-10-14-p7-poc-browse.md)
+- [2026-10-14-p8-poc-operate](2026-10-14-p8-poc-operate.md)
+- [2026-10-15-audit](2026-10-15-audit.md)
+- [2026-10-15-p11-select-sort](2026-10-15-p11-select-sort.md)
+- [2026-10-15-p15-viewer](2026-10-15-p15-viewer.md)
+- [2026-10-15-p16-automotive](2026-10-15-p16-automotive.md)
+- [2026-10-16-p18-listing-cache](2026-10-16-p18-listing-cache.md)
+- [2026-10-17-p22-live-settings-file](2026-10-17-p22-live-settings-file.md)
+- [2026-10-18-delete-dialog-enter](2026-10-18-delete-dialog-enter.md)
+- [2026-10-19-p33-view-parts](2026-10-19-p33-view-parts.md)
+- [2026-10-20-p36-multi-select-drag-drop](2026-10-20-p36-multi-select-drag-drop.md)
+- [2026-10-20-p40-command-center](2026-10-20-p40-command-center.md)
+- [2026-10-20-p41-multi-rename](2026-10-20-p41-multi-rename.md)
+- [2026-10-23-alpha-backend-continuation](2026-10-23-alpha-backend-continuation.md)
+- [2026-10-24-backend-reboot-handoff](2026-10-24-backend-reboot-handoff.md)
+- [2026-10-25-backend-review-index](2026-10-25-backend-review-index.md)
+- [2026-10-25-opus-backend-fixes](2026-10-25-opus-backend-fixes.md)
+- [2026-10-30-mimalloc-ab](2026-10-30-mimalloc-ab.md)
+
+## Model tiers
+
+Each atom names its role and effort. The orchestrator's role table decides the model; the old Opus-only tier table (2026-10-15) no longer applies.
 
 ## No skipping
 

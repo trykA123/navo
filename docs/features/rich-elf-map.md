@@ -64,4 +64,4 @@ Custom mode lets you turn parts on or off: the inspector, the memory strip, the 
 
 Module grouping was answered: cover every case. The plan lists no other blocking question.
 
-Refs: plans/2026-10-20-p38-rich-elf-map.md (D1 to D22)
+Refs: plans/2026-10-20-p38-rich-elf-map.md (in git history) (D1 to D22)
