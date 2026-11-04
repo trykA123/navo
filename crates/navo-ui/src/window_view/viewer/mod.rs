@@ -120,6 +120,7 @@ pub(super) struct Viewer {
     reencoding: Option<u64>,
     memory: Option<crate::primitives::AppHeld>,
     guide: Option<FileHooks>,
+    from_browse: bool,
 }
 
 fn merged_note(load: Option<&'static str>, start: Option<SharedString>) -> Option<SharedString> {
@@ -164,6 +165,7 @@ impl Viewer {
             reencoding: None,
             memory: None,
             guide: None,
+            from_browse: false,
         }
     }
 
@@ -275,8 +277,9 @@ impl NavoWindow {
         self.show_viewer(viewer, window, cx);
     }
 
-    fn show_viewer(&mut self, viewer: Viewer, window: &mut Window, cx: &mut Context<Self>) {
+    fn show_viewer(&mut self, mut viewer: Viewer, window: &mut Window, cx: &mut Context<Self>) {
         self.browser.dialog_opened();
+        viewer.from_browse = self.preview.is_browsing(window, cx);
         let focus = viewer.focus.clone();
         window.defer(cx, move |window, cx| window.focus(&focus, cx));
         self.viewer = Some(viewer);
@@ -303,9 +306,12 @@ impl NavoWindow {
         if self.warn_unsaved(cx) {
             return;
         }
-        self.viewer = None;
+        let from_browse = self.viewer.take().is_some_and(|viewer| viewer.from_browse);
         if self.settings.is_open() {
             self.focus_settings(window, cx);
+        } else if from_browse && self.preview.is_open() {
+            let target = self.preview.browse_target(cx);
+            window.focus(&target, cx);
         } else {
             self.focus_core_pane(window, cx);
         }

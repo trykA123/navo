@@ -198,7 +198,7 @@ fn shift_enter_on_a_largest_file_reveals_it_with_the_cursor_on_it(cx: &mut TestA
 }
 
 #[gpui_kit::test]
-fn f3_on_a_file_opens_the_full_viewer(cx: &mut TestAppContext) {
+fn f3_on_a_file_opens_the_full_viewer_and_esc_returns_to_the_preview(cx: &mut TestAppContext) {
     let (rig, fs) = browsing(cx);
     for _ in 0..3 {
         rig.key(cx, "down");
@@ -209,6 +209,13 @@ fn f3_on_a_file_opens_the_full_viewer(cx: &mut TestAppContext) {
         rig.read(cx, |view| view.viewer_location().cloned()),
         Some(file)
     );
+    rig.redraw(cx);
+    rig.key(cx, "escape");
+    rig.redraw(cx);
+    assert!(rig.read(cx, |view| view.viewer_location().is_none()));
+    assert!(rig.read(cx, |view| view.preview.is_open()));
+    assert!(sheet_has_focus(cx, &rig));
+    assert!(!rig.list_has_focus(cx));
 }
 
 #[gpui_kit::test]

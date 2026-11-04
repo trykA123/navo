@@ -415,3 +415,88 @@ fn space_pages_down_in_a_long_file_opened_in_the_preview(cx: &mut TestAppContext
         view.preview.folder().is_some_and(|f| f.marks.len() == 0)
     }));
 }
+
+fn is_browsing(cx: &mut TestAppContext, rig: &Rig) -> bool {
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.read(cx).preview.is_browsing(window, cx)
+    })
+    .expect("window")
+}
+
+fn has_body(view: &crate::window_view::NavoWindow) -> bool {
+    matches!(view.preview.shown(), Some(Shown::File(file)) if file.body.is_some())
+}
+
+/// Walks the list to each sample, runs `between` while browsing it, then checks one Esc closes.
+fn sweep_escape(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    between: impl Fn(&mut TestAppContext, &Rig, &str),
+) {
+    for (index, (name, _)) in samples().into_iter().enumerate() {
+        if index > 0 {
+            rig.key(cx, "down");
+        }
+        rig.open(cx);
+        rig.rest(cx);
+        assert!(rig.wait_until(cx, has_body), "{name} body");
+        assert_eq!(rig.shown_name(cx).as_deref(), Some(name));
+        rig.key(cx, "ctrl-shift-q");
+        assert!(body_has_focus(cx, rig), "{name} body focus");
+        between(cx, rig, name);
+        assert!(is_browsing(cx, rig), "{name} browsing before Esc");
+        rig.key(cx, "escape");
+        assert!(!is_browsing(cx, rig), "{name} still browsing after Esc");
+        assert!(rig.list_has_focus(cx), "{name} list focus after Esc");
+        assert!(
+            !rig.read(cx, |view| view.preview.is_open()),
+            "{name} closed"
+        );
+    }
+}
+
+#[gpui_kit::test]
+fn one_escape_closes_every_file_kind_preview(cx: &mut TestAppContext) {
+    let rig = open_samples(cx);
+    sweep_escape(cx, &rig, |cx, rig, _| rig.redraw(cx));
+}
+
+#[gpui_kit::test]
+fn one_escape_closes_every_file_kind_preview_after_a_reload(cx: &mut TestAppContext) {
+    let (rig, fs) = open_samples_on(cx, FakeFs::new().with_watch());
+    sweep_escape(cx, &rig, |cx, rig, name| {
+        let loads = rig.loads(cx);
+        fs.add_file(&format!("home/{name}"), 4_096);
+        assert!(
+            rig.rest_until(cx, |view| view.preview.loads() > loads),
+            "{name}"
+        );
+        assert!(rig.wait_until(cx, has_body), "{name} reloaded body");
+        assert!(body_has_focus(cx, rig), "{name} focus after reload");
+    });
+}
+
+#[gpui_kit::test]
+fn one_escape_closes_every_file_kind_preview_after_a_viewer_closes(cx: &mut TestAppContext) {
+    let rig = open_samples(cx);
+    sweep_escape(cx, &rig, |cx, rig, name| {
+        rig.key(cx, "escape");
+        rig.key(cx, "f3");
+        assert!(
+            rig.read(cx, |view| view.viewer_location().is_some()),
+            "{name} viewer"
+        );
+        rig.redraw(cx);
+        rig.key(cx, "escape");
+        rig.redraw(cx);
+        assert!(
+            rig.read(cx, |view| view.viewer_location().is_none()),
+            "{name} closed"
+        );
+        rig.key(cx, "ctrl-shift-q");
+        rig.settle_motion(cx);
+        assert!(rig.wait_until(cx, has_body), "{name} body after viewer");
+        assert!(body_has_focus(cx, rig), "{name} focus after viewer");
+    });
+}
