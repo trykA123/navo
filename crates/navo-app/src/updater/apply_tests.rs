@@ -135,10 +135,16 @@ fn apply_process_query_without_a_root_or_off_windows_reports_running() {
 
 #[test]
 fn an_unreadable_image_blocks_when_its_name_looks_like_navo() {
-    assert!(unreadable_counts("navo.exe", "navo.exe"));
-    assert!(unreadable_counts("Navo-Index.exe", "navo.exe"));
-    assert!(unreadable_counts("renamed.exe", "renamed.exe"));
-    assert!(!unreadable_counts("csrss.exe", "navo.exe"));
+    assert!(unreadable_counts("navo.exe", "navo.exe", true));
+    assert!(unreadable_counts("Navo-Index.exe", "navo.exe", true));
+    assert!(unreadable_counts("renamed.exe", "renamed.exe", true));
+    assert!(!unreadable_counts("csrss.exe", "navo.exe", true));
+}
+
+#[test]
+fn an_unreadable_navo_image_in_another_session_does_not_block() {
+    assert!(!unreadable_counts("navo.exe", "navo.exe", false));
+    assert!(!unreadable_counts("Navo-Index.exe", "navo.exe", false));
 }
 
 #[test]
