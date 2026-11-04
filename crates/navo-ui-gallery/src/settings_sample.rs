@@ -117,7 +117,10 @@ pub fn sheet(t: &Theme, state: &Entity<SheetState>, frame: SheetFrame, shown: &S
         .git_page(git)
         .index_progress(index_sample())
         .version("0.3.0".into())
-        .update(shown.extras.update.clone().unwrap_or(UpdateView::Hidden));
+        .update(
+            shown.extras.update.clone().unwrap_or(UpdateView::Hidden),
+            false,
+        );
     let body = if shown.extras.is_scrolled_to_end {
         let scroll = ScrollHandle::new();
         scroll.set_offset(point(px(0.), px(-10_000.)));
