@@ -1,15 +1,17 @@
 mod archives;
+mod gitignore;
 
 use std::fs::File;
 use std::io::{self, Read};
 use std::ops::ControlFlow;
 use std::time::{Duration, Instant};
 
-use navo_core::find::{Compiled, FileHits, FindQuery, Skip, scan};
+use navo_core::find::{Compiled, FileHits, FindQuery, GitRules, Skip, scan};
 use navo_core::{Location, ProviderPath};
 
 use super::{Filters, FindError, FindProgress, FoundBatch, FoundFile};
 use crate::{CancelToken, EntryBatch, EntryKind, FsEntry, LocalFs, Provider, os_path};
+use gitignore::{IgnoreRules, is_gitignore_file};
 
 const FILE_LIMIT: u64 = 64 * 1024 * 1024;
 const BATCH_FILES: u64 = 200;
@@ -23,6 +25,22 @@ pub(super) struct Walk<'a> {
     files: Vec<FoundFile>,
     last: Instant,
     scanned: u64,
+}
+
+struct PendingFolder {
+    location: Location,
+    relative: String,
+    rules: IgnoreRules,
+}
+
+impl PendingFolder {
+    fn child(&self, location: Location, relative: String) -> Self {
+        Self {
+            location,
+            relative,
+            rules: self.rules.clone(),
+        }
+    }
 }
 
 impl<'a> Walk<'a> {
@@ -54,14 +72,23 @@ impl<'a> Walk<'a> {
     }
 
     fn folders(&mut self, root: &Location, compiled: &Compiled) -> Result<(), FindError> {
-        let mut pending = vec![(root.clone(), String::new())];
-        while let Some(folder) = pending.pop() {
+        let rules = if self.honours_gitignore() {
+            IgnoreRules::above(root)
+        } else {
+            IgnoreRules::default()
+        };
+        let mut pending = vec![PendingFolder {
+            location: root.clone(),
+            relative: String::new(),
+            rules,
+        }];
+        while let Some(mut folder) = pending.pop() {
             self.check_cancelled()?;
-            self.progress.current = Some(folder.0.clone());
-            match self.list(&folder, compiled) {
+            self.progress.current = Some(folder.location.clone());
+            match self.list(&mut folder, compiled) {
                 Ok(children) => pending.extend(children.into_iter().rev()),
                 Err(error @ FindError::Cancelled) => return Err(error),
-                Err(error) if folder.0 == *root => return Err(error),
+                Err(error) if folder.location == *root => return Err(error),
                 Err(_) => self.progress.skipped += 1,
             }
             self.flush_if_due()?;
@@ -71,15 +98,20 @@ impl<'a> Walk<'a> {
 
     fn list(
         &mut self,
-        folder: &(Location, String),
+        folder: &mut PendingFolder,
         compiled: &Compiled,
-    ) -> Result<Vec<(Location, String)>, FindError> {
+    ) -> Result<Vec<PendingFolder>, FindError> {
         let mut children = Vec::new();
         let mut failure = None;
+        let mut is_first_batch = true;
+        let location = folder.location.clone();
         let cancel = self.cancel;
         let listed = LocalFs::new().list(
-            &folder.0,
+            &location,
             &mut |batch: EntryBatch| {
+                if std::mem::take(&mut is_first_batch) {
+                    self.add_folder_rules(folder, &batch);
+                }
                 let result: Result<(), FindError> =
                     batch.entries.into_iter().try_for_each(|entry| {
                         children.extend(self.take(folder, entry, compiled)?);
@@ -103,30 +135,50 @@ impl<'a> Walk<'a> {
         Ok(children)
     }
 
+    /// Adds the folder's own `.gitignore` before its first entry is taken.
+    fn add_folder_rules(&self, folder: &mut PendingFolder, first: &EntryBatch) {
+        // A one-batch folder shows whether it has a `.gitignore`; a longer one is probed.
+        if !self.honours_gitignore() || (first.last && !first.entries.iter().any(is_gitignore_file))
+        {
+            return;
+        }
+        if let Ok(path) = os_path(&folder.location) {
+            folder.rules = folder.rules.with_folder(&path);
+        }
+    }
+
+    fn honours_gitignore(&self) -> bool {
+        self.filters.query.git_rules == GitRules::On
+    }
+
     fn take(
         &mut self,
-        folder: &(Location, String),
+        folder: &PendingFolder,
         entry: FsEntry,
         compiled: &Compiled,
-    ) -> Result<Option<(Location, String)>, FindError> {
+    ) -> Result<Option<PendingFolder>, FindError> {
         self.check_cancelled()?;
         let location = folder
-            .0
+            .location
             .join(&entry.name)
             .map_err(|error| FindError::Invalid(error.to_string()))?;
-        let name = if folder.1.is_empty() {
+        let is_folder = entry.kind == EntryKind::Folder;
+        if entry.kind != EntryKind::Link && folder.rules.ignores(&location, is_folder) {
+            return Ok(None);
+        }
+        let name = if folder.relative.is_empty() {
             entry.name.to_text()
         } else {
             format!(
                 "{}{}{}",
-                folder.1,
+                folder.relative,
                 std::path::MAIN_SEPARATOR,
                 entry.name.to_text()
             )
         };
-        if entry.kind == EntryKind::Folder && self.filters.folder(&entry) {
+        if is_folder && self.filters.folder(&entry) {
             self.flush_if_due()?;
-            return Ok(Some((location, name)));
+            return Ok(Some(folder.child(location, name)));
         }
         if entry.kind == EntryKind::File {
             let found = FoundFile {

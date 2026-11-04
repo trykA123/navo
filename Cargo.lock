@@ -5894,6 +5894,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "gungraun",
+ "ignore",
  "inotify",
  "lzma-rust2",
  "md-5",

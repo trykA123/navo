@@ -1,4 +1,4 @@
-use crate::find::{Attribute, Date, FindQuery, ModifiedFilter, SizeFilter};
+use crate::find::{Attribute, Date, FindQuery, GitRules, ModifiedFilter, SizeFilter, TokenKind};
 
 #[test]
 fn words_and_quoted_phrases_form_text() {
@@ -90,6 +90,18 @@ fn archive_switches_are_explicit() {
 }
 
 #[test]
+fn git_rules_are_on_by_default_and_git_off_turns_them_off() {
+    assert_eq!(FindQuery::default().git_rules, GitRules::On);
+    assert_eq!(FindQuery::parse("needle").git_rules, GitRules::On);
+    let query = FindQuery::parse("needle GIT:off");
+    assert_eq!(query.git_rules, GitRules::Off);
+    assert_eq!(query.text, "needle");
+    assert_eq!(query.tokens[1].kind, TokenKind::Git);
+    assert!(query.tokens[1].message.is_none());
+    assert_eq!(FindQuery::parse("git:off git:on").git_rules, GitRules::On);
+}
+
+#[test]
 fn regex_token_preserves_pattern_and_enables_regex() {
     let query = FindQuery::parse(r"re:foo\s+bar");
     assert_eq!(query.text, r"foo\s+bar");
@@ -126,6 +138,7 @@ fn invalid_tokens_preserve_remaining_text_and_valid_filters() {
         "attr:unknown",
         "in:",
         "arc:yes",
+        "git:yes",
         "re:[",
         "re:",
     ] {
