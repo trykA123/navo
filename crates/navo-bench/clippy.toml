@@ -1,0 +1,36 @@
+too-many-lines-threshold = 50
+too-many-arguments-threshold = 4
+excessive-nesting-threshold = 4
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+disallowed-methods = [
+    { path = "std::fs::write", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::File::create", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::File::create_new", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::OpenOptions::open", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::remove_file", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::remove_dir", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::remove_dir_all", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::rename", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::copy", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::create_dir", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::create_dir_all", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::hard_link", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::set_permissions", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::soft_link", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::os::windows::fs::symlink_file", reason = "filesystem changes go through the guard module (rule a)", allow-invalid = true },
+    { path = "std::os::windows::fs::symlink_dir", reason = "filesystem changes go through the guard module (rule a)", allow-invalid = true },
+    { path = "std::os::unix::fs::symlink", reason = "filesystem changes go through the guard module (rule a)", allow-invalid = true },
+    { path = "std::fs::File::set_len", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::File::set_modified", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::File::set_times", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::File::set_permissions", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::fs::DirBuilder::create", reason = "filesystem changes go through the guard module (rule a)" },
+    { path = "std::os::unix::fs::chown", reason = "filesystem changes go through the guard module (rule a)", allow-invalid = true },
+    { path = "std::os::unix::fs::fchown", reason = "filesystem changes go through the guard module (rule a)", allow-invalid = true },
+    { path = "std::os::unix::fs::lchown", reason = "filesystem changes go through the guard module (rule a)", allow-invalid = true },
+    { path = "std::process::Command::new", reason = "processes start only from one reviewed module" },
+    { path = "std::process::Command::spawn", reason = "processes start only from one reviewed module" },
+]

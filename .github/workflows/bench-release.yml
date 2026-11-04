@@ -1,0 +1,58 @@
+name: bench-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tool tag, for example bench-2026-11-03"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Tag is a bench tag that does not exist yet
+        shell: pwsh
+        run: |
+          if ($env:TAG -cnotmatch '^bench-\d{4}-\d{2}-\d{2}[a-z]?$') { throw "bad tag: $env:TAG" }
+          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw "release $env:TAG exists" }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: false
+      - run: cargo build --release --locked -p navo-bench
+      - run: cargo build --release --locked -p navo-app --features tester
+      - name: Stage the tool
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bench | Out-Null
+          Copy-Item -LiteralPath target/release/navo-bench.exe -Destination bench
+          Copy-Item -LiteralPath target/release/navo.exe -Destination bench
+          Copy-Item -LiteralPath crates/navo-bench/README.txt -Destination bench
+          Compress-Archive -Path bench/* -DestinationPath navo-bench-tester.zip
+          (Get-FileHash -Algorithm SHA256 navo-bench-tester.zip).Hash.ToLower() + '  navo-bench-tester.zip' | Set-Content SHA256SUMS.txt
+      - name: Publish the pre-release
+        shell: pwsh
+        run: |
+          gh release create $env:TAG navo-bench-tester.zip SHA256SUMS.txt `
+            --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease `
+            --title "navo-bench (tester tool, not part of Navo)" `
+            --notes "A measuring tool for testers, not part of Navo and not an update. It reads the folder you choose, writes only into its own scratch folder and a new report folder, and the report holds numbers only: no file or folder names, paths or user names. Unzip, run navo-bench.exe, send report.html and report.json."

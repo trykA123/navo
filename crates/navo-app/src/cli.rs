@@ -11,7 +11,7 @@ pub(crate) enum Command {
     PdfHelper,
     IndexService(crate::index_service::Action),
     #[cfg(feature = "tester")]
-    Bench(crate::bench::Options),
+    Bench(crate::bench::Request),
     #[cfg(feature = "tester")]
     BenchIndex {
         json: bool,
@@ -34,7 +34,7 @@ pub(crate) struct Start {
 }
 
 #[cfg(feature = "tester")]
-pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | --index-memory [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>]]";
+pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | --index-memory [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>] | bench --folder <folder> [--filter <text>] --out <file.json>]";
 #[cfg(not(feature = "tester"))]
 pub(crate) const USAGE: &str = "usage: navo [--version | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [<path>]]";
 
@@ -235,6 +235,7 @@ mod release_tests {
             &["--trace", "t.jsonl"],
             &["--bench", "index"],
             &["bench", "--root", "fixture"],
+            &["bench", "--folder", "f", "--out", "o.json"],
             &["--diag-report", "r.zip"],
             &["--index-memory"],
             &["--index-memory", "--json"],

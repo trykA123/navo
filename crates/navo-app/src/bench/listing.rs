@@ -31,7 +31,7 @@ fn timed(action: impl FnOnce()) -> f64 {
     report::ms(started.elapsed())
 }
 
-pub(super) fn run(folder: &Location, label: &str) -> Result<Listing, String> {
+pub(super) fn run(folder: &Location, label: &str, filter: &str) -> Result<Listing, String> {
     let provider: Arc<dyn ProviderOps> = Arc::new(LocalFs::new());
     let mut browser = Browser::new(AppState::new(folder.clone()), provider, Arc::new(|| {}));
     let started = Instant::now();
@@ -56,7 +56,7 @@ pub(super) fn run(folder: &Location, label: &str) -> Result<Listing, String> {
             )
         })
         .collect();
-    let filter_keystroke_ms = FILTER
+    let filter_keystroke_ms = filter
         .chars()
         .map(|ch| {
             timed(|| {
@@ -71,7 +71,7 @@ pub(super) fn run(folder: &Location, label: &str) -> Result<Listing, String> {
         entries,
         list_ms,
         sort_ms,
-        filter: FILTER.to_owned(),
+        filter: filter.to_owned(),
         filter_keystroke_ms,
         filter_matches,
     })

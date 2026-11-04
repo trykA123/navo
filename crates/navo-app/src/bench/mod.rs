@@ -1,4 +1,5 @@
 mod fixture;
+mod folder;
 mod incremental;
 pub(crate) mod index;
 mod indexing;
@@ -32,7 +33,21 @@ pub(crate) struct Options {
     pub(crate) out: Option<PathBuf>,
 }
 
-pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Options, String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Request {
+    Fixture(Options),
+    Folder(folder::Options),
+}
+
+pub(crate) fn parse(args: impl Iterator<Item = OsString>) -> Result<Request, String> {
+    let args: Vec<OsString> = args.collect();
+    if args.iter().any(|arg| arg == "--folder") {
+        return folder::parse(args.into_iter()).map(Request::Folder);
+    }
+    parse_fixture(args.into_iter()).map(Request::Fixture)
+}
+
+fn parse_fixture(mut args: impl Iterator<Item = OsString>) -> Result<Options, String> {
     let (mut root, mut files, mut keep, mut out) = (None, DEFAULT_FILES, false, None);
     while let Some(arg) = args.next() {
         let flag = arg.to_string_lossy().into_owned();
@@ -72,7 +87,14 @@ fn count(text: &OsString) -> Result<usize, String> {
     }
 }
 
-pub(crate) fn run(options: &Options) -> ExitCode {
+pub(crate) fn run(request: &Request) -> ExitCode {
+    match request {
+        Request::Fixture(options) => run_fixture(options),
+        Request::Folder(options) => folder::run(options),
+    }
+}
+
+fn run_fixture(options: &Options) -> ExitCode {
     match execute(options) {
         Ok((report, json, md)) => {
             println!("{}", report::markdown(&report));
@@ -108,7 +130,13 @@ fn location(path: &Path) -> Result<Location, String> {
 
 fn listings(workspace: &Workspace) -> Result<Vec<report::Listing>, String> {
     HUGE.iter()
-        .map(|name| listing::run(&location(&workspace.fixture.join(name))?, name))
+        .map(|name| {
+            listing::run(
+                &location(&workspace.fixture.join(name))?,
+                name,
+                listing::FILTER,
+            )
+        })
         .collect()
 }
 
