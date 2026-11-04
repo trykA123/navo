@@ -14,7 +14,7 @@ const READ_WAIT: Duration = Duration::from_millis(20);
 /// Writes a heartbeat line every minute until `cancel`, so restarts and rebuilds show in the log.
 #[cfg(windows)]
 pub(super) fn run(log: &Log, volumes: &[SharedVolume], cancel: &navo_index::pipe::CancelToken) {
-    let probe = crate::diag::probe();
+    let probe = navo_diag::probe();
     let mut next = Instant::now();
     while !cancel.is_cancelled() {
         if Instant::now() >= next {

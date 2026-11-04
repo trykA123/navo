@@ -8,7 +8,7 @@ const READ_WAIT: Duration = Duration::from_millis(20);
 
 pub(super) fn answer(volumes: &[SharedVolume]) -> Reply {
     let mut memory = report_before(volumes, Instant::now() + READ_WAIT);
-    if let Ok(process) = crate::diag::probe().sample() {
+    if let Ok(process) = navo_diag::probe().sample() {
         memory.add(Part::Process, process.private_bytes as usize, 0);
     }
     Reply {
@@ -45,7 +45,7 @@ mod tests {
     use navo_index::pipe::{CancelToken, QueryTerm, Request, VolumeStatus};
 
     use super::*;
-    use crate::index_service::answer::State;
+    use crate::answer::State;
 
     fn bytes(reply: &Reply, wanted: Part) -> Option<u64> {
         let memory = reply.memory.as_ref()?;
@@ -70,8 +70,7 @@ mod tests {
         let request = Request {
             terms: vec![QueryTerm::MemoryV1],
         };
-        let reply =
-            crate::index_service::answer::answer(&[volume()], &request, &CancelToken::new());
+        let reply = crate::answer::answer(&[volume()], &request, &CancelToken::new());
         assert!(reply.hits.is_empty() && reply.totals.is_none());
         let memory = reply.memory.as_ref().unwrap();
         assert!(!memory.busy);

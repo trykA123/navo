@@ -46,6 +46,8 @@ mod rename_log;
 mod resident;
 mod retained_hooks;
 mod search_hooks;
+#[cfg(any(windows, test))]
+mod service_version_step;
 mod settings;
 mod shell_menu;
 mod splash;
@@ -54,8 +56,6 @@ mod terminal;
 mod updater;
 mod virtual_paste;
 mod watch_file;
-#[cfg(windows)]
-mod windows_memory;
 
 use std::ops::ControlFlow;
 #[cfg(feature = "tester")]

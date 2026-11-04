@@ -259,24 +259,13 @@ pub fn parse_mem_total(meminfo: &str) -> Option<u64> {
     kilobytes.checked_mul(1024)
 }
 
-#[cfg(target_os = "linux")]
 pub fn probe() -> Box<dyn MemoryProbe> {
-    Box::new(navo_diag::ProcStatusProbe)
-}
-
-#[cfg(windows)]
-pub fn probe() -> Box<dyn MemoryProbe> {
-    Box::new(crate::windows_memory::WindowsProbe)
-}
-
-#[cfg(not(any(target_os = "linux", windows)))]
-pub fn probe() -> Box<dyn MemoryProbe> {
-    Box::new(navo_diag::FakeProbe(Err(io::ErrorKind::Unsupported.into())))
+    navo_diag::probe()
 }
 
 #[cfg(windows)]
 fn total_ram() -> u64 {
-    crate::windows_memory::total_ram()
+    navo_diag::total_ram()
 }
 
 #[cfg(not(windows))]

@@ -17,6 +17,14 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 tracy-client = { version = "=0.19.0", default-features = false, features = ["enable"], optional = true }
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_System_ProcessStatus",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+] }
+
 [dev-dependencies]
 insta = "1.49.0"
 proptest = "1.12.0"

@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod components;
 mod disk_use;
@@ -19,10 +19,12 @@ pub use event_ring::{EventRing, RingStats};
 pub use log_layer::{LogConfig, LogFlush, LogLayer, RedactionMisses, is_redacted_path};
 pub use memory::{
     CacheRegistry, CacheSize, CacheUsage, FakeProbe, MemoryProbe, MemoryReport, ProcessMemory,
-    TaskCounters, TaskGuard, memory_report,
+    TaskCounters, TaskGuard, memory_report, probe,
 };
 #[cfg(target_os = "linux")]
 pub use memory::{ProcStatusProbe, parse_proc_status};
+#[cfg(windows)]
+pub use memory::{peak_working_set, total_ram};
 pub use redact::{DriveKind, Identity, LengthClass, PathKind, RedactedPath, Redactor, Salt};
 pub use report::{
     BuildInfo, DpiAwareness, ErrorRecord, ReportAttachments, ReportInput, ReportSummary,

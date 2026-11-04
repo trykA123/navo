@@ -1,5 +1,5 @@
 use super::*;
-use crate::index_service::answer::{SharedVolume, State};
+use crate::answer::{SharedVolume, State};
 use navo_index::{
     file::Header,
     ntfs::NtfsIndex,
@@ -41,13 +41,9 @@ fn service_answers_requested_totals_and_marks_building_volumes_incomplete() {
             "D:\\".into(),
         ])],
     };
-    let reply = crate::index_service::answer::answer(
-        std::slice::from_ref(&volume),
-        &request,
-        &CancelToken::new(),
-    )
-    .totals
-    .unwrap();
+    let reply = crate::answer::answer(std::slice::from_ref(&volume), &request, &CancelToken::new())
+        .totals
+        .unwrap();
     assert!(!reply.busy);
     assert_eq!(
         reply.totals,

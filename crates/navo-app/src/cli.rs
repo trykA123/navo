@@ -213,6 +213,9 @@ fn value(flag: &str, next: Option<OsString>) -> Result<PathBuf, String> {
 }
 
 #[cfg(test)]
+mod index_service_tests;
+
+#[cfg(test)]
 mod tests;
 
 #[cfg(all(test, feature = "tester"))]

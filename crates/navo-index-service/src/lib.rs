@@ -1,4 +1,9 @@
 #![deny(unsafe_code)]
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "the service command and its tests report to the terminal"
+)]
 
 #[cfg(any(windows, test))]
 mod answer;
@@ -6,7 +11,13 @@ mod answer;
 mod batch;
 #[cfg(any(windows, test))]
 mod bind_retry;
-#[cfg(any(windows, test))]
+#[cfg_attr(
+    not(any(windows, test)),
+    allow(
+        dead_code,
+        reason = "the service configuration is used on Windows and in tests"
+    )
+)]
 mod config;
 #[cfg(windows)]
 #[path = "directory/windows.rs"]
@@ -16,16 +27,13 @@ mod directory_policy;
 #[cfg(windows)]
 #[path = "elevation/windows.rs"]
 mod elevation;
+mod elevation_error;
 #[cfg(any(windows, test))]
 mod elevation_result;
+
+pub use elevation_error::ElevationError;
 #[cfg(any(windows, test))]
 mod heartbeat;
-#[cfg(any(windows, test))]
-mod memory;
-#[cfg(any(windows, test))]
-mod totals;
-#[cfg(any(windows, test))]
-pub(crate) use elevation_result::ElevationError;
 #[cfg(any(windows, test))]
 mod install_check;
 #[cfg(any(windows, test))]
@@ -35,6 +43,8 @@ mod install_plan;
 mod installation;
 #[cfg(any(windows, test))]
 mod lifecycle;
+#[cfg(any(windows, test))]
+mod memory;
 #[cfg(windows)]
 #[path = "ownership/windows.rs"]
 mod ownership;
@@ -60,9 +70,9 @@ mod session;
 #[path = "storage/windows.rs"]
 mod storage;
 #[cfg(any(windows, test))]
-mod upgrade;
+mod totals;
 #[cfg(any(windows, test))]
-mod version_step;
+mod upgrade;
 #[cfg(windows)]
 #[path = "volumes/windows.rs"]
 mod volumes;
@@ -70,14 +80,14 @@ mod volumes;
 mod worker;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Action {
+pub enum Action {
     Run,
     Install,
     Remove,
 }
 
 impl Action {
-    pub(crate) fn parse(value: &std::ffi::OsStr) -> Result<Self, String> {
+    pub fn parse(value: &std::ffi::OsStr) -> Result<Self, String> {
         match value.to_str() {
             Some("run") => Ok(Self::Run),
             Some("install") => Ok(Self::Install),
@@ -87,7 +97,7 @@ impl Action {
     }
 }
 
-pub(crate) fn run(action: Action) -> std::process::ExitCode {
+pub fn run(action: Action) -> std::process::ExitCode {
     match execute(action) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
@@ -106,13 +116,12 @@ fn failure_code(_: &std::io::Error) -> u8 {
 }
 
 #[cfg(windows)]
-pub(crate) fn request_elevation(action: Action) -> Result<(), ElevationError> {
+pub fn request_elevation(action: Action) -> Result<(), ElevationError> {
     elevation::launch(action)
 }
 
-#[cfg(any(windows, test))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ServiceQuery {
+pub struct ServiceQuery {
     pub running: Option<bool>,
     /// What a running service answers; `None` when it is not running or did not answer.
     pub version: Option<navo_index::pipe::ServiceVersion>,
@@ -120,7 +129,7 @@ pub(crate) struct ServiceQuery {
 }
 
 #[cfg(windows)]
-pub(crate) fn query() -> std::io::Result<ServiceQuery> {
+pub fn query() -> std::io::Result<ServiceQuery> {
     let running = scm::query_running(install_plan::NAVO)?;
     Ok(ServiceQuery {
         running,
@@ -141,24 +150,10 @@ fn running_version() -> Option<navo_index::pipe::ServiceVersion> {
     }
 }
 
-#[cfg(any(windows, test))]
-pub(crate) use version_step::is_older;
-
-/// Starts the D22f update check off the UI thread; off without a data folder to remember a decline.
-#[cfg(windows)]
-pub(crate) fn start_version_step(data: Option<&std::path::Path>) {
-    if let Some(data) = data {
-        version_step::start(data.join(version_step::DECLINED));
-    }
-}
-
-#[cfg(any(windows, test))]
-pub(crate) use config::Drive as ServiceDrive;
+pub use config::Drive as ServiceDrive;
 
 #[cfg(windows)]
-pub(crate) fn installed_volume_roots(
-    search: &navo_store::Search,
-) -> std::io::Result<Option<Vec<String>>> {
+pub fn installed_volume_roots(search: &navo_store::Search) -> std::io::Result<Option<Vec<String>>> {
     service_volume_roots(scm::query_enabled, volumes::discover, search)
 }
 
@@ -174,8 +169,7 @@ fn service_volume_roots(
     selected_roots(search, &discover()?).map(Some)
 }
 
-#[cfg(any(windows, test))]
-pub(crate) fn selected_roots(
+pub fn selected_roots(
     search: &navo_store::Search,
     available: &[ServiceDrive],
 ) -> std::io::Result<Vec<String>> {
@@ -186,12 +180,12 @@ pub(crate) fn selected_roots(
 }
 
 #[cfg(windows)]
-pub(crate) fn upgrade_notice_due(marker: Option<std::path::PathBuf>) -> bool {
+pub fn upgrade_notice_due(marker: Option<std::path::PathBuf>) -> bool {
     upgrade::UpgradeNotice::new(marker).is_due(query)
 }
 
 #[cfg(windows)]
-pub(crate) fn dismiss_upgrade_notice(marker: Option<std::path::PathBuf>) -> std::io::Result<()> {
+pub fn dismiss_upgrade_notice(marker: Option<std::path::PathBuf>) -> std::io::Result<()> {
     upgrade::UpgradeNotice::new(marker).dismiss()
 }
 

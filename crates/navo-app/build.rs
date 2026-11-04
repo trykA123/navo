@@ -9,8 +9,13 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+include!("build_resource.rs");
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=build_resource.rs");
+    println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
+    println!("cargo:rerun-if-env-changed=NAVO_BUILD");
     emit_commit();
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return Ok(());
@@ -28,10 +33,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed={}", icon.display());
 
     let version = env::var("CARGO_PKG_VERSION")?;
+    let product_version = product_version(&version);
     let rc = PathBuf::from(env::var("OUT_DIR")?).join("navo.rc");
-    fs::write(&rc, resource_script(&icon.display().to_string(), &version))?;
+    fs::write(
+        &rc,
+        resource_script(Resource {
+            icon: &icon.display().to_string(),
+            version: &version,
+            product_version: &product_version,
+            description: "Navo",
+            internal_name: "navo",
+            original_filename: "navo.exe",
+        }),
+    )?;
     embed_resource::compile(&rc, embed_resource::NONE).manifest_required()?;
     Ok(())
+}
+
+fn product_version(version: &str) -> String {
+    match env::var("NAVO_BUILD")
+        .ok()
+        .filter(|build| !build.is_empty())
+    {
+        Some(build) => format!("{version} ({build})"),
+        None => version.to_owned(),
+    }
 }
 
 fn emit_commit() {
@@ -47,40 +73,4 @@ fn git(args: &[&str]) -> Option<String> {
     let output = Command::new("git").args(args).output().ok()?;
     let text = String::from_utf8(output.stdout).ok()?;
     Some(text.trim().to_owned()).filter(|text| output.status.success() && !text.is_empty())
-}
-
-fn resource_script(icon: &str, version: &str) -> String {
-    let mut parts = version
-        .split(['.', '-'])
-        .map(|p| p.parse::<u16>().unwrap_or(0));
-    let mut next = || parts.next().unwrap_or(0);
-    let numeric = format!("{},{},{},0", next(), next(), next());
-    let icon = icon.replace('\\', "\\\\");
-    format!(
-        r#"1 ICON "{icon}"
-1 VERSIONINFO
-FILEVERSION {numeric}
-PRODUCTVERSION {numeric}
-FILEOS 0x40004
-FILETYPE 0x1
-BEGIN
-  BLOCK "StringFileInfo"
-  BEGIN
-    BLOCK "040904B0"
-    BEGIN
-      VALUE "FileDescription", "Navo"
-      VALUE "FileVersion", "{version}"
-      VALUE "InternalName", "navo"
-      VALUE "OriginalFilename", "navo.exe"
-      VALUE "ProductName", "Navo"
-      VALUE "ProductVersion", "{version}"
-    END
-  END
-  BLOCK "VarFileInfo"
-  BEGIN
-    VALUE "Translation", 0x409, 1200
-  END
-END
-"#
-    )
 }

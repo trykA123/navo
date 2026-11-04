@@ -94,21 +94,26 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --release -p navo-app
+      - run: cargo build --release -p navo-app -p navo-index-service
         env:
           NAVO_BUILD: ${{ inputs.tag }}
       - name: Binary size
-        run: cargo xtask binsize target/release/navo.exe
+        run: |
+          cargo xtask binsize target/release/navo.exe
+          cargo xtask binsize target/release/navo-index.exe
       - shell: pwsh
         run: |
           $out = (& target/release/navo.exe --version | Out-String).Trim()
           # The tag must match the workspace version, so the app, the package and the tag agree.
           if ($out -ne "navo $($env:TAG.Substring(1))") { throw "navo prints '$out' but the tag is $env:TAG: bump the workspace version first" }
-      - name: Stage navo.exe with its PDB, pdfium.dll and licences
+          $index = (& target/release/navo-index.exe --version | Out-String).Trim()
+          if ($index -ne "navo-index $($env:TAG.Substring(1))") { throw "navo-index prints '$index' but the tag is $env:TAG: bump the workspace version first" }
+      - name: Stage the executables with their PDB, pdfium.dll and licences
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item -LiteralPath target/release/navo.exe -Destination dist
+          Copy-Item -LiteralPath target/release/navo-index.exe -Destination dist
           Copy-Item -LiteralPath target/release/navo.pdb -Destination dist
           ./.github/scripts/fetch-pdfium.ps1 -Destination dist -Licenses dist/licenses/pdfium
           if (Test-Path -LiteralPath dist/navo-bench.exe) { throw 'navo-bench.exe must never ship in a release' }
@@ -148,8 +153,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path out | Out-Null
           & "$env:RUNNER_TEMP/vpk/vpk.exe" pack --packId $env:PACK_ID --packVersion $version --packTitle Navo --packDir dist --mainExe navo.exe --icon assets/brand/navo.ico --channel $env:CHANNEL --runtime win-x64 --outputDir out
           if ($LASTEXITCODE -ne 0) { throw "vpk pack failed with $LASTEXITCODE" }
-          Copy-Item -LiteralPath dist/navo.exe -Destination out
-          Compress-Archive -LiteralPath target/release/navo.pdb -DestinationPath out/navo-windows-x64-pdb.zip
+          Compress-Archive -LiteralPath target/release/navo.pdb, target/release/navo-index.pdb -DestinationPath out/navo-windows-x64-pdb.zip
           Get-ChildItem out | Format-Table Name, Length
       - name: Check the release feed
         shell: pwsh
@@ -162,6 +166,13 @@ jobs:
           if ($asset.Version -ne $env:PACK_VERSION) { throw "feed version $($asset.Version) is not $env:PACK_VERSION" }
           $pkg = Join-Path out $asset.FileName
           if (-not (Test-Path -LiteralPath $pkg)) { throw "feed names a missing package: $($asset.FileName)" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $pkg).Path)
+          try {
+            foreach ($entry in 'lib/app/navo.exe', 'lib/app/navo-index.exe') {
+              if (-not $archive.GetEntry($entry)) { throw "$entry is missing from the full package $($asset.FileName)" }
+            }
+          } finally { $archive.Dispose() }
           $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash
           if ($asset.SHA256 -ne $hash) { throw "feed SHA256 $($asset.SHA256) does not match the package $hash" }
           $size = (Get-Item -LiteralPath $pkg).Length
@@ -173,15 +184,24 @@ jobs:
           $portable = Join-Path $env:RUNNER_TEMP 'portable'
           Expand-Archive -LiteralPath "out/$env:PACK_ID-$env:CHANNEL-Portable.zip" -DestinationPath $portable
           $app = Join-Path $portable 'current'
-          foreach ($path in 'navo.exe', 'pdfium.dll', 'licenses/pdfium/LICENSE') {
+          foreach ($path in 'navo.exe', 'navo-index.exe', 'pdfium.dll', 'licenses/pdfium/LICENSE') {
             if (-not (Test-Path -LiteralPath (Join-Path $app $path))) { throw "$path is missing from the portable package" }
           }
           $out = (& (Join-Path $app 'navo.exe') --version | Out-String).Trim()
           if ($out -ne "navo $env:PACK_VERSION") { throw "unexpected output from the portable package: $out" }
-          foreach ($name in "$env:PACK_ID-$env:CHANNEL-Setup.exe", "releases.$env:CHANNEL.json", 'RELEASES', 'navo.exe', 'navo-windows-x64-pdb.zip') {
+          $out = (& (Join-Path $app 'navo-index.exe') --version | Out-String).Trim()
+          if ($out -ne "navo-index $env:PACK_VERSION") { throw "unexpected output from the portable navo-index.exe: $out" }
+          foreach ($name in "$env:PACK_ID-$env:CHANNEL-Setup.exe", "releases.$env:CHANNEL.json", 'RELEASES', 'navo-windows-x64-pdb.zip') {
             if (-not (Test-Path -LiteralPath "out/$name")) { throw "missing out/$name" }
           }
           if (-not (Get-ChildItem -LiteralPath out -Filter '*-full.nupkg')) { throw 'missing the full nupkg' }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $symbols = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath 'out/navo-windows-x64-pdb.zip').Path)
+          try {
+            foreach ($entry in 'navo.pdb', 'navo-index.pdb') {
+              if (-not $symbols.GetEntry($entry)) { throw "$entry is missing from the symbol package" }
+            }
+          } finally { $symbols.Dispose() }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: navo-windows-x64-${{ github.sha }}

@@ -2,12 +2,19 @@ use std::io;
 use std::path::Path;
 
 use navo_index::pipe::ServiceVersion;
+use navo_index_service::ServiceQuery;
 use navo_update::InstallKind;
-
-use super::ServiceQuery;
 
 /// Keeps the revision whose update prompt was declined or failed, under the data folder.
 pub(super) const DECLINED: &str = "index-service-declined";
+
+/// Starts the D22f update check off the UI thread; off without a data folder to remember a decline.
+#[cfg(windows)]
+pub(crate) fn start_version_step(data: Option<&Path>) {
+    if let Some(data) = data {
+        start(data.join(DECLINED));
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Step {
@@ -87,7 +94,7 @@ mod worker {
     }
 
     fn run(marker: &Path) {
-        let query = match super::super::query() {
+        let query = match navo_index_service::query() {
             Ok(query) => query,
             Err(error) => {
                 tracing::debug!(%error, "index service step: no service query");
@@ -101,9 +108,11 @@ mod worker {
             return;
         }
         tracing::info!(version = ?query.version, own = SERVICE_REVISION, "index service is older than Navo; asking to update it");
-        let prompt = super::super::request_elevation(super::super::Action::Install);
+        let prompt = navo_index_service::request_elevation(navo_index_service::Action::Install);
         std::thread::sleep(SETTLE);
-        let after = super::super::query().ok().and_then(|query| query.version);
+        let after = navo_index_service::query()
+            .ok()
+            .and_then(|query| query.version);
         if is_updated(prompt.is_ok(), after.as_ref(), SERVICE_REVISION) {
             tracing::info!(version = ?after, "index service updated");
             return;
@@ -124,5 +133,5 @@ mod worker {
 }
 
 #[cfg(test)]
-#[path = "version_step_tests.rs"]
+#[path = "service_version_step_tests.rs"]
 mod tests;
