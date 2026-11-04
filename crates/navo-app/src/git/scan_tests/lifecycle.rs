@@ -31,7 +31,7 @@ fn superseding_generation_rejects_old_results_and_old_observations() {
 }
 
 #[test]
-fn cached_badges_publish_stale_before_fresh_and_revisions_keep_increasing() {
+fn a_rescan_keeps_the_shown_badges_until_the_fresh_result_and_revisions_keep_increasing() {
     let h = Harness::new(probe(&["fixture/a"]));
     h.observe("fixture", 200, &["a"]);
     h.next();
@@ -39,12 +39,19 @@ fn cached_badges_publish_stale_before_fresh_and_revisions_keep_increasing() {
     let first = h.wait("fixture", |b| b.by_name.get("a").is_some_and(|b| !b.stale));
     h.scan.rescan(&location("fixture"));
     h.next();
-    let stale = h.wait("fixture", |b| b.by_name.get("a").is_some_and(|b| b.stale));
-    assert!(stale.revision > first.revision);
+    let kept = h.scan.badges(&location("fixture")).unwrap();
+    assert!(
+        Arc::ptr_eq(&kept, &first),
+        "nothing is dimmed while the scan runs"
+    );
     h.reply(Ok(status_with(b"? changed\0")));
-    let fresh = h.wait("fixture", |b| b.by_name.get("a").is_some_and(|b| !b.stale));
-    assert!(fresh.revision > stale.revision);
-    assert_eq!(fresh.by_name["a"].kind, BadgeKind::Modified);
+    let fresh = h.wait("fixture", |b| {
+        b.by_name
+            .get("a")
+            .is_some_and(|b| b.kind == BadgeKind::Modified)
+    });
+    assert!(!fresh.by_name["a"].stale);
+    assert!(fresh.revision > first.revision);
     assert!(h.scan.stop());
 }
 
@@ -116,5 +123,18 @@ fn an_idle_scanner_sleeps_until_a_request_or_a_stop_wakes_it() {
     h.reply(Ok(clean()));
     h.wait("other", |b| b.by_name.values().any(|b| !b.stale));
     h.wait_parked();
+    assert!(h.scan.stop());
+}
+
+#[test]
+fn a_listing_with_no_repository_left_clears_the_shown_badges() {
+    let h = Harness::new(probe(&["fixture/a"]));
+    h.observe("fixture", 200, &["a"]);
+    h.next();
+    h.reply(Ok(clean()));
+    h.wait("fixture", |b| b.by_name.contains_key("a"));
+    h.observe("fixture", 201, &["b"]);
+    let cleared = h.wait("fixture", |b| b.by_name.is_empty());
+    assert!(cleared.roots.is_empty());
     assert!(h.scan.stop());
 }

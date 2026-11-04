@@ -8,7 +8,7 @@ use navo_core::{AppState, Command, Location};
 
 use super::drive_fs::{DriveFs, local};
 use super::{fake, open_options, options_for, settle};
-use crate::git::{FolderBadges, GitHooks, NoGit};
+use crate::git::{BadgeKind, FolderBadges, GitHooks, NoGit, RepoBadge};
 use crate::status_bar::StatusNotice;
 use crate::window_view::NavoWindow;
 
@@ -25,6 +25,23 @@ struct Log {
 #[derive(Clone, Default)]
 struct Fake(Arc<Mutex<Log>>);
 
+fn clean_badge() -> RepoBadge {
+    RepoBadge {
+        kind: BadgeKind::Clean,
+        is_root: true,
+        stale: false,
+        branch: None,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+        changed: 0,
+        untracked: 0,
+        conflicted: 0,
+        fetched_ms: None,
+        reason: None,
+    }
+}
+
 impl Fake {
     fn publish(&self, at: &Location, revision: u64) {
         self.publish_with(at, revision, false);
@@ -35,6 +52,7 @@ impl Fake {
         let badges = Arc::new(FolderBadges {
             revision,
             slow_drive,
+            by_name: HashMap::from([("docs".to_owned(), clean_badge())]),
             ..FolderBadges::default()
         });
         log.published.insert(at.as_str().to_owned(), badges);
@@ -306,4 +324,70 @@ fn results_streaming_in_are_read_once_per_interval_and_the_last_one_wins(cx: &mu
         "one read covers the rest"
     );
     assert_eq!(pane_badges(cx, &view).map(|b| b.revision), Some(8));
+}
+
+fn badges_are_calm(cx: &mut TestAppContext, view: &Entity<NavoWindow>, git: &Fake, revision: u64) {
+    let log = git.0.lock().unwrap();
+    assert_eq!(log.observed.len(), 1, "one observe only");
+    assert!(log.forgotten.is_empty(), "nothing forgotten");
+    drop(log);
+    let badges = pane_badges(cx, view).expect("badges stay");
+    assert_eq!(badges.revision, revision);
+    assert!(!badges.by_name.is_empty() && badges.by_name.values().all(|b| !b.stale));
+}
+
+#[gpui_kit::test]
+fn a_resort_keeps_the_git_badges_and_does_not_observe_again(cx: &mut TestAppContext) {
+    let git = Fake::default();
+    let view = open_local(cx, Arc::new(git.clone()));
+    git.publish(&local(r"C:\home"), 5);
+    settle_git(cx, &view);
+    view.update(cx, |view, _| {
+        view.browser.sort_by(crate::file_list::SortBy::Size);
+    });
+    view.update(cx, |view, cx| view.wake(cx));
+    settle_git(cx, &view);
+    badges_are_calm(cx, &view, &git, 5);
+}
+
+#[gpui_kit::test]
+fn a_size_arrival_keeps_the_git_badges_and_does_not_observe_again(cx: &mut TestAppContext) {
+    let git = Fake::default();
+    let view = open_local(cx, Arc::new(git.clone()));
+    git.publish(&local(r"C:\home"), 5);
+    settle_git(cx, &view);
+    let before = view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        view.browser.details(tab)
+    });
+    view.update(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        assert!(view.browser.show_folder_size(&crate::browser::Measured {
+            tab,
+            folder: local(r"C:\home"),
+            name: "docs".into(),
+            size: Some(navo_fs::FolderSize::apparent_only(9)),
+        }));
+    });
+    let after = view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        view.browser.details(tab)
+    });
+    assert!(!Arc::ptr_eq(&before, &after), "the rows were replaced");
+    view.update(cx, |view, cx| view.wake(cx));
+    settle_git(cx, &view);
+    badges_are_calm(cx, &view, &git, 5);
+}
+
+#[gpui_kit::test]
+fn frames_with_the_same_rows_build_the_folder_names_once(cx: &mut TestAppContext) {
+    let git = Fake::default();
+    let view = open_local(cx, Arc::new(git.clone()));
+    view.update(cx, |view, cx| view.wake(cx));
+    let builds = crate::window_view::git_badges::NAME_BUILDS.with(std::cell::Cell::get);
+    for _ in 0..5 {
+        view.update(cx, |view, cx| view.wake(cx));
+    }
+    let after = crate::window_view::git_badges::NAME_BUILDS.with(std::cell::Cell::get);
+    assert_eq!(after, builds);
 }
