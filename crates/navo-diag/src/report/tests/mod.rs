@@ -216,6 +216,19 @@ fn disk_section_contains_redacted_locations_in_text_and_json() {
     }
 }
 
+/// A mode-000 folder is the only portable way to make the OS deny a root; Unix only.
+#[cfg(unix)]
+fn denied_location(root: &std::path::Path) -> (crate::DiskLocation, std::path::PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let denied = root.join("private-profile-denied");
+    fs::create_dir(&denied).unwrap();
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0o000)).unwrap();
+    (
+        crate::DiskLocation::new(crate::DiskKind::Index, denied.clone()),
+        denied,
+    )
+}
+
 #[test]
 fn bundle_redacts_sqlite_part_paths_and_keeps_not_readable() {
     let root = tempfile::tempdir().unwrap();
@@ -224,29 +237,17 @@ fn bundle_redacts_sqlite_part_paths_and_keeps_not_readable() {
     let db = profile.join("cache.db");
     fs::write(&db, [0; 7]).unwrap();
     fs::write(profile.join("cache.db-wal"), [0; 11]).unwrap();
-    let mut locations = vec![crate::DiskLocation::sqlite(
-        crate::DiskKind::ListingCache,
-        db,
-    )];
-    // A mode-000 folder is the only portable way to make the OS deny a root.
+    let sqlite = crate::DiskLocation::sqlite(crate::DiskKind::ListingCache, db);
     #[cfg(unix)]
-    let denied = {
+    let disk = {
         use std::os::unix::fs::PermissionsExt;
-        let denied = root.path().join("private-profile-denied");
-        fs::create_dir(&denied).unwrap();
-        fs::set_permissions(&denied, fs::Permissions::from_mode(0o000)).unwrap();
-        locations.push(crate::DiskLocation::new(
-            crate::DiskKind::Index,
-            denied.clone(),
-        ));
-        denied
-    };
-    let disk = crate::scan_disk_use(&locations);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
+        let (location, denied) = denied_location(root.path());
+        let disk = crate::scan_disk_use(&[sqlite, location]);
         fs::set_permissions(&denied, fs::Permissions::from_mode(0o700)).unwrap();
-    }
+        disk
+    };
+    #[cfg(not(unix))]
+    let disk = crate::scan_disk_use(&[sqlite]);
     let path = root.path().join("report.zip");
     crate::write_report_bundle(
         &path,

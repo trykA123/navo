@@ -306,7 +306,11 @@ mod tests;
 
 pub(crate) fn wire_diagnostics(
     hooks: &mut navo_ui::window_view::SettingsHooks,
-    #[cfg_attr(not(feature = "tester"), allow(unused_variables))] crash: &crate::crash_report::CrashStart,
+    #[cfg_attr(
+        not(feature = "tester"),
+        expect(unused_variables, reason = "only the tester build reads it")
+    )]
+    crash: &crate::crash_report::CrashStart,
     dirs: Option<&navo_store::StoreDirs>,
 ) {
     let data = dirs.map(|dirs| dirs.data.clone());
