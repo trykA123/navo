@@ -193,12 +193,12 @@ fn others_running(_root: Option<&Path>) -> io::Result<bool> {
     Ok(true)
 }
 
-/// An image we cannot read blocks the apply when its name is this image's name or starts
-/// with `navo` (the index service image, a renamed copy of a Navo build).
+/// An image we cannot read blocks the apply when it runs in this session and its name is this
+/// image's name or starts with `navo`; the index service runs in session 0 as `navo.exe`.
 #[cfg(any(windows, test))]
-fn unreadable_counts(name: &str, own: &str) -> bool {
+fn unreadable_counts(name: &str, own: &str, same_session: bool) -> bool {
     let name = name.to_lowercase();
-    name == own || name.starts_with("navo")
+    same_session && (name == own || name.starts_with("navo"))
 }
 
 /// This process and its children (the PDF helper) never block a restart.
@@ -221,6 +221,7 @@ mod processes {
         CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
         TH32CS_SNAPPROCESS,
     };
+    use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
     use windows_sys::Win32::System::Threading::{
         OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
         QueryFullProcessImageNameW,
@@ -247,6 +248,10 @@ mod processes {
             .map(|name| name.to_string_lossy().to_lowercase())
             .ok_or_else(|| io::Error::other("own image has no name"))?;
         let own = std::process::id();
+        let own_image = Own {
+            name: own_name,
+            session: session(own),
+        };
         let size = u32::try_from(size_of::<PROCESSENTRY32W>()).map_err(io::Error::other)?;
         // SAFETY: no pointers are passed; the result is checked before use.
         let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
@@ -265,7 +270,7 @@ mod processes {
         }
         loop {
             if super::is_other(entry.th32ProcessID, entry.th32ParentProcessID, own)
-                && belongs(&entry, &mut path, &roots, &own_name)
+                && belongs(&entry, &mut path, &roots, &own_image)
             {
                 return Ok(true);
             }
@@ -286,8 +291,14 @@ mod processes {
         }
     }
 
+    /// This process's image name and Windows session.
+    struct Own {
+        name: String,
+        session: Option<u32>,
+    }
+
     /// A process whose image cannot be read counts when its name looks like a Navo image.
-    fn belongs(entry: &PROCESSENTRY32W, path: &mut [u16], roots: &[PathBuf], own: &str) -> bool {
+    fn belongs(entry: &PROCESSENTRY32W, path: &mut [u16], roots: &[PathBuf], own: &Own) -> bool {
         match image(entry.th32ProcessID, path) {
             Some(image) => {
                 let image = normalized(&image);
@@ -299,9 +310,18 @@ mod processes {
                     .split(|unit| *unit == 0)
                     .next()
                     .unwrap_or_default();
-                super::unreadable_counts(&String::from_utf16_lossy(name), own)
+                let same_session =
+                    own.session.is_some() && session(entry.th32ProcessID) == own.session;
+                super::unreadable_counts(&String::from_utf16_lossy(name), &own.name, same_session)
             }
         }
+    }
+
+    fn session(pid: u32) -> Option<u32> {
+        let mut session = 0u32;
+        // SAFETY: `session` is a writable u32 for the duration of the call.
+        let success = unsafe { ProcessIdToSessionId(pid, &raw mut session) };
+        (success != 0).then_some(session)
     }
 
     fn image(pid: u32, path: &mut [u16]) -> Option<PathBuf> {
