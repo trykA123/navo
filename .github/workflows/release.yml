@@ -153,7 +153,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path out | Out-Null
           & "$env:RUNNER_TEMP/vpk/vpk.exe" pack --packId $env:PACK_ID --packVersion $version --packTitle Navo --packDir dist --mainExe navo.exe --icon assets/brand/navo.ico --channel $env:CHANNEL --runtime win-x64 --outputDir out
           if ($LASTEXITCODE -ne 0) { throw "vpk pack failed with $LASTEXITCODE" }
-          Compress-Archive -LiteralPath target/release/navo.pdb, target/release/navo-index.pdb -DestinationPath out/navo-windows-x64-pdb.zip
+          Compress-Archive -LiteralPath target/release/navo.pdb, target/release/navo_index.pdb -DestinationPath out/navo-windows-x64-pdb.zip
           Get-ChildItem out | Format-Table Name, Length
       - name: Check the release feed
         shell: pwsh
@@ -198,7 +198,7 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $symbols = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath 'out/navo-windows-x64-pdb.zip').Path)
           try {
-            foreach ($entry in 'navo.pdb', 'navo-index.pdb') {
+            foreach ($entry in 'navo.pdb', 'navo_index.pdb') {
               if (-not $symbols.GetEntry($entry)) { throw "$entry is missing from the symbol package" }
             }
           } finally { $symbols.Dispose() }
