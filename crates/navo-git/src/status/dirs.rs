@@ -40,6 +40,16 @@ impl DirMap {
         }
     }
 
+    /// Number of folders with a recorded state.
+    pub fn len(&self) -> usize {
+        self.worst.len()
+    }
+
+    /// True when no folder has a recorded state.
+    pub fn is_empty(&self) -> bool {
+        self.worst.is_empty()
+    }
+
     pub(super) fn overflowed(&self) -> bool {
         self.overflow
     }

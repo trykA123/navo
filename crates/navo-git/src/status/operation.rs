@@ -7,7 +7,7 @@ use super::Operation;
 use crate::GitError;
 
 /// Markers in priority order: a rebase that stopped on a pick also leaves `CHERRY_PICK_HEAD`.
-const MARKERS: [(&str, Operation); 6] = [
+pub(crate) const MARKERS: [(&str, Operation); 6] = [
     ("rebase-merge", Operation::Rebase),
     ("rebase-apply", Operation::Rebase),
     ("MERGE_HEAD", Operation::Merge),
