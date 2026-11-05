@@ -103,7 +103,8 @@ fn short_lines_get_character_spans() {
 fn long_but_not_huge_lines_keep_word_spans_only() {
     let left = line(&format!("{} alpha", "x".repeat(100)));
     let right = line(&format!("{} beta", "x".repeat(100)));
-    let result = intraline(pair(&left, &right));
+    // A loaded test machine can pass the 5 ms deadline; this test is about the length rule.
+    let result = intraline_with_deadline(pair(&left, &right), Duration::from_secs(5));
 
     assert!(!result.words.is_empty());
     assert!(result.chars.is_empty());
