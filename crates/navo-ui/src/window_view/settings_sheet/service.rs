@@ -52,8 +52,13 @@ impl NavoWindow {
         if self.settings.service_generation != generation {
             return;
         }
-        if outcome == ServiceOutcome::Failed {
-            self.settings.notice = Some(navo_l10n::tr("settings-search-service-failed").into());
+        let key = match outcome {
+            ServiceOutcome::Done => None,
+            ServiceOutcome::Deferred => Some("settings-search-service-deferred"),
+            ServiceOutcome::Failed => Some("settings-search-service-failed"),
+        };
+        if let Some(key) = key {
+            self.settings.notice = Some(navo_l10n::tr(key).into());
         }
         self.settings.service_status = status;
         self.settings.service_action_pending = false;
