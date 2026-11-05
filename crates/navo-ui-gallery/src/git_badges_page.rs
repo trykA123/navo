@@ -178,7 +178,7 @@ fn props(name: &str, (rows, git): (Arc<[FsEntry]>, Arc<FolderBadges>)) -> FileLi
             scroll: 0,
         },
         marked: Arc::new(Selection::new(rows.len() as u64)),
-        rows,
+        rows: rows.into(),
         is_active: true,
         filter: None,
         sort: SortKey::default(),

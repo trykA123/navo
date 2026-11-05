@@ -1,4 +1,5 @@
 use navo_core::{Location, PaneId, Tab, TabId};
+use navo_fs::view::Rows;
 use navo_fs::{EntryKind, FsEntry};
 
 use crate::window_view::NavoWindow;
@@ -60,11 +61,11 @@ impl NavoWindow {
         let state = self.browser.state();
         let pane = state.focused_pane();
         let tab = state.pane(pane)?.active();
-        cursor_target(pane, tab, &self.browser.details(tab.id()))
+        cursor_target(pane, tab, &self.browser.rows(tab.id()))
     }
 }
 
-fn cursor_target(pane: PaneId, tab: &Tab, details: &[FsEntry]) -> Option<Target> {
+fn cursor_target(pane: PaneId, tab: &Tab, details: &Rows) -> Option<Target> {
     let row = tab.view().cursor;
     let listed = tab.listing()?.get(row)?;
     let entry = details.get(usize::try_from(row).ok()?)?;
@@ -85,6 +86,7 @@ mod tests {
     use navo_core::{
         AppState, Entry, Event, Listing, Location, ProviderPath, apply_event, list_missing,
     };
+    use navo_fs::view::Rows;
     use navo_fs::{Attributes, EntryKind, FsEntry};
 
     #[test]
@@ -115,7 +117,8 @@ mod tests {
             modified_ms: None,
             attributes: Attributes::default(),
         };
-        let target = super::cursor_target(state.focused_pane(), &tab, &[entry]).unwrap();
+        let target =
+            super::cursor_target(state.focused_pane(), &tab, &Rows::from(vec![entry])).unwrap();
         assert_eq!(
             target.location,
             Location::new(r"C:\base\sub\a.txt").unwrap()

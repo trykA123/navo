@@ -15,7 +15,7 @@ impl WindowPage {
         let folder = side.tabs.first().copied().unwrap_or_default();
         let props = FileListProps {
             folder: folder.into(),
-            rows: self.rows.clone(),
+            rows: self.rows.clone().into(),
             view: ViewState {
                 cursor: self.hints.map_or(side.cursor, |shown| shown.cursor),
                 scroll: 0,

@@ -71,7 +71,7 @@ impl Render for KindsPage {
         let t = tokens::current(cx).clone();
         let props = FileListProps {
             folder: "file types".to_owned().into(),
-            rows: self.rows.clone(),
+            rows: self.rows.clone().into(),
             view: ViewState {
                 cursor: 0,
                 scroll: 0,

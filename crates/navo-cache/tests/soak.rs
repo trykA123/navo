@@ -7,7 +7,7 @@
     reason = "the soak fails on a broken fake file system"
 )]
 
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use navo_cache::{CacheKey, CacheKeys, CachedListing, Change, ListingCache};
 use navo_core::{Location, ProviderPath};
@@ -17,7 +17,7 @@ const GROUPS: usize = 200;
 const LEAVES: usize = 250;
 const FOLDERS: usize = GROUPS * LEAVES;
 const TABS: usize = 10_000;
-const WARM_UP_ROUNDS: usize = 2;
+const WARM_UP_ROUNDS: usize = 4;
 const OPEN_AT_ONCE: usize = 16;
 const MOVES: usize = 6;
 const BUDGET: usize = 8 * 1024 * 1024;
@@ -66,6 +66,13 @@ fn read(fs: &FakeFs, folder: &Location) -> CachedListing {
 fn cost(key: &CacheKey, listing: &CachedListing) -> usize {
     let probe = ListingCache::new(usize::MAX);
     probe.put(key.clone(), listing.clone());
+    if let Some(first) = listing.rows.first() {
+        probe.patch(
+            key,
+            listing.read_at + Duration::from_secs(1),
+            [Change::Modified(first.clone())],
+        );
+    }
     probe.stats().bytes
 }
 
@@ -230,8 +237,9 @@ impl<'a> Soak<'a> {
         );
         assert!(
             stats.pinned_bytes <= 2 * open * self.largest,
-            "pinned {} for {open} tabs",
-            stats.pinned_bytes
+            "pinned {} for {open} tabs, largest read listing {}",
+            stats.pinned_bytes,
+            self.largest
         );
         let peak = &mut self.peak;
         peak.unpinned = peak.unpinned.max(unpinned);

@@ -120,7 +120,7 @@ impl DrivesPage {
     fn list(&self, side: usize, folder: &str) -> FileList {
         let props = FileListProps {
             folder: folder.to_owned().into(),
-            rows: self.rows.clone(),
+            rows: self.rows.clone().into(),
             view: ViewState {
                 cursor: 4,
                 scroll: 0,

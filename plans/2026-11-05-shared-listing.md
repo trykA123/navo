@@ -131,6 +131,7 @@ Waves: {L1, L2} → L3 → {L4, L5} → L6 → L7. L2 may run on DeepSeek; L3–
 
 - Q1 (owner) — The core `Listing` still copies every name once per sort and filter (`Entry.name: String`, about 37 call sites in `navo-core` and `navo-ui`), and each patch still clones the rows once. Plan shared names (`Arc<str>`) separately after L6's numbers? **Recommended: yes, a separate plan, only if L6's bench shows sort time or memory still matters at 100k.**
 - Q2 (owner) — SL3: in case-sensitive folders (WSL, SFTP later), two names that differ only by case keep the folder's order on every re-sort instead of the previous sort's order. **Recommended: accept; the order becomes stable.**
+  With measured sizes a resort sorts the per-tab sized copy, whose source is the previous display order, so case-only ties follow the previous sort (accepted, review 2026-11-05).
 - Q3 (orchestrator) — L1 needs 4 files, and L4 and L5 are sweeps over more than 3 files (one mechanical edit each). **Recommended: accept; merging them into L3 would make a 15-file atom.**
 
 ## Log

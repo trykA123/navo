@@ -260,7 +260,7 @@ impl CommandCenterPage {
     fn list(&self) -> FileList {
         let props = FileListProps {
             folder: "commander".into(),
-            rows: self.rows.clone(),
+            rows: self.rows.clone().into(),
             view: ViewState {
                 cursor: 0,
                 scroll: 0,

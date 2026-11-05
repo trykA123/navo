@@ -72,7 +72,7 @@ impl NavoWindow {
             return;
         };
         let folder = tab.location().clone();
-        let count = u64::try_from(self.browser.details(tab.id()).len()).unwrap_or(u64::MAX);
+        let count = u64::try_from(self.browser.rows(tab.id()).len()).unwrap_or(u64::MAX);
         let context = format!(
             "{} · {}",
             super::pane::title_of(tab),

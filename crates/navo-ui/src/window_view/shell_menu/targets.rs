@@ -1,6 +1,7 @@
 use gpui_kit::{Pixels, Point, Window};
 use navo_core::{Location, Tab};
 use navo_fs::FsEntry;
+use navo_fs::view::Rows;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 use super::provider::ScreenSpot;
@@ -11,7 +12,7 @@ pub(in crate::window_view) struct Targets {
     pub context: String,
 }
 
-pub(super) fn targets(tab: &Tab, details: &[FsEntry], adds_cursor: bool) -> Targets {
+pub(super) fn targets(tab: &Tab, details: &Rows, adds_cursor: bool) -> Targets {
     let mut rows = tab.selection().marked();
     if rows.is_empty() || adds_cursor {
         rows.push(tab.view().cursor);
@@ -62,6 +63,7 @@ fn native_handle(window: &Window) -> Option<isize> {
 #[cfg(test)]
 mod tests {
     use navo_core::{AppState, Location, ProviderPath};
+    use navo_fs::view::Rows;
     use navo_fs::{Attributes, EntryKind, FsEntry};
 
     #[test]
@@ -77,7 +79,7 @@ mod tests {
             attributes: Attributes::default(),
         };
         assert_eq!(
-            super::targets(&tab, &[entry], false).items,
+            super::targets(&tab, &Rows::from(vec![entry]), false).items,
             [Location::new(r"C:\base\sub\a.txt").unwrap()]
         );
     }

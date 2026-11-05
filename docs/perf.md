@@ -151,6 +151,25 @@ On CI the Windows test job runs `bench-walk` with `--runs 3` and adds the table 
 
 Build with `cargo build --release -p navo-app --features tracy`. The build marks every frame and sends spans at `debug` level to Tracy. Open it with the Tracy viewer that matches `tracy-client-sys` 0.30.1 (Tracy v0.14.1 per the version table in that crate's README). For sampling without a viewer, run `samply record navo.exe`.
 
+## Shared listing (2026-11-05)
+
+Measured by tests on Linux (D110):
+
+| Case | Before | After |
+| --- | --- | --- |
+| Rows copied by one sort of a 100k-row folder | 7,100,000 B | 0 B |
+| Sorts for two tabs on one folder, same key | 2 | 1 |
+| Bytes allocated by one watcher patch of a 100k-row folder | 33,005,292 B | 7,000,617 B (the row clone itself is 7,000,000 B) |
+
+Windows VM, `navo bench --files 100000`, 3 runs each, median ms:
+
+| Case | Before | After |
+| --- | --- | --- |
+| List a 5k folder | 24.2 | 9.7 |
+| Sort a 5k folder by size / date / extension / name | 5.95 / 4.05 / 2.79 / 1.50 | 0.77 / 0.92 / 1.04 / 0.61 |
+| List a 25k folder | 23.4 | 22.8 |
+| Index time, search p95, peak memory | — | unchanged within spread |
+
 ## History
 
 | Date | Commit | Median warm first frame | Max private bytes |

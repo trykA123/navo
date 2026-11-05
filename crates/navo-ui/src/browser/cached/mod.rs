@@ -8,7 +8,7 @@ use navo_fs::{CancelToken, FsEntry, ProviderOps, WatchChange, load_folder_report
 
 use super::filter::Full;
 use super::offline::Progress;
-use super::sort::sorted_full;
+use super::sort::{SortCount, sorted_full};
 use super::{Browser, Message};
 use crate::file_list::{SortBy, SortKey};
 pub(in crate::browser) use early::{CachedSorted, Early};
@@ -30,11 +30,11 @@ pub(super) enum Fresh {
     Unchanged,
 }
 
-fn fresh_rows(rows: Arc<[FsEntry]>, sort: Option<(SortKey, bool)>) -> Fresh {
+fn fresh_rows(rows: Arc<[FsEntry]>, sort: Option<(SortKey, bool)>, count: &SortCount) -> Fresh {
     let full = sort.map(|(key, folders_first)| WorkerSorted {
         key,
         folders_first,
-        full: sorted_full(&rows, key, folders_first),
+        full: sorted_full(&rows, key, folders_first, count),
     });
     Fresh::Rows { rows, full }
 }
@@ -50,6 +50,7 @@ pub(super) struct Fetch {
     pub(super) is_kept_on_disk: bool,
     pub(super) progress: Progress,
     pub(super) sort: Option<(SortKey, bool)>,
+    pub(super) sort_count: SortCount,
     pub(super) early: Option<Early>,
 }
 
@@ -85,7 +86,7 @@ impl Fetch {
             .as_deref()
             .and_then(|changes| self.patched(changes))
         {
-            return Ok(fresh_rows(rows, self.sort));
+            return Ok(fresh_rows(rows, self.sort, &self.sort_count));
         }
         let (rows, full) = self.load(cancel)?;
         let unchanged = self
@@ -106,7 +107,7 @@ impl Fetch {
                     rows,
                     full: Some(full),
                 },
-                None => fresh_rows(rows, self.sort),
+                None => fresh_rows(rows, self.sort, &self.sort_count),
             },
         })
     }
@@ -131,7 +132,7 @@ impl Fetch {
                 folders_first,
                 full: Full {
                     listing: snapshot.listing,
-                    details: Arc::clone(&rows),
+                    details: Arc::clone(&rows).into(),
                 },
             }
         });
@@ -189,8 +190,14 @@ fn persist_if(cache: &ListingCache, key: &CacheKey, is_kept_on_disk: bool) {
 
 pub(super) struct Sorted {
     source: Arc<[FsEntry]>,
-    key: SortKey,
+    sort: (SortKey, bool),
     full: Full,
+}
+
+impl Sorted {
+    fn sorts(&self, rows: &Arc<[FsEntry]>, sort: (SortKey, bool)) -> bool {
+        self.sort == sort && Arc::ptr_eq(&self.source, rows)
+    }
 }
 
 impl Browser {
@@ -216,12 +223,17 @@ impl Browser {
             .then(|| self.keys.key(location))
             .flatten()
             .and_then(|key| self.cache.get(&key));
+        let sort = (self.sort_key(tab), self.folders_first);
         let (shown, early) = match cached {
-            Some(cached) if cached.rows.len() > SYNC_ROWS => {
+            Some(cached)
+                if cached.rows.len() > SYNC_ROWS
+                    && self.shared_sort(&cached.rows, sort).is_none() =>
+            {
                 let (sender, wake) = (self.sender.clone(), Arc::clone(&self.wake));
                 let early = Early {
                     cached: Arc::clone(&cached),
-                    sort: (self.sort_key(tab), self.folders_first),
+                    sort,
+                    sort_count: self.sort_count.clone(),
                     notify: Box::new(move |rows, sorted| {
                         let _ = sender.send(Message::CachedSorted(CachedSorted {
                             tab,
@@ -250,7 +262,8 @@ impl Browser {
             is_watched: self.is_settled(location),
             is_kept_on_disk: true,
             progress: self.stalls.progress(tab),
-            sort: Some((self.sort_key(tab), self.folders_first)),
+            sort: Some(sort),
+            sort_count: self.sort_count.clone(),
             early,
         }
     }
@@ -290,28 +303,45 @@ impl Browser {
         listing
     }
 
+    /// Whether `source` is the tab's cached generation, not a per-tab sized copy (SL2).
+    pub(super) fn is_cached_source(&self, tab: TabId, source: &Arc<[FsEntry]>) -> bool {
+        self.state
+            .tab(tab)
+            .and_then(|t| self.keys.key(t.location()))
+            .and_then(|key| self.cache.get(&key))
+            .is_some_and(|cached| Arc::ptr_eq(&cached.rows, source))
+    }
+
     pub(super) fn sorted_full(&mut self, tab: TabId, rows: &Arc<[FsEntry]>) -> Full {
-        let key = self.sort_key(tab);
+        let sort = (self.sort_key(tab), self.folders_first);
         let memo = self.sorted.entry(tab).or_default();
-        if let Some(at) = memo
-            .iter()
-            .position(|sorted| sorted.key == key && Arc::ptr_eq(&sorted.source, rows))
-        {
+        if let Some(at) = memo.iter().position(|sorted| sorted.sorts(rows, sort)) {
             let hit = memo.remove(at);
             let full = hit.full.clone();
             memo.insert(0, hit);
             return full;
         }
-        let full = self.full_of(tab, rows);
+        let full = self
+            .shared_sort(rows, sort)
+            .unwrap_or_else(|| self.full_of(tab, rows));
         self.remember(
             tab,
             Sorted {
                 source: Arc::clone(rows),
-                key,
+                sort,
                 full: full.clone(),
             },
         );
         full
+    }
+
+    /// The sort of `rows` that any open tab already holds (SL9).
+    pub(super) fn shared_sort(&self, rows: &Arc<[FsEntry]>, sort: (SortKey, bool)) -> Option<Full> {
+        self.sorted
+            .values()
+            .flatten()
+            .find(|sorted| sorted.sorts(rows, sort))
+            .map(|sorted| sorted.full.clone())
     }
 
     pub(super) fn remember(&mut self, tab: TabId, sorted: Sorted) {

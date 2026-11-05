@@ -91,7 +91,7 @@ impl NavoWindow {
 
     fn targets_with(&self, pane: PaneId, adds_cursor: bool) -> Option<Targets> {
         let tab = self.browser.state().pane(pane)?.active();
-        let found = targets::targets(tab, &self.browser.details(tab.id()), adds_cursor);
+        let found = targets::targets(tab, &self.browser.rows(tab.id()), adds_cursor);
         (!found.items.is_empty()).then_some(found)
     }
 }

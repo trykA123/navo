@@ -54,7 +54,7 @@ fn gather_tab(browser: &Browser, tab: &Tab) -> Gathered {
     } else {
         marked
     };
-    let details = browser.details(tab.id());
+    let details = browser.rows(tab.id());
     let items: Vec<Item> = rows
         .into_iter()
         .filter_map(|row| {
