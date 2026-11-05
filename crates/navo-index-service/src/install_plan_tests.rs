@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "install_order_tests.rs"]
+mod order;
+
 #[test]
 fn binary_is_copied_to_a_temporary_name_then_renamed_in_program_files() {
     let plan = CopyPlan::new(Path::new("program-files"), 123);
@@ -21,7 +24,7 @@ fn binary_is_copied_to_a_temporary_name_then_renamed_in_program_files() {
 }
 
 #[test]
-fn reinstall_moves_the_new_image_in_before_it_stops_the_service() {
+fn an_existing_service_is_stopped_before_its_image_is_moved_and_answer_follows_verify() {
     use Step::*;
     assert_eq!(
         install_steps(false),
@@ -32,20 +35,22 @@ fn reinstall_moves_the_new_image_in_before_it_stops_the_service() {
             BackupSettings,
             Configure,
             Start,
-            Verify
+            Verify,
+            Answer
         ]
     );
     assert_eq!(
         install_steps(true),
         &[
             Copy,
+            Stop,
             RenameOld,
             Replace,
-            Stop,
             BackupSettings,
             Configure,
             Start,
-            Verify
+            Verify,
+            Answer
         ]
     );
 }

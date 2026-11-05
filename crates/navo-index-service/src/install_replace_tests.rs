@@ -65,6 +65,7 @@ fn install(
             _ => Ok(()),
         }
     })
+    .map(drop)
 }
 
 fn image(disk: &Disk) -> Option<Vec<u8>> {
@@ -90,21 +91,21 @@ fn an_install_over_a_stale_image_replaces_it() {
 #[test]
 fn a_failed_replace_is_an_error_and_the_old_image_stays_whole() {
     let disk = disk(Some(OLD));
-    let replace = 5;
+    let replace = 6;
     assert!(install(&disk, true, Some(replace), |_| {}).is_err());
     assert_eq!(image(&disk).as_deref(), Some(OLD));
 }
 
 #[test]
 fn every_single_fault_ends_in_an_error_with_the_old_image_or_success_with_the_new() {
-    // Calls 2 and 11 sweep old images; their failure is only a leftover.
-    let calls = 11;
+    // Calls 2 and 12 sweep old images and 13 deletes the legacy image; each is only a leftover.
+    let calls = 13;
     for fault in 1..=calls {
         let disk = disk(Some(OLD));
         let result = install(&disk, true, Some(fault), |_| {});
         match result {
             Ok(()) => {
-                assert!(fault == 2 || fault == calls, "fault {fault} was ignored");
+                assert!([2, 12, 13].contains(&fault), "fault {fault} was ignored");
                 assert_eq!(image(&disk).as_deref(), Some(NEW), "fault {fault}");
             }
             Err(_) => {
