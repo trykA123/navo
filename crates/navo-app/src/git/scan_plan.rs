@@ -95,12 +95,13 @@ impl Plan {
         let mut updates = Vec::new();
         let mut confirm = Vec::new();
         let mut scan = Vec::new();
+        let listing = navo_fs::os_path(&found.listing.folder).ok();
         for root in &found.roots {
             let class = self.probe.root_class(root, &found.listing.folder);
             let key = root_key(root);
             let mark = self.watches.mark(root);
-            if mark.is_none() {
-                self.watches.arm(root, class);
+            if let (None, Some(listing)) = (&mark, &listing) {
+                self.watches.arm(root, listing, class);
             }
             let facts = Facts {
                 forced: force_all || input.forced.roots.contains(&key),

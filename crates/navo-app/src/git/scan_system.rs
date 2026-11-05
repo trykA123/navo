@@ -76,19 +76,23 @@ fn root_class_with(
 }
 
 /// The folders from the deeper of `a` and `b` up to the other, both included; `None` when
-/// neither contains the other.
+/// neither contains the other. Compared by root key, since `os_path` gives the listing a `\\?\`
+/// prefix that `Path::starts_with` treats as a different drive.
 #[cfg(windows)]
 fn between<'a>(a: &'a Path, b: &'a Path) -> Option<Vec<&'a Path>> {
-    let (top, deep) = if b.starts_with(a) {
-        (a, b)
-    } else if a.starts_with(b) {
-        (b, a)
+    use super::watches::{contains, root_key};
+
+    let (key_a, key_b) = (root_key(a), root_key(b));
+    let (top, deep) = if contains(&key_a, &key_b) {
+        (key_a, b)
+    } else if contains(&key_b, &key_a) {
+        (key_b, a)
     } else {
         return None;
     };
     Some(
         deep.ancestors()
-            .take_while(|level| level.starts_with(top))
+            .take_while(|level| contains(&top, &root_key(level)))
             .collect(),
     )
 }
