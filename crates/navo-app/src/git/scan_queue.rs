@@ -233,19 +233,11 @@ impl Shared {
     }
 
     /// Rechecks only the roots whose watch counted a change.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "focus picks this scope in a later atom")
-    )]
     pub fn rescan_changed(&mut self, folder: &Location) {
         self.rescan_with(folder, Scope::Changed);
     }
 
     /// Rechecks one repository's root; the scanner forces all when it matches no root.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "a fetch picks this scope in a later atom")
-    )]
     pub fn rescan_repo(&mut self, folder: &Location, path: PathBuf) {
         self.rescan_with(folder, Scope::Repo(path));
     }

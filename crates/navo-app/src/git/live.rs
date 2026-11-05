@@ -58,7 +58,7 @@ impl Hooks {
         drop(retired);
     }
 
-    /// Rescans every observed folder when the last status is over 60 s old.
+    /// Rechecks the changed roots of every observed folder when the last status is over 60 s old.
     pub(crate) fn focus_regained(&self) {
         if self.shared.age() <= FOCUS_STALE {
             return;
@@ -69,7 +69,7 @@ impl Hooks {
         };
         self.shared.touch();
         for folder in state.seen.keys() {
-            scan.rescan(folder);
+            scan.rescan_changed(folder);
         }
     }
 }
