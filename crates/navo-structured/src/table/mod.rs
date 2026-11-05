@@ -5,7 +5,7 @@ mod stream;
 
 pub use records::{ROWS_BYTES, RecordIndex, RowSlice, STRIDE, index_records, read_rows};
 pub use sniff::{Dialect, sniff};
-pub use sort::{is_numeric_column, sort_order};
+pub use sort::{SortMemo, is_numeric_column};
 
 use crate::ParseError;
 

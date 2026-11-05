@@ -42,20 +42,9 @@ impl Fuzzy {
                 indices: Vec::new(),
             });
         }
-        let text = if haystack.is_ascii() {
-            if self.ascii.as_ref().is_some_and(|terms| {
-                !terms
-                    .iter()
-                    .all(|term| ascii_subsequence(term, haystack.as_bytes()))
-            }) {
-                return None;
-            }
-            Utf32Str::Ascii(haystack.as_bytes())
-        } else {
-            self.buf.clear();
-            self.buf.extend(haystack.chars());
-            Utf32Str::Unicode(&self.buf)
-        };
+        let text = utf32(self.ascii.as_deref(), &mut self.buf, haystack)?;
+        #[cfg(test)]
+        test_counters::count_indices_computed();
         let mut indices = Vec::new();
         let mut score = 0u32;
         for atom in &self.atoms {
@@ -64,6 +53,61 @@ impl Fuzzy {
         indices.sort_unstable();
         indices.dedup();
         Some(Match { score, indices })
+    }
+
+    /// Scores `haystack` without computing highlight indices.
+    pub(crate) fn score_only(&mut self, haystack: &str) -> Option<u32> {
+        if self.empty {
+            return Some(0);
+        }
+        let text = utf32(self.ascii.as_deref(), &mut self.buf, haystack)?;
+        let mut score = 0u32;
+        for atom in &self.atoms {
+            score += u32::from(atom.score(text, &mut self.matcher)?);
+        }
+        Some(score)
+    }
+}
+
+fn utf32<'a>(
+    ascii: Option<&[Vec<u8>]>,
+    buf: &'a mut Vec<char>,
+    haystack: &'a str,
+) -> Option<Utf32Str<'a>> {
+    if haystack.is_ascii() {
+        if ascii.is_some_and(|terms| {
+            !terms
+                .iter()
+                .all(|term| ascii_subsequence(term, haystack.as_bytes()))
+        }) {
+            return None;
+        }
+        Some(Utf32Str::Ascii(haystack.as_bytes()))
+    } else {
+        buf.clear();
+        buf.extend(haystack.chars());
+        Some(Utf32Str::Unicode(buf.as_slice()))
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_counters {
+    use std::cell::Cell;
+
+    thread_local! {
+        static INDICES_COMPUTED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    pub(crate) fn count_indices_computed() {
+        INDICES_COMPUTED.with(|count| count.set(count.get() + 1));
+    }
+
+    pub(crate) fn indices_computed() -> usize {
+        INDICES_COMPUTED.with(Cell::get)
+    }
+
+    pub(crate) fn reset_indices_computed() {
+        INDICES_COMPUTED.with(|count| count.set(0));
     }
 }
 

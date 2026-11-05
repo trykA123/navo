@@ -5,10 +5,10 @@ mod keys;
 mod rows;
 
 use std::any::Any;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use gpui_kit::{AnyView, FocusHandle};
-use navo_structured::table::{Dialect, MAX_COLUMNS, Table, column_widths};
+use navo_structured::table::{Dialect, MAX_COLUMNS, SortMemo, Table, column_widths};
 
 pub(super) use keys::bind_keys;
 
@@ -52,6 +52,7 @@ pub(in crate::window_view::viewer) struct TableView {
     left: usize,
     sort: Option<SortKey>,
     sorting: Option<Job>,
+    sort_memo: Arc<Mutex<SortMemo>>,
     note: Option<SharedString>,
     page: usize,
     available: Option<Pixels>,
@@ -94,6 +95,7 @@ impl TableView {
             left: 0,
             sort: None,
             sorting: None,
+            sort_memo: Arc::new(Mutex::new(SortMemo::default())),
             note,
             page: 1,
             available: None,

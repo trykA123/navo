@@ -1,11 +1,10 @@
 use rusqlite::Connection;
 
+pub(super) const USED_BYTES_SQL: &str =
+    "SELECT COALESCE((SELECT bytes FROM tbl_bytes WHERE tbl = ?1), 0)";
+
 pub(super) fn used_bytes(conn: &Connection, table: &str) -> Result<u64, rusqlite::Error> {
-    conn.query_row(
-        "SELECT COALESCE(SUM(size), 0) FROM blob WHERE tbl = ?1",
-        [table],
-        read_size,
-    )
+    conn.query_row(USED_BYTES_SQL, [table], read_size)
 }
 
 pub(super) fn entries(conn: &Connection, table: &str) -> Result<u64, rusqlite::Error> {
