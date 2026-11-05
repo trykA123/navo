@@ -2,6 +2,19 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.2.3 — 2026-11-05
+
+### Fixed
+
+- A file edited inside an open folder shows its new size and date at once.
+
+### Faster
+
+- Filling the listing cache no longer slows down as the cache grows.
+- Ctrl+K and other fuzzy lists work out highlights only for the rows on screen.
+- Sorting a table viewer by the same column again does not reread every cell. Sort data stays under 32 MiB.
+- PDF search keeps mostly-Latin page text in half the memory and searches more of a large PDF.
+
 ## Unreleased
 
 ### New
