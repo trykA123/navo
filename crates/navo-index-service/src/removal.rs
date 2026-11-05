@@ -3,7 +3,7 @@ use std::io;
 mod files;
 mod stop;
 
-pub(super) use files::removable_image;
+pub(super) use files::{LockedImage, removable_image};
 pub(super) use stop::{PROCESS_WAIT, STOP_LIMIT};
 
 #[cfg(windows)]

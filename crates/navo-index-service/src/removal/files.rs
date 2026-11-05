@@ -60,6 +60,14 @@ impl Cleanup {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("cannot delete or rename service image {path}: {source}", path = .path.display())]
+pub(crate) struct LockedImage {
+    pub path: PathBuf,
+    #[source]
+    pub source: io::Error,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Left {
     Gone,
@@ -150,10 +158,11 @@ fn remove_file(
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.eq_ignore_ascii_case(image))
         {
-            return Err(io::Error::other(format!(
-                "cannot delete or rename service image {}: {error}",
-                path.display()
-            )));
+            tracing::error!(path = %path.display(), %error, "service image is locked; close the program using it and retry");
+            return Err(io::Error::other(LockedImage {
+                path: path.to_path_buf(),
+                source: error,
+            }));
         }
         path.to_path_buf()
     };

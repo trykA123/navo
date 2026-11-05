@@ -1,5 +1,5 @@
 use std::io;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub(crate) use crate::REMOVE_DEADLINE;
 pub(crate) const STOP_LIMIT: Duration = Duration::from_secs(12);
@@ -54,33 +54,37 @@ pub(crate) trait Control {
     fn stop(&mut self) -> io::Result<bool>;
     /// Waits on the kept handle; `false` when the process still runs after `limit`.
     fn wait(&mut self, limit: Duration) -> io::Result<bool>;
-    fn elapsed(&self) -> Duration;
+    fn now(&self) -> Instant;
     fn pause(&mut self);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct StopLimits {
     pub stop: Duration,
-    pub wait: Duration,
+    pub deadline: Option<Instant>,
 }
 
 impl StopLimits {
     pub(crate) const FULL: Self = Self {
         stop: STOP_LIMIT,
-        wait: PROCESS_WAIT,
+        deadline: None,
     };
 
-    pub(crate) fn within(remaining: Duration) -> Self {
-        let stop = STOP_LIMIT.min(remaining);
+    pub(crate) fn within(deadline: Instant) -> Self {
         Self {
-            stop,
-            wait: PROCESS_WAIT.min(remaining.saturating_sub(stop)),
+            stop: STOP_LIMIT,
+            deadline: Some(deadline),
         }
     }
 }
 
 /// Stops the service and waits for its process to end; a timeout leaves it registered.
 pub(crate) fn stop(control: &mut impl Control, limits: StopLimits) -> io::Result<()> {
+    let stop_deadline = limits
+        .deadline
+        .map_or(control.now() + limits.stop, |deadline| {
+            deadline.min(control.now() + limits.stop)
+        });
     let mut held = Held::default();
     loop {
         let status = control.status()?;
@@ -96,12 +100,15 @@ pub(crate) fn stop(control: &mut impl Control, limits: StopLimits) -> io::Result
                 held.stop(control, status.process)?;
             }
         }
-        if control.elapsed() >= limits.stop {
+        if control.now() >= stop_deadline {
             return Err(timed_out("the index service did not stop in time"));
         }
         control.pause();
     }
-    if held.process.is_some() && !control.wait(limits.wait)? {
+    let wait = limits.deadline.map_or(PROCESS_WAIT, |deadline| {
+        PROCESS_WAIT.min(deadline.saturating_duration_since(control.now()))
+    });
+    if held.process.is_some() && !control.wait(wait)? {
         return Err(timed_out("the index service process did not exit in time"));
     }
     Ok(())

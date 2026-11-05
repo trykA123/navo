@@ -12,6 +12,8 @@ pub enum ElevationError {
     Cancelled,
     #[error("index service operation failed: {reason} (exit code {0})", reason = reason(*.0))]
     Failed(u32),
+    #[error("index service image {} is locked; close the program using it and retry", .0.display())]
+    LockedImage(std::path::PathBuf),
     #[error("index service elevation: {0}")]
     Launch(#[from] std::io::Error),
 }

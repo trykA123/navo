@@ -73,8 +73,7 @@ pub(super) fn remove_service(product: Product, deadline: Instant) -> io::Result<
         }
         Err(error) => return Err(error),
     };
-    let remaining = deadline.saturating_duration_since(Instant::now());
-    super::scm_stop::stop(&service, StopLimits::within(remaining))?;
+    super::scm_stop::stop(&service, StopLimits::within(deadline))?;
     // SAFETY: service has DELETE access and its process has exited.
     checked(unsafe { DeleteService(service.0) })
 }

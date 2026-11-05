@@ -200,7 +200,29 @@ fn removal_fails_if_an_image_cannot_be_deleted_or_renamed() {
             index: &index,
         };
         let error = clean(&mut fake, folders, &[image], &limits()).unwrap_err();
-        assert_eq!(crate::failure_code(&error), 1, "{error}");
+        let code = crate::failure_code(&error);
+        assert_ne!(code, 1, "{error}");
+        let mapped = crate::elevation_result::from_exit_code(u32::from(code)).unwrap_err();
+        let crate::ElevationError::LockedImage(path) = &mapped else {
+            panic!("expected a locked image: {mapped}");
+        };
+        assert_eq!(path.file_name().unwrap(), image);
+        let folder = if image == "ferrite.exe" {
+            "Ferrite"
+        } else {
+            "Navo"
+        };
+        assert!(path.ends_with(Path::new(folder).join("Index").join(image)));
+        assert!(
+            mapped
+                .to_string()
+                .contains("close the program using it and retry")
+        );
+        assert!(
+            error
+                .to_string()
+                .contains(&index.join(image).display().to_string())
+        );
         assert!(fake.scheduled.is_empty());
         assert!(fake.files.contains(&index.join(image)));
     }

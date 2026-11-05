@@ -13,6 +13,8 @@ struct Fake {
     at: usize,
     events: Vec<Event>,
     clock: Duration,
+    started: Instant,
+    wait_limit: Duration,
     accepts_stop: Vec<bool>,
     exits: bool,
 }
@@ -28,6 +30,8 @@ impl Fake {
             at: 0,
             events: Vec::new(),
             clock: Duration::ZERO,
+            started: Instant::now(),
+            wait_limit: PROCESS_WAIT,
             accepts_stop: Vec::new(),
             exits: true,
         }
@@ -57,11 +61,11 @@ impl Control for Fake {
     }
     fn wait(&mut self, limit: Duration) -> io::Result<bool> {
         self.events.push(Event::Wait);
-        assert_eq!(limit, PROCESS_WAIT);
+        assert_eq!(limit, self.wait_limit);
         Ok(self.exits)
     }
-    fn elapsed(&self) -> Duration {
-        self.clock
+    fn now(&self) -> Instant {
+        self.started + self.clock
     }
     fn pause(&mut self) {
         self.clock += POLL;
@@ -231,7 +235,23 @@ fn removal_limits_fit_the_deadline_inside_the_uninstall_budget() {
     assert!(STOP_LIMIT + PROCESS_WAIT < REMOVE_DEADLINE);
     assert!(REMOVE_DEADLINE < Duration::from_secs(25));
     for lock_wait in [Duration::ZERO, Duration::from_secs(19), REMOVE_DEADLINE] {
-        let limits = StopLimits::within(REMOVE_DEADLINE - lock_wait);
-        assert!(lock_wait + limits.stop + limits.wait <= REMOVE_DEADLINE);
+        let deadline = Instant::now() + REMOVE_DEADLINE;
+        let limits = StopLimits::within(deadline);
+        assert_eq!(limits.deadline, Some(deadline));
+        assert!(PROCESS_WAIT.min(REMOVE_DEADLINE - lock_wait) + lock_wait <= REMOVE_DEADLINE);
     }
+}
+
+#[test]
+fn a_fast_stop_after_a_long_lock_wait_keeps_the_remaining_process_wait() {
+    let mut fake = Fake::new(&[
+        status(State::Running, 40),
+        status(State::Running, 40),
+        status(State::Stopped, 0),
+    ]);
+    let deadline = fake.started + REMOVE_DEADLINE;
+    fake.clock = Duration::from_secs(19);
+    fake.wait_limit = Duration::from_millis(900);
+    stop(&mut fake, StopLimits::within(deadline)).unwrap();
+    assert_eq!(fake.events, [Event::Open(40), Event::Stop, Event::Wait]);
 }

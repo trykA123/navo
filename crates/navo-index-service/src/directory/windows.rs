@@ -326,7 +326,7 @@ fn is_trusted(handle: &OwnedHandle, expected: &LocalAllocation) -> io::Result<bo
     Ok(trusted_owner && protected_acl(&actual) == Some(expected))
 }
 
-fn protected_acl(descriptor: &LocalAllocation) -> Option<&[u8]> {
+pub(crate) fn protected_acl(descriptor: &LocalAllocation) -> Option<&[u8]> {
     let (mut control, mut revision, mut present, mut defaulted) = (0, 0, 0, 0);
     let mut acl: *mut ACL = ptr::null_mut();
     // SAFETY: descriptor is live and all outputs point to correctly typed writable storage.

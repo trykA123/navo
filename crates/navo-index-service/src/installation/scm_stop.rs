@@ -21,7 +21,6 @@ pub(super) fn stop(service: &ServiceHandle, limits: StopLimits) -> io::Result<()
     let mut control = ScmControl {
         service,
         process: None,
-        started: Instant::now(),
     };
     super::super::removal::stop(&mut control, limits)
 }
@@ -29,7 +28,6 @@ pub(super) fn stop(service: &ServiceHandle, limits: StopLimits) -> io::Result<()
 struct ScmControl<'a> {
     service: &'a ServiceHandle,
     process: Option<OwnedHandle>,
-    started: Instant,
 }
 
 impl Control for ScmControl<'_> {
@@ -95,8 +93,8 @@ impl Control for ScmControl<'_> {
         }
     }
 
-    fn elapsed(&self) -> Duration {
-        self.started.elapsed()
+    fn now(&self) -> Instant {
+        Instant::now()
     }
 
     fn pause(&mut self) {
