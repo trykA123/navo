@@ -183,13 +183,18 @@ impl Hooks {
         lock(&self.state).settings.clone()
     }
 
-    /// Rescans the listing that holds `repo`'s badge; does nothing once the scanner is replaced.
+    /// Rescans `repo` in the listing that holds its badge; does nothing once the scanner is
+    /// replaced.
     fn rescan_of(&self, repo: &Location) -> Rescan {
         let view = lock(&self.state).scan.as_ref().map(GitScan::view);
         let listing = repo.parent();
+        let path = navo_fs::os_path(repo).ok();
         Arc::new(move || {
             if let (Some(view), Some(listing)) = (&view, &listing) {
-                view.rescan(listing);
+                match &path {
+                    Some(path) => view.rescan_repo(listing, path.clone()),
+                    None => view.rescan(listing),
+                }
             }
         })
     }
