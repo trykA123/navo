@@ -38,6 +38,29 @@ fn wait_for(
     }
 }
 
+/// Writes `text` again every 500 ms until the news arrives; the folder watch arms asynchronously on Windows.
+fn write_until(
+    path: &std::path::Path,
+    text: &str,
+    receiver: &mut UnboundedReceiver<UserCommandNews>,
+    wanted: impl Fn(&UserCommandNews) -> bool,
+) -> UserCommandNews {
+    let deadline = Instant::now() + NEWS_WAIT;
+    loop {
+        std::fs::write(path, text).expect("an edit");
+        let round = Instant::now() + Duration::from_millis(500);
+        while Instant::now() < round {
+            while let Ok(news) = receiver.try_recv() {
+                if wanted(&news) {
+                    return news;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(Instant::now() < deadline, "no matching news arrived");
+    }
+}
+
 #[test]
 fn a_valid_file_gives_applied() {
     let (_root, dirs) = dirs();
@@ -82,12 +105,8 @@ fn a_broken_edit_gives_invalid_and_keeps_the_list() {
         UserCommandNews::Applied(commands, _) if commands.len() == 1
     ));
 
-    std::fs::write(
-        &path,
-        "[[command]]\nname = \"Broken\"\nprogram = \"{file}\"\n",
-    )
-    .expect("a broken edit");
-    let invalid = wait_for(&mut news, |news| {
+    let broken = "[[command]]\nname = \"Broken\"\nprogram = \"{file}\"\n";
+    let invalid = write_until(&path, broken, &mut news, |news| {
         matches!(news, UserCommandNews::Invalid(_))
     });
     let UserCommandNews::Invalid(message) = invalid else {
