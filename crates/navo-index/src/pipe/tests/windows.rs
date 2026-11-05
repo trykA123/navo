@@ -152,6 +152,13 @@ fn connect_test(name: &str) -> Client {
 }
 
 #[test]
+fn a_client_handle_gives_the_server_process_id() {
+    let (_server, client, _) = connection("server-id");
+    let pipe = client.pipe.as_ref().unwrap();
+    assert_eq!(pipe.server_process_id().unwrap(), std::process::id());
+}
+
+#[test]
 fn client_refuses_a_pipe_owned_by_this_process() {
     let (server, name) = fixture("untrusted-owner");
     assert!(matches!(

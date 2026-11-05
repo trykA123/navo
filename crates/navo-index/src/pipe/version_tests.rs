@@ -2,6 +2,7 @@ use std::sync::{Mutex, mpsc};
 
 use super::*;
 use crate::pipe::session::{Transport, serve_session};
+use crate::pipe::status::Identified;
 use crate::pipe::{CancelToken, Cancellation, Hit, MemoryReport, Query, Status, frames};
 
 fn request(terms: Vec<QueryTerm>) -> Request {
@@ -15,12 +16,16 @@ fn known(revision: u32, build: &str) -> ServiceVersion {
     }
 }
 
-fn answer(revision: u32, build: &str) -> Result<Vec<Response>, Failure> {
-    Ok(vec![Response::VersionV1 {
+fn reply(revision: u32, build: &str) -> Vec<Response> {
+    vec![Response::VersionV1 {
         generation: 1,
         revision,
         build: build.into(),
-    }])
+    }]
+}
+
+fn answer(revision: u32, build: &str) -> Result<Vec<Response>, Failure> {
+    Ok(reply(revision, build))
 }
 
 #[test]
@@ -183,6 +188,53 @@ fn a_wrong_answer_is_refused() {
             Err(PipeError::InvalidResponse)
         ));
     }
+}
+
+fn identified(
+    server: u32,
+    responses: Result<Vec<Response>, PipeError>,
+) -> Result<Identified, PipeError> {
+    Ok(Identified { server, responses })
+}
+
+#[test]
+fn the_answer_and_the_server_id_come_from_the_same_connection() {
+    let version = read_version_from_server(|request| {
+        assert!(request.wants_version());
+        identified(4242, Ok(reply(3, "abc")))
+    });
+    assert_eq!(version.unwrap(), (known(3, "abc"), 4242));
+}
+
+#[test]
+fn an_older_service_still_gives_its_server_id() {
+    let dropped = || identified(77, Err(PipeError::NotAvailable));
+    assert_eq!(
+        read_version_from_server(|_| dropped()).unwrap(),
+        (ServiceVersion::Older, 77)
+    );
+}
+
+#[test]
+fn the_server_id_call_keeps_the_error_rules_of_the_plain_call() {
+    let errors: [fn() -> Result<Identified, PipeError>; 4] = [
+        || Err(PipeError::NotAvailable),
+        || identified(1, Err(PipeError::TimedOut)),
+        || identified(1, Err(PipeError::Cancelled)),
+        || identified(1, Ok(Vec::new())),
+    ];
+    for error in errors {
+        assert!(read_version_from_server(|_| error()).is_err());
+    }
+}
+
+#[cfg(not(windows))]
+#[test]
+fn the_server_id_is_unavailable_without_a_pipe_server() {
+    assert!(matches!(
+        crate::pipe::platform::Pipe.server_process_id(),
+        Err(PipeError::NotAvailable)
+    ));
 }
 
 struct OnePipe {
