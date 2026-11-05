@@ -9,6 +9,25 @@ use super::install_plan::NAVO;
 /// The image the service ran before `navo-index.exe`; deleted only past the commit point.
 const LEGACY_IMAGE: &str = "navo.exe";
 
+pub(super) fn legacy_command(command: &str) -> bool {
+    let command = command.trim_start();
+    let image = if let Some(quoted) = command.strip_prefix('"') {
+        let Some((image, _)) = quoted.split_once('"') else {
+            return false;
+        };
+        image
+    } else {
+        command.split_whitespace().next().unwrap_or_default()
+    };
+    let mut parts = image.rsplit(['\\', '/']);
+    parts
+        .next()
+        .is_some_and(|name| name.eq_ignore_ascii_case(LEGACY_IMAGE))
+        && parts
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("Index"))
+}
+
 /// Why a finished install does not run the new image; the elevated run exits with code 3.
 #[derive(Debug, thiserror::Error)]
 pub(super) enum Mismatch {

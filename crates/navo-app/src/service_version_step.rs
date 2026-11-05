@@ -51,9 +51,24 @@ pub(super) fn service_step(
     }
 }
 
-/// The prompt counts as declined unless it succeeded and the service no longer answers older.
+/// The prompt succeeds only when the service answers the current revision or newer.
 pub(super) fn is_updated(prompt_ok: bool, after: Option<&ServiceVersion>, own: u32) -> bool {
-    prompt_ok && !after.is_some_and(|version| is_older(version, own))
+    prompt_ok && matches!(after, Some(ServiceVersion::Known { revision, .. }) if *revision >= own)
+}
+
+fn prompt_after_lock<G>(
+    lock: io::Result<Option<G>>,
+    recheck: impl FnOnce() -> io::Result<Step>,
+    prompt: impl FnOnce(),
+) -> io::Result<()> {
+    let Some(_guard) = lock? else {
+        tracing::debug!("index service step: another Navo is changing the service");
+        return Ok(());
+    };
+    if recheck()? == Step::Elevate {
+        prompt();
+    }
+    Ok(())
 }
 
 pub(super) fn read_declined(marker: &Path) -> Option<u32> {
@@ -73,9 +88,10 @@ mod worker {
     use std::time::Duration;
 
     use navo_index::pipe::SERVICE_REVISION;
+    use navo_index_service::change_lock::{ChangeLock, Scope};
     use navo_update::InstallKind;
 
-    use super::{Step, is_updated, read_declined, service_step, write_declined};
+    use super::{Step, is_updated, prompt_after_lock, read_declined, service_step, write_declined};
 
     const AFTER_FIRST_WINDOW: Duration = Duration::from_secs(5);
     const SETTLE: Duration = Duration::from_secs(5);
@@ -94,20 +110,34 @@ mod worker {
     }
 
     fn run(marker: &Path) {
-        let query = match navo_index_service::query() {
-            Ok(query) => query,
-            Err(error) => {
-                tracing::debug!(%error, "index service step: no service query");
-                return;
+        let result = (|| {
+            if query_step(marker)? != Step::Elevate {
+                return Ok(());
             }
-        };
+            prompt_after_lock(
+                ChangeLock::acquire(Scope::Local, Duration::ZERO),
+                || query_step(marker),
+                || update(marker),
+            )
+        })();
+        if let Err(error) = result {
+            tracing::debug!(%error, "index service step: cannot check or guard the service");
+        }
+    }
+
+    fn query_step(marker: &Path) -> std::io::Result<Step> {
+        let query = navo_index_service::query()?;
         let declined = read_declined(marker);
         let step = service_step(install_kind(), &query, SERVICE_REVISION, declined);
-        if step != Step::Elevate {
-            tracing::debug!(?step, version = ?query.version, "index service step");
-            return;
-        }
-        tracing::info!(version = ?query.version, own = SERVICE_REVISION, "index service is older than Navo; asking to update it");
+        tracing::debug!(?step, version = ?query.version, "index service step");
+        Ok(step)
+    }
+
+    fn update(marker: &Path) {
+        tracing::info!(
+            own = SERVICE_REVISION,
+            "index service is older than Navo; asking to update it"
+        );
         let prompt = navo_index_service::request_elevation(navo_index_service::Action::Install);
         std::thread::sleep(SETTLE);
         let after = navo_index_service::query()

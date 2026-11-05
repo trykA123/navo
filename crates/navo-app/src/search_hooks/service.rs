@@ -57,6 +57,9 @@ fn status_from_query(query: std::io::Result<crate::index_service::ServiceQuery>)
         .version
         .as_ref()
         .is_some_and(|version| is_older(version, SERVICE_REVISION));
+    if query.legacy_image {
+        return ServiceStatus::Outdated;
+    }
     match query.running {
         None => ServiceStatus::NotInstalled,
         Some(true) if is_running_older => ServiceStatus::Outdated,
@@ -90,12 +93,111 @@ fn report(
 
 #[cfg(windows)]
 fn elevate(action: crate::index_service::Action) -> ServiceOutcome {
-    report(action, crate::index_service::request_elevation(action))
+    use std::time::Duration;
+
+    use navo_index_service::change_lock::{ChangeLock, Scope};
+
+    let result = (|| {
+        let _guard =
+            ChangeLock::acquire(Scope::Local, Duration::from_secs(60))?.ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "another Navo held the index service change mutex for 60 seconds",
+                )
+            })?;
+        change_after_recheck(
+            action,
+            crate::index_service::query(),
+            crate::index_service::request_elevation,
+        )
+    })();
+    report(action, result)
+}
+
+#[cfg(any(windows, test))]
+fn change_after_recheck(
+    action: crate::index_service::Action,
+    query: std::io::Result<crate::index_service::ServiceQuery>,
+    change: impl FnOnce(crate::index_service::Action) -> Result<Elevated, ElevationError>,
+) -> Result<Elevated, ElevationError> {
+    use crate::index_service::Action;
+
+    let status = status_from_query(Ok(query?));
+    let allowed = match action {
+        Action::Install => status.can_install(),
+        Action::Remove => status.can_remove(),
+        Action::Run => false,
+    };
+    if !allowed {
+        return Ok(Elevated::Done);
+    }
+    change(action)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn registered(running: Option<bool>, legacy_image: bool) -> crate::index_service::ServiceQuery {
+        crate::index_service::ServiceQuery {
+            running,
+            version: None,
+            legacy_present: false,
+            legacy_image,
+        }
+    }
+
+    #[test]
+    fn a_registered_legacy_image_offers_update_in_every_state_without_an_answer() {
+        for running in [None, Some(false), Some(true)] {
+            let status = status_from_query(Ok(registered(running, true)));
+            assert_eq!(status, ServiceStatus::Outdated);
+            assert!(status.can_install());
+        }
+        assert_eq!(
+            status_from_query(Ok(registered(Some(false), false))),
+            ServiceStatus::Stopped
+        );
+    }
+
+    #[test]
+    fn settings_actions_recheck_before_changing_the_service() {
+        use crate::index_service::Action;
+
+        let mut current = registered(Some(true), false);
+        current.version = Some(navo_index::pipe::ServiceVersion::Known {
+            revision: navo_index::pipe::SERVICE_REVISION,
+            build: "test".into(),
+        });
+        let result = change_after_recheck(Action::Install, Ok(current), |_| {
+            unreachable!("another Navo already updated the service")
+        });
+        assert_eq!(result.unwrap(), Elevated::Done);
+        let result = change_after_recheck(Action::Remove, Ok(registered(None, false)), |_| {
+            unreachable!("another Navo already removed the service")
+        });
+        assert_eq!(result.unwrap(), Elevated::Done);
+        for action in [Action::Install, Action::Remove] {
+            let changed = std::cell::Cell::new(false);
+            let result = change_after_recheck(action, Ok(registered(Some(false), true)), |seen| {
+                assert_eq!(seen, action);
+                changed.set(true);
+                Ok(Elevated::Done)
+            });
+            assert_eq!(result.unwrap(), Elevated::Done);
+            assert!(changed.get());
+        }
+    }
+
+    #[test]
+    fn a_failed_settings_recheck_preserves_the_error_without_elevating() {
+        let result = change_after_recheck(
+            crate::index_service::Action::Install,
+            Err(std::io::ErrorKind::PermissionDenied.into()),
+            |_| unreachable!("an unreadable service cannot be changed"),
+        );
+        assert!(matches!(result, Err(ElevationError::Launch(_))));
+    }
 
     #[test]
     fn queried_service_presence_and_state_determine_status() {
@@ -105,6 +207,7 @@ mod tests {
                     running,
                     version: None,
                     legacy_present,
+                    legacy_image: false,
                 })
             };
             assert_eq!(status_from_query(query(None)), ServiceStatus::NotInstalled);
@@ -125,6 +228,7 @@ mod tests {
                 running: Some(true),
                 version: Some(version),
                 legacy_present: false,
+                legacy_image: false,
             })
         };
         let known = |revision| ServiceVersion::Known {

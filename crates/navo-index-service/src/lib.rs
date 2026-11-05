@@ -138,6 +138,8 @@ pub struct ServiceQuery {
     /// What a running service answers; `None` when it is not running or did not answer.
     pub version: Option<navo_index::pipe::ServiceVersion>,
     pub legacy_present: bool,
+    /// The registered Navo service command still runs `Index\navo.exe`.
+    pub legacy_image: bool,
 }
 
 #[cfg(windows)]
@@ -147,6 +149,7 @@ pub fn query() -> std::io::Result<ServiceQuery> {
         running,
         version: (running == Some(true)).then(running_version).flatten(),
         legacy_present: scm::query_running(install_plan::LEGACY_PRODUCT)?.is_some(),
+        legacy_image: scm::query_legacy_image()?,
     })
 }
 

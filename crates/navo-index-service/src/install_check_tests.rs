@@ -183,3 +183,24 @@ fn a_refused_legacy_delete_is_scheduled_and_reported_as_a_warning() {
     );
     assert!(warning.contains("schedule refused"), "{warning}");
 }
+
+#[test]
+fn only_the_registered_legacy_image_in_index_needs_migration() {
+    for command in [
+        r#""C:\Program Files\Navo\Index\navo.exe" --index-service run"#,
+        r"C:\Navo\INDEX\NAVO.EXE --index-service run",
+        r#"  "C:/Navo/Index/navo.exe" --index-service run"#,
+    ] {
+        assert!(super::legacy_command(command), "{command}");
+    }
+    for command in [
+        r#""C:\Navo\Index\navo-index.exe" run"#,
+        r#""C:\Navo\navo.exe" --index-service run"#,
+        r#""C:\Navo\Index\navo.exe.old" --index-service run"#,
+        r#""C:\Navo\Index\other.exe" "C:\Navo\Index\navo.exe""#,
+        r#""C:\Navo\Index\navo.exe --index-service run"#,
+        "",
+    ] {
+        assert!(!super::legacy_command(command), "{command}");
+    }
+}

@@ -11,6 +11,7 @@ fn query(legacy_present: bool) -> impl FnOnce() -> io::Result<ServiceQuery> {
             running: None,
             version: None,
             legacy_present,
+            legacy_image: false,
         })
     }
 }
