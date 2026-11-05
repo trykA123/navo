@@ -19,6 +19,7 @@ Finished plans were removed on 2026-11-04; they stay in git history. Plans still
 - [2026-10-28-speed](2026-10-28-speed.md)
 - [2026-10-29-speed-atoms](2026-10-29-speed-atoms.md)
 - [2026-11-04-keys-and-mouse](2026-11-04-keys-and-mouse.md)
+- [2026-11-05-index-layout](2026-11-05-index-layout.md)
 
 **Parked**
 
