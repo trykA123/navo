@@ -28,6 +28,23 @@ impl NameTable {
     pub fn memory_bytes(&self) -> usize {
         self.memory_parts().total()
     }
+
+    #[cfg(test)]
+    pub(crate) fn column_bytes(&self) -> Vec<(&'static str, usize)> {
+        let mut columns = vec![
+            ("names", self.names.capacity()),
+            ("offsets", self.offsets.capacity() * size_of::<u32>()),
+            ("parents", self.parents.capacity() * size_of::<u32>()),
+            ("flags", self.flags.capacity() * size_of::<u16>()),
+            ("bytes", self.bytes.capacity() * size_of::<u64>()),
+            (
+                "counts",
+                self.counts.capacity() * size_of::<(u32, [u32; 2])>(),
+            ),
+        ];
+        columns.extend(self.children.column_bytes());
+        columns
+    }
 }
 
 #[cfg(test)]
@@ -51,6 +68,19 @@ mod tests {
     #[test]
     fn an_empty_table_holds_no_memory() {
         assert_eq!(NameTable::new().memory_parts(), TableMemory::default());
+    }
+
+    #[test]
+    fn column_bytes_sum_to_memory_bytes() {
+        let table = table(10_000);
+        assert_eq!(
+            table
+                .column_bytes()
+                .iter()
+                .map(|(_, bytes)| bytes)
+                .sum::<usize>(),
+            table.memory_bytes()
+        );
     }
 
     #[test]

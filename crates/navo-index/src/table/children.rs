@@ -15,6 +15,22 @@ pub(super) struct Children {
 }
 
 impl Children {
+    #[cfg(test)]
+    pub(super) fn column_bytes(&self) -> [(&'static str, usize); 4] {
+        [
+            ("children.first", self.first.capacity() * size_of::<u32>()),
+            ("children.next", self.next.capacity() * size_of::<u32>()),
+            (
+                "children.previous",
+                self.previous.capacity() * size_of::<u32>(),
+            ),
+            (
+                "children.waiting",
+                self.waiting.capacity() * size_of::<u32>(),
+            ),
+        ]
+    }
+
     pub(super) fn with_capacity(entries: usize) -> Self {
         Self {
             first: Vec::with_capacity(entries),
