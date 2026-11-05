@@ -152,7 +152,10 @@ impl Reader {
         loop {
             let delivered = match self.wait_for_changes(&mut buffer, subtree) {
                 Outcome::Filled(0) | Outcome::Overflow => self.raw.overflow(),
-                Outcome::Filled(bytes) => self.send(&buffer, bytes),
+                Outcome::Filled(bytes) => {
+                    self.raw.count_read();
+                    self.send(&buffer, bytes)
+                }
                 Outcome::Stopped => return,
                 Outcome::Failed(failure) => {
                     return self.raw.failed(io_error(&failure, &self.folder));

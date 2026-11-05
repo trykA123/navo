@@ -100,16 +100,6 @@ fn shutdown_cancels_active_and_queued_work_and_is_idempotent() {
     assert!(h.calls.try_iter().next().is_none());
 }
 
-impl Harness {
-    fn wait_parked(&self) {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while !self.scan.shared.0.lock().unwrap().parked {
-            assert!(Instant::now() < deadline, "the idle scanner never slept");
-            std::thread::sleep(Duration::from_millis(1));
-        }
-    }
-}
-
 #[test]
 fn an_idle_scanner_sleeps_until_a_request_or_a_stop_wakes_it() {
     let h = Harness::new(probe(&["fixture/a", "other/a"]));

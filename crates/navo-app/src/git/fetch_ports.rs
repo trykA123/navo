@@ -27,7 +27,7 @@ pub(crate) trait Fetcher: Send + Sync + 'static {
 
 pub(crate) trait Watch: Send + Sync + 'static {
     fn repos(&self) -> Vec<ScanRepo>;
-    fn rescan(&self, listing: &Location);
+    fn rescan(&self, repo: &ScanRepo);
     fn drive_class(&self, listing: &Location) -> DriveClass;
 }
 
@@ -59,8 +59,8 @@ impl Watch for ScanView {
         ScanView::repos(self)
     }
 
-    fn rescan(&self, listing: &Location) {
-        ScanView::rescan(self, listing);
+    fn rescan(&self, repo: &ScanRepo) {
+        ScanView::rescan_repo(self, &repo.listing, repo.path.clone());
     }
 
     fn drive_class(&self, listing: &Location) -> DriveClass {

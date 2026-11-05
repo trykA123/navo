@@ -20,7 +20,7 @@ const MINUTE: i64 = 60_000;
 struct FakeWatch {
     repos: Mutex<Vec<ScanRepo>>,
     network: Mutex<Vec<Location>>,
-    rescans: Mutex<Vec<Location>>,
+    rescans: Mutex<Vec<(Location, PathBuf)>>,
 }
 
 impl Watch for FakeWatch {
@@ -28,8 +28,11 @@ impl Watch for FakeWatch {
         self.repos.lock().unwrap().clone()
     }
 
-    fn rescan(&self, listing: &Location) {
-        self.rescans.lock().unwrap().push(listing.clone());
+    fn rescan(&self, repo: &ScanRepo) {
+        self.rescans
+            .lock()
+            .unwrap()
+            .push((repo.listing.clone(), repo.path.clone()));
     }
 
     fn drive_class(&self, listing: &Location) -> DriveClass {
@@ -310,7 +313,37 @@ fn a_successful_fetch_rescans_its_listing_and_fetches_one_at_a_time() {
     assert_eq!(engine.tick(&cancel), Step::Ran);
     assert_eq!(engine.tick(&cancel), Step::Idle);
     assert_eq!(rig.fetched().len(), 2);
-    assert_eq!(*rig.watch.rescans.lock().unwrap(), vec![listing(); 2]);
+    let rescanned: Vec<Location> = rig
+        .watch
+        .rescans
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(listing, _)| listing.clone())
+        .collect();
+    assert_eq!(rescanned, vec![listing(); 2]);
+}
+
+#[test]
+fn a_successful_fetch_rescans_only_the_repository_it_fetched() {
+    let rig = Rig::new();
+    rig.add("a", badge());
+    rig.add("b", badge());
+    let mut engine = rig.engine(&settings(5));
+    let cancel = Cancel::new();
+    assert_eq!(engine.tick(&cancel), Step::Ran);
+    assert_eq!(
+        *rig.watch.rescans.lock().unwrap(),
+        vec![(listing(), PathBuf::from("fixture/a"))]
+    );
+    assert_eq!(engine.tick(&cancel), Step::Ran);
+    assert_eq!(
+        *rig.watch.rescans.lock().unwrap(),
+        vec![
+            (listing(), PathBuf::from("fixture/a")),
+            (listing(), PathBuf::from("fixture/b")),
+        ]
+    );
 }
 
 #[test]

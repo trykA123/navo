@@ -2,14 +2,22 @@
 mod cache;
 #[path = "scan_listing.rs"]
 mod listing;
+#[path = "scan_plan.rs"]
+mod plan;
 #[path = "scan_queue.rs"]
 mod queue;
 #[path = "scan_saved.rs"]
 mod saved;
+#[path = "scan_skip.rs"]
+mod skip;
 #[path = "scan_slots.rs"]
 mod slots;
+#[path = "scan_system.rs"]
+mod system;
 #[path = "scan_view.rs"]
 mod view;
+#[path = "scan_watch.rs"]
+mod watches;
 #[path = "scan_worker.rs"]
 mod worker;
 
@@ -18,9 +26,9 @@ use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use navo_core::Location;
+use navo_core::{FileIdentity, Location};
 use navo_fs::DriveClass;
-use navo_git::status::RepoStatus;
+use navo_git::status::{Fingerprint, RepoStatus};
 use navo_git::trust::Refusal;
 use navo_store::GitSettings;
 use navo_ui::git::FolderBadges;
@@ -29,12 +37,15 @@ pub(crate) use navo_fs::CancelToken as Cancel;
 use queue::{Listing, Shared};
 pub(crate) use saved::{DbSaved, SavedBadges};
 pub(crate) use slots::Slots;
+pub(crate) use system::SystemProbe;
 pub(crate) use view::{ScanRepo, ScanView};
 
 const QUEUE_CAP: usize = 256;
 const CACHE_CAP: usize = 256;
 const ROW_CAP: usize = 2000;
 const REPO_CAP: usize = 64;
+/// Most watches or kept proofs held at once.
+const WATCH_CAP: usize = 64;
 const MIN_PROCESSES: usize = 2;
 const MAX_PROCESSES: usize = 4;
 const CACHE_BYTES: usize = 1024 * 1024;
@@ -63,24 +74,48 @@ pub(crate) trait StatusSource: Send + Sync + 'static {
     fn status(&self, repo_root: &Path, cancel: &Cancel) -> Result<RepoStatus, ScanError>;
 }
 
+/// One repository tree watch: live while the backend covers the subtree, counting every raw
+/// notification before the debouncer.
+pub(crate) trait RepoWatch: Send {
+    fn is_live(&self) -> bool;
+    fn changes(&self) -> u64;
+}
+
+impl RepoWatch for navo_fs::Watch {
+    fn is_live(&self) -> bool {
+        navo_fs::Watch::is_live(self)
+    }
+
+    fn changes(&self) -> u64 {
+        self.raw_changes()
+    }
+}
+
 pub(crate) trait Probe: Send + Sync + 'static {
     fn has_git(&self, folder: &Path) -> bool;
     fn drive_class(&self, listing: &Location) -> DriveClass;
     fn now(&self) -> Instant {
         Instant::now()
     }
-}
 
-#[derive(Debug)]
-pub(crate) struct SystemProbe;
-
-impl Probe for SystemProbe {
-    fn has_git(&self, folder: &Path) -> bool {
-        std::fs::metadata(folder.join(".git")).is_ok_and(|m| m.is_file() || m.is_dir())
+    /// The files a status read, or `None` when no proof is safe.
+    fn fingerprint(&self, _root: &Path, _upstream: Option<&str>) -> Option<Fingerprint> {
+        None
     }
 
-    fn drive_class(&self, listing: &Location) -> DriveClass {
-        navo_fs::drive_class(listing)
+    /// A subtree watch on `root`, or `None` when the platform cannot provide one.
+    fn watch_tree(&self, _root: &Path) -> Option<Box<dyn RepoWatch>> {
+        None
+    }
+
+    /// The volume class of `root`; `Unknown` when a fixed listing class cannot be proven for it.
+    fn root_class(&self, _root: &Path, _listing: &Location) -> DriveClass {
+        DriveClass::Unknown
+    }
+
+    /// The file identity of `root`, used to notice a replaced folder.
+    fn identity(&self, _root: &Path) -> Option<FileIdentity> {
+        None
     }
 }
 
@@ -209,6 +244,13 @@ impl GitScan {
     pub(crate) fn rescan(&self, folder: &Location) {
         let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
         shared.rescan(folder);
+        self.shared.1.notify_one();
+    }
+
+    /// Rechecks only the roots whose watch counted a change.
+    pub(crate) fn rescan_changed(&self, folder: &Location) {
+        let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+        shared.rescan_changed(folder);
         self.shared.1.notify_one();
     }
 

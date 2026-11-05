@@ -2,7 +2,7 @@ mod batch;
 mod translate;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -46,6 +46,7 @@ pub(crate) enum Raw {
 pub(crate) struct RawSender {
     sender: Sender<Raw>,
     live: Arc<AtomicBool>,
+    count: Arc<AtomicU64>,
 }
 
 impl RawSender {
@@ -53,15 +54,24 @@ impl RawSender {
         self.live.store(true, Ordering::Release);
     }
 
+    /// Counts one completed read, so a record the parser skips still counts as a change.
+    #[cfg(windows)]
+    pub(crate) fn count_read(&self) {
+        self.count.fetch_add(1, Ordering::Release);
+    }
+
     pub(crate) fn change(&self, change: WatchChange) -> bool {
+        self.count.fetch_add(1, Ordering::Release);
         self.sender.send(Raw::Change(change)).is_ok()
     }
 
     pub(crate) fn overflow(&self) -> bool {
+        self.count.fetch_add(1, Ordering::Release);
         self.sender.send(Raw::Overflow).is_ok()
     }
 
     pub(crate) fn failed(&self, error: FsError) {
+        self.count.fetch_add(1, Ordering::Release);
         self.live.store(false, Ordering::Release);
         let _ = self.sender.send(Raw::Failed(error));
     }
@@ -70,6 +80,7 @@ impl RawSender {
 pub struct Watch {
     raw: Sender<Raw>,
     live: Arc<AtomicBool>,
+    count: Arc<AtomicU64>,
     backend: Option<Box<dyn Send>>,
     debouncer: Option<JoinHandle<()>>,
 }
@@ -121,9 +132,11 @@ impl Watch {
         };
         let (raw, events) = mpsc::channel();
         let live = Arc::new(AtomicBool::new(false));
+        let count = Arc::new(AtomicU64::new(0));
         let backend = backend(RawSender {
             sender: raw.clone(),
             live: Arc::clone(&live),
+            count: Arc::clone(&count),
         })?;
         let debouncer = std::thread::Builder::new()
             .name("folder-watch".to_owned())
@@ -135,6 +148,7 @@ impl Watch {
         Ok(Self {
             raw,
             live,
+            count,
             backend: Some(Box::new(backend)),
             debouncer: Some(debouncer),
         })
@@ -145,6 +159,12 @@ impl Watch {
     #[must_use]
     pub fn is_live(&self) -> bool {
         self.live.load(Ordering::Acquire)
+    }
+
+    /// Raw notifications received so far, including those a batch collapses.
+    #[must_use]
+    pub fn raw_changes(&self) -> u64 {
+        self.count.load(Ordering::Acquire)
     }
 }
 

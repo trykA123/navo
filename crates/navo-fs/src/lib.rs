@@ -39,6 +39,8 @@ pub use job::{
     roll_back, run_job, run_job_parallel, run_job_parallel_with_sources, run_job_with_sources,
     run_rename, settle_prepared_move, undo_move, undo_write,
 };
+#[cfg(windows)]
+pub use local::volume_mount_point;
 pub use local::{
     AutoTuning, LocalFs, MutationLocations, make_link, mutation_location, native_identity,
     native_rename_atomic, native_replace, os_path, save_location,

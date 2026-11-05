@@ -405,7 +405,7 @@ impl NavoWindow {
         if !matches!(command, Command::PaneScroll { .. }) {
             self.forget_command_notices();
         }
-        self.show_refusal(result);
+        self.show_command_result(command, result);
         self.focus_core_pane(window, cx);
         cx.notify();
     }

@@ -8,6 +8,7 @@ use std::thread::JoinHandle;
 
 use inotify::{Event, EventMask, Inotify, WatchDescriptor, WatchMask, Watches};
 use navo_core::{FsErrorKind, Location};
+use rustix::event::{PollFd, PollFlags, Timespec, poll};
 
 use super::{error, io_error, platform};
 use crate::WatchChange;
@@ -115,27 +116,56 @@ impl Reader {
         })
     }
 
-    fn run(mut self) {
-        let mut buffer = vec![0u8; BUFFER];
+    fn run(self) {
+        self.run_with_buffer(&mut vec![0u8; BUFFER]);
+    }
+
+    fn run_with_buffer(mut self, buffer: &mut [u8]) {
+        let mut translate = Translate::default();
         loop {
-            let events = match self.inotify.read_events_blocking(&mut buffer) {
-                Ok(events) => events,
+            let mut changes = Vec::new();
+            let read = match self.wait(translate.has_pending_move()) {
+                Ok(true) => self.read_batch(buffer, &mut translate, &mut changes),
+                Ok(false) => {
+                    translate.flush(&mut changes);
+                    Ok(ControlFlow::Continue(()))
+                }
+                Err(failure) => Err(failure),
+            };
+            match read {
+                Ok(ControlFlow::Continue(())) => {}
+                Ok(ControlFlow::Break(())) => return,
                 Err(failure) if failure.kind() == io::ErrorKind::Interrupted => continue,
                 Err(failure) => return self.fail(io_error(&failure, &self.folder)),
-            };
-            let mut changes = Vec::new();
-            let mut translate = Translate::default();
-            let read = events
-                .into_iter()
-                .try_for_each(|event| self.read(&event, &mut translate, &mut changes));
-            if read.is_break() {
-                return;
             }
-            translate.flush(&mut changes);
             if !changes.into_iter().all(|change| self.raw.change(change)) {
                 return;
             }
         }
+    }
+
+    fn read_batch(
+        &mut self,
+        buffer: &mut [u8],
+        translate: &mut Translate,
+        changes: &mut Vec<WatchChange>,
+    ) -> io::Result<ControlFlow<()>> {
+        let events = self.inotify.read_events(buffer)?;
+        Ok(events
+            .into_iter()
+            .try_for_each(|event| self.read(&event, translate, changes)))
+    }
+
+    fn wait(&self, pending_move: bool) -> io::Result<bool> {
+        let timeout = Timespec {
+            tv_sec: 0,
+            tv_nsec: 100_000_000,
+        };
+        let mut fds = [PollFd::new(&self.inotify, PollFlags::IN)];
+        // inotify may split a rename pair across reads; a move out has no second record.
+        poll(&mut fds, pending_move.then_some(&timeout))
+            .map(|ready| ready != 0)
+            .map_err(io::Error::from)
     }
 
     fn read(
@@ -150,6 +180,7 @@ impl Reader {
             return ControlFlow::Break(());
         }
         if event.mask.intersects(EventMask::Q_OVERFLOW) {
+            translate.flush(changes);
             self.raw.overflow();
         } else if let (Some(kind), Some(name)) = (kind_of(event.mask, event.cookie), event.name) {
             translate.feed(kind, platform::entry_name(name), changes);
@@ -179,3 +210,7 @@ fn kind_of(mask: EventMask, cookie: u32) -> Option<RawKind> {
         None
     }
 }
+
+#[cfg(test)]
+#[path = "linux_watch_tests.rs"]
+mod tests;

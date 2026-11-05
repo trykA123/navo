@@ -99,6 +99,14 @@ fn a_move_into_the_folder_is_a_creation() {
 }
 
 fn manual_watch() -> (Watch, RawSender, mpsc::Receiver<WatchEvent>, Arc<()>) {
+    manual_watch_at(Depth::Folder)
+}
+
+fn manual_tree_watch() -> (Watch, RawSender, mpsc::Receiver<WatchEvent>, Arc<()>) {
+    manual_watch_at(Depth::Subtree)
+}
+
+fn manual_watch_at(depth: Depth) -> (Watch, RawSender, mpsc::Receiver<WatchEvent>, Arc<()>) {
     let (sender, events) = mpsc::channel();
     let marker = Arc::new(());
     let held = Arc::clone(&marker);
@@ -107,10 +115,15 @@ fn manual_watch() -> (Watch, RawSender, mpsc::Receiver<WatchEvent>, Arc<()>) {
         let _ = sender.send(event);
     });
     let mut raw = None;
-    let watch = Watch::start(&Location::new("/").unwrap(), sink, |sender| {
+    let folder = Location::new("/").unwrap();
+    let backend = |sender| {
         raw = Some(sender);
         Ok(())
-    })
+    };
+    let watch = match depth {
+        Depth::Folder => Watch::start(&folder, sink, backend),
+        Depth::Subtree => Watch::start_tree(&folder, sink, backend),
+    }
     .unwrap();
     (watch, raw.unwrap(), events, marker)
 }
@@ -217,6 +230,53 @@ fn a_watch_is_live_only_once_its_backend_says_so() {
     assert!(!watch.is_live());
     raw.mark_live();
     assert!(watch.is_live());
+}
+
+#[test]
+fn a_create_then_a_remove_counts_twice_and_reports_no_change() {
+    let (watch, raw, events, _) = manual_tree_watch();
+    raw.change(created("gone.txt"));
+    raw.change(WatchChange::Removed(name("gone.txt")));
+    assert_eq!(watch.raw_changes(), 2);
+    assert_eq!(
+        events.recv_timeout(Duration::from_secs(5)),
+        Ok(WatchEvent::Changed(Vec::new()))
+    );
+}
+
+#[test]
+fn an_overflow_adds_one_to_the_raw_count() {
+    let (watch, raw, _events, _) = manual_watch();
+    raw.overflow();
+    assert_eq!(watch.raw_changes(), 1);
+}
+
+#[test]
+fn a_failure_adds_one_and_clears_liveness() {
+    let (watch, raw, _events, _) = manual_watch();
+    raw.mark_live();
+    raw.failed(FsError::new(FsErrorKind::NetworkLost));
+    assert_eq!(watch.raw_changes(), 1);
+    assert!(!watch.is_live());
+}
+
+#[test]
+fn the_raw_count_is_readable_before_the_debouncer_delivers() {
+    let (watch, raw, events, _) = manual_watch();
+    raw.change(created("a"));
+    assert_eq!(watch.raw_changes(), 1);
+    assert_eq!(events.try_recv(), Err(mpsc::TryRecvError::Empty));
+}
+
+#[cfg(windows)]
+#[test]
+fn the_volume_mount_point_of_a_temp_folder_is_the_system_drive_root() {
+    let dir = tempfile::tempdir().unwrap();
+    let system = std::env::var("SystemDrive").expect("Windows defines SystemDrive");
+    assert_eq!(
+        crate::volume_mount_point(dir.path()).unwrap(),
+        std::path::PathBuf::from(format!("{system}\\"))
+    );
 }
 
 #[test]

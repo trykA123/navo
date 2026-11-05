@@ -343,13 +343,35 @@ fn a_title_match_hides_a_body_match() {
     assert_eq!(found[0].field, Some(Field::Title));
 }
 
-#[test]
-fn large_non_matching_rows_are_skipped_quickly() {
+fn large_non_matching_history() -> Vec<Stored> {
     let big = "ab".repeat(128 * 1024);
     let unicode = "é".repeat(128 * 1024);
-    let history: Vec<Stored> = (0..250)
+    (0..250)
         .flat_map(|n| [text_entry(n, &big), text_entry(n + 1000, &unicode)])
-        .collect();
+        .collect()
+}
+
+#[test]
+fn large_non_matching_rows_are_skipped() {
+    let history = large_non_matching_history();
+    assert!(
+        search(
+            Rows {
+                history: &history,
+                saved: &[]
+            },
+            Mode::Recent,
+            "zzz",
+            None
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+#[ignore = "timing: run alone with the release profile"]
+fn large_non_matching_rows_are_skipped_quickly() {
+    let history = large_non_matching_history();
     let rows = Rows {
         history: &history,
         saved: &[],

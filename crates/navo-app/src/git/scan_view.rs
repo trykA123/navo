@@ -42,6 +42,13 @@ impl ScanView {
         shared.rescan(folder);
         self.shared.1.notify_one();
     }
+
+    /// Rechecks one repository's root in a listing.
+    pub(crate) fn rescan_repo(&self, folder: &Location, path: PathBuf) {
+        let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+        shared.rescan_repo(folder, path);
+        self.shared.1.notify_one();
+    }
 }
 
 fn repo(folder: &Location, name: &str, badge: &RepoBadge) -> Option<ScanRepo> {
