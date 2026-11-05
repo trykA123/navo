@@ -6,6 +6,8 @@ mod listing;
 mod queue;
 #[path = "scan_saved.rs"]
 mod saved;
+#[path = "scan_skip.rs"]
+mod skip;
 #[path = "scan_slots.rs"]
 mod slots;
 #[path = "scan_view.rs"]
@@ -35,6 +37,9 @@ const QUEUE_CAP: usize = 256;
 const CACHE_CAP: usize = 256;
 const ROW_CAP: usize = 2000;
 const REPO_CAP: usize = 64;
+/// Most watches or kept proofs held at once.
+#[allow(dead_code, reason = "the watch module arms roots in a later atom")]
+const WATCH_CAP: usize = 64;
 const MIN_PROCESSES: usize = 2;
 const MAX_PROCESSES: usize = 4;
 const CACHE_BYTES: usize = 1024 * 1024;
