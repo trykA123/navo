@@ -29,6 +29,11 @@ fn kept<T: Copy, U>(column: &[T], map: &Remap, live: usize, value: impl Fn(T) ->
 }
 
 impl NameTable {
+    /// Whether dead slots pass a third of all slots, and the table has `min_slots`.
+    pub fn is_sparse(&self, min_slots: u32) -> bool {
+        self.slots() >= min_slots && self.slots() as usize > self.len() + self.len() / 2
+    }
+
     /// Drops removed slots column by column, so only one old column is copied at a time.
     pub fn compact(&mut self) -> Remap {
         let slots = self.slots();
@@ -85,9 +90,30 @@ mod oracle_tests;
 
 #[cfg(test)]
 mod tests {
-    use super::NameTable;
+    use super::{NO_PARENT, NameTable};
     use crate::table::Flags;
     use crate::table::tests::{tree, win};
+
+    #[test]
+    fn is_sparse_once_dead_slots_pass_a_third_of_all_slots() {
+        const MIN_SLOTS: u32 = 100_000;
+        assert!(table_with(150_001, 100_000).is_sparse(MIN_SLOTS));
+        assert!(!table_with(150_000, 100_000).is_sparse(MIN_SLOTS));
+        assert!(!table_with(9, 5).is_sparse(MIN_SLOTS));
+    }
+
+    fn table_with(slots: u32, live: u32) -> NameTable {
+        let mut table = NameTable::new();
+        let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+        for _ in 1..slots {
+            table.push(root, "f", Flags::NONE).unwrap();
+        }
+        for id in live..slots {
+            table.remove(id);
+        }
+        assert_eq!((table.slots(), table.len()), (slots, live as usize));
+        table
+    }
 
     #[test]
     fn remap_get_is_none_for_removed_and_out_of_range_ids() {

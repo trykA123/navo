@@ -258,9 +258,9 @@ fn contains(parent: &Location, location: &Location) -> bool {
         .any(|location| parent.same_place(&location))
 }
 
-/// Compacts once dead slots outnumber live ones, as NTFS does after a doubling.
+/// Compacts once dead slots pass a third of all slots.
 fn compact_if_sparse(table: &mut NameTable) {
-    if table.slots() >= COMPACT_MIN_SLOTS && table.slots() as usize > 2 * table.len() {
+    if table.is_sparse(COMPACT_MIN_SLOTS) {
         drop(table.compact());
     }
 }

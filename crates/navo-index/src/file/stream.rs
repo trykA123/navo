@@ -36,7 +36,7 @@ impl Body<'_> {
             out.write_all(&parent.to_le_bytes())?;
         }
         for &flag in flags {
-            out.write_all(&flag.to_le_bytes())?;
+            out.write_all(&u16::from(flag).to_le_bytes())?;
         }
         let (sizes, counts) = self.table.stored_totals();
         for &size in sizes {
@@ -187,7 +187,7 @@ mod tests {
         let mut entry = [0u8; 20];
         entry[..16].copy_from_slice(&((1u128 << 100) | 8).to_le_bytes());
         let mut reader = CheckedReader::new(&entry[..], &[]);
-        // The one narrow bucket set (84 bytes) fits; the wide one (152 bytes) does not.
+        // The wide map's first table needs more than the 100-byte budget.
         let _failing = fail_allocations_from(100);
         let result = reader.ids(1);
         assert!(matches!(result, Err(FileError::Allocation(_))));

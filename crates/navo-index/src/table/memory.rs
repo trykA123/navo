@@ -1,4 +1,4 @@
-use super::NameTable;
+use super::{NameTable, StoredFlags};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TableMemory {
@@ -18,7 +18,7 @@ impl NameTable {
         TableMemory {
             names: self.names.capacity() + self.offsets.capacity() * size_of::<u32>(),
             tree: self.parents.capacity() * size_of::<u32>()
-                + self.flags.capacity() * size_of::<u16>()
+                + self.flags.capacity() * size_of::<StoredFlags>()
                 + self.children.memory_bytes(),
             totals: self.bytes.capacity() * size_of::<u64>()
                 + self.counts.capacity() * size_of::<(u32, [u32; 2])>(),
@@ -27,6 +27,23 @@ impl NameTable {
 
     pub fn memory_bytes(&self) -> usize {
         self.memory_parts().total()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn column_bytes(&self) -> Vec<(&'static str, usize)> {
+        let mut columns = vec![
+            ("names", self.names.capacity()),
+            ("offsets", self.offsets.capacity() * size_of::<u32>()),
+            ("parents", self.parents.capacity() * size_of::<u32>()),
+            ("flags", self.flags.capacity() * size_of::<StoredFlags>()),
+            ("bytes", self.bytes.capacity() * size_of::<u64>()),
+            (
+                "counts",
+                self.counts.capacity() * size_of::<(u32, [u32; 2])>(),
+            ),
+        ];
+        columns.extend(self.children.column_bytes());
+        columns
     }
 }
 
@@ -54,10 +71,23 @@ mod tests {
     }
 
     #[test]
+    fn column_bytes_sum_to_memory_bytes() {
+        let table = table(10_000);
+        assert_eq!(
+            table
+                .column_bytes()
+                .iter()
+                .map(|(_, bytes)| bytes)
+                .sum::<usize>(),
+            table.memory_bytes()
+        );
+    }
+
+    #[test]
     fn a_table_with_entries_reports_every_part() {
         let parts = table(10).memory_parts();
         assert!(parts.names >= 10 * "file-0.txt".len());
-        assert!(parts.tree >= 12 * (size_of::<u32>() * 4 + size_of::<u16>()));
+        assert!(parts.tree >= 12 * (size_of::<u32>() * 4 + size_of::<StoredFlags>()));
         assert!(parts.totals >= 12 * size_of::<u64>());
         assert_eq!(parts.total(), table(10).memory_bytes());
     }

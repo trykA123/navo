@@ -5,8 +5,8 @@
 
 use super::*;
 use crate::heap_probe::Probe;
-use crate::table::NO_PARENT;
 use crate::table::tests::tree;
+use crate::table::{NO_PARENT, StoredFlags};
 
 #[test]
 fn totals_follow_insert_resize_move_and_subtree_removal() {
@@ -258,7 +258,10 @@ fn rebuilding_totals_needs_only_the_folder_counts() {
 }
 
 /// Reloads `t` through `from_raw_parts` after `edit` changes its parents or flags.
-fn reload(t: &NameTable, edit: impl FnOnce(&mut Vec<u32>, &mut Vec<u16>)) -> Option<NameTable> {
+fn reload(
+    t: &NameTable,
+    edit: impl FnOnce(&mut Vec<u32>, &mut Vec<StoredFlags>),
+) -> Option<NameTable> {
     let (names, offsets, parents, flags) = t.raw_parts();
     let (mut parents, mut flags) = (parents.to_vec(), flags.to_vec());
     edit(&mut parents, &mut flags);

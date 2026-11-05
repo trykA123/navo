@@ -14,7 +14,7 @@ use crate::table::{Flags, NO_PARENT, NameTable};
 use crate::usn::FrnMap;
 
 const ENTRIES: u32 = 1_000_000;
-// Peak budgets: the value measured on Linux at this size, plus 10 per cent.
+// Peak budgets: the value measured on Linux at this size, plus 10 per cent; steady plus 2 per cent.
 // Just past a power of two, where growth by doubling leaves the most unused capacity.
 const GROWN_ENTRIES: u32 = 1_100_000;
 const SCALES: [u32; 2] = [2_000_000, 5_000_000];
@@ -24,8 +24,26 @@ const COMPACT_EXTRA: usize = 32;
 const LOAD_EXTRA: usize = 9;
 const LOAD_FOLDERS_EXTRA: usize = 13;
 const PUSH_EXTRA: usize = 22;
+const STEADY_PER_ENTRY: usize = 52;
 
-fn header() -> Header {
+#[test]
+fn steady_stays_within_budget() {
+    let (index, probe) = steady_index(ENTRIES, 0);
+    let columns: usize = index
+        .table
+        .column_bytes()
+        .iter()
+        .map(|(_, bytes)| bytes)
+        .sum();
+    let accounted = columns + index.ids.memory_bytes();
+    let marked = probe.mark();
+    let retained = held(index, &probe);
+    assert!(retained <= STEADY_PER_ENTRY * ENTRIES as usize);
+    assert!(accounted.abs_diff(retained) <= retained / 100);
+    assert!(marked.abs_diff(retained) <= retained / 100);
+}
+
+pub(super) fn header() -> Header {
     Header {
         volume_serial: 42,
         journal_id: 7,
@@ -36,7 +54,7 @@ fn header() -> Header {
 }
 
 /// Heap bytes the index holds, measured by dropping it.
-fn held(index: NtfsIndex, probe: &Probe) -> usize {
+pub(super) fn held(index: NtfsIndex, probe: &Probe) -> usize {
     let before = probe.read().retained;
     drop(index);
     (before - probe.read().retained).unsigned_abs()
@@ -50,7 +68,7 @@ fn report(case: &str, entries: usize, measured: Measured, per_entry: usize) {
     );
 }
 
-fn save(path: &std::path::Path, index: &NtfsIndex) {
+pub(super) fn save(path: &std::path::Path, index: &NtfsIndex) {
     let (table, ids, position) = index.snapshot().unwrap();
     let header = Header {
         next_usn: position.next_usn,
@@ -60,7 +78,7 @@ fn save(path: &std::path::Path, index: &NtfsIndex) {
 }
 
 /// A root and `entries - 1` files, each file reference one hundred past its id.
-fn flat_index(entries: u32) -> NtfsIndex {
+pub(super) fn flat_index(entries: u32) -> NtfsIndex {
     let mut table = NameTable::new();
     let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
     let mut ids = FrnMap::with_capacity(entries as usize);
@@ -73,6 +91,66 @@ fn flat_index(entries: u32) -> NtfsIndex {
     }
     table.shrink_to_fit();
     NtfsIndex::restore((header(), table, ids), 42, 7).unwrap()
+}
+
+pub(super) fn steady_index(entries: u32, record_gap: u32) -> (NtfsIndex, Probe) {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("steady.index");
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+    let mut ids = FrnMap::with_capacity(entries as usize);
+    ids.insert(5, root);
+    let mut parent = root;
+    for number in 1..entries {
+        let flags = if number % 10 == 0 {
+            Flags::FOLDER
+        } else {
+            Flags::NONE
+        };
+        let id = table
+            .push(
+                if flags == Flags::FOLDER { root } else { parent },
+                &format!("entry-{number:07}.txt"),
+                flags,
+            )
+            .unwrap();
+        if flags == Flags::FOLDER {
+            parent = id;
+        }
+        let gap = number.checked_div(record_gap).unwrap_or(0);
+        ids.insert(u128::from(100 + number + gap), id);
+    }
+    let source = NtfsIndex::restore((header(), table, ids), 42, 7).unwrap();
+    save(&path, &source);
+    drop(source);
+    let probe = Probe::start();
+    let index = NtfsIndex::restore(file::load_with_ids(&path).unwrap(), 42, 7).unwrap();
+    (index, probe)
+}
+
+#[test]
+#[ignore = "steady report"]
+fn steady_report() {
+    for entries in [1_000_000, 2_000_000, 5_000_000] {
+        for gap in [0, 4] {
+            let (index, probe) = steady_index(entries, gap);
+            let columns = index.table.column_bytes();
+            let frn = index.ids.memory_bytes();
+            let total: usize = columns.iter().map(|(_, bytes)| bytes).sum::<usize>() + frn;
+            let retained = held(index, &probe);
+            print!("STEADY {} gap {}:", entries / 1_000_000, gap);
+            for (name, bytes) in columns {
+                print!(" {name} {:.2}", bytes as f64 / f64::from(entries));
+            }
+            println!(
+                " frn {:.2} total {:.2} held {} KiB",
+                frn as f64 / f64::from(entries),
+                total as f64 / f64::from(entries),
+                retained >> 10
+            );
+            assert!(total.abs_diff(retained) <= retained / 100);
+        }
+    }
 }
 
 /// A root, one folder per fourth entry, and the other entries as files inside the last folder.
@@ -109,7 +187,7 @@ fn build_peak(entries: u32) -> (Measured, usize) {
 }
 
 /// Total capacities a previous build suggests, with the one-sixteenth slack.
-fn hint(index: &NtfsIndex) -> SizeHint {
+pub(super) fn hint(index: &NtfsIndex) -> SizeHint {
     let entries = index.table.len();
     let folders = index.table.folder_count();
     let names = index.table.live_name_bytes();
@@ -118,7 +196,6 @@ fn hint(index: &NtfsIndex) -> SizeHint {
         entries,
         folders: (folders + folders / 16).min(entries),
         name_bytes: names + names / 16,
-        references: index.ids.len(),
     }
 }
 

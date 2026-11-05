@@ -19,14 +19,20 @@ pub(super) fn grow_names(names: &mut String, needed: usize) {
     }
 }
 
-pub(super) fn trim_column<T>(column: &mut Vec<T>) {
-    if column.capacity() - column.len() > column.len() / 16 {
+/// Spare capacity an unsized build keeps, as a divisor of the length.
+const UNSIZED_SLACK: usize = 16;
+/// A sized build keeps the hint's sixteenth plus a sixteenth of shrinkage, so a volume slightly
+/// smaller than the old index does not copy a column while both indexes are held.
+const SIZED_SLACK: usize = 8;
+
+pub(super) fn trim_column<T>(column: &mut Vec<T>, slack: usize) {
+    if column.capacity() - column.len() > column.len() / slack {
         column.shrink_to_fit();
     }
 }
 
-fn trim_names(names: &mut String) {
-    if names.capacity() - names.len() > names.len() / 16 {
+fn trim_names(names: &mut String, slack: usize) {
+    if names.capacity() - names.len() > names.len() / slack {
         names.shrink_to_fit();
     }
 }
@@ -49,7 +55,7 @@ impl NameTable {
         self.bytes.try_reserve_exact(additional)?;
         self.counts
             .try_reserve_exact(folders.saturating_sub(self.counts.len()))?;
-        self.children.try_reserve_total(entries)?;
+        self.children.try_reserve_total(entries, folders)?;
         Ok(())
     }
 
@@ -63,13 +69,22 @@ impl NameTable {
 
     /// Drops spare capacity only where it exceeds a sixteenth of the column.
     pub fn trim_slack(&mut self) {
-        trim_names(&mut self.names);
-        trim_column(&mut self.offsets);
-        trim_column(&mut self.parents);
-        trim_column(&mut self.flags);
-        trim_column(&mut self.bytes);
-        trim_column(&mut self.counts);
-        self.children.trim_slack();
+        self.trim_slack_over(UNSIZED_SLACK);
+    }
+
+    /// Drops spare capacity only where it exceeds an eighth of the column; for sized builds.
+    pub fn trim_sized_slack(&mut self) {
+        self.trim_slack_over(SIZED_SLACK);
+    }
+
+    fn trim_slack_over(&mut self, slack: usize) {
+        trim_names(&mut self.names, slack);
+        trim_column(&mut self.offsets, slack);
+        trim_column(&mut self.parents, slack);
+        trim_column(&mut self.flags, slack);
+        trim_column(&mut self.bytes, slack);
+        trim_column(&mut self.counts, slack);
+        self.children.trim_slack(slack);
     }
 
     /// Bytes of live names, each with its terminating NUL. Dead names in the arena do not count.
@@ -93,9 +108,9 @@ impl NameTable {
             && within(self.counts.capacity(), self.counts.len())
             && self
                 .children
-                .capacities()
+                .spares()
                 .into_iter()
-                .all(|capacity| within(capacity, self.offsets.len()))
+                .all(|(capacity, len)| within(capacity, len))
     }
 }
 
@@ -184,9 +199,10 @@ mod tests {
         assert_eq!(table.bytes.capacity(), 100_000);
         assert_eq!(table.counts.capacity(), 10_000);
         assert_eq!(table.names.capacity(), 100_000);
-        for capacity in table.children.capacities() {
-            assert_eq!(capacity, 100_000);
-        }
+        let [(first, _), (next, _), (previous, _)] = table.children.spares();
+        assert!((10_000..=100_000).contains(&first));
+        assert_eq!(next, 100_000);
+        assert_eq!(previous, 100_000);
     }
 
     #[test]
@@ -217,6 +233,43 @@ mod tests {
         table.trim_slack();
         assert_eq!(table.offsets.capacity(), kept);
         assert_eq!(table.names.capacity(), names + 10);
+    }
+
+    /// The 1,000-entry table with total capacities reserved as a sized build would.
+    fn reserved(extra_entries: usize, extra_names: usize) -> NameTable {
+        let mut table = table(1_000);
+        let (names, slots) = (table.names.len(), table.offsets.len());
+        table
+            .try_reserve_total(slots + extra_entries, 1, names + extra_names)
+            .unwrap();
+        table
+    }
+
+    #[test]
+    fn a_sized_trim_keeps_a_reserve_the_build_fell_just_short_of() {
+        // A hint a sixteenth over the old index, for a build a few bytes smaller than it.
+        let built = table(1_000);
+        let (entries, names) = (built.offsets.len() / 16 + 1, built.names.len() / 16 + 8);
+        let mut sized = reserved(entries, names);
+        let kept = (sized.names.capacity(), sized.offsets.capacity());
+        sized.trim_sized_slack();
+        assert_eq!((sized.names.capacity(), sized.offsets.capacity()), kept);
+
+        let mut trimmed = reserved(entries, names);
+        trimmed.trim_slack();
+        assert!(trimmed.names.capacity() < kept.0);
+        assert!(trimmed.offsets.capacity() < kept.1);
+    }
+
+    #[test]
+    fn a_sized_trim_keeps_an_eighth_and_drops_more() {
+        let names = table(1_000).names.len();
+        let mut at = reserved(0, names / 8);
+        at.trim_sized_slack();
+        assert_eq!(at.names.capacity(), names + names / 8);
+        let mut over = reserved(0, names / 8 + 1);
+        over.trim_sized_slack();
+        assert!(over.names.capacity() < names + names / 8);
     }
 
     #[test]

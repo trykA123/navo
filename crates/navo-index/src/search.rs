@@ -341,3 +341,7 @@ mod worker_filter_tests {
         assert!(created.load(std::sync::atomic::Ordering::Relaxed) >= 1);
     }
 }
+
+#[cfg(test)]
+#[path = "search/timing_tests.rs"]
+mod timing_tests;

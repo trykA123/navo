@@ -14,6 +14,7 @@ use crate::fuzzy::{Fuzzy, Match};
 pub use change::TableChange;
 use children::Children;
 pub use flags::Flags;
+pub(crate) use flags::StoredFlags;
 pub use folder_lookup::{FolderLookup, FolderLookupExpired};
 pub use memory::TableMemory;
 pub use totals::Totals;
@@ -39,7 +40,7 @@ pub struct NameTable {
     names: String,
     offsets: Vec<u32>,
     parents: Vec<u32>,
-    flags: Vec<u16>,
+    flags: Vec<StoredFlags>,
     children: Children,
     bytes: Vec<u64>,
     counts: Vec<(u32, [u32; 2])>,
@@ -90,21 +91,16 @@ impl NameTable {
         self.counts.shrink_to_fit();
     }
 
-    pub(crate) fn raw_parts(&self) -> (&str, &[u32], &[u32], &[u16]) {
+    pub(crate) fn raw_parts(&self) -> (&str, &[u32], &[u32], &[StoredFlags]) {
         (&self.names, &self.offsets, &self.parents, &self.flags)
     }
 
     pub(crate) fn from_raw_parts(
         names: String,
-        arrays: (Vec<u32>, Vec<u32>, Vec<u16>),
+        arrays: (Vec<u32>, Vec<u32>, Vec<StoredFlags>),
         totals: (Vec<u64>, Vec<[u32; 2]>),
     ) -> Option<Self> {
         let (offsets, parents, flags) = arrays;
-        let valid_flags = Flags::FOLDER.bits()
-            | Flags::HIDDEN.bits()
-            | Flags::SYSTEM.bits()
-            | Flags::REPARSE.bits()
-            | Flags::DELETED;
         if offsets.len() != parents.len()
             || offsets.len() != flags.len()
             || offsets.len() != totals.0.len()
@@ -112,7 +108,7 @@ impl NameTable {
             || u32::try_from(offsets.len()).is_err()
             || u32::try_from(names.len()).is_err()
             || (!names.is_empty() && !names.ends_with(NAME_END))
-            || flags.iter().any(|bits| bits & !valid_flags != 0)
+            || flags.iter().any(|bits| bits & !Flags::VALID != 0)
         {
             return None;
         }
@@ -208,7 +204,7 @@ impl NameTable {
         growth::grow_column(&mut self.parents);
         self.parents.push(parent);
         growth::grow_column(&mut self.flags);
-        self.flags.push(Flags::from_stored(flags.bits()).bits());
+        self.flags.push(Flags::from_stored(flags.stored()).stored());
         growth::grow_column(&mut self.bytes);
         self.bytes.push(0);
         if flags.contains(Flags::FOLDER) {
@@ -216,7 +212,8 @@ impl NameTable {
             self.counts.push((id, [0; 2]));
         }
         self.children.reserve_for_push();
-        self.children.add(id, &self.parents);
+        self.children
+            .add(id, &self.parents, flags.contains(Flags::FOLDER));
         self.live += 1;
         let mut descendants = Totals::default();
         for child in self.children.of(id) {
@@ -338,8 +335,11 @@ impl NameTable {
 
     fn relink(&mut self) {
         let flags = &self.flags;
-        self.children =
-            Children::rebuild(&self.parents, |id| flags[id as usize] & Flags::DELETED == 0);
+        self.children = Children::rebuild(
+            &self.parents,
+            |id| flags[id as usize] & Flags::DELETED == 0,
+            |id| flags[id as usize] & Flags::FOLDER.stored() != 0,
+        );
     }
 
     fn mark_deleted(&mut self, id: u32) {

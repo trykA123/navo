@@ -89,6 +89,12 @@ impl Probe {
             retained: live as isize - self.start as isize,
         }
     }
+
+    pub fn mark(&self) -> usize {
+        let live = LIVE.load(Relaxed);
+        PEAK.store(live, Relaxed);
+        live - self.start
+    }
 }
 
 pub const MIB: usize = 1 << 20;

@@ -87,7 +87,6 @@ pub struct SizeHint {
     pub entries: usize,
     pub folders: usize,
     pub name_bytes: usize,
-    pub references: usize,
 }
 
 impl NtfsIndex {
@@ -375,6 +374,8 @@ fn recover_rename(index: &NtfsIndex, change: TableChange) -> TableChange {
 mod batch_tests;
 #[cfg(test)]
 mod memory_tests;
+#[cfg(test)]
+mod peak_ratio_tests;
 #[cfg(test)]
 mod peak_tests;
 #[cfg(any(test, feature = "test-support"))]
