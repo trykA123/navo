@@ -50,10 +50,10 @@ impl Engine {
         if outcome == Outcome::Cancelled {
             return Step::Idle;
         }
-        self.attempts.insert(repo.path, now);
         if outcome == Outcome::Fetched {
-            self.ports.watch.rescan(&repo.listing);
+            self.ports.watch.rescan(&repo);
         }
+        self.attempts.insert(repo.path, now);
         Step::Ran
     }
 
