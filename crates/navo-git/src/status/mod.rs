@@ -1,9 +1,11 @@
 mod dirs;
+mod fingerprint;
 mod operation;
 mod parse;
 
 pub use dirs::DirMap;
 pub(crate) use dirs::Severity;
+pub use fingerprint::{Fingerprint, fingerprint};
 
 pub use parse::parse_porcelain_v2;
 

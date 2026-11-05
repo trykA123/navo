@@ -22,7 +22,7 @@ mod results;
 mod saved_restart;
 
 #[derive(Default)]
-struct FakeProbe {
+pub(super) struct FakeProbe {
     repos: HashSet<PathBuf>,
     network: bool,
     probes: AtomicUsize,
@@ -51,7 +51,7 @@ impl Probe for FakeProbe {
 }
 
 impl FakeProbe {
-    fn epoch(&self) -> &'static Instant {
+    pub(super) fn epoch(&self) -> &'static Instant {
         static EPOCH: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
         EPOCH.get_or_init(Instant::now)
     }
@@ -88,32 +88,35 @@ impl StatusSource for FakeSource {
     }
 }
 
-struct Harness {
-    scan: GitScan,
+pub(super) struct Harness {
+    pub(super) scan: GitScan,
     source: Arc<FakeSource>,
-    calls: mpsc::Receiver<(PathBuf, Cancel)>,
-    notices: mpsc::Receiver<u64>,
+    pub(super) calls: mpsc::Receiver<(PathBuf, Cancel)>,
+    pub(super) notices: mpsc::Receiver<u64>,
 }
 
 impl Harness {
-    fn new(probe: Arc<FakeProbe>) -> Self {
+    pub(super) fn new(probe: Arc<FakeProbe>) -> Self {
         Self::build(probe, |ports, notify| {
             GitScan::start_with_limits(ports, &GitSettings::default(), notify, Limits::default())
                 .unwrap()
         })
     }
 
-    fn configured(probe: Arc<FakeProbe>, settings: GitSettings, limits: Limits) -> Self {
+    pub(super) fn configured(probe: Arc<FakeProbe>, settings: GitSettings, limits: Limits) -> Self {
         Self::build(probe, move |ports, notify| {
             GitScan::start_with_limits(ports, &settings, notify, limits).unwrap()
         })
     }
 
-    fn build(probe: Arc<dyn Probe>, start: impl FnOnce(Ports, Notify) -> GitScan) -> Self {
+    pub(super) fn build(
+        probe: Arc<dyn Probe>,
+        start: impl FnOnce(Ports, Notify) -> GitScan,
+    ) -> Self {
         Self::build_saved(probe, None, start)
     }
 
-    fn with_saved(probe: Arc<FakeProbe>, saved: Arc<dyn SavedBadges>) -> Self {
+    pub(super) fn with_saved(probe: Arc<FakeProbe>, saved: Arc<dyn SavedBadges>) -> Self {
         Self::build_saved(probe, Some(saved), |ports, notify| {
             let (settings, limits) = (GitSettings::default(), Limits::default());
             GitScan::start_with_limits(ports, &settings, notify, limits).unwrap()
@@ -148,11 +151,11 @@ impl Harness {
         }
     }
 
-    fn reply(&self, result: Result<RepoStatus, ScanError>) {
+    pub(super) fn reply(&self, result: Result<RepoStatus, ScanError>) {
         self.source.replies.lock().unwrap().push_back(result);
     }
 
-    fn observe(&self, folder: &str, generation: u64, names: &[&str]) {
+    pub(super) fn observe(&self, folder: &str, generation: u64, names: &[&str]) {
         self.scan.observe(
             &location(folder),
             generation,
@@ -166,11 +169,15 @@ impl Harness {
         );
     }
 
-    fn next(&self) -> (PathBuf, Cancel) {
+    pub(super) fn next(&self) -> (PathBuf, Cancel) {
         self.calls.recv_timeout(Duration::from_secs(3)).unwrap()
     }
 
-    fn wait(&self, folder: &str, ready: impl Fn(&FolderBadges) -> bool) -> Arc<FolderBadges> {
+    pub(super) fn wait(
+        &self,
+        folder: &str,
+        ready: impl Fn(&FolderBadges) -> bool,
+    ) -> Arc<FolderBadges> {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             let current = self.scan.badges(&location(folder));
@@ -182,17 +189,31 @@ impl Harness {
                 .unwrap();
         }
     }
+
+    pub(super) fn revision(&self, folder: &str) -> u64 {
+        self.scan
+            .badges(&location(folder))
+            .map_or(0, |badges| badges.revision)
+    }
+
+    pub(super) fn wait_parked(&self) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !self.scan.shared.0.lock().unwrap().parked {
+            assert!(Instant::now() < deadline, "the idle scanner never slept");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
 }
 
-fn location(folder: &str) -> Location {
+pub(super) fn location(folder: &str) -> Location {
     Location::new(folder).unwrap()
 }
-fn status_with(records: &[u8]) -> RepoStatus {
+pub(super) fn status_with(records: &[u8]) -> RepoStatus {
     let mut output = b"# branch.oid (initial)\0# branch.head main\0".to_vec();
     output.extend_from_slice(records);
     parse_porcelain_v2(&output, false).unwrap()
 }
-fn clean() -> RepoStatus {
+pub(super) fn clean() -> RepoStatus {
     status_with(b"")
 }
 fn probe(repos: &[&str]) -> Arc<FakeProbe> {

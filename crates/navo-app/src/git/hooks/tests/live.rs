@@ -86,7 +86,7 @@ impl Watch for OneRepo {
         }]
     }
 
-    fn rescan(&self, _: &Location) {}
+    fn rescan(&self, _: &ScanRepo) {}
 
     fn drive_class(&self, _: &Location) -> DriveClass {
         DriveClass::Removable

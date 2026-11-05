@@ -336,7 +336,7 @@ impl NavoWindow {
         cx.notify();
     }
 
-    fn git_rescan(&mut self, listing: Location) {
+    pub(super) fn git_rescan(&mut self, listing: Location) {
         self.git_menu.cache = None;
         let Some(hooks) = self.git_badges.hooks() else {
             return;

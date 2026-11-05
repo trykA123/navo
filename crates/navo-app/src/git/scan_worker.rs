@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
@@ -10,12 +10,14 @@ use std::time::Instant;
 use navo_core::Location;
 use navo_fs::DriveClass;
 use navo_git::status::RepoStatus;
-use navo_ui::git::FolderBadges;
 
-use super::cache::{Cache, Cached};
+use super::cache::Cache;
 use super::listing::{self, Discovered};
+use super::plan::{Check, Input, Plan, Timer, fill};
 use super::queue::{Listing, Request, Shared};
+use super::skip::MAX_PROOF_AGE;
 use super::slots::Slot;
+use super::watches::root_key;
 use super::{Cancel, Limits, Notify, Ports, STOP_WAIT, SavedBadges, ScanError, Slots, TICK};
 
 type State = Arc<(Mutex<Shared>, Condvar)>;
@@ -50,9 +52,17 @@ struct Call {
     cancel: Cancel,
     thread: JoinHandle<()>,
     result: Receiver<Result<RepoStatus, ScanError>>,
+    check: Check,
     deadline: Instant,
     timed_out: bool,
     _slot: Slot,
+}
+
+struct Done {
+    listing: Arc<Listing>,
+    root: PathBuf,
+    check: Check,
+    result: Result<RepoStatus, ScanError>,
 }
 
 struct Scanner {
@@ -60,8 +70,11 @@ struct Scanner {
     ports: Ports,
     config: Config,
     cache: Cache,
+    plan: Plan,
     listings: HashMap<Location, Discovered>,
     calls: Vec<Call>,
+    /// The `Shared::held` count the watches were last pruned at.
+    held: u64,
     /// A network probe helper is still running.
     network_probe: Arc<AtomicBool>,
 }
@@ -72,13 +85,16 @@ pub(super) fn spawn(shared: State, ports: Ports, config: Config) -> io::Result<R
         .name("navo-git-scan".into())
         .spawn(move || {
             let cache = primed(ports.saved.as_deref());
+            let plan = Plan::new(ports.probe.clone());
             let mut scanner = Scanner {
                 shared,
                 ports,
                 config,
                 cache,
+                plan,
                 listings: HashMap::new(),
                 calls: Vec::new(),
+                held: 0,
                 network_probe: Arc::default(),
             };
             scanner.run();
@@ -94,8 +110,11 @@ impl Scanner {
     fn run(&mut self) {
         loop {
             self.collect();
+            self.due();
             self.listings
                 .retain(|_, found| !found.listing.cancelled.is_cancelled());
+            self.plan.retain(&self.listings);
+            self.release_watches();
             let slot = self.config.slots.try_acquire();
             let Some(request) = self.next_request(slot.is_some()) else {
                 return;
@@ -110,19 +129,48 @@ impl Scanner {
         }
     }
 
+    /// Releases watches once the held folders change, so none outlives its listing (R3).
+    fn release_watches(&mut self) {
+        let held: Vec<PathBuf> = {
+            let shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if shared.held == self.held {
+                return;
+            }
+            self.held = shared.held;
+            let listings = shared.active.values();
+            listings.map(|entry| entry.listing.path.clone()).collect()
+        };
+        self.plan.keep_watches(&held);
+    }
+
     fn next_request(&self, has_slot: bool) -> Option<Option<Request>> {
         let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
         (!shared.stopped).then(|| shared.pop(has_slot))
     }
 
-    /// Sleeps until a request or a stop; polls only while a call runs or a request waits for a slot.
+    /// Sleeps until a request, a stop or a deadline; polls only while a call runs or a request
+    /// waits for a slot.
     fn wait(&self) {
         let shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
-        if shared.stopped {
+        if shared.stopped || shared.held != self.held {
             return;
         }
         if !self.calls.is_empty() || !shared.queue.is_empty() {
             let _wait = self.shared.1.wait_timeout(shared, TICK);
+            return;
+        }
+        if let Some(next) = self.plan.next() {
+            let wait = next.saturating_duration_since(self.ports.probe.now());
+            #[cfg(test)]
+            let shared = mark_parked(shared, true);
+            let (shared, _) = self
+                .shared
+                .1
+                .wait_timeout(shared, wait)
+                .unwrap_or_else(PoisonError::into_inner);
+            #[cfg(test)]
+            let shared = mark_parked(shared, false);
+            drop(shared);
             return;
         }
         #[cfg(test)]
@@ -142,37 +190,37 @@ impl Scanner {
             return;
         }
         let found = self.discover(&listing);
-        let keeps = !found.slow && !found.roots.is_empty() && self.lock().shows_badges(&listing);
-        let revision = if keeps {
+        let input = {
             let mut shared = self.lock();
-            if shared.is_current(&listing) {
-                shared.push_all(&listing, &found.roots);
+            Input {
+                forced: shared.take_forced(&listing),
+                forcing: shared.forcing(&listing),
+                shows: shared.shows_badges(&listing),
             }
-            None
-        } else {
-            self.publish_cached(&listing, &found)
         };
+        let decision = self.plan.plan(&mut self.cache, &found, input);
+        let revision = self.plan.publish(&self.shared.0, &found, decision);
         self.listings.insert(listing.folder.clone(), found);
         self.notify(revision);
     }
 
-    fn publish_cached(&mut self, listing: &Arc<Listing>, found: &Discovered) -> Option<u64> {
-        let mut badges = FolderBadges {
-            slow_drive: found.slow,
-            ..FolderBadges::default()
-        };
-        for root in &found.roots {
-            if let Some(mut cached) = self.cache.get(root) {
-                cached.stale = true;
-                fill(&mut badges, found, root, &cached);
+    /// Runs the deadlines that are due, dropping those whose listing is gone.
+    fn due(&mut self) {
+        let now = self.ports.probe.now();
+        for timer in self.plan.pop_due(now) {
+            let listing = timer.listing();
+            let Some(found) = self.listings.get(&listing.folder) else {
+                continue;
+            };
+            if !Arc::ptr_eq(&found.listing, &listing) {
+                continue;
             }
+            let revision = match timer {
+                timer @ Timer::Confirm { .. } => self.plan.confirm(&self.shared.0, found, timer),
+                timer @ Timer::Expire { .. } => self.plan.expire(&self.shared.0, found, timer),
+            };
+            self.notify(revision);
         }
-        let mut shared = self.lock();
-        let revision = shared.publish(listing, badges);
-        if revision.is_some() {
-            shared.push_all(listing, &found.roots);
-        }
-        revision
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Shared> {
@@ -196,6 +244,11 @@ impl Scanner {
         if cancel.is_cancelled() {
             return;
         }
+        let upstream = self
+            .cache
+            .get(&root)
+            .and_then(|cached| cached.root.upstream.clone());
+        let check = self.plan.check(&root, upstream);
         let source = self.ports.source.clone();
         let token = cancel.clone();
         let path = root.clone();
@@ -217,13 +270,19 @@ impl Scanner {
                 cancel,
                 thread,
                 result,
+                check,
                 deadline: Instant::now() + self.config.limits.status_timeout,
                 timed_out: false,
                 _slot: slot,
             }),
             Err(error) => {
                 tracing::warn!(%error, "cannot start Git status worker");
-                self.finish(&listing, root, Err(ScanError::Failed));
+                self.finish(Done {
+                    listing,
+                    root,
+                    check,
+                    result: Err(ScanError::Failed),
+                });
             }
         }
     }
@@ -250,7 +309,12 @@ impl Scanner {
             tracing::warn!("git status worker panicked");
         }
         if !call.timed_out {
-            self.finish(&call.listing, call.root, result.as_ref().map_err(|e| *e));
+            self.finish(Done {
+                listing: call.listing,
+                root: call.root,
+                check: call.check,
+                result,
+            });
         }
     }
 
@@ -261,29 +325,41 @@ impl Scanner {
         }
         call.timed_out = true;
         call.cancel.cancel();
-        let listing = call.listing.clone();
-        let root = call.root.clone();
-        self.finish(&listing, root, Err(ScanError::TimedOut));
+        let done = Done {
+            listing: call.listing.clone(),
+            root: call.root.clone(),
+            check: call.check.clone(),
+            result: Err(ScanError::TimedOut),
+        };
+        self.finish(done);
     }
 
-    fn finish(
-        &mut self,
-        listing: &Arc<Listing>,
-        root: PathBuf,
-        result: Result<&RepoStatus, ScanError>,
-    ) {
+    fn finish(&mut self, done: Done) {
+        let Done {
+            listing,
+            root,
+            check,
+            result,
+        } = done;
         let Some(found) = self.listings.get(&listing.folder) else {
             return;
         };
-        if !Arc::ptr_eq(&found.listing, listing) {
+        if !Arc::ptr_eq(&found.listing, &listing) {
             return;
         }
-        let cached = listing::project(result, &found.bindings, &root);
+        let cached = listing::project(
+            result.as_ref().map_err(|error| *error),
+            &found.bindings,
+            &root,
+        );
+        let at = self.ports.probe.now();
+        self.plan.expire_at(&listing, &root, at + MAX_PROOF_AGE);
         let revision = {
             let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if !shared.is_current(listing) {
+            if !shared.is_current(&listing) {
                 return;
             }
+            shared.forced_done(&listing, &root_key(&root));
             let mut badges = shared
                 .active
                 .get(&listing.folder)
@@ -291,8 +367,9 @@ impl Scanner {
                 .cloned()
                 .unwrap_or_default();
             fill(&mut badges, found, &root, &cached);
-            shared.publish(listing, badges)
+            shared.publish(&listing, badges)
         };
+        self.plan.finish(&root, check, &result);
         if result.is_ok() {
             if let Some(saved) = &self.ports.saved {
                 saved.save(&root, &cached);
@@ -339,18 +416,4 @@ fn primed(saved: Option<&dyn SavedBadges>) -> Cache {
         cache.insert(root, cached);
     }
     cache
-}
-
-fn fill(badges: &mut FolderBadges, found: &Discovered, root: &Path, cached: &Cached) {
-    if found.parent.as_deref() == Some(root) {
-        badges.repository = Some(cached.repo());
-    }
-    for binding in found.bindings.iter().filter(|b| b.root == root) {
-        if let Some(badge) = cached.row(&binding.relative) {
-            if !badge.is_root {
-                badges.roots.insert(binding.name.clone(), cached.repo());
-            }
-            badges.by_name.insert(binding.name.clone(), badge);
-        }
-    }
 }

@@ -396,6 +396,16 @@ fn kind_of_io(kind: io::ErrorKind) -> FsErrorKind {
     }
 }
 
+/// The volume root that contains `path`, spelled by the nearest ancestor of `path`.
+#[cfg(windows)]
+pub fn volume_mount_point(path: &Path) -> io::Result<PathBuf> {
+    let mount = win_volume::mount_point(path)?;
+    path.ancestors()
+        .find(|level| win_volume::is_mount_point(level, &mount))
+        .map(Path::to_path_buf)
+        .ok_or_else(|| io::Error::other(format!("{} has no volume mount point", path.display())))
+}
+
 pub fn native_identity(path: &std::path::Path) -> std::io::Result<Option<crate::FileIdentity>> {
     identity::read(path)
 }

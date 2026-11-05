@@ -27,6 +27,8 @@ pub(super) struct Discovered {
     pub parent: Option<PathBuf>,
     /// The probe gave up on a slow drive.
     pub slow: bool,
+    /// Discovery hit `REPO_CAP` and left roots out.
+    pub truncated: bool,
 }
 
 impl Discovered {
@@ -37,6 +39,7 @@ impl Discovered {
             roots: Vec::new(),
             parent: None,
             slow: false,
+            truncated: false,
         }
     }
 
@@ -126,6 +129,7 @@ pub(super) fn discover(
             continue;
         };
         if !roots.contains(root) && roots.len() >= REPO_CAP {
+            found.truncated = true;
             continue;
         }
         if roots.insert(root.clone()) {

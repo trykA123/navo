@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use navo_core::{CommandError, LayoutError, Location, OpKind, StateError};
+use navo_core::{Command, CommandError, LayoutError, Location, OpKind, StateError};
 
 use super::NavoWindow;
 use super::shell_menu::put_paths_on_clipboard;
@@ -139,6 +139,22 @@ impl NavoWindow {
 
     pub(super) fn show_notice(&mut self, notice: StatusNotice) {
         self.clipboard.notice = Some(notice);
+    }
+
+    /// Shows a refusal; a refresh that went through also rechecks the focused local listing's Git badges.
+    pub(super) fn show_command_result(
+        &mut self,
+        command: &Command,
+        result: Result<(), CommandError>,
+    ) {
+        let refreshed = matches!(command, Command::PaneRefresh) && result.is_ok();
+        self.show_refusal(result);
+        let state = self.browser.state();
+        let pane = state.pane(state.focused_pane());
+        let listing = pane.map(|pane| pane.active().location().clone());
+        if let Some(listing) = listing.filter(|listing| refreshed && listing.is_local()) {
+            self.git_rescan(listing);
+        }
     }
 
     pub(super) fn show_refusal(&mut self, result: Result<(), CommandError>) {

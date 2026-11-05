@@ -17,6 +17,11 @@ pub(crate) struct Translate {
 }
 
 impl Translate {
+    #[cfg(target_os = "linux")]
+    pub(crate) fn has_pending_move(&self) -> bool {
+        self.moved_from.is_some()
+    }
+
     pub(crate) fn feed(&mut self, kind: RawKind, name: ProviderPath, out: &mut Vec<WatchChange>) {
         if let RawKind::MovedTo(cookie) = kind {
             let change = self.moved_to(cookie, name, out);

@@ -45,6 +45,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### Fixed
 
+- Renaming a file in an open Linux folder no longer occasionally looks like deleting one file and adding another.
 - After a crash, Navo puts a file back that an interrupted copy, move or save had set aside, and it now writes that step to disk before it forgets the undo record. A power loss at that moment can no longer leave the original stranded.
 
 ### Backend branch
