@@ -19,7 +19,6 @@ Finished plans were removed on 2026-11-04; they stay in git history. Plans still
 - [2026-10-28-speed](2026-10-28-speed.md)
 - [2026-10-29-speed-atoms](2026-10-29-speed-atoms.md)
 - [2026-11-04-keys-and-mouse](2026-11-04-keys-and-mouse.md)
-- [2026-11-05-index-layout](2026-11-05-index-layout.md)
 
 **Parked**
 
@@ -46,6 +45,15 @@ Finished plans were removed on 2026-11-04; they stay in git history. Plans still
 - [2026-10-25-backend-review-index](2026-10-25-backend-review-index.md)
 - [2026-10-25-opus-backend-fixes](2026-10-25-opus-backend-fixes.md)
 - [2026-10-30-mimalloc-ab](2026-10-30-mimalloc-ab.md)
+
+## Completed for v0.3.0
+
+These plans remain available as validation evidence:
+
+- [Shared listing](2026-11-05-shared-listing.md)
+- [Git status reuse](2026-11-05-git-skip.md)
+- [Smaller index layout](2026-11-05-index-layout.md)
+- [Linux rename notifications](2026-11-05-linux-watch-rename.md)
 
 ## Model tiers
 

@@ -1,6 +1,8 @@
 # Navo roadmap
 
-Updated 5 November 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
+Updated 5 November 2026. This document tracks current implementation status. The [original visual outline](../design/roadmap.html) shows the milestone scope. Scope and priority decisions are in [decisions.md](decisions.md), especially D85 and D106. Plain-language specs are in [features/](features/).
+
+Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versions; a feature release increments the minor version. Windows packages are on [GitHub releases](https://github.com/trykA123/navo/releases).
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
@@ -36,65 +38,56 @@ Exit: the spike meets the targets on Linux and a Windows PC, otherwise D2 is reo
 
 ## v1 Alpha · done
 
-Goal: a file manager the owner can use every day on Windows.
+The owner signed off the Alpha on 4 November 2026, released as v0.2.0 with the separate navo-bench tool. Daily-use and performance follow-ups continue below; they do not reopen the signed-off milestone.
 
-Signed off by the owner on 4 November 2026 and released as v0.2.0, together with the navo-bench benchmark tool. The remaining Windows checks and the heavy benchmark happen during daily use. Stage names (alpha, beta) are milestones, not version numbers; versions follow D106.
-
-All four alpha features are built. They are in the pre-release alpha-2026-10-26. Status is shown instead of percentages, because the old percentages mixed building with release checks.
-
-| Feature | Built | Still open |
+| Feature | Delivered | Follow-up |
 | --- | --- | --- |
-| Multi-select and drag and drop | Marking, drops between panes, folders, tabs, path crumbs and drives, Alt-drop shortcuts, drag to and from Explorer, right-button drop choices, auto-scroll near list edges, and folders, tabs and drives that open on hover | Checked by the owner on a Windows PC. Linux external drops are Copy-only. |
-| Rich ELF and MAP | Rich views, memory models, companion discovery and live module prefixes | Final review and Windows checks |
-| Ctrl+K command center | Commands, recent files, tabs, folder and path sources, disk index, Search settings and the optional Windows service | Works on a Windows PC; the owner checks again with the leaner index service |
-| Multi-rename | Journaled rename with safe undo and crash recovery; edited, imported, pasted and copied names; sorting, ordering and folder counters; optional rename log. Rename works on FAT and exFAT drives; undo there checks size and time first. | Checked by the owner on a Windows PC. The FAT and exFAT check is set aside for now. |
+| Multi-select and drag and drop | Marking, drops between panes, folders, tabs, path crumbs and drives, shortcuts, drag to and from Explorer, right-button choices and auto-scroll | Owner checked Explorer drag. Linux external drops are Copy-only. |
+| Rich ELF and MAP | Rich views, memory models, companion discovery and live module prefixes | Validate the reviewed Rich views on a Windows desktop |
+| Ctrl+K command center | Commands, recent files, tabs, folder and path sources, disk index, Search settings and the optional index service | Real-volume memory and large-index measurements |
+| Multi-rename | Journaled rename and undo, crash recovery, edited and imported names, sorting, counters and optional rename log | Owner checked rename. The FAT/exFAT USB check is set aside. |
 
-Windows CI is green: 7,118 tests passed. Linux passed all 10 gate steps.
+The delivered app also includes:
 
-Merged after that release: six built-in colour themes. They are Open sea (the default), Red bill, Black cap, Fine mesh, Grain, and Ink and amber. Each has a light and a dark form. Pick one in Settings > Appearance > Colour theme. It applies at once.
+- Two panes, tabs, navigation history, session restore, file operations, selection, virtual lists, the viewer and activity strip.
+- Six colour themes: Open sea, Red bill, Black cap, Fine mesh, Grain, and Ink and amber, each in light and dark forms.
+- The Navo name and `n_` icon. The old Ferrite profile moves to Navo with crash recovery; the preserved old folder is named `Ferrite.migrated-to-navo`.
+- The Windows start-up splash, shown only when start-up exceeds half a second, and the styled Windows shell menu with classic-menu fallback.
+- The user guide on Shift+F1, tray and summon support, faster start, earlier PDF availability and quiet idle behavior.
+- Setup.exe and the portable zip on the release page. The installer is already shipping.
 
-### Merged since that release
+## Release scope · v0.3.0
 
-- **Navo.** The app has a new name and the `n_` icon. Your Navo profile (settings, tabs, history) moves to Navo once, safely, with crash recovery. The old folder is renamed to "Navo.migrated-to-navo". An installed Navo Index service is upgraded from a one-time notice.
-- **Start-up splash.** A small native Windows window with the `n_` icon and the "navo" wordmark. It shows only when start-up takes longer than half a second, and fades out. It does not appear on Linux.
-- **New right-click menu.** The real Windows shell menu in Navo's style. The filter sits at the top. Submenus open in place, with a back row. Shift adds the extended items. If anything fails, the classic Windows menu opens instead.
-- **Fixes from the final reviews** of the Ctrl+K index service and of Rich ELF and MAP.
+The three parts below are implemented and merged on main. They add to the existing v0.2.3 app.
 
-### Done in v0.3.0
+| Change | Completed behavior | Evidence |
+| --- | --- | --- |
+| Faster folders | Tabs share folder rows and sorted views. Sorts and filters avoid copying every row. | [Shared listing plan](../plans/2026-11-05-shared-listing.md) |
+| Git badges skip unchanged repositories | A recent status can be reused when a live watch and Git fingerprint prove no change. Watches cover the listing folder, its ancestors and direct children. Refresh, Git commands and returning to a left folder force a check. | [Git skip plan](../plans/2026-11-05-git-skip.md), D111 |
+| Smaller file index | About 97 MiB per two million entries in the synthetic fixture, with compatible version-three snapshots and measured rebuild limits. | [Index layout plan](../plans/2026-11-05-index-layout.md), D109 |
 
-- **Faster folders:** tabs share folder rows and sorted views; sorts and filters avoid copying every row.
-- **Git badges skip unchanged repositories:** watches cover the open folder, its parents and direct children. Refresh and Git commands check again.
-- **Leaner index:** about 97 MiB per two million entries in the synthetic fixture, with snapshot compatibility and measured rebuild limits. Real-volume VM memory measurements remain unavailable because the required test volumes and service are absent.
+Also included: the Linux rename-notification fix and targeted dependency updates. The watched-folder size/date fix and earlier cache, fuzzy-search, table-sort and PDF-search optimizations shipped in v0.2.3.
 
-### Now in progress
+Windows VM checks, host gates, snapshot compatibility checks and release search timings passed. The real-volume VM memory procedure remains unavailable: the required test volumes and service are absent. The synthetic result is not a whole-service private-memory measurement.
 
-Status on 5 November 2026:
+## Active work
 
-- **In-app updates (built, VM test next):** a test feed for tester builds and a nine-case install and update test in the Windows VM.
+- **In-app update validation:** the updater and Restart flow are built. The tester-only folder feed and nine-case end-to-end VM suite are **not built**. Service-update/migration verification and the final updater review remain open before v1.0; see IX8q, IX8r and IX8s in the [beta plan](../plans/2026-10-27-beta.md).
+- **Compare and sync:** engine work has landed for large-file reading, text differences, parallel content checks and Git revisions. The compare screen and sync workflow remain; see the [compare plan](../plans/2026-10-20-p42-compare.md).
+- **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
+- **Beta completion:** finish results-pane appearance and hit lines, background job work and accessibility follow-up, in the priority order below.
 
-- **Compare and sync (v1.0).** The engine is about a third done: big files are read once with steady memory, changes are found down to the word, content checks use every core, and Git repositories can be read at any revision. Next: the compare screen, then sync.
-- **Installer.** Setup.exe ships with the next pre-release, next to the portable zip. Updates from inside the app follow.
-- **Safer undo for moves.** Ctrl+Z after a move checks that each file is still the same one before it moves it back.
+### Validation still to finish
 
-Done since 27 October: the fixes from the owner's testing (pane keys, self-saving workspaces, tab drag between panes, system defaults, settings badges), the user guide (Shift+F1), Navo in the tray, faster start, PDFs ready sooner, quiet when idle, and colours from the theme everywhere. Release builds no longer carry performance or trace tooling; that lives in a separate tester build.
+- Windows desktop follow-up for Rich ELF/MAP, profile migration, the splash and the leaner index service. Explorer drag and multi-rename are checked; the FAT/exFAT USB check remains set aside.
+- A heavy Windows benchmark covering millions of indexed files, search latency, long lists, memory and animation smoothness.
+- The long daily-use check for lost or damaged files.
 
-Still open for alpha sign-off:
-
-- Owner checks on a Windows PC: the leaner index service, the Rich ELF and MAP views, the profile move to Navo, and the splash. Explorer drag and multi-rename are checked; the FAT or exFAT USB stick check is set aside for now.
-- A heavy benchmark: millions of indexed files, search latency, long lists, memory, and animation smoothness recorded on a Windows PC.
-- Two weeks of daily use with no lost or damaged files.
-
-The latest downloadable alpha is the pre-release alpha-2026-10-26d. It has all four alpha features, the colour themes, the splash and the new right-click menu. The Navo rename comes in the next build. DBC/A2L viewer screens, automotive colours and viewer chrome are beta work (D75).
-
-The foundation already includes two panes, tabs, history, session restore, file operations, virtual lists, themes, the viewer, selection and the activity strip. The beta and later phases below retain their existing scope.
-
-Exit: two weeks of daily use on a Windows PC with no lost or damaged files.
-
-## v1 Beta
+## v1 Beta · in progress
 
 Goal: fast search, workspaces and tiled panes, safe deletes.
 
-The owner reordered the beta on 27 October 2026 (D85). Built in this order:
+The owner reordered the beta on 27 October 2026 (D85). This is the priority order; each item states its current status:
 
 1. core: search index like Everything: Ctrl+K answers at once from the Navo Index service, even while it updates; no folder walks on NTFS drives; the service starts from its saved index; less memory; a benchmark next to Everything. The busy-answer fix is done. Memory peaks are cut: loading the index and rebuilding it need far less extra memory (load 22 → 8 bytes per file, rebuilds sized from the old index, cleanup a third of before), one drive builds at a time, and network drives are indexed only when you list them, with a cap.
 2. core: delete safety net (D65): Shift+Del and overwrites keep the old files 1–7 days, a "Recently deleted" view, Ctrl+Z restores. On by default since alpha-2026-10-28e; review and docs left.
@@ -102,7 +95,7 @@ The owner reordered the beta on 27 October 2026 (D85). Built in this order:
 4. core: up to four panes, tiled like Hyprland (D80): five layouts and your own on Ctrl+L, split, close, swap and resize from the keyboard, Shift+drag swap, divider drag, a strip in narrow windows. Done.
 5. core: find files by content and attributes in Ctrl+K, with results as a tab you can work in; virtual collections (saved searches, snapshots, files picked by hand). Query, content matcher, collection store, results tab, Ctrl+K modes and Content mode (search inside files, Enter opens at the line) done; results tab look and hit lines next.
 6. module: clipboard history in a Ctrl+K-style palette, as a module you can switch off. Built: it records text, links and file lists you copy, opens with Ctrl+Shift+V or Win+Alt+V from any app, pastes back, and can be paused, cleared or deleted. Saved items (snippets, paths), encrypted secrets and folder notes are built, with a manage view on F2. A pass on a real Windows desktop is done: the pop-up takes focus, secrets clear after 30 s and when Navo quits, and Delete all wipes the data. The summon hotkey and tray are done.
-7. core: background work that never waits: job pools with priorities, folder sizes that cancel when you leave, size on disk, hard links counted once.
+7. core: background work that never waits: job pools with priorities, folder sizes that cancel when you leave, size on disk, hard links counted once. Still planned as B10; existing speed improvements do not complete this work.
 8. core: accessibility basics: Narrator reads lists, dialogs and Ctrl+K, focus visible everywhere, reduced motion, contrast themes, UI scale. Mostly done.
 
 Done earlier in the beta: responsive layout and new fonts (D80), clone a tab into the other pane, open a terminal here, cache sizes in diagnostics, Follow on Windows, the DBC and A2L outline in F3, every shortcut changeable in Shortcuts (conflict checks, hints that show your keys, old keymaps carried over), a right-button setting for Total Commander or Windows behaviour, and your own commands like Total Commander's: a commands file names a program, its arguments (cursor file, marked files, both folders) and a key, and each command runs from the file list or Ctrl+K. Speed pass: large folders sort by size or date about 2.5× faster, many small files copy about 2× faster, and Ctrl+K searches once per 100 ms while a folder walk grows.
@@ -114,7 +107,7 @@ Exit: no open data-safety bugs; start-up and memory targets met in CI.
 Replaces Total Commander for daily work (D39). Parity features are built to beat TC, not copy it.
 
 1. core: compare and sync, better than Beyond Compare where it counts (D40): folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `navo-compare` crate.
-2. infra: signed portable `.exe` and the Velopack installer with in-app updates (D89, replaces the NSIS plan in D73), whose uninstaller also removes the index service; user guide; soak test; steadier Windows tests.
+2. infra: code signing, full installer/update validation, the soak test and steadier Windows tests. The Velopack installer, portable package, user guide and in-app updater are built; the tester feed, nine-case update suite and final review remain open (D89 supersedes D73). The uninstaller includes index-service removal.
 3. core: optional default file manager (Win+E).
 4. core: inspector column with preview and properties, thumbnails, archives as folders (zip, 7z, tar with gz, xz and zst). File details, owner and hashes are done.
 5. core: module registry with runtime on/off and safe mode; settings window generated from module schemas; notifications for long operations.
@@ -130,7 +123,7 @@ Exit: every target is met on a clean Windows 11 machine, and a week of work runs
 
 ## v1.2 · Git
 
-- module: Git: status in the file list, history, diff and the usual commands. Built: status badges on repositories and a menu (click or Alt+G) that hands commit, log and diff to your Git tool, with a safe fast-forward pull and an unforced push; a pass on a real Windows desktop is left.
+- module: the remaining Git history, diff and command workflows. Already built: repository badges, reuse of unchanged status, Alt+G or click menus for the chosen Git tool, fast-forward pull and an unforced push. A real Windows desktop follow-up remains.
 
 ## v2.0 · Open platform
 
