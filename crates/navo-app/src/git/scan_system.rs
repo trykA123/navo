@@ -126,6 +126,8 @@ fn drive_letter(path: &Path) -> Option<u8> {
     }
 }
 
-#[cfg(all(test, windows))]
+// Two attributes: clippy only treats a plain `cfg(test)` module as test code.
+#[cfg(test)]
+#[cfg(windows)]
 #[path = "scan_tests/system_windows.rs"]
 mod tests;
