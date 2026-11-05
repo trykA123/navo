@@ -1,13 +1,5 @@
 //! Repository watches: one subtree watch per unchanged root, with every raw change counted.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the scanner arms repository watches in a later atom"
-    )
-)]
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;

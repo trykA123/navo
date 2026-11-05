@@ -269,10 +269,6 @@ impl Shared {
     }
 
     /// Takes the roots the current scan must force, clearing them.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the scanner reads forced roots in a later atom")
-    )]
     pub fn take_forced(&mut self, listing: &Arc<Listing>) -> Forced {
         if !self.is_current(listing) {
             return Forced::default();

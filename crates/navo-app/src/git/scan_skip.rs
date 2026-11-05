@@ -1,11 +1,6 @@
 //! Pure skip rules: when a kept status may stand in for a new one, and the deadlines
 //! that follow a fresh badge.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the scanner wires the skip plan in a later atom")
-)]
-
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -226,6 +221,10 @@ impl<T> Deadlines<T> {
         self.entries.drain(..due).map(|(_, value)| value).collect()
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "expiry retains deadlines in a later atom")
+    )]
     pub(crate) fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
         self.entries.retain(|(_, value)| keep(value));
     }

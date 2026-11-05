@@ -44,7 +44,10 @@ impl ScanView {
     }
 
     /// Rechecks one repository's root in a listing.
-    #[expect(dead_code, reason = "a fetch uses this scope in a later atom")]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "a fetch uses this scope in a later atom")
+    )]
     pub(crate) fn rescan_repo(&self, folder: &Location, path: PathBuf) {
         let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
         shared.rescan_repo(folder, path);

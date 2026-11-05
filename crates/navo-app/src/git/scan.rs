@@ -2,6 +2,8 @@
 mod cache;
 #[path = "scan_listing.rs"]
 mod listing;
+#[path = "scan_plan.rs"]
+mod plan;
 #[path = "scan_queue.rs"]
 mod queue;
 #[path = "scan_saved.rs"]
@@ -97,10 +99,6 @@ pub(crate) trait Probe: Send + Sync + 'static {
     }
 
     /// The files a status read, or `None` when no proof is safe.
-    #[expect(
-        dead_code,
-        reason = "the scanner reads the fingerprint in a later atom"
-    )]
     fn fingerprint(&self, _root: &Path, _upstream: Option<&str>) -> Option<Fingerprint> {
         None
     }
@@ -111,7 +109,6 @@ pub(crate) trait Probe: Send + Sync + 'static {
     }
 
     /// The volume class of `root`, `Unknown` when it cannot be proven a fixed local volume.
-    #[expect(dead_code, reason = "the scanner reads the class in a later atom")]
     fn root_class(&self, _root: &Path, _listing: &Location) -> DriveClass {
         DriveClass::Unknown
     }
@@ -251,7 +248,10 @@ impl GitScan {
     }
 
     /// Rechecks only the roots whose watch counted a change.
-    #[expect(dead_code, reason = "focus uses this scope in a later atom")]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "focus uses this scope in a later atom")
+    )]
     pub(crate) fn rescan_changed(&self, folder: &Location) {
         let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
         shared.rescan_changed(folder);
