@@ -235,4 +235,7 @@ fn read_array<const N: usize>(input: &mut &[u8]) -> Result<[u8; N], FileError> {
 }
 
 #[cfg(test)]
+#[path = "file/stats_tests.rs"]
+mod stats_tests;
+#[cfg(test)]
 mod tests;
