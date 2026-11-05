@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use navo_core::{Location, ProviderPath};
 use navo_ui::git::FolderBadges;
 
-use super::{Cancel, QUEUE_BYTES, QUEUE_CAP, ROW_CAP, Row};
+use super::watches::root_key;
+use super::{Cancel, QUEUE_BYTES, QUEUE_CAP, REPO_CAP, ROW_CAP, Row};
 
 pub(super) struct Listing {
     pub folder: Location,
@@ -85,9 +86,52 @@ impl Request {
     }
 }
 
+/// What a rescan asks for: only changed roots, every root, or one repository.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Scope {
+    Changed,
+    All,
+    Repo(PathBuf),
+}
+
+/// Roots a scan must check regardless of their proof, by root key.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct Forced {
+    pub all: bool,
+    pub roots: Vec<String>,
+}
+
+impl Forced {
+    fn apply(&mut self, scope: Scope) {
+        match scope {
+            // Changed adds nothing: it is the normal plan, and explicit forces stay.
+            Scope::Changed => {}
+            Scope::All => {
+                self.all = true;
+                self.roots.clear();
+            }
+            Scope::Repo(path) => {
+                if self.all {
+                    return;
+                }
+                let key = root_key(&path);
+                if !self.roots.contains(&key) {
+                    self.roots.push(key);
+                }
+                // More forced roots than discovery can hold is every root.
+                if self.roots.len() > REPO_CAP {
+                    self.all = true;
+                    self.roots.clear();
+                }
+            }
+        }
+    }
+}
+
 pub(super) struct Entry {
     pub listing: Arc<Listing>,
     pub badges: Option<Arc<FolderBadges>>,
+    pub forced: Forced,
 }
 
 #[derive(Default)]
@@ -112,15 +156,19 @@ impl Shared {
         {
             return;
         }
-        let kept = self
-            .active
-            .get(&listing.folder)
-            .and_then(|old| old.badges.clone());
-        self.replace(listing, kept);
+        let old = self.active.get(&listing.folder);
+        let kept = old.and_then(|old| old.badges.clone());
+        let forced = old.map(|old| old.forced.clone()).unwrap_or_default();
+        self.replace(listing, kept, forced);
     }
 
     /// Swaps in a listing; the old badges stay visible until the new scan publishes.
-    fn replace(&mut self, listing: Arc<Listing>, badges: Option<Arc<FolderBadges>>) {
+    fn replace(
+        &mut self,
+        listing: Arc<Listing>,
+        badges: Option<Arc<FolderBadges>>,
+        forced: Forced,
+    ) {
         self.forget(&listing.folder);
         self.order.push_back(listing.folder.clone());
         self.active.insert(
@@ -128,6 +176,7 @@ impl Shared {
             Entry {
                 listing: listing.clone(),
                 badges,
+                forced,
             },
         );
         while self.active.len() > QUEUE_CAP || self.bytes() > QUEUE_BYTES {
@@ -180,19 +229,58 @@ impl Shared {
     }
 
     pub fn rescan(&mut self, folder: &Location) {
+        self.rescan_with(folder, Scope::All);
+    }
+
+    /// Rechecks only the roots whose watch counted a change.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "focus picks this scope in a later atom")
+    )]
+    pub fn rescan_changed(&mut self, folder: &Location) {
+        self.rescan_with(folder, Scope::Changed);
+    }
+
+    /// Rechecks one repository's root; the scanner forces all when it matches no root.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "a fetch picks this scope in a later atom")
+    )]
+    pub fn rescan_repo(&mut self, folder: &Location, path: PathBuf) {
+        self.rescan_with(folder, Scope::Repo(path));
+    }
+
+    fn rescan_with(&mut self, folder: &Location, scope: Scope) {
         let Some(old) = self.active.get(folder) else {
             return;
         };
         let listing = Listing::new(folder, old.listing.generation, old.listing.rows.clone());
         let kept = old.badges.clone();
+        let mut forced = old.forced.clone();
+        forced.apply(scope);
         if self.stopped {
             return;
         }
         if let Some(listing) = listing {
-            self.replace(listing, kept);
+            self.replace(listing, kept, forced);
         } else {
             self.forget(folder);
         }
+    }
+
+    /// Takes the roots the current scan must force, clearing them.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the scanner reads forced roots in a later atom")
+    )]
+    pub fn take_forced(&mut self, listing: &Arc<Listing>) -> Forced {
+        if !self.is_current(listing) {
+            return Forced::default();
+        }
+        self.active
+            .get_mut(&listing.folder)
+            .map(|entry| std::mem::take(&mut entry.forced))
+            .unwrap_or_default()
     }
 
     /// The folder already shows badges that a new scan will replace.
@@ -255,59 +343,5 @@ fn request_bytes(request: &Request) -> usize {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn listing(generation: u64) -> Arc<Listing> {
-        let folder = Location::new("fixture").unwrap();
-        let rows = vec![Row {
-            name: "a".into(),
-            on_screen: true,
-        }];
-        Listing::new(&folder, generation, rows).unwrap()
-    }
-
-    fn shown(shared: &Shared) -> Option<Arc<FolderBadges>> {
-        let folder = Location::new("fixture").unwrap();
-        shared.active.get(&folder)?.badges.clone()
-    }
-
-    fn published(shared: &mut Shared, first: &Arc<Listing>) -> Arc<FolderBadges> {
-        shared.publish(first, FolderBadges::default()).unwrap();
-        shown(shared).unwrap()
-    }
-
-    #[test]
-    fn rescan_keeps_the_badges_until_the_new_scan_publishes() {
-        let mut shared = Shared::default();
-        let first = listing(1);
-        shared.observe(first.clone());
-        let before = published(&mut shared, &first);
-        shared.rescan(&Location::new("fixture").unwrap());
-        assert!(Arc::ptr_eq(&shown(&shared).unwrap(), &before));
-        let current = shared.active.values().next().unwrap().listing.clone();
-        assert!(!Arc::ptr_eq(&current, &first));
-        assert!(first.cancelled.is_cancelled());
-        assert!(shared.is_current(&current));
-    }
-
-    #[test]
-    fn observing_the_same_folder_again_keeps_its_badges() {
-        let mut shared = Shared::default();
-        let first = listing(1);
-        shared.observe(first.clone());
-        let before = published(&mut shared, &first);
-        shared.observe(listing(2));
-        assert!(Arc::ptr_eq(&shown(&shared).unwrap(), &before));
-    }
-
-    #[test]
-    fn forgetting_the_folder_drops_its_badges() {
-        let mut shared = Shared::default();
-        let first = listing(1);
-        shared.observe(first.clone());
-        published(&mut shared, &first);
-        shared.forget(&Location::new("fixture").unwrap());
-        assert!(shown(&shared).is_none());
-    }
-}
+#[path = "scan_tests/queue.rs"]
+mod tests;

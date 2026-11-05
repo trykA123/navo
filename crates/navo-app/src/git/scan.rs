@@ -250,6 +250,14 @@ impl GitScan {
         self.shared.1.notify_one();
     }
 
+    /// Rechecks only the roots whose watch counted a change.
+    #[expect(dead_code, reason = "focus uses this scope in a later atom")]
+    pub(crate) fn rescan_changed(&self, folder: &Location) {
+        let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+        shared.rescan_changed(folder);
+        self.shared.1.notify_one();
+    }
+
     pub(crate) fn badges(&self, folder: &Location) -> Option<Arc<FolderBadges>> {
         self.shared
             .0
