@@ -83,7 +83,8 @@ fn layout_and_messages_match_windows_sys() {
 
 #[test]
 fn testee_runs_in_a_job_shows_a_window_and_counts_posted_keys() {
-    if !has_desktop() {
+    // GitHub runners turn posted letter keys into no characters; the VM covers this test.
+    if !has_desktop() || std::env::var_os("GITHUB_ACTIONS").is_some() {
         return;
     }
     let (_parent, root) = scratch();
