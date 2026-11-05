@@ -1,11 +1,13 @@
 use std::io;
 
-use super::ElevationError;
+use super::{Elevated, ElevationError};
 
 const OTHER: u8 = 1;
 const NOT_REPLACED: u8 = 3;
 const TIMED_OUT: u8 = 4;
 const DENIED: u8 = 5;
+/// Remove finished and Windows deletes its last files at the next restart.
+pub(super) const DEFERRED: u8 = 6;
 
 /// The exit code of an elevated run, so the app that asked can log why it failed.
 pub(super) fn failure_code(error: &io::Error) -> u8 {
@@ -19,9 +21,18 @@ pub(super) fn failure_code(error: &io::Error) -> u8 {
     }
 }
 
-pub(super) fn from_exit_code(code: u32) -> Result<(), ElevationError> {
+/// The exit code of an elevated run that succeeded.
+pub(super) fn success_code(outcome: Elevated) -> u8 {
+    match outcome {
+        Elevated::Done => 0,
+        Elevated::Deferred => DEFERRED,
+    }
+}
+
+pub(super) fn from_exit_code(code: u32) -> Result<Elevated, ElevationError> {
     match code {
-        0 => Ok(()),
+        0 => Ok(Elevated::Done),
+        code if code == u32::from(DEFERRED) => Ok(Elevated::Deferred),
         code => Err(ElevationError::Failed(code)),
     }
 }
@@ -32,7 +43,8 @@ mod tests {
 
     #[test]
     fn elevated_child_exit_code_is_not_lost() {
-        assert!(from_exit_code(0).is_ok());
+        assert!(matches!(from_exit_code(0), Ok(Elevated::Done)));
+        assert!(matches!(from_exit_code(1), Err(ElevationError::Failed(1))));
         assert!(matches!(from_exit_code(7), Err(ElevationError::Failed(7))));
         assert!(!ElevationError::Cancelled.to_string().is_empty());
     }
@@ -44,5 +56,21 @@ mod tests {
         assert_ne!(code, failure_code(&io::Error::other("anything else")));
         let text = ElevationError::Failed(u32::from(code)).to_string();
         assert!(text.contains("old one was kept"), "{text}");
+    }
+
+    #[test]
+    fn exit_code_six_is_a_deferred_success_and_round_trips() {
+        assert!(matches!(from_exit_code(6), Ok(Elevated::Deferred)));
+        for outcome in [Elevated::Done, Elevated::Deferred] {
+            let code = u32::from(success_code(outcome));
+            assert_eq!(from_exit_code(code).unwrap(), outcome);
+        }
+        assert_ne!(DEFERRED, failure_code(&io::Error::other("anything")));
+    }
+
+    #[test]
+    fn code_six_has_its_own_reason() {
+        let text = ElevationError::Failed(6).to_string();
+        assert!(text.contains("next restart"), "{text}");
     }
 }

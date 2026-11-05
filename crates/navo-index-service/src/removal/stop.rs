@@ -1,8 +1,7 @@
 use std::io;
 use std::time::Duration;
 
-/// The whole elevated remove, stop and files included; inside the app's 25 s budget.
-pub(crate) const REMOVE_DEADLINE: Duration = Duration::from_secs(20);
+pub(crate) use crate::REMOVE_DEADLINE;
 pub(crate) const STOP_LIMIT: Duration = Duration::from_secs(12);
 pub(crate) const PROCESS_WAIT: Duration = Duration::from_secs(5);
 pub(crate) const POLL: Duration = Duration::from_millis(100);

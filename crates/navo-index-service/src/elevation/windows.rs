@@ -24,14 +24,14 @@ use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
 use super::Action;
 use super::elevation_result::from_exit_code;
-use crate::ElevationError;
+use crate::{Elevated, ElevationError};
 
 pub(super) fn is_admin() -> bool {
     // SAFETY: IsUserAnAdmin inspects the calling process token without pointer arguments.
     unsafe { IsUserAnAdmin() != 0 }
 }
 
-pub(super) fn launch(action: Action) -> Result<(), ElevationError> {
+pub(super) fn launch(action: Action) -> Result<Elevated, ElevationError> {
     let mode = match action {
         Action::Install => "install",
         Action::Remove => "remove",
@@ -67,7 +67,7 @@ pub(super) fn launch(action: Action) -> Result<(), ElevationError> {
     wait_for_child(info.hProcess)
 }
 
-fn wait_for_child(raw: *mut c_void) -> Result<(), ElevationError> {
+fn wait_for_child(raw: *mut c_void) -> Result<Elevated, ElevationError> {
     if raw.is_null() {
         return Err(io::Error::other("elevation returned no process handle").into());
     }

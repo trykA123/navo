@@ -45,6 +45,15 @@ impl Cleanup {
         self.scheduled.is_empty() && self.unknown.is_empty()
     }
 
+    /// Deferred when anything waits for a restart; kept unknown files do not defer.
+    pub(crate) fn outcome(&self) -> crate::Elevated {
+        if self.scheduled.is_empty() {
+            crate::Elevated::Done
+        } else {
+            crate::Elevated::Deferred
+        }
+    }
+
     pub(crate) fn extend(&mut self, other: Self) {
         self.scheduled.extend(other.scheduled);
         self.unknown.extend(other.unknown);

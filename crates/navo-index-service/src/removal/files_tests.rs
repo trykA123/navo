@@ -302,3 +302,28 @@ fn removal_reports_what_both_products_left() {
     assert_eq!(left.scheduled, [index(), parent()]);
     assert_eq!(left.unknown, [index().join("notes.txt")]);
 }
+
+#[test]
+fn only_scheduled_leftovers_defer_the_outcome() {
+    use crate::Elevated;
+
+    assert_eq!(Cleanup::default().outcome(), Elevated::Done);
+    let unknown = Cleanup {
+        scheduled: Vec::new(),
+        unknown: vec![index().join("notes.txt")],
+    };
+    assert_eq!(unknown.outcome(), Elevated::Done);
+    let scheduled = Cleanup {
+        scheduled: vec![index()],
+        unknown: vec![index().join("notes.txt")],
+    };
+    assert_eq!(scheduled.outcome(), Elevated::Deferred);
+}
+
+#[test]
+fn a_refused_delete_that_was_scheduled_defers_the_outcome() {
+    let mut fake = Fake::with(&["navo-index.exe"]);
+    fake.refuse("navo-index.exe", 99);
+    let left = clean_navo(&mut fake).unwrap();
+    assert_eq!(left.outcome(), crate::Elevated::Deferred);
+}

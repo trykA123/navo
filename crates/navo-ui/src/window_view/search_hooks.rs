@@ -18,6 +18,8 @@ pub type UpgradeDue = Arc<dyn Fn() -> bool + Send + Sync>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ServiceOutcome {
     Done,
+    /// Removed; Windows deletes the last files at the next restart.
+    Deferred,
     Failed,
 }
 

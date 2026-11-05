@@ -1,7 +1,7 @@
 use navo_ui::window_view::ServiceHooks;
 
 #[cfg(any(windows, test))]
-use crate::index_service::ElevationError;
+use crate::index_service::{Elevated, ElevationError};
 #[cfg(any(windows, test))]
 use navo_ui::window_view::{ServiceOutcome, ServiceStatus};
 
@@ -66,9 +66,9 @@ fn status_from_query(query: std::io::Result<crate::index_service::ServiceQuery>)
 }
 
 #[cfg(any(windows, test))]
-fn action_outcome(result: Result<(), ElevationError>) -> Result<(), ElevationError> {
+fn action_outcome(result: Result<Elevated, ElevationError>) -> Result<Elevated, ElevationError> {
     match result {
-        Err(ElevationError::Cancelled) => Ok(()),
+        Err(ElevationError::Cancelled) => Ok(Elevated::Done),
         result => result,
     }
 }
@@ -76,10 +76,11 @@ fn action_outcome(result: Result<(), ElevationError>) -> Result<(), ElevationErr
 #[cfg(any(windows, test))]
 fn report(
     action: crate::index_service::Action,
-    result: Result<(), ElevationError>,
+    result: Result<Elevated, ElevationError>,
 ) -> ServiceOutcome {
     match action_outcome(result) {
-        Ok(()) => ServiceOutcome::Done,
+        Ok(Elevated::Done) => ServiceOutcome::Done,
+        Ok(Elevated::Deferred) => ServiceOutcome::Deferred,
         Err(error) => {
             tracing::warn!(?action, %error, "index service change failed");
             ServiceOutcome::Failed
@@ -156,6 +157,18 @@ mod tests {
     }
 
     #[test]
+    fn a_deferred_removal_is_reported_as_deferred_not_failed() {
+        use crate::index_service::Action;
+
+        let deferred = report(Action::Remove, Ok(Elevated::Deferred));
+        assert_eq!(deferred, ServiceOutcome::Deferred);
+        assert_eq!(
+            report(Action::Remove, Ok(Elevated::Done)),
+            ServiceOutcome::Done
+        );
+    }
+
+    #[test]
     fn an_unreadable_scm_is_unavailable_and_disables_actions() {
         let status = status_from_query(Err(std::io::Error::from(
             std::io::ErrorKind::PermissionDenied,
@@ -167,7 +180,7 @@ mod tests {
     #[test]
     fn cancelling_elevation_has_the_same_outcome_as_no_change() {
         assert!(action_outcome(Err(ElevationError::Cancelled)).is_ok());
-        assert!(action_outcome(Ok(())).is_ok());
+        assert!(action_outcome(Ok(Elevated::Done)).is_ok());
     }
 
     #[test]

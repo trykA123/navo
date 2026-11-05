@@ -17,6 +17,7 @@ use windows_sys::Win32::System::Services::{
 };
 use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles};
 
+use super::Elevated;
 use super::directory::{Policy, ProtectedDirectory, known_folder};
 use super::elevation::wide;
 use super::install_plan::{
@@ -266,10 +267,10 @@ fn configure_recovery(service: &ServiceHandle) -> io::Result<()> {
 }
 
 /// Removes both services and their files; prints what waits for a restart or was kept.
-pub(super) fn remove() -> io::Result<()> {
+pub(super) fn remove() -> io::Result<Elevated> {
     let left = cleanup::remove_all()?;
     if !left.is_complete() {
         cleanup::report(&left);
     }
-    Ok(())
+    Ok(left.outcome())
 }

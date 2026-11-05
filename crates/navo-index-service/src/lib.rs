@@ -33,7 +33,7 @@ mod elevation_error;
 #[cfg(any(windows, test))]
 mod elevation_result;
 
-pub use elevation_error::ElevationError;
+pub use elevation_error::{Elevated, ElevationError};
 #[cfg(any(windows, test))]
 mod heartbeat;
 #[cfg(any(windows, test))]
@@ -101,7 +101,7 @@ impl Action {
 
 pub fn run(action: Action) -> std::process::ExitCode {
     match execute(action) {
-        Ok(()) => std::process::ExitCode::SUCCESS,
+        Ok(outcome) => std::process::ExitCode::from(success_code(outcome)),
         Err(error) => {
             eprintln!("navo: index service: {error}");
             std::process::ExitCode::from(failure_code(&error))
@@ -110,15 +110,23 @@ pub fn run(action: Action) -> std::process::ExitCode {
 }
 
 #[cfg(any(windows, test))]
-use elevation_result::failure_code;
+use elevation_result::{failure_code, success_code};
 
 #[cfg(not(any(windows, test)))]
 fn failure_code(_: &std::io::Error) -> u8 {
     1
 }
 
+#[cfg(not(any(windows, test)))]
+fn success_code(_: Elevated) -> u8 {
+    0
+}
+
+/// The most time the elevated remove takes; the app's uninstall callback waits longer.
+pub const REMOVE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
+
 #[cfg(windows)]
-pub fn request_elevation(action: Action) -> Result<(), ElevationError> {
+pub fn request_elevation(action: Action) -> Result<Elevated, ElevationError> {
     elevation::launch(action)
 }
 
@@ -192,19 +200,19 @@ pub fn dismiss_upgrade_notice(marker: Option<std::path::PathBuf>) -> std::io::Re
 }
 
 #[cfg(windows)]
-fn execute(action: Action) -> std::io::Result<()> {
+fn execute(action: Action) -> std::io::Result<Elevated> {
     match action {
-        Action::Run => scm::dispatch(),
+        Action::Run => scm::dispatch().map(|()| Elevated::Done),
         Action::Install | Action::Remove if !elevation::is_admin() => {
             request_elevation(action).map_err(std::io::Error::other)
         }
-        Action::Install => installation::install(),
+        Action::Install => installation::install().map(|()| Elevated::Done),
         Action::Remove => installation::remove(),
     }
 }
 
 #[cfg(not(windows))]
-fn execute(_: Action) -> std::io::Result<()> {
+fn execute(_: Action) -> std::io::Result<Elevated> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "requires Windows",
