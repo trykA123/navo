@@ -2,23 +2,17 @@
 
 use std::io;
 use std::os::windows::ffi::OsStrExt;
-use std::path::Path;
 use std::ptr;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use windows_sys::Win32::Foundation::{
-    ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_EXISTS,
-    ERROR_SERVICE_NOT_ACTIVE,
-};
-use windows_sys::Win32::Storage::FileSystem::DELETE;
+use windows_sys::Win32::Foundation::{ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_EXISTS};
 use windows_sys::Win32::System::Services::{
-    ChangeServiceConfig2W, ChangeServiceConfigW, ControlService, CreateServiceW, DeleteService,
-    OpenServiceW, QueryServiceStatus, SC_ACTION, SC_ACTION_NONE, SC_ACTION_RESTART,
-    SC_MANAGER_CONNECT, SC_MANAGER_CREATE_SERVICE, SERVICE_ALL_ACCESS, SERVICE_AUTO_START,
+    ChangeServiceConfig2W, ChangeServiceConfigW, CreateServiceW, DeleteService, OpenServiceW,
+    QueryServiceStatus, SC_ACTION, SC_ACTION_NONE, SC_ACTION_RESTART, SC_MANAGER_CONNECT,
+    SC_MANAGER_CREATE_SERVICE, SERVICE_ALL_ACCESS, SERVICE_AUTO_START,
     SERVICE_CONFIG_DELAYED_AUTO_START_INFO, SERVICE_CONFIG_FAILURE_ACTIONS,
-    SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_CONTROL_STOP, SERVICE_DELAYED_AUTO_START_INFO,
-    SERVICE_ERROR_NORMAL, SERVICE_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW,
-    SERVICE_QUERY_STATUS, SERVICE_STATUS, SERVICE_STOP, SERVICE_STOP_PENDING, SERVICE_STOPPED,
+    SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_DELAYED_AUTO_START_INFO, SERVICE_ERROR_NORMAL,
+    SERVICE_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW, SERVICE_STATUS, SERVICE_STOPPED,
     SERVICE_WIN32_OWN_PROCESS, StartServiceW,
 };
 use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles};
@@ -26,18 +20,18 @@ use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles}
 use super::directory::{Policy, ProtectedDirectory, known_folder};
 use super::elevation::wide;
 use super::install_plan::{
-    CopyPlan, FreshInstall, LEGACY_PRODUCT, NAVO, Product, SettingsBackup, Step, clear_directory,
-    data_directories, run_install,
+    CopyPlan, FreshInstall, LEGACY_PRODUCT, SettingsBackup, Step, data_directories, run_install,
 };
 use super::policy::{FAILURE_DELAYS, RESET_SECONDS, RESTART_CLEAN_STOPS};
-use super::scm::{
-    ServiceHandle, checked, open_manager, service_handle, service_name, service_name_of,
-};
+use super::removal::StopLimits;
+use super::scm::{ServiceHandle, checked, open_manager, service_handle, service_name};
 use super::storage::Storage;
-use super::upgrade::{UpgradeStep, await_answer, remove_both, run_upgrade};
+use super::upgrade::{UpgradeStep, await_answer, run_upgrade};
 
+mod cleanup;
 mod configuration;
 mod legacy;
+mod scm_stop;
 mod verify;
 
 const ANSWER_WAIT: (Duration, Duration) = (Duration::from_secs(30), Duration::from_millis(250));
@@ -53,8 +47,13 @@ pub(super) fn install() -> io::Result<()> {
         UpgradeStep::AwaitNew => {
             await_answer(ANSWER_WAIT, || navo_index::pipe::Client::connect().is_ok())
         }
-        UpgradeStep::RemoveLegacyService => remove_service(LEGACY_PRODUCT),
-        UpgradeStep::RemoveLegacyFiles => remove_files(LEGACY_PRODUCT),
+        UpgradeStep::RemoveLegacyService => {
+            cleanup::remove_service(LEGACY_PRODUCT, cleanup::deadline())
+        }
+        UpgradeStep::RemoveLegacyFiles => {
+            cleanup::remove_files(LEGACY_PRODUCT, cleanup::deadline())
+                .map(|left| cleanup::report(&left))
+        }
     })?;
     if let Some(warning) = leftover {
         tracing::warn!(%warning, "index service installed with old files left in place");
@@ -105,7 +104,9 @@ fn install_with(
     let (mut settings, mut started_after) = (None, None);
     let result = run_install(exists, was_running, |step| match step {
         Step::RecoverOld => fresh.recover_executable(plan),
-        Step::Stop => stop(&service).map(|()| started_after = Some(verify::now())),
+        Step::Stop => {
+            scm_stop::stop(&service, StopLimits::FULL).map(|()| started_after = Some(verify::now()))
+        }
         Step::Copy => plan.copy_from(&std::env::current_exe()?),
         Step::RenameOld => plan.rename_old(),
         Step::Replace => plan.replace(),
@@ -264,109 +265,11 @@ fn configure_recovery(service: &ServiceHandle) -> io::Result<()> {
     Ok(())
 }
 
+/// Removes both services and their files; prints what waits for a restart or was kept.
 pub(super) fn remove() -> io::Result<()> {
-    remove_both([NAVO, LEGACY_PRODUCT], |product| {
-        super::removal::run(|| remove_service(product), || remove_files(product))
-    })
-}
-
-fn remove_files(product: Product) -> io::Result<()> {
-    let binary = remove_binary(product);
-    binary.and(remove_data(product))
-}
-
-fn remove_service(product: Product) -> io::Result<()> {
-    let manager = open_manager(SC_MANAGER_CONNECT)?;
-    let name = service_name_of(product);
-    // SAFETY: manager and terminated name are live for the call.
-    let raw = unsafe {
-        OpenServiceW(
-            manager.0,
-            name.as_ptr(),
-            DELETE | SERVICE_STOP | SERVICE_QUERY_STATUS,
-        )
-    };
-    let service = match service_handle(raw) {
-        Ok(service) => service,
-        Err(error) if error.raw_os_error() == Some(ERROR_SERVICE_DOES_NOT_EXIST as i32) => {
-            return Err(io::ErrorKind::NotFound.into());
-        }
-        Err(error) => return Err(error),
-    };
-    stop(&service)?;
-    // SAFETY: service has DELETE access and is stopped.
-    checked(unsafe { DeleteService(service.0) })?;
-    drop(service);
-    Ok(())
-}
-
-fn remove_binary(product: Product) -> io::Result<()> {
-    let plan = CopyPlan::of(
-        product,
-        &known_folder(&FOLDERID_ProgramFiles)?,
-        std::process::id(),
-    );
-    let parent = plan
-        .directory
-        .parent()
-        .ok_or_else(|| io::Error::other("missing install parent"))?;
-    let Some(mut guard) = open_existing(&[parent, &plan.directory], Policy::Executable)? else {
-        return Ok(());
-    };
-    super::removal::remove_image(|| std::fs::remove_file(&plan.executable))?;
-    let _ = plan.delete_old();
-    guard.remove_last(&plan.directory)?;
-    guard.remove_last(parent)
-}
-
-fn remove_data(product: Product) -> io::Result<()> {
-    let [parent, index] = product.data_directories(&known_folder(&FOLDERID_ProgramData)?);
-    if let Some(mut guard) = open_existing(&[&parent, &index], Policy::Data)? {
-        clear_directory(&index)?;
-        guard.remove_last(&index)?;
-        return guard.remove_last(&parent);
-    }
-    match open_existing(&[&parent], Policy::Data)? {
-        Some(mut guard) => guard.remove_last(&parent),
-        None => Ok(()),
-    }
-}
-
-fn open_existing(paths: &[&Path], policy: Policy) -> io::Result<Option<ProtectedDirectory>> {
-    match ProtectedDirectory::open(paths, policy, false) {
-        Ok(guard) => Ok(Some(guard)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
-fn stop(service: &ServiceHandle) -> io::Result<()> {
-    let mut status = SERVICE_STATUS::default();
-    // SAFETY: service is live with QUERY_STATUS access; status is writable.
-    checked(unsafe { QueryServiceStatus(service.0, &mut status) })?;
-    if !matches!(
-        status.dwCurrentState,
-        SERVICE_STOPPED | SERVICE_STOP_PENDING
-    ) {
-        // SAFETY: service has STOP access and status is writable output.
-        if unsafe { ControlService(service.0, SERVICE_CONTROL_STOP, &mut status) } == 0 {
-            let error = io::Error::last_os_error();
-            if error.raw_os_error() != Some(ERROR_SERVICE_NOT_ACTIVE as i32) {
-                return Err(error);
-            }
-        }
-    }
-    let started = Instant::now();
-    while status.dwCurrentState != SERVICE_STOPPED {
-        if started.elapsed() >= Duration::from_secs(60) {
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "index service did not stop",
-            ));
-        }
-        std::thread::sleep(Duration::from_millis(100));
-        // SAFETY: service remains live and status is writable output.
-        checked(unsafe { QueryServiceStatus(service.0, &mut status) })?;
+    let left = cleanup::remove_all()?;
+    if !left.is_complete() {
+        cleanup::report(&left);
     }
     Ok(())
 }

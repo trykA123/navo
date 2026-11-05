@@ -59,3 +59,10 @@ fn copy_refuses_an_existing_temporary_file() {
     assert!(plan.copy_from(&plan.temporary).is_err());
     assert_eq!(std::fs::read(&plan.temporary).unwrap(), b"untouched");
 }
+
+#[test]
+fn remove_deletes_both_navo_images_while_install_keeps_the_old_image() {
+    assert_eq!(NAVO.image, "navo.exe");
+    assert_eq!(NAVO.removable, ["navo-index.exe", "navo.exe"]);
+    assert_eq!(LEGACY_PRODUCT.removable, ["ferrite.exe"]);
+}

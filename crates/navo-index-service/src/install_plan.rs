@@ -6,18 +6,22 @@ use std::time::Duration;
 pub(super) struct Product {
     pub folder: &'static str,
     pub image: &'static str,
+    /// Every image remove deletes, with its numbered `.old` and `.tmp` copies.
+    pub removable: &'static [&'static str],
     pub service: &'static [u8],
 }
 
 pub(super) const NAVO: Product = Product {
     folder: navo_core::brand::NAME,
     image: "navo.exe",
+    removable: &["navo-index.exe", "navo.exe"],
     service: b"Navo Index",
 };
 
 pub(super) const LEGACY_PRODUCT: Product = Product {
     folder: navo_core::brand::LEGACY_NAME,
     image: "ferrite.exe",
+    removable: &["ferrite.exe"],
     service: b"Ferrite Index",
 };
 

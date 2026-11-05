@@ -1,5 +1,13 @@
 use std::io;
 
+mod files;
+mod stop;
+
+#[cfg(windows)]
+pub(super) use files::{Cleanup, Entry, Files, Folders, Limits, clean};
+#[cfg(windows)]
+pub(super) use stop::{Control, POLL, REMOVE_DEADLINE, State, Status, StopLimits, stop};
+
 pub(super) fn run(
     remove_service: impl FnOnce() -> io::Result<()>,
     cleanup: impl FnOnce() -> io::Result<()>,
@@ -9,16 +17,6 @@ pub(super) fn run(
         result => result?,
     }
     cleanup()
-}
-
-pub(super) fn remove_image(delete: impl FnMut() -> io::Result<()>) -> io::Result<()> {
-    let mut delete = delete;
-    super::install_plan::retry(5, std::time::Duration::from_millis(200), || {
-        match delete() {
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            result => result,
-        }
-    })
 }
 
 #[cfg(test)]
@@ -39,21 +37,6 @@ mod tests {
         .unwrap();
         assert!(cleaned.get());
     }
-
-    #[test]
-    fn mapped_images_are_retried_before_cleanup_is_abandoned() {
-        let attempts = Cell::new(0);
-        remove_image(|| {
-            attempts.set(attempts.get() + 1);
-            if attempts.get() < 4 {
-                Err(io::ErrorKind::PermissionDenied.into())
-            } else {
-                Ok(())
-            }
-        })
-        .unwrap();
-        assert_eq!(attempts.get(), 4);
-    }
 }
 
 #[cfg(test)]
@@ -73,15 +56,5 @@ mod refusal_tests {
             .is_err()
         );
         assert!(!cleaned);
-    }
-    #[test]
-    fn an_already_missing_image_needs_no_retry() {
-        let mut attempts = 0;
-        remove_image(|| {
-            attempts += 1;
-            Err(io::ErrorKind::NotFound.into())
-        })
-        .unwrap();
-        assert_eq!(attempts, 1);
     }
 }

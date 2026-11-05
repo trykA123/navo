@@ -70,8 +70,13 @@ impl ProtectedDirectory {
         Ok(Self { guards })
     }
 
-    pub fn remove_last(&mut self, path: &Path) -> io::Result<()> {
+    /// Closes the guard of the last folder, so the folder can be removed.
+    pub fn release_last(&mut self) {
         drop(self.guards.pop());
+    }
+
+    pub fn remove_last(&mut self, path: &Path) -> io::Result<()> {
+        self.release_last();
         match std::fs::remove_dir(path) {
             Err(error) if error.kind() == io::ErrorKind::DirectoryNotEmpty => Ok(()),
             result => result,
