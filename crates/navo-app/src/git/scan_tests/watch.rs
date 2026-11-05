@@ -328,3 +328,53 @@ fn contains_respects_folder_boundaries() {
     assert!(!contains("c:/a", "c:/ab"));
     assert!(!contains("c:/a/b", "c:/a"));
 }
+
+fn live_armed(probe: &FakeProbe, watches: &mut Watches, root: &str, listing: &str) -> PathBuf {
+    let root = path(root);
+    probe.set_identity(&root, Some(identity(1)));
+    probe.make_live(&root);
+    watches.arm(&root, &path(listing), DriveClass::Ssd);
+    assert!(watches.mark(&root).is_some(), "the root is armed");
+    root
+}
+
+#[test]
+fn leaving_the_last_listing_releases_its_watches() {
+    let probe = Arc::new(FakeProbe::default());
+    let mut watches = Watches::new(probe.clone());
+    let own = live_armed(&probe, &mut watches, "l/a", "l/a");
+    let child = live_armed(&probe, &mut watches, "l/a/repo", "l/a");
+    let ancestor = live_armed(&probe, &mut watches, "l", "l/a");
+
+    watches.keep_for(&[path("l/a")]);
+    assert!(watches.mark(&child).is_some(), "the listing is still held");
+
+    watches.keep_for(&[]);
+    for root in [&own, &child, &ancestor] {
+        assert_eq!(
+            watches.mark(root),
+            None,
+            "R3: no watch may outlive every listing it was armed for"
+        );
+    }
+}
+
+#[test]
+fn a_watch_valid_for_another_held_listing_survives() {
+    let probe = Arc::new(FakeProbe::default());
+    let mut watches = Watches::new(probe.clone());
+    let shared = live_armed(&probe, &mut watches, "l/a", "l/a");
+    let deep = live_armed(&probe, &mut watches, "l/a/repo", "l/a");
+
+    watches.keep_for(&[path("l/")]);
+
+    assert!(
+        watches.mark(&shared).is_some(),
+        "a direct child of the held listing stays armed"
+    );
+    assert_eq!(
+        watches.mark(&deep),
+        None,
+        "a grandchild of the held listing would block renaming its parent"
+    );
+}

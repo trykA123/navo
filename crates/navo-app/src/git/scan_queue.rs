@@ -132,6 +132,8 @@ pub(super) struct Entry {
     pub listing: Arc<Listing>,
     pub badges: Option<Arc<FolderBadges>>,
     pub forced: Forced,
+    /// Root keys a plan forced whose status has not finished; a newer listing forces them again.
+    pub forcing: Vec<String>,
 }
 
 #[derive(Default)]
@@ -139,6 +141,8 @@ pub(super) struct Shared {
     pub queue: VecDeque<Request>,
     pub active: HashMap<Location, Entry>,
     pub stopped: bool,
+    /// Counts changes to the held folders, so the scanner releases watches only then.
+    pub held: u64,
     /// The worker sleeps until a request or a stop wakes it.
     #[cfg(test)]
     pub parked: bool,
@@ -169,14 +173,21 @@ impl Shared {
         badges: Option<Arc<FolderBadges>>,
         forced: Forced,
     ) {
+        let forcing = self
+            .active
+            .get(&listing.folder)
+            .map(|old| old.forcing.clone())
+            .unwrap_or_default();
         self.forget(&listing.folder);
         self.order.push_back(listing.folder.clone());
+        self.held = self.held.wrapping_add(1);
         self.active.insert(
             listing.folder.clone(),
             Entry {
                 listing: listing.clone(),
                 badges,
                 forced,
+                forcing,
             },
         );
         while self.active.len() > QUEUE_CAP || self.bytes() > QUEUE_BYTES {
@@ -223,6 +234,7 @@ impl Shared {
     pub fn forget(&mut self, folder: &Location) {
         if let Some(old) = self.active.remove(folder) {
             old.listing.cancel();
+            self.held = self.held.wrapping_add(1);
         }
         self.order.retain(|old| old != folder);
         self.queue.retain(|q| &q.listing().folder != folder);
@@ -269,6 +281,45 @@ impl Shared {
             .get_mut(&listing.folder)
             .map(|entry| std::mem::take(&mut entry.forced))
             .unwrap_or_default()
+    }
+
+    /// Roots an earlier plan forced whose status has not finished.
+    pub fn forcing(&self, listing: &Arc<Listing>) -> Vec<String> {
+        if !self.is_current(listing) {
+            return Vec::new();
+        }
+        self.active
+            .get(&listing.folder)
+            .map(|entry| entry.forcing.clone())
+            .unwrap_or_default()
+    }
+
+    /// Keeps the roots a plan forced until their status finishes. A current plan forced every
+    /// key it read that is still a root, so it replaces the set; a superseded one adds to it.
+    pub fn hold_forced(&mut self, listing: &Arc<Listing>, keys: Vec<String>) {
+        let current = self.is_current(listing);
+        let Some(entry) = self.active.get_mut(&listing.folder) else {
+            return;
+        };
+        if current {
+            entry.forcing = keys;
+            return;
+        }
+        for key in keys {
+            if !entry.forcing.contains(&key) {
+                entry.forcing.push(key);
+            }
+        }
+    }
+
+    /// A forced root's status finished for the current listing.
+    pub fn forced_done(&mut self, listing: &Arc<Listing>, key: &str) {
+        if !self.is_current(listing) {
+            return;
+        }
+        if let Some(entry) = self.active.get_mut(&listing.folder) {
+            entry.forcing.retain(|forced| forced != key);
+        }
     }
 
     /// The folder already shows badges that a new scan will replace.

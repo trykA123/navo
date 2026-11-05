@@ -57,14 +57,19 @@ impl Probe for SystemProbe {
 }
 
 /// The listing's class, or `Unknown` unless every folder from the listing to `root` is plain
-/// (no symlink or junction) and `root` lies on the volume of its own drive letter.
-#[cfg(windows)]
+/// (no symlink or junction) and `root` lies on the volume of its own drive letter. Only a fixed
+/// class reads the disk, so a network or removable root never blocks the scanner.
+#[cfg(any(windows, test))]
 fn root_class_with(
     root: &Path,
     listing: &Location,
     mount_point: impl FnOnce(&Path) -> std::io::Result<std::path::PathBuf>,
     class_of: impl FnOnce(&Location) -> DriveClass,
 ) -> DriveClass {
+    let class = class_of(listing);
+    if !matches!(class, DriveClass::Ssd | DriveClass::Hdd) {
+        return class;
+    }
     let Ok(folder) = navo_fs::os_path(listing) else {
         return DriveClass::Unknown;
     };
@@ -72,13 +77,13 @@ fn root_class_with(
     if !plain || !mount_point(root).is_ok_and(|mount| is_drive_root_of(&mount, root)) {
         return DriveClass::Unknown;
     }
-    class_of(listing)
+    class
 }
 
 /// The folders from the deeper of `a` and `b` up to the other, both included; `None` when
 /// neither contains the other. Compared by root key, since `os_path` gives the listing a `\\?\`
 /// prefix that `Path::starts_with` treats as a different drive.
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn between<'a>(a: &'a Path, b: &'a Path) -> Option<Vec<&'a Path>> {
     use super::watches::{contains, root_key};
 
@@ -97,13 +102,13 @@ fn between<'a>(a: &'a Path, b: &'a Path) -> Option<Vec<&'a Path>> {
     )
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn is_plain(level: &Path) -> bool {
     std::fs::symlink_metadata(level).is_ok_and(|m| !m.file_type().is_symlink())
 }
 
 /// Whether `mount` is exactly `X:\`, where `X` is the drive letter of `root`.
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn is_drive_root_of(mount: &Path, root: &Path) -> bool {
     use std::path::Component;
 
@@ -117,7 +122,7 @@ fn is_drive_root_of(mount: &Path, root: &Path) -> bool {
     bare && letter.is_some() && letter == drive_letter(root)
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn drive_letter(path: &Path) -> Option<u8> {
     use std::path::{Component, Prefix};
 
@@ -129,6 +134,10 @@ fn drive_letter(path: &Path) -> Option<u8> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+#[path = "scan_tests/system.rs"]
+mod portable_tests;
 
 // Two attributes: clippy only treats a plain `cfg(test)` module as test code.
 #[cfg(test)]

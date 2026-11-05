@@ -204,3 +204,26 @@ fn armed_watches_leave_folders_outside_the_listing_path_free() {
         .expect("R3: renaming the armed direct-child repository must succeed");
     drop(watches);
 }
+
+#[test]
+fn leaving_a_listing_frees_renaming_and_deleting_its_parent() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent = dir.path().join("parent");
+    let listing = parent.join("listing");
+    let repo = listing.join("repo");
+    fs::create_dir_all(repo.join(".git")).unwrap();
+    let mut watches = Watches::new(Arc::new(SystemProbe));
+    let folder = navo_fs::os_path(&location(&listing)).unwrap();
+    arm_live(&mut watches, &repo, &folder);
+    arm_live(&mut watches, &listing, &folder);
+
+    watches.keep_for(&[]);
+
+    let moved = dir.path().join("parent-moved");
+    let renamed = within(Duration::from_secs(2), || {
+        fs::rename(&parent, &moved).is_ok()
+    });
+    assert!(renamed, "R3: a left listing's parent must be renameable");
+    fs::remove_dir_all(&moved).expect("R3: a left listing's parent must be deletable");
+    drop(watches);
+}

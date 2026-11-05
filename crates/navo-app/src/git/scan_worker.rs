@@ -17,6 +17,7 @@ use super::plan::{Check, Input, Plan, Timer, fill};
 use super::queue::{Listing, Request, Shared};
 use super::skip::MAX_PROOF_AGE;
 use super::slots::Slot;
+use super::watches::root_key;
 use super::{Cancel, Limits, Notify, Ports, STOP_WAIT, SavedBadges, ScanError, Slots, TICK};
 
 type State = Arc<(Mutex<Shared>, Condvar)>;
@@ -72,6 +73,8 @@ struct Scanner {
     plan: Plan,
     listings: HashMap<Location, Discovered>,
     calls: Vec<Call>,
+    /// The `Shared::held` count the watches were last pruned at.
+    held: u64,
     /// A network probe helper is still running.
     network_probe: Arc<AtomicBool>,
 }
@@ -91,6 +94,7 @@ pub(super) fn spawn(shared: State, ports: Ports, config: Config) -> io::Result<R
                 plan,
                 listings: HashMap::new(),
                 calls: Vec::new(),
+                held: 0,
                 network_probe: Arc::default(),
             };
             scanner.run();
@@ -110,6 +114,7 @@ impl Scanner {
             self.listings
                 .retain(|_, found| !found.listing.cancelled.is_cancelled());
             self.plan.retain(&self.listings);
+            self.release_watches();
             let slot = self.config.slots.try_acquire();
             let Some(request) = self.next_request(slot.is_some()) else {
                 return;
@@ -124,6 +129,20 @@ impl Scanner {
         }
     }
 
+    /// Releases watches once the held folders change, so none outlives its listing (R3).
+    fn release_watches(&mut self) {
+        let held: Vec<PathBuf> = {
+            let shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if shared.held == self.held {
+                return;
+            }
+            self.held = shared.held;
+            let listings = shared.active.values();
+            listings.map(|entry| entry.listing.path.clone()).collect()
+        };
+        self.plan.keep_watches(&held);
+    }
+
     fn next_request(&self, has_slot: bool) -> Option<Option<Request>> {
         let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
         (!shared.stopped).then(|| shared.pop(has_slot))
@@ -133,7 +152,7 @@ impl Scanner {
     /// waits for a slot.
     fn wait(&self) {
         let shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
-        if shared.stopped {
+        if shared.stopped || shared.held != self.held {
             return;
         }
         if !self.calls.is_empty() || !shared.queue.is_empty() {
@@ -171,13 +190,15 @@ impl Scanner {
             return;
         }
         let found = self.discover(&listing);
-        let (forced, shows) = {
+        let input = {
             let mut shared = self.lock();
-            (shared.take_forced(&listing), shared.shows_badges(&listing))
+            Input {
+                forced: shared.take_forced(&listing),
+                forcing: shared.forcing(&listing),
+                shows: shared.shows_badges(&listing),
+            }
         };
-        let decision = self
-            .plan
-            .plan(&mut self.cache, &found, Input { forced, shows });
+        let decision = self.plan.plan(&mut self.cache, &found, input);
         let revision = self.plan.publish(&self.shared.0, &found, decision);
         self.listings.insert(listing.folder.clone(), found);
         self.notify(revision);
@@ -338,6 +359,7 @@ impl Scanner {
             if !shared.is_current(&listing) {
                 return;
             }
+            shared.forced_done(&listing, &root_key(&root));
             let mut badges = shared
                 .active
                 .get(&listing.folder)

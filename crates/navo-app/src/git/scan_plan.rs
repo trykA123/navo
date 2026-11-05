@@ -19,6 +19,8 @@ use super::{Probe, ScanError};
 /// What the scanner takes from the shared queue before a plan.
 pub(super) struct Input {
     pub forced: Forced,
+    /// Root keys an earlier plan forced whose status has not finished.
+    pub forcing: Vec<String>,
     pub shows: bool,
 }
 
@@ -26,6 +28,7 @@ pub(super) struct Input {
 pub(super) struct Decision {
     shows: bool,
     keep: bool,
+    forced: Vec<String>,
     updates: Vec<(PathBuf, Cached)>,
     confirm: Vec<PathBuf>,
     scan: Vec<PathBuf>,
@@ -110,6 +113,11 @@ impl Plan {
         });
     }
 
+    /// Releases the watches no held listing would arm.
+    pub(super) fn keep_watches(&mut self, listings: &[PathBuf]) {
+        self.watches.keep_for(listings);
+    }
+
     /// Phase one: picks the roots to publish stale now and confirm one second later.
     pub(super) fn plan(&mut self, cache: &mut Cache, found: &Discovered, input: Input) -> Decision {
         let now = self.probe.now();
@@ -118,6 +126,7 @@ impl Plan {
             .iter()
             .any(|root| input.forced.roots.contains(&root_key(root)));
         let force_all = input.forced.all || (!input.forced.roots.is_empty() && !matches);
+        let mut forced = Vec::new();
         let mut updates = Vec::new();
         let mut confirm = Vec::new();
         let mut scan = Vec::new();
@@ -129,14 +138,19 @@ impl Plan {
             if let (None, Some(listing)) = (&mark, &listing) {
                 self.watches.arm(root, listing, class);
             }
+            let is_forced =
+                force_all || input.forced.roots.contains(&key) || input.forcing.contains(&key);
             let facts = Facts {
-                forced: force_all || input.forced.roots.contains(&key),
+                forced: is_forced,
                 truncated: found.truncated,
                 class,
                 kept: self.proofs.get(&key),
                 mark,
                 now,
             };
+            if is_forced {
+                forced.push(key);
+            }
             if let (Ok(()), Some(kept)) = (skip::precheck(&facts), facts.kept.as_ref()) {
                 let cached = listing::project(Ok(&kept.status), &found.bindings, root);
                 updates.push((root.clone(), cached));
@@ -150,6 +164,7 @@ impl Plan {
         Decision {
             shows: input.shows,
             keep,
+            forced,
             updates,
             confirm,
             scan,
@@ -167,6 +182,7 @@ impl Plan {
         let listing = &found.listing;
         let revision = {
             let mut shared = shared.lock().unwrap_or_else(PoisonError::into_inner);
+            shared.hold_forced(listing, std::mem::take(&mut decision.forced));
             if decision.keep {
                 shared.push_all(listing, &decision.scan);
                 return None;

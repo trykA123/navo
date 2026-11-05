@@ -54,6 +54,12 @@ impl RawSender {
         self.live.store(true, Ordering::Release);
     }
 
+    /// Counts one completed read, so a record the parser skips still counts as a change.
+    #[cfg(windows)]
+    pub(crate) fn count_read(&self) {
+        self.count.fetch_add(1, Ordering::Release);
+    }
+
     pub(crate) fn change(&self, change: WatchChange) -> bool {
         self.count.fetch_add(1, Ordering::Release);
         self.sender.send(Raw::Change(change)).is_ok()

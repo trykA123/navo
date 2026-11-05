@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -22,6 +22,13 @@ struct WatchState {
 struct FakeWatch {
     live: Arc<AtomicBool>,
     changes: Arc<AtomicU64>,
+    dropped: Arc<AtomicUsize>,
+}
+
+impl Drop for FakeWatch {
+    fn drop(&mut self) {
+        self.dropped.fetch_add(1, Ordering::SeqCst);
+    }
 }
 
 impl RepoWatch for FakeWatch {
@@ -43,6 +50,7 @@ pub(super) struct SkipProbe {
     watches: Mutex<HashMap<PathBuf, WatchState>>,
     start: Instant,
     offset: Mutex<Duration>,
+    dropped: Arc<AtomicUsize>,
 }
 
 impl SkipProbe {
@@ -54,6 +62,7 @@ impl SkipProbe {
             watches: Mutex::new(HashMap::new()),
             start: Instant::now(),
             offset: Mutex::new(Duration::ZERO),
+            dropped: Arc::default(),
         }
     }
 
@@ -75,6 +84,18 @@ impl SkipProbe {
                 changes: Arc::new(AtomicU64::new(0)),
             })
             .clone()
+    }
+
+    /// Waits until `count` watches were released.
+    pub(super) fn wait_dropped(&self, count: usize) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while self.dropped.load(Ordering::SeqCst) < count {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        true
     }
 
     pub(super) fn bump(&self, root: &Path) {
@@ -104,6 +125,7 @@ impl Probe for SkipProbe {
         Some(Box::new(FakeWatch {
             live: state.live,
             changes: state.changes,
+            dropped: self.dropped.clone(),
         }))
     }
 

@@ -1,7 +1,7 @@
 //! Repository watches: one subtree watch per unchanged root, with every raw change counted.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 
@@ -11,9 +11,10 @@ use navo_fs::DriveClass;
 use super::skip::Mark;
 use super::{Probe, RepoWatch, WATCH_CAP};
 
-/// One armed watch, its folder identity, and the epoch it was armed at.
+/// One armed watch, its root's parent key, its folder identity, and the epoch it was armed at.
 struct Entry {
     watch: Box<dyn RepoWatch>,
+    parent: String,
     identity: FileIdentity,
     epoch: u64,
 }
@@ -37,15 +38,14 @@ impl Watches {
     /// Arms a subtree watch on a fixed local drive, unless `root` is a volume root or the watch
     /// would block renaming a folder the listing watch leaves free (R3).
     pub(crate) fn arm(&mut self, root: &Path, listing: &Path, class: DriveClass) {
-        if !matches!(class, DriveClass::Ssd | DriveClass::Hdd) || root.parent().is_none() {
+        let Some(parent) = root.parent() else {
+            return;
+        };
+        if !matches!(class, DriveClass::Ssd | DriveClass::Hdd) {
             return;
         }
-        let key = root_key(root);
-        let listing = root_key(listing);
-        let child = root
-            .parent()
-            .is_some_and(|parent| root_key(parent) == listing);
-        if !child && !contains(&key, &listing) {
+        let (key, parent) = (root_key(root), root_key(parent));
+        if !allowed(&key, &parent, &root_key(listing)) {
             return;
         }
         let Some(identity) = self.probe.identity(root) else {
@@ -59,6 +59,7 @@ impl Watches {
         self.next_epoch += 1;
         let entry = Entry {
             watch,
+            parent,
             identity,
             epoch: self.next_epoch,
         };
@@ -93,6 +94,20 @@ impl Watches {
             return None;
         }
         Some(Mark { epoch, changes })
+    }
+
+    /// Releases every watch that none of the held `listings` would arm (R3).
+    pub(crate) fn keep_for(&mut self, listings: &[PathBuf]) {
+        let held: Vec<String> = listings.iter().map(|listing| root_key(listing)).collect();
+        let gone: Vec<String> = self
+            .entries
+            .iter()
+            .filter(|(key, entry)| !held.iter().any(|l| allowed(key, &entry.parent, l)))
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in gone {
+            self.remove(&key);
+        }
     }
 
     fn remove(&mut self, key: &str) {
@@ -130,6 +145,12 @@ fn key_of(text: &str, windows: bool) -> String {
         key.make_ascii_lowercase();
     }
     key
+}
+
+/// Whether a watch on `key` blocks no folder the listing watch leaves free: the root is the
+/// listing, an ancestor of it, or a direct child of it.
+fn allowed(key: &str, parent: &str, listing: &str) -> bool {
+    parent == listing || contains(key, listing)
 }
 
 /// Whether the folder keyed `deep` is the folder keyed `top` or lies inside it.

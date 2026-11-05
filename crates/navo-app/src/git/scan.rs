@@ -108,7 +108,7 @@ pub(crate) trait Probe: Send + Sync + 'static {
         None
     }
 
-    /// The volume class of `root`, `Unknown` when it cannot be proven a fixed local volume.
+    /// The volume class of `root`; `Unknown` when a fixed listing class cannot be proven for it.
     fn root_class(&self, _root: &Path, _listing: &Location) -> DriveClass {
         DriveClass::Unknown
     }

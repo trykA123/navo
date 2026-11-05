@@ -11,6 +11,8 @@ use skip_probe::{SkipProbe, fresh, harness, prints, repo, scanned};
 
 #[path = "skip_expiry.rs"]
 mod expiry;
+#[path = "skip_leave.rs"]
+mod leave;
 #[path = "skip_probe.rs"]
 mod skip_probe;
 #[path = "skip_upstream.rs"]
