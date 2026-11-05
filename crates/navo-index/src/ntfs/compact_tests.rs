@@ -339,7 +339,7 @@ fn a_rename_split_across_a_compaction_lands_on_the_right_entry() {
 }
 
 #[test]
-fn the_batch_path_compacts_only_past_the_minimum_and_twice_the_live_set() {
+fn the_batch_path_compacts_only_past_the_minimum_and_the_sparse_trigger() {
     let mut tree = Tree::new(5, 20, 1_999);
     tree.delete(100, 0);
     assert_eq!(tree.index.table.slots(), 2_020);
@@ -351,7 +351,7 @@ fn the_batch_path_compacts_only_past_the_minimum_and_twice_the_live_set() {
             .map(|file| record(file, ROOT, DELETE, "gone"))
             .collect()
     };
-    apply(&mut tree.index, delete(FIRST_FILE..FIRST_FILE + 50_000));
+    apply(&mut tree.index, delete(FIRST_FILE..FIRST_FILE + 30_000));
     assert_eq!(
         tree.index.table.slots(),
         slots,
@@ -359,7 +359,7 @@ fn the_batch_path_compacts_only_past_the_minimum_and_twice_the_live_set() {
     );
     let survivor = FIRST_FILE + files - 1;
     let reference = tree.index.table.path(tree.index.ids[&survivor]);
-    let mut last: Vec<_> = delete(FIRST_FILE + 50_000..FIRST_FILE + 60_000);
+    let mut last: Vec<_> = delete(FIRST_FILE + 30_000..FIRST_FILE + 60_000);
     last.push(record(survivor, ROOT, OLD_NAME, "old"));
     apply(&mut tree.index, last);
     assert_dense_and_consistent(&tree.index);
