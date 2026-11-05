@@ -1,16 +1,18 @@
 //! The scan plan: what to publish at once, which roots to confirm, and what to scan.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
+use navo_core::Location;
 use navo_git::status::{Fingerprint, RepoStatus};
 use navo_ui::git::FolderBadges;
 
 use super::cache::{Cache, Cached};
 use super::listing::{self, Discovered};
 use super::queue::{Forced, Listing, Request, Shared};
-use super::skip::{self, CONFIRM_WAIT, Deadlines, Facts, Kept, Proofs, Verdict};
+use super::skip::{self, CONFIRM_WAIT, Deadlines, Facts, Kept, MAX_PROOF_AGE, Proofs, Verdict};
 use super::watches::{Watches, root_key};
 use super::{Probe, ScanError};
 
@@ -38,12 +40,26 @@ pub(super) enum Timer {
         /// The plan time, so the one-second wait does not age the proof on its own.
         at: Instant,
     },
+    Expire {
+        listing: Arc<Listing>,
+        root: PathBuf,
+    },
 }
 
 impl Timer {
     pub(super) fn listing(&self) -> Arc<Listing> {
         match self {
-            Self::Confirm { listing, .. } => listing.clone(),
+            Self::Confirm { listing, .. } | Self::Expire { listing, .. } => listing.clone(),
+        }
+    }
+
+    fn is_expire_of(&self, listing: &Arc<Listing>, root: &Path) -> bool {
+        match self {
+            Self::Expire {
+                listing: own,
+                root: own_root,
+            } => Arc::ptr_eq(own, listing) && own_root == root,
+            Self::Confirm { .. } => false,
         }
     }
 }
@@ -82,6 +98,16 @@ impl Plan {
 
     pub(super) fn pop_due(&mut self, now: Instant) -> Vec<Timer> {
         self.deadlines.pop_due(now)
+    }
+
+    /// Drops deadlines of listings the scanner no longer tracks.
+    pub(super) fn retain(&mut self, listings: &HashMap<Location, Discovered>) {
+        self.deadlines.retain(|timer| {
+            let listing = timer.listing();
+            listings
+                .get(&listing.folder)
+                .is_some_and(|found| Arc::ptr_eq(&found.listing, &listing))
+        });
     }
 
     /// Phase one: picks the roots to publish stale now and confirm one second later.
@@ -245,7 +271,9 @@ impl Plan {
         found: &Discovered,
         timer: Timer,
     ) -> Option<u64> {
-        let Timer::Confirm { listing, root, at } = timer;
+        let Timer::Confirm { listing, root, at } = timer else {
+            return None;
+        };
         {
             let shared = shared.lock().unwrap_or_else(PoisonError::into_inner);
             if !shared.is_current(&listing) {
@@ -277,8 +305,57 @@ impl Plan {
             return None;
         }
         let kept = facts.kept.as_ref()?;
+        self.expire_at(&listing, &root, kept.proof.checked_at + MAX_PROOF_AGE);
         let cached = listing::project(Ok(&kept.status), &found.bindings, &root);
         publish_fresh(shared, found, &root, &cached)
+    }
+
+    /// Phase three: dims the root's rows once its fresh badge is five minutes old.
+    pub(super) fn expire(
+        &self,
+        shared: &Mutex<Shared>,
+        found: &Discovered,
+        timer: Timer,
+    ) -> Option<u64> {
+        let Timer::Expire { listing, root } = timer else {
+            return None;
+        };
+        let mut shared = shared.lock().unwrap_or_else(PoisonError::into_inner);
+        if !shared.is_current(&listing) {
+            return None;
+        }
+        let mut badges = shared
+            .active
+            .get(&listing.folder)
+            .and_then(|entry| entry.badges.as_deref())
+            .cloned()?;
+        if found.parent.as_deref() == Some(root.as_path())
+            && let Some(repository) = badges.repository.as_mut()
+        {
+            repository.badge.stale = true;
+        }
+        for binding in found.bindings.iter().filter(|binding| binding.root == root) {
+            if let Some(badge) = badges.by_name.get_mut(&binding.name) {
+                badge.stale = true;
+            }
+            if let Some(root_badge) = badges.roots.get_mut(&binding.name) {
+                root_badge.badge.stale = true;
+            }
+        }
+        shared.publish(&listing, badges)
+    }
+
+    /// Schedules when a fresh root dims, replacing its earlier deadline.
+    pub(super) fn expire_at(&mut self, listing: &Arc<Listing>, root: &Path, at: Instant) {
+        self.deadlines
+            .retain(|timer| !timer.is_expire_of(listing, root));
+        self.deadlines.insert(
+            at,
+            Timer::Expire {
+                listing: listing.clone(),
+                root: root.to_path_buf(),
+            },
+        );
     }
 }
 

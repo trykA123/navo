@@ -13,8 +13,9 @@ use navo_git::status::RepoStatus;
 
 use super::cache::Cache;
 use super::listing::{self, Discovered};
-use super::plan::{Check, Input, Plan, fill};
+use super::plan::{Check, Input, Plan, Timer, fill};
 use super::queue::{Listing, Request, Shared};
+use super::skip::MAX_PROOF_AGE;
 use super::slots::Slot;
 use super::{Cancel, Limits, Notify, Ports, STOP_WAIT, SavedBadges, ScanError, Slots, TICK};
 
@@ -108,6 +109,7 @@ impl Scanner {
             self.due();
             self.listings
                 .retain(|_, found| !found.listing.cancelled.is_cancelled());
+            self.plan.retain(&self.listings);
             let slot = self.config.slots.try_acquire();
             let Some(request) = self.next_request(slot.is_some()) else {
                 return;
@@ -127,7 +129,8 @@ impl Scanner {
         (!shared.stopped).then(|| shared.pop(has_slot))
     }
 
-    /// Sleeps until a request or a stop; polls only while a call runs or a request waits for a slot.
+    /// Sleeps until a request, a stop or a deadline; polls only while a call runs or a request
+    /// waits for a slot.
     fn wait(&self) {
         let shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
         if shared.stopped {
@@ -139,7 +142,16 @@ impl Scanner {
         }
         if let Some(next) = self.plan.next() {
             let wait = next.saturating_duration_since(self.ports.probe.now());
-            let _wait = self.shared.1.wait_timeout(shared, wait);
+            #[cfg(test)]
+            let shared = mark_parked(shared, true);
+            let (shared, _) = self
+                .shared
+                .1
+                .wait_timeout(shared, wait)
+                .unwrap_or_else(PoisonError::into_inner);
+            #[cfg(test)]
+            let shared = mark_parked(shared, false);
+            drop(shared);
             return;
         }
         #[cfg(test)]
@@ -171,7 +183,7 @@ impl Scanner {
         self.notify(revision);
     }
 
-    /// Runs the confirms that are due, dropping those whose listing is gone.
+    /// Runs the deadlines that are due, dropping those whose listing is gone.
     fn due(&mut self) {
         let now = self.ports.probe.now();
         for timer in self.plan.pop_due(now) {
@@ -182,7 +194,10 @@ impl Scanner {
             if !Arc::ptr_eq(&found.listing, &listing) {
                 continue;
             }
-            let revision = self.plan.confirm(&self.shared.0, found, timer);
+            let revision = match timer {
+                timer @ Timer::Confirm { .. } => self.plan.confirm(&self.shared.0, found, timer),
+                timer @ Timer::Expire { .. } => self.plan.expire(&self.shared.0, found, timer),
+            };
             self.notify(revision);
         }
     }
@@ -316,6 +331,8 @@ impl Scanner {
             &found.bindings,
             &root,
         );
+        let at = self.ports.probe.now();
+        self.plan.expire_at(&listing, &root, at + MAX_PROOF_AGE);
         let revision = {
             let mut shared = self.shared.0.lock().unwrap_or_else(PoisonError::into_inner);
             if !shared.is_current(&listing) {

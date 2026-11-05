@@ -221,10 +221,6 @@ impl<T> Deadlines<T> {
         self.entries.drain(..due).map(|(_, value)| value).collect()
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "expiry retains deadlines in a later atom")
-    )]
     pub(crate) fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
         self.entries.retain(|(_, value)| keep(value));
     }

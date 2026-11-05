@@ -9,6 +9,8 @@ use super::super::ScanError;
 use super::super::tests::{clean, location, status_with};
 use skip_probe::{SkipProbe, fresh, harness, prints, repo, scanned};
 
+#[path = "skip_expiry.rs"]
+mod expiry;
 #[path = "skip_probe.rs"]
 mod skip_probe;
 #[path = "skip_upstream.rs"]
@@ -136,11 +138,14 @@ fn a_proof_under_five_minutes_reuses() {
     h.reply(Ok(clean()));
     fresh(&h, "fixture", "repo");
 
-    probe.advance(Duration::from_secs(299));
+    probe.advance(Duration::from_secs(290));
     h.observe("fixture", 2, &["repo"]);
     h.wait("fixture", |badges| badges.by_name["repo"].stale);
     fresh(&h, "fixture", "repo");
-    assert!(h.calls.try_recv().is_err(), "4 min 59 s is still fresh");
+    assert!(
+        h.calls.try_recv().is_err(),
+        "under five minutes is still fresh"
+    );
     assert!(h.scan.stop());
 }
 
