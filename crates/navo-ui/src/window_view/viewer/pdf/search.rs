@@ -61,14 +61,12 @@ pub(super) fn find(chars: &PageChars, query: &Query) -> Vec<(u32, u32)> {
     }
     let mut found = Vec::new();
     let mut at = 0;
-    while at + needle.len() <= chars.len() {
+    while needle.len() <= chars.len().saturating_sub(at) {
+        let end = at.saturating_add(needle.len()).min(chars.len());
         let fits = chars
-            .iter()
-            .skip(at)
-            .take(needle.len())
+            .slice(at, end - at)
             .zip(&needle)
             .all(|(have, want)| fold(have, query.match_case) == *want);
-        let end = at + needle.len();
         let bounded = !query.whole_word
             || (chars.get(at.wrapping_sub(1)).is_none_or(|ch| !is_word(ch))
                 && chars.get(end).is_none_or(|ch| !is_word(ch)));
@@ -95,15 +93,13 @@ fn flat(chars: impl Iterator<Item = char>) -> String {
 
 pub(super) fn snippet(chars: &PageChars, hit: &Hit) -> Snippet {
     let start = (hit.start as usize).min(chars.len());
-    let end = (start + hit.len as usize).min(chars.len());
+    let end = start.saturating_add(hit.len as usize).min(chars.len());
     let from = start.saturating_sub(CONTEXT);
-    let to = (end + CONTEXT).min(chars.len());
-    let mut before = flat(chars.iter().skip(from).take(start - from))
+    let to = end.saturating_add(CONTEXT).min(chars.len());
+    let mut before = flat(chars.slice(from, start - from))
         .trim_start()
         .to_owned();
-    let mut after = flat(chars.iter().skip(end).take(to - end))
-        .trim_end()
-        .to_owned();
+    let mut after = flat(chars.slice(end, to - end)).trim_end().to_owned();
     if from > 0 {
         before.insert(0, '…');
     }
@@ -112,7 +108,7 @@ pub(super) fn snippet(chars: &PageChars, hit: &Hit) -> Snippet {
     }
     Snippet {
         before,
-        hit: flat(chars.iter().skip(start).take(end - start)),
+        hit: flat(chars.slice(start, end - start)),
         after,
     }
 }
@@ -123,6 +119,10 @@ mod tests {
 
     fn chars(text: &str) -> PageChars {
         PageChars::Wide(text.chars().collect())
+    }
+
+    fn narrow(text: &str) -> PageChars {
+        PageChars::Narrow(text.bytes().collect())
     }
 
     fn query(text: &str, match_case: bool, whole_word: bool) -> Query {
@@ -149,6 +149,30 @@ mod tests {
     #[test]
     fn a_snippet_keeps_context_on_one_line() {
         let page = chars("first line\r\nsecond   word here");
+        let shown = snippet(
+            &page,
+            &Hit {
+                page: 0,
+                start: 21,
+                len: 4,
+                y: 0.,
+            },
+        );
+        assert_eq!(
+            (
+                shown.before.as_str(),
+                shown.hit.as_str(),
+                shown.after.as_str()
+            ),
+            ("first line second ", "word", " here")
+        );
+    }
+
+    #[test]
+    fn a_narrow_page_finds_and_snippets_the_same_text() {
+        let page = narrow("first line\r\nsecond   word here");
+        let found = find(&page, &query("word", false, false));
+        assert_eq!(found, [(21, 4)]);
         let shown = snippet(
             &page,
             &Hit {

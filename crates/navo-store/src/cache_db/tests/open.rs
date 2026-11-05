@@ -1,9 +1,50 @@
+use std::cell::RefCell;
+
 use super::*;
+use crate::cache_db::migrations;
 
 const PAGE: usize = 4096;
 
 fn garbage() -> Vec<u8> {
     (0..8192_u32).map(|i| (i * 31 + 7) as u8).collect()
+}
+
+fn write_v0(path: &Path) {
+    Connection::open(path)
+        .unwrap()
+        .execute_batch(
+            "PRAGMA journal_mode = WAL;
+             CREATE TABLE blob (
+                 tbl TEXT, key BLOB, value BLOB, size INTEGER, accessed INTEGER,
+                 PRIMARY KEY(tbl, key)
+             );
+             CREATE INDEX blob_age ON blob (tbl, accessed, key, size);
+             INSERT INTO blob (tbl, key, value, size, accessed) VALUES
+                 ('thumbs', x'61', x'6f6e65', 4, 1),
+                 ('thumbs', x'62', x'74776f', 4, 2),
+                 ('sizes', x'78', x'7979', 3, 3);",
+        )
+        .unwrap();
+}
+
+thread_local! {
+    static SECOND: RefCell<Option<Connection>> = const { RefCell::new(None) };
+    static BLOCKER: RefCell<Option<Connection>> = const { RefCell::new(None) };
+    static SECOND_RESULT: RefCell<Option<Result<CacheDb, String>>> = const { RefCell::new(None) };
+}
+
+fn migrate_second(_: i32) -> bool {
+    BLOCKER.with(|slot| {
+        slot.borrow_mut()
+            .take()
+            .expect("the blocker connection")
+            .execute_batch("ROLLBACK")
+            .expect("release the write lock");
+    });
+    let second = SECOND.with(|slot| slot.borrow_mut().take().expect("the second connection"));
+    let opened = CacheDb::from_connection(second).map_err(|error| error.to_string());
+    SECOND_RESULT.with(|slot| *slot.borrow_mut() = Some(opened));
+    true
 }
 
 fn open(dir: &TempDir) -> (CacheDb, CacheOpen) {
@@ -135,4 +176,78 @@ fn used_bytes_survive_close_and_reopen() {
     drop(cache);
     let (cache, _) = open(&dir);
     assert_eq!(cache.used_bytes("thumbs").unwrap(), 8);
+}
+
+#[test]
+fn two_connections_migrate_a_version_zero_file_once() {
+    let dir = tmp();
+    let path = cache_path(&dir);
+    write_v0(&path);
+    let blocker = Connection::open(&path).unwrap();
+    blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+    BLOCKER.with(|slot| *slot.borrow_mut() = Some(blocker));
+    SECOND.with(|slot| *slot.borrow_mut() = Some(Connection::open(&path).unwrap()));
+
+    let first = Connection::open(&path).unwrap();
+    first.busy_handler(Some(migrate_second)).unwrap();
+    let first = CacheDb::from_connection(first).map_err(|error| error.to_string());
+    let second = SECOND_RESULT.with(|slot| slot.borrow_mut().take()).unwrap();
+
+    for opened in [&first, &second] {
+        assert!(
+            opened.is_ok(),
+            "{}",
+            opened.as_ref().err().map_or("", String::as_str)
+        );
+    }
+    let first = first.expect("the first open succeeds");
+    let second = second.expect("the second open succeeds");
+    for cache in [&first, &second] {
+        for table in ["thumbs", "sizes"] {
+            let sum: i64 = cache
+                .conn
+                .query_row(
+                    "SELECT COALESCE(SUM(size), 0) FROM blob WHERE tbl = ?1",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(
+                cache.used_bytes(table).unwrap(),
+                u64::try_from(sum).unwrap(),
+                "stored total for {table}"
+            );
+        }
+        let version: u32 = cache
+            .conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, migrations::VERSION);
+    }
+}
+
+#[test]
+fn a_newer_cache_version_is_refused() {
+    let dir = tmp();
+    let path = cache_path(&dir);
+    write_v0(&path);
+    Connection::open(&path)
+        .unwrap()
+        .pragma_update(None, "user_version", migrations::VERSION + 1)
+        .unwrap();
+    let error = CacheDb::open(&path)
+        .err()
+        .expect("a newer cache is refused");
+    assert!(
+        matches!(
+            error,
+            CacheError::TooNew { found, supported }
+                if found == migrations::VERSION + 1 && supported == migrations::VERSION
+        ),
+        "{error:?}"
+    );
+    assert!(
+        !corrupt_path(&dir, 1).exists(),
+        "the cache is left in place"
+    );
 }

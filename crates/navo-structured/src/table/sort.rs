@@ -5,6 +5,7 @@ use super::Table;
 use super::sniff::{is_number, number};
 
 const MEMO_COLUMNS: usize = 8;
+const MEMO_BYTES: u64 = 32 * 1024 * 1024;
 
 fn cell(rows: &[Vec<String>], row: usize, column: usize) -> &str {
     rows.get(row)
@@ -47,15 +48,17 @@ struct ColumnKeys {
     column: usize,
     keys: SortKeys,
     used: u64,
+    bytes: u64,
 }
 
-/// Parsed sort keys for one table, at most [`MEMO_COLUMNS`] columns.
+/// Parsed sort keys for one table, at most [`MEMO_COLUMNS`] columns or [`MEMO_BYTES`].
 ///
 /// The keys belong to the table's identity; sorting another table drops them.
 #[derive(Default)]
 pub struct SortMemo {
     table: Option<Arc<Table>>,
     columns: Vec<ColumnKeys>,
+    bytes: u64,
     clock: u64,
 }
 
@@ -73,6 +76,7 @@ impl SortMemo {
         {
             self.table = Some(table.clone());
             self.columns.clear();
+            self.bytes = 0;
         }
         self.clock = self.clock.wrapping_add(1);
         if let Some(at) = self.columns.iter().position(|keys| keys.column == column) {
@@ -82,19 +86,50 @@ impl SortMemo {
         }
         let keys = parse_keys(&table.rows, column);
         let order = sort_ids(&keys, table.rows.len(), descending);
+        let bytes = keys.bytes();
         self.remember(ColumnKeys {
             column,
             keys,
             used: self.clock,
+            bytes,
         });
         order
     }
 
     fn remember(&mut self, keys: ColumnKeys) {
-        if self.columns.len() < MEMO_COLUMNS {
-            self.columns.push(keys);
-        } else if let Some(slot) = self.columns.iter_mut().min_by_key(|keys| keys.used) {
-            *slot = keys;
+        if keys.bytes > MEMO_BYTES {
+            return;
+        }
+        while !self.columns.is_empty()
+            && (self.columns.len() >= MEMO_COLUMNS
+                || self.bytes.saturating_add(keys.bytes) > MEMO_BYTES)
+        {
+            let Some(oldest) = self
+                .columns
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, keys)| keys.used)
+                .map(|(at, _)| at)
+            else {
+                break;
+            };
+            let removed = self.columns.swap_remove(oldest);
+            self.bytes = self.bytes.saturating_sub(removed.bytes);
+        }
+        self.bytes = self.bytes.saturating_add(keys.bytes);
+        self.columns.push(keys);
+    }
+}
+
+impl SortKeys {
+    fn bytes(&self) -> u64 {
+        match self {
+            Self::Numbers(keys) => (keys.capacity() * std::mem::size_of::<Option<f64>>()) as u64,
+            Self::Text(keys) => {
+                let slots = keys.capacity() * std::mem::size_of::<String>();
+                let text: usize = keys.iter().map(String::capacity).sum();
+                (slots.saturating_add(text)) as u64
+            }
         }
     }
 }

@@ -198,6 +198,27 @@ fn stored_totals_follow_direct_blob_writes() {
 }
 
 #[test]
+fn stored_totals_follow_a_direct_table_change() {
+    let mut cache = mem();
+    cache.put(T, b"a", b"one").unwrap();
+    cache
+        .conn
+        .execute("UPDATE blob SET tbl = 'sizes' WHERE tbl = ?1", [T])
+        .unwrap();
+    assert_totals(&cache, T);
+    assert_totals(&cache, "sizes");
+    cache
+        .conn
+        .execute(
+            "UPDATE blob SET tbl = 'other', size = 7 WHERE tbl = 'sizes'",
+            [],
+        )
+        .unwrap();
+    assert_totals(&cache, "sizes");
+    assert_totals(&cache, "other");
+}
+
+#[test]
 fn opening_an_unversioned_cache_fills_the_stored_totals() {
     let dir = tmp();
     let path = cache_path(&dir);

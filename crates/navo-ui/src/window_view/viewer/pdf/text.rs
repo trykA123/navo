@@ -13,6 +13,29 @@ pub(super) enum PageChars {
     Wide(Arc<[char]>),
 }
 
+pub(super) enum PageSlice<'a> {
+    Narrow(std::slice::Iter<'a, u8>),
+    Wide(std::slice::Iter<'a, char>),
+}
+
+impl Iterator for PageSlice<'_> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<char> {
+        match self {
+            Self::Narrow(chars) => chars.next().map(|&byte| char::from(byte)),
+            Self::Wide(chars) => chars.next().copied(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Narrow(chars) => chars.size_hint(),
+            Self::Wide(chars) => chars.size_hint(),
+        }
+    }
+}
+
 impl PageChars {
     pub(super) fn len(&self) -> usize {
         match self {
@@ -32,6 +55,16 @@ impl PageChars {
         }
     }
 
+    pub(super) fn slice(&self, at: usize, len: usize) -> PageSlice<'_> {
+        let end = at.saturating_add(len).min(self.len());
+        let at = at.min(end);
+        match self {
+            Self::Narrow(chars) => PageSlice::Narrow(chars[at..end].iter()),
+            Self::Wide(chars) => PageSlice::Wide(chars[at..end].iter()),
+        }
+    }
+
+    #[cfg(test)]
     pub(super) fn iter(&self) -> impl Iterator<Item = char> + '_ {
         (0..self.len()).map(|at| match self {
             Self::Narrow(chars) => char::from(chars[at]),
@@ -292,6 +325,18 @@ mod tests {
             }
             assert_eq!(chars.get(chars.len()), None);
         }
+    }
+
+    #[test]
+    fn a_char_slice_clamps_to_the_page() {
+        let narrow = PageChars::Narrow(b"abc".to_vec().into());
+        assert_eq!(narrow.slice(1, 2).collect::<String>(), "bc");
+        assert_eq!(narrow.slice(2, 9).collect::<String>(), "c");
+        assert_eq!(narrow.slice(9, 1).collect::<String>(), "");
+        let wide = PageChars::Wide(vec!['a', 'ș', 'c'].into());
+        assert_eq!(wide.slice(1, 2).collect::<String>(), "șc");
+        assert_eq!(wide.slice(2, 9).collect::<String>(), "c");
+        assert_eq!(wide.slice(9, 1).collect::<String>(), "");
     }
 
     #[test]

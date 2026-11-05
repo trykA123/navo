@@ -24,6 +24,8 @@ pub enum CacheError {
     Sqlite(#[from] rusqlite::Error),
     #[error("cache file error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("cache schema version {found} is newer than the supported version {supported}")]
+    TooNew { found: u32, supported: u32 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -257,6 +257,51 @@ fn the_memo_keeps_only_the_eight_most_recently_sorted_columns() {
     );
 }
 
+fn large_table(rows: usize, columns: usize) -> Arc<Table> {
+    let cell = "x".repeat(2 * 1024 * 1024);
+    table_from(
+        (0..rows)
+            .map(|_| (0..columns).map(|_| cell.clone()).collect())
+            .collect(),
+    )
+}
+
+#[test]
+fn the_memo_drops_the_least_recently_sorted_column_when_its_keys_exceed_the_budget() {
+    let table = large_table(9, 2);
+    let mut memo = SortMemo::default();
+    let _ = memo.sort_order(&table, 0, false);
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, true);
+    assert_eq!(
+        parsed_cells(),
+        parsed,
+        "a column under the budget stays cached"
+    );
+    let _ = memo.sort_order(&table, 1, false);
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, false);
+    assert!(
+        parsed_cells() > parsed,
+        "the least recently sorted column was evicted by bytes"
+    );
+}
+
+#[test]
+fn a_column_larger_than_the_key_budget_is_sorted_without_caching() {
+    let table = large_table(17, 1);
+    let mut memo = SortMemo::default();
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, false);
+    assert!(parsed_cells() > parsed);
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, true);
+    assert!(
+        parsed_cells() > parsed,
+        "keys over the budget are parsed again"
+    );
+}
+
 #[test]
 fn widths_come_from_the_sample_and_are_clamped() {
     let header = vec!["id".to_owned(), "x".to_owned()];
