@@ -266,6 +266,8 @@ pub(super) enum Step {
     RestoreConfiguration,
     DeleteOld,
     Verify,
+    Answer,
+    DeleteLegacy,
 }
 
 pub(super) fn install_steps(exists: bool) -> &'static [Step] {
@@ -273,13 +275,14 @@ pub(super) fn install_steps(exists: bool) -> &'static [Step] {
     if exists {
         &[
             Copy,
+            Stop,
             RenameOld,
             Replace,
-            Stop,
             BackupSettings,
             Configure,
             Start,
             Verify,
+            Answer,
         ]
     } else {
         &[
@@ -290,15 +293,18 @@ pub(super) fn install_steps(exists: bool) -> &'static [Step] {
             Configure,
             Start,
             Verify,
+            Answer,
         ]
     }
 }
 
+/// Runs the install with rollback; `Answer` is the commit point. `Ok(Some(warning))`: the new
+/// service runs, but the legacy image could not be deleted.
 pub(super) fn run_install(
     exists: bool,
     was_running: bool,
     mut execute: impl FnMut(Step) -> io::Result<()>,
-) -> io::Result<()> {
+) -> io::Result<Option<io::Error>> {
     execute(Step::RecoverOld)?;
     let _ = execute(Step::DeleteOld);
     let mut completed = Vec::new();
@@ -309,7 +315,7 @@ pub(super) fn run_install(
         completed.push(step);
     }
     let _ = execute(Step::DeleteOld);
-    Ok(())
+    Ok(execute(Step::DeleteLegacy).err())
 }
 
 fn recover(
@@ -332,7 +338,7 @@ fn recover(
     } else if completed.contains(&Step::Copy) {
         rollback.push((Step::DiscardCopy, "discarding the temporary copy"));
     }
-    if !exists && replaced {
+    if replaced {
         rollback.push((Step::RemoveFresh, "removing the new executable"));
     }
     if exists && replaced {

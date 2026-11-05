@@ -44,9 +44,7 @@ pub(super) fn install() -> io::Result<()> {
     };
     let leftover = run_upgrade(legacy, |step| match step {
         UpgradeStep::InstallNew => install_current(&config),
-        UpgradeStep::AwaitNew => {
-            await_answer(ANSWER_WAIT, || navo_index::pipe::Client::connect().is_ok())
-        }
+        UpgradeStep::AwaitNew => answer(),
         UpgradeStep::RemoveLegacyService => {
             cleanup::remove_service(LEGACY_PRODUCT, cleanup::deadline())
         }
@@ -55,11 +53,23 @@ pub(super) fn install() -> io::Result<()> {
                 .map(|left| cleanup::report(&left))
         }
     })?;
+    warn_leftover(leftover);
+    Ok(())
+}
+
+fn warn_leftover(leftover: Option<io::Error>) {
     if let Some(warning) = leftover {
         tracing::warn!(%warning, "index service installed with old files left in place");
         eprintln!("navo: index service: warning: {warning}");
     }
-    Ok(())
+}
+
+fn answer() -> io::Result<()> {
+    await_answer(ANSWER_WAIT, || {
+        navo_index::pipe::Client::connect()
+            .map(drop)
+            .map_err(io::Error::other)
+    })
 }
 
 fn install_current(config: &super::config::Config) -> io::Result<()> {
@@ -110,12 +120,8 @@ fn install_with(
         Step::Copy => plan.copy_from(&std::env::current_exe()?),
         Step::RenameOld => plan.rename_old(),
         Step::Replace => plan.replace(),
-        Step::BackupSettings => {
-            settings = Some(SettingsBackup::capture(
-                &storage.directory.join("service.json"),
-            )?);
-            Ok(())
-        }
+        Step::BackupSettings => SettingsBackup::capture(&storage.directory.join("service.json"))
+            .map(|backup| settings = Some(backup)),
         Step::Configure => update(&service, &command)
             .and_then(|()| configure_recovery(&service))
             .and_then(|()| storage.write_config(config)),
@@ -124,17 +130,19 @@ fn install_with(
             start(&service)
         }
         Step::Verify => verify::installed(&service, plan, &command, started_after),
+        Step::Answer => answer(),
+        // The install image is still the legacy name; nothing else to delete yet.
+        Step::DeleteLegacy => Ok(()),
         Step::Restore => plan.restore(),
         Step::RestoreSettings => settings.as_ref().map_or(Ok(()), SettingsBackup::restore),
         Step::RemoveFresh => fresh.remove_executable(plan),
         Step::DiscardCopy => plan.discard_copy(),
-        Step::RestoreConfiguration => match &previous {
-            Some(previous) => previous.restore(&service),
-            None => Ok(()),
-        },
+        Step::RestoreConfiguration => previous
+            .as_ref()
+            .map_or(Ok(()), |old| old.restore(&service)),
         Step::DeleteOld => plan.delete_old(),
     });
-    finish_install(result, exists, &service)
+    finish_install(result.map(warn_leftover), exists, &service)
 }
 
 fn finish_install(result: io::Result<()>, exists: bool, service: &ServiceHandle) -> io::Result<()> {
