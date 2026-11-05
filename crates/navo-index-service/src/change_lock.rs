@@ -2,31 +2,57 @@ use std::io;
 use std::time::Duration;
 
 #[cfg(windows)]
+mod file;
+#[cfg(windows)]
 mod windows;
 #[cfg(windows)]
 pub use windows::ChangeLock;
 
 #[cfg(windows)]
-pub(super) fn global() -> io::Result<ChangeLock> {
-    ChangeLock::acquire(Scope::Global, Duration::from_secs(60))?.ok_or_else(|| {
+pub(super) fn machine(wait: Duration) -> io::Result<file::FileLock> {
+    file::FileLock::acquire(wait)?.ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::TimedOut,
-            "another index service change held the mutex for 60 seconds",
+            "another index service change held change.lock until the wait ended",
         )
     })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
-    Global,
     Local,
 }
 
 impl Scope {
     fn name(self) -> &'static str {
         match self {
-            Self::Global => "Global\\NavoIndexServiceChange",
             Self::Local => "Local\\NavoIndexServiceChange",
+        }
+    }
+}
+
+const FILE_POLL: Duration = Duration::from_millis(100);
+const SHARING_VIOLATION: i32 = 32;
+
+fn acquire_file<T>(
+    wait: Duration,
+    mut open: impl FnMut() -> io::Result<T>,
+    mut elapsed: impl FnMut() -> Duration,
+    mut pause: impl FnMut(Duration),
+) -> io::Result<Option<T>> {
+    loop {
+        match open() {
+            Ok(handle) => return Ok(Some(handle)),
+            Err(error) if error.raw_os_error() == Some(SHARING_VIOLATION) => {}
+            Err(error) => return Err(error),
+        }
+        let remaining = wait.saturating_sub(elapsed());
+        if remaining.is_zero() {
+            return Ok(None);
+        }
+        pause(FILE_POLL.min(remaining));
+        if elapsed() >= wait {
+            return Ok(None);
         }
     }
 }
@@ -73,5 +99,7 @@ pub(super) fn install_unless_current(
     install()
 }
 
+#[cfg(test)]
+mod file_tests;
 #[cfg(test)]
 mod tests;

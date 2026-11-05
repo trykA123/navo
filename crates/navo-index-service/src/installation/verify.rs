@@ -31,7 +31,7 @@ use super::super::upgrade::await_answer;
 
 const CONFIG_BYTES: usize = 8 * 1024;
 const PATH_UNITS: usize = 32_768;
-const ANSWER_TRY: Duration = Duration::from_secs(2);
+use super::super::elevation_limits::ANSWER_TRY;
 
 /// Checks the current service without creating files or changing its registration or state.
 pub(super) fn current(source: &Path) -> io::Result<bool> {

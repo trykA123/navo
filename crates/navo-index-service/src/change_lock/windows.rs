@@ -11,7 +11,7 @@ use windows_sys::Win32::System::Threading::{CreateMutexW, ReleaseMutex, WaitForS
 
 use super::{Held, Scope, WaitResult};
 
-/// Serialises service changes in one session or across the machine. Drop on the acquiring thread.
+/// Serialises app service changes in one session. Drop on the acquiring thread.
 pub struct ChangeLock {
     _held: Held<Mutex>,
 }

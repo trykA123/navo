@@ -111,8 +111,7 @@ fn a_wait_timeout_does_not_release_someone_elses_lock() {
 }
 
 #[test]
-fn scopes_name_the_same_change_in_their_own_namespace() {
-    assert_eq!(Scope::Global.name(), "Global\\NavoIndexServiceChange");
+fn the_app_mutex_stays_local_to_the_session() {
     assert_eq!(Scope::Local.name(), "Local\\NavoIndexServiceChange");
 }
 

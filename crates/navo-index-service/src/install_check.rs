@@ -208,17 +208,7 @@ fn is_legacy(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(OsStr::to_str) else {
         return false;
     };
-    let Some((head, rest)) = name.split_at_checked(LEGACY_IMAGE.len()) else {
-        return false;
-    };
-    head.eq_ignore_ascii_case(LEGACY_IMAGE)
-        && (rest.is_empty()
-            || rest
-                .strip_prefix('.')
-                .and_then(|rest| rest.strip_suffix(".old"))
-                .is_some_and(|nonce| {
-                    !nonce.is_empty() && nonce.bytes().all(|b| b.is_ascii_digit())
-                }))
+    super::removal::removable_image(&[LEGACY_IMAGE], name).is_some()
 }
 
 /// Windows paths and service commands compare without case.

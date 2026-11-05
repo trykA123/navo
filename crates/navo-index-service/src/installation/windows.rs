@@ -4,7 +4,7 @@ use std::io;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_EXISTS};
 use windows_sys::Win32::Storage::FileSystem::MOVEFILE_DELAY_UNTIL_REBOOT;
@@ -40,7 +40,10 @@ mod legacy;
 mod scm_stop;
 mod verify;
 
-const ANSWER_WAIT: (Duration, Duration) = (Duration::from_secs(30), Duration::from_millis(250));
+const ANSWER_WAIT: (Duration, Duration) = (
+    super::elevation_limits::ANSWER_WAIT,
+    Duration::from_millis(250),
+);
 const DESCRIPTION: &str = "Keeps the file index for Navo search up to date.";
 const LEGACY_TRIES: u32 = 5;
 const LEGACY_DELAY: Duration = Duration::from_millis(200);
@@ -53,27 +56,28 @@ struct Installed {
 
 pub(super) fn install() -> io::Result<()> {
     let source = service_source(&std::env::current_exe()?)?;
-    super::change_lock::install_unless_current(
-        || verify::current(&source),
-        || install_service(&source),
-    )
+    install_service(&source)
 }
 
 fn install_service(source: &Path) -> io::Result<()> {
     let legacy = legacy::detect()?;
-    let config = match legacy::carried_config() {
-        Some(config) => config,
-        None => super::session::installation_config()?,
-    };
     let mut installed = None;
     let leftover = run_upgrade(legacy, |step| match step {
-        UpgradeStep::InstallNew => {
-            install_current(source, &config).map(|done| installed = Some(done))
-        }
-        UpgradeStep::AwaitNew => installed
-            .as_ref()
-            .ok_or_else(unverified)
-            .and_then(|done| answer(&done.service, Some(&done.process))),
+        UpgradeStep::InstallNew => super::change_lock::install_unless_current(
+            || verify::current(source),
+            || {
+                let config = match legacy::carried_config() {
+                    Some(config) => config,
+                    None => super::session::installation_config()?,
+                };
+                install_current(source, &config).map(|done| installed = Some(done))
+            },
+        ),
+        UpgradeStep::AwaitNew => match installed.as_ref() {
+            Some(done) => answer(&done.service, Some(&done.process)),
+            None if verify::current(source)? => Ok(()),
+            None => Err(unverified()),
+        },
         UpgradeStep::RemoveLegacyService => {
             cleanup::remove_service(LEGACY_PRODUCT, cleanup::deadline())
         }
@@ -354,8 +358,8 @@ fn configure_recovery(service: &ServiceHandle) -> io::Result<()> {
 }
 
 /// Removes both services and their files; prints what waits for a restart or was kept.
-pub(super) fn remove() -> io::Result<Elevated> {
-    let left = cleanup::remove_all()?;
+pub(super) fn remove(deadline: Instant) -> io::Result<Elevated> {
+    let left = cleanup::remove_all(deadline)?;
     if !left.is_complete() {
         cleanup::report(&left);
     }

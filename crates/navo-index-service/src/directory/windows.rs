@@ -46,8 +46,24 @@ pub(super) struct ProtectedDirectory {
 
 impl ProtectedDirectory {
     pub fn open(paths: &[&Path], policy: Policy, install: bool) -> io::Result<Self> {
+        Self::open_with(
+            paths,
+            policy,
+            if install {
+                Mode::Repair
+            } else {
+                Mode::Existing
+            },
+        )
+    }
+
+    pub fn create_for_lock(path: &Path) -> io::Result<Self> {
+        Self::open_with(&[path], Policy::Executable, Mode::Create)
+    }
+
+    fn open_with(paths: &[&Path], policy: Policy, mode: Mode) -> io::Result<Self> {
         let descriptor = descriptor(policy)?;
-        if install {
+        if mode != Mode::Existing {
             let _ = super::ownership::enable_privileges();
         }
         let mut guards = Vec::new();
@@ -62,7 +78,7 @@ impl ProtectedDirectory {
             guards.push(guard);
         }
         for path in paths {
-            let guard = open_verified(path, &descriptor, install).map_err(|error| {
+            let guard = open_verified(path, &descriptor, mode).map_err(|error| {
                 io::Error::new(error.kind(), format!("{}: {error}", path.display()))
             })?;
             guards.push(guard);
@@ -84,18 +100,21 @@ impl ProtectedDirectory {
     }
 }
 
-fn open_verified(
-    path: &Path,
-    descriptor: &LocalAllocation,
-    install: bool,
-) -> io::Result<OwnedHandle> {
-    if install {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Existing,
+    Create,
+    Repair,
+}
+
+fn open_verified(path: &Path, descriptor: &LocalAllocation, mode: Mode) -> io::Result<OwnedHandle> {
+    if mode != Mode::Existing {
         create_directory(path, descriptor)?;
     }
     let guard = open_directory(path)?;
     let kind = found(&guard)?;
     let trusted = kind == Found::Directory && is_trusted(&guard, descriptor)?;
-    let action = directory_action(kind, trusted, install);
+    let action = directory_action(kind, trusted, mode == Mode::Repair);
     if action == DirectoryAction::Accept {
         return Ok(guard);
     }

@@ -27,8 +27,7 @@ pub(super) fn deadline() -> Instant {
 }
 
 /// Removes both services and their files within `REMOVE_DEADLINE`; returns what is left.
-pub(super) fn remove_all() -> io::Result<Cleanup> {
-    let deadline = deadline();
+pub(super) fn remove_all(deadline: Instant) -> io::Result<Cleanup> {
     let mut cleanup = Cleanup::default();
     remove_both([NAVO, LEGACY_PRODUCT], |product| {
         removal::run(

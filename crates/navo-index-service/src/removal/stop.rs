@@ -71,9 +71,10 @@ impl StopLimits {
     };
 
     pub(crate) fn within(remaining: Duration) -> Self {
+        let stop = STOP_LIMIT.min(remaining);
         Self {
-            stop: STOP_LIMIT.min(remaining),
-            wait: PROCESS_WAIT.min(remaining),
+            stop,
+            wait: PROCESS_WAIT.min(remaining.saturating_sub(stop)),
         }
     }
 }

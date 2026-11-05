@@ -136,7 +136,11 @@ impl CopyPlan {
         let mut result = Ok(());
         for entry in std::fs::read_dir(&self.directory)? {
             let entry = entry?;
-            if is_old_image(self.image, &entry.file_name().to_string_lossy()) {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if !name.eq_ignore_ascii_case(self.image)
+                && super::removal::removable_image(&[self.image], &name).is_some()
+            {
                 result = result.and(std::fs::remove_file(entry.path()));
             }
         }

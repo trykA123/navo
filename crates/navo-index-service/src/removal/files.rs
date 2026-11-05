@@ -141,13 +141,23 @@ fn remove_file(
     let Err(error) = delete(files, path, limits) else {
         return Ok(());
     };
-    tracing::warn!(path = %path.display(), %error, "service file not deleted; scheduling it");
     let renamed = path.with_file_name(format!("{image}.{}.old", limits.process));
     let target = if renamed != path && files.rename(path, &renamed).is_ok() {
         renamed
     } else {
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case(image))
+        {
+            return Err(io::Error::other(format!(
+                "cannot delete or rename service image {}: {error}",
+                path.display()
+            )));
+        }
         path.to_path_buf()
     };
+    tracing::warn!(path = %target.display(), %error, "service file not deleted; scheduling it");
     schedule(files, &target, cleanup).map(|_| ())
 }
 
@@ -158,7 +168,11 @@ fn delete(files: &mut impl Files, path: &Path, limits: &Limits) -> io::Result<()
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
             Err(_) if attempt < limits.tries && Instant::now() < limits.deadline => {
                 attempt += 1;
-                std::thread::sleep(limits.delay);
+                std::thread::sleep(
+                    limits
+                        .delay
+                        .min(limits.deadline.saturating_duration_since(Instant::now())),
+                );
             }
             result => return result,
         }

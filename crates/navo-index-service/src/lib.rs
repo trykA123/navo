@@ -33,6 +33,8 @@ mod directory_policy;
 mod elevation;
 mod elevation_error;
 #[cfg(any(windows, test))]
+mod elevation_limits;
+#[cfg(any(windows, test))]
 mod elevation_result;
 
 pub use elevation_error::{Elevated, ElevationError};
@@ -212,12 +214,15 @@ fn execute(action: Action) -> std::io::Result<Elevated> {
             request_elevation(action).map_err(std::io::Error::other)
         }
         Action::Install => {
-            let _change = change_lock::global()?;
+            let _change = change_lock::machine(elevation_limits::CHANGE_WAIT)?;
             installation::install().map(|()| Elevated::Done)
         }
         Action::Remove => {
-            let _change = change_lock::global()?;
-            installation::remove()
+            let deadline = std::time::Instant::now() + REMOVE_DEADLINE;
+            let _change = change_lock::machine(
+                deadline.saturating_duration_since(std::time::Instant::now()),
+            )?;
+            installation::remove(deadline)
         }
     }
 }
