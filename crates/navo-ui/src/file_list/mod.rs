@@ -35,7 +35,7 @@ use gpui_kit::{
     MouseButton, ParentElement, Pixels, RenderOnce, SharedString, Styled, Window, div,
 };
 use navo_core::{Command, Selection, ViewState};
-use navo_fs::FsEntry;
+use navo_fs::view::Rows;
 
 pub use action::{FileListAction, FilterEdit};
 pub use drop::{DropEvent, DropPayload, DropSpot, ListEdge};
@@ -63,7 +63,7 @@ type PageRowsHandler = Rc<dyn Fn(&u64, &mut Window, &mut App)>;
 #[derive(Clone, Debug)]
 pub struct FileListProps {
     pub folder: SharedString,
-    pub rows: Arc<[FsEntry]>,
+    pub rows: Rows,
     pub view: ViewState,
     pub marked: Arc<Selection>,
     pub is_active: bool,

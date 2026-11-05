@@ -1,10 +1,12 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+use crate::listing::NameLookup;
 use crate::{CacheKey, CacheStats, CachedListing};
 
 struct Slot {
     listing: Arc<CachedListing>,
+    lookup: Option<NameLookup>,
     bytes: usize,
     tick: u64,
 }
@@ -18,14 +20,25 @@ pub(crate) enum Swap {
 
 pub(crate) struct SizedListing {
     pub(crate) listing: Arc<CachedListing>,
+    pub(crate) lookup: Option<NameLookup>,
     pub(crate) bytes: usize,
 }
 
 impl SizedListing {
     pub(crate) fn new(key: &CacheKey, listing: CachedListing) -> Self {
-        let bytes = key.estimated_bytes() + listing.estimated_bytes();
+        Self::with_lookup(key, listing, None)
+    }
+
+    pub(crate) fn with_lookup(
+        key: &CacheKey,
+        listing: CachedListing,
+        lookup: Option<NameLookup>,
+    ) -> Self {
+        let lookup_bytes = lookup.as_ref().map_or(0, NameLookup::bytes);
+        let bytes = key.estimated_bytes() + listing.estimated_bytes() + lookup_bytes;
         Self {
             listing: Arc::new(listing),
+            lookup,
             bytes,
         }
     }
@@ -75,6 +88,56 @@ impl Store {
 
     pub(crate) fn peek(&self, key: &CacheKey) -> Option<Arc<CachedListing>> {
         self.slots.get(key).map(|slot| Arc::clone(&slot.listing))
+    }
+
+    // The slot keeps its listing; only the lookup leaves, so a stale swap cannot move it to new rows.
+    pub(crate) fn take_lookup(
+        &mut self,
+        key: &CacheKey,
+    ) -> Option<(Arc<CachedListing>, Option<NameLookup>)> {
+        let (listing, lookup, bytes) = {
+            let slot = self.slots.get_mut(key)?;
+            let lookup = slot.lookup.take();
+            let bytes = lookup.as_ref().map_or(0, NameLookup::bytes);
+            slot.bytes -= bytes;
+            (Arc::clone(&slot.listing), lookup, bytes)
+        };
+        self.bytes -= bytes;
+        if self.is_pinned(key) {
+            self.pinned_bytes -= bytes;
+        }
+        Some((listing, lookup))
+    }
+
+    pub(crate) fn restore_lookup(
+        &mut self,
+        key: &CacheKey,
+        seen: &Arc<CachedListing>,
+        lookup: Option<NameLookup>,
+    ) {
+        let Some(lookup) = lookup else {
+            return;
+        };
+        let pinned = self.is_pinned(key);
+        let Some(slot) = self.slots.get_mut(key) else {
+            return;
+        };
+        if !Arc::ptr_eq(&slot.listing, seen) {
+            return;
+        }
+        let bytes = lookup.bytes();
+        slot.lookup = Some(lookup);
+        slot.bytes += bytes;
+        self.bytes += bytes;
+        if pinned {
+            self.pinned_bytes += bytes;
+        }
+        self.evict_to_budget();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn lookup(&self, key: &CacheKey) -> Option<&NameLookup> {
+        self.slots.get(key)?.lookup.as_ref()
     }
 
     pub(crate) fn put(&mut self, key: CacheKey, entry: SizedListing) {
@@ -187,11 +250,16 @@ impl Store {
         if self.is_pinned(&key) {
             self.pinned_bytes += entry.bytes;
         }
-        let SizedListing { listing, bytes } = entry;
+        let SizedListing {
+            listing,
+            lookup,
+            bytes,
+        } = entry;
         self.slots.insert(
             key,
             Slot {
                 listing,
+                lookup,
                 bytes,
                 tick,
             },

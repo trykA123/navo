@@ -65,6 +65,29 @@ fn details_line_up_with_the_listing() {
 }
 
 #[test]
+fn rows_line_up_with_the_listing_after_a_sort_a_filter_and_a_measure() {
+    let fs = fake();
+    let mut browser = browser_at(&fs, "home");
+    settle(&mut browser);
+    browser.sort_by(crate::file_list::SortBy::Size);
+    browser.filter_push('s');
+    settle(&mut browser);
+    browser.command(&Command::SelectionToggle).unwrap();
+    settle(&mut browser);
+    let tab = browser.state().active_tab().id();
+    let rows = browser.rows(tab);
+    let listing = browser.state().active_tab().listing().unwrap();
+    let row_names: Vec<String> = rows.iter().map(|row| row.name.to_text()).collect();
+    let entry_names: Vec<String> = listing
+        .entries()
+        .iter()
+        .map(|entry| entry.name.clone())
+        .collect();
+    assert_eq!(row_names, entry_names);
+    assert_eq!(rows[0].size, 7);
+}
+
+#[test]
 fn a_command_runs_its_listing_effect() {
     let fs = fake();
     let mut browser = browser_at(&fs, "home");

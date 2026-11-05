@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use navo_core::{AppState, Location, TabId};
-use navo_fs::{CancelToken, FsEntry, JobKind, JobSlot, Priority, volume_of};
+use navo_fs::view::Rows;
+use navo_fs::{CancelToken, JobKind, JobSlot, Priority, volume_of};
 
 use super::cached::SYNC_ROWS;
 use super::filter::{Full, Shown, Visibility, shown_until};
-use super::sort::sorted_full;
+use super::sort::{SortCount, sorted_rows};
 use super::{Browser, Message};
 use crate::file_list::SortKey;
 
@@ -14,7 +15,7 @@ pub(super) struct ViewJob {
     revision: u64,
     cancel: CancelToken,
     location: Location,
-    rows: Arc<[FsEntry]>,
+    rows: Rows,
     resized: Vec<(String, u64)>,
     carry: Carry,
 }
@@ -53,14 +54,14 @@ impl ViewJobs {
     pub(super) fn resized(
         &mut self,
         tab: TabId,
-        (from, to): (&Arc<[FsEntry]>, &Arc<[FsEntry]>),
+        (from, to): (&Rows, &Rows),
         sizes: &[(String, u64)],
     ) {
         let Some(job) = self.jobs.get_mut(&tab) else {
             return;
         };
-        if Arc::ptr_eq(&job.rows, from) {
-            job.rows = Arc::clone(to);
+        if Rows::same(&job.rows, from) {
+            job.rows = to.clone();
             job.resized.extend_from_slice(sizes);
         }
     }
@@ -102,18 +103,22 @@ struct ViewWork {
     stamp: Stamp,
     base: Full,
     sort: Option<(SortKey, bool)>,
+    sort_count: SortCount,
     texts: [String; 2],
 }
 
 impl ViewWork {
     fn run(self, cancel: &CancelToken) -> Option<Viewed> {
         let _span = tracing::debug_span!("listing.view_job").entered();
-        let full = self
-            .sort
-            .map(|(key, folders_first)| sorted_full(&self.base.details, key, folders_first));
-        if cancel.is_cancelled() {
-            return None;
-        }
+        let full = match self.sort {
+            Some(sort) => Some(sorted_rows(
+                self.base.details.source(),
+                sort,
+                cancel,
+                &self.sort_count,
+            )?),
+            None => None,
+        };
         let base = full.as_ref().unwrap_or(&self.base);
         let shows = self.stamp.shows;
         let [text, fallback] = self.texts;
@@ -172,13 +177,14 @@ impl Browser {
             sort: carry
                 .sorts
                 .then(|| (self.sort_key(tab), self.folders_first)),
+            sort_count: self.sort_count.clone(),
             texts: [text, carry.fallback.clone()],
         };
         let job = ViewJob {
             revision: self.view_jobs.next,
             cancel: CancelToken::new(),
             location,
-            rows: Arc::clone(&work.base.details),
+            rows: work.base.details.clone(),
             resized: Vec::new(),
             carry,
         };
@@ -232,7 +238,7 @@ impl Browser {
         let is_same_rows = self
             .full
             .get(&tab)
-            .is_some_and(|full| Arc::ptr_eq(&full.details, &job.rows));
+            .is_some_and(|full| Rows::same(&full.details, &job.rows));
         if !is_same_rows || shows != self.visibility() {
             let fallback = job.carry.fallback.clone();
             let again = self.submit_view(tab, ViewChange::Again, Some(job));

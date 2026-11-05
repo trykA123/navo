@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use crate::{CancelToken, FsEntry};
 
+use super::rows::count_copied_row;
 use super::{Needle, Scratch};
 
 const CHECK_EVERY: usize = 4_096;
@@ -75,7 +76,11 @@ pub fn filter_all(rows: &[FsEntry], filter: &ViewFilter, cancel: &CancelToken) -
 pub fn materialize(rows: &[FsEntry], order: &[u32]) -> Vec<FsEntry> {
     order
         .iter()
-        .filter_map(|&index| rows.get(usize::try_from(index).ok()?).cloned())
+        .filter_map(|&index| rows.get(usize::try_from(index).ok()?))
+        .map(|entry| {
+            count_copied_row(entry);
+            entry.clone()
+        })
         .collect()
 }
 

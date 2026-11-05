@@ -66,7 +66,7 @@ impl MenuPage {
         };
         let props = FileListProps {
             folder: "commander".into(),
-            rows: self.rows.clone(),
+            rows: self.rows.clone().into(),
             view: ViewState { cursor, scroll: 0 },
             marked: Arc::new(marked),
             is_active: true,

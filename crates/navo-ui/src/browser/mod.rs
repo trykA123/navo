@@ -8,6 +8,7 @@ use navo_core::{
     AppState, Command, CommandError, CursorMove, Effect, Event, FsError, Listing, Location, PaneId,
     TabId, apply_event, list_missing,
 };
+use navo_fs::view::Rows;
 use navo_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
 
 pub use compare::{
@@ -53,7 +54,7 @@ pub struct Browser {
     sender: Sender<Message>,
     receiver: Receiver<Message>,
     wake: Waker,
-    details: HashMap<TabId, Arc<[FsEntry]>>,
+    details: HashMap<TabId, Rows>,
     errors: HashMap<TabId, FsError>,
     late_errors: HashMap<TabId, FsError>,
     focus_after_load: HashMap<TabId, String>,
@@ -74,6 +75,7 @@ pub struct Browser {
     folders_first: bool,
     copying: operate::Copying,
     sorts: HashMap<TabId, crate::file_list::SortKey>,
+    sort_count: sort::SortCount,
     next_op: u64,
     launcher: Launcher,
     seen: Vec<open::Seen>,
@@ -100,6 +102,7 @@ impl Browser {
         Self::with_pools(state, provider, wake, pools)
     }
 
+    #[expect(clippy::too_many_lines, reason = "one field per browser part")]
     fn with_pools(
         state: AppState,
         provider: Arc<dyn ProviderOps>,
@@ -140,6 +143,7 @@ impl Browser {
             folders_first: true,
             copying: operate::Copying::default(),
             sorts: HashMap::new(),
+            sort_count: sort::SortCount::default(),
             next_op: 0,
             launcher: Arc::new(|_| {}),
             seen: Vec::new(),
@@ -233,12 +237,17 @@ impl Browser {
     }
 
     #[must_use]
-    pub fn details(&self, tab: TabId) -> Arc<[FsEntry]> {
+    pub fn rows(&self, tab: TabId) -> Rows {
         self.details
             .get(&tab)
             .filter(|_| self.is_loaded(tab))
             .cloned()
-            .unwrap_or_else(|| Arc::from([]))
+            .unwrap_or_default()
+    }
+
+    #[must_use]
+    pub fn details(&self, tab: TabId) -> Arc<[FsEntry]> {
+        self.rows(tab).to_arc()
     }
 
     #[must_use]

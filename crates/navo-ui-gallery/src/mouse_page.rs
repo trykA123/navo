@@ -96,7 +96,7 @@ impl MousePage {
         let tab = panel.state.active_tab();
         let props = FileListProps {
             folder: "commander".into(),
-            rows: self.rows.clone(),
+            rows: self.rows.clone().into(),
             view: tab.view(),
             marked: Arc::new(tab.selection().clone()),
             is_active: true,

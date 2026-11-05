@@ -39,7 +39,7 @@ fn browser(fs: &Arc<FakeFs>) -> Browser {
     browser
 }
 
-fn settle(browser: &mut Browser) {
+pub(super) fn settle(browser: &mut Browser) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while browser.loading() && Instant::now() < deadline {
         browser.poll();
@@ -48,7 +48,7 @@ fn settle(browser: &mut Browser) {
     browser.poll();
 }
 
-fn names(browser: &Browser) -> Vec<String> {
+pub(super) fn names(browser: &Browser) -> Vec<String> {
     browser
         .state()
         .active_tab()
@@ -253,7 +253,7 @@ fn a_default_sort_set_before_start_orders_the_first_listing() {
     assert_eq!(names(&browser), ["alpha", "zeta", "C.md", "a.rs", "b.txt"]);
 }
 
-fn oracle_order(rows: &[FsEntry], key: SortKey, folders_first: bool) -> Vec<String> {
+pub(super) fn oracle_order(rows: &[FsEntry], key: SortKey, folders_first: bool) -> Vec<String> {
     let lower = |e: &FsEntry| e.name.display().to_lowercase();
     let is_file = |e: &FsEntry| e.kind != EntryKind::Folder;
     let ext = |e: &FsEntry| match lower(e).rsplit_once('.') {
@@ -304,7 +304,7 @@ fn a_25k_row_sort_equals_the_previous_comparator() {
     for by in [SortBy::Name, SortBy::Ext, SortBy::Size, SortBy::Date] {
         for descending in [false, true] {
             let key = SortKey { by, descending };
-            let got = super::sorted_full(&rows, key, true);
+            let got = super::sorted_full(&rows, key, true, &super::SortCount::default());
             let names: Vec<String> = got.details.iter().map(|e| e.name.to_text()).collect();
             assert_eq!(names, oracle_order(&rows, key, true));
         }

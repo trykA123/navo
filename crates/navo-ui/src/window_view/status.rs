@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Weak};
 
 use navo_core::{Selection, TabId};
-use navo_fs::{EntryKind, FsEntry};
+use navo_fs::EntryKind;
+use navo_fs::view::{Rows, WeakRows};
 
 use crate::settings::WindowParts;
 use crate::status_bar::{FooterParts, StatusBarProps};
@@ -24,7 +24,7 @@ struct Totals {
 
 #[derive(Default)]
 pub(super) struct TotalsCache {
-    tabs: HashMap<TabId, (Weak<[FsEntry]>, Totals)>,
+    tabs: HashMap<TabId, (WeakRows, Totals)>,
     #[cfg(test)]
     computed: u32,
 }
@@ -33,13 +33,13 @@ impl TotalsCache {
     pub(super) fn status_of(
         &mut self,
         tab: TabId,
-        rows: &Arc<[FsEntry]>,
+        rows: &Rows,
         marked: &Selection,
     ) -> StatusBarProps {
         let _span = tracing::debug_span!("status.totals").entered();
-        let weak = Arc::downgrade(rows);
+        let weak = rows.downgrade();
         let totals = match self.tabs.get(&tab) {
-            Some((cached, totals)) if cached.ptr_eq(&weak) && cached.strong_count() > 0 => *totals,
+            Some((cached, totals)) if cached.is_view_of(rows) => *totals,
             _ => {
                 let totals = totals_of(rows);
                 #[cfg(test)]
@@ -67,9 +67,9 @@ impl TotalsCache {
     }
 }
 
-fn totals_of(rows: &[FsEntry]) -> Totals {
+fn totals_of(rows: &Rows) -> Totals {
     let mut totals = Totals::default();
-    for entry in rows {
+    for entry in rows.iter() {
         let is_folder = entry.kind == EntryKind::Folder;
         totals.folders += u64::from(is_folder);
         totals.files += u64::from(!is_folder);

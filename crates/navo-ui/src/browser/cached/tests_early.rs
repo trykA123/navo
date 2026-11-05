@@ -9,7 +9,7 @@ use super::tests::gated::Gated;
 use super::tests::{big_fake, browser_with, is_cached, names, settle};
 use super::{CachedSorted, Fresh, WorkerSorted};
 use crate::browser::Browser;
-use crate::browser::sort::{sorted_full, ui_sorts};
+use crate::browser::sort::{SortCount, sorted_full, ui_sorts};
 
 const ROWS: usize = 30_000;
 
@@ -29,7 +29,7 @@ fn decoy(browser: &Browser, tab: TabId, request: u64) -> CachedSorted {
     }]
     .into();
     let (key, folders_first) = (browser.sort_key(tab), browser.folders_first);
-    let full = sorted_full(&rows, key, folders_first);
+    let full = sorted_full(&rows, key, folders_first, &SortCount::default());
     CachedSorted {
         tab,
         request,
@@ -130,6 +130,7 @@ fn a_cancelled_fetch_sends_no_early_listing() {
     let early = super::Early {
         cached,
         sort: (browser.sort_key(browser.state().active_tab().id()), true),
+        sort_count: SortCount::default(),
         notify: Box::new(move |rows, _| {
             let _ = sender.send(rows.len());
         }),

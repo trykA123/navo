@@ -7,7 +7,7 @@ use navo_fs::{CancelToken, FsEntry};
 use super::{Sorted, WorkerSorted};
 use crate::browser::Browser;
 use crate::browser::filter::Full;
-use crate::browser::sort::sorted_full;
+use crate::browser::sort::{SortCount, sorted_full};
 use crate::file_list::SortKey;
 
 pub(in crate::browser) struct CachedSorted {
@@ -20,6 +20,7 @@ pub(in crate::browser) struct CachedSorted {
 pub(in crate::browser) struct Early {
     pub(super) cached: Arc<CachedListing>,
     pub(super) sort: (SortKey, bool),
+    pub(super) sort_count: SortCount,
     pub(super) notify: Box<dyn FnOnce(Arc<[FsEntry]>, WorkerSorted) + Send>,
 }
 
@@ -27,7 +28,7 @@ impl Early {
     pub(super) fn send(self, cancel: &CancelToken) {
         let (key, folders_first) = self.sort;
         let rows = Arc::clone(&self.cached.rows);
-        let full = sorted_full(&rows, key, folders_first);
+        let full = sorted_full(&rows, key, folders_first, &self.sort_count);
         let sorted = WorkerSorted {
             key,
             folders_first,
@@ -48,12 +49,15 @@ impl Browser {
     ) -> Full {
         let current = (self.sort_key(tab), self.folders_first);
         match worker {
-            Some(sorted) if (sorted.key, sorted.folders_first) == current => {
+            Some(sorted)
+                if (sorted.key, sorted.folders_first) == current
+                    && self.shared_sort(rows, current).is_none() =>
+            {
                 self.remember(
                     tab,
                     Sorted {
                         source: Arc::clone(rows),
-                        key: sorted.key,
+                        sort: current,
                         full: sorted.full.clone(),
                     },
                 );

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use navo_core::{ProviderPath, Selection, TabId};
+use navo_fs::view::Rows;
 use navo_fs::{Attributes, EntryKind, FsEntry};
 
 use super::TotalsCache;
@@ -15,8 +16,8 @@ fn entry(name: &str, kind: EntryKind, size: u64) -> FsEntry {
     }
 }
 
-fn rows() -> Arc<[FsEntry]> {
-    Arc::from(vec![
+fn rows() -> Rows {
+    Rows::from(vec![
         entry("d", EntryKind::Folder, 0),
         entry("a", EntryKind::File, 10),
         entry("b", EntryKind::File, 20),
@@ -60,4 +61,43 @@ fn marked_totals_follow_selection() {
     let status = cache.status_of(TabId::new(1), &rows, &marked);
     assert_eq!((status.marked, status.marked_bytes), (1, 10));
     assert_eq!(cache.computed, 1);
+}
+
+#[test]
+fn views_of_one_source_compute_totals_once_each_and_a_dropped_source_misses() {
+    let mut cache = TotalsCache::default();
+    let marked = Selection::new(3);
+    let source = rows();
+    let all = Rows::all(Arc::clone(source.source()));
+    let narrowed = source.narrowed(vec![0, 2]);
+
+    let first = cache.status_of(TabId::new(1), &all, &marked);
+    let second = cache.status_of(TabId::new(2), &narrowed, &marked);
+    let again = cache.status_of(TabId::new(1), &all, &marked);
+    assert_eq!(cache.computed, 2);
+    assert_eq!((first.folders, first.files, first.bytes), (1, 2, 30));
+    assert_eq!((second.folders, second.files, second.bytes), (1, 1, 20));
+    assert_eq!((again.folders, again.files, again.bytes), (1, 2, 30));
+
+    drop(source);
+    drop(all);
+    drop(narrowed);
+    let fresh = rows();
+    let status = cache.status_of(TabId::new(1), &fresh, &marked);
+    assert_eq!(cache.computed, 3);
+    assert_eq!(status.bytes, 30);
+}
+
+#[test]
+fn a_narrowed_view_of_the_same_tab_recomputes_its_totals() {
+    let mut cache = TotalsCache::default();
+    let marked = Selection::new(3);
+    let all = rows();
+    let narrowed = all.narrowed(vec![0]);
+
+    let first = cache.status_of(TabId::new(1), &all, &marked);
+    let second = cache.status_of(TabId::new(1), &narrowed, &marked);
+    assert_eq!(cache.computed, 2);
+    assert_eq!((first.folders, first.files, first.bytes), (1, 2, 30));
+    assert_eq!((second.folders, second.files, second.bytes), (1, 0, 0));
 }

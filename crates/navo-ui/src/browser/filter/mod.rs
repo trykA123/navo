@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use navo_core::{Command, CursorMove, Entry, Event, Listing, Location, TabId};
-use navo_fs::view::{ViewFilter, filter_all, materialize};
-use navo_fs::{CancelToken, FsEntry};
+use navo_fs::CancelToken;
+use navo_fs::view::{Rows, ViewFilter, filter_all, filter_order};
 
 use super::Browser;
 use super::sort::listing_of;
@@ -21,12 +20,12 @@ pub(super) struct Filter {
 #[derive(Clone)]
 pub(super) struct Full {
     pub(super) listing: Listing,
-    pub(super) details: Arc<[FsEntry]>,
+    pub(super) details: Rows,
 }
 
 pub(super) struct Shown {
     listing: Listing,
-    details: Arc<[FsEntry]>,
+    details: Rows,
 }
 
 impl Browser {
@@ -154,7 +153,7 @@ impl Browser {
         tab: TabId,
         location: &Location,
         full: Full,
-    ) -> (Listing, Arc<[FsEntry]>) {
+    ) -> (Listing, Rows) {
         let shown = match self.filters.get(&tab) {
             Some(filter) if &filter.location == location => {
                 shown(&full, &filter.text, self.visibility())
@@ -224,7 +223,7 @@ impl Browser {
         if found.is_empty() {
             return;
         }
-        let rows: Arc<[FsEntry]> = rows.into();
+        let rows: Rows = rows.into();
         self.view_jobs.resized(tab, (&full.details, &rows), &found);
         full.details = rows;
     }
@@ -312,14 +311,18 @@ pub(super) fn shown_until(
         show_hidden: shows.hidden,
         show_system: shows.system,
     };
-    let keep = filter_all(&full.details, &filter, cancel)?;
+    let source = full.details.source();
+    let keep = match full.details.order() {
+        Some(order) => filter_order(source, order, &filter, cancel)?,
+        None => filter_all(source, &filter, cancel)?,
+    };
     if keep.is_empty() && needle.is_some() {
         return None;
     }
-    let details = materialize(&full.details, &keep);
+    let details = full.details.narrowed(keep);
     Some(Shown {
         listing: listing_of(&details),
-        details: details.into(),
+        details,
     })
 }
 

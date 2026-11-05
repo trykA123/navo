@@ -59,13 +59,15 @@ impl ListingCache {
     ) {
         let changes: Vec<Change> = changes.into_iter().collect();
         for _ in 0..2 {
-            let Some(seen) = self.lock().peek(key) else {
+            let Some((seen, lookup)) = self.lock().take_lookup(key) else {
                 return;
             };
             if seen.read_at > changed_at {
+                self.lock().restore_lookup(key, &seen, lookup);
                 return;
             }
-            let entry = SizedListing::new(key, seen.patched(&changes, changed_at));
+            let (listing, lookup) = seen.patched_with(&changes, changed_at, lookup);
+            let entry = SizedListing::with_lookup(key, listing, lookup);
             if self.lock().swap(key, &seen, entry) != Swap::Stale {
                 return;
             }

@@ -125,7 +125,7 @@ impl PanePage {
             .unwrap_or_default();
         FileListProps {
             folder,
-            rows: self.rows.clone(),
+            rows: self.rows.clone().into(),
             view: tab.view(),
             marked: Arc::new(tab.selection().clone()),
             is_active: true,

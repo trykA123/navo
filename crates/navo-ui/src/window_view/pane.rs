@@ -3,6 +3,7 @@ use std::sync::Arc;
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 use navo_core::{Command, PaneId, Tab};
+use navo_fs::view::Rows;
 
 use super::NavoWindow;
 use super::chrome_state::Hidden;
@@ -89,7 +90,7 @@ impl NavoWindow {
         let has_cursor = is_active && !self.preview.is_browsing(window, cx);
         let props = self.list_props(pane, tab, has_cursor);
         let cover = self.hint_cover(window, cx).filter(|_| has_cursor);
-        let status = self.pane_status(pane, tab, &props.rows);
+        let status = self.pane_status(pane, tab, &self.browser.rows(tab.id()));
         let focus = self.handle(pane, cx);
         let chrome = self.ensure_chrome(pane, window, cx);
         let parts = WindowParts::of(&self.values);
@@ -150,12 +151,7 @@ impl NavoWindow {
             .summary(self.find_status(pane))
     }
 
-    fn pane_status(
-        &self,
-        pane: PaneId,
-        tab: &Tab,
-        rows: &Arc<[navo_fs::FsEntry]>,
-    ) -> StatusBarProps {
+    fn pane_status(&self, pane: PaneId, tab: &Tab, rows: &Rows) -> StatusBarProps {
         StatusBarProps {
             free_bytes: self.free_on_drive(pane),
             mark: self.listing_mark(tab),
@@ -170,7 +166,7 @@ impl NavoWindow {
     fn list_props(&self, pane: PaneId, tab: &Tab, is_active: bool) -> FileListProps {
         FileListProps {
             folder: self.tab_title(tab),
-            rows: self.browser.details(tab.id()),
+            rows: self.browser.rows(tab.id()),
             view: tab.view(),
             marked: Arc::clone(tab.selection_arc()),
             is_active,

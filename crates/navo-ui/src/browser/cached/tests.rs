@@ -3,6 +3,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use navo_cache::{CacheKeys, CachedListing, ListingCache};
 use navo_core::{AppState, Command, CursorMove, ProviderPath};
+use navo_fs::view::Rows;
 use navo_fs::{Attributes, CancelToken, EntryKind, FakeFs, FakeOp, FsEntry, ProviderOps};
 
 use super::{Fetch, Fresh, Progress};
@@ -12,6 +13,7 @@ use crate::file_list::{SortBy, SortKey};
 pub(crate) mod gated;
 mod kept;
 mod offline;
+mod shared;
 pub(in crate::browser) mod stalled;
 
 fn fake() -> Arc<FakeFs> {
@@ -189,6 +191,7 @@ fn a_slower_stale_revalidation_never_overwrites_a_newer_one() {
         is_kept_on_disk: true,
         progress: Progress::default(),
         sort: None,
+        sort_count: crate::browser::sort::SortCount::default(),
         early: None,
     };
     let slow = fetch(gate.clone());
@@ -294,9 +297,9 @@ fn back_reuses_the_sorted_rows_of_the_last_visit() {
     let fs = fake();
     let mut browser = browser(&fs);
     let tab = browser.state().active_tab().id();
-    let first = browser.details(tab);
+    let first = browser.rows(tab);
     into_docs_and_back(&mut browser, &fs, || {});
-    assert!(Arc::ptr_eq(&first, &browser.details(tab)));
+    assert!(Rows::same(&first, &browser.rows(tab)));
 }
 
 #[test]
@@ -305,9 +308,9 @@ fn an_unchanged_fresh_listing_keeps_the_shown_rows() {
     let mut browser = browser(&fs);
     let tab = browser.state().active_tab().id();
     into_docs_and_back(&mut browser, &fs, || {});
-    let cached = browser.details(tab);
+    let cached = browser.rows(tab);
     settle(&mut browser);
-    assert!(Arc::ptr_eq(&cached, &browser.details(tab)));
+    assert!(Rows::same(&cached, &browser.rows(tab)));
     assert!(!is_cached(&browser));
 }
 
@@ -447,6 +450,7 @@ fn a_touched_file_with_a_new_size_shows_even_when_the_folder_time_is_unchanged()
         is_kept_on_disk: false,
         progress: Progress::default(),
         sort: None,
+        sort_count: crate::browser::sort::SortCount::default(),
         early: None,
     };
     fetch(None, None, false).run(&CancelToken::new()).unwrap();

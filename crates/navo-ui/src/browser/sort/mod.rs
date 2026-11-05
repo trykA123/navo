@@ -1,7 +1,8 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use navo_core::{Entry, Listing, TabId};
-use navo_fs::view::{materialize, sort_order};
+use navo_fs::view::{Rows, sort_order};
 use navo_fs::{CancelToken, EntryKind, FsEntry};
 
 use super::Browser;
@@ -44,7 +45,13 @@ impl Browser {
         let Some(full) = self.full.remove(&tab) else {
             return false;
         };
-        self.full.insert(tab, sorted(full, key, self.folders_first));
+        let source = Arc::clone(full.details.source());
+        let sorted = if self.is_cached_source(tab, &source) {
+            self.sorted_full(tab, &source)
+        } else {
+            sorted_full(&source, key, self.folders_first, &self.sort_count)
+        };
+        self.full.insert(tab, sorted);
         let text = self.filter_text(tab).unwrap_or_default().to_owned();
         self.set_filter(tab, text)
     }
@@ -60,31 +67,60 @@ impl Browser {
         self.resort(tab)
     }
 
-    pub(super) fn full_of(&self, tab: TabId, rows: &[FsEntry]) -> Full {
+    pub(super) fn full_of(&self, tab: TabId, rows: &Arc<[FsEntry]>) -> Full {
         #[cfg(test)]
         ui_sorts::bump();
-        sorted_rows(rows, self.sort_key(tab), self.folders_first)
+        sorted_full(
+            rows,
+            self.sort_key(tab),
+            self.folders_first,
+            &self.sort_count,
+        )
+    }
+
+    #[cfg(test)]
+    pub(super) fn sorts(&self) -> usize {
+        self.sort_count.0.load(Ordering::Relaxed)
     }
 }
 
-fn sorted(full: Full, key: SortKey, folders_first: bool) -> Full {
-    sorted_rows(&full.details, key, folders_first)
+/// Sorts started for one `Browser`, on the UI thread and on workers.
+#[derive(Clone, Default)]
+pub(in crate::browser) struct SortCount(Arc<AtomicUsize>);
+
+pub(super) fn sorted_full(
+    rows: &Arc<[FsEntry]>,
+    key: SortKey,
+    folders_first: bool,
+    count: &SortCount,
+) -> Full {
+    let cancel = CancelToken::new();
+    sorted_rows(rows, (key, folders_first), &cancel, count).unwrap_or_else(|| {
+        let details = Rows::all(Arc::clone(rows));
+        Full {
+            listing: listing_of(&details),
+            details,
+        }
+    })
 }
 
-pub(super) fn sorted_full(rows: &Arc<[FsEntry]>, key: SortKey, folders_first: bool) -> Full {
-    sorted_rows(rows, key, folders_first)
+/// Sorts `rows` into an index view over them; `None` when cancelled.
+pub(super) fn sorted_rows(
+    rows: &Arc<[FsEntry]>,
+    (key, folders_first): (SortKey, bool),
+    cancel: &CancelToken,
+    count: &SortCount,
+) -> Option<Full> {
+    count.0.fetch_add(1, Ordering::Relaxed);
+    let order = sort_order(rows, key, folders_first, cancel)?;
+    let details = Rows::ordered(Arc::clone(rows), order.into());
+    Some(Full {
+        listing: listing_of(&details),
+        details,
+    })
 }
 
-fn sorted_rows(rows: &[FsEntry], key: SortKey, folders_first: bool) -> Full {
-    let order = sort_order(rows, key, folders_first, &CancelToken::new()).unwrap_or_default();
-    let rows = materialize(rows, &order);
-    Full {
-        listing: listing_of(&rows),
-        details: rows.into(),
-    }
-}
-
-pub(super) fn listing_of(rows: &[FsEntry]) -> Listing {
+pub(super) fn listing_of(rows: &Rows) -> Listing {
     Listing::new(
         rows.iter()
             .map(|entry| Entry {
@@ -112,3 +148,7 @@ pub(super) mod ui_sorts {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_jobs;
+#[cfg(test)]
+mod tests_views;

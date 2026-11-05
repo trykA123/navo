@@ -183,6 +183,7 @@ impl Browser {
             is_kept_on_disk: false,
             progress: progress.clone(),
             sort: None,
+            sort_count: self.sort_count.clone(),
             early: None,
         };
         let finished = Finished {

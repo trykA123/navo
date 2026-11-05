@@ -59,7 +59,7 @@ pub(super) fn props(rows: Arc<[FsEntry]>) -> FileListProps {
     let len = rows.len() as u64;
     FileListProps {
         folder: "core".into(),
-        rows,
+        rows: rows.into(),
         view: ViewState::default(),
         marked: Arc::new(Selection::new(len)),
         is_active: true,
