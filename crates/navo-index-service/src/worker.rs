@@ -247,7 +247,12 @@ impl Worker {
     fn replace(&mut self, index: NtfsIndex) {
         let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
         state.status.progress = None;
-        state.index = Some(Arc::new(index));
+        let old = state.index.replace(Arc::new(index));
+        drop(old);
+        // Trim only after the old index is gone, so the copy does not double the rebuild peak.
+        if let Some(index) = state.index.as_mut().and_then(Arc::get_mut) {
+            index.table.trim_slack();
+        }
         self.clock.changed(self.started.elapsed());
     }
 

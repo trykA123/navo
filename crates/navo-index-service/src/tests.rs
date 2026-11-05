@@ -336,7 +336,6 @@ fn a_hint_counts_live_entries_not_dead_slots() {
     let live = index.table.len();
     assert_eq!(hint.entries, live + live / 16);
     assert_eq!(hint.folders, 1);
-    assert_eq!(hint.references, live);
 }
 
 #[test]
@@ -382,25 +381,9 @@ fn a_hint_ignores_renamed_dead_names() {
 }
 
 #[test]
-fn a_hint_does_not_grow_the_file_reference_map_across_a_bucket_class() {
-    for references in [114_687, 114_688, 114_689] {
-        let old: FrnMap = (0..references)
-            .map(|number| (number as u128, number as u32))
-            .collect();
-        let hint = hint_from_counts(references, 0, 0, old.len());
-        assert_eq!(hint.references, references);
-        assert!(
-            FrnMap::with_capacity(hint.references).memory_bytes() <= old.memory_bytes(),
-            "{references} references"
-        );
-    }
-}
-
-#[test]
 fn a_hint_caps_every_total() {
-    let hint = hint_from_counts(usize::MAX, usize::MAX, usize::MAX, usize::MAX);
+    let hint = hint_from_counts(usize::MAX, usize::MAX, usize::MAX);
     assert_eq!(hint.entries, u32::MAX as usize - 1);
     assert_eq!(hint.folders, u32::MAX as usize - 1);
     assert_eq!(hint.name_bytes, u32::MAX as usize);
-    assert_eq!(hint.references, u32::MAX as usize - 1);
 }

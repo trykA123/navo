@@ -339,7 +339,7 @@ fn a_rename_split_across_a_compaction_lands_on_the_right_entry() {
 }
 
 #[test]
-fn the_batch_path_compacts_only_past_the_minimum_and_twice_the_live_set() {
+fn the_batch_path_compacts_only_past_the_minimum_and_the_sparse_trigger() {
     let mut tree = Tree::new(5, 20, 1_999);
     tree.delete(100, 0);
     assert_eq!(tree.index.table.slots(), 2_020);
@@ -351,7 +351,7 @@ fn the_batch_path_compacts_only_past_the_minimum_and_twice_the_live_set() {
             .map(|file| record(file, ROOT, DELETE, "gone"))
             .collect()
     };
-    apply(&mut tree.index, delete(FIRST_FILE..FIRST_FILE + 50_000));
+    apply(&mut tree.index, delete(FIRST_FILE..FIRST_FILE + 30_000));
     assert_eq!(
         tree.index.table.slots(),
         slots,
@@ -359,9 +359,18 @@ fn the_batch_path_compacts_only_past_the_minimum_and_twice_the_live_set() {
     );
     let survivor = FIRST_FILE + files - 1;
     let reference = tree.index.table.path(tree.index.ids[&survivor]);
-    let mut last: Vec<_> = delete(FIRST_FILE + 50_000..FIRST_FILE + 60_000);
+    let mut last: Vec<_> = delete(FIRST_FILE + 30_000..FIRST_FILE + 60_000);
     last.push(record(survivor, ROOT, OLD_NAME, "old"));
-    apply(&mut tree.index, last);
+    // One batch, so the trigger sees the whole wave and compacts once at the end.
+    let next_usn = tree.index.position.next_usn + 1;
+    let unresolved = tree
+        .index
+        .apply_batch(UsnBatch {
+            next_usn,
+            records: last,
+        })
+        .unwrap();
+    assert!(unresolved.is_empty(), "{unresolved:?}");
     assert_dense_and_consistent(&tree.index);
     assert_eq!(tree.index.table.path(tree.index.ids[&survivor]), reference);
     apply(
@@ -370,6 +379,34 @@ fn the_batch_path_compacts_only_past_the_minimum_and_twice_the_live_set() {
     );
     let moved = tree.index.table.path(tree.index.ids[&survivor]).unwrap();
     assert_eq!(moved, format!("C:{}moved.txt", std::path::MAIN_SEPARATOR));
+}
+
+#[test]
+fn the_chunked_batch_path_compacts_within_one_and_a_half_times_live() {
+    let files = u128::from(COMPACT_MIN_SLOTS) + 40_000;
+    let mut tree = Tree::new(13, 0, files);
+    let delete = (FIRST_FILE..FIRST_FILE + 60_000)
+        .map(|file| record(file, ROOT, DELETE, "gone"))
+        .collect();
+    // `apply` splits this into 10k batches, so one of them sees the wave and compacts.
+    apply(&mut tree.index, delete);
+    let (live, slots) = (tree.index.table.len(), tree.index.table.slots());
+    assert!(
+        slots as usize > live,
+        "the last chunk should leave dead slots"
+    );
+    assert!(
+        slots as usize <= live + live / 2,
+        "{slots} slots for {live} live entries"
+    );
+    assert!(tree.index.table.valid_structure());
+    assert_eq!(tree.index.ids.get(&ROOT), Some(&0));
+    assert!(
+        tree.index
+            .ids
+            .values()
+            .all(|&id| tree.index.table.name(id).is_some())
+    );
 }
 
 #[path = "compact_restore_tests.rs"]

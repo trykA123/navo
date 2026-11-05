@@ -78,7 +78,7 @@ pub(super) fn enumerate_volume_sized(
 ) -> Result<Enumeration, NtfsError> {
     let state = JournalState::parse(&volume.query_journal()?)?;
     let mut index = NtfsIndex::new(drive, state.position)?;
-    reserve_for_build(&mut index, hint, drive)?;
+    let sized = reserve_for_build(&mut index, hint, drive)?;
     let mut pending = Pending::default();
     let mut cursor = 0;
     let mut count = 0;
@@ -107,8 +107,10 @@ pub(super) fn enumerate_volume_sized(
         return Err(NtfsError::Cancelled);
     }
     JournalState::parse(&volume.query_journal()?)?.check(state.position)?;
-    // Growth adds an eighth at a time; a build happens once, so trim the leftover slack.
-    index.table.trim_slack();
+    // A sized build keeps its spare until the service has dropped the old index.
+    if !sized {
+        index.table.trim_slack();
+    }
     index.ids.shrink_to_fit();
     let blocked_peak = pending.blocked_peak;
     Ok(Enumeration {
@@ -120,25 +122,26 @@ pub(super) fn enumerate_volume_sized(
 }
 
 /// Reserves the hint's total capacities, falling back to a fresh unsized index on allocation failure.
-fn reserve_for_build(index: &mut NtfsIndex, hint: SizeHint, drive: char) -> Result<(), NtfsError> {
+/// Returns whether the reserve holds.
+fn reserve_for_build(
+    index: &mut NtfsIndex,
+    hint: SizeHint,
+    drive: char,
+) -> Result<bool, NtfsError> {
     if hint == SizeHint::default() {
-        return Ok(());
+        return Ok(false);
     }
     let reserved = index
         .table
-        .try_reserve_total(hint.entries, hint.folders, hint.name_bytes)
-        .and_then(|()| {
-            index
-                .ids
-                .try_reserve(hint.references.saturating_sub(index.ids.len()))
-        });
+        .try_reserve_total(hint.entries, hint.folders, hint.name_bytes);
     if let Err(error) = reserved {
         tracing::warn!(%error, drive = %drive, "index reserve failed; building unsized");
         #[cfg(test)]
         RESERVE_FAILURES.with(|count| count.set(count.get() + 1));
         *index = NtfsIndex::new(drive, index.position)?;
+        return Ok(false);
     }
-    Ok(())
+    Ok(true)
 }
 
 fn add_record(
@@ -325,7 +328,6 @@ mod sized_tests {
             entries,
             folders: (folders + folders / 16).min(entries),
             name_bytes: names + names / 16,
-            references: index.ids.len(),
         }
     }
 
@@ -369,41 +371,32 @@ mod sized_tests {
     fn oversized_hints_fall_back_to_an_unsized_build() {
         let baseline = MftFixture::new(ENTRIES, 7).read().index;
         let memory = baseline.table.memory_bytes() + baseline.ids.memory_bytes();
-        for hint in [
-            SizeHint {
-                entries: 100_000_000,
-                folders: 0,
-                name_bytes: 0,
-                references: 0,
-            },
-            SizeHint {
-                entries: 0,
-                folders: 0,
-                name_bytes: 0,
-                references: 100_000_000,
-            },
-        ] {
-            RESERVE_FAILURES.with(|count| count.set(0));
-            let result = {
-                let _failing = fail_allocations_from(64 * MIB);
-                enumerate_volume_sized(
-                    &mut MftFixture::new(ENTRIES, 7),
-                    'C',
-                    usize::MAX,
-                    hint,
-                    &CancelToken::new(),
-                )
-                .unwrap()
-            };
-            assert!(RESERVE_FAILURES.with(std::cell::Cell::get) >= 1);
-            assert_eq!(result.index.table.len(), ENTRIES as usize);
-            assert_eq!(result.index.ids.len(), ENTRIES as usize);
-            let built = result.index.table.memory_bytes() + result.index.ids.memory_bytes();
-            assert!(
-                built <= memory + memory / 10,
-                "{built} bytes, baseline {memory}"
-            );
-        }
+        // The table hint is the only reservation that can fail; dense pages reserve nothing ahead.
+        let hint = SizeHint {
+            entries: 100_000_000,
+            folders: 0,
+            name_bytes: 0,
+        };
+        RESERVE_FAILURES.with(|count| count.set(0));
+        let result = {
+            let _failing = fail_allocations_from(64 * MIB);
+            enumerate_volume_sized(
+                &mut MftFixture::new(ENTRIES, 7),
+                'C',
+                usize::MAX,
+                hint,
+                &CancelToken::new(),
+            )
+            .unwrap()
+        };
+        assert_eq!(RESERVE_FAILURES.with(std::cell::Cell::get), 1);
+        assert_eq!(result.index.table.len(), ENTRIES as usize);
+        assert_eq!(result.index.ids.len(), ENTRIES as usize);
+        let built = result.index.table.memory_bytes() + result.index.ids.memory_bytes();
+        assert!(
+            built <= memory + memory / 10,
+            "{built} bytes, baseline {memory}"
+        );
     }
 
     #[test]

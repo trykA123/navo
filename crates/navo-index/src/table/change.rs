@@ -54,7 +54,7 @@ impl NameTable {
                 let parent = self.resolve_parent(file_id, parent_id, ids)?;
                 let previous = ids.get(&file_id).copied().filter(|&id| self.is_live(id));
                 let id = self.upsert(previous, parent, (&name, flags))?;
-                self.flags[id as usize] = flags.bits();
+                self.set_flags(id, flags);
                 ids.insert(file_id, id);
             }
             TableChange::Rename {
@@ -66,14 +66,14 @@ impl NameTable {
                 let id = self.resolve_file(file_id, ids)?;
                 let parent = self.resolve_parent(file_id, parent_id, ids)?;
                 self.rename(id, parent, &name)?;
-                self.flags[id as usize] = flags.bits();
+                self.set_flags(id, flags);
             }
             TableChange::Remove { file_id } => {
                 removed = ids.remove(&file_id).map_or(0, |id| self.remove(id));
             }
             TableChange::Attributes { file_id, flags } => {
                 let id = self.resolve_file(file_id, ids)?;
-                self.flags[id as usize] = flags.bits();
+                self.set_flags(id, flags);
             }
             TableChange::Size { file_id, bytes } => {
                 let id = self.resolve_file(file_id, ids)?;

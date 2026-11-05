@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, Read as _};
 use std::path::Path;
 
-use crate::table::NameTable;
+use crate::table::{NameTable, StoredFlags};
 use crate::usn::FrnMap;
 
 mod stream;
@@ -116,7 +116,9 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
     let names = input.bytes(lengths.names)?;
     let offsets = input.values(lengths.entries, u32::from_le_bytes)?;
     let parents = input.values(lengths.entries, u32::from_le_bytes)?;
-    let flags = input.values(lengths.entries, u16::from_le_bytes)?;
+    let flags = input.values(lengths.entries, |bytes| {
+        StoredFlags::try_from(u16::from_le_bytes(bytes)).unwrap_or(StoredFlags::MAX)
+    })?;
     let sizes = input.values(lengths.entries, u64::from_le_bytes)?;
     let counts = input.values(lengths.entries, |[a, b, c, d, e, f, g, h]: [u8; 8]| {
         [
@@ -234,5 +236,11 @@ fn read_array<const N: usize>(input: &mut &[u8]) -> Result<[u8; N], FileError> {
     Ok(*head)
 }
 
+#[cfg(test)]
+#[path = "file/compat_tests.rs"]
+mod compat_tests;
+#[cfg(test)]
+#[path = "file/stats_tests.rs"]
+mod stats_tests;
 #[cfg(test)]
 mod tests;

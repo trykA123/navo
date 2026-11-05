@@ -137,12 +137,7 @@ impl SaveClock {
 }
 
 /// Capacities for a rebuild: live entries and names plus a sixteenth, folders capped at entries.
-pub(super) fn hint_from_counts(
-    len: usize,
-    folders: usize,
-    live_name_bytes: usize,
-    references: usize,
-) -> SizeHint {
+pub(super) fn hint_from_counts(len: usize, folders: usize, live_name_bytes: usize) -> SizeHint {
     const MAX_ENTRIES: usize = u32::MAX as usize - 1;
     const MAX_NAME_BYTES: usize = u32::MAX as usize;
     let entries = len.saturating_add(len / 16).min(MAX_ENTRIES);
@@ -152,7 +147,6 @@ pub(super) fn hint_from_counts(
         name_bytes: live_name_bytes
             .saturating_add(live_name_bytes / 16)
             .min(MAX_NAME_BYTES),
-        references: references.min(entries),
     }
 }
 
@@ -163,7 +157,6 @@ pub(super) fn build_hint(old: Option<&NtfsIndex>) -> SizeHint {
             old.table.len(),
             old.table.folder_count(),
             old.table.live_name_bytes(),
-            old.ids.len(),
         )
     })
 }

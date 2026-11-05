@@ -5,6 +5,7 @@ use navo_core::ProviderPath;
 use crate::table::{Flags, TableChange};
 
 mod frn_map;
+mod frn_pages;
 pub use frn_map::FrnMap;
 
 const FILE_CREATE: u32 = 0x100;

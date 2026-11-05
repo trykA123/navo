@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{Flags, NO_PARENT, NameTable, TableError};
+use super::{Flags, NO_PARENT, NameTable, StoredFlags, TableError};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Totals {
@@ -42,6 +42,80 @@ impl NameTable {
         Ok(())
     }
 
+    /// Writes `flags`, keeping the folder counts column and ancestor totals in step.
+    pub(super) fn set_flags(&mut self, id: u32, flags: Flags) {
+        let at = id as usize;
+        let was_folder = self.flags[at] & Flags::FOLDER.stored() != 0;
+        let is_folder = flags.stored() & Flags::FOLDER.stored() != 0;
+        if was_folder == is_folder {
+            self.flags[at] = flags.stored();
+        } else if is_folder {
+            self.promote_to_folder(id, flags);
+        } else if self.children.of(id).next().is_none() {
+            self.demote_empty_folder(id, flags);
+        } else {
+            // A demoted folder with live children is refused on load; keep its totals as today.
+            self.flags[at] = flags.stored();
+        }
+    }
+
+    fn promote_to_folder(&mut self, id: u32, flags: Flags) {
+        let at = id as usize;
+        let parent = self.parents[at];
+        let descendants = self.child_totals(id);
+        let old = self.contribution(id);
+        self.adjust_ancestors(parent, old, false);
+        let child_counts = Totals {
+            files: descendants.files,
+            folders: descendants.folders,
+            ..Totals::default()
+        };
+        self.adjust_ancestors(parent, child_counts, false);
+        self.bytes[at] = descendants.bytes;
+        self.flags[at] = flags.stored();
+        self.put_counts(id, [descendants.files, descendants.folders]);
+        let new = self.contribution(id);
+        self.adjust_ancestors(parent, new, true);
+    }
+
+    fn demote_empty_folder(&mut self, id: u32, flags: Flags) {
+        let at = id as usize;
+        let parent = self.parents[at];
+        let old = self.contribution(id);
+        self.adjust_ancestors(parent, old, false);
+        self.take_counts(id);
+        self.flags[at] = flags.stored();
+        let new = self.contribution(id);
+        self.adjust_ancestors(parent, new, true);
+    }
+
+    fn child_totals(&self, id: u32) -> Totals {
+        let mut totals = Totals::default();
+        for child in self.children.of(id) {
+            let child = self.contribution(child);
+            totals.bytes += child.bytes;
+            totals.files += child.files;
+            totals.folders += child.folders;
+        }
+        totals
+    }
+
+    fn put_counts(&mut self, id: u32, counts: [u32; 2]) {
+        match self.counts.binary_search_by_key(&id, |&(slot, _)| slot) {
+            Ok(at) => self.counts[at].1 = counts,
+            Err(at) => {
+                super::growth::grow_column(&mut self.counts);
+                self.counts.insert(at, (id, counts));
+            }
+        }
+    }
+
+    fn take_counts(&mut self, id: u32) {
+        if let Ok(at) = self.counts.binary_search_by_key(&id, |&(slot, _)| slot) {
+            self.counts.remove(at);
+        }
+    }
+
     pub(super) fn contribution(&self, id: u32) -> Totals {
         let folder = self
             .flags(id)
@@ -77,7 +151,7 @@ impl NameTable {
     }
 
     pub(super) fn folder_counts(&self, id: u32) -> [u32; 2] {
-        if self.flags[id as usize] & Flags::FOLDER.bits() == 0 {
+        if self.flags[id as usize] & Flags::FOLDER.stored() == 0 {
             return [0; 2];
         }
         self.counts
@@ -86,7 +160,7 @@ impl NameTable {
     }
 
     pub(super) fn folder_counts_mut(&mut self, id: u32) -> Option<&mut [u32; 2]> {
-        if self.flags[id as usize] & Flags::FOLDER.bits() == 0 {
+        if self.flags[id as usize] & Flags::FOLDER.stored() == 0 {
             return None;
         }
         let at = self
@@ -119,14 +193,15 @@ impl NameTable {
 
     fn counted_folders(&self) -> impl Iterator<Item = u32> + '_ {
         self.live_ids()
-            .filter(|&id| self.flags[id as usize] & Flags::FOLDER.bits() != 0)
+            .filter(|&id| self.flags[id as usize] & Flags::FOLDER.stored() != 0)
     }
 
     /// Recomputes folder sums by a post-order walk of the child lists, with no per-slot scratch.
     /// Returns `false` when the lists do not form one tree over every live entry.
     pub(super) fn rebuild_totals(&mut self) -> bool {
-        let live_folder =
-            |bits: &u16| bits & (Flags::FOLDER.bits() | Flags::DELETED) == Flags::FOLDER.bits();
+        let live_folder = |bits: &StoredFlags| {
+            bits & (Flags::FOLDER.stored() | Flags::DELETED) == Flags::FOLDER.stored()
+        };
         let folders = self.flags.iter().filter(|bits| live_folder(bits)).count();
         self.counts.clear();
         if self.counts.try_reserve_exact(folders).is_err() {
@@ -185,7 +260,7 @@ impl NameTable {
     /// Saturating, so a corrupt list that revisits entries cannot overflow before it is caught.
     fn add_to_parent(&mut self, id: u32, parent: u32) {
         let at = id as usize;
-        let folder = self.flags[at] & Flags::FOLDER.bits() != 0;
+        let folder = self.flags[at] & Flags::FOLDER.stored() != 0;
         let [files, folders] = self.folder_counts(id);
         let bytes = self.bytes[at];
         self.bytes[parent as usize] = self.bytes[parent as usize].saturating_add(bytes);
