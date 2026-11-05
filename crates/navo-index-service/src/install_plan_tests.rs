@@ -7,7 +7,7 @@ mod order;
 fn binary_is_copied_to_a_temporary_name_then_renamed_in_program_files() {
     let plan = CopyPlan::new(Path::new("program-files"), 123);
     assert_eq!(plan.directory, Path::new("program-files/Navo/Index"));
-    assert_eq!(plan.executable, plan.directory.join("navo.exe"));
+    assert_eq!(plan.executable, plan.directory.join("navo-index.exe"));
     assert_eq!(plan.temporary.parent(), Some(plan.directory.as_path()));
     assert_ne!(plan.temporary, plan.executable);
     let root = tempfile::tempdir().unwrap();
@@ -66,8 +66,8 @@ fn copy_refuses_an_existing_temporary_file() {
 }
 
 #[test]
-fn remove_deletes_both_navo_images_while_install_keeps_the_old_image() {
-    assert_eq!(NAVO.image, "navo.exe");
+fn install_places_the_index_image_and_remove_deletes_both_navo_images() {
+    assert_eq!(NAVO.image, "navo-index.exe");
     assert_eq!(NAVO.removable, ["navo-index.exe", "navo.exe"]);
     assert_eq!(LEGACY_PRODUCT.removable, ["ferrite.exe"]);
 }

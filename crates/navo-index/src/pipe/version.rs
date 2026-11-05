@@ -4,7 +4,7 @@ use super::status::{Failure, Identified, exchange, exchange_identified};
 use super::{Client, PipeError, QueryTerm, Request, Response};
 
 /// Bumped by hand whenever the service's behaviour changes; Navo asks for an update when it is higher.
-pub const SERVICE_REVISION: u32 = 2;
+pub const SERVICE_REVISION: u32 = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ServiceVersion {

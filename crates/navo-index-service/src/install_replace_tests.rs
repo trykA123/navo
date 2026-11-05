@@ -18,7 +18,7 @@ struct Disk {
 
 fn disk(stale: Option<&[u8]>) -> Disk {
     let root = tempfile::tempdir().unwrap();
-    let source = root.path().join("navo.exe");
+    let source = root.path().join("navo-index.exe");
     std::fs::write(&source, NEW).unwrap();
     let plan = CopyPlan::new(&root.path().join("Program Files"), 7);
     std::fs::create_dir_all(&plan.directory).unwrap();
@@ -76,7 +76,7 @@ fn leftovers(disk: &Disk) -> Vec<String> {
     std::fs::read_dir(&disk.plan.directory)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| name != "navo.exe")
+        .filter(|name| name != "navo-index.exe")
         .collect()
 }
 
@@ -136,7 +136,7 @@ fn an_image_swapped_before_the_check_fails_the_install_and_rolls_back() {
 #[test]
 fn an_exe_left_behind_by_remove_is_replaced_by_the_next_install() {
     let disk = disk(Some(OLD));
-    let mapped_leftover = disk.plan.directory.join("navo.exe.99.old");
+    let mapped_leftover = disk.plan.directory.join("navo-index.exe.99.old");
     std::fs::write(&mapped_leftover, OLD).unwrap();
     install(&disk, false, None, |_| {}).unwrap();
     assert_eq!(image(&disk).as_deref(), Some(NEW));

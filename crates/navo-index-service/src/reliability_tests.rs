@@ -183,9 +183,9 @@ fn old_images_are_deleted_and_other_files_are_kept() {
     let plan = CopyPlan::new(root.path(), 123);
     std::fs::create_dir_all(&plan.directory).unwrap();
     for name in [
-        "navo.exe.122.old",
-        "navo.exe",
-        "navo.exe.x.old",
+        "navo-index.exe.122.old",
+        "navo-index.exe",
+        "navo-index.exe.x.old",
         "notes.old",
     ] {
         std::fs::write(plan.directory.join(name), b"x").unwrap();
@@ -196,7 +196,10 @@ fn old_images_are_deleted_and_other_files_are_kept() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     left.sort();
-    assert_eq!(left, ["navo.exe", "navo.exe.x.old", "notes.old"]);
+    assert_eq!(
+        left,
+        ["navo-index.exe", "navo-index.exe.x.old", "notes.old"]
+    );
 }
 
 #[test]

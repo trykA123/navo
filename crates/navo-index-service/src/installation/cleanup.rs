@@ -173,7 +173,7 @@ impl Files for WindowsFiles {
 }
 
 /// Zero flags refuse an existing target; a NULL target with DELAY_UNTIL_REBOOT schedules a delete.
-fn move_file(from: &Path, to: Option<&Path>, flags: u32) -> io::Result<()> {
+pub(super) fn move_file(from: &Path, to: Option<&Path>, flags: u32) -> io::Result<()> {
     let from = terminated(from);
     let to = to.map(terminated);
     let target = to.as_ref().map_or(ptr::null(), |to| to.as_ptr());

@@ -97,7 +97,7 @@ fn migration_and_reinstall_both_run_the_decided_order_and_delete_legacy_last() {
             "previous {previous:?}"
         );
         assert_eq!(world.image().as_deref(), Some(NEW));
-        assert_eq!(world.files(), ["navo.exe"]);
+        assert_eq!(world.files(), ["navo-index.exe"]);
     }
 }
 

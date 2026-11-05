@@ -13,7 +13,7 @@ pub(super) struct Product {
 
 pub(super) const NAVO: Product = Product {
     folder: navo_core::brand::NAME,
-    image: "navo.exe",
+    image: "navo-index.exe",
     removable: &["navo-index.exe", "navo.exe"],
     service: b"Navo Index",
 };
