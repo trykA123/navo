@@ -189,15 +189,32 @@ fn removal_renames_a_refused_image_and_schedules_it_before_its_folders() {
 }
 
 #[test]
-fn removal_schedules_the_original_path_when_the_rename_is_refused() {
-    let mut fake = Fake::with(&["navo.exe"]);
-    fake.refuse("navo.exe", u32::MAX);
-    fake.refused_renames.insert(index().join("navo.exe"));
-    clean_navo(&mut fake).unwrap();
-    assert_eq!(
-        fake.scheduled,
-        [index().join("navo.exe"), index(), parent()]
-    );
+fn removal_fails_if_an_image_cannot_be_deleted_or_renamed() {
+    for image in ["navo.exe", "navo-index.exe", "ferrite.exe"] {
+        let mut fake = Fake::with(&[image]);
+        fake.refuse(image, u32::MAX);
+        fake.refused_renames.insert(index().join(image));
+        let (parent, index) = (parent(), index());
+        let folders = Folders {
+            parent: &parent,
+            index: &index,
+        };
+        let error = clean(&mut fake, folders, &[image], &limits()).unwrap_err();
+        assert_eq!(crate::failure_code(&error), 1, "{error}");
+        assert!(fake.scheduled.is_empty());
+        assert!(fake.files.contains(&index.join(image)));
+    }
+}
+
+#[test]
+fn removal_schedules_a_leftover_copy_when_its_rename_is_refused() {
+    let name = "navo-index.exe.3.tmp";
+    let mut fake = Fake::with(&[name]);
+    fake.refuse(name, u32::MAX);
+    fake.refused_renames.insert(index().join(name));
+    let cleanup = clean_navo(&mut fake).unwrap();
+    assert_eq!(fake.scheduled, [index().join(name), index(), parent()]);
+    assert_eq!(cleanup.outcome(), crate::Elevated::Deferred);
 }
 
 #[test]

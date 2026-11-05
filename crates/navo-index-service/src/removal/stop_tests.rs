@@ -230,7 +230,8 @@ fn removal_reads_every_service_state_and_refuses_an_unknown_one() {
 fn removal_limits_fit_the_deadline_inside_the_uninstall_budget() {
     assert!(STOP_LIMIT + PROCESS_WAIT < REMOVE_DEADLINE);
     assert!(REMOVE_DEADLINE < Duration::from_secs(25));
-    let limits = StopLimits::within(Duration::from_secs(3));
-    assert_eq!(limits.stop, Duration::from_secs(3));
-    assert_eq!(limits.wait, Duration::from_secs(3));
+    for lock_wait in [Duration::ZERO, Duration::from_secs(19), REMOVE_DEADLINE] {
+        let limits = StopLimits::within(REMOVE_DEADLINE - lock_wait);
+        assert!(lock_wait + limits.stop + limits.wait <= REMOVE_DEADLINE);
+    }
 }

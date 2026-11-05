@@ -184,6 +184,7 @@ fn old_images_are_deleted_and_other_files_are_kept() {
     std::fs::create_dir_all(&plan.directory).unwrap();
     for name in [
         "navo-index.exe.122.old",
+        "navo-index.exe.122.tmp",
         "navo-index.exe",
         "navo-index.exe.x.old",
         "notes.old",

@@ -123,7 +123,7 @@ fn the_service_command_runs_the_quoted_index_image() {
 }
 
 #[test]
-fn delete_legacy_removes_only_the_old_image_and_its_old_copies() {
+fn delete_legacy_removes_only_the_old_image_and_its_numbered_copies() {
     let deleted = RefCell::new(Vec::new());
     let names = [
         "navo-index.exe",
@@ -146,7 +146,10 @@ fn delete_legacy_removes_only_the_old_image_and_its_old_copies() {
         |_| panic!("nothing refused"),
     );
     assert!(result.is_ok());
-    assert_eq!(deleted.into_inner(), ["NAVO.EXE", "navo.exe.12.old"]);
+    assert_eq!(
+        deleted.into_inner(),
+        ["NAVO.EXE", "navo.exe.12.old", "navo.exe.3.tmp"]
+    );
 }
 
 #[test]
