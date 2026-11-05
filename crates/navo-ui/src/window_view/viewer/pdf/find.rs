@@ -232,3 +232,51 @@ impl PdfView {
         Some(count_label(&doc.hits, &progress).into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use navo_pdf::protocol::{CharBox, PageText, TextChar};
+
+    use super::*;
+
+    #[test]
+    fn hits_keep_character_offsets_and_page_coordinates() {
+        for text in ["café test café", "șț test șț"] {
+            let chars = text
+                .chars()
+                .enumerate()
+                .map(|(at, ch)| TextChar {
+                    ch,
+                    bounds: CharBox {
+                        left: at as f32,
+                        right: at as f32 + 1.,
+                        top: 25.,
+                        bottom: 35.,
+                    },
+                })
+                .collect();
+            let page = PageText::new(100., 100., chars).expect("page");
+            let words = PageWords::of(&page);
+            let query = Query {
+                text: "test".into(),
+                ..Default::default()
+            };
+            let hits = hits_in(2, &words, &query);
+            let start = text.chars().position(|ch| ch == 't').expect("test");
+            assert_eq!(
+                hits,
+                [Hit {
+                    page: 2,
+                    start: start as u32,
+                    len: 4,
+                    y: 0.25
+                }]
+            );
+            let boxes = rects(&page, hits[0].start, hits[0].len);
+            assert_eq!(
+                (boxes[0].left, boxes[0].right),
+                (start as f32, start as f32 + 4.)
+            );
+        }
+    }
+}

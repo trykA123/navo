@@ -1,3 +1,5 @@
+use super::text::PageChars;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Query {
     pub text: String,
@@ -48,26 +50,28 @@ fn is_word(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
 
-pub(super) fn find(chars: &[char], query: &Query) -> Vec<(u32, u32)> {
+pub(super) fn find(chars: &PageChars, query: &Query) -> Vec<(u32, u32)> {
     let needle: Vec<char> = query
         .text
         .chars()
         .map(|ch| fold(ch, query.match_case))
         .collect();
-    if needle.is_empty() || needle.len() > chars.len() {
+    if needle.is_empty() || chars.is_empty() || needle.len() > chars.len() {
         return Vec::new();
     }
     let mut found = Vec::new();
     let mut at = 0;
     while at + needle.len() <= chars.len() {
-        let fits = chars[at..at + needle.len()]
+        let fits = chars
             .iter()
+            .skip(at)
+            .take(needle.len())
             .zip(&needle)
-            .all(|(have, want)| fold(*have, query.match_case) == *want);
+            .all(|(have, want)| fold(have, query.match_case) == *want);
         let end = at + needle.len();
         let bounded = !query.whole_word
-            || ((at == 0 || !is_word(chars[at - 1]))
-                && chars.get(end).is_none_or(|ch| !is_word(*ch)));
+            || (chars.get(at.wrapping_sub(1)).is_none_or(|ch| !is_word(ch))
+                && chars.get(end).is_none_or(|ch| !is_word(ch)));
         if fits && bounded {
             found.push((at as u32, needle.len() as u32));
             at = end;
@@ -78,10 +82,10 @@ pub(super) fn find(chars: &[char], query: &Query) -> Vec<(u32, u32)> {
     found
 }
 
-fn flat(chars: &[char]) -> String {
-    let mut text = String::with_capacity(chars.len());
+fn flat(chars: impl Iterator<Item = char>) -> String {
+    let mut text = String::new();
     for ch in chars {
-        let ch = if ch.is_whitespace() { ' ' } else { *ch };
+        let ch = if ch.is_whitespace() { ' ' } else { ch };
         if !(ch == ' ' && text.ends_with(' ')) {
             text.push(ch);
         }
@@ -89,13 +93,17 @@ fn flat(chars: &[char]) -> String {
     text
 }
 
-pub(super) fn snippet(chars: &[char], hit: &Hit) -> Snippet {
+pub(super) fn snippet(chars: &PageChars, hit: &Hit) -> Snippet {
     let start = (hit.start as usize).min(chars.len());
     let end = (start + hit.len as usize).min(chars.len());
     let from = start.saturating_sub(CONTEXT);
     let to = (end + CONTEXT).min(chars.len());
-    let mut before = flat(&chars[from..start]).trim_start().to_owned();
-    let mut after = flat(&chars[end..to]).trim_end().to_owned();
+    let mut before = flat(chars.iter().skip(from).take(start - from))
+        .trim_start()
+        .to_owned();
+    let mut after = flat(chars.iter().skip(end).take(to - end))
+        .trim_end()
+        .to_owned();
     if from > 0 {
         before.insert(0, '…');
     }
@@ -104,7 +112,7 @@ pub(super) fn snippet(chars: &[char], hit: &Hit) -> Snippet {
     }
     Snippet {
         before,
-        hit: flat(&chars[start..end]),
+        hit: flat(chars.iter().skip(start).take(end - start)),
         after,
     }
 }
@@ -113,8 +121,8 @@ pub(super) fn snippet(chars: &[char], hit: &Hit) -> Snippet {
 mod tests {
     use super::*;
 
-    fn chars(text: &str) -> Vec<char> {
-        text.chars().collect()
+    fn chars(text: &str) -> PageChars {
+        PageChars::Wide(text.chars().collect())
     }
 
     fn query(text: &str, match_case: bool, whole_word: bool) -> Query {
