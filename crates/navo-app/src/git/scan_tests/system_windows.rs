@@ -34,10 +34,14 @@ fn repo() -> (tempfile::TempDir, PathBuf) {
 
 fn armed(root: &Path) -> Watches {
     let mut watches = Watches::new(Arc::new(SystemProbe));
-    watches.arm(root, DriveClass::Ssd);
+    arm_live(&mut watches, root, root);
+    watches
+}
+
+fn arm_live(watches: &mut Watches, root: &Path, listing: &Path) {
+    watches.arm(root, listing, DriveClass::Ssd);
     let live = within(Duration::from_secs(2), || watches.mark(root).is_some());
     assert!(live, "a fixed-drive watch must go live within 2 s");
-    watches
 }
 
 fn changes(watches: &mut Watches, root: &Path) -> u64 {
@@ -182,15 +186,21 @@ fn root_off_its_drive_letter_volume_gives_unknown() {
 }
 
 #[test]
-fn renaming_and_deleting_the_watched_roots_parent_succeed() {
-    let (dir, root) = repo();
-    let parent = dir.path().join("parent");
-    fs::create_dir(&parent).unwrap();
-    let inner = parent.join("repo");
-    fs::rename(&root, &inner).unwrap();
-    let watches = armed(&inner);
-    let moved = dir.path().join("parent-moved");
-    fs::rename(&parent, &moved).expect("R3: renaming a watched root's parent must succeed");
-    fs::remove_dir_all(&moved).expect("R3: deleting a watched root's parent must succeed");
+fn armed_watches_leave_folders_outside_the_listing_path_free() {
+    let dir = tempfile::tempdir().unwrap();
+    let listing = dir.path().join("listing");
+    let repo = listing.join("repo");
+    fs::create_dir_all(repo.join(".git")).unwrap();
+    let sibling = dir.path().join("sibling");
+    fs::create_dir_all(sibling.join("inner")).unwrap();
+    let mut watches = Watches::new(Arc::new(SystemProbe));
+    let folder = navo_fs::os_path(&location(&listing)).unwrap();
+    arm_live(&mut watches, &repo, &folder);
+    arm_live(&mut watches, &listing, &folder);
+    let moved = dir.path().join("sibling-moved");
+    fs::rename(&sibling, &moved).expect("R3: renaming a folder off the listing path must succeed");
+    fs::remove_dir_all(&moved).expect("R3: deleting a folder off the listing path must succeed");
+    fs::rename(&repo, listing.join("repo-moved"))
+        .expect("R3: renaming the armed direct-child repository must succeed");
     drop(watches);
 }

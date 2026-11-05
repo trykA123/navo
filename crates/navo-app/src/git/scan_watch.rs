@@ -42,12 +42,20 @@ impl Watches {
         }
     }
 
-    /// Arms a subtree watch on a fixed local drive, unless `root` is a volume root.
-    pub(crate) fn arm(&mut self, root: &Path, class: DriveClass) {
+    /// Arms a subtree watch on a fixed local drive, unless `root` is a volume root or the watch
+    /// would block renaming a folder the listing watch leaves free (R3).
+    pub(crate) fn arm(&mut self, root: &Path, listing: &Path, class: DriveClass) {
         if !matches!(class, DriveClass::Ssd | DriveClass::Hdd) || root.parent().is_none() {
             return;
         }
         let key = root_key(root);
+        let listing = root_key(listing);
+        let child = root
+            .parent()
+            .is_some_and(|parent| root_key(parent) == listing);
+        if !child && !contains(&key, &listing) {
+            return;
+        }
         let Some(identity) = self.probe.identity(root) else {
             self.remove(&key);
             return;
@@ -109,12 +117,33 @@ fn release(watch: Box<dyn RepoWatch>) {
         .spawn(move || drop(watch));
 }
 
-/// The key for a root: forward slashes, ASCII-lowercased on Windows.
+/// The key for a root: forward slashes, no trailing one; on Windows also without the verbatim
+/// `\\?\` prefix and ASCII-lowercased.
 pub(crate) fn root_key(path: &Path) -> String {
-    let text = path.to_string_lossy().replace('\\', "/");
-    #[cfg(windows)]
-    let text = text.to_ascii_lowercase();
-    text
+    key_of(&path.to_string_lossy(), cfg!(windows))
+}
+
+fn key_of(text: &str, windows: bool) -> String {
+    let unc = text.strip_prefix(r"\\?\UNC\");
+    let text = match (windows, unc) {
+        (false, _) => text.to_owned(),
+        (true, Some(share)) => format!(r"\\{share}"),
+        (true, None) => text.strip_prefix(r"\\?\").unwrap_or(text).to_owned(),
+    };
+    let mut key = text.replace('\\', "/");
+    while key.len() > 1 && key.ends_with('/') && !key.ends_with(":/") {
+        key.pop();
+    }
+    if windows {
+        key.make_ascii_lowercase();
+    }
+    key
+}
+
+/// Whether the folder keyed `deep` is the folder keyed `top` or lies inside it.
+pub(crate) fn contains(top: &str, deep: &str) -> bool {
+    deep.strip_prefix(top)
+        .is_some_and(|rest| rest.is_empty() || top.ends_with('/') || rest.starts_with('/'))
 }
 
 #[cfg(test)]

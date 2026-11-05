@@ -125,7 +125,7 @@ fn mark_needs_a_live_watch_and_tracks_raw_changes() {
     let root = path("repo");
     probe.set_identity(&root, Some(identity(1)));
     let mut watches = Watches::new(probe.clone());
-    watches.arm(&root, DriveClass::Ssd);
+    watches.arm(&root, &root, DriveClass::Ssd);
 
     assert_eq!(
         watches.mark(&root),
@@ -154,7 +154,7 @@ fn a_root_without_an_identity_is_never_armed() {
     let root = path("repo");
     let mut watches = Watches::new(probe.clone());
 
-    watches.arm(&root, DriveClass::Ssd);
+    watches.arm(&root, &root, DriveClass::Ssd);
 
     assert_eq!(
         probe.created(),
@@ -171,7 +171,7 @@ fn a_changed_identity_clears_the_mark_and_re_arming_starts_a_new_epoch() {
     probe.set_identity(&root, Some(identity(1)));
     probe.make_live(&root);
     let mut watches = Watches::new(probe.clone());
-    watches.arm(&root, DriveClass::Ssd);
+    watches.arm(&root, &root, DriveClass::Ssd);
     let first = watches
         .mark(&root)
         .expect("the armed watch covers the root");
@@ -179,7 +179,7 @@ fn a_changed_identity_clears_the_mark_and_re_arming_starts_a_new_epoch() {
     probe.set_identity(&root, Some(identity(2)));
     assert_eq!(watches.mark(&root), None, "the folder was replaced");
 
-    watches.arm(&root, DriveClass::Ssd);
+    watches.arm(&root, &root, DriveClass::Ssd);
     let second = watches.mark(&root).expect("the new watch covers the root");
     assert_ne!(second.epoch, first.epoch, "a new watch has a new epoch");
 }
@@ -195,7 +195,7 @@ fn sixty_five_roots_evict_the_least_recently_armed() {
     let mut watches = Watches::new(probe);
 
     for root in &roots {
-        watches.arm(root, DriveClass::Ssd);
+        watches.arm(root, root, DriveClass::Ssd);
     }
 
     assert_eq!(
@@ -225,10 +225,10 @@ fn evicting_a_slow_watch_does_not_block_arming() {
     let mut watches = Watches::new(probe);
 
     for root in &roots[..64] {
-        watches.arm(root, DriveClass::Ssd);
+        watches.arm(root, root, DriveClass::Ssd);
     }
     let start = Instant::now();
-    watches.arm(&roots[64], DriveClass::Ssd);
+    watches.arm(&roots[64], &roots[64], DriveClass::Ssd);
 
     assert!(
         start.elapsed() < Duration::from_millis(100),
@@ -249,11 +249,11 @@ fn only_fixed_drives_and_non_volume_roots_are_armed() {
         DriveClass::Removable,
         DriveClass::Unknown,
     ] {
-        watches.arm(&root, class);
+        watches.arm(&root, &root, class);
         assert_eq!(probe.created(), 0, "{class:?} is not a fixed drive");
     }
     for class in [DriveClass::Ssd, DriveClass::Hdd] {
-        watches.arm(&root, class);
+        watches.arm(&root, &root, class);
     }
     assert_eq!(probe.created(), 2, "both fixed classes are armed");
 
@@ -263,7 +263,7 @@ fn only_fixed_drives_and_non_volume_roots_are_armed() {
         Path::new("/")
     };
     probe.set_identity(volume, Some(identity(2)));
-    watches.arm(volume, DriveClass::Ssd);
+    watches.arm(volume, volume, DriveClass::Ssd);
     assert_eq!(probe.created(), 2, "a volume root is never armed");
 }
 
@@ -276,4 +276,55 @@ fn root_key_uses_forward_slashes() {
 #[test]
 fn root_key_is_case_insensitive_on_windows() {
     assert_eq!(root_key(Path::new("C:/R")), root_key(Path::new("c:\\r")));
+}
+
+fn armed_under(listing: &str, root: &str) -> bool {
+    let probe = Arc::new(FakeProbe::default());
+    let root = path(root);
+    probe.set_identity(&root, Some(identity(1)));
+    let mut watches = Watches::new(probe.clone());
+    watches.arm(&root, &path(listing), DriveClass::Ssd);
+    probe.created() == 1
+}
+
+#[test]
+fn only_the_listing_its_ancestors_and_direct_children_are_armed() {
+    assert!(armed_under("l/a", "l/a"), "the listing itself");
+    assert!(armed_under("l/a", "l"), "an ancestor of the listing");
+    assert!(armed_under("l/a/", "l/a/repo"), "a direct child");
+    assert!(
+        !armed_under("l/a", "l/a/sub/repo"),
+        "a grandchild would block renaming its parent"
+    );
+    assert!(!armed_under("l/a", "l/b"), "a sibling of the listing");
+    assert!(
+        !armed_under("l/a", "l/ab"),
+        "a name that only shares a prefix"
+    );
+}
+
+#[test]
+fn windows_keys_drop_the_verbatim_prefix_case_and_trailing_separator() {
+    assert_eq!(
+        key_of(r"\\?\C:\Users\A\", true),
+        key_of(r"c:\users\a", true)
+    );
+    assert_eq!(key_of(r"\\?\C:\", true), "c:/");
+    assert_eq!(key_of(r"C:\", true), "c:/");
+    assert_eq!(key_of(r"\\?\UNC\Srv\Share\x", true), "//srv/share/x");
+    assert_eq!(
+        key_of(r"\\?\C:\A", false),
+        "//?/C:/A",
+        "only Windows strips it"
+    );
+}
+
+#[test]
+fn contains_respects_folder_boundaries() {
+    assert!(contains("c:/a", "c:/a"));
+    assert!(contains("c:/a", "c:/a/b"));
+    assert!(contains("c:/", "c:/a"));
+    assert!(contains("/", "/home"));
+    assert!(!contains("c:/a", "c:/ab"));
+    assert!(!contains("c:/a/b", "c:/a"));
 }
