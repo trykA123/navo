@@ -10,6 +10,8 @@ mod saved;
 mod skip;
 #[path = "scan_slots.rs"]
 mod slots;
+#[path = "scan_system.rs"]
+mod system;
 #[path = "scan_view.rs"]
 mod view;
 #[path = "scan_watch.rs"]
@@ -33,6 +35,7 @@ pub(crate) use navo_fs::CancelToken as Cancel;
 use queue::{Listing, Shared};
 pub(crate) use saved::{DbSaved, SavedBadges};
 pub(crate) use slots::Slots;
+pub(crate) use system::SystemProbe;
 pub(crate) use view::{ScanRepo, ScanView};
 
 const QUEUE_CAP: usize = 256;
@@ -116,19 +119,6 @@ pub(crate) trait Probe: Send + Sync + 'static {
     /// The file identity of `root`, used to notice a replaced folder.
     fn identity(&self, _root: &Path) -> Option<FileIdentity> {
         None
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct SystemProbe;
-
-impl Probe for SystemProbe {
-    fn has_git(&self, folder: &Path) -> bool {
-        std::fs::metadata(folder.join(".git")).is_ok_and(|m| m.is_file() || m.is_dir())
-    }
-
-    fn drive_class(&self, listing: &Location) -> DriveClass {
-        navo_fs::drive_class(listing)
     }
 }
 
