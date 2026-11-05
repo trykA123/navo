@@ -62,6 +62,14 @@ Merged after that release: six built-in colour themes. They are Open sea (the de
 
 ### Now in progress
 
+Status on 5 November 2026:
+
+- **v0.2.3 (release build running):** a file edited in an open folder shows its new size at once; faster listing cache, Ctrl+K highlights, table sorts and PDF search.
+- **Faster folders (ready, next on main):** a folder keeps one set of rows; sorts and filters are views over it, and two tabs on one folder share a sort. In the Windows benchmark a 5,000-file folder lists in 10 ms instead of 24, and sorts 2–7× faster.
+- **Git badges skip unchanged repositories (reviewed, fixed, final Windows check):** Navo watches only the open folder, its parents and its direct children. Leaving a folder frees it for rename and delete. Recheck always runs.
+- **Leaner index (reviewed, fixed):** about 97 MiB per 2 million files instead of about 160. Rebuilds peak at about 2× the index; the first load of an older index and a rebuild after the drive grew may peak at 2.5×.
+- **In-app updates (built, VM test next):** a test feed for tester builds and a nine-case install and update test in the Windows VM.
+
 - **Compare and sync (v1.0).** The engine is about a third done: big files are read once with steady memory, changes are found down to the word, content checks use every core, and Git repositories can be read at any revision. Next: the compare screen, then sync.
 - **Installer.** Setup.exe ships with the next pre-release, next to the portable zip. Updates from inside the app follow.
 - **Safer undo for moves.** Ctrl+Z after a move checks that each file is still the same one before it moves it back.
