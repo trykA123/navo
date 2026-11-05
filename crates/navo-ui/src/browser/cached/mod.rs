@@ -69,7 +69,9 @@ impl Fetch {
             .and_then(|folder| folder.modified_ms)
             .and_then(|ms| u64::try_from(ms).ok())
             .map(|ms| UNIX_EPOCH + Duration::from_millis(ms));
+        // A file edit leaves the folder time alone on NTFS, so watcher changes go first.
         if self.is_watched
+            && self.touched.as_ref().is_none_or(Vec::is_empty)
             && folder_changed.is_some()
             && self
                 .shown

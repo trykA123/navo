@@ -428,3 +428,51 @@ fn another_sort_key_still_gets_the_sorted_snapshot_rows() {
         ["docs", "a.txt", "b.txt", "c.txt", "d.txt"]
     );
 }
+
+#[test]
+fn a_touched_file_with_a_new_size_shows_even_when_the_folder_time_is_unchanged() {
+    let fs = fake();
+    stamp_folder(&fs, 1_000);
+    let cache = ListingCache::default();
+    let keys = CacheKeys::default();
+    let key = keys.key(&fs.location("home")).unwrap();
+    let fetch = |shown, touched, is_watched| Fetch {
+        provider: fs.clone(),
+        cache: cache.clone(),
+        keys: keys.clone(),
+        location: fs.location("home"),
+        shown,
+        touched,
+        is_watched,
+        is_kept_on_disk: false,
+        progress: Progress::default(),
+        sort: None,
+        early: None,
+    };
+    fetch(None, None, false).run(&CancelToken::new()).unwrap();
+    let shown = cache.get(&key);
+    let name = ProviderPath::from_text("a.txt");
+    fs.add_entry(
+        "home",
+        FsEntry {
+            name: name.clone(),
+            kind: EntryKind::File,
+            size: 99,
+            modified_ms: Some(5_000),
+            attributes: Attributes::default(),
+        },
+    );
+    stamp_folder(&fs, 1_000);
+    let touched = Some(vec![navo_fs::WatchChange::Modified(name)]);
+    let fresh = fetch(shown, touched, true)
+        .run(&CancelToken::new())
+        .unwrap();
+    let Fresh::Rows { rows, .. } = fresh else {
+        panic!("the touched change was dropped: Fresh::Unchanged");
+    };
+    let size = rows
+        .iter()
+        .find(|r| r.name.display() == "a.txt")
+        .map(|r| r.size);
+    assert_eq!(size, Some(99));
+}
