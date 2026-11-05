@@ -7,7 +7,7 @@ use crate::fuzzy::{Fuzzy, Match};
 use crate::table::{Flags, NameTable};
 
 const CHUNK_SIZE: u32 = 16 * 1024;
-type Candidates = BinaryHeap<(Reverse<u32>, u32, Vec<u32>)>;
+type Candidates = BinaryHeap<(Reverse<u32>, u32)>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Term<'a> {
@@ -93,9 +93,34 @@ pub fn search_filtered_with<I: FnMut(u32) -> bool>(
     if cancel() {
         return Vec::new();
     }
-    hits.into_sorted_vec()
-        .into_iter()
-        .map(|(Reverse(score), id, indices)| TableHit { id, score, indices })
+    highlight(table, query, hits.into_sorted_vec())
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "the scan matched this live id against the same unchanged table"
+)]
+fn highlight(
+    table: &NameTable,
+    query: &[Term<'_>],
+    hits: Vec<(Reverse<u32>, u32)>,
+) -> Vec<TableHit> {
+    if hits.is_empty() {
+        return Vec::new();
+    }
+    let mut matchers = Matchers::new(query);
+    hits.into_iter()
+        .map(|(Reverse(score), id)| {
+            let matched = table
+                .name(id)
+                .and_then(|name| matchers.score(table, id, name))
+                .expect("a scanned hit still matches its unchanged table entry");
+            TableHit {
+                id,
+                score,
+                indices: matched.indices,
+            }
+        })
         .collect()
 }
 
@@ -139,10 +164,10 @@ impl<C: Fn() -> bool + Sync> Search<'_, C> {
             if (self.cancel)() {
                 break;
             }
-            if let Some(hit) = matchers.score(self.table, id, name)
+            if let Some(score) = matchers.score_only(self.table, id, name)
                 && include(id)
             {
-                keep_hit(&mut hits, (Reverse(hit.score), id, hit.indices), self.limit);
+                keep_hit(&mut hits, (Reverse(score), id), self.limit);
             }
         }
         hits
@@ -159,7 +184,7 @@ impl<C: Fn() -> bool + Sync> Search<'_, C> {
     }
 }
 
-fn keep_hit(hits: &mut Candidates, hit: (Reverse<u32>, u32, Vec<u32>), limit: usize) {
+fn keep_hit(hits: &mut Candidates, hit: (Reverse<u32>, u32), limit: usize) {
     if hits.len() < limit {
         hits.push(hit);
     } else if let Some(mut worst) = hits.peek_mut()
@@ -216,6 +241,18 @@ impl<'a> Matchers<'a> {
         Some(hit)
     }
 
+    fn score_only(&mut self, table: &NameTable, id: u32, name: &str) -> Option<u32> {
+        if !self.matches_extension(table, id, name) {
+            return None;
+        }
+        let mut score = score_terms_only(&mut self.names, name)?;
+        if !self.paths.is_empty() {
+            let path = table.path_with(id, '/')?;
+            score = score.saturating_add(score_terms_only(&mut self.paths, &path)?);
+        }
+        Some(score)
+    }
+
     fn matches_extension(&self, table: &NameTable, id: u32, name: &str) -> bool {
         if self.extensions.is_empty() {
             return true;
@@ -253,6 +290,14 @@ fn score_terms(matchers: &mut [Fuzzy], text: &str) -> Option<Match> {
         combined.indices.extend(hit.indices);
     }
     Some(combined)
+}
+
+fn score_terms_only(matchers: &mut [Fuzzy], text: &str) -> Option<u32> {
+    let mut score = 0u32;
+    for matcher in matchers {
+        score = score.saturating_add(matcher.score_only(text)?);
+    }
+    Some(score)
 }
 
 fn name_offset(path: &str, name: &str) -> u32 {

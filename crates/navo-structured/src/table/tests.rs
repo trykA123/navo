@@ -1,9 +1,12 @@
+use std::cmp::Ordering;
 use std::fmt::Write as _;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use super::sort::parsed_cells;
 use super::{
-    Dialect, MAX_COLUMNS, ROWS_BYTES, RecordIndex, STRIDE, column_name, column_widths,
-    index_records, parse_table, read_rows, sniff, sort_order,
+    Dialect, MAX_COLUMNS, ROWS_BYTES, RecordIndex, STRIDE, SortMemo, Table, column_name,
+    column_widths, index_records, parse_table, read_rows, sniff,
 };
 use crate::Watch;
 
@@ -48,20 +51,255 @@ fn a_numeric_first_row_is_data_and_columns_get_letters() {
     assert_eq!(column_name(26), "AA");
 }
 
+fn table_from(rows: Vec<Vec<String>>) -> Arc<Table> {
+    let columns = rows.iter().map(Vec::len).max().unwrap_or(0);
+    Arc::new(Table {
+        header: (0..columns).map(column_name).collect(),
+        rows,
+        columns,
+        widest: columns,
+    })
+}
+
+fn table_of<const C: usize>(rows: &[[&str; C]]) -> Arc<Table> {
+    table_from(
+        rows.iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_owned()).collect())
+            .collect(),
+    )
+}
+
+fn legacy_cell(rows: &[Vec<String>], row: usize, column: usize) -> &str {
+    rows.get(row)
+        .and_then(|cells| cells.get(column))
+        .map_or("", |cell| cell.trim())
+}
+
+fn legacy_is_numeric_column(rows: &[Vec<String>], column: usize) -> bool {
+    let mut cells = (0..rows.len())
+        .map(|row| legacy_cell(rows, row, column))
+        .filter(|cell| !cell.is_empty())
+        .peekable();
+    cells.peek().is_some() && cells.all(super::sniff::is_number)
+}
+
+fn legacy_order<T>(mut keyed: Vec<(T, u32)>, compare: impl Fn(&T, &T) -> Ordering) -> Vec<u32> {
+    keyed.sort_by(|(left, _), (right, _)| compare(left, right));
+    keyed.into_iter().map(|(_, row)| row).collect()
+}
+
+fn legacy_sort_order(rows: &[Vec<String>], column: usize, descending: bool) -> Vec<u32> {
+    let direction = |ordering: Ordering| {
+        if descending {
+            ordering.reverse()
+        } else {
+            ordering
+        }
+    };
+    let ids = || (0..rows.len()).filter_map(|row| u32::try_from(row).ok().map(|id| (row, id)));
+    if legacy_is_numeric_column(rows, column) {
+        let keyed = ids()
+            .map(|(row, id)| (legacy_cell(rows, row, column).parse::<f64>().ok(), id))
+            .collect();
+        return legacy_order(keyed, |left, right| match (left, right) {
+            (Some(left), Some(right)) => direction(left.total_cmp(right)),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        });
+    }
+    let keyed = ids()
+        .map(|(row, id)| (legacy_cell(rows, row, column).to_lowercase(), id))
+        .collect();
+    legacy_order(keyed, |left: &String, right: &String| {
+        match (left.is_empty(), right.is_empty()) {
+            (false, true) => Ordering::Less,
+            (true, false) => Ordering::Greater,
+            _ => direction(left.cmp(right)),
+        }
+    })
+}
+
+fn assert_matches_legacy(table: &Arc<Table>, columns: usize) {
+    let mut memo = SortMemo::default();
+    for column in 0..columns {
+        for descending in [false, true] {
+            assert_eq!(
+                memo.sort_order(table, column, descending),
+                legacy_sort_order(&table.rows, column, descending),
+                "column {column} descending {descending}"
+            );
+        }
+    }
+}
+
+const NUMERIC: [[&str; 2]; 8] = [
+    ["10", "beta"],
+    ["9", "Alpha"],
+    ["", "gamma"],
+    ["100", "alpha2"],
+    ["-3.5", ""],
+    ["1e2", "Zed"],
+    ["007", "émile"],
+    ["10", "alpha"],
+];
+
+const MIXED: [[&str; 2]; 5] = [
+    ["10", "b"],
+    ["n/a", "A"],
+    ["", "a"],
+    ["100", ""],
+    ["2", "B"],
+];
+
+const TEXT: [[&str; 2]; 7] = [
+    ["B", "x"],
+    ["a", "X"],
+    ["", ""],
+    ["A", "y"],
+    ["İ", "Y"],
+    ["ß", ""],
+    ["i", "z"],
+];
+
+const ODD: [[&str; 2]; 5] = [
+    ["NaN", "inf"],
+    ["-inf", "1e309"],
+    ["", "nan"],
+    ["2", "-0"],
+    ["1,5", "0"],
+];
+
+const SPACED: [[&str; 1]; 5] = [[" 2 "], ["-0"], ["+0"], [".5"], ["5."]];
+
 #[test]
-fn numeric_columns_sort_by_value_and_text_without_case() {
-    let rows: Vec<Vec<String>> = [
-        ["10", "beta"],
-        ["9", "Alpha"],
-        ["", "gamma"],
-        ["100", "alpha2"],
-    ]
-    .iter()
-    .map(|row| row.iter().map(|cell| (*cell).to_owned()).collect())
-    .collect();
-    assert_eq!(sort_order(&rows, 0, false), [1, 0, 3, 2]);
-    assert_eq!(sort_order(&rows, 0, true), [3, 0, 1, 2]);
-    assert_eq!(sort_order(&rows, 1, false), [1, 3, 0, 2]);
+fn sorting_matches_the_old_order_for_numeric_mixed_text_and_empty_cells() {
+    assert_matches_legacy(&table_of(&NUMERIC), 2);
+    assert_matches_legacy(&table_of(&MIXED), 2);
+    assert_matches_legacy(&table_of(&TEXT), 2);
+    assert_matches_legacy(&table_of(&ODD), 2);
+    assert_matches_legacy(&table_of(&SPACED), 1);
+    assert_matches_legacy(&table_from(Vec::new()), 1);
+    let ragged = table_from(vec![
+        vec!["2".to_owned()],
+        vec!["1".to_owned(), "x".to_owned()],
+        vec!["".to_owned()],
+        vec!["3".to_owned(), "y".to_owned(), "z".to_owned()],
+    ]);
+    assert_matches_legacy(&ragged, 3);
+}
+
+#[test]
+fn a_column_is_parsed_once_and_a_second_sort_parses_nothing() {
+    let numeric = table_of(&NUMERIC);
+    let mut memo = SortMemo::default();
+    let parsed = parsed_cells();
+    let order = memo.sort_order(&numeric, 0, false);
+    assert_eq!(order, [4, 6, 1, 0, 7, 3, 5, 2]);
+    assert_eq!(
+        parsed_cells() - parsed,
+        7,
+        "each non-empty cell is parsed once"
+    );
+    let parsed = parsed_cells();
+    let handle = Arc::clone(&numeric);
+    let reversed = memo.sort_order(&handle, 0, true);
+    assert_eq!(parsed_cells(), parsed, "the second sort reuses the keys");
+    assert_eq!(reversed, [3, 5, 0, 7, 1, 6, 4, 2]);
+
+    let text = table_of(&TEXT);
+    let mut memo = SortMemo::default();
+    let _ = memo.sort_order(&text, 1, false);
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&text, 1, true);
+    assert_eq!(
+        parsed_cells(),
+        parsed,
+        "the second text sort reuses the keys"
+    );
+}
+
+#[test]
+fn a_reloaded_table_drops_the_cached_keys() {
+    let first = table_of(&[["2"], ["1"]]);
+    let mut memo = SortMemo::default();
+    assert_eq!(memo.sort_order(&first, 0, false), [1, 0]);
+    let reloaded = table_of(&[["2"], ["3"]]);
+    let parsed = parsed_cells();
+    assert_eq!(memo.sort_order(&reloaded, 0, false), [0, 1]);
+    assert!(
+        parsed_cells() > parsed,
+        "the reloaded table is parsed again"
+    );
+}
+
+#[test]
+fn the_memo_keeps_only_the_eight_most_recently_sorted_columns() {
+    let rows: Vec<Vec<String>> = (0..2)
+        .map(|row| {
+            (0..9)
+                .map(|column| ((row * 9 + column) % 10).to_string())
+                .collect()
+        })
+        .collect();
+    let table = table_from(rows);
+    let mut memo = SortMemo::default();
+    for column in 0..9 {
+        let _ = memo.sort_order(&table, column, false);
+    }
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 1, false);
+    assert_eq!(parsed_cells(), parsed, "column 1 is still cached");
+    let _ = memo.sort_order(&table, 0, false);
+    assert!(
+        parsed_cells() > parsed,
+        "column 0 was the least recent and is gone"
+    );
+}
+
+fn large_table(rows: usize, columns: usize) -> Arc<Table> {
+    let cell = "x".repeat(2 * 1024 * 1024);
+    table_from(
+        (0..rows)
+            .map(|_| (0..columns).map(|_| cell.clone()).collect())
+            .collect(),
+    )
+}
+
+#[test]
+fn the_memo_drops_the_least_recently_sorted_column_when_its_keys_exceed_the_budget() {
+    let table = large_table(9, 2);
+    let mut memo = SortMemo::default();
+    let _ = memo.sort_order(&table, 0, false);
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, true);
+    assert_eq!(
+        parsed_cells(),
+        parsed,
+        "a column under the budget stays cached"
+    );
+    let _ = memo.sort_order(&table, 1, false);
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, false);
+    assert!(
+        parsed_cells() > parsed,
+        "the least recently sorted column was evicted by bytes"
+    );
+}
+
+#[test]
+fn a_column_larger_than_the_key_budget_is_sorted_without_caching() {
+    let table = large_table(17, 1);
+    let mut memo = SortMemo::default();
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, false);
+    assert!(parsed_cells() > parsed);
+    let parsed = parsed_cells();
+    let _ = memo.sort_order(&table, 0, true);
+    assert!(
+        parsed_cells() > parsed,
+        "keys over the budget are parsed again"
+    );
 }
 
 #[test]

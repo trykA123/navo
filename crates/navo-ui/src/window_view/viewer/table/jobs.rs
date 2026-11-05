@@ -5,7 +5,7 @@ use std::time::Duration;
 use navo_structured::Watch;
 use navo_structured::table::{
     Dialect, MAX_COLUMNS, RecordIndex, RowSlice, column_name, column_widths, index_records,
-    read_rows, sort_order,
+    read_rows,
 };
 
 use super::rows::Rows;
@@ -160,11 +160,18 @@ impl TableView {
             .is_some_and(|sort| sort.column == column && !sort.descending);
         let key = SortKey { column, descending };
         let table = table.clone();
+        let memo = self.sort_memo.clone();
         self.sort = Some(key);
         self.note = None;
         self.sorting = Some(spawn_job(
             cx,
-            move |_, send| send(sort_order(&table.rows, column, descending)),
+            move |_, send| {
+                let order = memo
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .sort_order(&table, column, descending);
+                send(order);
+            },
             |view: &mut Self, order: Vec<u32>, cx| {
                 view.sorting = None;
                 if let Rows::Memory { order: shown, .. } = &mut view.rows {

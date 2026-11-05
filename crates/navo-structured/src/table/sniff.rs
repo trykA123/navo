@@ -45,9 +45,16 @@ fn consistency(rows: &[Vec<String>]) -> (usize, usize) {
         .unwrap_or((0, 1))
 }
 
-pub(super) fn is_number(cell: &str) -> bool {
+pub(super) fn number(cell: &str) -> Option<f64> {
     let cell = cell.trim();
-    !cell.is_empty() && cell.chars().any(|ch| ch.is_ascii_digit()) && cell.parse::<f64>().is_ok()
+    if cell.is_empty() || !cell.chars().any(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    cell.parse::<f64>().ok()
+}
+
+pub(super) fn is_number(cell: &str) -> bool {
+    number(cell).is_some()
 }
 
 fn header_votes(rows: &[Vec<String>]) -> i32 {

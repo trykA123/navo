@@ -5,11 +5,84 @@ use std::sync::Arc;
 use navo_pdf::protocol::{CharBox, PageText};
 
 const BOXES_KEPT: usize = 24;
-pub(super) const INDEX_BUDGET: usize = 16 * 1024 * 1024;
+pub(super) const INDEX_BUDGET_BYTES: usize = 32 * 1024 * 1024;
+
+#[derive(Clone)]
+pub(super) enum PageChars {
+    Narrow(Arc<[u8]>),
+    Wide(Arc<[char]>),
+}
+
+pub(super) enum PageSlice<'a> {
+    Narrow(std::slice::Iter<'a, u8>),
+    Wide(std::slice::Iter<'a, char>),
+}
+
+impl Iterator for PageSlice<'_> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<char> {
+        match self {
+            Self::Narrow(chars) => chars.next().map(|&byte| char::from(byte)),
+            Self::Wide(chars) => chars.next().copied(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Narrow(chars) => chars.size_hint(),
+            Self::Wide(chars) => chars.size_hint(),
+        }
+    }
+}
+
+impl PageChars {
+    pub(super) fn len(&self) -> usize {
+        match self {
+            Self::Narrow(chars) => chars.len(),
+            Self::Wide(chars) => chars.len(),
+        }
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub(super) fn get(&self, at: usize) -> Option<char> {
+        match self {
+            Self::Narrow(chars) => chars.get(at).copied().map(char::from),
+            Self::Wide(chars) => chars.get(at).copied(),
+        }
+    }
+
+    pub(super) fn slice(&self, at: usize, len: usize) -> PageSlice<'_> {
+        let end = at.saturating_add(len).min(self.len());
+        let at = at.min(end);
+        match self {
+            Self::Narrow(chars) => PageSlice::Narrow(chars[at..end].iter()),
+            Self::Wide(chars) => PageSlice::Wide(chars[at..end].iter()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn iter(&self) -> impl Iterator<Item = char> + '_ {
+        (0..self.len()).map(|at| match self {
+            Self::Narrow(chars) => char::from(chars[at]),
+            Self::Wide(chars) => chars[at],
+        })
+    }
+
+    fn bytes(&self) -> usize {
+        match self {
+            Self::Narrow(chars) => std::mem::size_of_val(chars.as_ref()),
+            Self::Wide(chars) => std::mem::size_of_val(chars.as_ref()),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(super) struct PageWords {
-    pub chars: Arc<[char]>,
+    pub chars: PageChars,
     lines: Arc<[(u32, f32)]>,
 }
 
@@ -26,8 +99,13 @@ impl PageWords {
                 last = Some(top);
             }
         }
+        let chars = if text.chars().iter().all(|ch| u32::from(ch.ch) <= 0xff) {
+            PageChars::Narrow(text.chars().iter().map(|ch| ch.ch as u8).collect())
+        } else {
+            PageChars::Wide(text.chars().iter().map(|ch| ch.ch).collect())
+        };
         Self {
-            chars: text.chars().iter().map(|ch| ch.ch).collect(),
+            chars,
             lines: lines.into(),
         }
     }
@@ -44,7 +122,7 @@ pub(super) struct TextIndex {
     pages: Vec<Option<PageWords>>,
     indexed: u32,
     next: u32,
-    chars: usize,
+    bytes: usize,
     is_full: bool,
 }
 
@@ -54,7 +132,7 @@ impl TextIndex {
             pages: (0..count).map(|_| None).collect(),
             indexed: 0,
             next: 0,
-            chars: 0,
+            bytes: 0,
             is_full: false,
         }
     }
@@ -66,11 +144,12 @@ impl TextIndex {
         if slot.is_some() || self.is_full {
             return false;
         }
-        self.chars += words.chars.len();
-        if self.chars > INDEX_BUDGET {
+        let bytes = words.chars.bytes() + std::mem::size_of_val(words.lines.as_ref());
+        if bytes > INDEX_BUDGET_BYTES.saturating_sub(self.bytes) {
             self.is_full = true;
             return false;
         }
+        self.bytes += bytes;
         *slot = Some(words);
         self.indexed += 1;
         self.advance();
@@ -232,6 +311,72 @@ mod tests {
         let mut chars = line("alpha", 10.);
         chars.extend(line("beta", 50.));
         PageText::new(100., 100., chars).expect("page")
+    }
+
+    #[test]
+    fn page_chars_preserve_latin_and_wide_indices() {
+        for (text, narrow) in [("aÿz", true), ("aĀz", false), ("șț", false)] {
+            let page = PageText::new(100., 100., line(text, 10.)).expect("page");
+            let chars = PageWords::of(&page).chars;
+            assert_eq!(matches!(chars, PageChars::Narrow(_)), narrow);
+            assert_eq!(chars.iter().collect::<String>(), text);
+            for (index, ch) in text.chars().enumerate() {
+                assert_eq!(chars.get(index), Some(ch));
+            }
+            assert_eq!(chars.get(chars.len()), None);
+        }
+    }
+
+    #[test]
+    fn a_char_slice_clamps_to_the_page() {
+        let narrow = PageChars::Narrow(b"abc".to_vec().into());
+        assert_eq!(narrow.slice(1, 2).collect::<String>(), "bc");
+        assert_eq!(narrow.slice(2, 9).collect::<String>(), "c");
+        assert_eq!(narrow.slice(9, 1).collect::<String>(), "");
+        let wide = PageChars::Wide(vec!['a', 'ș', 'c'].into());
+        assert_eq!(wide.slice(1, 2).collect::<String>(), "șc");
+        assert_eq!(wide.slice(2, 9).collect::<String>(), "c");
+        assert_eq!(wide.slice(9, 1).collect::<String>(), "");
+    }
+
+    #[test]
+    fn byte_budget_counts_text_and_lines_before_accepting_a_page() {
+        let mut index = TextIndex::new(3);
+        let line_bytes = std::mem::size_of::<(u32, f32)>();
+        let words = PageWords {
+            chars: PageChars::Narrow(vec![b'a'; INDEX_BUDGET_BYTES - line_bytes].into()),
+            lines: vec![(0, 0.)].into(),
+        };
+        assert!(index.insert(0, words));
+        assert!(!index.is_full());
+        assert!(!index.insert(1, PageWords::of(&page())));
+        assert!(index.is_full());
+        assert_eq!(index.indexed(), 1);
+        assert!(index.get(1).is_none());
+
+        let mut index = TextIndex::new(1);
+        let words = PageWords {
+            chars: PageChars::Narrow(vec![b'a'; INDEX_BUDGET_BYTES - line_bytes + 1].into()),
+            lines: vec![(0, 0.)].into(),
+        };
+        assert!(!index.insert(0, words));
+        assert!(index.is_full());
+    }
+
+    #[test]
+    fn wide_pages_count_four_bytes_per_character() {
+        let mut index = TextIndex::new(2);
+        let words = PageWords {
+            chars: PageChars::Wide(vec!['ș'; INDEX_BUDGET_BYTES / 4 - 1].into()),
+            lines: Arc::from([]),
+        };
+        assert!(index.insert(0, words));
+        let words = PageWords {
+            chars: PageChars::Wide(vec!['ț'; 2].into()),
+            lines: Arc::from([]),
+        };
+        assert!(!index.insert(1, words));
+        assert!(index.is_full());
     }
 
     #[test]

@@ -1,7 +1,9 @@
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-use super::{TableHit, Term, search};
+use super::{Matchers, TableHit, Term, search};
 use crate::fuzzy::Fuzzy;
 use crate::table::{Flags, NO_PARENT, NameTable};
 
@@ -15,6 +17,104 @@ fn files(names: &[&str]) -> NameTable {
 
 fn ids(hits: &[TableHit]) -> Vec<u32> {
     hits.iter().map(|hit| hit.id).collect()
+}
+
+fn search_with_scan_indices(table: &NameTable, query: &[Term<'_>], limit: usize) -> Vec<TableHit> {
+    if limit == 0 || table.is_empty() || query.is_empty() {
+        return Vec::new();
+    }
+    let mut matchers = Matchers::new(query);
+    let mut hits: BinaryHeap<(Reverse<u32>, u32, Vec<u32>)> = BinaryHeap::new();
+    for (id, name) in table.iter() {
+        if let Some(hit) = matchers.score(table, id, name) {
+            let candidate = (Reverse(hit.score), id, hit.indices);
+            if hits.len() < limit {
+                hits.push(candidate);
+            } else if let Some(mut worst) = hits.peek_mut()
+                && (candidate.0, candidate.1) < (worst.0, worst.1)
+            {
+                *worst = candidate;
+            }
+        }
+    }
+    hits.into_sorted_vec()
+        .into_iter()
+        .map(|(Reverse(score), id, indices)| TableHit { id, score, indices })
+        .collect()
+}
+
+fn corpus() -> NameTable {
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "données", Flags::FOLDER).unwrap();
+    let source = table.push(root, "src", Flags::FOLDER).unwrap();
+    for name in [
+        "README.md",
+        "readme.txt",
+        "Readme.md",
+        "rdme.rs",
+        "résumé.rs",
+        "Résumé.txt",
+        "Über_ünd.txt",
+        "日本e\u{301}.txt",
+        "New tab.rs",
+        "new-tab.txt",
+        "note.txt",
+        "note.txt",
+        "note.txt",
+        "Note.TXT",
+        "eins zwei drei.txt",
+    ] {
+        table.push(source, name, Flags::NONE).unwrap();
+    }
+    let other = table.push(NO_PARENT, "other", Flags::FOLDER).unwrap();
+    table.push(other, "readme.rs", Flags::NONE).unwrap();
+    table
+}
+
+#[test]
+fn scanning_without_indices_matches_the_old_scan() {
+    let table = corpus();
+    let queries: &[&[Term<'_>]] = &[
+        &[Term::Name("readme")],
+        &[Term::Name("Readme")],
+        &[Term::Name("rdm")],
+        &[Term::Name("note")],
+        &[Term::Name("tab new")],
+        &[Term::Name("new"), Term::Name("tab")],
+        &[Term::Name("ünd")],
+        &[Term::Name("resume")],
+        &[Term::Name("résumé")],
+        &[Term::Name("e")],
+        &[Term::Name("données"), Term::Name("readme")],
+        &[Term::Path("données/src")],
+        &[Term::Path("données/src/readme")],
+        &[Term::Path("other"), Term::Name("readme")],
+        &[Term::Name("readme"), Term::Path("données")],
+    ];
+    assert!(search(&table, &[Term::Name("readme")], 20, &|| false).len() >= 4);
+    for query in queries {
+        for limit in [1, 2, 3, 5, 20] {
+            assert_eq!(
+                search(&table, query, limit, &|| false),
+                search_with_scan_indices(&table, query, limit),
+                "{query:?} limit {limit}"
+            );
+        }
+    }
+}
+
+#[test]
+fn indices_are_computed_only_for_returned_hits() {
+    let mut table = NameTable::new();
+    for id in 0..500 {
+        table
+            .push(NO_PARENT, &format!("match-{id:03}"), Flags::NONE)
+            .unwrap();
+    }
+    crate::fuzzy::test_counters::reset_indices_computed();
+    let hits = search(&table, &[Term::Name("match")], 3, &|| false);
+    assert_eq!(hits.len(), 3);
+    assert_eq!(crate::fuzzy::test_counters::indices_computed(), 3);
 }
 
 #[test]
