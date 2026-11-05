@@ -64,8 +64,9 @@ pub fn hooks(dirs: Option<&StoreDirs>) -> (UserCommandHooks, Option<Watch>) {
         edit(&template).map_err(|error| format!("{FILE}: {error}"))
     }));
     *lock(&sender_slot) = Some(sender.clone());
-    let _ = sender.send(loaded.news.clone());
-    let watching = watch(&path, loaded.news, commands, sender);
+    // Watch before the first news, so an edit made as soon as it arrives is seen.
+    let watching = watch(&path, loaded.news.clone(), commands, sender.clone());
+    let _ = sender.send(loaded.news);
     start::sweep(SystemTime::now(), start::is_running);
     if watching.is_none() {
         tracing::warn!(
