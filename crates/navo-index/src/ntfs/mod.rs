@@ -376,6 +376,8 @@ mod batch_tests;
 #[cfg(test)]
 mod memory_tests;
 #[cfg(test)]
+mod peak_ratio_tests;
+#[cfg(test)]
 mod peak_tests;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
