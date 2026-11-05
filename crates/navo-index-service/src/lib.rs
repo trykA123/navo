@@ -13,6 +13,8 @@ mod batch;
 mod bind_retry;
 #[cfg(any(windows, test))]
 mod build_permit;
+#[cfg(any(windows, test))]
+pub mod change_lock;
 #[cfg_attr(
     not(any(windows, test)),
     allow(
@@ -206,8 +208,14 @@ fn execute(action: Action) -> std::io::Result<Elevated> {
         Action::Install | Action::Remove if !elevation::is_admin() => {
             request_elevation(action).map_err(std::io::Error::other)
         }
-        Action::Install => installation::install().map(|()| Elevated::Done),
-        Action::Remove => installation::remove(),
+        Action::Install => {
+            let _change = change_lock::global()?;
+            installation::install().map(|()| Elevated::Done)
+        }
+        Action::Remove => {
+            let _change = change_lock::global()?;
+            installation::remove()
+        }
     }
 }
 

@@ -53,6 +53,13 @@ struct Installed {
 
 pub(super) fn install() -> io::Result<()> {
     let source = service_source(&std::env::current_exe()?)?;
+    super::change_lock::install_unless_current(
+        || verify::current(&source),
+        || install_service(&source),
+    )
+}
+
+fn install_service(source: &Path) -> io::Result<()> {
     let legacy = legacy::detect()?;
     let config = match legacy::carried_config() {
         Some(config) => config,
@@ -61,7 +68,7 @@ pub(super) fn install() -> io::Result<()> {
     let mut installed = None;
     let leftover = run_upgrade(legacy, |step| match step {
         UpgradeStep::InstallNew => {
-            install_current(&source, &config).map(|done| installed = Some(done))
+            install_current(source, &config).map(|done| installed = Some(done))
         }
         UpgradeStep::AwaitNew => installed
             .as_ref()

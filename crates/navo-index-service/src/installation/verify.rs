@@ -6,9 +6,12 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use navo_index::pipe::Client;
-use windows_sys::Win32::Foundation::{FILETIME, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows_sys::Win32::Foundation::{
+    ERROR_SERVICE_DOES_NOT_EXIST, FILETIME, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
 use windows_sys::Win32::System::Services::{
-    QUERY_SERVICE_CONFIGW, QueryServiceConfigW, QueryServiceStatusEx, SC_STATUS_PROCESS_INFO,
+    OpenServiceW, QUERY_SERVICE_CONFIGW, QueryServiceConfigW, QueryServiceStatusEx,
+    SC_MANAGER_CONNECT, SC_STATUS_PROCESS_INFO, SERVICE_QUERY_CONFIG, SERVICE_QUERY_STATUS,
     SERVICE_STATUS_PROCESS,
 };
 use windows_sys::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
@@ -16,17 +19,67 @@ use windows_sys::Win32::System::Threading::{
     GetProcessTimes, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
     PROCESS_SYNCHRONIZE, QueryFullProcessImageNameW, WaitForSingleObject,
 };
+use windows_sys::Win32::UI::Shell::FOLDERID_ProgramFiles;
 
 use super::super::install_check::{
     Expected, Mismatch, Process, Running, Seen, check_answer, check_image, check_running,
+    is_mismatch,
 };
-use super::super::install_plan::CopyPlan;
-use super::super::scm::{ServiceHandle, checked};
+use super::super::install_plan::{CopyPlan, NAVO};
+use super::super::scm::{ServiceHandle, checked, open_manager, service_handle, service_name};
 use super::super::upgrade::await_answer;
 
 const CONFIG_BYTES: usize = 8 * 1024;
 const PATH_UNITS: usize = 32_768;
 const ANSWER_TRY: Duration = Duration::from_secs(2);
+
+/// Checks the current service without creating files or changing its registration or state.
+pub(super) fn current(source: &Path) -> io::Result<bool> {
+    if super::super::scm::query_running(NAVO)? != Some(true) {
+        return Ok(false);
+    }
+    let manager = open_manager(SC_MANAGER_CONNECT)?;
+    let name = service_name();
+    // SAFETY: manager and terminated name remain live; only read-only access is requested.
+    let raw = unsafe {
+        OpenServiceW(
+            manager.0,
+            name.as_ptr(),
+            SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS,
+        )
+    };
+    let service = match service_handle(raw) {
+        Ok(service) => service,
+        Err(error) if error.raw_os_error() == Some(ERROR_SERVICE_DOES_NOT_EXIST as i32) => {
+            return Ok(false);
+        }
+        Err(error) => return Err(error),
+    };
+    let plan = CopyPlan::new(
+        &super::super::directory::known_folder(&FOLDERID_ProgramFiles)?,
+        std::process::id(),
+    );
+    let checked = installed(
+        &service,
+        (&plan, source),
+        &super::binary_command(&plan),
+        Some(0),
+    )
+    .and_then(|bound| answer(&service, &bound, (Duration::ZERO, Duration::ZERO)));
+    match checked {
+        Ok(()) => Ok(true),
+        Err(error)
+            if is_mismatch(&error)
+                || matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::TimedOut
+                ) =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
 
 /// The verified service process, opened by Verify and held until the commit point.
 pub(super) struct Bound {
