@@ -1,6 +1,6 @@
 # Navo roadmap
 
-Updated 4 November 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
+Updated 5 November 2026. The visual version is [`design/roadmap.html`](../design/roadmap.html). Scope rules are in [decisions.md](decisions.md) (D13, D14). Plain-language specs for the bigger features are in [features/](features/).
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
@@ -60,14 +60,16 @@ Merged after that release: six built-in colour themes. They are Open sea (the de
 - **New right-click menu.** The real Windows shell menu in Navo's style. The filter sits at the top. Submenus open in place, with a back row. Shift adds the extended items. If anything fails, the classic Windows menu opens instead.
 - **Fixes from the final reviews** of the Ctrl+K index service and of Rich ELF and MAP.
 
+### Done in v0.3.0
+
+- **Faster folders:** tabs share folder rows and sorted views; sorts and filters avoid copying every row.
+- **Git badges skip unchanged repositories:** watches cover the open folder, its parents and direct children. Refresh and Git commands check again.
+- **Leaner index:** about 97 MiB per two million entries in the synthetic fixture, with snapshot compatibility and measured rebuild limits. Real-volume VM memory measurements remain unavailable because the required test volumes and service are absent.
+
 ### Now in progress
 
 Status on 5 November 2026:
 
-- **v0.2.3 (release build running):** a file edited in an open folder shows its new size at once; faster listing cache, Ctrl+K highlights, table sorts and PDF search.
-- **Faster folders (ready, next on main):** a folder keeps one set of rows; sorts and filters are views over it, and two tabs on one folder share a sort. In the Windows benchmark a 5,000-file folder lists in 10 ms instead of 24, and sorts 2–7× faster.
-- **Git badges skip unchanged repositories (reviewed, fixed, final Windows check):** Navo watches only the open folder, its parents and its direct children. Leaving a folder frees it for rename and delete. Recheck always runs.
-- **Leaner index (reviewed, fixed):** about 97 MiB per 2 million files instead of about 160. Rebuilds peak at about 2× the index; the first load of an older index and a rebuild after the drive grew may peak at 2.5×.
 - **In-app updates (built, VM test next):** a test feed for tester builds and a nine-case install and update test in the Windows VM.
 
 - **Compare and sync (v1.0).** The engine is about a third done: big files are read once with steady memory, changes are found down to the word, content checks use every core, and Git repositories can be read at any revision. Next: the compare screen, then sync.

@@ -1,6 +1,6 @@
 # Index layout: a smaller resting index
 
-Status: running (host gates passed; Windows validation pending) · Repo: `navo` · Branch: `index-layout` from `main` · Started: 2026-11-05
+Status: done · Repo: `navo` · Branch: `index-layout` from `main` · Started: 2026-11-05
 
 ## Goal
 
@@ -337,3 +337,16 @@ Final. Workers never reopen them; a worker that finds one wrong stops and report
 - 2026-11-05 — Prepared the final squash over the Git skip integration. Kept D110 and D111 while resolving the D109 conflict, and recorded every owner-approved LD9 ceiling in D109.
 
 - 2026-11-05 — Final combined-tree gate passed all eight steps: 485 index/service tests passed, 22 skipped. Windows branch and exact-final-commit CI remain required before pushing.
+
+- 2026-11-05 — Release preparation audits found a pinned pulldown-cmark advisory and one additional zip 8 advisory. The release candidate pins pulldown-cmark 0.13.6, updates yanked async-executor 1.14.0 to 1.14.1, and documents RUSTSEC-2026-0429 with the same unreachable ZipArchive::extract rationale as the existing Velopack zip exceptions. Verified Velopack 1.2.161 source contains no extract call; Navo's archive dependency is zip 9.0.3. cargo deny check passed; cargo audit passed with the four documented Velopack exceptions (nine existing allowed maintenance warnings). The navo-structured gate passed all eight steps, 110 tests.
+
+- 2026-11-05 — The reproducible S0 baseline is now pinned at `5184cd3c`, based on `b1ac29db` before layout changes. Its host gate passed all eight steps and 317 tests. The benchmark file blob is identical on both layouts (`14e248aefcfcf9dd71c6bbbbd788b9fe127918a4`); lint-only assertion flattening preserved the measured fixture and timed calls.
+
+- 2026-11-05 — Branch VM CI `8a333e7c` ALL GREEN: 12,010 tests passed, 61 skipped. Final combined commit `680f5ac7` VM CI ALL GREEN: 12,165 tests passed, 62 skipped; platform tests, doctests and release build passed. Squash landed and pushed to main. Real-volume memory validation remains unavailable for the documented missing VM prerequisites.
+- 2026-11-05 — Final 0.3.0 candidate: all nine release service timing tests passed in 1.547 s. Repeated LD10 on a quiet host against S0 baseline `5184cd3c`, four Rayon workers, five paired release rounds. This integrated candidate includes the previously shipped score-only search optimization from main, so these gains combine that optimization with the smaller layout; the layout-only comparison is recorded above.
+
+| Query | Base medians (µs) | Final medians (µs) | Five ratios | Median ratio | Base spread |
+| --- | --- | --- | --- | --- | --- |
+| doc | 59707, 59214, 60833, 58581, 60436 | 16553, 16850, 16651, 16440, 16514 | 0.2772, 0.2846, 0.2737, 0.2806, 0.2732 | 0.2772 | 1.0384 |
+| report-pdf | 19061, 18514, 19344, 18671, 19010 | 11838, 11838, 11961, 11779, 11976 | 0.6211, 0.6394, 0.6183, 0.6309, 0.6300 | 0.6300 | 1.0448 |
+| src-main | 42029, 40267, 43095, 40649, 42336 | 24623, 23919, 23722, 23120, 24242 | 0.5859, 0.5940, 0.5505, 0.5688, 0.5726 | 0.5726 | 1.0702 |

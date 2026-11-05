@@ -2,6 +2,18 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.3.0 — 2026-11-05
+
+### Faster
+
+- Large folders share their rows across tabs, sorts and filters, making navigation faster and using less memory.
+- Git badges reuse a recent status while watched repositories stay unchanged. Refresh and Git commands always check again.
+- File search uses a smaller index and less memory while rebuilding it.
+
+### Fixed
+
+- Renaming a file in an open Linux folder no longer occasionally looks like deleting one file and adding another.
+
 ## v0.2.3 — 2026-11-05
 
 ### Fixed
@@ -45,7 +57,6 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 ### Fixed
 
-- Renaming a file in an open Linux folder no longer occasionally looks like deleting one file and adding another.
 - After a crash, Navo puts a file back that an interrupted copy, move or save had set aside, and it now writes that step to disk before it forgets the undo record. A power loss at that moment can no longer leave the original stranded.
 
 ### Backend branch

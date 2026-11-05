@@ -1,6 +1,6 @@
 # Shared listing · one row set per folder, sorted views as index orders
 
-Status: ready · Repo: `navo` · Branch: one `sl<id>` branch per atom from `main` (at or after 1fd013b0) · Started: 2026-11-05
+Status: done · Repo: `navo` · Branch: one `sl<id>` branch per atom from `main` (at or after 1fd013b0) · Started: 2026-11-05
 
 Parent: `plans/2026-10-29-speed-atoms.md` (SP7, D1, D2, D19). This plan continues SP7. It does not repeat SP7e/f/i (index orders and async views already exist); it removes the materialisation step SP7's D2 kept.
 
@@ -50,13 +50,13 @@ Commands: every cargo call runs as in speed-atoms "Shared commands" (`flock`, `n
 
 | Atom | Component | Role | Effort | After | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| L1 | `rows-view` | api-builder | medium | — | `cargo xtask check -p navo-fs` | ready |
-| L2 | `name-lookup` | api-builder | high | — | `cargo xtask check -p navo-cache` | ready |
-| L3 | `browser-rows` | api-builder | medium | L1 | `cargo xtask check -p navo-ui` | blocked |
-| L4 | `list-rows` | ui-builder | medium | L3 | `cargo xtask check -p navo-ui -p navo-ui-gallery` | blocked |
-| L5 | `row-consumers` | patcher | medium | L3 | `cargo xtask check -p navo-ui` | blocked |
-| L6 | `index-views` | senior | high | L4, L5 | `cargo xtask check -p navo-ui` | blocked |
-| L7 | `shared-sorts` | senior | high | L6 | `cargo xtask check -p navo-ui` | blocked |
+| L1 | `rows-view` | api-builder | medium | — | `cargo xtask check -p navo-fs` | done |
+| L2 | `name-lookup` | api-builder | high | — | `cargo xtask check -p navo-cache` | done |
+| L3 | `browser-rows` | api-builder | medium | L1 | `cargo xtask check -p navo-ui` | done |
+| L4 | `list-rows` | ui-builder | medium | L3 | `cargo xtask check -p navo-ui -p navo-ui-gallery` | done |
+| L5 | `row-consumers` | patcher | medium | L3 | `cargo xtask check -p navo-ui` | done |
+| L6 | `index-views` | senior | high | L4, L5 | `cargo xtask check -p navo-ui` | done |
+| L7 | `shared-sorts` | senior | high | L6 | `cargo xtask check -p navo-ui` | done |
 
 Waves: {L1, L2} → L3 → {L4, L5} → L6 → L7. L2 may run on DeepSeek; L3–L7 never do (navo-ui).
 
@@ -139,3 +139,5 @@ Waves: {L1, L2} → L3 → {L4, L5} → L6 → L7. L2 may run on DeepSeek; L3–
 - 2026-11-05 — Planned by Turgon (Opus 5.5) from the orchestrator's direction. Facts checked on main: `IndexedRows` rebuild per patch (`listing.rs:48-107`), `materialize` in `sorted_rows` and `shown_until`, per-tab memo `sorted` with `KEEP_SORTED = 2`, cursor and marks keyed by row and remapped by name in `tab.rs`, one `submit` per tab, watcher fix 1fd013b0 (changes before the folder-time shortcut). Tie break by index in `navo-fs/src/view/sort.rs:162-163`.
 - 2026-11-05 — Plan check (Terra xhigh): fix first, 10 findings. Orchestrator decisions applied: pane single flight dropped (old L7, findings 1–4) and moved to Later; reserved-name check kept and tested (5); `ViewWork::run` sorts the source with cancel and sizes (6); sort counter covers worker and UI, new L7 shares sorts through the memo with real two-tab tests (7); L2 collision fallback for the whole batch, kept seed, capacity in bytes, in-place map, end-to-end allocation target (8); L1 four files, two gallery consumers added to L4, L5 grep excludes the provider method (9); pointer tests move to `Rows::same`, filter and tab-switch tests added (10).
 - 2026-11-05 — VM bench (100k files, 3 runs): not slower anywhere; 5k folder list 24.2 → 9.7 ms, sorts 0.13–0.41×. Squash rebased onto main as `sl-main` `1c8e6ee3` with the VM numbers in docs/perf.md. Next: VM CI on the exact HEAD after rebasing onto the docs commit, push after v0.2.3 is out.
+
+- 2026-11-05 — Landed on main as `e547aba4`, with exact-commit VM CI ALL GREEN (12,024 tests passed). Included in v0.3.0 release preparation.

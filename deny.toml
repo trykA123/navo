@@ -13,6 +13,7 @@ ignore = [
     { id = "RUSTSEC-2026-0367", reason = "zip 8.6.0 extract() symlink and permission handling; velopack 1.2.161 pins zip 8, Navo only runs the startup hooks and never extracts a package; remove when velopack moves to zip 9" },
     { id = "RUSTSEC-2026-0368", reason = "zip 8.6.0 extract() symlink and permission handling; velopack 1.2.161 pins zip 8, Navo only runs the startup hooks and never extracts a package; remove when velopack moves to zip 9" },
     { id = "RUSTSEC-2026-0369", reason = "zip 8.6.0 extract() symlink and permission handling; velopack 1.2.161 pins zip 8, Navo only runs the startup hooks and never extracts a package; remove when velopack moves to zip 9" },
+    { id = "RUSTSEC-2026-0429", reason = "zip 8.6.0 through velopack 1.2.161; its source reads entries individually and never calls ZipArchive::extract, the affected API; Navo archive handling uses zip 9; recheck on every velopack update" },
 ]
 
 [licenses]
