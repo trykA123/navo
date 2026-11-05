@@ -9,6 +9,7 @@ mod budget;
 mod connection;
 mod content_hash;
 mod git_badges;
+mod migrations;
 
 pub use content_hash::{CONTENT_HASH_BUDGET, ContentKey};
 pub use git_badges::GIT_BADGES_BUDGET;
@@ -146,16 +147,10 @@ impl CacheDb {
         Ok(())
     }
 
-    fn from_connection(conn: Connection) -> Result<Self, CacheError> {
-        conn.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA synchronous = OFF;
-             CREATE TABLE IF NOT EXISTS blob (
-                 tbl TEXT, key BLOB, value BLOB, size INTEGER, accessed INTEGER,
-                 PRIMARY KEY(tbl, key)
-             );
-             CREATE INDEX IF NOT EXISTS blob_age ON blob (tbl, accessed, key, size);",
-        )?;
+    fn from_connection(mut conn: Connection) -> Result<Self, CacheError> {
+        conn.execute_batch("PRAGMA journal_mode = WAL;")?;
+        migrations::migrate(&mut conn)?;
+        conn.execute_batch("PRAGMA synchronous = OFF;")?;
         let clock = conn.query_row("SELECT COALESCE(MAX(accessed), 0) FROM blob", [], |row| {
             row.get(0)
         })?;
