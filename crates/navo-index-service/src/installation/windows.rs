@@ -2,16 +2,19 @@
 
 use std::io;
 use std::os::windows::ffi::OsStrExt;
+use std::path::Path;
 use std::ptr;
 use std::time::Duration;
 
 use windows_sys::Win32::Foundation::{ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_EXISTS};
+use windows_sys::Win32::Storage::FileSystem::MOVEFILE_DELAY_UNTIL_REBOOT;
 use windows_sys::Win32::System::Services::{
     ChangeServiceConfig2W, ChangeServiceConfigW, CreateServiceW, DeleteService, OpenServiceW,
     QueryServiceStatus, SC_ACTION, SC_ACTION_NONE, SC_ACTION_RESTART, SC_MANAGER_CONNECT,
     SC_MANAGER_CREATE_SERVICE, SERVICE_ALL_ACCESS, SERVICE_AUTO_START,
-    SERVICE_CONFIG_DELAYED_AUTO_START_INFO, SERVICE_CONFIG_FAILURE_ACTIONS,
-    SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_DELAYED_AUTO_START_INFO, SERVICE_ERROR_NORMAL,
+    SERVICE_CONFIG_DELAYED_AUTO_START_INFO, SERVICE_CONFIG_DESCRIPTION,
+    SERVICE_CONFIG_FAILURE_ACTIONS, SERVICE_CONFIG_FAILURE_ACTIONS_FLAG,
+    SERVICE_DELAYED_AUTO_START_INFO, SERVICE_DESCRIPTIONW, SERVICE_ERROR_NORMAL,
     SERVICE_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW, SERVICE_STATUS, SERVICE_STOPPED,
     SERVICE_WIN32_OWN_PROCESS, StartServiceW,
 };
@@ -20,14 +23,16 @@ use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles}
 use super::Elevated;
 use super::directory::{Policy, ProtectedDirectory, known_folder};
 use super::elevation::wide;
+use super::install_check::{delete_legacy, service_command, service_source};
 use super::install_plan::{
-    CopyPlan, FreshInstall, LEGACY_PRODUCT, SettingsBackup, Step, data_directories, run_install,
+    CopyPlan, FreshInstall, LEGACY_PRODUCT, SettingsBackup, Step, data_directories, retry,
+    run_install,
 };
 use super::policy::{FAILURE_DELAYS, RESET_SECONDS, RESTART_CLEAN_STOPS};
 use super::removal::StopLimits;
 use super::scm::{ServiceHandle, checked, open_manager, service_handle, service_name};
 use super::storage::Storage;
-use super::upgrade::{UpgradeStep, await_answer, run_upgrade};
+use super::upgrade::{UpgradeStep, run_upgrade};
 
 mod cleanup;
 mod configuration;
@@ -36,16 +41,32 @@ mod scm_stop;
 mod verify;
 
 const ANSWER_WAIT: (Duration, Duration) = (Duration::from_secs(30), Duration::from_millis(250));
+const DESCRIPTION: &str = "Keeps the file index for Navo search up to date.";
+const LEGACY_TRIES: u32 = 5;
+const LEGACY_DELAY: Duration = Duration::from_millis(200);
+
+/// The installed service and its verified process, held until the install is done.
+struct Installed {
+    service: ServiceHandle,
+    process: verify::Bound,
+}
 
 pub(super) fn install() -> io::Result<()> {
+    let source = service_source(&std::env::current_exe()?)?;
     let legacy = legacy::detect()?;
     let config = match legacy::carried_config() {
         Some(config) => config,
         None => super::session::installation_config()?,
     };
+    let mut installed = None;
     let leftover = run_upgrade(legacy, |step| match step {
-        UpgradeStep::InstallNew => install_current(&config),
-        UpgradeStep::AwaitNew => answer(),
+        UpgradeStep::InstallNew => {
+            install_current(&source, &config).map(|done| installed = Some(done))
+        }
+        UpgradeStep::AwaitNew => installed
+            .as_ref()
+            .ok_or_else(unverified)
+            .and_then(|done| answer(&done.service, Some(&done.process))),
         UpgradeStep::RemoveLegacyService => {
             cleanup::remove_service(LEGACY_PRODUCT, cleanup::deadline())
         }
@@ -65,15 +86,16 @@ fn warn_leftover(leftover: Option<io::Error>) {
     }
 }
 
-fn answer() -> io::Result<()> {
-    await_answer(ANSWER_WAIT, || {
-        navo_index::pipe::Client::connect()
-            .map(drop)
-            .map_err(io::Error::other)
-    })
+fn unverified() -> io::Error {
+    io::Error::other("the service answer was checked before its process was verified")
 }
 
-fn install_current(config: &super::config::Config) -> io::Result<()> {
+fn answer(service: &ServiceHandle, process: Option<&verify::Bound>) -> io::Result<()> {
+    let process = process.ok_or_else(unverified)?;
+    verify::answer(service, process, ANSWER_WAIT)
+}
+
+fn install_current(source: &Path, config: &super::config::Config) -> io::Result<Installed> {
     let plan = CopyPlan::new(&known_folder(&FOLDERID_ProgramFiles)?, std::process::id());
     let data = data_directories(&known_folder(&FOLDERID_ProgramData)?);
     let parent = plan
@@ -87,7 +109,7 @@ fn install_current(config: &super::config::Config) -> io::Result<()> {
         data[1].clone(),
     ];
     let mut fresh = FreshInstall::observe(&plan, &directories);
-    let result = install_with(&plan, config, &mut fresh);
+    let result = install_with((&plan, source), config, &mut fresh);
     if result.is_err() {
         let _ = fresh.remove_directories();
     }
@@ -95,10 +117,10 @@ fn install_current(config: &super::config::Config) -> io::Result<()> {
 }
 
 fn install_with(
-    plan: &CopyPlan,
+    (plan, source): (&CopyPlan, &Path),
     config: &super::config::Config,
     fresh: &mut FreshInstall,
-) -> io::Result<()> {
+) -> io::Result<Installed> {
     let storage = Storage::open(true)?;
     let parent = plan
         .directory
@@ -112,28 +134,26 @@ fn install_with(
     let previous = exists
         .then(|| configuration::Configuration::read(&service))
         .transpose()?;
-    let (mut settings, mut started_after) = (None, None);
+    let (mut settings, mut started_after, mut process) = (None, None, None);
     let result = run_install(exists, was_running, |step| match step {
         Step::RecoverOld => fresh.recover_executable(plan),
         Step::Stop => {
             scm_stop::stop(&service, StopLimits::FULL).map(|()| started_after = Some(verify::now()))
         }
-        Step::Copy => plan.copy_from(&std::env::current_exe()?),
+        Step::Copy => plan.copy_from(source),
         Step::RenameOld => plan.rename_old(),
         Step::Replace => plan.replace(),
         Step::BackupSettings => SettingsBackup::capture(&storage.directory.join("service.json"))
             .map(|backup| settings = Some(backup)),
-        Step::Configure => update(&service, &command)
-            .and_then(|()| configure_recovery(&service))
-            .and_then(|()| storage.write_config(config)),
+        Step::Configure => configure(&service, &command, &storage, config),
         Step::Start => {
             started_after.get_or_insert_with(verify::now);
             start(&service)
         }
-        Step::Verify => verify::installed(&service, plan, &command, started_after),
-        Step::Answer => answer(),
-        // The install image is still the legacy name; nothing else to delete yet.
-        Step::DeleteLegacy => Ok(()),
+        Step::Verify => verify::installed(&service, (plan, source), &command, started_after)
+            .map(|bound| process = Some(bound)),
+        Step::Answer => answer(&service, process.as_ref()),
+        Step::DeleteLegacy => remove_legacy(plan),
         Step::Restore => plan.restore(),
         Step::RestoreSettings => settings.as_ref().map_or(Ok(()), SettingsBackup::restore),
         Step::RemoveFresh => fresh.remove_executable(plan),
@@ -143,7 +163,44 @@ fn install_with(
             .map_or(Ok(()), |old| old.restore(&service)),
         Step::DeleteOld => plan.delete_old(),
     });
-    finish_install(result.map(warn_leftover), exists, &service)
+    finish_install(result.map(warn_leftover), exists, &service)?;
+    let process = process.ok_or_else(unverified)?;
+    Ok(Installed { service, process })
+}
+
+fn configure(
+    service: &ServiceHandle,
+    command: &[u16],
+    storage: &Storage,
+    config: &super::config::Config,
+) -> io::Result<()> {
+    update(service, command)?;
+    describe(service)?;
+    configure_recovery(service)?;
+    storage.write_config(config)
+}
+
+/// Past the commit point: deletes `Index\navo.exe` and its `.old` copies, scheduling a refusal.
+fn remove_legacy(plan: &CopyPlan) -> io::Result<()> {
+    let mut paths = Vec::new();
+    for entry in std::fs::read_dir(&plan.directory)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            paths.push(entry.path());
+        }
+    }
+    delete_legacy(paths, remove_existing, |path: &Path| {
+        cleanup::move_file(path, None, MOVEFILE_DELAY_UNTIL_REBOOT)
+    })
+}
+
+fn remove_existing(path: &Path) -> io::Result<()> {
+    retry(LEGACY_TRIES, LEGACY_DELAY, || {
+        match std::fs::remove_file(path) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    })
 }
 
 fn finish_install(result: io::Result<()>, exists: bool, service: &ServiceHandle) -> io::Result<()> {
@@ -175,10 +232,10 @@ fn start(service: &ServiceHandle) -> io::Result<()> {
 }
 
 fn binary_command(plan: &CopyPlan) -> Vec<u16> {
-    let mut command = vec![u16::from(b'"')];
-    command.extend(plan.executable.as_os_str().encode_wide());
-    command.extend(wide("\" --index-service run"));
-    command
+    service_command(&plan.executable)
+        .encode_wide()
+        .chain(Some(0))
+        .collect()
 }
 
 fn register(manager: &ServiceHandle, command: &[u16]) -> io::Result<(ServiceHandle, bool)> {
@@ -229,6 +286,21 @@ fn update(service: &ServiceHandle, command: &[u16]) -> io::Result<()> {
             account.as_ptr(),
             ptr::null(),
             ptr::null(),
+        )
+    })
+}
+
+fn describe(service: &ServiceHandle) -> io::Result<()> {
+    let mut text = wide(DESCRIPTION);
+    let info = SERVICE_DESCRIPTIONW {
+        lpDescription: text.as_mut_ptr(),
+    };
+    // SAFETY: info points to the live NUL-terminated description; service is live.
+    checked(unsafe {
+        ChangeServiceConfig2W(
+            service.0,
+            SERVICE_CONFIG_DESCRIPTION,
+            (&info as *const SERVICE_DESCRIPTIONW).cast(),
         )
     })
 }
