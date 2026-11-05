@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
-use navo_core::{AppState, Location};
+use navo_core::{AppState, Command, Location};
 
 use super::drive_fs::{DriveFs, local};
 use super::{fake, open_options, options_for, press, settle};
@@ -457,6 +457,23 @@ fn check_again_rescans_the_listing(cx: &mut TestAppContext) {
     settle(cx, &view);
     assert_eq!(git.log.lock().unwrap().rescans, [local(r"C:\home")]);
     assert!(git.runs().is_empty());
+}
+
+#[gpui_kit::test]
+fn the_refresh_key_rescans_the_focused_local_listing(cx: &mut TestAppContext) {
+    let git = Fake::new(menu_items(false), badge(BadgeKind::Clean));
+    let (window, view) = open(cx, &git);
+    let apply = |cx: &mut TestAppContext, command: Command| {
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.apply(&command, window, cx));
+        })
+        .expect("window");
+        settle(cx, &view);
+    };
+    apply(cx, Command::PaneBack);
+    assert!(git.log.lock().unwrap().rescans.is_empty());
+    apply(cx, Command::PaneRefresh);
+    assert_eq!(git.log.lock().unwrap().rescans, [local(r"C:\home")]);
 }
 
 #[gpui_kit::test]
