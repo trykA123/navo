@@ -56,6 +56,7 @@ impl NavoWindow {
             ServiceOutcome::Done => None,
             ServiceOutcome::Deferred => Some("settings-search-service-deferred"),
             ServiceOutcome::Failed => Some("settings-search-service-failed"),
+            ServiceOutcome::Locked => Some("settings-search-service-locked"),
         };
         if let Some(key) = key {
             self.settings.notice = Some(navo_l10n::tr(key).into());

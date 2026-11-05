@@ -84,6 +84,10 @@ fn report(
     match action_outcome(result) {
         Ok(Elevated::Done) => ServiceOutcome::Done,
         Ok(Elevated::Deferred) => ServiceOutcome::Deferred,
+        Err(ElevationError::LockedImage(path)) => {
+            tracing::warn!(?action, path = %path.display(), "index service file is locked");
+            ServiceOutcome::Locked
+        }
         Err(error) => {
             tracing::warn!(?action, %error, "index service change failed");
             ServiceOutcome::Failed
@@ -256,6 +260,11 @@ mod tests {
 
         let failed = report(Action::Install, Err(ElevationError::Failed(3)));
         assert_eq!(failed, ServiceOutcome::Failed);
+        let locked = report(
+            Action::Install,
+            Err(ElevationError::LockedImage("navo-index.exe".into())),
+        );
+        assert_eq!(locked, ServiceOutcome::Locked);
         let cancelled = report(Action::Install, Err(ElevationError::Cancelled));
         assert_eq!(cancelled, ServiceOutcome::Done);
     }

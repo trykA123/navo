@@ -21,6 +21,8 @@ pub enum ServiceOutcome {
     /// Removed; Windows deletes the last files at the next restart.
     Deferred,
     Failed,
+    /// A service file is in use; the user closes the program holding it and retries.
+    Locked,
 }
 
 #[derive(Clone, Debug, PartialEq)]
