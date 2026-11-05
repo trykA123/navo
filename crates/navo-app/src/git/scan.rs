@@ -12,6 +12,8 @@ mod skip;
 mod slots;
 #[path = "scan_view.rs"]
 mod view;
+#[path = "scan_watch.rs"]
+mod watches;
 #[path = "scan_worker.rs"]
 mod worker;
 
@@ -20,9 +22,9 @@ use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use navo_core::Location;
+use navo_core::{FileIdentity, Location};
 use navo_fs::DriveClass;
-use navo_git::status::RepoStatus;
+use navo_git::status::{Fingerprint, RepoStatus};
 use navo_git::trust::Refusal;
 use navo_store::GitSettings;
 use navo_ui::git::FolderBadges;
@@ -38,7 +40,6 @@ const CACHE_CAP: usize = 256;
 const ROW_CAP: usize = 2000;
 const REPO_CAP: usize = 64;
 /// Most watches or kept proofs held at once.
-#[allow(dead_code, reason = "the watch module arms roots in a later atom")]
 const WATCH_CAP: usize = 64;
 const MIN_PROCESSES: usize = 2;
 const MAX_PROCESSES: usize = 4;
@@ -68,11 +69,53 @@ pub(crate) trait StatusSource: Send + Sync + 'static {
     fn status(&self, repo_root: &Path, cancel: &Cancel) -> Result<RepoStatus, ScanError>;
 }
 
+/// One repository tree watch: live while the backend covers the subtree, counting every raw
+/// notification before the debouncer.
+pub(crate) trait RepoWatch: Send {
+    fn is_live(&self) -> bool;
+    fn changes(&self) -> u64;
+}
+
+impl RepoWatch for navo_fs::Watch {
+    fn is_live(&self) -> bool {
+        navo_fs::Watch::is_live(self)
+    }
+
+    fn changes(&self) -> u64 {
+        self.raw_changes()
+    }
+}
+
 pub(crate) trait Probe: Send + Sync + 'static {
     fn has_git(&self, folder: &Path) -> bool;
     fn drive_class(&self, listing: &Location) -> DriveClass;
     fn now(&self) -> Instant {
         Instant::now()
+    }
+
+    /// The files a status read, or `None` when no proof is safe.
+    #[expect(
+        dead_code,
+        reason = "the scanner reads the fingerprint in a later atom"
+    )]
+    fn fingerprint(&self, _root: &Path, _upstream: Option<&str>) -> Option<Fingerprint> {
+        None
+    }
+
+    /// A subtree watch on `root`, or `None` when the platform cannot provide one.
+    fn watch_tree(&self, _root: &Path) -> Option<Box<dyn RepoWatch>> {
+        None
+    }
+
+    /// The volume class of `root`, `Unknown` when it cannot be proven a fixed local volume.
+    #[expect(dead_code, reason = "the scanner reads the class in a later atom")]
+    fn root_class(&self, _root: &Path, _listing: &Location) -> DriveClass {
+        DriveClass::Unknown
+    }
+
+    /// The file identity of `root`, used to notice a replaced folder.
+    fn identity(&self, _root: &Path) -> Option<FileIdentity> {
+        None
     }
 }
 
