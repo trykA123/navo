@@ -38,6 +38,13 @@ fn wait_for(
     }
 }
 
+fn take(
+    receiver: &mut UnboundedReceiver<UserCommandNews>,
+    wanted: &impl Fn(&UserCommandNews) -> bool,
+) -> Option<UserCommandNews> {
+    std::iter::from_fn(|| receiver.try_recv().ok()).find(|news| wanted(news))
+}
+
 /// Writes `text` again every 500 ms until the news arrives; the folder watch arms asynchronously on Windows.
 fn write_until(
     path: &std::path::Path,
@@ -50,10 +57,8 @@ fn write_until(
         std::fs::write(path, text).expect("an edit");
         let round = Instant::now() + Duration::from_millis(500);
         while Instant::now() < round {
-            while let Ok(news) = receiver.try_recv() {
-                if wanted(&news) {
-                    return news;
-                }
+            if let Some(news) = take(receiver, &wanted) {
+                return news;
             }
             std::thread::sleep(Duration::from_millis(5));
         }
