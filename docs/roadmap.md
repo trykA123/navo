@@ -110,7 +110,7 @@ Replaces Total Commander for daily work (D39). Parity features are built to beat
 2. infra: code signing, full installer/update validation, the soak test and steadier Windows tests. The Velopack installer, portable package, user guide and in-app updater are built; the tester feed, nine-case update suite and final review remain open (D89 supersedes D73). The uninstaller includes index-service removal.
 3. core: optional default file manager (Win+E).
 4. core: inspector column with preview and properties, thumbnails, archives as folders (zip, 7z, tar with gz, xz and zst). File details, owner and hashes are done.
-5. core: module registry with runtime on/off and safe mode; settings window generated from module schemas; notifications for long operations.
+5. core: module registry with runtime on/off and safe mode; settings window generated from module schemas; notifications for long operations. Then the automotive viewers move into one module (D112).
 
 Exit: every target is met on a clean Windows 11 machine, and a week of work runs without opening Total Commander.
 
@@ -143,6 +143,7 @@ Exit: a third-party plugin is built, installed and updated without touching Navo
 
 ## Later
 
+- Accepted ideas not yet in a plan: [ideas](ideas.md).
 - module: duplicates and disk usage.
 - package: import of Zed and VS Code colour themes.
 - Native editing for each kind: a table edits like a spreadsheet; a tree edits keys and values in place.
