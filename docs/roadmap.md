@@ -4,6 +4,23 @@ Updated 9 November 2026. This document tracks current implementation status. The
 
 Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versions; a feature release increments the minor version. Windows packages are on [GitHub releases](https://github.com/trykA123/navo/releases).
 
+## Where we are · 9 November 2026
+
+- **Alpha:** done. Signed off on 4 November and released as v0.2.0.
+- **Beta:** about three quarters done. Workspaces, tiled panes, clipboard history, the new layout and fonts, and user commands are finished. Still open:
+  - **Search index memory:** the index service still peaks near 800 MB on a real PC (owner, v0.3.0); a fix plan from the memory audit comes next, then a retest on 0.4.1.
+  - **Delete safety net:** on by default and working; a final review and the help text remain.
+  - **Find files:** content search and the results tab work; the results tab's final look and hit lines get a design round.
+  - **Accessibility:** the basics are in; polish remains.
+  - **Background work that never waits** (job priorities, folder sizes that cancel): not started.
+  - **Validation:** the heavy Windows benchmark and the long daily-use check for lost files.
+- **v1.0:** started.
+  - **Compare and sync:** folder compare in the panes is shipped; the sync engine and its safe copy plan are built; the sync screen remains.
+  - **Installer wizard:** part 1 (the engine: folder checks, install, upgrade, shortcuts) is in the Windows VM; part 2 is the wizard screens.
+  - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt when the service changes) runs on 0.4.1.
+  - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, and the module registry.
+- **Latest release:** v0.4.1 (Git no longer blocks renaming repository folders; SQLite security update), published after its Windows VM check.
+
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
 ## v1.0 targets
@@ -83,13 +100,14 @@ Windows VM checks, host gates, snapshot compatibility checks and release search 
 | Change | Completed behavior | Evidence |
 | --- | --- | --- |
 | Git stops before file operations | Rename, delete and move of a folder pause Navo's own Git reads in it and end them first, so Windows no longer reports the folder in use. A fetch, Pull or Push is never stopped: Navo waits up to 3 s, then reports the folder locked by `git.exe`. | [Git-stop plan](../plans/2026-11-09-git-stop-before-fileops.md) |
+| SQLite security update | rusqlite 0.41.1 bundles SQLite 3.54.1, which fixes RUSTSEC-2026-0459. | `cargo deny`, `cargo audit` |
 
 ## Active work
 
-- **In-app update validation:** built and run in the Windows VM for v0.4.0. The tester-only folder feed exists, and the nine-case update suite passed seven cases; cases 8–9 passed their visible checks. The index service runs as `navo-index.exe`, and the senior review fixes are in. Still open before v1.0: the owner counts the UAC prompts (update cases 8–9, service checks 1–3) and checks Task Manager, the service checks 5–6 are rerun after the review fixes, and `docs/features/updates.md` is written (IX8t). See the [beta plan](../plans/2026-10-27-beta.md).
-- **Installer wizard:** part 1 is being built. The per-user setup checks folders, holds the chosen folder, prepares the package and runs Velopack's install or upgrade; next are the Windows checks in the VM and the wizard screens. See the [installer plan](../plans/2026-11-09-installer-wizard.md).
-- **Git and file operations:** done in v0.4.1. Rename, delete and move stop Navo's own Git commands in that folder before they act.
-- **Compare and sync:** engine work has landed for large-file reading, text differences, parallel content checks and Git revisions. The compare screen and sync workflow remain; see the [compare plan](../plans/2026-10-20-p42-compare.md).
+- **In-app update validation:** the nine-case update suite and the index-service checks passed in the Windows VM; the update spec is written ([updates](features/updates.md)). Still open: the owner updates a real PC from 0.3.0 to 0.4.1 and confirms exactly one admin prompt, `navo-index.exe` in Task Manager, and none on the next starts. See the [beta plan](../plans/2026-10-27-beta.md).
+- **Installer wizard, part 1:** folder checks, holding the chosen folder, the package, Velopack's install and upgrade, and removing unticked shortcuts are built and pass in the Windows VM. Next: the DLL-planting guard, the VM test tables and the command line. Part 2 is the wizard screens. See the [installer plan](../plans/2026-11-09-installer-wizard.md).
+- **Index service memory:** the owner saw peaks near 800 MB in the service on v0.3.0. The memory audit names three causes: a rebuild that keeps the old index, a compaction that builds a second name table, and a full copy of the index. A fix plan comes next.
+- **Compare and sync:** folder compare is shipped: two folders, or a folder and a Git revision, side by side with differences marked. The engine handles large files, text differences, Git revisions and a safe sync plan. The sync screen remains; see the [compare plan](../plans/2026-10-20-p42-compare.md).
 - **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
 - **Beta completion:** finish results-pane appearance and hit lines, background job work and accessibility follow-up, in the priority order below.
 
@@ -106,12 +124,12 @@ Goal: fast search, workspaces and tiled panes, safe deletes.
 The owner reordered the beta on 27 October 2026 (D85). This is the priority order; each item states its current status:
 
 1. core: search index like Everything: Ctrl+K answers at once from the Navo Index service, even while it updates; no folder walks on NTFS drives; the service starts from its saved index; less memory; a benchmark next to Everything. The busy-answer fix is done. Memory peaks are cut: loading the index and rebuilding it need far less extra memory (load 22 → 8 bytes per file, rebuilds sized from the old index, cleanup a third of before), one drive builds at a time, and network drives are indexed only when you list them, with a cap.
-2. core: delete safety net (D65): Shift+Del and overwrites keep the old files 1–7 days, a "Recently deleted" view, Ctrl+Z restores. On by default since alpha-2026-10-28e; review and docs left.
+2. core: delete safety net (D65): Shift+Del and overwrites keep the old files 1–7 days, a "Recently deleted" view, Ctrl+Z restores. On by default since alpha-2026-10-28e; review and help text left.
 3. core: workspaces (Alt+1…9) with the tray: named workspaces, drafts, Save and Discard, rename, move, delete with Ctrl+Z, and a status-bar button. Done.
 4. core: up to four panes, tiled like Hyprland (D80): five layouts and your own on Ctrl+L, split, close, swap and resize from the keyboard, Shift+drag swap, divider drag, a strip in narrow windows. Done.
-5. core: find files by content and attributes in Ctrl+K, with results as a tab you can work in; virtual collections (saved searches, snapshots, files picked by hand). Query, content matcher, collection store, results tab, Ctrl+K modes and Content mode (search inside files, Enter opens at the line) done; results tab look and hit lines next.
+5. core: find files by content and attributes in Ctrl+K, with results as a tab you can work in; virtual collections (saved searches, snapshots, files picked by hand). Query, content matcher, collection store, results tab (query as the label, progress, hit counts, drag), Ctrl+K modes and Content mode (search inside files, Enter opens at the line) done; a design round for the results tab look and hit lines is next.
 6. module: clipboard history in a Ctrl+K-style palette, as a module you can switch off. Built: it records text, links and file lists you copy, opens with Ctrl+Shift+V or Win+Alt+V from any app, pastes back, and can be paused, cleared or deleted. Saved items (snippets, paths), encrypted secrets and folder notes are built, with a manage view on F2. A pass on a real Windows desktop is done: the pop-up takes focus, secrets clear after 30 s and when Navo quits, and Delete all wipes the data. The summon hotkey and tray are done.
-7. core: background work that never waits: job pools with priorities, folder sizes that cancel when you leave, size on disk, hard links counted once. Still planned as B10; existing speed improvements do not complete this work.
+7. core: background work that never waits: job pools with priorities, folder sizes that cancel when you leave, size on disk, hard links counted once. Not started; existing speed improvements do not complete this work.
 8. core: accessibility basics: Narrator reads lists, dialogs and Ctrl+K, focus visible everywhere, reduced motion, contrast themes, UI scale. Mostly done.
 
 Done earlier in the beta: responsive layout and new fonts (D80), clone a tab into the other pane, open a terminal here, cache sizes in diagnostics, Follow on Windows, the DBC and A2L outline in F3, every shortcut changeable in Shortcuts (conflict checks, hints that show your keys, old keymaps carried over), a right-button setting for Total Commander or Windows behaviour, and your own commands like Total Commander's: a commands file names a program, its arguments (cursor file, marked files, both folders) and a key, and each command runs from the file list or Ctrl+K. Speed pass: large folders sort by size or date about 2.5× faster, many small files copy about 2× faster, and Ctrl+K searches once per 100 ms while a folder walk grows.
@@ -122,8 +140,8 @@ Exit: no open data-safety bugs; start-up and memory targets met in CI.
 
 Replaces Total Commander for daily work (D39). Parity features are built to beat TC, not copy it.
 
-1. core: compare and sync, better than Beyond Compare where it counts (D40): folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `navo-compare` crate.
-2. infra: code signing, full installer/update validation, the soak test and steadier Windows tests. The Velopack installer, portable package, user guide and in-app updater are built; the tester feed, nine-case update suite and final review remain open (D89 supersedes D73). The uninstaller includes index-service removal.
+1. core: compare and sync, better than Beyond Compare where it counts (D40). Folder compare in the panes and the sync plan engine are done; the sync screen remains. Scope: folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `navo-compare` crate.
+2. infra: code signing, full installer/update validation, the soak test and steadier Windows tests. The Velopack installer, portable package, user guide, in-app updater, tester feed and nine-case update suite are done (D89 supersedes D73). The installer wizard is in progress; code signing, the soak test and the owner's real-PC update check remain. The uninstaller includes index-service removal.
 3. core: optional default file manager (Win+E).
 4. core: inspector column with preview and properties, thumbnails, archives as folders (zip, 7z, tar with gz, xz and zst). File details, owner and hashes are done.
 5. core: module registry with runtime on/off and safe mode; settings window generated from module schemas; notifications for long operations. Then the automotive viewers move into one module (D112).
