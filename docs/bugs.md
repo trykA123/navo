@@ -4,6 +4,8 @@ Open bugs found by the owner or by reviews that are parked on purpose. Each line
 
 ## Open
 
+- **2026-11-09 · Flaky Windows CI test `cli_push_safety::cancel_and_the_deadline_kill_a_push_while_git_runs_and_leave_no_git`.** In a full VM run it failed with "the stalled child outlived the kill" (`crates/navo-git/tests/cli_sync/support.rs:243`). Alone it passed 5 of 5 runs. Likely a timing bound under full-suite load; a checker should measure the kill-to-exit time under load before changing the bound.
+
 - **2026-10-19 · Flaky Windows CI test `shell_menu_windows::a_loading_submenu_fills_later`.** On run 39197766470 the runner's "Send to" submenu stayed Loading for 15 s; the rerun passed. The test depends on the runner's shell state; consider a longer deadline or skipping it when Send to never fills on the runner.
 - **2026-10-17 · The app menu always says "Installed"** (`navo-app/src/app_menu/mod.rs:19`) while the shipped `.exe` is portable (D3); portable mode (D10) is not built. Fixed by P19 L7b (word removed until portable mode exists).
 - **2026-10-17 · Settings rows marked "Not applied yet": font, font size, light and dark theme names, terminal provider and command.** They are saved but not used anywhere. Needs a plan (theme loader D16, font settings, terminal providers).

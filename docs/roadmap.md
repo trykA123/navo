@@ -1,6 +1,6 @@
 # Navo roadmap
 
-Updated 5 November 2026. This document tracks current implementation status. The [original visual outline](../design/roadmap.html) shows the milestone scope. Scope and priority decisions are in [decisions.md](decisions.md), especially D85 and D106. Plain-language specs are in [features/](features/).
+Updated 9 November 2026. This document tracks current implementation status. The [original visual outline](../design/roadmap.html) shows the milestone scope. Scope and priority decisions are in [decisions.md](decisions.md), especially D85 and D106. Plain-language specs are in [features/](features/).
 
 Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versions; a feature release increments the minor version. Windows packages are on [GitHub releases](https://github.com/trykA123/navo/releases).
 
@@ -70,9 +70,19 @@ Also included: the Linux rename-notification fix and targeted dependency updates
 
 Windows VM checks, host gates, snapshot compatibility checks and release search timings passed. The real-volume VM memory procedure remains unavailable: the required test volumes and service are absent. The synthetic result is not a whole-service private-memory measurement.
 
+## Release scope · v0.4.0
+
+| Change | Completed behavior | Evidence |
+| --- | --- | --- |
+| Own index service exe | The service runs `navo-index.exe` as "Navo Index". Install over the old `navo.exe` service migrates with one prompt and rolls back on failure; remove leaves no Program Files folder, or schedules what Windows refuses. | IX8v, IX8s in the [beta plan](../plans/2026-10-27-beta.md) |
+| Repository folders stay renameable | The long-lived `git cat-file` child runs outside the repository and closes after 2 s idle. | Windows tests in `navo-git` |
+| Update test feed | Tester builds read a local feed; the nine-case VM update suite runs. | `testing/ix8r-report.md` |
+
 ## Active work
 
-- **In-app update validation:** the updater and Restart flow are built. The tester-only folder feed and nine-case end-to-end VM suite are **not built**. Service-update/migration verification and the final updater review remain open before v1.0; see IX8q, IX8r and IX8s in the [beta plan](../plans/2026-10-27-beta.md).
+- **In-app update validation:** built and run in the Windows VM for v0.4.0. The tester-only folder feed exists, and the nine-case update suite passed seven cases; cases 8–9 passed their visible checks. The index service runs as `navo-index.exe`, and the senior review fixes are in. Still open before v1.0: the owner counts the UAC prompts (update cases 8–9, service checks 1–3) and checks Task Manager, the service checks 5–6 are rerun after the review fixes, and `docs/features/updates.md` is written (IX8t). See the [beta plan](../plans/2026-10-27-beta.md).
+- **Installer wizard:** the plan is in revision after its plan check, with three owner decisions open: per-user only, the licence, and no moving of an install. See the [installer plan](../plans/2026-11-09-installer-wizard.md) once it lands.
+- **Git and file operations:** v0.4.0 fixes the long-lived Git child that locked repository folders. Next: rename, delete and move stop the short Git commands running in that folder before they act.
 - **Compare and sync:** engine work has landed for large-file reading, text differences, parallel content checks and Git revisions. The compare screen and sync workflow remain; see the [compare plan](../plans/2026-10-20-p42-compare.md).
 - **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
 - **Beta completion:** finish results-pane appearance and hit lines, background job work and accessibility follow-up, in the priority order below.

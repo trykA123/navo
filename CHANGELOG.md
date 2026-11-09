@@ -2,6 +2,18 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.4.0 — 2026-11-09
+
+### Fixed
+
+- You can rename or delete a Git repository folder while Navo shows its Git badges. Before, Windows said the folder was locked.
+
+### Changed
+
+- The search index service runs as its own program, `navo-index.exe`, shown as "Navo Index" in Task Manager. Updating from an older version moves the service with one administrator prompt.
+- Removing the index service leaves no Navo folder in Program Files. A file that Windows will not let go is deleted at the next restart, and Settings says so.
+- Installing or removing the service is safer: one change runs at a time, a failed install puts the old service back, and a slow service gets time to stop.
+
 ## v0.3.0 — 2026-11-05
 
 ### Faster
