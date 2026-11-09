@@ -23,6 +23,10 @@ mod cli_sync_support;
 mod cli_pull;
 
 #[cfg(test)]
+#[path = "cli_sync/paused.rs"]
+mod cli_paused;
+
+#[cfg(test)]
 #[path = "cli_sync/pull_refuse.rs"]
 mod cli_pull_refuse;
 

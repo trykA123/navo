@@ -9,9 +9,8 @@ use navo_fs::{EntryBatch, EntryKind as FsKind, FsEntry};
 pub(super) fn reason_of(kind: FsErrorKind) -> Reason {
     match kind {
         FsErrorKind::NotFound => Reason::NotFound,
-        FsErrorKind::AccessDenied | FsErrorKind::SharingViolation | FsErrorKind::Locked => {
-            Reason::AccessDenied
-        }
+        FsErrorKind::Locked => Reason::Locked,
+        FsErrorKind::AccessDenied | FsErrorKind::SharingViolation => Reason::AccessDenied,
         FsErrorKind::Cancelled => Reason::Stopped,
         FsErrorKind::NotSupportedYet | FsErrorKind::SourceFilterFailed => Reason::Unsupported,
         FsErrorKind::ChangedOnDisk => Reason::ChangedOnDisk,

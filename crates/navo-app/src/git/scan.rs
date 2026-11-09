@@ -6,6 +6,8 @@ mod listing;
 mod plan;
 #[path = "scan_queue.rs"]
 mod queue;
+#[path = "scan_retry.rs"]
+mod retry;
 #[path = "scan_saved.rs"]
 mod saved;
 #[path = "scan_skip.rs"]
@@ -67,6 +69,8 @@ pub(crate) enum ScanError {
     Failed,
     #[error("repository status was cancelled")]
     Cancelled,
+    #[error("repository status paused for a file operation")]
+    Paused,
 }
 
 /// Sources must observe cancellation within 100 ms and bound their output to 8 MiB.

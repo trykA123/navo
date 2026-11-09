@@ -2,6 +2,9 @@ use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::Aside;
 use super::copy::{Copier, CopyStep, copy, overwrites, place};
+use std::cell::RefCell;
+
+use super::git_pause::{hold_paused, pause_job};
 use super::hold::hold;
 use super::marks::Marks;
 use super::remove::{Removals, remove};
@@ -106,12 +109,24 @@ fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the walk keeps the pause gate with its step loop"
+)]
 fn walk_marking(
     (job, done): (Job<'_>, &[u32]),
     ctx: &mut JobContext<'_>,
     marks: &mut Marks,
 ) -> JobOutcome {
     let plan = job.plan;
+    let first = (0_u32..)
+        .zip(&plan.steps)
+        .find(|(seq, _)| !done.contains(seq))
+        .map_or(0, |(seq, _)| seq);
+    let pauses = RefCell::new(match pause_job(plan, ctx) {
+        Ok(pauses) => Some(pauses),
+        Err(error) => return JobOutcome::Failed { seq: first, error },
+    });
     let mut progress = Progress::start(plan);
     let mut kept = Vec::new();
     let mut failed = None;
@@ -125,13 +140,12 @@ fn walk_marking(
         {
             return JobOutcome::Failed { seq, error };
         }
-        hold(ctx.cancel, &mut progress, ctx.progress);
-        if ctx.cancel.is_cancelled() {
-            return JobOutcome::Cancelled;
+        if let Err(outcome) = hold_paused(plan, seq, ctx, &pauses, &mut progress) {
+            return outcome;
         }
         progress.current = Some(current_of(step));
         let start = progress.bytes_done;
-        let result = attempt_step(job, (seq, step), &kept, (ctx, &mut progress));
+        let result = attempt_step(job, (seq, step), &kept, (ctx, &mut progress), &pauses);
         match result {
             Ok(outcome) => {
                 note_kept(step, outcome, &mut kept);
@@ -159,16 +173,22 @@ fn walk_marking(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk context is passed beside the pauses"
+)]
 fn attempt_step(
     job: Job<'_>,
     (seq, step): (u32, &Step),
     kept: &[Location],
     (ctx, progress): (&mut JobContext<'_>, &mut Progress),
+    pauses: &RefCell<Option<Vec<crate::GitPauseGuard>>>,
 ) -> Result<StepOutcome, FsError> {
     if holds_kept(step, kept) {
         return Ok(StepOutcome::Skipped);
     }
-    prepare(seq, (job.plan, step), ctx).and_then(|()| apply(job, (seq, step), ctx, progress))
+    prepare(seq, (job.plan, step), ctx)
+        .and_then(|()| apply(job, (seq, step), ctx, progress, pauses))
 }
 
 fn step_failure(
@@ -215,11 +235,16 @@ fn advance(progress: &mut Progress, kind: OpKind, step: &Step) {
     progress.files_done += files;
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk context is passed beside the pauses"
+)]
 pub(super) fn apply(
     job: Job<'_>,
     (seq, step): (u32, &Step),
     ctx: &mut JobContext<'_>,
     progress: &mut Progress,
+    pauses: &RefCell<Option<Vec<crate::GitPauseGuard>>>,
 ) -> Result<StepOutcome, FsError> {
     let ops = ctx.ops;
     let done = |result: Result<(), FsError>| result.map(|()| StepOutcome::Done);
@@ -236,7 +261,7 @@ pub(super) fn apply(
                 target,
                 size: *size,
             };
-            copy_in_order(job, &step, ctx, progress)
+            copy_in_order(job, &step, ctx, progress, pauses)
         }
         Step::Rename { source, target } => done(rename_step(job, ctx, source, target)),
         Step::Recycle { location } => done(ops.recycle(location)),
@@ -277,11 +302,16 @@ fn rename_step(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk context is passed beside the pauses"
+)]
 fn copy_in_order(
     job: Job<'_>,
     step: &CopyStep<'_>,
     ctx: &mut JobContext<'_>,
     progress: &mut Progress,
+    pauses: &RefCell<Option<Vec<crate::GitPauseGuard>>>,
 ) -> Result<StepOutcome, FsError> {
     super::temporary::prepare(ctx, step, job.namespace)?;
     let copier = copier_of(job, ctx);
@@ -294,6 +324,9 @@ fn copy_in_order(
         estimate = total;
         progress.bytes_done = base.saturating_add(bytes);
         report(progress);
+        if cancel.is_paused() {
+            pauses.replace(None);
+        }
         hold(cancel, progress, report);
     };
     let mut created = |identity| ctx.log.created_temporary((step.seq, identity), ctx.ops);

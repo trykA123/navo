@@ -15,6 +15,7 @@ use super::cache::Cache;
 use super::listing::{self, Discovered};
 use super::plan::{Check, Input, Plan, Timer, fill};
 use super::queue::{Listing, Request, Shared};
+use super::retry;
 use super::skip::MAX_PROOF_AGE;
 use super::slots::Slot;
 use super::watches::root_key;
@@ -58,11 +59,11 @@ struct Call {
     _slot: Slot,
 }
 
-struct Done {
-    listing: Arc<Listing>,
-    root: PathBuf,
-    check: Check,
-    result: Result<RepoStatus, ScanError>,
+pub(super) struct Done {
+    pub(super) listing: Arc<Listing>,
+    pub(super) root: PathBuf,
+    pub(super) check: Check,
+    pub(super) result: Result<RepoStatus, ScanError>,
 }
 
 struct Scanner {
@@ -218,6 +219,10 @@ impl Scanner {
             let revision = match timer {
                 timer @ Timer::Confirm { .. } => self.plan.confirm(&self.shared.0, found, timer),
                 timer @ Timer::Expire { .. } => self.plan.expire(&self.shared.0, found, timer),
+                Timer::Retry { listing, root } => {
+                    retry::retry_now(&self.shared.0, &listing, root);
+                    None
+                }
             };
             self.notify(revision);
         }
@@ -335,12 +340,17 @@ impl Scanner {
     }
 
     fn finish(&mut self, done: Done) {
+        if matches!(done.result, Err(ScanError::Paused)) {
+            retry::settle_paused(&self.shared.0, &mut self.plan, done, self.ports.probe.now());
+            return;
+        }
         let Done {
             listing,
             root,
             check,
             result,
         } = done;
+        self.plan.retries.reset(&listing, &root);
         let Some(found) = self.listings.get(&listing.folder) else {
             return;
         };

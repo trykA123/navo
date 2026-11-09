@@ -123,6 +123,8 @@ impl Vault<'_> {
             .location
             .parent()
             .ok_or_else(|| Error::Changed(target.location.clone()))?;
+        let _held_pause = self.ops.pause_git(&entry.record.held()?)?;
+        let _target_pause = self.ops.pause_git(&target.location)?;
         let mut tx = self.catalog.checked_transaction(&entry)?;
         if let Some(owner) = owner {
             tx.authorize_rollback(entry.id, owner)?;

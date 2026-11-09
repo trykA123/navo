@@ -153,6 +153,8 @@ impl Vault<'_> {
         }
         proof::owned(self.ops, &entry.record)?;
         snapshot::verify(self.ops, &entry.record, (&entry.record.source, false), run)?;
+        let _source_pause = self.ops.pause_git(&entry.record.source)?;
+        let _held_pause = self.ops.pause_git(&entry.record.held()?)?;
         let tx = self.catalog.checked_transaction(&entry)?;
         proof::owned(self.ops, &entry.record)?;
         if !proof::node(self.ops, &entry.record.source, &entry.record.nodes[0])? {

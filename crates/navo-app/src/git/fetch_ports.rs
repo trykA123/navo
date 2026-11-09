@@ -96,7 +96,7 @@ impl Fetcher for CliFetcher {
 fn outcome(result: Result<(), GitError>) -> Outcome {
     match result {
         Ok(()) => Outcome::Fetched,
-        Err(GitError::Cancelled) => Outcome::Cancelled,
+        Err(GitError::Cancelled | GitError::Paused) => Outcome::Cancelled,
         Err(
             GitError::Guarded { .. }
             | GitError::NoUpstream
@@ -110,5 +110,15 @@ fn outcome(result: Result<(), GitError>) -> Outcome {
             tracing::debug!(%error, "background fetch failed");
             Outcome::Failed
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_paused_fetch_is_cancelled() {
+        assert_eq!(outcome(Err(GitError::Paused)), Outcome::Cancelled);
     }
 }

@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{FocusHandle, KeyBinding, Render, TestAppContext};
@@ -6,6 +7,7 @@ use gpui_kit::{FocusHandle, KeyBinding, Render, TestAppContext};
 use super::*;
 use crate::prelude::*;
 use crate::window_view::tests::fake;
+use navo_fs::{Provider, ProviderOps};
 
 gpui_kit::actions!(input_trace_tests, [ReadMetadata]);
 
@@ -201,4 +203,113 @@ fn an_input_that_paints_no_frame_still_gets_a_line_without_render_time(cx: &mut 
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].action, "mouse:move");
     assert_eq!(records[0].ui_busy_ms, 0.);
+}
+
+struct PauseSpy {
+    fs: Arc<navo_fs::FakeFs>,
+    pauses: AtomicUsize,
+}
+
+impl Provider for PauseSpy {
+    fn id(&self) -> navo_core::ProviderId {
+        self.fs.id()
+    }
+
+    fn capabilities(&self) -> navo_fs::Capabilities {
+        self.fs.capabilities()
+    }
+
+    fn list(
+        &self,
+        folder: &navo_core::Location,
+        sink: &mut dyn navo_fs::ListSink,
+        cancel: &navo_fs::CancelToken,
+    ) -> Result<(), navo_core::FsError> {
+        self.fs.list(folder, sink, cancel)
+    }
+
+    fn metadata(
+        &self,
+        location: &navo_core::Location,
+    ) -> Result<navo_fs::FsEntry, navo_core::FsError> {
+        self.fs.metadata(location)
+    }
+}
+
+impl ProviderOps for PauseSpy {
+    fn pause_git(
+        &self,
+        location: &navo_core::Location,
+    ) -> Result<Option<navo_fs::GitPauseGuard>, navo_core::FsError> {
+        self.pauses.fetch_add(1, Ordering::SeqCst);
+        self.fs.pause_git(location)
+    }
+
+    fn create_folder(&self, location: &navo_core::Location) -> Result<(), navo_core::FsError> {
+        self.fs.create_folder(location)
+    }
+
+    fn create_file(&self, location: &navo_core::Location) -> Result<(), navo_core::FsError> {
+        self.fs.create_file(location)
+    }
+
+    fn copy_file(
+        &self,
+        source: &navo_core::Location,
+        target: &navo_core::Location,
+        progress: &mut dyn FnMut(u64),
+        cancel: &navo_fs::CancelToken,
+    ) -> Result<u64, navo_core::FsError> {
+        self.fs.copy_file(source, target, progress, cancel)
+    }
+
+    fn rename(
+        &self,
+        source: &navo_core::Location,
+        target: &navo_core::Location,
+    ) -> Result<(), navo_core::FsError> {
+        self.fs.rename(source, target)
+    }
+
+    fn replace(
+        &self,
+        source: &navo_core::Location,
+        target: &navo_core::Location,
+    ) -> Result<(), navo_core::FsError> {
+        self.fs.replace(source, target)
+    }
+
+    fn remove_file(&self, location: &navo_core::Location) -> Result<(), navo_core::FsError> {
+        self.fs.remove_file(location)
+    }
+
+    fn remove_link(&self, location: &navo_core::Location) -> Result<(), navo_core::FsError> {
+        self.fs.remove_link(location)
+    }
+
+    fn remove_empty_folder(
+        &self,
+        location: &navo_core::Location,
+    ) -> Result<(), navo_core::FsError> {
+        self.fs.remove_empty_folder(location)
+    }
+
+    fn recycle(&self, location: &navo_core::Location) -> Result<(), navo_core::FsError> {
+        self.fs.recycle(location)
+    }
+}
+
+#[test]
+fn pause_git_reaches_the_inner_provider_through_the_trace() {
+    let dir = tempfile::tempdir().unwrap();
+    let trace = InputTrace::new(dir.path().join("pause.jsonl")).unwrap();
+    let spy = Arc::new(PauseSpy {
+        fs: fake(),
+        pauses: AtomicUsize::new(0),
+    });
+    let inner: Arc<dyn ProviderOps> = spy.clone();
+    let wrapped = trace.provider(inner);
+    let location = spy.fs.location("home/a");
+    assert!(wrapped.pause_git(&location).unwrap().is_none());
+    assert_eq!(spy.pauses.load(Ordering::SeqCst), 1);
 }

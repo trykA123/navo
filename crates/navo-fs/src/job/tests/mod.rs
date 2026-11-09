@@ -36,6 +36,7 @@ mod parallel_delete;
 mod parallel_pause;
 mod parallel_props;
 mod pause;
+mod pause_roots;
 mod placed;
 mod recycle;
 mod rename;

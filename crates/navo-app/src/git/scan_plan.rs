@@ -12,6 +12,7 @@ use navo_ui::git::FolderBadges;
 use super::cache::{Cache, Cached};
 use super::listing::{self, Discovered};
 use super::queue::{Forced, Listing, Request, Shared};
+use super::retry;
 use super::skip::{self, CONFIRM_WAIT, Deadlines, Facts, Kept, MAX_PROOF_AGE, Proofs, Verdict};
 use super::watches::{Watches, root_key};
 use super::{Probe, ScanError};
@@ -47,22 +48,18 @@ pub(super) enum Timer {
         listing: Arc<Listing>,
         root: PathBuf,
     },
+    Retry {
+        listing: Arc<Listing>,
+        root: PathBuf,
+    },
 }
 
 impl Timer {
     pub(super) fn listing(&self) -> Arc<Listing> {
         match self {
-            Self::Confirm { listing, .. } | Self::Expire { listing, .. } => listing.clone(),
-        }
-    }
-
-    fn is_expire_of(&self, listing: &Arc<Listing>, root: &Path) -> bool {
-        match self {
-            Self::Expire {
-                listing: own,
-                root: own_root,
-            } => Arc::ptr_eq(own, listing) && own_root == root,
-            Self::Confirm { .. } => false,
+            Self::Confirm { listing, .. }
+            | Self::Expire { listing, .. }
+            | Self::Retry { listing, .. } => listing.clone(),
         }
     }
 }
@@ -72,7 +69,8 @@ pub(super) struct Plan {
     probe: Arc<dyn Probe>,
     proofs: Proofs,
     watches: Watches,
-    deadlines: Deadlines<Timer>,
+    pub(super) deadlines: Deadlines<Timer>,
+    pub(super) retries: retry::Retries,
 }
 
 /// The watch mark, fingerprint and time a status call started from.
@@ -91,6 +89,7 @@ impl Plan {
             probe,
             proofs: Proofs::default(),
             deadlines: Deadlines::default(),
+            retries: retry::Retries::default(),
         }
     }
 
@@ -111,6 +110,7 @@ impl Plan {
                 .get(&listing.folder)
                 .is_some_and(|found| Arc::ptr_eq(&found.listing, &listing))
         });
+        self.retries.retain(listings);
     }
 
     /// Releases the watches no held listing would arm.
@@ -326,6 +326,37 @@ impl Plan {
         publish_fresh(shared, found, &root, &cached)
     }
 
+    /// Schedules when a fresh root dims, replacing its earlier deadline.
+    pub(super) fn expire_at(&mut self, listing: &Arc<Listing>, root: &Path, at: Instant) {
+        self.replace_timer(
+            at,
+            Timer::Expire {
+                listing: listing.clone(),
+                root: root.to_path_buf(),
+            },
+        );
+    }
+
+    /// Schedules a paused root's retry, replacing an earlier retry for the same root.
+    pub(super) fn retry_at(&mut self, listing: &Arc<Listing>, root: &Path, at: Instant) {
+        self.replace_timer(
+            at,
+            Timer::Retry {
+                listing: listing.clone(),
+                root: root.to_path_buf(),
+            },
+        );
+    }
+
+    /// Drops a timer with the same variant, listing and root, then schedules `timer`.
+    fn replace_timer(&mut self, at: Instant, timer: Timer) {
+        let variant = std::mem::discriminant(&timer);
+        self.deadlines.retain(|old| {
+            std::mem::discriminant(old) != variant || !retry::same_place(old, &timer)
+        });
+        self.deadlines.insert(at, timer);
+    }
+
     /// Phase three: dims the root's rows once its fresh badge is five minutes old.
     pub(super) fn expire(
         &self,
@@ -359,19 +390,6 @@ impl Plan {
             }
         }
         shared.publish(&listing, badges)
-    }
-
-    /// Schedules when a fresh root dims, replacing its earlier deadline.
-    pub(super) fn expire_at(&mut self, listing: &Arc<Listing>, root: &Path, at: Instant) {
-        self.deadlines
-            .retain(|timer| !timer.is_expire_of(listing, root));
-        self.deadlines.insert(
-            at,
-            Timer::Expire {
-                listing: listing.clone(),
-                root: root.to_path_buf(),
-            },
-        );
     }
 }
 
@@ -423,6 +441,9 @@ pub(super) fn fill(badges: &mut FolderBadges, found: &Discovered, root: &Path, c
         }
     }
 }
+
+#[cfg(test)]
+pub(super) use tests::skip_probe;
 
 #[cfg(test)]
 #[path = "scan_tests/skip_flow.rs"]

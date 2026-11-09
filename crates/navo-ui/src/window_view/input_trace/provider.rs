@@ -5,9 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use navo_core::{FsError, Location, ProviderId};
 
 use navo_fs::{
-    CancelToken, Capabilities, CopyControl, FileDetails, FileIdentity, FsEntry, ListSink,
-    MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UnixAccess, VerifiedRename, Watch,
-    WatchSink,
+    CancelToken, Capabilities, CopyControl, FileDetails, FileIdentity, FsEntry, GitPauseGuard,
+    ListSink, MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UnixAccess, VerifiedRename,
+    Watch, WatchSink,
 };
 
 pub(super) struct CountingFs {
@@ -76,6 +76,11 @@ impl Provider for CountingFs {
 }
 
 impl ProviderOps for CountingFs {
+    fn pause_git(&self, location: &Location) -> Result<Option<GitPauseGuard>, FsError> {
+        self.count();
+        self.inner.pause_git(location)
+    }
+
     fn hide_retained(&self, location: &Location, identity: FileIdentity) -> Result<(), FsError> {
         self.count();
         self.inner.hide_retained(location, identity)

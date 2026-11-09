@@ -188,7 +188,7 @@ fn two_connections_migrate_a_version_zero_file_once() {
     BLOCKER.with(|slot| *slot.borrow_mut() = Some(blocker));
     SECOND.with(|slot| *slot.borrow_mut() = Some(Connection::open(&path).unwrap()));
 
-    let first = Connection::open(&path).unwrap();
+    let mut first = Connection::open(&path).unwrap();
     first.busy_handler(Some(migrate_second)).unwrap();
     let first = CacheDb::from_connection(first).map_err(|error| error.to_string());
     let second = SECOND_RESULT.with(|slot| slot.borrow_mut().take()).unwrap();

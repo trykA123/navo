@@ -1,11 +1,45 @@
 use std::fs::{self, File};
+use std::time::Duration;
 
-use navo_core::{FsError, FsErrorKind, Location};
+use navo_core::{FsError, FsErrorKind, Location, LockHolder};
+use navo_git::cli::{GitPause, stop_under};
 
 #[cfg(windows)]
 use super::win_copy::{self, CopyProgress};
-use super::{LocalFs, error, io_error, os_path};
+use super::{LocalFs, error, io_error, lock_holders, os_path};
 use crate::{CancelToken, ProviderOps};
+
+/// How long a file operation waits for Git reads in its folder to stop.
+const GIT_STOP_WAIT: Duration = Duration::from_secs(3);
+
+/// Stops Git reads in `location` and keeps new ones out until the returned guard drops.
+fn git_paused(location: &Location) -> Result<GitPause, FsError> {
+    stop_under(&os_path(location)?, GIT_STOP_WAIT).map_err(|_| git_busy(location))
+}
+
+/// The Locked error for a pause held by a write session; Git is named even when no handle is.
+fn git_busy(location: &Location) -> FsError {
+    FsError {
+        kind: FsErrorKind::Locked,
+        location: Some(location.clone()),
+        os_code: None,
+        holders: with_git_holder(lock_holders(location)),
+    }
+}
+
+/// Appends the expected `git.exe` holder unless the system already named it.
+fn with_git_holder(mut holders: Vec<LockHolder>) -> Vec<LockHolder> {
+    if !holders
+        .iter()
+        .any(|holder| holder.name.eq_ignore_ascii_case("git.exe"))
+    {
+        holders.push(LockHolder {
+            name: "git.exe".into(),
+            pid: 0,
+        });
+    }
+    holders
+}
 
 #[cfg(any(windows, test))]
 fn shell_drops_trailing_dot_or_space(path: &std::path::Path) -> bool {
@@ -18,6 +52,10 @@ fn shell_drops_trailing_dot_or_space(path: &std::path::Path) -> bool {
 }
 
 impl ProviderOps for LocalFs {
+    fn pause_git(&self, location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
+        git_paused(location).map(|pause| Some(crate::GitPauseGuard::new(pause)))
+    }
+
     fn copy_file_owned(
         &self,
         request: crate::OwnedCopy<'_>,
@@ -62,6 +100,7 @@ impl ProviderOps for LocalFs {
     }
 
     fn rename_atomic(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        let _git = git_paused(source)?;
         super::platform::rename_atomic(&os_path(source)?, &os_path(target)?)
             .map_err(|error| io_error(&error, source))
     }
@@ -198,6 +237,7 @@ impl ProviderOps for LocalFs {
     }
 
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        let _git = git_paused(source)?;
         super::platform::rename_new(&os_path(source)?, &os_path(target)?)
             .map_err(|e| io_error(&e, source))
     }
@@ -209,6 +249,7 @@ impl ProviderOps for LocalFs {
         to: &Location,
         expect: &crate::MoveProof,
     ) -> Result<crate::VerifiedRename, FsError> {
+        let _git = git_paused(from)?;
         super::verified::rename(from, to, expect)
     }
 
@@ -247,10 +288,12 @@ impl ProviderOps for LocalFs {
     }
 
     fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError> {
+        let _git = git_paused(location)?;
         fs::remove_dir(os_path(location)?).map_err(|e| io_error(&e, location))
     }
 
     fn recycle(&self, location: &Location) -> Result<(), FsError> {
+        let _git = git_paused(location)?;
         let path = os_path(location)?;
         #[cfg(windows)]
         if shell_drops_trailing_dot_or_space(&path) {
@@ -292,7 +335,35 @@ impl ProviderOps for LocalFs {
 mod tests {
     use std::path::Path;
 
+    use navo_core::{FsErrorKind, Location, LockHolder, ProviderPath};
+
     use super::shell_drops_trailing_dot_or_space;
+    use super::{git_busy, with_git_holder};
+
+    #[test]
+    fn a_paused_git_read_is_locked_and_names_git() {
+        let location = Location::local(ProviderPath::from_text("/repo")).unwrap();
+        let error = git_busy(&location);
+        assert_eq!(error.kind, FsErrorKind::Locked);
+        assert!(error.holders.iter().any(|holder| holder.name == "git.exe"));
+    }
+
+    #[test]
+    fn the_git_holder_is_added_once_and_keeps_a_real_name() {
+        let added = with_git_holder(Vec::new());
+        assert_eq!(
+            added,
+            vec![LockHolder {
+                name: "git.exe".into(),
+                pid: 0
+            }]
+        );
+        let named = vec![LockHolder {
+            name: "git.exe".into(),
+            pid: 42,
+        }];
+        assert_eq!(with_git_holder(named.clone()), named);
+    }
 
     #[test]
     fn a_name_ending_in_a_dot_cannot_be_spelled_by_the_shell() {

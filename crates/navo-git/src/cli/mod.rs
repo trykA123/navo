@@ -25,6 +25,7 @@ mod process_cap;
 mod process_tree;
 mod process_watch;
 mod remote;
+mod running;
 mod status;
 mod sync;
 mod sync_check;
@@ -37,6 +38,7 @@ use process::{CommandSpec, base_command, command_io, run_process};
 
 pub use process_cap::{ProcessOptions, ProcessOutput};
 pub use process_watch::{Cancel, ProcessOutcome};
+pub use running::{GitBusy, GitPause, stop_under};
 pub use status::StatusLimits;
 pub use sync::{SYNC_TIMEOUT, SyncKind, SyncPreview, SyncSummary, SyncTarget};
 pub use sync_check::RemoteBinding;

@@ -541,6 +541,10 @@ fn git_errors_keep_their_kind() {
         error_kind(&fixture, |_| GitError::Timeout),
         FsErrorKind::Timeout
     );
+    assert_eq!(
+        error_kind(&fixture, |_| GitError::Paused),
+        FsErrorKind::Locked
+    );
 }
 
 #[test]

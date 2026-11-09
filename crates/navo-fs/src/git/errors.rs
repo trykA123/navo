@@ -38,6 +38,7 @@ pub(super) fn git(error: GitError, location: &Location) -> FsError {
             _ => FsErrorKind::Unknown,
         },
         GitError::Command { stderr, .. } if not_a_repository(&stderr) => FsErrorKind::NotFound,
+        GitError::Paused => FsErrorKind::Locked,
         _ => FsErrorKind::Unknown,
     };
     at(kind, location)

@@ -56,25 +56,7 @@ fn rotate(path: &Path) -> Result<(), String> {
 }
 
 fn place_backup(path: &Path, backup: &Path) -> Result<(), String> {
-    use navo_fs::ProviderOps;
-    navo_fs::LocalFs::new()
-        .rename_atomic(&native_location(path)?, &native_location(backup)?)
-        .map_err(|error| error.message())
-}
-
-fn native_location(path: &Path) -> Result<navo_core::Location, String> {
-    let path = std::path::absolute(path).map_err(|error| error.to_string())?;
-    #[cfg(unix)]
-    let name = {
-        use std::os::unix::ffi::OsStrExt;
-        navo_core::ProviderPath::from_bytes(path.as_os_str().as_bytes())
-    };
-    #[cfg(windows)]
-    let name = {
-        use std::os::windows::ffi::OsStrExt;
-        navo_core::ProviderPath::from_wide(&path.as_os_str().encode_wide().collect::<Vec<_>>())
-    };
-    navo_core::Location::local(name).map_err(|error| error.to_string())
+    navo_fs::native_rename_atomic(path, backup).map_err(|error| error.to_string())
 }
 
 fn recognized(path: &Path) -> Result<(), String> {

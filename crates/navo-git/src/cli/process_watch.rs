@@ -52,6 +52,12 @@ impl Control {
     }
 }
 
+/// How often an active watchdog with a file-operation stop checks its flags.
+const STOP_POLL: Duration = Duration::from_millis(5);
+
+/// How often an idle filter stream without a deadline checks its stop flag.
+const IDLE_STOP_POLL: Duration = Duration::from_millis(20);
+
 pub(super) struct Watchdog {
     activity: Arc<Activity>,
     handle: Option<JoinHandle<Result<(), GitError>>>,
@@ -62,6 +68,7 @@ struct Activity {
     state: Mutex<Idle>,
     changed: Condvar,
     control: Option<Control>,
+    stop: Option<Cancel>,
 }
 
 #[derive(Default)]
@@ -72,11 +79,16 @@ struct Idle {
 }
 
 impl Watchdog {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the start carries the child, timeout, outcome, cancel control and stop flag"
+    )]
     pub(super) fn start(
         child: ChildSlot,
         timeout: Duration,
         outcome: Outcome,
         control: Option<Control>,
+        stop: Option<Cancel>,
     ) -> Result<Self, GitError> {
         let activity = Arc::new(Activity {
             state: Mutex::new(Idle {
@@ -85,6 +97,7 @@ impl Watchdog {
             }),
             changed: Condvar::new(),
             control,
+            stop,
         });
         let watched = Arc::clone(&activity);
         let handle = thread::Builder::new()
@@ -157,11 +170,24 @@ fn watch(activity: Arc<Activity>, child: ChildSlot, timeout: Duration) -> Result
         if state.stopped {
             return Ok(());
         }
+        if activity.stop.as_ref().is_some_and(Cancel::is_cancelled) {
+            state.reason = Some(ProcessOutcome::Cancelled);
+            drop(state);
+            return stop_shared(&child);
+        }
         let Some(since) = state.since else {
-            state = activity
-                .changed
-                .wait(state)
-                .unwrap_or_else(PoisonError::into_inner);
+            state = if activity.stop.is_some() {
+                activity
+                    .changed
+                    .wait_timeout(state, IDLE_STOP_POLL)
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .0
+            } else {
+                activity
+                    .changed
+                    .wait(state)
+                    .unwrap_or_else(PoisonError::into_inner)
+            };
             continue;
         };
         let remaining = timeout.saturating_sub(since.elapsed());
@@ -175,8 +201,8 @@ fn watch(activity: Arc<Activity>, child: ChildSlot, timeout: Duration) -> Result
             drop(state);
             return stop_shared(&child);
         }
-        let remaining = if activity.control.is_some() {
-            remaining.min(Duration::from_millis(5))
+        let remaining = if activity.control.is_some() || activity.stop.is_some() {
+            remaining.min(STOP_POLL)
         } else {
             remaining
         };

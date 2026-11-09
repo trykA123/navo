@@ -1,7 +1,12 @@
 [test-groups]
 clipboard = { max-threads = 1 }
+process = { max-threads = 1 }
 shell = { max-threads = 1 }
 timing = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "binary(cli_process)"
+test-group = "process"
 
 [[profile.default.overrides]]
 filter = "binary(clipboard_windows) | binary(clipboard_virtual_windows) | binary(clipboard_watch_windows) | binary(clipboard_text_windows) | binary(shell_menu_windows)"
@@ -26,6 +31,10 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 
 [profile.ci.junit]
 path = "junit.xml"
+
+[[profile.ci.overrides]]
+filter = "binary(cli_process)"
+test-group = "process"
 
 [[profile.ci.overrides]]
 filter = "binary(shell_menu_windows)"

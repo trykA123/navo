@@ -194,6 +194,7 @@ pub enum ReadHint {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Reason {
     AccessDenied,
+    Locked,
     NotFound,
     ReadError,
     Stopped,
@@ -209,6 +210,7 @@ impl Reason {
     pub const fn fluent_id(self) -> FluentId {
         FluentId::new(match self {
             Self::AccessDenied => "compare-reason-access-denied",
+            Self::Locked => "compare-reason-locked",
             Self::NotFound => "compare-reason-not-found",
             Self::ReadError => "compare-reason-read-error",
             Self::Stopped => "compare-reason-stopped",

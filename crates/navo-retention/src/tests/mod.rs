@@ -13,6 +13,7 @@ mod legacy;
 mod local;
 mod maintenance;
 mod owner;
+mod pauses;
 mod placement;
 mod privacy;
 mod purge;

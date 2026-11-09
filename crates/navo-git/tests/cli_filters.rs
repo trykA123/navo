@@ -6,6 +6,11 @@ mod fixture;
 #[path = "cli_filters/streaming.rs"]
 mod streaming;
 
+#[cfg(test)]
+#[cfg(unix)]
+#[path = "cli_filters/paused.rs"]
+mod paused;
+
 #[cfg(windows)]
 #[test]
 fn unix_filter_streaming_scripts_are_skipped() {

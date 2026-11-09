@@ -1,3 +1,5 @@
+#[cfg(test)]
+use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::io::{self, Read};
 use std::process::{ChildStderr, ChildStdout, ExitStatus, Stdio};
@@ -13,6 +15,16 @@ use super::process_tree::GitTree;
 use super::process_watch::{
     Cancel, ChildSlot, Control, Outcome, ProcessOutcome, Watchdog, capture_stderr, stop_shared,
 };
+use super::running::{self, Ticket, Work};
+
+#[cfg(test)]
+type AfterReadersHook = Box<dyn FnOnce(&Option<Cancel>)>;
+
+#[cfg(test)]
+thread_local! {
+    /// A one-shot hook that runs after the readers join in `Capture::finish`.
+    static AFTER_READERS: RefCell<Option<AfterReadersHook>> = const { RefCell::new(None) };
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct ProcessOptions {
@@ -36,8 +48,24 @@ impl ProcessOutput {
 
 type Reader = JoinHandle<io::Result<Vec<u8>>>;
 
+/// Installs a one-shot test hook that runs after the readers join in `Capture::finish`.
+#[cfg(test)]
+pub(super) fn hook_after_readers(hook: impl FnOnce(&Option<Cancel>) + 'static) {
+    AFTER_READERS.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+/// Runs and clears the test hook installed for the current thread.
+#[cfg(test)]
+fn after_readers(stop: &Option<Cancel>) {
+    let hook = AFTER_READERS.with(|slot| slot.borrow_mut().take());
+    if let Some(hook) = hook {
+        hook(stop);
+    }
+}
+
 struct Capture {
     child: ChildSlot,
+    stop: Option<Cancel>,
     watchdog: Option<Watchdog>,
     stdout: Option<Reader>,
     stderr: Option<Reader>,
@@ -59,19 +87,33 @@ pub(super) fn run_cancellable<S: AsRef<OsStr>>(
             stderr: Vec::new(),
         });
     }
+    let ticket = spec
+        .repo
+        .map(|repo| running::register(repo, Work::Read))
+        .transpose()?;
+    let stop = ticket.as_ref().map(Ticket::stop_flag);
+    if stop.as_ref().is_some_and(Cancel::is_cancelled) {
+        return Err(GitError::Paused);
+    }
     let mut command = base_command(spec);
     command
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = GitTree::spawn(&mut command).map_err(|error| command_io(spec.git, error))?;
+    child.attach(ticket);
     let pipes = child.take_pipes();
     let (Some(stdout), Some(stderr)) = pipes else {
-        child.stop()?;
+        let stopped = child.stop();
+        if stop.as_ref().is_some_and(Cancel::is_cancelled) {
+            return Err(GitError::Paused);
+        }
+        stopped?;
         return Err(GitError::SessionClosed);
     };
     let mut capture = Capture {
         child: Arc::new(Mutex::new(Some(child))),
+        stop,
         watchdog: None,
         stdout: None,
         stderr: None,
@@ -112,6 +154,7 @@ impl Capture {
                 cancel: cancel.clone(),
                 capped: Arc::clone(&self.capped),
             }),
+            self.stop.clone(),
         )?);
         Ok(())
     }
@@ -119,8 +162,17 @@ impl Capture {
     fn finish(&mut self) -> Result<ProcessOutput, GitError> {
         let stdout = join_reader(self.stdout.take())?;
         let stderr = join_reader(self.stderr.take())?;
+        if self.stop.as_ref().is_some_and(Cancel::is_cancelled) {
+            return Err(GitError::Paused);
+        }
+        #[cfg(test)]
+        after_readers(&self.stop);
         let status = self.wait()?;
         let reason = self.watchdog.take().and_then(Watchdog::finish);
+        // A stop can land after the readers join and before the tree is reaped.
+        if self.stop.as_ref().is_some_and(Cancel::is_cancelled) {
+            return Err(GitError::Paused);
+        }
         if let Some(Err(error)) = self
             .outcome
             .lock()

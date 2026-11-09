@@ -7,6 +7,19 @@ use super::{
 
 pub use navo_core::{FileIdentity, FileIdentityKind};
 
+/// Keeps Git reads in a folder paused while it lives; dropping it releases the pause.
+#[must_use]
+pub struct GitPauseGuard {
+    _pause: navo_git::cli::GitPause,
+}
+
+impl GitPauseGuard {
+    /// Wraps a navo-git pause so callers outside navo-fs see only this opaque guard.
+    pub(crate) fn new(pause: navo_git::cli::GitPause) -> Self {
+        Self { _pause: pause }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnixAccess {
     pub owner: u32,
@@ -58,6 +71,10 @@ pub trait ProviderOps: Provider {
         self.remove_file(location)
     }
     fn available_space(&self, _location: &Location) -> Result<Option<u64>, FsError> {
+        Ok(None)
+    }
+    /// Stops Git reads under `location` and keeps them out while the guard lives.
+    fn pause_git(&self, _location: &Location) -> Result<Option<GitPauseGuard>, FsError> {
         Ok(None)
     }
     fn supports_atomic_rename(&self) -> bool {

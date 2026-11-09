@@ -60,9 +60,9 @@ pub use paged::{
 pub use protection::{ResolvedPlan, check_mutation, check_relocation, check_resolved_mutation};
 pub use provider::{
     AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
-    EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, LinkKey, ListSink, MoveProof,
-    OwnedCopy, Provider, ProviderOps, RenameSkip, SizeEntry, StreamWrite, UnixAccess,
-    VerifiedRename,
+    EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, GitPauseGuard, LinkKey,
+    ListSink, MoveProof, OwnedCopy, Provider, ProviderOps, RenameSkip, SizeEntry, StreamWrite,
+    UnixAccess, VerifiedRename,
 };
 pub use scan::{existing_at, scan};
 pub use slow::SlowFs;

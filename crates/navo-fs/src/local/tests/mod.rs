@@ -12,6 +12,8 @@ use crate::{EntryBatch, EntryKind};
 mod copy_windows;
 mod details;
 mod errors;
+#[cfg(any(unix, windows))]
+mod git_pause;
 mod hostile;
 #[cfg(windows)]
 mod identity_windows;
