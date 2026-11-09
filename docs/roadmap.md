@@ -15,10 +15,11 @@ Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versio
   - **Background work that never waits** (job priorities, folder sizes that cancel): not started.
   - **Validation:** the heavy Windows benchmark and the long daily-use check for lost files.
 - **v1.0:** started.
-  - **Compare and sync:** folder compare in the panes is shipped; the sync engine and its safe copy plan are built; the sync screen remains.
+  - **Compare and sync:** folder compare in the panes is shipped; the sync engine and its safe copy plan are built. A second design round for the full Beyond Compare-class experience (file diff, copying changes, hex and image compare, sync) runs now; building the chosen direction follows.
   - **Installer wizard:** part 1 (the engine: folder checks, install, upgrade, shortcuts, DLL guard, scripted install) is built and passes every VM table; part 2 is the wizard screens.
   - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt when the service changes) runs on 0.4.1.
   - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, and the module registry.
+- **Order after the current work (owner, 9 November):** index service memory, speed checks that fail the build, the mimalloc trial, background work that never waits, then smarter search. Accessibility is required for v1.0.
 - **Latest release:** v0.4.1 (Git no longer blocks renaming repository folders; SQLite security update), published after its Windows VM check.
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
@@ -107,7 +108,7 @@ Windows VM checks, host gates, snapshot compatibility checks and release search 
 - **In-app update validation:** the nine-case update suite and the index-service checks passed in the Windows VM; the update spec is written ([updates](features/updates.md)). Still open: the owner updates a real PC from 0.3.0 to 0.4.1 and confirms exactly one admin prompt, `navo-index.exe` in Task Manager, and none on the next starts. See the [beta plan](../plans/2026-10-27-beta.md).
 - **Installer wizard, part 1:** folder checks, holding the chosen folder, the package, Velopack's install and upgrade, and removing unticked shortcuts the DLL-planting guard and the scripted install (`--silent` with an exit code per outcome) are built and pass in the Windows VM, including the five VM test tables. Part 2 is the wizard screens. See the [installer plan](../plans/2026-11-09-installer-wizard.md).
 - **Index service memory:** the owner saw peaks near 800 MB in the service on v0.3.0. The three causes the memory audit named were already fixed in v0.3.0, so the real cause is open. Next: the owner's numbers on 0.4.1, then a peak measurement on a real drive, then a fix plan.
-- **Compare and sync:** folder compare is shipped: two folders, or a folder and a Git revision, side by side with differences marked. The engine handles large files, text differences, Git revisions and a safe sync plan. The sync screen remains; see the [compare plan](../plans/2026-10-20-p42-compare.md).
+- **Compare and sync:** folder compare is shipped: two folders, or a folder and a Git revision, side by side with differences marked. The engine handles large files, text differences, Git revisions and a safe sync plan. A design round for the full file diff, copy and sync experience runs now; see the [compare plan](../plans/2026-10-20-p42-compare.md).
 - **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
 - **Beta completion:** finish results-pane appearance and hit lines, background job work and accessibility follow-up, in the priority order below.
 
