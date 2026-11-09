@@ -1,10 +1,12 @@
 //! Builds and runs bounded Git subprocesses for the command-line backend.
 
+#[cfg(test)]
+use std::cell::RefCell;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Output, Stdio};
+use std::process::{Command, ExitStatus, Output, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -12,6 +14,33 @@ use std::time::{Duration, Instant};
 use crate::GitError;
 
 use super::parse::protocol;
+use super::process_tree::GitTree;
+use super::process_watch::Cancel;
+use super::running::{self, Ticket, Work};
+
+#[cfg(test)]
+type AfterReapHook = Box<dyn FnOnce(Option<&Cancel>)>;
+
+#[cfg(test)]
+thread_local! {
+    /// A one-shot hook that runs after `wait` observes the exit.
+    static AFTER_REAP: RefCell<Option<AfterReapHook>> = const { RefCell::new(None) };
+}
+
+/// Installs a one-shot test hook that runs after `wait` observes the exit.
+#[cfg(test)]
+fn hook_after_reap(hook: impl FnOnce(Option<&Cancel>) + 'static) {
+    AFTER_REAP.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+/// Runs and clears the test hook installed for the current thread.
+#[cfg(test)]
+fn after_reap(stop: Option<&Cancel>) {
+    let hook = AFTER_REAP.with(|slot| slot.borrow_mut().take());
+    if let Some(hook) = hook {
+        hook(stop);
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct Version {
@@ -129,16 +158,21 @@ pub(super) fn run_process<S: AsRef<OsStr>>(
     spec: &CommandSpec<'_>,
     args: &[S],
 ) -> Result<Output, GitError> {
+    let ticket = spec
+        .repo
+        .map(|repo| running::register(repo, Work::Read))
+        .transpose()?;
+    let stop = ticket.as_ref().map(Ticket::stop_flag);
     let Spawned {
-        mut child,
+        mut tree,
         stdout,
         stderr,
-    } = spawn(spec, args)?;
+    } = spawn(spec, args, ticket)?;
     let started = Instant::now();
-    let status = match wait(&mut child, spec.git, started, spec.timeout) {
+    let status = match wait(&mut tree, spec, started, stop.as_ref()) {
         Ok(status) => status,
         Err(error) => {
-            stop(&mut child);
+            let _ = tree.stop();
             drop(stdout);
             drop(stderr);
             return Err(error);
@@ -152,7 +186,7 @@ pub(super) fn run_process<S: AsRef<OsStr>>(
 }
 
 struct Spawned {
-    child: Child,
+    tree: GitTree,
     stdout: Reader,
     stderr: Reader,
 }
@@ -186,63 +220,80 @@ impl Reader {
     }
 }
 
-fn spawn<S: AsRef<OsStr>>(spec: &CommandSpec<'_>, args: &[S]) -> Result<Spawned, GitError> {
+/// Starts the child, attaches its registry ticket, and takes its pipes for the readers.
+fn spawn<S: AsRef<OsStr>>(
+    spec: &CommandSpec<'_>,
+    args: &[S],
+    ticket: Option<Ticket>,
+) -> Result<Spawned, GitError> {
     let mut command = base_command(spec);
     command
         .args(args.iter())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .map_err(|error| command_io(spec.git, error))?;
-    let Some(stdout) = child.stdout.take() else {
-        stop(&mut child);
+    let mut tree = GitTree::spawn(&mut command).map_err(|error| command_io(spec.git, error))?;
+    tree.attach(ticket);
+    let (stdout, stderr) = tree.take_pipes();
+    let Some(stdout) = stdout else {
+        let _ = tree.stop();
         return Err(protocol());
     };
-    let Some(stderr) = child.stderr.take() else {
-        stop(&mut child);
+    let Some(stderr) = stderr else {
+        let _ = tree.stop();
+        drop(stdout);
         return Err(protocol());
     };
     let stdout = match read_thread(stdout) {
         Ok(thread) => thread,
         Err(error) => {
-            stop(&mut child);
+            let _ = tree.stop();
             return Err(error);
         }
     };
     let stderr = match read_thread(stderr) {
         Ok(thread) => thread,
         Err(error) => {
-            stop(&mut child);
+            let _ = tree.stop();
             drop(stdout);
             return Err(error);
         }
     };
     Ok(Spawned {
-        child,
+        tree,
         stdout,
         stderr,
     })
 }
 
+/// Polls the tree, returning `Paused` when its stop flag is set and `Timeout` at the deadline.
 fn wait(
-    child: &mut Child,
-    git: &Path,
+    tree: &mut GitTree,
+    spec: &CommandSpec<'_>,
     started: Instant,
-    timeout: Duration,
+    stop: Option<&Cancel>,
 ) -> Result<ExitStatus, GitError> {
     loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return Ok(status),
+        if stop.is_some_and(Cancel::is_cancelled) {
+            return Err(GitError::Paused);
+        }
+        match tree.try_wait() {
+            Ok(Some(status)) => {
+                #[cfg(test)]
+                after_reap(stop);
+                if stop.is_some_and(Cancel::is_cancelled) {
+                    return Err(GitError::Paused);
+                }
+                return Ok(status);
+            }
             Ok(None) => {}
             Err(error) => {
                 return Err(GitError::Io {
-                    path: git.to_path_buf(),
+                    path: spec.git.to_path_buf(),
                     kind: error.kind(),
                 });
             }
         }
-        if started.elapsed() >= timeout {
+        if started.elapsed() >= spec.timeout {
             return Err(GitError::Timeout);
         }
         thread::sleep(Duration::from_millis(5));
@@ -266,11 +317,6 @@ where
             kind: error.kind(),
         })?;
     Ok(Reader { receiver, handle })
-}
-
-fn stop(child: &mut Child) {
-    let _ = child.kill();
-    let _ = child.wait();
 }
 
 pub(super) fn command_io(git: &Path, error: io::Error) -> GitError {

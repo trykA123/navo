@@ -109,6 +109,10 @@ impl ProviderOps for SlowFs {
         self.inner.remove_owned_file(location, identity)
     }
 
+    fn pause_git(&self, location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
+        self.inner.pause_git(location)
+    }
+
     fn available_space(&self, location: &Location) -> Result<Option<u64>, FsError> {
         self.sleep();
         self.inner.available_space(location)

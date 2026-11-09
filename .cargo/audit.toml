@@ -1,0 +1,11 @@
+# cargo-audit config for the gate; mirrors the reviewed vulnerability ignores in deny.toml.
+# zip 8.6.0 comes only through velopack 1.2.161, and Navo never calls ZipArchive::extract.
+# Remove these when velopack moves to zip 9.
+
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+    "RUSTSEC-2026-0429",
+]

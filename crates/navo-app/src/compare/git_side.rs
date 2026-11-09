@@ -114,3 +114,26 @@ impl SideSource for GitSide {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use navo_compare::model::ReadHint;
+    use navo_git::GitError;
+
+    use super::*;
+
+    #[test]
+    fn a_paused_read_shows_locked_not_a_read_error() {
+        let side = GitSide {
+            git: GitFs::with_factory(|_| Err(GitError::Paused)),
+            repo: PathBuf::from("repo"),
+            rev: "HEAD".to_owned(),
+            provider: provider_id(),
+        };
+        let error = side
+            .open(&RelPath::root(), ReadHint::Buffered)
+            .err()
+            .expect("a paused read must fail");
+        assert_eq!(error, Reason::Locked);
+    }
+}

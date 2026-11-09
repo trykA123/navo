@@ -1,5 +1,6 @@
 mod aside;
 mod copy;
+mod git_pause;
 mod hold;
 mod link;
 mod marks;

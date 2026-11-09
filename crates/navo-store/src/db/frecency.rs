@@ -144,10 +144,10 @@ mod batch_tests {
 
     #[test]
     fn ten_visits_commit_in_one_transaction() {
-        let db = Db::open_in_memory().unwrap();
+        let mut db = Db::open_in_memory().unwrap();
         let commits = Arc::new(AtomicUsize::new(0));
         let counted = commits.clone();
-        db.connection()
+        db.connection_mut()
             .commit_hook(Some(move || {
                 counted.fetch_add(1, Ordering::Relaxed);
                 false

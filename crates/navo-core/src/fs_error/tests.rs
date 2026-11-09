@@ -215,6 +215,18 @@ fn assert_holder_message(names: &[&str], programs: &str) {
 }
 
 #[test]
+fn lock_message_with_a_zero_pid_names_only_the_program() {
+    let failure = FsError {
+        holders: vec![LockHolder {
+            name: "git.exe".to_owned(),
+            pid: 0,
+        }],
+        ..error(Locked, Some("report.docx"))
+    };
+    assert_eq!(failure.message(), "“report.docx” is in use by git.exe.");
+}
+
+#[test]
 fn lock_message_names_one_holder() {
     assert_holder_message(&["Microsoft Word"], "Microsoft Word");
 }

@@ -144,6 +144,12 @@ impl Db {
         &self.conn
     }
 
+    /// Returns the connection mutably, for tests that install SQLite hooks (rusqlite 0.41).
+    #[cfg(test)]
+    pub(crate) fn connection_mut(&mut self) -> &mut Connection {
+        &mut self.conn
+    }
+
     pub fn hold_access_guard(&mut self, guard: Arc<dyn Send + Sync>) {
         self._access_guard = Some(guard);
     }

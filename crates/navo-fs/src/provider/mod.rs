@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 use navo_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 pub use cancel::CancelToken;
-pub use ops::{FileIdentity, FileIdentityKind, ProviderOps, UnixAccess};
+pub use ops::{FileIdentity, FileIdentityKind, GitPauseGuard, ProviderOps, UnixAccess};
 pub use owned::{CopyControl, OwnedCopy, StreamWrite};
 pub(crate) use verified::Seen;
 pub use verified::{MoveProof, RenameSkip, VerifiedRename};

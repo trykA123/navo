@@ -89,7 +89,7 @@ Final. Workers never reopen them; a worker that finds one wrong stops and report
   - `rename_atomic` (`:64`), `rename` (`:200`) and `rename_verified` (`:206`), on the source;
   - `remove_empty_folder` (`:249`) and `recycle` (`:253`).
 
-  `GIT_STOP_WAIT` is 3 s (owner, Q1). `GitBusy` maps to `FsErrorKind::Locked` with `holders: lock_holders(location)`, so the existing Locked message and Retry apply. File-only methods are not hooked: a file is never a repository and holds none. The hook runs on every platform.
+  `GIT_STOP_WAIT` is 3 s (owner, Q1). `GitBusy` maps to `FsErrorKind::Locked` with `holders: lock_holders(location)` plus a named `git.exe` holder when the Restart Manager lists none, so the existing Locked message and Retry apply. File-only methods are not hooked: a file is never a repository. Files inside `.git` can still be held by a running status, so a delete takes one job-wide pause over its chosen roots. The hook runs on every platform.
 - GF7 — **The scanner rescans.**
   - `GitError::Paused` becomes `ScanError::Paused`.
   - On Paused, `finish` still calls `shared.forced_done` (when the listing is current) and `plan.finish`. It skips `project`, `expire_at`, publishing and caching, and sets `Timer::Retry` 500 ms later. When due, the timer calls `rescan_repo`.
@@ -252,7 +252,7 @@ Order: A1 first. Then A2 → A3a → A3b, in parallel with A4, A5p and A6a → A
   - In `ops.rs`, add `const GIT_STOP_WAIT: Duration = Duration::from_secs(3);` and `fn git_paused(location: &Location) -> Result<GitPause, FsError>`.
   - `git_paused` calls `navo_git::cli::stop_under(&os_path(location)?, GIT_STOP_WAIT)`. It maps `GitBusy` to `FsError { kind: FsErrorKind::Locked, location: Some(location.clone()), os_code: None, holders: lock_holders(location) }`.
   - The first line of the five methods in GF6 is `let _git = git_paused(source_or_location)?;`.
-- **Test (`git_pause_windows.rs`, `#[cfg(windows)]`, in the style of `process_windows_tests.rs`):**
+- **Test (`git_pause.rs`, `#[cfg(windows)]`, in the style of `process_windows_tests.rs`):**
   1. Initialise `<tmp>/repo` with `git.exe`. Set `alias.navo-wait` to `!echo started > ../started.txt; sleep 10`.
   2. Run `CliGit::run_cancellable(&["navo-wait"], ...)` on a thread. Wait for `<tmp>/started.txt`.
   3. Control: assert that `std::fs::rename(repo, moved)` fails. The child runs with `-C <repo>`, so its current-folder handle is the same handle `status` holds after its own `chdir` into the root. The control therefore reproduces the status race.
@@ -263,6 +263,8 @@ Order: A1 first. Then A2 → A3a → A3b, in parallel with A4, A5p and A6a → A
   A Unix twin without step 3 runs on the local gate.
 - **Check:** `-p navo-fs`, then `windows-quick.yml` on the branch. Both test names show as passed in the junit artifact.
 - **Stop if:** any of the five methods is reached from the GPUI thread (search the callers of `rename` and `recycle` in `navo-ui`); or step 3 succeeds on the VM, which would mean the test does not reproduce the bug.
+
+**A5 fixes (after review).** A delete, or a cross-volume move with removals, takes one pause over its chosen top-level source roots before the step loop and holds every guard until the loop ends. A Locked pause names `git.exe` with `pid: 0` when the system lists no holder. Retention capture and restore take the pause before their catalog transaction and use the raw native rename inside it; rotation does the same. A nested pause returns at once.
 
 ### A5p — Git-location reads report Locked
 

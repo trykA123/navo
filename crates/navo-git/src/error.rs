@@ -97,6 +97,8 @@ pub enum GitError {
     },
     Timeout,
     Cancelled,
+    /// A file operation paused Git in this folder, so the child was refused or stopped.
+    Paused,
     UnrepresentablePath,
     Protocol {
         detail: String,
@@ -185,6 +187,7 @@ fn plain_text(error: &GitError) -> &'static str {
         GitError::PullUnfinished => "pull ended without reaching the upstream",
         GitError::Timeout => "git did not answer before the deadline",
         GitError::Cancelled => "the git call was cancelled",
+        GitError::Paused => "a file operation paused Git in this folder",
         GitError::UnrepresentablePath => "path is not representable",
         GitError::SessionBusy => "the git cat-file session is busy",
         GitError::SessionClosed => "the git cat-file session closed",

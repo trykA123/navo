@@ -75,7 +75,19 @@ impl FakeFs {
     }
 }
 
+impl FakeFs {
+    /// The pause count seen by each `rename_atomic` call.
+    pub fn pauses_before_rename(&self) -> Vec<usize> {
+        lock(&self.pauses).1.clone()
+    }
+}
+
 impl ProviderOps for FakeFs {
+    fn pause_git(&self, _location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
+        lock(&self.pauses).0 += 1;
+        Ok(None)
+    }
+
     fn available_space(&self, location: &Location) -> Result<Option<u64>, FsError> {
         let path = self.own_path(location)?;
         fail_now(self.record_call(&path, FakeOp::Space).as_ref(), location)?;
@@ -88,6 +100,8 @@ impl ProviderOps for FakeFs {
     }
 
     fn rename_atomic(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        let count = lock(&self.pauses).0;
+        lock(&self.pauses).1.push(count);
         self.rename(source, target)
     }
 

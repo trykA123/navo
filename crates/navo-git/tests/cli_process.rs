@@ -11,7 +11,7 @@ mod cli_process {
 
     #[cfg(unix)]
     use navo_git::CliOptions;
-    use navo_git::{Cancel, CliGit, ProcessOptions, ProcessOutcome};
+    use navo_git::{Cancel, CliGit, GitError, ProcessOptions, ProcessOutcome};
 
     use super::fixture::Fixture;
 
@@ -156,6 +156,53 @@ mod cli_process {
         assert!(!running(&wait_file(&fixture, "child.pid")));
     }
 
+    /// A pause held before the call refuses it without spawning.
+    #[test]
+    fn a_live_pause_refuses_run_cancellable() {
+        let fixture = fixture();
+        let cli = cli(&fixture, "echo started > parent.pid");
+        let pause = navo_git::cli::stop_under(fixture.repo(), Duration::from_millis(100)).unwrap();
+        let started = Instant::now();
+        let result = cli.run_cancellable(&["gs2-helper"], &Cancel::default(), &options(65536));
+        assert!(
+            started.elapsed() < Duration::from_millis(50),
+            "the refusal took {:?}",
+            started.elapsed()
+        );
+        assert!(matches!(result, Err(GitError::Paused)));
+        assert!(!fixture.repo().join("parent.pid").exists());
+        drop(pause);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_under_pauses_a_running_cancellable_call() {
+        let fixture = fixture();
+        let cli = cli(
+            &fixture,
+            "printf payload\necho $$ > parent.pid\nsleep 20 &\necho $! > child.pid\nwait",
+        );
+        let cancel = Cancel::default();
+        thread::scope(|scope| {
+            let handle =
+                scope.spawn(|| cli.run_cancellable(&["gs2-helper"], &cancel, &options(65536)));
+            let parent = wait_file(&fixture, "parent.pid");
+            let child = wait_file(&fixture, "child.pid");
+            let started = Instant::now();
+            let pause = navo_git::cli::stop_under(fixture.repo(), Duration::from_secs(2)).unwrap();
+            assert!(
+                started.elapsed() < Duration::from_millis(300),
+                "the stop took {:?}",
+                started.elapsed()
+            );
+            let result = handle.join().unwrap();
+            drop(pause);
+            assert!(matches!(result, Err(GitError::Paused)));
+            assert_reaped(&parent);
+            assert!(!running(&child));
+        });
+    }
+
     #[cfg(unix)]
     #[test]
     fn stdout_cap_preserves_exact_boundary_and_kills_writer() {
@@ -239,6 +286,54 @@ mod cli_process {
             );
             assert!(!native_running(&pid));
         });
+    }
+
+    /// A registry stop pauses a cancellable run and kills its MSYS child.
+    #[cfg(windows)]
+    #[test]
+    fn stop_under_pauses_a_running_cancellable_call_on_windows() {
+        let fixture = fixture();
+        let cli = cli(
+            &fixture,
+            "sleep 60 &\ncat /proc/$!/winpid > child.pid\nwait",
+        );
+        let cancel = Cancel::default();
+        thread::scope(|scope| {
+            let handle =
+                scope.spawn(|| cli.run_cancellable(&["gs2-helper"], &cancel, &options(65536)));
+            let child = wait_file(&fixture, "child.pid");
+            let started = Instant::now();
+            let pause = navo_git::cli::stop_under(fixture.repo(), Duration::from_secs(2)).unwrap();
+            assert!(
+                started.elapsed() < Duration::from_millis(300),
+                "the stop took {:?}",
+                started.elapsed()
+            );
+            let result = handle.join().unwrap();
+            drop(pause);
+            assert!(matches!(result, Err(GitError::Paused)));
+            assert!(!native_running(&child));
+        });
+    }
+
+    /// A normal exit still terminates descendants left in the Windows job object.
+    #[cfg(windows)]
+    #[test]
+    fn a_normal_exit_still_terminates_the_job() {
+        let fixture = fixture();
+        let cli = cli(
+            &fixture,
+            "sleep 60 >/dev/null 2>&1 &\ncat /proc/$!/winpid > child.pid\nexit 0",
+        );
+        let output = cli
+            .run_cancellable(&["gs2-helper"], &Cancel::default(), &patient())
+            .unwrap();
+        assert_eq!(output.outcome, ProcessOutcome::Done);
+        let child = wait_file(&fixture, "child.pid");
+        assert!(
+            !native_running(&child),
+            "a finished run must still kill its job"
+        );
     }
 
     /// A deadline far past the test, so only the cancel can end the run.

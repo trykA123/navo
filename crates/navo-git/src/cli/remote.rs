@@ -7,6 +7,7 @@ use crate::trust::{Guard, NO_AUTO_MAINTENANCE};
 use super::parse::protocol;
 use super::process::CommandSpec;
 use super::process_cap::run_cancellable;
+use super::running::{self, Work};
 use super::{Cancel, CliGit, ProcessOptions};
 
 /// The deadline of a background fetch (D100g).
@@ -35,6 +36,7 @@ impl CliGit {
         cancel: &Cancel,
         timeout: Duration,
     ) -> Result<(), GitError> {
+        let _session = running::register(&self.repo, Work::Write)?;
         if guard.is_blocked() {
             return Err(GitError::NotTrusted {
                 path: self.repo.clone(),

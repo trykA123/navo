@@ -3,7 +3,10 @@
 use std::fs;
 use std::io::Read;
 use std::process::Command;
+use std::time::{Duration, Instant};
 
+use super::super::process_tree::GitTree;
+use super::super::running::{self, Work};
 use crate::{CliGit, GitError, GitSource, ObjectId};
 
 #[test]
@@ -106,4 +109,42 @@ fn commit_all(repo: &std::path::Path) {
         .chain(["commit", "-q", "-m", "one"])
         .collect();
     run_git(repo, &args);
+}
+
+#[test]
+fn a_finished_tree_has_no_active_process_before_stop_under_succeeds() {
+    let listing = tempfile::tempdir().unwrap();
+    let repo = listing.path().join("repo");
+    fs::create_dir(&repo).unwrap();
+    let mut command = Command::new("cmd.exe");
+    command.args([
+        "/C",
+        "start",
+        "/B",
+        "ping",
+        "-n",
+        "10",
+        "127.0.0.1",
+        ">",
+        "nul",
+    ]);
+    let mut tree = GitTree::spawn(&mut command).unwrap();
+    tree.attach(Some(running::register(&repo, Work::Read).unwrap()));
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let status = loop {
+        if let Some(status) = tree.try_wait().unwrap() {
+            break status;
+        }
+        assert!(Instant::now() < deadline, "the wrapper did not exit");
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert!(status.success());
+    assert_eq!(
+        tree.active_processes().unwrap(),
+        0,
+        "the sleeping descendant must be gone before the ticket drops"
+    );
+    assert!(running::stop_under(&repo, Duration::ZERO).is_ok());
+    tree.stop().unwrap();
 }

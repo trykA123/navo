@@ -126,7 +126,7 @@ fn an_interrupted_conversion_leaves_a_consistent_database_for_the_next_start() {
         journal.finish(JobId(at + 1), JobState::Done).unwrap();
     }
     let calls = std::sync::atomic::AtomicU32::new(0);
-    conn(&journal)
+    conn_mut(&mut journal)
         .progress_handler(
             10,
             Some(move || calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed) > 200),

@@ -43,7 +43,7 @@ impl RepoWatch for FakeWatch {
 
 /// A probe on a settled fixed drive: settable fingerprint, a live watch, and a clock the
 /// test can move.
-pub(super) struct SkipProbe {
+pub(crate) struct SkipProbe {
     repos: HashSet<PathBuf>,
     class: DriveClass,
     print: Mutex<Option<Fingerprint>>,
@@ -54,7 +54,7 @@ pub(super) struct SkipProbe {
 }
 
 impl SkipProbe {
-    pub(super) fn new(class: DriveClass, repos: &[&str]) -> Self {
+    pub(crate) fn new(class: DriveClass, repos: &[&str]) -> Self {
         Self {
             repos: repos.iter().map(PathBuf::from).collect(),
             class,
@@ -66,11 +66,11 @@ impl SkipProbe {
         }
     }
 
-    pub(super) fn set_print(&self, print: Option<Fingerprint>) {
+    pub(crate) fn set_print(&self, print: Option<Fingerprint>) {
         *self.print.lock().unwrap() = print;
     }
 
-    pub(super) fn advance(&self, by: Duration) {
+    pub(crate) fn advance(&self, by: Duration) {
         *self.offset.lock().unwrap() += by;
     }
 
@@ -151,7 +151,7 @@ fn write_stamp(root: &Path, relative: &str, text: &str, at: SystemTime) {
 }
 
 /// Two fingerprints of one settled `.git` layout, before and after an index write.
-pub(super) fn prints() -> (Fingerprint, Fingerprint) {
+pub(crate) fn prints() -> (Fingerprint, Fingerprint) {
     let dir = tempfile::tempdir().unwrap();
     let old = SystemTime::now() - Duration::from_secs(60);
     let now = SystemTime::now();
@@ -166,11 +166,11 @@ pub(super) fn prints() -> (Fingerprint, Fingerprint) {
     (first, second)
 }
 
-pub(super) fn repo() -> PathBuf {
+pub(crate) fn repo() -> PathBuf {
     PathBuf::from("fixture/repo")
 }
 
-pub(super) fn harness(probe: Arc<SkipProbe>, network: bool) -> Harness {
+pub(crate) fn harness(probe: Arc<SkipProbe>, network: bool) -> Harness {
     let settings = GitSettings {
         network,
         ..GitSettings::default()
@@ -180,7 +180,7 @@ pub(super) fn harness(probe: Arc<SkipProbe>, network: bool) -> Harness {
     })
 }
 
-pub(super) fn scanned(h: &Harness, folder: &str, name: &str) {
+pub(crate) fn scanned(h: &Harness, folder: &str, name: &str) {
     h.observe(folder, 1, &[name]);
     assert_eq!(
         h.next().0,
@@ -199,7 +199,7 @@ pub(super) fn upstream_status(name: &str) -> RepoStatus {
     status
 }
 
-pub(super) fn fresh(h: &Harness, folder: &str, name: &str) -> Arc<FolderBadges> {
+pub(crate) fn fresh(h: &Harness, folder: &str, name: &str) -> Arc<FolderBadges> {
     h.wait(folder, |badges| {
         badges.by_name.get(name).is_some_and(|badge| !badge.stale)
     })

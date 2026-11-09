@@ -2,6 +2,18 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.4.1 — 2026-11-09
+
+### Fixed
+
+- Renaming, deleting or moving a folder that holds a Git repository works while Git badges are being checked. Before, Windows could say the folder was in use. The same holds for any folder above or inside a repository.
+- While the rename or delete runs, the repository's badges keep their last state, then refresh about half a second later.
+- A background fetch, or a Pull or Push you started, is never stopped. Navo waits up to 3 seconds for it to end; if it still runs, the operation says the folder is locked by `git.exe`, and Retry works once Git ends.
+
+### Security
+
+- The built-in SQLite is updated to 3.54.1, which fixes RUSTSEC-2026-0459: a crafted database file could return stale memory to queries.
+
 ## v0.4.0 — 2026-11-09
 
 ### Fixed

@@ -8,6 +8,7 @@ use crate::trust::{Guard, NO_AUTO_MAINTENANCE, maintenance_off};
 
 use super::CliGit;
 use super::process_watch::Cancel;
+use super::running::{self, Work};
 use super::sync_check::{Ran, RemoteBinding, require_default_fetch};
 use super::sync_read::{Tracking, fetched_oid, needs_credentials, pushed_flag};
 
@@ -135,6 +136,7 @@ impl CliGit {
         cancel: &Cancel,
         timeout: Duration,
     ) -> Result<SyncSummary, GitError> {
+        let _session = running::register(&self.repo, Work::Write)?;
         let started = Instant::now();
         self.confirmed(target)?;
         let tracking = &target.tracking;
@@ -230,6 +232,7 @@ impl CliGit {
         cancel: &Cancel,
         timeout: Duration,
     ) -> Result<SyncSummary, GitError> {
+        let _session = running::register(&self.repo, Work::Write)?;
         self.confirmed(target)?;
         let tracking = &target.tracking;
         let Some(head) = target.head.as_deref() else {

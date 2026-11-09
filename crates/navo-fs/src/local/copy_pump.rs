@@ -33,6 +33,7 @@ impl PumpError {
                 .and_then(|e| e.downcast_ref::<navo_git::GitError>())
             {
                 Some(navo_git::GitError::Timeout) => error(FsErrorKind::Timeout, source),
+                Some(navo_git::GitError::Paused) => error(FsErrorKind::Locked, source),
                 Some(navo_git::GitError::Command { .. }) => {
                     error(FsErrorKind::SourceFilterFailed, source)
                 }
@@ -88,4 +89,22 @@ fn pump_into<R: Read + ?Sized>(
 #[cfg(test)]
 pub(super) fn allocations() -> usize {
     ALLOCATIONS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+mod tests {
+    use navo_core::{FsErrorKind, Location, ProviderPath};
+    use navo_git::GitError;
+
+    use super::PumpError;
+
+    #[test]
+    fn a_paused_read_is_locked_at_the_source() {
+        let source = Location::local(ProviderPath::from_text("/source")).unwrap();
+        let target = Location::local(ProviderPath::from_text("/target")).unwrap();
+        let error =
+            PumpError::Read(std::io::Error::other(GitError::Paused)).located(&source, &target);
+        assert_eq!(error.kind, FsErrorKind::Locked);
+        assert_eq!(error.location.as_ref(), Some(&source));
+    }
 }

@@ -14,7 +14,7 @@ mod expiry;
 #[path = "skip_leave.rs"]
 mod leave;
 #[path = "skip_probe.rs"]
-mod skip_probe;
+pub(crate) mod skip_probe;
 #[path = "skip_upstream.rs"]
 mod upstream;
 

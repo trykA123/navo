@@ -24,6 +24,11 @@ fn conn(journal: &JobJournal) -> &Connection {
     journal.db.connection()
 }
 
+/// The journal's connection, mutable for tests that install SQLite hooks.
+fn conn_mut(journal: &mut JobJournal) -> &mut Connection {
+    journal.db.connection_mut()
+}
+
 fn job_state(journal: &JobJournal, job: JobId) -> String {
     conn(journal)
         .query_row("SELECT state FROM job WHERE id = ?1", [job.0], |row| {

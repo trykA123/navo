@@ -16,6 +16,8 @@ use super::*;
 mod lifecycle;
 #[path = "scan_tests/limits.rs"]
 mod limits;
+#[path = "scan_tests/paused.rs"]
+mod paused;
 #[path = "scan_tests/results.rs"]
 mod results;
 #[path = "scan_tests/saved_restart.rs"]

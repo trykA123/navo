@@ -47,6 +47,12 @@ fn failed_read(
         Some(Ok(output)) if !output.status.success() => output,
         Some(Err(error)) => return Err(error),
         _ => {
+            if let Some(inner) = error
+                .get_ref()
+                .and_then(|inner| inner.downcast_ref::<GitError>())
+            {
+                return Err(inner.clone());
+            }
             return Err(GitError::Io {
                 path: cli.git.clone(),
                 kind: error.kind(),

@@ -15,6 +15,7 @@ impl JobLog for Log {
     }
 }
 
+#[expect(clippy::too_many_lines, reason = "one pause and resume scenario")]
 #[test]
 fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers() {
     let fs = FakeFs::new();
@@ -62,6 +63,7 @@ fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers
         },
         &mut ctx,
         pool,
+        Vec::new(),
     );
     runner.progress.paused = true;
     runner.note_pause();

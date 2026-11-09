@@ -142,6 +142,7 @@ fn scan_error(error: &GitError) -> ScanError {
         GitError::GitNotFound | GitError::GitTooOld { .. } => ScanError::NoGit,
         GitError::Timeout => ScanError::TimedOut,
         GitError::Cancelled => ScanError::Cancelled,
+        GitError::Paused => ScanError::Paused,
         other => refusal(other).map_or(ScanError::Failed, ScanError::Refused),
     }
 }

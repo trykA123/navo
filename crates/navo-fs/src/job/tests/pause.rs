@@ -1,7 +1,12 @@
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{Scope, ScopedJoinHandle, scope};
 use std::time::Duration;
+
+use navo_core::Totals;
+
+use crate::run_job;
 
 use super::*;
 
@@ -314,4 +319,155 @@ fn cancel_while_paused_after_the_last_chunk_never_places_the_file() {
         (tree_of(&fs, "dst"), leftovers(&fs)),
         (Snapshot::new(), Vec::new())
     );
+}
+
+struct RetakeFail<'a> {
+    fs: &'a FakeFs,
+    cancel: &'a CancelToken,
+    pauses: AtomicUsize,
+}
+
+impl Provider for RetakeFail<'_> {
+    fn id(&self) -> navo_core::ProviderId {
+        self.fs.id()
+    }
+
+    fn capabilities(&self) -> crate::Capabilities {
+        self.fs.capabilities()
+    }
+
+    fn list(
+        &self,
+        folder: &Location,
+        sink: &mut dyn crate::ListSink,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        self.fs.list(folder, sink, cancel)
+    }
+
+    fn metadata(&self, location: &Location) -> Result<crate::FsEntry, FsError> {
+        self.fs.metadata(location)
+    }
+}
+
+impl ProviderOps for RetakeFail<'_> {
+    fn pause_git(&self, location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
+        if self
+            .pauses
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            == 0
+        {
+            self.fs.pause_git(location)
+        } else {
+            Err(FsError {
+                location: Some(location.clone()),
+                ..FsError::new(FsErrorKind::Locked)
+            })
+        }
+    }
+
+    fn create_folder(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.create_folder(location)
+    }
+
+    fn create_file(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.create_file(location)
+    }
+
+    fn copy_file(
+        &self,
+        source: &Location,
+        target: &Location,
+        progress: &mut dyn FnMut(u64),
+        cancel: &CancelToken,
+    ) -> Result<u64, FsError> {
+        self.fs.copy_file(source, target, progress, cancel)
+    }
+
+    fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.fs.rename(source, target)
+    }
+
+    fn replace(&self, source: &Location, target: &Location) -> Result<(), FsError> {
+        self.fs.replace(source, target)
+    }
+
+    fn remove_file(&self, location: &Location) -> Result<(), FsError> {
+        let result = self.fs.remove_file(location);
+        self.cancel.pause();
+        result
+    }
+
+    fn remove_link(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.remove_link(location)
+    }
+
+    fn remove_empty_folder(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.remove_empty_folder(location)
+    }
+
+    fn recycle(&self, location: &Location) -> Result<(), FsError> {
+        self.fs.recycle(location)
+    }
+}
+
+#[expect(clippy::too_many_lines, reason = "one pause and retake scenario")]
+#[test]
+fn a_failed_retake_reports_the_next_pending_seq() {
+    let fs = FakeFs::new();
+    fs.add_file("dir/a", 1);
+    fs.add_file("dir/b", 1);
+    let plan = OperationPlan {
+        kind: OpKind::Delete,
+        steps: vec![
+            Step::RemoveFile {
+                location: fs.location("dir/a"),
+            },
+            Step::RemoveFile {
+                location: fs.location("dir/b"),
+            },
+            Step::RemoveFolder {
+                location: fs.location("dir"),
+            },
+        ],
+        totals: Totals {
+            files: 2,
+            folders: 0,
+            bytes: 2,
+        },
+        conflicts: Vec::new(),
+        risks: Vec::new(),
+    };
+    let cancel = CancelToken::new();
+    let ops = RetakeFail {
+        fs: &fs,
+        cancel: &cancel,
+        pauses: AtomicUsize::new(0),
+    };
+    let (sender, paused) = channel();
+    let token = cancel.clone();
+    let outcome = std::thread::scope(|scope| {
+        let job = scope.spawn(move || {
+            let mut log = Log::default();
+            let mut progress = |progress: &Progress| {
+                let _ = progress.paused.then(|| sender.send(()));
+            };
+            let mut ctx = JobContext {
+                ops: &ops,
+                log: &mut log,
+                cancel: &token,
+                progress: &mut progress,
+            };
+            run_job(&plan, &[], &mut ctx)
+        });
+        paused.recv_timeout(WAIT).expect("the job pauses");
+        cancel.resume();
+        job.join().unwrap()
+    });
+    assert!(
+        matches!(outcome, JobOutcome::Failed { seq: 1, .. }),
+        "{outcome:?}"
+    );
+    assert!(fs.metadata(&fs.location("dir/a")).is_err());
+    assert!(fs.metadata(&fs.location("dir/b")).is_ok());
 }

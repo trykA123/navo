@@ -20,7 +20,6 @@ pub(super) fn shared_columns(
         .prepare(&format!("SELECT * FROM {table} LIMIT 0"))
         .map_err(read_error)?
         .column_names()
-        .into_iter()
         .map(str::to_owned)
         .collect::<Vec<_>>();
     let mut statement = target

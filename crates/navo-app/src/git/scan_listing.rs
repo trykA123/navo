@@ -236,7 +236,7 @@ fn reason(error: ScanError) -> BadgeReason {
         ScanError::Refused(Refusal::Filter) => BadgeReason::Filter,
         ScanError::Refused(Refusal::Program) => BadgeReason::Program,
         ScanError::Refused(Refusal::Guard) => BadgeReason::Guard,
-        ScanError::Failed | ScanError::Cancelled => BadgeReason::Failed,
+        ScanError::Failed | ScanError::Cancelled | ScanError::Paused => BadgeReason::Failed,
     }
 }
 

@@ -52,6 +52,7 @@ compare-status-checking = same size and time · checking
 compare-status-not-checked = Not checked ({ $reason })
 compare-status-unavailable = unavailable: { $reason }
 compare-reason-access-denied = access denied
+compare-reason-locked = locked
 compare-reason-not-found = not found
 compare-reason-read-error = read error
 compare-reason-stopped = stopped

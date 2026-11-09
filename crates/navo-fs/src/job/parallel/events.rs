@@ -1,11 +1,16 @@
 use std::sync::mpsc::RecvTimeoutError;
+use std::time::Duration;
 
 use super::*;
 use crate::job::copy::{Copied, place};
 
 impl Runner<'_, '_, '_> {
     pub(super) fn receive(&mut self) {
-        let event = match self.marks.due_in() {
+        let wake = self.marks.due_in().or_else(|| {
+            (self.progress.paused || self.ctx.cancel.is_paused())
+                .then_some(Duration::from_millis(50))
+        });
+        let event = match wake {
             Some(wait) => self.pool.events.recv_timeout(wait),
             None => self
                 .pool

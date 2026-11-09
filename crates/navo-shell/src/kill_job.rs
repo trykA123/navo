@@ -11,8 +11,9 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
 };
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-    SetInformationJobObject, TerminateJobObject,
+    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
+    QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
 };
 use windows_sys::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_SUSPENDED, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME,
@@ -73,6 +74,25 @@ impl KillJob {
     pub fn terminate(&self) -> io::Result<()> {
         // SAFETY: the job handle is live for the call.
         check(unsafe { TerminateJobObject(self.0.as_raw_handle(), 1) })
+    }
+
+    /// How many processes the job still holds.
+    pub fn active_processes(&self) -> io::Result<u32> {
+        let mut info = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+        let bytes = u32::try_from(size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>())
+            .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+        let mut returned = 0;
+        // SAFETY: the job handle is live and `info` is a writable structure of `bytes` bytes.
+        check(unsafe {
+            QueryInformationJobObject(
+                self.0.as_raw_handle(),
+                JobObjectBasicAccountingInformation,
+                (&raw mut info).cast(),
+                bytes,
+                &mut returned,
+            )
+        })?;
+        Ok(info.ActiveProcesses)
     }
 }
 

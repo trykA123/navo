@@ -30,6 +30,16 @@ pub(super) fn run_with(
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
+    let pauses = match super::git_pause::pause_job(plan, ctx) {
+        Ok(pauses) => pauses,
+        Err(error) => {
+            let seq = (0_u32..)
+                .zip(&plan.steps)
+                .find(|(seq, _)| !done.contains(seq))
+                .map_or(0, |(seq, _)| seq);
+            return JobOutcome::Failed { seq, error };
+        }
+    };
     let aside = Aside::new();
     let removals = Removals::of(plan);
     let namespace = namespace_of(ctx);
@@ -40,11 +50,11 @@ pub(super) fn run_with(
         removals: &removals,
         sources,
     };
-    coordinate((job, copier_of(job, ctx)), ctx, done, workers)
+    coordinate((job, copier_of(job, ctx), pauses), ctx, done, workers)
 }
 
 fn coordinate<'p>(
-    (job, copier): (Job<'p>, Copier<'p>),
+    (job, copier, pauses): (Job<'p>, Copier<'p>, Vec<crate::GitPauseGuard>),
     ctx: &mut JobContext<'_>,
     done: &[u32],
     workers: usize,
@@ -64,6 +74,7 @@ fn coordinate<'p>(
         }
         drop(events);
         if started == 0 {
+            drop(pauses);
             return super::run::run_with((plan, job.sources), done, ctx);
         }
         let pool = Pool {
@@ -71,7 +82,7 @@ fn coordinate<'p>(
             events: finished,
             workers: started,
         };
-        let mut runner = Runner::new(job, ctx, pool);
+        let mut runner = Runner::new(job, ctx, pool, pauses);
         runner.walk(done);
         runner.outcome()
     })
@@ -92,6 +103,7 @@ struct Runner<'p, 'c, 'a> {
     progress: Progress,
     kept: Vec<Location>,
     marks: Marks,
+    pauses: Option<Vec<crate::GitPauseGuard>>,
     failed: Option<(u32, FsError)>,
     partial: Option<(u32, FsError)>,
     cancelled: bool,
@@ -127,7 +139,12 @@ fn inside(child: &Location, folder: &Location) -> bool {
 }
 
 impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
-    fn new(job: Job<'p>, ctx: &'c mut JobContext<'a>, pool: Pool<'p>) -> Self {
+    fn new(
+        job: Job<'p>,
+        ctx: &'c mut JobContext<'a>,
+        pool: Pool<'p>,
+        pauses: Vec<crate::GitPauseGuard>,
+    ) -> Self {
         let plan = job.plan;
         let progress = Progress::start(plan);
         Self {
@@ -139,6 +156,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             progress,
             kept: Vec::new(),
             marks: Marks::new(plan.kind),
+            pauses: Some(pauses),
             failed: None,
             partial: None,
             cancelled: false,
@@ -161,6 +179,12 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         while !self.in_flight.is_empty() {
             self.receive();
             self.note_pause();
+            if self.progress.paused {
+                self.flush_marks();
+            }
+            if self.progress.paused && self.pauses.is_some() && self.no_removal_in_flight() {
+                self.pauses = None;
+            }
         }
         self.flush_marks();
     }
@@ -190,20 +214,63 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         let room = room_for(step, self.pool.workers);
         loop {
             self.note_pause();
+            if self.progress.paused {
+                self.flush_marks();
+            }
+            if self.progress.paused && self.pauses.is_some() && self.no_removal_in_flight() {
+                self.pauses = None;
+            }
             let is_busy = self.in_flight.len() > room
                 || self.progress.paused
                 || self.shares_a_name((seq, step))
                 || self.waits_for_others(step);
             if self.stopped() || !is_busy {
+                self.retake_if_needed(seq);
                 return;
             }
-            if self.in_flight.is_empty() {
+            if self.pauses.is_none() {
+                self.resume_after_pause(seq);
+            } else if self.in_flight.is_empty() {
                 self.flush_marks();
-                self.ctx.cancel.wait_while_paused();
+                self.resume_after_pause(seq);
             } else {
                 self.receive();
             }
         }
+    }
+
+    /// Drops the pause while the job sleeps, then takes it again before the next step.
+    fn resume_after_pause(&mut self, seq: u32) {
+        if self.progress.paused {
+            self.pauses = None;
+        }
+        self.ctx.cancel.wait_while_paused();
+        if !self.stopped() {
+            self.retake(seq);
+        }
+    }
+
+    /// Takes the job-wide pause again unless the job has stopped.
+    fn retake_if_needed(&mut self, seq: u32) {
+        if !self.stopped() {
+            self.retake(seq);
+        }
+    }
+
+    /// Takes the job-wide pause again before a mutating step.
+    fn retake(&mut self, seq: u32) {
+        if self.pauses.is_some() {
+            return;
+        }
+        match super::git_pause::pause_job(self.job.plan, self.ctx) {
+            Ok(pauses) => self.pauses = Some(pauses),
+            Err(error) => self.fail(seq, error),
+        }
+    }
+
+    /// Whether every in-flight task is a copy, so no removal or rename is running.
+    fn no_removal_in_flight(&self) -> bool {
+        self.in_flight.values().all(|(step, _)| !is_removal(step))
     }
 
     fn shares_a_name(&self, (seq, step): (u32, &Step)) -> bool {
@@ -265,8 +332,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             let result = if holds_kept(step, &self.kept) {
                 Ok(StepOutcome::Skipped)
             } else {
-                super::rename::prepare(seq, (self.job.plan, step), self.ctx)
-                    .and_then(|()| apply(self.job, (seq, step), self.ctx, &mut self.progress))
+                self.apply_step(seq, step)
             };
             let bytes = counted(self.job.plan.kind, step).0;
             self.settle(seq, step, result.map(|outcome| (outcome, bytes)));
@@ -283,6 +349,13 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             return;
         }
         self.dispatch(seq, step, Task::Copy { seq, step: copy });
+    }
+
+    /// Applies a step that stays on the runner thread; parallel copies own the guard.
+    fn apply_step(&mut self, seq: u32, step: &'p Step) -> Result<StepOutcome, FsError> {
+        let pauses = std::cell::RefCell::new(None);
+        super::rename::prepare(seq, (self.job.plan, step), self.ctx)
+            .and_then(|()| apply(self.job, (seq, step), self.ctx, &mut self.progress, &pauses))
     }
 
     fn dispatch(&mut self, seq: u32, step: &'p Step, task: Task<'p>) {

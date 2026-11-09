@@ -78,11 +78,17 @@ Windows VM checks, host gates, snapshot compatibility checks and release search 
 | Repository folders stay renameable | The long-lived `git cat-file` child runs outside the repository and closes after 2 s idle. | Windows tests in `navo-git` |
 | Update test feed | Tester builds read a local feed; the nine-case VM update suite runs. | `testing/ix8r-report.md` |
 
+## Release scope · v0.4.1
+
+| Change | Completed behavior | Evidence |
+| --- | --- | --- |
+| Git stops before file operations | Rename, delete and move of a folder pause Navo's own Git reads in it and end them first, so Windows no longer reports the folder in use. A fetch, Pull or Push is never stopped: Navo waits up to 3 s, then reports the folder locked by `git.exe`. | [Git-stop plan](../plans/2026-11-09-git-stop-before-fileops.md) |
+
 ## Active work
 
 - **In-app update validation:** built and run in the Windows VM for v0.4.0. The tester-only folder feed exists, and the nine-case update suite passed seven cases; cases 8–9 passed their visible checks. The index service runs as `navo-index.exe`, and the senior review fixes are in. Still open before v1.0: the owner counts the UAC prompts (update cases 8–9, service checks 1–3) and checks Task Manager, the service checks 5–6 are rerun after the review fixes, and `docs/features/updates.md` is written (IX8t). See the [beta plan](../plans/2026-10-27-beta.md).
-- **Installer wizard:** the plan is in revision after its plan check, with three owner decisions open: per-user only, the licence, and no moving of an install. See the [installer plan](../plans/2026-11-09-installer-wizard.md) once it lands.
-- **Git and file operations:** v0.4.0 fixes the long-lived Git child that locked repository folders. Next: rename, delete and move stop the short Git commands running in that folder before they act.
+- **Installer wizard:** part 1 is being built. The per-user setup checks folders, holds the chosen folder, prepares the package and runs Velopack's install or upgrade; next are the Windows checks in the VM and the wizard screens. See the [installer plan](../plans/2026-11-09-installer-wizard.md).
+- **Git and file operations:** done in v0.4.1. Rename, delete and move stop Navo's own Git commands in that folder before they act.
 - **Compare and sync:** engine work has landed for large-file reading, text differences, parallel content checks and Git revisions. The compare screen and sync workflow remain; see the [compare plan](../plans/2026-10-20-p42-compare.md).
 - **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
 - **Beta completion:** finish results-pane appearance and hit lines, background job work and accessibility follow-up, in the priority order below.
