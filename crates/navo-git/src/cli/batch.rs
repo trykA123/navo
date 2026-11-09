@@ -2,7 +2,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{GitError, ObjectId};
 
@@ -28,6 +28,7 @@ pub(super) struct Batch {
     generation: u64,
     dead: bool,
     pending: bool,
+    last_used: Instant,
 }
 
 impl Batch {
@@ -75,6 +76,7 @@ impl Batch {
             generation,
             dead: false,
             pending: false,
+            last_used: Instant::now(),
         })
     }
 
@@ -84,6 +86,7 @@ impl Batch {
         timeout: Duration,
     ) -> Result<StartedBlob, GitError> {
         self.ready()?;
+        self.last_used = Instant::now();
         let watchdog = Watchdog::start(Arc::clone(&self.child), timeout)?;
         if self.write_command(id).is_err() {
             self.dead = true;
@@ -178,6 +181,7 @@ impl Batch {
             });
         }
         self.pending = false;
+        self.last_used = Instant::now();
         watchdog.progress();
         Ok(())
     }
@@ -216,6 +220,11 @@ impl Batch {
 
     pub(super) fn is_dead(&self) -> bool {
         self.dead
+    }
+
+    /// Whether this child has been unused for at least `idle` and has no blob in flight.
+    pub(super) fn is_idle(&self, idle: Duration) -> bool {
+        !self.pending && self.last_used.elapsed() >= idle
     }
 
     pub(super) fn generation(&self) -> u64 {

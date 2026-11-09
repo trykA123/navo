@@ -1,3 +1,5 @@
+//! Builds and runs bounded Git subprocesses for the command-line backend.
+
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{self, Read};
@@ -20,6 +22,8 @@ pub(super) struct Version {
 pub(super) struct CommandSpec<'a> {
     pub git: &'a Path,
     pub repo: Option<&'a Path>,
+    /// An absolute git dir; the child runs from the temp folder instead of `-C <repo>`.
+    pub git_dir: Option<&'a Path>,
     pub env: &'a [(OsString, OsString)],
     pub timeout: Duration,
 }
@@ -28,6 +32,7 @@ pub(super) fn resolve_git(git: &Path, env: &[(OsString, OsString)], timeout: Dur
     let spec = CommandSpec {
         git,
         repo: None,
+        git_dir: None,
         env,
         timeout,
     };
@@ -58,6 +63,7 @@ pub(super) fn version_of(
     let spec = CommandSpec {
         git,
         repo: None,
+        git_dir: None,
         env,
         timeout,
     };
@@ -92,9 +98,15 @@ fn parse_number(part: Option<&str>) -> Option<u32> {
     }
 }
 
+/// Builds the command for `spec`: detached to its git dir, or from the repository with `-C`.
 pub(super) fn base_command(spec: &CommandSpec<'_>) -> Command {
     let mut command = Command::new(spec.git);
-    if let Some(repo) = spec.repo {
+    if let Some(git_dir) = spec.git_dir {
+        command
+            .arg("--git-dir")
+            .arg(git_dir)
+            .current_dir(std::env::temp_dir());
+    } else if let Some(repo) = spec.repo {
         command.arg("-C").arg(repo);
     }
     command
@@ -271,3 +283,12 @@ pub(super) fn command_io(git: &Path, error: io::Error) -> GitError {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "process_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[cfg(windows)]
+#[path = "process_windows_tests.rs"]
+mod windows_tests;

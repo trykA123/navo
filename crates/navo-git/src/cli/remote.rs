@@ -57,6 +57,7 @@ impl CliGit {
         let spec = CommandSpec {
             git: &self.git,
             repo: Some(&self.repo),
+            git_dir: None,
             env: &env,
             timeout,
         };
