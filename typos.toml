@@ -29,6 +29,8 @@ BA_DEF_ = "BA_DEF_"
 BA_DEF_DEF_ = "BA_DEF_DEF_"
 PNGs = "PNGs"
 flate2 = "flate2"
+# Velopack's random backup-folder suffix, quoted in the W1 report.
+lDOUeEBO7UIvpoLK = "lDOUeEBO7UIvpoLK"
 
 [type.md.extend-words]
 Durin = "Durin"

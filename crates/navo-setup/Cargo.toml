@@ -1,0 +1,62 @@
+[package]
+name = "navo-setup"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+tester = []
+
+[dependencies]
+navo-core = { path = "../navo-core" }
+navo-diag = { path = "../navo-diag" }
+navo-l10n = { path = "../navo-l10n" }
+navo-store = { path = "../navo-store" }
+navo-ui = { path = "../navo-ui" }
+navo-update = { path = "../navo-update" }
+roxmltree = "=0.21.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "=0.10.9"
+zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+] }
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Console",
+  "Win32_System_IO",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_System_SystemServices",
+  "Win32_System_Threading",
+  "Win32_System_Time",
+  "Win32_System_WindowsProgramming",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+proptest = "1.12.0"
+tempfile = "3.27.0"
+
+[build-dependencies]
+embed-resource = "3.0.12"
+sha2 = "=0.10.9"
+
+[lints]
+workspace = true

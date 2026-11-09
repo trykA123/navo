@@ -6027,6 +6027,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "navo-setup"
+version = "0.4.0"
+dependencies = [
+ "embed-resource",
+ "navo-core",
+ "navo-diag",
+ "navo-l10n",
+ "navo-store",
+ "navo-ui",
+ "navo-update",
+ "proptest",
+ "roxmltree 0.21.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "windows 0.62.2",
+ "windows-sys 0.61.2",
+ "zip 9.0.3",
+]
+
+[[package]]
 name = "navo-shell"
 version = "0.4.1"
 dependencies = [
