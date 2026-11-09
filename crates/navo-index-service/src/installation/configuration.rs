@@ -5,7 +5,7 @@ use windows_sys::Win32::System::Services::{
     ChangeServiceConfig2W, ChangeServiceConfigW, QUERY_SERVICE_CONFIGW, QueryServiceConfig2W,
     QueryServiceConfigW, SC_ACTION, SERVICE_CONFIG, SERVICE_CONFIG_DELAYED_AUTO_START_INFO,
     SERVICE_CONFIG_DESCRIPTION, SERVICE_CONFIG_FAILURE_ACTIONS,
-    SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW,
+    SERVICE_CONFIG_FAILURE_ACTIONS_FLAG, SERVICE_DESCRIPTIONW, SERVICE_FAILURE_ACTIONSW,
 };
 
 use super::super::scm::{ServiceHandle, checked};
@@ -85,8 +85,29 @@ fn restore_optional(
             )
         });
     }
+    if kind == SERVICE_CONFIG_DESCRIPTION {
+        return restore_description(service, data);
+    }
     // SAFETY: the aligned captured buffer contains the matching queried structure and live embedded pointers.
     checked(unsafe { ChangeServiceConfig2W(service.0, kind, data.as_ptr().cast()) })
+}
+
+/// A NULL description leaves the new one in place; an empty string clears it.
+fn restore_description(service: &ServiceHandle, data: &[usize]) -> io::Result<()> {
+    // SAFETY: this level was initialized by QueryServiceConfig2W; its embedded pointer stays live.
+    let mut description = unsafe { *data.as_ptr().cast::<SERVICE_DESCRIPTIONW>() };
+    let mut empty = [0u16];
+    if description.lpDescription.is_null() {
+        description.lpDescription = empty.as_mut_ptr();
+    }
+    // SAFETY: the pointer refers to the captured buffer or to `empty`, both live for the call.
+    checked(unsafe {
+        ChangeServiceConfig2W(
+            service.0,
+            SERVICE_CONFIG_DESCRIPTION,
+            (&description as *const SERVICE_DESCRIPTIONW).cast(),
+        )
+    })
 }
 
 fn query(mut call: impl FnMut(*mut u8, u32, *mut u32) -> i32) -> io::Result<Vec<usize>> {

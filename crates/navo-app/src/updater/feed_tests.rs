@@ -66,3 +66,14 @@ fn module_holds_no_token() {
     assert!(secrets.iter().all(|word| !source.contains(word)));
     assert!(source.contains("GithubSource::new(REPO, None, true)"));
 }
+
+#[test]
+fn release_feed_never_reads_the_test_override() {
+    // A Windows checkout has CRLF line ends; the matches below expect LF.
+    let source = include_str!("feed.rs").replace("\r\n", "\n");
+    assert!(!source.contains("env::"));
+    assert!(!source.contains("NAVO_UPDATE_FEED_DIR"));
+    assert!(source.contains("#[cfg(feature = \"tester\")]\n        let source ="));
+    let modules = include_str!("mod.rs").replace("\r\n", "\n");
+    assert!(modules.contains("#[cfg(feature = \"tester\")]\npub(crate) mod test_feed;"));
+}

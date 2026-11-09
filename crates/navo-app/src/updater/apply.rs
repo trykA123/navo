@@ -194,7 +194,7 @@ fn others_running(_root: Option<&Path>) -> io::Result<bool> {
 }
 
 /// An image we cannot read blocks the apply when it runs in this session and its name is this
-/// image's name or starts with `navo`; the index service runs in session 0 as `navo.exe`.
+/// image's name or starts with `navo`; the index service runs in session 0 as `navo-index.exe`.
 #[cfg(any(windows, test))]
 fn unreadable_counts(name: &str, own: &str, same_session: bool) -> bool {
     let name = name.to_lowercase();

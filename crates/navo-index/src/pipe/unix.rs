@@ -33,6 +33,10 @@ impl Pipe {
         Err(PipeError::NotAvailable)
     }
 
+    pub(super) fn server_process_id(&self) -> Result<u32, PipeError> {
+        Err(PipeError::NotAvailable)
+    }
+
     pub(super) fn disconnect(&self) -> Result<(), PipeError> {
         Err(PipeError::NotAvailable)
     }

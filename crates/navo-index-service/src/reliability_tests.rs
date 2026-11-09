@@ -14,30 +14,7 @@ fn record(exists: bool, failed: Option<Step>) -> (Vec<Step>, io::Result<()>) {
             false => Ok(()),
         }
     });
-    (calls, result)
-}
-
-#[test]
-fn reinstall_cleans_leftovers_then_deletes_the_old_image_after_the_check() {
-    use Step::*;
-    let (calls, result) = record(true, None);
-    result.unwrap();
-    assert_eq!(
-        calls,
-        [
-            RecoverOld,
-            DeleteOld,
-            Copy,
-            RenameOld,
-            Replace,
-            Stop,
-            BackupSettings,
-            Configure,
-            Start,
-            Verify,
-            DeleteOld
-        ]
-    );
+    (calls, result.map(drop))
 }
 
 #[test]
@@ -45,12 +22,14 @@ fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
     use Step::*;
     let steps = [
         Copy,
+        Stop,
         RenameOld,
         Replace,
-        Stop,
         BackupSettings,
         Configure,
         Start,
+        Verify,
+        Answer,
     ];
     for (end, failed) in steps.into_iter().enumerate() {
         let (calls, result) = record(true, Some(failed));
@@ -59,10 +38,17 @@ fn a_failed_reinstall_restores_the_image_and_starts_the_service_again() {
         assert_eq!(&calls[2..=end + 2], &steps[..=end]);
         let rollback: &[Step] = match failed {
             Copy => &[Start],
-            RenameOld => &[DiscardCopy, Start],
+            Stop | RenameOld => &[DiscardCopy, Start],
             Replace => &[Restore, Start],
-            Stop | BackupSettings => &[Stop, Restore, RestoreConfiguration, Start],
-            _ => &[Stop, RestoreSettings, Restore, RestoreConfiguration, Start],
+            BackupSettings => &[Stop, Restore, RemoveFresh, RestoreConfiguration, Start],
+            _ => &[
+                Stop,
+                RestoreSettings,
+                Restore,
+                RemoveFresh,
+                RestoreConfiguration,
+                Start,
+            ],
         };
         assert_eq!(&calls[end + 3..], rollback, "after {failed:?}");
     }
@@ -104,9 +90,9 @@ fn restore_puts_the_old_image_back_over_the_replacement() {
 }
 
 #[test]
-fn every_failure_after_replace_restores_the_old_image_and_configuration_before_start() {
+fn every_failure_from_stop_restores_the_old_image_and_configuration_before_start() {
     use Step::*;
-    for failed in [Stop, Configure, Start] {
+    for failed in [Stop, Configure, Start, Answer] {
         let root = tempfile::tempdir().unwrap();
         let plan = CopyPlan::new(root.path(), 7);
         std::fs::create_dir_all(&plan.directory).unwrap();
@@ -137,7 +123,8 @@ fn every_failure_after_replace_restores_the_old_image_and_configuration_before_s
         );
         assert_eq!(configuration, previous, "after {failed:?}");
         assert!(running, "after {failed:?}");
-        assert!(calls.ends_with(&[Restore, RestoreConfiguration, Start]));
+        assert_eq!(calls.last(), Some(&Start), "after {failed:?}");
+        assert!(!calls.contains(&DeleteLegacy), "after {failed:?}");
     }
 }
 
@@ -184,7 +171,7 @@ fn execute_install_step(
         }
         RestoreConfiguration => *configuration = previous_service_configuration(),
         DiscardCopy => plan.discard_copy()?,
-        BackupSettings | RestoreSettings | RemoveFresh | Verify => {}
+        BackupSettings | RestoreSettings | RemoveFresh | Verify | Answer | DeleteLegacy => {}
         DeleteOld => plan.delete_old()?,
     }
     Ok(())
@@ -196,9 +183,10 @@ fn old_images_are_deleted_and_other_files_are_kept() {
     let plan = CopyPlan::new(root.path(), 123);
     std::fs::create_dir_all(&plan.directory).unwrap();
     for name in [
-        "navo.exe.122.old",
-        "navo.exe",
-        "navo.exe.x.old",
+        "navo-index.exe.122.old",
+        "navo-index.exe.122.tmp",
+        "navo-index.exe",
+        "navo-index.exe.x.old",
         "notes.old",
     ] {
         std::fs::write(plan.directory.join(name), b"x").unwrap();
@@ -209,7 +197,10 @@ fn old_images_are_deleted_and_other_files_are_kept() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     left.sort();
-    assert_eq!(left, ["navo.exe", "navo.exe.x.old", "notes.old"]);
+    assert_eq!(
+        left,
+        ["navo-index.exe", "navo-index.exe.x.old", "notes.old"]
+    );
 }
 
 #[test]

@@ -172,7 +172,7 @@ fn interrupted_install_restores_the_only_old_image_before_cleanup() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 10);
     std::fs::create_dir_all(&plan.directory).unwrap();
-    let old = plan.directory.join("navo.exe.9.old");
+    let old = plan.directory.join("navo-index.exe.9.old");
     std::fs::write(&old, b"only good image").unwrap();
     plan.recover_old().unwrap();
     plan.delete_old().unwrap();
@@ -211,7 +211,7 @@ fn a_planted_image_moved_aside_does_not_count_as_a_trusted_previous_image() {
     fresh.remove_executable(&plan).unwrap();
     assert!(!plan.executable.exists());
     assert_eq!(
-        std::fs::read(preserved.join("navo.exe")).unwrap(),
+        std::fs::read(preserved.join("navo-index.exe")).unwrap(),
         b"planted"
     );
 }
@@ -221,7 +221,7 @@ fn install_preflight_recovers_the_only_image_before_a_new_copy_fails() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 10);
     std::fs::create_dir_all(&plan.directory).unwrap();
-    std::fs::write(plan.directory.join("navo.exe.9.old"), b"good image").unwrap();
+    std::fs::write(plan.directory.join("navo-index.exe.9.old"), b"good image").unwrap();
     let result = run_install(true, false, |step| match step {
         Step::RecoverOld => plan.recover_old(),
         Step::DeleteOld => plan.delete_old(),
@@ -239,7 +239,7 @@ fn ambiguous_crash_images_are_preserved_without_starting_cleanup() {
     std::fs::create_dir_all(&plan.directory).unwrap();
     for nonce in [8, 9] {
         std::fs::write(
-            plan.directory.join(format!("navo.exe.{nonce}.old")),
+            plan.directory.join(format!("navo-index.exe.{nonce}.old")),
             b"preserved",
         )
         .unwrap();
@@ -263,7 +263,7 @@ fn a_recovered_trusted_image_is_not_removed_as_a_fresh_copy() {
     let root = tempfile::tempdir().unwrap();
     let plan = CopyPlan::new(root.path(), 10);
     std::fs::create_dir_all(&plan.directory).unwrap();
-    std::fs::write(plan.directory.join("navo.exe.9.old"), b"good image").unwrap();
+    std::fs::write(plan.directory.join("navo-index.exe.9.old"), b"good image").unwrap();
     let mut fresh = FreshInstall::observe(&plan, &[]);
     fresh.recover_executable(&plan).unwrap();
     fresh.remove_executable(&plan).unwrap();

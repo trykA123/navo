@@ -2,6 +2,8 @@ use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use super::install_check::is_mismatch;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum UpgradeStep {
     InstallNew,
@@ -74,20 +76,27 @@ pub(super) fn remove_both<P: Copy>(
     first.and(remove(legacy))
 }
 
+/// Polls `answers` until it passes. At the deadline the last mismatch is the error (exit 3);
+/// a pipe that never answered is a timeout.
 pub(super) fn await_answer(
     (limit, poll): (Duration, Duration),
-    mut answers: impl FnMut() -> bool,
+    mut answers: impl FnMut() -> io::Result<()>,
 ) -> io::Result<()> {
     let started = Instant::now();
+    let mut mismatch = None;
     loop {
-        if answers() {
-            return Ok(());
+        match answers() {
+            Ok(()) => return Ok(()),
+            Err(error) if is_mismatch(&error) => mismatch = Some(error),
+            Err(_) => {}
         }
         if started.elapsed() >= limit {
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "the new index service pipe did not answer",
-            ));
+            return Err(mismatch.unwrap_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "the new index service pipe did not answer",
+                )
+            }));
         }
         std::thread::sleep(poll);
     }

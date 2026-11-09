@@ -7,7 +7,7 @@ pub(crate) use crate::service_version_step::is_older;
 #[cfg(windows)]
 pub(crate) use crate::service_version_step::start_version_step;
 #[cfg(any(windows, test))]
-pub(crate) use navo_index_service::{ElevationError, ServiceQuery};
+pub(crate) use navo_index_service::{Elevated, ElevationError, ServiceQuery};
 #[cfg(test)]
 pub(crate) use navo_index_service::{ServiceDrive, selected_roots};
 #[cfg(windows)]

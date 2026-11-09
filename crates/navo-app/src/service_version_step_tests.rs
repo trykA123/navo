@@ -3,13 +3,14 @@ use navo_update::InstallKind;
 
 use super::*;
 
-const OWN: u32 = 4;
+const OWN: u32 = 3;
 
 fn running(version: Option<ServiceVersion>) -> ServiceQuery {
     ServiceQuery {
         running: Some(true),
         version,
         legacy_present: false,
+        legacy_image: false,
     }
 }
 
@@ -79,9 +80,10 @@ fn a_declined_revision_is_not_asked_again_but_a_newer_one_is() {
 }
 
 #[test]
-fn only_a_successful_prompt_without_an_older_answer_counts_as_updated() {
+fn only_a_successful_prompt_with_a_current_answer_counts_as_updated() {
     assert!(is_updated(true, known(OWN).as_ref(), OWN));
-    assert!(is_updated(true, None, OWN));
+    assert!(is_updated(true, known(OWN + 1).as_ref(), OWN));
+    assert!(!is_updated(true, None, OWN));
     assert!(!is_updated(false, known(OWN).as_ref(), OWN));
     assert!(!is_updated(true, Some(&ServiceVersion::Older), OWN));
     assert!(!is_updated(true, known(OWN - 1).as_ref(), OWN));
@@ -96,4 +98,73 @@ fn the_declined_marker_round_trips_and_garbage_reads_as_none() {
     assert_eq!(read_declined(&marker), Some(OWN));
     std::fs::write(&marker, b"not a number").unwrap();
     assert_eq!(read_declined(&marker), None);
+}
+
+#[test]
+fn a_held_change_lock_skips_the_recheck_and_prompt() {
+    prompt_after_lock(
+        Ok(None::<()>),
+        || unreachable!("another Navo owns the change"),
+        || unreachable!("another Navo owns the prompt"),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_service_updated_or_declined_before_the_recheck_never_prompts() {
+    let older = running(known(OWN - 1));
+    assert_eq!(step(InstallKind::Installed, &older, None), Step::Elevate);
+    for (query, declined) in [(running(known(OWN)), None), (older, Some(OWN))] {
+        prompt_after_lock(
+            Ok(Some(())),
+            || Ok(step(InstallKind::Installed, &query, declined)),
+            || unreachable!("the fresh query no longer needs a prompt"),
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn failed_lock_or_recheck_never_prompts() {
+    let denied = || io::Error::from(io::ErrorKind::PermissionDenied);
+    let result = prompt_after_lock::<()>(
+        Err(denied()),
+        || unreachable!("the guard was not acquired"),
+        || unreachable!("the guard was not acquired"),
+    );
+    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+    let result = prompt_after_lock(
+        Ok(Some(())),
+        || Err(denied()),
+        || unreachable!("a failed query cannot prompt"),
+    );
+    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+}
+
+#[test]
+fn the_change_guard_stays_held_through_recheck_and_prompt() {
+    use std::cell::Cell;
+
+    struct Guard<'a>(&'a Cell<bool>);
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            self.0.set(false);
+        }
+    }
+    let held = Cell::new(true);
+    let prompted = Cell::new(false);
+    prompt_after_lock(
+        Ok(Some(Guard(&held))),
+        || {
+            assert!(held.get());
+            Ok(step(InstallKind::Installed, &running(known(OWN - 1)), None))
+        },
+        || {
+            assert!(held.get());
+            prompted.set(true);
+        },
+    )
+    .unwrap();
+    assert!(prompted.get());
+    assert!(!held.get());
 }

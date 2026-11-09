@@ -1,3 +1,5 @@
+//! Settings actions that install, remove or refresh the index service.
+
 use crate::prelude::*;
 use crate::settings::ServiceStatus;
 use crate::window_view::NavoWindow;
@@ -30,6 +32,7 @@ impl NavoWindow {
         self.settings.service_action_pending = action.is_some();
         self.settings.service_generation += 1;
         self.settings.service_status = ServiceStatus::NotAvailable;
+        self.settings.service_notice = None;
         let generation = self.settings.service_generation;
         let status = self.settings.search.service.status.clone();
         cx.spawn(async move |this, cx| {
@@ -52,8 +55,19 @@ impl NavoWindow {
         if self.settings.service_generation != generation {
             return;
         }
-        if outcome == ServiceOutcome::Failed {
-            self.settings.notice = Some(navo_l10n::tr("settings-search-service-failed").into());
+        let key = match outcome {
+            ServiceOutcome::Done => None,
+            ServiceOutcome::Deferred => Some("settings-search-service-deferred"),
+            ServiceOutcome::Failed => Some("settings-search-service-failed"),
+            ServiceOutcome::Locked => Some("settings-search-service-locked"),
+        };
+        if let Some(key) = key {
+            let message: SharedString = navo_l10n::tr(key).into();
+            if outcome == ServiceOutcome::Deferred {
+                self.settings.service_notice = Some(message);
+            } else {
+                self.settings.notice = Some(message);
+            }
         }
         self.settings.service_status = status;
         self.settings.service_action_pending = false;

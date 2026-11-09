@@ -1,3 +1,5 @@
+//! Settings to Search tests for service status, actions and notices.
+
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -18,6 +20,7 @@ struct Calls {
     status_calls: AtomicUsize,
     status: Mutex<ServiceStatus>,
     is_failing: AtomicBool,
+    is_deferred: AtomicBool,
 }
 
 fn hooks(calls: &Arc<Calls>) -> SearchHooks {
@@ -43,6 +46,9 @@ fn hooks(calls: &Arc<Calls>) -> SearchHooks {
             remove: Arc::new(move || {
                 remove.remove.fetch_add(1, Ordering::SeqCst);
                 *remove.status.lock().unwrap() = ServiceStatus::NotInstalled;
+                if remove.is_deferred.load(Ordering::SeqCst) {
+                    return ServiceOutcome::Deferred;
+                }
                 ServiceOutcome::Done
             }),
             ..ServiceHooks::none()
@@ -154,6 +160,25 @@ fn a_failed_update_says_so_and_keeps_the_update_button(cx: &mut TestAppContext) 
     assert_eq!(
         label(cx, &rig, "settings-service-status"),
         Some(ServiceStatus::Outdated.text().to_string())
+    );
+}
+
+#[gpui_kit::test]
+fn a_deferred_removal_shows_the_restart_notice_and_not_installed(cx: &mut TestAppContext) {
+    let (rig, calls) = open_search(cx, ServiceStatus::Running, true);
+    calls.is_deferred.store(true, Ordering::SeqCst);
+    assert!(label(cx, &rig, "settings-error").is_none());
+    rig.click(cx, "settings-service-remove");
+    cx.run_until_parked();
+    assert_eq!(count(&calls.remove), 1);
+    assert!(label(cx, &rig, "settings-error").is_none());
+    assert_eq!(
+        label(cx, &rig, "settings-notice").as_deref(),
+        Some("The index service is removed. Windows deletes its last files at the next restart.")
+    );
+    assert_eq!(
+        label(cx, &rig, "settings-service-status"),
+        Some(ServiceStatus::NotInstalled.text().to_string())
     );
 }
 

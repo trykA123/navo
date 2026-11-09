@@ -23,8 +23,8 @@ use windows_sys::Win32::{
         SECURITY_SQOS_PRESENT, WriteFile,
     },
     System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_REJECT_REMOTE_CLIENTS,
-        WaitNamedPipeW,
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeServerProcessId,
+        PIPE_REJECT_REMOTE_CLIENTS, WaitNamedPipeW,
     },
 };
 
@@ -65,6 +65,16 @@ impl Pipe {
 
     pub(super) fn verify_owner(&self) -> Result<(), PipeError> {
         security::verify_owner(self.raw())
+    }
+
+    /// The id of the process that owns the server end. Valid on a client handle.
+    pub(super) fn server_process_id(&self) -> Result<u32, PipeError> {
+        let mut id = 0;
+        // SAFETY: the handle is a live pipe handle owned by self; id is a valid out pointer.
+        if unsafe { GetNamedPipeServerProcessId(self.raw(), &mut id) } == 0 {
+            return Err(io_error());
+        }
+        Ok(id)
     }
 
     #[cfg(test)]

@@ -1,3 +1,5 @@
+//! Settings sheet data, events, field navigation and body rendering.
+
 mod body;
 mod clipboard_fields;
 mod clipboard_values;
@@ -172,6 +174,7 @@ pub struct SettingsBody {
     values: Values,
     row: usize,
     error: Option<SharedString>,
+    notice: Option<SharedString>,
     editor: Option<AnyElement>,
     shortcuts: Option<AnyElement>,
     filter: Filter,
@@ -361,6 +364,7 @@ impl RenderOnce for SettingsBody {
             .child(
                 column()
                     .children(self.error.map(|message| view::error_line(&t, message)))
+                    .children(self.notice.map(|message| view::notice_line(&t, message)))
                     .children(notice)
                     .child(content)
                     .children(footer),

@@ -24,14 +24,14 @@ use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
 use super::Action;
 use super::elevation_result::from_exit_code;
-use crate::ElevationError;
+use crate::{Elevated, ElevationError};
 
 pub(super) fn is_admin() -> bool {
     // SAFETY: IsUserAnAdmin inspects the calling process token without pointer arguments.
     unsafe { IsUserAnAdmin() != 0 }
 }
 
-pub(super) fn launch(action: Action) -> Result<(), ElevationError> {
+pub(super) fn launch(action: Action) -> Result<Elevated, ElevationError> {
     let mode = match action {
         Action::Install => "install",
         Action::Remove => "remove",
@@ -67,14 +67,16 @@ pub(super) fn launch(action: Action) -> Result<(), ElevationError> {
     wait_for_child(info.hProcess)
 }
 
-fn wait_for_child(raw: *mut c_void) -> Result<(), ElevationError> {
+fn wait_for_child(raw: *mut c_void) -> Result<Elevated, ElevationError> {
     if raw.is_null() {
         return Err(io::Error::other("elevation returned no process handle").into());
     }
     // SAFETY: ShellExecuteExW transferred the process handle with NOCLOSEPROCESS.
     let process = unsafe { OwnedHandle::from_raw_handle(raw) };
+    let wait = u32::try_from(super::elevation_limits::ELEVATION_WAIT.as_millis())
+        .map_err(|_| io::Error::other("elevation wait too long"))?;
     // SAFETY: process remains live for this bounded wait.
-    match unsafe { WaitForSingleObject(process.as_raw_handle(), 180_000) } {
+    match unsafe { WaitForSingleObject(process.as_raw_handle(), wait) } {
         WAIT_OBJECT_0 => {}
         WAIT_TIMEOUT => {
             return Err(io::Error::new(

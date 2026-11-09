@@ -1,3 +1,5 @@
+//! Row, control and status-line rendering for the settings sheet.
+
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{Role, ScrollHandle};
 
@@ -79,6 +81,21 @@ pub(super) fn error_line(t: &Theme, message: SharedString) -> impl IntoElement {
         .mt(t.spacing.md)
         .text_size(t.typography.small)
         .text_color(t.colors.mark)
+        .child(message)
+}
+
+/// A neutral notice line in the sheet: muted text, not the error alert slot.
+pub(super) fn notice_line(t: &Theme, message: SharedString) -> impl IntoElement {
+    div()
+        .id("settings-notice")
+        .role(Role::Status)
+        .aria_label(message.clone())
+        .test_support()
+        .flex_none()
+        .mx(t.spacing.xl)
+        .mt(t.spacing.md)
+        .text_size(t.typography.small)
+        .text_color(t.colors.muted)
         .child(message)
 }
 

@@ -6,6 +6,8 @@ pub(crate) enum Command {
     Open(Start),
     Version,
     #[cfg(feature = "tester")]
+    UpdateStatus,
+    #[cfg(feature = "tester")]
     DiagReport(PathBuf),
     CrashTest(PathBuf),
     PdfHelper,
@@ -34,13 +36,14 @@ pub(crate) struct Start {
 }
 
 #[cfg(feature = "tester")]
-pub(crate) const USAGE: &str = "usage: navo [--version | --diag-report <file.zip> | --bench index [--json] | --index-memory [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>] | bench --folder <folder> [--filter <text>] --out <file.json>]";
+pub(crate) const USAGE: &str = "usage: navo [--version | --update-status | --diag-report <file.zip> | --bench index [--json] | --index-memory [--json] | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [--metrics <file.json>] [--trace <file>] [<path>] | bench --root <folder> [--files <count>] [--keep] [--out <file.json>] | bench --folder <folder> [--filter <text>] --out <file.json>]";
 #[cfg(not(feature = "tester"))]
 pub(crate) const USAGE: &str = "usage: navo [--version | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [<path>]]";
 
 #[cfg(feature = "tester")]
-const STANDALONE: [&str; 7] = [
+const STANDALONE: [&str; 8] = [
     "--version",
+    "--update-status",
     "--diag-report",
     "--pdf-helper",
     "--crash-test",
@@ -74,9 +77,11 @@ impl Command {
             Self::PdfHelper | Self::IndexService(_) => false,
             Self::Version | Self::CrashTest(_) => true,
             #[cfg(feature = "tester")]
-            Self::DiagReport(_) | Self::Bench(_) | Self::BenchIndex { .. } | Self::IndexMemory => {
-                true
-            }
+            Self::UpdateStatus
+            | Self::DiagReport(_)
+            | Self::Bench(_)
+            | Self::BenchIndex { .. }
+            | Self::IndexMemory => true,
         }
     }
 }
@@ -180,6 +185,8 @@ fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Co
     }
     let command = match flag {
         "--version" => Command::Version,
+        #[cfg(feature = "tester")]
+        "--update-status" => Command::UpdateStatus,
         "--pdf-helper" => Command::PdfHelper,
         "--index-service" => Command::IndexService(crate::index_service::Action::parse(
             rest.next()
@@ -233,6 +240,8 @@ mod release_tests {
     fn tester_flags_are_refused_in_a_release_build() {
         assert!(!USAGE.contains("--index-memory"));
         assert!(!STANDALONE.contains(&"--index-memory"));
+        assert!(!USAGE.contains("--update-status"));
+        assert!(!STANDALONE.contains(&"--update-status"));
         for args in [
             &["--metrics", "m.json"][..],
             &["--trace", "t.jsonl"],
@@ -242,6 +251,7 @@ mod release_tests {
             &["--diag-report", "r.zip"],
             &["--index-memory"],
             &["--index-memory", "--json"],
+            &["--update-status"],
         ] {
             assert!(refused(args), "{args:?}");
         }

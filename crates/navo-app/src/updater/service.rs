@@ -31,6 +31,9 @@ impl Updater {
     /// An installed copy starts its runner after `delay`, or at once on Check now.
     pub(crate) fn start(feed: Arc<dyn UpdateFeed>, delay: Duration) -> Arc<Self> {
         let kind = feed.kind();
+        if kind != InstallKind::Installed {
+            tracing::info!(?kind, "update: no automatic checks for this copy");
+        }
         let updater = Arc::new(Self {
             feed: Arc::new(Logged(feed)),
             kind,

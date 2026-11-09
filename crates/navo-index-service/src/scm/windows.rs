@@ -5,6 +5,7 @@
 
 use std::ffi::c_void;
 use std::io;
+use std::os::windows::ffi::OsStringExt;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicPtr, AtomicU32, Ordering};
 use std::{panic, ptr};
@@ -30,6 +31,7 @@ static CANCEL: OnceLock<CancelToken> = OnceLock::new();
 static STATUS: AtomicPtr<c_void> = AtomicPtr::new(ptr::null_mut());
 static STATE: AtomicU32 = AtomicU32::new(SERVICE_START_PENDING);
 static CHECKPOINT: AtomicU32 = AtomicU32::new(0);
+const CONFIG_BYTES: usize = 8 * 1024;
 
 pub(super) struct ServiceHandle(pub SC_HANDLE);
 
@@ -52,7 +54,41 @@ pub(super) fn query_running(product: Product) -> io::Result<Option<bool>> {
 }
 
 pub(super) fn query_enabled(product: Product) -> io::Result<Option<bool>> {
-    const CONFIG_BYTES: usize = 8 * 1024;
+    query_config(product, |config| Ok(config.dwStartType != SERVICE_DISABLED))
+}
+
+pub(super) fn query_legacy_image() -> io::Result<bool> {
+    query_config(NAVO, |config| {
+        if config.lpBinaryPathName.is_null() {
+            return Ok(false);
+        }
+        let start = config as *const QUERY_SERVICE_CONFIGW as usize;
+        let address = config.lpBinaryPathName as usize;
+        if !(start..start + CONFIG_BYTES).contains(&address) {
+            return Err(io::Error::other(
+                "service binary path is outside the configuration",
+            ));
+        }
+        let remaining = (start + CONFIG_BYTES - address) / size_of::<u16>();
+        // SAFETY: the SCM string lies in the live config buffer; the scan cannot pass its end.
+        let units = unsafe {
+            let length = (0..remaining)
+                .find(|&at| *config.lpBinaryPathName.add(at) == 0)
+                .ok_or_else(|| io::Error::other("unterminated service binary path"))?;
+            std::slice::from_raw_parts(config.lpBinaryPathName, length)
+        };
+        let command = std::ffi::OsString::from_wide(units);
+        Ok(super::install_check::legacy_command(
+            &command.to_string_lossy(),
+        ))
+    })
+    .map(|legacy| legacy.unwrap_or(false))
+}
+
+fn query_config<T>(
+    product: Product,
+    read: impl FnOnce(&QUERY_SERVICE_CONFIGW) -> io::Result<T>,
+) -> io::Result<Option<T>> {
     let manager = open_manager(SC_MANAGER_CONNECT)?;
     let name = service_name_of(product);
     // SAFETY: manager and terminated name remain live; only read-only configuration access is requested.
@@ -77,7 +113,7 @@ pub(super) fn query_enabled(product: Product) -> io::Result<Option<bool>> {
     })?;
     // SAFETY: QueryServiceConfigW initialized the aligned buffer with a QUERY_SERVICE_CONFIGW.
     let config = unsafe { &*buffer.as_ptr().cast::<QUERY_SERVICE_CONFIGW>() };
-    Ok(Some(config.dwStartType != SERVICE_DISABLED))
+    read(config).map(Some)
 }
 
 pub(super) fn dispatch() -> io::Result<()> {

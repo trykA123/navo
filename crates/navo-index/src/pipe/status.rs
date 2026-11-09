@@ -39,16 +39,42 @@ pub(super) fn exchange(
     deadline: Instant,
 ) -> Result<Vec<Response>, Failure> {
     let pipe = platform::Pipe::connect_before(PIPE_NAME, deadline).map_err(Failure::Connect)?;
+    exchange_on(&pipe, request, replies, deadline).map_err(Failure::Exchange)
+}
+
+/// The responses of one exchange and the id of the process that served them.
+pub(super) struct Identified {
+    pub server: u32,
+    pub responses: Result<Vec<Response>, PipeError>,
+}
+
+/// Like `exchange`, on one connection that also names its server process. An outer error means
+/// no verified connection or no server id; the exchange itself is in `responses`.
+pub(super) fn exchange_identified(
+    request: Request,
+    replies: usize,
+    deadline: Instant,
+) -> Result<Identified, PipeError> {
+    let pipe = platform::Pipe::connect_before(PIPE_NAME, deadline)?;
+    let server = pipe.server_process_id()?;
+    let responses = exchange_on(&pipe, request, replies, deadline);
+    Ok(Identified { server, responses })
+}
+
+fn exchange_on(
+    pipe: &platform::Pipe,
+    request: Request,
+    replies: usize,
+    deadline: Instant,
+) -> Result<Vec<Response>, PipeError> {
     let query = Query {
         request,
         generation: 1,
     };
-    pipe.write(&query, Some(deadline))
-        .map_err(Failure::Exchange)?;
+    pipe.write(&query, Some(deadline))?;
     (0..replies)
         .map(|_| pipe.read(Some(deadline), &Cancellation::Poll(&|| false)))
-        .collect::<Result<_, _>>()
-        .map_err(Failure::Exchange)
+        .collect()
 }
 
 fn read_status(

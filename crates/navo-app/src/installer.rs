@@ -10,10 +10,13 @@ use std::time::Duration;
 use crate::index_service;
 #[cfg(windows)]
 use crate::logging;
+#[cfg(any(windows, test))]
+use navo_index_service::Elevated;
 #[cfg(windows)]
 use navo_store::StoreDirs;
 
-#[cfg(windows)]
+/// The uninstall callback's wait for the elevated remove, which has `REMOVE_DEADLINE`.
+#[cfg(any(windows, test))]
 const REMOVE_BUDGET: Duration = Duration::from_secs(25);
 
 static RESTARTED: AtomicBool = AtomicBool::new(false);
@@ -40,13 +43,15 @@ pub(crate) fn restarted() -> bool {
 enum Removal {
     NotInstalled,
     Removed,
+    /// Removed; Windows deletes the last files at the next restart.
+    Deferred,
     Skipped(String),
 }
 
 #[cfg(any(windows, test))]
 fn remove_when_installed(
     installed: impl FnOnce() -> io::Result<bool>,
-    remove: impl FnOnce() -> Result<(), String> + Send + 'static,
+    remove: impl FnOnce() -> Result<Elevated, String> + Send + 'static,
     wait: Duration,
 ) -> Removal {
     match installed() {
@@ -59,7 +64,8 @@ fn remove_when_installed(
         let _ = done.send(remove());
     });
     match finished.recv_timeout(wait) {
-        Ok(Ok(())) => Removal::Removed,
+        Ok(Ok(Elevated::Done)) => Removal::Removed,
+        Ok(Ok(Elevated::Deferred)) => Removal::Deferred,
         Ok(Err(error)) => Removal::Skipped(error),
         Err(_) => Removal::Skipped(format!("no answer within {} s", wait.as_secs())),
     }
@@ -83,6 +89,11 @@ fn remove_index_service() {
     match outcome {
         Removal::NotInstalled => tracing::info!("uninstall: no index service to remove"),
         Removal::Removed => tracing::info!("uninstall: index service removed"),
+        Removal::Deferred => {
+            tracing::info!(
+                "uninstall: index service removed; its last files go at the next restart"
+            );
+        }
         Removal::Skipped(reason) => {
             tracing::warn!(reason, "uninstall: index service left in place");
         }
@@ -104,7 +115,7 @@ mod tests {
             || Ok(false),
             move || {
                 seen.store(true, Ordering::SeqCst);
-                Ok(())
+                Ok(Elevated::Done)
             },
             Duration::from_secs(1),
         );
@@ -128,7 +139,7 @@ mod tests {
             || Ok(true),
             || {
                 std::thread::sleep(Duration::from_secs(3));
-                Ok(())
+                Ok(Elevated::Done)
             },
             Duration::from_millis(100),
         );
@@ -139,9 +150,40 @@ mod tests {
     fn a_failed_query_skips_the_removal() {
         let outcome = remove_when_installed(
             || Err(io::ErrorKind::PermissionDenied.into()),
-            || Ok(()),
+            || Ok(Elevated::Done),
             Duration::from_secs(1),
         );
         assert!(matches!(outcome, Removal::Skipped(_)));
+    }
+
+    #[test]
+    fn a_deferred_removal_is_removed_not_skipped() {
+        let outcome = remove_when_installed(
+            || Ok(true),
+            || Ok(Elevated::Deferred),
+            Duration::from_secs(1),
+        );
+        assert_eq!(outcome, Removal::Deferred);
+        let done =
+            remove_when_installed(|| Ok(true), || Ok(Elevated::Done), Duration::from_secs(1));
+        assert_eq!(done, Removal::Removed);
+    }
+
+    #[test]
+    fn a_slow_removal_is_skipped_with_no_answer() {
+        let outcome = remove_when_installed(
+            || Ok(true),
+            || {
+                std::thread::sleep(Duration::from_secs(3));
+                Ok(Elevated::Deferred)
+            },
+            Duration::from_secs(1),
+        );
+        assert_eq!(outcome, Removal::Skipped("no answer within 1 s".into()));
+    }
+
+    #[test]
+    fn the_elevated_deadline_is_inside_the_uninstall_budget() {
+        assert!(navo_index_service::REMOVE_DEADLINE < REMOVE_BUDGET);
     }
 }

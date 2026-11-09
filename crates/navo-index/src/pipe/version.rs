@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use super::status::{Failure, exchange};
+use super::status::{Failure, Identified, exchange, exchange_identified};
 use super::{Client, PipeError, QueryTerm, Request, Response};
 
 /// Bumped by hand whenever the service's behaviour changes; Navo asks for an update when it is higher.
-pub const SERVICE_REVISION: u32 = 2;
+pub const SERVICE_REVISION: u32 = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ServiceVersion {
@@ -32,21 +32,42 @@ impl Client {
     pub fn version(deadline: Instant) -> Result<ServiceVersion, PipeError> {
         read_version(|request| exchange(request, 1, deadline))
     }
+
+    /// Like `version`, with the id of the process serving the pipe, read on the same connection.
+    pub fn version_from_server(deadline: Instant) -> Result<(ServiceVersion, u32), PipeError> {
+        read_version_from_server(|request| exchange_identified(request, 1, deadline))
+    }
 }
 
 fn read_version(
     ask: impl FnOnce(Request) -> Result<Vec<Response>, Failure>,
 ) -> Result<ServiceVersion, PipeError> {
-    let request = Request {
+    match ask(version_request()) {
+        Err(Failure::Connect(error)) => Err(error),
+        Err(Failure::Exchange(error)) => version_of(Err(error)),
+        Ok(responses) => version_of(Ok(responses)),
+    }
+}
+
+fn read_version_from_server(
+    ask: impl FnOnce(Request) -> Result<Identified, PipeError>,
+) -> Result<(ServiceVersion, u32), PipeError> {
+    let Identified { server, responses } = ask(version_request())?;
+    Ok((version_of(responses)?, server))
+}
+
+fn version_request() -> Request {
+    Request {
         terms: vec![QueryTerm::VersionV1],
-    };
-    match ask(request) {
+    }
+}
+
+/// A closed pipe or an undecodable frame means a service that predates `VersionV1`.
+fn version_of(outcome: Result<Vec<Response>, PipeError>) -> Result<ServiceVersion, PipeError> {
+    match outcome {
         Ok(responses) => decode_version(responses),
-        Err(Failure::Connect(error))
-        | Err(Failure::Exchange(error @ (PipeError::TimedOut | PipeError::Cancelled))) => {
-            Err(error)
-        }
-        Err(Failure::Exchange(_)) => Ok(ServiceVersion::Older),
+        Err(error @ (PipeError::TimedOut | PipeError::Cancelled)) => Err(error),
+        Err(_) => Ok(ServiceVersion::Older),
     }
 }
 
