@@ -352,7 +352,7 @@ Other sections cover the file index for `Ctrl+K`, rename options, the clipboard,
 
 ## Updates
 
-Navo checks for a new version when an installed copy starts. It checks again every 24 hours. Time that the computer sleeps counts toward the 24 hours.
+When **Check for updates automatically** is on, Navo checks for a new version when an installed copy starts. While it stays in the tray, it checks again every 24 hours. Time that the computer sleeps counts toward the 24 hours.
 
 The 24-hour check runs only when both of these are on:
 
