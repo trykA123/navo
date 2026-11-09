@@ -4,9 +4,7 @@ use std::io;
 
 use navo_update::{InstallKind, Version};
 
-use super::{
-    Apply, Reason, Staged, apply_decision, has_relative_value, is_other, unreadable_counts,
-};
+use super::{Apply, Reason, Staged, apply_decision, has_relative_value};
 use crate::cli::{Command, Start};
 
 fn open() -> Command {
@@ -134,20 +132,6 @@ fn apply_process_query_without_a_root_or_off_windows_reports_running() {
 }
 
 #[test]
-fn an_unreadable_image_blocks_when_its_name_looks_like_navo() {
-    assert!(unreadable_counts("navo.exe", "navo.exe", true));
-    assert!(unreadable_counts("Navo-Index.exe", "navo.exe", true));
-    assert!(unreadable_counts("renamed.exe", "renamed.exe", true));
-    assert!(!unreadable_counts("csrss.exe", "navo.exe", true));
-}
-
-#[test]
-fn an_unreadable_navo_image_in_another_session_does_not_block() {
-    assert!(!unreadable_counts("navo.exe", "navo.exe", false));
-    assert!(!unreadable_counts("Navo-Index.exe", "navo.exe", false));
-}
-
-#[test]
 fn relative_values_wait_but_flags_and_absolute_paths_do_not() {
     let args = |items: &[&str]| items.iter().map(OsString::from).collect::<Vec<_>>();
     assert!(!has_relative_value(&args(&[])));
@@ -244,15 +228,6 @@ fn the_helper_stops_before_the_handoff_and_only_for_one() {
 
 fn decide_ready() -> Apply<&'static str> {
     apply_decision(InstallKind::Installed, newer(), alone, &open())
-}
-
-#[test]
-fn a_child_process_does_not_block_a_restart() {
-    let own = 4000;
-    assert!(!is_other(own, 1, own));
-    assert!(!is_other(4100, own, own));
-    assert!(!is_other(0, 0, own));
-    assert!(is_other(4200, 1234, own));
 }
 
 #[test]

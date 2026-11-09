@@ -291,23 +291,23 @@ Ids IW0–IW24. Part 2's W-docs atom records them as D113. Workers never reopen 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | W0 | research | researcher | medium | — | — | research note answers Q1–Q14 with file:line | done (2026-11-09) |
 | W1 | VM probe | checker | high | W0, ix8v merged, G1 | — | report P1–P10, P1h, P2u, P3h, P3d and P3s with evidence | done (2026-11-09) |
-| W2a | `process-scan` | api-builder | medium | W1 | — | `cargo nextest run -p navo-diag processes` | blocked |
-| W2b | `process-scan` (use) | patcher | medium | W2a | — | `cargo nextest run -p navo-app updater::apply`; VM CI green | blocked |
-| W3 | `setup-crate` | patcher | medium | W1 | — | `cargo xtask check -p navo-setup`; `cargo tree -p navo-setup -e normal --depth 1 --prefix none --target all` lists exactly IW14's direct dependencies; `cargo tree -p navo-setup -e normal --prefix none --target all` exits 0 and has no line starting `velopack ` | blocked |
-| W4a | `path-syntax` | senior | high | W3 | — | `cargo nextest run -p navo-setup syntax` | blocked |
-| W4b | `placement` | senior | high | W4a | — | `cargo nextest run -p navo-setup placement` | blocked |
-| W5 | `install-mode` | api-builder | high | W3 | — | `cargo nextest run -p navo-setup mode` | blocked |
-| W6 | `setup-flow` | api-builder | high | W4b, W5 | — | `cargo nextest run -p navo-setup flow` | blocked |
-| W7a | `chain-probe` | senior | high | W4b | — | `cargo xtask check -p navo-setup` on Windows; VM `--tester-probe chain` table T1 | blocked |
-| W7b | `facts-probe` | senior | high | W7a | — | VM `--tester-probe facts` table T2 | blocked |
-| W7c | `discovery` | senior | high | W5, W7b | — | VM `--tester-probe discover` table T3 | blocked |
-| W7d | `chain-pin` | senior | high | W7c | — | `cargo nextest run -p navo-setup pin` (Windows); VM `--tester-probe pin` table T5 | blocked |
-| W8a | `payload` | api-builder | high | W3 | — | `cargo nextest run -p navo-setup payload` (Windows) | blocked |
-| W8h | `dll-guard` | senior | high | W8a | — | `scripts/setup-imports.ps1 target\release\navo-setup.exe` prints PASS | blocked |
-| W8u | `upgrade-prep` | senior | high | W7d, W8a | — | `cargo nextest run -p navo-setup upgrade` (Windows) | blocked |
-| W8b | `setup-runner` | senior | high | W2b merged with VM CI green, W6, W7b, W7c, W7d, W8a, W8u | — | `cargo nextest run -p navo-setup runner` | blocked |
-| W8s | `shortcuts` | senior | high | W8b | — | `cargo nextest run -p navo-setup shortcuts` (Windows) | blocked |
-| W8c | `setup-cli` | api-builder | medium | W8b, W8s, W8h | — | `cargo nextest run -p navo-setup cli`; VM: exit codes table T4 | blocked |
+| W2a | `process-scan` | api-builder | medium | W1 | — | `cargo nextest run -p navo-diag processes` | done |
+| W2b | `process-scan` (use) | patcher | medium | W2a | — | `cargo nextest run -p navo-app updater::apply`; VM CI green | done |
+| W3 | `setup-crate` | patcher | medium | W1 | — | `cargo xtask check -p navo-setup`; `cargo tree -p navo-setup -e normal --depth 1 --prefix none --target all` lists exactly IW14's direct dependencies; `cargo tree -p navo-setup -e normal --prefix none --target all` exits 0 and has no line starting `velopack ` | done |
+| W4a | `path-syntax` | senior | high | W3 | — | `cargo nextest run -p navo-setup syntax` | done |
+| W4b | `placement` | senior | high | W4a | — | `cargo nextest run -p navo-setup placement` | done |
+| W5 | `install-mode` | api-builder | high | W3 | — | `cargo nextest run -p navo-setup mode` | done |
+| W6 | `setup-flow` | api-builder | high | W4b, W5 | — | `cargo nextest run -p navo-setup flow` | done |
+| W7a | `chain-probe` | senior | high | W4b | — | `cargo xtask check -p navo-setup` on Windows; VM `--tester-probe chain` table T1 | done; T1 19/19 PASS (c98b7d43) |
+| W7b | `facts-probe` | senior | high | W7a | — | VM `--tester-probe facts` table T2 | done; T2 9/9 PASS (c98b7d43) |
+| W7c | `discovery` | senior | high | W5, W7b | — | VM `--tester-probe discover` table T3 | done; VM CI green (04d05636), T3 29/29 PASS |
+| W7d | `chain-pin` | senior | high | W7c | — | `cargo nextest run -p navo-setup pin` (Windows); VM `--tester-probe pin` table T5 | done; VM CI green (04d05636), T5 8/8 PASS |
+| W8a | `payload` | api-builder | high | W3 | — | `cargo nextest run -p navo-setup payload` (Windows) | done; VM CI green (04d05636) |
+| W8h | `dll-guard` | senior | high | W8a | — | `scripts/setup-imports.ps1 target\release\navo-setup.exe` prints PASS | done; `DELAY_LOAD` = bcrypt, bcryptprimitives (payload build); imports check PASS |
+| W8u | `upgrade-prep` | senior | high | W7d, W8a | — | `cargo nextest run -p navo-setup upgrade` (Windows) | done (9d8d9bf7); VM CI green (04d05636) |
+| W8b | `setup-runner` | senior | high | W2b merged with VM CI green, W6, W7b, W7c, W7d, W8a, W8u | — | `cargo nextest run -p navo-setup runner` | done; reviewed by hand; VM CI green (2fda9733) |
+| W8s | `shortcuts` | senior | high | W8b | — | `cargo nextest run -p navo-setup shortcuts` (Windows) | done; sharing-violation fix (2acac260); VM CI green (04d05636) |
+| W8c | `setup-cli` | api-builder | medium | W8b, W8s, W8h | — | `cargo nextest run -p navo-setup cli`; VM: exit codes table T4 | done; T4 15/15 PASS (38117677); senior-review fixes in; VM CI green (8c772bb5) |
 
 19 atoms, close to the 15-atom guide; part 2 holds the rest. **G1 (orchestrator, after ix8v merges):** re-read `scripts/update-e2e.ps1` and `NAVO_UPDATE_FEED_DIR` on main, and update the line numbers in W1 and in part 2's W15. The ix8v numbers below are from `78a73adc`. G1 done 2026-11-09: unchanged on main `91e7a4e7`. **No builder before W1.** The orchestrator rewrote IW3, IW4, IW7, IW8, IW11 and IW12 from W0 (rows 52–63); W1 confirms them first. One cargo gate at a time in the Windows VM. Each worker writes gate output to `<worktree>/../<atom>.log` and reads only its tail.
 
@@ -630,3 +630,6 @@ W1 run 2 passed every stop rule (report: `testing/installer-w1-report.md`). Its 
 - 2026-11-09 — Revised from W0 (architect Turgon), rows 52–63 here and 64–68 in part 2, applying the orchestrator's eight decisions. The marker is written after verification; upgrades go through `Update.exe apply` (new IW8b and atom W8u, the nupkg embedded); IW6 refuses `%`, `^`, `&` and `!`; one install at a time; W1 probes both Velopack paths. Still drafting.
 - 2026-11-09 — W1 run 1 (VM): P1, P1h, P2 and P3h PASS (the hold works on both paths; R8 cleared for them). P2u stopped on R9: the library deletes older nupkgs after a download, the wizard did not. Orchestrator: IW8b step 4 now does the same cleanup by handle; R9 restated with the compared state; Velopack's extras listed in step 8. W1 reruns P2u and the probes not yet run.
 - 2026-11-09 — W1 run 2 (VM): every probe ran; no stop rule fired. P1, P1h, P2, P2u, P3h, P4, P5, P6 PASS; P3, P3d, P3s, P7, P8, P9, P10 recorded. The orchestrator added the W1 decisions (free space, the fallback folder, Navo started mid-upgrade, user guide). W1 done; part 1 may start (W2a, W3).
+- 2026-11-09 — W8s fixed: `IPersistFile::Load` reopened the link and hit a sharing violation against the DELETE handle, so no link was ever deleted. The link is now read through the held handle and parsed from memory (`IPersistStream`); links over 1 MiB are kept. W8h: `DEPENDENTLOADFLAG 0x800`, `SetDefaultDllDirectories` first in `main`, and `scripts/setup-imports.ps1` (PASS on navo-setup, FAIL on navo.exe as a negative check). The delay-load list is empty because today's `main` only prints the version and the linker drops the rest. W8c must fill `DELAY_LOAD` in `build.rs` when it wires the runner in; the imports check fails until it does. `ntdll.dll` is allowed: the kernel maps it before any search. Next: VM tables T1–T3 and T5, then W8c.
+- 2026-11-09 — VM tables at c98b7d43, tester build: T1 19/19, T2 9/9, T3 29/29, T5 8/8 PASS, no skips, VM cleaned. Stand-ins: the 8.3 row used `C:\PROGRA~1\Navo` (AppData has no short name in the VM); Documents was redirected with `SHSetKnownFolderPath` (the registry value alone changes nothing); the non-elevated token came from a `RunLevel Limited` scheduled task. A SAFER-restricted token (`runas /trustlevel`) reads as elevated and the facts probe fails closed (ProbeFailed), as intended. Next: W8c.
+- 2026-11-09 — W8c done. Without a payload the linker drops the runner, so the imports check must run on a payload build; it now fails on a payload-less build. A payload build imports `bcrypt.dll` and `bcryptprimitives.dll` outside KnownDLLs; both are delay-loaded. T4 at 38117677 (tester build, real 0.0.2–0.0.4 packages): 15/15 PASS for exit codes 0, 2–9, VM cleaned. Senior review (approve with fixes): real space floor for silent installs, exact refusal reasons, IW7 recovery text, the upgrade shortcut note, elevation first, share-read-only link handle, Same/Newer `--installto` → 3, fail-closed `SetDefaultDllDirectories`, the right child name, logs after parse. VM CI green at 8c772bb5 (12,417 tests). Notes for part 2: `Update.exe --uninstall` does not exit when run headless (the uninstall itself completes); release.yml must run `setup-imports.ps1` on the payload build. Part 1 done.

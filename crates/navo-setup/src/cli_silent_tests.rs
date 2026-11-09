@@ -1,0 +1,256 @@
+//! Fake-host silent-mode tests for IW17 exit codes.
+
+use super::*;
+
+/// Builds a validated file payload with the crate's package name and version.
+fn payload(root: &Path) -> Payload {
+    let setup = root.join("input.exe");
+    fs::write(&setup, b"fixture Setup.exe").unwrap();
+    let package = root.join(format!("NavoApp-{VERSION}-full.nupkg"));
+    let mut zip = zip::ZipWriter::new(fs::File::create(&package).unwrap());
+    zip.start_file(
+        "lib/net8/NavoApp.nuspec",
+        zip::write::SimpleFileOptions::default(),
+    )
+    .unwrap();
+    zip.write_all(
+        format!(
+            "<package><metadata><id>NavoApp</id><version>{VERSION}</version></metadata></package>"
+        )
+        .as_bytes(),
+    )
+    .unwrap();
+    zip.finish().unwrap();
+    Payload::from_files(&setup, &package, parse_version(VERSION).unwrap()).unwrap()
+}
+
+/// Parses one sq.version identity.
+fn sq(version: &str) -> SqVersion {
+    parse_sq_version(&format!(
+        "<package><metadata><id>NavoApp</id><version>{version}</version></metadata></package>"
+    ))
+    .unwrap()
+}
+
+/// Builds one valid marker.
+fn marker() -> crate::marker::Marker {
+    crate::marker::Marker {
+        pack_id: "NavoApp".to_owned(),
+        install_id: "0123456789abcdef0123456789abcdef".to_owned(),
+        created_by: format!("navo-setup {VERSION}"),
+    }
+}
+
+/// Builds one valid install at `root`.
+fn install(root: &str, version: &str) -> Install {
+    Install {
+        root: PathBuf::from(root),
+        identity: FileIdentity {
+            volume: 1,
+            file: [2; 16],
+            kind: FileIdentityKind::Native,
+        },
+        safe_chain: true,
+        update_exe: true,
+        sq_version: Ok(sq(version)),
+        marker: Some(Ok(marker())),
+    }
+}
+
+/// Builds a discovery with one registry install.
+fn discovery(version: &str) -> Discovery {
+    Discovery {
+        registry: Some(Ok(install(ROOT, version))),
+        legacy: None,
+    }
+}
+
+/// Runs silent mode with one fake host and returns its exit code.
+fn run_silent(host: &mut FakeHost, payload: Option<Payload>) -> ExitCode {
+    run_to(host, payload, ROOT)
+}
+
+/// Runs silent mode into one requested folder.
+fn run_to(host: &mut FakeHost, payload: Option<Payload>, root: &str) -> ExitCode {
+    run(
+        &args(&["--silent", "--installto", root]),
+        payload,
+        Some(host),
+        &test_logs,
+    )
+}
+
+/// Returns the two log paths used by the fake runs.
+fn test_logs() -> std::io::Result<LogPaths> {
+    Ok(LogPaths {
+        wizard: PathBuf::from("C:/Temp/NavoSetup-logs/test.log"),
+        velopack: PathBuf::from(LOG),
+    })
+}
+
+/// A successful fresh silent run returns 0.
+#[test]
+fn a_successful_silent_run_returns_0() {
+    let dir = tempfile::tempdir().unwrap();
+    let payload = payload(dir.path());
+    let mut host = FakeHost::new();
+    host.discoveries
+        .extend([Ok(Discovery::default()), Ok(Discovery::default())]);
+    host.registry
+        .extend([Registry::Absent, Registry::NamesRoot]);
+    host.verified.push_back(Verified {
+        update_exe: true,
+        sq_version: Some(sq(VERSION)),
+    });
+    host.child_script.push_back(Some(0));
+    assert_eq!(run_silent(&mut host, Some(payload)), ExitCode::SUCCESS);
+}
+
+/// Each reachable IW17 failure maps to its documented exit code.
+#[test]
+fn silent_failures_map_to_iw17_codes() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let mut host = FakeHost::new();
+    host.elevated.push_back(Ok(true));
+    assert_eq!(
+        run_silent(&mut host, Some(payload(dir.path()))),
+        ExitCode::from(7)
+    );
+
+    let mut host = FakeHost::new();
+    host.discoveries
+        .extend([Ok(discovery(VERSION)), Ok(discovery(VERSION))]);
+    assert_eq!(
+        run_silent(&mut host, Some(payload(dir.path()))),
+        ExitCode::from(8)
+    );
+
+    let mut host = FakeHost::new();
+    host.discoveries
+        .push_back(Err(std::io::Error::other("discovery failed")));
+    assert_eq!(
+        run_silent(&mut host, Some(payload(dir.path()))),
+        ExitCode::from(6)
+    );
+
+    let mut host = FakeHost::new();
+    host.discoveries
+        .extend([Ok(Discovery::default()), Ok(discovery("0.3.0"))]);
+    assert_eq!(
+        run_silent(&mut host, Some(payload(dir.path()))),
+        ExitCode::from(3)
+    );
+
+    let mut host = FakeHost::new();
+    host.discoveries
+        .extend([Ok(discovery("0.3.0")), Ok(discovery("0.3.0"))]);
+    host.running.push_back(Ok(true));
+    assert_eq!(
+        run_silent(&mut host, Some(payload(dir.path()))),
+        ExitCode::from(4)
+    );
+
+    let mut host = FakeHost::new();
+    host.discoveries
+        .extend([Ok(Discovery::default()), Ok(Discovery::default())]);
+    host.registry.push_back(Registry::Absent);
+    host.child_script.push_back(Some(1));
+    assert_eq!(
+        run_silent(&mut host, Some(payload(dir.path()))),
+        ExitCode::from(5)
+    );
+
+    let mut host = FakeHost::new();
+    assert_eq!(run_silent(&mut host, None), ExitCode::from(9));
+}
+
+/// Direct runner errors keep their IW17 codes in one table.
+#[test]
+fn runner_errors_keep_their_codes() {
+    let cases = [
+        (InstallError::Elevated, 7),
+        (InstallError::Blocked, 4),
+        (InstallError::NoPayload, 9),
+        (InstallError::Extract, 5),
+        (InstallError::WrongAction, 5),
+        (InstallError::Failed(Failure::EmptyRoot(None)), 5),
+        (InstallError::ModeChanged(Box::new(Mode::Fresh)), 3),
+    ];
+    for (error, code) in cases {
+        assert_eq!(error.exit_code(), code);
+    }
+}
+
+/// A different --installto while an install exists exits 3.
+#[test]
+fn a_different_installto_while_installed_exits_3() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = FakeHost::new();
+    host.discoveries
+        .extend([Ok(discovery("0.3.0")), Ok(discovery("0.3.0"))]);
+    assert_eq!(
+        run_to(&mut host, Some(payload(dir.path())), r"C:\Elsewhere\Navo"),
+        ExitCode::from(3)
+    );
+}
+
+/// A differently cased --installto names the installed folder and proceeds.
+#[test]
+fn a_differently_cased_installto_proceeds() {
+    #[cfg(windows)]
+    let lower = r"c:/programs/navo";
+    #[cfg(not(windows))]
+    let lower = "/programs/navo";
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = FakeHost::new();
+    host.discoveries
+        .extend([Ok(discovery("0.3.0")), Ok(discovery("0.3.0"))]);
+    host.running.extend([Ok(false), Ok(false)]);
+    host.registry.push_back(Registry::NamesRoot);
+    host.markers.push_back(Some(marker()));
+    host.verified.push_back(Verified {
+        update_exe: true,
+        sq_version: Some(sq(VERSION)),
+    });
+    host.child_script.push_back(Some(0));
+    assert_eq!(
+        run_to(&mut host, Some(payload(dir.path())), lower),
+        ExitCode::SUCCESS
+    );
+}
+
+#[path = "cli_recovery_tests.rs"]
+mod recovery;
+
+/// The child exit code reaches the IW17 exit-5 stderr line.
+#[test]
+fn the_child_exit_code_reaches_the_failure_message() {
+    use crate::flow::{InstallAction, Request, Shortcuts};
+
+    let dir = tempfile::tempdir().unwrap();
+    let payload = payload(dir.path());
+    let request = Request {
+        mode: Box::new(Mode::Fresh),
+        root: PathBuf::from(ROOT),
+        shortcuts: Shortcuts {
+            desktop: true,
+            start_menu: true,
+        },
+        action: InstallAction::Run,
+    };
+    let mut host = FakeHost::new();
+    host.discoveries.push_back(Ok(Discovery::default()));
+    host.registry.push_back(Registry::Absent);
+    host.child_script.push_back(Some(1603));
+    let error = crate::runner::install(request, &payload, Path::new(LOG), &mut host, &mut |_| {})
+        .expect_err("child must fail");
+    assert!(matches!(
+        error,
+        InstallError::Failed(Failure::PartialRoot(Some(1603)))
+    ));
+    let message = crate::cli::messages::install_message(&error, Path::new(ROOT), false);
+    assert!(message.contains("1603"), "{message}");
+    assert!(message.contains(ROOT), "{message}");
+    assert!(message.contains("Delete this folder"), "{message}");
+}
