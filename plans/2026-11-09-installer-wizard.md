@@ -131,7 +131,7 @@ Ids IW0–IW24. Part 2's W-docs atom records them as D113. Workers never reopen 
   - The drive must be local: `GetDriveTypeW` is fixed or removable.
   - The drive must not be a `subst` or other DOS-device alias. `QueryDosDeviceW("X:")` must succeed, and its target must not start with `\??\`. Otherwise the folder is refused (fail closed).
   - A probe file in the nearest existing ancestor must be created and deleted without elevation: `CREATE_NEW` with `FILE_FLAG_DELETE_ON_CLOSE`, share none, closed at once, so Setup's own handle deletes it.
-  - The free space must be at least 4 × the payload size.
+  - The free space must be at least the larger of 4 × the payload size and Velopack Setup.exe's own requirement, computed the same way (W1 run 2: Setup.exe asked for 232 MB where 4 × payload was about 188 MB; W4b reads its formula in `velopack/src/bins/src/` and cites it). A folder that passes the wizard must never fail Setup.exe on space.
   - The wizard then creates and holds the missing folders and the root (IW7a). It re-resolves the chain and the refused set (IW8a) and refuses if anything changed.
   - The root is empty when Setup.exe starts: the wizard creates it and writes nothing into it. Setup.exe treats a root that is not empty as an earlier install and renames it away (W0 Q2, Q11).
   - After Setup.exe exits 0 and IW4's checks 1–3, 5 and 6 pass, the wizard writes the marker `<root>\navo-install.json` = `{"packId":"NavoApp","installId":"<32 hex from a CSPRNG>","createdBy":"navo-setup <version>"}`. It writes with `CREATE_NEW` through the still-held root, flushes and closes the handle, and records the marker's file id. The install counts as a success only once the marker is written (IW4 check 4).
@@ -289,8 +289,8 @@ Ids IW0–IW24. Part 2's W-docs atom records them as D113. Workers never reopen 
 
 | Atom | Component | Role | Effort | After | Owner gate | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| W0 | research | researcher | medium | — | — | research note answers Q1–Q14 with file:line | done ([note](2026-11-09-installer-w0-velopack.md)) |
-| W1 | VM probe | checker | high | W0, ix8v merged, G1 | — | report P1–P10, P1h, P2u, P3h, P3d and P3s with evidence | blocked |
+| W0 | research | researcher | medium | — | — | research note answers Q1–Q14 with file:line | done (2026-11-09) |
+| W1 | VM probe | checker | high | W0, ix8v merged, G1 | — | report P1–P10, P1h, P2u, P3h, P3d and P3s with evidence | done (2026-11-09) |
 | W2a | `process-scan` | api-builder | medium | W1 | — | `cargo nextest run -p navo-diag processes` | blocked |
 | W2b | `process-scan` (use) | patcher | medium | W2a | — | `cargo nextest run -p navo-app updater::apply`; VM CI green | blocked |
 | W3 | `setup-crate` | patcher | medium | W1 | — | `cargo xtask check -p navo-setup`; `cargo tree -p navo-setup -e normal --depth 1 --prefix none --target all` lists exactly IW14's direct dependencies; `cargo tree -p navo-setup -e normal --prefix none --target all` exits 0 and has no line starting `velopack ` | blocked |
@@ -602,6 +602,15 @@ From the [W0 note](2026-11-09-installer-w0-velopack.md). Rows 64–68 are in par
 | 62 | IW11 confirmed from W0 Q5 and Q6: exact `.lnk` paths; apply never re-creates a link; an upgrade skips the Shortcuts page. IW12 confirmed (W0 Q3): the Start Navo box stays. |
 | 63 | IW9's scan runs twice for an upgrade, before anything is written and just before apply. A fresh install rechecks just before spawn that no HKCU key appeared. |
 
+## W1 decisions (orchestrator, 2026-11-09)
+
+W1 run 2 passed every stop rule (report: `testing/installer-w1-report.md`). Its new findings:
+
+- **Free space (IW7):** the larger of 4 × payload and Velopack's own requirement; see IW7. W4b owns it.
+- **Velopack's fallback folder (IW8):** `%LocalAppData%\NavoApp` is also where Velopack puts `packages\` when it cannot write the root, and uninstall never removes it. Discovery counts it as an install only when it is valid (`current\sq.version` and `Update.exe` present, as IW8 already defines). An invalid leftover is ignored for the "one install" rule and never touched. W7c adds T3 rows: a fallback folder holding only `packages\`, and one holding a partial `current\`.
+- **Navo started during an upgrade (IW8b, IW9):** a Navo started between step 4 and apply finds the staged nupkg and runs its own apply (`navo-app/src/updater/apply.rs`, `at_start`). The wizard then verifies per IW4. If every check passes, it is a success, and the Finish page adds "Navo finished the update itself." Otherwise, the Failed page reads "Navo was started during Setup. Close Navo and run Setup again." and Retry is offered once no Navo runs. W8b tests both paths with the fake launcher.
+- **User guide (W17):** interactive uninstall shows an "Uninstall Complete" box and removes the folder only after OK; parent folders Setup created stay after uninstall; uninstall also deletes the user's own shortcuts into the folder (IW20).
+
 ## Owner answers (2026-11-09)
 
 - **P1 (IW18):** per-user only. Yes. Unblocks W4b and W7b; the gates are cleared in both atom tables.
@@ -620,3 +629,4 @@ From the [W0 note](2026-11-09-installer-w0-velopack.md). Rows 64–68 are in par
 - 2026-11-09 — Revised after the third Terra xhigh plan check (architect Turgon). The orchestrator added IW0; findings 41 and 42 are out of scope under it, the rest fixed (rows 40–51 here, 47–49 in part 2). IW7a is simpler: it holds the root and created folders and rechecks the ancestors. W7a–W7d now run in order. Still drafting.
 - 2026-11-09 — Revised from W0 (architect Turgon), rows 52–63 here and 64–68 in part 2, applying the orchestrator's eight decisions. The marker is written after verification; upgrades go through `Update.exe apply` (new IW8b and atom W8u, the nupkg embedded); IW6 refuses `%`, `^`, `&` and `!`; one install at a time; W1 probes both Velopack paths. Still drafting.
 - 2026-11-09 — W1 run 1 (VM): P1, P1h, P2 and P3h PASS (the hold works on both paths; R8 cleared for them). P2u stopped on R9: the library deletes older nupkgs after a download, the wizard did not. Orchestrator: IW8b step 4 now does the same cleanup by handle; R9 restated with the compared state; Velopack's extras listed in step 8. W1 reruns P2u and the probes not yet run.
+- 2026-11-09 — W1 run 2 (VM): every probe ran; no stop rule fired. P1, P1h, P2, P2u, P3h, P4, P5, P6 PASS; P3, P3d, P3s, P7, P8, P9, P10 recorded. The orchestrator added the W1 decisions (free space, the fallback folder, Navo started mid-upgrade, user guide). W1 done; part 1 may start (W2a, W3).
