@@ -23,7 +23,7 @@ function Hold-Resource {
     try {
         switch ($Hold) {
             'Global' { $resource = New-Object Threading.Mutex($true, 'Global\NavoIndexServiceChange') }
-            'Lock' { $resource = [IO.File]::Open($Target, 'Open', 'ReadWrite', 'None') }
+            'Lock' { $resource = [IO.File]::Open($Target, 'OpenOrCreate', 'ReadWrite', 'None') }
             'Refused' { $resource = [IO.File]::Open($Target, 'Open', 'Read', 'ReadWrite') }
             'Mapped' {
                 Add-Type @'
