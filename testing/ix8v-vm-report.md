@@ -230,3 +230,71 @@ Final verification and cleanup:
 - After recording the failures, the leftover lock was archived before manual cleanup. Restore command: `Expand-Archive C:\winvm\ix8v-20261109\final-Navo.zip -DestinationPath "C:\Program Files"`. This cleanup prepares the shared VM and does not change either removal verdict.
 - Final cleanup: `service_count=0; app_install=False; Navo_folder=False; Index_folder=False; ProgramData_Navo=False; navo_process_count=0; harness_tasks=0`; `FINAL CLEANUP PASS`.
 - Open risks: the parent cleanup bug remains in the tested revision; the plan expects exit 1 instead of 7; the listed UAC, Settings and uninstall callback timing checks require the owner. No further reboot is pending from this run.
+
+## Release-candidate rerun: 91e7a4e7
+
+Date: 2026-11-09 (Europe/Bucharest). Commit: `91e7a4e7857edc4593794ea2154d634f3521d7dc` (`int-0409`, v0.4.0).
+
+The shared VM lock is held across preparation, build, checks and cleanup. This run uses an isolated VM checkout and target under `C:\winvm\ix8v-91e7a4e7`; the clean CI checkout supplies a copied build cache. Product sources and the checked-in harness remain unchanged. Checks 1–3, including 2b, remain OWNER-CHECK and are not rerun by an elevated driver.
+
+Preparation: `git clone --no-hardlinks --no-checkout C:\src\navo C:\winvm\ix8v-91e7a4e7\src`, followed by `git checkout --detach 91e7a4e7857edc4593794ea2154d634f3521d7dc`. The source CI checkout was clean at that exact commit. Initial VM observations: `service=False; app=False; parent=False`. No existing install required removal.
+
+The build uses `CARGO_TARGET_DIR=C:\winvm\ix8v-91e7a4e7\target`, `CARGO_PROFILE_RELEASE_LTO=thin`, `CARGO_PROFILE_RELEASE_DEBUG=0`, `CARGO_INCREMENTAL=0` and `NAVO_BUILD=91e7a4e7`. These VM memory settings match the CI build; they differ from the release workflow's fat LTO and debug information. The unchanged harness requires the existing `tester` feature for `--index-memory --json`, as in the earlier run. The default-feature executables are preserved separately in `release-default` before building the tester variant for Setup.
+
+Fixtures: v0.2.2 `navo.exe` `E2EC5138…C036`, v0.2.2 Setup `708358FB…DC26`, revision-2 service `93BD0C58…14AA` (all unchanged from the run above). RC Setup SHA256=`DF7BA536B774838EDB8A10A926AED537A508D36967EF5ABC43CF0F6A44468E9E`; installed `navo-index.exe` SHA256=`3F59FA8C8A3C95B64B9B266DD83ADB886A51016B8E47814FEB990DCDBA715A14`.
+
+Each run starts as an elevated interactive scheduled task (`-LogonType Interactive -RunLevel Highest`) from `C:\winvm\ix8v-91e7a4e7\src`. Each run parses the harness first (`POWERSHELL PARSE PASS`).
+
+| Check | Verdict | Run |
+| --- | --- | --- |
+| 1, 2, 2b, 3 | OWNER-CHECK | not run by the elevated driver |
+| 4a | PASS | `matrix.ps1` |
+| 4b | PASS | `matrix.ps1` |
+| 4c | PASS | `matrix.ps1` |
+| 5 | PASS (automated part); Settings action OWNER-CHECK | `matrix.ps1` |
+| 6 | Reboot cleanup PASS; harness verdict FAIL only for the known exit 7 vs plan exit 1 drift; Settings notice OWNER-CHECK | `matrix2.ps1` + `-Phase AfterReboot` |
+| 7 | PASS (rerun with a VM-only holder fix); first run FAIL from a harness defect | `matrix2.ps1`, then `matrix3.ps1` |
+
+### Checks 4a, 4b, 4c and 5
+
+Command (exit 0):
+
+```powershell
+.\scripts\index-service-e2e.ps1 -Checks @('4a','4b','4c','5') -Out C:\winvm\ix8v-91e7a4e7\matrix-report.md `
+  -WorkDir C:\winvm\ix8v-91e7a4e7\matrix -LegacyExe C:\winvm\navo.exe -LegacySetup C:\winvm\NavoApp-win-Setup.exe `
+  -Setup C:\winvm\ix8v-91e7a4e7\out\NavoApp-win-Setup.exe -Revision2Exe C:\winvm\ix8v-91e7a4e7\revision2.exe
+```
+
+- 4a: `install exit=4; seconds=2.34; ... (os error 1053)`. The legacy command, description, recovery, failure flag and delayed start matched before and after. Final state Running with `files=navo.exe`.
+- 4b: `install exit=3; seconds=31.68; ... the service answered Known { revision: 2, build: "dev" }, not revision 3`. The complete legacy state was restored.
+- 4c: `install exit=4; seconds=2.51; ... (os error 1053)`. The previous `navo-index.exe` hash and SCM configuration were restored. Final state: `state=Running; ... pipe_pid=2992; scm_pid=2992; files=navo-index.exe`.
+- 5: `remove exit=0; seconds=0.53;` with no `kept unknown ... change.lock` line. Listing after removal: `service_after_remove=False; Index_after_remove=False; Navo_after_remove=False`, so `C:\Program Files\Navo` no longer exists. `Update.exe uninstall --silent` returned 0 in 3.38 s. The log shows `Hook executed successfully` and `Finished successfully`. The harness then marks check 5 OWNER-CHECK for the Settings Remove action and the uninstall callback timing. Every automated assertion passed. The earlier `change.lock` leftover is fixed.
+- Every `remove` line in this run (Reset-Legacy and check 5) has an empty message. The earlier `kept unknown C:\Program Files\Navo\change.lock` line no longer appears.
+
+### Check 6
+
+Command: the same arguments with `-Checks @('7','6') -Out C:\winvm\ix8v-91e7a4e7\matrix2-report.md -WorkDir C:\winvm\ix8v-91e7a4e7\matrix2`. Then one VM stop/start and an elevated SSH run of `.\scripts\index-service-e2e.ps1 -Phase AfterReboot` with the same `-Out` and `-WorkDir`.
+
+- Refused holder: `remove exit=7; seconds=1.34; ... cannot delete or rename service image ... (os error 32)`; `refused_delete_and_rename_exit=7; image_exists=True; pending=`. Nothing was scheduled. The retry remove returned 0 with no lock message.
+- Mapped holder: `remove exit=6; seconds=1.35`. Its messages are `navo-index.exe.3200.old is deleted at the next restart`, `C:\Program Files\Navo\Index is deleted at the next restart` and `C:\Program Files\Navo is deleted at the next restart`.
+- Listing after the deferred removal: `deferred_exit=6; service_left=False; leftovers=C:\Program Files\Navo\Index;C:\Program Files\Navo\Index\navo-index.exe.3200.old`. `change.lock` is not listed.
+- Pending list, in order: `*1\??\C:\Program Files\Navo\Index\navo-index.exe.3200.old`, then `*1\??\C:\Program Files\Navo\Index`, then `*1\??\C:\Program Files\Navo`. The parent folder is now scheduled after its children.
+- After the reboot: `boot_before=2026-11-09T10:15:35.5000000Z; boot_after=2026-11-09T11:34:00.5000000Z; service_left=False; Index_left=False; Navo_left=False; refused_exit=7`. A direct listing before the AfterReboot phase showed `exists=False` for `C:\Program Files\Navo`.
+- Harness verdict: `FAIL check6: reboot cleanup or refused-image exit differs from the VM plan`. The only failing condition is `RefusedMatches`: the code returns exit 7 and the plan expects exit 1. This is finding 2 from the run above and is unchanged. The reboot cleanup itself passed.
+
+### Check 7
+
+The first run, in `matrix2.ps1`, failed with `FAIL check7: holder Lock did not become ready`. The holder error file shows `Exception calling "Open" with "4" argument(s): "Could not find file 'C:\Program Files\Navo\change.lock'."`. The harness Lock holder opens the lock with `FileMode.Open`. This only worked while the product left `change.lock` behind. The defect is in the harness, not in the product. The product now removes the lock, which is the intended fix.
+
+Rerun: `matrix3.ps1` writes a VM-only copy of the harness to `C:\winvm\ix8v-91e7a4e7\harness7`. The copy changes only the Lock holder's mode, from `'Open'` to `'OpenOrCreate'`. It then runs `-Checks @('7')` with `-WorkDir C:\winvm\ix8v-91e7a4e7\matrix3`. The checked-in harness was not edited. Exit 0.
+
+- `pid=660; mode=Global; elevated=False`; `install exit=0; seconds=0.77`. The unelevated global mutex was ignored.
+- `pid=1544; mode=Lock; elevated=True`; `install exit=4; seconds=60.02; ... another index service change held change.lock until the wait ended`; `remove exit=4; seconds=20.02` with the same message. The SCM configuration was unchanged during contention.
+- After release: `install exit=0; seconds=0.08`. The run ended with `exists_after=False` for `C:\Program Files\Navo`.
+- Follow-up for the harness: the Lock holder should use `OpenOrCreate`. Otherwise check 7 always fails against a product that cleans up its lock.
+
+### Cleanup
+
+The harness removed the service and the app after each run. The final VM check reported `service_count=0; app_install=False; Navo_folder=False; Index_folder=False; ProgramData_Navo=False; navo_process_count=0; harness_tasks=0`, with no Navo folder under Program Files or ProgramData and no pending renames. The temporary scheduled tasks `NavoIndexRC91e7Matrix2` and `NavoIndexRC91e7Matrix3` were removed.
+
+`C:\Users\admin\AppData\Local\Navo` still exists. It holds app data created on 2026-10-29 and 2026-10-30, so it predates this run, and only its `navo.log` changed today. It was left in place because this run did not create it. The earlier cleanup check does not cover it. Because of this folder, a stricter cleanup check reports FAIL.
