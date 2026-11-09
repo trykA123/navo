@@ -1,3 +1,5 @@
+//! Navo index service library: search, configuration and elevated install and remove actions.
+
 #![deny(unsafe_code)]
 #![allow(
     clippy::print_stdout,
@@ -13,6 +15,8 @@ mod batch;
 mod bind_retry;
 #[cfg(any(windows, test))]
 mod build_permit;
+#[cfg(any(windows, test))]
+pub mod change_lock;
 #[cfg_attr(
     not(any(windows, test)),
     allow(
@@ -31,9 +35,11 @@ mod directory_policy;
 mod elevation;
 mod elevation_error;
 #[cfg(any(windows, test))]
+mod elevation_limits;
+#[cfg(any(windows, test))]
 mod elevation_result;
 
-pub use elevation_error::ElevationError;
+pub use elevation_error::{Elevated, ElevationError};
 #[cfg(any(windows, test))]
 mod heartbeat;
 #[cfg(any(windows, test))]
@@ -101,7 +107,7 @@ impl Action {
 
 pub fn run(action: Action) -> std::process::ExitCode {
     match execute(action) {
-        Ok(()) => std::process::ExitCode::SUCCESS,
+        Ok(outcome) => std::process::ExitCode::from(success_code(outcome)),
         Err(error) => {
             eprintln!("navo: index service: {error}");
             std::process::ExitCode::from(failure_code(&error))
@@ -110,15 +116,23 @@ pub fn run(action: Action) -> std::process::ExitCode {
 }
 
 #[cfg(any(windows, test))]
-use elevation_result::failure_code;
+use elevation_result::{failure_code, success_code};
 
 #[cfg(not(any(windows, test)))]
 fn failure_code(_: &std::io::Error) -> u8 {
     1
 }
 
+#[cfg(not(any(windows, test)))]
+fn success_code(_: Elevated) -> u8 {
+    0
+}
+
+/// The most time the elevated remove takes; the app's uninstall callback waits longer.
+pub const REMOVE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
+
 #[cfg(windows)]
-pub fn request_elevation(action: Action) -> Result<(), ElevationError> {
+pub fn request_elevation(action: Action) -> Result<Elevated, ElevationError> {
     elevation::launch(action)
 }
 
@@ -128,6 +142,8 @@ pub struct ServiceQuery {
     /// What a running service answers; `None` when it is not running or did not answer.
     pub version: Option<navo_index::pipe::ServiceVersion>,
     pub legacy_present: bool,
+    /// The registered Navo service command still runs `Index\navo.exe`.
+    pub legacy_image: bool,
 }
 
 #[cfg(windows)]
@@ -137,6 +153,7 @@ pub fn query() -> std::io::Result<ServiceQuery> {
         running,
         version: (running == Some(true)).then(running_version).flatten(),
         legacy_present: scm::query_running(install_plan::LEGACY_PRODUCT)?.is_some(),
+        legacy_image: scm::query_legacy_image()?,
     })
 }
 
@@ -191,20 +208,39 @@ pub fn dismiss_upgrade_notice(marker: Option<std::path::PathBuf>) -> std::io::Re
     upgrade::UpgradeNotice::new(marker).dismiss()
 }
 
+/// Runs one service action; an elevated change drops its file lock before the last folder check.
 #[cfg(windows)]
-fn execute(action: Action) -> std::io::Result<()> {
+fn execute(action: Action) -> std::io::Result<Elevated> {
     match action {
-        Action::Run => scm::dispatch(),
+        Action::Run => scm::dispatch().map(|()| Elevated::Done),
         Action::Install | Action::Remove if !elevation::is_admin() => {
             request_elevation(action).map_err(std::io::Error::other)
         }
-        Action::Install => installation::install(),
-        Action::Remove => installation::remove(),
+        Action::Install => {
+            let result = {
+                let _change = change_lock::machine(elevation_limits::CHANGE_WAIT)?;
+                installation::install()
+            };
+            if result.is_err() {
+                installation::remove_change_leftovers();
+            }
+            result.map(|()| Elevated::Done)
+        }
+        Action::Remove => {
+            let deadline = std::time::Instant::now() + REMOVE_DEADLINE;
+            let result = {
+                let _change = change_lock::machine(
+                    deadline.saturating_duration_since(std::time::Instant::now()),
+                )?;
+                installation::remove(deadline)
+            };
+            removal::finish(result, installation::remove_change_leftovers)
+        }
     }
 }
 
 #[cfg(not(windows))]
-fn execute(_: Action) -> std::io::Result<()> {
+fn execute(_: Action) -> std::io::Result<Elevated> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "requires Windows",

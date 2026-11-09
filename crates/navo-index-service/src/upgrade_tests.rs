@@ -1,4 +1,5 @@
 use super::ServiceQuery;
+use super::install_check::{Mismatch, is_mismatch};
 use super::install_plan::{CopyPlan, LEGACY_PRODUCT, NAVO};
 use super::upgrade::{UpgradeNotice, await_answer, carry_legacy_config, remove_both};
 use std::time::Duration;
@@ -10,6 +11,7 @@ fn query(legacy_present: bool) -> impl FnOnce() -> io::Result<ServiceQuery> {
             running: None,
             version: None,
             legacy_present,
+            legacy_image: false,
         })
     }
 }
@@ -58,18 +60,39 @@ fn waiting_for_the_new_pipe_is_bounded_and_ends_on_the_first_answer() {
     let limit = (Duration::from_millis(30), Duration::from_millis(5));
     let error = await_answer(limit, || {
         calls.set(calls.get() + 1);
-        false
+        Err(io::ErrorKind::NotFound.into())
     })
     .unwrap_err();
     assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    assert!(!is_mismatch(&error), "a silent pipe is a timeout");
     assert!(calls.get() >= 2);
     calls.set(0);
     await_answer(limit, || {
         calls.set(calls.get() + 1);
-        calls.get() == 2
+        match calls.get() {
+            1 => Err(io::Error::other(Mismatch::NotRunning)),
+            _ => Ok(()),
+        }
     })
     .unwrap();
     assert_eq!(calls.get(), 2);
+}
+
+#[test]
+fn a_wrong_answer_until_the_deadline_is_a_mismatch() {
+    let limit = (Duration::from_millis(20), Duration::from_millis(5));
+    let tries = Cell::new(0);
+    let error = await_answer(limit, || {
+        tries.set(tries.get() + 1);
+        match tries.get() {
+            1 => Err(io::Error::other(Mismatch::NotRunning)),
+            _ => Err(io::ErrorKind::NotFound.into()),
+        }
+    })
+    .unwrap_err();
+    assert!(is_mismatch(&error), "{error}");
+    let error = await_answer(limit, || Err(io::Error::other(Mismatch::OldProcess))).unwrap_err();
+    assert!(is_mismatch(&error), "{error}");
 }
 
 #[test]

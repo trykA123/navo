@@ -1,3 +1,5 @@
+//! Builder methods for the settings sheet body passed to the renderer.
+
 use std::rc::Rc;
 
 use gpui_kit::{FocusHandle, ScrollHandle};
@@ -16,6 +18,7 @@ impl SettingsBody {
             values,
             row: row.min(HELP_ROW),
             error: None,
+            notice: None,
             editor: None,
             shortcuts: None,
             find: None,
@@ -50,6 +53,14 @@ impl SettingsBody {
     #[must_use]
     pub fn error(mut self, message: Option<SharedString>) -> Self {
         self.error = message;
+        self
+    }
+
+    /// Sets the error line and the neutral notice line; a deferred outcome uses the latter.
+    #[must_use]
+    pub fn messages(mut self, error: Option<SharedString>, notice: Option<SharedString>) -> Self {
+        self.error = error;
+        self.notice = notice;
         self
     }
 

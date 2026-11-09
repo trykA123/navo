@@ -6,7 +6,7 @@ use std::sync::{Mutex, PoisonError};
 use std::thread;
 
 use navo_update::{FeedError, Found, InstallKind, Release, UpdateFeed, Version, parse_version};
-use velopack::sources::GithubSource;
+use velopack::sources::{GithubSource, UpdateSource};
 use velopack::{Error, NetworkError, UpdateCheck, UpdateInfo, UpdateManager, UpdateOptions};
 
 const REPO: &str = "https://github.com/trykA123/navo";
@@ -20,7 +20,7 @@ pub(crate) fn install_kind(manager: &UpdateManager) -> InstallKind {
     }
 }
 
-/// Checks and downloads from GitHub releases. The last found update is kept for the download.
+/// Checks and downloads releases. The last found update is kept for the download.
 pub(crate) struct VelopackFeed {
     manager: UpdateManager,
     kind: InstallKind,
@@ -28,14 +28,19 @@ pub(crate) struct VelopackFeed {
 }
 
 impl VelopackFeed {
-    /// `Err(Unpackaged)` when this copy has no Velopack install around it.
+    /// No feed when this copy is unpackaged or its tester override is invalid.
     pub(crate) fn detect() -> Result<Self, InstallKind> {
         let options = UpdateOptions {
             AllowVersionDowngrade: false,
             ..Default::default()
         };
-        let source = GithubSource::new(REPO, None, true);
-        match UpdateManager::new(source, Some(options), None) {
+        let source: Box<dyn UpdateSource> = Box::new(GithubSource::new(REPO, None, true));
+        #[cfg(feature = "tester")]
+        let source = match super::test_feed::source().map_err(|_| InstallKind::Unpackaged)? {
+            Some(source) => Box::new(source) as Box<dyn UpdateSource>,
+            None => source,
+        };
+        match UpdateManager::new_boxed(source, Some(options), None) {
             Ok(manager) => Ok(Self {
                 kind: install_kind(&manager),
                 manager,

@@ -18,7 +18,7 @@ struct Disk {
 
 fn disk(stale: Option<&[u8]>) -> Disk {
     let root = tempfile::tempdir().unwrap();
-    let source = root.path().join("navo.exe");
+    let source = root.path().join("navo-index.exe");
     std::fs::write(&source, NEW).unwrap();
     let plan = CopyPlan::new(&root.path().join("Program Files"), 7);
     std::fs::create_dir_all(&plan.directory).unwrap();
@@ -65,6 +65,7 @@ fn install(
             _ => Ok(()),
         }
     })
+    .map(drop)
 }
 
 fn image(disk: &Disk) -> Option<Vec<u8>> {
@@ -75,7 +76,7 @@ fn leftovers(disk: &Disk) -> Vec<String> {
     std::fs::read_dir(&disk.plan.directory)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| name != "navo.exe")
+        .filter(|name| name != "navo-index.exe")
         .collect()
 }
 
@@ -90,21 +91,21 @@ fn an_install_over_a_stale_image_replaces_it() {
 #[test]
 fn a_failed_replace_is_an_error_and_the_old_image_stays_whole() {
     let disk = disk(Some(OLD));
-    let replace = 5;
+    let replace = 6;
     assert!(install(&disk, true, Some(replace), |_| {}).is_err());
     assert_eq!(image(&disk).as_deref(), Some(OLD));
 }
 
 #[test]
 fn every_single_fault_ends_in_an_error_with_the_old_image_or_success_with_the_new() {
-    // Calls 2 and 11 sweep old images; their failure is only a leftover.
-    let calls = 11;
+    // Calls 2 and 12 sweep old images and 13 deletes the legacy image; each is only a leftover.
+    let calls = 13;
     for fault in 1..=calls {
         let disk = disk(Some(OLD));
         let result = install(&disk, true, Some(fault), |_| {});
         match result {
             Ok(()) => {
-                assert!(fault == 2 || fault == calls, "fault {fault} was ignored");
+                assert!([2, 12, 13].contains(&fault), "fault {fault} was ignored");
                 assert_eq!(image(&disk).as_deref(), Some(NEW), "fault {fault}");
             }
             Err(_) => {
@@ -135,7 +136,7 @@ fn an_image_swapped_before_the_check_fails_the_install_and_rolls_back() {
 #[test]
 fn an_exe_left_behind_by_remove_is_replaced_by_the_next_install() {
     let disk = disk(Some(OLD));
-    let mapped_leftover = disk.plan.directory.join("navo.exe.99.old");
+    let mapped_leftover = disk.plan.directory.join("navo-index.exe.99.old");
     std::fs::write(&mapped_leftover, OLD).unwrap();
     install(&disk, false, None, |_| {}).unwrap();
     assert_eq!(image(&disk).as_deref(), Some(NEW));

@@ -1,4 +1,25 @@
+//! Remove step sequencing and the best-effort cleanup after the change lock drops.
+
 use std::io;
+
+mod files;
+mod stop;
+
+pub(super) use files::{LockedImage, removable_image};
+pub(super) use stop::{INSTALL_STOP_LIMIT, PROCESS_WAIT};
+
+#[cfg(windows)]
+pub(super) use files::{CHANGE_LOCK, Cleanup, Entry, Files, Folders, Limits, clean, remove_parent};
+#[cfg(windows)]
+pub(super) use stop::{
+    Control, POLL, REMOVE_DEADLINE, StartResult, State, Status, StopLimits, start, stop,
+};
+
+/// Runs the best-effort folder cleanup after the lock drops; the action result is unchanged.
+pub(super) fn finish<T>(result: io::Result<T>, cleanup: impl FnOnce()) -> io::Result<T> {
+    cleanup();
+    result
+}
 
 pub(super) fn run(
     remove_service: impl FnOnce() -> io::Result<()>,
@@ -11,20 +32,21 @@ pub(super) fn run(
     cleanup()
 }
 
-pub(super) fn remove_image(delete: impl FnMut() -> io::Result<()>) -> io::Result<()> {
-    let mut delete = delete;
-    super::install_plan::retry(5, std::time::Duration::from_millis(200), || {
-        match delete() {
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            result => result,
-        }
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn cleanup_never_changes_the_remove_result() {
+        let cleaned = Cell::new(false);
+        let result = finish(Ok(crate::Elevated::Done), || cleaned.set(true));
+        assert!(cleaned.get());
+        assert_eq!(result.unwrap(), crate::Elevated::Done);
+
+        let error = finish::<crate::Elevated>(Err(io::ErrorKind::PermissionDenied.into()), || {});
+        assert_eq!(error.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+    }
 
     #[test]
     fn removing_an_absent_service_still_cleans_its_files() {
@@ -38,21 +60,6 @@ mod tests {
         )
         .unwrap();
         assert!(cleaned.get());
-    }
-
-    #[test]
-    fn mapped_images_are_retried_before_cleanup_is_abandoned() {
-        let attempts = Cell::new(0);
-        remove_image(|| {
-            attempts.set(attempts.get() + 1);
-            if attempts.get() < 4 {
-                Err(io::ErrorKind::PermissionDenied.into())
-            } else {
-                Ok(())
-            }
-        })
-        .unwrap();
-        assert_eq!(attempts.get(), 4);
     }
 }
 
@@ -73,15 +80,5 @@ mod refusal_tests {
             .is_err()
         );
         assert!(!cleaned);
-    }
-    #[test]
-    fn an_already_missing_image_needs_no_retry() {
-        let mut attempts = 0;
-        remove_image(|| {
-            attempts += 1;
-            Err(io::ErrorKind::NotFound.into())
-        })
-        .unwrap();
-        assert_eq!(attempts, 1);
     }
 }

@@ -1,3 +1,5 @@
+//! Settings sheet panel state, actions and overlay rendering.
+
 mod change;
 mod edit;
 mod find;
@@ -88,6 +90,7 @@ pub(super) struct SettingsPanel {
     edit: Option<edit::TextEdit>,
     restore_preview: bool,
     notice: Option<SharedString>,
+    service_notice: Option<SharedString>,
     waiting_locate: Option<Field>,
     file: Option<Location>,
     line_of: FindLine,
@@ -153,6 +156,7 @@ impl SettingsPanel {
             edit: None,
             restore_preview: false,
             notice: None,
+            service_notice: None,
             waiting_locate: None,
             file,
             line_of,
@@ -239,6 +243,7 @@ impl NavoWindow {
         self.prepare_find(window, cx);
         self.settings.undo.clear();
         self.settings.notice = None;
+        self.settings.service_notice = None;
         self.settings.sheet.update(cx, |sheet, cx| sheet.open(cx));
         self.focus_settings(window, cx);
         cx.notify();
@@ -311,6 +316,7 @@ impl NavoWindow {
         let from = section_of(self.settings.row);
         self.settings.row = row.min(HELP_ROW);
         self.settings.notice = None;
+        self.settings.service_notice = None;
         let was_shortcuts = std::mem::take(&mut self.settings.is_shortcuts);
         if was_shortcuts {
             self.pause_shortcuts(cx);
@@ -365,7 +371,7 @@ impl NavoWindow {
             .update(self.settings.updates.view.clone(), self.restart_offered())
             .summon_key_taken(self.summon_key_taken())
             .clipboard_key_taken(self.clipboard_key_taken())
-            .error(error)
+            .messages(error, self.settings.service_notice.clone())
             .filter(self.settings.filter.clone())
             .find(self.find_bar(&t, cx))
             .upgrade(self.settings.upgrade.items())

@@ -161,6 +161,12 @@ fn execute_command(
             ExitCode::SUCCESS
         }
         #[cfg(feature = "tester")]
+        Command::UpdateStatus => {
+            let _diagnostics = install_logging(&profile);
+            println!("{}", updater::test_feed::status());
+            ExitCode::SUCCESS
+        }
+        #[cfg(feature = "tester")]
         Command::DiagReport(path) => write_report(&path, started, &profile),
         Command::CrashTest(_) => crash_test(&profile),
         Command::PdfHelper => pdf_helper::run(),

@@ -6,18 +6,22 @@ use std::time::Duration;
 pub(super) struct Product {
     pub folder: &'static str,
     pub image: &'static str,
+    /// Every image remove deletes, with its numbered `.old` and `.tmp` copies.
+    pub removable: &'static [&'static str],
     pub service: &'static [u8],
 }
 
 pub(super) const NAVO: Product = Product {
     folder: navo_core::brand::NAME,
-    image: "navo.exe",
+    image: "navo-index.exe",
+    removable: &["navo-index.exe", "navo.exe"],
     service: b"Navo Index",
 };
 
 pub(super) const LEGACY_PRODUCT: Product = Product {
     folder: navo_core::brand::LEGACY_NAME,
     image: "ferrite.exe",
+    removable: &["ferrite.exe"],
     service: b"Ferrite Index",
 };
 
@@ -132,7 +136,11 @@ impl CopyPlan {
         let mut result = Ok(());
         for entry in std::fs::read_dir(&self.directory)? {
             let entry = entry?;
-            if is_old_image(self.image, &entry.file_name().to_string_lossy()) {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if !name.eq_ignore_ascii_case(self.image)
+                && super::removal::removable_image(&[self.image], &name).is_some()
+            {
                 result = result.and(std::fs::remove_file(entry.path()));
             }
         }
@@ -262,6 +270,8 @@ pub(super) enum Step {
     RestoreConfiguration,
     DeleteOld,
     Verify,
+    Answer,
+    DeleteLegacy,
 }
 
 pub(super) fn install_steps(exists: bool) -> &'static [Step] {
@@ -269,13 +279,14 @@ pub(super) fn install_steps(exists: bool) -> &'static [Step] {
     if exists {
         &[
             Copy,
+            Stop,
             RenameOld,
             Replace,
-            Stop,
             BackupSettings,
             Configure,
             Start,
             Verify,
+            Answer,
         ]
     } else {
         &[
@@ -286,15 +297,18 @@ pub(super) fn install_steps(exists: bool) -> &'static [Step] {
             Configure,
             Start,
             Verify,
+            Answer,
         ]
     }
 }
 
+/// Runs the install with rollback; `Answer` is the commit point. `Ok(Some(warning))`: the new
+/// service runs, but the legacy image could not be deleted.
 pub(super) fn run_install(
     exists: bool,
     was_running: bool,
     mut execute: impl FnMut(Step) -> io::Result<()>,
-) -> io::Result<()> {
+) -> io::Result<Option<io::Error>> {
     execute(Step::RecoverOld)?;
     let _ = execute(Step::DeleteOld);
     let mut completed = Vec::new();
@@ -305,7 +319,7 @@ pub(super) fn run_install(
         completed.push(step);
     }
     let _ = execute(Step::DeleteOld);
-    Ok(())
+    Ok(execute(Step::DeleteLegacy).err())
 }
 
 fn recover(
@@ -328,7 +342,7 @@ fn recover(
     } else if completed.contains(&Step::Copy) {
         rollback.push((Step::DiscardCopy, "discarding the temporary copy"));
     }
-    if !exists && replaced {
+    if replaced {
         rollback.push((Step::RemoveFresh, "removing the new executable"));
     }
     if exists && replaced {
