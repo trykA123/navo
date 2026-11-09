@@ -19,6 +19,7 @@ pub(super) fn read_worktree_form(
     let spec = CommandSpec {
         git: &cli.git,
         repo: Some(&cli.repo),
+        git_dir: None,
         env: &cli.env,
         timeout: cli.timeout,
     };

@@ -1,6 +1,8 @@
+//! The command-line Git backend: resolves Git once and reads a repository through `CliGit`.
+
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::process::{Output, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -43,6 +45,9 @@ pub use sync_read::Tracking;
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const MIN_GIT_VERSION: (u32, u32) = (2, 36);
 
+/// How long an unused `cat-file` child may stay alive before the next read replaces it.
+const BATCH_IDLE: Duration = Duration::from_secs(2);
+
 #[derive(Debug, Clone)]
 pub struct CliOptions {
     pub timeout: Duration,
@@ -69,6 +74,8 @@ pub struct CliGit {
     git_dir_output: Vec<u8>,
     session: Arc<Mutex<Option<Batch>>>,
     next_generation: AtomicU64,
+    /// How long an unused batch child may stay alive before the next read replaces it.
+    batch_idle: Duration,
 }
 
 impl CliGit {
@@ -104,6 +111,7 @@ impl CliGit {
             git_dir_output: Vec::new(),
             session: Arc::new(Mutex::new(None)),
             next_generation: AtomicU64::new(0),
+            batch_idle: BATCH_IDLE,
         };
         cli.git_dir_output = cli.run_ok(&["rev-parse", "--absolute-git-dir"])?.stdout;
         Ok(cli)
@@ -119,6 +127,7 @@ impl CliGit {
         let spec = CommandSpec {
             git: &self.git,
             repo: Some(&self.repo),
+            git_dir: None,
             env: &self.env,
             timeout: options.timeout,
         };
@@ -146,6 +155,7 @@ impl CliGit {
         let spec = CommandSpec {
             git: &self.git,
             repo: Some(&self.repo),
+            git_dir: None,
             env: &self.env,
             timeout: self.timeout,
         };
@@ -180,14 +190,22 @@ impl CliGit {
         }
     }
 
-    fn spawn_batch(&self) -> Result<Batch, GitError> {
+    /// Builds `cat-file` against the absolute git dir from the temp folder, never the work tree.
+    fn batch_command(&self) -> Result<Command, GitError> {
+        let git_dir = self.git_dir()?;
         let spec = CommandSpec {
             git: &self.git,
-            repo: Some(&self.repo),
+            repo: None,
+            git_dir: Some(&git_dir),
             env: &self.env,
             timeout: self.timeout,
         };
-        let mut command = base_command(&spec);
+        Ok(base_command(&spec))
+    }
+
+    /// Starts the long-lived `cat-file` batch child.
+    fn spawn_batch(&self) -> Result<Batch, GitError> {
+        let mut command = self.batch_command()?;
         command
             .args(["cat-file", "--batch-command", "--buffer"])
             .stdin(Stdio::piped())
@@ -246,9 +264,13 @@ impl GitSource for CliGit {
         parse_tree(&output.stdout)
     }
 
+    /// Starts a blob read, replacing a dead or idle batch child first.
     fn read_blob(&self, id: &ObjectId) -> Result<BlobReader, GitError> {
         let mut session = self.session.lock().map_err(|_| GitError::SessionClosed)?;
-        if session.as_ref().is_some_and(Batch::is_dead) {
+        let stale = session
+            .as_ref()
+            .is_some_and(|batch| batch.is_dead() || batch.is_idle(self.batch_idle));
+        if stale {
             *session = None;
         }
         if session.is_none() {
