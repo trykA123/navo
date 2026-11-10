@@ -263,7 +263,8 @@ pub(super) fn finish(c: &Ctx) -> AnyElement {
     let heading = c
         .strings
         .finish_title
-        .replace("{path}", &c.view.folder_text);
+        .replace("{path}", &format!("\n{}", c.view.folder_text))
+        .replace(" \n", "\n");
     let send = c.on_action.clone();
     let start = CheckBox::new("finish-start", c.strings.finish_start.clone())
         .checked(c.view.start_navo)

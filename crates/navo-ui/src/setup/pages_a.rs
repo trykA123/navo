@@ -203,9 +203,15 @@ pub(super) fn folder(c: &Ctx) -> AnyElement {
         .gap(c.t.spacing.sm)
         .child(path_field(c))
         .child(browse);
-    column(c, &c.strings.folder_title)
+    let mut page = column(c, &c.strings.folder_title)
         .child(row)
-        .child(status_lines(c))
-        .child(paragraph(c, c.strings.folder_warning.to_string()))
-        .into_any_element()
+        .child(status_lines(c));
+    if !c.view.folder_locked {
+        page = page.child(
+            paragraph(c, c.strings.folder_warning.to_string())
+                .id("folder-warning")
+                .test_support(),
+        );
+    }
+    page.into_any_element()
 }

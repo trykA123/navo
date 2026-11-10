@@ -81,6 +81,10 @@ fn a_locked_folder_turns_browse_off(cx: &mut TestAppContext) {
     let (window, sent) = open(cx, folder_view(true));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert!(
+            window.try_find("folder-warning").is_none(),
+            "a locked upgrade folder draws no create warning"
+        );
         window.click("folder-browse", cx);
     })
     .expect("window");

@@ -149,7 +149,7 @@ fn finish_names_the_folder_lists_keys_and_sends_actions(cx: &mut TestAppContext)
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let heading = window.find("setup-heading");
-        assert_eq!(heading.label(), Some("Navo is installed in C:\\Navo."));
+        assert_eq!(heading.label(), Some("Navo is installed in\nC:\\Navo."));
         for (index, key) in ["Ctrl+K", "F1", "Shift+F1"].into_iter().enumerate() {
             let line = window.find(format!("finish-key-{index}"));
             assert!(line.label().expect("label").starts_with(key));
