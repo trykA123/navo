@@ -260,6 +260,7 @@ jobs:
           $assets.Add("$env:PACK_ID-$env:CHANNEL-Setup.exe")
           $assets.Add($env:PACK_ASSET)
           $assets.Add("releases.$env:CHANNEL.json")
+          $assets.Add("assets.$env:CHANNEL.json")
           $assets.Add('RELEASES')
           $assets.Add('navo-windows-x64-pdb.zip')
           if ($env:NAVO_PUBLISH_SETUP_WIZARD -eq 'true') { $assets.Add('Navo-Setup.exe') }
