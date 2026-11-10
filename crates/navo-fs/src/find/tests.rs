@@ -191,7 +191,13 @@ fn cancellation_keeps_delivered_hits_and_stops_at_a_batch_boundary() {
     assert!(matches!(result, Err(FindError::Cancelled)));
     assert!(cancel.is_cancelled());
     assert!(!names(&batches).is_empty());
-    assert!(batches.last().unwrap().progress.scanned <= 200);
+    // Files a virus scanner holds come back skipped, so earlier batches may have no hits.
+    let before = batches
+        .iter()
+        .rev()
+        .nth(1)
+        .map_or(0, |batch| batch.progress.scanned);
+    assert!(batches.last().unwrap().progress.scanned - before <= 200);
 }
 
 #[test]
