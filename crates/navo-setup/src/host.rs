@@ -1,6 +1,6 @@
 //! Platform boundary for the install runner: probes, holds, payload and process scan.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -97,33 +97,115 @@ pub trait Host {
     ) -> io::Result<Cleanup>;
 }
 
-/// Whether `root` holds only a Velopack uninstall leftover: `Update.exe` and empty folders.
-///
-/// Velopack's uninstaller can leave `Update.exe` and empty folders behind. Setup accepts
-/// such a folder as a fresh root; any other file or non-empty folder still refuses it.
-pub(crate) fn uninstall_leftovers_only(root: &Path) -> io::Result<bool> {
-    for entry in std::fs::read_dir(root)? {
-        let entry = entry?;
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            if std::fs::read_dir(entry.path())?.next().is_some() {
-                return Ok(false);
+/// One directory entry's shape for the uninstall-leftover rule.
+struct Leftover {
+    name: OsString,
+    folder: bool,
+    reparse: bool,
+    empty: bool,
+}
+
+/// Whether the entries are a regular `Update.exe` plus empty, non-reparse folders.
+fn leftovers_shape(entries: &[Leftover]) -> bool {
+    let mut update = false;
+    for entry in entries {
+        if entry.reparse {
+            return false;
+        }
+        if entry.folder {
+            if !entry.empty {
+                return false;
             }
-        } else if !(kind.is_file()
-            && entry
-                .file_name()
-                .as_os_str()
-                .eq_ignore_ascii_case(std::ffi::OsStr::new("Update.exe")))
-        {
-            return Ok(false);
+        } else if entry.name.eq_ignore_ascii_case(OsStr::new("Update.exe")) {
+            update = true;
+        } else {
+            return false;
         }
     }
-    Ok(true)
+    update
+}
+
+/// Whether `root` holds only a Velopack uninstall leftover: a regular `Update.exe` and empty folders.
+///
+/// Velopack's uninstaller can leave `Update.exe` and empty folders behind. Setup accepts
+/// exactly that shape as a fresh root; any other file, non-empty folder or reparse point refuses it.
+pub(crate) fn uninstall_leftovers_only(root: &Path) -> io::Result<bool> {
+    let mut entries = Vec::new();
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        let metadata = std::fs::symlink_metadata(entry.path())?;
+        let folder = metadata.is_dir();
+        let reparse = is_reparse(&metadata);
+        let empty = folder && !reparse && std::fs::read_dir(entry.path())?.next().is_none();
+        entries.push(Leftover {
+            name: entry.file_name(),
+            folder,
+            reparse,
+            empty,
+        });
+    }
+    Ok(leftovers_shape(&entries))
+}
+
+/// Whether the metadata carries a reparse point: a Windows attribute or a symlink elsewhere.
+#[cfg(windows)]
+fn is_reparse(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse(metadata: &std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Builds one fabricated entry for the pure rule.
+    fn leftover(name: &str, folder: bool, reparse: bool, empty: bool) -> Leftover {
+        Leftover {
+            name: name.into(),
+            folder,
+            reparse,
+            empty,
+        }
+    }
+
+    #[test]
+    fn the_rule_requires_a_regular_update_exe() {
+        assert!(leftovers_shape(&[
+            leftover("Update.exe", false, false, true),
+            leftover("empty", true, false, true),
+        ]));
+        assert!(!leftovers_shape(&[leftover("empty", true, false, true)]));
+        assert!(!leftovers_shape(&[leftover(
+            "Update.exe",
+            true,
+            false,
+            true
+        )]));
+        assert!(!leftovers_shape(&[
+            leftover("Update.exe", false, false, true),
+            leftover("other.txt", false, false, true),
+        ]));
+        assert!(!leftovers_shape(&[
+            leftover("Update.exe", false, false, true),
+            leftover("full", true, false, false),
+        ]));
+        assert!(!leftovers_shape(&[leftover(
+            "Update.exe",
+            false,
+            true,
+            true
+        )]));
+        assert!(!leftovers_shape(&[
+            leftover("Update.exe", false, false, true),
+            leftover("link", true, true, false),
+        ]));
+    }
 
     /// Builds a temp folder with the given files and empty folders.
     fn folder(files: &[&str], dirs: &[&str]) -> tempfile::TempDir {
@@ -146,16 +228,28 @@ mod tests {
     }
 
     #[test]
+    fn empty_folders_without_an_update_leftover_are_refused() {
+        let root = folder(&[], &["src", "docs"]);
+        assert!(!uninstall_leftovers_only(root.path()).unwrap());
+    }
+
+    #[test]
     fn anything_else_is_refused() {
-        for root in [
-            folder(&["Update.exe", "other.txt"], &[]),
-            folder(&["Setup.exe"], &[]),
-            folder(&[], &["full"]),
-        ] {
-            if root.path().join("full").exists() {
-                std::fs::write(root.path().join("full/child"), b"x").unwrap();
-            }
-            assert!(!uninstall_leftovers_only(root.path()).unwrap());
-        }
+        let other = folder(&["Update.exe", "other.txt"], &[]);
+        assert!(!uninstall_leftovers_only(other.path()).unwrap());
+        let setup = folder(&["Setup.exe"], &[]);
+        assert!(!uninstall_leftovers_only(setup.path()).unwrap());
+        let full = folder(&["Update.exe"], &["full"]);
+        std::fs::write(full.path().join("full/child"), b"x").unwrap();
+        assert!(!uninstall_leftovers_only(full.path()).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_reparse_entry_is_refused() {
+        use std::os::unix::fs::symlink;
+        let root = folder(&["Update.exe"], &[]);
+        symlink(root.path().join("Update.exe"), root.path().join("link")).unwrap();
+        assert!(!uninstall_leftovers_only(root.path()).unwrap());
     }
 }

@@ -178,3 +178,22 @@ fn a_swapped_empty_folder_is_kept_by_identity() {
     assert_eq!(removal.kept, vec![folder.clone()]);
     assert!(folder.exists());
 }
+
+#[test]
+fn an_existing_leftover_root_is_held() {
+    let temp = tempfile::tempdir().expect("temp folder");
+    std::fs::write(temp.path().join("Update.exe"), b"x").expect("update");
+    std::fs::create_dir(temp.path().join("empty")).expect("empty");
+    let chain = chain_under(temp.path(), &[]);
+    let pin = Pin::fresh(&chain).expect("leftover root is held");
+    assert_eq!(pin.root(), Some(temp.path()));
+    assert!(!pin.created_root());
+}
+
+#[test]
+fn a_non_leftover_existing_root_still_refuses() {
+    let temp = tempfile::tempdir().expect("temp folder");
+    std::fs::write(temp.path().join("other.txt"), b"x").expect("other");
+    let chain = chain_under(temp.path(), &[]);
+    assert!(matches!(Pin::fresh(&chain), Err(PinError::RootExists)));
+}

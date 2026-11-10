@@ -26,7 +26,7 @@ use crate::upgrade::{self, Staged};
 mod checks;
 #[path = "host_files.rs"]
 mod files;
-use checks::{folder_error, refuse_existing, refuse_existing_folders, refuse_fresh};
+use checks::{folder_error, refuse_existing, refuse_existing_folders};
 use files::{hash_reader, marker_id, open_regular};
 
 /// The extracted Setup.exe and work folder; `setup` drops first so a bare close can delete it.
@@ -63,7 +63,7 @@ impl Host for WindowsHost {
     /// Creates and holds the fresh chain after placement; every post-create error removes it.
     fn pin_fresh(&mut self, root: &Path, space: &Space) -> io::Result<Pin> {
         let chain = resolved(root)?;
-        refuse_fresh(&chain)?;
+        refuse_existing(&chain)?;
         let refused = chain::refused()?;
         let facts = facts::facts(&chain)?;
         placement::check(&chain, &refused, &facts, space, &chain::OrdinalNames)
@@ -162,7 +162,12 @@ impl Host for WindowsHost {
             .pin
             .root()
             .ok_or_else(|| io::Error::other("pin has no root"))?;
-        crate::host::uninstall_leftovers_only(root)
+        if held.pin.created_root() {
+            let mut entries = fs::read_dir(root)?;
+            Ok(entries.next().is_none())
+        } else {
+            crate::host::uninstall_leftovers_only(root)
+        }
     }
 
     /// Creates the private work folder, extracts Setup.exe and holds it.

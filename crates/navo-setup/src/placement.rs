@@ -113,6 +113,9 @@ pub fn check(
     if chain.existing.is_empty() || chain.missing.iter().any(|name| name.is_empty()) {
         return Err(FolderProblem::ProbeFailed);
     }
+    if chain.existing.iter().any(|link| link.reparse) {
+        return Err(FolderProblem::ReparsePoint);
+    }
     if chain.missing.is_empty() {
         let leftovers = chain
             .existing
@@ -121,9 +124,6 @@ pub fn check(
         if !leftovers {
             return Err(FolderProblem::RootExists);
         }
-    }
-    if chain.existing.iter().any(|link| link.reparse) {
-        return Err(FolderProblem::ReparsePoint);
     }
     if facts.subst {
         return Err(FolderProblem::SubstDrive);

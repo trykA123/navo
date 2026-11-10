@@ -87,9 +87,6 @@ impl Pin {
             let Some(root) = chain.existing.last() else {
                 return Err(PinError::InvalidChain);
             };
-            if !crate::host::uninstall_leftovers_only(&root.path).unwrap_or(false) {
-                return Err(PinError::RootExists);
-            }
             let handle = open_hold(&root.path)?;
             let (id, reparse, directory) = read_id(&handle)?;
             if reparse {
@@ -97,6 +94,12 @@ impl Pin {
             }
             if !directory {
                 return Err(PinError::NotFolder);
+            }
+            if id != root.id {
+                return Err(PinError::Identity);
+            }
+            if !crate::host::uninstall_leftovers_only(&root.path)? {
+                return Err(PinError::RootExists);
             }
             return Ok(Self {
                 existing_root: Some(Held {
@@ -146,6 +149,11 @@ impl Pin {
             }),
             created: Vec::new(),
         })
+    }
+
+    /// Whether the root is one Setup created in this session.
+    pub fn created_root(&self) -> bool {
+        self.existing_root.is_none() && !self.created.is_empty()
     }
 
     /// The held root path, or `None` when the pin holds nothing.

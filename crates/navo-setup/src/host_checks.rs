@@ -5,14 +5,6 @@ use std::io;
 use crate::placement::{self, Chain, Protected, Refused};
 use crate::probe::chain;
 
-/// Refuses a fresh chain with any existing reparse point or a root that exists.
-pub(super) fn refuse_fresh(chain: &Chain) -> io::Result<()> {
-    if chain.missing.is_empty() {
-        return Err(io::Error::from(io::ErrorKind::AlreadyExists));
-    }
-    refuse_existing(chain)
-}
-
 /// Refuses a chain with a reparse point or a root that cannot be the install root.
 pub(super) fn refuse_existing(chain: &Chain) -> io::Result<()> {
     if chain.existing.is_empty() || chain.existing.iter().any(|link| link.reparse) {
