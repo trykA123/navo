@@ -62,7 +62,6 @@ pub(crate) fn install(data: Option<&Path>, diagnostics: &Diagnostics) {
 
 /// Runs the hidden `--crash-server <socket> <logs>` mode: one native dump, then exit.
 /// Returns 2 off Windows, where no native crash reporter exists.
-#[expect(dead_code, reason = "R2d wires the --crash-server flag")]
 pub(crate) fn serve(socket: &Path, logs: &Path) -> ExitCode {
     #[cfg(windows)]
     {

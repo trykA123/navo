@@ -378,3 +378,28 @@ fn trace_is_refused_instead_of_forwarded_to_a_running_instance() {
         std::ops::ControlFlow::Break(std::process::ExitCode::FAILURE)
     ));
 }
+
+#[test]
+fn crash_server_mode_takes_a_socket_and_a_log_folder() {
+    let parsed = parse_strs(&["--crash-server", "sock", "logs"]).expect("both values parse");
+    assert_eq!(
+        parsed,
+        Command::CrashServer {
+            socket: PathBuf::from("sock"),
+            logs: PathBuf::from("logs"),
+        }
+    );
+    assert!(!parsed.uses_console());
+}
+
+#[test]
+fn crash_server_mode_needs_both_values() {
+    assert!(refusal(&["--crash-server"]).contains("--crash-server needs a value"));
+    assert!(refusal(&["--crash-server", "sock"]).contains("--crash-server needs a value"));
+}
+
+#[test]
+fn crash_server_mode_stands_alone() {
+    assert!(refusal(&["--crash-server", "sock", "logs", "--left", "a"]).contains("stands alone"));
+    assert!(refusal(&["--left", "a", "--crash-server", "sock", "logs"]).contains("stands alone"));
+}
