@@ -9,6 +9,8 @@ use super::*;
 use crate::{EntryBatch, EntryKind};
 
 #[cfg(windows)]
+mod copy_offload;
+#[cfg(windows)]
 mod copy_windows;
 mod details;
 mod errors;
