@@ -44,7 +44,7 @@ const ALL_PAGES: [SetupPage; 13] = [
 
 #[test]
 fn no_page_has_two_actions_on_one_letter() {
-    let strings = Strings::english();
+    let strings = Strings::load();
     for page in ALL_PAGES {
         let view = SetupView {
             page,
@@ -62,7 +62,7 @@ fn no_page_has_two_actions_on_one_letter() {
 
 #[test]
 fn folder_lists_browse_until_the_field_is_locked() {
-    let strings = Strings::english();
+    let strings = Strings::load();
     let folder = SetupView {
         page: SetupPage::Folder,
         can_next: true,
@@ -84,7 +84,7 @@ fn folder_lists_browse_until_the_field_is_locked() {
 
 #[test]
 fn licence_lists_accept_and_next_follows_its_gate() {
-    let strings = Strings::english();
+    let strings = Strings::load();
     let view = SetupView {
         page: SetupPage::Licence,
         can_back: true,

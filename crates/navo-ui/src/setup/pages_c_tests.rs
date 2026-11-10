@@ -22,7 +22,7 @@ impl Render for Host {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let sent = self.sent.clone();
         let on_action: OnAction = Rc::new(move |action, _, _| sent.borrow_mut().push(action));
-        render_page(&self.view, &Strings::english(), on_action)
+        render_page(&self.view, &Strings::load(), on_action)
     }
 }
 
@@ -185,7 +185,7 @@ fn blocked_names_the_folder_and_retry_follows_the_gate(cx: &mut TestAppContext) 
 
 #[test]
 fn access_keys_list_the_buttons_of_each_page_without_a_clash() {
-    let strings = Strings::english();
+    let strings = Strings::load();
     let keys = |page, can_retry| {
         access_keys(
             &SetupView {

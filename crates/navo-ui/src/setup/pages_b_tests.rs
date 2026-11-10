@@ -24,7 +24,7 @@ impl Render for Host {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let sent = self.sent.clone();
         let on_action: OnAction = Rc::new(move |action, _, _| sent.borrow_mut().push(action));
-        render_page(&self.view, &Strings::english(), on_action)
+        render_page(&self.view, &Strings::load(), on_action)
     }
 }
 
