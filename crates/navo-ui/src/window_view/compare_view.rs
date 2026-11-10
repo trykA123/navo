@@ -1,5 +1,7 @@
 //! Compare mode on screen: each compared pane draws its side's rows, one bar sits above both.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use navo_core::PaneId;
@@ -12,6 +14,7 @@ use crate::compare_diff::DiffHooks;
 use crate::compare_list::{BarEvent, CompareBar, CompareEvent, CompareList};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
+use gpui_kit::EntityId;
 
 /// The rows built for one run and revision, so a frame does not rebuild 66,000 of them.
 struct Built {
@@ -22,6 +25,8 @@ struct Built {
 /// The compare UI state: the pane lists, and the full-window screen over them (D23).
 pub(super) struct CompareView {
     scroll: ListScroll,
+    /// The scroll offset the panes last painted at.
+    painted_offset: Rc<Cell<Pixels>>,
     built: Option<Built>,
     scrolled_to: Option<String>,
     /// The file diff and Stream drawn in place of the panes, when open.
@@ -35,6 +40,7 @@ impl CompareView {
     pub(super) fn new(hooks: Option<Arc<dyn DiffHooks>>, wake: Waker) -> Self {
         Self {
             scroll: ListScroll::default(),
+            painted_offset: Rc::default(),
             built: None,
             scrolled_to: None,
             screen: None,
@@ -77,11 +83,18 @@ impl NavoWindow {
         // The empty text follows totals, which do not move the revision.
         let empty = rows.is_empty().then(|| empty_text(mode)).flatten();
         let label = navo_l10n::tr(["compare-list-left", "compare-list-right"][side]);
+        let panes: Vec<_> = self.cached.pane_ids().collect();
         let list = CompareList::new(("compare-list", pane.get()), rows, &self.compare.scroll)
             .selected(at)
             .active(self.browser.state().focused_pane() == pane)
             .empty_text(empty)
             .label(label)
+            .on_scroll(
+                Rc::clone(&self.compare.painted_offset),
+                move |window, cx| {
+                    notify_panes_later(panes.clone(), window, cx);
+                },
+            )
             .track_focus(focus)
             .on_event(
                 cx.listener(move |this: &mut Self, event: &CompareEvent, window, cx| {
@@ -140,4 +153,14 @@ impl NavoWindow {
         self.focus_core_pane(window, cx);
         cx.notify();
     }
+}
+
+/// Notifies the cached pane views after this frame. Both compare panes draw one scroll offset, but
+/// a wheel turn only notifies the pane under it; a notify raised while painting is dropped.
+fn notify_panes_later(panes: Vec<EntityId>, window: &mut Window, cx: &mut App) {
+    window.defer(cx, move |_, cx| {
+        for id in &panes {
+            cx.notify(*id);
+        }
+    });
 }

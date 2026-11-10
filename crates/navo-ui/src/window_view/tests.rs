@@ -28,6 +28,7 @@ mod command_center;
 mod compare;
 mod compare_copy;
 mod compare_screen;
+mod compare_scroll;
 mod compare_sheet;
 mod compare_stream;
 mod crash_notice;
