@@ -183,7 +183,8 @@ fn execute_command(
 }
 
 /// The CI crash probe: `NAVO_CRASH_TEST=1` panics, `native` raises an access violation once the
-/// native reporter attached (exit 3 when it did not). Any other value exits 2 and writes nothing.
+/// native reporter attached. On Windows both exit 3 without it. Any other value exits 2 and
+/// writes nothing.
 #[inline(never)]
 #[allow(clippy::panic, reason = "an opt-in CI probe exercises the panic hook")]
 fn crash_test(profile: &Profile) -> ExitCode {
@@ -200,8 +201,9 @@ fn crash_test(profile: &Profile) -> ExitCode {
     };
     let diagnostics = install_logging(profile);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
-    // The panic probe waits too, so its crash server always has a client to lose.
-    if !crash::ready(std::time::Duration::from_secs(5)) && native {
+    // Both probes wait, so a failed attach fails the probe instead of looking like a crash.
+    #[cfg(windows)]
+    if !crash::ready(crash::ATTACH_BUDGET) {
         eprintln!("navo: native crash reporter did not attach");
         return ExitCode::from(3);
     }

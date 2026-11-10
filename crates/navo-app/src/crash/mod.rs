@@ -24,7 +24,7 @@ pub(crate) mod test_damage;
 mod unclean;
 
 #[cfg(windows)]
-pub(crate) use native_client::{raise_access_violation, ready};
+pub(crate) use native_client::{ATTACH_BUDGET, raise_access_violation, ready};
 #[cfg(test)]
 pub(crate) use unclean::sentinel_path;
 pub(crate) use unclean::{open_db, record_failed_check};
@@ -74,13 +74,7 @@ pub(crate) fn install(data: Option<&Path>, diagnostics: &Diagnostics) {
     }
 }
 
-/// Off Windows there is no native crash reporter, so it is never ready.
-#[cfg(not(windows))]
-pub(crate) fn ready(_timeout: std::time::Duration) -> bool {
-    false
-}
-
-/// Off Windows the native probe has nothing to raise; `ready` is false, so it never runs.
+/// Off Windows the native probe has nothing to raise, so it aborts.
 #[cfg(not(windows))]
 pub(crate) fn raise_access_violation() -> ! {
     std::process::abort()

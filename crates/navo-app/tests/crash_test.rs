@@ -203,25 +203,37 @@ mod native {
             .collect()
     }
 
-    /// Fails when any record string holds a drive path, the user name or the profile path.
+    /// Fails when any record string holds a drive or UNC path, the user name or the profile path.
     fn assert_redacted(record: &Value) {
         let mut strings = Vec::new();
         collect_strings(record, &mut strings);
-        let username = std::env::var("USERNAME").ok();
-        let profile = std::env::var("USERPROFILE").ok();
+        let username = std::env::var("USERNAME").unwrap();
+        let profile = std::env::var("USERPROFILE").unwrap();
+        assert!(
+            !username.is_empty(),
+            "USERNAME must be set for the redaction check"
+        );
+        assert!(
+            !profile.is_empty(),
+            "USERPROFILE must be set for the redaction check"
+        );
+        let username = if username.len() >= 3 {
+            Some(username.to_ascii_lowercase())
+        } else {
+            None
+        };
+        let profile = profile.to_ascii_lowercase();
         for text in strings {
-            assert!(!text.contains(":\\"), "a drive path leaked: {text}");
-            if let Some(username) = username.as_deref().filter(|name| name.len() >= 3) {
-                assert!(
-                    !text
-                        .to_ascii_lowercase()
-                        .contains(&username.to_ascii_lowercase()),
-                    "the user name leaked: {text}"
-                );
+            assert!(
+                !text.contains(":\\") && !text.contains(":/"),
+                "a drive path leaked: {text}"
+            );
+            assert!(!text.contains(r"\\"), "a UNC path leaked: {text}");
+            let lower = text.to_ascii_lowercase();
+            if let Some(username) = username.as_deref() {
+                assert!(!lower.contains(username), "the user name leaked: {text}");
             }
-            if let Some(profile) = profile.as_deref() {
-                assert!(!text.contains(profile), "the profile path leaked: {text}");
-            }
+            assert!(!lower.contains(&profile), "the profile path leaked: {text}");
         }
     }
 
