@@ -134,7 +134,8 @@ fn hide_own_console() {
 /// Attaches to the parent console so silent-mode messages are visible (IW17).
 ///
 /// AttachConsole replaces the standard handles. A redirected `--version`, hash or silent run
-/// keeps its pipes: the non-null handles saved before the attach are put back afterwards.
+/// keeps its pipes: the handles saved before the attach that name a pipe or a file are put back
+/// afterwards, and a console stream keeps the parent console's handle instead.
 #[cfg(windows)]
 fn attach_console() {
     use windows_sys::Win32::System::Console::{
@@ -149,12 +150,25 @@ fn attach_console() {
     restore(STD_OUTPUT_HANDLE, out);
     restore(STD_ERROR_HANDLE, error);
 
-    /// Puts a saved standard handle back when it was a real handle (a redirected pipe).
+    /// Puts a saved standard handle back when it names a redirection, never a console stream.
+    ///
+    /// Only redirected streams are worth restoring: with one stream redirected and the other not,
+    /// the unredirected one still holds its old console handle, and putting that back would cover
+    /// the parent console handle that `AttachConsole` just installed.
     fn restore(which: u32, saved: windows_sys::Win32::Foundation::HANDLE) {
         use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_TYPE_DISK, FILE_TYPE_PIPE, GetFileType,
+        };
         use windows_sys::Win32::System::Console::SetStdHandle;
-        if saved != std::ptr::null_mut() && saved != INVALID_HANDLE_VALUE {
-            // SAFETY: the caller's handle came from GetStdHandle and is still valid here.
+        if saved == std::ptr::null_mut() || saved == INVALID_HANDLE_VALUE {
+            return;
+        }
+        // SAFETY: `saved` is the value GetStdHandle returned for this process; GetFileType only
+        // inspects it, and an unusable handle answers FILE_TYPE_UNKNOWN.
+        let kind = unsafe { GetFileType(saved) };
+        if kind == FILE_TYPE_PIPE || kind == FILE_TYPE_DISK {
+            // SAFETY: SetStdHandle only records the handle for this process.
             unsafe { SetStdHandle(which, saved) };
         }
     }
