@@ -1,3 +1,4 @@
+# Syntax rules and UDL imports for the editor.
 [package]
 name = "navo-syntax"
 version.workspace = true
@@ -7,7 +8,7 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
-quick-xml = "0.41.0"
+quick-xml = "0.42.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_ignored = "0.1.14"
 thiserror = "2.0.21"

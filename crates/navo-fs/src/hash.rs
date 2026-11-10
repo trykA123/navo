@@ -1,3 +1,5 @@
+//! Hashes files in filesystem jobs and formats their checksum output.
+
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
@@ -6,7 +8,7 @@ use std::time::Duration;
 
 use md5::{Digest as _, Md5};
 use navo_core::{FsError, FsErrorKind, Location, ProviderPath};
-use sha2::{Digest as _, Sha256};
+use sha2::Sha256;
 
 use crate::{CancelToken, JobKind, JobSlot, Pools, Priority, volume_of};
 
@@ -146,11 +148,12 @@ impl HashState {
         }
     }
 
+    /// Returns the finalized checksum as lowercase hexadecimal text.
     fn finish(self) -> String {
         match self {
             Self::Crc32(digest) => format!("{:08x}", digest.finalize()),
             Self::Md5(digest) => lower_hex(&digest.finalize()),
-            Self::Sha256(digest) => format!("{:x}", digest.finalize()),
+            Self::Sha256(digest) => lower_hex(&digest.finalize()),
         }
     }
 }

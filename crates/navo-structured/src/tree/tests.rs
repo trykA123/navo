@@ -1,3 +1,5 @@
+//! Checks structured trees, including JSON and YAML parser behavior.
+
 use crate::json::{parse_json, parse_jsonc};
 use crate::yaml::parse_yaml;
 use crate::{Key, NodeId, NodeKind, Outline, Step, Tree};
@@ -126,6 +128,16 @@ fn yaml_tree_has_every_value_with_its_path_and_kind() {
     assert_eq!(tree.kind(find(&tree, "$.empty")), NodeKind::Null);
     assert_eq!(tree.kind(find(&tree, "$.flag")), NodeKind::Bool);
     assert_eq!(tree.kind(find(&tree, "$.quoted")), NodeKind::String);
+}
+
+#[test]
+fn yaml_empty_block_scalar_at_eof_is_an_empty_string() {
+    let tree = parse_yaml(b"empty: |\n").unwrap();
+    let empty = find(&tree, "$.empty");
+    assert_eq!(
+        (tree.kind(empty), tree.value(empty)),
+        (NodeKind::String, "")
+    );
 }
 
 #[test]

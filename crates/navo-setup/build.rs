@@ -3,7 +3,7 @@
 #![allow(clippy::print_stdout, reason = "Cargo build directives use stdout")]
 
 use sha2::{Digest, Sha256};
-use std::{env, error::Error, ffi::OsString, fs, io, path::Path};
+use std::{env, error::Error, ffi::OsString, fs, io, io::Read, path::Path};
 
 include!("../navo-app/build_resource.rs");
 
@@ -82,7 +82,19 @@ fn copy_payload(input: &Path, out: &Path, label: &str) -> Result<String, Box<dyn
     let destination = out.join(label);
     fs::copy(input, &destination)?;
     let mut hash = Sha256::new();
-    let size = io::copy(&mut fs::File::open(&destination)?, &mut hash)?;
+    let mut file = fs::File::open(&destination)?;
+    let mut buffer = [0; 8192];
+    let mut size = 0_u64;
+    loop {
+        let count = match file.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(count) => count,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error.into()),
+        };
+        hash.update(&buffer[..count]);
+        size += count as u64;
+    }
     let digest: [u8; 32] = hash.finalize().into();
     Ok(format!(
         "pub const {label}: &[u8] = include_bytes!({destination:?});\npub const {label}_SHA256: [u8; 32] = {digest:?};\npub const {label}_SIZE: u64 = {size};\n"
