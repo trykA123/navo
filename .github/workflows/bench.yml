@@ -1,48 +1,129 @@
+# Speed guard: Callgrind instruction counts for head vs the last release, judged by xtask.
+# Called by release.yml (mode guard) and run by hand (guard, or noise = HEAD twice).
 name: bench
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: guard compares with the last release; noise measures HEAD twice
+        type: choice
+        options: [guard, noise]
+        default: guard
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        default: guard
 
 permissions:
   contents: read
-
-concurrency:
-  group: bench-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  listing:
+  instructions:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      HEAD_SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+      MODE: ${{ inputs.mode || 'guard' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: Check the checkout and fetch tags
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          git fetch --force --tags origin
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends valgrind
-      - run: cargo install gungraun-runner --version 0.20.0 --locked
-      - name: Measure the base commit
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - name: Install valgrind and the gungraun runner
         run: |
-          BASE_SHA="${BASE_SHA:-$(git rev-parse HEAD~1)}"
-          git checkout --force "$BASE_SHA"
-          if [ -f crates/navo-fs/benches/listing.rs ]; then
-            cargo bench -p navo-fs --bench listing -- --save-baseline=base
-            echo "BASE_MEASURED=1" >> "$GITHUB_ENV"
-          fi
-      - name: Compare the head commit
-        env:
-          HEAD_SHA: ${{ github.sha }}
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends valgrind
+          cargo install gungraun-runner --version 0.20.0 --locked
+          rm -rf target/gungraun
+      - name: List the bench targets
         run: |
-          git checkout --force "$HEAD_SHA"
-          if [ "${BASE_MEASURED:-0}" = "1" ]; then
-            cargo bench -p navo-fs --bench listing -- --baseline=base
+          set -euo pipefail
+          discover=()
+          if [ "$MODE" = "noise" ]; then discover=(--discover); fi
+          cargo xtask speed-targets --config perf/speed.toml "${discover[@]}" > "$RUNNER_TEMP/targets.txt"
+          cat "$RUNNER_TEMP/targets.txt"
+      - name: Choose the base
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = "noise" ]; then
+            BASE_SHA="$HEAD_SHA"
+            BASE_LABEL=noise
+            BASE_CONFIG=none
           else
-            cargo bench -p navo-fs --bench listing -- --save-baseline=base
+            gh release list --exclude-drafts --limit 200 \
+              --json tagName,isDraft,isPrerelease,publishedAt > "$RUNNER_TEMP/releases.json"
+            base_out=$(cargo xtask speed-base --releases "$RUNNER_TEMP/releases.json" \
+              --head "$HEAD_SHA" --config perf/speed.toml)
+            BASE_SHA=$(printf '%s\n' "$base_out" | sed -n 's/^BASE_SHA=//p')
+            BASE_LABEL=$(printf '%s\n' "$base_out" | sed -n 's/^BASE_LABEL=//p')
+            printf '%s\n' "$BASE_SHA" | grep -Eq '^[0-9a-f]{40}$'
+            test "$BASE_SHA" != "$HEAD_SHA"
+            git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"
+            if git cat-file -e "$BASE_SHA:perf/speed.toml" 2> /dev/null; then
+              git show "$BASE_SHA:perf/speed.toml" > "$RUNNER_TEMP/base-speed.toml"
+              BASE_CONFIG="$RUNNER_TEMP/base-speed.toml"
+            else
+              BASE_CONFIG=none
+            fi
           fi
+          printf 'BASE_SHA=%s\nBASE_LABEL=%s\nBASE_CONFIG=%s\n' \
+            "$BASE_SHA" "$BASE_LABEL" "$BASE_CONFIG" >> "$GITHUB_ENV"
+      - name: Base pass
+        run: |
+          set -euo pipefail
+          start=$SECONDS
+          git checkout --force "$BASE_SHA"
+          : > "$RUNNER_TEMP/measured-base.txt"
+          while read -r pkg bench features; do
+            if ! ls crates/*/benches/"$bench.rs" > /dev/null 2>&1; then
+              continue
+            fi
+            args=(-p "$pkg" --bench "$bench")
+            if [ "$features" != "-" ]; then args+=(--features "$features"); fi
+            cargo bench "${args[@]}" -- --save-baseline=base
+            echo "$pkg $bench" >> "$RUNNER_TEMP/measured-base.txt"
+          done < "$RUNNER_TEMP/targets.txt"
+          git checkout --force "$HEAD_SHA"
+          echo "base pass: $((SECONDS - start)) s"
+      - name: Head pass
+        run: |
+          set -euo pipefail
+          start=$SECONDS
+          find target/gungraun -name summary.json -delete 2> /dev/null || true
+          while read -r pkg bench features; do
+            args=(-p "$pkg" --bench "$bench")
+            if [ "$features" != "-" ]; then args+=(--features "$features"); fi
+            extra=(--save-summary=pretty-json)
+            if grep -qx "$pkg $bench" "$RUNNER_TEMP/measured-base.txt"; then
+              extra+=(--baseline=base)
+            fi
+            cargo bench "${args[@]}" -- "${extra[@]}"
+          done < "$RUNNER_TEMP/targets.txt"
+          echo "head pass: $((SECONDS - start)) s"
+      - name: Verdict
+        run: |
+          set -euo pipefail
+          cargo xtask speed-verdict --summaries target/gungraun --config perf/speed.toml \
+            --base-config "$BASE_CONFIG" --retired perf/speed-retired.toml \
+            --targets "$RUNNER_TEMP/targets.txt" --base "$BASE_SHA" --label "$BASE_LABEL" \
+            --mode "$MODE" --limit 5 --noise-limit 0.5 --out "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: speed-summaries
+          path: target/gungraun/**/summary.json
