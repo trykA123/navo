@@ -1,0 +1,217 @@
+//! The change map: a narrow strip at the right edge of the file diff.
+//! It shows one tick per hunk, the viewport box and the current hunk; click or drag jumps.
+
+mod geometry;
+
+#[cfg(test)]
+mod tests;
+
+use std::ops::Range;
+use std::sync::Arc;
+
+use gpui_kit::{
+    Bounds, EventEmitter, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, canvas,
+};
+
+pub use self::geometry::{HunkKind, MapHunk, Tick, row_at, ticks, viewport_box};
+use crate::prelude::*;
+use crate::tokens::{self, DiffColors, Theme};
+
+/// Width of the strip, in px.
+const WIDTH: f32 = 22.;
+/// Font size of the number on the current hunk, in px.
+const NUMBER_SIZE: f32 = 10.;
+
+/// What the map reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapEvent {
+    /// The user asked to show this row.
+    Jump(u32),
+}
+
+/// The change map element.
+pub struct ChangeMap {
+    hunks: Arc<[MapHunk]>,
+    total_rows: u32,
+    viewport: Range<u32>,
+    current: Option<usize>,
+    top: Pixels,
+    height: f32,
+    dragging: bool,
+}
+
+impl EventEmitter<MapEvent> for ChangeMap {}
+
+impl ChangeMap {
+    /// Builds a map for `hunks` over `total_rows` rows; the viewport starts empty.
+    pub fn new(hunks: Arc<[MapHunk]>, total_rows: u32) -> Self {
+        Self {
+            hunks,
+            total_rows,
+            viewport: 0..0,
+            current: None,
+            top: px(0.),
+            height: 0.,
+            dragging: false,
+        }
+    }
+
+    /// Replaces the hunks and the row count.
+    pub fn set_hunks(&mut self, hunks: Arc<[MapHunk]>, total_rows: u32, cx: &mut Context<Self>) {
+        self.hunks = hunks;
+        self.total_rows = total_rows;
+        self.current = self.current.filter(|at| *at < self.hunks.len());
+        cx.notify();
+    }
+
+    /// Sets the rows the file diff shows now.
+    pub fn set_viewport(&mut self, rows: Range<u32>, cx: &mut Context<Self>) {
+        if self.viewport != rows {
+            self.viewport = rows;
+            cx.notify();
+        }
+    }
+
+    /// Sets the current hunk (outlined and numbered), or none.
+    pub fn set_current(&mut self, hunk: Option<usize>, cx: &mut Context<Self>) {
+        let hunk = hunk.filter(|at| *at < self.hunks.len());
+        if self.current != hunk {
+            self.current = hunk;
+            cx.notify();
+        }
+    }
+
+    /// The current hunk, or none.
+    #[cfg(test)]
+    pub(crate) fn current(&self) -> Option<usize> {
+        self.current
+    }
+
+    /// Emits a jump to the row under window position `y`.
+    fn jump(&self, y: Pixels, cx: &mut Context<Self>) {
+        let row = row_at(f32::from(y - self.top), self.total_rows, self.height);
+        cx.emit(MapEvent::Jump(row));
+    }
+
+    /// Stores the measured strip height.
+    fn measure(&mut self, bounds: Bounds<Pixels>, cx: &mut Context<Self>) {
+        let height = f32::from(bounds.size.height);
+        self.top = bounds.origin.y;
+        if (self.height - height).abs() > f32::EPSILON {
+            self.height = height;
+            cx.notify();
+        }
+    }
+}
+
+/// Returns the tick colour for a hunk kind from the diff tokens.
+fn tint(colors: &DiffColors, kind: HunkKind) -> Hsla {
+    match kind {
+        HunkKind::Changed => colors.change.mark,
+        HunkKind::Added => colors.add.mark,
+        HunkKind::Deleted => colors.delete.mark,
+    }
+}
+
+/// An invisible layer that reports the strip's bounds.
+fn sensor(cx: &mut Context<ChangeMap>) -> impl IntoElement + use<> {
+    let entity = cx.entity().downgrade();
+    canvas(
+        move |bounds, _, cx| {
+            entity.update(cx, |map, cx| map.measure(bounds, cx)).ok();
+        },
+        |_, (), _, _| {},
+    )
+    .absolute()
+    .size_full()
+}
+
+/// One tick; the current one gets an outline and its number.
+fn tick_view(t: &Theme, tick: &Tick, number: Option<usize>) -> Div {
+    let base = div()
+        .absolute()
+        .left_0()
+        .w(px(3.))
+        .top(px(tick.top))
+        .h(px(tick.height));
+    let mark = base.bg(tint(&t.diff, tick.kind)).rounded(px(1.));
+    match number {
+        None => mark,
+        Some(n) => mark
+            .w(px(WIDTH - 8.))
+            .border_2()
+            .border_color(t.colors.text)
+            .child(
+                div()
+                    .absolute()
+                    .right_0()
+                    .text_size(px(NUMBER_SIZE))
+                    .text_color(t.colors.background)
+                    .bg(t.colors.text)
+                    .rounded(t.radii.xs)
+                    .px(px(2.))
+                    .child(format!("{}", n + 1)),
+            ),
+    }
+}
+
+impl Render for ChangeMap {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let sensor = sensor(cx);
+        let t = tokens::current(cx);
+        let marks = ticks(&self.hunks, self.total_rows, self.height);
+        let current = self.current.and_then(|at| geometry::tick_of(&marks, at));
+        let (vp_top, vp_height) = viewport_box(&self.viewport, self.total_rows, self.height);
+        let ticks_view = marks.iter().enumerate().map(|(i, tick)| {
+            let number = (current == Some(i)).then(|| self.current.unwrap_or(0));
+            tick_view(t, tick, number)
+        });
+        div()
+            .id("change-map")
+            .relative()
+            .flex_none()
+            .w(px(WIDTH))
+            .h_full()
+            .bg(t.colors.rail)
+            .border_l_1()
+            .border_color(t.colors.line)
+            .cursor_pointer()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|map, event: &MouseDownEvent, _, cx| {
+                    map.dragging = true;
+                    map.jump(event.position.y, cx);
+                }),
+            )
+            .on_mouse_move(cx.listener(|map, event: &MouseMoveEvent, _, cx| {
+                if map.dragging && event.dragging() {
+                    map.jump(event.position.y, cx);
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|map, _: &MouseUpEvent, _, _| map.dragging = false),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|map, _: &MouseUpEvent, _, _| map.dragging = false),
+            )
+            .child(sensor)
+            .children(ticks_view)
+            .child(viewport_view(t, vp_top, vp_height))
+    }
+}
+
+/// The box that shows which rows are on screen, `top` and `height` in pixels.
+fn viewport_view(t: &Theme, top: f32, height: f32) -> Div {
+    div()
+        .absolute()
+        .left_0()
+        .right_0()
+        .top(px(top))
+        .h(px(height))
+        .border_1()
+        .border_color(t.colors.muted)
+        .bg(t.colors.text.opacity(0.08))
+        .rounded(px(2.))
+}

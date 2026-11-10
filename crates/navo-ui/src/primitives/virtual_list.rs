@@ -26,6 +26,11 @@ impl ListScroll {
         self.0.scroll_to_item(index, ScrollStrategy::Nearest);
     }
 
+    /// Scrolls so row `index` sits in the middle of the list, as far as the ends allow.
+    pub fn scroll_to_center(&self, index: usize) {
+        self.0.scroll_to_item(index, ScrollStrategy::Center);
+    }
+
     pub fn scroll_to_top(&self, index: usize) {
         self.0.scroll_to_item_strict(index, ScrollStrategy::Top);
     }

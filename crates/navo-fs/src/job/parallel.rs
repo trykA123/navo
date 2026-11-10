@@ -50,6 +50,13 @@ pub(super) fn run_with(
         removals: &removals,
         sources,
     };
+    if let Err((seq, error)) = super::run::precheck_writes(job, done, ctx) {
+        return if error.kind == FsErrorKind::Cancelled {
+            JobOutcome::Cancelled
+        } else {
+            JobOutcome::Failed { seq, error }
+        };
+    }
     coordinate((job, copier_of(job, ctx), pauses), ctx, done, workers)
 }
 

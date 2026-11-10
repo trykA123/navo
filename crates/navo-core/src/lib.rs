@@ -50,8 +50,9 @@ pub use network_walk::{
 };
 pub use op_plan::{
     Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, FileStamp, ItemKind, OpKind,
-    OperationPlan, PlanRequest, Resolution, Risk, ScannedItem, Step, Totals, drop_op, is_protected,
-    plan, plan_keeping, relative_folders, right_button_drag, write_plan,
+    OperationPlan, PlanRequest, Resolution, Risk, ScannedItem, Step, Totals, WriteManyError,
+    WriteTarget, drop_op, is_protected, plan, plan_keeping, relative_folders, right_button_drag,
+    write_many_plan, write_plan,
 };
 pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection, SpanMode};

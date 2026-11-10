@@ -80,6 +80,23 @@ fn no_database() -> String {
 }
 
 fn offer(journal: &SharedJournal) -> Result<Option<UndoOffer>, String> {
+    let rename = newest_rename(journal)?;
+    let save = newest_save(journal)?;
+    let newest = match (rename, save) {
+        (Some(rename), Some(save)) => {
+            if save.created_at > rename.created_at {
+                Some(save)
+            } else {
+                Some(rename)
+            }
+        }
+        (rename, save) => rename.or(save),
+    };
+    Ok(newest)
+}
+
+/// Offers the newest undoable rename, move or retained job.
+fn newest_rename(journal: &SharedJournal) -> Result<Option<UndoOffer>, String> {
     let kinds = UndoKinds {
         rename: KIND,
         moves: MOVE_KIND,
@@ -100,6 +117,23 @@ fn offer(journal: &SharedJournal) -> Result<Option<UndoOffer>, String> {
             let job = u64::try_from(id.0).map_err(|error| error.to_string())?;
             Ok(Some(UndoOffer::retained(job, created_at, entries)))
         }
+    }
+}
+
+/// Offers the newest finished compare Save job that still has an old file to restore.
+fn newest_save(journal: &SharedJournal) -> Result<Option<UndoOffer>, String> {
+    let kinds = UndoKinds {
+        rename: "save",
+        moves: "save",
+        retained: &[],
+        now_ms: now_ms(),
+    };
+    match jobs::lock(journal)
+        .newest_undoable(kinds)
+        .map_err(|error| error.to_string())?
+    {
+        Some(Undoable::Rename(job)) => decode(&job).map(Some),
+        Some(Undoable::Retained { .. }) | None => Ok(None),
     }
 }
 

@@ -205,7 +205,7 @@ fn count_of(left: &[SharedString]) -> u64 {
 }
 
 pub(super) fn done_detail(job: &JobInfo, undo_key: Option<&SharedString>) -> Option<String> {
-    if job.kind != OpKind::Rename {
+    if !matches!(job.kind, OpKind::Rename | OpKind::Save) {
         return refused_text(&job.rename.refused);
     }
     if !job.rename.undo {
@@ -222,7 +222,9 @@ pub(super) fn done_detail(job: &JobInfo, undo_key: Option<&SharedString>) -> Opt
         return (!parts.is_empty()).then(|| parts.join(" · "));
     }
     let skipped = u64::try_from(job.rename.skipped).unwrap_or(u64::MAX);
+    let missing = u64::try_from(job.rename.missing).unwrap_or(u64::MAX);
     let parts: Vec<String> = [
+        (missing > 0).then(|| t!("activity-undo-missing", count = missing)),
         (skipped > 0).then(|| {
             t!(
                 "activity-undo-skipped",
@@ -244,7 +246,9 @@ pub(super) fn failure_detail(job: &JobInfo, message: &SharedString) -> String {
     } else {
         "activity-rename-left"
     };
+    let missing = u64::try_from(job.rename.missing).unwrap_or(u64::MAX);
     let parts = [
+        (missing > 0).then(|| t!("activity-undo-missing", count = missing)),
         left_text(id, &job.rename.left),
         refused_text(&job.rename.refused),
     ];

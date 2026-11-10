@@ -459,6 +459,15 @@ compare.up | Compare | false
 compare.exit | Compare | true
 compare.stop_checking | Compare | true
 compare.continue | Compare | true
+compare.stream | Compare | true
+compare.next_file | CompareView | true
+compare.previous_file | CompareView | true
+compare.view_menu | CompareView | true
+compare.changes | CompareView | true
+compare.details | CompareView | true
+compare.toggle_viewed | CompareStream | true
+compare.fold | CompareStream | true
+compare.open_file | CompareStream | true
 user_commands.run | FileList | false
 user_commands.edit | global | true
 window.new | global | true

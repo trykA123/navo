@@ -42,6 +42,42 @@ fn seq_of(plan: &OperationPlan, target: &Location) -> u32 {
         .map_or(0, |(seq, _)| seq)
 }
 
+fn run_save_undo(
+    plan: &OperationPlan,
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+) -> (JobOutcome, RenameReport) {
+    let (ops, cancel) = (ctx.ops, ctx.cancel);
+    let log = &mut *ctx.log;
+    let Some(result) = log.undo_save(plan, done, ops, cancel) else {
+        return save_failed(plan, FsError::new(FsErrorKind::NotSupportedYet));
+    };
+    match result {
+        Ok(done) => {
+            let missing = usize::try_from(done.missing).unwrap_or(usize::MAX);
+            if done.missing > 0 {
+                let (outcome, mut report) = save_failed(plan, FsError::new(FsErrorKind::NotFound));
+                report.missing = missing;
+                return (outcome, report);
+            }
+            let report = RenameReport {
+                missing,
+                ..RenameReport::default()
+            };
+            (JobOutcome::Done, report)
+        }
+        Err(error) => save_failed(plan, error),
+    }
+}
+
+fn save_failed(plan: &OperationPlan, error: FsError) -> (JobOutcome, RenameReport) {
+    let seq = (0_u32..)
+        .zip(&plan.steps)
+        .find(|(_, step)| matches!(step, Step::WriteFile { .. }))
+        .map_or(0, |(seq, _)| seq);
+    (JobOutcome::Failed { seq, error }, RenameReport::default())
+}
+
 struct Counting<'a> {
     inner: &'a mut dyn JobLog,
     progress: &'a mut dyn FnMut(&Progress),
@@ -89,6 +125,9 @@ pub fn run_undo(
     done: &[u32],
     ctx: &mut JobContext<'_>,
 ) -> (JobOutcome, RenameReport) {
+    if plan.kind == OpKind::Save {
+        return run_save_undo(plan, done, ctx);
+    }
     let JobContext {
         ops, log, progress, ..
     } = ctx;

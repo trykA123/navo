@@ -3,7 +3,7 @@
 mod bar;
 mod list;
 mod row;
-mod tone;
+pub(crate) mod tone;
 
 use std::rc::Rc;
 

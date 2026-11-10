@@ -62,7 +62,7 @@ pub(super) fn record_placed(
         .map_err(|_| FsError::new(FsErrorKind::Unknown))
 }
 
-pub(super) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Result<(), FsError> {
+pub(crate) fn record(journal: &SharedJournal, job: JobId, held: &HeldFile) -> Result<(), FsError> {
     write_record(journal, job, (held, false))
 }
 
@@ -107,12 +107,29 @@ pub(super) fn record_proved(
         placed_size: held.placed.map(|stamp| stamp.size),
         placed_modified_ms: held.placed.and_then(|stamp| stamp.modified_ms),
         volume: held.volume,
+        placed_hash: held.placed_hash,
         proof: proof.clone(),
     };
     let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
     lock(journal)
         .record_held(job, &bytes, now_ms())
         .map_err(|_| FsError::new(FsErrorKind::Unknown))
+}
+
+/// The held old file of a retained Save job for `target`, when its placed hash is known.
+pub(crate) fn save_held(
+    journal: &SharedJournal,
+    job: JobId,
+    target: &Location,
+) -> Result<Option<HeldFile>, JournalError> {
+    let rows = held_of(journal, job)?;
+    if rows.unreadable > 0 {
+        return Ok(None);
+    }
+    Ok(rows
+        .files
+        .into_iter()
+        .find(|file| file.placed_hash.is_some() && file.original.same_place(target)))
 }
 
 pub(super) fn held_of(journal: &SharedJournal, job: JobId) -> Result<Held, JournalError> {

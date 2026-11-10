@@ -459,6 +459,15 @@ compare.up | Up in both panes | Compare
 compare.exit | Leave compare | Compare
 compare.stop_checking | Stop checking contents | Compare
 compare.continue | Continue the compare on a network drive | Compare
+compare.stream | Stream all differences | Compare
+compare.next_file | Next changed file | CompareView
+compare.previous_file | Previous changed file | CompareView
+compare.view_menu | View menu of the file diff | CompareView
+compare.changes | List of changes | CompareView
+compare.details | Details of the pair | CompareView
+compare.toggle_viewed | Mark file as viewed | CompareStream
+compare.fold | Fold or unfold the card | CompareStream
+compare.open_file | Open the file diff | CompareStream
 user_commands.run | Run user command | FileList
 user_commands.edit | Edit user commands | global
 window.new | New window | global

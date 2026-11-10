@@ -5,7 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use navo_core::{FsError, FsErrorKind, OpKind, OperationPlan};
 use navo_fs::{
-    FileIdentity, FileStamp, HeldFile, JobLog, JobOutcome, PlacedFile, ProviderOps, StepOutcome,
+    CancelToken, FileIdentity, FileStamp, HeldFile, JobLog, JobOutcome, PlacedFile, ProviderOps,
+    SaveUndo, StepOutcome,
 };
 use navo_store::{JobId, JobJournal, JobState, JournalError};
 use navo_ui::browser::OpLog;
@@ -31,6 +32,7 @@ mod temporary;
 mod trim;
 
 pub(crate) use guard_log::{guard_factory, guard_write};
+pub(crate) use held::{record as hold_record, save_held};
 #[cfg(test)]
 pub use pending::still_pending;
 pub use pending::{StillPending, log_pending};
@@ -256,6 +258,19 @@ impl JobLog for JournalLog {
 
     fn steps(&mut self, marks: &[(u32, StepOutcome)]) -> Result<(), FsError> {
         marks::mark_all(self, marks)
+    }
+
+    fn undo_save(
+        &mut self,
+        plan: &OperationPlan,
+        done: &[u32],
+        ops: &dyn ProviderOps,
+        cancel: &CancelToken,
+    ) -> Option<Result<SaveUndo, FsError>> {
+        if plan.kind != OpKind::Save {
+            return None;
+        }
+        Some(self.restore_saved(plan, done, ops, cancel))
     }
 
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {

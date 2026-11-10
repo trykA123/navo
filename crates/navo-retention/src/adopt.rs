@@ -110,6 +110,7 @@ impl Vault<'_> {
                         volume: held.volume,
                         placed_size: held.placed.map(|stamp| stamp.size),
                         placed_modified_ms: held.placed.and_then(|stamp| stamp.modified_ms),
+                        placed_hash: held.placed_hash,
                         proof: evidence.clone(),
                     },
                 ));

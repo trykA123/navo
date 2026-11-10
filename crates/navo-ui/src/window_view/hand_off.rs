@@ -141,6 +141,7 @@ pub struct OpenHooks {
     pub window_shown: Option<WindowShown>,
     pub resident: Option<std::rc::Rc<dyn ResidentHooks>>,
     pub compare: Option<std::sync::Arc<dyn crate::browser::CompareHooks>>,
+    pub diff: Option<std::sync::Arc<dyn crate::compare_diff::DiffHooks>>,
     pub user_commands: Option<super::UserCommandHooks>,
 }
 

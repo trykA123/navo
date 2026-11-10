@@ -35,20 +35,25 @@ fn a_finished_save_keeps_the_exact_old_bytes_in_the_vault() {
         lock(&saving.journal).read_job(job).unwrap().0,
         JobState::Done
     );
-    assert!(lock(&saving.journal).held(job).unwrap().is_empty());
+    assert_eq!(lock(&saving.journal).held(job).unwrap().len(), 1);
 }
 
 #[test]
-fn undo_of_a_save_is_offered_as_a_retained_restore_that_lands_beside_the_file() {
+fn undo_of_an_unchanged_save_is_offered_as_a_retained_restore_in_place() {
     let saving = saved();
     let hooks = crate::rename_hooks::hooks(Some(saving.journal.clone()), None);
     let offer = (hooks.last)().unwrap().unwrap();
     assert_eq!(offer.kind, UndoKind::Retained(vec![saving.entries()[0].id]));
     let place = restore(&saving);
-    assert_eq!(place, saving.fs.location("dest/a (restored).txt"));
+    assert_eq!(place, saving.fs.location(TARGET));
     assert_eq!(hash_at(&saving.fs, &place), Some(OLD_HASH));
     assert_eq!(saving.fs.metadata(&place).unwrap().size, 3);
-    assert_eq!(saving.hash(TARGET), Some(NEW_HASH));
+    assert!(
+        saving
+            .fs
+            .metadata(&saving.fs.location("dest/a (restored).txt"))
+            .is_err()
+    );
 }
 
 #[test]

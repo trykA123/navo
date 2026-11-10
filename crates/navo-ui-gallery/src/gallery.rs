@@ -15,6 +15,7 @@ use crate::bars_page::{self, DragTreemapBars, drag_treemap_bars};
 use crate::clip_palette_page::ClipPalettePage;
 use crate::columns_page::ColumnsPage;
 use crate::command_center_page::{self, CommandCenterPage};
+use crate::compare_diff_page::{CompareDiffPage, Screen};
 use crate::compare_page;
 use crate::drives_page::{DrivesPage, Shows};
 use crate::git_badges_page::GitBadgesPage;
@@ -74,6 +75,7 @@ pub struct Gallery {
     typed_path: Entity<DrivesPage>,
     kinds: Entity<KindsPage>,
     columns: Entity<ColumnsPage>,
+    compare_diff: [Entity<CompareDiffPage>; 4],
     drag_treemap: DragTreemapBars,
     strip: Entity<StripPage>,
     tree: Option<Box<dyn ViewerBody>>,
@@ -132,6 +134,13 @@ impl Gallery {
             typed_path: cx.new(|cx| DrivesPage::new(Shows::PathError, cx)),
             kinds: cx.new(KindsPage::new),
             columns: cx.new(|cx| ColumnsPage::new(window, cx)),
+            compare_diff: [
+                (Screen::File, false),
+                (Screen::File, true),
+                (Screen::Stream, false),
+                (Screen::Stream, true),
+            ]
+            .map(|(screen, narrow)| cx.new(|cx| CompareDiffPage::new(screen, narrow, cx))),
             drag_treemap: drag_treemap_bars(window, cx),
             strip: cx.new(StripPage::new),
             tree: structured::body(TREE_NAME, TREE, window, cx),
@@ -354,6 +363,7 @@ impl Render for Gallery {
             Page::FileKinds => root.child(self.kinds.clone()),
             Page::Columns => root.child(self.columns.clone()),
             Page::Compare => root.child(compare_page::page(cx)),
+            _ if self.compare_diff_page().is_some() => root.children(self.compare_diff_page()),
             Page::MemoryStrip => root.child(self.strip.clone()),
             Page::Archive => root.child(self.archive.clone()),
             Page::Font => root.children(self.font.clone()),
@@ -374,6 +384,19 @@ impl Render for Gallery {
 }
 
 impl Gallery {
+    /// The compare diff entity for the current page, if it is one of those pages.
+    fn compare_diff_page(&self) -> Option<Entity<CompareDiffPage>> {
+        let at = [
+            Page::CompareDiff,
+            Page::CompareDiff720,
+            Page::CompareStream,
+            Page::CompareStream720,
+        ]
+        .iter()
+        .position(|page| *page == self.page)?;
+        self.compare_diff.get(at).cloned()
+    }
+
     fn menu_page(&self, page: Page) -> Option<Entity<MenuPage>> {
         self.menus
             .iter()

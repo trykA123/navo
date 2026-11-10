@@ -12,6 +12,7 @@ mod content_hash;
 mod git_badges;
 mod open;
 mod props;
+mod viewed;
 
 fn mem() -> CacheDb {
     CacheDb::open_in_memory().unwrap()

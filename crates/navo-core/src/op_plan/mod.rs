@@ -6,7 +6,7 @@ mod risks;
 
 use serde::{Deserialize, Serialize};
 
-pub use build::{relative_folders, write_plan};
+pub use build::{WriteManyError, WriteTarget, relative_folders, write_many_plan, write_plan};
 pub use drop::{DropKeys, DropOp, drop_op, right_button_drag};
 pub use protect::is_protected;
 

@@ -315,6 +315,7 @@ fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Sp
         window_shown: crate::resident::window_shown(),
         resident: None,
         compare: Some(Arc::new(crate::compare::PaneCompare::default())),
+        diff: Some(Arc::new(crate::compare::diff::DiffBackend::default())),
         user_commands: None,
     }
 }

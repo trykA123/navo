@@ -5,8 +5,10 @@ use std::sync::Arc;
 use navo_core::PaneId;
 
 use super::NavoWindow;
+use super::compare_screen::{CompareScreen, DiffSlot};
 use crate::FocusHandle;
-use crate::browser::{RowView, bar_view, empty_text, pane_rows};
+use crate::browser::{RowView, Waker, bar_view, empty_text, pane_rows};
+use crate::compare_diff::DiffHooks;
 use crate::compare_list::{BarEvent, CompareBar, CompareEvent, CompareList};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
@@ -17,11 +19,28 @@ struct Built {
     sides: [Arc<[RowView]>; 2],
 }
 
-#[derive(Default)]
+/// The compare UI state: the pane lists, and the full-window screen over them (D23).
 pub(super) struct CompareView {
     scroll: ListScroll,
     built: Option<Built>,
     scrolled_to: Option<String>,
+    /// The file diff and Stream drawn in place of the panes, when open.
+    pub(super) screen: Option<CompareScreen>,
+    /// The app's diff hooks and the inbox of their updates.
+    pub(super) diff: DiffSlot,
+}
+
+impl CompareView {
+    /// Empty compare state over the app's diff `hooks` (none until wired); `wake` wakes the window.
+    pub(super) fn new(hooks: Option<Arc<dyn DiffHooks>>, wake: Waker) -> Self {
+        Self {
+            scroll: ListScroll::default(),
+            built: None,
+            scrolled_to: None,
+            screen: None,
+            diff: DiffSlot::new(hooks, wake),
+        }
+    }
 }
 
 impl NavoWindow {
@@ -97,7 +116,9 @@ impl NavoWindow {
                 self.browser.compare_enter();
             }
         }
-        self.focus_core_pane(window, cx);
+        if !self.open_file_diff(window, cx) {
+            self.focus_core_pane(window, cx);
+        }
         cx.notify();
     }
 

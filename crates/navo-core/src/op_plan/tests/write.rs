@@ -93,3 +93,120 @@ fn an_old_plan_without_a_write_step_still_parses() {
             .all(|step| !matches!(step, Step::WriteFile { .. }))
     );
 }
+
+fn write_target(target: &str, staged: &str, staged_len: u64) -> WriteTarget {
+    WriteTarget {
+        target: loc(target),
+        staged: loc(staged),
+        expect: stamp(7, 1_000),
+        staged_len,
+    }
+}
+
+#[test]
+fn a_write_many_plan_has_one_step_and_one_overwrite_risk_per_target() {
+    let plan = write_many_plan(&[
+        write_target("/dest/a.txt", "/dest/.a.txt.tmp", 11),
+        write_target("/dest/b.txt", "/dest/.b.txt.tmp", 13),
+    ])
+    .unwrap();
+    assert_eq!(plan.kind, OpKind::Save);
+    assert_eq!(
+        plan.steps,
+        [
+            Step::WriteFile {
+                target: loc("/dest/a.txt"),
+                staged: loc("/dest/.a.txt.tmp"),
+                staged_len: 11,
+                expect: stamp(7, 1_000),
+            },
+            Step::WriteFile {
+                target: loc("/dest/b.txt"),
+                staged: loc("/dest/.b.txt.tmp"),
+                staged_len: 13,
+                expect: stamp(7, 1_000),
+            },
+        ]
+    );
+    assert_eq!(
+        plan.totals,
+        Totals {
+            files: 2,
+            folders: 0,
+            bytes: 24,
+        }
+    );
+    assert_eq!(
+        plan.risks,
+        [
+            Risk::Overwrite(loc("/dest/a.txt")),
+            Risk::Overwrite(loc("/dest/b.txt")),
+        ]
+    );
+    assert!(plan.conflicts.is_empty());
+}
+
+#[test]
+fn an_empty_write_many_plan_is_refused() {
+    assert_eq!(write_many_plan(&[]), Err(WriteManyError::Empty));
+}
+
+#[test]
+fn a_target_used_twice_is_refused() {
+    let writes = [
+        write_target("/dest/a.txt", "/dest/.a.txt.tmp", 11),
+        write_target("/dest/a.txt", "/dest/.other.txt.tmp", 13),
+    ];
+    assert_eq!(
+        write_many_plan(&writes),
+        Err(WriteManyError::Duplicate(loc("/dest/a.txt")))
+    );
+}
+
+#[test]
+fn a_staged_path_used_twice_is_refused() {
+    let writes = [
+        write_target("/dest/a.txt", "/dest/.a.txt.tmp", 11),
+        write_target("/dest/b.txt", "/dest/.a.txt.tmp", 13),
+    ];
+    assert_eq!(
+        write_many_plan(&writes),
+        Err(WriteManyError::Duplicate(loc("/dest/.a.txt.tmp")))
+    );
+}
+
+#[test]
+fn a_staged_path_that_is_another_target_is_refused() {
+    let writes = [
+        write_target("/dest/a.txt", "/dest/.a.txt.tmp", 11),
+        write_target("/dest/b.txt", "/dest/a.txt", 13),
+    ];
+    assert_eq!(
+        write_many_plan(&writes),
+        Err(WriteManyError::Duplicate(loc("/dest/a.txt")))
+    );
+}
+
+#[test]
+fn a_target_used_twice_in_another_case_is_refused() {
+    let writes = [
+        write_target(r"C:\Work\a.txt", r"C:\Work\.a.txt.tmp", 11),
+        write_target(r"c:\work\A.TXT", r"c:\work\.other.txt.tmp", 13),
+    ];
+    assert_eq!(
+        write_many_plan(&writes),
+        Err(WriteManyError::Duplicate(loc(r"c:\work\A.TXT")))
+    );
+}
+
+#[test]
+fn a_many_step_plan_round_trips_through_json() {
+    let plan = write_many_plan(&[
+        write_target("/dest/a.txt", "/dest/.a.txt.tmp", 11),
+        write_target("/dest/b.txt", "/dest/.b.txt.tmp", 13),
+    ])
+    .unwrap();
+    let json = serde_json::to_value(&plan).unwrap();
+    assert_eq!(json["steps"].as_array().unwrap().len(), 2);
+    assert_eq!(serde_json::from_value::<OperationPlan>(json).unwrap(), plan);
+}

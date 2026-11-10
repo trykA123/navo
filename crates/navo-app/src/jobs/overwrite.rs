@@ -50,8 +50,9 @@ pub(super) fn finish(
     {
         return Ok(());
     }
-    let keep =
-        state == JobState::Failed && stranded(ops, &staged_saves(&log.journal, log.job, &job.plan));
+    let keep = (state == JobState::Failed
+        && stranded(ops, &staged_saves(&log.journal, log.job, &job.plan)))
+        || saves_for_undo(&job.plan);
     let (db, _) = crate::crash::open_db(&navo_store::StoreDirs::journal_in(&request.data))
         .map_err(|error| error.to_string())?;
     if let Err(error) = adopt(db, &log.journal, &job, (state, &request.data, ops, keep)) {
@@ -72,6 +73,12 @@ pub(super) fn finish(
         return Err(navo_l10n::t!("job-retention-failed", error = error));
     }
     Ok(())
+}
+
+/// `true` for a retained Save job: the held row keeps the placed hash that undo needs.
+fn saves_for_undo(plan: &[u8]) -> bool {
+    serde_json::from_slice::<RetainedWritePlan>(plan)
+        .is_ok_and(|plan| plan.plan().kind == OpKind::Save)
 }
 
 /// Settles a retained write at startup; `true` when a save left its staged bytes stranded.

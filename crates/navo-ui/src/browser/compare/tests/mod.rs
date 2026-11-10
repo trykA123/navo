@@ -15,6 +15,7 @@ use crate::settings::Values;
 mod mode;
 mod rows;
 mod stopped;
+mod stream;
 
 #[derive(Default)]
 pub(super) struct Calls {

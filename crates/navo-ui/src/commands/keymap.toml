@@ -2119,6 +2119,113 @@ context = "CompareView"
 command = "compare.save"
 keys = ["ctrl-s"]
 
+# CompareStream
+
+[[bind]]
+command = "compare.stream"
+keys = ["alt-f"]
+context = "Compare"
+
+[[bind]]
+command = "compare.next_file"
+keys = ["ctrl-alt-down"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.previous_file"
+keys = ["ctrl-alt-up"]
+context = "CompareView"
+
+[[bind]]
+command = "files.undo"
+keys = ["ctrl-z"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.view_menu"
+keys = ["alt-v"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.changes"
+keys = ["ctrl-b"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.details"
+keys = ["ctrl-i"]
+context = "CompareView"
+
+[[bind]]
+command = "compare.next_difference"
+keys = ["j"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.previous_difference"
+keys = ["k"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.next_file"
+keys = ["shift-j", "ctrl-alt-down"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.previous_file"
+keys = ["shift-k", "ctrl-alt-up"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.toggle_viewed"
+keys = ["v"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.fold"
+keys = ["o"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.open_file"
+keys = ["enter"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.search"
+keys = ["/"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.copy_all_left"
+keys = ["ctrl-shift-left"]
+context = "CompareStream"
+
+[[bind]]
+command = "compare.copy_all_right"
+keys = ["ctrl-shift-right"]
+context = "CompareStream"
+
+[[bind]]
+command = "files.undo"
+keys = ["ctrl-z"]
+context = "CompareStream"
+
+[[bind]]
+command = "find.result_up"
+keys = ["up"]
+context = "CompareOutline"
+
+[[bind]]
+command = "find.result_down"
+keys = ["down"]
+context = "CompareOutline"
+
+[[bind]]
+command = "find.go_to_result"
+keys = ["enter"]
+context = "CompareOutline"
+
 
 [[bind]]
 command = "clip_palette.pick_first"

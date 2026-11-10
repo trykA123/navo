@@ -123,6 +123,13 @@ fn walk_marking(
         .zip(&plan.steps)
         .find(|(seq, _)| !done.contains(seq))
         .map_or(0, |(seq, _)| seq);
+    if let Err((seq, error)) = precheck_writes(job, done, ctx) {
+        return if error.kind == FsErrorKind::Cancelled {
+            JobOutcome::Cancelled
+        } else {
+            JobOutcome::Failed { seq, error }
+        };
+    }
     let pauses = RefCell::new(match pause_job(plan, ctx) {
         Ok(pauses) => Some(pauses),
         Err(error) => return JobOutcome::Failed { seq: first, error },
@@ -171,6 +178,43 @@ fn walk_marking(
         Some((seq, error)) => JobOutcome::Failed { seq, error },
         None => JobOutcome::Done,
     }
+}
+
+/// Checks every pending WriteFile target before the job writes its first file.
+pub(super) fn precheck_writes(
+    job: Job<'_>,
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+) -> Result<(), (u32, FsError)> {
+    let pending = (0_u32..)
+        .zip(&job.plan.steps)
+        .filter(|(seq, step)| !done.contains(seq) && matches!(step, Step::WriteFile { .. }))
+        .count();
+    if pending < 2 {
+        return Ok(());
+    }
+    for (seq, step) in (0_u32..).zip(&job.plan.steps) {
+        let Step::WriteFile {
+            target,
+            staged,
+            staged_len,
+            expect,
+        } = step
+        else {
+            continue;
+        };
+        if done.contains(&seq) {
+            continue;
+        }
+        let write = super::write_file::Write {
+            target,
+            staged,
+            staged_len: *staged_len,
+            expect,
+        };
+        super::write_file::precheck(ctx, &write).map_err(|error| (seq, error))?;
+    }
+    Ok(())
 }
 
 #[expect(

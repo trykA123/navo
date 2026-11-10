@@ -189,7 +189,14 @@ fn resolve(raw: Raw) -> Result<Bind, KeymapError> {
 }
 
 /// Commands that also take keys in a second, unrelated context.
-const ALSO_IN: [(&str, &str); 1] = [("workspace.new", "WorkspaceTray")];
+const ALSO_IN: [(&str, &str); 6] = [
+    ("workspace.new", "WorkspaceTray"),
+    ("files.undo", "CompareView"),
+    ("files.undo", "CompareStream"),
+    ("find.result_up", "CompareOutline"),
+    ("find.result_down", "CompareOutline"),
+    ("find.go_to_result", "CompareOutline"),
+];
 
 pub(crate) fn also_in(command: &str, context: &str) -> bool {
     ALSO_IN.contains(&(command, context))

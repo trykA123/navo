@@ -186,15 +186,15 @@ fn resolving_a_save_that_is_still_pending_keeps_its_proof() {
 }
 
 #[test]
-fn placed_and_returned_saves_never_keep_their_proof_or_get_listed() {
+fn a_placed_save_keeps_its_proof_for_undo_and_a_returned_one_does_not() {
     let placed = Saving::new("");
     assert!(matches!(placed.save(STAGED, (3, 1_000)), JobOutcome::Done));
     let returned = crashed_after_the_hold();
-    for saving in [&placed, &returned] {
-        for _ in 0..2 {
-            assert!(recover(saving).pending.is_empty());
-            assert_eq!(proofs(saving), 0);
-        }
+    for _ in 0..2 {
+        assert!(recover(&placed).pending.is_empty());
+        assert_eq!(proofs(&placed), 1);
+        assert!(recover(&returned).pending.is_empty());
+        assert_eq!(proofs(&returned), 0);
     }
     assert_eq!(state(&returned), JobState::Failed);
     assert_eq!(returned.hash(STAGED), Some(NEW_HASH));

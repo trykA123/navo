@@ -4,7 +4,7 @@ use super::aside::{Aside, kept_back, presence};
 use super::copy::failure;
 use super::restore::is_placed;
 use super::{HeldFile, JobContext, StepOutcome};
-use crate::{EntryKind, FileIdentity, FsEntry, ProviderOps};
+use crate::{CancelToken, EntryKind, FileIdentity, FsEntry, ProviderOps};
 
 pub(super) struct Write<'a> {
     pub target: &'a Location,
@@ -25,11 +25,8 @@ pub(super) fn run(
     write: &Write<'_>,
 ) -> Result<StepOutcome, FsError> {
     let ops = ctx.ops;
-    check_stamp(ops, write)?;
+    check_target(ops, write, ctx.cancel)?;
     let staged = check_staged(ops, write)?;
-    if ops.content_hash(write.target, ctx.cancel)? != write.expect.hash {
-        return Err(failure(FsErrorKind::ChangedOnDisk, write.target));
-    }
     let checked = Checked {
         staged,
         identity: ops.file_identity(write.target)?,
@@ -42,6 +39,23 @@ pub(super) fn run(
     aside
         .write_over(ctx, write, &checked)
         .map(|()| StepOutcome::Done)
+}
+
+/// Checks a target's stamp and hash without writing; used before a many-file save starts.
+pub(super) fn precheck(ctx: &JobContext<'_>, write: &Write<'_>) -> Result<(), FsError> {
+    check_target(ctx.ops, write, ctx.cancel)
+}
+
+fn check_target(
+    ops: &dyn ProviderOps,
+    write: &Write<'_>,
+    cancel: &CancelToken,
+) -> Result<(), FsError> {
+    check_stamp(ops, write)?;
+    if ops.content_hash(write.target, cancel)? != write.expect.hash {
+        return Err(failure(FsErrorKind::ChangedOnDisk, write.target));
+    }
+    Ok(())
 }
 
 pub(super) fn check_staged(ops: &dyn ProviderOps, write: &Write<'_>) -> Result<FsEntry, FsError> {

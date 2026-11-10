@@ -65,12 +65,18 @@ enum Allow {
     },
 }
 
-const ALLOW: [Allow; 7] = [
+const ALLOW: [Allow; 8] = [
     // Esc leaves the Markdown preview before the viewer closes.
     Allow::Wins {
         key: "escape",
         command: "editor.leave_preview",
         context: "MarkdownPreview",
+    },
+    // Enter in the open Stream outline jumps to the item instead of opening the card's file.
+    Allow::Wins {
+        key: "enter",
+        command: "find.go_to_result",
+        context: "CompareOutline",
     },
     // Esc closes the find results before the viewer closes.
     Allow::Wins {

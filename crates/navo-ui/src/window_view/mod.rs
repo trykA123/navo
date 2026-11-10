@@ -6,6 +6,7 @@ mod clipboard_palette;
 mod closing;
 mod command_center;
 mod compare_keys;
+mod compare_screen;
 mod compare_view;
 mod crash;
 mod diagnostics_refresh;
@@ -326,7 +327,7 @@ impl NavoWindow {
             multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
             chrome: chrome_state::Chromes::default(),
-            compare: compare_view::CompareView::default(),
+            compare: compare_view::CompareView::new(options.open.diff.clone(), Self::waker(cx)),
             cached: cached_views::CachedViews::new(cx),
             git_badges: git_badges::GitBadgeStore::new(options.git, cx),
             git_menu: git_menu::GitMenuState::new(cx),
@@ -367,7 +368,7 @@ impl NavoWindow {
         if polled {
             self.drag_list_changed(cx);
         }
-        if self.poll_preview() || polled {
+        if self.poll_preview() | self.poll_compare_screen(cx) || polled {
             cx.notify();
         }
         self.linger_ended(cx);

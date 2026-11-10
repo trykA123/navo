@@ -23,6 +23,8 @@ pub(super) struct CompareRows {
     checking: bool,
     /// Entries listed so far while the walk waits at the network limit.
     stopped: Option<u64>,
+    /// Counts the row batches of this generation, so a reader can tell the rows changed.
+    batches: u64,
 }
 
 impl CompareRows {
@@ -43,6 +45,7 @@ impl CompareRows {
                 if !self.admit(generation) {
                     return Applied::Ignored;
                 }
+                self.batches += u64::from(!rows.is_empty());
                 rows.into_iter().for_each(|row| self.upsert(row));
                 for step in progress {
                     self.progress.insert(step.id, step);
@@ -122,6 +125,26 @@ impl CompareRows {
             .filter_map(|&at| self.rows.get(at))
     }
 
+    /// The row with `id`, if it arrived.
+    pub(super) fn by_id(&self, id: u64) -> Option<&CompareRow> {
+        self.rows.get(*self.by_id.get(&id)?)
+    }
+
+    /// Every row under `folder` at any depth, depth first: each row, then the rows inside it.
+    /// Rows keep the engine's order within a folder (an explicit stack, no recursion).
+    pub(super) fn under(&self, folder: &str) -> Vec<&CompareRow> {
+        let mut out = Vec::new();
+        let mut stack: Vec<&CompareRow> = self.children(folder).collect();
+        stack.reverse();
+        while let Some(row) = stack.pop() {
+            out.push(row);
+            let inside = stack.len();
+            stack.extend(self.children(&row.path));
+            stack[inside..].reverse();
+        }
+        out
+    }
+
     pub(super) fn by_path(&self, path: &str) -> Option<&CompareRow> {
         let parent = path.rsplit_once('/').map_or("", |(parent, _)| parent);
         self.children(parent).find(|row| row.path == path)
@@ -151,6 +174,11 @@ impl CompareRows {
 
     pub(super) fn stopped(&self) -> Option<u64> {
         self.stopped
+    }
+
+    /// Row batches received in this generation; it changes whenever a row arrives or changes.
+    pub(super) fn batches(&self) -> u64 {
+        self.batches
     }
 
     pub(super) fn len(&self) -> usize {

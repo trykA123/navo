@@ -37,6 +37,13 @@ pub enum StepOutcome {
     Failed,
 }
 
+/// The result of undoing a Save plan: its steps and how many done steps had no held old file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SaveUndo {
+    pub outcome: StepOutcome,
+    pub missing: u32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStamp {
     pub size: u64,
@@ -107,6 +114,22 @@ pub trait JobLog {
             .try_for_each(|&(seq, outcome)| self.step(seq, outcome))
     }
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
+
+    /// Restores the old files of a Save plan; `None` when this log cannot undo saves.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the log needs the plan, its done steps and the operation context"
+    )]
+    fn undo_save(
+        &mut self,
+        _plan: &OperationPlan,
+        _done: &[u32],
+        _ops: &dyn ProviderOps,
+        _cancel: &CancelToken,
+    ) -> Option<Result<SaveUndo, FsError>> {
+        None
+    }
+
     fn journal_held(&mut self, held: &HeldFile) -> Result<bool, FsError>;
     fn journal_placed(&mut self, _placed: &PlacedFile) -> Result<(), FsError> {
         Ok(())

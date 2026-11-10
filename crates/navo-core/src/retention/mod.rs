@@ -129,6 +129,8 @@ pub struct ProvedOverwrite {
     pub placed_size: Option<u64>,
     pub placed_modified_ms: Option<i64>,
     pub volume: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed_hash: Option<[u8; 32]>,
     pub proof: OverwriteProof,
 }
 

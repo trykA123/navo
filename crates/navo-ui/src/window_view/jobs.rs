@@ -80,6 +80,7 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
         rename: RenameNote {
             undo: job.undo,
             skipped: job.report.skipped,
+            missing: job.report.missing,
             left: job.report.left.iter().filter_map(name_of).collect(),
             log_error: job.report.log_error.clone().map(Into::into),
             refused: job

@@ -76,6 +76,10 @@ activity-chip-undone = Undid { $count ->
    *[other] { $items } items
 }
 activity-undo-hint = { $key } undo
+activity-undo-missing = { $count ->
+    [one] { $count } file could not be restored
+   *[other] { $count } files could not be restored
+}
 activity-undo-skipped = { $count ->
     [one] { $items } item had changed and was left as it is
    *[other] { $items } items had changed and were left as they are

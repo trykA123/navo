@@ -365,7 +365,7 @@ fn a_module_binds_only_its_own_commands(cx: &mut TestAppContext) {
         .copied()
         .filter(|action| !action.starts_with("file_list::"))
         .collect();
-    assert_eq!((actions.len(), foreign), (66, Vec::<&str>::new()));
+    assert_eq!((actions.len(), foreign), (68, Vec::<&str>::new()));
 }
 
 #[gpui_kit::test]
@@ -419,10 +419,20 @@ fn drawer_keys_belong_to_the_shared_view_commands_in_every_viewer() {
             .map(|bind| (bind.context.clone(), bind.spec.name))
             .collect()
     };
-    assert_eq!(keyed("ctrl-b"), [("Viewer".to_owned(), "view.left_drawer")]);
+    let compare = |key: &str, name| (key.to_owned(), name);
+    assert_eq!(
+        keyed("ctrl-b"),
+        [
+            ("Viewer".to_owned(), "view.left_drawer"),
+            compare("CompareView", "compare.changes")
+        ]
+    );
     assert_eq!(
         keyed("ctrl-i"),
-        [("Viewer".to_owned(), "view.right_drawer")]
+        [
+            ("Viewer".to_owned(), "view.right_drawer"),
+            compare("CompareView", "compare.details")
+        ]
     );
 }
 

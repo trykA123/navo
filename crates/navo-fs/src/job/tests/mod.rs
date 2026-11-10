@@ -46,6 +46,7 @@ mod volume_proof;
 mod workers;
 mod write;
 mod write_file;
+mod write_file_many;
 mod write_file_races;
 mod write_file_retained;
 mod write_file_retained_crash;

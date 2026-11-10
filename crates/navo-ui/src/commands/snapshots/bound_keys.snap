@@ -111,17 +111,32 @@ command_center.run_in_new_tab | alt-enter | CommandCenter
 command_center.run_in_new_tab | alt-enter | CommandCenter > Input
 command_center.up | up | CommandCenter
 command_center.up | up | CommandCenter > Input
+compare.changes | ctrl-b | CompareView
 compare.continue | ctrl-f7 | Compare
+compare.details | ctrl-i | CompareView
 compare.enter | enter | Compare
 compare.exit | escape | Compare
 compare.exit | escape | CompareView
+compare.fold | o | CompareStream
 compare.next_difference | alt-down | Compare
 compare.next_difference | alt-down | CompareView
 compare.next_difference | f7 | CompareView
+compare.next_difference | j | CompareStream
+compare.next_file | ctrl-alt-down | CompareStream
+compare.next_file | ctrl-alt-down | CompareView
+compare.next_file | shift-j | CompareStream
+compare.open_file | enter | CompareStream
 compare.previous_difference | alt-up | Compare
 compare.previous_difference | alt-up | CompareView
+compare.previous_difference | k | CompareStream
 compare.previous_difference | shift-f7 | CompareView
+compare.previous_file | ctrl-alt-up | CompareStream
+compare.previous_file | ctrl-alt-up | CompareView
+compare.previous_file | shift-k | CompareStream
+compare.stream | alt-f | Compare
+compare.toggle_viewed | v | CompareStream
 compare.up | backspace | Compare
+compare.view_menu | alt-v | CompareView
 compare.with_other_pane | ctrl-shift-d | FileList
 confirm.cancel | escape | ConfirmDialog
 context_menu.back | escape | ContextMenu
@@ -232,6 +247,8 @@ files.sort_by_name | ctrl-f3 | FileList
 files.sort_by_size | ctrl-f6 | FileList
 files.toggle_mark | space | FileList
 files.toggle_mark_down | insert | FileList
+files.undo | ctrl-z | CompareStream
+files.undo | ctrl-z | CompareView
 files.undo | ctrl-z | FileList
 files.unmark_all | ctrl-- | FileList
 files.unmark_all | ctrl-shift-a | FileList
@@ -243,6 +260,7 @@ files.unmark_pattern | subtract | FileList
 files.view | f3 | FileList
 find.all | alt-enter | ViewerFind
 find.close_results | escape | FindAll
+find.go_to_result | enter | CompareOutline
 find.go_to_result | enter | FindAll
 find.match_case | alt-c | Viewer
 find.newer_search | down | ViewerFind > Input
@@ -250,7 +268,9 @@ find.next | f3 | Viewer
 find.older_search | up | ViewerFind > Input
 find.open | ctrl-f | Viewer
 find.previous | shift-f3 | Viewer
+find.result_down | down | CompareOutline
 find.result_down | down | FindAll
+find.result_up | up | CompareOutline
 find.result_up | up | FindAll
 find.selection | ctrl-f3 | Viewer
 git.menu | alt-g | FileList

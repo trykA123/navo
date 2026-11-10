@@ -20,6 +20,8 @@ pub enum Pause {
 pub struct RenameNote {
     pub undo: bool,
     pub skipped: usize,
+    /// Done save steps whose old file was no longer held.
+    pub missing: usize,
     pub left: Vec<SharedString>,
     pub log_error: Option<SharedString>,
     /// Pasted names refused before the job ran, each with its reason.
