@@ -20,8 +20,8 @@ use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
     FILE_ATTRIBUTE_TAG_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ, FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
-    FileAttributeTagInfo, FileDispositionInfo, GetFileInformationByHandleEx, OPEN_EXISTING,
-    ReadFile, SetFileInformationByHandle,
+    FileAttributeTagInfo, FileDispositionInfo, GetFileInformationByHandleEx, GetLongPathNameW,
+    OPEN_EXISTING, ReadFile, SetFileInformationByHandle,
 };
 
 use super::inside;
@@ -141,7 +141,31 @@ pub(super) fn target_inside(root: &Path, link_bytes: &[u8]) -> bool {
         Ok(PathBuf::from(std::ffi::OsString::from_wide(&buffer[..end])))
     })();
     drop(apartment);
-    target.is_ok_and(|target| inside(root, &target))
+    // Compare long names: a root or target spelled with 8.3 parts (RUNNER~1) names the same folder.
+    target.is_ok_and(|target| inside(&long_form(root), &long_form(&target)))
+}
+
+/// The path with 8.3 short parts expanded to long names, or the path unchanged when it does not
+/// exist or the expansion fails.
+fn long_form(path: &Path) -> PathBuf {
+    let wide = wide_z(path);
+    // SAFETY: `wide` is NUL-terminated; a null output with zero length asks for the needed size.
+    let needed = unsafe { GetLongPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) };
+    let Ok(size) = usize::try_from(needed) else {
+        return path.to_path_buf();
+    };
+    if size == 0 {
+        return path.to_path_buf();
+    }
+    let mut buffer = vec![0u16; size];
+    // SAFETY: `buffer` has `needed` writable units and `wide` stays NUL-terminated.
+    let length = unsafe { GetLongPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), needed) };
+    match usize::try_from(length) {
+        Ok(length) if length > 0 && length < size => {
+            PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length]))
+        }
+        _ => path.to_path_buf(),
+    }
 }
 
 /// Marks a handle's file for deletion when the handle closes.
