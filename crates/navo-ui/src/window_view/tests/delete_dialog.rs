@@ -170,7 +170,7 @@ fn key_down(rig: &Rig, cx: &mut TestAppContext, key: &str, is_held: bool) {
         .update(cx, |_, window, cx| {
             window.dispatch_event(
                 gpui_kit::KeyDownEvent {
-                    keystroke: gpui_kit::Keystroke::parse(key)
+                    keystroke: crate::host_os::parse_keystroke(key)
                         .expect("key")
                         .with_simulated_ime(),
                     is_held,

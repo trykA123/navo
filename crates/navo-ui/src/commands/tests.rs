@@ -7,6 +7,7 @@ use super::{
     GLOBAL, Keymap, all, by_name, entries, for_action, for_menu, is_within, key_bindings, registry,
 };
 use crate::app_menu::MenuCommand;
+use crate::host_os::HOST_OS;
 
 const NAMESPACES: [&str; 30] = [
     "activity_strip",
@@ -76,7 +77,7 @@ fn triples(cx: &mut TestAppContext, bind: impl FnOnce(&mut App)) -> Vec<String> 
                 let keys: Vec<String> = binding
                     .keystrokes()
                     .iter()
-                    .map(|key| key.inner().unparse())
+                    .map(|key| key.inner().unparse(HOST_OS))
                     .collect();
                 let context = binding
                     .predicate()
@@ -94,7 +95,7 @@ fn is_alias(binding: &gpui_kit::KeyBinding) -> bool {
     let keys: Vec<String> = binding
         .keystrokes()
         .iter()
-        .map(|key| key.inner().unparse())
+        .map(|key| key.inner().unparse(HOST_OS))
         .collect();
     super::bind::is_shifted_digit_alias(&keys.join(" "))
 }
@@ -299,7 +300,7 @@ fn in_bound_order(cx: &mut TestAppContext) -> Vec<String> {
                 let keys: Vec<String> = binding
                     .keystrokes()
                     .iter()
-                    .map(|key| key.inner().unparse())
+                    .map(|key| key.inner().unparse(HOST_OS))
                     .collect();
                 let context = binding
                     .predicate()

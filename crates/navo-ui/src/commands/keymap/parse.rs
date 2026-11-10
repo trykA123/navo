@@ -7,6 +7,7 @@ use toml::Spanned;
 
 use super::Bind;
 use crate::commands::{CommandSpec, GLOBAL, by_name, is_hidden, is_within};
+use crate::host_os::{HOST_OS, parse_keystroke};
 
 const LEGACY_PANE: &str = "FerritePane";
 
@@ -138,13 +139,13 @@ fn line_at(text: &str, offset: usize) -> usize {
 pub fn normal(key: &str) -> Option<String> {
     let strokes: Vec<String> = key
         .split_whitespace()
-        .map(|part| stroke(part).map(|stroke| stroke.unparse()))
+        .map(|part| stroke(part).map(|stroke| stroke.unparse(HOST_OS)))
         .collect::<Option<_>>()?;
     (!strokes.is_empty()).then(|| strokes.join(" "))
 }
 
 pub(super) fn stroke(part: &str) -> Option<Keystroke> {
-    Keystroke::parse(part)
+    parse_keystroke(part)
         .ok()
         .filter(|stroke| !stroke.key.is_empty())
 }

@@ -11,6 +11,7 @@ use crate::file_list::OpenGitMenu;
 use crate::git::menu::{self, Choice, Model, Source};
 use crate::git::menu_view::{self, Live, Look};
 use crate::git::{GitAction, GitMenu, GitStarted, Previewed, RepoBadge};
+use crate::host_os::HOST_OS;
 use crate::prelude::*;
 use crate::primitives::popup_menu::{self, ChooseHandler, Keys, PopupMenu, wire_keys};
 use crate::status_bar::StatusNotice;
@@ -254,7 +255,7 @@ impl NavoWindow {
         binding
             .keystrokes()
             .first()
-            .map(|keystroke| keystroke.inner().unparse())
+            .map(|keystroke| keystroke.inner().unparse(HOST_OS))
     }
 
     fn git_chooser(cx: &mut Context<Self>) -> ChooseHandler {

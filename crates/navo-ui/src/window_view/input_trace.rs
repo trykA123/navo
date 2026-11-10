@@ -10,6 +10,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::host_os::HOST_OS;
 use gpui_kit::{App, Global, Window, WindowId};
 use navo_fs::ProviderOps;
 use serde::{Deserialize, Serialize};
@@ -82,7 +83,11 @@ impl InputTrace {
             let Some(state) = state else { return };
             cx.set_global(state.clone());
             cx.intercept_keystrokes(move |event, window, cx| {
-                state.begin(format!("key:{}", event.keystroke), window, cx);
+                state.begin(
+                    format!("key:{}", event.keystroke.display(HOST_OS)),
+                    window,
+                    cx,
+                );
             })
             .detach();
             cx.observe_keystrokes(|event, window, cx| {

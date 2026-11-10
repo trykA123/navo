@@ -1,5 +1,5 @@
 use gpui_kit::base::{ObservedElement, Scrollbar, ScrollbarMode, TestSupportExt};
-use gpui_kit::{Role, ScrollWheelEvent, Stateful, canvas};
+use gpui_kit::{Role, ScrollEvent, Stateful, canvas};
 
 use super::PagedView;
 use super::moves::Move;
@@ -170,7 +170,7 @@ impl PagedView {
             .overflow_hidden()
             .font_family(t.typography.mono_font.clone())
             .text_size(t.typography.small)
-            .on_scroll_wheel(cx.listener(|view, event: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|view, event: &ScrollEvent, _, cx| {
                 view.scroll_wheel(event, cx);
             }))
             .child(measure)

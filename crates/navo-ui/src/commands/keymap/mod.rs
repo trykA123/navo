@@ -15,6 +15,7 @@ use gpui_kit::Keystroke;
 
 use super::CommandSpec;
 use super::bind::with_shifted_digit_aliases;
+use crate::host_os::HOST_OS;
 
 pub use overlay::{KeymapWarning, Overlaid, UserKeymapError};
 #[cfg(test)]
@@ -83,7 +84,7 @@ impl Keymap {
     /// True when `stroke` is bound to `command` in `context`, with the Linux shifted-digit aliases.
     #[must_use]
     pub fn has_key_in(&self, command: &str, context: &str, stroke: &Keystroke) -> bool {
-        let wanted = stroke.unparse();
+        let wanted = stroke.unparse(HOST_OS);
         self.keys_in(command, context).any(|bound| {
             with_shifted_digit_aliases(bound)
                 .iter()

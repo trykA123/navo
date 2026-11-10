@@ -1,6 +1,6 @@
 use gpui_kit::{
     App, DispatchPhase, FileDropEvent, IntoElement, MouseDownEvent, MouseEvent, MouseExitEvent,
-    MouseMoveEvent, MousePressureEvent, MouseUpEvent, PinchEvent, ScrollWheelEvent, Styled, Window,
+    MouseMoveEvent, MousePressureEvent, MouseUpEvent, PinchEvent, ScrollEvent, Styled, Window,
     canvas, deferred, div,
 };
 
@@ -28,7 +28,7 @@ pub(in crate::window_view) fn frame(window: &Window, cx: &App) -> Option<impl In
             listen::<MouseDownEvent>("mouse:down", window);
             listen::<MouseUpEvent>("mouse:up", window);
             listen::<MouseMoveEvent>("mouse:move", window);
-            listen::<ScrollWheelEvent>("mouse:scroll", window);
+            listen::<ScrollEvent>("mouse:scroll", window);
             listen::<MousePressureEvent>("mouse:pressure", window);
             listen::<PinchEvent>("mouse:pinch", window);
             listen::<MouseExitEvent>("mouse:exit", window);

@@ -16,7 +16,7 @@ mod view;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use gpui_kit::{FocusHandle, Focusable, ScrollDelta, ScrollWheelEvent, Task};
+use gpui_kit::{FocusHandle, Focusable, ScrollDelta, ScrollEvent, Task};
 use navo_core::paging::{LineIndex, MAX_ROW};
 
 pub(super) use body::PagedBody;
@@ -250,7 +250,7 @@ impl PagedView {
         cx.notify();
     }
 
-    fn scroll_wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
+    fn scroll_wheel(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
         if self.row_height <= px(0.) {
             return;
         }

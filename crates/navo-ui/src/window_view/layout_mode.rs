@@ -6,6 +6,7 @@ use super::NavoWindow;
 use super::layout_switcher::LayoutSwitcherAction;
 use super::pane::PaneStep;
 use crate::commands::{Keymap, LAYOUT_MODE, active, is_fixed_digit, is_shown_key};
+use crate::host_os::HOST_OS;
 use crate::prelude::*;
 use crate::primitives::Kbd;
 use crate::tokens::Theme;
@@ -124,7 +125,7 @@ const VERBS: [Verb; 20] = [
 ];
 
 fn mode_key(keymap: &Keymap, keystroke: &Keystroke) -> Option<ModeKey> {
-    if is_fixed_digit(&keystroke.unparse()) {
+    if is_fixed_digit(&keystroke.unparse(HOST_OS)) {
         return None;
     }
     VERBS

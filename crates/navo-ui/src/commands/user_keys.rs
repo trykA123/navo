@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use gpui_kit::{Action, App, DummyKeyboardMapper, Global, KeyBinding, KeyBindingContextPredicate};
+use gpui_kit::{Action, App, Global, KeyBinding, KeyBindingContextPredicate};
 
 use super::bind::with_shifted_digit_aliases;
 
@@ -44,8 +44,8 @@ pub(crate) fn bind_user_command_keys(cx: &mut App) {
         })
         .filter_map(|(key, name)| {
             let action = Box::new(RunUserCommand { name });
-            let mapper = &DummyKeyboardMapper;
-            KeyBinding::load(&key, action, Some(predicate.clone()), false, None, mapper).ok()
+            // No key equivalents: the binding stays layout independent (see bind.rs).
+            KeyBinding::load(&key, action, Some(predicate.clone()), false, None, cx).ok()
         })
         .collect();
     cx.bind_keys(bindings);
