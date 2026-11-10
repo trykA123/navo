@@ -62,6 +62,7 @@ fn guarded_crash_test_writes_a_record_in_the_given_profile() {
 }
 
 #[cfg(windows)]
+#[allow(clippy::unwrap_used, reason = "test helpers fail loudly")]
 mod native {
     use std::fs;
     use std::path::{Path, PathBuf};
