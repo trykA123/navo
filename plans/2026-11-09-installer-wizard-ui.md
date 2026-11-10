@@ -59,7 +59,7 @@ The view model is plain data, so `navo-ui` does not depend on `navo-setup`. `nav
 | Atom | Component | Role | Effort | After | Owner gate | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | W9 | prototype | designer | high | part 1 done | — | owner picks one variant | done (A, Rail) |
-| W10a | `setup-view-model` | api-builder | medium | W9 | — | `cargo nextest run -p navo-ui setup` | blocked |
+| W10a | `setup-view-model` | api-builder | medium | W9 | — | `cargo nextest run -p navo-ui setup` | done |
 | W10b | `setup-pages` A | ui-builder | high | W10a | — | `cargo xtask check -p navo-ui` | blocked |
 | W11a | `setup-pages` B | ui-builder | high | W10b | — | `cargo xtask check -p navo-ui` | blocked |
 | W11b | `setup-pages` C | ui-builder | medium | W11a | — | `cargo xtask check -p navo-ui` | blocked |
