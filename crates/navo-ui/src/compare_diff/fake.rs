@@ -18,6 +18,7 @@ pub(crate) struct Calls {
     pub(crate) stream_sink: Mutex<Option<StreamSink>>,
     pub(crate) requests: Mutex<Vec<PairRequest>>,
     pub(crate) spans: Mutex<Vec<Range<u32>>>,
+    pub(crate) refreshes: Mutex<Vec<u64>>,
     pub(crate) items: Mutex<Vec<(u64, usize)>>,
     pub(crate) searches: Mutex<Vec<(u64, String)>>,
     pub(crate) focused: Mutex<Vec<Vec<u64>>>,
@@ -173,6 +174,15 @@ impl FakeDiffHooks {
             .clone()
     }
 
+    /// The request id of every pair refresh so far, oldest first.
+    pub(crate) fn refreshes(&self) -> Vec<u64> {
+        self.calls
+            .refreshes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     /// Whether a pair control was dropped.
     pub(crate) fn dropped(&self) -> bool {
         self.calls.dropped.load(Ordering::SeqCst)
@@ -190,12 +200,17 @@ impl PairControl for FakePair {
             .unwrap_or_else(PoisonError::into_inner)
             .push(rows);
     }
-    fn refresh(&self) {
+    fn refresh(&self, request: u64) {
         *self
             .0
             .refreshed
             .lock()
             .unwrap_or_else(PoisonError::into_inner) += 1;
+        self.0
+            .refreshes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(request);
     }
     fn acknowledge(&self, upto: u64) {
         self.0

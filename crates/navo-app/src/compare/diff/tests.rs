@@ -6,6 +6,7 @@ mod copy;
 mod copy_hook;
 mod copy_many;
 mod hooks;
+mod image;
 mod large;
 mod lines;
 mod load;

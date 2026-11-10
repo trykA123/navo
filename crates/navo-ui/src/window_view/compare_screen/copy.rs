@@ -268,7 +268,7 @@ impl NavoWindow {
             .filter(|f| f.request.id == done.request && done.result == CopyResult::Copied)
         {
             file.at = at;
-            file.control.refresh();
+            file.refresh();
         }
         if let (Some(stream), CopyResult::Copied) = (screen.stream.as_mut(), &done.result) {
             stream.reload_item(done.request);

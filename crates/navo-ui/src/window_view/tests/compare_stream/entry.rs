@@ -97,8 +97,14 @@ impl Rig {
 
     /// Delivers a two-hunk text to the last opened pair; returns the file view's current change.
     fn open_two_hunks(&self, cx: &mut TestAppContext) -> Option<usize> {
+        let request = self
+            .view
+            .read_with(cx, |view, _| {
+                view.file_screen().map(|(request, _)| request.id)
+            })
+            .unwrap_or(1);
         let opened = DiffUpdate::Opened {
-            request: 1,
+            request,
             kind: PairKind::Text,
             text: Some(two_hunks()),
         };

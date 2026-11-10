@@ -23,6 +23,18 @@ impl NavoWindow {
         file.large.as_ref().map(|large| large.hunks.as_slice())
     }
 
+    /// Asks the open file screen's worker to reload both sides.
+    pub(in crate::window_view) fn refresh_file_screen(&mut self) {
+        if let Some(file) = self
+            .compare
+            .screen
+            .as_mut()
+            .and_then(|screen| screen.file.as_mut())
+        {
+            file.refresh();
+        }
+    }
+
     /// Whether the open file screen has focus.
     pub(in crate::window_view) fn file_screen_focused(&self, window: &Window) -> bool {
         self.compare

@@ -103,7 +103,7 @@ fn a_refresh_while_loading_sends_one_result_with_the_new_id() {
     let (sink, receiver) = channel();
     let control = PairDiff::start(request(7), slow_input(&source), sink);
     source.wait_opened();
-    control.refresh();
+    control.refresh(8);
     source.release();
     match receiver.recv_timeout(WAIT).unwrap() {
         DiffUpdate::Opened { request, .. } => assert_eq!(request, 8),
@@ -113,6 +113,21 @@ fn a_refresh_while_loading_sends_one_result_with_the_new_id() {
     match receiver.recv_timeout(WAIT).unwrap() {
         DiffUpdate::Spans { request, .. } => assert_eq!(request, 8),
         other => panic!("expected Spans on the new id, got {other:?}"),
+    }
+}
+
+#[test]
+fn coalesced_refreshes_load_under_the_newest_requested_id() {
+    let source = Arc::new(SlowSource::new());
+    let (sink, receiver) = channel();
+    let control = PairDiff::start(request(7), slow_input(&source), sink);
+    source.wait_opened();
+    control.refresh(8);
+    control.refresh(9);
+    source.release();
+    match receiver.recv_timeout(WAIT).unwrap() {
+        DiffUpdate::Opened { request, .. } => assert_eq!(request, 9, "the screen expects 9"),
+        other => panic!("expected the refreshed Opened, got {other:?}"),
     }
 }
 

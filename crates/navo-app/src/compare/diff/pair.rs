@@ -10,6 +10,7 @@ use navo_compare::model::{CancelToken, Reason};
 use navo_ui::compare_diff::{DiffSink, DiffUpdate, PairControl, PairKind, PairRequest};
 
 use super::convert::{spans, to_pair_text};
+use super::image;
 use super::load::{LoadInput, Loaded, load_pair};
 
 const CAPACITY: usize = 8;
@@ -21,6 +22,8 @@ pub(crate) type Opener = Box<dyn Fn() -> Result<Arc<LoadInput>, Reason> + Send>;
 pub(crate) struct PairDiff {
     commands: Arc<Commands>,
     thread: Option<JoinHandle<()>>,
+    #[cfg(test)]
+    done: std::sync::mpsc::Receiver<()>,
 }
 
 impl PairDiff {
@@ -36,9 +39,15 @@ impl PairDiff {
         let id = request.id;
         let failed = Arc::clone(&sink);
         let worker = Arc::clone(&commands);
+        #[cfg(test)]
+        let (done_tx, done) = std::sync::mpsc::channel();
         let spawned = thread::Builder::new()
             .name("compare-pair".to_owned())
-            .spawn(move || run(id, &opener, sink, &worker));
+            .spawn(move || {
+                run(id, &opener, sink, &worker);
+                #[cfg(test)]
+                let _ = done_tx.send(());
+            });
         let thread = match spawned {
             Ok(thread) => Some(thread),
             Err(error) => {
@@ -50,7 +59,12 @@ impl PairDiff {
                 None
             }
         };
-        Self { commands, thread }
+        Self {
+            commands,
+            thread,
+            #[cfg(test)]
+            done,
+        }
     }
 }
 
@@ -59,8 +73,8 @@ impl PairControl for PairDiff {
         self.commands.send(Command::Spans(rows));
     }
 
-    fn refresh(&self) {
-        self.commands.send(Command::Refresh);
+    fn refresh(&self, request: u64) {
+        self.commands.send(Command::Refresh(request));
     }
 }
 
@@ -84,17 +98,33 @@ impl Drop for PairDiff {
     }
 }
 
+#[cfg(test)]
+impl PairDiff {
+    /// Cancel the worker before a test releases its blocked read.
+    pub(crate) fn close_for_test(&self) {
+        self.commands.close();
+    }
+
+    /// Wait up to 5 s for the worker to signal that it exited.
+    pub(crate) fn wait_for_exit(&self) -> bool {
+        self.done
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .is_ok()
+    }
+}
+
 /// One command for the pair worker.
 enum Command {
     Spans(Range<u32>),
-    Refresh,
+    Refresh(u64),
 }
 
 /// Work found after a load, before the next blocking receive.
 #[derive(Default)]
 struct Pending {
     spans: Option<Range<u32>>,
-    refresh: bool,
+    /// The id of the newest refresh, which coalesces every earlier one.
+    refresh: Option<u64>,
 }
 
 /// The worker's bounded queue. A newer span request replaces an older one.
@@ -136,7 +166,7 @@ impl Commands {
         while let Some(command) = queue.pop_front() {
             match command {
                 Command::Spans(rows) => pending.spans = Some(rows),
-                Command::Refresh => pending.refresh = true,
+                Command::Refresh(next) => pending.refresh = Some(next),
             }
         }
         pending
@@ -178,8 +208,8 @@ fn run(mut id: u64, opener: &Opener, sink: DiffSink, commands: &Commands) {
             return;
         }
         let pending = commands.take_pending();
-        if pending.refresh {
-            id = id.wrapping_add(1);
+        if let Some(next) = pending.refresh {
+            id = next;
             continue;
         }
         sink(DiffUpdate::Opened {
@@ -190,12 +220,17 @@ fn run(mut id: u64, opener: &Opener, sink: DiffSink, commands: &Commands) {
         if let Some(rows) = pending.spans {
             send_spans(&loaded, id, rows, &sink);
         }
+        if matches!(loaded.kind, PairKind::Image)
+            && !image::diff(&input, id, &sink, &commands.cancel)
+        {
+            return;
+        }
         loop {
             match commands.recv() {
                 None => return,
                 Some(Command::Spans(rows)) => send_spans(&loaded, id, rows, &sink),
-                Some(Command::Refresh) => {
-                    id = id.wrapping_add(1);
+                Some(Command::Refresh(next)) => {
+                    id = next;
                     break;
                 }
             }
@@ -224,16 +259,15 @@ fn open_input(
             kind: PairKind::Unavailable(reason.fluent_id().as_str()),
             text: None,
         });
-        wait_refresh(commands)?;
-        *id = id.wrapping_add(1);
+        *id = wait_refresh(commands)?;
     }
 }
 
-/// Ignore span requests until a refresh (`Some`) or close (`None`).
-fn wait_refresh(commands: &Commands) -> Option<()> {
+/// Ignore span requests until a refresh (`Some` with its id) or close (`None`).
+fn wait_refresh(commands: &Commands) -> Option<u64> {
     loop {
         match commands.recv()? {
-            Command::Refresh => return Some(()),
+            Command::Refresh(next) => return Some(next),
             Command::Spans(_) => {}
         }
     }

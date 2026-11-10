@@ -195,6 +195,9 @@ fn viewed_of(
     cancel: &CancelToken,
 ) -> ([u8; 64], bool) {
     let left = hash_side(&input.left, left, cancel);
+    if cancel.is_cancelled() {
+        return ([0u8; 64], false);
+    }
     let right = hash_side(&input.right, right, cancel);
     let mut viewed = [0u8; 64];
     viewed[..HASH_BYTES].copy_from_slice(&left.unwrap_or(ZERO_HASH));
@@ -209,6 +212,9 @@ fn hash_side(
     loaded: &SideLoad,
     cancel: &CancelToken,
 ) -> Option<[u8; HASH_BYTES]> {
+    if cancel.is_cancelled() {
+        return None;
+    }
     match loaded {
         SideLoad::Whole(whole) => Some(*blake3::hash(&whole.bytes).as_bytes()),
         SideLoad::Missing => Some(ZERO_HASH),
@@ -225,6 +231,9 @@ fn stream_hash(
     entry: &SideEntry,
     cancel: &CancelToken,
 ) -> Option<[u8; HASH_BYTES]> {
+    if cancel.is_cancelled() {
+        return None;
+    }
     if entry.size > WHOLE_LIMIT {
         return None;
     }

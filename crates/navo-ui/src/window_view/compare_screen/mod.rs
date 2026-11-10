@@ -132,6 +132,20 @@ pub(super) enum FileState {
     Failed(SharedString),
 }
 
+/// The worker request id an update belongs to.
+fn request_of(update: &DiffUpdate) -> u64 {
+    match update {
+        DiffUpdate::Opened { request, .. }
+        | DiffUpdate::Spans { request, .. }
+        | DiffUpdate::Large { request, .. }
+        | DiffUpdate::LargeLines { request, .. }
+        | DiffUpdate::Bytes { request, .. }
+        | DiffUpdate::Image { request, .. }
+        | DiffUpdate::ChangedOnDisk { request }
+        | DiffUpdate::Failed { request, .. } => *request,
+    }
+}
+
 /// The hunks, steps and progress of one applied large text snapshot (V38 draws them).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(super) struct LargeShown {
@@ -144,6 +158,11 @@ pub(super) struct LargeShown {
 pub(super) struct FileScreen {
     tag: u64,
     request: PairRequest,
+    /// The worker request id of the newest update; older ones are stale.
+    active: u64,
+    /// The newest request id this screen asked for; an `Opened` below it is stale. `None` once
+    /// ids ran out, so every update is dropped.
+    expected: Option<u64>,
     sides: SharedString,
     focus: FocusHandle,
     state: FileState,
@@ -163,10 +182,24 @@ pub(super) struct FileScreen {
 }
 
 impl FileScreen {
-    /// Applies one update; false when nothing shown changes (disk changes come later).
+    /// Applies one update; false when nothing shown changes or the update is stale.
     fn apply(&mut self, update: DiffUpdate) -> bool {
+        let opened = matches!(update, DiffUpdate::Opened { .. });
+        let request = request_of(&update);
+        let Some(expected) = self.expected else {
+            return false;
+        };
+        if request < expected || (!opened && request != self.active) {
+            return false;
+        }
         match update {
-            DiffUpdate::Opened { kind, text, .. } => {
+            DiffUpdate::Opened {
+                request,
+                kind,
+                text,
+            } => {
+                self.active = request;
+                self.expected = Some(request);
                 self.pick.clear();
                 let (at, words) = (self.at, self.look.words);
                 self.view = text
@@ -196,9 +229,24 @@ impl FileScreen {
             }
             DiffUpdate::LargeLines { .. }
             | DiffUpdate::Bytes { .. }
+            | DiffUpdate::Image { .. }
             | DiffUpdate::ChangedOnDisk { .. } => return false,
         }
         true
+    }
+
+    /// Asks the worker to reload both sides under the next request id; updates for every earlier
+    /// id become stale. Fails the pair, without reusing an id, once the ids run out.
+    fn refresh(&mut self) {
+        let next = self.expected.and_then(|id| id.checked_add(1));
+        self.expected = next;
+        match next {
+            Some(id) => self.control.refresh(id),
+            None => {
+                self.view = None;
+                self.state = FileState::Failed(navo_l10n::tr("compare-could-not-start").into());
+            }
+        }
     }
 }
 
@@ -290,9 +338,12 @@ impl NavoWindow {
                     .map(|stream| stream.look)
             })
             .unwrap_or_else(look::Look::rich);
+        let active = request.id;
         let file = FileScreen {
             tag,
             request,
+            active,
+            expected: Some(active),
             sides: sides_label(self),
             focus: focus.clone(),
             state: FileState::Loading,
