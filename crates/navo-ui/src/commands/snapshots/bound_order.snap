@@ -261,6 +261,12 @@ image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
 viewer.go_to_start | home | Pdf
 viewer.go_to_end | end | Pdf
+viewer.line_up | up | CompareView
+viewer.line_down | down | CompareView
+viewer.page_up | pageup | CompareView
+viewer.page_down | pagedown | CompareView
+viewer.go_to_start | home | CompareView
+viewer.go_to_end | end | CompareView
 find.result_up | up | CompareOutline
 find.result_down | down | CompareOutline
 find.go_to_result | enter | CompareOutline

@@ -28,8 +28,16 @@ enum Part {
     Equal,
     /// Hunk number `n` of the sorted list.
     Hunk(usize),
-    /// A gap whose sides differ in length (an evicted section): one changed block.
-    Block,
+    /// Lines the diff has not settled (still diffing, or evicted): paired one to one, unknown.
+    Pending,
+}
+
+/// What the diff has settled: whether every section is diffed, and the left lines of the
+/// sections whose hunks were evicted (D17 paged hunks).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(in crate::window_view) struct Settled {
+    pub(in crate::window_view) done: bool,
+    pub(in crate::window_view) evicted: Vec<Range<u64>>,
 }
 
 /// A run of rows starting at list row `row` over `left` and `right` lines.
@@ -51,6 +59,7 @@ pub(in crate::window_view) struct RowMap {
     segments: Vec<Segment>,
     layout: Layout,
     totals: Option<(u64, u64)>,
+    settled: Settled,
 }
 
 /// A range's length.
@@ -60,11 +69,13 @@ fn len(range: &Range<u64>) -> u64 {
 
 impl RowMap {
     /// Sorts `hunks` by line and maps them in `layout`; `totals` are both sides' line counts,
-    /// unknown until the first line window arrives. Empty or overlapping hunks are skipped.
+    /// unknown until the first line window arrives; `settled` says which gaps are known equal.
+    /// Empty or overlapping hunks are skipped.
     pub(in crate::window_view) fn new(
         hunks: &[LargeHunk],
         layout: Layout,
         totals: Option<(u64, u64)>,
+        settled: Settled,
     ) -> Self {
         let mut sorted = hunks.to_vec();
         sorted.sort_by_key(|hunk| (hunk.left_rows.start, hunk.right_rows.start));
@@ -83,6 +94,7 @@ impl RowMap {
             segments: Vec::new(),
             layout,
             totals,
+            settled,
         };
         map.segments = map.build();
         map
@@ -97,7 +109,7 @@ impl RowMap {
             segments.push(segment);
         };
         for (n, hunk) in self.hunks.iter().enumerate() {
-            let gap = gap(
+            let gap = self.gap(
                 left..hunk.left_rows.start,
                 right..hunk.right_rows.start,
                 row,
@@ -119,12 +131,12 @@ impl RowMap {
             (left, right) = (hunk.left_rows.end, hunk.right_rows.end);
         }
         let tail = match self.totals {
-            Some((l, r)) => gap(left..l.max(left), right..r.max(right), row),
+            Some((l, r)) => self.gap(left..l.max(left), right..r.max(right), row),
             None => Some(Segment {
                 row,
                 left: left..u64::MAX,
                 right: right..u64::MAX,
-                part: Part::Equal,
+                part: Part::Pending,
             }),
         };
         if let Some(tail) = tail {
@@ -138,7 +150,7 @@ impl RowMap {
         let (l, r) = (len(&segment.left), len(&segment.right));
         match (segment.part, self.layout) {
             (Part::Equal, _) => l.min(r),
-            (_, Layout::SideBySide) => l.max(r),
+            (Part::Pending, _) | (_, Layout::SideBySide) => l.max(r),
             (_, Layout::Unified) => l.saturating_add(r),
         }
     }
@@ -187,7 +199,7 @@ impl RowMap {
         }
         let line = |range: &Range<u64>, k: u64| (k < len(range)).then(|| range.start + k);
         let (left, right) = match (segment.part, self.layout) {
-            (Part::Equal, _) | (_, Layout::SideBySide) => {
+            (Part::Equal | Part::Pending, _) | (_, Layout::SideBySide) => {
                 (line(&segment.left, k), line(&segment.right, k))
             }
             (_, Layout::Unified) => match line(&segment.left, k) {
@@ -197,13 +209,14 @@ impl RowMap {
         };
         let kind = match (segment.part, left, right) {
             (Part::Equal, ..) => ShownKind::Equal,
+            (Part::Pending, ..) => ShownKind::Pending,
             (_, Some(_), Some(_)) => ShownKind::Changed,
             (_, Some(_), None) => ShownKind::Deleted,
             (_, None, _) => ShownKind::Inserted,
         };
         let hunk = match segment.part {
             Part::Hunk(n) => Some(n),
-            Part::Equal | Part::Block => None,
+            Part::Equal | Part::Pending => None,
         };
         Shown {
             kind,
@@ -228,7 +241,7 @@ impl RowMap {
         let range = side_of(segment);
         let k = line.saturating_sub(range.start);
         let before = match (anchor, segment.part, self.layout) {
-            (Anchor::Right(_), Part::Hunk(_) | Part::Block, Layout::Unified) => len(&segment.left),
+            (Anchor::Right(_), Part::Hunk(_), Layout::Unified) => len(&segment.left),
             _ => 0,
         };
         segment.row.saturating_add(before).saturating_add(k)
@@ -242,22 +255,24 @@ impl RowMap {
             .map(Anchor::Left)
             .or_else(|| shown.right.map(Anchor::Right))
     }
-}
 
-/// The gap between two hunks starting at `row`: equal when both sides are as long, else one
-/// changed block; `None` when both are empty.
-fn gap(left: Range<u64>, right: Range<u64>, row: u64) -> Option<Segment> {
-    let part = match (len(&left), len(&right)) {
-        (0, 0) => return None,
-        (l, r) if l == r => Part::Equal,
-        _ => Part::Block,
-    };
-    Some(Segment {
-        row,
-        left,
-        right,
-        part,
-    })
+    /// The gap between two hunks starting at `row`: equal only when the diff finished, no
+    /// evicted section touches it and both sides are as long; else pending. `None` when empty.
+    fn gap(&self, left: Range<u64>, right: Range<u64>, row: u64) -> Option<Segment> {
+        let evicted = (self.settled.evicted.iter())
+            .any(|section| section.start < left.end && left.start < section.end);
+        let part = match (len(&left), len(&right)) {
+            (0, 0) => return None,
+            (l, r) if l == r && self.settled.done && !evicted => Part::Equal,
+            _ => Part::Pending,
+        };
+        Some(Segment {
+            row,
+            left,
+            right,
+            part,
+        })
+    }
 }
 
 /// A row past the end: a filler with no lines.

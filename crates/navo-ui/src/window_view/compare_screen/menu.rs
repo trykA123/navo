@@ -118,6 +118,9 @@ impl NavoWindow {
         {
             view.set_words(file.look.words);
         }
+        if let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut()) {
+            file.follow_layout();
+        }
         cx.notify();
     }
 

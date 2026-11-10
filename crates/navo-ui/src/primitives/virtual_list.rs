@@ -39,6 +39,19 @@ impl ListScroll {
         self.0.0.borrow().base_handle.offset().y
     }
 
+    /// Sets the vertical offset (zero or below) now, not at the next layout, so a read right
+    /// after sees it.
+    pub fn set_offset_y(&self, y: Pixels) {
+        let handle = &self.0.0.borrow().base_handle;
+        handle.set_offset(gpui_kit::point(handle.offset().x, y));
+    }
+
+    /// The list's height in the last layout; zero before the first one.
+    pub fn viewport_height(&self) -> Pixels {
+        let state = self.0.0.borrow();
+        state.last_item_size.map_or(px(0.), |size| size.item.height)
+    }
+
     pub fn is_at_bottom(&self) -> bool {
         let state = self.0.0.borrow();
         let Some(size) = state.last_item_size else {

@@ -28,6 +28,7 @@ mod command_center;
 mod compare;
 mod compare_copy;
 mod compare_large;
+mod compare_large_view;
 mod compare_screen;
 mod compare_scroll;
 mod compare_sheet;

@@ -18,7 +18,7 @@ const MOST: u64 = 2_000;
 pub(in crate::window_view) struct LineCache {
     left: BTreeMap<u64, String>,
     right: BTreeMap<u64, String>,
-    /// The window asked for last; cleared when any window arrives.
+    /// The one window in flight; cleared when it arrives.
     asked: Option<Range<u64>>,
 }
 
@@ -29,49 +29,45 @@ impl LineCache {
         side.get(&line).map(String::as_str)
     }
 
-    /// Stores a window that starts at line `start`, then drops the lines farthest from it.
+    /// Stores a window that starts at line `start`, then drops each side's lines farthest from
+    /// its line in view (`near`), so sides far apart never evict each other's visible lines.
     pub(in crate::window_view) fn add(
         &mut self,
         start: u64,
-        left: Vec<String>,
-        right: Vec<String>,
+        (left, right): (Vec<String>, Vec<String>),
+        near: (u64, u64),
     ) {
         self.asked = None;
-        for (side, lines) in [(&mut self.left, left), (&mut self.right, right)] {
+        let sides = [
+            (&mut self.left, left, near.0),
+            (&mut self.right, right, near.1),
+        ];
+        for (side, lines, near) in sides {
             for (at, text) in (start..).zip(lines) {
                 side.insert(at, text);
             }
-            trim(side, start);
+            trim(side, near);
         }
     }
 
     /// The window to ask for so `rows` show text: the missing part of the left lines, else of
-    /// the right lines, widened by up to 200 lines and at most 2,000 long. `None` when all arrived or the
-    /// window is already in flight.
+    /// the right lines, widened by up to 200 lines and at most 2,000 long. `None` when all
+    /// arrived or a window is in flight: one at a time, so an answer never races a newer ask.
     pub(in crate::window_view) fn wanted(
         &self,
         map: &RowMap,
         rows: Range<u64>,
     ) -> Option<Range<u64>> {
-        let (mut left, mut right) = (None::<Range<u64>>, None::<Range<u64>>);
-        for row in rows {
-            let shown = map.at(row);
-            widen(&mut left, shown.left);
-            widen(&mut right, shown.right);
+        if self.asked.is_some() {
+            return None;
         }
+        let (left, right) = in_view(map, rows);
         let (left_total, right_total) = map.totals().unwrap_or((u64::MAX, u64::MAX));
         let (side, missing) = missing(&self.left, left, left_total)
             .map(|range| (&self.left, range))
             .or_else(|| {
                 missing(&self.right, right, right_total).map(|range| (&self.right, range))
             })?;
-        if self
-            .asked
-            .as_ref()
-            .is_some_and(|asked| asked.start <= missing.start && missing.end <= asked.end)
-        {
-            return None;
-        }
         // Widen back over missing lines only, so every answer brings at least one new line.
         let mut start = missing.start;
         while start > 0 && missing.start - start < AHEAD && !side.contains_key(&(start - 1)) {
@@ -88,6 +84,20 @@ impl LineCache {
     pub(in crate::window_view) fn asked(&mut self, rows: Range<u64>) {
         self.asked = Some(rows);
     }
+}
+
+/// The left and right lines that list rows `rows` show.
+pub(in crate::window_view) fn in_view(
+    map: &RowMap,
+    rows: Range<u64>,
+) -> (Option<Range<u64>>, Option<Range<u64>>) {
+    let (mut left, mut right) = (None::<Range<u64>>, None::<Range<u64>>);
+    for row in rows {
+        let shown = map.at(row);
+        widen(&mut left, shown.left);
+        widen(&mut right, shown.right);
+    }
+    (left, right)
 }
 
 /// Grows `range` to hold `line`.

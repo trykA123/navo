@@ -16,15 +16,14 @@ mod search;
 mod sheet;
 mod stream;
 
-use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gpui_kit::{FocusHandle, Subscription};
 
 use super::NavoWindow;
 use crate::browser::{FileDiffRequest, Waker};
-use crate::compare_diff::PairRequest;
-use crate::compare_diff::{DiffHooks, DiffSink, DiffUpdate, PairControl, PairKind, PairText};
+use crate::compare_diff::{DiffHooks, DiffSink, DiffUpdate, Layout, PairControl, PairKind};
+use crate::compare_diff::{PairRequest, PairText};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
 use large::LargeShown;
@@ -164,10 +163,10 @@ pub(super) struct FileScreen {
     at: Option<usize>,
     /// The large text snapshot applied last; its number was acknowledged after applying.
     large: Option<LargeShown>,
-    /// Shared with the large body's rows, which ask for line windows as they are built.
-    control: Rc<dyn PairControl>,
-    /// What the View menu set: parts shown and layout.
+    control: Box<dyn PairControl>,
+    /// What the View menu set: parts shown and layout; `auto` is the window's layout.
     look: look::Look,
+    auto: Layout,
     drawers: drawers::Drawers,
     menu: Option<(Entity<ContextMenu>, Subscription)>,
     /// The lines picked for a partial copy (V32).
@@ -175,8 +174,9 @@ pub(super) struct FileScreen {
 }
 
 impl FileScreen {
-    /// Applies one update; false when nothing shown changes or the update is stale.
-    fn apply(&mut self, update: DiffUpdate) -> bool {
+    /// Applies one update, drawing rows `row_height` tall; false when nothing shown changes or
+    /// the update is stale.
+    fn apply(&mut self, update: DiffUpdate, row_height: Pixels) -> bool {
         let opened = matches!(update, DiffUpdate::Opened { .. });
         let request = request_of(&update);
         let Some(expected) = self.expected else {
@@ -198,15 +198,23 @@ impl FileScreen {
                 self.view = text
                     .clone()
                     .map(|text| file::FileView::new(text, at, words));
-                self.large = matches!(kind, PairKind::Large { .. }).then(LargeShown::default);
+                let layout = self.look.layout.unwrap_or(self.auto);
+                self.large = matches!(kind, PairKind::Large { .. })
+                    .then(|| LargeShown::new(row_height, layout));
                 self.state = FileState::Opened { kind, text };
+                self.follow_layout();
             }
-            DiffUpdate::Failed { text, .. } => self.state = FileState::Failed(text.into()),
+            DiffUpdate::Failed { text, .. } => {
+                self.large = None;
+                self.state = FileState::Failed(text.into());
+            }
             DiffUpdate::Spans { spans, .. } => match self.view.as_mut() {
                 Some(view) => view.add_spans(spans),
                 None => return false,
             },
-            DiffUpdate::Large { .. } | DiffUpdate::LargeLines { .. } => self.apply_large(update),
+            DiffUpdate::Large { .. } | DiffUpdate::LargeLines { .. } => {
+                self.apply_large(update, row_height);
+            }
             DiffUpdate::Bytes { .. }
             | DiffUpdate::Image { .. }
             | DiffUpdate::ChangedOnDisk { .. } => return false,
@@ -218,7 +226,7 @@ impl FileScreen {
     /// id become stale. Fails the pair, without reusing an id, once the ids run out.
     fn refresh(&mut self) {
         let next = self.expected.and_then(|id| id.checked_add(1));
-        self.expected = next;
+        (self.expected, self.large) = (next, None);
         match next {
             Some(id) => self.control.refresh(id),
             None => {
@@ -306,8 +314,7 @@ impl NavoWindow {
         };
         self.compare.diff.opened += 1;
         let tag = self.compare.diff.opened;
-        let control: Rc<dyn PairControl> =
-            Rc::from(hooks.open_pair(request.clone(), &self.values, self.compare.diff.sink(tag)));
+        let control = hooks.open_pair(request.clone(), &self.values, self.compare.diff.sink(tag));
         let focus = cx.focus_handle();
         let screen = self.compare.screen.as_ref();
         let look = screen
@@ -332,6 +339,7 @@ impl NavoWindow {
             large: None,
             control,
             look,
+            auto: file::layout_for(window),
             drawers: drawers::Drawers::new(),
             menu: None,
             pick: pick::Pick::default(),
@@ -351,11 +359,12 @@ impl NavoWindow {
     /// Drains the inboxes of the Stream and the file diff; updates for a closed or replaced
     /// file screen are dropped. Returns whether the screen changed.
     pub(super) fn poll_compare_screen(&mut self, cx: &mut Context<Self>) -> bool {
-        self.poll_stream(cx) | self.poll_file_screen() | self.poll_copies() | self.poll_sheet()
+        let rows = crate::tokens::current(cx).spacing.row_height;
+        self.poll_stream(cx) | self.poll_file_screen(rows) | self.poll_copies() | self.poll_sheet()
     }
 
-    /// Drains the file diff's inbox. Returns whether the file screen changed.
-    fn poll_file_screen(&mut self) -> bool {
+    /// Drains the file diff's inbox into rows `rows` tall. Returns whether the screen changed.
+    fn poll_file_screen(&mut self, rows: Pixels) -> bool {
         let updates = std::mem::take(
             &mut *self
                 .compare
@@ -371,7 +380,9 @@ impl NavoWindow {
         updates
             .into_iter()
             .filter(|(sent_to, _)| *sent_to == tag)
-            .fold(false, |changed, (_, update)| file.apply(update) | changed)
+            .fold(false, |changed, (_, update)| {
+                file.apply(update, rows) | changed
+            })
     }
 
     /// Esc on the file diff: pops it and cancels its pair. Focus goes to the Stream underneath,

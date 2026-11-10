@@ -150,11 +150,11 @@ fn body(
                 .children(map),
         );
     }
-    if let Some(large) = file.large.as_mut() {
-        let list = large.list(look.layout_in(window), &file.control, cx);
-        return area.child(div().flex().flex_1().min_h_0().child(list));
-    }
     let failed = matches!(file.state, FileState::Failed(_));
+    if let Some(large) = file.large.as_ref().filter(|_| !failed) {
+        let rows = div().flex().flex_1().min_h_0().child(large.list(cx));
+        return area.child(NavoWindow::large_moves(rows, cx));
+    }
     area.when_some(message(&file.state), |area, text| {
         area.child(
             div()
@@ -230,6 +230,7 @@ impl NavoWindow {
         let root = Self::copy_keys(Self::walk_keys(div().id("compare-screen"), cx), cx);
         let root = Self::drawer_actions(Self::look_actions(root, cx), cx);
         let root = Self::menu_keys(Self::pick_keys(root, cx), cx);
+        let root = Self::large_keys(root, cx);
         let bars = FileBars {
             weak: cx.weak_entity(),
             hovered: self.file_hover(),

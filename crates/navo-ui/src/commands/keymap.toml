@@ -2139,6 +2139,36 @@ keys = ["alt-v"]
 context = "CompareView"
 
 [[bind]]
+command = "viewer.line_up"
+keys = ["up"]
+context = "CompareView"
+
+[[bind]]
+command = "viewer.line_down"
+keys = ["down"]
+context = "CompareView"
+
+[[bind]]
+command = "viewer.page_up"
+keys = ["pageup"]
+context = "CompareView"
+
+[[bind]]
+command = "viewer.page_down"
+keys = ["pagedown"]
+context = "CompareView"
+
+[[bind]]
+command = "viewer.go_to_start"
+keys = ["home"]
+context = "CompareView"
+
+[[bind]]
+command = "viewer.go_to_end"
+keys = ["end"]
+context = "CompareView"
+
+[[bind]]
 command = "compare.changes"
 keys = ["ctrl-b"]
 context = "CompareView"

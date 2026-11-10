@@ -51,11 +51,14 @@ impl NavoWindow {
         Some((shown.kind, side(true, shown.left), side(false, shown.right)))
     }
 
-    /// Scrolls the large body so row `row` is on top.
+    /// Scrolls the large body so row `row` is on top, as a scroll event would.
     pub(in crate::window_view) fn large_scroll_to(&mut self, row: usize) {
         let file = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
-        if let Some(large) = file.and_then(|file| file.large.as_mut()) {
-            large.scroll.scroll_to_top(row);
+        if let Some(file) = file
+            && let Some(large) = file.large.as_mut()
+        {
+            large.place(u64::try_from(row).unwrap_or(u64::MAX), 0.);
+            large.ask(file.control.as_ref());
         }
     }
 }

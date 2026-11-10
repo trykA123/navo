@@ -10,10 +10,10 @@ use super::settle;
 use crate::compare_diff::{
     DiffSink, DiffUpdate, LargeHunk, LargeProgress, LargeStage, Layout, PairKind, ShownKind,
 };
-use crate::window_view::compare_screen::large::{Anchor, RowMap};
+use crate::window_view::compare_screen::large::{Anchor, RowMap, Settled};
 
 /// A hunk over `left` and `right` lines; the byte ranges do not matter to the body.
-fn hunk(left: std::ops::Range<u64>, right: std::ops::Range<u64>) -> LargeHunk {
+pub(super) fn hunk(left: std::ops::Range<u64>, right: std::ops::Range<u64>) -> LargeHunk {
     LargeHunk {
         left_rows: left.clone(),
         right_rows: right.clone(),
@@ -38,7 +38,7 @@ fn snapshot(hunks: Vec<LargeHunk>, done: u64, ack: u64) -> DiffUpdate {
 }
 
 /// Lines `rows` of both sides ("l7", "r7") with the sides' line counts.
-fn lines(rows: std::ops::Range<u64>, totals: (u64, u64)) -> DiffUpdate {
+pub(super) fn lines(rows: std::ops::Range<u64>, totals: (u64, u64)) -> DiffUpdate {
     DiffUpdate::LargeLines {
         request: 1,
         rows: rows.clone(),
@@ -51,7 +51,7 @@ fn lines(rows: std::ops::Range<u64>, totals: (u64, u64)) -> DiffUpdate {
 }
 
 /// Opens `a.txt` as a large pair and returns the sink its updates go through.
-fn open_large(cx: &mut TestAppContext) -> (Rig, DiffSink) {
+pub(super) fn open_large(cx: &mut TestAppContext) -> (Rig, DiffSink) {
     let rig = rig(cx);
     rig.press(cx, "enter");
     let sink = rig.diff.pair_sink();
@@ -67,7 +67,7 @@ fn open_large(cx: &mut TestAppContext) -> (Rig, DiffSink) {
     (rig, sink)
 }
 
-fn push(cx: &mut TestAppContext, rig: &Rig, sink: &DiffSink, update: DiffUpdate) {
+pub(super) fn push(cx: &mut TestAppContext, rig: &Rig, sink: &DiffSink, update: DiffUpdate) {
     sink(update);
     settle(cx, &rig.view);
 }
@@ -103,7 +103,7 @@ fn compare_large_rows_come_from_hunks_and_requested_line_windows(cx: &mut TestAp
     assert_eq!(row(cx, 13), (ShownKind::Inserted, None, shown(13, "r13")));
     assert_eq!(
         row(cx, 15),
-        (ShownKind::Equal, shown(12, "l12"), shown(15, "r15"))
+        (ShownKind::Pending, shown(12, "l12"), shown(15, "r15"))
     );
     assert_eq!(status(cx, &rig), t!("compare-screen-changes", total = 1));
 }
@@ -261,7 +261,11 @@ fn compare_large_done_with_no_more_hunks_ends_the_wait(cx: &mut TestAppContext) 
 #[test]
 fn compare_large_maps_unified_rows_and_unequal_gaps() {
     let hunks = [hunk(10..12, 10..13), hunk(50..51, 51..51)];
-    let unified = RowMap::new(&hunks, Layout::Unified, Some((100, 99)));
+    let done = || Settled {
+        done: true,
+        evicted: Vec::new(),
+    };
+    let unified = RowMap::new(&hunks, Layout::Unified, Some((100, 99)), done());
     let at = |map: &RowMap, row| {
         let shown = map.at(row);
         (shown.kind, shown.left, shown.right)
@@ -270,18 +274,18 @@ fn compare_large_maps_unified_rows_and_unequal_gaps() {
     assert_eq!(at(&unified, 12), (ShownKind::Inserted, None, Some(10)));
     assert_eq!(at(&unified, 15), (ShownKind::Equal, Some(12), Some(13)));
     assert_eq!(unified.row_of(Anchor::Right(12)), 14);
-    // After the second hunk 49 left lines face 48 right lines: an evicted section, shown as
-    // one changed block that is not a change to step to.
-    let side = RowMap::new(&hunks, Layout::SideBySide, Some((100, 99)));
+    // After the second hunk 49 left lines face 48 right lines: no settled pairing, so the
+    // rows are pending, paired one to one, and not a change to step to.
+    let side = RowMap::new(&hunks, Layout::SideBySide, Some((100, 99)), done());
     assert_eq!(side.count(), 10 + 3 + 38 + 1 + 49);
-    assert_eq!(at(&side, 52), (ShownKind::Changed, Some(51), Some(51)));
-    assert_eq!(at(&side, 100), (ShownKind::Deleted, Some(99), None));
+    assert_eq!(at(&side, 52), (ShownKind::Pending, Some(51), Some(51)));
+    assert_eq!(at(&side, 100), (ShownKind::Pending, Some(99), None));
     assert_eq!(side.at(52).hunk, None);
     assert_eq!(side.at(51).hunk, Some(1));
     assert_eq!(side.row_of(Anchor::Left(60)), 61);
-    let open = RowMap::new(&hunks[..1], Layout::SideBySide, None);
+    let open = RowMap::new(&hunks[..1], Layout::SideBySide, None, done());
     assert_eq!(
         at(&open, 5_000),
-        (ShownKind::Equal, Some(4_999), Some(5_000))
+        (ShownKind::Pending, Some(4_999), Some(5_000))
     );
 }

@@ -7,6 +7,7 @@ mod list;
 mod map;
 #[cfg(test)]
 mod probes;
+mod scroll;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -15,10 +16,10 @@ use navo_l10n::{t, tr};
 
 #[cfg(test)]
 pub(in crate::window_view) use map::Anchor;
-pub(in crate::window_view) use map::RowMap;
+pub(in crate::window_view) use map::{RowMap, Settled};
 
 use crate::compare_diff::{
-    DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStepView, Layout,
+    DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepView, Layout,
 };
 use crate::prelude::*;
 use crate::primitives::ListScroll;
@@ -32,7 +33,9 @@ pub(super) struct LargeShown {
     map: Rc<RowMap>,
     lines: Rc<RefCell<LineCache>>,
     scroll: ListScroll,
-    /// The row height of the last frame; zero before the first one.
+    /// The first row of the list's window of rows (D16: small `f32` offsets at 10M lines).
+    base: u64,
+    /// The theme's row height when the last update or event came.
     row_height: Pixels,
     /// The current change, by its first lines, so it survives hunks arriving above it.
     current: Option<(u64, u64)>,
@@ -40,23 +43,23 @@ pub(super) struct LargeShown {
     seeking: bool,
 }
 
-impl Default for LargeShown {
-    fn default() -> Self {
+impl LargeShown {
+    /// An empty body in `layout` with rows `row_height` tall.
+    pub(super) fn new(row_height: Pixels, layout: Layout) -> Self {
         Self {
             hunks: Vec::new(),
             steps: Vec::new(),
             progress: None,
-            map: Rc::new(RowMap::new(&[], Layout::SideBySide, None)),
+            map: Rc::new(RowMap::new(&[], layout, None, Settled::default())),
             lines: Rc::default(),
             scroll: ListScroll::new(),
-            row_height: px(0.),
+            base: 0,
+            row_height,
             current: None,
             seeking: false,
         }
     }
-}
 
-impl LargeShown {
     /// Applies a snapshot. The top line stays on top; a waiting next difference jumps to the
     /// first new hunk past the current one, or stops once the diff finished without one.
     pub(super) fn snapshot(
@@ -65,9 +68,8 @@ impl LargeShown {
         steps: Vec<LargeStepView>,
         progress: Option<LargeProgress>,
     ) {
-        let map = RowMap::new(&hunks, self.map.layout(), self.map.totals());
         (self.hunks, self.steps, self.progress) = (hunks, steps, progress);
-        self.remap(map);
+        self.remap(self.rebuild(self.map.layout(), self.map.totals()));
         if !self.seeking {
             return;
         }
@@ -86,29 +88,52 @@ impl LargeShown {
         (left, right): (Vec<String>, Vec<String>),
         totals: (u64, u64),
     ) {
-        self.lines.borrow_mut().add(start, left, right);
+        let near = self.near(start);
+        self.lines.borrow_mut().add(start, (left, right), near);
         if self.map.totals() != Some(totals) {
-            self.remap(RowMap::new(&self.hunks, self.map.layout(), Some(totals)));
+            self.remap(self.rebuild(self.map.layout(), Some(totals)));
         }
     }
 
-    /// Replaces the row map, keeping the top line on top (D16).
+    /// Shows the rows in `layout`, keeping the top line on top.
+    pub(super) fn relayout(&mut self, layout: Layout) {
+        if self.map.layout() != layout {
+            self.remap(self.rebuild(layout, self.map.totals()));
+        }
+    }
+
+    /// A row map of the applied hunks in `layout` with line counts `totals`.
+    fn rebuild(&self, layout: Layout, totals: Option<(u64, u64)>) -> RowMap {
+        RowMap::new(&self.hunks, layout, totals, self.settled())
+    }
+
+    /// What the diff settled: done once the last section reported, and the evicted sections
+    /// that no hunk came back to (a re-diffed section has its hunks again).
+    fn settled(&self) -> Settled {
+        let mut starts: Vec<u64> = self.hunks.iter().map(|hunk| hunk.left_rows.start).collect();
+        starts.sort_unstable();
+        let evicted = (self.steps.iter())
+            .filter(|step| step.step == LargeStep::PagedHunks)
+            .map(|step| step.section.clone())
+            .filter(|section| {
+                let at = starts.partition_point(|&start| start < section.start);
+                starts.get(at).is_none_or(|&start| start >= section.end)
+            })
+            .collect();
+        Settled {
+            done: self.finished(),
+            evicted,
+        }
+    }
+
+    /// Replaces the row map, keeping the top line on top (D16); reads the position now, so
+    /// back-to-back remaps before a frame keep the same line.
     fn remap(&mut self, map: RowMap) {
-        let top = self.top();
+        let (top, sub) = (self.top(), self.sub());
         let anchor = self.map.anchor(top);
         self.map = Rc::new(map);
-        if let Some(anchor) = anchor {
-            let row = self.map.row_of(anchor);
-            if row != top {
-                self.scroll
-                    .scroll_to_top(usize::try_from(row).unwrap_or(usize::MAX));
-            }
-        }
-    }
-
-    /// The top row of the list in the last frame.
-    fn top(&self) -> u64 {
-        u64::try_from(self.scroll.top_row(self.row_height)).unwrap_or(u64::MAX)
+        let row = anchor.map_or(top, |anchor| self.map.row_of(anchor));
+        self.place(row, sub);
     }
 
     /// Whether the diff reported its last section.
@@ -150,8 +175,7 @@ impl LargeShown {
         };
         self.current = Some((hunk.left_rows.start, hunk.right_rows.start));
         if let Some(row) = self.map.hunk_row(n) {
-            self.scroll
-                .scroll_to_center(usize::try_from(row).unwrap_or(usize::MAX));
+            self.place(row.saturating_sub(self.visible() / 2), 0.);
         }
     }
 
@@ -208,10 +232,13 @@ impl LargeShown {
 }
 
 impl super::FileScreen {
-    /// Applies a large snapshot or line window. A snapshot is acknowledged only after it is
-    /// applied, so the engine frees only what this view already dropped.
-    pub(super) fn apply_large(&mut self, update: DiffUpdate) {
-        let large = self.large.get_or_insert_with(LargeShown::default);
+    /// Applies a large snapshot or line window with rows `row_height` tall, then asks for the
+    /// lines in view. A snapshot is acknowledged only after it is applied, so the engine frees
+    /// only what this view already dropped.
+    pub(super) fn apply_large(&mut self, update: DiffUpdate, row_height: Pixels) {
+        let layout = self.look.layout.unwrap_or(self.auto);
+        let large = (self.large).get_or_insert_with(|| LargeShown::new(row_height, layout));
+        large.row_height = row_height;
         match update {
             DiffUpdate::Large {
                 hunks,
@@ -232,6 +259,7 @@ impl super::FileScreen {
             } => large.add_lines(rows.start, (left, right), totals),
             _ => {}
         }
+        large.ask(self.control.as_ref());
     }
 
     /// The status line's change counter: the text pair's, else the large body's.
