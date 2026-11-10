@@ -67,8 +67,13 @@ fn renders_for_move(cx: &mut TestAppContext, window: AnyWindowHandle, to: Point<
     renders() - before
 }
 
+/// Runs frames until the window asks for none, advancing the test clock one 60 Hz frame
+/// each; panics after about half a second of frames, so an endless animation fails.
 fn frame(cx: &mut TestAppContext, window: AnyWindowHandle) {
-    for _ in 0..6 {
+    for _ in 0..30 {
+        // GPUI animations read the executor's clock, which only moves when a test moves it.
+        cx.executor()
+            .advance_clock(std::time::Duration::from_millis(16));
         let ran = cx
             .update_window(window, |_, window, cx| window.simulate_next_frame(cx))
             .expect("window");

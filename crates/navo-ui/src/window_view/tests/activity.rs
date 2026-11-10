@@ -83,6 +83,9 @@ fn click(cx: &mut TestAppContext, window: AnyWindowHandle, id: impl Into<Element
     cx.run_until_parked();
 }
 
+/// Longer than the ~80 ms fade-in; GPUI animations run on the executor's test clock.
+const PAST_FADE: Duration = Duration::from_millis(200);
+
 fn advance(cx: &mut TestAppContext, by: Duration) {
     cx.executor().advance_clock(by);
     cx.run_until_parked();
@@ -168,6 +171,7 @@ fn hovering_the_row_keeps_a_done_item(cx: &mut TestAppContext) {
     let (window, view) = open_plain(cx);
     press(cx, window, &view, "f5");
     press(cx, window, &view, "enter");
+    advance(cx, PAST_FADE);
     find(cx, window, |window, cx| window.hover("activity-strip", cx));
     advance(cx, Duration::from_secs(20));
     assert!(has(cx, window, "activity-strip"));
@@ -344,6 +348,7 @@ fn show_in_the_drawer_closes_it_and_the_card_is_on_top(cx: &mut TestAppContext) 
     assert!(in_drawer(cx, window, ("activity-show", 2u64)));
     key(cx, window, "enter");
     assert!(!has(cx, window, "activity-drawer"));
+    advance(cx, PAST_FADE);
     let card = find(cx, window, |window, _| {
         window
             .try_find("job-card")
