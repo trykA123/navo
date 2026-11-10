@@ -31,6 +31,9 @@ undocumented_unsafe_blocks = "deny"
 unimplemented = "deny"
 unwrap_used = "deny"
 
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
