@@ -183,11 +183,60 @@ fn a_swapped_empty_folder_is_kept_by_identity() {
 fn an_existing_leftover_root_is_held() {
     let temp = tempfile::tempdir().expect("temp folder");
     std::fs::write(temp.path().join("Update.exe"), b"x").expect("update");
-    std::fs::create_dir(temp.path().join("empty")).expect("empty");
     let chain = chain_under(temp.path(), &[]);
     let pin = Pin::fresh(&chain).expect("leftover root is held");
     assert_eq!(pin.root(), Some(temp.path()));
     assert!(!pin.created_root());
+}
+
+#[test]
+fn a_leftover_root_with_a_subfolder_refuses() {
+    let temp = tempfile::tempdir().expect("temp folder");
+    std::fs::write(temp.path().join("Update.exe"), b"x").expect("update");
+    std::fs::create_dir(temp.path().join("empty")).expect("empty");
+    let chain = chain_under(temp.path(), &[]);
+    assert!(matches!(Pin::fresh(&chain), Err(PinError::RootExists)));
+}
+
+#[test]
+fn a_leftover_root_whose_identity_moved_refuses() {
+    let temp = tempfile::tempdir().expect("temp folder");
+    std::fs::write(temp.path().join("Update.exe"), b"x").expect("update");
+    let mut chain = chain_under(temp.path(), &[]);
+    let root = chain.existing.last_mut().expect("the root exists");
+    root.id = FileId {
+        volume: root.id.volume,
+        id: root.id.id ^ 1,
+    };
+    assert!(matches!(Pin::fresh(&chain), Err(PinError::Identity)));
+}
+
+#[test]
+fn remove_created_of_a_held_leftover_root_deletes_nothing() {
+    let temp = tempfile::tempdir().expect("temp folder");
+    std::fs::write(temp.path().join("Update.exe"), b"x").expect("update");
+    let chain = chain_under(temp.path(), &[]);
+    let pin = Pin::fresh(&chain).expect("leftover root is held");
+    let removal = pin.remove_created();
+    assert!(removal.removed.is_empty(), "{removal:?}");
+    assert!(removal.kept.is_empty(), "{removal:?}");
+    assert!(temp.path().exists(), "the existing root survives");
+    assert!(temp.path().join("Update.exe").exists());
+}
+
+#[test]
+fn remove_created_keeps_an_existing_root_and_its_update_exe() {
+    let temp = tempfile::tempdir().expect("temp folder");
+    let keep = temp.path().join("keep");
+    std::fs::create_dir(&keep).expect("keep");
+    std::fs::write(keep.join("Update.exe"), b"x").expect("update");
+    let chain = chain_under(temp.path(), &["keep", "new"]);
+    let pin = Pin::fresh(&chain).expect("fresh pin");
+    let removal = pin.remove_created();
+    assert_eq!(removal.removed, vec![keep.join("new")]);
+    assert!(removal.kept.is_empty(), "{removal:?}");
+    assert!(keep.exists(), "an existing folder is never removed");
+    assert!(keep.join("Update.exe").exists());
 }
 
 #[test]

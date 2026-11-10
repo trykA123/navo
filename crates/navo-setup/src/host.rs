@@ -100,48 +100,42 @@ pub trait Host {
 /// One directory entry's shape for the uninstall-leftover rule.
 struct Leftover {
     name: OsString,
+    regular_file: bool,
     folder: bool,
     reparse: bool,
-    empty: bool,
 }
 
-/// Whether the entries are a regular `Update.exe` plus empty, non-reparse folders.
-fn leftovers_shape(entries: &[Leftover]) -> bool {
-    let mut update = false;
-    for entry in entries {
-        if entry.reparse {
-            return false;
-        }
-        if entry.folder {
-            if !entry.empty {
-                return false;
-            }
-        } else if entry.name.eq_ignore_ascii_case(OsStr::new("Update.exe")) {
-            update = true;
-        } else {
-            return false;
-        }
+impl Leftover {
+    /// Whether this entry is the one item a leftover root may hold: a regular `Update.exe`.
+    fn is_update_leftover(&self) -> bool {
+        !self.reparse
+            && !self.folder
+            && self.regular_file
+            && self.name.eq_ignore_ascii_case(OsStr::new("Update.exe"))
     }
-    update
 }
 
-/// Whether `root` holds only a Velopack uninstall leftover: a regular `Update.exe` and empty folders.
+/// Whether the entries are exactly one regular `Update.exe` and nothing else.
+fn leftovers_shape(entries: &[Leftover]) -> bool {
+    entries.len() == 1 && entries.first().is_some_and(Leftover::is_update_leftover)
+}
+
+/// Whether `root` holds only a Velopack uninstall leftover: one regular `Update.exe`.
 ///
-/// Velopack's uninstaller can leave `Update.exe` and empty folders behind. Setup accepts
-/// exactly that shape as a fresh root; any other file, non-empty folder or reparse point refuses it.
+/// Velopack's uninstaller can leave `Update.exe` behind. Setup accepts exactly that and refuses
+/// every other entry: a folder (its contents are never read, so a junction cannot be followed),
+/// a reparse point, and anything that is not a regular file, such as a device or a socket.
 pub(crate) fn uninstall_leftovers_only(root: &Path) -> io::Result<bool> {
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;
+        // `symlink_metadata` describes the entry itself, so no reparse point is ever followed.
         let metadata = std::fs::symlink_metadata(entry.path())?;
-        let folder = metadata.is_dir();
-        let reparse = is_reparse(&metadata);
-        let empty = folder && !reparse && std::fs::read_dir(entry.path())?.next().is_none();
         entries.push(Leftover {
             name: entry.file_name(),
-            folder,
-            reparse,
-            empty,
+            regular_file: metadata.is_file(),
+            folder: metadata.is_dir(),
+            reparse: is_reparse(&metadata),
         });
     }
     Ok(leftovers_shape(&entries))
@@ -165,45 +159,56 @@ mod tests {
     use super::*;
 
     /// Builds one fabricated entry for the pure rule.
-    fn leftover(name: &str, folder: bool, reparse: bool, empty: bool) -> Leftover {
+    fn leftover(name: &str, regular_file: bool, folder: bool, reparse: bool) -> Leftover {
         Leftover {
             name: name.into(),
+            regular_file,
             folder,
             reparse,
-            empty,
         }
+    }
+
+    /// The one accepted entry: a regular file named `Update.exe`.
+    fn update() -> Leftover {
+        leftover("Update.exe", true, false, false)
     }
 
     #[test]
     fn the_rule_requires_a_regular_update_exe() {
-        assert!(leftovers_shape(&[
-            leftover("Update.exe", false, false, true),
-            leftover("empty", true, false, true),
-        ]));
-        assert!(!leftovers_shape(&[leftover("empty", true, false, true)]));
+        assert!(leftovers_shape(&[update()]));
+        assert!(!leftovers_shape(&[]));
+        assert!(!leftovers_shape(&[update(), update()]));
+        assert!(!leftovers_shape(&[leftover(
+            "Update.exe",
+            false,
+            false,
+            false
+        )]));
         assert!(!leftovers_shape(&[leftover(
             "Update.exe",
             true,
             false,
             true
         )]));
-        assert!(!leftovers_shape(&[
-            leftover("Update.exe", false, false, true),
-            leftover("other.txt", false, false, true),
-        ]));
-        assert!(!leftovers_shape(&[
-            leftover("Update.exe", false, false, true),
-            leftover("full", true, false, false),
-        ]));
         assert!(!leftovers_shape(&[leftover(
             "Update.exe",
             false,
             true,
-            true
+            false
+        )]));
+        assert!(!leftovers_shape(&[leftover(
+            "other.txt",
+            true,
+            false,
+            false
         )]));
         assert!(!leftovers_shape(&[
-            leftover("Update.exe", false, false, true),
-            leftover("link", true, true, false),
+            update(),
+            leftover("empty", false, true, false)
+        ]));
+        assert!(!leftovers_shape(&[
+            update(),
+            leftover("current", false, true, true)
         ]));
     }
 
@@ -220,8 +225,8 @@ mod tests {
     }
 
     #[test]
-    fn an_update_leftover_with_empty_folders_is_accepted() {
-        let root = folder(&["Update.exe"], &["empty", "also-empty"]);
+    fn a_lone_update_leftover_is_accepted() {
+        let root = folder(&["Update.exe"], &[]);
         assert!(uninstall_leftovers_only(root.path()).unwrap());
         let lower = folder(&["update.EXE"], &[]);
         assert!(uninstall_leftovers_only(lower.path()).unwrap());
@@ -244,12 +249,46 @@ mod tests {
         assert!(!uninstall_leftovers_only(full.path()).unwrap());
     }
 
+    #[test]
+    fn a_leftover_root_with_a_subfolder_is_refused() {
+        let root = folder(&["Update.exe"], &["empty"]);
+        assert!(!uninstall_leftovers_only(root.path()).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_regular_update_entry_is_refused() {
+        let root = tempfile::tempdir().unwrap();
+        std::os::unix::net::UnixListener::bind(root.path().join("Update.exe")).unwrap();
+        assert!(!uninstall_leftovers_only(root.path()).unwrap());
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_reparse_entry_is_refused() {
         use std::os::unix::fs::symlink;
         let root = folder(&["Update.exe"], &[]);
         symlink(root.path().join("Update.exe"), root.path().join("link")).unwrap();
+        assert!(!uninstall_leftovers_only(root.path()).unwrap());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_junction_entry_is_refused() {
+        let root = folder(&["Update.exe"], &[]);
+        let target = tempfile::tempdir().unwrap();
+        let link = root.path().join("current");
+        let made = std::process::Command::new("cmd")
+            .args([
+                "/C",
+                "mklink",
+                "/J",
+                link.to_str().unwrap(),
+                target.path().to_str().unwrap(),
+            ])
+            .status()
+            .expect("cmd mklink");
+        assert!(made.success(), "junction creation failed: {made}");
         assert!(!uninstall_leftovers_only(root.path()).unwrap());
     }
 }
