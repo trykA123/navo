@@ -220,11 +220,10 @@ jobs:
           $expected = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
           $printed = (& $exe --package-sha256 | Out-String).Trim().ToLowerInvariant()
           if ($printed -ne $expected) { throw "package SHA256 mismatch: $printed vs $expected" }
-          $dumpbin = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\dumpbin.exe'
-          if (-not (Test-Path -LiteralPath $dumpbin)) {
-            $dumpbin = (Get-ChildItem 'C:\Program Files*\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' |
-              Sort-Object -Property FullName -Descending | Select-Object -First 1).FullName
-          }
+          # vswhere finds any Visual Studio edition and version on the runner image.
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $dumpbin = & $vswhere -latest -products * -find 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' |
+            Sort-Object -Descending | Select-Object -First 1
           if (-not $dumpbin) { throw 'dumpbin.exe not found' }
           ./scripts/setup-imports.ps1 -Exe $exe -Dumpbin $dumpbin
           if ($LASTEXITCODE -ne 0) { throw "setup-imports.ps1 failed with $LASTEXITCODE" }
