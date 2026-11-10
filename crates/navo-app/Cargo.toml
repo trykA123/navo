@@ -1,3 +1,4 @@
+# Builds the Navo desktop app and its crash-reporting support.
 [package]
 name = "navo-app"
 version.workspace = true
@@ -49,7 +50,10 @@ velopack = "=1.2.161"
 libc = "=0.2.191"
 
 [target.'cfg(windows)'.dependencies]
+crash-handler = "=0.8.1"
 gpui-pre-windows = "=0.3.9"
+minidump = "=0.27.0"
+minidumper = "=0.11.0"
 tray-icon = { version = "=0.26.1", default-features = false }
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
@@ -60,6 +64,7 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_Storage_FileSystem",
   "Win32_System_Com",
   "Win32_System_Console",
+  "Win32_System_Diagnostics_Debug",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_IO",
   "Win32_System_LibraryLoader",
@@ -83,10 +88,13 @@ windows-sys = { version = "0.61.2", features = [
 [dev-dependencies]
 futures = "0.3.34"
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }
+minidump = "=0.27.0"
+minidump-synth = "=0.27.0"
 navo-store = { path = "../navo-store", features = ["test-support"] }
 insta = "1.49.0"
 navo-index = { path = "../navo-index", features = ["test-support"] }
 navo-update = { path = "../navo-update", features = ["test-support"] }
+test-assembler = "=0.1.6"
 zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 
