@@ -1,4 +1,4 @@
-//! Installer texts as plain data; `&` marks an access key. W12a fills these from setup.ftl.
+//! Installer texts as plain data; `&` marks an access key; loaded from the l10n catalog (setup.ftl).
 
 use crate::SharedString;
 
@@ -64,72 +64,117 @@ pub struct Strings {
 }
 
 impl Strings {
-    /// Returns the English placeholder texts used until setup.ftl exists.
+    /// Reads every setup text from the l10n catalog. Placeholders such as `{version}` stay
+    /// in the text as literal `{name}` markers for the pages to fill.
     #[expect(clippy::too_many_lines, reason = "one field per text")]
-    pub fn english() -> Self {
+    pub fn load() -> Self {
+        let text = |id: &str| -> SharedString {
+            let mut args = navo_l10n::FluentArgs::new();
+            for name in PLACEHOLDERS {
+                args.set(name, format!("{{{name}}}"));
+            }
+            navo_l10n::tr_args(id, &args).into()
+        };
         Self {
-            back: "&Back".into(),
-            next: "&Next".into(),
-            welcome_install: "Install Navo {version}".into(),
-            welcome_blurb: "Setup puts Navo in a folder you choose. No administrator rights are needed.".into(),
-            welcome_installed: "Navo {installed} is installed in {path}. Setup updates it there. Your settings and shortcuts stay.".into(),
-            licence_title: "Licence".into(),
+            back: text("setup-back"),
+            next: text("setup-next"),
+            welcome_install: text("setup-welcome-install"),
+            welcome_blurb: text("setup-welcome-blurb"),
+            welcome_installed: text("setup-welcome-installed"),
+            licence_title: text("setup-licence-title"),
             licence_text: include_str!("../../../navo-setup/assets/LICENSE.txt").into(),
-            licence_accept: "I &accept the licence".into(),
-            licence_apache: "Read the Apache-2.0 &licence text".into(),
-            apache_url: "https://www.apache.org/licenses/LICENSE-2.0.txt".into(),
-            folder_title: "Install folder".into(),
-            folder_label: "Install folder".into(),
-            folder_browse: "B&rowse…".into(),
-            folder_space: "Needs {needed}, {free} free".into(),
-            folder_space_unknown: "Disk space is not known yet".into(),
-            folder_warning: "Setup creates this folder. Uninstalling Navo deletes it with everything inside, so keep your own files elsewhere.".into(),
-            shortcuts_title: "Shortcuts".into(),
-            shortcuts_start_menu: "&Start menu".into(),
-            shortcuts_start_menu_hint: "Find Navo by typing its name".into(),
-            shortcuts_desktop: "&Desktop".into(),
-            shortcuts_desktop_hint: "An icon on your desktop".into(),
-            installing_title: "Installing Navo".into(),
-            installing_bar: "Installing".into(),
-            installing_elapsed: "Elapsed {time}".into(),
-            installing_still: "Setup is still working… A slow disk or a virus scanner can take a while. Details are in {log}.".into(),
-            installing_tips_title: "While you wait".into(),
+            licence_accept: text("setup-licence-accept"),
+            licence_apache: text("setup-licence-apache"),
+            apache_url: text("setup-apache-url"),
+            folder_title: text("setup-folder-title"),
+            folder_label: text("setup-folder-label"),
+            folder_browse: text("setup-folder-browse"),
+            folder_space: text("setup-folder-space"),
+            folder_space_unknown: text("setup-folder-space-unknown"),
+            folder_warning: text("setup-folder-warning"),
+            shortcuts_title: text("setup-shortcuts-title"),
+            shortcuts_start_menu: text("setup-shortcuts-start-menu"),
+            shortcuts_start_menu_hint: text("setup-shortcuts-start-menu-hint"),
+            shortcuts_desktop: text("setup-shortcuts-desktop"),
+            shortcuts_desktop_hint: text("setup-shortcuts-desktop-hint"),
+            installing_title: text("setup-installing-title"),
+            installing_bar: text("setup-installing-bar"),
+            installing_elapsed: text("setup-installing-elapsed"),
+            installing_still: text("setup-installing-still"),
+            installing_tips_title: text("setup-installing-tips-title"),
             installing_tips: vec![
-                ("Ctrl+K".into(), "One box for files, folders, commands and tabs.".into()),
-                ("F5 / F6".into(), "Copy and move in the background. Ctrl+Z undoes them.".into()),
-                ("Ctrl+L".into(), "Pick a pane layout, up to four panes.".into()),
-                ("Ctrl+F7".into(), "Compare two folders, then Enter on a file for its diff.".into()),
+                (
+                    text("setup-installing-tip-1-key"),
+                    text("setup-installing-tip-1-text"),
+                ),
+                (
+                    text("setup-installing-tip-2-key"),
+                    text("setup-installing-tip-2-text"),
+                ),
+                (
+                    text("setup-installing-tip-3-key"),
+                    text("setup-installing-tip-3-text"),
+                ),
+                (
+                    text("setup-installing-tip-4-key"),
+                    text("setup-installing-tip-4-text"),
+                ),
             ],
-            finish_title: "Navo is installed in {path}.".into(),
+            finish_title: text("setup-finish-title"),
             finish_keys: vec![
-                ("Ctrl+K".into(), "find anything".into()),
-                ("F1".into(), "every shortcut".into()),
-                ("Shift+F1".into(), "a short guide".into()),
+                (
+                    text("setup-finish-key-1-key"),
+                    text("setup-finish-key-1-text"),
+                ),
+                (
+                    text("setup-finish-key-2-key"),
+                    text("setup-finish-key-2-text"),
+                ),
+                (
+                    text("setup-finish-key-3-key"),
+                    text("setup-finish-key-3-text"),
+                ),
             ],
-            finish_start: "&Start Navo".into(),
-            finish_open_folder: "&Open folder".into(),
-            finish_remove: "Remove Navo from Windows Settings → Apps.".into(),
-            failed_title: "Setup could not finish".into(),
-            failed_log: "Log".into(),
-            failed_copy: "Copy &details".into(),
-            failed_retry: "&Retry".into(),
-            failed_leftover: "Setup left files in {path}. Delete this folder before you run Setup again.".into(),
-            blocked_title: "Close Navo to continue".into(),
-            blocked_text: "Navo is running from {path}. Close it, then choose Try again.".into(),
-            blocked_note: "Setup never closes Navo for you. Save your work in Navo, close its window, then try again.".into(),
-            blocked_retry: "&Try again".into(),
-            same_title: "Navo is already installed".into(),
-            same_text: "Navo {installed} is installed in {path}. Setup has nothing to do.".into(),
-            same_open: "&Open Navo".into(),
-            newer_title: "A newer Navo is installed".into(),
-            newer_text: "A newer Navo {installed} is installed in {path}.".into(),
-            ambiguous_title: "Setup cannot continue".into(),
-            ambiguous_text: "Repair by uninstalling first: remove Navo in Windows Settings → Apps, then run Setup again.".into(),
-            elevated_title: "Started as administrator".into(),
-            elevated_text: "Setup installs Navo for one user and never runs as administrator. Close it and start it again without \"Run as administrator\".".into(),
-            no_payload_title: "Nothing to install".into(),
-            no_payload_text: "This copy of Setup does not carry Navo. Download Setup again from the Navo releases page.".into(),
-            close: "&Close".into(),
+            finish_start: text("setup-finish-start"),
+            finish_open_folder: text("setup-finish-open-folder"),
+            finish_remove: text("setup-finish-remove"),
+            failed_title: text("setup-failed-title"),
+            failed_log: text("setup-failed-log"),
+            failed_copy: text("setup-failed-copy"),
+            failed_retry: text("setup-failed-retry"),
+            failed_leftover: text("setup-failed-leftover"),
+            blocked_title: text("setup-blocked-title"),
+            blocked_text: text("setup-blocked-text"),
+            blocked_note: text("setup-blocked-note"),
+            blocked_retry: text("setup-blocked-retry"),
+            same_title: text("setup-same-title"),
+            same_text: text("setup-same-text"),
+            same_open: text("setup-same-open"),
+            newer_title: text("setup-newer-title"),
+            newer_text: text("setup-newer-text"),
+            ambiguous_title: text("setup-ambiguous-title"),
+            ambiguous_text: text("setup-ambiguous-text"),
+            elevated_title: text("setup-elevated-title"),
+            elevated_text: text("setup-elevated-text"),
+            no_payload_title: text("setup-no-payload-title"),
+            no_payload_text: text("setup-no-payload-text"),
+            close: text("setup-close"),
         }
     }
+
+    /// Returns the English texts; the same as [`Strings::load`] while only en-US exists.
+    pub fn english() -> Self {
+        Self::load()
+    }
 }
+
+/// Template placeholders the pages fill in after loading.
+const PLACEHOLDERS: [&str; 7] = [
+    "version",
+    "installed",
+    "path",
+    "needed",
+    "free",
+    "time",
+    "log",
+];
