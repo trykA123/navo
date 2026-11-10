@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      dry-run:
+        description: "Validate the release path without publishing; the speed gate still runs"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,13 +38,20 @@ jobs:
   check-tag:
     runs-on: ubuntu-latest
     steps:
-      - name: Tag name is valid and unused
+      - name: Tag name is valid and unused outside a dry run
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry-run }}
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad tag: $TAG (use vX.Y.Z)"; exit 1; }
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "release $TAG exists"; exit 1; fi
+          if [ "$DRY_RUN" != "true" ] && gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "release $TAG exists"; exit 1; fi
+
+  speed:
+    needs: check-tag
+    uses: ./.github/workflows/bench.yml
+    with:
+      mode: guard
 
   clippy-windows:
     needs: check-tag
@@ -216,12 +228,14 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [clippy-windows, gate-windows, build-windows]
+    needs: [clippy-windows, gate-windows, build-windows, speed]
     # Skipped checks count as passed; a failed or cancelled one stops the release.
     if: >-
       always() && needs.build-windows.result == 'success'
       && contains(fromJSON('["success","skipped"]'), needs.clippy-windows.result)
       && contains(fromJSON('["success","skipped"]'), needs.gate-windows.result)
+      && needs.speed.result == 'success'
+      && !inputs.dry-run
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -249,3 +263,18 @@ jobs:
           while read -r old; do
             gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
           done
+
+  would-publish:
+    needs: [clippy-windows, gate-windows, build-windows, speed]
+    # The dry-run proof of SC8: the same gate as publish, with the dry-run term inverted.
+    if: >-
+      always() && needs.build-windows.result == 'success'
+      && contains(fromJSON('["success","skipped"]'), needs.clippy-windows.result)
+      && contains(fromJSON('["success","skipped"]'), needs.gate-windows.result)
+      && needs.speed.result == 'success'
+      && inputs.dry-run
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - run: echo "would publish $TAG"
