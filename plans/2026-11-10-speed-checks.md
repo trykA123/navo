@@ -175,8 +175,8 @@ Final. Workers never reopen them; a worker who finds one wrong stops and reports
 | A5 | `release-workflow` | `.github/workflows/release.yml` | infra-builder | medium | G-A1 | `actionlint`; G-A3 | todo |
 | A6 | `bench-targets` | `crates/navo-index/Cargo.toml`, `crates/navo-index/benches/search.rs`, `Cargo.lock` | api-builder | medium | G-A1 | BCHK navo-index search | done |
 | A7 | `intraline-hook` | `crates/navo-compare/src/text/intraline.rs`, `crates/navo-compare/src/text/intraline/tests.rs` | api-builder | medium | — | CHK `cargo nextest run -p navo-compare --features test-hooks intraline`; CHK `cargo xtask check -p navo-compare` | done |
-| A8 | `bench-targets` | `crates/navo-compare/Cargo.toml`, `crates/navo-compare/benches/text.rs`, `Cargo.lock` | api-builder | medium | A6, A7 | BCHK navo-compare text | todo |
-| A9 | `bench-targets` | `crates/navo-core/Cargo.toml`, `crates/navo-core/benches/rename.rs`, `Cargo.lock` | api-builder | medium | A8 | BCHK navo-core rename | todo |
+| A8 | `bench-targets` | `crates/navo-compare/Cargo.toml`, `crates/navo-compare/benches/text.rs`, `Cargo.lock` | api-builder | medium | A6, A7 | BCHK navo-compare text | done |
+| A9 | `bench-targets` | `crates/navo-core/Cargo.toml`, `crates/navo-core/benches/rename.rs`, `Cargo.lock` | api-builder | medium | A8 | BCHK navo-core rename | done |
 
 **BCHK, for bench atoms A6, A8 and A9.**
 - **Worker.** Run CHK `cargo bench -p <crate> --bench <name> --no-run`, plus `--features` from `required-features`, and CHK `cargo xtask check -p <crate>`. That is the worker's whole check.
@@ -473,3 +473,4 @@ No open questions remain.
 - 2026-11-10 — load_folder checker: not a real cost. perf_event user Ir around `load_folder` on 50k FakeFs: v0.6.0 115,013,236 vs HEAD 115,013,876 (same fixture); HEAD bulk fixture 1.6 % lower. The guard compares the base commit's bench (per-entry fixture) with HEAD's (b4dbbe38 bulk fixture), so heap layout differs under Callgrind. Unproven under valgrind (not installed here). The `[[accepted]]` entry stays; it expires with the v0.7.0 base.
 - 2026-11-10 — G-A1 passed: noise run 42841797233 green (6m24s); guard run 42844748759 red on R1's sort cost, then 42861997352 green after the `[[accepted]]` entries (30m44s). Base was v0.6.0 (the newest strict-ancestor release), not v0.5.0, with the "no base manifest" line and a base Ir for all six IDs. A5, A6 unblocked.
 - 2026-11-10 — A6 merged (DeepSeek flash, warm session 99.7 % cache): `navo-index/benches/search.rs`, five IDs in the commit body; they enter `perf/speed.toml` after a noise run (SC4). Callgrind counts UNTESTED locally (no valgrind). A7 was already on main (76c04a76: `refine(None)`, `intraline_unbounded`, 200-pair equality test); table corrected.
+- 2026-11-10 — A8 and A9 merged (DeepSeek flash, warm session, 99.8 % cache): compare text diff/card/intraline benches and rename preview/check_rows benches; IDs in the commit bodies. Next: a noise run, then add the new IDs to `perf/speed.toml` (SC4). Callgrind counts UNTESTED locally.
