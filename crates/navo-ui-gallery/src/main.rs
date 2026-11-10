@@ -38,6 +38,7 @@ mod rich_sample;
 mod screenshot;
 mod sections;
 mod settings_sample;
+mod setup_page;
 mod sheet_sample;
 mod shortcuts_sample;
 mod strip_page;

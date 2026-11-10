@@ -1,4 +1,4 @@
-use super::{Page, PageInfo, clip_palette, info, join, later};
+use super::{Page, PageInfo, clip_palette, info, join, later, setup};
 
 const HEAD: [PageInfo; 83] = [
     info(Page::Primitives, "Parts", "p7-gallery", true),
@@ -263,4 +263,6 @@ const HEAD: [PageInfo; 83] = [
 
 const MID: [PageInfo; 143] = join(&HEAD, &later::ALL);
 
-pub const PAGES: [PageInfo; 166] = join(&MID, &clip_palette::ALL);
+const MORE: [PageInfo; 166] = join(&MID, &clip_palette::ALL);
+
+pub const PAGES: [PageInfo; 187] = join(&MORE, &setup::ALL);

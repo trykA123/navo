@@ -349,7 +349,7 @@ impl Render for Gallery {
             return root.when(is_narrow, |r| r.bg(t.colors.line)).child(page);
         }
         let root = root.child(self.header(cx)).child(self.page_bar(&t, cx));
-        if let Some(page) = bars_page::page_of(&self.drag_treemap, self.page) {
+        if let Some(page) = bars_page::page_of(&self.drag_treemap, self.page, cx) {
             return root.child(page);
         }
         match self.page {
