@@ -16,6 +16,10 @@ pub(super) struct Report {
     pub(super) first_frame_ms: f64,
     pub(super) first_usable_ms: f64,
     pub(super) marks: Vec<Mark>,
+    // An empty list is skipped so a report without pane readings keeps the recorded
+    // snapshot; `perf-summary` treats a missing field there as a wrong count.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(super) pane_entries: Vec<u64>,
     pub(super) idle_private_bytes: Option<u64>,
     pub(super) idle_working_set_bytes: Option<u64>,
     pub(super) peak_working_set_bytes: Option<u64>,
@@ -72,10 +76,18 @@ impl Report {
                     ms: clock.ms(at),
                 })
                 .collect(),
+            pane_entries: Vec::new(),
             idle_private_bytes: memory.private_bytes,
             idle_working_set_bytes: memory.working_set_bytes,
             peak_working_set_bytes: memory.peak_working_set_bytes,
         }
+    }
+
+    /// Sets the entries each pane listed at start-up, in pane order.
+    #[must_use]
+    pub(super) fn with_panes(mut self, panes: Vec<u64>) -> Self {
+        self.pane_entries = panes;
+        self
     }
 
     pub(super) fn to_json(&self) -> String {

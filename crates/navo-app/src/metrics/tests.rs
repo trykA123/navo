@@ -202,6 +202,7 @@ fn a_finished_run_writes_the_report_and_exits_cleanly() {
         .collect();
     assert!(names.contains(&"window built"), "{names:?}");
     assert!(names.contains(&"first usable"), "{names:?}");
+    assert_eq!(value["pane_entries"], serde_json::json!([5000, 200]));
 }
 
 #[test]
