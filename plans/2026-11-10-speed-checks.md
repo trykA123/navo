@@ -468,3 +468,4 @@ No open questions remain.
   3. The A8 fixture guarantees 200 surviving changed pairs, built directly by index.
   4. Duplicate measured IDs fail (SC4 rule 2), with a test.
   5. C7 depends on A5.
+- 2026-11-10 — G-A1 fixture fix merged (`b4dbbe38`): `FakeFs::add_entries` builds the 50k folder in one pass (14.7 ms native, was O(n²)); bench.yml timeout 60 min. Next: after the push, `gh workflow run bench.yml -f mode=noise`, then `mode=guard`.
