@@ -5865,7 +5865,7 @@ name = "navo-clipboard"
 version = "0.6.0"
 dependencies = [
  "rusqlite",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",
@@ -5946,7 +5946,7 @@ dependencies = [
  "ruzstd",
  "same-file",
  "sevenz-rust2",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
@@ -5967,7 +5967,7 @@ dependencies = [
  "navo-compare",
  "navo-shell",
  "rustix",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "tempfile",
 ]
 
@@ -6060,7 +6060,7 @@ dependencies = [
  "roxmltree 0.21.2",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "tempfile",
  "windows 0.62.2",
  "windows-sys 0.61.2",
@@ -6110,7 +6110,7 @@ dependencies = [
  "csv",
  "csv-core",
  "pulldown-cmark",
- "quick-xml",
+ "quick-xml 0.42.0",
  "saphyr-parser",
  "serde",
  "serde_json",
@@ -6122,7 +6122,7 @@ name = "navo-syntax"
 version = "0.6.0"
 dependencies = [
  "proptest",
- "quick-xml",
+ "quick-xml 0.42.0",
  "serde",
  "serde_ignored",
  "tempfile",
@@ -7498,6 +7498,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8260,9 +8269,9 @@ dependencies = [
 
 [[package]]
 name = "saphyr-parser"
-version = "0.2.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c6220586c3dacac54bfddec87af86ddb31862d29666e7e35cf4baf70a25d387"
+checksum = "48cf5a82d41247a625f040af08e91008fec945bce3b0bffba992c44af092caa2"
 dependencies = [
  "arraydeque",
  "thiserror 2.0.21",
@@ -10670,7 +10679,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "338e30461b3a2b67d70eb30a6d89f8e0c93a833e07d2ae89085cd070c4a00ac0"
 dependencies = [
  "proc-macro2",
- "quick-xml",
+ "quick-xml 0.41.0",
  "quote",
 ]
 
@@ -11626,7 +11635,7 @@ checksum = "a6c2ad15e0e922856ee89afe862b8992334bbe7953adad56cd1199358cb30566"
 dependencies = [
  "bitflags 2.13.2",
  "libc",
- "quick-xml",
+ "quick-xml 0.41.0",
  "x11",
 ]
 

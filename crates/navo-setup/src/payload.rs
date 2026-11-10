@@ -187,7 +187,18 @@ impl Payload {
 /// Hashes an open reader and checks its size in bytes; mismatches fail closed.
 pub fn verify_hash(reader: &mut impl Read, expected: &[u8; 32], size: u64) -> io::Result<()> {
     let mut hash = Sha256::new();
-    let count = io::copy(reader, &mut hash)?;
+    let mut buffer = [0; 8192];
+    let mut count = 0_u64;
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        hash.update(&buffer[..read]);
+        count += read as u64;
+    }
     let actual: [u8; 32] = hash.finalize().into();
     if count != size || actual != *expected {
         return Err(io::Error::new(

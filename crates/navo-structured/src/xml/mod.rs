@@ -1,3 +1,5 @@
+//! Parses XML document trees and exposes indexed child loading.
+
 mod index;
 
 use quick_xml::events::{BytesRef, BytesStart, Event};
@@ -18,15 +20,16 @@ pub(crate) struct Label {
     pub text: String,
 }
 
+/// Builds an element label, retaining raw attributes when normalization fails.
 pub(crate) fn label_of(start: &BytesStart<'_>) -> Label {
-    let name = String::from_utf8_lossy(start.name().as_ref()).into_owned();
+    let name = start.name().as_ref().to_owned();
     let mut attrs = String::new();
     for attribute in start.attributes().flatten() {
-        let key = String::from_utf8_lossy(attribute.key.as_ref()).into_owned();
+        let key = attribute.key.as_ref();
         let value = attribute
             .normalized_value(XmlVersion::default())
             .map_or_else(
-                |_| String::from_utf8_lossy(&attribute.value).into_owned(),
+                |_| attribute.value.clone().into_owned(),
                 std::borrow::Cow::into_owned,
             );
         if !attrs.is_empty() {
@@ -41,12 +44,12 @@ pub(crate) fn label_of(start: &BytesStart<'_>) -> Label {
     }
 }
 
+/// Resolves numeric and predefined XML references, retaining unknown names.
 pub(crate) fn reference_text(reference: &BytesRef<'_>) -> String {
     if let Ok(Some(ch)) = reference.resolve_char_ref() {
         return ch.to_string();
     }
-    let name = String::from_utf8_lossy(reference);
-    match name.as_ref() {
+    match reference.as_ref() {
         "amp" => "&".to_owned(),
         "lt" => "<".to_owned(),
         "gt" => ">".to_owned(),
@@ -103,6 +106,7 @@ impl Full<'_> {
         }
     }
 
+    /// Adds an XML event at its byte offset; invalid tree structure fails.
     fn event(&mut self, event: Event<'_>, offset: u64) -> Result<bool, ParseError> {
         match event {
             Event::Start(start) => {
@@ -114,8 +118,8 @@ impl Full<'_> {
                 self.open(&label_of(&start), offset)?;
             }
             Event::End(_) => self.close(),
-            Event::Text(text) => self.text(&String::from_utf8_lossy(&text)),
-            Event::CData(data) => self.text(&String::from_utf8_lossy(&data)),
+            Event::Text(text) => self.text(&text),
+            Event::CData(data) => self.text(&data),
             Event::GeneralRef(reference) => self.text(&reference_text(&reference)),
             Event::Eof => return Ok(false),
             Event::Comment(_) | Event::Decl(_) | Event::PI(_) | Event::DocType(_) => {}

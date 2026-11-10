@@ -1,3 +1,5 @@
+//! Scans XML byte ranges into bounded indexes for lazy tree previews.
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use quick_xml::Reader;
@@ -214,17 +216,18 @@ impl Scanner {
         }
     }
 
+    /// Indexes an XML event and its byte span; EOF ends the scan.
     fn event(&mut self, event: Event<'_>, at: Span) -> Option<Flow> {
         let flow = match event {
             Event::Start(start) => self.start(label_of(&start), at, false),
             Event::Empty(start) => self.start(label_of(&start), at, true),
             Event::End(_) => self.end(at.end),
             Event::Text(text) => {
-                self.text(&String::from_utf8_lossy(&text));
+                self.text(&text);
                 Flow::More
             }
             Event::CData(data) => {
-                self.text(&String::from_utf8_lossy(&data));
+                self.text(&data);
                 Flow::More
             }
             Event::GeneralRef(reference) => {
