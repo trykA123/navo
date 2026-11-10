@@ -23,14 +23,14 @@ struct Writer {
 }
 
 #[derive(Serialize)]
-struct Record {
-    version: &'static str,
-    commit: &'static str,
-    thread: String,
-    location: Option<String>,
-    message: String,
-    backtrace: String,
-    events: Vec<String>,
+pub(super) struct Record {
+    pub(super) version: &'static str,
+    pub(super) commit: &'static str,
+    pub(super) thread: String,
+    pub(super) location: Option<String>,
+    pub(super) message: String,
+    pub(super) backtrace: String,
+    pub(super) events: Vec<String>,
 }
 
 pub(super) fn install(data: Option<&Path>, diagnostics: &Diagnostics) {
@@ -78,20 +78,26 @@ impl Writer {
                 .backtrace(&Backtrace::force_capture().to_string()),
             events: events.iter().skip(skip).map(ToString::to_string).collect(),
         };
-        let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-        let path = self.logs.join(format!(
-            "crash-{stamp}-{}-{:03}.json",
-            std::process::id(),
-            SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        ));
-        navo_store::replace_atomic(&path, &serde_json::to_vec_pretty(&record)?)?;
-        let files = files(&self.logs);
-        let excess = files.len().saturating_sub(KEEP_FILES);
-        for path in files.into_iter().take(excess) {
-            let _ = fs::remove_file(path);
-        }
-        Ok(())
+        write_record(&self.logs, &record).map(drop)
     }
+}
+
+/// Writes `record` as a new `crash-*.json` in `logs`, keeps the newest `KEEP_FILES`, and
+/// returns the written path. Fails when the file cannot be written.
+pub(super) fn write_record(logs: &Path, record: &Record) -> io::Result<PathBuf> {
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let path = logs.join(format!(
+        "crash-{stamp}-{}-{:03}.json",
+        std::process::id(),
+        SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    navo_store::replace_atomic(&path, &serde_json::to_vec_pretty(record)?)?;
+    let files = files(logs);
+    let excess = files.len().saturating_sub(KEEP_FILES);
+    for old in files.into_iter().take(excess) {
+        let _ = fs::remove_file(old);
+    }
+    Ok(path)
 }
 
 fn message<'a>(info: &'a PanicHookInfo<'_>) -> &'a str {
