@@ -42,7 +42,13 @@ fn serve(host: &mut FakeHost, payload: &Payload, jobs: Vec<Job>) -> Vec<Reply> {
     drop(send);
     let mut probe = FakeProbe::default();
     let log = Path::new(r"C:\Temp\velopack.log");
-    let mut worker = Worker::new(host, &mut probe, Some(payload), log);
+    let mut worker = Worker::new(
+        host,
+        &mut probe,
+        Some(payload),
+        log,
+        PathBuf::from(r"C:\Temp\navo-setup.log"),
+    );
     let mut replies = Vec::new();
     worker.serve(&inbox, &mut |reply| replies.push(reply));
     replies

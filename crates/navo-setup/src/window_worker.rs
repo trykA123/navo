@@ -2,7 +2,8 @@
 //!
 //! The window sends jobs over a channel; every probe and the runner run here, never on the UI thread.
 
-use std::io;
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -63,6 +64,8 @@ pub struct Worker<'a> {
     /// `None` when Setup carries no payload; every install then reports NoPayload.
     pub payload: Option<&'a Payload>,
     pub velopack_log: &'a Path,
+    /// The wizard log that records a failed Navo launch and other window-side problems.
+    pub setup_log: PathBuf,
     session: Option<Session>,
     /// The held session follows a Setup.exe exit 0: Navo is installed, so release deletes nothing.
     installed: bool,
@@ -70,17 +73,23 @@ pub struct Worker<'a> {
 
 impl<'a> Worker<'a> {
     /// Builds a worker with no retained session.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the worker owns the host, probe, payload, Velopack log and wizard log"
+    )]
     pub fn new(
         host: &'a mut dyn Host,
         probe: &'a mut dyn Probe,
         payload: Option<&'a Payload>,
         velopack_log: &'a Path,
+        setup_log: PathBuf,
     ) -> Self {
         Self {
             host,
             probe,
             payload,
             velopack_log,
+            setup_log,
             session: None,
             installed: false,
         }
@@ -110,11 +119,18 @@ impl<'a> Worker<'a> {
                 }
                 Job::Rescan(root) => reply(Reply::Event(Event::RunningScanned(self.scan(&root)))),
                 // Setup closes next; a failed launch leaves Navo installed and is not an error page.
-                Job::Start(root) => drop(self.probe.start_navo(&root)),
+                Job::Start(root) => self.start_navo(&root),
             }
         }
         self.release();
         reply(Reply::Closed);
+    }
+
+    /// Starts Navo and records a failure in the wizard log; Setup still closes normally.
+    fn start_navo(&mut self, root: &Path) {
+        if let Err(error) = self.probe.start_navo(root) {
+            append_log(&self.setup_log, &format!("could not start Navo: {error}"));
+        }
     }
 
     /// Runs one install action; recovery actions need the retained session and fail closed without it.
@@ -244,10 +260,62 @@ impl Probe for WindowsProbe {
         // A working folder inside `current\` would block Update.exe from renaming it later.
         let profile = std::env::var_os("USERPROFILE")
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "USERPROFILE is not set"))?;
-        std::process::Command::new(root.join("current").join("navo.exe"))
-            .current_dir(profile)
-            .spawn()
-            .map(drop)
+        start_detached(&root.join("current").join("navo.exe"), Path::new(&profile))
+    }
+}
+
+/// Starts `exe` outside Setup's job so it survives the window closing; falls back to the shell.
+#[cfg(windows)]
+fn start_detached(exe: &Path, profile: &Path) -> io::Result<()> {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+    let mut command = Command::new(exe);
+    command
+        .current_dir(profile)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_BREAKAWAY_FROM_JOB);
+    match command.spawn() {
+        Ok(_) => Ok(()),
+        // A job that forbids breakaway is left for the shell, which starts Navo outside it.
+        Err(error) if error.raw_os_error() == Some(5) => shell_start(exe, profile),
+        Err(error) => Err(error),
+    }
+}
+
+/// Asks the Windows shell to start `exe` from `profile`; used when Setup's job forbids breakaway.
+#[cfg(windows)]
+fn shell_start(exe: &Path, profile: &Path) -> io::Result<()> {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use windows::core::{HSTRING, PCWSTR, w};
+
+    let file = HSTRING::from(exe.to_string_lossy().as_ref());
+    let directory = HSTRING::from(profile.to_string_lossy().as_ref());
+    // SAFETY: both HSTRINGs are NUL-terminated and live for the call; the shell owns the launch.
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &file,
+            PCWSTR::null(),
+            &directory,
+            SW_SHOWNORMAL,
+        )
+    };
+    if result.0 as isize <= 32 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Appends one line to the wizard log; a log that cannot be opened never changes the outcome.
+fn append_log(path: &Path, line: &str) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "navo-setup: {line}");
     }
 }
 
@@ -258,7 +326,12 @@ pub struct Link {
 }
 
 /// Starts the worker thread; `make` builds its Host and Probe on that thread. Fails if the thread cannot start.
-pub fn spawn<F>(payload: Option<Payload>, velopack_log: PathBuf, make: F) -> io::Result<Link>
+pub fn spawn<F>(
+    payload: Option<Payload>,
+    velopack_log: PathBuf,
+    setup_log: PathBuf,
+    make: F,
+) -> io::Result<Link>
 where
     F: FnOnce() -> (Box<dyn Host>, Box<dyn Probe>) + Send + 'static,
 {
@@ -268,7 +341,13 @@ where
         .name("navo-setup-worker".into())
         .spawn(move || {
             let (mut host, mut probe) = make();
-            let mut worker = Worker::new(&mut *host, &mut *probe, payload.as_ref(), &velopack_log);
+            let mut worker = Worker::new(
+                &mut *host,
+                &mut *probe,
+                payload.as_ref(),
+                &velopack_log,
+                setup_log,
+            );
             // A send fails only after the window is gone; the session is still released.
             worker.serve(&inbox, &mut |reply| drop(outbox.unbounded_send(reply)));
         })?;

@@ -68,9 +68,14 @@ fn open_window() -> ExitCode {
     use window_worker::{Probe, WindowsProbe};
     hide_own_console();
     let payload = payload::Payload::embedded().ok();
-    let velopack_log = payload::Logs::create().map_or_else(
-        |_| std::env::temp_dir().join("navo-setup-velopack.log"),
-        |logs| logs.velopack,
+    let (velopack_log, setup_log) = payload::Logs::create().map_or_else(
+        |_| {
+            (
+                std::env::temp_dir().join("navo-setup-velopack.log"),
+                std::env::temp_dir().join("navo-setup.log"),
+            )
+        },
+        |logs| (logs.velopack, logs.wizard),
     );
     let default = cli::default_root().unwrap_or_default();
     let flow = window_core::initial_flow(&mut host::WindowsHost, payload.as_ref(), default);
@@ -83,12 +88,12 @@ fn open_window() -> ExitCode {
                 .saturating_mul(4)
                 .max(space.velopack_requirement())
         }),
-        log_paths: vec![velopack_log.clone()],
+        log_paths: vec![velopack_log.clone(), setup_log.clone()],
     };
     let make = || -> (Box<dyn host::Host>, Box<dyn Probe>) {
         (Box::new(host::WindowsHost), Box::new(WindowsProbe))
     };
-    let link = match window_worker::spawn(payload, velopack_log, make) {
+    let link = match window_worker::spawn(payload, velopack_log, setup_log, make) {
         Ok(link) => link,
         Err(error) => {
             eprintln!("navo-setup: cannot start the Setup worker: {error}");
