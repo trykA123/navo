@@ -132,11 +132,32 @@ fn hide_own_console() {
 }
 
 /// Attaches to the parent console so silent-mode messages are visible (IW17).
+///
+/// AttachConsole replaces the standard handles. A redirected `--version`, hash or silent run
+/// keeps its pipes: the non-null handles saved before the attach are put back afterwards.
 #[cfg(windows)]
 fn attach_console() {
-    use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
-    // SAFETY: AttachConsole takes a process id and touches no memory we own; no console is fine.
+    use windows_sys::Win32::System::Console::{
+        ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
+    };
+    // SAFETY: GetStdHandle takes a constant and returns a borrowed standard handle.
+    let out = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+    // SAFETY: GetStdHandle takes a constant and returns a borrowed standard handle.
+    let error = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
+    // SAFETY: AttachConsole takes a constant and touches no memory we own; no console is fine.
     let _ = unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+    restore(STD_OUTPUT_HANDLE, out);
+    restore(STD_ERROR_HANDLE, error);
+
+    /// Puts a saved standard handle back when it was a real handle (a redirected pipe).
+    fn restore(which: u32, saved: windows_sys::Win32::Foundation::HANDLE) {
+        use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+        use windows_sys::Win32::System::Console::SetStdHandle;
+        if saved != std::ptr::null_mut() && saved != INVALID_HANDLE_VALUE {
+            // SAFETY: the caller's handle came from GetStdHandle and is still valid here.
+            unsafe { SetStdHandle(which, saved) };
+        }
+    }
 }
 
 /// Does nothing off Windows, where there is no parent console.
