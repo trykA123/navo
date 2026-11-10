@@ -7,6 +7,7 @@ mod drawers;
 mod entry;
 mod file;
 mod host;
+pub(in crate::window_view) mod large;
 pub(in crate::window_view) mod look;
 pub(in crate::window_view) mod menu;
 mod outline;
@@ -15,6 +16,7 @@ mod search;
 mod sheet;
 mod stream;
 
+use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gpui_kit::{FocusHandle, Subscription};
@@ -22,12 +24,10 @@ use gpui_kit::{FocusHandle, Subscription};
 use super::NavoWindow;
 use crate::browser::{FileDiffRequest, Waker};
 use crate::compare_diff::PairRequest;
-use crate::compare_diff::{
-    DiffHooks, DiffSink, DiffUpdate, LargeHunk, LargeProgress, LargeStepView, PairControl,
-    PairKind, PairText,
-};
+use crate::compare_diff::{DiffHooks, DiffSink, DiffUpdate, PairControl, PairKind, PairText};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
+use large::LargeShown;
 use stream::StreamScreen;
 
 /// Updates from open pairs, each tagged with the file screen it was sent to.
@@ -146,14 +146,6 @@ fn request_of(update: &DiffUpdate) -> u64 {
     }
 }
 
-/// The hunks, steps and progress of one applied large text snapshot (V38 draws them).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub(super) struct LargeShown {
-    pub(super) hunks: Vec<LargeHunk>,
-    pub(super) steps: Vec<LargeStepView>,
-    pub(super) progress: Option<LargeProgress>,
-}
-
 /// One open file pair: its request, its control and what arrived for it.
 pub(super) struct FileScreen {
     tag: u64,
@@ -172,7 +164,8 @@ pub(super) struct FileScreen {
     at: Option<usize>,
     /// The large text snapshot applied last; its number was acknowledged after applying.
     large: Option<LargeShown>,
-    control: Box<dyn PairControl>,
+    /// Shared with the large body's rows, which ask for line windows as they are built.
+    control: Rc<dyn PairControl>,
     /// What the View menu set: parts shown and layout.
     look: look::Look,
     drawers: drawers::Drawers,
@@ -205,6 +198,7 @@ impl FileScreen {
                 self.view = text
                     .clone()
                     .map(|text| file::FileView::new(text, at, words));
+                self.large = matches!(kind, PairKind::Large { .. }).then(LargeShown::default);
                 self.state = FileState::Opened { kind, text };
             }
             DiffUpdate::Failed { text, .. } => self.state = FileState::Failed(text.into()),
@@ -212,23 +206,8 @@ impl FileScreen {
                 Some(view) => view.add_spans(spans),
                 None => return false,
             },
-            DiffUpdate::Large {
-                hunks,
-                steps,
-                progress,
-                ack,
-                ..
-            } => {
-                // Apply first: the acknowledgement lets the engine free what this view dropped.
-                self.large = Some(LargeShown {
-                    hunks,
-                    steps,
-                    progress,
-                });
-                self.control.acknowledge(ack);
-            }
-            DiffUpdate::LargeLines { .. }
-            | DiffUpdate::Bytes { .. }
+            DiffUpdate::Large { .. } | DiffUpdate::LargeLines { .. } => self.apply_large(update),
+            DiffUpdate::Bytes { .. }
             | DiffUpdate::Image { .. }
             | DiffUpdate::ChangedOnDisk { .. } => return false,
         }
@@ -327,7 +306,8 @@ impl NavoWindow {
         };
         self.compare.diff.opened += 1;
         let tag = self.compare.diff.opened;
-        let control = hooks.open_pair(request.clone(), &self.values, self.compare.diff.sink(tag));
+        let control: Rc<dyn PairControl> =
+            Rc::from(hooks.open_pair(request.clone(), &self.values, self.compare.diff.sink(tag)));
         let focus = cx.focus_handle();
         let screen = self.compare.screen.as_ref();
         let look = screen

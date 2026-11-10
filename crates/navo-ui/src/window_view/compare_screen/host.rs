@@ -150,6 +150,10 @@ fn body(
                 .children(map),
         );
     }
+    if let Some(large) = file.large.as_mut() {
+        let list = large.list(look.layout_in(window), &file.control, cx);
+        return area.child(div().flex().flex_1().min_h_0().child(list));
+    }
     let failed = matches!(file.state, FileState::Failed(_));
     area.when_some(message(&file.state), |area, text| {
         area.child(
@@ -212,7 +216,7 @@ impl NavoWindow {
             return self.stream_view(window, cx);
         }
         let t = tokens::current(cx).clone();
-        let exit = cx.listener(|view, _: &Exit, window, cx| match view.clear_picks() {
+        let exit = cx.listener(|view, _: &Exit, window, cx| match view.esc_in_place() {
             true => cx.notify(),
             false => view.pop_file_diff(window, cx),
         });
@@ -234,7 +238,7 @@ impl NavoWindow {
         };
         let note = self.compare.diff.copy.note.clone();
         let file = self.compare.screen.as_mut()?.file.as_mut()?;
-        let changes = file.view.as_ref().map(super::file::FileView::status);
+        let changes = file.changes();
         let root = root
             .key_context(CONTEXT)
             .track_focus(&file.focus)

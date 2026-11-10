@@ -121,10 +121,15 @@ fn lines_returns_the_requested_window_from_both_sides() {
     loop {
         assert!(Instant::now() < deadline, "no line update");
         if let DiffUpdate::LargeLines {
-            rows, left, right, ..
+            rows,
+            left,
+            right,
+            totals,
+            ..
         } = next(&receive)
         {
             assert_eq!(rows, 0..3);
+            assert_eq!(totals, (20, 20), "both sides' line counts");
             assert_eq!(left, ["line 0", "line 1", "line 2"]);
             assert_eq!(right, ["line 0", "line 1", "line 2"]);
             break;

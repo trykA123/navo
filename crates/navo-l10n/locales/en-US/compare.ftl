@@ -118,6 +118,7 @@ compare-screen-changes = { $total ->
    *[other] { $total } changes
 }
 compare-screen-no-changes = No changes
+compare-screen-looking-further = Looking further… { $percent } %
 compare-card-viewed = Viewed
 compare-card-gap = { $lines ->
     [one] 1 unchanged line

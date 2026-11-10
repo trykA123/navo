@@ -206,7 +206,7 @@ pub enum DiffUpdate {
     },
     /// The display lines of a large text pair, read off the UI thread. A side past its end
     /// has fewer lines than `rows`; a `*_cut` side's last line is longer than the read limit
-    /// and ends early.
+    /// and ends early. `totals` holds both sides' line counts.
     LargeLines {
         request: u64,
         rows: Range<u64>,
@@ -214,6 +214,7 @@ pub enum DiffUpdate {
         right: Vec<String>,
         left_cut: bool,
         right_cut: bool,
+        totals: (u64, u64),
     },
     Bytes {
         request: u64,

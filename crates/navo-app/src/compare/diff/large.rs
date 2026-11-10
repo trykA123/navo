@@ -269,6 +269,7 @@ fn run_lines(id: u64, input: LargeInput, sink: DiffSink, queue: &LineQueue) {
                     right: window.right,
                     left_cut: window.left_cut,
                     right_cut: window.right_cut,
+                    totals: window.totals,
                 });
             }
             Err(Reason::Stopped) => return,

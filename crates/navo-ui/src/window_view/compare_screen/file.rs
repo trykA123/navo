@@ -266,10 +266,12 @@ impl NavoWindow {
         let layout = view
             .as_ref()
             .map_or_else(|| layout_for(window), |file| file.look.layout_in(window));
-        if view
-            .and_then(|file| file.view.as_mut())
-            .is_some_and(|view| view.step(forward, layout))
-        {
+        let moved = view.is_some_and(|file| match (file.view.as_mut(), file.large.as_mut()) {
+            (Some(view), _) => view.step(forward, layout),
+            (None, Some(large)) => large.step(forward),
+            (None, None) => false,
+        });
+        if moved {
             self.compare.diff.copy.note = None;
             cx.notify();
         }
