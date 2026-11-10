@@ -23,6 +23,7 @@ Six researchers (2026-11-10) looked at alternatives to our crates, crates we cou
 | R13 | Block cloning for same-volume copies on ReFS / Dev Drive | Microsoft engineering post | copy test on a Dev Drive in the VM | small | low |
 | R14 | SMB folders: first rows paint from the first 1 MB query; re-list on demand instead of change notifications (second half **rejected, RP9**) | MS-SMB2 credits; ReadDirectoryChangesExW limits on SMB | first-paint time on a 50,000-file share | medium | medium |
 | R15 | Dev profile `debug = "line-tables-only"`; measure `sccache` across worktrees | Cargo docs; target dirs are 30–70 GB | target size and cold build time before/after | small | medium |
+| R16 | GPUI → `gpui-fast` (longbridge fork: retained mode, scroll layers; Apache-2.0, v0.1.14) | README: −75–88 % main-thread CPU per frame scrolling 5,000-row lists/tables (Linux); gpui-kit stories −37 % CPU | spike branch after DU: Navo on gpui-fast via `[patch]` (compat crates pin gpui-pre 0.3.9 — needs 0.3.12), our gpui-pre-windows patches ported; VM numbers ≥ 30 % less CPU scrolling a 50k folder and the compare view; tester finds no stale-render bug (retained mode needs `cx.notify()` outside tracked state) | large | high (owner, 2026-11-10); target v0.8.0 |
 
 ## Navo Compare (standalone) additions
 
