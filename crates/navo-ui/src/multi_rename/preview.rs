@@ -132,6 +132,7 @@ fn is_problem(row: &PreviewRow) -> bool {
 }
 
 fn rows(compiled: &Compiled, items: &[Item], form: Option<&Form>, fold: Fold) -> Vec<Row> {
+    let _zone = tracing::debug_span!("rename.preview").entered();
     let mut ordinal = 0u64;
     let mut folders = HashMap::<String, u64>::new();
     items
