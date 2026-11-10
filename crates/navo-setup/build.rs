@@ -105,7 +105,20 @@ fn copy_payload(input: &Path, out: &Path, label: &str) -> Result<String, Box<dyn
 ///
 /// Without a payload the linker drops the runner, so check a payload build.
 /// `scripts/setup-imports.ps1` fails when a new one appears without being listed here.
-const DELAY_LOAD: &[&str] = &["bcrypt.dll", "bcryptprimitives.dll"];
+const DELAY_LOAD: &[&str] = &[
+    "bcrypt.dll",
+    "bcryptprimitives.dll",
+    "comctl32.dll",
+    "d3d11.dll",
+    "dcomp.dll",
+    "dwmapi.dll",
+    "dwrite.dll",
+    "dxgi.dll",
+    "icuuc.dll",
+    "uiautomationcore.dll",
+    "userenv.dll",
+    "winmm.dll",
+];
 
 /// Links Setup so its imports load from System32 only (IW24 DLL planting defence).
 ///
