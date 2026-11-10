@@ -1,6 +1,6 @@
 # Speed checks — part B: the Windows VM guard on every push
 
-Status: ready, revision 6 · Base: `da6e3d8c` (local `main`; every path and line below checked there) · Repo: `navo`, plus the VM scripts in `/mnt/Sabrent/homelab/winvm/tools/` (outside git; written `$TOOLS` below) · Started: 2026-11-10
+Status: ready, revision 7 · Base: `da6e3d8c` (local `main`; every path and line below checked there) · Repo: `navo`, plus the VM scripts in `/mnt/Sabrent/homelab/winvm/tools/` (outside git; written `$TOOLS` below) · Started: 2026-11-10
 
 This plan ships on its own. The shared spec, the shared rules (builders, CHK, files, lockfile chain) and part A are in `plans/2026-11-10-speed-checks.md`. No atom here changes `Cargo.lock`, and none needs part A's code.
 
@@ -137,13 +137,11 @@ Final. Workers never reopen them.
     - `pub(super) fn run(args: &[String]) -> ExitCode`: parse, run, map errors to exit codes (usage 2 with the mode's usage line on stderr, failure 1 with `perf: <error>` on stderr).
     - `enum Mode { Fresh { root: PathBuf, output: PathBuf, commit: String } }` and `fn parse(args: &[String]) -> Result<Mode, String>` with SC11's flag rules. Only `fresh` exists here; other names are "unknown mode".
     - `pub(super) const EXPECTED_PANES: [u64; 2] = [5000, 200];` with a comment naming `fixture.rs`.
-    - `pub(super) fn check_done(json: &str) -> Result<(), String>`, per SC10.
     - `pub(super) fn check_report(json: &str, sha: &str) -> Result<Fresh, String>`; `pub(super) struct Fresh { pub(super) private_bytes: u64, pub(super) first_usable_ms: f64 }`. A private serde struct reads `commit`, `idle_private_bytes`, `pane_entries`, `first_usable_ms` (other fields ignored).
     - `pub(super) fn load_run(root: &Path, sha: &str) -> Result<Run, String>`; `pub(super) struct Run { pub(super) private_bytes: u64, pub(super) warm_ms: f64 }` per SC11. Errors name the file.
     - `fresh`: `load_run`, print the stdout line, then `super::summarize(root, output)`.
 - **Tests (`modes/tests.rs`, temp dirs as in `bench_walk`):**
   - `parse`: missing value, unknown flag, repeated flag, unknown mode, short or upper-case `--commit` → usage; a valid `fresh` line parses.
-  - `check_done`: 0, 5 and 7 entries, a `1`, a `"0"`, a `0.5`, a third key, no `finished`, malformed JSON all fail; six zeros pass.
   - `check_report`: wrong commit, 7-character commit, absent memory, zero memory, `[5000, 199]`, absent `pane_entries` fail; a good report passes.
   - `run` on a folder with six good reports gives `ExitCode::SUCCESS` and the summary file contains `## Navo Windows performance`; with `warm-3.json` deleted it gives `ExitCode::FAILURE`.
   - The existing `perf/tests.rs` passes unchanged.
@@ -153,7 +151,7 @@ Final. Workers never reopen them.
 
 - **Read:** `xtask/src/perf/modes.rs` (B3 state), SC11.
 - **Change:**
-  - **`modes.rs`.** Add `mod calibrate;`, the `Vm`, `Calibrate` and `Aggregate` variants with SC11's flags, and their runners. `vm`: `check_done(--done)`, `load_run`, read `--baseline` (missing file → `None`), `judge`, print and append the line, exit per SC11. `calibrate`: `check_done`, `load_run`, print and append `calibration_line`. `aggregate`: print `aggregate(...)`.
+  - **`modes.rs`.** Add `pub(super) fn check_done(json: &str) -> Result<(), String>` per SC10 (moved from B3: `fresh` never calls it, so B3 would fail `dead_code`), with its tests in `modes/tests.rs` (0, 5 and 7 entries, a `1`, a `"0"`, a `0.5`, a third key, no `finished`, malformed JSON all fail; six zeros pass). Add `mod calibrate;`, the `Vm`, `Calibrate` and `Aggregate` variants with SC11's flags, and their runners. `vm`: `check_done(--done)`, `load_run`, read `--baseline` (missing file → `None`), `judge`, print and append the line, exit per SC11. `calibrate`: `check_done`, `load_run`, print and append `calibration_line`. `aggregate`: print `aggregate(...)`.
   - **`modes/calibrate.rs`:**
     - `#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)] #[serde(deny_unknown_fields)] pub(super) struct Baseline` with SC11's fields and types, in order.
     - `pub(super) enum Verdict { Pass(String), Fail(String), NotCalibrated(String) }`.
@@ -210,7 +208,7 @@ Final. Workers never reopen them.
   - **`ci.ps1`:**
     - `param(… [ValidateSet('normal','calibrate')][string]$Mode = 'normal')`; `$Required = 'clippy,test,build'`. A stage other than `clippy`, `test`, `build`, `perf`, `calibrate` prints `=== FAIL usage (unknown stage <x>)` and exits 1. `-Mode calibrate` without `calibrate` in the stages fails the same way.
     - After the HEAD check: `Write-Output "=== sha $(git rev-parse HEAD)"`.
-    - **`function Start-PerfRun([string]$Stage)`**, used by both stages, returns `$run, $fp`:
+    - **`function Start-PerfRun([string]$Stage)`**, used by both stages, sets `$script:PerfRun` and `$script:PerfFp` and is called without assignment (`Step` and `schtasks.exe` write to the output stream, so a captured return value would swallow the step logs); `perf` and `calibrate` below read `$run = $script:PerfRun; $fp = $script:PerfFp`:
       1. set the two release env vars; `Step build-perf { cmd /c "cargo build --release -p navo-app --features tester --target-dir target\perf 2>&1" }`;
       2. no `C:\winvm\snapshot-id.txt` → `=== FAIL $Stage (no C:\winvm\snapshot-id.txt)`, exit 1;
       3. fingerprint, then `-replace '[^A-Za-z0-9.;=+_-]', '_'`:
@@ -274,3 +272,4 @@ Final. Workers never reopen them.
   5. B3 split into B3 (`modes.rs`: parser, SC10 checks, `fresh`) and B3c (`modes/calibrate.rs`: baseline, verdict, aggregate); tests sit in `tests.rs` files, which the size check exempts.
   6. B1 asserts `pane_entries == [2, 2]` in the navo-ui watch test; B2 asserts `[5000, 200]` in the run JSON test. `skip_serializing_if` keeps the snapshot unchanged, so B2 stays at three files.
   - Also: SC12's hook patterns end in `( |$)`, and the perf steps are named `build-perf` and `fixture-perf`, so no step line starts with `=== ok perf` by accident. Base moved to `da6e3d8c`; part A's merged atoms touch no part B file.
+- 2026-11-10 — Gemini re-check of revision 6: `check_done` and its tests move from B3 to B3c (no `fresh` caller → `dead_code`); `Start-PerfRun` sets `$script:PerfRun` / `$script:PerfFp` instead of returning values. Revision 7.

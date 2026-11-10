@@ -1,6 +1,6 @@
 # Speed checks — part C: a Tracy trace build for testers
 
-Status: ready, revision 6 · Base: `da6e3d8c` (local `main`; every path and line below checked there) · Repo: `navo`, plus a scan tool in `/mnt/Sabrent/homelab/winvm/tools/` (outside git; written `$TOOLS` below) · Started: 2026-11-10
+Status: ready, revision 7 · Base: `da6e3d8c` (local `main`; every path and line below checked there) · Repo: `navo`, plus a scan tool in `/mnt/Sabrent/homelab/winvm/tools/` (outside git; written `$TOOLS` below) · Started: 2026-11-10
 
 This plan ships on its own. The shared spec and the shared rules (builders, CHK, files, lockfile chain) are in `plans/2026-11-10-speed-checks.md`.
 
@@ -178,11 +178,11 @@ Final. Workers never reopen them.
 - **Read:** `crates/navo-diag/tracy/flags.rs` (C2a), and in the cargo registry `tracy-client-sys-0.30.1/build.rs:85-136`, `tracy/common/TracySystem.cpp:340-380`, `tracy/client/TracyProfiler.cpp:590-612`.
 - **Change:**
   - **`navo_tracy_user.hpp`.** A header comment, then `#pragma once`; `#include <cstddef>` and `#include <cstring>`; `#define TRACY_HAS_CUSTOM_USER_INFO 1`; three `static inline` global functions: `PlatformGetUserLogin()` returns `"navo"`, `PlatformGetUserFullName()` returns `nullptr`, and `PlatformGetHostname(char* buf, size_t size)` does `strncpy(buf, "tester", size - 1)`.
-  - **`build.rs`.** `//!` header, then `include!("tracy/flags.rs");` and `fn main()`:
+  - **`build.rs`.** `//!` header, `#![allow(clippy::print_stdout, reason = "cargo reads build script directives from stdout")]`, then `include!("tracy/flags.rs");` and `fn main() -> Result<(), Box<dyn std::error::Error>>` (no `panic!`: the workspace denies it; same shape as `crates/navo-app/build.rs`):
     1. `let target = std::env::var("TARGET").unwrap_or_default();`
     2. print `cargo:rerun-if-env-changed={var}` for every `watched_vars(&target)`, and `cargo:rerun-if-changed=tracy/flags.rs`;
-    3. return when `CARGO_FEATURE_TRACY` is unset;
-    4. `if let Err(message) = check_env(&target, &|name| std::env::var(name).ok(), &|path| path.is_file()) { panic!("{message}"); }`.
+    3. return `Ok(())` when `CARGO_FEATURE_TRACY` is unset;
+    4. `check_env(&target, &|name| std::env::var(name).ok(), &|path| path.is_file())?; Ok(())` — the error string becomes the build error (`String` converts into `Box<dyn Error>`).
 - **Check** (CHK each; `H=$PWD/crates/navo-diag/tracy/navo_tracy_user.hpp`):
   1. `cargo check -p navo-diag --features tracy` fails with the message.
   2. `TRACY_CLIENT_SYS_CXXFLAGS="-include $H" cargo check -p navo-diag --features tracy` builds (the client compiles with the header).
@@ -259,7 +259,7 @@ Final. Workers never reopen them.
   - **`tracy_scan.py`.** Starts with `#!/usr/bin/env -S uv run --script` and PEP 723 metadata: `requires-python = ">=3.14"`, `dependencies = ["lz4==4.4.5", "zstandard==0.25.0"]`. Then:
     - `class DecodeError(Exception)`; `def decode(raw: bytes) -> bytes`;
     - `def stored_strings(data: bytes) -> list[str]`: candidates from `re.finditer(rb"(?s)(?=..\x00{6})", data)`, then SC18's length and UTF-8 rules;
-    - `def raw_runs(data: bytes) -> list[str]`: ASCII/UTF-8 by `rb"(?:[\x20-\x7e]|[\xc2-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf4][\x80-\xbf]{3}){3,}"`; UTF-16LE by `rb"(?:[\x20-\x7e\xa0-\xff]\x00|[\x00-\xff][\x01-\xd7]){3,}"` on `data` and `data[1:]`;
+    - `def raw_runs(data: bytes) -> list[str]`: ASCII/UTF-8 by strict UTF-8 `rb"(?:[\x20-\x7e]|\xc2[\xa0-\xbf]|[\xc3-\xdf][\x80-\xbf]|\xe0[\xa0-\xbf][\x80-\xbf]|[\xe1-\xec\xee\xef][\x80-\xbf]{2}|\xed[\x80-\x9f][\x80-\xbf]|\xf0[\x90-\xbf][\x80-\xbf]{2}|[\xf1-\xf3][\x80-\xbf]{3}|\xf4[\x80-\x8f][\x80-\xbf]{2}){3,}"` (no overlongs, surrogates or code points past U+10FFFF, so `.decode("utf-8")` never raises); UTF-16LE by `rb"(?:[\x20-\x7e\xa0-\xff]\x00|[\x00-\xff][\x01-\xd7]){3,}"` on `data` and `data[1:]`;
     - `def findings(data: bytes, forbid: list[str]) -> list[str]`: SC18's rules, one message per hit with the rule and the text;
     - `def main() -> int`: `argparse` with `file` and repeatable `--forbid`; prints every `User:` line found and each finding; returns 1 on any finding or `DecodeError`, else 0; `raise SystemExit(main())`.
   - **`tracy_scan_test.py`.** The same header with `pytest==9.2.0` added; its `main` runs `pytest.main(["-q", "-p", "no:cacheprovider", __file__])`. A helper writes synthetic `.tracy` files: payload split into 64 KiB blocks, 2 streams, for LZ4 (`lz4.block.compress(block, store_size=False, dict=<previous block of that stream>)`) and for Zstd (`compressobj()` per stream, `flush(zstandard.COMPRESSOBJ_FLUSH_BLOCK)` per block). A `stored(s)` helper gives `len(s).to_bytes(8, "little") + s.encode()`.
@@ -305,3 +305,4 @@ Final. Workers never reopen them.
   3. `../winvm/tools/` does not resolve from a crew worktree: now `/mnt/Sabrent/homelab/winvm/tools/`. `requirements.txt` + `pip` replaced by PEP 723 metadata run with `uv run --script` (python.md); C8 has two files.
   4. C8 no longer reads an unfetched tarball: the v0.14.1 file layout is written into C8, checked against the upstream headers.
   - Also found while fixing C8: 1 MiB of random bytes holds about six `X:\` matches, so the old "random bytes pass" test could never pass, and a real trace would trip the path rules by chance. SC18 now applies path rules to stored (length-prefixed) strings only, the way Tracy writes every string; the `User:` and forbidden-word rules still cover all raw text. `l10n.catalog` is at line 83, not 82. C7 covers W14's `navo-setup` (it depends on `navo-diag`). G-C2 waits for G-A3. Base moved to `da6e3d8c`.
+- 2026-11-10 — Gemini re-check of revision 6: C8 `raw_runs` now matches strict UTF-8 only; C2b `build.rs` allows `print_stdout` and returns `Result` instead of `panic!` (workspace lints). Revision 7.
