@@ -7,10 +7,6 @@ rust-version.workspace = true
 publish.workspace = true
 license.workspace = true
 
-# R2f native crash client uses it.
-[package.metadata.cargo-shear]
-ignored = ["crash-handler"]
-
 [[bin]]
 name = "navo"
 path = "src/main.rs"
