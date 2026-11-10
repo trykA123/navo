@@ -8,6 +8,12 @@ use crate::logging::Diagnostics;
 
 mod downloads;
 mod hook;
+#[cfg(windows)]
+#[cfg_attr(
+    test,
+    allow(dead_code, reason = "unit tests never start the crash server")
+)]
+mod native_client;
 #[cfg(any(windows, test))]
 mod native_server;
 #[cfg(any(windows, test))]
@@ -17,6 +23,8 @@ pub(crate) mod store;
 pub(crate) mod test_damage;
 mod unclean;
 
+#[cfg(windows)]
+pub(crate) use native_client::{raise_access_violation, ready};
 #[cfg(test)]
 pub(crate) use unclean::sentinel_path;
 pub(crate) use unclean::{open_db, record_failed_check};
@@ -56,8 +64,26 @@ impl Running {
     }
 }
 
+/// Installs the panic hook and, on Windows with a data folder, the native crash client.
 pub(crate) fn install(data: Option<&Path>, diagnostics: &Diagnostics) {
     hook::install(data, diagnostics);
+    // Unit tests never spawn the app's crash server from a test binary.
+    #[cfg(all(windows, not(test)))]
+    if let Some(data) = data {
+        native_client::attach(&data.join("logs"));
+    }
+}
+
+/// Off Windows there is no native crash reporter, so it is never ready.
+#[cfg(not(windows))]
+pub(crate) fn ready(_timeout: std::time::Duration) -> bool {
+    false
+}
+
+/// Off Windows the native probe has nothing to raise; `ready` is false, so it never runs.
+#[cfg(not(windows))]
+pub(crate) fn raise_access_violation() -> ! {
+    std::process::abort()
 }
 
 /// Runs the hidden `--crash-server <socket> <logs>` mode: one native dump, then exit.

@@ -182,15 +182,32 @@ fn execute_command(
     }
 }
 
+/// The CI crash probe: `NAVO_CRASH_TEST=1` panics, `native` raises an access violation once the
+/// native reporter attached (exit 3 when it did not). Any other value exits 2 and writes nothing.
 #[inline(never)]
 #[allow(clippy::panic, reason = "an opt-in CI probe exercises the panic hook")]
 fn crash_test(profile: &Profile) -> ExitCode {
-    if std::env::var_os("NAVO_CRASH_TEST").as_deref() != Some(std::ffi::OsStr::new("1")) {
-        eprintln!("navo: --crash-test requires NAVO_CRASH_TEST=1");
-        return ExitCode::from(2);
-    }
+    let native = match std::env::var_os("NAVO_CRASH_TEST")
+        .as_deref()
+        .and_then(|v| v.to_str())
+    {
+        Some("1") => false,
+        Some("native") => true,
+        _ => {
+            eprintln!("navo: --crash-test requires NAVO_CRASH_TEST=1 or native");
+            return ExitCode::from(2);
+        }
+    };
     let diagnostics = install_logging(profile);
     crash::install(profile.dirs().map(|dirs| dirs.data.as_path()), &diagnostics);
+    // The panic probe waits too, so its crash server always has a client to lose.
+    if !crash::ready(std::time::Duration::from_secs(5)) && native {
+        eprintln!("navo: native crash reporter did not attach");
+        return ExitCode::from(3);
+    }
+    if native {
+        crash::raise_access_violation();
+    }
     tracing::warn!("crash test about to panic");
     panic!("Navo CI crash test");
 }
