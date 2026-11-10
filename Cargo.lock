@@ -6327,6 +6327,7 @@ name = "navo-index"
 version = "0.6.0"
 dependencies = [
  "crc32fast",
+ "gungraun",
  "navo-core",
  "navo-fs",
  "navo-store",
