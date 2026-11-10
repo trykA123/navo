@@ -102,6 +102,7 @@ impl SetupWindow {
     }
 
     /// Returns the window handle, for tests that need to inspect or move focus.
+    #[cfg(test)]
     pub(crate) fn window_handle(&self) -> AnyWindowHandle {
         self.handle
     }

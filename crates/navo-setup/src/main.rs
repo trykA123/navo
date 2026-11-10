@@ -5,6 +5,8 @@
     clippy::print_stdout,
     reason = "the command-line entry point prints results and errors"
 )]
+// A double-click must not flash a console; debug builds keep it for tester diagnostics.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 use std::ffi::OsString;
 use std::process::ExitCode;

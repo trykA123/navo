@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::os::windows::fs::OpenOptionsExt;
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child as ProcessChild, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -207,11 +208,13 @@ impl Host for WindowsHost {
         let (program, rest) = args
             .split_first()
             .ok_or_else(|| io::Error::other("empty Velopack argument array"))?;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let child = Command::new(program)
             .args(rest)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn()?;
         Ok(Box::new(Process(child)))
     }
