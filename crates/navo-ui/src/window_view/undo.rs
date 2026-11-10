@@ -1,4 +1,4 @@
-use navo_core::Step;
+use navo_core::{OpKind, Step};
 use navo_l10n::{t, tr};
 
 use super::NavoWindow;
@@ -50,7 +50,7 @@ fn folder_of(offer: &UndoOffer) -> String {
         .steps
         .iter()
         .find_map(|step| match step {
-            Step::Rename { target, .. } => target.parent(),
+            Step::Rename { target, .. } | Step::WriteFile { target, .. } => target.parent(),
             _ => None,
         })
         .and_then(|folder| folder.name().map(|name| name.to_text()))
@@ -67,6 +67,22 @@ pub(super) fn ask_props(props: ConfirmProps, offer: &UndoOffer) -> ConfirmProps 
         };
     }
     let count = u64::try_from(offer.items()).unwrap_or(u64::MAX);
+    if matches!(offer.kind, UndoKind::Retained(_)) {
+        return ConfirmProps {
+            title: t!("undo-retained-ask", count = count).into(),
+            confirm_label: tr("undo-ask-label").into(),
+            summary: tr("undo-retained-ask-summary").into(),
+            ..props
+        };
+    }
+    if offer.plan.kind == OpKind::Save {
+        return ConfirmProps {
+            title: t!("undo-save-ask", count = count).into(),
+            confirm_label: tr("undo-ask-label").into(),
+            summary: tr("undo-save-summary").into(),
+            ..props
+        };
+    }
     ConfirmProps {
         title: t!(
             "undo-ask",

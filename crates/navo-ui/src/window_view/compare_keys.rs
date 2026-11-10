@@ -4,7 +4,8 @@ use navo_core::CursorMove;
 use super::NavoWindow;
 use crate::browser::Browser;
 use crate::commands::compare::{
-    Continue, Enter, Exit, NextDifference, PreviousDifference, StopChecking, Up, WithOtherPane,
+    Continue, Enter, Exit, NextDifference, PreviousDifference, StopChecking, Stream, Up,
+    WithOtherPane,
 };
 use crate::file_list::{
     CursorDown, CursorFirst, CursorLast, CursorUp, PageDown, PageUp, SwitchPane,
@@ -33,6 +34,13 @@ pub(super) fn compare_keys(root: Div, cx: &mut Context<NavoWindow>) -> Div {
     ))
     .on_action(step::<StopChecking>(Browser::compare_stop_checking, cx))
     .on_action(step::<Continue>(Browser::compare_continue, cx))
+    .on_action(
+        cx.listener(|this: &mut NavoWindow, _: &Stream, window, cx| {
+            if this.browser.compare_mode().is_some() {
+                this.open_compare_stream(window, cx);
+            }
+        }),
+    )
     .on_action(cursor::<CursorUp>(CursorMove::Up, cx))
     .on_action(cursor::<CursorDown>(CursorMove::Down, cx))
     .on_action(cursor::<PageUp>(CursorMove::PageUp, cx))
@@ -56,13 +64,16 @@ fn cursor<A: gpui_kit::Action>(
     step(move |browser: &mut Browser| browser.compare_cursor(to), cx)
 }
 
+/// Runs one compare step; a step that asked for a file diff opens it, others keep the pane focused.
 fn step<A: gpui_kit::Action>(
     run: impl Fn(&mut Browser) -> bool + 'static,
     cx: &mut Context<NavoWindow>,
 ) -> impl Fn(&A, &mut Window, &mut App) + 'static {
     cx.listener(move |this: &mut NavoWindow, _: &A, window, cx| {
         if run(&mut this.browser) {
-            this.focus_core_pane(window, cx);
+            if !this.open_file_diff(window, cx) {
+                this.focus_core_pane(window, cx);
+            }
             cx.notify();
         }
     })

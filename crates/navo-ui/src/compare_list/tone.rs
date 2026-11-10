@@ -4,7 +4,7 @@ use crate::browser::Tone;
 use crate::tokens::Theme;
 
 /// The text colour of a tone, from the diff tokens.
-pub(super) fn text(t: &Theme, tone: Tone) -> Hsla {
+pub(crate) fn text(t: &Theme, tone: Tone) -> Hsla {
     match tone {
         Tone::Muted => t.colors.muted,
         Tone::Change => t.diff.change.text,
@@ -16,7 +16,7 @@ pub(super) fn text(t: &Theme, tone: Tone) -> Hsla {
 }
 
 /// The badge background of a tone; quiet tones have none.
-pub(super) fn wash(t: &Theme, tone: Tone) -> Option<Hsla> {
+pub(crate) fn wash(t: &Theme, tone: Tone) -> Option<Hsla> {
     match tone {
         Tone::Muted | Tone::Busy => None,
         Tone::Change => Some(t.diff.change.wash),

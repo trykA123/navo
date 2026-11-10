@@ -55,6 +55,39 @@ impl Browser {
         true
     }
 
+    /// Shows the folder of the row at `path` in both panes and selects it; the Stream calls it
+    /// on the way back. False outside a compare or when a side of the folder cannot be joined.
+    pub fn compare_reveal(&mut self, path: &str) -> bool {
+        let Some(mode) = self.hooks.compare.mode.as_ref() else {
+            return false;
+        };
+        let (folder, name) = path.rsplit_once('/').unwrap_or(("", path));
+        let moves = folder != mode.folder();
+        if moves {
+            let targets = [0, 1].map(|side| mode.side_location(side, folder));
+            let [Some(left), Some(right)] = targets else {
+                return false;
+            };
+            let name = Some(name.to_owned());
+            self.compare_panes([(left, name.clone()), (right, name)]);
+        }
+        let Some(mode) = self.hooks.compare.mode.as_mut() else {
+            return false;
+        };
+        if moves {
+            mode.show_folder(folder.to_owned());
+        }
+        let hidden = mode
+            .rows
+            .by_path(path)
+            .is_some_and(|row| !mode.filter().keeps(row));
+        if hidden {
+            mode.set_filter(super::CompareFilter::All);
+        }
+        mode.select(path);
+        true
+    }
+
     /// Esc: clears the compare filter first, then leaves compare mode.
     pub fn compare_exit(&mut self) -> bool {
         let Some(mode) = self.hooks.compare.mode.as_mut() else {

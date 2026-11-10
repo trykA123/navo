@@ -42,6 +42,8 @@ pub(super) struct Saved {
 /// Enter on a file row: the file diff (U7) opens these sides.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileDiffRequest {
+    /// The compare row id.
+    pub id: u64,
     pub path: String,
     pub left: Option<Location>,
     pub right: Option<Location>,
@@ -62,7 +64,7 @@ pub struct CompareMode {
     pub(super) saved: [Saved; 2],
     pub(super) focused: PaneId,
     pub(super) failed: Option<String>,
-    rows: CompareRows,
+    pub(super) rows: CompareRows,
     folder: String,
     filter: CompareFilter,
     selected: Option<String>,
@@ -316,6 +318,7 @@ impl CompareMode {
             side.is_some_and(|s| s.kind == super::CompareKind::File)
         };
         FileDiffRequest {
+            id: row.id,
             path: row.path.clone(),
             left: file(row.left)
                 .then(|| self.side_location(0, &row.path))

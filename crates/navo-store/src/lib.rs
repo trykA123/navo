@@ -17,7 +17,8 @@ pub use atomic_write::{
     write_atomic_streamed,
 };
 pub use cache_db::{
-    CONTENT_HASH_BUDGET, CacheDb, CacheError, CacheOpen, ContentKey, GIT_BADGES_BUDGET,
+    COMPARE_VIEWED_BUDGET, CONTENT_HASH_BUDGET, CacheDb, CacheError, CacheOpen, ContentKey,
+    GIT_BADGES_BUDGET,
 };
 pub use db::{
     Collection, CollectionItem, CollectionKind, Db, DbError, FileMemory, Frecent, NewCollection,

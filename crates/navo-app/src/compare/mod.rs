@@ -24,6 +24,7 @@
 )]
 
 mod convert;
+pub(crate) mod diff;
 mod entry;
 pub(crate) mod git_side;
 pub(crate) mod handle;

@@ -20,7 +20,7 @@ fn key_of(context: &str) -> Option<&'static str> {
         "ContextMenu" => "command-center-context-context-menu",
         "CrashNotice" => "command-center-context-crash-notice",
         "Shortcuts" => "command-center-context-shortcuts",
-        "Compare" | "CompareView" => "command-center-context-compare",
+        "Compare" | "CompareView" | "CompareStream" => "command-center-context-compare",
         _ if is_within(context, "Viewer") => "command-center-context-viewer",
         _ if is_within(context, "MultiRename") => "command-center-context-multi-rename",
         _ if is_within(context, "SettingsSheet") => "command-center-context-settings",

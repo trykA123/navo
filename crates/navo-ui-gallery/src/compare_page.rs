@@ -1,6 +1,13 @@
 use std::sync::Arc;
 
-use navo_ui::browser::{BarView, CompareFilter, CompareKind, RowView, SideView, Tone, Total};
+use navo_ui::browser::{
+    BarView, CompareFilter, CompareKind, CompareRow, CompareSide, RowStatus, RowView, SideView,
+    Tone, Total,
+};
+use navo_ui::compare_diff::{
+    Card, CardCtx, CardRow, DiffRow, Layout, PairKind, StreamModel, StreamUpdate, ViewedKey,
+    stream_items, stream_row_view, stream_rows,
+};
 use navo_ui::compare_list::{CompareBar, CompareList};
 use navo_ui::prelude::*;
 use navo_ui::primitives::ListScroll;
@@ -191,4 +198,136 @@ pub fn page(cx: &App) -> Div {
                 .child(pane(0, "gallery-compare-left"))
                 .child(pane(1, "gallery-compare-right")),
         )
+        .child(
+            div()
+                .flex()
+                .flex_none()
+                .h(px(380.))
+                .gap(t.spacing.md)
+                .child(stream_column(&t, Layout::SideBySide))
+                .child(stream_column(&t, Layout::Unified)),
+        )
+}
+
+/// A card line from line numbers and texts.
+pub(crate) fn card_line(row: DiffRow, hunk: u32, left: &str, right: &str) -> CardRow {
+    let text = |s: &str| (!s.is_empty()).then(|| s.to_owned());
+    CardRow::Line {
+        row,
+        hunk,
+        left: text(left),
+        right: text(right),
+    }
+}
+
+/// A card of `kind` with `rows`.
+pub(crate) fn sample_card(kind: PairKind, rows: Vec<CardRow>, viewed: bool) -> Card {
+    Card {
+        kind,
+        rows,
+        hunks: Vec::new(),
+        added: 3,
+        removed: 2,
+        viewed_key: ViewedKey([0; 64]),
+        viewed,
+        viewable: true,
+    }
+}
+
+/// A Stream model with an open text card, a binary summary, a pending card, a viewed card
+/// and a rules group.
+fn stream_model(layout: Layout) -> StreamModel {
+    let mut model = StreamModel::default();
+    model.set_items(1, stream_items(&stream_rows_fake(), ""));
+    let cards = [
+        (1, sample_card(PairKind::Text, text_rows(), false)),
+        (2, sample_card(PairKind::Binary, Vec::new(), false)),
+        (4, sample_card(PairKind::Text, Vec::new(), true)),
+    ];
+    for (id, card) in cards {
+        let update = StreamUpdate::Card {
+            generation: 1,
+            id,
+            card: Arc::new(card),
+        };
+        model.apply(&update);
+    }
+    if layout == Layout::SideBySide {
+        model.next_change(1);
+    }
+    model
+}
+
+/// The compare rows the fake Stream lists.
+fn stream_rows_fake() -> [CompareRow; 6] {
+    let side = Some(CompareSide {
+        kind: CompareKind::File,
+        size: 1,
+        modified_ms: None,
+    });
+    let row = |id: u64, path: &str, status| CompareRow {
+        id,
+        path: path.to_owned(),
+        left: side,
+        right: side,
+        status,
+        contains_differences: false,
+    };
+    [
+        row(1, "crates/core/src/walk.rs", RowStatus::Different),
+        row(2, "assets/logo.bin", RowStatus::Different),
+        row(3, "crates/core/src/lib.rs", RowStatus::Checking),
+        row(4, "docs/notes.md", RowStatus::Different),
+        row(5, "a.txt", RowStatus::SameAfterRules),
+        row(6, "b.txt", RowStatus::SameAfterRules),
+    ]
+}
+
+/// The rows of the open text card: lines, a gap and a "more" note.
+fn text_rows() -> Vec<CardRow> {
+    vec![
+        card_line(
+            DiffRow::Equal(10, 10),
+            0,
+            "fn walk(root: &Path) {",
+            "fn walk(root: &Path) {",
+        ),
+        card_line(
+            DiffRow::Changed(11, 11),
+            0,
+            "    let mut seen = 0;",
+            "    let mut seen = 0u64;",
+        ),
+        card_line(DiffRow::Deleted(12), 0, "    // old counter", ""),
+        card_line(DiffRow::Inserted(12), 0, "", "    // counts every entry"),
+        card_line(DiffRow::Equal(13, 13), 0, "}", "}"),
+        CardRow::Gap { lines: 42 },
+        card_line(DiffRow::Equal(56, 56), 1, "fn done() {}", "fn done() {}"),
+        card_line(DiffRow::Inserted(57), 1, "", "fn extra() {}"),
+        CardRow::More { hunks: 3 },
+    ]
+}
+
+/// One Stream column: every card row kind in `layout`, inside a bordered panel.
+fn stream_column(t: &tokens::Theme, layout: Layout) -> Div {
+    let model = stream_model(layout);
+    let rows = stream_rows(&model, layout);
+    let ctx = CardCtx {
+        t,
+        model: &model,
+        layout,
+    };
+    let views: Vec<AnyElement> = (0..rows.len())
+        .map(|at| stream_row_view(&rows, at, &ctx))
+        .collect();
+    div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_w_0()
+        .overflow_hidden()
+        .p(t.spacing.md)
+        .rounded(t.radii.card)
+        .bg(t.colors.background)
+        .children(views)
 }

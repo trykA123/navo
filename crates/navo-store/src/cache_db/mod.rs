@@ -10,9 +10,11 @@ mod connection;
 mod content_hash;
 mod git_badges;
 mod migrations;
+mod viewed;
 
 pub use content_hash::{CONTENT_HASH_BUDGET, ContentKey};
 pub use git_badges::GIT_BADGES_BUDGET;
+pub use viewed::COMPARE_VIEWED_BUDGET;
 
 const DEFAULT_BUDGET: u64 = 64 * 1024 * 1024;
 const MAX_PENDING_ACCESSES: usize = 4096;
@@ -165,6 +167,7 @@ impl CacheDb {
         };
         content_hash::configure(&mut cache);
         git_badges::configure(&mut cache);
+        viewed::configure(&mut cache);
         Ok(cache)
     }
 

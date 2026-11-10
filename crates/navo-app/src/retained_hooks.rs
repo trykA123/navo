@@ -7,6 +7,7 @@ use navo_retention::{Error, RestoreRequest, RetentionRun, Vault};
 use navo_store::{RetentionCatalog, RetentionStoreError, StoreDirs};
 use navo_ui::browser::{NoRetained, RetainedHooks, RetainedKind, RetainedRow, RetainedState};
 
+mod in_place;
 mod names;
 
 const MAX_PAGE: u16 = 1000;
@@ -50,6 +51,16 @@ impl RetainedHooks for VaultHooks {
         let _lease = crate::jobs::claim_exclusive(&self.dirs.data)?;
         let mut vault = self.vault()?;
         let entry = vault.get(id).map_err(|error| refused(&error))?;
+        if entry.state == Stored::Ready
+            && let Some(file) = in_place::saved_held(&self.dirs, &entry)?
+            && self
+                .ops
+                .content_hash(&entry.record.source, &CancelToken::new())
+                .ok()
+                == file.placed_hash
+        {
+            return in_place::restore(&self.dirs, self.ops.as_ref(), &entry, &file);
+        }
         let target = names::free_target(self.ops.as_ref(), &entry)?;
         let request = &RestoreRequest {
             id,

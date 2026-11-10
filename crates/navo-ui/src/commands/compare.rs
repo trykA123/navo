@@ -17,11 +17,23 @@ gpui_kit::actions!(
         StopChecking,
         Continue,
         ViewBytes,
-        ViewText
+        ViewText,
+        Stream,
+        NextFile,
+        PreviousFile,
+        ViewMenu,
+        Changes,
+        Details,
+        ToggleViewed,
+        Fold,
+        OpenFile,
+        Search,
+        CopyAllLeft,
+        CopyAllRight
     ]
 );
 
-pub(super) const GROUPS: [Group; 4] = [
+pub(super) const GROUPS: [Group; 5] = [
     Group {
         context: "FileList",
         commands: &[(
@@ -70,6 +82,7 @@ pub(super) const GROUPS: [Group; 4] = [
                 "compare.continue",
                 "cmd-compare-continue",
             ),
+            ("compare::Stream", "compare.stream", "cmd-compare-stream"),
         ],
     },
     Group {
@@ -86,6 +99,50 @@ pub(super) const GROUPS: [Group; 4] = [
                 "compare.view_text",
                 "cmd-compare-view-text",
             ),
+            (
+                "compare::NextFile",
+                "compare.next_file",
+                "cmd-compare-next-file",
+            ),
+            (
+                "compare::PreviousFile",
+                "compare.previous_file",
+                "cmd-compare-previous-file",
+            ),
+            (
+                "compare::ViewMenu",
+                "compare.view_menu",
+                "cmd-compare-view-menu",
+            ),
+            ("compare::Changes", "compare.changes", "cmd-compare-changes"),
+            ("compare::Details", "compare.details", "cmd-compare-details"),
+        ],
+    },
+    Group {
+        context: "CompareStream",
+        commands: &[
+            (
+                "compare::ToggleViewed",
+                "compare.toggle_viewed",
+                "cmd-compare-toggle-viewed",
+            ),
+            ("compare::Fold", "compare.fold", "cmd-compare-fold"),
+            (
+                "compare::OpenFile",
+                "compare.open_file",
+                "cmd-compare-open-file",
+            ),
+            ("compare::Search", "compare.search", "cmd-compare-search"),
+            (
+                "compare::CopyAllLeft",
+                "compare.copy_all_left",
+                "cmd-compare-copy-all-left",
+            ),
+            (
+                "compare::CopyAllRight",
+                "compare.copy_all_right",
+                "cmd-compare-copy-all-right",
+            ),
         ],
     },
 ];
@@ -98,6 +155,9 @@ const NOT_BUILT: &[&str] = &[
     "compare.save",
     "compare.view_bytes",
     "compare.view_text",
+    "compare.search",
+    "compare.copy_all_left",
+    "compare.copy_all_right",
 ];
 
 /// Whether `name` is a compare command that is not offered: all while Compare is off,

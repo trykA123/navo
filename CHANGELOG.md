@@ -2,6 +2,25 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.5.0 — 2026-11-10
+
+### Added
+
+- When you compare two folders, Enter on a file pair opens its diff in the full window. The two files sit side by side, or in one column when the window is narrow. Alt+↓ and Alt+↑ (or F7 and Shift+F7) move to the next and previous change, and Esc goes back to the folders with the file selected.
+- A change map runs down the right edge of the diff. It marks every change, and a click jumps to it.
+- In the Rich look, the words that changed inside a line are highlighted.
+- Alt+V opens the View menu: Simple or Rich, side by side or one column, changed words and the change map. Ctrl+B lists the changes, and Ctrl+I shows each file's encoding and line endings. Both panels start closed.
+- Alt+F opens the Stream: every difference under the compared folder, one card per file, in path order. J and K move from change to change across files, Shift+J and Shift+K move from file to file, O folds a card, and Enter opens the file at that change. Esc from the file comes back to the same card.
+- V marks a file as Viewed and moves on. A bar at the bottom counts the viewed files. Viewed marks are kept by file content, so they survive a refresh and a restart, and a file that changes again shows up as not viewed.
+- Ctrl+B in the Stream opens an outline of the files, grouped by folder, with their status and Viewed marks. Enter or a click jumps to a file.
+- Ctrl+Alt+↓ and Ctrl+Alt+↑ in a file diff move to the next and previous file of the Stream.
+
+### Notes
+
+- The Stream builds the cards near the view first and keeps their memory within a quarter of the memory budget in Settings. Cards far from the view are rebuilt when you come back to them.
+- Binary files, images and text files over 64 MiB show a short summary card in this version. F3 opens them in the viewer.
+- Copying changes from one side to the other comes in the next version.
+
 ## v0.4.1 — 2026-11-09
 
 ### Fixed

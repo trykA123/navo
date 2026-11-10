@@ -1,4 +1,5 @@
 pub mod apply;
+pub mod card;
 pub mod diff;
 mod digest;
 pub mod intraline;
@@ -9,6 +10,7 @@ pub mod scan;
 pub mod side;
 
 pub use apply::{ApplyError, Direction, Picked, PickedHunk, TargetFacts, apply_hunk, apply_picked};
+pub use card::{CardLimits, CardPlan, CardRow, card};
 pub use diff::{Alignment, Fallback, Hunk, Row, diff_lines};
 pub use digest::{HUNK_DIGEST_BYTES, HunkDigest, HunkDigests};
 pub use intraline::{

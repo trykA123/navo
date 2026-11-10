@@ -17,6 +17,7 @@ pub use compare::{
     RowProgress, RowStatus, RowView, SideView, StopBound, Tone, Total, bar_view, empty_text,
     pane_rows,
 };
+pub(crate) use compare::{look_of, status_text};
 pub use find::FindResults;
 pub use measure::{FolderTotals, FolderTotalsQuery, SizeMode, no_folder_totals};
 pub(crate) use measure::{Measured, folder_bytes};

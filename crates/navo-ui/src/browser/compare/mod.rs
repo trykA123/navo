@@ -15,6 +15,7 @@ mod hooks;
 mod mode;
 mod navigate;
 mod rows;
+mod stream;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -26,6 +27,7 @@ pub use hooks::{
 use mode::Saved;
 pub use mode::{CompareFilter, CompareMode, FileDiffRequest};
 pub use view::{BarView, FILTERS, RowView, SideView, Tone, Total, bar_view, empty_text, pane_rows};
+pub(crate) use view::{look_of, status_text};
 
 /// Why a compare did not start.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

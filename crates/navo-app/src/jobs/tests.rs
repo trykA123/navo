@@ -10,6 +10,7 @@ use navo_store::{Db, JobJournal, StepState};
 
 use super::{SharedJournal, lock, log_factory, open, recover};
 
+mod compare_undo;
 mod salvage;
 mod session_hold;
 

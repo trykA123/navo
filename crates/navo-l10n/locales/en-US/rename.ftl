@@ -125,6 +125,11 @@ rename-folder-changed = The folder changed. Check the preview, then press Enter 
 rename-presets-failed = The preset could not be stored: { $reason }
 undo-nothing = Nothing to undo
 undo-read-failed = The undo history could not be read: { $reason }
+undo-retained-ask = Restore { $count ->
+    [one] { $count } old version
+   *[other] { $count } old versions
+} from Navo's vault?
+undo-retained-ask-summary = The old version goes back in place when the file still has the saved bytes; otherwise it lands beside as "(restored)".
 undo-retained-busy = Wait until the last undo ends
 undo-retained-done = Restored { $count ->
     [one] { $count } item
@@ -142,6 +147,11 @@ undo-ask = Undo the rename of { $count ->
 } in { $folder }?
 undo-ask-label = Undo
 undo-ask-summary = Names go back as they were. Items that changed since are left as they are.
+undo-save-ask = Undo the save of { $count ->
+    [one] { $count } file
+   *[other] { $count } files
+}?
+undo-save-summary = The old file goes back in place when it still has the saved bytes; otherwise it is kept beside as "(restored)". Files changed since are left as they are.
 undo-finish-ask = An earlier undo of a rename did not finish. Finish it now?
 undo-finish-label = Finish the undo
 undo-finish-summary = Names that are already back stay as they are.

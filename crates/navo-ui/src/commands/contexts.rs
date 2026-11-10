@@ -2,8 +2,10 @@ pub const GLOBAL: &str = "global";
 
 const VIEWER: &str = "Viewer";
 
-pub(super) const PARENTS: [(&str, &str); 28] = [
+pub(super) const PARENTS: [(&str, &str); 30] = [
     ("Archive", VIEWER),
+    ("CompareOutline", "CompareStream"),
+    ("CompareStream", "CompareView"),
     ("CompareView", "Compare"),
     ("Editor", VIEWER),
     ("Elf", "Space"),

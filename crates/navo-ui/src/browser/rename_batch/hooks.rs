@@ -58,14 +58,18 @@ impl UndoOffer {
             .zip(&self.plan.steps)
             .filter(move |(seq, step)| done.contains(seq) && is_item(step))
             .filter_map(|(_, step)| match step {
-                Step::Rename { target, .. } => Some(target),
+                Step::Rename { target, .. } | Step::WriteFile { target, .. } => Some(target),
                 _ => None,
             })
     }
 }
 
 pub(super) fn is_item(step: &Step) -> bool {
-    matches!(step, Step::Rename { target, .. } if !is_rename_temporary(target))
+    match step {
+        Step::Rename { target, .. } => !is_rename_temporary(target),
+        Step::WriteFile { .. } => true,
+        _ => false,
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -73,6 +77,8 @@ pub struct RenameReport {
     pub left: Vec<Location>,
     pub applied: Vec<u32>,
     pub skipped: usize,
+    /// Done save steps whose old file was no longer held, so they could not be restored.
+    pub missing: usize,
     pub log_error: Option<String>,
 }
 
