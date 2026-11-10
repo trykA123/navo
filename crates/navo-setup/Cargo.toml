@@ -11,6 +11,8 @@ license.workspace = true
 tester = []
 
 [dependencies]
+futures = "0.3.34"
+gpui-kit = "=0.9.1"
 navo-core = { path = "../navo-core" }
 navo-diag = { path = "../navo-diag" }
 navo-l10n = { path = "../navo-l10n" }
@@ -53,6 +55,7 @@ windows-sys = { version = "0.61.2", features = [
 ] }
 
 [dev-dependencies]
+gpui-kit = { version = "=0.9.1", features = ["test-support"] }
 proptest = "1.12.0"
 tempfile = "3.27.0"
 

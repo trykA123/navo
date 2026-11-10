@@ -190,7 +190,7 @@ fn report_install(
 
 /// Resolves the default fresh root `FOLDERID_UserProgramFiles\Navo`.
 #[cfg(windows)]
-fn default_root() -> Result<PathBuf, CliError> {
+pub(crate) fn default_root() -> Result<PathBuf, CliError> {
     use windows_sys::Win32::UI::Shell::FOLDERID_UserProgramFiles;
     crate::probe::chain::known_folder(&FOLDERID_UserProgramFiles)
         .map_err(|_| CliError::Folder("the default install folder is unavailable".to_owned()))?
@@ -200,7 +200,7 @@ fn default_root() -> Result<PathBuf, CliError> {
 
 /// Refuses the default root off Windows, where silent mode never runs.
 #[cfg(not(windows))]
-fn default_root() -> Result<PathBuf, CliError> {
+pub(crate) fn default_root() -> Result<PathBuf, CliError> {
     Err(CliError::NoHost)
 }
 

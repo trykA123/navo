@@ -349,6 +349,11 @@ pub fn close(session: Session, host: &mut dyn Host) {
     steps::close_with(session, host, remove_created);
 }
 
+/// Closes a session kept after Setup.exe exited 0; it only drops handles and deletes nothing.
+pub fn close_installed(session: Session, host: &mut dyn Host) {
+    steps::close_success(session, host);
+}
+
 /// Retries a failed marker write on the session's held root.
 pub fn mark_again(mut session: Session, host: &mut dyn Host) -> Result<(), InstallError> {
     if !steps::unchanged(host, &session.pin) {
