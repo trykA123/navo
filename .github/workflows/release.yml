@@ -96,6 +96,7 @@ jobs:
     runs-on: windows-latest
     env:
       TAG: ${{ inputs.tag }}
+      NAVO_PUBLISH_SETUP_WIZARD: ${{ vars.NAVO_PUBLISH_SETUP_WIZARD }}
     steps:
       - name: Tag is vX.Y.Z
         shell: pwsh
@@ -108,7 +109,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-auditable and cargo-audit
         run: cargo install --locked cargo-auditable@0.7.7 cargo-audit@0.22.2
-      - run: cargo auditable build --release -p navo-app -p navo-index-service
+      - run: cargo auditable build --locked --release -p navo-app -p navo-index-service
         env:
           NAVO_BUILD: ${{ inputs.tag }}
       - name: Audit the shipped executables for known vulnerabilities
@@ -196,6 +197,37 @@ jobs:
           if ($asset.SHA256 -ne $hash) { throw "feed SHA256 $($asset.SHA256) does not match the package $hash" }
           $size = (Get-Item -LiteralPath $pkg).Length
           if ($asset.Size -ne $size) { throw "feed size $($asset.Size) does not match the package $size" }
+          "PACK_ASSET=$($asset.FileName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build the Setup wizard
+        shell: pwsh
+        run: |
+          $env:NAVO_SETUP_PAYLOAD = (Resolve-Path -LiteralPath 'out/NavoApp-win-Setup.exe').Path
+          $env:NAVO_SETUP_PACKAGE = (Resolve-Path -LiteralPath (Join-Path 'out' $env:PACK_ASSET)).Path
+          $env:NAVO_SETUP_REQUIRE_PAYLOAD = '1'
+          cargo build --locked --release -p navo-setup
+          if ($LASTEXITCODE -ne 0) { throw "navo-setup build failed with $LASTEXITCODE" }
+          Copy-Item -LiteralPath 'target/release/navo-setup.exe' -Destination 'out/Navo-Setup.exe'
+      - name: Check the Setup wizard
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path -LiteralPath 'out/Navo-Setup.exe').Path
+          $version = (& $exe --version | Out-String).Trim()
+          if ($version -ne "navo-setup $env:PACK_VERSION") { throw "unexpected Setup version: $version" }
+          $payload = (Get-FileHash -LiteralPath 'out/NavoApp-win-Setup.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          $printed = (& $exe --payload-sha256 | Out-String).Trim().ToLowerInvariant()
+          if ($printed -ne $payload) { throw "payload SHA256 mismatch: $printed vs $payload" }
+          $package = (Resolve-Path -LiteralPath (Join-Path 'out' $env:PACK_ASSET)).Path
+          $expected = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
+          $printed = (& $exe --package-sha256 | Out-String).Trim().ToLowerInvariant()
+          if ($printed -ne $expected) { throw "package SHA256 mismatch: $printed vs $expected" }
+          $dumpbin = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\dumpbin.exe'
+          if (-not (Test-Path -LiteralPath $dumpbin)) {
+            $dumpbin = (Get-ChildItem 'C:\Program Files*\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' |
+              Sort-Object -Property FullName -Descending | Select-Object -First 1).FullName
+          }
+          if (-not $dumpbin) { throw 'dumpbin.exe not found' }
+          ./scripts/setup-imports.ps1 -Exe $exe -Dumpbin $dumpbin
+          if ($LASTEXITCODE -ne 0) { throw "setup-imports.ps1 failed with $LASTEXITCODE" }
       - name: Verify the portable package
         timeout-minutes: 2
         shell: pwsh
@@ -221,6 +253,32 @@ jobs:
               if (-not $symbols.GetEntry($entry)) { throw "$entry is missing from the symbol package" }
             }
           } finally { $symbols.Dispose() }
+      - name: Write the asset list and checksums
+        shell: pwsh
+        run: |
+          $assets = [Collections.Generic.List[string]]::new()
+          $assets.Add("$env:PACK_ID-$env:CHANNEL-Portable.zip")
+          $assets.Add("$env:PACK_ID-$env:CHANNEL-Setup.exe")
+          $assets.Add($env:PACK_ASSET)
+          $assets.Add("releases.$env:CHANNEL.json")
+          $assets.Add('RELEASES')
+          $assets.Add('navo-windows-x64-pdb.zip')
+          if ($env:NAVO_PUBLISH_SETUP_WIZARD -eq 'true') { $assets.Add('Navo-Setup.exe') }
+          [IO.File]::WriteAllText((Join-Path (Get-Location) 'out/assets.txt'), (($assets -join "`n") + "`n"))
+          $allowed = @('assets.txt', 'SHA256SUMS.txt', 'Navo-Setup.exe')
+          foreach ($name in $assets) {
+            if (-not (Test-Path -LiteralPath (Join-Path 'out' $name))) { throw "missing release asset: $name" }
+          }
+          foreach ($file in Get-ChildItem -LiteralPath 'out' -File) {
+            if ($assets -notcontains $file.Name -and $allowed -notcontains $file.Name) {
+              throw "unlisted file in out/: $($file.Name)"
+            }
+          }
+          $lines = foreach ($name in $assets) {
+            $hash = (Get-FileHash -LiteralPath (Join-Path 'out' $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $name"
+          }
+          [IO.File]::WriteAllText((Join-Path (Get-Location) 'out/SHA256SUMS.txt'), (($lines -join "`n") + "`n"))
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: navo-windows-x64-${{ github.sha }}
@@ -247,13 +305,15 @@ jobs:
         with:
           name: navo-windows-x64-${{ github.sha }}
           path: navo
-      - name: Write the checksums
+      - name: Verify the release assets
         working-directory: navo
-        run: sha256sum -- * > SHA256SUMS.txt
+        run: sha256sum -c SHA256SUMS.txt
       - name: Create the pre-release
         working-directory: navo
         run: |
-          gh release create "$TAG" ./* \
+          mapfile -t assets < assets.txt
+          if [ "${#assets[@]}" -eq 0 ]; then echo 'assets.txt is empty'; exit 1; fi
+          gh release create "$TAG" "${assets[@]}" SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "$TAG" --notes "Build ${GITHUB_SHA::8}. Notes follow."
       - name: Keep the newest releases
