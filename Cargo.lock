@@ -6274,7 +6274,6 @@ dependencies = [
  "tempfile",
  "tracing",
  "tracing-subscriber",
- "tracing-tracy",
  "tracy-client",
  "windows-sys 0.61.2",
  "zip 9.5.0",
@@ -10160,17 +10159,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "tracing-tracy"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b326790213b869d948a5d1ea56472ed5b20c7cefde07684ee35d6b7a980fef1"
-dependencies = [
- "tracing-core",
- "tracing-subscriber",
- "tracy-client",
 ]
 
 [[package]]
