@@ -1,3 +1,5 @@
+//! Define benchmark JSON metrics and write reports with the text renderer.
+
 mod text;
 
 use std::io;
@@ -72,6 +74,8 @@ pub(super) struct Listing {
     pub(super) folder: String,
     pub(super) entries: usize,
     pub(super) list_ms: f64,
+    pub(super) first_batch_ms: f64,
+    pub(super) provider_ms: f64,
     pub(super) sort_ms: Vec<(String, f64)>,
     pub(super) filter: String,
     pub(super) filter_keystroke_ms: Vec<f64>,
