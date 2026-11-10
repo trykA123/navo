@@ -69,9 +69,7 @@ fn filter_case() -> (Vec<FsEntry>, Vec<u32>, Needle, CancelToken) {
 fn fake_folder() -> (FakeFs, Location) {
     let fs = FakeFs::new();
     fs.add_folder("d");
-    for at in 0..FAKE_ENTRIES {
-        fs.add_entry("d", row(at));
-    }
+    fs.add_entries("d", (0..FAKE_ENTRIES).map(row));
     let location = fs.location("d");
     (fs, location)
 }

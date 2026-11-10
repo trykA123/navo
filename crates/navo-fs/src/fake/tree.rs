@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use navo_core::{FsErrorKind, ProviderPath};
@@ -147,6 +148,33 @@ impl Tree {
             Some(existing) => existing.entry = entry,
             None => parent.children.push(Node::leaf(entry)),
         }
+    }
+
+    /// Appends `entries` to `folder` (created if missing) in one pass, with no per-entry scan.
+    /// Fails with the first name that repeats inside the batch or already sits in the folder.
+    pub(super) fn insert_all(
+        &mut self,
+        folder: &str,
+        entries: impl IntoIterator<Item = FsEntry>,
+    ) -> Result<(), ProviderPath> {
+        let fold = self.fold;
+        let key = |name: &ProviderPath| {
+            if fold {
+                ProviderPath::from_text(&fold_text(&name.to_text()))
+            } else {
+                name.clone()
+            }
+        };
+        let parent = self.folder_mut(folder);
+        let mut seen: HashSet<ProviderPath> =
+            parent.children.iter().map(|c| key(&c.entry.name)).collect();
+        for entry in entries {
+            if !seen.insert(key(&entry.name)) {
+                return Err(entry.name);
+            }
+            parent.children.push(Node::leaf(entry));
+        }
+        Ok(())
     }
 
     pub(super) fn remove(&mut self, path: &str) {
