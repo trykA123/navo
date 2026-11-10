@@ -64,3 +64,7 @@ setup-elevated-text = Setup installs Navo for one user and never runs as adminis
 setup-no-payload-title = Nothing to install
 setup-no-payload-text = This copy of Setup does not carry Navo. Download Setup again from the Navo releases page.
 setup-close = &Close
+setup-install = &Install
+setup-finish = &Finish
+setup-rail-version = Version { $version }
+setup-step-welcome = Welcome

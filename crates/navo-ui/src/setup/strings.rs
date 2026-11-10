@@ -61,6 +61,13 @@ pub struct Strings {
     pub no_payload_title: SharedString,
     pub no_payload_text: SharedString,
     pub close: SharedString,
+    /// Footer: Install (Folder in an update, Shortcuts) and Finish.
+    pub install: SharedString,
+    pub finish: SharedString,
+    /// Rail: the window title, "Version {version}" and the first step's name.
+    pub title: SharedString,
+    pub rail_version: SharedString,
+    pub step_welcome: SharedString,
 }
 
 impl Strings {
@@ -159,6 +166,11 @@ impl Strings {
             no_payload_title: text("setup-no-payload-title"),
             no_payload_text: text("setup-no-payload-text"),
             close: text("setup-close"),
+            install: text("setup-install"),
+            finish: text("setup-finish"),
+            title: text("setup-window-title"),
+            rail_version: text("setup-rail-version"),
+            step_welcome: text("setup-step-welcome"),
         }
     }
 

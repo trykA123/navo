@@ -362,12 +362,14 @@ pub(super) fn failed(c: &Ctx) -> AnyElement {
         .flex()
         .gap(c.t.spacing.sm)
         .child(
-            Button::new("failed-copy", plain_text(&c.strings.failed_copy))
+            Button::new("failed-copy", c.strings.failed_copy.clone())
+                .access_key(c.view.show_keys)
                 .on_click(move |_, window, cx| copy(SetupAction::CopyDetails, window, cx)),
         )
         .child(
-            Button::new("failed-retry", plain_text(&c.strings.failed_retry))
-                .disabled(!c.view.can_retry || leftover.is_some())
+            Button::new("failed-retry", c.strings.failed_retry.clone())
+                .access_key(c.view.show_keys)
+                .disabled(!c.view.retry_enabled())
                 .on_click(move |_, window, cx| retry(SetupAction::TryAgain, window, cx)),
         );
     page.child(buttons).into_any_element()

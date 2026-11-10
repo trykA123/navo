@@ -1,17 +1,19 @@
 //! The Setup window: a GPUI entity that draws the wizard and runs the core's outputs.
 //!
 //! Effects go to the worker thread; replies come back on a channel. Close waits for the worker.
+//! Keys and the Folder field live in `window_input.rs`.
 
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use futures::StreamExt;
 use gpui_kit::{
-    AppContext, Bounds, ClipboardItem, Context, IntoElement, PathPromptOptions, Render,
-    Subscription, Task, TitlebarOptions, Window, WindowAppearance, WindowBounds, WindowOptions, px,
-    size,
+    AnyWindowHandle, AppContext, Bounds, ClipboardItem, Context, Entity, FocusHandle,
+    InteractiveElement, IntoElement, PathPromptOptions, Render, Subscription, Task,
+    TitlebarOptions, Window, WindowAppearance, WindowBounds, WindowOptions, px, size,
 };
-use navo_ui::setup::{OnAction, SetupAction, Strings, render_page};
+use navo_ui::primitives::TextFieldState;
+use navo_ui::setup::{OnAction, SetupAction, Strings, render_frame};
 use navo_ui::tokens::{self, Mode};
 use navo_ui::{ParentElement, Styled, div};
 
@@ -25,13 +27,21 @@ pub const DEBOUNCE: Duration = Duration::from_millis(300);
 
 /// The wizard window's state: the pure core, its texts and the worker's job queue.
 pub struct SetupWindow {
-    shell: Shell,
-    strings: Strings,
+    pub(crate) shell: Shell,
+    pub(crate) strings: Strings,
     jobs: Sender<Job>,
     /// The pending folder check; replacing or dropping it cancels the earlier timer.
     debounce: Option<Task<()>>,
+    /// The editable Folder field; its edits feed the debounced check.
+    pub(crate) field: Entity<TextFieldState>,
+    /// The window root's focus: Enter there runs the default button.
+    pub(crate) focus: FocusHandle,
+    /// The footer's primary button; focus starts here so it shows and Space presses it.
+    pub(crate) primary: FocusHandle,
+    handle: AnyWindowHandle,
     _replies: Task<()>,
     _appearance: Subscription,
+    _field: Subscription,
 }
 
 impl SetupWindow {
@@ -58,13 +68,23 @@ impl SetupWindow {
             tokens::apply(mode_of(window.appearance()), cx);
             cx.notify();
         });
+        let strings = Strings::load();
+        let (field, field_changes) = Self::folder_field(&shell, &strings, window, cx);
+        let focus = cx.focus_handle();
+        let primary = cx.focus_handle();
+        window.focus(&primary, cx);
         Self {
             shell,
-            strings: Strings::load(),
+            strings,
             jobs,
             debounce: None,
+            field,
+            focus,
+            primary,
+            handle: window.window_handle(),
             _replies: listen,
             _appearance: appearance,
+            _field: field_changes,
         }
     }
 
@@ -128,6 +148,7 @@ impl SetupWindow {
 
     /// Opens the native folder picker; the picked parent becomes `<parent>\Navo` in the flow.
     fn browse(&mut self, cx: &mut Context<Self>) {
+        let handle = self.handle;
         let picked = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -138,9 +159,12 @@ impl SetupWindow {
             let Ok(Ok(Some(paths))) = picked.await else {
                 return;
             };
-            if let Some(parent) = paths.into_iter().next() {
-                let _ = this.update(cx, |view, cx| view.handle(Event::BrowsePicked(parent), cx));
-            }
+            let Some(parent) = paths.into_iter().next() else {
+                return;
+            };
+            let _ = cx.update_window(handle, |_, window, cx| {
+                this.update(cx, |view, cx| view.picked(parent, window, cx))
+            });
         })
         .detach();
     }
@@ -155,15 +179,21 @@ impl SetupWindow {
 }
 
 impl Render for SetupWindow {
-    /// Draws the current page on the theme surface.
+    /// Draws the rail, the current page and the footer; the root takes the window's keys.
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = tokens::current(cx);
-        let page = render_page(&self.shell.view(), &self.strings, Self::sink(cx));
+        let view = self.shell.view();
+        let frame = render_frame(
+            &view,
+            &self.strings,
+            Self::sink(cx),
+            (Some(self.field.clone()), Some(self.primary.clone())),
+        );
         div()
             .size_full()
-            .p(t.spacing.xl)
-            .bg(t.colors.surface)
-            .child(page)
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::key_down))
+            .on_modifiers_changed(cx.listener(Self::modifiers_changed))
+            .child(frame)
     }
 }
 

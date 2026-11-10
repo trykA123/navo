@@ -26,7 +26,7 @@ fn back_is_false_on_installing() {
     assert!(!view.can_back());
 }
 
-const ALL_PAGES: [SetupPage; 13] = [
+pub(super) const ALL_PAGES: [SetupPage; 13] = [
     SetupPage::Welcome,
     SetupPage::Licence,
     SetupPage::Folder,

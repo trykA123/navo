@@ -7,6 +7,7 @@ use super::{
 };
 
 mod git;
+mod kit;
 mod light_dark;
 mod surfaces;
 
