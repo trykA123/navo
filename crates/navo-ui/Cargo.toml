@@ -14,7 +14,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 codebook-tree-sitter-latex = "=0.6.1"
 flate2 = "=1.1.11"
 futures = "0.3.34"
-gpui-kit = { version = "=0.7.3", features = [
+gpui-kit = { version = "=0.9.1", features = [
   "tree-sitter-astro",
   "tree-sitter-bash",
   "tree-sitter-c",
@@ -63,7 +63,7 @@ image = { version = "=0.25.10", default-features = false, features = [
 kamadak-exif = "=0.6.2"
 lofty = "=0.25.5"
 raw-window-handle = "0.6.2"
-resvg = "=0.46.0"
+resvg = "=0.49.0"
 navo-automotive = { path = "../navo-automotive" }
 navo-cache = { path = "../navo-cache" }
 navo-core = { path = "../navo-core" }
@@ -100,7 +100,7 @@ url = "=2.5.8"
 windows-version = "0.1.7"
 
 [dev-dependencies]
-gpui-kit = { version = "=0.7.3", features = ["test-support"] }
+gpui-kit = { version = "=0.9.1", features = ["test-support"] }
 insta = "1.49.0"
 object = { version = "=0.41.0", default-features = false, features = ["elf", "write_std"] }
 proptest = "1.12.0"

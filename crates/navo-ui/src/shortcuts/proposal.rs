@@ -3,6 +3,7 @@ use navo_l10n::tr;
 
 use crate::commands::focus_paths::screen_reach;
 use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap, Reach, normal_key, shown};
+use crate::host_os::HOST_OS;
 
 const MODIFIERS: [&str; 7] = [
     "shift", "control", "ctrl", "alt", "platform", "function", "fn",
@@ -67,7 +68,7 @@ pub fn recorded(stroke: &Keystroke) -> Option<Recorded> {
     match stroke.key.as_str() {
         "escape" if bare => Some(Recorded::Cancel),
         "backspace" if bare => Some(Recorded::Unbind),
-        _ => normal_key(&stroke.unparse().to_lowercase()).map(Recorded::Key),
+        _ => normal_key(&stroke.unparse(HOST_OS).to_lowercase()).map(Recorded::Key),
     }
 }
 

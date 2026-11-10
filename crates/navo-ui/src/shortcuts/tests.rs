@@ -2,6 +2,7 @@ use gpui_kit::Keystroke;
 
 use super::*;
 use crate::commands::{Keymap, all, by_name};
+use crate::host_os::parse_keystroke;
 
 fn spec(name: &str) -> crate::commands::CommandSpec {
     by_name(name).expect("a registered command")
@@ -42,7 +43,7 @@ fn keys(list: &[&str]) -> Vec<String> {
 }
 
 fn stroke(text: &str) -> Keystroke {
-    Keystroke::parse(text).expect("a keystroke")
+    parse_keystroke(text).expect("a keystroke")
 }
 
 #[test]

@@ -383,7 +383,7 @@ impl RenderOnce for FileList {
                 (ctx.clone(), self.on_page_rows, self.known_width),
                 watch(state.clone()),
             ))
-            .on_scroll_wheel(watch::report_scroll(&ctx, watch(state)))
+            .on_scroll(watch::report_scroll(&ctx, watch(state)))
             .on_mouse_down(MouseButton::Right, press::background_down(&ctx))
             .overflow_hidden()
             .child(lift::lifted(list, lift));

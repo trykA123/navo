@@ -51,7 +51,7 @@ libc = "=0.2.191"
 
 [target.'cfg(windows)'.dependencies]
 crash-handler = "=0.8.1"
-gpui-pre-windows = "=0.3.9"
+gpui-pre-windows = "=0.3.12"
 minidump = "=0.27.0"
 minidumper = "=0.11.0"
 tray-icon = { version = "=0.26.1", default-features = false }
@@ -87,7 +87,7 @@ windows-sys = { version = "0.61.2", features = [
 
 [dev-dependencies]
 futures = "0.3.34"
-gpui-kit = { version = "=0.7.3", features = ["test-support"] }
+gpui-kit = { version = "=0.9.1", features = ["test-support"] }
 minidump = "=0.27.0"
 minidump-synth = "=0.27.0"
 navo-store = { path = "../navo-store", features = ["test-support"] }

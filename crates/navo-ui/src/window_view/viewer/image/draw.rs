@@ -3,7 +3,7 @@ use std::sync::Arc;
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{
     Corners, CursorStyle, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, RenderImage,
-    ScrollDelta, ScrollWheelEvent, Stateful, canvas, fill, point,
+    ScrollDelta, ScrollEvent, Stateful, canvas, fill, point,
 };
 
 use super::ImageView;
@@ -72,7 +72,7 @@ fn paint_picture(
 }
 
 impl ImageView {
-    fn wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
+    fn wheel(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
         let viewport = self.viewport();
         let notches = match event.delta {
             ScrollDelta::Lines(lines) => lines.y,
@@ -145,7 +145,7 @@ impl ImageView {
             .overflow_hidden()
             .bg(t.colors.background)
             .cursor(cursor)
-            .on_scroll_wheel(cx.listener(|view, event: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|view, event: &ScrollEvent, _, cx| {
                 view.wheel(event, cx);
             }))
             .on_mouse_down(

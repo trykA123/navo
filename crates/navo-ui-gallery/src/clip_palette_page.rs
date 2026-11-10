@@ -105,13 +105,13 @@ fn stage(
 /// Tab to the password field and type a new password, as a user would.
 fn type_password(window: &mut Window, cx: &mut App) {
     for key in ["tab", "tab"] {
-        if let Ok(stroke) = Keystroke::parse(key) {
+        if let Ok(stroke) = Keystroke::parse_with_os(key, cx.platform_info().os) {
             window.dispatch_keystroke(stroke, cx);
         }
     }
     for typed in "k7#Qm2-vX9!pLr4e".chars() {
         let text = typed.to_string();
-        if let Ok(mut stroke) = Keystroke::parse(&text) {
+        if let Ok(mut stroke) = Keystroke::parse_with_os(&text, cx.platform_info().os) {
             stroke.key_char = Some(text);
             window.dispatch_keystroke(stroke, cx);
         }

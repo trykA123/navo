@@ -1,4 +1,4 @@
-// Ferrite patches to gpui-pre-windows 0.3.9:
+// Ferrite patches to gpui-pre-windows 0.3.12:
 // - directx_devices.rs: prefer the low-power GPU; FERRITE_GPU=default|high-performance overrides.
 // - window.rs: the drop target stores grfKeyState, dispatches first, returns the effect the app
 //   set (None without a hint), never returns DROPEFFECT_MOVE from Drop, and exports
@@ -8,6 +8,7 @@
 // - vsync.rs, vsync_park.rs, platform.rs, events.rs: the VSync thread parks while every window is
 //   hidden or minimised or idle; showing, restoring, activating or stopping wakes it, a park lasts
 //   at most 250 ms, and the first frame after a park sleeps one interval instead of DwmFlush.
+// - platform.rs: since 0.3.12 key downs skip the window procedure; translate_accelerator wakes VSync.
 #![cfg(target_os = "windows")]
 
 mod clipboard;

@@ -5,6 +5,7 @@ use gpui_kit::{
     RenderOnce, Role, StatefulInteractiveElement, Styled, Window, div, transparent_black,
 };
 
+use crate::host_os::parse_keystroke;
 use crate::tokens;
 
 #[derive(IntoElement)]
@@ -15,7 +16,7 @@ pub struct Kbd {
 
 impl Kbd {
     pub fn new(id: impl Into<ElementId>, keys: &str) -> Option<Self> {
-        let keystroke = Keystroke::parse(keys).ok()?;
+        let keystroke = parse_keystroke(keys).ok()?;
         Some(Self {
             id: id.into(),
             keystroke,

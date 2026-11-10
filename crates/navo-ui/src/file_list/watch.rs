@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use gpui_kit::{App, Bounds, Entity, Pixels, ScrollWheelEvent, Window};
+use gpui_kit::{App, Bounds, Entity, Pixels, ScrollEvent, Window};
 use navo_core::Command;
 
 use super::{KnownWidth, ListContext, ListState, PageRowsHandler, lift, row_index, row_number};
@@ -38,7 +38,7 @@ fn shown_top(state: &ListState, len: usize, row_height: Pixels) -> u64 {
 pub(super) fn report_scroll(
     ctx: &Rc<ListContext>,
     watch: Watch,
-) -> impl Fn(&ScrollWheelEvent, &mut Window, &mut App) + 'static {
+) -> impl Fn(&ScrollEvent, &mut Window, &mut App) + 'static {
     let ctx = ctx.clone();
     move |_, window, cx| {
         let known = ctx.props.view.scroll;

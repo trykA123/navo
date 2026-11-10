@@ -7,6 +7,7 @@ use navo_fs::{Attributes, EntryKind, FakeFs, FsEntry};
 
 use super::{NavoWindow, open_options, options_for, press, two_panes};
 use crate::commands::{Keymap, for_action};
+use crate::host_os::HOST_OS;
 use crate::settings::{Change, Field, Values};
 use crate::window_view::{
     EditorHooks, KeymapHooks, KeymapNews, KeymapSender, OpenHooks, SettingsHooks, StartOptions,
@@ -155,7 +156,7 @@ impl Rig {
                     let keys: Vec<String> = binding
                         .keystrokes()
                         .iter()
-                        .map(|key| key.inner().unparse())
+                        .map(|key| key.inner().unparse(HOST_OS))
                         .collect();
                     keys.join(" ")
                 })

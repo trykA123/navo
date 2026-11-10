@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, Entity, Modifiers, ScrollDelta, ScrollWheelEvent, TestAppContext, point, px,
+    AnyWindowHandle, Entity, Modifiers, ScrollDelta, ScrollEvent, TestAppContext, point, px,
 };
 use gpui_kit::{AppContext as _, InputEvent as _};
 use navo_core::Location;
@@ -419,7 +419,7 @@ fn ctrl_wheel_zooms_and_a_plain_wheel_scrolls(cx: &mut TestAppContext) {
     keys(cx, &rig, &["ctrl-1"]);
     cx.update_window(rig.0, |_, window, cx| {
         let centre = window.find("pdf-stage").bounds().center();
-        let wheel = ScrollWheelEvent {
+        let wheel = ScrollEvent {
             position: centre,
             delta: ScrollDelta::Lines(point(0., 1.)),
             modifiers: Modifiers::control(),

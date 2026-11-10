@@ -1,10 +1,11 @@
-use gpui_kit::{Keystroke, SharedString};
+use gpui_kit::SharedString;
 use navo_l10n::tr;
 
 use super::combo::Combo;
 use super::groups::{ORDER, place_of};
 use super::runs::folded;
 use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap};
+use crate::host_os::parse_keystroke;
 
 const CONTEXTS: [&str; 3] = [GLOBAL, "NavoPane", "FileList"];
 
@@ -81,7 +82,7 @@ pub fn key_cap(key: &str) -> String {
 fn caps_on(bind: &Bind, combo: Combo) -> Vec<SharedString> {
     bind.keys
         .iter()
-        .filter_map(|key| Keystroke::parse(key).ok())
+        .filter_map(|key| parse_keystroke(key).ok())
         .filter(|stroke| combo.matches(&stroke.modifiers))
         .map(|stroke| key_cap(&stroke.key).into())
         .collect()

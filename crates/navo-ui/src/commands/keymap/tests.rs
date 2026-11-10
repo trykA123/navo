@@ -344,6 +344,8 @@ fn visible_compare_binds_build_gpui_key_bindings(cx: &mut gpui_kit::TestAppConte
 mod lookups {
     use gpui_kit::Keystroke;
 
+    use crate::host_os::parse_keystroke;
+
     use super::{Keymap, one};
 
     fn keymap() -> Keymap {
@@ -354,7 +356,7 @@ mod lookups {
     }
 
     fn stroke(text: &str) -> Keystroke {
-        Keystroke::parse(text).expect("stroke")
+        parse_keystroke(text).expect("stroke")
     }
 
     #[test]

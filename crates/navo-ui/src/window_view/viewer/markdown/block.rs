@@ -41,7 +41,7 @@ pub(super) fn text_element(page: &Page, id: (&'static str, usize), shown: Runs) 
             let Some(link) = ids.get(at).copied() else {
                 return;
             };
-            let opens = window.modifiers().secondary();
+            let opens = window.modifiers().secondary(cx);
             let _ = view.update(cx, |view, cx| view.click_link(link, opens, cx));
         })
         .into_any_element()

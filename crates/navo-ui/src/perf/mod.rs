@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-use gpui_kit::{DispatchPhase, ScrollWheelEvent, canvas, deferred};
+use gpui_kit::{DispatchPhase, ScrollEvent, canvas, deferred};
 pub use navo_diag::perf::{
     GpuFacts, Latency, MonitorFacts, ProcessSample, RECORD_FOR, Recording, SystemFacts, UiFlag,
     UiState,
@@ -157,7 +157,7 @@ pub(crate) fn frame_end(start: FrameStart) -> impl IntoElement {
     let probe = canvas(
         |_, _, _| Instant::now(),
         move |_, laid_out, window, _| {
-            window.on_mouse_event(|_: &ScrollWheelEvent, phase, _, _| {
+            window.on_mouse_event(|_: &ScrollEvent, phase, _, _| {
                 if phase == DispatchPhase::Capture {
                     note_scroll();
                 }

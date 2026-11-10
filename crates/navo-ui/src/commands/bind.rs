@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use gpui_kit::{App, DummyKeyboardMapper, KeyBinding, KeyBindingContextPredicate};
+use gpui_kit::{App, KeyBinding, KeyBindingContextPredicate};
 
 use super::{Bind, GLOBAL, Keymap, active};
 
@@ -83,8 +83,9 @@ fn bindings_of(bind: &Bind, cx: &App, expand: fn(&str) -> Vec<String>) -> Vec<Ke
         .flat_map(|key| expand(key))
         .filter_map(|key| {
             let action = action.boxed_clone();
-            let mapper = &DummyKeyboardMapper;
-            KeyBinding::load(&key, action, predicate.clone(), false, None, mapper).ok()
+            // GPUI 0.3.12 takes the platform mapper; with key equivalents off it keeps the binding
+            // as written on every layout (vendored gpui-pre-windows keyboard.rs patch).
+            KeyBinding::load(&key, action, predicate.clone(), false, None, cx).ok()
         })
         .collect()
 }

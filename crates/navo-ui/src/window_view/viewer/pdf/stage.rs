@@ -1,7 +1,7 @@
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, ScrollDelta,
-    ScrollWheelEvent, Size, Stateful, StyledImage, canvas, img, point,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, ScrollDelta, ScrollEvent,
+    Size, Stateful, StyledImage, canvas, img, point,
 };
 use navo_pdf::protocol::CharBox;
 
@@ -160,7 +160,7 @@ impl PdfView {
         camera.keep_anchor(&doc.pages, anchor);
     }
 
-    fn wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
+    fn wheel(&mut self, event: &ScrollEvent, cx: &mut Context<Self>) {
         let (delta, notches) = match event.delta {
             ScrollDelta::Lines(lines) => {
                 (point(lines.x * WHEEL_LINE, lines.y * WHEEL_LINE), lines.y)
@@ -220,7 +220,7 @@ impl PdfView {
             .min_w_0()
             .overflow_hidden()
             .bg(t.colors.background)
-            .on_scroll_wheel(cx.listener(|view, event: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|view, event: &ScrollEvent, _, cx| {
                 view.wheel(event, cx);
             }))
             .on_mouse_down(

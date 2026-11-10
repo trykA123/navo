@@ -6,12 +6,13 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::test::TestWindowExt as _;
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Entity, InputEvent as _, KeyDownEvent, KeyUpEvent, Keystroke,
+    AnyWindowHandle, AppContext as _, Entity, InputEvent as _, KeyDownEvent, KeyUpEvent,
     TestAppContext,
 };
 
 use super::terminal::open_terminal;
 use super::{fake, home_beside_dest, open_options, options_for, press, settle};
+use crate::host_os::parse_keystroke;
 use crate::settings::{Change, Field, Values};
 use crate::window_view::{EditorHooks, NavoWindow, SettingsHooks, TerminalHooks};
 
@@ -139,7 +140,7 @@ fn the_terminal_returns_at_once_and_starts_after_the_worker_finishes(cx: &mut Te
 fn key(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let keystroke = Keystroke::parse(key).unwrap();
+        let keystroke = parse_keystroke(key).unwrap();
         let down = KeyDownEvent {
             keystroke: keystroke.clone(),
             is_held: false,

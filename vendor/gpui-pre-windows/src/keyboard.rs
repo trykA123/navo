@@ -41,6 +41,10 @@ impl PlatformKeyboardMapper for WindowsKeyboardMapper {
         mut keystroke: Keystroke,
         use_key_equivalents: bool,
     ) -> KeybindingKeystroke {
+        // Navo: bindings stay layout independent (DummyKeyboardMapper behaviour before 0.3.12).
+        if !use_key_equivalents {
+            return KeybindingKeystroke::from_keystroke(keystroke);
+        }
         let Some((vkey, shifted_key)) = self.get_vkey_from_key(&keystroke.key, use_key_equivalents)
         else {
             return KeybindingKeystroke::from_keystroke(keystroke);
@@ -367,5 +371,26 @@ mod tests {
         assert_eq!(mapped.inner().key, "$");
         assert_eq!(mapped.key(), "4");
         assert_eq!(*mapped.modifiers(), Modifiers::control_shift());
+    }
+
+    /// Navo: without key equivalents a binding is never rewritten by the active layout.
+    #[test]
+    fn layout_independent_without_key_equivalents() {
+        let mapper = WindowsKeyboardMapper::new();
+        for (modifiers, key) in [
+            (Modifiers::shift(), "/"),
+            (Modifiers::control_shift(), "4"),
+            (Modifiers::control(), "$"),
+        ] {
+            let keystroke = Keystroke {
+                modifiers,
+                key: key.to_string(),
+                key_char: None,
+            };
+            let mapped = mapper.map_key_equivalent(keystroke.clone(), false);
+            assert_eq!(*mapped.inner(), keystroke, "matching must use the binding as written");
+            assert_eq!(mapped.key(), key, "the shown key must be the key as written");
+            assert_eq!(*mapped.modifiers(), modifiers, "shown modifiers must not change");
+        }
     }
 }

@@ -6,6 +6,7 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Window, div,
 };
 
+use crate::host_os::parse_keystroke;
 use crate::tokens;
 
 pub struct Tooltip {
@@ -22,7 +23,7 @@ impl Tooltip {
     }
 
     pub fn keys(mut self, keys: &str) -> Self {
-        self.keystroke = Keystroke::parse(keys).ok();
+        self.keystroke = parse_keystroke(keys).ok();
         self
     }
 
