@@ -1,3 +1,5 @@
+//! Exercise font viewer metadata, hostile tables and private preview registration.
+
 use std::borrow::Cow;
 use std::io::Write as _;
 use std::sync::atomic::AtomicBool;
@@ -6,7 +8,8 @@ use std::time::{Duration, Instant};
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use gpui_kit::TestAppContext;
-use ttf_parser::Face;
+use skrifa::FontRef;
+use skrifa::raw::TableProvider;
 
 use super::face::{FontFace, FontFormat, font_format};
 use super::register;
@@ -107,12 +110,20 @@ fn name_table(sfnt: &[u8]) -> Vec<u8> {
     table.data.to_vec()
 }
 
+/// Decode preview family records for the existing registration assertions.
 fn family_names(sfnt: &[u8]) -> Vec<(u16, String)> {
-    let face = Face::parse(sfnt, 0).unwrap();
-    face.names()
-        .into_iter()
-        .filter(|name| NAME_IDS.contains(&name.name_id))
-        .filter_map(|name| Some((name.name_id, name.to_string()?)))
+    let face = FontRef::from_index(sfnt, 0).unwrap();
+    let table = face.name().unwrap();
+    table
+        .name_record()
+        .iter()
+        .filter(|record| NAME_IDS.contains(&record.name_id().to_u16()))
+        .filter_map(|record| {
+            Some((
+                record.name_id().to_u16(),
+                record.string(table.string_data()).ok()?.to_string(),
+            ))
+        })
         .collect()
 }
 

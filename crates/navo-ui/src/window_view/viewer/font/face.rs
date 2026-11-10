@@ -1,8 +1,11 @@
+//! Read font metadata and prepare privately named viewer previews.
+
 use std::borrow::Cow;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::AtomicBool;
 
-use ttf_parser::{Face, Tag, name_id};
+use skrifa::raw::{ReadError, TableProvider, tables::os2::SelectionFlags};
+use skrifa::{FontRef, Tag, string::StringId};
 
 use super::sfnt::{self, MAX_TABLES, usize_at};
 use super::{cmap, names, woff};
@@ -74,12 +77,31 @@ pub struct FontFace {
     pub(super) preview: Option<Preview>,
 }
 
-fn name(face: &Face<'_>, ids: &[u16]) -> Option<String> {
+/// Read the first face and glyph count; reject missing or truncated required metadata tables.
+fn read_face(bytes: &[u8]) -> Result<(FontRef<'_>, u16), ReadError> {
+    let face = FontRef::from_index(bytes, 0)?;
+    face.head()?;
+    face.hhea()?;
+    let glyphs = face.maxp()?.num_glyphs();
+    Ok((face, glyphs))
+}
+
+/// Read the first supported UTF-16 name for the IDs, or return none for missing or invalid names.
+fn name(face: &FontRef<'_>, ids: &[StringId]) -> Option<String> {
+    let table = face.name().ok()?;
     ids.iter().find_map(|id| {
-        face.names()
-            .into_iter()
-            .filter(|name| name.name_id == *id)
-            .find_map(|name| name.to_string())
+        table
+            .name_record()
+            .iter()
+            .filter(|record| record.name_id() == *id)
+            .find_map(|record| {
+                let unicode = record.platform_id() == 0
+                    || (record.platform_id() == 3 && matches!(record.encoding_id(), 0 | 1));
+                if !unicode {
+                    return None;
+                }
+                Some(record.string(table.string_data()).ok()?.to_string())
+            })
             .filter(|text| !text.trim().is_empty())
     })
 }
@@ -90,6 +112,7 @@ fn hash_of(bytes: &[u8]) -> u64 {
     hasher.finish()
 }
 
+/// Build a privately named preview, returning none when its font tables cannot be rewritten.
 fn preview(sfnt: &[u8], format: FontFormat) -> Option<Preview> {
     let hash = hash_of(sfnt);
     let family = format!("Navo Preview {hash:016x}");
@@ -102,7 +125,7 @@ fn preview(sfnt: &[u8], format: FontFormat) -> Option<Preview> {
     let name = tables.iter_mut().find(|table| table.tag == NAME)?;
     name.data = Cow::Owned(names::rename(&name.data, &family, &postscript)?);
     let bytes = sfnt::write(flavor, tables)?;
-    Face::parse(&bytes, 0).ok()?;
+    read_face(&bytes).ok()?;
     Some(Preview {
         family,
         bytes,
@@ -111,29 +134,44 @@ fn preview(sfnt: &[u8], format: FontFormat) -> Option<Preview> {
 }
 
 impl FontFace {
+    /// Read viewer metadata and a bounded character grid; reject damaged or unnamed fonts.
     pub fn parse(bytes: Vec<u8>, cancel: &AtomicBool) -> Result<Self, String> {
         let format = font_format(&bytes).ok_or("This is not a font Navo can show.")?;
         let sfnt = match format {
             FontFormat::Woff => woff::to_sfnt(&bytes).ok_or("This WOFF font looks damaged.")?,
             _ => bytes,
         };
-        let face =
-            Face::parse(&sfnt, 0).map_err(|error| format!("This font looks damaged: {error}"))?;
-        let family = name(&face, &[name_id::TYPOGRAPHIC_FAMILY, name_id::FAMILY])
-            .ok_or("This font has no family name.")?;
+        let (face, glyphs) =
+            read_face(&sfnt).map_err(|error| format!("This font looks damaged: {error}"))?;
+        let os2 = face.os2().ok();
+        let family = name(
+            &face,
+            &[StringId::TYPOGRAPHIC_FAMILY_NAME, StringId::FAMILY_NAME],
+        )
+        .ok_or("This font has no family name.")?;
         Ok(Self {
             family,
-            style: name(&face, &[name_id::TYPOGRAPHIC_SUBFAMILY, name_id::SUBFAMILY])
-                .unwrap_or_else(|| "Regular".to_owned()),
-            version: name(&face, &[name_id::VERSION]),
+            style: name(
+                &face,
+                &[
+                    StringId::TYPOGRAPHIC_SUBFAMILY_NAME,
+                    StringId::SUBFAMILY_NAME,
+                ],
+            )
+            .unwrap_or_else(|| "Regular".to_owned()),
+            version: name(&face, &[StringId::VERSION_STRING]),
             format,
-            glyphs: face.number_of_glyphs(),
-            weight: face.weight().to_number(),
-            is_italic: face.is_italic(),
+            glyphs,
+            weight: os2.as_ref().map_or(400, |table| table.us_weight_class()),
+            is_italic: os2
+                .as_ref()
+                .is_some_and(|table| table.fs_selection().contains(SelectionFlags::ITALIC))
+                || face
+                    .post()
+                    .is_ok_and(|table| table.italic_angle().to_f64() != 0.0),
             chars: face
-                .raw_face()
-                .table(Tag::from_bytes(b"cmap"))
-                .map(|table| cmap::grid_chars(table, cancel))
+                .table_data(Tag::new(b"cmap"))
+                .map(|table| cmap::grid_chars(table.as_bytes(), cancel))
                 .unwrap_or_default(),
             preview: preview(&sfnt, format),
         })
