@@ -3,8 +3,13 @@
 use std::{path::PathBuf, rc::Rc, time::Duration};
 
 use crate::primitives::access_key;
+use crate::tokens;
 use crate::{AnyElement, App, IntoElement, ParentElement, Window, div};
+use gpui_kit::RenderOnce;
 
+mod pages_a;
+#[cfg(test)]
+mod pages_a_tests;
 mod strings;
 #[cfg(test)]
 mod tests;
@@ -133,22 +138,38 @@ pub fn access_keys(view: &SetupView, strings: &Strings) -> Vec<(char, SetupActio
     keys
 }
 
-/// Renders only the page name until the ordered page atoms supply their implementations.
-pub fn render_page(view: &SetupView, _strings: &Strings, _on_action: OnAction) -> AnyElement {
-    let name = match view.page {
-        SetupPage::Welcome => "Welcome",
-        SetupPage::Licence => "Licence",
-        SetupPage::Folder => "Folder",
-        SetupPage::Shortcuts => "Shortcuts",
-        SetupPage::Installing => "Installing",
-        SetupPage::Finish => "Finish",
-        SetupPage::Failed => "Failed",
-        SetupPage::Blocked => "Blocked",
-        SetupPage::Same => "Same",
-        SetupPage::Newer => "Newer",
-        SetupPage::Ambiguous => "Ambiguous",
-        SetupPage::Elevated => "Elevated",
-        SetupPage::NoPayload => "NoPayload",
-    };
-    div().child(name).into_any_element()
+/// Renders the current page; pages not built yet show their name only.
+pub fn render_page(view: &SetupView, strings: &Strings, on_action: OnAction) -> AnyElement {
+    Page {
+        view: view.clone(),
+        strings: strings.clone(),
+        on_action,
+    }
+    .into_any_element()
+}
+
+/// One page, built on the current theme when it renders.
+#[derive(IntoElement)]
+struct Page {
+    view: SetupView,
+    strings: Strings,
+    on_action: OnAction,
+}
+
+impl RenderOnce for Page {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = tokens::current(cx);
+        let ctx = pages_a::Ctx {
+            t,
+            view: &self.view,
+            strings: &self.strings,
+            on_action: &self.on_action,
+        };
+        match self.view.page {
+            SetupPage::Welcome => pages_a::welcome(&ctx),
+            SetupPage::Licence => pages_a::licence(&ctx),
+            SetupPage::Folder => pages_a::folder(&ctx),
+            other => div().child(format!("{other:?}")).into_any_element(),
+        }
+    }
 }
