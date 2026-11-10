@@ -27,3 +27,4 @@ Owner rule (2026-11-10): every crate stays on its latest release. 39 of 105 dire
 ## Log
 
 - 2026-11-10 — Plan written from three researcher reports (compare/fs/archives, Git/UI/platform, parsers). MSRVs top out at 1.95; the toolchain is 1.99.
+- 2026-11-10 — DS split. tree-sitter 0.27.2 cannot resolve: gpui-component 0.7.3 needs tree-sitter ^0.26.13 and tree-sitter's native `links` forbids two copies. **DS-a** (quick-xml 0.42, saphyr-parser 0.3.3, sha2 0.11 to unify digest 0.11 with md-5) runs now; **DS-b** (tree-sitter 0.27.2, tree-sitter-sequel 0.3.12) runs after DU if gpui-kit 0.9.1 moves to tree-sitter 0.27, else waits for gpui-component. DA merged (00119730).
