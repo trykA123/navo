@@ -1,7 +1,10 @@
+//! Instruction-count benches for folder listing (sort, filter, load) under Callgrind.
+//! No gungraun limits are set: `cargo xtask speed-verdict` judges the summaries (see bench.yml).
+
 use std::hint::black_box;
 
 use gungraun::{
-    Callgrind, EventKind, LibraryBenchmarkConfig, library_benchmark, library_benchmark_group, main,
+    Callgrind, LibraryBenchmarkConfig, library_benchmark, library_benchmark_group, main,
 };
 use navo_core::{FsError, Location, ProviderPath};
 use navo_fs::view::{Needle, SortBy, SortKey, ViewFilter, filter_order, sort_order};
@@ -107,15 +110,15 @@ fn bench_load_folder(input: (FakeFs, Location)) -> Result<FolderSnapshot, FsErro
     black_box(load_folder(&fs, &location, &CancelToken::new()))
 }
 
+/// Callgrind with default options and no soft limits.
 fn callgrind() -> Callgrind {
-    let mut tool = Callgrind::default();
-    tool.soft_limits([(EventKind::Ir, 10.0)]);
-    tool
+    Callgrind::default()
 }
 
+/// Bench config: Callgrind plus one rayon thread, so counts do not depend on scheduling.
 fn config() -> LibraryBenchmarkConfig {
     let mut config = LibraryBenchmarkConfig::default();
-    config.tool(callgrind());
+    config.tool(callgrind()).env("RAYON_NUM_THREADS", "1");
     config
 }
 
