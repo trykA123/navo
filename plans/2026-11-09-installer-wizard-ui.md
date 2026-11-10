@@ -58,7 +58,7 @@ The view model is plain data, so `navo-ui` does not depend on `navo-setup`. `nav
 
 | Atom | Component | Role | Effort | After | Owner gate | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| W9 | prototype | designer | high | part 1 done | — | owner picks one variant | blocked |
+| W9 | prototype | designer | high | part 1 done | — | owner picks one variant | done (A, Rail) |
 | W10a | `setup-view-model` | api-builder | medium | W9 | — | `cargo nextest run -p navo-ui setup` | blocked |
 | W10b | `setup-pages` A | ui-builder | high | W10a | — | `cargo xtask check -p navo-ui` | blocked |
 | W11a | `setup-pages` B | ui-builder | high | W10b | — | `cargo xtask check -p navo-ui` | blocked |
@@ -66,7 +66,7 @@ The view model is plain data, so `navo-ui` does not depend on `navo-setup`. `nav
 | W11g | `setup-gallery` | ui-builder | medium | W10b, W11a, W11b | — | `cargo xtask check -p navo-ui-gallery`; screenshots of every page in both themes | blocked |
 | W12a | `setup-strings` | patcher | medium | W10b, W11a, W11b | — | `cargo nextest run -p navo-l10n`; `cargo xtask l10n` | blocked |
 | W12b | `setup-window` | senior | high | W11g, W12a, W13b | — | `cargo nextest run -p navo-setup window`; VM: the window opens and installs (S1b) | blocked |
-| W13a | `licence-text` (repo) | patcher | medium | — | — | `cargo metadata --no-deps --format-version 1` shows `MIT OR Apache-2.0` for every package | blocked |
+| W13a | `licence-text` (repo) | patcher | medium | — | — | `cargo metadata --no-deps --format-version 1` shows `MIT OR Apache-2.0` for every package | done |
 | W13b | `licence-text` (wizard) | patcher | medium | W13a, part 1's W3 | — | `cargo nextest run -p navo-setup licence` | blocked |
 | W14 | `release-wizard` | infra-builder | high | W12b | — | rehearsal run (`publish: false`) green, with `Navo-Setup.exe` in the artifact; `sha256sum -c` passes; `assets.txt` matches v0.3.0's asset names apart from versions | blocked |
 | W15h | snapshot control | infra-builder | medium | — | — | `winvm.sh snapshot` save, load and delete round trip (see W15h) | blocked |
