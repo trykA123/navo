@@ -1,0 +1,27 @@
+# Weekly dependency update PRs: one grouped PR for Cargo, one for GitHub Actions.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Bucharest
+    versioning-strategy: increase
+    open-pull-requests-limit: 2
+    labels: [dependencies]
+    groups:
+      all:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Bucharest
+    labels: [dependencies]
+    groups:
+      all:
+        patterns: ["*"]
