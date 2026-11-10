@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use navo_fs::DriveClass;
 
-use super::skip_probe::{SkipProbe, fresh, harness, prints, repo, scanned};
+use super::skip_probe::{SkipProbe, after_confirm, fresh, harness, prints, repo, scanned};
 use crate::git::scan::tests::{clean, location};
 
 #[test]
@@ -51,7 +51,7 @@ fn a_recheck_survives_a_newer_listing_before_its_status_finishes() {
     });
 
     h.observe("fixture", 3, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_confirm();
     fresh(&h, "fixture", "repo");
     assert!(
         h.calls.try_recv().is_err(),

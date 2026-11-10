@@ -10,6 +10,7 @@ use navo_git::status::{Fingerprint, RepoStatus};
 use navo_ui::git::FolderBadges;
 
 use super::cache::{Cache, Cached};
+use super::fill::{apply_updates, hidden, publish_fresh};
 use super::listing::{self, Discovered};
 use super::queue::{Forced, Listing, Request, Shared};
 use super::retry;
@@ -180,7 +181,7 @@ impl Plan {
         mut decision: Decision,
     ) -> Option<u64> {
         let listing = &found.listing;
-        let revision = {
+        let (current, revision) = {
             let mut shared = shared.lock().unwrap_or_else(PoisonError::into_inner);
             shared.hold_forced(listing, std::mem::take(&mut decision.forced));
             if decision.keep {
@@ -198,17 +199,24 @@ impl Plan {
                 FolderBadges::default()
             };
             badges.slow_drive = found.slow;
-            for (root, cached) in &mut decision.updates {
-                cached.stale = true;
-                fill(&mut badges, found, root, cached);
-            }
-            let revision = shared.publish(listing, badges);
-            if revision.is_some() {
+            apply_updates(&mut badges, found, &mut decision.updates, &decision.confirm);
+            let current = shared.is_current(listing);
+            let shown = shared
+                .active
+                .get(&listing.folder)
+                .and_then(|entry| entry.badges.as_deref());
+            let unchanged = shown == Some(&badges);
+            let revision = if unchanged {
+                None
+            } else {
+                shared.publish(listing, badges)
+            };
+            if current {
                 shared.push_all(listing, &decision.scan);
             }
-            revision
+            (current, revision)
         };
-        if revision.is_some() {
+        if current {
             for root in decision.confirm {
                 self.deadlines.insert(
                     decision.at + CONFIRM_WAIT,
@@ -390,55 +398,6 @@ impl Plan {
             }
         }
         shared.publish(&listing, badges)
-    }
-}
-
-fn publish_fresh(
-    shared: &Mutex<Shared>,
-    found: &Discovered,
-    root: &Path,
-    cached: &Cached,
-) -> Option<u64> {
-    let mut shared = shared.lock().unwrap_or_else(PoisonError::into_inner);
-    if !shared.is_current(&found.listing) {
-        return None;
-    }
-    let mut badges = shared
-        .active
-        .get(&found.listing.folder)
-        .and_then(|entry| entry.badges.as_deref())
-        .cloned()
-        .unwrap_or_default();
-    fill(&mut badges, found, root, cached);
-    shared.publish(&found.listing, badges)
-}
-
-/// A cached projection of a scanned root, hidden while it is scanned.
-fn hidden(cache: &mut Cache, shows: bool, root: &Path) -> Option<(PathBuf, Cached)> {
-    if shows {
-        return None;
-    }
-    stale(cache, root)
-}
-
-/// A cached projection of a root, marked stale.
-fn stale(cache: &mut Cache, root: &Path) -> Option<(PathBuf, Cached)> {
-    let mut cached = cache.get(root)?;
-    cached.stale = true;
-    Some((root.to_path_buf(), cached))
-}
-
-pub(super) fn fill(badges: &mut FolderBadges, found: &Discovered, root: &Path, cached: &Cached) {
-    if found.parent.as_deref() == Some(root) {
-        badges.repository = Some(cached.repo());
-    }
-    for binding in found.bindings.iter().filter(|binding| binding.root == root) {
-        if let Some(badge) = cached.row(&binding.relative) {
-            if !badge.is_root {
-                badges.roots.insert(binding.name.clone(), cached.repo());
-            }
-            badges.by_name.insert(binding.name.clone(), badge);
-        }
     }
 }
 

@@ -7,7 +7,7 @@ use navo_ui::git::{BadgeKind, BadgeReason};
 
 use super::super::ScanError;
 use super::super::tests::{clean, location, status_with};
-use skip_probe::{SkipProbe, fresh, harness, prints, repo, scanned};
+use skip_probe::{SkipProbe, after_confirm, after_plan, fresh, harness, prints, repo, scanned};
 
 #[path = "skip_expiry.rs"]
 mod expiry;
@@ -15,28 +15,29 @@ mod expiry;
 mod leave;
 #[path = "skip_probe.rs"]
 pub(crate) mod skip_probe;
+#[path = "skip_steady.rs"]
+mod steady;
 #[path = "skip_upstream.rs"]
 mod upstream;
 
 #[test]
-fn an_unchanged_reopen_is_shown_stale_then_fresh_without_a_status_call() {
+fn an_unchanged_reopen_stays_fresh_without_a_status_call_or_a_publish() {
     let (print, _) = prints();
     let probe = Arc::new(SkipProbe::new(DriveClass::Ssd, &["fixture/repo"]));
     probe.set_print(Some(print));
     let h = harness(probe.clone(), false);
     scanned(&h, "fixture", "repo");
     h.reply(Ok(clean()));
-    fresh(&h, "fixture", "repo");
+    let first = fresh(&h, "fixture", "repo");
 
     h.observe("fixture", 2, &["repo"]);
-    let stale = h.wait("fixture", |badges| badges.by_name["repo"].stale);
-    assert_eq!(stale.by_name["repo"].kind, BadgeKind::Clean);
     let shown = fresh(&h, "fixture", "repo");
-    assert!(shown.revision >= 2);
+    assert_eq!(shown.by_name["repo"].kind, BadgeKind::Clean);
     assert!(
         h.calls.try_recv().is_err(),
         "an unchanged reopen must not call"
     );
+    assert!(shown.revision >= first.revision);
     assert!(h.scan.stop());
 }
 
@@ -51,7 +52,7 @@ fn a_change_before_the_confirm_deadline_calls() {
     fresh(&h, "fixture", "repo");
 
     h.observe("fixture", 2, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_plan();
     probe.bump(&repo());
     assert_eq!(h.next().0, repo(), "a change inside the window scans");
     h.reply(Ok(clean()));
@@ -106,7 +107,6 @@ fn a_fingerprint_change_calls() {
 
     probe.set_print(Some(changed));
     h.observe("fixture", 2, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
     assert_eq!(h.next().0, repo(), "the .git fingerprint changed");
     h.reply(Ok(clean()));
     assert!(h.scan.stop());
@@ -142,7 +142,7 @@ fn a_proof_under_five_minutes_reuses() {
 
     probe.advance(Duration::from_secs(290));
     h.observe("fixture", 2, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_confirm();
     fresh(&h, "fixture", "repo");
     assert!(
         h.calls.try_recv().is_err(),
@@ -187,7 +187,7 @@ fn a_rescan_calls_and_a_changed_rescan_reuses() {
     });
 
     h.scan.rescan_changed(&location("fixture"));
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_confirm();
     fresh(&h, "fixture", "repo");
     assert!(
         h.calls.try_recv().is_err(),
@@ -257,7 +257,7 @@ fn subfolder_rows_reuse_states_from_the_kept_status() {
     assert_eq!(first.by_name["deep"].kind, BadgeKind::Modified);
 
     h.observe("fixture/repo/src", 2, &["deep"]);
-    h.wait("fixture/repo/src", |badges| badges.by_name["deep"].stale);
+    after_confirm();
     let shown = fresh(&h, "fixture/repo/src", "deep");
     assert_eq!(shown.by_name["deep"].kind, BadgeKind::Modified);
     assert!(h.calls.try_recv().is_err());
@@ -330,9 +330,7 @@ fn a_truncated_listing_calls_every_root() {
     h.wait("fixture", all_fresh);
 
     h.observe("fixture", 2, &listed);
-    h.wait("fixture", |badges| {
-        badges.by_name.len() == 64 && badges.by_name.values().all(|badge| badge.stale)
-    });
+    after_confirm();
     h.wait("fixture", all_fresh);
     assert!(
         h.calls.try_recv().is_err(),
@@ -366,7 +364,7 @@ fn a_forget_before_the_confirm_drops_it() {
     fresh(&h, "fixture", "repo");
 
     h.observe("fixture", 2, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_plan();
     h.scan.forget(&location("fixture"));
     h.wait_parked();
     assert!(
@@ -388,7 +386,7 @@ fn a_newer_observe_before_the_confirm_drops_it() {
     fresh(&h, "fixture", "repo");
 
     h.observe("fixture", 2, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_plan();
     probe.bump(&repo());
     h.observe("fixture", 3, &["repo"]);
     assert_eq!(h.next().0, repo());

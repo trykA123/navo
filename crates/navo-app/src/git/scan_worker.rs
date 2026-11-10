@@ -12,8 +12,9 @@ use navo_fs::DriveClass;
 use navo_git::status::RepoStatus;
 
 use super::cache::Cache;
+use super::fill::fill;
 use super::listing::{self, Discovered};
-use super::plan::{Check, Input, Plan, Timer, fill};
+use super::plan::{Check, Input, Plan, Timer};
 use super::queue::{Listing, Request, Shared};
 use super::retry;
 use super::skip::MAX_PROOF_AGE;

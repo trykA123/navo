@@ -1,5 +1,7 @@
 #[path = "scan_cache.rs"]
 mod cache;
+#[path = "scan_fill.rs"]
+mod fill;
 #[path = "scan_listing.rs"]
 mod listing;
 #[path = "scan_plan.rs"]
