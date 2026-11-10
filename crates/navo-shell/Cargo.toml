@@ -6,6 +6,11 @@ rust-version.workspace = true
 publish.workspace = true
 license.workspace = true
 
+# `windows_core` is reached only through the `implement` attribute in the
+# Windows-only clipboard test; that macro expands to `::windows_core::...`.
+[package.metadata.cargo-shear]
+ignored = ["windows-core"]
+
 [dependencies]
 navo-core = { path = "../navo-core" }
 thiserror = "2.0.21"

@@ -6406,7 +6406,6 @@ dependencies = [
  "navo-core",
  "navo-diag",
  "navo-l10n",
- "navo-store",
  "navo-ui",
  "navo-update",
  "proptest",
