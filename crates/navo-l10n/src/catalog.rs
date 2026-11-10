@@ -81,6 +81,7 @@ impl Catalog {
 
     #[must_use]
     pub fn build_on(sources: &[(&str, &str)], platform: Platform) -> (Self, Vec<CatalogError>) {
+        let _zone = tracing::debug_span!("l10n.catalog").entered();
         let language: LanguageIdentifier = LOCALE.parse().unwrap_or_default();
         let mut bundle = FluentBundle::new_concurrent(vec![language]);
         bundle.set_use_isolating(false);
