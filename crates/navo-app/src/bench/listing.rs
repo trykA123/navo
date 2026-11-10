@@ -1,8 +1,11 @@
+//! Measure Browser operations and provider batch timings for bench reports.
+
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use navo_core::{AppState, Location};
-use navo_fs::{LocalFs, ProviderOps};
+use navo_fs::{CancelToken, EntryBatch, LocalFs, Provider, ProviderOps};
 use navo_ui::browser::Browser;
 use navo_ui::file_list::SortBy;
 
@@ -31,6 +34,7 @@ fn timed(action: impl FnOnce()) -> f64 {
     report::ms(started.elapsed())
 }
 
+/// Measure folder operations in milliseconds, failing if either listing pass fails.
 pub(super) fn run(folder: &Location, label: &str, filter: &str) -> Result<Listing, String> {
     let provider: Arc<dyn ProviderOps> = Arc::new(LocalFs::new());
     let mut browser = Browser::new(AppState::new(folder.clone()), provider, Arc::new(|| {}));
@@ -66,13 +70,33 @@ pub(super) fn run(folder: &Location, label: &str, filter: &str) -> Result<Listin
         .collect();
     let filter_matches = shown(&browser).unwrap_or_default();
     browser.filter_clear();
+    let (first_batch_ms, provider_ms) = provider_times(folder, label)?;
     Ok(Listing {
         folder: label.to_owned(),
         entries,
         list_ms,
+        first_batch_ms,
+        provider_ms,
         sort_ms,
         filter: filter.to_owned(),
         filter_keystroke_ms,
         filter_matches,
     })
+}
+
+/// Measure first non-empty batch and total milliseconds, or return the provider error.
+fn provider_times(folder: &Location, label: &str) -> Result<(f64, f64), String> {
+    let started = Instant::now();
+    let mut first_batch_ms = None;
+    let mut sink = |batch: EntryBatch| {
+        if first_batch_ms.is_none() && !batch.entries.is_empty() {
+            first_batch_ms = Some(report::ms(started.elapsed()));
+        }
+        ControlFlow::Continue(())
+    };
+    LocalFs::new()
+        .list(folder, &mut sink, &CancelToken::new())
+        .map_err(|error| format!("provider listing {label}: {error:?}"))?;
+    let provider_ms = report::ms(started.elapsed());
+    Ok((first_batch_ms.unwrap_or_default(), provider_ms))
 }

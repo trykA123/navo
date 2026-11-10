@@ -1,3 +1,5 @@
+//! Run read-only folder benchmarks and write numeric JSON summaries.
+
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,6 +23,8 @@ pub(crate) struct Options {
 #[derive(Debug, Serialize)]
 struct Run {
     list_ms: f64,
+    first_batch_ms: f64,
+    provider_ms: f64,
     sort_ms: Vec<(String, f64)>,
     filter_keystroke_ms: Vec<f64>,
 }
@@ -120,9 +124,12 @@ fn measure(options: &Options) -> Result<Summary, String> {
     })
 }
 
+/// Keep the numeric timings from a listing for the folder JSON report.
 fn run_of(listing: Listing) -> Run {
     Run {
         list_ms: listing.list_ms,
+        first_batch_ms: listing.first_batch_ms,
+        provider_ms: listing.provider_ms,
         sort_ms: listing.sort_ms,
         filter_keystroke_ms: listing.filter_keystroke_ms,
     }
@@ -176,6 +183,16 @@ mod tests {
         assert_eq!(json["bytes"], 8);
         assert_eq!(json["filter_chars"], 12);
         assert_eq!(json["runs"].as_array().unwrap().len(), RUNS);
+        for run in json["runs"].as_array().unwrap() {
+            let first_batch_ms = run["first_batch_ms"].as_f64().unwrap_or_default();
+            let provider_ms = run["provider_ms"].as_f64().unwrap_or_default();
+            assert!(first_batch_ms > 0.0, "first_batch_ms must be positive");
+            assert!(provider_ms > 0.0, "provider_ms must be positive");
+            assert!(
+                first_batch_ms <= provider_ms,
+                "the first batch must arrive before the provider finishes"
+            );
+        }
         assert_eq!(fs::read_dir(&folder).unwrap().count(), 2);
     }
 
