@@ -145,26 +145,41 @@ pub(super) fn target_inside(root: &Path, link_bytes: &[u8]) -> bool {
     target.is_ok_and(|target| inside(&long_form(root), &long_form(&target)))
 }
 
-/// The path with 8.3 short parts expanded to long names, or the path unchanged when it does not
-/// exist or the expansion fails.
+/// The path with 8.3 short parts expanded to long names. A missing tail (a link target not yet
+/// installed) is kept as written below its longest existing ancestor; the path stays unchanged
+/// when no ancestor expands.
 fn long_form(path: &Path) -> PathBuf {
+    let mut existing = path;
+    let mut tail = Vec::new();
+    loop {
+        if let Some(mut long) = long_existing(existing) {
+            long.extend(tail.iter().rev());
+            return long;
+        }
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                tail.push(name);
+                existing = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// The long-name form of an existing path; `None` when it does not exist or expansion fails.
+fn long_existing(path: &Path) -> Option<PathBuf> {
     let wide = wide_z(path);
     // SAFETY: `wide` is NUL-terminated; a null output with zero length asks for the needed size.
     let needed = unsafe { GetLongPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) };
-    let Ok(size) = usize::try_from(needed) else {
-        return path.to_path_buf();
-    };
-    if size == 0 {
-        return path.to_path_buf();
-    }
+    let size = usize::try_from(needed).ok().filter(|&size| size > 0)?;
     let mut buffer = vec![0u16; size];
     // SAFETY: `buffer` has `needed` writable units and `wide` stays NUL-terminated.
     let length = unsafe { GetLongPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), needed) };
     match usize::try_from(length) {
         Ok(length) if length > 0 && length < size => {
-            PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length]))
+            Some(PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length])))
         }
-        _ => path.to_path_buf(),
+        _ => None,
     }
 }
 
