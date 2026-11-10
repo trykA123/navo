@@ -1,3 +1,5 @@
+//! Checks ELF allocation totals, symbol mapping, and copied data.
+
 mod elf_build;
 
 use elf_build::{Named, Part, build, firmware, func, named, parse, read, rh850, text};
@@ -8,11 +10,12 @@ fn an_rwx_flash_segment_does_not_count_as_ram() {
     let mut spec = firmware(false, false);
     spec.parts.push(Part {
         name: ".init_array",
-        flags: u64::from(raw::SHF_ALLOC | raw::SHF_WRITE),
+        flags: raw::SHF_ALLOC.0 | raw::SHF_WRITE.0,
         ..text(0x0800_0400 + 0x40, 0x10)
     });
-    spec.loads[0].1 = raw::PF_R | raw::PF_W | raw::PF_X;
-    spec.loads.push((3, raw::PF_R | raw::PF_W | raw::PF_X));
+    spec.loads[0].1 = raw::PF_R.0 | raw::PF_W.0 | raw::PF_X.0;
+    spec.loads
+        .push((3, raw::PF_R.0 | raw::PF_W.0 | raw::PF_X.0));
     let elf = parse(&build(&spec));
     assert_eq!(elf.totals.load, 0x400 + 0x40 + 0x10);
     assert_eq!(elf.totals.ram, 0x40 + 0x200);
@@ -24,8 +27,8 @@ fn arm_mapping_symbols_are_left_out() {
     let symbols = spec.symbols.as_mut().unwrap();
     for name in ["$t", "$d", "$a.12", "$x"] {
         symbols.push(Named {
-            kind: raw::STT_NOTYPE,
-            bind: raw::STB_LOCAL,
+            kind: raw::STT_NOTYPE.0,
+            bind: raw::STB_LOCAL.0,
             ..func(name, 0x0800_0100, 0, 0)
         });
     }

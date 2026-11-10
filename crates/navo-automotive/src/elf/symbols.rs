@@ -1,3 +1,5 @@
+//! Reads bounded ELF symbols into the automotive viewer model.
+
 use std::ops::Range;
 use std::sync::atomic::Ordering;
 
@@ -57,35 +59,38 @@ impl Names {
     }
 }
 
-fn kind_of(kind: u8) -> SymbolKind {
+/// Converts an ELF symbol type to the viewer enum, preserving unknown values.
+fn kind_of(kind: elf::SymbolType) -> SymbolKind {
     match kind {
         elf::STT_NOTYPE => SymbolKind::None,
         elf::STT_OBJECT => SymbolKind::Object,
         elf::STT_FUNC => SymbolKind::Func,
         elf::STT_COMMON => SymbolKind::Common,
         elf::STT_TLS => SymbolKind::Tls,
-        other => SymbolKind::Other(other),
+        other => SymbolKind::Other(other.0),
     }
 }
 
-fn bind_of(bind: u8) -> Bind {
+/// Converts an ELF binding to the viewer enum, preserving unknown values.
+fn bind_of(bind: elf::SymbolBind) -> Bind {
     match bind {
         elf::STB_LOCAL => Bind::Local,
         elf::STB_GLOBAL => Bind::Global,
         elf::STB_WEAK => Bind::Weak,
-        other => Bind::Other(other),
+        other => Bind::Other(other.0),
     }
 }
 
-fn place_of(index: u16, sections: usize) -> Place {
+/// Resolves a symbol section index against the section count, preserving special values.
+fn place_of(index: elf::SymbolSection, sections: usize) -> Place {
     match index {
         elf::SHN_UNDEF => Place::Undefined,
         elf::SHN_ABS => Place::Absolute,
         elf::SHN_COMMON => Place::Common,
-        index if usize::from(index) < sections && index < elf::SHN_LORESERVE => {
-            Place::Section(u32::from(index))
+        index if usize::from(index.0) < sections && index.0 < elf::SHN_LORESERVE => {
+            Place::Section(u32::from(index.0))
         }
-        other => Place::Other(other),
+        other => Place::Other(other.0),
     }
 }
 
@@ -186,6 +191,7 @@ fn symbol_of<Y: Sym<Endian = Endianness>>(
     })
 }
 
+/// Reads bounded symbols and names, returning file marks; cancellation fails.
 pub(super) fn read_symbols<S, R>(
     table: &SymbolTable<'_, S, R>,
     watch: &mut Watch<'_>,
@@ -215,7 +221,7 @@ where
         strings,
         endian: table.endian,
         sections: table.sections.len(),
-        has_mapping: matches!(table.machine, elf::EM_ARM | elf::EM_AARCH64),
+        has_mapping: matches!(elf::Machine(table.machine), elf::EM_ARM | elf::EM_AARCH64),
     };
     for (at, sym) in raw.iter().enumerate().skip(1).take(MAX_SYMBOLS) {
         if at % CHECK_EVERY == 0 {

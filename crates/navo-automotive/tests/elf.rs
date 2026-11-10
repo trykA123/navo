@@ -1,3 +1,5 @@
+//! Checks automotive ELF parsing, metadata, and malformed input.
+
 mod elf_build;
 
 use elf_build::{EM_V800, build, firmware, line_program, named, parse, read};
@@ -169,7 +171,7 @@ fn a_symbol_table_with_a_bogus_size_is_a_problem() {
     let symtab = elf
         .sections
         .iter()
-        .position(|section| section.kind == raw::SHT_SYMTAB)
+        .position(|section| section.kind == raw::SHT_SYMTAB.0)
         .unwrap();
     let shoff = u32::from_le_bytes(bytes[0x20..0x24].try_into().unwrap()) as usize;
     let size_at = shoff + symtab * 40 + 20;

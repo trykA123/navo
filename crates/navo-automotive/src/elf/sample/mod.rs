@@ -1,15 +1,16 @@
+//! Builds sample firmware specifications and DWARF line programs for automotive fixtures.
+
 use gimli::write::{
     Address, AttributeValue, DwarfUnit, EndianVec, LineProgram, LineString, Sections,
 };
 use gimli::{Encoding, Format, LineEncoding, RunTimeEndian};
-use object::Endianness;
 use object::elf;
-use object::write::StringId;
-use object::write::elf::{FileHeader, ProgramHeader, SectionHeader, SectionIndex, Sym, Writer};
 
 mod demo;
+mod writer;
 
 pub use demo::demo;
+pub use writer::build;
 
 pub const EM_V800: u16 = 36;
 
@@ -47,11 +48,12 @@ pub struct Spec {
     pub debug: Vec<(&'static str, Vec<u8>)>,
 }
 
+/// Creates an executable section with a byte address and byte length.
 pub fn text(address: u64, len: usize) -> Part {
     Part {
         name: ".text",
-        kind: elf::SHT_PROGBITS,
-        flags: u64::from(elf::SHF_ALLOC | elf::SHF_EXECINSTR),
+        kind: elf::SHT_PROGBITS.0,
+        flags: elf::SHF_ALLOC.0 | elf::SHF_EXECINSTR.0,
         address,
         load_address: address,
         data: vec![0x90; len],
@@ -59,11 +61,12 @@ pub fn text(address: u64, len: usize) -> Part {
     }
 }
 
+/// Creates a writable section with a byte address and byte length.
 pub fn data(address: u64, len: usize) -> Part {
     Part {
         name: ".data",
-        kind: elf::SHT_PROGBITS,
-        flags: u64::from(elf::SHF_ALLOC | elf::SHF_WRITE),
+        kind: elf::SHT_PROGBITS.0,
+        flags: elf::SHF_ALLOC.0 | elf::SHF_WRITE.0,
         address,
         load_address: address,
         data: vec![0x11; len],
@@ -71,11 +74,12 @@ pub fn data(address: u64, len: usize) -> Part {
     }
 }
 
+/// Creates an uninitialized writable section with a byte address and byte size.
 pub fn bss(address: u64, size: u64) -> Part {
     Part {
         name: ".bss",
-        kind: elf::SHT_NOBITS,
-        flags: u64::from(elf::SHF_ALLOC | elf::SHF_WRITE),
+        kind: elf::SHT_NOBITS.0,
+        flags: elf::SHF_ALLOC.0 | elf::SHF_WRITE.0,
         address,
         load_address: address,
         data: Vec::new(),
@@ -83,39 +87,43 @@ pub fn bss(address: u64, size: u64) -> Part {
     }
 }
 
+/// Creates a global function symbol with a byte address, byte size, and section index.
 pub fn func(name: &str, value: u64, size: u64, part: usize) -> Named {
     Named {
         name: name.to_owned(),
         value,
         size,
-        kind: elf::STT_FUNC,
-        bind: elf::STB_GLOBAL,
+        kind: elf::STT_FUNC.0,
+        bind: elf::STB_GLOBAL.0,
         part: Some(part),
         is_absolute: false,
     }
 }
 
+/// Creates a global data symbol with a byte address, byte size, and section index.
 pub fn object(name: &str, value: u64, size: u64, part: usize) -> Named {
     Named {
-        kind: elf::STT_OBJECT,
+        kind: elf::STT_OBJECT.0,
         ..func(name, value, size, part)
     }
 }
 
+/// Creates an absolute symbol with a name and byte value.
 pub fn absolute(name: &str, value: u64) -> Named {
     Named {
-        kind: elf::STT_NOTYPE,
+        kind: elf::STT_NOTYPE.0,
         part: None,
         is_absolute: true,
         ..func(name, value, 0, 0)
     }
 }
 
+/// Creates sample firmware for the requested ELF class and endianness.
 pub fn firmware(is_64: bool, is_big: bool) -> Spec {
     Spec {
         is_64,
         is_big,
-        machine: elf::EM_ARM,
+        machine: elf::EM_ARM.0,
         entry: 0x0800_0101,
         parts: vec![
             text(0x0800_0000, 0x400),
@@ -132,20 +140,20 @@ pub fn firmware(is_64: bool, is_big: bool) -> Spec {
             object("counter", 0x2000_0000, 4, 1),
             object("rx_buffer", 0x2000_0040, 0x100, 2),
             Named {
-                bind: elf::STB_LOCAL,
+                bind: elf::STB_LOCAL.0,
                 ..object("state", 0x2000_0004, 1, 1)
             },
             Named {
-                kind: elf::STT_FILE,
-                bind: elf::STB_LOCAL,
+                kind: elf::STT_FILE.0,
+                bind: elf::STB_LOCAL.0,
                 part: None,
                 ..func("main.c", 0, 0, 0)
             },
         ]),
         loads: vec![
-            (0, elf::PF_R | elf::PF_X),
-            (1, elf::PF_R | elf::PF_W),
-            (2, elf::PF_R | elf::PF_W),
+            (0, elf::PF_R.0 | elf::PF_X.0),
+            (1, elf::PF_R.0 | elf::PF_W.0),
+            (2, elf::PF_R.0 | elf::PF_W.0),
         ],
         debug: Vec::new(),
     }
@@ -214,204 +222,4 @@ pub fn line_program_in(
         })
         .map_err(|error| error.to_string())?;
     Ok(out)
-}
-
-struct Reserved {
-    parts: Vec<(StringId, SectionIndex)>,
-    debug: Vec<(StringId, SectionIndex)>,
-    names: Vec<StringId>,
-    offsets: Vec<usize>,
-    debug_offsets: Vec<usize>,
-}
-
-fn reserve_symbols<'a>(
-    writer: &mut Writer<'a>,
-    spec: &'a Spec,
-    parts: &[(StringId, SectionIndex)],
-) -> Vec<StringId> {
-    let mut names = Vec::new();
-    if let Some(symbols) = &spec.symbols {
-        writer.reserve_null_symbol_index();
-        for symbol in symbols {
-            let section = symbol.part.and_then(|at| parts.get(at)).map(|part| part.1);
-            names.push(writer.add_string(symbol.name.as_bytes()));
-            writer.reserve_symbol_index(section);
-        }
-        writer.reserve_symtab_section_index();
-        writer.reserve_strtab_section_index();
-    }
-    names
-}
-
-fn reserve<'a>(writer: &mut Writer<'a>, spec: &'a Spec) -> Reserved {
-    writer.reserve_file_header();
-    writer.reserve_program_headers(spec.loads.len() as u32);
-    writer.reserve_null_section_index();
-    let parts: Vec<_> = spec
-        .parts
-        .iter()
-        .map(|part| {
-            let name = writer.add_section_name(part.name.as_bytes());
-            (name, writer.reserve_section_index())
-        })
-        .collect();
-    let debug: Vec<_> = spec
-        .debug
-        .iter()
-        .map(|(name, _)| {
-            let name = writer.add_section_name(name.as_bytes());
-            (name, writer.reserve_section_index())
-        })
-        .collect();
-    let names = reserve_symbols(writer, spec, &parts);
-    writer.reserve_shstrtab_section_index();
-    let offsets = spec
-        .parts
-        .iter()
-        .map(|part| writer.reserve(part.data.len(), 4))
-        .collect();
-    let debug_offsets = spec
-        .debug
-        .iter()
-        .map(|(_, bytes)| writer.reserve(bytes.len(), 1))
-        .collect();
-    if spec.symbols.is_some() {
-        writer.reserve_symtab();
-        writer.reserve_strtab();
-    }
-    writer.reserve_shstrtab();
-    writer.reserve_section_headers();
-    Reserved {
-        parts,
-        debug,
-        names,
-        offsets,
-        debug_offsets,
-    }
-}
-
-fn write_symbols(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) {
-    if let Some(symbols) = &spec.symbols {
-        writer.write_null_symbol();
-        for (symbol, name) in symbols.iter().zip(&reserved.names) {
-            writer.write_symbol(&Sym {
-                name: Some(*name),
-                section: symbol
-                    .part
-                    .and_then(|at| reserved.parts.get(at))
-                    .map(|part| part.1),
-                st_info: (symbol.bind << 4) | symbol.kind,
-                st_other: 0,
-                st_shndx: if symbol.is_absolute { elf::SHN_ABS } else { 0 },
-                st_value: symbol.value,
-                st_size: symbol.size,
-            });
-        }
-        writer.write_strtab();
-    }
-}
-
-fn write_contents(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) -> Result<(), String> {
-    writer
-        .write_file_header(&FileHeader {
-            os_abi: 0,
-            abi_version: 0,
-            e_type: elf::ET_EXEC,
-            e_machine: spec.machine,
-            e_entry: spec.entry,
-            e_flags: 0,
-        })
-        .map_err(|error| error.to_string())?;
-    writer.write_align_program_headers();
-    for (at, flags) in &spec.loads {
-        let (Some(part), Some(offset)) = (spec.parts.get(*at), reserved.offsets.get(*at)) else {
-            return Err(format!("load segment {at} names no section"));
-        };
-        writer.write_program_header(&ProgramHeader {
-            p_type: elf::PT_LOAD,
-            p_flags: *flags,
-            p_offset: *offset as u64,
-            p_vaddr: part.address,
-            p_paddr: part.load_address,
-            p_filesz: part.data.len() as u64,
-            p_memsz: part.size,
-            p_align: 4,
-        });
-    }
-    for part in &spec.parts {
-        writer.write_align(4);
-        writer.write(&part.data);
-    }
-    for (_, bytes) in &spec.debug {
-        writer.write(bytes);
-    }
-    write_symbols(writer, spec, reserved);
-    writer.write_shstrtab();
-    Ok(())
-}
-
-fn header(
-    name: StringId,
-    (sh_type, sh_flags): (u32, u64),
-    (sh_addr, sh_offset, sh_size): (u64, u64, u64),
-) -> SectionHeader {
-    SectionHeader {
-        name: Some(name),
-        sh_type,
-        sh_flags,
-        sh_addr,
-        sh_offset,
-        sh_size,
-        sh_link: 0,
-        sh_info: 0,
-        sh_addralign: 1,
-        sh_entsize: 0,
-    }
-}
-
-fn write_headers(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) {
-    writer.write_null_section_header();
-    for ((part, (name, _)), offset) in spec
-        .parts
-        .iter()
-        .zip(&reserved.parts)
-        .zip(&reserved.offsets)
-    {
-        writer.write_section_header(&header(
-            *name,
-            (part.kind, part.flags),
-            (part.address, *offset as u64, part.size),
-        ));
-    }
-    for (((_, bytes), (name, _)), offset) in spec
-        .debug
-        .iter()
-        .zip(&reserved.debug)
-        .zip(&reserved.debug_offsets)
-    {
-        writer.write_section_header(&header(
-            *name,
-            (elf::SHT_PROGBITS, 0),
-            (0, *offset as u64, bytes.len() as u64),
-        ));
-    }
-    if spec.symbols.is_some() {
-        writer.write_symtab_section_header(1);
-        writer.write_strtab_section_header();
-    }
-    writer.write_shstrtab_section_header();
-}
-
-pub fn build(spec: &Spec) -> Result<Vec<u8>, String> {
-    let endian = if spec.is_big {
-        Endianness::Big
-    } else {
-        Endianness::Little
-    };
-    let mut buffer = Vec::new();
-    let mut writer = Writer::new(endian, spec.is_64, &mut buffer);
-    let reserved = reserve(&mut writer, spec);
-    write_contents(&mut writer, spec, &reserved)?;
-    write_headers(&mut writer, spec, &reserved);
-    Ok(buffer)
 }

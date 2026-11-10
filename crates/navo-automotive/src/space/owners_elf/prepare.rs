@@ -1,3 +1,5 @@
+//! Prepares ELF ownership information for automotive memory views.
+
 use std::cmp::Reverse;
 use std::collections::HashMap;
 
@@ -34,11 +36,13 @@ fn real_file(index: usize, name: &str) -> u32 {
     }
 }
 
+/// Checks whether a symbol can own memory rather than describe a file, section, or TLS.
 fn is_owning(symbol: &Symbol) -> bool {
-    !matches!(
-        symbol.kind,
-        SymbolKind::Other(STT_FILE | STT_SECTION) | SymbolKind::Tls
-    )
+    match symbol.kind {
+        SymbolKind::Other(kind) => !matches!(object::elf::SymbolType(kind), STT_FILE | STT_SECTION),
+        SymbolKind::Tls => false,
+        _ => true,
+    }
 }
 
 impl<'a> Context<'a> {

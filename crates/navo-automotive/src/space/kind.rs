@@ -1,3 +1,5 @@
+//! Classifies automotive memory allocations from ELF sections and names.
+
 use object::elf::{SHF_TLS, SHF_WRITE, SHT_NOBITS};
 
 use crate::elf::Section;
@@ -21,6 +23,7 @@ impl Kind {
     }
 
     #[must_use]
+    /// Classifies an ELF section by its allocation, execution, and storage flags.
     pub fn of_section(section: &Section) -> Self {
         if is_fill_name(&section.name) {
             Self::Fill
@@ -28,9 +31,9 @@ impl Kind {
             Self::Other
         } else if section.is_executable() {
             Self::Code
-        } else if section.kind == SHT_NOBITS && !is_copied_data(section) {
+        } else if section.kind == SHT_NOBITS.0 && !is_copied_data(section) {
             Self::Bss
-        } else if section.flags & u64::from(SHF_WRITE) != 0 {
+        } else if section.flags & SHF_WRITE.0 != 0 {
             Self::Data
         } else {
             Self::Rodata
@@ -75,17 +78,19 @@ impl Kind {
     }
 }
 
+/// Checks whether a section represents uninitialized thread-local storage.
 pub(super) fn takes_no_address_space(section: &Section) -> bool {
-    section.kind == SHT_NOBITS && section.flags & u64::from(SHF_TLS) != 0
+    section.kind == SHT_NOBITS.0 && section.flags & SHF_TLS.0 != 0
 }
 
 fn is_fill_name(name: &str) -> bool {
     name.starts_with("$fill")
 }
 
+/// Checks whether writable section names identify initialized copied data.
 fn is_copied_data(section: &Section) -> bool {
     let name = section.name.as_str();
-    section.flags & u64::from(SHF_WRITE) != 0
+    section.flags & SHF_WRITE.0 != 0
         && ["data", "zdata", "sdata"].iter().any(|stem| {
             name.strip_prefix('.')
                 .and_then(|rest| rest.strip_prefix(stem))
@@ -103,7 +108,7 @@ mod tests {
         Section {
             name: name.to_owned(),
             kind,
-            flags: u64::from(SHF_ALLOC | SHF_WRITE),
+            flags: SHF_ALLOC.0 | SHF_WRITE.0,
             address: 0,
             size: 4,
             offset: 0,
@@ -113,20 +118,23 @@ mod tests {
     #[test]
     fn nobits_zdata_is_data() {
         assert_eq!(
-            Kind::of_section(&section(".zdata.foo", SHT_NOBITS)),
+            Kind::of_section(&section(".zdata.foo", SHT_NOBITS.0)),
             Kind::Data
         );
-        assert_eq!(Kind::of_section(&section(".sdata", SHT_NOBITS)), Kind::Data);
+        assert_eq!(
+            Kind::of_section(&section(".sdata", SHT_NOBITS.0)),
+            Kind::Data
+        );
     }
 
     #[test]
     fn nobits_bss_stays_bss() {
         assert_eq!(
-            Kind::of_section(&section(".bss.foo", SHT_NOBITS)),
+            Kind::of_section(&section(".bss.foo", SHT_NOBITS.0)),
             Kind::Bss
         );
         assert_eq!(
-            Kind::of_section(&section(".database", SHT_NOBITS)),
+            Kind::of_section(&section(".database", SHT_NOBITS.0)),
             Kind::Bss
         );
     }
@@ -141,7 +149,7 @@ mod tests {
     #[test]
     fn progbits_data_stays_data() {
         assert_eq!(
-            Kind::of_section(&section(".data", SHT_PROGBITS)),
+            Kind::of_section(&section(".data", SHT_PROGBITS.0)),
             Kind::Data
         );
     }
