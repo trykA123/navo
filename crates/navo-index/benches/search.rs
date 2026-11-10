@@ -43,7 +43,8 @@ fn build_table() -> NameTable {
             2 => format!("report {file:06}.pdf"),
             _ => format!("résumé-{file:06}.md"),
         };
-        let folder = folders[(file % FOLDERS) as usize];
+        // Groups of four consecutive files share a folder, so every folder holds all four kinds.
+        let folder = folders[((file / 4) % FOLDERS) as usize];
         table.push(folder, &name, Flags::NONE).unwrap();
     }
     table
