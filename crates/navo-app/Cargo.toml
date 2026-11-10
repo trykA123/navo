@@ -24,6 +24,16 @@ tracy = ["navo-diag/tracy"]
 blake3 = "=1.8.7"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 encoding_rs = "0.8.44"
+image = { version = "=0.25.10", default-features = false, features = [
+  "bmp",
+  "gif",
+  "ico",
+  "jpeg",
+  "png",
+  "tiff",
+  "webp",
+] }
+imagesize = "=0.13.0"
 mimalloc = { version = "=0.1.52", optional = true, default-features = false }
 navo-cache = { path = "../navo-cache" }
 navo-clipboard = { path = "../navo-clipboard" }

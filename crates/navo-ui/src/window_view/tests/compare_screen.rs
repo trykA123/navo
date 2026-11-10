@@ -21,6 +21,7 @@ use crate::window_view::OpenHooks;
 use crate::window_view::compare_screen::FileState;
 
 mod body;
+mod refresh;
 mod view;
 
 const KEYMAP: &str = include_str!("../../commands/keymap.toml");
@@ -322,6 +323,63 @@ fn compare_screen_shows_the_opened_pair_and_a_failure_text(cx: &mut TestAppConte
     assert_eq!(
         rig.state(cx),
         Some(FileState::Failed("Access denied".into()))
+    );
+}
+
+#[gpui_kit::test]
+fn compare_screen_drops_updates_for_an_old_request(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.press(cx, "enter");
+    let sink = rig.diff.pair_sink();
+    let opened = |request| DiffUpdate::Opened {
+        request,
+        kind: PairKind::Image,
+        text: None,
+    };
+    rig.push(cx, &sink, opened(1));
+    rig.push(cx, &sink, opened(2));
+    let stale = DiffUpdate::Failed {
+        request: 1,
+        text: "old".into(),
+    };
+    rig.push(cx, &sink, stale);
+    assert!(
+        matches!(rig.state(cx), Some(FileState::Opened { .. })),
+        "an update for the old request changes nothing"
+    );
+    let current = DiffUpdate::Failed {
+        request: 2,
+        text: "current".into(),
+    };
+    rig.push(cx, &sink, current);
+    assert_eq!(rig.state(cx), Some(FileState::Failed("current".into())));
+}
+
+#[gpui_kit::test]
+fn compare_screen_drops_a_stale_opened_update(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.press(cx, "enter");
+    let sink = rig.diff.pair_sink();
+    let opened = |request, kind| DiffUpdate::Opened {
+        request,
+        kind,
+        text: None,
+    };
+    rig.push(cx, &sink, opened(2, PairKind::Binary));
+    rig.push(
+        cx,
+        &sink,
+        opened(1, PairKind::Unavailable("compare-reason-unsupported")),
+    );
+    assert_eq!(
+        rig.state(cx),
+        Some(FileState::Opened {
+            kind: PairKind::Binary,
+            text: None
+        }),
+        "a stale Opened must not roll the request id back"
     );
 }
 

@@ -88,7 +88,7 @@ impl LargeDiff {
 impl PairControl for LargeDiff {
     fn spans(&self, _rows: Range<u32>) {}
 
-    fn refresh(&self) {}
+    fn refresh(&self, _request: u64) {}
 
     /// Move the diff's focus; the worker applies it only after `Done`.
     fn focus(&self, line: u64) {

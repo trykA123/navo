@@ -6124,6 +6124,8 @@ dependencies = [
  "futures",
  "gpui-kit",
  "gpui-pre-windows",
+ "image",
+ "imagesize 0.13.0",
  "insta",
  "libc",
  "mimalloc",
