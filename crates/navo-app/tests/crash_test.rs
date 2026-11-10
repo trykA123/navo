@@ -49,8 +49,9 @@ fn guarded_crash_test_writes_a_record_in_the_given_profile() {
     assert_eq!(record["message"], "Navo CI crash test");
     let backtrace = record["backtrace"].as_str().unwrap();
     let mut lines = backtrace.lines();
+    // Line-tables-only keeps just the bare symbol; full debug info adds the crate path.
     assert!(
-        lines.any(|line| line.contains("navo::crash_test")),
+        lines.any(|line| line.contains("navo::crash_test") || line.trim().ends_with("crash_test")),
         "{backtrace}"
     );
     let location = lines.next().unwrap_or_default();
