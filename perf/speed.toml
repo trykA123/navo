@@ -1,0 +1,26 @@
+# SC3 selects a strict-ancestor product release; recovery needs a reviewed commit and reason.
+# SC4 guards each listed ID against the base manifest; SC5 rejects instruction growth above 5%.
+
+[[bench]]
+id = "navo-fs/listing::listing::bench_sort_order.name"
+guarded = true
+
+[[bench]]
+id = "navo-fs/listing::listing::bench_sort_order.extension"
+guarded = true
+
+[[bench]]
+id = "navo-fs/listing::listing::bench_sort_order.size"
+guarded = true
+
+[[bench]]
+id = "navo-fs/listing::listing::bench_sort_order.date"
+guarded = true
+
+[[bench]]
+id = "navo-fs/listing::listing::bench_filter_order.sensor"
+guarded = true
+
+[[bench]]
+id = "navo-fs/listing::listing::bench_load_folder.fifty_thousand"
+guarded = true

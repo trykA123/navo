@@ -1,6 +1,9 @@
 //! Discover portable benchmark targets and expose speed-check commands.
 
+pub mod base;
 pub mod config;
+
+pub use base::base_cmd;
 
 use std::{
     fs,
@@ -53,12 +56,6 @@ fn target_options(args: &[String]) -> Result<(PathBuf, bool), String> {
         }
     }
     Ok((path.ok_or(usage)?, discover))
-}
-
-/// Placeholder for release base selection, returning an unavailable status.
-pub fn base_cmd(_args: &[String]) -> ExitCode {
-    eprintln!("not built yet");
-    ExitCode::from(2)
 }
 
 /// Placeholder for instruction verdicts, returning an unavailable status.
