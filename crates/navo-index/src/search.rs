@@ -67,6 +67,7 @@ pub fn search_filtered_with<I: FnMut(u32) -> bool>(
     query: &[Term<'_>],
     options: &SearchOptions<'_, impl Fn() -> bool + Sync, impl Fn() -> I + Sync>,
 ) -> Vec<TableHit> {
+    let _zone = tracing::debug_span!("index.search").entered();
     let SearchOptions {
         limit,
         cancel,
