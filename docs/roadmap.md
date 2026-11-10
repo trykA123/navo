@@ -16,7 +16,8 @@ Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versio
   - **Validation:** the heavy Windows benchmark and the long daily-use check for lost files.
 - **v1.0:** started.
   - **Compare and sync:** folder compare in the panes is shipped; the sync engine and its safe copy plan are built. A second design round for the full Beyond Compare-class experience (file diff, copying changes, hex and image compare, sync) runs now; building the chosen direction follows.
-  - **Installer wizard:** part 1 (the engine: folder checks, install, upgrade, shortcuts, DLL guard, scripted install) is built and passes every VM table; part 2 is the wizard screens.
+  - **Installer wizard:** part 1 (the engine: folder checks, install, upgrade, shortcuts, DLL guard, scripted install) is built and passes every VM table. The wizard window is built: pages, keyboard access keys, an editable folder field, a safe Close and Back. Next: the release pipeline for the wizard, then the full VM pass of every page.
+  - **Native crash reports:** a separate crash-reporter process now writes a small crash dump and a readable summary, and keeps only the newest two dumps. Next: the Windows crash tests.
   - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt when the service changes) runs on 0.4.1.
   - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, and the module registry.
 - **Order after the current work (owner, 9 November):** index service memory, speed checks that fail the build, the mimalloc trial, background work that never waits, then smarter search. Accessibility is required for v1.0.
