@@ -1,3 +1,5 @@
+//! Held-file undo rows of a job: recording, reading, releasing and forgetting them.
+
 use navo_core::retention::{OverwriteProof, ProvedOverwrite};
 use navo_core::{FsError, FsErrorKind, Location};
 use navo_fs::{FileStamp, HeldFile, PlacedFile, ProviderOps, release_held};
@@ -5,6 +7,14 @@ use navo_store::{JobId, JobState, JournalError};
 use serde::{Deserialize, Serialize};
 
 use super::{SharedJournal, lock, now_ms};
+
+mod retired;
+
+/// Deletes one undo row of a job, matched by its exact bytes.
+const FORGET_ROW: &str = "DELETE FROM undo WHERE job_id = ?1 AND inverse = ?2";
+
+pub(super) use retired::after_trim;
+pub(crate) use retired::{forget_held_at, forget_retired};
 
 #[derive(Serialize, Deserialize)]
 struct HeldRecord {
@@ -297,10 +307,7 @@ pub(super) fn settle_restore(journal: &SharedJournal, job: JobId) -> Result<(), 
     transaction.execute("UPDATE job SET state = 'done' WHERE id = ?1", [job.0])?;
     for row in journal.held(job)? {
         if serde_json::from_slice::<HeldRecord>(&row).is_ok_and(|record| record.restoring) {
-            transaction.execute(
-                "DELETE FROM undo WHERE job_id = ?1 AND inverse = ?2",
-                (job.0, row.as_slice()),
-            )?;
+            transaction.execute(FORGET_ROW, (job.0, row.as_slice()))?;
         }
     }
     transaction.commit()?;

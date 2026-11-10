@@ -5,7 +5,9 @@ use std::ops::Range;
 
 use super::hooks::{CardRow, DiffRow, Layout, PairText};
 use super::stream_model::StreamModel;
+use narrow::Slot;
 
+mod narrow;
 mod unified;
 
 /// How a shown row looks.
@@ -52,6 +54,11 @@ pub enum StreamRow {
         lines: u32,
     },
     More {
+        item: usize,
+        hunks: u32,
+    },
+    /// Hunks a search did not match, folded into one row.
+    Others {
         item: usize,
         hunks: u32,
     },
@@ -140,7 +147,8 @@ pub fn stream_rows(model: &StreamModel, layout: Layout) -> Vec<StreamRow> {
         if card.rows.is_empty() {
             out.push(StreamRow::Summary(item));
         }
-        card_rows(&mut out, item, &card.rows, layout);
+        let slots = narrow::slots(&card.rows, model.matched_hunks(id));
+        card_rows(&mut out, item, &card.rows, (&slots, layout));
     }
     if model.rules > 0 && !model.searching() {
         out.push(StreamRow::RulesGroup);
@@ -148,10 +156,19 @@ pub fn stream_rows(model: &StreamModel, layout: Layout) -> Vec<StreamRow> {
     out
 }
 
-/// Appends the Stream rows of one card's rows. Row numbers past `u32::MAX` are dropped.
-fn card_rows(out: &mut Vec<StreamRow>, item: usize, rows: &[CardRow], layout: Layout) {
-    let mut at = 0;
-    while at < rows.len() {
+/// Appends the Stream rows of one card's `slots`. Row numbers past `u32::MAX` are dropped.
+fn card_rows(out: &mut Vec<StreamRow>, item: usize, rows: &[CardRow], plan: (&[Slot], Layout)) {
+    let (slots, layout) = plan;
+    let mut next = 0;
+    while let Some(&slot) = slots.get(next) {
+        next += 1;
+        let at = match slot {
+            Slot::Row(at) => at,
+            Slot::Others(hunks) => {
+                out.push(StreamRow::Others { item, hunks });
+                continue;
+            }
+        };
         let Ok(card_row) = u32::try_from(at) else {
             return;
         };
@@ -159,8 +176,11 @@ fn card_rows(out: &mut Vec<StreamRow>, item: usize, rows: &[CardRow], layout: La
             CardRow::Line { row, .. } if layout == Layout::Unified && changed(row) => {
                 let end = run_end(rows, at);
                 unified_run(out, item, rows, at..end);
-                at = end;
-                continue;
+                // The run's other rows are drawn now; skip their slots.
+                next += slots[next..]
+                    .iter()
+                    .take_while(|slot| matches!(slot, Slot::Row(i) if *i < end))
+                    .count();
             }
             CardRow::Line { .. } => out.push(StreamRow::Line {
                 item,
@@ -176,7 +196,6 @@ fn card_rows(out: &mut Vec<StreamRow>, item: usize, rows: &[CardRow], layout: La
                 hunks: *hunks,
             }),
         }
-        at += 1;
     }
 }
 

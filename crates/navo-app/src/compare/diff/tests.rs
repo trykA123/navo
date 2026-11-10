@@ -2,6 +2,7 @@
 
 mod convert;
 mod copy;
+mod copy_hook;
 mod copy_many;
 mod hooks;
 mod load;

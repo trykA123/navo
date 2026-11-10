@@ -23,10 +23,10 @@ gpui_kit::actions!(
 pub(super) type MenuSlot = Option<(Entity<ContextMenu>, Subscription)>;
 
 /// The look, focus and menu of the top screen: the file diff, else the Stream.
-struct LookHost<'a> {
-    look: &'a mut Look,
-    focus: &'a FocusHandle,
-    menu: &'a mut MenuSlot,
+pub(super) struct LookHost<'a> {
+    pub(super) look: &'a mut Look,
+    pub(super) focus: &'a FocusHandle,
+    pub(super) menu: &'a mut MenuSlot,
 }
 
 /// The entries of the menu for `look`; `layout` is the layout in use.
@@ -96,7 +96,7 @@ impl NavoWindow {
     }
 
     /// The look, focus and menu slot of the file diff, else of the Stream.
-    fn look_host(&mut self) -> Option<LookHost<'_>> {
+    pub(super) fn look_host(&mut self) -> Option<LookHost<'_>> {
         let screen = self.compare.screen.as_mut()?;
         if let Some(file) = screen.file.as_mut() {
             let (look, focus, menu) = (&mut file.look, &file.focus, &mut file.menu);
@@ -127,13 +127,29 @@ impl NavoWindow {
         let Some(host) = self.look_host() else {
             return;
         };
-        let viewport = window.viewport_size();
         let items = entries(host.look, host.look.layout_in(window));
+        let anchor = point(
+            window.viewport_size().width - t.spacing.xl,
+            t.spacing.path_height * 2.,
+        );
+        self.show_menu((items, "compare-view-title", anchor), window, cx);
+    }
+
+    /// Shows `items` titled by the Fluent id `title` in the top screen's menu slot at `anchor`.
+    pub(super) fn show_menu(
+        &mut self,
+        (items, title, anchor): (Vec<MenuEntry>, &str, Point<Pixels>),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(host) = self.look_host() else {
+            return;
+        };
         let input = ContextMenuInput {
             menu: viewer_menu(&items, host.focus, window),
-            context: tr("compare-view-title").into(),
-            anchor: point(viewport.width - t.spacing.xl, t.spacing.path_height * 2.),
-            bounds: Bounds::new(Point::default(), viewport),
+            context: tr(title).into(),
+            anchor,
+            bounds: Bounds::new(Point::default(), window.viewport_size()),
             restore: Some(host.focus.clone()),
         };
         let menu = cx.new(|cx| {

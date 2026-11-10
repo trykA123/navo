@@ -5,7 +5,8 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{ListState, Role, WeakEntity, list};
 use navo_l10n::{t, tr};
 
-use super::super::outline;
+use super::super::copy::{Note, note_view};
+use super::super::{outline, search};
 use super::StreamScreen;
 use crate::compare_diff::{CardCtx, StreamRow, stream_row_view};
 use crate::prelude::*;
@@ -103,8 +104,8 @@ fn counter(t: &Theme, (viewed, total): (usize, usize)) -> impl IntoElement {
         .child(text)
 }
 
-/// The status line: the Viewed counter, then the keys and the way back.
-fn status_line(t: &Theme, stream: &StreamScreen) -> Div {
+/// The status line: the Viewed counter, the last copy's note, then the keys and the way back.
+fn status_line(t: &Theme, stream: &StreamScreen, note: Option<&Note>) -> Div {
     div()
         .flex()
         .flex_none()
@@ -116,6 +117,7 @@ fn status_line(t: &Theme, stream: &StreamScreen) -> Div {
         .border_color(t.colors.line)
         .bg(t.colors.rail)
         .child(counter(t, stream.model.counter()))
+        .children(note.map(|note| note_view(t, note)))
         .child(div().flex_1())
         .child(small(t).flex_none().child(tr("compare-stream-keys")))
         .child(small(t).flex_none().child(tr("compare-screen-esc")))
@@ -136,24 +138,38 @@ fn row(weak: &WeakEntity<NavoWindow>, at: usize, cx: &App) -> AnyElement {
         return div().into_any_element();
     };
     let t = tokens::current(cx);
+    let bars = window.card_bars(weak, cx);
     let ctx = CardCtx {
         t,
         model: &stream.model,
         layout: stream.layout,
+        bars: Some(&bars),
     };
     let starts_card = matches!(
         stream.rows[at],
         StreamRow::Header(_) | StreamRow::RulesGroup
     );
+    let menu = weak.clone();
     div()
         .px(t.spacing.lg)
         .when(starts_card, |d| d.pt(t.spacing.md))
+        .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+            let pointer = event.position;
+            let _ = menu.update(cx, |view, cx| {
+                view.menu_at_stream_row((at, pointer), window, cx);
+            });
+        })
         .child(stream_row_view(&stream.rows, at, &ctx))
         .into_any_element()
 }
 
 /// The card list over `state`, or the empty note when no file differs.
-fn body(t: &Theme, state: &ListState, empty: bool, weak: WeakEntity<NavoWindow>) -> Div {
+fn body(
+    t: &Theme,
+    state: &ListState,
+    empty: Option<SharedString>,
+    weak: WeakEntity<NavoWindow>,
+) -> Div {
     let area = div()
         .id("compare-stream-rows")
         .role(Role::List)
@@ -165,12 +181,12 @@ fn body(t: &Theme, state: &ListState, empty: bool, weak: WeakEntity<NavoWindow>)
         .min_h_0()
         .bg(t.colors.rail)
         .pb(t.spacing.md);
-    let area = area.when(empty, |area| {
+    let area = area.when_some(empty, |area, note| {
         area.child(
             div()
                 .p(t.spacing.xxl)
                 .text_color(t.colors.muted)
-                .child(tr("compare-stream-empty")),
+                .child(note),
         )
     });
     let rows = list(state.clone(), move |at, _, cx| row(&weak, at, cx)).size_full();
@@ -193,17 +209,30 @@ impl NavoWindow {
         let back = cx.listener(|view, _: &ClickEvent, window, cx| view.leave_stream(window, cx));
         let weak = cx.weak_entity();
         let root = Self::stream_keys(div().id("compare-stream"), cx);
-        let root = Self::outline_keys(root, cx);
-        let root = Self::open_card_key(root, cx);
+        let root = Self::search_keys(Self::outline_keys(root, cx), cx);
+        let root = Self::copy_keys(Self::open_card_key(Self::sheet_keys(root, cx), cx), cx);
         let root = Self::stream_details_key(Self::look_actions(root, cx), cx);
+        let root = Self::menu_keys(root, cx);
+        let note = self.compare.diff.copy.note.clone();
         let stream = self.stream_mut()?;
         stream.relayout(stream.look.layout_in(window));
         let drawer = outline::drawer(&t, stream, cx);
         let details = super::details::drawer(&t, stream);
-        let empty = stream.model.items().is_empty();
-        let root = root
+        let empty = stream.empty_note();
+        let search = search::bar(&t, stream, cx);
+        // The keys' context wraps the cards only: the search field sits outside it, so its
+        // letters are typed and not run as J, K, V or O.
+        let cards = root
             .key_context(CONTEXT)
             .track_focus(&stream.focus)
+            .relative()
+            .flex()
+            .flex_1()
+            .min_h_0()
+            .children(drawer)
+            .child(body(&t, &stream.list, empty, weak))
+            .children(details);
+        let root = div()
             .flex()
             .flex_col()
             .flex_1()
@@ -211,25 +240,20 @@ impl NavoWindow {
             .min_w_0()
             .bg(t.colors.surface)
             .child(header(&t, stream, back))
-            .child(
-                div()
-                    .relative()
-                    .flex()
-                    .flex_1()
-                    .min_h_0()
-                    .children(drawer)
-                    .child(body(&t, &stream.list, empty, weak))
-                    .children(details),
-            )
-            .child(status_line(&t, stream));
+            .children(search)
+            .child(cards)
+            .child(status_line(&t, stream, note.as_ref()));
+        let sheet = self.sheet_view(cx);
         let parent = div()
             .key_context(PARENT)
+            .relative()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
             .min_w_0()
-            .child(root);
+            .child(root)
+            .children(sheet);
         Some(parent.into_any_element())
     }
 }

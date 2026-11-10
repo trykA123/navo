@@ -29,7 +29,12 @@ gpui_kit::actions!(
         OpenFile,
         Search,
         CopyAllLeft,
-        CopyAllRight
+        CopyAllRight,
+        PickDown,
+        PickUp,
+        PickToggle,
+        RemovePicked,
+        ShowMenu
     ]
 );
 
@@ -59,16 +64,6 @@ pub(super) const GROUPS: [Group; 5] = [
                 "compare.previous_difference",
                 "cmd-compare-previous-difference",
             ),
-            (
-                "compare::CopyRight",
-                "compare.copy_right",
-                "cmd-compare-copy-right",
-            ),
-            (
-                "compare::CopyLeft",
-                "compare.copy_left",
-                "cmd-compare-copy-left",
-            ),
             ("compare::Enter", "compare.enter", "cmd-compare-enter"),
             ("compare::Up", "compare.up", "cmd-compare-up"),
             ("compare::Exit", "compare.exit", "cmd-compare-exit"),
@@ -88,6 +83,16 @@ pub(super) const GROUPS: [Group; 5] = [
     Group {
         context: "CompareView",
         commands: &[
+            (
+                "compare::CopyRight",
+                "compare.copy_right",
+                "cmd-compare-copy-right",
+            ),
+            (
+                "compare::CopyLeft",
+                "compare.copy_left",
+                "cmd-compare-copy-left",
+            ),
             ("compare::Save", "compare.save", "cmd-compare-save"),
             (
                 "compare::ViewBytes",
@@ -116,6 +121,27 @@ pub(super) const GROUPS: [Group; 5] = [
             ),
             ("compare::Changes", "compare.changes", "cmd-compare-changes"),
             ("compare::Details", "compare.details", "cmd-compare-details"),
+            (
+                "compare::PickDown",
+                "compare.pick_down",
+                "cmd-compare-pick-down",
+            ),
+            ("compare::PickUp", "compare.pick_up", "cmd-compare-pick-up"),
+            (
+                "compare::PickToggle",
+                "compare.pick_toggle",
+                "cmd-compare-pick-toggle",
+            ),
+            (
+                "compare::RemovePicked",
+                "compare.remove_picked",
+                "cmd-compare-remove-picked",
+            ),
+            (
+                "compare::ShowMenu",
+                "compare.show_menu",
+                "cmd-compare-show-menu",
+            ),
         ],
     },
     Group {
@@ -150,14 +176,9 @@ pub(super) const GROUPS: [Group; 5] = [
 /// Commands whose atoms have not landed: out of menus, palette and keymap while Compare is on.
 const NOT_BUILT: &[&str] = &[
     "compare.refs",
-    "compare.copy_left",
-    "compare.copy_right",
     "compare.save",
     "compare.view_bytes",
     "compare.view_text",
-    "compare.search",
-    "compare.copy_all_left",
-    "compare.copy_all_right",
 ];
 
 /// Whether `name` is a compare command that is not offered: all while Compare is off,

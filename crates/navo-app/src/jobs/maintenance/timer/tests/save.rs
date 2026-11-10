@@ -77,3 +77,21 @@ fn maintenance_timer_pass_expires_a_saved_old_version_but_not_a_fresh_one() {
     assert_eq!(profile.live(), 0);
     assert!(profile.fs.metadata(&container).is_err());
 }
+
+#[test]
+fn trimming_a_saved_old_version_forgets_the_save_undo_rows() {
+    let profile = Profile::new();
+    save(&profile);
+    let holding = || {
+        crate::jobs::lock(&profile.journal)
+            .finished_holding()
+            .unwrap()
+    };
+    assert_eq!(holding().len(), 1, "a retained save keeps its undo row");
+    let now = super::super::super::super::now_ms();
+    assert!(matches!(
+        profile.pass(now + 4 * DAY_MS),
+        Pass::Ran { purged: 1, .. }
+    ));
+    assert_eq!(holding(), [], "the trimmed save keeps no undo row");
+}

@@ -137,7 +137,7 @@ impl Rig {
         cx.run_until_parked();
     }
 
-    fn state(&self, cx: &mut TestAppContext) -> Option<FileState> {
+    pub(super) fn state(&self, cx: &mut TestAppContext) -> Option<FileState> {
         self.view.read_with(cx, |view, _| {
             view.file_screen().map(|(_, state)| state.clone())
         })

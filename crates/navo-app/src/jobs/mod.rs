@@ -32,7 +32,7 @@ mod temporary;
 mod trim;
 
 pub(crate) use guard_log::{guard_factory, guard_write};
-pub(crate) use held::{record as hold_record, save_held};
+pub(crate) use held::{forget_held_at, forget_retired, record as hold_record, save_held};
 #[cfg(test)]
 pub use pending::still_pending;
 pub use pending::{StillPending, log_pending};

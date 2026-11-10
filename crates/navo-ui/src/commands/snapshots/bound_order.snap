@@ -527,6 +527,8 @@ compare.next_difference | alt-down | CompareView
 compare.next_difference | f7 | CompareView
 compare.previous_difference | alt-up | CompareView
 compare.previous_difference | shift-f7 | CompareView
+compare.copy_right | ctrl-alt-right | CompareView
+compare.copy_left | ctrl-alt-left | CompareView
 compare.exit | escape | CompareView
 compare.stream | alt-f | Compare
 compare.next_file | ctrl-alt-down | CompareView
@@ -534,6 +536,12 @@ compare.previous_file | ctrl-alt-up | CompareView
 compare.view_menu | alt-v | CompareView
 compare.changes | ctrl-b | CompareView
 compare.details | ctrl-i | CompareView
+compare.pick_down | shift-down | CompareView
+compare.pick_up | shift-up | CompareView
+compare.pick_toggle | space | CompareView
+compare.remove_picked | ctrl-shift-delete | CompareView
+compare.show_menu | menu | CompareView
+compare.show_menu | shift-f10 | CompareView
 compare.next_difference | j | CompareStream
 compare.previous_difference | k | CompareStream
 compare.next_file | shift-j | CompareStream
@@ -543,6 +551,9 @@ compare.previous_file | ctrl-alt-up | CompareStream
 compare.toggle_viewed | v | CompareStream
 compare.fold | o | CompareStream
 compare.open_file | enter | CompareStream
+compare.search | / | CompareStream
+compare.copy_all_left | ctrl-shift-left | CompareStream
+compare.copy_all_right | ctrl-shift-right | CompareStream
 [navo_window]
 jobs.toggle | ctrl-j | global
 help.key_map | f1 | global

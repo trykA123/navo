@@ -17,10 +17,11 @@ use crate::compare_diff::{
 };
 
 mod entry;
+mod search;
 mod vr1;
 
 /// `count` differing items with ids 1..=count, and their pair requests.
-fn items(count: u64) -> (StreamList, Vec<PairRequest>) {
+pub(super) fn items(count: u64) -> (StreamList, Vec<PairRequest>) {
     let items: Vec<StreamItem> = (1..=count)
         .map(|id| StreamItem {
             id,
@@ -82,7 +83,7 @@ fn card(hunks: u32) -> Arc<Card> {
 
 impl Rig {
     /// Opens a Stream over `count` items and draws it.
-    fn open_stream(&self, cx: &mut TestAppContext, count: u64) {
+    pub(super) fn open_stream(&self, cx: &mut TestAppContext, count: u64) {
         let items = items(count);
         let view = self.view.clone();
         cx.update_window(self.window, |_, window, cx| {
@@ -93,7 +94,7 @@ impl Rig {
     }
 
     /// Settles the window and draws a frame.
-    fn frame(&self, cx: &mut TestAppContext) {
+    pub(super) fn frame(&self, cx: &mut TestAppContext) {
         settle(cx, &self.view);
         cx.update_window(self.window, |_, window, cx| window.render_frame(cx))
             .expect("window");

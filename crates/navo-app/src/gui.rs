@@ -203,6 +203,11 @@ pub(crate) fn open(mut launch: Launch) {
     #[cfg(windows)]
     crate::index_service::start_version_step(dirs.as_ref().map(|dirs| dirs.data.as_path()));
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
+    let diff = crate::compare::diff::diff_backend(
+        services.sessions.as_ref(),
+        launch.experimental_retention,
+        &local,
+    );
     let exit = (disk, visits, services.sessions);
     files::prewarm_pdf(PDF_WARM_DELAY);
     let quit_git = git.clone();
@@ -242,7 +247,7 @@ pub(crate) fn open(mut launch: Launch) {
                         .as_ref()
                         .map(crate::resident::ResidentHandle::hooks),
                 )),
-                ..open_hooks(launch.path, launch.instance_requests, launch.splash)
+                ..open_hooks(launch.path, launch.instance_requests, launch.splash, diff)
             },
             rename: Some(services.rename),
             retained: services.retained,
@@ -307,7 +312,12 @@ fn mark_window_open(viewer: bool) {
     metrics::mark("window opening");
 }
 
-fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Splash) -> OpenHooks {
+fn open_hooks(
+    path: Option<PathBuf>,
+    inbox: OpenInbox,
+    splash: crate::splash::Splash,
+    diff: Arc<crate::compare::diff::DiffBackend>,
+) -> OpenHooks {
     OpenHooks {
         path: path.and_then(|path| path_location(&path)),
         inbox: Some(inbox),
@@ -315,7 +325,7 @@ fn open_hooks(path: Option<PathBuf>, inbox: OpenInbox, splash: crate::splash::Sp
         window_shown: crate::resident::window_shown(),
         resident: None,
         compare: Some(Arc::new(crate::compare::PaneCompare::default())),
-        diff: Some(Arc::new(crate::compare::diff::DiffBackend::default())),
+        diff: Some(diff),
         user_commands: None,
     }
 }

@@ -7,6 +7,7 @@ use gpui_kit::component::Icon;
 use navo_fs::EntryKind;
 use navo_l10n::tr;
 
+use super::copy::{FileBars, Note, note_view};
 use super::drawers::{changes_view, details_view};
 use super::{FileScreen, FileState};
 use crate::commands::compare::{Exit, NextDifference, PreviousDifference};
@@ -124,12 +125,17 @@ fn header(
 
 /// The body: the rows of an opened text pair between the drawers that are open, with the
 /// change map beside them; else "Comparing…" or the failure text.
-fn body(t: &Theme, file: &mut FileScreen, window: &Window, cx: &mut Context<NavoWindow>) -> Div {
+fn body(
+    t: &Theme,
+    file: &mut FileScreen,
+    (bars, window): (FileBars, &Window),
+    cx: &mut Context<NavoWindow>,
+) -> Div {
     let area = div().flex().flex_col().flex_1().min_h_0();
     let (look, drawers) = (file.look, &file.drawers);
     if let Some(view) = file.view.as_mut() {
         let layout = look.layout_in(window);
-        let list = div().flex_1().min_w_0().child(view.list(layout, cx));
+        let list = div().flex_1().min_w_0().child(view.list(layout, bars, cx));
         let map = look.map.then(|| view.map_element(layout, cx));
         view.watch_rows(layout, window, cx);
         let changes = drawers
@@ -163,8 +169,8 @@ fn body(t: &Theme, file: &mut FileScreen, window: &Window, cx: &mut Context<Navo
     })
 }
 
-/// The one status line at the bottom: the change counter, then the way back.
-fn status_line(t: &Theme, changes: Option<SharedString>) -> Div {
+/// The one status line at the bottom: the change counter, the last copy's note, then the way back.
+fn status_line(t: &Theme, changes: Option<SharedString>, note: Option<&Note>) -> Div {
     div()
         .flex()
         .flex_none()
@@ -185,6 +191,7 @@ fn status_line(t: &Theme, changes: Option<SharedString>) -> Div {
                     .child(changes),
             )
         })
+        .children(note.map(|note| note_view(t, note)))
         .child(div().flex_1())
         .child(small(t).child(tr("compare-screen-esc")))
 }
@@ -205,7 +212,10 @@ impl NavoWindow {
             return self.stream_view(window, cx);
         }
         let t = tokens::current(cx).clone();
-        let exit = cx.listener(|view, _: &Exit, window, cx| view.pop_file_diff(window, cx));
+        let exit = cx.listener(|view, _: &Exit, window, cx| match view.clear_picks() {
+            true => cx.notify(),
+            false => view.pop_file_diff(window, cx),
+        });
         let back = cx.listener(|view, _: &ClickEvent, window, cx| view.pop_file_diff(window, cx));
         let next = cx.listener(|view, _: &NextDifference, window, cx| {
             view.step_change(true, window, cx);
@@ -213,8 +223,16 @@ impl NavoWindow {
         let previous = cx.listener(|view, _: &PreviousDifference, window, cx| {
             view.step_change(false, window, cx);
         });
-        let root = Self::walk_keys(div().id("compare-screen"), cx);
+        let root = Self::copy_keys(Self::walk_keys(div().id("compare-screen"), cx), cx);
         let root = Self::drawer_actions(Self::look_actions(root, cx), cx);
+        let root = Self::menu_keys(Self::pick_keys(root, cx), cx);
+        let bars = FileBars {
+            weak: cx.weak_entity(),
+            hovered: self.file_hover(),
+            animate: !cx.reduce_motion(),
+            picks: self.pick_draw(cx),
+        };
+        let note = self.compare.diff.copy.note.clone();
         let file = self.compare.screen.as_mut()?.file.as_mut()?;
         let changes = file.view.as_ref().map(super::file::FileView::status);
         let root = root
@@ -230,8 +248,8 @@ impl NavoWindow {
             .min_w_0()
             .bg(t.colors.surface)
             .child(header(&t, file, back))
-            .child(body(&t, file, window, cx))
-            .child(status_line(&t, changes));
+            .child(body(&t, file, (bars, window), cx))
+            .child(status_line(&t, changes, note.as_ref()));
         Some(root.into_any_element())
     }
 }

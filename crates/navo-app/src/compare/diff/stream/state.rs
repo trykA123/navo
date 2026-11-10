@@ -257,7 +257,7 @@ impl State {
     }
 
     /// Put an id in the matching priority queue once.
-    fn enqueue(&mut self, id: u64) {
+    pub(super) fn enqueue(&mut self, id: u64) {
         if self.held.contains_key(&id)
             || self.in_progress.contains(&id)
             || self.scheduled.contains(&id)

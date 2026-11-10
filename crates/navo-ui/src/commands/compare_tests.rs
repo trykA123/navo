@@ -24,14 +24,14 @@ fn the_compare_commands_are_registered_in_the_planned_contexts() {
             ("compare.refs", "global"),
             ("compare.next_difference", "Compare"),
             ("compare.previous_difference", "Compare"),
-            ("compare.copy_right", "Compare"),
-            ("compare.copy_left", "Compare"),
             ("compare.enter", "Compare"),
             ("compare.up", "Compare"),
             ("compare.exit", "Compare"),
             ("compare.stop_checking", "Compare"),
             ("compare.continue", "Compare"),
             ("compare.stream", "Compare"),
+            ("compare.copy_right", "CompareView"),
+            ("compare.copy_left", "CompareView"),
             ("compare.save", "CompareView"),
             ("compare.view_bytes", "CompareView"),
             ("compare.view_text", "CompareView"),
@@ -40,6 +40,11 @@ fn the_compare_commands_are_registered_in_the_planned_contexts() {
             ("compare.view_menu", "CompareView"),
             ("compare.changes", "CompareView"),
             ("compare.details", "CompareView"),
+            ("compare.pick_down", "CompareView"),
+            ("compare.pick_up", "CompareView"),
+            ("compare.pick_toggle", "CompareView"),
+            ("compare.remove_picked", "CompareView"),
+            ("compare.show_menu", "CompareView"),
             ("compare.toggle_viewed", "CompareStream"),
             ("compare.fold", "CompareStream"),
             ("compare.open_file", "CompareStream"),
@@ -73,16 +78,11 @@ fn hidden_compare_commands_still_resolve_by_name_and_action() {
     );
 }
 
-const NOT_BUILT: [&str; 9] = [
+const NOT_BUILT: [&str; 4] = [
     "compare.refs",
-    "compare.copy_left",
-    "compare.copy_right",
     "compare.save",
     "compare.view_bytes",
     "compare.view_text",
-    "compare.search",
-    "compare.copy_all_left",
-    "compare.copy_all_right",
 ];
 
 fn palette_names() -> Vec<&'static str> {

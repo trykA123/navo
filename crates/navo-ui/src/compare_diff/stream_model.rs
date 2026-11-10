@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 mod items;
+mod search;
 mod update;
 
 use super::hooks::{Card, ViewedKey};
@@ -25,6 +26,10 @@ pub struct StreamModel {
     pub(super) query: u64,
     /// Item id to the hunk indexes that match; `None` when no search narrows the Stream.
     pub(super) hits: Option<HashMap<u64, Vec<u32>>>,
+    /// How far the app got with the query that `hits` answer.
+    pub(super) scan: search::Scan,
+    /// Set by a restarted search: its first hits replace the old ones.
+    pub(super) replace_hits: bool,
     pub(super) outline_open: bool,
     pub(super) progress: (u32, u32),
 }
@@ -108,6 +113,15 @@ impl StreamModel {
             }
             None => false,
         }
+    }
+
+    /// Puts the cursor on `stop` when it is a stop of the Stream. Returns whether it moved.
+    pub fn set_stop(&mut self, stop: Stop) -> bool {
+        let found = self.stops().contains(&stop);
+        if found {
+            self.cursor = stop;
+        }
+        found
     }
 
     /// Item indexes shown now: all of them, or the ones the search matched.

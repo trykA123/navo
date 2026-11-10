@@ -89,7 +89,7 @@ impl StreamScreen {
     /// Replaces the items and their pairs, for the app and the model, under the next generation
     /// when `fresh` (the compare restarted), else under the same one so built cards stay. The
     /// cursor stays on its item while that item is listed. False when nothing changed.
-    fn replace_items(
+    pub(super) fn replace_items(
         &mut self,
         (list, requests): (StreamList, Vec<PairRequest>),
         fresh: bool,
@@ -97,14 +97,47 @@ impl StreamScreen {
         if list.items == self.model.items() && list.rules == self.model.rules() {
             return false;
         }
+        self.apply_items((list, requests), fresh);
+        true
+    }
+
+    /// Rebuilds the card of item `id` from its files as they are now, after a copy changed
+    /// them; other cards stay. The search runs again, as the card's hunks may have moved.
+    pub(super) fn reload_item(&mut self, id: u64) {
+        if !self.requests.contains_key(&id) {
+            return;
+        }
+        self.control.reload(id);
+        self.search_rerun_soon(true);
+        self.sync_rows();
+    }
+
+    /// Rebuilds every card from the files as they are now, under the next generation: a sheet
+    /// changed many, and the Stream does not know which cards it touched.
+    pub(super) fn reload(&mut self) {
+        let list = StreamList {
+            items: self.model.items().to_vec(),
+            rules: self.model.rules(),
+        };
+        let requests = list
+            .items
+            .iter()
+            .filter_map(|item| self.requests.get(&item.id).cloned())
+            .collect();
+        self.apply_items((list, requests), true);
+    }
+
+    /// Sends `list` and its pairs to the app and the model, under the next generation when
+    /// `fresh`, else under the same one.
+    fn apply_items(&mut self, (list, requests): (StreamList, Vec<PairRequest>), fresh: bool) {
         let generation = self.model.generation() + u64::from(fresh);
         let settled = list.items.iter().map(|item| item.settled);
         let sent = requests.iter().cloned().zip(settled).collect();
         self.control.set_items(generation, sent);
         self.requests = requests.into_iter().map(|r| (r.id, r)).collect();
         self.model.set_items(generation, list);
+        self.search_rerun_soon(fresh);
         self.sync_rows();
-        true
     }
 }
 
@@ -151,7 +184,35 @@ impl NavoWindow {
         }
         stream.stamp = Some(stamp);
         stream.resynced = Some(now);
-        stream.replace_items(items_of(mode), fresh)
+        let changed = stream.replace_items(items_of(mode), fresh);
+        self.arm_rerun(cx);
+        changed
+    }
+
+    /// Sets the timer for a search rerun that came too soon, when none is set.
+    pub(super) fn arm_rerun(&mut self, cx: &mut Context<Self>) {
+        let Some(stream) = self.stream_mut() else {
+            return;
+        };
+        if let Some(wait) = stream.rerun_wait() {
+            stream.rerun.wait = Some(Self::rerun_after(wait, cx));
+        }
+    }
+
+    /// A task that searches again once `wait` has passed.
+    fn rerun_after(wait: Duration, cx: &mut Context<Self>) -> Task<()> {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(wait).await;
+            let _ = this.update(cx, Self::rerun_fired);
+        })
+    }
+
+    /// The rerun timer ended: searches again and redraws.
+    fn rerun_fired(&mut self, cx: &mut Context<Self>) {
+        if let Some(stream) = self.stream_mut() {
+            stream.rerun_due();
+            cx.notify();
+        }
     }
 
     /// A task that rebuilds the items once `wait` has passed.

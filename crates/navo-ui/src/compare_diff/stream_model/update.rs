@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use super::search::Scan;
 use super::{EscStep, Stop, StreamList, StreamModel};
 use crate::compare_diff::hooks::{Card, StreamUpdate};
 
@@ -34,12 +35,16 @@ impl StreamModel {
                 generation,
                 query,
                 hits,
-                ..
-            } if *generation == self.generation && *query == self.query => {
-                // Hits may come in parts; a later part for the same file replaces the earlier one.
-                if let Some(found) = self.hits.as_mut() {
-                    found.extend(hits.iter().cloned());
-                }
+                searched,
+                total,
+                done,
+            } if *generation == self.generation && *query == self.query && self.searching() => {
+                self.take_hits(hits);
+                self.scan = Scan {
+                    searched: *searched,
+                    total: *total,
+                    done: *done,
+                };
             }
             _ => {}
         }
@@ -97,13 +102,15 @@ impl StreamModel {
     pub fn begin_search(&mut self, query: u64) {
         self.query = query;
         self.hits = Some(HashMap::new());
+        self.scan = Scan::default();
+        self.replace_hits = false;
         self.fix_cursor();
     }
 
     /// Esc: closes the search, then the outline, then leaves the Stream.
     pub fn esc(&mut self) -> EscStep {
-        if self.hits.take().is_some() {
-            self.fix_cursor();
+        if self.searching() {
+            self.clear_search();
             EscStep::ClearSearch
         } else if std::mem::take(&mut self.outline_open) {
             EscStep::CloseOutline

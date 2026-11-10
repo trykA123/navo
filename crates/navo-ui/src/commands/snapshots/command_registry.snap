@@ -460,14 +460,24 @@ compare.exit | Leave compare | Compare
 compare.stop_checking | Stop checking contents | Compare
 compare.continue | Continue the compare on a network drive | Compare
 compare.stream | Stream all differences | Compare
+compare.copy_right | Copy to the right | CompareView
+compare.copy_left | Copy to the left | CompareView
 compare.next_file | Next changed file | CompareView
 compare.previous_file | Previous changed file | CompareView
 compare.view_menu | View menu of the file diff | CompareView
 compare.changes | List of changes | CompareView
 compare.details | Details of the pair | CompareView
+compare.pick_down | Pick the next line | CompareView
+compare.pick_up | Pick the previous line | CompareView
+compare.pick_toggle | Pick or unpick the line | CompareView
+compare.remove_picked | Remove the picked lines | CompareView
+compare.show_menu | Open the menu at the cursor line | CompareView
 compare.toggle_viewed | Mark file as viewed | CompareStream
 compare.fold | Fold or unfold the card | CompareStream
 compare.open_file | Open the file diff | CompareStream
+compare.search | Search the differences | CompareStream
+compare.copy_all_left | Copy all matches to the left | CompareStream
+compare.copy_all_right | Copy all matches to the right | CompareStream
 user_commands.run | Run user command | FileList
 user_commands.edit | Edit user commands | global
 window.new | New window | global

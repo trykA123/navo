@@ -10,6 +10,7 @@ retained-restore-failed = { $name } was not restored: { $error }
 retained-purge-failed = { $name } was not deleted: { $error }
 retained-already-restored = { $name } was already restored to { $folder }, so nothing was deleted.
 retained-name-taken = { $name } was not restored: every “(restored)” name in its folder is taken.
+retained-old-version-gone = { $name } was not restored: its old version is no longer in the holding folder. It may already be back in its original place.
 git-off = Git is turned off.
 clipboard-off = The clipboard history is turned off.
 clipboard-busy = The clipboard history is busy. Try again in a moment.

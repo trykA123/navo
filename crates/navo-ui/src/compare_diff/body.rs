@@ -8,6 +8,7 @@ use gpui_kit::{Background, HighlightStyle, StyledText, pattern_slash, rems};
 use super::hooks::{Layout, PairText};
 use super::rows::{ShownKind, ShownRow};
 use super::spans::SpanCache;
+use super::ticks::{PickSide, Ticks, tick_slot};
 use crate::prelude::*;
 use crate::tokens::Theme;
 
@@ -24,6 +25,8 @@ pub struct BodyLook<'a> {
     pub current: Option<u32>,
     /// Changed spans inside lines; `None` in the Simple look, which paints none.
     pub spans: Option<&'a SpanCache>,
+    /// The tick boxes of the picked lines; `None` where lines cannot be picked.
+    pub ticks: Option<&'a Ticks<'a>>,
 }
 
 /// Digits of the largest line number on either side (at least 1).
@@ -42,6 +45,14 @@ pub fn digits(text: &PairText) -> usize {
 enum Side {
     Left,
     Right,
+}
+
+/// The pick side that goes with a drawn side.
+fn pick_side(side: Side) -> PickSide {
+    match side {
+        Side::Left => PickSide::Left,
+        Side::Right => PickSide::Right,
+    }
 }
 
 /// The background of one side of a row: a wash for a change, hatching for a filler side.
@@ -149,6 +160,10 @@ fn side_cell(look: &BodyLook, row: &ShownRow, side: Side) -> Div {
         .when_some(side_fill(look.theme, row.kind, side), |cell, fill| {
             cell.bg(fill)
         })
+        .children(
+            look.ticks
+                .map(|ticks| tick_slot(look.theme, ticks, row, pick_side(side))),
+        )
         .child(number(look, at.map(|(line, _)| line)))
         .child(line_text(
             at.map(|(_, text)| text),
@@ -194,6 +209,10 @@ pub fn row_view(look: &BodyLook, row: &ShownRow) -> AnyElement {
         Layout::Unified => base
             .px(t.spacing.sm)
             .when_some(unified_fill(t, row.kind), |cell, fill| cell.bg(fill))
+            .children(look.ticks.map(|ticks| {
+                let side = row.right.map_or(PickSide::Left, |_| PickSide::Right);
+                tick_slot(t, ticks, row, side)
+            }))
             .child(number(look, row.left.map(|(line, _)| line)))
             .child(number(look, row.right.map(|(line, _)| line)))
             .child(unified_text(look, row)),
@@ -256,6 +275,7 @@ mod tests {
             digits: 1,
             current: None,
             spans,
+            ticks: None,
         };
         let line = Some((0, "héllo"));
         assert!(

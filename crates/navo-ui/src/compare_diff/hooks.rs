@@ -1,11 +1,13 @@
 //! Plain UI types and traits the app implements for the file diff and the Stream.
 //! All loading, diffing, hashing and searching run on app threads (D24).
 
+use std::collections::BTreeSet;
 use std::ops::Range;
 use std::sync::Arc;
 
 use navo_core::Location;
 
+use super::sheet::{SheetPlan, SheetPlanSink, SheetResult, SheetSink};
 use crate::settings::Values;
 
 /// One file pair to open. `id` is the compare row id.
@@ -163,6 +165,7 @@ pub enum StreamUpdate {
         built: u32,
         total: u32,
     },
+    /// The files that matched since the last `Hits` of this query, not all so far.
     Hits {
         generation: u64,
         query: u64,
@@ -172,6 +175,43 @@ pub enum StreamUpdate {
         done: bool,
     },
 }
+
+/// Which way a change is copied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyDirection {
+    ToLeft,
+    ToRight,
+}
+
+/// One change to copy: the pair, the shown byte ranges and digest, and the direction (D29).
+/// `lines` holds the source-side line numbers to copy (V32); `None` copies the whole change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopyChange {
+    pub pair: PairRequest,
+    pub left_bytes: Range<u64>,
+    pub right_bytes: Range<u64>,
+    pub digest: [u8; 16],
+    pub direction: CopyDirection,
+    pub lines: Option<BTreeSet<usize>>,
+}
+
+/// How a copy ended. A refusal carries the text for the status line; nothing was written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CopyResult {
+    Copied,
+    Refused(String),
+}
+
+/// The end of one copy, for the pair whose `request` id was sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopyDone {
+    pub request: u64,
+    pub direction: CopyDirection,
+    pub result: CopyResult,
+}
+
+/// Receives the end of a copy on any thread; it wakes the window.
+pub type CopySink = Arc<dyn Fn(CopyDone) + Send + Sync>;
 
 /// Receives file diff updates on any thread; it wakes the window.
 pub type DiffSink = Arc<dyn Fn(DiffUpdate) + Send + Sync>;
@@ -197,6 +237,9 @@ pub trait StreamControl: Send {
     fn set_viewed(&self, id: u64, key: ViewedKey, viewed: bool);
     /// Searches every difference; empty `text` stops the search.
     fn search(&self, query: u64, text: String);
+    /// Drops the card of item `id` and builds it again from the files as they are now, under
+    /// the same generation; the other cards stay.
+    fn reload(&self, id: u64);
 }
 
 /// Opens file diffs and Streams; the app implements it over the compare engine.
@@ -211,6 +254,43 @@ pub trait DiffHooks: Send + Sync {
 
     /// Opens a Stream using the compare settings in `values`.
     fn open_stream(&self, values: &Values, sink: StreamSink) -> Box<dyn StreamControl>;
+
+    /// Copies one change and reports once through `done`, never blocking the caller. The
+    /// default refuses, for a backend that cannot write.
+    fn copy_change(&self, change: CopyChange, done: CopySink) {
+        done(CopyDone {
+            request: change.pair.id,
+            direction: change.direction,
+            result: CopyResult::Refused(navo_l10n::tr("compare-copy-not-copyable")),
+        });
+    }
+
+    /// Plans a copy of many changes without writing and reports once through `planned`. The
+    /// app keeps the plan for `run_sheet`. The default plans no file.
+    fn plan_sheet(&self, _changes: Vec<CopyChange>, planned: SheetPlanSink) {
+        planned(SheetPlan::default());
+    }
+
+    /// Runs the last plan as one job and reports once through `done`, never blocking the
+    /// caller. The default refuses, for a backend that cannot write.
+    fn run_sheet(&self, done: SheetSink) {
+        done(SheetResult::Refused(navo_l10n::tr(
+            "compare-copy-not-copyable",
+        )));
+    }
+
+    /// Copies several changes of one pair as one job (one undo step) and reports once through
+    /// `done`. The default sends a lone change to `copy_change` and refuses more.
+    fn copy_changes(&self, mut changes: Vec<CopyChange>, done: CopySink) {
+        match (changes.pop(), changes.is_empty()) {
+            (Some(change), true) => self.copy_change(change, done),
+            (first, _) => done(CopyDone {
+                request: first.as_ref().map_or(0, |change| change.pair.id),
+                direction: first.map_or(CopyDirection::ToRight, |change| change.direction),
+                result: CopyResult::Refused(navo_l10n::tr("compare-copy-not-copyable")),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]

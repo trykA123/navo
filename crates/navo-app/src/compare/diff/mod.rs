@@ -4,15 +4,17 @@
 
 mod convert;
 mod copy;
+mod copy_hook;
 mod copy_many;
 mod hooks;
 mod load;
 mod pair;
+mod sheet_hook;
 mod sides;
 mod stream;
 mod viewed;
 
-pub(crate) use hooks::DiffBackend;
+pub(crate) use hooks::{DiffBackend, diff_backend};
 
 #[cfg(test)]
 mod tests;

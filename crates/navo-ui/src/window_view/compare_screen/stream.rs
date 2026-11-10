@@ -16,6 +16,7 @@ use gpui_kit::{FocusHandle, ListAlignment, ListState, Task};
 use super::look::Look;
 use super::menu::MenuSlot;
 use super::outline::Outline;
+use super::search::{Rerun, Search};
 use super::{CompareScreen, DiffSlot};
 use crate::compare_diff::{
     CardRow, Layout, PairRequest, StreamControl, StreamList, StreamModel, StreamRow, StreamSink,
@@ -54,6 +55,8 @@ pub(super) struct StreamScreen {
     pub(super) details: bool,
     sides: SharedString,
     pub(super) outline: Outline,
+    /// The search field, once `/` made it.
+    pub(super) search: Option<Search>,
     pub(super) control: Box<dyn StreamControl>,
     /// Each item's pair by item id: Enter and Ctrl+Alt+↓/↑ open it in the file diff.
     pub(super) requests: HashMap<u64, PairRequest>,
@@ -63,6 +66,8 @@ pub(super) struct StreamScreen {
     pub(super) resynced: Option<Instant>,
     /// The wait before a rebuild that came too soon after the last one.
     pub(super) resync_wait: Option<Task<()>>,
+    /// The throttle of searching again after the items changed.
+    pub(super) rerun: Rerun,
     inbox: StreamInbox,
     /// The first and last visible item positions the app last heard as focus.
     sent: Option<(usize, usize)>,
@@ -88,6 +93,7 @@ pub(super) fn item_of(row: &StreamRow) -> Option<usize> {
         | StreamRow::Line { item, .. }
         | StreamRow::Gap { item, .. }
         | StreamRow::More { item, .. }
+        | StreamRow::Others { item, .. }
         | StreamRow::Placeholder(item)
         | StreamRow::Summary(item) => Some(item),
         StreamRow::RulesGroup => None,
@@ -116,7 +122,7 @@ impl StreamScreen {
     }
 
     /// The row of the current stop: the first row of its hunk, else its card's header.
-    fn cursor_row(&self) -> Option<usize> {
+    pub(super) fn cursor_row(&self) -> Option<usize> {
         let stop = self.model.cursor();
         let header = self
             .rows
@@ -186,11 +192,13 @@ impl NavoWindow {
             details: false,
             sides: super::sides_label(self),
             outline: Outline::new(cx),
+            search: None,
             control,
             requests: requests.into_iter().map(|r| (r.id, r)).collect(),
             stamp: self.browser.compare_mode().map(|mode| mode.rows_stamp()),
             resynced: None,
             resync_wait: None,
+            rerun: Rerun::default(),
             inbox,
             sent: None,
             settle: None,

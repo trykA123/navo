@@ -131,6 +131,11 @@ impl StreamControl for StreamSession {
         drop(state);
         self.shared.ready.notify_all();
     }
+
+    fn reload(&self, id: u64) {
+        self.lock().invalidate(id);
+        self.shared.ready.notify_all();
+    }
 }
 
 impl StreamSession {

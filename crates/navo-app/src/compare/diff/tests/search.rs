@@ -188,3 +188,29 @@ fn empty_text_stops_the_search() {
     assert_eq!(searched, 20);
     assert_eq!(total, 20);
 }
+
+#[test]
+fn each_hits_part_carries_only_the_new_hits() {
+    let data: HashMap<u64, PairData> = (0..12)
+        .map(|id| (id, pair(b"alpha\n", b"ALPHA changed\n")))
+        .collect();
+    let (session, receiver) = start(data.clone(), Duration::from_millis(30));
+    session.set_items(1, items(&data, true));
+    session.search(9, "alpha".to_owned());
+    let mut ids = Vec::new();
+    let mut parts = 0;
+    loop {
+        let (hits, _, _, done) = next_hits(&receiver, 9);
+        ids.extend(hits.iter().map(|(id, _)| *id));
+        parts += 1;
+        if done {
+            break;
+        }
+    }
+    assert!(parts > 1, "the search sent one part only");
+    let mut sorted = ids.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), ids.len(), "a hit was sent twice: {ids:?}");
+    assert_eq!(ids.len(), 12);
+}

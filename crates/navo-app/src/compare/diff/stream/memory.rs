@@ -49,6 +49,16 @@ impl State {
             .copied()
     }
 
+    /// Drops the held card of `id` and queues it for a new build, so a copy that changed its
+    /// files shows at once; other cards stay.
+    pub(super) fn invalidate(&mut self, id: u64) {
+        if let Some(card) = self.held.remove(&id) {
+            self.held_bytes = self.held_bytes.saturating_sub(card_bytes(&card));
+        }
+        self.built.remove(&id);
+        self.enqueue(id);
+    }
+
     /// Drops held cards whose item left the list or whose pair changed, within one generation.
     pub(super) fn drop_stale(&mut self, previous: &HashMap<u64, PairRequest>) {
         let stale: Vec<u64> = self

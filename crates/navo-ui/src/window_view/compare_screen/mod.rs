@@ -1,6 +1,8 @@
 //! The full-window compare screen (D23): the file diff stacked over the Stream, drawn where the
 //! viewer draws. This file holds its state: how a file diff opens, takes updates and pops.
 
+mod context;
+mod copy;
 mod drawers;
 mod entry;
 mod file;
@@ -8,6 +10,9 @@ mod host;
 pub(in crate::window_view) mod look;
 pub(in crate::window_view) mod menu;
 mod outline;
+mod pick;
+mod search;
+mod sheet;
 mod stream;
 
 use std::sync::{Arc, Mutex, PoisonError};
@@ -31,6 +36,10 @@ pub(super) struct DiffSlot {
     inbox: Inbox,
     wake: Waker,
     opened: u64,
+    /// The hovered change, the copy in flight and the last copy's note (V27).
+    copy: copy::CopyState,
+    /// The plan sheet of copy all matches (V31).
+    sheet: sheet::SheetState,
 }
 
 impl DiffSlot {
@@ -41,6 +50,8 @@ impl DiffSlot {
             inbox: Inbox::default(),
             wake,
             opened: 0,
+            copy: copy::CopyState::default(),
+            sheet: sheet::SheetState::default(),
         }
     }
 
@@ -84,6 +95,8 @@ pub(super) struct FileScreen {
     look: look::Look,
     drawers: drawers::Drawers,
     menu: Option<(Entity<ContextMenu>, Subscription)>,
+    /// The lines picked for a partial copy (V32).
+    pick: pick::Pick,
 }
 
 impl FileScreen {
@@ -91,6 +104,7 @@ impl FileScreen {
     fn apply(&mut self, update: DiffUpdate) -> bool {
         match update {
             DiffUpdate::Opened { kind, text, .. } => {
+                self.pick.clear();
                 let (at, words) = (self.at, self.look.words);
                 self.view = text
                     .clone()
@@ -208,6 +222,7 @@ impl NavoWindow {
             look,
             drawers: drawers::Drawers::new(),
             menu: None,
+            pick: pick::Pick::default(),
         };
         let old = self
             .compare
@@ -224,7 +239,7 @@ impl NavoWindow {
     /// Drains the inboxes of the Stream and the file diff; updates for a closed or replaced
     /// file screen are dropped. Returns whether the screen changed.
     pub(super) fn poll_compare_screen(&mut self, cx: &mut Context<Self>) -> bool {
-        self.poll_stream(cx) | self.poll_file_screen()
+        self.poll_stream(cx) | self.poll_file_screen() | self.poll_copies() | self.poll_sheet()
     }
 
     /// Drains the file diff's inbox. Returns whether the file screen changed.
@@ -267,6 +282,7 @@ impl NavoWindow {
             stream.look = file.look;
         }
         release(file, cx);
+        self.compare.diff.copy.note = None;
         match &screen.stream {
             Some(stream) => window.focus(&stream.focus, cx),
             None => {
