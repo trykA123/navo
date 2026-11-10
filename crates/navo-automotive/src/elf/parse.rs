@@ -1,3 +1,5 @@
+//! Parses bounded ELF tables into the automotive viewer model.
+
 use object::elf;
 use object::read::ReadCacheOps;
 use object::read::elf::{FileHeader, ProgramHeader, SectionHeader};
@@ -64,6 +66,7 @@ pub(super) fn bytes_of<'a, S: SectionHeader<Endian = Endianness>, R: ReadCacheOp
         .map_err(|()| ElfProblem::Malformed(format!("{what} lies outside the file")))
 }
 
+/// Converts an ELF header to the numeric viewer model.
 fn header_of<Elf: FileHeader<Endian = Endianness>>(header: &Elf, endian: Endianness) -> Header {
     Header {
         class: if header.is_class_64() {
@@ -76,13 +79,14 @@ fn header_of<Elf: FileHeader<Endian = Endianness>>(header: &Elf, endian: Endiann
         } else {
             Endian::Little
         },
-        machine: header.e_machine(endian),
-        kind: header.e_type(endian),
+        machine: header.e_machine(endian).0,
+        kind: header.e_type(endian).0,
         entry: header.e_entry(endian).into(),
-        flags: header.e_flags(endian),
+        flags: header.e_flags(endian).0,
     }
 }
 
+/// Reads one ELF class into the viewer model; malformed input or cancellation fails.
 fn parse_as<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
     data: Data<'_, R>,
     watch: &mut Watch<'_>,
@@ -103,7 +107,7 @@ fn parse_as<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
     let segments = segments_of::<Elf, R>((header, endian), data, &mut problems);
     let table = SymbolTable {
         endian,
-        machine: header.e_machine(endian),
+        machine: header.e_machine(endian).0,
         headers,
         sections: &sections,
         data,
@@ -140,6 +144,7 @@ fn capped<'a, T>(
     all.get(..max).unwrap_or(all)
 }
 
+/// Reads section names and numeric metadata, recording malformed table problems.
 fn sections_of<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
     (header, endian): (&Elf, Endianness),
     headers: &[Elf::SectionHeader],
@@ -161,8 +166,8 @@ fn sections_of<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
         .iter()
         .map(|section| Section {
             name: name_at(strings, section.sh_name(endian)).unwrap_or_default(),
-            kind: section.sh_type(endian),
-            flags: section.sh_flags(endian).into(),
+            kind: section.sh_type(endian).0,
+            flags: section.sh_flags(endian).0,
             address: section.sh_addr(endian).into(),
             size: section.sh_size(endian).into(),
             offset: section.sh_offset(endian).into(),
@@ -170,6 +175,7 @@ fn sections_of<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
         .collect()
 }
 
+/// Reads bounded load segments with byte addresses and sizes, recording malformed headers.
 fn segments_of<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
     (header, endian): (&Elf, Endianness),
     data: Data<'_, R>,
@@ -184,8 +190,8 @@ fn segments_of<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
     capped(headers, MAX_SEGMENTS, "segments", problems)
         .iter()
         .map(|segment| Segment {
-            kind: segment.p_type(endian),
-            flags: segment.p_flags(endian),
+            kind: segment.p_type(endian).0,
+            flags: segment.p_flags(endian).0,
             offset: segment.p_offset(endian).into(),
             virtual_address: segment.p_vaddr(endian).into(),
             physical_address: segment.p_paddr(endian).into(),
@@ -195,19 +201,19 @@ fn segments_of<Elf: FileHeader<Endian = Endianness>, R: ReadCacheOps>(
         .collect()
 }
 
+/// Finds usable DWARF sections and records missing or compressed debug data.
 fn dwarf_of(sections: &[Section], problems: &mut Vec<ElfProblem>) -> Vec<(&'static str, usize)> {
     let is_compressed = sections.iter().any(|section| {
         section.name.starts_with(".zdebug_")
-            || (section.name.starts_with(".debug_")
-                && section.flags & u64::from(elf::SHF_COMPRESSED) != 0)
+            || (section.name.starts_with(".debug_") && section.flags & elf::SHF_COMPRESSED.0 != 0)
     });
     let found: Vec<(&'static str, usize)> = DWARF
         .iter()
         .filter_map(|name| {
             let at = sections.iter().position(|section| {
                 section.name == *name
-                    && section.kind != elf::SHT_NOBITS
-                    && section.flags & u64::from(elf::SHF_COMPRESSED) == 0
+                    && section.kind != elf::SHT_NOBITS.0
+                    && section.flags & elf::SHF_COMPRESSED.0 == 0
             })?;
             Some((*name, at))
         })
@@ -228,6 +234,7 @@ fn is_copied(section: &Section, segments: &[Segment]) -> bool {
     })
 }
 
+/// Counts section and segment byte totals for the viewer.
 fn totals(sections: &[Section], segments: &[Segment]) -> Totals {
     let loaded: Vec<&Section> = sections
         .iter()
@@ -253,10 +260,10 @@ fn totals(sections: &[Section], segments: &[Segment]) -> Totals {
         };
     }
     let has_loads = segments.iter().any(Segment::is_load);
-    let write = u64::from(elf::SHF_WRITE);
+    let write = elf::SHF_WRITE.0;
     let mut totals = Totals::default();
     for section in loaded {
-        let is_nobits = section.kind == elf::SHT_NOBITS;
+        let is_nobits = section.kind == elf::SHT_NOBITS.0;
         if !is_nobits {
             totals.load = totals.load.saturating_add(section.size);
         }

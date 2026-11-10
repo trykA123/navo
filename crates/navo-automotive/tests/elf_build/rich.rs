@@ -1,3 +1,5 @@
+//! Builds rich ELF and linker-map fixtures for automotive memory tests.
+
 use std::fmt::Write;
 
 use object::elf;
@@ -38,10 +40,11 @@ impl Fixture {
         }
     }
 
+    /// Adds a fixture section and matching load segment, returning its section index.
     fn push(&mut self, name: String, part: Part) -> usize {
         let at = self.spec.parts.len();
-        if part.flags & u64::from(elf::SHF_ALLOC) != 0 {
-            let flags = if part.flags & u64::from(elf::SHF_EXECINSTR) != 0 {
+        if part.flags & elf::SHF_ALLOC.0 != 0 {
+            let flags = if part.flags & elf::SHF_EXECINSTR.0 != 0 {
                 5
             } else {
                 6
@@ -53,19 +56,21 @@ impl Fixture {
         at
     }
 
+    /// Builds reserved ELF fixture bytes; invalid fixture metadata fails the test.
     pub fn build(mut self) -> Vec<u8> {
         if let Some(symbols) = &mut self.spec.symbols {
-            symbols.sort_by_key(|symbol| symbol.bind != elf::STB_LOCAL);
+            symbols.sort_by_key(|symbol| symbol.bind != elf::STB_LOCAL.0);
         }
         writer::build(&self.spec, &self.names)
     }
 
+    /// Builds matching linker-map text for the fixture sections and memory usage.
     pub fn map(&self) -> String {
         let mut result = String::from(
             "TASKING VX\n* Link Result\n| File | Section | Size | Offset | Section | Size |\n",
         );
         for (at, (part, name)) in self.spec.parts.iter().zip(&self.names).enumerate() {
-            if part.flags & u64::from(elf::SHF_ALLOC) == 0 || name.starts_with("$fill") {
+            if part.flags & elf::SHF_ALLOC.0 == 0 || name.starts_with("$fill") {
                 continue;
             }
             let module = MODULES[at % MODULES.len()];
@@ -74,7 +79,7 @@ impl Fixture {
         result.push_str("* Locate Result\n* Sections\n+ Space chip:core:linear (MAU = 8bit)\n| Group | Chip | Section | Space addr | Chip addr | Size (MAU) | Alignment |\n");
         let mut used = [0u64; 2];
         for (at, (part, name)) in self.spec.parts.iter().zip(&self.names).enumerate() {
-            if part.flags & u64::from(elf::SHF_ALLOC) == 0 {
+            if part.flags & elf::SHF_ALLOC.0 == 0 {
                 continue;
             }
             let ram = part.address >= RAM;
@@ -124,14 +129,16 @@ impl Fixture {
     }
 }
 
+/// Marks a fixture symbol as locally bound.
 fn local(mut symbol: Named) -> Named {
-    symbol.bind = elf::STB_LOCAL;
+    symbol.bind = elf::STB_LOCAL.0;
     symbol
 }
 
+/// Creates a file-marker symbol for the named fixture module.
 fn file(module: &str) -> Named {
     Named {
-        kind: elf::STT_FILE,
+        kind: elf::STT_FILE.0,
         part: None,
         ..local(func(&format!("{module}_Unit.o"), 0, 0, 0))
     }
@@ -368,10 +375,11 @@ mod writer {
     use super::super::elf_build::Spec;
 
     struct Reserved {
-        sections: Vec<(StringId, SectionIndex, usize)>,
+        sections: Vec<(StringId, SectionIndex, u64)>,
         symbols: Vec<StringId>,
     }
 
+    /// Reserves fixture byte offsets and tables; invalid string tables fail the test.
     fn reserve<'a>(writer: &mut Writer<'a>, spec: &'a Spec, names: &'a [String]) -> Reserved {
         writer.reserve_file_header();
         writer.reserve_program_headers(spec.loads.len() as u32);
@@ -405,29 +413,30 @@ mod writer {
         }
         writer.reserve_shstrtab_section_index();
         for (section, part) in sections.iter_mut().zip(&spec.parts) {
-            section.2 = writer.reserve(part.data.len(), 4);
+            section.2 = writer.reserve(part.data.len() as u64, 4);
         }
         for (section, (_, bytes)) in sections[spec.parts.len()..].iter_mut().zip(&spec.debug) {
-            section.2 = writer.reserve(bytes.len(), 1);
+            section.2 = writer.reserve(bytes.len() as u64, 1);
         }
         if spec.symbols.is_some() {
             writer.reserve_symtab();
-            writer.reserve_strtab();
+            writer.reserve_strtab().unwrap();
         }
-        writer.reserve_shstrtab();
+        writer.reserve_shstrtab().unwrap();
         writer.reserve_section_headers();
         Reserved { sections, symbols }
     }
 
+    /// Writes fixture ELF headers and contents; invalid headers fail the test.
     fn contents(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) {
         writer
             .write_file_header(&FileHeader {
-                os_abi: 0,
+                os_abi: elf::ELFOSABI_NONE,
                 abi_version: 0,
                 e_type: elf::ET_EXEC,
-                e_machine: spec.machine,
+                e_machine: elf::Machine(spec.machine),
                 e_entry: spec.entry,
-                e_flags: 0,
+                e_flags: elf::FileFlags(0),
             })
             .unwrap();
         writer.write_align_program_headers();
@@ -435,8 +444,8 @@ mod writer {
             let part = &spec.parts[*at];
             writer.write_program_header(&ProgramHeader {
                 p_type: elf::PT_LOAD,
-                p_flags: *flags,
-                p_offset: reserved.sections[*at].2 as u64,
+                p_flags: elf::ProgramFlags(*flags),
+                p_offset: reserved.sections[*at].2,
                 p_vaddr: part.address,
                 p_paddr: part.load_address,
                 p_filesz: part.data.len() as u64,
@@ -455,6 +464,7 @@ mod writer {
         writer.write_shstrtab();
     }
 
+    /// Writes reserved fixture symbols and string table data.
     fn symbols(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) {
         let Some(symbols) = &spec.symbols else {
             return;
@@ -462,14 +472,14 @@ mod writer {
         writer.write_null_symbol();
         for (symbol, name) in symbols.iter().zip(&reserved.symbols) {
             writer.write_symbol(&Sym {
-                name: Some(*name),
-                section: symbol.part.map(|at| reserved.sections[at].1),
-                st_info: (symbol.bind << 4) | symbol.kind,
-                st_other: 0,
-                st_shndx: if symbol.is_absolute || symbol.kind == elf::STT_FILE {
+                st_name: writer.string_offset(Some(*name)),
+                section: symbol.part.map(|at| reserved.sections[at].1.0),
+                st_info: elf::SymbolInfo((symbol.bind << 4) | symbol.kind),
+                st_other: elf::SymbolOther(0),
+                st_shndx: if symbol.is_absolute || symbol.kind == elf::STT_FILE.0 {
                     elf::SHN_ABS
                 } else {
-                    0
+                    elf::SHN_UNDEF
                 },
                 st_value: symbol.value,
                 st_size: symbol.size,
@@ -478,15 +488,16 @@ mod writer {
         writer.write_strtab();
     }
 
+    /// Writes fixture section headers and string table offsets.
     fn headers(writer: &mut Writer<'_>, spec: &Spec, reserved: &Reserved) {
         writer.write_null_section_header();
         for (part, (name, _, offset)) in spec.parts.iter().zip(&reserved.sections) {
             writer.write_section_header(&SectionHeader {
-                name: Some(*name),
-                sh_type: part.kind,
-                sh_flags: part.flags,
+                sh_name: writer.section_name_offset(Some(*name)),
+                sh_type: elf::SectionType(part.kind),
+                sh_flags: elf::SectionFlags(part.flags),
                 sh_addr: part.address,
-                sh_offset: *offset as u64,
+                sh_offset: *offset,
                 sh_size: part.size,
                 sh_link: 0,
                 sh_info: 0,
@@ -500,11 +511,11 @@ mod writer {
             .zip(&reserved.sections[spec.parts.len()..])
         {
             writer.write_section_header(&SectionHeader {
-                name: Some(*name),
+                sh_name: writer.section_name_offset(Some(*name)),
                 sh_type: elf::SHT_PROGBITS,
-                sh_flags: 0,
+                sh_flags: elf::SectionFlags(0),
                 sh_addr: 0,
-                sh_offset: *offset as u64,
+                sh_offset: *offset,
                 sh_size: bytes.len() as u64,
                 sh_link: 0,
                 sh_info: 0,
@@ -515,7 +526,7 @@ mod writer {
         if let Some(symbols) = &spec.symbols {
             let locals = symbols
                 .iter()
-                .take_while(|symbol| symbol.bind == elf::STB_LOCAL)
+                .take_while(|symbol| symbol.bind == elf::STB_LOCAL.0)
                 .count();
             writer.write_symtab_section_header(locals as u32 + 1);
             writer.write_strtab_section_header();
@@ -523,6 +534,7 @@ mod writer {
         writer.write_shstrtab_section_header();
     }
 
+    /// Builds reserved ELF fixture bytes; invalid fixture metadata fails the test.
     pub(super) fn build(spec: &Spec, names: &[String]) -> Vec<u8> {
         assert_eq!(spec.parts.len(), names.len());
         let endian = if spec.is_big {

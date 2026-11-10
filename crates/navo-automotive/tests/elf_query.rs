@@ -1,3 +1,5 @@
+//! Checks ELF symbol filtering, sorting, and selection.
+
 #![allow(clippy::unwrap_used, reason = "test helpers")]
 
 mod elf_build;
@@ -118,15 +120,15 @@ fn a_cancelled_query_gives_nothing() {
 
 fn local(symbol: Named) -> Named {
     Named {
-        bind: raw::STB_LOCAL,
-        kind: raw::STT_NOTYPE,
+        bind: raw::STB_LOCAL.0,
+        kind: raw::STT_NOTYPE.0,
         ..symbol
     }
 }
 
 fn weak(symbol: Named) -> Named {
     Named {
-        bind: raw::STB_WEAK,
+        bind: raw::STB_WEAK.0,
         ..symbol
     }
 }

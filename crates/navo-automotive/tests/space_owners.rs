@@ -1,3 +1,5 @@
+//! Checks automotive memory ownership from ELF and linker maps.
+
 #![allow(clippy::unwrap_used, reason = "synthetic test fixtures must parse")]
 
 mod elf_build;
@@ -14,8 +16,8 @@ use object::elf as raw;
 
 const ROM: u64 = 0xA004_C000;
 const DSPR: u64 = 0x7000_0000;
-const LOAD_RX: u32 = raw::PF_R | raw::PF_X;
-const LOAD_RW: u32 = raw::PF_R | raw::PF_W;
+const LOAD_RX: u32 = raw::PF_R.0 | raw::PF_X.0;
+const LOAD_RW: u32 = raw::PF_R.0 | raw::PF_W.0;
 
 const MDF: &str = "space code 1 8\n\
     chip pflash 10 8 0xF0000 rom\n\
@@ -47,15 +49,17 @@ fn named_text(name: &'static str, address: u64, len: usize) -> Part {
     }
 }
 
+/// Marks a fixture symbol as locally bound.
 fn local(mut symbol: Named) -> Named {
-    symbol.bind = raw::STB_LOCAL;
+    symbol.bind = raw::STB_LOCAL.0;
     symbol
 }
 
+/// Creates a file-marker symbol for the named fixture source.
 fn file(name: &str) -> Named {
     Named {
-        kind: raw::STT_FILE,
-        bind: raw::STB_LOCAL,
+        kind: raw::STT_FILE.0,
+        bind: raw::STB_LOCAL.0,
         part: None,
         ..func(name, 0, 0, 0)
     }

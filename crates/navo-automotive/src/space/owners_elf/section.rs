@@ -1,3 +1,5 @@
+//! Assigns ELF section ranges to symbols and sources in automotive memory views.
+
 use std::ops::Range;
 
 use super::files::{FileKind, classify, plain_section};
@@ -47,9 +49,10 @@ pub(super) fn build(ctx: &Context<'_>, out: &mut Builder, at: usize) {
     work.mirror_load_image(first);
 }
 
+/// Returns a symbol byte address with the ARM Thumb instruction bit cleared.
 fn thumb_start(ctx: &Context<'_>, symbol: &Symbol) -> u64 {
     let is_thumb =
-        ctx.elf.header.machine == object::elf::EM_ARM && symbol.kind == crate::SymbolKind::Func;
+        ctx.elf.header.machine == object::elf::EM_ARM.0 && symbol.kind == crate::SymbolKind::Func;
     if is_thumb {
         symbol.value & !1
     } else {

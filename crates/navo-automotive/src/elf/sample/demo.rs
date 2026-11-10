@@ -1,3 +1,5 @@
+//! Builds the demonstration firmware shown by the automotive ELF viewer.
+
 use ::object::elf;
 
 use super::{Named, Part, Spec, bss, build, data, func, line_program, object, text};
@@ -40,6 +42,7 @@ const DEMO_OBJECTS: [(&str, u64, usize); 8] = [
     ("Os_Stack", 2048, 2),
 ];
 
+/// Builds the demonstration ELF bytes, returning errors for invalid fixture metadata.
 pub fn demo() -> Result<Vec<u8>, String> {
     let base = 0x0000_8000;
     let mut symbols: Vec<Named> = DEMO_FUNCTIONS
@@ -56,7 +59,7 @@ pub fn demo() -> Result<Vec<u8>, String> {
         cursor[part] += size;
         let mut symbol = object(name, address, size, part);
         if name.starts_with("g_") {
-            symbol.bind = elf::STB_LOCAL;
+            symbol.bind = elf::STB_LOCAL.0;
         }
         symbols.push(symbol);
     }
@@ -67,7 +70,7 @@ pub fn demo() -> Result<Vec<u8>, String> {
     let spec = Spec {
         is_64: false,
         is_big: false,
-        machine: elf::EM_ARM,
+        machine: elf::EM_ARM.0,
         entry: base + 1,
         parts: vec![
             text(base, 0x1800),
@@ -79,9 +82,9 @@ pub fn demo() -> Result<Vec<u8>, String> {
         ],
         symbols: Some(symbols),
         loads: vec![
-            (0, elf::PF_R | elf::PF_X),
-            (1, elf::PF_R | elf::PF_W),
-            (2, elf::PF_R | elf::PF_W),
+            (0, elf::PF_R.0 | elf::PF_X.0),
+            (1, elf::PF_R.0 | elf::PF_W.0),
+            (2, elf::PF_R.0 | elf::PF_W.0),
         ],
         debug: line_program(false, false, &rows)?,
     };

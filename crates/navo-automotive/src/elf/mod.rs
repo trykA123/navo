@@ -1,3 +1,5 @@
+//! Defines the automotive ELF model and reader interface.
+
 mod demangle;
 mod lines;
 mod names;
@@ -244,13 +246,15 @@ impl Elf {
 
 impl Section {
     #[must_use]
+    /// Checks whether this section has the ELF allocation flag.
     pub fn is_loaded(&self) -> bool {
-        self.flags & u64::from(object::elf::SHF_ALLOC) != 0
+        self.flags & object::elf::SHF_ALLOC.0 != 0
     }
 
     #[must_use]
+    /// Checks whether this loaded section contains executable instructions.
     pub fn is_executable(&self) -> bool {
-        self.is_loaded() && self.flags & u64::from(object::elf::SHF_EXECINSTR) != 0
+        self.is_loaded() && self.flags & object::elf::SHF_EXECINSTR.0 != 0
     }
 
     #[must_use]
@@ -271,13 +275,15 @@ impl Section {
 
 impl Segment {
     #[must_use]
+    /// Checks whether this segment loads bytes into memory.
     pub fn is_load(&self) -> bool {
-        self.kind == object::elf::PT_LOAD
+        self.kind == object::elf::PT_LOAD.0
     }
 
     #[must_use]
+    /// Checks whether this segment permits writes.
     pub fn is_writable(&self) -> bool {
-        self.flags & object::elf::PF_W != 0
+        self.flags & object::elf::PF_W.0 != 0
     }
 
     #[must_use]

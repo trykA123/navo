@@ -1,3 +1,5 @@
+//! Reads bounded DWARF source lines for automotive ELF symbols.
+
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -102,6 +104,7 @@ fn executable(elf: &Elf) -> Vec<Range<u64>> {
         .collect()
 }
 
+/// Finds a symbol byte address, clearing the ARM Thumb bit; missing symbols return none.
 fn symbol_address(elf: &Elf, at: usize) -> Option<u64> {
     let symbol = elf.symbols.get(at)?;
     let section = match symbol.place {
@@ -111,7 +114,7 @@ fn symbol_address(elf: &Elf, at: usize) -> Option<u64> {
     if !section.is_executable() {
         return None;
     }
-    let thumb = elf.header.machine == object::elf::EM_ARM && symbol.kind == SymbolKind::Func;
+    let thumb = elf.header.machine == object::elf::EM_ARM.0 && symbol.kind == SymbolKind::Func;
     Some(if thumb {
         symbol.value & !1
     } else {
@@ -155,6 +158,7 @@ fn check_sizes<R: ReadCacheOps>(data: &ReadCache<R>, elf: &Elf, lines: &mut Line
     }
 }
 
+/// Reads DWARF source lines from ELF sections; cancellation or loading errors fail.
 pub(super) fn read<R: ReadCacheOps>(
     data: &ReadCache<R>,
     elf: &Elf,
@@ -194,8 +198,7 @@ pub(super) fn read<R: ReadCacheOps>(
             }
         };
         let at = header
-            .offset()
-            .as_debug_info_offset()
+            .debug_info_offset()
             .map_or(0, |offset| offset.0 as u64);
         (watch.progress)(at * PER_MILLE / info);
         if let Err(error) = dwarf.unit(header).and_then(|unit| walk.unit(&unit)) {

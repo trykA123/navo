@@ -1,3 +1,5 @@
+//! Filters and sorts symbols for the automotive ELF viewer.
+
 use std::cmp::Ordering;
 use std::sync::atomic::{self, AtomicBool};
 
@@ -139,9 +141,10 @@ impl Boundaries {
     }
 }
 
+/// Checks whether a symbol lacks useful allocation information for the viewer.
 fn is_noise(elf: &Elf, boundaries: &Boundaries, symbol: &Symbol) -> bool {
     symbol.place == Place::Absolute
-        || matches!(symbol.kind, SymbolKind::Other(STT_FILE | STT_SECTION))
+        || matches!(symbol.kind, SymbolKind::Other(kind) if matches!(object::elf::SymbolType(kind), STT_FILE | STT_SECTION))
         || (symbol.size == 0 && estimate(elf, symbol, boundaries.after(symbol)).is_none())
 }
 
