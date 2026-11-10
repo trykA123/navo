@@ -22,6 +22,7 @@ use super::copy_hook::{CopyService, unavailable};
 use super::load::{LoadInput, Side};
 use super::pair::PairDiff;
 use super::sides::{side_of, unreadable_side};
+use super::sources::Sources;
 use super::stream::{LoadFn, StreamSession};
 use super::viewed::{LazyViewed, NoViewed, OpenViewed, ViewedMarks, ViewedStore};
 use crate::compare::convert::settings_of;
@@ -41,6 +42,7 @@ pub(crate) struct DiffBackend {
 impl Default for DiffBackend {
     /// Real local and Git sides and the profile cache, both opened later on workers.
     fn default() -> Self {
+        Sources::sweep_startup();
         Self::with_parts(Arc::new(side_of), Arc::new(open_viewed))
     }
 }

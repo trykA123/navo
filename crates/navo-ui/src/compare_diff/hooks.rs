@@ -10,6 +10,13 @@ use navo_core::Location;
 use super::sheet::{SheetPlan, SheetPlanSink, SheetResult, SheetSink};
 use crate::settings::Values;
 
+mod large;
+
+pub use large::{
+    ByteProgress, ByteRegionView, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepReason,
+    LargeStepView,
+};
+
 /// One file pair to open. `id` is the compare row id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PairRequest {
@@ -135,6 +142,30 @@ pub enum DiffUpdate {
         request: u64,
         spans: Vec<RowSpans>,
     },
+    Large {
+        request: u64,
+        hunks: Vec<LargeHunk>,
+        steps: Vec<LargeStepView>,
+        progress: Option<LargeProgress>,
+        /// This snapshot's number; the view acknowledges it after applying the snapshot.
+        ack: u64,
+    },
+    /// The display lines of a large text pair, read off the UI thread. A side past its end
+    /// has fewer lines than `rows`; a `*_cut` side's last line is longer than the read limit
+    /// and ends early.
+    LargeLines {
+        request: u64,
+        rows: Range<u64>,
+        left: Vec<String>,
+        right: Vec<String>,
+        left_cut: bool,
+        right_cut: bool,
+    },
+    Bytes {
+        request: u64,
+        regions: Vec<ByteRegionView>,
+        progress: Option<ByteProgress>,
+    },
     ChangedOnDisk {
         request: u64,
     },
@@ -225,6 +256,12 @@ pub trait PairControl: Send {
     fn spans(&self, rows: Range<u32>);
     /// Reloads both sides.
     fn refresh(&self);
+    /// Moves a large diff's focus to `line`; a text pair ignores it.
+    fn focus(&self, _line: u64) {}
+    /// Asks for the display lines of a large text pair; a text pair ignores it.
+    fn lines(&self, _rows: Range<u64>) {}
+    /// Releases the eviction charges of snapshots up to number `upto` once the view applied it.
+    fn acknowledge(&self, _upto: u64) {}
 }
 
 /// A running Stream. No call blocks; dropping it cancels without blocking.

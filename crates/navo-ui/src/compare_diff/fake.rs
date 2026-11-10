@@ -22,6 +22,7 @@ pub(crate) struct Calls {
     pub(crate) searches: Mutex<Vec<(u64, String)>>,
     pub(crate) focused: Mutex<Vec<Vec<u64>>>,
     pub(crate) viewed: Mutex<Vec<(u64, bool)>>,
+    pub(crate) acks: Mutex<Vec<u64>>,
     pub(crate) dropped: AtomicBool,
     pub(crate) copies: Mutex<Vec<CopyChange>>,
     pub(crate) copy_sink: Mutex<Option<CopySink>>,
@@ -163,6 +164,15 @@ impl FakeDiffHooks {
             .unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// Every acknowledgement a pair control received, oldest first.
+    pub(crate) fn acks(&self) -> Vec<u64> {
+        self.calls
+            .acks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     /// Whether a pair control was dropped.
     pub(crate) fn dropped(&self) -> bool {
         self.calls.dropped.load(Ordering::SeqCst)
@@ -186,6 +196,13 @@ impl PairControl for FakePair {
             .refreshed
             .lock()
             .unwrap_or_else(PoisonError::into_inner) += 1;
+    }
+    fn acknowledge(&self, upto: u64) {
+        self.0
+            .acks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(upto);
     }
 }
 

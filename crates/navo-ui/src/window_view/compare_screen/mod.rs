@@ -22,7 +22,10 @@ use gpui_kit::{FocusHandle, Subscription};
 use super::NavoWindow;
 use crate::browser::{FileDiffRequest, Waker};
 use crate::compare_diff::PairRequest;
-use crate::compare_diff::{DiffHooks, DiffSink, DiffUpdate, PairControl, PairKind, PairText};
+use crate::compare_diff::{
+    DiffHooks, DiffSink, DiffUpdate, LargeHunk, LargeProgress, LargeStepView, PairControl,
+    PairKind, PairText,
+};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
 use stream::StreamScreen;
@@ -59,12 +62,62 @@ impl DiffSlot {
     fn sink(&self, tag: u64) -> DiffSink {
         let (inbox, wake) = (Arc::clone(&self.inbox), Arc::clone(&self.wake));
         Arc::new(move |update| {
-            inbox
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .push((tag, update));
+            coalesce(
+                &mut inbox.lock().unwrap_or_else(PoisonError::into_inner),
+                tag,
+                update,
+            );
             wake();
         })
+    }
+}
+
+/// Queue `update`, coalescing the snapshots the view has not applied yet.
+///
+/// A newer `Large` snapshot replaces the older one. `Bytes` updates carry only new regions,
+/// so an older pending one keeps its regions and takes the newer progress.
+pub(super) fn coalesce(inbox: &mut Vec<(u64, DiffUpdate)>, tag: u64, update: DiffUpdate) {
+    match update {
+        DiffUpdate::Large { request, .. } => {
+            inbox.retain(|(sent_to, queued)| {
+                *sent_to != tag
+                    || !matches!(queued, DiffUpdate::Large { request: queued, .. } if *queued == request)
+            });
+            inbox.push((tag, update));
+        }
+        DiffUpdate::Bytes {
+            request,
+            regions,
+            progress,
+        } => {
+            let pending = inbox
+                .iter_mut()
+                .rev()
+                .find_map(|(sent_to, queued)| match queued {
+                    DiffUpdate::Bytes {
+                        request: queued,
+                        regions: older,
+                        progress: older_progress,
+                    } if *sent_to == tag && *queued == request => Some((older, older_progress)),
+                    _ => None,
+                });
+            if let Some((older, older_progress)) = pending {
+                older.extend(regions);
+                if progress.is_some() {
+                    *older_progress = progress;
+                }
+            } else {
+                inbox.push((
+                    tag,
+                    DiffUpdate::Bytes {
+                        request,
+                        regions,
+                        progress,
+                    },
+                ));
+            }
+        }
+        other => inbox.push((tag, other)),
     }
 }
 
@@ -79,6 +132,14 @@ pub(super) enum FileState {
     Failed(SharedString),
 }
 
+/// The hunks, steps and progress of one applied large text snapshot (V38 draws them).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(super) struct LargeShown {
+    pub(super) hunks: Vec<LargeHunk>,
+    pub(super) steps: Vec<LargeStepView>,
+    pub(super) progress: Option<LargeProgress>,
+}
+
 /// One open file pair: its request, its control and what arrived for it.
 pub(super) struct FileScreen {
     tag: u64,
@@ -90,6 +151,8 @@ pub(super) struct FileScreen {
     view: Option<file::FileView>,
     /// The change to show first once the text arrives.
     at: Option<usize>,
+    /// The large text snapshot applied last; its number was acknowledged after applying.
+    large: Option<LargeShown>,
     control: Box<dyn PairControl>,
     /// What the View menu set: parts shown and layout.
     look: look::Look,
@@ -116,7 +179,24 @@ impl FileScreen {
                 Some(view) => view.add_spans(spans),
                 None => return false,
             },
-            DiffUpdate::ChangedOnDisk { .. } => return false,
+            DiffUpdate::Large {
+                hunks,
+                steps,
+                progress,
+                ack,
+                ..
+            } => {
+                // Apply first: the acknowledgement lets the engine free what this view dropped.
+                self.large = Some(LargeShown {
+                    hunks,
+                    steps,
+                    progress,
+                });
+                self.control.acknowledge(ack);
+            }
+            DiffUpdate::LargeLines { .. }
+            | DiffUpdate::Bytes { .. }
+            | DiffUpdate::ChangedOnDisk { .. } => return false,
         }
         true
     }
@@ -218,6 +298,7 @@ impl NavoWindow {
             state: FileState::Loading,
             view: None,
             at,
+            large: None,
             control,
             look,
             drawers: drawers::Drawers::new(),
