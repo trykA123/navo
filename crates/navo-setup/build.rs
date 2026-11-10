@@ -120,26 +120,14 @@ fn link_dll_guard() {
     }
 }
 
-/// Embeds the app's icon/version resource and the required asInvoker/DPI manifest.
+/// Embeds the app's icon and version resource. The asInvoker/PerMonitorV2 manifest
+/// (IW13) comes from gpui-pre's default `windows-manifest` feature; a second one fails the link.
 fn compile_resources(out: &Path) -> Result<(), Box<dyn Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let icon = root.join("assets/brand/navo.ico");
     println!("cargo:rerun-if-changed={}", icon.display());
-    let manifest = out.join("setup.manifest");
-    fs::write(
-        &manifest,
-        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges>
-    <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
-  </requestedPrivileges></security></trustInfo>
-  <application xmlns="urn:schemas-microsoft-com:asm.v3"><windowsSettings>
-    <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
-  </windowsSettings></application>
-</assembly>"#,
-    )?;
     let version = env::var("CARGO_PKG_VERSION")?;
-    let mut rc = resource_script(Resource {
+    let rc = resource_script(Resource {
         icon: &icon.display().to_string(),
         version: &version,
         product_version: &version,
@@ -147,10 +135,6 @@ fn compile_resources(out: &Path) -> Result<(), Box<dyn Error>> {
         internal_name: "navo-setup",
         original_filename: "Navo-Setup.exe",
     });
-    rc.push_str(&format!(
-        "1 24 \"{}\"\n",
-        manifest.display().to_string().replace('\\', "\\\\")
-    ));
     let resource = out.join("setup.rc");
     fs::write(&resource, rc)?;
     embed_resource::compile(&resource, embed_resource::NONE).manifest_required()?;
