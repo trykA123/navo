@@ -4,7 +4,7 @@ use std::time::Duration;
 use navo_fs::DriveClass;
 use navo_ui::git::BadgeKind;
 
-use super::skip_probe::{SkipProbe, fresh, harness, prints, repo, scanned};
+use super::skip_probe::{SkipProbe, after_confirm, fresh, harness, prints, repo, scanned};
 use crate::git::scan::tests::{Harness, clean, location};
 
 /// Moves the fake clock and wakes a scanner that is waiting on its next deadline.
@@ -49,7 +49,7 @@ fn a_reused_root_dims_five_minutes_after_its_check() {
 
     advance(&h, &probe, Duration::from_secs(280));
     h.observe("fixture", 2, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_confirm();
     fresh(&h, "fixture", "repo");
 
     advance(&h, &probe, Duration::from_secs(20));

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use navo_fs::DriveClass;
 
-use super::skip_probe::{SkipProbe, fresh, harness, prints, repo, upstream_status};
+use super::skip_probe::{SkipProbe, after_confirm, fresh, harness, prints, repo, upstream_status};
 
 #[test]
 fn a_first_new_upstream_leaves_no_proof_so_the_next_open_calls_and_the_one_after_reuses() {
@@ -32,7 +32,7 @@ fn a_first_new_upstream_leaves_no_proof_so_the_next_open_calls_and_the_one_after
     });
 
     h.observe("fixture", 3, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
+    after_confirm();
     fresh(&h, "fixture", "repo");
     assert!(
         h.calls.try_recv().is_err(),
@@ -61,7 +61,6 @@ fn an_upstream_ref_change_between_opens_calls() {
 
     probe.set_print(Some(changed));
     h.observe("fixture", 3, &["repo"]);
-    h.wait("fixture", |badges| badges.by_name["repo"].stale);
     assert_eq!(h.next().0, repo(), "the ref moved under the proof");
     h.reply(Ok(upstream_status("origin/main")));
     assert!(h.scan.stop());

@@ -204,3 +204,13 @@ pub(crate) fn fresh(h: &Harness, folder: &str, name: &str) -> Arc<FolderBadges> 
         badges.by_name.get(name).is_some_and(|badge| !badge.stale)
     })
 }
+
+/// Gives the scanner time to plan a request; a plan that changes nothing publishes nothing.
+pub(crate) fn after_plan() {
+    std::thread::sleep(Duration::from_millis(100));
+}
+
+/// Waits past the confirm wait, so a background confirm has run.
+pub(crate) fn after_confirm() {
+    std::thread::sleep(Duration::from_millis(1400));
+}
