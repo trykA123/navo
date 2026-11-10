@@ -10,6 +10,9 @@ use gpui_kit::RenderOnce;
 mod pages_a;
 #[cfg(test)]
 mod pages_a_tests;
+mod pages_b;
+#[cfg(test)]
+mod pages_b_tests;
 mod strings;
 #[cfg(test)]
 mod tests;
@@ -133,6 +136,29 @@ pub fn access_keys(view: &SetupView, strings: &Strings) -> Vec<(char, SetupActio
         SetupPage::Folder if !view.folder_locked => {
             add(&strings.folder_browse, SetupAction::Browse)
         }
+        SetupPage::Shortcuts => {
+            add(
+                &strings.shortcuts_start_menu,
+                SetupAction::Toggle(SetupCheck::StartMenu),
+            );
+            add(
+                &strings.shortcuts_desktop,
+                SetupAction::Toggle(SetupCheck::Desktop),
+            );
+        }
+        SetupPage::Finish => {
+            add(
+                &strings.finish_start,
+                SetupAction::Toggle(SetupCheck::StartNavo),
+            );
+            add(&strings.finish_open_folder, SetupAction::OpenFolder);
+        }
+        SetupPage::Failed => {
+            add(&strings.failed_copy, SetupAction::CopyDetails);
+            if view.can_retry {
+                add(&strings.failed_retry, SetupAction::TryAgain);
+            }
+        }
         _ => {}
     }
     keys
@@ -164,11 +190,16 @@ impl RenderOnce for Page {
             view: &self.view,
             strings: &self.strings,
             on_action: &self.on_action,
+            reduce_motion: cx.reduce_motion(),
         };
         match self.view.page {
             SetupPage::Welcome => pages_a::welcome(&ctx),
             SetupPage::Licence => pages_a::licence(&ctx),
             SetupPage::Folder => pages_a::folder(&ctx),
+            SetupPage::Shortcuts => pages_b::shortcuts(&ctx),
+            SetupPage::Installing => pages_b::installing(&ctx),
+            SetupPage::Finish => pages_b::finish(&ctx),
+            SetupPage::Failed => pages_b::failed(&ctx),
             other => div().child(format!("{other:?}")).into_any_element(),
         }
     }
