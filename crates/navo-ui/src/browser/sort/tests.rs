@@ -253,10 +253,29 @@ fn a_default_sort_set_before_start_orders_the_first_listing() {
     assert_eq!(names(&browser), ["alpha", "zeta", "C.md", "a.rs", "b.txt"]);
 }
 
+/// Splits a name into text and digit-run tokens; digit runs compare by (length, digits).
+fn natural_key(name: &str) -> Vec<(bool, String)> {
+    let mut tokens: Vec<(bool, String)> = Vec::new();
+    for ch in name.chars() {
+        let digit = ch.is_ascii_digit();
+        match tokens.last_mut() {
+            Some((is_digit, text)) if *is_digit == digit => text.push(ch),
+            _ => tokens.push((digit, ch.to_string())),
+        }
+    }
+    for (is_digit, text) in &mut tokens {
+        if *is_digit {
+            let stripped = text.trim_start_matches('0');
+            *text = format!("{:08}{stripped}", stripped.len());
+        }
+    }
+    tokens
+}
+
 pub(super) fn oracle_order(rows: &[FsEntry], key: SortKey, folders_first: bool) -> Vec<String> {
-    let lower = |e: &FsEntry| e.name.display().to_lowercase();
+    let lower = |e: &FsEntry| natural_key(&e.name.display().to_lowercase());
     let is_file = |e: &FsEntry| e.kind != EntryKind::Folder;
-    let ext = |e: &FsEntry| match lower(e).rsplit_once('.') {
+    let ext = |e: &FsEntry| match e.name.display().to_lowercase().rsplit_once('.') {
         Some((stem, ext)) if is_file(e) && !stem.is_empty() => ext.to_owned(),
         _ => String::new(),
     };
