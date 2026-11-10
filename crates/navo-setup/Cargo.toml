@@ -16,7 +16,6 @@ gpui-kit = "=0.9.1"
 navo-core = { path = "../navo-core" }
 navo-diag = { path = "../navo-diag" }
 navo-l10n = { path = "../navo-l10n" }
-navo-store = { path = "../navo-store" }
 navo-ui = { path = "../navo-ui" }
 navo-update = { path = "../navo-update" }
 roxmltree = "=0.21.2"
