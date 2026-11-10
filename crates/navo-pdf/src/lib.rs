@@ -11,7 +11,7 @@ pub use client::{Confine, DEFAULT_TIMEOUT, Document, Launcher};
 pub use pdfium::{MAX_FILE_BYTES, PdfiumEngine, library_beside};
 pub use serve::{Engine, Unavailable, clip, serve};
 
-pub const PDFIUM_VERSION: &str = "chromium/8076";
+pub const PDFIUM_VERSION: &str = "chromium/8125";
 
 #[cfg(test)]
 mod tests {
