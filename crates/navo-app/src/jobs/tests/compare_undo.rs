@@ -12,6 +12,8 @@ use navo_ui::browser::{LoggedOperation, RenameReport, UndoKind, UndoOffer};
 use super::super::{SessionHolds, lock};
 use super::*;
 
+mod retained;
+
 const OLD: u64 = 3;
 const NEW: u64 = 11;
 const OLD_TIME: i64 = 1_000;

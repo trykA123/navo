@@ -1,13 +1,15 @@
 //! Gallery pages `p42-diff*`: the compare file diff and the Stream with fake data, wide
 //! (side by side, 1280 px) and narrow (unified, 720 px), with their drawers open.
 
+use std::collections::BTreeSet;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use navo_ui::compare_diff::body::{BodyLook, digits, row_view};
 use navo_ui::compare_diff::map::{ChangeMap, HunkKind, MapHunk};
 use navo_ui::compare_diff::{
-    CardCtx, DiffRow, Layout, PairText, SpanCache, StreamModel, StreamRow, pair_rows,
-    stream_row_view, stream_rows,
+    CardCtx, DiffRow, Layout, PairText, PickSide, SpanCache, StreamModel, StreamRow, Ticks,
+    line_on, pair_rows, stream_row_view, stream_rows,
 };
 use navo_ui::prelude::*;
 use navo_ui::tokens::{self, Theme};
@@ -75,7 +77,12 @@ fn map_hunks(text: &PairText, layout: Layout) -> Arc<[MapHunk]> {
 /// The Stream's cards as one padded column on the rail colour.
 fn card_list(t: &Theme, model: &StreamModel, layout: Layout) -> Div {
     let rows = stream_rows(model, layout);
-    let ctx = CardCtx { t, model, layout };
+    let ctx = CardCtx {
+        t,
+        model,
+        layout,
+        bars: None,
+    };
     let cards = (0..rows.len()).map(|at| {
         let first = matches!(rows[at], StreamRow::Header(_) | StreamRow::RulesGroup);
         div()
@@ -121,14 +128,33 @@ impl CompareDiffPage {
         }
     }
 
+    /// The left lines of the current change, as if picked with Shift+↓ (V32).
+    fn picked(&self) -> BTreeSet<u32> {
+        let rows = &self.text.hunks[CURRENT].rows;
+        let rows = &self.text.rows[rows.start as usize..rows.end as usize];
+        rows.iter()
+            .filter_map(|row| line_on(*row, PickSide::Left))
+            .collect()
+    }
+
     /// The file diff: header, drawers, rows, change map and status line.
     fn file(&self, t: &Theme, layout: Layout) -> Div {
+        let picked = self.picked();
+        let ticks = Ticks {
+            text: &self.text,
+            side: Some(PickSide::Left),
+            cursor: picked.iter().next_back().copied(),
+            picked: &picked,
+            hovered: None,
+            on_tick: Rc::new(|_, _, _, _, _| {}),
+        };
         let look = BodyLook {
             theme: t,
             layout,
             digits: digits(&self.text),
             current: Some(CURRENT as u32),
             spans: Some(&self.spans),
+            ticks: Some(&ticks),
         };
         let rows = pair_rows(&self.text, layout, 0..self.text.rows.len() * 2);
         let list = div()

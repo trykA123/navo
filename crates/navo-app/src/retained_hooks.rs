@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use navo_core::Location;
 use navo_core::retention::{RetainedState as Stored, RetentionEntry, RetentionId};
+use navo_core::{FsErrorKind, Location};
 use navo_fs::{CancelToken, ProviderOps};
 use navo_retention::{Error, RestoreRequest, RetentionRun, Vault};
 use navo_store::{RetentionCatalog, RetentionStoreError, StoreDirs};
@@ -61,6 +61,12 @@ impl RetainedHooks for VaultHooks {
         {
             return in_place::restore(&self.dirs, self.ops.as_ref(), &entry, &file);
         }
+        if entry.state == Stored::Ready && self.vault_file_gone(&entry) {
+            return Err(navo_l10n::t!(
+                "retained-old-version-gone",
+                name = names::shown(&entry)
+            ));
+        }
         let target = names::free_target(self.ops.as_ref(), &entry)?;
         let request = &RestoreRequest {
             id,
@@ -73,6 +79,7 @@ impl RetainedHooks for VaultHooks {
             )
             .map_err(|error| failed("retained-restore-failed", &entry, &error))?;
         tracing::info!(id = id.0, "retained entry restored");
+        self.forget_rows(&entry);
         // An interrupted restore that had already landed reports where it landed.
         Ok(restored.target.map_or(target, |landed| landed.location))
     }
@@ -112,11 +119,35 @@ impl RetainedHooks for VaultHooks {
             ));
         }
         tracing::info!(id = id.0, "retained entry purged");
+        self.forget_rows(&entry);
         Ok(())
     }
 }
 
 impl VaultHooks {
+    /// `true` when the entry's file is provably missing from its holding folder.
+    fn vault_file_gone(&self, entry: &RetentionEntry) -> bool {
+        entry.record.held().is_ok_and(|held| {
+            self.ops
+                .metadata(&held)
+                .is_err_and(|error| error.kind == FsErrorKind::NotFound)
+        })
+    }
+
+    /// Forgets the undo rows a retained Save kept for an entry that no longer holds its file.
+    fn forget_rows(&self, entry: &RetentionEntry) {
+        let Some(job) = entry.job_id.filter(|_| entry.record.payload_name.is_some()) else {
+            return;
+        };
+        let journal =
+            crate::jobs::open(&self.dirs.journal_file()).map_err(|error| error.to_string());
+        if let Err(error) = journal.and_then(|journal| {
+            crate::jobs::forget_retired(&journal, &self.dirs.data, navo_store::JobId(job))
+        }) {
+            tracing::warn!(id = entry.id.0, %error, "undo rows of a retained save kept");
+        }
+    }
+
     fn vault(&self) -> Result<Vault<'_>, String> {
         let (db, _) = crate::crash::open_db(&self.dirs.journal_file())
             .map_err(|error| navo_l10n::t!("retained-open-failed", error = error.to_string()))?;

@@ -126,7 +126,7 @@ impl Builder {
                 rows: at..at + 1,
                 left_bytes: 0..0,
                 right_bytes: 0..0,
-                digest: None,
+                digest: Some([0; 16]),
                 added,
                 removed,
             }),

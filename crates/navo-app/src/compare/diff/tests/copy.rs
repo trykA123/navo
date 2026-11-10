@@ -19,6 +19,8 @@ use crate::compare::diff::load::{LoadInput, load_pair};
 use crate::compare::local::LocalSide;
 use crate::jobs::{SessionHolds, open};
 
+mod log;
+
 const LEFT: &[u8] = b"a\nb\nc\n";
 const RIGHT: &[u8] = b"a\nB\nc\n";
 

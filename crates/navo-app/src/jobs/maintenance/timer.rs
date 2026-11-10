@@ -290,6 +290,7 @@ fn maintain(
     let selection_time = if scope == Scope::Pressure { 0 } else { now };
     let (purged, bytes) = purge_volumes(&mut vault, &live, (policy, selection_time, cancel));
     drop(vault);
+    super::super::held::after_trim(journal, &dirs.data);
     let pruned = if scope == Scope::Scheduled {
         prune(dirs, now)
     } else {

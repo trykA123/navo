@@ -84,10 +84,6 @@ impl SessionHolds {
     }
 
     /// Compare saves and whole-file copies keep their old files for the session.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "compare UI job wiring follows this backend atom")
-    )]
     pub fn compare_factory(&self, drive: Option<Arc<dyn ProviderOps>>) -> LogFactory {
         let holds = Self {
             compare_copies: true,

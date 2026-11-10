@@ -85,6 +85,7 @@ impl NavoWindow {
         }
         stream.sync_rows();
         stream.reveal_cursor();
+        self.compare.diff.copy.note = None;
         self.settle_stream_focus(cx);
         cx.notify();
     }
@@ -108,6 +109,8 @@ impl NavoWindow {
         };
         if std::mem::take(&mut stream.details) {
             cx.notify();
+        } else if stream.search_open() {
+            self.search_close(window, cx);
         } else if stream.model.esc() == EscStep::Leave {
             self.leave_stream(window, cx);
         } else {
@@ -123,6 +126,7 @@ impl NavoWindow {
     pub(super) fn leave_stream(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let path = self.stream_mut().and_then(|stream| stream.current_path());
         self.compare.screen = None;
+        self.compare.diff.copy.note = None;
         if let Some(path) = path {
             self.browser.compare_reveal(&path);
         }

@@ -6,7 +6,8 @@ mod line;
 
 use navo_l10n::{t, tr};
 
-use super::hooks::{CardRow, Layout, PairKind};
+use super::copy_bar::{BarRow, CardBars, hunk_row};
+use super::hooks::{Card, CardRow, Layout, PairKind};
 use super::rows::{Half, StreamRow};
 use super::stream_model::StreamModel;
 use crate::format;
@@ -25,12 +26,14 @@ const ICON: f32 = 14.;
 /// Size of the status mark badge, in px.
 const BADGE: f32 = 18.;
 
-/// What every card row needs: the theme, the Stream model and the layout.
+/// What every card row needs: the theme, the Stream model, the layout and the copy bars.
 #[derive(Clone, Copy)]
 pub struct CardCtx<'a> {
     pub t: &'a Theme,
     pub model: &'a StreamModel,
     pub layout: Layout,
+    /// The hover bars of copyable changes; `None` draws none.
+    pub bars: Option<&'a CardBars>,
 }
 
 /// Builds the element for `rows[at]`. The card's last row gets the rounded bottom corners.
@@ -45,9 +48,10 @@ pub fn stream_row_view(rows: &[StreamRow], at: usize, ctx: &CardCtx<'_>) -> AnyE
             item,
             card_row,
             half,
-        } => card_line(ctx, (item, card_row), half, last),
+        } => card_line(ctx, (at, item, card_row), half, last),
         StreamRow::Gap { lines, .. } => note(t, last, t!("compare-card-gap", lines = lines)),
         StreamRow::More { hunks, .. } => note(t, last, t!("compare-card-more", hunks = hunks)),
+        StreamRow::Others { hunks, .. } => note(t, last, t!("compare-card-others", hunks = hunks)),
         StreamRow::Placeholder(_) => note(t, last, tr("compare-screen-comparing")),
         StreamRow::Summary(item) => summary(t, ctx.model, item, last),
         StreamRow::RulesGroup => rules_group(t, ctx.model.rules()).into_any_element(),
@@ -57,12 +61,13 @@ pub fn stream_row_view(rows: &[StreamRow], at: usize, ctx: &CardCtx<'_>) -> AnyE
 /// A card line looked up from the model; an empty row if the card was evicted meanwhile.
 fn card_line(
     ctx: &CardCtx<'_>,
-    (item, card_row): (usize, u32),
+    (at, item, card_row): (usize, usize, u32),
     half: Half,
     last: bool,
 ) -> AnyElement {
     let model = ctx.model;
-    let card = model.card(model.items()[item].id);
+    let id = model.items()[item].id;
+    let card = model.card(id);
     let row = card.and_then(|card| card.rows.get(card_row as usize));
     let Some(CardRow::Line {
         row,
@@ -84,7 +89,56 @@ fn card_line(
         left: left.as_deref(),
         right: right.as_deref(),
     };
-    line::view(ctx.t, look, *row, text).into_any_element()
+    let drawn = line::view(ctx.t, look, *row, text).into_any_element();
+    match ctx.bars.zip(card).filter(|(_, card)| copyable(card, *hunk)) {
+        Some((bars, card)) => {
+            let first = half != Half::Right && starts_hunk(card, card_row);
+            with_bar(ctx.t, drawn, bars, ((at, id, *hunk), first))
+        }
+        None => drawn,
+    }
+}
+
+/// Whether change `hunk` of `card` can be copied: a text card whose change has a digest.
+fn copyable(card: &Card, hunk: u32) -> bool {
+    card.kind == PairKind::Text
+        && card
+            .hunks
+            .get(hunk as usize)
+            .is_some_and(|view| view.digest.is_some())
+}
+
+/// Whether card row `card_row` is the first line of its change.
+fn starts_hunk(card: &Card, card_row: u32) -> bool {
+    let Some(CardRow::Line { hunk, .. }) = card.rows.get(card_row as usize) else {
+        return false;
+    };
+    card_row
+        .checked_sub(1)
+        .and_then(|before| card.rows.get(before as usize))
+        .is_none_or(|row| !matches!(row, CardRow::Line { hunk: h, .. } if h == hunk))
+}
+
+/// Wraps a card line (row `at` of the list) of change `hunk` of item `id` so it reports hover
+/// and, on the change's first line, carries the bar.
+fn with_bar(
+    t: &Theme,
+    row: AnyElement,
+    bars: &CardBars,
+    ((at, id, hunk), first): ((usize, u64, u32), bool),
+) -> AnyElement {
+    let (on_hover, on_copy) = (bars.on_hover.clone(), bars.on_copy.clone());
+    let bar = BarRow {
+        id: ("compare-card-row", at),
+        first,
+        hovered: bars.hovered == Some((id, hunk)),
+        animate: bars.animate,
+        on_hover: std::rc::Rc::new(move |on, cx| on_hover(id, hunk, on, cx)),
+        on_copy: std::rc::Rc::new(move |direction, window, cx| {
+            on_copy(id, hunk, direction, window, cx);
+        }),
+    };
+    hunk_row(t, row, bar)
 }
 
 /// The frame every card row shares: card surface, side edges, rounded bottom on the last row.

@@ -254,3 +254,25 @@ fn items_leaving_the_list_free_their_cards_in_the_same_generation() {
     let left = session.state_held();
     assert!(left > 0 && left < full / 2, "held {left} of {full}");
 }
+
+#[test]
+fn reload_rebuilds_one_card_and_leaves_the_others() {
+    let data = small_data(0..3);
+    let (sink, receiver) = channel();
+    let load = load_fn(data.clone(), Duration::ZERO, None, None);
+    let session = StreamSession::start(sink, SIXTY_FOUR_MIB, load, not_viewed());
+    session.set_items(1, items(&data, true));
+    while !matches!(
+        receiver.recv_timeout(WAIT).unwrap(),
+        StreamUpdate::Progress { built: 3, .. }
+    ) {}
+    while receiver.try_recv().is_ok() {}
+    session.reload(2);
+    let mut rebuilt = Vec::new();
+    while let Ok(update) = receiver.recv_timeout(Duration::from_millis(500)) {
+        if let StreamUpdate::Card { id, .. } = update {
+            rebuilt.push(id);
+        }
+    }
+    assert_eq!(rebuilt, vec![2], "only the reloaded card is built again");
+}

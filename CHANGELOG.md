@@ -2,6 +2,26 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.6.0 — 2026-11-10
+
+### Added
+
+- In a file diff or the Stream, Ctrl+Alt+← and Ctrl+Alt+→ copy the current change to the left or right side. A bar on hover offers the same. The change then says "Copied to the right · Undo", and Ctrl+Z puts the file back byte for byte.
+- If a file changed after Navo showed it, the copy is refused with "Changed since shown" and the card reloads. A Git or read-only side says why it cannot be written.
+- `/` searches the Stream. It narrows the cards to the files and changes whose changed lines or path contain the text, and the outline shows hit counts. J and K move between matches only, and Esc clears the search.
+- With a search active, Ctrl+Shift+← and Ctrl+Shift+→ (or "Copy all N") open a plan sheet. It lists each file, its matching changes and anything that cannot be copied. Enter copies them all as one job, and one Ctrl+Z undoes every file.
+- You can copy only some lines of a change. Shift+↑, Shift+↓, Space, the tick boxes on hover or Shift+click pick lines on one side; Ctrl+Alt+← or → then copies just those. Ctrl+Shift+Del removes the picked lines of a one-sided change. Esc clears the pick.
+- Right-click on a line of the diff or the Stream opens a menu with every action for that line and its key. Shift+F10 and the Menu key open it under the cursor.
+
+### Fixed
+
+- Git badges no longer blink. Before, a recheck of a repository that had not changed dimmed its badges for a second and brought them back, which could repeat every few seconds.
+
+### Notes
+
+- Copies use the same safe save as other file jobs: they show in the job list and can be undone from Undo.
+- Binary files, images and text files over 64 MiB still show a summary card. Image compare comes in a later version.
+
 ## v0.5.0 — 2026-11-10
 
 ### Added

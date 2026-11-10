@@ -31,6 +31,7 @@ pub(super) fn after(log: &JournalLog, state: JobState, ops: &dyn ProviderOps) {
     }) {
         tracing::warn!(job = log.job.0, %error, "retention maintenance deferred");
     }
+    super::held::after_trim(Some(&log.journal), data);
 }
 
 fn current(log: &JournalLog) -> Result<Option<RetentionPolicy>, String> {

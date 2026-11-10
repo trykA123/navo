@@ -4,7 +4,7 @@
 use navo_core::retention::{
     RestoreTarget, RetainedState as Stored, RetentionEntry, SAVE_RETAINED_KIND,
 };
-use navo_core::{FsError, Location};
+use navo_core::{FsError, FsErrorKind, Location, ProviderPath};
 use navo_fs::{CancelToken, HeldFile, JobContext, JobLog, ProviderOps, StepOutcome};
 use navo_store::{JobId, RetentionCatalog, StoreDirs};
 
@@ -27,7 +27,8 @@ pub(super) fn saved_held(
         .map_err(|error| error.to_string())
 }
 
-/// Puts the old file back at its original path, keeping the newer bytes in the job hold.
+/// Puts the old file back at its original path and drops the newer bytes (no redo).
+/// Fails when undo refuses, or when the entry cannot be marked restored after one retry.
 pub(super) fn restore(
     dirs: &StoreDirs,
     ops: &dyn ProviderOps,
@@ -50,8 +51,45 @@ pub(super) fn restore(
         progress: &mut |_| {},
     };
     navo_fs::undo_write(file, &mut ctx).map_err(|error| error.message())?;
-    mark_restored(dirs, entry, ops)?;
+    mark_restored(dirs, entry, ops).or_else(|error| {
+        tracing::warn!(id = entry.id.0, %error, "restored entry not marked; retrying once");
+        mark_restored(dirs, entry, ops)
+    })?;
+    forget_newer(&log.journal, (dirs, log.job), file, ops);
     Ok(entry.record.source.clone())
+}
+
+/// Forgets the job rows of a restored entry, then removes the newer bytes kept as `.current`.
+/// Rows go first, so a crash leaves an orphan file, never a row without its file.
+fn forget_newer(
+    journal: &crate::jobs::SharedJournal,
+    (dirs, job): (&StoreDirs, JobId),
+    file: &HeldFile,
+    ops: &dyn ProviderOps,
+) {
+    let Some(current) = current_of(&file.held) else {
+        return;
+    };
+    if let Err(error) = crate::jobs::forget_retired(journal, &dirs.data, job) {
+        tracing::warn!(job = job.0, %error, "undo row of a restored save kept");
+    }
+    if let Err(error) = crate::jobs::forget_held_at(journal, job, &current) {
+        tracing::warn!(job = job.0, %error, "newer bytes of a restored save kept");
+        return;
+    }
+    if let Err(error) = ops.remove_file(&current)
+        && error.kind != FsErrorKind::NotFound
+    {
+        tracing::warn!(job = job.0, error = ?error.kind, "newer bytes of a restored save kept");
+    }
+}
+
+/// Where in-place undo parks the newer bytes: the held file's name plus `.current`.
+fn current_of(held: &Location) -> Option<Location> {
+    let name = held.name()?.to_text();
+    held.parent()?
+        .join(&ProviderPath::from_text(&format!("{name}.current")))
+        .ok()
 }
 
 /// Records the file that an in-place undo moved out of the way.

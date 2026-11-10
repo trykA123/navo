@@ -90,6 +90,8 @@ impl SearchState {
 struct Scan {
     text: String,
     hits: Vec<(u64, Vec<u32>)>,
+    /// How many of `hits` earlier messages already carried.
+    sent: usize,
     searched: u32,
     total: u32,
     last: Instant,
@@ -101,6 +103,7 @@ impl Scan {
         Self {
             text,
             hits: Vec::new(),
+            sent: 0,
             searched: 0,
             total,
             last: Instant::now(),
@@ -122,12 +125,14 @@ impl Scan {
         }
     }
 
-    /// Send the accumulated hits for this query.
-    fn send(&self, shared: &Arc<Shared>, job: &SearchJob, done: bool) {
+    /// Send the hits found since the last message of this query; the model adds them up.
+    fn send(&mut self, shared: &Arc<Shared>, job: &SearchJob, done: bool) {
+        let fresh = self.hits[self.sent..].to_vec();
+        self.sent = self.hits.len();
         (shared.sink)(StreamUpdate::Hits {
             generation: job.generation,
             query: job.query,
-            hits: self.hits.clone(),
+            hits: fresh,
             searched: self.searched,
             total: self.total,
             done,

@@ -7,6 +7,7 @@ use navo_ui::browser::LoggedOperation;
 use super::{CopyContext, CopyRefusal};
 
 /// Log, check, run and finish the plan like a pane job. A stamp mismatch means "changed".
+/// A job that ran to Done counts as copied even when its log cannot finish.
 pub(in crate::compare::diff) fn run(
     ctx: &CopyContext<'_>,
     plan: &OperationPlan,
@@ -31,7 +32,13 @@ pub(in crate::compare::diff) fn run(
     });
     let finished = log.finish(&outcome, ctx.ops);
     match outcome {
-        JobOutcome::Done => finished.map_err(CopyRefusal::Failed),
+        JobOutcome::Done => {
+            // The target already holds the new bytes, so a log error must not read as a refusal.
+            if let Err(error) = finished {
+                tracing::warn!(%error, "copy written but its job log did not finish");
+            }
+            Ok(())
+        }
         JobOutcome::Failed { error, .. } if error.kind == FsErrorKind::ChangedOnDisk => {
             Err(CopyRefusal::Changed)
         }

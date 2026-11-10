@@ -2,6 +2,7 @@
 //! and next and previous change (Alt+↓/↑, F7/Shift+F7), each centred in the list.
 
 mod map;
+mod reveal;
 mod spans;
 
 use std::cell::{Cell, RefCell};
@@ -13,8 +14,12 @@ use gpui_kit::Task;
 use navo_l10n::{t, tr};
 
 use super::super::layout::ONE_PANE_BELOW;
+use super::context::{RowHit, on_right_click};
+use super::copy::FileBars;
 use crate::compare_diff::body::{BodyLook, digits, row_view};
-use crate::compare_diff::{DiffRow, Layout, PairText, SpanCache, pair_rows, row_count};
+use crate::compare_diff::{
+    DiffRow, Layout, PairText, ShownRow, SpanCache, Ticks, pair_rows, row_count,
+};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, VirtualList};
 use crate::tokens;
@@ -141,6 +146,13 @@ impl FileView {
         }
     }
 
+    /// Makes change `hunk` the current one without scrolling (a right-click put the cursor there).
+    pub(super) fn set_current(&mut self, hunk: usize) {
+        if hunk < self.text.hunks.len() {
+            self.current = Some(hunk);
+        }
+    }
+
     /// The current change, if any.
     pub(super) fn current(&self) -> Option<usize> {
         self.current
@@ -167,32 +179,51 @@ impl FileView {
         text.into()
     }
 
-    /// The row list for the viewport in `layout`.
-    pub(super) fn list(&mut self, layout: Layout, cx: &App) -> AnyElement {
+    /// The row list for the viewport in `layout`; rows of a copyable change report hover and
+    /// carry the copy bar when `bars` is given.
+    pub(super) fn list(&mut self, layout: Layout, bars: FileBars, cx: &App) -> AnyElement {
         if std::mem::take(&mut self.centre)
             && let Some(at) = self.current
         {
             let row = self.shape(layout).starts[at];
             self.scroll.scroll_to_center(row);
         }
-        let count = self.shape(layout).count;
+        let (count, starts) = {
+            let shape = self.shape(layout);
+            (shape.count, shape.starts.clone())
+        };
         let (text, built) = (Arc::clone(&self.text), Rc::clone(&self.built));
         let current = self.current.and_then(|at| u32::try_from(at).ok());
         let digits = digits(&text);
         let (spans, words) = (Rc::clone(&self.spans), self.words);
+        let picks = bars.picks.clone();
         let rows = move |range: Range<usize>, _: &mut Window, cx: &mut App| {
             built.set((range.start, range.end));
             let cache = words.then(|| spans.borrow());
+            let ticks = Ticks {
+                text: &text,
+                side: picks.side,
+                picked: &picks.lines,
+                cursor: picks.cursor,
+                hovered: bars.hovered,
+                on_tick: Rc::clone(&picks.on_tick),
+            };
             let look = BodyLook {
                 theme: tokens::current(cx),
                 layout,
                 digits,
                 current,
                 spans: cache.as_deref(),
+                ticks: Some(&ticks),
             };
-            pair_rows(&text, layout, range)
-                .iter()
-                .map(|row| row_view(&look, row))
+            let first = range.start;
+            let rows = pair_rows(&text, layout, range);
+            rows.iter()
+                .enumerate()
+                .map(|(i, row)| {
+                    let drawn = row_view(&look, row);
+                    wrap_row(&bars, look.theme, drawn, (first + i, row, (&text, &starts)))
+                })
                 .collect()
         };
         VirtualList::new("compare-file-rows", count, &self.scroll, rows)
@@ -200,6 +231,27 @@ impl FileView {
             .label(tr("compare-screen-rows"))
             .into_any_element()
     }
+}
+
+/// Wraps list row `at` (shown as `row`) with the copy bar when it belongs to a copyable change
+/// of `text`, and with the right-click menu; `starts` holds the first list row of every change.
+fn wrap_row(
+    bars: &FileBars,
+    t: &tokens::Theme,
+    drawn: AnyElement,
+    (at, row, (text, starts)): (usize, &ShownRow, (&PairText, &[usize])),
+) -> AnyElement {
+    let hunk = row
+        .hunk
+        .filter(|&h| text.hunks[h as usize].digest.is_some());
+    let shown = match hunk {
+        Some(hunk) => {
+            let first_row = starts.get(hunk as usize) == Some(&at);
+            bars.wrap(t, drawn, (at, hunk, first_row))
+        }
+        None => drawn,
+    };
+    on_right_click(&bars.weak, shown, RowHit::of(row))
 }
 
 impl NavoWindow {
@@ -218,6 +270,7 @@ impl NavoWindow {
             .and_then(|file| file.view.as_mut())
             .is_some_and(|view| view.step(forward, layout))
         {
+            self.compare.diff.copy.note = None;
             cx.notify();
         }
     }
@@ -233,51 +286,4 @@ impl FileView {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::Shape;
-    use crate::compare_diff::{DiffRow, HunkView, Layout, PairFacts, PairText, ViewedKey};
-
-    /// Hunk `rows` with no bytes or digest.
-    fn hunk(rows: std::ops::Range<u32>) -> HunkView {
-        HunkView {
-            rows,
-            left_bytes: 0..0,
-            right_bytes: 0..0,
-            digest: None,
-            added: 0,
-            removed: 0,
-        }
-    }
-
-    #[test]
-    fn compare_screen_unified_hunks_start_after_the_rows_changed_before_them() {
-        let rows = vec![
-            DiffRow::Equal(0, 0),
-            DiffRow::Changed(1, 1),
-            DiffRow::Changed(2, 2),
-            DiffRow::Equal(3, 3),
-            DiffRow::Deleted(4),
-            DiffRow::Changed(5, 4),
-        ];
-        let text = PairText {
-            left: vec![String::new(); 6],
-            right: vec![String::new(); 5],
-            rows,
-            hunks: vec![hunk(1..3), hunk(4..6)],
-            facts: PairFacts {
-                left_encoding: "",
-                right_encoding: "",
-                left_endings: "",
-                right_endings: "",
-                raw_equal: false,
-                display_equal: false,
-                fallbacks: vec![],
-            },
-            viewed: ViewedKey([0; 64]),
-        };
-        let side = Shape::new(&text, Layout::SideBySide);
-        assert_eq!((side.count, side.starts), (6, vec![1, 4]));
-        let unified = Shape::new(&text, Layout::Unified);
-        assert_eq!((unified.count, unified.starts), (9, vec![1, 6]));
-    }
-}
+mod tests;

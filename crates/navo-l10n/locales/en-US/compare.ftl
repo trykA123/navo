@@ -73,6 +73,11 @@ cmd-compare-open-file = Open the file diff
 cmd-compare-search = Search the differences
 cmd-compare-copy-all-left = Copy all matches to the left
 cmd-compare-copy-all-right = Copy all matches to the right
+cmd-compare-pick-down = Pick the next line
+cmd-compare-pick-up = Pick the previous line
+cmd-compare-pick-toggle = Pick or unpick the line
+cmd-compare-remove-picked = Remove the picked lines
+cmd-compare-show-menu = Open the menu at the cursor line
 compare-screen-back = Back
 compare-screen-comparing = Comparing…
 compare-screen-sides = { $left } ↔ { $right }
@@ -121,6 +126,10 @@ compare-card-more = { $hunks ->
     [one] 1 more change · Enter opens the full diff
    *[other] { $hunks } more changes · Enter opens the full diff
 }
+compare-card-others = { $hunks ->
+    [one] 1 other change
+   *[other] { $hunks } other changes
+}
 compare-card-rules = { $count ->
     [one] 1 file is the same after the rules
    *[other] { $count } files are the same after the rules
@@ -136,6 +145,60 @@ compare-copy-changed = Changed since shown. Nothing was copied.
 compare-copy-read-only = This side is read-only. Nothing was copied.
 compare-copy-not-copyable = This change cannot be copied.
 compare-copy-failed = The change was not copied: { $reason }
+compare-copy-bar-left = Copy to left
+compare-copy-bar-right = Copy to right
+compare-copy-pick = Pick a change first. Nothing was copied.
+compare-copy-no-digest = This change is too large or too coarse to copy. Nothing was copied.
+compare-copy-running = A copy is still running. Wait for it to end.
+compare-copy-pick-side = The picked lines are on the other side. Nothing was copied.
+compare-remove-whole = Pick every line of a change that exists on one side only. Nothing was removed.
+compare-removed-left = Removed from the left
+compare-removed-right = Removed from the right
+compare-tick-label = Pick line { $line }
+compare-copied-left = Copied to the left
+compare-copied-right = Copied to the right
+compare-copy-undo = Undo
+compare-sheet-title-left = Copy all matches to the left
+compare-sheet-title-right = Copy all matches to the right
+compare-sheet-confirm = Copy all
+compare-sheet-summary = { $changes ->
+    [one] 1 change
+   *[other] { $changes } changes
+} in { $files ->
+    [one] 1 file
+   *[other] { $files } files
+} · { $size } · Ctrl+Z undoes them all
+compare-sheet-none = Nothing in the matches can be copied.
+compare-sheet-need-search = Search first: copy all copies the changes that match.
+compare-sheet-wait = The search is still running. Wait for it to finish.
+compare-sheet-line = { $path } · { $changes ->
+    [one] 1 change
+   *[other] { $changes } changes
+} · { $size }
+compare-sheet-skipped = Skipped, { $why } · { $path }
+compare-sheet-why-changed = changed since shown
+compare-sheet-why-read-only = read-only side
+compare-sheet-why-not-copyable = cannot be copied
+compare-sheet-why-failed = could not be read
+compare-sheet-why-not-loaded = not loaded yet
+compare-sheet-why-no-digest = too large to copy
+compare-sheet-copied-left = Copied { $changes ->
+    [one] 1 change
+   *[other] { $changes } changes
+} in { $files ->
+    [one] 1 file
+   *[other] { $files } files
+} to the left · { $size }
+compare-sheet-copied-right = Copied { $changes ->
+    [one] 1 change
+   *[other] { $changes } changes
+} in { $files ->
+    [one] 1 file
+   *[other] { $files } files
+} to the right · { $size }
+compare-sheet-button = Copy all { $count }
+compare-sheet-button-left = Copy all matches to the left
+compare-sheet-button-right = Copy all matches to the right
 compare-stream-title = Differences
 compare-stream-files = { $count ->
     [one] 1 file
@@ -144,6 +207,20 @@ compare-stream-files = { $count ->
 compare-stream-viewed = Viewed { $viewed } of { $total }
 compare-stream-rows = Changed files
 compare-stream-empty = No differences under this folder.
+compare-search-label = Search all differences
+compare-search-found = { $changes ->
+    [one] 1 change
+   *[other] { $changes } changes
+} in { $files ->
+    [one] 1 file
+   *[other] { $files } files
+} { $changes ->
+    [one] matches
+   *[other] match
+}
+compare-search-progress = Searching… { $searched } of { $total }
+compare-search-none = No difference contains this text.
+compare-search-clear = Clear search
 compare-stream-keys = J / K next change
 compare-stream-details-changes = { $count ->
     [one] 1 change
@@ -152,6 +229,14 @@ compare-stream-details-changes = { $count ->
 compare-outline-title = Outline
 compare-outline-top = Top level
 compare-view-title = View
+compare-menu-title = Line actions
+compare-menu-copy-left = Copy this change to the left
+compare-menu-copy-right = Copy this change to the right
+compare-menu-copy-picked-left = Copy picked lines to the left
+compare-menu-copy-picked-right = Copy picked lines to the right
+compare-menu-pick = Pick this line
+compare-menu-unpick = Unpick this line
+compare-menu-view = View
 compare-view-simple = Simple
 compare-view-rich = Rich
 compare-view-custom = Custom
