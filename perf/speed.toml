@@ -25,6 +25,47 @@ guarded = true
 id = "navo-fs/listing::listing::bench_load_folder.fifty_thousand"
 guarded = true
 
+# 2026-11-10 A6/A8/A9 IDs after noise run 42890376477 (all diffs <= 0.01 %); guarded after the next release (G-A2).
+[[bench]]
+id = "navo-index/search::search::bench_name.sensor"
+guarded = false
+
+[[bench]]
+id = "navo-index/search::search::bench_fuzzy.snsr"
+guarded = false
+
+[[bench]]
+id = "navo-index/search::search::bench_path.huge_007_sensor"
+guarded = false
+
+[[bench]]
+id = "navo-index/search::search::bench_extension.bin"
+guarded = false
+
+[[bench]]
+id = "navo-index/search::search::bench_load.index"
+guarded = false
+
+[[bench]]
+id = "navo-compare/text::text::bench_diff.twenty_thousand"
+guarded = false
+
+[[bench]]
+id = "navo-compare/text::text::bench_card.default_limits"
+guarded = false
+
+[[bench]]
+id = "navo-compare/text::text::bench_intraline.two_hundred"
+guarded = false
+
+[[bench]]
+id = "navo-core/rename::rename::bench_preview.ten_thousand"
+guarded = false
+
+[[bench]]
+id = "navo-core/rename::rename::bench_check.ten_thousand"
+guarded = false
+
 # 2026-11-10 guard run 42844748759 vs v0.6.0. Sort rows: R1 natural digit order (byte key per row).
 [[accepted]]
 bench = "navo-fs/listing::listing::bench_sort_order.name"
