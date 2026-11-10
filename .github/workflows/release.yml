@@ -94,9 +94,16 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --release -p navo-app -p navo-index-service
+      - name: Install cargo-auditable and cargo-audit
+        run: cargo install --locked cargo-auditable@0.7.7 cargo-audit@0.22.2
+      - run: cargo auditable build --release -p navo-app -p navo-index-service
         env:
           NAVO_BUILD: ${{ inputs.tag }}
+      - name: Audit the shipped executables for known vulnerabilities
+        # Fails on a vulnerability; unmaintained or yanked crates only warn (no --deny).
+        run: |
+          cargo audit bin target/release/navo.exe
+          cargo audit bin target/release/navo-index.exe
       - name: Binary size
         run: |
           cargo xtask binsize target/release/navo.exe
