@@ -18,7 +18,7 @@ tracy = ["navo-diag/tracy"]
 [dependencies]
 blake3 = "=1.8.7"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-encoding_rs = "0.8.42"
+encoding_rs = "0.8.44"
 mimalloc = { version = "=0.1.52", optional = true, default-features = false }
 navo-cache = { path = "../navo-cache" }
 navo-clipboard = { path = "../navo-clipboard" }
@@ -40,13 +40,13 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
-toml = "1.1.8"
+toml = "1.2.1"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["env-filter", "registry", "std"] }
 velopack = "=1.2.161"
 
 [target.'cfg(unix)'.dependencies]
-libc = "=0.2.190"
+libc = "=0.2.191"
 
 [target.'cfg(windows)'.dependencies]
 gpui-pre-windows = "=0.3.9"

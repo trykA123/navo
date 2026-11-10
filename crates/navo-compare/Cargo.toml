@@ -17,8 +17,8 @@ image = { version = "=0.25.10", default-features = false }
 image-compare = "=0.5.0"
 imara-diff = "=0.2.0"
 navo-core = { path = "../navo-core" }
-similar = "=3.2.0"
-xxhash-rust = { version = "=0.8.18", features = ["xxh3"] }
+similar = "=3.2.1"
+xxhash-rust = { version = "=0.8.19", features = ["xxh3"] }
 
 [dev-dependencies]
 proptest = "1.12.0"
