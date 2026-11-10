@@ -122,11 +122,13 @@ pub fn hex_hash(hash: &[u8; 32]) -> String {
 mod tests;
 
 #[path = "cli_messages.rs"]
-mod messages;
+pub(crate) mod messages;
 #[path = "cli_parse.rs"]
 mod parse_flags;
 #[path = "cli_run.rs"]
 mod run;
 pub use parse_flags::parse;
 
+#[cfg(windows)]
+pub(crate) use run::default_root;
 pub use run::run;

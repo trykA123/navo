@@ -89,68 +89,7 @@ pub enum Effect {
     Close,
 }
 
-/// Verification, including marker handling, has completed before either success is reported.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Completion {
-    Installed,
-    NavoFinishedUpdate,
-}
-
-impl Completion {
-    /// Returns W1's additional success notice when Navo completed its own update.
-    pub fn notice(self) -> Option<&'static str> {
-        match self {
-            Self::Installed => None,
-            Self::NavoFinishedUpdate => Some("Navo finished the update itself."),
-        }
-    }
-}
-
-/// Runner failures distinguish safe retries from files or recovery sessions to keep.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Failure {
-    Folder(FolderProblem),
-    EmptyRoot(Option<u32>),
-    PartialRoot(Option<u32>),
-    Upgrade(Option<u32>),
-    Changed,
-    Unmarked,
-    Remarked,
-    Unlisted,
-    NavoStarted,
-    AfterExit(Option<u32>),
-}
-
-impl Failure {
-    /// Returns W1's recovery notice when a mid-upgrade launch could not be verified.
-    pub fn notice(&self) -> Option<&'static str> {
-        match self {
-            Self::NavoStarted => {
-                Some("Navo was started during Setup. Close Navo and run Setup again.")
-            }
-            _ => None,
-        }
-    }
-}
-
-/// A runner result is sent only after the child exits and verification finishes.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SetupExit {
-    Installed(Completion),
-    Failed(Failure),
-    Blocked,
-    ModeChanged(Box<Mode>),
-    Elevated,
-    NoPayload,
-}
-
-/// Unknown scan results fail closed, just like a visible running Navo (IW9).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RunningScan {
-    Clear,
-    Running,
-    Failed,
-}
+pub use crate::flow_outcome::{Completion, Failure, RunningScan, SetupExit};
 
 /// User actions and asynchronous results accepted by the wizard.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -175,6 +114,8 @@ pub enum Event {
     },
     SetupExited(SetupExit),
     RunningScanned(RunningScan),
+    /// The shell's worker is gone; any page that waits on it would hang.
+    WorkerLost,
 }
 
 /// Owned wizard state; private fields prevent bypassing consent and child ownership.
@@ -250,7 +191,9 @@ impl Flow {
     pub fn can_retry(&self) -> bool {
         let safe = matches!(
             self.failure,
-            Some(Failure::EmptyRoot(_) | Failure::Upgrade(_) | Failure::Unmarked)
+            Some(
+                Failure::EmptyRoot(_) | Failure::Upgrade(_) | Failure::Unmarked | Failure::Extract
+            )
         ) || (self.failure == Some(Failure::NavoStarted) && self.running_clear);
         !self.closed
             && !self.scanning
@@ -273,15 +216,43 @@ impl Flow {
     }
 
     /// Moves to a previous editable page while preserving any unsafe-root refusal.
-    fn back(&mut self) {
+    /// Leaving a failure that installed nothing clears it, and a fresh folder is checked again.
+    fn back(&mut self) -> Vec<Effect> {
         self.scanning = false;
         self.running_clear = false;
+        let left_failed = self.page == Page::Failed;
         self.page = match self.page {
             Page::Licence => Page::Welcome,
             Page::Folder => Page::Licence,
             Page::Shortcuts | Page::Failed => Page::Folder,
             _ => self.page,
         };
+        let nothing_installed = matches!(
+            self.failure,
+            Some(
+                Failure::EmptyRoot(_) | Failure::Upgrade(_) | Failure::Extract | Failure::Folder(_)
+            )
+        );
+        if !(left_failed && nothing_installed) {
+            return Vec::new();
+        }
+        self.failure = None;
+        if self.mode != Mode::Fresh {
+            return Vec::new();
+        }
+        self.folder = checked_syntax(self.folder.path().to_owned());
+        match &self.folder {
+            Folder::Checking(candidate) => vec![Effect::CheckFolder(candidate.clone())],
+            _ => Vec::new(),
+        }
+    }
+
+    /// Shows Failed on any page once the worker is gone; nothing can run any more.
+    fn worker_lost(&mut self) {
+        self.page = Page::Failed;
+        self.failure = Some(Failure::WorkerLost);
+        self.scanning = false;
+        self.running_clear = false;
     }
 
     /// Starts one runner action; only SetupExited can release Installing afterward.
@@ -398,6 +369,10 @@ pub fn step(mut flow: Flow, event: Event) -> (Flow, Vec<Effect>) {
     if flow.closed {
         return (flow, Vec::new());
     }
+    if event == Event::WorkerLost {
+        flow.worker_lost();
+        return (flow, Vec::new());
+    }
     if flow.page == Page::Installing {
         if let Event::SetupExited(exit) = event {
             flow.exited(exit);
@@ -410,10 +385,7 @@ pub fn step(mut flow: Flow, event: Event) -> (Flow, Vec<Effect>) {
     }
     let effects = match event {
         Event::Next => flow.next(),
-        Event::Back => {
-            flow.back();
-            Vec::new()
-        }
+        Event::Back => flow.back(),
         Event::Close | Event::Esc => flow.close(false),
         Event::Finish if flow.page == Page::Finish => flow.close(flow.start_navo),
         Event::OpenNavo if flow.page == Page::Same => flow.close(true),

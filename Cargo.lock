@@ -6401,6 +6401,8 @@ name = "navo-setup"
 version = "0.6.0"
 dependencies = [
  "embed-resource",
+ "futures",
+ "gpui-kit",
  "navo-core",
  "navo-diag",
  "navo-l10n",

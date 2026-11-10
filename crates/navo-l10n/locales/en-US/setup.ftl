@@ -1,4 +1,5 @@
 # Installer (navo-setup) texts. `&` marks an access key; the pages fill the placeholders.
+setup-window-title = Navo Setup
 setup-back = &Back
 setup-next = &Next
 setup-welcome-install = Install Navo { $version }

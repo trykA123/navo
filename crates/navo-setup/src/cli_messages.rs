@@ -53,7 +53,7 @@ fn mode_message(found: &Mode) -> String {
 }
 
 /// Describes one runner failure, including the IW7 recovery text where it applies.
-fn failure_message(failure: &Failure, root: &Path, upgrade: bool) -> String {
+pub(crate) fn failure_message(failure: &Failure, root: &Path, upgrade: bool) -> String {
     match failure {
         Failure::Folder(problem) => folder_message(*problem),
         Failure::EmptyRoot(code) => child_exit(
@@ -93,6 +93,11 @@ fn failure_message(failure: &Failure, root: &Path, upgrade: bool) -> String {
             *code,
             "the install could not be verified",
         ),
+        Failure::Extract => {
+            "Setup could not unpack its installer. Free some space on the system drive, then try again."
+                .to_owned()
+        }
+        Failure::WorkerLost => "Setup stopped unexpectedly. Close Setup and run it again.".to_owned(),
     }
 }
 

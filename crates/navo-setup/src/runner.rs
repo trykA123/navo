@@ -126,10 +126,12 @@ fn failure_code(failure: &Failure) -> u8 {
         | Failure::Unmarked
         | Failure::Remarked
         | Failure::Unlisted
-        | Failure::AfterExit(_) => 5,
+        | Failure::AfterExit(_)
+        | Failure::Extract
+        | Failure::WorkerLost => 5,
     }
 }
 
 #[path = "runner_run.rs"]
 mod run;
-pub use run::{close, install, mark_again, retry};
+pub use run::{close, close_installed, install, mark_again, retry};

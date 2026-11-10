@@ -11,6 +11,7 @@ use std::process::ExitCode;
 
 pub mod cli;
 pub mod flow;
+pub mod flow_outcome;
 pub mod host;
 pub mod licence;
 pub mod marker;
@@ -30,6 +31,16 @@ pub mod syntax;
 pub mod probe;
 
 pub mod upgrade;
+pub mod window;
+pub mod window_core;
+#[cfg(test)]
+mod window_recovery_tests;
+#[cfg(test)]
+mod window_tests;
+pub mod window_view;
+pub mod window_worker;
+#[cfg(test)]
+mod window_worker_tests;
 
 #[cfg(feature = "tester")]
 mod tester;
@@ -40,8 +51,74 @@ fn main() -> ExitCode {
         eprintln!("navo-setup: cannot restrict DLL loading to System32");
         return ExitCode::from(5);
     }
+    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.is_empty() {
+        return open_window();
+    }
     attach_console();
-    run(std::env::args_os().skip(1).collect())
+    run(args)
+}
+
+/// Opens the wizard: reads the install state, starts the worker, then runs the window.
+#[cfg(windows)]
+fn open_window() -> ExitCode {
+    use window_worker::{Probe, WindowsProbe};
+    hide_own_console();
+    let payload = payload::Payload::embedded().ok();
+    let velopack_log = payload::Logs::create().map_or_else(
+        |_| std::env::temp_dir().join("navo-setup-velopack.log"),
+        |logs| logs.velopack,
+    );
+    let default = cli::default_root().unwrap_or_default();
+    let flow = window_core::initial_flow(&mut host::WindowsHost, payload.as_ref(), default);
+    let facts = window_view::Facts {
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        space_needed: payload.as_ref().map(|payload| {
+            let space = payload.space();
+            space
+                .payload
+                .saturating_mul(4)
+                .max(space.velopack_requirement())
+        }),
+        log_paths: vec![velopack_log.clone()],
+    };
+    let make = || -> (Box<dyn host::Host>, Box<dyn Probe>) {
+        (Box::new(host::WindowsHost), Box::new(WindowsProbe))
+    };
+    let link = match window_worker::spawn(payload, velopack_log, make) {
+        Ok(link) => link,
+        Err(error) => {
+            eprintln!("navo-setup: cannot start the Setup worker: {error}");
+            return ExitCode::from(5);
+        }
+    };
+    match window::launch(window_core::Shell::new(flow, facts), link) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("navo-setup: {message}");
+            ExitCode::from(5)
+        }
+    }
+}
+
+/// Refuses the window off Windows, where Setup has no host.
+#[cfg(not(windows))]
+fn open_window() -> ExitCode {
+    eprintln!("navo-setup: the Setup window runs only on Windows");
+    ExitCode::from(2)
+}
+
+/// Frees the console Windows made for a double-click; a console shared with a shell stays.
+#[cfg(windows)]
+fn hide_own_console() {
+    use windows_sys::Win32::System::Console::{FreeConsole, GetConsoleProcessList};
+    let mut ids = [0u32; 2];
+    // SAFETY: the buffer is valid for two u32 entries, the length passed.
+    let count = unsafe { GetConsoleProcessList(ids.as_mut_ptr(), 2) };
+    if count == 1 {
+        // SAFETY: FreeConsole takes no arguments and only detaches this process.
+        let _ = unsafe { FreeConsole() };
+    }
 }
 
 /// Attaches to the parent console so silent-mode messages are visible (IW17).
