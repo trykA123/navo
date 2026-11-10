@@ -98,6 +98,7 @@ fn execute(
     }
     let command = match parsed {
         Ok(Command::PdfHelper) => return pdf_helper::run(),
+        Ok(Command::CrashServer { socket, logs }) => return crash::serve(&socket, &logs),
         Ok(Command::IndexService(action)) => return index_service::run(action),
         #[cfg(feature = "tester")]
         Ok(Command::Bench(options)) => return bench::run(&options),
@@ -170,6 +171,7 @@ fn execute_command(
         Command::DiagReport(path) => write_report(&path, started, &profile),
         Command::CrashTest(_) => crash_test(&profile),
         Command::PdfHelper => pdf_helper::run(),
+        Command::CrashServer { socket, logs } => crash::serve(&socket, &logs),
         Command::IndexService(action) => index_service::run(action),
         #[cfg(feature = "tester")]
         Command::Bench(options) => bench::run(&options),

@@ -11,6 +11,10 @@ pub(crate) enum Command {
     DiagReport(PathBuf),
     CrashTest(PathBuf),
     PdfHelper,
+    CrashServer {
+        socket: PathBuf,
+        logs: PathBuf,
+    },
     IndexService(crate::index_service::Action),
     #[cfg(feature = "tester")]
     Bench(crate::bench::Request),
@@ -41,7 +45,7 @@ pub(crate) const USAGE: &str = "usage: navo [--version | --update-status | --dia
 pub(crate) const USAGE: &str = "usage: navo [--version | [--no-retention] [--view <file>] [--left <folder>] [--right <folder>] [--profile <folder>] [<path>]]";
 
 #[cfg(feature = "tester")]
-const STANDALONE: [&str; 8] = [
+const STANDALONE: [&str; 9] = [
     "--version",
     "--update-status",
     "--diag-report",
@@ -50,13 +54,15 @@ const STANDALONE: [&str; 8] = [
     "--index-service",
     "--bench",
     "--index-memory",
+    "--crash-server",
 ];
 #[cfg(not(feature = "tester"))]
-const STANDALONE: [&str; 4] = [
+const STANDALONE: [&str; 5] = [
     "--version",
     "--pdf-helper",
     "--crash-test",
     "--index-service",
+    "--crash-server",
 ];
 #[cfg(feature = "tester")]
 const WINDOW_FLAGS: [&str; 6] = [
@@ -74,7 +80,7 @@ impl Command {
     pub(crate) fn uses_console(&self) -> bool {
         match self {
             Self::Open(start) => start.is_metrics(),
-            Self::PdfHelper | Self::IndexService(_) => false,
+            Self::PdfHelper | Self::CrashServer { .. } | Self::IndexService(_) => false,
             Self::Version | Self::CrashTest(_) => true,
             #[cfg(feature = "tester")]
             Self::UpdateStatus
@@ -194,6 +200,10 @@ fn standalone(flag: &str, mut rest: impl Iterator<Item = OsString>) -> Result<Co
                 .ok_or("--index-service needs a mode")?,
         )?),
         "--crash-test" => Command::CrashTest(value(flag, rest.next())?),
+        "--crash-server" => Command::CrashServer {
+            socket: value(flag, rest.next())?,
+            logs: value(flag, rest.next())?,
+        },
         #[cfg(feature = "tester")]
         "--diag-report" => Command::DiagReport(value(flag, rest.next())?),
         _ => return Err(format!("unknown argument {flag}")),
