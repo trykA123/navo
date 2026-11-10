@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use std::{fs, io};
@@ -8,10 +9,8 @@ use crate::logging::Diagnostics;
 mod downloads;
 mod hook;
 #[cfg(any(windows, test))]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the crash server (R2c) is its first caller")
-)]
+mod native_server;
+#[cfg(any(windows, test))]
 mod native_summary;
 pub(crate) mod store;
 #[cfg(test)]
@@ -59,6 +58,21 @@ impl Running {
 
 pub(crate) fn install(data: Option<&Path>, diagnostics: &Diagnostics) {
     hook::install(data, diagnostics);
+}
+
+/// Runs the hidden `--crash-server <socket> <logs>` mode: one native dump, then exit.
+/// Returns 2 off Windows, where no native crash reporter exists.
+#[expect(dead_code, reason = "R2d wires the --crash-server flag")]
+pub(crate) fn serve(socket: &Path, logs: &Path) -> ExitCode {
+    #[cfg(windows)]
+    {
+        native_server::serve(socket, logs)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (socket, logs);
+        ExitCode::from(2)
+    }
 }
 
 pub(crate) fn pending(data: &Path) -> Option<Pending> {
