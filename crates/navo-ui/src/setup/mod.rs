@@ -1,11 +1,18 @@
 //! Plain installer display data; the setup shell maps its flow and runner into this contract.
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, rc::Rc, time::Duration};
 
-use crate::{AnyElement, IntoElement, ParentElement, div};
+use crate::primitives::access_key;
+use crate::{AnyElement, App, IntoElement, ParentElement, Window, div};
 
+mod strings;
 #[cfg(test)]
 mod tests;
+
+pub use strings::Strings;
+
+/// Callback the pages call with the user's intent; the setup shell owns the flow.
+pub type OnAction = Rc<dyn Fn(SetupAction, &mut Window, &mut App)>;
 
 /// The thirteen pages mirrored from the setup flow without an engine dependency.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -83,6 +90,8 @@ pub struct SetupView {
     /// Space values are bytes when the shell has obtained them.
     pub space_needed: Option<u64>,
     pub space_free: Option<u64>,
+    /// True while Alt is held; access keys then show underlined.
+    pub show_keys: bool,
 }
 
 impl SetupView {
@@ -97,8 +106,35 @@ impl SetupView {
     }
 }
 
+/// Lists the Alt+letter keys of the current page: Back and Next when enabled, plus page controls.
+pub fn access_keys(view: &SetupView, strings: &Strings) -> Vec<(char, SetupAction)> {
+    let mut keys = Vec::new();
+    let mut add = |text: &str, action: SetupAction| {
+        if let Some(key) = access_key(text) {
+            keys.push((key, action));
+        }
+    };
+    if view.can_back() {
+        add(&strings.back, SetupAction::Back);
+    }
+    if view.can_next() {
+        add(&strings.next, SetupAction::Next);
+    }
+    match view.page {
+        SetupPage::Licence => add(
+            &strings.licence_accept,
+            SetupAction::Toggle(SetupCheck::AcceptLicence),
+        ),
+        SetupPage::Folder if !view.folder_locked => {
+            add(&strings.folder_browse, SetupAction::Browse)
+        }
+        _ => {}
+    }
+    keys
+}
+
 /// Renders only the page name until the ordered page atoms supply their implementations.
-pub fn render_page(view: &SetupView) -> AnyElement {
+pub fn render_page(view: &SetupView, _strings: &Strings, _on_action: OnAction) -> AnyElement {
     let name = match view.page {
         SetupPage::Welcome => "Welcome",
         SetupPage::Licence => "Licence",
