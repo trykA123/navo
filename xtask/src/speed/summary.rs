@@ -209,7 +209,8 @@ mod tests {
         assert_eq!(collect(&tree.0)?.len(), 2);
         std::fs::write(tree.0.join("a/b/summary.json"), "invalid")?;
         let error = collect(&tree.0).err().ok_or("invalid summary accepted")?;
-        assert!(error.contains("a/b/summary.json"), "{error}");
+        let bad = tree.0.join("a").join("b").join("summary.json");
+        assert!(error.contains(&bad.display().to_string()), "{error}");
         Ok(())
     }
 }
