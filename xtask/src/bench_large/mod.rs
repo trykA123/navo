@@ -149,7 +149,7 @@ fn notes(options: &Options, text_size: u64, content_size: u64) -> Vec<String> {
             SMALL_BYTES
         ),
         "Line keys are xxh3-64 over the trimmed line, sampled at 1 of K = 32 by hash. Candidates are 16 bytes (hash and line); anchors are patience LIS over unique candidates on both sides.".to_owned(),
-        "xxhash-rust =0.8.18 (released 2026-07-21) and fastcdc =4.0.1 (released 2026-04-26), both over two weeks old at 2026-10-30. memmap2 =0.9.11 is pinned; it is used only in xtask.".to_owned(),
+        "xxhash-rust =0.8.18 (released 2026-07-21) and fastcdc =5.0.0 (released 2026-04-26), both over two weeks old at 2026-10-30. memmap2 =0.9.11 is pinned; it is used only in xtask.".to_owned(),
         "Sections are coalesced to at least 2,048 lines per side, capped at 64 MiB or 1,000,000 lines per side, and re-anchored at K/8 then every line when over the cap.".to_owned(),
         "Byte content alignment uses FastCDC 2 KiB / 8 KiB / 64 KiB chunks with a BLAKE3 hash each, unique on both sides, then the same patience LIS; regions up to 64 KiB refine with similar's byte diff.".to_owned(),
         "Peak RSS is /proc/self/status VmHWM on Linux; Windows has no portable peak-RSS read in this harness.".to_owned(),
