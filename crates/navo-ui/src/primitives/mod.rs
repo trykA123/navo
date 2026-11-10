@@ -1,4 +1,6 @@
+pub mod access_label;
 mod button;
+mod check_box;
 mod columns;
 pub(crate) mod fit;
 mod icon;
@@ -15,7 +17,9 @@ mod virtual_list;
 #[cfg(test)]
 mod tests;
 
+pub use access_label::{access_key, access_label};
 pub use button::{Button, ButtonVariant, IconButton};
+pub use check_box::CheckBox;
 pub use columns::{
     ColumnAlign, ColumnEvent, ColumnHead, ColumnSet, ColumnSpec, Fitted, fit_name, map_prefix,
     symbol_prefix,

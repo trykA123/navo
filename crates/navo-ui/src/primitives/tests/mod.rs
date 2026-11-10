@@ -1,4 +1,5 @@
 mod button;
+mod check_box;
 mod kbd;
 mod splitter;
 mod tabs;

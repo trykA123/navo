@@ -1,6 +1,6 @@
 //! Navigation guards for the installer display contract, independent of the setup engine.
 
-use super::{SetupPage, SetupView};
+use super::{SetupAction, SetupCheck, SetupPage, SetupView, Strings, access_keys};
 
 #[test]
 fn can_next_is_false_when_problem_is_set() {
@@ -24,4 +24,74 @@ fn back_is_false_on_installing() {
     assert!(view.can_back());
     view.page = SetupPage::Installing;
     assert!(!view.can_back());
+}
+
+const ALL_PAGES: [SetupPage; 13] = [
+    SetupPage::Welcome,
+    SetupPage::Licence,
+    SetupPage::Folder,
+    SetupPage::Shortcuts,
+    SetupPage::Installing,
+    SetupPage::Finish,
+    SetupPage::Failed,
+    SetupPage::Blocked,
+    SetupPage::Same,
+    SetupPage::Newer,
+    SetupPage::Ambiguous,
+    SetupPage::Elevated,
+    SetupPage::NoPayload,
+];
+
+#[test]
+fn no_page_has_two_actions_on_one_letter() {
+    let strings = Strings::english();
+    for page in ALL_PAGES {
+        let view = SetupView {
+            page,
+            can_next: true,
+            can_back: true,
+            ..SetupView::default()
+        };
+        let keys = access_keys(&view, &strings);
+        let mut letters: Vec<char> = keys.iter().map(|(key, _)| *key).collect();
+        letters.sort_unstable();
+        letters.dedup();
+        assert_eq!(letters.len(), keys.len(), "{page:?}: {keys:?}");
+    }
+}
+
+#[test]
+fn folder_lists_browse_until_the_field_is_locked() {
+    let strings = Strings::english();
+    let folder = SetupView {
+        page: SetupPage::Folder,
+        can_next: true,
+        can_back: true,
+        ..SetupView::default()
+    };
+    assert!(access_keys(&folder, &strings).contains(&('r', SetupAction::Browse)));
+    let locked = SetupView {
+        folder_locked: true,
+        ..folder
+    };
+    let keys = access_keys(&locked, &strings);
+    assert!(
+        !keys
+            .iter()
+            .any(|(_, action)| *action == SetupAction::Browse)
+    );
+}
+
+#[test]
+fn licence_lists_accept_and_next_follows_its_gate() {
+    let strings = Strings::english();
+    let view = SetupView {
+        page: SetupPage::Licence,
+        can_back: true,
+        ..SetupView::default()
+    };
+    let keys = access_keys(&view, &strings);
+    assert!(keys.contains(&('b', SetupAction::Back)));
+    assert!(keys.contains(&('a', SetupAction::Toggle(SetupCheck::AcceptLicence))));
+    assert!(!keys.iter().any(|(_, action)| *action == SetupAction::Next));
 }
