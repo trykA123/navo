@@ -17,6 +17,10 @@ use crate::placement::Space;
 use crate::runner::{self, InstallError, Installed, Progress, Session};
 use crate::syntax::{Candidate, FolderProblem};
 
+#[cfg(windows)]
+#[path = "window_launch.rs"]
+mod launch;
+
 /// One piece of work the window asks for.
 #[derive(Debug)]
 pub enum Job {
@@ -260,73 +264,8 @@ impl Probe for WindowsProbe {
         // A working folder inside `current\` would block Update.exe from renaming it later.
         let profile = std::env::var_os("USERPROFILE")
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "USERPROFILE is not set"))?;
-        start_detached(&root.join("current").join("navo.exe"), Path::new(&profile))
+        launch::start_detached(&root.join("current").join("navo.exe"), Path::new(&profile))
     }
-}
-
-/// Starts `exe` outside Setup's job so it survives the window closing; falls back to the shell.
-#[cfg(windows)]
-fn start_detached(exe: &Path, profile: &Path) -> io::Result<()> {
-    use std::os::windows::process::CommandExt;
-    use std::process::{Command, Stdio};
-
-    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
-    let mut command = Command::new(exe);
-    command
-        .current_dir(profile)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(CREATE_BREAKAWAY_FROM_JOB);
-    match command.spawn() {
-        Ok(_) => Ok(()),
-        // A job that forbids breakaway is left for the shell, which starts Navo outside it.
-        Err(error) if error.raw_os_error() == Some(5) => shell_start(exe, profile),
-        Err(error) => Err(error),
-    }
-}
-
-/// Asks Explorer's shell automation to start `exe` from `profile`, outside Setup's job.
-#[cfg(windows)]
-fn shell_start(exe: &Path, profile: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
-    use windows::Win32::System::Com::{
-        CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
-        CoUninitialize,
-    };
-    use windows::Win32::System::Variant::VARIANT;
-    use windows::Win32::UI::Shell::{IShellDispatch2, Shell};
-    use windows::core::BSTR;
-
-    // SAFETY: CoInitializeEx initializes COM for this thread and touches no memory we own.
-    let initialized = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
-    if initialized.is_err() && initialized != RPC_E_CHANGED_MODE {
-        return Err(io::Error::other(format!(
-            "COM init failed: {initialized:?}"
-        )));
-    }
-    // SAFETY: the Shell automation coclass is created without an outer object.
-    let started = unsafe {
-        CoCreateInstance(
-            &Shell,
-            None::<&windows::core::IUnknown>,
-            CLSCTX_LOCAL_SERVER,
-        )
-    }
-    .and_then(|shell: IShellDispatch2| {
-        let file = BSTR::from_wide(&exe.as_os_str().encode_wide().collect::<Vec<_>>());
-        let directory = BSTR::from_wide(&profile.as_os_str().encode_wide().collect::<Vec<_>>());
-        let empty = VARIANT::default();
-        // SAFETY: the automation object is live, both BSTRs live for the call, and the empty
-        // variants mean no arguments, the default verb and the default show; Explorer launches Navo.
-        unsafe { shell.ShellExecute(&file, &empty, &directory, &empty, &empty) }
-    });
-    if initialized.is_ok() {
-        // SAFETY: this balances the successful CoInitializeEx above.
-        unsafe { CoUninitialize() };
-    }
-    started.map_err(|error: windows::core::Error| io::Error::other(error.message()))
 }
 
 /// Appends one line to the wizard log; a log that cannot be opened never changes the outcome.
