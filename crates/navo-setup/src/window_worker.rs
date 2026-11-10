@@ -286,30 +286,47 @@ fn start_detached(exe: &Path, profile: &Path) -> io::Result<()> {
     }
 }
 
-/// Asks the Windows shell to start `exe` from `profile`; used when Setup's job forbids breakaway.
+/// Asks Explorer's shell automation to start `exe` from `profile`, outside Setup's job.
 #[cfg(windows)]
 fn shell_start(exe: &Path, profile: &Path) -> io::Result<()> {
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-    use windows::core::{HSTRING, PCWSTR, w};
-
-    let file = HSTRING::from(exe.to_string_lossy().as_ref());
-    let directory = HSTRING::from(profile.to_string_lossy().as_ref());
-    // SAFETY: both HSTRINGs are NUL-terminated and live for the call; the shell owns the launch.
-    let result = unsafe {
-        ShellExecuteW(
-            None,
-            w!("open"),
-            &file,
-            PCWSTR::null(),
-            &directory,
-            SW_SHOWNORMAL,
-        )
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
+    use windows::Win32::System::Com::{
+        CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+        CoUninitialize,
     };
-    if result.0 as isize <= 32 {
-        return Err(io::Error::last_os_error());
+    use windows::Win32::System::Variant::VARIANT;
+    use windows::Win32::UI::Shell::{IShellDispatch2, Shell};
+    use windows::core::BSTR;
+
+    // SAFETY: CoInitializeEx initializes COM for this thread and touches no memory we own.
+    let initialized = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+    if initialized.is_err() && initialized != RPC_E_CHANGED_MODE {
+        return Err(io::Error::other(format!(
+            "COM init failed: {initialized:?}"
+        )));
     }
-    Ok(())
+    // SAFETY: the Shell automation coclass is created without an outer object.
+    let started = unsafe {
+        CoCreateInstance(
+            &Shell,
+            None::<&windows::core::IUnknown>,
+            CLSCTX_LOCAL_SERVER,
+        )
+    }
+    .and_then(|shell: IShellDispatch2| {
+        let file = BSTR::from_wide(&exe.as_os_str().encode_wide().collect::<Vec<_>>());
+        let directory = BSTR::from_wide(&profile.as_os_str().encode_wide().collect::<Vec<_>>());
+        let empty = VARIANT::default();
+        // SAFETY: the automation object is live, both BSTRs live for the call, and the empty
+        // variants mean no arguments, the default verb and the default show; Explorer launches Navo.
+        unsafe { shell.ShellExecute(&file, &empty, &directory, &empty, &empty) }
+    });
+    if initialized.is_ok() {
+        // SAFETY: this balances the successful CoInitializeEx above.
+        unsafe { CoUninitialize() };
+    }
+    started.map_err(|error: windows::core::Error| io::Error::other(error.message()))
 }
 
 /// Appends one line to the wizard log; a log that cannot be opened never changes the outcome.
