@@ -42,4 +42,4 @@ reason = "R1 natural order: extension ties fall back to the natural name key"
 bench = "navo-fs/listing::listing::bench_load_folder.fifty_thousand"
 base = "e42dcb8db43a60fd3dad62bcd7716bfa443e25df"
 max_percent = 6.0
-reason = "Cause not proven (load does not build the natural key); candidates: the DU dependency update or the b4dbbe38 bench fixture. A checker follows (speed-checks plan)."
+reason = "load_folder code unchanged since v0.6.0 (perf_event Ir equal within 0.001 %); the base side runs the old per-entry fixture, the head side b4dbbe38 bulk fixture, so heap layout differs under Callgrind"
