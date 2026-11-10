@@ -1,7 +1,9 @@
+//! Walk Unicode cmap tables with bounded work for the font viewer grid.
+
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use ttf_parser::cmap::Subtable4;
+use skrifa::raw::{FontRead, tables::cmap::Cmap4};
 
 use super::sfnt::{u16_at, u32_at, usize_at};
 
@@ -38,17 +40,16 @@ impl Walk<'_> {
         }
     }
 
+    /// Offer format 4 mappings until the grid, cancellation or work limit is reached.
     fn format_4(&mut self, subtable: &[u8]) {
-        let Some(table) = Subtable4::parse(subtable) else {
+        let Ok(table) = Cmap4::read(subtable.into()) else {
             return;
         };
         for code in FIRST_CHAR..=LAST_BMP {
             if !self.step() {
                 return;
             }
-            let glyph = table
-                .glyph_index(code)
-                .map_or(0, |glyph| u32::from(glyph.0));
+            let glyph = table.map_codepoint(code).map_or(0, |glyph| glyph.to_u32());
             self.offer(code, glyph);
         }
     }
