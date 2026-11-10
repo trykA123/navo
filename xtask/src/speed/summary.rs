@@ -9,8 +9,8 @@ use std::{
 #[derive(Debug)]
 pub struct Measured {
     pub id: String,
-    pub new_ir: f64,
-    pub old_ir: Option<f64>,
+    pub new_ir: u64,
+    pub old_ir: Option<u64>,
 }
 
 /// Parse one summary into instruction counts; fail on missing head Ir or invalid JSON.
@@ -32,16 +32,7 @@ pub fn measured(json: &str) -> Result<Measured, String> {
     if profiles.next().is_some() {
         return Err("summary has multiple Callgrind profiles".into());
     }
-    let new_ir = values.values.new.ok_or("summary has no head Ir")?;
-    if !new_ir.is_finite()
-        || new_ir < 0.0
-        || values
-            .values
-            .old
-            .is_some_and(|old| !old.is_finite() || old < 0.0)
-    {
-        return Err("summary Ir must be a finite non-negative count".into());
-    }
+    let new_ir = values.values.new;
     let suffix = summary.id.map(|id| format!(".{id}")).unwrap_or_default();
     Ok(Measured {
         id: format!("{package}/{}{suffix}", summary.module_path),
@@ -117,9 +108,16 @@ struct Metric {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Values {
-    new: Option<f64>,
-    old: Option<f64>,
+    new: u64,
+    #[serde(default, deserialize_with = "present_old")]
+    old: Option<u64>,
+}
+
+/// Read a present old Ir as an integer; reject null while allowing an absent field.
+fn present_old<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<u64>, D::Error> {
+    u64::deserialize(deserializer).map(Some)
 }
 
 #[cfg(test)]
@@ -148,8 +146,8 @@ mod tests {
             reading.id,
             "navo-fs/listing::listing::bench_sort_order.name"
         );
-        assert_eq!(reading.new_ir, 1051.0);
-        assert_eq!(reading.old_ir, Some(1000.0));
+        assert_eq!(reading.new_ir, 1051);
+        assert_eq!(reading.old_ir, Some(1000));
         Ok(())
     }
 
@@ -186,6 +184,16 @@ mod tests {
         ] {
             assert!(measured(&fixture(values).to_string()).is_err());
         }
+    }
+
+    #[test]
+    fn rejects_unknown_old_key() {
+        assert!(measured(&fixture(json!({"new": 100, "old_typo": 90})).to_string()).is_err());
+    }
+
+    #[test]
+    fn rejects_explicit_null_old() {
+        assert!(measured(&fixture(json!({"new": 100, "old": null})).to_string()).is_err());
     }
 
     #[test]

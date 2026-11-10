@@ -171,12 +171,22 @@ fn build_verdict(options: &BTreeMap<&str, &str>) -> Result<verdict::Report, Stri
     ))
 }
 
-/// Parse a finite, non-negative percentage or return an input error.
-fn percent(value: &str) -> Result<f64, String> {
-    value
-        .parse::<f64>()
+/// Parse a non-negative percentage in tenths into permille; reject invalid or finer limits.
+fn percent(value: &str) -> Result<u64, String> {
+    let (whole, fraction) = value.split_once('.').unwrap_or((value, ""));
+    let fraction = fraction.trim_end_matches('0');
+    if whole.is_empty()
+        || !whole.bytes().all(|byte| byte.is_ascii_digit())
+        || fraction.len() > 1
+        || !fraction.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(format!("invalid percentage: {value}"));
+    }
+    whole
+        .parse::<u64>()
         .ok()
-        .filter(|value| value.is_finite() && *value >= 0.0)
+        .and_then(|whole| whole.checked_mul(10))
+        .and_then(|whole| whole.checked_add(fraction.parse::<u64>().unwrap_or(0)))
         .ok_or_else(|| format!("invalid percentage: {value}"))
 }
 

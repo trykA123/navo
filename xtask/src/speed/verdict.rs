@@ -27,7 +27,7 @@ impl Report {
     }
 }
 
-/// Compare counts and manifests; return a markdown table and all verdict findings.
+/// Compare counts and manifests using permille limits; return a table and all findings.
 #[expect(
     clippy::too_many_arguments,
     reason = "A3 specifies the pure verdict inputs explicitly"
@@ -40,8 +40,8 @@ pub fn verdict(
     base_sha: &str,
     targets: &[String],
     mode: Mode,
-    limit: f64,
-    noise_limit: f64,
+    limit: u64,
+    noise_limit: u64,
     resolve: impl Fn(&str) -> Option<String>,
 ) -> Report {
     let mut rows: Vec<_> = measured.iter().collect();
@@ -63,7 +63,9 @@ pub fn verdict(
         check_manifest(measured, head, targets, &mut report);
         check_established(&guard, &resolve, &mut report);
         for entry in &head.accepted {
-            if resolve(&entry.base).as_deref() != Some(base_sha) {
+            if !measured.iter().any(|item| item.id == entry.bench) {
+                report.fail(format!("stale accepted {}: no measured ID", entry.bench));
+            } else if resolve(&entry.base).as_deref() != Some(base_sha) {
                 report.lines.push(format!(
                     "warning: stale accepted {} at {}: {}",
                     entry.bench, entry.base, entry.reason
@@ -85,7 +87,7 @@ struct Guard<'a> {
     base: Option<&'a Config>,
     retired: &'a [Retired],
     base_sha: &'a str,
-    limit: f64,
+    limit: u64,
 }
 
 /// Check manifest coverage and uniqueness against measured IDs and discovered targets.
@@ -184,10 +186,6 @@ fn compare_guard(
     resolve: &impl Fn(&str) -> Option<String>,
     report: &mut Report,
 ) {
-    if !valid_count(item.new_ir) {
-        report.fail(format!("{}: missing or invalid head Ir", item.id));
-        return;
-    }
     let Some(entry) = guard.head.benches.iter().find(|entry| entry.id == item.id) else {
         return;
     };
@@ -199,17 +197,12 @@ fn compare_guard(
         }
         return;
     };
-    if !valid_count(old) {
-        report.fail(format!("{}: invalid base Ir", item.id));
-        return;
-    }
     if !entry.guarded {
         report
             .lines
             .push(format!("{}: set guarded = true", item.id));
     }
-    let diff = difference(item.new_ir, old);
-    if diff <= guard.limit {
+    if item.new_ir <= old || !exceeds(item.new_ir - old, old, guard.limit) {
         return;
     }
     check_regression(item, guard, resolve, report);
@@ -231,7 +224,10 @@ fn check_regression(
             && !entry.reason.trim().is_empty()
             && entry.max_percent.is_finite()
             && resolve(&entry.base).as_deref() == Some(guard.base_sha)
-            && diff <= entry.max_percent
+            && super::percent(&entry.max_percent.to_string()).is_ok_and(|limit| {
+                item.old_ir
+                    .is_some_and(|old| !exceeds(item.new_ir.saturating_sub(old), old, limit))
+            })
     });
     match accepted {
         Some(entry) => report.lines.push(format!(
@@ -240,41 +236,42 @@ fn check_regression(
         )),
         None => report.fail(format!(
             "{}: regressed {diff:.3}% > {:.3}%",
-            item.id, guard.limit
+            item.id,
+            guard.limit as f64 / 10.0
         )),
     }
 }
 
 /// Compare both noise runs, allowing unlisted IDs while requiring both readings.
-fn compare_noise(item: &Measured, head: &Config, limit: f64, report: &mut Report) {
+fn compare_noise(item: &Measured, head: &Config, limit: u64, report: &mut Report) {
     if !head.benches.iter().any(|entry| entry.id == item.id) {
         report.lines.push(format!("unlisted ID: {}", item.id));
     }
-    if !valid_count(item.new_ir) {
-        report.fail(format!("{}: missing or invalid head Ir", item.id));
-        return;
-    }
-    let Some(old) = item.old_ir.filter(|old| valid_count(*old)) else {
+    let Some(old) = item.old_ir else {
         report.fail(format!("{}: missing or invalid base Ir for noise", item.id));
         return;
     };
     let diff = difference(item.new_ir, old);
-    if diff.abs() > limit {
-        report.fail(format!("{}: noise {diff:.3}% exceeds {limit:.3}%", item.id));
+    if exceeds(item.new_ir.abs_diff(old), old, limit) {
+        report.fail(format!(
+            "{}: noise {diff:.3}% exceeds {:.3}%",
+            item.id,
+            limit as f64 / 10.0
+        ));
     }
 }
 
-/// Accept finite non-negative instruction counts from the summary boundary.
-fn valid_count(count: f64) -> bool {
-    count.is_finite() && count >= 0.0
+/// Compare an Ir delta against a limit in permille without rounding instruction counts.
+fn exceeds(delta: u64, base: u64, limit: u64) -> bool {
+    u128::from(delta) * 1000 > u128::from(base) * u128::from(limit)
 }
 
 /// Compute percentage growth; equal zero counts have no growth, otherwise zero gives infinity.
-fn difference(new: f64, old: f64) -> f64 {
+fn difference(new: u64, old: u64) -> f64 {
     if new == old {
         0.0
     } else {
-        (new - old) / old * 100.0
+        (new as f64 - old as f64) / old as f64 * 100.0
     }
 }
 

@@ -19,7 +19,7 @@ fn config(guarded: bool) -> Config {
 }
 
 /// Build one instruction reading in Ir units.
-fn reading(new_ir: f64, old_ir: Option<f64>) -> Measured {
+fn reading(new_ir: u64, old_ir: Option<u64>) -> Measured {
     Measured {
         id: ID.into(),
         new_ir,
@@ -42,8 +42,8 @@ fn guard(
         "base-sha",
         &["navo-fs listing -".into()],
         Mode::Guard,
-        5.0,
-        0.5,
+        50,
+        5,
         |reference| (reference == "v0.5.0").then(|| "base-sha".into()),
     )
 }
@@ -73,7 +73,7 @@ fn duplicate_manifest_ids_fail_sc4_rule_two() {
         guarded: true,
     });
     fails(
-        guard(&[reading(1000.0, Some(1000.0))], &head, None, &[]),
+        guard(&[reading(1000, Some(1000))], &head, None, &[]),
         "duplicate manifest",
     );
 }
@@ -82,7 +82,7 @@ fn duplicate_manifest_ids_fail_sc4_rule_two() {
 fn duplicate_measured_ids_fail_sc4_rule_two() {
     fails(
         guard(
-            &[reading(1000.0, Some(1000.0)), reading(1000.0, Some(1000.0))],
+            &[reading(1000, Some(1000)), reading(1000, Some(1000))],
             &config(true),
             None,
             &[],
@@ -98,7 +98,7 @@ fn missing_head_summary_fails_sc4_rule_three() {
 
 #[test]
 fn unlisted_summary_fails_sc4_rule_four() {
-    let mut item = reading(1000.0, Some(1000.0));
+    let mut item = reading(1000, Some(1000));
     item.id = "navo-fs/listing::other".into();
     fails(guard(&[item], &config(true), None, &[]), "unlisted");
 }
@@ -106,15 +106,15 @@ fn unlisted_summary_fails_sc4_rule_four() {
 #[test]
 fn target_without_manifest_id_fails_sc4_rule_five() {
     let report = verdict(
-        &[reading(1000.0, Some(1000.0))],
+        &[reading(1000, Some(1000))],
         &config(true),
         None,
         &[],
         "base-sha",
         &["navo-fs listing -".into(), "navo-index search bench".into()],
         Mode::Guard,
-        5.0,
-        0.5,
+        50,
+        5,
         |_| None,
     );
     fails(report, "target navo-index/search has no manifest ID");
@@ -123,32 +123,24 @@ fn target_without_manifest_id_fails_sc4_rule_five() {
 #[test]
 fn manifest_without_target_fails_sc4_rule_five() {
     let report = verdict(
-        &[reading(1000.0, Some(1000.0))],
+        &[reading(1000, Some(1000))],
         &config(true),
         None,
         &[],
         "base-sha",
         &["navo-index search bench".into()],
         Mode::Guard,
-        5.0,
-        0.5,
+        50,
+        5,
         |_| None,
     );
     fails(report, "names no target");
 }
 
 #[test]
-fn invalid_head_ir_fails_sc4_rule_six() {
-    fails(
-        guard(&[reading(f64::NAN, Some(1000.0))], &config(true), None, &[]),
-        "head Ir",
-    );
-}
-
-#[test]
 fn guarded_without_base_ir_fails_even_without_base_manifest() {
     fails(
-        guard(&[reading(1000.0, None)], &config(true), None, &[]),
+        guard(&[reading(1000, None)], &config(true), None, &[]),
         "no base Ir",
     );
 }
@@ -157,7 +149,7 @@ fn guarded_without_base_ir_fails_even_without_base_manifest() {
 fn established_removed_id_fails_sc4_rule_eight() {
     let mut head = config(false);
     head.benches[0].id = "navo-fs/listing::other".into();
-    let mut item = reading(1000.0, None);
+    let mut item = reading(1000, None);
     item.id = head.benches[0].id.clone();
     fails(
         guard(&[item], &head, Some(&config(true)), &[]),
@@ -169,7 +161,7 @@ fn established_removed_id_fails_sc4_rule_eight() {
 fn matching_retirement_allows_removal() {
     let mut head = config(false);
     head.benches[0].id = "navo-fs/listing::other".into();
-    let mut item = reading(1000.0, None);
+    let mut item = reading(1000, None);
     item.id = head.benches[0].id.clone();
     let retired = [Retired {
         id: ID.into(),
@@ -185,7 +177,7 @@ fn matching_retirement_allows_removal() {
 fn established_downgrade_fails() {
     fails(
         guard(
-            &[reading(1000.0, Some(1000.0))],
+            &[reading(1000, Some(1000))],
             &config(false),
             Some(&config(true)),
             &[],
@@ -203,7 +195,7 @@ fn retirement_for_another_base_still_fails() {
     }];
     fails(
         guard(
-            &[reading(1000.0, Some(1000.0))],
+            &[reading(1000, Some(1000))],
             &config(false),
             Some(&config(true)),
             &retired,
@@ -215,15 +207,15 @@ fn retirement_for_another_base_still_fails() {
 #[test]
 fn regression_at_limit_plus_point_one_fails() {
     fails(
-        guard(&[reading(1051.0, Some(1000.0))], &config(true), None, &[]),
+        guard(&[reading(1051, Some(1000))], &config(true), None, &[]),
         "regressed",
     );
 }
 
 #[test]
 fn regression_at_and_below_limit_passes() {
-    for new_ir in [1049.0, 1050.0] {
-        assert!(!guard(&[reading(new_ir, Some(1000.0))], &config(true), None, &[]).failed);
+    for new_ir in [1049, 1050] {
+        assert!(!guard(&[reading(new_ir, Some(1000))], &config(true), None, &[]).failed);
     }
 }
 
@@ -241,12 +233,7 @@ fn accepted(base: &str) -> Config {
 
 #[test]
 fn accepted_matching_base_passes_through_maximum() {
-    let report = guard(
-        &[reading(1060.0, Some(1000.0))],
-        &accepted("v0.5.0"),
-        None,
-        &[],
-    );
+    let report = guard(&[reading(1060, Some(1000))], &accepted("v0.5.0"), None, &[]);
     assert!(!report.failed, "{:?}", report.lines);
     assert!(report.lines.join("\n").contains("extra validation"));
 }
@@ -254,7 +241,7 @@ fn accepted_matching_base_passes_through_maximum() {
 #[test]
 fn accepted_another_base_is_stale_and_regressed() {
     let report = guard(
-        &[reading(1051.0, Some(1000.0))],
+        &[reading(1051, Some(1000))],
         &accepted("another"),
         None,
         &[],
@@ -266,19 +253,14 @@ fn accepted_another_base_is_stale_and_regressed() {
 #[test]
 fn accepted_above_maximum_is_regressed() {
     fails(
-        guard(
-            &[reading(1061.0, Some(1000.0))],
-            &accepted("v0.5.0"),
-            None,
-            &[],
-        ),
+        guard(&[reading(1061, Some(1000))], &accepted("v0.5.0"), None, &[]),
         "regressed",
     );
 }
 
 #[test]
 fn bootstrap_without_base_passes_and_notes_absent_manifest() {
-    let report = guard(&[reading(1000.0, None)], &config(false), None, &[]);
+    let report = guard(&[reading(1000, None)], &config(false), None, &[]);
     assert!(!report.failed, "{:?}", report.lines);
     assert!(report.lines[0].contains("no base manifest"));
     assert!(report.lines.join("\n").contains("bootstrap"));
@@ -286,17 +268,17 @@ fn bootstrap_without_base_passes_and_notes_absent_manifest() {
 
 #[test]
 fn bootstrap_with_base_is_compared_and_flagged() {
-    let report = guard(&[reading(1000.0, Some(1000.0))], &config(false), None, &[]);
+    let report = guard(&[reading(1000, Some(1000))], &config(false), None, &[]);
     assert!(!report.failed, "{:?}", report.lines);
     assert!(report.lines.join("\n").contains("set guarded = true"));
     fails(
-        guard(&[reading(1051.0, Some(1000.0))], &config(false), None, &[]),
+        guard(&[reading(1051, Some(1000))], &config(false), None, &[]),
         "regressed",
     );
 }
 
 /// Run noise mode with one unlisted ID and no established IDs.
-fn noise(new_ir: f64, old_ir: Option<f64>) -> Report {
+fn noise(new_ir: u64, old_ir: Option<u64>) -> Report {
     let mut head = config(true);
     head.benches.clear();
     verdict(
@@ -307,16 +289,16 @@ fn noise(new_ir: f64, old_ir: Option<f64>) -> Report {
         "",
         &[],
         Mode::Noise,
-        5.0,
-        0.5,
+        50,
+        5,
         |_| None,
     )
 }
 
 #[test]
 fn noise_passes_with_unlisted_ids_at_inclusive_boundary() {
-    for new_ir in [995.0, 1000.0, 1005.0] {
-        let report = noise(new_ir, Some(1000.0));
+    for new_ir in [995, 1000, 1005] {
+        let report = noise(new_ir, Some(1000));
         assert!(!report.failed, "{:?}", report.lines);
         assert!(report.lines.join("\n").contains("unlisted"));
     }
@@ -324,9 +306,37 @@ fn noise_passes_with_unlisted_ids_at_inclusive_boundary() {
 
 #[test]
 fn noise_fails_in_both_directions_and_on_missing_values() {
-    for new_ir in [994.0, 1006.0] {
-        fails(noise(new_ir, Some(1000.0)), "noise");
+    for new_ir in [994, 1006] {
+        fails(noise(new_ir, Some(1000)), "noise");
     }
-    fails(noise(1000.0, None), "base Ir");
-    fails(noise(f64::NAN, Some(1000.0)), "head Ir");
+    fails(noise(1000, None), "base Ir");
+}
+
+#[test]
+fn exact_large_regression_above_limit_fails() {
+    fails(
+        guard(
+            &[reading(9457559217478093, Some(9007199254741040))],
+            &config(true),
+            None,
+            &[],
+        ),
+        "regressed",
+    );
+}
+
+#[test]
+fn exact_large_noise_at_limit_passes() {
+    let report = noise(9052235251015107, Some(9007199254741400));
+    assert!(!report.failed, "{:?}", report.lines);
+}
+
+#[test]
+fn unmeasured_accepted_entry_is_stale_and_fails() {
+    let mut head = accepted("v0.5.0");
+    head.accepted[0].bench = "navo-fs/listing::absent".into();
+    fails(
+        guard(&[reading(1000, Some(1000))], &head, None, &[]),
+        "stale accepted navo-fs/listing::absent",
+    );
 }
