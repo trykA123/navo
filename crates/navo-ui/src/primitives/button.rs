@@ -1,11 +1,17 @@
+//! Buttons on navo's tokens: text buttons (with an optional `&` access key) and icon buttons.
+
 use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button as KitButton, ButtonVariants};
 use gpui_kit::component::{Disableable, Icon, Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
-use gpui_kit::{App, ClickEvent, ElementId, IntoElement, RenderOnce, SharedString, Styled, Window};
+use gpui_kit::{
+    App, ClickEvent, ElementId, FocusHandle, IntoElement, ParentElement, RenderOnce, SharedString,
+    Styled, Window,
+};
 
+use super::access_label::{access_label, plain_text};
 use crate::tokens;
 
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -27,6 +33,9 @@ pub struct Button {
     variant: ButtonVariant,
     is_disabled: bool,
     tooltip: Option<SharedString>,
+    /// Set when the label holds an `&` access-key marker; true while Alt is held.
+    show_keys: Option<bool>,
+    focus: Option<FocusHandle>,
     on_click: Option<ClickHandler>,
 }
 
@@ -39,8 +48,22 @@ impl Button {
             variant: ButtonVariant::default(),
             is_disabled: false,
             tooltip: None,
+            show_keys: None,
+            focus: None,
             on_click: None,
         }
+    }
+
+    /// Reads the label's `&` access-key marker and underlines the key while `show_keys` is true.
+    pub fn access_key(mut self, show_keys: bool) -> Self {
+        self.show_keys = Some(show_keys);
+        self
+    }
+
+    /// Ties the button to `focus`, so the owner can put keyboard focus on it.
+    pub fn track_focus(mut self, focus: &FocusHandle) -> Self {
+        self.focus = Some(focus.clone());
+        self
     }
 
     pub fn variant(mut self, variant: ButtonVariant) -> Self {
@@ -75,8 +98,13 @@ impl Button {
 impl RenderOnce for Button {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
-        let button = KitButton::new(self.id)
-            .label(self.label)
+        let button = match self.show_keys {
+            Some(show) => KitButton::new(self.id)
+                .accessibility_label(plain_text(&self.label))
+                .child(access_label(&self.label, show)),
+            None => KitButton::new(self.id).label(self.label),
+        };
+        let button = button
             .small()
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.small)
@@ -92,6 +120,7 @@ impl RenderOnce for Button {
         };
         button
             .when_some(self.tooltip, KitButton::tooltip)
+            .when_some(self.focus, |button, focus| button.track_focus(&focus))
             .when_some(self.on_click, |button, handler| {
                 button.on_click(move |event, window, cx| handler(event, window, cx))
             })

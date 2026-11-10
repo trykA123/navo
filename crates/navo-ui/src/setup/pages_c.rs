@@ -6,7 +6,6 @@ use gpui_kit::{InteractiveElement, Role, SharedString, StatefulInteractiveElemen
 use super::SetupAction;
 use super::pages_a::{Ctx, column, paragraph};
 use crate::primitives::Button;
-use crate::primitives::access_label::plain_text;
 use crate::{AnyElement, Div, IntoElement, ParentElement, Styled, div};
 
 /// Builds a named text block; refusals use `Role::Alert` so screen readers announce them.
@@ -21,7 +20,7 @@ fn text_block(c: &Ctx, id: &'static str, role: Role, text: String) -> impl IntoE
         .child(text)
 }
 
-/// Builds one button whose click sends `action`; its label drops the `&` marker.
+/// Builds one button whose click sends `action`; Alt underlines its `&` access key.
 fn action_button(
     c: &Ctx,
     id: &'static str,
@@ -29,7 +28,8 @@ fn action_button(
     (action, disabled): (SetupAction, bool),
 ) -> Button {
     let send = c.on_action.clone();
-    Button::new(id, plain_text(label))
+    Button::new(id, label.clone())
+        .access_key(c.view.show_keys)
         .disabled(disabled)
         .on_click(move |_, window, cx| send(action, window, cx))
 }

@@ -1,12 +1,12 @@
 //! Setup pages Welcome, Licence and Folder; `render_page` in `mod.rs` calls them with the theme.
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{FontWeight, InteractiveElement, Role, StatefulInteractiveElement};
+use gpui_kit::{Entity, FontWeight, InteractiveElement, Role, StatefulInteractiveElement};
 
 use super::{OnAction, SetupAction, SetupCheck, SetupView, Strings};
 use crate::format;
 use crate::primitives::access_label::{access_label, plain_text};
-use crate::primitives::{Button, CheckBox};
+use crate::primitives::{Button, CheckBox, TextField, TextFieldState};
 use crate::tokens::Theme;
 use crate::{AnyElement, App, Div, IntoElement, ParentElement, Styled, div, px};
 
@@ -19,6 +19,7 @@ pub(super) struct Ctx<'a> {
     pub strings: &'a Strings,
     pub on_action: &'a OnAction,
     pub reduce_motion: bool,
+    pub field: Option<&'a Entity<TextFieldState>>,
 }
 
 /// Builds a page column with its heading.
@@ -121,10 +122,15 @@ fn space_line(c: &Ctx) -> String {
     }
 }
 
-/// Builds the read-only path field; locked in an upgrade, so it is dimmed.
-fn path_field(c: &Ctx) -> impl IntoElement {
+/// Builds the path field: editable when the shell gives one, else read-only (dimmed when locked).
+fn path_field(c: &Ctx) -> AnyElement {
     let t = c.t;
     let locked = c.view.folder_locked;
+    if let Some(field) = c.field.filter(|_| !locked) {
+        let label = plain_text(&c.strings.folder_label);
+        let input = TextField::new("folder-field", field, label);
+        return div().flex_1().min_w_0().child(input).into_any_element();
+    }
     div()
         .id("folder-field")
         .role(Role::TextInput)
@@ -148,6 +154,7 @@ fn path_field(c: &Ctx) -> impl IntoElement {
         })
         .text_ellipsis()
         .child(c.view.folder_text.clone())
+        .into_any_element()
 }
 
 /// Builds the space line and, when set, the problem line under the field.
@@ -182,7 +189,8 @@ fn status_lines(c: &Ctx) -> Div {
 /// Folder: the path field, Browse (off when locked), space, problem and the uninstall note.
 pub(super) fn folder(c: &Ctx) -> AnyElement {
     let send = c.on_action.clone();
-    let browse = Button::new("folder-browse", plain_text(&c.strings.folder_browse))
+    let browse = Button::new("folder-browse", c.strings.folder_browse.clone())
+        .access_key(c.view.show_keys)
         .disabled(c.view.folder_locked)
         .on_click(move |_, window, cx| send(SetupAction::Browse, window, cx));
     let row = div()

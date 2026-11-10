@@ -7,8 +7,9 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    App, ClickEvent, Div, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    Role, SharedString, StatefulInteractiveElement, Styled, Toggled, Window, div, px,
+    Animation, AnimationExt, AnyElement, App, ClickEvent, Div, ElementId, InteractiveElement,
+    IntoElement, ParentElement, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled,
+    Toggled, Window, div, px,
 };
 
 use super::access_label::{access_label, plain_text};
@@ -19,6 +20,8 @@ type ToggleHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
 const BOX_SIZE: f32 = 16.;
 const MARK_SIZE: f32 = 12.;
+/// The box's opacity when a state change starts its fade.
+const FADE_FROM: f32 = 0.3;
 
 /// A check box whose label may hold one `&` access-key marker.
 #[derive(IntoElement)]
@@ -91,6 +94,19 @@ fn mark_box(t: &Theme, checked: bool, disabled: bool) -> Div {
         })
 }
 
+/// Fades the box in over the theme's fade time when its state changes; still under reduced motion.
+fn fade_on_change(mark: Div, checked: bool, t: &Theme, reduce_motion: bool) -> AnyElement {
+    if reduce_motion {
+        return mark.into_any_element();
+    }
+    // A new id per state restarts the fade on every change (fade only, IW21).
+    let id = ("check-mark", usize::from(checked));
+    mark.with_animation(id, Animation::new(t.motion.fade), |mark, delta| {
+        mark.opacity(FADE_FROM + (1. - FADE_FROM) * delta)
+    })
+    .into_any_element()
+}
+
 impl RenderOnce for CheckBox {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
@@ -100,6 +116,7 @@ impl RenderOnce for CheckBox {
             t.colors.text
         };
         let mark = mark_box(t, self.checked, self.disabled);
+        let mark = fade_on_change(mark, self.checked, t, cx.reduce_motion());
         let toggled = if self.checked {
             Toggled::True
         } else {

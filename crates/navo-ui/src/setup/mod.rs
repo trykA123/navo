@@ -2,11 +2,15 @@
 
 use std::{path::PathBuf, rc::Rc, time::Duration};
 
-use crate::primitives::access_key;
+use crate::primitives::{TextFieldState, access_key};
 use crate::tokens;
 use crate::{AnyElement, App, IntoElement, Window};
-use gpui_kit::RenderOnce;
+use gpui_kit::{Entity, RenderOnce};
 
+mod frame;
+pub mod keys;
+#[cfg(test)]
+mod keys_tests;
 mod pages_a;
 #[cfg(test)]
 mod pages_a_tests;
@@ -20,6 +24,7 @@ mod strings;
 #[cfg(test)]
 mod tests;
 
+pub use frame::render_frame;
 pub use strings::Strings;
 
 /// Callback the pages call with the user's intent; the setup shell owns the flow.
@@ -114,24 +119,26 @@ impl SetupView {
         self.can_next && self.problem.is_none() && self.page != SetupPage::Installing
     }
 
+    /// Whether Failed's Retry button is on: the flow allows it and no partial root is left.
+    pub fn retry_enabled(&self) -> bool {
+        self.can_retry && self.leftover_root.is_none()
+    }
+
     /// Returns the effective Back gate; Installing cannot release the runner's page.
     pub fn can_back(&self) -> bool {
         self.can_back && self.page != SetupPage::Installing
     }
 }
 
-/// Lists the Alt+letter keys of the current page: Back and Next when enabled, plus page controls.
+/// Lists the Alt+letter keys of the current page: the enabled footer buttons, then page controls.
 pub fn access_keys(view: &SetupView, strings: &Strings) -> Vec<(char, SetupAction)> {
-    let mut labels = Vec::new();
-    if view.can_back() {
-        labels.push((&*strings.back, SetupAction::Back));
-    }
-    if view.can_next() {
-        labels.push((&*strings.next, SetupAction::Next));
-    }
-    labels.extend(page_keys(view, strings));
-    labels
-        .into_iter()
+    let footer = keys::footer(view, strings);
+    let buttons = footer
+        .iter()
+        .filter(|button| button.enabled)
+        .map(|button| (&*button.label, button.action));
+    buttons
+        .chain(page_keys(view, strings))
         .filter_map(|(text, action)| access_key(text).map(|key| (key, action)))
         .collect()
 }
@@ -158,7 +165,7 @@ fn page_keys<'a>(view: &SetupView, strings: &'a Strings) -> Vec<(&'a str, SetupA
         ],
         SetupPage::Failed => {
             let mut keys = vec![(&*strings.failed_copy, SetupAction::CopyDetails)];
-            if view.can_retry {
+            if view.retry_enabled() {
                 keys.push((&*strings.failed_retry, SetupAction::TryAgain));
             }
             keys
@@ -182,16 +189,19 @@ pub fn render_page(view: &SetupView, strings: &Strings, on_action: OnAction) -> 
         view: view.clone(),
         strings: strings.clone(),
         on_action,
+        field: None,
     }
     .into_any_element()
 }
 
 /// One page, built on the current theme when it renders.
 #[derive(IntoElement)]
-struct Page {
-    view: SetupView,
-    strings: Strings,
-    on_action: OnAction,
+pub(super) struct Page {
+    pub view: SetupView,
+    pub strings: Strings,
+    pub on_action: OnAction,
+    /// The editable Folder field; without it the folder shows as read-only text.
+    pub field: Option<Entity<TextFieldState>>,
 }
 
 impl RenderOnce for Page {
@@ -203,6 +213,7 @@ impl RenderOnce for Page {
             strings: &self.strings,
             on_action: &self.on_action,
             reduce_motion: cx.reduce_motion(),
+            field: self.field.as_ref(),
         };
         match self.view.page {
             SetupPage::Welcome => pages_a::welcome(&ctx),

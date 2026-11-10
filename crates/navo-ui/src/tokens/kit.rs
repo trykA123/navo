@@ -1,9 +1,16 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use gpui_kit::App;
+use gpui_kit::component::input::CursorBlink;
 use gpui_kit::component::theme::{Theme as KitTheme, ThemeColor, ThemeMode};
 
 use super::{ColorTheme, Colors, Density, Mode, SyntaxTheme, Theme, highlight_theme};
+
+/// Text carets blink at 500 ms, then rest visible after 5 s without typing, so an idle
+/// focused field never wakes the app.
+const CARET: CursorBlink =
+    CursorBlink::blinking(Duration::from_millis(500)).with_idle_timeout(Duration::from_secs(5));
 
 fn map_colors(c: &Colors, k: &mut ThemeColor) {
     k.background = c.background;
@@ -98,6 +105,7 @@ pub fn apply_look(mode: Mode, look: ThemeLook, cx: &mut App) {
         kit.mono_font_family = typography.mono_font;
         kit.radius = radius;
         kit.shadow = false;
+        kit.cursor_blink = CARET;
         map_colors(&colors, &mut kit.colors);
         let highlight = highlight_theme(syntax, mode, &colors, &kit.highlight_theme);
         kit.highlight_theme = Arc::new(highlight);

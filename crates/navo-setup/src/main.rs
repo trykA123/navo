@@ -33,6 +33,9 @@ pub mod probe;
 pub mod upgrade;
 pub mod window;
 pub mod window_core;
+mod window_input;
+#[cfg(test)]
+mod window_input_tests;
 #[cfg(test)]
 mod window_recovery_tests;
 #[cfg(test)]
