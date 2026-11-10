@@ -203,6 +203,8 @@ pub enum Reason {
     Unsupported,
     ChangedOnDisk,
     WorkerPanicked,
+    /// A spool or other temporary copy ran out of disk space.
+    DiskFull,
 }
 
 impl Reason {
@@ -219,6 +221,7 @@ impl Reason {
             Self::Unsupported => "compare-reason-unsupported",
             Self::ChangedOnDisk => "compare-reason-changed-on-disk",
             Self::WorkerPanicked => "compare-reason-worker-panicked",
+            Self::DiskFull => "compare-reason-disk-full",
         })
     }
 }

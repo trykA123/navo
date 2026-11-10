@@ -2,15 +2,18 @@
 //!
 //! Every step runs on an app thread; the UI receives owned snapshots tagged by request id.
 
+mod bytes;
 mod convert;
 mod copy;
 mod copy_hook;
 mod copy_many;
 mod hooks;
+mod large;
 mod load;
 mod pair;
 mod sheet_hook;
 mod sides;
+mod sources;
 mod stream;
 mod viewed;
 

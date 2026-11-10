@@ -15,7 +15,7 @@ use crate::browser::{
 };
 use crate::commands::Keymap;
 use crate::compare_diff::fake::FakeDiffHooks;
-use crate::compare_diff::{DiffUpdate, PairKind};
+use crate::compare_diff::{ByteProgress, ByteRegionView, DiffUpdate, LargeHunk, PairKind};
 use crate::settings::Values;
 use crate::window_view::OpenHooks;
 use crate::window_view::compare_screen::FileState;
@@ -143,6 +143,12 @@ impl Rig {
         })
     }
 
+    fn large_hunks(&self, cx: &mut TestAppContext) -> Option<Vec<LargeHunk>> {
+        self.view.read_with(cx, |view, _| {
+            view.file_large_hunks().map(<[LargeHunk]>::to_vec)
+        })
+    }
+
     fn selected(&self, cx: &mut TestAppContext) -> Option<String> {
         self.view.read_with(cx, |view, _| {
             let mode = view.browser.compare_mode()?;
@@ -188,6 +194,107 @@ fn compare_screen_enter_on_a_file_row_opens_it_with_the_fake_hooks(cx: &mut Test
     assert!(asked[0].left.is_some() && asked[0].right.is_some());
     assert_eq!(rig.state(cx), Some(FileState::Loading));
     assert!(rig.focused(cx, true));
+}
+
+#[gpui_kit::test]
+fn a_large_snapshot_acknowledges_only_after_the_view_applies_it(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.press(cx, "enter");
+    let sink = rig.diff.pair_sink();
+    let (first, second) = (large_hunk(0..2), large_hunk(5..6));
+    let snapshot = |hunks: Vec<LargeHunk>, ack| DiffUpdate::Large {
+        request: 1,
+        hunks,
+        steps: Vec::new(),
+        progress: None,
+        ack,
+    };
+    rig.push(cx, &sink, snapshot(vec![first.clone(), second.clone()], 1));
+    assert_eq!(rig.diff.acks(), vec![1]);
+    assert_eq!(
+        rig.large_hunks(cx),
+        Some(vec![first, second.clone()]),
+        "the acknowledged snapshot's hunks are applied"
+    );
+    rig.push(cx, &sink, snapshot(vec![second.clone()], 2));
+    assert_eq!(rig.diff.acks(), vec![1, 2]);
+    assert_eq!(
+        rig.large_hunks(cx),
+        Some(vec![second]),
+        "an evicted hunk is gone before its release is acknowledged"
+    );
+}
+
+/// A large hunk over `rows` on both sides.
+fn large_hunk(rows: std::ops::Range<u64>) -> LargeHunk {
+    LargeHunk {
+        left_rows: rows.clone(),
+        right_rows: rows.clone(),
+        left_bytes: rows.clone(),
+        right_bytes: rows,
+    }
+}
+
+#[gpui_kit::test]
+fn newer_large_snapshots_coalesce_and_keep_only_the_last_ack(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.press(cx, "enter");
+    let sink = rig.diff.pair_sink();
+    for ack in [3, 7] {
+        sink(DiffUpdate::Large {
+            request: 1,
+            hunks: Vec::new(),
+            steps: Vec::new(),
+            progress: None,
+            ack,
+        });
+    }
+    settle(cx, &rig.view);
+    assert_eq!(rig.diff.acks(), vec![7], "one snapshot, the newest ack");
+}
+
+#[test]
+fn byte_deltas_merge_into_one_pending_snapshot() {
+    let mut inbox = Vec::new();
+    let first = DiffUpdate::Bytes {
+        request: 1,
+        regions: vec![ByteRegionView {
+            left: 0..1,
+            right: 0..1,
+            changed: 1,
+        }],
+        progress: Some(ByteProgress {
+            done: 1,
+            total: 2,
+            coarse: false,
+        }),
+    };
+    let second = DiffUpdate::Bytes {
+        request: 1,
+        regions: vec![ByteRegionView {
+            left: 1..2,
+            right: 1..2,
+            changed: 1,
+        }],
+        progress: Some(ByteProgress {
+            done: 2,
+            total: 2,
+            coarse: false,
+        }),
+    };
+    crate::window_view::compare_screen::coalesce(&mut inbox, 1, first);
+    crate::window_view::compare_screen::coalesce(&mut inbox, 1, second);
+    assert_eq!(inbox.len(), 1);
+    let DiffUpdate::Bytes {
+        regions, progress, ..
+    } = &inbox[0].1
+    else {
+        panic!("a byte snapshot");
+    };
+    assert_eq!(regions.len(), 2, "deltas are kept");
+    assert_eq!(progress.map(|p| p.done), Some(2));
 }
 
 #[gpui_kit::test]

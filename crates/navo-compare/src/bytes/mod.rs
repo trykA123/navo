@@ -77,6 +77,7 @@ pub struct Request {
 pub struct ByteDiff {
     events: Receiver<ByteEvent>,
     cancel: CancelToken,
+    worker: Option<std::thread::JoinHandle<()>>,
     #[cfg(test)]
     retained: Arc<retained::Capacity>,
 }
@@ -106,16 +107,21 @@ impl ByteDiff {
                     events: &events,
                 });
             });
-        if spawned.is_err() {
-            offset::post(
-                &fallback,
-                &cancel,
-                ByteEvent::Failed(Reason::WorkerPanicked),
-            );
-        }
+        let worker = match spawned {
+            Ok(worker) => Some(worker),
+            Err(_) => {
+                offset::post(
+                    &fallback,
+                    &cancel,
+                    ByteEvent::Failed(Reason::WorkerPanicked),
+                );
+                None
+            }
+        };
         Self {
             events: receive,
             cancel,
+            worker,
             #[cfg(test)]
             retained,
         }
@@ -124,6 +130,14 @@ impl ByteDiff {
     #[must_use]
     pub fn events(&self) -> &Receiver<ByteEvent> {
         &self.events
+    }
+
+    /// Cancel and wait for the engine worker; call off the UI thread.
+    pub fn join(mut self) {
+        self.cancel.cancel();
+        if let Some(worker) = self.worker.take() {
+            let _joined = worker.join();
+        }
     }
 
     #[cfg(test)]

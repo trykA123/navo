@@ -15,6 +15,14 @@ impl NavoWindow {
         Some((&file.request, &file.state))
     }
 
+    /// The hunks of the large snapshot the open file screen applied last.
+    pub(in crate::window_view) fn file_large_hunks(
+        &self,
+    ) -> Option<&[crate::compare_diff::LargeHunk]> {
+        let file = self.compare.screen.as_ref()?.file.as_ref()?;
+        file.large.as_ref().map(|large| large.hunks.as_slice())
+    }
+
     /// Whether the open file screen has focus.
     pub(in crate::window_view) fn file_screen_focused(&self, window: &Window) -> bool {
         self.compare
