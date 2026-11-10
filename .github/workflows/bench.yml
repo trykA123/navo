@@ -25,7 +25,8 @@ env:
 jobs:
   instructions:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # The base pass on releases before this fix spends ~27 min in the old O(n^2) fixture setup.
+    timeout-minutes: 60
     env:
       HEAD_SHA: ${{ github.sha }}
       GH_TOKEN: ${{ github.token }}

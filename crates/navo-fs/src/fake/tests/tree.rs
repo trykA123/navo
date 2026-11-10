@@ -167,3 +167,36 @@ fn long_name_survives() {
     let name = ProviderPath::from_text(&"x".repeat(300));
     assert_eq!(round_trip(name.clone()), [name]);
 }
+
+#[test]
+fn add_entries_matches_add_entry_one_by_one() {
+    let entry = |at: u32| FsEntry {
+        size: u64::from(at),
+        ..file_entry(ProviderPath::from_text(&format!("n{at:03}")))
+    };
+    let (one, bulk) = (FakeFs::new(), FakeFs::new());
+    for at in 0..200 {
+        one.add_entry("d/sub", entry(at));
+    }
+    bulk.add_entries("d/sub", (0..200).map(entry));
+    let sizes = |fs: &FakeFs| -> Vec<(String, u64)> {
+        list_all(fs, "d/sub")
+            .1
+            .iter()
+            .flat_map(|b| &b.entries)
+            .map(|e| (e.name.to_text(), e.size))
+            .collect()
+    };
+    assert_eq!(sizes(&one), sizes(&bulk));
+    assert_eq!(sizes(&bulk).len(), 200);
+}
+
+#[test]
+#[should_panic(expected = "duplicate name")]
+fn add_entries_rejects_a_folded_duplicate() {
+    let fs = FakeFs::new().case_insensitive();
+    fs.add_entries(
+        "d",
+        ["a", "A"].map(|n| file_entry(ProviderPath::from_text(n))),
+    );
+}

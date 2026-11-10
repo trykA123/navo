@@ -1,3 +1,4 @@
+mod bulk;
 mod copy;
 mod ops;
 mod permissions;
