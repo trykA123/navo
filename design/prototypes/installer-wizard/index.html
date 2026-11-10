@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navo Setup wizard: four directions</title>
+<!-- W9 prototype. Pick a direction with keys 1-4. Colours come only from Navo theme tokens (Open sea, light and dark). Motion is an 80 ms fade. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Theme tokens. Names follow crates/navo-ui/src/tokens (Open sea palette, surfaces, diff, marks). */
+:root {
+  color-scheme: light;
+  --rail: oklch(95.5% 0.012 225);
+  --background: oklch(98.5% 0.008 225);
+  --surface: oklch(99.8% 0 225);
+  --zebra: oklch(97% 0.010 225);
+  --line: oklch(89% 0.014 225);
+  --text: oklch(22% 0.014 225);
+  --muted: oklch(48.8% 0.017 225);
+  --faint: oklch(64.8% 0.017 225);
+  --hover: oklch(94.25% 0.027 218);
+  --selection: oklch(90% 0.046 218);
+  --on-selection: var(--text);
+  --accent: oklch(52% 0.092 218);
+  --accent-text: oklch(48.8% 0.086 218);
+  --mark: oklch(48.8% 0.144 22);
+  --folder: oklch(49.6% 0.102 80);
+  --kind-code: oklch(49.6% 0.12 262);
+  --kind-image: oklch(49.6% 0.12 340);
+  --kind-archive: oklch(49.6% 0.12 45);
+  --kind-doc: oklch(49.6% 0.12 235);
+  --kind-sheet: oklch(49.6% 0.12 165);
+  --ok: oklch(48% 0.108 160);
+  --warn: oklch(49.6% 0.102 80);
+  --ink: oklch(20% 0.02 250);
+  /* surfaces */
+  --card: var(--surface);
+  --card-edge: var(--line);
+  --card-ring: oklch(61.3% 0.075 225);
+  --current: var(--selection);
+  --field: var(--rail);
+  --keycap-face: var(--surface);
+  --keycap-edge: var(--line);
+  --keycap-label: var(--text);
+  --keycap-lit: var(--accent);
+  --keycap-lit-label: var(--background);
+  --layer-tint: var(--hover);
+  --pill: var(--surface);
+  --pill-ring: var(--accent);
+  --pill-label: var(--accent-text);
+  --progress-track: var(--line);
+  --progress-fill: var(--accent);
+  --sheet: var(--surface);
+  --scrim: oklch(20% 0.02 250 / 0.4);
+  /* diff */
+  --diff-delete-text: oklch(50% 0.17 27); --diff-delete-mark: oklch(62% 0.17 27); --diff-delete-fill: oklch(88% 0.07 27); --diff-delete-wash: oklch(96.5% 0.02 27);
+  --diff-add-text: oklch(46% 0.12 150); --diff-add-mark: oklch(60% 0.14 150); --diff-add-fill: oklch(87% 0.08 150); --diff-add-wash: oklch(96.5% 0.025 150);
+  --diff-change-text: oklch(48% 0.11 70); --diff-change-mark: oklch(60% 0.13 70); --diff-change-fill: oklch(88% 0.07 70); --diff-change-wash: oklch(97% 0.025 80);
+  --diff-moved-text: oklch(48% 0.10 210); --diff-moved-mark: oklch(60% 0.10 210); --diff-moved-fill: oklch(88% 0.06 210); --diff-moved-wash: oklch(96.5% 0.02 210);
+  --diff-conflict-text: oklch(50% 0.17 27); --diff-conflict-mark: oklch(50% 0.17 27); --diff-conflict-fill: oklch(88% 0.07 27); --diff-conflict-wash: oklch(96.5% 0.02 27);
+  --diff-auto-merged-text: oklch(50% 0.15 262); --diff-auto-merged-mark: oklch(50% 0.15 262); --diff-auto-merged-fill: oklch(88% 0.06 262); --diff-auto-merged-wash: oklch(96.5% 0.02 262);
+  --diff-gap-hatch: oklch(91% 0.006 260);
+  /* git */
+  --git-conflict: oklch(56% 0.2 25); --git-modified: oklch(56% 0.138 55); --git-sync: oklch(56% 0.128 240); --git-quiet: oklch(56.8% 0.017 225);
+  /* syntax (Oxidised Iron) */
+  --syntax-keyword: oklch(50% 0.125 40); --syntax-type: oklch(41% 0.08 82); --syntax-function: oklch(48% 0.075 210); --syntax-number: oklch(49% 0.1 330); --syntax-string: oklch(48% 0.1 145); --syntax-comment: oklch(54% 0.015 60); --syntax-attribute: oklch(46% 0.07 62);
+  /* shadows */
+  --shadow-card: 0 0 0 1px var(--card-edge);
+  --shadow-menu: 0 18px 44px -12px oklch(21% 0.012 260 / 0.28), 0 2px 6px oklch(21% 0.012 260 / 0.06), 0 0 0 1px var(--card-edge);
+  --shadow-sheet: 0 28px 60px -20px oklch(20% 0.02 250 / 0.42), 0 0 0 1px var(--card-edge);
+  --shadow-chip: 0 2px 6px oklch(21% 0.012 260 / 0.08), 0 8px 20px -10px oklch(21% 0.012 260 / 0.2);
+  --shadow-focus: 0 0 0 2px var(--pill-ring);
+  /* motion, type, space, radii (design_b) */
+  --motion-fade: 80ms;
+  --font-ui: "Inter", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --fs-12: 0.75rem; --fs-13: 0.8125rem; --fs-14: 0.875rem; --fs-16: 1rem; --fs-20: 1.25rem;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --rail: oklch(19% 0.014 225);
+  --background: oklch(22.5% 0.014 225);
+  --surface: oklch(26.5% 0.014 225);
+  --zebra: oklch(20.75% 0.014 225);
+  --line: oklch(33% 0.014 225);
+  --text: oklch(93.8% 0.014 225);
+  --muted: oklch(72% 0.017 225);
+  --faint: oklch(54.8% 0.017 225);
+  --hover: oklch(27.75% 0.036 218);
+  --selection: oklch(33% 0.058 218);
+  --accent: oklch(76% 0.11 218);
+  --accent-text: oklch(76% 0.11 218);
+  --mark: oklch(76% 0.166 22);
+  --folder: oklch(82% 0.13 80);
+  --kind-code: oklch(76% 0.12 262);
+  --kind-image: oklch(76% 0.12 340);
+  --kind-archive: oklch(76% 0.12 45);
+  --kind-doc: oklch(76% 0.12 235);
+  --kind-sheet: oklch(76% 0.12 165);
+  --ok: oklch(85% 0.13 160);
+  --warn: oklch(82% 0.13 80);
+  --ink: oklch(0% 0 0);
+  --card-ring: oklch(65.3% 0.091 225);
+  --scrim: oklch(0% 0 0 / 0.4);
+  --diff-delete-text: oklch(76% 0.13 27); --diff-delete-mark: oklch(66% 0.16 27); --diff-delete-fill: oklch(36% 0.09 27); --diff-delete-wash: oklch(21% 0.03 27);
+  --diff-add-text: oklch(78% 0.13 150); --diff-add-mark: oklch(68% 0.14 150); --diff-add-fill: oklch(36% 0.08 150); --diff-add-wash: oklch(21% 0.03 150);
+  --diff-change-text: oklch(82% 0.12 78); --diff-change-mark: oklch(74% 0.13 78); --diff-change-fill: oklch(36% 0.08 78); --diff-change-wash: oklch(21.5% 0.025 78);
+  --diff-moved-text: oklch(78% 0.09 210); --diff-moved-mark: oklch(68% 0.10 210); --diff-moved-fill: oklch(36% 0.06 210); --diff-moved-wash: oklch(21% 0.025 210);
+  --diff-conflict-text: oklch(76% 0.13 27); --diff-conflict-mark: oklch(76% 0.13 27); --diff-conflict-fill: oklch(36% 0.09 27); --diff-conflict-wash: oklch(21% 0.03 27);
+  --diff-auto-merged-text: oklch(72% 0.13 262); --diff-auto-merged-mark: oklch(72% 0.13 262); --diff-auto-merged-fill: oklch(36% 0.08 262); --diff-auto-merged-wash: oklch(21% 0.03 262);
+  --diff-gap-hatch: oklch(23% 0.01 260);
+  --git-conflict: oklch(72% 0.15 25); --git-modified: oklch(72% 0.15 55); --git-sync: oklch(72% 0.15 240); --git-quiet: oklch(63.4% 0.017 225);
+  --syntax-keyword: oklch(75% 0.095 40); --syntax-type: oklch(85% 0.075 82); --syntax-function: oklch(80% 0.065 210); --syntax-number: oklch(77% 0.075 330); --syntax-string: oklch(80% 0.08 145); --syntax-comment: oklch(64% 0.014 60); --syntax-attribute: oklch(80% 0.06 62);
+  --shadow-menu: 0 22px 48px -12px oklch(0% 0 0 / 0.7), 0 0 0 1px oklch(93% 0.006 260 / 0.04), 0 0 0 1px var(--card-edge);
+  --shadow-sheet: 0 28px 60px -20px oklch(0% 0 0 / 0.85), 0 0 0 1px var(--card-edge);
+  --shadow-chip: 0 2px 6px oklch(0% 0 0 / 0.35), 0 10px 24px -10px oklch(0% 0 0 / 0.6);
+}
+:root{--font-brand:"Space Grotesk","Inter",sans-serif}
+
+/* Everything below uses only the tokens above. No colour literals. */
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--rail);color:var(--text);font:var(--fs-13)/1.45 var(--font-ui);min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+u{text-decoration:none}
+.alt u{text-decoration:underline;text-underline-offset:2px}
+
+/* Picker (prototype chrome, not part of the wizard) */
+.picker{background:var(--background);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.picker h1{font:600 14px var(--font-brand);margin:0;letter-spacing:-.01em}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:2px;background:var(--rail);gap:2px}
+.seg button{border:0;background:none;border-radius:6px;height:26px;padding:0 10px;cursor:pointer;color:var(--muted);font-weight:500;font-size:12.5px;transition:opacity var(--motion-fade)}
+.seg button[aria-pressed=true]{background:var(--surface);color:var(--text);box-shadow:var(--shadow-card)}
+.seg button:focus-visible,.picker select:focus-visible{outline:2px solid var(--card-ring);outline-offset:1px}
+.picker select{height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);padding:0 8px;font:inherit;max-width:100%}
+.why{flex-basis:100%;margin:0;color:var(--muted);font-size:12.5px}
+.why b{color:var(--text);font-weight:600}
+.stage{flex:1;padding:24px 16px 40px;display:flex;justify-content:center;align-items:flex-start}
+#fit{position:relative}
+.win{position:absolute;left:0;top:0;width:640px;height:480px;transform-origin:0 0;background:var(--background);border-radius:8px;box-shadow:var(--shadow-sheet);overflow:hidden;display:flex;flex-direction:column}
+.titlebar{height:32px;flex:none;display:flex;align-items:center;justify-content:space-between;background:var(--rail);border-bottom:1px solid var(--line);padding-left:10px;font-size:12px;color:var(--muted)}
+.titlebar .t{display:flex;align-items:center;gap:8px}
+.titlebar .x{width:46px;height:32px;display:grid;place-items:center;color:var(--muted)}
+.client{height:448px;position:relative;overflow:hidden;opacity:1;transition:opacity var(--motion-fade) linear}
+.client.out{opacity:0}
+.toast{position:absolute;inset:0;background:var(--scrim);display:grid;place-items:center;opacity:0;pointer-events:none;transition:opacity var(--motion-fade) linear;z-index:5}
+.toast.on{opacity:1;pointer-events:auto}
+.toast div{background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-menu);padding:16px 20px;max-width:340px;text-align:left}
+.toast b{display:block;margin-bottom:4px;font:600 15px var(--font-brand)}
+.toast span{color:var(--muted)}
+
+/* Shared parts */
+.ic{flex:none;display:block}
+.brand-mark{flex:none;display:block}
+.btn{height:30px;padding:0 14px;border:1px solid var(--line);border-radius:6px;background:var(--surface);display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:500;font-size:13px;cursor:pointer;white-space:nowrap;transition:background var(--motion-fade) linear}
+.btn:hover:not(:disabled){background:var(--hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+.btn.primary:hover:not(:disabled){background:var(--accent);opacity:.92}
+.btn:disabled{color:var(--muted);background:transparent;border-color:var(--line);cursor:default;opacity:.62}
+.btn.primary:disabled{background:var(--zebra);color:var(--muted);border-color:var(--line)}
+.btn:focus{outline:2px solid var(--card-ring);outline-offset:2px}
+.btn.ghost{border-color:transparent;background:none}
+.btn.ghost:hover:not(:disabled){background:var(--hover)}
+.btn.small{height:26px;padding:0 10px;font-size:12.5px}
+kbd{font:500 10.5px/1 var(--font-mono);color:var(--muted);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:2px 5px;background:var(--surface);display:inline-block}
+.btn.primary kbd{color:var(--surface);background:none;border-color:var(--surface);opacity:.8}
+.link{color:var(--accent-text);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;background:none;border:0;padding:0;font:inherit}
+.link:focus{outline:2px solid var(--card-ring);outline-offset:2px;border-radius:3px}
+.mono{font-family:var(--font-mono);font-size:12px}
+.p{margin:0 0 12px;color:var(--text);font-size:13.5px;line-height:1.5;max-width:46ch}
+.p code,.note code,.margin code,.lead code{font:12px var(--font-mono);background:var(--rail);border:1px solid var(--line);border-radius:4px;padding:0 4px;overflow-wrap:anywhere}
+.title{font:600 22px/1.2 var(--font-brand);letter-spacing:-.015em;margin:0 0 8px}
+.lead{margin:0 0 14px;font-size:13.5px;line-height:1.5;color:var(--text);max-width:48ch}
+.muted{color:var(--muted)}
+
+.tone-info{--t-bg:var(--selection);--t-fg:var(--accent-text)}
+.tone-ok{--t-bg:var(--diff-add-wash);--t-fg:var(--diff-add-text)}
+.tone-warn{--t-bg:var(--diff-change-wash);--t-fg:var(--diff-change-text)}
+.tone-err{--t-bg:var(--diff-delete-wash);--t-fg:var(--diff-delete-text)}
+.tile{width:40px;height:40px;border-radius:11px;background:var(--t-bg);color:var(--t-fg);display:grid;place-items:center;flex:none}
+
+.note{display:flex;gap:9px;align-items:flex-start;padding:8px 11px;border-radius:8px;background:var(--zebra);border:1px solid var(--line);font-size:12.5px;line-height:18px;color:var(--text);margin:0 0 10px;max-width:50ch}
+.note .ic{margin-top:1px;color:var(--muted)}
+.note.tone-warn,.note.tone-err,.note.tone-ok{background:var(--t-bg);border-color:transparent;color:var(--t-fg)}
+.note.tone-warn .ic,.note.tone-err .ic,.note.tone-ok .ic{color:var(--t-fg)}
+.note strong{font-weight:600}
+
+.facts{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:9px}
+.facts li{display:flex;align-items:center;gap:11px;font-size:13px;color:var(--text)}
+.facts .dot{width:26px;height:26px;border-radius:8px;background:var(--rail);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent-text);flex:none}
+
+.fieldrow{display:flex;gap:8px;align-items:center;margin:0 0 8px}
+.field{flex:1;min-width:0;height:34px;border:1px solid var(--line);border-radius:7px;background:var(--surface);display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--muted);font:12.5px var(--font-mono)}
+.field .path{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.field .path .dim{color:var(--muted)}
+.field .path b{color:var(--text);font-weight:600}
+.field .path em{font-style:normal;color:var(--diff-delete-text);background:var(--diff-delete-wash);border-radius:3px;padding:0 2px;font-weight:600}
+.field.bad{border-color:var(--mark);box-shadow:0 0 0 1px var(--mark)}
+.field.locked{background:var(--zebra)}
+.meta{display:flex;gap:16px;color:var(--muted);font-size:12px;margin:0 0 12px;font-variant-numeric:tabular-nums}
+.meta span{display:inline-flex;align-items:center;gap:6px}
+.meta b{color:var(--text);font-weight:600}
+
+.chk{display:flex;align-items:center;gap:10px;min-height:28px;cursor:pointer;font-size:13.5px;border-radius:6px;padding:2px 4px 2px 0;width:max-content;max-width:100%}
+.chk:focus{outline:2px solid var(--card-ring);outline-offset:2px}
+.chk .box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--muted);display:grid;place-items:center;color:var(--surface);flex:none;transition:background var(--motion-fade) linear}
+.chk[aria-checked=true] .box{background:var(--accent);border-color:var(--accent)}
+.chk .box .ic{opacity:0;transition:opacity var(--motion-fade) linear}
+.chk[aria-checked=true] .box .ic{opacity:1}
+.chk small{color:var(--muted);font-size:12px;margin-left:2px}
+.chks{display:flex;flex-direction:column;gap:4px}
+
+.lic{height:150px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:10px 12px;font:11px/1.55 var(--font-mono);color:var(--muted);white-space:pre-wrap;margin:0 0 10px;max-width:62ch}
+.lic:focus{outline:2px solid var(--card-ring);outline-offset:2px}
+.lic h4{margin:0 0 6px;font:600 11.5px var(--font-mono);color:var(--text)}
+
+.bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin:6px 0 10px;max-width:62ch}
+.bar i{display:block;height:100%;width:42%;border-radius:2px;background:var(--accent);animation:breathe 2.6s ease-in-out infinite alternate}
+@keyframes breathe{from{opacity:.45}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.bar i,.pulse{animation:none}}
+.pulse{animation:breathe 2.6s ease-in-out infinite alternate}
+.elapsed{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.elapsed b{color:var(--text);font:600 13px var(--font-mono)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;margin:0 0 12px;align-items:baseline}
+.kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.steplist{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.steplist li{display:flex;align-items:center;gap:10px;height:30px;font-size:13px;border-radius:6px;padding:0 4px}
+.steplist .mk{width:18px;height:18px;display:grid;place-items:center;flex:none;color:var(--ok)}
+.steplist .mk i{display:block;width:6px;height:6px;border-radius:50%;background:var(--line)}
+.steplist .cur .mk i{width:8px;height:8px;background:var(--accent)}
+.steplist .pend{color:var(--muted)}
+.steplist time{margin-left:auto;font:11.5px var(--font-mono);color:var(--muted)}
+
+/* ---------- Direction A: step rail ---------- */
+.A{display:flex;height:100%}
+.A .rail{width:178px;flex:none;background:var(--rail);border-right:1px solid var(--line);padding:20px 16px 16px;display:flex;flex-direction:column;gap:22px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand b{font:600 15px/1.1 var(--font-brand);letter-spacing:-.01em;display:block}
+.brand small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.steps li{display:flex;align-items:center;gap:10px;height:30px;padding:0 8px;border-radius:7px;color:var(--muted);font-size:12.5px}
+.steps li .mk{width:16px;height:16px;display:grid;place-items:center;flex:none}
+.steps li .mk i{display:block;width:6px;height:6px;border-radius:50%;background:var(--line)}
+.steps li.done{color:var(--text)} .steps li.done .mk{color:var(--accent-text)}
+.steps li.cur{background:var(--selection);color:var(--text);font-weight:600}
+.steps li.cur .mk i{width:8px;height:8px;background:var(--accent)}
+.steps li.cur.err .mk{color:var(--mark)}
+.steps li.skip{text-decoration:line-through;text-decoration-color:var(--faint)}
+.steps li.skip .mk{color:var(--muted)}
+.A .railfoot{margin-top:auto;color:var(--muted);font-size:11.5px;line-height:1.5;display:flex;flex-direction:column;gap:2px}
+.A .main{flex:1;min-width:0;display:flex;flex-direction:column}
+.A .body{flex:1;padding:28px 32px 0;overflow:hidden;min-height:0}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 20px;border-top:1px solid var(--line);flex:none}
+.foot .hints{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:11.5px}
+.foot .hints span{display:inline-flex;gap:6px;align-items:center}
+.foot .acts{display:flex;gap:8px;align-items:center}
+
+/* ---------- Direction B: single card ---------- */
+.B{display:flex;flex-direction:column;height:100%;background:var(--rail)}
+.B header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px 10px}
+.B header .brand b{font-size:14px}
+.B header .count{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;display:flex;gap:6px;align-items:center}
+.B header .count b{color:var(--text);font-weight:600}
+.segs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:0 20px}
+.segs i{height:3px;border-radius:2px;background:var(--line)}
+.segs i.done,.segs i.cur{background:var(--accent)}
+.segs i.cur.err{background:var(--mark)}
+.segs i.skip{opacity:.35}
+.B .card{flex:1;min-height:0;margin:14px 20px 0;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-card);padding:22px 26px 0;overflow:hidden}
+.B .head{display:flex;gap:14px;align-items:center;margin-bottom:14px}
+.B .head .title{margin:0 0 2px;font-size:20px}
+.B .head .sub{color:var(--muted);font-size:12.5px}
+.B .card .lead{margin-bottom:12px}
+.B .foot{border-top:0;padding:12px 20px 14px}
+
+/* ---------- Direction C: summary sheet ---------- */
+.C{display:flex;flex-direction:column;height:100%}
+.C .top{display:flex;align-items:center;gap:12px;padding:20px 28px 12px}
+.C .top .title{margin:0;font-size:19px}
+.C .top .sub{color:var(--muted);font-size:12.5px;margin-top:1px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;border:1px solid var(--line);font:500 11px var(--font-mono);color:var(--muted);background:var(--surface);white-space:nowrap}
+.chip.tone-ok,.chip.tone-warn,.chip.tone-err,.chip.tone-info{background:var(--t-bg);color:var(--t-fg);border-color:transparent}
+.C .rows{flex:1;min-height:0;padding:0 28px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.row{border:1px solid var(--line);border-radius:11px;background:var(--surface);flex:none}
+.row.open{border-color:var(--card-ring);box-shadow:var(--shadow-card)}
+.row-h{display:flex;align-items:center;gap:12px;height:46px;padding:0 12px 0 10px}
+.row-h .ico{width:28px;height:28px;border-radius:8px;background:var(--rail);color:var(--muted);display:grid;place-items:center;flex:none}
+.row.open .ico{background:var(--selection);color:var(--accent-text)}
+.row-h .lab{font-weight:600;font-size:13px;width:96px;flex:none}
+.row-h .val{flex:1;min-width:0;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-h .val.mono{font-size:12px}
+.row-b{padding:2px 14px 14px 60px}
+.row-b .note:last-child,.row-b .meta:last-child{margin-bottom:0}
+.row.skipped .lab,.row.skipped .val{opacity:.75}
+.C .center{flex:1;padding:0 28px;min-height:0}
+.panel{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:16px 18px;box-shadow:var(--shadow-card)}
+.panel .phead{display:flex;gap:14px;align-items:center;margin-bottom:12px}
+.panel .phead .title{margin:0 0 2px;font-size:18px}
+.C .foot{border-top:0;padding:12px 28px 16px}
+
+/* ---------- Direction D: margin notes ---------- */
+.D{height:100%;display:flex;flex-direction:column}
+.D .rule{height:2px;background:var(--line);flex:none}
+.D .rule i{display:block;height:100%;background:var(--accent);width:var(--p)}
+.D .rule.err i{background:var(--mark)}
+.D .wrap{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 156px;gap:26px;padding:24px 28px 0 36px}
+.eyebrow{font:500 11px var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;display:flex;gap:8px;align-items:center}
+.eyebrow .ic{color:var(--t-fg,var(--accent-text))}
+.D .title{font-size:29px;line-height:1.1;letter-spacing:-.025em;margin:0 0 12px}
+.D .lead{font-size:13.5px}
+.margin{border-left:1px solid var(--line);padding:2px 0 0 14px;display:flex;flex-direction:column;gap:14px;font-size:12px;line-height:1.5;color:var(--muted);align-self:start;margin-top:30px}
+.margin h5{margin:0 0 3px;font:500 10px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--text)}
+.margin p{margin:0}
+.margin .mono,.margin b{color:var(--text)}
+.D .foot{border-top:0;justify-content:flex-start;padding:14px 36px 22px;gap:6px}
+.D .foot .acts{gap:6px}
+.D .foot .btn kbd{margin-left:2px}
+.D .btn{height:32px}
+.D .btn.ghost{color:var(--muted)}
+.D .btn.ghost:hover:not(:disabled){color:var(--text)}
+.D .field{border-radius:6px;height:38px;font-size:13px}
+.D .fieldrow{margin-bottom:10px}
+
+.A .railfoot .hints{flex-direction:column;align-items:flex-start;gap:6px}
+/* Installing only: the n and the _ of the brand mark spar while Setup works. Transform-only, no colour change, off for reduced motion. */
+.spar{position:relative;height:36px;width:84px;margin-bottom:10px}
+.spar .sn{position:absolute;left:10px;bottom:3px;font:700 28px/1 var(--font-brand);color:var(--text);transform-origin:50% 100%;animation:spar-n 2.4s ease-in-out infinite}
+.spar .su{position:absolute;right:10px;bottom:6px;width:16px;height:4px;border-radius:1px;background:var(--accent);animation:spar-u 2.4s ease-in-out infinite}
+@keyframes spar-n{0%,22%{transform:translateX(0) rotate(0)}32%{transform:translateX(14px) rotate(9deg)}38%{transform:translateX(9px) rotate(-5deg)}48%,62%{transform:translateX(0) rotate(0)}70%{transform:translateX(-4px) rotate(-12deg)}78%{transform:translateX(-10px) rotate(-4deg)}90%,100%{transform:translateX(0) rotate(0)}}
+@keyframes spar-u{0%,22%{transform:translateX(0)}30%{transform:translateX(-30px)}36%{transform:translateX(-20px) translateY(-7px)}46%,58%{transform:translateX(0)}68%{transform:translateX(-34px) translateY(-3px)}74%{transform:translateX(-30px)}88%,100%{transform:translateX(0)}}
+/* One small n/_ scene per page (rail footer). Transform and opacity only, slow, no flashing. */
+.spar.welcome .su{animation:wave-u 3s ease-in-out infinite}.spar.welcome .sn{animation:wave-n 3s ease-in-out infinite}
+@keyframes wave-u{0%,100%{opacity:1;transform:translateX(0)}50%{opacity:.35;transform:translateX(0)}}
+@keyframes wave-n{0%,60%,100%{transform:rotate(0)}70%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}90%{transform:rotate(-3deg)}}
+.spar.sign .su{right:auto;left:10px;width:22px;bottom:0;transform-origin:0 50%;animation:sign-u 3.2s ease-in-out infinite}.spar.sign .sn{animation:none}
+@keyframes sign-u{0%,10%{transform:scaleX(0)}45%,85%{transform:scaleX(1)}100%{transform:scaleX(0);opacity:0}}
+.spar.floor .su{animation:floor-u 3s ease-in-out infinite}.spar.floor .sn{animation:floor-n 3s ease-in-out infinite}
+@keyframes floor-u{0%,15%{transform:translateX(0)}45%,80%{transform:translateX(-46px)}100%{transform:translateX(0)}}
+@keyframes floor-n{0%,40%{transform:translateY(-6px)}55%,80%{transform:translateY(0)}100%{transform:translateY(-6px)}}
+.spar.copy .sn2{position:absolute;left:44px;bottom:3px;font:700 28px/1 var(--font-brand);color:var(--faint);animation:copy-n 3s ease-in-out infinite}.spar.copy .sn{animation:none}.spar.copy .su{right:4px;animation:none}
+@keyframes copy-n{0%,15%{opacity:0;transform:translateX(-30px)}50%,85%{opacity:1;transform:translateX(0)}100%{opacity:0;transform:translateX(0)}}
+.spar.done .sn{animation:done-n 2.6s ease-in-out infinite}.spar.done .su{animation:done-u 2.6s ease-in-out infinite}
+@keyframes done-n{0%,20%{transform:translateX(0)}45%,80%{transform:translateX(14px) translateY(-4px)}100%{transform:translateX(0)}}
+@keyframes done-u{0%,20%{transform:translateX(0)}45%,80%{transform:translateX(-24px) translateY(-4px)}100%{transform:translateX(0)}}
+.spar.down .sn{animation:down-n 3.4s ease-in-out infinite}.spar.down .su{background:var(--faint);animation:down-u 3.4s ease-in-out infinite}
+@keyframes down-n{0%,20%{transform:rotate(0)}45%,85%{transform:rotate(-16deg) translateY(2px)}100%{transform:rotate(0)}}
+@keyframes down-u{0%,25%{transform:rotate(0)}50%,85%{transform:rotate(25deg) translateY(4px)}100%{transform:rotate(0)}}
+.spar.nope .su{animation:nope-u 2.8s ease-in-out infinite}.spar.nope .sn{animation:none}
+@keyframes nope-u{0%,40%,100%{transform:translateX(0)}50%{transform:translateX(-6px)}60%{transform:translateX(6px)}70%{transform:translateX(-4px)}80%{transform:translateX(0)}}
+/* Installing: four key tips cross-fade, 4 s each. */
+.tips{position:relative;height:64px;max-width:46ch;border-top:1px solid var(--line);padding-top:12px;margin-top:8px}
+.tips-h{font:500 10.5px var(--font-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.tip{position:absolute;left:0;right:0;top:34px;display:flex;gap:10px;align-items:center;font-size:13px;opacity:0;animation:tip 16s linear infinite}
+.tip kbd{flex:none}
+@keyframes tip{0%{opacity:0}1%,24%{opacity:1}25%,100%{opacity:0}}
+.first{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12.5px;margin:0 0 12px;align-items:center}
+.first span{color:var(--muted)}
+/* Finish: n and _ meet, "avo" fills in, then the line. Runs once. */
+.hello{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin:6px 0 16px;max-width:none}
+.hello .word{display:flex;align-items:flex-end;font:700 44px/1 var(--font-brand);letter-spacing:-.03em;color:var(--text);height:52px}
+.hello .w-n{display:inline-block;animation:hello-n .6s ease-out both}
+.hello .w-avo{display:inline-block;overflow:hidden;max-width:0;opacity:0;animation:hello-avo .7s ease-out 1.1s both}
+.hello .w-u{display:inline-block;width:22px;height:6px;margin:0 0 4px 6px;border-radius:1px;background:var(--accent);animation:hello-u .7s ease-out .4s both}
+.hello .tag{font:500 13px var(--font-mono);color:var(--muted);opacity:0;animation:hello-tag .5s ease-out 1.9s both;display:flex;gap:6px;align-items:center}
+.hello .tag b{color:var(--accent-text);font-weight:600}
+@keyframes hello-n{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes hello-u{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:none}}
+@keyframes hello-avo{from{max-width:0;opacity:0}to{max-width:90px;opacity:1}}
+@keyframes hello-tag{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.tip{animation:none!important}.tip:not(:first-of-type){display:none}.tip:first-of-type{opacity:1}.spar .sn,.spar .su,.spar .sn2,.hello *{animation:none!important}.hello .w-avo{max-width:none;opacity:1}.hello .tag{opacity:1}}
+.A .foot{justify-content:flex-end}
+.foot .hints{min-width:0;white-space:nowrap}
+.hints span{display:inline-flex;gap:5px;align-items:center}
+.brand-mark{box-shadow:0 0 0 1px var(--line);border-radius:22%}
+.C .top{padding:16px 28px 10px}
+.row-b{padding-bottom:12px}
+.C .steplist li{height:27px}
+.C .panel{padding:14px 18px}
+</style>
+</head>
+<body>
+<div class="picker" role="toolbar" aria-label="Prototype controls">
+  <h1>Navo Setup</h1>
+  <div class="seg" role="group" aria-label="Direction"><button data-dir="A">A</button><button data-dir="B">B</button><button data-dir="C">C</button><button data-dir="D">D</button></div>
+  <select id="pages" aria-label="Page"></select>
+  <div class="seg" role="group" aria-label="Theme"><button data-theme-btn="light">Light</button><button data-theme-btn="dark">Dark</button><button data-theme-btn="system">System</button></div>
+  <p class="why" id="why"></p>
+</div>
+<div class="stage"><div id="fit"><div class="win" id="win">
+  <div class="titlebar"><span class="t"><svg width="14" height="14" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--ink)"/><rect x="20" y="21" width="7" height="2" fill="var(--accent)"/><path d="M5 23V9h3.2v2h.5c.4-.8 1.4-1.5 3.4-1.5 3.800 0 6 2.100 6 5V23h-3.300v-8.300c0-1.700-.9-2.600-2.500-2.600-1.800 0-2.900 1.200-2.900 3.400V23z" fill="var(--background)"/></svg>Navo Setup</span><span class="x"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1" fill="none"><path d="M0 0l10 10M10 0L0 10"/></svg></span></div>
+  <div class="client" id="client"></div>
+  <div class="toast" id="toast" role="status"><div><b>Setup closes here</b><span>Nothing has changed on this PC. Press any key or click to reopen the prototype.</span></div></div>
+</div></div></div>
+<script>
+/* Navo Setup wizard prototype: pages, four layouts, picker, keys. No external scripts. */
+const PATH_PARENT = '%LocalAppData%\\Programs\\';
+const PATH = PATH_PARENT + 'Navo';
+const LOG = '%LocalAppData%\\Navo Setup\\setup.log';
+const NEW = '0.6.0', OLD = '0.5.0', NEWER = '0.7.1';
+
+const I = {
+  check: '<path d="M3.5 8.5l3 3 6-7"/>',
+  info: '<circle cx="8" cy="8" r="6.2"/><path d="M8 7.4v3.6M8 4.9v.1"/>',
+  warn: '<path d="M8 2.6l5.9 10.2H2.1z"/><path d="M8 6.8v2.8M8 11.5v.1"/>',
+  x: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  minus: '<path d="M4 8h8"/>',
+  lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1.6"/><path d="M5.5 7V5.3a2.5 2.5 0 015 0V7"/>',
+  folder: '<path d="M2 4.8c0-.7.5-1.2 1.2-1.2h2.6l1.4 1.5h5.6c.7 0 1.2.5 1.2 1.2v5.5c0 .7-.5 1.2-1.2 1.2H3.2c-.7 0-1.2-.5-1.2-1.2z"/>',
+  doc: '<path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3M6 8.2h4M6 10.6h4"/>',
+  link: '<path d="M6.6 9.4l2.8-2.8M7.2 4.6l.7-.7a2.4 2.4 0 013.4 3.4l-.7.7M8.8 11.4l-.7.7a2.4 2.4 0 01-3.4-3.4l.7-.7"/>',
+  copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 5.5V4A1.5 1.5 0 009 2.5H4A1.5 1.5 0 002.5 4v5A1.5 1.5 0 004 10.5h1.5"/>',
+  ext: '<path d="M9 3h4v4M13 3L7.5 8.5M11 9.5V12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1h2.5"/>',
+  user: '<circle cx="8" cy="5.5" r="2.6"/><path d="M3 13.5c.6-2.6 2.6-3.8 5-3.8s4.4 1.2 5 3.8"/>',
+  wifi: '<path d="M2 6.2a8.5 8.5 0 0112 0M4.2 8.6a5.4 5.4 0 017.6 0M6.4 11a2.3 2.3 0 013.2 0M3 3l10 10"/>',
+  trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/>',
+  play: '<path d="M5 3.5l7 4.5-7 4.5z"/>',
+  clock: '<circle cx="8" cy="8" r="6"/><path d="M8 4.8V8l2.2 1.4"/>',
+  shield: '<path d="M8 2l5 1.8v4c0 3-2 4.8-5 6-3-1.2-5-3-5-6v-4z"/>',
+  list: '<path d="M5.5 4.5h8M5.5 8h8M5.5 11.5h8M2.5 4.5h.1M2.5 8h.1M2.5 11.5h.1"/>',
+  key: '<circle cx="5.5" cy="10.5" r="2.5"/><path d="M7.3 8.7L13 3M11 5l1.5 1.5"/>',
+};
+const ic = (n, s = 16) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+const mark = (s = 28) => `<svg class="brand-mark" width="${s}" height="${s}" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7.04" fill="var(--ink)"/><path d="M4.68 23V8.77H7.92V10.76H8.41Q8.79 9.95 9.78 9.24Q10.77 8.53 12.75 8.53Q14.4 8.53 15.65 9.27Q16.91 10.01 17.61 11.34Q18.32 12.66 18.32 14.48V23H15.02V14.73Q15.02 13 14.17 12.16Q13.31 11.32 11.76 11.32Q10 11.32 8.99 12.48Q7.98 13.64 7.98 15.79V23Z" fill="var(--background)"/><rect x="20" y="21" width="7" height="2" fill="var(--accent)"/></svg>`;
+
+const STEPS = ['Welcome', 'Licence', 'Install folder', 'Shortcuts', 'Installing', 'Finish'];
+const PAGE_LIST = [
+  ['Welcome', [['welcome-fresh', 'Fresh install'], ['welcome-update', 'Update found'], ['same', 'Same version'], ['newer', 'Newer installed'], ['ambiguous', 'Ambiguous (repair)'], ['admin', 'Started as administrator']]],
+  ['Licence', [['licence', 'Licence']]],
+  ['Install folder', [['folder', 'Normal'], ['folder-bad', 'Refused folder'], ['folder-locked', 'Update-locked']]],
+  ['Shortcuts', [['shortcuts', 'Shortcuts']]],
+  ['Installing', [['installing', 'Normal'], ['installing-long', 'After 3 minutes'], ['installing-close', 'Close Navo to continue']]],
+  ['Finish', [['finish', 'Finish']]],
+  ['Failed', [['failed', 'No leftover files'], ['failed-left', 'Leftover files']]],
+];
+const SEQ_FRESH = ['welcome-fresh', 'licence', 'folder', 'shortcuts', 'installing', 'finish'];
+const SEQ_UPDATE = ['welcome-update', 'licence', 'folder-locked', 'installing', 'finish'];
+
+const st = { dir: 'A', page: 'welcome-fresh', theme: 'system', lic: false, startMenu: true, desktop: true, startNavo: true };
+
+const MIT = `Copyright (c) 2026 The Navo authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`;
+
+const code = (s) => `<code>${s}</code>`;
+
+/** Builds the data for one page: step, tone, text, blocks, buttons and margin notes. */
+function model(id) {
+  const upd = id === 'welcome-update' || id === 'folder-locked';
+  const m = { id, upd, step: 0, tone: 'info', glyph: 'info', blocks: [], back: null, margin: [] };
+  const lic = !st.lic;
+  switch (id) {
+    case 'welcome-fresh':
+      Object.assign(m, { glyph: 'folder', title: `Install Navo ${NEW}`, sub: 'Welcome',
+        lead: 'Setup puts Navo on this PC. It takes about a minute.',
+        blocks: [{ t: 'facts', rows: [['user', 'Installs for your account only. No administrator needed.'], ['wifi', 'Works offline. Setup downloads nothing.'], ['trash', 'Removes cleanly in Windows Settings → Apps.']] }],
+        primary: { t: 'Next', k: 'N' }, close: true, back: 'off',
+        margin: [['For you only', 'Navo goes into your user folder. Other accounts on this PC are not touched.']] });
+      break;
+    case 'welcome-update':
+      Object.assign(m, { glyph: 'folder', title: `Update Navo to ${NEW}`, sub: 'Update found',
+        lead: `Navo ${OLD} is installed in ${code(PATH)}. Setup updates it there. Your settings and shortcuts stay.`,
+        blocks: [{ t: 'facts', rows: [['lock', 'The folder stays as it is. Setup offers no other one.'], ['link', 'Your shortcuts stay. That page is skipped.']] }],
+        primary: { t: 'Next', k: 'N' }, close: true, back: 'off',
+        margin: [['Installed', `Navo <b>${OLD}</b> in ${code('…\\Programs\\Navo')}`]] });
+      break;
+    case 'same':
+      Object.assign(m, { tone: 'ok', glyph: 'check', title: `Navo ${NEW} is already installed`, sub: 'Nothing to do',
+        lead: `Navo ${NEW} is installed in ${code(PATH)}. There is nothing to update.`,
+        primary: { t: 'Open Navo', k: 'O', icon: 'play' }, close: true, back: null,
+        margin: [['Change it', 'To move Navo, remove it in Windows Settings → Apps and run Setup again.']] });
+      break;
+    case 'newer':
+      Object.assign(m, { tone: 'warn', glyph: 'warn', title: 'A newer Navo is installed', sub: 'Setup stops here',
+        lead: `Navo ${NEWER} is installed in ${code(PATH)}. This Setup installs ${NEW}, which is older.`,
+        blocks: [{ t: 'note', tone: 'info', h: 'To go back to an older version, remove Navo in Windows Settings → Apps first, then run Setup again.' }],
+        primary: { t: 'Close', k: 'C', close: true }, closeOnly: true,
+        margin: [['Why', 'Setup never downgrades. Your files and settings stay safe.']] });
+      break;
+    case 'ambiguous':
+      Object.assign(m, { tone: 'warn', glyph: 'warn', title: 'Navo needs repair first', sub: 'Setup stops here',
+        lead: `An earlier install in ${code(PATH)} looks damaged or unclear. Setup does not touch that folder.`,
+        blocks: [{ t: 'note', tone: 'warn', h: '<strong>Repair by uninstalling first:</strong> remove Navo in Windows Settings → Apps, then run Setup again.' }],
+        primary: { t: 'Close', k: 'C', close: true }, closeOnly: true,
+        margin: [['Nothing changed', 'Setup has not written or deleted anything.']] });
+      break;
+    case 'admin':
+      Object.assign(m, { tone: 'warn', glyph: 'shield', title: 'Start Setup normally', sub: 'Setup stops here',
+        lead: 'Start Setup normally, without Run as administrator.',
+        blocks: [{ t: 'note', tone: 'info', h: 'Navo installs for your own account. Close this window, then double-click Navo-Setup.exe as usual.' }],
+        primary: { t: 'Close', k: 'C', close: true }, closeOnly: true,
+        margin: [['Why', 'An elevated Setup would create files your normal account cannot update.']] });
+      break;
+    case 'licence':
+      Object.assign(m, { step: 1, glyph: 'doc', title: 'Licence', sub: 'Read and accept',
+        lead: 'Navo is licensed MIT OR Apache-2.0. You may use it under either licence.',
+        blocks: [{ t: 'lic' }],
+        primary: { t: 'Next', k: 'N', off: lic }, close: true, back: 'on',
+        margin: [['Two licences', 'This page shows the MIT text. The Apache-2.0 text opens on GitHub.'], ['Next', lic ? 'Tick the box to go on.' : 'Accepted.']] });
+      break;
+    case 'folder':
+    case 'folder-bad':
+    case 'folder-locked': {
+      const v = id === 'folder-bad' ? 'bad' : id === 'folder-locked' ? 'locked' : 'ok';
+      Object.assign(m, { step: 2, glyph: 'folder', title: 'Install folder', sub: v === 'locked' ? 'Locked for an update' : 'Where Navo goes',
+        lead: v === 'locked' ? 'Navo stays in the folder it already uses.' : 'Setup creates this folder and installs Navo in it.',
+        blocks: [{ t: 'folder', v }],
+        primary: { t: v === 'locked' ? 'Install' : 'Next', k: v === 'locked' ? 'I' : 'N', off: v === 'bad' }, close: true, back: 'on',
+        margin: [['Space', 'Needs <b>312 MB</b>.<br><b>148.2 GB</b> free on C:.'], ['Browse', 'Pick a parent folder. Setup adds a new <b>Navo</b> folder inside it.']] });
+      if (v === 'locked') m.margin = [['Locked', `Navo ${OLD} lives here. An update keeps its folder.`], ['Space', 'Needs <b>312 MB</b>.<br><b>148.2 GB</b> free on C:.']];
+      break;
+    }
+    case 'shortcuts':
+      Object.assign(m, { step: 3, glyph: 'link', title: 'Shortcuts', sub: 'Where to find Navo',
+        lead: 'Choose where Setup puts shortcuts to Navo.',
+        blocks: [{ t: 'shortcuts' }],
+        primary: { t: 'Install', k: 'I' }, close: true, back: 'on',
+        margin: [['Later', 'Uninstalling Navo removes every shortcut that points into its folder.']] });
+      break;
+    case 'installing':
+    case 'installing-long':
+    case 'installing-close': {
+      const v = id === 'installing' ? 'n' : id === 'installing-long' ? 'long' : 'close';
+      Object.assign(m, { step: 4, glyph: 'clock', title: v === 'close' ? 'Close Navo to continue' : `Installing Navo ${NEW}`, sub: v === 'close' ? 'Navo is running' : 'Please wait',
+        lead: v === 'close' ? `Navo is running from ${code(PATH)}. Close it, then choose Try again.` : `Installing Navo in ${code(PATH)}…`,
+        blocks: [{ t: 'install', v }],
+        primary: v === 'close' ? { t: 'Try again', k: 'T' } : { t: 'Installing…', off: true },
+        close: v === 'close' ? true : 'off', back: 'off', noEsc: v !== 'close', tone: v === 'close' ? 'warn' : 'info', glyph: v === 'close' ? 'warn' : 'clock',
+        margin: v === 'close'
+          ? [['Setup never closes Navo', 'Save your work in Navo, close its window, then try again.']]
+          : [['Keys are off', 'Back and Close stay off until the installer has finished.']] });
+      break;
+    }
+    case 'finish':
+      Object.assign(m, { step: 5, tone: 'ok', glyph: 'check', title: 'Navo is installed', sub: 'All done',
+        lead: `Navo is installed in ${code(PATH)}.`,
+        blocks: [{ t: 'finish' }],
+        primary: { t: 'Finish', k: 'F' }, back: null, close: null,
+        margin: [['Remove it later', 'Remove Navo from Windows Settings → Apps.']] });
+      break;
+    case 'failed':
+    case 'failed-left': {
+      const left = id === 'failed-left';
+      Object.assign(m, { step: 4, tone: 'err', glyph: 'x', title: 'Setup could not finish', sub: left ? 'Files were left behind' : 'Nothing was installed',
+        lead: left ? 'Windows could not write all files to the install folder (access denied). Navo is not installed.' : 'Windows could not write to the install folder (access denied). Navo is not installed.',
+        blocks: [{ t: 'failed', left }],
+        primary: { t: 'Close', k: 'C', close: true }, close: null, back: 'on', extra: { t: 'Copy details', icon: 'copy', k: 'D' },
+        margin: left ? [['Left behind', 'Setup never deletes installed files itself.']] : [['Nothing changed', 'Setup left no files and changed no settings.']] });
+      break;
+    }
+  }
+  return m;
+}
+
+/* ---------- blocks ---------- */
+function chk(key, label, on, extra = '') {
+  return `<div class="chk" role="checkbox" tabindex="0" aria-checked="${on}" aria-label="${label}" data-chk="${key}"><span class="box">${ic('check', 12)}</span><span>${label}</span>${extra}</div>`;
+}
+function pathHtml(v) {
+  if (v === 'bad') return '<span class="dim">D:\\R<em>&amp;</em>D\\</span><b>Navo</b>';
+  return `<span class="dim">${PATH_PARENT.replace(/\\/g, '\\')}</span><b>Navo</b>`;
+}
+function folderBlock(v, d) {
+  const locked = v === 'locked', bad = v === 'bad';
+  const field = `<div class="field ${bad ? 'bad' : ''} ${locked ? 'locked' : ''}" role="textbox" aria-readonly="true" aria-label="Install folder">${ic(locked ? 'lock' : 'folder')}<span class="path">${pathHtml(v)}</span></div>`;
+  const browse = `<button class="btn" ${locked ? 'disabled' : ''}>${ic('folder')}<span><u>B</u>rowse…</span></button>`;
+  const meta = d === 'D' || d === 'C' ? '' : `<div class="meta"><span>Needs <b>312 MB</b></span><span><b>148.2 GB</b> free on C:</span></div>`;
+  const metaC = d === 'C' ? `<div class="meta"><span>Needs <b>312 MB</b></span><span><b>148.2 GB</b> free on C:</span></div>` : '';
+  let notes = '';
+  if (bad) notes += `<div class="note tone-err" role="alert">${ic('x')}<span><strong>This folder cannot be used.</strong> Its path holds <b>&amp;</b>. Setup refuses <b>%</b> <b>^</b> <b>&amp;</b> and <b>!</b>. Choose another folder.</span></div>`;
+  if (locked) notes += `<div class="note">${ic('lock')}<span>Navo ${OLD} is installed here. An update keeps its folder.</span></div>`;
+  else notes += `<div class="note">${ic('info')}<span>Setup creates this folder. Uninstalling Navo deletes it with everything inside, so keep your own files elsewhere.</span></div>`;
+  return `<div class="fieldrow">${field}${browse}</div>${meta}${metaC}${notes}`;
+}
+function installBlock(v, d) {
+  if (v === 'close') {
+    return `<div class="note tone-warn">${ic('warn')}<span><strong>Close Navo to continue.</strong> Setup never closes Navo for you.</span></div><div class="elapsed">${ic('clock')}<span>Elapsed <b>0:21</b></span></div>`;
+  }
+  const long = v === 'long';
+  const el = long ? '3:12' : '0:42';
+  const status = long
+    ? `<div class="note">${ic('info')}<span><strong>Setup is still working…</strong> A slow disk or a virus scanner can take a while. Details are in ${code(LOG)}.</span></div>`
+    : '';
+  if (d === 'C') {
+    const rows = long
+      ? [['done', 'Check the folder', '0:01'], ['cur', 'Run the installer', '3:10'], ['pend', 'Verify the files', ''], ['pend', 'Mark the folder', '']]
+      : [['done', 'Check the folder', '0:01'], ['cur', 'Run the installer', '0:41'], ['pend', 'Verify the files', ''], ['pend', 'Mark the folder', '']];
+    return `<ul class="steplist" aria-live="polite">${rows.map(([s, l, t]) => `<li class="${s}"><span class="mk">${s === 'done' ? ic('check') : s === 'cur' ? '<i class="pulse"></i>' : '<i></i>'}</span><span class="${s === 'pend' ? '' : ''}">${l}</span><time>${t}</time></li>`).join('')}</ul>${status ? '<div style="margin-top:10px">' + status + '</div>' : ''}`;
+  }
+  const tips = [['Ctrl+K', 'One box for files, folders, commands and tabs.'], ['F5 / F6', 'Copy and move in the background. Ctrl+Z undoes them.'], ['Ctrl+L', 'Pick a pane layout, up to four panes.'], ['Ctrl+F7', 'Compare two folders, then Enter on a file for its diff.']];
+  const tip = `<div class="tips" aria-live="off"><div class="tips-h">While you wait</div>${tips.map(([k, t], i) => `<div class="tip" style="animation-delay:${i * 4}s"><kbd>${k}</kbd><span>${t}</span></div>`).join('')}</div>`;
+  return `<div class="bar" role="progressbar" aria-label="Installing" aria-valuetext="Working"><i></i></div><div class="elapsed" aria-live="polite">${ic('clock')}<span>Elapsed <b>${el}</b></span></div><div style="height:12px"></div>${status}${long ? '' : tip}`;
+}
+function finishBlock(d) {
+  const hello = d === 'A' ? `<div class="hello" aria-hidden="true"><div class="word"><span class="w-n">n</span><span class="w-avo">avo</span><span class="w-u"></span></div><div class="tag">navo.. <b>→ explore it</b></div></div>` : '';
+  const first = d === 'A' ? `<div class="first"><kbd>Ctrl+K</kbd><span>find anything</span><kbd>F1</kbd><span>every shortcut</span><kbd>Shift+F1</kbd><span>a short guide</span></div>` : '';
+  return `${hello}${first}<div class="chks">${chk('startNavo', 'Start Navo', st.startNavo)}</div><div style="margin:8px 0 12px"><button class="link">${ic('ext')}Open folder</button></div><div class="note">${ic('info')}<span>Remove Navo from Windows Settings → Apps.</span></div>`;
+}
+function failedBlock(left) {
+  let h = `<dl class="kv"><dt>Log</dt><dd class="mono">${LOG}</dd></dl>`;
+  if (left) h += `<div class="note tone-err" role="alert">${ic('folder')}<span>Setup left files in ${code(PATH)}. <strong>Delete this folder before you run Setup again.</strong></span></div>`;
+  return h;
+}
+function block(b, d) {
+  switch (b.t) {
+    case 'facts': return `<ul class="facts">${b.rows.map(([i, t]) => `<li><span class="dot">${ic(i)}</span><span>${t}</span></li>`).join('')}</ul>`;
+    case 'note': return `<div class="note ${b.tone ? 'tone-' + b.tone : ''}">${ic(b.tone === 'warn' ? 'warn' : 'info')}<span>${b.h}</span></div>`;
+    case 'lic': return `<div class="lic" tabindex="0" role="document" aria-label="MIT licence text"><h4>MIT License</h4>${MIT}</div><div class="chks">${chk('lic', 'I accept the licence', st.lic)}<div style="padding:2px 0 0 26px"><button class="link">${ic('ext')}Read the Apache-2.0 text</button></div></div>`;
+    case 'folder': return folderBlock(b.v, d);
+    case 'shortcuts': return `<div class="chks">${chk('startMenu', 'Start menu', st.startMenu, '<small>Find Navo by typing its name</small>')}${chk('desktop', 'Desktop', st.desktop, '<small>An icon on your desktop</small>')}</div>`;
+    case 'install': return installBlock(b.v, d);
+    case 'finish': return finishBlock(d);
+    case 'failed': return failedBlock(b.left);
+  }
+  return '';
+}
+const blocks = (m, d) => m.blocks.map((b) => block(b, d)).join('');
+
+/* ---------- buttons and keys ---------- */
+function btnHtml(act, label, o = {}) {
+  const dis = o.off ? 'disabled' : '';
+  const acc = o.k ? `<u>${o.k}</u>${label.slice(1)}` : label;
+  return `<button class="btn ${o.cls || ''}" data-act="${act}" ${dis}>${o.icon ? ic(o.icon) : ''}<span>${acc}</span>${o.kbd ? `<kbd>${o.kbd}</kbd>` : ''}</button>`;
+}
+function buttons(m, d, opts = {}) {
+  const p = m.primary, out = [];
+  const kd = d === 'D';
+  if (m.extra) out.push(btnHtml('extra', m.extra.t, { icon: m.extra.icon, cls: kd ? 'ghost' : '' }));
+  if (m.back) out.push(btnHtml('back', 'Back', { k: 'B', off: m.back === 'off', cls: kd ? 'ghost' : '' }));
+  const closeBtn = m.close ? btnHtml('close', 'Close', { k: 'C', off: m.close === 'off', cls: kd ? 'ghost' : '', kbd: kd && m.close !== 'off' && !m.noEsc ? 'Esc' : '' }) : '';
+  const prim = btnHtml('primary', p.t, { k: p.k && p.t.length > 1 && !p.off ? p.k : '', off: p.off, cls: 'primary', icon: p.icon, kbd: kd && !p.off ? 'Enter' : '' });
+  const showCloseSep = m.close && !(m.closeOnly);
+  if (kd) return prim + out.join('') + (showCloseSep ? closeBtn : '');
+  return out.join('') + (showCloseSep ? closeBtn : '') + prim;
+}
+function hints(m) {
+  const h = [];
+  const same = m.primary.t === 'Close';
+  if (same) return '<span><kbd>Enter</kbd><kbd>Esc</kbd>Close</span>';
+  if (!m.primary.off) h.push(`<span><kbd>Enter</kbd>${m.primary.t}</span>`);
+  if ((m.close && m.close !== 'off' && !m.noEsc) || m.closeOnly || m.id === 'finish' || m.id.startsWith('failed')) h.push('<span><kbd>Esc</kbd>Close</span>');
+  if (m.noEsc) h.push('<span>Keys wait while Setup works</span>');
+  return h.slice(0, 2).join('');
+}
+function stepStates(m) {
+  return STEPS.map((s, i) => {
+    let c = i < m.step ? 'done' : i === m.step ? 'cur' : '';
+    if (m.upd && i === 3) c = 'skip';
+    if (m.upd && i > 3 && i < m.step) c = 'done';
+    if (i === m.step && m.tone === 'err') c += ' err';
+    return [s, c.trim()];
+  });
+}
+const stepMarker = (c) => c.includes('skip') ? ic('minus', 14) : c.includes('err') ? ic('x', 14) : c.startsWith('done') ? ic('check', 14) : '<i></i>';
+
+/** Picks the small n/_ scene for a page: wave, sign, floor, copy, spar, high five, fall, or "no". */
+function toy(m) {
+  const id = m.id;
+  const scene = id.startsWith('welcome') ? 'welcome' : id === 'licence' ? 'sign' : id.startsWith('folder') ? 'floor'
+    : id === 'shortcuts' ? 'copy' : id === 'installing' || id === 'installing-long' ? '' : id === 'finish' || id === 'same' ? 'done'
+    : id.startsWith('failed') ? 'down' : 'nope';
+  return `<div class="spar ${scene}" aria-hidden="true"><span class="sn">n</span>${scene === 'copy' ? '<span class="sn2">n</span>' : ''}<span class="su"></span></div>`;
+}
+
+/* ---------- layouts ---------- */
+function layoutA(m) {
+  const steps = stepStates(m).map(([s, c]) => `<li class="${c}" ${c.startsWith('cur') ? 'aria-current="step"' : ''}><span class="mk">${stepMarker(c)}</span>${s}</li>`).join('');
+  return `<div class="A"><aside class="rail"><div class="brand">${mark(30)}<div><b>Navo Setup</b><small>Version ${NEW}</small></div></div><ol class="steps">${steps}</ol><div class="railfoot">${toy(m)}<div class="hints">${hints(m)}</div></div></aside>
+  <section class="main"><div class="body"><h2 class="title">${m.title}</h2><p class="lead">${m.lead}</p>${blocks(m, 'A')}</div>
+  <footer class="foot"><div class="acts">${buttons(m, 'A')}</div></footer></section></div>`;
+}
+function layoutB(m) {
+  const segs = stepStates(m).map(([, c]) => `<i class="${c}"></i>`).join('');
+  const cur = m.step + 1;
+  return `<div class="B"><header><div class="brand">${mark(24)}<b>Navo Setup</b></div><div class="count">Step <b>${cur}</b> of 6 · ${STEPS[m.step]}</div></header><div class="segs" aria-hidden="true">${segs}</div>
+  <section class="card tone-${m.tone}"><div class="head"><span class="tile">${ic(m.glyph, 22)}</span><div><h2 class="title">${m.title}</h2><div class="sub">${m.sub || ''}</div></div></div><p class="lead">${m.lead}</p>${blocks(m, 'B')}</section>
+  <footer class="foot"><div class="hints">${hints(m)}</div><div class="acts">${buttons(m, 'B')}</div></footer></div>`;
+}
+function layoutC(m) {
+  const id = m.id;
+  const sheet = ['welcome-fresh', 'welcome-update', 'licence', 'folder', 'folder-bad', 'folder-locked', 'shortcuts'].includes(id);
+  const top = (title, sub, chip) => `<div class="top">${mark(36)}<div style="flex:1;min-width:0"><h2 class="title">${title}</h2><div class="sub">${sub}</div></div>${chip}</div>`;
+  if (sheet) {
+    const open = id === 'licence' ? 'lic' : id.startsWith('folder') ? 'folder' : id === 'shortcuts' ? 'short' : '';
+    const fv = id === 'folder-bad' ? 'bad' : (m.upd ? 'locked' : 'ok');
+    const sc = [st.startMenu && 'Start menu', st.desktop && 'Desktop'].filter(Boolean).join(', ') || 'None';
+    const row = (k, ico, lab, val, chip, body, o = {}) => `<section class="row ${open === k ? 'open' : ''} ${o.skip ? 'skipped' : ''}"><div class="row-h"><span class="ico">${ic(ico)}</span><span class="lab">${lab}</span><span class="val ${o.mono ? 'mono' : ''}">${open === k && k === 'folder' ? '' : val}</span>${chip}</div>${open === k ? `<div class="row-b">${body}</div>` : ''}</section>`;
+    const licChip = st.lic ? `<span class="chip tone-ok">${ic('check', 11)}Accepted</span>` : `<span class="chip tone-warn">${ic('warn', 11)}Review</span>`;
+    const folderChip = fv === 'bad' ? `<span class="chip tone-err">${ic('x', 11)}Refused</span>` : (m.upd ? `<span class="chip">${ic('lock', 11)}Locked</span>` : '');
+    const licBody = `<div class="lic" tabindex="0" style="height:72px;margin-bottom:8px" role="document" aria-label="MIT licence text"><h4>MIT License</h4>${MIT}</div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div class="chks">${chk('lic', 'I accept the licence', st.lic)}</div><button class="link">${ic('ext')}Apache-2.0 text</button></div>`;
+    const rows =
+      row('lic', 'doc', 'Licence', 'MIT OR Apache-2.0', licChip, licBody) +
+      row('folder', 'folder', 'Install folder', PATH, folderChip, folderBlock(fv, 'C'), { mono: true }) +
+      row('short', 'link', 'Shortcuts', m.upd ? 'Skipped. An update keeps your shortcuts.' : sc, m.upd ? '<span class="chip">Skipped</span>' : '', `<div class="chks">${chk('startMenu', 'Start menu', st.startMenu)}${chk('desktop', 'Desktop', st.desktop)}</div>`, { skip: m.upd });
+    const upd = m.upd || id === 'folder-locked';
+    const title = upd ? `Update Navo to ${NEW}` : `Install Navo ${NEW}`;
+    const sub = upd ? `Navo ${OLD} is installed here. Setup updates it. Your settings and shortcuts stay.` : 'Per user · works offline · about a minute';
+    const prim = Object.assign({}, m.primary, { t: upd ? 'Update' : 'Install', k: upd ? 'U' : 'I', off: !st.lic || id === 'folder-bad' });
+    const mm = Object.assign({}, m, { primary: prim, back: null });
+    return `<div class="C">${top(title, sub, `<span class="chip">${upd ? OLD + ' → ' + NEW : 'v' + NEW}</span>`)}<div class="rows">${rows}</div>
+    <footer class="foot"><div class="hints">${prim.off ? `<span>${ic('info', 13)}${id === 'folder-bad' ? 'Choose another folder to install.' : 'Accept the licence to install.'}</span>` : hints(mm)}</div><div class="acts">${buttons(mm, 'C')}</div></footer></div>`;
+  }
+  const panel = `<div class="panel tone-${m.tone}"><div class="phead"><span class="tile">${ic(m.glyph, 22)}</span><div><h2 class="title">${m.title}</h2><div class="muted" style="font-size:12.5px">${m.step === 4 && m.id !== 'installing-close' ? `Installing Navo in ${code(PATH)}…` : (m.sub || '')}</div></div></div>${m.step === 4 && m.id !== 'installing-close' ? '' : `<p class="lead" style="margin-bottom:10px">${m.lead}</p>`}${blocks(m, 'C')}</div>`;
+  const chipTxt = m.step >= 4 ? 'v' + NEW : '';
+  return `<div class="C">${top(`Navo Setup`, `Version ${NEW}`, chipTxt ? `<span class="chip">${chipTxt}</span>` : '')}<div class="center">${panel}</div>
+  <footer class="foot"><div class="hints">${hints(m)}</div><div class="acts">${buttons(m, 'C')}</div></footer></div>`;
+}
+function layoutD(m) {
+  const n = String(m.step + 1).padStart(2, '0');
+  const pct = Math.round(((m.step + 1) / 6) * 100);
+  const margin = m.margin.map(([h, t]) => `<div><h5>${h}</h5><p>${t}</p></div>`).join('');
+  return `<div class="D"><div class="rule ${m.tone === 'err' ? 'err' : ''}" style="--p:${pct}%"><i></i></div>
+  <div class="wrap"><main class="tone-${m.tone}"><div class="eyebrow">${m.tone !== 'info' ? ic(m.glyph === 'clock' ? 'info' : m.glyph, 13) : ''}<span>${n} / 06 · ${STEPS[m.step]}</span></div><h2 class="title">${m.title}</h2><p class="lead">${m.lead}</p>${blocks(m, 'D')}</main>
+  <aside class="margin" aria-label="Notes">${margin}</aside></div>
+  <footer class="foot"><div class="acts">${buttons(m, 'D')}</div></footer></div>`;
+}
+const LAYOUTS = { A: layoutA, B: layoutB, C: layoutC, D: layoutD };
+
+/* ---------- shell ---------- */
+const $ = (s) => document.querySelector(s);
+const WHY = {
+  A: 'Rail. Navo\u2019s own look: a step list on the left, one page on the right, the usual Back / Close / Next bar.',
+  B: 'Card. Navo\u2019s own look: one raised card with a state tile and a segmented step bar. No side rail.',
+  C: '<b>Free.</b> Summary sheet. Licence, folder and shortcuts sit on one page as rows, so you see every choice and install in one press (Obsidian and Toolbox rows). Worth it: fewer clicks, nothing hidden.',
+  D: '<b>Free.</b> Margin notes. One big title, one job in the main column, and the fine print (space, rules, keys) in a quiet margin; keys live on the buttons. Worth it: it reads like Navo\u2019s docs and stays calm.',
+};
+function seqOf(id) { return SEQ_UPDATE.includes(id) && id !== 'licence' && id !== 'installing' && id !== 'finish' ? SEQ_UPDATE : SEQ_FRESH.includes(id) ? SEQ_FRESH : SEQ_UPDATE; }
+let lastSeq = SEQ_FRESH;
+function go(id, instant) {
+  const c = $('#client');
+  const apply = () => { st.page = id; if (id === 'welcome-update' || id === 'folder-locked') lastSeq = SEQ_UPDATE; else if (id === 'welcome-fresh') lastSeq = SEQ_FRESH; render(); c.classList.remove('out'); };
+  if (instant) return apply();
+  c.classList.add('out'); setTimeout(apply, 80);
+}
+function render(focus = true) {
+  const m = model(st.page);
+  $('#client').innerHTML = LAYOUTS[st.dir](m);
+  $('#why').innerHTML = WHY[st.dir];
+  $('#win').className = 'win ' + (document.body.classList.contains('alt') ? 'alt' : '');
+  document.querySelectorAll('[data-dir]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.dir === st.dir));
+  document.querySelectorAll('[data-theme-btn]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.themeBtn === st.theme));
+  $('#pages').value = st.page;
+  if (focus) { const p = document.querySelector('[data-act=primary]:not(:disabled)') || document.querySelector('.btn:not(:disabled)'); if (p) p.focus({ preventScroll: true }); }
+  history.replaceState(null, '', `?d=${st.dir}&p=${st.page}&theme=${st.theme}`);
+}
+function applyTheme() {
+  const dark = st.theme === 'dark' || (st.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+}
+function fit() {
+  const s = Math.min(1, (innerWidth - 32) / 640);
+  const f = $('#fit'); f.style.width = 640 * s + 'px'; f.style.height = 480 * s + 'px';
+  $('#win').style.transform = `scale(${s})`;
+}
+function toast(on) { $('#toast').classList.toggle('on', on); }
+function act(a) {
+  const id = st.page, seq = lastSeq, i = seq.indexOf(id);
+  if (a === 'close') return toast(true);
+  if (a === 'back') { if (i > 0) go(seq[i - 1]); else if (id.startsWith('failed')) go(seq[seq.length - 3 >= 0 ? seq.length - 3 : 0]); return; }
+  if (a === 'extra') return;
+  if (a === 'primary') {
+    const m = model(id);
+    if (m.primary.off) return;
+    if (id === 'same') return toast(true);
+    if (m.closeOnly || id === 'finish' || id.startsWith('failed')) return toast(true);
+    if (id === 'installing-close') return go('installing');
+    if (i >= 0 && i < seq.length - 1) return go(seq[i + 1]);
+    if (id === 'folder-bad') return;
+    if (id === 'folder-locked') return go('installing');
+  }
+}
+function build() {
+  const sel = $('#pages');
+  sel.innerHTML = PAGE_LIST.map(([g, items]) => `<optgroup label="${g}">${items.map(([v, l]) => `<option value="${v}">${g === l ? l : g + ' · ' + l}</option>`).join('')}</optgroup>`).join('');
+  const q = new URLSearchParams(location.search);
+  if (q.get('d')) st.dir = q.get('d');
+  if (q.get('p')) st.page = q.get('p');
+  if (q.get('theme')) st.theme = q.get('theme');
+  if (q.get('lic')) st.lic = true;
+  lastSeq = ['welcome-update', 'folder-locked'].includes(st.page) ? SEQ_UPDATE : SEQ_FRESH;
+  sel.onchange = () => { const v = sel.value; if (v === 'welcome-update' || v === 'folder-locked') lastSeq = SEQ_UPDATE; else if (v === 'welcome-fresh' || v === 'folder' || v === 'shortcuts') lastSeq = SEQ_FRESH; go(v); };
+  document.querySelectorAll('[data-dir]').forEach((b) => (b.onclick = () => { st.dir = b.dataset.dir; render(false); }));
+  document.querySelectorAll('[data-theme-btn]').forEach((b) => (b.onclick = () => { st.theme = b.dataset.themeBtn; applyTheme(); render(false); }));
+  $('#win').addEventListener('click', (e) => {
+    if ($('#toast').classList.contains('on')) { toast(false); return; }
+    const chkEl = e.target.closest('[data-chk]');
+    if (chkEl) { st[chkEl.dataset.chk] = !st[chkEl.dataset.chk]; const k = chkEl.dataset.chk; render(false); document.querySelector(`[data-chk=${k}]`)?.focus(); return; }
+    const b = e.target.closest('[data-act]'); if (b && !b.disabled) act(b.dataset.act);
+  });
+  addEventListener('keydown', (e) => {
+    const t = e.target, tag = t.tagName;
+    if (e.key === 'Alt') { document.body.classList.add('alt'); $('#win').classList.add('alt'); return; }
+    if (e.altKey && /^[bB]$/.test(e.key)) { e.preventDefault(); const bb = document.querySelector('[data-act=back]:not(:disabled)'); bb && act('back'); return; }
+    if (e.altKey && /^[nN]$/.test(e.key)) { e.preventDefault(); const p = document.querySelector('[data-act=primary]:not(:disabled)'); p && /Next|Install/.test(p.textContent) && act('primary'); return; }
+    if ($('#toast').classList.contains('on')) { toast(false); return; }
+    if (tag === 'SELECT') return;
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && /^[1-4]$/.test(e.key)) { st.dir = 'ABCD'[+e.key - 1]; render(false); return; }
+    if (e.key === ' ' && t.dataset && t.dataset.chk) { e.preventDefault(); t.click(); return; }
+    if (e.key === 'Enter' && tag !== 'BUTTON' && !(t.dataset && t.dataset.chk)) { const p = document.querySelector('[data-act=primary]:not(:disabled)'); if (p) act('primary'); return; }
+    if (e.key === 'Escape') { const m = model(st.page); if (!m.noEsc) toast(true); }
+  });
+  addEventListener('keyup', (e) => { if (e.key === 'Alt') { document.body.classList.remove('alt'); $('#win').classList.remove('alt'); } });
+  addEventListener('resize', fit);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+  applyTheme(); fit(); render();
+}
+build();
+</script></body></html>
