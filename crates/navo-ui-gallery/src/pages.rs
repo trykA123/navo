@@ -2,6 +2,7 @@ mod clip_palette;
 mod command_center;
 mod later;
 mod recovery;
+mod setup;
 mod table;
 mod tray;
 
@@ -175,6 +176,27 @@ pub enum Page {
     ClipEdit390,
     ClipEditSecret,
     ClipEditSecret390,
+    SetupWelcome,
+    SetupWelcomeUpdate,
+    SetupLicence,
+    SetupLicenceAccepted,
+    SetupFolder,
+    SetupFolderLocked,
+    SetupFolderProblem,
+    SetupShortcuts,
+    SetupInstalling,
+    SetupInstallingSlow,
+    SetupFinish,
+    SetupFailedRetry,
+    SetupFailedLeftover,
+    SetupBlocked,
+    SetupBlockedRetry,
+    SetupSame,
+    SetupNewer,
+    SetupAmbiguous,
+    SetupAmbiguousNotice,
+    SetupElevated,
+    SetupNoPayload,
 }
 
 #[derive(Clone, Copy)]

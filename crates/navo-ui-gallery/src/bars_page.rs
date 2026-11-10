@@ -152,7 +152,7 @@ pub fn drive_of(pages: &DragTreemapBars, page: Page, window: &mut Window, cx: &m
     true
 }
 
-pub fn page_of(pages: &DragTreemapBars, page: Page) -> Option<AnyElement> {
+pub fn page_of(pages: &DragTreemapBars, page: Page, cx: &App) -> Option<AnyElement> {
     if let Some(rich) = rich_page(pages, page) {
         return Some(rich.clone().into_any_element());
     }
@@ -166,6 +166,6 @@ pub fn page_of(pages: &DragTreemapBars, page: Page) -> Option<AnyElement> {
         Page::MultiRenamePreviewLarge => preview[1].clone().into_any_element(),
         Page::MultiRenameTool => tool[0].clone().into_any_element(),
         Page::MultiRenameToolMenu => tool[1].clone().into_any_element(),
-        _ => return None,
+        _ => return crate::setup_page::element(page, cx),
     })
 }
