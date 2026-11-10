@@ -7,7 +7,7 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
-crc32fast = "1.5.2"
+crc32fast = "1.5.5"
 lz4_flex = { version = "0.14.0", default-features = false, features = ["std", "safe-encode", "safe-decode", "checked-decode"] }
 navo-core = { path = "../navo-core" }
 navo-fs = { path = "../navo-fs" }
