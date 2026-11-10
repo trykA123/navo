@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use gpui_kit::{AppContext, Entity, TestAppContext, WindowOptions};
+use gpui_kit::{AppContext, Entity, Focusable, TestAppContext, WindowOptions};
 use navo_ui::setup::{SetupAction, SetupCheck, SetupPage};
 use navo_update::parse_version;
 
@@ -80,8 +80,9 @@ pub fn exited(exit: SetupExit) -> Reply {
 }
 
 /// An upgrade shell on Welcome for the Navo 0.3.0 installed in OTHER.
-pub fn upgrade_shell() -> Shell {
-    let found = crate::mode::Install {
+/// An installed Navo 0.3.0 in OTHER, as discovery reports it.
+fn installed() -> crate::mode::Install {
+    crate::mode::Install {
         root: OTHER.into(),
         identity: navo_core::FileIdentity {
             volume: 1,
@@ -94,8 +95,18 @@ pub fn upgrade_shell() -> Shell {
             "<package><metadata><id>NavoApp</id><version>0.3.0</version></metadata></package>",
         ),
         marker: None,
-    };
-    let flow = crate::flow::Flow::new(Mode::Upgrade(found), ROOT.into());
+    }
+}
+
+/// An upgrade shell on Welcome for the Navo 0.3.0 installed in OTHER.
+pub fn upgrade_shell() -> Shell {
+    let flow = crate::flow::Flow::new(Mode::Upgrade(installed()), ROOT.into());
+    Shell::new(flow, facts())
+}
+
+/// A Same page shell for the Navo installed in OTHER.
+fn same_shell() -> Shell {
+    let flow = crate::flow::Flow::new(Mode::Same(installed()), ROOT.into());
     Shell::new(flow, facts())
 }
 
@@ -294,9 +305,13 @@ type FakeWorker = (
 
 /// Opens the window on a ready Folder page and returns it with the fake worker's channels.
 fn open_on_folder(cx: &mut TestAppContext) -> (Entity<SetupWindow>, FakeWorker) {
+    open_shell(cx, shell_on_ready_folder())
+}
+
+/// Opens the window on `shell` and returns it with the fake worker's channels.
+fn open_shell(cx: &mut TestAppContext, shell: Shell) -> (Entity<SetupWindow>, FakeWorker) {
     let (jobs, inbox) = mpsc::channel();
     let (outbox, replies) = futures::channel::mpsc::unbounded();
-    let shell = shell_on_ready_folder();
     let window = cx.update(|cx| {
         gpui_kit::init(cx);
         navo_ui::tokens::apply(navo_ui::tokens::Mode::Light, cx);
@@ -361,4 +376,44 @@ fn a_worker_that_vanishes_mid_install_shows_failed(cx: &mut TestAppContext) {
     cx.run_until_parked();
     let page = cx.update(|cx| window.read(cx).shell().page());
     assert_eq!(page, crate::flow::Page::Failed);
+}
+
+#[gpui_kit::test]
+fn a_page_change_moves_focus_to_the_new_primary(cx: &mut TestAppContext) {
+    let (window, _worker) = open_on_folder(cx);
+    let handle = cx.update(|cx| window.read(cx).window_handle());
+    let field = cx.update(|cx| window.read(cx).field.clone());
+    let field_focus = cx.update(|cx| field.read(cx).focus_handle(cx));
+    cx.update_window(handle, |_, window, cx| window.focus(&field_focus, cx))
+        .expect("window");
+    cx.update(|cx| window.update(cx, |view, cx| view.act(SetupAction::Next, cx)));
+    cx.run_until_parked();
+    let primary = cx.update(|cx| window.read(cx).primary.clone());
+    let focused = cx
+        .update_window(handle, |_, window, _| primary.is_focused(window))
+        .expect("window");
+    assert!(
+        focused,
+        "the Shortcuts page's Install button must take focus"
+    );
+}
+
+#[gpui_kit::test]
+fn the_same_page_starts_on_the_root_focus(cx: &mut TestAppContext) {
+    let (window, _worker) = open_shell(cx, same_shell());
+    let handle = cx.update(|cx| window.read(cx).window_handle());
+    let (root, primary) = cx.update(|cx| {
+        let view = window.read(cx);
+        (view.focus.clone(), view.primary.clone())
+    });
+    let (root_focused, primary_focused) = cx
+        .update_window(handle, |_, window, _| {
+            (root.is_focused(window), primary.is_focused(window))
+        })
+        .expect("window");
+    assert!(root_focused, "the Same page must start on the root focus");
+    assert!(
+        !primary_focused,
+        "the Same page draws no primary footer button"
+    );
 }

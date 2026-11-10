@@ -13,11 +13,12 @@ use gpui_kit::{
     TitlebarOptions, Window, WindowAppearance, WindowBounds, WindowOptions, px, size,
 };
 use navo_ui::primitives::TextFieldState;
+use navo_ui::setup::keys::footer;
 use navo_ui::setup::{OnAction, SetupAction, Strings, render_frame};
 use navo_ui::tokens::{self, Mode};
 use navo_ui::{ParentElement, Styled, div};
 
-use crate::flow::Event;
+use crate::flow::{Event, Page};
 use crate::syntax::Candidate;
 use crate::window_core::{Out, Shell};
 use crate::window_worker::{Job, Link, Reply};
@@ -38,6 +39,8 @@ pub struct SetupWindow {
     pub(crate) focus: FocusHandle,
     /// The footer's primary button; focus starts here so it shows and Space presses it.
     pub(crate) primary: FocusHandle,
+    /// The page drawn last; a change moves focus to the new page's default.
+    page: Page,
     handle: AnyWindowHandle,
     _replies: Task<()>,
     _appearance: Subscription,
@@ -72,7 +75,11 @@ impl SetupWindow {
         let (field, field_changes) = Self::folder_field(&shell, &strings, window, cx);
         let focus = cx.focus_handle();
         let primary = cx.focus_handle();
-        window.focus(&primary, cx);
+        let page = shell.page();
+        let drawn = footer(&shell.view(), &strings)
+            .iter()
+            .any(|button| button.primary);
+        window.focus(if drawn { &primary } else { &focus }, cx);
         Self {
             shell,
             strings,
@@ -81,6 +88,7 @@ impl SetupWindow {
             field,
             focus,
             primary,
+            page,
             handle: window.window_handle(),
             _replies: listen,
             _appearance: appearance,
@@ -91,6 +99,11 @@ impl SetupWindow {
     /// Returns the pure core, for tests.
     pub fn shell(&self) -> &Shell {
         &self.shell
+    }
+
+    /// Returns the window handle, for tests that need to inspect or move focus.
+    pub(crate) fn window_handle(&self) -> AnyWindowHandle {
+        self.handle
     }
 
     /// Runs one page or footer action.
@@ -124,6 +137,11 @@ impl SetupWindow {
                 Out::Quit => cx.quit(),
             }
         }
+        let page = self.shell.page();
+        if page != self.page {
+            self.page = page;
+            self.focus_page(cx);
+        }
         cx.notify();
     }
 
@@ -133,6 +151,22 @@ impl SetupWindow {
             cx.background_executor().timer(DEBOUNCE).await;
             let _ = this.update(cx, |view, cx| view.send(Job::Check(candidate), cx));
         }));
+    }
+
+    /// Moves focus to the new page's default: the footer primary, or the root that owns the keys.
+    fn focus_page(&mut self, cx: &mut Context<Self>) {
+        let drawn = footer(&self.shell.view(), &self.strings)
+            .iter()
+            .any(|button| button.primary);
+        let focus = if drawn {
+            self.primary.clone()
+        } else {
+            self.focus.clone()
+        };
+        let handle = self.handle;
+        cx.defer(move |cx| {
+            let _ = cx.update_window(handle, |_, window, cx| window.focus(&focus, cx));
+        });
     }
 
     /// Queues one job; a worker that is gone turns into a failed run or a quit.
