@@ -295,3 +295,27 @@ fn a_retry_that_reuses_the_sessions_empty_root() {
     assert_eq!(count(&host, |call| matches!(call, Call::PinFresh(_))), 1);
     assert_eq!(count(&host, |call| matches!(call, Call::Spawn(_))), 2);
 }
+
+/// A fresh root that gained content after the hold is refused before Setup.exe ever starts.
+#[test]
+fn a_root_that_grew_after_the_hold_spawns_no_child() {
+    let dir = tempfile::tempdir().unwrap();
+    let payload = payload(dir.path());
+    let mut host = fresh_host();
+    host.root_empty_before_child.push_back(Ok(false));
+    let (result, _) = run(&mut host, fresh_request(), &payload);
+    let Err(error) = result else {
+        panic!("a root that grew after the hold must refuse the install");
+    };
+    assert!(
+        matches!(error, InstallError::Failed(Failure::Changed)),
+        "{error:?}"
+    );
+    assert_eq!(count(&host, |call| matches!(call, Call::Spawn(_))), 0);
+    assert!(host.calls.iter().any(|call| matches!(
+        call,
+        Call::Cleanup {
+            remove_created: true
+        }
+    )));
+}

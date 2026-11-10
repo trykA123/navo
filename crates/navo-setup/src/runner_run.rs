@@ -92,9 +92,13 @@ fn run(
         };
     }
 
-    // Step 7: recheck; fresh installs also prove no HKCU key appeared.
+    // Step 7: recheck; fresh installs also prove the held root is still empty and no HKCU key appeared.
     if !steps::unchanged(host, &session.pin) {
         steps::close_with(session, host, !upgrade);
+        return Err(InstallError::Failed(Failure::Changed));
+    }
+    if !upgrade && !steps::empty(host, &session.pin) {
+        steps::close_with(session, host, true);
         return Err(InstallError::Failed(Failure::Changed));
     }
     if upgrade && !steps::clear(host, &session.root) {
@@ -270,7 +274,7 @@ fn resume_session(
         steps::close_with(session, host, false);
         return Err(InstallError::WrongAction);
     }
-    let empty = matches!(host.root_empty(&session.pin), Ok(true));
+    let empty = steps::empty(host, &session.pin);
     if !steps::unchanged(host, &session.pin) || !empty {
         steps::close_with(session, host, true);
         return Err(InstallError::Failed(Failure::Changed));

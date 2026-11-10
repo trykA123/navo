@@ -90,6 +90,7 @@ pub struct FakeHost {
     pub wait_calls: Rc<Cell<usize>>,
     pub cleanup_wait_calls: Rc<Cell<Option<usize>>>,
     pub root_empty: VecDeque<io::Result<bool>>,
+    pub root_empty_before_child: VecDeque<io::Result<bool>>,
     pub kept: Vec<PathBuf>,
 }
 
@@ -123,6 +124,7 @@ impl FakeHost {
             wait_calls: Rc::new(Cell::new(0)),
             cleanup_wait_calls: Rc::new(Cell::new(None)),
             root_empty: VecDeque::new(),
+            root_empty_before_child: VecDeque::new(),
             kept: Vec::new(),
         }
     }
@@ -217,10 +219,17 @@ impl Host for FakeHost {
         next(&mut self.running, Ok(false))
     }
 
-    /// Records the root emptiness check and returns the scripted answer.
+    /// Records the root emptiness check; the check made directly after the child is the only
+    /// post-child one, so it pops `root_empty`. Pre-child checks pop
+    /// `root_empty_before_child`, whose unscripted answer is the empty root Setup holds.
     fn root_empty(&mut self, _pin: &Pin) -> io::Result<bool> {
+        let after_child = matches!(self.calls.last(), Some(Call::Spawn(_)));
         self.calls.push(Call::RootEmpty);
-        next(&mut self.root_empty, Ok(false))
+        if after_child {
+            next(&mut self.root_empty, Ok(false))
+        } else {
+            next(&mut self.root_empty_before_child, Ok(true))
+        }
     }
 
     /// Records extraction and returns a fake held Setup.exe path.

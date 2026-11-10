@@ -235,3 +235,8 @@ pub(super) fn unchanged(host: &mut dyn Host, pin: &super::Pin) -> bool {
 pub(super) fn clear(host: &mut dyn Host, root: &Path) -> bool {
     matches!(host.running(root), Ok(false))
 }
+
+/// Whether the held fresh root still holds nothing; an error counts as not empty.
+pub(super) fn empty(host: &mut dyn Host, pin: &super::Pin) -> bool {
+    matches!(host.root_empty(pin), Ok(true))
+}
