@@ -1,6 +1,6 @@
 # Speed checks — part B: the Windows VM guard on every push
 
-Status: drafting, revision 4 · Repo: `navo`, plus the VM scripts in `../winvm/tools/` (outside git) · Started: 2026-11-10
+Status: drafting, revision 5 · Repo: `navo`, plus the VM scripts in `../winvm/tools/` (outside git) · Started: 2026-11-10
 
 This plan ships on its own. The shared spec, the shared rules (builders, CHK, files, lockfile chain) and part A are in `plans/2026-11-10-speed-checks.md`. No atom here changes `Cargo.lock`, and none needs part A's code.
 
@@ -132,11 +132,11 @@ Final. Workers never reopen them.
   - **`StartReport`** gains `pub pane_entries: Vec<u64>`.
   - **`into_report`** initialises it as `pane_entries: Vec::new()` in its `StartReport` literal.
   - **`report_start`**, after `into_report` returns `(report, on_report)`, makes `report` mutable and sets it before calling `on_report`:
-    `report.pane_entries = self.panes().into_iter().map(|p| state.pane(p).map_or(0, |pane| pane.active().listing().map_or(0, Listing::len))).collect();`
+    `report.pane_entries = self.panes().into_iter().map(|p| state.pane(p).map_or(0, |pane| pane.active().listing().map_or(0, |listing| listing.len()))).collect();`
     Here `state` is `self.browser.state()`. A missing pane or an unlisted tab gives 0, which `perf-summary` then rejects.
   - **`metrics/tests.rs`.** The `ui_report` literal adds `pane_entries: vec![5000, 200]`.
 - **Check:** as in the table.
-- **Stop if:** `Listing::len` counts a parent (`..`) row.
+- **Stop if:** `listing.len()` counts a parent (`..`) row.
 
 ### B2 — `pane_entries` in the metrics JSON
 
@@ -212,12 +212,13 @@ Final. Workers never reopen them.
       4. wait up to 420 s for `done.json`. On a timeout, end the task, stop the perf `navo.exe` processes, and fail.
     - **`perf`** runs `perf-summary <run> <run>\summary.md --mode vm --commit $Sha --done <run>\done.json --baseline perf\vm-baseline.toml --fingerprint …`. Exit 4 prints `=== perf: not calibrated`, then `=== FAIL perf (not calibrated)`, and exits 1.
     - **`calibrate`** runs `perf-summary <run> <run>\summary.md --mode calibrate …`, prints its line, and ends with `=== CALIBRATION OK`, never a green line.
-    - **The final line** is `=== ALL GREEN` only in normal mode when every stage in `$Required` ran and passed. Otherwise it is `=== PARTIAL GREEN <stages>`.
+    - **The final line** is `=== ALL GREEN` only in normal mode when the stage set that ran is exactly `$Required` (same order-free set rule as `ci.sh`) and every stage passed. Any other set, a superset included, ends `=== PARTIAL GREEN <stages>`.
 - **Check:**
   1. `ci.sh <repo> <sha>` still ends `=== ALL GREEN`, and its log has `=== sha <the full sha>`.
   2. `ci.sh --calibrate <repo> <sha>` exits 0 with `=== CALIBRATION OK`, and its log has no `ALL GREEN`.
   3. `ci.sh <repo> <sha> build,perf` with no baseline committed ends `=== perf: not calibrated` and exits non-zero.
   4. `ls ~/.cache/winvm-ci/` shows that `<sha8>.log` was not overwritten by checks 2 and 3.
+  5. `ci.sh <repo> <sha> clippy,test,build,calibrate` (a superset of `$Required`) ends `=== PARTIAL GREEN clippy,test,build,calibrate`, exits 0, writes only `<sha8>.partial.log`, and its log has no `ALL GREEN`.
 - **Stop if:** the VM has no interactive session for the task.
 
 ### B6 — perf required
@@ -245,3 +246,6 @@ Final. Workers never reopen them.
   5. The hook checks the full sha that the log records (SC12, G-B3).
   6. The absolute fixture path, generated per run; a 420 s parent timeout with cleanup (SC10, B4, B5).
   7. The pane-count proof is narrowed to the folders' shape; the paths are covered by the per-run absolute fixture (SC10).
+- 2026-11-10 — Revision 5 after plan check 4 (part B, 2 findings):
+  1. `ci.ps1` and `ci.sh` share one rule: `ALL GREEN` only when the stage set equals `$Required` exactly; a superset is partial. B5 check 5 proves it.
+  2. B1 uses `|listing| listing.len()`, so `start_watch.rs` needs no `Listing` import.

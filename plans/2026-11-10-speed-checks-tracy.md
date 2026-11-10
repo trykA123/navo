@@ -1,6 +1,6 @@
 # Speed checks — part C: a Tracy trace build for testers
 
-Status: drafting, revision 4 · Repo: `navo`, plus a scan tool in `../winvm/tools/` (outside git) · Started: 2026-11-10
+Status: drafting, revision 5 · Repo: `navo`, plus a scan tool in `../winvm/tools/` (outside git) · Started: 2026-11-10
 
 This plan ships on its own. The shared spec and the shared rules (builders, CHK, files, lockfile chain) are in `plans/2026-11-10-speed-checks.md`.
 
@@ -66,7 +66,8 @@ Final. Workers never reopen them.
     - MSVC: `-FI<abs path>`;
     - gcc and clang: `-include <abs path>`.
   - **Fail closed.**
-    - **Build guard.** `crates/navo-diag/build.rs` fails any build with the `tracy` feature when `TRACY_CLIENT_SYS_CXXFLAGS` does not name `navo_tracy_user.hpp`.
+    - **Build guard.** `crates/navo-diag/build.rs` fails any build with the `tracy` feature unless `TRACY_CLIENT_SYS_CXXFLAGS` holds a real force-include of the header: a whitespace token `-FI<path>` or `/FI<path>`, or a token `-include` followed by a token `<path>`, where `<path>` ends in `navo_tracy_user.hpp` and the file exists. A name inside a define (`-DX=navo_tracy_user.hpp`) does not count.
+    - **No external client.** The same guard fails when `TRACY_CLIENT_LIB`, `TRACY_CLIENT_LIB_PATH` or `TRACY_CLIENT_STATIC` is set, because `tracy-client-sys/build.rs:121-136` then links a prebuilt client and never compiles the guarded source.
     - **Hook guard.** `bench-release.yml` fails when the resolved `tracy-client-sys` source no longer contains `TRACY_HAS_CUSTOM_USER_INFO` in both files.
     - **Re-proof on bumps.** Any `tracy-client` or `tracy-client-sys` version change repeats G-C1 before the next tester zip.
   - **Why not the other routes.** This beats a patched vendored copy, because there is no fork to maintain and the version stays pinned. It also beats scrubbing the header after capture, because the real values never reach the trace at all.
@@ -124,11 +125,11 @@ Final. Workers never reopen them.
 | Atom | Component | Files (all) | Role | Effort | After | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | profiling | `crates/navo-diag/Cargo.toml`, `crates/navo-diag/src/profiling.rs`, `Cargo.lock` | api-builder | high | part A's A9 merged (lockfile only) | CHK `cargo nextest run -p navo-diag --features tracy profiling`; CHK `cargo xtask check -p navo-diag` | todo |
-| C2 | host info | `crates/navo-diag/build.rs` (new), `crates/navo-diag/tracy/navo_tracy_user.hpp` (new) | patcher | medium | C1 | the three C2 checks below | todo |
+| C2 | host info | `crates/navo-diag/build.rs` (new), `crates/navo-diag/tracy/navo_tracy_user.hpp` (new), `crates/navo-diag/tracy/flags.rs` (new), `crates/navo-diag/tests/tracy_flags.rs` (new) | patcher | medium | C1 | the six C2 checks below | todo |
 | C3 | zones | `crates/navo-index/src/search.rs`, `crates/navo-l10n/src/catalog.rs` | patcher | medium | — | CHK `cargo xtask check -p navo-index -p navo-l10n` | todo |
 | C4 | zones | `crates/navo-app/src/compare/diff/load.rs`, `crates/navo-app/src/compare/diff/stream/worker.rs` | patcher | medium | — | CHK `cargo xtask check -p navo-app` | todo |
 | C5 | zones | `crates/navo-ui/src/multi_rename/preview.rs` | patcher | medium | — | CHK `cargo xtask check -p navo-ui` | todo |
-| C6 | tester zip | `.github/workflows/bench-release.yml`, `crates/navo-bench/README.txt` | infra-builder | medium | C2 | `actionlint`; G-C1 | todo |
+| C6 | tester zip | `.github/workflows/bench-release.yml`, `crates/navo-bench/README.txt` | infra-builder | medium | C2 | `actionlint`; the C6 branch dispatch below | todo |
 | C7 | release check | `.github/workflows/release.yml` | patcher | medium | C6, part A's A5 merged | `actionlint`; G-C2 | todo |
 | C8 | scan tool | `../winvm/tools/tracy_scan.py`, `../winvm/tools/tracy_scan_test.py`, `../winvm/tools/tracy-requirements.txt` (all new) | infra-builder | medium | — | `.venv-tracy/bin/python -I tracy_scan_test.py` passes | todo |
 
@@ -181,11 +182,16 @@ Final. Workers never reopen them.
     - three `static inline` global functions: `PlatformGetUserLogin()` returns `"navo"`, `PlatformGetUserFullName()` returns `nullptr`, and `PlatformGetHostname(char* buf, size_t size)` copies `"tester"` with `strncpy(buf, "tester", size - 1)`.
   - **`build.rs`.**
     - It prints `cargo:rerun-if-env-changed=TRACY_CLIENT_SYS_CXXFLAGS`.
-    - When `CARGO_FEATURE_TRACY` is set and the variable does not contain `navo_tracy_user.hpp`, it panics. The message names the variable and the two flag forms from SC14.
+    - It also prints `cargo:rerun-if-env-changed=` for `TRACY_CLIENT_LIB`, `TRACY_CLIENT_LIB_PATH` and `TRACY_CLIENT_STATIC`.
+    - When `CARGO_FEATURE_TRACY` is set, it panics unless the flags hold a real force-include as SC14's build guard defines (token parse, path exists), and it panics when any of the three external-client variables is set. Each message names the variable and the two flag forms from SC14.
+    - The token parse is a small pure function. Build scripts do not run `#[cfg(test)]`, so it lives in `crates/navo-diag/tracy/flags.rs`, included by `build.rs` with `include!` and by a test in `crates/navo-diag/tests/tracy_flags.rs`.
 - **Check:** CHK, three runs:
   1. `cargo check -p navo-diag --features tracy` fails with the message.
   2. The same with `TRACY_CLIENT_SYS_CXXFLAGS="-include $PWD/crates/navo-diag/tracy/navo_tracy_user.hpp"` builds.
   3. CHK `cargo nextest run -p navo-diag --features tracy profiling` passes with that variable set.
+  4. With `TRACY_CLIENT_SYS_CXXFLAGS="-DX=navo_tracy_user.hpp"` the build fails with the message.
+  5. With the valid flags plus `TRACY_CLIENT_LIB=tracy` the build fails with the external-client message.
+  6. CHK `cargo nextest run -p navo-diag tracy_flags` passes (accepts both MSVC forms and `-include <path>`; rejects a define, a missing file and a bare `-include`).
 - **Stop if:** the client fails to compile with the header force-included.
 
 ### C3 — backend zones
@@ -231,7 +237,12 @@ Final. Workers never reopen them.
     - `cargo tree -p navo-app -e features --features tester,tracy` contains `tracy-client`. The same with `--features tester` does not.
     - The bytes of `navo-tracy.exe` contain `TRACY_PORT`. The tester `navo.exe` does not.
   - **README.** Add the seven owner steps, and the "What a trace holds" paragraph, from this plan.
-- **Check:** `actionlint`, then G-C1.
+  - **No build paths in the zip.** The `navo-tracy.exe` build step also sets `RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=navo --remap-path-prefix=${{ env.CARGO_HOME }}=cargo` and adds `-d1trimfile:${{ github.workspace }}\` to `TRACY_CLIENT_SYS_CXXFLAGS`, so line tables, panic locations and C++ `__FILE__` strings hold no runner paths.
+  - **Artifact scan.** Before upload, scan every staged `.exe` and `.dll` in the zip folder with the same string rules as C8 (ASCII, UTF-8, UTF-16LE, 3+ chars). Fail on `runneradmin`, `D:\a\`, `C:\Users\`, `\.cargo\registry` or `${{ github.workspace }}`. The scan runs on `navo-tracy.exe` and the tester `navo.exe`; a hit in Tracy's own prebuilt tools is listed but does not fail (they are upstream binaries).
+- **Check:**
+  1. `actionlint`.
+  2. **Branch dispatch (C6's own check, needs only C2):** dispatch `bench-release.yml` on the C6 branch with a test tag. The hook guard, SC16 feature and marker checks and the artifact scan pass; the zip lists `navo-tracy.exe` and the three Tracy tools. Delete the test release.
+  3. G-C1 runs later, on `main`, after C3–C6 and C8 have merged; it is not C6's check.
 - **Stop if:** the version table names another Tracy version, or the asset lacks one of the three tools.
 
 ### C7 — Tracy checks in the release
@@ -290,3 +301,7 @@ Final. Workers never reopen them.
   2. The guarantee is narrowed to what the capture and scan prove. The scan covers ASCII, UTF-8 and UTF-16LE strings of three or more characters.
   3. A positive-control capture: an exe renamed to the canary must fail the scan.
   4. C3–C5 run at medium effort. C4's zones go in `worker.rs` and `load.rs`, not in `convert.rs`.
+- 2026-11-10 — Revision 5 after plan check 4 (part C, 3 findings):
+  1. The build guard parses the force-include token and checks the file exists; a define with the name fails. It also rejects `TRACY_CLIENT_LIB`, `TRACY_CLIENT_LIB_PATH` and `TRACY_CLIENT_STATIC`. C2 checks 4–6 prove both bypasses fail.
+  2. C6 has its own branch dispatch check; G-C1 runs on `main` after integration.
+  3. The tester build remaps workspace and cargo-home paths (Rust and MSVC), and C6 scans the staged binaries for runner paths before upload.
