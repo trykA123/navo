@@ -348,11 +348,12 @@ pub(super) fn failed(c: &Ctx) -> AnyElement {
         page = page.child(alert(c, "failed-problem", problem.clone(), false));
     }
     page = page.child(log_field(c));
-    if c.view.notice.is_some() && !c.view.can_retry {
+    let leftover = c.view.leftover_root.as_ref();
+    if let Some(root) = leftover {
         let text = c
             .strings
             .failed_leftover
-            .replace("{path}", &c.view.folder_text);
+            .replace("{path}", &root.display().to_string());
         page = page.child(alert(c, "failed-leftover", text, true));
     }
     let copy = c.on_action.clone();
@@ -366,7 +367,7 @@ pub(super) fn failed(c: &Ctx) -> AnyElement {
         )
         .child(
             Button::new("failed-retry", plain_text(&c.strings.failed_retry))
-                .disabled(!c.view.can_retry)
+                .disabled(!c.view.can_retry || leftover.is_some())
                 .on_click(move |_, window, cx| retry(SetupAction::TryAgain, window, cx)),
         );
     page.child(buttons).into_any_element()

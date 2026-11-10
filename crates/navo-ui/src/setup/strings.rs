@@ -45,10 +45,27 @@ pub struct Strings {
     pub failed_copy: SharedString,
     pub failed_retry: SharedString,
     pub failed_leftover: SharedString,
+    pub blocked_title: SharedString,
+    pub blocked_text: SharedString,
+    pub blocked_note: SharedString,
+    pub blocked_retry: SharedString,
+    pub same_title: SharedString,
+    pub same_text: SharedString,
+    pub same_open: SharedString,
+    pub newer_title: SharedString,
+    pub newer_text: SharedString,
+    pub ambiguous_title: SharedString,
+    pub ambiguous_text: SharedString,
+    pub elevated_title: SharedString,
+    pub elevated_text: SharedString,
+    pub no_payload_title: SharedString,
+    pub no_payload_text: SharedString,
+    pub close: SharedString,
 }
 
 impl Strings {
     /// Returns the English placeholder texts used until setup.ftl exists.
+    #[expect(clippy::too_many_lines, reason = "one field per text")]
     pub fn english() -> Self {
         Self {
             back: "&Back".into(),
@@ -97,6 +114,22 @@ impl Strings {
             failed_copy: "Copy &details".into(),
             failed_retry: "&Retry".into(),
             failed_leftover: "Setup left files in {path}. Delete this folder before you run Setup again.".into(),
+            blocked_title: "Close Navo to continue".into(),
+            blocked_text: "Navo is running from {path}. Close it, then choose Try again.".into(),
+            blocked_note: "Setup never closes Navo for you. Save your work in Navo, close its window, then try again.".into(),
+            blocked_retry: "&Try again".into(),
+            same_title: "Navo is already installed".into(),
+            same_text: "Navo {installed} is installed in {path}. Setup has nothing to do.".into(),
+            same_open: "&Open Navo".into(),
+            newer_title: "A newer Navo is installed".into(),
+            newer_text: "A newer Navo {installed} is installed in {path}.".into(),
+            ambiguous_title: "Setup cannot continue".into(),
+            ambiguous_text: "Repair by uninstalling first: remove Navo in Windows Settings → Apps, then run Setup again.".into(),
+            elevated_title: "Started as administrator".into(),
+            elevated_text: "Setup installs Navo for one user and never runs as administrator. Close it and start it again without \"Run as administrator\".".into(),
+            no_payload_title: "Nothing to install".into(),
+            no_payload_text: "This copy of Setup does not carry Navo. Download Setup again from the Navo releases page.".into(),
+            close: "&Close".into(),
         }
     }
 }

@@ -66,7 +66,8 @@ fn failed(can_retry: bool, leftover: bool) -> SetupView {
         page: SetupPage::Failed,
         problem: Some("The installer stopped.".into()),
         can_retry,
-        notice: leftover.then(|| "files left".into()),
+        leftover_root: leftover.then(|| PathBuf::from("C:\\Navo\\Root")),
+        notice: Some("general advice".into()),
         folder_text: "C:\\Navo".into(),
         log_paths: vec![PathBuf::from("C:\\Logs\\setup.log")],
         details: "exit 7".into(),
@@ -199,13 +200,14 @@ fn failed_shows_problem_log_and_copy_details(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn failed_with_leftover_files_names_the_root_and_turns_retry_off(cx: &mut TestAppContext) {
-    let (window, sent) = open(cx, failed(false, true));
+    let (window, sent) = open(cx, failed(true, true));
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let leftover = window.find("failed-leftover");
         assert_eq!(leftover.role(), Some(Role::Alert));
         let label = leftover.label().expect("label");
-        assert!(label.contains("C:\\Navo"), "{label}");
+        assert!(label.contains("C:\\Navo\\Root"), "{label}");
+        assert!(!label.contains("general advice"), "{label}");
         assert!(
             label.ends_with("Delete this folder before you run Setup again."),
             "{label}"

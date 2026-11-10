@@ -4,7 +4,7 @@ use std::{path::PathBuf, rc::Rc, time::Duration};
 
 use crate::primitives::access_key;
 use crate::tokens;
-use crate::{AnyElement, App, IntoElement, ParentElement, Window, div};
+use crate::{AnyElement, App, IntoElement, Window};
 use gpui_kit::RenderOnce;
 
 mod pages_a;
@@ -13,6 +13,9 @@ mod pages_a_tests;
 mod pages_b;
 #[cfg(test)]
 mod pages_b_tests;
+mod pages_c;
+#[cfg(test)]
+mod pages_c_tests;
 mod strings;
 #[cfg(test)]
 mod tests;
@@ -91,8 +94,11 @@ pub struct SetupView {
     pub start_menu: bool,
     pub start_navo: bool,
     pub can_retry: bool,
-    /// Formatted completion or recovery advice, including UnsafeName's distinct advice.
+    /// Formatted completion or recovery advice; Ambiguous shows it instead of the repair text
+    /// (UnsafeName's distinct advice).
     pub notice: Option<String>,
+    /// A failed fresh install's root that still holds files; Failed names it and turns Retry off.
+    pub leftover_root: Option<PathBuf>,
     pub log_paths: Vec<PathBuf>,
     pub details: String,
     /// Space values are bytes when the shell has obtained them.
@@ -116,55 +122,61 @@ impl SetupView {
 
 /// Lists the Alt+letter keys of the current page: Back and Next when enabled, plus page controls.
 pub fn access_keys(view: &SetupView, strings: &Strings) -> Vec<(char, SetupAction)> {
-    let mut keys = Vec::new();
-    let mut add = |text: &str, action: SetupAction| {
-        if let Some(key) = access_key(text) {
-            keys.push((key, action));
-        }
-    };
+    let mut labels = Vec::new();
     if view.can_back() {
-        add(&strings.back, SetupAction::Back);
+        labels.push((&*strings.back, SetupAction::Back));
     }
     if view.can_next() {
-        add(&strings.next, SetupAction::Next);
+        labels.push((&*strings.next, SetupAction::Next));
     }
-    match view.page {
-        SetupPage::Licence => add(
-            &strings.licence_accept,
-            SetupAction::Toggle(SetupCheck::AcceptLicence),
-        ),
-        SetupPage::Folder if !view.folder_locked => {
-            add(&strings.folder_browse, SetupAction::Browse)
-        }
-        SetupPage::Shortcuts => {
-            add(
-                &strings.shortcuts_start_menu,
-                SetupAction::Toggle(SetupCheck::StartMenu),
-            );
-            add(
-                &strings.shortcuts_desktop,
-                SetupAction::Toggle(SetupCheck::Desktop),
-            );
-        }
-        SetupPage::Finish => {
-            add(
-                &strings.finish_start,
-                SetupAction::Toggle(SetupCheck::StartNavo),
-            );
-            add(&strings.finish_open_folder, SetupAction::OpenFolder);
-        }
-        SetupPage::Failed => {
-            add(&strings.failed_copy, SetupAction::CopyDetails);
-            if view.can_retry {
-                add(&strings.failed_retry, SetupAction::TryAgain);
-            }
-        }
-        _ => {}
-    }
-    keys
+    labels.extend(page_keys(view, strings));
+    labels
+        .into_iter()
+        .filter_map(|(text, action)| access_key(text).map(|key| (key, action)))
+        .collect()
 }
 
-/// Renders the current page; pages not built yet show their name only.
+/// Lists the labels and actions of the controls a page adds to Back and Next, in tab order.
+fn page_keys<'a>(view: &SetupView, strings: &'a Strings) -> Vec<(&'a str, SetupAction)> {
+    let toggle = SetupAction::Toggle;
+    let close = (&*strings.close, SetupAction::Close);
+    match view.page {
+        SetupPage::Licence => vec![(&*strings.licence_accept, toggle(SetupCheck::AcceptLicence))],
+        SetupPage::Folder if !view.folder_locked => {
+            vec![(&*strings.folder_browse, SetupAction::Browse)]
+        }
+        SetupPage::Shortcuts => vec![
+            (
+                &*strings.shortcuts_start_menu,
+                toggle(SetupCheck::StartMenu),
+            ),
+            (&*strings.shortcuts_desktop, toggle(SetupCheck::Desktop)),
+        ],
+        SetupPage::Finish => vec![
+            (&*strings.finish_start, toggle(SetupCheck::StartNavo)),
+            (&*strings.finish_open_folder, SetupAction::OpenFolder),
+        ],
+        SetupPage::Failed => {
+            let mut keys = vec![(&*strings.failed_copy, SetupAction::CopyDetails)];
+            if view.can_retry {
+                keys.push((&*strings.failed_retry, SetupAction::TryAgain));
+            }
+            keys
+        }
+        SetupPage::Same => vec![(&*strings.same_open, SetupAction::Primary), close],
+        SetupPage::Blocked if view.can_retry => {
+            vec![(&*strings.blocked_retry, SetupAction::TryAgain), close]
+        }
+        SetupPage::Blocked
+        | SetupPage::Newer
+        | SetupPage::Ambiguous
+        | SetupPage::Elevated
+        | SetupPage::NoPayload => vec![close],
+        _ => Vec::new(),
+    }
+}
+
+/// Renders the current page.
 pub fn render_page(view: &SetupView, strings: &Strings, on_action: OnAction) -> AnyElement {
     Page {
         view: view.clone(),
@@ -200,7 +212,12 @@ impl RenderOnce for Page {
             SetupPage::Installing => pages_b::installing(&ctx),
             SetupPage::Finish => pages_b::finish(&ctx),
             SetupPage::Failed => pages_b::failed(&ctx),
-            other => div().child(format!("{other:?}")).into_any_element(),
+            SetupPage::Blocked => pages_c::blocked(&ctx),
+            SetupPage::Same => pages_c::same(&ctx),
+            SetupPage::Newer => pages_c::newer(&ctx),
+            SetupPage::Ambiguous => pages_c::ambiguous(&ctx),
+            SetupPage::Elevated => pages_c::elevated(&ctx),
+            SetupPage::NoPayload => pages_c::no_payload(&ctx),
         }
     }
 }
