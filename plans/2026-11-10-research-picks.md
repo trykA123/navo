@@ -79,16 +79,16 @@ CHK means: `flock ~/.cache/rusty-cargo.lock nice -n 10 env CARGO_BUILD_JOBS=8 CA
 
 | Id | Name | Files | Role | Effort | Deps | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| R2a | `crash-record-writer` | `crates/navo-app/src/crash/hook.rs` (154) | patcher | medium | — | CHK `cargo nextest run -p navo-app crash`; CHK `cargo xtask check -p navo-app` | todo |
-| R2b | `native-summary` | `crates/navo-app/Cargo.toml` (97), `Cargo.lock`, `crates/navo-app/src/crash/native_summary.rs` (new); one `mod` line in `crash/mod.rs` (111) | api-builder | high | R2a, lockfile slot | CHK `cargo nextest run -p navo-app native_summary`; CHK `cargo xtask check -p navo-app`; `cargo deny check` | todo |
+| R2a | `crash-record-writer` | `crates/navo-app/src/crash/hook.rs` (154) | patcher | medium | — | CHK `cargo nextest run -p navo-app crash`; CHK `cargo xtask check -p navo-app` | done |
+| R2b | `native-summary` | `crates/navo-app/Cargo.toml` (97), `Cargo.lock`, `crates/navo-app/src/crash/native_summary.rs` (new); one `mod` line in `crash/mod.rs` (111) | api-builder | high | R2a, lockfile slot | CHK `cargo nextest run -p navo-app native_summary`; CHK `cargo xtask check -p navo-app`; `cargo deny check` | done |
 | R2c | `native-server` | `crates/navo-app/src/crash/native_server.rs` (new), `crates/navo-app/src/crash/mod.rs` | senior | high | R2b | CHK `cargo nextest run -p navo-app native_server`; CHK `cargo xtask check -p navo-app`; VM | todo |
 | R2d | `crash-server-flag` | `crates/navo-app/src/cli.rs` (268), `crates/navo-app/src/cli/tests.rs`, `crates/navo-app/src/main.rs` (403 raw, 381 code) | api-builder | medium | R2c | CHK `cargo nextest run -p navo-app cli`; CHK `cargo xtask check -p navo-app`; VM | todo |
 | R2e | `native-crash-test` (red) | `crates/navo-app/tests/crash_test.rs` (61) | api-builder | medium | R2d | VM shows the new tests red, all else green | todo |
 | R2f | `native-client` | `crates/navo-app/src/crash/native_client.rs` (new), `crates/navo-app/src/crash/mod.rs`, `crates/navo-app/src/main.rs` | senior | high | R2e (same branch) | VM `=== ALL GREEN`, incl. R2e's tests | todo |
 | R5a | `shear` | the `Cargo.toml` of at most 2 crates `cargo shear` names, `Cargo.lock` | patcher | medium | DP1, lockfile slot | `cargo shear` clean; CHK `cargo xtask check -p <each touched crate>` | todo |
-| R12a | `copy-offload-probe` | `crates/navo-fs/src/local/tests/copy_offload.rs` (new), `crates/navo-fs/src/local/tests/mod.rs` (157), `scripts/offload-probe.ps1` (new) | senior | high | — | VM; then the VM probe run below writes `offload.json` | todo |
+| R12a | `copy-offload-probe` | `crates/navo-fs/src/local/tests/copy_offload.rs` (new), `crates/navo-fs/src/local/tests/mod.rs` (157), `scripts/offload-probe.ps1` (new) | senior | high | — | VM; then the VM probe run below writes `offload.json` | done |
 | R12b | `offload-buffering` | `crates/navo-fs/src/local/win_copy.rs` (328 raw, 294 code), `crates/navo-fs/src/local/tests/copy_offload.rs` | senior | high | G-R12/R13 | VM; VM probe run shows `large_unowned` offloaded | gated |
-| R14a | `first-batch-bench` | `crates/navo-app/src/bench/listing.rs` (78), `crates/navo-app/src/bench/report/mod.rs` (127), `crates/navo-app/src/bench/folder.rs` (246) | api-builder | medium | — | CHK `cargo nextest run -p navo-app --features tester bench::folder`; CHK `cargo xtask check -p navo-app` | todo |
+| R14a | `first-batch-bench` | `crates/navo-app/src/bench/listing.rs` (78), `crates/navo-app/src/bench/report/mod.rs` (127), `crates/navo-app/src/bench/folder.rs` (246) | api-builder | medium | — | CHK `cargo nextest run -p navo-app --features tester bench::folder`; CHK `cargo xtask check -p navo-app` | done |
 | R14b | `first-rows` | split after G-R14 (see brief) | api-builder | high | G-R14 | per split atom | gated |
 | R15a | `dev-line-tables` | `Cargo.toml` (42) | patcher | medium | — | measurement below; CHK `cargo xtask check -p navo-fs` | todo |
 | R15b | `sccache-measure` | none (measurement only) | infra-builder | medium | R15a | measurement below | todo |

@@ -63,7 +63,7 @@ The view model is plain data, so `navo-ui` does not depend on `navo-setup`. `nav
 | W10b | `setup-pages` A | ui-builder | high | W10a | — | `cargo xtask check -p navo-ui` | done |
 | W11a | `setup-pages` B | ui-builder | high | W10b | — | `cargo xtask check -p navo-ui` | done |
 | W11b | `setup-pages` C | ui-builder | medium | W11a | — | `cargo xtask check -p navo-ui` | done |
-| W11g | `setup-gallery` | ui-builder | medium | W10b, W11a, W11b | — | `cargo xtask check -p navo-ui-gallery`; screenshots of every page in both themes | blocked |
+| W11g | `setup-gallery` | ui-builder | medium | W10b, W11a, W11b | — | `cargo xtask check -p navo-ui-gallery`; screenshots of every page in both themes | done (shots pending: VM lock) |
 | W12a | `setup-strings` | patcher | medium | W10b, W11a, W11b | — | `cargo nextest run -p navo-l10n`; `cargo xtask l10n` | done |
 | W12b | `setup-window` | senior | high | W11g, W12a, W13b | — | `cargo nextest run -p navo-setup window`; VM: the window opens and installs (S1b) | blocked |
 | W13a | `licence-text` (repo) | patcher | medium | — | — | `cargo metadata --no-deps --format-version 1` shows `MIT OR Apache-2.0` for every package | done |
