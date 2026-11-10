@@ -10,6 +10,8 @@ pub struct StartReport {
     pub first_usable: Instant,
     pub renderer: Option<String>,
     pub marks: Vec<Mark>,
+    /// Entries listed in each pane when the start report is sent; 0 for a missing pane or unlisted tab.
+    pub pane_entries: Vec<u64>,
 }
 
 pub struct StartWatch {
@@ -92,6 +94,7 @@ impl Watching {
             first_usable: self.clock.first_usable()?,
             renderer: self.renderer,
             marks: self.watch.marks,
+            pane_entries: Vec::new(),
         };
         Some((report, self.watch.on_report))
     }
@@ -175,9 +178,20 @@ impl NavoWindow {
             self.fail_start(error, cx);
             return;
         }
-        let Some((report, on_report)) = self.start.take().and_then(Watching::into_report) else {
+        let Some((mut report, on_report)) = self.start.take().and_then(Watching::into_report)
+        else {
             return;
         };
+        let state = self.browser.state();
+        report.pane_entries = self
+            .panes()
+            .into_iter()
+            .map(|p| {
+                state.pane(p).map_or(0, |pane| {
+                    pane.active().listing().map_or(0, |listing| listing.len())
+                })
+            })
+            .collect();
         on_report(Ok(report));
         cx.quit();
     }
