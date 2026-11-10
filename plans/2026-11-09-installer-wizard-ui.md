@@ -67,7 +67,7 @@ The view model is plain data, so `navo-ui` does not depend on `navo-setup`. `nav
 | W12a | `setup-strings` | patcher | medium | W10b, W11a, W11b | — | `cargo nextest run -p navo-l10n`; `cargo xtask l10n` | blocked |
 | W12b | `setup-window` | senior | high | W11g, W12a, W13b | — | `cargo nextest run -p navo-setup window`; VM: the window opens and installs (S1b) | blocked |
 | W13a | `licence-text` (repo) | patcher | medium | — | — | `cargo metadata --no-deps --format-version 1` shows `MIT OR Apache-2.0` for every package | done |
-| W13b | `licence-text` (wizard) | patcher | medium | W13a, part 1's W3 | — | `cargo nextest run -p navo-setup licence` | blocked |
+| W13b | `licence-text` (wizard) | patcher | medium | W13a, part 1's W3 | — | `cargo nextest run -p navo-setup licence` | done |
 | W14 | `release-wizard` | infra-builder | high | W12b | — | rehearsal run (`publish: false`) green, with `Navo-Setup.exe` in the artifact; `sha256sum -c` passes; `assets.txt` matches v0.3.0's asset names apart from versions | blocked |
 | W15h | snapshot control | infra-builder | medium | — | — | `winvm.sh snapshot` save, load and delete round trip (see W15h) | blocked |
 | W15a | `setup-e2e` controller, common and install cases | tester | high | W14, G1, W15h | — | `setup-e2e.ps1 -Cases S1a,S1b,S2,S2b,S3,S8,S9` prints PASS | blocked |

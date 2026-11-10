@@ -12,6 +12,7 @@ use std::process::ExitCode;
 pub mod cli;
 pub mod flow;
 pub mod host;
+pub mod licence;
 pub mod marker;
 pub mod mode;
 #[cfg(test)]
