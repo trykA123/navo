@@ -1,3 +1,5 @@
+//! Workspace maintenance commands and benchmark tooling.
+
 #![deny(unsafe_code)]
 #![allow(
     clippy::print_stdout,
@@ -16,14 +18,19 @@ mod gate;
 mod l10n;
 mod perf;
 mod size;
+pub mod speed;
 pub mod stats;
 
 use std::process::ExitCode;
 
+/// Route CLI arguments to a task and return its exit status.
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let rest = args.get(1..).unwrap_or_default();
     match args.first().map(String::as_str) {
+        Some("speed-targets") => speed::targets_cmd(rest),
+        Some("speed-base") => speed::base_cmd(rest),
+        Some("speed-verdict") => speed::verdict_cmd(rest),
         Some("size") => size::run(rest),
         Some("coverage") => coverage::run(rest),
         Some("binsize") => binsize::run(rest),
@@ -39,7 +46,7 @@ fn main() -> ExitCode {
         Some("bench-walk") => bench_walk::run(rest),
         _ => {
             eprintln!(
-                "usage: cargo xtask <size | coverage | binsize <path> | gate [--coverage] | check -p <crate> [-p <crate>...] | l10n [--list] | colors | perf-fixture <dir> | perf-summary <reports-dir> <summary-file> | bench-copy <target-folder> [--runs N] [--sets small,medium,large] | bench-diff [--quick] [--json <path>] | bench-large [--quick] [--huge] [--json <path>] | bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size]>"
+                "usage: cargo xtask <speed-targets --config <file> [--discover] | speed-base | speed-verdict | size | coverage | binsize <path> | gate [--coverage] | check -p <crate> [-p <crate>...] | l10n [--list] | colors | perf-fixture <dir> | perf-summary <reports-dir> <summary-file> | bench-copy <target-folder> [--runs N] [--sets small,medium,large] | bench-diff [--quick] [--json <path>] | bench-large [--quick] [--huge] [--json <path>] | bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size]>"
             );
             ExitCode::from(2)
         }
