@@ -78,6 +78,7 @@ fn the_watch_reports_once_after_the_listed_frame_and_the_idle_wait(cx: &mut Test
     let report = reports[0].as_ref().unwrap();
     assert!(report.first_frame <= report.first_usable);
     assert_eq!(report.renderer, None);
+    assert_eq!(report.pane_entries, vec![2, 2]);
     let labels: Vec<&str> = report.marks.iter().map(|(label, _)| *label).collect();
     assert!(labels.contains(&"window built"), "{labels:?}");
     assert!(

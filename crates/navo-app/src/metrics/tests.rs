@@ -176,6 +176,7 @@ fn ui_report(start: Instant) -> StartReport {
         first_usable: at(start, 250),
         renderer: None,
         marks: vec![("window built", at(start, 150))],
+        pane_entries: vec![5000, 200],
     }
 }
 
