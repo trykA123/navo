@@ -54,7 +54,8 @@ impl Run {
             marks: all,
             memory: Memory::sample(),
         };
-        let report = Report::new(Build::current(), &self.clock, measured);
+        let report =
+            Report::new(Build::current(), &self.clock, measured).with_panes(ui.pane_entries);
         match report.write(&self.destination) {
             Ok(()) => self.written.set(true),
             Err(error) => eprintln!(
