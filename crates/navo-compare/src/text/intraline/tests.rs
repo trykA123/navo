@@ -1,3 +1,5 @@
+//! Tests intraline spans, fallbacks, and the benchmark refinement path.
+
 use std::ops::ControlFlow;
 
 use navo_core::encoding::{DetectedBy, Encoding, TextEncoding};
@@ -104,7 +106,10 @@ fn long_but_not_huge_lines_keep_word_spans_only() {
     let left = line(&format!("{} alpha", "x".repeat(100)));
     let right = line(&format!("{} beta", "x".repeat(100)));
     // A loaded test machine can pass the 5 ms deadline; this test is about the length rule.
-    let result = intraline_with_deadline(pair(&left, &right), Duration::from_secs(5));
+    let result = refine(
+        pair(&left, &right),
+        Some(Instant::now() + Duration::from_secs(5)),
+    );
 
     assert!(!result.words.is_empty());
     assert!(result.chars.is_empty());
@@ -149,7 +154,7 @@ fn a_pathological_pair_hits_the_deadline() {
         .collect();
     let left = line(&left_text);
     let right = line(&right_text);
-    let result = intraline_with_deadline(pair(&left, &right), Duration::ZERO);
+    let result = refine(pair(&left, &right), Some(Instant::now()));
 
     assert!(result.words.is_empty());
     assert!(result.chars.is_empty());
@@ -250,4 +255,22 @@ fn a_lossily_decoded_line_is_whole_line() {
     assert!(result.words.is_empty());
     assert!(result.chars.is_empty());
     assert_eq!(result.fallback, Some(IntralineFallback::Lossy));
+}
+
+#[cfg(feature = "test-hooks")]
+#[test]
+fn intraline_unbounded_matches_deadline_for_benchmark_pairs() {
+    let mut checked = 0;
+    for i in (0..20_000).filter(|i| i % 100 == 50) {
+        let left = line(&format!("    value_{i} = compute({i}, {});", i * 7 % 13));
+        let right = line(&format!("{} // edited", left.text));
+        let pair = pair(&left, &right);
+        let unbounded = intraline_unbounded(pair);
+        let bounded = refine(pair, Some(Instant::now() + Duration::from_secs(3_600)));
+        assert_eq!(unbounded.fallback, None, "pair {i} must refine fully");
+        assert_eq!(bounded.fallback, None, "pair {i} must meet its deadline");
+        assert_eq!(unbounded, bounded, "pair {i} must have identical spans");
+        checked += 1;
+    }
+    assert_eq!(checked, 200);
 }

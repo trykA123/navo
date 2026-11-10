@@ -1,3 +1,5 @@
+//! Refines changed text lines into word and character spans with optional deadlines.
+
 use std::ops::Range;
 use std::time::{Duration, Instant};
 
@@ -76,12 +78,27 @@ pub struct LinePair<'a> {
     pub right: SideLine<'a>,
 }
 
+/// Refine a line pair with a 5 ms budget after lossy and length checks.
 #[must_use]
 pub fn intraline(pair: LinePair<'_>) -> Intraline {
-    intraline_with_deadline(pair, INTRALINE_DEADLINE)
+    prepare(pair, || Some(Instant::now() + INTRALINE_DEADLINE))
 }
 
-fn intraline_with_deadline(pair: LinePair<'_>, budget: Duration) -> Intraline {
+/// Refine a line pair without reading the clock; retain lossy and length fallbacks.
+#[cfg(feature = "test-hooks")]
+#[must_use]
+pub fn intraline_unbounded(pair: LinePair<'_>) -> Intraline {
+    refine(pair, None)
+}
+
+/// Refine a line pair with an optional absolute deadline and no clock reads for None.
+#[cfg(any(test, feature = "test-hooks"))]
+fn refine(pair: LinePair<'_>, deadline: Option<Instant>) -> Intraline {
+    prepare(pair, || deadline)
+}
+
+/// Validate a pair before creating its deadline, preserving the production clock point.
+fn prepare(pair: LinePair<'_>, deadline: impl FnOnce() -> Option<Instant>) -> Intraline {
     if !pair.left.lossless || !pair.right.lossless {
         return fallback(IntralineFallback::Lossy);
     }
@@ -90,48 +107,59 @@ fn intraline_with_deadline(pair: LinePair<'_>, budget: Duration) -> Intraline {
     if left_chars > INTRALINE_MAX_CHARS || right_chars > INTRALINE_MAX_CHARS {
         return fallback(IntralineFallback::LineTooLong);
     }
-    let deadline = Instant::now() + budget;
+    refine_words(pair, deadline(), left_chars.max(right_chars))
+}
+
+/// Refine words for a validated pair, then refine characters for short changed lines.
+fn refine_words(pair: LinePair<'_>, deadline: Option<Instant>, max_chars: usize) -> Intraline {
     let mut config = TextDiff::configure();
     config.algorithm(Algorithm::Myers);
-    config.deadline(deadline);
+    if let Some(deadline) = deadline {
+        config.deadline(deadline);
+    }
     let words = config.diff_words(&pair.left.line.text, &pair.right.line.text);
-    if Instant::now() >= deadline {
+    if deadline_exceeded(deadline) {
         return fallback(IntralineFallback::Deadline);
     }
     let word_spans = word_spans(&pair, &words);
-    if Instant::now() >= deadline {
+    if deadline_exceeded(deadline) {
         return fallback(IntralineFallback::Deadline);
     }
-    if word_spans.is_empty() {
-        return Intraline {
-            words: Vec::new(),
-            chars: Vec::new(),
-            fallback: None,
-        };
-    }
-    if left_chars > INTRALINE_SHORT_CHARS || right_chars > INTRALINE_SHORT_CHARS {
+    if word_spans.is_empty() || max_chars > INTRALINE_SHORT_CHARS {
         return Intraline {
             words: word_spans,
             chars: Vec::new(),
             fallback: None,
         };
     }
+    refine_chars(pair, deadline, word_spans)
+}
+
+/// Refine characters for a short pair, retaining its word spans unless time expires.
+fn refine_chars(pair: LinePair<'_>, deadline: Option<Instant>, words: Vec<Span>) -> Intraline {
     let mut config = TextDiff::configure();
     config.algorithm(Algorithm::Myers);
-    config.deadline(deadline);
+    if let Some(deadline) = deadline {
+        config.deadline(deadline);
+    }
     let chars = config.diff_chars(&pair.left.line.text, &pair.right.line.text);
-    if Instant::now() >= deadline {
+    if deadline_exceeded(deadline) {
         return fallback(IntralineFallback::Deadline);
     }
-    let char_spans = char_spans(&pair, &chars);
-    if Instant::now() >= deadline {
+    let chars = char_spans(&pair, &chars);
+    if deadline_exceeded(deadline) {
         return fallback(IntralineFallback::Deadline);
     }
     Intraline {
-        words: word_spans,
-        chars: char_spans,
+        words,
+        chars,
         fallback: None,
     }
+}
+
+/// Check an absolute deadline, reading the clock only when a deadline exists.
+fn deadline_exceeded(deadline: Option<Instant>) -> bool {
+    deadline.is_some_and(|deadline| Instant::now() >= deadline)
 }
 
 fn word_spans(pair: &LinePair<'_>, diff: &TextDiff<'_, '_, str>) -> Vec<Span> {
