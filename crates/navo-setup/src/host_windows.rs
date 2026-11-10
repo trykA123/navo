@@ -154,15 +154,14 @@ impl Host for WindowsHost {
         navo_diag::processes::any_under(root)
     }
 
-    /// Reports whether the held root has no entries; an error counts as not empty.
+    /// Reports whether the held root holds only an uninstall leftover; an error counts as not empty.
     fn root_empty(&mut self, pin: &Pin) -> io::Result<bool> {
         let held = held(pin)?;
         let root = held
             .pin
             .root()
             .ok_or_else(|| io::Error::other("pin has no root"))?;
-        let mut entries = fs::read_dir(root)?;
-        Ok(entries.next().is_none())
+        crate::host::uninstall_leftovers_only(root)
     }
 
     /// Creates the private work folder, extracts Setup.exe and holds it.

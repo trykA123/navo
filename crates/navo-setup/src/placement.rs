@@ -114,7 +114,13 @@ pub fn check(
         return Err(FolderProblem::ProbeFailed);
     }
     if chain.missing.is_empty() {
-        return Err(FolderProblem::RootExists);
+        let leftovers = chain
+            .existing
+            .last()
+            .is_some_and(|link| crate::host::uninstall_leftovers_only(&link.path).unwrap_or(false));
+        if !leftovers {
+            return Err(FolderProblem::RootExists);
+        }
     }
     if chain.existing.iter().any(|link| link.reparse) {
         return Err(FolderProblem::ReparsePoint);

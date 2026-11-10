@@ -96,3 +96,66 @@ pub trait Host {
         remove_created: bool,
     ) -> io::Result<Cleanup>;
 }
+
+/// Whether `root` holds only a Velopack uninstall leftover: `Update.exe` and empty folders.
+///
+/// Velopack's uninstaller can leave `Update.exe` and empty folders behind. Setup accepts
+/// such a folder as a fresh root; any other file or non-empty folder still refuses it.
+pub(crate) fn uninstall_leftovers_only(root: &Path) -> io::Result<bool> {
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            if std::fs::read_dir(entry.path())?.next().is_some() {
+                return Ok(false);
+            }
+        } else if !(kind.is_file()
+            && entry
+                .file_name()
+                .as_os_str()
+                .eq_ignore_ascii_case(std::ffi::OsStr::new("Update.exe")))
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Builds a temp folder with the given files and empty folders.
+    fn folder(files: &[&str], dirs: &[&str]) -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        for file in files {
+            std::fs::write(root.path().join(file), b"x").unwrap();
+        }
+        for dir in dirs {
+            std::fs::create_dir(root.path().join(dir)).unwrap();
+        }
+        root
+    }
+
+    #[test]
+    fn an_update_leftover_with_empty_folders_is_accepted() {
+        let root = folder(&["Update.exe"], &["empty", "also-empty"]);
+        assert!(uninstall_leftovers_only(root.path()).unwrap());
+        let lower = folder(&["update.EXE"], &[]);
+        assert!(uninstall_leftovers_only(lower.path()).unwrap());
+    }
+
+    #[test]
+    fn anything_else_is_refused() {
+        for root in [
+            folder(&["Update.exe", "other.txt"], &[]),
+            folder(&["Setup.exe"], &[]),
+            folder(&[], &["full"]),
+        ] {
+            if root.path().join("full").exists() {
+                std::fs::write(root.path().join("full/child"), b"x").unwrap();
+            }
+            assert!(!uninstall_leftovers_only(root.path()).unwrap());
+        }
+    }
+}

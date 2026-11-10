@@ -84,7 +84,28 @@ impl Pin {
             return Err(PinError::InvalidChain);
         };
         if chain.missing.is_empty() {
-            return Err(PinError::RootExists);
+            let Some(root) = chain.existing.last() else {
+                return Err(PinError::InvalidChain);
+            };
+            if !crate::host::uninstall_leftovers_only(&root.path).unwrap_or(false) {
+                return Err(PinError::RootExists);
+            }
+            let handle = open_hold(&root.path)?;
+            let (id, reparse, directory) = read_id(&handle)?;
+            if reparse {
+                return Err(PinError::Reparse);
+            }
+            if !directory {
+                return Err(PinError::NotFolder);
+            }
+            return Ok(Self {
+                existing_root: Some(Held {
+                    path: root.path.clone(),
+                    id,
+                    handle: Some(handle),
+                }),
+                created: Vec::new(),
+            });
         }
         let mut created = Vec::new();
         let mut path = base.path.clone();
