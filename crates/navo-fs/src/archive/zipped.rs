@@ -1,4 +1,5 @@
-use std::io::{Read, Seek};
+use std::cell::Cell;
+use std::io::{self, Read, Seek};
 
 use zip::read::ZipFile;
 use zip::result::ZipError;
@@ -51,6 +52,36 @@ fn failed(error: ZipError) -> String {
     }
 }
 
+/// Reader that notes when zip 9.5's lazy decompressor refuses an unknown method.
+struct Probe<'a, R> {
+    inner: R,
+    refused: &'a Cell<bool>,
+}
+
+impl<R: Read> Read for Probe<'_, R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.inner.read(buffer).inspect_err(|error| {
+            let method = error
+                .get_ref()
+                .and_then(|inner| inner.downcast_ref::<ZipError>());
+            if matches!(method, Some(ZipError::CompressionMethodNotSupported(_))) {
+                self.refused.set(true);
+            }
+        })
+    }
+}
+
+/// Maps a read failure to the "method not supported" text when the probe saw that refusal.
+fn refusal<T>(result: Result<T, String>, refused: &Cell<bool>) -> Result<T, String> {
+    result.map_err(|error| {
+        if refused.get() {
+            UNSUPPORTED_METHOD.to_owned()
+        } else {
+            error
+        }
+    })
+}
+
 pub(super) fn list_archive<'a, R: Read + Seek>(
     archive: &mut ZipArchive<R>,
     limits: Limits<'a>,
@@ -73,7 +104,12 @@ pub(super) fn read<R: Read + Seek>(reader: R, at: EntryAt) -> Result<Vec<u8>, St
     let entry = describe(&archive.by_index_raw(at.index).map_err(damaged)?);
     at.check(&entry)?;
     let file = archive.by_index(at.index).map_err(failed)?;
-    read_capped(file, at.limit)
+    let refused = Cell::new(false);
+    let probe = Probe {
+        inner: file,
+        refused: &refused,
+    };
+    refusal(read_capped(probe, at.limit), &refused)
 }
 
 pub(super) fn stream<R: Read + Seek>(reader: R, request: StreamRequest<'_>) -> Result<(), String> {
@@ -91,5 +127,13 @@ pub(super) fn stream_archive<R: Read + Seek>(
     let entry = describe(&archive.by_index_raw(request.at.index).map_err(damaged)?);
     request.at.check(&entry)?;
     let file = archive.by_index(request.at.index).map_err(failed)?;
-    pump(file, request.sender, request.cancel, request.gone).map(drop)
+    let refused = Cell::new(false);
+    let probe = Probe {
+        inner: file,
+        refused: &refused,
+    };
+    refusal(
+        pump(probe, request.sender, request.cancel, request.gone).map(drop),
+        &refused,
+    )
 }

@@ -248,6 +248,48 @@ fn corrupt_archives_error_and_never_panic() {
 }
 
 #[test]
+fn a_7z_with_a_damaged_header_errors_and_never_panics() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut flipped = seven_bytes(false);
+    let last = flipped.len() - 1;
+    flipped[last] ^= 0xFF;
+    let mut bad_start = seven_bytes(false);
+    bad_start[12..20].fill(0xFF);
+    for (name, bytes) in [("flipped.7z", flipped), ("start.7z", bad_start)] {
+        let path = write(&dir, name, &bytes);
+        let listed = list_archive(&path).map(|listing| listing.entries.len());
+        let read = read_archive_entry(&path, 0, ENTRY_LIMIT);
+        assert!(listed.is_err() || read.is_err(), "{name}");
+    }
+}
+
+#[test]
+fn a_zip_symlink_is_listed_as_a_file_and_never_followed() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = dir.path().join("outside.txt");
+    fs::write(&outside, b"secret").unwrap();
+    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    writer
+        .add_symlink("link", "../outside.txt", SimpleFileOptions::default())
+        .unwrap();
+    let inner = dir.path().join("inner");
+    fs::create_dir(&inner).unwrap();
+    let path = write(
+        &dir,
+        "inner/links.zip",
+        &writer.finish().unwrap().into_inner(),
+    );
+    let listing = list_archive(&path).unwrap();
+    assert_eq!(listing.entries.len(), 1);
+    assert_eq!(listing.entries[0].name, "link");
+    assert_eq!(
+        read_archive_entry(&path, 0, ENTRY_LIMIT).unwrap(),
+        b"../outside.txt"
+    );
+    assert_eq!(fs::read_dir(&inner).unwrap().count(), 1);
+}
+
+#[test]
 fn an_encrypted_zip_entry_is_flagged_and_not_read() {
     let mut bytes = zip_bytes();
     let flags = |signature: &[u8], offset: usize, bytes: &mut Vec<u8>| {

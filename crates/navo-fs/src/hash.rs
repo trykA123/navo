@@ -4,9 +4,9 @@ use std::path::Path;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
 
-use md5::{Digest, Md5};
+use md5::{Digest as _, Md5};
 use navo_core::{FsError, FsErrorKind, Location, ProviderPath};
-use sha2::Sha256;
+use sha2::{Digest as _, Sha256};
 
 use crate::{CancelToken, JobKind, JobSlot, Pools, Priority, volume_of};
 
@@ -149,10 +149,21 @@ impl HashState {
     fn finish(self) -> String {
         match self {
             Self::Crc32(digest) => format!("{:08x}", digest.finalize()),
-            Self::Md5(digest) => format!("{:x}", digest.finalize()),
+            Self::Md5(digest) => lower_hex(&digest.finalize()),
             Self::Sha256(digest) => format!("{:x}", digest.finalize()),
         }
     }
+}
+
+/// Formats bytes as lowercase hex; digest 0.11 outputs no longer implement `LowerHex`.
+fn lower_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut text, byte| {
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
 }
 
 #[cfg(test)]

@@ -13,7 +13,7 @@ chardetng = "1.0.0"
 encoding_rs = "0.8.44"
 memchr = "2.8.3"
 regex = "=1.13.1"
-similar = { version = "=2.7.0", default-features = false }
+similar = { version = "=3.2.1", default-features = false }
 thiserror = "2.0.21"
 unicode-normalization = "=0.1.26"
 
