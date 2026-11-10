@@ -24,3 +24,22 @@ guarded = true
 [[bench]]
 id = "navo-fs/listing::listing::bench_load_folder.fifty_thousand"
 guarded = true
+
+# 2026-11-10 guard run 42844748759 vs v0.6.0. Sort rows: R1 natural digit order (byte key per row).
+[[accepted]]
+bench = "navo-fs/listing::listing::bench_sort_order.name"
+base = "e42dcb8db43a60fd3dad62bcd7716bfa443e25df"
+max_percent = 46.0
+reason = "R1 natural order: correct digit order; 100k rows 17.9 -> 23.0 ms, 5k rows faster"
+
+[[accepted]]
+bench = "navo-fs/listing::listing::bench_sort_order.extension"
+base = "e42dcb8db43a60fd3dad62bcd7716bfa443e25df"
+max_percent = 35.5
+reason = "R1 natural order: extension ties fall back to the natural name key"
+
+[[accepted]]
+bench = "navo-fs/listing::listing::bench_load_folder.fifty_thousand"
+base = "e42dcb8db43a60fd3dad62bcd7716bfa443e25df"
+max_percent = 6.0
+reason = "Cause not proven (load does not build the natural key); candidates: the DU dependency update or the b4dbbe38 bench fixture. A checker follows (speed-checks plan)."

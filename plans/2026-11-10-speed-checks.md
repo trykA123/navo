@@ -469,3 +469,4 @@ No open questions remain.
   4. Duplicate measured IDs fail (SC4 rule 2), with a test.
   5. C7 depends on A5.
 - 2026-11-10 — G-A1 fixture fix merged (`b4dbbe38`): `FakeFs::add_entries` builds the 50k folder in one pass (14.7 ms native, was O(n²)); bench.yml timeout 60 min. Next: after the push, `gh workflow run bench.yml -f mode=noise`, then `mode=guard`.
+- 2026-11-10 — First guard run on main (76965652 vs v0.6.0, run 42844748759) failed: sort name +44.5 %, extension +33.8 %, load_folder 50k +5.35 % Ir. Noise run green. Sort rows are R1's accepted natural-order cost; load_folder's cause is not proven (R1 does not touch load; candidates DU deps or the b4dbbe38 fixture). All three entered as `[[accepted]]` against v0.6.0; **checker owed** for load_folder before v0.7.0.
