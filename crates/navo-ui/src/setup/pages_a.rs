@@ -18,10 +18,11 @@ pub(super) struct Ctx<'a> {
     pub view: &'a SetupView,
     pub strings: &'a Strings,
     pub on_action: &'a OnAction,
+    pub reduce_motion: bool,
 }
 
 /// Builds a page column with its heading.
-fn column(c: &Ctx, heading: &str) -> Div {
+pub(super) fn column(c: &Ctx, heading: &str) -> Div {
     div().flex().flex_col().gap(c.t.spacing.md).child(
         div()
             .id("setup-heading")
@@ -36,7 +37,7 @@ fn column(c: &Ctx, heading: &str) -> Div {
 }
 
 /// Builds a muted paragraph.
-fn paragraph(c: &Ctx, text: String) -> Div {
+pub(super) fn paragraph(c: &Ctx, text: String) -> Div {
     div()
         .text_size(c.t.typography.body)
         .text_color(c.t.colors.muted)
