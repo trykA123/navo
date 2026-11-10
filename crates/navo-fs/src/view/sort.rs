@@ -3,20 +3,28 @@ use std::ops::Range;
 
 use crate::{CancelToken, EntryKind, FsEntry};
 
+use super::natural::{NaturalArena, NaturalRef, natural_cmp};
 use super::{SortBy, SortKey};
 
 const CHECK_EVERY: usize = 4_096;
 
+/// Shared buffers for all rows: lowercase names and their natural-order keys.
+#[derive(Default)]
+struct Arena {
+    text: String,
+    natural: NaturalArena,
+}
+
 struct Keyed {
     is_file: bool,
-    lower: String,
     extension: Range<usize>,
+    natural: NaturalRef,
     size: u64,
     modified_ms: Option<i64>,
     index: u32,
 }
 
-fn keyed(entry: &FsEntry, index: u32) -> Keyed {
+fn keyed(entry: &FsEntry, index: u32, arena: &mut Arena) -> Keyed {
     let lower = entry.name.display().to_lowercase();
     let is_file = entry.kind != EntryKind::Folder;
     let extension = if is_file {
@@ -27,10 +35,12 @@ fn keyed(entry: &FsEntry, index: u32) -> Keyed {
     } else {
         lower.len()
     };
+    let base = arena.text.len();
+    arena.text.push_str(&lower);
     Keyed {
         is_file,
-        extension: extension..lower.len(),
-        lower,
+        extension: base + extension..base + lower.len(),
+        natural: arena.natural.add(&lower),
         size: entry.size,
         modified_ms: entry.modified_ms,
         index,
@@ -48,13 +58,14 @@ pub fn sort_order(
         return primary_order(rows, key, folders_first, cancel);
     }
     let mut keys = Vec::with_capacity(rows.len());
+    let mut arena = Arena::default();
     for (at, entry) in rows.iter().enumerate() {
         if at % CHECK_EVERY == 0 && cancel.is_cancelled() {
             return None;
         }
-        keys.push(keyed(entry, u32::try_from(at).ok()?));
+        keys.push(keyed(entry, u32::try_from(at).ok()?, &mut arena));
     }
-    keys.sort_by(|a, b| compare(a, b, key, folders_first));
+    keys.sort_unstable_by(|a, b| compare(a, b, &arena, (key, folders_first)));
     if cancel.is_cancelled() {
         return None;
     }
@@ -102,7 +113,7 @@ fn primary_order(
                     (entry.name.display().to_lowercase(), index)
                 })
                 .collect();
-            tied.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+            tied.sort_by(|a, b| natural_cmp(&a.0, &b.0).then_with(|| a.1.cmp(&b.1)));
             for (slot, (_, index)) in order[start..end].iter_mut().zip(tied) {
                 *slot = index;
             }
@@ -146,33 +157,31 @@ fn is_file(entry: &FsEntry) -> bool {
     entry.kind != EntryKind::Folder
 }
 
-fn compare(a: &Keyed, b: &Keyed, key: SortKey, folders_first: bool) -> Ordering {
+fn compare(a: &Keyed, b: &Keyed, arena: &Arena, (key, folders_first): (SortKey, bool)) -> Ordering {
     let groups = if folders_first {
         a.is_file.cmp(&b.is_file)
     } else {
         Ordering::Equal
     };
     groups.then_with(|| {
-        let by_key = by(a, b, key.by);
+        let by_key = by(a, b, arena, key.by);
         let by_key = if key.descending {
             by_key.reverse()
         } else {
             by_key
         };
         by_key
-            .then_with(|| a.lower.cmp(&b.lower))
+            .then_with(|| arena.natural.compare(&a.natural, &b.natural))
             .then_with(|| a.index.cmp(&b.index))
     })
 }
 
-fn by(a: &Keyed, b: &Keyed, sort: SortBy) -> Ordering {
+fn by(a: &Keyed, b: &Keyed, arena: &Arena, sort: SortBy) -> Ordering {
     match sort {
-        SortBy::Name => a.lower.cmp(&b.lower),
-        SortBy::Ext => a
-            .lower
-            .get(a.extension.clone())
-            .cmp(&b.lower.get(b.extension.clone()))
-            .then_with(|| a.lower.cmp(&b.lower)),
+        SortBy::Name => arena.natural.compare(&a.natural, &b.natural),
+        SortBy::Ext => arena.text[a.extension.clone()]
+            .cmp(&arena.text[b.extension.clone()])
+            .then_with(|| arena.natural.compare(&a.natural, &b.natural)),
         SortBy::Size => a.size.cmp(&b.size),
         SortBy::Date => a.modified_ms.cmp(&b.modified_ms),
     }
