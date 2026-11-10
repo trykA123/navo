@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gpui_kit::WeakEntity;
+use gpui_kit::{EntityId, WeakEntity};
 use navo_core::PaneId;
 
 use super::NavoWindow;
@@ -46,6 +46,11 @@ impl CachedViews {
     fn part(part: Part, cx: &mut Context<NavoWindow>) -> Entity<CachedPart> {
         let owner = cx.weak_entity();
         cx.new(|_| CachedPart { owner, part })
+    }
+
+    /// The entity ids of the cached pane views.
+    pub(super) fn pane_ids(&self) -> impl Iterator<Item = EntityId> + '_ {
+        self.panes.values().map(Entity::entity_id)
     }
 
     pub(super) fn title(&self, cx: &App) -> AnyElement {

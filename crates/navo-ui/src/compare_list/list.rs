@@ -1,10 +1,12 @@
+use std::cell::Cell;
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, ElementId, FocusHandle, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, RenderOnce, SharedString, Styled, Window, div,
+    ParentElement, Pixels, RenderOnce, SharedString, Styled, Window, canvas, div,
 };
 
 use super::row::{RowLook, row_element};
@@ -25,7 +27,11 @@ pub struct CompareList {
     label: SharedString,
     focus: Option<FocusHandle>,
     on_event: Option<EventHandler>,
+    on_scroll: Option<ScrollWatch>,
 }
+
+/// The offset last painted, and what to run when a paint finds a different one.
+type ScrollWatch = (Rc<Cell<Pixels>>, Rc<dyn Fn(&mut Window, &mut App)>);
 
 impl CompareList {
     pub fn new(id: impl Into<ElementId>, rows: Arc<[RowView]>, scroll: &ListScroll) -> Self {
@@ -39,6 +45,7 @@ impl CompareList {
             label: SharedString::default(),
             focus: None,
             on_event: None,
+            on_scroll: None,
         }
     }
 
@@ -80,9 +87,36 @@ impl CompareList {
         mut self,
         handler: impl Fn(&CompareEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_event = Some(std::rc::Rc::new(handler));
+        self.on_event = Some(Rc::new(handler));
         self
     }
+
+    /// Runs `handler` after a paint finds the scroll offset moved from `seen` (the wheel, keys,
+    /// the scrollbar), so the other view over the same offset can repaint. Idle frames run nothing.
+    #[must_use]
+    pub fn on_scroll(
+        mut self,
+        seen: Rc<Cell<Pixels>>,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_scroll = Some((seen, Rc::new(handler)));
+        self
+    }
+}
+
+/// A zero-size child that, once the list is painted, reports a changed scroll offset.
+fn scroll_watch(scroll: ListScroll, (seen, handler): ScrollWatch) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |_, (), window, cx| {
+            let offset = scroll.offset_y();
+            if seen.replace(offset) != offset {
+                handler(window, cx);
+            }
+        },
+    )
+    .absolute()
+    .size_0()
 }
 
 struct Rows {
@@ -173,13 +207,13 @@ impl RenderOnce for CompareList {
         if let Some(text) = self.empty {
             return shell.child(focused.child(empty_view(&t, text)));
         }
-        let rows = std::rc::Rc::new(Rows {
+        let rows = Rc::new(Rows {
             rows: self.rows,
             selected: self.selected,
             is_active: self.is_active,
             on_event: self.on_event,
         });
-        let described = std::rc::Rc::clone(&rows);
+        let described = Rc::clone(&rows);
         let list = VirtualList::new(
             "rows",
             rows.rows.len(),
@@ -189,6 +223,7 @@ impl RenderOnce for CompareList {
         .row_height(t.rows.height)
         .label(self.label)
         .describe_rows(move |index| described.describe(index));
-        shell.child(focused.child(list))
+        let watch = self.on_scroll.map(|watch| scroll_watch(self.scroll, watch));
+        shell.child(focused.child(list)).children(watch)
     }
 }

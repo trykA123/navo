@@ -1,7 +1,12 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use gpui_kit::{AnyWindowHandle, Entity, TestAppContext, VisualTestContext};
+use gpui_kit::AppContext as _;
+use gpui_kit::test::TestQueryExt;
+use gpui_kit::{
+    AnyWindowHandle, Entity, InputEvent as _, Modifiers, Role, ScrollDelta, ScrollEvent,
+    TestAppContext, VisualTestContext, point, px,
+};
 use navo_core::Location;
 
 use super::{NavoWindow, StartOptions, fake, open_options, options_for, press, settle, two_panes};
@@ -48,8 +53,8 @@ impl CompareHooks for Hooks {
     }
 }
 
-struct Rig {
-    window: AnyWindowHandle,
+pub(super) struct Rig {
+    pub(super) window: AnyWindowHandle,
     view: Entity<NavoWindow>,
     sink: Sink,
     continued: Arc<AtomicUsize>,
@@ -57,7 +62,7 @@ struct Rig {
 }
 
 /// Both panes on `home`; the keymap is parsed again so the compare flag of this thread applies.
-fn rig(cx: &mut TestAppContext) -> Rig {
+pub(super) fn rig(cx: &mut TestAppContext) -> Rig {
     rig_with(cx, Keymap::parse(KEYMAP).expect("keymap"))
 }
 
@@ -85,7 +90,7 @@ fn rig_with(cx: &mut TestAppContext, keymap: Keymap) -> Rig {
 }
 
 impl Rig {
-    fn press(&self, cx: &mut TestAppContext, key: &str) {
+    pub(super) fn press(&self, cx: &mut TestAppContext, key: &str) {
         press(cx, self.window, &self.view, key);
     }
 
@@ -165,7 +170,7 @@ fn enter_opens_the_folder_in_both_panes_and_esc_brings_them_back(cx: &mut TestAp
 }
 
 impl Rig {
-    fn send_files(&self, cx: &mut TestAppContext, names: &[&str]) {
+    pub(super) fn send_files(&self, cx: &mut TestAppContext, names: &[&str]) {
         let side = Some(CompareSide {
             kind: CompareKind::File,
             size: 3,
@@ -300,4 +305,83 @@ fn the_stop_notice_continues_by_button_and_by_key(cx: &mut TestAppContext) {
     settle(cx, &rig.view);
     rig.press(cx, "ctrl-f7");
     assert_eq!(rig.continued.load(Ordering::SeqCst), 2);
+}
+
+/// The first row label shown in the left and in the right half of the window.
+pub(super) fn first_labels(cx: &mut TestAppContext, window: AnyWindowHandle) -> [String; 2] {
+    cx.update_window(window, |_, window, _| {
+        let edge = window.viewport_size().width / 2.;
+        let items = window.find_all_by_role(Role::ListItem);
+        let first = |right: bool| {
+            items
+                .iter()
+                .filter(|item| (item.bounds().origin.x >= edge) == right)
+                .find_map(|item| item.label().map(str::to_owned))
+                .unwrap_or_default()
+        };
+        [first(false), first(true)]
+    })
+    .expect("window")
+}
+
+/// Runs a few real frames; unlike `render_frame` they keep cached views cached.
+pub(super) fn frames(cx: &mut TestAppContext, window: AnyWindowHandle) {
+    for _ in 0..5 {
+        cx.executor()
+            .advance_clock(std::time::Duration::from_millis(16));
+        cx.update_window(window, |_, window, cx| window.simulate_next_frame(cx))
+            .expect("window");
+        cx.run_until_parked();
+    }
+}
+
+/// R16: both compare panes share one scroll offset, yet only the pane under the wheel repaints.
+#[gpui_kit::test]
+fn a_wheel_turn_over_the_left_compare_pane_moves_the_right_pane_too(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-shift-d");
+    let names: Vec<String> = (0..500).map(|n| format!("f{n:04}.txt")).collect();
+    rig.send_files(cx, &names.iter().map(String::as_str).collect::<Vec<_>>());
+    frames(cx, rig.window);
+    let [left, right] = first_labels(cx, rig.window);
+    assert!(
+        left.starts_with("f0000") && right.starts_with("f0000"),
+        "{left} / {right}"
+    );
+    let over_left = cx
+        .update_window(rig.window, |_, window, _| {
+            let items = window.find_all_by_role(Role::ListItem);
+            let item = items
+                .iter()
+                .min_by_key(|item| item.bounds().origin.x)
+                .expect("a row");
+            item.bounds().center()
+        })
+        .expect("window");
+    let none = Modifiers::default();
+    let delta = ScrollDelta::Pixels(point(px(0.), px(-2000.)));
+    let wheel = ScrollEvent {
+        position: over_left,
+        delta,
+        modifiers: none,
+        ..Default::default()
+    };
+    frames(cx, rig.window);
+    cx.update_window(rig.window, |_, window, cx| {
+        window.dispatch_event(crate::test_pointer::moved(None, over_left, none), cx);
+    })
+    .expect("window");
+    frames(cx, rig.window);
+    cx.update_window(rig.window, |_, window, cx| {
+        window.dispatch_event(wheel.to_platform_input(), cx);
+    })
+    .expect("window");
+    // Real frames, not `render_frame`: that one refreshes every view and hides a stale cached pane.
+    frames(cx, rig.window);
+    let [left, right] = first_labels(cx, rig.window);
+    assert!(!left.starts_with("f0000"), "the left pane scrolled: {left}");
+    assert_eq!(
+        left, right,
+        "both panes show the same rows after the wheel turn"
+    );
 }
