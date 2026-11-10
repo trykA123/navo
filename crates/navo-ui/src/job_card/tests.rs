@@ -345,18 +345,16 @@ impl Render for Under {
 #[gpui_kit::test]
 fn a_faded_card_neither_shows_nor_takes_clicks(cx: &mut TestAppContext) {
     let (window, under) = open(cx, |_, _| Under { clicks: 0 });
-    let deadline = Instant::now() + Duration::from_secs(2);
-    let card = loop {
-        let card = cx
-            .update_window(window, |_, window, cx| {
-                window.render_frame(cx);
-                window.find("job-card")
-            })
-            .expect("window");
-        if !card.visible() || Instant::now() > deadline {
-            break card;
-        }
-    };
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("window");
+    // The 1 ms fade runs on the executor's clock, which only moves when the test moves it.
+    cx.executor().advance_clock(Duration::from_millis(2));
+    let card = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("job-card")
+        })
+        .expect("window");
     assert!(!card.visible());
     let middle = card.bounds().center();
     cx.update_window(window, |_, window, cx| {
