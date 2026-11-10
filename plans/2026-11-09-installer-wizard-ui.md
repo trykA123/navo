@@ -64,7 +64,7 @@ The view model is plain data, so `navo-ui` does not depend on `navo-setup`. `nav
 | W11a | `setup-pages` B | ui-builder | high | W10b | — | `cargo xtask check -p navo-ui` | done |
 | W11b | `setup-pages` C | ui-builder | medium | W11a | — | `cargo xtask check -p navo-ui` | done |
 | W11g | `setup-gallery` | ui-builder | medium | W10b, W11a, W11b | — | `cargo xtask check -p navo-ui-gallery`; screenshots of every page in both themes | blocked |
-| W12a | `setup-strings` | patcher | medium | W10b, W11a, W11b | — | `cargo nextest run -p navo-l10n`; `cargo xtask l10n` | blocked |
+| W12a | `setup-strings` | patcher | medium | W10b, W11a, W11b | — | `cargo nextest run -p navo-l10n`; `cargo xtask l10n` | done |
 | W12b | `setup-window` | senior | high | W11g, W12a, W13b | — | `cargo nextest run -p navo-setup window`; VM: the window opens and installs (S1b) | blocked |
 | W13a | `licence-text` (repo) | patcher | medium | — | — | `cargo metadata --no-deps --format-version 1` shows `MIT OR Apache-2.0` for every package | done |
 | W13b | `licence-text` (wizard) | patcher | medium | W13a, part 1's W3 | — | `cargo nextest run -p navo-setup licence` | done |
@@ -286,3 +286,4 @@ Rows 21–29, 37–46, 50 and 51 are in part 1.
 - 2026-11-10 — W10c and W10b merged. Follow-ups for W12b: the Folder field is read-only (SetupView has no text-edit channel; Browse only); `Button` takes plain text, so Browse shows no underlined access key; the Apache link has no access key (no open-URL action); the check box state change has no 80 ms fade; `xtask/l10n-allow.txt` was raised 664 → 674 for placeholder strings, W12a lowers it again.
 - 2026-11-10 — W15h done, with a cost finding. `savevm` refused the raw UEFI vars (`pflash1 is writable but does not support snapshots`); the orchestrator moved the vars to qcow2 (`OVMF_VARS.qcow2`, raw backup kept), and the round trip passes. But on the ~155 GB disk, `loadvm` took 306 s and `delvm` 295 s (save 15 s), slower than a cold boot. **W15a decides per run:** prefer a throwaway qcow2 overlay on the base disk plus a cold boot with auto-logon (discard = delete the overlay); use `snapshot load` only if the overlay path is slower in practice.
 - 2026-11-10 — W11a and W11b merged. `SetupView.leftover_root` replaces the overloaded `notice` flag on Failed. The rail-footer n/_ spar moves to W12b (navo-ui has no rail; the window shell draws it). Blocked page wording taken from the prototype.
+- 2026-11-10 — W12a done: setup.ftl holds every installer text; `Strings::load()` reads it (`english()` stays as an alias until W11g lands). Tip 4 now names Ctrl+Shift+D (compare two folders); Ctrl+F7 is Continue compare on a network drive. Setup shortcuts now compare long names (8.3 short paths failed on the GitHub runner).
