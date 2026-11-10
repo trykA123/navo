@@ -39,6 +39,7 @@ pub mod prompt_dialog;
 pub mod recently_deleted;
 pub mod rename;
 pub mod settings;
+pub mod setup;
 pub mod shortcuts;
 pub mod side_sheet;
 pub mod status_bar;
