@@ -22,6 +22,8 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_INFORMATION, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
 };
 
+use super::cmdline::quote_arg;
+
 /// The attached handler; set once, when the client is connected to its server.
 static NATIVE: OnceLock<CrashHandler> = OnceLock::new();
 /// Guards against a second `attach`, which would start a second server.
@@ -145,11 +147,15 @@ impl Server {
         Ok(ExitStatus::from_raw(code))
     }
 
-    /// Terminates the server; a process that already exited is not an error.
+    /// Terminates the server; a process that exited between the check and the call is fine.
     fn kill(&self) -> io::Result<()> {
         // SAFETY: `self.process` is a live process handle with terminate access.
         if unsafe { TerminateProcess(self.process.as_raw_handle(), 1) } == 0 {
-            return Err(io::Error::last_os_error());
+            let error = io::Error::last_os_error();
+            if self.try_wait()?.is_some() {
+                return Ok(());
+            }
+            return Err(error);
         }
         Ok(())
     }
@@ -207,40 +213,6 @@ fn wide(path: &Path) -> Vec<u16> {
     path.as_os_str().encode_wide().chain([0]).collect()
 }
 
-/// Appends `arg` to a command line, quoted and escaped by the `CreateProcessW` rules.
-fn quote_arg(line: &mut Vec<u16>, arg: &OsStr) {
-    let units: Vec<u16> = arg.encode_wide().collect();
-    let needs_quotes = units.is_empty()
-        || units.iter().any(|&unit| {
-            unit == u16::from(b' ') || unit == u16::from(b'\t') || unit == u16::from(b'"')
-        });
-    if !needs_quotes {
-        line.extend_from_slice(&units);
-        line.push(u16::from(b' '));
-        return;
-    }
-    line.push(u16::from(b'"'));
-    let mut backslashes = 0;
-    for unit in units {
-        if unit == u16::from(b'\\') {
-            backslashes += 1;
-            continue;
-        }
-        // Backslashes only need doubling before a quote or the closing quote.
-        let escape = if unit == u16::from(b'"') {
-            backslashes * 2 + 1
-        } else {
-            backslashes
-        };
-        line.extend(std::iter::repeat_n(u16::from(b'\\'), escape));
-        line.push(unit);
-        backslashes = 0;
-    }
-    line.extend(std::iter::repeat_n(u16::from(b'\\'), backslashes * 2));
-    line.push(u16::from(b'"'));
-    line.push(u16::from(b' '));
-}
-
 /// Connects to the server, 50 tries apart: 10 ms first, then 100 ms; fails when it already exited.
 fn connect_client(socket: &Path, server: &Server) -> Result<Client, String> {
     let mut last = String::from("no try");
@@ -264,6 +236,7 @@ fn connect_client(socket: &Path, server: &Server) -> Result<Client, String> {
 /// Stops the server and removes its socket; `grace` lets a client close first, so the server
 /// removes its own socket before the fallback kill.
 fn stop(server: &Server, socket: &Path, grace: Duration) {
+    FAILED.store(true, Ordering::SeqCst);
     let deadline = Instant::now() + grace;
     while server.try_wait().ok().flatten().is_none() {
         if Instant::now() >= deadline {
@@ -283,8 +256,11 @@ fn stop(server: &Server, socket: &Path, grace: Duration) {
 }
 
 /// Waits up to `timeout` for the reporter to attach, checking every 10 ms; true once attached.
-/// Returns false early when the attach thread has already given up.
+/// Returns false at once before `attach` runs or after the attach thread has given up.
 pub(crate) fn ready(timeout: Duration) -> bool {
+    if !STARTED.load(Ordering::SeqCst) {
+        return false;
+    }
     let deadline = Instant::now() + timeout;
     loop {
         if NATIVE.get().is_some() {

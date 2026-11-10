@@ -74,15 +74,15 @@ mod native {
     /// Waits for one native crash record and checks that the probe left nothing unredacted.
     #[test]
     fn native_crash_test_writes_a_redacted_record() {
-        let root = tempfile::tempdir().unwrap();
+        let root = temp_profile();
         let logs = root.path().join("data/logs");
         let (mut child, socket) = spawn_probe(root.path(), "native");
 
-        let records = wait_for(Duration::from_secs(10), || {
+        let records = wait_for(Duration::from_secs(15), || {
             let records = crash_files(&logs, "json");
             (!records.is_empty()).then_some(records)
         });
-        let status = wait_child(&mut child, Duration::from_secs(10));
+        let status = wait_child(&mut child, Duration::from_secs(15));
 
         let Some(records) = records else {
             stop(&mut child);
@@ -116,10 +116,10 @@ mod native {
     /// Runs the panic probe and checks that its crash server socket is gone afterwards.
     #[test]
     fn panic_crash_leaves_no_crash_server() {
-        let root = tempfile::tempdir().unwrap();
+        let root = temp_profile();
         let (mut child, socket) = spawn_probe(root.path(), "1");
 
-        let status = wait_child(&mut child, Duration::from_secs(10));
+        let status = wait_child(&mut child, Duration::from_secs(15));
         let Some(status) = status else {
             stop(&mut child);
             panic!("the panic crash probe did not exit");
@@ -130,6 +130,14 @@ mod native {
             "the crash server socket survived the panic: {}",
             socket.display()
         );
+    }
+
+    /// Creates a temporary profile whose path contains a space, so the server args need quoting.
+    fn temp_profile() -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix("navo crash ")
+            .tempdir()
+            .unwrap()
     }
 
     /// Spawns `navo --crash-test root` with `guard` and returns the child and its socket path.

@@ -6,6 +6,8 @@ use std::{fs, io};
 
 use crate::logging::Diagnostics;
 
+#[cfg(any(windows, test))]
+mod cmdline;
 mod downloads;
 mod hook;
 #[cfg(windows)]
