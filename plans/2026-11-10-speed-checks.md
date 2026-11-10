@@ -172,7 +172,7 @@ Final. Workers never reopen them; a worker who finds one wrong stops and reports
 | A2 | `speed-base` | `xtask/src/speed/base.rs`, `xtask/src/speed/mod.rs`, `perf/speed.toml` | api-builder | high | A1 | as A1 | done |
 | A3 | `speed-verdict` | `xtask/src/speed/summary.rs`, `xtask/src/speed/verdict.rs`, `xtask/src/speed/mod.rs` | api-builder | high | A2 | as A1 | done (Terra review fixed) |
 | A4 | `bench-workflow` | `.github/workflows/bench.yml`, `crates/navo-fs/benches/listing.rs` | infra-builder | medium | A3 | `actionlint`; CHK `cargo bench -p navo-fs --bench listing --no-run`; G-A1 | done |
-| A5 | `release-workflow` | `.github/workflows/release.yml` | infra-builder | medium | G-A1 | `actionlint`; G-A3 | todo |
+| A5 | `release-workflow` | `.github/workflows/release.yml` | infra-builder | medium | G-A1 | `actionlint`; G-A3 | done (G-A3 pending) |
 | A6 | `bench-targets` | `crates/navo-index/Cargo.toml`, `crates/navo-index/benches/search.rs`, `Cargo.lock` | api-builder | medium | G-A1 | BCHK navo-index search | done |
 | A7 | `intraline-hook` | `crates/navo-compare/src/text/intraline.rs`, `crates/navo-compare/src/text/intraline/tests.rs` | api-builder | medium | — | CHK `cargo nextest run -p navo-compare --features test-hooks intraline`; CHK `cargo xtask check -p navo-compare` | done |
 | A8 | `bench-targets` | `crates/navo-compare/Cargo.toml`, `crates/navo-compare/benches/text.rs`, `Cargo.lock` | api-builder | medium | A6, A7 | BCHK navo-compare text | done |
@@ -474,3 +474,4 @@ No open questions remain.
 - 2026-11-10 — G-A1 passed: noise run 42841797233 green (6m24s); guard run 42844748759 red on R1's sort cost, then 42861997352 green after the `[[accepted]]` entries (30m44s). Base was v0.6.0 (the newest strict-ancestor release), not v0.5.0, with the "no base manifest" line and a base Ir for all six IDs. A5, A6 unblocked.
 - 2026-11-10 — A6 merged (DeepSeek flash, warm session 99.7 % cache): `navo-index/benches/search.rs`, five IDs in the commit body; they enter `perf/speed.toml` after a noise run (SC4). Callgrind counts UNTESTED locally (no valgrind). A7 was already on main (76c04a76: `refine(None)`, `intraline_unbounded`, 200-pair equality test); table corrected.
 - 2026-11-10 — A8 and A9 merged (DeepSeek flash, warm session, 99.8 % cache): compare text diff/card/intraline benches and rename preview/check_rows benches; IDs in the commit bodies. Next: a noise run, then add the new IDs to `perf/speed.toml` (SC4). Callgrind counts UNTESTED locally.
+- 2026-11-10 — A5 merged (DeepSeek flash, 99.7 % cache): release.yml gets `dry-run`, a `speed` job (calls bench.yml guard), `publish` gated on speed and `!dry-run`, `would-publish` for dry runs. actionlint clean. Orchestrator reviewed the diff. G-A3 runs after push.
