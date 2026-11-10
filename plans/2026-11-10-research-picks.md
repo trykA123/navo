@@ -18,7 +18,7 @@ Six researchers (2026-11-10) looked at alternatives to our crates, crates we cou
 | R8 | Font viewer: `ttf-parser` → `skrifa` | ttf-parser is in maintenance mode and recommends fontations | font viewer tests; 3 call sites | small | medium |
 | R9 | Fuzzy: benchmark `frizbee` against `nucleo-matcher` | self-reported 4× (1 thread) / 10× (8 threads) on 1.4 M paths; nucleo-matcher unreleased since 2024 | ≥ 2× on the real 2.6 M index and the ranking tests pass | medium | medium |
 | R10 | `flate2` on the `zlib-rs` backend | zlib-rs claims; native gain unverified | faster on an archive corpus | small | low |
-| R11 | Folder listing: `FindFirstFileExW` + `FindExInfoBasic` + `FIND_FIRST_EX_LARGE_FETCH` (check what we use first) | Microsoft docs | faster on local 5,000-file and SMB 50,000-file folders vs today and vs Total Commander | small | high |
+| R11 | Folder listing: `FindFirstFileExW` + `FindExInfoBasic` + `FIND_FIRST_EX_LARGE_FETCH` — **already in place** (`navo-fs/src/local/win_list.rs`; std `read_dir` is only the fallback) | Microsoft docs | faster on local 5,000-file and SMB 50,000-file folders vs today and vs Total Commander | small | high |
 | R12 | Same-server SMB copy via `FSCTL_SRV_COPYCHUNK` | data stays on the server | copy test on a real share; falls back cleanly | medium | high (2 PB shares) |
 | R13 | Block cloning for same-volume copies on ReFS / Dev Drive | Microsoft engineering post | copy test on a Dev Drive in the VM | small | low |
 | R14 | SMB folders: first rows paint from the first 1 MB query; re-list on demand instead of change notifications | MS-SMB2 credits; ReadDirectoryChangesExW limits on SMB | first-paint time on a 50,000-file share | medium | medium |

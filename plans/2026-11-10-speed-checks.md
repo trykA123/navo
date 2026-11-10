@@ -168,7 +168,7 @@ Final. Workers never reopen them; a worker who finds one wrong stops and reports
 
 | Atom | Component | Files (all) | Role | Effort | After | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A1 | `speed-config` | `xtask/src/main.rs`, `xtask/src/speed/mod.rs`, `xtask/src/speed/config.rs` | api-builder | medium | — | CHK `cargo nextest run -p xtask speed`; CHK `cargo xtask check -p xtask` | todo |
+| A1 | `speed-config` | `xtask/src/main.rs`, `xtask/src/speed/mod.rs`, `xtask/src/speed/config.rs` | api-builder | medium | — | CHK `cargo nextest run -p xtask speed`; CHK `cargo xtask check -p xtask` | done (e0c74537) |
 | A2 | `speed-base` | `xtask/src/speed/base.rs`, `xtask/src/speed/mod.rs`, `perf/speed.toml` | api-builder | high | A1 | as A1 | todo |
 | A3 | `speed-verdict` | `xtask/src/speed/summary.rs`, `xtask/src/speed/verdict.rs`, `xtask/src/speed/mod.rs` | api-builder | high | A2 | as A1 | todo |
 | A4 | `bench-workflow` | `.github/workflows/bench.yml`, `crates/navo-fs/benches/listing.rs` | infra-builder | medium | A3 | `actionlint`; CHK `cargo bench -p navo-fs --bench listing --no-run`; G-A1 | todo |
