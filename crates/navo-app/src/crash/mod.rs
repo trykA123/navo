@@ -8,6 +8,7 @@ use crate::logging::Diagnostics;
 mod downloads;
 mod hook;
 #[cfg(any(windows, test))]
+#[cfg_attr(not(test), expect(dead_code, reason = "the crash server (R2c) is its first caller"))]
 mod native_summary;
 pub(crate) mod store;
 #[cfg(test)]
