@@ -7,6 +7,8 @@ use crate::logging::Diagnostics;
 
 mod downloads;
 mod hook;
+#[cfg(any(windows, test))]
+mod native_summary;
 pub(crate) mod store;
 #[cfg(test)]
 pub(crate) mod test_damage;
