@@ -6,6 +6,7 @@ use navo_compare::bytes::Align;
 use navo_ui::compare_diff::{CardDetail, PairKind};
 
 use super::bytes::ByteInput;
+use super::image;
 use super::load::LoadInput;
 pub(crate) use super::pair::spool_path;
 use super::pair::{EnginePlan, large_input};
@@ -54,6 +55,11 @@ pub(crate) fn detail_fn(plan: EnginePlan) -> DetailFn {
                     &job.cancel,
                     emit,
                 );
+            }
+            PairKind::Image => {
+                if let Some(detail) = image::thumb::card(input, &job.cancel) {
+                    emit(detail, true);
+                }
             }
             _ => {}
         },
