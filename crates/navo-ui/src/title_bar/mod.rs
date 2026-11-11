@@ -19,6 +19,7 @@ use gpui_kit::{
 use crate::tokens::{self, Theme};
 
 pub(crate) use backdrop::{GradientLayer, system_backdrop};
+pub use brand::BrandMark;
 pub(crate) use brand::icon_for as logo;
 pub use search::HeaderSearch;
 
@@ -72,6 +73,10 @@ pub struct NavoTitleBar {
     is_on_mica: bool,
     on_close: Option<CloseHandler>,
     app_button: Option<(bool, AppButtonHandler)>,
+    /// The mark left of the title; `None` draws Navo's own logo.
+    mark: Option<BrandMark>,
+    /// Whether the chevron that hints the title opens the app menu is drawn; Navo draws it.
+    menu_arrow: bool,
 }
 
 impl NavoTitleBar {
@@ -84,6 +89,8 @@ impl NavoTitleBar {
             is_on_mica: false,
             on_close: None,
             app_button: None,
+            mark: None,
+            menu_arrow: true,
         }
     }
 
@@ -120,6 +127,20 @@ impl NavoTitleBar {
 
     pub fn on_close(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_close = Some(Rc::new(handler));
+        self
+    }
+
+    /// Draw `mark` left of the title instead of Navo's own logo; the caller holds both scale bands.
+    #[must_use]
+    pub fn mark(mut self, mark: BrandMark) -> Self {
+        self.mark = Some(mark);
+        self
+    }
+
+    /// Show (`true`, Navo's own bar) or hide the chevron that hints the title opens the app menu.
+    #[must_use]
+    pub fn menu_arrow(mut self, shown: bool) -> Self {
+        self.menu_arrow = shown;
         self
     }
 }
@@ -179,7 +200,11 @@ impl RenderOnce for NavoTitleBar {
             .relative()
             .child(brand::brand(
                 t,
-                self.title,
+                brand::Brand {
+                    title: self.title,
+                    mark: self.mark,
+                    menu_arrow: self.menu_arrow,
+                },
                 window.scale_factor(),
                 self.app_button,
             ))

@@ -1,21 +1,44 @@
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::AppContext as _;
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, Bounds, Context, IntoElement, ParentElement, Point, Render, Role, Styled,
-    TestAppContext, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions, div, px, size,
+    AnyWindowHandle, Bounds, Context, Image, ImageFormat, IntoElement, ParentElement, Point,
+    Render, Role, Styled, TestAppContext, Window, WindowBackgroundAppearance, WindowBounds,
+    WindowOptions, div, px, size,
 };
 
-use super::{HeaderSearch, NavoTitleBar, main_window_options, system_backdrop, window_options};
+use super::{
+    BrandMark, HeaderSearch, NavoTitleBar, main_window_options, system_backdrop, window_options,
+};
 use crate::tokens::{self, Mode};
 
 const WIDTH: f32 = 1000.;
 
+/// A caller's mark: one flat square per scale band, so a test sees the bar drew the given images.
+fn test_mark() -> BrandMark {
+    let image = |edge: u32| {
+        let svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="{edge}" height="{edge}"><rect width="{edge}" height="{edge}" fill="#7f7f7f"/></svg>"##
+        );
+        Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()))
+    };
+    BrandMark {
+        at_1x: image(24),
+        at_2x: image(48),
+    }
+}
+
+/// The window the title-bar tests draw: the bar as Navo builds it, or with the brand seam set.
 struct Shell {
     closes: Rc<Cell<usize>>,
+    /// The mark in place of Navo's own logo; `None` keeps Navo's.
+    mark: Option<BrandMark>,
+    /// Whether the chevron that hints the app menu sits after the title.
+    menu_arrow: bool,
 }
 
 impl Render for Shell {
@@ -23,7 +46,12 @@ impl Render for Shell {
         let closes = self.closes.clone();
         let bar = NavoTitleBar::new("Navo")
             .header(HeaderSearch::new())
+            .menu_arrow(self.menu_arrow)
             .on_close(move |_, _| closes.set(closes.get() + 1));
+        let bar = match self.mark.clone() {
+            Some(mark) => bar.mark(mark),
+            None => bar,
+        };
         div()
             .size_full()
             .flex()
@@ -33,7 +61,19 @@ impl Render for Shell {
     }
 }
 
+/// The bar exactly as Navo draws it: its own mark and the menu chevron.
 fn open(cx: &mut TestAppContext, closes: Rc<Cell<usize>>) -> AnyWindowHandle {
+    open_brand(cx, closes, None, true)
+}
+
+/// The bar through the brand seam: `mark` replaces Navo's logo when given, `menu_arrow` is the
+/// chevron after the title.
+fn open_brand(
+    cx: &mut TestAppContext,
+    closes: Rc<Cell<usize>>,
+    mark: Option<BrandMark>,
+    menu_arrow: bool,
+) -> AnyWindowHandle {
     cx.update(|cx| {
         gpui_kit::init(cx);
         tokens::apply(Mode::Light, cx);
@@ -44,9 +84,15 @@ fn open(cx: &mut TestAppContext, closes: Rc<Cell<usize>>) -> AnyWindowHandle {
             })),
             ..window_options("Navo")
         };
-        gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| Shell { closes }))
-            .expect("open test window")
-            .0
+        gpui_kit::open_window(options, cx, |_, cx| {
+            cx.new(|_| Shell {
+                closes,
+                mark,
+                menu_arrow,
+            })
+        })
+        .expect("open test window")
+        .0
     })
 }
 
@@ -150,6 +196,36 @@ fn header_content_neither_moves_nor_zooms_the_window(cx: &mut TestAppContext) {
         window.drag_to("title-bar-search", "title-bar-search-key", cx);
         window.double_click("title-bar-search", cx);
         assert!(window.find("title-bar-header").visible());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn the_menu_arrow_shows_by_default_and_can_be_hidden(cx: &mut TestAppContext) {
+    let window = open(cx, Rc::default());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find("title-bar-arrow").visible());
+    })
+    .expect("window");
+
+    let window = open_brand(cx, Rc::default(), None, false);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find("title-bar-title").visible());
+        assert!(window.try_find("title-bar-arrow").is_none());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_brand_mark_draws_at_the_icon_size(cx: &mut TestAppContext) {
+    let window = open_brand(cx, Rc::default(), Some(test_mark()), true);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let icon = window.find("title-bar-icon");
+        assert!(icon.visible());
+        assert_eq!(icon.bounds().size, size(px(24.), px(24.)));
     })
     .expect("window");
 }
