@@ -9,8 +9,9 @@ use gpui_kit::{
     ParentElement, Pixels, RenderOnce, SharedString, Styled, Window, canvas, div,
 };
 
+use super::gutter_cell::gutter_cell;
 use super::row::{RowLook, row_element};
-use super::{CompareEvent, EventHandler};
+use super::{CompareEvent, EventHandler, gutter_width};
 use crate::browser::RowView;
 use crate::primitives::{ListScroll, RowSemantics, VirtualList};
 use crate::tokens::{self, Theme};
@@ -28,6 +29,7 @@ pub struct CompareList {
     focus: Option<FocusHandle>,
     on_event: Option<EventHandler>,
     on_scroll: Option<ScrollWatch>,
+    gutter: bool,
 }
 
 /// The offset last painted, and what to run when a paint finds a different one.
@@ -46,6 +48,7 @@ impl CompareList {
             focus: None,
             on_event: None,
             on_scroll: None,
+            gutter: false,
         }
     }
 
@@ -102,6 +105,14 @@ impl CompareList {
         self.on_scroll = Some((seen, Rc::new(handler)));
         self
     }
+
+    /// Whether this pane draws the gutter column at the trailing edge of its rows: the pane that
+    /// shows the compare's left side does, the other one does not.
+    #[must_use]
+    pub fn gutter(mut self, on: bool) -> Self {
+        self.gutter = on;
+        self
+    }
 }
 
 /// A zero-size child that, once the list is painted, reports a changed scroll offset.
@@ -124,6 +135,8 @@ struct Rows {
     selected: Option<usize>,
     is_active: bool,
     on_event: Option<EventHandler>,
+    /// The gutter column's width, or `None` in the pane that draws no gutter.
+    gutter: Option<Pixels>,
 }
 
 impl Rows {
@@ -137,7 +150,7 @@ impl Rows {
         };
         let on_event = self.on_event.clone();
         let path = row.path.clone();
-        let element = row_element(&look).id("cells").on_mouse_down(
+        let cells = row_element(&look).id("cells").on_mouse_down(
             MouseButton::Left,
             move |event, window, cx| {
                 let Some(handler) = &on_event else {
@@ -151,7 +164,24 @@ impl Rows {
                 handler(&event, window, cx);
             },
         );
-        Some(element.into_any_element())
+        // The gutter column sits past the cells, so it keeps the row's height and its trailing edge.
+        let element = match self.gutter {
+            Some(width) => div()
+                .flex()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .child(cells)
+                .child(gutter_cell(
+                    t,
+                    ("gutter", index),
+                    width,
+                    row.gutter.as_ref(),
+                ))
+                .into_any_element(),
+            None => cells.into_any_element(),
+        };
+        Some(element)
     }
 
     fn render(&self, range: Range<usize>, cx: &App) -> Vec<AnyElement> {
@@ -190,7 +220,7 @@ fn empty_view(t: &Theme, text: SharedString) -> impl IntoElement {
 }
 
 impl RenderOnce for CompareList {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         crate::assets::load_mono_fonts(cx);
         let t = tokens::current(cx).clone();
         let fill = || div().flex().flex_col().flex_1().min_w_0().min_h_0();
@@ -212,6 +242,10 @@ impl RenderOnce for CompareList {
             selected: self.selected,
             is_active: self.is_active,
             on_event: self.on_event,
+            // The window's width is only known here, and it picks the gutter's narrow or wide size.
+            gutter: self
+                .gutter
+                .then(|| gutter_width(window.viewport_size().width)),
         });
         let described = Rc::clone(&rows);
         let list = VirtualList::new(
