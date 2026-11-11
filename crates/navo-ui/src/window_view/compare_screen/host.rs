@@ -238,7 +238,7 @@ impl NavoWindow {
         let root = Self::switch_actions(root, cx);
         let root = Self::drawer_actions(Self::look_actions(root, cx), cx);
         let root = image::image_keys(Self::menu_keys(Self::pick_keys(root, cx), cx), cx);
-        Self::large_keys(root, cx)
+        Self::sideways_keys(Self::large_keys(root, cx), cx)
     }
 
     /// The compare screen in place of the panes: the file diff, else the Stream, else `None`.

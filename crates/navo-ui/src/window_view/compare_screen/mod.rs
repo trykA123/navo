@@ -368,6 +368,7 @@ impl NavoWindow {
             });
         self.start_hex_open(cx);
         self.start_file_syntax(cx);
+        self.start_file_widths(cx);
         changed
     }
 
