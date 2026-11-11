@@ -198,7 +198,7 @@ pub(super) fn close_success(session: Session, host: &mut dyn Host) {
     close_with(session, host, false);
 }
 
-/// Cleans up after a failed child; an empty fresh root is retained for Retry instead.
+/// Cleans up after a failed child; only a nonzero exit retains an empty fresh root for Retry.
 pub(super) fn fail_after_child(
     mut session: Session,
     host: &mut dyn Host,
@@ -208,7 +208,7 @@ pub(super) fn fail_after_child(
         close_success(session, host);
         return InstallError::Failed(Failure::Upgrade(code));
     }
-    if matches!(host.root_empty(&session.pin), Ok(true)) {
+    if code != Some(0) && matches!(host.root_empty(&session.pin), Ok(true)) {
         session.extracted = None;
         return InstallError::RetryEmpty(session, code);
     }

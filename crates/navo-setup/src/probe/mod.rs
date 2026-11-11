@@ -5,4 +5,5 @@
 pub mod chain;
 pub mod discovery;
 pub mod facts;
+mod parent_acl;
 pub mod pin;

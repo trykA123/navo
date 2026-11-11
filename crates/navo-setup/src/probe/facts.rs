@@ -26,6 +26,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows_sys::Win32::System::WindowsProgramming::{DRIVE_FIXED, DRIVE_REMOTE, DRIVE_REMOVABLE};
 
+use super::parent_acl;
 use crate::placement::{Chain, DriveKind, Facts};
 
 /// The largest target `QueryDosDeviceW` can return, in UTF-16 units.
@@ -50,6 +51,7 @@ pub fn facts(chain: &Chain) -> io::Result<Facts> {
     Ok(Facts {
         drive: drive_kind(&root.path)?,
         subst: subst_drive(&root.path),
+        parent_open: parent_acl::parent_open(chain)?,
         writable: write_probe(&nearest.path)?,
         free: free_space(&nearest.path)?,
     })

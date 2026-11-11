@@ -50,6 +50,7 @@ fn valid_facts() -> Facts {
     Facts {
         drive: DriveKind::Fixed,
         subst: false,
+        parent_open: false,
         writable: true,
         free: 1_000_000_000,
     }
@@ -192,6 +193,23 @@ fn a_subst_drive_is_refused() {
     let mut facts = valid_facts();
     facts.subst = true;
     let chain = chain(existing(), &["Navo"]);
+    assert_eq!(
+        check_default(&chain, &Refused::default(), &facts, 100),
+        Err(FolderProblem::SubstDrive)
+    );
+}
+
+#[test]
+fn an_open_parent_is_refused_after_subst_and_before_the_drive_kind() {
+    let mut facts = valid_facts();
+    facts.parent_open = true;
+    facts.drive = DriveKind::Remote;
+    let chain = chain(existing(), &["Navo"]);
+    assert_eq!(
+        check_default(&chain, &Refused::default(), &facts, 100),
+        Err(FolderProblem::ParentOpen)
+    );
+    facts.subst = true;
     assert_eq!(
         check_default(&chain, &Refused::default(), &facts, 100),
         Err(FolderProblem::SubstDrive)

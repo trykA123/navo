@@ -236,6 +236,7 @@ fn every_problem_has_a_message_and_a_fix() {
         FolderProblem::ProtectedFolder,
         FolderProblem::DriveNotLocal,
         FolderProblem::SubstDrive,
+        FolderProblem::ParentOpen,
         FolderProblem::NotWritable,
         FolderProblem::NotEnoughSpace,
         FolderProblem::ProbeFailed,

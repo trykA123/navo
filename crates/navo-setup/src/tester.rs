@@ -93,6 +93,7 @@ fn chain_report(path: &OsStr) -> Value {
     let facts = Facts {
         drive: DriveKind::Fixed,
         subst: false,
+        parent_open: false,
         writable: true,
         free: u64::MAX,
     };
