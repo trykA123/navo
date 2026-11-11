@@ -17,13 +17,14 @@ const LOOK_AHEAD: usize = 4;
 
 /// The lines read for one window; `rows` is what both sides returned, maybe less than asked.
 /// A side past its end holds fewer lines. A `*_cut` side's last line is longer than the side
-/// limit and ends early.
+/// limit and ends early. `totals` holds both sides' line counts.
 pub(crate) struct Window {
     pub(crate) rows: Range<u64>,
     pub(crate) left: Vec<String>,
     pub(crate) right: Vec<String>,
     pub(crate) left_cut: bool,
     pub(crate) right_cut: bool,
+    pub(crate) totals: (u64, u64),
 }
 
 /// One side's lines, whether the byte budget cut them short, and whether that cut fell
@@ -76,12 +77,14 @@ impl Reader {
         let (mut left, mut right) = (left.lines, right.lines);
         left.truncate(kept);
         right.truncate(kept);
+        let totals = (self.left.total(cancel)?, self.right.total(cancel)?);
         Ok(Window {
             rows: rows.start..end,
             left,
             right,
             left_cut,
             right_cut,
+            totals,
         })
     }
 }
@@ -192,6 +195,15 @@ impl Side {
             .map_err(|_| Reason::ReadError)?
             .unwrap_or_else(|| self.source.len());
         Ok(Some((start, end.max(start))))
+    }
+
+    /// The side's line count, from its index (built here when no window read it yet).
+    fn total(&mut self, cancel: &CancelToken) -> Result<u64, Reason> {
+        self.build(cancel)?;
+        let index = self.index.as_ref().ok_or(Reason::ReadError)?;
+        index
+            .line_count(&self.source)
+            .map_err(|_| Reason::ReadError)
     }
 
     /// Build the side's line index once, scanning the source in 256 KiB blocks.

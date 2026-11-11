@@ -1,12 +1,12 @@
 use std::ops::Range;
 use std::rc::Rc;
 
-use gpui_kit::base::{Scrollbar, ScrollbarMode, TestSupportExt};
+use gpui_kit::base::{Scrollbar, ScrollbarHandle, ScrollbarMode, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, ElementId, FocusHandle, InteractiveElement, IntoElement, ParentElement,
-    Pixels, RenderOnce, Role, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
-    UniformListScrollHandle, Window, div, px, uniform_list,
+    AnyElement, App, Bounds, ElementId, FocusHandle, InteractiveElement, IntoElement,
+    ParentElement, Pixels, RenderOnce, Role, ScrollStrategy, SharedString,
+    StatefulInteractiveElement, Styled, UniformListScrollHandle, Window, div, px, uniform_list,
 };
 
 use crate::tokens;
@@ -37,6 +37,24 @@ impl ListScroll {
 
     pub fn offset_y(&self) -> Pixels {
         self.0.0.borrow().base_handle.offset().y
+    }
+
+    /// Sets the vertical offset (zero or below) now, not at the next layout, so a read right
+    /// after sees it.
+    pub fn set_offset_y(&self, y: Pixels) {
+        let handle = &self.0.0.borrow().base_handle;
+        handle.set_offset(gpui_kit::point(handle.offset().x, y));
+    }
+
+    /// The list's height in the last layout; zero before the first one.
+    pub fn viewport_height(&self) -> Pixels {
+        let state = self.0.0.borrow();
+        state.last_item_size.map_or(px(0.), |size| size.item.height)
+    }
+
+    /// The list's bounds in the last layout.
+    pub fn bounds(&self) -> Bounds<Pixels> {
+        self.0.0.borrow().base_handle.bounds()
     }
 
     pub fn is_at_bottom(&self) -> bool {
@@ -79,6 +97,7 @@ pub struct VirtualList {
     render_rows: RowRenderer,
     describe_rows: Option<RowDescriber>,
     row_height: Option<Pixels>,
+    bar: Option<AnyElement>,
 }
 
 impl VirtualList {
@@ -97,7 +116,23 @@ impl VirtualList {
             render_rows: Rc::new(render_rows),
             describe_rows: None,
             row_height: None,
+            bar: None,
         }
+    }
+
+    /// Draws the scrollbar over `handle` instead of the list's own, so it can span rows the
+    /// list does not hold.
+    #[must_use]
+    pub fn scrollbar<H: ScrollbarHandle + Clone>(mut self, handle: &H) -> Self {
+        self.bar = Some(Self::bar(handle));
+        self
+    }
+
+    fn bar<H: ScrollbarHandle + Clone>(handle: &H) -> AnyElement {
+        Scrollbar::vertical(handle)
+            .id("scrollbar")
+            .mode(ScrollbarMode::Always)
+            .into_any_element()
     }
 
     #[must_use]
@@ -193,10 +228,6 @@ impl RenderOnce for VirtualList {
             .min_h_0()
             .size_full()
             .child(rows)
-            .child(
-                Scrollbar::vertical(&self.scroll.0)
-                    .id("scrollbar")
-                    .mode(ScrollbarMode::Always),
-            )
+            .child(self.bar.unwrap_or_else(|| Self::bar(&self.scroll.0)))
     }
 }

@@ -20,7 +20,7 @@ use super::super::settings::CompareSettings;
 use super::copy::CopyRefusal;
 use super::copy_hook::{CopyService, unavailable};
 use super::load::{LoadInput, Side};
-use super::pair::PairDiff;
+use super::pair::{EnginePlan, PairDiff};
 use super::sides::{side_of, unreadable_side};
 use super::sources::Sources;
 use super::stream::{LoadFn, StreamSession};
@@ -91,10 +91,11 @@ impl DiffHooks for DiffBackend {
         sink: DiffSink,
     ) -> Box<dyn PairControl> {
         let settings = settings_of(values);
+        let plan = EnginePlan::new(settings.clone(), true);
         let side = Arc::clone(&self.side);
         let pair = request.clone();
         let opener = Box::new(move || input_of(&pair, &settings, &side).map(Arc::new));
-        Box::new(PairDiff::open(request, opener, sink))
+        Box::new(PairDiff::open(request, opener, plan, sink))
     }
 
     /// Open a Stream over the compared folder with a quarter-budget, at least 64 MiB.

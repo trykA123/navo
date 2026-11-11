@@ -59,7 +59,7 @@ fn pick_side(side: Side) -> PickSide {
 fn side_fill(t: &Theme, kind: ShownKind, side: Side) -> Option<Background> {
     let wash = |tone: Hsla| Some(Background::from(tone));
     match (kind, side) {
-        (ShownKind::Equal, _) => None,
+        (ShownKind::Equal | ShownKind::Pending, _) => None,
         (ShownKind::Changed, _) => wash(t.diff.change.wash),
         (ShownKind::Deleted, Side::Left) => wash(t.diff.delete.wash),
         (ShownKind::Inserted, Side::Right) => wash(t.diff.add.wash),
@@ -72,7 +72,7 @@ fn side_fill(t: &Theme, kind: ShownKind, side: Side) -> Option<Background> {
 /// The background of a unified row, which has one text column.
 fn unified_fill(t: &Theme, kind: ShownKind) -> Option<Background> {
     match kind {
-        ShownKind::Equal | ShownKind::Filler => None,
+        ShownKind::Equal | ShownKind::Filler | ShownKind::Pending => None,
         ShownKind::Changed => Some(t.diff.change.wash.into()),
         ShownKind::Deleted => Some(t.diff.delete.wash.into()),
         ShownKind::Inserted => Some(t.diff.add.wash.into()),
@@ -195,6 +195,9 @@ pub fn row_view(look: &BodyLook, row: &ShownRow) -> AnyElement {
         .items_center()
         .font_family(t.typography.mono_font.clone())
         .text_size(t.typography.small)
+        .when(row.kind == ShownKind::Pending, |row| {
+            row.text_color(t.colors.muted)
+        })
         .border_l_2()
         .border_color(if is_current {
             t.diff.change.mark

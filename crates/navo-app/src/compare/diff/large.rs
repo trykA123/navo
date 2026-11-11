@@ -149,10 +149,12 @@ fn run(id: u64, input: LargeInput, sink: DiffSink, commands: &Commands) {
     let (left, right) = match build(&input, &commands.cancel) {
         Ok(sides) => sides,
         Err(reason) => {
-            sink(DiffUpdate::Failed {
-                request: id,
-                text: failure_text(reason),
-            });
+            if reason != Reason::Stopped {
+                sink(DiffUpdate::Failed {
+                    request: id,
+                    text: failure_text(reason),
+                });
+            }
             return;
         }
     };
@@ -269,6 +271,7 @@ fn run_lines(id: u64, input: LargeInput, sink: DiffSink, queue: &LineQueue) {
                     right: window.right,
                     left_cut: window.left_cut,
                     right_cut: window.right_cut,
+                    totals: window.totals,
                 });
             }
             Err(Reason::Stopped) => return,

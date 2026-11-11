@@ -57,7 +57,11 @@ impl Ticks<'_> {
         let copyable = hunk
             .and_then(|hunk| self.text.hunks.get(hunk as usize))
             .is_some_and(|hunk| hunk.digest.is_some());
-        copyable && !matches!(kind, ShownKind::Equal | ShownKind::Filler)
+        copyable
+            && !matches!(
+                kind,
+                ShownKind::Equal | ShownKind::Filler | ShownKind::Pending
+            )
     }
 
     /// Whether the boxes of change `hunk` show: any pick, or the pointer over the change.

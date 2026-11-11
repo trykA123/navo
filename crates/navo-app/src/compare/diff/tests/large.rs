@@ -23,7 +23,7 @@ use crate::compare::diff::large::{Ctx, convert};
 use crate::compare::diff::large::{LargeDiff, LargeInput, TestState};
 use crate::compare::settings::CompareSettings;
 
-const WAIT: Duration = Duration::from_secs(20);
+pub(super) const WAIT: Duration = Duration::from_secs(20);
 
 fn location(path: &Path) -> Location {
     Location::local(navo_core::ProviderPath::from_text(
@@ -32,7 +32,7 @@ fn location(path: &Path) -> Location {
     .unwrap()
 }
 
-fn request() -> PairRequest {
+pub(super) fn request() -> PairRequest {
     PairRequest {
         id: 9,
         path: "large.log".into(),
@@ -41,7 +41,7 @@ fn request() -> PairRequest {
     }
 }
 
-fn sink() -> (DiffSink, Receiver<DiffUpdate>) {
+pub(super) fn sink() -> (DiffSink, Receiver<DiffUpdate>) {
     let (send, receive) = mpsc::channel();
     (
         Arc::new(move |update| {
@@ -65,7 +65,7 @@ fn input(dir: &Path, left: &str, right: &str) -> LargeInput {
 }
 
 /// Write `lines` numbered lines, changing `changed` on the right side.
-fn pair(dir: &Path, lines: usize, changed: usize) -> LargeInput {
+pub(super) fn pair(dir: &Path, lines: usize, changed: usize) -> LargeInput {
     let mut left = String::new();
     let mut right = String::new();
     for index in 0..lines {
@@ -121,10 +121,15 @@ fn lines_returns_the_requested_window_from_both_sides() {
     loop {
         assert!(Instant::now() < deadline, "no line update");
         if let DiffUpdate::LargeLines {
-            rows, left, right, ..
+            rows,
+            left,
+            right,
+            totals,
+            ..
         } = next(&receive)
         {
             assert_eq!(rows, 0..3);
+            assert_eq!(totals, (20, 20), "both sides' line counts");
             assert_eq!(left, ["line 0", "line 1", "line 2"]);
             assert_eq!(right, ["line 0", "line 1", "line 2"]);
             break;
@@ -323,6 +328,14 @@ fn the_display_reader_opens_its_own_sources() {
         if matches!(next(&receive), DiffUpdate::LargeLines { .. }) {
             break;
         }
+    }
+    let deadline = Instant::now() + WAIT;
+    while sources.opens() < 4 {
+        assert!(
+            Instant::now() < deadline,
+            "the engine did not open its two sources"
+        );
+        thread::yield_now();
     }
     assert!(
         sources.opens() >= 4,

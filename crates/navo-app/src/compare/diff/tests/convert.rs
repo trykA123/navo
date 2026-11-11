@@ -2,6 +2,8 @@
 
 use std::fs;
 use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use navo_compare::model::CancelToken;
 use navo_compare::text::{
@@ -123,7 +125,18 @@ fn spans_are_utf8_byte_offsets_on_a_non_ascii_line() {
         &CancelToken::new(),
     );
     let text = to_pair_text(&loaded).unwrap();
-    let found = spans(&loaded, 0..1);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let found = loop {
+        let found = spans(&loaded, 0..1);
+        if !found.is_empty() {
+            break found;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the intraline deadline kept expiring"
+        );
+        thread::yield_now();
+    };
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].row, 0);
     assert!(found[0].left.contains(&(2..3)));

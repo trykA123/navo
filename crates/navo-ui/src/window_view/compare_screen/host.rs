@@ -9,6 +9,7 @@ use navo_l10n::tr;
 
 use super::copy::{FileBars, Note, note_view};
 use super::drawers::{changes_view, details_view};
+use super::image;
 use super::{FileScreen, FileState};
 use crate::commands::compare::{Exit, NextDifference, PreviousDifference};
 use crate::file_list::kind;
@@ -132,6 +133,11 @@ fn body(
     cx: &mut Context<NavoWindow>,
 ) -> Div {
     let area = div().flex().flex_col().flex_1().min_h_0();
+    let shown = !matches!(file.state, FileState::Failed(_));
+    if let Some(pictures) = file.pictures.as_mut().filter(|_| shown) {
+        pictures.set_rich(file.look.preset != super::look::Preset::Simple);
+        return area.child(image::body(t, pictures, cx));
+    }
     let (look, drawers) = (file.look, &file.drawers);
     if let Some(view) = file.view.as_mut() {
         let layout = look.layout_in(window);
@@ -151,6 +157,10 @@ fn body(
         );
     }
     let failed = matches!(file.state, FileState::Failed(_));
+    if let Some(large) = file.large.as_ref().filter(|_| !failed) {
+        let rows = div().flex().flex_1().min_h_0().child(large.list(cx));
+        return area.child(NavoWindow::large_moves(rows, cx));
+    }
     area.when_some(message(&file.state), |area, text| {
         area.child(
             div()
@@ -212,7 +222,7 @@ impl NavoWindow {
             return self.stream_view(window, cx);
         }
         let t = tokens::current(cx).clone();
-        let exit = cx.listener(|view, _: &Exit, window, cx| match view.clear_picks() {
+        let exit = cx.listener(|view, _: &Exit, window, cx| match view.esc_in_place() {
             true => cx.notify(),
             false => view.pop_file_diff(window, cx),
         });
@@ -225,7 +235,8 @@ impl NavoWindow {
         });
         let root = Self::copy_keys(Self::walk_keys(div().id("compare-screen"), cx), cx);
         let root = Self::drawer_actions(Self::look_actions(root, cx), cx);
-        let root = Self::menu_keys(Self::pick_keys(root, cx), cx);
+        let root = image::image_keys(Self::menu_keys(Self::pick_keys(root, cx), cx), cx);
+        let root = Self::large_keys(root, cx);
         let bars = FileBars {
             weak: cx.weak_entity(),
             hovered: self.file_hover(),
@@ -234,7 +245,7 @@ impl NavoWindow {
         };
         let note = self.compare.diff.copy.note.clone();
         let file = self.compare.screen.as_mut()?.file.as_mut()?;
-        let changes = file.view.as_ref().map(super::file::FileView::status);
+        let changes = file.changes();
         let root = root
             .key_context(CONTEXT)
             .track_focus(&file.focus)
