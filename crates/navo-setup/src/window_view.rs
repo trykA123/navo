@@ -57,7 +57,12 @@ pub fn view(flow: &Flow, facts: &Facts, live: &Live) -> SetupView {
         start_navo,
         can_retry: flow.can_retry(),
         notice: notice(flow),
-        leftover_root: matches!(flow.failure(), Some(Failure::PartialRoot(_)))
+        // Exit 0 means Setup.exe wrote the uninstall entry: deleting the folder would break it.
+        leftover_root: flow
+            .failure()
+            .is_some_and(
+                |failure| matches!(failure, Failure::PartialRoot(code) if *code != Some(0)),
+            )
             .then(|| folder.path().to_owned()),
         log_paths: log_paths(facts),
         details: details(flow, facts),

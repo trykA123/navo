@@ -89,6 +89,15 @@ fn cleanup_keeps_a_file_with_a_different_id() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+/// The root SDDL protects the DACL and grants inherited full access to three principals.
+#[test]
+fn root_sddl_has_three_inherited_full_aces_and_no_parent_inheritance() {
+    assert_eq!(
+        security::root_sddl("S-1-5-21-1-2-3-1001"),
+        "D:P(A;OICI;FA;;;S-1-5-21-1-2-3-1001)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
+    );
+}
+
 /// A protected directory DACL has exactly two explicit allow ACEs: user and SYSTEM.
 #[test]
 fn work_dacl_grants_only_user_and_system() -> io::Result<()> {

@@ -7,12 +7,19 @@ use std::path::Path;
 use windows_sys::Win32::Foundation::{
     CloseHandle, ERROR_SHARING_VIOLATION, HANDLE, INVALID_HANDLE_VALUE,
 };
+use windows_sys::Win32::Security::{
+    Authorization::{
+        ConvertSecurityDescriptorToStringSecurityDescriptorW, GetNamedSecurityInfoW, SE_FILE_OBJECT,
+    },
+    DACL_SECURITY_INFORMATION,
+};
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_LIST_DIRECTORY,
     FILE_READ_ATTRIBUTES, OPEN_EXISTING,
 };
 
 use super::{Pin, PinError, ancestors_unchanged};
+use crate::payload::platform::security;
 use crate::placement::{Chain, FileId};
 use crate::probe::chain::resolve_path;
 
@@ -121,6 +128,68 @@ fn a_second_open_with_share_read_and_write_succeeds() {
     let second = Pin::existing(temp.path(), id);
     assert!(second.is_ok());
     assert!(first.unchanged());
+}
+
+#[test]
+fn every_fresh_folder_has_a_protected_dacl_with_three_explicit_aces() -> std::io::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let chain = chain_under(temp.path(), &["tools", "root"]);
+    let _pin = Pin::fresh(&chain).expect("fresh pin");
+    for name in ["tools", "root"] {
+        let sddl = dacl_sddl(&temp.path().join(name))?;
+        assert!(sddl.starts_with("D:P"), "{sddl}");
+        assert_eq!(sddl.matches("(A;OICI;FA;;;").count(), 3, "{sddl}");
+        for group in ["AU", "BU", "WD"] {
+            assert!(!sddl.contains(&format!(";;;{group})")), "{sddl}");
+        }
+        assert!(sddl.contains(";;;SY)"), "{sddl}");
+        assert!(sddl.contains(";;;BA)"), "{sddl}");
+    }
+    Ok(())
+}
+
+/// Reads a folder's DACL back as SDDL text.
+fn dacl_sddl(path: &Path) -> std::io::Result<String> {
+    let mut descriptor = std::ptr::null_mut();
+    let mut acl = std::ptr::null_mut();
+    // SAFETY: the wide path is NUL-terminated and every optional output is null or writable.
+    let status = unsafe {
+        GetNamedSecurityInfoW(
+            wide_z(path).as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut acl,
+            std::ptr::null_mut(),
+            &mut descriptor,
+        )
+    };
+    if status != 0 {
+        return Err(std::io::Error::from_raw_os_error(status.cast_signed()));
+    }
+    let _allocation = security::Local(descriptor);
+    let mut text = std::ptr::null_mut();
+    let mut length = 0;
+    // SAFETY: the descriptor is live and the text and length outputs are writable.
+    if unsafe {
+        ConvertSecurityDescriptorToStringSecurityDescriptorW(
+            descriptor,
+            1,
+            DACL_SECURITY_INFORMATION,
+            &mut text,
+            &mut length,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error());
+    }
+    let _text = security::Local(text.cast());
+    let length = usize::try_from(length).map_err(std::io::Error::other)?;
+    // SAFETY: a successful conversion returns a live string of `length` UTF-16 units.
+    Ok(String::from_utf16_lossy(unsafe {
+        std::slice::from_raw_parts(text, length)
+    }))
 }
 
 #[test]

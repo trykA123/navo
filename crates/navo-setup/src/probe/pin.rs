@@ -13,6 +13,7 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 use windows_sys::Win32::Storage::FileSystem::{
     CreateDirectoryW, CreateFileW, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
     FILE_ATTRIBUTE_TAG_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
@@ -21,6 +22,7 @@ use windows_sys::Win32::Storage::FileSystem::{
     GetFileInformationByHandleEx, OPEN_EXISTING, SYNCHRONIZE, SetFileInformationByHandle,
 };
 
+use crate::payload::platform::security;
 use crate::placement::{Chain, FileId};
 use crate::probe::chain::resolve_path;
 
@@ -78,7 +80,7 @@ pub struct Pin {
 }
 
 impl Pin {
-    /// Creates and holds every missing folder in `chain`; a partial failure cleans up first.
+    /// Creates and holds every missing folder with a protected DACL; a partial failure cleans up.
     pub fn fresh(chain: &Chain) -> Result<Self, PinError> {
         let Some(base) = chain.existing.last() else {
             return Err(PinError::InvalidChain);
@@ -86,11 +88,12 @@ impl Pin {
         if chain.missing.is_empty() {
             return Err(PinError::RootExists);
         }
+        let descriptor = security::root_descriptor()?;
         let mut created = Vec::new();
         let mut path = base.path.clone();
         for name in &chain.missing {
             path.push(name);
-            match create_and_hold(&path) {
+            match create_and_hold(&path, &descriptor) {
                 Ok(held) => created.push(held),
                 Err(error) => {
                     remove_folders(created);
@@ -211,11 +214,17 @@ fn held_ok(held: &Held) -> bool {
         .is_ok_and(|(id, reparse)| !reparse && id == held.id)
 }
 
-/// Creates one folder and immediately holds it.
-fn create_and_hold(path: &Path) -> Result<Held, PinError> {
+/// Creates one folder with the protected DACL and immediately holds it.
+fn create_and_hold(path: &Path, descriptor: &security::Local) -> Result<Held, PinError> {
     let wide = wide_z(path);
-    // SAFETY: the wide path is NUL-terminated and no security attributes are used.
-    let created = unsafe { CreateDirectoryW(wide.as_ptr(), std::ptr::null()) };
+    let length = u32::try_from(size_of::<SECURITY_ATTRIBUTES>()).map_err(io::Error::other)?;
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: length,
+        lpSecurityDescriptor: descriptor.0,
+        bInheritHandle: 0,
+    };
+    // SAFETY: the wide path is NUL-terminated and the descriptor stays live for the call.
+    let created = unsafe { CreateDirectoryW(wide.as_ptr(), std::ptr::from_ref(&attributes)) };
     if created == 0 {
         let error = io::Error::last_os_error();
         return if error.kind() == io::ErrorKind::AlreadyExists {

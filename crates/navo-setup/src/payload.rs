@@ -18,7 +18,7 @@ mod embedded {
 }
 #[cfg(windows)]
 #[path = "payload_windows.rs"]
-mod platform;
+pub(crate) mod platform;
 #[cfg(windows)]
 pub use platform::{Extracted, Logs, Work, rotate_logs};
 #[cfg(test)]

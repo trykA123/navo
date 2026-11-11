@@ -31,7 +31,7 @@ use windows_sys::Win32::{
 };
 
 #[path = "payload_security.rs"]
-mod security;
+pub(crate) mod security;
 
 /// A volume plus 128-bit file identity, never a pathname comparison.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

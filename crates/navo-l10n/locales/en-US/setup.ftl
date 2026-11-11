@@ -48,6 +48,7 @@ setup-failed-log = Log
 setup-failed-copy = Copy &details
 setup-failed-retry = &Retry
 setup-failed-leftover = Setup left files in { $path }. Delete this folder before you run Setup again.
+setup-failed-unverified = Setup could not finish checking Navo in { $path }. Remove Navo in Windows Settings → Apps, then run Setup again.
 setup-blocked-title = Close Navo to continue
 setup-blocked-text = Navo is running from { $path }. Close it, then choose Try again.
 setup-blocked-note = Setup never closes Navo for you. Save your work in Navo, close its window, then try again.
