@@ -159,7 +159,7 @@ function Step-ToFolder($wizard, [string]$welcome) {
 # From the Folder page of a fresh install: Next, Install, then waits for Finish, at most 300 s.
 function Step-FreshInstall($wizard) {
     Step-Page $wizard.Window 'n' 'Start menu' 60
-    Step-Page $wizard.Window 'i' 'Navo is installed in' 300
+    Step-Page $wizard.Window 'i' 'Navo is installed\.' 300
 }
 
 # Leaves the Finish page, unticking Start Navo first when asked; waits for the wizard to exit.
@@ -321,7 +321,7 @@ function Test-S3 {
     Start-Sleep -Seconds 3
     Assert ([NavoE2E.Native]::FindDialog($wizard.Process.Id) -eq [IntPtr]::Zero) 'Alt+R opened Browse on an upgrade'
     Write-Evidence "locked Folder page text:`n$page"
-    Step-Page $wizard.Window 'i' 'Navo is installed in' 300
+    Step-Page $wizard.Window 'i' 'Navo is installed\.' 300
     Finish-Wizard $wizard $false
     Assert ([NavoE2E.Native]::FileId($root) -eq $id) 'the root was replaced'
     Assert ((Read-SqVersion $root) -eq '0.0.2') 'sq.version is not 0.0.2'

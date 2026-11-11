@@ -123,7 +123,7 @@ function Wait-Installed([IntPtr]$window, [string]$theme) {
     $state = @{ seen = $false }
     Wait-Until {
         $text = Get-UiText $window
-        if ($text -match 'Navo is installed in') { return $true }
+        if ($text -match 'Navo is installed\.') { return $true }
         if (-not $state.seen -and $text -notmatch 'Start menu') { $state.seen = $true; Save-Page $window $theme 'installing' }
         $false
     } 300 'the Finish page did not show'
