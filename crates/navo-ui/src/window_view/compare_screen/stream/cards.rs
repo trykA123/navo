@@ -7,6 +7,7 @@ use std::ops::Range;
 use gpui_kit::base::TestSupportExt;
 use navo_l10n::{t, tr};
 
+use super::Thumbs;
 use crate::compare_diff::card::{LINE_HEIGHT, NOTE_HEIGHT, frame};
 use crate::compare_diff::{
     CARD_HUNKS, CardDetail, CardScan, HEX_CARD_ROWS, LargeCard, LargeProgress, PairKind,
@@ -16,12 +17,15 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 
 mod hex;
+mod image;
 
-/// What a detail row needs: the theme and the model holding the card and its detail.
+/// What a detail row needs: the theme, the model holding the card and its detail, and the GPU
+/// textures uploaded for the cards near the view (D26.3).
 #[derive(Clone, Copy)]
 pub(super) struct DetailCtx<'a> {
     pub t: &'a Theme,
     pub model: &'a StreamModel,
+    pub thumbs: &'a Thumbs,
 }
 
 /// The height a heavy card's body always draws at, detail or none (D26.5): one status line plus
@@ -36,9 +40,10 @@ pub(super) fn detail_height(t: &Theme, kind: PairKind) -> Pixels {
     px(NOTE_HEIGHT) + body
 }
 
-/// The detail row of item `item`: a frame of the card's own height, its status line and, for a
-/// large pair, the line ranges the scan found (D26.7). Fails to an empty frame when the card was
-/// evicted between building the rows and drawing them.
+/// The detail row of item `item`: a frame of the card's own height, its status line and the body
+/// its kind has — line ranges for a large pair (D26.7), hex rows for a binary one (D26.8) or the
+/// two thumbnails of an image pair (D26.5). Fails to an empty frame when the card was evicted
+/// between building the rows and drawing them.
 pub(super) fn detail_row(ctx: &DetailCtx<'_>, item: usize) -> AnyElement {
     let t = ctx.t;
     let id = ctx.model.items()[item].id;
@@ -47,6 +52,8 @@ pub(super) fn detail_row(ctx: &DetailCtx<'_>, item: usize) -> AnyElement {
     };
     let held = ctx.model.detail(id).map(|detail| &**detail);
     let (text, side) = status_of(held);
+    let thumbs = matches!(held, Some(CardDetail::Image(_)))
+        .then(|| image::image_body(ctx, id).into_any_element());
     frame(t, true)
         .flex_col()
         .items_start()
@@ -56,6 +63,7 @@ pub(super) fn detail_row(ctx: &DetailCtx<'_>, item: usize) -> AnyElement {
         .child(status_row(t, text, side))
         .children(hunk_rows(t, held))
         .children(hex::body(t, held))
+        .children(thumbs)
         .into_any_element()
 }
 
@@ -85,8 +93,7 @@ fn status_of(detail: Option<&CardDetail>) -> (String, Option<String>) {
         Some(CardDetail::Large(card)) => large_status(card),
         Some(CardDetail::Failed(why)) => (why.clone(), None),
         Some(CardDetail::Bytes(card)) => (hex::hex_status(card), None),
-        // The image card gets its score and thumbnails in A9b (D26.6).
-        Some(CardDetail::Image(_)) => (tr("compare-screen-comparing"), None),
+        Some(CardDetail::Image(card)) => (image::image_status(card), None),
     }
 }
 
