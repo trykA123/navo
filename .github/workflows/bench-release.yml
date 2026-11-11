@@ -42,6 +42,77 @@ jobs:
       - run: cargo build --release --locked -p navo-bench
       - run: cargo build --release --locked -p navo-app --features tester
       - run: cargo build --release --locked -p navo-index-service
+      - name: Tracy hook is still in the vendored client
+        shell: pwsh
+        run: |
+          $meta = cargo metadata --format-version 1 --locked | ConvertFrom-Json
+          $pkg = @($meta.packages | Where-Object { $_.name -ceq 'tracy-client-sys' })
+          if ($pkg.Count -ne 1) { throw "expected one tracy-client-sys, found $($pkg.Count)" }
+          $dir = Split-Path -Parent $pkg[0].manifest_path
+          foreach ($rel in 'tracy/common/TracySystem.cpp', 'tracy/client/TracyProfiler.cpp') {
+            if (-not (Select-String -LiteralPath (Join-Path $dir $rel) -SimpleMatch -Quiet 'TRACY_HAS_CUSTOM_USER_INFO')) {
+              throw "$rel lacks TRACY_HAS_CUSTOM_USER_INFO"
+            }
+          }
+      - name: Make CARGO_HOME visible to later steps
+        shell: pwsh
+        run: |
+          if (-not $env:CARGO_HOME) { "CARGO_HOME=$HOME\.cargo" | Add-Content -Path $env:GITHUB_ENV }
+      - name: Build the trace build
+        run: cargo build --release --locked -p navo-app --features tester,tracy --target-dir target/tracy
+        env:
+          TRACY_CLIENT_SYS_CXXFLAGS: -FI${{ github.workspace }}\crates\navo-diag\tracy\navo_tracy_user.hpp -d1trimfile:${{ github.workspace }}\
+          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=navo --remap-path-prefix=${{ env.CARGO_HOME }}=cargo
+      - name: Tracy tools (v0.14.1, pinned hashes)
+        shell: pwsh
+        run: |
+          $base = 'https://github.com/wolfpld/tracy'
+          $zip = Join-Path $env:RUNNER_TEMP 'tracy-windows.zip'
+          Invoke-WebRequest -Uri "$base/releases/download/v0.14.1/windows-0.14.1.zip" -OutFile $zip
+          if ((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower() -ne 'f7499d74914aa3ba94a2c1ce72f36477d7b61d9d0f7c9790e05274c258c97fb5') { throw 'Tracy zip hash differs' }
+          $lic = Join-Path $env:RUNNER_TEMP 'tracy-LICENSE'
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/wolfpld/tracy/v0.14.1/LICENSE' -OutFile $lic
+          if ((Get-FileHash -Algorithm SHA256 $lic).Hash.ToLower() -ne '27ab6b51e57f7e263a6e953d9c8984cd26e69d2f7606bde81e4b3048acf30732') { throw 'Tracy licence hash differs' }
+          $out = Join-Path $env:RUNNER_TEMP 'tracy-windows'
+          Expand-Archive -LiteralPath $zip -DestinationPath $out
+          New-Item -ItemType Directory -Force -Path bench | Out-Null
+          foreach ($exe in 'tracy-capture.exe', 'tracy-csvexport.exe', 'tracy-profiler.exe') {
+            $f = Get-ChildItem -LiteralPath $out -Recurse -File -Filter $exe
+            if (@($f).Count -ne 1) { throw "$exe is not in the Tracy v0.14.1 asset" }
+            Copy-Item -LiteralPath $f.FullName -Destination bench
+          }
+          Copy-Item -LiteralPath $lic -Destination bench/TRACY-LICENSE.txt
+          Copy-Item -LiteralPath target/tracy/release/navo.exe -Destination bench/navo-tracy.exe
+      - name: Prove Tracy is only in the trace build
+        shell: pwsh
+        run: |
+          $with = (cargo tree -p navo-app -e features --features tester,tracy) -join "`n"
+          if ($with -cnotmatch 'tracy-client') { throw 'tester,tracy tree lacks tracy-client' }
+          $without = (cargo tree -p navo-app -e features --features tester) -join "`n"
+          if ($without -cmatch 'tracy-client') { throw 'tester tree holds tracy-client' }
+          $latin1 = [Text.Encoding]::Latin1
+          # Both encodings are searched as Latin-1 text, so one ordinal IndexOf finds either.
+          function Find-Needle([string]$file, [string]$needle) {
+            $text = $latin1.GetString([IO.File]::ReadAllBytes($file))
+            $ascii = $latin1.GetString([Text.Encoding]::ASCII.GetBytes($needle))
+            $wide = $latin1.GetString([Text.Encoding]::Unicode.GetBytes($needle))
+            return $text.Contains($ascii, [StringComparison]::Ordinal) -or $text.Contains($wide, [StringComparison]::Ordinal)
+          }
+          if (-not (Find-Needle 'bench/navo-tracy.exe' 'TRACY_PORT')) { throw 'navo-tracy.exe lacks TRACY_PORT' }
+          if (Find-Needle 'target/release/navo.exe' 'TRACY_PORT') { throw 'tester navo.exe holds TRACY_PORT' }
+          $needles = 'runneradmin', 'D:\a\', 'C:\Users\', '\.cargo\registry'
+          $bad = 0
+          foreach ($file in 'bench/navo-tracy.exe', 'target/release/navo.exe') {
+            foreach ($n in $needles) {
+              if (Find-Needle $file $n) { Write-Host "::error::$file holds '$n'"; $bad++ }
+            }
+          }
+          foreach ($file in 'bench/tracy-capture.exe', 'bench/tracy-csvexport.exe', 'bench/tracy-profiler.exe') {
+            foreach ($n in $needles) {
+              if (Find-Needle $file $n) { Write-Host "upstream tool $file holds '$n' (listed only)" }
+            }
+          }
+          if ($bad -gt 0) { throw "$bad forbidden strings in the shipped exes" }
       - name: Stage the tool
         shell: pwsh
         run: |

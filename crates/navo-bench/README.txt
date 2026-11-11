@@ -23,3 +23,41 @@ Options:
 
 Exit codes: 0 every step ran, 1 a step failed, 2 wrong options or a refused folder,
 3 your folder changed or could not be proved unchanged (DATA SAFETY).
+
+Recording a slow moment (the trace build)
+
+navo-tracy.exe is a separate Navo build that records when its own steps run. The zip also holds
+tracy-capture.exe, tracy-csvexport.exe and tracy-profiler.exe, with Tracy's licence in
+TRACY-LICENSE.txt.
+
+1. Quit Navo from the tray, so the two copies do not compete for the summon key.
+2. Unzip the tester zip into a folder outside Downloads.
+3. In that folder, run .\tracy-capture.exe -o navo.tracy -a 127.0.0.1. It waits.
+4. Start .\navo-tracy.exe --profile .\tracy-profile. It uses its own settings and never
+   touches the real profile.
+5. Do the slow thing, then close Navo. tracy-capture writes navo.tracy and stops.
+6. Run .\tracy-csvexport.exe navo.tracy > zones.csv and send only zones.csv. It holds fixed
+   zone names, empty source columns and times.
+7. navo.tracy stays on your PC. Open it with tracy-profiler.exe if you want to look yourself.
+   Never commit or publish it.
+
+What a trace holds:
+- fixed zone names and their times;
+- frame marks;
+- thread ids and the names Windows gives threads;
+- the exe name, navo-tracy.exe;
+- CPU, RAM and OS version;
+- the header line "User: navo@tester".
+
+By design it holds no file names, paths, field values, real login, computer name or full name.
+The design reasons are:
+- zone names are fixed literals in our code;
+- source fields are empty;
+- the header values are fixed at build time.
+
+What is checked is narrower: one real capture of the exercised flows was scanned. The scan found
+only "User: navo@tester", none of the forbidden words in any ASCII, UTF-8 or UTF-16LE text, and
+no path-shaped string among the strings Tracy stores.
+
+What leaves your PC is only zones.csv. Its columns are zone name, source file (empty), source
+line (0) and times.
