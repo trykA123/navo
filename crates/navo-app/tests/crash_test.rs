@@ -56,7 +56,7 @@ fn guarded_crash_test_writes_a_record_in_the_given_profile() {
     );
     let location = lines.next().unwrap_or_default();
     assert!(
-        location.trim_start().starts_with("at ") && location.contains("main.rs:"),
+        location.trim_start().starts_with("at ") && location.contains("lib.rs:"),
         "the crash_test frame has no source location: {backtrace}"
     );
 }

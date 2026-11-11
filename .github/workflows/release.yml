@@ -155,7 +155,7 @@ jobs:
           if ($records.Count -ne 1) { throw "expected one crash record, got $($records.Count)" }
           $record = Get-Content -LiteralPath $records[0].FullName -Raw | ConvertFrom-Json
           if ($record.message -ne 'Navo CI crash test') { throw 'unexpected panic message' }
-          if ($record.backtrace -notmatch 'navo::crash_test\r?\n\s+at [^\r\n]*main\.rs:\d+') { throw 'release backtrace has no Navo crash_test frame with its source location' }
+          if ($record.backtrace -notmatch 'navo::crash_test\r?\n\s+at [^\r\n]*lib\.rs:\d+') { throw 'release backtrace has no Navo crash_test frame with its source location' }
       - name: Install vpk
         shell: pwsh
         run: |
