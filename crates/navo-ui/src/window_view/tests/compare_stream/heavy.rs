@@ -9,8 +9,8 @@ use gpui_kit::{AppContext as _, Pixels, TestAppContext, px};
 use super::super::compare_screen::{Rig, rig};
 use crate::compare_diff::card::{LINE_HEIGHT, NOTE_HEIGHT};
 use crate::compare_diff::{
-    CARD_HUNKS, Card, CardDetail, CardScan, LargeCard, LargeHunk, LargeProgress, LargeStage,
-    PairKind, Stop, StreamRow, StreamUpdate, ViewedKey,
+    BytesCard, CARD_HUNKS, Card, CardDetail, CardScan, HEX_CARD_ROWS, HexWindow, LargeCard,
+    LargeHunk, LargeProgress, LargeStage, PairKind, Stop, StreamRow, StreamUpdate, ViewedKey,
 };
 
 /// A GiB per side: past the Whole tier, so the pair is a large one (D8).
@@ -111,6 +111,36 @@ impl Rig {
         })
     }
 
+    /// The height D26.5 fixes for a binary card, read from the theme the app draws with.
+    fn binary_height(&self, cx: &mut TestAppContext) -> Pixels {
+        self.view.read_with(cx, |_, cx| {
+            let t = crate::tokens::current(cx);
+            px(NOTE_HEIGHT) + t.spacing.row_height * HEX_CARD_ROWS as f32
+        })
+    }
+
+    /// Whether the last frame drew hex side cell `index` inside item `id`'s detail row.
+    fn hex_cell(&self, cx: &mut TestAppContext, id: u64, index: usize) -> bool {
+        cx.update_window(self.window, |_, window, _| {
+            window
+                .within(("compare-card-detail", id))
+                .try_find(("paged-row", index))
+                .is_some()
+        })
+        .expect("window")
+    }
+
+    /// The text the last frame drew on hex side cell `index` of item `id`'s detail row.
+    fn hex_label(&self, cx: &mut TestAppContext, id: u64, index: usize) -> Option<String> {
+        cx.update_window(self.window, |_, window, _| {
+            window
+                .within(("compare-card-detail", id))
+                .try_find(("paged-row", index))
+                .and_then(|cell| cell.label().map(str::to_owned))
+        })
+        .expect("window")
+    }
+
     /// The text the last frame drew on hunk row `n` of item `id`'s card, `None` when it drew none.
     fn hunk_text(&self, cx: &mut TestAppContext, id: u64, n: usize) -> Option<String> {
         cx.update_window(self.window, |_, window, _| {
@@ -193,5 +223,59 @@ fn compare_stream_a_large_card_is_one_j_stop(cx: &mut TestAppContext) {
             hunk: None
         },
         "J goes to the next card at once"
+    );
+}
+
+/// A binary detail of `rows` full hex rows on both sides, one changed region at byte 0x40.
+fn bytes_detail(rows: usize) -> Arc<CardDetail> {
+    let len = rows * 16;
+    Arc::new(CardDetail::Bytes(BytesCard {
+        window: Some(HexWindow {
+            left_start: 0,
+            right_start: 0,
+            left: vec![b'a'; len],
+            right: vec![b'b'; len],
+            changed_left: 0x40..0x42,
+            changed_right: 0x40..0x42,
+            wide: (false, false),
+        }),
+        progress: None,
+        scan: CardScan::Full,
+    }))
+}
+
+#[gpui_kit::test]
+fn compare_stream_a_hex_card_has_nine_rows_at_a_fixed_height(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_stream(cx, 2);
+    rig.send_heavy(cx, 1, PairKind::Binary);
+    let at = rig.row_index(cx, StreamRow::Detail(0));
+    let rows = rig.rows(cx);
+    // The card is nine hex rows tall before any detail has arrived (D26.5).
+    let want = rig.binary_height(cx);
+    let before = rig.row_height(cx, at);
+    assert_eq!(before, want, "a binary card keeps the hex height");
+    assert!(!rig.hex_cell(cx, 1, 0), "and draws no hex row yet");
+    rig.send_detail(cx, 1, bytes_detail(HEX_CARD_ROWS));
+    assert_eq!(
+        rig.rows(cx),
+        rows,
+        "the arriving window splices no row (D26.3)"
+    );
+    assert_eq!(
+        rig.row_height(cx, at),
+        before,
+        "and never changes the height"
+    );
+    // Each of the nine rows draws both sides, tinted where the bytes differ (D26.8).
+    for index in 0..HEX_CARD_ROWS * 2 {
+        assert!(rig.hex_cell(cx, 1, index), "hex side cell {index} is drawn");
+    }
+    assert!(
+        rig.hex_label(cx, 1, 0)
+            .is_some_and(|label| label.starts_with("00000000")),
+        "the row shows its offset: {:?}",
+        rig.hex_label(cx, 1, 0)
     );
 }
