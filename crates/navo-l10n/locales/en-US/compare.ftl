@@ -154,6 +154,7 @@ compare-card-large-full = { $hunks ->
    *[other] { $hunks }+ changes · Enter opens the full diff
 }
 compare-card-large-hunk = Lines { $left } → { $right }
+compare-card-hex-first = First change at byte { $offset }
 compare-card-rules = { $count ->
     [one] 1 file is the same after the rules
    *[other] { $count } files are the same after the rules

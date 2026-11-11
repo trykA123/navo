@@ -1,5 +1,6 @@
 //! The heavy card's fixed-height detail body: its status line, then the large card's hunk rows
-//! (D26.5, D26.7). A detail never changes the height, so a new one splices no rows (D26.3).
+//! (D26.5, D26.7) or the binary card's hex window (D26.8). A detail never changes the height, so
+//! a new one splices no rows (D26.3).
 
 use std::ops::Range;
 
@@ -13,6 +14,8 @@ use crate::compare_diff::{
 };
 use crate::prelude::*;
 use crate::tokens::Theme;
+
+mod hex;
 
 /// What a detail row needs: the theme and the model holding the card and its detail.
 #[derive(Clone, Copy)]
@@ -52,6 +55,7 @@ pub(super) fn detail_row(ctx: &DetailCtx<'_>, item: usize) -> AnyElement {
         .test_support()
         .child(status_row(t, text, side))
         .children(hunk_rows(t, held))
+        .children(hex::body(t, held))
         .into_any_element()
 }
 
@@ -80,9 +84,9 @@ fn status_of(detail: Option<&CardDetail>) -> (String, Option<String>) {
         None => (tr("compare-screen-comparing"), None),
         Some(CardDetail::Large(card)) => large_status(card),
         Some(CardDetail::Failed(why)) => (why.clone(), None),
-        // Only the large card has words of its own yet; the others get the binary and image
-        // bodies in their own atoms (D26.4).
-        Some(CardDetail::Bytes(_) | CardDetail::Image(_)) => (tr("compare-screen-comparing"), None),
+        Some(CardDetail::Bytes(card)) => (hex::hex_status(card), None),
+        // The image card gets its score and thumbnails in A9b (D26.6).
+        Some(CardDetail::Image(_)) => (tr("compare-screen-comparing"), None),
     }
 }
 
