@@ -17,6 +17,7 @@ use crate::compare_diff::{
 };
 
 mod entry;
+mod heavy;
 mod search;
 mod vr1;
 

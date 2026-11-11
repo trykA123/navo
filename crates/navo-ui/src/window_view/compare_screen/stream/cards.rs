@@ -3,6 +3,7 @@
 
 use std::ops::Range;
 
+use gpui_kit::base::TestSupportExt;
 use navo_l10n::{t, tr};
 
 use crate::compare_diff::card::{LINE_HEIGHT, NOTE_HEIGHT, frame};
@@ -35,7 +36,6 @@ pub(super) fn detail_height(t: &Theme, kind: PairKind) -> Pixels {
 /// The detail row of item `item`: a frame of the card's own height, its status line and, for a
 /// large pair, the line ranges the scan found (D26.7). Fails to an empty frame when the card was
 /// evicted between building the rows and drawing them.
-#[allow(dead_code, reason = "A8a2 routes Detail rows here")]
 pub(super) fn detail_row(ctx: &DetailCtx<'_>, item: usize) -> AnyElement {
     let t = ctx.t;
     let id = ctx.model.items()[item].id;
@@ -49,6 +49,7 @@ pub(super) fn detail_row(ctx: &DetailCtx<'_>, item: usize) -> AnyElement {
         .items_start()
         .h(detail_height(t, card.kind))
         .id(("compare-card-detail", id))
+        .test_support()
         .child(status_row(t, text, side))
         .children(hunk_rows(t, held))
         .into_any_element()
@@ -112,15 +113,24 @@ fn percent(progress: LargeProgress) -> Option<u64> {
 
 /// The large card's hunk rows: at most `CARD_HUNKS` of them, one line range per row (D26.4).
 /// Any other detail draws only its status line, so this is empty.
-fn hunk_rows(t: &Theme, detail: Option<&CardDetail>) -> Vec<Div> {
+fn hunk_rows(t: &Theme, detail: Option<&CardDetail>) -> Vec<AnyElement> {
     let Some(CardDetail::Large(card)) = detail else {
         return Vec::new();
     };
     card.hunks
         .iter()
         .take(CARD_HUNKS)
-        .map(|hunk| {
+        .enumerate()
+        .map(|(at, hunk)| {
+            let text = t!(
+                "compare-card-large-hunk",
+                left = rows_text(&hunk.left_rows),
+                right = rows_text(&hunk.right_rows)
+            );
             div()
+                .id(("compare-card-large-hunk", at))
+                .aria_label(text.clone())
+                .test_support()
                 .flex()
                 .flex_none()
                 .w_full()
@@ -130,11 +140,8 @@ fn hunk_rows(t: &Theme, detail: Option<&CardDetail>) -> Vec<Div> {
                 .font_family(t.typography.mono_font.clone())
                 .text_size(t.typography.small)
                 .text_color(t.colors.text)
-                .child(t!(
-                    "compare-card-large-hunk",
-                    left = rows_text(&hunk.left_rows),
-                    right = rows_text(&hunk.right_rows)
-                ))
+                .child(text)
+                .into_any_element()
         })
         .collect()
 }
