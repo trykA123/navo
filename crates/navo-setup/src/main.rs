@@ -39,6 +39,8 @@ mod window_input;
 #[cfg(test)]
 mod window_input_tests;
 #[cfg(test)]
+mod window_keys_tests;
+#[cfg(test)]
 mod window_recovery_tests;
 #[cfg(test)]
 mod window_tests;

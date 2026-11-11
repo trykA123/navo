@@ -42,6 +42,7 @@ pub struct SetupWindow {
     _replies: Task<()>,
     _appearance: Subscription,
     _field: Subscription,
+    _keys: Subscription,
 }
 
 impl SetupWindow {
@@ -73,6 +74,7 @@ impl SetupWindow {
         let focus = cx.focus_handle();
         let primary = cx.focus_handle();
         window.focus(&primary, cx);
+        let keys = Self::intercept_keys(window, cx);
         Self {
             shell,
             strings,
@@ -85,6 +87,7 @@ impl SetupWindow {
             _replies: listen,
             _appearance: appearance,
             _field: field_changes,
+            _keys: keys,
         }
     }
 
@@ -179,7 +182,7 @@ impl SetupWindow {
 }
 
 impl Render for SetupWindow {
-    /// Draws the rail, the current page and the footer; the root takes the window's keys.
+    /// Draws the rail, the current page and the footer; keys arrive through `intercept_keys`.
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = self.shell.view();
         let frame = render_frame(
@@ -191,7 +194,6 @@ impl Render for SetupWindow {
         div()
             .size_full()
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(Self::key_down))
             .on_modifiers_changed(cx.listener(Self::modifiers_changed))
             .child(frame)
     }

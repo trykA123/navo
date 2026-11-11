@@ -6,8 +6,8 @@ use std::path::PathBuf;
 
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::{
-    App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Keystroke, ModifiersChangedEvent,
-    Subscription, Window,
+    App, Context, Entity, FocusHandle, Focusable, Keystroke, ModifiersChangedEvent, Subscription,
+    Window,
 };
 use navo_ui::primitives::access_label::plain_text;
 use navo_ui::primitives::{TextFieldState, text_field_state};
@@ -59,22 +59,28 @@ impl SetupWindow {
         self.field.read(cx).value().to_string()
     }
 
-    /// Runs the action of Enter, Esc or Alt+letter and stops the key there.
-    pub(crate) fn key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(key) = setup_key(&event.keystroke) else {
-            return;
-        };
-        let focus = self.focus_kind(window, cx);
-        let view = self.shell.view();
-        if let Some(action) = key_action(&view, &self.strings, key, focus) {
+    /// Takes Enter, Esc and Alt+letter before gpui picks a focus path, on every page.
+    ///
+    /// A focused handle that the page does not draw (the primary button on a refusal page, the
+    /// Folder field after Next) sends keys to the window's Root, past any listener of ours.
+    pub(crate) fn intercept_keys(window: &Window, cx: &mut Context<Self>) -> Subscription {
+        let ours = window.window_handle();
+        let this = cx.entity().downgrade();
+        cx.intercept_keystrokes(move |event, window, cx| {
+            let Some(view) = this.upgrade().filter(|_| window.window_handle() == ours) else {
+                return;
+            };
+            let Some(key) = setup_key(&event.keystroke) else {
+                return;
+            };
+            let setup = view.read(cx);
+            let focus = setup.focus_kind(window, cx);
+            let Some(action) = key_action(&setup.shell.view(), &setup.strings, key, focus) else {
+                return;
+            };
             cx.stop_propagation();
-            self.act(action, cx);
-        }
+            view.update(cx, |view, cx| view.act(action, cx));
+        })
     }
 
     /// Names what has focus: the window root (or nothing), the Folder field, or a control.
