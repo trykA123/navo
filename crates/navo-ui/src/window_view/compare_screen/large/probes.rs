@@ -1,9 +1,10 @@
-//! Test probes of the large text body: its row count, top row and status, one row's lines, and
-//! a scroll to a row.
+//! Test probes of the large text body: its row count, top row and status, one row's lines, a
+//! scroll to a row, and its sideways state.
 
 use crate::compare_diff::ShownKind;
 use crate::prelude::*;
 use crate::window_view::NavoWindow;
+use crate::window_view::compare_screen::SidewaysSeen;
 
 /// What a test reads of the large body.
 pub(in crate::window_view) struct LargeProbe {
@@ -69,5 +70,18 @@ impl NavoWindow {
             large.place(u64::try_from(row).unwrap_or(u64::MAX), 0.);
             large.ask(file.control.as_ref());
         }
+    }
+
+    /// The open large body's sideways offset, this frame's cut and the extent, for tests.
+    pub(in crate::window_view) fn large_sideways(&self) -> Option<SidewaysSeen> {
+        let large = self
+            .compare
+            .screen
+            .as_ref()?
+            .file
+            .as_ref()?
+            .large
+            .as_ref()?;
+        Some(large.sideways.seen())
     }
 }

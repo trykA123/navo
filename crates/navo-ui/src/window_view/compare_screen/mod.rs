@@ -19,8 +19,10 @@ mod outline;
 mod pick;
 mod search;
 mod sheet;
+pub(in crate::window_view::compare_screen) mod sideways;
 mod state;
 mod stream;
+pub(in crate::window_view::compare_screen) mod strip;
 mod switch;
 
 use std::sync::{Arc, PoisonError};
