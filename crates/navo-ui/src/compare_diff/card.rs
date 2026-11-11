@@ -16,11 +16,12 @@ use crate::tokens::Theme;
 
 pub(crate) use header::badge;
 use header::{accent_bar, header};
+pub(crate) use line::LINE_HEIGHT;
 
 /// Height of a header row, in px.
 const HEADER_HEIGHT: f32 = 36.;
 /// Height of a gap, more, placeholder or summary row, in px.
-const NOTE_HEIGHT: f32 = 26.;
+pub(crate) const NOTE_HEIGHT: f32 = 26.;
 /// Size of the icons in a header, in px.
 const ICON: f32 = 14.;
 /// Size of the status mark badge, in px.
@@ -145,7 +146,7 @@ fn with_bar(
 }
 
 /// The frame every card row shares: card surface, side edges, rounded bottom on the last row.
-fn frame(t: &Theme, last: bool) -> Div {
+pub(crate) fn frame(t: &Theme, last: bool) -> Div {
     div()
         .relative()
         .flex()

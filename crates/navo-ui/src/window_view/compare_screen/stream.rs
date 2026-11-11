@@ -1,6 +1,7 @@
 //! The Stream screen (V19): every changed file as a card in one gpui `list`. Arriving cards are
 //! spliced in so the top visible row stays (D25); J/K, Shift+J/K, V and O move and mark (D27).
 
+mod cards;
 mod details;
 mod focus;
 mod keys;
