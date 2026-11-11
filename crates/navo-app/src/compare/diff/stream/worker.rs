@@ -74,12 +74,18 @@ pub(super) fn build_card(
     if cancel.is_cancelled() {
         return None;
     }
-    let plan = loaded
-        .alignment
-        .as_ref()
-        .map(|alignment| card_plan(alignment, CardLimits::default()))
-        .unwrap_or_default();
-    let mut card = to_card(&loaded, &plan);
+    let plan = {
+        let _zone = tracing::debug_span!("compare.card").entered();
+        loaded
+            .alignment
+            .as_ref()
+            .map(|alignment| card_plan(alignment, CardLimits::default()))
+            .unwrap_or_default()
+    };
+    let mut card = {
+        let _zone = tracing::debug_span!("compare.intraline").entered();
+        to_card(&loaded, &plan)
+    };
     card.viewed = card.viewable
         && match shared.viewed.get(&card.viewed_key.0) {
             Ok(viewed) => viewed,
