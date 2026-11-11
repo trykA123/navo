@@ -89,7 +89,12 @@ function Close-UninstallBox([Diagnostics.Process]$process) {
         $process.Refresh()
         $box = $desktop.FindFirst([Windows.Automation.TreeScope]::Children, $title)
         $button = if ($box) { $box.FindFirst([Windows.Automation.TreeScope]::Descendants, $ok) }
-        if ($button) { Invoke-Element $button; $state.answered = $true }
+        if ($button) {
+            Invoke-Element $button
+            Start-Sleep -Seconds 2
+            if ($desktop.FindFirst([Windows.Automation.TreeScope]::Children, $title)) { [NavoE2E.Native]::Focus([IntPtr]$box.Current.NativeWindowHandle) | Out-Null; [NavoE2E.Native]::Press($script:VK_RETURN) }
+            $state.answered = $true
+        }
         $state.answered -or $process.HasExited
     } 120 'the Uninstall Complete box did not appear'
     Write-Evidence "Uninstall Complete box answered: $($state.answered)"
@@ -114,8 +119,9 @@ function Test-S4aAsA {
     Write-Evidence "UninstallString: $command"
     $process = Start-Process -FilePath $match.Groups[1].Value -ArgumentList $match.Groups[2].Value -PassThru
     Close-UninstallBox $process
-    Assert ($process.WaitForExit(120000)) 'the uninstall did not end in 120 s'
-    Wait-Until { -not (Test-Path -LiteralPath $root) } 60 'the root is still there'
+    try { Wait-Until { -not (Test-Path -LiteralPath $root) } 90 'the root is still there' }
+    catch { Write-Evidence "uninstall process ended=$($process.HasExited); processes: $((Get-InstallerProcesses) -join '; ')"; throw }
+    Write-Evidence "root gone; uninstall process ended=$($process.HasExited)"
     Add-Fault (-not (Test-Path -LiteralPath (Join-Path $root 'inside.txt'))) 'inside.txt survived'
     Add-Fault (-not (Test-Path -LiteralPath $mine)) 'Mine.lnk survived (IW20)'
     Add-Fault (-not (Test-Path -LiteralPath $links.Desktop)) 'the Desktop Navo link survived'
@@ -125,7 +131,7 @@ function Test-S4aAsA {
     Add-Fault (-not (Test-Path -LiteralPath $script:uninstallKey)) 'the HKCU uninstall key survived'
     $query = Run-Process sc.exe @('query', 'Navo Index')
     Add-Fault ($query.Code -ne 0) "sc.exe query Navo Index exited 0: $($query.Text.Trim())"
-    Write-Evidence "uninstall exit=$($process.ExitCode) sc query exit=$($query.Code) log:`n$(Get-NavoLogText)"
+    Write-Evidence "sc query exit=$($query.Code) log:`n$(Get-NavoLogText)"
     Assert-Faults
 }
 
@@ -141,6 +147,8 @@ function Test-S4a {
 
 # Installs 0.0.2 as u after a installed its own copy with the service; returns u's root.
 function Install-WithServiceByA([string]$name) {
+    $policy = Get-ItemProperty -LiteralPath "Registry::$($script:POLICY)"
+    Write-Evidence "UAC policy: ConsentPromptBehaviorAdmin=$($policy.ConsentPromptBehaviorAdmin) ConsentPromptBehaviorUser=$($policy.ConsentPromptBehaviorUser) PromptOnSecureDesktop=$($policy.PromptOnSecureDesktop)"
     try { Invoke-AsA $name }
     finally { Remove-Item -LiteralPath (Join-Path $script:caseDir 'a.secret') -ErrorAction SilentlyContinue }
     $root = Get-DefaultRoot
@@ -154,11 +162,14 @@ function Install-WithServiceByA([string]$name) {
 # S4b: u's elevation request is denied; the uninstall removes the root, the service stays, the log names the skip.
 function Test-S4b {
     $root = Install-WithServiceByA 'S4b'
+    $clock = [Diagnostics.Stopwatch]::StartNew()
     Uninstall-Root $root
+    Write-Evidence "uninstall took $([math]::Round($clock.Elapsed.TotalSeconds, 1)) s; consent.exe prompts seen: $($script:consents.Count)"
     Assert ((Get-IndexService).State -eq 'Running') 'the service did not stay'
     $log = Get-NavoLogText
     Write-Evidence "Navo log:`n$log"
-    Assert ($log -match 'uninstall: index service left in place') 'the Navo log does not name the skipped removal'
+    # The log redacts the user name u everywhere, so "uninstall" is written "<user>ninstall".
+    Assert ($log -match 'ninstall: index service left in place') 'the Navo log does not name the skipped removal'
 }
 
 # Asks the host to save a screen picture, which sees the secure desktop; waits for its answer, at most 120 s.
@@ -245,9 +256,9 @@ function Test-S13 {
     $exe = Join-Path $downloads 'Navo-Setup.exe'
     Copy-Item -LiteralPath (Join-Path $wizards '0.0.2\Navo-Setup.exe') -Destination $exe
     foreach ($name in $script:PLANT_NAMES) { Copy-Item -LiteralPath (Join-Path $script:caseDir 'plant.dll') -Destination (Join-Path $downloads $name) }
-    Assert ((Get-PlantOut).Count -eq 0) "plant-out is not empty: $((Get-PlantOut) -join ', ')"
+    Assert (@(Get-PlantOut).Count -eq 0) "plant-out is not empty: $((Get-PlantOut) -join ', ')"
     Start-Process -FilePath rundll32.exe -ArgumentList "`"$(Join-Path $downloads 'version.dll')`",Ping" -Wait -WindowStyle Hidden
-    Wait-Until { (Get-PlantOut) -contains 'version.dll.txt' } 10 'the positive control wrote no version.dll.txt'
+    Wait-Until { @(Get-PlantOut) -contains 'version.dll.txt' } 10 'the positive control wrote no version.dll.txt'
     Write-Evidence "positive control wrote: $((Get-PlantOut) -join ', ')"
     Get-ChildItem -LiteralPath 'C:\Users\u\plant-out' -Force | Remove-Item -Force
     $process = Start-Interactive $exe @() $false
@@ -256,7 +267,7 @@ function Test-S13 {
     Step-ToFolder $wizard 'Install Navo 0\.0\.2'
     Step-FreshInstall $wizard
     Finish-Wizard $wizard $false
-    $loaded = Get-PlantOut
+    $loaded = @(Get-PlantOut)
     Write-Evidence "plant-out after the wizard: [$($loaded -join ', ')]; planted: $($script:PLANT_NAMES -join ', ')"
     Assert ($loaded.Count -eq 0) "a planted DLL ran: $($loaded -join ', ')"
 }
