@@ -138,6 +138,7 @@ fn size_of(side: &SideLoad) -> u64 {
 
 /// Diff the Whole sides, using an empty side for a missing text side.
 fn alignment_of(left: &SideLoad, right: &SideLoad, options: &Options) -> Option<Alignment> {
+    let _zone = tracing::debug_span!("compare.diff").entered();
     match (left, right) {
         (SideLoad::Whole(left), SideLoad::Whole(right)) => {
             Some(diff_lines(left.line_set(), right.line_set(), options))
