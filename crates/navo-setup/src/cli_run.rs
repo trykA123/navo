@@ -119,18 +119,18 @@ impl placement::NameEq for AsciiNames {
 fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPaths) -> ExitCode {
     match host.elevated() {
         Ok(false) => {}
-        _ => return report(&CliError::Elevated),
+        _ => return fail(&CliError::Elevated, logs),
     }
     let discovery = match host.discover() {
         Ok(discovery) => discovery,
-        Err(_) => return report(&CliError::Discovery),
+        Err(_) => return fail(&CliError::Discovery, logs),
     };
     let found = mode(&discovery, &payload.version);
     if let Mode::Upgrade(install) | Mode::Same(install) | Mode::Newer(install) = &found
         && let Some(requested) = &options.install_to
         && !same_root(requested, &install.root)
     {
-        return report(&CliError::AlreadyInstalled(install.root.clone()));
+        return fail(&CliError::AlreadyInstalled(install.root.clone()), logs);
     }
     let upgrade = matches!(found, Mode::Upgrade(_));
     let root = match &found {
@@ -139,7 +139,7 @@ fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPa
             Some(root) => root,
             None => match default_root() {
                 Ok(root) => root,
-                Err(error) => return report(&error),
+                Err(error) => return fail(&error, logs),
             },
         },
         Mode::Same(install) | Mode::Newer(install) => install.root.clone(),
@@ -161,7 +161,7 @@ fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPa
     };
     match runner::install(request, payload, &logs.velopack, host, &mut |_| {}) {
         Ok(_) => ExitCode::SUCCESS,
-        Err(error) => report_install(error, host, &root, upgrade),
+        Err(error) => report_install(error, host, &root, upgrade, logs),
     }
 }
 
@@ -178,14 +178,41 @@ fn report_install(
     host: &mut dyn Host,
     root: &Path,
     upgrade: bool,
+    logs: &LogPaths,
 ) -> ExitCode {
     let code = error.exit_code();
     let message = install_message(&error, root, upgrade);
     if let InstallError::RetryEmpty(session, _) = error {
         runner::close(session, host);
     }
-    eprintln!("navo-setup: {message}");
+    print_failure(&message, logs);
     ExitCode::from(code)
+}
+
+/// Prints one CLI error after the logs exist, with the log paths, and returns its IW17 code.
+fn fail(error: &CliError, logs: &LogPaths) -> ExitCode {
+    print_failure(&error.message(), logs);
+    ExitCode::from(error.exit_code())
+}
+
+/// Prints a failure and the log paths to stderr and appends the same lines to the wizard log.
+///
+/// The Velopack log is named only when a Velopack process wrote it.
+fn print_failure(message: &str, logs: &LogPaths) {
+    let mut lines = vec![
+        format!("navo-setup: {message}"),
+        format!("navo-setup: log: {}", logs.wizard.display()),
+    ];
+    if logs.velopack.is_file() {
+        lines.push(format!(
+            "navo-setup: Velopack log: {}",
+            logs.velopack.display()
+        ));
+    }
+    for line in lines {
+        eprintln!("{line}");
+        write_log_line(&logs.wizard, &line);
+    }
 }
 
 /// Resolves the default fresh root `FOLDERID_UserProgramFiles\Navo` without creating anything.

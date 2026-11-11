@@ -182,6 +182,104 @@ fn runner_errors_keep_their_codes() {
     }
 }
 
+/// Runs silent mode into `root` with both logs in `dir`; returns the code and the wizard log.
+fn run_logged(host: &mut FakeHost, root: &str, dir: &Path) -> (ExitCode, String, PathBuf) {
+    let payload_dir = tempfile::tempdir().unwrap();
+    let wizard = dir.join("run.log");
+    let velopack = dir.join("run-velopack.log");
+    let paths = LogPaths {
+        wizard: wizard.clone(),
+        velopack,
+    };
+    let logs = move || Ok(paths.clone());
+    let args = args(&["--silent", "--installto", root]);
+    let code = run(&args, Some(payload(payload_dir.path())), Some(host), &logs);
+    (
+        code,
+        fs::read_to_string(&wizard).unwrap_or_default(),
+        wizard,
+    )
+}
+
+/// Builds one fake host per failing IW17 exit 3 to 8, with the folder each one asks for.
+fn failing_hosts() -> Vec<(u8, &'static str, FakeHost)> {
+    let host = |setup: &dyn Fn(&mut FakeHost)| {
+        let mut host = FakeHost::new();
+        setup(&mut host);
+        host
+    };
+    vec![
+        (
+            3,
+            r"C:\Elsewhere\Navo",
+            host(&|h| h.discoveries.extend([Ok(discovery("0.3.0"))])),
+        ),
+        (
+            3,
+            ROOT,
+            host(&|h| {
+                h.discoveries
+                    .extend([Ok(Discovery::default()), Ok(discovery("0.3.0"))])
+            }),
+        ),
+        (
+            4,
+            ROOT,
+            host(&|h| {
+                h.discoveries
+                    .extend([Ok(discovery("0.3.0")), Ok(discovery("0.3.0"))]);
+                h.running.push_back(Ok(true));
+            }),
+        ),
+        (
+            5,
+            ROOT,
+            host(&|h| {
+                h.discoveries
+                    .extend([Ok(Discovery::default()), Ok(Discovery::default())]);
+                h.registry.push_back(Registry::Absent);
+                h.child_script.push_back(Some(1));
+            }),
+        ),
+        (
+            6,
+            ROOT,
+            host(&|h| {
+                h.discoveries
+                    .push_back(Err(std::io::Error::other("registry")))
+            }),
+        ),
+        (7, ROOT, host(&|h| h.elevated.push_back(Ok(true)))),
+        (
+            8,
+            ROOT,
+            host(&|h| {
+                h.discoveries
+                    .extend([Ok(discovery(VERSION)), Ok(discovery(VERSION))])
+            }),
+        ),
+    ]
+}
+
+/// Every failing exit prints the wizard log's path, and the log holds the same lines (S10, IW17).
+#[test]
+fn every_failing_silent_exit_names_its_log() {
+    for (code, root, mut host) in failing_hosts() {
+        let dir = tempfile::tempdir().unwrap();
+        let (exit, text, wizard) = run_logged(&mut host, root, dir.path());
+        assert_eq!(exit, ExitCode::from(code), "{text}");
+        let named = format!("navo-setup: log: {}", wizard.display());
+        assert!(
+            text.lines().any(|line| line == named),
+            "exit {code}: {text:?}"
+        );
+        assert!(
+            text.lines().count() >= 2,
+            "exit {code} logs its message too: {text:?}"
+        );
+    }
+}
+
 /// A different --installto while an install exists exits 3.
 #[test]
 fn a_different_installto_while_installed_exits_3() {
