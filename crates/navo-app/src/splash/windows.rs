@@ -17,6 +17,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SWP_SHOWWINDOW, SetWindowPos, TranslateMessage, ULW_ALPHA, UpdateLayeredWindow,
 };
 
+use super::art::Art;
 use super::canvas::{self, Canvas, Look};
 use super::timing::{self, Event, Frame, Surface};
 use super::windows_desktop::{colorref, monitor, motion, open_window, status_font, theme};
@@ -95,7 +96,7 @@ impl Window {
     fn create(near: Option<PhysicalRect>) -> Option<Self> {
         let (work, scale) = monitor(near);
         let look = theme();
-        let canvas = Canvas::new(scale, look)?;
+        let canvas = Canvas::with_art(scale, look, &Art::NAVO)?;
         let origin = centre(work, &canvas);
         let hwnd = open_window(origin, canvas.width() as i32, canvas.height() as i32)?;
         let mut window = Self {

@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use super::art::Art;
 use super::timing::Frame;
 
 const WIDTH: f32 = 320.0;
@@ -9,15 +10,11 @@ const QUARTER: f32 = 4.0;
 const STATUS_TOP: f32 = 184.0;
 const STATUS_INSET: f32 = 16.0;
 
-// Open sea and icon variant A colours from D78, converted from OKLCH to sRGB.
-const TILE: u32 = 0x08_1115;
-const GLYPH: u32 = 0xE2_EDF2;
-const BAR: u32 = 0x50_C2DF;
-
-const TILE_MASK: &[u8] = include_bytes!("../../../../assets/brand/splash/tile.pgm");
-const GLYPH_MASK: &[u8] = include_bytes!("../../../../assets/brand/splash/glyph.pgm");
-const BAR_MASK: &[u8] = include_bytes!("../../../../assets/brand/splash/bar.pgm");
-const WORDMARK_MASK: &[u8] = include_bytes!("../../../../assets/brand/splash/wordmark.pgm");
+// The unchanged canvas tests name these colours directly; art.rs owns the values now.
+#[cfg(test)]
+const TILE: u32 = Art::NAVO.tile_colour;
+#[cfg(test)]
+const BAR: u32 = Art::NAVO.bar_colour;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Look {
@@ -62,18 +59,20 @@ pub(super) struct Canvas {
     base: Vec<u32>,
     pixels: Vec<u32>,
     bar: Coverage,
+    bar_colour: u32,
     scale: f32,
 }
 
 impl Canvas {
-    pub(super) fn new(scale: f32, look: Look) -> Option<Self> {
+    /// Builds a canvas at `scale` with `look`, painting the masks and colours in `art`.
+    pub(super) fn with_art(scale: f32, look: Look, art: &Art) -> Option<Self> {
         let width = (WIDTH * scale).round() as usize;
         let height = (HEIGHT * scale).round() as usize;
         let mut base = shape(width, height, scale, look);
         for (mask, colour) in [
-            (TILE_MASK, TILE),
-            (GLYPH_MASK, GLYPH),
-            (WORDMARK_MASK, look.text),
+            (art.tile, art.tile_colour),
+            (art.glyph, art.glyph_colour),
+            (art.wordmark, look.text),
         ] {
             paint(
                 &mut base,
@@ -82,7 +81,7 @@ impl Canvas {
                 (colour, 1.0),
             );
         }
-        let bar = cover(&parse(BAR_MASK)?, scale);
+        let bar = cover(&parse(art.bar)?, scale);
         let pixels = base.clone();
         let mut canvas = Self {
             width,
@@ -90,10 +89,17 @@ impl Canvas {
             base,
             pixels,
             bar,
+            bar_colour: art.bar_colour,
             scale,
         };
         canvas.set_bar(1.0);
         Some(canvas)
+    }
+
+    /// Builds a canvas with Navo's splash art, for the canvas tests.
+    #[cfg(test)]
+    pub(super) fn new(scale: f32, look: Look) -> Option<Self> {
+        Self::with_art(scale, look, &Art::NAVO)
     }
 
     pub(super) fn set_bar(&mut self, opacity: f32) {
@@ -107,7 +113,12 @@ impl Canvas {
                 to.copy_from_slice(from);
             }
         }
-        paint(&mut self.pixels, self.width, &self.bar, (BAR, opacity));
+        paint(
+            &mut self.pixels,
+            self.width,
+            &self.bar,
+            (self.bar_colour, opacity),
+        );
     }
 
     pub(super) fn width(&self) -> usize {
