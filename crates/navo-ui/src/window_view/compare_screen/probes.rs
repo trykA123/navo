@@ -86,6 +86,19 @@ impl NavoWindow {
         Some((file.look, file.drawers.changes, file.drawers.details))
     }
 
+    /// The open file diff's look, to change it in tests.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_look_mut(&mut self) -> Option<&mut look::Look> {
+        Some(&mut self.compare.screen.as_mut()?.file.as_mut()?.look)
+    }
+
+    /// The sideways offset, cut and extent of the open text view.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_sideways(&self) -> Option<super::SidewaysSeen> {
+        let file = self.compare.screen.as_ref()?.file.as_ref()?;
+        Some(file.view.as_ref()?.sideways_seen())
+    }
+
     /// The cursor of the list of changes.
     pub(in crate::window_view) fn file_drawer_cursor(&self) -> Option<usize> {
         Some(self.compare.screen.as_ref()?.file.as_ref()?.drawers.cursor)

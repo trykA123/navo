@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use super::super::context::{RowHit, on_right_click};
 use super::super::copy::FileBars;
-use crate::compare_diff::body::{BodyLook, row_view};
+use super::sideways::{self, SidewaysHandle};
+use crate::compare_diff::body::{BodyLook, RowCut, row_view_cut};
 use crate::compare_diff::{Layout, OnBytesHere, PairText, ShownRow, SpanCache, Ticks, pair_rows};
 use crate::prelude::*;
 use crate::tokens;
@@ -27,11 +28,18 @@ pub(super) struct ListRows {
     pub(super) words: bool,
     pub(super) bars: FileBars,
     pub(super) on_long: OnBytesHere,
+    /// The sideways offset every row's text is cut by; the first row carries its probe.
+    pub(super) sideways: SidewaysHandle,
 }
 
 impl ListRows {
-    /// Draws list rows `range` and records them as built.
-    pub(super) fn draw(&self, range: Range<usize>, cx: &mut App) -> Vec<AnyElement> {
+    /// Draws list rows `range`, cut at this frame's sideways offset, and records them as built.
+    pub(super) fn draw(
+        &self,
+        range: Range<usize>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Vec<AnyElement> {
         let (text, picks, bars) = (&self.text, &self.bars.picks, &self.bars);
         self.built.set((range.start, range.end));
         let cache = self.words.then(|| self.spans.borrow());
@@ -52,13 +60,23 @@ impl ListRows {
             ticks: Some(&ticks),
             bytes_here: Some(&self.on_long),
         };
+        let cut = self.sideways.frame(sideways::advance(window, look.theme));
+        let probed = RowCut {
+            probe: Some(self.sideways.probe()),
+            ..cut.clone()
+        };
         let first = range.start;
         let rows = pair_rows(text, self.layout, range);
         rows.iter()
             .enumerate()
             .map(|(i, row)| {
-                let drawn = row_view(&look, row);
-                wrap_row(bars, look.theme, drawn, (first + i, row, (text, &self.starts)))
+                let drawn = row_view_cut(&look, row, if i == 0 { &probed } else { &cut });
+                wrap_row(
+                    bars,
+                    look.theme,
+                    drawn,
+                    (first + i, row, (text, &self.starts)),
+                )
             })
             .collect()
     }
