@@ -1,16 +1,20 @@
-//! Heavy cards in the Stream (D26.5, D26.7): a large card is drawn at its fixed height from the
-//! moment it arrives, its detail redraws that same row, and the card stays one J stop (D27).
+//! Heavy cards in the Stream (D26.5, D26.7, D26.8): each is drawn at its fixed height from the
+//! moment it arrives, its detail redraws that same row, the card stays one J stop (D27), and its
+//! thumbnails are held on the GPU only while the card is near the view (D26.3).
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, Pixels, TestAppContext, px};
 
 use super::super::compare_screen::{Rig, rig};
+use super::super::held::gpu_images;
 use crate::compare_diff::card::{LINE_HEIGHT, NOTE_HEIGHT};
 use crate::compare_diff::{
-    BytesCard, CARD_HUNKS, Card, CardDetail, CardScan, HEX_CARD_ROWS, HexWindow, LargeCard,
-    LargeHunk, LargeProgress, LargeStage, PairKind, Stop, StreamRow, StreamUpdate, ViewedKey,
+    BytesCard, CARD_HUNKS, Card, CardDetail, CardScan, HEX_CARD_ROWS, HexWindow, ImageCard,
+    LargeCard, LargeHunk, LargeProgress, LargeStage, PairKind, Stop, StreamRow, StreamUpdate,
+    Thumb, ViewedKey,
 };
 
 /// A GiB per side: past the Whole tier, so the pair is a large one (D8).
@@ -277,5 +281,84 @@ fn compare_stream_a_hex_card_has_nine_rows_at_a_fixed_height(cx: &mut TestAppCon
             .is_some_and(|label| label.starts_with("00000000")),
         "the row shows its offset: {:?}",
         rig.hex_label(cx, 1, 0)
+    );
+}
+
+/// A 2×2 BGRA thumbnail of solid pixels.
+fn thumb() -> Thumb {
+    Thumb {
+        width: 2,
+        height: 2,
+        bgra: Arc::from(vec![0u8; 16]),
+    }
+}
+
+/// An image detail with `thumbs` thumbnails: the left side from one, the right from two (D26.6).
+fn image_detail(thumbs: usize) -> Arc<CardDetail> {
+    Arc::new(CardDetail::Image(ImageCard {
+        similarity: Some(90),
+        note: None,
+        left: (thumbs > 0).then(thumb),
+        right: (thumbs > 1).then(thumb),
+    }))
+}
+
+/// Scrolls the Stream to `item` and lets the focus settle, as a real scroll does.
+fn scroll_far(cx: &mut TestAppContext, rig: &Rig, item: usize) {
+    rig.scroll_to_item(cx, item);
+    rig.view.update(cx, |view, cx| view.stream_scrolled(cx));
+    cx.executor().advance_clock(Duration::from_millis(200));
+    rig.frame(cx);
+}
+
+#[gpui_kit::test]
+fn compare_stream_thumbnails_are_freed_when_the_stream_closes(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_stream(cx, 2);
+    rig.send_heavy(cx, 1, PairKind::Image);
+    rig.send_detail(cx, 1, image_detail(2));
+    assert_eq!(gpu_images(cx).items, 2, "both thumbs are uploaded");
+    rig.press(cx, "escape");
+    cx.run_until_parked();
+    assert_eq!(gpu_images(cx).items, 0, "closing the Stream frees them");
+}
+
+#[gpui_kit::test]
+fn compare_stream_an_evicted_image_card_frees_its_thumbnails(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_stream(cx, 260);
+    rig.send_heavy(cx, 1, PairKind::Image);
+    rig.send_detail(cx, 1, image_detail(2));
+    assert_eq!(gpu_images(cx).items, 2, "a card in view uploads");
+    scroll_far(cx, &rig, 250);
+    cx.run_until_parked();
+    assert_eq!(
+        gpu_images(cx).items,
+        0,
+        "a card 200 items away loses its thumbnails with it"
+    );
+}
+
+#[gpui_kit::test]
+fn compare_stream_a_new_detail_replaces_the_old_thumbnails(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_stream(cx, 2);
+    rig.send_heavy(cx, 1, PairKind::Image);
+    rig.send_detail(cx, 1, image_detail(2));
+    assert_eq!(gpu_images(cx).items, 2, "the first detail uploads");
+    rig.send_detail(cx, 1, image_detail(1));
+    assert_eq!(
+        gpu_images(cx).items,
+        1,
+        "the old pair is freed as the new one arrives"
+    );
+    rig.send_detail(cx, 1, image_detail(0));
+    assert_eq!(
+        gpu_images(cx).items,
+        0,
+        "a detail with no thumbnails holds none"
     );
 }

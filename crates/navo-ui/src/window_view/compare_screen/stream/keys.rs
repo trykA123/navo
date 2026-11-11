@@ -63,9 +63,16 @@ impl NavoWindow {
         }
     }
 
-    /// The scroll rested: sends the focus and redraws when far cards were dropped.
+    /// The scroll rested: sends the focus, frees the thumbnails that left it and redraws when far
+    /// cards were dropped.
     fn stream_settled(&mut self, cx: &mut Context<Self>) {
-        if self.stream_mut().is_some_and(StreamScreen::send_focus) {
+        let mut dropped = false;
+        if let Some(stream) = self.stream_mut() {
+            dropped = stream.send_focus();
+            let keep = stream.near_ids();
+            stream.thumbs.sync(&stream.model, &keep, cx);
+        }
+        if dropped {
             cx.notify();
         }
     }
@@ -125,6 +132,9 @@ impl NavoWindow {
     /// file revealed and selected there.
     pub(super) fn leave_stream(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let path = self.stream_mut().and_then(|stream| stream.current_path());
+        if let Some(stream) = self.stream_mut() {
+            stream.thumbs.release_all(cx);
+        }
         self.compare.screen = None;
         self.compare.diff.copy.note = None;
         if let Some(path) = path {

@@ -6,6 +6,7 @@ mod details;
 mod focus;
 mod keys;
 mod splice;
+mod thumbs;
 mod view;
 
 use std::collections::HashMap;
@@ -13,6 +14,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
 use gpui_kit::{FocusHandle, ListAlignment, ListState, Task};
+
+use thumbs::Thumbs;
 
 use super::look::Look;
 use super::menu::MenuSlot;
@@ -70,6 +73,8 @@ pub(super) struct StreamScreen {
     /// The throttle of searching again after the items changed.
     pub(super) rerun: Rerun,
     inbox: StreamInbox,
+    /// The GPU textures of the image cards near the view (D26.3).
+    pub(super) thumbs: Thumbs,
     /// The first and last visible item positions the app last heard as focus.
     sent: Option<(usize, usize)>,
     settle: Option<Task<()>>,
@@ -202,6 +207,7 @@ impl NavoWindow {
             resync_wait: None,
             rerun: Rerun::default(),
             inbox,
+            thumbs: Thumbs::default(),
             sent: None,
             settle: None,
         };
@@ -210,6 +216,10 @@ impl NavoWindow {
             .compare
             .screen
             .get_or_insert_with(CompareScreen::default);
+        // A new Stream takes over the GPU textures the old one held (D26.3).
+        if let Some(old) = &mut screen.stream {
+            old.thumbs.release_all(cx);
+        }
         screen.stream = Some(stream);
         cx.notify();
         Some(focus)
@@ -252,6 +262,8 @@ impl NavoWindow {
             stream.drop_far_cards();
         }
         stream.sync_rows();
+        let keep = stream.near_ids();
+        stream.thumbs.sync(&stream.model, &keep, cx);
         true
     }
 }
