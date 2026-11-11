@@ -266,7 +266,9 @@ viewer.line_down | down | CompareView
 viewer.page_up | pageup | CompareView
 viewer.page_down | pagedown | CompareView
 viewer.go_to_start | home | CompareView
+viewer.go_to_start | ctrl-home | CompareView
 viewer.go_to_end | end | CompareView
+viewer.go_to_end | ctrl-end | CompareView
 viewer.scroll_left | left | CompareView
 viewer.scroll_right | right | CompareView
 find.result_up | up | CompareOutline
