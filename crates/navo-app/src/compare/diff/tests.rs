@@ -8,6 +8,7 @@ mod copy_many;
 mod hooks;
 mod image;
 mod large;
+mod large_far;
 mod large_spool;
 mod lines;
 mod load;
