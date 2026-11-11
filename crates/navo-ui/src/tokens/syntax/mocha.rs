@@ -1,6 +1,10 @@
+//! Mocha syntax roles (light and dark) and its tinted-line comment colour.
+
 use super::{Role, Style, role};
-use crate::tokens::Colors;
+use gpui_kit::Hsla;
+
 use crate::tokens::design_b::ok;
+use crate::tokens::{Colors, Mode};
 
 pub(super) fn light(c: &Colors) -> Vec<Role> {
     vec![
@@ -60,4 +64,12 @@ pub(super) fn dark(c: &Colors) -> Vec<Role> {
         role("link_uri", ok(84., 0.04, 25.), Style::Plain),
         role("text.literal", ok(78., 0.08, 185.), Style::Plain),
     ]
+}
+
+/// The comment colour on a tinted diff line, in the comment hue of this theme.
+pub(super) fn comment_on_tint(mode: Mode) -> Hsla {
+    match mode {
+        Mode::Light => ok(48., 0.018, 260.),
+        Mode::Dark => ok(76., 0.016, 260.),
+    }
 }
