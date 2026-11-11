@@ -8,7 +8,7 @@ use gpui_kit::{HighlightStyle, StyledText};
 use super::{BodyLook, Side};
 use crate::compare_diff::rows::ShownKind;
 use crate::prelude::*;
-use crate::tokens::Theme;
+use crate::tokens::{DiffTone, Theme};
 
 /// The text of one line, with `runs` (byte ranges) tinted; it never wraps.
 pub(super) fn line_text(text: Option<&str>, runs: Vec<Range<usize>>, tint: Hsla) -> Div {
@@ -64,5 +64,43 @@ pub(super) fn span_tint(t: &Theme, kind: ShownKind) -> Hsla {
         ShownKind::Deleted => t.diff.delete.fill,
         ShownKind::Inserted => t.diff.add.fill,
         _ => t.diff.change.fill,
+    }
+}
+
+/// The tone of the text column of `kind` on `side`: a change on both sides, a deletion on the
+/// left, an insertion on the right; `None` for equal, pending and filler cells.
+pub(super) fn text_tone(t: &Theme, kind: ShownKind, side: Side) -> Option<DiffTone> {
+    match (kind, side) {
+        (ShownKind::Changed, _) => Some(t.diff.change),
+        (ShownKind::Deleted, Side::Left) => Some(t.diff.delete),
+        (ShownKind::Inserted, Side::Right) => Some(t.diff.add),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ShownKind, Side, text_tone};
+    use crate::tokens::{Mode, Theme};
+
+    #[test]
+    fn text_tone_tints_changed_added_and_removed_text_only() {
+        let t = Theme::new(Mode::Light);
+        assert_eq!(
+            text_tone(&t, ShownKind::Changed, Side::Left),
+            Some(t.diff.change)
+        );
+        assert_eq!(
+            text_tone(&t, ShownKind::Deleted, Side::Left),
+            Some(t.diff.delete)
+        );
+        assert_eq!(
+            text_tone(&t, ShownKind::Inserted, Side::Right),
+            Some(t.diff.add)
+        );
+        assert_eq!(text_tone(&t, ShownKind::Deleted, Side::Right), None);
+        assert_eq!(text_tone(&t, ShownKind::Inserted, Side::Left), None);
+        assert_eq!(text_tone(&t, ShownKind::Equal, Side::Left), None);
+        assert_eq!(text_tone(&t, ShownKind::Pending, Side::Right), None);
     }
 }

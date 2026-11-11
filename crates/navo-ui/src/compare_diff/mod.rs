@@ -5,6 +5,7 @@ pub mod body;
 pub mod card;
 mod cols;
 pub mod copy_bar;
+mod edge;
 #[cfg(test)]
 pub(crate) mod fake;
 pub mod hooks;

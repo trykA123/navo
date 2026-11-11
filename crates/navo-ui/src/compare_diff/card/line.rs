@@ -3,6 +3,9 @@
 
 use gpui_kit::{Div, Hsla};
 
+use crate::compare_diff::edge::edged;
+use crate::tokens::DiffTone;
+
 use super::{accent_bar, frame};
 use crate::compare_diff::hooks::{DiffRow, Layout};
 use crate::compare_diff::rows::Half;
@@ -23,11 +26,13 @@ pub(super) struct Texts<'a> {
     pub right: Option<&'a str>,
 }
 
-/// What one half shows: its line number, text and background.
+/// What one half shows: its line number, text, the tone of its text column and the hatching
+/// of a half with no line.
 struct HalfView<'a> {
     number: Option<u32>,
     text: Option<&'a str>,
-    fill: Option<Hsla>,
+    tone: Option<DiffTone>,
+    hatch: Option<Hsla>,
 }
 
 /// How a line is drawn: layout, which half, whether it is the current hunk, and whether
@@ -54,33 +59,36 @@ pub(super) fn view(t: &Theme, look: Look, row: DiffRow, text: Texts<'_>) -> Div 
         .child(body)
 }
 
+/// The tone of each half's text column: a change on both, a deletion left, an insertion right.
+fn half_tones(t: &Theme, row: DiffRow) -> (Option<DiffTone>, Option<DiffTone>) {
+    match row {
+        DiffRow::Equal(..) => (None, None),
+        DiffRow::Changed(..) => (Some(t.diff.change), Some(t.diff.change)),
+        DiffRow::Deleted(_) => (Some(t.diff.delete), None),
+        DiffRow::Inserted(_) => (None, Some(t.diff.add)),
+    }
+}
+
 /// Both halves of a side-by-side line.
 fn sides(t: &Theme, row: DiffRow, text: Texts<'_>) -> Div {
-    let (l, r, lf, rf) = match row {
-        DiffRow::Equal(l, r) => (Some(l), Some(r), None, None),
-        DiffRow::Changed(l, r) => (
-            Some(l),
-            Some(r),
-            Some(t.diff.change.wash),
-            Some(t.diff.change.wash),
-        ),
-        DiffRow::Deleted(l) => (
-            Some(l),
-            None,
-            Some(t.diff.delete.wash),
-            Some(t.diff.gap_hatch),
-        ),
-        DiffRow::Inserted(r) => (None, Some(r), Some(t.diff.gap_hatch), Some(t.diff.add.wash)),
+    let (l, r) = match row {
+        DiffRow::Equal(l, r) | DiffRow::Changed(l, r) => (Some(l), Some(r)),
+        DiffRow::Deleted(l) => (Some(l), None),
+        DiffRow::Inserted(r) => (None, Some(r)),
     };
+    let (lt, rt) = half_tones(t, row);
+    let hatch = Some(t.diff.gap_hatch);
     let left = HalfView {
         number: l,
         text: text.left,
-        fill: lf,
+        tone: lt,
+        hatch: hatch.filter(|_| l.is_none()),
     };
     let right = HalfView {
         number: r,
         text: text.right,
-        fill: rf,
+        tone: rt,
+        hatch: hatch.filter(|_| r.is_none()),
     };
     div()
         .flex()
@@ -100,9 +108,9 @@ fn half_view(t: &Theme, half: &HalfView<'_>, first: bool) -> Div {
         .h_full()
         .overflow_hidden()
         .when(!first, |d| d.border_l_1().border_color(t.colors.line))
-        .when_some(half.fill, Styled::bg)
+        .when_some(half.hatch, Styled::bg)
         .child(gutter(t, half.number))
-        .child(code(t, half.text))
+        .child(edged(code(t, half.text), half.tone))
 }
 
 /// A unified line: two gutters, a sign and one text. Equal lines show both numbers.
@@ -124,17 +132,25 @@ fn unified(t: &Theme, row: DiffRow, text: Texts<'_>, half: Half) -> Div {
         .items_center()
         .w_full()
         .h_full()
-        .when_some(tone, |d, tone| d.bg(tone.wash))
         .child(gutter(t, l))
         .child(gutter(t, r))
-        .child(
+        .child(edged(
             div()
-                .flex_none()
-                .w(px(SIGN))
-                .text_color(tone.map_or(t.colors.muted, |tone| tone.text))
-                .child(sign),
-        )
-        .child(code(t, body))
+                .flex()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .items_center()
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(SIGN))
+                        .text_color(tone.map_or(t.colors.muted, |tone| tone.text))
+                        .child(sign),
+                )
+                .child(code(t, body)),
+            tone,
+        ))
 }
 
 /// A right-aligned line number (1-based) in the faint colour.
@@ -157,4 +173,25 @@ fn code(t: &Theme, text: Option<&str>) -> Div {
         .truncate()
         .text_color(t.colors.text)
         .children(text.map(|s| SharedString::from(s.to_owned())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::half_tones;
+    use crate::compare_diff::hooks::DiffRow;
+    use crate::tokens::{Mode, Theme};
+
+    #[test]
+    fn half_tones_tint_changed_added_and_removed_text_only() {
+        let t = Theme::new(Mode::Dark);
+        assert_eq!(half_tones(&t, DiffRow::Equal(0, 0)), (None, None));
+        let change = Some(t.diff.change);
+        assert_eq!(half_tones(&t, DiffRow::Changed(0, 0)), (change, change));
+        let delete = (Some(t.diff.delete), None);
+        assert_eq!(half_tones(&t, DiffRow::Deleted(0)), delete);
+        assert_eq!(
+            half_tones(&t, DiffRow::Inserted(0)),
+            (None, Some(t.diff.add))
+        );
+    }
 }
