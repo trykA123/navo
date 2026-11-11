@@ -166,6 +166,7 @@ fn row(weak: &WeakEntity<NavoWindow>, at: usize, cx: &App) -> AnyElement {
                 &cards::DetailCtx {
                     t,
                     model: &stream.model,
+                    thumbs: &stream.thumbs,
                 },
                 item,
             ),
