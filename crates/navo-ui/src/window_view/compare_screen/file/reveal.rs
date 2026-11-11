@@ -48,14 +48,16 @@ impl FileView {
         }
     }
 
-    /// Scrolls so the picked line `spot` is on screen, moving as little as it can.
+    /// Scrolls so the picked line `spot` is on screen, moving as little as it can. The list is
+    /// asked in items: while lines wrap a row of it starts at its row's first item.
     pub(in crate::window_view::compare_screen) fn reveal(&mut self, layout: Layout, spot: Spot) {
         let row = self.row_of(layout, spot);
-        self.scroll.scroll_to(row);
+        self.scroll.scroll_to(self.list_row(row));
     }
 
     /// Where the bottom of the cursor line is, in px from the top of the list, given the
     /// pick `spot`, else the current change's first row, else the first row. May be off screen.
+    /// A wrapped row ends below its last visual line, so its items are counted.
     pub(in crate::window_view::compare_screen) fn line_bottom(
         &mut self,
         layout: Layout,
@@ -67,6 +69,7 @@ impl FileView {
             (None, Some(hunk)) => self.shape(layout).starts.get(hunk).copied().unwrap_or(0),
             (None, None) => 0,
         };
-        self.scroll.offset_y() + row_height * (row + 1) as f32
+        let below = self.list_row(row) + self.row_lines(row) as usize;
+        self.scroll.offset_y() + row_height * below as f32
     }
 }

@@ -82,7 +82,8 @@ pub(super) struct FileView {
     /// Shapes per layout, measured once per text: unified counting walks every hunk row.
     shapes: [Option<Shape>; 2],
     current: Option<usize>,
-    /// Whether the list still has to centre the current change on its next draw.
+    /// Whether the list still has to centre the current change on its next draw: set when a pair
+    /// opens on a change and by every jump to one, and kept while wrap waits for its index.
     centre: bool,
     scroll: ListScroll,
     /// The rows the list built in its last frame.
@@ -169,9 +170,12 @@ impl FileView {
         true
     }
 
-    /// Makes change `hunk` the current one and centres its first list item.
+    /// Makes change `hunk` the current one and centres its first list item: now through the index
+    /// the view has, and again on the next draw, so a wrap index rebuilt in that frame (`layout`
+    /// measures the pair then) still ends with the change in the middle.
     pub(super) fn go_to(&mut self, hunk: usize, layout: Layout) {
         self.current = Some(hunk);
+        self.centre = true;
         if let Some(&row) = self.shape(layout).starts.get(hunk) {
             self.scroll.scroll_to_center(self.list_row(row));
         }
@@ -214,6 +218,8 @@ impl FileView {
     /// change report hover and carry the copy bar when `bars` is given.
     pub(super) fn list(&mut self, layout: Layout, bars: FileBars, cx: &App) -> AnyElement {
         let row_height = tokens::current(cx).spacing.row_height;
+        // The index first: the centre and the seek that follow read it, and its re-anchor stood
+        // down for a pending centre.
         self.index(layout, row_height);
         self.place(layout);
         let (count, starts) = {
