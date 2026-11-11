@@ -9,7 +9,7 @@ usage: setup-e2e-host.sh <case>...      run cases, one fresh boot per case or pa
        setup-e2e-host.sh --clone-base   copy the paused CI VM's disk to the frozen base
        setup-e2e-host.sh --make-base    build packs and wizards into the base (once)
 Needs NAVO_WINVM, the path of the VM tool. Optional: NAVO_E2E_DIR, NAVO_E2E_SSH_PORT,
-NAVO_E2E_VNC, NAVO_E2E_LOCK_WAIT (seconds, default 1800), NAVO_E2E_ARTIFACT (a Navo-Setup.exe that S12 installs).
+NAVO_E2E_VNC, NAVO_E2E_LOCK_WAIT (seconds, default 1800).
 EOF
   exit 2
 }
@@ -232,14 +232,6 @@ serve_shots() {
   done
 }
 
-# Copies the rehearsal Setup.exe (NAVO_E2E_ARTIFACT) to C:\e2e\artifact for the parts that install it.
-push_artifact() {
-  [[ "$1" == S12 ]] || return 0
-  [[ -f "${NAVO_E2E_ARTIFACT:-}" ]] || { echo "setup-e2e: S12 needs NAVO_E2E_ARTIFACT=<Navo-Setup.exe>" >&2; return 1; }
-  ssh_vm 'cmd /c "if not exist C:\e2e\artifact mkdir C:\e2e\artifact"'
-  scp_vm "$NAVO_E2E_ARTIFACT" admin@127.0.0.1:C:/e2e/artifact/Navo-Setup.exe
-}
-
 # Boots a fresh overlay, runs one part in u's session, waits for done, collects the evidence.
 # After done, the guest's Finalize-<part> (admin) undoes machine-wide changes, then the folder is copied.
 run_part() {
@@ -249,7 +241,6 @@ run_part() {
   vm_boot throwaway
   wait_ssh 600
   push_scripts
-  push_artifact "$part"
   guest_ps -WaitLogon
   guest_ps -Launch -Case "$part"
   local deadline=$((SECONDS + CASE_TIMEOUT)) done=0 listing
