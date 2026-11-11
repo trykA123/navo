@@ -136,7 +136,8 @@ impl ScrollbarHandle for SidewaysHandle {
 
     fn content_size(&self) -> Size<Pixels> {
         let state = self.0.borrow();
-        let wide = state.widest.unwrap_or(0) as f32 * state.advance;
+        // One column past the widest line, as `max` counts it, so dragging reaches the end.
+        let wide = (state.widest.unwrap_or(0) as f32 + 1.) * state.advance;
         size(px(wide), state.probe.get().left.size.height)
     }
 }
@@ -247,6 +248,11 @@ impl SidewaysHandle {
     /// The offset, this frame's cut and the extent, for tests.
     pub(super) fn seen(&self) -> SidewaysSeen {
         let advance = px(self.0.borrow().advance);
+        self.seen_at(advance)
+    }
+
+    /// Like `seen`, with this frame's column `advance` (px) given.
+    pub(super) fn seen_at(&self, advance: Pixels) -> SidewaysSeen {
         let cut = self.frame(advance);
         let state = self.0.borrow();
         SidewaysSeen {
@@ -256,5 +262,27 @@ impl SidewaysHandle {
             advance: state.advance,
             max: state.max(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::base::ScrollbarHandle;
+
+    use super::SidewaysHandle;
+    use crate::compare_diff::body::ProbeSeen;
+    use crate::prelude::*;
+
+    #[test]
+    fn the_bar_range_reaches_the_same_end_as_the_wheel() {
+        let handle = SidewaysHandle::default();
+        handle.probe().set(ProbeSeen {
+            left: Bounds::new(point(px(0.), px(0.)), size(px(200.), px(20.))),
+            ..ProbeSeen::default()
+        });
+        handle.set_widest(100);
+        let seen = handle.seen_at(px(5.));
+        let bar_range = f32::from(handle.content_size().width) - 200.;
+        assert_eq!(Some(bar_range), seen.max);
     }
 }
