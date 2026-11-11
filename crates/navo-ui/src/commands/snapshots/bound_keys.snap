@@ -548,7 +548,9 @@ viewer.page_up | pageup | CompareView
 viewer.page_up | pageup | Viewer
 viewer.previous_file | p | Viewer
 viewer.save | ctrl-s | Viewer
+viewer.scroll_left | left | CompareView
 viewer.scroll_left | left | Viewer
+viewer.scroll_right | right | CompareView
 viewer.scroll_right | right | Viewer
 viewer.show_hex | alt-3 | Viewer
 viewer.show_line_ends | alt-l | Viewer

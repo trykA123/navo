@@ -26,6 +26,8 @@ pub(in crate::window_view) struct Look {
     pub(in crate::window_view) map: bool,
     /// The layout the user picked; none follows the window width.
     pub(in crate::window_view) layout: Option<Layout>,
+    /// Wrap long lines; off by default. Kept by every preset (D39.8).
+    pub(in crate::window_view) wrap: bool,
 }
 
 impl Look {
@@ -36,6 +38,7 @@ impl Look {
             words: true,
             map: true,
             layout: None,
+            wrap: false,
         }
     }
 
@@ -69,5 +72,21 @@ impl Look {
     /// The layout in `window`: the picked one, else side by side, or unified below 900 px.
     pub(in crate::window_view) fn layout_in(&self, window: &Window) -> Layout {
         self.layout.unwrap_or_else(|| layout_for(window))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_starts_off_and_every_preset_keeps_it() {
+        let mut look = Look::rich();
+        assert!(!look.wrap);
+        look.wrap = true;
+        for preset in [Preset::Simple, Preset::Rich, Preset::Custom] {
+            look.choose(preset);
+            assert!(look.wrap, "{preset:?} dropped wrap");
+        }
     }
 }

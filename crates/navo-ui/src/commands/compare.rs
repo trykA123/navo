@@ -35,7 +35,8 @@ gpui_kit::actions!(
         PickUp,
         PickToggle,
         RemovePicked,
-        ShowMenu
+        ShowMenu,
+        ToggleWrap
     ]
 );
 
@@ -148,6 +149,11 @@ pub(super) const GROUPS: [Group; 5] = [
                 "compare.show_menu",
                 "cmd-compare-show-menu",
             ),
+            (
+                "compare::ToggleWrap",
+                "compare.toggle_wrap",
+                "cmd-compare-toggle-wrap",
+            ),
         ],
     },
     Group {
@@ -180,7 +186,7 @@ pub(super) const GROUPS: [Group; 5] = [
 ];
 
 /// Commands whose atoms have not landed: out of menus, palette and keymap while Compare is on.
-const NOT_BUILT: &[&str] = &["compare.refs", "compare.save"];
+const NOT_BUILT: &[&str] = &["compare.refs", "compare.save", "compare.toggle_wrap"];
 
 /// Whether `name` is a compare command that is not offered: all while Compare is off,
 /// and the ones still to be built while it is on.

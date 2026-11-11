@@ -46,6 +46,7 @@ fn the_compare_commands_are_registered_in_the_planned_contexts() {
             ("compare.pick_toggle", "CompareView"),
             ("compare.remove_picked", "CompareView"),
             ("compare.show_menu", "CompareView"),
+            ("compare.toggle_wrap", "CompareView"),
             ("compare.toggle_viewed", "CompareStream"),
             ("compare.fold", "CompareStream"),
             ("compare.open_file", "CompareStream"),
@@ -79,7 +80,7 @@ fn hidden_compare_commands_still_resolve_by_name_and_action() {
     );
 }
 
-const NOT_BUILT: [&str; 2] = ["compare.refs", "compare.save"];
+const NOT_BUILT: [&str; 3] = ["compare.refs", "compare.save", "compare.toggle_wrap"];
 
 fn palette_names() -> Vec<&'static str> {
     entries()
