@@ -262,7 +262,15 @@ impl NavoWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let view = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
+        let mut view = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
+        if let Some(hex) = view.as_mut().and_then(|file| file.hex.as_mut()) {
+            let visible = super::hex::visible_rows(tokens::current(cx), window);
+            if hex.step(forward, visible) {
+                self.compare.diff.copy.note = None;
+                cx.notify();
+            }
+            return;
+        }
         let layout = view
             .as_ref()
             .map_or_else(|| layout_for(window), |file| file.look.layout_in(window));

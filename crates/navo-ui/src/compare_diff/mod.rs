@@ -18,7 +18,7 @@ pub mod ticks;
 pub use card::{CardCtx, stream_row_view};
 pub use hooks::{
     ByteProgress, ByteRegionView, Card, CardRow, CopyChange, CopyDirection, CopyDone, CopyResult,
-    CopySink, DiffHooks, DiffRow, DiffSink, DiffUpdate, HunkView, ImageAlpha, ImageLimit,
+    CopySink, DiffHooks, DiffRow, DiffSink, DiffUpdate, HexAlign, HunkView, ImageAlpha, ImageLimit,
     ImageMask, ImageScores, ImageSize, LargeHunk, LargeProgress, LargeStage, LargeStep,
     LargeStepReason, LargeStepView, Layout, PairControl, PairFacts, PairKind, PairRequest,
     PairText, RowSpans, StreamControl, StreamSink, StreamUpdate, ViewedKey,

@@ -3,6 +3,7 @@
 
 use gpui_kit::FocusHandle;
 
+use super::hex::HexProbe;
 use super::{FileState, look};
 use crate::compare_diff::PairRequest;
 use crate::prelude::*;
@@ -88,5 +89,72 @@ impl NavoWindow {
     /// The cursor of the list of changes.
     pub(in crate::window_view) fn file_drawer_cursor(&self) -> Option<usize> {
         Some(self.compare.screen.as_ref()?.file.as_ref()?.drawers.cursor)
+    }
+
+    /// The open hex body: current region, built rows, row count, alignment and gap rows.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_hex_probe(&mut self) -> Option<HexProbe> {
+        let hex = self.compare.screen.as_mut()?.file.as_mut()?.hex.as_mut()?;
+        Some(hex.probe(24))
+    }
+
+    /// How many rows the hex body shows in `window`.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_hex_visible(&self, window: &Window, cx: &App) -> usize {
+        super::hex::visible_rows(crate::tokens::current(cx), window)
+    }
+
+    /// Drops the fetched hex rows, for the unfetched-row probe.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_hex_forget_rows(&mut self) {
+        if let Some(hex) = self
+            .compare
+            .screen
+            .as_mut()
+            .and_then(|screen| screen.file.as_mut())
+            .and_then(|file| file.hex.as_mut())
+        {
+            hex.forget_rows();
+        }
+    }
+
+    /// Switches the hex alignment and issues its run, without letting background work land.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_hex_set_align(
+        &mut self,
+        align: crate::compare_diff::HexAlign,
+    ) {
+        if let Some(hex) = self
+            .compare
+            .screen
+            .as_mut()
+            .and_then(|screen| screen.file.as_mut())
+            .and_then(|file| file.hex.as_mut())
+        {
+            hex.set_align(align);
+            hex.request_regions();
+        }
+    }
+
+    /// Moves the hex scrollbar thumb, as a drag would.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_hex_set_drag(&mut self, fraction: f64) {
+        if let Some(hex) = self
+            .compare
+            .screen
+            .as_mut()
+            .and_then(|screen| screen.file.as_mut())
+            .and_then(|file| file.hex.as_mut())
+        {
+            hex.set_scroll_fraction(fraction);
+        }
+    }
+
+    /// Feeds fractional wheel rows and returns the top row.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_hex_wheel(&mut self, rows: f64) -> Option<usize> {
+        let hex = self.compare.screen.as_mut()?.file.as_mut()?.hex.as_mut()?;
+        hex.wheel_rows(rows, 24);
+        Some(hex.top())
     }
 }

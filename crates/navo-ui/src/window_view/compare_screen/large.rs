@@ -265,10 +265,11 @@ impl super::FileScreen {
     }
 
     /// The status line's change counter: the text pair's, else the large body's, else the
-    /// image pair's similarity.
+    /// hex regions, else the image pair's similarity.
     pub(super) fn changes(&self) -> Option<SharedString> {
         let text = self.view.as_ref().map(super::file::FileView::status);
         text.or_else(|| self.large.as_ref().map(LargeShown::status))
+            .or_else(|| self.hex.as_ref().and_then(super::hex::HexView::status))
             .or_else(|| {
                 self.pictures
                     .as_ref()

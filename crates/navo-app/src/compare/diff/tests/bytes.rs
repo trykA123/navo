@@ -44,6 +44,7 @@ fn input(root: &Path, left: &str, right: &str, align: Align) -> ByteInput {
         left: local_side(root, left),
         right: local_side(root, right),
         align,
+        run: 1,
         budget: Budget::default(),
     }
 }
@@ -189,6 +190,7 @@ fn a_cancel_stops_a_running_diff_and_joins() {
                 entry,
             ),
             align: Align::Offset,
+            run: 1,
             budget: Budget::default(),
         },
         sink,

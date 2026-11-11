@@ -7,6 +7,7 @@ use navo_l10n::tr;
 
 use super::look::{Look, Preset};
 use crate::commands::compare::ViewMenu;
+use crate::compare_diff::HexAlign;
 use crate::compare_diff::Layout;
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
@@ -16,7 +17,14 @@ use crate::window_view::viewer::{MenuEntry, ViewCustom, ViewRich, ViewSimple, vi
 
 gpui_kit::actions!(
     compare_view,
-    [ShowUnified, ShowSideBySide, ToggleWords, ToggleMap]
+    [
+        ShowUnified,
+        ShowSideBySide,
+        ToggleWords,
+        ToggleMap,
+        AlignOffset,
+        AlignContent
+    ]
 );
 
 /// An open View menu and its event subscription.
@@ -29,11 +37,16 @@ pub(super) struct LookHost<'a> {
     pub(super) menu: &'a mut MenuSlot,
 }
 
-/// The entries of the menu for `look`; `layout` is the layout in use.
-pub(in crate::window_view) fn entries(look: &Look, layout: Layout) -> Vec<MenuEntry> {
+/// The entries of the menu for `look`; `layout` is the layout in use and `hex` the alignment
+/// when the open file diff is a binary pair.
+pub(in crate::window_view) fn entries(
+    look: &Look,
+    layout: Layout,
+    hex: Option<HexAlign>,
+) -> Vec<MenuEntry> {
     let run =
         |id: &str, action: Box<dyn Action>, on: bool| MenuEntry::Run(tr(id).into(), action, on);
-    vec![
+    let mut items = vec![
         run(
             "compare-view-simple",
             Box::new(ViewSimple),
@@ -63,7 +76,21 @@ pub(in crate::window_view) fn entries(look: &Look, layout: Layout) -> Vec<MenuEn
         MenuEntry::Break,
         run("compare-view-words", Box::new(ToggleWords), look.words),
         run("compare-view-map", Box::new(ToggleMap), look.map),
-    ]
+    ];
+    if let Some(align) = hex {
+        items.push(MenuEntry::Break);
+        items.push(run(
+            "compare-hex-align-offset",
+            Box::new(AlignOffset),
+            align == HexAlign::Offset,
+        ));
+        items.push(run(
+            "compare-hex-align-content",
+            Box::new(AlignContent),
+            align == HexAlign::Content,
+        ));
+    }
+    items
 }
 
 impl NavoWindow {
@@ -93,6 +120,35 @@ impl NavoWindow {
         .on_action(cx.listener(|view, _: &ToggleMap, _, cx| {
             view.change_look(Look::toggle_map, cx);
         }))
+        .on_action(cx.listener(|view, _: &AlignOffset, _, cx| {
+            view.set_hex_align(HexAlign::Offset, cx);
+        }))
+        .on_action(cx.listener(|view, _: &AlignContent, _, cx| {
+            view.set_hex_align(HexAlign::Content, cx);
+        }))
+    }
+
+    /// Switches the open hex body's alignment and asks for regions in that alignment.
+    fn set_hex_align(&mut self, align: HexAlign, cx: &mut Context<Self>) {
+        let Some(file) = self
+            .compare
+            .screen
+            .as_mut()
+            .and_then(|screen| screen.file.as_mut())
+        else {
+            return;
+        };
+        let Some(hex) = file.hex.as_mut() else {
+            return;
+        };
+        if !hex.set_align(align) {
+            return;
+        }
+        let run = hex.request_regions();
+        if let Some(run) = run {
+            file.control.byte_regions(align, run);
+        }
+        cx.notify();
     }
 
     /// The look, focus and menu slot of the file diff, else of the Stream.
@@ -127,10 +183,17 @@ impl NavoWindow {
     /// Opens the View menu under the header, at the right edge.
     fn open_look_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let t = tokens::current(cx).clone();
+        let hex = self
+            .compare
+            .screen
+            .as_ref()
+            .and_then(|screen| screen.file.as_ref())
+            .and_then(|file| file.hex.as_ref())
+            .map(super::hex::HexView::align);
         let Some(host) = self.look_host() else {
             return;
         };
-        let items = entries(host.look, host.look.layout_in(window));
+        let items = entries(host.look, host.look.layout_in(window), hex);
         let anchor = point(
             window.viewport_size().width - t.spacing.xl,
             t.spacing.path_height * 2.,

@@ -156,6 +156,9 @@ fn body(
                 .children(map),
         );
     }
+    if let Some(hex) = file.hex.as_ref() {
+        return area.child(hex.body(t, window, cx));
+    }
     let failed = matches!(file.state, FileState::Failed(_));
     if let Some(large) = file.large.as_ref().filter(|_| !failed) {
         let rows = div().flex().flex_1().min_h_0().child(large.list(cx));

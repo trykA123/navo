@@ -15,14 +15,14 @@ struct Geometry {
 }
 
 #[derive(Clone, Default)]
-pub(super) struct ByteScroll(Rc<Cell<Geometry>>);
+pub(crate) struct ByteScroll(Rc<Cell<Geometry>>);
 
 impl ByteScroll {
-    pub(super) fn height(&self) -> Pixels {
+    pub(crate) fn height(&self) -> Pixels {
         self.0.get().bounds.size.height
     }
 
-    pub(super) fn measure(&self, bounds: Bounds<Pixels>) -> bool {
+    pub(crate) fn measure(&self, bounds: Bounds<Pixels>) -> bool {
         let mut geometry = self.0.get();
         let changed = geometry.bounds.size != bounds.size;
         geometry.bounds = bounds;
@@ -34,7 +34,7 @@ impl ByteScroll {
         f32::from(geometry.content - geometry.bounds.size.height)
     }
 
-    pub(super) fn take_drag(&self) -> Option<f64> {
+    pub(crate) fn take_drag(&self) -> Option<f64> {
         let mut geometry = self.0.get();
         if !geometry.dragged {
             return None;
@@ -48,7 +48,7 @@ impl ByteScroll {
         Some(f64::from(-f32::from(geometry.offset) / travel).clamp(0., 1.))
     }
 
-    pub(super) fn show(&self, fraction: f64, pages: f64) {
+    pub(crate) fn show(&self, fraction: f64, pages: f64) {
         let mut geometry = self.0.get();
         let pages = pages.clamp(1., MAX_PAGES);
         geometry.content = geometry.bounds.size.height * pages as f32;

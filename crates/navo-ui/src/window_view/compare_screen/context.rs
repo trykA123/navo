@@ -60,6 +60,12 @@ pub(super) fn on_right_click(
 impl FileScreen {
     /// What the menu may offer at the cursor line of the open pair.
     fn menu_facts(&self) -> FileFacts {
+        if let Some(hex) = &self.hex {
+            return FileFacts {
+                changes: hex.region_count() > 0,
+                ..FileFacts::default()
+            };
+        }
         let Some(view) = &self.view else {
             return FileFacts::default();
         };

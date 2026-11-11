@@ -52,7 +52,8 @@ impl DiffSlot {
 /// Queue `update`, coalescing the snapshots the view has not applied yet.
 ///
 /// A newer `Large` snapshot replaces the older one. `Bytes` updates carry only new regions,
-/// so an older pending one keeps its regions and takes the newer progress.
+/// so an older pending one of the same request, align and run keeps its regions and takes the
+/// newer progress.
 pub(in crate::window_view) fn coalesce(
     inbox: &mut Vec<(u64, DiffUpdate)>,
     tag: u64,
@@ -68,36 +69,77 @@ pub(in crate::window_view) fn coalesce(
         }
         DiffUpdate::Bytes {
             request,
+            align,
+            run,
             regions,
             progress,
-        } => {
-            let pending = inbox
-                .iter_mut()
-                .rev()
-                .find_map(|(sent_to, queued)| match queued {
-                    DiffUpdate::Bytes {
-                        request: queued,
-                        regions: older,
-                        progress: older_progress,
-                    } if *sent_to == tag && *queued == request => Some((older, older_progress)),
-                    _ => None,
-                });
-            if let Some((older, older_progress)) = pending {
-                older.extend(regions);
-                if progress.is_some() {
-                    *older_progress = progress;
-                }
-            } else {
-                inbox.push((
-                    tag,
-                    DiffUpdate::Bytes {
-                        request,
-                        regions,
-                        progress,
-                    },
-                ));
-            }
-        }
+        } => coalesce_bytes(
+            inbox,
+            tag,
+            ByteBatch {
+                request,
+                align,
+                run,
+                regions,
+                progress,
+            },
+        ),
         other => inbox.push((tag, other)),
+    }
+}
+
+/// The fields of one `DiffUpdate::Bytes`, passed to `coalesce_bytes` as one value.
+struct ByteBatch {
+    request: u64,
+    align: crate::compare_diff::HexAlign,
+    run: u64,
+    regions: Vec<crate::compare_diff::ByteRegionView>,
+    progress: Option<crate::compare_diff::ByteProgress>,
+}
+
+/// Merge one byte snapshot into the pending snapshot of the same run.
+fn coalesce_bytes(inbox: &mut Vec<(u64, DiffUpdate)>, tag: u64, batch: ByteBatch) {
+    let ByteBatch {
+        request,
+        align,
+        run,
+        regions,
+        progress,
+    } = batch;
+    let pending = inbox
+        .iter_mut()
+        .rev()
+        .find_map(|(sent_to, queued)| match queued {
+            DiffUpdate::Bytes {
+                request: queued,
+                align: older_align,
+                run: older_run,
+                regions: older,
+                progress: older_progress,
+            } if *sent_to == tag
+                && *queued == request
+                && *older_align == align
+                && *older_run == run =>
+            {
+                Some((older, older_progress))
+            }
+            _ => None,
+        });
+    if let Some((older, older_progress)) = pending {
+        older.extend(regions);
+        if progress.is_some() {
+            *older_progress = progress;
+        }
+    } else {
+        inbox.push((
+            tag,
+            DiffUpdate::Bytes {
+                request,
+                align,
+                run,
+                regions,
+                progress,
+            },
+        ));
     }
 }

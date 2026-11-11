@@ -96,6 +96,7 @@ impl EngineJob<'_> {
                             left,
                             right,
                             align,
+                            run: 0,
                             budget: self.plan.budget,
                         },
                         self.sink.clone(),

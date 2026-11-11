@@ -27,6 +27,7 @@ mod column_widths;
 mod command_center;
 mod compare;
 mod compare_copy;
+mod compare_hex;
 mod compare_image;
 mod compare_large;
 mod compare_large_bar;

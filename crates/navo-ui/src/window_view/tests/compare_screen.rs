@@ -74,10 +74,20 @@ pub(super) fn rig(cx: &mut TestAppContext) -> Rig {
 
 /// The same rig in a window `width` wide.
 pub(super) fn rig_sized(cx: &mut TestAppContext, width: gpui_kit::Pixels) -> Rig {
+    rig_with_files(cx, width, super::super::FileHooks::none())
+}
+
+/// The same rig, opening pair sides through `files`.
+pub(super) fn rig_with_files(
+    cx: &mut TestAppContext,
+    width: gpui_kit::Pixels,
+    files: super::super::FileHooks,
+) -> Rig {
     let fs = fake();
     let sink = Sink::default();
     let diff = Arc::new(FakeDiffHooks::default());
     let options = StartOptions {
+        files,
         open: OpenHooks {
             compare: Some(Arc::new(Hooks(sink.clone()))),
             diff: Some(diff.clone()),
@@ -130,7 +140,7 @@ impl Rig {
     }
 
     /// Runs `action` on the focused element, as a key or a menu entry would.
-    fn dispatch(&self, cx: &mut TestAppContext, action: &dyn gpui_kit::Action) {
+    pub(super) fn dispatch(&self, cx: &mut TestAppContext, action: &dyn gpui_kit::Action) {
         cx.update_window(self.window, |_, window, cx| {
             window.dispatch_action(action.boxed_clone(), cx);
         })
@@ -172,7 +182,7 @@ impl Rig {
         .expect("window")
     }
 
-    fn push(
+    pub(super) fn push(
         &self,
         cx: &mut TestAppContext,
         sink: &crate::compare_diff::DiffSink,
@@ -261,6 +271,8 @@ fn byte_deltas_merge_into_one_pending_snapshot() {
     let mut inbox = Vec::new();
     let first = DiffUpdate::Bytes {
         request: 1,
+        align: crate::compare_diff::HexAlign::Offset,
+        run: 1,
         regions: vec![ByteRegionView {
             left: 0..1,
             right: 0..1,
@@ -274,6 +286,8 @@ fn byte_deltas_merge_into_one_pending_snapshot() {
     };
     let second = DiffUpdate::Bytes {
         request: 1,
+        align: crate::compare_diff::HexAlign::Offset,
+        run: 1,
         regions: vec![ByteRegionView {
             left: 1..2,
             right: 1..2,
