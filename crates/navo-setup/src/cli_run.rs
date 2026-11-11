@@ -166,7 +166,7 @@ fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPa
 }
 
 /// Appends one line to the wizard log; a write failure never stops the install.
-fn write_log_line(path: &Path, line: &str) {
+pub(crate) fn write_log_line(path: &Path, line: &str) {
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(file, "{line}");
     }

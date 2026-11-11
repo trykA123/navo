@@ -72,9 +72,10 @@ fn open_window() -> ExitCode {
     use window_worker::{Probe, WindowsProbe};
     hide_own_console();
     let payload = payload::Payload::embedded().ok();
-    let velopack_log = payload::Logs::create().map_or_else(
-        |_| std::env::temp_dir().join("navo-setup-velopack.log"),
-        |logs| logs.velopack,
+    let logs = payload::Logs::create().ok();
+    let velopack_log = logs.as_ref().map_or_else(
+        || std::env::temp_dir().join("navo-setup-velopack.log"),
+        |logs| logs.velopack.clone(),
     );
     let default = cli::default_root().unwrap_or_default();
     let flow = window_core::initial_flow(&mut host::WindowsHost, payload.as_ref(), default);
@@ -87,6 +88,7 @@ fn open_window() -> ExitCode {
                 .saturating_mul(4)
                 .max(space.velopack_requirement())
         }),
+        wizard_log: logs.map(|logs| logs.wizard),
         log_paths: vec![velopack_log.clone()],
     };
     let make = || -> (Box<dyn host::Host>, Box<dyn Probe>) {

@@ -1,12 +1,14 @@
 //! Recovery tests for the window core: Back from Failed, a lost worker, invalid edits and unsafe-name text.
 
+use std::path::Path;
+
 use navo_ui::setup::{SetupAction, SetupPage};
 
 use crate::flow::{Event, Failure, InstallAction, SetupExit};
 use crate::mode::{Mode, Why};
 use crate::window_core::{Out, Shell};
 use crate::window_tests::{
-    ROOT, candidate, exited, fresh_shell, shell_on_ready_folder, upgrade_shell,
+    ROOT, WIZARD_LOG, candidate, exited, fresh_shell, shell_on_ready_folder, upgrade_shell,
 };
 use crate::window_worker::{Job, Reply};
 
@@ -116,11 +118,34 @@ fn the_unsafe_name_notice_never_mentions_uninstalling() {
     );
 }
 
+/// A failed run names the wizard log first and writes its problem there (plan: Failed, S10).
+#[test]
+fn a_failed_run_names_the_wizard_log_and_writes_the_problem_to_it() {
+    let mut shell = shell_on_ready_folder();
+    shell.act(SetupAction::Next);
+    shell.act(SetupAction::Primary);
+    let outs = shell.reply(exited(SetupExit::Failed(Failure::Upgrade(Some(1)))));
+    let logs = shell.view().log_paths;
+    assert_eq!(
+        logs.first().map(|p| p.as_path()),
+        Some(Path::new(WIZARD_LOG)),
+        "{logs:?}"
+    );
+    assert!(
+        logs.iter()
+            .any(|p| p.to_string_lossy().ends_with("velopack.log")),
+        "{logs:?}"
+    );
+    let logged = |out: &Out| matches!(out, Out::Log { path, line } if path == Path::new(WIZARD_LOG) && line.contains("code 1"));
+    assert!(outs.iter().any(logged), "{outs:?}");
+}
+
 /// The window facts the tests share.
 fn facts() -> crate::window_view::Facts {
     crate::window_view::Facts {
         version: "0.4.0".into(),
         space_needed: Some(200),
+        wizard_log: None,
         log_paths: Vec::new(),
     }
 }
