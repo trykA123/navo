@@ -147,6 +147,12 @@ impl FileView {
         self.sideways = SidewaysHandle::carried(&old.sideways);
     }
 
+    /// Keeps the syntax parse of `old`, the same pair before a reload, to colour the rows with
+    /// until this text's own parse lands.
+    pub(super) fn keep_syntax(&mut self, old: &Self) {
+        self.syntax.keep_from(&old.syntax);
+    }
+
     /// The shape in `layout`, measured on first use.
     fn shape(&mut self, layout: Layout) -> &Shape {
         let slot = &mut self.shapes[usize::from(layout == Layout::Unified)];
