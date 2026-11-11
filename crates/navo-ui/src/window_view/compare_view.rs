@@ -62,7 +62,10 @@ impl NavoWindow {
         focus: &FocusHandle,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let mode = self.browser.compare_mode()?;
+        let Some(mode) = self.browser.compare_mode() else {
+            self.compare.map = None; // the compare ended: the map goes with it
+            return None;
+        };
         let side = mode.side_of(pane)?;
         let key = (mode.run(), mode.revision());
         if self.compare.built.as_ref().map(|built| built.key) != Some(key) {

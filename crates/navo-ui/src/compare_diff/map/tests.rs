@@ -165,3 +165,23 @@ fn a_drag_keeps_jumping_and_a_move_without_a_press_does_not(cx: &mut TestAppCont
         vec![MapEvent::Jump(200), MapEvent::Jump(400)]
     );
 }
+
+#[gpui_kit::test]
+fn a_scroll_reuses_the_ticks_placed_for_these_hunks(cx: &mut TestAppContext) {
+    let hunks: Arc<[MapHunk]> =
+        Arc::new([hunk(1..2, HunkKind::Changed), hunk(5..6, HunkKind::Added)]);
+    let map = cx.new(|_| ChangeMap::new(hunks, 10));
+    let placed = map.read_with(cx, |map, _| map.ticks());
+    map.update(cx, |map, cx| map.set_viewport(3..6, cx));
+    map.update(cx, |map, cx| map.set_current(Some(1), cx));
+    let after = map.read_with(cx, |map, _| map.ticks());
+    assert!(
+        Arc::ptr_eq(&placed, &after),
+        "a scroll or a new current hunk moves the box, it does not re-place a million ticks"
+    );
+    map.update(cx, |map, cx| {
+        map.set_hunks(Arc::new([hunk(9..10, HunkKind::Deleted)]), 10, cx)
+    });
+    let grown = map.read_with(cx, |map, _| map.ticks());
+    assert!(!Arc::ptr_eq(&placed, &grown), "new hunks are placed again");
+}
