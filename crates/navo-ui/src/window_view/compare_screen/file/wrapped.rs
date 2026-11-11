@@ -68,8 +68,8 @@ impl FileView {
     }
 
     /// Rebuilds the wrap index when its key (`layout`, width in columns) changed, and keeps the
-    /// top pair row on top (rows `row_height` px high). Flat while wrap is off or before the
-    /// widths and the text cell are known.
+    /// top pair row on top (rows `row_height` px high) unless a centre is pending, which moves
+    /// the list anyway. Flat while wrap is off or before the widths and the text cell are known.
     pub(super) fn index(&mut self, layout: Layout, row_height: Pixels) {
         let key = match (self.wrapped.on, &self.cols, self.sideways.wrap_cols()) {
             (true, Some(_), Some(cols)) => Some((layout, cols)),
@@ -86,7 +86,9 @@ impl FileView {
                 cols: wrap,
             });
         self.wrapped.key = key;
-        self.scroll.scroll_to_top(self.list_row(top));
+        if !self.centre {
+            self.scroll.scroll_to_top(self.list_row(top));
+        }
     }
 
     /// The first list item of pair row `row`.
@@ -95,6 +97,20 @@ impl FileView {
             .draw
             .as_ref()
             .map_or(row, |wrap| wrap.index.first_of(row))
+    }
+
+    /// The list items pair row `row` takes: one while flat, 0 past the last row while wrapping.
+    pub(super) fn row_lines(&self, row: usize) -> u32 {
+        self.wrapped
+            .draw
+            .as_ref()
+            .map_or(1, |wrap| wrap.index.lines_of(row))
+    }
+
+    /// Whether wrap is on but its index is not built yet (the widths or the text cell are still
+    /// unknown). List indices are flat then, so a centre waits for the frame that builds it.
+    pub(super) fn index_pending(&self) -> bool {
+        self.wrapped.on && self.wrapped.draw.is_none()
     }
 
     /// The pair row list item `item` shows.

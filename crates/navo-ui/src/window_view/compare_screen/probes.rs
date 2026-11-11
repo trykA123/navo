@@ -1,6 +1,8 @@
 //! Test probes of the compare screen: the open file screen, its look, drawers and map, and an
 //! empty Stream under the file diff.
 
+use std::sync::Arc;
+
 use gpui_kit::FocusHandle;
 
 use super::hex::HexProbe;
@@ -113,6 +115,32 @@ impl NavoWindow {
     )> {
         let file = self.compare.screen.as_ref()?.file.as_ref()?;
         Some(file.view.as_ref()?.wrap_seen(row_height))
+    }
+
+    /// Marks change `at` as the one the open file diff centres when its text lands, the way
+    /// Enter on a Stream card does. False when no file diff is open.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_open_at(&mut self, at: usize) -> bool {
+        let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut()) else {
+            return false;
+        };
+        file.at = Some(at);
+        true
+    }
+
+    /// How far down from the top of the list the line the file diff's menu anchors on ends, in px:
+    /// the picked line, else the current change's first line, else the first line. `None` when no
+    /// text pair is open.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_line_bottom(
+        &mut self,
+        layout: crate::compare_diff::Layout,
+        row_height: Pixels,
+    ) -> Option<Pixels> {
+        let file = self.compare.screen.as_mut()?.file.as_mut()?;
+        let text = Arc::clone(file.view.as_ref()?.text());
+        let spot = file.pick.cursor_spot(&text);
+        Some(file.view.as_mut()?.line_bottom(layout, spot, row_height))
     }
 
     /// The cursor of the list of changes.

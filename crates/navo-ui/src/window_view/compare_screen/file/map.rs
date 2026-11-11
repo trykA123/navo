@@ -96,11 +96,13 @@ impl FileView {
 }
 
 impl NavoWindow {
-    /// Scrolls the open file diff so `row` is in the middle of the list.
+    /// Scrolls the open file diff so `row` (a pair row, as the map counts them) is in the middle
+    /// of the list, which is asked in list items.
     fn jump_file_row(&mut self, row: u32, cx: &mut Context<Self>) {
         let file = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
         if let Some(view) = file.and_then(|file| file.view.as_mut()) {
-            view.scroll.scroll_to_center(row as usize);
+            let item = view.list_row(row as usize);
+            view.scroll.scroll_to_center(item);
             cx.notify();
         }
     }

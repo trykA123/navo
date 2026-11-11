@@ -87,12 +87,13 @@ fn line_of_offset(text: &PairText, offset: u64) -> usize {
 
 impl FileView {
     /// The byte offset in the left file of the line on top of the list, rows `row_height` tall.
+    /// The list's top is a list item: while lines wrap its row is the pair row it belongs to.
     pub(in crate::window_view::compare_screen) fn top_offset(
         &self,
         layout: Layout,
         row_height: gpui_kit::Pixels,
     ) -> u64 {
-        let row = self.scroll.top_row(row_height);
+        let row = self.pair_row(self.scroll.top_row(row_height));
         offset_of_line(&self.text, line_at_row(&self.text, layout, row))
     }
 
@@ -101,10 +102,12 @@ impl FileView {
         self.seek = Some(line_of_offset(&self.text, offset));
     }
 
-    /// Before a draw in `layout`: centres the current change once after a step, then applies a
-    /// pending seek.
+    /// Before a draw in `layout`: centres the current change once, then applies a pending seek.
+    /// A centre is kept for a later frame while wrap still waits for its index, because the flat
+    /// list indices of these frames would put the change nowhere near its wrapped row.
     pub(super) fn place(&mut self, layout: Layout) {
-        if std::mem::take(&mut self.centre)
+        if !self.index_pending()
+            && std::mem::take(&mut self.centre)
             && let Some(at) = self.current
         {
             let row = self.shape(layout).starts[at];
@@ -113,11 +116,11 @@ impl FileView {
         self.apply_seek(layout);
     }
 
-    /// Scrolls to a pending seek in `layout`, once.
+    /// Scrolls to a pending seek in `layout`, once: the sought pair row on top of the list.
     pub(super) fn apply_seek(&mut self, layout: Layout) {
         if let Some(line) = self.seek.take() {
-            self.scroll
-                .scroll_to_top(row_of_line(&self.text, layout, line));
+            let row = row_of_line(&self.text, layout, line);
+            self.scroll.scroll_to_top(self.list_row(row));
         }
     }
 }
