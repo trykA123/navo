@@ -21,6 +21,7 @@ mod cancel;
 mod ico;
 mod limits;
 mod sniff;
+mod thumb;
 
 #[test]
 fn scores_and_mask_come_after_opened() {
