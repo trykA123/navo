@@ -22,9 +22,12 @@ struct Sample {
     tone: Tone,
     mark: &'static str,
     status: &'static str,
+    /// The left side has the later time, so its pane marks the row as the newer one.
+    newer_left: bool,
 }
 
 const TIME: &str = "2026-10-20 13:41";
+const EARLIER_TIME: &str = "2026-10-18 09:05";
 
 const SAMPLES: [Sample; 10] = [
     sample(
@@ -36,10 +39,11 @@ const SAMPLES: [Sample; 10] = [
     sample(
         "Cargo.toml",
         CompareKind::File,
-        [Some(("1.6 KB", TIME)), Some(("1.7 KB", TIME))],
+        [Some(("1.6 KB", TIME)), Some(("1.7 KB", EARLIER_TIME))],
         (Tone::Change, "≠"),
     )
-    .said("different"),
+    .said("different")
+    .newer_on_left(),
     sample(
         "legacy_walk.rs",
         CompareKind::File,
@@ -110,6 +114,7 @@ const fn sample(
         tone,
         mark,
         status: "",
+        newer_left: false,
     }
 }
 
@@ -119,19 +124,31 @@ impl Sample {
         self
     }
 
+    /// Mark this row's left side as the newer one of the pair.
+    const fn newer_on_left(mut self) -> Self {
+        self.newer_left = true;
+        self
+    }
+
     fn view(&self, side: usize) -> RowView {
         let here = self.sides[side].map(|(size, time)| SideView {
             kind: self.kind,
             size: size.to_owned(),
             time: time.to_owned(),
+            newer: self.newer_left && side == 0,
         });
+        let missing = if side == 0 {
+            "not in left"
+        } else {
+            "not in right"
+        };
         RowView {
             path: self.name.to_owned(),
             name: self.name.to_owned(),
             status: if here.is_some() {
                 self.status.to_owned()
             } else {
-                String::new()
+                missing.to_owned()
             },
             side: here,
             tone: self.tone,
