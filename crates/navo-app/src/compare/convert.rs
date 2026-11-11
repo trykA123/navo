@@ -2,47 +2,19 @@
 
 use navo_compare::model::{EntryKind, Row, SideEntry, Status};
 use navo_compare::session::{RowBatch, StopBound, Totals};
-use navo_store::{Compare, SettingValue};
 use navo_ui::browser::{
     CompareKind, CompareRow, CompareSide, CompareTotals, CompareUpdate, RowProgress, RowStatus,
     StopBound as UiBound,
 };
-use navo_ui::settings::{Change, FIELDS, Section, Values};
+use navo_ui::compare_diff::CompareOptions;
+use navo_ui::settings::Values;
 
 use super::handle::CompareEvent;
 use super::settings::CompareSettings;
 
 /// The compare settings the user sees in `values`, read through the stored `[compare]` rules.
 pub(super) fn settings_of(values: &Values) -> CompareSettings {
-    let mut table = serde_json::Map::new();
-    for spec in FIELDS
-        .iter()
-        .filter(|spec| spec.section == Section::Compare)
-    {
-        let Some(key) = spec.key.strip_prefix("compare.") else {
-            continue;
-        };
-        let change = Change {
-            field: spec.field,
-            value: values.get(spec.field).clone(),
-        };
-        if let Some(value) = crate::settings::stored_value(&change) {
-            table.insert(key.to_owned(), json_of(value));
-        }
-    }
-    let stored: Compare = serde_json::from_value(serde_json::Value::Object(table))
-        .inspect_err(|error| tracing::warn!(%error, "compare settings fall back to defaults"))
-        .unwrap_or_default();
-    CompareSettings::from(&stored)
-}
-
-fn json_of(value: SettingValue) -> serde_json::Value {
-    match value {
-        SettingValue::Bool(flag) => flag.into(),
-        SettingValue::Integer(number) => number.into(),
-        SettingValue::Text(text) => text.into(),
-        SettingValue::List(items) => items.into(),
-    }
+    CompareSettings::from(&CompareOptions::from_values(values).compare)
 }
 
 /// The UI update for an event.
