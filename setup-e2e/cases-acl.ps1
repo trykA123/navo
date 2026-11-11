@@ -25,6 +25,8 @@ function Test-S16a {
     Step-ToFolder $wizard 'Install Navo 0\.0\.2'
     Set-FolderPath $wizard $root
     Assert (-not (Test-Path -LiteralPath $parent)) "$parent exists before Install"
+    Write-Evidence "folder page:`n$(Get-UiText $wizard.Window)"
+    Save-WindowShot $wizard.Window 'S16a-folder'
     Step-FreshInstall $wizard
     Finish-Wizard $wizard $false
     Assert ((Read-SqVersion $root) -eq '0.0.2') 'the install is not 0.0.2'
