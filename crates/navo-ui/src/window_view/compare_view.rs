@@ -66,7 +66,7 @@ impl NavoWindow {
             self.compare.map = None; // the compare ended: the map goes with it
             return None;
         };
-        let side = mode.side_of(pane)?;
+        let side = self.browser.compare_side_of(pane)?;
         let key = (mode.run(), mode.revision());
         if self.compare.built.as_ref().map(|built| built.key) != Some(key) {
             self.compare.built = Some(Built {
