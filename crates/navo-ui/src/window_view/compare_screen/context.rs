@@ -69,7 +69,14 @@ impl FileScreen {
             };
         }
         let Some(view) = &self.view else {
-            return FileFacts::default();
+            let Some(large) = &self.large else {
+                return FileFacts::default();
+            };
+            return FileFacts {
+                changes: large.has_changes(),
+                bytes_here: self.switch.aimed(),
+                ..FileFacts::default()
+            };
         };
         let text = view.text();
         let copyable = view
@@ -165,27 +172,15 @@ impl NavoWindow {
     }
 
     /// A right-click on a file diff row: the cursor goes to its change and line, then the menu
-    /// opens at `at`.
+    /// opens at `at`. A Large row has no cursor to move, but it still notes its aim (V41e).
     fn menu_at_file_row(
         &mut self,
         (hit, at): (RowHit, Point<Pixels>),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut())
-            && let Some(view) = file.view.as_mut()
-        {
-            if let Some(hunk) = hit.hunk {
-                view.set_current(hunk as usize);
-            }
-            let side = file.pick.side_for(hit.left.is_some());
-            let line = match side {
-                PickSide::Left => hit.left,
-                PickSide::Right => hit.right,
-            };
-            if let Some(line) = line {
-                file.pick.point(view.text(), (side, line));
-            }
+        if let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut()) {
+            point_text_row(file, hit);
             file.aim_at(LongHit {
                 left: hit.left,
                 right: hit.right,
@@ -267,4 +262,23 @@ impl NavoWindow {
 /// One entry: the label of Fluent id `id`, running `action`.
 pub(super) fn run(id: &str, action: impl gpui_kit::Action) -> MenuEntry {
     MenuEntry::Run(tr(id).into(), Box::new(action), false)
+}
+
+/// Moves the text pair's cursor onto the clicked row: its change, then its line. A pair with no
+/// text view (Large, image) has no cursor, so this does nothing for it.
+fn point_text_row(file: &mut FileScreen, hit: RowHit) {
+    let Some(view) = file.view.as_mut() else {
+        return;
+    };
+    if let Some(hunk) = hit.hunk {
+        view.set_current(hunk as usize);
+    }
+    let side = file.pick.side_for(hit.left.is_some());
+    let line = match side {
+        PickSide::Left => hit.left,
+        PickSide::Right => hit.right,
+    };
+    if let Some(line) = line {
+        file.pick.point(view.text(), (side, line));
+    }
 }

@@ -166,6 +166,7 @@ compare-copy-pick = Pick a change first. Nothing was copied.
 compare-copy-no-digest = This change is too large or too coarse to copy. Nothing was copied.
 compare-copy-running = A copy is still running. Wait for it to end.
 compare-copy-pick-side = The picked lines are on the other side. Nothing was copied.
+compare-bytes-here-none = Put the cursor on a line over 1 MiB to show its bytes
 compare-remove-whole = Pick every line of a change that exists on one side only. Nothing was removed.
 compare-removed-left = Removed from the left
 compare-removed-right = Removed from the right

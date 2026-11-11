@@ -37,12 +37,13 @@ pub(in crate::window_view::compare_screen) struct FileBars {
 
 impl FileBars {
     /// Wraps the drawn `row` (number `at`, first row of its change when `first`) of change
-    /// `hunk` so the pointer shows the bar and its buttons copy.
+    /// `hunk` so the pointer shows the bar and its buttons copy. `bar_left` puts the bar on the
+    /// row's left end, where a "Show bytes here" button does not sit (V41e).
     pub(in crate::window_view::compare_screen) fn wrap(
         &self,
         t: &Theme,
         row: AnyElement,
-        (at, hunk, first): (usize, u32, bool),
+        (at, hunk, first, bar_left): (usize, u32, bool, bool),
     ) -> AnyElement {
         let (on_hover, on_copy) = (self.weak.clone(), self.weak.clone());
         let bar = BarRow {
@@ -50,6 +51,7 @@ impl FileBars {
             first,
             hovered: self.hovered == Some(hunk),
             animate: self.animate,
+            bar_left,
             on_hover: Rc::new(move |on, cx| {
                 let _ = on_hover.update(cx, |view, cx| {
                     view.set_copy_hover(Hover::File(hunk), on, cx);

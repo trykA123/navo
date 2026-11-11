@@ -33,6 +33,9 @@ pub struct BarRow {
     pub hovered: bool,
     /// Whether the bar fades in; false when the system asks for reduced motion.
     pub animate: bool,
+    /// Whether the bar sits on the row's left end: the right end shows a "Show bytes here"
+    /// button (V41e), which the bar must not cover.
+    pub bar_left: bool,
     pub on_hover: OnHover,
     pub on_copy: OnCopy,
 }
@@ -55,6 +58,7 @@ pub fn hunk_row(t: &Theme, row: AnyElement, bar: BarRow) -> AnyElement {
         first,
         hovered,
         animate,
+        bar_left,
         on_hover,
         on_copy,
     } = bar;
@@ -66,7 +70,7 @@ pub fn hunk_row(t: &Theme, row: AnyElement, bar: BarRow) -> AnyElement {
         .on_hover(move |on, _, cx| on_hover(*on, cx))
         .child(row);
     match hovered && first {
-        true => wrapper.child(bar_view(t, id.1, on_copy, animate)),
+        true => wrapper.child(bar_view(t, (id.1, bar_left), on_copy, animate)),
         false => wrapper,
     }
     .into_any_element()
@@ -98,8 +102,9 @@ fn button(
         .child(SharedString::from(label))
 }
 
-/// The bar itself, faded in unless the system asks for reduced motion.
-fn bar_view(t: &Theme, id: usize, on_copy: OnCopy, animate: bool) -> AnyElement {
+/// The bar itself, faded in unless the system asks for reduced motion. It sits on the row's
+/// right end, or on its left when `at_left` says the right end shows a "Show bytes here" button.
+fn bar_view(t: &Theme, (id, at_left): (usize, bool), on_copy: OnCopy, animate: bool) -> AnyElement {
     let (to_left, to_right) = (on_copy.clone(), on_copy);
     let left = button(
         t,
@@ -115,7 +120,6 @@ fn bar_view(t: &Theme, id: usize, on_copy: OnCopy, animate: bool) -> AnyElement 
     );
     let bar = div()
         .absolute()
-        .right(t.spacing.md)
         .top(px(1.))
         .bottom(px(1.))
         .flex()
@@ -131,6 +135,10 @@ fn bar_view(t: &Theme, id: usize, on_copy: OnCopy, animate: bool) -> AnyElement 
         .child(left)
         .child(div().w(px(1.)).h_full().bg(t.colors.line))
         .child(right);
+    let bar = match at_left {
+        true => bar.left(t.spacing.md),
+        false => bar.right(t.spacing.md),
+    };
     if !animate {
         return bar.into_any_element();
     }

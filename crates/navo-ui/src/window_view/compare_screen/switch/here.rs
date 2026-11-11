@@ -4,7 +4,9 @@
 use std::rc::Rc;
 
 use gpui_kit::{Stateful, WeakEntity};
+use navo_l10n::tr;
 
+use super::super::copy::Note;
 use super::super::file::FileView;
 use super::super::hex::Anchor as HexAnchor;
 use super::super::large::Anchor as LineAnchor;
@@ -64,13 +66,22 @@ impl FileScreen {
         }
     }
 
-    /// Notes `hit` as the line the menu opened on, when one of its lines is over 1 MiB.
+    /// Notes `hit` as the menu's line, when one of its lines in this pair is over 1 MiB: the
+    /// text pair's lines read the view's text, a Large pair's read its line cache (V41e).
     pub(in crate::window_view::compare_screen) fn aim_at(&mut self, hit: LongHit) {
-        self.switch.aim = self.view.as_ref().and_then(|view| long_in(view, hit));
+        self.switch.aim = match self.view.as_ref() {
+            Some(view) => long_in(view, hit),
+            None => self.large.as_ref().and_then(|large| large.long_hit(hit)),
+        };
     }
 
-    /// Notes the line under the keys' cursor as the menu's line, when it is over 1 MiB.
+    /// Notes the aim for the keys' command: on a text pair the line under the pick cursor, on a
+    /// Large pair the first line over 1 MiB in view, left side first (V41e); nothing else.
     pub(in crate::window_view::compare_screen) fn aim_from_cursor(&mut self) {
+        if self.view.is_none() {
+            self.switch.aim = self.large.as_ref().and_then(|large| large.long_in_view());
+            return;
+        }
         let spot = self
             .view
             .as_ref()
@@ -132,7 +143,7 @@ fn long_in(view: &FileView, hit: LongHit) -> Option<LongHit> {
 
 impl NavoWindow {
     /// Binds Show bytes here on the file diff's `root`: it acts on the menu's line, else the
-    /// cursor's.
+    /// cursor's; with neither a long line it says so in the compare notice (V41e).
     pub(in crate::window_view::compare_screen) fn here_actions(
         root: Stateful<Div>,
         cx: &mut Context<Self>,
@@ -144,8 +155,17 @@ impl NavoWindow {
             if file.switch.aim.is_none() {
                 file.aim_from_cursor();
             }
-            if let Some(hit) = file.switch.aim.take() {
-                view.show_bytes_here(hit, cx);
+            let hit = file.switch.aim.take();
+            match hit {
+                Some(hit) => view.show_bytes_here(hit, cx),
+                None => {
+                    view.compare.diff.copy.note = Some(Note {
+                        text: tr("compare-bytes-here-none").into(),
+                        undo: false,
+                        error: true,
+                    });
+                    cx.notify();
+                }
             }
         }))
     }

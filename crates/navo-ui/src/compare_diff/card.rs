@@ -133,6 +133,7 @@ fn with_bar(
         first,
         hovered: bars.hovered == Some((id, hunk)),
         animate: bars.animate,
+        bar_left: false,
         on_hover: std::rc::Rc::new(move |on, cx| on_hover(id, hunk, on, cx)),
         on_copy: std::rc::Rc::new(move |direction, window, cx| {
             on_copy(id, hunk, direction, window, cx);

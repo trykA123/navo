@@ -13,7 +13,9 @@ use super::wrapped::WrapDraw;
 use gpui_kit::component::highlighter::HighlightTheme;
 
 use crate::compare_diff::body::{BodyLook, PairSyntax, SyntaxLook, row_view_cut};
-use crate::compare_diff::{Layout, OnBytesHere, PairText, ShownRow, SpanCache, Ticks, pair_rows};
+use crate::compare_diff::{
+    Layout, OnBytesHere, PairText, ShownRow, SpanCache, Ticks, is_long, pair_rows,
+};
 use crate::prelude::*;
 use crate::tokens;
 
@@ -88,7 +90,12 @@ impl ListRows {
                 let drawn = row_view_cut(&look, row, &cut);
                 let first =
                     sub == 0 && row.hunk.and_then(|h| self.starts.get(h as usize)) == Some(&at);
-                Some(wrap_row(bars, look.theme, drawn, (item, first, row, text)))
+                Some(wrap_row(
+                    bars,
+                    look.theme,
+                    drawn,
+                    (item, first, row, (text, self.layout)),
+                ))
             })
             .collect()
     }
@@ -102,19 +109,32 @@ impl ListRows {
     }
 }
 
+/// Whether the row's right end draws a "Show bytes here" button, so the copy bar must sit on
+/// the row's left end instead: in side-by-side the right line's button, in unified either one.
+fn shows_button_at_right(row: &ShownRow, layout: Layout) -> bool {
+    let long = |side: Option<(u32, &str)>| side.is_some_and(|(_, line)| is_long(line));
+    match layout {
+        Layout::SideBySide => long(row.right),
+        Layout::Unified => long(row.left) || long(row.right),
+    }
+}
+
 /// Wraps list item `id` (drawn from `row`) with the copy bar when it belongs to a copyable change
 /// of `text`, and with the right-click menu; the bar's buttons sit on the change's `first` item.
 fn wrap_row(
     bars: &FileBars,
     t: &tokens::Theme,
     drawn: AnyElement,
-    (id, first, row, text): (usize, bool, &ShownRow, &PairText),
+    (id, first, row, (text, layout)): (usize, bool, &ShownRow, (&PairText, Layout)),
 ) -> AnyElement {
     let hunk = row
         .hunk
         .filter(|&h| text.hunks[h as usize].digest.is_some());
     let shown = match hunk {
-        Some(hunk) => bars.wrap(t, drawn, (id, hunk, first)),
+        Some(hunk) => {
+            let bar_left = shows_button_at_right(row, layout);
+            bars.wrap(t, drawn, (id, hunk, first, bar_left))
+        }
         None => drawn,
     };
     on_right_click(&bars.weak, shown, RowHit::of(row))
