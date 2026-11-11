@@ -3,6 +3,7 @@
 
 use gpui_kit::{Background, pattern_slash, rems};
 
+use super::edge::edged;
 use super::hooks::{Layout, PairText};
 use super::long::{LongHit, OnBytesHere, bytes_here, is_long};
 use super::rows::{ShownKind, ShownRow};
@@ -10,7 +11,7 @@ use super::spans::SpanCache;
 use super::ticks::{PickSide, Ticks, tick_slot};
 use crate::prelude::*;
 use crate::tokens::Theme;
-use text::{line_text, span_runs, span_tint};
+use text::{line_text, span_runs, span_tint, text_tone};
 
 mod text;
 
@@ -59,27 +60,13 @@ fn pick_side(side: Side) -> PickSide {
     }
 }
 
-/// The background of one side of a row: a wash for a change, hatching for a filler side.
-fn side_fill(t: &Theme, kind: ShownKind, side: Side) -> Option<Background> {
-    let wash = |tone: Hsla| Some(Background::from(tone));
+/// The hatching of a side with no line in a changed row or a filler; other sides have none.
+fn side_hatch(t: &Theme, kind: ShownKind, side: Side) -> Option<Background> {
     match (kind, side) {
-        (ShownKind::Equal | ShownKind::Pending, _) => None,
-        (ShownKind::Changed, _) => wash(t.diff.change.wash),
-        (ShownKind::Deleted, Side::Left) => wash(t.diff.delete.wash),
-        (ShownKind::Inserted, Side::Right) => wash(t.diff.add.wash),
-        (ShownKind::Deleted | ShownKind::Inserted | ShownKind::Filler, _) => {
-            Some(pattern_slash(t.diff.gap_hatch, 1., 4.))
-        }
-    }
-}
-
-/// The background of a unified row, which has one text column.
-fn unified_fill(t: &Theme, kind: ShownKind) -> Option<Background> {
-    match kind {
-        ShownKind::Equal | ShownKind::Filler | ShownKind::Pending => None,
-        ShownKind::Changed => Some(t.diff.change.wash.into()),
-        ShownKind::Deleted => Some(t.diff.delete.wash.into()),
-        ShownKind::Inserted => Some(t.diff.add.wash.into()),
+        (ShownKind::Deleted, Side::Right)
+        | (ShownKind::Inserted, Side::Left)
+        | (ShownKind::Filler, _) => Some(pattern_slash(t.diff.gap_hatch, 1., 4.)),
+        _ => None,
     }
 }
 
@@ -127,7 +114,7 @@ fn side_cell(look: &BodyLook, row: &ShownRow, side: Side) -> Div {
         .h_full()
         .items_center()
         .px(look.theme.spacing.sm)
-        .when_some(side_fill(look.theme, row.kind, side), |cell, fill| {
+        .when_some(side_hatch(look.theme, row.kind, side), |cell, fill| {
             cell.bg(fill)
         })
         .children(
@@ -135,10 +122,13 @@ fn side_cell(look: &BodyLook, row: &ShownRow, side: Side) -> Div {
                 .map(|ticks| tick_slot(look.theme, ticks, row, pick_side(side))),
         )
         .child(number(look, at.map(|(line, _)| line)))
-        .child(line_text(
-            at.map(|(_, text)| text),
-            span_runs(look, side, at),
-            span_tint(look.theme, row.kind),
+        .child(edged(
+            line_text(
+                at.map(|(_, text)| text),
+                span_runs(look, side, at),
+                span_tint(look.theme, row.kind),
+            ),
+            text_tone(look.theme, row.kind, side),
         ))
         .children(long_button(look, row, (side, at)))
 }
@@ -149,10 +139,13 @@ fn unified_text(look: &BodyLook, row: &ShownRow) -> Div {
         Some(line) => (Side::Right, Some(line)),
         None => (Side::Left, row.left),
     };
-    line_text(
-        line.map(|(_, text)| text),
-        span_runs(look, side, line),
-        span_tint(look.theme, row.kind),
+    edged(
+        line_text(
+            line.map(|(_, text)| text),
+            span_runs(look, side, line),
+            span_tint(look.theme, row.kind),
+        ),
+        text_tone(look.theme, row.kind, side),
     )
 }
 
@@ -190,7 +183,6 @@ pub fn row_view(look: &BodyLook, row: &ShownRow) -> AnyElement {
             .child(side_cell(look, row, Side::Right)),
         Layout::Unified => base
             .px(t.spacing.sm)
-            .when_some(unified_fill(t, row.kind), |cell, fill| cell.bg(fill))
             .children(look.ticks.map(|ticks| {
                 let side = row.right.map_or(PickSide::Left, |_| PickSide::Right);
                 tick_slot(t, ticks, row, side)
@@ -205,23 +197,20 @@ pub fn row_view(look: &BodyLook, row: &ShownRow) -> AnyElement {
 
 #[cfg(test)]
 mod tests {
-    use super::{BodyLook, Side, side_fill, span_runs, unified_fill};
+    use super::{BodyLook, Side, side_hatch, span_runs};
     use crate::compare_diff::{
         DiffRow, Layout, PairFacts, PairText, RowSpans, ShownKind, SpanCache, ViewedKey,
     };
     use crate::tokens::{Mode, Theme};
 
     #[test]
-    fn body_tints_come_from_the_diff_tokens() {
+    fn body_hatches_only_the_side_without_a_line() {
         let t = Theme::new(Mode::Light);
-        assert!(side_fill(&t, ShownKind::Equal, Side::Left).is_none());
-        let wash = side_fill(&t, ShownKind::Deleted, Side::Left);
-        assert_eq!(wash, Some(t.diff.delete.wash.into()));
-        assert_ne!(side_fill(&t, ShownKind::Deleted, Side::Right), wash);
-        assert_eq!(
-            unified_fill(&t, ShownKind::Inserted),
-            Some(t.diff.add.wash.into())
-        );
+        assert!(side_hatch(&t, ShownKind::Equal, Side::Left).is_none());
+        assert!(side_hatch(&t, ShownKind::Deleted, Side::Left).is_none());
+        assert!(side_hatch(&t, ShownKind::Deleted, Side::Right).is_some());
+        assert!(side_hatch(&t, ShownKind::Inserted, Side::Left).is_some());
+        assert!(side_hatch(&t, ShownKind::Filler, Side::Right).is_some());
     }
 
     #[test]
