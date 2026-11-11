@@ -56,6 +56,13 @@ impl StreamScreen {
         visible[near].iter().map(|&at| items[at].id).collect()
     }
 
+    /// Frees the thumbnails that left the focus list and uploads those of the details held now
+    /// (D26.3). The caller has just changed the model, by a worker update or by a resync.
+    pub(super) fn sync_thumbs(&mut self, cx: &mut App) {
+        let keep = self.near_ids();
+        self.thumbs.sync(&self.model, &keep, cx);
+    }
+
     /// Drops the cards that arrived or stayed more than 200 items from the view, without
     /// rebuilding the rows. Returns whether any dropped.
     pub(super) fn drop_far_cards(&mut self) -> bool {

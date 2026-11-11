@@ -69,8 +69,7 @@ impl NavoWindow {
         let mut dropped = false;
         if let Some(stream) = self.stream_mut() {
             dropped = stream.send_focus();
-            let keep = stream.near_ids();
-            stream.thumbs.sync(&stream.model, &keep, cx);
+            stream.sync_thumbs(cx);
         }
         if dropped {
             cx.notify();

@@ -296,7 +296,7 @@ fn compare_stream_a_hex_card_has_nine_rows_at_a_fixed_height(cx: &mut TestAppCon
 }
 
 /// A 2×2 BGRA thumbnail of solid pixels.
-fn thumb() -> Thumb {
+pub(super) fn thumb() -> Thumb {
     Thumb {
         width: 2,
         height: 2,
@@ -305,7 +305,7 @@ fn thumb() -> Thumb {
 }
 
 /// An image detail with `thumbs` thumbnails: the left side from one, the right from two (D26.6).
-fn image_detail(thumbs: usize) -> Arc<CardDetail> {
+pub(super) fn image_detail(thumbs: usize) -> Arc<CardDetail> {
     Arc::new(CardDetail::Image(ImageCard {
         similarity: Some(90),
         note: None,
