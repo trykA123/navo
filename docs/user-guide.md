@@ -15,6 +15,7 @@ This guide is for people who try Navo for the first time. You do not need to kno
 - [Git](#git)
 - [Compare](#compare)
 - [Settings and themes](#settings-and-themes)
+- [Installing and uninstalling](#installing-and-uninstalling)
 - [Updates](#updates)
 - [Portable copies and profiles](#portable-copies-and-profiles)
 - [Tips for Total Commander users](#tips-for-total-commander-users)
@@ -349,6 +350,56 @@ Settings are stored in a plain text file, `navo.toml`. You can edit it by hand. 
 Under Colour theme you can choose Open sea, Red bill, Black cap, Fine mesh, Grain or Ink and amber. Each has a light and a dark version. You can follow the system, or keep light or dark. A separate Syntax theme sets the colours of code in the viewer and the editor.
 
 Other sections cover the file index for `Ctrl+K`, rename options, the clipboard, the safety net and diagnostics.
+
+## Installing and uninstalling
+
+**Not released yet.** The Navo installer wizard is built and tested, but no release includes it. v0.7.0 waits for it. Until then, use the portable zip or the plain installer on the releases page. The text below describes the wizard.
+
+`Navo-Setup.exe` is a guided installer for one user. It never asks for administrator rights and needs no network. It has five pages: Welcome, Licence, Install folder, Shortcuts and Finish. Enter presses the main button. Esc closes the wizard before the install starts. Alt+B goes back and Alt+N goes next.
+
+### Choosing the folder
+
+The default folder is `Programs\Navo` inside your Local AppData folder. Browse picks a parent folder. Setup then creates a new `Navo` folder inside it.
+
+Setup deletes this whole folder when you uninstall Navo. Keep your own files elsewhere.
+
+Setup refuses:
+
+- a folder that already exists;
+- a path with `%`, `^`, `&` or `!` in it;
+- a network drive, a `subst` drive, a system folder, your profile folder and OneDrive folders;
+- a drive with too little free space.
+
+Setup also refuses a folder when other people on the PC could change a folder above it. This happens with a folder you made under `C:\`, such as `C:\Tools`. It happens with a drive root that lets others delete or rename its contents, and with FAT32 and exFAT drives. The message reads: "Other people on this PC can change a folder above this one. Choose a folder directly on a drive, such as C:\Navo."
+
+A folder made directly under `C:\`, such as `C:\Navo`, works for a standard user.
+
+### Installing
+
+- Only one Navo is installed at a time. A newer Setup updates it in place. Your settings and shortcuts stay.
+- If the same or a newer version is installed, Setup starts nothing. To go back to an older version, uninstall Navo first.
+- If Navo runs from the install folder, Setup asks you to close it. Setup never closes Navo itself. A Navo that starts during the install can still be stopped by the update step.
+- If you start Setup as administrator, it asks you to start it again normally.
+- If Setup says "Repair by uninstalling first", remove Navo in Windows Settings → Apps. Then run Setup again.
+- If the install ends but Setup cannot confirm it, it tells you to remove Navo in Windows Settings → Apps. It never offers to delete the folder.
+- The Finish page says "Navo is installed." The folder is on its own line below.
+
+An unticked shortcut is deleted after a fresh install. An update never creates shortcuts again.
+
+### Uninstalling
+
+Remove Navo in Windows Settings → Apps.
+
+- Uninstall deletes the install folder with everything inside.
+- It also deletes every shortcut that points into that folder, including ones you made.
+- Your settings and data folders stay.
+- Uninstall removes the index service after one administrator prompt. It waits at most 25 seconds, also when you refuse the prompt. If the service stays, remove it in an administrator window with `sc.exe delete "Navo Index"`.
+
+### Known limits
+
+- Windows UI Automation shows an empty access key on every element. The Alt keys still work.
+- The installer is not signed yet, so Windows may warn about it.
+- The details are in [features/install.md](features/install.md).
 
 ## Updates
 
