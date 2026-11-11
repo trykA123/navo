@@ -66,7 +66,7 @@ impl LargeDiff {
     /// Start the drain and line workers with a pair request.
     pub(crate) fn start(request: PairRequest, input: LargeInput, sink: DiffSink) -> Self {
         let commands = Arc::new(Commands::new());
-        let lines = Arc::new(LineQueue::new(commands.cancel.clone()));
+        let lines = Arc::new(LineQueue::new(CancelToken::new()));
         let (id, reader_input) = (request.id, input.clone());
         let (main_commands, main_sink) = (Arc::clone(&commands), sink.clone());
         let worker = spawn("compare-large", move || {
@@ -251,7 +251,7 @@ fn run_lines(id: u64, input: LargeInput, sink: DiffSink, queue: &LineQueue) {
         if reader.is_none() {
             match build_reader(&input, &cancel) {
                 Ok(built) => reader = Some(built),
-                Err(Reason::Stopped) => return,
+                Err(Reason::Stopped) => return stopped(queue),
                 Err(reason) => {
                     tracing::warn!(?reason, "compare large line sources failed");
                     sink(line_failure(id, reason));
@@ -276,12 +276,19 @@ fn run_lines(id: u64, input: LargeInput, sink: DiffSink, queue: &LineQueue) {
                     totals: window.totals,
                 });
             }
-            Err(Reason::Stopped) => return,
+            Err(Reason::Stopped) => return stopped(queue),
             Err(reason) => {
                 tracing::warn!(?reason, "compare large line read failed");
                 sink(line_failure(id, reason));
             }
         }
+    }
+}
+
+/// Log a line worker stop that the view did not ask for, so it is never silent.
+fn stopped(queue: &LineQueue) {
+    if !queue.is_closed() {
+        tracing::warn!("compare large line worker stopped before the view closed");
     }
 }
 

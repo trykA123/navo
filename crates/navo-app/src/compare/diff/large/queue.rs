@@ -86,7 +86,7 @@ pub(crate) struct LineQueue {
 }
 
 impl LineQueue {
-    /// A queue sharing the drain worker's cancel token.
+    /// A queue with its own cancel token, cancelled only when the view closes it.
     pub(crate) fn new(cancel: CancelToken) -> Self {
         Self {
             lines: Mutex::new(Lines::default()),
@@ -122,6 +122,14 @@ impl LineQueue {
                 .wait(lines)
                 .unwrap_or_else(PoisonError::into_inner);
         }
+    }
+
+    /// Whether the view closed this queue.
+    pub(crate) fn is_closed(&self) -> bool {
+        self.lines
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .closed
     }
 
     /// Stop the line worker: set `closed` under the lock, then wake it, so no wake-up is lost.

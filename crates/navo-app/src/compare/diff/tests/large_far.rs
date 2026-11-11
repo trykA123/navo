@@ -26,7 +26,6 @@ fn wait_for_the_diff_to_finish(receive: &Receiver<DiffUpdate>) {
 }
 
 #[test]
-#[ignore = "chk-large-text: line worker dies when the drain worker drops the engine (cancels the shared token)"]
 fn a_line_window_asked_after_the_diff_finished_still_arrives() {
     let dir = tempfile::tempdir().unwrap();
     let input = pair(dir.path(), 4_000, 1_234);
@@ -50,4 +49,25 @@ fn a_line_window_asked_after_the_diff_finished_still_arrives() {
     let far = far.expect("no line window arrived after the diff finished");
     assert_eq!(far[0], "line 2000");
     drop(control);
+}
+
+#[test]
+fn closing_the_view_stops_the_line_worker() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = pair(dir.path(), 4_000, 1_234);
+    let (sink, receive) = sink();
+    let control = LargeDiff::start(request(), input, sink);
+    control.lines(0..10);
+    wait_for_the_diff_to_finish(&receive);
+    drop(control);
+    let deadline = Instant::now() + WAIT;
+    while Instant::now() < deadline {
+        if matches!(
+            receive.recv_timeout(Duration::from_millis(100)),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+        ) {
+            return;
+        }
+    }
+    panic!("a worker still holds the sink after close");
 }
