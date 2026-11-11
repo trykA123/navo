@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, path::PathBuf, rc::Rc, time::Duration};
 
-use gpui_kit::test::TestWindowExt;
+use gpui_kit::test::{TestQueryExt, TestWindowExt};
 use gpui_kit::{
     AnyWindowHandle, AppContext as _, Bounds, Context, IntoElement, Point, Render, Role,
     TestAppContext, Window, WindowBounds, WindowOptions, px, size,
@@ -149,7 +149,7 @@ fn finish_names_the_folder_lists_keys_and_sends_actions(cx: &mut TestAppContext)
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let heading = window.find("setup-heading");
-        assert_eq!(heading.label(), Some("Navo is installed in C:\\Navo."));
+        assert_eq!(heading.label(), Some("Navo is installed."));
         for (index, key) in ["Ctrl+K", "F1", "Shift+F1"].into_iter().enumerate() {
             let line = window.find(format!("finish-key-{index}"));
             assert!(line.label().expect("label").starts_with(key));
@@ -170,6 +170,24 @@ fn finish_names_the_folder_lists_keys_and_sends_actions(cx: &mut TestAppContext)
             SetupAction::OpenFolder
         ]
     );
+}
+
+#[gpui_kit::test]
+fn finish_path_is_one_named_line_that_is_not_a_tab_stop(cx: &mut TestAppContext) {
+    let folder = r"C:\Users\admin\AppData\Local\Programs\Navo";
+    let view = SetupView {
+        page: SetupPage::Finish,
+        folder_text: folder.into(),
+        ..SetupView::default()
+    };
+    let (window, _) = open(cx, view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let path = window.find_by_label(folder);
+        assert_eq!(path.label(), Some(folder));
+        assert!(path.focused().is_none(), "{path:?} is focusable");
+    })
+    .expect("window");
 }
 
 #[gpui_kit::test]
