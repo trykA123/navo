@@ -119,10 +119,10 @@ Final. Workers never reopen them.
 | Atom | Component | Files (all) | Role | Effort | After | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | profiling | `crates/navo-diag/Cargo.toml`, `crates/navo-diag/src/profiling.rs` (42 lines), `Cargo.lock` | api-builder | high | — (A9 merged) | CHK `cargo nextest run -p navo-diag --features tracy profiling`; CHK `cargo xtask check -p navo-diag` | done |
-| C2a | host info: flag check | `crates/navo-diag/tracy/flags.rs` (new), `crates/navo-diag/tests/tracy_flags.rs` (new) | patcher | medium | — | CHK `cargo nextest run -p navo-diag --test tracy_flags` | todo |
+| C2a | host info: flag check | `crates/navo-diag/tracy/flags.rs` (new), `crates/navo-diag/tests/tracy_flags.rs` (new) | patcher | medium | — | CHK `cargo nextest run -p navo-diag --test tracy_flags` | done |
 | C2b | host info: guard and header | `crates/navo-diag/build.rs` (new), `crates/navo-diag/tracy/navo_tracy_user.hpp` (new) | patcher | medium | C1, C2a | the six C2b checks below | todo |
 | C3 | zones | `crates/navo-index/src/search.rs`, `crates/navo-l10n/src/catalog.rs` | patcher | medium | — | CHK `cargo xtask check -p navo-index -p navo-l10n` | done |
-| C4 | zones | `crates/navo-app/src/compare/diff/load.rs`, `crates/navo-app/src/compare/diff/stream/worker.rs` | patcher | medium | — | CHK `cargo xtask check -p navo-app` | todo |
+| C4 | zones | `crates/navo-app/src/compare/diff/load.rs`, `crates/navo-app/src/compare/diff/stream/worker.rs` | patcher | medium | — | CHK `cargo xtask check -p navo-app` | done |
 | C5 | zones | `crates/navo-ui/src/multi_rename/preview.rs` | patcher | medium | — | CHK `cargo xtask check -p navo-ui` | done |
 | C6 | tester zip | `.github/workflows/bench-release.yml`, `crates/navo-bench/README.txt` | infra-builder | medium | C2b | `actionlint`; the C6 branch dispatch below | todo |
 | C7 | release check | `.github/workflows/release.yml` (339 lines) | patcher | medium | C6 | `actionlint`; G-C2 | todo |
@@ -307,3 +307,4 @@ Final. Workers never reopen them.
   - Also found while fixing C8: 1 MiB of random bytes holds about six `X:\` matches, so the old "random bytes pass" test could never pass, and a real trace would trip the path rules by chance. SC18 now applies path rules to stored (length-prefixed) strings only, the way Tracy writes every string; the `User:` and forbidden-word rules still cover all raw text. `l10n.catalog` is at line 83, not 82. C7 covers W14's `navo-setup` (it depends on `navo-diag`). G-C2 waits for G-A3. Base moved to `da6e3d8c`.
 - 2026-11-10 — Gemini re-check of revision 6: C8 `raw_runs` now matches strict UTF-8 only; C2b `build.rs` allows `print_stdout` and returns `Result` instead of `panic!` (workspace lints). Revision 7.
 - 2026-11-11 — C1, C3, C5 merged. C1 went in before a clean Windows run: its only unrelated failures were the shortcuts bug, fixed on main, and the_display_reader_opens_its_own_sources, which looks flaky.
+- 2026-11-11 — C2a and C4 merged. C2a matches the header by exact file name, after a hand review caught a suffix match.
