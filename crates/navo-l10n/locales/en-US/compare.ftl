@@ -260,6 +260,7 @@ compare-view-rich = Rich
 compare-view-custom = Custom
 compare-view-words = Changed words
 compare-view-map = Change map
+compare-view-wrap = Wrap lines
 compare-view-unified = Unified
 compare-view-side-by-side = Side by side
 compare-hex-align-offset = Align by offset

@@ -475,6 +475,7 @@ compare.pick_up | CompareView | true
 compare.pick_toggle | CompareView | true
 compare.remove_picked | CompareView | true
 compare.show_menu | CompareView | true
+compare.toggle_wrap | CompareView | true
 compare.toggle_viewed | CompareStream | true
 compare.fold | CompareStream | true
 compare.open_file | CompareStream | true

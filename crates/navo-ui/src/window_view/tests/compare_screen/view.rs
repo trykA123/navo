@@ -1,15 +1,67 @@
 //! The View menu and the drawers of the file diff (V17): each menu entry, drawers that start
-//! closed, and Enter in the list of changes jumping to the change.
+//! closed, and Enter in the list of changes jumping to the change. W8i adds the Wrap lines entry
+//! and Alt+Z.
 
 use gpui_kit::TestAppContext;
+use navo_core::shell_menu::ItemId;
 
+use super::super::compare_hex::hex_rig;
+use super::super::compare_switch::open;
 use super::body::pair;
-use super::rig;
-use crate::compare_diff::Layout;
+use super::{Rig, rig};
+use crate::compare_diff::{Layout, PairKind};
+use crate::context_menu::ContextMenuEvent;
+use crate::window_view::compare_screen::look::Preset;
 use crate::window_view::compare_screen::menu::{
     ShowSideBySide, ShowUnified, ToggleMap, ToggleWords,
 };
 use crate::window_view::viewer::{ViewCustom, ViewRich, ViewSimple};
+
+/// The labels and checked states of the entries of the open View menu.
+fn menu_entries(rig: &Rig, cx: &mut TestAppContext) -> Vec<(String, bool)> {
+    let menu = rig
+        .view
+        .read_with(cx, |view, _| view.compare_menu_view())
+        .expect("an open View menu");
+    menu.read_with(cx, |menu, _| {
+        menu.menu()
+            .items
+            .iter()
+            .map(|item| (item.text.clone(), item.checked))
+            .collect()
+    })
+}
+
+/// Whether the open View menu offers "Wrap lines".
+fn offers_wrap(rig: &Rig, cx: &mut TestAppContext) -> bool {
+    menu_entries(rig, cx)
+        .iter()
+        .any(|(text, ..)| text == "Wrap lines")
+}
+
+/// Closes the open View menu choosing the entry that runs `compare::ToggleWrap`, as a click
+/// would; the menu's own event path then dispatches it.
+fn choose_wrap(rig: &Rig, cx: &mut TestAppContext) {
+    let menu = rig
+        .view
+        .read_with(cx, |view, _| view.compare_menu_view())
+        .expect("an open View menu");
+    menu.update(cx, |_, cx| {
+        cx.emit(ContextMenuEvent::Chosen(ItemId::Action(
+            "compare::ToggleWrap",
+        )));
+    });
+    cx.run_until_parked();
+}
+
+/// The wrap setting of the open file diff's look.
+fn wrap(rig: &Rig, cx: &mut TestAppContext) -> bool {
+    rig.view
+        .read_with(cx, |view, _| view.file_look())
+        .expect("an open file diff")
+        .0
+        .wrap
+}
 
 #[gpui_kit::test]
 fn compare_screen_drawers_start_closed_and_the_look_starts_rich(cx: &mut TestAppContext) {
@@ -105,4 +157,86 @@ fn compare_screen_alt_v_opens_the_menu_and_each_entry_changes_the_look(cx: &mut 
         rig.view
             .read_with(cx, |view, _| view.compare_menu_view().is_some())
     );
+}
+
+#[gpui_kit::test]
+fn alt_z_flips_wrap_on_an_open_text_pair(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_text(cx, pair(40, &[10]));
+    assert!(!wrap(&rig, cx), "wrap starts off");
+    rig.press(cx, "alt-z");
+    assert!(wrap(&rig, cx), "Alt+Z turns wrap on");
+    rig.press(cx, "alt-z");
+    assert!(!wrap(&rig, cx), "Alt+Z again turns wrap off");
+}
+
+#[gpui_kit::test]
+fn the_wrap_menu_entry_flips_wrap_and_shows_checked(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_text(cx, pair(40, &[10]));
+    rig.press(cx, "alt-v");
+    let entries = menu_entries(&rig, cx);
+    let entry = entries
+        .iter()
+        .find(|(text, ..)| text == "Wrap lines")
+        .unwrap_or_else(|| panic!("the menu offers Wrap lines: {entries:?}"));
+    assert!(!entry.1, "unchecked while wrap is off");
+    choose_wrap(&rig, cx);
+    assert!(wrap(&rig, cx), "choosing the entry turns wrap on");
+    rig.press(cx, "alt-v");
+    assert!(
+        menu_entries(&rig, cx)
+            .iter()
+            .any(|(text, on)| text == "Wrap lines" && *on),
+        "the entry shows checked while wrap is on"
+    );
+}
+
+#[gpui_kit::test]
+fn the_wrap_entry_shows_on_text_pairs_only(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let text = rig(cx);
+    text.open_text(cx, pair(40, &[10]));
+    text.press(cx, "alt-v");
+    assert!(offers_wrap(&text, cx), "a text pair offers the entry");
+    let hex = hex_rig(cx, vec![0x11; 0x2000], vec![0x11; 0x2000]);
+    hex.press(cx, "enter");
+    open(cx, &hex, (1, PairKind::Binary), None);
+    hex.press(cx, "alt-v");
+    assert!(!offers_wrap(&hex, cx), "a hex pair does not");
+    let large = rig(cx);
+    large.press(cx, "enter");
+    open(
+        cx,
+        &large,
+        (
+            1,
+            PairKind::Large {
+                left: 40,
+                right: 40,
+            },
+        ),
+        None,
+    );
+    large.press(cx, "alt-v");
+    assert!(!offers_wrap(&large, cx), "a large pair does not");
+}
+
+#[gpui_kit::test]
+fn choosing_the_simple_preset_keeps_wrap(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_text(cx, pair(40, &[10]));
+    rig.press(cx, "alt-z");
+    assert!(wrap(&rig, cx), "wrap is on");
+    rig.dispatch(cx, &ViewSimple);
+    let look = rig
+        .view
+        .read_with(cx, |view, _| view.file_look())
+        .expect("an open file diff")
+        .0;
+    assert_eq!(look.preset, Preset::Simple);
+    assert!(look.wrap, "Simple keeps wrap as it was (D39.8)");
 }

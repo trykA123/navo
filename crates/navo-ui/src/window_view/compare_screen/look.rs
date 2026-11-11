@@ -69,6 +69,11 @@ impl Look {
         self.preset = Preset::Custom;
     }
 
+    /// Flips line wrap; every preset keeps wrap (D39.8), so the preset stays as it is.
+    pub(in crate::window_view) fn toggle_wrap(&mut self) {
+        self.wrap = !self.wrap;
+    }
+
     /// The layout in `window`: the picked one, else side by side, or unified below 900 px.
     pub(in crate::window_view) fn layout_in(&self, window: &Window) -> Layout {
         self.layout.unwrap_or_else(|| layout_for(window))

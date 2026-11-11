@@ -552,6 +552,7 @@ compare.pick_toggle | space | CompareView
 compare.remove_picked | ctrl-shift-delete | CompareView
 compare.show_menu | menu | CompareView
 compare.show_menu | shift-f10 | CompareView
+compare.toggle_wrap | alt-z | CompareView
 compare.next_difference | j | CompareStream
 compare.previous_difference | k | CompareStream
 compare.next_file | shift-j | CompareStream
