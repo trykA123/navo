@@ -10,6 +10,7 @@ use super::{
     CompareFilter, CompareKind, CompareMode, CompareRow, CompareSide, CompareTotals, RowProgress,
     RowStatus,
 };
+use crate::compare_list::{GutterLabel, gutter_label};
 use crate::format;
 
 /// Which theme colour a row mark, status or total is drawn in.
@@ -40,6 +41,9 @@ pub struct RowView {
     pub tone: Tone,
     pub mark: &'static str,
     pub status: String,
+    /// The pair's gutter words, set only for the rows of side 0 (the left side), which draws the
+    /// gutter column. `None` where the pair has nothing to say there.
+    pub gutter: Option<GutterLabel>,
 }
 
 /// A count in the totals line.
@@ -131,6 +135,10 @@ fn side_view(side: CompareSide) -> SideView {
     }
 }
 
+/// One pane's row of a pair: its side, words, tone and (for side 0 only) the gutter label.
+///
+/// `side` is 0 for the pane that shows the compare's left side; `progress` is the bytes checked of
+/// a row over 64 MiB. Only that pane draws the gutter, so the label describes the pair once.
 fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> RowView {
     let contains_differences =
         row.is_folder_pair() && row.contains_differences && row.status.is_same();
@@ -146,6 +154,7 @@ fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> Row
         side: here.map(side_view),
         tone,
         mark,
+        gutter: (side == 0).then(|| gutter_label(row, progress)).flatten(),
         status: if here.is_none() {
             String::new()
         } else if contains_differences {

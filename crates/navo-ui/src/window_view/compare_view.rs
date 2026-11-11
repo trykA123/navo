@@ -85,6 +85,7 @@ impl NavoWindow {
         let label = navo_l10n::tr(["compare-list-left", "compare-list-right"][side]);
         let panes: Vec<_> = self.cached.pane_ids().collect();
         let list = CompareList::new(("compare-list", pane.get()), rows, &self.compare.scroll)
+            .gutter(side == 0)
             .selected(at)
             .active(self.browser.state().focused_pane() == pane)
             .empty_text(empty)

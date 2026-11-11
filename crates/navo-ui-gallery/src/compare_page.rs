@@ -136,6 +136,7 @@ impl Sample {
             side: here,
             tone: self.tone,
             mark: self.mark,
+            gutter: None,
         }
     }
 }

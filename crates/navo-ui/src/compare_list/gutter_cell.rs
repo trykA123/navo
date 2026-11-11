@@ -2,6 +2,7 @@
 //!
 //! Sizes follow `design/prototypes/compare-marks-d114.html`, direction 2 with words.
 
+use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     Div, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
@@ -95,6 +96,8 @@ pub fn gutter_cell(
         cell.child(
             pill(t, label, compact, width)
                 .id(id.into())
+                // Registers the cell, so a test or an assistive tool can find it by this id.
+                .test_support()
                 .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx)),
         )
     })
