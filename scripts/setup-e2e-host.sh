@@ -266,7 +266,7 @@ run_batch() {
   trap vm_quit EXIT
   local failed=0 case
   for case in "$@"; do
-    [[ "$case" =~ ^S[0-9]+[a-z]?(-programs)?$ ]] || { echo "setup-e2e: bad case name $case" >&2; exit 2; }
+    [[ "$case" =~ ^S[0-9]+[a-z]?$ ]] || { echo "setup-e2e: bad case name $case" >&2; exit 2; }
     run_case "$case" || failed=1
   done
   echo "--- summary"
