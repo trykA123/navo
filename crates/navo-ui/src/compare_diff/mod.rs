@@ -19,7 +19,7 @@ pub mod stream_model;
 pub mod ticks;
 
 pub use card::{CardCtx, stream_row_view};
-pub use cols::{LineCols, Shown, TAB_COLS, char_cols, cut, line_cols, visual_lines};
+pub use cols::{LineCols, Shown, TAB_COLS, WrapIndex, char_cols, cut, line_cols, visual_lines};
 pub use hooks::{
     ByteProgress, ByteRegionView, Card, CardRow, CopyChange, CopyDirection, CopyDone, CopyResult,
     CopySink, DiffHooks, DiffRow, DiffSink, DiffUpdate, HexAlign, HunkView, ImageAlpha, ImageLimit,

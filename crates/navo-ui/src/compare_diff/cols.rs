@@ -8,6 +8,9 @@ use unicode_width::UnicodeWidthChar;
 use super::hooks::PairText;
 use super::long::is_long;
 
+mod wrap;
+pub use wrap::WrapIndex;
+
 /// Columns between tab stops.
 pub const TAB_COLS: u32 = 4;
 
