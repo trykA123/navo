@@ -259,10 +259,12 @@ function Get-InstallerProcesses {
 }
 
 # Runs a silent tester wizard and logs installer processes. Result: Code, Text, Error, Seen. $onPoll runs at each poll.
-function Invoke-Silent([string]$version, [string[]]$arguments = @(), [scriptblock]$onPoll = $null, [int]$seconds = 600) {
+# $setup and $package replace the pack's own payload files (S10's fakes).
+function Invoke-Silent([string]$version, [string[]]$arguments = @(), [scriptblock]$onPoll = $null, [int]$seconds = 600, [string]$setup = '', [string]$package = '') {
     $exe = Join-Path $wizards 'tester\Navo-Setup.exe'
-    $all = @('--silent') + $arguments + @('--payload', (Get-PackFile $version '*Setup.exe'),
-        '--payload-package', (Get-PackFile $version '*-full.nupkg'), '--payload-version', $version)
+    if (-not $setup) { $setup = Get-PackFile $version '*Setup.exe' }
+    if (-not $package) { $package = Get-PackFile $version '*-full.nupkg' }
+    $all = @('--silent') + $arguments + @('--payload', $setup, '--payload-package', $package, '--payload-version', $version)
     $psi = New-Object System.Diagnostics.ProcessStartInfo($exe, (Quote-Arguments $all))
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
