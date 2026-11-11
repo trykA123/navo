@@ -40,7 +40,10 @@ jobs:
         with:
           save-if: false
       - run: cargo build --release --locked -p navo-bench
-      - run: cargo build --release --locked -p navo-app --features tester
+      - name: Build the tester exe
+        run: cargo build --release --locked -p navo-app --features tester
+        env:
+          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=navo --remap-path-prefix=${{ env.CARGO_HOME }}=cargo -C target-feature=+crt-static -C link-arg=/STACK:8388608
       - run: cargo build --release --locked -p navo-index-service
       - name: Tracy hook is still in the vendored client
         shell: pwsh
@@ -62,7 +65,7 @@ jobs:
         run: cargo build --release --locked -p navo-app --features tester,tracy --target-dir target/tracy
         env:
           TRACY_CLIENT_SYS_CXXFLAGS: -FI${{ github.workspace }}\crates\navo-diag\tracy\navo_tracy_user.hpp -d1trimfile:${{ github.workspace }}\
-          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=navo --remap-path-prefix=${{ env.CARGO_HOME }}=cargo
+          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=navo --remap-path-prefix=${{ env.CARGO_HOME }}=cargo -C target-feature=+crt-static -C link-arg=/STACK:8388608
       - name: Tracy tools (v0.14.1, pinned hashes)
         shell: pwsh
         run: |

@@ -55,9 +55,9 @@ The design reasons are:
 - source fields are empty;
 - the header values are fixed at build time.
 
-What is checked is narrower: one real capture of the exercised flows was scanned. The scan found
-only "User: navo@tester", none of the forbidden words in any ASCII, UTF-8 or UTF-16LE text, and
-no path-shaped string among the strings Tracy stores.
+What is checked is narrower: before a zip is published, the release workflow scans navo-tracy.exe
+and the tester navo.exe for the forbidden words and path fragments, in ASCII and UTF-16LE text.
+The publish job fails if it finds one. No capture scan is claimed here.
 
 What leaves your PC is only zones.csv. Its columns are zone name, source file (empty), source
 line (0) and times.
