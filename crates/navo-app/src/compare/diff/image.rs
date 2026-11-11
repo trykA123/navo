@@ -17,6 +17,7 @@ mod header;
 mod ico;
 #[cfg(test)]
 pub(crate) mod probe;
+pub(crate) mod thumb;
 
 pub(crate) use self::header::too_large;
 #[cfg(test)]
@@ -48,8 +49,12 @@ struct Snapshot {
 enum Prepared {
     /// The pair cannot be scored or decoded; the scores are the whole answer.
     Fallback(ImageScores),
-    /// The sides differ in size; the scores hold both dimensions.
-    Mismatch { scores: ImageScores },
+    /// The sides differ in size; the scores hold both dimensions and the snapshots make thumbs.
+    Mismatch {
+        scores: ImageScores,
+        left: (Vec<u8>, ::image::ImageFormat),
+        right: (Vec<u8>, ::image::ImageFormat),
+    },
     /// Both sides decoded; the engine compares them and `convert` builds the mask.
     Decoded {
         first: DynamicImage,
@@ -146,7 +151,7 @@ fn compare(
     cancel: &CancelToken,
 ) -> Result<(ImageScores, Option<ImageMask>), Failure> {
     match prepare(input, cancel)? {
-        Prepared::Fallback(scores) | Prepared::Mismatch { scores } => Ok((scores, None)),
+        Prepared::Fallback(scores) | Prepared::Mismatch { scores, .. } => Ok((scores, None)),
         Prepared::Decoded {
             first,
             second,
@@ -178,6 +183,8 @@ fn size_fallback(
     }
     Ok((left != right).then_some(Prepared::Mismatch {
         scores: ImageScores::SizeMismatch { left, right },
+        left: (left_bytes.to_vec(), left_format),
+        right: (right_bytes.to_vec(), right_format),
     }))
 }
 
