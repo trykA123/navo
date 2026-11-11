@@ -182,6 +182,56 @@ fn a_failed_setup_that_wrote_nothing_retains_the_root_and_one_that_wrote_a_file_
     )));
 }
 
+/// An exit-0 verification failure keeps the root and tells the user to remove Navo in Settings.
+#[test]
+fn an_exit_zero_verification_failure_keeps_the_root_and_never_asks_to_delete_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let payload = payload(dir.path());
+    let mut host = fresh_host();
+    host.verified.clear();
+    host.verified.push_back(Verified {
+        update_exe: false,
+        sq_version: None,
+    });
+    let (result, _) = run(&mut host, fresh_request(), &payload);
+    let error = result.err().unwrap();
+    assert!(matches!(
+        error,
+        InstallError::Failed(Failure::PartialRoot(Some(0)))
+    ));
+    assert_eq!(error.exit_code(), 5);
+    let message = crate::cli::messages::failure_message(
+        &Failure::PartialRoot(Some(0)),
+        Path::new(ROOT),
+        false,
+    );
+    assert!(
+        message.contains("Setup could not finish checking Navo in"),
+        "{message}"
+    );
+    assert!(message.contains(ROOT), "{message}");
+    assert!(
+        message.contains("Remove Navo in Windows Settings → Apps"),
+        "{message}"
+    );
+    assert!(!message.contains("Delete this folder"), "{message}");
+    assert_eq!(
+        count(&host, |call| matches!(
+            call,
+            Call::Cleanup {
+                remove_created: true
+            }
+        )),
+        0
+    );
+    assert!(host.calls.iter().any(|call| matches!(
+        call,
+        Call::Cleanup {
+            remove_created: false
+        }
+    )));
+}
+
 /// Exit-0 marker and registry failures keep the session, and Close deletes nothing.
 #[test]
 fn after_exit_zero_marker_and_registry_failures_keep_the_session() {

@@ -193,6 +193,26 @@ fn failed_pages_name_the_problem_and_a_partial_root() {
 }
 
 #[test]
+fn an_exit_zero_verification_failure_shows_recovery_text_without_a_leftover_alert() {
+    let mut shell = shell_on_ready_folder();
+    shell.act(SetupAction::Next);
+    shell.act(SetupAction::Primary);
+    shell.reply(exited(SetupExit::Failed(Failure::PartialRoot(Some(0)))));
+    let failed = shell.view();
+    let problem = failed.problem.as_deref().unwrap_or_default();
+    assert!(
+        problem.contains("Setup could not finish checking Navo in"),
+        "{problem}"
+    );
+    assert!(
+        problem.contains("Remove Navo in Windows Settings → Apps"),
+        "{problem}"
+    );
+    assert!(!problem.contains("Delete this folder"), "{problem}");
+    assert_eq!(failed.leftover_root, None);
+}
+
+#[test]
 fn refusal_pages_come_from_elevation_payload_and_discovery() {
     let dir = tempfile::tempdir().unwrap();
     let payload = payload(dir.path());
