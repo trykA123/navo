@@ -24,6 +24,8 @@ pub(crate) struct Calls {
     pub(crate) focused: Mutex<Vec<Vec<u64>>>,
     pub(crate) viewed: Mutex<Vec<(u64, bool)>>,
     pub(crate) acks: Mutex<Vec<u64>>,
+    pub(crate) lines: Mutex<Vec<Range<u64>>>,
+    pub(crate) large_focus: Mutex<Vec<u64>>,
     pub(crate) dropped: AtomicBool,
     pub(crate) copies: Mutex<Vec<CopyChange>>,
     pub(crate) copy_sink: Mutex<Option<CopySink>>,
@@ -183,6 +185,24 @@ impl FakeDiffHooks {
             .clone()
     }
 
+    /// Every large line window a pair control was asked for, oldest first.
+    pub(crate) fn line_requests(&self) -> Vec<Range<u64>> {
+        self.calls
+            .lines
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Every large focus line a pair control was given, oldest first.
+    pub(crate) fn large_focus(&self) -> Vec<u64> {
+        self.calls
+            .large_focus
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     /// Whether a pair control was dropped.
     pub(crate) fn dropped(&self) -> bool {
         self.calls.dropped.load(Ordering::SeqCst)
@@ -211,6 +231,20 @@ impl PairControl for FakePair {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(request);
+    }
+    fn focus(&self, line: u64) {
+        self.0
+            .large_focus
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(line);
+    }
+    fn lines(&self, rows: Range<u64>) {
+        self.0
+            .lines
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(rows);
     }
     fn acknowledge(&self, upto: u64) {
         self.0

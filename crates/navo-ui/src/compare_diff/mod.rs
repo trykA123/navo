@@ -7,6 +7,7 @@ pub mod copy_bar;
 #[cfg(test)]
 pub(crate) mod fake;
 pub mod hooks;
+pub mod image_body;
 pub mod map;
 pub mod rows;
 pub mod sheet;

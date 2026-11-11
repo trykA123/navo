@@ -19,18 +19,18 @@ use crate::compare::diff::load::{LoadInput, Side};
 use crate::compare::diff::pair::PairDiff;
 use crate::compare::local::LocalSide;
 
-const WAIT: Duration = Duration::from_secs(20);
+pub(super) const WAIT: Duration = Duration::from_secs(20);
 
-fn location(path: &Path) -> Location {
+pub(super) fn location(path: &Path) -> Location {
     let text = path.to_str().unwrap_or_default();
     Location::local(ProviderPath::from_text(text)).unwrap()
 }
 
-fn write(root: &Path, rel: &str, bytes: &[u8]) {
+pub(super) fn write(root: &Path, rel: &str, bytes: &[u8]) {
     fs::write(root.join(rel), bytes).unwrap();
 }
 
-fn local_side(root: &Path, rel: &str) -> Side {
+pub(super) fn local_side(root: &Path, rel: &str) -> Side {
     let size = fs::metadata(root.join(rel)).unwrap().len();
     let side = Arc::new(LocalSide::new(location(root)).unwrap());
     let entry = SideEntry::new(
@@ -51,7 +51,7 @@ fn local_input(root: &Path) -> LoadInput {
     }
 }
 
-fn request(id: u64) -> PairRequest {
+pub(super) fn request(id: u64) -> PairRequest {
     PairRequest {
         id,
         path: "left.txt".to_owned(),
@@ -60,7 +60,7 @@ fn request(id: u64) -> PairRequest {
     }
 }
 
-fn channel() -> (DiffSink, Receiver<DiffUpdate>) {
+pub(super) fn channel() -> (DiffSink, Receiver<DiffUpdate>) {
     let (sender, receiver) = mpsc::channel();
     let sink: DiffSink = Arc::new(move |update| {
         let _ = sender.send(update);

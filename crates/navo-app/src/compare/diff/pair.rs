@@ -12,6 +12,11 @@ use navo_ui::compare_diff::{DiffSink, DiffUpdate, PairControl, PairKind, PairReq
 use super::convert::{spans, to_pair_text};
 use super::image;
 use super::load::{LoadInput, Loaded, load_pair};
+use engine::{EngineJob, Live};
+
+mod engine;
+
+pub(crate) use engine::EnginePlan;
 
 const CAPACITY: usize = 8;
 
@@ -21,30 +26,50 @@ pub(crate) type Opener = Box<dyn Fn() -> Result<Arc<LoadInput>, Reason> + Send>;
 /// An open pair. `spans` and `refresh` only queue work; dropping cancels off the caller.
 pub(crate) struct PairDiff {
     commands: Arc<Commands>,
+    live: Arc<Live>,
     thread: Option<JoinHandle<()>>,
     #[cfg(test)]
     done: std::sync::mpsc::Receiver<()>,
 }
 
 impl PairDiff {
-    /// Start the worker for an input that is already built.
+    /// Start the worker for an input that is already built, with default engine settings.
     pub(crate) fn start(request: PairRequest, input: LoadInput, sink: DiffSink) -> Self {
         let input = Arc::new(input);
-        Self::open(request, Box::new(move || Ok(Arc::clone(&input))), sink)
+        Self::open(
+            request,
+            Box::new(move || Ok(Arc::clone(&input))),
+            EnginePlan::default(),
+            sink,
+        )
     }
 
     /// Start the worker; `opener` builds the sides there, so nothing runs on the caller's thread.
-    pub(crate) fn open(request: PairRequest, opener: Opener, sink: DiffSink) -> Self {
+    pub(crate) fn open(
+        request: PairRequest,
+        opener: Opener,
+        plan: EnginePlan,
+        sink: DiffSink,
+    ) -> Self {
         let commands = Arc::new(Commands::new());
+        let live = Arc::new(Live::new());
         let id = request.id;
         let failed = Arc::clone(&sink);
         let worker = Arc::clone(&commands);
+        let worker_live = Arc::clone(&live);
         #[cfg(test)]
         let (done_tx, done) = std::sync::mpsc::channel();
         let spawned = thread::Builder::new()
             .name("compare-pair".to_owned())
             .spawn(move || {
-                run(id, &opener, sink, &worker);
+                run(&Worker {
+                    request: &request,
+                    opener: &opener,
+                    plan: &plan,
+                    sink: &sink,
+                    commands: &worker,
+                    live: &worker_live,
+                });
                 #[cfg(test)]
                 let _ = done_tx.send(());
             });
@@ -61,6 +86,7 @@ impl PairDiff {
         };
         Self {
             commands,
+            live,
             thread,
             #[cfg(test)]
             done,
@@ -76,12 +102,25 @@ impl PairControl for PairDiff {
     fn refresh(&self, request: u64) {
         self.commands.send(Command::Refresh(request));
     }
+
+    fn focus(&self, line: u64) {
+        self.live.focus(line);
+    }
+
+    fn lines(&self, rows: Range<u64>) {
+        self.live.lines(rows);
+    }
+
+    fn acknowledge(&self, upto: u64) {
+        self.live.acknowledge(upto);
+    }
 }
 
 impl Drop for PairDiff {
-    /// Cancel the load and join on a helper thread, never on the caller.
+    /// Cancel the load and the engine, then join on a helper thread, never on the caller.
     fn drop(&mut self) {
         self.commands.close();
+        self.live.close();
         let Some(thread) = self.thread.take() else {
             return;
         };
@@ -197,44 +236,85 @@ impl Commands {
     }
 }
 
-/// Open the sides, load, report `Opened`, then answer spans and reopen on refresh until closed.
-fn run(mut id: u64, opener: &Opener, sink: DiffSink, commands: &Commands) {
+/// Everything one pair worker thread owns; a struct keeps the worker call readable.
+struct Worker<'a> {
+    request: &'a PairRequest,
+    opener: &'a Opener,
+    plan: &'a EnginePlan,
+    sink: &'a DiffSink,
+    commands: &'a Commands,
+    live: &'a Live,
+}
+
+/// Open the sides, load, report `Opened`, then answer spans and restart on refresh until closed.
+fn run(worker: &Worker<'_>) {
+    let _guard = LiveGuard(worker.live);
+    let mut id = worker.request.id;
     loop {
-        let Some(input) = open_input(&mut id, opener, &sink, commands) else {
+        let Some(input) = open_input(&mut id, worker.opener, worker.sink, worker.commands) else {
             return;
         };
-        let loaded = load_pair(&input, &commands.cancel);
-        if commands.cancel.is_cancelled() {
+        let loaded = load_pair(&input, &worker.commands.cancel);
+        if worker.commands.cancel.is_cancelled() {
             return;
         }
-        let pending = commands.take_pending();
+        let pending = worker.commands.take_pending();
         if let Some(next) = pending.refresh {
             id = next;
+            worker.live.clear();
             continue;
         }
-        sink(DiffUpdate::Opened {
+        (worker.sink)(DiffUpdate::Opened {
             request: id,
             kind: loaded.kind,
             text: to_pair_text(&loaded).map(Arc::new),
         });
         if let Some(rows) = pending.spans {
-            send_spans(&loaded, id, rows, &sink);
+            send_spans(&loaded, id, rows, worker.sink);
         }
+        let mut pair = worker.request.clone();
+        pair.id = id;
+        worker.live.install(
+            EngineJob {
+                request: &pair,
+                loaded: &loaded,
+                load: &input,
+                plan: worker.plan,
+                sink: worker.sink,
+            }
+            .running(),
+        );
         if matches!(loaded.kind, PairKind::Image)
-            && !image::diff(&input, id, &sink, &commands.cancel)
+            && !image::diff(&input, id, worker.sink, &worker.commands.cancel)
         {
             return;
         }
-        loop {
-            match commands.recv() {
-                None => return,
-                Some(Command::Spans(rows)) => send_spans(&loaded, id, rows, &sink),
-                Some(Command::Refresh(next)) => {
-                    id = next;
-                    break;
-                }
+        let Some(next) = serve(&loaded, id, worker) else {
+            return;
+        };
+        id = next;
+    }
+}
+
+/// Answer spans until a refresh gives the next request id (`Some`) or the pair closes (`None`).
+fn serve(loaded: &Loaded, id: u64, worker: &Worker<'_>) -> Option<u64> {
+    loop {
+        match worker.commands.recv()? {
+            Command::Spans(rows) => send_spans(loaded, id, rows, worker.sink),
+            Command::Refresh(next) => {
+                worker.live.clear();
+                return Some(next);
             }
         }
+    }
+}
+
+/// Clears the live engine when the pair worker stops, whatever path it takes.
+struct LiveGuard<'a>(&'a Live);
+
+impl Drop for LiveGuard<'_> {
+    fn drop(&mut self) {
+        self.0.close();
     }
 }
 

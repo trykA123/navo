@@ -96,6 +96,7 @@ impl NavoWindow {
         let viewport = window.viewport_size();
         if viewport != self.chrome.viewport {
             self.chrome.viewport = viewport;
+            self.large_follow_window(window);
             for chrome in self.chrome.panes.values() {
                 chrome.list_width.set(None);
             }

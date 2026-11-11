@@ -1,0 +1,291 @@
+//! The large text body of the file diff (V38, D16): rows built from hunks and requested line
+//! windows, "Looking further… N %" past the known hunks, and a top line that arriving hunks
+//! never move.
+
+use gpui_kit::TestAppContext;
+use navo_l10n::t;
+
+use super::compare_screen::{Rig, rig};
+use super::settle;
+use crate::compare_diff::{
+    DiffSink, DiffUpdate, LargeHunk, LargeProgress, LargeStage, Layout, PairKind, ShownKind,
+};
+use crate::window_view::compare_screen::large::{Anchor, RowMap, Settled};
+
+/// A hunk over `left` and `right` lines; the byte ranges do not matter to the body.
+pub(super) fn hunk(left: std::ops::Range<u64>, right: std::ops::Range<u64>) -> LargeHunk {
+    LargeHunk {
+        left_rows: left.clone(),
+        right_rows: right.clone(),
+        left_bytes: left,
+        right_bytes: right,
+    }
+}
+
+/// A snapshot of request 1 with `hunks`, sections `done` of 5 and acknowledgement `ack`.
+fn snapshot(hunks: Vec<LargeHunk>, done: u64, ack: u64) -> DiffUpdate {
+    DiffUpdate::Large {
+        request: 1,
+        hunks,
+        steps: Vec::new(),
+        progress: Some(LargeProgress {
+            stage: LargeStage::Sections,
+            done,
+            total: 5,
+        }),
+        ack,
+    }
+}
+
+/// Lines `rows` of both sides ("l7", "r7") with the sides' line counts.
+pub(super) fn lines(rows: std::ops::Range<u64>, totals: (u64, u64)) -> DiffUpdate {
+    DiffUpdate::LargeLines {
+        request: 1,
+        rows: rows.clone(),
+        left: rows.clone().map(|at| format!("l{at}")).collect(),
+        right: rows.map(|at| format!("r{at}")).collect(),
+        left_cut: false,
+        right_cut: false,
+        totals,
+    }
+}
+
+/// Opens `a.txt` as a large pair and returns the sink its updates go through.
+pub(super) fn open_large(cx: &mut TestAppContext) -> (Rig, DiffSink) {
+    let rig = rig(cx);
+    rig.press(cx, "enter");
+    let sink = rig.diff.pair_sink();
+    sink(DiffUpdate::Opened {
+        request: 1,
+        kind: PairKind::Large {
+            left: 1 << 30,
+            right: 1 << 30,
+        },
+        text: None,
+    });
+    settle(cx, &rig.view);
+    (rig, sink)
+}
+
+pub(super) fn push(cx: &mut TestAppContext, rig: &Rig, sink: &DiffSink, update: DiffUpdate) {
+    sink(update);
+    settle(cx, &rig.view);
+}
+
+fn status(cx: &mut TestAppContext, rig: &Rig) -> String {
+    let probe = rig.view.read_with(cx, |view, _| view.large_probe());
+    probe.expect("a large body").status.to_string()
+}
+
+#[gpui_kit::test]
+fn compare_large_rows_come_from_hunks_and_requested_line_windows(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, snapshot(vec![hunk(10..12, 10..15)], 1, 1));
+    let asked = rig.diff.line_requests();
+    assert_eq!(asked.first().map(|rows| rows.start), Some(0), "{asked:?}");
+    push(cx, &rig, &sink, lines(0..40, (30, 33)));
+    let probe = rig
+        .view
+        .read_with(cx, |view, _| view.large_probe())
+        .unwrap();
+    assert_eq!(probe.count, 33, "10 equal, 5 in the hunk, 18 after it");
+    let row = |cx: &mut TestAppContext, at| {
+        rig.view
+            .read_with(cx, |view, _| view.large_row(at))
+            .unwrap()
+    };
+    let shown = |line: u64, text: &str| Some((line, text.to_owned()));
+    assert_eq!(
+        row(cx, 11),
+        (ShownKind::Changed, shown(11, "l11"), shown(11, "r11"))
+    );
+    assert_eq!(row(cx, 13), (ShownKind::Inserted, None, shown(13, "r13")));
+    assert_eq!(
+        row(cx, 15),
+        (ShownKind::Pending, shown(12, "l12"), shown(15, "r15"))
+    );
+    assert_eq!(status(cx, &rig), t!("compare-screen-changes", total = 1));
+}
+
+#[gpui_kit::test]
+fn compare_large_asks_once_per_missing_window(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, lines(0..300, (5_000, 5_000)));
+    let before = rig.diff.line_requests().len();
+    settle(cx, &rig.view);
+    rig.view.update(cx, |_, cx| cx.notify());
+    settle(cx, &rig.view);
+    assert_eq!(
+        rig.diff.line_requests().len(),
+        before,
+        "a shown window that arrived is not asked again"
+    );
+    rig.view.update(cx, |view, cx| {
+        view.large_scroll_to(3_000);
+        cx.notify();
+    });
+    settle(cx, &rig.view);
+    let asked = rig.diff.line_requests();
+    let last = asked.last().expect("a request after the scroll");
+    assert!(last.contains(&3_000), "the new window is asked: {last:?}");
+    assert!(last.end - last.start <= 2_000, "within one read: {last:?}");
+    let focus = rig.diff.large_focus();
+    assert!(
+        focus
+            .last()
+            .is_some_and(|line| (2_500..3_500).contains(line)),
+        "the section in view goes first: {focus:?}"
+    );
+    rig.view.update(cx, |_, cx| cx.notify());
+    settle(cx, &rig.view);
+    assert_eq!(
+        rig.diff.line_requests().len(),
+        asked.len(),
+        "no repeat while in flight"
+    );
+}
+
+#[gpui_kit::test]
+fn compare_large_arriving_hunks_never_move_the_top_line(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, lines(0..100, (1_000, 1_010)));
+    push(
+        cx,
+        &rig,
+        &sink,
+        snapshot(vec![hunk(900..900, 900..910)], 1, 1),
+    );
+    rig.view.update(cx, |view, cx| {
+        view.large_scroll_to(500);
+        cx.notify();
+    });
+    settle(cx, &rig.view);
+    let top = |cx: &mut TestAppContext| {
+        let probe = rig
+            .view
+            .read_with(cx, |view, _| view.large_probe())
+            .unwrap();
+        (
+            probe.top,
+            rig.view
+                .read_with(cx, |view, _| view.large_row(probe.top))
+                .unwrap()
+                .1,
+        )
+    };
+    let (row, line) = top(cx);
+    assert_eq!((row, line.map(|(at, _)| at)), (500, Some(500)));
+    let above = vec![hunk(10..10, 10..20), hunk(900..900, 910..920)];
+    push(cx, &rig, &sink, snapshot(above, 2, 2));
+    let (row, line) = top(cx);
+    assert_eq!(
+        (row, line.map(|(at, _)| at)),
+        (510, Some(500)),
+        "ten rows arrived above; the same line stays on top"
+    );
+}
+
+#[gpui_kit::test]
+fn compare_large_next_past_known_hunks_looks_further_then_jumps(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, lines(0..100, (1_000, 1_000)));
+    push(cx, &rig, &sink, snapshot(vec![hunk(10..11, 10..11)], 2, 1));
+    rig.press(cx, "alt-down");
+    assert_eq!(
+        status(cx, &rig),
+        t!("compare-screen-change", current = 1, total = 1)
+    );
+    rig.press(cx, "alt-down");
+    assert_eq!(
+        status(cx, &rig),
+        t!("compare-screen-looking-further", percent = 40)
+    );
+    let both = vec![hunk(10..11, 10..11), hunk(700..702, 700..702)];
+    push(cx, &rig, &sink, snapshot(both, 3, 2));
+    assert_eq!(
+        status(cx, &rig),
+        t!("compare-screen-change", current = 2, total = 2)
+    );
+    let probe = rig
+        .view
+        .read_with(cx, |view, _| view.large_probe())
+        .unwrap();
+    assert!(
+        probe.top <= 700 && 700 < probe.top + 60,
+        "jumped to it: {}",
+        probe.top
+    );
+}
+
+#[gpui_kit::test]
+fn compare_large_esc_stops_looking_further_and_keeps_the_screen(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, lines(0..100, (1_000, 1_000)));
+    push(cx, &rig, &sink, snapshot(vec![hunk(10..11, 10..11)], 2, 1));
+    rig.press(cx, "alt-down");
+    rig.press(cx, "alt-down");
+    rig.press(cx, "escape");
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.file_screen().is_some())
+    );
+    let one = t!("compare-screen-change", current = 1, total = 1);
+    assert_eq!(status(cx, &rig), one);
+    let both = vec![hunk(10..11, 10..11), hunk(700..702, 700..702)];
+    push(cx, &rig, &sink, snapshot(both, 3, 2));
+    assert_eq!(
+        status(cx, &rig),
+        t!("compare-screen-change", current = 1, total = 2)
+    );
+}
+
+#[gpui_kit::test]
+fn compare_large_done_with_no_more_hunks_ends_the_wait(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, snapshot(vec![hunk(10..11, 10..11)], 2, 1));
+    rig.press(cx, "alt-down");
+    rig.press(cx, "alt-down");
+    push(cx, &rig, &sink, snapshot(vec![hunk(10..11, 10..11)], 5, 2));
+    assert_eq!(
+        status(cx, &rig),
+        t!("compare-screen-change", current = 1, total = 1)
+    );
+}
+
+#[test]
+fn compare_large_maps_unified_rows_and_unequal_gaps() {
+    let hunks = [hunk(10..12, 10..13), hunk(50..51, 51..51)];
+    let done = || Settled {
+        done: true,
+        evicted: Vec::new(),
+    };
+    let unified = RowMap::new(&hunks, Layout::Unified, Some((100, 99)), done());
+    let at = |map: &RowMap, row| {
+        let shown = map.at(row);
+        (shown.kind, shown.left, shown.right)
+    };
+    assert_eq!(at(&unified, 11), (ShownKind::Deleted, Some(11), None));
+    assert_eq!(at(&unified, 12), (ShownKind::Inserted, None, Some(10)));
+    assert_eq!(at(&unified, 15), (ShownKind::Equal, Some(12), Some(13)));
+    assert_eq!(unified.row_of(Anchor::Right(12)), 14);
+    // After the second hunk 49 left lines face 48 right lines: no settled pairing, so the
+    // rows are pending, paired one to one, and not a change to step to.
+    let side = RowMap::new(&hunks, Layout::SideBySide, Some((100, 99)), done());
+    assert_eq!(side.count(), 10 + 3 + 38 + 1 + 49);
+    assert_eq!(at(&side, 52), (ShownKind::Pending, Some(51), Some(51)));
+    assert_eq!(at(&side, 100), (ShownKind::Pending, Some(99), None));
+    assert_eq!(side.at(52).hunk, None);
+    assert_eq!(side.at(51).hunk, Some(1));
+    assert_eq!(side.row_of(Anchor::Left(60)), 61);
+    let open = RowMap::new(&hunks[..1], Layout::SideBySide, None, done());
+    assert_eq!(
+        at(&open, 5_000),
+        (ShownKind::Pending, Some(4_999), Some(5_000))
+    );
+}

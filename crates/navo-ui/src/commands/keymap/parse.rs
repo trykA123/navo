@@ -190,8 +190,14 @@ fn resolve(raw: Raw) -> Result<Bind, KeymapError> {
 }
 
 /// Commands that also take keys in a second, unrelated context.
-const ALSO_IN: [(&str, &str); 6] = [
+const ALSO_IN: [(&str, &str); 12] = [
     ("workspace.new", "WorkspaceTray"),
+    ("viewer.line_up", "CompareView"),
+    ("viewer.line_down", "CompareView"),
+    ("viewer.page_up", "CompareView"),
+    ("viewer.page_down", "CompareView"),
+    ("viewer.go_to_start", "CompareView"),
+    ("viewer.go_to_end", "CompareView"),
     ("files.undo", "CompareView"),
     ("files.undo", "CompareStream"),
     ("find.result_up", "CompareOutline"),

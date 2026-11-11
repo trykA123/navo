@@ -18,6 +18,8 @@ pub enum ShownKind {
     Deleted,
     Inserted,
     Filler,
+    /// Lines the large diff has not settled yet (still diffing, or an evicted section).
+    Pending,
 }
 
 /// One drawn row. Each side holds a line index and its text, or nothing (a filler side).

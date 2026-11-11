@@ -256,7 +256,13 @@ fn set_in(command: &'static str, context: Option<&str>, list: &[&str]) -> Edit {
     }
 }
 
-const END_CONTEXTS: [Option<&str>; 4] = [None, Some("Archive"), Some("Tree"), Some("Pdf")];
+const END_CONTEXTS: [Option<&str>; 5] = [
+    None,
+    Some("Archive"),
+    Some("Tree"),
+    Some("Pdf"),
+    Some("CompareView"),
+];
 
 #[test]
 fn a_command_bound_in_several_contexts_is_recorded_in_each() {
@@ -286,6 +292,7 @@ fn the_home_context_is_written_without_a_context() {
         set_in("viewer.go_to_start", Some("Archive"), &["f8"]),
         set_in("viewer.go_to_start", Some("Tree"), &["f8"]),
         set_in("viewer.go_to_start", Some("Pdf"), &["f8"]),
+        set_in("viewer.go_to_start", Some("CompareView"), &["f8"]),
     ];
     assert_eq!(edits, expected);
 }

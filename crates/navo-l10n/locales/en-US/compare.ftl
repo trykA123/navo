@@ -118,6 +118,7 @@ compare-screen-changes = { $total ->
    *[other] { $total } changes
 }
 compare-screen-no-changes = No changes
+compare-screen-looking-further = Looking further… { $percent } %
 compare-card-viewed = Viewed
 compare-card-gap = { $lines ->
     [one] 1 unchanged line
@@ -254,3 +255,20 @@ compare-drawer-sides = { $left } ↔ { $right }
 compare-drawer-raw-differs = The raw bytes differ; the active options hide the difference.
 compare-drawer-same = The two sides are the same.
 compare-drawer-fallbacks = Fallbacks
+compare-image-side-by-side = Side by side
+compare-image-overlay = Overlay
+compare-image-mask = Difference mask
+compare-image-wipe-label = Overlay wipe
+compare-image-wipe-keys = ArrowLeft ArrowRight Home End
+compare-image-wipe-hint = Left and Right arrows move the wipe. Home and End go to the edges.
+compare-image-left = Left
+compare-image-right = Right
+compare-image-loading = Reading the picture…
+compare-image-similar = { $percent } % similar
+compare-image-note-unreadable = A side cannot be read as a picture.
+compare-image-note-hash = Compared by hash only: the two files are the same or different.
+compare-image-note-sizes = Sizes differ, so there is nothing to overlay.
+compare-image-note-format = This picture format cannot be compared.
+compare-image-note-pixels = Too many pixels to compare: the mask is missing.
+compare-image-note-encoded = The file is too large to decode: the mask is missing.
+compare-image-note-decode = A side cannot be decoded: the mask is missing.
