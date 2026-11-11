@@ -8,7 +8,7 @@ mod items;
 mod search;
 mod update;
 
-use super::hooks::{Card, ViewedKey};
+use super::hooks::{Card, CardDetail, ViewedKey};
 
 pub use items::{EscStep, Stop, StreamItem, StreamList, is_stream_item, stream_items};
 
@@ -19,6 +19,8 @@ pub struct StreamModel {
     pub(super) rules: usize,
     pub(super) generation: u64,
     pub(super) cards: HashMap<u64, Arc<Card>>,
+    /// What the detail lane found past each held card's summary, by item id (D26.2).
+    pub(super) details: HashMap<u64, Arc<CardDetail>>,
     pub(super) viewed: HashSet<u64>,
     /// Items whose fold differs from the default: a viewed card is folded, others are open.
     pub(super) toggled: HashSet<u64>,
@@ -61,6 +63,13 @@ impl StreamModel {
     #[must_use]
     pub fn card(&self, id: u64) -> Option<&Arc<Card>> {
         self.cards.get(&id)
+    }
+
+    /// The detail held for item `id`: what its last card showed past the summary. `None` while
+    /// no detail job has answered for the card held now (D26.2).
+    #[must_use]
+    pub fn detail(&self, id: u64) -> Option<&Arc<CardDetail>> {
+        self.details.get(&id)
     }
 
     #[must_use]

@@ -1,8 +1,10 @@
-//! Tests for the Stream model: item filter, J/K and Shift+J/K stops, folds and Viewed. Shared helpers.
+//! Tests for the Stream model: item filter, J/K and Shift+J/K stops, folds, Viewed, details.
 
 use super::*;
 use crate::browser::{CompareKind, CompareRow, CompareSide, RowStatus};
-use crate::compare_diff::hooks::{HunkView, PairKind, StreamUpdate};
+use crate::compare_diff::hooks::{
+    CARD_HUNKS, CardDetail, CardScan, HunkView, LargeCard, LargeHunk, PairKind, StreamUpdate,
+};
 
 pub(super) fn side(kind: CompareKind) -> Option<CompareSide> {
     Some(CompareSide {
@@ -44,13 +46,18 @@ pub(super) fn card(hunks: usize, key: u8) -> Arc<Card> {
     })
 }
 
-pub(super) fn model(ids: &[u64]) -> StreamModel {
+/// The Stream list of items `ids`, as the app sends it for a refresh.
+pub(super) fn listed(ids: &[u64]) -> StreamList {
     let rows: Vec<CompareRow> = ids
         .iter()
         .map(|&id| file(id, &format!("f{id}.txt"), RowStatus::Different))
         .collect();
+    stream_items(&rows, "")
+}
+
+pub(super) fn model(ids: &[u64]) -> StreamModel {
     let mut m = StreamModel::default();
-    m.set_items(1, stream_items(&rows, ""));
+    m.set_items(1, listed(ids));
     m
 }
 
@@ -59,6 +66,60 @@ pub(super) fn give(m: &mut StreamModel, id: u64, hunks: usize) {
         generation: m.generation,
         id,
         card: card(hunks, id as u8),
+    });
+}
+
+/// A `Large` detail of `hunks` line ranges, as one detail job's snapshot looks (D26.2).
+pub(super) fn detail(hunks: usize) -> Arc<CardDetail> {
+    Arc::new(CardDetail::Large(LargeCard {
+        hunks: (0..hunks)
+            .map(|at| LargeHunk {
+                left_rows: at as u64..at as u64 + 2,
+                right_rows: at as u64..at as u64 + 2,
+                left_bytes: 0..8,
+                right_bytes: 0..9,
+            })
+            .collect(),
+        found: hunks as u32,
+        progress: None,
+        scan: CardScan::Full,
+    }))
+}
+
+/// A `Detail` update tagged with `generation`, for item `id`, holding `hunks` line ranges.
+pub(super) fn detail_update(generation: u64, id: u64, hunks: usize) -> StreamUpdate {
+    StreamUpdate::Detail {
+        id,
+        generation,
+        detail: detail(hunks),
+    }
+}
+
+/// Sends the current generation's detail of `id`, as the app's one detail lane would.
+pub(super) fn give_detail(m: &mut StreamModel, id: u64, hunks: usize) {
+    m.apply(&detail_update(m.generation, id, hunks));
+}
+
+/// Sends item `id`'s base card of a large pair: a summary holding no hunks of its own.
+pub(super) fn give_heavy(m: &mut StreamModel, id: u64) {
+    let mut summary = (*card(0, id as u8)).clone();
+    let (left, right) = (1 << 30, 1 << 30);
+    summary.kind = PairKind::Large { left, right };
+    let card = Arc::new(summary);
+    let generation = m.generation;
+    m.apply(&StreamUpdate::Card {
+        generation,
+        id,
+        card,
+    });
+}
+
+/// Sends a card of `id` with a chosen `key`, so a test can control its content (D28).
+pub(super) fn give_key(m: &mut StreamModel, id: u64, hunks: usize, key: u8) {
+    m.apply(&StreamUpdate::Card {
+        generation: m.generation,
+        id,
+        card: card(hunks, key),
     });
 }
 
@@ -271,4 +332,71 @@ fn viewed_on_the_last_file_stays_there() {
         }
     );
     assert_eq!(m.counter(), (1, 2));
+}
+
+#[test]
+fn a_detail_is_kept_with_its_card_and_dropped_with_it() {
+    let mut m = model(&[1, 2]);
+    give(&mut m, 1, 2);
+    give_detail(&mut m, 1, 3);
+    assert_eq!(m.detail(1), Some(&detail(3)));
+    // A newer snapshot of the same id replaces the one held.
+    give_detail(&mut m, 1, 1);
+    assert_eq!(m.detail(1), Some(&detail(1)));
+    // A refresh that still lists the item keeps the card and its detail.
+    m.set_items(2, listed(&[1]));
+    assert_eq!(m.detail(1), Some(&detail(1)));
+    // An evicted card loses its detail with it (D26.3).
+    let generation = m.generation;
+    m.apply(&StreamUpdate::Evicted { id: 1, generation });
+    assert_eq!((m.card(1), m.detail(1)), (None, None));
+    // An item leaving the list drops the pair the same way.
+    give(&mut m, 1, 2);
+    give_detail(&mut m, 1, 2);
+    m.set_items(3, listed(&[2]));
+    assert_eq!((m.card(1), m.detail(1)), (None, None));
+}
+
+#[test]
+fn a_detail_without_its_card_is_dropped() {
+    let mut m = model(&[1, 2]);
+    // Item 1 is listed but has no card: its detail has nothing to fill (D26.2).
+    give_detail(&mut m, 1, 2);
+    assert_eq!(m.detail(1), None);
+    // Item 9 is not listed, and generation 99 is not the model's.
+    give(&mut m, 2, 1);
+    m.apply(&detail_update(m.generation, 9, 1));
+    m.apply(&detail_update(99, 2, 1));
+    assert_eq!((m.detail(9), m.detail(2)), (None, None));
+    // A card arriving later does not pick up the detail that was dropped.
+    give(&mut m, 1, 1);
+    assert_eq!(m.detail(1), None);
+    give_detail(&mut m, 1, 1);
+    assert_eq!(m.detail(1), Some(&detail(1)));
+}
+
+#[test]
+fn a_card_with_new_content_drops_the_old_detail() {
+    let mut m = model(&[1]);
+    give(&mut m, 1, 2);
+    give_detail(&mut m, 1, 4);
+    // A rebuilt card of the same content keeps the detail: only its rows were new.
+    give_key(&mut m, 1, 3, 1);
+    assert_eq!(m.detail(1), Some(&detail(4)));
+    // Other content under the same id makes the held detail wrong: it goes with the old card.
+    give_key(&mut m, 1, 3, 2);
+    assert_eq!(m.card(1).map(|c| c.hunks.len()), Some(3));
+    assert_eq!(m.detail(1), None);
+}
+
+#[test]
+fn a_heavy_card_with_a_detail_is_still_one_stop() {
+    let mut m = model(&[1, 2]);
+    give_heavy(&mut m, 1);
+    give(&mut m, 2, 2);
+    give_detail(&mut m, 1, CARD_HUNKS);
+    let stops: Vec<_> = m.stops().iter().map(|s| (s.item, s.hunk)).collect();
+    // A heavy card holds no hunks of its own, so its detail never adds a stop (D26.5, D27).
+    assert_eq!(stops, [(0, None), (1, Some(0)), (1, Some(1))]);
+    assert_eq!(m.detail(1), Some(&detail(CARD_HUNKS)));
 }
