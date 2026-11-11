@@ -219,7 +219,7 @@ fn stream_rows_cover_open_viewed_placeholder_summary_and_rules() {
             More { item: 0, hunks: 2 },
             Header(1),
             Header(2),
-            Summary(2),
+            Detail(2),
             RulesGroup,
         ]
     );
@@ -235,6 +235,50 @@ fn stream_rows_cover_open_viewed_placeholder_summary_and_rules() {
     );
     m.begin_search(1);
     assert!(stream_rows(&m, Layout::Unified).is_empty());
+}
+
+/// The rows item 0's card of `kind` draws, with every other card unbuilt.
+fn rows_for(kind: PairKind) -> Vec<StreamRow> {
+    let m = stream(&[(1, card(kind, false, false))]);
+    stream_rows(&m, Layout::SideBySide)
+}
+
+/// Each pair kind with the one body row an empty card of it draws.
+fn body_of_each_kind() -> [(PairKind, StreamRow); 6] {
+    [
+        (
+            PairKind::Large {
+                left: 1 << 30,
+                right: 1 << 30,
+            },
+            StreamRow::Detail(0),
+        ),
+        (PairKind::Binary, StreamRow::Detail(0)),
+        (PairKind::Image, StreamRow::Detail(0)),
+        (PairKind::Text, StreamRow::Summary(0)),
+        (PairKind::OneSided { left: true }, StreamRow::Summary(0)),
+        (PairKind::Unavailable("why"), StreamRow::Summary(0)),
+    ]
+}
+
+#[test]
+fn heavy_kinds_get_one_detail_row_and_others_a_summary() {
+    // Items 1 and 2 have no card, so each kind is followed by the same placeholder tail.
+    let tail = &[
+        StreamRow::Header(1),
+        StreamRow::Placeholder(1),
+        StreamRow::Header(2),
+        StreamRow::Placeholder(2),
+        StreamRow::RulesGroup,
+    ][..];
+    // A large, binary or image card draws its one fixed-height body from the moment it arrives
+    // (D26.5); the light kinds keep the summary row.
+    for (kind, body) in body_of_each_kind() {
+        let rows = rows_for(kind);
+        assert_eq!(rows.first(), Some(&StreamRow::Header(0)), "{kind:?}");
+        assert_eq!(rows.get(1), Some(&body), "{kind:?} · its one body row");
+        assert_eq!(&rows[2..], tail, "{kind:?} · no second body row");
+    }
 }
 
 /// A card line with the given row, hunk and side texts.
