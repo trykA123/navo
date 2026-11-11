@@ -3,32 +3,45 @@
 
 use std::ops::Range;
 
-use gpui_kit::{HighlightStyle, StyledText};
+use gpui_kit::StyledText;
 
-use super::{BodyLook, Side};
+use super::cut::{LineAt, probe_canvas, shown_line};
+use super::{BodyLook, RowCut, Side};
+use crate::compare_diff::cols::Shown;
 use crate::compare_diff::rows::ShownKind;
 use crate::prelude::*;
 use crate::tokens::{DiffTone, Theme};
 
-/// The text of one line, with `runs` (byte ranges) tinted; it never wraps.
-pub(super) fn line_text(text: Option<&str>, runs: Vec<Range<usize>>, tint: Hsla) -> Div {
+/// The text cell of `at`'s line: the columns `row_cut` keeps, changed words tinted, moved left
+/// by its nudge; it never wraps. This is the one place that builds a line's styled text.
+pub(super) fn line_text(look: &BodyLook, at: &LineAt, row_cut: &RowCut) -> Div {
     let cell = div()
+        .relative()
         .flex_1()
         .min_w_0()
         .whitespace_nowrap()
-        .overflow_hidden();
-    let Some(text) = text else {
+        .overflow_hidden()
+        .children(
+            row_cut
+                .probe
+                .as_ref()
+                .map(|probe| probe_canvas(probe, at.slot)),
+        );
+    let Some(Shown { text, runs }) = shown_line(look, at, row_cut) else {
         return cell;
     };
-    if runs.is_empty() {
-        return cell.child(SharedString::from(text.to_owned()));
-    }
-    let style = HighlightStyle {
-        background_color: Some(tint),
-        ..HighlightStyle::default()
+    let styled = if runs.is_empty() {
+        SharedString::from(text).into_any_element()
+    } else {
+        StyledText::new(text)
+            .with_highlights(runs)
+            .into_any_element()
     };
-    let runs = runs.into_iter().map(|run| (run, style));
-    cell.child(StyledText::new(text.to_owned()).with_highlights(runs))
+    if row_cut.nudge > px(0.) {
+        cell.child(div().ml(-row_cut.nudge).child(styled))
+    } else {
+        cell.child(styled)
+    }
 }
 
 /// The changed byte ranges of line `line` on `side` that fall on character boundaries of `text`,

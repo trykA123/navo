@@ -98,6 +98,7 @@ pub struct VirtualList {
     describe_rows: Option<RowDescriber>,
     row_height: Option<Pixels>,
     bar: Option<AnyElement>,
+    axis_locked: bool,
 }
 
 impl VirtualList {
@@ -117,6 +118,7 @@ impl VirtualList {
             describe_rows: None,
             row_height: None,
             bar: None,
+            axis_locked: false,
         }
     }
 
@@ -133,6 +135,14 @@ impl VirtualList {
             .id("scrollbar")
             .mode(ScrollbarMode::Always)
             .into_any_element()
+    }
+
+    /// Keeps the wheel on its own axis: a sideways delta (Shift+wheel, a touchpad swipe) no longer
+    /// scrolls the rows, and a touchpad gesture stays on the axis it started on.
+    #[must_use]
+    pub fn axis_locked(mut self) -> Self {
+        self.axis_locked = true;
+        self
     }
 
     #[must_use]
@@ -205,7 +215,7 @@ impl RenderOnce for VirtualList {
         let len = self.len;
         let render_rows = self.render_rows;
         let describe = self.describe_rows;
-        let rows = uniform_list("rows", len, move |range: Range<usize>, window, cx| {
+        let mut rows = uniform_list("rows", len, move |range: Range<usize>, window, cx| {
             let frame = RowFrame {
                 start: range.start,
                 len,
@@ -216,6 +226,9 @@ impl RenderOnce for VirtualList {
         })
         .track_scroll(&self.scroll.0)
         .size_full();
+        if self.axis_locked {
+            rows.style().restrict_scroll_to_axis = Some(true);
+        }
         let list = div().id(self.id).role(Role::List);
         let list = match self.label {
             Some(label) => list.aria_label(label),
