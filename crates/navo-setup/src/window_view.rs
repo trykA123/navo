@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use navo_ui::setup::{SetupAction, SetupPage, SetupProgress, SetupView};
 
-use crate::cli::messages::failure_message;
+use crate::cli::messages::{failure_message, unsafe_name};
 use crate::flow::{Failure, Flow, Folder, Page};
 use crate::mode::{Mode, Why};
 use crate::runner::Progress;
@@ -140,10 +140,9 @@ fn notice(flow: &Flow) -> Option<String> {
         (Page::Finish, _) => flow.completion()?.notice().map(str::to_owned),
         (Page::Failed, _) => flow.failure()?.notice().map(str::to_owned),
         // IW8: this text must never suggest uninstalling, the step the character rule guards.
-        (Page::Ambiguous, Mode::Ambiguous(Why::UnsafeName { root, character })) => Some(format!(
-            "Navo is installed in `{}`. Setup cannot update a folder whose name contains `{character}`. Keep using Navo there; it updates itself.",
-            root.display()
-        )),
+        (Page::Ambiguous, Mode::Ambiguous(Why::UnsafeName { root, character })) => {
+            Some(unsafe_name(root, *character))
+        }
         _ => None,
     }
 }
