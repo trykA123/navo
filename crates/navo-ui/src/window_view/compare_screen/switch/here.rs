@@ -41,11 +41,34 @@ fn anchor(left: bool, offset: u64) -> HexAnchor {
     }
 }
 
+/// `hit` narrowed to the row's line on one side, to ask whether that line is the long one.
+fn one_sided(left: bool, line: u32) -> LongHit {
+    match left {
+        true => LongHit {
+            left: Some(line),
+            right: None,
+        },
+        false => LongHit {
+            left: None,
+            right: Some(line),
+        },
+    }
+}
+
 impl FileScreen {
-    /// The line the row names: its left one, else its right one (a one-sided line).
-    fn line_of(hit: LongHit) -> Option<(bool, u32)> {
+    /// The line the row names: the side whose line is over 1 MiB when only that side's is, else
+    /// the left one (both long, or a one-sided line, keep the left). `long` says whether the line
+    /// a one-sided hit names is over the limit on this pair.
+    fn line_of(hit: LongHit, long: &dyn Fn(LongHit) -> bool) -> Option<(bool, u32)> {
         match (hit.left, hit.right) {
-            (Some(line), _) => Some((true, line)),
+            (Some(left), Some(right)) => {
+                let only_right = !long(one_sided(true, left)) && long(one_sided(false, right));
+                match only_right {
+                    true => Some((false, right)),
+                    false => Some((true, left)),
+                }
+            }
+            (Some(line), None) => Some((true, line)),
             (None, Some(line)) => Some((false, line)),
             (None, None) => None,
         }
@@ -102,7 +125,6 @@ impl FileScreen {
     /// Where Bytes opens for `hit`, and the large line Show text returns to (none for a text
     /// pair, which returns by the hex body's offset). `None` when the pair has no offset for it.
     fn here(&self, hit: LongHit) -> Option<(HexAnchor, Option<LineAnchor>)> {
-        let (left, line) = Self::line_of(hit)?;
         if let (
             Some(view),
             FileState::Opened {
@@ -112,6 +134,7 @@ impl FileScreen {
         ) = (self.view.as_ref(), &self.state)
         {
             long_in(view, hit)?;
+            let (left, line) = Self::line_of(hit, &|one| long_in(view, one).is_some())?;
             let text = view.text();
             let starts = if left {
                 &text.left_starts
@@ -120,13 +143,15 @@ impl FileScreen {
             };
             return Some((anchor(left, *starts.get(line as usize)?), None));
         }
+        let large = self.large.as_ref()?;
+        let (left, line) = Self::line_of(hit, &|one| large.long_hit(one).is_some())?;
         let at = u64::from(line);
         let line = if left {
             LineAnchor::Left(at)
         } else {
             LineAnchor::Right(at)
         };
-        let offset = self.large.as_ref().and_then(|large| large.start_of(line))?;
+        let offset = large.start_of(line)?;
         Some((anchor(left, offset), Some(line)))
     }
 }

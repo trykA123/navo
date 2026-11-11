@@ -114,6 +114,38 @@ fn compare_here_a_one_sided_right_line_opens_bytes_at_its_right_offset(cx: &mut 
     );
 }
 
+/// The long row as a change whose left line stays short: only the right side is over 1 MiB.
+fn right_long_text() -> PairText {
+    let mut text = long_text();
+    text.left[AT] = "short".to_owned();
+    text.right[AT] = "x".repeat(LONG_LINE + 1);
+    text.right_starts[AT] = 0x1000;
+    text
+}
+
+#[gpui_kit::test]
+fn compare_here_a_changed_row_with_a_long_right_line_lands_on_the_right_offset(
+    cx: &mut TestAppContext,
+) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = text_rig(cx, right_long_text());
+    assert!(
+        has(cx, &rig, ("compare-bytes-right", AT)),
+        "the long right line offers it"
+    );
+    assert!(
+        !has(cx, &rig, ("compare-bytes-left", AT)),
+        "the short left line offers nothing"
+    );
+    click(cx, &rig, ("compare-bytes-right", AT));
+    open(cx, &rig, (2, PairKind::Binary), None);
+    assert_eq!(
+        probe(cx, &rig).built.start,
+        0x100,
+        "the right byte 0x1000 is row 0x100, not the left line's row {AT}"
+    );
+}
+
 /// Lines `0..40` of request `request` with line 5 over 1 MiB; line `n` starts at byte `16 * n`.
 fn large_lines(request: u64) -> DiffUpdate {
     let side = |name: &str| -> Vec<String> {
