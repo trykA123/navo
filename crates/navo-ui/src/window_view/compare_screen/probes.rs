@@ -150,11 +150,15 @@ impl NavoWindow {
         }
     }
 
-    /// Feeds fractional wheel rows and returns the top row.
+    /// Feeds fractional wheel rows for a body `visible` rows tall; returns the top row.
     #[cfg(test)]
-    pub(in crate::window_view) fn file_hex_wheel(&mut self, rows: f64) -> Option<usize> {
+    pub(in crate::window_view) fn file_hex_wheel(
+        &mut self,
+        rows: f64,
+        visible: usize,
+    ) -> Option<usize> {
         let hex = self.compare.screen.as_mut()?.file.as_mut()?.hex.as_mut()?;
-        hex.wheel_rows(rows, 24);
+        hex.wheel_rows(rows, visible);
         Some(hex.top())
     }
 }

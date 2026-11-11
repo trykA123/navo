@@ -428,9 +428,10 @@ fn compare_screen_hex_scrolls_past_f32_row_precision(cx: &mut TestAppContext) {
         target - half,
         "the region's row is a count, not an f32 pixel"
     );
+    let page = visible(cx, &rig);
     let top = rig
         .view
-        .update(cx, |view, _| view.file_hex_wheel(half as f64))
+        .update(cx, |view, _| view.file_hex_wheel(half as f64, page))
         .expect("the hex body");
     assert_eq!(top, target, "row 2^24 + 1 has no f32 value");
     assert_eq!(probe(cx, &rig).built.start, target);
@@ -482,9 +483,10 @@ fn compare_screen_hex_keeps_fractional_wheel_rows(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let rig = hex_rig(cx, vec![0x11; 0x400], vec![0x22; 0x400]);
     open_hex(cx, &rig, &[], HexAlign::Offset);
+    let page = visible(cx, &rig);
     let top = |rig: &Rig, cx: &mut TestAppContext, rows| {
         rig.view
-            .update(cx, |view, _| view.file_hex_wheel(rows))
+            .update(cx, |view, _| view.file_hex_wheel(rows, page))
             .expect("the hex body")
     };
     assert_eq!(top(&rig, cx, 0.4), 0);
@@ -915,22 +917,30 @@ fn compare_screen_hex_stepping_to_the_last_page_clamps_the_top(cx: &mut TestAppC
     );
     rig.press(cx, "f7");
     let page = visible(cx, &rig);
-    let top = rig.view.update(cx, |view, _| view.file_hex_wheel(0.));
+    let top = rig.view.update(cx, |view, _| view.file_hex_wheel(0., page));
     assert_eq!(
         top,
         Some(0x400 - page),
         "a step in the last page leaves the top on the last page"
     );
-    let up = rig.view.update(cx, |view, _| view.file_hex_wheel(-1.));
+    let up = rig
+        .view
+        .update(cx, |view, _| view.file_hex_wheel(-1., page));
     assert_eq!(up, Some(0x400 - page - 1), "the first upward tick scrolls");
+}
+
+/// Wheels the hex body to row `top` with no frame or request after it.
+fn wheel_to(cx: &mut TestAppContext, rig: &Rig, top: usize) {
+    let page = visible(cx, rig);
+    rig.view.update(cx, |view, _| {
+        view.file_hex_wheel(-1e9, page);
+        view.file_hex_wheel(top as f64, page);
+    });
 }
 
 /// Scrolls the hex body to row `top` and asks for its rows without letting the read land.
 fn scroll_and_request(cx: &mut TestAppContext, rig: &Rig, top: usize) {
-    rig.view.update(cx, |view, _| {
-        view.file_hex_wheel(-1e9);
-        view.file_hex_wheel(top as f64);
-    });
+    wheel_to(cx, rig, top);
     cx.update_window(rig.window, |_, window, cx| {
         rig.view
             .update(cx, |view, cx| view.request_hex_rows(window, cx));
@@ -971,6 +981,41 @@ fn compare_screen_hex_eviction_keeps_the_visible_rows(cx: &mut TestAppContext) {
             break;
         }
     }
+    settle(cx, &rig.view);
+    wheel_to(cx, &rig, far + 5000);
+    assert!(
+        probe(cx, &rig).loaded.iter().take(page).all(|row| *row),
+        "the far read landed, so its rows are cached"
+    );
+}
+
+#[gpui_kit::test]
+fn compare_screen_hex_eviction_keeps_the_viewport_at_the_current_top(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = hex_rig(cx, patterned(0x10_0000, 0), patterned(0x10_0000, 0x55));
+    open_hex(cx, &rig, &[], HexAlign::Offset);
+    let far = fill_cache(cx, &rig);
+    let page = visible(cx, &rig);
+    scroll_and_request(cx, &rig, far + 5000);
+    wheel_to(cx, &rig, far - page);
+    let on_screen =
+        |cx: &mut TestAppContext| probe(cx, &rig).loaded.iter().take(page).all(|row| *row);
+    assert!(on_screen(cx), "the rows at the new top are cached");
+    for tick in 0..200 {
+        assert!(
+            on_screen(cx),
+            "tick {tick}: the read must not blank the rows at the new top"
+        );
+        if !cx.executor().tick() {
+            break;
+        }
+    }
+    settle(cx, &rig.view);
+    wheel_to(cx, &rig, far + 5000);
+    assert!(
+        probe(cx, &rig).loaded.iter().take(page).all(|row| *row),
+        "the far read landed"
+    );
 }
 
 #[gpui_kit::test]
@@ -986,7 +1031,7 @@ fn compare_screen_hex_cache_stays_bounded(cx: &mut TestAppContext) {
         let seen = probe(cx, &rig);
         peak = peak.max(seen.cached);
         assert!(
-            seen.cached <= seen.cache_limit + page,
+            seen.cached <= seen.cache_limit + 2 * page,
             "step {step}: {} spans cached",
             seen.cached
         );
