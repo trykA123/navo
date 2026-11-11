@@ -48,7 +48,10 @@ pub(super) fn detail_row(ctx: &DetailCtx<'_>, item: usize) -> AnyElement {
     let t = ctx.t;
     let id = ctx.model.items()[item].id;
     let Some(card) = ctx.model.card(id) else {
-        return frame(t, true).into_any_element();
+        // No card to size by: keep the heavy card's own height so the list never reflows (D26.5).
+        return frame(t, true)
+            .h(detail_height(t, PairKind::Image))
+            .into_any_element();
     };
     let held = ctx.model.detail(id).map(|detail| &**detail);
     let (text, side) = status_of(held);

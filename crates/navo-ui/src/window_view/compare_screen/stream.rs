@@ -253,6 +253,9 @@ impl NavoWindow {
             stream.model.apply(update);
         }
         if updates.is_empty() {
+            if resynced {
+                stream.sync_thumbs(cx);
+            }
             return resynced;
         }
         if updates
@@ -262,8 +265,7 @@ impl NavoWindow {
             stream.drop_far_cards();
         }
         stream.sync_rows();
-        let keep = stream.near_ids();
-        stream.thumbs.sync(&stream.model, &keep, cx);
+        stream.sync_thumbs(cx);
         true
     }
 }
