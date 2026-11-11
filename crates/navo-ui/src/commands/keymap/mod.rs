@@ -148,6 +148,11 @@ mod fragment_tests {
     #[test]
     fn builtin_keymap_parses_with_the_fragment() {
         let keymap = Keymap::parse(BUILTIN).expect("builtin keymap");
-        assert_eq!(keymap.binds().len(), 555);
+        let main = Keymap::parse(include_str!("../keymap.toml")).expect("main keymap");
+        let compare = Keymap::parse(COMPARE_KEYMAP).expect("compare keymap");
+        assert_eq!(
+            keymap.binds().len(),
+            main.binds().len() + compare.binds().len()
+        );
     }
 }
