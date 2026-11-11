@@ -6539,6 +6539,7 @@ dependencies = [
  "tree-sitter-sequel",
  "tree-sitter-xml",
  "ts-parser-perl",
+ "unicode-width",
  "url",
  "windows-version",
 ]
