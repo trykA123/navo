@@ -1,6 +1,7 @@
 //! How the Stream model takes worker updates, new item lists, a search and Esc (D24, D25, D30).
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use super::search::Scan;
 use super::{EscStep, Stop, StreamList, StreamModel};
@@ -16,12 +17,22 @@ impl StreamModel {
                 card,
             } if *generation == self.generation => {
                 if self.items.iter().any(|i| i.id == *id) {
-                    self.take_viewed(*id, card);
-                    self.cards.insert(*id, card.clone());
+                    self.take_card(*id, card);
+                }
+            }
+            StreamUpdate::Detail {
+                generation,
+                id,
+                detail,
+            } if *generation == self.generation => {
+                // A detail belongs to the card it was read for; without one it draws nowhere.
+                if self.items.iter().any(|i| i.id == *id) && self.cards.contains_key(id) {
+                    self.details.insert(*id, detail.clone());
                 }
             }
             StreamUpdate::Evicted { generation, id } if *generation == self.generation => {
                 self.cards.remove(id);
+                self.details.remove(id);
             }
             StreamUpdate::Viewed { id, viewed } => self.mark_viewed(*id, *viewed),
             StreamUpdate::Progress {
@@ -51,16 +62,19 @@ impl StreamModel {
         self.fix_cursor();
     }
 
-    /// Takes the Viewed mark of a new card, unless the same content is already on screen:
-    /// then the mark set here in the meantime wins. New content shows its stored mark (D28).
-    fn take_viewed(&mut self, id: u64, card: &Card) {
+    /// Stores a new card. Its detail goes with the card it was read for: other content under the
+    /// same id means the held detail is about bytes that are gone. The Viewed mark of the same
+    /// content already on screen wins over the card's, so a rebuild keeps what V set here (D28).
+    fn take_card(&mut self, id: u64, card: &Arc<Card>) {
         let same = self
             .cards
             .get(&id)
             .is_some_and(|old| old.viewed_key == card.viewed_key);
         if !same {
+            self.details.remove(&id);
             self.mark_viewed(id, card.viewed);
         }
+        self.cards.insert(id, card.clone());
     }
 
     /// Sets the Viewed mark of `id`; a change puts its fold back to the default.
@@ -76,7 +90,7 @@ impl StreamModel {
     }
 
     /// Replaces the items for a new `generation`; the cursor stays on the same item id.
-    /// Cards of items still listed stay until the app sends new ones.
+    /// Cards of items still listed stay until the app sends new ones, with their details.
     pub fn set_items(&mut self, generation: u64, list: StreamList) {
         let kept = self.items.get(self.cursor.item).map(|i| i.id);
         self.generation = generation;
@@ -84,6 +98,7 @@ impl StreamModel {
         self.rules = list.rules;
         let ids: HashSet<u64> = self.items.iter().map(|i| i.id).collect();
         self.cards.retain(|id, _| ids.contains(id));
+        self.details.retain(|id, _| ids.contains(id));
         self.cursor = match kept.and_then(|id| self.items.iter().position(|i| i.id == id)) {
             Some(item) => Stop {
                 item,
