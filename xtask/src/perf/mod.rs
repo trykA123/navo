@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 mod fixture;
+mod modes;
 mod report;
 
 #[cfg(test)]
@@ -19,6 +20,9 @@ pub(crate) fn fixture(args: &[String]) -> ExitCode {
 }
 
 pub(crate) fn summary(args: &[String]) -> ExitCode {
+    if args.iter().any(|arg| arg == "--mode") {
+        return modes::run(args);
+    }
     let [root, output] = args else {
         eprintln!("usage: cargo xtask perf-summary <reports-dir> <summary-file>");
         return ExitCode::from(2);
