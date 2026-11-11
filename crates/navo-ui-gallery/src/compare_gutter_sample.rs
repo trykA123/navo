@@ -64,7 +64,7 @@ fn entries() -> Vec<Entry> {
         entry("checking", &file(RowStatus::Checking), Some(checking)),
         entry("pending", &file(RowStatus::Checking), None),
         entry(
-            "not checked",
+            "unchecked",
             &file(RowStatus::NotChecked("compare-reason-stopped")),
             None,
         ),

@@ -169,7 +169,7 @@ fn the_words_come_from_the_l10n_ids() {
         (GutterText::Rules, "same*"),
         (GutterText::Checking(25), "25%"),
         (GutterText::Pending, "…"),
-        (GutterText::NotChecked, "not checked"),
+        (GutterText::NotChecked, "unchecked"),
         (GutterText::Unavailable, "can't read"),
     ];
     for (text, words) in cases {
