@@ -280,6 +280,21 @@ fn every_failing_silent_exit_names_its_log() {
     }
 }
 
+/// An unsafe folder name gets IW8's own advice in silent mode too, never "uninstall".
+#[test]
+fn an_unsafe_name_is_never_told_to_uninstall() {
+    let why = crate::mode::Why::UnsafeName {
+        root: PathBuf::from(r"C:\R&D\Navo"),
+        character: '&',
+    };
+    let error = InstallError::ModeChanged(Box::new(Mode::Ambiguous(why)));
+    let message = crate::cli::messages::install_message(&error, Path::new(ROOT), false);
+    assert_eq!(
+        message,
+        "Navo is installed in `C:\\R&D\\Navo`. Setup cannot update a folder whose name contains `&`. Keep using Navo there; it updates itself."
+    );
+}
+
 /// A different --installto while an install exists exits 3.
 #[test]
 fn a_different_installto_while_installed_exits_3() {

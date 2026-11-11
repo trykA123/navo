@@ -2,7 +2,12 @@
 
 use std::path::Path;
 
-use crate::{flow::Failure, mode::Mode, runner::InstallError, syntax::FolderProblem};
+use crate::{
+    flow::Failure,
+    mode::{Mode, Why},
+    runner::InstallError,
+    syntax::FolderProblem,
+};
 
 /// Describes one runner failure with the root and child that produced it.
 pub(super) fn install_message(error: &InstallError, fallback_root: &Path, upgrade: bool) -> String {
@@ -45,11 +50,21 @@ pub(super) fn install_message(error: &InstallError, fallback_root: &Path, upgrad
 fn mode_message(found: &Mode) -> String {
     match found {
         Mode::Same(_) | Mode::Newer(_) => "a same or newer Navo is already installed".to_owned(),
+        Mode::Ambiguous(Why::UnsafeName { root, character }) => unsafe_name(root, *character),
         Mode::Ambiguous(_) => {
             "repair by uninstalling Navo in Settings, then run Setup again".to_owned()
         }
         Mode::Fresh | Mode::Upgrade(_) => "the install state changed; run Setup again".to_owned(),
     }
+}
+
+/// IW8's advice for a root that fails the character rule; it never suggests uninstalling,
+/// the step the rule guards. The window's Ambiguous page shows the same text.
+pub(crate) fn unsafe_name(root: &Path, character: char) -> String {
+    format!(
+        "Navo is installed in `{}`. Setup cannot update a folder whose name contains `{character}`. Keep using Navo there; it updates itself.",
+        root.display()
+    )
 }
 
 /// Describes one runner failure, including the IW7 recovery text where it applies.
