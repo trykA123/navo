@@ -67,18 +67,13 @@ impl DiffBackend {
     }
 }
 
-/// The file diff backend; its copies run as compare jobs of this session, so Ctrl+Z finds them.
-/// Without a job profile it still diffs and refuses every copy.
+/// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
 pub(crate) fn diff_backend(
-    sessions: Option<&crate::jobs::SessionHolds>,
-    experimental: bool,
+    copy: Option<LogFactory>,
     local: &Arc<dyn ProviderOps>,
 ) -> Arc<DiffBackend> {
-    Arc::new(match sessions {
-        Some(sessions) => DiffBackend::with_copy(
-            sessions.compare_factory(experimental.then(|| local.clone())),
-            local.clone(),
-        ),
+    Arc::new(match copy {
+        Some(factory) => DiffBackend::with_copy(factory, local.clone()),
         None => DiffBackend::default(),
     })
 }

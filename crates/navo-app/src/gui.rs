@@ -203,11 +203,11 @@ pub(crate) fn open(mut launch: Launch) {
     #[cfg(windows)]
     crate::index_service::start_version_step(dirs.as_ref().map(|dirs| dirs.data.as_path()));
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
-    let diff = crate::compare::diff::diff_backend(
-        services.sessions.as_ref(),
-        launch.experimental_retention,
-        &local,
-    );
+    let copy = services
+        .sessions
+        .as_ref()
+        .map(|holds| holds.compare_factory(launch.experimental_retention.then(|| local.clone())));
+    let diff = crate::compare::diff::diff_backend(copy, &local);
     let exit = (disk, visits, services.sessions);
     files::prewarm_pdf(PDF_WARM_DELAY);
     let quit_git = git.clone();
