@@ -254,7 +254,11 @@ impl HexView {
     }
 
     /// Asks for the visible rows after this frame, so render does no I/O and changes no state.
-    pub(super) fn request_later(&self, window: &Window, cx: &mut Context<NavoWindow>) {
+    pub(in crate::window_view::compare_screen) fn request_later(
+        &self,
+        window: &Window,
+        cx: &mut Context<NavoWindow>,
+    ) {
         let weak = cx.weak_entity();
         window.defer(cx, move |window, cx| {
             if let Some(view) = weak.upgrade() {

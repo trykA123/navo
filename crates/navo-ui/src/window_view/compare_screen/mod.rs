@@ -114,6 +114,7 @@ impl FileScreen {
             DiffUpdate::Failed { text, .. } => {
                 (self.view, self.large, self.hex) = (None, None, None);
                 self.switch.landed();
+                self.switch.release();
                 self.fail(text);
             }
             DiffUpdate::Spans { spans, .. } => match self.view.as_mut() {
@@ -154,6 +155,7 @@ impl FileScreen {
     /// kind only; rows are `row_height` tall.
     fn opened(&mut self, (kind, text): (PairKind, Option<Arc<PairText>>), row_height: Pixels) {
         let offset = self.switch.landed();
+        let old_view = self.view.take();
         let (at, words) = (self.at.filter(|_| offset.is_none()), self.look.words);
         self.view = text.clone().map(|text| {
             let mut view = file::FileView::new(text, at, words);
@@ -172,6 +174,12 @@ impl FileScreen {
         self.open_pictures(kind);
         self.state = FileState::Opened { kind, text };
         self.follow_layout();
+        match (offset, self.hex.is_some()) {
+            (Some(_), shown) => self.switch.hold(old_view.filter(|_| shown)),
+            (None, false) => self.switch.release(),
+            (None, true) => {}
+        }
+        self.drop_unfit_bytes(kind);
     }
 
     /// Asks the worker to reload both sides under the next request id; updates for every earlier

@@ -11,6 +11,7 @@ use super::copy::{FileBars, Note, note_view};
 use super::details::beside;
 use super::drawers::{changes_view, details_view};
 use super::image;
+use super::switch;
 use super::{FileScreen, FileState};
 use crate::commands::compare::{Exit, NextDifference, PreviousDifference};
 use crate::file_list::kind;
@@ -158,8 +159,8 @@ fn body(
                 .children(map),
         );
     }
-    if let Some(hex) = file.hex.as_ref() {
-        return beside(hex.body(t, window, cx).into_any_element(), details);
+    if let Some(bytes) = switch::bytes_body(file, (t, window, bars), cx) {
+        return beside(bytes, details);
     }
     let failed = matches!(file.state, FileState::Failed(_));
     if let Some(large) = file.large.as_ref().filter(|_| !failed) {

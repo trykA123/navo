@@ -147,6 +147,28 @@ impl Rows {
         self.row(index)?.left.map(|span| span.at)
     }
 
+    /// The left byte offset row `index` starts at; a gap row takes the next row's that has a
+    /// left side, or the end of the left bytes when none follows.
+    pub(super) fn left_from(&self, index: usize) -> u64 {
+        if let Some(at) = self.left_at(index) {
+            return at;
+        }
+        let after = self
+            .segments
+            .partition_point(|segment| segment.first <= index);
+        let shows_left = |segment: &&Segment| segment.left_len > 0;
+        let next = self.segments.get(after..).unwrap_or_default();
+        match next.iter().find(shows_left) {
+            Some(segment) => segment.left,
+            None => self
+                .segments
+                .iter()
+                .rev()
+                .find(shows_left)
+                .map_or(0, |segment| segment.left.saturating_add(segment.left_len)),
+        }
+    }
+
     /// The first row that shows left byte `offset` or later; the last row past the end.
     pub(super) fn row_of_left(&self, offset: u64) -> usize {
         let at = self

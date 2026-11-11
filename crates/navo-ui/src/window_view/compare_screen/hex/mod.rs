@@ -73,6 +73,9 @@ pub(super) struct HexView {
     error: Option<SharedString>,
     /// The left byte offset to put on top once the rows exist (Alt+V Bytes).
     start: Option<u64>,
+    /// The exact left offset the top row was sought, kept while that row stays on top so a
+    /// rebuild (regions landing) puts the same byte back on top.
+    pin: Option<u64>,
     /// Set by the view's one open and never cleared, so no wake or failure opens again.
     open_started: bool,
 }
@@ -106,6 +109,7 @@ impl HexView {
             scroll: ByteScroll::default(),
             error: None,
             start: None,
+            pin: None,
             open_started: false,
         }
     }
@@ -336,6 +340,7 @@ impl HexView {
 
     /// Rebuilds rows and tint indexes; the old map stays on screen until the new bytes land.
     fn rebuild(&mut self) {
+        let anchor = self.anchor();
         let rows = match self.align {
             HexAlign::Offset => Rows::offset(self.lengths),
             HexAlign::Content => Rows::content(self.lengths, &self.regions),
@@ -347,6 +352,7 @@ impl HexView {
         if self.installed() {
             self.top = self.top.min(self.rows.count().saturating_sub(1));
         }
+        self.reanchor(anchor);
         if self.current.is_some_and(|at| at >= self.regions.len()) {
             self.current = self.regions.len().checked_sub(1);
         }
