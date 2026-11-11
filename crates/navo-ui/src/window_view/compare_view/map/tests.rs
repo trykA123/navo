@@ -11,7 +11,6 @@ fn row(tone: Tone) -> RowView {
         name: "a.txt".to_owned(),
         side: None,
         tone,
-        mark: "",
         status: String::new(),
         gutter: None,
     }
