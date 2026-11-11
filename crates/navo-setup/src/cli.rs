@@ -132,3 +132,4 @@ pub use parse_flags::parse;
 #[cfg(windows)]
 pub(crate) use run::default_root;
 pub use run::run;
+pub(crate) use run::write_log_line as append_log_line;

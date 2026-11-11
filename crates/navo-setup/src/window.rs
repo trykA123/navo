@@ -124,6 +124,7 @@ impl SetupWindow {
                 Out::Browse => self.browse(cx),
                 Out::OpenFolder(path) => cx.open_with_system(&path),
                 Out::Copy(text) => cx.write_to_clipboard(ClipboardItem::new_string(text)),
+                Out::Log { path, line } => crate::cli::append_log_line(&path, &line),
                 Out::Quit => cx.quit(),
             }
         }

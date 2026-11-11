@@ -22,6 +22,7 @@ use crate::window_worker::{Job, Link, Reply};
 pub const ROOT: &str = r"C:\Programs\Navo";
 pub const OTHER: &str = r"D:\Apps\Navo";
 pub const VERSION: &str = "0.4.0";
+pub const WIZARD_LOG: &str = r"C:\Temp\wizard.log";
 
 /// Builds a validated file payload in `dir`, as the runner tests do.
 pub fn payload(dir: &Path) -> Payload {
@@ -48,6 +49,7 @@ fn facts() -> Facts {
     Facts {
         version: VERSION.into(),
         space_needed: Some(200),
+        wizard_log: Some(PathBuf::from(WIZARD_LOG)),
         log_paths: vec![PathBuf::from(r"C:\Temp\velopack.log")],
     }
 }

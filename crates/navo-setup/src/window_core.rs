@@ -49,6 +49,11 @@ pub enum Out {
     Browse,
     OpenFolder(PathBuf),
     Copy(String),
+    /// Append one line to a log file; a write error never stops the wizard.
+    Log {
+        path: PathBuf,
+        line: String,
+    },
     /// The worker released everything; end the process.
     Quit,
 }
@@ -149,8 +154,21 @@ impl Shell {
             self.live.space_free = None;
             outs.push(Out::CancelCheck);
         }
+        if !was_failed && self.flow.page() == Page::Failed {
+            outs.extend(self.failure_log());
+        }
         outs.extend(effects.into_iter().map(|effect| self.effect(effect)));
         outs
+    }
+
+    /// Builds the wizard-log line for a run that just failed, so the named log holds the problem.
+    fn failure_log(&self) -> Option<Out> {
+        let path = self.facts.wizard_log.clone()?;
+        let problem = self.view().problem?;
+        Some(Out::Log {
+            path,
+            line: format!("navo-setup: {problem}"),
+        })
     }
 
     /// Turns one flow effect into an output; Close waits for the worker before quitting.

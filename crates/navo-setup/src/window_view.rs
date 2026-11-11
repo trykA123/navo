@@ -15,6 +15,9 @@ pub struct Facts {
     pub version: String,
     /// Bytes Velopack needs on the target drive.
     pub space_needed: Option<u64>,
+    /// The wizard's own log for this run; the window writes a failure's problem there.
+    pub wizard_log: Option<PathBuf>,
+    /// Further logs to name, such as Velopack's.
     pub log_paths: Vec<PathBuf>,
 }
 
@@ -56,7 +59,7 @@ pub fn view(flow: &Flow, facts: &Facts, live: &Live) -> SetupView {
         notice: notice(flow),
         leftover_root: matches!(flow.failure(), Some(Failure::PartialRoot(_)))
             .then(|| folder.path().to_owned()),
-        log_paths: facts.log_paths.clone(),
+        log_paths: log_paths(facts),
         details: details(flow, facts),
         space_needed: facts.space_needed,
         space_free: live.space_free,
@@ -145,9 +148,19 @@ fn notice(flow: &Flow) -> Option<String> {
     }
 }
 
+/// Lists the logs to name: the wizard's own log first, then the others such as Velopack's.
+fn log_paths(facts: &Facts) -> Vec<PathBuf> {
+    facts
+        .wizard_log
+        .iter()
+        .chain(&facts.log_paths)
+        .cloned()
+        .collect()
+}
+
 /// The text Copy details puts on the clipboard: the problem, then one log path per line.
 fn details(flow: &Flow, facts: &Facts) -> String {
     let mut lines: Vec<String> = problem(flow).into_iter().collect();
-    lines.extend(facts.log_paths.iter().map(|p| p.display().to_string()));
+    lines.extend(log_paths(facts).iter().map(|p| p.display().to_string()));
     lines.join("\n")
 }
