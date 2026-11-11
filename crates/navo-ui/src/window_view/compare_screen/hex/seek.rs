@@ -5,6 +5,13 @@
 
 use super::HexView;
 
+/// The byte kept on top across a rebuild: a left offset, or the right one on a gap row.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum Anchor {
+    Left(u64),
+    Right(u64),
+}
+
 impl HexView {
     /// The left byte offset of the first row shown, or the offset still waiting to be shown.
     /// A gap row reports the next row that has a left side.
@@ -35,21 +42,29 @@ impl HexView {
             .filter(|&offset| self.rows.row_of_left(offset) == self.top)
     }
 
-    /// The left byte on top now, taken before the rows are swapped; none before the rows exist.
-    pub(super) fn anchor(&self) -> Option<u64> {
+    /// The byte on top now, taken before the rows are swapped; the left one, else the right
+    /// one of a gap row (D16: arriving rows never move the top line); none before the rows exist.
+    pub(super) fn anchor(&self) -> Option<Anchor> {
         if !self.installed() || self.rows.count() == 0 {
             return None;
         }
-        Some(
-            self.pinned()
-                .unwrap_or_else(|| self.rows.left_from(self.top)),
-        )
+        if let Some(offset) = self.pinned() {
+            return Some(Anchor::Left(offset));
+        }
+        let row = self.rows.row(self.top)?;
+        Some(match (row.left, row.right) {
+            (Some(left), _) => Anchor::Left(left.at),
+            (None, Some(right)) => Anchor::Right(right.at),
+            (None, None) => Anchor::Left(self.rows.left_from(self.top)),
+        })
     }
 
     /// Puts the row that holds `anchor` back on top after the rows were swapped.
-    pub(super) fn reanchor(&mut self, anchor: Option<u64>) {
-        if let Some(offset) = anchor {
-            self.top = self.rows.row_of_left(offset);
+    pub(super) fn reanchor(&mut self, anchor: Option<Anchor>) {
+        match anchor {
+            Some(Anchor::Left(offset)) => self.top = self.rows.row_of_left(offset),
+            Some(Anchor::Right(offset)) => self.top = self.rows.row_of_right(offset),
+            None => {}
         }
     }
 

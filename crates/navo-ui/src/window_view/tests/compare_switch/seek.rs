@@ -193,13 +193,62 @@ fn compare_switch_bytes_never_draws_a_blank_body_before_the_first_hex_rows(
         cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
             .expect("window");
         let (text, hex) = body_drawn(cx, &rig);
-        assert!(text || hex, "blank frame: {:?}", probe(cx, &rig));
-        if hex {
+        let shown = probe(cx, &rig);
+        assert!(text || hex, "blank frame: {shown:?}");
+        if shown.rows > 0 {
+            // The rows are installed: a drawn body without bytes has no `paged-row` cells.
+            assert!(hex, "rows installed but the body draws no bytes: {shown:?}");
+            assert!(
+                shown.left_hex.iter().any(Option::is_some),
+                "no bytes: {shown:?}"
+            );
             return;
         }
         crate::window_view::tests::settle(cx, &rig.view);
     }
     panic!("the hex rows never landed");
+}
+
+/// Sends one more region batch for pair `request`: `100` bytes inserted at left offset 600.
+fn second_batch(cx: &mut TestAppContext, rig: &Rig, request: u64) {
+    let run = probe(cx, rig).run;
+    let sink = rig.diff.pair_sink();
+    let bytes = DiffUpdate::Bytes {
+        request,
+        align: HexAlign::Content,
+        run,
+        regions: vec![ByteRegionView {
+            left: 600..600,
+            right: 2700..2800,
+            changed: 100,
+        }],
+        progress: None,
+    };
+    rig.push(cx, &sink, bytes);
+    frame(cx, rig);
+}
+
+#[gpui_kit::test]
+fn compare_hex_a_gap_top_row_keeps_its_right_offset_when_more_regions_land(
+    cx: &mut TestAppContext,
+) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = unequal(cx);
+    rig.press(cx, "enter");
+    open(cx, &rig, (1, PairKind::Binary), None);
+    insertion(cx, &rig, 1);
+    let top = rig.view.update(cx, |view, _| view.file_hex_wheel(30.));
+    assert!(top.is_some_and(|row| row > 20 && row < 131), "top: {top:?}");
+    let before = probe(cx, &rig);
+    let want = before.top_right.expect("the gap row holds right bytes");
+    assert_eq!(before.top_left, None, "the top row is in the gap");
+    second_batch(cx, &rig, 1);
+    let after = probe(cx, &rig);
+    let at = after.top_right.expect("still a right-only row on top");
+    assert!(
+        at <= want && want < at + 16,
+        "top moved from right byte {want} to {at}: {after:?}"
+    );
 }
 
 #[gpui_kit::test]

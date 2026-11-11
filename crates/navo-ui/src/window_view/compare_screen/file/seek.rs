@@ -50,12 +50,18 @@ fn line_at_row(text: &PairText, layout: Layout, row: usize) -> usize {
 
 /// The first list row that shows left line `line` or a later one; the last row when none does.
 fn row_of_line(text: &PairText, layout: Layout, line: usize) -> usize {
-    // A list row is never ahead of its `DiffRow` number, so the scan starts there.
-    let at = text
+    let found = text
         .rows
         .iter()
         .position(|row| left_line(*row).is_some_and(|shown| shown >= line))
         .unwrap_or(text.rows.len().saturating_sub(1));
+    // A list row is never ahead of its `DiffRow` number. A unified run lists its lefts before
+    // its rights, so they can sit before `found`: the scan starts at the run's first row.
+    let at = text
+        .hunks
+        .iter()
+        .find(|hunk| hunk.rows.contains(&(found as u32)))
+        .map_or(found, |hunk| hunk.rows.start as usize);
     scan_left(text, layout, at, |shown| shown >= line)
         .map_or_else(|| row_count(text, layout).saturating_sub(1), |(row, _)| row)
 }
@@ -111,11 +117,8 @@ mod tests {
 
     /// Five lines of ten bytes; the right side inserts a row after left line 1 and changes line 3.
     fn text() -> PairText {
-        PairText {
-            left: vec![String::new(); 5],
-            right: vec![String::new(); 6],
-            left_starts: vec![0, 10, 20, 30, 40, 50],
-            rows: vec![
+        with_rows(
+            vec![
                 DiffRow::Equal(0, 0),
                 DiffRow::Equal(1, 1),
                 DiffRow::Inserted(2),
@@ -123,10 +126,21 @@ mod tests {
                 DiffRow::Changed(3, 4),
                 DiffRow::Equal(4, 5),
             ],
-            hunks: [2..3, 4..5]
-                .into_iter()
+            &[2..3, 4..5],
+        )
+    }
+
+    /// A pair of five lines with the given diff rows and hunk row ranges.
+    fn with_rows(rows: Vec<DiffRow>, hunks: &[std::ops::Range<u32>]) -> PairText {
+        PairText {
+            left: vec![String::new(); 5],
+            right: vec![String::new(); 6],
+            left_starts: vec![0, 10, 20, 30, 40, 50],
+            rows,
+            hunks: hunks
+                .iter()
                 .map(|rows| HunkView {
-                    rows,
+                    rows: rows.clone(),
                     left_bytes: 0..0,
                     right_bytes: 0..0,
                     digest: None,
@@ -179,6 +193,26 @@ mod tests {
             5,
             "past the end: last row"
         );
+    }
+
+    #[test]
+    #[allow(
+        clippy::single_range_in_vec_init,
+        reason = "one hunk: a list of hunk ranges"
+    )]
+    fn a_unified_run_that_inserts_first_maps_its_lefts() {
+        // Unified list: E:l0, D:l1, I:r1, I:r2, E:l2.
+        let text = with_rows(
+            vec![
+                DiffRow::Equal(0, 0),
+                DiffRow::Inserted(1),
+                DiffRow::Changed(1, 2),
+                DiffRow::Equal(2, 3),
+            ],
+            &[1..3],
+        );
+        assert_eq!(row_of_line(&text, Layout::Unified, 1), 1);
+        assert_eq!(line_at_row(&text, Layout::Unified, 1), 1);
     }
 
     #[test]

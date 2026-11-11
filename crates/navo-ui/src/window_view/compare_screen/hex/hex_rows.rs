@@ -185,6 +185,22 @@ impl Rows {
         row.min(self.total.saturating_sub(1))
     }
 
+    /// The first row that shows right byte `offset` or later; the last row past the end.
+    pub(super) fn row_of_right(&self, offset: u64) -> usize {
+        let at = self
+            .segments
+            .iter()
+            .position(|segment| offset < segment.right.saturating_add(segment.right_len));
+        let Some(segment) = at.and_then(|at| self.segments.get(at)) else {
+            return self.total.saturating_sub(1);
+        };
+        let inside = offset.saturating_sub(segment.right) / HEX_WIDTH;
+        let row = segment
+            .first
+            .saturating_add(usize::try_from(inside).unwrap_or(0));
+        row.min(self.total.saturating_sub(1))
+    }
+
     /// The row region `at` starts on; the last row when the region has no bytes.
     pub(super) fn row_for_region(
         &self,
