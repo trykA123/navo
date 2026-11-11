@@ -1,13 +1,15 @@
 # Runs inside the Windows VM for the installer's end-to-end cases (plan W15a).
 # -MakeBase builds the base once, -WaitLogon waits for u's desktop, -Launch starts a case in u's session, -Case runs it.
 # -Helper runs a case's second account step (S7 as a), started by the case itself.
+# -Finalize runs the case's Finalize-<case> as the SSH admin after the case is done, to undo machine-wide changes.
 #requires -Version 5.1
 param(
     [string]$Case,
     [switch]$MakeBase,
     [switch]$WaitLogon,
     [switch]$Launch,
-    [switch]$Helper
+    [switch]$Helper,
+    [switch]$Finalize
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -257,7 +259,23 @@ function Invoke-Case([string]$name) {
     Write-Host $line
 }
 
+# Runs Finalize-<case> if the case has one; a failure turns the case's result into FAIL and exits nonzero.
+function Invoke-Finalize([string]$name) {
+    if (-not (Get-Command "Finalize-$name" -ErrorAction SilentlyContinue)) { return }
+    $script:caseDir = Join-Path $e2e "out\$name"
+    $script:WorkDir = $script:caseDir
+    try { & "Finalize-$name" }
+    catch {
+        $result = Join-Path $script:caseDir 'result.txt'
+        $utf8 = New-Object Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($result, "FAIL ${name}: finalize: $($_.Exception.Message)`r`n", $utf8)
+        Write-Host "FAIL ${name}: finalize: $($_.Exception.Message)"
+        exit 1
+    }
+}
+
 if ($MakeBase) { Invoke-MakeBase }
+elseif ($Finalize) { Invoke-Finalize $Case }
 elseif ($WaitLogon) { Invoke-WaitLogon }
 elseif ($Launch) { Invoke-Launch $Case }
 elseif ($Helper) { & "Invoke-${Case}Helper" }

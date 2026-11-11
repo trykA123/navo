@@ -9,7 +9,7 @@ usage: setup-e2e-host.sh <case>...      run cases, one fresh boot per case or pa
        setup-e2e-host.sh --clone-base   copy the paused CI VM's disk to the frozen base
        setup-e2e-host.sh --make-base    build packs and wizards into the base (once)
 Needs NAVO_WINVM, the path of the VM tool. Optional: NAVO_E2E_DIR, NAVO_E2E_SSH_PORT,
-NAVO_E2E_VNC, NAVO_E2E_LOCK_WAIT (seconds, default 1800).
+NAVO_E2E_VNC, NAVO_E2E_LOCK_WAIT (seconds, default 1800), NAVO_E2E_ARTIFACT (a Navo-Setup.exe that S12 installs).
 EOF
   exit 2
 }
@@ -47,24 +47,27 @@ take_lock() {
   done
 }
 
-# Sends one QMP command to a socket and prints the reply; exits nonzero on a QMP error.
+# Sends one QMP command (an optional third argument is its JSON "arguments") and prints the reply; exits nonzero on a QMP error.
 qmp_to() {
-  python3 -I - "$1" "$2" <<'PY'
+  python3 -I - "$1" "$2" "${3:-}" <<'PY'
 import json, socket, sys
 sock = socket.socket(socket.AF_UNIX)
 sock.connect(sys.argv[1])
 sock.settimeout(120)
 stream = sock.makefile("rw")
 stream.readline()
-def call(name):
-    stream.write(json.dumps({"execute": name}) + "\n")
+def call(name, arguments=None):
+    command = {"execute": name}
+    if arguments:
+        command["arguments"] = arguments
+    stream.write(json.dumps(command) + "\n")
     stream.flush()
     while True:
         message = json.loads(stream.readline())
         if "return" in message or "error" in message:
             return message
 call("qmp_capabilities")
-reply = call(sys.argv[2])
+reply = call(sys.argv[2], json.loads(sys.argv[3]) if sys.argv[3] else None)
 print(json.dumps(reply))
 sys.exit(1 if "error" in reply else 0)
 PY
@@ -214,7 +217,31 @@ verdict_of() {
   if [[ -s "$result" ]]; then head -n 1 "$result"; else echo "FAIL $1: no result in the evidence"; fi
 }
 
+# Answers the screenshot requests of a running part: a case writes shot-<name>.req in its folder
+# (a UAC prompt sits on the secure desktop, which only the host can capture); the host saves
+# <name>.png from the VM screen and writes shot-<name>.ok back. $1 = part, $2 = directory listing.
+serve_shots() {
+  local part=$1 listing=$2 request name
+  for request in $(grep -o 'shot-[A-Za-z0-9_-]*\.req' <<<"$listing" || true); do
+    name=${request#shot-}
+    name=${name%.req}
+    [[ -e "$OUT/$part/$name.png" ]] && continue
+    qmp_to "$QMP" screendump "{\"filename\": \"$OUT/$part/$name.png\", \"format\": \"png\"}" >/dev/null ||
+      echo "setup-e2e: screendump $name failed" >&2
+    ssh_vm "cmd /c echo ok>C:\\e2e\\out\\$part\\shot-$name.ok" || true
+  done
+}
+
+# Copies the rehearsal Setup.exe (NAVO_E2E_ARTIFACT) to C:\e2e\artifact for the parts that install it.
+push_artifact() {
+  [[ "$1" == S12 ]] || return 0
+  [[ -f "${NAVO_E2E_ARTIFACT:-}" ]] || { echo "setup-e2e: S12 needs NAVO_E2E_ARTIFACT=<Navo-Setup.exe>" >&2; return 1; }
+  ssh_vm 'cmd /c "if not exist C:\e2e\artifact mkdir C:\e2e\artifact"'
+  scp_vm "$NAVO_E2E_ARTIFACT" admin@127.0.0.1:C:/e2e/artifact/Navo-Setup.exe
+}
+
 # Boots a fresh overlay, runs one part in u's session, waits for done, collects the evidence.
+# After done, the guest's Finalize-<part> (admin) undoes machine-wide changes, then the folder is copied.
 run_part() {
   local part=$1 evidence=$OUT/$1
   rm -rf "$evidence"
@@ -222,19 +249,25 @@ run_part() {
   vm_boot throwaway
   wait_ssh 600
   push_scripts
+  push_artifact "$part"
   guest_ps -WaitLogon
   guest_ps -Launch -Case "$part"
-  local deadline=$((SECONDS + CASE_TIMEOUT)) done=0
+  local deadline=$((SECONDS + CASE_TIMEOUT)) done=0 listing
   while ((SECONDS < deadline)) && vm_alive; do
-    if ssh_vm "cmd /c if exist C:\\e2e\\out\\$part\\done echo yes" 2>/dev/null | grep -q yes; then
+    listing=$(ssh_vm "cmd /c dir /b C:\\e2e\\out\\$part" 2>/dev/null | tr -d '\r' || true)
+    serve_shots "$part" "$listing"
+    if grep -qx 'done' <<<"$listing"; then
       done=1
       break
     fi
-    sleep 5
+    sleep 2
   done
+  if ((done == 1)); then guest_ps -Finalize -Case "$part" || echo "FAIL $part: finalize step failed" >"$evidence/finalize-failed.txt"; fi
   scp_vm "admin@127.0.0.1:C:/e2e/out/$part/*" "$evidence/" || true
   if ((done == 0)); then
     echo "FAIL $part: timeout after $CASE_TIMEOUT s" >"$evidence/result.txt"
+  elif [[ -s "$evidence/finalize-failed.txt" ]]; then
+    cp "$evidence/finalize-failed.txt" "$evidence/result.txt"
   fi
   vm_quit
 }
