@@ -526,12 +526,14 @@ viewer.copy_path_line | ctrl-shift-c | Viewer
 viewer.edit | ctrl-e | Viewer
 viewer.encoding | ctrl-shift-e | Viewer
 viewer.follow | alt-f | Viewer
+viewer.go_to_end | ctrl-end | CompareView
 viewer.go_to_end | ctrl-end | Viewer
 viewer.go_to_end | end | Archive
 viewer.go_to_end | end | CompareView
 viewer.go_to_end | end | Pdf
 viewer.go_to_end | end | Tree
 viewer.go_to_line | ctrl-g | Viewer
+viewer.go_to_start | ctrl-home | CompareView
 viewer.go_to_start | ctrl-home | Viewer
 viewer.go_to_start | home | Archive
 viewer.go_to_start | home | CompareView

@@ -231,6 +231,17 @@ fn compare_large_scrolls_by_line_page_and_end_keys(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn compare_large_ctrl_home_and_ctrl_end_jump_to_the_ends(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, lines(0..100, (5_000, 5_000)));
+    rig.press(cx, "ctrl-end");
+    assert!(top(cx, &rig).0 > 4_900, "ctrl-end: {:?}", top(cx, &rig));
+    rig.press(cx, "ctrl-home");
+    assert_eq!(top(cx, &rig).0, 0, "ctrl-home goes to the first line");
+}
+
+#[gpui_kit::test]
 fn compare_large_failure_and_refresh_drop_the_large_body(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let (rig, sink) = open_large(cx);

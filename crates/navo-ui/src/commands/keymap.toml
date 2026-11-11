@@ -2160,12 +2160,12 @@ context = "CompareView"
 
 [[bind]]
 command = "viewer.go_to_start"
-keys = ["home"]
+keys = ["home", "ctrl-home"]
 context = "CompareView"
 
 [[bind]]
 command = "viewer.go_to_end"
-keys = ["end"]
+keys = ["end", "ctrl-end"]
 context = "CompareView"
 
 [[bind]]
