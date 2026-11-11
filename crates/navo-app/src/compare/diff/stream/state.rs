@@ -6,6 +6,7 @@ use std::sync::Arc;
 use navo_compare::model::CancelToken;
 use navo_ui::compare_diff::{Card, PairRequest};
 
+use super::detail_state::Details;
 use super::memory::{card_bytes, count};
 use super::search::{SearchJob, SearchState};
 
@@ -60,9 +61,10 @@ pub(crate) struct State {
     scheduled: HashSet<u64>,
     in_progress: HashSet<u64>,
     pub(super) held: HashMap<u64, Arc<Card>>,
+    pub(super) details: Details,
     pub(super) held_bytes: u64,
     pub(super) built: HashSet<u64>,
-    budget: u64,
+    pub(super) budget: u64,
     generation_cancel: CancelToken,
     pub(super) search: SearchState,
 }
@@ -84,6 +86,7 @@ impl State {
             scheduled: HashSet::new(),
             in_progress: HashSet::new(),
             held: HashMap::new(),
+            details: Details::default(),
             held_bytes: 0,
             built: HashSet::new(),
             budget,
@@ -101,6 +104,7 @@ impl State {
             self.generation_cancel = CancelToken::new();
             self.held.clear();
             self.held_bytes = 0;
+            self.details.clear();
             self.built.clear();
             self.in_progress.clear();
         }
@@ -130,6 +134,7 @@ impl State {
     /// The returned cards are sent again because the UI may have dropped a body that is too far
     /// from the view. A duplicate id is returned once.
     pub(crate) fn focus(&mut self, ids: Vec<u64>) -> Vec<(u64, Arc<Card>)> {
+        self.details.set_order(&ids);
         self.focus = ids.iter().copied().collect();
         let mut held = Vec::new();
         let mut seen = HashSet::new();
@@ -206,17 +211,7 @@ impl State {
         self.held_bytes = self.held_bytes.saturating_add(card_bytes(&card));
         self.held.insert(id, Arc::clone(&card));
         self.built.insert(id);
-        let mut evicted = Vec::new();
-        while self.held_bytes > self.budget {
-            let Some(victim) = self.victim() else {
-                break;
-            };
-            let Some(removed) = self.held.remove(&victim) else {
-                break;
-            };
-            self.held_bytes = self.held_bytes.saturating_sub(card_bytes(&removed));
-            evicted.push(victim);
-        }
+        let evicted = self.evict_over_budget();
         Some(Finish {
             generation,
             id,
@@ -253,6 +248,7 @@ impl State {
     /// Stop all loads and any search in this generation.
     pub(super) fn cancel(&mut self) {
         self.generation_cancel.cancel();
+        self.details.cancel_running();
         self.search.cancel();
     }
 

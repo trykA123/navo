@@ -13,6 +13,7 @@ use self::state::{Finish, State, ViewedWrite};
 use super::load::LoadInput;
 use super::viewed::ViewedMarks;
 
+pub(crate) mod detail_state;
 pub(crate) mod memory;
 mod search;
 pub(crate) mod state;

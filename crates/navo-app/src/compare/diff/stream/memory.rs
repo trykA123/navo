@@ -55,6 +55,7 @@ impl State {
         if let Some(card) = self.held.remove(&id) {
             self.held_bytes = self.held_bytes.saturating_sub(card_bytes(&card));
         }
+        self.details.forget(id);
         self.built.remove(&id);
         self.enqueue(id);
     }
@@ -75,6 +76,7 @@ impl State {
             if let Some(card) = self.held.remove(&id) {
                 self.held_bytes = self.held_bytes.saturating_sub(card_bytes(&card));
             }
+            self.details.forget(id);
             self.built.remove(&id);
         }
     }
