@@ -3,6 +3,7 @@
 
 mod map;
 mod reveal;
+mod rows;
 mod seek;
 mod spans;
 
@@ -15,13 +16,10 @@ use gpui_kit::Task;
 use navo_l10n::{t, tr};
 
 use super::super::layout::ONE_PANE_BELOW;
-use super::context::{RowHit, on_right_click};
 use super::copy::FileBars;
 use super::switch;
-use crate::compare_diff::body::{BodyLook, digits, row_view};
-use crate::compare_diff::{
-    DiffRow, Layout, PairText, ShownRow, SpanCache, Ticks, pair_rows, row_count,
-};
+use crate::compare_diff::body::digits;
+use crate::compare_diff::{DiffRow, Layout, PairText, SpanCache, row_count};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, VirtualList};
 use crate::tokens;
@@ -198,67 +196,24 @@ impl FileView {
             let shape = self.shape(layout);
             (shape.count, shape.starts.clone())
         };
-        let (text, built) = (Arc::clone(&self.text), Rc::clone(&self.built));
-        let current = self.current.and_then(|at| u32::try_from(at).ok());
-        let (digits, spans, words) = (digits(&text), Rc::clone(&self.spans), self.words);
-        let picks = bars.picks.clone();
-        let on_long = switch::on_bytes_here(&bars.weak);
-        let rows = move |range: Range<usize>, _: &mut Window, cx: &mut App| {
-            built.set((range.start, range.end));
-            let cache = words.then(|| spans.borrow());
-            let ticks = Ticks {
-                text: &text,
-                side: picks.side,
-                picked: &picks.lines,
-                cursor: picks.cursor,
-                hovered: bars.hovered,
-                on_tick: Rc::clone(&picks.on_tick),
-            };
-            let look = BodyLook {
-                theme: tokens::current(cx),
-                layout,
-                digits,
-                current,
-                spans: cache.as_deref(),
-                ticks: Some(&ticks),
-                bytes_here: Some(&on_long),
-            };
-            let first = range.start;
-            let rows = pair_rows(&text, layout, range);
-            rows.iter()
-                .enumerate()
-                .map(|(i, row)| {
-                    let drawn = row_view(&look, row);
-                    wrap_row(&bars, look.theme, drawn, (first + i, row, (&text, &starts)))
-                })
-                .collect()
+        let rows = rows::ListRows {
+            text: Arc::clone(&self.text),
+            built: Rc::clone(&self.built),
+            starts,
+            layout,
+            current: self.current.and_then(|at| u32::try_from(at).ok()),
+            digits: digits(&self.text),
+            spans: Rc::clone(&self.spans),
+            words: self.words,
+            on_long: switch::on_bytes_here(&bars.weak),
+            bars,
         };
+        let rows = move |range: Range<usize>, _: &mut Window, cx: &mut App| rows.draw(range, cx);
         VirtualList::new("compare-file-rows", count, &self.scroll, rows)
             .row_height(tokens::current(cx).spacing.row_height)
             .label(tr("compare-screen-rows"))
             .into_any_element()
     }
-}
-
-/// Wraps list row `at` (shown as `row`) with the copy bar when it belongs to a copyable change
-/// of `text`, and with the right-click menu; `starts` holds the first list row of every change.
-fn wrap_row(
-    bars: &FileBars,
-    t: &tokens::Theme,
-    drawn: AnyElement,
-    (at, row, (text, starts)): (usize, &ShownRow, (&PairText, &[usize])),
-) -> AnyElement {
-    let hunk = row
-        .hunk
-        .filter(|&h| text.hunks[h as usize].digest.is_some());
-    let shown = match hunk {
-        Some(hunk) => {
-            let first_row = starts.get(hunk as usize) == Some(&at);
-            bars.wrap(t, drawn, (at, hunk, first_row))
-        }
-        None => drawn,
-    };
-    on_right_click(&bars.weak, shown, RowHit::of(row))
 }
 
 impl NavoWindow {
