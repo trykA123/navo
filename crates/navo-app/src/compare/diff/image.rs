@@ -4,6 +4,7 @@
 
 use std::io::{ErrorKind, Read};
 
+use ::image::DynamicImage;
 use navo_compare::image::{ImageOutcome, ImageSize as CompareSize};
 use navo_compare::model::{CancelToken, ReadHint};
 use navo_ui::compare_diff::{
@@ -43,6 +44,21 @@ struct Snapshot {
     oversize: bool,
 }
 
+/// What an image pair needs next: a header-only fallback, a size mismatch or two decoded sides.
+enum Prepared {
+    /// The pair cannot be scored or decoded; the scores are the whole answer.
+    Fallback(ImageScores),
+    /// The sides differ in size; the scores hold both dimensions.
+    Mismatch { scores: ImageScores },
+    /// Both sides decoded; the engine compares them and `convert` builds the mask.
+    Decoded {
+        first: DynamicImage,
+        second: DynamicImage,
+        left_bytes: Vec<u8>,
+        right_bytes: Vec<u8>,
+    },
+}
+
 /// Compare an opened image pair and report `Image`, or `Failed` when a side cannot be read.
 /// Returns false when the pair was closed and no update must be sent.
 pub(crate) fn diff(input: &LoadInput, request: u64, sink: &DiffSink, cancel: &CancelToken) -> bool {
@@ -77,37 +93,31 @@ pub(crate) fn diff(input: &LoadInput, request: u64, sink: &DiffSink, cancel: &Ca
     true
 }
 
-/// Snapshot and hash both sides once, check dimensions, then decode the snapshots.
-fn compare(
-    input: &LoadInput,
-    cancel: &CancelToken,
-) -> Result<(ImageScores, Option<ImageMask>), Failure> {
+/// Snapshot and hash both sides once, then say what the pair needs: a fallback or a decode.
+fn prepare(input: &LoadInput, cancel: &CancelToken) -> Result<Prepared, Failure> {
     let left = input.left.as_ref().ok_or(Failure::Read)?;
     let right = input.right.as_ref().ok_or(Failure::Read)?;
     let left_snapshot = read_snapshot(left, cancel)?;
     let right_snapshot = read_snapshot(right, cancel)?;
     let equal = left_snapshot.hash == right_snapshot.hash;
     if left_snapshot.oversize || right_snapshot.oversize {
-        return Ok((
-            ImageScores::TooLarge {
-                reason: ImageLimit::Encoded,
-                equal,
-            },
-            None,
-        ));
+        return Ok(Prepared::Fallback(ImageScores::TooLarge {
+            reason: ImageLimit::Encoded,
+            equal,
+        }));
     }
     let left_bytes = left_snapshot.bytes.ok_or(Failure::Read)?;
     let right_bytes = right_snapshot.bytes.ok_or(Failure::Read)?;
     let left_format = header::format_of_snapshot(&left_bytes, left)?;
     let right_format = header::format_of_snapshot(&right_bytes, right)?;
     let formats = (left_format, right_format);
-    if let Some(scores) = size_fallback(&left_bytes, &right_bytes, formats, equal)? {
-        return Ok((scores, None));
+    if let Some(prepared) = size_fallback(&left_bytes, &right_bytes, formats, equal)? {
+        return Ok(prepared);
     }
     let first = match header::decode(&left_bytes, left_format) {
         Ok(image) => image,
         Err(Failure::TooLarge(reason, _)) => {
-            return Ok((ImageScores::TooLarge { reason, equal }, None));
+            return Ok(Prepared::Fallback(ImageScores::TooLarge { reason, equal }));
         }
         Err(other) => return Err(other),
     };
@@ -122,8 +132,32 @@ fn compare(
     if cancel.is_cancelled() {
         return Err(Failure::Cancelled);
     }
-    let outcome = navo_compare::image::compare(&first, &second).map_err(|_| Failure::Compare)?;
-    Ok(convert(outcome, &left_bytes, &right_bytes))
+    Ok(Prepared::Decoded {
+        first,
+        second,
+        left_bytes,
+        right_bytes,
+    })
+}
+
+/// Turn a prepared pair into the UI scores and mask; only a decoded pair reaches the engine.
+fn compare(
+    input: &LoadInput,
+    cancel: &CancelToken,
+) -> Result<(ImageScores, Option<ImageMask>), Failure> {
+    match prepare(input, cancel)? {
+        Prepared::Fallback(scores) | Prepared::Mismatch { scores } => Ok((scores, None)),
+        Prepared::Decoded {
+            first,
+            second,
+            left_bytes,
+            right_bytes,
+        } => {
+            let outcome =
+                navo_compare::image::compare(&first, &second).map_err(|_| Failure::Compare)?;
+            Ok(convert(outcome, &left_bytes, &right_bytes))
+        }
+    }
 }
 
 /// The fallback for a pair over a pixel cap or of different sizes, read from the headers the
@@ -133,13 +167,18 @@ fn size_fallback(
     right_bytes: &[u8],
     (left_format, right_format): (::image::ImageFormat, ::image::ImageFormat),
     equal: bool,
-) -> Result<Option<ImageScores>, Failure> {
+) -> Result<Option<Prepared>, Failure> {
     let left = header::dimensions(left_bytes, left_format)?;
     let right = header::dimensions(right_bytes, right_format)?;
     if let Some(reason) = size_limit(left, right, left_format, right_format) {
-        return Ok(Some(ImageScores::TooLarge { reason, equal }));
+        return Ok(Some(Prepared::Fallback(ImageScores::TooLarge {
+            reason,
+            equal,
+        })));
     }
-    Ok((left != right).then_some(ImageScores::SizeMismatch { left, right }))
+    Ok((left != right).then_some(Prepared::Mismatch {
+        scores: ImageScores::SizeMismatch { left, right },
+    }))
 }
 
 /// The pixel cap that applies to a same-format pair, if any.
