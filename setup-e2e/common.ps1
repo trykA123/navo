@@ -155,7 +155,11 @@ function Install-ServiceFrom([string]$navo) {
     Run-Checked $navo @('--index-service', 'install') 90 | Out-Null
     Wait-Until { Observe-Consent; $service = Get-IndexService; $service -and $service.State -eq 'Running' } 30 'service did not start'
     $root = Split-Path (Split-Path $navo -Parent) -Parent
-    Assert ((Get-IndexService).PathName.Trim('"').StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) 'service image is outside the root'
+    # The service copies itself to Program Files\Navo\Index (W1 P10), so that folder counts as well as the root.
+    $image = (Get-IndexService).PathName.Trim('"')
+    $homes = @($root, (Join-Path $env:ProgramFiles 'Navo'))
+    Assert (@($homes | Where-Object { $image.StartsWith($_ + '\', [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0) "service image $image is outside $($homes -join ' and ')"
+    Write-Evidence "service image: $image"
 }
 
 # Source: scripts/update-e2e.ps1:419-429 (Uninstall-Copy). Runs <root>\Update.exe uninstall --silent and waits for the root to go.
