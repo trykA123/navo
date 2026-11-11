@@ -17,13 +17,14 @@ use navo_ui::compare_diff::{
 use navo_ui::settings::Values;
 
 use super::super::settings::CompareSettings;
+use super::cards;
 use super::copy::CopyRefusal;
 use super::copy_hook::{CopyService, unavailable};
 use super::load::{LoadInput, Side};
 use super::pair::{EnginePlan, PairDiff};
 use super::sides::{side_of, unreadable_side};
 use super::sources::Sources;
-use super::stream::{LoadFn, StreamSession};
+use super::stream::{LoadFn, StreamParts, StreamSession};
 use super::viewed::{LazyViewed, NoViewed, OpenViewed, ViewedMarks, ViewedStore};
 use crate::compare::convert::settings_of;
 
@@ -103,10 +104,20 @@ impl DiffHooks for DiffBackend {
         let settings = settings_of(values);
         let budget = (settings.budget().bytes() / 4).max(64 * 1024 * 1024);
         let side = Arc::clone(&self.side);
+        let load_settings = settings.clone();
         let load: LoadFn =
-            Arc::new(move |request| Some(input_or_unreadable(request, &settings, &side)));
+            Arc::new(move |request| Some(input_or_unreadable(request, &load_settings, &side)));
         let viewed: Arc<dyn ViewedMarks> = self.viewed.clone();
-        Box::new(StreamSession::start(sink, budget, load, viewed))
+        let detail = Some(cards::detail_fn(EnginePlan::new(settings, true)));
+        Box::new(StreamSession::start_with(
+            sink,
+            budget,
+            StreamParts {
+                load,
+                viewed,
+                detail,
+            },
+        ))
     }
 
     /// Copy one change on a new thread, or refuse when the app has no job factory.
