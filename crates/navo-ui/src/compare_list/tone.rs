@@ -67,4 +67,35 @@ mod tests {
             }
         }
     }
+
+    /// Every diff tone reads on its own wash and fill, and body text reads on the wash.
+    #[test]
+    fn every_diff_tone_reads_on_its_wash_and_fill() {
+        let cases = [Mode::Light, Mode::Dark].into_iter().flat_map(|mode| {
+            let t = Theme::new(mode);
+            t.diff.tones().map(move |(name, tone)| {
+                let body = t.colors.text;
+                (mode, name, tone, body)
+            })
+        });
+        for (mode, name, tone, body) in cases {
+            let checks = [
+                ("text on wash", contrast_ratio(tone.text, tone.wash)),
+                ("text on fill", contrast_ratio(tone.text, tone.fill)),
+                ("body on wash", contrast_ratio(body, tone.wash)),
+            ];
+            for (what, ratio) in checks {
+                assert!(ratio >= 4.5, "{mode:?} {name} {what} is {ratio:.2}:1");
+            }
+        }
+    }
+
+    /// Conflict has its own hue, so its text differs from delete in both modes.
+    #[test]
+    fn conflict_text_differs_from_delete_text() {
+        for mode in [Mode::Light, Mode::Dark] {
+            let t = Theme::new(mode);
+            assert_ne!(t.diff.conflict.text, t.diff.delete.text, "{mode:?}");
+        }
+    }
 }
