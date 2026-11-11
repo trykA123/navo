@@ -170,13 +170,8 @@ fn stream_files() -> [CompareRow; 8] {
         size: 1,
         modified_ms: None,
     });
-    let row = |id: u64, path: &str, status, left: bool| CompareRow {
-        id,
-        path: path.to_owned(),
-        left: file.filter(|_| left),
-        right: file,
-        status,
-        contains_differences: false,
+    let row = |id: u64, path: &str, status, left: bool| {
+        CompareRow::new(id, path.to_owned(), status, (file.filter(|_| left), file))
     };
     let (diff, rules) = (RowStatus::Different, RowStatus::SameAfterRules);
     [

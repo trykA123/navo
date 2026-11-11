@@ -105,6 +105,7 @@ fn row_of(row: &Row) -> CompareRow {
         right: row.right.as_deref().map(side_of),
         status: status_of(row.display_status),
         contains_differences: row.contains_differences,
+        differences_inside: row.differences_inside,
     }
 }
 

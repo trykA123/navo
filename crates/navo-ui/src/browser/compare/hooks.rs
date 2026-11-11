@@ -66,9 +66,30 @@ pub struct CompareRow {
     pub status: RowStatus,
     /// Folder rows: the subtree holds a difference, whatever the folder's own status is.
     pub contains_differences: bool,
+    /// Folder rows: differing files and conflicts below this folder; 0 for files.
+    pub differences_inside: u32,
 }
 
 impl CompareRow {
+    /// A row with no differences below it; set `contains_differences` for folders that have some.
+    #[must_use]
+    pub fn new(
+        id: u64,
+        path: impl Into<String>,
+        status: RowStatus,
+        (left, right): (Option<CompareSide>, Option<CompareSide>),
+    ) -> Self {
+        Self {
+            id,
+            path: path.into(),
+            left,
+            right,
+            status,
+            contains_differences: false,
+            differences_inside: 0,
+        }
+    }
+
     /// Whether the Differences filter and next and previous difference stop on this row.
     #[must_use]
     pub fn is_difference(&self) -> bool {

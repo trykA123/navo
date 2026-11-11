@@ -146,14 +146,7 @@ fn stream(cards: &[(u64, Card)]) -> StreamModel {
         size: 1,
         modified_ms: None,
     });
-    let row = |id: u64, status| CompareRow {
-        id,
-        path: format!("f{id}"),
-        left: side,
-        right: side,
-        status,
-        contains_differences: false,
-    };
+    let row = |id: u64, status| CompareRow::new(id, format!("f{id}"), status, (side, side));
     let rows = [
         row(1, RowStatus::Different),
         row(2, RowStatus::Different),

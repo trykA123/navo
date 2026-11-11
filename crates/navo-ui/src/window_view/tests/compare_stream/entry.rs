@@ -60,14 +60,7 @@ pub(super) fn row(id: u64, path: &str, status: RowStatus) -> CompareRow {
         size: 3,
         modified_ms: None,
     });
-    CompareRow {
-        id,
-        path: path.to_owned(),
-        left: side,
-        right: side,
-        status,
-        contains_differences: false,
-    }
+    CompareRow::new(id, path.to_owned(), status, (side, side))
 }
 
 impl Rig {

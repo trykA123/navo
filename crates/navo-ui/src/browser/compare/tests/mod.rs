@@ -175,14 +175,7 @@ pub(super) fn row(id: u64, path: &str, status: RowStatus) -> CompareRow {
         RowStatus::OnlyRight => (None, side(kind)),
         _ => (side(kind), side(kind)),
     };
-    CompareRow {
-        id,
-        path: path.to_owned(),
-        left,
-        right,
-        status,
-        contains_differences: false,
-    }
+    CompareRow::new(id, path, status, (left, right))
 }
 
 pub(super) fn rows(generation: u64, rows: Vec<CompareRow>) -> CompareUpdate {
