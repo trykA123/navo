@@ -19,7 +19,7 @@ mod sources;
 mod stream;
 mod viewed;
 
-pub(crate) use hooks::{DiffBackend, diff_backend};
+pub use hooks::{DiffBackend, diff_backend};
 
 #[cfg(test)]
 mod tests;

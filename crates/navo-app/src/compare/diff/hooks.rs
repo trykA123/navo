@@ -34,7 +34,7 @@ pub(crate) type SideFn =
 
 /// The app's `DiffHooks`: builds local and Git file sides and owns the Viewed store. Copying a
 /// change needs the compare job factory; without one every copy is refused.
-pub(crate) struct DiffBackend {
+pub struct DiffBackend {
     side: SideFn,
     viewed: Arc<LazyViewed>,
     copy: Option<CopyService>,
@@ -68,10 +68,7 @@ impl DiffBackend {
 }
 
 /// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
-pub(crate) fn diff_backend(
-    copy: Option<LogFactory>,
-    local: &Arc<dyn ProviderOps>,
-) -> Arc<DiffBackend> {
+pub fn diff_backend(copy: Option<LogFactory>, local: &Arc<dyn ProviderOps>) -> Arc<DiffBackend> {
     Arc::new(match copy {
         Some(factory) => DiffBackend::with_copy(factory, local.clone()),
         None => DiffBackend::default(),

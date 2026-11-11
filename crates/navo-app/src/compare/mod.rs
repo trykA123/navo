@@ -17,6 +17,7 @@
 //! `ReadHint::Map` maps nothing: S4 found under 3 % gain, so every side reads buffered.
 //! `git_side::GitSide` reads with the engine that `settings::engine_for` chose for the repository.
 //! Ignore rules read the root `.gitignore` and `.git/info/exclude` of each side, not nested files.
+//! Public for Sidewise (NC52): `PaneCompare` and `diff::{DiffBackend, diff_backend}`.
 
 #![cfg_attr(
     not(test),
@@ -24,7 +25,7 @@
 )]
 
 mod convert;
-pub(crate) mod diff;
+pub mod diff;
 mod entry;
 pub(crate) mod git_side;
 pub(crate) mod handle;
@@ -34,7 +35,7 @@ mod pane;
 mod rules;
 pub(crate) mod settings;
 
-pub(crate) use pane::PaneCompare;
+pub use pane::PaneCompare;
 
 #[cfg(test)]
 mod tests;
