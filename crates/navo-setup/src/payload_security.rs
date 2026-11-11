@@ -30,7 +30,7 @@ impl Drop for Local {
 }
 
 /// Returns the current process user's SID text, or the Windows query error.
-pub(super) fn user_sid() -> io::Result<String> {
+pub(crate) fn user_sid() -> io::Result<String> {
     let mut raw = ptr::null_mut();
     // SAFETY: the pseudo-handle is valid and raw is a writable token output.
     if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) } == 0 {
@@ -75,7 +75,7 @@ pub(super) fn user_sid() -> io::Result<String> {
 }
 
 /// Converts a valid Windows SID to text and releases the temporary string allocation.
-pub(super) fn sid_text(sid: *mut c_void) -> io::Result<String> {
+pub(crate) fn sid_text(sid: *mut c_void) -> io::Result<String> {
     let mut text = ptr::null_mut();
     // SAFETY: the caller supplies a live SID and text is writable output.
     if unsafe { ConvertSidToStringSidW(sid, &mut text) } == 0 {

@@ -232,6 +232,42 @@ fn an_exit_zero_verification_failure_keeps_the_root_and_never_asks_to_delete_it(
     )));
 }
 
+/// An exit-0 child with an empty root still reaches the unverified Settings recovery path.
+#[test]
+fn an_exit_zero_child_with_an_empty_root_is_not_a_retry() {
+    let dir = tempfile::tempdir().unwrap();
+    let payload = payload(dir.path());
+    let mut host = fresh_host();
+    host.verified.clear();
+    host.verified.push_back(Verified {
+        update_exe: false,
+        sq_version: None,
+    });
+    host.root_empty.push_back(Ok(true));
+    let (result, _) = run(&mut host, fresh_request(), &payload);
+    let error = result.err().unwrap();
+    assert!(
+        matches!(error, InstallError::Failed(Failure::PartialRoot(Some(0)))),
+        "{error:?}"
+    );
+    assert_eq!(error.exit_code(), 5);
+    assert!(host.calls.iter().any(|call| matches!(
+        call,
+        Call::Cleanup {
+            remove_created: false
+        }
+    )));
+    assert_eq!(
+        count(&host, |call| matches!(
+            call,
+            Call::Cleanup {
+                remove_created: true
+            }
+        )),
+        0
+    );
+}
+
 /// Exit-0 marker and registry failures keep the session, and Close deletes nothing.
 #[test]
 fn after_exit_zero_marker_and_registry_failures_keep_the_session() {

@@ -46,6 +46,7 @@ pub enum FolderProblem {
     ProtectedFolder,
     DriveNotLocal,
     SubstDrive,
+    ParentOpen,
     NotWritable,
     NotEnoughSpace,
     ProbeFailed,
@@ -90,6 +91,7 @@ impl FolderProblem {
             Self::SubstDrive => {
                 "This drive is a mapped alias for another folder, which Setup cannot use."
             }
+            Self::ParentOpen => "Other people on this PC can change a folder above this one.",
             Self::NotWritable => "Setup cannot write to this folder.",
             Self::NotEnoughSpace => "This drive does not have enough free space for Navo.",
             Self::ProbeFailed => "Setup could not check this folder.",
@@ -117,6 +119,9 @@ impl FolderProblem {
             Self::ReparsePoint => "Choose a folder whose path has no links or synced placeholders.",
             Self::ProtectedFolder => "Choose another folder, such as C:\\Navo.",
             Self::SubstDrive => "Choose the folder on its real drive.",
+            Self::ParentOpen => {
+                "Choose a folder directly on a drive, such as C:\\Navo, or keep the default folder."
+            }
             Self::NotWritable => "Choose a folder you can write to, or fix its permissions.",
             Self::NotEnoughSpace => "Free some space or choose another drive.",
             Self::ProbeFailed => "Choose another folder, or check that you can write to it.",

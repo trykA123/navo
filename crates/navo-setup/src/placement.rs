@@ -62,6 +62,8 @@ pub enum DriveKind {
 pub struct Facts {
     pub drive: DriveKind,
     pub subst: bool,
+    /// Whether another user can change an existing folder above the candidate.
+    pub parent_open: bool,
     pub writable: bool,
     pub free: u64,
 }
@@ -121,6 +123,9 @@ pub fn check(
     }
     if facts.subst {
         return Err(FolderProblem::SubstDrive);
+    }
+    if facts.parent_open {
+        return Err(FolderProblem::ParentOpen);
     }
     if !matches!(facts.drive, DriveKind::Fixed | DriveKind::Removable) {
         return Err(FolderProblem::DriveNotLocal);
