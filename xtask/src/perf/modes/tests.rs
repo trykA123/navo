@@ -4,13 +4,25 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use super::{EXPECTED_PANES, Mode, check_report, load_run, parse, run};
+use super::{EXPECTED_PANES, Mode, check_done, check_report, load_run, parse, run};
 
 /// A full 40-character lowercase sha, as `--commit` must be.
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// The `NAVO_COMMIT` of a build of `SHA`: the 12-character short sha.
 const COMMIT: &str = "0123456789ab";
+
+/// The `done.json` B4 writes last over one clean run of six launches.
+const DONE: &str = r#"{"exits":[0,0,0,0,0,0],"finished":"2026-11-11T04:00:00Z"}"#;
+
+/// `done.json` of a run whose sixth launch hit B4's 60 s timeout.
+const DONE_124: &str = r#"{"exits":[0,0,0,0,0,124],"finished":"2026-11-11T04:00:00Z"}"#;
+
+/// SC11's fingerprint of this VM, as `ci.ps1` builds it.
+const FP: &str = "os=19045.5151;cpus=4";
+
+/// SC11's calibration line for the run `TestRoot::write_run` folds under `--commit SHA`.
+const CALIBRATION: &str = r#"=== calibration {"commit":"0123456789abcdef0123456789abcdef01234567","fingerprint":"os=19045.5151;cpus=4","private_bytes":71000000,"warm_ms":260.0}"#;
 
 /// Arguments as `perf-summary` receives them on the command line.
 fn args(values: &[&str]) -> Vec<String> {
@@ -27,6 +39,101 @@ fn fresh_line(root: &Path, output: &Path) -> Vec<String> {
         "--commit",
         SHA,
     ])
+}
+
+/// The arguments of a line of mode `name`, over the two run positionals and `tail`.
+fn run_line(name: &str, tail: &[&str]) -> Vec<String> {
+    let mut values = vec!["reports", "summary.md", "--mode", name];
+    values.extend_from_slice(tail);
+    args(&values)
+}
+
+/// The arguments of a line of mode `name` over a temp run folder and summary file.
+fn mode_line(name: &str, root: &Path, output: &Path, tail: &[&str]) -> Vec<String> {
+    let mut values = vec![
+        root.to_str().unwrap(),
+        output.to_str().unwrap(),
+        "--mode",
+        name,
+    ];
+    values.extend_from_slice(tail);
+    args(&values)
+}
+
+/// SC11's `vm` line over `root`, judged against `baseline` on fingerprint `FP`.
+fn vm_line(root: &Path, output: &Path, baseline: &Path) -> Vec<String> {
+    mode_line(
+        "vm",
+        root,
+        output,
+        &[
+            "--commit",
+            SHA,
+            "--done",
+            root.join("done.json").to_str().unwrap(),
+            "--baseline",
+            baseline.to_str().unwrap(),
+            "--fingerprint",
+            FP,
+        ],
+    )
+}
+
+/// SC11's `calibrate` line over `root`, which carries no baseline.
+fn calibrate_line(root: &Path, output: &Path) -> Vec<String> {
+    mode_line(
+        "calibrate",
+        root,
+        output,
+        &[
+            "--commit",
+            SHA,
+            "--done",
+            root.join("done.json").to_str().unwrap(),
+            "--fingerprint",
+            FP,
+        ],
+    )
+}
+
+/// SC11's `aggregate` line over a lines file: it takes one positional, not a run folder.
+fn aggregate_line(lines: &Path) -> Vec<String> {
+    args(&[
+        "--mode",
+        "aggregate",
+        lines.to_str().unwrap(),
+        "--measured",
+        "2026-11-11",
+        "--reason",
+        "ten idle runs",
+    ])
+}
+
+/// A `vm-baseline.toml` on fingerprint `FP` whose memory limit gates `private_bytes`, at
+/// the SC11 baseline of 300 ms warm with both guards on.
+fn write_baseline(path: &Path, private_bytes: u64) {
+    fs::write(
+        path,
+        format!(
+            r#"vm_fingerprint = "{FP}"
+commit = "{SHA}"
+measured = "2026-11-10"
+reason = "ten idle runs"
+private_bytes = {private_bytes}
+warm_first_usable_ms = 300.0
+memory_spread = 0.02
+time_spread = 0.05
+memory_guard = true
+time_guard = true
+"#
+        ),
+    )
+    .unwrap();
+}
+
+/// Ten calibration lines of one commit and one VM, as `calibrate` writes them.
+fn calibration_lines() -> String {
+    format!("{CALIBRATION}\n").repeat(10)
 }
 
 /// A report in the real metrics schema, corrected to a fixture run of `SHA`.
@@ -76,6 +183,26 @@ impl TestRoot {
             report["first_usable_ms"] = serde_json::json!(first_usable_ms);
             fs::write(self.0.join(format!("{name}.json")), report.to_string()).unwrap();
         }
+    }
+
+    /// `done.json`, as B4 writes it last over the run.
+    fn write_done(&self, json: &str) {
+        fs::write(self.0.join("done.json"), json).unwrap();
+    }
+
+    /// The summary file SC11's modes append their line to.
+    fn summary(&self) -> PathBuf {
+        self.0.join("summary.md")
+    }
+
+    /// The `vm-baseline.toml` beside the run.
+    fn baseline(&self) -> PathBuf {
+        self.0.join("vm-baseline.toml")
+    }
+
+    /// The contents of `path`, which the appended-line tests read back.
+    fn read(&self, path: &Path) -> String {
+        fs::read_to_string(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
     }
 }
 
@@ -220,5 +347,278 @@ fn run_fails_when_a_report_is_missing() {
         run(&fresh_line(&root.0, &root.0.join("summary.md"))),
         ExitCode::FAILURE,
         "a missing report must fail closed"
+    );
+}
+
+#[test]
+fn parse_accepts_the_modes_of_a_vm_run() {
+    let vm = parse(&args(&[
+        "reports",
+        "summary.md",
+        "--mode",
+        "vm",
+        "--commit",
+        SHA,
+        "--done",
+        "done.json",
+        "--baseline",
+        "perf/vm-baseline.toml",
+        "--fingerprint",
+        "os=19045.5151;cpus=4",
+    ]));
+    match vm {
+        Ok(Mode::Vm {
+            run: args,
+            baseline,
+        }) => {
+            assert_eq!(args.root, PathBuf::from("reports"));
+            assert_eq!(args.output, PathBuf::from("summary.md"));
+            assert_eq!(args.commit, SHA);
+            assert_eq!(args.done, PathBuf::from("done.json"));
+            assert_eq!(args.fingerprint, "os=19045.5151;cpus=4");
+            assert_eq!(baseline, PathBuf::from("perf/vm-baseline.toml"));
+        }
+        other => panic!("a vm line must parse as vm, got {other:?}"),
+    }
+    let aggregate = parse(&args(&[
+        "--mode",
+        "aggregate",
+        "calibration.txt",
+        "--measured",
+        "2026-11-11",
+        "--reason",
+        "ten idle runs",
+    ]));
+    match aggregate {
+        Ok(Mode::Aggregate {
+            lines,
+            measured,
+            reason,
+        }) => {
+            assert_eq!(lines, PathBuf::from("calibration.txt"));
+            assert_eq!(measured, "2026-11-11");
+            assert_eq!(reason, "ten idle runs");
+        }
+        other => panic!("an aggregate line must parse as aggregate, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_rejects_a_flag_or_positional_of_another_mode() {
+    for line in [
+        run_line(
+            "vm",
+            &[
+                "--commit",
+                SHA,
+                "--done",
+                "done.json",
+                "--fingerprint",
+                "fp",
+            ],
+        ),
+        run_line(
+            "vm",
+            &[
+                "--commit",
+                SHA,
+                "--done",
+                "done.json",
+                "--baseline",
+                "b",
+                "--fingerprint",
+            ],
+        ),
+        run_line(
+            "calibrate",
+            &[
+                "--commit",
+                SHA,
+                "--done",
+                "d",
+                "--fingerprint",
+                "fp",
+                "--baseline",
+                "b",
+            ],
+        ),
+        args(&[
+            "--mode",
+            "aggregate",
+            "--measured",
+            "2026-11-11",
+            "--reason",
+            "r",
+        ]),
+        run_line("aggregate", &["--measured", "2026-11-11", "--reason", "r"]),
+    ] {
+        let error = parse(&line).unwrap_err();
+        assert!(error.contains("usage:"), "{line:?} is usage: {error}");
+    }
+}
+
+#[test]
+fn check_done_accepts_six_zero_exits() {
+    check_done(DONE).unwrap();
+}
+
+#[test]
+fn check_done_rejects_anything_else() {
+    for json in [
+        r#"{"exits":[],"finished":"2026-11-11T04:00:00Z"}"#,
+        r#"{"exits":[0,0,0,0,0],"finished":"2026-11-11T04:00:00Z"}"#,
+        r#"{"exits":[0,0,0,0,0,0,0],"finished":"2026-11-11T04:00:00Z"}"#,
+        r#"{"exits":[0,0,0,0,0,1],"finished":"2026-11-11T04:00:00Z"}"#,
+        r#"{"exits":["0",0,0,0,0,0],"finished":"2026-11-11T04:00:00Z"}"#,
+        r#"{"exits":[0,0,0.5,0,0,0],"finished":"2026-11-11T04:00:00Z"}"#,
+        r#"{"exits":[0,0,0,0,0,0],"finished":"2026-11-11T04:00:00Z","extra":true}"#,
+        r#"{"exits":[0,0,0,0,0,0]}"#,
+        "not JSON",
+    ] {
+        assert!(check_done(json).is_err(), "accepted {json}");
+    }
+}
+
+#[test]
+fn check_done_rejects_a_finished_that_is_not_a_string() {
+    for json in [
+        r#"{"exits":[0,0,0,0,0,0],"finished":null}"#,
+        r#"{"exits":[0,0,0,0,0,0],"finished":1762833600}"#,
+        r#"{"exits":[0,0,0,0,0,0],"finished":["2026-11-11T04:00:00Z"]}"#,
+    ] {
+        assert!(check_done(json).is_err(), "accepted {json}");
+    }
+    check_done(DONE).unwrap();
+}
+
+#[test]
+fn vm_fails_closed_on_a_timed_out_launch() {
+    let root = TestRoot::new();
+    root.write_run();
+    root.write_done(DONE_124);
+    write_baseline(&root.baseline(), 62_000_000);
+    assert_eq!(
+        run(&vm_line(&root.0, &root.summary(), &root.baseline())),
+        ExitCode::from(1),
+        "done.json exited 124, so the run never finished"
+    );
+}
+
+#[test]
+fn calibrate_fails_closed_on_a_timed_out_launch() {
+    let root = TestRoot::new();
+    root.write_run();
+    root.write_done(DONE_124);
+    assert_eq!(
+        run(&calibrate_line(&root.0, &root.summary())),
+        ExitCode::from(1),
+        "a timed out launch must not calibrate"
+    );
+}
+
+#[test]
+fn vm_fails_closed_when_done_json_is_absent() {
+    let root = TestRoot::new();
+    root.write_run();
+    write_baseline(&root.baseline(), 62_000_000);
+    assert_eq!(
+        run(&vm_line(&root.0, &root.summary(), &root.baseline())),
+        ExitCode::from(1),
+        "no done.json means no finished run"
+    );
+}
+
+#[test]
+fn calibrate_fails_closed_when_done_json_is_absent() {
+    let root = TestRoot::new();
+    root.write_run();
+    assert_eq!(
+        run(&calibrate_line(&root.0, &root.summary())),
+        ExitCode::from(1),
+        "no done.json means no calibration line"
+    );
+}
+
+#[test]
+fn vm_fails_on_a_baseline_it_cannot_read() {
+    let root = TestRoot::new();
+    root.write_run();
+    root.write_done(DONE);
+    let summary = root.summary();
+    let baseline = root.baseline();
+    write_baseline(&baseline, 62_000_000);
+    let good = root.read(&baseline);
+    let extra_key = format!("{good}extra = 1\n");
+    for text in ["not a baseline", extra_key.as_str()] {
+        fs::write(&baseline, text).unwrap();
+        assert_eq!(
+            run(&vm_line(&root.0, &summary, &baseline)),
+            ExitCode::from(1),
+            "an unreadable baseline is SC11's failure, not its exit 4"
+        );
+    }
+}
+
+#[test]
+fn vm_passes_a_steady_run_and_appends_its_line() {
+    let root = TestRoot::new();
+    root.write_run();
+    root.write_done(DONE);
+    write_baseline(&root.baseline(), 62_000_000);
+    let summary = root.summary();
+    assert_eq!(
+        run(&vm_line(&root.0, &summary, &root.baseline())),
+        ExitCode::SUCCESS,
+        "71000000 bytes is under the baseline's 1.15"
+    );
+    let text = root.read(&summary);
+    assert!(text.starts_with("perf: pass: "), "appended {text}");
+}
+
+#[test]
+fn vm_fails_a_memory_regression_and_appends_its_line() {
+    let root = TestRoot::new();
+    root.write_run();
+    root.write_done(DONE);
+    write_baseline(&root.baseline(), 60_000_000);
+    let summary = root.summary();
+    assert_eq!(
+        run(&vm_line(&root.0, &summary, &root.baseline())),
+        ExitCode::FAILURE,
+        "71000000 bytes is over the baseline's 1.15"
+    );
+    let text = root.read(&summary);
+    assert!(text.starts_with("perf: FAIL: "), "appended {text}");
+}
+
+#[test]
+fn calibrate_appends_its_calibration_line() {
+    let root = TestRoot::new();
+    root.write_run();
+    root.write_done(DONE);
+    let summary = root.summary();
+    assert_eq!(
+        run(&calibrate_line(&root.0, &summary)),
+        ExitCode::SUCCESS,
+        "a clean run calibrates"
+    );
+    assert_eq!(root.read(&summary).trim_end(), CALIBRATION);
+}
+
+#[test]
+fn aggregate_reads_ten_lines_and_rejects_others() {
+    let root = TestRoot::new();
+    let lines = root.0.join("calibration.txt");
+    fs::write(&lines, calibration_lines()).unwrap();
+    assert_eq!(
+        run(&aggregate_line(&lines)),
+        ExitCode::SUCCESS,
+        "ten lines make a baseline"
+    );
+    fs::write(&lines, "not a calibration line\n").unwrap();
+    assert_eq!(
+        run(&aggregate_line(&lines)),
+        ExitCode::FAILURE,
+        "a lines file of other text fails"
     );
 }
