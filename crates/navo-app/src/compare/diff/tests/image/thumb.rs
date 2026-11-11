@@ -85,3 +85,27 @@ fn thumbnail_pixels_are_bgra() {
     let left = card.left.expect("a left thumbnail");
     assert_eq!(&left.bgra[..4], &[30, 20, 10, 255]);
 }
+
+#[test]
+fn an_unsupported_format_gets_a_note_and_no_thumbnails() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("left.svg"), b"<svg/>").unwrap();
+    fs::write(dir.path().join("right.svg"), b"<svg/>").unwrap();
+    let input = local_input(dir.path(), "left.svg", "right.svg");
+    let card = image_card(card(&input, &CancelToken::new()));
+    assert!(card.similarity.is_none());
+    assert_eq!(card.note, Some("compare-image-note-format"));
+    assert!(card.left.is_none());
+    assert!(card.right.is_none());
+}
+
+#[test]
+fn a_cancelled_image_job_gets_no_detail() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("left.png"), png(8, 8, None)).unwrap();
+    fs::write(dir.path().join("right.png"), png(8, 8, None)).unwrap();
+    let input = local_input(dir.path(), "left.png", "right.png");
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    assert!(card(&input, &cancel).is_none());
+}

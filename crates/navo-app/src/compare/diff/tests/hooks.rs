@@ -271,3 +271,36 @@ fn open_stream_runs_the_detail_lane_for_a_large_pair() {
         }
     }
 }
+
+#[test]
+fn open_stream_runs_the_detail_lane_for_a_binary_pair() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "left.bin", b"a\0b");
+    write(dir.path(), "right.bin", b"a\0c");
+    let (sink, receiver) = channel();
+    let stream = DiffBackend::default().open_stream(&Values::default(), sink);
+    let left = dir.path().join("left.bin");
+    let right = dir.path().join("right.bin");
+    stream.focus(vec![8]);
+    stream.set_items(1, vec![(request(8, &left, &right), true)]);
+
+    let mut card_seen = false;
+    loop {
+        match receiver.recv_timeout(WAIT).unwrap() {
+            StreamUpdate::Card { id: 8, card, .. } => {
+                assert_eq!(card.kind, PairKind::Binary);
+                card_seen = true;
+            }
+            StreamUpdate::Detail { id: 8, detail, .. } => {
+                assert!(card_seen, "the detail arrived before the card");
+                let CardDetail::Bytes(card) = detail.as_ref() else {
+                    panic!("unexpected binary detail");
+                };
+                if card.scan != CardScan::Running {
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+}
