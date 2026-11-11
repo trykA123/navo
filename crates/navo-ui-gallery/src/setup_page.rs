@@ -11,6 +11,8 @@ use navo_ui::tokens;
 use crate::pages::Page;
 
 const FOLDER: &str = r"C:\Users\admin\AppData\Local\Navo";
+/// A longer Finish folder, so the gallery shows the one-line path cut with an ellipsis.
+const FINISH_FOLDER: &str = r"C:\Users\admin\AppData\Local\Programs\Navo";
 const WIDTH: f32 = 640.;
 const HEIGHT: f32 = 480.;
 
@@ -124,6 +126,7 @@ fn view_after_shortcuts(page: Page) -> Option<SetupView> {
         Page::SetupInstallingSlow => installing(185),
         Page::SetupFinish => SetupView {
             start_navo: true,
+            folder_text: FINISH_FOLDER.into(),
             ..primary(SetupPage::Finish, SetupAction::Primary)
         },
         Page::SetupFailedRetry => failed(false),

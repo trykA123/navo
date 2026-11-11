@@ -258,12 +258,26 @@ fn first_keys(c: &Ctx) -> Div {
     div().flex().flex_col().gap(c.t.spacing.xs).children(rows)
 }
 
+/// Builds the install-path line under the Finish heading: one line, cut with an ellipsis,
+/// named by the whole path so a screen reader still reads it.
+fn finish_path(c: &Ctx) -> impl IntoElement {
+    let path = c.view.folder_text.clone();
+    div()
+        .id("finish-path")
+        .role(Role::Label)
+        .aria_label(path.clone())
+        .test_support()
+        .min_w_0()
+        .whitespace_nowrap()
+        .overflow_hidden()
+        .text_ellipsis()
+        .text_size(c.t.typography.body)
+        .text_color(c.t.colors.muted)
+        .child(path)
+}
+
 /// Finish: the folder, three first keys, "Start Navo", the Open folder link and the removal hint.
 pub(super) fn finish(c: &Ctx) -> AnyElement {
-    let heading = c
-        .strings
-        .finish_title
-        .replace("{path}", &c.view.folder_text);
     let send = c.on_action.clone();
     let start = CheckBox::new("finish-start", c.strings.finish_start.clone())
         .checked(c.view.start_navo)
@@ -287,7 +301,8 @@ pub(super) fn finish(c: &Ctx) -> AnyElement {
             &c.strings.finish_open_folder,
             c.view.show_keys,
         ));
-    let mut page = column(c, &heading)
+    let mut page = column(c, &c.strings.finish_title)
+        .child(finish_path(c))
         .child(first_keys(c))
         .child(start)
         .child(open);
