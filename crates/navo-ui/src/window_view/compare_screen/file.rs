@@ -7,6 +7,7 @@ mod rows;
 mod seek;
 mod sideways;
 mod spans;
+mod syntax;
 
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
@@ -101,6 +102,8 @@ pub(super) struct FileView {
     sideways: SidewaysHandle,
     /// The column count of every line, measured on the first draw.
     cols: Option<Arc<LineCols>>,
+    /// The sides' syntax parse (D38), started by the window once the text is open.
+    syntax: syntax::SyntaxSlot,
 }
 
 impl FileView {
@@ -125,6 +128,7 @@ impl FileView {
             seek: None,
             sideways: SidewaysHandle::default(),
             cols: None,
+            syntax: syntax::SyntaxSlot::default(),
         }
     }
 
@@ -215,18 +219,13 @@ impl FileView {
     /// The row list for the viewport in `layout`; rows of a copyable change report hover and
     /// carry the copy bar when `bars` is given.
     pub(super) fn list(&mut self, layout: Layout, bars: FileBars, cx: &App) -> AnyElement {
-        if std::mem::take(&mut self.centre)
-            && let Some(at) = self.current
-        {
-            let row = self.shape(layout).starts[at];
-            self.scroll.scroll_to_center(row);
-        }
-        self.apply_seek(layout);
+        self.place(layout);
         self.ensure_cols();
         let (count, starts) = {
             let shape = self.shape(layout);
             (shape.count, shape.starts.clone())
         };
+        let (syntax, colours) = self.syntax.parts(cx);
         let rows = rows::ListRows {
             text: Arc::clone(&self.text),
             built: Rc::clone(&self.built),
@@ -238,6 +237,8 @@ impl FileView {
             words: self.words,
             on_long: switch::on_bytes_here(&bars.weak),
             sideways: self.sideways.clone(),
+            syntax,
+            colours,
             bars,
         };
         let on_wheel = sideways::on_wheel(self.sideways.clone(), rows.bars.weak.clone());

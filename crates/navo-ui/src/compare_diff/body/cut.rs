@@ -5,8 +5,9 @@ use std::cell::Cell;
 use std::ops::Range;
 use std::rc::Rc;
 
-use gpui_kit::{HighlightStyle, canvas};
+use gpui_kit::{HighlightStyle, canvas, combine_highlights};
 
+use super::syntax::syntax_runs;
 use super::text::span_tint;
 use super::{BodyLook, Side, span_runs};
 use crate::compare_diff::cols::{Shown, cut};
@@ -60,7 +61,8 @@ pub(super) struct LineAt<'a> {
     pub slot: Side,
 }
 
-/// The text and tinted runs of `at`'s line after the cut, or `None` for no line. A line over
+/// The text and runs of `at`'s line after the cut, or `None` for no line: syntax colours with
+/// the changed-word fill over them. A line over
 /// `LONG_LINE` is never cut: it draws whole and keeps its "Show bytes here" button.
 pub(super) fn shown_line(
     look: &BodyLook,
@@ -72,10 +74,15 @@ pub(super) fn shown_line(
         background_color: Some(span_tint(look.theme, at.kind)),
         ..HighlightStyle::default()
     };
-    let runs: Vec<_> = span_runs(look, at.side, at.line)
+    let fills = span_runs(look, at.side, at.line)
         .into_iter()
-        .map(|run| (run, style))
-        .collect();
+        .map(|run| (run, style));
+    let colours = syntax_runs(look, at);
+    let runs: Vec<_> = if colours.is_empty() {
+        fills.collect()
+    } else {
+        combine_highlights(colours, fills).collect()
+    };
     match &row_cut.cols {
         Some(cols) if !is_long(text) => Some(cut(text, &runs, cols.clone())),
         _ => Some(Shown {

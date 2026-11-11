@@ -13,9 +13,11 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 use cut::{LineAt, lead_row};
 pub use cut::{ProbeSeen, RowCut, TextProbe};
+pub use syntax::{PairSyntax, SideSyntax, SyntaxLook};
 use text::{line_text, span_runs, text_tone};
 
 mod cut;
+mod syntax;
 mod text;
 
 /// Width of one digit of a line number, in rem (the mono font is about 0.6 em wide).
@@ -35,6 +37,8 @@ pub struct BodyLook<'a> {
     pub ticks: Option<&'a Ticks<'a>>,
     /// The "Show bytes here" click for lines over 1 MiB; `None` where the pair cannot show bytes.
     pub bytes_here: Option<&'a OnBytesHere>,
+    /// The sides' syntax parse and colours; `None` draws plain text (D38).
+    pub syntax: Option<SyntaxLook<'a>>,
 }
 
 /// Digits of the largest line number on either side (at least 1).
@@ -273,6 +277,7 @@ mod tests {
             spans,
             ticks: None,
             bytes_here: None,
+            syntax: None,
         };
         let line = Some((0, "héllo"));
         assert!(

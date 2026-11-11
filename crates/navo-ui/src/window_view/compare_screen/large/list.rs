@@ -50,6 +50,7 @@ impl LargeShown {
                 spans: None,
                 ticks: None,
                 bytes_here: Some(&on_long),
+                syntax: None,
             };
             let row = |at: usize| base.saturating_add(u64::try_from(at).unwrap_or(u64::MAX));
             range.map(|at| draw(&look, &map, &cache, row(at))).collect()

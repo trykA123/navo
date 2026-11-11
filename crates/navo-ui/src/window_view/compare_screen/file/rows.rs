@@ -9,7 +9,9 @@ use std::sync::Arc;
 use super::super::context::{RowHit, on_right_click};
 use super::super::copy::FileBars;
 use super::sideways::{self, SidewaysHandle};
-use crate::compare_diff::body::{BodyLook, RowCut, row_view_cut};
+use gpui_kit::component::highlighter::HighlightTheme;
+
+use crate::compare_diff::body::{BodyLook, PairSyntax, RowCut, SyntaxLook, row_view_cut};
 use crate::compare_diff::{Layout, OnBytesHere, PairText, ShownRow, SpanCache, Ticks, pair_rows};
 use crate::prelude::*;
 use crate::tokens;
@@ -30,6 +32,10 @@ pub(super) struct ListRows {
     pub(super) on_long: OnBytesHere,
     /// The sideways offset every row's text is cut by; the first row carries its probe.
     pub(super) sideways: SidewaysHandle,
+    /// The sides' finished syntax parse, if any (D38).
+    pub(super) syntax: Option<Rc<PairSyntax>>,
+    /// The theme's highlight colours, as F3 reads them.
+    pub(super) colours: Option<Arc<HighlightTheme>>,
 }
 
 impl ListRows {
@@ -59,6 +65,7 @@ impl ListRows {
             spans: cache.as_deref(),
             ticks: Some(&ticks),
             bytes_here: Some(&self.on_long),
+            syntax: SyntaxLook::new(self.syntax.as_deref(), self.colours.as_deref()),
         };
         let cut = self.sideways.frame(sideways::advance(window, look.theme));
         let probed = RowCut {

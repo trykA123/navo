@@ -101,6 +101,18 @@ impl FileView {
         self.seek = Some(line_of_offset(&self.text, offset));
     }
 
+    /// Before a draw in `layout`: centres the current change once after a step, then applies a
+    /// pending seek.
+    pub(super) fn place(&mut self, layout: Layout) {
+        if std::mem::take(&mut self.centre)
+            && let Some(at) = self.current
+        {
+            let row = self.shape(layout).starts[at];
+            self.scroll.scroll_to_center(row);
+        }
+        self.apply_seek(layout);
+    }
+
     /// Scrolls to a pending seek in `layout`, once.
     pub(super) fn apply_seek(&mut self, layout: Layout) {
         if let Some(line) = self.seek.take() {

@@ -63,6 +63,7 @@ fn shown_line_cuts_text_and_runs_to_the_columns() {
         spans: Some(&cache),
         ticks: None,
         bytes_here: None,
+        syntax: None,
     };
     let at = |line| LineAt {
         kind: ShownKind::Changed,
@@ -102,6 +103,7 @@ fn shown_line_never_cuts_a_line_over_a_mebibyte() {
         spans: None,
         ticks: None,
         bytes_here: None,
+        syntax: None,
     };
     let cut = RowCut {
         cols: Some(0..4),
