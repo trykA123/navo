@@ -7,7 +7,9 @@ mod rows;
 mod seek;
 mod sideways;
 mod spans;
+mod strip;
 mod syntax;
+mod widths;
 
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
@@ -100,8 +102,10 @@ pub(super) struct FileView {
     seek: Option<usize>,
     /// The sideways scroll both text columns share.
     sideways: SidewaysHandle,
-    /// The column count of every line, measured on the first draw.
+    /// The column count of every line, once the background measure landed.
     cols: Option<Arc<LineCols>>,
+    /// The background measure of `cols`, started by the window once the text is open.
+    widths: widths::WidthsSlot,
     /// The sides' syntax parse (D38), started by the window once the text is open.
     syntax: syntax::SyntaxSlot,
 }
@@ -128,6 +132,7 @@ impl FileView {
             seek: None,
             sideways: SidewaysHandle::default(),
             cols: None,
+            widths: widths::WidthsSlot::default(),
             syntax: syntax::SyntaxSlot::default(),
         }
     }
@@ -140,16 +145,6 @@ impl FileView {
     /// Turns line wrap on or off for the next draw; sideways input is ignored while it is on.
     pub(super) fn set_wrap(&self, wrap: bool) {
         self.sideways.set_wrap(wrap);
-    }
-
-    /// Measures the columns of every line once, on the UI thread for now (W8e2 moves it to a
-    /// background task), and gives the widest to the sideways state.
-    fn ensure_cols(&mut self) {
-        if self.cols.is_none() {
-            let cols = LineCols::measure(&self.text);
-            self.sideways.set_widest(cols.widest());
-            self.cols = Some(Arc::new(cols));
-        }
     }
 
     /// The shape in `layout`, measured on first use.
@@ -216,11 +211,10 @@ impl FileView {
         text.into()
     }
 
-    /// The row list for the viewport in `layout`; rows of a copyable change report hover and
-    /// carry the copy bar when `bars` is given.
+    /// The row list for the viewport in `layout` above the sideways strip; rows of a copyable
+    /// change report hover and carry the copy bar when `bars` is given.
     pub(super) fn list(&mut self, layout: Layout, bars: FileBars, cx: &App) -> AnyElement {
         self.place(layout);
-        self.ensure_cols();
         let (count, starts) = {
             let shape = self.shape(layout);
             (shape.count, shape.starts.clone())
@@ -255,6 +249,7 @@ impl FileView {
             .size_full()
             .on_scroll(on_wheel)
             .child(list)
+            .child(strip::strip(&self.sideways, layout))
             .into_any_element()
     }
 }

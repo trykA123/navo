@@ -172,3 +172,76 @@ fn a_reload_keeps_the_offset(cx: &mut TestAppContext) {
     frames(&rig, cx);
     assert_eq!(seen(&rig, cx).offset, 80.);
 }
+
+/// Whether the sideways strip's left (or only) bar is in the last frame.
+fn strip_shown(rig: &Rig, cx: &mut TestAppContext) -> bool {
+    cx.update_window(rig.window, |_, window, _| {
+        window.try_find("compare-sideways-left").is_some()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn right_moves_eight_columns_and_left_stops_at_zero(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = opened(cx);
+    rig.press(cx, "left");
+    assert_eq!(seen(&rig, cx).offset, 0., "left at 0 stays at 0");
+    rig.press(cx, "right");
+    let now = seen(&rig, cx);
+    assert!((now.offset - 8. * now.advance).abs() < 0.01, "{now:?}");
+    rig.press(cx, "left");
+    assert_eq!(seen(&rig, cx).offset, 0.);
+}
+
+#[gpui_kit::test]
+fn the_strip_shows_only_for_wide_lines_without_wrap(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let short = rig(cx);
+    short.open_text(cx, pair(40, &[3]));
+    frames(&short, cx);
+    assert!(!strip_shown(&short, cx), "short lines have no strip");
+    let rig = opened(cx);
+    assert!(strip_shown(&rig, cx), "500-column lines show the strip");
+    rig.view.update(cx, |view, _| {
+        view.file_look_mut().expect("open").wrap = true;
+    });
+    frames(&rig, cx);
+    assert!(!strip_shown(&rig, cx), "wrap hides the strip");
+}
+
+#[gpui_kit::test]
+fn widths_for_a_replaced_text_are_dropped(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_text(cx, pair(40, &[3]));
+    frames(&rig, cx);
+    let stale = Arc::new(wide_pair());
+    let cols = crate::compare_diff::LineCols::measure(&stale);
+    rig.view
+        .update(cx, |view, cx| view.install_file_widths(&stale, cols, cx));
+    frames(&rig, cx);
+    assert_eq!(
+        seen(&rig, cx).max,
+        Some(0.),
+        "the open text keeps its own widths"
+    );
+}
+
+#[gpui_kit::test]
+fn widths_are_measured_off_the_ui_thread(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.press(cx, "enter");
+    (rig.diff.pair_sink())(DiffUpdate::Opened {
+        request: rig.diff.requests()[0].id,
+        kind: PairKind::Text,
+        text: Some(Arc::new(wide_pair())),
+    });
+    rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
+    frames(&rig, cx);
+    assert_eq!(seen(&rig, cx).max, None, "no extent before the task ran");
+    cx.run_until_parked();
+    frames(&rig, cx);
+    assert!(seen(&rig, cx).max.is_some_and(|max| max > 0.));
+}

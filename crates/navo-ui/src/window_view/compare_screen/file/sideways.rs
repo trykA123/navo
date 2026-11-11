@@ -5,11 +5,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui_kit::base::ScrollbarHandle;
-use gpui_kit::{ScrollDelta, ScrollEvent, Size, WeakEntity, font};
+use gpui_kit::{ScrollDelta, ScrollEvent, Size, Stateful, WeakEntity, font};
 
 use crate::compare_diff::body::{RowCut, TextProbe};
 use crate::prelude::*;
 use crate::tokens::Theme;
+use crate::window_view::NavoWindow;
+use crate::window_view::viewer::{ScrollLeft, ScrollRight};
 
 /// The sideways state of one open text view.
 #[derive(Default)]
@@ -24,6 +26,8 @@ struct Sideways {
     wrap: bool,
     /// The text cells' bounds, written by the first built row's canvas.
     probe: TextProbe,
+    /// The left edge of the strip under the list, in window px, written by its canvas.
+    strip_x: Pixels,
 }
 
 impl Sideways {
@@ -145,6 +149,73 @@ pub(super) fn advance(window: &Window, t: &Theme) -> Pixels {
     match system.ch_width(id, t.typography.small) {
         Ok(width) if width > px(0.) => width,
         _ => t.typography.small * 0.6,
+    }
+}
+
+/// How many columns Left or Right moves the text, as in the viewer (F3).
+const KEY_COLS: f32 = 8.;
+
+impl SidewaysHandle {
+    /// Whether the text is cut: the extent is known and above 0, and lines do not wrap.
+    pub(super) fn cut_shown(&self) -> bool {
+        let state = self.0.borrow();
+        !state.wrap && state.max().is_some_and(|max| max > 0.)
+    }
+
+    /// The strip's left edge in window px, as its canvas last saw it.
+    pub(super) fn strip_x(&self) -> Pixels {
+        self.0.borrow().strip_x
+    }
+
+    /// Records the strip's left edge `x` (window px), and asks for one more frame when it moved,
+    /// so the bars follow a drawer that opens beside the list.
+    pub(super) fn set_strip_x(&self, x: Pixels, window: &mut Window) {
+        let moved = std::mem::replace(&mut self.0.borrow_mut().strip_x, x) != x;
+        if moved {
+            window.request_animation_frame();
+        }
+    }
+
+    /// Moves the offset by `cols` columns (negative: left), clamped; true when it moved.
+    /// Ignored while wrapping or before the extent is known.
+    fn step(&self, cols: f32) -> bool {
+        let mut state = self.0.borrow_mut();
+        let (Some(max), false) = (state.max(), state.wrap) else {
+            return false;
+        };
+        let next = (state.offset + cols * state.advance).clamp(0., max);
+        let moved = next != state.offset;
+        state.offset = next;
+        moved
+    }
+}
+
+impl NavoWindow {
+    /// Moves the open text view sideways by `cols` columns and redraws; with no text view
+    /// the key goes on to the next handler.
+    fn sideways_step(&mut self, cols: f32, cx: &mut Context<Self>) {
+        let file = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
+        let Some(view) = file.and_then(|file| file.view.as_ref()) else {
+            cx.propagate();
+            return;
+        };
+        if view.sideways.step(cols) {
+            cx.notify();
+        }
+    }
+
+    /// Binds Left and Right (`viewer::ScrollLeft/ScrollRight`) on the file diff's `root`: they
+    /// move the open text view 8 columns sideways (D39.3d).
+    pub(in crate::window_view::compare_screen) fn sideways_keys(
+        root: Stateful<Div>,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        root.on_action(cx.listener(|view, _: &ScrollLeft, _, cx| {
+            view.sideways_step(-KEY_COLS, cx);
+        }))
+        .on_action(cx.listener(|view, _: &ScrollRight, _, cx| {
+            view.sideways_step(KEY_COLS, cx);
+        }))
     }
 }
 
