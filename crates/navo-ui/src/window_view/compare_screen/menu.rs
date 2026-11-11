@@ -190,10 +190,14 @@ impl NavoWindow {
             .and_then(|screen| screen.file.as_ref())
             .and_then(|file| file.hex.as_ref())
             .map(super::hex::HexView::align);
+        let switch = (self.compare.screen.as_ref())
+            .and_then(|screen| screen.file.as_ref())
+            .map(super::switch::entries);
         let Some(host) = self.look_host() else {
             return;
         };
-        let items = entries(host.look, host.look.layout_in(window), hex);
+        let mut items = entries(host.look, host.look.layout_in(window), hex);
+        items.extend(switch.unwrap_or_default());
         let anchor = point(
             window.viewport_size().width - t.spacing.xl,
             t.spacing.path_height * 2.,

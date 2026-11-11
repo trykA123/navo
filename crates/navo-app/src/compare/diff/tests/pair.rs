@@ -97,6 +97,58 @@ fn opened_comes_first_then_the_requested_spans() {
     }
 }
 
+/// The kind and text flag of the next `Opened`, skipping the engine's other updates.
+fn next_opened(receiver: &Receiver<DiffUpdate>) -> (u64, PairKind, bool) {
+    loop {
+        match receiver.recv_timeout(WAIT).unwrap() {
+            DiffUpdate::Opened {
+                request,
+                kind,
+                text,
+            } => return (request, kind, text.is_some()),
+            _ => continue,
+        }
+    }
+}
+
+#[test]
+fn a_forced_bytes_view_opens_a_text_pair_as_binary_and_keeps_it_across_refreshes() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "left.txt", b"alpha\nbeta\n");
+    write(dir.path(), "right.txt", b"alpha\nbetA\n");
+    let (sink, receiver) = channel();
+    let control = PairDiff::start(request(7), local_input(dir.path()), sink);
+    assert_eq!(next_opened(&receiver), (7, PairKind::Text, true));
+    control.view_as(8, true);
+    assert_eq!(next_opened(&receiver), (8, PairKind::Binary, false));
+    control.refresh(9);
+    assert_eq!(
+        next_opened(&receiver),
+        (9, PairKind::Binary, false),
+        "a refresh of the same pair keeps the bytes view"
+    );
+    control.view_as(10, false);
+    assert_eq!(next_opened(&receiver), (10, PairKind::Text, true));
+    control.refresh(11);
+    assert_eq!(next_opened(&receiver), (11, PairKind::Text, true));
+}
+
+#[test]
+fn a_forced_bytes_view_never_installs_a_result_for_an_older_request() {
+    let source = Arc::new(SlowSource::new());
+    let (sink, receiver) = channel();
+    let control = PairDiff::start(request(7), slow_input(&source), sink);
+    source.wait_opened();
+    control.view_as(8, true);
+    source.release();
+    let (id, kind, _) = next_opened(&receiver);
+    assert_eq!(
+        (id, kind),
+        (8, PairKind::Binary),
+        "the old load is not reported"
+    );
+}
+
 #[test]
 fn a_refresh_while_loading_sends_one_result_with_the_new_id() {
     let source = Arc::new(SlowSource::new());

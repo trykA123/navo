@@ -25,6 +25,7 @@ mod fetch;
 mod held;
 mod hex_rows;
 mod scroll;
+mod seek;
 
 #[cfg(test)]
 pub(in crate::window_view) use self::hex_probe::HexProbe;
@@ -70,6 +71,8 @@ pub(super) struct HexView {
     open: Option<gpui_kit::Task<()>>,
     scroll: ByteScroll,
     error: Option<SharedString>,
+    /// The left byte offset to put on top once the rows exist (Alt+V Bytes).
+    start: Option<u64>,
     /// Set by the view's one open and never cleared, so no wake or failure opens again.
     open_started: bool,
 }
@@ -102,6 +105,7 @@ impl HexView {
             open: None,
             scroll: ByteScroll::default(),
             error: None,
+            start: None,
             open_started: false,
         }
     }
@@ -128,6 +132,7 @@ impl HexView {
             .take()
             .filter(|held| held.is_carried() && self.error.is_none());
         self.rebuild();
+        self.apply_start();
         self.reset_loading();
         self.held = old_pair;
     }

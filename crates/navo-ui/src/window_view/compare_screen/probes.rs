@@ -161,4 +161,18 @@ impl NavoWindow {
         hex.wheel_rows(rows, visible);
         Some(hex.top())
     }
+
+    /// The labels of the View menu entries that switch the open pair between Text and Bytes.
+    pub(in crate::window_view) fn file_switch_labels(&self) -> Vec<String> {
+        let Some(file) = self.compare.screen.as_ref().and_then(|s| s.file.as_ref()) else {
+            return Vec::new();
+        };
+        super::switch::entries(file)
+            .into_iter()
+            .filter_map(|entry| match entry {
+                crate::window_view::viewer::MenuEntry::Run(label, ..) => Some(label.to_string()),
+                _ => None,
+            })
+            .collect()
+    }
 }

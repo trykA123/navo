@@ -85,6 +85,8 @@ pub struct PairFacts {
 pub struct PairText {
     pub left: Vec<String>,
     pub right: Vec<String>,
+    /// The byte offset of each left line in its file, plus the end offset; empty when unknown.
+    pub left_starts: Vec<u64>,
     pub rows: Vec<DiffRow>,
     pub hunks: Vec<HunkView>,
     pub facts: PairFacts,
@@ -328,6 +330,12 @@ pub trait PairControl: Send {
     fn acknowledge(&self, _upto: u64) {}
     /// Diffs the two sides as bytes with `align`; a text pair ignores it.
     fn byte_regions(&self, _align: HexAlign, _run: u64) {}
+    /// Reloads both sides under `request` like `refresh`, and keeps opening the pair as bytes
+    /// (`bytes`) or as its own kind (not `bytes`) on every later reload. A forced view only
+    /// changes a text or large pair; the default ignores the choice.
+    fn view_as(&self, request: u64, _bytes: bool) {
+        self.refresh(request);
+    }
 }
 
 /// A running Stream. No call blocks; dropping it cancels without blocking.

@@ -12,7 +12,7 @@ use crate::compare_diff::{DiffRow, DiffUpdate, HunkView, Layout, PairFacts, Pair
 use crate::tokens;
 
 /// A pair of `len` equal rows, with a changed row (one hunk) at each of `changed`.
-pub(super) fn pair(len: u32, changed: &[u32]) -> PairText {
+pub(in crate::window_view::tests) fn pair(len: u32, changed: &[u32]) -> PairText {
     let rows = (0..len)
         .map(|at| match changed.contains(&at) {
             true => DiffRow::Changed(at, at),
@@ -32,6 +32,7 @@ pub(super) fn pair(len: u32, changed: &[u32]) -> PairText {
         .collect();
     let lines = vec![String::new(); len as usize];
     PairText {
+        left_starts: Vec::new(),
         left: lines.clone(),
         right: lines,
         rows,
@@ -51,7 +52,7 @@ pub(super) fn pair(len: u32, changed: &[u32]) -> PairText {
 
 impl Rig {
     /// Opens the selected row and delivers `text` as its opened pair.
-    pub(super) fn open_text(&self, cx: &mut TestAppContext, text: PairText) {
+    pub(in crate::window_view::tests) fn open_text(&self, cx: &mut TestAppContext, text: PairText) {
         self.press(cx, "enter");
         let sink = self.diff.pair_sink();
         let opened = DiffUpdate::Opened {
@@ -65,7 +66,7 @@ impl Rig {
     }
 
     /// The current change, the rows built in the last frame and the row count in `layout`.
-    pub(super) fn probe(
+    pub(in crate::window_view::tests) fn probe(
         &self,
         cx: &mut TestAppContext,
         layout: Layout,

@@ -36,6 +36,7 @@ mod compare_screen;
 mod compare_scroll;
 mod compare_sheet;
 mod compare_stream;
+mod compare_switch;
 mod crash_notice;
 mod cursor_follow;
 mod delete_dialog;

@@ -85,6 +85,19 @@ fn rows_and_hunks_map_one_to_one() {
 }
 
 #[test]
+fn the_pair_text_carries_the_byte_start_of_every_left_line() {
+    let dir = tempfile::tempdir().unwrap();
+    write_bytes(dir.path(), "left.txt", b"one\r\ntwo\nthree\n");
+    write_bytes(dir.path(), "right.txt", b"one\ntwo\nthree\n");
+    let loaded = load_pair(
+        &input(dir.path(), "left.txt", "right.txt"),
+        &CancelToken::new(),
+    );
+    let text = to_pair_text(&loaded).unwrap();
+    assert_eq!(text.left_starts, vec![0, 5, 9, 15]);
+}
+
+#[test]
 fn a_token_cap_alignment_has_no_digests() {
     let left = whole("a\n", vec![line("a")]);
     let right = whole("a\n", vec![line("a")]);

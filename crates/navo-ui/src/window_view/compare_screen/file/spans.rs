@@ -92,6 +92,7 @@ mod tests {
     fn one_big_hunk(count: u32) -> Arc<PairText> {
         let lines = vec![String::from("x"); count as usize];
         Arc::new(PairText {
+            left_starts: Vec::new(),
             left: lines.clone(),
             right: lines,
             rows: (0..count).map(|at| DiffRow::Changed(at, at)).collect(),

@@ -252,6 +252,7 @@ impl NavoWindow {
             view.step_change(false, window, cx);
         });
         let root = Self::copy_keys(Self::walk_keys(div().id("compare-screen"), cx), cx);
+        let root = Self::switch_actions(root, cx);
         let root = Self::drawer_actions(Self::look_actions(root, cx), cx);
         let root = image::image_keys(Self::menu_keys(Self::pick_keys(root, cx), cx), cx);
         let root = Self::large_keys(root, cx);

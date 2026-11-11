@@ -3,10 +3,10 @@
 use std::sync::PoisonError;
 
 use navo_compare::bytes::Align;
-use navo_ui::compare_diff::{HexAlign, PairRequest};
+use navo_ui::compare_diff::{HexAlign, PairKind, PairRequest};
 
 use super::super::bytes::{ByteDiff, ByteInput};
-use super::super::load::LoadInput;
+use super::super::load::{LoadInput, Loaded};
 use super::{Commands, Worker};
 
 /// Start or replace the byte diff of a binary pair for `align`; a text pair ignores it.
@@ -48,4 +48,12 @@ pub(super) fn clear_bytes(commands: &Commands) {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .take();
+}
+
+/// Opens a text pair as bytes when `on` (Alt+V Bytes): its kind becomes `Binary`, so the UI
+/// gets no text and the engine runs the byte diff. Other kinds keep their own view.
+pub(super) fn force_bytes(loaded: &mut Loaded, on: bool) {
+    if on && loaded.kind == PairKind::Text {
+        loaded.kind = PairKind::Binary;
+    }
 }

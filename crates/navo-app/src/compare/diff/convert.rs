@@ -30,6 +30,11 @@ pub(crate) fn to_pair_text(loaded: &Loaded) -> Option<PairText> {
     Some(PairText {
         left,
         right,
+        left_starts: loaded
+            .left
+            .as_ref()
+            .map(|whole| whole.starts.clone())
+            .unwrap_or_default(),
         rows: alignment.rows.iter().map(|row| diff_row(*row)).collect(),
         hunks,
         facts: facts_of(loaded, alignment),

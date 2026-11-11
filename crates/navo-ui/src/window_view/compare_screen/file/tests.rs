@@ -26,6 +26,7 @@ fn compare_screen_unified_hunks_start_after_the_rows_changed_before_them() {
         DiffRow::Changed(5, 4),
     ];
     let text = PairText {
+        left_starts: Vec::new(),
         left: vec![String::new(); 6],
         right: vec![String::new(); 5],
         rows,

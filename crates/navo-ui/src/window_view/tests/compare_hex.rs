@@ -173,14 +173,14 @@ fn until_reopened(cx: &mut TestAppContext, rig: &Rig) {
 }
 
 /// A compare screen over two equally long sides.
-fn hex_rig(cx: &mut TestAppContext, left: Vec<u8>, right: Vec<u8>) -> Rig {
+pub(super) fn hex_rig(cx: &mut TestAppContext, left: Vec<u8>, right: Vec<u8>) -> Rig {
     let left_len = u64::try_from(left.len()).unwrap_or(0);
     let right_len = u64::try_from(right.len()).unwrap_or(0);
     hex_rig_len(cx, left, right, (left_len, right_len))
 }
 
 /// Renders a frame and lets the deferred background row read land.
-fn frame(cx: &mut TestAppContext, rig: &Rig) {
+pub(super) fn frame(cx: &mut TestAppContext, rig: &Rig) {
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("window");
     settle(cx, &rig.view);
@@ -234,7 +234,7 @@ fn open_hex(
 }
 
 /// The current region, visible rows, row count, alignment and gap rows.
-fn probe(cx: &mut TestAppContext, rig: &Rig) -> HexProbe {
+pub(super) fn probe(cx: &mut TestAppContext, rig: &Rig) -> HexProbe {
     rig.view
         .update(cx, |view, _| view.file_hex_probe())
         .expect("the binary pair shows a hex body")

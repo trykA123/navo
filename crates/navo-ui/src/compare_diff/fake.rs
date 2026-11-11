@@ -19,6 +19,7 @@ pub(crate) struct Calls {
     pub(crate) requests: Mutex<Vec<PairRequest>>,
     pub(crate) spans: Mutex<Vec<Range<u32>>>,
     pub(crate) refreshes: Mutex<Vec<u64>>,
+    pub(crate) views: Mutex<Vec<(u64, bool)>>,
     pub(crate) items: Mutex<Vec<(u64, usize)>>,
     pub(crate) searches: Mutex<Vec<(u64, String)>>,
     pub(crate) focused: Mutex<Vec<Vec<u64>>>,
@@ -185,6 +186,15 @@ impl FakeDiffHooks {
             .clone()
     }
 
+    /// The `(request id, bytes)` of every forced view choice so far, oldest first.
+    pub(crate) fn views(&self) -> Vec<(u64, bool)> {
+        self.calls
+            .views
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
     /// Every large line window a pair control was asked for, oldest first.
     pub(crate) fn line_requests(&self) -> Vec<Range<u64>> {
         self.calls
@@ -231,6 +241,14 @@ impl PairControl for FakePair {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(request);
+    }
+    fn view_as(&self, request: u64, bytes: bool) {
+        self.0
+            .views
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push((request, bytes));
+        self.refresh(request);
     }
     fn focus(&self, line: u64) {
         self.0

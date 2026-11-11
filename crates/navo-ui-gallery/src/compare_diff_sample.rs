@@ -148,6 +148,7 @@ pub fn pair() -> (Arc<PairText>, SpanCache) {
         fallbacks: Vec::new(),
     };
     let text = Arc::new(PairText {
+        left_starts: Vec::new(),
         left: build.left,
         right: build.right,
         rows: build.rows,

@@ -142,6 +142,27 @@ impl Rows {
         })
     }
 
+    /// The left byte offset where row `index` starts; `None` for a gap or past the end.
+    pub(super) fn left_at(&self, index: usize) -> Option<u64> {
+        self.row(index)?.left.map(|span| span.at)
+    }
+
+    /// The first row that shows left byte `offset` or later; the last row past the end.
+    pub(super) fn row_of_left(&self, offset: u64) -> usize {
+        let at = self
+            .segments
+            .iter()
+            .position(|segment| offset < segment.left.saturating_add(segment.left_len));
+        let Some(segment) = at.and_then(|at| self.segments.get(at)) else {
+            return self.total.saturating_sub(1);
+        };
+        let inside = offset.saturating_sub(segment.left) / HEX_WIDTH;
+        let row = segment
+            .first
+            .saturating_add(usize::try_from(inside).unwrap_or(0));
+        row.min(self.total.saturating_sub(1))
+    }
+
     /// The row region `at` starts on; the last row when the region has no bytes.
     pub(super) fn row_for_region(
         &self,
