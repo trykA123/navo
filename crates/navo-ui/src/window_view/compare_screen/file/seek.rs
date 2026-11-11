@@ -108,7 +108,7 @@ impl FileView {
             && let Some(at) = self.current
         {
             let row = self.shape(layout).starts[at];
-            self.scroll.scroll_to_center(row);
+            self.scroll.scroll_to_center(self.list_row(row));
         }
         self.apply_seek(layout);
     }

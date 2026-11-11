@@ -68,6 +68,15 @@ impl SidewaysHandle {
         self.0.borrow_mut().widest = Some(widest);
     }
 
+    /// The width of a wrapped visual line in whole columns (D39.5): the text cell's columns less
+    /// one for a wide character that starts last, at least 8. `None` before the first probe.
+    pub(super) fn wrap_cols(&self) -> Option<u32> {
+        let state = self.0.borrow();
+        let width = state.text_width()?;
+        let cols = (width / state.advance).floor();
+        (cols.is_finite() && cols > 0.).then(|| (cols as u32).saturating_sub(1).max(8))
+    }
+
     /// Turns wrap on or off; the offset stays as it is.
     pub(super) fn set_wrap(&self, wrap: bool) {
         self.0.borrow_mut().wrap = wrap;

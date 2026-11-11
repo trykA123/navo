@@ -99,6 +99,22 @@ impl NavoWindow {
         Some(file.view.as_ref()?.sideways_seen())
     }
 
+    /// The open text view's wrap index and width (columns), its top list item and the items
+    /// that fit in the list, at rows `row_height` high.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_wrap(
+        &self,
+        row_height: Pixels,
+    ) -> Option<(
+        Option<crate::compare_diff::WrapIndex>,
+        Option<u32>,
+        usize,
+        usize,
+    )> {
+        let file = self.compare.screen.as_ref()?.file.as_ref()?;
+        Some(file.view.as_ref()?.wrap_seen(row_height))
+    }
+
     /// The cursor of the list of changes.
     pub(in crate::window_view) fn file_drawer_cursor(&self) -> Option<usize> {
         Some(self.compare.screen.as_ref()?.file.as_ref()?.drawers.cursor)

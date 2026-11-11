@@ -117,6 +117,16 @@ fn shown_line_never_cuts_a_line_over_a_mebibyte() {
     };
     let shown = shown_line(&look, &line, &cut).expect("a line");
     assert_eq!(shown.text.len(), long.len());
+    let later = RowCut {
+        cols: Some(4..8),
+        continued: true,
+        ..RowCut::default()
+    };
+    let shown = shown_line(&look, &line, &later).expect("a line");
+    assert_eq!(
+        shown.text, "",
+        "a later wrapped line leaves the long line out"
+    );
 }
 
 #[test]

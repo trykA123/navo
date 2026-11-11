@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use super::{LineCols, visual_lines};
 use crate::compare_diff::hooks::{DiffRow, Layout, PairText};
+use crate::compare_diff::row_count;
 
 /// Maps list rows (the rows a layout draws) to list items (one item per visual line).
 ///
@@ -98,6 +99,11 @@ impl WrapIndex {
             Layout::SideBySide => side_by_side(&text.rows, (cols, wrap), &mut acc),
             Layout::Unified => Unified::new(text, (cols, wrap), &mut acc).walk(),
         }
+        debug_assert_eq!(
+            acc.rows,
+            row_count(text, layout),
+            "rows as `pair_rows` counts them"
+        );
         acc.finish()
     }
 

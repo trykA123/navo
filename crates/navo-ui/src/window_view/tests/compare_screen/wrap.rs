@@ -1,0 +1,150 @@
+//! Wrapped rows in the file diff (D39.5–D39.6): one list item per visual line, a row as tall as
+//! its taller side, Alt+↓ through the index, toggles that keep the top pair row, and a resize.
+
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AppContext as _, Pixels, TestAppContext, VisualTestContext, px, size};
+
+use super::body::pair;
+use super::{Rig, rig, rig_sized};
+use crate::compare_diff::{Layout, PairText, WrapIndex};
+
+/// The wrap index, its width in columns, the top list item and the items the list has room for.
+type Seen = (Option<WrapIndex>, Option<u32>, usize, usize);
+
+/// A pair of `len` rows changed at `changed`, whose every right line is `cols` columns wide.
+fn wrapped_pair(len: u32, changed: &[u32], cols: usize) -> PairText {
+    let mut text = pair(len, changed);
+    text.right = vec!["w".repeat(cols); len as usize];
+    text
+}
+
+/// Lets the background width measure land, then draws three frames: the probe, the index, and
+/// the scroll it asked for.
+fn frames(rig: &Rig, cx: &mut TestAppContext) {
+    cx.run_until_parked();
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window.render_frame(cx);
+        window.render_frame(cx);
+    })
+    .expect("window");
+}
+
+/// Opens `text` and draws until the widths and the text cell are known.
+fn opened(rig: &Rig, cx: &mut TestAppContext, text: PairText) {
+    rig.open_text(cx, text);
+    frames(rig, cx);
+}
+
+/// Turns wrap on or off through the look, as Alt+Z will, and redraws.
+fn set_wrap(rig: &Rig, cx: &mut TestAppContext, wrap: bool) {
+    rig.view.update(cx, |view, _| {
+        view.file_look_mut().expect("open").wrap = wrap;
+    });
+    frames(rig, cx);
+}
+
+fn row_height(cx: &mut TestAppContext) -> Pixels {
+    cx.update(|cx| crate::tokens::current(cx).spacing.row_height)
+}
+
+fn seen(rig: &Rig, cx: &mut TestAppContext) -> Seen {
+    let height = row_height(cx);
+    rig.view
+        .update(cx, |view, _| view.file_wrap(height))
+        .expect("an opened text pair")
+}
+
+/// The index and its width, once wrap is on and everything is measured.
+fn index(rig: &Rig, cx: &mut TestAppContext) -> (WrapIndex, u32) {
+    let (index, cols, ..) = seen(rig, cx);
+    (index.expect("a wrap index"), cols.expect("a wrap width"))
+}
+
+#[gpui_kit::test]
+fn a_huge_wrapped_pair_builds_only_the_items_in_view(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    opened(&rig, cx, wrapped_pair(200_000, &[], 300));
+    set_wrap(&rig, cx, true);
+    let (index, cols) = index(&rig, cx);
+    let lines = 300usize.div_ceil(cols as usize);
+    assert!(lines > 1, "300 columns wrap at {cols}");
+    assert_eq!(index.total(), 200_000 * lines);
+    let in_view = seen(&rig, cx).3;
+    let built = rig.probe(cx, Layout::SideBySide).1;
+    assert!(!built.is_empty());
+    assert!(
+        built.len() <= in_view / lines + 2,
+        "{} pair rows for {in_view} items of {lines} lines",
+        built.len()
+    );
+}
+
+#[gpui_kit::test]
+fn a_tall_row_takes_the_items_of_its_taller_side(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    let mut text = pair(40, &[3]);
+    text.left[3] = "l".repeat(30);
+    text.right[3] = "r".repeat(400);
+    opened(&rig, cx, text);
+    set_wrap(&rig, cx, true);
+    let (index, cols) = index(&rig, cx);
+    let lines = 400u32.div_ceil(cols);
+    assert_eq!(index.lines_of(3), lines, "the right side sets the height");
+    assert_eq!((index.lines_of(2), index.lines_of(4)), (1, 1));
+    assert_eq!(index.total(), 39 + lines as usize);
+    assert_eq!(index.first_of(4), 4 + lines as usize - 1);
+}
+
+#[gpui_kit::test]
+fn alt_down_puts_the_first_item_of_the_change_in_view(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    opened(&rig, cx, wrapped_pair(400, &[10, 200, 390], 300));
+    set_wrap(&rig, cx, true);
+    rig.press(cx, "f7");
+    rig.press(cx, "alt-down");
+    frames(&rig, cx);
+    let (index, _) = index(&rig, cx);
+    let (_, _, top, in_view) = seen(&rig, cx);
+    let first = index.first_of(200);
+    assert!(
+        top <= first && first < top + in_view,
+        "item {first} in {top}..{}",
+        top + in_view
+    );
+    assert!(rig.probe(cx, Layout::SideBySide).1.contains(&200));
+}
+
+#[gpui_kit::test]
+fn toggling_wrap_keeps_the_top_pair_row(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    opened(&rig, cx, wrapped_pair(400, &[200], 300));
+    rig.press(cx, "alt-down");
+    frames(&rig, cx);
+    let flat_top = seen(&rig, cx).2;
+    assert!(flat_top > 100, "scrolled to the change: top {flat_top}");
+    set_wrap(&rig, cx, true);
+    let (index, _) = index(&rig, cx);
+    let top = seen(&rig, cx).2;
+    assert_eq!(index.at(top), (flat_top, 0), "wrap on keeps the top row");
+    set_wrap(&rig, cx, false);
+    assert_eq!(seen(&rig, cx).2, flat_top, "wrap off keeps it too");
+}
+
+#[gpui_kit::test]
+fn a_narrower_window_wraps_at_fewer_columns(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig_sized(cx, px(1400.));
+    opened(&rig, cx, wrapped_pair(40, &[3], 300));
+    set_wrap(&rig, cx, true);
+    let (_, wide) = index(&rig, cx);
+    VisualTestContext::from_window(rig.window, cx).simulate_resize(size(px(1000.), px(800.)));
+    frames(&rig, cx);
+    let (index, narrow) = index(&rig, cx);
+    assert!(narrow < wide, "{narrow} columns after {wide}");
+    assert_eq!(index.total(), 40 * 300usize.div_ceil(narrow as usize));
+}
