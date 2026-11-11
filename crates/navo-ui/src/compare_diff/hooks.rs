@@ -10,9 +10,14 @@ use navo_core::Location;
 use super::sheet::{SheetPlan, SheetPlanSink, SheetResult, SheetSink};
 use crate::settings::Values;
 
+mod detail;
 mod image_types;
 mod large;
 
+pub use detail::{
+    BytesCard, CARD_HUNKS, CardDetail, CardScan, HEX_CARD_ROWS, HexWindow, ImageCard, LargeCard,
+    THUMB_SIDE, Thumb,
+};
 pub use image_types::{ImageAlpha, ImageLimit, ImageMask, ImageScores, ImageSize};
 pub use large::{
     ByteProgress, ByteRegionView, HexAlign, LargeHunk, LargeProgress, LargeStage, LargeStep,
@@ -223,6 +228,12 @@ pub enum StreamUpdate {
         searched: u32,
         total: u32,
         done: bool,
+    },
+    /// A card's detail; replaces the previous one of the same id.
+    Detail {
+        generation: u64,
+        id: u64,
+        detail: Arc<CardDetail>,
     },
 }
 

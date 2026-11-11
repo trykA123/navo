@@ -161,31 +161,18 @@ impl ImageBody {
     /// Similarity as a whole percent, Rich only: the structural score is the one to lead with.
     #[must_use]
     pub fn similarity(&self) -> Option<u32> {
-        let ImageScores::Scored { ssim, .. } = self.scores.as_ref()? else {
-            return None;
-        };
+        let scores = self.scores.as_ref()?;
         if !self.rich {
             return None;
         }
-        let percent = (*ssim * 100.).round().clamp(0., 100.);
-        // The value is a rounded percent already clamped to 0..=100.
-        Some(percent as u32)
+        similarity_of(scores)
     }
 
     /// Why the pair has no scores, as a Fluent id; `None` when it has them.
     #[must_use]
     pub fn notice(&self) -> Option<&'static str> {
-        match self.scores.as_ref()? {
-            ImageScores::Scored { .. } => None,
-            ImageScores::HashOnly { .. } => Some("compare-image-note-hash"),
-            ImageScores::SizeMismatch { .. } => Some("compare-image-note-sizes"),
-            ImageScores::Unsupported { .. } => Some("compare-image-note-format"),
-            ImageScores::TooLarge { reason, .. } => Some(match reason {
-                ImageLimit::Encoded => "compare-image-note-encoded",
-                ImageLimit::Pixels => "compare-image-note-pixels",
-                ImageLimit::Decode => "compare-image-note-decode",
-            }),
-        }
+        let scores = self.scores.as_ref()?;
+        notice_of(scores)
     }
 
     /// Whether the pair is worth reading and decoding for the view: a hashed or oversized result
@@ -200,6 +187,34 @@ impl ImageBody {
             ) => true,
             Some(ImageScores::HashOnly { .. } | ImageScores::TooLarge { .. }) | None => false,
         }
+    }
+}
+
+/// Similarity as a whole percent for any card: the structural score of a scored pair,
+/// rounded and clamped to `0..=100`; `None` for every D20 fallback.
+#[must_use]
+pub fn similarity_of(scores: &ImageScores) -> Option<u32> {
+    let ImageScores::Scored { ssim, .. } = scores else {
+        return None;
+    };
+    let percent = (*ssim * 100.).round().clamp(0., 100.);
+    // The value is a rounded percent already clamped to 0..=100.
+    Some(percent as u32)
+}
+
+/// Why a pair has no scores, as a Fluent id, for any card: `None` when it has them.
+#[must_use]
+pub fn notice_of(scores: &ImageScores) -> Option<&'static str> {
+    match scores {
+        ImageScores::Scored { .. } => None,
+        ImageScores::HashOnly { .. } => Some("compare-image-note-hash"),
+        ImageScores::SizeMismatch { .. } => Some("compare-image-note-sizes"),
+        ImageScores::Unsupported { .. } => Some("compare-image-note-format"),
+        ImageScores::TooLarge { reason, .. } => Some(match reason {
+            ImageLimit::Encoded => "compare-image-note-encoded",
+            ImageLimit::Pixels => "compare-image-note-pixels",
+            ImageLimit::Decode => "compare-image-note-decode",
+        }),
     }
 }
 
