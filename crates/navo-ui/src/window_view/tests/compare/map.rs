@@ -3,13 +3,15 @@
 
 use gpui_kit::test::{TestQueryExt, TestWindowExt};
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Bounds, Modifiers, MouseButton, Pixels, Role, TestAppContext,
-    point, px,
+    AnyWindowHandle, AppContext as _, Bounds, Entity, Modifiers, MouseButton, Pixels, Role,
+    TestAppContext, point, px,
 };
 
 use navo_l10n::tr;
 
-use super::{first_labels, frames, rig};
+use super::{Rig, first_labels, frames, rig};
+use crate::compare_diff::map::ChangeMap;
+use crate::compare_list::BarEvent;
 use crate::test_pointer::{dispatch, down, up};
 
 /// The id the folder map draws under.
@@ -132,4 +134,54 @@ fn an_empty_compare_draws_no_map(cx: &mut TestAppContext) {
         drawn(cx, rig.window, MAP).is_empty(),
         "a compare with no rows draws no map"
     );
+}
+
+impl Rig {
+    /// The mounted folder map entity, or `None` when the compare has dropped it.
+    fn folder_map(&self, cx: &mut TestAppContext) -> Option<Entity<ChangeMap>> {
+        self.view.read_with(cx, |view, _| view.folder_map())
+    }
+}
+
+#[gpui_kit::test]
+fn leaving_the_compare_drops_the_map_entity(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-shift-d");
+    rig.send_files(cx, &["a.txt", "b.txt"]);
+    frames(cx, rig.window);
+    assert!(
+        rig.folder_map(cx).is_some(),
+        "the map is mounted while comparing"
+    );
+    rig.bar(cx, BarEvent::Leave);
+    frames(cx, rig.window);
+    assert!(
+        rig.folder_map(cx).is_none(),
+        "leaving the compare drops the map entity and its subscription"
+    );
+}
+
+#[gpui_kit::test]
+fn a_jump_to_the_last_row_clips_the_map_viewport_to_the_row_count(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "ctrl-shift-d");
+    let names: Vec<String> = (0..60).map(|n| format!("f{n:02}.txt")).collect();
+    rig.send_files(cx, &names.iter().map(String::as_str).collect::<Vec<_>>());
+    frames(cx, rig.window);
+    let map = drawn(cx, rig.window, MAP)[0];
+    let at = point(
+        map.origin.x + map.size.width / 2.,
+        map.origin.y + map.size.height * 0.99,
+    );
+    let none = Modifiers::default();
+    dispatch(cx, rig.window, down(MouseButton::Left, at, none));
+    dispatch(cx, rig.window, up(MouseButton::Left, at, none));
+    frames(cx, rig.window);
+    let entity = rig.folder_map(cx).expect("the folder map");
+    let seen = entity.read_with(cx, |map, _| map.viewport());
+    assert_eq!(
+        seen.end, 60,
+        "the viewport ends at the row count, not past it"
+    );
+    assert!(seen.start < seen.end, "rows are on screen: {seen:?}");
 }

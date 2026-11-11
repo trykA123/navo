@@ -45,17 +45,19 @@ fn folder_hunks(rows: &[RowView]) -> Arc<[MapHunk]> {
         .collect()
 }
 
-/// The tick that shows the selected row: the count of difference rows before it. `None` when that
-/// row is quiet, busy, or past the end of the list.
-fn current_hunk(rows: &[RowView], selected: usize) -> Option<usize> {
-    let difference = |row: &RowView| kind_of(row.tone).is_some();
-    let row = rows.get(selected)?;
-    difference(row).then(|| {
-        rows[..selected]
-            .iter()
-            .filter(|row| difference(row))
-            .count()
-    })
+/// The index of every difference row, in list order: a row's place in it is its tick's index.
+fn difference_rows(rows: &[RowView]) -> Vec<u32> {
+    (0u32..)
+        .zip(rows)
+        .filter_map(|(at, row)| kind_of(row.tone).map(|_| at))
+        .collect()
+}
+
+/// The tick that shows the selected row, found in the sorted `differences` by binary search.
+/// `None` when that row is quiet, busy, or past the end of the list.
+fn hunk_at(differences: &[u32], selected: usize) -> Option<usize> {
+    let row = u32::try_from(selected).ok()?;
+    differences.binary_search(&row).ok()
 }
 
 /// The rows the shared scroll shows now, out of `total` rows `row_height` px high.
@@ -87,11 +89,13 @@ struct MapFeed {
     selected: Option<usize>,
 }
 
-/// The folder map: its entity, its jump subscription, and the `built` its hunks came from.
+/// The folder map: its entity, its jump subscription, the `built` its hunks came from, and the
+/// index of every difference row, which turns a selected row into a tick at once.
 pub(super) struct MapMount {
     entity: Entity<ChangeMap>,
     _jumps: Subscription,
     key: (u64, u64),
+    differences: Vec<u32>,
 }
 
 impl MapMount {
@@ -106,6 +110,7 @@ impl MapMount {
             entity,
             _jumps,
             key,
+            differences: difference_rows(rows),
         }
     }
 }
@@ -130,14 +135,25 @@ impl NavoWindow {
         list: AnyElement,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let feed = self.compare.built.as_ref().and_then(|built| {
-            (pane.side == SIDE && !built.sides[SIDE].is_empty()).then(|| MapFeed {
-                key: built.key,
-                rows: Arc::clone(&built.sides[SIDE]),
-                selected: pane.selected,
-            })
-        });
-        let Some(feed) = feed else { return list };
+        let side = self
+            .compare
+            .built
+            .as_ref()
+            .filter(|_| pane.side == SIDE)
+            .map(|built| (built.key, Arc::clone(&built.sides[SIDE]), pane.selected));
+        let Some((key, rows, selected)) = side else {
+            return list;
+        };
+        if rows.is_empty() {
+            // Nothing left to place ticks on: drop the entity instead of keeping a stale one.
+            self.compare.map = None;
+            return list;
+        }
+        let feed = MapFeed {
+            key,
+            rows,
+            selected,
+        };
         let map = self.map_strip(feed, cx);
         div()
             .flex()
@@ -155,20 +171,29 @@ impl NavoWindow {
         let total = u32::try_from(feed.rows.len()).unwrap_or(u32::MAX);
         let row_height = tokens::current(cx).rows.height;
         let viewport = visible_rows(&self.compare.scroll, row_height, total);
-        let current = feed
-            .selected
-            .and_then(|selected| current_hunk(&feed.rows, selected));
+        if self
+            .compare
+            .map
+            .as_ref()
+            .is_some_and(|old| old.key.0 != feed.key.0)
+        {
+            self.compare.map = None;
+        }
         let mounted = self
             .compare
             .map
             .get_or_insert_with(|| MapMount::new(&feed.rows, feed.key, cx));
         if mounted.key != feed.key {
             mounted.key = feed.key;
+            mounted.differences = difference_rows(&feed.rows);
             let hunks = folder_hunks(&feed.rows);
             mounted
                 .entity
                 .update(cx, |map, cx| map.set_hunks(hunks, total, cx));
         }
+        let current = feed
+            .selected
+            .and_then(|selected| hunk_at(&mounted.differences, selected));
         mounted.entity.update(cx, |map, cx| {
             map.set_viewport(viewport, cx);
             map.set_current(current, cx);
@@ -187,5 +212,16 @@ impl NavoWindow {
                 cx.notify(id);
             }
         });
+    }
+}
+
+#[cfg(test)]
+impl NavoWindow {
+    /// The mounted folder map, for tests.
+    pub(in crate::window_view) fn folder_map(&self) -> Option<Entity<ChangeMap>> {
+        self.compare
+            .map
+            .as_ref()
+            .map(|mounted| mounted.entity.clone())
     }
 }

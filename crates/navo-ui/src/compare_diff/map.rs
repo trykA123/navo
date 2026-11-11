@@ -38,6 +38,9 @@ pub enum MapEvent {
 /// The change map element.
 pub struct ChangeMap {
     hunks: Arc<[MapHunk]>,
+    /// The hunks placed along `height`: kept until the hunks or the height change, so a scroll
+    /// moves the box without re-placing a million ticks.
+    marks: Arc<[Tick]>,
     total_rows: u32,
     viewport: Range<u32>,
     current: Option<usize>,
@@ -53,6 +56,7 @@ impl ChangeMap {
     /// Builds a map for `hunks` over `total_rows` rows; the viewport starts empty.
     pub fn new(hunks: Arc<[MapHunk]>, total_rows: u32) -> Self {
         Self {
+            marks: place(&hunks, total_rows, 0.),
             hunks,
             total_rows,
             viewport: 0..0,
@@ -76,6 +80,7 @@ impl ChangeMap {
         self.hunks = hunks;
         self.total_rows = total_rows;
         self.current = self.current.filter(|at| *at < self.hunks.len());
+        self.marks = place(&self.hunks, self.total_rows, self.height);
         cx.notify();
     }
 
@@ -102,6 +107,18 @@ impl ChangeMap {
         self.current
     }
 
+    /// The rows on screen, for tests.
+    #[cfg(test)]
+    pub(crate) fn viewport(&self) -> Range<u32> {
+        self.viewport.clone()
+    }
+
+    /// The placed ticks, for tests.
+    #[cfg(test)]
+    pub(crate) fn ticks(&self) -> Arc<[Tick]> {
+        Arc::clone(&self.marks)
+    }
+
     /// Emits a jump to the row under window position `y`.
     fn jump(&self, y: Pixels, cx: &mut Context<Self>) {
         let row = row_at(f32::from(y - self.top), self.total_rows, self.height);
@@ -114,9 +131,15 @@ impl ChangeMap {
         self.top = bounds.origin.y;
         if (self.height - height).abs() > f32::EPSILON {
             self.height = height;
+            self.marks = place(&self.hunks, self.total_rows, height);
             cx.notify();
         }
     }
+}
+
+/// Places every hunk along a strip `height` px high.
+fn place(hunks: &[MapHunk], total_rows: u32, height: f32) -> Arc<[Tick]> {
+    Arc::from(ticks(hunks, total_rows, height))
 }
 
 /// Returns the tick colour for a hunk kind from the diff tokens.
@@ -177,7 +200,7 @@ impl Render for ChangeMap {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let sensor = sensor(cx);
         let t = tokens::current(cx);
-        let marks = ticks(&self.hunks, self.total_rows, self.height);
+        let marks = Arc::clone(&self.marks);
         let current = self.current.and_then(|at| geometry::tick_of(&marks, at));
         let (vp_top, vp_height) = viewport_box(&self.viewport, self.total_rows, self.height);
         let width = f32::from(self.width);
