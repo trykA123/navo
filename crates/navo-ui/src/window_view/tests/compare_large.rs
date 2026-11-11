@@ -8,7 +8,8 @@ use navo_l10n::t;
 use super::compare_screen::{Rig, rig};
 use super::settle;
 use crate::compare_diff::{
-    DiffSink, DiffUpdate, LargeHunk, LargeProgress, LargeStage, Layout, PairKind, ShownKind,
+    DiffSink, DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepReason,
+    LargeStepView, Layout, PairKind, ShownKind,
 };
 use crate::window_view::compare_screen::large::{Anchor, RowMap, Settled};
 
@@ -288,4 +289,74 @@ fn compare_large_maps_unified_rows_and_unequal_gaps() {
         at(&open, 5_000),
         (ShownKind::Pending, Some(4_999), Some(5_000))
     );
+}
+
+fn notes(cx: &mut TestAppContext, rig: &Rig) -> String {
+    let probe = rig.view.read_with(cx, |view, _| view.large_probe());
+    probe.expect("a large body").notes.to_string()
+}
+
+fn step(kind: LargeStep, reason: LargeStepReason, section: std::ops::Range<u64>) -> LargeStepView {
+    LargeStepView {
+        step: kind,
+        lines: section.end - section.start,
+        section,
+        reason,
+    }
+}
+
+/// A snapshot of request 1 with `steps`, sections `done` of 5.
+fn with_steps(steps: Vec<LargeStepView>, done: u64) -> DiffUpdate {
+    match snapshot(Vec::new(), done, 1) {
+        DiffUpdate::Large {
+            request,
+            hunks,
+            progress,
+            ack,
+            ..
+        } => DiffUpdate::Large {
+            request,
+            hunks,
+            steps,
+            progress,
+            ack,
+        },
+        other => other,
+    }
+}
+
+#[gpui_kit::test]
+fn compare_large_progress_line_runs_until_the_last_section(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, snapshot(Vec::new(), 2, 1));
+    assert_eq!(
+        notes(cx, &rig),
+        t!("compare-screen-comparing-percent", percent = 40)
+    );
+    push(cx, &rig, &sink, snapshot(Vec::new(), 5, 2));
+    assert_eq!(notes(cx, &rig), "", "the line goes when the diff is done");
+}
+
+#[gpui_kit::test]
+fn compare_large_step_notices_name_the_step_and_the_setting(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    let steps = vec![
+        step(LargeStep::Coarse, LargeStepReason::Budget, 0..90),
+        step(LargeStep::Coarse, LargeStepReason::Budget, 90..180),
+        step(LargeStep::Coarse, LargeStepReason::SectionCap, 180..270),
+        step(LargeStep::PagedHunks, LargeStepReason::Paged, 270..360),
+    ];
+    push(cx, &rig, &sink, with_steps(steps, 5));
+    let want = [
+        t!("compare-screen-notice-coarse-budget", sections = 2),
+        t!("compare-screen-notice-coarse-cap", sections = 1),
+        t!("compare-screen-notice-paged"),
+    ]
+    .join(" · ");
+    assert_eq!(notes(cx, &rig), want);
+    assert!(want.contains("Memory budget"), "{want}");
+    push(cx, &rig, &sink, with_steps(Vec::new(), 5));
+    assert_eq!(notes(cx, &rig), "", "no step, no notice");
 }

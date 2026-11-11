@@ -119,6 +119,16 @@ compare-screen-changes = { $total ->
 }
 compare-screen-no-changes = No changes
 compare-screen-looking-further = Looking further… { $percent } %
+compare-screen-comparing-percent = Comparing… { $percent } %
+compare-screen-notice-coarse-budget = { $sections ->
+    [one] 1 section shown as one block to stay in the memory budget. Raise it in Settings > Compare > Memory budget.
+   *[other] { $sections } sections shown as one block to stay in the memory budget. Raise it in Settings > Compare > Memory budget.
+}
+compare-screen-notice-coarse-cap = { $sections ->
+    [one] 1 section shown as one block: too large to compare line by line.
+   *[other] { $sections } sections shown as one block: too large to compare line by line.
+}
+compare-screen-notice-paged = Changes far from the view are kept as counts to stay in the memory budget. Raise it in Settings > Compare > Memory budget.
 compare-card-viewed = Viewed
 compare-card-gap = { $lines ->
     [one] 1 unchanged line
