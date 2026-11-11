@@ -1,4 +1,6 @@
 #[cfg(any(windows, test))]
+mod art;
+#[cfg(any(windows, test))]
 mod canvas;
 mod timing;
 #[cfg(windows)]
