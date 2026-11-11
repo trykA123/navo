@@ -9,7 +9,9 @@ use navo_l10n::tr;
 use super::FileScreen;
 use super::stream::{StreamScreen, item_of};
 use crate::commands::compare::ShowMenu;
-use crate::compare_diff::{CardRow, CopyDirection, PairKind, PickSide, ShownRow, Stop, StreamRow};
+use crate::compare_diff::{
+    CardRow, CopyDirection, LongHit, PairKind, PickSide, ShownRow, Stop, StreamRow,
+};
 use crate::prelude::*;
 use crate::tokens;
 use crate::window_view::NavoWindow;
@@ -85,7 +87,22 @@ impl FileScreen {
             remove: self.pick.has_lines(),
             pick: self.pick.line_state(text, view.current()),
             changes: view.change_count() > 0,
+            bytes_here: self.switch.aimed(),
         }
+    }
+}
+
+#[cfg(test)]
+impl FileScreen {
+    /// The labels of the entries the menu would list for the cursor line now.
+    pub(super) fn menu_labels(&self) -> Vec<String> {
+        file_entries(&self.menu_facts())
+            .into_iter()
+            .filter_map(|entry| match entry {
+                MenuEntry::Run(label, ..) => Some(label.to_string()),
+                _ => None,
+            })
+            .collect()
     }
 }
 
@@ -169,6 +186,10 @@ impl NavoWindow {
             if let Some(line) = line {
                 file.pick.point(view.text(), (side, line));
             }
+            file.aim_at(LongHit {
+                left: hit.left,
+                right: hit.right,
+            });
         }
         self.compare.diff.copy.note = None;
         self.open_compare_menu(Some(at), window, cx);
@@ -196,6 +217,11 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         let anchor = at.unwrap_or_else(|| self.cursor_anchor(window, cx));
+        if at.is_none()
+            && let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut())
+        {
+            file.aim_from_cursor();
+        }
         let Some(screen) = self.compare.screen.as_ref() else {
             return;
         };

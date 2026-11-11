@@ -13,6 +13,7 @@ fn text() -> PairText {
         .collect();
     PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: vec![String::new(); 7],
         right: vec![String::new(); 7],
         rows,

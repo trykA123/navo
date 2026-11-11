@@ -43,6 +43,7 @@ fn types_build_and_compare() {
     let key = ViewedKey([1; 64]);
     let text = PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: vec!["a".into()],
         right: vec!["b".into()],
         rows: vec![

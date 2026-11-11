@@ -31,6 +31,7 @@ fn two_hunks() -> Arc<PairText> {
     };
     Arc::new(PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: vec![String::new(); 6],
         right: vec![String::new(); 6],
         rows,

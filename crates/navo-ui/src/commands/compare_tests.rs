@@ -35,6 +35,7 @@ fn the_compare_commands_are_registered_in_the_planned_contexts() {
             ("compare.save", "CompareView"),
             ("compare.view_bytes", "CompareView"),
             ("compare.view_text", "CompareView"),
+            ("compare.show_bytes_here", "CompareView"),
             ("compare.next_file", "CompareView"),
             ("compare.previous_file", "CompareView"),
             ("compare.view_menu", "CompareView"),

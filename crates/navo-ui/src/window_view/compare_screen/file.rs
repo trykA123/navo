@@ -17,6 +17,7 @@ use navo_l10n::{t, tr};
 use super::super::layout::ONE_PANE_BELOW;
 use super::context::{RowHit, on_right_click};
 use super::copy::FileBars;
+use super::switch;
 use crate::compare_diff::body::{BodyLook, digits, row_view};
 use crate::compare_diff::{
     DiffRow, Layout, PairText, ShownRow, SpanCache, Ticks, pair_rows, row_count,
@@ -199,9 +200,9 @@ impl FileView {
         };
         let (text, built) = (Arc::clone(&self.text), Rc::clone(&self.built));
         let current = self.current.and_then(|at| u32::try_from(at).ok());
-        let digits = digits(&text);
-        let (spans, words) = (Rc::clone(&self.spans), self.words);
+        let (digits, spans, words) = (digits(&text), Rc::clone(&self.spans), self.words);
         let picks = bars.picks.clone();
+        let on_long = switch::on_bytes_here(&bars.weak);
         let rows = move |range: Range<usize>, _: &mut Window, cx: &mut App| {
             built.set((range.start, range.end));
             let cache = words.then(|| spans.borrow());
@@ -220,6 +221,7 @@ impl FileView {
                 current,
                 spans: cache.as_deref(),
                 ticks: Some(&ticks),
+                bytes_here: Some(&on_long),
             };
             let first = range.start;
             let rows = pair_rows(&text, layout, range);

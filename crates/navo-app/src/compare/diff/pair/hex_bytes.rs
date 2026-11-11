@@ -50,10 +50,11 @@ pub(super) fn clear_bytes(commands: &Commands) {
         .take();
 }
 
-/// Opens a text pair as bytes when `on` (Alt+V Bytes): its kind becomes `Binary`, so the UI
-/// gets no text and the engine runs the byte diff. Other kinds keep their own view.
+/// Opens a text or large pair as bytes when `on` (Alt+V Bytes, Show bytes here): its kind
+/// becomes `Binary`, so the UI gets no text and the engine runs the byte diff instead of the
+/// large diff. Other kinds keep their own view.
 pub(super) fn force_bytes(loaded: &mut Loaded, on: bool) {
-    if on && loaded.kind == PairKind::Text {
+    if on && matches!(loaded.kind, PairKind::Text | PairKind::Large { .. }) {
         loaded.kind = PairKind::Binary;
     }
 }

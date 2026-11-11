@@ -271,6 +271,8 @@ fn run_lines(id: u64, input: LargeInput, sink: DiffSink, queue: &LineQueue) {
                     right: window.right,
                     left_cut: window.left_cut,
                     right_cut: window.right_cut,
+                    left_starts: window.left_starts,
+                    right_starts: window.right_starts,
                     totals: window.totals,
                 });
             }

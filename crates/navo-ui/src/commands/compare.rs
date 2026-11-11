@@ -18,6 +18,7 @@ gpui_kit::actions!(
         Continue,
         ViewBytes,
         ViewText,
+        ShowBytesHere,
         Stream,
         NextFile,
         PreviousFile,
@@ -103,6 +104,11 @@ pub(super) const GROUPS: [Group; 5] = [
                 "compare::ViewText",
                 "compare.view_text",
                 "cmd-compare-view-text",
+            ),
+            (
+                "compare::ShowBytesHere",
+                "compare.show_bytes_here",
+                "cmd-compare-show-bytes-here",
             ),
             (
                 "compare::NextFile",

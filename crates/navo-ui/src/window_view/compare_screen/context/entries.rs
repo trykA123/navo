@@ -4,7 +4,7 @@
 use super::run;
 use crate::commands::compare::{
     Changes, CopyLeft, CopyRight, Details, Fold, NextDifference, NextFile, OpenFile, PickToggle,
-    PreviousDifference, PreviousFile, RemovePicked, Search, ToggleViewed, ViewMenu,
+    PreviousDifference, PreviousFile, RemovePicked, Search, ShowBytesHere, ToggleViewed, ViewMenu,
 };
 use crate::compare_diff::CopyDirection;
 use crate::window_view::viewer::MenuEntry;
@@ -30,6 +30,8 @@ pub(super) struct FileFacts {
     pub(super) pick: Option<bool>,
     /// Whether the pair has any change to walk to.
     pub(super) changes: bool,
+    /// Whether the line under the cursor is over 1 MiB, so it can open in Bytes (V41d).
+    pub(super) bytes_here: bool,
 }
 
 /// What applies at the Stream's current stop.
@@ -108,6 +110,11 @@ pub(super) fn file_entries(facts: &FileFacts) -> Vec<MenuEntry> {
     join(vec![
         copy_entries(facts.copy),
         picking,
+        if facts.bytes_here {
+            vec![run("cmd-compare-show-bytes-here", ShowBytesHere)]
+        } else {
+            Vec::new()
+        },
         walking(facts.changes),
         showing(),
     ])
@@ -176,6 +183,15 @@ mod tests {
         let one = actions(&file_entries(&picked));
         assert!(one.contains(&"compare::CopyRight") && !one.contains(&"compare::CopyLeft"));
         assert!(one.contains(&"compare::RemovePicked"));
+        assert!(
+            !none.contains(&"compare::ShowBytesHere"),
+            "only a long line offers bytes"
+        );
+        let long = FileFacts {
+            bytes_here: true,
+            ..FileFacts::default()
+        };
+        assert!(actions(&file_entries(&long)).contains(&"compare::ShowBytesHere"));
         let bare = actions(&stream_entries(&StreamFacts::default()));
         assert!(!bare.contains(&"compare::OpenFile") && bare.contains(&"compare::Search"));
     }
@@ -188,6 +204,7 @@ mod tests {
             remove: true,
             pick: Some(true),
             changes: true,
+            bytes_here: true,
         };
         let stream = StreamFacts {
             item: true,

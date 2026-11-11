@@ -24,6 +24,9 @@ pub(crate) struct Window {
     pub(crate) right: Vec<String>,
     pub(crate) left_cut: bool,
     pub(crate) right_cut: bool,
+    /// The file byte offset of each line in `left` and `right`.
+    pub(crate) left_starts: Vec<u64>,
+    pub(crate) right_starts: Vec<u64>,
     pub(crate) totals: (u64, u64),
 }
 
@@ -32,6 +35,8 @@ pub(crate) struct Window {
 #[derive(Default)]
 struct SideLines {
     lines: Vec<String>,
+    /// The file byte offset each of `lines` starts at.
+    starts: Vec<u64>,
     cut: bool,
     partial: bool,
 }
@@ -74,16 +79,20 @@ impl Reader {
             rows.end
         };
         let (left_cut, right_cut) = (left.partial && kept > 0, right.partial && kept > 0);
-        let (mut left, mut right) = (left.lines, right.lines);
-        left.truncate(kept);
-        right.truncate(kept);
+        let (mut left, mut right) = ((left.lines, left.starts), (right.lines, right.starts));
+        for side in [&mut left, &mut right] {
+            side.0.truncate(kept);
+            side.1.truncate(kept);
+        }
         let totals = (self.left.total(cancel)?, self.right.total(cancel)?);
         Ok(Window {
             rows: rows.start..end,
-            left,
-            right,
+            left: left.0,
+            right: right.0,
             left_cut,
             right_cut,
+            left_starts: left.1,
+            right_starts: right.1,
             totals,
         })
     }
@@ -149,8 +158,10 @@ impl Side {
         let kept = u64::try_from(bytes.len().min(limit)).unwrap_or(u64::MAX);
         let cut = end.saturating_sub(start) > kept;
         let partial = cut && self.cut(&mut bytes, limit);
+        let (lines, starts) = decode_lines(&bytes, self.layout, start);
         Ok(SideLines {
-            lines: decode_lines(&bytes, self.layout, start == 0),
+            lines,
+            starts,
             cut,
             partial,
         })
@@ -285,25 +296,30 @@ fn read_range(
     Ok(bytes)
 }
 
-/// Split raw bytes into display lines, dropping the BOM at the file start.
-fn decode_lines(bytes: &[u8], layout: TextLayout, at_start: bool) -> Vec<String> {
-    let skip = if at_start {
+/// Split raw bytes read from file offset `start` into display lines and the file offset of each,
+/// dropping the BOM at the file start.
+fn decode_lines(bytes: &[u8], layout: TextLayout, start: u64) -> (Vec<String>, Vec<u64>) {
+    let skip = if start == 0 {
         layout.bom_len().min(bytes.len())
     } else {
         0
     };
     let body = &bytes[skip..];
+    let base = start.saturating_add(u64::try_from(skip).unwrap_or(0));
+    let at = |from: usize| base.saturating_add(u64::try_from(from).unwrap_or(u64::MAX));
     let unit = layout.unit();
-    let mut lines = Vec::new();
+    let (mut lines, mut starts) = (Vec::new(), Vec::new());
     let mut from = 0;
     for newline in layout.newlines(body) {
         lines.push(decode(&body[from..newline], layout));
+        starts.push(at(from));
         from = newline.saturating_add(unit);
     }
     if from < body.len() {
         lines.push(decode(&body[from..], layout));
+        starts.push(at(from));
     }
-    lines
+    (lines, starts)
 }
 
 /// Decode one line's bytes with the side's encoding.

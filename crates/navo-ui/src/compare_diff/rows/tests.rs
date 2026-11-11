@@ -20,6 +20,7 @@ fn text(rows: Vec<DiffRow>, hunks: &[(u32, u32)], lines: usize) -> PairText {
     };
     PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: (0..lines).map(|i| format!("l{i}")).collect(),
         right: (0..lines).map(|i| format!("r{i}")).collect(),
         rows,

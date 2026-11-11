@@ -12,6 +12,7 @@ cmd-compare-stop-checking = Stop checking contents
 cmd-compare-continue = Continue the compare on a network drive
 cmd-compare-view-bytes = Show bytes
 cmd-compare-view-text = Show text
+cmd-compare-show-bytes-here = Show bytes here
 compare-needs-two-panes = Compare needs two panes side by side.
 compare-could-not-start = The compare could not start.
 compare-filter-all = All

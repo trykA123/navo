@@ -190,3 +190,35 @@ fn a_stamp_check_error_past_the_end_fails_closed() {
     let result = reader.read(3..5, &CancelToken::new());
     assert!(matches!(result, Err(Reason::ReadError)));
 }
+
+#[test]
+fn a_window_reports_the_file_byte_offset_of_each_line() {
+    let mut reader = Reader::new(utf8("ab\ncde\nf\ngh\n"), utf8("x\nyy\nzzz\n"));
+    let window = reader.read(1..3, &CancelToken::new()).unwrap();
+    assert_eq!(window.left, ["cde", "f"]);
+    assert_eq!(
+        window.left_starts,
+        [3, 7],
+        "mid-file lines keep file offsets"
+    );
+    assert_eq!(window.right_starts, [2, 5]);
+}
+
+#[test]
+fn line_offsets_count_the_bom_and_wide_units() {
+    let mut bytes = vec![0xFF, 0xFE];
+    bytes.extend(wide("ab\ncd\n"));
+    let layout = TextLayout::of(TextEncoding {
+        encoding: encoding_rs::UTF_16LE,
+        bom: true,
+        by: DetectedBy::Bom,
+    });
+    let mut reader = Reader::new(side(mem(bytes), layout), utf8("x\ny\n"));
+    let window = reader.read(0..2, &CancelToken::new()).unwrap();
+    assert_eq!(window.left, ["ab", "cd"]);
+    assert_eq!(
+        window.left_starts,
+        [2, 8],
+        "the BOM is two bytes, each line six"
+    );
+}

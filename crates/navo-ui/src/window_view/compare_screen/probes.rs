@@ -184,4 +184,10 @@ impl NavoWindow {
             })
             .collect()
     }
+
+    /// The labels of the file diff's menu entries for the line the menu opened on.
+    pub(in crate::window_view) fn file_menu_labels(&self) -> Vec<String> {
+        let file = self.compare.screen.as_ref().and_then(|s| s.file.as_ref());
+        file.map(super::FileScreen::menu_labels).unwrap_or_default()
+    }
 }

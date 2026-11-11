@@ -12,6 +12,7 @@ fn one(start: u32, end: u32) -> Vec<std::ops::Range<u32>> {
 fn pair(len: u32) -> PairText {
     PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: Vec::new(),
         right: Vec::new(),
         rows: (0..len).map(|at| DiffRow::Changed(at, at)).collect(),

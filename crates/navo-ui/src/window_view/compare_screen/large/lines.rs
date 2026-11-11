@@ -13,6 +13,13 @@ const AHEAD: u64 = 200;
 /// The most lines one request reads; the app caps a window at the same count.
 const MOST: u64 = 2_000;
 
+/// One fetched line window: its first line, both sides' text and their file byte offsets.
+pub(in crate::window_view) struct Fetched {
+    pub start: u64,
+    pub lines: (Vec<String>, Vec<String>),
+    pub starts: (Vec<u64>, Vec<u64>),
+}
+
 /// Both sides' cached lines and the window in flight.
 #[derive(Debug, Default)]
 pub(in crate::window_view) struct LineCache {
@@ -20,6 +27,9 @@ pub(in crate::window_view) struct LineCache {
     right: BTreeMap<u64, String>,
     /// The one window in flight; cleared when it arrives.
     asked: Option<Range<u64>>,
+    /// The file byte offset of each cached line, per side (V41d).
+    starts_left: BTreeMap<u64, u64>,
+    starts_right: BTreeMap<u64, u64>,
 }
 
 impl LineCache {
@@ -29,24 +39,50 @@ impl LineCache {
         side.get(&line).map(String::as_str)
     }
 
-    /// Stores a window that starts at line `start`, then drops each side's lines farthest from
+    /// The file byte offset of line `line` on the left (`left`) or right side, when it is cached.
+    pub(in crate::window_view) fn start_of(&self, left: bool, line: u64) -> Option<u64> {
+        let starts = if left {
+            &self.starts_left
+        } else {
+            &self.starts_right
+        };
+        starts.get(&line).copied()
+    }
+
+    /// Stores a fetched window, then drops each side's lines farthest from
     /// its line in view (`near`), so sides far apart never evict each other's visible lines.
-    pub(in crate::window_view) fn add(
-        &mut self,
-        start: u64,
-        (left, right): (Vec<String>, Vec<String>),
-        near: (u64, u64),
-    ) {
+    pub(in crate::window_view) fn add(&mut self, fetched: Fetched, near: (u64, u64)) {
+        let Fetched {
+            start,
+            lines: (left, right),
+            starts: (left_starts, right_starts),
+        } = fetched;
         self.asked = None;
         let sides = [
-            (&mut self.left, left, near.0),
-            (&mut self.right, right, near.1),
+            (
+                &mut self.left,
+                &mut self.starts_left,
+                left,
+                left_starts,
+                near.0,
+            ),
+            (
+                &mut self.right,
+                &mut self.starts_right,
+                right,
+                right_starts,
+                near.1,
+            ),
         ];
-        for (side, lines, near) in sides {
+        for (side, kept, lines, starts, near) in sides {
+            for (at, offset) in (start..).zip(starts) {
+                kept.insert(at, offset);
+            }
             for (at, text) in (start..).zip(lines) {
                 side.insert(at, text);
             }
             trim(side, near);
+            kept.retain(|line, _| side.contains_key(line));
         }
     }
 
