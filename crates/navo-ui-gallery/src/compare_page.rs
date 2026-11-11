@@ -20,7 +20,6 @@ struct Sample {
     kind: CompareKind,
     sides: [Option<(&'static str, &'static str)>; 2],
     tone: Tone,
-    mark: &'static str,
     status: &'static str,
     /// The left side has the later time, so its pane marks the row as the newer one.
     newer_left: bool,
@@ -34,13 +33,13 @@ const SAMPLES: [Sample; 10] = [
         "docs",
         CompareKind::Folder,
         [Some(("<DIR>", TIME)); 2],
-        (Tone::Muted, "="),
+        Tone::Muted,
     ),
     sample(
         "Cargo.toml",
         CompareKind::File,
         [Some(("1.6 KB", TIME)), Some(("1.7 KB", EARLIER_TIME))],
-        (Tone::Change, "≠"),
+        Tone::Change,
     )
     .said("different")
     .newer_on_left(),
@@ -48,56 +47,56 @@ const SAMPLES: [Sample; 10] = [
         "legacy_walk.rs",
         CompareKind::File,
         [Some(("5.3 KB", TIME)), None],
-        (Tone::Delete, "←"),
+        Tone::Delete,
     )
     .said("only left"),
     sample(
         "write_file.rs",
         CompareKind::File,
         [None, Some(("6.7 KB", TIME))],
-        (Tone::Add, "→"),
+        Tone::Add,
     )
     .said("only right"),
     sample(
         "big_trace.asc",
         CompareKind::File,
         [Some(("612 MB", TIME)), Some(("612 MB", TIME))],
-        (Tone::Busy, "…"),
+        Tone::Busy,
     )
     .said("same size and time · checking · 208.0 MB of 612.0 MB"),
     sample(
         "flash_dump.hex",
         CompareKind::File,
         [Some(("148 MB", TIME)), Some(("148 MB", TIME))],
-        (Tone::Muted, "–"),
+        Tone::Muted,
     )
     .said("Not checked (stopped)"),
     sample(
         "notes",
         CompareKind::Folder,
         [Some(("<DIR>", TIME)), Some(("1.0 KB", TIME))],
-        (Tone::Conflict, "!"),
+        Tone::Conflict,
     )
     .said("type conflict"),
     sample(
         "secret.key",
         CompareKind::File,
         [Some(("64 B", TIME)), Some(("64 B", TIME))],
-        (Tone::Conflict, "!"),
+        Tone::Conflict,
     )
     .said("unavailable: access denied"),
     sample(
         "README.md",
         CompareKind::File,
         [Some(("5.9 KB", TIME)), Some(("5.9 KB", TIME))],
-        (Tone::Muted, "="),
+        Tone::Muted,
     )
     .said("same after rules"),
     sample(
         "lib.rs",
         CompareKind::File,
         [Some(("2.0 KB", TIME)), Some(("2.0 KB", TIME))],
-        (Tone::Muted, "="),
+        Tone::Muted,
     ),
 ];
 
@@ -105,14 +104,13 @@ const fn sample(
     name: &'static str,
     kind: CompareKind,
     sides: [Option<(&'static str, &'static str)>; 2],
-    (tone, mark): (Tone, &'static str),
+    tone: Tone,
 ) -> Sample {
     Sample {
         name,
         kind,
         sides,
         tone,
-        mark,
         status: "",
         newer_left: false,
     }
@@ -152,7 +150,6 @@ impl Sample {
             },
             side: here,
             tone: self.tone,
-            mark: self.mark,
             gutter: None,
         }
     }
