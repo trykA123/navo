@@ -13,8 +13,8 @@ use crate::compare_diff::{CARD_HUNKS, ImageCard};
 use crate::prelude::*;
 
 /// The image card's body: a box `CARD_HUNKS × LINE_HEIGHT` px tall with one half per side, each
-/// showing its texture whole (`ObjectFit::Contain`). A side with no uploaded texture draws
-/// nothing and the card surface of the frame shows through (D26.5).
+/// showing its texture whole (`ObjectFit::Contain`), inset so it never touches the card's edge.
+/// A side with no uploaded texture draws nothing and the card surface shows through (D26.5).
 pub(super) fn image_body(ctx: &DetailCtx<'_>, id: u64) -> Div {
     let (left, right) = ctx.thumbs.pair(id);
     div()
@@ -22,6 +22,7 @@ pub(super) fn image_body(ctx: &DetailCtx<'_>, id: u64) -> Div {
         .w_full()
         .flex_none()
         .h(px(CARD_HUNKS as f32 * LINE_HEIGHT))
+        .pb(ctx.t.spacing.sm)
         .child(half(left, 0))
         .child(half(right, 1))
 }
