@@ -20,8 +20,9 @@ use windows_sys::Win32::Security::{
     GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CREATE_NEW, CreateFileW, DELETE, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_DELETE_ON_CLOSE,
-    GetDiskFreeSpaceExW, GetDriveTypeW, QueryDosDeviceW,
+    CREATE_NEW, CreateDirectoryW, CreateFileW, DELETE, FILE_ATTRIBUTE_NORMAL,
+    FILE_FLAG_DELETE_ON_CLOSE, GetDiskFreeSpaceExW, GetDriveTypeW, QueryDosDeviceW,
+    RemoveDirectoryW,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows_sys::Win32::System::WindowsProgramming::{DRIVE_FIXED, DRIVE_REMOTE, DRIVE_REMOVABLE};
@@ -52,7 +53,7 @@ pub fn facts(chain: &Chain) -> io::Result<Facts> {
         drive: drive_kind(&root.path)?,
         subst: subst_drive(&root.path),
         parent_open: parent_acl::parent_open(chain)?,
-        writable: write_probe(&nearest.path)?,
+        writable: write_probe(&nearest.path, !chain.missing.is_empty())?,
         free: free_space(&nearest.path)?,
     })
 }
@@ -111,8 +112,41 @@ fn subst_drive(root: &Path) -> bool {
     target.starts_with(&SUBST_PREFIX)
 }
 
+/// Proves the nearest folder accepts what Setup does next: a folder for a fresh chain, else a file.
+fn write_probe(parent: &Path, fresh: bool) -> io::Result<bool> {
+    if fresh {
+        folder_probe(parent)
+    } else {
+        file_probe(parent)
+    }
+}
+
+/// Creates and removes a uniquely named probe folder; false means the folder is not writable.
+#[allow(
+    clippy::print_stderr,
+    reason = "a probe folder that cannot be removed deserves one warning"
+)]
+fn folder_probe(parent: &Path) -> io::Result<bool> {
+    let path = parent.join(format!("{PROBE_PREFIX}{}", random_hex()?));
+    let wide = wide_z(&path);
+    // SAFETY: the wide path is NUL-terminated and no security attributes are used.
+    let created = unsafe { CreateDirectoryW(wide.as_ptr(), std::ptr::null()) };
+    if created == 0 {
+        return Ok(false);
+    }
+    // SAFETY: the wide path is NUL-terminated; the folder exists and is empty.
+    if unsafe { RemoveDirectoryW(wide.as_ptr()) } == 0 {
+        eprintln!(
+            "navo-setup: cannot remove the write probe {}: {}",
+            path.display(),
+            io::Error::last_os_error()
+        );
+    }
+    Ok(true)
+}
+
 /// Creates and closes a `CREATE_NEW` probe file; false means the folder is not writable.
-fn write_probe(parent: &Path) -> io::Result<bool> {
+fn file_probe(parent: &Path) -> io::Result<bool> {
     let path = parent.join(format!("{PROBE_PREFIX}{}", random_hex()?));
     let path = wide_z(&path);
     // SAFETY: the path is NUL-terminated, the buffer is live, and no template or security
@@ -211,5 +245,19 @@ impl Drop for Owned {
     fn drop(&mut self) {
         // SAFETY: this guard owns a live handle that nothing else closes.
         unsafe { CloseHandle(self.0) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A folder probe creates and removes its folder in a writable temp directory.
+    #[test]
+    fn the_folder_probe_leaves_nothing_behind() -> io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        assert!(write_probe(temp.path(), true)?);
+        assert_eq!(std::fs::read_dir(temp.path())?.count(), 0);
+        Ok(())
     }
 }
