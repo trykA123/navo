@@ -39,10 +39,16 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: false
+      - name: Make CARGO_HOME visible to later steps, before any build reads it
+        shell: pwsh
+        run: |
+          if (-not $env:CARGO_HOME) { "CARGO_HOME=$HOME\.cargo" | Add-Content -Path $env:GITHUB_ENV }
       - run: cargo build --release --locked -p navo-bench
       - name: Build the tester exe
         run: cargo build --release --locked -p navo-app --features tester
         env:
+          # MSVC embeds C __FILE__ paths (tree-sitter asserts, UTF-16); --remap-path-prefix covers Rust only.
+          CFLAGS: -d1trimfile:${{ env.CARGO_HOME }}\registry\src\
           RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=navo --remap-path-prefix=${{ env.CARGO_HOME }}=cargo -C target-feature=+crt-static -C link-arg=/STACK:8388608
       - run: cargo build --release --locked -p navo-index-service
       - name: Tracy hook is still in the vendored client
@@ -57,13 +63,10 @@ jobs:
               throw "$rel lacks TRACY_HAS_CUSTOM_USER_INFO"
             }
           }
-      - name: Make CARGO_HOME visible to later steps
-        shell: pwsh
-        run: |
-          if (-not $env:CARGO_HOME) { "CARGO_HOME=$HOME\.cargo" | Add-Content -Path $env:GITHUB_ENV }
       - name: Build the trace build
         run: cargo build --release --locked -p navo-app --features tester,tracy --target-dir target/tracy
         env:
+          CFLAGS: -d1trimfile:${{ env.CARGO_HOME }}\registry\src\
           TRACY_CLIENT_SYS_CXXFLAGS: -FI${{ github.workspace }}\crates\navo-diag\tracy\navo_tracy_user.hpp -d1trimfile:${{ github.workspace }}\
           RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=navo --remap-path-prefix=${{ env.CARGO_HOME }}=cargo -C target-feature=+crt-static -C link-arg=/STACK:8388608
       - name: Tracy tools (v0.14.1, pinned hashes)
