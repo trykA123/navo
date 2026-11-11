@@ -78,12 +78,7 @@ fn hidden_compare_commands_still_resolve_by_name_and_action() {
     );
 }
 
-const NOT_BUILT: [&str; 4] = [
-    "compare.refs",
-    "compare.save",
-    "compare.view_bytes",
-    "compare.view_text",
-];
+const NOT_BUILT: [&str; 2] = ["compare.refs", "compare.save"];
 
 fn palette_names() -> Vec<&'static str> {
     entries()

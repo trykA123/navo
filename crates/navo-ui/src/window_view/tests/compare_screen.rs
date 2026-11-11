@@ -20,7 +20,7 @@ use crate::settings::Values;
 use crate::window_view::OpenHooks;
 use crate::window_view::compare_screen::FileState;
 
-mod body;
+pub(super) mod body;
 mod refresh;
 mod view;
 

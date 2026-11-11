@@ -174,12 +174,7 @@ pub(super) const GROUPS: [Group; 5] = [
 ];
 
 /// Commands whose atoms have not landed: out of menus, palette and keymap while Compare is on.
-const NOT_BUILT: &[&str] = &[
-    "compare.refs",
-    "compare.save",
-    "compare.view_bytes",
-    "compare.view_text",
-];
+const NOT_BUILT: &[&str] = &["compare.refs", "compare.save"];
 
 /// Whether `name` is a compare command that is not offered: all while Compare is off,
 /// and the ones still to be built while it is on.

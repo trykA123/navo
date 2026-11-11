@@ -43,6 +43,7 @@ fn pick_text() -> PairText {
         r += u32::from(op != 'D');
     }
     PairText {
+        left_starts: Vec::new(),
         left: vec!["line".to_owned(); l as usize],
         right: vec!["line".to_owned(); r as usize],
         rows,

@@ -14,7 +14,7 @@ use super::convert::{spans, to_pair_text};
 use super::image;
 use super::load::{LoadInput, Loaded, load_pair};
 use engine::{EngineJob, Live};
-use hex_bytes::{clear_bytes, start_bytes};
+use hex_bytes::{clear_bytes, force_bytes, start_bytes};
 
 mod engine;
 mod hex_bytes;
@@ -106,6 +106,11 @@ impl PairControl for PairDiff {
         self.commands.send(Command::Refresh(request));
     }
 
+    fn view_as(&self, request: u64, bytes: bool) {
+        self.commands.bytes_view.store(bytes, Ordering::Release);
+        self.commands.send(Command::Refresh(request));
+    }
+
     fn focus(&self, line: u64) {
         self.live.focus(line);
     }
@@ -184,6 +189,8 @@ struct Commands {
     cancel: CancelToken,
     /// The running byte diff; dropping it cancels its workers.
     bytes: Mutex<Option<ByteDiff>>,
+    /// Whether the pair opens as bytes whatever its kind (Alt+V), kept across refreshes.
+    bytes_view: AtomicBool,
 }
 
 impl Commands {
@@ -194,6 +201,7 @@ impl Commands {
             closed: AtomicBool::new(false),
             cancel: CancelToken::new(),
             bytes: Mutex::new(None),
+            bytes_view: AtomicBool::new(false),
         }
     }
 
@@ -268,7 +276,7 @@ fn run(worker: &Worker<'_>) {
         let Some(input) = open_input(&mut id, worker.opener, worker.sink, worker.commands) else {
             return;
         };
-        let loaded = load_pair(&input, &worker.commands.cancel);
+        let loaded = load_forced(&input, worker.commands);
         if worker.commands.cancel.is_cancelled() {
             return;
         }
@@ -312,6 +320,13 @@ fn run(worker: &Worker<'_>) {
         };
         id = next;
     }
+}
+
+/// Load the pair; as bytes when Alt+V forced that view, which every reload keeps.
+fn load_forced(input: &LoadInput, commands: &Commands) -> Loaded {
+    let mut loaded = load_pair(input, &commands.cancel);
+    force_bytes(&mut loaded, commands.bytes_view.load(Ordering::Acquire));
+    loaded
 }
 
 /// Answer spans and byte requests until a refresh gives the next request id (`Some`) or the pair closes (`None`).

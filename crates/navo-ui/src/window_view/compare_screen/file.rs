@@ -3,6 +3,7 @@
 
 mod map;
 mod reveal;
+mod seek;
 mod spans;
 
 use std::cell::{Cell, RefCell};
@@ -91,6 +92,8 @@ pub(super) struct FileView {
     settle: Option<Task<()>>,
     /// Whether the extra first frame was asked for.
     retried: bool,
+    /// The left line to put on top at the next draw (Alt+V back from bytes).
+    seek: Option<usize>,
 }
 
 impl FileView {
@@ -112,6 +115,7 @@ impl FileView {
             watched: (0, 0),
             settle: None,
             retried: false,
+            seek: None,
         }
     }
 
@@ -188,6 +192,7 @@ impl FileView {
             let row = self.shape(layout).starts[at];
             self.scroll.scroll_to_center(row);
         }
+        self.apply_seek(layout);
         let (count, starts) = {
             let shape = self.shape(layout);
             (shape.count, shape.starts.clone())

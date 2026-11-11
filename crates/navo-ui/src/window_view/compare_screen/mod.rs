@@ -19,7 +19,9 @@ mod outline;
 mod pick;
 mod search;
 mod sheet;
+mod state;
 mod stream;
+mod switch;
 
 use std::sync::{Arc, PoisonError};
 
@@ -35,32 +37,9 @@ pub(in crate::window_view) use inbox::DiffSlot;
 #[cfg(test)]
 pub(in crate::window_view) use inbox::coalesce;
 use large::LargeShown;
+pub(super) use state::FileState;
+use state::request_of;
 use stream::StreamScreen;
-
-/// What the file diff shows now.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) enum FileState {
-    Loading,
-    Opened {
-        kind: PairKind,
-        text: Option<Arc<PairText>>,
-    },
-    Failed(SharedString),
-}
-
-/// The worker request id an update belongs to.
-fn request_of(update: &DiffUpdate) -> u64 {
-    match update {
-        DiffUpdate::Opened { request, .. }
-        | DiffUpdate::Spans { request, .. }
-        | DiffUpdate::Large { request, .. }
-        | DiffUpdate::LargeLines { request, .. }
-        | DiffUpdate::Bytes { request, .. }
-        | DiffUpdate::Image { request, .. }
-        | DiffUpdate::ChangedOnDisk { request }
-        | DiffUpdate::Failed { request, .. } => *request,
-    }
-}
 
 /// One open file pair: its request, its control and what arrived for it.
 pub(super) struct FileScreen {
@@ -80,6 +59,8 @@ pub(super) struct FileScreen {
     hex: Option<hex::HexView>,
     /// The change to show first once the text arrives.
     at: Option<usize>,
+    /// The Alt+V switch in flight and the view the pair is in (see `switch`).
+    switch: switch::Switch,
     /// The large text snapshot applied last; its number was acknowledged after applying.
     large: Option<LargeShown>,
     /// The pair's two pictures, once it opened as an image pair (V40).
@@ -132,6 +113,7 @@ impl FileScreen {
             }
             DiffUpdate::Failed { text, .. } => {
                 (self.view, self.large, self.hex) = (None, None, None);
+                self.switch.landed();
                 self.fail(text);
             }
             DiffUpdate::Spans { spans, .. } => match self.view.as_mut() {
@@ -171,15 +153,22 @@ impl FileScreen {
     /// Installs an opened pair: its text rows, its large or image or hex body by kind, or its
     /// kind only; rows are `row_height` tall.
     fn opened(&mut self, (kind, text): (PairKind, Option<Arc<PairText>>), row_height: Pixels) {
-        let (at, words) = (self.at, self.look.words);
-        self.view = text
-            .clone()
-            .map(|text| file::FileView::new(text, at, words));
+        let offset = self.switch.landed();
+        let (at, words) = (self.at.filter(|_| offset.is_none()), self.look.words);
+        self.view = text.clone().map(|text| {
+            let mut view = file::FileView::new(text, at, words);
+            offset.inspect(|&offset| view.seek_offset(offset));
+            view
+        });
         let layout = self.look.layout.unwrap_or(self.auto);
         self.large =
             matches!(kind, PairKind::Large { .. }).then(|| LargeShown::new(row_height, layout));
         let old = self.hex.take();
-        self.hex = matches!(kind, PairKind::Binary).then(|| hex::HexView::reopened(old));
+        self.hex = matches!(kind, PairKind::Binary).then(|| {
+            let mut view = hex::HexView::reopened(old);
+            offset.inspect(|&offset| view.seek(offset));
+            view
+        });
         self.open_pictures(kind);
         self.state = FileState::Opened { kind, text };
         self.follow_layout();
@@ -188,18 +177,24 @@ impl FileScreen {
     /// Asks the worker to reload both sides under the next request id; updates for every earlier
     /// id become stale. Fails the pair, without reusing an id, once the ids run out.
     fn refresh(&mut self) {
+        if let Some(id) = self.next_id() {
+            self.control.refresh(id);
+        }
+    }
+
+    /// Takes the next request id and makes every earlier one stale; the pair fails, without
+    /// reusing an id, once the ids run out (`None`).
+    fn next_id(&mut self) -> Option<u64> {
         let next = self.expected.and_then(|id| id.checked_add(1));
         (self.expected, self.large) = (next, None);
-        if let Some(id) = next {
-            self.active = id;
-        }
         match next {
-            Some(id) => self.control.refresh(id),
+            Some(id) => self.active = id,
             None => {
                 self.view = None;
                 self.state = FileState::Failed(navo_l10n::tr("compare-could-not-start").into());
             }
         }
+        next
     }
 }
 
@@ -304,6 +299,7 @@ impl NavoWindow {
             view: None,
             hex: None,
             at,
+            switch: switch::Switch::default(),
             large: None,
             pictures: None,
             retired: Vec::new(),

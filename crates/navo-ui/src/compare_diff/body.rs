@@ -248,6 +248,7 @@ mod tests {
     fn body_paints_spans_only_when_given_and_skips_bad_ranges() {
         let t = Theme::new(Mode::Light);
         let text = PairText {
+            left_starts: Vec::new(),
             left: vec!["héllo".into()],
             right: vec![],
             rows: vec![DiffRow::Changed(0, 0)],
