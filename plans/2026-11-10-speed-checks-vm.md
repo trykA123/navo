@@ -82,7 +82,7 @@ Final. Workers never reopen them.
 | B1 | start report | `crates/navo-ui/src/window_view/start_watch.rs` (200 lines), `crates/navo-ui/src/window_view/tests/start_watch.rs` (127), `crates/navo-app/src/metrics/tests.rs` (226) | patcher | medium | — | CHK `cargo xtask check -p navo-ui -p navo-app` | done |
 | B2 | metrics report | `crates/navo-app/src/metrics/report.rs` (88), `crates/navo-app/src/metrics/run.rs`, `crates/navo-app/src/metrics/tests.rs` | patcher | medium | B1 | CHK `cargo nextest run -p navo-app metrics`; CHK `cargo xtask check -p navo-app`; CHK `cargo xtask check -p navo-bench` | done |
 | B3 | `perf-summary` fresh | `xtask/src/perf/mod.rs` (59), `xtask/src/perf/modes.rs` (new), `xtask/src/perf/modes/tests.rs` (new) | api-builder | high | B2 | CHK `cargo nextest run -p xtask perf`; CHK `cargo xtask check -p xtask` | done |
-| B3c | `perf-summary` vm, calibrate, aggregate | `xtask/src/perf/modes.rs`, `xtask/src/perf/modes/calibrate.rs` (new), `xtask/src/perf/modes/calibrate/tests.rs` (new) | api-builder | high | B3 | as B3 | todo |
+| B3c | `perf-summary` vm, calibrate, aggregate | `xtask/src/perf/modes.rs`, `xtask/src/perf/modes/calibrate.rs` (new), `xtask/src/perf/modes/calibrate/tests.rs` (new) | api-builder | high | B3 | as B3 | done |
 | B3b | `checks.yml` caller | `.github/workflows/checks.yml` | patcher | medium | B3 | `actionlint .github/workflows/checks.yml`; one `checks.yml` dispatch | todo |
 | B4 | VM launcher | `$TOOLS/perf.ps1` (new) | infra-builder | medium | B3b, B3c | the B4 VM run below | todo |
 | B5 | VM stages | `$TOOLS/ci.ps1` (49), `$TOOLS/ci.sh` (28) | infra-builder | medium | B4 | the six B5 checks below | todo |
@@ -274,3 +274,4 @@ Final. Workers never reopen them.
   - Also: SC12's hook patterns end in `( |$)`, and the perf steps are named `build-perf` and `fixture-perf`, so no step line starts with `=== ok perf` by accident. Base moved to `da6e3d8c`; part A's merged atoms touch no part B file.
 - 2026-11-10 — Gemini re-check of revision 6: `check_done` and its tests move from B3 to B3c (no `fresh` caller → `dead_code`); `Start-PerfRun` sets `$script:PerfRun` / `$script:PerfFp` instead of returning values. Revision 7.
 - 2026-11-11 — B1, B2, B3 merged (B3 review APPROVE; two minor test gaps left: unsorted warm fixture, missing --commit and extra positional cases).
+- 2026-11-11 — B3c merged (qwen3.8-flash, one fix round after a Sonnet review asked for run-level tests of the fail-closed paths; the new tests also caught `finished: null`). 45 perf tests pass. Real `done.json`, reports and the ten-run calibration stay UNTESTED until B4 and B5. `modes.rs` has 385 code lines, so the next addition goes in a new file.
