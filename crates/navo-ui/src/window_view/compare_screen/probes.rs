@@ -98,6 +98,15 @@ impl NavoWindow {
         Some(hex.probe(24))
     }
 
+    /// Puts the line holding left byte `offset` on top of the text list at the next draw.
+    #[cfg(test)]
+    pub(in crate::window_view) fn file_seek_offset(&mut self, offset: u64) {
+        let view = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
+        if let Some(view) = view.and_then(|file| file.view.as_mut()) {
+            view.seek_offset(offset);
+        }
+    }
+
     /// How many rows the hex body shows in `window`.
     #[cfg(test)]
     pub(in crate::window_view) fn file_hex_visible(&self, window: &Window, cx: &App) -> usize {

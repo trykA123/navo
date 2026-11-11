@@ -4,22 +4,26 @@
 use gpui_kit::{Action, Stateful};
 use navo_l10n::tr;
 
+use super::copy::FileBars;
+use super::file::FileView;
 use super::hex::visible_rows;
 use super::{FileScreen, FileState};
 use crate::commands::compare::{ViewBytes, ViewText};
 use crate::compare_diff::PairKind;
 use crate::prelude::*;
-use crate::tokens;
+use crate::tokens::{self, Theme};
 use crate::window_view::NavoWindow;
 use crate::window_view::viewer::MenuEntry;
 
 /// Which view the pair was forced into and the offset the switch in flight must land on.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(super) struct Switch {
     /// Whether the pair opens as bytes whatever its kind.
     bytes: bool,
     /// The left byte offset to show first; set from the request until its `Opened` lands.
     waiting: Option<u64>,
+    /// The text view kept drawn until the hex body has its first rows.
+    held: Option<FileView>,
 }
 
 impl Switch {
@@ -27,6 +31,40 @@ impl Switch {
     pub(super) fn landed(&mut self) -> Option<u64> {
         self.waiting.take()
     }
+
+    /// Keeps the text view that a landed switch to bytes replaces, so no frame is blank.
+    pub(super) fn hold(&mut self, view: Option<FileView>) {
+        self.held = view;
+    }
+
+    /// Drops the text view kept for the switch.
+    pub(super) fn release(&mut self) {
+        self.held = None;
+    }
+
+    /// Forgets the forced bytes view; true when it was set.
+    pub(super) fn unforce(&mut self) -> bool {
+        std::mem::take(&mut self.bytes)
+    }
+}
+
+/// The hex body of a binary pair; after Alt+V Show bytes the text view stays drawn instead
+/// until the hex body has its first rows (it asks for them meanwhile), so no frame is blank.
+pub(super) fn bytes_body(
+    file: &mut FileScreen,
+    (t, window, bars): (&Theme, &Window, FileBars),
+    cx: &mut Context<NavoWindow>,
+) -> Option<AnyElement> {
+    let hex = file.hex.as_ref()?;
+    if hex.ready(visible_rows(t, window)) {
+        file.switch.release();
+        return Some(hex.body(t, window, cx));
+    }
+    let Some(old) = file.switch.held.as_mut() else {
+        return Some(hex.body(t, window, cx));
+    };
+    hex.request_later(window, cx);
+    Some(old.list(file.look.layout_in(window), bars, cx))
 }
 
 /// Whether the file diff holds an opened text pair, the only kind Alt+V can show as bytes.
@@ -55,6 +93,20 @@ pub(super) fn entries(file: &FileScreen) -> Vec<MenuEntry> {
             run("cmd-compare-view-text", Box::new(ViewText)),
         ],
         _ => Vec::new(),
+    }
+}
+
+impl FileScreen {
+    /// Clears a forced bytes view when a reload lands as anything but a binary pair (the file
+    /// grew past the whole-file limit, say), so the menu and later reloads follow the file.
+    pub(super) fn drop_unfit_bytes(&mut self, kind: PairKind) {
+        if matches!(kind, PairKind::Binary) || !self.switch.unforce() {
+            return;
+        }
+        if let Some(id) = self.active.checked_add(1) {
+            (self.expected, self.active) = (Some(id), id);
+            self.control.view_as(id, false);
+        }
     }
 }
 
@@ -92,10 +144,8 @@ impl NavoWindow {
         let Some(id) = file.next_id() else {
             return cx.notify();
         };
-        file.switch = Switch {
-            bytes,
-            waiting: Some(offset),
-        };
+        file.switch.bytes = bytes;
+        file.switch.waiting = Some(offset);
         file.control.view_as(id, bytes);
         cx.notify();
     }

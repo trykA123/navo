@@ -20,6 +20,8 @@ pub(in crate::window_view) struct HexProbe {
     /// The most spans either side's byte cache holds, and the size that triggers eviction.
     pub(in crate::window_view) cached: usize,
     pub(in crate::window_view) cache_limit: usize,
+    /// The left byte offset the top row starts at; none on a gap.
+    pub(in crate::window_view) top_left: Option<u64>,
     pub(in crate::window_view) left_hex: Vec<Option<String>>,
     pub(in crate::window_view) status: Option<String>,
 }
@@ -42,6 +44,7 @@ impl HexView {
             status: self.status().map(|text| text.to_string()),
             cached: self.loaded.len(),
             cache_limit: CACHE_LIMIT,
+            top_left: self.rows.left_at(range.start),
             ready: self.left.is_some() || self.right.is_some() || self.error.is_some(),
             loaded: range
                 .clone()

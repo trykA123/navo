@@ -2,7 +2,7 @@
 //! Text / Bytes switch (V41b): the line on top becomes an offset, and an offset becomes a line.
 
 use super::FileView;
-use crate::compare_diff::{DiffRow, Layout, PairText, pair_rows};
+use crate::compare_diff::{DiffRow, Layout, PairText, pair_rows, row_count};
 
 /// The left line a diff row shows; an inserted row has none.
 fn left_line(row: DiffRow) -> Option<usize> {
@@ -14,36 +14,50 @@ fn left_line(row: DiffRow) -> Option<usize> {
     }
 }
 
+/// How many list rows one scan step reads.
+const STEP: usize = 4096;
+
+/// The first list row at or after `from` whose left line passes `stop`, with that line; the
+/// walk reads the real rows of `layout`, so interleaved and run-ordered lists both map right.
+fn scan_left(
+    text: &PairText,
+    layout: Layout,
+    from: usize,
+    stop: impl Fn(usize) -> bool,
+) -> Option<(usize, usize)> {
+    let mut start = from;
+    loop {
+        let shown = pair_rows(text, layout, start..start.saturating_add(STEP));
+        if shown.is_empty() {
+            return None;
+        }
+        let found = shown.iter().enumerate().find_map(|(at, row)| {
+            let (line, _) = row.left?;
+            stop(line as usize).then_some((start + at, line as usize))
+        });
+        if found.is_some() {
+            return found;
+        }
+        start = start.saturating_add(shown.len());
+    }
+}
+
 /// The left line list `row` shows, or the next one when the row has only a right side; the
-/// line count when the row is past the end or no left line follows.
+/// line count when no left line follows.
 fn line_at_row(text: &PairText, layout: Layout, row: usize) -> usize {
-    let shown = pair_rows(text, layout, row..row.saturating_add(1));
-    let Some(first) = shown.first().map(|shown| shown.row as usize) else {
-        return text.left.len();
-    };
-    let rows = text.rows.get(first..).unwrap_or_default();
-    rows.iter()
-        .find_map(|row| left_line(*row))
-        .unwrap_or(text.left.len())
+    scan_left(text, layout, row, |_| true).map_or(text.left.len(), |(_, line)| line)
 }
 
 /// The first list row that shows left line `line` or a later one; the last row when none does.
 fn row_of_line(text: &PairText, layout: Layout, line: usize) -> usize {
+    // A list row is never ahead of its `DiffRow` number, so the scan starts there.
     let at = text
         .rows
         .iter()
         .position(|row| left_line(*row).is_some_and(|shown| shown >= line))
         .unwrap_or(text.rows.len().saturating_sub(1));
-    match layout {
-        Layout::SideBySide => at,
-        Layout::Unified => {
-            let before = text.rows.get(..at).unwrap_or_default();
-            at + before
-                .iter()
-                .filter(|row| matches!(row, DiffRow::Changed(..)))
-                .count()
-        }
-    }
+    scan_left(text, layout, at, |shown| shown >= line)
+        .map_or_else(|| row_count(text, layout).saturating_sub(1), |(row, _)| row)
 }
 
 /// The byte offset where left line `line` starts; the file's end past the last line, 0 when
@@ -145,8 +159,8 @@ mod tests {
         assert_eq!(line_at_row(&text, Layout::SideBySide, 9), 5, "past the end");
         assert_eq!(
             line_at_row(&text, Layout::Unified, 5),
-            3,
-            "the changed row, inserted half"
+            4,
+            "the changed row, inserted half: the next left line"
         );
     }
 

@@ -11,8 +11,10 @@ use super::compare_screen::body::pair;
 use crate::commands::compare::{ViewBytes, ViewText};
 use crate::compare_diff::{DiffUpdate, Layout, PairKind, PairText};
 
+mod seek;
+
 /// Bytes per line of the sample text, so line `n` starts at byte `16 * n`.
-const LINE: u64 = 16;
+pub(super) const LINE: u64 = 16;
 
 /// A 400-line pair with one change on line 300 whose lines each start `LINE` bytes apart.
 fn text() -> PairText {
@@ -23,7 +25,7 @@ fn text() -> PairText {
 }
 
 /// Sends `Opened` for `request`.
-fn open(
+pub(super) fn open(
     cx: &mut TestAppContext,
     rig: &Rig,
     (request, kind): (u64, PairKind),
@@ -114,7 +116,7 @@ fn compare_switch_a_second_bytes_request_while_one_waits_sends_nothing(cx: &mut 
 }
 
 /// The labels the View menu offers for switching, read from the open pair.
-fn labels(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
+pub(super) fn labels(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
     rig.view.read_with(cx, |view, _| view.file_switch_labels())
 }
 
