@@ -37,12 +37,31 @@ pub(super) fn run(shared: &Arc<Shared>, detail: &DetailFn) {
             continue;
         };
         drop(state);
-        run_job(shared, detail, job);
+        let job_id = job.id;
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run_job(shared, detail, job);
+        }));
+        if result.is_err() {
+            tracing::warn!(id = job_id, "detail job panicked");
+        }
     }
 }
 
-/// Load and run one job, then free the lane whatever the job did.
+/// Frees the single detail lane when the job ends, normally or by unwinding.
+struct LaneGuard<'a> {
+    shared: &'a Shared,
+    job: &'a DetailJob,
+}
+
+impl Drop for LaneGuard<'_> {
+    fn drop(&mut self) {
+        self.shared.lock_state().end_detail(self.job);
+    }
+}
+
+/// Load and run one job; the lane guard frees it even when the job panics.
 fn run_job(shared: &Arc<Shared>, detail: &DetailFn, job: DetailJob) {
+    let _lane = LaneGuard { shared, job: &job };
     if let Some(input) = (shared.load)(&job.request) {
         let published: Cell<Option<Instant>> = Cell::new(None);
         let emit = |value: CardDetail, last: bool| {
@@ -58,7 +77,6 @@ fn run_job(shared: &Arc<Shared>, detail: &DetailFn, job: DetailJob) {
         };
         detail(&job, &input, &emit);
     }
-    shared.lock_state().end_detail(&job);
 }
 
 impl Shared {

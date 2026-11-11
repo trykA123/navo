@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -210,4 +210,148 @@ fn a_session_without_a_detail_fn_sends_no_details() {
     }
     let next = receiver.recv_timeout(Duration::from_millis(300));
     assert!(!matches!(next, Ok(StreamUpdate::Detail { .. })));
+}
+
+#[test]
+fn a_panicking_detail_job_does_not_stop_the_lane() {
+    let mut data = binary_data(10);
+    data.extend(binary_data(11));
+    let panicked = Arc::new(AtomicBool::new(false));
+    let panics = Arc::new(AtomicUsize::new(0));
+    let detail: DetailFn = {
+        let panicked = Arc::clone(&panicked);
+        let panics = Arc::clone(&panics);
+        Arc::new(move |job, _input, emit| {
+            if job.id == 10 {
+                panics.fetch_add(1, Ordering::SeqCst);
+                panicked.store(true, Ordering::SeqCst);
+                panic!("the detail job under test panicked");
+            }
+            emit(CardDetail::Failed("second".to_owned()), true);
+        })
+    };
+    let (sink, receiver) = channel();
+    let session = StreamSession::start_with(
+        sink,
+        BUDGET,
+        StreamParts {
+            load: simple_load(data.clone()),
+            viewed: not_viewed(),
+            detail: Some(detail),
+        },
+    );
+    session.focus(vec![10]);
+    session.set_items(1, items(&data, true));
+
+    let deadline = Instant::now() + WAIT;
+    while !panicked.load(Ordering::Acquire) {
+        assert!(Instant::now() < deadline, "the first job did not panic");
+        thread::sleep(Duration::from_millis(5));
+    }
+    session.focus(vec![11]);
+    let (id, detail) = next_detail(&receiver);
+    assert_eq!(id, 11);
+    assert_eq!(*detail, CardDetail::Failed("second".to_owned()));
+    assert_eq!(
+        panics.load(Ordering::SeqCst),
+        1,
+        "the panicking id was retried"
+    );
+}
+
+#[test]
+fn focus_away_does_not_overlap_a_second_detail_job() {
+    let mut data = binary_data(20);
+    data.extend(binary_data(21));
+    let active = Arc::new(AtomicUsize::new(0));
+    let maximum = Arc::new(AtomicUsize::new(0));
+    let first_done = Arc::new(AtomicBool::new(false));
+    let (entered, jobs) = mpsc::channel();
+    let held = Arc::new(Barrier::new(2));
+    let detail: DetailFn = {
+        let active = Arc::clone(&active);
+        let maximum = Arc::clone(&maximum);
+        let first_done = Arc::clone(&first_done);
+        let held = Arc::clone(&held);
+        Arc::new(move |job, _input, emit| {
+            let now = active.fetch_add(1, Ordering::SeqCst) + 1;
+            maximum.fetch_max(now, Ordering::SeqCst);
+            entered.send(job.id).unwrap();
+            if job.id == 20 {
+                held.wait();
+                active.fetch_sub(1, Ordering::SeqCst);
+                first_done.store(true, Ordering::SeqCst);
+                return;
+            }
+            assert!(
+                first_done.load(Ordering::SeqCst),
+                "the second job started before the first returned"
+            );
+            active.fetch_sub(1, Ordering::SeqCst);
+            emit(CardDetail::Failed("second".to_owned()), true);
+        })
+    };
+    let (sink, receiver) = channel();
+    let session = StreamSession::start_with(
+        sink,
+        BUDGET,
+        StreamParts {
+            load: simple_load(data.clone()),
+            viewed: not_viewed(),
+            detail: Some(detail),
+        },
+    );
+    session.focus(vec![20]);
+    session.set_items(1, items(&data, true));
+    assert_eq!(jobs.recv_timeout(WAIT).unwrap(), 20);
+
+    session.focus(vec![21]);
+    held.wait();
+    assert_eq!(jobs.recv_timeout(WAIT).unwrap(), 21);
+    assert_eq!(maximum.load(Ordering::SeqCst), 1);
+    assert_eq!(next_detail(&receiver).0, 21);
+}
+
+#[test]
+fn a_generation_change_drops_the_old_jobs_late_snapshot() {
+    let data = binary_data(30);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (started, entered) = mpsc::channel();
+    let held = Arc::new(Barrier::new(2));
+    let detail: DetailFn = {
+        let calls = Arc::clone(&calls);
+        let held = Arc::clone(&held);
+        Arc::new(move |_job, _input, emit| {
+            let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
+            if call == 1 {
+                started.send(()).unwrap();
+                held.wait();
+                emit(CardDetail::Failed("late".to_owned()), true);
+            }
+        })
+    };
+    let (sink, receiver) = channel();
+    let session = StreamSession::start_with(
+        sink,
+        BUDGET,
+        StreamParts {
+            load: simple_load(data.clone()),
+            viewed: not_viewed(),
+            detail: Some(detail),
+        },
+    );
+    session.focus(vec![30]);
+    session.set_items(1, items(&data, true));
+    entered.recv_timeout(WAIT).unwrap();
+
+    session.set_items(2, items(&data, true));
+    held.wait();
+    let deadline = Instant::now() + Duration::from_millis(300);
+    while Instant::now() < deadline {
+        match receiver.recv_timeout(Duration::from_millis(50)) {
+            Ok(StreamUpdate::Detail { .. }) => panic!("a stale detail escaped"),
+            Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
 }
