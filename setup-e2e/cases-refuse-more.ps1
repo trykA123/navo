@@ -196,6 +196,7 @@ function Test-S10c {
     Step-Page $wizard.Window 'i' 'Setup could not finish' 300
     $text = Get-UiText $wizard.Window
     Write-Evidence "Failed page:`n$text"
+    Save-WindowShot $wizard.Window 'S10c-failed-page.png'
     $logs = @([regex]::Matches($text, '[^\s`]+\.log') | ForEach-Object { $_.Value } | Sort-Object -Unique)
     Add-Fault (@($logs | Where-Object { $_ -match '-velopack\.log$' }).Count -ge 1) 'the Failed page names no Velopack log'
     Add-Fault (@($logs | Where-Object { $_ -notmatch '-velopack\.log$' }).Count -ge 1) 'the Failed page names no wizard log'

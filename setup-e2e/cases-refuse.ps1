@@ -253,25 +253,18 @@ function Test-S6 {
     Assert-Faults
 }
 
-# Evidence only, after a wrong exit: the same run with a deny of only file and folder creation.
-function Get-S15Diagnosis([string]$root) {
-    Run-Checked icacls.exe @($root, '/deny', 'u:(WD,AD)') | Out-Null
-    try { Invoke-Silent '0.0.3' | Out-Null }
-    finally { Run-Checked icacls.exe @($root, '/remove:d', 'u') | Out-Null }
-}
-
 # S15: a root u cannot write refuses the upgrade with exit 3, asks for no UAC and starts nothing.
 function Test-S15 {
     $root = Install-Default
     $before = Get-HashListing $root
     $script:consentSeen = @()
     $poll = { $script:consentSeen += @(Get-CimInstance Win32_Process -Filter "Name='consent.exe'" | ForEach-Object { $_.ProcessId }) }
-    Run-Checked icacls.exe @($root, '/deny', 'u:(W,AD)') | Out-Null
+    # (WD,AD), not (W): icacls's W includes SYNCHRONIZE, which stops discovery opening the root.
+    Run-Checked icacls.exe @($root, '/deny', 'u:(WD,AD)') | Out-Null
     try {
         Write-Evidence "root ACL during the run:`n$(Run-Checked icacls.exe @($root))"
         $result = Invoke-Silent '0.0.3' @() $poll
     } finally { Run-Checked icacls.exe @($root, '/remove:d', 'u') | Out-Null }
-    if ($result.Code -ne 3) { Get-S15Diagnosis $root }
     Assert ($result.Code -eq 3) "exit $($result.Code), not 3: $($result.Error)"
     Assert ($result.Error -match 'Setup cannot write') "no 'Setup cannot write' in: $($result.Error.Trim())"
     Assert ($script:consentSeen.Count -eq 0) "consent.exe ran: $($script:consentSeen -join ', ')"
