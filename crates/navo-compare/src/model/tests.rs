@@ -152,6 +152,7 @@ fn a_hundred_thousand_paired_rows_fit_in_fifty_megabytes() {
             generation: Generation::new(u64::try_from(index).unwrap()),
             content: ContentClass::Unknown,
             contains_differences: false,
+            differences_inside: 0,
         });
     }
 

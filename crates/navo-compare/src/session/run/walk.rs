@@ -238,6 +238,7 @@ fn folder_error(generation: Generation, folder: &RelPath, side: SideId, reason: 
         generation,
         content: ContentClass::Unknown,
         contains_differences: false,
+        differences_inside: 0,
     }
 }
 

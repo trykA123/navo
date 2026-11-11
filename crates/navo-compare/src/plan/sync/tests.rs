@@ -73,6 +73,7 @@ fn row(id: u64, left: Option<SideEntry>, right: Option<SideEntry>, status: Statu
         generation: Generation::new(GENERATION),
         content: ContentClass::Unknown,
         contains_differences: false,
+        differences_inside: 0,
     }
 }
 

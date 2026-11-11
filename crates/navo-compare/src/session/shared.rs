@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::model::{Generation, Reason, Row};
 use crate::queue::Progress;
@@ -135,6 +135,7 @@ impl Shared {
         let flagged = state.rollup.add_batch(&rows, parent);
         rows.extend(flagged);
         let is_final = final_batch(&mut state);
+        rows.extend(state.rollup.take_dirty(Instant::now(), is_final));
         send(&mut state, rows, is_final, None)
     }
 
@@ -153,6 +154,7 @@ impl Shared {
         let is_final = final_batch(&mut state);
         let mut rows = vec![row];
         rows.extend(flagged);
+        rows.extend(state.rollup.take_dirty(Instant::now(), is_final));
         send(&mut state, rows, is_final, None)
     }
 
@@ -166,6 +168,7 @@ impl Shared {
         let is_final = final_batch(&mut state);
         let mut rows = vec![row];
         rows.extend(flagged);
+        rows.extend(state.rollup.take_dirty(Instant::now(), is_final));
         send(&mut state, rows, is_final, None)
     }
 

@@ -1,6 +1,10 @@
-//! Folder roll-up: turns `contains_differences` on for the folders above a difference.
+//! Folder roll-up: flags and counts the differences below each folder row.
 
-use std::collections::HashMap;
+/// Least time between two sends of held (count-only) folder rows.
+const HOLD: Duration = Duration::from_millis(100);
+
+use std::collections::{BTreeSet, HashMap};
+use std::time::{Duration, Instant};
 
 use crate::model::{EntryKind, Row, Status};
 
@@ -10,9 +14,15 @@ struct Folder {
 }
 
 /// The folder rows of one generation, with their parents.
+///
+/// Every call that counts a difference is a transition into a difference status: the row was
+/// Checking or Same before, never already a difference.
 #[derive(Default)]
 pub(super) struct Rollup {
     folders: HashMap<u64, Folder>,
+    /// Folders whose count changed but were not sent yet.
+    dirty: BTreeSet<u64>,
+    last_taken: Option<Instant>,
 }
 
 impl Rollup {
@@ -20,9 +30,9 @@ impl Rollup {
     /// batch's differences newly flag. The caller sends the returned rows again.
     pub(super) fn add_batch(&mut self, rows: &[Row], parent: Option<u64>) -> Vec<Row> {
         let mut changed = Vec::new();
-        let mut differs = false;
+        let mut differs = 0;
         for row in rows {
-            differs = differs || row.raw_status.is_difference();
+            differs += u32::from(row.raw_status.is_difference());
             if is_folder(row) {
                 let folder = Folder {
                     row: row.clone(),
@@ -31,8 +41,8 @@ impl Rollup {
                 self.folders.insert(row.id, folder);
             }
         }
-        if differs {
-            self.flag_from(parent, &mut changed);
+        if differs > 0 {
+            self.flag_from(parent, differs, &mut changed);
         }
         changed
     }
@@ -41,7 +51,7 @@ impl Rollup {
     pub(super) fn resolve(&mut self, parent: Option<u64>, status: Status) -> Vec<Row> {
         let mut changed = Vec::new();
         if status.is_difference() {
-            self.flag_from(parent, &mut changed);
+            self.flag_from(parent, 1, &mut changed);
         }
         changed
     }
@@ -53,21 +63,48 @@ impl Rollup {
             return changed;
         };
         row.contains_differences = folder.row.contains_differences;
+        row.differences_inside = folder.row.differences_inside;
         folder.row = row.clone();
         let parent = folder.parent;
         if row.raw_status.is_difference() && !previous.is_difference() {
-            self.flag_from(parent, &mut changed);
+            self.flag_from(parent, 1, &mut changed);
         }
         changed
     }
 
-    fn flag_from(&mut self, mut parent: Option<u64>, changed: &mut Vec<Row>) {
-        while let Some(folder) = parent.and_then(|id| self.folders.get_mut(&id)) {
-            if folder.row.contains_differences {
+    /// Returns the held folder rows (each once, latest count) when `is_final` or when 100 ms
+    /// passed since the last return; otherwise nothing.
+    pub(super) fn take_dirty(&mut self, now: Instant, is_final: bool) -> Vec<Row> {
+        let due = self
+            .last_taken
+            .is_none_or(|last| now.duration_since(last) >= HOLD);
+        if self.dirty.is_empty() || !(is_final || due) {
+            return Vec::new();
+        }
+        self.last_taken = Some(now);
+        let ids = std::mem::take(&mut self.dirty);
+        let folders = &self.folders;
+        ids.iter()
+            .filter_map(|id| folders.get(id))
+            .map(|folder| folder.row.clone())
+            .collect()
+    }
+
+    /// Adds `count` differences to every ancestor. An ancestor newly flagged goes to `changed`
+    /// at once; the others are held as dirty for `take_dirty`.
+    fn flag_from(&mut self, mut parent: Option<u64>, count: u32, changed: &mut Vec<Row>) {
+        while let Some(id) = parent {
+            let Some(folder) = self.folders.get_mut(&id) else {
                 return;
+            };
+            folder.row.differences_inside += count;
+            if folder.row.contains_differences {
+                self.dirty.insert(id);
+            } else {
+                folder.row.contains_differences = true;
+                self.dirty.remove(&id);
+                changed.push(folder.row.clone());
             }
-            folder.row.contains_differences = true;
-            changed.push(folder.row.clone());
             parent = folder.parent;
         }
     }
