@@ -305,3 +305,11 @@ compare-image-note-format = This picture format cannot be compared.
 compare-image-note-pixels = Too many pixels to compare: the mask is missing.
 compare-image-note-encoded = The file is too large to decode: the mask is missing.
 compare-image-note-decode = A side cannot be decoded: the mask is missing.
+
+compare-gutter-changed = changed
+compare-gutter-only-left = ◀ only
+compare-gutter-only-right = only ▶
+compare-gutter-type = type ≠
+compare-gutter-inside = { $count } inside
+compare-gutter-rules = same*
+compare-gutter-checking = { $percent }%
