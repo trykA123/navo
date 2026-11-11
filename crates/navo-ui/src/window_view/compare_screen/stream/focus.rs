@@ -24,15 +24,13 @@ impl StreamScreen {
     /// drops cards more than 200 items away. Returns whether rows changed.
     pub(super) fn send_focus(&mut self) -> bool {
         let visible = self.model.visible();
-        let Some(last) = visible.len().checked_sub(1) else {
+        if visible.is_empty() {
             return false;
-        };
+        }
         let (low, high) = self.in_view(&visible).unwrap_or((0, 0));
         if self.sent != Some((low, high)) {
             self.sent = Some((low, high));
-            let near = low.saturating_sub(FOCUS_MARGIN)..=(high + FOCUS_MARGIN).min(last);
-            let items = self.model.items();
-            let ids = visible[near].iter().map(|&at| items[at].id).collect();
+            let ids = self.near_ids();
             self.control.focus(ids);
         }
         let dropped = self.evict_far(&visible, (low, high));
@@ -40,6 +38,22 @@ impl StreamScreen {
             self.sync_rows();
         }
         dropped
+    }
+
+    /// The ids the app last heard as the focus: those from `FOCUS_MARGIN` before the view to
+    /// `FOCUS_MARGIN` after it, empty before any focus was sent. The detail lane works through
+    /// this list, and so do the GPU thumbnails held for it (D26.1, D26.3).
+    pub(super) fn near_ids(&self) -> Vec<u64> {
+        let visible = self.model.visible();
+        let Some(last) = visible.len().checked_sub(1) else {
+            return Vec::new();
+        };
+        let Some((low, high)) = self.sent else {
+            return Vec::new();
+        };
+        let near = low.saturating_sub(FOCUS_MARGIN)..=(high + FOCUS_MARGIN).min(last);
+        let items = self.model.items();
+        visible[near].iter().map(|&at| items[at].id).collect()
     }
 
     /// Drops the cards that arrived or stayed more than 200 items from the view, without
