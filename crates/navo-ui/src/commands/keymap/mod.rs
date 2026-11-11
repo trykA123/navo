@@ -23,7 +23,14 @@ pub(crate) use parse::also_in;
 pub use parse::{KeymapError, normal as normal_key};
 pub use shown::shown;
 
-const BUILTIN: &str = include_str!("../keymap.toml");
+/// The compare screen's keys, which Sidewise's keymap includes (NC11).
+pub const COMPARE_KEYMAP: &str = include_str!("../compare_keymap.toml");
+
+const BUILTIN: &str = concat!(
+    include_str!("../keymap.toml"),
+    "\n",
+    include_str!("../compare_keymap.toml")
+);
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Bind {
@@ -117,5 +124,30 @@ impl Keymap {
             && self
                 .keys_of(command)
                 .any(|bound| parse::normal(bound) == wanted)
+    }
+}
+
+#[cfg(test)]
+mod fragment_tests {
+    use super::{BUILTIN, COMPARE_KEYMAP, Keymap};
+
+    #[test]
+    fn compare_fragment_holds_only_compare_contexts() {
+        let keymap = Keymap::parse(COMPARE_KEYMAP).expect("compare keymap");
+        assert!(!keymap.binds().is_empty());
+        for bind in keymap.binds() {
+            assert!(
+                bind.context.starts_with("Compare"),
+                "{} sits in {}",
+                bind.spec.name,
+                bind.context
+            );
+        }
+    }
+
+    #[test]
+    fn builtin_keymap_parses_with_the_fragment() {
+        let keymap = Keymap::parse(BUILTIN).expect("builtin keymap");
+        assert_eq!(keymap.binds().len(), 555);
     }
 }

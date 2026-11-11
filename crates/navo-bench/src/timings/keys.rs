@@ -15,7 +15,11 @@ pub(super) fn keys() -> Vec<Key> {
 mod tests {
     use super::*;
 
-    const KEYMAP: &str = include_str!("../../../navo-ui/src/commands/keymap.toml");
+    const KEYMAP: &str = concat!(
+        include_str!("../../../navo-ui/src/commands/keymap.toml"),
+        "\n",
+        include_str!("../../../navo-ui/src/commands/compare_keymap.toml")
+    );
     /// Contexts of viewers, trees and the layout mode (only while its switcher has focus); the file list is not among them.
     const READ_ONLY_PREFIXES: [&str; 8] = [
         "viewer.",
