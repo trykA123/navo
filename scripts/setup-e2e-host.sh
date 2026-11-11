@@ -34,7 +34,7 @@ SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyCheckin
   -o "UserKnownHostsFile=$RUN/known_hosts" -o LogLevel=ERROR)
 
 # A case that needs more than one clean start runs as parts; it passes only when every part does.
-declare -A PARTS=([S9]="S9a S9b")
+declare -A PARTS=([S9]="S9a S9b" [S3b]="S3b1 S3b2" [S10]="S10a S10b S10c" [S14]="S14a S14b S14c")
 
 # Takes the CI lock on fd 9, retrying until LOCK_WAIT seconds pass; exits 75 when it stays busy.
 take_lock() {

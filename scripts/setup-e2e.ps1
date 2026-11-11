@@ -1,11 +1,13 @@
 # Runs inside the Windows VM for the installer's end-to-end cases (plan W15a).
 # -MakeBase builds the base once, -WaitLogon waits for u's desktop, -Launch starts a case in u's session, -Case runs it.
+# -Helper runs a case's second account step (S7 as a), started by the case itself.
 #requires -Version 5.1
 param(
     [string]$Case,
     [switch]$MakeBase,
     [switch]$WaitLogon,
-    [switch]$Launch
+    [switch]$Launch,
+    [switch]$Helper
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -134,6 +136,7 @@ function Build-Wizards([string]$source) {
 }
 
 # Builds the S10 fake payloads; each sleeps 5 s and exits 1, and fail-partial first writes partial.txt.
+# fail-apply\ holds a copy of the 0.0.3 nupkg whose Squirrel.exe (the new Update.exe) only exits 1.
 function New-Fakes {
     $folder = Join-Path $e2e 'fakes'
     New-Item -ItemType Directory -Path $folder -Force | Out-Null
@@ -141,6 +144,37 @@ function New-Fakes {
     $write = 'for (int i = 0; i + 1 < a.Length; i++) if (a[i] == "--installto") { System.IO.Directory.CreateDirectory(a[i + 1]); System.IO.File.WriteAllText(System.IO.Path.Combine(a[i + 1], "partial.txt"), "x"); }'
     Add-Type -TypeDefinition $body.Replace('%WRITE%', '') -OutputType ConsoleApplication -OutputAssembly (Join-Path $folder 'fail-empty.exe')
     Add-Type -TypeDefinition $body.Replace('%WRITE%', $write) -OutputType ConsoleApplication -OutputAssembly (Join-Path $folder 'fail-partial.exe')
+    $updater = Join-Path $folder 'fail-apply-updater.exe'
+    Add-Type -TypeDefinition 'public static class Q { public static int Main() { return 1; } }' -OutputType ConsoleApplication -OutputAssembly $updater
+    $apply = Join-Path $folder 'fail-apply'
+    New-Item -ItemType Directory -Path $apply -Force | Out-Null
+    $nupkg = Get-PackFile '0.0.3' '*-full.nupkg'
+    $copy = Join-Path $apply (Split-Path $nupkg -Leaf)
+    Copy-Item -LiteralPath $nupkg -Destination $copy -Force
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $archive = [IO.Compression.ZipFile]::Open($copy, [IO.Compression.ZipArchiveMode]::Update)
+    try {
+        $entries = @($archive.Entries | Where-Object { $_.Name -eq 'Squirrel.exe' })
+        Assert ($entries.Count -eq 1) "expected one Squirrel.exe in $copy"
+        $name = $entries[0].FullName
+        $entries[0].Delete()
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $updater, $name)
+    } finally { $archive.Dispose() }
+}
+
+# Builds wizards that embed S10's fakes, because only a wizard without arguments opens its window.
+# fail-empty and fail-partial carry a fake Setup.exe as 0.0.2; fail-apply carries the fail-apply nupkg as 0.0.3.
+function Build-FakeWizards([string]$source) {
+    $fakes = Join-Path $e2e 'fakes'
+    $apply = @(Get-ChildItem -LiteralPath (Join-Path $fakes 'fail-apply') -Filter '*-full.nupkg')
+    Assert ($apply.Count -eq 1) 'expected one fail-apply nupkg'
+    $base = Get-PackFile '0.0.2' '*-full.nupkg'
+    foreach ($build in @(@('fail-empty', '0.0.2', (Join-Path $fakes 'fail-empty.exe'), $base),
+            @('fail-partial', '0.0.2', (Join-Path $fakes 'fail-partial.exe'), $base),
+            @('fail-apply', '0.0.3', (Get-PackFile '0.0.3' '*Setup.exe'), $apply[0].FullName))) {
+        Set-SetupVersion $source $build[1]
+        Build-Wizard $build[0] $source @{ NAVO_SETUP_PAYLOAD = $build[2]; NAVO_SETUP_PACKAGE = $build[3]; NAVO_SETUP_REQUIRE_PAYLOAD = '1' } @()
+    }
 }
 
 # Makes the base's content: accounts, packs 0.0.1 to 0.0.3, wizards and fakes. Nothing is installed.
@@ -157,6 +191,7 @@ function Invoke-MakeBase {
     }
     Build-Wizards $source
     New-Fakes
+    Build-FakeWizards $source
     $out = Join-Path $e2e 'out'
     New-Item -ItemType Directory -Path $out -Force | Out-Null
     Run-Checked icacls.exe @($out, '/grant', 'u:(OI)(CI)M', 'a:(OI)(CI)M') | Out-Null
@@ -175,9 +210,19 @@ function Invoke-WaitLogon {
 }
 
 # Registers and starts the case as u in the interactive session; the task outlives this SSH call.
+# A case's Initialize-<case> runs here first, as the SSH admin; when it fails, the case ends FAIL at once.
 function Invoke-Launch([string]$name) {
     $folder = Join-Path $e2e "out\$name"
     New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    if (Get-Command "Initialize-$name" -ErrorAction SilentlyContinue) {
+        try { & "Initialize-$name" }
+        catch {
+            $utf8 = New-Object Text.UTF8Encoding($false)
+            [IO.File]::WriteAllText((Join-Path $folder 'result.txt'), "FAIL ${name}: set-up: $($_.Exception.Message)`r`n", $utf8)
+            [IO.File]::WriteAllText((Join-Path $folder 'done'), '', $utf8)
+            return
+        }
+    }
     # vpk moves its output from admin's TEMP, so those files keep a private ACL that u cannot read.
     Run-Checked icacls.exe @($packages, '/reset', '/T', '/Q') | Out-Null
     $arguments = Quote-Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $e2e 'scripts\setup-e2e.ps1'), '-Case', $name)
@@ -215,6 +260,7 @@ function Invoke-Case([string]$name) {
 if ($MakeBase) { Invoke-MakeBase }
 elseif ($WaitLogon) { Invoke-WaitLogon }
 elseif ($Launch) { Invoke-Launch $Case }
+elseif ($Helper) { & "Invoke-${Case}Helper" }
 elseif ($Case) { Invoke-Case $Case }
 else { throw 'give -MakeBase, -WaitLogon, -Launch -Case <case> or -Case <case>' }
 exit 0
