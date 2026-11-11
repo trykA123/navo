@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Folder Compare Marks</title>
+<!-- Navo folder compare: four directions for status colours and marks, behind one picker. Base tokens from crates/navo-ui/src/tokens (Open Sea). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --rail: oklch(95.5% 0.012 225); --background: oklch(98.5% 0.008 225); --surface: oklch(99.8% 0 225);
+  --line: oklch(89% 0.014 225); --text: oklch(22% 0.014 225); --muted: oklch(48.8% 0.017 225);
+  --faint: oklch(64.8% 0.017 225); --hover: oklch(94.25% 0.027 218); --selection: oklch(90% 0.046 218);
+  --accent: oklch(52% 0.092 218); --accent-text: oklch(48.8% 0.086 218); --folder: oklch(49.6% 0.102 80);
+  /* status tones: text, solid badge, row tint, strong fill. Conflict gets its own hue (335), apart from delete (27). */
+  --del-text: oklch(50% 0.17 27);  --del-row: oklch(94.5% 0.04 27);  --del-fill: oklch(90% 0.06 27);
+  --add-text: oklch(46% 0.12 150); --add-row: oklch(94.5% 0.045 150); --add-fill: oklch(89.5% 0.07 150);
+  --chg-text: oklch(48% 0.11 70);  --chg-row: oklch(95% 0.05 80);   --chg-fill: oklch(90% 0.065 78);
+  --cfl-text: oklch(48% 0.16 335); --cfl-row: oklch(94.5% 0.04 335); --cfl-fill: oklch(90% 0.06 335);
+  --busy-text: var(--accent-text); --busy-row: var(--hover);
+  --on-badge: oklch(99.8% 0 225);
+  --gap: oklch(91% 0.006 260); --gap-line: oklch(84% 0.008 260);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --rail: oklch(19% 0.014 225); --background: oklch(22.5% 0.014 225); --surface: oklch(26.5% 0.014 225);
+  --line: oklch(33% 0.014 225); --text: oklch(93.8% 0.014 225); --muted: oklch(72% 0.017 225);
+  --faint: oklch(54.8% 0.017 225); --hover: oklch(27.75% 0.036 218); --selection: oklch(33% 0.058 218);
+  --accent: oklch(76% 0.11 218); --accent-text: oklch(76% 0.11 218); --folder: oklch(82% 0.13 80);
+  --del-text: oklch(76% 0.13 27);  --del-row: oklch(27% 0.05 27);  --del-fill: oklch(36% 0.09 27);
+  --add-text: oklch(78% 0.13 150); --add-row: oklch(27% 0.05 150); --add-fill: oklch(36% 0.08 150);
+  --chg-text: oklch(82% 0.12 78);  --chg-row: oklch(28% 0.045 78); --chg-fill: oklch(36% 0.08 78);
+  --cfl-text: oklch(78% 0.13 335); --cfl-row: oklch(27% 0.05 335); --cfl-fill: oklch(36% 0.09 335);
+  --on-badge: oklch(22.5% 0.014 225);
+  --gap: oklch(23% 0.01 260); --gap-line: oklch(29% 0.012 260);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --rail: oklch(19% 0.014 225); --background: oklch(22.5% 0.014 225); --surface: oklch(26.5% 0.014 225);
+  --line: oklch(33% 0.014 225); --text: oklch(93.8% 0.014 225); --muted: oklch(72% 0.017 225);
+  --faint: oklch(54.8% 0.017 225); --hover: oklch(27.75% 0.036 218); --selection: oklch(33% 0.058 218);
+  --accent: oklch(76% 0.11 218); --accent-text: oklch(76% 0.11 218); --folder: oklch(82% 0.13 80);
+  --del-text: oklch(76% 0.13 27);  --del-row: oklch(27% 0.05 27);  --del-fill: oklch(36% 0.09 27);
+  --add-text: oklch(78% 0.13 150); --add-row: oklch(27% 0.05 150); --add-fill: oklch(36% 0.08 150);
+  --chg-text: oklch(82% 0.12 78);  --chg-row: oklch(28% 0.045 78); --chg-fill: oklch(36% 0.08 78);
+  --cfl-text: oklch(78% 0.13 335); --cfl-row: oklch(27% 0.05 335); --cfl-fill: oklch(36% 0.09 335);
+  --on-badge: oklch(22.5% 0.014 225);
+  --gap: oklch(23% 0.01 260); --gap-line: oklch(29% 0.012 260);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--background); color: var(--text); font: 13px/1.4 Inter, system-ui, sans-serif; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* picker */
+.picker { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 10px 16px; background: var(--rail); border-bottom: 1px solid var(--line); }
+.picker .group { display: flex; gap: 4px; flex-wrap: wrap; }
+.picker button { border: 1px solid var(--line); background: var(--surface); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+.picker button[aria-pressed="true"] { background: var(--selection); border-color: var(--accent); font-weight: 600; }
+.picker .note { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.spacer { flex: 1; }
+
+/* app frame */
+.app { margin: 16px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.head { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); background: var(--rail); }
+.head div { padding: 8px 12px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.head div + div { border-left: 1px solid var(--line); }
+.bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--selection); }
+.chip .n { font-weight: 700; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.running { color: var(--busy-text); margin-left: auto; font-size: 12px; }
+
+.t-del { --t: var(--del-text); --r: var(--del-row); --f: var(--del-fill); }
+.t-add { --t: var(--add-text); --r: var(--add-row); --f: var(--add-fill); }
+.t-chg { --t: var(--chg-text); --r: var(--chg-row); --f: var(--chg-fill); }
+.t-cfl { --t: var(--cfl-text); --r: var(--cfl-row); --f: var(--cfl-fill); }
+.t-busy { --t: var(--busy-text); --r: var(--busy-row); --f: var(--busy-row); }
+.t-same { --t: var(--muted); --r: transparent; --f: transparent; }
+.dot { background: var(--t); }
+
+.rows { list-style: none; margin: 0; padding: 4px 0; }
+.name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-name { color: var(--folder); }
+.meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.gapcell { background: repeating-linear-gradient(135deg, var(--gap) 0 6px, var(--gap-line) 6px 7px); border-radius: 5px; min-height: 28px; }
+.ind { display: inline-block; flex: none; }
+.newer { color: var(--text); font-weight: 600; }
+
+/* ---------- Direction 1: tinted rows, solid badges, edge bar ---------- */
+.d1 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 1px 4px; }
+.d1 .cell { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 10px 0 12px; margin: 0 2px;
+  border-radius: 5px; background: var(--r); position: relative; min-width: 0; }
+.d1 .cell::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 2px; background: var(--t); }
+.d1 .t-same .cell::before { display: none; }
+.d1 .badge { width: 20px; height: 20px; border-radius: 4px; display: grid; place-items: center; flex: none;
+  background: var(--t); color: var(--on-badge); font: 700 14px "JetBrains Mono", monospace; }
+.d1 .t-same .badge { background: transparent; color: var(--faint); }
+.d1 .cell .name { flex: 1; font-weight: 600; color: var(--t); }
+.d1 .t-same .cell .name { font-weight: 400; color: var(--text); }
+.d1 .t-same .cell .name.folder-name { color: var(--folder); }
+.d1 .words { color: var(--t); font-size: 12px; white-space: nowrap; }
+.d1 .meta { width: 150px; text-align: right; }
+
+/* ---------- Direction 2: centre gutter, map strip, newer side marked ---------- */
+.d2 .body { display: grid; grid-template-columns: 1fr 14px; }
+.d2 .row { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: stretch; }
+.d2 .cell { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; min-width: 0; }
+.d2 .row:nth-child(even) .cell { background: color-mix(in oklch, var(--rail) 55%, transparent); }
+.d2 .cell .name { flex: 1; color: var(--text); }
+.d2 :not(.t-same) > .cell .name { color: var(--t); font-weight: 600; }
+.d2 .gut { display: grid; place-items: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); background: var(--rail); }
+.d2 .g { min-width: 26px; height: 20px; border-radius: 10px; display: grid; place-items: center; padding: 0 5px;
+  font: 700 13px "JetBrains Mono", monospace; color: var(--t); background: var(--r); border: 1px solid var(--t); }
+.d2 .t-same .g { border: 0; background: none; color: var(--muted); }
+.d2.words .row { grid-template-columns: 1fr 84px 1fr; }
+.d2.words .g { font: 600 11.5px Inter, sans-serif; padding: 0 8px; white-space: nowrap; }
+.d2 .meta { display: flex; gap: 10px; }
+.d2 .map { border-left: 1px solid var(--line); background: var(--rail); position: relative; }
+.d2 .tick { position: absolute; left: 3px; right: 3px; height: 4px; border-radius: 2px; background: var(--t); }
+
+/* ---------- Direction 3: one ledger with words and deltas ---------- */
+.d3 .table { width: 100%; border-collapse: collapse; }
+.d3 th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.d3 td { padding: 6px 10px; border-bottom: 1px solid color-mix(in oklch, var(--line) 60%, transparent); vertical-align: middle; }
+.d3 .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px;
+  font-weight: 600; color: var(--t); background: var(--r); border: 1px solid color-mix(in oklch, var(--t) 45%, transparent); white-space: nowrap; }
+.d3 .t-same .pill { border-color: transparent; background: none; font-weight: 500; }
+.d3 .delta { color: var(--t); font-weight: 600; white-space: nowrap; }
+.d3 .absent { color: var(--faint); font-style: italic; }
+.d3 td.nm { max-width: 320px; }
+.d3 .meta { display: block; }
+
+/* ---------- Direction 4: strong fills, same rows folded, folder composition ---------- */
+.d4 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 2px 6px; }
+.d4 .cell { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 10px; border-radius: 6px; background: var(--f); min-width: 0; }
+.d4 .t-same .cell { background: none; color: var(--muted); }
+.d4 .t-same .cell .name.folder-name { color: var(--folder); }
+.d4 .cell .name { flex: 1; font-weight: 600; }
+.d4 .t-same .cell .name { font-weight: 400; }
+.d4 .glyph { font: 700 14px "JetBrains Mono", monospace; width: 16px; text-align: center; flex: none; }
+.d4 .comp { display: flex; width: 72px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); flex: none; }
+.d4 .comp span { display: block; height: 100%; background: var(--t); }
+.d4 .fold { margin: 2px 6px; padding: 5px 10px; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); cursor: pointer;
+  background: none; width: calc(100% - 12px); text-align: left; }
+.d4 .tag { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+
+.legend { margin: 0 16px 24px; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 14px; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+
+/* phone width: one column, both sides stacked inside the row */
+@media (max-width: 720px) {
+  .app { margin: 12px 8px; }
+  .head { grid-template-columns: 1fr; }
+  .head div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .d1 .row, .d4 .row { grid-template-columns: 1fr; gap: 2px; }
+  /* one line per pair: the side that exists; the gap is not drawn */
+  .d1 .row > .gapcell, .d4 .row > .gapcell { display: none; }
+  .d1 .row:not(:has(> .gapcell)) > :nth-child(2), .d4 .row:not(:has(> .gapcell)) > :nth-child(2) { display: none; }
+  .d4 .meta { display: none; }
+  .d3 .meta { display: inline; }
+  .d3 td.lt:empty, .d3 td.rt:empty, .d3 td.dl:empty { display: none; }
+  .d1 .meta, .d1 .words, .d2 .meta { display: none; }
+  .d2 .row { grid-template-columns: 1fr 40px 1fr; }
+  .d2.words .row { grid-template-columns: 1fr 66px 1fr; }
+  .d2.words .g { padding: 0 4px; font-size: 10.5px; }
+  .d2 .cell { padding: 0 6px; }
+  .d3 thead { display: none; }
+  .d3 tr { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .d3 td { border: 0; padding: 0; }
+  .d3 td.st { grid-row: span 2; }
+  .d3 td.nm { max-width: none; min-width: 0; }
+  .d3 td.lt, .d3 td.rt, .d3 td.dl { grid-column: 2; }
+  .d3 td.lt::before { content: "L "; color: var(--faint); }
+  .d3 td.rt::before { content: "R "; color: var(--faint); }
+  .d4 .comp { width: 48px; }
+}
+@media (prefers-reduced-motion: no-preference) { .chip, .picker button { transition: background-color .12s; } }
+
+/* ---------- file view (all directions) ---------- */
+:root { --syn-kw: oklch(50% 0.125 40); --syn-ty: oklch(41% 0.08 82); --syn-fn: oklch(48% 0.075 210); --syn-num: oklch(49% 0.1 330);
+  --syn-str: oklch(48% 0.1 145); --syn-com: oklch(54% 0.015 60); --syn-mac: oklch(46% 0.07 62); --syn-com-tint: oklch(48% 0.015 60); }
+:root[data-theme="dark"] { --syn-kw: oklch(75% 0.095 40); --syn-ty: oklch(85% 0.075 82); --syn-fn: oklch(80% 0.065 210); --syn-num: oklch(77% 0.075 330);
+  --syn-str: oklch(80% 0.08 145); --syn-com: oklch(64% 0.014 60); --syn-mac: oklch(80% 0.06 62); --syn-com-tint: oklch(76% 0.014 60); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --syn-kw: oklch(75% 0.095 40); --syn-ty: oklch(85% 0.075 82);
+  --syn-fn: oklch(80% 0.065 210); --syn-num: oklch(77% 0.075 330); --syn-str: oklch(80% 0.08 145); --syn-com: oklch(64% 0.014 60);
+  --syn-mac: oklch(80% 0.06 62); --syn-com-tint: oklch(76% 0.014 60); } }
+.s-kw { color: var(--syn-kw); } .s-ty { color: var(--syn-ty); } .s-fn { color: var(--syn-fn); } .s-num { color: var(--syn-num); }
+.s-str { color: var(--syn-str); } .s-com { color: var(--syn-com); font-style: italic; } .s-mac { color: var(--syn-mac); } .s-pp { color: var(--syn-kw); }
+.tinted .s-com { color: var(--syn-com-tint); }
+
+.fbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.fbar .path { font-weight: 600; }
+.fbar button { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.fbar button[aria-pressed="true"] { border-color: var(--accent); background: var(--selection); }
+.fbar .stat { color: var(--muted); font-size: 12px; }
+.fbar .stat b { font-weight: 700; }
+.kbd { font: 600 11px "JetBrains Mono", monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--muted); }
+.opens { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+
+.code { font: 12.5px/20px "JetBrains Mono", ui-monospace, monospace; }
+.split { display: grid; grid-template-columns: 1fr 1fr; }
+.split.has-gut { grid-template-columns: 1fr 40px 1fr 12px; }
+.side { display: grid; grid-template-columns: 44px 1fr; min-width: 0; border-right: 1px solid var(--line); }
+.side:last-of-type { border-right: 0; }
+.nums { background: var(--rail); color: var(--muted); text-align: right; user-select: none; }
+.nums div, .lines .ln { height: 20px; }
+.nums div { padding-right: 8px; }
+.hs { overflow-x: auto; overflow-y: hidden; min-width: 0; scrollbar-width: thin; }
+.lines { display: inline-block; min-width: 100%; }
+.lines .ln { white-space: pre; padding: 0 12px 0 10px; position: relative; }
+.ln.gap { background: repeating-linear-gradient(135deg, var(--gap) 0 6px, var(--gap-line) 6px 7px); }
+.gutcol { background: var(--rail); border-right: 1px solid var(--line); }
+.gutcol div { height: 20px; display: grid; place-items: center; }
+.mapcol { position: relative; background: var(--rail); border-left: 1px solid var(--line); }
+.mapcol .tick { position: absolute; left: 2px; right: 2px; border-radius: 2px; background: var(--t); min-height: 3px; }
+
+/* wrapped: one grid row per pair, so both sides share a height */
+.wrapgrid { display: grid; grid-template-columns: 44px 1fr 44px 1fr; }
+.wrapgrid.has-gut { grid-template-columns: 44px 1fr 40px 44px 1fr; }
+.wrapgrid > .n { background: var(--rail); color: var(--muted); text-align: right; padding-right: 8px; user-select: none; }
+.wrapgrid > .c { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 12px 0 10px; min-width: 0; position: relative; border-right: 1px solid var(--line); }
+.wrapgrid > .c.gap { background: repeating-linear-gradient(135deg, var(--gap) 0 6px, var(--gap-line) 6px 7px); }
+.wrapgrid > .g { background: var(--rail); display: grid; place-items: start center; padding-top: 0; border-right: 1px solid var(--line); }
+
+/* unified (direction 3, and every direction at phone width) */
+.uni { display: grid; grid-template-columns: auto 1fr; }
+.uni .unums { background: var(--rail); color: var(--muted); user-select: none; }
+.uni .unums div { height: 20px; display: grid; grid-template-columns: 34px 34px 18px; text-align: right; }
+.uni .unums span { padding-right: 6px; }
+.uni.wrap { display: block; }
+.uni.wrap .urow { display: grid; grid-template-columns: 34px 34px 18px 1fr; }
+.uni.wrap .urow > span { background: var(--rail); color: var(--muted); text-align: right; padding-right: 6px; }
+.uni.wrap .urow > .c { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 12px 0 8px; background: none; color: inherit; text-align: left; position: relative; }
+.fold-line { height: 20px; box-sizing: border-box; display: flex; align-items: center; padding: 0 12px; color: var(--muted); font: 12px Inter, sans-serif;
+  background: var(--rail); border-block: 1px dashed var(--line); }
+
+/* direction looks inside the file */
+.fd1 .tone:not(.t-same) { background: var(--r); }
+.fd1 .tone:not(.t-same)::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--t); }
+.fd1 .w { background: var(--f); border-radius: 3px; }
+.fd2 .w { background: var(--r); box-shadow: inset 0 -2px 0 var(--t); }
+.fd2 .gchip { min-width: 22px; height: 16px; border-radius: 8px; display: grid; place-items: center; font: 700 11px "JetBrains Mono", monospace;
+  color: var(--t); border: 1px solid var(--t); background: var(--r); font-size: 12px; }
+.fd3 .tone.t-del, .fd3 .tone.t-add { background: var(--r); }
+.fd3 .w { background: var(--f); border-radius: 3px; }
+.fd3 .sign { font-weight: 700; color: var(--t); }
+.fd4 .tone:not(.t-same) { background: var(--f); color: var(--text); }
+.fd4 .tone:not(.t-same) [class^="s-"] { color: inherit; font-style: normal; }
+.fd4 .w { text-decoration: underline 2px var(--t); text-underline-offset: 3px; font-weight: 700; }
+
+.hint { padding: 8px 12px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div class="picker" role="toolbar" aria-label="Directions">
+  <div class="group" id="dirs"></div>
+  <div class="group" id="views"></div>
+  <span class="spacer"></span>
+  <div class="group">
+    <button id="theme" type="button" aria-label="Switch theme">Light / Dark</button>
+  </div>
+  <p class="note" id="note"></p>
+</div>
+
+<div class="app" id="app">
+  <div class="head"><div class="mono">C:\proj\firmware-v2</div><div class="mono">D:\backup\firmware-v2</div></div>
+  <div class="bar" id="bar"></div>
+  <div id="view"></div>
+</div>
+<div class="legend" id="legend"></div>
+
+<script>
+/** Sample compare rows: depth, name, kind per side (f file, d folder, null missing), status, sizes in bytes, times. */
+const ROWS = [
+  { d: 0, n: "build", k: ["d", "d"], s: "contains", c: { chg: 2, del: 1, add: 1, cfl: 0 } },
+  { d: 1, n: "app.hex", k: ["f", "f"], s: "changed", L: [421888, "10.11.2026 14:02"], R: [418304, "09.11.2026 18:40"] },
+  { d: 1, n: "app.map", k: ["f", "f"], s: "changed", L: [1204224, "10.11.2026 14:02"], R: [1204224, "09.11.2026 18:40"] },
+  { d: 1, n: "boot.hex", k: ["f", null], s: "left", L: [65536, "10.11.2026 14:01"] },
+  { d: 1, n: "debug.log", k: [null, "f"], s: "right", R: [8812, "09.11.2026 18:41"] },
+  { d: 0, n: "docs", k: ["d", "d"], s: "same" },
+  { d: 0, n: "src", k: ["d", "d"], s: "contains", c: { chg: 1, del: 0, add: 0, cfl: 1 } },
+  { d: 1, n: "can_driver.c", k: ["f", "f"], s: "same", L: [18230, "02.11.2026 09:12"], R: [18230, "02.11.2026 09:12"] },
+  { d: 1, n: "config", k: ["d", "f"], s: "conflict", L: [0, "05.11.2026 11:30"], R: [1422, "07.11.2026 16:05"] },
+  { d: 1, n: "main.c", k: ["f", "f"], s: "changed", L: [9204, "06.11.2026 10:15"], R: [9771, "08.11.2026 17:52"] },
+  { d: 1, n: "util.c", k: ["f", "f"], s: "rules", L: [4410, "01.11.2026 08:00"], R: [4520, "01.11.2026 08:00"] },
+  { d: 0, n: "CHANGELOG.md", k: ["f", "f"], s: "same", L: [12044, "10.11.2026 13:55"], R: [12044, "10.11.2026 13:55"] },
+  { d: 0, n: "firmware.a2l", k: ["f", "f"], s: "checking", L: [1288490188, "10.11.2026 13:40"], R: [1288490188, "09.11.2026 18:20"], p: 0.26 },
+  { d: 0, n: "logo.png", k: ["f", "f"], s: "sizetime", L: [48211, "15.10.2026 12:00"], R: [48211, "15.10.2026 12:00"] },
+  { d: 0, n: "notes.txt", k: [null, "f"], s: "right", R: [1180, "09.11.2026 18:45"] },
+  { d: 0, n: "README.md", k: ["f", "f"], s: "same", L: [3302, "28.10.2026 10:00"], R: [3302, "28.10.2026 10:00"] },
+];
+
+/** Status → tone class, glyph, words. */
+const LOOK = {
+  same:     ["t-same", "=", "same"],
+  rules:    ["t-same", "≈", "same after rules · line endings"],
+  sizetime: ["t-same", "=", "same size and time"],
+  contains: ["t-chg", "⊃", "contains differences"],
+  changed:  ["t-chg", "≠", "changed"],
+  left:     ["t-del", "←", "left only"],
+  right:    ["t-add", "→", "right only"],
+  conflict: ["t-cfl", "!", "type conflict · folder vs file"],
+  checking: ["t-busy", "…", "checking"],
+};
+
+const DIRS = [
+  ["1", "Direcția 1", "Rânduri tonate: fond colorat pe tot rândul, bară pe margine, insignă plină. Conflictul are culoarea lui (magenta). Golul e hașurat."],
+  ["2", "Direcția 2", "Jgheab central: un semn între panouri arată statusul și partea pe care e fișierul; partea mai nouă e marcată ▲; hartă de diferențe pe dreapta."],
+  ["3", "Direcția 3", "Registru: o singură listă cu status scris în cuvinte, stânga și dreapta pe coloane și diferența calculată (+3,5 KB, mai nou cu 2 zile)."],
+  ["4", "Direcția 4", "Căldură: rânduri pline de culoare, rândurile identice pliate în grupuri, folderele arată din ce sunt făcute diferențele."],
+];
+
+const FILTERS = [["all", "All"], ["diff", "Differences"], ["orphans", "Orphans"], ["same", "Same"]];
+const state = { dir: "1", filter: "all", unfold: false, view: "folder", wrap: false, signs: "words" };
+try { const s = JSON.parse(localStorage.getItem("fcm") || "{}"); Object.assign(state, s); } catch (_) {}
+const q = new URLSearchParams(location.search);
+if (q.get("dir")) state.dir = q.get("dir");
+if (q.get("view")) state.view = q.get("view");
+if (q.get("signs")) state.signs = q.get("signs");
+if (q.get("wrap")) state.wrap = q.get("wrap") === "1";
+const root = document.documentElement;
+let theme = q.get("theme");
+try { theme = theme || localStorage.getItem("fcm-theme"); } catch (_) {}
+root.dataset.theme = theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+
+/** Formats bytes as KB/MB/GB with one decimal. */
+function size(b) {
+  if (b == null) return "";
+  if (b < 1024) return b + " B";
+  const u = ["KB", "MB", "GB"]; let v = b / 1024, i = 0;
+  while (v >= 1024 && i < 2) { v /= 1024; i++; }
+  return v.toFixed(v < 10 ? 1 : 0) + " " + u[i];
+}
+/** Parses "dd.mm.yyyy hh:mm" to a Date. */
+function when(t) { const [d, h] = t.split(" "); const [D, M, Y] = d.split("."); return new Date(`${Y}-${M}-${D}T${h}`); }
+/** Escapes text for HTML. */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/** Which side is newer: 0 left, 1 right, -1 equal or unknown. */
+function newer(r) {
+  if (!r.L || !r.R || r.s.startsWith("same") || r.s === "sizetime") return -1;
+  const a = when(r.L[1]), b = when(r.R[1]);
+  return a > b ? 0 : b > a ? 1 : -1;
+}
+/** Size and time difference text for the ledger. */
+function delta(r) {
+  if (r.s === "left") return "only in left";
+  if (r.s === "right") return "only in right";
+  if (r.s === "checking") return Math.round(r.p * 100) + "% read";
+  if (r.s === "conflict") return "folder ↔ file";
+  if (!r.L || !r.R || r.k[0] === "d") return "";
+  const db = r.R[0] - r.L[0];
+  const n = newer(r);
+  const parts = [];
+  if (db) parts.push((db > 0 ? "+" : "−") + size(Math.abs(db)) + " right");
+  if (n >= 0) {
+    const days = Math.round(Math.abs(when(r.L[1]) - when(r.R[1])) / 864e5);
+    parts.push((n === 0 ? "left" : "right") + " newer" + (days ? ` by ${days} d` : ""));
+  }
+  return parts.join(" · ") || (r.s === "rules" ? "line endings only" : "");
+}
+
+/** True when the row passes the current filter. */
+function visible(r) {
+  const f = state.filter;
+  if (f === "all") return true;
+  const same = ["same", "rules", "sizetime"].includes(r.s);
+  if (f === "same") return same;
+  if (f === "orphans") return r.s === "left" || r.s === "right";
+  return !same;
+}
+/** Totals by tone for the bar. */
+function totals() {
+  const t = { chg: 0, del: 0, add: 0, cfl: 0, same: 0 };
+  for (const r of ROWS) {
+    if (r.k.includes("d") && r.s !== "conflict") continue;
+    if (r.s === "changed") t.chg++; else if (r.s === "left") t.del++; else if (r.s === "right") t.add++;
+    else if (r.s === "conflict") t.cfl++; else if (r.s !== "checking") t.same++;
+  }
+  return t;
+}
+
+/** Name with tree indent and folder brackets. */
+function nameHtml(r, side) {
+  const kind = r.k[side];
+  const label = kind === "d" ? `[${esc(r.n)}]` : esc(r.n);
+  const opens = r.n === "main.c" ? ` data-file="main.c" role="link" tabindex="0" title="Open the file diff"` : ` title="${esc(r.n)}"`;
+  return `<span class="name ${kind === "d" ? "folder-name" : ""}${r.n === "main.c" ? " opens" : ""}"${opens} style="padding-left:${r.d * 16}px">${label}</span>`;
+}
+/** Size and time of one side, with the newer side marked when asked. */
+function metaHtml(r, side, mark) {
+  const v = side ? r.R : r.L;
+  if (!v) return "";
+  const s = r.k[side] === "d" ? "&lt;DIR&gt;" : size(v[0]);
+  const isNew = mark && newer(r) === side;
+  return `<span class="meta num ${isNew ? "newer" : ""}">${s} · ${v[1]}${isNew ? " ▲" : ""}</span>`;
+}
+
+function renderBar() {
+  const t = totals();
+  const chips = [
+    ["diff", "t-chg", t.chg, "changed"],
+    ["orphans", "t-del", t.del, "left only"],
+    ["orphans", "t-add", t.add, "right only"],
+    ["same", "t-same", t.same, "same"],
+  ];
+  const filt = FILTERS.map(([id, label]) =>
+    `<button class="chip" data-filter="${id}" aria-pressed="${state.filter === id}">${label}</button>`).join("");
+  const sum = chips.map(([, tone, n, label]) =>
+    `<span class="chip ${tone}" style="cursor:default"><span class="dot"></span><span class="n num">${n}</span> ${label}</span>`).join("");
+  document.getElementById("bar").innerHTML = filt + `<span style="width:8px"></span>` + sum +
+    (t.cfl ? `<span class="chip t-cfl" style="cursor:default"><span class="dot"></span><span class="n">${t.cfl}</span> conflict</span>` : "") +
+    (state.dir === "2" ? `<span class="chip" style="cursor:default;gap:2px">Signs: <button class="chip" style="border:0;padding:0 6px" data-signs="words" aria-pressed="${state.signs !== "symbols"}">words</button><button class="chip" style="border:0;padding:0 6px" data-signs="symbols" aria-pressed="${state.signs === "symbols"}">symbols</button></span>` : "") +
+    `<span class="running">checking 1 file · 312 MB of 1.2 GB</span>`;
+}
+
+function d1() {
+  return `<ul class="rows d1">` + ROWS.filter(visible).map(r => {
+    const [tone, g, words] = LOOK[r.s];
+    const cell = side => r.k[side] == null
+      ? `<div class="gapcell" aria-label="missing on this side"></div>`
+      : `<div class="cell"><span class="badge" aria-hidden="true">${g}</span>${nameHtml(r, side)}<span class="words">${words === "same" ? "" : esc(words)}</span>${metaHtml(r, side, false)}</div>`;
+    return `<li class="row ${tone}">${cell(0)}${cell(1)}</li>`;
+  }).join("") + `</ul>`;
+}
+
+function d2() {
+  const rows = ROWS.filter(visible);
+  const words = state.signs !== "symbols";
+  const count = r => r.c.chg + r.c.del + r.c.add + r.c.cfl;
+  const WORD = { changed: "changed", left: "◀ only", right: "only ▶", conflict: "type ≠", rules: "same*", same: "", sizetime: "", checking: "", contains: "" };
+  const glyph = r => {
+    if (!words) return r.s === "left" ? "◀" : r.s === "right" ? "▶" : LOOK[r.s][1];
+    if (r.s === "contains") return `${count(r)} inside`;
+    if (r.s === "checking") return `${Math.round(r.p * 100)}%`;
+    return WORD[r.s];
+  };
+  const list = rows.map(r => {
+    const [tone, , words] = LOOK[r.s];
+    const cell = side => r.k[side] == null
+      ? `<div class="cell"><span class="meta" style="color:var(--muted)">${side ? "not in right" : "not in left"}</span></div>`
+      : `<div class="cell">${nameHtml(r, side)}${metaHtml(r, side, true)}</div>`;
+    const g = glyph(r);
+    return `<li class="row ${tone}">${cell(0)}<div class="gut">${g ? `<span class="g" title="${esc(words)}">${g}</span>` : ""}</div>${cell(1)}</li>`;
+  }).join("");
+  const ticks = rows.map((r, i) => LOOK[r.s][0] === "t-same" ? "" :
+    `<span class="tick ${LOOK[r.s][0]}" style="top:calc(${(i + 0.3) / rows.length * 100}% )"></span>`).join("");
+  return `<div class="d2${words ? " words" : ""}"><div class="body"><ul class="rows">${list}</ul><div class="map" aria-hidden="true">${ticks}</div></div></div>`;
+}
+
+function d3() {
+  const side = (r, s) => r.k[s] == null ? `<span class="absent">not here</span>` :
+    `<span class="meta num">${r.k[s] === "d" ? "folder" : size((s ? r.R : r.L)[0])} · ${(s ? r.R : r.L)?.[1] ?? ""}</span>`;
+  const body = ROWS.filter(visible).map(r => {
+    const [tone, g, words] = LOOK[r.s];
+    const label = r.s === "contains" ? `${r.c.chg + r.c.del + r.c.add + r.c.cfl} inside` : words.split(" · ")[0];
+    return `<tr class="${tone}"><td class="st"><span class="pill"><span aria-hidden="true">${g}</span>${esc(label)}</span></td>
+      <td class="nm">${nameHtml(r, r.k[0] ? 0 : 1)}</td>
+      <td class="lt">${r.k[0] === "d" && r.k[1] === "d" ? "" : side(r, 0)}</td>
+      <td class="rt">${r.k[0] === "d" && r.k[1] === "d" ? "" : side(r, 1)}</td>
+      <td class="dl"><span class="delta">${esc(delta(r))}</span></td></tr>`;
+  }).join("");
+  return `<div class="d3"><table class="table"><thead><tr><th>Status</th><th>Name</th><th>Left</th><th>Right</th><th>Difference</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function d4() {
+  const out = []; let run = [];
+  const flush = () => {
+    if (!run.length) return;
+    if (run.length >= 2 && !state.unfold && state.filter !== "same") {
+      out.push(`<button class="fold" data-unfold="1">＝ ${run.length} identical · ${run.map(r => esc(r.n)).slice(0, 3).join(", ")}${run.length > 3 ? "…" : ""} — show</button>`);
+    } else run.forEach(r => out.push(row(r)));
+    run = [];
+  };
+  const comp = c => {
+    const total = c.chg + c.del + c.add + c.cfl || 1;
+    return `<span class="comp" title="${c.chg} changed, ${c.del} left only, ${c.add} right only, ${c.cfl} conflict">` +
+      ["chg", "del", "add", "cfl"].filter(k => c[k]).map(k => `<span class="t-${k}" style="width:${c[k] / total * 100}%"></span>`).join("") + `</span>`;
+  };
+  const tag = r => ({ changed: "changed", left: "left only", right: "right only", conflict: "conflict", checking: "checking 26%" }[r.s] || "");
+  function row(r) {
+    const [tone, g] = LOOK[r.s];
+    const cell = side => r.k[side] == null ? `<div class="gapcell"></div>` :
+      `<div class="cell"><span class="glyph" style="color:var(--t)" aria-hidden="true">${g}</span>${nameHtml(r, side)}` +
+      (r.s === "contains" ? comp(r.c) : `<span class="tag" style="color:var(--t)">${tag(r)}</span>`) + `${metaHtml(r, side, true)}</div>`;
+    return `<li class="row ${tone}">${cell(0)}${cell(1)}</li>`;
+  }
+  for (const r of ROWS.filter(visible)) {
+    if (["same", "rules", "sizetime"].includes(r.s) && r.k[0] !== "d") { if (run.length && run[0].d !== r.d) flush(); run.push(r); }
+    else { flush(); out.push(row(r)); }
+  }
+  flush();
+  return `<ul class="rows d4">${out.join("")}</ul>`;
+}
+
+function render() {
+  document.getElementById("dirs").innerHTML = DIRS.map(([id, label]) =>
+    `<button type="button" data-dir="${id}" aria-pressed="${state.dir === id}">${label}</button>`).join("");
+  document.getElementById("note").textContent = DIRS.find(d => d[0] === state.dir)[2];
+  document.getElementById("views").innerHTML = [["folder", "Foldere"], ["file", "Fișier: src/main.c"]].map(([id, label]) =>
+    `<button type="button" data-view="${id}" aria-pressed="${state.view === id}">${label}</button>`).join("");
+  const bar = document.getElementById("bar");
+  if (state.view === "file") {
+    bar.innerHTML = fileBar();
+    document.getElementById("view").innerHTML = fileView();
+    syncScroll();
+  } else {
+    renderBar();
+    document.getElementById("view").innerHTML = { 1: d1, 2: d2, 3: d3, 4: d4 }[state.dir]();
+  }
+  if (state.dir === "2" && state.view === "folder" && state.signs !== "symbols") {
+    document.getElementById("legend").innerHTML = [
+      ["t-chg", "changed", "same name on both sides, different content"],
+      ["t-del", "◀ only", "the file is only in the left folder"],
+      ["t-add", "only ▶", "the file is only in the right folder"],
+      ["t-cfl", "type ≠", "a folder on one side, a file on the other"],
+      ["t-chg", "4 inside", "a folder with 4 differences somewhere inside"],
+      ["t-same", "same*", "same after rules, e.g. only the line endings differ"],
+      ["t-busy", "26%", "content still being checked"],
+      ["t-same", "▲", "the newer side (bold date)"],
+      ["t-same", "(empty)", "identical"],
+    ].map(([t, w, d]) => `<span class="${t}"><b style="color:var(--t)">${w}</b>${d}</span>`).join("");
+  } else document.getElementById("legend").innerHTML = ["changed", "left", "right", "conflict", "contains", "rules", "checking"].map(s =>
+    `<span class="${LOOK[s][0]}"><b class="mono" style="color:var(--t)">${s === "left" && state.dir === "2" ? "◀" : s === "right" && state.dir === "2" ? "▶" : LOOK[s][1]}</b>${LOOK[s][2]}</span>`).join("");
+  try { localStorage.setItem("fcm", JSON.stringify({ dir: state.dir, filter: state.filter, view: state.view, wrap: state.wrap })); } catch (_) {}
+}
+
+document.addEventListener("click", e => {
+  const open = e.target.closest("[data-file]");
+  if (open) { state.view = "file"; render(); return; }
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.view) state.view = b.dataset.view;
+  else if (b.dataset.wrap) state.wrap = !state.wrap;
+  else if (b.dataset.signs) state.signs = b.dataset.signs;
+  else if (b.dataset.dir) { state.dir = b.dataset.dir; state.unfold = false; }
+  else if (b.dataset.filter) state.filter = b.dataset.filter;
+  else if (b.dataset.unfold) state.unfold = true;
+  else if (b.id === "theme") {
+    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+    try { localStorage.setItem("fcm-theme", root.dataset.theme); } catch (_) {}
+  }
+  render();
+});
+</script>
+<script>
+/* File view: src/main.c, left (06.11) against right (08.11). Each entry: [kind, left text, right text]. */
+const PAIRS = [
+  ["same", "#include <stdint.h>"],
+  ["same", "#include <stdbool.h>"],
+  ["same", '#include "can_driver.h"'],
+  ["add", null, '#include "watchdog.h"'],
+  ["same", ""],
+  ["chg", "#define TX_TIMEOUT_MS   50u", "#define TX_TIMEOUT_MS   120u"],
+  ["same", "#define RX_QUEUE_LEN    32u"],
+  ["same", ""],
+  ["chg", "/* Sends one frame and waits for a free mailbox; returns 0 on success, -1 when the controller does not answer in time. */",
+          "/* Sends one frame and waits for a free mailbox; returns 0 on success, -1 when the controller does not answer within TX_TIMEOUT_MS, -2 when the bus is off. */"],
+  ["chg", "static int can_send(uint32_t id, const uint8_t *data, uint8_t len)", "static int can_send(uint32_t id, const uint8_t *data, uint8_t len, bool extended)"],
+  ["same", "{"],
+  ["same", "    uint32_t start = tick_ms();"],
+  ["chg", "    while (!mailbox_free(CAN1)) {", "    while (!mailbox_free(CAN1) && !bus_off(CAN1)) {"],
+  ["same", "        if (tick_ms() - start > TX_TIMEOUT_MS) {"],
+  ["same", "            return -1;"],
+  ["same", "        }"],
+  ["add", null, "        watchdog_kick();"],
+  ["same", "    }"],
+  ["chg", "    return mailbox_write(CAN1, id, data, len);",
+          "    return mailbox_write(CAN1, id | (extended ? CAN_ID_EXT : 0u), data, len); // extended ids carry the IDE bit, reference manual 32.7.3, table 214"],
+  ["same", "}"],
+  ["same", ""],
+  ["del", 'static void debug_dump(const uint8_t *data, uint8_t len) { for (uint8_t i = 0; i < len; i++) { printf("%02X ", data[i]); } printf("\\n"); }', null],
+  ["same", ""],
+  ["same", "int main(void)"],
+  ["same", "{"],
+  ["same", "    can_init(500000u);"],
+  ["chg", "    uint8_t frame[8] = { 0x10, 0x20, 0x30, 0x40 };", "    uint8_t frame[8] = { 0x10, 0x20, 0x30, 0x40, 0x00, 0x00, 0x00, 0x01 };"],
+  ["chg", "    can_send(0x18FF50E5u, frame, 4u);", "    can_send(0x18FF50E5u, frame, 8u, true);"],
+  ["same", "    return 0;"],
+  ["same", "}"],
+].map(([k, l, r]) => ({ k, l: k === "same" ? l : l, r: k === "same" ? l : r }));
+
+const KW = new Set(["static", "const", "return", "while", "if", "for", "else", "true", "false", "struct", "sizeof"]);
+const TY = new Set(["uint8_t", "uint16_t", "uint32_t", "int", "void", "bool", "char", "unsigned"]);
+const TONE = { same: "t-same", chg: "t-chg", del: "t-del", add: "t-add" };
+const SIGN = { chg: "≠", del: "←", add: "→" };
+const GSIGN = { chg: "≠", del: "◀", add: "▶" };
+
+/** Returns one syntax class per character of a C line (comments, strings, numbers, keywords, types, calls, macros). */
+function syntax(line) {
+  const cls = new Array(line.length).fill("");
+  const re = /(\/\/.*$|\/\*.*?\*\/)|("(?:\\.|[^"\\])*"|<[\w.]+>(?=\s*$))|(^\s*#\w+)|\b(0x[0-9A-Fa-f]+u?|\d+u?)\b|\b([A-Za-z_]\w*)\b/g;
+  let m;
+  while ((m = re.exec(line))) {
+    let c = "";
+    if (m[1]) c = "s-com"; else if (m[2]) c = "s-str"; else if (m[3]) c = "s-pp"; else if (m[4]) c = "s-num";
+    else if (m[5]) {
+      const w = m[5];
+      c = KW.has(w) ? "s-kw" : TY.has(w) ? "s-ty" : /^[A-Z][A-Z0-9_]+$/.test(w) ? "s-mac" : /^\s*\(/.test(line.slice(re.lastIndex)) ? "s-fn" : "";
+    }
+    for (let i = m.index; i < re.lastIndex; i++) cls[i] = c;
+  }
+  return cls;
+}
+
+/** Splits a line into word, space and punctuation tokens. */
+const tokens = s => s.match(/\w+|\s+|[^\w\s]/g) || [];
+
+/** Marks changed characters of a and b through a token LCS; returns two boolean arrays. */
+function wordDiff(a, b) {
+  const A = tokens(a), B = tokens(b), n = A.length, m = B.length;
+  const T = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    T[i][j] = A[i] === B[j] ? T[i + 1][j + 1] + 1 : Math.max(T[i + 1][j], T[i][j + 1]);
+  const ka = new Array(n).fill(true), kb = new Array(m).fill(true);
+  for (let i = 0, j = 0; i < n && j < m;) {
+    if (A[i] === B[j]) { ka[i] = kb[j] = false; i++; j++; } else if (T[i + 1][j] >= T[i][j + 1]) i++; else j++;
+  }
+  const spread = (toks, keep) => toks.flatMap((t, i) => Array(t.length).fill(keep[i] && /\S/.test(t)));
+  return [spread(A, ka), spread(B, kb)];
+}
+
+/** Renders a line with syntax colours and, where `changed` is set, the changed-word mark. */
+function codeHtml(line, changed) {
+  if (!line) return "";
+  const cls = syntax(line);
+  let out = "", i = 0;
+  while (i < line.length) {
+    const c = cls[i], w = changed ? changed[i] : false;
+    let j = i;
+    while (j < line.length && cls[j] === c && (changed ? changed[j] : false) === w) j++;
+    const text = esc(line.slice(i, j));
+    const inner = c ? `<span class="${c}">${text}</span>` : text;
+    out += w ? `<span class="w">${inner}</span>` : inner;
+    i = j;
+  }
+  return out;
+}
+
+/** Adds line numbers and word marks to every pair. */
+function prepared() {
+  let ln = 0, rn = 0;
+  return PAIRS.map(p => {
+    const q = { ...p, ln: p.l != null ? ++ln : "", rn: p.r != null ? ++rn : "" };
+    if (p.k === "chg") [q.wl, q.wr] = wordDiff(p.l, p.r);
+    return q;
+  });
+}
+
+/** Unchanged runs longer than this fold in direction 4. */
+const FOLD_AT = 2;
+
+/** Groups pairs; in direction 4 long same-runs become one fold entry. */
+function grouped(rows) {
+  if (state.dir !== "4") return rows;
+  const out = []; let run = [];
+  const flush = () => { if (run.length > FOLD_AT) out.push({ fold: run.length }); else out.push(...run); run = []; };
+  rows.forEach(r => { if (r.k === "same") run.push(r); else { flush(); out.push(r); } });
+  flush();
+  return out;
+}
+
+function fileBar() {
+  const c = PAIRS.filter(p => p.k !== "same");
+  const n = k => c.filter(p => p.k === k).length;
+  return `<button type="button" data-view="folder">← Folders</button>
+    <span class="path mono">src/main.c</span>
+    <span class="stat"><b class="t-chg" style="color:var(--t)">≠ ${n("chg")}</b> changed · <b class="t-add" style="color:var(--t)">→ ${n("add")}</b> added · <b class="t-del" style="color:var(--t)">← ${n("del")}</b> removed</span>
+    <span class="spacer"></span>
+    <span class="stat"><span class="kbd">Alt+↓</span> next change</span>
+    <button type="button" data-wrap="1" aria-pressed="${state.wrap}">Wrap ${state.wrap ? "on" : "off"} <span class="kbd">Alt+Z</span></button>`;
+}
+
+const narrow = () => matchMedia("(max-width: 720px)").matches;
+
+function fileView() {
+  const rows = grouped(prepared());
+  const unified = state.dir === "3" || narrow();
+  const body = unified ? unifiedView(rows) : state.wrap ? wrapView(rows) : splitView(rows);
+  const hint = state.wrap
+    ? "Wrap on: long lines break inside their column; both sides keep the same row height."
+    : unified ? "Wrap off: the code scrolls sideways; line numbers stay put."
+    : "Wrap off: both sides scroll sideways together (Shift+wheel, touchpad, or the bar under each side); line numbers stay put.";
+  return `<div class="code fd${state.dir}">${body}</div><div class="hint">${hint}${narrow() && state.dir !== "3" ? " At phone width every direction shows one column." : ""}</div>`;
+}
+
+function splitView(rows) {
+  const gut = state.dir === "2";
+  const side = s => {
+    const nums = rows.map(r => r.fold ? `<div></div>` : `<div>${s ? r.rn : r.ln}</div>`).join("");
+    const lines = rows.map(r => {
+      if (r.fold) return `<div class="ln fold-line">··· ${r.fold} unchanged lines</div>`;
+      const text = s ? r.r : r.l;
+      if (text == null) return `<div class="ln gap"></div>`;
+      const tint = r.k !== "same" ? " tinted" : "";
+      return `<div class="ln tone ${TONE[r.k]}${tint}">${codeHtml(text, s ? r.wr : r.wl) || " "}</div>`;
+    }).join("");
+    return `<div class="side"><div class="nums">${nums}</div><div class="hs" data-sync><div class="lines">${lines}</div></div></div>`;
+  };
+  if (!gut) return `<div class="split">${side(0)}${side(1)}</div>`;
+  const g = rows.map(r => r.fold || r.k === "same" ? `<div></div>` : `<div class="${TONE[r.k]}"><span class="gchip">${GSIGN[r.k]}</span></div>`).join("");
+  const ticks = rows.map((r, i) => r.fold || r.k === "same" ? "" :
+    `<span class="tick ${TONE[r.k]}" style="top:${i / rows.length * 100}%;height:${100 / rows.length}%"></span>`).join("");
+  return `<div class="split has-gut">${side(0)}<div class="gutcol">${g}</div>${side(1)}<div class="mapcol" aria-hidden="true">${ticks}</div></div>`;
+}
+
+function wrapView(rows) {
+  const gut = state.dir === "2";
+  const cell = (r, s) => {
+    const text = s ? r.r : r.l;
+    if (text == null) return `<div class="c gap"></div>`;
+    return `<div class="c tone ${TONE[r.k]}${r.k !== "same" ? " tinted" : ""}">${codeHtml(text, s ? r.wr : r.wl) || " "}</div>`;
+  };
+  const html = rows.map(r => {
+    if (r.fold) return `<div class="fold-line" style="grid-column:1/-1">··· ${r.fold} unchanged lines</div>`;
+    const g = gut ? `<div class="g ${TONE[r.k]}">${r.k === "same" ? "" : `<span class="gchip">${GSIGN[r.k]}</span>`}</div>` : "";
+    return `<div class="n">${r.ln}</div>${cell(r, 0)}${g}<div class="n">${r.rn}</div>${cell(r, 1)}`;
+  }).join("");
+  return `<div class="wrapgrid${gut ? " has-gut" : ""}">${html}</div>`;
+}
+
+/** One column: a changed pair becomes a removed line then an added line. */
+function unifiedView(rows) {
+  const lines = [];
+  rows.forEach(r => {
+    if (r.fold) { lines.push({ fold: r.fold }); return; }
+    if (r.k === "same") lines.push({ o: r.ln, n: r.rn, s: " ", t: "t-same", text: r.l });
+    if (r.k === "del" || r.k === "chg") lines.push({ o: r.ln, n: "", s: "−", t: "t-del", text: r.l, w: r.wl });
+    if (r.k === "add" || r.k === "chg") lines.push({ o: "", n: r.rn, s: "+", t: "t-add", text: r.r, w: r.wr });
+  });
+  const tint = l => l.t !== "t-same" ? " tinted" : "";
+  if (state.wrap) {
+    return `<div class="uni wrap">` + lines.map(l => l.fold
+      ? `<div class="fold-line">··· ${l.fold} unchanged lines</div>`
+      : `<div class="urow tone ${l.t}${tint(l)}"><span>${l.o}</span><span>${l.n}</span><span class="sign">${l.s}</span><div class="c">${codeHtml(l.text, l.w) || " "}</div></div>`).join("") + `</div>`;
+  }
+  const nums = lines.map(l => l.fold ? `<div></div>` : `<div class="${l.t}"><span>${l.o}</span><span>${l.n}</span><span class="sign">${l.s}</span></div>`).join("");
+  const code = lines.map(l => l.fold ? `<div class="ln fold-line">··· ${l.fold} unchanged lines</div>`
+    : `<div class="ln tone ${l.t}${tint(l)}">${codeHtml(l.text, l.w) || " "}</div>`).join("");
+  return `<div class="uni"><div class="unums">${nums}</div><div class="hs"><div class="lines">${code}</div></div></div>`;
+}
+
+/** Keeps the two sides' sideways scroll in step. */
+function syncScroll() {
+  const panes = [...document.querySelectorAll("[data-sync]")];
+  let busy = false;
+  panes.forEach(p => p.addEventListener("scroll", () => {
+    if (busy) return; busy = true;
+    panes.forEach(o => { if (o !== p) o.scrollLeft = p.scrollLeft; });
+    requestAnimationFrame(() => { busy = false; });
+  }, { passive: true }));
+}
+
+document.addEventListener("keydown", e => {
+  if (e.altKey && (e.key === "z" || e.key === "Z") && state.view === "file") { e.preventDefault(); state.wrap = !state.wrap; render(); }
+  else if (e.key === "Enter" && e.target.dataset && e.target.dataset.file) { state.view = "file"; render(); }
+  else if (e.key === "Escape" && state.view === "file") { state.view = "folder"; render(); }
+});
+let lastNarrow = narrow();
+addEventListener("resize", () => { if (narrow() !== lastNarrow) { lastNarrow = narrow(); render(); } });
+render();
+</script>
+</body>
+</html>
