@@ -114,13 +114,13 @@ function Test-S5 {
     Write-Evidence "blocked twice; root unchanged across $($before.Count) files"
     Stop-Root $root
     Write-Evidence "navo processes after the stop:`n$(Get-NavoProcesses)"
-    try { Step-Page $wizard.Window 't' 'Navo is installed in' 120 }
+    try { Step-Page $wizard.Window 't' 'Navo is installed\.' 120 }
     catch {
         # Evidence only: a silent run now tells a window bug (exit 0) from a process still running (exit 4).
         Write-Evidence "navo processes after Try again:`n$(Get-NavoProcesses)"
         # A UIA press rules out lost keys: if the button works, the page moves.
         foreach ($button in @(Get-UiElements $wizard.Window '^Try again')) { Invoke-Element $button }
-        try { Wait-UiText $wizard.Window 'Navo is installed in' 30 } catch { Write-Evidence 'a UIA press of Try again did not move the page either' }
+        try { Wait-UiText $wizard.Window 'Navo is installed\.' 30 } catch { Write-Evidence 'a UIA press of Try again did not move the page either' }
         Send-Alt $wizard.Window 'c'
         $wizard.Process.WaitForExit(30000) | Out-Null
         Invoke-Silent '0.0.3' | Out-Null
