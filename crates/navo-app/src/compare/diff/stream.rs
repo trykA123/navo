@@ -13,17 +13,28 @@ use self::state::{Finish, State, ViewedWrite};
 use super::load::LoadInput;
 use super::viewed::ViewedMarks;
 
+pub(crate) mod detail;
 pub(crate) mod detail_state;
 pub(crate) mod memory;
 mod search;
 pub(crate) mod state;
 mod worker;
 
+pub(crate) use detail::DetailFn;
+pub(crate) use detail_state::DetailJob;
+
 /// The four workers D26 allows at once.
 const WORKERS: usize = 4;
 
 /// A factory that turns one Stream item into a loadable pair.
 pub(crate) type LoadFn = Arc<dyn Fn(&PairRequest) -> Option<LoadInput> + Send + Sync>;
+
+/// What a Stream needs besides its sink and budget: a loader, Viewed marks and a detail lane.
+pub(crate) struct StreamParts {
+    pub load: LoadFn,
+    pub viewed: Arc<dyn ViewedMarks>,
+    pub detail: Option<DetailFn>,
+}
 
 /// A running Stream. Methods only queue work; dropping cancels off the caller.
 pub(crate) struct StreamSession {
@@ -45,13 +56,31 @@ pub(super) struct Shared {
 }
 
 impl StreamSession {
-    /// Start the workers. `budget` is the effective card-body limit, in bytes.
+    /// Start the four card workers with no detail lane. `budget` is the card-body limit, in bytes.
     pub(crate) fn start(
         sink: StreamSink,
         budget: u64,
         load: LoadFn,
         viewed: Arc<dyn ViewedMarks>,
     ) -> Self {
+        Self::start_with(
+            sink,
+            budget,
+            StreamParts {
+                load,
+                viewed,
+                detail: None,
+            },
+        )
+    }
+
+    /// Start the card workers and, when given, the one detail lane. `budget` is in bytes.
+    pub(crate) fn start_with(sink: StreamSink, budget: u64, parts: StreamParts) -> Self {
+        let StreamParts {
+            load,
+            viewed,
+            detail,
+        } = parts;
         let shared = Arc::new(Shared {
             state: Mutex::new(State::new(budget)),
             order: Mutex::new(()),
@@ -62,7 +91,7 @@ impl StreamSession {
             viewed_error: AtomicBool::new(false),
             stopped: AtomicBool::new(false),
         });
-        let mut workers = Vec::with_capacity(WORKERS);
+        let mut workers = Vec::with_capacity(WORKERS + 1);
         for index in 0..WORKERS {
             let worker = Arc::clone(&shared);
             let spawned = thread::Builder::new()
@@ -71,6 +100,16 @@ impl StreamSession {
             match spawned {
                 Ok(handle) => workers.push(handle),
                 Err(error) => tracing::warn!(%error, "compare stream worker did not start"),
+            }
+        }
+        if let Some(detail) = detail {
+            let worker = Arc::clone(&shared);
+            let spawned = thread::Builder::new()
+                .name("compare-stream-detail".to_owned())
+                .spawn(move || detail::run(&worker, &detail));
+            match spawned {
+                Ok(handle) => workers.push(handle),
+                Err(error) => tracing::warn!(%error, "compare stream detail worker did not start"),
             }
         }
         Self {
@@ -98,6 +137,7 @@ impl StreamControl for StreamSession {
     fn focus(&self, ids: Vec<u64>) {
         let mut state = self.lock();
         let held = state.focus(ids);
+        let details = state.focused_details();
         let generation = state.generation();
         // A resent card must not overtake an Evicted event a worker sends for it.
         let _order = self.shared.lock_order();
@@ -107,6 +147,13 @@ impl StreamControl for StreamSession {
                 generation,
                 id,
                 card,
+            });
+        }
+        for (id, detail) in details {
+            (self.shared.sink)(StreamUpdate::Detail {
+                generation,
+                id,
+                detail,
             });
         }
         self.shared.ready.notify_all();

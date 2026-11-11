@@ -14,7 +14,6 @@ use super::state::State;
 mod tests;
 
 /// A detail job taken for one heavy held card; `cancel` stops it when the card leaves.
-#[allow(dead_code, reason = "the detail lane (A3) calls it")]
 pub(crate) struct DetailJob {
     pub id: u64,
     pub generation: u64,
@@ -24,7 +23,6 @@ pub(crate) struct DetailJob {
 }
 
 /// A stored detail snapshot, with the ids its bytes pushed out of the card budget.
-#[allow(dead_code, reason = "the detail lane (A3) calls it")]
 pub(crate) struct DetailFinish {
     pub generation: u64,
     pub id: u64,
@@ -126,7 +124,6 @@ impl State {
     /// Take the heavy card nearest the focus middle, if the lane is free (D26.1).
     ///
     /// Returns `None` while a job runs or no focused card needs a detail.
-    #[allow(dead_code, reason = "the detail lane (A3) calls it")]
     pub(crate) fn take_detail(&mut self) -> Option<DetailJob> {
         if self.details.running.is_some() {
             return None;
@@ -164,7 +161,6 @@ impl State {
     /// Store a detail snapshot for the running job and evict cards until the budget holds.
     ///
     /// Returns `None` for a stale, cancelled or non-running job, or one without a held card.
-    #[allow(dead_code, reason = "the detail lane (A3) calls it")]
     pub(crate) fn store_detail(
         &mut self,
         job: &DetailJob,
@@ -202,7 +198,6 @@ impl State {
     }
 
     /// End a detail job: free the lane and remember an unfinished id so it is not retried.
-    #[allow(dead_code, reason = "the detail lane (A3) calls it")]
     pub(crate) fn end_detail(&mut self, job: &DetailJob) {
         if self
             .details
@@ -219,7 +214,6 @@ impl State {
     }
 
     /// The held details of the focused ids in focus order, for resending after a focus.
-    #[allow(dead_code, reason = "the detail lane (A3) calls it")]
     pub(crate) fn focused_details(&self) -> Vec<(u64, Arc<CardDetail>)> {
         self.details
             .order
