@@ -6,6 +6,7 @@ mod bar;
 mod lines;
 mod list;
 mod map;
+mod notice;
 #[cfg(test)]
 mod probes;
 mod scroll;
@@ -268,7 +269,11 @@ impl super::FileScreen {
     /// hex regions, else the image pair's similarity.
     pub(super) fn changes(&self) -> Option<SharedString> {
         let text = self.view.as_ref().map(super::file::FileView::status);
-        text.or_else(|| self.large.as_ref().map(LargeShown::status))
+        let large = self.large.as_ref().map(|large| match large.notes() {
+            Some(notes) => format!("{} · {notes}", large.status()).into(),
+            None => large.status(),
+        });
+        text.or(large)
             .or_else(|| self.hex.as_ref().and_then(super::hex::HexView::status))
             .or_else(|| {
                 self.pictures

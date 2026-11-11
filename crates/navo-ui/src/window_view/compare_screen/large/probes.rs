@@ -12,6 +12,8 @@ pub(in crate::window_view) struct LargeProbe {
     /// The first row of the list's window.
     pub(in crate::window_view) base: u64,
     pub(in crate::window_view) status: SharedString,
+    /// The progress line and step notices beside the status, joined; empty when none.
+    pub(in crate::window_view) notes: SharedString,
 }
 
 /// One side's line number and text, or none.
@@ -33,6 +35,7 @@ impl NavoWindow {
             top: large.top(),
             base: large.bar.base(),
             status: large.status(),
+            notes: large.notes().unwrap_or_default(),
         })
     }
 
