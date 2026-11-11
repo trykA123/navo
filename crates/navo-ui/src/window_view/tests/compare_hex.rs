@@ -924,3 +924,76 @@ fn compare_screen_hex_stepping_to_the_last_page_clamps_the_top(cx: &mut TestAppC
     let up = rig.view.update(cx, |view, _| view.file_hex_wheel(-1.));
     assert_eq!(up, Some(0x400 - page - 1), "the first upward tick scrolls");
 }
+
+/// Scrolls the hex body to row `top` and asks for its rows without letting the read land.
+fn scroll_and_request(cx: &mut TestAppContext, rig: &Rig, top: usize) {
+    rig.view.update(cx, |view, _| {
+        view.file_hex_wheel(-1e9);
+        view.file_hex_wheel(top as f64);
+    });
+    cx.update_window(rig.window, |_, window, cx| {
+        rig.view
+            .update(cx, |view, cx| view.request_hex_rows(window, cx));
+    })
+    .expect("window");
+}
+
+/// Reads whole pages from the top until the byte cache is past its limit; returns the next page.
+fn fill_cache(cx: &mut TestAppContext, rig: &Rig) -> usize {
+    let page = visible(cx, rig);
+    let mut next = page;
+    while probe(cx, rig).cached <= probe(cx, rig).cache_limit {
+        scroll_and_request(cx, rig, next);
+        settle(cx, &rig.view);
+        next += page;
+    }
+    next
+}
+
+#[gpui_kit::test]
+fn compare_screen_hex_eviction_keeps_the_visible_rows(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = hex_rig(cx, patterned(0x10_0000, 0), patterned(0x10_0000, 0x55));
+    open_hex(cx, &rig, &[], HexAlign::Offset);
+    let far = fill_cache(cx, &rig);
+    let page = visible(cx, &rig);
+    scroll_and_request(cx, &rig, far + 5000);
+    scroll_and_request(cx, &rig, 1);
+    let on_screen =
+        |cx: &mut TestAppContext| probe(cx, &rig).loaded.iter().take(page).all(|row| *row);
+    assert!(on_screen(cx), "rows 1.. are cached before the read lands");
+    for tick in 0..200 {
+        assert!(
+            on_screen(cx),
+            "tick {tick}: the late read must not blank the rows on screen"
+        );
+        if !cx.executor().tick() {
+            break;
+        }
+    }
+}
+
+#[gpui_kit::test]
+fn compare_screen_hex_cache_stays_bounded(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = hex_rig(cx, patterned(0x10_0000, 0), patterned(0x10_0000, 0x55));
+    open_hex(cx, &rig, &[], HexAlign::Offset);
+    let page = visible(cx, &rig);
+    let mut peak = 0;
+    for step in 1..=(2 * 4096 / page + 4) {
+        scroll_and_request(cx, &rig, step * page);
+        settle(cx, &rig.view);
+        let seen = probe(cx, &rig);
+        peak = peak.max(seen.cached);
+        assert!(
+            seen.cached <= seen.cache_limit + page,
+            "step {step}: {} spans cached",
+            seen.cached
+        );
+        assert!(
+            seen.loaded.iter().take(page).all(|row| *row),
+            "step {step} is blank"
+        );
+    }
+    assert!(peak > 4096, "the cache did fill past its limit: {peak}");
+}

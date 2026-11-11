@@ -60,6 +60,8 @@ pub(super) struct HexView {
     /// The first visible row, as a count, never a pixel offset.
     top: usize,
     loaded: ByteCache,
+    /// The rows on screen at the last request, which eviction never removes.
+    shown: Range<usize>,
     /// The range a background read is fetching.
     pending: Option<Range<usize>>,
     /// The running read; dropping it cancels the fetch.
@@ -94,6 +96,7 @@ impl HexView {
             current: None,
             top: 0,
             loaded: ByteCache::default(),
+            shown: 0..0,
             pending: None,
             fetch: None,
             open: None,

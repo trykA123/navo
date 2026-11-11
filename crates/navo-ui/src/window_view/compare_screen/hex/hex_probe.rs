@@ -3,6 +3,7 @@
 use std::ops::Range;
 
 use super::HexView;
+use super::fetch::CACHE_LIMIT;
 
 /// The current region, visible rows, row count, alignment, gaps, fetched bytes and status.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +17,9 @@ pub(in crate::window_view) struct HexProbe {
     pub(in crate::window_view) gaps: Vec<bool>,
     pub(in crate::window_view) loaded: Vec<bool>,
     pub(in crate::window_view) ready: bool,
+    /// The most spans either side's byte cache holds, and the size that triggers eviction.
+    pub(in crate::window_view) cached: usize,
+    pub(in crate::window_view) cache_limit: usize,
     pub(in crate::window_view) left_hex: Vec<Option<String>>,
     pub(in crate::window_view) status: Option<String>,
 }
@@ -36,6 +40,8 @@ impl HexView {
                 .map(|at| self.rows.row(at).is_some_and(|row| row.is_gap()))
                 .collect(),
             status: self.status().map(|text| text.to_string()),
+            cached: self.loaded.len(),
+            cache_limit: CACHE_LIMIT,
             ready: self.left.is_some() || self.right.is_some() || self.error.is_some(),
             loaded: range
                 .clone()
