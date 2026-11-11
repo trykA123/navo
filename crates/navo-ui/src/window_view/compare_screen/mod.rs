@@ -168,6 +168,7 @@ impl FileScreen {
             .map(|text| file::FileView::new(text, at, words));
         if let (Some(view), Some(old)) = (self.view.as_mut(), old_view.as_ref()) {
             view.keep_sideways(old);
+            view.keep_syntax(old);
         }
         let layout = self.look.layout.unwrap_or(self.auto);
         let sideways = self.take_sideways();

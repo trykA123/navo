@@ -22,6 +22,9 @@ const HEAD: usize = 1024;
 pub(super) struct SyntaxSlot {
     started: bool,
     ready: Option<Rc<PairSyntax>>,
+    /// The parse of the text this pair showed before a reload, kept so the rows keep their
+    /// colours until the new text's own parse lands (W7f).
+    provisional: Option<Rc<PairSyntax>>,
     /// The wait for the background parse; dropping it drops the result.
     task: Option<Task<()>>,
 }
@@ -31,7 +34,19 @@ impl SyntaxSlot {
     pub(super) fn parts(&self, cx: &App) -> (Option<Rc<PairSyntax>>, Option<Arc<HighlightTheme>>) {
         let colours = cx.try_global::<KitTheme>();
         let colours = colours.map(|kit| Arc::clone(&kit.highlight_theme));
-        (self.ready.clone(), colours)
+        (self.shown().cloned(), colours)
+    }
+
+    /// The parse the rows colour with: this text's own once it landed, else the one kept from
+    /// before a reload of the same pair.
+    fn shown(&self) -> Option<&Rc<PairSyntax>> {
+        self.ready.as_ref().or(self.provisional.as_ref())
+    }
+
+    /// Keeps the parse `old` was colouring with, the same pair before a reload, until this text's
+    /// own one lands: its finished parse, or the provisional one it was itself still waiting for.
+    pub(super) fn keep_from(&mut self, old: &Self) {
+        self.provisional = old.shown().cloned();
     }
 }
 
@@ -102,6 +117,7 @@ impl NavoWindow {
             .filter(|view| Arc::ptr_eq(view.text(), text));
         if let Some(view) = view {
             view.syntax.ready = Some(Rc::new(pair));
+            view.syntax.provisional = None;
             view.syntax.task = None;
             cx.notify();
         }
@@ -112,7 +128,23 @@ impl NavoWindow {
 impl NavoWindow {
     /// The open file view's parsed pair, once its background parse ended.
     pub(in crate::window_view) fn file_syntax(&self) -> Option<Rc<PairSyntax>> {
+        self.syntax_slot()?.ready.clone()
+    }
+
+    /// The pair the open file view's rows colour with now: the finished parse, or the provisional
+    /// one kept across a reload until it lands.
+    pub(in crate::window_view) fn file_syntax_shown(&self, cx: &App) -> Option<Rc<PairSyntax>> {
+        self.syntax_slot()?.parts(cx).0
+    }
+
+    /// The parse the open file view keeps from before a reload, until its own one lands.
+    pub(in crate::window_view) fn file_syntax_provisional(&self) -> Option<Rc<PairSyntax>> {
+        self.syntax_slot()?.provisional.clone()
+    }
+
+    /// The syntax slot of the open file view, or `None` with no text pair open.
+    fn syntax_slot(&self) -> Option<&SyntaxSlot> {
         let file = self.compare.screen.as_ref()?.file.as_ref()?;
-        file.view.as_ref()?.syntax.ready.clone()
+        Some(&file.view.as_ref()?.syntax)
     }
 }

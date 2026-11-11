@@ -37,7 +37,7 @@ pub(super) struct ListRows {
     pub(super) sideways: SidewaysHandle,
     /// The wrap index and width while lines wrap; `None` draws one item per pair row.
     pub(super) wrap: Option<WrapDraw>,
-    /// The sides' finished syntax parse, if any (D38).
+    /// The parse the rows colour with: this text's own, or the one kept over a reload (D38, W7f).
     pub(super) syntax: Option<Rc<PairSyntax>>,
     /// The theme's highlight colours, as F3 reads them.
     pub(super) colours: Option<Arc<HighlightTheme>>,
