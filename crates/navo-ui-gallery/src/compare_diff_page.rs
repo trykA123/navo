@@ -156,6 +156,7 @@ impl CompareDiffPage {
             spans: Some(&self.spans),
             ticks: Some(&ticks),
             bytes_here: None,
+            syntax: None,
         };
         let rows = pair_rows(&self.text, layout, 0..self.text.rows.len() * 2);
         let list = div()
