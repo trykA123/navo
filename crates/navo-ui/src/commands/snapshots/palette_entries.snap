@@ -464,6 +464,7 @@ compare.copy_right | CompareView | true
 compare.copy_left | CompareView | true
 compare.view_bytes | CompareView | true
 compare.view_text | CompareView | true
+compare.show_bytes_here | CompareView | true
 compare.next_file | CompareView | true
 compare.previous_file | CompareView | true
 compare.view_menu | CompareView | true

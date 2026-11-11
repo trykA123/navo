@@ -8,6 +8,7 @@ pub mod copy_bar;
 pub(crate) mod fake;
 pub mod hooks;
 pub mod image_body;
+pub mod long;
 pub mod map;
 pub mod rows;
 pub mod sheet;
@@ -23,6 +24,7 @@ pub use hooks::{
     LargeStepReason, LargeStepView, Layout, PairControl, PairFacts, PairKind, PairRequest,
     PairText, RowSpans, StreamControl, StreamSink, StreamUpdate, ViewedKey,
 };
+pub use long::{LONG_LINE, LongHit, OnBytesHere, is_long};
 pub use rows::{Half, ShownKind, ShownRow, StreamRow, pair_rows, row_count, stream_rows};
 pub use sheet::{SheetPlan, SheetPlanSink, SheetResult, SheetRow, SheetSink};
 pub use spans::SpanCache;

@@ -6,6 +6,9 @@ use std::rc::Rc;
 
 use navo_l10n::tr;
 
+use gpui_kit::WeakEntity;
+
+use super::super::switch;
 use super::map::RowMap;
 use super::{LargeShown, LineCache};
 use crate::compare_diff::ShownRow;
@@ -13,10 +16,15 @@ use crate::compare_diff::body::{BodyLook, row_view};
 use crate::prelude::*;
 use crate::primitives::VirtualList;
 use crate::tokens;
+use crate::window_view::NavoWindow;
 
 impl LargeShown {
     /// The row list in the map's layout; it captures plain data only, never the pair control.
-    pub(in crate::window_view::compare_screen) fn list(&self, cx: &App) -> AnyElement {
+    pub(in crate::window_view::compare_screen) fn list(
+        &self,
+        weak: &WeakEntity<NavoWindow>,
+        cx: &App,
+    ) -> AnyElement {
         let row_height = tokens::current(cx).spacing.row_height;
         let (map, lines, base) = (
             Rc::clone(&self.map),
@@ -31,6 +39,7 @@ impl LargeShown {
             .max(1)
             .to_string()
             .len();
+        let on_long = switch::on_bytes_here(weak);
         let rows = move |range: Range<usize>, _: &mut Window, cx: &mut App| {
             let cache = lines.borrow();
             let look = BodyLook {
@@ -40,6 +49,7 @@ impl LargeShown {
                 current,
                 spans: None,
                 ticks: None,
+                bytes_here: Some(&on_long),
             };
             let row = |at: usize| base.saturating_add(u64::try_from(at).unwrap_or(u64::MAX));
             range.map(|at| draw(&look, &map, &cache, row(at))).collect()

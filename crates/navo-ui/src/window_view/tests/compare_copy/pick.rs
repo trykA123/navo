@@ -44,6 +44,7 @@ fn pick_text() -> PairText {
     }
     PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: vec!["line".to_owned(); l as usize],
         right: vec!["line".to_owned(); r as usize],
         rows,

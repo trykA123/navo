@@ -1,0 +1,170 @@
+//! "Show bytes here" on a line over 1 MiB (V41d, D18): the pair reopens in the hex body at the
+//! line's byte offset, and Show text comes back to the line. Text and large pairs share it.
+
+use std::rc::Rc;
+
+use gpui_kit::{Stateful, WeakEntity};
+
+use super::super::file::FileView;
+use super::super::hex::Anchor as HexAnchor;
+use super::super::large::Anchor as LineAnchor;
+use super::super::{FileScreen, FileState};
+use crate::commands::compare::ShowBytesHere;
+use crate::compare_diff::{LongHit, OnBytesHere, PairKind, PickSide, is_long};
+use crate::prelude::*;
+use crate::window_view::NavoWindow;
+
+/// Where a switch lands: a byte of the hex body, or a line of the large body.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::window_view::compare_screen) enum At {
+    Hex(HexAnchor),
+    Line(LineAnchor),
+}
+
+/// The click handler of a "Show bytes here" button: it opens the pair in Bytes at the row's line.
+pub(in crate::window_view::compare_screen) fn on_bytes_here(
+    weak: &WeakEntity<NavoWindow>,
+) -> OnBytesHere {
+    let weak = weak.clone();
+    Rc::new(move |hit, _, cx| {
+        let _ = weak.update(cx, |view, cx| view.show_bytes_here(hit, cx));
+    })
+}
+
+/// The hex anchor for a line that starts at `offset` on the left (`left`) or right file.
+fn anchor(left: bool, offset: u64) -> HexAnchor {
+    match left {
+        true => HexAnchor::Left(offset),
+        false => HexAnchor::Right(offset),
+    }
+}
+
+impl FileScreen {
+    /// The line the row names: its left one, else its right one (a one-sided line).
+    fn line_of(hit: LongHit) -> Option<(bool, u32)> {
+        match (hit.left, hit.right) {
+            (Some(line), _) => Some((true, line)),
+            (None, Some(line)) => Some((false, line)),
+            (None, None) => None,
+        }
+    }
+
+    /// Shows the place a landed switch asked for: a byte in the hex body or in the text view's
+    /// left file, or a line of the large body.
+    pub(in crate::window_view::compare_screen) fn land(&mut self, at: At) {
+        match (at, self.hex.as_mut(), self.view.as_mut()) {
+            (At::Hex(at), Some(hex), _) => hex.seek(at),
+            (At::Hex(HexAnchor::Left(offset)), None, Some(view)) => view.seek_offset(offset),
+            (At::Line(line), ..) => {
+                if let Some(large) = self.large.as_mut() {
+                    large.seek_line(line);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Notes `hit` as the line the menu opened on, when one of its lines is over 1 MiB.
+    pub(in crate::window_view::compare_screen) fn aim_at(&mut self, hit: LongHit) {
+        self.switch.aim = self.view.as_ref().and_then(|view| long_in(view, hit));
+    }
+
+    /// Notes the line under the keys' cursor as the menu's line, when it is over 1 MiB.
+    pub(in crate::window_view::compare_screen) fn aim_from_cursor(&mut self) {
+        let spot = self
+            .view
+            .as_ref()
+            .and_then(|view| self.pick.cursor_spot(view.text()));
+        let hit = spot.map(|spot| match spot.side {
+            PickSide::Left => LongHit {
+                left: Some(spot.line),
+                right: None,
+            },
+            PickSide::Right => LongHit {
+                left: None,
+                right: Some(spot.line),
+            },
+        });
+        self.switch.aim = hit.and_then(|hit| long_in(self.view.as_ref()?, hit));
+    }
+
+    /// Where Bytes opens for `hit`, and the large line Show text returns to (none for a text
+    /// pair, which returns by the hex body's offset). `None` when the pair has no offset for it.
+    fn here(&self, hit: LongHit) -> Option<(HexAnchor, Option<LineAnchor>)> {
+        let (left, line) = Self::line_of(hit)?;
+        if let (
+            Some(view),
+            FileState::Opened {
+                kind: PairKind::Text,
+                ..
+            },
+        ) = (self.view.as_ref(), &self.state)
+        {
+            long_in(view, hit)?;
+            let text = view.text();
+            let starts = if left {
+                &text.left_starts
+            } else {
+                &text.right_starts
+            };
+            return Some((anchor(left, *starts.get(line as usize)?), None));
+        }
+        let at = u64::from(line);
+        let line = if left {
+            LineAnchor::Left(at)
+        } else {
+            LineAnchor::Right(at)
+        };
+        let offset = self.large.as_ref().and_then(|large| large.start_of(line))?;
+        Some((anchor(left, offset), Some(line)))
+    }
+}
+
+/// `hit` when one of its lines in `view` is over 1 MiB.
+fn long_in(view: &FileView, hit: LongHit) -> Option<LongHit> {
+    let text = view.text();
+    let long = |lines: &[String], at: Option<u32>| {
+        at.and_then(|at| lines.get(at as usize))
+            .is_some_and(|line| is_long(line))
+    };
+    (long(&text.left, hit.left) || long(&text.right, hit.right)).then_some(hit)
+}
+
+impl NavoWindow {
+    /// Binds Show bytes here on the file diff's `root`: it acts on the menu's line, else the
+    /// cursor's.
+    pub(in crate::window_view::compare_screen) fn here_actions(
+        root: Stateful<Div>,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        root.on_action(cx.listener(|view, _: &ShowBytesHere, _, cx| {
+            let Some(file) = view.compare.screen.as_mut().and_then(|s| s.file.as_mut()) else {
+                return;
+            };
+            if file.switch.aim.is_none() {
+                file.aim_from_cursor();
+            }
+            if let Some(hit) = file.switch.aim.take() {
+                view.show_bytes_here(hit, cx);
+            }
+        }))
+    }
+
+    /// Reopens the pair as bytes at the line `hit` names, keeping the old body drawn until the
+    /// hex body has rows. A switch in flight, or a pair already in bytes, ignores it.
+    fn show_bytes_here(&mut self, hit: LongHit, cx: &mut Context<Self>) {
+        let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut()) else {
+            return;
+        };
+        if file.switch.is_busy() {
+            return;
+        }
+        let Some((at, back)) = file.here(hit) else {
+            return;
+        };
+        if file.begin_switch(true, At::Hex(at)) {
+            file.switch.back = back;
+        }
+        cx.notify();
+    }
+}

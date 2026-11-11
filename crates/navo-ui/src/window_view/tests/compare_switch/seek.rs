@@ -113,6 +113,7 @@ fn long_run() -> PairText {
     let lines = vec![String::new(); 162];
     PairText {
         left_starts: (0..=162).map(|line| line * LINE).collect(),
+        right_starts: Vec::new(),
         left: lines.clone(),
         right: lines,
         hunks: vec![HunkView {

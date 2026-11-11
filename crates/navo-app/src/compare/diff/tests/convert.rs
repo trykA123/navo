@@ -95,6 +95,7 @@ fn the_pair_text_carries_the_byte_start_of_every_left_line() {
     );
     let text = to_pair_text(&loaded).unwrap();
     assert_eq!(text.left_starts, vec![0, 5, 9, 15]);
+    assert_eq!(text.right_starts, vec![0, 4, 8, 14]);
 }
 
 #[test]

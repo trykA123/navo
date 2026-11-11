@@ -7,7 +7,7 @@ use super::HexView;
 
 /// The byte kept on top across a rebuild: a left offset, or the right one on a gap row.
 #[derive(Debug, Clone, Copy)]
-pub(super) enum Anchor {
+pub(in crate::window_view::compare_screen) enum Anchor {
     Left(u64),
     Right(u64),
 }
@@ -16,23 +16,29 @@ impl HexView {
     /// The left byte offset of the first row shown, or the offset still waiting to be shown.
     /// A gap row reports the next row that has a left side.
     pub(in crate::window_view::compare_screen) fn top_offset(&self, visible: usize) -> u64 {
-        if let Some(start) = self.start {
+        if let Some(Anchor::Left(start)) = self.start {
             return start;
         }
         let top = self.viewport(visible).start;
         self.pinned().unwrap_or_else(|| self.rows.left_from(top))
     }
 
-    /// Starts the body at left byte `offset` once its rows are laid out.
-    pub(in crate::window_view::compare_screen) fn seek(&mut self, offset: u64) {
-        self.start = Some(offset);
+    /// Starts the body at `at` (a byte of the left file, or of the right one for a line only it
+    /// has) once its rows are laid out.
+    pub(in crate::window_view::compare_screen) fn seek(&mut self, at: Anchor) {
+        self.start = Some(at);
     }
 
-    /// Puts a pending start on the top row; called once the rows exist.
+    /// Puts a pending start on the top row; called once the rows exist. Only a left offset is
+    /// pinned: a right one lands on its row, and a rebuild then keeps that row's own byte.
     pub(super) fn apply_start(&mut self) {
-        if let Some(offset) = self.start.take() {
-            self.top = self.rows.row_of_left(offset);
-            self.pin = Some(offset);
+        match self.start.take() {
+            Some(Anchor::Left(offset)) => {
+                self.top = self.rows.row_of_left(offset);
+                self.pin = Some(offset);
+            }
+            Some(Anchor::Right(offset)) => self.top = self.rows.row_of_right(offset),
+            None => {}
         }
     }
 

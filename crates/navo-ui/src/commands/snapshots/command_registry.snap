@@ -464,6 +464,7 @@ compare.copy_right | Copy to the right | CompareView
 compare.copy_left | Copy to the left | CompareView
 compare.view_bytes | Show bytes | CompareView
 compare.view_text | Show text | CompareView
+compare.show_bytes_here | Show bytes here | CompareView
 compare.next_file | Next changed file | CompareView
 compare.previous_file | Previous changed file | CompareView
 compare.view_menu | View menu of the file diff | CompareView

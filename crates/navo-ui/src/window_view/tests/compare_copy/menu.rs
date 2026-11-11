@@ -81,3 +81,26 @@ fn compare_copy_menu_opens_on_the_stream_and_copies_the_current_change(cx: &mut 
     assert_eq!(asked.len(), 1);
     assert_eq!(asked[0].direction, CopyDirection::ToRight);
 }
+
+#[gpui_kit::test]
+fn compare_copy_menu_lists_show_bytes_here_only_for_a_long_line(cx: &mut TestAppContext) {
+    use crate::window_view::tests::compare_here::long_rig;
+
+    let _shown = crate::compare_visible::show_compare();
+    let rig = long_rig(cx);
+    let labels = |cx: &mut TestAppContext| rig.view.read_with(cx, |v, _| v.file_menu_labels());
+    rig.right_click(cx, ("row", 299));
+    assert!(rig.menu_open(cx));
+    assert!(
+        !labels(cx).contains(&"Show bytes here".to_owned()),
+        "a short line"
+    );
+    rig.press(cx, "escape");
+    rig.right_click(cx, ("row", 300));
+    assert!(
+        labels(cx).contains(&"Show bytes here".to_owned()),
+        "the long line"
+    );
+    rig.press(cx, "enter");
+    assert_eq!(rig.diff.views(), vec![(2, true)], "the entry opens Bytes");
+}

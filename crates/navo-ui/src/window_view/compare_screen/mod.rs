@@ -154,28 +154,23 @@ impl FileScreen {
     /// Installs an opened pair: its text rows, its large or image or hex body by kind, or its
     /// kind only; rows are `row_height` tall.
     fn opened(&mut self, (kind, text): (PairKind, Option<Arc<PairText>>), row_height: Pixels) {
-        let offset = self.switch.landed();
+        let landing = self.switch.landed();
         let old_view = self.view.take();
-        let (at, words) = (self.at.filter(|_| offset.is_none()), self.look.words);
-        self.view = text.clone().map(|text| {
-            let mut view = file::FileView::new(text, at, words);
-            offset.inspect(|&offset| view.seek_offset(offset));
-            view
-        });
+        let (at, words) = (self.at.filter(|_| landing.is_none()), self.look.words);
+        self.view = text
+            .clone()
+            .map(|text| file::FileView::new(text, at, words));
         let layout = self.look.layout.unwrap_or(self.auto);
         self.large =
             matches!(kind, PairKind::Large { .. }).then(|| LargeShown::new(row_height, layout));
         let old = self.hex.take();
-        self.hex = matches!(kind, PairKind::Binary).then(|| {
-            let mut view = hex::HexView::reopened(old);
-            offset.inspect(|&offset| view.seek(offset));
-            view
-        });
+        self.hex = matches!(kind, PairKind::Binary).then(|| hex::HexView::reopened(old));
+        landing.inspect(|&at| self.land(at));
         self.open_pictures(kind);
         self.state = FileState::Opened { kind, text };
         self.follow_layout();
-        match (offset, self.hex.is_some()) {
-            (Some(_), shown) => self.switch.hold(old_view.filter(|_| shown)),
+        match (landing, self.hex.is_some()) {
+            (Some(_), shown) => self.switch.hold(old_view, shown),
             (None, false) => self.switch.release(),
             (None, true) => {}
         }

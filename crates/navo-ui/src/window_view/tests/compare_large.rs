@@ -48,6 +48,8 @@ pub(super) fn lines(rows: std::ops::Range<u64>, totals: (u64, u64)) -> DiffUpdat
         right: rows.map(|at| format!("r{at}")).collect(),
         left_cut: false,
         right_cut: false,
+        left_starts: Vec::new(),
+        right_starts: Vec::new(),
         totals,
     }
 }
@@ -67,6 +69,22 @@ pub(super) fn open_large(cx: &mut TestAppContext) -> (Rig, DiffSink) {
     });
     settle(cx, &rig.view);
     (rig, sink)
+}
+
+/// Opens the selected row of `rig` as a large pair; returns the sink its updates go through.
+pub(super) fn open_large_in(cx: &mut TestAppContext, rig: &Rig) -> DiffSink {
+    rig.press(cx, "enter");
+    let sink = rig.diff.pair_sink();
+    sink(DiffUpdate::Opened {
+        request: 1,
+        kind: PairKind::Large {
+            left: 1 << 30,
+            right: 1 << 30,
+        },
+        text: None,
+    });
+    settle(cx, &rig.view);
+    sink
 }
 
 pub(super) fn push(cx: &mut TestAppContext, rig: &Rig, sink: &DiffSink, update: DiffUpdate) {

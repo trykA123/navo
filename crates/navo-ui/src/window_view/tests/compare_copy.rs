@@ -45,6 +45,7 @@ fn text() -> PairText {
     let lines = vec!["line".to_owned(); 40];
     PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: lines.clone(),
         right: lines,
         rows,

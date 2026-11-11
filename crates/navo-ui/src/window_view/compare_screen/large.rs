@@ -3,6 +3,7 @@
 //! hunks waits with "Looking further… N %" until one arrives, and Esc stops the wait.
 
 mod bar;
+mod here;
 mod lines;
 mod list;
 mod map;
@@ -16,9 +17,7 @@ use std::rc::Rc;
 
 use navo_l10n::{t, tr};
 
-#[cfg(test)]
-pub(in crate::window_view) use map::Anchor;
-pub(in crate::window_view) use map::{RowMap, Settled};
+pub(in crate::window_view) use map::{Anchor, RowMap, Settled};
 
 use crate::compare_diff::{
     DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepView, Layout,
@@ -43,6 +42,8 @@ pub(super) struct LargeShown {
     current: Option<(u64, u64)>,
     /// Whether next difference waits for a hunk past the known ones.
     seeking: bool,
+    /// The line to put on top once the line counts are known (Show text from bytes, V41d).
+    sought: Option<Anchor>,
 }
 
 impl LargeShown {
@@ -59,6 +60,7 @@ impl LargeShown {
             scroll,
             current: None,
             seeking: false,
+            sought: None,
         }
     }
 
@@ -84,14 +86,9 @@ impl LargeShown {
     }
 
     /// Stores a line window that starts at line `start` with both sides' line counts.
-    pub(super) fn add_lines(
-        &mut self,
-        start: u64,
-        (left, right): (Vec<String>, Vec<String>),
-        totals: (u64, u64),
-    ) {
-        let near = self.near(start);
-        self.lines.borrow_mut().add(start, (left, right), near);
+    pub(super) fn add_lines(&mut self, fetched: lines::Fetched, totals: (u64, u64)) {
+        let near = self.near(fetched.start);
+        self.lines.borrow_mut().add(fetched, near);
         if self.map.totals() != Some(totals) {
             self.remap(self.rebuild(self.map.layout(), Some(totals)));
         }
@@ -137,6 +134,7 @@ impl LargeShown {
         self.bar.set_count(self.map.count());
         let row = anchor.map_or(top, |anchor| self.map.row_of(anchor));
         self.place(row, sub);
+        self.apply_sought();
     }
 
     /// Whether the diff reported its last section.
@@ -257,9 +255,18 @@ impl super::FileScreen {
                 rows,
                 left,
                 right,
+                left_starts,
+                right_starts,
                 totals,
                 ..
-            } => large.add_lines(rows.start, (left, right), totals),
+            } => large.add_lines(
+                lines::Fetched {
+                    start: rows.start,
+                    lines: (left, right),
+                    starts: (left_starts, right_starts),
+                },
+                totals,
+            ),
             _ => {}
         }
         large.ask(self.control.as_ref());

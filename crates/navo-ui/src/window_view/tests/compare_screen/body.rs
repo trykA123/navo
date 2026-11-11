@@ -33,6 +33,7 @@ pub(in crate::window_view::tests) fn pair(len: u32, changed: &[u32]) -> PairText
     let lines = vec![String::new(); len as usize];
     PairText {
         left_starts: Vec::new(),
+        right_starts: Vec::new(),
         left: lines.clone(),
         right: lines,
         rows,

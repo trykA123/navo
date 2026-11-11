@@ -14,6 +14,7 @@ use self::fetch::ByteCache;
 pub(super) use self::fetch::{Fetched, SidesOpened, fetch_rows};
 use self::held::Held;
 pub(super) use self::hex_rows::Rows;
+pub(super) use self::seek::Anchor;
 use crate::compare_diff::{ByteRegionView, HexAlign};
 use crate::prelude::*;
 use crate::tokens::Theme;
@@ -71,8 +72,9 @@ pub(super) struct HexView {
     open: Option<gpui_kit::Task<()>>,
     scroll: ByteScroll,
     error: Option<SharedString>,
-    /// The left byte offset to put on top once the rows exist (Alt+V Bytes).
-    start: Option<u64>,
+    /// The byte offset to put on top once the rows exist (Alt+V Bytes; Show bytes here seeks
+    /// the right file for a line only it has).
+    start: Option<Anchor>,
     /// The exact left offset the top row was sought, kept while that row stays on top so a
     /// rebuild (regions landing) puts the same byte back on top.
     pin: Option<u64>,

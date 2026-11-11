@@ -163,8 +163,13 @@ fn body(
         return beside(bytes, details);
     }
     let failed = matches!(file.state, FileState::Failed(_));
-    if let Some(large) = file.large.as_ref().filter(|_| !failed) {
-        let rows = div().flex().flex_1().min_h_0().child(large.list(cx));
+    let large = file.large.as_ref().or(file.switch.held_large());
+    if let Some(large) = large.filter(|_| !failed) {
+        let rows = div()
+            .flex()
+            .flex_1()
+            .min_h_0()
+            .child(large.list(&cx.weak_entity(), cx));
         return beside(
             NavoWindow::large_moves(rows, cx).into_any_element(),
             details,

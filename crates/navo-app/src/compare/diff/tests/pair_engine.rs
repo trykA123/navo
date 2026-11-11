@@ -167,6 +167,45 @@ fn binary_pairs_of_different_sizes_align_by_content() {
 }
 
 #[test]
+fn a_forced_bytes_view_opens_a_large_pair_as_binary() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = large_input(dir.path());
+    let (sink, receive) = channel();
+    let control = PairDiff::start(large_request(7, dir.path()), input, sink);
+    assert!(matches!(opened(&receive, 7), PairKind::Large { .. }));
+    control.view_as(8, true);
+    let deadline = Instant::now() + WAIT;
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "no Opened for the forced request"
+        );
+        if let DiffUpdate::Opened {
+            request: 8, kind, ..
+        } = receive.recv_timeout(WAIT).unwrap()
+        {
+            assert_eq!(kind, PairKind::Binary);
+            break;
+        }
+    }
+    control.view_as(9, false);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "no Opened for the released request"
+        );
+        if let DiffUpdate::Opened {
+            request: 9, kind, ..
+        } = receive.recv_timeout(WAIT).unwrap()
+        {
+            assert!(matches!(kind, PairKind::Large { .. }));
+            break;
+        }
+    }
+    drop(control);
+}
+
+#[test]
 fn lines_before_the_engine_starts_are_replayed() {
     let dir = tempfile::tempdir().unwrap();
     let input = large_input(dir.path());

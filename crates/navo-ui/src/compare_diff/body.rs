@@ -6,6 +6,7 @@ use std::ops::Range;
 use gpui_kit::{Background, HighlightStyle, StyledText, pattern_slash, rems};
 
 use super::hooks::{Layout, PairText};
+use super::long::{LongHit, OnBytesHere, bytes_here, is_long};
 use super::rows::{ShownKind, ShownRow};
 use super::spans::SpanCache;
 use super::ticks::{PickSide, Ticks, tick_slot};
@@ -27,6 +28,8 @@ pub struct BodyLook<'a> {
     pub spans: Option<&'a SpanCache>,
     /// The tick boxes of the picked lines; `None` where lines cannot be picked.
     pub ticks: Option<&'a Ticks<'a>>,
+    /// The "Show bytes here" click for lines over 1 MiB; `None` where the pair cannot show bytes.
+    pub bytes_here: Option<&'a OnBytesHere>,
 }
 
 /// Digits of the largest line number on either side (at least 1).
@@ -144,6 +147,25 @@ fn span_tint(t: &Theme, kind: ShownKind) -> Hsla {
     }
 }
 
+/// The "Show bytes here" button for the line `at` of `row` when it is over 1 MiB.
+fn long_button(
+    look: &BodyLook,
+    row: &ShownRow,
+    (side, at): (Side, Option<(u32, &str)>),
+) -> Option<AnyElement> {
+    let on = look.bytes_here?;
+    at.filter(|(_, text)| is_long(text))?;
+    let hit = LongHit {
+        left: row.left.map(|(line, _)| line),
+        right: row.right.map(|(line, _)| line),
+    };
+    let name = match side {
+        Side::Left => "compare-bytes-left",
+        Side::Right => "compare-bytes-right",
+    };
+    Some(bytes_here(look.theme, (row.row, name), hit, on).into_any_element())
+}
+
 /// One side of a side-by-side row.
 fn side_cell(look: &BodyLook, row: &ShownRow, side: Side) -> Div {
     let at = match side {
@@ -170,6 +192,7 @@ fn side_cell(look: &BodyLook, row: &ShownRow, side: Side) -> Div {
             span_runs(look, side, at),
             span_tint(look.theme, row.kind),
         ))
+        .children(long_button(look, row, (side, at)))
 }
 
 /// The one text column of a unified row: the inserted side when it has one, else the deleted.
@@ -183,6 +206,14 @@ fn unified_text(look: &BodyLook, row: &ShownRow) -> Div {
         span_runs(look, side, line),
         span_tint(look.theme, row.kind),
     )
+}
+
+/// The "Show bytes here" button of a unified row's one text line.
+fn unified_button(look: &BodyLook, row: &ShownRow) -> Option<AnyElement> {
+    match row.right {
+        Some(line) => long_button(look, row, (Side::Right, Some(line))),
+        None => long_button(look, row, (Side::Left, row.left)),
+    }
 }
 
 /// One drawn row of the file diff in the look's layout.
@@ -218,7 +249,8 @@ pub fn row_view(look: &BodyLook, row: &ShownRow) -> AnyElement {
             }))
             .child(number(look, row.left.map(|(line, _)| line)))
             .child(number(look, row.right.map(|(line, _)| line)))
-            .child(unified_text(look, row)),
+            .child(unified_text(look, row))
+            .children(unified_button(look, row)),
     };
     row_el.into_any_element()
 }
@@ -249,6 +281,7 @@ mod tests {
         let t = Theme::new(Mode::Light);
         let text = PairText {
             left_starts: Vec::new(),
+            right_starts: Vec::new(),
             left: vec!["héllo".into()],
             right: vec![],
             rows: vec![DiffRow::Changed(0, 0)],
@@ -280,6 +313,7 @@ mod tests {
             current: None,
             spans,
             ticks: None,
+            bytes_here: None,
         };
         let line = Some((0, "héllo"));
         assert!(

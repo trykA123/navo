@@ -136,6 +136,7 @@ mod tests {
             left: vec![String::new(); 5],
             right: vec![String::new(); 6],
             left_starts: vec![0, 10, 20, 30, 40, 50],
+            right_starts: Vec::new(),
             rows,
             hunks: hunks
                 .iter()

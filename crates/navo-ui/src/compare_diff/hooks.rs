@@ -87,6 +87,8 @@ pub struct PairText {
     pub right: Vec<String>,
     /// The byte offset of each left line in its file, plus the end offset; empty when unknown.
     pub left_starts: Vec<u64>,
+    /// The same for the right lines; empty when unknown.
+    pub right_starts: Vec<u64>,
     pub rows: Vec<DiffRow>,
     pub hunks: Vec<HunkView>,
     pub facts: PairFacts,
@@ -208,12 +210,15 @@ pub enum DiffUpdate {
     },
     /// The display lines of a large text pair, read off the UI thread. A side past its end
     /// has fewer lines than `rows`; a `*_cut` side's last line is longer than the read limit
-    /// and ends early. `totals` holds both sides' line counts.
+    /// and ends early. `totals` holds both sides' line counts. `*_starts` hold the byte offset
+    /// of each line in `left` and `right`, in the same order.
     LargeLines {
         request: u64,
         rows: Range<u64>,
         left: Vec<String>,
         right: Vec<String>,
+        left_starts: Vec<u64>,
+        right_starts: Vec<u64>,
         left_cut: bool,
         right_cut: bool,
         totals: (u64, u64),
