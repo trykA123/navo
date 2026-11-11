@@ -196,7 +196,8 @@ impl Shared {
             return false;
         }
         state.stopped = Some(stop);
-        send(&mut state, Vec::new(), false, None)
+        let rows = state.rollup.take_dirty(Instant::now(), false);
+        send(&mut state, rows, false, None)
     }
 
     /// Waits until `resume`. False when `abandon` says the walk is over or the session closed.
@@ -221,7 +222,8 @@ impl Shared {
         if state.generation != generation || state.closed || state.stopped.take().is_none() {
             return false;
         }
-        let sent = send(&mut state, Vec::new(), false, None);
+        let rows = state.rollup.take_dirty(Instant::now(), false);
+        let sent = send(&mut state, rows, false, None);
         self.resumed.notify_all();
         sent
     }
@@ -243,7 +245,8 @@ impl Shared {
             return true;
         }
         state.final_emitted = true;
-        send(&mut state, Vec::new(), true, None)
+        let rows = state.rollup.take_dirty(Instant::now(), true);
+        send(&mut state, rows, true, None)
     }
 
     pub(super) fn finish_problem(&self, generation: Generation, reason: Reason) -> bool {
@@ -261,7 +264,8 @@ impl Shared {
             return true;
         }
         state.final_emitted = true;
-        let sent = send(&mut state, Vec::new(), true, Some(reason));
+        let rows = state.rollup.take_dirty(Instant::now(), true);
+        let sent = send(&mut state, rows, true, Some(reason));
         state.closed = true;
         sent
     }
