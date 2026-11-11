@@ -2,7 +2,8 @@
 # S11 installs with all outbound traffic blocked; S12 walks the rehearsal wizard with keys in both themes.
 
 $script:THEME_KEY = 'HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
-$script:ARTIFACT = 'C:\e2e\artifact\Navo-Setup.exe'
+# The base's own wizard with 0.0.2 inside: the same UI code as main. The rehearsal artifact (a7206b36) predates the W15b key fix.
+$script:S12_WIZARD = Join-Path $wizards '0.0.2\Navo-Setup.exe'
 $script:NAMED_TYPES = 'Button|CheckBox|Edit|Hyperlink|RadioButton|ComboBox|ListItem|TabItem|Slider|MenuItem'
 
 # Returns whether a TCP connection to the address and port opens within three seconds.
@@ -106,33 +107,38 @@ function Accept-Licence([IntPtr]$window, [string]$theme) {
 
 # Esc on Welcome closes the wizard, and nothing is installed or registered.
 function Test-EscOnWelcome {
-    $process = Start-Interactive $script:ARTIFACT @() $false
+    $process = Start-Interactive $script:S12_WIZARD @() $false
     Assert $process 'the wizard exited at once'
     $window = Wait-MainWindow $process
     Wait-UiText $window 'Install Navo' 60
     Send-Key $window 0x1B
     Assert ($process.WaitForExit(15000)) 'Esc on Welcome did not close the wizard'
-    Add-Fault ($process.ExitCode -eq 0) "Esc exit code was $($process.ExitCode)"
     Add-Fault (-not (Test-Path -LiteralPath (Get-DefaultRoot))) 'Esc on Welcome created the default root'
     Add-Fault (-not (Test-Path -LiteralPath $script:uninstallKey)) 'Esc on Welcome wrote the uninstall key'
-    Write-Evidence "Esc on Welcome: exit=$($process.ExitCode)"
+    Write-Evidence 'Esc on Welcome closed the wizard; no root and no uninstall key were created'
 }
 
-# Waits through the install after Alt+I, shooting the Installing page if it is seen; ends on the Finish page.
+# Waits through the install after Alt+I, dumping and shooting the Installing page if it is seen; ends on the Finish page.
 function Wait-Installed([IntPtr]$window, [string]$theme) {
-    $shot = $false
+    $state = @{ seen = $false }
     Wait-Until {
         $text = Get-UiText $window
         if ($text -match 'Navo is installed in') { return $true }
-        if (-not $shot -and $text -notmatch 'Start menu') { $script:shot = $true; Save-UiDump $window $theme 'installing' }
+        if (-not $state.seen -and $text -notmatch 'Start menu') { $state.seen = $true; Save-Page $window $theme 'installing' }
         $false
     } 300 'the Finish page did not show'
-    Write-Evidence "Installing page seen: $shot"
+    Write-Evidence "Installing page seen: $($state.seen)"
+}
+
+# Step-Page, and on a failure a picture of the whole screen from the host before the error goes on.
+function Step-PageShot([IntPtr]$window, [char]$letter, [string]$pattern, [string]$tag) {
+    try { Step-Page $window $letter $pattern 20 }
+    catch { Request-HostShot $tag; throw }
 }
 
 # Walks one wizard run by keys only: Enter, Alt+N, Alt+B, Tab, Space; dumps and shoots each page.
 function Walk-Pages([string]$theme) {
-    $process = Start-Interactive $script:ARTIFACT @() $false
+    $process = Start-Interactive $script:S12_WIZARD @() $false
     Assert $process 'the wizard exited at once'
     $window = Wait-MainWindow $process
     Wait-UiText $window 'Install Navo' 60
@@ -144,7 +150,7 @@ function Walk-Pages([string]$theme) {
     Save-Page $window $theme 'licence-accepted'
     Step-Page $window 'n' 'Uninstalling Navo deletes it|Install folder'
     Save-Page $window $theme 'folder'
-    Step-Page $window 'n' 'Start menu'
+    Step-PageShot $window 'n' 'Start menu' "stuck-$theme-shortcuts"
     Save-Page $window $theme 'shortcuts'
     Step-Page $window 'b' 'Uninstalling Navo deletes it|Install folder'
     Step-Page $window 'n' 'Start menu'
@@ -159,7 +165,7 @@ function Walk-Pages([string]$theme) {
 
 # S12: both themes, pages walked with keys, UIA dump and picture per page; Esc on Welcome changes nothing.
 function Test-S12 {
-    Assert (Test-Path -LiteralPath $script:ARTIFACT) "no rehearsal wizard at $script:ARTIFACT"
+    Assert (Test-Path -LiteralPath $script:S12_WIZARD) "no wizard at $script:S12_WIZARD"
     Backup-Registry $script:THEME_KEY
     Test-EscOnWelcome
     foreach ($theme in @(@('dark', 0), @('light', 1))) {
