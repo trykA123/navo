@@ -151,18 +151,6 @@ impl CompareMode {
         &self.roots
     }
 
-    /// Whether `pane` is one of the two compared panes.
-    #[must_use]
-    pub fn has_pane(&self, pane: PaneId) -> bool {
-        self.side_of(pane).is_some()
-    }
-
-    /// 0 for the left pane, 1 for the right one.
-    #[must_use]
-    pub fn side_of(&self, pane: PaneId) -> Option<usize> {
-        self.saved.iter().position(|saved| saved.pane == pane)
-    }
-
     #[must_use]
     pub fn filter(&self) -> CompareFilter {
         self.filter

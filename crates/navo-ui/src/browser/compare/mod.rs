@@ -65,6 +65,18 @@ impl Browser {
         self.hooks.compare.mode.as_ref()
     }
 
+    /// 0 for the left compared pane, 1 for the right one; None outside a compare or for another pane.
+    #[must_use]
+    pub fn compare_side_of(&self, pane: PaneId) -> Option<usize> {
+        self.hooks
+            .compare
+            .mode
+            .as_ref()?
+            .saved
+            .iter()
+            .position(|saved| saved.pane == pane)
+    }
+
     /// For the rows view (U5): selection and filter.
     pub fn compare_mode_mut(&mut self) -> Option<&mut CompareMode> {
         self.hooks.compare.mode.as_mut()
