@@ -53,7 +53,6 @@ impl Thumbs {
     }
 
     /// The uploaded textures of item `id`'s card, `None` on each side it does not show.
-    #[allow(dead_code, reason = "A9b draws the image card body from these")]
     pub(super) fn pair(&self, id: u64) -> (Option<&Arc<RenderImage>>, Option<&Arc<RenderImage>>) {
         match self.shown.get(&id) {
             Some(shown) => (shown.left.as_ref(), shown.right.as_ref()),

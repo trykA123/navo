@@ -2,8 +2,11 @@
 //! card's tinted slots and status words.
 
 use super::hex;
+use super::image;
 use super::*;
-use crate::compare_diff::{ByteProgress, BytesCard, HexWindow, LargeProgress, LargeStage};
+use crate::compare_diff::{
+    ByteProgress, BytesCard, HexWindow, ImageCard, LargeProgress, LargeStage,
+};
 
 /// A large card with the given scan, found count and progress.
 fn large(scan: CardScan, found: u32, progress: Option<LargeProgress>) -> LargeCard {
@@ -134,4 +137,29 @@ fn hex_status_reads_first_change_and_no_changes() {
         )),
         "Comparing…"
     );
+}
+
+/// An image card with the given score and note, without thumbnails.
+fn image(similarity: Option<u32>, note: Option<&'static str>) -> ImageCard {
+    ImageCard {
+        similarity,
+        note,
+        left: None,
+        right: None,
+    }
+}
+
+#[test]
+fn image_status_prefers_the_score_then_the_note() {
+    // The score is the card's only number, so it wins over any note (D26.6).
+    assert_eq!(
+        image::image_status(&image(Some(80), Some("compare-image-note-unreadable"))),
+        "80 % similar"
+    );
+    // Without a score the note says why; with neither the job has not answered yet.
+    assert_eq!(
+        image::image_status(&image(None, Some("compare-image-note-unreadable"))),
+        "A side cannot be read as a picture."
+    );
+    assert_eq!(image::image_status(&image(None, None)), "Comparing…");
 }

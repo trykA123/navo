@@ -134,6 +134,17 @@ impl Rig {
         .expect("window")
     }
 
+    /// Whether the last frame drew thumbnail half `index` inside item `id`'s detail row.
+    fn thumb_cell(&self, cx: &mut TestAppContext, id: u64, index: usize) -> bool {
+        cx.update_window(self.window, |_, window, _| {
+            window
+                .within(("compare-card-detail", id))
+                .try_find(("compare-card-thumb", index))
+                .is_some()
+        })
+        .expect("window")
+    }
+
     /// The text the last frame drew on hex side cell `index` of item `id`'s detail row.
     fn hex_label(&self, cx: &mut TestAppContext, id: u64, index: usize) -> Option<String> {
         cx.update_window(self.window, |_, window, _| {
@@ -361,4 +372,25 @@ fn compare_stream_a_new_detail_replaces_the_old_thumbnails(cx: &mut TestAppConte
         0,
         "a detail with no thumbnails holds none"
     );
+}
+
+#[gpui_kit::test]
+fn compare_stream_an_image_card_draws_both_thumbnails_at_a_fixed_height(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_stream(cx, 2);
+    rig.send_heavy(cx, 1, PairKind::Image);
+    let at = rig.row_index(cx, StreamRow::Detail(0));
+    let rows = rig.rows(cx);
+    let before = rig.row_height(cx, at);
+    assert_eq!(before, card_height(), "the image card is 146 px tall");
+    assert!(!rig.thumb_cell(cx, 1, 0), "and draws no thumbnail yet");
+    rig.send_detail(cx, 1, image_detail(2));
+    assert_eq!(rig.rows(cx), rows, "the thumbnails splice no row (D26.3)");
+    assert_eq!(rig.row_height(cx, at), before, "and no reflow");
+    assert!(rig.thumb_cell(cx, 1, 0), "the left side is drawn");
+    assert!(rig.thumb_cell(cx, 1, 1), "the right side is drawn");
+    rig.send_detail(cx, 1, image_detail(1));
+    assert!(rig.thumb_cell(cx, 1, 0), "one side still draws");
+    assert!(rig.thumb_cell(cx, 1, 1), "the other stays an empty half");
 }
