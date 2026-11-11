@@ -274,8 +274,15 @@ impl NavoWindow {
         if std::mem::take(&mut self.settings.restore_preview) {
             self.open_preview(window, cx);
         }
-        self.focus_core_pane(window, cx);
+        self.focus_after_settings(window, cx);
         cx.notify();
+    }
+
+    /// Returns focus to an open compare file diff, else to the focused pane.
+    fn focus_after_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.focus_file_screen(window, cx) {
+            self.focus_core_pane(window, cx);
+        }
     }
 
     pub(super) fn focus_settings(&self, window: &mut Window, cx: &mut App) {

@@ -419,3 +419,78 @@ fn compare_large_details_drawer_lists_kind_sizes_step_and_progress(cx: &mut Test
     settle(cx, &rig.view);
     assert_eq!(facts(cx), None, "Ctrl+I closes it again");
 }
+
+/// Opens a large diff with the budget notice and its link showing.
+fn open_with_link(cx: &mut TestAppContext) -> Rig {
+    let (rig, sink) = open_large(cx);
+    let budget = step(LargeStep::Coarse, LargeStepReason::Budget, 90..180);
+    push(cx, &rig, &sink, with_steps(vec![budget], 5));
+    assert!(has_link(cx, &rig));
+    rig
+}
+
+/// Whether the open compare file screen holds focus.
+fn file_focused(cx: &mut TestAppContext, rig: &Rig) -> bool {
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, _| view.file_screen_focused(window))
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn compare_large_closing_settings_returns_focus_to_the_diff(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = open_with_link(cx);
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click("compare-screen-budget-link", cx);
+    })
+    .expect("window");
+    settle(cx, &rig.view);
+    assert!(rig.view.read_with(cx, |view, _| view.settings.is_open()));
+    rig.press(cx, "escape");
+    settle(cx, &rig.view);
+    assert!(!rig.view.read_with(cx, |view, _| view.settings.is_open()));
+    assert!(file_focused(cx, &rig), "the diff has focus again");
+    rig.press(cx, "ctrl-i");
+    settle(cx, &rig.view);
+    let facts = rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    assert!(facts.is_some(), "Ctrl+I opens the details drawer");
+}
+
+/// Moves focus along the window's tab order until the budget link has it; false if it never does.
+fn tab_to_link(cx: &mut TestAppContext, rig: &Rig) -> bool {
+    for _ in 0..16 {
+        let on_link = rig
+            .window
+            .update(cx, |_, window, cx| {
+                window.focus_next(cx);
+                window.render_frame(cx);
+                window.find("compare-screen-budget-link").focused() == Some(true)
+            })
+            .expect("window");
+        if on_link {
+            return true;
+        }
+    }
+    false
+}
+
+#[gpui_kit::test]
+fn compare_large_budget_link_works_from_the_keyboard(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = open_with_link(cx);
+    let opened =
+        |cx: &mut TestAppContext| rig.view.read_with(cx, |view, _| view.settings.is_open());
+    assert!(tab_to_link(cx, &rig), "Tab reaches the link");
+    rig.press(cx, "enter");
+    settle(cx, &rig.view);
+    assert!(opened(cx), "Enter opens Settings");
+    rig.press(cx, "escape");
+    settle(cx, &rig.view);
+    assert!(!opened(cx), "Escape closes Settings");
+    assert!(tab_to_link(cx, &rig), "Tab reaches the link again");
+    rig.press(cx, "space");
+    settle(cx, &rig.view);
+    assert!(opened(cx), "Space opens Settings");
+}

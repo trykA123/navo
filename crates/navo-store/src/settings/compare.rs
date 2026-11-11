@@ -3,8 +3,8 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 // Memory budget range and default, in MiB.
-const MIN_BUDGET_MIB: u32 = 256;
-const MAX_BUDGET_MIB: u32 = 16_384;
+pub const MIN_BUDGET_MIB: u32 = 256;
+pub const MAX_BUDGET_MIB: u32 = 16_384;
 const DEFAULT_BUDGET_MIB: u32 = 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

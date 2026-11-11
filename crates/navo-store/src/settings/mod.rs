@@ -21,7 +21,7 @@ mod retention;
 mod saving;
 mod view;
 
-pub use compare::{Compare, CompareGitEngine, ContentCheck};
+pub use compare::{Compare, CompareGitEngine, ContentCheck, MAX_BUDGET_MIB, MIN_BUDGET_MIB};
 pub use complete::DefaultChange;
 use complete::{Ledger, reconcile};
 pub use edit::{SettingValue, key_line, section_line};
