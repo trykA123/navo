@@ -8,6 +8,7 @@ use navo_l10n::{t, tr};
 use super::super::copy::{Note, note_view};
 use super::super::{outline, search};
 use super::StreamScreen;
+use super::cards;
 use crate::compare_diff::{CardCtx, StreamRow, stream_row_view};
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName, icon};
@@ -159,7 +160,17 @@ fn row(weak: &WeakEntity<NavoWindow>, at: usize, cx: &App) -> AnyElement {
                 view.menu_at_stream_row((at, pointer), window, cx);
             });
         })
-        .child(stream_row_view(&stream.rows, at, &ctx))
+        .child(match stream.rows[at] {
+            // A heavy card's body is the fixed-height row the detail lane fills (D26.5).
+            StreamRow::Detail(item) => cards::detail_row(
+                &cards::DetailCtx {
+                    t,
+                    model: &stream.model,
+                },
+                item,
+            ),
+            _ => stream_row_view(&stream.rows, at, &ctx),
+        })
         .into_any_element()
 }
 
