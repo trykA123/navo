@@ -19,6 +19,8 @@ const WIDE: Pixels = px(84.);
 const NARROW: Pixels = px(66.);
 const NARROW_WINDOW: Pixels = px(720.);
 const PILL_HEIGHT: Pixels = px(20.);
+/// Room the cell's 1 px borders keep on each side of the pill.
+const CELL_BORDER_ROOM: Pixels = px(4.);
 
 /// The gutter width for a window of this width: 84 px, or 66 px under 720 px.
 #[must_use]
@@ -41,13 +43,18 @@ fn pill_metrics(compact: bool) -> (Pixels, Pixels) {
 }
 
 /// The pill's border: the tone's text colour, or the quiet line colour for muted tones.
-fn pill(t: &Theme, label: &GutterLabel, compact: bool) -> Div {
+///
+/// `width` is the cell's width: the pill never outgrows it, so a long label in any language is
+/// cut with an ellipsis and the full words stay readable in the cell's hover text.
+fn pill(t: &Theme, label: &GutterLabel, compact: bool, width: Pixels) -> Div {
     let ink = tone::text(t, label.tone);
     let border = tone::wash(t, label.tone).map_or(t.colors.line, |_| ink);
     let (font, pad) = pill_metrics(compact);
     div()
         .h(PILL_HEIGHT)
         .px(pad)
+        .min_w_0()
+        .max_w(width - CELL_BORDER_ROOM)
         .flex()
         .items_center()
         .rounded(t.radii.full)
@@ -58,7 +65,7 @@ fn pill(t: &Theme, label: &GutterLabel, compact: bool) -> Div {
         .text_size(font)
         .font_weight(FontWeight::SEMIBOLD)
         .whitespace_nowrap()
-        .child(label.text.words())
+        .child(div().min_w_0().truncate().child(label.text.words()))
 }
 
 /// The gutter cell of one row, `width` wide and as tall as its row; `None` leaves it empty.
@@ -86,7 +93,7 @@ pub fn gutter_cell(
     cell.when_some(label, |cell, label| {
         let tip = label.hover.clone();
         cell.child(
-            pill(t, label, compact)
+            pill(t, label, compact, width)
                 .id(id.into())
                 .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx)),
         )

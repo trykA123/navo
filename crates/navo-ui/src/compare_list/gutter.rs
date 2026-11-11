@@ -106,6 +106,7 @@ fn folder_changed(row: &CompareRow) -> Option<GutterLabel> {
     waiting.then(|| label(GutterText::Changed, Tone::Change, hover))
 }
 
+/// A gutter label built from its words, its tone and the text shown on hover.
 fn label(text: GutterText, tone: Tone, hover: String) -> GutterLabel {
     GutterLabel { text, tone, hover }
 }
