@@ -21,6 +21,8 @@ use crate::compare::diff::bytes::{ByteDiff, ByteInput};
 use crate::compare::diff::load::Side;
 use crate::compare::local::LocalSide;
 
+mod card;
+
 const WAIT: Duration = Duration::from_secs(5);
 
 fn location(path: &Path) -> Location {
