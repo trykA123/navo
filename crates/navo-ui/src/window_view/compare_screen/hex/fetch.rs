@@ -16,7 +16,7 @@ use crate::compare_diff::PairRequest;
 use crate::prelude::*;
 use crate::window_view::NavoWindow;
 
-/// How many cached spans trigger an eviction; the rows on screen are kept.
+/// How many cached spans trigger an eviction; the shown rows and the viewport at the current top are kept.
 pub(super) const CACHE_LIMIT: usize = 4096;
 
 /// The two byte sources of a hex body, or the first reason one could not open.
@@ -220,8 +220,8 @@ impl HexView {
         Some((sources, reads, range))
     }
 
-    /// Keeps one fetched range, evicting all but the shown rows when full; another range's read
-    /// is dropped. Its bytes are keyed by span, so a read that outlived a row-map change is
+    /// Keeps one fetched range, evicting all but the shown rows and the viewport at the current
+    /// top when full; another range's read is dropped. Its bytes are keyed by span, so a read that outlived a row-map change is
     /// still correct and only fills less.
     pub(in crate::window_view::compare_screen) fn install_rows(
         &mut self,
@@ -233,11 +233,13 @@ impl HexView {
         }
         self.pending = None;
         // The held map draws from this cache, so it is never evicted under one. The rows on
-        // screen stay, so a late read never blanks them.
+        // screen stay (the last requested ones and those at the current top, which a scroll
+        // moved before any request), so a late read never blanks them.
         if self.held.is_none() && self.loaded.is_full() {
-            let shown = self.shown.clone();
+            let now = self.viewport(self.shown.len());
+            let keep = self.shown.clone().chain(now);
             self.loaded
-                .retain_rows(shown.filter_map(|at| self.rows.row(at)));
+                .retain_rows(keep.filter_map(|at| self.rows.row(at)));
         }
         self.loaded.store(fetched);
         self.release_held(&range);
