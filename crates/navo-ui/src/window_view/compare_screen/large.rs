@@ -52,8 +52,10 @@ pub(super) struct LargeShown {
 }
 
 impl LargeShown {
-    /// An empty body in `layout` with rows `row_height` tall.
-    pub(super) fn new(row_height: Pixels, layout: Layout) -> Self {
+    /// An empty body in `layout` with rows `row_height` tall, starting from the sideways state
+    /// `sideways` — `carried` from the pair's previous body across a refresh (W8j2), or a fresh
+    /// handle at offset 0 for a new pair.
+    pub(super) fn new(row_height: Pixels, layout: Layout, sideways: SidewaysHandle) -> Self {
         let scroll = ListScroll::new();
         Self {
             hunks: Vec::new(),
@@ -66,7 +68,7 @@ impl LargeShown {
             current: None,
             seeking: false,
             sought: None,
-            sideways: SidewaysHandle::default(),
+            sideways,
         }
     }
 
@@ -264,7 +266,9 @@ impl super::FileScreen {
     /// only what this view already dropped.
     pub(super) fn apply_large(&mut self, update: DiffUpdate, row_height: Pixels) {
         let layout = self.look.layout.unwrap_or(self.auto);
-        let large = (self.large).get_or_insert_with(|| LargeShown::new(row_height, layout));
+        let sideways = self.take_sideways();
+        let large =
+            (self.large).get_or_insert_with(|| LargeShown::new(row_height, layout, sideways));
         large.bar.set_row_height(row_height);
         match update {
             DiffUpdate::Large {

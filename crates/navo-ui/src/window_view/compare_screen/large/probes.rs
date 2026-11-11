@@ -72,16 +72,11 @@ impl NavoWindow {
         }
     }
 
-    /// The open large body's sideways offset, this frame's cut and the extent, for tests.
+    /// The sideways offset, this frame's cut and the extent of the large body the screen draws:
+    /// the open one, else the one a bytes switch holds (as in `host.rs`).
     pub(in crate::window_view) fn large_sideways(&self) -> Option<SidewaysSeen> {
-        let large = self
-            .compare
-            .screen
-            .as_ref()?
-            .file
-            .as_ref()?
-            .large
-            .as_ref()?;
+        let file = self.compare.screen.as_ref()?.file.as_ref()?;
+        let large = file.large.as_ref().or(file.switch.held_large())?;
         Some(large.sideways.seen())
     }
 }

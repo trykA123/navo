@@ -98,6 +98,7 @@ impl NavoWindow {
             at,
             switch: switch::Switch::default(),
             large: None,
+            carried_sideways: None,
             pictures: None,
             retired: Vec::new(),
             control,

@@ -39,6 +39,7 @@ pub(in crate::window_view) use inbox::DiffSlot;
 #[cfg(test)]
 pub(in crate::window_view) use inbox::coalesce;
 use large::LargeShown;
+use sideways::SidewaysHandle;
 pub(super) use state::FileState;
 use state::request_of;
 use stream::StreamScreen;
@@ -65,6 +66,9 @@ pub(super) struct FileScreen {
     switch: switch::Switch,
     /// The large text snapshot applied last; its number was acknowledged after applying.
     large: Option<LargeShown>,
+    /// The sideways state of the large body a `refresh` replaced; the body built for the same
+    /// pair carries it, and it is dropped on any other `Opened` (a new pair starts at 0).
+    carried_sideways: Option<SidewaysHandle>,
     /// The pair's two pictures, once it opened as an image pair (V40).
     pictures: Option<image::Pictures>,
     /// Image bodies a refresh replaced, until the next poll frees their GPU pictures.
@@ -166,8 +170,9 @@ impl FileScreen {
             view.keep_sideways(old);
         }
         let layout = self.look.layout.unwrap_or(self.auto);
-        self.large =
-            matches!(kind, PairKind::Large { .. }).then(|| LargeShown::new(row_height, layout));
+        let sideways = self.take_sideways();
+        self.large = matches!(kind, PairKind::Large { .. })
+            .then(|| LargeShown::new(row_height, layout, sideways));
         let old = self.hex.take();
         self.hex = matches!(kind, PairKind::Binary).then(|| hex::HexView::reopened(old));
         landing.inspect(|&at| self.land(at));
@@ -183,11 +188,23 @@ impl FileScreen {
     }
 
     /// Asks the worker to reload both sides under the next request id; updates for every earlier
-    /// id become stale. Fails the pair, without reusing an id, once the ids run out.
+    /// id become stale. Fails the pair, without reusing an id, once the ids run out. Keeps the
+    /// large body's sideways state for the body the reload builds (W8j2).
     fn refresh(&mut self) {
+        if let Some(large) = self.large.as_ref() {
+            self.carried_sideways = Some(large.sideways());
+        }
         if let Some(id) = self.next_id() {
             self.control.refresh(id);
         }
+    }
+
+    /// The sideways state the next large body starts from: the one `refresh` kept, `carried`
+    /// into it, or a fresh handle — offset 0 — when nothing was kept.
+    pub(in crate::window_view::compare_screen) fn take_sideways(&mut self) -> SidewaysHandle {
+        self.carried_sideways
+            .take()
+            .map_or_else(SidewaysHandle::default, |old| SidewaysHandle::carried(&old))
     }
 
     /// Takes the next request id and makes every earlier one stale; the pair fails, without

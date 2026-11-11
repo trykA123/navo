@@ -1,6 +1,7 @@
 //! Sideways scroll of the large text body (W8j): the extent grows as wider line windows arrive
-//! and never shrinks, the wheel moves only the shared offset, Left/Right step 8 columns, short
-//! lines show no strip, and a reopened pair starts at offset 0.
+//! and never shrinks, the wheel (alone and with Shift) and Left/Right move the body the screen
+//! draws — open or held by a bytes switch —, short lines show no strip, a refresh of the same
+//! pair keeps the offset, and another pair starts at 0.
 
 use std::ops::Range;
 
@@ -12,7 +13,9 @@ use gpui_kit::{
 
 use super::compare_large::{lines, open_large, open_large_in, push};
 use super::compare_screen::Rig;
-use crate::compare_diff::{DiffSink, DiffUpdate};
+use super::compare_switch::LINE;
+use crate::commands::compare::ShowBytesHere;
+use crate::compare_diff::{DiffSink, DiffUpdate, LONG_LINE, PairKind};
 use crate::window_view::compare_screen::SidewaysSeen;
 
 /// A line of `cols` columns of `a`..`z`, as in the file diff's wide pair.
@@ -22,10 +25,11 @@ fn wide(cols: u32) -> String {
         .collect()
 }
 
-/// Lines `rows` of both sides, every one `cols` columns wide, with the sides' line counts.
-fn wide_lines(rows: Range<u64>, totals: (u64, u64), cols: u32) -> DiffUpdate {
+/// Lines `rows` of both sides for request `request`, every one `cols` columns wide, with the
+/// sides' line counts.
+fn wide_lines(request: u64, rows: Range<u64>, totals: (u64, u64), cols: u32) -> DiffUpdate {
     DiffUpdate::LargeLines {
-        request: 1,
+        request,
         rows: rows.clone(),
         left: rows.clone().map(|_| wide(cols)).collect(),
         right: rows.map(|_| wide(cols)).collect(),
@@ -34,6 +38,31 @@ fn wide_lines(rows: Range<u64>, totals: (u64, u64), cols: u32) -> DiffUpdate {
         left_starts: Vec::new(),
         right_starts: Vec::new(),
         totals,
+    }
+}
+
+/// The same window, but left line 1 is over `LONG_LINE` bytes and both sides' lines start 16
+/// bytes apart: "Show bytes here" finds it and holds the body while the switch is in flight.
+fn held_window(request: u64) -> DiffUpdate {
+    let side = |left: bool| -> Vec<String> {
+        (0..40u64)
+            .map(|at| match (left, at) {
+                (true, 1) => "x".repeat(LONG_LINE + 1),
+                _ => wide(500),
+            })
+            .collect()
+    };
+    let starts: Vec<u64> = (0..40u64).map(|at| at * LINE).collect();
+    DiffUpdate::LargeLines {
+        request,
+        rows: 0..40,
+        left: side(true),
+        right: side(false),
+        left_cut: false,
+        right_cut: false,
+        left_starts: starts.clone(),
+        right_starts: starts,
+        totals: (5_000, 5_000),
     }
 }
 
@@ -47,8 +76,7 @@ fn frames(cx: &mut TestAppContext, rig: &Rig) {
 }
 
 /// Turns the wheel over the middle of the large rows with `modifiers` held, then redraws.
-fn wheel(cx: &mut TestAppContext, rig: &Rig, delta: ScrollDelta) {
-    let modifiers = Modifiers::default();
+fn wheel(cx: &mut TestAppContext, rig: &Rig, delta: ScrollDelta, modifiers: Modifiers) {
     cx.update_window(rig.window, |_, window, cx| {
         let centre = window.find("compare-large-rows").bounds().center();
         window.dispatch_event(crate::test_pointer::moved(None, centre, modifiers), cx);
@@ -66,7 +94,12 @@ fn wheel(cx: &mut TestAppContext, rig: &Rig, delta: ScrollDelta) {
 }
 
 fn sideways_px(cx: &mut TestAppContext, rig: &Rig, x: f32, y: f32) {
-    wheel(cx, rig, ScrollDelta::Pixels(point(px(x), px(y))));
+    wheel(
+        cx,
+        rig,
+        ScrollDelta::Pixels(point(px(x), px(y))),
+        Modifiers::default(),
+    );
 }
 
 fn seen(cx: &mut TestAppContext, rig: &Rig) -> SidewaysSeen {
@@ -87,7 +120,7 @@ fn strip_shown(cx: &mut TestAppContext, rig: &Rig) -> bool {
 /// cut is ready.
 fn opened(cx: &mut TestAppContext) -> (Rig, DiffSink) {
     let (rig, sink) = open_large(cx);
-    push(cx, &rig, &sink, wide_lines(0..40, (5_000, 5_000), 500));
+    push(cx, &rig, &sink, wide_lines(1, 0..40, (5_000, 5_000), 500));
     frames(cx, &rig);
     (rig, sink)
 }
@@ -102,7 +135,7 @@ fn expected_from(offset: f32, advance: f32) -> (u32, f32) {
 fn the_extent_grows_with_arriving_windows_and_never_shrinks(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let (rig, sink) = open_large(cx);
-    push(cx, &rig, &sink, wide_lines(0..40, (5_000, 5_000), 500));
+    push(cx, &rig, &sink, wide_lines(1, 0..40, (5_000, 5_000), 500));
     frames(cx, &rig);
     let first = seen(cx, &rig);
     assert!(
@@ -113,7 +146,7 @@ fn the_extent_grows_with_arriving_windows_and_never_shrinks(cx: &mut TestAppCont
     frames(cx, &rig);
     let narrow = seen(cx, &rig);
     assert_eq!(narrow.max, first.max, "a narrower window never shrinks it");
-    push(cx, &rig, &sink, wide_lines(80..100, (5_000, 5_000), 700));
+    push(cx, &rig, &sink, wide_lines(1, 80..100, (5_000, 5_000), 700));
     frames(cx, &rig);
     let grown = seen(cx, &rig);
     assert!(
@@ -188,4 +221,96 @@ fn a_reopened_large_pair_starts_at_zero(cx: &mut TestAppContext) {
     let now = seen(cx, &rig);
     assert_eq!(now.offset, 0., "a new pair starts at 0");
     assert!(now.max.is_none(), "and knows no extent yet: {now:?}");
+}
+
+/// Shift held, as a real wheel with the modifier would report it.
+fn shifted() -> Modifiers {
+    Modifiers {
+        shift: true,
+        ..Modifiers::default()
+    }
+}
+
+#[gpui_kit::test]
+fn a_shifted_wheel_moves_the_large_offset(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, _sink) = opened(cx);
+    wheel(cx, &rig, ScrollDelta::Lines(point(-3., 0.)), shifted());
+    let now = seen(cx, &rig);
+    assert!(
+        (now.offset - 3. * now.advance).abs() < 0.01,
+        "Shift plus wheel moves the body: {now:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn right_moves_the_large_body_a_bytes_switch_holds(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    push(cx, &rig, &sink, held_window(1));
+    frames(cx, &rig);
+    rig.dispatch(cx, &ShowBytesHere);
+    assert_eq!(
+        rig.diff.views(),
+        vec![(2, true)],
+        "the switch holds the body"
+    );
+    rig.press(cx, "right");
+    let now = seen(cx, &rig);
+    assert!(
+        (now.offset - 8. * now.advance).abs() < 0.01,
+        "Right moves the held body 8 columns: {now:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn a_refresh_of_the_same_pair_keeps_the_large_sideways_offset(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = opened(cx);
+    sideways_px(cx, &rig, -80., 0.);
+    assert_eq!(seen(cx, &rig).offset, 80., "the wheel moved it first");
+    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    push(cx, &rig, &sink, wide_lines(2, 0..40, (5_000, 5_000), 500));
+    frames(cx, &rig);
+    let now = seen(cx, &rig);
+    assert_eq!(
+        now.offset, 80.,
+        "a refresh of the same pair keeps it: {now:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn a_new_large_pair_after_a_refresh_starts_at_zero(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = opened(cx);
+    sideways_px(cx, &rig, -80., 0.);
+    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    push(cx, &rig, &sink, wide_lines(2, 0..40, (5_000, 5_000), 500));
+    frames(cx, &rig);
+    rig.press(cx, "escape");
+    rig.press(cx, "down");
+    rig.press(cx, "enter");
+    let other = rig.diff.requests().last().expect("the second pair").id;
+    let sink = rig.diff.pair_sink();
+    push(
+        cx,
+        &rig,
+        &sink,
+        DiffUpdate::Opened {
+            request: other,
+            kind: PairKind::Large {
+                left: 1 << 30,
+                right: 1 << 30,
+            },
+            text: None,
+        },
+    );
+    push(
+        cx,
+        &rig,
+        &sink,
+        wide_lines(other, 0..40, (5_000, 5_000), 500),
+    );
+    frames(cx, &rig);
+    assert_eq!(seen(cx, &rig).offset, 0., "another pair starts at 0");
 }
