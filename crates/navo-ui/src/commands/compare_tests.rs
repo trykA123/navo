@@ -1,8 +1,8 @@
 use gpui_kit::{App, TestAppContext};
 use navo_l10n::catalog;
 
-use super::{all, by_name, entries, for_action, registry};
-use crate::compare_visible::hide_compare;
+use super::{all, by_name, entries, for_action, is_hidden, registry};
+use crate::compare_visible::{hide_compare, show_compare};
 
 fn compare_names() -> Vec<&'static str> {
     registry()
@@ -80,7 +80,7 @@ fn hidden_compare_commands_still_resolve_by_name_and_action() {
     );
 }
 
-const NOT_BUILT: [&str; 3] = ["compare.refs", "compare.save", "compare.toggle_wrap"];
+const NOT_BUILT: [&str; 2] = ["compare.refs", "compare.save"];
 
 fn palette_names() -> Vec<&'static str> {
     entries()
@@ -117,6 +117,12 @@ fn commands_still_to_be_built_stay_out_while_compare_is_on() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn the_built_wrap_command_is_not_hidden_while_compare_is_on() {
+    let _shown = show_compare();
+    assert!(!is_hidden("compare.toggle_wrap"), "W8i built it");
 }
 
 #[test]

@@ -13,13 +13,13 @@ fn error_of(text: &str) -> Option<KeymapError> {
 fn the_built_in_keymap_parses_and_validates() {
     let parsed = Keymap::parse(BUILTIN);
     assert_eq!(parsed.as_ref().err(), None);
-    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(555));
+    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(556));
 }
 
 #[test]
 fn the_built_in_keymap_is_parsed_once() {
     assert!(std::ptr::eq(Keymap::builtin(), Keymap::builtin()));
-    assert_eq!(Keymap::builtin().binds().len(), 555);
+    assert_eq!(Keymap::builtin().binds().len(), 556);
 }
 
 #[test]
@@ -272,7 +272,7 @@ fn visible_compare_binds_follow_the_key_table() {
             .flat_map(|(_, _, keys)| keys)
             .collect()
     };
-    assert_eq!(compare_binds(&keymap).len(), 33);
+    assert_eq!(compare_binds(&keymap).len(), 34);
     assert_eq!(
         keyed("compare.with_other_pane", "FileList"),
         ["ctrl-shift-d"]
@@ -338,7 +338,7 @@ fn visible_compare_binds_build_gpui_key_bindings(cx: &mut gpui_kit::TestAppConte
     let _shown = crate::compare_visible::show_compare();
     let keymap = Keymap::parse(BUILTIN).expect("keymap");
     let built = cx.update(|cx| crate::commands::key_bindings(&keymap, cx, Some("compare")));
-    assert_eq!(built.len(), 38);
+    assert_eq!(built.len(), 39);
 }
 
 mod lookups {

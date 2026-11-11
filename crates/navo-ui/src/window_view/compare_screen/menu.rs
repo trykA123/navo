@@ -6,7 +6,7 @@ use navo_core::shell_menu::ItemId;
 use navo_l10n::tr;
 
 use super::look::{Look, Preset};
-use crate::commands::compare::ViewMenu;
+use crate::commands::compare::{ToggleWrap, ViewMenu};
 use crate::compare_diff::HexAlign;
 use crate::compare_diff::Layout;
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
@@ -37,15 +37,36 @@ pub(super) struct LookHost<'a> {
     pub(super) menu: &'a mut MenuSlot,
 }
 
-/// The entries of the menu for `look`; `layout` is the layout in use and `hex` the alignment
-/// when the open file diff is a binary pair.
+/// A menu entry that runs `action`; labelled by the Fluent `id` and checked when `on`.
+fn run(id: &str, action: Box<dyn Action>, on: bool) -> MenuEntry {
+    MenuEntry::Run(tr(id).into(), action, on)
+}
+
+/// The hex tail of the menu for an open binary pair: a break and the two align entries.
+fn hex_entries(align: HexAlign) -> Vec<MenuEntry> {
+    vec![
+        MenuEntry::Break,
+        run(
+            "compare-hex-align-offset",
+            Box::new(AlignOffset),
+            align == HexAlign::Offset,
+        ),
+        run(
+            "compare-hex-align-content",
+            Box::new(AlignContent),
+            align == HexAlign::Content,
+        ),
+    ]
+}
+
+/// The entries of the menu for `look`; `layout` is the layout in use, `hex` the alignment
+/// when the open file diff is a binary pair, and `text` whether it shows the text file diff.
 pub(in crate::window_view) fn entries(
     look: &Look,
     layout: Layout,
     hex: Option<HexAlign>,
+    text: bool,
 ) -> Vec<MenuEntry> {
-    let run =
-        |id: &str, action: Box<dyn Action>, on: bool| MenuEntry::Run(tr(id).into(), action, on);
     let mut items = vec![
         run(
             "compare-view-simple",
@@ -77,18 +98,11 @@ pub(in crate::window_view) fn entries(
         run("compare-view-words", Box::new(ToggleWords), look.words),
         run("compare-view-map", Box::new(ToggleMap), look.map),
     ];
+    if text {
+        items.push(run("compare-view-wrap", Box::new(ToggleWrap), look.wrap));
+    }
     if let Some(align) = hex {
-        items.push(MenuEntry::Break);
-        items.push(run(
-            "compare-hex-align-offset",
-            Box::new(AlignOffset),
-            align == HexAlign::Offset,
-        ));
-        items.push(run(
-            "compare-hex-align-content",
-            Box::new(AlignContent),
-            align == HexAlign::Content,
-        ));
+        items.extend(hex_entries(align));
     }
     items
 }
@@ -125,6 +139,14 @@ impl NavoWindow {
         }))
         .on_action(cx.listener(|view, _: &AlignContent, _, cx| {
             view.set_hex_align(HexAlign::Content, cx);
+        }))
+    }
+
+    /// Registers the wrap toggle on the file diff's root, where the View actions run with the
+    /// `CompareView` key context; the Stream root does not handle it yet (W8k).
+    pub(super) fn wrap_action(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        root.on_action(cx.listener(|view, _: &ToggleWrap, _, cx| {
+            view.change_look(Look::toggle_wrap, cx);
         }))
     }
 
@@ -190,13 +212,19 @@ impl NavoWindow {
             .and_then(|screen| screen.file.as_ref())
             .and_then(|file| file.hex.as_ref())
             .map(super::hex::HexView::align);
+        let text = self
+            .compare
+            .screen
+            .as_ref()
+            .and_then(|screen| screen.file.as_ref())
+            .is_some_and(|file| file.view.is_some() && file.hex.is_none());
         let switch = (self.compare.screen.as_ref())
             .and_then(|screen| screen.file.as_ref())
             .map(super::switch::entries);
         let Some(host) = self.look_host() else {
             return;
         };
-        let mut items = entries(host.look, host.look.layout_in(window), hex);
+        let mut items = entries(host.look, host.look.layout_in(window), hex, text);
         items.extend(switch.unwrap_or_default());
         let anchor = point(
             window.viewport_size().width - t.spacing.xl,

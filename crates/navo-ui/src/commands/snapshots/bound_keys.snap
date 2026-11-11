@@ -146,6 +146,7 @@ compare.show_menu | menu | CompareView
 compare.show_menu | shift-f10 | CompareView
 compare.stream | alt-f | Compare
 compare.toggle_viewed | v | CompareStream
+compare.toggle_wrap | alt-z | CompareView
 compare.up | backspace | Compare
 compare.view_menu | alt-v | CompareView
 compare.with_other_pane | ctrl-shift-d | FileList

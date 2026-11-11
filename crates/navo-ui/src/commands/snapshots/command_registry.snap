@@ -475,6 +475,7 @@ compare.pick_up | Pick the previous line | CompareView
 compare.pick_toggle | Pick or unpick the line | CompareView
 compare.remove_picked | Remove the picked lines | CompareView
 compare.show_menu | Open the menu at the cursor line | CompareView
+compare.toggle_wrap | Wrap lines | CompareView
 compare.toggle_viewed | Mark file as viewed | CompareStream
 compare.fold | Fold or unfold the card | CompareStream
 compare.open_file | Open the file diff | CompareStream
