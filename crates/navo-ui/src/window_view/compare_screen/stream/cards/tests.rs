@@ -1,7 +1,9 @@
-//! Tests for a heavy card's detail text: the large card's status line and its line ranges.
+//! Tests for a heavy card's detail: the large card's status line and ranges, and the binary
+//! card's tinted slots and status words.
 
+use super::hex;
 use super::*;
-use crate::compare_diff::{LargeProgress, LargeStage};
+use crate::compare_diff::{ByteProgress, BytesCard, HexWindow, LargeProgress, LargeStage};
 
 /// A large card with the given scan, found count and progress.
 fn large(scan: CardScan, found: u32, progress: Option<LargeProgress>) -> LargeCard {
@@ -58,4 +60,78 @@ fn rows_text_is_one_based() {
     assert_eq!(rows_text(&(4..12)), "5–12");
     // A hunk the scan has not sized yet shows the line it started at.
     assert_eq!(rows_text(&(7..7)), "8");
+}
+
+/// A hex window of `bytes` on each side, with the left's changed range `changed` (D26.8).
+fn window(bytes: usize, changed: Range<u64>) -> HexWindow {
+    HexWindow {
+        left_start: 0x20,
+        right_start: 0x20,
+        left: vec![b'a'; bytes],
+        right: vec![b'b'; bytes],
+        changed_left: changed.clone(),
+        changed_right: changed,
+        wide: (false, false),
+    }
+}
+
+/// A binary card with the given scan, window and byte-scan progress.
+fn bytes(scan: CardScan, window: Option<HexWindow>, progress: Option<ByteProgress>) -> BytesCard {
+    BytesCard {
+        window,
+        progress,
+        scan,
+    }
+}
+
+#[test]
+fn window_tints_mark_only_the_changed_bytes() {
+    // A range inside the row marks its own slots and nothing else.
+    assert_eq!(
+        hex::window_tints(0x20, &(0x23..0x25)),
+        [(3, true), (4, true)]
+    );
+    // A range that runs past the row is cut at its 16 bytes.
+    assert_eq!(
+        hex::window_tints(0x20, &(0x2e..0x40)),
+        [(14, true), (15, true)]
+    );
+    // Ranges before, after or empty mark no slot of this row.
+    assert!(hex::window_tints(0x20, &(0x10..0x20)).is_empty());
+    assert!(hex::window_tints(0x20, &(0x30..0x32)).is_empty());
+    assert!(hex::window_tints(0x20, &(0x24..0x24)).is_empty());
+}
+
+#[test]
+fn hex_status_reads_first_change_and_no_changes() {
+    // The card stops at the first region it found (D26.4, D26.8).
+    let full = bytes(CardScan::Full, Some(window(16, 0x2a..0x2c)), None);
+    assert_eq!(hex::hex_status(&full), "First change at byte 0x2A");
+    assert_eq!(
+        hex::hex_status(&bytes(CardScan::Done, None, None)),
+        "No changes"
+    );
+    // While the byte scan runs it says how far it got, or nothing at all yet.
+    let going = bytes(
+        CardScan::Running,
+        None,
+        Some(ByteProgress {
+            done: 40,
+            total: 100,
+            coarse: false,
+        }),
+    );
+    assert_eq!(hex::hex_status(&going), "Comparing… 40 %");
+    assert_eq!(
+        hex::hex_status(&bytes(
+            CardScan::Running,
+            None,
+            Some(ByteProgress {
+                done: 0,
+                total: 0,
+                coarse: true,
+            }),
+        )),
+        "Comparing…"
+    );
 }
