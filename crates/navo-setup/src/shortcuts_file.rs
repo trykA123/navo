@@ -176,9 +176,9 @@ fn long_existing(path: &Path) -> Option<PathBuf> {
     // SAFETY: `buffer` has `needed` writable units and `wide` stays NUL-terminated.
     let length = unsafe { GetLongPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), needed) };
     match usize::try_from(length) {
-        Ok(length) if length > 0 && length < size => {
-            Some(PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length])))
-        }
+        Ok(length) if length > 0 && length < size => Some(PathBuf::from(
+            std::ffi::OsString::from_wide(&buffer[..length]),
+        )),
         _ => None,
     }
 }
