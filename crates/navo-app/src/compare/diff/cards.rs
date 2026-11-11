@@ -32,6 +32,10 @@ pub(crate) fn detail_fn(plan: EnginePlan) -> DetailFn {
             }
             PairKind::Binary => {
                 let (Some(left), Some(right)) = (input.left.clone(), input.right.clone()) else {
+                    emit(
+                        CardDetail::Failed(navo_l10n::tr("compare-could-not-start")),
+                        true,
+                    );
                     return;
                 };
                 let align = if left.1.size == right.1.size {
