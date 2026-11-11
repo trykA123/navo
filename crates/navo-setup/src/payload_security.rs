@@ -20,7 +20,7 @@ use windows_sys::Win32::{
 };
 
 /// An allocation returned by LocalAlloc-based security APIs.
-pub(super) struct Local(pub(super) *mut c_void);
+pub(crate) struct Local(pub(crate) *mut c_void);
 impl Drop for Local {
     /// Releases the owned Windows allocation once.
     fn drop(&mut self) {
@@ -93,18 +93,36 @@ pub(super) fn sid_text(sid: *mut c_void) -> io::Result<String> {
     }))
 }
 
+/// Builds the private work-folder SDDL: this user and SYSTEM, with no parent inheritance.
+fn private_sddl(sid: &str) -> String {
+    format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)")
+}
+
+/// Builds the protected setup-folder SDDL: this user, SYSTEM and Administrators, inherited.
+pub(super) fn root_sddl(sid: &str) -> String {
+    format!("{}(A;OICI;FA;;;BA)", private_sddl(sid))
+}
+
 /// Creates a protected DACL granting only this user and SYSTEM full access.
 pub(super) fn private_descriptor() -> io::Result<Local> {
     let sid = user_sid()?;
-    let sddl: Vec<u16> = format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)")
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
+    descriptor(&private_sddl(&sid))
+}
+
+/// Creates a protected folder DACL for this user, SYSTEM and Administrators with full access.
+pub(crate) fn root_descriptor() -> io::Result<Local> {
+    let sid = user_sid()?;
+    descriptor(&root_sddl(&sid))
+}
+
+/// Converts one SDDL string to an allocated, self-relative security descriptor.
+fn descriptor(sddl: &str) -> io::Result<Local> {
+    let wide: Vec<u16> = sddl.encode_utf16().chain(Some(0)).collect();
     let mut descriptor = ptr::null_mut();
     // SAFETY: SDDL is NUL-terminated; output is allocated by the API on success.
     if unsafe {
         ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            sddl.as_ptr(),
+            wide.as_ptr(),
             1,
             &mut descriptor,
             ptr::null_mut(),

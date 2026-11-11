@@ -76,6 +76,10 @@ pub(crate) fn failure_message(failure: &Failure, root: &Path, upgrade: bool) -> 
             *code,
             &format!("the empty install folder `{}` was removed", root.display()),
         ),
+        // Setup.exe wrote the uninstall entry before this check, so deleting the folder breaks it.
+        Failure::PartialRoot(Some(0)) => {
+            navo_l10n::t!("setup-failed-unverified", path = root.display().to_string())
+        }
         Failure::PartialRoot(code) => child_exit(
             "Setup.exe",
             *code,
