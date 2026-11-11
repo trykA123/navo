@@ -57,9 +57,6 @@ fn every_status_maps_to_its_label_tone_and_hover() {
             RowStatus::CaseConflict,
             Some((GutterText::Type, Tone::Conflict, "case conflict")),
         ),
-        (RowStatus::NotChecked("compare-reason-stopped"), None),
-        (RowStatus::Unavailable("compare-reason-access-denied"), None),
-        (RowStatus::Checking, None),
     ];
     for (status, want) in cases {
         let want = want.map(|(text, tone, hover)| (text, tone, hover.to_owned()));
@@ -77,11 +74,64 @@ fn a_checking_row_shows_its_percent() {
     let got = gutter_label(&file(RowStatus::Checking), Some(progress)).expect("label");
     assert_eq!((got.text, got.tone), (GutterText::Checking(25), Tone::Busy));
     assert!(got.hover.starts_with("same size and time"), "{}", got.hover);
-    let empty = RowProgress {
+}
+
+#[test]
+fn a_checking_row_without_progress_says_pending() {
+    let got = gutter_label(&file(RowStatus::Checking), None).expect("label");
+    assert_eq!(
+        (got.text, got.tone, got.hover.as_str()),
+        (
+            GutterText::Pending,
+            Tone::Muted,
+            "same size and time · checking"
+        )
+    );
+}
+
+#[test]
+fn a_checking_row_with_total_zero_says_pending() {
+    let progress = RowProgress {
+        id: 1,
+        bytes_done: 0,
         bytes_total: 0,
-        ..progress
     };
-    assert_eq!(gutter_label(&file(RowStatus::Checking), Some(empty)), None);
+    let got = gutter_label(&file(RowStatus::Checking), Some(progress)).expect("label");
+    assert_eq!(
+        (got.text, got.tone, got.hover.as_str()),
+        (
+            GutterText::Pending,
+            Tone::Muted,
+            "same size and time · checking"
+        )
+    );
+}
+
+#[test]
+fn an_unchecked_row_says_not_checked() {
+    let got =
+        gutter_label(&file(RowStatus::NotChecked("compare-reason-stopped")), None).expect("label");
+    assert_eq!(
+        (got.text, got.tone, got.hover.as_str()),
+        (GutterText::NotChecked, Tone::Muted, "Not checked (stopped)")
+    );
+}
+
+#[test]
+fn an_unavailable_row_says_cant_read() {
+    let got = gutter_label(
+        &file(RowStatus::Unavailable("compare-reason-access-denied")),
+        None,
+    )
+    .expect("label");
+    assert_eq!(
+        (got.text, got.tone, got.hover.as_str()),
+        (
+            GutterText::Unavailable,
+            Tone::Muted,
+            "unavailable: access denied"
+        )
+    );
 }
 
 #[test]
@@ -118,6 +168,9 @@ fn the_words_come_from_the_l10n_ids() {
         (GutterText::Inside(12), "12 inside"),
         (GutterText::Rules, "same*"),
         (GutterText::Checking(25), "25%"),
+        (GutterText::Pending, "…"),
+        (GutterText::NotChecked, "not checked"),
+        (GutterText::Unavailable, "can't read"),
     ];
     for (text, words) in cases {
         assert_eq!(text.words(), words, "{}", text.id());

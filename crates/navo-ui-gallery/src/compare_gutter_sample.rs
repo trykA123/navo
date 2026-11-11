@@ -62,6 +62,17 @@ fn entries() -> Vec<Entry> {
         ),
         entry("same by rules", &file(RowStatus::SameAfterRules), None),
         entry("checking", &file(RowStatus::Checking), Some(checking)),
+        entry("pending", &file(RowStatus::Checking), None),
+        entry(
+            "not checked",
+            &file(RowStatus::NotChecked("compare-reason-stopped")),
+            None,
+        ),
+        entry(
+            "can't read",
+            &file(RowStatus::Unavailable("compare-reason-access-denied")),
+            None,
+        ),
     ]
 }
 

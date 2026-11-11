@@ -19,6 +19,12 @@ pub enum GutterText {
     Rules,
     /// A big file being checked, in whole percent.
     Checking(u8),
+    /// A checking row whose bytes are not counted yet.
+    Pending,
+    /// A row the compare stopped before checking.
+    NotChecked,
+    /// A row one side cannot be read.
+    Unavailable,
 }
 
 impl GutterText {
@@ -33,6 +39,9 @@ impl GutterText {
             Self::Inside(_) => "compare-gutter-inside",
             Self::Rules => "compare-gutter-rules",
             Self::Checking(_) => "compare-gutter-checking",
+            Self::Pending => "compare-gutter-pending",
+            Self::NotChecked => "compare-gutter-not-checked",
+            Self::Unavailable => "compare-gutter-unavailable",
         }
     }
 
@@ -58,8 +67,8 @@ pub struct GutterLabel {
 /// The label of a row, or `None` for rows that say nothing in the gutter.
 ///
 /// A folder pair with differences inside always says "{n} inside", even when the folder is itself
-/// changed. Identical, not-checked and unavailable rows have no label, and so does a checking row
-/// without `progress` (small files finish at once).
+/// changed. Identical rows have no label; rows the compare did not reach say what they are in the
+/// muted tone, and so does a checking row whose byte count is missing (small files finish at once).
 #[must_use]
 pub fn gutter_label(row: &CompareRow, progress: Option<RowProgress>) -> Option<GutterLabel> {
     let inside = row.is_folder_pair()
@@ -80,8 +89,12 @@ pub fn gutter_label(row: &CompareRow, progress: Option<RowProgress>) -> Option<G
         RowStatus::OnlyLeft => (GutterText::OnlyLeft, Tone::Delete),
         RowStatus::OnlyRight => (GutterText::OnlyRight, Tone::Add),
         RowStatus::TypeConflict | RowStatus::CaseConflict => (GutterText::Type, Tone::Conflict),
-        RowStatus::Checking => (GutterText::Checking(percent(progress?)?), Tone::Busy),
-        RowStatus::NotChecked(_) | RowStatus::Unavailable(_) => return None,
+        RowStatus::Checking => match progress.and_then(percent) {
+            Some(done) => (GutterText::Checking(done), Tone::Busy),
+            None => (GutterText::Pending, Tone::Muted),
+        },
+        RowStatus::NotChecked(_) => (GutterText::NotChecked, Tone::Muted),
+        RowStatus::Unavailable(_) => (GutterText::Unavailable, Tone::Muted),
     };
     Some(label(text, tone, status_text(row.status, progress)))
 }

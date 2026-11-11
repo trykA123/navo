@@ -313,3 +313,6 @@ compare-gutter-type = type ≠
 compare-gutter-inside = { $count } inside
 compare-gutter-rules = same*
 compare-gutter-checking = { $percent }%
+compare-gutter-pending = …
+compare-gutter-not-checked = not checked
+compare-gutter-unavailable = can't read
