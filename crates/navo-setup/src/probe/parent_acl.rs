@@ -133,10 +133,10 @@ fn wide_z(path: &Path) -> Vec<u16> {
 mod tests {
     use windows_sys::Win32::Security::{
         Authorization::{
-            ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityDescriptorDacl,
-            SE_FILE_OBJECT, SetNamedSecurityInfoW,
+            ConvertStringSecurityDescriptorToSecurityDescriptorW, SE_FILE_OBJECT,
+            SetNamedSecurityInfoW,
         },
-        DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION,
+        DACL_SECURITY_INFORMATION, GetSecurityDescriptorDacl, PROTECTED_DACL_SECURITY_INFORMATION,
     };
 
     use super::*;
