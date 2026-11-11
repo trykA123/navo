@@ -367,6 +367,7 @@ impl NavoWindow {
                 file.apply(update, rows) | changed
             });
         self.start_hex_open(cx);
+        self.start_file_syntax(cx);
         changed
     }
 
