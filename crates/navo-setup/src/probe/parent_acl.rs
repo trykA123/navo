@@ -8,17 +8,13 @@
 
 use std::{io, path::Path, ptr};
 
-use windows_sys::Win32::{
-    Foundation::{GENERIC_ALL, GENERIC_WRITE},
-    Security::{
-        ACCESS_ALLOWED_ACE, ACL,
-        Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT},
-        DACL_SECURITY_INFORMATION, GetAce, INHERIT_ONLY_ACE, OWNER_SECURITY_INFORMATION,
-        PSECURITY_DESCRIPTOR, PSID,
-    },
-    Storage::FileSystem::{DELETE, FILE_DELETE_CHILD, WRITE_DAC, WRITE_OWNER},
+use windows_sys::Win32::Security::{
+    ACCESS_ALLOWED_ACE, ACL,
+    Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT},
+    DACL_SECURITY_INFORMATION, GetAce, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
 };
 
+use crate::parent_acl_rule::ace_opens;
 use crate::payload::platform::security;
 use crate::placement::Chain;
 
@@ -33,22 +29,19 @@ const CREATOR_OWNER: &str = "S-1-3-0";
 /// The placeholder that grants each object's owner rights without inherited control.
 const OWNER_RIGHTS: &str = "S-1-3-4";
 
-/// Rights that let another SID change the folder itself.
-const CHANGES_FOLDER: u32 = DELETE | WRITE_DAC | WRITE_OWNER | GENERIC_ALL | GENERIC_WRITE;
-
-/// Whether an existing folder above the candidate, except the drive root, is open to others.
+/// Whether an existing folder or the drive root is open to another user.
 pub(super) fn parent_open(chain: &Chain) -> io::Result<bool> {
     let user = security::user_sid()?;
-    for link in chain.existing.iter().skip(1) {
-        if folder_open(&link.path, &user)? {
+    for (index, link) in chain.existing.iter().enumerate() {
+        if folder_open(&link.path, &user, index == 0)? {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-/// Reads one folder's owner and DACL; an error is returned so the caller refuses.
-fn folder_open(path: &Path, user: &str) -> io::Result<bool> {
+/// Reads one folder's owner and DACL; the root uses the narrower rule and ignores its owner.
+fn folder_open(path: &Path, user: &str, is_root: bool) -> io::Result<bool> {
     let wide = wide_z(path);
     let mut owner: PSID = ptr::null_mut();
     let mut acl: *mut ACL = ptr::null_mut();
@@ -67,10 +60,14 @@ fn folder_open(path: &Path, user: &str) -> io::Result<bool> {
         )
     };
     if status != 0 {
-        return Err(io::Error::from_raw_os_error(status.cast_signed()));
+        return if is_root {
+            Ok(true)
+        } else {
+            Err(io::Error::from_raw_os_error(status.cast_signed()))
+        };
     }
     let _allocation = security::Local(descriptor);
-    if !trusted(&security::sid_text(owner)?, user) {
+    if !is_root && !trusted(&security::sid_text(owner)?, user) {
         return Ok(true);
     }
     if acl.is_null() {
@@ -79,15 +76,15 @@ fn folder_open(path: &Path, user: &str) -> io::Result<bool> {
     // SAFETY: the successful query returned a live ACL allocation.
     let count = u32::from(unsafe { (*acl).AceCount });
     for index in 0..count {
-        if ace_open(acl, index, user)? {
+        if ace_open(acl, index, user, is_root)? {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-/// Whether one allow ACE gives another SID rights over this folder or its children.
-fn ace_open(acl: *const ACL, index: u32, user: &str) -> io::Result<bool> {
+/// Whether one allow ACE gives another SID rights over this folder or the root.
+fn ace_open(acl: *const ACL, index: u32, user: &str, is_root: bool) -> io::Result<bool> {
     let mut raw = ptr::null_mut();
     // SAFETY: acl is live and index is within its verified AceCount.
     if unsafe { GetAce(acl, index, &mut raw) } == 0 {
@@ -95,19 +92,20 @@ fn ace_open(acl: *const ACL, index: u32, user: &str) -> io::Result<bool> {
     }
     // SAFETY: GetAce returned an ACE whose header is readable before its type is interpreted.
     let ace = unsafe { &*raw.cast::<ACCESS_ALLOWED_ACE>() };
-    if ace.Header.AceType != 0 {
-        return Ok(false);
-    }
+    let ace_type = ace.Header.AceType;
     let flags = u32::from(ace.Header.AceFlags);
-    let applies = flags & INHERIT_ONLY_ACE == 0;
-    let changes_folder = applies && ace.Mask & CHANGES_FOLDER != 0;
-    let deletes_child = ace.Mask & FILE_DELETE_CHILD != 0;
-    if !changes_folder && !deletes_child {
-        return Ok(false);
-    }
-    // SAFETY: an access-allowed ACE stores its SID at SidStart.
-    let sid = security::sid_text(ptr::from_ref(&ace.SidStart).cast_mut().cast())?;
-    Ok(!trusted(&sid, user))
+    let trusted = if ace_type == 0 {
+        // SAFETY: an access-allowed ACE stores its SID at this fixed offset from its start.
+        let sid = unsafe {
+            raw.cast::<u8>()
+                .add(std::mem::offset_of!(ACCESS_ALLOWED_ACE, SidStart))
+                .cast()
+        };
+        trusted(&security::sid_text(sid)?, user)
+    } else {
+        false
+    };
+    Ok(ace_opens(ace_type, flags, ace.Mask, is_root, trusted))
 }
 
 /// Whether a SID is one that may change Navo's install chain.
@@ -140,21 +138,6 @@ mod tests {
     };
 
     use super::*;
-    use crate::placement::{FileId, Link};
-
-    /// Builds a chain whose only checked parent is `path`.
-    fn chain_for(path: &Path) -> Chain {
-        let link = |path: &Path| Link {
-            path: path.to_path_buf(),
-            name: path.file_name().unwrap_or_default().into(),
-            id: FileId { volume: 0, id: 0 },
-            reparse: false,
-        };
-        Chain {
-            existing: vec![link(Path::new("C:\\")), link(path)],
-            missing: Vec::new(),
-        }
-    }
 
     /// Replaces one folder's DACL with `sddl`.
     fn set_dacl(path: &Path, sddl: &str) -> io::Result<()> {
@@ -200,6 +183,26 @@ mod tests {
         Ok(())
     }
 
+    /// Replaces one folder's DACL with a null DACL, which grants everyone full access.
+    fn set_null_dacl(path: &Path) -> io::Result<()> {
+        // SAFETY: the path is NUL-terminated; a null DACL is the intended value.
+        let status = unsafe {
+            SetNamedSecurityInfoW(
+                wide_z(path).as_ptr(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+        if status != 0 {
+            return Err(io::Error::from_raw_os_error(status.cast_signed()));
+        }
+        Ok(())
+    }
+
     /// A user/SY/BA DACL is closed; adding an Authenticated Users allow ACE opens it.
     #[test]
     fn an_authenticated_users_ace_makes_the_parent_open() -> io::Result<()> {
@@ -207,9 +210,26 @@ mod tests {
         let user = security::user_sid()?;
         let closed = format!("D:P(A;OICI;FA;;;{user})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)");
         set_dacl(temp.path(), &closed)?;
-        assert!(!parent_open(&chain_for(temp.path()))?);
+        assert!(!folder_open(temp.path(), &user, false)?);
         set_dacl(temp.path(), &format!("{closed}(A;;FA;;;AU)"))?;
-        assert!(parent_open(&chain_for(temp.path()))?);
+        assert!(folder_open(temp.path(), &user, false)?);
+        Ok(())
+    }
+
+    /// The root rule opens on a null DACL, FILE_DELETE_CHILD, WRITE_DAC or GENERIC_ALL only.
+    #[test]
+    fn the_root_rule_ignores_delete_and_generic_write() -> io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let user = security::user_sid()?;
+        let closed = format!("D:P(A;OICI;FA;;;{user})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)");
+        set_dacl(temp.path(), &closed)?;
+        assert!(!folder_open(temp.path(), &user, true)?);
+        set_null_dacl(temp.path())?;
+        assert!(folder_open(temp.path(), &user, true)?);
+        for (right, open) in [("GA", true), ("WD", true), ("SD", false), ("GW", false)] {
+            set_dacl(temp.path(), &format!("{closed}(A;;{right};;;AU)"))?;
+            assert_eq!(folder_open(temp.path(), &user, true)?, open, "{right}");
+        }
         Ok(())
     }
 }
