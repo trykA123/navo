@@ -4,7 +4,7 @@
 use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::{HighlightStyle, Hsla};
 
-use super::{PairSyntax, SideSyntax, SyntaxLook};
+use super::{PairSyntax, SideSyntax, SyntaxLook, line_run};
 use crate::compare_diff::body::cut::{LineAt, shown_line};
 use crate::compare_diff::body::{BodyLook, RowCut, Side};
 use crate::compare_diff::{
@@ -174,4 +174,22 @@ fn a_line_that_is_not_the_parsed_line_stays_plain() {
     assert!(!side.line_runs((1, RUST[1]), &*colours).is_empty());
     assert!(side.line_runs((1, "let x"), &*colours).is_empty());
     assert!(side.line_runs((9, RUST[1]), &*colours).is_empty());
+}
+
+#[test]
+fn a_style_range_that_ends_before_the_line_gives_no_run() {
+    let run = line_run(0..5, 20, 10);
+    assert!(
+        run.is_empty(),
+        "a run before the line colours nothing: {run:?}"
+    );
+}
+
+#[test]
+fn a_style_range_past_the_line_end_is_clipped_to_the_line() {
+    assert_eq!(
+        line_run(10..40, 20, 10),
+        0..10,
+        "the run stops with the line"
+    );
 }
