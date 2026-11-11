@@ -18,7 +18,7 @@ Navo is for people who move files all day and want to do it from the keyboard. I
 
 It is also built for engineers who work with build output. The F3 viewer opens ELF images, linker MAP files, HEX and S-record files, CAN traces and PDF manuals, next to the usual text, JSON, YAML, XML and Markdown.
 
-Navo ships for Windows as a portable build: a zip with `navo.exe`, no installer. It also builds and runs on Linux, which is where most development happens.
+Navo ships for Windows as a portable zip with `navo.exe` and as a Velopack installer. Both are on the [releases page](https://github.com/trykA123/navo/releases). A guided installer with a choice of folder is built but not released yet; see [docs/features/install.md](docs/features/install.md). It also builds and runs on Linux, which is where most development happens.
 
 ## The ideas behind it
 
