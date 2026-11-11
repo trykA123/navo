@@ -137,7 +137,11 @@ fn every_fresh_folder_has_a_protected_dacl_with_three_explicit_aces() -> std::io
     let _pin = Pin::fresh(&chain).expect("fresh pin");
     let full = security::user_sid()?;
     // SDDL writes the built-in Administrator (RID 500, as on CI runners) as the alias LA.
-    let user = if full.ends_with("-500") { "LA".to_owned() } else { full };
+    let user = if full.ends_with("-500") {
+        "LA".to_owned()
+    } else {
+        full
+    };
     for name in ["tools", "root"] {
         let sddl = dacl_sddl(&temp.path().join(name))?;
         assert!(sddl.starts_with("D:P"), "{sddl}");
