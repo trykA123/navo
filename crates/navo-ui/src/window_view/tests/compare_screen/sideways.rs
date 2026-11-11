@@ -1,5 +1,6 @@
-//! Sideways scroll of the file diff (D39.2–D39.4, PC3, PC4): the wheel moves one shared offset,
-//! a vertical swipe does not, layouts and reloads keep it, and wrap ignores sideways input.
+//! Sideways scroll of the file diff (D39.2–D39.4, PC3, PC4): the wheel (alone, and with Shift
+//! as gpui delivers it) moves one shared offset, a vertical swipe does not, layouts and reloads
+//! keep it, and wrap ignores sideways input.
 
 use std::sync::Arc;
 
@@ -244,4 +245,22 @@ fn widths_are_measured_off_the_ui_thread(cx: &mut TestAppContext) {
     cx.run_until_parked();
     frames(&rig, cx);
     assert!(seen(&rig, cx).max.is_some_and(|max| max > 0.));
+}
+
+#[gpui_kit::test]
+fn a_shifted_wheel_moves_the_file_diff_sideways(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = opened(cx);
+    let shift = Modifiers {
+        shift: true,
+        ..Modifiers::default()
+    };
+    // A vertical wheel with Shift: gpui turns it into this horizontal `Lines` delta on
+    // Windows, X11 and Wayland before the body handler sees it.
+    wheel(&rig, cx, ScrollDelta::Lines(point(-3., 0.)), shift);
+    let now = seen(&rig, cx);
+    assert!(
+        (now.offset - 3. * now.advance).abs() < 0.01,
+        "Shift plus wheel moves the body: {now:?}"
+    );
 }

@@ -19,15 +19,19 @@ const KEY_COLS: f32 = 8.;
 
 impl NavoWindow {
     /// Moves the open text body sideways by `cols` columns and redraws: the text view when it
-    /// shows, else the large body (W8j); with neither open the key goes on to the next handler.
+    /// shows, else the large body the host draws — open, or held by a bytes switch (W8j2);
+    /// with neither open the key goes on to the next handler.
     fn sideways_step(&mut self, cols: f32, cx: &mut Context<Self>) {
         let file = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
         let view = file
             .as_ref()
             .and_then(|file| file.view.as_ref().map(|view| view.sideways.clone()));
-        let large = file
-            .as_ref()
-            .and_then(|file| file.large.as_ref().map(|large| large.sideways()));
+        let large = file.as_ref().and_then(|file| {
+            file.large
+                .as_ref()
+                .or(file.switch.held_large())
+                .map(|large| large.sideways())
+        });
         let Some(handle) = view.or(large) else {
             cx.propagate();
             return;
