@@ -6512,6 +6512,7 @@ dependencies = [
  "navo-l10n",
  "navo-pdf",
  "navo-retention",
+ "navo-store",
  "navo-structured",
  "navo-syntax",
  "object 0.41.0",

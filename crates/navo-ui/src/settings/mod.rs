@@ -21,6 +21,7 @@ mod row_state;
 mod search_fields;
 mod search_page;
 mod steps;
+mod stored;
 mod summon_key;
 mod tray_fields;
 mod update_fields;
@@ -53,6 +54,7 @@ pub use search_page::{SearchPage, ServiceStatus};
 pub use steps::{
     HELP_ROW, Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of,
 };
+pub use stored::stored_value;
 pub use summon_key::{SummonKey, SummonKeyError, parse_summon_key};
 pub use upgrade::{DefaultShift, Moved};
 pub use values::{Change, Value, Values};

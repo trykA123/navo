@@ -78,6 +78,7 @@ navo-index = { path = "../navo-index" }
 navo-l10n = { path = "../navo-l10n" }
 navo-pdf = { path = "../navo-pdf" }
 navo-retention = { path = "../navo-retention" }
+navo-store = { path = "../navo-store" }
 navo-structured = { path = "../navo-structured" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

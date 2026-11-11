@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use navo_core::Location;
-use navo_core::list_text::{join_list, split_list};
+use navo_core::list_text::join_list;
 use navo_fs::Watch;
 use navo_store::{
     Saved, SettingValue, Settings, SettingsError, SettingsStore, settings_key_line,
@@ -28,6 +28,7 @@ mod skipped;
 mod start;
 
 pub(crate) use guide_hint::{take as take_marker, wire as wire_guide_hint};
+pub(crate) use navo_ui::settings::stored_value;
 pub use reload::{Follow, Reloader};
 pub use start::{Loaded, start_from};
 #[cfg(test)]
@@ -234,22 +235,6 @@ fn describe(error: &SettingsError) -> String {
 )]
 fn report(message: &str) {
     eprintln!("settings: {message}");
-}
-
-pub(crate) fn stored_value(change: &Change) -> Option<SettingValue> {
-    match (&change.value, change.field.spec().control) {
-        (Value::Flag(flag), _) => Some(SettingValue::Bool(*flag)),
-        (Value::Number(number), _) => Some(SettingValue::Integer(*number)),
-        (Value::Text(text), _) if change.field.is_list() => {
-            Some(SettingValue::List(split_list(text)))
-        }
-        (Value::Text(text), _) if text.is_empty() => None,
-        (Value::Text(text), _) => Some(SettingValue::Text(text.to_string())),
-        (Value::Pick(at), Control::Choices(options, _)) => options
-            .get(*at)
-            .map(|option| SettingValue::Text(option.toml.to_owned())),
-        (Value::Pick(_) | Value::Unset | Value::Reset, _) => None,
-    }
 }
 
 pub fn values_of(store: &SettingsStore) -> Values {
