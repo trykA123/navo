@@ -12,6 +12,11 @@ test-group = "process"
 filter = "binary(clipboard_windows) | binary(clipboard_virtual_windows) | binary(clipboard_watch_windows) | binary(clipboard_text_windows) | binary(shell_menu_windows)"
 test-group = "clipboard"
 
+# GitHub's Windows runners sometimes deliver no clipboard update within the tests' 5 s wait.
+[[profile.default.overrides]]
+filter = "binary(clipboard_text_windows) & test(/^the_watcher_/)"
+retries = 2
+
 [[profile.default.overrides]]
 filter = "binary(shell_menu_pages_windows) | (package(navo-app) & test(/^shell_menu::/))"
 test-group = "shell"
