@@ -188,13 +188,13 @@ fn report_install(
     ExitCode::from(code)
 }
 
-/// Resolves the default fresh root `FOLDERID_UserProgramFiles\Navo`.
+/// Resolves the default fresh root `FOLDERID_UserProgramFiles\Navo` without creating anything.
 #[cfg(windows)]
 pub(crate) fn default_root() -> Result<PathBuf, CliError> {
     use windows_sys::Win32::UI::Shell::FOLDERID_UserProgramFiles;
-    crate::probe::chain::known_folder(&FOLDERID_UserProgramFiles)
+    crate::probe::chain::known_folder_unverified(&FOLDERID_UserProgramFiles)
         .map_err(|_| CliError::Folder("the default install folder is unavailable".to_owned()))?
-        .map(|base| base.join("Navo"))
+        .map(|base| crate::default_root::under(&base))
         .ok_or_else(|| CliError::Folder("the default install folder is unavailable".to_owned()))
 }
 

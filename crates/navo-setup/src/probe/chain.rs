@@ -30,7 +30,8 @@ use windows_sys::Win32::UI::Shell::{
     FOLDERID_ProgramData, FOLDERID_ProgramFiles, FOLDERID_ProgramFilesCommon,
     FOLDERID_ProgramFilesX86, FOLDERID_Public, FOLDERID_RoamingAppData, FOLDERID_SkyDrive,
     FOLDERID_StartMenu, FOLDERID_Startup, FOLDERID_System, FOLDERID_UserProgramFiles,
-    FOLDERID_Videos, FOLDERID_Windows, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
+    FOLDERID_Videos, FOLDERID_Windows, KF_FLAG_CREATE, KF_FLAG_DEFAULT, KF_FLAG_DONT_VERIFY,
+    SHGetKnownFolderPath,
 };
 use windows_sys::core::{GUID, PWSTR};
 
@@ -87,7 +88,7 @@ pub fn refused() -> io::Result<Refused> {
     add_known(&mut never_equal, &FOLDERID_LocalAppData, &[])?;
     add_known(&mut never_equal, &FOLDERID_RoamingAppData, &[])?;
     add_known(&mut never_equal, &FOLDERID_LocalAppDataLow, &[])?;
-    add_known(&mut never_equal, &FOLDERID_UserProgramFiles, &[])?;
+    add_known_unverified(&mut never_equal, &FOLDERID_UserProgramFiles)?;
     add_known(&mut never_equal, &FOLDERID_StartMenu, &[])?;
     add_known(&mut never_equal, &FOLDERID_Public, &[])?;
 
@@ -240,7 +241,17 @@ fn protected_from(path: &Path) -> io::Result<Protected> {
 
 /// Adds one known folder to a refused set, skipping only an unresolvable known folder.
 fn add_known(out: &mut Vec<Protected>, id: &GUID, suffix: &[&str]) -> io::Result<()> {
-    let Some(base) = known_folder(id)? else {
+    add_base(out, known_folder(id)?, suffix)
+}
+
+/// Adds a known folder whose path counts even when the folder does not exist yet.
+fn add_known_unverified(out: &mut Vec<Protected>, id: &GUID) -> io::Result<()> {
+    add_base(out, known_folder_unverified(id)?, &[])
+}
+
+/// Adds a resolved known folder plus a suffix; an unresolved one is skipped.
+fn add_base(out: &mut Vec<Protected>, base: Option<PathBuf>, suffix: &[&str]) -> io::Result<()> {
+    let Some(base) = base else {
         return Ok(());
     };
     out.push(protected_from(&with_suffix(&base, suffix))?);
@@ -258,12 +269,28 @@ fn with_suffix(base: &Path, suffix: &[&str]) -> PathBuf {
 
 /// Resolves one known folder; `None` is the allowed `E_FAIL` or file-not-found skip.
 pub(crate) fn known_folder(id: &GUID) -> io::Result<Option<PathBuf>> {
+    known_folder_with(id, KF_FLAG_DEFAULT)
+}
+
+/// Resolves a known folder's path without requiring the folder to exist and creates nothing.
+pub(crate) fn known_folder_unverified(id: &GUID) -> io::Result<Option<PathBuf>> {
+    known_folder_with(id, KF_FLAG_DONT_VERIFY)
+}
+
+/// Resolves a known folder and lets Windows create it with its normal ACL when it is missing.
+pub(crate) fn create_known_folder(id: &GUID) -> io::Result<PathBuf> {
+    known_folder_with(id, KF_FLAG_CREATE)?
+        .ok_or_else(|| io::Error::other("the known folder cannot be created"))
+}
+
+/// Calls `SHGetKnownFolderPath` with `flags`; `None` is the allowed `E_FAIL` or not-found skip.
+fn known_folder_with(id: &GUID, flags: i32) -> io::Result<Option<PathBuf>> {
     let mut raw: PWSTR = std::ptr::null_mut();
     // SAFETY: the GUID is a valid known-folder id and `raw` is a writable path pointer.
     let result = unsafe {
         SHGetKnownFolderPath(
             id,
-            KF_FLAG_DEFAULT as u32,
+            flags.cast_unsigned(),
             std::ptr::null_mut(),
             &raw mut raw,
         )
