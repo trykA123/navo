@@ -17,5 +17,6 @@ mod pair_engine;
 mod search;
 mod sources;
 mod stream;
+mod stream_detail;
 mod viewable;
 mod viewed;
