@@ -10,6 +10,7 @@ mod spans;
 mod strip;
 mod syntax;
 mod widths;
+mod wrapped;
 
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
@@ -108,6 +109,8 @@ pub(super) struct FileView {
     widths: widths::WidthsSlot,
     /// The sides' syntax parse (D38), started by the window once the text is open.
     syntax: syntax::SyntaxSlot,
+    /// Wrapped lines and their index (D39.5–D39.6).
+    wrapped: wrapped::Wrapped,
 }
 
 impl FileView {
@@ -134,17 +137,13 @@ impl FileView {
             cols: None,
             widths: widths::WidthsSlot::default(),
             syntax: syntax::SyntaxSlot::default(),
+            wrapped: wrapped::Wrapped::default(),
         }
     }
 
     /// Keeps the sideways offset of `old`, the same pair before a reload.
     pub(super) fn keep_sideways(&mut self, old: &Self) {
         self.sideways = SidewaysHandle::carried(&old.sideways);
-    }
-
-    /// Turns line wrap on or off for the next draw; sideways input is ignored while it is on.
-    pub(super) fn set_wrap(&self, wrap: bool) {
-        self.sideways.set_wrap(wrap);
     }
 
     /// The shape in `layout`, measured on first use.
@@ -170,11 +169,11 @@ impl FileView {
         true
     }
 
-    /// Makes change `hunk` the current one and centres it.
+    /// Makes change `hunk` the current one and centres its first list item.
     pub(super) fn go_to(&mut self, hunk: usize, layout: Layout) {
         self.current = Some(hunk);
         if let Some(&row) = self.shape(layout).starts.get(hunk) {
-            self.scroll.scroll_to_center(row);
+            self.scroll.scroll_to_center(self.list_row(row));
         }
     }
 
@@ -214,11 +213,14 @@ impl FileView {
     /// The row list for the viewport in `layout` above the sideways strip; rows of a copyable
     /// change report hover and carry the copy bar when `bars` is given.
     pub(super) fn list(&mut self, layout: Layout, bars: FileBars, cx: &App) -> AnyElement {
+        let row_height = tokens::current(cx).spacing.row_height;
+        self.index(layout, row_height);
         self.place(layout);
         let (count, starts) = {
             let shape = self.shape(layout);
             (shape.count, shape.starts.clone())
         };
+        let count = self.items(count);
         let (syntax, colours) = self.syntax.parts(cx);
         let rows = rows::ListRows {
             text: Arc::clone(&self.text),
@@ -231,6 +233,7 @@ impl FileView {
             words: self.words,
             on_long: switch::on_bytes_here(&bars.weak),
             sideways: self.sideways.clone(),
+            wrap: self.wrap_draw(),
             syntax,
             colours,
             bars,
@@ -240,7 +243,7 @@ impl FileView {
             rows.draw(range, window, cx)
         };
         let list = VirtualList::new("compare-file-rows", count, &self.scroll, rows)
-            .row_height(tokens::current(cx).spacing.row_height)
+            .row_height(row_height)
             .label(tr("compare-screen-rows"))
             .axis_locked();
         div()

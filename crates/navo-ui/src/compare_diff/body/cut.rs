@@ -62,14 +62,20 @@ pub(super) struct LineAt<'a> {
 }
 
 /// The text and runs of `at`'s line after the cut, or `None` for no line: syntax colours with
-/// the changed-word fill over them. A line over
-/// `LONG_LINE` is never cut: it draws whole and keeps its "Show bytes here" button.
+/// the changed-word fill over them. A line over `LONG_LINE` is never cut: it draws whole and
+/// keeps its "Show bytes here" button, and a later wrapped line of its row leaves it out.
 pub(super) fn shown_line(
     look: &BodyLook,
     at: &LineAt,
     row_cut: &RowCut,
 ) -> Option<Shown<HighlightStyle>> {
     let (_, text) = at.line?;
+    if row_cut.continued && is_long(text) {
+        return Some(Shown {
+            text: String::new(),
+            runs: Vec::new(),
+        });
+    }
     let style = HighlightStyle {
         background_color: Some(span_tint(look.theme, at.kind)),
         ..HighlightStyle::default()

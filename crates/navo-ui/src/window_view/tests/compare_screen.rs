@@ -25,6 +25,7 @@ mod refresh;
 mod sideways;
 mod syntax;
 mod view;
+mod wrap;
 
 const KEYMAP: &str = include_str!("../../commands/keymap.toml");
 
