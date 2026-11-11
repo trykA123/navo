@@ -12,6 +12,7 @@ pub mod hooks;
 pub mod image_body;
 pub mod long;
 pub mod map;
+mod options;
 pub mod rows;
 pub mod sheet;
 pub mod spans;
@@ -29,6 +30,7 @@ pub use hooks::{
     PairText, RowSpans, StreamControl, StreamSink, StreamUpdate, THUMB_SIDE, Thumb, ViewedKey,
 };
 pub use long::{LONG_LINE, LongHit, OnBytesHere, is_long};
+pub use options::CompareOptions;
 pub use rows::{Half, ShownKind, ShownRow, StreamRow, pair_rows, row_count, stream_rows};
 pub use sheet::{SheetPlan, SheetPlanSink, SheetResult, SheetRow, SheetSink};
 pub use spans::SpanCache;
