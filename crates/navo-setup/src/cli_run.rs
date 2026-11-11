@@ -133,17 +133,9 @@ fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPa
         return fail(&CliError::AlreadyInstalled(install.root.clone()), logs);
     }
     let upgrade = matches!(found, Mode::Upgrade(_));
-    let root = match &found {
-        Mode::Upgrade(install) => install.root.clone(),
-        Mode::Fresh => match options.install_to.clone() {
-            Some(root) => root,
-            None => match default_root() {
-                Ok(root) => root,
-                Err(error) => return fail(&error, logs),
-            },
-        },
-        Mode::Same(install) | Mode::Newer(install) => install.root.clone(),
-        Mode::Ambiguous(_) => options.install_to.clone().unwrap_or_default(),
+    let root = match install_root(&found, options) {
+        Ok(root) => root,
+        Err(error) => return fail(&error, logs),
     };
     if upgrade && (!options.desktop || !options.start_menu) {
         let line = "An upgrade keeps the existing shortcuts; --no-desktop and --no-start-menu have no effect.";
@@ -166,6 +158,19 @@ fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPa
             report_install(error, host, &message, logs)
         }
     }
+}
+
+/// Picks the install folder for a silent run: the existing install's root, `--install-to`, or the
+/// default root for a fresh install. Fails only when the default root cannot be found.
+fn install_root(found: &Mode, options: &Silent) -> Result<PathBuf, CliError> {
+    Ok(match found {
+        Mode::Upgrade(install) | Mode::Same(install) | Mode::Newer(install) => install.root.clone(),
+        Mode::Fresh => match options.install_to.clone() {
+            Some(root) => root,
+            None => default_root()?,
+        },
+        Mode::Ambiguous(_) => options.install_to.clone().unwrap_or_default(),
+    })
 }
 
 /// Appends one line to the wizard log; a write failure never stops the install.
