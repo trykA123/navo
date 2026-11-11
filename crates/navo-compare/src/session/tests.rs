@@ -310,5 +310,6 @@ fn generation_with(generation: Generation, status: Status, kind: EntryKind) -> R
         generation,
         content: ContentClass::Unknown,
         contains_differences: false,
+        differences_inside: 0,
     }
 }

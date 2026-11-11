@@ -286,6 +286,9 @@ pub struct Row {
     /// Folder rows only: the subtree holds a different, orphan, conflict or unavailable row.
     /// The folder keeps its own `raw_status`; the session re-sends the row when this turns on.
     pub contains_differences: bool,
+    /// Folder rows only: how many rows below this folder have a difference status (files,
+    /// one-sided folders, conflicts, unavailable); 0 for files.
+    pub differences_inside: u32,
 }
 
 #[derive(Debug, Clone, Default)]
