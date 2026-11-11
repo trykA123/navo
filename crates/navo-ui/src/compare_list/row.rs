@@ -1,5 +1,7 @@
 use gpui_kit::prelude::FluentBuilder;
-use gpui_kit::{Div, FontWeight, ParentElement, Pixels, SharedString, Styled, div, px};
+use gpui_kit::{
+    Div, FontWeight, ParentElement, Pixels, SharedString, Styled, div, pattern_slash, px,
+};
 use navo_fs::EntryKind;
 
 use super::tone;
@@ -33,14 +35,24 @@ fn frame(t: &Theme) -> Div {
         .rounded(t.radii.md)
 }
 
-/// A row with no file on this side: a flat fill, so the other side's row stays lined up.
+/// A row with no file on this side: the words that say so on a hatch, so the other side's row
+/// stays lined up. The hatch is the file diff's.
 fn gap(look: &RowLook) -> Div {
     let t = look.theme;
     let selected = look.is_selected;
     frame(t)
-        .bg(t.diff.gap_hatch)
+        .bg(pattern_slash(t.diff.gap_hatch, 1., 4.))
+        .pl(t.rows.inset)
         .when(selected, |d| d.shadow(inset_ring(t.colors.line)))
         .when(selected && look.is_active, |d| d.child(cursor_bar(t)))
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_size(t.typography.small)
+                .text_color(t.colors.muted)
+                .child(SharedString::from(look.row.status.clone())),
+        )
 }
 
 fn entry_kind(kind: CompareKind) -> EntryKind {
@@ -58,13 +70,20 @@ fn name_text(row: &RowView, side: &SideView) -> String {
     }
 }
 
-fn number(width: Pixels, text: &str) -> Div {
+/// The mark that sits before the date of the newer side of a pair.
+const NEWER_MARK: &str = "▲";
+
+/// A right-aligned, truncated number cell `width` wide. `mark` sits inside the same width, so a
+/// marked date loses room instead of pushing the column.
+fn number(width: Pixels, mark: Option<&str>, text: &str) -> Div {
     div()
         .w(width)
         .flex_none()
         .flex()
+        .items_center()
         .justify_end()
         .overflow_hidden()
+        .children(mark.map(|mark| div().flex_none().mr(px(2.)).child(SharedString::from(mark))))
         .child(
             div()
                 .min_w_0()
@@ -73,7 +92,13 @@ fn number(width: Pixels, text: &str) -> Div {
         )
 }
 
+/// The size and the date of one side: loud and marked on the newer side, muted on the other.
 fn numbers(t: &Theme, side: &SideView) -> Div {
+    let (colour, weight) = if side.newer {
+        (t.colors.text, FontWeight::SEMIBOLD)
+    } else {
+        (t.colors.muted, FontWeight::NORMAL)
+    };
     div()
         .flex()
         .items_center()
@@ -82,9 +107,14 @@ fn numbers(t: &Theme, side: &SideView) -> Div {
         .font_family(t.typography.numbers_font.clone())
         .font_features(t.typography.numbers_font_features.clone())
         .text_size(t.typography.small)
-        .text_color(t.colors.muted)
-        .child(number(SIZE_WIDTH, &side.size))
-        .child(number(DATE_WIDTH, &side.time))
+        .text_color(colour)
+        .font_weight(weight)
+        .child(number(SIZE_WIDTH, None, &side.size))
+        .child(number(
+            DATE_WIDTH,
+            side.newer.then_some(NEWER_MARK),
+            &side.time,
+        ))
 }
 
 fn name_color(t: &Theme, row: &RowView) -> gpui_kit::Hsla {

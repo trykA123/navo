@@ -30,6 +30,8 @@ pub struct SideView {
     pub kind: CompareKind,
     pub size: String,
     pub time: String,
+    /// This side's time is the later one of the pair, so the pane marks it as the newer side.
+    pub newer: bool,
 }
 
 /// One pane's row. `side` is `None` where the file does not exist: the pane draws a gap.
@@ -121,7 +123,7 @@ fn checking_text(progress: Option<RowProgress>) -> String {
     }
 }
 
-fn side_view(side: CompareSide) -> SideView {
+fn side_view(side: CompareSide, newer: bool) -> SideView {
     let size = match side.kind {
         CompareKind::File => format::size(side.size),
         CompareKind::Folder => "<DIR>".to_owned(),
@@ -132,13 +134,35 @@ fn side_view(side: CompareSide) -> SideView {
         kind: side.kind,
         size,
         time: side.modified_ms.map(format::date).unwrap_or_default(),
+        newer,
     }
+}
+
+/// A pair whose modified time tells which side is the newer one: two files or two links.
+///
+/// A folder's time is its own, not news about the other folder, so folder pairs are never marked.
+fn compares_time(side: CompareSide) -> bool {
+    matches!(side.kind, CompareKind::File | CompareKind::Link)
+}
+
+/// Which side of a pair is newer: `Some(0)` the left, `Some(1)` the right, `None` when a side is
+/// missing, is not a file or a link, or has no time, or when the two times are the same.
+fn newer_side(row: &CompareRow) -> Option<usize> {
+    let (Some(left), Some(right)) = (row.left, row.right) else {
+        return None;
+    };
+    if !compares_time(left) || !compares_time(right) {
+        return None;
+    }
+    let (before, after) = (left.modified_ms?, right.modified_ms?);
+    (before != after).then(|| usize::from(after > before))
 }
 
 /// One pane's row of a pair: its side, words, tone and (for side 0 only) the gutter label.
 ///
 /// `side` is 0 for the pane that shows the compare's left side; `progress` is the bytes checked of
-/// a row over 64 MiB. Only that pane draws the gutter, so the label describes the pair once.
+/// a row over 64 MiB. Only that pane draws the gutter, so the label describes the pair once. A row
+/// with no file here says so in its `status`, which is the only thing the pane draws for it.
 fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> RowView {
     let contains_differences =
         row.is_folder_pair() && row.contains_differences && row.status.is_same();
@@ -148,20 +172,20 @@ fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> Row
         look_of(row.status)
     };
     let here = if side == 0 { row.left } else { row.right };
+    let status = match here {
+        Some(_) if contains_differences => tr("compare-status-contains-differences"),
+        Some(_) => status_text(row.status, progress),
+        None if side == 0 => tr("compare-row-not-in-left"),
+        None => tr("compare-row-not-in-right"),
+    };
     RowView {
         path: row.path.clone(),
         name: row.name().to_owned(),
-        side: here.map(side_view),
+        side: here.map(|this| side_view(this, newer_side(row) == Some(side))),
         tone,
         mark,
         gutter: (side == 0).then(|| gutter_label(row, progress)).flatten(),
-        status: if here.is_none() {
-            String::new()
-        } else if contains_differences {
-            tr("compare-status-contains-differences")
-        } else {
-            status_text(row.status, progress)
-        },
+        status,
     }
 }
 

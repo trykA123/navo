@@ -34,7 +34,7 @@ fn both_panes_list_the_same_rows_in_the_same_order() {
 }
 
 #[test]
-fn the_side_without_the_file_gets_a_gap_and_no_status_words() {
+fn the_side_without_the_file_gets_a_gap_that_names_its_side() {
     let (mut browser, calls) = started();
     deliver(&mut browser, &calls, root_rows());
     let mode = browser.compare_mode().expect("compare mode");
@@ -46,7 +46,7 @@ fn the_side_without_the_file_gets_a_gap_and_no_status_words() {
     assert!(left[only_left].side.is_some());
     assert_eq!(left[only_left].status, "only left");
     assert!(right[only_left].side.is_none());
-    assert_eq!(right[only_left].status, "");
+    assert_eq!(right[only_left].status, "not in right");
     let same = at(&left, "a.txt");
     assert!(left[same].side.is_some() && right[same].side.is_some());
     assert_eq!(left[same].status, "");
@@ -70,6 +70,103 @@ fn sizes_and_times_come_from_the_side_that_has_the_file() {
         .map(|at| pane_rows(mode, at)[0].side.clone().expect("side").size)
         .into();
     assert_eq!(sizes, ["2.0 KB", "3.0 MB"]);
+}
+
+#[test]
+fn the_right_pane_says_a_left_only_file_is_not_in_right() {
+    let (mut browser, calls) = started();
+    deliver(&mut browser, &calls, root_rows());
+    let mode = browser.compare_mode().expect("compare mode");
+    let (left, right) = (pane_rows(mode, 0), pane_rows(mode, 1));
+    let at = left
+        .iter()
+        .position(|row| row.path == "b.txt")
+        .expect("row");
+    assert_eq!(right[at].status, "not in right");
+    assert!(right[at].side.is_none());
+    assert_eq!(left[at].status, "only left");
+    assert!(left[at].side.is_some());
+}
+
+#[test]
+fn the_left_pane_says_a_right_only_file_is_not_in_left() {
+    let (mut browser, calls) = started();
+    deliver(
+        &mut browser,
+        &calls,
+        rows(1, vec![row(1, "z.txt", RowStatus::OnlyRight)]),
+    );
+    let mode = browser.compare_mode().expect("compare mode");
+    let (left, right) = (pane_rows(mode, 0), pane_rows(mode, 1));
+    assert_eq!(left[0].status, "not in left");
+    assert!(left[0].side.is_none());
+    assert_eq!(right[0].status, "only right");
+}
+
+/// A pair of file sides with the given modified times.
+fn timed(id: u64, kind: CompareKind, left: Option<i64>, right: Option<i64>) -> CompareRow {
+    let side = |modified_ms| {
+        Some(CompareSide {
+            kind,
+            size: 7,
+            modified_ms,
+        })
+    };
+    CompareRow::new(id, "a.txt", RowStatus::Different, (side(left), side(right)))
+}
+
+/// The `newer` mark of one pane's first row.
+fn newer(browser: &crate::browser::Browser, side: usize) -> bool {
+    let mode = browser.compare_mode().expect("compare mode");
+    pane_rows(mode, side)
+        .first()
+        .and_then(|row| row.side.as_ref())
+        .is_some_and(|view| view.newer)
+}
+
+#[test]
+fn only_the_side_with_the_later_time_is_newer() {
+    let (mut browser, calls) = started();
+    deliver(
+        &mut browser,
+        &calls,
+        rows(1, vec![timed(1, CompareKind::File, Some(20), Some(10))]),
+    );
+    assert!(newer(&browser, 0));
+    assert!(!newer(&browser, 1));
+    deliver(
+        &mut browser,
+        &calls,
+        rows(1, vec![timed(1, CompareKind::Link, Some(10), Some(20))]),
+    );
+    assert!(!newer(&browser, 0));
+    assert!(newer(&browser, 1));
+    deliver(
+        &mut browser,
+        &calls,
+        rows(1, vec![timed(1, CompareKind::File, Some(20), Some(20))]),
+    );
+    assert!(!newer(&browser, 0));
+    assert!(!newer(&browser, 1));
+    deliver(
+        &mut browser,
+        &calls,
+        rows(1, vec![timed(1, CompareKind::File, Some(20), None)]),
+    );
+    assert!(!newer(&browser, 0));
+    assert!(!newer(&browser, 1));
+}
+
+#[test]
+fn a_folder_pair_is_never_marked_newer() {
+    let (mut browser, calls) = started();
+    deliver(
+        &mut browser,
+        &calls,
+        rows(1, vec![timed(1, CompareKind::Folder, Some(20), Some(10))]),
+    );
+    assert!(!newer(&browser, 0));
+    assert!(!newer(&browser, 1));
 }
 
 #[test]
