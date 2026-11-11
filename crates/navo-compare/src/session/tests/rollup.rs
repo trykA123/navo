@@ -193,3 +193,54 @@ fn a_same_or_checking_resolve_changes_no_count() {
             .is_empty()
     );
 }
+
+/// A `Shared` holding folder 10 with three differences under it; the third falls in the 100 ms window and is held.
+fn shared_with_held_count() -> (Arc<shared::Shared>, std::sync::mpsc::Receiver<RowBatch>) {
+    let generation = Generation::new(1);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let shared = Arc::new(shared::Shared::new(sender, generation));
+    let folder = Row {
+        id: 10,
+        ..generation_with(generation, Status::Same, EntryKind::Folder)
+    };
+    assert!(shared.emit_initial(generation, vec![folder], None));
+    for id in [20, 21, 22] {
+        let file = Row {
+            id,
+            ..generation_with(generation, diff(), EntryKind::File)
+        };
+        assert!(shared.emit_initial(generation, vec![file], Some(10)));
+    }
+    (shared, receiver)
+}
+
+fn last_count_of_folder(receiver: &std::sync::mpsc::Receiver<RowBatch>) -> (RowBatch, u32) {
+    let batches: Vec<RowBatch> = receiver.try_iter().collect();
+    let count = batches
+        .iter()
+        .flat_map(|batch| batch.rows.iter())
+        .filter(|row| row.id == 10)
+        .map(|row| row.differences_inside)
+        .next_back();
+    (batches.into_iter().last().unwrap(), count.unwrap())
+}
+
+#[test]
+fn finish_sends_the_counts_held_back_by_the_window() {
+    let (shared, receiver) = shared_with_held_count();
+    assert!(shared.finish(Generation::new(1)));
+    let (last, count) = last_count_of_folder(&receiver);
+
+    assert!(last.is_final);
+    assert_eq!(count, 3);
+}
+
+#[test]
+fn finish_problem_sends_the_counts_held_back_by_the_window() {
+    let (shared, receiver) = shared_with_held_count();
+    assert!(shared.finish_problem(Generation::new(1), Reason::ReadError));
+    let (last, count) = last_count_of_folder(&receiver);
+
+    assert!(last.is_final);
+    assert_eq!(count, 3);
+}

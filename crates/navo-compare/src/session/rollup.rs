@@ -16,7 +16,8 @@ struct Folder {
 /// The folder rows of one generation, with their parents.
 ///
 /// Every call that counts a difference is a transition into a difference status: the row was
-/// Checking or Same before, never already a difference.
+/// Checking or Same before, never already a difference. Counts only rise: a future path that
+/// turns a difference into Same (sync, copy) must decrement.
 #[derive(Default)]
 pub(super) struct Rollup {
     folders: HashMap<u64, Folder>,
