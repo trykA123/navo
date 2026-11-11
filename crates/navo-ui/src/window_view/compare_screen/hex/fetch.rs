@@ -16,8 +16,8 @@ use crate::compare_diff::PairRequest;
 use crate::prelude::*;
 use crate::window_view::NavoWindow;
 
-/// How many cached spans trigger a clear; the visible rows are read again at once.
-const CACHE_LIMIT: usize = 4096;
+/// How many cached spans trigger an eviction; the rows on screen are kept.
+pub(super) const CACHE_LIMIT: usize = 4096;
 
 /// The two byte sources of a hex body, or the first reason one could not open.
 pub(in crate::window_view::compare_screen) struct SidesOpened {
@@ -68,10 +68,30 @@ impl ByteCache {
         self.right.get(&span?)?.clone()
     }
 
+    /// Forgets every row except the spans of `keep`.
+    fn retain_rows(&mut self, keep: impl Iterator<Item = RowAt>) {
+        let mut kept = Self::default();
+        for row in keep {
+            if let Some((span, bytes)) = row.left.and_then(|span| self.left.remove_entry(&span)) {
+                kept.left.insert(span, bytes);
+            }
+            if let Some((span, bytes)) = row.right.and_then(|span| self.right.remove_entry(&span)) {
+                kept.right.insert(span, bytes);
+            }
+        }
+        *self = kept;
+    }
+
     /// Forgets every row.
     pub(super) fn clear(&mut self) {
         self.left.clear();
         self.right.clear();
+    }
+
+    /// The most spans either side holds, for tests.
+    #[cfg(test)]
+    pub(super) fn len(&self) -> usize {
+        self.left.len().max(self.right.len())
     }
 
     /// Whether the cache grew past its limit.
@@ -176,11 +196,12 @@ impl HexView {
         self.pending.as_ref() != Some(range) && self.unfetched(range)
     }
 
-    /// The sources and spans to read for `range`; marks the range pending.
+    /// The sources and spans to read for `range`; notes it as shown and marks it pending.
     pub(in crate::window_view::compare_screen) fn begin_fetch(
         &mut self,
         range: Range<usize>,
     ) -> Option<(Sources, Vec<RowAt>, Range<usize>)> {
+        self.shown = range.clone();
         self.release_held(&range);
         if !self.needs_rows(&range) {
             return None;
@@ -199,8 +220,9 @@ impl HexView {
         Some((sources, reads, range))
     }
 
-    /// Keeps one fetched range; another range's read is dropped. Its bytes are keyed by span,
-    /// so a read that outlived a row-map change is still correct and only fills less.
+    /// Keeps one fetched range, evicting all but the shown rows when full; another range's read
+    /// is dropped. Its bytes are keyed by span, so a read that outlived a row-map change is
+    /// still correct and only fills less.
     pub(in crate::window_view::compare_screen) fn install_rows(
         &mut self,
         range: Range<usize>,
@@ -210,9 +232,12 @@ impl HexView {
             return;
         }
         self.pending = None;
-        // The held map draws from this cache, so it is never cleared under one.
+        // The held map draws from this cache, so it is never evicted under one. The rows on
+        // screen stay, so a late read never blanks them.
         if self.held.is_none() && self.loaded.is_full() {
-            self.loaded.clear();
+            let shown = self.shown.clone();
+            self.loaded
+                .retain_rows(shown.filter_map(|at| self.rows.row(at)));
         }
         self.loaded.store(fetched);
         self.release_held(&range);
