@@ -1,5 +1,7 @@
 //! Compare mode on screen: each compared pane draws its side's rows, one bar sits above both.
 
+mod map;
+
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -28,6 +30,8 @@ pub(super) struct CompareView {
     /// The scroll offset the panes last painted at.
     painted_offset: Rc<Cell<Pixels>>,
     built: Option<Built>,
+    /// The change map beside the pane that shows the compare's right side (D36).
+    map: Option<map::MapMount>,
     scrolled_to: Option<String>,
     /// The file diff and Stream drawn in place of the panes, when open.
     pub(super) screen: Option<CompareScreen>,
@@ -42,6 +46,7 @@ impl CompareView {
             scroll: ListScroll::default(),
             painted_offset: Rc::default(),
             built: None,
+            map: None,
             scrolled_to: None,
             screen: None,
             diff: DiffSlot::new(hooks, wake),
@@ -102,7 +107,8 @@ impl NavoWindow {
                     this.compare_event((pane, event), window, cx);
                 }),
             );
-        Some(list.into_any_element())
+        let strip = map::MapPane { side, selected: at };
+        Some(self.list_with_map(strip, list.into_any_element(), cx))
     }
 
     /// The filter row and totals line, or `None` outside compare mode.

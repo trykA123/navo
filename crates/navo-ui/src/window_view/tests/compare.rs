@@ -375,3 +375,4 @@ fn a_wheel_turn_over_the_left_compare_pane_moves_the_right_pane_too(cx: &mut Tes
 }
 
 mod gutter;
+mod map;
