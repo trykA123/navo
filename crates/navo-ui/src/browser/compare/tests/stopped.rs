@@ -160,7 +160,7 @@ fn a_folder_that_holds_a_difference_stays_under_the_differences_filter() {
 }
 
 #[test]
-fn folders_with_nested_differences_get_a_distinct_mark_and_status() {
+fn folders_with_nested_differences_get_a_distinct_tone_and_status() {
     let (mut browser, calls) = started();
     deliver(&mut browser, &calls, nested_change());
     for side in [0, 1] {
@@ -168,24 +168,32 @@ fn folders_with_nested_differences_get_a_distinct_mark_and_status() {
         let views = pane_rows(mode, side);
         let changed = views.iter().find(|row| row.path == "a").expect("folder");
         let same = views.iter().find(|row| row.path == "c").expect("folder");
-        assert_ne!(changed.mark, "=");
-        assert_ne!(changed.mark, "≠");
         assert_eq!(changed.tone, Tone::Change);
+        assert_ne!(
+            changed.status,
+            navo_l10n::tr("compare-status-different"),
+            "a folder holding a difference is not drawn as one that differs"
+        );
         assert_eq!(
             changed.status,
             navo_l10n::tr("compare-status-contains-differences")
         );
-        assert_eq!(same.mark, "=");
+        assert_eq!(same.tone, Tone::Muted);
         assert!(same.status.is_empty());
     }
     select(&mut browser, "a");
     assert!(browser.compare_enter());
     let mode = browser.compare_mode().expect("compare mode");
-    assert_ne!(pane_rows(mode, 0)[0].mark, "=");
+    let holder = &pane_rows(mode, 0)[0];
+    assert_eq!(holder.tone, Tone::Change);
+    assert_eq!(
+        holder.status,
+        navo_l10n::tr("compare-status-contains-differences")
+    );
 }
 
 #[test]
-fn nested_differences_preserve_one_sided_and_checking_folder_marks() {
+fn nested_differences_preserve_one_sided_and_checking_folder_tones() {
     let (mut browser, calls) = started();
     for (status, side) in [
         (RowStatus::OnlyLeft, 0),
@@ -201,8 +209,8 @@ fn nested_differences_preserve_one_sided_and_checking_folder_marks() {
         deliver(&mut browser, &calls, rows(1, vec![folder]));
         let mode = browser.compare_mode().expect("compare mode");
         let view = &pane_rows(mode, side)[0];
-        let (tone, mark) = super::super::view::look_of(status);
-        assert_eq!((view.tone, view.mark), (tone, mark));
+        let (tone, _) = super::super::view::look_of(status);
+        assert_eq!(view.tone, tone, "{status:?} keeps its own colour");
         assert_eq!(view.status, super::super::view::status_text(status, None));
     }
 }

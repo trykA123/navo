@@ -41,7 +41,6 @@ pub struct RowView {
     pub name: String,
     pub side: Option<SideView>,
     pub tone: Tone,
-    pub mark: &'static str,
     pub status: String,
     /// The pair's gutter words, set only for the rows of side 0 (the left side), which draws the
     /// gutter column. `None` where the pair has nothing to say there.
@@ -166,10 +165,10 @@ fn newer_side(row: &CompareRow) -> Option<usize> {
 fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> RowView {
     let contains_differences =
         row.is_folder_pair() && row.contains_differences && row.status.is_same();
-    let (tone, mark) = if contains_differences {
-        (Tone::Change, "⊃")
+    let tone = if contains_differences {
+        Tone::Change
     } else {
-        look_of(row.status)
+        look_of(row.status).0
     };
     let here = if side == 0 { row.left } else { row.right };
     let status = match here {
@@ -183,7 +182,6 @@ fn row_view(row: &CompareRow, side: usize, progress: Option<RowProgress>) -> Row
         name: row.name().to_owned(),
         side: here.map(|this| side_view(this, newer_side(row) == Some(side))),
         tone,
-        mark,
         gutter: (side == 0).then(|| gutter_label(row, progress)).flatten(),
         status,
     }
