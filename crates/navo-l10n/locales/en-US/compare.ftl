@@ -145,6 +145,15 @@ compare-card-others = { $hunks ->
     [one] 1 other change
    *[other] { $hunks } other changes
 }
+compare-card-large-found = { $hunks ->
+    [one] 1 change so far
+   *[other] { $hunks } changes so far
+}
+compare-card-large-full = { $hunks ->
+    [one] 1+ change · Enter opens the full diff
+   *[other] { $hunks }+ changes · Enter opens the full diff
+}
+compare-card-large-hunk = Lines { $left } → { $right }
 compare-card-rules = { $count ->
     [one] 1 file is the same after the rules
    *[other] { $count } files are the same after the rules
