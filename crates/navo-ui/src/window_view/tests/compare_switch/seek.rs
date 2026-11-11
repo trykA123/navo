@@ -5,7 +5,7 @@
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 
-use super::super::compare_hex::{frame, hex_rig, probe};
+use super::super::compare_hex::{frame, hex_rig, probe, visible};
 use super::super::compare_screen::Rig;
 use super::super::compare_screen::body::pair;
 use super::{LINE, labels, open};
@@ -91,7 +91,10 @@ fn compare_switch_text_from_a_gap_top_row_opens_at_the_next_left_line(cx: &mut T
     rig.dispatch(cx, &ViewBytes);
     open(cx, &rig, (2, PairKind::Binary), None);
     insertion(cx, &rig, 2);
-    let top = rig.view.update(cx, |view, _| view.file_hex_wheel(-30.));
+    let page = visible(cx, &rig);
+    let top = rig
+        .view
+        .update(cx, |view, _| view.file_hex_wheel(-30., page));
     assert!(top.is_some_and(|row| row > 20 && row < 131));
     assert_eq!(probe(cx, &rig).top_left, None, "the top row is in the gap");
     rig.dispatch(cx, &ViewText);
@@ -237,7 +240,10 @@ fn compare_hex_a_gap_top_row_keeps_its_right_offset_when_more_regions_land(
     rig.press(cx, "enter");
     open(cx, &rig, (1, PairKind::Binary), None);
     insertion(cx, &rig, 1);
-    let top = rig.view.update(cx, |view, _| view.file_hex_wheel(30.));
+    let page = visible(cx, &rig);
+    let top = rig
+        .view
+        .update(cx, |view, _| view.file_hex_wheel(30., page));
     assert!(top.is_some_and(|row| row > 20 && row < 131), "top: {top:?}");
     let before = probe(cx, &rig);
     let want = before.top_right.expect("the gap row holds right bytes");

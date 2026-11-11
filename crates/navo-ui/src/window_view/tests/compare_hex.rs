@@ -315,7 +315,7 @@ fn label_at(bytes: &[u8], at: usize) -> String {
 }
 
 /// How many rows the window shows.
-fn visible(cx: &mut TestAppContext, rig: &Rig) -> usize {
+pub(super) fn visible(cx: &mut TestAppContext, rig: &Rig) -> usize {
     cx.update_window(rig.window, |_, window, cx| {
         rig.view.read(cx).file_hex_visible(window, cx)
     })

@@ -1,9 +1,9 @@
 //! Draws the compare screen where the viewer draws: the Direction 4 header (back, file icon,
 //! name, sides, encoding), the rows of the pair and one status line with the change counter.
 
-use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::Icon;
+use gpui_kit::{Role, Stateful};
 use navo_fs::EntryKind;
 use navo_l10n::tr;
 
@@ -226,6 +226,15 @@ fn status_line(
 }
 
 impl NavoWindow {
+    /// The file diff's root with every key and action group registered on it.
+    fn screen_keys(cx: &mut Context<Self>) -> Stateful<Div> {
+        let root = Self::copy_keys(Self::walk_keys(div().id("compare-screen"), cx), cx);
+        let root = Self::switch_actions(root, cx);
+        let root = Self::drawer_actions(Self::look_actions(root, cx), cx);
+        let root = image::image_keys(Self::menu_keys(Self::pick_keys(root, cx), cx), cx);
+        Self::large_keys(root, cx)
+    }
+
     /// The compare screen in place of the panes: the file diff, else the Stream, else `None`.
     pub(in crate::window_view) fn compare_screen_view(
         &mut self,
@@ -252,11 +261,7 @@ impl NavoWindow {
         let previous = cx.listener(|view, _: &PreviousDifference, window, cx| {
             view.step_change(false, window, cx);
         });
-        let root = Self::copy_keys(Self::walk_keys(div().id("compare-screen"), cx), cx);
-        let root = Self::switch_actions(root, cx);
-        let root = Self::drawer_actions(Self::look_actions(root, cx), cx);
-        let root = image::image_keys(Self::menu_keys(Self::pick_keys(root, cx), cx), cx);
-        let root = Self::large_keys(root, cx);
+        let root = Self::screen_keys(cx);
         let bars = FileBars {
             weak: cx.weak_entity(),
             hovered: self.file_hover(),
