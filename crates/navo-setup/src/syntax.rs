@@ -119,9 +119,7 @@ impl FolderProblem {
             Self::ReparsePoint => "Choose a folder whose path has no links or synced placeholders.",
             Self::ProtectedFolder => "Choose another folder, such as C:\\Navo.",
             Self::SubstDrive => "Choose the folder on its real drive.",
-            Self::ParentOpen => {
-                "Choose a folder directly on a drive, such as C:\\Navo, or keep the default folder."
-            }
+            Self::ParentOpen => "Choose a folder directly on a drive, such as C:\\Navo.",
             Self::NotWritable => "Choose a folder you can write to, or fix its permissions.",
             Self::NotEnoughSpace => "Free some space or choose another drive.",
             Self::ProbeFailed => "Choose another folder, or check that you can write to it.",
