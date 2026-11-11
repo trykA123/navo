@@ -1,9 +1,14 @@
 mod fallback;
 mod iron;
 mod mocha;
+mod tint;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tint_tests;
+
+pub use tint::{TintLook, on_tint};
 
 use gpui_kit::component::highlighter::{HighlightTheme, SyntaxColors};
 use gpui_kit::component::theme::ThemeMode;

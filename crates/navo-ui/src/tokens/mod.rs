@@ -32,7 +32,7 @@ pub use motion::Motion;
 pub use palette::ColorTheme;
 pub use shadows::Shadows;
 pub use surfaces::Surfaces;
-pub use syntax::{SyntaxTheme, highlight_theme};
+pub use syntax::{SyntaxTheme, TintLook, highlight_theme, on_tint};
 pub use system_palette::{
     SystemPalette, contrast_theme, from_colorref, set_system_palette_reader, system_palette,
 };
