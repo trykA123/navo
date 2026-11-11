@@ -48,7 +48,7 @@ jobs:
       - name: Tracy hook is still in the vendored client
         shell: pwsh
         run: |
-          $meta = cargo metadata --format-version 1 --locked | ConvertFrom-Json
+          $meta = cargo metadata --format-version 1 --locked --all-features | ConvertFrom-Json
           $pkg = @($meta.packages | Where-Object { $_.name -ceq 'tracy-client-sys' })
           if ($pkg.Count -ne 1) { throw "expected one tracy-client-sys, found $($pkg.Count)" }
           $dir = Split-Path -Parent $pkg[0].manifest_path
