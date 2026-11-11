@@ -13,6 +13,8 @@ use navo_ui::prelude::*;
 use navo_ui::primitives::ListScroll;
 use navo_ui::tokens;
 
+use crate::compare_gutter_sample::gutter_sample;
+
 struct Sample {
     name: &'static str,
     kind: CompareKind,
@@ -207,6 +209,7 @@ pub fn page(cx: &App) -> Div {
                 .child(stream_column(&t, Layout::SideBySide))
                 .child(stream_column(&t, Layout::Unified)),
         )
+        .child(gutter_sample())
 }
 
 /// A card line from line numbers and texts.

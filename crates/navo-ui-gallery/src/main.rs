@@ -9,6 +9,7 @@ mod command_center_page;
 mod compare_diff_page;
 mod compare_diff_parts;
 mod compare_diff_sample;
+mod compare_gutter_sample;
 mod compare_page;
 mod drag_page;
 mod drives_page;
