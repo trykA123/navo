@@ -21,6 +21,12 @@ use crate::tokens::{self, DiffColors, Theme};
 const WIDTH: f32 = 22.;
 /// Font size of the number on the current hunk, in px.
 const NUMBER_SIZE: f32 = 10.;
+/// What the current hunk's outline leaves of a wide strip, in px.
+const CURRENT_INSET: f32 = 8.;
+/// The narrowest drawn outline of the current hunk, in px.
+const MARK_MIN: f32 = 4.;
+/// A strip narrower than this has no room for the current hunk's number, in px.
+const NUMBER_MIN: f32 = 16.;
 
 /// What the map reports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +43,7 @@ pub struct ChangeMap {
     current: Option<usize>,
     top: Pixels,
     height: f32,
+    width: Pixels,
     dragging: bool,
 }
 
@@ -52,8 +59,16 @@ impl ChangeMap {
             current: None,
             top: px(0.),
             height: 0.,
+            width: px(WIDTH),
             dragging: false,
         }
+    }
+
+    /// Makes the strip `width` px wide; the file diff keeps the 22 px default.
+    #[must_use]
+    pub fn with_width(mut self, width: Pixels) -> Self {
+        self.width = width;
+        self
     }
 
     /// Replaces the hunks and the row count.
@@ -126,8 +141,8 @@ fn sensor(cx: &mut Context<ChangeMap>) -> impl IntoElement + use<> {
     .size_full()
 }
 
-/// One tick; the current one gets an outline and its number.
-fn tick_view(t: &Theme, tick: &Tick, number: Option<usize>) -> Div {
+/// One tick; the current one gets an outline, and its number on a strip wide enough for it.
+fn tick_view(t: &Theme, tick: &Tick, number: Option<usize>, width: f32) -> Div {
     let base = div()
         .absolute()
         .left_0()
@@ -135,23 +150,26 @@ fn tick_view(t: &Theme, tick: &Tick, number: Option<usize>) -> Div {
         .top(px(tick.top))
         .h(px(tick.height));
     let mark = base.bg(tint(&t.diff, tick.kind)).rounded(px(1.));
+    let wide = width >= NUMBER_MIN;
     match number {
         None => mark,
         Some(n) => mark
-            .w(px(WIDTH - 8.))
+            .w(px((width - CURRENT_INSET).max(MARK_MIN)))
             .border_2()
             .border_color(t.colors.text)
-            .child(
-                div()
-                    .absolute()
-                    .right_0()
-                    .text_size(px(NUMBER_SIZE))
-                    .text_color(t.colors.background)
-                    .bg(t.colors.text)
-                    .rounded(t.radii.xs)
-                    .px(px(2.))
-                    .child(format!("{}", n + 1)),
-            ),
+            .when(wide, |mark| {
+                mark.child(
+                    div()
+                        .absolute()
+                        .right_0()
+                        .text_size(px(NUMBER_SIZE))
+                        .text_color(t.colors.background)
+                        .bg(t.colors.text)
+                        .rounded(t.radii.xs)
+                        .px(px(2.))
+                        .child(format!("{}", n + 1)),
+                )
+            }),
     }
 }
 
@@ -162,15 +180,16 @@ impl Render for ChangeMap {
         let marks = ticks(&self.hunks, self.total_rows, self.height);
         let current = self.current.and_then(|at| geometry::tick_of(&marks, at));
         let (vp_top, vp_height) = viewport_box(&self.viewport, self.total_rows, self.height);
+        let width = f32::from(self.width);
         let ticks_view = marks.iter().enumerate().map(|(i, tick)| {
             let number = (current == Some(i)).then(|| self.current.unwrap_or(0));
-            tick_view(t, tick, number)
+            tick_view(t, tick, number, width)
         });
         div()
             .id("change-map")
             .relative()
             .flex_none()
-            .w(px(WIDTH))
+            .w(self.width)
             .h_full()
             .bg(t.colors.rail)
             .border_l_1()
