@@ -37,18 +37,69 @@ pub(crate) fn icon_for(scale_factor: f32) -> Arc<Image> {
     }
 }
 
-pub(super) fn brand(
-    t: &Theme,
-    title: SharedString,
-    scale_factor: f32,
-    button: Option<(bool, AppButtonHandler)>,
-) -> impl IntoElement {
-    let icon = div()
+/// The mark left of the title, one image per scale band; `at_2x` above 100 % scale.
+#[derive(Clone)]
+pub struct BrandMark {
+    /// The image drawn at 100 % scale and below.
+    pub at_1x: Arc<Image>,
+    /// The image drawn above 100 % scale.
+    pub at_2x: Arc<Image>,
+}
+
+/// What the brand end of the title bar shows: the app `title`, the `mark` before it and the
+/// `menu_arrow` chevron after it.
+pub(super) struct Brand {
+    pub(super) title: SharedString,
+    pub(super) mark: Option<BrandMark>,
+    pub(super) menu_arrow: bool,
+}
+
+/// The mark image for `scale_factor`: the caller's `mark` when set, Navo's own logo otherwise.
+fn image_of(mark: Option<BrandMark>, scale_factor: f32) -> Arc<Image> {
+    mark.map_or_else(
+        || icon_for(scale_factor),
+        |mark| {
+            if scale_factor > 1. {
+                mark.at_2x
+            } else {
+                mark.at_1x
+            }
+        },
+    )
+}
+
+/// The fixed `ICON_SIZE` square the mark draws in; `image` fills it.
+fn mark_icon(image: Arc<Image>) -> impl IntoElement {
+    div()
         .id("title-bar-icon")
         .test_support()
         .flex_none()
         .size(px(ICON_SIZE))
-        .child(img(icon_for(scale_factor)).size_full());
+        .child(img(image).size_full())
+}
+
+/// The chevron that hints the title opens the app menu; a bare brand leaves it out.
+fn menu_arrow(t: &Theme) -> impl IntoElement {
+    div()
+        .id("title-bar-arrow")
+        .test_support()
+        .flex_none()
+        .child(chevron(
+            IconName::ChevronDown,
+            t.spacing.icon - px(1.),
+            t.colors.muted,
+        ))
+}
+
+/// The brand end of the title bar: `brand`'s mark, `brand.title` and, when the brand asks, the
+/// menu chevron; `button` turns the whole end into the app-menu button.
+pub(super) fn brand(
+    t: &Theme,
+    brand: Brand,
+    scale_factor: f32,
+    button: Option<(bool, AppButtonHandler)>,
+) -> impl IntoElement {
+    let icon = mark_icon(image_of(brand.mark, scale_factor));
     let role = if button.is_some() {
         Role::Button
     } else {
@@ -57,7 +108,7 @@ pub(super) fn brand(
     div()
         .id("title-bar-title")
         .role(role)
-        .aria_label(title.clone())
+        .aria_label(brand.title.clone())
         .test_support()
         .when_some(button, |brand, (is_open, handler)| {
             brand
@@ -79,10 +130,6 @@ pub(super) fn brand(
         .font_family(t.typography.brand_font.clone())
         .font_weight(FontWeight::SEMIBOLD)
         .child(icon)
-        .child(title)
-        .child(chevron(
-            IconName::ChevronDown,
-            t.spacing.icon - px(1.),
-            t.colors.muted,
-        ))
+        .child(brand.title)
+        .when(brand.menu_arrow, |brand| brand.child(menu_arrow(t)))
 }

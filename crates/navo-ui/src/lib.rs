@@ -63,4 +63,4 @@ pub use gpui_kit::{
     ParentElement, Pixels, Point, Render, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, Window, WindowBounds, WindowOptions, div, px, relative, size,
 };
-pub use title_bar::{HeaderSearch, NavoTitleBar, window_options};
+pub use title_bar::{BrandMark, HeaderSearch, NavoTitleBar, window_options};
