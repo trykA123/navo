@@ -3,6 +3,7 @@ use gpui_kit::component::input::InputEvent;
 use gpui_kit::{Focusable, Role, Subscription};
 
 use navo_core::list_text::{join_list, split_list};
+use navo_l10n::t;
 
 use crate::prelude::*;
 use crate::primitives::{TextField, TextFieldState, text_field_state};
@@ -23,11 +24,23 @@ fn joined(text: &str) -> String {
     join_list(&split_list(text))
 }
 
+/// Whether a typed number fits the field's range; only the memory budget has a narrower one.
+fn in_budget_range(field: Field, number: u16) -> bool {
+    let (low, high) = field.number_range();
+    field != Field::CompareBudgetMib || (low..=high).contains(&i64::from(number))
+}
+
 fn parsed(field: Field, text: &str) -> Result<Value, SharedString> {
     let text = text.trim();
     match field.spec().control {
         Control::Number => match text.parse::<u16>() {
-            Ok(number) if number > 0 => Ok(Value::Number(number.into())),
+            Ok(number) if number > 0 && in_budget_range(field, number) => {
+                Ok(Value::Number(number.into()))
+            }
+            _ if field == Field::CompareBudgetMib => {
+                let (low, high) = field.number_range();
+                Err(t!("settings-number-range-problem", low = low, high = high).into())
+            }
             _ => Err(NUMBER_PROBLEM.into()),
         },
         _ if matches!(field, Field::SummonKey | Field::ClipboardKey) => parse_summon_key(text)
@@ -131,5 +144,21 @@ mod tests {
         );
         assert!(parsed(Field::ClipboardKey, "Win+Alt+V").is_ok());
         assert!(parsed(Field::ClipboardKey, "").is_ok());
+    }
+
+    #[test]
+    fn a_typed_memory_budget_must_be_in_the_stores_range() {
+        let typed = |text| parsed(Field::CompareBudgetMib, text);
+        assert_eq!(typed("300").ok(), Some(Value::Number(300)));
+        assert_eq!(typed("256").ok(), Some(Value::Number(256)));
+        assert_eq!(typed("16384").ok(), Some(Value::Number(16_384)));
+        assert!(typed("255").is_err());
+        assert!(typed("16385").is_err());
+        let problem = typed("9").expect_err("a problem");
+        assert!(
+            problem.contains("256") && problem.contains("16384"),
+            "{problem}"
+        );
+        assert!(parsed(Field::UiScale, "1").is_ok());
     }
 }

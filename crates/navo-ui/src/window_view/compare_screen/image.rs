@@ -176,6 +176,14 @@ impl Pictures {
         }
     }
 
+    /// The width and height in pixels of one side's decoded picture, once it is ready.
+    pub(super) fn dimensions(&self, at: usize) -> Option<(u32, u32)> {
+        match &self.slots[at] {
+            Slot::Ready(_, width, height) => Some((*width, *height)),
+            _ => None,
+        }
+    }
+
     /// The ready picture of one side.
     pub(super) fn picture(&self, at: usize) -> Option<Arc<RenderImage>> {
         match &self.slots[at] {

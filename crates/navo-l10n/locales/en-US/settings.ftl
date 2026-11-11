@@ -214,6 +214,7 @@ settings-compare-ignore-list = Ignored names
 settings-compare-ignore-list-help = Patterns a folder compare leaves out, separated by commas, for example *.o, target.
 settings-compare-respect-gitignore = Respect .gitignore
 settings-compare-respect-gitignore-help = A folder compare leaves out the files that .gitignore rules ignore.
+settings-number-range-problem = Type a whole number from { $low } to { $high }.
 settings-compare-memory-budget = Memory budget
 settings-compare-memory-budget-help = The most memory one compare may use, in MiB, from 256 to 16,384. A smaller budget shows less detail in very large files.
 settings-compare-content-check = Same-file check

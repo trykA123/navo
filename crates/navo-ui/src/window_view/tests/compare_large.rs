@@ -2,7 +2,8 @@
 //! windows, "Looking further… N %" past the known hunks, and a top line that arriving hunks
 //! never move.
 
-use gpui_kit::TestAppContext;
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AppContext as _, TestAppContext};
 use navo_l10n::t;
 
 use super::compare_screen::{Rig, rig};
@@ -339,7 +340,7 @@ fn compare_large_progress_line_runs_until_the_last_section(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn compare_large_step_notices_name_the_step_and_the_setting(cx: &mut TestAppContext) {
+fn compare_large_step_notices_name_the_step(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let (rig, sink) = open_large(cx);
     let steps = vec![
@@ -356,7 +357,65 @@ fn compare_large_step_notices_name_the_step_and_the_setting(cx: &mut TestAppCont
     ]
     .join(" · ");
     assert_eq!(notes(cx, &rig), want);
-    assert!(want.contains("Memory budget"), "{want}");
     push(cx, &rig, &sink, with_steps(Vec::new(), 5));
     assert_eq!(notes(cx, &rig), "", "no step, no notice");
+}
+
+/// Whether the large body shows the link to the memory budget setting.
+fn has_link(cx: &mut TestAppContext, rig: &Rig) -> bool {
+    rig.view
+        .read_with(cx, |view, _| view.large_probe())
+        .expect("a large body")
+        .budget_link
+}
+
+#[gpui_kit::test]
+fn compare_large_budget_link_opens_settings_at_the_memory_budget(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    let cap = step(LargeStep::Coarse, LargeStepReason::SectionCap, 0..90);
+    push(cx, &rig, &sink, with_steps(vec![cap], 5));
+    assert!(!has_link(cx, &rig), "a cap notice has no setting to raise");
+    let budget = step(LargeStep::Coarse, LargeStepReason::Budget, 90..180);
+    push(cx, &rig, &sink, with_steps(vec![budget], 5));
+    assert!(has_link(cx, &rig));
+    assert!(
+        !notes(cx, &rig).contains("Settings"),
+        "the link names the setting"
+    );
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click("compare-screen-budget-link", cx);
+    })
+    .expect("window");
+    settle(cx, &rig.view);
+    let (open, row) = rig
+        .view
+        .read_with(cx, |view, _| (view.settings.is_open(), view.settings_row()));
+    assert!(open, "the link opens Settings");
+    let want = crate::settings::FIELDS
+        .iter()
+        .position(|spec| spec.field == crate::settings::Field::CompareBudgetMib);
+    assert_eq!(Some(row), want, "at the memory budget row");
+}
+
+#[gpui_kit::test]
+fn compare_large_details_drawer_lists_kind_sizes_step_and_progress(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    let coarse = step(LargeStep::Coarse, LargeStepReason::SectionCap, 0..90);
+    push(cx, &rig, &sink, with_steps(vec![coarse], 2));
+    let facts = |cx: &mut TestAppContext| rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    assert_eq!(facts(cx), None, "the drawer starts closed");
+    rig.press(cx, "ctrl-i");
+    settle(cx, &rig.view);
+    let want = [
+        "Kind: Large text",
+        "Sizes: 1.0 GB ↔ 1.0 GB",
+        "Engine step: Coarse blocks",
+        "Progress: Comparing… 40 %",
+    ];
+    assert_eq!(facts(cx), Some(want.map(str::to_owned).to_vec()));
+    rig.press(cx, "ctrl-i");
+    settle(cx, &rig.view);
+    assert_eq!(facts(cx), None, "Ctrl+I closes it again");
 }

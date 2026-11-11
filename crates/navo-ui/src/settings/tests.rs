@@ -890,3 +890,15 @@ fn a_visible_compare_section_has_rows_hits_and_a_stop_in_the_walk() {
     assert_eq!(section_of(walked), Section::Compare);
     assert!(lines(&Filter::default(), Section::Compare).contains(&Line::Section(Section::Compare)));
 }
+
+#[test]
+fn the_memory_budget_keeps_to_the_stores_range() {
+    assert_eq!(Field::CompareBudgetMib.number_range(), (256, 16_384));
+    let spec = spec(Field::CompareBudgetMib);
+    assert_eq!(nudged(spec, &Value::Number(256), Nudge::Back), None);
+    assert_eq!(nudged(spec, &Value::Number(16_384), Nudge::Forward), None);
+    assert_eq!(
+        nudged(spec, &Value::Number(1024), Nudge::Forward),
+        Some(Value::Number(1025))
+    );
+}
