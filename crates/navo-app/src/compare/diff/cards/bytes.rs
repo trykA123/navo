@@ -68,7 +68,15 @@ pub(crate) fn run(job: BytesJob, cancel: &CancelToken, emit: &dyn Fn(CardDetail,
             }
             Ok(_) => {}
             Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => return,
+            Err(RecvTimeoutError::Disconnected) => {
+                if !cancel.is_cancelled() {
+                    emit(
+                        CardDetail::Failed(navo_l10n::tr("compare-could-not-start")),
+                        true,
+                    );
+                }
+                return;
+            }
         }
     }
 }

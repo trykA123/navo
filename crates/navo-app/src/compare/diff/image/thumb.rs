@@ -24,6 +24,9 @@ pub(crate) fn card(input: &LoadInput, cancel: &CancelToken) -> Option<CardDetail
             right,
         }) => {
             let left = decode_thumb(&left);
+            if cancel.is_cancelled() {
+                return None;
+            }
             let right = decode_thumb(&right);
             Some(image_card(scores, left, right))
         }
