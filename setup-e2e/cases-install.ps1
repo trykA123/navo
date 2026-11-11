@@ -334,7 +334,6 @@ function Test-S3 {
 
 # S8: a same or older wizard exits 8, starts nothing and leaves the root unchanged.
 function Test-S8 {
-    Use-ProgramsFolder
     $root = Get-DefaultRoot
     $result = Invoke-Silent '0.0.2'
     Assert ($result.Code -eq 0) "install exit $($result.Code): $($result.Error)"
@@ -350,7 +349,6 @@ function Test-S8 {
 
 # S9a: an unticked Desktop link stays absent after a wizard upgrade.
 function Test-S9a {
-    Use-ProgramsFolder
     $root = Get-DefaultRoot
     $links = Get-LinkPaths
     $result = Invoke-Silent '0.0.2' @('--no-desktop')
@@ -366,7 +364,6 @@ function Test-S9a {
 
 # S9b: an unticked Start menu link stays absent after an update through Navo.
 function Test-S9b {
-    Use-ProgramsFolder
     $root = Get-DefaultRoot
     $links = Get-LinkPaths
     $result = Invoke-Silent '0.0.2' @('--no-start-menu')
@@ -381,9 +378,3 @@ function Test-S9b {
     Assert (-not (Test-Path -LiteralPath $links.Start)) 'the unticked Start menu link came back after the update'
     Assert-LinkToRoot $links.Desktop $root
 }
-
-# S1a's checks on a profile that has the Programs folder, so they run despite the fresh-profile failure.
-function Test-S1a-programs { Use-ProgramsFolder; Test-S1a }
-
-# S1b's checks on a profile that has the Programs folder.
-function Test-S1b-programs { Use-ProgramsFolder; Test-S1b }

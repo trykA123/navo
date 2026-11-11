@@ -201,9 +201,6 @@ function Get-PackFile([string]$version, [string]$filter) {
 # Returns the expected default root, %LocalAppData%\Programs\Navo.
 function Get-DefaultRoot { Join-Path $env:LOCALAPPDATA 'Programs\Navo' }
 
-# Creates %LocalAppData%\Programs: navo-setup exits 3 without it, and these cases test something else.
-function Use-ProgramsFolder { New-Item -ItemType Directory -Path (Join-Path $env:LOCALAPPDATA 'Programs') -Force | Out-Null }
-
 # Returns the version in <root>\current\sq.version; throws when it is missing.
 function Read-SqVersion([string]$root) {
     $file = Join-Path $root 'current\sq.version'

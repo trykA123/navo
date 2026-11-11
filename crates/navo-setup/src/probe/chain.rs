@@ -295,6 +295,8 @@ fn known_folder_with(id: &GUID, flags: i32) -> io::Result<Option<PathBuf>> {
             &raw mut raw,
         )
     };
+    // Freed on every path: Microsoft documents the free even on failure, and a null free is a no-op.
+    let owned = KnownPath(raw);
     if result < 0 {
         if result == E_FAIL || result == HRESULT_FILE_NOT_FOUND {
             return Ok(None);
@@ -306,7 +308,6 @@ fn known_folder_with(id: &GUID, flags: i32) -> io::Result<Option<PathBuf>> {
     if raw.is_null() {
         return Err(io::Error::other("SHGetKnownFolderPath returned no path"));
     }
-    let owned = KnownPath(raw);
     Ok(Some(PathBuf::from(OsString::from_wide(owned.units()))))
 }
 
