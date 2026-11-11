@@ -116,14 +116,7 @@ impl Rig {
             size: 0,
             modified_ms: None,
         });
-        let docs = CompareRow {
-            id: 1,
-            path: "docs".into(),
-            left: side,
-            right: side,
-            status: RowStatus::Same,
-            contains_differences: false,
-        };
+        let docs = CompareRow::new(1, "docs", RowStatus::Same, (side, side));
         let sink = self
             .sink
             .lock()
@@ -178,13 +171,8 @@ impl Rig {
         });
         let rows = (1u64..)
             .zip(names)
-            .map(|(id, name)| CompareRow {
-                id,
-                path: (*name).to_owned(),
-                left: side,
-                right: side,
-                status: RowStatus::Different,
-                contains_differences: false,
+            .map(|(id, name)| {
+                CompareRow::new(id, (*name).to_owned(), RowStatus::Different, (side, side))
             })
             .collect();
         let sink = self

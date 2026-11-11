@@ -13,14 +13,7 @@ pub(super) fn side(kind: CompareKind) -> Option<CompareSide> {
 }
 
 pub(super) fn row(id: u64, path: &str, status: RowStatus, kind: CompareKind) -> CompareRow {
-    CompareRow {
-        id,
-        path: path.into(),
-        left: side(kind),
-        right: side(kind),
-        status,
-        contains_differences: false,
-    }
+    CompareRow::new(id, path, status, (side(kind), side(kind)))
 }
 
 pub(super) fn file(id: u64, path: &str, status: RowStatus) -> CompareRow {

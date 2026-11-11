@@ -113,14 +113,7 @@ pub(super) fn rig_with_files(
     });
     let rows = (1u64..)
         .zip(["a.txt", "b.txt"])
-        .map(|(id, name)| CompareRow {
-            id,
-            path: name.to_owned(),
-            left: side,
-            right: side,
-            status: RowStatus::Different,
-            contains_differences: false,
-        })
+        .map(|(id, name)| CompareRow::new(id, name.to_owned(), RowStatus::Different, (side, side)))
         .collect();
     let send = sink.lock().unwrap().clone().expect("a started compare");
     rig.compare = send.clone();

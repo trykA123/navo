@@ -4,8 +4,8 @@ use super::mode::{deliver, root_rows, select, selected, start, visible};
 use super::{browser, row, rows, sides};
 use crate::browser::compare::view::{look_of, status_text};
 use crate::browser::{
-    CompareFilter, CompareKind, CompareSide, CompareTotals, CompareUpdate, RowProgress, RowStatus,
-    Tone, bar_view, empty_text, pane_rows,
+    CompareFilter, CompareKind, CompareRow, CompareSide, CompareTotals, CompareUpdate, RowProgress,
+    RowStatus, Tone, bar_view, empty_text, pane_rows,
 };
 
 const MIB: u64 = 1 << 20;
@@ -345,4 +345,25 @@ fn the_revision_moves_with_rows_and_filter_but_not_with_the_selection() {
     assert_eq!(revision(&browser), after_rows);
     browser.compare_filter(CompareFilter::Same);
     assert!(revision(&browser) > after_rows);
+}
+
+#[test]
+fn a_row_update_that_raises_the_count_replaces_the_stored_count() {
+    let (mut browser, calls) = started();
+    let folder = |count| CompareRow {
+        contains_differences: true,
+        differences_inside: count,
+        ..row(1, "docs", RowStatus::Same)
+    };
+    let count = |browser: &crate::browser::Browser| {
+        let mode = browser.compare_mode().expect("compare mode");
+        let rows = mode.rows_under_folder();
+        rows.iter()
+            .find(|row| row.id == 1)
+            .map(|row| row.differences_inside)
+    };
+    deliver(&mut browser, &calls, rows(1, vec![folder(1)]));
+    assert_eq!(count(&browser), Some(1));
+    deliver(&mut browser, &calls, rows(1, vec![folder(4)]));
+    assert_eq!(count(&browser), Some(4));
 }

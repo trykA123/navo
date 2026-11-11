@@ -265,14 +265,8 @@ fn stream_rows_fake() -> [CompareRow; 6] {
         size: 1,
         modified_ms: None,
     });
-    let row = |id: u64, path: &str, status| CompareRow {
-        id,
-        path: path.to_owned(),
-        left: side,
-        right: side,
-        status,
-        contains_differences: false,
-    };
+    let row =
+        |id: u64, path: &str, status| CompareRow::new(id, path.to_owned(), status, (side, side));
     [
         row(1, "crates/core/src/walk.rs", RowStatus::Different),
         row(2, "assets/logo.bin", RowStatus::Different),
