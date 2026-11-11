@@ -10,6 +10,9 @@ const CONTENT_CHECKS: [Choice; 2] = [
     choice("settings-compare-content-check-size-time", "size-time"),
 ];
 
+/// The memory budget's range in MiB, the same as the store's clamp.
+pub(super) const BUDGET_MIB: (i64, i64) = (256, 16_384);
+
 pub(super) const COMPARE_FIELDS: [FieldSpec; 5] = [
     spec(
         (F::CompareGitEngine, S::Compare, "compare.git-engine"),

@@ -3,6 +3,7 @@
 
 mod context;
 mod copy;
+mod details;
 mod drawers;
 mod entry;
 mod file;
@@ -96,6 +97,17 @@ pub(super) struct FileScreen {
 }
 
 impl FileScreen {
+    /// The byte sizes of a large pair's two sides.
+    fn large_sizes(&self) -> Option<(u64, u64)> {
+        match &self.state {
+            FileState::Opened {
+                kind: PairKind::Large { left, right },
+                ..
+            } => Some((*left, *right)),
+            _ => None,
+        }
+    }
+
     /// Applies one update, drawing rows `row_height` tall; false when nothing shown changes or
     /// the update is stale.
     fn apply(&mut self, update: DiffUpdate, row_height: Pixels) -> bool {

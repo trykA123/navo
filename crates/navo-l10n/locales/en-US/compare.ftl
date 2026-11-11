@@ -121,14 +121,15 @@ compare-screen-no-changes = No changes
 compare-screen-looking-further = Looking further… { $percent } %
 compare-screen-comparing-percent = Comparing… { $percent } %
 compare-screen-notice-coarse-budget = { $sections ->
-    [one] 1 section shown as one block to stay in the memory budget. Raise it in Settings > Compare > Memory budget.
-   *[other] { $sections } sections shown as one block to stay in the memory budget. Raise it in Settings > Compare > Memory budget.
+    [one] 1 section shown as one block to stay in the memory budget.
+   *[other] { $sections } sections shown as one block to stay in the memory budget.
 }
 compare-screen-notice-coarse-cap = { $sections ->
     [one] 1 section shown as one block: too large to compare line by line.
    *[other] { $sections } sections shown as one block: too large to compare line by line.
 }
-compare-screen-notice-paged = Changes far from the view are kept as counts to stay in the memory budget. Raise it in Settings > Compare > Memory budget.
+compare-screen-notice-paged = Changes far from the view are kept as counts to stay in the memory budget.
+compare-screen-budget-link = Raise the memory budget
 compare-card-viewed = Viewed
 compare-card-gap = { $lines ->
     [one] 1 unchanged line
@@ -271,6 +272,20 @@ compare-drawer-sides = { $left } ↔ { $right }
 compare-drawer-raw-differs = The raw bytes differ; the active options hide the difference.
 compare-drawer-same = The two sides are the same.
 compare-drawer-fallbacks = Fallbacks
+compare-drawer-kind = Kind
+compare-drawer-kind-large = Large text
+compare-drawer-kind-binary = Binary
+compare-drawer-kind-image = Image
+compare-drawer-sizes = Sizes
+compare-drawer-step = Engine step
+compare-drawer-step-whole = Whole file
+compare-drawer-step-sections = By section
+compare-drawer-step-coarse = Coarse blocks
+compare-drawer-step-paged = Paged changes
+compare-drawer-align = Alignment
+compare-drawer-view = View
+compare-drawer-progress = Progress
+compare-drawer-progress-finished = Finished
 compare-image-side-by-side = Side by side
 compare-image-overlay = Overlay
 compare-image-mask = Difference mask

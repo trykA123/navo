@@ -174,6 +174,11 @@ impl HexView {
         true
     }
 
+    /// The byte lengths of the two sides; zero for a side that is missing.
+    pub(super) fn lengths(&self) -> (u64, u64) {
+        self.lengths
+    }
+
     /// The current alignment.
     pub(super) fn align(&self) -> HexAlign {
         self.align

@@ -1042,3 +1042,27 @@ fn compare_screen_hex_cache_stays_bounded(cx: &mut TestAppContext) {
     }
     assert!(peak > 4096, "the cache did fill past its limit: {peak}");
 }
+
+#[gpui_kit::test]
+fn compare_screen_hex_details_drawer_lists_kind_sizes_alignment_and_regions(
+    cx: &mut TestAppContext,
+) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = hex_rig(cx, vec![0x11; 0x4000], vec![0x22; 0x4000]);
+    open_hex(
+        cx,
+        &rig,
+        &[(0x1000..0x1004, 0x1000..0x1004)],
+        HexAlign::Offset,
+    );
+    rig.press(cx, "ctrl-i");
+    settle(cx, &rig.view);
+    let facts = rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    let want = [
+        "Kind: Binary",
+        "Sizes: 16.0 KB ↔ 16.0 KB",
+        "Alignment: Align by offset",
+        "Progress: 1 regions",
+    ];
+    assert_eq!(facts, Some(want.map(str::to_owned).to_vec()));
+}

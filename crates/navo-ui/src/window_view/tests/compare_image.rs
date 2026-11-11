@@ -449,3 +449,20 @@ fn image_body_wipe_and_view_rules_stay_in_range() {
     assert_eq!(plain.notice(), None);
     assert_eq!(body.similarity(), Some(98));
 }
+
+#[gpui_kit::test]
+fn compare_image_details_drawer_lists_kind_sizes_view_and_similarity(cx: &mut TestAppContext) {
+    let rig = rig(cx, true);
+    rig.open(cx, scored(), Some(mask()));
+    rig.press(cx, "ctrl-i");
+    rig.paint(cx);
+    let facts = rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    let facts = facts.expect("the drawer is open");
+    assert_eq!(facts[0], "Kind: Image");
+    assert!(
+        facts[1].starts_with("Sizes: ") && facts[1].contains(" × "),
+        "{facts:?}"
+    );
+    assert_eq!(facts[2], "View: Side by side");
+    assert_eq!(facts[3], "Progress: 98 % similar");
+}

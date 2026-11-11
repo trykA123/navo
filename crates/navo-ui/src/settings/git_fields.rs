@@ -53,9 +53,10 @@ pub(super) const GIT_FIELDS: [FieldSpec; 7] = [
 pub(super) const FETCH_MINUTES: (i64, i64) = (5, 120);
 
 impl Field {
-    pub(super) fn number_range(self) -> (i64, i64) {
+    pub fn number_range(self) -> (i64, i64) {
         match self {
             Self::GitFetchMinutes => FETCH_MINUTES,
+            Self::CompareBudgetMib => super::compare_fields::BUDGET_MIB,
             _ => (1, i64::from(u16::MAX)),
         }
     }

@@ -8,13 +8,14 @@ use navo_fs::EntryKind;
 use navo_l10n::tr;
 
 use super::copy::{FileBars, Note, note_view};
+use super::details::beside;
 use super::drawers::{changes_view, details_view};
 use super::image;
 use super::{FileScreen, FileState};
 use crate::commands::compare::{Exit, NextDifference, PreviousDifference};
 use crate::file_list::kind;
 use crate::prelude::*;
-use crate::primitives::{IconButton, IconName};
+use crate::primitives::{Button, IconButton, IconName};
 use crate::tokens::{self, Theme};
 use crate::window_view::NavoWindow;
 
@@ -134,9 +135,10 @@ fn body(
 ) -> Div {
     let area = div().flex().flex_col().flex_1().min_h_0();
     let shown = !matches!(file.state, FileState::Failed(_));
+    let details = file.body_details(t);
     if let Some(pictures) = file.pictures.as_mut().filter(|_| shown) {
         pictures.set_rich(file.look.preset != super::look::Preset::Simple);
-        return area.child(image::body(t, pictures, cx));
+        return beside(image::body(t, pictures, cx).into_any_element(), details);
     }
     let (look, drawers) = (file.look, &file.drawers);
     if let Some(view) = file.view.as_mut() {
@@ -157,33 +159,45 @@ fn body(
         );
     }
     if let Some(hex) = file.hex.as_ref() {
-        return area.child(hex.body(t, window, cx));
+        return beside(hex.body(t, window, cx).into_any_element(), details);
     }
     let failed = matches!(file.state, FileState::Failed(_));
     if let Some(large) = file.large.as_ref().filter(|_| !failed) {
         let rows = div().flex().flex_1().min_h_0().child(large.list(cx));
-        return area.child(NavoWindow::large_moves(rows, cx));
+        return beside(
+            NavoWindow::large_moves(rows, cx).into_any_element(),
+            details,
+        );
     }
     area.when_some(message(&file.state), |area, text| {
-        area.child(
-            div()
-                .id("compare-screen-status")
-                .role(Role::Status)
-                .aria_label(text.clone())
-                .test_support()
-                .p(t.spacing.xxl)
-                .text_color(if failed {
-                    t.colors.warn
-                } else {
-                    t.colors.muted
-                })
-                .child(text),
-        )
+        area.child(message_view(t, text, failed))
     })
 }
 
+/// The centred "Comparing…" or failure text, in the warning colour when `failed`.
+fn message_view(t: &Theme, text: SharedString, failed: bool) -> impl IntoElement {
+    let color = if failed {
+        t.colors.warn
+    } else {
+        t.colors.muted
+    };
+    div()
+        .id("compare-screen-status")
+        .role(Role::Status)
+        .aria_label(text.clone())
+        .test_support()
+        .p(t.spacing.xxl)
+        .text_color(color)
+        .child(text)
+}
+
 /// The one status line at the bottom: the change counter, the last copy's note, then the way back.
-fn status_line(t: &Theme, changes: Option<SharedString>, note: Option<&Note>) -> Div {
+fn status_line(
+    t: &Theme,
+    changes: Option<SharedString>,
+    link: Option<Button>,
+    note: Option<&Note>,
+) -> Div {
     div()
         .flex()
         .flex_none()
@@ -204,6 +218,7 @@ fn status_line(t: &Theme, changes: Option<SharedString>, note: Option<&Note>) ->
                     .child(changes),
             )
         })
+        .children(link)
         .children(note.map(|note| note_view(t, note)))
         .child(div().flex_1())
         .child(small(t).child(tr("compare-screen-esc")))
@@ -249,6 +264,7 @@ impl NavoWindow {
         let note = self.compare.diff.copy.note.clone();
         let file = self.compare.screen.as_mut()?.file.as_mut()?;
         let changes = file.changes();
+        let link = file.budget_link_button(cx);
         let root = root
             .key_context(CONTEXT)
             .track_focus(&file.focus)
@@ -263,7 +279,7 @@ impl NavoWindow {
             .bg(t.colors.surface)
             .child(header(&t, file, back))
             .child(body(&t, file, (bars, window), cx))
-            .child(status_line(&t, changes, note.as_ref()));
+            .child(status_line(&t, changes, link, note.as_ref()));
         Some(root.into_any_element())
     }
 }
