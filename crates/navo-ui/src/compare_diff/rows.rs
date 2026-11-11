@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use super::hooks::{CardRow, DiffRow, Layout, PairText};
+use super::hooks::{CardRow, DiffRow, Layout, PairKind, PairText};
 use super::stream_model::StreamModel;
 use narrow::Slot;
 
@@ -66,6 +66,8 @@ pub enum StreamRow {
     },
     Placeholder(usize),
     Summary(usize),
+    /// The fixed-height body of a large, binary or image card (D26.5).
+    Detail(usize),
     RulesGroup,
 }
 
@@ -129,10 +131,20 @@ fn side_row(text: &PairText, at: usize, hunk: Option<u32>) -> ShownRow<'_> {
     }
 }
 
+/// Whether `kind` is a heavy pair: large, binary or image. Its card shows a fixed-height detail
+/// body instead of a summary line, whether or not its detail has arrived (D26.5).
+fn heavy(kind: PairKind) -> bool {
+    matches!(
+        kind,
+        PairKind::Large { .. } | PairKind::Binary | PairKind::Image
+    )
+}
+
 /// The Stream's list: per shown item a header, then its card rows when the card is open.
 /// Folded and viewed cards give a header only; an unbuilt card a placeholder; a card without
-/// rows (large, binary, image, unavailable) a summary. Cards follow `layout`: in unified a
-/// hunk lists its deleted lines, then its inserted lines, as `pair_rows` does.
+/// rows a summary, or for a heavy pair the one detail body it fills in (D26.5). Cards follow
+/// `layout`: in unified a hunk lists its deleted lines, then its inserted lines, as `pair_rows`
+/// does.
 #[must_use]
 pub fn stream_rows(model: &StreamModel, layout: Layout) -> Vec<StreamRow> {
     let mut out = Vec::new();
@@ -147,7 +159,11 @@ pub fn stream_rows(model: &StreamModel, layout: Layout) -> Vec<StreamRow> {
             continue;
         };
         if card.rows.is_empty() {
-            out.push(StreamRow::Summary(item));
+            out.push(if heavy(card.kind) {
+                StreamRow::Detail(item)
+            } else {
+                StreamRow::Summary(item)
+            });
         }
         let slots = narrow::slots(&card.rows, model.matched_hunks(id));
         card_rows(&mut out, item, &card.rows, (&slots, layout));

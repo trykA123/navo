@@ -95,7 +95,8 @@ pub(super) fn item_of(row: &StreamRow) -> Option<usize> {
         | StreamRow::More { item, .. }
         | StreamRow::Others { item, .. }
         | StreamRow::Placeholder(item)
-        | StreamRow::Summary(item) => Some(item),
+        | StreamRow::Summary(item)
+        | StreamRow::Detail(item) => Some(item),
         StreamRow::RulesGroup => None,
     }
 }

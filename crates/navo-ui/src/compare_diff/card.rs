@@ -54,6 +54,8 @@ pub fn stream_row_view(rows: &[StreamRow], at: usize, ctx: &CardCtx<'_>) -> AnyE
         StreamRow::Others { hunks, .. } => note(t, last, t!("compare-card-others", hunks = hunks)),
         StreamRow::Placeholder(_) => note(t, last, tr("compare-screen-comparing")),
         StreamRow::Summary(item) => summary(t, ctx.model, item, last),
+        // Until its own body is drawn, a detail row falls back to the card's summary (D26.5).
+        StreamRow::Detail(item) => summary(t, ctx.model, item, last),
         StreamRow::RulesGroup => rules_group(t, ctx.model.rules()).into_any_element(),
     }
 }
