@@ -16,7 +16,7 @@ use super::hash_cache::StoreHashCache;
 
 /// Starts folder compares of two local panes. Hashes are kept for this run of Navo only.
 #[derive(Default)]
-pub(crate) struct PaneCompare {
+pub struct PaneCompare {
     cache: OnceLock<Arc<dyn HashCache>>,
 }
 
