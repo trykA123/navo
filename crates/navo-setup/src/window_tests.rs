@@ -81,7 +81,13 @@ pub fn exited(exit: SetupExit) -> Reply {
 
 /// An upgrade shell on Welcome for the Navo 0.3.0 installed in OTHER.
 pub fn upgrade_shell() -> Shell {
-    let found = crate::mode::Install {
+    let flow = crate::flow::Flow::new(Mode::Upgrade(installed()), ROOT.into());
+    Shell::new(flow, facts())
+}
+
+/// The healthy Navo 0.3.0 install in OTHER that discovery reports.
+pub fn installed() -> crate::mode::Install {
+    crate::mode::Install {
         root: OTHER.into(),
         identity: navo_core::FileIdentity {
             volume: 1,
@@ -94,9 +100,12 @@ pub fn upgrade_shell() -> Shell {
             "<package><metadata><id>NavoApp</id><version>0.3.0</version></metadata></package>",
         ),
         marker: None,
-    };
-    let flow = crate::flow::Flow::new(Mode::Upgrade(found), ROOT.into());
-    Shell::new(flow, facts())
+    }
+}
+
+/// A shell on the page that `mode` opens with, as discovery would start it.
+pub fn shell_in(mode: Mode) -> Shell {
+    Shell::new(crate::flow::Flow::new(mode, ROOT.into()), facts())
 }
 
 #[test]
