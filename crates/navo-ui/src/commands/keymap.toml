@@ -2204,6 +2204,21 @@ keys = ["menu", "shift-f10"]
 context = "CompareView"
 
 [[bind]]
+command = "compare.toggle_wrap"
+keys = ["alt-z"]
+context = "CompareView"
+
+[[bind]]
+command = "viewer.scroll_left"
+keys = ["left"]
+context = "CompareView"
+
+[[bind]]
+command = "viewer.scroll_right"
+keys = ["right"]
+context = "CompareView"
+
+[[bind]]
 command = "compare.next_difference"
 keys = ["j"]
 context = "CompareStream"

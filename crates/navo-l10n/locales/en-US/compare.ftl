@@ -75,6 +75,7 @@ cmd-compare-open-file = Open the file diff
 cmd-compare-search = Search the differences
 cmd-compare-copy-all-left = Copy all matches to the left
 cmd-compare-copy-all-right = Copy all matches to the right
+cmd-compare-toggle-wrap = Wrap lines
 cmd-compare-pick-down = Pick the next line
 cmd-compare-pick-up = Pick the previous line
 cmd-compare-pick-toggle = Pick or unpick the line
