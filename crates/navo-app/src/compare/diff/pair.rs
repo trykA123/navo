@@ -19,7 +19,7 @@ use hex_bytes::{clear_bytes, force_bytes, start_bytes};
 mod engine;
 mod hex_bytes;
 
-pub(crate) use engine::EnginePlan;
+pub(crate) use engine::{EnginePlan, large_input, spool_path};
 
 const CAPACITY: usize = 8;
 

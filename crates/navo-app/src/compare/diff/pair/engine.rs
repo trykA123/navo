@@ -153,7 +153,11 @@ impl Running {
 }
 
 /// The large engine's input; its sides are built again on its own workers.
-fn large_input(request: &PairRequest, load: &LoadInput, plan: &EnginePlan) -> LargeInput {
+pub(crate) fn large_input(
+    request: &PairRequest,
+    load: &LoadInput,
+    plan: &EnginePlan,
+) -> LargeInput {
     LargeInput {
         left: request.left.clone(),
         right: request.right.clone(),
@@ -167,7 +171,7 @@ fn large_input(request: &PairRequest, load: &LoadInput, plan: &EnginePlan) -> La
 }
 
 /// The spool base, detected on the worker because it stats portable markers.
-fn spool_path(plan: &EnginePlan) -> Option<PathBuf> {
+pub(crate) fn spool_path(plan: &EnginePlan) -> Option<PathBuf> {
     if plan.spool {
         StoreDirs::detect().map(|dirs| dirs.data.join(SPOOL_DIR))
     } else {
