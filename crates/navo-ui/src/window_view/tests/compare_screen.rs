@@ -27,7 +27,11 @@ mod syntax;
 mod view;
 mod wrap;
 
-const KEYMAP: &str = include_str!("../../commands/keymap.toml");
+const KEYMAP: &str = concat!(
+    include_str!("../../commands/keymap.toml"),
+    "\n",
+    include_str!("../../commands/compare_keymap.toml")
+);
 
 type Sink = Arc<Mutex<Option<CompareSink>>>;
 

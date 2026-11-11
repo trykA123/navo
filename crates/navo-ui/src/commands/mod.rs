@@ -39,7 +39,8 @@ pub(crate) use compare::is_hidden;
 pub use contexts::{GLOBAL, is_within};
 pub use focus_paths::Reach;
 pub use keymap::{
-    Bind, Keymap, KeymapError, KeymapWarning, Overlaid, UserKeymapError, normal_key, shown,
+    Bind, COMPARE_KEYMAP, Keymap, KeymapError, KeymapWarning, Overlaid, UserKeymapError,
+    normal_key, shown,
 };
 pub use layout_mode::CONTEXT as LAYOUT_MODE;
 pub use layout_mode::{is_fixed_digit, is_shown_key};
