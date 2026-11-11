@@ -538,3 +538,11 @@ fn an_invalid_retention_cap_shows_the_stores_error_and_leaves_the_file() {
         "[retention]\ndays = 2\n"
     );
 }
+
+/// The Settings field's range for the memory budget must match the store's clamp.
+#[test]
+fn the_budget_field_range_is_the_stores_clamp() {
+    let (low, high) = Field::CompareBudgetMib.number_range();
+    assert_eq!(low, i64::from(navo_store::MIN_BUDGET_MIB));
+    assert_eq!(high, i64::from(navo_store::MAX_BUDGET_MIB));
+}

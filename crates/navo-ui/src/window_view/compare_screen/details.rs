@@ -6,6 +6,7 @@ use navo_l10n::{t, tr};
 
 use super::FileScreen;
 use super::drawers::{fact, frame};
+use crate::commands::compare::PickToggle;
 use crate::compare_diff::image_body::ImageMode;
 use crate::compare_diff::{HexAlign, LargeStep, LargeStepView};
 use crate::format;
@@ -63,15 +64,17 @@ impl FileScreen {
                     .dimensions(at)
                     .map_or_else(String::new, |(w, h)| format!("{w} × {h}"))
             };
-            return Some(vec![
+            let mut facts = vec![
                 line("compare-drawer-kind", tr("compare-drawer-kind-image")),
                 sizes(size(0), size(1)),
                 line("compare-drawer-view", tr(mode)),
-                line(
-                    "compare-drawer-progress",
-                    pictures.status().unwrap_or_default().to_string(),
-                ),
-            ]);
+            ];
+            facts.extend(
+                pictures
+                    .status()
+                    .map(|status| line("compare-drawer-progress", status.to_string())),
+            );
+            return Some(facts);
         }
         if let Some(hex) = self.hex.as_ref() {
             let align = match hex.align() {
@@ -79,15 +82,16 @@ impl FileScreen {
                 HexAlign::Content => "compare-hex-align-content",
             };
             let (left, right) = hex.lengths();
-            return Some(vec![
+            let mut facts = vec![
                 line("compare-drawer-kind", tr("compare-drawer-kind-binary")),
                 sizes(format::size(left), format::size(right)),
                 line("compare-drawer-align", tr(align)),
-                line(
-                    "compare-drawer-progress",
-                    hex.status().unwrap_or_default().to_string(),
-                ),
-            ]);
+            ];
+            facts.extend(
+                hex.status()
+                    .map(|status| line("compare-drawer-progress", status.to_string())),
+            );
+            return Some(facts);
         }
         let large = self.large.as_ref()?;
         let (left, right) = self.large_sizes()?;
@@ -124,18 +128,24 @@ impl FileScreen {
     }
 
     /// The link beside the large body's counter to the memory budget setting, when a step
-    /// cut detail for the budget.
-    pub(super) fn budget_link_button(&self, cx: &mut Context<NavoWindow>) -> Option<Button> {
+    /// cut detail for the budget. Space on it opens Settings too: it would otherwise reach the
+    /// diff's pick key.
+    pub(super) fn budget_link_button(&self, cx: &mut Context<NavoWindow>) -> Option<Div> {
         self.large.as_ref().filter(|large| large.budget_link())?;
+        let button = Button::new(
+            "compare-screen-budget-link",
+            tr("compare-screen-budget-link"),
+        )
+        .variant(ButtonVariant::Ghost)
+        .on_click(cx.listener(|view, _: &ClickEvent, window, cx| {
+            view.open_settings_at(Field::CompareBudgetMib, window, cx);
+        }));
         Some(
-            Button::new(
-                "compare-screen-budget-link",
-                tr("compare-screen-budget-link"),
-            )
-            .variant(ButtonVariant::Ghost)
-            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| {
-                view.open_settings_at(Field::CompareBudgetMib, window, cx);
-            })),
+            div()
+                .child(button)
+                .on_action(cx.listener(|view, _: &PickToggle, window, cx| {
+                    view.open_settings_at(Field::CompareBudgetMib, window, cx);
+                })),
         )
     }
 }

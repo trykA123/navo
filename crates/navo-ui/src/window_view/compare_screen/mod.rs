@@ -326,6 +326,12 @@ impl NavoWindow {
         true
     }
 
+    /// Focuses the open file diff; returns false when none is open.
+    pub(super) fn focus_file_screen(&self, window: &mut Window, cx: &mut App) -> bool {
+        let file = self.compare.screen.as_ref().and_then(|s| s.file.as_ref());
+        file.map(|file| window.focus(&file.focus, cx)).is_some()
+    }
+
     /// Drains the inboxes of the Stream and the file diff; updates for a closed or replaced
     /// file screen are dropped. Returns whether the screen changed.
     pub(super) fn poll_compare_screen(&mut self, cx: &mut Context<Self>) -> bool {

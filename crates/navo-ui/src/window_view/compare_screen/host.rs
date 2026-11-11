@@ -15,7 +15,7 @@ use super::{FileScreen, FileState};
 use crate::commands::compare::{Exit, NextDifference, PreviousDifference};
 use crate::file_list::kind;
 use crate::prelude::*;
-use crate::primitives::{Button, IconButton, IconName};
+use crate::primitives::{IconButton, IconName};
 use crate::tokens::{self, Theme};
 use crate::window_view::NavoWindow;
 
@@ -195,7 +195,7 @@ fn message_view(t: &Theme, text: SharedString, failed: bool) -> impl IntoElement
 fn status_line(
     t: &Theme,
     changes: Option<SharedString>,
-    link: Option<Button>,
+    link: Option<Div>,
     note: Option<&Note>,
 ) -> Div {
     div()
