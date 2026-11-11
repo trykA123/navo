@@ -22,6 +22,7 @@ use crate::window_view::compare_screen::FileState;
 
 pub(super) mod body;
 mod refresh;
+mod sideways;
 mod view;
 
 const KEYMAP: &str = include_str!("../../commands/keymap.toml");

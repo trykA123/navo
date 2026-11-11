@@ -144,6 +144,7 @@ fn body(
     let (look, drawers) = (file.look, &file.drawers);
     if let Some(view) = file.view.as_mut() {
         let layout = look.layout_in(window);
+        view.set_wrap(look.wrap);
         let list = div().flex_1().min_w_0().child(view.list(layout, bars, cx));
         let map = look.map.then(|| view.map_element(layout, cx));
         view.watch_rows(layout, window, cx);

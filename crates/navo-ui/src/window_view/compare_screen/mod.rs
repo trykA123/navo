@@ -160,6 +160,9 @@ impl FileScreen {
         self.view = text
             .clone()
             .map(|text| file::FileView::new(text, at, words));
+        if let (Some(view), Some(old)) = (self.view.as_mut(), old_view.as_ref()) {
+            view.keep_sideways(old);
+        }
         let layout = self.look.layout.unwrap_or(self.auto);
         self.large =
             matches!(kind, PairKind::Large { .. }).then(|| LargeShown::new(row_height, layout));
@@ -404,5 +407,7 @@ impl NavoWindow {
 
 #[cfg(test)]
 mod probes;
+#[cfg(test)]
+pub(in crate::window_view) use file::SidewaysSeen;
 #[cfg(test)]
 pub(in crate::window_view) use hex::HexProbe;

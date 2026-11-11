@@ -5,6 +5,7 @@ mod map;
 mod reveal;
 mod rows;
 mod seek;
+mod sideways;
 mod spans;
 
 use std::cell::{Cell, RefCell};
@@ -19,11 +20,14 @@ use super::super::layout::ONE_PANE_BELOW;
 use super::copy::FileBars;
 use super::switch;
 use crate::compare_diff::body::digits;
-use crate::compare_diff::{DiffRow, Layout, PairText, SpanCache, row_count};
+use crate::compare_diff::{DiffRow, Layout, LineCols, PairText, SpanCache, row_count};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, VirtualList};
 use crate::tokens;
 use crate::window_view::NavoWindow;
+use sideways::SidewaysHandle;
+#[cfg(test)]
+pub(in crate::window_view) use sideways::SidewaysSeen;
 
 /// How a pair lays out in one layout: its row count and the first row of each hunk.
 struct Shape {
@@ -93,6 +97,10 @@ pub(super) struct FileView {
     retried: bool,
     /// The left line to put on top at the next draw (Alt+V back from bytes).
     seek: Option<usize>,
+    /// The sideways scroll both text columns share.
+    sideways: SidewaysHandle,
+    /// The column count of every line, measured on the first draw.
+    cols: Option<Arc<LineCols>>,
 }
 
 impl FileView {
@@ -115,6 +123,28 @@ impl FileView {
             settle: None,
             retried: false,
             seek: None,
+            sideways: SidewaysHandle::default(),
+            cols: None,
+        }
+    }
+
+    /// Keeps the sideways offset of `old`, the same pair before a reload.
+    pub(super) fn keep_sideways(&mut self, old: &Self) {
+        self.sideways = SidewaysHandle::carried(&old.sideways);
+    }
+
+    /// Turns line wrap on or off for the next draw; sideways input is ignored while it is on.
+    pub(super) fn set_wrap(&self, wrap: bool) {
+        self.sideways.set_wrap(wrap);
+    }
+
+    /// Measures the columns of every line once, on the UI thread for now (W8e2 moves it to a
+    /// background task), and gives the widest to the sideways state.
+    fn ensure_cols(&mut self) {
+        if self.cols.is_none() {
+            let cols = LineCols::measure(&self.text);
+            self.sideways.set_widest(cols.widest());
+            self.cols = Some(Arc::new(cols));
         }
     }
 
@@ -192,6 +222,7 @@ impl FileView {
             self.scroll.scroll_to_center(row);
         }
         self.apply_seek(layout);
+        self.ensure_cols();
         let (count, starts) = {
             let shape = self.shape(layout);
             (shape.count, shape.starts.clone())
@@ -206,12 +237,23 @@ impl FileView {
             spans: Rc::clone(&self.spans),
             words: self.words,
             on_long: switch::on_bytes_here(&bars.weak),
+            sideways: self.sideways.clone(),
             bars,
         };
-        let rows = move |range: Range<usize>, _: &mut Window, cx: &mut App| rows.draw(range, cx);
-        VirtualList::new("compare-file-rows", count, &self.scroll, rows)
+        let on_wheel = sideways::on_wheel(self.sideways.clone(), rows.bars.weak.clone());
+        let rows = move |range: Range<usize>, window: &mut Window, cx: &mut App| {
+            rows.draw(range, window, cx)
+        };
+        let list = VirtualList::new("compare-file-rows", count, &self.scroll, rows)
             .row_height(tokens::current(cx).spacing.row_height)
             .label(tr("compare-screen-rows"))
+            .axis_locked();
+        div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .on_scroll(on_wheel)
+            .child(list)
             .into_any_element()
     }
 }
@@ -254,6 +296,11 @@ impl FileView {
     pub(super) fn probe(&mut self, layout: Layout) -> (Option<usize>, Range<usize>, usize) {
         let (start, end) = self.built.get();
         (self.current, start..end, self.shape(layout).count)
+    }
+
+    /// The sideways offset, cut and extent.
+    pub(super) fn sideways_seen(&self) -> SidewaysSeen {
+        self.sideways.seen()
     }
 }
 
