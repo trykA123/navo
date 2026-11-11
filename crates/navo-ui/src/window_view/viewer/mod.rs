@@ -69,6 +69,7 @@ pub(in crate::window_view) use keys::{
 };
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use menu::viewer_menu;
+pub(crate) use paged::{ByteScroll, HexLine, hex_row_tinted};
 pub use paged::{PagedKind, PagedView};
 pub use pdf::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use search::memory::MemoryLink;

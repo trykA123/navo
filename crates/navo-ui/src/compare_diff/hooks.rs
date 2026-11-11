@@ -13,8 +13,8 @@ use crate::settings::Values;
 mod large;
 
 pub use large::{
-    ByteProgress, ByteRegionView, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepReason,
-    LargeStepView,
+    ByteProgress, ByteRegionView, HexAlign, LargeHunk, LargeProgress, LargeStage, LargeStep,
+    LargeStepReason, LargeStepView,
 };
 
 /// One file pair to open. `id` is the compare row id.
@@ -218,6 +218,9 @@ pub enum DiffUpdate {
     },
     Bytes {
         request: u64,
+        align: HexAlign,
+        /// The run `byte_regions` issued; regions from an older run are stale.
+        run: u64,
         regions: Vec<ByteRegionView>,
         progress: Option<ByteProgress>,
     },
@@ -323,6 +326,8 @@ pub trait PairControl: Send {
     fn lines(&self, _rows: Range<u64>) {}
     /// Releases the eviction charges of snapshots up to number `upto` once the view applied it.
     fn acknowledge(&self, _upto: u64) {}
+    /// Diffs the two sides as bytes with `align`; a text pair ignores it.
+    fn byte_regions(&self, _align: HexAlign, _run: u64) {}
 }
 
 /// A running Stream. No call blocks; dropping it cancels without blocking.

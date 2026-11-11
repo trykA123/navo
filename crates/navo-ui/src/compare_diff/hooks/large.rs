@@ -55,6 +55,23 @@ pub struct LargeProgress {
     pub total: u64,
 }
 
+/// How a byte diff lines up its two columns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HexAlign {
+    Offset,
+    Content,
+}
+
+impl HexAlign {
+    /// The name the hex probe reports.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Offset => "offset",
+            Self::Content => "content",
+        }
+    }
+}
+
 /// One changed region of a byte diff, by offset on both sides.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ByteRegionView {

@@ -9,9 +9,9 @@ pub enum PagedKind {
     Text,
 }
 
-pub(super) struct HexLine {
-    pub start: u64,
-    pub row: HexRow,
+pub(crate) struct HexLine {
+    pub(crate) start: u64,
+    pub(crate) row: HexRow,
 }
 
 pub(super) struct TextLine {

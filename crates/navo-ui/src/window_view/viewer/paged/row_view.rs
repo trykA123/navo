@@ -12,7 +12,7 @@ use crate::tokens::Theme;
 const SHOWN_CHARS: usize = 1000;
 const MATCH_OPACITY: f32 = 0.3;
 
-pub(super) struct RowLook<'a> {
+pub(crate) struct RowLook<'a> {
     pub t: &'a Theme,
     pub height: Pixels,
     pub painted: Painted<'a>,
@@ -105,11 +105,43 @@ fn hex_ranges(slots: &[(usize, Paint)]) -> (Runs, Runs) {
         .unzip()
 }
 
-pub(super) fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyElement {
+pub(crate) fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyElement {
     let (hex_paint, ascii_paint) = hex_ranges(&hex_slots(line.start, &look.painted));
+    let is_bookmarked = look.is_bookmarked(line.start..line.start + HEX_WIDTH);
+    let styles = (look.styled(hex_paint), look.styled(ascii_paint));
+    hex_body(look, (index, line, is_bookmarked), styles)
+}
+
+/// One hex row of the compare diff: the shared frame and aria label, tinted with the diff
+/// tokens for the changed byte slots and a stronger tint for the current region.
+pub(crate) fn hex_row_tinted(
+    t: &Theme,
+    index: usize,
+    line: &HexLine,
+    tints: &[(usize, bool)],
+) -> AnyElement {
+    let look = RowLook {
+        t,
+        height: t.spacing.row_height,
+        painted: Painted {
+            hit: None,
+            marks: &[],
+            matches: &[],
+        },
+        bookmarks: &[],
+        line_ends: false,
+    };
+    hex_body(&look, (index, line, false), tint_styles(t, tints))
+}
+
+/// The one body both hex rows draw, at the look's height: gutter, offset, hex and ASCII.
+fn hex_body(
+    look: &RowLook<'_>,
+    (index, line, is_bookmarked): (usize, &HexLine, bool),
+    (hex_styles, ascii_styles): (Styles, Styles),
+) -> AnyElement {
     let row = &line.row;
     let label = format!("{}  {}  {}", row.offset, row.hex, row.ascii);
-    let is_bookmarked = look.is_bookmarked(line.start..line.start + HEX_WIDTH);
     row_frame(look, index, label)
         .child(look.gutter(index, is_bookmarked))
         .child(
@@ -117,13 +149,35 @@ pub(super) fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyEl
                 .text_color(look.t.colors.muted)
                 .child(row.offset.clone()),
         )
-        .child(StyledText::new(row.hex.clone()).with_highlights(look.styled(hex_paint)))
+        .child(StyledText::new(row.hex.clone()).with_highlights(hex_styles))
         .child(
-            div().text_color(look.t.colors.muted).child(
-                StyledText::new(row.ascii.clone()).with_highlights(look.styled(ascii_paint)),
-            ),
+            div()
+                .text_color(look.t.colors.muted)
+                .child(StyledText::new(row.ascii.clone()).with_highlights(ascii_styles)),
         )
         .into_any_element()
+}
+
+/// The highlight ranges of tinted slots in the hex text, and in the ASCII text.
+type Styles = Vec<(Range<usize>, HighlightStyle)>;
+
+fn tint_styles(t: &Theme, slots: &[(usize, bool)]) -> (Styles, Styles) {
+    let mut hex = Vec::with_capacity(slots.len());
+    let mut ascii = Vec::with_capacity(slots.len());
+    for &(slot, current) in slots {
+        let colour = match current {
+            true => t.diff.change.mark,
+            false => t.diff.change.fill,
+        };
+        let style = HighlightStyle {
+            background_color: Some(colour),
+            ..HighlightStyle::default()
+        };
+        let at = slot * 3 + usize::from(slot >= 8);
+        hex.push((at..at + 2, style));
+        ascii.push((slot..slot + 1, style));
+    }
+    (hex, ascii)
 }
 
 fn line_end_glyph(

@@ -367,6 +367,22 @@ fn a_binary_file_opens_the_hex_view_on_the_first_row(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn a_hex_row_is_as_tall_as_the_scroll_math_counts(cx: &mut TestAppContext) {
+    let (window, view) = paged_window(cx, Setup::new(mixed(4096)));
+    assert_eq!(kind(cx, &view), Some(PagedKind::Hex));
+    let (drawn, counted) = cx
+        .update_window(window, |_, window, cx| {
+            let t = crate::tokens::current(cx);
+            (
+                window.find(("paged-row", 0_usize)).bounds().size.height,
+                t.typography.line_height + t.spacing.xxs,
+            )
+        })
+        .expect("window");
+    assert_eq!(drawn, counted, "scrolling counts rows of the drawn height");
+}
+
+#[gpui_kit::test]
 fn ctrl_end_shows_the_last_screen_and_ctrl_home_the_first(cx: &mut TestAppContext) {
     let bytes = mixed(64 * 1024);
     let len = bytes.len() as u64;

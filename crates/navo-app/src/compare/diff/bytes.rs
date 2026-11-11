@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use navo_compare::bytes::{Align, ByteDiff as Engine, ByteEvent, ByteRegion, ByteSide, Request};
 use navo_compare::model::{Budget, CancelToken, DiffStep, Reason};
-use navo_ui::compare_diff::{ByteProgress, ByteRegionView, DiffSink, DiffUpdate, PairRequest};
+use navo_ui::compare_diff::{
+    ByteProgress, ByteRegionView, DiffSink, DiffUpdate, HexAlign, PairRequest,
+};
 
 use super::load::Side;
 
@@ -18,6 +20,7 @@ pub(crate) struct ByteInput {
     pub left: Side,
     pub right: Side,
     pub align: Align,
+    pub run: u64,
     pub budget: Budget,
 }
 
@@ -39,13 +42,15 @@ impl ByteDiff {
             Align::Offset => input.left.1.size.max(input.right.1.size),
             Align::Content => input.left.1.size.saturating_add(input.right.1.size),
         };
+        let align = hex_align(input.align);
+        let byte_run = input.run;
         #[cfg(test)]
         let joined = Arc::default();
         let spawned = thread::Builder::new()
             .name("compare-bytes".to_owned())
             .spawn(move || {
                 let engine = Engine::start(request_of(input), &worker.cancel);
-                let mut report = Report::new(id, total, sink);
+                let mut report = Report::new((id, total), align, byte_run, sink);
                 run(&engine, &worker, &mut report);
                 engine
             });
@@ -149,6 +154,8 @@ fn run(engine: &Engine, commands: &Commands, report: &mut Report) {
 /// The new regions and progress since the last snapshot.
 struct Report {
     id: u64,
+    align: HexAlign,
+    run: u64,
     regions: Vec<ByteRegionView>,
     progress: ByteProgress,
     sink: DiffSink,
@@ -156,9 +163,11 @@ struct Report {
 
 impl Report {
     /// A report with no regions and `total` expected bytes.
-    fn new(id: u64, total: u64, sink: DiffSink) -> Self {
+    fn new((id, total): (u64, u64), align: HexAlign, run: u64, sink: DiffSink) -> Self {
         Self {
             id,
+            align,
+            run,
             regions: Vec::new(),
             progress: ByteProgress {
                 done: 0,
@@ -203,9 +212,19 @@ impl Report {
         let regions = std::mem::take(&mut self.regions);
         (self.sink)(DiffUpdate::Bytes {
             request: self.id,
+            align: self.align,
+            run: self.run,
             regions,
             progress: Some(self.progress),
         });
+    }
+}
+
+/// Map the engine's alignment to the UI's plain one.
+fn hex_align(align: Align) -> HexAlign {
+    match align {
+        Align::Offset => HexAlign::Offset,
+        Align::Content => HexAlign::Content,
     }
 }
 

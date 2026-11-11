@@ -6,6 +6,8 @@ mod copy;
 mod drawers;
 mod entry;
 mod file;
+mod hex;
+mod hex_open;
 mod host;
 pub(in crate::window_view) mod image;
 mod inbox;
@@ -73,6 +75,8 @@ pub(super) struct FileScreen {
     state: FileState,
     /// The rows of an opened text pair.
     view: Option<file::FileView>,
+    /// The columns of an opened binary pair.
+    hex: Option<hex::HexView>,
     /// The change to show first once the text arrives.
     at: Option<usize>,
     /// The large text snapshot applied last; its number was acknowledged after applying.
@@ -112,19 +116,10 @@ impl FileScreen {
                 self.active = request;
                 self.expected = Some(request);
                 self.pick.clear();
-                let (at, words) = (self.at, self.look.words);
-                self.view = text
-                    .clone()
-                    .map(|text| file::FileView::new(text, at, words));
-                let layout = self.look.layout.unwrap_or(self.auto);
-                self.large = matches!(kind, PairKind::Large { .. })
-                    .then(|| LargeShown::new(row_height, layout));
-                self.open_pictures(kind);
-                self.state = FileState::Opened { kind, text };
-                self.follow_layout();
+                self.opened((kind, text), row_height);
             }
             DiffUpdate::Failed { text, .. } => {
-                (self.view, self.large) = (None, None);
+                (self.view, self.large, self.hex) = (None, None, None);
                 self.fail(text);
             }
             DiffUpdate::Spans { spans, .. } => match self.view.as_mut() {
@@ -139,9 +134,43 @@ impl FileScreen {
                 return true;
             }
             DiffUpdate::Image { scores, mask, .. } => return self.apply_image(scores, mask),
-            DiffUpdate::Bytes { .. } => return false,
+            DiffUpdate::Bytes {
+                align,
+                run,
+                regions,
+                ..
+            } => return self.apply_bytes(regions, (align, run)),
         }
         true
+    }
+
+    /// Applies a byte snapshot to the hex body; false when the body is gone or stale.
+    fn apply_bytes(
+        &mut self,
+        regions: Vec<crate::compare_diff::ByteRegionView>,
+        (align, run): (crate::compare_diff::HexAlign, u64),
+    ) -> bool {
+        match self.hex.as_mut() {
+            Some(hex) => hex.add(regions, (align, run)),
+            None => false,
+        }
+    }
+
+    /// Installs an opened pair: its text rows, its large or image or hex body by kind, or its
+    /// kind only; rows are `row_height` tall.
+    fn opened(&mut self, (kind, text): (PairKind, Option<Arc<PairText>>), row_height: Pixels) {
+        let (at, words) = (self.at, self.look.words);
+        self.view = text
+            .clone()
+            .map(|text| file::FileView::new(text, at, words));
+        let layout = self.look.layout.unwrap_or(self.auto);
+        self.large =
+            matches!(kind, PairKind::Large { .. }).then(|| LargeShown::new(row_height, layout));
+        let old = self.hex.take();
+        self.hex = matches!(kind, PairKind::Binary).then(|| hex::HexView::reopened(old));
+        self.open_pictures(kind);
+        self.state = FileState::Opened { kind, text };
+        self.follow_layout();
     }
 
     /// Asks the worker to reload both sides under the next request id; updates for every earlier
@@ -149,6 +178,9 @@ impl FileScreen {
     fn refresh(&mut self) {
         let next = self.expected.and_then(|id| id.checked_add(1));
         (self.expected, self.large) = (next, None);
+        if let Some(id) = next {
+            self.active = id;
+        }
         match next {
             Some(id) => self.control.refresh(id),
             None => {
@@ -258,6 +290,7 @@ impl NavoWindow {
             focus: focus.clone(),
             state: FileState::Loading,
             view: None,
+            hex: None,
             at,
             large: None,
             pictures: None,
@@ -286,14 +319,15 @@ impl NavoWindow {
     pub(super) fn poll_compare_screen(&mut self, cx: &mut Context<Self>) -> bool {
         let rows = crate::tokens::current(cx).spacing.row_height;
         self.poll_stream(cx)
-            | self.poll_file_screen(rows)
+            | self.poll_file_screen(rows, cx)
             | self.poll_copies()
             | self.poll_sheet()
             | self.load_pictures(cx)
     }
 
-    /// Drains the file diff's inbox into rows `rows` tall. Returns whether the screen changed.
-    fn poll_file_screen(&mut self, rows: Pixels) -> bool {
+    /// Drains the file diff's inbox into rows `rows` tall, then starts a binary body's open.
+    /// Returns whether the screen changed.
+    fn poll_file_screen(&mut self, rows: Pixels, cx: &mut Context<Self>) -> bool {
         let updates = std::mem::take(
             &mut *self
                 .compare
@@ -306,12 +340,14 @@ impl NavoWindow {
             return false;
         };
         let tag = file.tag;
-        updates
+        let changed = updates
             .into_iter()
             .filter(|(sent_to, _)| *sent_to == tag)
             .fold(false, |changed, (_, update)| {
                 file.apply(update, rows) | changed
-            })
+            });
+        self.start_hex_open(cx);
+        changed
     }
 
     /// Esc on the file diff: pops it and cancels its pair. Focus goes to the Stream underneath,
@@ -351,3 +387,5 @@ impl NavoWindow {
 
 #[cfg(test)]
 mod probes;
+#[cfg(test)]
+pub(in crate::window_view) use hex::HexProbe;

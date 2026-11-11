@@ -7,14 +7,17 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 
 use navo_compare::model::{CancelToken, Reason};
-use navo_ui::compare_diff::{DiffSink, DiffUpdate, PairControl, PairKind, PairRequest};
+use navo_ui::compare_diff::{DiffSink, DiffUpdate, HexAlign, PairControl, PairKind, PairRequest};
 
+use super::bytes::ByteDiff;
 use super::convert::{spans, to_pair_text};
 use super::image;
 use super::load::{LoadInput, Loaded, load_pair};
 use engine::{EngineJob, Live};
+use hex_bytes::{clear_bytes, start_bytes};
 
 mod engine;
+mod hex_bytes;
 
 pub(crate) use engine::EnginePlan;
 
@@ -114,6 +117,10 @@ impl PairControl for PairDiff {
     fn acknowledge(&self, upto: u64) {
         self.live.acknowledge(upto);
     }
+
+    fn byte_regions(&self, align: HexAlign, run: u64) {
+        self.commands.send(Command::Bytes { align, run });
+    }
 }
 
 impl Drop for PairDiff {
@@ -156,6 +163,7 @@ impl PairDiff {
 enum Command {
     Spans(Range<u32>),
     Refresh(u64),
+    Bytes { align: HexAlign, run: u64 },
 }
 
 /// Work found after a load, before the next blocking receive.
@@ -164,6 +172,8 @@ struct Pending {
     spans: Option<Range<u32>>,
     /// The id of the newest refresh, which coalesces every earlier one.
     refresh: Option<u64>,
+    /// The newest byte alignment asked for.
+    bytes: Option<(HexAlign, u64)>,
 }
 
 /// The worker's bounded queue. A newer span request replaces an older one.
@@ -172,6 +182,8 @@ struct Commands {
     ready: Condvar,
     closed: AtomicBool,
     cancel: CancelToken,
+    /// The running byte diff; dropping it cancels its workers.
+    bytes: Mutex<Option<ByteDiff>>,
 }
 
 impl Commands {
@@ -181,6 +193,7 @@ impl Commands {
             ready: Condvar::new(),
             closed: AtomicBool::new(false),
             cancel: CancelToken::new(),
+            bytes: Mutex::new(None),
         }
     }
 
@@ -206,6 +219,7 @@ impl Commands {
             match command {
                 Command::Spans(rows) => pending.spans = Some(rows),
                 Command::Refresh(next) => pending.refresh = Some(next),
+                Command::Bytes { align, run } => pending.bytes = Some((align, run)),
             }
         }
         pending
@@ -262,6 +276,7 @@ fn run(worker: &Worker<'_>) {
         if let Some(next) = pending.refresh {
             id = next;
             worker.live.clear();
+            clear_bytes(worker.commands);
             continue;
         }
         (worker.sink)(DiffUpdate::Opened {
@@ -289,21 +304,28 @@ fn run(worker: &Worker<'_>) {
         {
             return;
         }
-        let Some(next) = serve(&loaded, id, worker) else {
+        if let Some((align, run)) = pending.bytes {
+            start_bytes((worker.request, &input, id), (align, run), worker);
+        }
+        let Some(next) = serve((&loaded, &input), id, worker) else {
             return;
         };
         id = next;
     }
 }
 
-/// Answer spans until a refresh gives the next request id (`Some`) or the pair closes (`None`).
-fn serve(loaded: &Loaded, id: u64, worker: &Worker<'_>) -> Option<u64> {
+/// Answer spans and byte requests until a refresh gives the next request id (`Some`) or the pair closes (`None`).
+fn serve((loaded, input): (&Loaded, &LoadInput), id: u64, worker: &Worker<'_>) -> Option<u64> {
     loop {
         match worker.commands.recv()? {
             Command::Spans(rows) => send_spans(loaded, id, rows, worker.sink),
             Command::Refresh(next) => {
                 worker.live.clear();
+                clear_bytes(worker.commands);
                 return Some(next);
+            }
+            Command::Bytes { align, run } => {
+                start_bytes((worker.request, input, id), (align, run), worker);
             }
         }
     }
@@ -348,7 +370,7 @@ fn wait_refresh(commands: &Commands) -> Option<u64> {
     loop {
         match commands.recv()? {
             Command::Refresh(next) => return Some(next),
-            Command::Spans(_) => {}
+            Command::Spans(_) | Command::Bytes { .. } => {}
         }
     }
 }

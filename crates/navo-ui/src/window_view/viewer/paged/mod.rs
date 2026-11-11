@@ -20,7 +20,9 @@ use gpui_kit::{FocusHandle, Focusable, ScrollDelta, ScrollEvent, Task};
 use navo_core::paging::{LineIndex, MAX_ROW};
 
 pub(super) use body::PagedBody;
+pub(crate) use lines::HexLine;
 pub use lines::PagedKind;
+pub(crate) use row_view::hex_row_tinted;
 
 use super::files::{IndexRun, Paged, Reopen, SharedSource};
 use super::search::find_all::FoundRow;
@@ -35,7 +37,7 @@ use follow::Follower;
 use jobs::{IndexDone, IndexMessage};
 use moves::{Move, MoveQueue};
 use rows::RowCache;
-use scroll::ByteScroll;
+pub(crate) use scroll::ByteScroll;
 
 const WHEEL_ROWS: f32 = 3.;
 const SHIFT_COLUMNS: usize = 8;
