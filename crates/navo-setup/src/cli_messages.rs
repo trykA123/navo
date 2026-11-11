@@ -35,7 +35,7 @@ pub(super) fn install_message(error: &InstallError, fallback_root: &Path, upgrad
             session.root().display()
         ),
         InstallError::Remarked(session) => format!(
-            "Navo is installed in `{}`, but its folder carries another mark. Remove Navo in Settings → Apps, then run Setup again.",
+            "Navo is installed in `{}`, but its folder carries another mark. Remove Navo in Windows Settings → Apps, then run Setup again.",
             session.root().display()
         ),
         InstallError::Unlisted(session) => format!(
@@ -95,7 +95,7 @@ pub(crate) fn failure_message(failure: &Failure, root: &Path, upgrade: bool) -> 
             root.display()
         ),
         Failure::Remarked => format!(
-            "Navo is installed in `{}`, but its folder carries another mark. Remove Navo in Settings → Apps, then run Setup again.",
+            "Navo is installed in `{}`, but its folder carries another mark. Remove Navo in Windows Settings → Apps, then run Setup again.",
             root.display()
         ),
         Failure::Unlisted => format!(

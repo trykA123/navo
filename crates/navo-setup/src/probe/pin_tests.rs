@@ -135,6 +135,7 @@ fn every_fresh_folder_has_a_protected_dacl_with_three_explicit_aces() -> std::io
     let temp = tempfile::tempdir()?;
     let chain = chain_under(temp.path(), &["tools", "root"]);
     let _pin = Pin::fresh(&chain).expect("fresh pin");
+    let user = security::user_sid()?;
     for name in ["tools", "root"] {
         let sddl = dacl_sddl(&temp.path().join(name))?;
         assert!(sddl.starts_with("D:P"), "{sddl}");
@@ -142,6 +143,7 @@ fn every_fresh_folder_has_a_protected_dacl_with_three_explicit_aces() -> std::io
         for group in ["AU", "BU", "WD"] {
             assert!(!sddl.contains(&format!(";;;{group})")), "{sddl}");
         }
+        assert!(sddl.contains(&format!(";;;{user})")), "{sddl}");
         assert!(sddl.contains(";;;SY)"), "{sddl}");
         assert!(sddl.contains(";;;BA)"), "{sddl}");
     }
