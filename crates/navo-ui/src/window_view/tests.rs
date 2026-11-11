@@ -32,6 +32,7 @@ mod compare_hex;
 mod compare_image;
 mod compare_large;
 mod compare_large_bar;
+mod compare_large_sideways;
 mod compare_large_view;
 mod compare_screen;
 mod compare_scroll;

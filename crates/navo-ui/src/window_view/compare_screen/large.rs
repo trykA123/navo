@@ -20,10 +20,12 @@ use navo_l10n::{t, tr};
 pub(in crate::window_view) use map::{Anchor, RowMap, Settled};
 
 use crate::compare_diff::{
-    DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepView, Layout,
+    DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepView, Layout, is_long,
+    line_cols,
 };
 use crate::prelude::*;
 use crate::primitives::ListScroll;
+use crate::window_view::compare_screen::sideways::SidewaysHandle;
 use bar::FileBar;
 use lines::LineCache;
 
@@ -44,6 +46,9 @@ pub(super) struct LargeShown {
     seeking: bool,
     /// The line to put on top once the line counts are known (Show text from bytes, V41d).
     sought: Option<Anchor>,
+    /// The sideways scroll both text columns share (W8j). The large body never wraps, so this
+    /// handle keeps wrap off; a new pair starts at offset 0.
+    sideways: SidewaysHandle,
 }
 
 impl LargeShown {
@@ -61,7 +66,13 @@ impl LargeShown {
             current: None,
             seeking: false,
             sought: None,
+            sideways: SidewaysHandle::default(),
         }
+    }
+
+    /// The sideways state, for the wheel listener and the Left/Right keys beside the file.
+    pub(super) fn sideways(&self) -> SidewaysHandle {
+        self.sideways.clone()
     }
 
     /// Applies a snapshot. The top line stays on top; a waiting next difference jumps to the
@@ -87,10 +98,25 @@ impl LargeShown {
 
     /// Stores a line window that starts at line `start` with both sides' line counts.
     pub(super) fn add_lines(&mut self, fetched: lines::Fetched, totals: (u64, u64)) {
+        self.widen_sideways(&fetched);
         let near = self.near(fetched.start);
         self.lines.borrow_mut().add(fetched, near);
         if self.map.totals() != Some(totals) {
             self.remap(self.rebuild(self.map.layout(), Some(totals)));
+        }
+    }
+
+    /// Raises the sideways extent to the widest line of the window `fetched` (W8j), as the file
+    /// diff's `LineCols` counts it: a line over `LONG_LINE` is skipped, and the extent only
+    /// grows — a narrower window arriving later never shrinks it.
+    fn widen_sideways(&self, fetched: &lines::Fetched) {
+        let wide = (fetched.lines.0.iter().chain(fetched.lines.1.iter()))
+            .filter(|line| !is_long(line))
+            .map(|line| line_cols(line))
+            .max()
+            .unwrap_or(0);
+        if wide > self.sideways.widest().unwrap_or(0) {
+            self.sideways.set_widest(wide);
         }
     }
 
