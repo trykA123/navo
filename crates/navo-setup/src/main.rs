@@ -20,6 +20,8 @@ pub mod marker;
 pub mod mode;
 #[cfg(test)]
 mod mode_tests;
+#[cfg(any(windows, test))]
+mod parent_acl_rule;
 pub mod payload;
 pub mod placement;
 pub mod runner;
