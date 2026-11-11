@@ -10,6 +10,8 @@ use std::ffi::OsString;
 use std::process::ExitCode;
 
 pub mod cli;
+#[cfg(any(windows, test))]
+pub mod default_root;
 pub mod flow;
 pub mod flow_outcome;
 pub mod host;

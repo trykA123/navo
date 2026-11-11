@@ -10,6 +10,9 @@ use std::time::{Duration, Instant};
 
 use navo_core::{FileIdentity, FileIdentityKind};
 
+use windows_sys::Win32::UI::Shell::FOLDERID_UserProgramFiles;
+
+use crate::default_root;
 use crate::host::Host;
 use crate::host::ShortcutReport;
 use crate::marker::Marker;
@@ -61,6 +64,7 @@ impl Host for WindowsHost {
 
     /// Creates and holds the fresh chain after placement; every post-create error removes it.
     fn pin_fresh(&mut self, root: &Path, space: &Space) -> io::Result<Pin> {
+        ensure_default_parent(root)?;
         let chain = resolved(root)?;
         refuse_fresh(&chain)?;
         let refused = chain::refused()?;
@@ -293,6 +297,20 @@ impl Host for WindowsHost {
         };
         Ok(Cleanup { kept })
     }
+}
+
+/// Creates the per-user Programs folder through Windows when `root` is the default root.
+///
+/// Probing creates nothing; this runs only once an install starts. Typed roots are untouched.
+fn ensure_default_parent(root: &Path) -> io::Result<()> {
+    let id = &FOLDERID_UserProgramFiles;
+    let Some(parent) = chain::known_folder_unverified(id)? else {
+        return Ok(());
+    };
+    if default_root::is_default_root(root, &parent, &chain::OrdinalNames) {
+        chain::create_known_folder(id)?;
+    }
+    Ok(())
 }
 
 /// Parses and resolves one root path into its existing ancestors and missing names.
