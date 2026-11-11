@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use super::*;
 use crate::compare_diff::fake::FakeDiffHooks;
+use crate::compare_diff::image_body::{notice_of, similarity_of};
 
 fn request(id: u64) -> PairRequest {
     PairRequest {
@@ -165,5 +166,98 @@ fn an_update_flows_through_the_fake() {
             .unwrap_or_else(PoisonError::into_inner)[0]
             .id,
         9
+    );
+}
+
+#[test]
+fn similarity_of_rounds_the_structural_score() {
+    let scored = ImageScores::Scored {
+        ssim: 0.987,
+        rgb_min_rms_similarity: 0.9,
+        luma_hellinger_similarity: 0.9,
+        alpha: None,
+    };
+    assert_eq!(similarity_of(&scored), Some(99));
+    assert_eq!(similarity_of(&ImageScores::HashOnly { equal: true }), None);
+}
+
+#[test]
+fn notice_of_names_each_fallback() {
+    assert_eq!(
+        notice_of(&ImageScores::HashOnly { equal: false }),
+        Some("compare-image-note-hash")
+    );
+    assert_eq!(
+        notice_of(&ImageScores::SizeMismatch {
+            left: ImageSize {
+                width: 2,
+                height: 1,
+            },
+            right: ImageSize {
+                width: 1,
+                height: 1,
+            },
+        }),
+        Some("compare-image-note-sizes")
+    );
+    assert_eq!(
+        notice_of(&ImageScores::Unsupported { format: "svg" }),
+        Some("compare-image-note-format")
+    );
+    for (reason, id) in [
+        (ImageLimit::Encoded, "compare-image-note-encoded"),
+        (ImageLimit::Pixels, "compare-image-note-pixels"),
+        (ImageLimit::Decode, "compare-image-note-decode"),
+    ] {
+        assert_eq!(
+            notice_of(&ImageScores::TooLarge {
+                reason,
+                equal: false,
+            }),
+            Some(id)
+        );
+    }
+    let scored = ImageScores::Scored {
+        ssim: 1.0,
+        rgb_min_rms_similarity: 1.0,
+        luma_hellinger_similarity: 1.0,
+        alpha: None,
+    };
+    assert_eq!(notice_of(&scored), None);
+}
+
+#[test]
+fn a_detail_update_compares_by_value() {
+    let card = LargeCard {
+        hunks: vec![LargeHunk {
+            left_rows: 0..2,
+            right_rows: 0..2,
+            left_bytes: 0..8,
+            right_bytes: 0..9,
+        }],
+        found: 1,
+        progress: None,
+        scan: CardScan::Full,
+    };
+    let update = StreamUpdate::Detail {
+        generation: 3,
+        id: 7,
+        detail: Arc::new(CardDetail::Large(card.clone())),
+    };
+    assert_eq!(
+        update,
+        StreamUpdate::Detail {
+            generation: 3,
+            id: 7,
+            detail: Arc::new(CardDetail::Large(card)),
+        }
+    );
+    assert_ne!(
+        update,
+        StreamUpdate::Detail {
+            generation: 3,
+            id: 8,
+            detail: Arc::new(CardDetail::Failed("gone".into())),
+        }
     );
 }

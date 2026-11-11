@@ -21,11 +21,12 @@ pub mod ticks;
 pub use card::{CardCtx, stream_row_view};
 pub use cols::{LineCols, Shown, TAB_COLS, WrapIndex, char_cols, cut, line_cols, visual_lines};
 pub use hooks::{
-    ByteProgress, ByteRegionView, Card, CardRow, CopyChange, CopyDirection, CopyDone, CopyResult,
-    CopySink, DiffHooks, DiffRow, DiffSink, DiffUpdate, HexAlign, HunkView, ImageAlpha, ImageLimit,
-    ImageMask, ImageScores, ImageSize, LargeHunk, LargeProgress, LargeStage, LargeStep,
+    ByteProgress, ByteRegionView, BytesCard, CARD_HUNKS, Card, CardDetail, CardRow, CardScan,
+    CopyChange, CopyDirection, CopyDone, CopyResult, CopySink, DiffHooks, DiffRow, DiffSink,
+    DiffUpdate, HEX_CARD_ROWS, HexAlign, HexWindow, HunkView, ImageAlpha, ImageCard, ImageLimit,
+    ImageMask, ImageScores, ImageSize, LargeCard, LargeHunk, LargeProgress, LargeStage, LargeStep,
     LargeStepReason, LargeStepView, Layout, PairControl, PairFacts, PairKind, PairRequest,
-    PairText, RowSpans, StreamControl, StreamSink, StreamUpdate, ViewedKey,
+    PairText, RowSpans, StreamControl, StreamSink, StreamUpdate, THUMB_SIDE, Thumb, ViewedKey,
 };
 pub use long::{LONG_LINE, LongHit, OnBytesHere, is_long};
 pub use rows::{Half, ShownKind, ShownRow, StreamRow, pair_rows, row_count, stream_rows};
