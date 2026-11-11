@@ -201,70 +201,50 @@ fn run_logged(host: &mut FakeHost, root: &str, dir: &Path) -> (ExitCode, String,
     )
 }
 
-/// Builds one fake host per failing IW17 exit 3 to 8, with the folder each one asks for.
-fn failing_hosts() -> Vec<(u8, &'static str, FakeHost)> {
-    let host = |setup: &dyn Fn(&mut FakeHost)| {
-        let mut host = FakeHost::new();
-        setup(&mut host);
-        host
-    };
-    vec![
-        (
-            3,
-            r"C:\Elsewhere\Navo",
-            host(&|h| h.discoveries.extend([Ok(discovery("0.3.0"))])),
-        ),
-        (
-            3,
-            ROOT,
-            host(&|h| {
-                h.discoveries
-                    .extend([Ok(Discovery::default()), Ok(discovery("0.3.0"))])
-            }),
-        ),
-        (
-            4,
-            ROOT,
-            host(&|h| {
-                h.discoveries
-                    .extend([Ok(discovery("0.3.0")), Ok(discovery("0.3.0"))]);
-                h.running.push_back(Ok(true));
-            }),
-        ),
-        (
-            5,
-            ROOT,
-            host(&|h| {
-                h.discoveries
-                    .extend([Ok(Discovery::default()), Ok(Discovery::default())]);
-                h.registry.push_back(Registry::Absent);
-                h.child_script.push_back(Some(1));
-            }),
-        ),
-        (
-            6,
-            ROOT,
-            host(&|h| {
-                h.discoveries
-                    .push_back(Err(std::io::Error::other("registry")))
-            }),
-        ),
-        (7, ROOT, host(&|h| h.elevated.push_back(Ok(true)))),
-        (
-            8,
-            ROOT,
-            host(&|h| {
-                h.discoveries
-                    .extend([Ok(discovery(VERSION)), Ok(discovery(VERSION))])
-            }),
-        ),
-    ]
+/// The failing IW17 exits 3 to 8 to test, each with the folder it asks for.
+const FAILING: [(u8, &str); 7] = [
+    (3, r"C:\Elsewhere\Navo"),
+    (3, ROOT),
+    (4, ROOT),
+    (5, ROOT),
+    (6, ROOT),
+    (7, ROOT),
+    (8, ROOT),
+];
+
+/// Builds the fake host that makes a silent run into `root` exit with `code`.
+fn failing_host(code: u8, root: &str) -> FakeHost {
+    let mut host = FakeHost::new();
+    let fresh = || Ok(Discovery::default());
+    match code {
+        3 if root != ROOT => host.discoveries.push_back(Ok(discovery("0.3.0"))),
+        3 => host.discoveries.extend([fresh(), Ok(discovery("0.3.0"))]),
+        4 => {
+            host.discoveries
+                .extend([Ok(discovery("0.3.0")), Ok(discovery("0.3.0"))]);
+            host.running.push_back(Ok(true));
+        }
+        5 => {
+            host.discoveries.extend([fresh(), fresh()]);
+            host.registry.push_back(Registry::Absent);
+            host.child_script.push_back(Some(1));
+        }
+        6 => host
+            .discoveries
+            .push_back(Err(std::io::Error::other("registry"))),
+        7 => host.elevated.push_back(Ok(true)),
+        _ => host
+            .discoveries
+            .extend([Ok(discovery(VERSION)), Ok(discovery(VERSION))]),
+    }
+    host
 }
 
 /// Every failing exit prints the wizard log's path, and the log holds the same lines (S10, IW17).
 #[test]
 fn every_failing_silent_exit_names_its_log() {
-    for (code, root, mut host) in failing_hosts() {
+    for (code, root) in FAILING {
+        let mut host = failing_host(code, root);
         let dir = tempfile::tempdir().unwrap();
         let (exit, text, wizard) = run_logged(&mut host, root, dir.path());
         assert_eq!(exit, ExitCode::from(code), "{text}");

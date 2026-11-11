@@ -161,7 +161,10 @@ fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPa
     };
     match runner::install(request, payload, &logs.velopack, host, &mut |_| {}) {
         Ok(_) => ExitCode::SUCCESS,
-        Err(error) => report_install(error, host, &root, upgrade, logs),
+        Err(error) => {
+            let message = install_message(&error, &root, upgrade);
+            report_install(error, host, &message, logs)
+        }
     }
 }
 
@@ -176,16 +179,14 @@ pub(crate) fn write_log_line(path: &Path, line: &str) {
 fn report_install(
     error: InstallError,
     host: &mut dyn Host,
-    root: &Path,
-    upgrade: bool,
+    message: &str,
     logs: &LogPaths,
 ) -> ExitCode {
     let code = error.exit_code();
-    let message = install_message(&error, root, upgrade);
     if let InstallError::RetryEmpty(session, _) = error {
         runner::close(session, host);
     }
-    print_failure(&message, logs);
+    print_failure(message, logs);
     ExitCode::from(code)
 }
 
