@@ -22,6 +22,8 @@ pub(in crate::window_view) struct HexProbe {
     pub(in crate::window_view) cache_limit: usize,
     /// The left byte offset the top row starts at; none on a gap.
     pub(in crate::window_view) top_left: Option<u64>,
+    /// The right byte offset the top row starts at; none when the right side has a gap.
+    pub(in crate::window_view) top_right: Option<u64>,
     pub(in crate::window_view) left_hex: Vec<Option<String>>,
     pub(in crate::window_view) status: Option<String>,
 }
@@ -45,6 +47,11 @@ impl HexView {
             cached: self.loaded.len(),
             cache_limit: CACHE_LIMIT,
             top_left: self.rows.left_at(range.start),
+            top_right: self
+                .rows
+                .row(range.start)
+                .and_then(|row| row.right)
+                .map(|span| span.at),
             ready: self.left.is_some() || self.right.is_some() || self.error.is_some(),
             loaded: range
                 .clone()
