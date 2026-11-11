@@ -21,7 +21,6 @@ mod large;
 pub(crate) use large::{large_card, run};
 
 /// Build the detail function for one engine plan; only large pairs have a runner so far.
-#[allow(dead_code, reason = "the hooks wiring (A4b) calls it")]
 pub(crate) fn detail_fn(plan: EnginePlan) -> DetailFn {
     Arc::new(
         move |job: &DetailJob, input: &LoadInput, emit: &dyn Fn(CardDetail, bool)| {

@@ -10,8 +10,11 @@ use std::thread::{self, ThreadId};
 use std::time::Duration;
 
 use navo_compare::model::Reason;
+use navo_compare::text::side::WHOLE_LIMIT;
 use navo_core::{Location, ProviderPath};
-use navo_ui::compare_diff::{DiffHooks, DiffSink, DiffUpdate, PairKind, PairRequest, StreamUpdate};
+use navo_ui::compare_diff::{
+    CardDetail, CardScan, DiffHooks, DiffSink, DiffUpdate, PairKind, PairRequest, StreamUpdate,
+};
 use navo_ui::settings::Values;
 
 use crate::compare::diff::DiffBackend;
@@ -227,4 +230,44 @@ fn open_stream_opens_the_viewed_store_on_a_worker_only_when_needed() {
     }
     assert_eq!(probe.started.load(Ordering::SeqCst), 1);
     probe.assert_off(thread::current().id());
+}
+
+#[test]
+fn open_stream_runs_the_detail_lane_for_a_large_pair() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = "same line\n".repeat(200);
+    write(dir.path(), "left.log", body.as_bytes());
+    write(dir.path(), "right.log", body.as_bytes());
+    let side: SideFn = Arc::new(|location, settings| {
+        let (source, mut entry) = side_of(location, settings)?;
+        entry.size = WHOLE_LIMIT + 1;
+        Ok((source, entry))
+    });
+    let backend = DiffBackend::with_parts(side, Arc::new(|| Arc::new(NoViewed)));
+    let (sink, receiver) = channel();
+    let stream = backend.open_stream(&Values::default(), sink);
+    let left = dir.path().join("left.log");
+    let right = dir.path().join("right.log");
+    stream.focus(vec![7]);
+    stream.set_items(1, vec![(request(7, &left, &right), true)]);
+
+    let mut card_seen = false;
+    loop {
+        match receiver.recv_timeout(WAIT).unwrap() {
+            StreamUpdate::Card { id: 7, card, .. } => {
+                assert!(matches!(card.kind, PairKind::Large { .. }));
+                card_seen = true;
+            }
+            StreamUpdate::Detail { id: 7, detail, .. } => {
+                assert!(card_seen, "the detail arrived before the card");
+                let CardDetail::Large(card) = detail.as_ref() else {
+                    panic!("unexpected large detail");
+                };
+                if card.scan == CardScan::Done {
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
 }

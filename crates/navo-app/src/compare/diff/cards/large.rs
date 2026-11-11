@@ -16,7 +16,6 @@ use super::super::large::{LargeDiff, LargeInput};
 const DETAIL_POLL: Duration = Duration::from_millis(50);
 
 /// Run one large pair's scan, emitting card details until it is full, done or cancelled.
-#[allow(dead_code, reason = "the hooks wiring (A4b) calls it")]
 pub(crate) fn run(
     request: &PairRequest,
     input: LargeInput,
@@ -59,7 +58,6 @@ pub(crate) fn run(
 }
 
 /// The card body of a large pair: at most `CARD_HUNKS` hunks and how far its scan got.
-#[allow(dead_code, reason = "the hooks wiring (A4b) calls it")]
 pub(crate) fn large_card(hunks: &[LargeHunk], progress: Option<LargeProgress>) -> LargeCard {
     let mut sorted = hunks.to_vec();
     sorted.sort_by_key(|hunk| (hunk.left_rows.start, hunk.right_rows.start));
