@@ -7,6 +7,7 @@ use gpui_kit::TestAppContext;
 use navo_l10n::tr;
 
 use super::super::compare_screen::{Rig, rig};
+use super::super::screen_access::screen_read;
 use super::{DIGEST, hunk};
 use crate::compare_diff::{
     Card, CardRow, CopyDirection, CopyResult, DiffRow, PairKind, StreamUpdate, ViewedKey,
@@ -50,7 +51,7 @@ impl Rig {
 
     /// The list row of the first line of the open Stream's copyable change.
     fn card_row_with_bar(&self, cx: &mut TestAppContext) -> usize {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (_, rows, _) = view.stream_probe().expect("a Stream");
             rows.iter()
                 .position(|row| matches!(row, crate::compare_diff::StreamRow::Line { .. }))
@@ -77,7 +78,7 @@ fn compare_copy_the_stream_key_copies_the_current_change_and_reloads_its_card(
         Some((tr("compare-copied-right"), true, false))
     );
     assert_eq!(rig.diff.reloaded(), vec![1], "the copied card is rebuilt");
-    let generation = rig.view.read_with(cx, |view, _| {
+    let generation = screen_read(&rig.view, cx, |view, _| {
         view.stream_probe().expect("a Stream").0.generation()
     });
     assert_eq!(generation, 1, "no other card is rebuilt");
