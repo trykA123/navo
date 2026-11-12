@@ -2,6 +2,7 @@
 //!
 //! The GPUI entity in `window.rs` only executes the outputs, so this logic is tested without a window.
 
+use std::io;
 use std::path::PathBuf;
 
 use navo_ui::setup::{SetupAction, SetupCheck, SetupView};
@@ -182,6 +183,15 @@ impl Shell {
         })
     }
 
+    /// Builds the wizard-log line for a Navo launch that failed; the wizard still closes.
+    fn start_failure_log(&self, error: &io::Error) -> Option<Out> {
+        let path = self.facts.wizard_log.clone()?;
+        Some(Out::Log {
+            path,
+            line: format!("navo-setup: cannot start Navo: {error}"),
+        })
+    }
+
     /// Turns one flow effect into an output; Close waits for the worker before quitting.
     fn effect(&mut self, effect: Effect) -> Out {
         match effect {
@@ -225,6 +235,7 @@ impl Shell {
             }
             Reply::Progress(_) => Vec::new(),
             Reply::Event(event) => self.handle(event),
+            Reply::StartFailed(error) => self.start_failure_log(&error).into_iter().collect(),
             Reply::Closed => vec![Out::Quit],
         }
     }

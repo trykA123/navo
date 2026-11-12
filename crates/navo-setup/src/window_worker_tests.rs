@@ -13,10 +13,11 @@ use crate::syntax::{Candidate, FolderProblem};
 use crate::window_tests::{ROOT, VERSION, candidate, payload};
 use crate::window_worker::{Job, Probe, Reply, Worker};
 
-/// A probe that passes every folder and records launches.
+/// A probe that passes every folder and records launches; `start_fails` refuses the launch.
 #[derive(Default)]
 struct FakeProbe {
     started: Vec<PathBuf>,
+    start_fails: bool,
 }
 
 impl Probe for FakeProbe {
@@ -33,20 +34,32 @@ impl Probe for FakeProbe {
     }
     fn start_navo(&mut self, root: &Path) -> std::io::Result<()> {
         self.started.push(root.to_owned());
+        if self.start_fails {
+            return Err(std::io::Error::from_raw_os_error(6));
+        }
         Ok(())
     }
 }
 
 /// Runs `jobs` through a worker on this thread and returns its replies.
 fn serve(host: &mut FakeHost, payload: &Payload, jobs: Vec<Job>) -> Vec<Reply> {
+    serve_with(host, payload, jobs, &mut FakeProbe::default())
+}
+
+/// Runs `jobs` with a chosen probe, so a test can script the Navo launch.
+fn serve_with(
+    host: &mut FakeHost,
+    payload: &Payload,
+    jobs: Vec<Job>,
+    probe: &mut dyn Probe,
+) -> Vec<Reply> {
     let (send, inbox) = mpsc::channel();
     for job in jobs {
         send.send(job).unwrap();
     }
     drop(send);
-    let mut probe = FakeProbe::default();
     let log = Path::new(r"C:\Temp\velopack.log");
-    let mut worker = Worker::new(host, &mut probe, Some(payload), log);
+    let mut worker = Worker::new(host, probe, Some(payload), log);
     let mut replies = Vec::new();
     worker.serve(&inbox, &mut |reply| replies.push(reply));
     replies
@@ -250,4 +263,26 @@ fn release_drops_the_held_empty_root_at_once() {
         .iter()
         .position(|c| matches!(c, Call::Running(_)));
     assert!(cleanup < rescan, "Release must run before the next job");
+}
+
+#[test]
+fn a_failed_navo_launch_is_reported_and_the_worker_still_closes() {
+    let dir = tempfile::tempdir().unwrap();
+    let payload = payload(dir.path());
+    let mut host = FakeHost::new();
+    let mut probe = FakeProbe {
+        start_fails: true,
+        ..FakeProbe::default()
+    };
+    let jobs = vec![Job::Start(ROOT.into()), Job::Close];
+    let replies = serve_with(&mut host, &payload, jobs, &mut probe);
+    assert_eq!(probe.started, [PathBuf::from(ROOT)]);
+    assert!(
+        matches!(&replies[..], [Reply::StartFailed(error), Reply::Closed] if error.raw_os_error() == Some(6)),
+        "the launch error must reach the window before Closed, got {replies:?}"
+    );
+    assert!(
+        exits(&replies).is_empty(),
+        "a failed launch is not a run exit: {replies:?}"
+    );
 }

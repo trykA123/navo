@@ -44,6 +44,8 @@ mod window_input_tests;
 mod window_keys_tests;
 #[cfg(test)]
 mod window_recovery_tests;
+#[cfg(all(test, windows))]
+mod window_start_tests;
 #[cfg(test)]
 mod window_tests;
 pub mod window_view;

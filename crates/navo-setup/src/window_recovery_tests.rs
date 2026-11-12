@@ -4,7 +4,7 @@ use std::path::Path;
 
 use navo_ui::setup::{SetupAction, SetupPage};
 
-use crate::flow::{Event, Failure, InstallAction, SetupExit};
+use crate::flow::{Completion, Event, Failure, InstallAction, SetupExit};
 use crate::mode::{Mode, Why};
 use crate::window_core::{Out, Shell};
 use crate::window_tests::{
@@ -139,6 +139,32 @@ fn a_failed_run_names_the_wizard_log_and_writes_the_problem_to_it() {
     );
     let logged = |out: &Out| matches!(out, Out::Log { path, line } if path == Path::new(WIZARD_LOG) && line.contains("code 1"));
     assert!(outs.iter().any(logged), "{outs:?}");
+}
+
+/// A Navo launch that fails reaches the wizard log; Finish stays and the wizard still quits.
+#[test]
+fn a_failed_navo_launch_is_logged_and_the_wizard_still_closes() {
+    let mut shell = shell_on_ready_folder();
+    shell.act(SetupAction::Next);
+    shell.act(SetupAction::Primary);
+    shell.reply(exited(SetupExit::Installed(Completion::Installed)));
+    let outs = shell.act(SetupAction::Primary);
+    assert!(
+        matches!(&outs[..], [Out::Send(Job::Start(root)), Out::Send(Job::Close)] if root == Path::new(ROOT)),
+        "Finish must ask for the launch, got {outs:?}"
+    );
+    let outs = shell.reply(Reply::StartFailed(std::io::Error::from_raw_os_error(6)));
+    let logged = |out: &Out| matches!(out, Out::Log { path, line } if path == Path::new(WIZARD_LOG) && line.contains("Navo") && line.contains('6'));
+    assert!(
+        outs.iter().any(logged),
+        "the launch error must reach the wizard log, got {outs:?}"
+    );
+    assert_eq!(
+        shell.view().page,
+        SetupPage::Finish,
+        "a failed launch is not an error page"
+    );
+    assert!(matches!(&shell.reply(Reply::Closed)[..], [Out::Quit]));
 }
 
 /// The window facts the tests share.
