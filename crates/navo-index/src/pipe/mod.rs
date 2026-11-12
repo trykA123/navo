@@ -52,7 +52,7 @@ pub enum PipeError {
 
 pub use frames::{
     FolderTotals, FolderTotalsReply, Hit, MemoryPart, MemoryReport, Query, QueryTerm, Reply,
-    Request, Response, Status, VolumeMemory, VolumeStatus,
+    Request, Response, SIZES_UNKNOWN_PREFIX, Status, VolumeMemory, VolumeStatus,
 };
 pub use memory::Part;
 pub use version::{SERVICE_REVISION, ServiceVersion, build_id};

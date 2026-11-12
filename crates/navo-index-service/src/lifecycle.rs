@@ -4,7 +4,7 @@ use super::config::Drive;
 
 use navo_index::file::{self, FileError, Header};
 use navo_index::ntfs::{NtfsError, NtfsIndex, SizeHint};
-use navo_index::pipe::{BuildReason, CancelToken};
+use navo_index::pipe::{BuildReason, CancelToken, SIZES_UNKNOWN_PREFIX};
 use navo_index::table::NameTable;
 use navo_index::usn::FrnMap;
 
@@ -24,10 +24,9 @@ pub(super) fn begin_build(status: &mut navo_index::pipe::VolumeStatus, total_fil
 }
 
 pub(super) fn report_unknown_sizes(errors: &mut Vec<String>, count: u64) {
-    const PREFIX: &str = "sizes unknown: ";
-    clear_failures(errors, PREFIX);
+    clear_failures(errors, SIZES_UNKNOWN_PREFIX);
     if count != 0 {
-        errors.push(format!("{PREFIX}{count}"));
+        errors.push(format!("{SIZES_UNKNOWN_PREFIX}{count}"));
     }
 }
 

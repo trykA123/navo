@@ -58,7 +58,7 @@ pub(super) fn configured(
                     .reply
                     .into_iter()
                     .flat_map(|status| &status.volumes)
-                    .filter(|volume| !volume.errors.is_empty())
+                    .filter(|volume| volume.has_blocking_error())
                     .map(|volume| drive_root(&volume.root)),
             )
             .collect()
@@ -133,13 +133,17 @@ pub(super) fn exclusions(options: &IndexOptions, available: &[Drive]) -> Vec<Str
 fn covered(root: &Location, service: Option<&Status>) -> bool {
     service.is_some_and(|status| {
         status.volumes.iter().any(|volume| {
-            volume.errors.is_empty()
+            !volume.has_blocking_error()
                 && (volume.entries > 0 || volume.progress.is_some())
                 && Location::new(drive_root(&volume.root))
                     .is_ok_and(|volume| contains(&volume, root))
         })
     })
 }
+
+#[cfg(test)]
+#[path = "roots_tests.rs"]
+mod ixm1_tests;
 
 #[cfg(test)]
 mod tests {
