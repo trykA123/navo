@@ -5,6 +5,9 @@ use std::collections::HashMap;
 use std::io;
 
 mod compact;
+#[cfg(any(windows, test, feature = "test-support"))]
+#[cfg_attr(not(test), allow(dead_code, reason = "used by two-pass scan"))]
+mod directory_graph;
 mod pending;
 use pending::Pending;
 #[cfg(any(windows, test))]
@@ -269,6 +272,8 @@ fn recover_rename(index: &NtfsIndex, change: TableChange) -> TableChange {
 mod batch_tests;
 #[cfg(test)]
 mod blocked_peak_tests;
+#[cfg(test)]
+mod directory_graph_tests;
 #[cfg(test)]
 mod memory_tests;
 #[cfg(test)]
