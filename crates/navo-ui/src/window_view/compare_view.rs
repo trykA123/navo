@@ -6,7 +6,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use navo_core::PaneId;
+use navo_core::{Command, Direction, PaneId};
 
 use super::NavoWindow;
 use super::compare_screen::{CompareScreen, DiffSlot};
@@ -121,6 +121,17 @@ impl NavoWindow {
             |this: &mut Self, event: &BarEvent, window, cx| this.bar_event(event, window, cx),
         ));
         Some(bar.into_any_element())
+    }
+
+    /// Focuses `pane` by sending the layout focus around until it lands there; a pane that is
+    /// already focused returns at once, a gone pane after one turn of the layout.
+    pub(super) fn focus_pane(&mut self, pane: PaneId) {
+        for direction in Direction::ALL {
+            if self.browser.state().focused_pane() == pane {
+                return;
+            }
+            let _ = self.browser.command(&Command::LayoutFocus { direction });
+        }
     }
 
     fn compare_event(

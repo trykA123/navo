@@ -5,6 +5,7 @@ mod clipboard;
 mod clipboard_palette;
 mod closing;
 mod command_center;
+mod compare_host;
 mod compare_keys;
 mod compare_screen;
 mod compare_view;
@@ -97,7 +98,7 @@ use std::sync::Arc;
 use command_center::CommandCenterState;
 use gpui_kit::{FocusHandle, Subscription};
 use navo_cache::{CacheKeys, ListingCache};
-use navo_core::{AppState, Command, Direction, PaneId};
+use navo_core::{AppState, Command, PaneId};
 use navo_fs::ProviderOps;
 
 use crate::app_menu::Identity;
@@ -386,15 +387,6 @@ impl NavoWindow {
         let pane = self.browser.state().focused_pane();
         let handle = self.handle(pane, cx);
         window.focus(&handle, cx);
-    }
-
-    fn focus_pane(&mut self, pane: PaneId) {
-        for direction in Direction::ALL {
-            if self.browser.state().focused_pane() == pane {
-                return;
-            }
-            let _ = self.browser.command(&Command::LayoutFocus { direction });
-        }
     }
 
     fn apply(&mut self, command: &Command, window: &mut Window, cx: &mut Context<Self>) {

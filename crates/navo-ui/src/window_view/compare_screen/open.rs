@@ -6,7 +6,6 @@ use std::sync::{Arc, PoisonError};
 
 use super::{CompareScreen, FileScreen, FileState, NavoWindow};
 use super::{drawers, file, look, pick, sides_label, switch};
-use crate::browser::FileDiffRequest;
 use crate::compare_diff::{CompareOptions, PairRequest, PairText};
 use crate::prelude::*;
 
@@ -41,33 +40,9 @@ fn release(file: Option<FileScreen>, cx: &mut App) {
 }
 
 impl NavoWindow {
-    /// Opens the file diff Enter asked for; false when none was asked or the app has no hooks.
-    pub(in crate::window_view) fn open_file_diff(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(asked) = self.browser.take_file_diff() else {
-            return false;
-        };
-        let FileDiffRequest {
-            id,
-            path,
-            left,
-            right,
-        } = asked;
-        let request = PairRequest {
-            id,
-            path,
-            left,
-            right,
-        };
-        self.show_pair((request, None), window, cx)
-    }
-
     /// Opens `request` in the file diff, over any Stream, replacing an open file diff and
     /// focusing it; `at` is the change to show first. False when the app has no diff hooks.
-    pub(in crate::window_view::compare_screen) fn show_pair(
+    pub(in crate::window_view) fn show_pair(
         &mut self,
         (request, at): (PairRequest, Option<usize>),
         window: &mut Window,
