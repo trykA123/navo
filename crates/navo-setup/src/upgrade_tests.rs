@@ -275,6 +275,7 @@ fn apply_args_matches_the_library_array_plus_log() {
         root.join("packages").into_os_string(),
         "--log".into(),
         log.as_os_str().to_os_string(),
+        "--verbose".into(),
     ];
     assert_eq!(apply_args(&root, &staged, &log), expected);
 }

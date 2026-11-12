@@ -40,7 +40,7 @@ pub struct Staged {
     pub path: PathBuf,
 }
 
-/// Builds IW3's exact `Update.exe apply` array, followed by `--log`.
+/// Builds IW3's exact `Update.exe apply` array, followed by `--log` and `--verbose` (D117).
 pub fn apply_args(root: &Root, staged: &Staged, log: &Path) -> Vec<OsString> {
     vec![
         root.join("Update.exe").into_os_string(),
@@ -55,6 +55,7 @@ pub fn apply_args(root: &Root, staged: &Staged, log: &Path) -> Vec<OsString> {
         root.join("packages").into_os_string(),
         "--log".into(),
         log.as_os_str().to_os_string(),
+        "--verbose".into(),
     ]
 }
 

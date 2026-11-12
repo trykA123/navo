@@ -207,6 +207,7 @@ fn expected_upgrade(payload: &Payload) -> Vec<std::ffi::OsString> {
         root.join("packages").into_os_string(),
         "--log".into(),
         LOG.into(),
+        "--verbose".into(),
     ]
 }
 
