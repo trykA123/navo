@@ -333,7 +333,7 @@ fn marking_a_folder_does_not_measure_it_when_measuring_is_off() {
 }
 
 fn index_answers(folder: Location, complete: bool) -> FolderTotalsQuery {
-    Arc::new(move |asked| {
+    Arc::new(move |asked: &Location| {
         (asked == &folder).then_some(FolderTotals {
             bytes: 42,
             files: 1,
