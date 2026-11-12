@@ -4,8 +4,8 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use super::{
-    Chain, DriveKind, Facts, FileId, Link, NameEq, Protected, Refused, Space, browse_target, check,
-    inside, same_path,
+    Chain, DriveKind, Facts, FileId, FolderWarning, Link, NameEq, Protected, Refused, Space,
+    browse_target, check, inside, same_path, warning,
 };
 use crate::syntax::FolderProblem;
 
@@ -200,19 +200,31 @@ fn a_subst_drive_is_refused() {
 }
 
 #[test]
-fn an_open_parent_is_refused_after_subst_and_before_the_drive_kind() {
+fn an_open_parent_is_not_refused() {
     let mut facts = valid_facts();
     facts.parent_open = true;
     facts.drive = DriveKind::Remote;
     let chain = chain(existing(), &["Navo"]);
     assert_eq!(
         check_default(&chain, &Refused::default(), &facts, 100),
-        Err(FolderProblem::ParentOpen)
+        Err(FolderProblem::DriveNotLocal)
     );
-    facts.subst = true;
+    facts.drive = DriveKind::Fixed;
     assert_eq!(
         check_default(&chain, &Refused::default(), &facts, 100),
-        Err(FolderProblem::SubstDrive)
+        Ok(())
+    );
+}
+
+#[test]
+fn an_open_parent_returns_the_parent_warning() {
+    let mut facts = valid_facts();
+    facts.parent_open = true;
+    assert_eq!(warning(&facts), Some(FolderWarning::ParentOpen));
+    assert_eq!(warning(&valid_facts()), None);
+    assert_eq!(
+        FolderWarning::ParentOpen.message(),
+        "Other people on this PC can change a folder above this one. Navo still works here, but a folder directly on a drive, such as C:\\Navo, is safer."
     );
 }
 

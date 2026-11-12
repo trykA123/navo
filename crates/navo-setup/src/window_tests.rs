@@ -11,6 +11,7 @@ use navo_update::parse_version;
 use crate::flow::{Completion, Event, Failure, SetupExit};
 use crate::mode::{Discovery, Mode};
 use crate::payload::Payload;
+use crate::placement::FolderWarning;
 use crate::runner::Progress;
 use crate::runner_fake::FakeHost;
 use crate::syntax::{Candidate, FolderProblem, parse_candidate};
@@ -63,6 +64,15 @@ pub fn fresh_shell() -> Shell {
     Shell::new(flow, facts())
 }
 
+/// Walks a fresh shell to the Folder page with ROOT waiting for its check.
+fn shell_checking_folder() -> Shell {
+    let mut shell = fresh_shell();
+    shell.act(SetupAction::Next);
+    shell.act(SetupAction::Toggle(SetupCheck::AcceptLicence));
+    shell.act(SetupAction::Next);
+    shell
+}
+
 /// Walks a fresh shell to the Folder page with ROOT checked and ready.
 pub fn shell_on_ready_folder() -> Shell {
     let mut shell = fresh_shell();
@@ -72,6 +82,7 @@ pub fn shell_on_ready_folder() -> Shell {
     shell.reply(Reply::Checked {
         candidate: candidate(ROOT),
         result: Ok(()),
+        warning: None,
         free: Some(9_000),
     });
     shell
@@ -264,6 +275,7 @@ fn a_stale_check_result_is_dropped() {
     shell.reply(Reply::Checked {
         candidate: candidate(ROOT),
         result: Ok(()),
+        warning: None,
         free: Some(1),
     });
     let view = shell.view();
@@ -277,11 +289,49 @@ fn a_stale_check_result_is_dropped() {
     shell.reply(Reply::Checked {
         candidate: candidate(OTHER),
         result: Err(FolderProblem::NotWritable),
+        warning: None,
         free: Some(7),
     });
     let view = shell.view();
     assert!(!view.can_next());
     assert_eq!(view.space_free, Some(7));
+    assert!(
+        view.problem
+            .unwrap()
+            .starts_with(FolderProblem::NotWritable.message())
+    );
+}
+
+#[test]
+fn an_open_parent_shows_a_warning_with_next_still_on() {
+    let mut shell = shell_checking_folder();
+    shell.reply(Reply::Checked {
+        candidate: candidate(ROOT),
+        result: Ok(()),
+        warning: Some(FolderWarning::ParentOpen),
+        free: Some(9_000),
+    });
+    let view = shell.view();
+    assert_eq!(view.problem, None);
+    assert_eq!(
+        view.notice.as_deref(),
+        Some(FolderWarning::ParentOpen.message())
+    );
+    assert!(view.can_next());
+}
+
+#[test]
+fn a_refusal_wins_over_the_parent_warning() {
+    let mut shell = shell_checking_folder();
+    shell.reply(Reply::Checked {
+        candidate: candidate(ROOT),
+        result: Err(FolderProblem::NotWritable),
+        warning: Some(FolderWarning::ParentOpen),
+        free: Some(9_000),
+    });
+    let view = shell.view();
+    assert!(!view.can_next());
+    assert_eq!(view.notice, None);
     assert!(
         view.problem
             .unwrap()

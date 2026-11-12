@@ -39,6 +39,7 @@ fn back_from_an_empty_root_releases_it_and_checks_the_folder_again() {
         shell.reply(Reply::Checked {
             candidate: candidate(ROOT),
             result: Ok(()),
+            warning: None,
             free: Some(9_000),
         });
         shell.act(SetupAction::Next);

@@ -12,7 +12,7 @@ use crate::flow::{Event, Failure, InstallAction, Request, RunningScan, SetupExit
 use crate::host::Host;
 use crate::mode::{Mode, Why, mode};
 use crate::payload::Payload;
-use crate::placement::Space;
+use crate::placement::{FolderWarning, Space};
 use crate::runner::{self, InstallError, Installed, Progress, Session};
 use crate::syntax::{Candidate, FolderProblem};
 
@@ -35,6 +35,8 @@ pub enum Reply {
     Checked {
         candidate: Candidate,
         result: Result<(), FolderProblem>,
+        /// A non-refusing warning about the candidate, when the probe found one.
+        warning: Option<FolderWarning>,
         /// Free bytes on the candidate's drive, when the probe read them.
         free: Option<u64>,
     },
@@ -46,12 +48,16 @@ pub enum Reply {
 
 /// Platform steps outside the runner's Host: the placement check and the Navo launch.
 pub trait Probe {
-    /// Checks a fresh folder against IW7 and IW8a; also returns its drive's free bytes when known.
+    /// Checks a fresh folder against IW7 and IW8a; returns its warning and free bytes when known.
     fn check_folder(
         &mut self,
         candidate: &Candidate,
         space: &Space,
-    ) -> (Result<(), FolderProblem>, Option<u64>);
+    ) -> (
+        Result<(), FolderProblem>,
+        Option<FolderWarning>,
+        Option<u64>,
+    );
     /// Starts the installed Navo from `root` without waiting for it.
     fn start_navo(&mut self, root: &Path) -> io::Result<()>;
 }
@@ -94,13 +100,14 @@ impl<'a> Worker<'a> {
                 Job::Close => break,
                 Job::Release => self.release(),
                 Job::Check(candidate) => {
-                    let (result, free) = match &space {
+                    let (result, warning, free) = match &space {
                         Some(space) => self.probe.check_folder(&candidate, space),
-                        None => (Err(FolderProblem::ProbeFailed), None),
+                        None => (Err(FolderProblem::ProbeFailed), None, None),
                     };
                     reply(Reply::Checked {
                         candidate,
                         result,
+                        warning,
                         free,
                     });
                 }
@@ -225,7 +232,11 @@ impl Probe for WindowsProbe {
         &mut self,
         candidate: &Candidate,
         space: &Space,
-    ) -> (Result<(), FolderProblem>, Option<u64>) {
+    ) -> (
+        Result<(), FolderProblem>,
+        Option<FolderWarning>,
+        Option<u64>,
+    ) {
         use crate::probe::{chain, facts};
         let probed = chain::resolve_chain(candidate).and_then(|chain| {
             let refused = chain::refused()?;
@@ -233,10 +244,11 @@ impl Probe for WindowsProbe {
             Ok((chain, refused, facts))
         });
         let Ok((chain, refused, facts)) = probed else {
-            return (Err(FolderProblem::ProbeFailed), None);
+            return (Err(FolderProblem::ProbeFailed), None, None);
         };
         let result = crate::placement::check(&chain, &refused, &facts, space, &chain::OrdinalNames);
-        (result, Some(facts.free))
+        let warning = crate::placement::warning(&facts);
+        (result, warning, Some(facts.free))
     }
 
     /// Starts `<root>\current\navo.exe` detached from the profile folder (IW12); fails without a profile.

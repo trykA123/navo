@@ -10,6 +10,7 @@ use crate::flow::{self, Effect, Event, Flow, Page, SetupExit, Shortcuts};
 use crate::host::Host;
 use crate::mode::{Mode, Why, mode};
 use crate::payload::Payload;
+use crate::placement::FolderWarning;
 use crate::syntax::Candidate;
 use crate::window_view::{Facts, Live, view};
 use crate::window_worker::{Job, Reply};
@@ -64,6 +65,8 @@ pub struct Shell {
     flow: Flow,
     facts: Facts,
     live: Live,
+    /// The current folder's non-refusing warning; a refusal clears it.
+    warning: Option<FolderWarning>,
     closing: bool,
 }
 
@@ -74,13 +77,18 @@ impl Shell {
             flow,
             facts,
             live: Live::default(),
+            warning: None,
             closing: false,
         }
     }
 
-    /// Returns the view to draw now.
+    /// Returns the view to draw now, with the folder warning on the Folder page.
     pub fn view(&self) -> SetupView {
-        view(&self.flow, &self.facts, &self.live)
+        let mut view = view(&self.flow, &self.facts, &self.live);
+        if self.flow.page() == Page::Folder {
+            view.notice = self.warning.map(|warning| warning.message().to_owned());
+        }
+        view
     }
 
     /// Returns the current flow page.
@@ -150,6 +158,9 @@ impl Shell {
         if was_failed && !matches!(self.flow.page(), Page::Failed | Page::Installing) {
             outs.push(Out::Send(Job::Release));
         }
+        if edit {
+            self.warning = None;
+        }
         if edit && !matches!(self.flow.folder(), flow::Folder::Checking(_)) {
             self.live.space_free = None;
             outs.push(Out::CancelCheck);
@@ -176,6 +187,7 @@ impl Shell {
         match effect {
             Effect::CheckFolder(candidate) => {
                 self.live.space_free = None;
+                self.warning = None;
                 Out::CheckLater(candidate)
             }
             Effect::Install(request) => Out::Send(Job::Install(request)),
@@ -194,11 +206,16 @@ impl Shell {
             Reply::Checked {
                 candidate,
                 result,
+                warning,
                 free,
             } => {
                 if matches!(self.flow.folder(), flow::Folder::Checking(current) if *current == candidate)
                 {
                     self.live.space_free = free;
+                    self.warning = match result {
+                        Ok(()) => warning,
+                        Err(_) => None,
+                    };
                 }
                 self.handle(Event::FolderChecked { candidate, result })
             }

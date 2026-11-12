@@ -188,9 +188,9 @@ fn run(args: Vec<OsString>) -> ExitCode {
     #[cfg(windows)]
     let mut windows_host = crate::host::WindowsHost;
     #[cfg(windows)]
-    let host: Option<&mut dyn crate::host::Host> = Some(&mut windows_host);
+    let host: Option<&mut dyn crate::cli::CliHost> = Some(&mut windows_host);
     #[cfg(not(windows))]
-    let host: Option<&mut dyn crate::host::Host> = None;
+    let host: Option<&mut dyn crate::cli::CliHost> = None;
     cli::run(&args, None, host, &logs)
 }
 

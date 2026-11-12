@@ -17,7 +17,9 @@ use serde_json::{Value, json};
 #[cfg(windows)]
 use crate::mode::{Discovery, Install, Mode, Why, mode as decide};
 #[cfg(windows)]
-use crate::placement::{Chain, DriveKind, Facts, Link, Protected, Refused, Space, check};
+use crate::placement::{
+    Chain, DriveKind, Facts, FolderWarning, Link, Protected, Refused, Space, check, warning,
+};
 #[cfg(windows)]
 use crate::probe::chain::{OrdinalNames, refused, resolve_chain};
 #[cfg(windows)]
@@ -78,6 +80,7 @@ fn chain_report(path: &OsStr) -> Value {
                 "path": text,
                 "chain": Value::Null,
                 "refused": Value::Null,
+                "warning": Value::Null,
                 "verdict": problem_json(problem),
             });
         }
@@ -109,6 +112,7 @@ fn chain_report(path: &OsStr) -> Value {
         "chain": chain_json(&chain),
         "refused": refused_json(&refused),
         "facts": "assumed fixed, writable and unlimited; W7b probes the real facts",
+        "warning": warning_json(warning(&facts)),
         "verdict": verdict_json(verdict),
     })
 }
@@ -121,6 +125,7 @@ fn failed_report(path: String, error: &io::Error) -> Value {
         "chain": Value::Null,
         "refused": Value::Null,
         "error": error.to_string(),
+        "warning": Value::Null,
         "verdict": problem_json(FolderProblem::ProbeFailed),
     })
 }
@@ -141,6 +146,15 @@ fn verdict_json(result: Result<(), FolderProblem>) -> Value {
     match result {
         Ok(()) => json!({ "ok": true }),
         Err(problem) => problem_json(problem),
+    }
+}
+
+/// A non-refusing warning as JSON, or null.
+#[cfg(windows)]
+fn warning_json(warning: Option<FolderWarning>) -> Value {
+    match warning {
+        Some(FolderWarning::ParentOpen) => json!("parent_open"),
+        None => Value::Null,
     }
 }
 
@@ -225,6 +239,7 @@ fn facts_report(path: &OsStr) -> Value {
                 "path": text,
                 "elevated": elevated,
                 "facts": Value::Null,
+                "warning": Value::Null,
                 "verdict": problem_json(problem),
             });
         }
@@ -251,6 +266,7 @@ fn facts_report(path: &OsStr) -> Value {
         "path": text,
         "elevated": elevated,
         "facts": facts_json(&facts),
+        "warning": warning_json(warning(&facts)),
         "verdict": verdict_json(verdict),
     })
 }
@@ -263,6 +279,7 @@ fn facts_failed(path: String, elevated: bool, error: &io::Error) -> Value {
         "elevated": elevated,
         "facts": Value::Null,
         "error": error.to_string(),
+        "warning": Value::Null,
         "verdict": problem_json(FolderProblem::ProbeFailed),
     })
 }
