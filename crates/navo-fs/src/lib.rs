@@ -1,8 +1,10 @@
+//! Filesystem providers, durable mutations and background file jobs.
 #![deny(unsafe_code)]
 
 pub mod archive;
 mod code_page;
 mod drive_class;
+mod durable_replace;
 mod exists;
 mod fake;
 pub mod find;
@@ -25,6 +27,7 @@ mod watch;
 
 pub use code_page::{ansi_code_page, encoding_for_code_page};
 pub use drive_class::{DriveClass, drive_class};
+pub use durable_replace::native_replace_durable;
 pub(crate) use exists::{ALREADY_EXISTS_CODES, already_exists};
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use io_queue::{
