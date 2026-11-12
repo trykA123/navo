@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{
     Animation, AnimationExt, InteractiveElement, Role, SharedString, Stateful,
@@ -18,6 +19,8 @@ const BAR_HEIGHT: f32 = 6.;
 const TIP_CYCLE: Duration = Duration::from_secs(16);
 const TIP_AREA_HEIGHT: f32 = 24.;
 const BAR_PULSE: Duration = Duration::from_millis(2400);
+/// Shorter than the runner's 250 ms poll, so each new share settles before the next one.
+const FILL_EASE: Duration = Duration::from_millis(200);
 
 /// Formats a duration as minutes and seconds, `3:12`.
 fn clock(elapsed: Duration) -> String {
@@ -25,24 +28,9 @@ fn clock(elapsed: Duration) -> String {
     format!("{}:{:02}", seconds / 60, seconds % 60)
 }
 
-/// Builds the indeterminate bar; its fill fades slowly, and stands still under reduced motion.
-fn bar(c: &Ctx) -> impl IntoElement {
-    let fill = div()
-        .h_full()
-        .w(relative(0.4))
-        .rounded(px(BAR_HEIGHT / 2.))
-        .bg(c.t.surfaces.progress_fill);
-    let fill: AnyElement = if c.reduce_motion {
-        fill.into_any_element()
-    } else {
-        fill.with_animation(
-            "installing-bar-pulse",
-            Animation::new(BAR_PULSE).repeat(),
-            |fill, delta| fill.opacity(0.55 + 0.45 * (delta * std::f32::consts::TAU).sin().abs()),
-        )
-        .into_any_element()
-    };
-    div()
+/// Builds the bar: a verified share fills it, and no share pulses instead.
+fn bar(c: &Ctx, percent: Option<u8>) -> impl IntoElement {
+    let track = div()
         .id("installing-bar")
         .role(Role::ProgressIndicator)
         .aria_label(c.strings.installing_bar.to_string())
@@ -51,8 +39,90 @@ fn bar(c: &Ctx) -> impl IntoElement {
         .h(px(BAR_HEIGHT))
         .rounded(px(BAR_HEIGHT / 2.))
         .overflow_hidden()
-        .bg(c.t.surfaces.progress_track)
-        .child(fill)
+        .bg(c.t.surfaces.progress_track);
+    match percent {
+        Some(percent) => track
+            .aria_value(share_text(c, percent))
+            .child(fill(c, f32::from(percent) / 100.)),
+        None => track.child(pulse(c)),
+    }
+}
+
+/// The `NN %` text the bar and its caption both name.
+fn share_text(c: &Ctx, percent: u8) -> String {
+    c.strings
+        .installing_percent
+        .replace("{percent}", &percent.to_string())
+}
+
+/// The verified share of the track, eased into place; reduced motion shows it at once.
+fn fill(c: &Ctx, fraction: f32) -> AnyElement {
+    let fill = div()
+        .id("installing-fill")
+        .test_support()
+        .h_full()
+        .w(relative(fraction))
+        .rounded(px(BAR_HEIGHT / 2.))
+        .bg(c.t.surfaces.progress_fill);
+    if c.reduce_motion {
+        return fill.into_any_element();
+    }
+    fill.with_animation(
+        "installing-bar-fill",
+        Animation::new(FILL_EASE).with_easing(ease_out_cubic),
+        move |fill, delta| fill.w(relative(fraction * delta)),
+    )
+    .into_any_element()
+}
+
+/// The indeterminate fill: a slow fade, standing still under reduced motion.
+fn pulse(c: &Ctx) -> AnyElement {
+    let fill = div()
+        .h_full()
+        .w(relative(0.4))
+        .rounded(px(BAR_HEIGHT / 2.))
+        .bg(c.t.surfaces.progress_fill);
+    if c.reduce_motion {
+        return fill.into_any_element();
+    }
+    fill.with_animation(
+        "installing-bar-pulse",
+        Animation::new(BAR_PULSE).repeat(),
+        |fill, delta| fill.opacity(0.55 + 0.45 * (delta * std::f32::consts::TAU).sin().abs()),
+    )
+    .into_any_element()
+}
+
+/// The elapsed caption, with the verified share beside it when there is one.
+fn timing(c: &Ctx, elapsed: Duration, percent: Option<u8>) -> Div {
+    let text = c
+        .strings
+        .installing_elapsed
+        .replace("{time}", &clock(elapsed));
+    let row = div().flex().items_center().gap(c.t.spacing.sm).child(
+        div()
+            .id("installing-elapsed")
+            .role(Role::Status)
+            .aria_label(text.clone())
+            .test_support()
+            .text_size(c.t.typography.body)
+            .text_color(c.t.colors.text)
+            .child(text),
+    );
+    let Some(percent) = percent else {
+        return row;
+    };
+    let share = share_text(c, percent);
+    row.child(
+        div()
+            .id("installing-percent")
+            .role(Role::Status)
+            .aria_label(share.clone())
+            .test_support()
+            .text_size(c.t.typography.body)
+            .text_color(c.t.colors.muted)
+            .child(share),
+    )
 }
 
 /// Opacity of tip `index` at `delta` (0..1 of the cycle): a short fade in, a hold, a fade out.
@@ -131,24 +201,13 @@ fn tips(c: &Ctx) -> impl IntoElement {
 
 /// Installing: bar, elapsed time and tips; after 180 s the still-working text with the log. No button.
 pub(super) fn installing(c: &Ctx) -> AnyElement {
-    let (elapsed, still) = c
-        .view
-        .progress
-        .map_or((Duration::ZERO, false), |p| (p.elapsed, p.still_working));
-    let elapsed_text = c
-        .strings
-        .installing_elapsed
-        .replace("{time}", &clock(elapsed));
-    let mut page = column(c, &c.strings.installing_title).child(bar(c)).child(
-        div()
-            .id("installing-elapsed")
-            .role(Role::Status)
-            .aria_label(elapsed_text.clone())
-            .test_support()
-            .text_size(c.t.typography.body)
-            .text_color(c.t.colors.text)
-            .child(elapsed_text),
-    );
+    let progress = c.view.progress;
+    let elapsed = progress.map_or(Duration::ZERO, |p| p.elapsed);
+    let still = progress.is_some_and(|p| p.still_working);
+    let percent = progress.and_then(|p| p.percent);
+    let mut page = column(c, &c.strings.installing_title)
+        .child(bar(c, percent))
+        .child(timing(c, elapsed, percent));
     if still {
         let log = c.view.log_paths.first().map(|p| p.display().to_string());
         let text = c

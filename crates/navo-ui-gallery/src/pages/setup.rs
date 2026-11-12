@@ -3,7 +3,7 @@
 use super::{Page, PageInfo, info};
 
 /// The setup pages, in the order of their `Page` variants.
-pub(super) const ALL: [PageInfo; 21] = [
+pub(super) const ALL: [PageInfo; 23] = [
     info(Page::SetupWelcome, "Setup, Welcome", "setup-welcome", false),
     info(
         Page::SetupWelcomeUpdate,
@@ -41,6 +41,18 @@ pub(super) const ALL: [PageInfo; 21] = [
         Page::SetupInstalling,
         "Setup, Installing, early",
         "setup-installing",
+        false,
+    ),
+    info(
+        Page::SetupInstallingPercent,
+        "Setup, Installing, 35 %",
+        "setup-installing-percent",
+        false,
+    ),
+    info(
+        Page::SetupInstallingFinalizing,
+        "Setup, Installing, finishing",
+        "setup-installing-finalizing",
         false,
     ),
     info(
