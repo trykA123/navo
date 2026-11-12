@@ -143,7 +143,7 @@ fn covered(root: &Location, service: Option<&Status>) -> bool {
 
 #[cfg(test)]
 #[path = "roots_tests.rs"]
-mod ixm1_tests;
+mod unknown_sizes_coverage_tests;
 
 #[cfg(test)]
 mod tests {

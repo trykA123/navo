@@ -183,3 +183,23 @@ pub struct Reply {
     pub hits: Vec<Hit>,
     pub status: Status,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn volume(errors: &[&str]) -> VolumeStatus {
+        VolumeStatus {
+            errors: errors.iter().map(|error| (*error).to_owned()).collect(),
+            ..VolumeStatus::default()
+        }
+    }
+
+    #[test]
+    fn has_blocking_error_ignores_only_an_unknown_sizes_note() {
+        assert!(!volume(&[]).has_blocking_error());
+        assert!(!volume(&["sizes unknown: 7"]).has_blocking_error());
+        assert!(volume(&["unrelated error"]).has_blocking_error());
+        assert!(volume(&["sizes unknown: 7", "unrelated error"]).has_blocking_error());
+    }
+}
