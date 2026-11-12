@@ -95,10 +95,16 @@ pub fn refused() -> io::Result<Refused> {
     let mut fresh_only = Vec::new();
     add_known(&mut fresh_only, &FOLDERID_LocalAppData, &[NAVO_APP_ROOT])?;
 
+    // Atom 0: the same two folders also refuse with NeedsAdministrator; E10 removes this group.
+    let mut admin_only = Vec::new();
+    add_known(&mut admin_only, &FOLDERID_ProgramFiles, &[])?;
+    add_known(&mut admin_only, &FOLDERID_ProgramFilesX86, &[])?;
+
     Ok(Refused {
         never_inside,
         never_equal,
         fresh_only,
+        admin_only,
     })
 }
 

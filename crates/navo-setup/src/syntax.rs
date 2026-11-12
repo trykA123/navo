@@ -44,6 +44,7 @@ pub enum FolderProblem {
     RootExists,
     ReparsePoint,
     ProtectedFolder,
+    NeedsAdministrator,
     DriveNotLocal,
     SubstDrive,
     NotWritable,
@@ -86,6 +87,9 @@ impl FolderProblem {
             Self::ProtectedFolder => {
                 "Windows or Navo uses this folder, so Setup cannot install there."
             }
+            Self::NeedsAdministrator => {
+                "Program Files needs administrator rights, and this version of Setup cannot ask for them yet."
+            }
             Self::DriveNotLocal => "Setup can install only on a fixed or removable local drive.",
             Self::SubstDrive => {
                 "This drive is a mapped alias for another folder, which Setup cannot use."
@@ -116,6 +120,9 @@ impl FolderProblem {
             Self::RootExists => "Choose a new folder, or let Browse add a Navo folder.",
             Self::ReparsePoint => "Choose a folder whose path has no links or synced placeholders.",
             Self::ProtectedFolder => "Choose another folder, such as C:\\Navo.",
+            Self::NeedsAdministrator => {
+                r"Choose a folder such as C:\Navo, or keep the default folder."
+            }
             Self::SubstDrive => "Choose the folder on its real drive.",
             Self::NotWritable => "Choose a folder you can write to, or fix its permissions.",
             Self::NotEnoughSpace => "Free some space or choose another drive.",
