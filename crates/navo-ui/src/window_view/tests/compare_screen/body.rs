@@ -6,6 +6,7 @@ use std::sync::Arc;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext, px};
 
+use super::super::screen_access::{screen_read, screen_update};
 use super::{Rig, rig, rig_sized};
 use crate::compare_diff::ViewedKey;
 use crate::compare_diff::{DiffRow, DiffUpdate, HunkView, Layout, PairFacts, PairKind, PairText};
@@ -72,7 +73,7 @@ impl Rig {
         cx: &mut TestAppContext,
         layout: Layout,
     ) -> (Option<usize>, Vec<usize>, usize) {
-        self.view.update(cx, |view, _| {
+        screen_update(&self.view, cx, |view, _| {
             let (current, built, count) = view.file_probe(layout).expect("an opened text pair");
             (current, built.collect(), count)
         })
@@ -152,10 +153,7 @@ fn compare_screen_map_jump_scrolls_and_the_current_change_follows_alt_down(
     let _shown = crate::compare_visible::show_compare();
     let rig = rig(cx);
     rig.open_text(cx, pair(400, &[10, 200, 390]));
-    let map = rig
-        .view
-        .read_with(cx, |view, _| view.file_map())
-        .expect("a mounted change map");
+    let map = screen_read(&rig.view, cx, |view, _| view.file_map()).expect("a mounted change map");
     map.update(cx, |_, cx| cx.emit(MapEvent::Jump(300)));
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("window");
