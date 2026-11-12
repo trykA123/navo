@@ -73,7 +73,7 @@ fn drawn(cx: &mut TestAppContext, rig: &Rig, request: u64, text: PairText) {
         kind: PairKind::Text,
         text: Some(Arc::new(text)),
     });
-    rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
+    rig.view.update(cx, |view, cx| view.host_poll(cx));
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("a window");
 }
@@ -237,7 +237,7 @@ fn compare_screen_syntax_arrives_after_the_background_parse(cx: &mut TestAppCont
         kind: PairKind::Text,
         text: Some(Arc::new(text)),
     });
-    rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
+    rig.view.update(cx, |view, cx| view.host_poll(cx));
     let parsed = rig.view.read_with(cx, |view, _| view.file_syntax());
     assert!(parsed.is_none(), "the poll returns before the parse ends");
     cx.run_until_parked();

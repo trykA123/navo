@@ -75,6 +75,7 @@ mod perf_recording;
 mod placement;
 mod prefetch;
 mod recent_sheet;
+mod screen_access;
 mod settings_find;
 mod settings_git;
 mod settings_help;

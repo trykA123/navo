@@ -214,6 +214,6 @@ fn compare_image_a_new_mask_is_rebuilt_and_a_missing_one_is_dropped(cx: &mut Tes
 fn compare_image_an_idle_screen_asks_for_no_redraw(cx: &mut TestAppContext) {
     let rig = rig(cx, true);
     rig.open(cx, scored(), Some(mask()));
-    let changed = rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
+    let changed = rig.view.update(cx, |view, cx| view.host_poll(cx));
     assert!(!changed, "nothing is left to start");
 }

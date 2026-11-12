@@ -239,7 +239,7 @@ fn widths_are_measured_off_the_ui_thread(cx: &mut TestAppContext) {
         kind: PairKind::Text,
         text: Some(Arc::new(wide_pair())),
     });
-    rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
+    rig.view.update(cx, |view, cx| view.host_poll(cx));
     frames(&rig, cx);
     assert_eq!(seen(&rig, cx).max, None, "no extent before the task ran");
     cx.run_until_parked();

@@ -13,6 +13,7 @@ use navo_core::paging::{ByteSource, LineIndex, hex_row};
 
 use super::compare_screen::Rig;
 use super::compare_screen::rig_with_files;
+use super::screen_access::{screen_read, screen_update, screen_update_in};
 use super::settle;
 use crate::compare_diff::{ByteProgress, ByteRegionView, DiffUpdate, HexAlign, PairKind};
 use crate::window_view::compare_screen::HexProbe;
@@ -917,22 +918,20 @@ fn compare_screen_hex_stepping_to_the_last_page_clamps_the_top(cx: &mut TestAppC
     );
     rig.press(cx, "f7");
     let page = visible(cx, &rig);
-    let top = rig.view.update(cx, |view, _| view.file_hex_wheel(0., page));
+    let top = screen_update(&rig.view, cx, |view, _| view.file_hex_wheel(0., page));
     assert_eq!(
         top,
         Some(0x400 - page),
         "a step in the last page leaves the top on the last page"
     );
-    let up = rig
-        .view
-        .update(cx, |view, _| view.file_hex_wheel(-1., page));
+    let up = screen_update(&rig.view, cx, |view, _| view.file_hex_wheel(-1., page));
     assert_eq!(up, Some(0x400 - page - 1), "the first upward tick scrolls");
 }
 
 /// Wheels the hex body to row `top` with no frame or request after it.
 fn wheel_to(cx: &mut TestAppContext, rig: &Rig, top: usize) {
     let page = visible(cx, rig);
-    rig.view.update(cx, |view, _| {
+    screen_update(&rig.view, cx, |view, _| {
         view.file_hex_wheel(-1e9, page);
         view.file_hex_wheel(top as f64, page);
     });
@@ -941,11 +940,9 @@ fn wheel_to(cx: &mut TestAppContext, rig: &Rig, top: usize) {
 /// Scrolls the hex body to row `top` and asks for its rows without letting the read land.
 fn scroll_and_request(cx: &mut TestAppContext, rig: &Rig, top: usize) {
     wheel_to(cx, rig, top);
-    cx.update_window(rig.window, |_, window, cx| {
-        rig.view
-            .update(cx, |view, cx| view.request_hex_rows(window, cx));
-    })
-    .expect("window");
+    screen_update_in(&rig.view, rig.window, cx, |view, window, cx| {
+        view.request_hex_rows(window, cx)
+    });
 }
 
 /// Reads whole pages from the top until the byte cache is past its limit; returns the next page.
@@ -1057,7 +1054,7 @@ fn compare_screen_hex_details_drawer_lists_kind_sizes_alignment_and_regions(
     );
     rig.press(cx, "ctrl-i");
     settle(cx, &rig.view);
-    let facts = rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    let facts = screen_read(&rig.view, cx, |view, _| view.body_facts_probe());
     let want = [
         "Kind: Binary",
         "Sizes: 16.0 KB ↔ 16.0 KB",
