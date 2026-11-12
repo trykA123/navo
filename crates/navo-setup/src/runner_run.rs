@@ -2,11 +2,13 @@
 
 use std::io;
 use std::path::Path;
+use std::time::Duration;
 
 use crate::flow::{Completion, Failure, InstallAction, Request, Shortcuts};
 use crate::host::Host;
 use crate::mode::{Mode, Why, mode};
 use crate::payload::Payload;
+use crate::progress_log::PackageWeights;
 use crate::runner::{InstallError, Installed, Progress, Registry, Session};
 use crate::syntax::FolderProblem;
 use crate::upgrade::Staged;
@@ -125,7 +127,16 @@ fn run(
         Ok(child) => child,
         Err(_) => return Err(steps::fail_after_child(session, host, None)),
     };
-    let code = match steps::wait(&mut *child, progress) {
+    let code = match steps::wait_with_log(
+        &mut *child,
+        Some(steps::WatchedLog {
+            path: velopack_log,
+            upgrade,
+            weights: PackageWeights::from_nupkg(payload.package()).ok(),
+        }),
+        Duration::from_millis(250),
+        progress,
+    ) {
         Ok(code) => code,
         Err(_) => return Err(steps::fail_after_child(session, host, None)),
     };

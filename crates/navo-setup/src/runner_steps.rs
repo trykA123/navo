@@ -57,11 +57,6 @@ pub(super) struct WatchedLog<'a> {
     pub weights: Option<PackageWeights>,
 }
 
-/// Waits one second at a time; a timed-wait error waits without a deadline before failing.
-pub(super) fn wait(child: &mut dyn Child, progress: &mut dyn FnMut(Progress)) -> io::Result<i32> {
-    wait_with_log(child, None, Duration::from_secs(1), progress)
-}
-
 /// Waits in `poll_step` ticks, tailing the log when one is given. An event goes out only when the
 /// whole seconds, the percentage or the phase changed, so a silent wait still reports once a second.
 pub(super) fn wait_with_log(
@@ -338,7 +333,10 @@ mod tests {
     #[test]
     fn a_wait_without_a_log_reports_once_a_second_and_no_percentage() {
         let mut events = Vec::new();
-        wait(&mut *child(3), &mut |event| events.push(event)).expect("wait");
+        wait_with_log(&mut *child(3), None, Duration::from_secs(1), &mut |event| {
+            events.push(event)
+        })
+        .expect("wait");
         assert_eq!(events.len(), 3);
         assert_eq!(events[2].elapsed, Duration::from_secs(3));
         assert!(
