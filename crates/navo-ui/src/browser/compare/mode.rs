@@ -43,13 +43,15 @@ pub struct FileDiffRequest {
 
 /// One step of the Esc chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ExitStep {
+pub enum ExitStep {
+    /// The filter went back to `All`; the compare itself stays.
     FilterCleared,
+    /// Nothing to clear: leave compare mode.
     Leave,
 }
 
-/// A folder compare across the two panes. Index 0 is the left side.
-pub struct CompareMode {
+/// A folder compare's rows, cursor, filter and folder (NC56); index 0 is the left side.
+pub struct FolderSession {
     pub(super) run: u64,
     pub(super) control: Box<dyn CompareControl>,
     pub(super) roots: [Location; 2],
@@ -61,8 +63,12 @@ pub struct CompareMode {
     revision: u64,
 }
 
-impl CompareMode {
-    pub(super) fn new(run: u64, control: Box<dyn CompareControl>, roots: [Location; 2]) -> Self {
+/// Navo's name until Stage 3.
+pub type CompareMode = FolderSession;
+
+impl FolderSession {
+    /// A session for the `run` that asked for it, walking `roots` through `control`; no rows yet.
+    pub fn new(run: u64, control: Box<dyn CompareControl>, roots: [Location; 2]) -> Self {
         Self {
             run,
             control,
@@ -77,7 +83,7 @@ impl CompareMode {
     }
 
     /// Applies one update; returns whether anything changed.
-    pub(super) fn apply(&mut self, update: CompareUpdate) -> bool {
+    pub fn apply(&mut self, update: CompareUpdate) -> bool {
         let generation = self.rows.generation();
         let listed = self.touches_folder(&update);
         let applied = self.rows.apply(update);
@@ -226,7 +232,7 @@ impl CompareMode {
 
     /// Moves to the next difference below the selection; stops at the last one.
     /// A folder that holds a difference counts: the move lands on it and Enter goes in.
-    pub(super) fn next_difference(&mut self) -> bool {
+    pub fn next_difference(&mut self) -> bool {
         let visible = self.visible();
         let start = self.selected_at(&visible).map_or(0, |at| at + 1);
         let found = visible.iter().skip(start).find(|row| row.is_difference());
@@ -234,7 +240,7 @@ impl CompareMode {
     }
 
     /// Moves to the previous difference above the selection; stops at the first one.
-    pub(super) fn previous_difference(&mut self) -> bool {
+    pub fn previous_difference(&mut self) -> bool {
         let visible = self.visible();
         let end = self.selected_at(&visible).unwrap_or(visible.len());
         let found = visible
@@ -258,7 +264,8 @@ impl CompareMode {
         moved
     }
 
-    pub(super) fn exit_step(&mut self) -> ExitStep {
+    /// The next Esc step: clears a filter and reports that, or says to leave.
+    pub fn exit_step(&mut self) -> ExitStep {
         if self.filter == CompareFilter::All {
             return ExitStep::Leave;
         }
@@ -267,14 +274,14 @@ impl CompareMode {
     }
 
     /// Shows `folder` and selects nothing in it yet.
-    pub(super) fn show_folder(&mut self, folder: String) {
+    pub fn show_folder(&mut self, folder: String) {
         self.folder = folder;
         self.selected = None;
         self.revision += 1;
     }
 
     /// Where `path` is on one side, or `None` when a part cannot be joined.
-    pub(super) fn side_location(&self, side: usize, path: &str) -> Option<Location> {
+    pub fn side_location(&self, side: usize, path: &str) -> Option<Location> {
         let root = self.roots.get(side)?.clone();
         path.split('/')
             .filter(|part| !part.is_empty())
@@ -283,7 +290,8 @@ impl CompareMode {
             })
     }
 
-    pub(super) fn file_diff(&self, row: &CompareRow) -> FileDiffRequest {
+    /// The pair Enter on `row` opens: each side that is a file, at its own location.
+    pub fn file_diff(&self, row: &CompareRow) -> FileDiffRequest {
         let file = |side: Option<super::CompareSide>| {
             side.is_some_and(|s| s.kind == super::CompareKind::File)
         };

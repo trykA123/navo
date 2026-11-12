@@ -13,9 +13,9 @@ use navo_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOp
 
 pub use compare::{
     BarView, CompareControl, CompareFilter, CompareHooks, CompareKind, CompareMode, CompareRefusal,
-    CompareRow, CompareSide, CompareSink, CompareTotals, CompareUpdate, FILTERS, FileDiffRequest,
-    RowProgress, RowStatus, RowView, SideView, StopBound, Tone, Total, bar_view, empty_text,
-    pane_rows,
+    CompareRow, CompareSide, CompareSink, CompareTotals, CompareUpdate, ExitStep, FILTERS,
+    FileDiffRequest, FolderSession, RowProgress, RowStatus, RowView, SideView, StopBound, Tone,
+    Total, bar_view, empty_text, pane_rows,
 };
 pub(crate) use compare::{look_of, status_text};
 pub use find::FindResults;
