@@ -280,7 +280,7 @@ impl NavoWindow {
 
     /// Returns focus to an open compare file diff, else to the focused pane.
     fn focus_after_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.focus_file_screen(window, cx) {
+        if !self.host_focus_file(window, cx) {
             self.focus_core_pane(window, cx);
         }
     }

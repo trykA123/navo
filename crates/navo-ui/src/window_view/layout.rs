@@ -28,7 +28,7 @@ impl NavoWindow {
 
     fn panes_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let body = self.tiles_view(window, cx);
-        self.compare_screen_view(window, cx)
+        self.host_screen_view(window, cx)
             .or_else(|| self.viewer_view(window, cx))
             .unwrap_or(body)
     }

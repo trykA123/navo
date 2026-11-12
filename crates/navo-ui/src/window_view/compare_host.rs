@@ -5,6 +5,7 @@ use super::NavoWindow;
 use super::compare_screen::items_of;
 use crate::browser::FileDiffRequest;
 use crate::compare_diff::PairRequest;
+use crate::context_menu::ContextMenu;
 use crate::prelude::*;
 
 /// The type that owns the compare screen: `NavoWindow` until N6, then the `CompareScreen` entity.
@@ -46,5 +47,41 @@ impl ScreenOwner {
             return false;
         };
         self.open_stream(items, window, cx)
+    }
+
+    /// The compare screen drawn in place of the panes: the file diff, else the Stream, else `None`
+    /// when no screen is open.
+    pub(in crate::window_view) fn host_screen_view(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        self.compare_screen_view(window, cx)
+    }
+
+    /// The open View menu of the file diff or the Stream for the window to draw; `None` while
+    /// neither shows one.
+    pub(in crate::window_view) fn host_menu_view(&self) -> Option<Entity<ContextMenu>> {
+        self.compare_menu_view()
+    }
+
+    /// Re-lays the large diff body after a window resize; does nothing with no large body open.
+    pub(in crate::window_view) fn host_follow_window(&mut self, window: &Window) {
+        self.large_follow_window(window);
+    }
+
+    /// Drains the Stream's and the file diff's inboxes; true when the screen changed. Updates of
+    /// a closed or replaced file screen are dropped.
+    pub(in crate::window_view) fn host_poll(&mut self, cx: &mut Context<Self>) -> bool {
+        self.poll_compare_screen(cx)
+    }
+
+    /// Gives focus back to the open file diff; false when none is open.
+    pub(in crate::window_view) fn host_focus_file(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        self.focus_file_screen(window, cx)
     }
 }
