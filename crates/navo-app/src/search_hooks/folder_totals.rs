@@ -9,7 +9,7 @@ fn folder_totals(paths: &[String]) -> Option<Vec<Option<FolderTotals>>> {
 }
 
 pub fn query() -> FolderTotalsQuery {
-    Arc::new(|folder| {
+    Arc::new(|folder: &navo_core::Location| {
         if !folder.is_local() {
             return None;
         }

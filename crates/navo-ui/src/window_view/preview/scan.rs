@@ -47,6 +47,22 @@ impl Scan {
         }
     }
 
+    /// Waits for index totals without a profile or a live session, so no walk starts.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "T14 starts previews with this placeholder")
+    )]
+    pub(super) fn waiting(run: u64) -> Self {
+        Self {
+            profile: None,
+            phase: Phase::Stopped,
+            is_recounting: false,
+            is_live: false,
+            session: None,
+            run,
+        }
+    }
+
     pub(super) fn resume(&mut self, session: LiveHandle, run: u64) {
         self.phase = Phase::Counting {
             started: Instant::now(),
@@ -142,5 +158,41 @@ impl LiveSink for Snapshots {
 
     fn progress_every(&self) -> Duration {
         self.every
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waiting_opens_no_session_or_profile() {
+        let mut scan = Scan::waiting(7);
+        assert!(
+            scan.session.is_none(),
+            "waiting must not open a live session"
+        );
+        assert!(scan.profile.is_none(), "waiting must not carry a profile");
+        assert!(!scan.is_live(), "waiting is not a live scan");
+        assert!(!scan.is_recounting, "waiting is not recounting");
+        assert!(
+            scan.take_session().is_none(),
+            "waiting has no session to hand over"
+        );
+        assert!(!scan.stop(), "waiting has no walk to stop");
+    }
+
+    #[test]
+    fn waiting_is_stopped_and_keeps_the_run() {
+        let scan = Scan::waiting(7);
+        assert!(
+            matches!(scan.phase, Phase::Stopped),
+            "waiting must not be counting"
+        );
+        assert!(
+            !scan.is_counting(),
+            "waiting must not look like a running scan"
+        );
+        assert_eq!(scan.run, 7, "totals arrivals match the supplied run");
     }
 }
