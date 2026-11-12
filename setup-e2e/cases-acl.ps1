@@ -68,7 +68,8 @@ function Test-S16b {
     $acl = Get-Acl -LiteralPath $root
     Assert ($acl.AreAccessRulesProtected) "$root DACL is not protected"
     $sddl = $acl.Sddl
-    Assert ($sddl.StartsWith('D:P')) "$root SDDL does not start with D:P"
+    # Get-Acl puts the owner and group (O:…G:…) before the DACL, so look for a protected DACL anywhere.
+    Assert ($sddl -match 'D:P') "$root SDDL has no protected DACL (D:P)"
     $aces = [regex]::Matches($sddl, '\(A;').Count
     Assert ($aces -eq 3) "$root DACL has $aces ACEs, not three"
     Write-Evidence "icacls $root`n$((icacls.exe $root | Out-String).Trim())"
