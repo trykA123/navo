@@ -9,12 +9,12 @@ use gpui_kit::{
 use crate::compare_diff::{CopyDirection, Layout};
 use crate::window_view::tests::compare_screen::Rig;
 use crate::window_view::tests::compare_screen::rig;
+use crate::window_view::tests::screen_access::{screen_read, screen_update};
 
 impl Rig {
     /// Whether the compare menu is open.
     fn menu_open(&self, cx: &mut TestAppContext) -> bool {
-        self.view
-            .read_with(cx, |view, _| view.compare_menu_view().is_some())
+        screen_read(&self.view, cx, |view, _| view.compare_menu_view().is_some())
     }
 
     /// Right-clicks the middle of the element `id` and draws.
@@ -56,9 +56,7 @@ fn compare_copy_menu_right_click_moves_the_cursor_and_an_entry_copies(cx: &mut T
     rig.open_pair(cx);
     rig.right_click(cx, ("compare-file-row", 3));
     assert!(rig.menu_open(cx));
-    let current = rig
-        .view
-        .update(cx, |view, _| view.file_probe(Layout::SideBySide));
+    let current = screen_update(&rig.view, cx, |view, _| view.file_probe(Layout::SideBySide));
     assert_eq!(current.expect("an opened pair").0, Some(0));
     rig.press(cx, "enter");
     assert!(!rig.menu_open(cx), "choosing closes the menu");
@@ -88,7 +86,7 @@ fn compare_copy_menu_lists_show_bytes_here_only_for_a_long_line(cx: &mut TestApp
 
     let _shown = crate::compare_visible::show_compare();
     let rig = long_rig(cx);
-    let labels = |cx: &mut TestAppContext| rig.view.read_with(cx, |v, _| v.file_menu_labels());
+    let labels = |cx: &mut TestAppContext| screen_read(&rig.view, cx, |v, _| v.file_menu_labels());
     rig.right_click(cx, ("row", 299));
     assert!(rig.menu_open(cx));
     assert!(

@@ -12,6 +12,7 @@ use super::compare_large::open_large_in;
 use super::compare_screen::Rig;
 use super::compare_screen::body::pair;
 use super::compare_switch::{LINE, open};
+use super::screen_access::screen_read;
 use crate::commands::compare::{ShowBytesHere, ViewText};
 use crate::compare_diff::{DiffRow, DiffUpdate, LONG_LINE, Layout, PairKind, PairText};
 
@@ -207,10 +208,7 @@ fn compare_here_a_large_line_over_one_mebibyte_opens_bytes_and_text_returns(
         text: None,
     });
     super::compare_large::push(cx, &rig, &sink, large_lines(3));
-    let probe = rig
-        .view
-        .read_with(cx, |view, _| view.large_probe())
-        .expect("a large body");
+    let probe = screen_read(&rig.view, cx, |view, _| view.large_probe()).expect("a large body");
     assert_eq!(probe.top, 5, "the long line is on top again");
 }
 
@@ -240,13 +238,12 @@ fn right_click(cx: &mut TestAppContext, rig: &Rig, id: (&'static str, usize)) {
 
 /// Whether the compare menu is open.
 fn menu_open(cx: &mut TestAppContext, rig: &Rig) -> bool {
-    rig.view
-        .read_with(cx, |view, _| view.compare_menu_view().is_some())
+    screen_read(&rig.view, cx, |view, _| view.compare_menu_view().is_some())
 }
 
 /// The last note as (text, has Undo, is an error).
 fn note(cx: &mut TestAppContext, rig: &Rig) -> Option<(String, bool, bool)> {
-    rig.view.read_with(cx, |view, _| view.copy_note())
+    screen_read(&rig.view, cx, |view, _| view.copy_note())
 }
 
 /// The long row as a one-sided insert of a copyable change, so its hover bar and the
@@ -305,7 +302,7 @@ fn compare_here_a_right_click_on_a_large_row_opens_the_menu_with_show_bytes_here
     frame(cx, &rig);
     right_click(cx, &rig, ("row", 5));
     assert!(menu_open(cx, &rig), "the menu opens on a large row");
-    let labels = rig.view.read_with(cx, |view, _| view.file_menu_labels());
+    let labels = screen_read(&rig.view, cx, |view, _| view.file_menu_labels());
     assert!(
         labels.contains(&tr("cmd-compare-show-bytes-here")),
         "the long line lists Show bytes here: {labels:?}"
@@ -316,7 +313,7 @@ fn compare_here_a_right_click_on_a_large_row_opens_the_menu_with_show_bytes_here
     );
     rig.press(cx, "escape");
     right_click(cx, &rig, ("row", 4));
-    let labels = rig.view.read_with(cx, |view, _| view.file_menu_labels());
+    let labels = screen_read(&rig.view, cx, |view, _| view.file_menu_labels());
     assert!(
         !labels.contains(&tr("cmd-compare-show-bytes-here")),
         "a short line does not: {labels:?}"

@@ -8,6 +8,7 @@ use gpui_kit::{AppContext as _, TestAppContext};
 use navo_l10n::tr;
 
 use super::compare_screen::{Rig, rig};
+use super::screen_access::{screen_read, screen_update};
 use crate::compare_diff::{
     CopyDirection, CopyDone, CopyResult, DiffRow, DiffUpdate, HunkView, PairFacts, PairKind,
     PairText, ViewedKey,
@@ -85,7 +86,7 @@ impl Rig {
 
     /// The last copy's note as (text, has Undo, is an error).
     fn note(&self, cx: &mut TestAppContext) -> Option<(String, bool, bool)> {
-        self.view.read_with(cx, |view, _| view.copy_note())
+        screen_read(&self.view, cx, |view, _| view.copy_note())
     }
 
     /// Whether an element with `id` is on screen.
@@ -178,12 +179,10 @@ fn compare_copy_a_copied_change_says_so_with_undo_and_the_pair_reloads(cx: &mut 
     };
     rig.diff.pair_sink()(opened);
     rig.frame(cx);
-    let (current, _, _) = rig
-        .view
-        .update(cx, |view, _| {
-            view.file_probe(crate::compare_diff::Layout::SideBySide)
-        })
-        .expect("an opened pair");
+    let (current, _, _) = screen_update(&rig.view, cx, |view, _| {
+        view.file_probe(crate::compare_diff::Layout::SideBySide)
+    })
+    .expect("an opened pair");
     assert_eq!(
         current,
         Some(0),
