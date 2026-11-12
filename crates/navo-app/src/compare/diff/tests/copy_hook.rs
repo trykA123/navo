@@ -12,8 +12,8 @@ use navo_core::{Location, ProviderPath};
 use navo_fs::LocalFs;
 use navo_store::StoreDirs;
 use navo_ui::compare_diff::{
-    CopyChange, CopyDirection, CopyDone, CopyResult, CopySink, DiffHooks, DiffSink, DiffUpdate,
-    PairRequest, SheetPlan, SheetResult,
+    CompareOptions, CopyChange, CopyDirection, CopyDone, CopyResult, CopySink, DiffHooks, DiffSink,
+    DiffUpdate, PairRequest, SheetPlan, SheetResult,
 };
 use navo_ui::settings::Values;
 
@@ -60,7 +60,11 @@ fn copy_sink() -> (CopySink, Receiver<CopyDone>) {
 fn all_changes(backend: &DiffBackend, left: &Path, right: &Path) -> Vec<CopyChange> {
     let (sink, receiver) = sink();
     let pair = request(9, left, right);
-    let _control = backend.open_pair(pair.clone(), &Values::default(), sink);
+    let _control = backend.open_pair(
+        pair.clone(),
+        &CompareOptions::from_values(&Values::default()),
+        sink,
+    );
     let DiffUpdate::Opened { text, .. } = receiver.recv_timeout(WAIT).unwrap() else {
         panic!("expected Opened");
     };

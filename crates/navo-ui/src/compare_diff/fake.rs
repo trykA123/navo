@@ -6,10 +6,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use super::{
-    CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest, SheetPlanSink, SheetSink,
-    StreamControl, StreamSink, ViewedKey,
+    CompareOptions, CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest,
+    SheetPlanSink, SheetSink, StreamControl, StreamSink, ViewedKey,
 };
-use crate::settings::Values;
 
 /// What the fake recorded.
 #[derive(Default)]
@@ -321,7 +320,7 @@ impl DiffHooks for FakeDiffHooks {
     fn open_pair(
         &self,
         request: PairRequest,
-        _values: &Values,
+        _options: &CompareOptions,
         sink: DiffSink,
     ) -> Box<dyn PairControl> {
         self.calls
@@ -380,7 +379,7 @@ impl DiffHooks for FakeDiffHooks {
             .unwrap_or_else(PoisonError::into_inner) = Some(done);
     }
 
-    fn open_stream(&self, _values: &Values, sink: StreamSink) -> Box<dyn StreamControl> {
+    fn open_stream(&self, _options: &CompareOptions, sink: StreamSink) -> Box<dyn StreamControl> {
         *self
             .calls
             .stream_sink

@@ -13,7 +13,8 @@ use navo_compare::model::Reason;
 use navo_compare::text::side::WHOLE_LIMIT;
 use navo_core::{Location, ProviderPath};
 use navo_ui::compare_diff::{
-    CardDetail, CardScan, DiffHooks, DiffSink, DiffUpdate, PairKind, PairRequest, StreamUpdate,
+    CardDetail, CardScan, CompareOptions, DiffHooks, DiffSink, DiffUpdate, PairKind, PairRequest,
+    StreamUpdate,
 };
 use navo_ui::settings::Values;
 
@@ -63,7 +64,7 @@ fn a_pair_from_two_temp_files_opens() {
             &dir.path().join("left.txt"),
             &dir.path().join("right.txt"),
         ),
-        &Values::default(),
+        &CompareOptions::from_values(&Values::default()),
         sink,
     );
     match receiver.recv_timeout(WAIT).unwrap() {
@@ -92,7 +93,7 @@ fn a_missing_side_opens_as_one_sided() {
             left: Some(location(&dir.path().join("left.txt"))),
             right: None,
         },
-        &Values::default(),
+        &CompareOptions::from_values(&Values::default()),
         sink,
     );
     match receiver.recv_timeout(WAIT).unwrap() {
@@ -158,7 +159,7 @@ fn open_pair_returns_while_the_side_builder_blocks() {
     let left = dir.path().join("left.txt");
     let control = backend.open_pair(
         request(8, &left, &dir.path().join("right.txt")),
-        &Values::default(),
+        &CompareOptions::from_values(&Values::default()),
         sink,
     );
     assert_eq!(probe.finished.load(Ordering::SeqCst), 0);
@@ -184,7 +185,11 @@ fn an_unopenable_side_reports_unavailable_from_the_worker() {
     let (sink, receiver) = sink();
     let dir = tempfile::tempdir().unwrap();
     let missing = dir.path().join("left.txt");
-    let _control = backend.open_pair(request(9, &missing, &missing), &Values::default(), sink);
+    let _control = backend.open_pair(
+        request(9, &missing, &missing),
+        &CompareOptions::from_values(&Values::default()),
+        sink,
+    );
     match receiver.recv_timeout(WAIT).unwrap() {
         DiffUpdate::Opened {
             request,
@@ -207,7 +212,7 @@ fn open_stream_opens_the_viewed_store_on_a_worker_only_when_needed() {
     let probe = Arc::new(Probe::default());
     let backend = DiffBackend::with_parts(Arc::new(side_of), counting_viewed(&probe));
     let (sink, receiver) = channel();
-    let stream = backend.open_stream(&Values::default(), sink);
+    let stream = backend.open_stream(&CompareOptions::from_values(&Values::default()), sink);
     assert_eq!(probe.started.load(Ordering::SeqCst), 0);
     let left = dir.path().join("left.txt");
     let gone = dir.path().join("gone.txt");
@@ -245,7 +250,7 @@ fn open_stream_runs_the_detail_lane_for_a_large_pair() {
     });
     let backend = DiffBackend::with_parts(side, Arc::new(|| Arc::new(NoViewed)));
     let (sink, receiver) = channel();
-    let stream = backend.open_stream(&Values::default(), sink);
+    let stream = backend.open_stream(&CompareOptions::from_values(&Values::default()), sink);
     let left = dir.path().join("left.log");
     let right = dir.path().join("right.log");
     stream.focus(vec![7]);
@@ -278,7 +283,8 @@ fn open_stream_runs_the_detail_lane_for_a_binary_pair() {
     write(dir.path(), "left.bin", b"a\0b");
     write(dir.path(), "right.bin", b"a\0c");
     let (sink, receiver) = channel();
-    let stream = DiffBackend::default().open_stream(&Values::default(), sink);
+    let stream =
+        DiffBackend::default().open_stream(&CompareOptions::from_values(&Values::default()), sink);
     let left = dir.path().join("left.bin");
     let right = dir.path().join("right.bin");
     stream.focus(vec![8]);

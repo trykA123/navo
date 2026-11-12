@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use navo_core::Location;
 
+use super::CompareOptions;
 use super::sheet::{SheetPlan, SheetPlanSink, SheetResult, SheetSink};
-use crate::settings::Values;
 
 mod detail;
 mod image_types;
@@ -319,16 +319,16 @@ pub trait StreamControl: Send {
 
 /// Opens file diffs and Streams; the app implements it over the compare engine.
 pub trait DiffHooks: Send + Sync {
-    /// Opens one pair using the compare settings in `values`.
+    /// Opens one pair using the compare settings in `options`.
     fn open_pair(
         &self,
         request: PairRequest,
-        values: &Values,
+        options: &CompareOptions,
         sink: DiffSink,
     ) -> Box<dyn PairControl>;
 
-    /// Opens a Stream using the compare settings in `values`.
-    fn open_stream(&self, values: &Values, sink: StreamSink) -> Box<dyn StreamControl>;
+    /// Opens a Stream using the compare settings in `options`.
+    fn open_stream(&self, options: &CompareOptions, sink: StreamSink) -> Box<dyn StreamControl>;
 
     /// Copies one change and reports once through `done`, never blocking the caller. The
     /// default refuses, for a backend that cannot write.
