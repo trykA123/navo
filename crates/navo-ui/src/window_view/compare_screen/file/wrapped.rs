@@ -99,6 +99,17 @@ impl FileView {
             .map_or(row, |wrap| wrap.index.first_of(row))
     }
 
+    /// Centres list item `item`: strictly while lines wrap, because a change spans many items
+    /// and its first item can already be on screen while the rest of the change is not; while
+    /// flat, the non-strict centre keeps the view still when the row is already visible.
+    pub(super) fn centre_item(&self, item: usize) {
+        if self.wrapped.draw.is_some() {
+            self.scroll.scroll_to_center_strict(item);
+        } else {
+            self.scroll.scroll_to_center(item);
+        }
+    }
+
     /// The list items pair row `row` takes: one while flat, 0 past the last row while wrapping.
     pub(super) fn row_lines(&self, row: usize) -> u32 {
         self.wrapped

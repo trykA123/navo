@@ -161,6 +161,56 @@ fn alt_down_puts_the_first_item_of_the_change_in_view(cx: &mut TestAppContext) {
     assert!(rig.probe(cx, Layout::SideBySide).1.contains(&200));
 }
 
+/// The VM shape (W8o): two long changed lines among short ones; once change 1 centres at the
+/// top, change 2's first item is already fully visible at the bottom edge, and Alt+↓ must
+/// still centre it instead of leaving the change hanging below the viewport.
+#[gpui_kit::test]
+fn alt_down_centres_a_change_whose_first_item_is_already_visible(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    opened(&rig, cx, wrapped_pair(6, &[1, 4], 10));
+    set_wrap(&rig, cx, true);
+    let (_, cols) = index(&rig, cx);
+    let room = seen(&rig, cx).3;
+    assert!(room >= 10, "the rig shows {room} items");
+    let wide = cols as usize * (room - 5);
+    let mut text = pair(6, &[1, 4]);
+    for at in [1, 4] {
+        text.left[at] = "l".repeat(wide);
+        text.right[at] = "r".repeat(wide);
+    }
+    open(cx, &rig, (2, PairKind::Text), Some(text));
+    frames(&rig, cx);
+    let (index, _) = index(&rig, cx);
+    let lines = index.lines_of(1) as usize;
+    assert_eq!(lines, room - 5, "the long rows wrap to {lines} items");
+    rig.press(cx, "f7");
+    frames(&rig, cx);
+    let first = index.first_of(4);
+    let (_, _, top, room) = seen(&rig, cx);
+    assert_eq!(top, 0, "change 1 centres at the top of the short list");
+    assert!(
+        in_view(top, room, first),
+        "change 2's first item is on screen"
+    );
+    assert!(
+        first + lines > top + room,
+        "the rest of change 2 is below it"
+    );
+    rig.press(cx, "alt-down");
+    frames(&rig, cx);
+    let (_, _, top, room) = seen(&rig, cx);
+    assert_eq!(
+        rig.probe(cx, Layout::SideBySide).0,
+        Some(1),
+        "change 2 of 2"
+    );
+    assert!(
+        centred(top, room, first),
+        "change 2 centres: item {first} at top {top}, room {room}"
+    );
+}
+
 #[gpui_kit::test]
 fn toggling_wrap_keeps_the_top_pair_row(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
