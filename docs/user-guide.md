@@ -330,7 +330,51 @@ Folders that are Git repositories get a badge in the left column. It shows confl
 
 Press `Ctrl+Shift+D` to compare the two panes. You can also run "Compare with the other pane" from `Ctrl+K`.
 
-A folder that has a difference somewhere inside it shows the mark `⊃`. Its status says "contains differences".
+### Folders in the panes
+
+A narrow column between the two panes names the result for each row in one short word.
+
+- `changed`: the item exists on both sides and differs.
+- `◀ only`: the item is only in the left pane.
+- `only ▶`: the item is only in the right pane.
+- `type ≠`: one side is a file and the other is a folder, or a link.
+- `3 inside`: a folder with differences below it. The number counts them. Hover the word to see "contains differences".
+- `same*`: the same once your compare rules are applied, such as ignoring whitespace.
+- A percentage: Navo is still checking the item.
+- Nothing: the item is identical.
+
+An item that is missing on one side reads "not in left" or "not in right". Rows Navo has not checked yet show `…` or "unchecked". A row it cannot read shows "can't read".
+
+When both sides exist, the newer side shows its size and date in bold with a `▲` mark. The older side is muted.
+
+A thin change map runs along the right edge of the list. It shows where the differences are in the whole folder.
+
+### The file diff
+
+Press `Enter` on a file pair to open it as a full-window diff. `Esc` closes it.
+
+- Changed lines have a coloured background and a bar on the edge.
+- Words that changed inside a line have a stronger fill.
+- Text shows syntax colours, as in the viewer. A very large file stays plain.
+- `Alt+Down` and `Alt+Up` jump to the next and previous difference.
+- `Alt+V` opens the View menu. It sets the layout (side by side or unified), the changed words and the change map.
+
+### Long lines
+
+Lines do not wrap by default. Both sides scroll sideways together, so matching text stays level. Line numbers, edge bars and the change map stay where they are.
+
+- Hold `Shift` and turn the mouse wheel.
+- Swipe sideways on a touchpad.
+- Drag the bar under each side.
+- Press `Left` or `Right`.
+
+To wrap long lines instead, press `Alt+Z` or choose View, then Wrap lines. Both sides keep their rows aligned: a wrapped pair is as tall as its taller side. Press `Alt+Z` again to turn wrap off. Navo keeps your choice until you close the compare screen.
+
+The hex view for binary files never wraps and never scrolls sideways.
+
+### The Stream
+
+Press `Alt+F` to see every difference under the current folder as cards in one scroll. Text cards show syntax colours. `Alt+Z` wraps their long lines. Cards never scroll sideways. Press `Enter` on a card to open its file diff.
 
 ## Settings and themes
 
