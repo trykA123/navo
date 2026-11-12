@@ -8,6 +8,7 @@ use gpui_kit::TestAppContext;
 use super::compare_hex::{frame, hex_rig, probe};
 use super::compare_screen::Rig;
 use super::compare_screen::body::pair;
+use super::screen_access::{screen_read, screen_update};
 use crate::commands::compare::{ViewBytes, ViewText};
 use crate::compare_diff::{DiffUpdate, Layout, PairKind, PairText};
 
@@ -117,7 +118,7 @@ fn compare_switch_a_second_bytes_request_while_one_waits_sends_nothing(cx: &mut 
 
 /// The labels the View menu offers for switching, read from the open pair.
 pub(super) fn labels(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
-    rig.view.read_with(cx, |view, _| view.file_switch_labels())
+    screen_read(&rig.view, cx, |view, _| view.file_switch_labels())
 }
 
 #[gpui_kit::test]
@@ -148,7 +149,7 @@ fn compare_switch_a_refresh_keeps_the_bytes_view_and_its_row(cx: &mut TestAppCon
     let (rig, top) = scrolled_text(cx);
     rig.dispatch(cx, &ViewBytes);
     open(cx, &rig, (2, PairKind::Binary), None);
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     assert_eq!(
         rig.diff.views(),
         vec![(2, true)],

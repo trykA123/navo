@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use gpui_kit::TestAppContext;
 
+use super::super::screen_access::{screen_read, screen_update};
 use super::body::pair;
 use super::rig;
 use crate::compare_diff::{DiffUpdate, Layout, PairKind};
@@ -22,7 +23,7 @@ fn compare_screen_drops_an_old_opened_after_a_refresh(cx: &mut TestAppContext) {
         text: None,
     };
     rig.push(cx, &sink, opened(1, PairKind::Binary));
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     rig.push(
         cx,
         &sink,
@@ -59,8 +60,8 @@ fn compare_screen_drops_the_first_refresh_after_a_second(cx: &mut TestAppContext
         text: None,
     };
     rig.push(cx, &sink, opened(1, PairKind::Binary));
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     assert_eq!(rig.diff.refreshes(), vec![2, 3]);
     rig.push(cx, &sink, opened(2, PairKind::Image));
     let binary = Some(FileState::Opened {
@@ -94,7 +95,7 @@ fn compare_screen_fails_a_refresh_when_request_ids_run_out(cx: &mut TestAppConte
         text: None,
     };
     rig.push(cx, &sink, opened(u64::MAX));
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     assert!(
         matches!(rig.state(cx), Some(FileState::Failed(_))),
         "no id is left for the reload: {:?}",
@@ -118,10 +119,10 @@ fn compare_screen_enter_after_a_reload_with_fewer_changes_stays_in_bounds(cx: &m
         rig.press(cx, "down");
     }
     assert_eq!(
-        rig.view.read_with(cx, |view, _| view.file_drawer_cursor()),
+        screen_read(&rig.view, cx, |view, _| view.file_drawer_cursor()),
         Some(4)
     );
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let sink = rig.diff.pair_sink();
     rig.push(
         cx,
@@ -134,7 +135,7 @@ fn compare_screen_enter_after_a_reload_with_fewer_changes_stays_in_bounds(cx: &m
     );
     rig.press(cx, "enter");
     assert_eq!(
-        rig.view.read_with(cx, |view, _| view.file_drawer_cursor()),
+        screen_read(&rig.view, cx, |view, _| view.file_drawer_cursor()),
         Some(0),
         "the drawer cursor clamps to the reloaded change count"
     );

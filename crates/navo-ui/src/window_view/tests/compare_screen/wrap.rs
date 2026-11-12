@@ -10,6 +10,7 @@ use gpui_kit::{AppContext as _, Pixels, TestAppContext, VisualTestContext, px, s
 
 use super::super::compare_hex::hex_rig;
 use super::super::compare_switch::{LINE, open};
+use super::super::screen_access::{screen_read, screen_update};
 use super::body::pair;
 use super::{Rig, rig, rig_sized};
 use crate::commands::compare::{NextDifference, ViewBytes, ViewText};
@@ -45,7 +46,7 @@ pub(super) fn opened(rig: &Rig, cx: &mut TestAppContext, text: PairText) {
 
 /// Turns wrap on or off through the look, as Alt+Z will, and redraws.
 pub(super) fn set_wrap(rig: &Rig, cx: &mut TestAppContext, wrap: bool) {
-    rig.view.update(cx, |view, _| {
+    screen_update(&rig.view, cx, |view, _| {
         view.file_look_mut().expect("open").wrap = wrap;
     });
     frames(rig, cx);
@@ -55,11 +56,10 @@ fn row_height(cx: &mut TestAppContext) -> Pixels {
     cx.update(|cx| crate::tokens::current(cx).spacing.row_height)
 }
 
+/// Returns the wrap index and viewport; fails without an open text pair.
 pub(super) fn seen(rig: &Rig, cx: &mut TestAppContext) -> Seen {
     let height = row_height(cx);
-    rig.view
-        .update(cx, |view, _| view.file_wrap(height))
-        .expect("an opened text pair")
+    screen_update(&rig.view, cx, |view, _| view.file_wrap(height)).expect("an opened text pair")
 }
 
 /// The index and its width, once wrap is on and everything is measured.
@@ -251,10 +251,7 @@ fn a_map_click_with_tall_rows_above_centres_its_row(cx: &mut TestAppContext) {
     opened(&rig, cx, wrapped_pair(400, &[10, 200, 390], 300));
     set_wrap(&rig, cx, true);
     let (index, _) = index(&rig, cx);
-    let map = rig
-        .view
-        .read_with(cx, |view, _| view.file_map())
-        .expect("a mounted change map");
+    let map = screen_read(&rig.view, cx, |view, _| view.file_map()).expect("a mounted change map");
     map.update(cx, |_, cx| cx.emit(MapEvent::Jump(200)));
     frames(&rig, cx);
     let (_, _, top, room) = seen(&rig, cx);
@@ -321,12 +318,10 @@ fn a_pick_under_a_tall_row_and_its_menu_anchor_reach_the_line(cx: &mut TestAppCo
         top + room
     );
     let height = row_height(cx);
-    let bottom = rig
-        .view
-        .update(cx, |view, _| {
-            view.file_line_bottom(Layout::SideBySide, height)
-        })
-        .expect("the picked line the menu anchors on");
+    let bottom = screen_update(&rig.view, cx, |view, _| {
+        view.file_line_bottom(Layout::SideBySide, height)
+    })
+    .expect("the picked line the menu anchors on");
     let want = first + index.lines_of(390) as usize - top;
     let down = f32::from(bottom) / f32::from(height);
     assert!(
@@ -341,7 +336,7 @@ fn a_pair_opened_with_wrap_on_centres_its_first_change(cx: &mut TestAppContext) 
     let rig = rig(cx);
     rig.press(cx, "enter");
     set_wrap(&rig, cx, true);
-    let aimed = rig.view.update(cx, |view, _| view.file_open_at(0));
+    let aimed = screen_update(&rig.view, cx, |view, _| view.file_open_at(0));
     assert!(aimed, "the file diff is open before its text lands");
     let text = Arc::new(wrapped_pair(400, &[10, 200, 390], 300));
     let sink = rig.diff.pair_sink();
