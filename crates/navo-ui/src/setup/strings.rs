@@ -3,7 +3,7 @@
 use crate::SharedString;
 
 /// Every text the setup pages show. Templates use `{version}`, `{installed}`, `{path}`,
-/// `{needed}`, `{free}`, `{time}` and `{log}` placeholders that the pages fill in.
+/// `{needed}`, `{free}`, `{time}`, `{log}` and `{percent}` placeholders that the pages fill in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Strings {
     pub back: SharedString,
@@ -30,6 +30,12 @@ pub struct Strings {
     pub installing_title: SharedString,
     pub installing_bar: SharedString,
     pub installing_elapsed: SharedString,
+    /// `{percent}%`, shown beside the elapsed time only when a share is verified.
+    pub installing_percent: SharedString,
+    pub installing_stage_preparing: SharedString,
+    pub installing_stage_copying: SharedString,
+    pub installing_stage_extracting: SharedString,
+    pub installing_stage_finalizing: SharedString,
     pub installing_still: SharedString,
     pub installing_tips_title: SharedString,
     /// Four (key, text) pairs that cross-fade while Setup works.
@@ -107,6 +113,11 @@ impl Strings {
             installing_title: text("setup-installing-title"),
             installing_bar: text("setup-installing-bar"),
             installing_elapsed: text("setup-installing-elapsed"),
+            installing_percent: text("setup-installing-percent"),
+            installing_stage_preparing: text("setup-installing-stage-preparing"),
+            installing_stage_copying: text("setup-installing-stage-copying"),
+            installing_stage_extracting: text("setup-installing-stage-extracting"),
+            installing_stage_finalizing: text("setup-installing-stage-finalizing"),
             installing_still: text("setup-installing-still"),
             installing_tips_title: text("setup-installing-tips-title"),
             installing_tips: vec![
@@ -181,7 +192,7 @@ impl Strings {
 }
 
 /// Template placeholders the pages fill in after loading.
-const PLACEHOLDERS: [&str; 7] = [
+const PLACEHOLDERS: [&str; 8] = [
     "version",
     "installed",
     "path",
@@ -189,4 +200,5 @@ const PLACEHOLDERS: [&str; 7] = [
     "free",
     "time",
     "log",
+    "percent",
 ];
