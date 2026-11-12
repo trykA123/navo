@@ -33,7 +33,7 @@ fn pair_request(asked: FileDiffRequest) -> PairRequest {
 }
 
 /// The Stream's items under the compare folder in path order, and each item's pair (D25).
-fn items_of(mode: &CompareMode) -> (StreamList, Vec<PairRequest>) {
+pub(in crate::window_view) fn items_of(mode: &CompareMode) -> (StreamList, Vec<PairRequest>) {
     let list = stream_items(&mode.rows_under_folder(), mode.folder());
     let requests = list
         .items
@@ -55,7 +55,11 @@ fn items_of(mode: &CompareMode) -> (StreamList, Vec<PairRequest>) {
 
 /// The pair of the next (`step` 1) or previous (`-1`) Stream item after the row `id`, walking
 /// every row under the compare folder once, so a file that is no item still has neighbours.
-fn neighbour(mode: &CompareMode, id: u64, step: i32) -> Option<PairRequest> {
+pub(in crate::window_view) fn neighbour(
+    mode: &CompareMode,
+    id: u64,
+    step: i32,
+) -> Option<PairRequest> {
     let found = mode.row_beside(id, step, is_stream_item)?;
     mode.pair_of(found).map(pair_request)
 }
@@ -142,19 +146,6 @@ impl StreamScreen {
 }
 
 impl NavoWindow {
-    /// Alt+F or "Stream all differences": opens the Stream over every difference under the
-    /// compare folder. False outside a compare or without diff hooks.
-    pub(in crate::window_view) fn open_compare_stream(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(items) = self.browser.compare_mode().map(items_of) else {
-            return false;
-        };
-        self.open_stream(items, window, cx)
-    }
-
     /// Rebuilds the Stream's items when the compare's rows changed since they were built: at
     /// once for a new compare generation or a finished compare, else at most once per 500 ms,
     /// with a timer for a batch that came too soon. Returns whether the items changed.
