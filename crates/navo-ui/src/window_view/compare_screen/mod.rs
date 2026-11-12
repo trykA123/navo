@@ -232,18 +232,6 @@ pub(super) struct ScreenStack {
     file: Option<FileScreen>,
 }
 
-/// The compare roots' names as "left ↔ right", or empty outside a compare.
-fn sides_label(window: &ScreenOwner) -> SharedString {
-    let Some(mode) = window.browser.compare_mode() else {
-        return SharedString::default();
-    };
-    let [left, right] = mode.roots().clone().map(|root| {
-        root.name()
-            .map_or_else(|| root.as_str().to_owned(), |name| name.to_text())
-    });
-    navo_l10n::t!("compare-screen-sides", left = left, right = right).into()
-}
-
 #[cfg(test)]
 mod probes;
 #[cfg(test)]
