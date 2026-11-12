@@ -62,7 +62,7 @@ impl ScreenOwner {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
-        let files = self.files.clone();
+        let files = self.screen_files();
         let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut()) else {
             return false;
         };
