@@ -272,4 +272,39 @@ mod tests {
         let bar_range = f32::from(handle.content_size().width) - 200.;
         assert_eq!(Some(bar_range), seen.max);
     }
+
+    /// `advance` must be the pen advance of one glyph (what the line shaper steps by), not the
+    /// ink width of a "0": ten shaped columns are ten advances wide.
+    #[gpui_kit::test]
+    fn advance_is_the_shaped_column_width_of_the_mono_font(cx: &mut gpui_kit::TestAppContext) {
+        let platform = gpui_kit::platform::current_platform(true);
+        let mut cx = gpui_kit::TestAppContext::build_with_text_system(
+            cx.dispatcher.clone(),
+            None,
+            platform.text_system(),
+        );
+        cx.update(|cx| crate::assets::load_fonts(cx).expect("bundled fonts load"));
+        let window = cx.add_empty_window();
+        window.update(|window, _| {
+            let theme = crate::tokens::Theme::new(crate::tokens::Mode::Light);
+            let size = theme.typography.small;
+            let run = gpui_kit::TextRun {
+                len: 10,
+                font: gpui_kit::font(theme.typography.mono_font.clone()),
+                color: theme.colors.text,
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let shaped = window
+                .text_system()
+                .layout_line("0000000000", size, &[run], None);
+            let column = f32::from(shaped.width) / 10.;
+            let used = f32::from(super::advance(window, &theme));
+            assert!(
+                (used - column).abs() < 0.05,
+                "advance {used} px, shaped column {column} px"
+            );
+        });
+    }
 }
