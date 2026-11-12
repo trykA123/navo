@@ -54,8 +54,9 @@ impl ScreenOwner {
             .and_then(|file| file.view.as_mut())
             .filter(|view| Arc::ptr_eq(view.text(), text));
         if let Some(view) = view {
-            view.sideways.set_widest(cols.widest());
-            view.cols = Some(Arc::new(cols));
+            let cols = Arc::new(cols);
+            view.sideways.set_cols(&cols);
+            view.cols = Some(cols);
             view.widths.task = None;
             cx.notify();
         }

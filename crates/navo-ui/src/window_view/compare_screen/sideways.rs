@@ -5,10 +5,12 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::base::ScrollbarHandle;
 use gpui_kit::{ScrollDelta, ScrollEvent, Size, WeakEntity, font};
 
+use crate::compare_diff::LineCols;
 use crate::compare_diff::body::{RowCut, TextProbe};
 use crate::prelude::*;
 use crate::tokens::Theme;
@@ -20,6 +22,9 @@ struct Sideways {
     offset: f32,
     /// The widest line of the pair in columns; `None` until it is measured.
     widest: Option<u32>,
+    /// The measured widths of the pair, which hold the cut's start checkpoints; `None` until
+    /// the same measure lands.
+    widths: Option<Arc<LineCols>>,
     /// The width of one column of the monospace font, in px, read each frame.
     advance: f32,
     /// Whether lines wrap: sideways input is then ignored and the offset kept.
@@ -68,6 +73,14 @@ impl SidewaysHandle {
         self.0.borrow_mut().widest = Some(widest);
     }
 
+    /// Keeps the measured widths of the pair: they set the widest line and give every cut the
+    /// checkpoints a long line resumes from.
+    pub(in crate::window_view::compare_screen) fn set_cols(&self, cols: &Arc<LineCols>) {
+        let mut state = self.0.borrow_mut();
+        state.widest = Some(cols.widest());
+        state.widths = Some(Arc::clone(cols));
+    }
+
     /// The widest line of the pair so far, in columns; `None` before the first measure. The
     /// large body raises it window by window (W8j) and never lowers it.
     pub(in crate::window_view::compare_screen) fn widest(&self) -> Option<u32> {
@@ -95,6 +108,7 @@ impl SidewaysHandle {
 
     /// Takes this frame's column `advance` (px), clamps the offset once everything is known,
     /// and returns the cut every row draws (whole lines while wrapping or still measuring).
+    /// The cut carries the widths, so a long line resumes from a checkpoint, not from byte 0.
     pub(in crate::window_view::compare_screen) fn frame(&self, advance: Pixels) -> RowCut {
         let mut state = self.0.borrow_mut();
         state.advance = f32::from(advance);
@@ -108,6 +122,7 @@ impl SidewaysHandle {
         RowCut {
             cols: Some(from as u32..(from + span) as u32),
             nudge: px(state.offset - from * advance),
+            widths: state.widths.clone(),
             ..RowCut::default()
         }
     }
@@ -229,6 +244,8 @@ pub(in crate::window_view) struct SidewaysSeen {
     pub(in crate::window_view) nudge: f32,
     pub(in crate::window_view) advance: f32,
     pub(in crate::window_view) max: Option<f32>,
+    /// The widths this frame's cut carries, which hold the checkpoints it resumes from.
+    pub(in crate::window_view) widths: Option<Arc<LineCols>>,
 }
 
 #[cfg(test)]
@@ -249,6 +266,7 @@ impl SidewaysHandle {
             nudge: f32::from(cut.nudge),
             advance: state.advance,
             max: state.max(),
+            widths: cut.widths,
         }
     }
 }

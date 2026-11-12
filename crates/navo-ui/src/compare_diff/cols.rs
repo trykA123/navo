@@ -269,6 +269,18 @@ pub fn cut_from<S: Clone>(
     walk_line(line, runs, cols, start).0
 }
 
+/// Like [`cut_from`], also returning the characters examined, so a test outside this module can
+/// bound the walk of a cut a body built.
+#[cfg(test)]
+pub(crate) fn cut_examined<S: Clone>(
+    line: &str,
+    runs: &[(Range<usize>, S)],
+    cols: Range<u32>,
+    start: Option<Checkpoint>,
+) -> (Shown<S>, usize) {
+    walk_line(line, runs, cols, start)
+}
+
 /// The cut and the number of characters it examined, so a test can bound the walk.
 fn walk_line<S: Clone>(
     line: &str,

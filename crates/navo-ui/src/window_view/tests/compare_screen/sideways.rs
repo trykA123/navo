@@ -12,7 +12,7 @@ use gpui_kit::{
 
 use super::body::pair;
 use super::{Rig, rig};
-use crate::compare_diff::{DiffUpdate, Layout, PairKind, PairText};
+use crate::compare_diff::{DiffUpdate, Layout, PairKind, PairText, cut, cut_examined};
 use crate::window_view::compare_screen::SidewaysSeen;
 
 /// A 40-row pair whose every line is 500 columns of `a`..`z`.
@@ -263,4 +263,57 @@ fn a_shifted_wheel_moves_the_file_diff_sideways(cx: &mut TestAppContext) {
         (now.offset - 3. * now.advance).abs() < 0.01,
         "Shift plus wheel moves the body: {now:?}"
     );
+}
+
+/// A two-row pair whose changed first row holds `line` on both sides.
+fn long_pair(line: &str) -> PairText {
+    let mut text = pair(2, &[0]);
+    text.left[0] = line.to_owned();
+    text.right[0] = line.to_owned();
+    text
+}
+
+/// Opens a 900 KiB line, lets its widths land, and scrolls sideways to the end of it.
+fn at_the_end(cx: &mut TestAppContext) -> (Rig, String) {
+    let line = "x".repeat(900 * 1024);
+    let rig = rig(cx);
+    rig.open_text(cx, long_pair(&line));
+    cx.run_until_parked();
+    frames(&rig, cx);
+    sideways_px(&rig, cx, -100_000_000., 0.);
+    (rig, line)
+}
+
+#[gpui_kit::test]
+fn a_sideways_cut_near_the_end_of_a_long_line_examines_few_characters(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, line) = at_the_end(cx);
+    let now = seen(&rig, cx);
+    assert_eq!(Some(now.offset), now.max, "the offset is at the end");
+    let cols = now.cols.expect("a cut at the end of the line");
+    assert!(cols.start > 900_000, "near the end of 921600: {cols:?}");
+    let start = now
+        .widths
+        .as_ref()
+        .and_then(|w| w.left_start(0, cols.start));
+    let (_, examined) = cut_examined::<char>(&line, &[], cols, start);
+    assert!(
+        examined <= 2048,
+        "{examined} characters examined, at most 2048"
+    );
+}
+
+#[gpui_kit::test]
+fn the_sideways_cut_at_the_end_draws_what_a_walk_from_zero_draws(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, line) = at_the_end(cx);
+    let now = seen(&rig, cx);
+    let cols = now.cols.expect("a cut at the end of the line");
+    let widths = now.widths.expect("the cut carries the widths");
+    let half = line.len() / 2;
+    let runs = [(0..half, 'a'), (half..line.len(), 'b')];
+    let start = widths.left_start(0, cols.start);
+    let got = cut_examined(&line, &runs, cols.clone(), start).0;
+    let want = cut(&line, &runs, cols);
+    assert_eq!(got, want, "the checkpoint cut draws the walk from 0");
 }

@@ -20,6 +20,8 @@ pub mod stream_model;
 pub mod ticks;
 
 pub use card::{CardCtx, stream_row_view};
+#[cfg(test)]
+pub(crate) use cols::cut_examined;
 pub use cols::{LineCols, Shown, TAB_COLS, WrapIndex, char_cols, cut, line_cols, visual_lines};
 pub use hooks::{
     ByteProgress, ByteRegionView, BytesCard, CARD_HUNKS, Card, CardDetail, CardRow, CardScan,
