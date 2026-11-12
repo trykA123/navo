@@ -1,12 +1,15 @@
 //! The View menu and the drawers of the file diff (V17): each menu entry, drawers that start
 //! closed, and Enter in the list of changes jumping to the change. W8i adds the Wrap lines entry
-//! and Alt+Z.
+//! and Alt+Z; W8n the title-bar View button opening this menu on the compare screen.
 
+use gpui_kit::AppContext as _;
 use gpui_kit::TestAppContext;
+use gpui_kit::test::TestWindowExt;
 use navo_core::shell_menu::ItemId;
 
 use super::super::compare_hex::hex_rig;
 use super::super::compare_switch::open;
+use super::super::settle;
 use super::body::pair;
 use super::{Rig, rig};
 use crate::compare_diff::{Layout, PairKind};
@@ -222,6 +225,58 @@ fn the_wrap_entry_shows_on_text_pairs_only(cx: &mut TestAppContext) {
     );
     large.press(cx, "alt-v");
     assert!(!offers_wrap(&large, cx), "a large pair does not");
+}
+
+/// Clicks the title-bar "View" button, as a tester's pointer would.
+fn click_view(cx: &mut TestAppContext, rig: &Rig) {
+    cx.update_window(rig.window, |_, window, cx| window.click("window-view", cx))
+        .expect("window");
+    settle(cx, &rig.view);
+}
+
+/// The texts of the open window View menu; empty when it is closed.
+fn window_menu_texts(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
+    rig.view.read_with(cx, |view, cx| {
+        view.window_menu_view()
+            .map(|menu| {
+                menu.read(cx)
+                    .menu()
+                    .items
+                    .iter()
+                    .map(|item| item.text.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+#[gpui_kit::test]
+fn the_title_view_button_opens_the_compare_menu_on_the_compare_screen(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_text(cx, pair(40, &[10]));
+    click_view(cx, &rig);
+    assert!(
+        offers_wrap(&rig, cx),
+        "the title-bar View button opens the compare menu, which offers Wrap lines"
+    );
+}
+
+#[gpui_kit::test]
+fn the_title_view_button_opens_the_window_menu_without_the_compare_screen(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    click_view(cx, &rig);
+    let texts = window_menu_texts(cx, &rig);
+    assert!(
+        texts.iter().any(|text| text == "Path bar"),
+        "the window View menu opens: {texts:?}"
+    );
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.compare_menu_view().is_none()),
+        "the compare menu stays closed while the screen is"
+    );
 }
 
 #[gpui_kit::test]
