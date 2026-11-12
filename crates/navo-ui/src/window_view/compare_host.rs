@@ -97,4 +97,22 @@ impl ScreenOwner {
     pub(in crate::window_view) fn screen_files(&self) -> FileHooks {
         self.files.clone()
     }
+
+    /// The compare roots' names as "left ↔ right", or empty outside a compare.
+    pub(in crate::window_view) fn screen_sides(&self) -> SharedString {
+        let Some(mode) = self.browser.compare_mode() else {
+            return SharedString::default();
+        };
+        let [left, right] = mode.roots().clone().map(|root| {
+            root.name()
+                .map_or_else(|| root.as_str().to_owned(), |name| name.to_text())
+        });
+        navo_l10n::t!("compare-screen-sides", left = left, right = right).into()
+    }
+
+    /// The compare's rows stamp, its generation and the batches received in it; `None` outside a
+    /// compare, and it changes whenever the listed rows do.
+    pub(in crate::window_view) fn screen_stamp(&self) -> Option<(u64, u64)> {
+        self.browser.compare_mode().map(|mode| mode.rows_stamp())
+    }
 }

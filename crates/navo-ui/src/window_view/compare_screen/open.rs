@@ -5,7 +5,7 @@
 use std::sync::{Arc, PoisonError};
 
 use super::{FileScreen, FileState, ScreenOwner, ScreenStack};
-use super::{drawers, file, look, pick, sides_label, switch};
+use super::{drawers, file, look, pick, switch};
 use crate::compare_diff::{CompareOptions, PairRequest, PairText};
 use crate::prelude::*;
 
@@ -70,7 +70,7 @@ impl ScreenOwner {
             request,
             active,
             expected: Some(active),
-            sides: sides_label(self),
+            sides: self.screen_sides(),
             focus: focus.clone(),
             state: FileState::Loading,
             view: None,
