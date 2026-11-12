@@ -7,8 +7,13 @@ use std::sync::{Arc, PoisonError};
 use super::{CompareScreen, FileScreen, FileState, NavoWindow};
 use super::{drawers, file, look, pick, sides_label, switch};
 use crate::browser::FileDiffRequest;
-use crate::compare_diff::{PairRequest, PairText};
+use crate::compare_diff::{CompareOptions, PairRequest, PairText};
 use crate::prelude::*;
+
+/// The compare options from `window`'s settings values.
+pub(super) fn opts(window: &NavoWindow) -> CompareOptions {
+    CompareOptions::from_values(&window.values)
+}
 
 /// Drops a closed file screen; its texts' last references go to a background task, so a
 /// large pair is freed off the UI thread.
@@ -73,7 +78,7 @@ impl NavoWindow {
         };
         self.compare.diff.opened += 1;
         let tag = self.compare.diff.opened;
-        let control = hooks.open_pair(request.clone(), &self.values, self.compare.diff.sink(tag));
+        let control = hooks.open_pair(request.clone(), &opts(self), self.compare.diff.sink(tag));
         let focus = cx.focus_handle();
         let screen = self.compare.screen.as_ref();
         let look = screen

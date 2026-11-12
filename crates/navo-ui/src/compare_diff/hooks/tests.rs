@@ -4,8 +4,10 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use super::*;
+use crate::compare_diff::CompareOptions;
 use crate::compare_diff::fake::FakeDiffHooks;
 use crate::compare_diff::image_body::{notice_of, similarity_of};
+use crate::settings::Values;
 
 fn request(id: u64) -> PairRequest {
     PairRequest {
@@ -94,11 +96,18 @@ fn types_build_and_compare() {
 fn dropping_a_control_does_not_block() {
     let hooks = FakeDiffHooks::default();
     let sink: DiffSink = Arc::new(|_| {});
-    let control = hooks.open_pair(request(1), &Values::default(), sink);
+    let control = hooks.open_pair(
+        request(1),
+        &CompareOptions::from_values(&Values::default()),
+        sink,
+    );
     control.spans(0..10);
     drop(control);
     assert!(hooks.calls.dropped.load(Ordering::SeqCst));
-    let stream = hooks.open_stream(&Values::default(), Arc::new(|_| {}));
+    let stream = hooks.open_stream(
+        &CompareOptions::from_values(&Values::default()),
+        Arc::new(|_| {}),
+    );
     stream.set_items(1, vec![(request(1), true), (request(2), false)]);
     stream.search(3, "x".into());
     drop(stream);
@@ -136,7 +145,11 @@ fn an_update_flows_through_the_fake() {
             .unwrap_or_else(PoisonError::into_inner)
             .push(update);
     });
-    let _control = hooks.open_pair(request(9), &Values::default(), sink);
+    let _control = hooks.open_pair(
+        request(9),
+        &CompareOptions::from_values(&Values::default()),
+        sink,
+    );
     let push = hooks
         .calls
         .pair_sink

@@ -11,10 +11,9 @@ use navo_fs::ProviderOps;
 use navo_store::{CacheDb, StoreDirs};
 use navo_ui::browser::LogFactory;
 use navo_ui::compare_diff::{
-    CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest, SheetPlan, SheetPlanSink,
-    SheetResult, SheetSink, StreamControl, StreamSink,
+    CompareOptions, CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest, SheetPlan,
+    SheetPlanSink, SheetResult, SheetSink, StreamControl, StreamSink,
 };
-use navo_ui::settings::Values;
 
 use super::super::settings::CompareSettings;
 use super::cards;
@@ -26,7 +25,7 @@ use super::sides::{side_of, unreadable_side};
 use super::sources::Sources;
 use super::stream::{LoadFn, StreamParts, StreamSession};
 use super::viewed::{LazyViewed, NoViewed, OpenViewed, ViewedMarks, ViewedStore};
-use crate::compare::convert::settings_of;
+use crate::compare::convert::settings_from;
 
 /// Builds one side from its `Location`; it touches the file system, so only workers call it.
 pub(crate) type SideFn =
@@ -80,10 +79,10 @@ impl DiffHooks for DiffBackend {
     fn open_pair(
         &self,
         request: PairRequest,
-        values: &Values,
+        options: &CompareOptions,
         sink: DiffSink,
     ) -> Box<dyn PairControl> {
-        let settings = settings_of(values);
+        let settings = settings_from(options);
         let plan = EnginePlan::new(settings.clone(), true);
         let side = Arc::clone(&self.side);
         let pair = request.clone();
@@ -92,8 +91,8 @@ impl DiffHooks for DiffBackend {
     }
 
     /// Open a Stream over the compared folder with a quarter-budget, at least 64 MiB.
-    fn open_stream(&self, values: &Values, sink: StreamSink) -> Box<dyn StreamControl> {
-        let settings = settings_of(values);
+    fn open_stream(&self, options: &CompareOptions, sink: StreamSink) -> Box<dyn StreamControl> {
+        let settings = settings_from(options);
         let budget = (settings.budget().bytes() / 4).max(64 * 1024 * 1024);
         let side = Arc::clone(&self.side);
         let load_settings = settings.clone();

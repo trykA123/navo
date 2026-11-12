@@ -20,6 +20,7 @@ use thumbs::Thumbs;
 
 use super::look::Look;
 use super::menu::MenuSlot;
+use super::open::opts;
 use super::outline::Outline;
 use super::search::{Rerun, Search};
 use super::{CompareScreen, DiffSlot};
@@ -178,7 +179,7 @@ impl NavoWindow {
     ) -> Option<FocusHandle> {
         let hooks = self.compare.diff.hooks.clone()?;
         let inbox = StreamInbox::default();
-        let control = hooks.open_stream(&self.values, stream_sink(&inbox, &self.compare.diff));
+        let control = hooks.open_stream(&opts(self), stream_sink(&inbox, &self.compare.diff));
         let settled = list.items.iter().map(|item| item.settled);
         control.set_items(GENERATION, requests.iter().cloned().zip(settled).collect());
         let mut model = StreamModel::default();
