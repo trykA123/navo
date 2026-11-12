@@ -1,9 +1,14 @@
+//! Volume enumeration and journal I/O for the NTFS index.
+
 use std::collections::{HashMap, HashSet};
 
 use super::{
     Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Pending, Resume, SizeHint,
     TableChange, UsnBatch, parse_batch, validate_journal_cursor,
 };
+
+#[path = "two_pass_size.rs"]
+mod two_pass_size;
 
 #[cfg(test)]
 thread_local! {
@@ -144,25 +149,15 @@ fn reserve_for_build(
     Ok(true)
 }
 
+/// Queues a record and its bytes, returning the unknown-size count or an apply error.
 fn add_record(
     volume: &mut impl VolumeIo,
     index: &mut NtfsIndex,
     pending: &mut Pending,
     record: crate::usn::UsnRecord,
 ) -> Result<u64, NtfsError> {
-    let mut unknown = 0;
-    let size = if record.flags.contains(Flags::FOLDER) {
-        None
-    } else {
-        let size = match volume.file_size(record.file_id).map_err(size_error) {
-            Err(NtfsError::InvalidResponse(_)) => volume.current_file_size(record.file_id),
-            Err(NtfsError::FileGone) => return Ok(0),
-            other => other,
-        };
-        Some(size.unwrap_or_else(|_| {
-            unknown = 1;
-            0
-        }))
+    let Some(size) = two_pass_size::read_record_size(volume, &record) else {
+        return Ok(0);
     };
     let file_id = record.file_id;
     pending.push(
@@ -174,10 +169,10 @@ fn add_record(
             flags: record.flags,
         },
     )?;
-    if let Some(bytes) = size {
+    if let Some(bytes) = size.bytes {
         pending.push(index, TableChange::Size { file_id, bytes })?;
     }
-    Ok(unknown)
+    Ok(size.unknown)
 }
 
 pub(super) fn read_volume_journal(
