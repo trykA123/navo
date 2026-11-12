@@ -207,6 +207,8 @@ impl ScreenOwner {
         };
         let last = view.change_count().saturating_sub(1);
         let drawers = &mut file.drawers;
+        // A reload can leave fewer changes than the cursor the open drawer kept.
+        drawers.cursor = drawers.cursor.min(last);
         match event.keystroke.key.as_str() {
             "down" => drawers.cursor = (drawers.cursor + 1).min(last),
             "up" => drawers.cursor = drawers.cursor.saturating_sub(1),

@@ -263,6 +263,32 @@ fn the_title_view_button_opens_the_compare_menu_on_the_compare_screen(cx: &mut T
 }
 
 #[gpui_kit::test]
+fn the_title_view_button_opens_the_compare_menu_while_the_command_centre_is_focused(
+    cx: &mut TestAppContext,
+) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_text(cx, pair(40, &[10]));
+    rig.press(cx, "ctrl-k");
+    let centre_open = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find("command-center").is_some()
+        })
+        .expect("window");
+    assert!(centre_open, "Ctrl+K opens the command centre");
+    assert!(
+        !rig.focused(cx, true),
+        "the file diff no longer holds focus"
+    );
+    click_view(cx, &rig);
+    assert!(
+        offers_wrap(&rig, cx),
+        "the title-bar View button opens the compare menu even with focus elsewhere"
+    );
+}
+
+#[gpui_kit::test]
 fn the_title_view_button_opens_the_window_menu_without_the_compare_screen(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let rig = rig(cx);

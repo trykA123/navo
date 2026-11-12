@@ -178,8 +178,12 @@ impl FileView {
 
     /// Makes change `hunk` the current one and centres its first list item: now through the index
     /// the view has, and again on the next draw, so a wrap index rebuilt in that frame (`layout`
-    /// measures the pair then) still ends with the change in the middle.
+    /// measures the pair then) still ends with the change in the middle. A `hunk` past the last
+    /// change is ignored, as in `set_current`.
     pub(super) fn go_to(&mut self, hunk: usize, layout: Layout) {
+        if hunk >= self.text.hunks.len() {
+            return;
+        }
         self.current = Some(hunk);
         self.centre = true;
         if let Some(&row) = self.shape(layout).starts.get(hunk) {
