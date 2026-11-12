@@ -5,10 +5,11 @@
 use std::ops::Range;
 use std::sync::Arc;
 
+use gpui_kit::TestAppContext;
 use gpui_kit::component::highlighter::HighlightTheme;
-use gpui_kit::{AppContext as _, TestAppContext};
 
 use super::super::compare_screen::{Rig, rig};
+use super::super::screen_access::{screen_read, screen_update, screen_update_in};
 use super::entry::row;
 use crate::browser::{CompareUpdate, RowStatus};
 use crate::compare_diff::card::syntax::{CardKey, CardLook, CardSyntax, TextRun};
@@ -39,13 +40,9 @@ pub(super) fn open_one(rig: &Rig, cx: &mut TestAppContext, name: &str) {
         left: None,
         right: None,
     }];
-    let view = rig.view.clone();
-    cx.update_window(rig.window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.open_stream((list, requests), window, cx)
-        })
-    })
-    .expect("window");
+    screen_update_in(&rig.view, rig.window, cx, |view, window, cx| {
+        view.open_stream((list, requests), window, cx)
+    });
     rig.frame(cx);
 }
 
@@ -109,7 +106,7 @@ fn evict(rig: &Rig) {
 
 /// The left colour runs the Stream paints for row `at` of `card`; empty with no parse held.
 pub(super) fn held_runs(rig: &Rig, cx: &mut TestAppContext, card: &Card, at: u32) -> Vec<TextRun> {
-    let Some(held) = rig.view.read_with(cx, |view, _| view.stream_syntax(1)) else {
+    let Some(held) = screen_read(&rig.view, cx, |view, _| view.stream_syntax(1)) else {
         return Vec::new();
     };
     let t = Theme::new(Mode::Light);
@@ -132,7 +129,7 @@ pub(super) fn keyword_at(runs: &[TextRun]) -> Option<Range<usize>> {
 
 /// How many card parse slots the open Stream holds.
 fn slots(rig: &Rig, cx: &mut TestAppContext) -> usize {
-    rig.view.read_with(cx, |view, _| view.stream_syntax_slots())
+    screen_read(&rig.view, cx, |view, _| view.stream_syntax_slots())
 }
 
 /// Drains the Stream's inbox and waits for the background parse, as the file screen's test does.
@@ -143,8 +140,9 @@ pub(super) fn land(rig: &Rig, cx: &mut TestAppContext) {
 
 /// Delivers `parse` as the answer of a job started for `key`, as a background job does.
 fn deliver(rig: &Rig, cx: &mut TestAppContext, key: CardKey, parse: CardSyntax) -> bool {
-    rig.view
-        .update(cx, |view, cx| view.deliver_stream_syntax(key, parse, cx))
+    screen_update(&rig.view, cx, |view, cx| {
+        view.deliver_stream_syntax(key, parse, cx)
+    })
 }
 
 #[gpui_kit::test]
@@ -176,9 +174,7 @@ fn compare_stream_a_plain_card_gets_no_runs(cx: &mut TestAppContext) {
     send_card(&rig, 1, &card);
     land(&rig, cx);
     assert!(
-        rig.view
-            .read_with(cx, |view, _| view.stream_syntax(1))
-            .is_some(),
+        screen_read(&rig.view, cx, |view, _| view.stream_syntax(1)).is_some(),
         "a plain card is parsed too; it only finds no grammar"
     );
     let runs = held_runs(&rig, cx, &card, 1);
@@ -298,13 +294,9 @@ fn open_two_rs(rig: &Rig, cx: &mut TestAppContext) {
         })
         .collect();
     let list = StreamList { items, rules: 0 };
-    let view = rig.view.clone();
-    cx.update_window(rig.window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.open_stream((list, requests), window, cx)
-        })
-    })
-    .expect("window");
+    screen_update_in(&rig.view, rig.window, cx, |view, window, cx| {
+        view.open_stream((list, requests), window, cx)
+    });
     rig.frame(cx);
 }
 
@@ -324,7 +316,7 @@ fn compare_stream_a_job_lands_on_the_right_card_after_an_item_was_inserted_befor
     );
     // A plain-text item arrives before a.rs under the same generation, so a.rs moves from index 0
     // to index 1 while the generation stays 1 (WR3).
-    rig.view.update(cx, |view, _| {
+    screen_update(&rig.view, cx, |view, _| {
         view.stream_insert_item_before(
             1,
             StreamItem {
