@@ -12,14 +12,14 @@ use gpui_kit::Stateful;
 use crate::commands::compare::{PickDown, PickToggle, PickUp, RemovePicked};
 use crate::compare_diff::{OnTick, PairText, PickSide};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 pub(super) use state::{Pick, PickDraw, Spot};
 
 #[cfg(test)]
 mod tests;
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds the pick keys on the file diff's `root`.
     pub(super) fn pick_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &PickDown, window, cx| {

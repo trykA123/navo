@@ -10,7 +10,7 @@ use crate::compare_diff::Layout;
 use crate::compare_diff::map::{ChangeMap, HunkKind, MapEvent, MapHunk};
 use crate::compare_diff::{DiffRow, PairText};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The map entity of one file view, the jump subscription and the layout it last got hunks for.
 pub(super) struct MapMount {
@@ -64,7 +64,7 @@ impl FileView {
     pub(in crate::window_view::compare_screen) fn map_element(
         &mut self,
         layout: Layout,
-        cx: &mut Context<NavoWindow>,
+        cx: &mut Context<ScreenOwner>,
     ) -> AnyElement {
         let total = u32::try_from(self.shape(layout).count).unwrap_or(u32::MAX);
         let hunks = map_hunks(&self.text, layout);
@@ -95,7 +95,7 @@ impl FileView {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Scrolls the open file diff so `row` (a pair row, as the map counts them) is in the middle
     /// of the list, which is asked in list items.
     fn jump_file_row(&mut self, row: u32, cx: &mut Context<Self>) {

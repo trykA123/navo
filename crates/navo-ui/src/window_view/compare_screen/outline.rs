@@ -9,7 +9,7 @@ use super::stream::{StreamScreen, item_of};
 use crate::commands::compare::Changes;
 use crate::compare_diff::{Layout, StreamModel, StreamRow};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::{ListDown, ListGo, ListUp};
 
 pub(super) use view::drawer;
@@ -107,7 +107,7 @@ impl StreamScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds the drawer's keys on `root`: Ctrl+B opens or closes it; Up, Down and Enter work
     /// while it holds focus.
     pub(super) fn outline_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -181,7 +181,7 @@ impl NavoWindow {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// The item the outline marks as in view, for tests.
     pub(in crate::window_view) fn outline_in_view(&self) -> Option<usize> {
         let stream = self.compare.screen.as_ref()?.stream.as_ref()?;

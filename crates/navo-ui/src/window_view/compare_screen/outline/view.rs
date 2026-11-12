@@ -11,7 +11,7 @@ use crate::compare_diff::{Layout, StreamItem};
 use crate::prelude::*;
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::compare_screen::stream::StreamScreen;
 
 /// Width of the drawer, in px.
@@ -86,7 +86,7 @@ fn file_row(
     t: &Theme,
     stream: &StreamScreen,
     (at, view): (usize, usize),
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> AnyElement {
     let picked = stream.outline.selected == Some(at);
     let current = at == view;
@@ -133,7 +133,7 @@ fn rules_line(t: &Theme, count: usize) -> Div {
 pub(in crate::window_view::compare_screen) fn drawer(
     t: &Theme,
     stream: &StreamScreen,
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> Option<AnyElement> {
     if !stream.model.outline_open() {
         return None;

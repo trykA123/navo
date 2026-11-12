@@ -1,16 +1,16 @@
-//! The `NavoWindow` half of the compare screen: how a file diff opens and takes a pair over, how
+//! The `ScreenOwner` half of the compare screen: how a file diff opens and takes a pair over, how
 //! its updates are polled into rows, and how Esc pops it. `release` frees a closed screen's texts
 //! on a background thread.
 
 use std::sync::{Arc, PoisonError};
 
-use super::{CompareScreen, FileScreen, FileState, NavoWindow};
+use super::{FileScreen, FileState, ScreenOwner, ScreenStack};
 use super::{drawers, file, look, pick, sides_label, switch};
 use crate::compare_diff::{CompareOptions, PairRequest, PairText};
 use crate::prelude::*;
 
 /// The compare options from `window`'s settings values.
-pub(super) fn opts(window: &NavoWindow) -> CompareOptions {
+pub(super) fn opts(window: &ScreenOwner) -> CompareOptions {
     CompareOptions::from_values(&window.values)
 }
 
@@ -39,7 +39,7 @@ fn release(file: Option<FileScreen>, cx: &mut App) {
         .detach();
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Opens `request` in the file diff, over any Stream, replacing an open file diff and
     /// focusing it; `at` is the change to show first. False when the app has no diff hooks.
     pub(in crate::window_view) fn show_pair(
@@ -91,7 +91,7 @@ impl NavoWindow {
         let old = self
             .compare
             .screen
-            .get_or_insert_with(CompareScreen::default)
+            .get_or_insert_with(ScreenStack::default)
             .file
             .replace(file);
         release(old, cx);

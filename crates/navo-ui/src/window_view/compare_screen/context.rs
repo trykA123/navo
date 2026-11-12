@@ -14,7 +14,7 @@ use crate::compare_diff::{
 };
 use crate::prelude::*;
 use crate::tokens;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::MenuEntry;
 
 mod entries;
@@ -43,7 +43,7 @@ impl RowHit {
 /// Wraps the drawn file diff row `shown` so a right-click on it moves the cursor there and
 /// opens the menu at the pointer.
 pub(super) fn on_right_click(
-    weak: &WeakEntity<NavoWindow>,
+    weak: &WeakEntity<ScreenOwner>,
     shown: AnyElement,
     hit: RowHit,
 ) -> AnyElement {
@@ -163,7 +163,7 @@ impl StreamScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds Shift+F10 and the Menu key (open the menu at the cursor line) on a screen's `root`.
     pub(super) fn menu_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &ShowMenu, window, cx| {

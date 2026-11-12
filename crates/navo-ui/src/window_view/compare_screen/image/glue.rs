@@ -7,7 +7,7 @@ use super::{Found, Pictures, Pointer};
 use crate::compare_diff::image_body::ImageMode;
 use crate::compare_diff::{ImageMask, ImageScores, PairKind};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::compare_screen::look::Preset;
 use crate::window_view::compare_screen::{FileScreen, FileState};
 
@@ -55,7 +55,7 @@ impl FileScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Gives retired pictures back, then starts the body's jobs once its scores allow it.
     /// True only when a job started, so an idle screen is not redrawn on every wake.
     pub(in crate::window_view::compare_screen) fn load_pictures(
@@ -161,7 +161,7 @@ pub(in crate::window_view) struct Probe {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// The image body's state, or `None` when no image pair is open.
     pub(in crate::window_view) fn image_probe(&self) -> Option<Probe> {
         let body = self.pictures()?;

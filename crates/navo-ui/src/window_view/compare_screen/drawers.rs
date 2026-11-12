@@ -11,7 +11,7 @@ use crate::compare_diff::{DiffRow, PairFacts, PairText};
 use crate::prelude::*;
 use crate::primitives::{ListScroll, VirtualList};
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// Width of a drawer, in rem.
 const WIDTH_REM: f32 = 16.;
@@ -169,7 +169,7 @@ pub(super) fn details_view(t: &Theme, facts: &PairFacts) -> AnyElement {
         .into_any_element()
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Registers Ctrl+B, Ctrl+I and the list keys on the file diff root.
     pub(super) fn drawer_actions(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &Changes, _, cx| view.toggle_drawer(true, cx)))

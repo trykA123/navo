@@ -19,7 +19,7 @@ use crate::compare_diff::{ImageMask, ImageScores, PairRequest};
 use crate::prelude::*;
 use crate::primitives::{gpu_images, new_image, release_image};
 use crate::window_view::viewer::{IMAGE_LIMIT, Picture, decode_image};
-use crate::window_view::{FileHooks, NavoWindow};
+use crate::window_view::{FileHooks, ScreenOwner};
 
 #[cfg(test)]
 pub(in crate::window_view) use glue::Probe;
@@ -246,14 +246,14 @@ impl Pictures {
     }
 
     /// Starts the jobs that read the sides and build the mask picture; true when one started.
-    fn ensure_load(&mut self, files: &FileHooks, cx: &mut Context<NavoWindow>) -> bool {
+    fn ensure_load(&mut self, files: &FileHooks, cx: &mut Context<ScreenOwner>) -> bool {
         let sides = self.load_sides(files, cx);
         let mask = self.build_mask(cx);
         sides | mask
     }
 
     /// Reads both sides once the scores say the pair is worth decoding.
-    fn load_sides(&mut self, files: &FileHooks, cx: &mut Context<NavoWindow>) -> bool {
+    fn load_sides(&mut self, files: &FileHooks, cx: &mut Context<ScreenOwner>) -> bool {
         if !self.model.wants_sides() || self.load.is_some() {
             return false;
         }
@@ -276,7 +276,7 @@ impl Pictures {
     }
 
     /// Builds the mask picture for the mask the app sent, when the view can show it.
-    fn build_mask(&mut self, cx: &mut Context<NavoWindow>) -> bool {
+    fn build_mask(&mut self, cx: &mut Context<ScreenOwner>) -> bool {
         let Some(mask) = self.mask.clone() else {
             return false;
         };

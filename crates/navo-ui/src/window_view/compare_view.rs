@@ -9,7 +9,7 @@ use std::sync::Arc;
 use navo_core::{Command, Direction, PaneId};
 
 use super::NavoWindow;
-use super::compare_screen::{CompareScreen, DiffSlot};
+use super::compare_screen::{DiffSlot, ScreenStack};
 use crate::FocusHandle;
 use crate::browser::{RowView, Waker, bar_view, empty_text, pane_rows};
 use crate::compare_diff::DiffHooks;
@@ -34,7 +34,7 @@ pub(super) struct CompareView {
     map: Option<map::MapMount>,
     scrolled_to: Option<String>,
     /// The file diff and Stream drawn in place of the panes, when open.
-    pub(super) screen: Option<CompareScreen>,
+    pub(super) screen: Option<ScreenStack>,
     /// The app's diff hooks and the inbox of their updates.
     pub(super) diff: DiffSlot,
 }

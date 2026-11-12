@@ -17,7 +17,7 @@ use crate::compare_diff::image_body::ImageMode;
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, Kbd};
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The view each bare digit opens; the key shows beside its button.
 const VIEWS: [(char, ImageMode); 3] = [
@@ -30,7 +30,7 @@ const VIEWS: [(char, ImageMode); 3] = [
 pub(in crate::window_view::compare_screen) fn body(
     t: &Theme,
     body: &Pictures,
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> AnyElement {
     let view = match body.mode() {
         ImageMode::Overlay => wipe(t, body, cx),
@@ -52,7 +52,7 @@ pub(in crate::window_view::compare_screen) fn body(
 }
 
 /// The view picker, and why the pair shows less; `None` in the Simple look.
-fn picker(t: &Theme, body: &Pictures, cx: &mut Context<NavoWindow>) -> Option<AnyElement> {
+fn picker(t: &Theme, body: &Pictures, cx: &mut Context<ScreenOwner>) -> Option<AnyElement> {
     if !body.parts() {
         return None;
     }
@@ -88,7 +88,7 @@ fn view_button(
     t: &Theme,
     body: &Pictures,
     (key, mode): (char, ImageMode),
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> AnyElement {
     let open = body.mode();
     let label = tr(mode.label());
@@ -207,7 +207,7 @@ fn mask(t: &Theme, body: &Pictures) -> AnyElement {
 
 /// The overlay: both pictures in one box, cut where the wipe sits. It is a slider for the
 /// keyboard and for assistive tools, and the pointer drags it.
-fn wipe(t: &Theme, body: &Pictures, cx: &mut Context<NavoWindow>) -> AnyElement {
+fn wipe(t: &Theme, body: &Pictures, cx: &mut Context<ScreenOwner>) -> AnyElement {
     div()
         .id("compare-image-wipe")
         .test_support()
@@ -235,7 +235,7 @@ fn wipe(t: &Theme, body: &Pictures, cx: &mut Context<NavoWindow>) -> AnyElement 
 }
 
 /// The wipe's drawing surface: it records where the pictures sit and answers the pointer.
-fn stage(t: &Theme, body: &Pictures, cx: &mut Context<NavoWindow>) -> AnyElement {
+fn stage(t: &Theme, body: &Pictures, cx: &mut Context<ScreenOwner>) -> AnyElement {
     let (left, right) = (body.picture(0), body.picture(1));
     let ((width, height), split) = (body.side_size().unwrap_or((0., 0.)), body.split());
     let (record, line) = (Rc::clone(&body.stage), t.colors.line);
@@ -269,7 +269,7 @@ fn stage(t: &Theme, body: &Pictures, cx: &mut Context<NavoWindow>) -> AnyElement
 }
 
 /// Wires the stage's pointer events to the wipe: press, drag, release inside or outside.
-fn pointer_events(stage: Stateful<Div>, cx: &mut Context<NavoWindow>) -> Stateful<Div> {
+fn pointer_events(stage: Stateful<Div>, cx: &mut Context<ScreenOwner>) -> Stateful<Div> {
     stage
         .on_mouse_down(
             MouseButton::Left,
@@ -339,7 +339,7 @@ fn cut(
 /// The file diff root's image keys: `1`..`3` open a view, the arrows and Home/End move the wipe.
 pub(in crate::window_view::compare_screen) fn image_keys(
     root: Stateful<Div>,
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> Stateful<Div> {
     root.on_key_down(cx.listener(|view, event: &KeyDownEvent, _, cx| {
         if event.keystroke.modifiers.modified() {

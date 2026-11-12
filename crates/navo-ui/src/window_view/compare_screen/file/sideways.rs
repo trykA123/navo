@@ -5,7 +5,7 @@
 use gpui_kit::Stateful;
 
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::{ScrollLeft, ScrollRight};
 
 pub(in crate::window_view::compare_screen::file) use crate::window_view::compare_screen::sideways::{
@@ -17,7 +17,7 @@ pub(in crate::window_view) use crate::window_view::compare_screen::sideways::Sid
 /// How many columns Left or Right moves the text, as in the viewer (F3).
 const KEY_COLS: f32 = 8.;
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Moves the open text body sideways by `cols` columns and redraws: the text view when it
     /// shows, else the large body the host draws — open, or held by a bytes switch (W8j2);
     /// with neither open the key goes on to the next handler.

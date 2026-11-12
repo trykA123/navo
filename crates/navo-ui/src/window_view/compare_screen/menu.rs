@@ -12,7 +12,7 @@ use crate::compare_diff::Layout;
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
 use crate::tokens;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::{MenuEntry, ViewCustom, ViewRich, ViewSimple, viewer_menu};
 
 gpui_kit::actions!(
@@ -107,7 +107,7 @@ pub(in crate::window_view) fn entries(
     items
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Registers the actions the View menu runs on the file diff or the Stream root.
     pub(super) fn look_actions(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &ViewMenu, window, cx| {

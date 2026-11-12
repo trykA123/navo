@@ -9,7 +9,7 @@ use super::LargeShown;
 use crate::compare_diff::PairControl;
 use crate::prelude::*;
 use crate::tokens;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::{GoEnd, GoStart, PageDown, PageUp, RowDown, RowUp};
 
 impl LargeShown {
@@ -96,7 +96,7 @@ impl FileScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Runs `step` on the open large body, then asks for the lines now in view. With no large
     /// body the key goes on, so other file bodies and the list of changes still get it.
     fn with_large(&mut self, step: impl FnOnce(&mut LargeShown), cx: &mut Context<Self>) {

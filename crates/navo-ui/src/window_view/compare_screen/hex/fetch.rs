@@ -14,7 +14,7 @@ use super::HexView;
 use super::hex_rows::{RowAt, RowSpan};
 use crate::compare_diff::PairRequest;
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// How many cached spans trigger an eviction; the shown rows and the viewport at the current top are kept.
 pub(super) const CACHE_LIMIT: usize = 4096;
@@ -257,7 +257,7 @@ impl HexView {
     pub(in crate::window_view::compare_screen) fn request_later(
         &self,
         window: &Window,
-        cx: &mut Context<NavoWindow>,
+        cx: &mut Context<ScreenOwner>,
     ) {
         let weak = cx.weak_entity();
         window.defer(cx, move |window, cx| {

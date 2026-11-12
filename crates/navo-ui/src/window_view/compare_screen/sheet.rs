@@ -17,7 +17,7 @@ use crate::compare_diff::{
 };
 use crate::format;
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use rows::{gather, ordered, totals};
 pub(super) use view::buttons;
 
@@ -65,7 +65,7 @@ impl SheetState {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds Ctrl+Shift+← and Ctrl+Shift+→ (copy all matches) on the Stream's `root`.
     pub(super) fn sheet_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &CopyAllLeft, _, cx| {
@@ -255,7 +255,7 @@ impl NavoWindow {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// The open sheet's lines, or `None` while it is closed.
     pub(in crate::window_view) fn sheet_lines(&self) -> Option<Vec<String>> {
         let Phase::Asking { direction, rows } = &self.compare.diff.sheet.phase else {

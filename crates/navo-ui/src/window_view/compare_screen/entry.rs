@@ -11,7 +11,7 @@ use crate::browser::{CompareMode, FileDiffRequest};
 use crate::commands::compare::{NextFile, OpenFile, PreviousFile};
 use crate::compare_diff::{PairRequest, StreamList, is_stream_item, stream_items};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The shortest time between two rebuilds of the items while the compare still runs.
 const RESYNC: Duration = Duration::from_millis(500);
@@ -145,7 +145,7 @@ impl StreamScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Rebuilds the Stream's items when the compare's rows changed since they were built: at
     /// once for a new compare generation or a finished compare, else at most once per 500 ms,
     /// with a timer for a batch that came too soon. Returns whether the items changed.

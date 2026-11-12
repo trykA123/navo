@@ -11,7 +11,7 @@ use gpui_kit::component::theme::Theme as KitTheme;
 use crate::compare_diff::PairText;
 use crate::compare_diff::body::{PairSyntax, parse_side};
 use crate::prelude::*;
-use crate::window_view::{EDIT_LIMIT, NavoWindow};
+use crate::window_view::{EDIT_LIMIT, ScreenOwner};
 
 /// The parse of one opened text: not started, running (its task), or done.
 #[derive(Default)]
@@ -55,7 +55,7 @@ fn parse_pair(path: &str, text: &PairText) -> PairSyntax {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Starts the open text pair's syntax parse on a background thread, once per opened text.
     /// When it ends, the rows redraw in colour if that same text is still open.
     pub(in crate::window_view::compare_screen) fn start_file_syntax(
@@ -103,7 +103,7 @@ impl NavoWindow {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// The open file view's parsed pair, once its background parse ended.
     pub(in crate::window_view) fn file_syntax(&self) -> Option<Rc<PairSyntax>> {
         self.syntax_slot()?.ready.clone()

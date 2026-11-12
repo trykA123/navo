@@ -21,7 +21,7 @@ use crate::compare_diff::{OnBytesHere, ShownRow};
 use crate::prelude::*;
 use crate::primitives::VirtualList;
 use crate::tokens;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// Everything the list's rows closure holds between frames.
 struct ListRows {
@@ -32,7 +32,7 @@ struct ListRows {
     current: Option<u32>,
     digits: usize,
     on_long: OnBytesHere,
-    click: WeakEntity<NavoWindow>,
+    click: WeakEntity<ScreenOwner>,
     /// The sideways offset every row's text is cut by; the first row carries its probe.
     sideways: SidewaysHandle,
 }
@@ -82,7 +82,7 @@ impl LargeShown {
     /// never the pair control.
     pub(in crate::window_view::compare_screen) fn list(
         &self,
-        weak: &WeakEntity<NavoWindow>,
+        weak: &WeakEntity<ScreenOwner>,
         cx: &App,
     ) -> AnyElement {
         let row_height = tokens::current(cx).spacing.row_height;

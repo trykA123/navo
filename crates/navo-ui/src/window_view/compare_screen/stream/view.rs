@@ -13,7 +13,7 @@ use crate::compare_diff::{CardCtx, StreamRow, stream_row_view};
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName, icon};
 use crate::tokens::{self, Theme};
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The key context of the Stream (D27).
 const CONTEXT: &str = "CompareStream";
@@ -125,7 +125,7 @@ fn status_line(t: &Theme, stream: &StreamScreen, note: Option<&Note>) -> Div {
 }
 
 /// One list row: the card row at `at`, inset, with a gap above each card but the first.
-fn row(weak: &WeakEntity<NavoWindow>, at: usize, cx: &App) -> AnyElement {
+fn row(weak: &WeakEntity<ScreenOwner>, at: usize, cx: &App) -> AnyElement {
     let Some(view) = weak.upgrade() else {
         return div().into_any_element();
     };
@@ -182,7 +182,7 @@ fn body(
     t: &Theme,
     state: &ListState,
     empty: Option<SharedString>,
-    weak: WeakEntity<NavoWindow>,
+    weak: WeakEntity<ScreenOwner>,
 ) -> Div {
     let area = div()
         .id("compare-stream-rows")
@@ -212,7 +212,7 @@ fn body(
         .child(area.child(rows))
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The Stream in place of the panes, or `None` when none is open.
     pub(in crate::window_view) fn stream_view(
         &mut self,

@@ -3,7 +3,7 @@
 
 use crate::compare_diff::ShownKind;
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::compare_screen::SidewaysSeen;
 
 /// What a test reads of the large body.
@@ -22,7 +22,7 @@ pub(in crate::window_view) struct LargeProbe {
 /// One side's line number and text, or none.
 type Line = Option<(u64, String)>;
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The open large body's row count, top row and status line.
     pub(in crate::window_view) fn large_probe(&self) -> Option<LargeProbe> {
         let large = self

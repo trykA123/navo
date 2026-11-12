@@ -9,9 +9,9 @@ use super::hex::HexProbe;
 use super::{FileState, look};
 use crate::compare_diff::PairRequest;
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The open file screen's request and state, for tests.
     pub(in crate::window_view) fn file_screen(&self) -> Option<(&PairRequest, &FileState)> {
         let file = self.compare.screen.as_ref()?.file.as_ref()?;
@@ -81,7 +81,7 @@ impl NavoWindow {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The look and the open drawers (changes, details) of the open file diff.
     pub(in crate::window_view) fn file_look(&self) -> Option<(look::Look, bool, bool)> {
         let file = self.compare.screen.as_ref()?.file.as_ref()?;

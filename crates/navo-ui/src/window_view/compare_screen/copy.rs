@@ -14,7 +14,7 @@ use crate::compare_diff::{
     CopyChange, CopyDirection, CopyDone, CopyResult, CopySink, HunkView, PairKind, PairRequest,
 };
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 pub(super) use view::{FileBars, Note, note_view};
 
@@ -116,7 +116,7 @@ impl FileScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds Ctrl+Alt+← and Ctrl+Alt+→ (copy the current change) on a screen's `root`.
     pub(super) fn copy_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &CopyLeft, _, cx| {
@@ -285,7 +285,7 @@ impl NavoWindow {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// The last copy's note as text, whether it has Undo and whether it is an error.
     pub(in crate::window_view) fn copy_note(&self) -> Option<(String, bool, bool)> {
         let note = self.compare.diff.copy.note.as_ref()?;

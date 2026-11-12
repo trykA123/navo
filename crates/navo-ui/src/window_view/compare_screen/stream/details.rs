@@ -12,7 +12,7 @@ use crate::compare_diff::PairKind;
 use crate::compare_diff::card::kind_text;
 use crate::prelude::*;
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The lines of the drawer for the current file, or the empty note with no file.
 pub(super) fn lines(stream: &StreamScreen) -> Vec<String> {
@@ -50,7 +50,7 @@ pub(super) fn drawer(t: &Theme, stream: &StreamScreen) -> Option<AnyElement> {
     Some(drawer.into_any_element())
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds Ctrl+I (the details drawer) on the Stream's `root`.
     pub(super) fn stream_details_key(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &Details, _, cx| {
