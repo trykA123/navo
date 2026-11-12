@@ -150,7 +150,7 @@ fn hex_rig_reopen(
 /// Refreshes the open binary pair and delivers its second `Opened`; the reopen is started but
 /// never run here, as the test scheduler would block on the gate.
 fn refresh_hex(cx: &mut TestAppContext, rig: &Rig) {
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let sink = rig.diff.pair_sink();
     sink(DiffUpdate::Opened {
         request: 2,
@@ -236,8 +236,7 @@ fn open_hex(
 
 /// The current region, visible rows, row count, alignment and gap rows.
 pub(super) fn probe(cx: &mut TestAppContext, rig: &Rig) -> HexProbe {
-    rig.view
-        .update(cx, |view, _| view.file_hex_probe())
+    screen_update(&rig.view, cx, |view, _| view.file_hex_probe())
         .expect("the binary pair shows a hex body")
 }
 
@@ -317,10 +316,9 @@ fn label_at(bytes: &[u8], at: usize) -> String {
 
 /// How many rows the window shows.
 pub(super) fn visible(cx: &mut TestAppContext, rig: &Rig) -> usize {
-    cx.update_window(rig.window, |_, window, cx| {
-        rig.view.read(cx).file_hex_visible(window, cx)
+    screen_update_in(&rig.view, rig.window, cx, |view, window, cx| {
+        view.file_hex_visible(window, cx)
     })
-    .expect("window")
 }
 
 #[gpui_kit::test]
@@ -430,10 +428,10 @@ fn compare_screen_hex_scrolls_past_f32_row_precision(cx: &mut TestAppContext) {
         "the region's row is a count, not an f32 pixel"
     );
     let page = visible(cx, &rig);
-    let top = rig
-        .view
-        .update(cx, |view, _| view.file_hex_wheel(half as f64, page))
-        .expect("the hex body");
+    let top = screen_update(&rig.view, cx, |view, _| {
+        view.file_hex_wheel(half as f64, page)
+    })
+    .expect("the hex body");
     assert_eq!(top, target, "row 2^24 + 1 has no f32 value");
     assert_eq!(probe(cx, &rig).built.start, target);
 }
@@ -461,13 +459,10 @@ fn compare_screen_hex_drag_reaches_the_middle_and_the_end(cx: &mut TestAppContex
     open_hex(cx, &rig, &[], HexAlign::Offset);
     let max = 0x1_0000_0000usize / 16 - 24;
     let drag = |rig: &Rig, cx: &mut TestAppContext, fraction: f64| {
-        rig.view
-            .update(cx, |view, _| view.file_hex_set_drag(fraction));
-        cx.update_window(rig.window, |_, window, cx| {
-            rig.view
-                .update(cx, |view, cx| view.request_hex_rows(window, cx));
-        })
-        .expect("window");
+        screen_update(&rig.view, cx, |view, _| view.file_hex_set_drag(fraction));
+        screen_update_in(&rig.view, rig.window, cx, |view, window, cx| {
+            view.request_hex_rows(window, cx);
+        });
         probe(cx, rig).built.start
     };
     let middle = drag(&rig, cx, 0.5);
@@ -486,8 +481,7 @@ fn compare_screen_hex_keeps_fractional_wheel_rows(cx: &mut TestAppContext) {
     open_hex(cx, &rig, &[], HexAlign::Offset);
     let page = visible(cx, &rig);
     let top = |rig: &Rig, cx: &mut TestAppContext, rows| {
-        rig.view
-            .update(cx, |view, _| view.file_hex_wheel(rows, page))
+        screen_update(&rig.view, cx, |view, _| view.file_hex_wheel(rows, page))
             .expect("the hex body")
     };
     assert_eq!(top(&rig, cx, 0.4), 0);
@@ -500,7 +494,7 @@ fn compare_screen_hex_unfetched_rows_are_not_hatched(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let rig = hex_rig(cx, vec![0x11; 16], vec![0x22; 24]);
     open_hex(cx, &rig, &[(8..8, 8..16)], HexAlign::Content);
-    rig.view.update(cx, |view, _| view.file_hex_forget_rows());
+    screen_update(&rig.view, cx, |view, _| view.file_hex_forget_rows());
     draw_only(cx, &rig);
     assert!(!probe(cx, &rig).loaded[0], "the row is not fetched");
     assert!(
@@ -565,7 +559,7 @@ fn compare_screen_hex_refresh_drops_a_stale_open(cx: &mut TestAppContext) {
         text: None,
     });
     rig.view.update(cx, |view, cx| view.wake(cx));
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     gate.release();
     settle(cx, &rig.view);
     assert!(
@@ -631,7 +625,7 @@ fn compare_screen_hex_refresh_keeps_the_user_alignment(cx: &mut TestAppContext) 
     let rig = hex_rig(cx, vec![0x11; 64], vec![0x22; 64]);
     open_hex(cx, &rig, &[], HexAlign::Offset);
     rig.dispatch(cx, &AlignContent);
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let sink = rig.diff.pair_sink();
     rig.push(
         cx,
@@ -690,7 +684,7 @@ fn compare_screen_hex_opens_once_across_wakes(cx: &mut TestAppContext) {
     let shown = probe(cx, &rig);
     assert_eq!(shown.regions, 2);
     assert!(shown.loaded[0], "a later update keeps the fetched rows");
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     rig.push(
         cx,
         &sink,
@@ -730,7 +724,7 @@ fn compare_screen_hex_drops_bytes_that_arrive_before_the_reopen_asks(cx: &mut Te
     let _shown = crate::compare_visible::show_compare();
     let rig = hex_rig(cx, vec![0x11; 64], vec![0x22; 64]);
     open_hex(cx, &rig, &[(0x10..0x14, 0x10..0x14)], HexAlign::Offset);
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let sink = rig.diff.pair_sink();
     sink(DiffUpdate::Opened {
         request: 2,
@@ -757,7 +751,7 @@ fn compare_screen_hex_alignment_toggled_during_the_reopen_keeps_its_regions(
     let _shown = crate::compare_visible::show_compare();
     let rig = hex_rig(cx, vec![0x11; 64], vec![0x22; 64]);
     open_hex(cx, &rig, &[], HexAlign::Offset);
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let sink = rig.diff.pair_sink();
     sink(DiffUpdate::Opened {
         request: 2,
@@ -765,8 +759,9 @@ fn compare_screen_hex_alignment_toggled_during_the_reopen_keeps_its_regions(
         text: None,
     });
     rig.view.update(cx, |view, cx| view.wake(cx));
-    rig.view
-        .update(cx, |view, _| view.file_hex_set_align(HexAlign::Content));
+    screen_update(&rig.view, cx, |view, _| {
+        view.file_hex_set_align(HexAlign::Content)
+    });
     sink(snapshot(
         (2, 2),
         HexAlign::Content,

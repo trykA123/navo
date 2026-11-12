@@ -1,3 +1,5 @@
+//! Tracks pane chrome and forwards viewport changes to the compare screen.
+
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -92,11 +94,12 @@ impl NavoWindow {
         }
     }
 
+    /// Updates pane chrome and the compare layout when the window viewport changes.
     pub(super) fn viewport_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let viewport = window.viewport_size();
         if viewport != self.chrome.viewport {
             self.chrome.viewport = viewport;
-            self.host_follow_window(window);
+            self.host_follow_window(window, cx);
             for chrome in self.chrome.panes.values() {
                 chrome.list_width.set(None);
             }

@@ -8,14 +8,15 @@ use std::sync::Arc;
 
 use navo_core::{Command, Direction, PaneId};
 
-use super::NavoWindow;
-use super::compare_screen::{DiffSlot, ScreenStack};
+use super::compare_screen::{CompareScreen, DiffSlot};
+use super::{FileHooks, NavoWindow, OpenHooks};
 use crate::FocusHandle;
-use crate::browser::{RowView, Waker, bar_view, empty_text, pane_rows};
-use crate::compare_diff::DiffHooks;
+use crate::browser::{RowView, bar_view, empty_text, pane_rows};
+use crate::compare_diff::CompareOptions;
 use crate::compare_list::{BarEvent, CompareBar, CompareEvent, CompareList};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
+use crate::settings::Values;
 use gpui_kit::EntityId;
 
 /// The rows built for one run and revision, so a frame does not rebuild 66,000 of them.
@@ -34,22 +35,30 @@ pub(super) struct CompareView {
     map: Option<map::MapMount>,
     scrolled_to: Option<String>,
     /// The file diff and Stream drawn in place of the panes, when open.
-    pub(super) screen: Option<ScreenStack>,
-    /// The app's diff hooks and the inbox of their updates.
-    pub(super) diff: DiffSlot,
+    pub(super) screen: Entity<CompareScreen>,
 }
 
 impl CompareView {
-    /// Empty compare state over the app's diff `hooks` (none until wired); `wake` wakes the window.
-    pub(super) fn new(hooks: Option<Arc<dyn DiffHooks>>, wake: Waker) -> Self {
+    /// Creates the screen from startup hooks and values, then subscribes its window to events.
+    pub(super) fn new(
+        (open, files, values): (&OpenHooks, &FileHooks, &Values),
+        window: &mut Window,
+        cx: &mut Context<NavoWindow>,
+    ) -> Self {
+        let diff = DiffSlot::new(open.diff.clone(), NavoWindow::waker(cx));
+        let screen = cx
+            .new(|_| CompareScreen::new(diff, CompareOptions::from_values(values), files.clone()));
+        cx.subscribe_in(&screen, window, |view, _, event, window, cx| {
+            view.on_screen_event(event, Some(window), cx);
+        })
+        .detach();
         Self {
             scroll: ListScroll::default(),
             painted_offset: Rc::default(),
             built: None,
             map: None,
             scrolled_to: None,
-            screen: None,
-            diff: DiffSlot::new(hooks, wake),
+            screen,
         }
     }
 }

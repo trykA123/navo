@@ -1,8 +1,11 @@
+//! Saves settings and pushes applied values into the window and its compare screen.
+
 use std::sync::Arc;
 
 use super::NavoWindow;
 use crate::app_menu::Setting;
 use crate::browser::Browser;
+use crate::compare_diff::CompareOptions;
 use crate::prelude::*;
 use crate::settings::{Change, Field, Values};
 
@@ -148,8 +151,12 @@ pub(super) fn steer(values: &Values, browser: &mut Browser) {
 }
 
 impl NavoWindow {
+    /// Applies saved values to the browser, compare screen and window appearance.
     pub(super) fn set_values(&mut self, values: Values, window: &Window, cx: &mut App) {
         let old = std::mem::replace(&mut self.values, values);
+        self.compare.screen.update(cx, |screen, _| {
+            screen.set_options(CompareOptions::from_values(&self.values));
+        });
         let looks = |values: &Values| {
             (
                 values.theme(),

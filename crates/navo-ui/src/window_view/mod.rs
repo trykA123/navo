@@ -1,3 +1,5 @@
+//! The application window owns browser panes, shared chrome and subscribed screen entities.
+
 mod app_menu;
 mod cached_views;
 mod chrome_state;
@@ -270,11 +272,14 @@ pub struct NavoWindow {
 }
 
 impl NavoWindow {
+    /// Builds the window and its screen entities from startup hooks and saved settings.
     #[expect(clippy::too_many_lines, reason = "one field per window part")]
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let browser = Self::browser(&options, cx);
         let totals = options.search.folder_totals.clone();
         let (values, saver, settings) = Panel::split(options.settings, &options.search, cx);
+        let compare =
+            compare_view::CompareView::new((&options.open, &options.files, &values), window, cx);
         let view = Self {
             browser,
             focus: HashMap::new(),
@@ -329,7 +334,7 @@ impl NavoWindow {
             multi_rename: multi_rename::MultiRenameState::default(),
             start: options.start_watch.map(start_watch::Watching::built),
             chrome: chrome_state::Chromes::default(),
-            compare: compare_view::CompareView::new(options.open.diff.clone(), Self::waker(cx)),
+            compare,
             cached: cached_views::CachedViews::new(cx),
             git_badges: git_badges::GitBadgeStore::new(options.git, cx),
             git_menu: git_menu::GitMenuState::new(cx),
