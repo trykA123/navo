@@ -1,3 +1,5 @@
+//! Maintains file sizes and folder aggregates for full name tables.
+
 use serde::{Deserialize, Serialize};
 
 use super::{Flags, NO_PARENT, NameTable, StoredFlags, TableError};
@@ -10,15 +12,21 @@ pub struct Totals {
 }
 
 impl NameTable {
+    /// Returns live entry bytes, or None when the ID or retained size column is absent.
     pub fn size(&self, id: u32) -> Option<u64> {
-        self.is_live(id).then(|| self.bytes[id as usize])
+        self.bytes
+            .get(id as usize)
+            .filter(|_| self.is_live(id))
+            .copied()
     }
 
+    /// Returns live folder aggregates, or None when the folder or totals are absent.
     pub fn totals(&self, id: u32) -> Option<Totals> {
+        let bytes = self.size(id)?;
         self.flags(id)?.contains(Flags::FOLDER).then(|| {
             let [files, folders] = self.folder_counts(id);
             Totals {
-                bytes: self.bytes[id as usize],
+                bytes,
                 files,
                 folders,
             }
