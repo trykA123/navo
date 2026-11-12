@@ -1,27 +1,29 @@
 # Navo roadmap
 
-Updated 9 November 2026. This document tracks current implementation status. The [original visual outline](../design/roadmap.html) shows the milestone scope. Scope and priority decisions are in [decisions.md](decisions.md), especially D85 and D106. Plain-language specs are in [features/](features/).
+Updated 12 November 2026. This document tracks current implementation status. The [original visual outline](../design/roadmap.html) shows the milestone scope. Scope and priority decisions are in [decisions.md](decisions.md), especially D85 and D106. Plain-language specs are in [features/](features/).
 
 Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versions; a feature release increments the minor version. Windows packages are on [GitHub releases](https://github.com/trykA123/navo/releases).
 
-## Where we are · 9 November 2026
+## Where we are · 12 November 2026
 
 - **Alpha:** done. Signed off on 4 November and released as v0.2.0.
 - **Beta:** about three quarters done. Workspaces, tiled panes, clipboard history, the new layout and fonts, and user commands are finished. Still open:
-  - **Search index memory:** the index service peaked near 800 MB on a real PC (owner, v0.3.0). The audited causes were already fixed in 0.3.0; the owner retests on 0.4.1, then a real-drive measurement decides the fix.
+  - **Index service memory:** the owner's measurement on a real drive is still open. The `blocked_peak` line in `index-service.log` decides the fix. v0.7.0 already stops the app walking a drive the service indexes and cuts the folder-refresh peak.
   - **Delete safety net:** on by default and working; a final review and the help text remain.
   - **Find files:** content search and the results tab work; the results tab's final look and hit lines get a design round.
   - **Accessibility:** the basics are in; polish remains.
   - **Background work that never waits** (job priorities, folder sizes that cancel): not started.
   - **Validation:** the heavy Windows benchmark and the long daily-use check for lost files.
 - **v1.0:** started.
-  - **Compare and sync:** folder compare in the panes is shipped; the sync engine and its safe copy plan are built. A second design round for the full Beyond Compare-class experience (file diff, copying changes, hex and image compare, sync) runs now; building the chosen direction follows.
-  - **Installer wizard:** part 1 (the engine: folder checks, install, upgrade, shortcuts, DLL guard, scripted install) is built and passes every VM table. The wizard window is built: pages, keyboard access keys, an editable folder field, a safe Close and Back. Next: the release pipeline for the wizard, then the full VM pass of every page.
-  - **Native crash reports:** a separate crash-reporter process now writes a small crash dump and a readable summary, and keeps only the newest two dumps. Next: the Windows crash tests.
-  - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt when the service changes) runs on 0.4.1.
-  - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, and the module registry.
-- **Order after the current work (owner, 9 November):** index service memory, speed checks that fail the build, the mimalloc trial, background work that never waits, then smarter search. Accessibility is required for v1.0.
-- **Latest release:** v0.4.1 (Git no longer blocks renaming repository folders; SQLite security update), published after its Windows VM check.
+  - **Compare:** v0.7.0 ships readable compare. The gutter between the folder panes names each row's result, the newer side carries a ▲ mark, and a change map shows where the folder differs. Changed lines are coloured and changed words are filled. The file diff and the Stream draw syntax colours. Sideways scroll keeps both sides level, Alt+Z wraps the file diff and the Stream, and Alt+↓ and the change map centre a change. Binary pairs open as a hex diff, and Alt+V switches Text and Bytes. Stream cards cover large, binary and image pairs. The sync plan engine is built; the sync screen is not.
+  - **Compare follow-ups:** the V42 Windows VM proof left five. Shift+J far down a fresh folder Stream leaves the focused card below the view. PageDown is not bound in the Stream. At 200 % scale, diff rows touch and the Settings popover is clipped. Content jumps while placeholders fill. The hex ASCII column uses the proportional font.
+  - **Installer wizard:** released in v0.7.0. `Navo-Setup.exe` walks five pages, installs for one user and never asks for administrator rights. Setup protects the install folder, warns instead of refusing when a parent folder is open to other users (IW-D16), and installs silently on request.
+  - **Native crash reports:** built. An out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
+  - **Speed checks that fail the build:** done. Benches measure the hot paths, `perf/speed.toml` holds the speed gate, and a release waits for that gate. Tracy zones are in.
+  - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt) is still open.
+  - **Not started:** code signing, dragging files from Navo into other apps, Navo as the default file manager, the inspector with previews and archives as folders, the module registry, the mimalloc trial, background work that never waits, and smarter search.
+- **Order after the current work (owner, 12 November):** index service memory, the mimalloc trial, background work that never waits, then smarter search. Speed checks are done, so they leave the order. Accessibility is required for v1.0.
+- **Latest release:** v0.7.0 (readable compare, the installer wizard, index fixes, natural sort, the MIT or Apache-2.0 licence), published on 12 November 2026 after its Windows VM checks.
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
@@ -104,14 +106,65 @@ Windows VM checks, host gates, snapshot compatibility checks and release search 
 | Git stops before file operations | Rename, delete and move of a folder pause Navo's own Git reads in it and end them first, so Windows no longer reports the folder in use. A fetch, Pull or Push is never stopped: Navo waits up to 3 s, then reports the folder locked by `git.exe`. | [Git-stop plan](../plans/2026-11-09-git-stop-before-fileops.md) |
 | SQLite security update | rusqlite 0.41.1 bundles SQLite 3.54.1, which fixes RUSTSEC-2026-0459. | `cargo deny`, `cargo audit` |
 
+## Release scope · v0.5.0
+
+| Change | Completed behavior | Evidence |
+| --- | --- | --- |
+| Full-window file diff | Enter on a file pair opens its diff in the full window: the two files side by side, or one column in a narrow window. Alt+↓ and Alt+↑ (F7 and Shift+F7) move to the next and previous change. Esc returns to the folders with the file selected. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Change map and changed words | A map down the right edge marks every change, and a click jumps to it. The Rich look highlights the words that changed inside a line. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| View menu and panels | Alt+V picks Simple or Rich, side by side or one column, changed words and the change map. Ctrl+B lists the changes; Ctrl+I shows each file's encoding and line endings. Both panels start closed. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| The Stream | Alt+F opens one card per file under the compared folder, in path order. J and K move between changes across files, Shift+J and Shift+K between files, O folds a card, and Enter opens the file at that change. Ctrl+B opens an outline grouped by folder; Ctrl+Alt+↓ and Ctrl+Alt+↑ move to the next and previous file. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Viewed marks | V marks a file as Viewed and moves on; a bar at the bottom counts the viewed files. Marks are kept by file content, so they survive a refresh and a restart. A file that changes again shows as not viewed. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Stream memory | Cards near the view are built first and stay within a quarter of the memory budget in Settings. Cards far from the view are rebuilt when you come back to them. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+
+Binary files, images and text files over 64 MiB show a short summary card; F3 opens them in the viewer. Copying changes comes in v0.6.0.
+
+## Release scope · v0.6.0
+
+| Change | Completed behavior | Evidence |
+| --- | --- | --- |
+| Copy a change to the other side | Ctrl+Alt+← and Ctrl+Alt+→ copy the current change; a bar on hover offers the same. The change then says "Copied to the right · Undo", and Ctrl+Z puts the file back byte for byte. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Safe copy | A file that changed after Navo showed it refuses the copy with "Changed since shown" and reloads. A Git or read-only side says why it cannot be written. Copies use the same safe save as other file jobs: they show in the job list and can be undone from Undo. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Search the Stream | `/` narrows the cards to the files and changes whose changed lines or path contain the text, and the outline shows hit counts. J and K move between matches only, and Esc clears the search. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Copy all matches as one job | With a search active, Ctrl+Shift+← and Ctrl+Shift+→ (or "Copy all N") open a plan sheet. It lists each file, its matching changes and anything that cannot be copied. Enter copies them all as one job, and one Ctrl+Z undoes every file. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Pick lines of a change | Shift+↑, Shift+↓, Space, the tick boxes on hover or Shift+click pick lines on one side; Ctrl+Alt+← or → then copies just those. Ctrl+Shift+Del removes the picked lines of a one-sided change. Esc clears the pick. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+| Line context menu | Right-click on a line of the diff or the Stream opens every action for that line and its key. Shift+F10 and the Menu key open it under the cursor. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part V |
+
+Also fixed: Git badges no longer blink when a recheck finds an unchanged repository. Binary files, images and text files over 64 MiB still show a summary card; image compare comes in a later version.
+
+## Release scope · v0.7.0
+
+| Change | Completed behavior | Evidence |
+| --- | --- | --- |
+| Readable folder compare | A gutter between the panes names each row's result: changed, only on one side, or "3 inside" for a folder with differences below it. The newer side shows its size and date in bold with a ▲ mark. A change map marks where the whole folder differs. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part W |
+| Readable file diff | Changed lines carry a colour and an edge bar, and changed words carry a stronger fill. The file diff and the Stream draw syntax colours; a very large file stays plain. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part W |
+| Long lines | Both sides scroll sideways together, so matching text stays level. Alt+Z wraps the file diff and the Stream. Alt+↓ and a click on the change map put the change in the middle of the screen. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part W |
+| Hex diff and Stream cards | Binary pairs open as a hex diff, and Alt+V switches Text and Bytes. Stream cards cover large, binary and image pairs. | [Compare plan](../plans/2026-10-20-p42-compare.md), Part W |
+| Installer wizard | `Navo-Setup.exe` walks five pages, installs for one user and never asks for administrator rights. Setup protects the install folder, warns instead of refusing for an open parent folder (IW-D16), and `--silent` installs without a window. | [Installer wizard plan](../plans/2026-11-09-installer-wizard-ui.md) |
+| Index fixes and natural sort | The app leaves a drive to the service that already indexes it (IXM1). A folder refresh peaks at much less memory (IXM2, 3.77× → 2.51×). Names with numbers sort as you read them: `file2` before `file10`. | [v0.7.0 notes](../CHANGELOG.md); R1 in the [research picks](../plans/2026-11-10-research-picks.md) |
+
+Also included: the MIT or Apache-2.0 licence, speed checks that fail the build (benches, the speed gate in `perf/speed.toml`, a release that waits for the gate), Tracy zones, native crash reports (an out-of-process crash server writes a minidump and a readable summary), and Git and SQLite library updates.
+
+**Not in this release**
+
+- The sync screen. The plan engine is built; the screen is not.
+- The compare follow-ups from the V42 VM proof, listed under Active work.
+- Code signing. Setup is not signed, so Windows may warn.
+- Dragging files from Navo into other apps.
+- The owner's real-drive index measurement and the owner's real-PC update check.
+- The Windows crash tests.
+- Background work that never waits, the mimalloc trial and smarter search: not started. The delete safety net review, the Find files design round and accessibility polish are also open.
+
 ## Active work
 
-- **In-app update validation:** the nine-case update suite and the index-service checks passed in the Windows VM; the update spec is written ([updates](features/updates.md)). Still open: the owner updates a real PC from 0.3.0 to 0.4.1 and confirms exactly one admin prompt, `navo-index.exe` in Task Manager, and none on the next starts. See the [beta plan](../plans/2026-10-27-beta.md).
-- **Installer wizard, part 1:** folder checks, holding the chosen folder, the package, Velopack's install and upgrade, and removing unticked shortcuts the DLL-planting guard and the scripted install (`--silent` with an exit code per outcome) are built and pass in the Windows VM, including the five VM test tables. Part 2 is the wizard screens. See the [installer plan](../plans/2026-11-09-installer-wizard.md).
-- **Index service memory:** the owner saw peaks near 800 MB in the service on v0.3.0. The three causes the memory audit named were already fixed in v0.3.0, so the real cause is open. Next: the owner's numbers on 0.4.1, then a peak measurement on a real drive, then a fix plan.
-- **Compare and sync:** folder compare is shipped: two folders, or a folder and a Git revision, side by side with differences marked. The engine handles large files, text differences, Git revisions and a safe sync plan. A design round for the full file diff, copy and sync experience runs now; see the [compare plan](../plans/2026-10-20-p42-compare.md).
+- **In-app update validation:** the nine-case update suite and the index-service checks passed in the Windows VM; the update spec is written ([updates](features/updates.md)). Still open: the owner's real-PC update check. He confirms exactly one admin prompt when the service changes, `navo-index.exe` in Task Manager, and none on the next starts. See the [beta plan](../plans/2026-10-27-beta.md).
+- **Index service memory:** the service's peak on a real drive is still unmeasured. v0.7.0 stops the app walking a drive the service indexes (IXM1) and cuts the folder-refresh peak (IXM2, 3.77× → 2.51×). Next: the owner's `blocked_peak` line in `index-service.log`, then a fix plan.
+- **Compare and sync:** readable compare shipped in v0.7.0. The sync plan engine is built; the sync screen remains. The V42 Windows VM proof left follow-ups: Shift+J far down a fresh folder Stream leaves the focused card below the view; PageDown is not bound in the Stream; at 200 % scale, diff rows touch and the Settings popover is clipped; content jumps while placeholders fill; the hex ASCII column uses the proportional font. See the [compare plan](../plans/2026-10-20-p42-compare.md).
+- **Native crash reports:** an out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
+- **Code signing:** Setup is not signed, so Windows may warn about the file.
+- **Drag out:** dragging files from Navo into other apps does not work yet.
 - **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
-- **Beta completion:** finish results-pane appearance and hit lines, background job work and accessibility follow-up, in the priority order below.
+- **Beta completion:** the results-tab design round, the delete safety net review and help text, and accessibility polish. Background work that never waits is not started.
 
 ### Validation still to finish
 
@@ -138,30 +191,30 @@ Done earlier in the beta: responsive layout and new fonts (D80), clone a tab int
 
 Exit: no open data-safety bugs; start-up and memory targets met in CI.
 
-## v1.0
+## v1.0 · in progress
 
 Replaces Total Commander for daily work (D39). Parity features are built to beat TC, not copy it.
 
-1. core: compare and sync, better than Beyond Compare where it counts (D40). Folder compare in the panes and the sync plan engine are done; the sync screen remains. Scope: folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `navo-compare` crate.
-2. infra: code signing, full installer/update validation, the soak test and steadier Windows tests. The Velopack installer, portable package, user guide, in-app updater, tester feed and nine-case update suite are done (D89 supersedes D73). The installer wizard is built and passes its Windows test machine cases, but it is not released: v0.7.0 waits for it (see [install](features/install.md)). Code signing, the soak test and the owner's real-PC update check remain. The uninstaller includes index-service removal.
+1. core: compare and sync, better than Beyond Compare where it counts (D40). Folder compare in the panes, the readable file diff, the Stream, the hex diff and the sync plan engine are done; the sync screen remains. Scope: folder compare in the panes, a calm full-window look with a change map on each scroller (chosen), sync as a plan with undo, cached BLAKE3 hashes, syntax-aware text diff, paged diff for huge and binary files, image compare; engine in the shared `navo-compare` crate.
+2. infra: code signing, full installer/update validation, the soak test and steadier Windows tests. The Velopack installer, portable package, user guide, in-app updater, tester feed and nine-case update suite are done (D89 supersedes D73). The installer wizard is released in v0.7.0 (see [install](features/install.md)). Code signing, the soak test and the owner's real-PC update check remain. The uninstaller includes index-service removal.
 3. core: optional default file manager (Win+E).
 4. core: inspector column with preview and properties, thumbnails, archives as folders (zip, 7z, tar with gz, xz and zst). File details, owner and hashes are done.
 5. core: module registry with runtime on/off and safe mode; settings window generated from module schemas; notifications for long operations. Then the automotive viewers move into one module (D112).
 
 Exit: every target is met on a clean Windows 11 machine, and a week of work runs without opening Total Commander.
 
-## v1.1 · See and find
+## v1.1 · See and find · planned
 
 - module: auto switch view.
 - package: language packages for the F3 viewer (D38).
 - core: checksums (BLAKE3, SHA-256, SHA-1, MD5) with verify; images in F3.
 - package: Total Commander keymap.
 
-## v1.2 · Git
+## v1.2 · Git · planned
 
 - module: the remaining Git history, diff and command workflows. Already built: repository badges, reuse of unchanged status, Alt+G or click menus for the chosen Git tool, fast-forward pull and an unforced push. A real Windows desktop follow-up remains.
 
-## v2.0 · Open platform
+## v2.0 · Open platform · planned
 
 - core: WASM plugins (versioned WIT API, permissions, sandbox); Lua scripting.
 - infra: plugin SDK, template, dev mode with hot reload.
@@ -177,7 +230,7 @@ Exit: every target is met on a clean Windows 11 machine, and a week of work runs
 
 Exit: a third-party plugin is built, installed and updated without touching Navo's code.
 
-## Later
+## Later · planned
 
 - Accepted ideas not yet in a plan: [ideas](ideas.md).
 - module: duplicates and disk usage.
