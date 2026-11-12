@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use gpui_kit::{Stateful, Task};
 
+use super::ScreenEvent;
 use super::stream::StreamScreen;
 use crate::browser::{CompareMode, FileDiffRequest};
 use crate::commands::compare::{NextFile, OpenFile, PreviousFile};
@@ -242,10 +243,10 @@ impl ScreenOwner {
         let next = match screen.stream.as_mut() {
             Some(stream) => stream.walk(step),
             None => {
-                let shown = screen.file.as_ref().map(|file| file.request.id);
-                let mode = self.browser.compare_mode();
-                mode.zip(shown)
-                    .and_then(|(mode, id)| neighbour(mode, id, step))
+                if let Some(id) = screen.file.as_ref().map(|file| file.request.id) {
+                    self.emit_screen(ScreenEvent::WalkFile { from: id, step }, Some(window), cx);
+                }
+                return;
             }
         };
         if let Some(request) = next {

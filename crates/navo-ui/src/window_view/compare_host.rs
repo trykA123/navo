@@ -3,7 +3,7 @@
 
 use super::FileHooks;
 use super::NavoWindow;
-use super::compare_screen::{ScreenEvent, items_of};
+use super::compare_screen::{ScreenEvent, items_of, neighbour};
 use crate::browser::FileDiffRequest;
 use crate::compare_diff::{CompareOptions, PairRequest};
 use crate::context_menu::ContextMenu;
@@ -87,8 +87,8 @@ impl ScreenOwner {
     }
 
     /// Handles one screen event: `Closed` reveals its path and gives focus back to the compare
-    /// pane, `OpenSettings` opens Settings at its field. `window` is `None` only for `Resync`
-    /// (N4f2).
+    /// pane, `OpenSettings` opens Settings at its field, `WalkFile` opens the folder compare's
+    /// next or previous file. `window` is `None` only for `Resync` (N4f2).
     pub(in crate::window_view) fn on_screen_event(
         &mut self,
         event: &ScreenEvent,
@@ -108,6 +108,18 @@ impl ScreenOwner {
             ScreenEvent::OpenSettings(field) => {
                 if let Some(window) = window {
                     self.open_settings_at(*field, window, cx);
+                }
+            }
+            ScreenEvent::WalkFile { from, step } => {
+                let Some(window) = window else {
+                    return;
+                };
+                let found = self
+                    .browser
+                    .compare_mode()
+                    .and_then(|mode| neighbour(mode, *from, *step));
+                if let Some(request) = found {
+                    self.show_pair((request, Some(0)), window, cx);
                 }
             }
         }
