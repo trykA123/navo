@@ -79,6 +79,20 @@ pub(super) const ALL_PAGES: [SetupPage; 13] = [
 ];
 
 #[test]
+fn the_installing_percent_and_phase_texts_load_from_the_bundle() {
+    let strings = Strings::load();
+    assert_eq!(strings.installing_percent.as_ref(), "{percent}%");
+    for text in [
+        &strings.installing_stage_preparing,
+        &strings.installing_stage_copying,
+        &strings.installing_stage_extracting,
+        &strings.installing_stage_finalizing,
+    ] {
+        assert!(!text.is_empty(), "a phase text must load from setup.ftl");
+    }
+}
+
+#[test]
 fn no_page_has_two_actions_on_one_letter() {
     let strings = Strings::load();
     for page in ALL_PAGES {
