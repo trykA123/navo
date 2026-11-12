@@ -73,11 +73,23 @@ pub enum SetupAction {
     CopyDetails,
 }
 
+/// The phase the installer's own log has reached.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SetupStage {
+    Preparing,
+    CopyingPackage,
+    Extracting,
+    Finalizing,
+}
+
 /// Runner timing in seconds through Duration, including its 180-second notice flag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SetupProgress {
     pub elapsed: Duration,
     pub still_working: bool,
+    /// The verified share of the work; `None` is the pulse, never a frozen 0 %.
+    pub percent: Option<u8>,
+    pub stage: Option<SetupStage>,
 }
 
 impl SetupProgress {
@@ -86,6 +98,17 @@ impl SetupProgress {
         Self {
             elapsed,
             still_working,
+            percent: None,
+            stage: None,
+        }
+    }
+
+    /// Adds one estimate; clearing the share while keeping the phase is the stalled-Finalizing pulse.
+    pub fn with_estimate(self, percent: Option<u8>, stage: Option<SetupStage>) -> Self {
+        Self {
+            percent,
+            stage,
+            ..self
         }
     }
 }
