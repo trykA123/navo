@@ -369,7 +369,7 @@ impl NavoWindow {
         if polled {
             self.drag_list_changed(cx);
         }
-        if self.poll_preview() | self.poll_compare_screen(cx) || polled {
+        if self.poll_preview() | self.host_poll(cx) || polled {
             cx.notify();
         }
         self.linger_ended(cx);
