@@ -2,6 +2,8 @@
 
 use super::*;
 
+use crate::placement::FolderWarning;
+
 /// Builds a validated file payload with the crate's package name and version.
 fn payload(root: &Path) -> Payload {
     let setup = root.join("input.exe");
@@ -104,6 +106,29 @@ fn a_successful_silent_run_returns_0() {
     });
     host.child_script.push_back(Some(0));
     assert_eq!(run_silent(&mut host, Some(payload)), ExitCode::SUCCESS);
+}
+
+/// An open parent lets a silent install succeed and records the warning in the wizard log.
+#[test]
+fn a_silent_install_with_an_open_parent_warns_and_succeeds() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = FakeHost::new();
+    host.parent_warning = Some(FolderWarning::ParentOpen);
+    host.discoveries
+        .extend([Ok(Discovery::default()), Ok(Discovery::default())]);
+    host.registry
+        .extend([Registry::Absent, Registry::NamesRoot]);
+    host.verified.push_back(Verified {
+        update_exe: true,
+        sq_version: Some(sq(VERSION)),
+    });
+    host.child_script.push_back(Some(0));
+    let (exit, text, _) = run_logged(&mut host, ROOT, dir.path());
+    assert_eq!(exit, ExitCode::SUCCESS, "{text}");
+    assert!(
+        text.contains(FolderWarning::ParentOpen.message()),
+        "{text:?}"
+    );
 }
 
 /// Each reachable IW17 failure maps to its documented exit code.

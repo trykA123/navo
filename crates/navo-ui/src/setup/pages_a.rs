@@ -157,7 +157,7 @@ fn path_field(c: &Ctx) -> AnyElement {
         .into_any_element()
 }
 
-/// Builds the space line and, when set, the problem line under the field.
+/// Builds the space line and, when set, the warning and problem lines under the field.
 fn status_lines(c: &Ctx) -> Div {
     let t = c.t;
     let space = space_line(c);
@@ -171,6 +171,19 @@ fn status_lines(c: &Ctx) -> Div {
             .text_color(t.colors.muted)
             .child(space),
     );
+    let lines = match &c.view.notice {
+        Some(warning) => lines.child(
+            div()
+                .id("folder-warning")
+                .role(Role::Status)
+                .aria_label(warning.clone())
+                .test_support()
+                .text_size(t.typography.small)
+                .text_color(t.colors.warn)
+                .child(warning.clone()),
+        ),
+        None => lines,
+    };
     let Some(problem) = &c.view.problem else {
         return lines;
     };

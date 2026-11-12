@@ -15,15 +15,35 @@ use crate::{
     host::Host,
     mode::{Mode, mode},
     payload::Payload,
-    placement,
+    placement::{self, FolderWarning},
     runner::{self, InstallError},
 };
+
+/// A silent host that can report a non-refusing warning for the chosen folder.
+pub trait CliHost: Host {
+    /// Returns the warning for `root`; off Windows the default has none.
+    fn parent_warning(&mut self, _root: &Path) -> Option<FolderWarning> {
+        None
+    }
+}
+
+/// Reads the real parent warning on Windows through the same chain and facts probe.
+#[cfg(windows)]
+impl CliHost for crate::host::WindowsHost {
+    /// Resolves the chain, reads its facts and returns the parent warning.
+    fn parent_warning(&mut self, root: &Path) -> Option<FolderWarning> {
+        let candidate = crate::syntax::parse_candidate(root.as_os_str()).ok()?;
+        let chain = crate::probe::chain::resolve_chain(&candidate).ok()?;
+        let facts = crate::probe::facts::facts(&chain).ok()?;
+        placement::warning(&facts)
+    }
+}
 
 /// Runs one parsed command and returns its IW17 exit code.
 pub fn run(
     args: &[OsString],
     payload: Option<Payload>,
-    host: Option<&mut dyn Host>,
+    host: Option<&mut dyn CliHost>,
     logs: &dyn Fn() -> io::Result<LogPaths>,
 ) -> ExitCode {
     let parsed = match parse(args) {
@@ -116,7 +136,12 @@ impl placement::NameEq for AsciiNames {
 }
 
 /// Runs one silent install through the runner and prints failures to stderr.
-fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPaths) -> ExitCode {
+fn silent(
+    options: &Silent,
+    payload: &Payload,
+    host: &mut dyn CliHost,
+    logs: &LogPaths,
+) -> ExitCode {
     match host.elevated() {
         Ok(false) => {}
         _ => return fail(&CliError::Elevated, logs),
@@ -141,6 +166,9 @@ fn silent(options: &Silent, payload: &Payload, host: &mut dyn Host, logs: &LogPa
         let line = "An upgrade keeps the existing shortcuts; --no-desktop and --no-start-menu have no effect.";
         eprintln!("navo-setup: {line}");
         write_log_line(&logs.wizard, &format!("navo-setup: {line}"));
+    }
+    if let Some(warning) = host.parent_warning(&root) {
+        write_log_line(&logs.wizard, &format!("navo-setup: {}", warning.message()));
     }
     let request = Request {
         mode: Box::new(found),

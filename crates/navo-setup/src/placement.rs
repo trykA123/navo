@@ -57,6 +57,20 @@ pub enum DriveKind {
     Other,
 }
 
+/// A condition worth telling the user about, but never a refusal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FolderWarning {
+    /// Another user can change an existing folder above the candidate.
+    ParentOpen,
+}
+
+impl FolderWarning {
+    /// One user-facing line saying why the folder is less safe and what is safer.
+    pub fn message(self) -> &'static str {
+        "Other people on this PC can change a folder above this one. Navo still works here, but a folder directly on a drive, such as C:\\Navo, is safer."
+    }
+}
+
 /// The drive facts read by W7b, before the candidate is created.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Facts {
@@ -124,9 +138,6 @@ pub fn check(
     if facts.subst {
         return Err(FolderProblem::SubstDrive);
     }
-    if facts.parent_open {
-        return Err(FolderProblem::ParentOpen);
-    }
     if !matches!(facts.drive, DriveKind::Fixed | DriveKind::Removable) {
         return Err(FolderProblem::DriveNotLocal);
     }
@@ -156,6 +167,11 @@ pub fn check(
         return Err(FolderProblem::ProtectedFolder);
     }
     Ok(())
+}
+
+/// Returns the warning for a checked folder, or `None` when nothing needs saying.
+pub fn warning(facts: &Facts) -> Option<FolderWarning> {
+    facts.parent_open.then_some(FolderWarning::ParentOpen)
 }
 
 /// Whether the candidate is at or below `protected`.

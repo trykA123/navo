@@ -129,6 +129,7 @@ mod parse_flags;
 mod run;
 pub use parse_flags::parse;
 
+pub(crate) use run::CliHost;
 #[cfg(windows)]
 pub(crate) use run::default_root;
 pub use run::run;
