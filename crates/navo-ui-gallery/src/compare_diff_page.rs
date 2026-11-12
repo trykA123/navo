@@ -83,6 +83,7 @@ fn card_list(t: &Theme, model: &StreamModel, layout: Layout) -> Div {
         layout,
         bars: None,
         syntax: None,
+        wrap: false,
     };
     let cards = (0..rows.len()).map(|at| {
         let first = matches!(rows[at], StreamRow::Header(_) | StreamRow::RulesGroup);
