@@ -75,6 +75,8 @@ impl Host {
             table: Arc::clone(&table),
             cancel: cancel.clone(),
             dirty: None,
+            rescan: Vec::new(),
+            retrying: false,
         };
         let worker_sender = sender.clone();
         let thread = thread::Builder::new()
@@ -120,6 +122,10 @@ struct Worker {
     slot: JobSlot,
     status: HostStatus,
     dirty: Option<Instant>,
+    /// Roots a merge could not finish, waiting for one more walk.
+    rescan: Vec<Location>,
+    /// Whether the running scan is that one more walk, so a second failure is not queued again.
+    retrying: bool,
 }
 
 impl Worker {
@@ -148,6 +154,7 @@ impl Worker {
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
             self.save_due();
+            self.scan_queued();
         }
         drop(watch);
         while let Ok(message) = self.events.try_recv() {

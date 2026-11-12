@@ -89,37 +89,59 @@ impl Worker {
         self.dirty = Some((self.clock)());
     }
 
+    /// Replaces the subtree at `root` with `walked`, freeing the old subtree before the append.
     fn merge_subtree(
-        &self,
+        &mut self,
         table: &mut NameTable,
         root: &Location,
         walked: &NameTable,
     ) -> Result<bool, String> {
         let old = self.find(table, root).ok_or("unknown index subtree")?;
-        let removed = table
-            .iter()
-            .filter(|(id, _)| {
-                std::iter::successors(Some(*id), |&id| table.parent(id))
-                    .take(table.slots() as usize)
-                    .any(|id| id == old)
-            })
-            .count();
-        if table.len() - removed + walked.len() > self.options.limits.max_entries {
+        if table.len() - subtree_len(table, old) + walked.len() > self.options.limits.max_entries {
             return Err("index entry limit reached".into());
         }
         let parent = table.parent(old).unwrap_or(NO_PARENT);
         let name = table.name(old).unwrap_or_default().to_owned();
         let flags = table.flags(old).unwrap_or(Flags::FOLDER);
-        let new = table
-            .push(parent, &name, flags)
-            .map_err(|error| error.to_string())?;
+        table.remove(old);
+        let parent = table.compact().get(parent).unwrap_or(NO_PARENT);
+        if let Err(error) = reserve_append(table, walked, &name) {
+            self.queue_rescan(root);
+            return Err(error);
+        }
+        let new = match table.push(parent, &name, flags) {
+            Ok(new) => new,
+            Err(error) => {
+                self.queue_rescan(root);
+                return Err(error.to_string());
+            }
+        };
         let appended = append_children(table, new, walked);
         if appended.is_err() || self.cancel.is_cancelled() {
             table.remove(new);
+            self.queue_rescan(root);
             return appended.map(|()| false);
         }
-        table.remove(old);
         Ok(true)
+    }
+
+    /// Leaves `root` for one more walk, unless this scan is already that walk.
+    fn queue_rescan(&mut self, root: &Location) {
+        if !self.retrying && !self.rescan.iter().any(|queued| queued.same_place(root)) {
+            self.rescan.push(root.clone());
+        }
+    }
+
+    /// Walks each queued root once; a second failure leaves it to the watcher.
+    pub(super) fn scan_queued(&mut self) {
+        if self.rescan.is_empty() {
+            return;
+        }
+        self.retrying = true;
+        for root in std::mem::take(&mut self.rescan) {
+            self.scan_root(&root);
+        }
+        self.retrying = false;
     }
 
     pub(super) fn update(&mut self, event: WatchEvent) {
@@ -265,6 +287,30 @@ fn compact_if_sparse(table: &mut NameTable) {
     }
 }
 
+/// Reserves the whole append while the table is still small, so no column is copied beside
+/// `walked`. The root name counts from both tables, so a differing one still fits.
+fn reserve_append(table: &mut NameTable, walked: &NameTable, name: &str) -> Result<(), String> {
+    table
+        .try_reserve_total(
+            table.len() + walked.len(),
+            table.folder_count() + walked.folder_count(),
+            table.live_name_bytes() + walked.live_name_bytes() + name.len() + 1,
+        )
+        .map_err(|error| format!("reserving index subtree: {error}"))
+}
+
+/// Live entries at or below `old`, for the limit check before the subtree goes.
+fn subtree_len(table: &NameTable, old: u32) -> usize {
+    table
+        .iter()
+        .filter(|(id, _)| {
+            std::iter::successors(Some(*id), |&id| table.parent(id))
+                .take(table.slots() as usize)
+                .any(|id| id == old)
+        })
+        .count()
+}
+
 fn append_children(table: &mut NameTable, root: u32, walked: &NameTable) -> Result<(), String> {
     let mut ids = vec![NO_PARENT; walked.slots() as usize];
     let Some(first) = ids.first_mut() else {
@@ -295,3 +341,7 @@ fn flags(entry: &FsEntry) -> Flags {
     .filter(|(set, _)| *set)
     .fold(Flags::NONE, |flags, (_, flag)| flags | flag)
 }
+
+#[cfg(test)]
+#[path = "merge_tests.rs"]
+mod merge_tests;

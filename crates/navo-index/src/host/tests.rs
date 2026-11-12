@@ -130,6 +130,7 @@ impl Rig {
 struct Generated {
     fs: Arc<FakeFs>,
     files: usize,
+    batch: usize,
     extra: Mutex<Vec<String>>,
 }
 
@@ -138,8 +139,15 @@ impl Generated {
         Self {
             fs,
             files,
+            batch: 16_384,
             extra: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Lists in `LocalFs`'s batches, so a peak measures the index and not the fixture's buffer.
+    fn with_batch(mut self, batch: usize) -> Self {
+        self.batch = batch;
+        self
     }
 
     fn add_folder(&self, name: &str) {
@@ -152,7 +160,7 @@ impl Generated {
         let total = self.files + extra.len();
         let mut sent = 0;
         while sent < total && !cancel.is_cancelled() {
-            let count = 16_384.min(total - sent);
+            let count = self.batch.min(total - sent);
             let entries = (sent..sent + count)
                 .map(|index| self.file_or_folder(index, &extra))
                 .collect();
@@ -670,4 +678,70 @@ fn host_refresh_timing() {
         walked >> 10
     );
     assert!(peak <= bound, "peak {peak} > bound {bound}");
+}
+
+#[test]
+#[expect(clippy::print_stdout, reason = "the peak report is the test output")]
+fn a_subtree_refresh_peaks_within_two_and_a_half_tables() {
+    use crate::heap_probe::Probe;
+
+    const FILES: usize = 60_000;
+    let rig = Rig::new();
+    rig.fs.add_folder("tree/big");
+    let provider = Arc::new(Generated::new(Arc::clone(&rig.fs), FILES).with_batch(512));
+    let host = rig.start_provider(provider.clone());
+    built(&host);
+    provider.add_folder("refresh-0");
+    refreshed(&host);
+    let before = host.table().read().unwrap().memory_bytes();
+
+    let probe = Probe::start();
+    provider.add_folder("refresh-1");
+    refreshed(&host);
+    let peak = before + probe.read().peak;
+    println!(
+        "subtree refresh: peak {} KiB, before {} KiB, ratio {:.3}",
+        peak >> 10,
+        before >> 10,
+        peak as f64 / before as f64
+    );
+    assert!(peak <= before * 5 / 2, "peak {peak} > {}", before * 5 / 2);
+}
+
+fn paths(table: &NameTable) -> HashSet<String> {
+    table
+        .iter()
+        .filter_map(|(id, _)| table.path_with(id, '/'))
+        .collect()
+}
+
+#[test]
+fn a_refreshed_subtree_keeps_every_nested_path_and_the_unrelated_branch() {
+    let rig = Rig::new();
+    rig.fs.add_file("tree/big/deep/old.txt", 1);
+    rig.fs.add_file("tree/keep/kept.txt", 1);
+    let host = rig.start();
+    built(&host);
+    rig.fs.add_folder("tree/big/added");
+    assert!(refreshed(&host).errors.is_empty());
+    let shared = host.table();
+    let table = shared.read().unwrap();
+    assert_eq!(
+        paths(&table),
+        HashSet::from([
+            "tree".to_owned(),
+            "tree/big".to_owned(),
+            "tree/big/added".to_owned(),
+            "tree/big/deep".to_owned(),
+            "tree/big/deep/old.txt".to_owned(),
+            "tree/keep".to_owned(),
+            "tree/keep/kept.txt".to_owned(),
+        ])
+    );
+    assert!(
+        table
+            .iter()
+            .all(|(id, _)| table.path_with(id, '/').is_some())
+    );
+    assert!(table.valid_structure());
 }
