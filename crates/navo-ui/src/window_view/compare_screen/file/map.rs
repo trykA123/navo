@@ -102,7 +102,7 @@ impl ScreenOwner {
         let file = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
         if let Some(view) = file.and_then(|file| file.view.as_mut()) {
             let item = view.list_row(row as usize);
-            view.scroll.scroll_to_center(item);
+            view.centre_item(item);
             cx.notify();
         }
     }

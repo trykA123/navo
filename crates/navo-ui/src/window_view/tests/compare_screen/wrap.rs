@@ -16,10 +16,10 @@ use crate::commands::compare::{NextDifference, ViewBytes, ViewText};
 use crate::compare_diff::{DiffUpdate, Layout, PairKind, PairText, WrapIndex};
 
 /// The wrap index, its width in columns, the top list item and the items the list has room for.
-type Seen = (Option<WrapIndex>, Option<u32>, usize, usize);
+pub(super) type Seen = (Option<WrapIndex>, Option<u32>, usize, usize);
 
 /// A pair of `len` rows changed at `changed`, whose every right line is `cols` columns wide.
-fn wrapped_pair(len: u32, changed: &[u32], cols: usize) -> PairText {
+pub(super) fn wrapped_pair(len: u32, changed: &[u32], cols: usize) -> PairText {
     let mut text = pair(len, changed);
     text.right = vec!["w".repeat(cols); len as usize];
     text
@@ -27,7 +27,7 @@ fn wrapped_pair(len: u32, changed: &[u32], cols: usize) -> PairText {
 
 /// Lets the background width measure land, then draws three frames: the probe, the index, and
 /// the scroll it asked for.
-fn frames(rig: &Rig, cx: &mut TestAppContext) {
+pub(super) fn frames(rig: &Rig, cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
@@ -38,13 +38,13 @@ fn frames(rig: &Rig, cx: &mut TestAppContext) {
 }
 
 /// Opens `text` and draws until the widths and the text cell are known.
-fn opened(rig: &Rig, cx: &mut TestAppContext, text: PairText) {
+pub(super) fn opened(rig: &Rig, cx: &mut TestAppContext, text: PairText) {
     rig.open_text(cx, text);
     frames(rig, cx);
 }
 
 /// Turns wrap on or off through the look, as Alt+Z will, and redraws.
-fn set_wrap(rig: &Rig, cx: &mut TestAppContext, wrap: bool) {
+pub(super) fn set_wrap(rig: &Rig, cx: &mut TestAppContext, wrap: bool) {
     rig.view.update(cx, |view, _| {
         view.file_look_mut().expect("open").wrap = wrap;
     });
@@ -55,7 +55,7 @@ fn row_height(cx: &mut TestAppContext) -> Pixels {
     cx.update(|cx| crate::tokens::current(cx).spacing.row_height)
 }
 
-fn seen(rig: &Rig, cx: &mut TestAppContext) -> Seen {
+pub(super) fn seen(rig: &Rig, cx: &mut TestAppContext) -> Seen {
     let height = row_height(cx);
     rig.view
         .update(cx, |view, _| view.file_wrap(height))
@@ -63,7 +63,7 @@ fn seen(rig: &Rig, cx: &mut TestAppContext) -> Seen {
 }
 
 /// The index and its width, once wrap is on and everything is measured.
-fn index(rig: &Rig, cx: &mut TestAppContext) -> (WrapIndex, u32) {
+pub(super) fn index(rig: &Rig, cx: &mut TestAppContext) -> (WrapIndex, u32) {
     let (index, cols, ..) = seen(rig, cx);
     (index.expect("a wrap index"), cols.expect("a wrap width"))
 }
@@ -79,13 +79,13 @@ fn bytes_pair(len: u32, changed: &[u32], cols: usize) -> PairText {
 
 /// Whether list item `item` is on screen: at or below the top item, and no further down than the
 /// room of whole rows plus the partial row the list still shows at its bottom edge.
-fn in_view(top: usize, room: usize, item: usize) -> bool {
+pub(super) fn in_view(top: usize, room: usize, item: usize) -> bool {
     top <= item && item <= top + room
 }
 
 /// Whether list item `item` sits in the middle of a list showing `room` items from `top`: at
 /// most half a screen below the top, and at least a third, so a row left on top reads as wrong.
-fn centred(top: usize, room: usize, item: usize) -> bool {
+pub(super) fn centred(top: usize, room: usize, item: usize) -> bool {
     let below = item.saturating_sub(top);
     below <= room / 2 + 1 && below * 3 >= room
 }
