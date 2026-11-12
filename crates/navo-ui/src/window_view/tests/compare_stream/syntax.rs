@@ -137,7 +137,7 @@ fn slots(rig: &Rig, cx: &mut TestAppContext) -> usize {
 
 /// Drains the Stream's inbox and waits for the background parse, as the file screen's test does.
 pub(super) fn land(rig: &Rig, cx: &mut TestAppContext) {
-    rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
+    rig.view.update(cx, |view, cx| view.host_poll(cx));
     cx.run_until_parked();
 }
 
@@ -154,7 +154,7 @@ fn compare_stream_a_rust_card_colours_its_lines_after_the_parse_lands(cx: &mut T
     open_one(&rig, cx, "main.rs");
     let card = code_card(1);
     send_card(&rig, 1, &card);
-    rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
+    rig.view.update(cx, |view, cx| view.host_poll(cx));
     assert!(
         held_runs(&rig, cx, &card, 1).is_empty(),
         "the poll returns before the background parse ends"
