@@ -11,6 +11,7 @@ use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use navo_core::Location;
 
+use super::screen_access::screen_read;
 use super::{
     NavoWindow, StartOptions, fake, open_options_sized, options_for, press, settle, two_panes,
 };
@@ -223,8 +224,9 @@ impl Rig {
         press(cx, self.window, &self.view, key);
     }
 
+    /// Reads the image body state, or returns none when no image body is open.
     fn probe(&self, cx: &mut TestAppContext) -> Option<Probe> {
-        self.view.update(cx, |view, _| view.image_probe())
+        screen_read(&self.view, cx, |view, _| view.image_probe())
     }
 
     /// The GPU images the screen holds: two pictures, plus the mask once it is drawn.
@@ -453,7 +455,7 @@ fn compare_image_details_drawer_lists_kind_sizes_view_and_similarity(cx: &mut Te
     rig.open(cx, scored(), Some(mask()));
     rig.press(cx, "ctrl-i");
     rig.paint(cx);
-    let facts = rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    let facts = screen_read(&rig.view, cx, |view, _| view.body_facts_probe());
     let facts = facts.expect("the drawer is open");
     assert_eq!(facts[0], "Kind: Image");
     assert!(

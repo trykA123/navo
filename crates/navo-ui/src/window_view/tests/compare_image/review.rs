@@ -4,6 +4,7 @@
 
 use gpui_kit::{TestAppContext, px};
 
+use super::super::screen_access::screen_update;
 use super::{Rig, mask, rig, scored};
 use crate::compare_diff::image_body::{ImageBody, ImageMode};
 use crate::compare_diff::{DiffUpdate, ImageMask, ImageScores, ImageSize, PairKind};
@@ -28,9 +29,9 @@ impl Rig {
         self.paint(cx);
     }
 
+    /// Sends a pointer event at horizontal position `x` in pixels to the image body.
     fn pointer(&self, cx: &mut TestAppContext, at: Pointer, x: f32) {
-        self.view
-            .update(cx, |view, cx| view.image_pointer(at, px(x), cx));
+        screen_update(&self.view, cx, |view, cx| view.image_pointer(at, px(x), cx));
     }
 
     fn split(&self, cx: &mut TestAppContext) -> f32 {
@@ -81,7 +82,7 @@ fn compare_image_a_refresh_gives_the_old_pictures_back(cx: &mut TestAppContext) 
     let rig = rig(cx, true);
     rig.open(cx, scored(), Some(mask()));
     assert_eq!(rig.gpu(cx), 3);
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let sink = rig.diff.pair_sink();
     sink(DiffUpdate::Opened {
         request: 2,
@@ -105,7 +106,7 @@ fn compare_image_a_refresh_gives_the_old_pictures_back(cx: &mut TestAppContext) 
 fn compare_image_a_refresh_to_another_kind_or_a_failure_drops_the_body(cx: &mut TestAppContext) {
     let rig = rig(cx, true);
     rig.open(cx, scored(), Some(mask()));
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     (rig.diff.pair_sink())(DiffUpdate::Opened {
         request: 2,
         kind: PairKind::Binary,
@@ -115,7 +116,7 @@ fn compare_image_a_refresh_to_another_kind_or_a_failure_drops_the_body(cx: &mut 
     assert!(rig.probe(cx).is_none(), "a binary pair shows no picture");
     assert_eq!(rig.gpu(cx), 0);
 
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     (rig.diff.pair_sink())(DiffUpdate::Opened {
         request: 3,
         kind: PairKind::Image,
