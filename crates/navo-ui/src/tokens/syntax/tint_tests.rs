@@ -107,3 +107,27 @@ fn a_failing_colour_is_moved_until_it_reads_on_every_wash() {
         }
     }
 }
+
+#[test]
+fn a_second_frame_reuses_the_tint_without_a_search() {
+    let look = TintLook {
+        mode: Mode::Dark,
+        syntax: SyntaxTheme::OxidisedIron,
+    };
+    let grey = gpui_kit::hsla(0., 0., 0.55, 1.);
+    let before = super::tint::searches();
+    let first = on_tint("wr3.memo", grey, true, look);
+    let after_first = super::tint::searches();
+    assert_eq!(
+        after_first,
+        before + 1,
+        "the first frame resolves the colour from scratch once"
+    );
+    let second = on_tint("wr3.memo", grey, true, look);
+    assert_eq!(second, first, "the memoized colour is identical");
+    assert_eq!(
+        super::tint::searches(),
+        after_first,
+        "the second frame does no search"
+    );
+}
