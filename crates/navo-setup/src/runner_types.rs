@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::mode::SqVersion;
+use crate::progress_log::InstallStage;
 
 /// A child process with a timed wait, owned by the runner until it exits.
 pub trait Child {
@@ -124,9 +125,24 @@ pub struct Cleanup {
     pub kept: Vec<PathBuf>,
 }
 
-/// One progress event: the elapsed whole seconds and the 180 s message flag.
+/// One progress event: elapsed whole seconds, the 180 s flag and the verified work.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Progress {
     pub elapsed: Duration,
     pub still_working: bool,
+    /// `None` whenever no percentage is verified, which is the UI's pulse.
+    pub percent: Option<u8>,
+    pub stage: Option<InstallStage>,
+}
+
+impl Progress {
+    /// Timing only, for a wait that tails no log.
+    pub fn from_elapsed(elapsed: Duration, still_working: bool) -> Self {
+        Self {
+            elapsed,
+            still_working,
+            percent: None,
+            stage: None,
+        }
+    }
 }

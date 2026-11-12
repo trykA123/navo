@@ -10,6 +10,8 @@ use crate::host::Host;
 use crate::marker::Marker;
 use crate::mode::Mode;
 use crate::payload::Payload;
+use crate::progress_log::PackageWeights;
+use crate::progress_tail::LogTailer;
 use crate::runner::{Child, InstallError, Progress, Session, Verified};
 use crate::upgrade::{Staged, apply_args};
 
@@ -48,20 +50,51 @@ pub(super) fn spawn_args(
     }
 }
 
+/// The child's log, with the mode and weights the estimator needs to weigh it.
+pub(super) struct WatchedLog<'a> {
+    pub path: &'a Path,
+    pub upgrade: bool,
+    pub weights: Option<PackageWeights>,
+}
+
 /// Waits one second at a time; a timed-wait error waits without a deadline before failing.
 pub(super) fn wait(child: &mut dyn Child, progress: &mut dyn FnMut(Progress)) -> io::Result<i32> {
-    let mut seconds = 0u64;
+    wait_with_log(child, None, Duration::from_secs(1), progress)
+}
+
+/// Waits in `poll_step` ticks, tailing the log when one is given. An event goes out only when the
+/// whole seconds, the percentage or the phase changed, so a silent wait still reports once a second.
+pub(super) fn wait_with_log(
+    child: &mut dyn Child,
+    log: Option<WatchedLog<'_>>,
+    poll_step: Duration,
+    progress: &mut dyn FnMut(Progress),
+) -> io::Result<i32> {
+    let mut tailer = log.map(|log| LogTailer::new(log.path, log.upgrade, log.weights));
+    let mut elapsed = Duration::ZERO;
+    let mut last = Progress::from_elapsed(Duration::ZERO, false);
     loop {
-        match child.wait_timeout(Duration::from_secs(1)) {
+        match child.wait_timeout(poll_step) {
             Ok(Some(code)) => return Ok(code),
             Ok(None) => {}
             Err(error) => return child.wait().map_err(|_| error),
         }
-        seconds = seconds.saturating_add(1);
-        progress(Progress {
-            elapsed: Duration::from_secs(seconds),
-            still_working: seconds >= STILL_WORKING_SECONDS,
-        });
+        elapsed = elapsed.saturating_add(poll_step);
+        let (percent, stage) = match tailer.as_mut() {
+            Some(tailer) => tailer.snapshot(elapsed),
+            None => (None, None),
+        };
+        let seconds = Duration::from_secs(elapsed.as_secs());
+        let event = Progress {
+            elapsed: seconds,
+            still_working: seconds.as_secs() >= STILL_WORKING_SECONDS,
+            percent,
+            stage,
+        };
+        if event != last {
+            progress(event);
+            last = event;
+        }
     }
 }
 
@@ -235,4 +268,83 @@ pub(super) fn unchanged(host: &mut dyn Host, pin: &super::Pin) -> bool {
 /// Whether no Navo process runs from the root; a scan error counts as running.
 pub(super) fn clear(host: &mut dyn Host, root: &Path) -> bool {
     matches!(host.running(root), Ok(false))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::progress_log::InstallStage;
+    use crate::runner_fake::FakeHost;
+
+    const HEADER: &str =
+        "[Setup:7] [10:00:00] [INFO] Extracting 2 app files to \"C:\\N\\current\"...\n";
+    const FIRST: &str =
+        "[Setup:7] [10:00:01] [DEBUG]     0 Extracting 'lib/net8/navo.exe' to \"C:\\n.exe\"\n";
+    const BACKING_UP: &str = "[Setup:7] [10:00:02] [INFO] Backing up current dir\n";
+
+    /// A child that times out `ticks` times and then exits 0.
+    fn child(ticks: usize) -> Box<dyn Child> {
+        let mut host = FakeHost::new();
+        for _ in 0..ticks {
+            host.child_script.push_back(None);
+        }
+        host.child_script.push_back(Some(0));
+        host.spawn(&[]).expect("spawn")
+    }
+
+    #[test]
+    fn the_timed_wait_shows_a_percentage_then_pulses_when_finalizing_stalls() {
+        let dir = tempfile::tempdir().expect("temp");
+        let log = dir.path().join("velopack.log");
+        fs::write(&log, format!("{HEADER}{FIRST}")).expect("write");
+        let mut events = Vec::new();
+        let code = wait_with_log(
+            &mut *child(32),
+            Some(WatchedLog {
+                path: &log,
+                upgrade: true,
+                weights: None,
+            }),
+            Duration::from_millis(250),
+            &mut |event| {
+                if event.elapsed == Duration::from_secs(2) {
+                    fs::write(&log, format!("{HEADER}{FIRST}{BACKING_UP}")).expect("append");
+                }
+                events.push(event);
+            },
+        )
+        .expect("wait");
+        assert_eq!(code, 0);
+        let shown = events
+            .iter()
+            .position(|event| event.percent == Some(94))
+            .expect("the folder swap must reach the callback");
+        assert_eq!(events[shown].stage, Some(InstallStage::Finalizing));
+        let pulsed = events
+            .iter()
+            .position(|event| event.percent.is_none())
+            .expect("a stalled Finalizing must fall back to the pulse");
+        assert!(pulsed > shown, "the pulse must follow the percentage");
+        assert_eq!(events[pulsed].stage, Some(InstallStage::Finalizing));
+        assert!(events.iter().all(|event| event.percent != Some(100)));
+        assert_eq!(
+            events.last().expect("events").elapsed,
+            Duration::from_secs(8)
+        );
+    }
+
+    #[test]
+    fn a_wait_without_a_log_reports_once_a_second_and_no_percentage() {
+        let mut events = Vec::new();
+        wait(&mut *child(3), &mut |event| events.push(event)).expect("wait");
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[2].elapsed, Duration::from_secs(3));
+        assert!(
+            events
+                .iter()
+                .all(|event| event.percent.is_none() && event.stage.is_none())
+        );
+    }
 }
