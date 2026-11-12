@@ -8,6 +8,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{Action, AppContext as _, ListOffset, TestAppContext, px};
 
 use super::compare_screen::{Rig, rig, rig_sized};
+use super::screen_access::{screen_read, screen_update, screen_update_in};
 use super::settle;
 use crate::browser::RowStatus;
 use crate::commands::compare::ToggleViewed;
@@ -89,11 +90,9 @@ impl Rig {
     /// Opens a Stream over `count` items and draws it.
     pub(super) fn open_stream(&self, cx: &mut TestAppContext, count: u64) {
         let items = items(count);
-        let view = self.view.clone();
-        cx.update_window(self.window, |_, window, cx| {
-            view.update(cx, |view, cx| view.open_stream(items, window, cx))
-        })
-        .expect("window");
+        screen_update_in(&self.view, self.window, cx, |view, window, cx| {
+            view.open_stream(items, window, cx)
+        });
         self.frame(cx);
     }
 
@@ -107,7 +106,7 @@ impl Rig {
 
     /// Whether the outline drawer is open.
     fn outline_open(&self, cx: &mut TestAppContext) -> bool {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             view.stream_probe().expect("a Stream").0.outline_open()
         })
     }
@@ -132,15 +131,16 @@ impl Rig {
         self.frame(cx);
     }
 
+    /// Returns the current Stream stop.
     fn cursor(&self, cx: &mut TestAppContext) -> Stop {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             view.stream_probe().expect("a Stream").0.cursor()
         })
     }
 
     /// The list's top row index and that row.
     fn top(&self, cx: &mut TestAppContext) -> (usize, StreamRow) {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (_, rows, list) = view.stream_probe().expect("a Stream");
             let top = list.logical_scroll_top().item_ix;
             (top, rows[top])
@@ -149,7 +149,7 @@ impl Rig {
 
     /// Scrolls the list so the header of item `item` is the top row.
     fn scroll_to_item(&self, cx: &mut TestAppContext, item: usize) {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (_, rows, list) = view.stream_probe().expect("a Stream");
             let at = rows.iter().position(|row| *row == StreamRow::Header(item));
             list.scroll_to(ListOffset {
@@ -222,7 +222,7 @@ fn compare_stream_v_counts_and_moves_on(cx: &mut TestAppContext) {
     rig.send(cx, Box::new(ToggleViewed));
     assert_eq!(rig.diff.viewed(), vec![(1, true)]);
     assert_eq!(rig.cursor(cx), stop(1, 0), "V moves to the next file");
-    let (counter, folded) = rig.view.read_with(cx, |view, _| {
+    let (counter, folded) = screen_read(&rig.view, cx, |view, _| {
         let (model, rows, _) = view.stream_probe().expect("a Stream");
         let folded = !rows
             .iter()
@@ -246,7 +246,7 @@ fn compare_stream_focus_carries_visible_ids(cx: &mut TestAppContext) {
     );
     rig.send_card(cx, 1, 2);
     rig.scroll_to_item(cx, 250);
-    rig.view.update(cx, |view, cx| view.stream_scrolled(cx));
+    screen_update(&rig.view, cx, |view, cx| view.stream_scrolled(cx));
     cx.executor().advance_clock(Duration::from_millis(200));
     rig.frame(cx);
     let ids = rig.diff.last_focus().expect("a focus after the scroll");
@@ -255,7 +255,7 @@ fn compare_stream_focus_carries_visible_ids(cx: &mut TestAppContext) {
         !ids.contains(&240),
         "10 items before the view, no more: {ids:?}"
     );
-    let kept = rig.view.read_with(cx, |view, _| {
+    let kept = screen_read(&rig.view, cx, |view, _| {
         view.stream_probe().expect("a Stream").0.card(1).is_some()
     });
     assert!(!kept, "a card 250 items away is dropped");
@@ -267,9 +267,7 @@ fn compare_stream_esc_leaves_to_the_panes(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_stream(cx, 2);
     rig.press(cx, "escape");
-    let open = rig
-        .view
-        .read_with(cx, |view, _| view.compare.screen.is_some());
+    let open = screen_read(&rig.view, cx, |view, _| view.compare.screen.is_some());
     assert!(!open, "Esc closes the Stream");
 }
 
@@ -286,9 +284,7 @@ fn compare_stream_outline_opens_closed_and_ctrl_b_toggles_it(cx: &mut TestAppCon
     rig.press(cx, "ctrl-b");
     rig.press(cx, "escape");
     assert!(!rig.outline_open(cx), "Esc closes the outline first");
-    let open = rig
-        .view
-        .read_with(cx, |view, _| view.compare.screen.is_some());
+    let open = screen_read(&rig.view, cx, |view, _| view.compare.screen.is_some());
     assert!(open, "the Stream stays");
 }
 
@@ -328,7 +324,7 @@ fn compare_stream_outline_current_follows_the_scroll(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_stream(cx, 60);
     let in_view =
-        |cx: &mut TestAppContext| rig.view.read_with(cx, |view, _| view.outline_in_view());
+        |cx: &mut TestAppContext| screen_read(&rig.view, cx, |view, _| view.outline_in_view());
     assert_eq!(in_view(cx), Some(0));
     rig.scroll_to_item(cx, 30);
     assert_eq!(in_view(cx), Some(30));

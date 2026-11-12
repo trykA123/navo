@@ -6,6 +6,7 @@ use std::time::Duration;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 
+use super::super::screen_access::{screen_read, screen_update};
 use super::{Rig, items, rig, stop};
 use crate::compare_diff::{StreamRow, StreamUpdate};
 
@@ -25,9 +26,7 @@ impl Rig {
 
     /// The (open, field text, last query tag) of the search.
     fn field(&self, cx: &mut TestAppContext) -> (bool, String, u64) {
-        let view = self.view.clone();
-        cx.update(|cx| view.read(cx).search_probe(cx))
-            .expect("a field")
+        screen_read(&self.view, cx, |view, cx| view.search_probe(cx)).expect("a field")
     }
 
     /// The queries the fake app received.
@@ -67,7 +66,7 @@ impl Rig {
 
     /// How many rows of each kind the list holds: (lines, others).
     fn row_kinds(&self, cx: &mut TestAppContext) -> (usize, usize) {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (_, rows, _) = view.stream_probe().expect("a Stream");
             let lines = rows
                 .iter()
@@ -120,7 +119,7 @@ fn compare_search_hits_narrow_the_cards_and_fold_the_other_changes(cx: &mut Test
     let rig = rig(cx);
     rig.open_search(cx, "ab");
     rig.answer(cx, (1, false), vec![(1, vec![0]), (3, vec![1, 2])]);
-    let counts = rig.view.read_with(cx, |view, _| {
+    let counts = screen_read(&rig.view, cx, |view, _| {
         let model = view.stream_probe().expect("a Stream").0;
         (
             model.visible(),
@@ -132,7 +131,7 @@ fn compare_search_hits_narrow_the_cards_and_fold_the_other_changes(cx: &mut Test
     // Item 0 keeps hunk 0 and folds two; item 2 folds hunk 0 and keeps two.
     assert_eq!(rig.row_kinds(cx), (6, 2));
     rig.answer(cx, (1, true), vec![(1, vec![0]), (3, vec![1, 2])]);
-    let progress = rig.view.read_with(cx, |view, _| {
+    let progress = screen_read(&rig.view, cx, |view, _| {
         view.stream_probe().expect("a Stream").0.search_progress()
     });
     assert_eq!(progress, None, "done ends the progress line");
@@ -167,14 +166,12 @@ fn compare_search_esc_clears_closes_and_stops_the_app(cx: &mut TestAppContext) {
     rig.press(cx, "escape");
     assert!(!rig.field(cx).0, "the field closes");
     assert_eq!(rig.searches().last(), Some(&(2, String::new())));
-    let (searching, shown) = rig.view.read_with(cx, |view, _| {
+    let (searching, shown) = screen_read(&rig.view, cx, |view, _| {
         let model = view.stream_probe().expect("a Stream").0;
         (model.searching(), model.visible().len())
     });
     assert!(!searching && shown == 3, "every card is back");
-    let open = rig
-        .view
-        .read_with(cx, |view, _| view.compare.screen.is_some());
+    let open = screen_read(&rig.view, cx, |view, _| view.compare.screen.is_some());
     assert!(open, "the first Esc only closes the search");
     rig.press(cx, "j");
     assert_eq!(
@@ -194,7 +191,7 @@ fn compare_search_emptying_the_field_clears_without_a_final_hit(cx: &mut TestApp
     rig.press(cx, "backspace");
     rig.wait(cx, 150);
     assert_eq!(rig.searches().last(), Some(&(2, String::new())));
-    let searching = rig.view.read_with(cx, |view, _| {
+    let searching = screen_read(&rig.view, cx, |view, _| {
         view.stream_probe().expect("a Stream").0.searching()
     });
     assert!(!searching);
@@ -207,13 +204,13 @@ fn compare_search_a_new_item_list_asks_the_app_again(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_search(cx, "ab");
     rig.answer(cx, (1, true), vec![(2, vec![])]);
-    let replaced = rig
-        .view
-        .update(cx, |view, cx| view.stream_replace(items(4), true, cx));
+    let replaced = screen_update(&rig.view, cx, |view, cx| {
+        view.stream_replace(items(4), true, cx)
+    });
     assert!(replaced);
     rig.frame(cx);
     assert_eq!(rig.searches().last(), Some(&(2, "ab".to_owned())));
-    let visible = rig.view.read_with(cx, |view, _| {
+    let visible = screen_read(&rig.view, cx, |view, _| {
         view.stream_probe().expect("a Stream").0.visible()
     });
     assert_eq!(visible, [1], "the hits stay until the new ones come");
@@ -226,8 +223,9 @@ fn compare_search_same_generation_updates_rerun_at_most_once_a_second(cx: &mut T
     rig.open_search(cx, "ab");
     rig.answer(cx, (1, true), vec![(2, vec![])]);
     for count in [4, 5, 6] {
-        rig.view
-            .update(cx, |view, cx| view.stream_replace(items(count), false, cx));
+        screen_update(&rig.view, cx, |view, cx| {
+            view.stream_replace(items(count), false, cx)
+        });
         rig.frame(cx);
     }
     let asked = rig.searches();
@@ -245,8 +243,9 @@ fn compare_search_a_fresh_generation_reruns_at_once(cx: &mut TestAppContext) {
     rig.open_search(cx, "ab");
     rig.answer(cx, (1, true), vec![(2, vec![])]);
     for (count, fresh) in [(4, false), (5, true)] {
-        rig.view
-            .update(cx, |view, cx| view.stream_replace(items(count), fresh, cx));
+        screen_update(&rig.view, cx, |view, cx| {
+            view.stream_replace(items(count), fresh, cx)
+        });
         rig.frame(cx);
     }
     assert_eq!(rig.searches().len(), 3, "the fresh update did not wait");

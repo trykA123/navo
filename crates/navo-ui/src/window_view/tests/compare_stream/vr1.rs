@@ -7,6 +7,7 @@ use std::time::Duration;
 use gpui_kit::TestAppContext;
 
 use super::super::compare_screen::rig;
+use super::super::screen_access::screen_read;
 use super::entry::row;
 use super::stop;
 use crate::browser::{CompareUpdate, RowStatus};
@@ -50,7 +51,7 @@ fn compare_stream_row_batches_keep_the_generation_and_the_cards(cx: &mut TestApp
         vec![(1, 2), (1, 3), (1, 5), (1, 6)],
         "one generation"
     );
-    let kept = rig.view.read_with(cx, |view, _| {
+    let kept = screen_read(&rig.view, cx, |view, _| {
         view.stream_probe().expect("a Stream").0.card(1).is_some()
     });
     assert!(kept, "the built card stays");
@@ -92,7 +93,7 @@ fn compare_stream_a_card_far_from_the_view_is_dropped_on_arrival(cx: &mut TestAp
     rig.open_stream(cx, 500);
     rig.send_card(cx, 450, 1);
     rig.send_card(cx, 2, 1);
-    let (far, near) = rig.view.read_with(cx, |view, _| {
+    let (far, near) = screen_read(&rig.view, cx, |view, _| {
         let model = view.stream_probe().expect("a Stream").0;
         (model.card(450).is_some(), model.card(2).is_some())
     });
@@ -109,7 +110,7 @@ fn compare_stream_alt_v_sets_the_layout_and_the_look_a_file_diff_starts_with(
     rig.press(cx, "alt-f");
     rig.send_card(cx, 1, 1);
     rig.send(cx, Box::new(ShowUnified));
-    let unified = rig.view.read_with(cx, |view, _| {
+    let unified = screen_read(&rig.view, cx, |view, _| {
         let rows = view.stream_probe().expect("a Stream").1;
         rows.iter().any(|row| {
             matches!(
@@ -124,10 +125,7 @@ fn compare_stream_alt_v_sets_the_layout_and_the_look_a_file_diff_starts_with(
     assert!(unified, "the View menu's layout applies to the cards");
     rig.send(cx, Box::new(ViewSimple));
     rig.press(cx, "enter");
-    let (look, _, _) = rig
-        .view
-        .read_with(cx, |v, _| v.file_look())
-        .expect("a file diff");
+    let (look, _, _) = screen_read(&rig.view, cx, |view, _| view.file_look()).expect("a file diff");
     assert_eq!(
         look.preset,
         Preset::Simple,
@@ -136,9 +134,7 @@ fn compare_stream_alt_v_sets_the_layout_and_the_look_a_file_diff_starts_with(
     assert_eq!(look.layout, Some(Layout::Unified));
     rig.press(cx, "escape");
     rig.press(cx, "alt-v");
-    let menu = rig
-        .view
-        .read_with(cx, |v, _| v.compare_menu_view().is_some());
+    let menu = screen_read(&rig.view, cx, |v, _| v.compare_menu_view().is_some());
     assert!(menu, "Alt+V opens the View menu over the Stream");
 }
 
@@ -149,18 +145,12 @@ fn compare_stream_ctrl_i_shows_the_current_file_and_esc_closes_it_first(cx: &mut
     rig.press(cx, "alt-f");
     rig.send_card(cx, 1, 1);
     rig.press(cx, "ctrl-i");
-    let details = rig
-        .view
-        .read_with(cx, |v, _| v.stream_look())
-        .and_then(|l| l.1);
+    let details = screen_read(&rig.view, cx, |view, _| view.stream_look()).and_then(|l| l.1);
     let details = details.expect("Ctrl+I opens the details drawer");
     assert_eq!(details[0], "a.txt");
     assert_eq!(details.len(), 3, "path, status, changes: {details:?}");
     rig.press(cx, "escape");
-    let (_, details) = rig
-        .view
-        .read_with(cx, |v, _| v.stream_look())
-        .expect("a Stream");
+    let (_, details) = screen_read(&rig.view, cx, |view, _| view.stream_look()).expect("a Stream");
     assert!(
         details.is_none(),
         "Esc closes the drawer and keeps the Stream"
