@@ -1,3 +1,5 @@
+//! Column storage, entry identities and paths for the shared name index.
+
 mod change;
 mod children;
 mod compact;
@@ -5,6 +7,7 @@ mod flags;
 mod folder_lookup;
 mod growth;
 mod memory;
+mod search_storage;
 mod totals;
 
 use std::ops::Range;
