@@ -2,21 +2,57 @@
 
 # Navo
 
-A keyboard-first file manager for Windows, written in Rust.
+A keyboard-first file manager for Windows. Two panes, every action on a key, and no waiting.
 
 [![Navo showreel: a still from the product film](design/showreel/poster.png)](design/showreel/navo-showreel.mp4)
 
-The still above links to a two-and-a-half-minute product film ([`design/showreel/navo-showreel.mp4`](design/showreel/navo-showreel.mp4)). The film shows the planned product, not only what is built today. Many of its scenes are on the roadmap and not built yet: tiled panes, saved sets of panes, pins, find by content, archives as folders, the recently deleted view, the drawer with transfers, clipboard and a terminal, compare, CAN traces decoded with a DBC file, plugins and colour themes. Each of those scenes carries a "Planned" tag with its phase. The film is drawn from the feature specs and design prototypes, with invented file names. It is not a recording of the app. The [status](#status) section says what works today.
+The still links to a two-and-a-half-minute product film. It shows the planned product, not only what is built today. The [film note](#about-the-film-the-name-and-the-crates) at the end says which scenes are real.
 
-Navo is the product and codebase name. Crates use the `navo-` prefix.
+## Why you would switch
 
-Navo was called Ferrite before. An existing Ferrite profile moves to Navo on first start, and the old folder is renamed to `Ferrite.migrated-to-navo`.
+- **You keep your hands on the keys.** Two dense panes, F-keys and Total Commander selection work the way your fingers expect. Nothing makes you wait.
+- **You find anything in one box.** Press Ctrl+K and type. Commands, recent folders, open tabs and files appear together, and new files show up within a second.
+- **You can see what changed.** Compare two folders, open a pair as a side-by-side diff, and read every difference in one scroll.
+
+Navo does not copy Total Commander's look. It looks calm and modern, and drawers open only when you ask for them.
+
+## Your first five minutes
+
+1. Download Navo from the [releases page](https://github.com/trykA123/navo/releases). Unzip the portable zip and run `navo.exe`, or run the installer.
+2. Press Tab to move between the two panes. Press Enter to open a folder and Backspace to go up. Open one folder in each pane.
+3. Move the cursor to a file and press F5. Navo copies it to the other pane, with progress and a journal. F6 moves it. Ctrl+Z undoes the last operation.
+4. Press Ctrl+K and type a few letters of a file or folder. Press Enter to open the top hit.
+5. Open two folders with similar content, one in each pane, and press Ctrl+Shift+D. Navo marks every difference. Press Enter on a file pair to read its diff, and Esc to come back.
+
+The [user guide](docs/user-guide.md) lists the first ten keys to learn.
+
+## A tour
+
+### Two panes, all on keys
+
+Each pane holds any number of tabs, with history and session restore. The list is virtualised, so large folders stay smooth. You sort, filter by typing, mark with keys, mouse or lasso, and drag files between panes. Multi-rename shows a preview and one Ctrl+Z undoes it.
+
+### Ctrl+K and the index
+
+One box finds commands, recent folders, open tabs and files. An optional background service keeps a whole-disk index of NTFS drives, so a file you just made turns up within a second. Alt+F7 searches inside files.
+
+### The F3 viewer
+
+F3 opens the file under the cursor in a view that fits it: text and code with colours, hex, or a rich view. The rich view reads ELF images and linker MAP files (memory regions, an address-ordered strip and a treemap of modules), HEX and S-record files, CAN traces, PDF manuals, JSON, YAML, XML and Markdown. On a folder, F3 previews its size and file count.
+
+### Compare and the Stream
+
+Ctrl+Shift+D compares the two panes. A narrow column between them names each result in a word: changed, only on one side, "3 inside". Enter on a file pair opens a full-window diff with colour washes, the words that changed inside a line, syntax colours and a change map. Long lines scroll sideways, or wrap with Alt+Z. Alt+F opens the Stream: every difference under the folder, one card per file. You can copy a change to the other side, and Ctrl+Z puts the file back.
+
+### The installer
+
+`Navo-Setup.exe` is a guided installer for one user. It has five pages, never asks for administrator rights and works offline. It checks the folder you pick, updates an existing install in place, and Windows Settings removes it. See [docs/features/install.md](docs/features/install.md). It is built and tested, and comes with v0.7.0.
 
 ## What Navo is
 
-Navo is for people who move files all day and want to do it from the keyboard. It keeps the behaviour that makes Total Commander fast: two dense panes, F-keys, Total Commander selection, and no waiting. It does not copy its look. Navo looks calm and modern, and drawers open only when you ask for them.
+Navo is for people who move files all day and want to do it from the keyboard. It keeps the behaviour that makes Total Commander fast: two dense panes, F-keys, Total Commander selection, and no waiting.
 
-It is also built for engineers who work with build output. The F3 viewer opens ELF images, linker MAP files, HEX and S-record files, CAN traces and PDF manuals, next to the usual text, JSON, YAML, XML and Markdown.
+It is also built for engineers who work with build output, which is why the F3 viewer reads ELF, MAP, HEX, S-record and CAN files.
 
 Navo ships for Windows as a portable zip with `navo.exe` and as a Velopack installer. Both are on the [releases page](https://github.com/trykA123/navo/releases). A guided installer with a choice of folder is built but not released yet; see [docs/features/install.md](docs/features/install.md). It also builds and runs on Linux, which is where most development happens.
 
@@ -45,7 +81,7 @@ Navo is in its alpha (v0.5). It is usable, but it is not finished, and it is not
 - The [roadmap page](design/roadmap.html) counted 215 of 247 alpha items done on 21 October 2026.
 - Each green build of `main` becomes a Windows pre-release on the [releases page](https://github.com/trykA123/rusty/releases). [CHANGELOG.md](CHANGELOG.md) lists what each one changed.
 
-What works today, in short: two panes with tabs, history and session restore; a virtualised file list with sorting and a quick filter; copy, move, rename, new folder, Recycle Bin and Shift+Del with a journal; marking with keys, mouse and lasso; drag and drop between panes and onto tabs, crumbs and drives; copy and paste with Explorer; multi-rename; Ctrl+K with the file index; the preview drawer; the activity strip; settings; light and dark themes.
+What works today, in short: two panes with tabs, history and session restore; a virtualised file list with sorting and a quick filter; copy, move, rename, new folder, Recycle Bin and Shift+Del with a journal; marking with keys, mouse and lasso; drag and drop between panes and onto tabs, crumbs and drives; copy and paste with Explorer; multi-rename; Ctrl+K with the file index; folder and file compare with the Stream; the preview drawer; the activity strip; settings; light and dark themes.
 
 Known gap: drag and drop with other apps is not finished. Dragging files from Navo into Explorer or an editor does not work yet.
 
@@ -160,4 +196,12 @@ Changes merge locally as one squash commit per branch; pull requests are not use
 
 ## Licence
 
-The repository has no licence file yet.
+Navo is licensed under either the MIT licence ([LICENSE-MIT](LICENSE-MIT)) or the Apache licence 2.0 ([LICENSE-APACHE](LICENSE-APACHE)), at your choice.
+
+## About the film, the name and the crates
+
+The film is drawn from the feature specs and design prototypes, with invented file names. It is not a recording of the app. Many of its scenes are on the roadmap and not built yet: tiled panes, saved sets of panes, pins, find by content, archives as folders, the recently deleted view, the drawer with transfers, clipboard and a terminal, compare, CAN traces decoded with a DBC file, plugins and colour themes. Each of those scenes carries a "Planned" tag with its phase. The [status](#status) section says what works today.
+
+Navo is the product and codebase name. Crates use the `navo-` prefix.
+
+Navo was called Ferrite before. An existing Ferrite profile moves to Navo on first start, and the old folder is renamed to `Ferrite.migrated-to-navo`.

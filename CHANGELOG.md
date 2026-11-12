@@ -2,6 +2,118 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.7.0 — Read every line, install like an app
+
+*2026-11-12*
+
+You open two versions of a config file. The changed lines carry a soft colour, and the words that changed inside them stand out. The code is coloured as it is in the viewer. A long line scrolls sideways, with both sides moving together, or wraps when you press Alt+Z. Alt+↓ brings the next change to the middle of the screen.
+
+### Highlights
+
+**Compare now says what changed, in plain words.** Between the two folder panes, each row names its result: changed, only on one side, or "3 inside" for a folder with differences below it. A missing file says "not in left" or "not in right" on a hatched row. The newer side shows its size and date in bold with a ▲ mark. A thin change map runs along the edge of the list and shows where the differences are.
+
+| Try it | Key |
+| --- | --- |
+| Compare the two panes | Ctrl+Shift+D |
+| Open a file pair as a diff | Enter |
+| Next or previous change | Alt+↓ / Alt+↑ |
+| View menu | Alt+V |
+
+**Long lines no longer run off the screen.** In a file diff, lines do not wrap by default. Both sides scroll sideways together, so matching text stays level. Line numbers, edge bars and the change map stay where they are. If you prefer wrapping, one key turns it on, and both sides keep their rows aligned. Navo keeps your choice until you close the compare screen.
+
+| Try it | Key |
+| --- | --- |
+| Scroll sideways | Left / Right |
+| Scroll sideways with the wheel | Shift + mouse wheel |
+| Scroll sideways with the mouse | Drag the bar under each side |
+| Wrap long lines on or off | Alt+Z |
+| Wrap from the menu | View → Wrap lines (the title-bar View button opens it too) |
+
+**Navo now has a proper installer.** `Navo-Setup.exe` walks you through five pages: Welcome, Licence, Install folder, Shortcuts and Finish. It installs for you alone and never asks for administrator rights. It works offline. If Navo is already installed, it updates it in place and keeps your settings and shortcuts. To remove Navo, use Windows Settings → Apps.
+
+| Try it | Key |
+| --- | --- |
+| Press the main button | Enter |
+| Go back or next | Alt+B / Alt+N |
+| Close before the install starts | Esc |
+
+### Also new
+
+- The file diff and the Stream draw code with syntax colours. A very large file stays plain.
+- The Stream wraps long lines with Alt+Z. Its cards do not scroll sideways.
+- Setup picks a safe folder. It always makes a new `Navo` folder, and it protects that folder so only you, the system and administrators can change it.
+- Setup warns you when other people on the PC could change a folder above the one you chose. You can still go on.
+- Setup refuses a folder it cannot install into safely, with one line that says what to do.
+- Names with numbers sort the way you read them: `file2` comes before `file10`.
+- Binary files open as a hex diff in compare. Alt+V switches between Text and Bytes.
+- Navo is now licensed under MIT or Apache-2.0, at your choice. The Setup Licence page shows the text.
+
+### Fixed
+
+- Search index: before, Navo could scan a whole drive a second time while the background service already indexed it. Now it leaves that drive to the service.
+- Folder refresh: before, a refresh of a large folder could use a lot of memory. Now it uses much less.
+
+<details>
+<summary>Every change</summary>
+
+#### Compare: folders
+
+- A narrow column between the panes names each row's result: `changed`, `◀ only`, `only ▶`, `type ≠` (a file against a folder or a link), `3 inside`, `same*` (the same once your compare rules apply) or a percentage while Navo still checks.
+- Hover `3 inside` to read "contains differences".
+- A missing item reads "not in left" or "not in right". A row Navo has not checked reads `…` or "unchecked". A row it cannot read shows "can't read".
+- When both sides exist, the newer side has its size and date in bold with a ▲ mark. The older side is muted.
+- The old badge column is gone. The gutter replaces it.
+- The change map beside the right pane marks where the differences are in the whole folder.
+
+#### Compare: file diff and Stream
+
+- Changed lines have a coloured background and a bar on the edge. The colours are easy to read in both light and dark themes.
+- Changed words inside a line have a stronger fill.
+- Syntax colours match the viewer. A very large file stays plain. A reload of the same pair keeps its colours until the new ones are ready.
+- Left and Right scroll sideways. So do Shift + wheel, a touchpad swipe and the bar under each side.
+- Alt+Z, or View → Wrap lines, wraps long lines. A wrapped pair is as tall as its taller side. Press Alt+Z again to turn it off.
+- While lines wrap, Alt+↓ and a click on the change map put the change in the middle of the screen.
+- On the compare screen, the title-bar View button opens the compare View menu.
+- The hex view never wraps and never scrolls sideways.
+- The Stream wraps its text cards with Alt+Z. Its cards never scroll sideways.
+- Ctrl+Home and Ctrl+End jump to the ends of a very large text file.
+- In a large diff, a long line over 1 MiB offers "Show bytes here".
+- Ctrl+I shows details for large, binary and image pairs. A memory limit in Settings can lower detail for huge changes, and a link in the note opens that setting.
+
+#### Installer
+
+- Welcome says "Install Navo" and the version. If Navo is installed, it names the folder and says Setup updates it there.
+- Licence needs a tick on "I accept the licence" before Next.
+- Install folder shows the space needed and the free space. Browse picks a parent folder.
+- Shortcuts offers Start menu and Desktop, both ticked. An update skips this page and never makes a shortcut again.
+- Installing shows the elapsed time. After 3 minutes it says "Setup is still working…" and names the log.
+- Finish says "Navo is installed." and shows the folder on its own line.
+- Setup refuses: a path with `%`, `^`, `&` or `!`; a folder that exists; a link, `subst` or network drive; a system, profile or OneDrive folder; a drive with less than four times the install size free; a folder it cannot write to.
+- Setup warns, but still installs, for a folder made by a user directly under `C:\`, a drive root that lets others delete or rename its contents, and FAT32 or exFAT drives. A folder directly under `C:\`, such as `C:\Navo`, works for a standard user.
+- Only one Navo installs at a time. The same or a newer version already installed: Setup starts nothing. To go back to an older version, uninstall first.
+- If Navo runs from the folder, Setup asks you to close it. It never closes Navo itself.
+- If you start Setup as administrator, it asks you to start it again normally.
+- If the install ends but Setup cannot confirm it, it sends you to Windows Settings → Apps. It never offers to delete the folder.
+- `Navo-Setup.exe --silent` installs without a window. Options: `--installto <new folder>`, `--no-desktop` and `--no-start-menu`.
+- Uninstall deletes the install folder and every shortcut that points into it. Your settings and data folders stay. It removes the index service after one administrator prompt.
+
+#### Search and sorting
+
+- The app skips a drive the background service already indexes, also when the service only lacks file sizes.
+- A refresh of one folder peaks at much less memory.
+- Digits in names sort by value at any length. Leading zeros break a tie last.
+
+#### Security
+
+- The Git library and the SQLite library are updated. One update closes a published Git security advisory.
+
+#### Known issues
+
+- Setup is not signed yet, so Windows may warn about the file.
+- Dragging files from Navo into other apps still does not work.
+
+</details>
+
 ## v0.6.0 — 2026-11-10
 
 ### Added
