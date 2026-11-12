@@ -19,6 +19,7 @@ pub(in crate::window_view) mod menu;
 mod open;
 mod outline;
 mod pick;
+mod resync;
 mod search;
 mod sheet;
 pub(in crate::window_view::compare_screen) mod sideways;
@@ -237,6 +238,8 @@ pub(super) struct ScreenStack {
 
 #[cfg(test)]
 mod probes;
+#[cfg(test)]
+mod resync_tests;
 #[cfg(test)]
 pub(in crate::window_view) use file::SidewaysSeen;
 #[cfg(test)]

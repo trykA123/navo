@@ -7,15 +7,13 @@ use std::time::Duration;
 use gpui_kit::{Stateful, Task};
 
 use super::ScreenEvent;
+use super::resync::ResyncStep;
 use super::stream::StreamScreen;
 use crate::browser::{CompareMode, FileDiffRequest};
 use crate::commands::compare::{NextFile, OpenFile, PreviousFile};
 use crate::compare_diff::{PairRequest, StreamList, is_stream_item, stream_items};
 use crate::prelude::*;
 use crate::window_view::ScreenOwner;
-
-/// The shortest time between two rebuilds of the items while the compare still runs.
-const RESYNC: Duration = Duration::from_millis(500);
 
 /// The file diff's form of a compare pair.
 fn pair_request(asked: FileDiffRequest) -> PairRequest {
@@ -159,26 +157,20 @@ impl ScreenOwner {
         let Some(stream) = self.compare.screen.as_mut().and_then(|s| s.stream.as_mut()) else {
             return false;
         };
-        if stream.stamp == Some(stamp) {
-            return false;
-        }
-        let fresh = stream
-            .stamp
-            .is_none_or(|(generation, _)| generation != stamp.0);
-        let wait = stream.resynced.map_or(Duration::ZERO, |at| {
-            (at + RESYNC).saturating_duration_since(now)
-        });
-        if !fresh && mode.checking() && !wait.is_zero() {
-            if stream.resync_wait.is_none() {
-                stream.resync_wait = Some(Self::resync_after(wait, cx));
+        match stream.resync_step(stamp, mode.checking(), now) {
+            ResyncStep::Skip => false,
+            ResyncStep::Wait(wait) => {
+                if stream.resync_wait.is_none() {
+                    stream.resync_wait = Some(Self::resync_after(wait, cx));
+                }
+                false
             }
-            return false;
+            ResyncStep::Rebuild { fresh } => {
+                let changed = stream.resync_apply(stamp, now, items_of(mode), fresh);
+                self.arm_rerun(cx);
+                changed
+            }
         }
-        stream.stamp = Some(stamp);
-        stream.resynced = Some(now);
-        let changed = stream.replace_items(items_of(mode), fresh);
-        self.arm_rerun(cx);
-        changed
     }
 
     /// Sets the timer for a search rerun that came too soon, when none is set.
