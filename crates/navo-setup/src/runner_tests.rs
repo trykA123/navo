@@ -186,6 +186,7 @@ fn expected_fresh() -> Vec<std::ffi::OsString> {
         "--silent".into(),
         "--log".into(),
         LOG.into(),
+        "--verbose".into(),
     ]
 }
 

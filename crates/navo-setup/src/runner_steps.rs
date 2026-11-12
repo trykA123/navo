@@ -16,7 +16,7 @@ use crate::upgrade::{Staged, apply_args};
 /// IW4's 180-second deadline, after which only the progress text changes.
 const STILL_WORKING_SECONDS: u64 = 180;
 
-/// Builds IW3's exact argument array for the current mode.
+/// Builds IW3's argument array for the current mode, with D117's `--verbose`.
 #[expect(
     clippy::too_many_arguments,
     reason = "the mode, root, extracted payload, staged package and log are all inputs"
@@ -42,6 +42,7 @@ pub(super) fn spawn_args(
                 "--silent".into(),
                 "--log".into(),
                 velopack_log.as_os_str().to_os_string(),
+                "--verbose".into(),
             ])
         }
     }
