@@ -245,21 +245,15 @@ fn gutter(t: &Theme, number: Option<u32>) -> Div {
 fn code(t: &Theme, text: Option<&str>, runs: &[TextRun], wrap: bool) -> Div {
     let cell = div().flex_1().min_w_0().text_color(t.colors.text);
     let cell = if wrap { cell } else { cell.truncate() };
-    cell.when_some(code_child(text, runs, wrap), Div::child)
-}
-
-/// The colour runs a wrapped line paints: `code` keeps every run a truncated line keeps (W8k).
-/// This is the one place the wrap draw path decides the runs, so the tests check it directly.
-fn painted_runs(wrap: bool, runs: &[TextRun]) -> &[TextRun] {
-    let _ = wrap;
-    runs
+    cell.when_some(code_child(text, runs), Div::child)
 }
 
 /// The one child of a code cell, wrapped or truncated alike: the line as a `StyledText` that
 /// carries its colour runs (D38.3), a plain string when it has none, and `None` for a filler.
-fn code_child(text: Option<&str>, runs: &[TextRun], wrap: bool) -> Option<AnyElement> {
+/// Wrapping changes only the cell's layout, never its runs, so every run the line keeps —
+/// including one past the first visual line — is carried here (W8k).
+fn code_child(text: Option<&str>, runs: &[TextRun]) -> Option<AnyElement> {
     let text = text?;
-    let runs = painted_runs(wrap, runs);
     let child = if runs.is_empty() {
         SharedString::from(text.to_owned()).into_any_element()
     } else {
@@ -279,32 +273,32 @@ mod tests {
     use crate::compare_diff::hooks::DiffRow;
     use crate::tokens::{Mode, Theme};
 
-    /// `code` builds its wrapped cell's text through `code_child(.., wrap = true)`: a line with
-    /// colour runs must paint as a `StyledText` that carries them (W8k), never plain.
+    /// `code` builds its cell's text through `code_child`: a line with colour runs must paint as
+    /// a `StyledText` that carries them (W8k), never plain — including a run that sits past the
+    /// first visual line of a wrapped row. Wrapping changes the layout, not the runs.
     #[test]
     fn code_child_keeps_the_colour_runs_on_the_drawn_line() {
-        let run = || [(0usize..2, HighlightStyle::default())];
-        let mut styled =
-            code_child(Some("fn main() {}"), &run(), true).expect("a wrapped line paints its text");
+        let text = "w".repeat(200);
+        let late = [(
+            150usize..160,
+            HighlightStyle {
+                color: Some(gpui_kit::hsla(0.6, 0.5, 0.5, 1.)),
+                ..HighlightStyle::default()
+            },
+        )];
+        let mut styled = code_child(Some(&text), &late).expect("a line with runs paints its text");
         assert!(
             styled.downcast_mut::<StyledText>().is_some(),
-            "a wrapped line with colour runs paints as a StyledText that carries them"
+            "a line with colour runs paints as a StyledText that carries them, past the first visual line too"
         );
-        let mut plain =
-            code_child(Some("plain"), &[], true).expect("a wrapped line paints its text");
+        let mut plain = code_child(Some("plain"), &[]).expect("a line paints its text");
         assert!(
             plain.downcast_mut::<SharedString>().is_some(),
             "a line without runs paints plain, as before D38.3"
         );
         assert!(
-            code_child(None, &run(), true).is_none(),
+            code_child(None, &late).is_none(),
             "a filler half paints nothing"
-        );
-        let mut truncated = code_child(Some("fn main() {}"), &run(), false)
-            .expect("a truncated line paints its text");
-        assert!(
-            truncated.downcast_mut::<StyledText>().is_some(),
-            "the same runs paint styled when not wrapped too"
         );
     }
 

@@ -271,3 +271,77 @@ fn compare_stream_a_new_generation_reparses_the_card_it_kept(cx: &mut TestAppCon
         "and its lines keep colouring"
     );
 }
+
+/// Opens a Stream over two Rust files, `a.rs` (id 1) and `b.rs` (id 2), and draws it.
+fn open_two_rs(rig: &Rig, cx: &mut TestAppContext) {
+    let items = vec![
+        StreamItem {
+            id: 1,
+            path: "a.rs".to_owned(),
+            status: RowStatus::Different,
+            settled: true,
+        },
+        StreamItem {
+            id: 2,
+            path: "b.rs".to_owned(),
+            status: RowStatus::Different,
+            settled: true,
+        },
+    ];
+    let requests = items
+        .iter()
+        .map(|item| PairRequest {
+            id: item.id,
+            path: item.path.clone(),
+            left: None,
+            right: None,
+        })
+        .collect();
+    let list = StreamList { items, rules: 0 };
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_stream((list, requests), window, cx)
+        })
+    })
+    .expect("window");
+    rig.frame(cx);
+}
+
+#[gpui_kit::test]
+fn compare_stream_a_job_lands_on_the_right_card_after_an_item_was_inserted_before_it(
+    cx: &mut TestAppContext,
+) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    open_two_rs(&rig, cx);
+    let card = code_card(1);
+    send_card(&rig, 1, &card);
+    land(&rig, cx);
+    assert!(
+        !held_runs(&rig, cx, &card, 1).is_empty(),
+        "a.rs colours before the insertion"
+    );
+    // A plain-text item arrives before a.rs under the same generation, so a.rs moves from index 0
+    // to index 1 while the generation stays 1 (WR3).
+    rig.view.update(cx, |view, _| {
+        view.stream_insert_item_before(
+            1,
+            StreamItem {
+                id: 3,
+                path: "c.txt".to_owned(),
+                status: RowStatus::Different,
+                settled: true,
+            },
+        );
+    });
+    // A replacement card for a.rs needs a new job; it must still read a.rs, not the inserted c.txt.
+    let fresh = code_card(1);
+    send_card(&rig, 1, &fresh);
+    land(&rig, cx);
+    land(&rig, cx);
+    assert!(
+        !held_runs(&rig, cx, &fresh, 1).is_empty(),
+        "the job still lands on a.rs after an item was inserted before it"
+    );
+}

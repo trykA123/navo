@@ -34,6 +34,11 @@ struct Slot {
 #[derive(Default)]
 pub(super) struct StreamSyntax {
     slots: HashMap<u64, Slot>,
+    /// Item id to its index in the model's item list, so a job finds its path without a scan
+    /// (WR3). Rebuilt whenever the listed ids change, even under the same generation.
+    index: HashMap<u64, usize>,
+    /// The item ids, in order, that `index` was built from.
+    indexed: Vec<u64>,
 }
 
 impl StreamSyntax {
@@ -59,11 +64,45 @@ impl StreamSyntax {
 
     /// The jobs for `ids`: the held text cards among them that have no slot yet. Any other kind
     /// keeps drawing as before (D38.3).
-    fn jobs(&self, model: &StreamModel, ids: &[u64]) -> Vec<Job> {
+    fn jobs(&mut self, model: &StreamModel, ids: &[u64]) -> Vec<Job> {
+        self.refresh_index(model);
         ids.iter()
             .filter(|id| !self.slots.contains_key(*id))
-            .filter_map(|id| job(model, *id))
+            .filter_map(|id| self.job(model, *id))
             .collect()
+    }
+
+    /// Rebuilds the id-to-index map when the listed ids changed since it was built. The list can
+    /// change under the same generation (a resync that keeps it), so the ids, not the generation,
+    /// decide (WR3).
+    fn refresh_index(&mut self, model: &StreamModel) {
+        let items = model.items();
+        let same = self.indexed.len() == items.len()
+            && self
+                .indexed
+                .iter()
+                .zip(items)
+                .all(|(id, item)| *id == item.id);
+        if same {
+            return;
+        }
+        self.indexed = items.iter().map(|item| item.id).collect();
+        self.index = self.indexed.iter().copied().zip(0..).collect();
+    }
+
+    /// The job of item `id`: its held text card and the path of the listed item it belongs to,
+    /// found through the index instead of a scan of the whole list (WR3).
+    fn job(&self, model: &StreamModel, id: u64) -> Option<Job> {
+        let card = model.card(id)?;
+        if card.kind != PairKind::Text {
+            return None;
+        }
+        let at = *self.index.get(&id)?;
+        let path = model.items().get(at)?.path.clone();
+        Some(Job {
+            key: CardKey::new(id, model.generation(), card),
+            path,
+        })
     }
 
     /// Starts one background job per card, the whole card in one job since its snippets are small.
@@ -118,24 +157,6 @@ async fn deliver_later(
     let _ = this.update(cx, |window, cx| {
         window.deliver_stream_syntax(key, parsed, cx);
     });
-}
-
-/// The job of item `id`: its held text card and the path of the listed item it belongs to.
-fn job(model: &StreamModel, id: u64) -> Option<Job> {
-    let card = model.card(id)?;
-    if card.kind != PairKind::Text {
-        return None;
-    }
-    let path = model
-        .items()
-        .iter()
-        .find(|item| item.id == id)?
-        .path
-        .clone();
-    Some(Job {
-        key: CardKey::new(id, model.generation(), card),
-        path,
-    })
 }
 
 /// The items whose card the poll applied under the generation the model holds now.
@@ -215,5 +236,29 @@ impl ScreenOwner {
             .as_ref()
             .and_then(|screen| screen.stream.as_ref())
             .map_or(0, |stream| stream.syntax.slots.len())
+    }
+
+    /// Re-lists the open Stream's items with `item` inserted just before item `before`, under the
+    /// same generation, as a resync that keeps the generation does; for tests (WR3).
+    pub(in crate::window_view) fn stream_insert_item_before(
+        &mut self,
+        before: u64,
+        item: crate::compare_diff::StreamItem,
+    ) {
+        let Some(stream) = self.stream_mut() else {
+            return;
+        };
+        let mut list = crate::compare_diff::StreamList {
+            items: stream.model.items().to_vec(),
+            rules: stream.model.rules(),
+        };
+        let at = list
+            .items
+            .iter()
+            .position(|listed| listed.id == before)
+            .unwrap_or(list.items.len());
+        list.items.insert(at, item);
+        let generation = stream.model.generation();
+        stream.model.set_items(generation, list);
     }
 }
