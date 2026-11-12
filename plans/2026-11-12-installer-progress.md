@@ -78,7 +78,7 @@ Pin checked: [`Cargo.lock:11100-11104`](../Cargo.lock) (`velopack = "1.2.161"`),
 `Progress { elapsed, still_working, percent: Option<u8>, stage: Option<InstallStage> }` treats `percent: None` as the single source of truth for indeterminate UI:
 
 1. **Before child output / log creation:** On entering `Page::Installing` and until Velopack logs `"Extracting N app files..."` (or completes `.nupkg` copy on fresh install), `percent` is `None` -> bar pulses smoothly (`reduce_motion`: static 40% fill), no `0%` freeze.
-2. **Missing, locked, or unparseable log:** If `velopack_log` does not exist yet, cannot be opened, or contains unrecognized lines, `LogTailer` ignores errors cleanly (`io::ErrorKind` non-fatal) and keeps `percent = None`.
+2. **Missing, locked, or unparsable log:** If `velopack_log` does not exist yet, cannot be opened, or contains unrecognized lines, `LogTailer` ignores errors cleanly (`io::ErrorKind` non-fatal) and keeps `percent = None`.
 3. **Zero or empty byte/entry totals:** If `declared_files == Some(0)` or `total_bytes == 0`, emit `None` rather than dividing by zero or jumping straight to `100%`.
 4. **Post-extract / Defender / hook / `retry_io_ex` stall:** Once in `Finalizing` without log progress for `2 s`, `Estimator` clears `percent` back to `None` -> bar switches back to pulse (never stalls at `92%` or `99%`).
 5. **180 s timeout (`still_working`):** Existing `installing-still` notice replaces tips after `180 s` (`pages_b.rs:219`) regardless of `percent`.
