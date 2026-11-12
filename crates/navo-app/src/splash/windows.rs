@@ -1,3 +1,5 @@
+//! The Win32 splash window: a layered bitmap driven by the timing loop.
+
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 use std::sync::mpsc::Receiver;
@@ -22,18 +24,34 @@ use super::canvas::{self, Canvas, Look};
 use super::timing::{self, Event, Frame, Surface};
 use super::windows_desktop::{colorref, monitor, motion, open_window, status_font, theme};
 
-pub(super) fn run(events: &Receiver<Event>) {
+/// Runs the splash window thread with `art` until `events` ends.
+pub(super) fn run(events: &Receiver<Event>, art: Art) {
     let age = crate::metrics::process_age().unwrap_or_default();
     let origin = Instant::now().checked_sub(age).unwrap_or_else(Instant::now);
-    let mut native = Native::default();
+    let mut native = Native {
+        art,
+        ..Native::default()
+    };
     timing::drive(motion(), || origin.elapsed(), events, &mut native);
 }
 
-#[derive(Default)]
 struct Native {
+    art: Art,
     near: Option<PhysicalRect>,
     window: Option<Window>,
     has_failed: bool,
+}
+
+impl Default for Native {
+    /// A surface with Navo's art and no window yet.
+    fn default() -> Self {
+        Self {
+            art: Art::NAVO,
+            near: None,
+            window: None,
+            has_failed: false,
+        }
+    }
 }
 
 impl Surface for Native {
@@ -47,7 +65,7 @@ impl Surface for Native {
 
     fn paint(&mut self, frame: Frame) {
         if self.window.is_none() && !self.has_failed {
-            self.window = Window::create(self.near).map(|mut window| {
+            self.window = Window::create(self.near, self.art).map(|mut window| {
                 window.draw(frame);
                 window.show();
                 window
@@ -93,10 +111,11 @@ struct Window {
 }
 
 impl Window {
-    fn create(near: Option<PhysicalRect>) -> Option<Self> {
+    /// Creates the splash window near `near`, drawing `art`.
+    fn create(near: Option<PhysicalRect>, art: Art) -> Option<Self> {
         let (work, scale) = monitor(near);
         let look = theme();
-        let canvas = Canvas::with_art(scale, look, &Art::NAVO)?;
+        let canvas = Canvas::with_art(scale, look, &art)?;
         let origin = centre(work, &canvas);
         let hwnd = open_window(origin, canvas.width() as i32, canvas.height() as i32)?;
         let mut window = Self {
@@ -322,7 +341,7 @@ mod tests {
 
     #[test]
     fn the_splash_window_is_created_drawn_and_destroyed_without_showing() {
-        let mut window = Window::create(None).unwrap();
+        let mut window = Window::create(None, Art::NAVO).unwrap();
         window.draw(Frame {
             bar: 0.5,
             is_slow: true,
