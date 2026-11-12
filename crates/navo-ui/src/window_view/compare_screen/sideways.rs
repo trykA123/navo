@@ -157,12 +157,13 @@ impl ScrollbarHandle for SidewaysHandle {
     }
 }
 
-/// The width of one monospace column at the body's text size, in px. A text system that
-/// measures nothing (tests) gets 0.6 × the size.
+/// The width of one monospace column at the body's text size, in px: the pen advance of "0",
+/// as the line shaper steps. A text system that measures nothing (tests) gets 0.6 × the size.
 pub(in crate::window_view::compare_screen) fn advance(window: &Window, t: &Theme) -> Pixels {
     let system = window.text_system();
     let id = system.resolve_font(&font(t.typography.mono_font.clone()));
-    match system.ch_width(id, t.typography.small) {
+    // Not `ch_width`: on Windows that is the ink width of "0", about 0.74 of the advance.
+    match system.ch_advance(id, t.typography.small) {
         Ok(width) if width > px(0.) => width,
         _ => t.typography.small * 0.6,
     }
