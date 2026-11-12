@@ -24,6 +24,7 @@ mod mode_tests;
 mod parent_acl_rule;
 pub mod payload;
 pub mod placement;
+pub mod progress_log;
 pub mod runner;
 #[cfg(test)]
 mod runner_fake;
