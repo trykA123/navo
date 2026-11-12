@@ -51,7 +51,7 @@ mod search_hooks;
 mod service_version_step;
 mod settings;
 mod shell_menu;
-mod splash;
+pub mod splash;
 mod startup;
 mod terminal;
 mod updater;
