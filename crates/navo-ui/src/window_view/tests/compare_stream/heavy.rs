@@ -10,6 +10,7 @@ use gpui_kit::{AppContext as _, Pixels, TestAppContext, px};
 
 use super::super::compare_screen::{Rig, rig};
 use super::super::held::gpu_images;
+use super::super::screen_access::{screen_read, screen_update};
 use crate::compare_diff::card::{LINE_HEIGHT, NOTE_HEIGHT};
 use crate::compare_diff::{
     BytesCard, CARD_HUNKS, Card, CardDetail, CardScan, HEX_CARD_ROWS, HexWindow, ImageCard,
@@ -93,7 +94,7 @@ impl Rig {
 
     /// The index of the first row equal to `wanted`.
     fn row_index(&self, cx: &mut TestAppContext, wanted: StreamRow) -> usize {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (_, rows, _) = view.stream_probe().expect("a Stream");
             rows.iter().position(|row| *row == wanted).expect("the row")
         })
@@ -101,7 +102,7 @@ impl Rig {
 
     /// The Stream's rows, to show a detail splices none.
     fn rows(&self, cx: &mut TestAppContext) -> Vec<StreamRow> {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (_, rows, _) = view.stream_probe().expect("a Stream");
             rows.to_vec()
         })
@@ -109,7 +110,7 @@ impl Rig {
 
     /// The height the list gave row `at`; the row must be drawn for the list to know it.
     fn row_height(&self, cx: &mut TestAppContext, at: usize) -> Pixels {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (_, _, list) = view.stream_probe().expect("a Stream");
             list.bounds_for_item(at).expect("a drawn row").size.height
         })
@@ -317,7 +318,7 @@ pub(super) fn image_detail(thumbs: usize) -> Arc<CardDetail> {
 /// Scrolls the Stream to `item` and lets the focus settle, as a real scroll does.
 fn scroll_far(cx: &mut TestAppContext, rig: &Rig, item: usize) {
     rig.scroll_to_item(cx, item);
-    rig.view.update(cx, |view, cx| view.stream_scrolled(cx));
+    screen_update(&rig.view, cx, |view, cx| view.stream_scrolled(cx));
     cx.executor().advance_clock(Duration::from_millis(200));
     rig.frame(cx);
 }

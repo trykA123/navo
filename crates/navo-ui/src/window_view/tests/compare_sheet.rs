@@ -9,6 +9,7 @@ use gpui_kit::{AppContext as _, TestAppContext};
 use navo_l10n::tr;
 
 use super::compare_screen::{Rig, rig};
+use super::screen_access::screen_read;
 use crate::compare_diff::{
     Card, CardRow, CopyDirection, DiffRow, HunkView, PairKind, SheetPlan, SheetResult, SheetRow,
     StreamUpdate, ViewedKey,
@@ -101,7 +102,7 @@ impl Rig {
 
     /// The status line's note as (text, has Undo, is an error).
     fn last_note(&self, cx: &mut TestAppContext) -> Option<(String, bool, bool)> {
-        self.view.read_with(cx, |view, _| view.copy_note())
+        screen_read(&self.view, cx, |view, _| view.copy_note())
     }
 
     /// Opens a Stream of three files; cards 1 and 3 have three changes, card 2 is not sent.
@@ -121,7 +122,7 @@ impl Rig {
 
     /// The sheet's lines, or `None` while it is closed.
     fn sheet(&self, cx: &mut TestAppContext) -> Option<Vec<String>> {
-        self.view.read_with(cx, |view, _| view.sheet_lines())
+        screen_read(&self.view, cx, |view, _| view.sheet_lines())
     }
 
     /// The app plans: file 1 is written, file 3 changed since it was shown.
@@ -281,7 +282,7 @@ fn compare_sheet_a_refused_job_frees_the_copy_keys_and_reloads_nothing(cx: &mut 
     assert!(rig.copy_key_waits(cx), "held while the job runs");
     rig.diff.sheet_sink()(SheetResult::Refused(tr("compare-copy-changed")));
     rig.frame(cx);
-    let generation = rig.view.read_with(cx, |view, _| {
+    let generation = screen_read(&rig.view, cx, |view, _| {
         view.stream_probe().expect("a Stream").0.generation()
     });
     assert_eq!(generation, 1, "a refusal rebuilds no card");

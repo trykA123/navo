@@ -6,6 +6,7 @@ use std::sync::Arc;
 use gpui_kit::TestAppContext;
 
 use super::super::compare_screen::{Rig, rig};
+use super::super::screen_access::{screen_read, screen_update};
 use super::super::settle;
 use super::stop;
 use crate::browser::{CompareKind, CompareRow, CompareSide, CompareUpdate, RowStatus};
@@ -76,7 +77,7 @@ impl Rig {
 
     /// The paths of the Stream's items.
     pub(super) fn item_paths(&self, cx: &mut TestAppContext) -> Vec<String> {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             let (model, _, _) = view.stream_probe().expect("a Stream");
             model.items().iter().map(|item| item.path.clone()).collect()
         })
@@ -84,7 +85,7 @@ impl Rig {
 
     /// The id and path of the open file diff's pair.
     pub(super) fn shown(&self, cx: &mut TestAppContext) -> Option<(u64, String)> {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             view.file_screen()
                 .map(|(request, _)| (request.id, request.path.clone()))
         })
@@ -92,12 +93,10 @@ impl Rig {
 
     /// Delivers a two-hunk text to the last opened pair; returns the file view's current change.
     fn open_two_hunks(&self, cx: &mut TestAppContext) -> Option<usize> {
-        let request = self
-            .view
-            .read_with(cx, |view, _| {
-                view.file_screen().map(|(request, _)| request.id)
-            })
-            .unwrap_or(1);
+        let request = screen_read(&self.view, cx, |view, _| {
+            view.file_screen().map(|(request, _)| request.id)
+        })
+        .unwrap_or(1);
         let opened = DiffUpdate::Opened {
             request,
             kind: PairKind::Text,
@@ -105,7 +104,7 @@ impl Rig {
         };
         (self.diff.pair_sink())(opened);
         self.frame(cx);
-        self.view.update(cx, |view, _| {
+        screen_update(&self.view, cx, |view, _| {
             view.file_probe(crate::compare_diff::Layout::SideBySide)
                 .and_then(|(current, _, _)| current)
         })
@@ -122,9 +121,9 @@ impl Rig {
         })
     }
 
+    /// Whether the compare screen holds an open Stream.
     fn stream_open(&self, cx: &mut TestAppContext) -> bool {
-        self.view
-            .read_with(cx, |view, _| view.stream_probe().is_some())
+        screen_read(&self.view, cx, |view, _| view.stream_probe().is_some())
     }
 }
 

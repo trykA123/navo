@@ -9,6 +9,7 @@ use gpui_kit::{Pixels, TestAppContext, px};
 use navo_core::shell_menu::ItemId;
 
 use super::super::compare_screen::{Rig, rig};
+use super::super::screen_access::screen_read;
 use crate::compare_diff::{
     Card, CardRow, DiffRow, HunkView, PairKind, StreamRow, StreamUpdate, ViewedKey,
 };
@@ -58,19 +59,20 @@ fn open_card(rig: &Rig, cx: &mut TestAppContext, card: Arc<Card>) {
 
 /// Whether the open Stream's look wraps.
 fn wrapped(rig: &Rig, cx: &mut TestAppContext) -> bool {
-    rig.view
-        .read_with(cx, |view, _| view.stream_look().expect("a Stream").0.wrap)
+    screen_read(&rig.view, cx, |view, _| {
+        view.stream_look().expect("a Stream").0.wrap
+    })
 }
 
 /// The height the list gave the card's first line row; the row must be drawn to measure it.
 fn line_height(rig: &Rig, cx: &mut TestAppContext) -> Pixels {
-    let at = rig.view.read_with(cx, |view, _| {
+    let at = screen_read(&rig.view, cx, |view, _| {
         let (_, rows, _) = view.stream_probe().expect("a Stream");
         rows.iter()
             .position(|row| matches!(row, StreamRow::Line { .. }))
             .expect("a line row")
     });
-    rig.view.read_with(cx, |view, _| {
+    screen_read(&rig.view, cx, |view, _| {
         let (_, _, list) = view.stream_probe().expect("a Stream");
         list.bounds_for_item(at).expect("a drawn row").size.height
     })
@@ -78,10 +80,8 @@ fn line_height(rig: &Rig, cx: &mut TestAppContext) -> Pixels {
 
 /// The labels and checked states of the entries of the open View menu.
 fn menu_entries(rig: &Rig, cx: &mut TestAppContext) -> Vec<(String, bool)> {
-    let menu = rig
-        .view
-        .read_with(cx, |view, _| view.compare_menu_view())
-        .expect("an open View menu");
+    let menu =
+        screen_read(&rig.view, cx, |view, _| view.compare_menu_view()).expect("an open View menu");
     menu.read_with(cx, |menu, _| {
         menu.menu()
             .items
@@ -137,10 +137,8 @@ fn compare_stream_wrap_off_keeps_the_long_line_one_row_tall(cx: &mut TestAppCont
 /// Closes the open View menu choosing the entry that runs `compare::ToggleWrap`, as a click
 /// would; the menu's own event path then dispatches it.
 fn choose_wrap(rig: &Rig, cx: &mut TestAppContext) {
-    let menu = rig
-        .view
-        .read_with(cx, |view, _| view.compare_menu_view())
-        .expect("an open View menu");
+    let menu =
+        screen_read(&rig.view, cx, |view, _| view.compare_menu_view()).expect("an open View menu");
     menu.update(cx, |_, cx| {
         cx.emit(ContextMenuEvent::Chosen(ItemId::Action(
             "compare::ToggleWrap",
