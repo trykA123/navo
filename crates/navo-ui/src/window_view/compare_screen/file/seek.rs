@@ -109,8 +109,8 @@ impl FileView {
         if !self.index_pending()
             && std::mem::take(&mut self.centre)
             && let Some(at) = self.current
+            && let Some(&row) = self.shape(layout).starts.get(at)
         {
-            let row = self.shape(layout).starts[at];
             self.centre_item(self.list_row(row));
         }
         self.apply_seek(layout);

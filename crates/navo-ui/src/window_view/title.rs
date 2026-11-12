@@ -1,31 +1,30 @@
 //! The window title bar: the search field and the trailing "View" button, put together into
 //! the `NavoTitleBar` drawn at the top of every window.
 
-use gpui_kit::Action;
 use gpui_kit::canvas;
 
 use super::NavoWindow;
 use super::keys::OpenViewMenu;
-use crate::commands::compare::ViewMenu as CompareViewMenu;
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant};
 use crate::settings::WindowParts;
 use crate::title_bar::{HeaderSearch, NavoTitleBar};
 
 /// The title-bar "View" button. `compare_open` is true while the compare screen is up: the
-/// click then runs the compare View menu with "Wrap lines" (W8n), else the window's, as today.
-fn view_button(compare_open: bool) -> impl IntoElement {
+/// click then opens the compare View menu with "Wrap lines" directly (W8n), whatever holds
+/// focus, else the window's, as today.
+fn view_button(compare_open: bool, cx: &mut Context<NavoWindow>) -> impl IntoElement {
+    let open = cx.listener(move |view: &mut NavoWindow, _: &ClickEvent, window, cx| {
+        if compare_open {
+            view.open_look_menu(window, cx);
+        } else {
+            window.dispatch_action(Box::new(OpenViewMenu), cx);
+        }
+    });
     Button::new("window-view", "View")
         .variant(ButtonVariant::Ghost)
         .tooltip("View menu (Alt+V)")
-        .on_click(move |_, window, cx| {
-            let action: Box<dyn Action> = if compare_open {
-                Box::new(CompareViewMenu)
-            } else {
-                Box::new(OpenViewMenu)
-            };
-            window.dispatch_action(action, cx);
-        })
+        .on_click(open)
 }
 
 impl NavoWindow {
@@ -78,7 +77,7 @@ impl NavoWindow {
             bar
         };
         let bar = if self.can_open_window_menu() {
-            bar.trailing(view_button(self.compare.screen.is_some()))
+            bar.trailing(view_button(self.compare.screen.is_some(), cx))
         } else {
             bar
         };

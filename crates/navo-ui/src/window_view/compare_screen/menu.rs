@@ -203,7 +203,11 @@ impl ScreenOwner {
     }
 
     /// Opens the View menu under the header, at the right edge.
-    fn open_look_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::window_view) fn open_look_menu(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let t = tokens::current(cx).clone();
         let hex = self
             .compare
