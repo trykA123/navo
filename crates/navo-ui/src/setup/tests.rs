@@ -1,6 +1,18 @@
 //! Navigation guards for the installer display contract, independent of the setup engine.
 
-use super::{SetupAction, SetupCheck, SetupPage, SetupView, Strings, access_keys};
+use std::time::Duration;
+
+use super::{SetupAction, SetupCheck, SetupPage, SetupProgress, SetupView, Strings, access_keys};
+
+#[test]
+fn from_elapsed_keeps_the_time_and_the_deadline_flag() {
+    let calm = SetupProgress::from_elapsed(Duration::from_secs(42), false);
+    assert_eq!(calm.elapsed, Duration::from_secs(42));
+    assert!(!calm.still_working);
+    let slow = SetupProgress::from_elapsed(Duration::from_secs(180), true);
+    assert_eq!(slow.elapsed, Duration::from_secs(180));
+    assert!(slow.still_working);
+}
 
 #[test]
 fn can_next_is_false_when_problem_is_set() {

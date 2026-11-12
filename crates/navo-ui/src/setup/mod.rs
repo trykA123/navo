@@ -8,6 +8,7 @@ use crate::{AnyElement, App, IntoElement, Window};
 use gpui_kit::{Entity, RenderOnce};
 
 mod frame;
+mod installing;
 pub mod keys;
 #[cfg(test)]
 mod keys_tests;
@@ -77,6 +78,16 @@ pub enum SetupAction {
 pub struct SetupProgress {
     pub elapsed: Duration,
     pub still_working: bool,
+}
+
+impl SetupProgress {
+    /// Timing only, for callers that have no verified percentage to show.
+    pub fn from_elapsed(elapsed: Duration, still_working: bool) -> Self {
+        Self {
+            elapsed,
+            still_working,
+        }
+    }
 }
 
 /// Display values and engine gates; messages are supplied by the shell's localization.
@@ -220,7 +231,7 @@ impl RenderOnce for Page {
             SetupPage::Licence => pages_a::licence(&ctx),
             SetupPage::Folder => pages_a::folder(&ctx),
             SetupPage::Shortcuts => pages_b::shortcuts(&ctx),
-            SetupPage::Installing => pages_b::installing(&ctx),
+            SetupPage::Installing => installing::installing(&ctx),
             SetupPage::Finish => pages_b::finish(&ctx),
             SetupPage::Failed => pages_b::failed(&ctx),
             SetupPage::Blocked => pages_c::blocked(&ctx),
