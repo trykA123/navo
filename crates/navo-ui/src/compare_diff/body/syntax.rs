@@ -17,6 +17,30 @@ use crate::tokens::{TintLook, on_tint};
 /// The language `languages::detect` names for text with no grammar.
 const PLAIN: &str = "text";
 
+/// How many bytes of a side's first lines the language sniffer reads.
+const HEAD: usize = 1024;
+
+/// Parses one side of a pair named `path`, whose lines are `lines`, as a document of its own:
+/// the language comes from the file name and the head of the text, and `lines` is parsed to the
+/// end. `None` for plain text or a side over `cap` bytes (F3's `EDIT_LIMIT`). Blocks for the
+/// whole parse: call it off the UI thread.
+pub(crate) fn parse_side(path: &str, lines: &[String], cap: u64) -> Option<SideSyntax> {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(path);
+    let mut head = String::new();
+    for line in lines {
+        if head.len() >= HEAD {
+            break;
+        }
+        head.push_str(line);
+        head.push('\n');
+    }
+    let language = crate::languages::detect(name, head.as_bytes());
+    SideSyntax::parse(language, lines, cap)
+}
+
 /// One side's text parsed as a single document, and where each of its lines starts.
 pub struct SideSyntax {
     highlighter: SyntaxHighlighter,

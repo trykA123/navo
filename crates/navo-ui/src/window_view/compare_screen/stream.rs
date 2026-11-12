@@ -6,6 +6,7 @@ mod details;
 mod focus;
 mod keys;
 mod splice;
+mod syntax;
 mod thumbs;
 mod view;
 
@@ -75,6 +76,8 @@ pub(super) struct StreamScreen {
     inbox: StreamInbox,
     /// The GPU textures of the image cards near the view (D26.3).
     pub(super) thumbs: Thumbs,
+    /// The syntax parses of the text cards the Stream holds, by item id (D38.3).
+    syntax: syntax::StreamSyntax,
     /// The first and last visible item positions the app last heard as focus.
     sent: Option<(usize, usize)>,
     settle: Option<Task<()>>,
@@ -208,6 +211,7 @@ impl NavoWindow {
             rerun: Rerun::default(),
             inbox,
             thumbs: Thumbs::default(),
+            syntax: syntax::StreamSyntax::default(),
             sent: None,
             settle: None,
         };
@@ -254,6 +258,7 @@ impl NavoWindow {
         }
         if updates.is_empty() {
             if resynced {
+                stream.sync_syntax(&updates, cx);
                 stream.sync_thumbs(cx);
             }
             return resynced;
@@ -264,6 +269,7 @@ impl NavoWindow {
         {
             stream.drop_far_cards();
         }
+        stream.sync_syntax(&updates, cx);
         stream.sync_rows();
         stream.sync_thumbs(cx);
         true

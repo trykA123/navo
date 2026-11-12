@@ -329,6 +329,7 @@ fn stream_column(t: &tokens::Theme, layout: Layout) -> Div {
         model: &model,
         layout,
         bars: None,
+        syntax: None,
     };
     let views: Vec<AnyElement> = (0..rows.len())
         .map(|at| stream_row_view(&rows, at, &ctx))

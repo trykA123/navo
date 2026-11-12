@@ -3,6 +3,7 @@
 
 mod header;
 mod line;
+pub mod syntax;
 
 use navo_l10n::{t, tr};
 
@@ -27,7 +28,8 @@ const ICON: f32 = 14.;
 /// Size of the status mark badge, in px.
 const BADGE: f32 = 18.;
 
-/// What every card row needs: the theme, the Stream model, the layout and the copy bars.
+/// What every card row needs: the theme, the Stream model, the layout, the copy bars and, for a
+/// text card whose hunks are parsed, the colours its lines draw with (D38.3).
 #[derive(Clone, Copy)]
 pub struct CardCtx<'a> {
     pub t: &'a Theme,
@@ -35,6 +37,9 @@ pub struct CardCtx<'a> {
     pub layout: Layout,
     /// The hover bars of copyable changes; `None` draws none.
     pub bars: Option<&'a CardBars>,
+    /// The card's parsed hunk snippets and the theme's live highlight colours; `None` draws every
+    /// line as plain text, as before D38.3.
+    pub syntax: Option<syntax::CardLook<'a>>,
 }
 
 /// Builds the element for `rows[at]`. The card's last row gets the rounded bottom corners.
@@ -70,14 +75,15 @@ fn card_line(
 ) -> AnyElement {
     let model = ctx.model;
     let id = model.items()[item].id;
-    let card = model.card(id);
-    let row = card.and_then(|card| card.rows.get(card_row as usize));
+    let Some(card) = model.card(id) else {
+        return note(ctx.t, last, String::new());
+    };
     let Some(CardRow::Line {
         row,
         hunk,
         left,
         right,
-    }) = row
+    }) = card.rows.get(card_row as usize)
     else {
         return note(ctx.t, last, String::new());
     };
@@ -88,13 +94,18 @@ fn card_line(
         current: cursor.item == item && cursor.hunk == Some(*hunk),
         last,
     };
+    let (left_runs, right_runs) = ctx.syntax.map_or((Vec::new(), Vec::new()), |parsed| {
+        parsed.line_runs(ctx.t, &card.rows, card_row)
+    });
     let text = line::Texts {
         left: left.as_deref(),
         right: right.as_deref(),
+        left_runs: &left_runs,
+        right_runs: &right_runs,
     };
     let drawn = line::view(ctx.t, look, *row, text).into_any_element();
-    match ctx.bars.zip(card).filter(|(_, card)| copyable(card, *hunk)) {
-        Some((bars, card)) => {
+    match ctx.bars.filter(|_| copyable(card, *hunk)) {
+        Some(bars) => {
             let first = half != Half::Right && starts_hunk(card, card_row);
             with_bar(ctx.t, drawn, bars, ((at, id, *hunk), first))
         }

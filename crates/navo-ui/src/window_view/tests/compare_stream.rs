@@ -20,6 +20,7 @@ mod entry;
 mod heavy;
 mod heavy_thumbs;
 mod search;
+mod syntax;
 mod vr1;
 
 /// `count` differing items with ids 1..=count, and their pair requests.
