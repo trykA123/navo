@@ -2,7 +2,8 @@ use navo_core::{Command, CursorMove, Location, PaneId};
 
 use super::super::Browser;
 use super::RowStatus;
-use super::mode::{ExitStep, Saved};
+use super::binding::Saved;
+use super::mode::ExitStep;
 
 impl Browser {
     /// Enter: a folder pair opens in both panes, a file row asks for the file diff.
@@ -100,14 +101,17 @@ impl Browser {
     }
 
     /// Leaves compare mode: the engine is cancelled and both panes return to where they were.
+    /// The binding is always there with the mode, so a `None` here means no compare to leave.
     pub fn leave_compare(&mut self) {
         let Some(mode) = self.hooks.compare.mode.take() else {
             return;
         };
-        let focused = mode.focused;
-        let [left, right] = mode.saved.clone();
+        let Some(binding) = self.hooks.compare.binding.take() else {
+            return;
+        };
         drop(mode);
-        for saved in [left, right] {
+        let focused = binding.focused;
+        for saved in binding.saved {
             self.restore_pane(saved);
         }
         self.focus_compare_pane(focused);
@@ -178,10 +182,10 @@ impl Browser {
 
     /// Navigates each compare pane; `name` is selected once its listing arrives.
     fn compare_panes(&mut self, targets: [(Location, Option<String>); 2]) {
-        let Some(mode) = self.hooks.compare.mode.as_ref() else {
+        let Some(binding) = self.hooks.compare.binding.as_ref() else {
             return;
         };
-        let panes = [mode.saved[0].pane, mode.saved[1].pane];
+        let panes = [binding.saved[0].pane, binding.saved[1].pane];
         let focused = self.state.focused_pane();
         for (pane, (location, name)) in panes.into_iter().zip(targets) {
             self.navigate_pane(pane, location, name);
