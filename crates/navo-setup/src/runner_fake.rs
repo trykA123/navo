@@ -15,10 +15,12 @@ use std::time::Duration;
 
 use navo_core::FileIdentity;
 
+use crate::cli::CliHost;
 use crate::host::Host;
 use crate::marker::Marker;
 use crate::mode::Discovery;
 use crate::payload::Payload;
+use crate::placement::FolderWarning;
 use crate::runner::{Child, Cleanup, Extracted, MarkerId, Pin, Registry, Verified};
 use crate::upgrade::Staged;
 
@@ -73,6 +75,7 @@ pub struct FakeHost {
     pub spawned: bool,
     pub writable: VecDeque<bool>,
     pub running: VecDeque<io::Result<bool>>,
+    pub parent_warning: Option<FolderWarning>,
     pub extract_ok: bool,
     pub stage_ok: bool,
     pub replace_ok: bool,
@@ -106,6 +109,7 @@ impl FakeHost {
             spawned: false,
             writable: VecDeque::new(),
             running: VecDeque::new(),
+            parent_warning: None,
             extract_ok: true,
             stage_ok: true,
             replace_ok: true,
@@ -154,6 +158,13 @@ impl Default for FakeHost {
 /// Pops a scripted answer or returns the default.
 fn next<T>(queue: &mut VecDeque<T>, default: T) -> T {
     queue.pop_front().unwrap_or(default)
+}
+
+impl CliHost for FakeHost {
+    /// Returns the scripted parent warning.
+    fn parent_warning(&mut self, _root: &Path) -> Option<FolderWarning> {
+        self.parent_warning
+    }
 }
 
 impl Host for FakeHost {

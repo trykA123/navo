@@ -24,8 +24,12 @@ impl Probe for FakeProbe {
         &mut self,
         _: &Candidate,
         _: &Space,
-    ) -> (Result<(), FolderProblem>, Option<u64>) {
-        (Ok(()), Some(1))
+    ) -> (
+        Result<(), FolderProblem>,
+        Option<crate::placement::FolderWarning>,
+        Option<u64>,
+    ) {
+        (Ok(()), None, Some(1))
     }
     fn start_navo(&mut self, root: &Path) -> std::io::Result<()> {
         self.started.push(root.to_owned());

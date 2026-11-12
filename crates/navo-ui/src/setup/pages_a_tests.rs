@@ -77,6 +77,24 @@ fn folder_page_names_its_controls_and_browse_sends_an_action(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
+fn folder_page_shows_a_warning_line_without_a_problem(cx: &mut TestAppContext) {
+    let text = "Other people on this PC can change a folder above this one. Navo still works here, but a folder directly on a drive, such as C:\\Navo, is safer.";
+    let mut view = folder_view(false);
+    view.problem = None;
+    view.notice = Some(text.into());
+    view.can_next = true;
+    assert!(view.can_next());
+    let (window, _) = open(cx, view);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let warning = window.find("folder-warning");
+        assert_eq!(warning.role(), Some(Role::Status));
+        assert_eq!(warning.label(), Some(text));
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
 fn a_locked_folder_turns_browse_off(cx: &mut TestAppContext) {
     let (window, sent) = open(cx, folder_view(true));
     cx.update_window(window, |_, window, cx| {
