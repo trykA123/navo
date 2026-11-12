@@ -152,7 +152,7 @@ The app icon and wordmark live in `assets/brand/`. After editing an SVG there, r
 
 `cargo xtask gate` runs the whole quality gate. `cargo xtask gate --coverage` adds the coverage floors.
 
-Workers run `cargo xtask check -p <crate> [-p <crate>...]` on the crates they changed. It runs fmt, clippy, taplo, typos, size, l10n, colors and the nextest run for those crates only. The full gate runs on `main` after merging.
+Workers run `cargo xtask check -p <crate> [-p <crate>...]` on the crates they changed. It runs fmt, clippy, taplo, typos, size, l10n, colors, seams and the nextest run for those crates only. The full gate runs on `main` after merging.
 
 The gate runs, in order:
 
@@ -163,11 +163,12 @@ The gate runs, in order:
 5. size limits
 6. l10n: the Fluent files parse, every literal message id exists and is used, and the count of hard-coded texts (capitalised literals of two or more words in non-test code of `navo-ui` and `navo-app`) matches `xtask/l10n-allow.txt`
 7. colors: no colour is built outside the theme token layer (`rgb(`, `hsla(`, `Hsla {`, `black()`, SVG `fill="#`), except the files listed with a reason in `xtask/colors-allow.txt`
-8. cargo-deny
-9. cargo-audit
-10. nextest
-11. doc tests
-12. coverage (only with `--coverage`)
+8. seams: no `NavoWindow`, `Browser` or `self.browser` in the compare screen, diff and list modules
+9. cargo-deny
+10. cargo-audit
+11. nextest
+12. doc tests
+13. coverage (only with `--coverage`)
 
 Other subcommands: `cargo xtask size`, `cargo xtask l10n [--list]`, `cargo xtask colors`, `cargo xtask coverage`, `cargo xtask binsize <path>`, `cargo xtask bench-copy` and `cargo xtask perf-fixture`.
 
