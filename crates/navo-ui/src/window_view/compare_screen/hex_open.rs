@@ -17,7 +17,7 @@ impl ScreenOwner {
         let Some((tag, active, request)) = self.pending_hex() else {
             return;
         };
-        let files = self.files.clone();
+        let files = self.screen_files();
         let opening =
             cx.background_spawn(async move { hex::HexView::open_sides(&request, &files) });
         let task = cx.spawn(async move |this, cx| {

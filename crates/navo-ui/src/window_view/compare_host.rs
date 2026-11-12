@@ -1,10 +1,11 @@
 //! The window side of the compare screen: every call between `NavoWindow` and the screen goes
 //! through here (NC54, NC55).
 
+use super::FileHooks;
 use super::NavoWindow;
 use super::compare_screen::items_of;
 use crate::browser::FileDiffRequest;
-use crate::compare_diff::PairRequest;
+use crate::compare_diff::{CompareOptions, PairRequest};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
 
@@ -83,5 +84,17 @@ impl ScreenOwner {
         cx: &mut App,
     ) -> bool {
         self.focus_file_screen(window, cx)
+    }
+
+    // Owner inputs: N6 gives these the same names on the entity.
+
+    /// The compare settings the screen opens a pair with, read from the owner's values.
+    pub(in crate::window_view) fn screen_options(&self) -> CompareOptions {
+        CompareOptions::from_values(&self.values)
+    }
+
+    /// The app's file hooks, how the screen reads a side's bytes and bodies.
+    pub(in crate::window_view) fn screen_files(&self) -> FileHooks {
+        self.files.clone()
     }
 }

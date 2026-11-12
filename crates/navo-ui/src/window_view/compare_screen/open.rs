@@ -9,9 +9,9 @@ use super::{drawers, file, look, pick, sides_label, switch};
 use crate::compare_diff::{CompareOptions, PairRequest, PairText};
 use crate::prelude::*;
 
-/// The compare options from `window`'s settings values.
+/// The compare options the owner's settings give the screen.
 pub(super) fn opts(window: &ScreenOwner) -> CompareOptions {
-    CompareOptions::from_values(&window.values)
+    window.screen_options()
 }
 
 /// Drops a closed file screen; its texts' last references go to a background task, so a
