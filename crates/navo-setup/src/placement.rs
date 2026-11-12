@@ -9,6 +9,10 @@ use crate::syntax::FolderProblem;
 #[path = "placement_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "placement_admin_tests.rs"]
+mod admin_tests;
+
 /// Volume serial plus the 128-bit file id that identifies one folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileId {
@@ -46,6 +50,8 @@ pub struct Refused {
     pub never_inside: Vec<Protected>,
     pub never_equal: Vec<Protected>,
     pub fresh_only: Vec<Protected>,
+    /// Atom 0: Program Files folders that need administrator rights; removed by E10.
+    pub admin_only: Vec<Protected>,
 }
 
 /// The drive kind returned by `GetDriveTypeW`.
@@ -141,6 +147,9 @@ pub fn check(
     if !matches!(facts.drive, DriveKind::Fixed | DriveKind::Removable) {
         return Err(FolderProblem::DriveNotLocal);
     }
+    if let Some(problem) = refused_problem(chain, refused, names) {
+        return Err(problem);
+    }
     if !facts.writable {
         return Err(FolderProblem::NotWritable);
     }
@@ -150,6 +159,25 @@ pub fn check(
         .max(space.velopack_requirement());
     if facts.free < required {
         return Err(FolderProblem::NotEnoughSpace);
+    }
+    Ok(())
+}
+
+/// The refused-folder rule: the first group the candidate falls in, or `None`.
+///
+/// IW28's admin-only folders come first, so Program Files says what it needs instead of
+/// `NotWritable`; the IW8a groups follow unchanged.
+pub fn refused_problem(
+    chain: &Chain,
+    refused: &Refused,
+    names: &dyn NameEq,
+) -> Option<FolderProblem> {
+    if refused
+        .admin_only
+        .iter()
+        .any(|folder| inside(chain, folder, names))
+    {
+        return Some(FolderProblem::NeedsAdministrator);
     }
     if refused
         .never_inside
@@ -164,9 +192,9 @@ pub fn check(
             .iter()
             .any(|folder| inside(chain, folder, names))
     {
-        return Err(FolderProblem::ProtectedFolder);
+        return Some(FolderProblem::ProtectedFolder);
     }
-    Ok(())
+    None
 }
 
 /// Returns the warning for a checked folder, or `None` when nothing needs saying.

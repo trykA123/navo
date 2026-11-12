@@ -343,6 +343,7 @@ fn clean_refused() -> Refused {
         ],
         never_equal: Vec::new(),
         fresh_only: vec![protected(5, &["NavoApp"], Some(false))],
+        ..Refused::default()
     }
 }
 
