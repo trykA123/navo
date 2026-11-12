@@ -1,3 +1,5 @@
+//! Checks that restoring a sparse NTFS snapshot preserves its entries while compacting storage.
+
 use super::{
     FIRST_FILE, NtfsIndex, POSITION, ROOT, all_paths, assert_dense_and_consistent, file_size,
     header, listing,
@@ -5,7 +7,7 @@ use super::{
 use crate::file;
 use crate::ntfs::COMPACT_MIN_SLOTS;
 use crate::table::{Flags, NO_PARENT, NameTable};
-use crate::usn::{FrnMap, PendingRenames};
+use crate::usn::FrnMap;
 
 #[test]
 fn restoring_a_sparse_snapshot_compacts_it_and_keeps_the_listing() {
@@ -23,12 +25,9 @@ fn restoring_a_sparse_snapshot_compacts_it_and_keeps_the_listing() {
             ids.remove(&(FIRST_FILE + number));
         }
     }
-    let sparse = NtfsIndex {
-        table,
-        ids,
-        position: POSITION,
-        renames: PendingRenames::default(),
-    };
+    let mut sparse = NtfsIndex::new('C', POSITION).unwrap();
+    sparse.table = table;
+    sparse.ids = ids;
     let folder = tempfile::tempdir().unwrap();
     let path = folder.path().join("c.index");
     file::save_with_ids(&path, &header(), &sparse.table, &sparse.ids).unwrap();
