@@ -9,7 +9,8 @@ use gpui_kit::{
 };
 
 use super::{
-    OnAction, SetupAction, SetupCheck, SetupPage, SetupProgress, SetupView, Strings, render_page,
+    OnAction, SetupAction, SetupCheck, SetupPage, SetupProgress, SetupStage, SetupView, Strings,
+    render_page,
 };
 use crate::tokens::{self, Mode};
 
@@ -58,6 +59,17 @@ fn installing(seconds: u64, still_working: bool) -> SetupView {
         )),
         log_paths: vec![PathBuf::from("C:\\Logs\\setup.log")],
         ..SetupView::default()
+    }
+}
+
+/// The Installing page with a verified share and phase.
+fn installing_with(seconds: u64, percent: Option<u8>, stage: Option<SetupStage>) -> SetupView {
+    SetupView {
+        progress: Some(
+            SetupProgress::from_elapsed(Duration::from_secs(seconds), false)
+                .with_estimate(percent, stage),
+        ),
+        ..installing(seconds, false)
     }
 }
 
@@ -133,6 +145,56 @@ fn installing_after_three_minutes_names_the_log_and_drops_the_tips(cx: &mut Test
         assert!(label.starts_with("Setup is still working"), "{label}");
         assert!(label.contains("C:\\Logs\\setup.log"), "{label}");
         assert!(window.try_find("installing-tip-0").is_none());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_verified_share_names_the_percent_and_fills_the_bar(cx: &mut TestAppContext) {
+    let (window, _) = open(
+        cx,
+        installing_with(12, Some(35), Some(SetupStage::Extracting)),
+    );
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let share = window.find("installing-percent");
+        assert_eq!(share.role(), Some(Role::Status));
+        assert_eq!(share.label(), Some("35%"));
+        assert_eq!(window.find("installing-bar").value(), Some("35%"));
+        assert_eq!(
+            window.find("installing-elapsed").label(),
+            Some("Elapsed 0:12")
+        );
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn without_a_verified_share_the_bar_pulses_and_names_no_percent(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, installing_with(26, None, Some(SetupStage::Finalizing)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("installing-percent").is_none());
+        assert_eq!(window.find("installing-bar").value(), None);
+        assert!(window.try_find("installing-tip-0").is_some());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn reduced_motion_shows_the_share_at_once_without_animating(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, _) = open(
+        cx,
+        installing_with(12, Some(35), Some(SetupStage::Extracting)),
+    );
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let bar = window.find("installing-bar");
+        let fill = window.find("installing-fill");
+        let ratio = f32::from(fill.bounds().size.width) / f32::from(bar.bounds().size.width);
+        assert!((ratio - 0.35).abs() < 0.02, "fill ratio {ratio}");
+        assert_eq!(window.find("installing-percent").label(), Some("35%"));
     })
     .expect("window");
 }

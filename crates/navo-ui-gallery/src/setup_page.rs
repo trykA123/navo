@@ -5,7 +5,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use navo_ui::prelude::*;
-use navo_ui::setup::{SetupAction, SetupPage, SetupProgress, SetupView, Strings, render_page};
+use navo_ui::setup::{
+    SetupAction, SetupPage, SetupProgress, SetupStage, SetupView, Strings, render_page,
+};
 use navo_ui::tokens;
 
 use crate::pages::Page;
@@ -55,6 +57,17 @@ fn installing(seconds: u64) -> SetupView {
         )),
         log_paths: vec![PathBuf::from(format!(r"{FOLDER}\setup.log"))],
         ..base(SetupPage::Installing)
+    }
+}
+
+/// The Installing page with a verified share and phase, for the bar's determinate states.
+fn installing_with(seconds: u64, percent: Option<u8>, stage: SetupStage) -> SetupView {
+    SetupView {
+        progress: Some(
+            SetupProgress::from_elapsed(Duration::from_secs(seconds), false)
+                .with_estimate(percent, Some(stage)),
+        ),
+        ..installing(seconds)
     }
 }
 
@@ -123,6 +136,8 @@ fn view(page: Page) -> Option<SetupView> {
 fn view_after_shortcuts(page: Page) -> Option<SetupView> {
     Some(match page {
         Page::SetupInstalling => installing(12),
+        Page::SetupInstallingPercent => installing_with(12, Some(35), SetupStage::Extracting),
+        Page::SetupInstallingFinalizing => installing_with(26, None, SetupStage::Finalizing),
         Page::SetupInstallingSlow => installing(185),
         Page::SetupFinish => SetupView {
             start_navo: true,

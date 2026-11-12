@@ -185,6 +185,8 @@ pub enum Page {
     SetupFolderProblem,
     SetupShortcuts,
     SetupInstalling,
+    SetupInstallingPercent,
+    SetupInstallingFinalizing,
     SetupInstallingSlow,
     SetupFinish,
     SetupFailedRetry,
