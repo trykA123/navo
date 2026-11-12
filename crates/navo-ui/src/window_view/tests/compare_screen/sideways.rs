@@ -10,6 +10,7 @@ use gpui_kit::{
     px,
 };
 
+use super::super::screen_access::screen_update;
 use super::body::pair;
 use super::{Rig, rig};
 use crate::compare_diff::{DiffUpdate, Layout, PairKind, PairText, cut, cut_examined};
@@ -66,10 +67,9 @@ fn sideways_px(rig: &Rig, cx: &mut TestAppContext, x: f32, y: f32) {
     wheel(rig, cx, delta, Modifiers::default());
 }
 
+/// Returns the sideways cut and extent; fails without an open text pair.
 fn seen(rig: &Rig, cx: &mut TestAppContext) -> SidewaysSeen {
-    rig.view
-        .update(cx, |view, _| view.file_sideways())
-        .expect("an opened text pair")
+    screen_update(&rig.view, cx, |view, _| view.file_sideways()).expect("an opened text pair")
 }
 
 /// The cut that offset `offset` gives at column width `advance`: its first column and nudge.
@@ -122,7 +122,7 @@ fn both_sides_and_both_layouts_share_one_offset(cx: &mut TestAppContext) {
     let rig = opened(cx);
     sideways_px(&rig, cx, -80., 0.);
     let side_by_side = seen(&rig, cx);
-    rig.view.update(cx, |view, _| {
+    screen_update(&rig.view, cx, |view, _| {
         view.file_look_mut().expect("open").layout = Some(Layout::Unified);
     });
     frames(&rig, cx);
@@ -140,7 +140,7 @@ fn wrap_ignores_sideways_input_and_keeps_the_offset(cx: &mut TestAppContext) {
     let rig = opened(cx);
     sideways_px(&rig, cx, -80., 0.);
     let set_wrap = |cx: &mut TestAppContext, wrap: bool| {
-        rig.view.update(cx, |view, _| {
+        screen_update(&rig.view, cx, |view, _| {
             view.file_look_mut().expect("open").wrap = wrap;
         });
         frames(&rig, cx);
@@ -162,7 +162,7 @@ fn a_reload_keeps_the_offset(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let rig = opened(cx);
     sideways_px(&rig, cx, -80., 0.);
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let sink = rig.diff.pair_sink();
     let reopened = DiffUpdate::Opened {
         request: 2,
@@ -204,7 +204,7 @@ fn the_strip_shows_only_for_wide_lines_without_wrap(cx: &mut TestAppContext) {
     assert!(!strip_shown(&short, cx), "short lines have no strip");
     let rig = opened(cx);
     assert!(strip_shown(&rig, cx), "500-column lines show the strip");
-    rig.view.update(cx, |view, _| {
+    screen_update(&rig.view, cx, |view, _| {
         view.file_look_mut().expect("open").wrap = true;
     });
     frames(&rig, cx);
@@ -219,8 +219,9 @@ fn widths_for_a_replaced_text_are_dropped(cx: &mut TestAppContext) {
     frames(&rig, cx);
     let stale = Arc::new(wide_pair());
     let cols = crate::compare_diff::LineCols::measure(&stale);
-    rig.view
-        .update(cx, |view, cx| view.install_file_widths(&stale, cols, cx));
+    screen_update(&rig.view, cx, |view, cx| {
+        view.install_file_widths(&stale, cols, cx)
+    });
     frames(&rig, cx);
     assert_eq!(
         seen(&rig, cx).max,
