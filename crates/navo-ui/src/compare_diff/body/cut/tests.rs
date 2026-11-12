@@ -1,10 +1,13 @@
 //! Tests for the row cut: cut text and runs, long lines left whole, and continued rows.
 
+use std::sync::Arc;
+
 use super::{LineAt, RowCut, lead_row, shown_line};
 use crate::compare_diff::body::{BodyLook, Side};
 use crate::compare_diff::long::LONG_LINE;
 use crate::compare_diff::{
-    DiffRow, Layout, PairFacts, PairText, RowSpans, ShownKind, ShownRow, SpanCache, ViewedKey,
+    DiffRow, Layout, LineCols, PairFacts, PairText, RowSpans, ShownKind, ShownRow, SpanCache,
+    ViewedKey,
 };
 use crate::tokens::{Mode, Theme};
 
@@ -149,4 +152,52 @@ fn a_continued_row_has_no_number_tick_or_button() {
         (lead.kind, lead.hunk, lead.row),
         (row.kind, row.hunk, row.row)
     );
+}
+
+#[test]
+fn shown_line_cuts_a_long_line_from_the_checkpoint_of_its_side() {
+    let t = Theme::new(Mode::Light);
+    let left = "ab\t日c\u{301}".repeat(1200);
+    let right = "x\tyz".repeat(1500);
+    let text = PairText {
+        right: vec![right.clone()],
+        ..pair(vec![left.clone()])
+    };
+    let widths = Arc::new(LineCols::measure(&text));
+    let look = BodyLook {
+        theme: &t,
+        layout: Layout::SideBySide,
+        digits: 1,
+        current: None,
+        spans: None,
+        ticks: None,
+        bytes_here: None,
+        syntax: None,
+    };
+    let cols = 5000..5040;
+    let plain = RowCut {
+        cols: Some(cols.clone()),
+        ..RowCut::default()
+    };
+    let marked = RowCut {
+        cols: Some(cols),
+        widths: Some(widths),
+        ..RowCut::default()
+    };
+    let sides = [
+        (Side::Left, left.as_str(), "left"),
+        (Side::Right, right.as_str(), "right"),
+    ];
+    for (side, line, name) in sides {
+        let at = LineAt {
+            kind: ShownKind::Changed,
+            side,
+            line: Some((0, line)),
+            slot: side,
+        };
+        let want = shown_line(&look, &at, &plain).expect("a line");
+        let got = shown_line(&look, &at, &marked).expect("a line");
+        assert!(!want.text.is_empty(), "{name} shows columns 5000..5040");
+        assert_eq!(got, want, "{name} cuts the same from its checkpoint");
+    }
 }

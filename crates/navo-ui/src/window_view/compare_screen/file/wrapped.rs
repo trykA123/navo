@@ -2,10 +2,11 @@
 //! and column width, and the map between pair rows and list items (one item per visual line).
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use super::FileView;
 use crate::compare_diff::body::RowCut;
-use crate::compare_diff::{Layout, WrapIndex};
+use crate::compare_diff::{Layout, LineCols, WrapIndex};
 use crate::prelude::*;
 
 /// The wrap state of one open text view.
@@ -25,6 +26,8 @@ pub(super) struct WrapDraw {
     index: WrapIndex,
     /// The columns of one visual line (`W` in D39.5).
     cols: u32,
+    /// The measured widths of the text, which hold the start checkpoint of every cut.
+    widths: Arc<LineCols>,
 }
 
 impl WrapDraw {
@@ -50,11 +53,13 @@ impl WrapDraw {
     }
 
     /// The cut of visual line `sub`: columns `sub·W..(sub+1)·W`, a continuation after the first.
+    /// It carries the widths, so a long line's cut resumes from a checkpoint instead of byte 0.
     pub(super) fn cut(&self, sub: u32) -> RowCut {
         let from = sub.saturating_mul(self.cols);
         RowCut {
             cols: Some(from..from.saturating_add(self.cols)),
             continued: sub > 0,
+            widths: Some(Arc::clone(&self.widths)),
             ..RowCut::default()
         }
     }
@@ -80,10 +85,11 @@ impl FileView {
         }
         let top = self.pair_row(self.scroll.top_row(row_height));
         self.wrapped.draw = key
-            .zip(self.cols.as_deref())
+            .zip(self.cols.clone())
             .map(|((layout, wrap), cols)| WrapDraw {
-                index: WrapIndex::build(&self.text, layout, cols, wrap),
+                index: WrapIndex::build(&self.text, layout, &cols, wrap),
                 cols: wrap,
+                widths: cols,
             });
         self.wrapped.key = key;
         if !self.centre {
@@ -164,3 +170,6 @@ impl FileView {
         )
     }
 }
+
+#[cfg(test)]
+mod tests;

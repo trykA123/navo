@@ -14,6 +14,15 @@ pub use wrap::WrapIndex;
 /// Columns between tab stops.
 pub const TAB_COLS: u32 = 4;
 
+/// Columns between the checkpoints of a long line.
+const CHECK_EVERY: u32 = 1024;
+
+/// A line records checkpoints only once a character starts at or past this column.
+const CHECK_FROM: u32 = 4096;
+
+/// The spaces a tab or a control character draws: never more than `TAB_COLS` of them.
+const SPACES: &str = "    ";
+
 /// The columns character `ch` takes when it starts at column `at`: a tab runs to the next stop,
 /// a control character takes 1 (drawn as a space), a wide one 2 and a combining mark 0.
 #[must_use]
@@ -54,6 +63,23 @@ pub fn visual_lines(cols: u32, wrap: u32) -> u32 {
     cols.div_ceil(wrap.max(1)).max(1)
 }
 
+/// A point of a line the cut can resume from: the character at byte `byte` starts at column
+/// `col`, so the tab stops and the kept columns read the same as they do from byte 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Checkpoint {
+    /// The display column of the character at `byte`.
+    pub col: u32,
+    /// The byte of that character in the line; always a character start.
+    pub byte: usize,
+}
+
+/// The checkpoints of one line, in column order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Marks {
+    line: u32,
+    points: Vec<Checkpoint>,
+}
+
 /// The column count of every line of a pair, and the widest. A line over `LONG_LINE` counts 0,
 /// so it never sets the widest and wraps to one visual line.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,24 +87,78 @@ pub struct LineCols {
     left: Vec<u32>,
     right: Vec<u32>,
     widest: u32,
+    /// The checkpoints of the long lines of each side (left, then right), by line index.
+    marks: [Vec<Marks>; 2],
 }
 
-/// The columns of each line of `lines`, with 0 for a line over `LONG_LINE`.
-fn measure_side(lines: &[String]) -> Vec<u32> {
-    let one = |line: &String| if is_long(line) { 0 } else { line_cols(line) };
-    lines.iter().map(one).collect()
+/// The columns of each line of `lines` (0 over `LONG_LINE`) and the checkpoints of its long
+/// lines, in one walk.
+fn measure_side(lines: &[String]) -> (Vec<u32>, Vec<Marks>) {
+    let mut cols = Vec::with_capacity(lines.len());
+    let mut marks = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        let (width, points) = measure_line(line);
+        cols.push(width);
+        if !points.is_empty() {
+            let line = u32::try_from(at).unwrap_or(u32::MAX);
+            marks.push(Marks { line, points });
+        }
+    }
+    (cols, marks)
+}
+
+/// The columns of `line` and its checkpoints; a line over `LONG_LINE` counts 0 and records none.
+fn measure_line(line: &str) -> (u32, Vec<Checkpoint>) {
+    if is_long(line) {
+        return (0, Vec::new());
+    }
+    if is_plain(line) {
+        let cols = u32::try_from(line.len()).unwrap_or(u32::MAX);
+        return (cols, plain_marks(cols));
+    }
+    slow_marks(line)
+}
+
+/// The checkpoints of a printable ASCII line of `cols` columns, where every byte is a column.
+fn plain_marks(cols: u32) -> Vec<Checkpoint> {
+    (CHECK_FROM..cols)
+        .step_by(CHECK_EVERY as usize)
+        .map(|col| Checkpoint {
+            col,
+            byte: col as usize,
+        })
+        .collect()
+}
+
+/// The columns of `line`, recording a checkpoint every `CHECK_EVERY` columns past `CHECK_FROM`.
+/// Only a character that takes columns starts one, so a cut resuming there reads the same kept
+/// state as a walk from byte 0 (a zero-width mark keeps the state of its base).
+fn slow_marks(line: &str) -> (u32, Vec<Checkpoint>) {
+    let mut points = Vec::new();
+    let (mut at, mut next) = (0u32, CHECK_FROM);
+    for (byte, ch) in line.char_indices() {
+        let width = char_cols(ch, at);
+        if width > 0 && at >= next {
+            points.push(Checkpoint { col: at, byte });
+            next = at.saturating_add(CHECK_EVERY);
+        }
+        at = at.saturating_add(width);
+    }
+    (at, points)
 }
 
 impl LineCols {
     /// Measures every line of `text`. It walks all bytes once, so call it off the UI thread.
     #[must_use]
     pub fn measure(text: &PairText) -> Self {
-        let (left, right) = (measure_side(&text.left), measure_side(&text.right));
+        let (left, left_marks) = measure_side(&text.left);
+        let (right, right_marks) = measure_side(&text.right);
         let widest = left.iter().chain(&right).copied().max().unwrap_or(0);
         Self {
             left,
             right,
             widest,
+            marks: [left_marks, right_marks],
         }
     }
 
@@ -99,6 +179,26 @@ impl LineCols {
     pub fn widest(&self) -> u32 {
         self.widest
     }
+
+    /// The last checkpoint of left line `line` at or before column `col`; `None` walks from 0.
+    #[must_use]
+    pub fn left_start(&self, line: u32, col: u32) -> Option<Checkpoint> {
+        start_at(&self.marks[0], line, col)
+    }
+
+    /// The last checkpoint of right line `line` at or before column `col`; `None` walks from 0.
+    #[must_use]
+    pub fn right_start(&self, line: u32, col: u32) -> Option<Checkpoint> {
+        start_at(&self.marks[1], line, col)
+    }
+}
+
+/// The checkpoint of `line` nearest at or below `col`, from marks ordered by line.
+fn start_at(marks: &[Marks], line: u32, col: u32) -> Option<Checkpoint> {
+    let at = marks.partition_point(|m| m.line < line);
+    let points = &marks.get(at).filter(|m| m.line == line)?.points;
+    let before = points.partition_point(|p| p.col <= col);
+    before.checked_sub(1).map(|i| points[i])
 }
 
 /// A cut line: the text to draw and its runs, as byte ranges of that text.
@@ -153,6 +253,30 @@ impl<S: Clone> Walk<S> {
 /// move with their characters and are clipped (padding spaces carry no run).
 #[must_use]
 pub fn cut<S: Clone>(line: &str, runs: &[(Range<usize>, S)], cols: Range<u32>) -> Shown<S> {
+    cut_from(line, runs, cols, None)
+}
+
+/// Like [`cut`], resuming from `start` instead of byte 0. `start` must be a checkpoint of `line`
+/// (from [`LineCols::left_start`] or [`LineCols::right_start`]) at or before `cols.start`; the
+/// text and runs are the same as a walk from 0.
+#[must_use]
+pub fn cut_from<S: Clone>(
+    line: &str,
+    runs: &[(Range<usize>, S)],
+    cols: Range<u32>,
+    start: Option<Checkpoint>,
+) -> Shown<S> {
+    walk_line(line, runs, cols, start).0
+}
+
+/// The cut and the number of characters it examined, so a test can bound the walk.
+fn walk_line<S: Clone>(
+    line: &str,
+    runs: &[(Range<usize>, S)],
+    cols: Range<u32>,
+    start: Option<Checkpoint>,
+) -> (Shown<S>, usize) {
+    let start = start.unwrap_or(Checkpoint { col: 0, byte: 0 });
     let mut walk = Walk {
         out: Shown {
             text: String::new(),
@@ -161,9 +285,12 @@ pub fn cut<S: Clone>(line: &str, runs: &[(Range<usize>, S)], cols: Range<u32>) -
         open: None,
         next_run: 0,
     };
-    let (mut at, mut keep) = (0u32, cols.contains(&0));
-    let mut buf = [0u8; 4];
-    for (byte, ch) in line.char_indices() {
+    let (mut at, mut keep) = (start.col, cols.contains(&start.col));
+    let mut seen = 0usize;
+    let rest = line.get(start.byte..).unwrap_or_default();
+    for (byte, ch) in rest.char_indices() {
+        seen += 1;
+        let byte = byte + start.byte;
         let width = char_cols(ch, at);
         if width > 0 {
             if at >= cols.end {
@@ -177,15 +304,15 @@ pub fn cut<S: Clone>(line: &str, runs: &[(Range<usize>, S)], cols: Range<u32>) -
         }
         if keep {
             let piece = if ch == '\t' || ch.is_control() {
-                " ".repeat(width as usize)
+                &SPACES[..width as usize]
             } else {
-                ch.encode_utf8(&mut buf).to_owned()
+                &line[byte..byte + ch.len_utf8()]
             };
-            walk.push(runs, byte, &piece);
+            walk.push(runs, byte, piece);
         }
         at = at.saturating_add(width);
     }
-    walk.out
+    (walk.out, seen)
 }
 
 #[cfg(test)]

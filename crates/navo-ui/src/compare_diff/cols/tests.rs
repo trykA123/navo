@@ -3,6 +3,7 @@
 use super::*;
 use crate::compare_diff::hooks::{DiffRow, HunkView, PairFacts, ViewedKey};
 use crate::compare_diff::long::LONG_LINE;
+use proptest::prelude::*;
 
 /// A pair with the given side lines and no rows.
 fn pair(left: &[&str], right: &[&str]) -> PairText {
@@ -152,4 +153,126 @@ fn runs_move_with_wide_characters() {
     let shown = cut("a日本", &[(1..4, 'w')], 0..9);
     assert_eq!(shown.text, "a日本");
     assert_eq!(shown.runs, vec![(1..4, 'w')]);
+}
+
+/// The parts a random line is built from: ASCII, a tab, a wide character, a combining mark, a
+/// space and a control character.
+const PARTS: [&str; 6] = ["a", "\t", "日", "\u{301}", " ", "\u{7}"];
+
+/// A line of the parts `picks` names, in order.
+fn line_of(picks: &[u8]) -> String {
+    picks
+        .iter()
+        .map(|&p| PARTS[p as usize % PARTS.len()])
+        .collect()
+}
+
+/// A run over every character of `line`, alternating two styles so runs meet at every boundary.
+fn runs_of(line: &str) -> Vec<(Range<usize>, char)> {
+    line.char_indices()
+        .map(|(byte, ch)| {
+            let style = if byte % 2 == 0 { 'a' } else { 'b' };
+            (byte..byte + ch.len_utf8(), style)
+        })
+        .collect()
+}
+
+#[test]
+fn measure_records_a_checkpoint_every_1024_columns_of_a_long_line() {
+    let long = "x".repeat(6000);
+    let cols = LineCols::measure(&pair(&[&long], &[]));
+    let at = |col| cols.left_start(0, col);
+    assert_eq!(at(0), None, "the cut starts at byte 0 anyway");
+    assert_eq!(at(4095), None, "nothing before the first checkpoint");
+    assert_eq!(
+        at(4096),
+        Some(Checkpoint {
+            col: 4096,
+            byte: 4096
+        })
+    );
+    assert_eq!(
+        at(5119),
+        Some(Checkpoint {
+            col: 4096,
+            byte: 4096
+        })
+    );
+    assert_eq!(
+        at(5120),
+        Some(Checkpoint {
+            col: 5120,
+            byte: 5120
+        })
+    );
+    assert_eq!(
+        at(6000),
+        Some(Checkpoint {
+            col: 5120,
+            byte: 5120
+        })
+    );
+    assert_eq!(
+        cols.right_start(0, 5000),
+        None,
+        "the other side has no lines"
+    );
+    let short = "x".repeat(4096);
+    let cols = LineCols::measure(&pair(&[&short], &[]));
+    assert_eq!(
+        cols.left_start(0, 4096),
+        None,
+        "a short line records nothing"
+    );
+}
+
+#[test]
+fn a_checkpoint_holds_the_column_of_its_byte_on_a_character_start() {
+    let line = "a\t日e\u{301}".repeat(1200);
+    let cols = LineCols::measure(&pair(&[&line], &[]));
+    let mark = cols.left_start(0, 5000).expect("a checkpoint");
+    assert!(line.is_char_boundary(mark.byte), "{mark:?}");
+    assert_eq!(line_cols(&line[..mark.byte]), mark.col);
+    assert!(mark.col <= 5000, "{mark:?} is past the column asked for");
+    assert!(
+        mark.col + 1024 > 5000,
+        "{mark:?} is not the last one below 5000"
+    );
+}
+
+#[test]
+fn a_cut_near_the_end_of_a_long_line_examines_few_characters() {
+    let line = "x".repeat(900 * 1024);
+    let cols = LineCols::measure(&pair(&[&line], &[]));
+    let end = line_cols(&line);
+    let last = end - 100..end;
+    let start = cols.left_start(0, last.start);
+    let (shown, seen) = walk_line::<()>(&line, &[], last.clone(), start);
+    assert_eq!(shown.text.len(), 100);
+    assert!(seen <= 2048, "{seen} characters examined, at most 2048");
+    let (_, from_zero) = walk_line::<()>(&line, &[], last, None);
+    assert!(
+        from_zero > 900_000,
+        "the walk from 0 reads the line: {from_zero}"
+    );
+}
+
+proptest! {
+    #[test]
+    fn a_cut_from_the_best_checkpoint_equals_a_cut_from_zero(
+        picks in proptest::collection::vec(0u8..6, 4200..5200),
+        start in 0u32..10000,
+        span in 0u32..200,
+    ) {
+        let line = line_of(&picks);
+        let runs = runs_of(&line);
+        let cols = LineCols::measure(&pair(&[&line], &[]));
+        let from = cols.left_start(0, start);
+        if start >= 4200 && line_cols(&line) > 4200 {
+            prop_assert!(from.is_some(), "a long line has a checkpoint below {start}");
+        }
+        let want = cut(&line, &runs, start..start + span);
+        let got = cut_from(&line, &runs, start..start + span, from);
+        prop_assert_eq!(got, want);
+    }
 }
