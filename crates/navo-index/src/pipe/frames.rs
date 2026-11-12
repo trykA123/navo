@@ -78,6 +78,9 @@ pub struct Hit {
     pub indices: Vec<u32>,
 }
 
+/// Prefix of the non-fatal "sizes unknown" note; the index is still complete.
+pub const SIZES_UNKNOWN_PREFIX: &str = "sizes unknown: ";
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VolumeStatus {
     pub root: String,
@@ -87,6 +90,15 @@ pub struct VolumeStatus {
     /// MFT records counted when the last build started; only `Response::StatusV1` carries it.
     #[serde(skip)]
     pub total_files: Option<u64>,
+}
+
+impl VolumeStatus {
+    /// True when an error means the index is incomplete; "sizes unknown" is only a note.
+    pub fn has_blocking_error(&self) -> bool {
+        self.errors
+            .iter()
+            .any(|error| !error.starts_with(SIZES_UNKNOWN_PREFIX))
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
