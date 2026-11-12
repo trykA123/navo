@@ -111,10 +111,15 @@ impl ScreenOwner {
     }
 
     /// Drains the inboxes of the Stream and the file diff; updates for a closed or replaced
-    /// file screen are dropped. Returns whether the screen changed.
-    pub(in crate::window_view) fn poll_compare_screen(&mut self, cx: &mut Context<Self>) -> bool {
+    /// file screen are dropped. `resynced` is whether the host rebuilt the Stream's items this
+    /// poll (N4f2). Returns whether the screen changed.
+    pub(in crate::window_view) fn poll_compare_screen(
+        &mut self,
+        resynced: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let rows = crate::tokens::current(cx).spacing.row_height;
-        self.poll_stream(cx)
+        self.poll_stream(resynced, cx)
             | self.poll_file_screen(rows, cx)
             | self.poll_copies()
             | self.poll_sheet()

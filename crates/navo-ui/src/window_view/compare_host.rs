@@ -5,7 +5,7 @@ use super::FileHooks;
 use super::NavoWindow;
 use super::compare_screen::{ScreenEvent, items_of, neighbour};
 use crate::browser::FileDiffRequest;
-use crate::compare_diff::{CompareOptions, PairRequest};
+use crate::compare_diff::{CompareOptions, PairRequest, StreamList};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
 
@@ -71,10 +71,12 @@ impl ScreenOwner {
         self.large_follow_window(window);
     }
 
-    /// Drains the Stream's and the file diff's inboxes; true when the screen changed. Updates of
-    /// a closed or replaced file screen are dropped.
+    /// Resyncs the Stream's items from the folder compare, then drains the Stream's and the
+    /// file diff's inboxes; true when the screen changed. Updates of a closed or replaced file
+    /// screen are dropped.
     pub(in crate::window_view) fn host_poll(&mut self, cx: &mut Context<Self>) -> bool {
-        self.poll_compare_screen(cx)
+        let resynced = self.host_resync(cx);
+        self.poll_compare_screen(resynced, cx)
     }
 
     /// Gives focus back to the open file diff; false when none is open.
@@ -88,7 +90,8 @@ impl ScreenOwner {
 
     /// Handles one screen event: `Closed` reveals its path and gives focus back to the compare
     /// pane, `OpenSettings` opens Settings at its field, `WalkFile` opens the folder compare's
-    /// next or previous file. `window` is `None` only for `Resync` (N4f2).
+    /// next or previous file, `Resync` rebuilds the Stream's items. `window` is `None` only for
+    /// `Resync` (N4f2).
     pub(in crate::window_view) fn on_screen_event(
         &mut self,
         event: &ScreenEvent,
@@ -122,6 +125,11 @@ impl ScreenOwner {
                     self.show_pair((request, Some(0)), window, cx);
                 }
             }
+            ScreenEvent::Resync => {
+                if self.host_resync(cx) {
+                    cx.notify();
+                }
+            }
         }
     }
 
@@ -153,6 +161,19 @@ impl ScreenOwner {
     /// compare, and it changes whenever the listed rows do.
     pub(in crate::window_view) fn screen_stamp(&self) -> Option<(u64, u64)> {
         self.browser.compare_mode().map(|mode| mode.rows_stamp())
+    }
+
+    /// Whether the folder compare is still checking rows; false outside a compare.
+    pub(in crate::window_view) fn screen_checking(&self) -> bool {
+        self.browser
+            .compare_mode()
+            .is_some_and(|mode| mode.checking())
+    }
+
+    /// The Stream's items under the compare folder and each item's pair; `None` outside a
+    /// compare.
+    pub(in crate::window_view) fn screen_items(&self) -> Option<(StreamList, Vec<PairRequest>)> {
+        self.browser.compare_mode().map(items_of)
     }
 
     /// Sends one screen event to the window's handler; N6 turns this into `cx.emit(event)`.
