@@ -4,8 +4,8 @@
 
 use navo_l10n::{t, tr};
 
-use super::FileScreen;
 use super::drawers::{fact, frame};
+use super::{FileScreen, ScreenEvent};
 use crate::commands::compare::PickToggle;
 use crate::compare_diff::image_body::ImageMode;
 use crate::compare_diff::{HexAlign, LargeStep, LargeStepView};
@@ -138,13 +138,21 @@ impl FileScreen {
         )
         .variant(ButtonVariant::Ghost)
         .on_click(cx.listener(|view, _: &ClickEvent, window, cx| {
-            view.open_settings_at(Field::CompareBudgetMib, window, cx);
+            view.emit_screen(
+                ScreenEvent::OpenSettings(Field::CompareBudgetMib),
+                Some(window),
+                cx,
+            );
         }));
         Some(
             div()
                 .child(button)
                 .on_action(cx.listener(|view, _: &PickToggle, window, cx| {
-                    view.open_settings_at(Field::CompareBudgetMib, window, cx);
+                    view.emit_screen(
+                        ScreenEvent::OpenSettings(Field::CompareBudgetMib),
+                        Some(window),
+                        cx,
+                    );
                 })),
         )
     }

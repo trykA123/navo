@@ -3,7 +3,7 @@
 
 use super::FileHooks;
 use super::NavoWindow;
-use super::compare_screen::items_of;
+use super::compare_screen::{ScreenEvent, items_of};
 use crate::browser::FileDiffRequest;
 use crate::compare_diff::{CompareOptions, PairRequest};
 use crate::context_menu::ContextMenu;
@@ -86,6 +86,33 @@ impl ScreenOwner {
         self.focus_file_screen(window, cx)
     }
 
+    /// Handles one screen event: `Closed` reveals its path and gives focus back to the compare
+    /// pane, `OpenSettings` opens Settings at its field. `window` is `None` only for `Resync`
+    /// (N4f2).
+    pub(in crate::window_view) fn on_screen_event(
+        &mut self,
+        event: &ScreenEvent,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            ScreenEvent::Closed { reveal } => {
+                if let Some(path) = reveal {
+                    self.browser.compare_reveal(path);
+                }
+                if let Some(window) = window {
+                    self.focus_core_pane(window, cx);
+                }
+                cx.notify();
+            }
+            ScreenEvent::OpenSettings(field) => {
+                if let Some(window) = window {
+                    self.open_settings_at(*field, window, cx);
+                }
+            }
+        }
+    }
+
     // Owner inputs: N6 gives these the same names on the entity.
 
     /// The compare settings the screen opens a pair with, read from the owner's values.
@@ -114,5 +141,15 @@ impl ScreenOwner {
     /// compare, and it changes whenever the listed rows do.
     pub(in crate::window_view) fn screen_stamp(&self) -> Option<(u64, u64)> {
         self.browser.compare_mode().map(|mode| mode.rows_stamp())
+    }
+
+    /// Sends one screen event to the window's handler; N6 turns this into `cx.emit(event)`.
+    pub(in crate::window_view) fn emit_screen(
+        &mut self,
+        event: ScreenEvent,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
+        self.on_screen_event(&event, window, cx)
     }
 }
