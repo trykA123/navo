@@ -253,3 +253,44 @@ fn a_low_space_refusal_keeps_its_folder_problem() {
     assert_eq!(count(&host, |call| matches!(call, Call::Spawn(_))), 0);
     assert_eq!(count(&host, |call| matches!(call, Call::Cleanup { .. })), 0);
 }
+
+/// A real Velopack log reaches the callback as a percentage, then as a pulse when Finalizing stalls.
+#[test]
+fn a_real_log_reaches_the_callback_as_a_percentage_then_a_pulse() {
+    const HEADER: &str =
+        "[Setup:7] [10:00:00] [INFO] Extracting 2 app files to \"C:\\N\\current\"...\n";
+    const FIRST: &str =
+        "[Setup:7] [10:00:01] [DEBUG]     0 Extracting 'lib/net8/navo.exe' to \"C:\\n.exe\"\n";
+    const BACKING_UP: &str = "[Setup:7] [10:00:02] [INFO] Backing up current dir\n";
+
+    let dir = tempfile::tempdir().unwrap();
+    let payload = payload(dir.path());
+    let log = dir.path().join("velopack.log");
+    std::fs::write(&log, format!("{HEADER}{FIRST}")).unwrap();
+    let mut host = fresh_host();
+    host.child_script.clear();
+    for _ in 0..32 {
+        host.child_script.push_back(None);
+    }
+    host.child_script.push_back(Some(0));
+    let mut events = Vec::new();
+    let result = install(fresh_request(), &payload, &log, &mut host, &mut |event| {
+        if event.elapsed == std::time::Duration::from_secs(2) {
+            std::fs::write(&log, format!("{HEADER}{FIRST}{BACKING_UP}")).unwrap();
+        }
+        events.push(event);
+    });
+    assert!(matches!(result, Ok(Installed { .. })));
+    let stage = crate::progress_log::InstallStage::Finalizing;
+    let shown = events
+        .iter()
+        .position(|event| event.percent == Some(94))
+        .expect("the run must report the folder swap");
+    assert_eq!(events[shown].stage, Some(stage));
+    let pulsed = events
+        .iter()
+        .position(|event| event.percent.is_none() && event.stage == Some(stage))
+        .expect("a stalled Finalizing must fall back to the pulse");
+    assert!(pulsed > shown, "the pulse must follow the percentage");
+    assert!(events.iter().all(|event| event.percent != Some(100)));
+}

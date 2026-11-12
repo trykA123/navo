@@ -280,7 +280,7 @@ fn success_fresh_and_upgrade_exit_codes_and_progress() {
 
     let mut host = fresh_host();
     host.child_script.clear();
-    for _ in 0..180 {
+    for _ in 0..(180 * 4) {
         host.child_script.push_back(None);
     }
     host.child_script.push_back(Some(0));
