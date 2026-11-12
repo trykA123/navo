@@ -142,8 +142,9 @@ fn every_fresh_folder_has_a_protected_dacl_with_three_explicit_aces() -> std::io
     } else {
         full
     };
-    for name in ["tools", "root"] {
-        let sddl = dacl_sddl(&temp.path().join(name))?;
+    let tools = temp.path().join("tools");
+    for folder in [tools.clone(), tools.join("root")] {
+        let sddl = dacl_sddl(&folder)?;
         assert!(sddl.starts_with("D:P"), "{sddl}");
         assert_eq!(sddl.matches("(A;OICI;FA;;;").count(), 3, "{sddl}");
         for group in ["AU", "BU", "WD"] {
