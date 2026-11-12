@@ -14,7 +14,7 @@ use super::{StreamScreen, item_of};
 use crate::compare_diff::card::syntax::{CardKey, CardLook, CardSyntax};
 use crate::compare_diff::{PairKind, StreamModel, StreamUpdate};
 use crate::prelude::*;
-use crate::window_view::{EDIT_LIMIT, NavoWindow};
+use crate::window_view::{EDIT_LIMIT, ScreenOwner};
 
 /// One card's parse job: its key and the path the language is detected from.
 struct Job {
@@ -68,7 +68,7 @@ impl StreamSyntax {
 
     /// Starts one background job per card, the whole card in one job since its snippets are small.
     /// The slot keeps the job, so a result is checked against the card held when it ends.
-    fn start(&mut self, jobs: Vec<Job>, cx: &mut Context<NavoWindow>) {
+    fn start(&mut self, jobs: Vec<Job>, cx: &mut Context<ScreenOwner>) {
         for job in jobs {
             let key = job.key.clone();
             let card = Arc::clone(job.key.card());
@@ -111,7 +111,7 @@ impl StreamSyntax {
 async fn deliver_later(
     key: CardKey,
     parsing: Task<CardSyntax>,
-    this: WeakEntity<NavoWindow>,
+    this: WeakEntity<ScreenOwner>,
     cx: &mut AsyncApp,
 ) {
     let parsed = parsing.await;
@@ -157,7 +157,7 @@ impl StreamScreen {
     /// Prunes the parses of cards that are gone, replaced or re-listed, and starts a job for every
     /// text card that arrived or needs one (D38.3). The caller has just applied the updates to the
     /// model, so a card that left with them takes its parse along.
-    pub(super) fn sync_syntax(&mut self, updates: &[StreamUpdate], cx: &mut Context<NavoWindow>) {
+    pub(super) fn sync_syntax(&mut self, updates: &[StreamUpdate], cx: &mut Context<ScreenOwner>) {
         let mut ids = self.syntax.prune(&self.model);
         ids.extend(arrived(updates, self.model.generation()));
         let jobs = self.syntax.jobs(&self.model, &ids);
@@ -180,7 +180,7 @@ fn colours(cx: &App) -> Option<&HighlightTheme> {
     Some(&kit.highlight_theme)
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Delivers a card parse that just ended: the Stream keeps it only while it still holds that
     /// very card under that generation, and then redraws (D38.3). Returns whether it was kept.
     pub(in crate::window_view) fn deliver_stream_syntax(
@@ -201,7 +201,7 @@ impl NavoWindow {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// The parse the Stream holds for item `id`'s card, once its background job ended.
     pub(in crate::window_view) fn stream_syntax(&self, id: u64) -> Option<Rc<CardSyntax>> {
         let stream = self.compare.screen.as_ref()?.stream.as_ref()?;

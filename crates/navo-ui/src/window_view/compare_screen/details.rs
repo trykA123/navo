@@ -14,7 +14,7 @@ use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant};
 use crate::settings::Field;
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// One "name: value" line.
 fn line(name: &str, value: String) -> String {
@@ -130,7 +130,7 @@ impl FileScreen {
     /// The link beside the large body's counter to the memory budget setting, when a step
     /// cut detail for the budget. Space on it opens Settings too: it would otherwise reach the
     /// diff's pick key.
-    pub(super) fn budget_link_button(&self, cx: &mut Context<NavoWindow>) -> Option<Div> {
+    pub(super) fn budget_link_button(&self, cx: &mut Context<ScreenOwner>) -> Option<Div> {
         self.large.as_ref().filter(|large| large.budget_link())?;
         let button = Button::new(
             "compare-screen-budget-link",
@@ -151,7 +151,7 @@ impl FileScreen {
 }
 
 #[cfg(test)]
-impl crate::window_view::NavoWindow {
+impl crate::window_view::ScreenOwner {
     /// The lines the open details drawer shows for a large, hex or image body; none when the
     /// drawer is closed or the body is a small text pair.
     pub(in crate::window_view) fn body_facts_probe(&self) -> Option<Vec<String>> {

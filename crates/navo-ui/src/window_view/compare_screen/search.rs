@@ -16,7 +16,7 @@ use crate::commands::compare::{Exit, Search as OpenSearch};
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName, TextField, TextFieldState, icon, text_field_state};
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 pub(super) use rerun::Rerun;
 
 /// How long typing rests before the query goes to the app (D30).
@@ -131,7 +131,7 @@ fn status_text(stream: &StreamScreen) -> SharedString {
 pub(super) fn bar(
     t: &Theme,
     stream: &StreamScreen,
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> Option<AnyElement> {
     let search = stream.search.as_ref().filter(|s| s.open)?;
     let clear = cx.listener(|view, _: &ClickEvent, window, cx| view.search_close(window, cx));
@@ -176,7 +176,7 @@ pub(super) fn bar(
     Some(row.into_any_element())
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds `/` (open the search field) on the Stream's `root`.
     pub(super) fn search_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &OpenSearch, window, cx| {
@@ -265,7 +265,7 @@ impl NavoWindow {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// Whether the field is shown, its text, and the (tag, text) of the last query sent.
     pub(in crate::window_view) fn search_probe(&self, cx: &App) -> Option<(bool, String, u64)> {
         let stream = self.compare.screen.as_ref()?.stream.as_ref()?;

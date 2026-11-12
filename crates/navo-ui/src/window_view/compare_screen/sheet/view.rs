@@ -11,13 +11,13 @@ use crate::confirm_dialog::ConfirmDialog;
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, IconName};
 use crate::tokens::{self, Theme};
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The "Copy all N" buttons for the search row, or `None` while nothing matches.
 pub(in crate::window_view::compare_screen) fn buttons(
     t: &Theme,
     stream: &StreamScreen,
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> Option<Div> {
     let count = stream.model.match_counts().0;
     if count == 0 {
@@ -53,7 +53,7 @@ pub(in crate::window_view::compare_screen) fn buttons(
     )
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The open sheet over a scrim, or `None` when none is asked.
     pub(in crate::window_view::compare_screen) fn sheet_view(
         &self,

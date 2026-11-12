@@ -320,7 +320,7 @@ impl super::FileScreen {
     }
 }
 
-impl crate::window_view::NavoWindow {
+impl crate::window_view::ScreenOwner {
     /// Esc that stays on the file diff: stops a waiting next difference, else drops the
     /// picked lines. False when Esc should go back.
     pub(super) fn esc_in_place(&mut self) -> bool {

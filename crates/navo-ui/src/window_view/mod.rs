@@ -110,6 +110,7 @@ use crate::tokens::Mode;
 
 pub use app_menu::AppMenuHooks;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
+pub(in crate::window_view) use compare_host::ScreenOwner;
 pub use crash::CrashReportService;
 pub use drives::{DriveChanges, DriveHooks, DriveIcon, DriveInfo, DriveSignal};
 pub use drop_menu::drop_items;

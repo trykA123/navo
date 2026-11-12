@@ -18,7 +18,7 @@ use crate::file_list::kind;
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName};
 use crate::tokens::{self, Theme};
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The key context of the file diff (a focus-path root, D27).
 const CONTEXT: &str = "CompareView";
@@ -132,7 +132,7 @@ fn body(
     t: &Theme,
     file: &mut FileScreen,
     (bars, window): (FileBars, &Window),
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> Div {
     let area = div().flex().flex_col().flex_1().min_h_0();
     let shown = !matches!(file.state, FileState::Failed(_));
@@ -172,7 +172,7 @@ fn body(
             .min_h_0()
             .child(large.list(&cx.weak_entity(), cx));
         return beside(
-            NavoWindow::large_moves(rows, cx).into_any_element(),
+            ScreenOwner::large_moves(rows, cx).into_any_element(),
             details,
         );
     }
@@ -231,7 +231,7 @@ fn status_line(
         .child(small(t).child(tr("compare-screen-esc")))
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The file diff's root with every key and action group registered on it.
     fn screen_keys(cx: &mut Context<Self>) -> Stateful<Div> {
         let root = Self::copy_keys(Self::walk_keys(div().id("compare-screen"), cx), cx);

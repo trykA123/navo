@@ -16,7 +16,7 @@ use crate::commands::compare::{ViewBytes, ViewText};
 use crate::compare_diff::{LongHit, PairKind};
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::MenuEntry;
 
 pub(super) use here::{At, on_bytes_here};
@@ -85,7 +85,7 @@ impl Switch {
 pub(super) fn bytes_body(
     file: &mut FileScreen,
     (t, window, bars): (&Theme, &Window, FileBars),
-    cx: &mut Context<NavoWindow>,
+    cx: &mut Context<ScreenOwner>,
 ) -> Option<AnyElement> {
     let hex = file.hex.as_ref()?;
     if hex.ready(visible_rows(t, window)) {
@@ -146,7 +146,7 @@ impl FileScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds the two switch commands on the file diff's `root`.
     pub(super) fn switch_actions(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         let root = root

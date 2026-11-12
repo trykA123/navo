@@ -18,7 +18,7 @@ pub(super) use self::seek::Anchor;
 use crate::compare_diff::{ByteRegionView, HexAlign};
 use crate::prelude::*;
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::ByteScroll;
 
 mod draw;
@@ -258,7 +258,7 @@ impl HexView {
         &self,
         t: &Theme,
         window: &Window,
-        cx: &mut Context<NavoWindow>,
+        cx: &mut Context<ScreenOwner>,
     ) -> AnyElement {
         if let Some(error) = &self.error {
             return message(t, error.clone());

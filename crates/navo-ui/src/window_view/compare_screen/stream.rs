@@ -23,13 +23,13 @@ use super::menu::MenuSlot;
 use super::open::opts;
 use super::outline::Outline;
 use super::search::{Rerun, Search};
-use super::{CompareScreen, DiffSlot};
+use super::{DiffSlot, ScreenStack};
 use crate::compare_diff::{
     CardRow, Layout, PairRequest, StreamControl, StreamList, StreamModel, StreamRow, StreamSink,
     StreamUpdate, stream_rows,
 };
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// Pixels the list lays out beyond the viewport.
 const OVERDRAW: f32 = 200.;
@@ -175,7 +175,7 @@ impl StreamScreen {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The open Stream, under any file diff.
     pub(super) fn stream_mut(&mut self) -> Option<&mut StreamScreen> {
         self.compare.screen.as_mut()?.stream.as_mut()
@@ -229,10 +229,7 @@ impl NavoWindow {
             settle: None,
         };
         stream.send_focus();
-        let screen = self
-            .compare
-            .screen
-            .get_or_insert_with(CompareScreen::default);
+        let screen = self.compare.screen.get_or_insert_with(ScreenStack::default);
         // A new Stream takes over the GPU textures the old one held (D26.3).
         if let Some(old) = &mut screen.stream {
             old.thumbs.release_all(cx);
@@ -290,7 +287,7 @@ impl NavoWindow {
 }
 
 #[cfg(test)]
-impl NavoWindow {
+impl ScreenOwner {
     /// The Stream's model, rows and list, for tests.
     pub(in crate::window_view) fn stream_probe(
         &self,

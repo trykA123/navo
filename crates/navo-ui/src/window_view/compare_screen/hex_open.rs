@@ -5,13 +5,13 @@ use std::ops::Range;
 
 use gpui_kit::ScrollEvent;
 
-use super::NavoWindow;
+use super::ScreenOwner;
 use super::hex;
 use crate::compare_diff::PairRequest;
 use crate::prelude::*;
 use crate::tokens;
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Reads the open binary pair's sides on a background thread and keeps the task on the view.
     pub(super) fn start_hex_open(&mut self, cx: &mut Context<Self>) {
         let Some((tag, active, request)) = self.pending_hex() else {

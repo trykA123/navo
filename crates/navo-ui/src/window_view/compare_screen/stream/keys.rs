@@ -11,12 +11,12 @@ use crate::commands::compare::{
 };
 use crate::compare_diff::EscStep;
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// How long a scroll rests before the app hears which cards are in view.
 const SETTLE: Duration = Duration::from_millis(100);
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds the Stream's keys on `root`: J/K, Shift+J/K, V, O and Esc (D27).
     pub(super) fn stream_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         let step = |change: i32, file: bool| {

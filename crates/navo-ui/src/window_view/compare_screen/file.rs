@@ -28,7 +28,7 @@ use crate::compare_diff::{DiffRow, Layout, LineCols, PairText, SpanCache, row_co
 use crate::prelude::*;
 use crate::primitives::{ListScroll, VirtualList};
 use crate::tokens;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 use sideways::SidewaysHandle;
 #[cfg(test)]
 pub(in crate::window_view) use sideways::SidewaysSeen;
@@ -269,7 +269,7 @@ impl FileView {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Next or previous change in the open file diff.
     pub(super) fn step_change(
         &mut self,

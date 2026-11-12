@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use gpui_kit::{FocusHandle, Subscription};
 
-use super::NavoWindow;
+use super::ScreenOwner;
 use crate::compare_diff::{DiffUpdate, Layout, PairControl, PairKind};
 use crate::compare_diff::{PairRequest, PairText};
 use crate::context_menu::ContextMenu;
@@ -227,13 +227,13 @@ impl FileScreen {
 
 /// The screen in place of the panes: a Stream, a file diff on top of it, or both.
 #[derive(Default)]
-pub(super) struct CompareScreen {
+pub(super) struct ScreenStack {
     stream: Option<StreamScreen>,
     file: Option<FileScreen>,
 }
 
 /// The compare roots' names as "left ↔ right", or empty outside a compare.
-fn sides_label(window: &NavoWindow) -> SharedString {
+fn sides_label(window: &ScreenOwner) -> SharedString {
     let Some(mode) = window.browser.compare_mode() else {
         return SharedString::default();
     };

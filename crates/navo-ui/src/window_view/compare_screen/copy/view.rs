@@ -14,7 +14,7 @@ use crate::file_list::UndoLast;
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant};
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// What the status line says about the last copy.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub(in crate::window_view::compare_screen) struct Note {
 /// What the file diff's list needs to draw the bars: the window and the hovered change.
 #[derive(Clone)]
 pub(in crate::window_view::compare_screen) struct FileBars {
-    pub(in crate::window_view::compare_screen) weak: WeakEntity<NavoWindow>,
+    pub(in crate::window_view::compare_screen) weak: WeakEntity<ScreenOwner>,
     pub(in crate::window_view::compare_screen) hovered: Option<u32>,
     pub(in crate::window_view::compare_screen) animate: bool,
     /// The tick boxes of the picked lines.
@@ -99,11 +99,11 @@ pub(in crate::window_view::compare_screen) fn note_view(
         })
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// The bars of the Stream's cards: the hovered change and what the buttons call.
     pub(in crate::window_view::compare_screen) fn card_bars(
         &self,
-        weak: &WeakEntity<NavoWindow>,
+        weak: &WeakEntity<ScreenOwner>,
         cx: &App,
     ) -> CardBars {
         let hovered = match self.compare.diff.copy.hover {

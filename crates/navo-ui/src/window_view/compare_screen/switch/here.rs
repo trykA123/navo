@@ -14,7 +14,7 @@ use super::super::{FileScreen, FileState};
 use crate::commands::compare::ShowBytesHere;
 use crate::compare_diff::{LongHit, OnBytesHere, PairKind, PickSide, is_long};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// Where a switch lands: a byte of the hex body, or a line of the large body.
 #[derive(Debug, Clone, Copy)]
@@ -25,7 +25,7 @@ pub(in crate::window_view::compare_screen) enum At {
 
 /// The click handler of a "Show bytes here" button: it opens the pair in Bytes at the row's line.
 pub(in crate::window_view::compare_screen) fn on_bytes_here(
-    weak: &WeakEntity<NavoWindow>,
+    weak: &WeakEntity<ScreenOwner>,
 ) -> OnBytesHere {
     let weak = weak.clone();
     Rc::new(move |hit, _, cx| {
@@ -166,7 +166,7 @@ fn long_in(view: &FileView, hit: LongHit) -> Option<LongHit> {
     (long(&text.left, hit.left) || long(&text.right, hit.right)).then_some(hit)
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Binds Show bytes here on the file diff's `root`: it acts on the menu's line, else the
     /// cursor's; with neither a long line it says so in the compare notice (V41e).
     pub(in crate::window_view::compare_screen) fn here_actions(

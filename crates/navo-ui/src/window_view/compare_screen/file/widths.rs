@@ -7,7 +7,7 @@ use gpui_kit::Task;
 
 use crate::compare_diff::{LineCols, PairText};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// The width measure of one opened text: whether it started, and its running task.
 #[derive(Default)]
@@ -17,7 +17,7 @@ pub(super) struct WidthsSlot {
     task: Option<Task<()>>,
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Starts measuring the open text's line widths on a background thread, once per opened
     /// text. Until they land the sideways extent is unknown, so nothing is cut.
     pub(in crate::window_view::compare_screen) fn start_file_widths(

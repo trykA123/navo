@@ -7,7 +7,7 @@ use std::time::Duration;
 use super::FileView;
 use crate::compare_diff::{Layout, RowSpans, pair_rows};
 use crate::prelude::*;
-use crate::window_view::NavoWindow;
+use crate::window_view::ScreenOwner;
 
 /// How long the visible rows must stay the same before spans are asked for.
 const SETTLE: Duration = Duration::from_millis(100);
@@ -38,7 +38,7 @@ impl FileView {
         &mut self,
         layout: Layout,
         window: &Window,
-        cx: &mut Context<NavoWindow>,
+        cx: &mut Context<ScreenOwner>,
     ) {
         let built = self.built.get();
         if built == (0, 0) && !self.retried {
@@ -56,7 +56,7 @@ impl FileView {
     }
 }
 
-impl NavoWindow {
+impl ScreenOwner {
     /// Asks the engine for the spans of the visible rows it has not been asked about.
     fn ask_spans(&mut self, layout: Layout) {
         let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut()) else {
