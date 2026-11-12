@@ -8,6 +8,7 @@ use gpui_kit::{AppContext as _, TestAppContext};
 use super::super::compare_hex::{frame, hex_rig, probe, visible};
 use super::super::compare_screen::Rig;
 use super::super::compare_screen::body::pair;
+use super::super::screen_access::screen_update;
 use super::{LINE, labels, open};
 use crate::commands::compare::{ViewBytes, ViewText};
 use crate::compare_diff::{
@@ -92,9 +93,7 @@ fn compare_switch_text_from_a_gap_top_row_opens_at_the_next_left_line(cx: &mut T
     open(cx, &rig, (2, PairKind::Binary), None);
     insertion(cx, &rig, 2);
     let page = visible(cx, &rig);
-    let top = rig
-        .view
-        .update(cx, |view, _| view.file_hex_wheel(-30., page));
+    let top = screen_update(&rig.view, cx, |view, _| view.file_hex_wheel(-30., page));
     assert!(top.is_some_and(|row| row > 20 && row < 131));
     assert_eq!(probe(cx, &rig).top_left, None, "the top row is in the gap");
     rig.dispatch(cx, &ViewText);
@@ -136,8 +135,7 @@ fn compare_switch_unified_round_trip_lands_on_the_same_line(cx: &mut TestAppCont
     rig.press(cx, "enter");
     open(cx, &rig, (1, PairKind::Text), Some(long_run()));
     rig.dispatch(cx, &ShowUnified);
-    rig.view
-        .update(cx, |view, _| view.file_seek_offset(60 * LINE));
+    screen_update(&rig.view, cx, |view, _| view.file_seek_offset(60 * LINE));
     frame(cx, &rig);
     let (_, built, _) = rig.probe(cx, Layout::Unified);
     let top = built[0];
@@ -160,9 +158,7 @@ fn compare_switch_unified_round_trip_lands_on_the_same_line(cx: &mut TestAppCont
 
 /// Whether the last frame drew the text list and whether it drew hex rows.
 fn body_drawn(cx: &mut TestAppContext, rig: &Rig) -> (bool, bool) {
-    let first = rig
-        .view
-        .update(cx, |view, _| view.file_hex_probe())
+    let first = screen_update(&rig.view, cx, |view, _| view.file_hex_probe())
         .map_or(0, |hex| hex.built.start);
     cx.update_window(rig.window, |_, window, _| {
         // Hex row `n` is drawn as side slots `2n` (left) and `2n + 1` (right).
@@ -242,9 +238,7 @@ fn compare_hex_a_gap_top_row_keeps_its_right_offset_when_more_regions_land(
     open(cx, &rig, (1, PairKind::Binary), None);
     insertion(cx, &rig, 1);
     let page = visible(cx, &rig);
-    let top = rig
-        .view
-        .update(cx, |view, _| view.file_hex_wheel(30., page));
+    let top = screen_update(&rig.view, cx, |view, _| view.file_hex_wheel(30., page));
     assert!(top.is_some_and(|row| row > 20 && row < 131), "top: {top:?}");
     let before = probe(cx, &rig);
     let want = before.top_right.expect("the gap row holds right bytes");
