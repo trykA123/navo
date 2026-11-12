@@ -26,7 +26,7 @@ pub use hooks::{
     CompareControl, CompareHooks, CompareKind, CompareRow, CompareSide, CompareSink, CompareTotals,
     CompareUpdate, RowProgress, RowStatus, StopBound,
 };
-pub use mode::{CompareFilter, CompareMode, FileDiffRequest};
+pub use mode::{CompareFilter, CompareMode, ExitStep, FileDiffRequest, FolderSession};
 pub use view::{BarView, FILTERS, RowView, SideView, Tone, Total, bar_view, empty_text, pane_rows};
 pub(crate) use view::{look_of, status_text};
 
