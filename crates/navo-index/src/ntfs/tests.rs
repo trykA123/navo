@@ -1,7 +1,10 @@
+//! Legacy NTFS fixtures and enumeration/journal behavior tests.
 use super::*;
-use std::collections::VecDeque;
 
+#[path = "enumeration_replay.rs"]
+mod enumeration_replay;
 use crate::usn::{MAX_CARRIED_READS, UsnRecord};
+use enumeration_replay::{ReplayBuffers, ReplayQueries};
 
 const ROOT: u128 = (5 << 48) | 5;
 const POSITION: JournalPosition = JournalPosition {
@@ -63,8 +66,8 @@ fn journal(id: u64, first: i64, next: i64, lowest: i64) -> Vec<u8> {
 
 struct FakeVolume {
     cancel: Option<crate::pipe::CancelToken>,
-    queries: VecDeque<Vec<u8>>,
-    buffers: VecDeque<Option<Vec<u8>>>,
+    queries: ReplayQueries,
+    buffers: ReplayBuffers,
     cursors: Vec<u64>,
     reads: Vec<JournalPosition>,
     read: Vec<u8>,
@@ -127,16 +130,18 @@ impl VolumeIo for FakeVolume {
         }
         self.file_size(file_id)
     }
+    /// Returns queued journal metadata, then repeats the last response.
     fn query_journal(&mut self) -> Result<Vec<u8>, NtfsError> {
-        Ok(self.queries.pop_front().unwrap())
+        Ok(self.queries.read())
     }
 
+    /// Reads a replayable response at the requested MFT cursor.
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
         self.cursors.push(cursor);
         if let Some(cancel) = &self.cancel {
             cancel.cancel();
         }
-        Ok(self.buffers.pop_front().unwrap())
+        Ok(self.buffers.read(cursor))
     }
 
     fn read_journal(&mut self, position: JournalPosition) -> Result<Vec<u8>, NtfsError> {
