@@ -40,6 +40,9 @@ pub struct CardCtx<'a> {
     /// The card's parsed hunk snippets and the theme's live highlight colours; `None` draws every
     /// line as plain text, as before D38.3.
     pub syntax: Option<syntax::CardLook<'a>>,
+    /// Wrap a card line instead of truncating it (the look's Alt+Z flag, W8k); false draws every
+    /// line on one row, as before.
+    pub wrap: bool,
 }
 
 /// Builds the element for `rows[at]`. The card's last row gets the rounded bottom corners.
@@ -93,6 +96,7 @@ fn card_line(
         half,
         current: cursor.item == item && cursor.hunk == Some(*hunk),
         last,
+        wrap: ctx.wrap,
     };
     let (left_runs, right_runs) = ctx.syntax.map_or((Vec::new(), Vec::new()), |parsed| {
         parsed.line_runs(ctx.t, &card.rows, card_row)

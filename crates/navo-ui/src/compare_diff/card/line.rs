@@ -42,24 +42,31 @@ struct HalfView<'a> {
     hatch: Option<Hsla>,
 }
 
-/// How a line is drawn: layout, which half, whether it is the current hunk, and whether
-/// it ends the card.
+/// How a line is drawn: layout, which half, whether it is the current hunk, whether
+/// it ends the card, and whether its text wraps instead of truncating (W8k).
 #[derive(Clone, Copy)]
 pub(super) struct Look {
     pub layout: Layout,
     pub half: Half,
     pub current: bool,
     pub last: bool,
+    pub wrap: bool,
 }
 
-/// Builds a line row.
+/// Builds a line row. With wrap the row keeps its height as a floor and grows with its text;
+/// gpui's flex row then stretches both halves to the taller one.
 pub(super) fn view(t: &Theme, look: Look, row: DiffRow, text: Texts<'_>) -> Div {
     let body = match look.layout {
-        Layout::SideBySide => sides(t, row, text),
-        Layout::Unified => unified(t, row, text, look.half),
+        Layout::SideBySide => sides(t, row, text, look.wrap),
+        Layout::Unified => unified(t, row, text, look),
     };
-    frame(t, look.last)
-        .h(px(LINE_HEIGHT))
+    let frame = frame(t, look.last);
+    let frame = if look.wrap {
+        frame.min_h(px(LINE_HEIGHT)).items_stretch()
+    } else {
+        frame.h(px(LINE_HEIGHT))
+    };
+    frame
         .font_family(t.typography.mono_font.clone())
         .text_size(t.typography.small)
         .when(look.current, |d| d.child(accent_bar(t)))
@@ -76,8 +83,8 @@ pub(super) fn half_tones(t: &Theme, row: DiffRow) -> (Option<DiffTone>, Option<D
     }
 }
 
-/// Both halves of a side-by-side line.
-fn sides(t: &Theme, row: DiffRow, text: Texts<'_>) -> Div {
+/// Both halves of a side-by-side line. `wrap` lets them grow past one row.
+fn sides(t: &Theme, row: DiffRow, text: Texts<'_>, wrap: bool) -> Div {
     let (l, r) = match row {
         DiffRow::Equal(l, r) | DiffRow::Changed(l, r) => (Some(l), Some(r)),
         DiffRow::Deleted(l) => (Some(l), None),
@@ -99,27 +106,29 @@ fn sides(t: &Theme, row: DiffRow, text: Texts<'_>) -> Div {
         tone: rt,
         hatch: hatch.filter(|_| r.is_none()),
     };
-    div()
-        .flex()
-        .w_full()
-        .h_full()
-        .child(half_view(t, &left, true))
-        .child(half_view(t, &right, false))
+    let body = div().flex().w_full();
+    let body = if wrap {
+        body.items_stretch()
+    } else {
+        body.h_full()
+    };
+    body.child(half_view(t, &left, true, wrap))
+        .child(half_view(t, &right, false, wrap))
 }
 
-/// One half of a side-by-side line; the right half has a left edge.
-fn half_view(t: &Theme, half: &HalfView<'_>, first: bool) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .flex_1()
-        .min_w_0()
-        .h_full()
-        .overflow_hidden()
-        .when(!first, |d| d.border_l_1().border_color(t.colors.line))
+/// One half of a side-by-side line; the right half has a left edge. Wrapped, its text and
+/// gutter start at the top and the cell itself grows with the text.
+fn half_view(t: &Theme, half: &HalfView<'_>, first: bool, wrap: bool) -> Div {
+    let cell = div().flex().flex_1().min_w_0().overflow_hidden();
+    let cell = if wrap {
+        cell.items_start()
+    } else {
+        cell.items_center().h_full()
+    };
+    cell.when(!first, |d| d.border_l_1().border_color(t.colors.line))
         .when_some(half.hatch, Styled::bg)
         .child(gutter(t, half.number))
-        .child(edged(code(t, half.text, half.runs), half.tone))
+        .child(edged(code(t, half.text, half.runs, wrap), half.tone))
 }
 
 /// What a unified line shows: its two numbers, its sign, the tone of its text column and the
@@ -181,7 +190,8 @@ fn shown_line<'a>(t: &Theme, row: DiffRow, text: Texts<'a>, half: Half) -> Shown
 }
 
 /// A unified line: two gutters, a sign and one text. Equal lines show both numbers.
-fn unified(t: &Theme, row: DiffRow, text: Texts<'_>, half: Half) -> Div {
+/// Wrapped, the text grows past its row and the gutters and sign stay at the top.
+fn unified(t: &Theme, row: DiffRow, text: Texts<'_>, look: Look) -> Div {
     let ShownLine {
         left,
         right,
@@ -189,29 +199,30 @@ fn unified(t: &Theme, row: DiffRow, text: Texts<'_>, half: Half) -> Div {
         tone,
         text,
         runs,
-    } = shown_line(t, row, text, half);
-    div()
-        .flex()
-        .items_center()
-        .w_full()
-        .h_full()
-        .child(gutter(t, left))
+    } = shown_line(t, row, text, look.half);
+    let body = div().flex().w_full();
+    let body = if look.wrap {
+        body.items_start()
+    } else {
+        body.items_center().h_full()
+    };
+    let cell = div().flex().flex_1().min_w_0();
+    let cell = if look.wrap {
+        cell.items_start()
+    } else {
+        cell.items_center().h_full()
+    };
+    body.child(gutter(t, left))
         .child(gutter(t, right))
         .child(edged(
-            div()
-                .flex()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .items_center()
-                .child(
-                    div()
-                        .flex_none()
-                        .w(px(SIGN))
-                        .text_color(tone.map_or(t.colors.muted, |tone| tone.text))
-                        .child(sign),
-                )
-                .child(code(t, text, runs)),
+            cell.child(
+                div()
+                    .flex_none()
+                    .w(px(SIGN))
+                    .text_color(tone.map_or(t.colors.muted, |tone| tone.text))
+                    .child(sign),
+            )
+            .child(code(t, text, runs, look.wrap)),
             tone,
         ))
 }
@@ -229,13 +240,11 @@ fn gutter(t: &Theme, number: Option<u32>) -> Div {
 }
 
 /// The code text of one half; a filler shows nothing. Colour runs paint the words as the file
-/// body's `line_text` does, and the line still truncates — wrapping is W8k's job (D38.3).
-fn code(t: &Theme, text: Option<&str>, runs: &[TextRun]) -> Div {
-    let cell = div()
-        .flex_1()
-        .min_w_0()
-        .truncate()
-        .text_color(t.colors.text);
+/// body's `line_text` does, and stay on the line when it wraps (W8k); only unwrapped lines
+/// truncate.
+fn code(t: &Theme, text: Option<&str>, runs: &[TextRun], wrap: bool) -> Div {
+    let cell = div().flex_1().min_w_0().text_color(t.colors.text);
+    let cell = if wrap { cell } else { cell.truncate() };
     let Some(text) = text else {
         return cell;
     };

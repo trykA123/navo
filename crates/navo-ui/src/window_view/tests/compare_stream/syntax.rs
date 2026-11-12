@@ -23,7 +23,7 @@ use crate::window_view::EDIT_LIMIT;
 const CODE: [&str; 3] = ["// note", "fn main() {}", "}"];
 
 /// Opens a Stream over one file named `name` and draws it.
-fn open_one(rig: &Rig, cx: &mut TestAppContext, name: &str) {
+pub(super) fn open_one(rig: &Rig, cx: &mut TestAppContext, name: &str) {
     let list = StreamList {
         items: vec![StreamItem {
             id: 1,
@@ -60,7 +60,7 @@ fn line(row: DiffRow, hunk: u32, text: &str) -> CardRow {
 }
 
 /// A text card of `hunks` hunks, each the three `CODE` lines on both sides.
-fn code_card(hunks: u32) -> Arc<Card> {
+pub(super) fn code_card(hunks: u32) -> Arc<Card> {
     let rows = (0..hunks)
         .flat_map(|hunk| {
             [
@@ -91,7 +91,7 @@ fn code_card(hunks: u32) -> Arc<Card> {
 }
 
 /// Sends `card` for item 1 under `generation`, as the app would.
-fn send_card(rig: &Rig, generation: u64, card: &Arc<Card>) {
+pub(super) fn send_card(rig: &Rig, generation: u64, card: &Arc<Card>) {
     (rig.diff.stream_sink())(StreamUpdate::Card {
         generation,
         id: 1,
@@ -108,7 +108,7 @@ fn evict(rig: &Rig) {
 }
 
 /// The left colour runs the Stream paints for row `at` of `card`; empty with no parse held.
-fn held_runs(rig: &Rig, cx: &mut TestAppContext, card: &Card, at: u32) -> Vec<TextRun> {
+pub(super) fn held_runs(rig: &Rig, cx: &mut TestAppContext, card: &Card, at: u32) -> Vec<TextRun> {
     let Some(held) = rig.view.read_with(cx, |view, _| view.stream_syntax(1)) else {
         return Vec::new();
     };
@@ -124,7 +124,7 @@ fn held_runs(rig: &Rig, cx: &mut TestAppContext, card: &Card, at: u32) -> Vec<Te
 }
 
 /// The byte range of the coloured keyword at the start of the line, if the runs hold one.
-fn keyword_at(runs: &[TextRun]) -> Option<Range<usize>> {
+pub(super) fn keyword_at(runs: &[TextRun]) -> Option<Range<usize>> {
     runs.iter()
         .find(|(run, style)| run.contains(&0) && style.color.is_some())
         .map(|(run, _)| run.clone())
@@ -136,7 +136,7 @@ fn slots(rig: &Rig, cx: &mut TestAppContext) -> usize {
 }
 
 /// Drains the Stream's inbox and waits for the background parse, as the file screen's test does.
-fn land(rig: &Rig, cx: &mut TestAppContext) {
+pub(super) fn land(rig: &Rig, cx: &mut TestAppContext) {
     rig.view.update(cx, |view, cx| view.poll_compare_screen(cx));
     cx.run_until_parked();
 }

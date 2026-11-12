@@ -142,8 +142,8 @@ impl NavoWindow {
         }))
     }
 
-    /// Registers the wrap toggle on the file diff's root, where the View actions run with the
-    /// `CompareView` key context; the Stream root does not handle it yet (W8k).
+    /// Registers the wrap toggle on the file diff's and the Stream's roots, where the View
+    /// actions run with the `CompareView` key context (the Stream since W8k).
     pub(super) fn wrap_action(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &ToggleWrap, _, cx| {
             view.change_look(Look::toggle_wrap, cx);
@@ -216,8 +216,12 @@ impl NavoWindow {
             .compare
             .screen
             .as_ref()
-            .and_then(|screen| screen.file.as_ref())
-            .is_some_and(|file| file.view.is_some() && file.hex.is_none());
+            .is_some_and(|screen| match &screen.file {
+                // The file diff offers wrap on an opened text pair only (D39.7).
+                Some(file) => file.view.is_some() && file.hex.is_none(),
+                // The Stream draws text cards, so it always offers it (W8k).
+                None => screen.stream.is_some(),
+            });
         let switch = (self.compare.screen.as_ref())
             .and_then(|screen| screen.file.as_ref())
             .map(super::switch::entries);

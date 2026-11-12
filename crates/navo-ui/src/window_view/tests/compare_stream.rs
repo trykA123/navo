@@ -22,6 +22,7 @@ mod heavy_thumbs;
 mod search;
 mod syntax;
 mod vr1;
+mod wrap;
 
 /// `count` differing items with ids 1..=count, and their pair requests.
 pub(super) fn items(count: u64) -> (StreamList, Vec<PairRequest>) {

@@ -146,6 +146,7 @@ fn row(weak: &WeakEntity<NavoWindow>, at: usize, cx: &App) -> AnyElement {
         layout: stream.layout,
         bars: Some(&bars),
         syntax: stream.card_syntax(at, cx),
+        wrap: stream.look.wrap,
     };
     let starts_card = matches!(
         stream.rows[at],
@@ -224,11 +225,13 @@ impl NavoWindow {
         let root = Self::stream_keys(div().id("compare-stream"), cx);
         let root = Self::search_keys(Self::outline_keys(root, cx), cx);
         let root = Self::copy_keys(Self::open_card_key(Self::sheet_keys(root, cx), cx), cx);
-        let root = Self::stream_details_key(Self::look_actions(root, cx), cx);
         let root = Self::menu_keys(root, cx);
+        let root =
+            Self::stream_details_key(Self::wrap_action(Self::look_actions(root, cx), cx), cx);
         let note = self.compare.diff.copy.note.clone();
         let stream = self.stream_mut()?;
         stream.relayout(stream.look.layout_in(window));
+        stream.rewrap();
         let drawer = outline::drawer(&t, stream, cx);
         let details = super::details::drawer(&t, stream);
         let empty = stream.empty_note();

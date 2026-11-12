@@ -55,6 +55,8 @@ pub(super) struct StreamScreen {
     pub(super) layout: Layout,
     /// What the View menu set; a file diff opened from here starts with it.
     pub(super) look: Look,
+    /// The wrap state the list's rows were last measured with; a flip remeasures them (W8k).
+    wrapped: bool,
     /// The open View menu.
     pub(super) menu: MenuSlot,
     /// Whether the details drawer (Ctrl+I) shows the current file's facts.
@@ -132,6 +134,15 @@ impl StreamScreen {
         }
     }
 
+    /// When Alt+Z or the View menu flipped wrap since the last draw, asks the list to measure
+    /// every row again, so the row heights follow the new one-line-or-wrapped drawing (W8k).
+    fn rewrap(&mut self) {
+        if self.wrapped != self.look.wrap {
+            self.wrapped = self.look.wrap;
+            self.list.remeasure();
+        }
+    }
+
     /// The row of the current stop: the first row of its hunk, else its card's header.
     pub(super) fn cursor_row(&self) -> Option<usize> {
         let stop = self.model.cursor();
@@ -199,6 +210,7 @@ impl NavoWindow {
             list: state,
             layout: Layout::SideBySide,
             look: Look::rich(),
+            wrapped: false,
             menu: None,
             details: false,
             sides: super::sides_label(self),
