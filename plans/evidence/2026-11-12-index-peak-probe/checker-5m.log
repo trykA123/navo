@@ -1,0 +1,14 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (target/release/deps/navo_index-a8d73c7f13bcad65)
+
+running 1 test
+test ntfs::peak_tests::checker_peak_probe::checker_peak_breakdown ... INSTR files=5000000 old=0 max=854010241 sampled=Parts { peak: 854010241, live: 786617091, columns: [75755759, 14971632, 14971632, 3742908, 29943264, 4259352, 2839568, 14971632, 14971632, 0], logical_columns: 100533645, logical_names: 67344195, frn: 22710288, queue: 545814896, waiters: 41611280, pending_count: 1500000 }
+HELD columns=[("names", 99000003), ("offsets", 22000004), ("parents", 22000004), ("flags", 5500001), ("bytes", 44000008), ("counts", 6064572), ("children.heads", 4043048), ("children.next", 22000004), ("children.previous", 22000004), ("children.waiting", 0)] frn=33220448 peak=854010241 ms=4790 sampled_peak=854010241 live=786617091 logical_columns=100533645 logical_names=67344195 sampled_frn=22710288 queue=545814896 waiters=41611280 blocked=1500000 sampled_columns=[75755759, 14971632, 14971632, 3742908, 29943264, 4259352, 2839568, 14971632, 14971632, 0]
+PRODUCTION files=5000000 rebuild=false old=0 peak=854010289 steady=279828096 ratio=3.052 ms=4609
+INSTR files=5000000 old=279828096 max=1152653467 sampled=Parts { peak: 1152653467, live: 1152575370, columns: [105187503, 23375004, 23375004, 5843751, 46750008, 6375012, 4250008, 23375004, 23375004, 0], logical_columns: 103247245, logical_names: 69297987, frn: 23361552, queue: 545814896, waiters: 41611280, pending_count: 1500000 }
+HELD columns=[("names", 105187503), ("offsets", 23375004), ("parents", 23375004), ("flags", 5843751), ("bytes", 46750008), ("counts", 6375012), ("children.heads", 4250008), ("children.next", 23375004), ("children.previous", 23375004), ("children.waiting", 0)] frn=33220448 peak=1152653467 ms=5446 sampled_peak=1152653467 live=1152575370 logical_columns=103247245 logical_names=69297987 sampled_frn=23361552 queue=545814896 waiters=41611280 blocked=1500000 sampled_columns=[105187503, 23375004, 23375004, 5843751, 46750008, 6375012, 4250008, 23375004, 23375004, 0]
+PRODUCTION files=5000000 rebuild=true old=279828096 peak=1152653515 steady=295126746 ratio=3.906 ms=4485
+ALTERNATIVE files=5000000 ordered_peak=295368474 old=279828096 answer_only=148500012 full_old_peak=575196570 answer_old_peak=443868486 ms=3726
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 381 filtered out; finished in 26.95s

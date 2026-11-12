@@ -1,0 +1,14 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.47s
+     Running unittests src/lib.rs (target/release/deps/navo_index-a8d73c7f13bcad65)
+
+running 1 test
+test ntfs::peak_tests::checker_peak_probe::checker_peak_breakdown ... INSTR files=3000000 old=0 max=498046172 sampled=Parts { peak: 498046172, live: 461842908, columns: [47293959, 10515060, 10515060, 2628765, 21030120, 2659104, 1772736, 10515060, 10515060, 0], logical_columns: 62776045, logical_names: 42134403, frn: 14202432, queue: 306213456, waiters: 23928848, pending_count: 872000 }
+HELD columns=[("names", 59856411), ("offsets", 13308120), ("parents", 13308120), ("flags", 3327030), ("bytes", 26616240), ("counts", 3786096), ("children.heads", 2524064), ("children.next", 13308120), ("children.previous", 13308120), ("children.waiting", 0)] frn=19931032 peak=498046172 ms=2755 sampled_peak=498046172 live=461842908 logical_columns=62776045 logical_names=42134403 sampled_frn=14202432 queue=306213456 waiters=23928848 blocked=872000 sampled_columns=[47293959, 10515060, 10515060, 2628765, 21030120, 2659104, 1772736, 10515060, 10515060, 0]
+PRODUCTION files=3000000 rebuild=false old=0 peak=498046220 steady=169273353 ratio=2.942 ms=2623
+INSTR files=3000000 old=169273353 max=679069712 sampled=Parts { peak: 679069712, live: 678991615, columns: [63112503, 14025004, 14025004, 3506251, 28050008, 3825012, 2550008, 14025004, 14025004, 0], logical_columns: 61943245, logical_names: 41575107, frn: 14018112, queue: 313857456, waiters: 24645648, pending_count: 900000 }
+HELD columns=[("names", 63112503), ("offsets", 14025004), ("parents", 14025004), ("flags", 3506251), ("bytes", 28050008), ("counts", 3825012), ("children.heads", 2550008), ("children.next", 14025004), ("children.previous", 14025004), ("children.waiting", 0)] frn=19931032 peak=679069712 ms=2912 sampled_peak=679069712 live=678991615 logical_columns=61943245 logical_names=41575107 sampled_frn=14018112 queue=313857456 waiters=24645648 blocked=900000 sampled_columns=[63112503, 14025004, 14025004, 3506251, 28050008, 3825012, 2550008, 14025004, 14025004, 0]
+PRODUCTION files=3000000 rebuild=true old=169273353 peak=679069760 steady=177074830 ratio=3.835 ms=2564
+ALTERNATIVE files=3000000 ordered_peak=177222263 old=169273353 answer_only=89799681 full_old_peak=346495616 answer_old_peak=267021944 ms=2195
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 381 filtered out; finished in 15.38s

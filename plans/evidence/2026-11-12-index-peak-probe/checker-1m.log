@@ -1,0 +1,15 @@
+   Compiling navo-index v0.7.0 (/mnt/Sabrent/homelab/navo-chk-peak/crates/navo-index)
+    Finished `release` profile [optimized + debuginfo] target(s) in 43.39s
+     Running unittests src/lib.rs (target/release/deps/navo_index-a8d73c7f13bcad65)
+
+running 1 test
+test ntfs::peak_tests::checker_peak_probe::checker_peak_breakdown ... INSTR files=1000000 old=0 max=175987726 sampled=Parts { peak: 175987726, live: 162989576, columns: [14564026, 2878296, 2878296, 719574, 5756592, 921240, 614160, 2878296, 2878296, 0], logical_columns: 19384845, logical_names: 12949059, frn: 4385984, queue: 115978736, waiters: 8482832, pending_count: 300000 }
+HELD columns=[("names", 20736651), ("offsets", 4610464), ("parents", 4610464), ("flags", 1152616), ("bytes", 9220928), ("counts", 1200012), ("children.heads", 800008), ("children.next", 4610464), ("children.previous", 4610464), ("children.waiting", 0)] frn=6647800 peak=175987726 ms=873 sampled_peak=175987726 live=162989576 logical_columns=19384845 logical_names=12949059 sampled_frn=4385984 queue=115978736 waiters=8482832 blocked=300000 sampled_columns=[14564026, 2878296, 2878296, 719574, 5756592, 921240, 614160, 2878296, 2878296, 0]
+PRODUCTION files=1000000 rebuild=false old=0 peak=175987774 steady=58199871 ratio=3.024 ms=827
+INSTR files=1000000 old=58199871 max=239861122 sampled=Parts { peak: 239861122, live: 239544145, columns: [21037503, 4675004, 4675004, 1168751, 9350008, 1275012, 850008, 4675004, 4675004, 0], logical_columns: 20673645, logical_names: 13875843, frn: 4687040, queue: 115760336, waiters: 8462352, pending_count: 299200 }
+HELD columns=[("names", 21037503), ("offsets", 4675004), ("parents", 4675004), ("flags", 1168751), ("bytes", 9350008), ("counts", 1275012), ("children.heads", 850008), ("children.next", 4675004), ("children.previous", 4675004), ("children.waiting", 0)] frn=6647800 peak=239861122 ms=849 sampled_peak=239861122 live=239544145 logical_columns=20673645 logical_names=13875843 sampled_frn=4687040 queue=115760336 waiters=8462352 blocked=299200 sampled_columns=[21037503, 4675004, 4675004, 1168751, 9350008, 1275012, 850008, 4675004, 4675004, 0]
+PRODUCTION files=1000000 rebuild=true old=58199871 peak=239861170 steady=59029098 ratio=4.063 ms=806
+ALTERNATIVE files=1000000 ordered_peak=59165811 old=58199871 answer_only=31110195 full_old_peak=117365682 answer_old_peak=90276006 ms=696
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 381 filtered out; finished in 4.78s
