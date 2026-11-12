@@ -9,6 +9,7 @@ use gpui_kit::{
 
 use super::compare_large::{lines, open_large, push};
 use super::compare_screen::Rig;
+use super::screen_access::{screen_read, screen_update};
 use super::settle;
 use crate::test_pointer::{dispatch, down, moved, up};
 
@@ -16,7 +17,7 @@ const TOTAL: u64 = 1_000_000;
 
 /// The open large body's top row and the first row of its list window.
 fn place(cx: &mut TestAppContext, rig: &Rig) -> (u64, u64) {
-    let probe = rig.view.read_with(cx, |view, _| view.large_probe());
+    let probe = screen_read(&rig.view, cx, |view, _| view.large_probe());
     let probe = probe.expect("a large body");
     (probe.top, probe.base)
 }
@@ -115,7 +116,7 @@ fn compare_large_wheel_across_a_window_margin_keeps_the_top_row(cx: &mut TestApp
     let _shown = crate::compare_visible::show_compare();
     let (rig, sink) = open_large(cx);
     push(cx, &rig, &sink, lines(0..10, (TOTAL, TOTAL)));
-    rig.view.update(cx, |view, cx| {
+    screen_update(&rig.view, cx, |view, cx| {
         view.large_scroll_to(150_000);
         cx.notify();
     });

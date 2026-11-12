@@ -7,6 +7,7 @@ use gpui_kit::{AppContext as _, TestAppContext};
 use navo_l10n::t;
 
 use super::compare_screen::{Rig, rig};
+use super::screen_access::{screen_read, screen_update, screen_update_in};
 use super::settle;
 use crate::compare_diff::{
     DiffSink, DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepReason,
@@ -93,7 +94,7 @@ pub(super) fn push(cx: &mut TestAppContext, rig: &Rig, sink: &DiffSink, update: 
 }
 
 fn status(cx: &mut TestAppContext, rig: &Rig) -> String {
-    let probe = rig.view.read_with(cx, |view, _| view.large_probe());
+    let probe = screen_read(&rig.view, cx, |view, _| view.large_probe());
     probe.expect("a large body").status.to_string()
 }
 
@@ -105,15 +106,10 @@ fn compare_large_rows_come_from_hunks_and_requested_line_windows(cx: &mut TestAp
     let asked = rig.diff.line_requests();
     assert_eq!(asked.first().map(|rows| rows.start), Some(0), "{asked:?}");
     push(cx, &rig, &sink, lines(0..40, (30, 33)));
-    let probe = rig
-        .view
-        .read_with(cx, |view, _| view.large_probe())
-        .unwrap();
+    let probe = screen_read(&rig.view, cx, |view, _| view.large_probe()).unwrap();
     assert_eq!(probe.count, 33, "10 equal, 5 in the hunk, 18 after it");
     let row = |cx: &mut TestAppContext, at| {
-        rig.view
-            .read_with(cx, |view, _| view.large_row(at))
-            .unwrap()
+        screen_read(&rig.view, cx, |view, _| view.large_row(at)).unwrap()
     };
     let shown = |line: u64, text: &str| Some((line, text.to_owned()));
     assert_eq!(
@@ -142,7 +138,7 @@ fn compare_large_asks_once_per_missing_window(cx: &mut TestAppContext) {
         before,
         "a shown window that arrived is not asked again"
     );
-    rig.view.update(cx, |view, cx| {
+    screen_update(&rig.view, cx, |view, cx| {
         view.large_scroll_to(3_000);
         cx.notify();
     });
@@ -178,20 +174,16 @@ fn compare_large_arriving_hunks_never_move_the_top_line(cx: &mut TestAppContext)
         &sink,
         snapshot(vec![hunk(900..900, 900..910)], 1, 1),
     );
-    rig.view.update(cx, |view, cx| {
+    screen_update(&rig.view, cx, |view, cx| {
         view.large_scroll_to(500);
         cx.notify();
     });
     settle(cx, &rig.view);
     let top = |cx: &mut TestAppContext| {
-        let probe = rig
-            .view
-            .read_with(cx, |view, _| view.large_probe())
-            .unwrap();
+        let probe = screen_read(&rig.view, cx, |view, _| view.large_probe()).unwrap();
         (
             probe.top,
-            rig.view
-                .read_with(cx, |view, _| view.large_row(probe.top))
+            screen_read(&rig.view, cx, |view, _| view.large_row(probe.top))
                 .unwrap()
                 .1,
         )
@@ -230,10 +222,7 @@ fn compare_large_next_past_known_hunks_looks_further_then_jumps(cx: &mut TestApp
         status(cx, &rig),
         t!("compare-screen-change", current = 2, total = 2)
     );
-    let probe = rig
-        .view
-        .read_with(cx, |view, _| view.large_probe())
-        .unwrap();
+    let probe = screen_read(&rig.view, cx, |view, _| view.large_probe()).unwrap();
     assert!(
         probe.top <= 700 && 700 < probe.top + 60,
         "jumped to it: {}",
@@ -250,10 +239,9 @@ fn compare_large_esc_stops_looking_further_and_keeps_the_screen(cx: &mut TestApp
     rig.press(cx, "alt-down");
     rig.press(cx, "alt-down");
     rig.press(cx, "escape");
-    assert!(
-        rig.view
-            .read_with(cx, |view, _| view.file_screen().is_some())
-    );
+    assert!(screen_read(&rig.view, cx, |view, _| view
+        .file_screen()
+        .is_some()));
     let one = t!("compare-screen-change", current = 1, total = 1);
     assert_eq!(status(cx, &rig), one);
     let both = vec![hunk(10..11, 10..11), hunk(700..702, 700..702)];
@@ -311,7 +299,7 @@ fn compare_large_maps_unified_rows_and_unequal_gaps() {
 }
 
 fn notes(cx: &mut TestAppContext, rig: &Rig) -> String {
-    let probe = rig.view.read_with(cx, |view, _| view.large_probe());
+    let probe = screen_read(&rig.view, cx, |view, _| view.large_probe());
     probe.expect("a large body").notes.to_string()
 }
 
@@ -381,8 +369,7 @@ fn compare_large_step_notices_name_the_step(cx: &mut TestAppContext) {
 
 /// Whether the large body shows the link to the memory budget setting.
 fn has_link(cx: &mut TestAppContext, rig: &Rig) -> bool {
-    rig.view
-        .read_with(cx, |view, _| view.large_probe())
+    screen_read(&rig.view, cx, |view, _| view.large_probe())
         .expect("a large body")
         .budget_link
 }
@@ -422,7 +409,8 @@ fn compare_large_details_drawer_lists_kind_sizes_step_and_progress(cx: &mut Test
     let (rig, sink) = open_large(cx);
     let coarse = step(LargeStep::Coarse, LargeStepReason::SectionCap, 0..90);
     push(cx, &rig, &sink, with_steps(vec![coarse], 2));
-    let facts = |cx: &mut TestAppContext| rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    let facts =
+        |cx: &mut TestAppContext| screen_read(&rig.view, cx, |view, _| view.body_facts_probe());
     assert_eq!(facts(cx), None, "the drawer starts closed");
     rig.press(cx, "ctrl-i");
     settle(cx, &rig.view);
@@ -449,11 +437,9 @@ fn open_with_link(cx: &mut TestAppContext) -> Rig {
 
 /// Whether the open compare file screen holds focus.
 fn file_focused(cx: &mut TestAppContext, rig: &Rig) -> bool {
-    let view = rig.view.clone();
-    cx.update_window(rig.window, |_, window, cx| {
-        view.update(cx, |view, _| view.file_screen_focused(window))
+    screen_update_in(&rig.view, rig.window, cx, |view, window, _| {
+        view.file_screen_focused(window)
     })
-    .expect("window")
 }
 
 #[gpui_kit::test]
@@ -472,7 +458,7 @@ fn compare_large_closing_settings_returns_focus_to_the_diff(cx: &mut TestAppCont
     assert!(file_focused(cx, &rig), "the diff has focus again");
     rig.press(cx, "ctrl-i");
     settle(cx, &rig.view);
-    let facts = rig.view.read_with(cx, |view, _| view.body_facts_probe());
+    let facts = screen_read(&rig.view, cx, |view, _| view.body_facts_probe());
     assert!(facts.is_some(), "Ctrl+I opens the details drawer");
 }
 
