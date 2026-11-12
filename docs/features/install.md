@@ -45,13 +45,13 @@ A refused folder gets one line that says what is wrong and what to do.
 
 ### Folders others could change
 
-Setup also refuses a folder when another user on the PC could change a folder above it. This covers:
+Setup warns, but does not refuse, when another user on the PC could change a folder above it (IW-D16, owner 2026-11-12). The folder page shows the warning with Next enabled, and `--silent` writes it to the log. This covers:
 
 - a folder made by a user directly under `C:\`, such as `C:\Tools`;
 - a drive root that lets other users delete or rename its children, for example a root that gives Everyone full control;
 - FAT32 and exFAT drives, which have no access lists.
 
-The message is: "Other people on this PC can change a folder above this one. Choose a folder directly on a drive, such as C:\Navo."
+The warning is: "Other people on this PC can change a folder above this one. Navo still works here, but a folder directly on a drive, such as C:\Navo, is safer." The folders Setup creates still get the protected access list.
 
 A folder made directly under `C:\`, such as `C:\Navo`, works for a standard user.
 

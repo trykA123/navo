@@ -414,7 +414,7 @@ Setup refuses:
 - a network drive, a `subst` drive, a system folder, your profile folder and OneDrive folders;
 - a drive with too little free space.
 
-Setup also refuses a folder when other people on the PC could change a folder above it. This happens with a folder you made under `C:\`, such as `C:\Tools`. It happens with a drive root that lets others delete or rename its contents, and with FAT32 and exFAT drives. The message reads: "Other people on this PC can change a folder above this one. Choose a folder directly on a drive, such as C:\Navo."
+Setup warns, but still installs, when other people on the PC could change a folder above the one you chose. This happens with a folder you made under `C:\`, such as `C:\Tools`. It happens with a drive root that lets others delete or rename its contents, and with FAT32 and exFAT drives. The warning reads: "Other people on this PC can change a folder above this one. Navo still works here, but a folder directly on a drive, such as C:\Navo, is safer." Next stays available.
 
 A folder made directly under `C:\`, such as `C:\Navo`, works for a standard user.
 
