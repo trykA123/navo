@@ -5,6 +5,7 @@ mod context;
 mod copy;
 mod details;
 mod drawers;
+mod entity;
 mod entry;
 mod file;
 mod hex;
@@ -35,6 +36,7 @@ use crate::compare_diff::{DiffUpdate, Layout, PairControl, PairKind};
 use crate::compare_diff::{PairRequest, PairText};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
+pub(in crate::window_view) use entity::ScreenEvent;
 pub(in crate::window_view) use entry::items_of;
 pub(in crate::window_view) use inbox::DiffSlot;
 #[cfg(test)]

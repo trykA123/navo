@@ -12,6 +12,7 @@ use crate::commands::compare::{
 use crate::compare_diff::EscStep;
 use crate::prelude::*;
 use crate::window_view::ScreenOwner;
+use crate::window_view::compare_screen::ScreenEvent;
 
 /// How long a scroll rests before the app hears which cards are in view.
 const SETTLE: Duration = Duration::from_millis(100);
@@ -136,10 +137,6 @@ impl ScreenOwner {
         }
         self.compare.screen = None;
         self.compare.diff.copy.note = None;
-        if let Some(path) = path {
-            self.browser.compare_reveal(&path);
-        }
-        self.focus_core_pane(window, cx);
-        cx.notify();
+        self.emit_screen(ScreenEvent::Closed { reveal: path }, Some(window), cx);
     }
 }

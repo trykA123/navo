@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, PoisonError};
 
-use super::{FileScreen, FileState, ScreenOwner, ScreenStack};
+use super::{FileScreen, FileState, ScreenEvent, ScreenOwner, ScreenStack};
 use super::{drawers, file, look, pick, switch};
 use crate::compare_diff::{CompareOptions, PairRequest, PairText};
 use crate::prelude::*;
@@ -174,15 +174,14 @@ impl ScreenOwner {
         release(file, cx);
         self.compare.diff.copy.note = None;
         match &screen.stream {
-            Some(stream) => window.focus(&stream.focus, cx),
+            Some(stream) => {
+                window.focus(&stream.focus, cx);
+                cx.notify();
+            }
             None => {
                 self.compare.screen = None;
-                if let Some(path) = path {
-                    self.browser.compare_reveal(&path);
-                }
-                self.focus_core_pane(window, cx);
+                self.emit_screen(ScreenEvent::Closed { reveal: path }, Some(window), cx);
             }
         }
-        cx.notify();
     }
 }
