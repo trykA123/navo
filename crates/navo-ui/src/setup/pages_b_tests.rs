@@ -52,10 +52,10 @@ fn open(cx: &mut TestAppContext, view: SetupView) -> (AnyWindowHandle, Sent) {
 fn installing(seconds: u64, still_working: bool) -> SetupView {
     SetupView {
         page: SetupPage::Installing,
-        progress: Some(SetupProgress {
-            elapsed: Duration::from_secs(seconds),
+        progress: Some(SetupProgress::from_elapsed(
+            Duration::from_secs(seconds),
             still_working,
-        }),
+        )),
         log_paths: vec![PathBuf::from("C:\\Logs\\setup.log")],
         ..SetupView::default()
     }

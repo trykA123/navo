@@ -49,10 +49,10 @@ fn primary(page: SetupPage, action: SetupAction) -> SetupView {
 fn installing(seconds: u64) -> SetupView {
     SetupView {
         can_back: false,
-        progress: Some(SetupProgress {
-            elapsed: Duration::from_secs(seconds),
-            still_working: seconds >= 180,
-        }),
+        progress: Some(SetupProgress::from_elapsed(
+            Duration::from_secs(seconds),
+            seconds >= 180,
+        )),
         log_paths: vec![PathBuf::from(format!(r"{FOLDER}\setup.log"))],
         ..base(SetupPage::Installing)
     }
