@@ -31,6 +31,12 @@ impl ListScroll {
         self.0.scroll_to_item(index, ScrollStrategy::Center);
     }
 
+    /// Centres row `index` even when it is already visible: a wrapped change spans many items,
+    /// so its first item on screen is not the change on screen.
+    pub fn scroll_to_center_strict(&self, index: usize) {
+        self.0.scroll_to_item_strict(index, ScrollStrategy::Center);
+    }
+
     pub fn scroll_to_top(&self, index: usize) {
         self.0.scroll_to_item_strict(index, ScrollStrategy::Top);
     }
