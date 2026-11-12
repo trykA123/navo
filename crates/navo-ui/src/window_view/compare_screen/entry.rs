@@ -147,29 +147,47 @@ impl StreamScreen {
 impl ScreenOwner {
     /// Rebuilds the Stream's items when the compare's rows changed since they were built: at
     /// once for a new compare generation or a finished compare, else at most once per 500 ms,
-    /// with a timer for a batch that came too soon. Returns whether the items changed.
-    pub(super) fn resync_stream(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(mode) = self.browser.compare_mode() else {
+    /// with a timer for a batch that came too soon. Returns whether the items changed. The
+    /// folder facts come from the owner (N4f2), so the screen never reads the browser.
+    pub(in crate::window_view) fn host_resync(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(stamp) = self.screen_stamp() else {
             return false;
         };
-        let stamp = mode.rows_stamp();
+        let checking = self.screen_checking();
         let now = cx.background_executor().now();
-        let Some(stream) = self.compare.screen.as_mut().and_then(|s| s.stream.as_mut()) else {
+        let Some(step) = self
+            .stream_ref()
+            .map(|stream| stream.resync_step(stamp, checking, now))
+        else {
             return false;
         };
-        match stream.resync_step(stamp, mode.checking(), now) {
+        match step {
             ResyncStep::Skip => false,
             ResyncStep::Wait(wait) => {
-                if stream.resync_wait.is_none() {
-                    stream.resync_wait = Some(Self::resync_after(wait, cx));
-                }
+                self.arm_resync(wait, cx);
                 false
             }
             ResyncStep::Rebuild { fresh } => {
-                let changed = stream.resync_apply(stamp, now, items_of(mode), fresh);
+                let Some(items) = self.screen_items() else {
+                    return false;
+                };
+                let Some(stream) = self.stream_mut() else {
+                    return false;
+                };
+                let changed = stream.resync_apply(stamp, now, items, fresh);
                 self.arm_rerun(cx);
                 changed
             }
+        }
+    }
+
+    /// Sets the timer for a resync that came too soon, when none is set.
+    fn arm_resync(&mut self, wait: Duration, cx: &mut Context<Self>) {
+        let Some(stream) = self.stream_mut() else {
+            return;
+        };
+        if stream.resync_wait.is_none() {
+            stream.resync_wait = Some(Self::resync_after(wait, cx));
         }
     }
 
@@ -207,15 +225,13 @@ impl ScreenOwner {
         })
     }
 
-    /// The resync wait ended: rebuilds the items and redraws when they changed.
+    /// The resync wait ended: asks the window to rebuild the Stream's items (N4f2).
     fn resync_due(&mut self, cx: &mut Context<Self>) {
         // Detached, not dropped: this runs inside that task.
         if let Some(wait) = self.stream_mut().and_then(|s| s.resync_wait.take()) {
             wait.detach();
         }
-        if self.resync_stream(cx) {
-            cx.notify();
-        }
+        self.emit_screen(ScreenEvent::Resync, None, cx);
     }
 
     /// Enter on a card: opens its file in the file diff at the current change.

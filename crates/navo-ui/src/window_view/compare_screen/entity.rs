@@ -11,4 +11,6 @@ pub(in crate::window_view) enum ScreenEvent {
     OpenSettings(Field),
     /// Open the next (`step` 1) or previous (−1) file of the folder compare after row `from`.
     WalkFile { from: u64, step: i32 },
+    /// The resync wait ended: rebuild the Stream from the folder compare.
+    Resync,
 }

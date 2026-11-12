@@ -255,9 +255,9 @@ impl ScreenOwner {
     }
 
     /// Drains the Stream's inbox into its model, drops arrived cards far from the view and
-    /// splices the rows that changed. Returns whether anything arrived.
-    pub(super) fn poll_stream(&mut self, cx: &mut Context<Self>) -> bool {
-        let resynced = self.resync_stream(cx);
+    /// splices the rows that changed. `resynced` is whether the host rebuilt the items this
+    /// poll (N4f2). Returns whether anything arrived.
+    pub(super) fn poll_stream(&mut self, resynced: bool, cx: &mut Context<Self>) -> bool {
         let Some(stream) = self.stream_mut() else {
             return false;
         };
