@@ -169,10 +169,7 @@ fn a_fresh_install_runs_from_a_ready_folder_to_finish() {
     let installing = shell.view();
     assert_eq!(installing.page, SetupPage::Installing);
     assert!(!installing.can_back() && !installing.can_next() && installing.primary.is_none());
-    let progress = Progress {
-        elapsed: Duration::from_secs(4),
-        still_working: false,
-    };
+    let progress = Progress::from_elapsed(Duration::from_secs(4), false);
     shell.reply(Reply::Progress(progress));
     assert_eq!(
         shell.view().progress.unwrap().elapsed,
