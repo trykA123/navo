@@ -42,6 +42,8 @@ pub enum Reply {
     },
     Progress(Progress),
     Event(Event),
+    /// The Navo launch failed; the wizard logs it and still closes.
+    StartFailed(io::Error),
     /// Sent last: the session is released and the thread ends.
     Closed,
 }
@@ -117,7 +119,7 @@ impl<'a> Worker<'a> {
                 }
                 Job::Rescan(root) => reply(Reply::Event(Event::RunningScanned(self.scan(&root)))),
                 // Setup closes next; a failed launch leaves Navo installed and is not an error page.
-                Job::Start(root) => drop(self.probe.start_navo(&root)),
+                Job::Start(root) => self.start(&root, reply),
             }
         }
         self.release();
@@ -200,6 +202,13 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Starts Navo for the closing wizard; a failed launch is reported so the window can log it.
+    fn start(&mut self, root: &Path, reply: &mut dyn FnMut(Reply)) {
+        if let Err(error) = self.probe.start_navo(root) {
+            reply(Reply::StartFailed(error));
+        }
+    }
+
     /// Scans for a running Navo; a scan error fails closed as Failed, never Clear.
     fn scan(&mut self, root: &Path) -> RunningScan {
         match self.host.running(root) {
@@ -256,8 +265,12 @@ impl Probe for WindowsProbe {
         // A working folder inside `current\` would block Update.exe from renaming it later.
         let profile = std::env::var_os("USERPROFILE")
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "USERPROFILE is not set"))?;
+        // Setup freed its console, so the std handle slots are dead and CreateProcess refuses to inherit them.
         std::process::Command::new(root.join("current").join("navo.exe"))
             .current_dir(profile)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .map(drop)
     }
