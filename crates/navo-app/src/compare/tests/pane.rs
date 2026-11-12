@@ -5,10 +5,11 @@ use std::time::{Duration, Instant};
 use navo_compare::model::{ContentKey, HashCache};
 use navo_compare::session::CheckMode;
 use navo_ui::browser::{CompareHooks, CompareSink, CompareUpdate, RowStatus};
+use navo_ui::compare_diff::CompareOptions;
 use navo_ui::settings::{Change, Field, Value, Values};
 
 use super::{location, write};
-use crate::compare::convert::settings_of;
+use crate::compare::convert::settings_from;
 use crate::compare::pane::PaneCompare;
 
 const WAIT: Duration = Duration::from_secs(20);
@@ -64,7 +65,11 @@ fn a_pane_compare_sends_plain_rows_until_it_finishes() {
     let hooks = PaneCompare::with_cache(Arc::new(NoCache));
     let (sink, receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
-    let _control = hooks.start(sides, &Values::default(), sink);
+    let _control = hooks.start(
+        sides,
+        &CompareOptions::from_values(&Values::default()),
+        sink,
+    );
     let rows = finished(&receiver);
     let expected = [
         ("left.txt", RowStatus::OnlyLeft),
@@ -86,7 +91,11 @@ fn a_missing_folder_fails_with_the_could_not_start_text() {
     let hooks = PaneCompare::with_cache(Arc::new(NoCache));
     let (sink, receiver) = sink();
     let sides = (&location(&missing), &location(right.path()));
-    let _control = hooks.start(sides, &Values::default(), sink);
+    let _control = hooks.start(
+        sides,
+        &CompareOptions::from_values(&Values::default()),
+        sink,
+    );
     let update = receiver.recv_timeout(WAIT).unwrap();
     let text = navo_l10n::tr("compare-could-not-start");
     assert_eq!(update, CompareUpdate::Failed(text));
@@ -102,7 +111,11 @@ fn dropping_the_control_returns_at_once_and_ends_the_forwarding() {
     let hooks = PaneCompare::with_cache(Arc::new(NoCache));
     let (sink, _receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
-    let control = hooks.start(sides, &Values::default(), Arc::clone(&sink));
+    let control = hooks.start(
+        sides,
+        &CompareOptions::from_values(&Values::default()),
+        Arc::clone(&sink),
+    );
     let dropped = Instant::now();
     drop(control);
     assert!(dropped.elapsed() < Duration::from_millis(200));
@@ -129,7 +142,7 @@ fn the_compare_values_map_through_the_stored_settings_rules() {
         .fold(Values::default(), |values, (field, value)| {
             values.with(&Change { field, value })
         });
-    let settings = settings_of(&values);
+    let settings = settings_from(&CompareOptions::from_values(&values));
     assert_eq!(settings.content_check, CheckMode::SizeTime);
     assert_eq!(settings.memory_budget_mib, 256);
     assert_eq!(settings.ignore_list, ["*.{o,obj}", "target"]);
@@ -138,7 +151,7 @@ fn the_compare_values_map_through_the_stored_settings_rules() {
 
 #[test]
 fn default_values_give_the_default_compare_settings() {
-    let settings = settings_of(&Values::default());
+    let settings = settings_from(&CompareOptions::from_values(&Values::default()));
     assert_eq!(
         settings,
         crate::compare::settings::CompareSettings::default()
@@ -155,7 +168,11 @@ fn a_folder_row_carries_the_flag_of_a_difference_below_it() {
     let hooks = PaneCompare::with_cache(Arc::new(NoCache));
     let (sink, receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
-    let _control = hooks.start(sides, &Values::default(), sink);
+    let _control = hooks.start(
+        sides,
+        &CompareOptions::from_values(&Values::default()),
+        sink,
+    );
     let mut flagged = std::collections::BTreeMap::new();
     loop {
         match receiver.recv_timeout(WAIT).unwrap() {

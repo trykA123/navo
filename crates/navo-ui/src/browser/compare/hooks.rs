@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use navo_core::Location;
 
-use crate::settings::Values;
+use crate::compare_diff::CompareOptions;
 
 /// What one side of a compare row holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,11 +198,11 @@ pub trait CompareHooks: Send + Sync {
     /// Whether a compare can read `location`; panes elsewhere do not offer Compare.
     fn supports(&self, location: &Location) -> bool;
 
-    /// Compares `sides.0` (left) with `sides.1` (right) using the compare settings in `values`.
+    /// Compares `sides.0` (left) with `sides.1` (right) using the compare settings in `options`.
     fn start(
         &self,
         sides: (&Location, &Location),
-        values: &Values,
+        options: &CompareOptions,
         sink: CompareSink,
     ) -> Box<dyn CompareControl>;
 }

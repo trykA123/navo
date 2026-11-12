@@ -8,9 +8,9 @@ use navo_compare::model::HashCache;
 use navo_core::Location;
 use navo_store::CacheDb;
 use navo_ui::browser::{CompareControl, CompareHooks, CompareSink, CompareUpdate};
-use navo_ui::settings::Values;
+use navo_ui::compare_diff::CompareOptions;
 
-use super::convert::{settings_of, update_of};
+use super::convert::{settings_from, update_of};
 use super::handle::{CompareEvent, CompareHandle, CompareStart, CompareTarget};
 use super::hash_cache::StoreHashCache;
 
@@ -38,14 +38,14 @@ impl CompareHooks for PaneCompare {
     fn start(
         &self,
         (left, right): (&Location, &Location),
-        values: &Values,
+        options: &CompareOptions,
         sink: CompareSink,
     ) -> Box<dyn CompareControl> {
         let (events, receiver) = mpsc::channel();
         let request = CompareStart {
             left: CompareTarget::Local(left.clone()),
             right: CompareTarget::Local(right.clone()),
-            settings: settings_of(values),
+            settings: settings_from(options),
             cache: Arc::clone(self.cache.get_or_init(memory_cache)),
         };
         forward(receiver, sink);

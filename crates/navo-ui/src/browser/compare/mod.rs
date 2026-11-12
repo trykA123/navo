@@ -9,6 +9,7 @@ use navo_core::PaneId;
 
 use super::Browser;
 use super::message::Message;
+use crate::compare_diff::CompareOptions;
 use crate::settings::Values;
 
 mod binding;
@@ -121,7 +122,7 @@ impl Browser {
         let run = self.hooks.compare.runs;
         let sink = self.compare_sink(run);
         let sides = (&saved[0].location, &saved[1].location);
-        let control = hooks.start(sides, values, sink);
+        let control = hooks.start(sides, &CompareOptions::from_values(values), sink);
         let focused = self.state.focused_pane();
         let roots = [saved[0].location.clone(), saved[1].location.clone()];
         self.hooks.compare.mode = Some(CompareMode::new(run, control, roots));
