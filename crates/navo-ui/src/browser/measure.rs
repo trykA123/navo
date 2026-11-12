@@ -15,7 +15,7 @@ pub type FolderTotalsQuery = Arc<dyn Fn(&Location) -> Option<FolderTotals> + Sen
 
 #[must_use]
 pub fn no_folder_totals() -> FolderTotalsQuery {
-    Arc::new(|_| None)
+    Arc::new(|_: &navo_core::Location| None)
 }
 
 /// Which number a folder row shows: the file sizes or the space they take on disk.
