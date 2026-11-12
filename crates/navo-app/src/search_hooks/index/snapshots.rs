@@ -153,7 +153,7 @@ fn count_covered(folder: &Path, configured: &[Location], service: &Status) -> BT
 
 fn healthy(root: &Location, service: &Status) -> bool {
     service.volumes.iter().any(|volume| {
-        volume.errors.is_empty()
+        !volume.has_blocking_error()
             && volume.entries > 0
             && Location::new(drive_root(&volume.root)).is_ok_and(|volume| contains(&volume, root))
     })

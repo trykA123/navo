@@ -34,7 +34,7 @@ fn coverage(status: &Status) -> Vec<VolumeCoverage> {
                 .root
                 .trim_end_matches(['\\', '/'])
                 .to_ascii_uppercase(),
-            healthy: volume.errors.is_empty(),
+            healthy: !volume.has_blocking_error(),
             usable: volume.entries > 0 || volume.progress.is_some(),
         })
         .collect();
@@ -283,6 +283,25 @@ mod coverage_change_tests {
         status.volumes[0].errors[0] = "another error".into();
         assert!(cache.is_current(&options, Some(&status), now));
         status.volumes[0].root = "D:".into();
+        assert!(!cache.is_current(&options, Some(&status), now));
+    }
+
+    #[test]
+    fn an_unknown_sizes_note_does_not_change_coverage() {
+        let mut cache = Configured::default();
+        let now = Instant::now();
+        let options = IndexOptions::default();
+        let mut status = Status {
+            volumes: vec![VolumeStatus {
+                root: "C:".into(),
+                entries: 10,
+                ..Default::default()
+            }],
+        };
+        cache.settle(&options, Some(&status), now);
+        status.volumes[0].errors.push("sizes unknown: 7".into());
+        assert!(cache.is_current(&options, Some(&status), now));
+        status.volumes[0].errors[0] = "another error".into();
         assert!(!cache.is_current(&options, Some(&status), now));
     }
 }

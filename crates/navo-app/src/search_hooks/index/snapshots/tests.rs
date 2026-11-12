@@ -152,3 +152,11 @@ fn a_start_without_a_service_reply_breaks_the_healthy_run() {
     start(dir.path(), &[root()], Some(&healthy));
     assert!(!path.exists());
 }
+
+#[test]
+fn a_volume_whose_only_error_is_unknown_sizes_is_healthy() {
+    assert!(healthy(
+        &root(),
+        &status(10, vec!["sizes unknown: 7".into()])
+    ));
+}

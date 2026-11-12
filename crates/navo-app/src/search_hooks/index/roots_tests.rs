@@ -59,6 +59,19 @@ fn configured_does_not_add_a_volume_whose_only_error_is_unknown_sizes_as_a_root(
 }
 
 #[test]
+fn a_volume_whose_only_error_is_unknown_sizes_but_has_no_entries_is_not_covered() {
+    let root = Location::new(r"C:\").unwrap();
+    let status = Status {
+        volumes: vec![VolumeStatus {
+            root: "C:".into(),
+            errors: vec!["sizes unknown: 7".into()],
+            ..Default::default()
+        }],
+    };
+    assert!(!covered(&root, Some(&status)));
+}
+
+#[test]
 fn a_volume_with_another_error_is_still_not_covered() {
     let root = Location::new(r"C:\").unwrap();
     let status = Status {
