@@ -1,6 +1,7 @@
 //! The Stream follows Alt+Z (W8k, PC5): a card line wraps when the look says so and stays a
-//! truncated one-row line when it does not, the toggle remeasures the list both ways, the View
-//! menu offers the entry while the Stream is open, and a wrapped card keeps its colour runs.
+//! truncated one-row line when it does not, the toggle remeasures the list both ways and keeps
+//! the top card, a flip made while the Stream hides behind the file diff reaches the rows on
+//! return, and the View menu offers the entry while the Stream is open.
 
 use std::sync::Arc;
 
@@ -8,8 +9,6 @@ use gpui_kit::{Pixels, TestAppContext, px};
 use navo_core::shell_menu::ItemId;
 
 use super::super::compare_screen::{Rig, rig};
-use super::syntax;
-use crate::compare_diff::card::syntax::TextRun;
 use crate::compare_diff::{
     Card, CardRow, DiffRow, HunkView, PairKind, StreamRow, StreamUpdate, ViewedKey,
 };
@@ -176,18 +175,57 @@ fn compare_stream_the_view_menu_offers_the_wrap_entry_with_a_check(cx: &mut Test
 }
 
 #[gpui_kit::test]
-fn compare_stream_a_wrapped_card_keeps_its_colour_runs(cx: &mut TestAppContext) {
+fn compare_stream_a_wrap_flip_made_behind_the_file_diff_wraps_the_rows_on_return(
+    cx: &mut TestAppContext,
+) {
     let _shown = crate::compare_visible::show_compare();
     let rig = rig(cx);
-    syntax::open_one(&rig, cx, "main.rs");
-    let card = syntax::code_card(1);
-    syntax::send_card(&rig, 1, &card);
-    syntax::land(&rig, cx);
+    open_card(&rig, cx, long_card(500));
+    assert_eq!(
+        line_height(&rig, cx),
+        px(ROW),
+        "the card line starts on one row"
+    );
+    rig.press(cx, "enter");
     rig.press(cx, "alt-z");
-    assert!(wrapped(&rig, cx), "the card is drawn wrapped");
-    let runs: Vec<TextRun> = syntax::held_runs(&rig, cx, &card, 1);
+    rig.press(cx, "escape");
+    rig.frame(cx);
     assert!(
-        syntax::keyword_at(&runs).is_some(),
-        "a wrapped card still draws its colour runs: {runs:?}"
+        wrapped(&rig, cx),
+        "the file diff's wrap came back to the Stream (D39.8)"
+    );
+    let tall = line_height(&rig, cx);
+    assert!(
+        tall > px(ROW),
+        "the hidden flip remeasured the rows: the wrapped card line is taller than one row: {tall:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn compare_stream_a_wrap_flip_keeps_the_top_card(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = rig(cx);
+    rig.open_stream(cx, 60);
+    // A long card of item 2 sits above the view: flipping wrap grows its rows and moves
+    // everything below it in px, but not the anchored top card.
+    (rig.diff.stream_sink())(StreamUpdate::Card {
+        generation: 1,
+        id: 2,
+        card: long_card(500),
+    });
+    rig.frame(cx);
+    rig.scroll_to_item(cx, 30);
+    let (before, row) = rig.top(cx);
+    assert_eq!(
+        row,
+        StreamRow::Header(30),
+        "item 31's header is the top row"
+    );
+    rig.press(cx, "alt-z");
+    assert!(wrapped(&rig, cx), "Alt+Z flipped wrap on the Stream");
+    assert_eq!(
+        rig.top(cx),
+        (before, StreamRow::Header(30)),
+        "the scroll-top card is the same card after the flip"
     );
 }
