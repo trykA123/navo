@@ -2,6 +2,8 @@
 //! its own hunk snippet, a card with no parse or no grammar keeps drawing plain text, and a line
 //! whose text column is tinted takes the on-tint variant of every colour (D38.4).
 
+use std::ops::Range;
+
 use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::{HighlightStyle, Hsla};
 
@@ -175,6 +177,129 @@ fn a_deleted_card_line_takes_the_on_tint_comment_colour() {
         right.is_empty(),
         "a deleted line has no right text to colour"
     );
+}
+
+/// A line of the two-hunk card, on one hunk, with the same text both sides unless told.
+fn both(row: DiffRow, hunk: u32, text: &str) -> CardRow {
+    CardRow::Line {
+        row,
+        hunk,
+        left: Some(text.to_owned()),
+        right: Some(text.to_owned()),
+    }
+}
+
+/// The run that covers byte `at`, as a byte range; `None` when nothing colours it.
+fn run_at(runs: &[TextRun], at: usize) -> Option<Range<usize>> {
+    runs.iter()
+        .find(|(run, _)| run.contains(&at))
+        .map(|(run, _)| run.clone())
+}
+
+/// A card of two hunks with different lines and lengths, a gap between them and a "more" note
+/// after them: hunk 0 has two lines, hunk 1 three, the last one only on the right.
+fn two_hunks() -> Card {
+    let rows = vec![
+        both(DiffRow::Equal(0, 0), 0, "fn zero() {}"),
+        both(DiffRow::Changed(1, 1), 0, r#"let a = "x";"#),
+        CardRow::Gap { lines: 3 },
+        both(DiffRow::Equal(5, 5), 1, "// note"),
+        both(DiffRow::Changed(6, 6), 1, "fn one() {"),
+        CardRow::Line {
+            row: DiffRow::Inserted(7),
+            hunk: 1,
+            left: None,
+            right: Some(r#"let c = "see";"#.to_owned()),
+        },
+        CardRow::More { hunks: 2 },
+    ];
+    let hunk = |rows: Range<u32>, added, removed| HunkView {
+        rows,
+        left_bytes: 0..0,
+        right_bytes: 0..0,
+        digest: None,
+        added,
+        removed,
+    };
+    Card {
+        kind: PairKind::Text,
+        rows,
+        hunks: vec![hunk(0..2, 1, 1), hunk(5..7, 2, 0)],
+        added: 3,
+        removed: 1,
+        viewed_key: ViewedKey([7; 64]),
+        viewed: false,
+        viewable: true,
+    }
+}
+
+#[test]
+fn a_second_hunk_line_colours_inside_its_own_snippet_only() {
+    let t = Theme::new(Mode::Light);
+    let colours = highlight_theme(
+        t.syntax,
+        t.mode,
+        &t.colors,
+        &HighlightTheme::default_light(),
+    );
+    let card = two_hunks();
+    let syntax = CardSyntax::parse("main.rs", &card, EDIT_LIMIT);
+    let look = look(&syntax, &colours);
+    // Row 4 is the third line of the second snippet: `fn` there, not the comment that opens it.
+    let (left, _) = look.line_runs(&t, &card.rows, 4);
+    assert_eq!(
+        run_at(&left, 0),
+        Some(0..2),
+        "the second hunk's `fn` colours exactly its two bytes"
+    );
+    assert_eq!(
+        style_at(&left, 0).color,
+        expected(&colours, &t, ("keyword", true)),
+        "the run is the changed line's keyword colour"
+    );
+    // Row 5 colours only on the right, as the third line of that snippet.
+    let (left, right) = look.line_runs(&t, &card.rows, 5);
+    assert!(left.is_empty(), "an inserted line shows no left text");
+    assert_eq!(
+        run_at(&right, 8),
+        Some(8..13),
+        "the inserted line's string literal colours exactly its own bytes"
+    );
+}
+
+#[test]
+fn a_gap_and_a_more_note_have_no_place_and_no_runs() {
+    let t = Theme::new(Mode::Light);
+    let colours = highlight_theme(
+        t.syntax,
+        t.mode,
+        &t.colors,
+        &HighlightTheme::default_light(),
+    );
+    let card = two_hunks();
+    let syntax = CardSyntax::parse("main.rs", &card, EDIT_LIMIT);
+    let look = look(&syntax, &colours);
+    assert!(
+        syntax.places[2].is_none() && syntax.places[6].is_none(),
+        "a gap and a more note are placed nowhere in any snippet"
+    );
+    assert_eq!(
+        syntax.places[0].map(|place| (place.snippet, place.left, place.right)),
+        Some((0, Some(0), Some(0))),
+        "the first row opens the first snippet"
+    );
+    assert_eq!(
+        syntax.places[5].map(|place| (place.snippet, place.left, place.right)),
+        Some((1, None, Some(2))),
+        "the inserted row is the third line of the second snippet, on the right only"
+    );
+    for at in [2, 6] {
+        let (left, right) = look.line_runs(&t, &card.rows, at);
+        assert!(
+            left.is_empty() && right.is_empty(),
+            "row {at} shows no code and colours nothing"
+        );
+    }
 }
 
 #[test]
