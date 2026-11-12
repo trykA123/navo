@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
 use navo_core::Location;
 
+use super::screen_access::{screen_read, screen_update, screen_update_in};
 use super::{
     NavoWindow, StartOptions, fake, open_options_sized, options_for, press, settle, two_panes,
 };
@@ -149,14 +150,16 @@ impl Rig {
         cx.run_until_parked();
     }
 
+    /// Returns the open file screen state, or none when it is closed.
     pub(super) fn state(&self, cx: &mut TestAppContext) -> Option<FileState> {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             view.file_screen().map(|(_, state)| state.clone())
         })
     }
 
+    /// Returns the open large file hunks, or none without a large file screen.
     fn large_hunks(&self, cx: &mut TestAppContext) -> Option<Vec<LargeHunk>> {
-        self.view.read_with(cx, |view, _| {
+        screen_read(&self.view, cx, |view, _| {
             view.file_large_hunks().map(<[LargeHunk]>::to_vec)
         })
     }
@@ -170,14 +173,16 @@ impl Rig {
 
     /// Whether the open file screen, or else the focused pane, holds focus.
     fn focused(&self, cx: &mut TestAppContext, on_screen: bool) -> bool {
+        if on_screen {
+            return screen_update_in(&self.view, self.window, cx, |view, window, _| {
+                view.file_screen_focused(window)
+            });
+        }
         let view = self.view.clone();
         cx.update_window(self.window, |_, window, cx| {
-            view.update(cx, |view, cx| match on_screen {
-                true => view.file_screen_focused(window),
-                false => {
-                    let pane = view.browser.state().focused_pane();
-                    view.handle(pane, cx).is_focused(window)
-                }
+            view.update(cx, |view, cx| {
+                let pane = view.browser.state().focused_pane();
+                view.handle(pane, cx).is_focused(window)
             })
         })
         .expect("window")
@@ -452,12 +457,10 @@ fn compare_screen_esc_over_a_stream_returns_to_the_stream(cx: &mut TestAppContex
     let _shown = crate::compare_visible::show_compare();
     let rig = rig(cx);
     rig.press(cx, "enter");
-    let stream = rig.view.update(cx, |view, cx| view.put_stream_screen(cx));
+    let stream = screen_update(&rig.view, cx, |view, cx| view.put_stream_screen(cx));
     rig.press(cx, "escape");
     assert_eq!(rig.state(cx), None);
-    let has_screen = rig
-        .view
-        .read_with(cx, |view, _| view.compare.screen.is_some());
+    let has_screen = screen_read(&rig.view, cx, |view, _| view.compare.screen.is_some());
     assert!(has_screen, "the Stream stays");
     let on_stream = cx
         .update_window(rig.window, |_, window, _| stream.is_focused(window))

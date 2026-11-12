@@ -9,6 +9,7 @@ use navo_core::shell_menu::ItemId;
 
 use super::super::compare_hex::hex_rig;
 use super::super::compare_switch::open;
+use super::super::screen_access::screen_read;
 use super::super::settle;
 use super::body::pair;
 use super::{Rig, rig};
@@ -22,10 +23,8 @@ use crate::window_view::viewer::{ViewCustom, ViewRich, ViewSimple};
 
 /// The labels and checked states of the entries of the open View menu.
 fn menu_entries(rig: &Rig, cx: &mut TestAppContext) -> Vec<(String, bool)> {
-    let menu = rig
-        .view
-        .read_with(cx, |view, _| view.compare_menu_view())
-        .expect("an open View menu");
+    let menu =
+        screen_read(&rig.view, cx, |view, _| view.compare_menu_view()).expect("an open View menu");
     menu.read_with(cx, |menu, _| {
         menu.menu()
             .items
@@ -45,10 +44,8 @@ fn offers_wrap(rig: &Rig, cx: &mut TestAppContext) -> bool {
 /// Closes the open View menu choosing the entry that runs `compare::ToggleWrap`, as a click
 /// would; the menu's own event path then dispatches it.
 fn choose_wrap(rig: &Rig, cx: &mut TestAppContext) {
-    let menu = rig
-        .view
-        .read_with(cx, |view, _| view.compare_menu_view())
-        .expect("an open View menu");
+    let menu =
+        screen_read(&rig.view, cx, |view, _| view.compare_menu_view()).expect("an open View menu");
     menu.update(cx, |_, cx| {
         cx.emit(ContextMenuEvent::Chosen(ItemId::Action(
             "compare::ToggleWrap",
@@ -59,8 +56,7 @@ fn choose_wrap(rig: &Rig, cx: &mut TestAppContext) {
 
 /// The wrap setting of the open file diff's look.
 fn wrap(rig: &Rig, cx: &mut TestAppContext) -> bool {
-    rig.view
-        .read_with(cx, |view, _| view.file_look())
+    screen_read(&rig.view, cx, |view, _| view.file_look())
         .expect("an open file diff")
         .0
         .wrap
@@ -71,7 +67,7 @@ fn compare_screen_drawers_start_closed_and_the_look_starts_rich(cx: &mut TestApp
     let _shown = crate::compare_visible::show_compare();
     let rig = rig(cx);
     rig.open_text(cx, pair(400, &[10, 200]));
-    let (look, changes, details) = rig.view.read_with(cx, |view, _| view.file_look()).unwrap();
+    let (look, changes, details) = screen_read(&rig.view, cx, |view, _| view.file_look()).unwrap();
     assert!(look.words && look.map && look.layout.is_none());
     assert!(!changes && !details);
 }
@@ -84,12 +80,12 @@ fn compare_screen_enter_in_the_list_of_changes_jumps_and_esc_closes_the_drawer(
     let rig = rig(cx);
     rig.open_text(cx, pair(400, &[10, 200, 390]));
     rig.press(cx, "ctrl-b");
-    let open = rig.view.read_with(cx, |view, _| view.file_look()).unwrap();
+    let open = screen_read(&rig.view, cx, |view, _| view.file_look()).unwrap();
     assert!(open.1 && !open.2, "Ctrl+B opens the list of changes only");
     rig.press(cx, "down");
     rig.press(cx, "down");
     assert_eq!(
-        rig.view.read_with(cx, |v, _| v.file_drawer_cursor()),
+        screen_read(&rig.view, cx, |v, _| v.file_drawer_cursor()),
         Some(2)
     );
     rig.press(cx, "enter");
@@ -98,13 +94,13 @@ fn compare_screen_enter_in_the_list_of_changes_jumps_and_esc_closes_the_drawer(
     assert!(built.contains(&390), "the third change is shown: {built:?}");
     rig.press(cx, "escape");
     assert!(
-        rig.view.read_with(cx, |v, _| v.file_screen().is_some()),
+        screen_read(&rig.view, cx, |v, _| v.file_screen().is_some()),
         "Esc closed the drawer only"
     );
-    assert!(!rig.view.read_with(cx, |v, _| v.file_look()).unwrap().1);
+    assert!(!screen_read(&rig.view, cx, |v, _| v.file_look()).unwrap().1);
     rig.press(cx, "escape");
     assert!(
-        rig.view.read_with(cx, |v, _| v.file_screen().is_none()),
+        screen_read(&rig.view, cx, |v, _| v.file_screen().is_none()),
         "a second Esc goes back"
     );
 }
@@ -115,12 +111,11 @@ fn compare_screen_ctrl_i_opens_the_details_drawer(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.open_text(cx, pair(40, &[10]));
     rig.press(cx, "ctrl-i");
-    let open = rig.view.read_with(cx, |view, _| view.file_look()).unwrap();
+    let open = screen_read(&rig.view, cx, |view, _| view.file_look()).unwrap();
     assert!(!open.1 && open.2);
     rig.press(cx, "ctrl-i");
     assert!(
-        !rig.view
-            .read_with(cx, |view, _| view.file_look())
+        !screen_read(&rig.view, cx, |view, _| view.file_look())
             .unwrap()
             .2
     );
@@ -131,7 +126,8 @@ fn compare_screen_alt_v_opens_the_menu_and_each_entry_changes_the_look(cx: &mut 
     let _shown = crate::compare_visible::show_compare();
     let rig = rig(cx);
     rig.open_text(cx, pair(40, &[10]));
-    let look = |cx: &mut TestAppContext| rig.view.read_with(cx, |v, _| v.file_look()).unwrap().0;
+    let look =
+        |cx: &mut TestAppContext| screen_read(&rig.view, cx, |v, _| v.file_look()).unwrap().0;
     rig.dispatch(cx, &ViewSimple);
     assert_eq!((look(cx).words, look(cx).map), (false, false));
     rig.dispatch(cx, &ViewRich);
@@ -156,10 +152,9 @@ fn compare_screen_alt_v_opens_the_menu_and_each_entry_changes_the_look(cx: &mut 
     rig.dispatch(cx, &ShowSideBySide);
     assert_eq!(look(cx).layout, Some(Layout::SideBySide));
     rig.press(cx, "alt-v");
-    assert!(
-        rig.view
-            .read_with(cx, |view, _| view.compare_menu_view().is_some())
-    );
+    assert!(screen_read(&rig.view, cx, |view, _| view
+        .compare_menu_view()
+        .is_some()));
 }
 
 #[gpui_kit::test]
@@ -299,8 +294,7 @@ fn the_title_view_button_opens_the_window_menu_without_the_compare_screen(cx: &m
         "the window View menu opens: {texts:?}"
     );
     assert!(
-        rig.view
-            .read_with(cx, |view, _| view.compare_menu_view().is_none()),
+        screen_read(&rig.view, cx, |view, _| view.compare_menu_view().is_none()),
         "the compare menu stays closed while the screen is"
     );
 }
@@ -313,9 +307,7 @@ fn choosing_the_simple_preset_keeps_wrap(cx: &mut TestAppContext) {
     rig.press(cx, "alt-z");
     assert!(wrap(&rig, cx), "wrap is on");
     rig.dispatch(cx, &ViewSimple);
-    let look = rig
-        .view
-        .read_with(cx, |view, _| view.file_look())
+    let look = screen_read(&rig.view, cx, |view, _| view.file_look())
         .expect("an open file diff")
         .0;
     assert_eq!(look.preset, Preset::Simple);

@@ -9,6 +9,7 @@ use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 
+use super::super::screen_access::{screen_read, screen_update};
 use super::body::pair;
 use super::{CompareKind, CompareRow, CompareSide, CompareUpdate, Rig, RowStatus, rig};
 use crate::compare_diff::body::PairSyntax;
@@ -93,7 +94,7 @@ fn opened(cx: &mut TestAppContext) -> Rig {
 
 /// Reloads the open pair with `text`, without waiting for the parse of the new text.
 fn reloaded(cx: &mut TestAppContext, rig: &Rig, text: PairText) {
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     let request = *rig.diff.refreshes().last().expect("a refresh");
     drawn(cx, rig, request, text);
 }
@@ -111,7 +112,7 @@ struct Slots {
 
 /// Reads the open file view's syntax slot.
 fn slots(cx: &mut TestAppContext, rig: &Rig) -> Slots {
-    let (shown, ready, provisional) = rig.view.read_with(cx, |view, cx| {
+    let (shown, ready, provisional) = screen_read(&rig.view, cx, |view, cx| {
         (
             view.file_syntax_shown(cx),
             view.file_syntax(),
@@ -238,10 +239,10 @@ fn compare_screen_syntax_arrives_after_the_background_parse(cx: &mut TestAppCont
         text: Some(Arc::new(text)),
     });
     rig.view.update(cx, |view, cx| view.host_poll(cx));
-    let parsed = rig.view.read_with(cx, |view, _| view.file_syntax());
+    let parsed = screen_read(&rig.view, cx, |view, _| view.file_syntax());
     assert!(parsed.is_none(), "the poll returns before the parse ends");
     cx.run_until_parked();
-    let parsed = rig.view.read_with(cx, |view, _| view.file_syntax());
+    let parsed = screen_read(&rig.view, cx, |view, _| view.file_syntax());
     let left = parsed.as_ref().and_then(|pair| pair.left.as_ref());
     let colours = HighlightTheme::default_light();
     let runs = left.map(|side| side.line_runs((1, "    let s = 1;"), &*colours));
