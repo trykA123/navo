@@ -1,3 +1,5 @@
+//! Renders the application window and the menus supplied by its child screens.
+
 use gpui_kit::ModifiersChangedEvent;
 
 use super::{NavoWindow, input_trace, keys};
@@ -8,6 +10,7 @@ use crate::title_bar::{GradientLayer, system_backdrop};
 use crate::tokens;
 
 impl Render for NavoWindow {
+    /// Draws the window frame, child screens and active overlays.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         navo_diag::profiling::frame_mark();
         #[cfg(test)]
@@ -40,7 +43,7 @@ impl Render for NavoWindow {
             .children(self.tab_menu_view())
             .children(self.git_menu_view(window, cx))
             .children(self.viewer_menu_view())
-            .children(self.host_menu_view())
+            .children(self.host_menu_view(cx))
             .children(self.view_menus())
             .children(self.restart_dialog_view(cx));
         let root = self.drag_layer(Self::perf_on(root, frame, cx), cx);

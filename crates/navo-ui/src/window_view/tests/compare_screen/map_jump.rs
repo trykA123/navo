@@ -4,6 +4,7 @@
 use gpui_kit::TestAppContext;
 
 use super::super::compare_switch::open;
+use super::super::screen_access::screen_read;
 use super::body::pair;
 use super::rig;
 use super::wrap::{centred, frames, in_view, index, opened, seen, set_wrap, wrapped_pair};
@@ -46,10 +47,7 @@ fn a_map_jump_centres_a_change_whose_first_item_is_already_visible(cx: &mut Test
         first + lines > top + room,
         "the rest of change 2 is below it"
     );
-    let map = rig
-        .view
-        .read_with(cx, |view, _| view.file_map())
-        .expect("a mounted change map");
+    let map = screen_read(&rig.view, cx, |view, _| view.file_map()).expect("a mounted change map");
     map.update(cx, |_, cx| cx.emit(MapEvent::Jump(4)));
     frames(&rig, cx);
     let (_, _, top, room) = seen(&rig, cx);

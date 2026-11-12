@@ -16,7 +16,7 @@ use crate::title_bar::{HeaderSearch, NavoTitleBar};
 fn view_button(compare_open: bool, cx: &mut Context<NavoWindow>) -> impl IntoElement {
     let open = cx.listener(move |view: &mut NavoWindow, _: &ClickEvent, window, cx| {
         if compare_open {
-            view.open_look_menu(window, cx);
+            view.host_open_look_menu(window, cx);
         } else {
             window.dispatch_action(Box::new(OpenViewMenu), cx);
         }
@@ -77,7 +77,7 @@ impl NavoWindow {
             bar
         };
         let bar = if self.can_open_window_menu() {
-            bar.trailing(view_button(self.compare.screen.is_some(), cx))
+            bar.trailing(view_button(self.host_screen_open(cx), cx))
         } else {
             bar
         };
