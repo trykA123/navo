@@ -110,7 +110,6 @@ You open two versions of a config file. The changed lines carry a soft colour, a
 #### Known issues
 
 - Setup is not signed yet, so Windows may warn about the file.
-- Dragging files from Navo into other apps still does not work.
 
 </details>
 

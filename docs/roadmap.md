@@ -21,7 +21,7 @@ Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versio
   - **Native crash reports:** built. An out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
   - **Speed checks that fail the build:** done. Benches measure the hot paths, `perf/speed.toml` holds the speed gate, and a release waits for that gate. Tracy zones are in.
   - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt) is still open.
-  - **Not started:** code signing, dragging files from Navo into other apps, Navo as the default file manager, the inspector with previews and archives as folders, the module registry, the mimalloc trial, background work that never waits, and smarter search.
+  - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, the module registry, the mimalloc trial, background work that never waits, and smarter search.
 - **Order after the current work (owner, 12 November):** index service memory, the mimalloc trial, background work that never waits, then smarter search. Speed checks are done, so they leave the order. Accessibility is required for v1.0.
 - **Latest release:** v0.7.0 (readable compare, the installer wizard, index fixes, natural sort, the MIT or Apache-2.0 licence), published on 12 November 2026 after its Windows VM checks.
 
@@ -63,7 +63,7 @@ The owner signed off the Alpha on 4 November 2026, released as v0.2.0 with the s
 
 | Feature | Delivered | Follow-up |
 | --- | --- | --- |
-| Multi-select and drag and drop | Marking, drops between panes, folders, tabs, path crumbs and drives, shortcuts, drag to and from Explorer, right-button choices and auto-scroll | Owner checked Explorer drag. Linux external drops are Copy-only. |
+| Multi-select and drag and drop | Marking, drops between panes, folders, tabs, path crumbs and drives, shortcuts, drag to and from Explorer, right-button choices and auto-scroll | Owner checked drag and drop with Total Commander and Teams (12 November). Linux external drops are Copy-only. |
 | Rich ELF and MAP | Rich views, memory models, companion discovery and live module prefixes | Validate the reviewed Rich views on a Windows desktop |
 | Ctrl+K command center | Commands, recent files, tabs, folder and path sources, disk index, Search settings and the optional index service | Real-volume memory and large-index measurements |
 | Multi-rename | Journaled rename and undo, crash recovery, edited and imported names, sorting, counters and optional rename log | Owner checked rename. The FAT/exFAT USB check is set aside. |
@@ -150,25 +150,23 @@ Also included: the MIT or Apache-2.0 licence, speed checks that fail the build (
 - The sync screen. The plan engine is built; the screen is not.
 - The compare follow-ups from the V42 VM proof, listed under Active work.
 - Code signing. Setup is not signed, so Windows may warn.
-- Dragging files from Navo into other apps.
 - The owner's real-drive index measurement and the owner's real-PC update check.
 - The Windows crash tests.
 - Background work that never waits, the mimalloc trial and smarter search: not started. The delete safety net review, the Find files design round and accessibility polish are also open.
 
 ## Active work
 
-- **In-app update validation:** the nine-case update suite and the index-service checks passed in the Windows VM; the update spec is written ([updates](features/updates.md)). Still open: the owner's real-PC update check. He confirms exactly one admin prompt when the service changes, `navo-index.exe` in Task Manager, and none on the next starts. See the [beta plan](../plans/2026-10-27-beta.md).
+- **In-app update validation:** the nine-case update suite and the index-service checks passed in the Windows VM; the update spec is written ([updates](features/updates.md)). Still open: the owner's real-PC update check. The owner confirms exactly one admin prompt when the service changes, `navo-index.exe` in Task Manager, and none on the next starts. See the [beta plan](../plans/2026-10-27-beta.md).
 - **Index service memory:** the service's peak on a real drive is still unmeasured. v0.7.0 stops the app walking a drive the service indexes (IXM1) and cuts the folder-refresh peak (IXM2, 3.77× → 2.51×). Next: the owner's `blocked_peak` line in `index-service.log`, then a fix plan.
 - **Compare and sync:** readable compare shipped in v0.7.0. The sync plan engine is built; the sync screen remains. The V42 Windows VM proof left follow-ups: Shift+J far down a fresh folder Stream leaves the focused card below the view; PageDown is not bound in the Stream; at 200 % scale, diff rows touch and the Settings popover is clipped; content jumps while placeholders fill; the hex ASCII column uses the proportional font. See the [compare plan](../plans/2026-10-20-p42-compare.md).
 - **Native crash reports:** an out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
 - **Code signing:** Setup is not signed, so Windows may warn about the file.
-- **Drag out:** dragging files from Navo into other apps does not work yet.
 - **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
 - **Beta completion:** the results-tab design round, the delete safety net review and help text, and accessibility polish. Background work that never waits is not started.
 
 ### Validation still to finish
 
-- Windows desktop follow-up for Rich ELF/MAP, profile migration, the splash and the leaner index service. Explorer drag and multi-rename are checked; the FAT/exFAT USB check remains set aside.
+- Windows desktop follow-up for Rich ELF/MAP, profile migration, the splash and the leaner index service. Drag and drop with Total Commander and Teams, and multi-rename, are checked; the FAT/exFAT USB check remains set aside.
 - A heavy Windows benchmark covering millions of indexed files, search latency, long lists, memory and animation smoothness.
 - The long daily-use check for lost or damaged files.
 
