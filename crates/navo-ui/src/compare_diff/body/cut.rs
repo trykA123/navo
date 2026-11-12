@@ -4,13 +4,14 @@
 use std::cell::Cell;
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::{HighlightStyle, canvas, combine_highlights};
 
 use super::syntax::syntax_runs;
 use super::text::span_tint;
 use super::{BodyLook, Side, span_runs};
-use crate::compare_diff::cols::{Shown, cut};
+use crate::compare_diff::cols::{Checkpoint, LineCols, Shown, cut_from};
 use crate::compare_diff::long::is_long;
 use crate::compare_diff::rows::{ShownKind, ShownRow};
 use crate::prelude::*;
@@ -36,6 +37,9 @@ pub struct RowCut {
     pub continued: bool,
     /// Where the text cells report their bounds; `None` measures nothing.
     pub probe: Option<TextProbe>,
+    /// The measured widths of the pair, which hold the cut's start checkpoints; `None` (before
+    /// the measure lands) walks the line from byte 0.
+    pub widths: Option<Arc<LineCols>>,
 }
 
 /// The row whose number, tick and long button are drawn: `row` itself, or one with no lines
@@ -90,11 +94,25 @@ pub(super) fn shown_line(
         combine_highlights(colours, fills).collect()
     };
     match &row_cut.cols {
-        Some(cols) if !is_long(text) => Some(cut(text, &runs, cols.clone())),
+        Some(cols) if !is_long(text) => {
+            let start = start_of(row_cut, at, cols);
+            Some(cut_from(text, &runs, cols.clone(), start))
+        }
         _ => Some(Shown {
             text: text.to_owned(),
             runs,
         }),
+    }
+}
+
+/// The checkpoint the cut of `at`'s line resumes from: the last one at or before `cols.start`.
+/// `None` while the widths are unknown, or for a line too short to record one, walks from byte 0.
+fn start_of(row_cut: &RowCut, at: &LineAt, cols: &Range<u32>) -> Option<Checkpoint> {
+    let widths = row_cut.widths.as_deref()?;
+    let (line, _) = at.line?;
+    match at.side {
+        Side::Left => widths.left_start(line, cols.start),
+        Side::Right => widths.right_start(line, cols.start),
     }
 }
 
