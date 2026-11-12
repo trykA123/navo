@@ -44,10 +44,9 @@ pub fn view(flow: &Flow, facts: &Facts, live: &Live) -> SetupView {
         primary: primary(flow),
         folder_text: folder.path().display().to_string(),
         problem: problem(flow),
-        progress: live.progress.map(|p| SetupProgress {
-            elapsed: p.elapsed,
-            still_working: p.still_working,
-        }),
+        progress: live
+            .progress
+            .map(|p| SetupProgress::from_elapsed(p.elapsed, p.still_working)),
         version: facts.version.clone(),
         installed_version: installed(flow.mode()),
         folder_locked: matches!(folder, Folder::Locked(_)),
