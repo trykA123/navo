@@ -1,4 +1,4 @@
-use navo_core::{CursorMove, Location, PaneId, ProviderPath};
+use navo_core::{CursorMove, Location, ProviderPath};
 
 use super::CompareUpdate;
 use super::hooks::{CompareControl, CompareRow, CompareTotals, RowProgress, RowStatus};
@@ -31,14 +31,6 @@ impl CompareFilter {
 /// Rows a Page Up or Page Down key moves the selection by.
 const PAGE: usize = 10;
 
-/// A pane as it was before the compare started.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Saved {
-    pub pane: PaneId,
-    pub location: Location,
-    pub cursor: Option<String>,
-}
-
 /// Enter on a file row: the file diff (U7) opens these sides.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileDiffRequest {
@@ -61,8 +53,6 @@ pub struct CompareMode {
     pub(super) run: u64,
     pub(super) control: Box<dyn CompareControl>,
     pub(super) roots: [Location; 2],
-    pub(super) saved: [Saved; 2],
-    pub(super) focused: PaneId,
     pub(super) failed: Option<String>,
     pub(super) rows: CompareRows,
     folder: String,
@@ -72,19 +62,11 @@ pub struct CompareMode {
 }
 
 impl CompareMode {
-    pub(super) fn new(
-        run: u64,
-        control: Box<dyn CompareControl>,
-        saved: [Saved; 2],
-        focused: PaneId,
-    ) -> Self {
-        let roots = [saved[0].location.clone(), saved[1].location.clone()];
+    pub(super) fn new(run: u64, control: Box<dyn CompareControl>, roots: [Location; 2]) -> Self {
         Self {
             run,
             control,
             roots,
-            saved,
-            focused,
             failed: None,
             rows: CompareRows::new(),
             folder: String::new(),

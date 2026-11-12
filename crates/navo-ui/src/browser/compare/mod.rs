@@ -11,6 +11,7 @@ use super::Browser;
 use super::message::Message;
 use crate::settings::Values;
 
+mod binding;
 mod hooks;
 mod mode;
 mod navigate;
@@ -20,11 +21,11 @@ mod stream;
 mod tests;
 mod view;
 
+use binding::{PaneBinding, Saved};
 pub use hooks::{
     CompareControl, CompareHooks, CompareKind, CompareRow, CompareSide, CompareSink, CompareTotals,
     CompareUpdate, RowProgress, RowStatus, StopBound,
 };
-use mode::Saved;
 pub use mode::{CompareFilter, CompareMode, FileDiffRequest};
 pub use view::{BarView, FILTERS, RowView, SideView, Tone, Total, bar_view, empty_text, pane_rows};
 pub(crate) use view::{look_of, status_text};
@@ -50,6 +51,7 @@ impl CompareRefusal {
 pub(super) struct CompareSlot {
     starter: Option<Arc<dyn CompareHooks>>,
     mode: Option<CompareMode>,
+    binding: Option<PaneBinding>,
     runs: u64,
     notice: Option<String>,
     file_diff: Option<FileDiffRequest>,
@@ -68,13 +70,7 @@ impl Browser {
     /// 0 for the left compared pane, 1 for the right one; None outside a compare or for another pane.
     #[must_use]
     pub fn compare_side_of(&self, pane: PaneId) -> Option<usize> {
-        self.hooks
-            .compare
-            .mode
-            .as_ref()?
-            .saved
-            .iter()
-            .position(|saved| saved.pane == pane)
+        self.hooks.compare.binding.as_ref()?.side_of(pane)
     }
 
     /// For the rows view (U5): selection and filter.
@@ -115,6 +111,7 @@ impl Browser {
     }
 
     /// Compares the focused pane with the other pane; already comparing does nothing.
+    /// The session and its pane binding are set together, and stay that way until a leave.
     pub fn compare_with_other_pane(&mut self, values: &Values) -> Result<(), CompareRefusal> {
         if self.hooks.compare.mode.is_some() {
             return Ok(());
@@ -123,10 +120,12 @@ impl Browser {
         self.hooks.compare.runs += 1;
         let run = self.hooks.compare.runs;
         let sink = self.compare_sink(run);
-        let roots = (&saved[0].location, &saved[1].location);
-        let control = hooks.start(roots, values, sink);
+        let sides = (&saved[0].location, &saved[1].location);
+        let control = hooks.start(sides, values, sink);
         let focused = self.state.focused_pane();
-        self.hooks.compare.mode = Some(CompareMode::new(run, control, saved, focused));
+        let roots = [saved[0].location.clone(), saved[1].location.clone()];
+        self.hooks.compare.mode = Some(CompareMode::new(run, control, roots));
+        self.hooks.compare.binding = Some(PaneBinding { saved, focused });
         Ok(())
     }
 
