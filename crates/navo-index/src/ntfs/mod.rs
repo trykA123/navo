@@ -1,7 +1,12 @@
-use std::collections::{HashMap, VecDeque};
+//! NTFS enumeration and journal updates over the shared index table.
+
+#[cfg(test)]
+use std::collections::HashMap;
 use std::io;
 
 mod compact;
+mod pending;
+use pending::Pending;
 #[cfg(any(windows, test))]
 mod record_size;
 mod snapshot;
@@ -198,116 +203,6 @@ fn validate_journal_cursor(batch: &UsnBatch, saved: JournalPosition) -> Result<(
     Ok(())
 }
 
-struct Blocked {
-    missing: u128,
-    changes: VecDeque<TableChange>,
-}
-
-#[derive(Default)]
-struct Pending {
-    blocked: HashMap<u128, Blocked>,
-    waiters: HashMap<u128, Vec<u128>>,
-    reported: Vec<UnresolvedChange>,
-    removed_subtree: bool,
-    blocked_peak: usize,
-}
-
-impl Pending {
-    fn push(&mut self, index: &mut NtfsIndex, change: TableChange) -> Result<(), NtfsError> {
-        let Some(change) = normalize_root(index, change) else {
-            return Ok(());
-        };
-        let file_id = change_file_id(&change);
-        if let Some(blocked) = self.blocked.get_mut(&file_id) {
-            blocked.changes.push_back(change);
-            self.note_blocked();
-            return Ok(());
-        }
-        let mut ready = VecDeque::from([VecDeque::from([change])]);
-        while let Some(changes) = ready.pop_front() {
-            self.apply_queue(index, changes, &mut ready)?;
-        }
-        Ok(())
-    }
-
-    fn apply_queue(
-        &mut self,
-        index: &mut NtfsIndex,
-        mut changes: VecDeque<TableChange>,
-        ready: &mut VecDeque<VecDeque<TableChange>>,
-    ) -> Result<(), NtfsError> {
-        while let Some(change) = changes.pop_front() {
-            let change = recover_rename(index, change);
-            let file_id = change_file_id(&change);
-            match index.table.apply_in_batch(change.clone(), &mut index.ids) {
-                Ok(removed) => {
-                    self.removed_subtree |= removed > 1;
-                    self.wake(index, file_id, ready);
-                }
-                Err(TableError::UnknownFileReference(missing))
-                    if matches!(
-                        change,
-                        TableChange::Attributes { .. } | TableChange::Size { .. }
-                    ) =>
-                {
-                    self.reported.push(UnresolvedChange {
-                        missing_reference: missing,
-                        change,
-                    });
-                }
-                Err(TableError::UnknownFileReference(missing)) => {
-                    changes.push_front(change);
-                    self.blocked.insert(file_id, Blocked { missing, changes });
-                    self.waiters.entry(missing).or_default().push(file_id);
-                    self.note_blocked();
-                    return Ok(());
-                }
-                Err(error) => return Err(error.into()),
-            }
-        }
-        Ok(())
-    }
-
-    fn note_blocked(&mut self) {
-        self.blocked_peak = self.blocked_peak.max(self.blocked.len());
-    }
-
-    fn wake(
-        &mut self,
-        index: &NtfsIndex,
-        file_id: u128,
-        ready: &mut VecDeque<VecDeque<TableChange>>,
-    ) {
-        if !index.ids.contains_key(&file_id) {
-            return;
-        }
-        for waiting in self.waiters.remove(&file_id).into_iter().flatten() {
-            if let Some(blocked) = self.blocked.remove(&waiting) {
-                ready.push_back(blocked.changes);
-            }
-        }
-    }
-
-    fn forget_removed(&mut self, index: &mut NtfsIndex) {
-        if std::mem::take(&mut self.removed_subtree) {
-            index.table.forget_removed(&mut index.ids);
-        }
-    }
-
-    fn finish(self) -> Vec<UnresolvedChange> {
-        let unresolved = self.blocked.into_values().flat_map(|blocked| {
-            blocked
-                .changes
-                .into_iter()
-                .map(move |change| UnresolvedChange {
-                    missing_reference: blocked.missing,
-                    change,
-                })
-        });
-        self.reported.into_iter().chain(unresolved).collect()
-    }
-}
-
 fn change_file_id(change: &TableChange) -> u128 {
     match change {
         TableChange::Add { file_id, .. }
@@ -372,6 +267,8 @@ fn recover_rename(index: &NtfsIndex, change: TableChange) -> TableChange {
 
 #[cfg(test)]
 mod batch_tests;
+#[cfg(test)]
+mod blocked_peak_tests;
 #[cfg(test)]
 mod memory_tests;
 #[cfg(test)]
