@@ -1,11 +1,13 @@
 //! One card line: side by side (two halves) or unified (a sign column and one text).
-//! Tints come from the diff tokens; a filler half uses the gap hatch colour.
+//! Tints come from the diff tokens; a filler half uses the gap hatch colour. A line whose card
+//! has a parsed snippet draws its syntax colour runs, as the file body does (D38.3).
 
-use gpui_kit::{Div, Hsla};
+use gpui_kit::{Div, Hsla, StyledText};
 
 use crate::compare_diff::edge::edged;
 use crate::tokens::DiffTone;
 
+use super::syntax::TextRun;
 use super::{accent_bar, frame};
 use crate::compare_diff::hooks::{DiffRow, Layout};
 use crate::compare_diff::rows::Half;
@@ -19,18 +21,23 @@ const GUTTER: f32 = 44.;
 /// Width of the sign column in unified, in px.
 const SIGN: f32 = 18.;
 
-/// The two sides' texts of a line; `None` is a filler.
+/// The two sides' texts of a line and their colour runs; `None` text is a filler.
 #[derive(Clone, Copy)]
 pub(super) struct Texts<'a> {
     pub left: Option<&'a str>,
     pub right: Option<&'a str>,
+    /// The syntax colour runs of each side's line, in bytes of its text; empty draws it plain.
+    pub left_runs: &'a [TextRun],
+    /// The same for the right side.
+    pub right_runs: &'a [TextRun],
 }
 
-/// What one half shows: its line number, text, the tone of its text column and the hatching
-/// of a half with no line.
+/// What one half shows: its line number, text, the tone of its text column, the colour runs of
+/// that text and the hatching of a half with no line.
 struct HalfView<'a> {
     number: Option<u32>,
     text: Option<&'a str>,
+    runs: &'a [TextRun],
     tone: Option<DiffTone>,
     hatch: Option<Hsla>,
 }
@@ -60,7 +67,7 @@ pub(super) fn view(t: &Theme, look: Look, row: DiffRow, text: Texts<'_>) -> Div 
 }
 
 /// The tone of each half's text column: a change on both, a deletion left, an insertion right.
-fn half_tones(t: &Theme, row: DiffRow) -> (Option<DiffTone>, Option<DiffTone>) {
+pub(super) fn half_tones(t: &Theme, row: DiffRow) -> (Option<DiffTone>, Option<DiffTone>) {
     match row {
         DiffRow::Equal(..) => (None, None),
         DiffRow::Changed(..) => (Some(t.diff.change), Some(t.diff.change)),
@@ -81,12 +88,14 @@ fn sides(t: &Theme, row: DiffRow, text: Texts<'_>) -> Div {
     let left = HalfView {
         number: l,
         text: text.left,
+        runs: text.left_runs,
         tone: lt,
         hatch: hatch.filter(|_| l.is_none()),
     };
     let right = HalfView {
         number: r,
         text: text.right,
+        runs: text.right_runs,
         tone: rt,
         hatch: hatch.filter(|_| r.is_none()),
     };
@@ -110,30 +119,84 @@ fn half_view(t: &Theme, half: &HalfView<'_>, first: bool) -> Div {
         .when(!first, |d| d.border_l_1().border_color(t.colors.line))
         .when_some(half.hatch, Styled::bg)
         .child(gutter(t, half.number))
-        .child(edged(code(t, half.text), half.tone))
+        .child(edged(code(t, half.text, half.runs), half.tone))
+}
+
+/// What a unified line shows: its two numbers, its sign, the tone of its text column and the
+/// text with its colour runs.
+#[derive(Clone, Copy)]
+struct ShownLine<'a> {
+    left: Option<u32>,
+    right: Option<u32>,
+    sign: &'static str,
+    tone: Option<DiffTone>,
+    text: Option<&'a str>,
+    runs: &'a [TextRun],
+}
+
+/// The one side of `row` that unified draws at `half`, with its numbers, sign, tone, text and
+/// colour runs. Equal lines and the left half of a change draw the left text, the right half of
+/// a change and an insertion draw the right text, a deletion draws the left one with its sign.
+fn shown_line<'a>(t: &Theme, row: DiffRow, text: Texts<'a>, half: Half) -> ShownLine<'a> {
+    let plain = ShownLine {
+        left: None,
+        right: None,
+        sign: "",
+        tone: None,
+        text: text.left,
+        runs: text.left_runs,
+    };
+    let deleted = ShownLine {
+        sign: "\u{2212}",
+        tone: Some(t.diff.delete),
+        ..plain
+    };
+    let added = ShownLine {
+        left: None,
+        right: None,
+        sign: "+",
+        tone: Some(t.diff.add),
+        text: text.right,
+        runs: text.right_runs,
+    };
+    match (row, half) {
+        (DiffRow::Equal(l, r), _) | (DiffRow::Changed(l, r), Half::Both) => ShownLine {
+            left: Some(l),
+            right: Some(r),
+            ..plain
+        },
+        (DiffRow::Changed(l, _) | DiffRow::Deleted(l), _) if half != Half::Right => ShownLine {
+            left: Some(l),
+            ..deleted
+        },
+        (DiffRow::Changed(_, r) | DiffRow::Inserted(r), _) => ShownLine {
+            right: Some(r),
+            ..added
+        },
+        (DiffRow::Deleted(l), _) => ShownLine {
+            left: Some(l),
+            ..deleted
+        },
+    }
 }
 
 /// A unified line: two gutters, a sign and one text. Equal lines show both numbers.
 fn unified(t: &Theme, row: DiffRow, text: Texts<'_>, half: Half) -> Div {
-    let (l, r, sign, tone, body) = match (row, half) {
-        (DiffRow::Equal(l, r), _) | (DiffRow::Changed(l, r), Half::Both) => {
-            (Some(l), Some(r), "", None, text.left)
-        }
-        (DiffRow::Changed(l, _) | DiffRow::Deleted(l), _) if half != Half::Right => {
-            (Some(l), None, "\u{2212}", Some(t.diff.delete), text.left)
-        }
-        (DiffRow::Changed(_, r) | DiffRow::Inserted(r), _) => {
-            (None, Some(r), "+", Some(t.diff.add), text.right)
-        }
-        (DiffRow::Deleted(l), _) => (Some(l), None, "\u{2212}", Some(t.diff.delete), text.left),
-    };
+    let ShownLine {
+        left,
+        right,
+        sign,
+        tone,
+        text,
+        runs,
+    } = shown_line(t, row, text, half);
     div()
         .flex()
         .items_center()
         .w_full()
         .h_full()
-        .child(gutter(t, l))
-        .child(gutter(t, r))
+        .child(gutter(t, left))
+        .child(gutter(t, right))
         .child(edged(
             div()
                 .flex()
@@ -148,7 +211,7 @@ fn unified(t: &Theme, row: DiffRow, text: Texts<'_>, half: Half) -> Div {
                         .text_color(tone.map_or(t.colors.muted, |tone| tone.text))
                         .child(sign),
                 )
-                .child(code(t, body)),
+                .child(code(t, text, runs)),
             tone,
         ))
 }
@@ -165,14 +228,25 @@ fn gutter(t: &Theme, number: Option<u32>) -> Div {
         .children(number.map(|n| SharedString::from((n + 1).to_string())))
 }
 
-/// The code text of one half; a filler shows nothing.
-fn code(t: &Theme, text: Option<&str>) -> Div {
-    div()
+/// The code text of one half; a filler shows nothing. Colour runs paint the words as the file
+/// body's `line_text` does, and the line still truncates — wrapping is W8k's job (D38.3).
+fn code(t: &Theme, text: Option<&str>, runs: &[TextRun]) -> Div {
+    let cell = div()
         .flex_1()
         .min_w_0()
         .truncate()
-        .text_color(t.colors.text)
-        .children(text.map(|s| SharedString::from(s.to_owned())))
+        .text_color(t.colors.text);
+    let Some(text) = text else {
+        return cell;
+    };
+    let styled = if runs.is_empty() {
+        SharedString::from(text.to_owned()).into_any_element()
+    } else {
+        StyledText::new(text)
+            .with_highlights(runs.iter().cloned())
+            .into_any_element()
+    };
+    cell.child(styled)
 }
 
 #[cfg(test)]

@@ -145,6 +145,7 @@ fn row(weak: &WeakEntity<NavoWindow>, at: usize, cx: &App) -> AnyElement {
         model: &stream.model,
         layout: stream.layout,
         bars: Some(&bars),
+        syntax: stream.card_syntax(at, cx),
     };
     let starts_card = matches!(
         stream.rows[at],

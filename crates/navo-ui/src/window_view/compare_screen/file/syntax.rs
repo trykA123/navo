@@ -1,7 +1,6 @@
 //! The file diff's syntax parse (D38): each side of an opened text is parsed off the UI thread
 //! with F3's highlighter, once per opened text, and kept on the view for the rows to colour.
 
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -10,12 +9,9 @@ use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::component::theme::Theme as KitTheme;
 
 use crate::compare_diff::PairText;
-use crate::compare_diff::body::{PairSyntax, SideSyntax};
+use crate::compare_diff::body::{PairSyntax, parse_side};
 use crate::prelude::*;
 use crate::window_view::{EDIT_LIMIT, NavoWindow};
-
-/// How many bytes of a side's first lines the language sniffer reads.
-const HEAD: usize = 1024;
 
 /// The parse of one opened text: not started, running (its task), or done.
 #[derive(Default)]
@@ -50,30 +46,12 @@ impl SyntaxSlot {
     }
 }
 
-/// Parses one side of a file named `name`; plain over the cap or for a language with no grammar.
-fn parse_side(name: &str, lines: &[String]) -> Option<SideSyntax> {
-    let mut head = String::new();
-    for line in lines {
-        if head.len() >= HEAD {
-            break;
-        }
-        head.push_str(line);
-        head.push('\n');
-    }
-    let language = crate::languages::detect(name, head.as_bytes());
-    SideSyntax::parse(language, lines, EDIT_LIMIT)
-}
-
 /// Parses both sides of `text`, the pair at `path`. Blocks: runs on a background thread.
 fn parse_pair(path: &str, text: &PairText) -> PairSyntax {
     crate::languages::register_languages();
-    let name = Path::new(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(path);
     PairSyntax {
-        left: parse_side(name, &text.left),
-        right: parse_side(name, &text.right),
+        left: parse_side(path, &text.left, EDIT_LIMIT),
+        right: parse_side(path, &text.right, EDIT_LIMIT),
     }
 }
 

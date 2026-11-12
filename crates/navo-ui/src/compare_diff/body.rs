@@ -13,6 +13,7 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 use cut::{LineAt, lead_row};
 pub use cut::{ProbeSeen, RowCut, TextProbe};
+pub(crate) use syntax::parse_side;
 pub use syntax::{PairSyntax, SideSyntax, SyntaxLook};
 use text::{line_text, span_runs, text_tone};
 
