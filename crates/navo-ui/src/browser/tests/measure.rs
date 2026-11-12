@@ -300,7 +300,7 @@ fn an_index_total_shows_its_bytes_in_on_disk_mode() {
     let docs = fs.location("home/docs");
     let mut browser = browser_at(&fs, "home");
     browser.set_size_mode(SizeMode::OnDisk);
-    browser.set_folder_totals(Arc::new(move |asked| {
+    browser.set_folder_totals(Arc::new(move |asked: &navo_core::Location| {
         (asked == &docs).then_some(FolderTotals {
             bytes: 42,
             files: 1,

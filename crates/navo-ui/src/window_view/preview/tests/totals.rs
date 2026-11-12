@@ -21,7 +21,7 @@ fn project() -> Arc<FakeFs> {
 }
 
 fn index_answers(folder: Location, bytes: u64, complete: bool) -> FolderTotalsQuery {
-    Arc::new(move |asked| {
+    Arc::new(move |asked: &Location| {
         (asked == &folder).then_some(FolderTotals {
             bytes,
             files: 3,
