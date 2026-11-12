@@ -7,6 +7,7 @@ use gpui_kit::{AppContext as _, Keystroke, TestAppContext};
 
 use super::compare_large::{hunk, lines, open_large, push};
 use super::compare_screen::Rig;
+use super::screen_access::{screen_read, screen_update};
 use super::settle;
 use crate::compare_diff::{
     DiffUpdate, LargeHunk, LargeProgress, LargeStage, LargeStep, LargeStepReason, LargeStepView,
@@ -45,24 +46,22 @@ fn paged(left: Range<u64>) -> LargeStepView {
 
 /// The top row and the left line it shows.
 fn top(cx: &mut TestAppContext, rig: &Rig) -> (u64, Option<u64>) {
-    let row = rig
-        .view
-        .read_with(cx, |view, _| view.large_probe())
+    let row = screen_read(&rig.view, cx, |view, _| view.large_probe())
         .expect("a large body")
         .top;
-    let shown = rig.view.read_with(cx, |view, _| view.large_row(row));
+    let shown = screen_read(&rig.view, cx, |view, _| view.large_row(row));
     (row, shown.and_then(|(_, left, _)| left).map(|(at, _)| at))
 }
 
 /// The kind of row `row`.
 fn kind(cx: &mut TestAppContext, rig: &Rig, row: u64) -> ShownKind {
-    let shown = rig.view.read_with(cx, |view, _| view.large_row(row));
+    let shown = screen_read(&rig.view, cx, |view, _| view.large_row(row));
     shown.expect("a large body").0
 }
 
 /// Scrolls the large body so row `row` is on top.
 fn scroll(cx: &mut TestAppContext, rig: &Rig, row: usize) {
-    rig.view.update(cx, |view, cx| {
+    screen_update(&rig.view, cx, |view, cx| {
         view.large_scroll_to(row);
         cx.notify();
     });
@@ -151,10 +150,7 @@ fn compare_large_sides_far_apart_settle_without_a_request_loop(cx: &mut TestAppC
         .take_while(|_| answer(cx, &rig, &mut answered, totals))
         .count();
     assert!(rounds < 4, "the requests settle: {rounds} rounds");
-    let row = rig
-        .view
-        .read_with(cx, |view, _| view.large_row(21_000))
-        .unwrap();
+    let row = screen_read(&rig.view, cx, |view, _| view.large_row(21_000)).unwrap();
     let text = |line: Option<(u64, String)>| line.map(|(_, text)| text);
     assert_eq!(
         (text(row.1), text(row.2)),
@@ -251,10 +247,9 @@ fn compare_large_failure_and_refresh_drop_the_large_body(cx: &mut TestAppContext
         &sink,
         snapshot(vec![hunk(10..11, 10..11)], Vec::new(), (1, 5)),
     );
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     assert!(
-        rig.view
-            .read_with(cx, |view, _| view.large_probe().is_none()),
+        screen_read(&rig.view, cx, |view, _| view.large_probe().is_none()),
         "refresh drops it"
     );
     let (rig, sink) = open_large(cx);
@@ -274,10 +269,9 @@ fn compare_large_failure_and_refresh_drop_the_large_body(cx: &mut TestAppContext
             text: text.clone(),
         },
     );
-    assert!(
-        rig.view
-            .read_with(cx, |view, _| view.large_probe().is_none())
-    );
+    assert!(screen_read(&rig.view, cx, |view, _| view
+        .large_probe()
+        .is_none()));
     assert_eq!(rig.state(cx), Some(FileState::Failed(text.into())));
 }
 
@@ -298,8 +292,7 @@ fn compare_large_changed_on_disk_refreshes_and_drops_the_body(cx: &mut TestAppCo
         "the line read asks for a reload"
     );
     assert!(
-        rig.view
-            .read_with(cx, |view, _| view.large_probe().is_none()),
+        screen_read(&rig.view, cx, |view, _| view.large_probe().is_none()),
         "the stale body is gone"
     );
 }

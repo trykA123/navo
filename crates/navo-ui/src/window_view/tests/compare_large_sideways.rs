@@ -14,6 +14,7 @@ use gpui_kit::{
 use super::compare_large::{lines, open_large, open_large_in, push};
 use super::compare_screen::Rig;
 use super::compare_switch::LINE;
+use super::screen_access::{screen_read, screen_update};
 use crate::commands::compare::ShowBytesHere;
 use crate::compare_diff::{DiffSink, DiffUpdate, LONG_LINE, PairKind};
 use crate::window_view::compare_screen::SidewaysSeen;
@@ -103,9 +104,7 @@ fn sideways_px(cx: &mut TestAppContext, rig: &Rig, x: f32, y: f32) {
 }
 
 fn seen(cx: &mut TestAppContext, rig: &Rig) -> SidewaysSeen {
-    rig.view
-        .read_with(cx, |view, _| view.large_sideways())
-        .expect("an opened large pair")
+    screen_read(&rig.view, cx, |view, _| view.large_sideways()).expect("an opened large pair")
 }
 
 /// Whether the sideways strip's left (or only) bar is in the last frame.
@@ -159,20 +158,14 @@ fn the_extent_grows_with_arriving_windows_and_never_shrinks(cx: &mut TestAppCont
 fn a_sideways_wheel_moves_only_the_large_offset(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let (rig, _sink) = opened(cx);
-    let before = rig
-        .view
-        .read_with(cx, |view, _| view.large_probe())
-        .expect("a large body");
+    let before = screen_read(&rig.view, cx, |view, _| view.large_probe()).expect("a large body");
     sideways_px(cx, &rig, -80., 0.);
     let now = seen(cx, &rig);
     assert_eq!(now.offset, 80., "{now:?}");
     let (from, nudge) = expected_from(80., now.advance);
     assert_eq!(now.cols.as_ref().map(|cols| cols.start), Some(from));
     assert!((now.nudge - nudge).abs() < 0.01, "{now:?}");
-    let after = rig
-        .view
-        .read_with(cx, |view, _| view.large_probe())
-        .expect("a large body");
+    let after = screen_read(&rig.view, cx, |view, _| view.large_probe()).expect("a large body");
     assert_eq!(
         (after.top, after.base),
         (before.top, before.base),
@@ -269,7 +262,7 @@ fn a_refresh_of_the_same_pair_keeps_the_large_sideways_offset(cx: &mut TestAppCo
     let (rig, sink) = opened(cx);
     sideways_px(cx, &rig, -80., 0.);
     assert_eq!(seen(cx, &rig).offset, 80., "the wheel moved it first");
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     push(cx, &rig, &sink, wide_lines(2, 0..40, (5_000, 5_000), 500));
     frames(cx, &rig);
     let now = seen(cx, &rig);
@@ -284,7 +277,7 @@ fn a_new_large_pair_after_a_refresh_starts_at_zero(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
     let (rig, sink) = opened(cx);
     sideways_px(cx, &rig, -80., 0.);
-    rig.view.update(cx, |view, _| view.refresh_file_screen());
+    screen_update(&rig.view, cx, |view, _| view.refresh_file_screen());
     push(cx, &rig, &sink, wide_lines(2, 0..40, (5_000, 5_000), 500));
     frames(cx, &rig);
     rig.press(cx, "escape");
