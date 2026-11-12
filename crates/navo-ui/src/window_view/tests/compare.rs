@@ -15,8 +15,8 @@ use crate::browser::{
     CompareUpdate, RowStatus,
 };
 use crate::commands::Keymap;
+use crate::compare_diff::CompareOptions;
 use crate::compare_list::BarEvent;
-use crate::settings::Values;
 use crate::window_view::OpenHooks;
 
 const KEYMAP: &str = concat!(
@@ -49,7 +49,7 @@ impl CompareHooks for Hooks {
     fn start(
         &self,
         _sides: (&Location, &Location),
-        _values: &Values,
+        _options: &CompareOptions,
         sink: CompareSink,
     ) -> Box<dyn CompareControl> {
         *self.0.lock().unwrap() = Some(sink);

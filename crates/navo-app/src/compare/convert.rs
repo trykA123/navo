@@ -7,7 +7,6 @@ use navo_ui::browser::{
     StopBound as UiBound,
 };
 use navo_ui::compare_diff::CompareOptions;
-use navo_ui::settings::Values;
 
 use super::handle::CompareEvent;
 use super::settings::CompareSettings;
@@ -15,11 +14,6 @@ use super::settings::CompareSettings;
 /// The compare settings in `options` as the compare backend reads them.
 pub(super) fn settings_from(options: &CompareOptions) -> CompareSettings {
     CompareSettings::from(&options.compare)
-}
-
-/// The compare settings the user sees in `values`, read through the stored `[compare]` rules.
-pub(super) fn settings_of(values: &Values) -> CompareSettings {
-    settings_from(&CompareOptions::from_values(values))
 }
 
 /// The UI update for an event.

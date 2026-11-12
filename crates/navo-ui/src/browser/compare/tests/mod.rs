@@ -10,7 +10,7 @@ use super::{
     CompareControl, CompareHooks, CompareKind, CompareRow, CompareSide, CompareSink, CompareUpdate,
     RowStatus,
 };
-use crate::settings::Values;
+use crate::compare_diff::CompareOptions;
 
 mod mode;
 mod rows;
@@ -75,7 +75,7 @@ impl CompareHooks for FakeHooks {
     fn start(
         &self,
         (left, right): (&Location, &Location),
-        _values: &Values,
+        _options: &CompareOptions,
         sink: CompareSink,
     ) -> Box<dyn CompareControl> {
         let pair = (left.as_str().to_owned(), right.as_str().to_owned());

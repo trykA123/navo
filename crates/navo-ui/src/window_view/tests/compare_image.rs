@@ -19,11 +19,11 @@ use crate::browser::{
     RowStatus,
 };
 use crate::commands::Keymap;
+use crate::compare_diff::CompareOptions;
 use crate::compare_diff::fake::FakeDiffHooks;
 use crate::compare_diff::image_body::{ImageBody, ImageMode, SPLIT_STEP};
 use crate::compare_diff::{DiffUpdate, ImageLimit, ImageMask, ImageScores, PairKind};
 use crate::primitives::GPU_IMAGES;
-use crate::settings::Values;
 use crate::window_view::compare_screen::image::Probe;
 use crate::window_view::{FileHooks, OpenHooks};
 
@@ -58,7 +58,7 @@ impl CompareHooks for Hooks {
     fn start(
         &self,
         _sides: (&Location, &Location),
-        _values: &Values,
+        _options: &CompareOptions,
         sink: CompareSink,
     ) -> Box<dyn CompareControl> {
         *self.0.lock().unwrap() = Some(sink);
