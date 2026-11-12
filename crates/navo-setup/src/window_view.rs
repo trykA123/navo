@@ -2,11 +2,12 @@
 
 use std::path::PathBuf;
 
-use navo_ui::setup::{SetupAction, SetupPage, SetupProgress, SetupView};
+use navo_ui::setup::{SetupAction, SetupPage, SetupProgress, SetupStage, SetupView};
 
 use crate::cli::messages::{failure_message, unsafe_name};
 use crate::flow::{Failure, Flow, Folder, Page};
 use crate::mode::{Mode, Why};
+use crate::progress_log::InstallStage;
 use crate::runner::Progress;
 
 /// Facts fixed when the window opens: the payload version, its space need and the log files.
@@ -44,9 +45,10 @@ pub fn view(flow: &Flow, facts: &Facts, live: &Live) -> SetupView {
         primary: primary(flow),
         folder_text: folder.path().display().to_string(),
         problem: problem(flow),
-        progress: live
-            .progress
-            .map(|p| SetupProgress::from_elapsed(p.elapsed, p.still_working)),
+        progress: live.progress.map(|p| {
+            SetupProgress::from_elapsed(p.elapsed, p.still_working)
+                .with_estimate(p.percent, p.stage.map(stage))
+        }),
         version: facts.version.clone(),
         installed_version: installed(flow.mode()),
         folder_locked: matches!(folder, Folder::Locked(_)),
@@ -166,4 +168,14 @@ fn details(flow: &Flow, facts: &Facts) -> String {
     let mut lines: Vec<String> = problem(flow).into_iter().collect();
     lines.extend(log_paths(facts).iter().map(|p| p.display().to_string()));
     lines.join("\n")
+}
+
+/// The runner's phase as the display's own enum; navo-ui never depends on the engine.
+fn stage(stage: InstallStage) -> SetupStage {
+    match stage {
+        InstallStage::Preparing => SetupStage::Preparing,
+        InstallStage::CopyingPackage => SetupStage::CopyingPackage,
+        InstallStage::Extracting => SetupStage::Extracting,
+        InstallStage::Finalizing => SetupStage::Finalizing,
+    }
 }

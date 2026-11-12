@@ -2,7 +2,31 @@
 
 use std::time::Duration;
 
-use super::{SetupAction, SetupCheck, SetupPage, SetupProgress, SetupView, Strings, access_keys};
+use super::{
+    SetupAction, SetupCheck, SetupPage, SetupProgress, SetupStage, SetupView, Strings, access_keys,
+};
+
+#[test]
+fn from_elapsed_leaves_the_bar_indeterminate() {
+    let progress = SetupProgress::from_elapsed(Duration::from_secs(3), false);
+    assert_eq!(progress.percent, None);
+    assert_eq!(progress.stage, None);
+}
+
+#[test]
+fn with_estimate_carries_the_verified_share_and_phase() {
+    let progress = SetupProgress::from_elapsed(Duration::from_secs(3), false)
+        .with_estimate(Some(42), Some(SetupStage::Extracting));
+    assert_eq!(progress.percent, Some(42));
+    assert_eq!(progress.stage, Some(SetupStage::Extracting));
+    assert_eq!(progress.elapsed, Duration::from_secs(3));
+    let cleared = progress.with_estimate(None, Some(SetupStage::Finalizing));
+    assert_eq!(
+        cleared.percent, None,
+        "a stalled phase must clear the share"
+    );
+    assert_eq!(cleared.stage, Some(SetupStage::Finalizing));
+}
 
 #[test]
 fn from_elapsed_keeps_the_time_and_the_deadline_flag() {
