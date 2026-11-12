@@ -9,4 +9,6 @@ pub(in crate::window_view) enum ScreenEvent {
     Closed { reveal: Option<String> },
     /// Settings should open with this field selected.
     OpenSettings(Field),
+    /// Open the next (`step` 1) or previous (−1) file of the folder compare after row `from`.
+    WalkFile { from: u64, step: i32 },
 }
