@@ -9,7 +9,9 @@ use std::time::Duration;
 use navo_compare::model::{Generation, HashCache, ReadHint, Reason, SideSource};
 use navo_compare::session::{RowBatch, Session, SessionOptions, StopBound, Totals};
 use navo_core::Location;
+use navo_ui::compare_diff::CompareOptions;
 
+use super::convert::settings_from;
 use super::git_side::GitSide;
 use super::local::LocalSide;
 use super::rules;
@@ -29,6 +31,22 @@ pub struct CompareStart {
     pub right: CompareTarget,
     pub(crate) settings: CompareSettings,
     pub cache: Arc<dyn HashCache>,
+}
+
+impl CompareStart {
+    /// Builds a request from two targets, UI options and a hash cache; opens neither side.
+    pub fn new(
+        (left, right): (CompareTarget, CompareTarget),
+        options: &CompareOptions,
+        cache: Arc<dyn HashCache>,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            settings: settings_from(options),
+            cache,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

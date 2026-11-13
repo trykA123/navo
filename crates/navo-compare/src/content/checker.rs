@@ -1,3 +1,5 @@
+//! Content comparison with validated file stamps and cached hashes.
+
 use std::io::Read;
 
 use blake3::Hasher;
@@ -148,6 +150,7 @@ struct Checker<'a, 'b> {
 }
 
 impl Checker<'_, '_> {
+    /// Compares a pair using object IDs or validated metadata and content; returns read failures.
     fn run(&mut self, sides: Sides<'_>) -> ContentResult {
         let left = sides.left;
         let right = sides.right;
@@ -163,10 +166,6 @@ impl Checker<'_, '_> {
         if let Some(result) = check_object_ids(left, right) {
             return result;
         }
-        if left.entry.size != right.entry.size {
-            return different(None, ContentClass::Unknown);
-        }
-
         let left_key = content_key(left.source, left.entry);
         let right_key = content_key(right.source, right.entry);
         let keys = (&left_key, &right_key);
@@ -174,6 +173,9 @@ impl Checker<'_, '_> {
             Ok(hashes) => hashes,
             Err(result) => return result,
         };
+        if left.entry.size != right.entry.size {
+            return different(None, ContentClass::Unknown);
+        }
         match (left_hash, right_hash) {
             (Some(left_hash), Some(right_hash)) if left_hash == right_hash => {
                 outcome(Status::Same, ContentClass::Unknown)

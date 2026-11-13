@@ -103,12 +103,23 @@ impl SideSource for GitSide {
         self.git.read(&at).map_err(|error| reason_of(error.kind))
     }
 
+    /// Returns known metadata for `rel`; probes unknown blobs to preserve their read failure.
     fn stamp(&self, rel: &RelPath) -> Result<Stamp, Reason> {
         let at = self.location(rel)?;
         let found = self
             .git
             .metadata(&at)
             .map_err(|error| reason_of(error.kind))?;
+        if found.kind == navo_fs::EntryKind::File && found.size == 0 {
+            let entry = self
+                .git
+                .tree_entry(&at)
+                .map_err(|error| reason_of(error.kind))?;
+            if entry.size.is_none() {
+                self.open(rel, ReadHint::Buffered)?;
+                return Err(Reason::ChangedOnDisk);
+            }
+        }
         Ok(Stamp {
             size: found.size,
             modified: None,
