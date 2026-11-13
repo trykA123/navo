@@ -12,6 +12,7 @@ mod pending;
 use pending::Pending;
 #[cfg(any(windows, test))]
 mod record_size;
+mod search_only;
 mod snapshot;
 #[cfg(any(windows, test, feature = "test-support"))]
 #[cfg_attr(
@@ -73,6 +74,7 @@ pub struct NtfsIndex {
     pub ids: FrnMap,
     pub position: JournalPosition,
     renames: PendingRenames,
+    search_only: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -112,6 +114,7 @@ impl NtfsIndex {
             ids: [(ROOT_REFERENCE, root)].into(),
             position,
             renames: PendingRenames::default(),
+            search_only: false,
         })
     }
 
@@ -130,7 +133,11 @@ impl NtfsIndex {
         applying.finish(self)
     }
 
+    /// Begins journal application, rejecting generations whose update storage was released.
     pub fn begin_batch(&self, batch: UsnBatch) -> Result<BatchApply, NtfsError> {
+        if self.search_only {
+            return Err(NtfsError::InvalidResponse("the index is search-only"));
+        }
         BatchApply::new(batch, self.position, self.renames.clone())
     }
 }
@@ -159,7 +166,11 @@ impl BatchApply {
         })
     }
 
+    /// Applies up to the change limit, rejecting search-only or moved generations first.
     pub fn step(&mut self, index: &mut NtfsIndex, limit: usize) -> Result<bool, NtfsError> {
+        if index.search_only {
+            return Err(NtfsError::InvalidResponse("the index is search-only"));
+        }
         if index.position != self.position {
             return Err(NtfsError::InvalidResponse(
                 "the index moved during a journal batch",
