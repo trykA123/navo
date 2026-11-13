@@ -69,5 +69,8 @@ fn check_cancel(cancel: &CancelToken) -> Result<(), NtfsError> {
     Ok(())
 }
 #[cfg(test)]
+#[path = "directory_scan_edge_tests.rs"]
+mod edge_tests;
+#[cfg(test)]
 #[path = "directory_scan_tests.rs"]
 mod tests;
