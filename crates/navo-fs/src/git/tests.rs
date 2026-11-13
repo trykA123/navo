@@ -545,6 +545,10 @@ fn git_errors_keep_their_kind() {
         error_kind(&fixture, |_| GitError::Paused),
         FsErrorKind::Locked
     );
+    assert_eq!(
+        error_kind(&fixture, |_| GitError::MissingPromisorBlob),
+        FsErrorKind::MissingPromisorBlob
+    );
 }
 
 #[test]
