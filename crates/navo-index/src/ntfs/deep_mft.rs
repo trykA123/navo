@@ -115,6 +115,7 @@ impl VolumeIo for DeepMft {
 mod tests {
     use super::super::tests::collect_stream;
     use super::*;
+    use crate::ntfs::NtfsIndex;
 
     #[test]
     fn deep_mft_replay_streams_four_deep_tree_and_restarts_at_zero() {
@@ -127,18 +128,56 @@ mod tests {
         assert_eq!(second.records, first.records);
         assert_eq!(second.chunks, first.chunks);
 
-        let result = DeepMft::new(1_200).read();
+        let result = enumerate_volume(
+            &mut DeepMft::new(1_200),
+            'C',
+            usize::MAX,
+            &CancelToken::new(),
+        );
+        assert!(
+            result.is_ok(),
+            "pass 2 must insert files only after their folders exist: {:?}",
+            result.as_ref().err()
+        );
+        let result = result.unwrap();
         assert!(result.unresolved.is_empty());
         assert_eq!(result.index.table.len(), 1_321);
         assert_eq!(result.index.table.folder_count(), 121);
-        assert_eq!(result.blocked_peak, 360);
-        let sample = result.index.ids[&100];
-        let path = result.index.table.path_with(sample, '\\').unwrap();
-        assert_eq!(path.matches('\\').count(), 5);
+        assert_eq!(
+            result.blocked_peak, 0,
+            "two-pass builds resolve folders first, so no file waits for its parent"
+        );
+        assert_deep_paths(&result.index);
 
         let ordered = DeepMft::ordered(400).read();
         assert_eq!(ordered.blocked_peak, 0);
         assert_eq!(ordered.index.table.len(), 441);
         assert_eq!(ordered.index.table.folder_count(), 41);
+    }
+
+    /// Checks every expected path in the 1,200-file, four-deep fixture; panics on a mismatch.
+    fn assert_deep_paths(index: &NtfsIndex) {
+        assert_eq!(index.table.path_with(0, '\\').as_deref(), Some("C:"));
+        for tree in 0..30u128 {
+            let mut directory_path = String::from("C:");
+            for folder in 1_200 + tree * 4..1_200 + (tree + 1) * 4 {
+                directory_path.push_str(&format!("\\entry-{folder:07}.txt"));
+                let id = index.ids[&(folder + 100)];
+                assert_eq!(
+                    index.table.path_with(id, '\\').as_deref(),
+                    Some(directory_path.as_str()),
+                    "folder {folder} retains every ancestor"
+                );
+            }
+            for file in tree * 40..(tree + 1) * 40 {
+                let expected = format!("{directory_path}\\entry-{file:07}.txt");
+                let id = index.ids[&(file + 100)];
+                assert_eq!(
+                    index.table.path_with(id, '\\').as_deref(),
+                    Some(expected.as_str()),
+                    "file {file} retains every ancestor"
+                );
+            }
+        }
     }
 }
