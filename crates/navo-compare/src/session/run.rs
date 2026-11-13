@@ -1,14 +1,15 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::JoinHandle;
+use std::time::Instant;
 
 use crate::content::{self, CheckOptions, ContentProgress, Side};
 use crate::model::{CancelToken, ContentClass, Generation, Reason, Row, SideSource, Status};
 use crate::queue::{CheckEvent, Job, Queue, Settlement};
 
-use super::SessionOptions;
 use super::shared::Shared;
+use super::{ComparePhase, PhaseTelemetry, SessionOptions};
 
 mod threads;
 mod walk;
@@ -38,6 +39,7 @@ struct Context {
     shared: Arc<Shared>,
     queue: Arc<Queue>,
     next_row_id: Arc<AtomicU64>,
+    content_done: AtomicU64,
     #[cfg(test)]
     settle_hook: Option<SettleHook>,
 }
@@ -53,6 +55,7 @@ pub(super) fn spawn(run: Run) -> Vec<JoinHandle<()>> {
         shared: run.shared,
         queue: run.queue,
         next_row_id: run.next_row_id,
+        content_done: AtomicU64::new(0),
         #[cfg(test)]
         settle_hook: run.settle_hook,
     });
@@ -97,6 +100,7 @@ fn worker(context: &Context) {
                 row.raw_status = Status::NotChecked(Reason::Stopped);
                 row.display_status = row.raw_status;
                 row.content = ContentClass::Unknown;
+                record_content_check(context, true);
                 if !context.shared.emit_final(context.generation, row, parent) {
                     break;
                 }
@@ -135,7 +139,28 @@ fn run_job(context: &Context, job: Job) -> bool {
         row.display_status = row.raw_status;
         row.content = ContentClass::Unknown;
     }
+    record_content_check(context, true);
     context.shared.emit_final(context.generation, row, parent)
+}
+
+fn record_content_check(context: &Context, completed: bool) {
+    let done = if completed {
+        context
+            .content_done
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1)
+    } else {
+        context.content_done.load(Ordering::Relaxed)
+    };
+    let remaining = u64::try_from(context.queue.remaining()).unwrap_or(u64::MAX);
+    context.shared.record_phase(
+        context.generation,
+        PhaseTelemetry {
+            phase: ComparePhase::ContentCheck,
+            done,
+            total: Some(done.saturating_add(remaining)),
+        },
+    );
 }
 
 fn check_row(context: &Context, mut row: Row, job: &Job) -> Row {
@@ -154,9 +179,11 @@ fn check_row(context: &Context, mut row: Row, job: &Job) -> Row {
                 .queue
                 .progress(job.id, progress.bytes_done, progress.bytes_total)
         {
+            record_content_check(context, false);
             context.shared.emit_progress(context.generation, progress);
         }
     };
+    let started = Instant::now();
     let result = content::check(
         Side {
             entry: left_entry,
@@ -169,6 +196,10 @@ fn check_row(context: &Context, mut row: Row, job: &Job) -> Row {
         &options,
         &mut report,
     );
+    let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    context
+        .shared
+        .record_slow(context.generation, left_entry.rel.clone(), elapsed_ms);
     row.raw_status = result.status;
     row.display_status = result.status;
     row.content = result.content;
