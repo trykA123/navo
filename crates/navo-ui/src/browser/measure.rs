@@ -11,7 +11,32 @@ pub use navo_index::pipe::FolderTotals;
 
 use super::{Browser, Message};
 
-pub type FolderTotalsQuery = Arc<dyn Fn(&Location) -> Option<FolderTotals> + Send + Sync>;
+/// What a totals source knows about one folder: its totals, a rebuilding volume, or nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TotalsState {
+    Ready(FolderTotals),
+    Busy,
+    Unavailable,
+}
+
+/// Where folder totals come from; the existing fixtures answer with `Option<FolderTotals>`.
+pub trait FolderTotalsSource: Send + Sync {
+    fn query(&self, folder: &Location) -> TotalsState;
+}
+
+impl<F> FolderTotalsSource for F
+where
+    F: Fn(&Location) -> Option<FolderTotals> + Send + Sync,
+{
+    fn query(&self, folder: &Location) -> TotalsState {
+        match self(folder) {
+            Some(totals) => TotalsState::Ready(totals),
+            None => TotalsState::Unavailable,
+        }
+    }
+}
+
+pub type FolderTotalsQuery = Arc<dyn FolderTotalsSource>;
 
 #[must_use]
 pub fn no_folder_totals() -> FolderTotalsQuery {
@@ -39,9 +64,10 @@ impl SizeMode {
 }
 
 pub(crate) fn complete_bytes(query: &FolderTotalsQuery, folder: &Location) -> Option<u64> {
-    query(folder)
-        .filter(|totals| totals.complete)
-        .map(|totals| totals.bytes)
+    let TotalsState::Ready(totals) = query.query(folder) else {
+        return None;
+    };
+    totals.complete.then_some(totals.bytes)
 }
 
 pub(crate) fn folder_bytes(
@@ -276,5 +302,58 @@ impl Browser {
             },
         );
         work.asked.insert(key, Asked { job, asker });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder() -> Location {
+        Location::new(r"C:\proj").unwrap()
+    }
+
+    struct Rebuilding;
+
+    impl FolderTotalsSource for Rebuilding {
+        fn query(&self, _: &Location) -> TotalsState {
+            TotalsState::Busy
+        }
+    }
+
+    #[test]
+    fn totals_source_keeps_busy_for_a_rebuilding_volume() {
+        let query: FolderTotalsQuery = Arc::new(Rebuilding);
+        assert_eq!(
+            query.query(&folder()),
+            TotalsState::Busy,
+            "a rebuilding volume must stay Busy so a row can wait instead of falling back"
+        );
+    }
+
+    #[test]
+    fn totals_source_keeps_an_incomplete_fixture_answer_ready() {
+        let totals = FolderTotals {
+            bytes: 42,
+            files: 1,
+            folders: 0,
+            complete: false,
+        };
+        let answer = totals.clone();
+        let query: FolderTotalsQuery = Arc::new(move |_: &Location| Some(answer.clone()));
+        assert_eq!(
+            query.query(&folder()),
+            TotalsState::Ready(totals),
+            "an incomplete index total is still an answer, not Unavailable"
+        );
+    }
+
+    #[test]
+    fn totals_source_without_an_answer_is_unavailable() {
+        assert_eq!(
+            no_folder_totals().query(&folder()),
+            TotalsState::Unavailable,
+            "no source leaves the provider fallback in charge"
+        );
     }
 }

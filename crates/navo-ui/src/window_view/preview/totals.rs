@@ -7,7 +7,7 @@ use super::Preview;
 use super::folder::FolderPreview;
 use super::inbox::Arrival;
 use super::scan::Phase;
-use crate::browser::FolderTotals;
+use crate::browser::{FolderTotals, TotalsState};
 use crate::window_view::NavoWindow;
 
 impl Preview {
@@ -23,7 +23,7 @@ impl Preview {
         self.reads.submit(
             slot,
             Box::new(move |_| {
-                let Some(totals) = query(&folder) else {
+                let TotalsState::Ready(totals) = query.query(&folder) else {
                     return;
                 };
                 if send.send(Arrival::Totals { load, totals }).is_ok() {
@@ -38,6 +38,12 @@ impl Preview {
 impl FolderPreview {
     fn is_walked(&self) -> bool {
         matches!(self.scan.phase, Phase::Done { .. })
+    }
+
+    /// Whether this load waits for index totals instead of showing a number.
+    #[expect(dead_code, reason = "T14 stores the load's Busy decision here")]
+    pub(super) fn waiting_for_totals(&self) -> bool {
+        false
     }
 
     pub(super) fn shown_totals(&self) -> (FolderSize, bool) {
