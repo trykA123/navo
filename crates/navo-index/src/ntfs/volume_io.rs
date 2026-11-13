@@ -7,6 +7,9 @@ use super::{
     TableChange, UsnBatch, parse_batch, validate_journal_cursor,
 };
 
+#[cfg(test)]
+#[path = "journal_churn_tests.rs"]
+mod journal_churn_tests;
 #[path = "two_pass_size.rs"]
 mod two_pass_size;
 
@@ -175,6 +178,7 @@ fn add_record(
     Ok(size.unknown)
 }
 
+/// Reads journal changes, rejecting hard-link churn before size refresh or cursor validation.
 pub(super) fn read_volume_journal(
     volume: &mut impl VolumeIo,
     saved: JournalPosition,
@@ -182,6 +186,9 @@ pub(super) fn read_volume_journal(
     JournalState::parse(&volume.query_journal()?)?.check(saved)?;
     let bytes = volume.read_journal(saved).map_err(journal_error)?;
     let mut batch = parse_batch(&bytes)?;
+    if batch.records.iter().any(|raw| raw.reason & 0x10000 != 0) {
+        return Err(NtfsError::Reenumerate);
+    }
     refresh_sizes(volume, &mut batch);
     validate_journal_cursor(&batch, saved)?;
     Ok(batch)
