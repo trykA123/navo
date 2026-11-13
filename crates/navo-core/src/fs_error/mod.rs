@@ -17,6 +17,7 @@ pub enum FsErrorKind {
     JournalWriteFailed,
     ChangedOnDisk,
     SourceFilterFailed,
+    MissingPromisorBlob,
     Unknown,
 }
 
@@ -125,7 +126,9 @@ impl FsError {
                 &[Skip, SkipAll, Cancel]
             }
             FsErrorKind::ChangedOnDisk => &[Cancel],
-            FsErrorKind::SourceFilterFailed => &[Retry, Skip, SkipAll, Cancel],
+            FsErrorKind::SourceFilterFailed | FsErrorKind::MissingPromisorBlob => {
+                &[Retry, Skip, SkipAll, Cancel]
+            }
             FsErrorKind::Unknown => &[Retry, Skip, Cancel],
         }
     }
@@ -195,6 +198,11 @@ fn with_location(kind: FsErrorKind, place: &str) -> String {
                 "The source content filter failed for “{place}”. Check Git filters and Git LFS, then try again."
             )
         }
+        FsErrorKind::MissingPromisorBlob => {
+            format!(
+                "The Git promisor blob for “{place}” is missing locally. Lazy fetch is disabled."
+            )
+        }
         FsErrorKind::Unknown => format!("Something went wrong with \u{201c}{place}\u{201d}."),
     }
 }
@@ -217,6 +225,9 @@ fn without_location(kind: FsErrorKind) -> &'static str {
         FsErrorKind::ChangedOnDisk => "The file changed after it was opened.",
         FsErrorKind::SourceFilterFailed => {
             "The source content filter failed. Check Git filters and Git LFS, then try again."
+        }
+        FsErrorKind::MissingPromisorBlob => {
+            "The Git promisor blob is missing locally. Lazy fetch is disabled."
         }
         FsErrorKind::Unknown => "Something went wrong.",
     }

@@ -29,6 +29,7 @@ pub(super) fn git(error: GitError, location: &Location) -> FsError {
         GitError::Unsupported { .. } => FsErrorKind::NotSupportedYet,
         GitError::Timeout => FsErrorKind::Timeout,
         GitError::MissingObject { .. } => FsErrorKind::NotFound,
+        GitError::MissingPromisorBlob => FsErrorKind::MissingPromisorBlob,
         GitError::UnrepresentablePath => FsErrorKind::NameInvalid,
         GitError::GitNotFound | GitError::GitTooOld { .. } => FsErrorKind::NotSupportedYet,
         GitError::Io { kind, .. } => match kind {
