@@ -45,6 +45,7 @@ pub(super) struct FakeSource {
     entries: HashMap<String, Vec<SideEntry>>,
     files: HashMap<String, Arc<Vec<u8>>>,
     stamps: HashMap<String, Stamp>,
+    stamp_failures: HashMap<String, Reason>,
     list_failures: HashMap<String, Reason>,
     slow_listings: HashMap<String, SlowListing>,
     open_delay: Option<Duration>,
@@ -55,8 +56,11 @@ pub(super) struct FakeSource {
     read_gate: Option<ReadGate>,
     reads_total: Arc<AtomicU64>,
     reads_after: Arc<AtomicU64>,
+    stamps_called: Arc<AtomicU64>,
+    opens_called: Arc<AtomicU64>,
     case_sensitive: bool,
     network: bool,
+    may_have_unknown_size: bool,
 }
 
 impl FakeSource {
@@ -67,6 +71,7 @@ impl FakeSource {
             entries: HashMap::new(),
             files: HashMap::new(),
             stamps: HashMap::new(),
+            stamp_failures: HashMap::new(),
             list_failures: HashMap::new(),
             slow_listings: HashMap::new(),
             open_delay: None,
@@ -77,13 +82,32 @@ impl FakeSource {
             read_gate: None,
             reads_total: Arc::new(AtomicU64::new(0)),
             reads_after: Arc::new(AtomicU64::new(0)),
+            stamps_called: Arc::new(AtomicU64::new(0)),
+            opens_called: Arc::new(AtomicU64::new(0)),
             case_sensitive,
             network: false,
+            may_have_unknown_size: false,
         }
     }
 
     pub(super) fn set_network(&mut self) {
         self.network = true;
+    }
+
+    pub(super) fn set_unknown_sizes(&mut self) {
+        self.may_have_unknown_size = true;
+    }
+
+    pub(super) fn fail_stamp(&mut self, rel: &str, reason: Reason) {
+        self.stamp_failures.insert(rel.to_owned(), reason);
+    }
+
+    pub(super) fn stamp_counter(&self) -> Arc<AtomicU64> {
+        Arc::clone(&self.stamps_called)
+    }
+
+    pub(super) fn open_counter(&self) -> Arc<AtomicU64> {
+        Arc::clone(&self.opens_called)
     }
 
     pub(super) fn add_folder(&mut self, rel: &str) {
@@ -212,6 +236,7 @@ impl SideSource for FakeSource {
         if let Some(delay) = self.open_delay {
             thread::sleep(delay);
         }
+        self.opens_called.fetch_add(1, Ordering::Relaxed);
         let bytes = self
             .files
             .get(&rel.as_path().to_text())
@@ -228,10 +253,12 @@ impl SideSource for FakeSource {
     }
 
     fn stamp(&self, rel: &RelPath) -> Result<Stamp, Reason> {
-        self.stamps
-            .get(&rel.as_path().to_text())
-            .copied()
-            .ok_or(Reason::NotFound)
+        self.stamps_called.fetch_add(1, Ordering::Relaxed);
+        let key = rel.as_path().to_text();
+        if let Some(reason) = self.stamp_failures.get(&key) {
+            return Err(*reason);
+        }
+        self.stamps.get(&key).copied().ok_or(Reason::NotFound)
     }
 
     fn object_id(&self, _rel: &RelPath) -> Option<ObjectId> {
@@ -260,6 +287,10 @@ impl SideSource for FakeSource {
 
     fn is_network(&self) -> bool {
         self.network
+    }
+
+    fn may_have_unknown_size(&self) -> bool {
+        self.may_have_unknown_size
     }
 }
 

@@ -96,6 +96,18 @@ pub(super) fn stamp_matches(stamp: &Stamp, entry: &SideEntry) -> bool {
     stamp.size == entry.size && stamp.modified == entry.modified
 }
 
+/// Validates a zero-byte entry when its source may collapse unknown sizes to zero.
+pub(crate) fn probe_zero_size(side: Side<'_>) -> Result<Option<Stamp>, Reason> {
+    if side.entry.size != 0 || !side.source.may_have_unknown_size() {
+        return Ok(None);
+    }
+    let stamp = side.source.stamp(&side.entry.rel)?;
+    if !stamp_matches(&stamp, side.entry) {
+        return Err(Reason::ChangedOnDisk);
+    }
+    Ok(Some(stamp))
+}
+
 pub(super) fn finish_side(
     cache: &dyn HashCache,
     key: &ContentKey,

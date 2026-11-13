@@ -1,6 +1,6 @@
 //! Quick row classification before the session validates file contents.
 
-use crate::content::Side;
+use crate::content::{Side, probe_zero_size};
 use crate::model::{ContentClass, EntryKind, Reason, Row, SideSource, Status};
 
 use super::CheckMode;
@@ -39,19 +39,12 @@ pub(super) fn classify(row: &mut Row, mode: CheckMode, sources: [&dyn SideSource
     row.content = ContentClass::Unknown;
 }
 
-/// Classifies file metadata after validating zero sizes; returns unavailable on stamp failure.
+/// Classifies file metadata after validating zero sizes that may be unknown; returns unavailable on probe failure.
 fn file_status(left: Side<'_>, right: Side<'_>, mode: CheckMode) -> Status {
-    // Git listings use zero for unavailable blob sizes, so zero needs a validated stamp.
+    // Only sources that map unknown sizes to zero (e.g. Git) need a walk-time stamp probe.
     for side in [left, right] {
-        if side.entry.size != 0 {
-            continue;
-        }
-        match side.source.stamp(&side.entry.rel) {
-            Err(reason) => return Status::Unavailable(reason),
-            Ok(stamp) if stamp.size != 0 || stamp.modified != side.entry.modified => {
-                return Status::Unavailable(Reason::ChangedOnDisk);
-            }
-            Ok(_) => {}
+        if let Err(reason) = probe_zero_size(side) {
+            return Status::Unavailable(reason);
         }
     }
     let (left, right) = (left.entry, right.entry);

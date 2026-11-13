@@ -314,3 +314,51 @@ fn generation_with(generation: Generation, status: Status, kind: EntryKind) -> R
         differences_inside: 0,
     }
 }
+
+#[test]
+fn zero_byte_local_files_avoid_extra_stamp_probes_in_common_cases() {
+    let mut left = FakeSource::new(true);
+    let mut right = FakeSource::new(true);
+    left.add_file("empty.txt", Vec::new());
+    right.add_file("empty.txt", Vec::new());
+    let left_stamps = left.stamp_counter();
+    let right_stamps = right.stamp_counter();
+    let batches = collect(&start(left, right, CheckMode::SizeTime));
+    let row = batches_with_row(&batches, "empty.txt").last().unwrap().1;
+    assert_eq!(row.raw_status, Status::SameSizeTime);
+    assert_eq!(left_stamps.load(std::sync::atomic::Ordering::Relaxed), 0);
+    assert_eq!(right_stamps.load(std::sync::atomic::Ordering::Relaxed), 0);
+
+    let mut left = FakeSource::new(true);
+    let mut right = FakeSource::new(true);
+    right.set_unknown_sizes();
+    left.add_file("empty.txt", Vec::new());
+    right.add_file("empty.txt", Vec::new());
+    let left_stamps = left.stamp_counter();
+    let right_stamps = right.stamp_counter();
+    let right_opens = right.open_counter();
+    let batches = collect(&start(left, right, CheckMode::Content));
+    let row = batches_with_row(&batches, "empty.txt").last().unwrap().1;
+    assert_eq!(row.raw_status, Status::Same);
+    assert_eq!(left_stamps.load(std::sync::atomic::Ordering::Relaxed), 2);
+    assert_eq!(right_stamps.load(std::sync::atomic::Ordering::Relaxed), 3);
+    assert_eq!(right_opens.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    for mode in [CheckMode::SizeTime, CheckMode::Content] {
+        let mut left = FakeSource::new(true);
+        let mut right = FakeSource::new(true);
+        right.set_unknown_sizes();
+        left.add_file("missing.txt", Vec::new());
+        right.add_file("missing.txt", Vec::new());
+        right.fail_stamp("missing.txt", Reason::MissingBlob);
+        let left_stamps = left.stamp_counter();
+        let right_stamps = right.stamp_counter();
+        let right_opens = right.open_counter();
+        let batches = collect(&start(left, right, mode));
+        let row = batches_with_row(&batches, "missing.txt").last().unwrap().1;
+        assert_eq!(row.raw_status, Status::Unavailable(Reason::MissingBlob));
+        assert_eq!(left_stamps.load(std::sync::atomic::Ordering::Relaxed), 0);
+        assert_eq!(right_stamps.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(right_opens.load(std::sync::atomic::Ordering::Relaxed), 0);
+    }
+}

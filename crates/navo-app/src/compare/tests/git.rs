@@ -215,8 +215,14 @@ fn engine_for_follows_the_setting_and_the_repository_format() {
     assert_eq!(engine_for(&with(EngineSetting::Gix), &new), EngineKind::Cli);
 }
 
+struct PromisorFixture {
+    _dir: tempfile::TempDir,
+    promisor: PathBuf,
+    hydrated: PathBuf,
+}
+
 /// Creates a partial clone with two blobs hydrated; returns None when Git cannot initialize it.
-fn promisor_repo() -> Option<(tempfile::TempDir, PathBuf)> {
+fn promisor_repo() -> Option<PromisorFixture> {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     git(root, &["init", "-q", "--bare", "r.git"])?;
@@ -253,12 +259,16 @@ fn promisor_repo() -> Option<(tempfile::TempDir, PathBuf)> {
     git(&promisor, &["config", "filter.hostile.required", "true"]).unwrap();
     git(&promisor, &["cat-file", "blob", "HEAD:present.txt"]).unwrap();
     git(&promisor, &["cat-file", "blob", "HEAD:empty.txt"]).unwrap();
-    Some((dir, promisor))
+    Some(PromisorFixture {
+        _dir: dir,
+        promisor,
+        hydrated: remote,
+    })
 }
 
 #[test]
 fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
-    let Some((_dir, promisor)) = promisor_repo() else {
+    let Some(fixture) = promisor_repo() else {
         return;
     };
     let local = tempfile::tempdir().unwrap();
@@ -282,7 +292,7 @@ fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
                 (
                     CompareTarget::Local(location(local.path())),
                     CompareTarget::GitRawOdb {
-                        repo: promisor.clone(),
+                        repo: fixture.promisor.clone(),
                         rev: "HEAD".to_owned(),
                     },
                 ),
@@ -301,6 +311,53 @@ fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
                 },
             };
             assert_eq!(final_status(&rows, "empty.txt"), empty_status);
+            assert_eq!(
+                final_status(&rows, "missing.txt"),
+                Status::Unavailable(Reason::MissingBlob)
+            );
+        }
+    }
+}
+
+#[test]
+fn git_vs_git_reports_missing_promisor_blob_on_one_or_both_sides() {
+    let Some(fixture) = promisor_repo() else {
+        return;
+    };
+    for right_repo in [&fixture.promisor, &fixture.hydrated] {
+        for content_check in [
+            navo_store::ContentCheck::Content,
+            navo_store::ContentCheck::SizeTime,
+        ] {
+            let (sender, receiver) = mpsc::channel();
+            let options = navo_ui::compare_diff::CompareOptions {
+                compare: navo_store::Compare {
+                    content_check,
+                    ..navo_store::Compare::default()
+                },
+            };
+            let request = CompareStart::new(
+                (
+                    CompareTarget::GitRawOdb {
+                        repo: fixture.promisor.clone(),
+                        rev: "HEAD".to_owned(),
+                    },
+                    CompareTarget::GitRawOdb {
+                        repo: right_repo.clone(),
+                        rev: "HEAD".to_owned(),
+                    },
+                ),
+                &options,
+                Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap())),
+            );
+            let _handle = CompareHandle::start(request, sender);
+            let (rows, _, _) = finish(&receiver);
+            let known_same = match content_check {
+                navo_store::ContentCheck::Content => Status::Same,
+                navo_store::ContentCheck::SizeTime => Status::SameSizeTime,
+            };
+            assert_eq!(final_status(&rows, "present.txt"), known_same);
+            assert_eq!(final_status(&rows, "empty.txt"), known_same);
             assert_eq!(
                 final_status(&rows, "missing.txt"),
                 Status::Unavailable(Reason::MissingBlob)
