@@ -3,20 +3,22 @@ use std::sync::mpsc::Sender;
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::model::{Generation, Reason, Row};
+use crate::model::{Generation, Reason, RelPath, Row};
 use crate::queue::Progress;
 
 use super::rollup::Rollup;
-use super::{LimitStop, RowBatch, Totals};
+use super::{LimitStop, PhaseTelemetry, RowBatch, SlowEntry, Totals};
 
 /// How often a stopped walk re-checks for cancel when no wake-up arrives.
 const STOP_RECHECK: Duration = Duration::from_millis(250);
+const DEFAULT_SLOW_THRESHOLD_MS: u64 = 250;
 
 pub(super) struct Shared {
     state: Mutex<State>,
     resumed: Condvar,
     rows: Mutex<Vec<Option<Pending>>>,
     id_base: AtomicU64,
+    slow_threshold_ms: AtomicU64,
 }
 
 /// A row waiting for its content check, with the folder row it was listed under.
@@ -33,6 +35,8 @@ struct State {
     closed: bool,
     stopped: Option<LimitStop>,
     rollup: Rollup,
+    phase: Option<PhaseTelemetry>,
+    slow: Vec<SlowEntry>,
     sender: Sender<RowBatch>,
 }
 
@@ -47,11 +51,14 @@ impl Shared {
                 closed: false,
                 stopped: None,
                 rollup: Rollup::default(),
+                phase: None,
+                slow: Vec::new(),
                 sender,
             }),
             resumed: Condvar::new(),
             rows: Mutex::new(Vec::new()),
             id_base: AtomicU64::new(0),
+            slow_threshold_ms: AtomicU64::new(DEFAULT_SLOW_THRESHOLD_MS),
         }
     }
 
@@ -76,6 +83,43 @@ impl Shared {
         state.closed = false;
         state.stopped = None;
         state.rollup = Rollup::default();
+        state.phase = None;
+        state.slow.clear();
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_slow_threshold_ms(&self, ms: u64) {
+        self.slow_threshold_ms.store(ms, Ordering::Relaxed);
+    }
+
+    /// Records the latest phase counters for `generation`; returns false if stale or closed.
+    #[cfg_attr(not(test), expect(dead_code, reason = "wired in N9w/N9e"))]
+    pub(super) fn record_phase(&self, generation: Generation, telemetry: PhaseTelemetry) -> bool {
+        let mut state = self.state();
+        if state.generation != generation || state.closed {
+            return false;
+        }
+        state.phase = Some(telemetry);
+        true
+    }
+
+    /// Appends a slow entry when `elapsed_ms` meets the threshold; returns false otherwise.
+    #[cfg_attr(not(test), expect(dead_code, reason = "wired in N9w/N9e"))]
+    pub(super) fn record_slow(
+        &self,
+        generation: Generation,
+        rel: RelPath,
+        elapsed_ms: u64,
+    ) -> bool {
+        if elapsed_ms < self.slow_threshold_ms.load(Ordering::Relaxed) {
+            return false;
+        }
+        let mut state = self.state();
+        if state.generation != generation || state.closed {
+            return false;
+        }
+        state.slow.push(SlowEntry { rel, elapsed_ms });
+        true
     }
 
     pub(super) fn reset_rows(&self, id_base: u64) {
@@ -185,6 +229,7 @@ impl Shared {
             is_final: false,
             problem: None,
             limit: state.stopped,
+            ..RowBatch::default()
         };
         send_batch(&mut state, batch)
     }
@@ -320,21 +365,73 @@ fn send(state: &mut State, rows: Vec<Row>, is_final: bool, problem: Option<Reaso
     let batch = RowBatch {
         generation: state.generation,
         rows,
-        progress: Vec::new(),
         totals: state.totals,
         is_final,
         problem,
         limit: state.stopped,
+        ..RowBatch::default()
     };
     send_batch(state, batch)
 }
 
-fn send_batch(state: &mut State, batch: RowBatch) -> bool {
+fn send_batch(state: &mut State, mut batch: RowBatch) -> bool {
+    batch.phase = batch.phase.or_else(|| state.phase.take());
+    batch.slow.append(&mut state.slow);
     match state.sender.send(batch) {
         Ok(()) => true,
         Err(_) => {
             state.closed = true;
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod telemetry_tests {
+    use std::sync::mpsc;
+
+    use navo_core::ProviderPath;
+
+    use super::*;
+    use crate::session::ComparePhase;
+
+    #[test]
+    fn shared_records_and_drains_phase_and_slow_entries_at_threshold() {
+        let (tx, rx) = mpsc::channel();
+        let gen1 = Generation::new(1);
+        let shared = Shared::new(tx, gen1);
+        let phase = PhaseTelemetry {
+            phase: ComparePhase::QuickCheck,
+            done: 4,
+            total: Some(10),
+        };
+        let slow_a = RelPath::new(ProviderPath::from_text("slow.bin"));
+        let slow_b = RelPath::new(ProviderPath::from_text("other.bin"));
+
+        assert!(shared.record_phase(gen1, phase));
+        assert!(!shared.record_slow(gen1, slow_a.clone(), 249));
+        assert!(shared.record_slow(gen1, slow_a.clone(), 250));
+        shared.set_slow_threshold_ms(10);
+        assert!(!shared.record_slow(gen1, slow_b.clone(), 9));
+        assert!(shared.record_slow(gen1, slow_b.clone(), 10));
+
+        assert!(shared.report_problem(gen1, Reason::ReadError));
+        let batch = rx.try_recv().expect("batch emitted");
+        assert_eq!(batch.phase, Some(phase));
+        assert_eq!(batch.slow.len(), 2);
+        assert_eq!(
+            (&batch.slow[0].rel, batch.slow[0].elapsed_ms),
+            (&slow_a, 250)
+        );
+        assert_eq!(
+            (&batch.slow[1].rel, batch.slow[1].elapsed_ms),
+            (&slow_b, 10)
+        );
+
+        assert!(!shared.record_phase(Generation::new(99), phase));
+        assert!(!shared.record_slow(Generation::new(99), slow_b, 100));
+        assert!(shared.finish(gen1));
+        let final_batch = rx.try_recv().expect("final batch emitted");
+        assert_eq!((final_batch.phase, final_batch.slow.len()), (None, 0));
     }
 }

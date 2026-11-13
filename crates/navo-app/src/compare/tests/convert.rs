@@ -59,6 +59,7 @@ fn a_folder_row_keeps_its_count_of_differences_inside() {
         is_final: false,
         problem: None,
         limit: None,
+        ..RowBatch::default()
     };
     let CompareUpdate::Rows { rows, .. } = update_of(CompareEvent::Rows(batch)) else {
         panic!("rows update");

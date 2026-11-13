@@ -4,8 +4,8 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread::JoinHandle;
 
 use crate::model::{
-    CancelToken, EntryKind, Generation, HashCache, ReadHint, Reason, Row, SideEntry, SideSource,
-    Status,
+    CancelToken, EntryKind, Generation, HashCache, ReadHint, Reason, RelPath, Row, SideEntry,
+    SideSource, Status,
 };
 use crate::queue::{self, Progress, Queue};
 use crate::rules::IgnoreRules;
@@ -26,6 +26,29 @@ pub enum CheckMode {
     SizeTime,
 }
 
+/// Stage of a compare session currently reporting telemetry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComparePhase {
+    Listing,
+    QuickCheck,
+    ContentCheck,
+}
+
+/// Progress counters for one phase of a compare walk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PhaseTelemetry {
+    pub phase: ComparePhase,
+    pub done: u64,
+    pub total: Option<u64>,
+}
+
+/// Entry whose listing or content check met or exceeded the slow threshold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlowEntry {
+    pub rel: RelPath,
+    pub elapsed_ms: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RowBatch {
     pub generation: Generation,
@@ -36,6 +59,24 @@ pub struct RowBatch {
     pub problem: Option<Reason>,
     /// Set on every batch while the walk waits for `Session::continue_walk`.
     pub limit: Option<LimitStop>,
+    pub phase: Option<PhaseTelemetry>,
+    pub slow: Vec<SlowEntry>,
+}
+
+impl Default for RowBatch {
+    fn default() -> Self {
+        Self {
+            generation: Generation::new(0),
+            rows: Vec::new(),
+            progress: Vec::new(),
+            totals: Totals::default(),
+            is_final: false,
+            problem: None,
+            limit: None,
+            phase: None,
+            slow: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,6 +200,12 @@ impl Session {
     #[must_use]
     pub const fn generation(&self) -> Generation {
         self.generation
+    }
+
+    /// Overrides the slow-entry threshold in milliseconds for tests.
+    #[cfg(test)]
+    pub fn set_slow_threshold_ms_for_test(&self, ms: u64) {
+        self.shared.set_slow_threshold_ms(ms);
     }
 
     pub fn cancel(&self) {
