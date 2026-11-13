@@ -1,3 +1,5 @@
+//! Exercises positional totals, rebuild Busy replies and deadline fallback.
+
 use super::*;
 use crate::answer::{SharedVolume, State};
 use navo_index::{
@@ -8,8 +10,13 @@ use navo_index::{
 };
 
 fn volume() -> SharedVolume {
+    volume_at("C:")
+}
+
+/// Restores a full test generation rooted at the supplied drive.
+fn volume_at(root: &str) -> SharedVolume {
     let mut table = NameTable::new();
-    table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+    table.push(NO_PARENT, root, Flags::FOLDER).unwrap();
     table.push(0, "folder", Flags::FOLDER).unwrap();
     table.push(1, "file", Flags::NONE).unwrap();
     table.set_size(2, 100).unwrap();
@@ -17,14 +24,14 @@ fn volume() -> SharedVolume {
         volume_serial: 1,
         journal_id: 2,
         next_usn: 10,
-        root: "C:".into(),
+        root: root.into(),
         built_at: 0,
     };
     let index = NtfsIndex::restore((header, table, [(5, 0), (8, 1), (9, 2)].into()), 1, 2).unwrap();
     SharedVolume::new(State {
         index: Some(std::sync::Arc::new(index)),
         status: navo_index::pipe::VolumeStatus {
-            root: "C:".into(),
+            root: root.into(),
             ..Default::default()
         },
         ..Default::default()
@@ -93,7 +100,8 @@ fn busy_volume_answers_within_budget_and_requests_fallback() {
     let reply = answer(std::slice::from_ref(&volume), &["C:\\folder".into()])
         .totals
         .unwrap();
-    assert!(reply.busy);
+    assert!(!reply.busy);
+    assert_eq!(reply.totals, [None]);
     assert!(started.elapsed() < Duration::from_secs(1));
 }
 
@@ -102,7 +110,7 @@ fn expired_deadlines_request_fallback_even_without_lock_contention() {
     let reply = answer_before(&[volume()], &["C:".into()], Instant::now())
         .totals
         .unwrap();
-    assert!(reply.busy);
+    assert!(!reply.busy);
     assert_eq!(reply.totals, [None]);
 }
 
@@ -118,7 +126,7 @@ fn total_path_components_are_capped_before_taking_the_read_lock() {
     )
     .totals
     .unwrap();
-    assert!(reply.busy);
+    assert!(!reply.busy);
     assert!(reply.totals.is_empty());
 }
 
@@ -132,4 +140,58 @@ fn service_folder_paths_match_unicode_names() {
     let reply = answer(&[volume], &["c:/ä".into()]).totals.unwrap();
     assert!(!reply.busy);
     assert_eq!(reply.totals[0].as_ref().unwrap().bytes, 100);
+}
+
+#[test]
+fn search_only_totals_preserve_healthy_positions_and_search_hits() {
+    let volumes = [volume(), volume_at("D:")];
+    std::sync::Arc::get_mut(volumes[0].shared.write().unwrap().index.as_mut().unwrap())
+        .unwrap()
+        .make_search_only();
+    let request = Request {
+        terms: vec![QueryTerm::Name("file".into())],
+    };
+    let search = crate::answer::answer(&volumes, &request, &CancelToken::new());
+    assert_eq!(search.hits.len(), 2);
+    let paths = [
+        "C:\\folder".into(),
+        "D:\\folder".into(),
+        "C:\\missing".into(),
+    ];
+    let reply = answer(&volumes, &paths).totals.unwrap();
+    assert!(reply.busy, "requested search-only volumes must report Busy");
+    assert_eq!(
+        reply.totals,
+        [
+            None,
+            Some(FolderTotals {
+                bytes: 100,
+                files: 1,
+                folders: 0,
+                complete: true
+            }),
+            None
+        ]
+    );
+    let healthy = answer(&volumes, &["D:\\folder".into()]).totals.unwrap();
+    assert!(!healthy.busy);
+    assert_eq!(healthy.totals[0].as_ref().unwrap().bytes, 100);
+}
+
+#[test]
+fn timeout_after_partial_mixed_work_erases_totals_and_busy() {
+    let volumes = [volume(), volume_at("D:"), volume_at("E:")];
+    std::sync::Arc::get_mut(volumes[0].shared.write().unwrap().index.as_mut().unwrap())
+        .unwrap()
+        .make_search_only();
+    let _writer = volumes[2].shared.write().unwrap();
+    let paths = [
+        "C:\\folder".into(),
+        "D:\\folder".into(),
+        "E:\\folder".into(),
+    ];
+    let reply = answer_before(&volumes, &paths, Instant::now() + Duration::from_millis(20))
+        .totals
+        .unwrap();
+    assert_eq!((reply.totals, reply.busy), (vec![None; 3], false));
 }
