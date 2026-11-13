@@ -10,12 +10,12 @@ use navo_compare::model::{
 use navo_core::{FileIdentity, Location, ProviderId, ProviderPath};
 use navo_fs::git::{GitFs, location, provider_id};
 use navo_fs::{CancelToken as FsCancel, Provider};
-use navo_git::{EngineKind, GixGit};
+use navo_git::{CliGit, CliOptions, EngineKind, GixGit};
 
 use super::entry::{feed, reason_of, segments};
 
 /// The files of `repo@rev`. Submodules list as plain folders and cannot be entered.
-pub(crate) struct GitSide {
+pub struct GitSide {
     git: GitFs,
     repo: PathBuf,
     rev: String,
@@ -25,9 +25,27 @@ pub(crate) struct GitSide {
 impl GitSide {
     /// Opens a side with the given engine; fails with a reason when the repository or the
     /// revision is missing.
-    pub(crate) fn new(repo: PathBuf, rev: String, engine: EngineKind) -> Result<Self, Reason> {
+    pub fn new(repo: PathBuf, rev: String, engine: EngineKind) -> Result<Self, Reason> {
+        Self::open_with(git_fs(engine), repo, rev)
+    }
+
+    /// Opens a CLI Git side reading raw ODB objects without filters or attributes.
+    pub fn new_raw_odb(repo: PathBuf, rev: String) -> Result<Self, Reason> {
+        let git = GitFs::with_factory(|repo| {
+            Ok(Box::new(CliGit::with_options(
+                repo,
+                &CliOptions {
+                    raw_odb_only: true,
+                    ..CliOptions::default()
+                },
+            )?))
+        });
+        Self::open_with(git, repo, rev)
+    }
+
+    fn open_with(git: GitFs, repo: PathBuf, rev: String) -> Result<Self, Reason> {
         let side = Self {
-            git: git_fs(engine),
+            git,
             repo,
             rev,
             provider: provider_id(),
@@ -40,8 +58,13 @@ impl GitSide {
     }
 
     /// Forgets the resolved revision, so the next listing sees the current commit.
-    pub(crate) fn refresh(&self) {
+    pub fn refresh(&self) {
         self.git.refresh();
+    }
+
+    /// Resolves the Git object ID for `rel`, or `None` when missing or unresolvable.
+    pub fn object_id(&self, rel: &RelPath) -> Option<ObjectId> {
+        self.git.object_id(&self.location(rel).ok()?).ok()
     }
 
     fn location(&self, rel: &RelPath) -> Result<Location, Reason> {
@@ -94,7 +117,7 @@ impl SideSource for GitSide {
     }
 
     fn object_id(&self, rel: &RelPath) -> Option<ObjectId> {
-        self.git.object_id(&self.location(rel).ok()?).ok()
+        GitSide::object_id(self, rel)
     }
 
     fn file_id(&self, _rel: &RelPath) -> Option<FileIdentity> {
@@ -135,5 +158,48 @@ mod tests {
             .err()
             .expect("a paused read must fail");
         assert_eq!(error, Reason::Locked);
+    }
+
+    #[test]
+    fn missing_promisor_blob_maps_to_missing_blob() {
+        assert_eq!(
+            reason_of(navo_core::FsErrorKind::MissingPromisorBlob),
+            Reason::MissingBlob
+        );
+    }
+
+    #[test]
+    fn object_id_returns_blob_id_from_raw_odb() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .current_dir(repo)
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
+                .args(["-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"])
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        assert!(run(&["init", "-q"]).status.success());
+        std::fs::write(repo.join("a.txt"), b"alpha").unwrap();
+        assert!(run(&["add", "."]).status.success());
+        assert!(run(&["commit", "-q", "-m", "init"]).status.success());
+        let expected = String::from_utf8(run(&["rev-parse", "HEAD:a.txt"]).stdout)
+            .unwrap()
+            .trim()
+            .to_owned();
+
+        let side = GitSide::new_raw_odb(repo.to_path_buf(), "HEAD".to_owned()).unwrap();
+        let id = GitSide::object_id(&side, &RelPath::new(ProviderPath::from_text("a.txt")))
+            .expect("tracked blob must have an object id");
+        let actual: String = id.as_bytes().iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(actual, expected);
+        assert!(
+            GitSide::object_id(&side, &RelPath::new(ProviderPath::from_text("missing.txt")))
+                .is_none()
+        );
     }
 }
