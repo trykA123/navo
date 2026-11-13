@@ -93,7 +93,6 @@ impl Shared {
     }
 
     /// Records the latest phase counters for `generation`; returns false if stale or closed.
-    #[cfg_attr(not(test), expect(dead_code, reason = "wired in N9w/N9e"))]
     pub(super) fn record_phase(&self, generation: Generation, telemetry: PhaseTelemetry) -> bool {
         let mut state = self.state();
         if state.generation != generation || state.closed {
@@ -104,7 +103,6 @@ impl Shared {
     }
 
     /// Appends a slow entry when `elapsed_ms` meets the threshold; returns false otherwise.
-    #[cfg_attr(not(test), expect(dead_code, reason = "wired in N9w/N9e"))]
     pub(super) fn record_slow(
         &self,
         generation: Generation,

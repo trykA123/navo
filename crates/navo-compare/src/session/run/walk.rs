@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use crate::model::{
     CancelToken, CaseRule, ContentClass, EntryKind, Generation, Reason, RelPath, Row, SideEntry,
@@ -14,6 +15,7 @@ use crate::rules::IgnoreRules;
 use super::Context;
 use crate::session::classify::classify;
 use crate::session::limit::{LimitStop, Meter};
+use crate::session::{ComparePhase, PhaseTelemetry};
 
 #[derive(Clone)]
 struct WalkTask {
@@ -28,32 +30,52 @@ enum SideId {
     Right,
 }
 
+#[derive(Default)]
+struct WalkProgress {
+    listed: u64,
+    quick_checked: u64,
+}
+
+struct WalkState {
+    tasks: VecDeque<WalkTask>,
+    meter: Meter,
+    progress: WalkProgress,
+}
+
 pub(super) fn walk(context: &Context) {
-    let mut tasks = VecDeque::new();
-    tasks.push_back(WalkTask {
+    let network = context.left.is_network() || context.right.is_network();
+    let mut state = WalkState {
+        tasks: VecDeque::new(),
+        meter: Meter::new(context.options.network_cap.filter(|_| network)),
+        progress: WalkProgress::default(),
+    };
+    state.tasks.push_back(WalkTask {
         left: Some(RelPath::root()),
         right: Some(RelPath::root()),
         row: None,
     });
-    let network = context.left.is_network() || context.right.is_network();
-    let mut meter = Meter::new(context.options.network_cap.filter(|_| network));
-    while !tasks.is_empty() {
+    while !state.tasks.is_empty() {
         if context.cancel.is_cancelled() || context.shared.is_closed() {
             break;
         }
-        if let Some(stop) = meter.hit() {
+        if let Some(stop) = state.meter.hit() {
             if !wait_for_continue(context, stop) {
                 break;
             }
-            meter.restart();
+            state.meter.restart();
         }
-        let Some(task) = tasks.pop_front() else {
+        let Some(task) = state.tasks.pop_front() else {
             break;
         };
-        if !walk_folder(context, task, &mut tasks, &mut meter) {
+        if !walk_folder(context, task, &mut state) {
             break;
         }
     }
+    record_quick_check(
+        context,
+        state.progress.quick_checked,
+        Some(state.progress.quick_checked),
+    );
     context.shared.finish(context.generation);
 }
 
@@ -65,12 +87,7 @@ fn wait_for_continue(context: &Context, stop: LimitStop) -> bool {
             .wait_resumed(context.generation, || context.cancel.is_cancelled())
 }
 
-fn walk_folder(
-    context: &Context,
-    task: WalkTask,
-    tasks: &mut VecDeque<WalkTask>,
-    meter: &mut Meter,
-) -> bool {
+fn walk_folder(context: &Context, task: WalkTask, state: &mut WalkState) -> bool {
     if context.cancel.is_cancelled() {
         return false;
     }
@@ -88,7 +105,13 @@ fn walk_folder(
     if context.cancel.is_cancelled() {
         return false;
     }
-    meter.add_folder(left_entries.len().saturating_add(right_entries.len()));
+    let entry_count = left_entries.len().saturating_add(right_entries.len());
+    state.meter.add_folder(entry_count);
+    state.progress.listed = state
+        .progress
+        .listed
+        .saturating_add(u64::try_from(entry_count).unwrap_or(u64::MAX));
+    record_listing(context, state.progress.listed);
     let case = CaseRule::for_sides(
         context.left.case_sensitive(),
         context.right.case_sensitive(),
@@ -97,10 +120,38 @@ fn walk_folder(
     if context.cancel.is_cancelled() {
         return false;
     }
-    let Some(checking) = classify_rows(context, &mut rows, tasks) else {
+    let Some(checking) = classify_rows(context, &mut rows, &mut state.tasks) else {
         return false;
     };
-    publish_checking(context, rows, checking, task.row.as_ref().map(|row| row.id))
+    let row_count = u64::try_from(rows.len()).unwrap_or(u64::MAX);
+    let emitted = publish_checking(context, rows, checking, task.row.as_ref().map(|row| row.id));
+    if emitted {
+        state.progress.quick_checked = state.progress.quick_checked.saturating_add(row_count);
+        record_quick_check(context, state.progress.quick_checked, None);
+    }
+    emitted
+}
+
+fn record_listing(context: &Context, done: u64) {
+    context.shared.record_phase(
+        context.generation,
+        PhaseTelemetry {
+            phase: ComparePhase::Listing,
+            done,
+            total: None,
+        },
+    );
+}
+
+fn record_quick_check(context: &Context, done: u64, total: Option<u64>) {
+    context.shared.record_phase(
+        context.generation,
+        PhaseTelemetry {
+            phase: ComparePhase::QuickCheck,
+            done,
+            total,
+        },
+    );
 }
 
 fn publish_checking(
@@ -194,7 +245,13 @@ fn list_task(
         SideId::Left => &*context.left,
         SideId::Right => &*context.right,
     };
-    list_side(source, folder, &context.options.rules, &context.cancel)
+    let started = Instant::now();
+    let result = list_side(source, folder, &context.options.rules, &context.cancel);
+    let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    context
+        .shared
+        .record_slow(context.generation, folder.clone(), elapsed_ms);
+    result
 }
 
 fn list_side(
