@@ -1,3 +1,4 @@
+//! Allocation budgets and shared fixtures for NTFS peak-memory tests.
 #![allow(
     clippy::unwrap_used,
     clippy::print_stdout,
@@ -12,6 +13,9 @@ use crate::heap_probe::{Measured, Probe};
 use crate::pipe::CancelToken;
 use crate::table::{Flags, NO_PARENT, NameTable};
 use crate::usn::FrnMap;
+
+#[path = "two_pass_peak.rs"]
+mod two_pass_peak;
 
 const ENTRIES: u32 = 1_000_000;
 // Peak budgets: the value measured on Linux at this size, plus 10 per cent; steady plus 2 per cent.
