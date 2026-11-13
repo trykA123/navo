@@ -145,3 +145,86 @@ fn quarantine_rollback_preserves_sole_backup() {
         fixture.marker_bytes
     );
 }
+
+fn assert_fault_keeps_active(step: PreserveFault) {
+    for source in [Source::Canonical, Source::Backup] {
+        let fixture = fixture(source);
+        let preserved = fixture.directory.path().join("rollback-2026-11-13");
+        let _fault = arm_fault(step, 0);
+        let mut enumerated = false;
+        let result = rollback(
+            Rollback {
+                path: &fixture.canonical,
+                preserved: &preserved,
+                drive: DRIVE,
+            },
+            |_| {
+                enumerated = true;
+                Err(NtfsError::Cancelled)
+            },
+        );
+        assert!(matches!(result, Err(NtfsError::Snapshot(FileError::Io(_)))));
+        assert!(!enumerated);
+        assert_eq!(fs::read(&fixture.selected).unwrap(), fixture.bytes);
+        assert_eq!(
+            fs::read(fixture.directory.path().join("C.index.rebuilding")).unwrap(),
+            fixture.marker_bytes
+        );
+    }
+}
+
+#[test]
+fn quarantine_rollback_sync_failure_keeps_active_snapshot() {
+    assert_fault_keeps_active(PreserveFault::Sync);
+}
+
+#[test]
+fn quarantine_rollback_replace_failure_keeps_active_snapshot() {
+    assert_fault_keeps_active(PreserveFault::Replace);
+}
+
+#[test]
+fn quarantine_rollback_mid_loop_retry_same_preserved_fails_safely() {
+    let fixture = fixture(Source::Canonical);
+    let backup = navo_store::backup_path(&fixture.canonical);
+    fs::write(&backup, b"backup-bytes").unwrap();
+    let preserved = fixture.directory.path().join("rollback-2026-11-13");
+    let _fault = arm_fault(PreserveFault::Replace, 1);
+    let mut enumerated = false;
+    let first = rollback(
+        Rollback {
+            path: &fixture.canonical,
+            preserved: &preserved,
+            drive: DRIVE,
+        },
+        |_| {
+            enumerated = true;
+            Err(NtfsError::Cancelled)
+        },
+    );
+    assert!(matches!(first, Err(NtfsError::Snapshot(FileError::Io(_)))));
+    assert!(!enumerated);
+
+    let retry = rollback(
+        Rollback {
+            path: &fixture.canonical,
+            preserved: &preserved,
+            drive: DRIVE,
+        },
+        |_| {
+            enumerated = true;
+            Err(NtfsError::Cancelled)
+        },
+    );
+    assert!(matches!(
+        retry,
+        Err(NtfsError::Snapshot(FileError::Io(ref err))) if err.kind() == io::ErrorKind::AlreadyExists
+    ));
+    assert!(!enumerated);
+    assert_eq!(fs::read(preserved.join("C.index")).unwrap(), fixture.bytes);
+    assert_eq!(fs::read(&backup).unwrap(), b"backup-bytes");
+    assert_eq!(
+        fs::read(fixture.directory.path().join("C.index.rebuilding")).unwrap(),
+        fixture.marker_bytes
+    );
+}
