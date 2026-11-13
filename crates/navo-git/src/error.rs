@@ -108,6 +108,8 @@ pub enum GitError {
     MissingObject {
         id: ObjectId,
     },
+    /// A promisor blob is missing locally and lazy fetching is disabled.
+    MissingPromisorBlob,
     DuplicateEngine {
         id: String,
     },
@@ -191,6 +193,7 @@ fn plain_text(error: &GitError) -> &'static str {
         GitError::UnrepresentablePath => "path is not representable",
         GitError::SessionBusy => "the git cat-file session is busy",
         GitError::SessionClosed => "the git cat-file session closed",
+        GitError::MissingPromisorBlob => "promisor blob missing; lazy fetch disabled",
         _ => "git failed",
     }
 }

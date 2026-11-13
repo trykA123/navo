@@ -55,6 +55,7 @@ pub struct CliOptions {
     pub timeout: Duration,
     pub git: Option<PathBuf>,
     pub env: Vec<(OsString, OsString)>,
+    pub raw_odb_only: bool,
 }
 
 impl Default for CliOptions {
@@ -63,6 +64,7 @@ impl Default for CliOptions {
             timeout: DEFAULT_TIMEOUT,
             git: None,
             env: Vec::new(),
+            raw_odb_only: false,
         }
     }
 }
@@ -72,6 +74,7 @@ pub struct CliGit {
     repo: PathBuf,
     timeout: Duration,
     env: Vec<(OsString, OsString)>,
+    pub(super) raw_odb_only: bool,
     /// Output of `rev-parse --absolute-git-dir`, read once when the repository is opened.
     git_dir_output: Vec<u8>,
     session: Arc<Mutex<Option<Batch>>>,
@@ -110,6 +113,7 @@ impl CliGit {
             repo: repo.to_path_buf(),
             timeout: options.timeout,
             env: options.env.clone(),
+            raw_odb_only: options.raw_odb_only,
             git_dir_output: Vec::new(),
             session: Arc::new(Mutex::new(None)),
             next_generation: AtomicU64::new(0),
@@ -133,6 +137,9 @@ impl CliGit {
             env: &self.env,
             timeout: options.timeout,
         };
+        if self.raw_odb_only {
+            return process_cap::run_cancellable(&spec, &raw_odb_args(args), cancel, options);
+        }
         process_cap::run_cancellable(&spec, args, cancel, options)
     }
 
@@ -161,6 +168,9 @@ impl CliGit {
             env: &self.env,
             timeout: self.timeout,
         };
+        if self.raw_odb_only {
+            return run_process(&spec, &raw_odb_args(args));
+        }
         run_process(&spec, args)
     }
 
@@ -179,6 +189,9 @@ impl CliGit {
             return GitError::UnsafeDirectory {
                 path: self.repo.clone(),
             };
+        }
+        if is_missing_promisor_stderr(&stderr, self.raw_odb_only) {
+            return GitError::MissingPromisorBlob;
         }
         let args = args
             .iter()
@@ -202,7 +215,11 @@ impl CliGit {
             env: &self.env,
             timeout: self.timeout,
         };
-        Ok(base_command(&spec))
+        let mut command = base_command(&spec);
+        if self.raw_odb_only {
+            command.args(["-c", "core.attributesfile="]);
+        }
+        Ok(command)
     }
 
     /// Starts the long-lived `cat-file` batch child.
@@ -226,6 +243,26 @@ fn sets_home(key: &OsStr) -> bool {
     ["HOME", "USERPROFILE"]
         .iter()
         .any(|home| key.eq_ignore_ascii_case(home))
+}
+
+/// Prepends `-c core.attributesfile=` so raw ODB commands ignore external attributes files.
+fn raw_odb_args<S: AsRef<OsStr>>(args: &[S]) -> Vec<&OsStr> {
+    [OsStr::new("-c"), OsStr::new("core.attributesfile=")]
+        .into_iter()
+        .chain(args.iter().map(AsRef::as_ref))
+        .collect()
+}
+
+/// Recognizes missing-promisor stderr lines from `git cat-file` when lazy fetch is disabled.
+pub(super) fn is_missing_promisor_stderr(stderr: &str, raw_odb_only: bool) -> bool {
+    let lower = stderr.to_ascii_lowercase();
+    let promisor = lower.contains("from promisor remote")
+        || lower.contains("promisor blob")
+        || lower.contains("missing promisor")
+        || lower.contains("lazy fetching disabled")
+        || (lower.contains("promisor") && lower.contains("missing"));
+    promisor
+        || (raw_odb_only && lower.contains("fatal: git cat-file ") && lower.contains(": bad file"))
 }
 
 impl GitSource for CliGit {
@@ -289,6 +326,14 @@ impl GitSource for CliGit {
                     Arc::clone(&self.session),
                     started,
                 )))
+            }
+            Err(GitError::Command { ref stderr, .. })
+                if is_missing_promisor_stderr(stderr, self.raw_odb_only) =>
+            {
+                if session.as_ref().is_some_and(Batch::is_dead) {
+                    *session = None;
+                }
+                Err(GitError::MissingPromisorBlob)
             }
             Err(error) => {
                 if session.as_ref().is_some_and(Batch::is_dead) {

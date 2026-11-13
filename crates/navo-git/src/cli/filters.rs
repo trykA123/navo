@@ -15,6 +15,9 @@ pub(super) fn read_worktree_form(
     rev: &str,
     path: &GitPath,
 ) -> Result<WorktreeBlob, GitError> {
+    if cli.raw_odb_only {
+        return read_raw_odb(cli, rev, path);
+    }
     let args = filtered_args(rev, path)?;
     let spec = CommandSpec {
         git: &cli.git,
@@ -34,6 +37,16 @@ pub(super) fn read_worktree_form(
         reader: Box::new(Cursor::new(prefix).chain(stream)),
         reason,
         finish,
+    })
+}
+
+/// Reads raw ODB blob bytes directly, bypassing `.gitattributes`, filters, and lazy fetch.
+fn read_raw_odb(cli: &CliGit, rev: &str, path: &GitPath) -> Result<WorktreeBlob, GitError> {
+    let output = cli.run_ok(&raw_blob_args(rev, path)?)?;
+    Ok(WorktreeBlob {
+        reader: boxed(output.stdout),
+        reason: None,
+        finish: None,
     })
 }
 
@@ -252,5 +265,92 @@ mod tests {
             os_string(&[0xFF]),
             Err(GitError::UnrepresentablePath)
         ));
+    }
+}
+
+#[cfg(test)]
+mod raw_odb_tests {
+    use std::{ffi::OsString, fs, io::Read, path::Path, process::Command};
+
+    use super::super::is_missing_promisor_stderr as is_promisor;
+    use crate::{CliGit, CliOptions, GitError, GitPath, GitSource};
+
+    fn g(cwd: &Path, args: &[&str]) {
+        let bin = if cfg!(windows) { "git.exe" } else { "git" };
+        let out = Command::new(bin)
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+
+    fn commit_one(root: &Path, name: &str, file: &str, body: &[u8]) {
+        g(root, &["init", "-q", name]);
+        let work = root.join(name);
+        g(&work, &["config", "user.name", "N"]);
+        g(&work, &["config", "user.email", "n@x"]);
+        fs::write(work.join(file), body).unwrap();
+        g(&work, &["add", "-A"]);
+        g(&work, &["commit", "-qm", "1"]);
+    }
+
+    fn raw_read(
+        repo: &Path,
+        env: Vec<(OsString, OsString)>,
+        path: &str,
+    ) -> Result<Vec<u8>, GitError> {
+        let opts = CliOptions {
+            env,
+            raw_odb_only: true,
+            ..Default::default()
+        };
+        let mut blob = CliGit::with_options(repo, &opts)?
+            .read_blob_worktree_form("HEAD", &GitPath::from(path))?;
+        assert!(blob.reason.is_none());
+        let mut out = Vec::new();
+        blob.reader.read_to_end(&mut out).unwrap();
+        Ok(out)
+    }
+
+    #[test]
+    fn raw_odb_skips_hostile_filters_in_bare_repo() {
+        let t = tempfile::tempdir().unwrap();
+        let (root, bare) = (t.path(), t.path().join("b.git"));
+        commit_one(root, "w", "data.txt", b"raw-odb-bytes\n");
+        g(root, &["clone", "-q", "--bare", "w", "b.git"]);
+        let attrs = bare.join("info/attributes");
+        fs::write(&attrs, "* filter=hostile\n").unwrap();
+        let pairs = [
+            ("core.attributesfile", attrs.to_str().unwrap()),
+            ("filter.hostile.smudge", "nonexistent-hostile-filter"),
+            ("filter.hostile.required", "true"),
+        ];
+        let mut env = vec![("GIT_CONFIG_COUNT".into(), "3".into())];
+        for (i, (k, v)) in pairs.iter().enumerate() {
+            env.push((format!("GIT_CONFIG_KEY_{i}").into(), (*k).into()));
+            env.push((format!("GIT_CONFIG_VALUE_{i}").into(), (*v).into()));
+        }
+        let got = raw_read(&bare, env, "data.txt").unwrap();
+        assert_eq!(got, b"raw-odb-bytes\n");
+    }
+
+    #[test]
+    fn raw_odb_reports_missing_promisor_blob_with_no_lazy_fetch() {
+        let t = tempfile::tempdir().unwrap();
+        let (root, remote) = (t.path(), t.path().join("r.git"));
+        g(root, &["init", "-q", "--bare", "r.git"]);
+        commit_one(root, "w", "blob.txt", b"lazy-content\n");
+        let w = root.join("w");
+        g(&w, &["push", "-q", "../r.git", "HEAD:refs/heads/main"]);
+        g(&remote, &["config", "uploadpack.allowFilter", "true"]);
+        g(&remote, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+        let url = format!("file://{}", remote.display());
+        let args = ["clone", "-q", "--bare", "--filter=blob:none", &url, "p.git"];
+        g(root, &args);
+        let err = raw_read(&root.join("p.git"), Vec::new(), "blob.txt");
+        assert!(matches!(err, Err(GitError::MissingPromisorBlob)));
+        assert!(is_promisor("from promisor remote", true));
+        assert!(is_promisor("lazy fetching disabled", false));
     }
 }
