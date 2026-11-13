@@ -5,6 +5,7 @@ mod hash;
 mod read;
 
 pub use checker::check;
+pub(crate) use read::probe_zero_size;
 
 pub const CONTENT_BLOCK: usize = 1024 * 1024;
 const LARGE_CONTENT_THRESHOLD: u64 = 128 * 1024 * 1024;

@@ -147,6 +147,10 @@ impl SideSource for GitSide {
     fn read_only(&self) -> bool {
         true
     }
+
+    fn may_have_unknown_size(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

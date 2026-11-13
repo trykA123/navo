@@ -380,3 +380,41 @@ fn known_same_reads_nothing_and_skips_the_cache() {
     assert_eq!(cache.gets(), 0);
     assert_eq!(cache.puts(), 0);
 }
+
+#[test]
+fn direct_check_probes_unknown_zero_size_before_object_ids() {
+    let object_id = ObjectId::Sha1([0xA1; 20]);
+    let left_entry = entry("a.bin", 0);
+    let right_entry = entry("a.bin", 0);
+    let left_source = source("a.bin", Vec::new())
+        .with_unknown_sizes()
+        .with_object_id("a.bin", object_id)
+        .failing_stamp("a.bin", Reason::MissingBlob);
+    let right_source = source("a.bin", Vec::new())
+        .with_unknown_sizes()
+        .with_object_id("a.bin", object_id)
+        .failing_stamp("a.bin", Reason::MissingBlob);
+    let left_stats = left_source.stats();
+    let right_stats = right_source.stats();
+    let cache = FakeCache::default();
+    let cancel = CancelToken::new();
+
+    let result = check(
+        side(&left_entry, &left_source),
+        side(&right_entry, &right_source),
+        &options(&cache, &cancel),
+        &mut |_| {},
+    );
+
+    assert_eq!(
+        result,
+        ContentResult {
+            status: Status::Unavailable(Reason::MissingBlob),
+            content: ContentClass::Unknown,
+        }
+    );
+    assert_eq!(left_stats.stamps(), 1);
+    assert_eq!(right_stats.stamps(), 0);
+    assert_reads(&left_stats, 0, 0);
+    assert_reads(&right_stats, 0, 0);
+}

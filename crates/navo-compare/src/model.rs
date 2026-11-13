@@ -363,6 +363,11 @@ pub trait SideSource: Send + Sync {
     fn is_network(&self) -> bool {
         false
     }
+
+    /// True when listed zero-byte files may actually have an unknown size and must be probed via `stamp`.
+    fn may_have_unknown_size(&self) -> bool {
+        false
+    }
 }
 
 pub trait HashCache: Send + Sync {

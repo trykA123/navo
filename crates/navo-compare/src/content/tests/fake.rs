@@ -15,6 +15,7 @@ use crate::model::{
 #[derive(Default)]
 pub(super) struct Stats {
     opens: AtomicU64,
+    stamps: AtomicU64,
     bytes: AtomicU64,
     hints: Mutex<Vec<ReadHint>>,
     read_sizes: Mutex<Vec<usize>>,
@@ -23,6 +24,10 @@ pub(super) struct Stats {
 impl Stats {
     fn opens(&self) -> u64 {
         self.opens.load(Ordering::Relaxed)
+    }
+
+    pub(super) fn stamps(&self) -> u64 {
+        self.stamps.load(Ordering::Relaxed)
     }
 
     fn bytes(&self) -> u64 {
@@ -42,6 +47,7 @@ struct FakeFile {
     bytes: Arc<Vec<u8>>,
     object_id: Option<ObjectId>,
     fail_at: Option<u64>,
+    stamp_error: Option<Reason>,
     stamp: Stamp,
 }
 
@@ -50,6 +56,7 @@ pub(super) struct FakeSource {
     root: ProviderPath,
     files: HashMap<String, FakeFile>,
     stats: Arc<Stats>,
+    may_have_unknown_size: bool,
 }
 
 impl FakeSource {
@@ -62,6 +69,11 @@ impl FakeSource {
         self
     }
 
+    pub(super) fn with_unknown_sizes(mut self) -> Self {
+        self.may_have_unknown_size = true;
+        self
+    }
+
     pub(super) fn with_object_id(mut self, name: &str, object_id: ObjectId) -> Self {
         self.files.get_mut(name).unwrap().object_id = Some(object_id);
         self
@@ -69,6 +81,11 @@ impl FakeSource {
 
     pub(super) fn failing_after(mut self, name: &str, offset: u64) -> Self {
         self.files.get_mut(name).unwrap().fail_at = Some(offset);
+        self
+    }
+
+    pub(super) fn failing_stamp(mut self, name: &str, reason: Reason) -> Self {
+        self.files.get_mut(name).unwrap().stamp_error = Some(reason);
         self
     }
 
@@ -111,10 +128,15 @@ impl SideSource for FakeSource {
     }
 
     fn stamp(&self, rel: &RelPath) -> Result<Stamp, Reason> {
-        self.files
+        self.stats.stamps.fetch_add(1, Ordering::Relaxed);
+        let file = self
+            .files
             .get(&rel.as_path().to_text())
-            .map(|file| file.stamp)
-            .ok_or(Reason::NotFound)
+            .ok_or(Reason::NotFound)?;
+        if let Some(reason) = file.stamp_error {
+            return Err(reason);
+        }
+        Ok(file.stamp)
     }
 
     fn object_id(&self, rel: &RelPath) -> Option<ObjectId> {
@@ -143,6 +165,10 @@ impl SideSource for FakeSource {
 
     fn read_only(&self) -> bool {
         false
+    }
+
+    fn may_have_unknown_size(&self) -> bool {
+        self.may_have_unknown_size
     }
 }
 
@@ -246,6 +272,7 @@ pub(super) fn source(name: &str, bytes: Vec<u8>) -> FakeSource {
             bytes: Arc::new(bytes),
             object_id: None,
             fail_at: None,
+            stamp_error: None,
             stamp,
         },
     );
@@ -254,6 +281,7 @@ pub(super) fn source(name: &str, bytes: Vec<u8>) -> FakeSource {
         root: ProviderPath::from_text("root"),
         files,
         stats: Arc::new(Stats::default()),
+        may_have_unknown_size: false,
     }
 }
 

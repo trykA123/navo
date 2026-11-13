@@ -11,8 +11,8 @@ use crate::model::{
 use super::hash::{block_for, update};
 use super::read::{
     changed, check_kinds, check_object_ids, class, content_key, different, different_class,
-    finish_side, first_difference, open_pair, outcome, read_block, read_pair, stamp_matches,
-    stopped, unavailable,
+    finish_side, first_difference, open_pair, outcome, probe_zero_size, read_block, read_pair,
+    stamp_matches, stopped, unavailable,
 };
 use super::{CheckOptions, ContentProgress, ContentResult, LARGE_CONTENT_THRESHOLD, Side};
 
@@ -47,6 +47,15 @@ impl Counts {
             .saturating_add(u64::try_from(read).unwrap_or(u64::MAX));
         self.done > self.total || (read < block && self.done != self.total)
     }
+}
+
+fn probe_zero_sizes(
+    left: Side<'_>,
+    right: Side<'_>,
+) -> Result<(Option<Stamp>, Option<Stamp>), ContentResult> {
+    let left_stamp = probe_zero_size(left).map_err(unavailable)?;
+    let right_stamp = probe_zero_size(right).map_err(unavailable)?;
+    Ok((left_stamp, right_stamp))
 }
 
 struct Stream {
@@ -163,37 +172,50 @@ impl Checker<'_, '_> {
         if self.known_same {
             return outcome(Status::Same, ContentClass::Unknown);
         }
+        let probed = match probe_zero_sizes(left, right) {
+            Ok(probed) => probed,
+            Err(result) => return result,
+        };
         if let Some(result) = check_object_ids(left, right) {
             return result;
+        }
+        if left.entry.size != right.entry.size {
+            return different(None, ContentClass::Unknown);
         }
         let left_key = content_key(left.source, left.entry);
         let right_key = content_key(right.source, right.entry);
         let keys = (&left_key, &right_key);
-        let (left_hash, right_hash) = match self.cache_hashes(sides, keys) {
+        let hashes = match self.cache_hashes(sides, keys, probed) {
             Ok(hashes) => hashes,
             Err(result) => return result,
         };
-        if left.entry.size != right.entry.size {
-            return different(None, ContentClass::Unknown);
-        }
-        match (left_hash, right_hash) {
+        self.compare_with_cache(sides, keys, hashes)
+    }
+
+    fn compare_with_cache(
+        &mut self,
+        sides: Sides<'_>,
+        keys: (&ContentKey, &ContentKey),
+        hashes: CachedHashes,
+    ) -> ContentResult {
+        match hashes {
             (Some(left_hash), Some(right_hash)) if left_hash == right_hash => {
                 outcome(Status::Same, ContentClass::Unknown)
             }
             (Some(_), Some(_)) => different(None, ContentClass::Unknown),
             (Some(cached), None) => self.one_side(
                 sides,
-                right,
+                sides.right,
                 Cached {
-                    key: &right_key,
+                    key: keys.1,
                     hash: cached,
                 },
             ),
             (None, Some(cached)) => self.one_side(
                 sides,
-                left,
+                sides.left,
                 Cached {
-                    key: &left_key,
+                    key: keys.0,
                     hash: cached,
                 },
             ),
@@ -205,17 +227,28 @@ impl Checker<'_, '_> {
         &mut self,
         sides: Sides<'_>,
         keys: (&ContentKey, &ContentKey),
+        probed: (Option<Stamp>, Option<Stamp>),
     ) -> Result<CachedHashes, ContentResult> {
-        let left_stamp = sides
-            .left
-            .source
-            .stamp(&sides.left.entry.rel)
-            .map_err(unavailable)?;
-        let right_stamp = sides
-            .right
-            .source
-            .stamp(&sides.right.entry.rel)
-            .map_err(unavailable)?;
+        let left_stamp = probed.0.map_or_else(
+            || {
+                sides
+                    .left
+                    .source
+                    .stamp(&sides.left.entry.rel)
+                    .map_err(unavailable)
+            },
+            Ok,
+        )?;
+        let right_stamp = probed.1.map_or_else(
+            || {
+                sides
+                    .right
+                    .source
+                    .stamp(&sides.right.entry.rel)
+                    .map_err(unavailable)
+            },
+            Ok,
+        )?;
         if !stamp_matches(&left_stamp, sides.left.entry)
             || !stamp_matches(&right_stamp, sides.right.entry)
         {
