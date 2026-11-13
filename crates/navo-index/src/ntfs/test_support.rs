@@ -20,6 +20,7 @@ pub(super) const MAX_CHUNK_BYTES: usize = 64 * 1024;
 pub struct MftFixture {
     entries: u32,
     journal_id: u64,
+    enumeration_cursors: Option<Vec<u64>>,
 }
 
 impl MftFixture {
@@ -28,12 +29,20 @@ impl MftFixture {
         Self {
             entries,
             journal_id,
+            enumeration_cursors: None,
         }
     }
 
     /// Reads the full synthetic volume through the production enumeration loop.
     pub fn read(mut self) -> Enumeration {
         enumerate_volume(&mut self, 'C', usize::MAX, &CancelToken::new()).unwrap()
+    }
+
+    /// Reads the production loop and returns every cursor requested from the volume adapter.
+    pub fn read_with_cursors(mut self) -> (Enumeration, Vec<u64>) {
+        self.enumeration_cursors = Some(Vec::new());
+        let result = enumerate_volume(&mut self, 'C', usize::MAX, &CancelToken::new()).unwrap();
+        (result, self.enumeration_cursors.unwrap())
     }
 }
 
@@ -45,6 +54,9 @@ impl VolumeIo for MftFixture {
 
     /// Emits up to 512 records starting at `cursor` (1 when `cursor == 0`) within 64 KiB.
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
+        if let Some(cursors) = &mut self.enumeration_cursors {
+            cursors.push(cursor);
+        }
         let start = if cursor == 0 {
             1
         } else {
