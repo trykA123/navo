@@ -19,7 +19,9 @@ pub use compare::{
 };
 pub(crate) use compare::{look_of, status_text};
 pub use find::FindResults;
-pub use measure::{FolderTotals, FolderTotalsQuery, SizeMode, no_folder_totals};
+pub use measure::{
+    FolderTotals, FolderTotalsQuery, FolderTotalsSource, SizeMode, TotalsState, no_folder_totals,
+};
 pub(crate) use measure::{Measured, folder_bytes};
 use message::Message;
 pub(crate) use open::Seen;
