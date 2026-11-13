@@ -1,6 +1,5 @@
 //! Journal rejection and live cross-pass churn scripts for the two-pass builder.
 use super::*;
-use crate::ntfs::directory_scan::scan_directories;
 use crate::ntfs::test_support::{SyntheticRecord, append_record, journal_metadata};
 use crate::pipe::CancelToken;
 const ROOT: u64 = (5 << 48) | 5;
@@ -87,11 +86,10 @@ impl VolumeIo for Volume {
         (self.pass > 0).then_some(10).ok_or(NtfsError::FileGone)
     }
 }
-/// Returns a reconciled two-read index or Reenumerate; T3 replaces this driver with production enumeration.
+/// Builds through production enumeration and replays churn from the original journal cursor.
 fn build(volume: &mut Volume) -> Result<NtfsIndex, NtfsError> {
-    let scan = scan_directories(volume, 'C', usize::MAX, &CancelToken::new())?;
     let mut built = enumerate_volume(volume, 'C', usize::MAX, &CancelToken::new())?;
-    built.index.restart_at(scan.index.position);
+    assert_eq!(volume.pass, 2, "churn must span both production reads");
     let batch = read_volume_journal(volume, built.index.position)?;
     built.unresolved.extend(built.index.apply_batch(batch)?);
     if !built.unresolved.is_empty() || !built.index.pending_renames().is_empty() {

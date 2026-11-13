@@ -185,9 +185,9 @@ fn enumeration_uses_header_cursor_and_keeps_children_until_later_buffers() {
         &crate::pipe::CancelToken::new(),
     )
     .unwrap();
-    assert_eq!(volume.cursors, [0, 70, 200]);
+    assert_eq!(volume.cursors, [0, 70, 200, 0, 70, 200]);
     assert_eq!(result.index.position, POSITION);
-    assert_eq!(result.blocked_peak, 1);
+    assert_eq!(result.blocked_peak, 0);
     assert!(result.unresolved.is_empty());
     assert_eq!(
         result
@@ -233,7 +233,7 @@ fn enumeration_advances_header_only_buffers_without_treating_them_as_eof() {
         &crate::pipe::CancelToken::new(),
     )
     .unwrap();
-    assert_eq!(volume.cursors, [0, next]);
+    assert_eq!(volume.cursors, [0, next, 0, next]);
 }
 
 #[test]
@@ -257,15 +257,15 @@ fn enumeration_rejects_stalled_or_backward_cursors_and_truncated_records() {
 }
 
 #[test]
-fn enumeration_reports_orphans_at_the_end_and_respects_the_record_limit() {
+fn enumeration_rejects_blocked_orphans_within_the_record_limit() {
     let mut volume = FakeVolume::new(vec![Some(bytes(
         100,
         &[record(8, 9, "orphan"), record(10, ROOT, "known")],
     ))]);
-    let result = enumerate_volume(&mut volume, 'C', 1, &crate::pipe::CancelToken::new()).unwrap();
-    assert_eq!(result.unresolved.len(), 1);
-    assert_eq!(result.unresolved[0].missing_reference, 9);
-    assert_eq!(result.index.table.len(), 1);
+    assert!(matches!(
+        enumerate_volume(&mut volume, 'C', 1, &crate::pipe::CancelToken::new()),
+        Err(NtfsError::Reenumerate)
+    ));
 }
 
 #[test]

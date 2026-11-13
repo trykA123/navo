@@ -3,13 +3,15 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Pending, Resume, SizeHint,
-    TableChange, UsnBatch, parse_batch, validate_journal_cursor,
+    Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Resume, SizeHint, TableChange,
+    UsnBatch, parse_batch, validate_journal_cursor,
 };
 
 #[cfg(test)]
 #[path = "journal_churn_tests.rs"]
 mod journal_churn_tests;
+#[path = "two_pass.rs"]
+mod two_pass;
 #[path = "two_pass_size.rs"]
 mod two_pass_size;
 
@@ -77,6 +79,7 @@ pub(super) fn enumerate_volume(
     clippy::too_many_arguments,
     reason = "the volume, limit, hint and cancel token are separate build inputs"
 )]
+/// Builds folders first, then files within one record budget; rejects churn or cancellation.
 pub(super) fn enumerate_volume_sized(
     volume: &mut impl VolumeIo,
     drive: char,
@@ -84,17 +87,14 @@ pub(super) fn enumerate_volume_sized(
     hint: SizeHint,
     cancel: &crate::pipe::CancelToken,
 ) -> Result<Enumeration, NtfsError> {
-    let state = JournalState::parse(&volume.query_journal()?)?;
-    let mut index = NtfsIndex::new(drive, state.position)?;
-    let sized = reserve_for_build(&mut index, hint, drive)?;
-    let mut pending = Pending::default();
+    let scan = super::directory_scan::scan_directories(volume, drive, limit, cancel)?;
+    let mut index = scan.index;
+    let sized = reserve_for_build(&mut index, hint, scan.capacity, drive);
     let mut cursor = 0;
     let mut count = 0;
     let mut sizes_unknown = 0;
     while count < limit {
-        if cancel.is_cancelled() {
-            return Err(NtfsError::Cancelled);
-        }
+        two_pass::check_cancel(cancel)?;
         let Some(bytes) = volume.enumerate(cursor)? else {
             break;
         };
@@ -108,74 +108,46 @@ pub(super) fn enumerate_volume_sized(
         cursor = next;
         for record in batch.records.into_iter().take(limit - count) {
             count += 1;
-            sizes_unknown += add_record(volume, &mut index, &mut pending, record)?;
+            sizes_unknown += two_pass::add_file(volume, &mut index, record)?;
         }
     }
-    if cancel.is_cancelled() {
-        return Err(NtfsError::Cancelled);
-    }
-    JournalState::parse(&volume.query_journal()?)?.check(state.position)?;
+    two_pass::check_cancel(cancel)?;
+    JournalState::parse(&volume.query_journal()?)?.check(index.position)?;
+    two_pass::check_cancel(cancel)?;
     // A sized build keeps its spare until the service has dropped the old index.
     if !sized {
         index.table.trim_slack();
     }
     index.ids.shrink_to_fit();
-    let blocked_peak = pending.blocked_peak;
     Ok(Enumeration {
         index,
-        unresolved: pending.finish(),
+        unresolved: Vec::new(),
         sizes_unknown,
-        blocked_peak,
+        blocked_peak: 0,
     })
 }
 
-/// Reserves the hint's total capacities, falling back to a fresh unsized index on allocation failure.
+/// Reserves measured or hinted totals, retaining folders and releasing spare on failure.
 /// Returns whether the reserve holds.
 fn reserve_for_build(
     index: &mut NtfsIndex,
     hint: SizeHint,
+    measured: SizeHint,
     drive: char,
-) -> Result<bool, NtfsError> {
-    if hint == SizeHint::default() {
-        return Ok(false);
-    }
-    let reserved = index
-        .table
-        .try_reserve_total(hint.entries, hint.folders, hint.name_bytes);
+) -> bool {
+    let reserved = index.table.try_reserve_total(
+        hint.entries.max(measured.entries),
+        hint.folders.max(measured.folders),
+        hint.name_bytes.max(measured.name_bytes),
+    );
     if let Err(error) = reserved {
         tracing::warn!(%error, drive = %drive, "index reserve failed; building unsized");
         #[cfg(test)]
         RESERVE_FAILURES.with(|count| count.set(count.get() + 1));
-        *index = NtfsIndex::new(drive, index.position)?;
-        return Ok(false);
+        index.table.trim_slack();
+        return false;
     }
-    Ok(true)
-}
-
-/// Queues a record and its bytes, returning the unknown-size count or an apply error.
-fn add_record(
-    volume: &mut impl VolumeIo,
-    index: &mut NtfsIndex,
-    pending: &mut Pending,
-    record: crate::usn::UsnRecord,
-) -> Result<u64, NtfsError> {
-    let Some(size) = two_pass_size::read_record_size(volume, &record) else {
-        return Ok(0);
-    };
-    let file_id = record.file_id;
-    pending.push(
-        index,
-        TableChange::Add {
-            file_id: record.file_id,
-            parent_id: record.parent_id,
-            name: record.name,
-            flags: record.flags,
-        },
-    )?;
-    if let Some(bytes) = size.bytes {
-        pending.push(index, TableChange::Size { file_id, bytes })?;
-    }
-    Ok(size.unknown)
+    hint != SizeHint::default()
 }
 
 /// Reads journal changes, rejecting hard-link churn before size refresh or cursor validation.
