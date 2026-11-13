@@ -1,11 +1,14 @@
+//! Captures complete NTFS generations and restores validated snapshots for journal updates.
+
 use super::{NtfsError, NtfsIndex};
 use crate::file::{Header, validate_ids, validate_root};
 use crate::table::NameTable;
 use crate::usn::{FrnMap, JournalPosition, PendingRenames};
 
 impl NtfsIndex {
+    /// Borrows a complete snapshot, returning None for search-only or pending-rename state.
     pub fn snapshot(&self) -> Option<(&NameTable, &FrnMap, JournalPosition)> {
-        (self.renames == PendingRenames::default()).then_some((
+        (!self.search_only && self.renames == PendingRenames::default()).then_some((
             &self.table,
             &self.ids,
             self.position,
@@ -36,6 +39,7 @@ impl NtfsIndex {
                 next_usn: header.next_usn,
             },
             renames: PendingRenames::default(),
+            search_only: false,
         };
         index.compact_if_sparse(super::COMPACT_MIN_SLOTS);
         Ok(index)
