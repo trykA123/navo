@@ -82,8 +82,8 @@ fn a_network_walk_reports_each_stop_and_continues_to_the_end() {
             CompareEvent::Continued { .. } => continues += 1,
             CompareEvent::Totals { totals, .. } => rows = totals.rows,
             CompareEvent::Finished { .. } => break,
-            CompareEvent::Rows(_) => {}
             CompareEvent::Failed(error) => panic!("compare failed: {error:?}"),
+            _ => {}
         }
     }
     assert!(stops >= 1);

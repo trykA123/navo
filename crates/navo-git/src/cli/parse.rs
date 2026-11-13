@@ -100,7 +100,7 @@ fn parse_tree_record(record: &[u8]) -> Result<TreeEntry, GitError> {
         return Err(protocol());
     }
     let kind = tree_kind(mode.as_bytes());
-    let size = if size == "-" {
+    let size = if matches!(size, "-" | "BAD") {
         None
     } else {
         Some(size.parse::<u64>().map_err(|_| protocol())?)
@@ -125,5 +125,30 @@ pub(super) fn tree_kind(mode: &[u8]) -> TreeKind {
 pub(super) fn protocol() -> GitError {
     GitError::Protocol {
         detail: "malformed git output".to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SHA1: &str = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
+
+    #[test]
+    fn tree_dash_size_is_unknown() {
+        let raw = format!("040000 tree {SHA1}       -\tsub\0");
+        let entries = parse_tree(raw.as_bytes()).expect("dash size must parse");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].kind, TreeKind::Folder);
+        assert_eq!(entries[0].size, None);
+    }
+
+    #[test]
+    fn tree_bad_size_is_unknown() {
+        let raw = format!("100644 blob {SHA1}     BAD\tmissing.txt\0");
+        let entries = parse_tree(raw.as_bytes()).expect("BAD promisor size must parse");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].kind, TreeKind::File);
+        assert_eq!(entries[0].size, None);
     }
 }
