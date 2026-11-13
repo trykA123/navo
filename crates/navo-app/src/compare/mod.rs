@@ -27,8 +27,8 @@
 mod convert;
 pub mod diff;
 mod entry;
-pub(crate) mod git_side;
-pub(crate) mod handle;
+pub mod git_side;
+pub mod handle;
 pub(crate) mod hash_cache;
 pub(crate) mod local;
 mod pane;

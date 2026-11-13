@@ -14,6 +14,7 @@ pub(super) fn reason_of(kind: FsErrorKind) -> Reason {
         FsErrorKind::Cancelled => Reason::Stopped,
         FsErrorKind::NotSupportedYet | FsErrorKind::SourceFilterFailed => Reason::Unsupported,
         FsErrorKind::ChangedOnDisk => Reason::ChangedOnDisk,
+        FsErrorKind::MissingPromisorBlob => Reason::MissingBlob,
         _ => Reason::ReadError,
     }
 }
