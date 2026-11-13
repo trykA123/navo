@@ -59,6 +59,7 @@ mod ownership;
 #[cfg(any(windows, test))]
 mod policy;
 mod quarantine;
+mod quarantine_recovery;
 #[cfg(any(windows, test))]
 mod rebuild;
 #[cfg(any(windows, test))]
