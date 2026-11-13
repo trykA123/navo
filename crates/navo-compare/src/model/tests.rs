@@ -271,7 +271,13 @@ fn every_status_and_reason_has_its_own_message() {
         Reason::Unsupported,
         Reason::ChangedOnDisk,
         Reason::WorkerPanicked,
+        Reason::MissingBlob,
     ];
+
+    assert_eq!(
+        Reason::MissingBlob.fluent_id().as_str(),
+        "compare-reason-missing-blob"
+    );
 
     let mut ids = HashSet::new();
     for status in statuses {

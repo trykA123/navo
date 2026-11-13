@@ -205,6 +205,8 @@ pub enum Reason {
     WorkerPanicked,
     /// A spool or other temporary copy ran out of disk space.
     DiskFull,
+    /// A Git promisor blob is missing and lazy fetch is disabled.
+    MissingBlob,
 }
 
 impl Reason {
@@ -222,6 +224,7 @@ impl Reason {
             Self::ChangedOnDisk => "compare-reason-changed-on-disk",
             Self::WorkerPanicked => "compare-reason-worker-panicked",
             Self::DiskFull => "compare-reason-disk-full",
+            Self::MissingBlob => "compare-reason-missing-blob",
         })
     }
 }

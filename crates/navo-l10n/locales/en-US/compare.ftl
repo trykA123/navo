@@ -65,6 +65,7 @@ compare-reason-unsupported = not supported
 compare-reason-changed-on-disk = changed while reading
 compare-reason-worker-panicked = internal error
 compare-reason-disk-full = not enough disk space
+compare-reason-missing-blob = missing git blob
 cmd-compare-stream = Stream all differences
 cmd-compare-next-file = Next changed file
 cmd-compare-previous-file = Previous changed file
