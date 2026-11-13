@@ -1,10 +1,11 @@
 //! The command-line Git backend: resolves Git once and reads a repository through `CliGit`.
 
+use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use crate::trust::Guard;
@@ -24,6 +25,8 @@ mod process;
 mod process_cap;
 mod process_tree;
 mod process_watch;
+#[cfg(test)]
+mod raw_odb_tests;
 mod remote;
 mod running;
 mod status;
@@ -77,6 +80,8 @@ pub struct CliGit {
     pub(super) raw_odb_only: bool,
     /// Output of `rev-parse --absolute-git-dir`, read once when the repository is opened.
     git_dir_output: Vec<u8>,
+    /// Whether the repo configures a promisor remote, cached on first raw-ODB "bad file" check.
+    has_promisor: OnceLock<bool>,
     session: Arc<Mutex<Option<Batch>>>,
     next_generation: AtomicU64,
     /// How long an unused batch child may stay alive before the next read replaces it.
@@ -115,6 +120,7 @@ impl CliGit {
             env: options.env.clone(),
             raw_odb_only: options.raw_odb_only,
             git_dir_output: Vec::new(),
+            has_promisor: OnceLock::new(),
             session: Arc::new(Mutex::new(None)),
             next_generation: AtomicU64::new(0),
             batch_idle: BATCH_IDLE,
@@ -190,7 +196,7 @@ impl CliGit {
                 path: self.repo.clone(),
             };
         }
-        if is_missing_promisor_stderr(&stderr, self.raw_odb_only) {
+        if self.is_missing_promisor(&stderr) {
             return GitError::MissingPromisorBlob;
         }
         let args = args
@@ -236,6 +242,26 @@ impl CliGit {
         let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
         Batch::new(child, self.repo.clone(), generation)
     }
+
+    /// Classifies `stderr` as a missing promisor blob, consulting repo config at most once.
+    fn is_missing_promisor(&self, stderr: &str) -> bool {
+        is_explicit_promisor_stderr(stderr)
+            || (self.raw_odb_only && is_raw_bad_file_stderr(stderr) && self.has_promisor_remote())
+    }
+
+    /// Returns whether the repository configures a promisor remote, cached per `CliGit` handle.
+    fn has_promisor_remote(&self) -> bool {
+        *self
+            .has_promisor
+            .get_or_init(|| self.read_has_promisor_remote())
+    }
+
+    fn read_has_promisor_remote(&self) -> bool {
+        let Ok(output) = self.run(&["config", "--list", "-z", "--includes"]) else {
+            return false;
+        };
+        output.status.success() && parse_has_promisor(&output.stdout)
+    }
 }
 
 /// `~/` includes resolve against Navo's own home, so the child must inherit it unchanged.
@@ -254,15 +280,67 @@ fn raw_odb_args<S: AsRef<OsStr>>(args: &[S]) -> Vec<&OsStr> {
 }
 
 /// Recognizes missing-promisor stderr lines from `git cat-file` when lazy fetch is disabled.
-pub(super) fn is_missing_promisor_stderr(stderr: &str, raw_odb_only: bool) -> bool {
+#[cfg(test)]
+pub(super) fn is_missing_promisor_stderr(
+    stderr: &str,
+    raw_odb_only: bool,
+    has_promisor_remote: bool,
+) -> bool {
+    is_explicit_promisor_stderr(stderr)
+        || (raw_odb_only && has_promisor_remote && is_raw_bad_file_stderr(stderr))
+}
+
+fn is_explicit_promisor_stderr(stderr: &str) -> bool {
     let lower = stderr.to_ascii_lowercase();
-    let promisor = lower.contains("from promisor remote")
+    lower.contains("from promisor remote")
         || lower.contains("promisor blob")
         || lower.contains("missing promisor")
         || lower.contains("lazy fetching disabled")
-        || (lower.contains("promisor") && lower.contains("missing"));
-    promisor
-        || (raw_odb_only && lower.contains("fatal: git cat-file ") && lower.contains(": bad file"))
+        || (lower.contains("promisor") && lower.contains("missing"))
+}
+
+fn is_raw_bad_file_stderr(stderr: &str) -> bool {
+    let lower = stderr.to_ascii_lowercase();
+    lower.contains("fatal: git cat-file ") && lower.contains(": bad file")
+}
+
+/// Parses `git config --list -z` output for `remote.<name>.promisor=true` or `extensions.partialClone`.
+pub(super) fn parse_has_promisor(listed: &[u8]) -> bool {
+    let mut promisors: HashMap<&[u8], bool> = HashMap::new();
+    let mut partial_clone: Option<&[u8]> = None;
+    for entry in listed.split(|byte| *byte == 0) {
+        if entry.is_empty() {
+            continue;
+        }
+        let mut parts = entry.splitn(2, |byte| *byte == b'\n');
+        let Some(key) = parts.next() else {
+            continue;
+        };
+        let value = parts.next();
+        if key == b"extensions.partialclone" {
+            partial_clone = value;
+        } else if let Some(remote) = key
+            .strip_prefix(b"remote.")
+            .and_then(|rest| rest.strip_suffix(b".promisor"))
+            && !remote.is_empty()
+        {
+            promisors.insert(remote, is_git_true(value));
+        }
+    }
+    partial_clone.is_some_and(|value| !value.is_empty())
+        || promisors.values().any(|&enabled| enabled)
+}
+
+fn is_git_true(value: Option<&[u8]>) -> bool {
+    match value {
+        None => true,
+        Some(raw) => {
+            raw.eq_ignore_ascii_case(b"true")
+                || raw.eq_ignore_ascii_case(b"yes")
+                || raw.eq_ignore_ascii_case(b"on")
+                || raw == b"1"
+        }
+    }
 }
 
 impl GitSource for CliGit {
@@ -327,19 +405,17 @@ impl GitSource for CliGit {
                     started,
                 )))
             }
-            Err(GitError::Command { ref stderr, .. })
-                if is_missing_promisor_stderr(stderr, self.raw_odb_only) =>
-            {
-                if session.as_ref().is_some_and(Batch::is_dead) {
-                    *session = None;
-                }
-                Err(GitError::MissingPromisorBlob)
-            }
             Err(error) => {
                 if session.as_ref().is_some_and(Batch::is_dead) {
                     *session = None;
                 }
-                Err(error)
+                drop(session);
+                if matches!(error, GitError::Command { ref stderr, .. } if self.is_missing_promisor(stderr))
+                {
+                    Err(GitError::MissingPromisorBlob)
+                } else {
+                    Err(error)
+                }
             }
         }
     }
