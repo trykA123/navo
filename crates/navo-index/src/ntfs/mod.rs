@@ -8,6 +8,7 @@ mod compact;
 #[cfg(any(windows, test, feature = "test-support"))]
 #[cfg_attr(not(test), allow(dead_code, reason = "used by two-pass scan"))]
 mod directory_graph;
+mod directory_scan;
 mod pending;
 use pending::Pending;
 #[cfg(any(windows, test))]
