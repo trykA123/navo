@@ -18,20 +18,21 @@ use super::settings::{CompareSettings, engine_for, network_cap};
 const POLL: Duration = Duration::from_millis(10);
 
 /// One side of a compare.
-pub(crate) enum CompareTarget {
+pub enum CompareTarget {
     Local(Location),
     Git { repo: PathBuf, rev: String },
+    GitRawOdb { repo: PathBuf, rev: String },
 }
 
-pub(crate) struct CompareStart {
+pub struct CompareStart {
     pub left: CompareTarget,
     pub right: CompareTarget,
-    pub settings: CompareSettings,
+    pub(crate) settings: CompareSettings,
     pub cache: Arc<dyn HashCache>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum CompareError {
+pub enum CompareError {
     Left(Reason),
     Right(Reason),
     Rules(String),
@@ -41,7 +42,7 @@ pub(crate) enum CompareError {
 
 /// What the session thread sends. Per generation: `Rows` and `Totals` in order, then `Finished`.
 #[derive(Debug)]
-pub(crate) enum CompareEvent {
+pub enum CompareEvent {
     /// Rows, progress or a problem; its totals are also sent as `Totals`.
     Rows(RowBatch),
     Totals {
@@ -80,13 +81,13 @@ pub(super) struct Opened {
 
 /// A running compare. Methods only queue a command and never block.
 /// Dropping the handle cancels the compare and joins its thread on a helper thread.
-pub(crate) struct CompareHandle {
+pub struct CompareHandle {
     commands: Sender<Command>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl CompareHandle {
-    pub(crate) fn start(request: CompareStart, events: Sender<CompareEvent>) -> Self {
+    pub fn start(request: CompareStart, events: Sender<CompareEvent>) -> Self {
         Self::spawn(move || open_session(request), events)
     }
 
@@ -114,30 +115,30 @@ impl CompareHandle {
     }
 
     /// Stops the compare for good; the handle receives no more events.
-    pub(crate) fn cancel(&self) {
+    pub fn cancel(&self) {
         let _ = self.commands.send(Command::Cancel);
     }
 
-    pub(crate) fn stop_row(&self, id: u64) {
+    pub fn stop_row(&self, id: u64) {
         let _ = self.commands.send(Command::StopRow(id));
     }
 
-    pub(crate) fn stop_all(&self) {
+    pub fn stop_all(&self) {
         let _ = self.commands.send(Command::StopAll);
     }
 
     /// Puts these rows first in the content-check queue.
-    pub(crate) fn focus(&self, row_ids: Vec<u64>) {
+    pub fn focus(&self, row_ids: Vec<u64>) {
         let _ = self.commands.send(Command::Focus(row_ids));
     }
 
     /// Resumes a walk that stopped at the network limit.
-    pub(crate) fn continue_walk(&self) {
+    pub fn continue_walk(&self) {
         let _ = self.commands.send(Command::ContinueWalk);
     }
 
     /// Starts the compare again under a new generation.
-    pub(crate) fn refresh(&self) {
+    pub fn refresh(&self) {
         let _ = self.commands.send(Command::Refresh);
     }
 }
@@ -189,6 +190,11 @@ fn open_side(
         CompareTarget::Git { repo, rev } => {
             let engine = engine_for(settings, &repo);
             let side = Arc::new(GitSide::new(repo, rev, engine)?);
+            git_sides.push(Arc::clone(&side));
+            side
+        }
+        CompareTarget::GitRawOdb { repo, rev } => {
+            let side = Arc::new(GitSide::new_raw_odb(repo, rev)?);
             git_sides.push(Arc::clone(&side));
             side
         }

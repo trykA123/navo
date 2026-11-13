@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 
 use navo_compare::model::{
-    CancelToken, EntryKind, HashCache, ObjectId, ReadHint, RelPath, SideSource, Status,
+    CancelToken, EntryKind, HashCache, ObjectId, ReadHint, Reason, RelPath, SideSource, Status,
 };
 use navo_core::ProviderPath;
 use navo_git::{EngineKind, EngineSetting};
@@ -211,4 +211,66 @@ fn engine_for_follows_the_setting_and_the_repository_format() {
         EngineKind::Cli
     );
     assert_eq!(engine_for(&with(EngineSetting::Gix), &new), EngineKind::Cli);
+}
+
+#[test]
+fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    if git(root, &["init", "-q", "--bare", "r.git"]).is_none() {
+        return;
+    }
+    let work = root.join("w");
+    git(root, &["init", "-q", "w"]).unwrap();
+    write(&work, "present.txt", b"raw-bytes\n");
+    write(&work, "missing.txt", b"lazy-content\n");
+    git(&work, &["add", "."]).unwrap();
+    git(&work, &["commit", "-q", "-m", "first"]).unwrap();
+    git(&work, &["push", "-q", "../r.git", "HEAD:refs/heads/main"]).unwrap();
+
+    let remote = root.join("r.git");
+    git(&remote, &["config", "uploadpack.allowFilter", "true"]).unwrap();
+    git(&remote, &["symbolic-ref", "HEAD", "refs/heads/main"]).unwrap();
+    let url = format!("file://{}", remote.display());
+    git(
+        root,
+        &["clone", "-q", "--bare", "--filter=blob:none", &url, "p.git"],
+    )
+    .unwrap();
+
+    let promisor = root.join("p.git");
+    write(&promisor, "info/attributes", b"* filter=hostile\n");
+    git(
+        &promisor,
+        &[
+            "config",
+            "filter.hostile.smudge",
+            "nonexistent-hostile-filter",
+        ],
+    )
+    .unwrap();
+    git(&promisor, &["config", "filter.hostile.required", "true"]).unwrap();
+    git(&promisor, &["cat-file", "blob", "HEAD:present.txt"]).unwrap();
+
+    let local = tempfile::tempdir().unwrap();
+    write(local.path(), "present.txt", b"raw-bytes\n");
+    write(local.path(), "missing.txt", b"lazy-content\n");
+
+    let (sender, receiver) = mpsc::channel();
+    let request = CompareStart {
+        left: CompareTarget::Local(location(local.path())),
+        right: CompareTarget::GitRawOdb {
+            repo: promisor,
+            rev: "HEAD".to_owned(),
+        },
+        settings: CompareSettings::default(),
+        cache: Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap())),
+    };
+    let _handle = CompareHandle::start(request, sender);
+    let (rows, _, _) = finish(&receiver);
+    assert_eq!(final_status(&rows, "present.txt"), Status::Same);
+    assert_eq!(
+        final_status(&rows, "missing.txt"),
+        Status::Unavailable(Reason::MissingBlob)
+    );
 }
