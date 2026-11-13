@@ -26,7 +26,7 @@ pub(super) trait VolumeIo {
 }
 
 pub(super) struct JournalState {
-    position: JournalPosition,
+    pub(super) position: JournalPosition,
     readable_from: i64,
 }
 
@@ -51,7 +51,7 @@ impl JournalState {
         })
     }
 
-    fn check(&self, saved: JournalPosition) -> Result<(), NtfsError> {
+    pub(super) fn check(&self, saved: JournalPosition) -> Result<(), NtfsError> {
         if saved.resume(self.position.journal_id, self.readable_from) == Resume::Reenumerate
             || saved.next_usn > self.position.next_usn
         {
