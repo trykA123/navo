@@ -1,3 +1,5 @@
+//! Git compare integration tests, including raw reads from partial clones.
+
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -213,17 +215,16 @@ fn engine_for_follows_the_setting_and_the_repository_format() {
     assert_eq!(engine_for(&with(EngineSetting::Gix), &new), EngineKind::Cli);
 }
 
-#[test]
-fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
+/// Creates a partial clone with two blobs hydrated; returns None when Git cannot initialize it.
+fn promisor_repo() -> Option<(tempfile::TempDir, PathBuf)> {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    if git(root, &["init", "-q", "--bare", "r.git"]).is_none() {
-        return;
-    }
+    git(root, &["init", "-q", "--bare", "r.git"])?;
     let work = root.join("w");
     git(root, &["init", "-q", "w"]).unwrap();
     write(&work, "present.txt", b"raw-bytes\n");
     write(&work, "missing.txt", b"lazy-content\n");
+    write(&work, "empty.txt", b"");
     git(&work, &["add", "."]).unwrap();
     git(&work, &["commit", "-q", "-m", "first"]).unwrap();
     git(&work, &["push", "-q", "../r.git", "HEAD:refs/heads/main"]).unwrap();
@@ -251,26 +252,59 @@ fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
     .unwrap();
     git(&promisor, &["config", "filter.hostile.required", "true"]).unwrap();
     git(&promisor, &["cat-file", "blob", "HEAD:present.txt"]).unwrap();
+    git(&promisor, &["cat-file", "blob", "HEAD:empty.txt"]).unwrap();
+    Some((dir, promisor))
+}
 
+#[test]
+fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
+    let Some((_dir, promisor)) = promisor_repo() else {
+        return;
+    };
     let local = tempfile::tempdir().unwrap();
     write(local.path(), "present.txt", b"raw-bytes\n");
-    write(local.path(), "missing.txt", b"lazy-content\n");
+    write(local.path(), "empty.txt", b"");
 
-    let (sender, receiver) = mpsc::channel();
-    let request = CompareStart {
-        left: CompareTarget::Local(location(local.path())),
-        right: CompareTarget::GitRawOdb {
-            repo: promisor,
-            rev: "HEAD".to_owned(),
-        },
-        settings: CompareSettings::default(),
-        cache: Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap())),
-    };
-    let _handle = CompareHandle::start(request, sender);
-    let (rows, _, _) = finish(&receiver);
-    assert_eq!(final_status(&rows, "present.txt"), Status::Same);
-    assert_eq!(
-        final_status(&rows, "missing.txt"),
-        Status::Unavailable(Reason::MissingBlob)
-    );
+    for content_check in [
+        navo_store::ContentCheck::Content,
+        navo_store::ContentCheck::SizeTime,
+    ] {
+        for bytes in [b"lazy-content\n".as_slice(), b"".as_slice()] {
+            write(local.path(), "missing.txt", bytes);
+            let (sender, receiver) = mpsc::channel();
+            let options = navo_ui::compare_diff::CompareOptions {
+                compare: navo_store::Compare {
+                    content_check,
+                    ..navo_store::Compare::default()
+                },
+            };
+            let request = CompareStart::new(
+                (
+                    CompareTarget::Local(location(local.path())),
+                    CompareTarget::GitRawOdb {
+                        repo: promisor.clone(),
+                        rev: "HEAD".to_owned(),
+                    },
+                ),
+                &options,
+                Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap())),
+            );
+            let _handle = CompareHandle::start(request, sender);
+            let (rows, _, _) = finish(&receiver);
+            if content_check == navo_store::ContentCheck::Content {
+                assert_eq!(final_status(&rows, "present.txt"), Status::Same);
+            }
+            let empty_status = match content_check {
+                navo_store::ContentCheck::Content => Status::Same,
+                navo_store::ContentCheck::SizeTime => Status::Different {
+                    first_difference: None,
+                },
+            };
+            assert_eq!(final_status(&rows, "empty.txt"), empty_status);
+            assert_eq!(
+                final_status(&rows, "missing.txt"),
+                Status::Unavailable(Reason::MissingBlob)
+            );
+        }
+    }
 }

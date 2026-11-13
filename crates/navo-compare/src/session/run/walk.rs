@@ -1,3 +1,5 @@
+//! Walks compare folders, classifies rows and queues content checks.
+
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -188,6 +190,7 @@ fn job_spec(context: &Context, row: &Row) -> JobSpec {
     }
 }
 
+/// Classifies listed rows with their sources and collects those needing content checks.
 fn classify_rows(
     context: &Context,
     rows: &mut [Row],
@@ -200,7 +203,11 @@ fn classify_rows(
         }
         row.id = context.next_row_id.fetch_add(1, Ordering::Relaxed);
         row.generation = context.generation;
-        classify(row, context.options.check_mode);
+        classify(
+            row,
+            context.options.check_mode,
+            [context.left.as_ref(), context.right.as_ref()],
+        );
         push_folders(tasks, row, &context.options.rules);
         if row.raw_status == Status::Checking {
             checking.push(row.clone());
