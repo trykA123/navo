@@ -97,7 +97,11 @@ fn quarantine_rollback_cold_enumeration() {
             Some(&0),
             "rollback must cold-enumerate instead of resuming an incomplete checkpoint: {source:?}"
         );
-        assert_eq!(cursors, [0, 3]);
+        assert_eq!(
+            cursors,
+            [0, 3, 0, 3],
+            "folder and file passes must each cold-enumerate from zero through EOF"
+        );
         let rebuilt = rebuilt.unwrap();
         assert_eq!(rebuilt.position.next_usn, 100);
         assert_eq!(rebuilt.table.len(), 3);
