@@ -94,11 +94,69 @@ fn preserve_file(active: &Path, saved: &Path) -> io::Result<()> {
         .create_new(true)
         .open(&temporary)?;
     io::copy(&mut source, &mut target)?;
-    target.sync_all()?;
+    sync_target(&target)?;
     drop(target);
     drop(source);
-    navo_fs::native_replace_durable(&temporary, saved)?;
+    replace_durable(&temporary, saved)?;
     fs::remove_file(active)
+}
+
+/// Syncs a preserved temporary file before replacement; tests can inject a fault here.
+fn sync_target(target: &File) -> io::Result<()> {
+    #[cfg(test)]
+    check_fault(PreserveFault::Sync)?;
+    target.sync_all()
+}
+
+/// Replaces `saved` with `temporary` durably; tests can inject a fault here.
+fn replace_durable(temporary: &Path, saved: &Path) -> io::Result<()> {
+    #[cfg(test)]
+    check_fault(PreserveFault::Replace)?;
+    navo_fs::native_replace_durable(temporary, saved)
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PreserveFault {
+    Sync,
+    Replace,
+}
+
+#[cfg(test)]
+thread_local! {
+    static PRESERVE_FAULT: std::cell::Cell<Option<(PreserveFault, usize)>> =
+        const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+struct FaultGuard;
+
+#[cfg(test)]
+impl Drop for FaultGuard {
+    fn drop(&mut self) {
+        PRESERVE_FAULT.with(|slot| slot.set(None));
+    }
+}
+
+#[cfg(test)]
+fn arm_fault(step: PreserveFault, skip: usize) -> FaultGuard {
+    PRESERVE_FAULT.with(|slot| slot.set(Some((step, skip))));
+    FaultGuard
+}
+
+#[cfg(test)]
+fn check_fault(step: PreserveFault) -> io::Result<()> {
+    PRESERVE_FAULT.with(|slot| match slot.get() {
+        Some((target, 0)) if target == step => {
+            slot.set(None);
+            Err(io::Error::other("injected preserve fault"))
+        }
+        Some((target, remaining)) if target == step => {
+            slot.set(Some((target, remaining - 1)));
+            Ok(())
+        }
+        _ => Ok(()),
+    })
 }
 
 /// Loads canonical or backup for `drive`; the caller serializes replacement through S13 repair.
