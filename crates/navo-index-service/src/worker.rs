@@ -1,9 +1,11 @@
+//! Runs a volume's index updates and delegates snapshot persistence to the rebuild session.
+
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use navo_index::file::{self, Header};
+use navo_index::file;
 use navo_index::ntfs::{NtfsError, NtfsIndex, SizeHint, UnresolvedChange, Volume};
 use navo_index::pipe::CancelToken;
 
@@ -15,6 +17,7 @@ use super::lifecycle::{
     report_unknown_sizes, restore_or_enumerate,
 };
 use super::rebuild::{Cause, Rebuilds, error_kind, file_error_kind};
+use super::rebuild_session::{SaveInput, save_snapshot};
 use super::service_log::Log;
 use super::storage::Storage;
 
@@ -256,47 +259,36 @@ impl Worker {
         self.clock.changed(self.started.elapsed());
     }
 
+    /// Saves a due snapshot, logging failures and returning them as I/O errors.
     fn save(&mut self, stopping: bool) -> io::Result<()> {
         // A deferred rebuild means the index misses changes; the older snapshot replays them.
         if self.rebuilds.is_deferred() {
             return Ok(());
         }
-        let Some(index) = super::batch::published(&self.shared) else {
-            return Ok(());
-        };
-        let snapshot = index.snapshot();
-        if !self
-            .clock
-            .due(self.started.elapsed(), snapshot.as_ref(), stopping)
-        {
-            return Ok(());
-        }
-        let Some((table, ids, position)) = snapshot else {
-            return Ok(());
-        };
-        let header = Header {
-            volume_serial: self.drive.serial,
-            journal_id: position.journal_id,
-            next_usn: position.next_usn,
-            root: format!("{}:", self.drive.letter),
+        let input = SaveInput {
+            shared: &self.shared,
+            drive: self.drive,
+            path: &self.path,
+            elapsed: self.started.elapsed(),
+            stopping,
             built_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64,
         };
-        let entries = table.len();
-        let saved = self
-            .clock
-            .save(&self.path, (header, table, ids), self.started.elapsed());
+        let saved = save_snapshot(input, &mut self.clock);
         let letter = self.drive.letter;
         match &saved {
-            Ok(()) => self.log_line(format_args!("snapshot saved {letter}: entries={entries}")),
+            Ok(Some(entries)) => {
+                self.log_line(format_args!("snapshot saved {letter}: entries={entries}"));
+            }
+            Ok(None) => {}
             Err(error) => {
                 let kind = file_error_kind(error);
                 self.log_line(format_args!("snapshot save failed {letter}: {kind}"));
             }
         }
-        saved.map_err(io::Error::other)
+        saved.map(drop).map_err(io::Error::other)
     }
 
     fn log_line(&self, text: std::fmt::Arguments<'_>) {
