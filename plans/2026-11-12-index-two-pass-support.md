@@ -46,11 +46,11 @@ Use parent N/C/R commands, cargo lock, log redirection and actual exit-status ch
 | S6 | `full-build` | senior / Sol | xhigh | T2, S5 | N(navo-index, directory_scan); C(navo-index) | blocked | — |
 | S7 | `peak-proof` | senior / Sol | xhigh | T1, T5, S6 | N(navo-index, peak_harness); C(navo-index) | blocked | — |
 | S8 | `peak-proof` | senior / Sol | xhigh | T3, T5, S7, S12 | R(two_pass_); C(navo-index) | blocked | — |
-| S9 | `rebuild-session` | senior / Sol | xhigh | T7 | N(navo-index-service, persistence); C(navo-index-service) | blocked | — |
+| S9 | `rebuild-session` | api-builder / DeepSeek; Sol review | high | T7 | N(navo-index-service, persistence); C(navo-index-service) | Linux complete; Windows pending T15 | — |
 | S10 | `rebuild-session` | senior / Sol | xhigh | S9 | N(navo-index-service, batch); C(navo-index-service) | blocked | — |
 | S11 | `rebuild-session` | senior / Sol | xhigh | T5, T7, S10, S13 | N(navo-index-service, rebuild_session); C(navo-index-service) | blocked | — |
 | S12 | `rebuild-session` | senior / Sol | xhigh | T3, S11 | N(navo-index-service, rebuild_session); C(navo-index-service) | blocked | — |
-| S13 | `quarantine` | senior / Sol | xhigh | T7 | N(navo-index-service, quarantine); C(navo-index-service) | blocked | — |
+| S13 | `quarantine` | api-builder / DeepSeek; Sol review | high | T7 | N(navo-index-service, quarantine); C(navo-index-service) | recovering interrupted implementation | — |
 | S14 | `durable-replace` | tester / role default | xhigh | S4, T7, S13 | Windows durable_replace/quarantine tests; restart proof | blocked | — |
 | S15 | `full-build` | senior / Sol | xhigh | S5, S6 | N(navo-index, journal_churn); C(navo-index) | blocked | — |
 
@@ -140,6 +140,10 @@ Use parent N/C/R commands, cargo lock, log redirection and actual exit-status ch
 Each support atom records its assertion-red and green evidence; all four S8 numerical gates pass independently. S14 proves Windows durability before T8 activation, and T15 completes service/VM/full-gate/review proof. Parent acceptance criteria remain mandatory; this companion does not waive a failed memory/time gate or a missing platform run.
 
 ## Log
+
+- 2026-11-14 Europe/Bucharest — S9 source commit `c4f8ffb9` recovered and reviewed by Sol: direct helper 3/3, persistence 9/9, crate check 218 tests and all 9 steps. Assertion-red examples: saved next_usn 101 versus 100; due guard removal Some(1) versus None. Full gate exit 0: `gate: all 12 steps passed (527.5 s)`. Windows worker remains UNTESTED. Cherry-picked the atom onto owned integration base with status in the same integration commit; integration gate follows. Source changes remain three files; this fourth file records required plan status.
+
+- 2026-11-14 Europe/Bucharest — Resumed at fetched `origin/main@61508c91`. Original S9/S13 Sol runs ended at usage limits, leaving untested edits; S9 also retained an active due-guard mutation. Preserved original worktrees and copied each atom into an owned recovery worktree. Persistent `weekend-s9`/`weekend-s13` run Qwen-plan DeepSeek through dsh at high effort with 14400-second turn limits; follow-ups reuse the same sessions. S9 direct helper tests: 3 passed; persistence: 9 passed; crate check: all 9 steps passed (218 tests); fresh Sol review passed. Full gate and Windows worker proof are not yet passes. T13 and Sidewise Topbar require reviewed UI repairs before integration.
 
 - 2026-11-12 Europe/Bucharest — Created during review-1 rework. Split 15 support atoms from T3/T5/T7/T8/T15 to keep each plan at 15 runnable atoms. No implementation or VM check ran; every S atom remains blocked on MQ2 and its listed dependencies. No product edits, commits or deployment.
 

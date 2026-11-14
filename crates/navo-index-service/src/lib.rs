@@ -63,6 +63,8 @@ mod quarantine_recovery;
 #[cfg(any(windows, test))]
 mod rebuild;
 #[cfg(any(windows, test))]
+mod rebuild_session;
+#[cfg(any(windows, test))]
 mod removal;
 #[cfg(windows)]
 mod runtime;
