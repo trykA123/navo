@@ -1,3 +1,5 @@
+//! Queries folder totals and measures visible folders without blocking the UI thread.
+
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
@@ -5,7 +7,7 @@ use std::sync::Arc;
 use navo_core::{Location, Tab, TabId};
 use navo_fs::{
     CancelToken, FolderSize, JobId, JobKind, JobSlot, OwnerGuard, OwnerId, Priority, Provider,
-    folder_size, volume_of,
+    volume_of,
 };
 pub use navo_index::pipe::FolderTotals;
 
@@ -22,6 +24,12 @@ pub enum TotalsState {
 /// Where folder totals come from; the existing fixtures answer with `Option<FolderTotals>`.
 pub trait FolderTotalsSource: Send + Sync {
     fn query(&self, folder: &Location) -> TotalsState;
+
+    /// Wait off the UI thread while a rebuilding volume settles, returning `Ready`, `Unavailable`,
+    /// or `Busy` if `cancel` stops the wait.
+    fn wait(&self, folder: &Location, cancel: &CancelToken) -> TotalsState {
+        measure_busy::ask(self, folder, cancel, measure_busy::RETRY_EVERY)
+    }
 }
 
 impl<F> FolderTotalsSource for F
@@ -63,13 +71,6 @@ impl SizeMode {
     }
 }
 
-pub(crate) fn complete_bytes(query: &FolderTotalsQuery, folder: &Location) -> Option<u64> {
-    let TotalsState::Ready(totals) = query.query(folder) else {
-        return None;
-    };
-    totals.complete.then_some(totals.bytes)
-}
-
 pub(crate) fn folder_bytes(
     query: &FolderTotalsQuery,
     provider: &dyn Provider,
@@ -79,15 +80,16 @@ pub(crate) fn folder_bytes(
     folder_measure(query, provider, folder, cancel).map(|size| size.bytes)
 }
 
+/// A rebuilding volume keeps its pending indicator and shows no number: it is asked again off
+/// the UI thread instead of walked, and only a cancelled wait comes back without an answer.
 pub(crate) fn folder_measure(
     query: &FolderTotalsQuery,
     provider: &dyn Provider,
     folder: &Location,
     cancel: &CancelToken,
 ) -> Option<FolderSize> {
-    complete_bytes(query, folder)
-        .map(FolderSize::apparent_only)
-        .or_else(|| folder_size(provider, folder, cancel).ok())
+    let state = query.wait(folder, cancel);
+    measure_busy::shown(state, provider, folder, cancel)
 }
 
 pub(crate) struct Measured {
@@ -304,6 +306,9 @@ impl Browser {
         work.asked.insert(key, Asked { job, asker });
     }
 }
+
+#[path = "measure_busy.rs"]
+mod measure_busy;
 
 #[cfg(test)]
 mod tests {

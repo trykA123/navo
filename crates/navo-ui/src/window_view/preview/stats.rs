@@ -1,3 +1,5 @@
+//! Renders folder preview totals, scan status, and waiting states.
+
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{ClickEvent, Role, Stateful};
 use navo_fs::FolderProfile;
@@ -14,6 +16,7 @@ use crate::tokens::Theme;
 use crate::window_view::NavoWindow;
 
 const MINI_HEIGHT: f32 = 22.;
+const SIZE_LABEL: &str = "Total size";
 
 pub(super) struct StatsLook {
     pub is_row: bool,
@@ -134,6 +137,38 @@ fn live_marks(t: &Theme, scan: &Scan) -> Option<Div> {
     Some(line)
 }
 
+/// The size card while a rebuilding volume's totals are unknown: a dash, never a number, and
+/// no walk to stop or resume.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "T14 activates this through waiting_for_totals")
+)]
+fn waiting_stats(t: &Theme) -> Div {
+    let words = "Waiting";
+    let card = card(t, SIZE_LABEL, "–".to_owned())
+        .id("preview-total")
+        .role(Role::Status)
+        .aria_label(format!("{SIZE_LABEL} unknown"))
+        .test_support()
+        .text_size(t.typography.body * 1.5)
+        .child(
+            div()
+                .id("preview-waiting")
+                .aria_label(words)
+                .test_support()
+                .flex()
+                .items_center()
+                .gap(t.spacing.sm)
+                .min_h(px(MINI_HEIGHT))
+                .mt(t.spacing.xs)
+                .text_size(t.typography.small)
+                .text_color(t.colors.accent_text)
+                .child(icon(IconName::LoaderCircle, px(12.), t.colors.accent_text))
+                .child(div().truncate().child(words)),
+        );
+    div().flex().flex_col().gap(t.spacing.md).child(card)
+}
+
 impl NavoWindow {
     fn scan_line(t: &Theme, scan: &Scan, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let words = scan_words(scan);
@@ -190,7 +225,7 @@ impl NavoWindow {
         let (totals, is_final) = folder.shown_totals();
         let is_done = matches!(folder.scan.phase, Phase::Done { .. });
         let size_label = if is_final {
-            "Total size"
+            SIZE_LABEL
         } else {
             "Total size so far"
         };
@@ -250,5 +285,52 @@ impl NavoWindow {
             format!("{time} · {source}")
         };
         card(t, "Last change", day.to_owned()).child(sub(t, detail))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::TestAppContext;
+    use gpui_kit::test::TestWindowExt;
+
+    use super::*;
+    use crate::test_window::open;
+    use crate::tokens::Mode;
+
+    struct Waiting;
+
+    impl Render for Waiting {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            waiting_stats(&Theme::new(Mode::Light))
+        }
+    }
+
+    #[gpui_kit::test]
+    fn the_waiting_card_says_unknown_and_never_a_number(cx: &mut TestAppContext) {
+        let (window, _) = open(cx, |_, _| Waiting);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let card = window.find("preview-total");
+            assert_eq!(
+                card.label(),
+                Some("Total size unknown"),
+                "a rebuilding volume shows an unknown value, never a number"
+            );
+            assert_eq!(
+                card.role(),
+                Some(Role::Status),
+                "the wait reaches screen readers"
+            );
+            assert_eq!(window.find("preview-waiting").label(), Some("Waiting"));
+            assert!(
+                window.try_find("preview-stop").is_none(),
+                "no walk is running to stop"
+            );
+            assert!(
+                window.try_find("preview-resume").is_none(),
+                "no walk is running to resume"
+            );
+        })
+        .expect("window");
     }
 }
