@@ -48,8 +48,8 @@ Use parent N/C/R commands, cargo lock, log redirection and actual exit-status ch
 | S8 | `peak-proof` | senior / Sol | xhigh | T3, T5, S7, S12 | R(two_pass_); C(navo-index) | blocked | — |
 | S9 | `rebuild-session` | api-builder / DeepSeek; Sol review | high | T7 | N(navo-index-service, persistence); C(navo-index-service) | Linux complete; Windows pending T15 | — |
 | S10 | `rebuild-session` | api-builder / DeepSeek; Sol review | high | S9 | N(navo-index-service, batch); C(navo-index-service) | Linux complete; Windows pending T15 | — |
-| S11 | `rebuild-session` | senior / Sol | xhigh | T5, T7, S10, S13 | N(navo-index-service, rebuild_session); C(navo-index-service) | blocked | — |
-| S12 | `rebuild-session` | senior / Sol | xhigh | T3, S11 | N(navo-index-service, rebuild_session); C(navo-index-service) | blocked | — |
+| S11 | `rebuild-session` | senior / Sol | xhigh | T5, T7, S10, S13, RB4 | N(navo-index-service, rebuild_session); C(navo-index-service) | blocked | — |
+| S12 | `rebuild-session` | senior / Sol | xhigh | T3, S11, RB5 | N(navo-index-service, rebuild_session); C(navo-index-service) | blocked | — |
 | S13 | `quarantine` | api-builder / DeepSeek; Sol review | high | T7 | N(navo-index-service, quarantine); C(navo-index-service) | recovering interrupted implementation | — |
 | S14 | `durable-replace` | tester / role default | xhigh | S4, T7, S13 | Windows durable_replace/quarantine tests; restart proof | blocked | — |
 | S15 | `full-build` | senior / Sol | xhigh | S5, S6 | N(navo-index, journal_churn); C(navo-index) | blocked | — |
@@ -109,15 +109,17 @@ Use parent N/C/R commands, cargo lock, log redirection and actual exit-status ch
 - **Read/files:** `S/worker.rs:173-183,248-260` (324 before S9), `S/rebuild_session.rs` (S9 ≤100 including inline tests), `S/rebuild_session_tests.rs` (new child). Move hint and swap/drop/trim into the existing sibling, preserving behavior and explicit Shared ownership. Do not move follow/build loops or activate conversion. Register tests below that sibling, not lib.rs.
 - **Red/check:** temporarily skip the swap and fail the published new-hit assertion; restore, extract, then run rebuild_session, batch/persistence tests and C(navo-index-service). Stop if more than 35 lines must move or state ownership changes.
 
-### S11 — Prepare permit, quarantine and conversion (≤145 lines)
+### S11 — Prepare permit, quarantine and conversion (≤145 production lines; tests extra; BLOCKED)
 
-- **Read/files:** `S/rebuild_session.rs` (after S10 ≤145 including inline tests), `S/rebuild_prepare.rs` (new child), `S/rebuild_prepare_tests.rs` (new child). Read `S/build_permit.rs:20-72` (167), T7 and S13 completed contracts. Implement dormant prepare: wait without shared locks, establish TP10 active marker, repair/checkpoint safely, capture hint, then Arc::get_mut conversion under write lock. Return a session owning the permit; on any error preserve the published old generation and validated disk copy. Queued/cancelled volumes never degrade.
-- **Red/check:** fail old-hit, disk-copy and full-queued-capacity assertions before the guards; cover queued cancel, marker/checkpoint failure, held Arc (no cloning), repeat retry and two-volume exclusion. Run rebuild_session tests and C(navo-index-service). No worker wiring before T8/S14; stop at 145 lines.
+- **Blocked:** after RB0–RB4. Use the exact `PrepareInput<'s,'w>` / `PreparedRebuild<'s>` / `Permits` contract in `2026-11-15-rebuild-contract-repair.md`; the parent plan's old `PreparedRebuild<'static>` signature is superseded. Do not dispatch before RB4; S14 must be green before T8 activation.
+- **Read/files:** `S/rebuild_session.rs` (after RB4; measure at dispatch), `S/rebuild_prepare.rs` (new child), `S/rebuild_prepare_tests.rs` (new child). Read `S/build_permit.rs:20-72` (167), T7 and S13 completed contracts. Implement dormant prepare: wait without shared locks, establish TP10 active marker, repair/checkpoint safely, capture hint, then Arc::get_mut conversion under write lock. Return `PreparedRebuild<'s>` borrowing only `Snapshot`, owning `BuildPermit<'static>`; on any error preserve the published old generation and validated disk copy. Queued/cancelled volumes never degrade.
+- **Red/check:** fail old-hit, disk-copy and full-queued-capacity assertions before the guards; cover queued cancel, marker/checkpoint failure, held Arc (no cloning), repeat retry and two-volume exclusion. Run rebuild_session tests and C(navo-index-service). No worker wiring before T8/S14; stop at 145 production changed lines, tests extra.
 
-### S12 — Prepare catch-up, commit and cancellation (≤145 lines)
+### S12 — Prepare catch-up, commit and cancellation (≤145 production lines; tests extra; BLOCKED)
 
-- **Read/files:** `S/rebuild_session.rs` (after S11 ≤155 including inline tests), `S/rebuild_commit.rs` (new child), `S/rebuild_commit_tests.rs` (new child). Read `S/batch.rs:13-75` (75), S11/S13 contracts. Session owns permit through high-water catch-up, snapshot/no-unresolved validation, final cancel check, durable candidate save, swap/drop/trim, complete marker and release. No cancellation inside commit. Failed cleanup stays quarantined; old search or the committed generation remains published. Shutdown refuses search-only saves.
-- **Red/check:** first fail old-hit/disk-copy assertions for cancellation during pass 1, pass 2, catch-up and immediately before commit; test unresolved finish despite advanced cursor, reset/wrap, save failure, restart-after-save-before-swap, two failed retries and marker cleanup failure. Require second-volume start after promotion. Run rebuild_session, persistence and build_permit tests, C(navo-index-service). Keep Windows activation in T8/T15; stop at 145 lines.
+- **Blocked:** after S11 and RB5. Implement the `CaughtUp` / `commit` contract in `2026-11-15-rebuild-contract-repair.md`; `catch_up` rejects enumeration and every `BatchApply::finish` unresolved result, and `commit` consumes `CaughtUp`, never a bare index. Do not dispatch before RB5.
+- **Read/files:** `S/rebuild_session.rs` (after S11; measure at dispatch), `S/rebuild_commit.rs` (new child), `S/rebuild_commit_tests.rs` (new child). Read `S/batch.rs:13-75` (75), S11/S13 contracts. Session owns permit through high-water catch-up, snapshot/no-unresolved validation, final cancel check, durable candidate save, swap/drop/trim, complete marker and release; no cancellation inside commit. Failed cleanup stays quarantined; old search or the committed generation remains published. Shutdown refuses search-only saves.
+- **Red/check:** first fail old-hit/disk-copy assertions for cancellation during pass 1, pass 2, catch-up and immediately before commit; test unresolved finish despite advanced cursor, reset/wrap, save failure, restart-after-save-before-swap, two failed retries and marker cleanup failure. Require second-volume start after promotion. Run rebuild_session, persistence and build_permit tests, C(navo-index-service). Keep Windows activation in T8/T15; stop at 145 production changed lines, tests extra.
 
 ### S13 — Repair backup-only recovery and protect snapshot replacement (≤150 lines)
 
@@ -137,13 +139,15 @@ Use parent N/C/R commands, cargo lock, log redirection and actual exit-status ch
 
 ## Done when
 
-Each support atom records its assertion-red and green evidence; all four S8 numerical gates pass independently. S14 proves Windows durability before T8 activation, and T15 completes service/VM/full-gate/review proof. Parent acceptance criteria remain mandatory; this companion does not waive a failed memory/time gate or a missing platform run.
+Each support atom records its assertion-red and green evidence; all four S8 numerical gates pass independently. RB0–RB5 in `2026-11-15-rebuild-contract-repair.md` close the S13/T8 prerequisites; S11/S12 stay blocked until RB4/RB5. S14 proves Windows durability before T8 activation, and T15 completes service/VM/full-gate/review proof. Parent acceptance criteria remain mandatory; this companion does not waive a failed memory/time gate or a missing platform run.
 
 ## Log
 
 - 2026-11-15 Europe/Bucharest — Corrected integration validation: sharing a Cargo target reused an xtask embedding the S9 worktree path. The earlier 354.2-second run did not prove the integration checkout; S9's original 527.5-second source gate remains valid. The new target belongs only to the integration worktree. Its full gate exited 0: `gate: all 12 steps passed (530.1 s)`, 13,570 tests passed, including all 10 measure_busy cases and both new S10 tests. This validates the combined S10 and T13/UI1/UI2 source batch. No S13 code is included; its portable fault proof is still under review.
 
 - 2026-11-15 Europe/Bucharest — S10 source `09015ef7` preserves hint, progress clearing, old-reader ownership and drop-before-trim. Direct helper 5/5, batch 10/10, persistence 9/9; independent Sol review and crate gate passed all 9 steps with 220 tests. Mutating away the swap failed old-0000.txt versus new-0000.txt. Integration full gate follows. S11/S12 remain blocked: persistent recovery identity and caught-up unresolved evidence need explicit prerequisite contracts; no second old table or ordinary-save-then-refresh fallback is allowed. Windows worker remains UNTESTED.
+
+- 2026-11-15 Europe/Bucharest — Added the RB0–RB5 repair-plan dependency to S11/S12 and kept both BLOCKED. No code, test, cargo run or commit; Windows UNTESTED.
 
 - 2026-11-14 Europe/Bucharest — S9 source commit `c4f8ffb9` recovered and reviewed by Sol: direct helper 3/3, persistence 9/9, crate check 218 tests and all 9 steps. Assertion-red examples: saved next_usn 101 versus 100; due guard removal Some(1) versus None. Full gate exit 0: `gate: all 12 steps passed (527.5 s)`. Windows worker remains UNTESTED. Cherry-picked the atom onto owned integration base with status in the same integration commit; integration gate follows. Source changes remain three files; this fourth file records required plan status.
 
