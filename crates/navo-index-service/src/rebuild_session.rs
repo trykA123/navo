@@ -1,10 +1,21 @@
 //! Snapshot persistence shared by the volume worker and rebuild lifecycle.
 
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    sync::{Arc, PoisonError},
+    time::Duration,
+};
 
-use navo_index::file::{self, Header};
+use navo_index::{
+    file::{self, Header},
+    ntfs::{NtfsIndex, SizeHint},
+};
 
-use super::{answer::Shared, config::Drive, lifecycle::SaveClock};
+use super::{
+    answer::Shared,
+    config::Drive,
+    lifecycle::{SaveClock, build_hint},
+};
 
 /// Inputs for one due-checked snapshot write: published index, drive, path, elapsed time.
 #[derive(Clone, Copy)]
@@ -15,6 +26,29 @@ pub(super) struct SaveInput<'a> {
     pub elapsed: Duration,
     pub stopping: bool,
     pub built_at: i64,
+}
+
+/// Returns the existing build-hint policy applied to the published index.
+pub(super) fn rebuild_hint(shared: &Shared) -> SizeHint {
+    build_hint(
+        shared
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .index
+            .as_deref(),
+    )
+}
+
+/// Publishes a new index, drops the old generation, then trims the new table.
+pub(super) fn replace(shared: &Shared, index: NtfsIndex) {
+    let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
+    state.status.progress = None;
+    let old = state.index.replace(Arc::new(index));
+    drop(old);
+    // Trim only after the old index is gone, so the copy does not double the rebuild peak.
+    if let Some(index) = state.index.as_mut().and_then(Arc::get_mut) {
+        index.table.trim_slack();
+    }
 }
 
 /// Streams a due published snapshot using elapsed time and epoch seconds; returns write errors.
@@ -162,3 +196,7 @@ mod tests {
         assert_eq!(save_snapshot(input, &mut clock).unwrap(), Some(1));
     }
 }
+
+#[cfg(test)]
+#[path = "rebuild_session_tests.rs"]
+mod rebuild_session_tests;
