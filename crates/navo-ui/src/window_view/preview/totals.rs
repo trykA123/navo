@@ -1,3 +1,5 @@
+//! Fetches folder preview index totals and picks the displayed totals for stats cards.
+
 use std::sync::Arc;
 
 use navo_core::Location;
@@ -41,7 +43,6 @@ impl FolderPreview {
     }
 
     /// Whether this load waits for index totals instead of showing a number.
-    #[expect(dead_code, reason = "T14 stores the load's Busy decision here")]
     pub(super) fn waiting_for_totals(&self) -> bool {
         false
     }

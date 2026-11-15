@@ -94,8 +94,8 @@ Every new/changed test runs red before its fix; record the assertion failure, no
 | T10 | `totals-source` | api-builder / Qwen 4 Max | medium | T9 | app folder_totals test; C(navo-app) | blocked | — |
 | T11 | `totals-source` | ui-builder / Qwen 4 Max | high | T6, T10 | N(navo-ui, totals); C(navo-ui); C(navo-app) | blocked | — |
 | T12 | `totals-source` | api-builder / Qwen 4 Max | medium | T11 | app folder_totals test; C(navo-app) | blocked | — |
-| T13 | `waiting-totals` | ui-builder / Hydrogen | high | T12 | N(navo-ui, measure_busy); C(navo-ui) | policy/API checked; renderer seam pending | — |
-| T14 | `waiting-totals` | ui-builder / Hydrogen | high | T13, UI1, UI2 in seam plan | N(navo-ui, preview); C(navo-ui) | blocked | — |
+| T13 | `waiting-totals` | ui-builder / Hydrogen | high | T12 | N(navo-ui, measure_busy); C(navo-ui) | Linux checked; Sol pass | — |
+| T14 | `waiting-totals` | ui-builder / Hydrogen | high | T13, UI1–UI4 in seam plan | N(navo-ui, preview); C(navo-ui) | blocked | — |
 | T15 | `peak-proof` | tester / role default | xhigh | T8, T14, S8, S14 | R(two_pass_); VM procedure; full gate | blocked | — |
 
 ### T1 — Make both MFT reads real in the fixture
@@ -178,7 +178,7 @@ Every new/changed test runs red before its fix; record the assertion failure, no
 
 ### T14 — Transport Busy into preview before T8 activation (≤150 production changed lines)
 
-Prerequisite correction (2026-11-14): [UI1/UI2](2026-11-14-busy-totals-seams.md) expose T13's retry policy and connect its dormant renderer before this atom. The size cap counts production lines; tests are reported separately, per the owner's standing instruction.
+Prerequisite correction (2026-11-15): [UI1–UI4](2026-11-14-busy-totals-seams.md) expose T13's retry policy, connect its renderer, create file headroom and fence cancelled totals replies before this atom. The size cap counts production lines; tests are reported separately, per the owner's standing instruction.
 
 - **Read/files:** `U/window_view/preview/inbox.rs:7-24` (42), `U/window_view/preview/folder.rs:28-55,145-185,209-223,281-309` (372), `U/window_view/preview/totals.rs:14-82` (82 before T11). Read-only T13's renderer in stats.rs and T10's waiting constructor in scan.rs. Keep folder.rs below 400 physical lines by replacing existing scan-start logic, not appending another flow. Production budget: inbox transport 15, folder state/scan guards 40, totals query/handling 50 = 105 lines, with headroom to 150; inline transport/behavior tests are additional. These three files replace the old list; stats.rs belongs to T13 and UI2.
 - **Change:** carry `TotalsState` in `Arrival::Totals { load, totals }`; keep folder.rs's dispatcher and totals_arrived signature aligned. Store the load's Ready/Busy/Unavailable decision in FolderPreview; waiting_for_totals reflects Busy and activates T13's unknown renderer. Initialize with T10's non-walking Scan::waiting and ask totals unconditionally before starting a replacement totals scan; Ready/Unavailable may start the existing scan through a pub(super) folder helper; Busy must never start that walk. Suppress cached/profile numeric arrivals for the Busy load, preserving explicit contents browsing. Reuse T13's cancellable ≥1 s retry policy; navigation/Esc releases its owner. Ready fills totals, Unavailable resumes existing fallback; stale load IDs never update a new preview.
