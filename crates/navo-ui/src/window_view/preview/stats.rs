@@ -139,10 +139,6 @@ fn live_marks(t: &Theme, scan: &Scan) -> Option<Div> {
 
 /// The size card while a rebuilding volume's totals are unknown: a dash, never a number, and
 /// no walk to stop or resume.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "T14 activates this through waiting_for_totals")
-)]
 fn waiting_stats(t: &Theme) -> Div {
     let words = "Waiting";
     let card = card(t, SIZE_LABEL, "–".to_owned())
@@ -221,6 +217,9 @@ impl NavoWindow {
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> Div {
+        if folder.waiting_for_totals() {
+            return waiting_stats(t);
+        }
         let profile = folder.scan.profile.as_ref();
         let (totals, is_final) = folder.shown_totals();
         let is_done = matches!(folder.scan.phase, Phase::Done { .. });
