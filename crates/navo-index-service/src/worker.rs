@@ -2,22 +2,22 @@
 
 use std::io;
 use std::path::PathBuf;
-use std::sync::{Arc, PoisonError};
+use std::sync::PoisonError;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use navo_index::file;
-use navo_index::ntfs::{NtfsError, NtfsIndex, SizeHint, UnresolvedChange, Volume};
+use navo_index::ntfs::{NtfsError, NtfsIndex, UnresolvedChange, Volume};
 use navo_index::pipe::CancelToken;
 
 use super::answer::Shared;
 use super::build_permit::{BUILDS, BuildPermit};
 use super::config::{Drive, index_path};
 use super::lifecycle::{
-    SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, build_hint, clear_failures,
+    SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, clear_failures,
     report_unknown_sizes, restore_or_enumerate,
 };
 use super::rebuild::{Cause, Rebuilds, error_kind, file_error_kind};
-use super::rebuild_session::{SaveInput, save_snapshot};
+use super::rebuild_session::{SaveInput, rebuild_hint, replace, save_snapshot};
 use super::service_log::Log;
 use super::storage::Storage;
 
@@ -116,7 +116,8 @@ impl Worker {
                 self.drive.letter
             ));
         }
-        self.replace(index);
+        replace(&self.shared, index);
+        self.clock.changed(self.started.elapsed());
         drop(permit);
         Ok(opened)
     }
@@ -129,7 +130,8 @@ impl Worker {
         cancel: &CancelToken,
     ) -> Result<(), NtfsError> {
         let (index, permit) = self.build(volume, cause, cancel)?;
-        self.replace(index);
+        replace(&self.shared, index);
+        self.clock.changed(self.started.elapsed());
         drop(permit);
         Ok(())
     }
@@ -165,17 +167,6 @@ impl Worker {
         Ok(unresolved)
     }
 
-    /// Sizes the next build from the index it replaces.
-    fn rebuild_hint(&self) -> SizeHint {
-        build_hint(
-            self.shared
-                .read()
-                .unwrap_or_else(PoisonError::into_inner)
-                .index
-                .as_deref(),
-        )
-    }
-
     fn build(
         &mut self,
         volume: &mut Volume,
@@ -199,7 +190,7 @@ impl Worker {
                 .status,
             total_files,
         );
-        let hint = self.rebuild_hint();
+        let hint = rebuild_hint(&self.shared);
         self.discard_snapshot()?;
         self.log_line(format_args!("build queued {}:", self.drive.letter));
         let permit = BUILDS.acquire(cancel)?;
@@ -245,18 +236,6 @@ impl Worker {
                 source,
             }),
         }
-    }
-
-    fn replace(&mut self, index: NtfsIndex) {
-        let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
-        state.status.progress = None;
-        let old = state.index.replace(Arc::new(index));
-        drop(old);
-        // Trim only after the old index is gone, so the copy does not double the rebuild peak.
-        if let Some(index) = state.index.as_mut().and_then(Arc::get_mut) {
-            index.table.trim_slack();
-        }
-        self.clock.changed(self.started.elapsed());
     }
 
     /// Saves a due snapshot, logging failures and returning them as I/O errors.
