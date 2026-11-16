@@ -21,7 +21,7 @@ mod stream;
 mod viewed;
 
 pub use hooks::DiffBackend;
-pub use navo_backend::diff_backend;
+pub use navo_backend::{diff_backend, navo_compare_dirs};
 
 #[cfg(test)]
 mod tests;
