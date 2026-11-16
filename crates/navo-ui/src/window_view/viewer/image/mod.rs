@@ -1,8 +1,9 @@
 mod copy;
-mod decode;
+use sidewise_ui::window_view::viewer::image::decode;
 mod draw;
-mod exif;
-mod svg;
+use sidewise_ui::window_view::viewer::image::exif;
+#[cfg(test)]
+use sidewise_ui::window_view::viewer::image::svg;
 mod view;
 mod zoom;
 

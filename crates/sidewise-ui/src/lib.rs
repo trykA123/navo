@@ -1,5 +1,5 @@
-//! Sidewise's compare screens: the folder-compare model, file diff, list UI and keys.
-//! Moved out of navo-ui; navo-ui re-exports each module under its old path.
+//! Sidewise's compare screens and viewer parts, moved out of navo-ui.
+//! Navo re-exports each module under its old path.
 #![forbid(unsafe_code)]
 
 pub mod browser;
@@ -15,6 +15,7 @@ pub mod compare_keys;
 pub mod compare_list;
 pub mod compare_visible;
 pub mod list_actions;
+pub mod window_view;
 
 #[allow(
     unused_imports,

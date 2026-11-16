@@ -13,7 +13,6 @@ use navo_core::{
 use navo_fs::view::Rows;
 use navo_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
 
-pub(crate) use compare::status_text;
 pub use compare::{
     BarView, CompareControl, CompareFilter, CompareHooks, CompareKind, CompareMode, ComparePhase,
     CompareRefusal, CompareRow, CompareSide, CompareSink, CompareTotals, CompareUpdate, ExitStep,

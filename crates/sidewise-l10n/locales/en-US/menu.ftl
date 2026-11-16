@@ -11,3 +11,4 @@ context-menu-loading = Loading…
 context-menu-could-not-load = Could not load
 context-menu-retry = Retry
 context-menu-no-match = No matching commands
+cmd-viewer-encoding = Choose the text encoding

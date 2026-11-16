@@ -4,13 +4,13 @@ mod find;
 mod follow;
 mod found;
 mod jobs;
-mod lines;
+use sidewise_ui::window_view::viewer::paged::lines;
 mod marking;
 mod moves;
-mod row_view;
+use sidewise_ui::window_view::viewer::paged::row_view;
 mod rows;
-mod scroll;
-mod spans;
+use sidewise_ui::window_view::viewer::paged::scroll;
+use sidewise_ui::window_view::viewer::paged::spans;
 mod view;
 
 use std::collections::HashMap;
@@ -20,9 +20,7 @@ use gpui_kit::{FocusHandle, Focusable, ScrollDelta, ScrollEvent, Task};
 use navo_core::paging::{LineIndex, MAX_ROW};
 
 pub(super) use body::PagedBody;
-pub(crate) use lines::HexLine;
 pub use lines::PagedKind;
-pub(crate) use row_view::hex_row_tinted;
 
 use super::files::{IndexRun, Paged, Reopen, SharedSource};
 use super::search::find_all::FoundRow;
