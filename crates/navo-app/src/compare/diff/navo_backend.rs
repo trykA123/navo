@@ -1,4 +1,4 @@
-//! Navo's `DiffBackend` constructor: it builds Navo's parts and adds the copy service.
+//! Navo's `DiffBackend` constructor: it builds Navo's parts and adds the copy service as its host.
 //!
 //! It sits beside the hooks so the glue can build its backend without reaching into `hooks`.
 
@@ -9,6 +9,7 @@ use navo_fs::ProviderOps;
 use navo_store::StoreDirs;
 use navo_ui::browser::LogFactory;
 
+use super::copy_hook::CopyService;
 use super::hooks::{DiffBackend, navo_parts};
 use super::sources::SPOOL_DIR;
 use crate::compare::dirs::CompareDirs;
@@ -24,7 +25,7 @@ pub fn diff_backend(
 ) -> Arc<DiffBackend> {
     let backend = DiffBackend::new(navo_parts(dirs, cache_db));
     Arc::new(match copy {
-        Some(factory) => backend.copying(factory, local.clone()),
+        Some(factory) => backend.with_copy_host(Arc::new(CopyService::new(factory, local.clone()))),
         None => backend,
     })
 }

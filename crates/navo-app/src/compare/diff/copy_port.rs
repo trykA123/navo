@@ -23,10 +23,6 @@ fn not_copyable() -> String {
 }
 
 /// Refuse `change` through `done` with the read-only text; nothing is written.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "G3a2 wires the host-less backend")
-)]
 pub(crate) fn refuse_change(change: &CopyChange, done: &CopySink) {
     done(CopyDone {
         request: change.pair.id,
@@ -36,10 +32,6 @@ pub(crate) fn refuse_change(change: &CopyChange, done: &CopySink) {
 }
 
 /// Refuse a sheet run through `done` with the read-only text; nothing is written.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "G3a2 wires the host-less backend")
-)]
 pub(crate) fn refuse_sheet(done: SheetSink) {
     done(SheetResult::Refused(not_copyable()));
 }

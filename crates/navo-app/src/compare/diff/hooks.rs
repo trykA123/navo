@@ -8,17 +8,14 @@ use std::sync::Arc;
 use navo_compare::model::Reason;
 use navo_compare::text::Options;
 use navo_core::Location;
-use navo_fs::ProviderOps;
-use navo_ui::browser::LogFactory;
 use navo_ui::compare_diff::{
     CompareOptions, CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest, SheetPlan,
-    SheetPlanSink, SheetResult, SheetSink, StreamControl, StreamSink,
+    SheetPlanSink, SheetSink, StreamControl, StreamSink,
 };
 
 use super::super::settings::CompareSettings;
 use super::cards;
-use super::copy::CopyRefusal;
-use super::copy_hook::{CopyService, unavailable};
+use super::copy_port::{CopyHost, refuse_change, refuse_sheet};
 use super::load::{LoadInput, Side};
 use super::pair::{EnginePlan, PairDiff};
 use super::sides::{side_of, unreadable_side};
@@ -32,13 +29,13 @@ use crate::compare::dirs::CompareDirs;
 pub(crate) type SideFn =
     Arc<dyn Fn(&Location, &CompareSettings) -> Result<Side, Reason> + Send + Sync>;
 
-/// The app's `DiffHooks`: builds local and Git file sides and owns the Viewed store. Copying a
-/// change needs the compare job factory; without one every copy is refused.
+/// The app's `DiffHooks`: builds local and Git file sides and owns the Viewed store. Copies and
+/// saves go only through the host's `CopyHost`; without one every write is refused (read-only).
 pub struct DiffBackend {
     dirs: CompareDirs,
     side: SideFn,
     viewed: Arc<LazyViewed>,
-    copy: Option<CopyService>,
+    copy: Option<Arc<dyn CopyHost>>,
 }
 
 /// What a host passes to build a backend: its folders, its side builder and its Viewed opener.
@@ -82,15 +79,9 @@ impl DiffBackend {
         })
     }
 
-    /// The default backend whose copies run through `factory` and write with `ops`.
-    #[cfg(test)]
-    pub(crate) fn with_copy(factory: LogFactory, ops: Arc<dyn ProviderOps>) -> Self {
-        Self::default().copying(factory, ops)
-    }
-
-    /// This backend with its copies run through `factory`, writing with `ops`.
-    pub(crate) fn copying(mut self, factory: LogFactory, ops: Arc<dyn ProviderOps>) -> Self {
-        self.copy = Some(CopyService::new(factory, ops));
+    /// This backend with every copy and save written through `host`.
+    pub fn with_copy_host(mut self, host: Arc<dyn CopyHost>) -> Self {
+        self.copy = Some(host);
         self
     }
 
@@ -151,35 +142,36 @@ impl DiffHooks for DiffBackend {
         ))
     }
 
-    /// Copy one change on a new thread, or refuse when the app has no job factory.
+    /// Copy one change through the host, or refuse when there is no host.
     fn copy_change(&self, change: CopyChange, done: CopySink) {
         match &self.copy {
-            Some(service) => service.start(change, done),
-            None => unavailable(&change, &done),
+            Some(host) => host.copy_change(change, done),
+            None => refuse_change(&change, &done),
         }
     }
 
-    /// Plan many changes on a new thread, or report an empty plan without a job factory.
+    /// Plan many changes through the host, or report an empty plan when there is no host.
     fn plan_sheet(&self, changes: Vec<CopyChange>, planned: SheetPlanSink) {
         match &self.copy {
-            Some(service) => service.plan_sheet(changes, planned),
+            Some(host) => host.plan_sheet(changes, planned),
             None => planned(SheetPlan::default()),
         }
     }
 
-    /// Run the last plan as one job on a new thread, or refuse without a job factory.
+    /// Run the last plan through the host, or refuse when there is no host.
     fn run_sheet(&self, done: SheetSink) {
         match &self.copy {
-            Some(service) => service.run_sheet(done),
-            None => done(SheetResult::Refused(CopyRefusal::NotCopyable.text())),
+            Some(host) => host.run_sheet(done),
+            None => refuse_sheet(done),
         }
     }
 
-    /// Copy several changes of one pair as one job, or refuse when there is no job factory.
+    /// Copy several changes of one pair through the host as one job; without a host, refuse the
+    /// first change only. No changes send nothing.
     fn copy_changes(&self, changes: Vec<CopyChange>, done: CopySink) {
         match (&self.copy, changes.first()) {
-            (Some(service), Some(_)) => service.start_many(changes, done),
-            (None, Some(first)) => unavailable(first, &done),
+            (Some(host), Some(_)) => host.copy_changes(changes, done),
+            (None, Some(first)) => refuse_change(first, &done),
             (_, None) => {}
         }
     }

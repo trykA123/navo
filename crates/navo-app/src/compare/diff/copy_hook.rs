@@ -15,6 +15,8 @@ use super::copy::{CopyContext, CopyRefusal, CopyRequest, copy_change};
 use super::copy_many::plan::plan_sheet;
 use super::copy_many::run_sheet;
 use super::copy_port::CopyHost;
+#[cfg(test)]
+use super::hooks::DiffBackend;
 use super::hooks::rules;
 use super::sheet_hook::SheetSlot;
 
@@ -169,13 +171,10 @@ impl CopyService {
     }
 }
 
-/// The refusal for an app that has no job factory (no profile folder).
-pub(super) fn unavailable(change: &CopyChange, done: &CopySink) {
-    done(CopyDone {
-        request: change.pair.id,
-        direction: change.direction,
-        result: CopyResult::Refused(CopyRefusal::NotCopyable.text()),
-    });
+/// Navo's default backend whose copies run as jobs through `factory` and write with `ops`.
+#[cfg(test)]
+pub(crate) fn navo_copy_backend(factory: LogFactory, ops: Arc<dyn ProviderOps>) -> DiffBackend {
+    DiffBackend::default().with_copy_host(Arc::new(CopyService::new(factory, ops)))
 }
 
 /// Navo's write side: each copy runs as a compare job through the local provider (NC109).
