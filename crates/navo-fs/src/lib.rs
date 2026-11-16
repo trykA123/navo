@@ -57,6 +57,7 @@ pub use provider::{
     UnixAccess, VerifiedRename,
 };
 pub use scan::{existing_at, scan};
+pub use sidewise_fs::walk;
 pub use sidewise_fs::{
     CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
 };

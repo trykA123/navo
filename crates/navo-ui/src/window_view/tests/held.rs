@@ -15,7 +15,7 @@ use super::press;
 use crate::primitives::{GPU_IMAGES, read_tally};
 use crate::window_view::{FileHooks, FileText, Head, NavoWindow, Paged, PdfPages};
 
-const INTER: &[u8] = include_bytes!("../../../fonts/Inter-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../sidewise-kit/fonts/Inter-Regular.ttf");
 const ZIP_HEAD: &[u8] = b"PK\x03\x04\x14\x00\x00\x00\x08\x00";
 const PDF_HEAD: &[u8] = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n\x00";
 const SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="12"><rect width="12" height="12" fill="#f00"/></svg>"##;

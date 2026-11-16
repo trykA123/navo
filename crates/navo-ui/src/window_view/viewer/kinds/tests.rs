@@ -207,7 +207,7 @@ fn svg_stays_an_image_when_the_image_kind_exists() {
     assert!(ids.contains(&"tree"));
 }
 
-const INTER: &[u8] = include_bytes!("../../../../fonts/Inter-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../../sidewise-kit/fonts/Inter-Regular.ttf");
 
 fn best(head: &[u8], name: &str) -> &'static str {
     let sniff = Sniff {

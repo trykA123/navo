@@ -5,12 +5,12 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::{EventEmitter, Task};
 
+use super::files::CompareFiles;
 use super::look::{Look, LookDefaults};
 use super::resync::ResyncStep;
 use super::{DiffSlot, ScreenStack};
 use crate::compare_diff::{CompareOptions, PairRequest, StreamList};
 use crate::prelude::*;
-use crate::window_view::FileHooks;
 
 /// The file diff, Stream and inboxes owned by one compare screen.
 pub(in crate::window_view) struct ScreenParts {
@@ -22,7 +22,7 @@ pub(in crate::window_view) struct ScreenParts {
 pub struct CompareScreen {
     pub(in crate::window_view) compare: ScreenParts,
     options: CompareOptions,
-    files: FileHooks,
+    files: CompareFiles,
     sides: SharedString,
     stamp: Option<(u64, u64)>,
     look: LookDefaults,
@@ -30,11 +30,12 @@ pub struct CompareScreen {
 
 impl CompareScreen {
     /// Creates an empty screen with its diff inbox, compare options and file hooks.
-    pub fn new(diff: DiffSlot, options: CompareOptions, files: FileHooks) -> Self {
+    /// Takes any `Into<CompareFiles>`, so Navo can pass its `FileHooks`.
+    pub fn new(diff: DiffSlot, options: CompareOptions, files: impl Into<CompareFiles>) -> Self {
         Self {
             compare: ScreenParts { screen: None, diff },
             options,
-            files,
+            files: files.into(),
             sides: SharedString::default(),
             stamp: None,
             look: LookDefaults::default(),
@@ -76,8 +77,8 @@ impl CompareScreen {
         self.options.clone()
     }
 
-    /// The app's file hooks, used to read a side's bytes and bodies.
-    pub fn screen_files(&self) -> FileHooks {
+    /// The host's file source, used to read a side's bytes and bodies.
+    pub fn screen_files(&self) -> CompareFiles {
         self.files.clone()
     }
 

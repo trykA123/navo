@@ -5,7 +5,6 @@ use std::sync::Arc;
 use super::NavoWindow;
 use crate::app_menu::Setting;
 use crate::browser::Browser;
-use crate::compare_diff::CompareOptions;
 use crate::prelude::*;
 use crate::settings::{Change, Field, Values};
 
@@ -155,7 +154,7 @@ impl NavoWindow {
     pub(super) fn set_values(&mut self, values: Values, window: &Window, cx: &mut App) {
         let old = std::mem::replace(&mut self.values, values);
         self.compare.screen.update(cx, |screen, _| {
-            screen.set_options(CompareOptions::from_values(&self.values));
+            screen.set_options(crate::settings::compare_options(&self.values));
         });
         let looks = |values: &Values| {
             (

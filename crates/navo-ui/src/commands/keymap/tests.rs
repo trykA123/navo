@@ -1,4 +1,4 @@
-use super::{BUILTIN, Keymap, KeymapError, KeymapWarning, shown};
+use super::{Keymap, KeymapError, KeymapWarning, builtin, shown};
 
 fn one(command: &str, keys: &str, context: Option<&str>) -> String {
     let context = context.map_or_else(String::new, |context| format!("context = \"{context}\"\n"));
@@ -11,7 +11,7 @@ fn error_of(text: &str) -> Option<KeymapError> {
 
 #[test]
 fn the_built_in_keymap_parses_and_validates() {
-    let parsed = Keymap::parse(BUILTIN);
+    let parsed = Keymap::parse(builtin());
     assert_eq!(parsed.as_ref().err(), None);
     assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(556));
 }
@@ -254,7 +254,7 @@ fn compare_binds(keymap: &Keymap) -> Vec<(&'static str, String, Vec<String>)> {
 #[test]
 fn hidden_compare_binds_are_left_out_of_the_built_in_and_user_keymaps() {
     let _hidden = crate::compare_visible::hide_compare();
-    let builtin = Keymap::parse(BUILTIN).expect("keymap");
+    let builtin = Keymap::parse(builtin()).expect("keymap");
     assert_eq!(compare_binds(&builtin), []);
     let user = one("compare.exit", "\"escape\"", None) + &one("compare.nope", "\"f1\"", None);
     let overlaid = builtin.overlay(&user).expect("overlay");
@@ -264,7 +264,7 @@ fn hidden_compare_binds_are_left_out_of_the_built_in_and_user_keymaps() {
 #[test]
 fn visible_compare_binds_follow_the_key_table() {
     let _shown = crate::compare_visible::show_compare();
-    let keymap = Keymap::parse(BUILTIN).expect("keymap");
+    let keymap = Keymap::parse(builtin()).expect("keymap");
     let keyed = |name: &str, context: &str| -> Vec<String> {
         compare_binds(&keymap)
             .into_iter()
@@ -316,7 +316,7 @@ fn visible_compare_binds_follow_the_key_table() {
 #[test]
 fn visible_pick_binds_follow_the_key_table() {
     let _shown = crate::compare_visible::show_compare();
-    let keymap = Keymap::parse(BUILTIN).expect("keymap");
+    let keymap = Keymap::parse(builtin()).expect("keymap");
     let keyed = |name: &str, context: &str| -> Vec<String> {
         compare_binds(&keymap)
             .into_iter()
@@ -336,7 +336,7 @@ fn visible_pick_binds_follow_the_key_table() {
 #[gpui_kit::test]
 fn visible_compare_binds_build_gpui_key_bindings(cx: &mut gpui_kit::TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
-    let keymap = Keymap::parse(BUILTIN).expect("keymap");
+    let keymap = Keymap::parse(builtin()).expect("keymap");
     let built = cx.update(|cx| crate::commands::key_bindings(&keymap, cx, Some("compare")));
     assert_eq!(built.len(), 39);
 }
@@ -425,7 +425,7 @@ fn a_bare_digit_for_a_layout_verb_warns_and_stays_in_the_keymap() {
 #[test]
 fn visible_compare_menu_opens_with_shift_f10_and_the_menu_key() {
     let _shown = crate::compare_visible::show_compare();
-    let keymap = Keymap::parse(BUILTIN).expect("keymap");
+    let keymap = Keymap::parse(builtin()).expect("keymap");
     let keys: Vec<String> = compare_binds(&keymap)
         .into_iter()
         .filter(|(bound, at, _)| *bound == "compare.show_menu" && at == "CompareView")

@@ -5,11 +5,11 @@ use navo_core::{AppState, Command, CursorMove, Direction, Location};
 use navo_fs::{FakeFs, ProviderOps};
 
 use super::super::Browser;
-use super::super::tests::settle;
-use super::{
+use super::super::compare::{
     CompareControl, CompareHooks, CompareKind, CompareRow, CompareSide, CompareSink, CompareUpdate,
     RowStatus,
 };
+use super::super::tests::settle;
 use crate::compare_diff::CompareOptions;
 
 mod mode;

@@ -36,7 +36,7 @@ pub use syntax::{SyntaxTheme, TintLook, highlight_theme, on_tint};
 pub use system_palette::{
     SystemPalette, contrast_theme, from_colorref, set_system_palette_reader, system_palette,
 };
-pub(crate) use system_palette::{map_contrast_colors, with_system_palette};
+pub use system_palette::{map_contrast_colors, with_system_palette};
 pub use treemap::{TreemapLook, treemap_look};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]

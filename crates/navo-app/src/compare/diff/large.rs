@@ -17,7 +17,7 @@ use navo_core::paging::TextLayout;
 use navo_ui::compare_diff::{DiffSink, DiffUpdate, PairControl, PairRequest};
 
 use super::super::settings::CompareSettings;
-use super::sides::side_of;
+use super::sides::navo_side_of;
 use super::sources::{Sources, empty_source};
 
 mod acks;
@@ -223,7 +223,7 @@ fn build_side(
             layout: TextLayout::default(),
         });
     };
-    let (side, entry) = side_of(location, &input.settings)?;
+    let (side, entry) = navo_side_of(location, &input.settings)?;
     let text = TextSide::decode(side.as_ref(), &entry, input.fallback)?;
     let layout = match text {
         TextSide::Whole(whole) => whole.layout,

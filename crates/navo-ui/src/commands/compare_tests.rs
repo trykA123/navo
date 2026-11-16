@@ -2,7 +2,9 @@ use gpui_kit::{App, TestAppContext};
 use navo_l10n::catalog;
 
 use super::{all, by_name, entries, for_action, is_hidden, registry};
+use crate::compare_keys::COMPARE_LABELS;
 use crate::compare_visible::{hide_compare, show_compare};
+use crate::window_view::CompareScreen;
 
 fn compare_names() -> Vec<&'static str> {
     registry()
@@ -145,4 +147,21 @@ fn every_compare_action_exists(cx: &mut TestAppContext) {
             .collect()
     });
     assert_eq!(missing, Vec::<&str>::new());
+}
+
+#[test]
+fn compare_copy_menu_never_lists_a_command_that_is_not_built() {
+    let _shown = show_compare();
+    for name in CompareScreen::menu_action_names() {
+        let spec = for_action(name).expect("a registered action");
+        assert!(!is_hidden(spec.name), "{name}");
+    }
+}
+
+#[test]
+fn compare_labels_match_the_registry() {
+    for (command, label) in COMPARE_LABELS {
+        let spec = by_name(command).unwrap_or_else(|| panic!("{command} is not registered"));
+        assert_eq!(spec.label, *label, "{command}");
+    }
 }

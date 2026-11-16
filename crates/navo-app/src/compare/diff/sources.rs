@@ -16,7 +16,7 @@ use navo_core::paging::ByteSource;
 use navo_fs::{PagedFile, os_path};
 
 use super::super::settings::CompareSettings;
-use super::sides::side_of;
+use super::sides::navo_side_of;
 
 mod spool;
 
@@ -114,7 +114,7 @@ impl Sources {
         if location.provider().as_str() != "git" {
             return Err(Reason::Unsupported);
         }
-        let (side, entry) = side_of(location, settings)?;
+        let (side, entry) = navo_side_of(location, settings)?;
         self.open_git(side.as_ref(), &entry, cancel)
     }
 

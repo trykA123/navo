@@ -58,7 +58,7 @@ impl RetainedHooks for NoRetained {
 pub(super) struct HookSlots {
     pub rename: RenameSettings,
     pub retained: Arc<dyn RetainedHooks>,
-    pub compare: super::compare::CompareSlot,
+    pub compare: super::pane_compare::CompareSlot,
 }
 
 impl Default for HookSlots {
@@ -66,7 +66,7 @@ impl Default for HookSlots {
         Self {
             rename: RenameSettings::default(),
             retained: Arc::new(NoRetained),
-            compare: super::compare::CompareSlot::default(),
+            compare: super::pane_compare::CompareSlot::default(),
         }
     }
 }

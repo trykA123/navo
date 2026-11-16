@@ -2,7 +2,7 @@ use navo_core::CursorMove;
 
 use super::mode::{deliver, root_rows, select, selected, start, visible};
 use super::{browser, row, rows, sides};
-use crate::browser::compare::view::{look_of, status_text};
+use crate::browser::compare::{look_of, status_text};
 use crate::browser::{
     CompareFilter, CompareKind, CompareRow, CompareSide, CompareTotals, CompareUpdate, RowProgress,
     RowStatus, Tone, bar_view, empty_text, pane_rows,

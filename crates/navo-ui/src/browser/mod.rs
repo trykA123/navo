@@ -383,6 +383,7 @@ impl Browser {
 
 mod cached;
 mod compare;
+mod pane_compare;
 #[cfg(test)]
 pub(crate) use cached::tests::gated::Gated as GatedFs;
 mod filter;
