@@ -24,6 +24,7 @@ mod scan;
 mod slow;
 mod snapshot;
 pub mod view;
+mod volume;
 mod watch;
 
 pub use code_page::{ansi_code_page, encoding_for_code_page};
