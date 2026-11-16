@@ -11,6 +11,8 @@ use std::hint::black_box;
 use gungraun::{
     Callgrind, LibraryBenchmarkConfig, library_benchmark, library_benchmark_group, main,
 };
+use sidewise_engine as navo_compare;
+
 use navo_compare::text::intraline::{SideLine, intraline_unbounded};
 use navo_compare::text::side::LineSet;
 use navo_compare::text::{

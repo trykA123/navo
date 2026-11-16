@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use sidewise_engine as navo_compare;
+
 use navo_compare::model::{Budget, CancelToken};
 use navo_compare::text::large::{Covered, DiffEvent, LargeDiff, LargeSide, Request, StepReason};
 use navo_compare::text::normalise::Options;

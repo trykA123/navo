@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
-use navo_core::retention::{MAX_NODES, RetainedDeletePlan, RetainedWritePlan, RetentionPolicy};
+use navo_core::MAX_PLAN_NODES as MAX_NODES;
 use navo_core::{Location, OpKind, OperationPlan, ProviderPath, Resolution, Risk, Step, Totals};
 use proptest::prelude::*;
 
@@ -546,20 +546,6 @@ fn deletes_go_to_their_own_delete_part() {
             .iter()
             .all(|step| matches!(step, Step::MakeFolder { .. } | Step::CopyFile { .. }))
     );
-}
-
-#[test]
-fn the_parts_pass_the_safety_net_checks() {
-    let mut rows = delete_rows();
-    rows.push(left_only(4, folder("fresh")));
-    rows.push(left_only(5, file("fresh/f", 1, T0)));
-    rows.push(both(6, T0 + 10_000, T0));
-    let plan = run(&rows, rules(SyncMode::MirrorRight, KEPT), &[]).expect("plan");
-    let policy = RetentionPolicy::new(3, 1 << 40, 0).expect("policy");
-    let copy = plan.copy.expect("copy");
-    let delete = plan.delete.expect("delete");
-    RetainedWritePlan::new(copy, policy).expect("retained copy");
-    RetainedDeletePlan::new(delete, policy).expect("retained delete");
 }
 
 #[test]

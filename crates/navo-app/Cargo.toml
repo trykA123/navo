@@ -38,7 +38,7 @@ imagesize = "=0.13.0"
 mimalloc = { version = "=0.1.52", optional = true, default-features = false }
 navo-cache = { path = "../navo-cache" }
 navo-clipboard = { path = "../navo-clipboard" }
-navo-compare = { path = "../navo-compare" }
+navo-compare = { package = "sidewise-engine", path = "../sidewise-engine" }
 navo-core = { path = "../navo-core" }
 navo-diag = { path = "../navo-diag" }
 navo-fs = { path = "../navo-fs" }

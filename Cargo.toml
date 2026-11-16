@@ -4,6 +4,9 @@ members = ["crates/*", "xtask"]
 default-members = ["crates/*"]
 exclude = ["vendor"]
 
+[workspace.dependencies]
+navo-core = { package = "sidewise-core", path = "crates/sidewise-core" }
+
 [workspace.package]
 version = "0.7.0"
 edition = "2024"

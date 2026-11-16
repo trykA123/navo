@@ -3,7 +3,7 @@ pub const SLUG: &str = "navo";
 pub const LEGACY_NAME: &str = "Ferrite";
 pub const LEGACY_SLUG: &str = "ferrite";
 
-pub const TEMP_SUFFIX: &str = ".navo-part";
+pub use sidewise_core::TEMP_SUFFIX;
 pub const LEGACY_TEMP_SUFFIX: &str = ".ferrite-part";
 pub const RENAME_PREFIX: &str = ".navo-rename-";
 pub const LEGACY_RENAME_PREFIX: &str = ".ferrite-rename-";

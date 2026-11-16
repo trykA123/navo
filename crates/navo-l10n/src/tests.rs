@@ -45,6 +45,16 @@ fn a_plain_message_comes_from_the_embedded_files() {
 }
 
 #[test]
+fn the_compare_texts_come_from_sidewise_l10n() {
+    assert!(!FILES.iter().any(|(name, _)| *name == "compare.ftl"));
+    assert_eq!(
+        tr("compare-could-not-start"),
+        "The compare could not start."
+    );
+    assert!(catalog().has("compare-could-not-start"));
+}
+
+#[test]
 fn the_macro_passes_named_arguments() {
     assert_eq!(t!("fixture-greeting", name = "Ana"), "Hello, Ana!");
 }

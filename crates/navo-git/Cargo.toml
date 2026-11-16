@@ -11,7 +11,7 @@ license.workspace = true
 gix-config = { version = "=0.62.2", default-features = false, features = ["sha1", "sha256"] }
 gix-discover = { version = "=0.57.1", default-features = false, features = ["sha1", "sha256"] }
 gix = { version = "=0.90.0", default-features = false, features = ["sha1", "revision", "status"] }
-navo-compare = { path = "../navo-compare" }
+navo-compare = { package = "sidewise-engine", path = "../sidewise-engine" }
 navo-shell = { path = "../navo-shell" }
 sha2 = "=0.11.1"
 
