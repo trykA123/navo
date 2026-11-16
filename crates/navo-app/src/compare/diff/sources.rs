@@ -16,7 +16,8 @@ use navo_core::paging::ByteSource;
 use navo_fs::{PagedFile, os_path};
 
 use super::super::settings::CompareSettings;
-use super::sides::navo_side_of;
+use super::hooks::SideFn;
+use super::sides::side_of;
 
 mod spool;
 
@@ -55,22 +56,28 @@ fn check_root(root: &Path) -> Result<(), &'static str> {
 pub(crate) struct Sources {
     owner: Option<Arc<Owner>>,
     opens: Arc<AtomicU64>,
+    /// The backend's side builder; Git blobs are read through the side it builds.
+    side: SideFn,
 }
 
 impl Sources {
-    /// Sources with no spool folder; a Git blob over the limit reports a read error.
+    /// Sources with no spool folder and `StdSide` sides; a Git blob over the limit reports a
+    /// read error.
     pub(crate) fn without_spool() -> Self {
         Self {
             owner: None,
             opens: Arc::default(),
+            side: Arc::new(side_of),
         }
     }
 
-    /// Sources that spool under this process's folder in `base`.
-    pub(crate) fn new(base: Option<PathBuf>) -> Self {
+    /// Sources that spool under this process's folder in `base` and build sides with `side`,
+    /// the backend's side builder.
+    pub(crate) fn new(base: Option<PathBuf>, side: SideFn) -> Self {
         Self {
             owner: base.and_then(|base| owner_for(&base)),
             opens: Arc::default(),
+            side,
         }
     }
 
@@ -100,7 +107,8 @@ impl Sources {
         self.opens.load(Ordering::Relaxed)
     }
 
-    /// Open one fresh source for `location`; `cancel` stops a large Git copy.
+    /// Open one fresh source for `location`; a Git blob is read through the backend's side
+    /// builder. `cancel` stops a large Git copy.
     pub(crate) fn open(
         &self,
         location: &Location,
@@ -114,7 +122,7 @@ impl Sources {
         if location.provider().as_str() != "git" {
             return Err(Reason::Unsupported);
         }
-        let (side, entry) = navo_side_of(location, settings)?;
+        let (side, entry) = (self.side)(location, settings)?;
         self.open_git(side.as_ref(), &entry, cancel)
     }
 

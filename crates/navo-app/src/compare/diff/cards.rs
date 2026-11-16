@@ -53,7 +53,7 @@ pub(crate) fn detail_fn(plan: EnginePlan) -> DetailFn {
                             run: 0,
                             budget: plan.budget,
                         },
-                        sources: Sources::new(spool_path(&plan)),
+                        sources: Sources::new(spool_path(&plan), Arc::clone(&plan.side)),
                         settings: plan.settings.clone(),
                     },
                     &job.cancel,

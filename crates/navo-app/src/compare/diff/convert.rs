@@ -11,7 +11,7 @@ use navo_ui::compare_diff::{
     Card, CardRow, DiffRow, HunkView, PairFacts, PairText, RowSpans, ViewedKey,
 };
 
-use super::copy::shown_digest;
+use super::digest::shown_digest;
 use super::load::Loaded;
 
 /// The pair text for a text or one-sided pair; `None` for a summary-only kind.

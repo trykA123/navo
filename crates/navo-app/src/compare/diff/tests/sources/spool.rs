@@ -16,7 +16,10 @@ fn the_startup_sweep_cleans_the_folder_new_spools_go_to() {
     let stale = root.join("222-2");
     fs::create_dir_all(&stale).unwrap();
     fs::write(stale.join("owner.lock"), b"").unwrap();
-    let sources = Sources::new(Some(root.clone()));
+    let sources = Sources::new(
+        Some(root.clone()),
+        std::sync::Arc::new(crate::compare::diff::sides::side_of),
+    );
     let fake = FakeSide::zeros(3 * MIB as u64);
     let entry = entry("big.bin", 3 * MIB as u64);
     let _spooled = sources

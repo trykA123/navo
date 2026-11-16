@@ -2,7 +2,6 @@
 //!
 //! The hooks only start workers: sides and the Viewed store are opened on those workers.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use navo_compare::model::Reason;
@@ -18,10 +17,10 @@ use super::cards;
 use super::copy_port::{CopyHost, refuse_change, refuse_sheet};
 use super::load::{LoadInput, Side};
 use super::pair::{EnginePlan, PairDiff};
-use super::sides::{navo_side_of, side_of, unreadable_side};
+use super::sides::{side_of, unreadable_side};
 use super::sources::Sources;
 use super::stream::{LoadFn, StreamParts, StreamSession};
-use super::viewed::{LazyViewed, MemoryViewed, OpenViewed, ViewedMarks, opener};
+use super::viewed::{LazyViewed, MemoryViewed, OpenViewed, ViewedMarks};
 use crate::compare::convert::settings_from;
 use crate::compare::dirs::CompareDirs;
 
@@ -94,15 +93,6 @@ impl DiffBackend {
     /// building sides with this backend's side builder.
     pub(super) fn plan(&self, settings: CompareSettings) -> EnginePlan {
         EnginePlan::new(settings, self.dirs.spool.clone(), Arc::clone(&self.side))
-    }
-}
-
-/// Navo's sides over `dirs`, with Viewed marks in the cache file `cache_db` (memory if `None`).
-pub(super) fn navo_parts(dirs: CompareDirs, cache_db: Option<PathBuf>) -> BackendParts {
-    BackendParts {
-        dirs,
-        side: Arc::new(navo_side_of),
-        viewed: opener(cache_db),
     }
 }
 

@@ -167,7 +167,7 @@ pub(crate) fn large_input(
         right: request.right.clone(),
         settings: plan.settings.clone(),
         side: Arc::clone(&plan.side),
-        sources: Sources::new(spool_path(plan)),
+        sources: Sources::new(spool_path(plan), Arc::clone(&plan.side)),
         options: load.options,
         fallback: load.fallback,
         budget: plan.budget,

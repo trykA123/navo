@@ -7,6 +7,7 @@ mod convert;
 mod copy;
 mod copy_hook;
 mod copy_many;
+mod digest;
 mod hooks;
 mod large;
 mod navo_backend;
