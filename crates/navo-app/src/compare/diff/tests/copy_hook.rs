@@ -62,11 +62,7 @@ fn copy_sink() -> (CopySink, Receiver<CopyDone>) {
 fn all_changes(backend: &DiffBackend, left: &Path, right: &Path) -> Vec<CopyChange> {
     let (sink, receiver) = sink();
     let pair = request(9, left, right);
-    let _control = backend.open_pair(
-        pair.clone(),
-        &CompareOptions::default(),
-        sink,
-    );
+    let _control = backend.open_pair(pair.clone(), &CompareOptions::default(), sink);
     let DiffUpdate::Opened { text, .. } = receiver.recv_timeout(WAIT).unwrap() else {
         panic!("expected Opened");
     };
