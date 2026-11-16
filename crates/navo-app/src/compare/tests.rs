@@ -8,6 +8,7 @@ mod pane;
 mod rules;
 mod settings;
 mod side_target;
+mod std_side;
 
 use std::fs;
 use std::path::Path;

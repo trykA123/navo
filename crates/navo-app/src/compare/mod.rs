@@ -35,6 +35,7 @@ pub(crate) mod local;
 mod pane;
 mod rules;
 pub(crate) mod settings;
+mod std_side;
 
 pub use pane::{LocalTarget, PaneCompare};
 
