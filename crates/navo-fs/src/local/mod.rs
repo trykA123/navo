@@ -4,7 +4,6 @@ mod guard;
 mod hash;
 #[cfg(windows)]
 mod hidden;
-mod identity;
 mod link;
 #[cfg(target_os = "linux")]
 mod linux_watch;
@@ -28,8 +27,6 @@ use windows as platform;
 mod ops;
 mod space;
 mod stream;
-#[cfg(any(windows, test))]
-mod verbatim;
 #[cfg(any(unix, windows))]
 mod verified;
 #[cfg(windows)]
@@ -59,11 +56,14 @@ use std::ffi::OsStr;
 use std::fs::{self, DirEntry, Metadata};
 use std::io;
 use std::iter::Peekable;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::UNIX_EPOCH;
 
 use navo_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, ProviderPath};
 
+#[cfg(any(windows, test))]
+pub(crate) use crate::native::verbatim;
+pub use crate::native::{error, identity, native_identity, os_path};
 pub(crate) use guard::refuse_reserved;
 pub use guard::{MutationLocations, mutation_location, save_location};
 pub use link::make_link;
@@ -254,13 +254,6 @@ impl Provider for LocalFs {
     }
 }
 
-pub fn os_path(location: &Location) -> Result<PathBuf, FsError> {
-    if !location.is_local() {
-        return Err(error(FsErrorKind::NameInvalid, location));
-    }
-    platform::os_path(location.path()).ok_or_else(|| error(FsErrorKind::NameInvalid, location))
-}
-
 fn open_failure(failure: &io::Error, path: &Path, folder: &Location) -> FsError {
     let mut failure = io_error(failure, folder);
     if failure.kind == FsErrorKind::NotFound
@@ -355,13 +348,6 @@ fn modified_ms(metadata: &Metadata) -> Option<i64> {
     }
 }
 
-fn error(kind: FsErrorKind, location: &Location) -> FsError {
-    FsError {
-        location: Some(location.clone()),
-        ..FsError::new(kind)
-    }
-}
-
 fn io_error(failure: &io::Error, location: &Location) -> FsError {
     let os_code = failure.raw_os_error();
     let kind = os_code.map_or_else(|| kind_of_io(failure.kind()), platform::error_kind);
@@ -398,16 +384,12 @@ fn kind_of_io(kind: io::ErrorKind) -> FsErrorKind {
 
 /// The volume root that contains `path`, spelled by the nearest ancestor of `path`.
 #[cfg(windows)]
-pub fn volume_mount_point(path: &Path) -> io::Result<PathBuf> {
+pub fn volume_mount_point(path: &Path) -> io::Result<std::path::PathBuf> {
     let mount = win_volume::mount_point(path)?;
     path.ancestors()
         .find(|level| win_volume::is_mount_point(level, &mount))
         .map(Path::to_path_buf)
         .ok_or_else(|| io::Error::other(format!("{} has no volume mount point", path.display())))
-}
-
-pub fn native_identity(path: &std::path::Path) -> std::io::Result<Option<crate::FileIdentity>> {
-    identity::read(path)
 }
 
 pub fn native_rename_atomic(

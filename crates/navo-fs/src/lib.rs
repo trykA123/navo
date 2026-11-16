@@ -15,6 +15,7 @@ mod io_queue;
 mod job;
 mod local;
 mod measure;
+mod native;
 mod network_walk;
 mod paged;
 mod protection;
