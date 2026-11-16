@@ -3,6 +3,7 @@
 use std::io::Read;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use navo_compare::model::{
     CancelToken, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource, Stamp,
@@ -17,6 +18,7 @@ use navo_git::{
 };
 
 use super::entry::{reason_of, segments};
+use super::handle::CompareTarget;
 use super::local::feed;
 use super::settings::CompareSettings;
 
@@ -77,6 +79,37 @@ impl GitSide {
         let inner = segments(rel).join("/");
         location(&self.repo, &self.rev, &inner).map_err(|_| Reason::Unsupported)
     }
+}
+
+/// A target that opens `rev` of `repo` on the session thread, with the Git engine `settings` pick.
+/// The settings are cloned now; the engine is chosen when the opener runs.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "test-only until Sidewise builds Git targets (IB2)"
+    )
+)]
+pub(crate) fn git_target(repo: PathBuf, rev: String, settings: &CompareSettings) -> CompareTarget {
+    let settings = settings.clone();
+    CompareTarget::Side(Box::new(move || {
+        let engine = engine_for(&settings, &repo);
+        Ok(Arc::new(GitSide::new(repo, rev, engine)?) as Arc<dyn SideSource>)
+    }))
+}
+
+/// A target that reads `rev` of `repo` straight from its object database, on the session thread.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "test-only until Sidewise builds Git targets (IB2)"
+    )
+)]
+pub(crate) fn git_raw_target(repo: PathBuf, rev: String) -> CompareTarget {
+    CompareTarget::Side(Box::new(move || {
+        Ok(Arc::new(GitSide::new_raw_odb(repo, rev)?) as Arc<dyn SideSource>)
+    }))
 }
 
 fn git_fs(engine: EngineKind) -> GitFs {

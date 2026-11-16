@@ -1,6 +1,5 @@
 //! The session thread: owns the engine session and forwards its batches to the UI.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
@@ -12,19 +11,19 @@ use navo_core::Location;
 use navo_ui::compare_diff::CompareOptions;
 
 use super::convert::settings_from;
-use super::git_side::GitSide;
-use super::git_side::engine_for;
 use super::local::LocalSide;
 use super::rules;
 use super::settings::{CompareSettings, network_cap};
 
 const POLL: Duration = Duration::from_millis(10);
 
-/// One side of a compare.
+/// Opens one side of a compare. It runs on the session thread, never on the UI thread.
+pub type SideOpener = Box<dyn FnOnce() -> Result<Arc<dyn SideSource>, Reason> + Send>;
+
+/// One side of a compare: a local folder, or an opener the session thread runs.
 pub enum CompareTarget {
     Local(Location),
-    Git { repo: PathBuf, rev: String },
-    GitRawOdb { repo: PathBuf, rev: String },
+    Side(SideOpener),
 }
 
 pub struct CompareStart {
@@ -183,9 +182,8 @@ impl Drop for CompareHandle {
 
 fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
     let mut refresh = Vec::new();
-    let settings = &request.settings;
-    let left = open_side(request.left, settings, &mut refresh).map_err(CompareError::Left)?;
-    let right = open_side(request.right, settings, &mut refresh).map_err(CompareError::Right)?;
+    let left = open_side(request.left, &mut refresh).map_err(CompareError::Left)?;
+    let right = open_side(request.right, &mut refresh).map_err(CompareError::Right)?;
     let rules = rules::build(&*left, &*right, &request.settings)
         .map_err(|error| CompareError::Rules(error.to_string()))?;
     let options = SessionOptions {
@@ -201,20 +199,13 @@ fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
 
 fn open_side(
     target: CompareTarget,
-    settings: &CompareSettings,
     refresh: &mut Vec<Arc<dyn SideSource>>,
 ) -> Result<Arc<dyn SideSource>, Reason> {
     Ok(match target {
         CompareTarget::Local(root) => Arc::new(LocalSide::new(root)?),
-        CompareTarget::Git { repo, rev } => {
-            let engine = engine_for(settings, &repo);
-            let side = Arc::new(GitSide::new(repo, rev, engine)?);
-            refresh.push(Arc::clone(&side) as Arc<dyn SideSource>);
-            side
-        }
-        CompareTarget::GitRawOdb { repo, rev } => {
-            let side = Arc::new(GitSide::new_raw_odb(repo, rev)?);
-            refresh.push(Arc::clone(&side) as Arc<dyn SideSource>);
+        CompareTarget::Side(open) => {
+            let side = open()?;
+            refresh.push(Arc::clone(&side));
             side
         }
     })

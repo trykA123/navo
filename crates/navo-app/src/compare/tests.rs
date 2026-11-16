@@ -7,6 +7,7 @@ mod local;
 mod pane;
 mod rules;
 mod settings;
+mod side_target;
 
 use std::fs;
 use std::path::Path;
