@@ -5,15 +5,12 @@ use std::ops::ControlFlow;
 use std::time::Duration;
 
 use super::NavoWindow;
-use super::compare_screen::{CompareScreen, ScreenEvent, SettingKey, items_of, neighbour};
+use super::compare_screen::{ScreenEvent, SettingKey, items_of, neighbour};
 use crate::browser::{Browser, FileDiffRequest};
 use crate::compare_diff::PairRequest;
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
 use crate::settings::Field;
-
-/// The entity that owns the compare screen's state and rendering.
-pub(in crate::window_view) type ScreenOwner = CompareScreen;
 
 impl NavoWindow {
     /// Opens the file diff Enter asked for; false when none was asked or the app has no hooks.

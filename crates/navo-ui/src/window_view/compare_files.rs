@@ -1,15 +1,7 @@
 //! The NV side of the compare file seam: builds `CompareFiles` from the viewer's `FileHooks`.
 
+use super::CompareFiles;
 use super::FileHooks;
-use super::compare_screen::files::CompareFiles;
-
-impl CompareFiles {
-    /// A layer that opens nothing; its errors read as `FileHooks::none()`'s do (the text lives there).
-    #[allow(dead_code, reason = "the screen reads it from U4b on")]
-    pub fn none() -> Self {
-        FileHooks::none().into()
-    }
-}
 
 impl From<FileHooks> for CompareFiles {
     /// Keeps only what the compare screen reads: `bytes`, and `paged` narrowed to its source.

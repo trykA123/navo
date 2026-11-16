@@ -245,7 +245,6 @@ cmd-viewer-show-line-ends = Show line ends
 cmd-viewer-follow = Follow the end of the file
 cmd-viewer-context-menu = Context menu
 cmd-viewer-view-menu = View menu
-cmd-viewer-encoding = Choose the text encoding
 cmd-view-left-drawer = Left drawer
 cmd-view-right-drawer = Right drawer
 cmd-view-line-numbers = Show or hide line numbers

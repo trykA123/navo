@@ -11,11 +11,22 @@ license.workspace = true
 test-support = []
 
 [dependencies]
+flate2 = "=1.1.11"
 gpui-kit = "=0.9.1"
-image = { version = "=0.25.10", default-features = false }
+image = { version = "=0.25.10", default-features = false, features = [
+  "bmp",
+  "gif",
+  "ico",
+  "jpeg",
+  "png",
+  "tiff",
+  "webp",
+] }
+kamadak-exif = "=0.6.2"
 navo-compare = { package = "sidewise-engine", path = "../sidewise-engine" }
 navo-core = { package = "sidewise-core", path = "../sidewise-core" }
 navo-l10n = { package = "sidewise-l10n", path = "../sidewise-l10n" }
+resvg = "=0.49.0"
 serde = { version = "1.0.229", features = ["derive"] }
 sidewise-kit = { path = "../sidewise-kit" }
 toml = "1.2.1"
