@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::{EventEmitter, Task};
 
+use super::look::{Look, LookDefaults};
 use super::resync::ResyncStep;
 use super::{DiffSlot, ScreenStack};
 use crate::compare_diff::{CompareOptions, PairRequest, StreamList};
@@ -25,6 +26,7 @@ pub struct CompareScreen {
     files: FileHooks,
     sides: SharedString,
     stamp: Option<(u64, u64)>,
+    look: LookDefaults,
 }
 
 impl CompareScreen {
@@ -36,6 +38,7 @@ impl CompareScreen {
             files,
             sides: SharedString::default(),
             stamp: None,
+            look: LookDefaults::default(),
         }
     }
 
@@ -48,6 +51,25 @@ impl CompareScreen {
     /// Replaces the compare options after the window applies settings.
     pub fn set_options(&mut self, options: CompareOptions) {
         self.options = options;
+    }
+
+    /// Stores the host's look defaults and applies them to the open file diff and Stream.
+    pub fn set_look(&mut self, look: LookDefaults) {
+        self.look = look;
+        let applied = Look::from_defaults(look);
+        if let Some(screen) = self.compare.screen.as_mut() {
+            if let Some(file) = screen.file.as_mut() {
+                file.look = applied;
+            }
+            if let Some(stream) = screen.stream.as_mut() {
+                stream.look = applied;
+            }
+        }
+    }
+
+    /// The look defaults new file diffs and Streams start from.
+    pub fn look_defaults(&self) -> LookDefaults {
+        self.look
     }
 
     /// The compare options used when opening a pair or Stream.

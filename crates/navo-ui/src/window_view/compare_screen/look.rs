@@ -68,7 +68,6 @@ impl Look {
     }
 
     /// The look for a host's defaults: the preset first, then words, wrap and layout from `d`.
-    #[cfg_attr(not(test), allow(dead_code, reason = "LK1b is the first caller"))]
     pub(in crate::window_view) fn from_defaults(d: LookDefaults) -> Self {
         let mut look = Self::rich();
         look.choose(d.preset);
