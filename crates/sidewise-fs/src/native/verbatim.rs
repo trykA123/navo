@@ -3,7 +3,7 @@ const SLASH: u16 = 0x2F;
 const DOT: u16 = 0x2E;
 const COLON: u16 = 0x3A;
 
-pub(crate) fn verbatim(units: &[u16]) -> Vec<u16> {
+pub fn verbatim(units: &[u16]) -> Vec<u16> {
     match units {
         [a, b, mark, c, ..]
             if is_separator(*a)

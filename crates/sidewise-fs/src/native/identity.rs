@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::{FileIdentity, FileIdentityKind};
 
 #[cfg(target_os = "linux")]
-pub(crate) fn mount(path: &Path) -> io::Result<Option<u64>> {
+pub fn mount(path: &Path) -> io::Result<Option<u64>> {
     use rustix::fs::{AtFlags, CWD, StatxFlags, statx};
     let stat = statx(
         CWD,
@@ -16,22 +16,22 @@ pub(crate) fn mount(path: &Path) -> io::Result<Option<u64>> {
 }
 
 #[cfg(windows)]
-pub(crate) fn mount(path: &Path) -> io::Result<Option<u64>> {
+pub fn mount(path: &Path) -> io::Result<Option<u64>> {
     Ok(read(path)?.map(|identity| identity.volume))
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]
-pub(super) fn mount(_path: &Path) -> io::Result<Option<u64>> {
+pub fn mount(_path: &Path) -> io::Result<Option<u64>> {
     Ok(None)
 }
 
 #[cfg(unix)]
-pub(crate) fn read(path: &Path) -> io::Result<Option<FileIdentity>> {
+pub fn read(path: &Path) -> io::Result<Option<FileIdentity>> {
     Ok(Some(from_metadata(&std::fs::symlink_metadata(path)?)))
 }
 
 #[cfg(unix)]
-pub(crate) fn from_file(file: &std::fs::File) -> io::Result<Option<FileIdentity>> {
+pub fn from_file(file: &std::fs::File) -> io::Result<Option<FileIdentity>> {
     Ok(Some(from_metadata(&file.metadata()?)))
 }
 
@@ -46,7 +46,7 @@ fn from_metadata(metadata: &std::fs::Metadata) -> FileIdentity {
 }
 
 #[cfg(windows)]
-pub(crate) fn read(path: &Path) -> io::Result<Option<FileIdentity>> {
+pub fn read(path: &Path) -> io::Result<Option<FileIdentity>> {
     use std::fs::OpenOptions;
     use std::os::windows::fs::OpenOptionsExt;
     use windows_sys::Win32::Storage::FileSystem::{
@@ -61,7 +61,7 @@ pub(crate) fn read(path: &Path) -> io::Result<Option<FileIdentity>> {
 }
 
 #[cfg(windows)]
-pub(crate) fn from_file(file: &std::fs::File) -> io::Result<Option<FileIdentity>> {
+pub fn from_file(file: &std::fs::File) -> io::Result<Option<FileIdentity>> {
     proved(filesystem_name(file), || file_id(file))
 }
 
@@ -267,6 +267,6 @@ mod tests {
 }
 
 #[cfg(not(any(unix, windows)))]
-pub(super) fn read(_: &Path) -> io::Result<Option<FileIdentity>> {
+pub fn read(_: &Path) -> io::Result<Option<FileIdentity>> {
     Ok(None)
 }

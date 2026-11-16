@@ -61,12 +61,12 @@ use std::time::UNIX_EPOCH;
 
 use navo_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, ProviderPath};
 
-#[cfg(any(windows, test))]
-pub(crate) use crate::native::verbatim;
-pub use crate::native::{error, identity, native_identity, os_path};
 pub(crate) use guard::refuse_reserved;
 pub use guard::{MutationLocations, mutation_location, save_location};
 pub use link::make_link;
+#[cfg(any(windows, test))]
+pub(crate) use sidewise_fs::native::verbatim;
+pub use sidewise_fs::native::{error, identity, native_identity, os_path};
 
 #[cfg(any(unix, windows))]
 use crate::SizeEntry;

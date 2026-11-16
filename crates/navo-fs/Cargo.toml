@@ -20,6 +20,7 @@ navo-core = { path = "../navo-core" }
 navo-git = { path = "../navo-git" }
 sevenz-rust2 = { version = "=0.25.0", default-features = false }
 sha2 = "=0.11.1"
+sidewise-fs = { path = "../sidewise-fs" }
 tar = { version = "=0.4.46", default-features = false }
 thiserror = "2.0.21"
 trash = "5.3.0"

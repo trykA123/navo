@@ -3,7 +3,7 @@
 use navo_core::Location;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct VolumeId(pub(crate) String);
+pub struct VolumeId(pub String);
 
 impl VolumeId {
     #[must_use]

@@ -4,10 +4,10 @@ mod scheduler;
 
 use crate::DriveClass;
 
-pub use crate::volume::{VolumeId, volume_of};
 pub use pools::{JobKind, Pools};
 pub use runner::{Classifier, IoQueue, Job, JobSlot, OwnerGuard};
 pub use scheduler::{Cancelled, Scheduler};
+pub use sidewise_fs::{VolumeId, volume_of};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Priority {

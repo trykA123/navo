@@ -3,8 +3,7 @@ use std::{ffi::OsString, path::PathBuf};
 use navo_core::{FsError, FsErrorKind, Location};
 
 pub mod identity;
-#[cfg(any(windows, test))]
-pub(crate) mod verbatim;
+pub mod verbatim;
 
 pub fn os_path(location: &Location) -> Result<PathBuf, FsError> {
     if !location.is_local() {
