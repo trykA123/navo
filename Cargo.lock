@@ -9249,6 +9249,7 @@ name = "sidewise-host"
 version = "0.7.0"
 dependencies = [
  "blake3",
+ "encoding_rs",
  "image",
  "imagesize 0.13.0",
  "sidewise-core",
