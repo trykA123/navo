@@ -4,6 +4,7 @@ mod body;
 mod clipboard_fields;
 mod clipboard_values;
 mod compare_fields;
+mod compare_options;
 mod controls;
 mod diagnostics_page;
 mod fields;
@@ -42,6 +43,7 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle};
 
+pub use compare_options::compare_options;
 pub use fields::{
     COLOR_THEMES, Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look,
     PRESETS, SORTS, SYNTAX_THEMES, Section, THEMES,
