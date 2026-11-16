@@ -2,44 +2,49 @@
 
 use std::ops::Range;
 use std::path::PathBuf;
-#[cfg(test)]
-use std::sync::Arc;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use navo_compare::bytes::Align;
 use navo_compare::model::Budget;
 use navo_ui::compare_diff::{DiffSink, PairControl, PairKind, PairRequest};
 
 use super::super::bytes::{ByteDiff, ByteInput};
+use super::super::hooks::SideFn;
 use super::super::large::{LargeDiff, LargeInput};
 use super::super::load::{LoadInput, Loaded};
+use super::super::sides::side_of;
 use super::super::sources::Sources;
 use crate::compare::settings::CompareSettings;
 
-/// What every pair engine needs: the rules' settings, a memory budget and the spool root.
+/// What every pair engine needs: the rules' settings, a memory budget, the spool root and the
+/// backend's side builder.
 #[derive(Clone)]
 pub(crate) struct EnginePlan {
     pub settings: CompareSettings,
     pub budget: Budget,
     /// The Git spool root the host chose; `None` means a large Git blob cannot spool.
     pub spool: Option<PathBuf>,
+    /// The backend's side builder; the large view builds its sides with it.
+    pub side: SideFn,
 }
 
 impl EnginePlan {
-    /// A plan for `settings` that spools large Git blobs under `spool`, if any.
-    pub(crate) fn new(settings: CompareSettings, spool: Option<PathBuf>) -> Self {
+    /// A plan for `settings` that spools large Git blobs under `spool`, if any, and builds
+    /// sides with `side`.
+    pub(crate) fn new(settings: CompareSettings, spool: Option<PathBuf>, side: SideFn) -> Self {
         Self {
             budget: settings.budget(),
             settings,
             spool,
+            side,
         }
     }
 }
 
 impl Default for EnginePlan {
-    /// Default rules and budget, with no spool folder (local pairs need none).
+    /// Default rules and budget, no spool folder (local pairs need none) and `StdSide` sides.
     fn default() -> Self {
-        Self::new(CompareSettings::default(), None)
+        Self::new(CompareSettings::default(), None, Arc::new(side_of))
     }
 }
 
@@ -161,6 +166,7 @@ pub(crate) fn large_input(
         left: request.left.clone(),
         right: request.right.clone(),
         settings: plan.settings.clone(),
+        side: Arc::clone(&plan.side),
         sources: Sources::new(spool_path(plan)),
         options: load.options,
         fallback: load.fallback,

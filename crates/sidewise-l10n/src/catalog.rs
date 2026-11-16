@@ -4,7 +4,10 @@ use fluent_bundle::{FluentArgs, FluentResource, FluentValue, concurrent::FluentB
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
-pub const FILES: &[(&str, &str)] = &[("compare.ftl", include_str!("../locales/en-US/compare.ftl"))];
+pub const FILES: &[(&str, &str)] = &[
+    ("compare.ftl", include_str!("../locales/en-US/compare.ftl")),
+    ("menu.ftl", include_str!("../locales/en-US/menu.ftl")),
+];
 
 const LOCALE: &str = "en-US";
 

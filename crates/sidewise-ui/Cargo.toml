@@ -1,0 +1,30 @@
+# Sidewise's compare screens: the folder-compare model, file diff, list UI and keys.
+[package]
+name = "sidewise-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+gpui-kit = "=0.9.1"
+image = { version = "=0.25.10", default-features = false }
+navo-compare = { package = "sidewise-engine", path = "../sidewise-engine" }
+navo-core = { package = "sidewise-core", path = "../sidewise-core" }
+navo-l10n = { package = "sidewise-l10n", path = "../sidewise-l10n" }
+serde = { version = "1.0.229", features = ["derive"] }
+sidewise-kit = { path = "../sidewise-kit" }
+toml = "1.2.1"
+unicode-width = "=0.2.2"
+
+[dev-dependencies]
+gpui-kit = { version = "=0.9.1", features = ["test-support"] }
+proptest = "1.12.0"
+sidewise-kit = { path = "../sidewise-kit", features = ["test-support"] }
+
+[lints]
+workspace = true

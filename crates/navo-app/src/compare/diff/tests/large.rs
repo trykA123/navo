@@ -56,6 +56,7 @@ fn input(dir: &Path, left: &str, right: &str) -> LargeInput {
         left: Some(location(&dir.join(left))),
         right: Some(location(&dir.join(right))),
         settings: CompareSettings::default(),
+        side: Arc::new(crate::compare::diff::sides::side_of),
         sources: crate::compare::diff::sources::Sources::without_spool(),
         options: Options::default(),
         fallback: encoding_rs::UTF_8,

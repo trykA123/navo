@@ -1,11 +1,7 @@
-mod button;
 mod check_box;
-mod kbd;
 mod splitter;
 mod tabs;
 mod tabs_menu;
-mod tooltip;
-mod virtual_list;
 
 use gpui_kit::{
     AnyWindowHandle, App, AppContext, Bounds, Entity, Point, Render, TestAppContext, Window,

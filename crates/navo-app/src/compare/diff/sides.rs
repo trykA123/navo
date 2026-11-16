@@ -1,4 +1,5 @@
-//! File sides for the file diff and the Stream: a local file or an unreadable side.
+//! File sides for the file diff and the Stream: a local file (`StdSide` by default) or an
+//! unreadable side.
 //!
 //! Building a side touches the file system, so it runs only on worker threads.
 //! Git blobs live in the child module `git`.
@@ -11,29 +12,38 @@ use navo_compare::model::{
 };
 use navo_core::{Location, ProviderId, ProviderPath};
 
-use super::super::local::LocalSide;
 use super::super::settings::CompareSettings;
+use super::super::std_side::StdSide;
 use super::load::Side;
 
 mod git;
 
 pub(super) use git::navo_side_of;
 
-/// A local file side from one `Location`; any other provider is `Reason::Unsupported`.
+/// Opens a side root folder; `side_of` uses `StdSide`, Navo's `navo_side_of` uses `LocalSide`.
+type RootOpener = fn(Location) -> Result<Arc<dyn SideSource>, Reason>;
+
+/// A local file side from one `Location`, read through `StdSide`; any other provider is
+/// `Reason::Unsupported`.
 pub(super) fn side_of(location: &Location, _settings: &CompareSettings) -> Result<Side, Reason> {
-    if location.is_local() {
-        local_side(location)
-    } else {
-        Err(Reason::Unsupported)
-    }
+    file_side(location, std_root)
 }
 
-/// A local file: its parent folder is the side root and its name is the relative path.
-fn local_side(location: &Location) -> Result<Side, Reason> {
+/// The default root opener: plain `std::fs` (`StdSide`).
+fn std_root(root: Location) -> Result<Arc<dyn SideSource>, Reason> {
+    Ok(Arc::new(StdSide::new(root)?))
+}
+
+/// A local file: its parent folder, opened by `open_root`, is the side root and its name is the
+/// relative path. Fails with `Reason::Unsupported` for a non-local location or one with no parent.
+fn file_side(location: &Location, open_root: RootOpener) -> Result<Side, Reason> {
+    if !location.is_local() {
+        return Err(Reason::Unsupported);
+    }
     let (Some(parent), Some(name)) = location.parent_and_name() else {
         return Err(Reason::Unsupported);
     };
-    let side: Arc<dyn SideSource> = Arc::new(LocalSide::new(parent)?);
+    let side = open_root(parent)?;
     let rel = RelPath::new(name);
     let stamp = side.stamp(&rel)?;
     Ok((

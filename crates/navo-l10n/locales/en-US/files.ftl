@@ -237,18 +237,6 @@ path-hidden-show = Show hidden folders
 
 drag-refused-path = Cannot drop { $path }. Only absolute local paths are supported.
 
-context-menu-type-to-filter = Type to filter
-context-menu-filter-commands = Filter commands
-context-menu-classic-menu = Classic menu
-context-menu-filter-keys = ↑↓ move · Enter run · Esc clear
-context-menu-classic-only = { $count ->
-    [one] { $count } item only in the classic menu
-   *[other] { $count } items only in the classic menu
-}
-context-menu-loading = Loading…
-context-menu-could-not-load = Could not load
-context-menu-retry = Retry
-context-menu-no-match = No matching commands
 shell-menu-loading = Loading Windows items…
 shell-menu-slow = Windows menu is slow
 tabs-more = { $count ->
