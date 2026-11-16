@@ -10,7 +10,6 @@ use super::resync::ResyncStep;
 use super::{DiffSlot, ScreenStack};
 use crate::compare_diff::{CompareOptions, PairRequest, StreamList};
 use crate::prelude::*;
-use crate::settings::Field;
 use crate::window_view::FileHooks;
 
 /// The file diff, Stream and inboxes owned by one compare screen.
@@ -184,13 +183,21 @@ impl Render for CompareScreen {
     }
 }
 
+/// A setting the compare screen can ask its window to open, without naming the app's own
+/// settings fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingKey {
+    /// The memory budget of the large compare, in MiB.
+    CompareBudgetMib,
+}
+
 /// What the compare screen asks of its window (NC54).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScreenEvent {
     /// The screen closed; reveal and select this path in the compare pane.
     Closed { reveal: Option<String> },
     /// Settings should open with this field selected.
-    OpenSettings(Field),
+    OpenSettings(SettingKey),
     /// Open the next (`step` 1) or previous (−1) file of the folder compare after row `from`.
     WalkFile { from: u64, step: i32 },
     /// The resync wait ended: rebuild the Stream from the folder compare.

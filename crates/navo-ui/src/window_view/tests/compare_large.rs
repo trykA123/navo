@@ -14,6 +14,7 @@ use crate::compare_diff::{
     LargeStepView, Layout, PairKind, ShownKind,
 };
 use crate::window_view::compare_screen::large::{Anchor, RowMap, Settled};
+use crate::window_view::compare_screen::{ScreenEvent, SettingKey};
 
 /// A hunk over `left` and `right` lines; the byte ranges do not matter to the body.
 pub(super) fn hunk(left: std::ops::Range<u64>, right: std::ops::Range<u64>) -> LargeHunk {
@@ -401,6 +402,30 @@ fn compare_large_budget_link_opens_settings_at_the_memory_budget(cx: &mut TestAp
         .iter()
         .position(|spec| spec.field == crate::settings::Field::CompareBudgetMib);
     assert_eq!(Some(row), want, "at the memory budget row");
+}
+
+#[gpui_kit::test]
+fn the_budget_link_asks_for_the_budget_setting(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let (rig, sink) = open_large(cx);
+    let budget = step(LargeStep::Coarse, LargeStepReason::Budget, 90..180);
+    push(cx, &rig, &sink, with_steps(vec![budget], 5));
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let screen = rig
+        .view
+        .read_with(cx, |view, _| view.compare.screen.clone());
+    let seen = events.clone();
+    let _watch = cx.update(|cx| {
+        cx.subscribe(&screen, move |_, event: &ScreenEvent, _| {
+            seen.borrow_mut().push(event.clone());
+        })
+    });
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click("compare-screen-budget-link", cx);
+    })
+    .expect("window");
+    let want = ScreenEvent::OpenSettings(SettingKey::CompareBudgetMib);
+    assert_eq!(events.borrow().as_slice(), [want]);
 }
 
 #[gpui_kit::test]
