@@ -8,7 +8,6 @@ use navo_compare::model::Reason;
 use navo_compare::text::Options;
 use navo_core::Location;
 use navo_fs::ProviderOps;
-use navo_store::{CacheDb, StoreDirs};
 use navo_ui::browser::LogFactory;
 use navo_ui::compare_diff::{
     CompareOptions, CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest, SheetPlan,
@@ -24,7 +23,7 @@ use super::pair::{EnginePlan, PairDiff};
 use super::sides::{side_of, unreadable_side};
 use super::sources::Sources;
 use super::stream::{LoadFn, StreamParts, StreamSession};
-use super::viewed::{LazyViewed, NoViewed, OpenViewed, ViewedMarks, ViewedStore};
+use super::viewed::{LazyViewed, OpenViewed, ViewedMarks, open_viewed};
 use crate::compare::convert::settings_from;
 use crate::compare::dirs::CompareDirs;
 
@@ -180,18 +179,6 @@ impl DiffHooks for DiffBackend {
 /// change against a fresh diff, so it must use the same ones.
 pub(super) fn rules() -> (Options, &'static encoding_rs::Encoding) {
     (Options::default(), encoding_rs::UTF_8)
-}
-
-/// Open the profile cache for Viewed marks, or fall back to memory and a no-op store.
-fn open_viewed() -> Arc<dyn ViewedMarks> {
-    let db = StoreDirs::detect()
-        .filter(|dirs| dirs.ensure().is_ok())
-        .and_then(|dirs| CacheDb::open(&dirs.data.join("cache.db")).ok())
-        .map(|(db, _)| db);
-    match db.or_else(|| CacheDb::open_in_memory().ok()) {
-        Some(db) => Arc::new(ViewedStore::new(db)),
-        None => Arc::new(NoViewed),
-    }
 }
 
 /// Build one pair, reporting the first side that cannot open.

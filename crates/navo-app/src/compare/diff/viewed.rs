@@ -1,9 +1,15 @@
 //! Viewed marks over the store's `compare-viewed` table (D28).
 
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use navo_store::{CacheDb, CacheError};
+use navo_store::CacheError;
+
+mod store;
+
+#[cfg(test)]
+pub(crate) use store::ViewedStore;
+pub(crate) use store::open_viewed;
 
 /// A Viewed store failure, kept as its message so hosts need no store error type.
 #[derive(Debug)]
@@ -29,55 +35,6 @@ pub(crate) trait ViewedMarks: Send + Sync {
     fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError>;
     /// Sets or clears the mark for this 64-byte content key.
     fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError>;
-}
-
-/// The `compare-viewed` table behind a mutex, so writes never reach the UI thread.
-pub(crate) struct ViewedStore {
-    db: Mutex<Option<CacheDb>>,
-}
-
-impl ViewedStore {
-    /// Keep this open cache as the Viewed store.
-    pub(crate) fn new(db: CacheDb) -> Self {
-        Self {
-            db: Mutex::new(Some(db)),
-        }
-    }
-
-    fn db(&self) -> MutexGuard<'_, Option<CacheDb>> {
-        self.db.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-}
-
-impl ViewedMarks for ViewedStore {
-    fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError> {
-        let guard = self.db();
-        match guard.as_ref() {
-            Some(db) => db.get_viewed(key).map_err(ViewedError::from),
-            None => Ok(false),
-        }
-    }
-
-    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError> {
-        let mut guard = self.db();
-        let Some(db) = guard.as_mut() else {
-            return Ok(());
-        };
-        if viewed {
-            db.put_viewed(key, now_ms()).map_err(ViewedError::from)
-        } else {
-            db.clear_viewed(key).map(|_| ()).map_err(ViewedError::from)
-        }
-    }
-}
-
-/// The current time in milliseconds, or zero before the epoch.
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
-        })
 }
 
 /// A store that never marks anything viewed, used when the cache cannot open.
@@ -124,5 +81,30 @@ impl ViewedMarks for LazyViewed {
 
     fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError> {
         self.store().set(key, viewed)
+    }
+}
+
+/// Viewed marks kept in memory only, for a host with no profile cache.
+#[derive(Default)]
+#[expect(dead_code, reason = "the default backend takes it in G2c")]
+pub(crate) struct MemoryViewed(Mutex<HashSet<[u8; 64]>>);
+
+impl ViewedMarks for MemoryViewed {
+    fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(key))
+    }
+
+    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError> {
+        let mut marks = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if viewed {
+            marks.insert(*key);
+        } else {
+            marks.remove(key);
+        }
+        Ok(())
     }
 }
