@@ -8,6 +8,8 @@ mod drawers;
 mod entity;
 mod entry;
 mod file;
+#[allow(dead_code, reason = "the screen reads it from U4b on")]
+pub(in crate::window_view) mod files;
 mod hex;
 mod hex_open;
 mod host;

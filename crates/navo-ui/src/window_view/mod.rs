@@ -7,6 +7,7 @@ mod clipboard;
 mod clipboard_palette;
 mod closing;
 mod command_center;
+mod compare_files;
 mod compare_host;
 mod compare_keys;
 mod compare_screen;
