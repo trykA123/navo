@@ -15,7 +15,6 @@ use navo_ui::compare_diff::{
     CompareOptions, CopyChange, CopyDirection, CopyDone, CopyResult, CopySink, DiffHooks, DiffSink,
     DiffUpdate, PairRequest, SheetPlan, SheetResult,
 };
-use navo_ui::settings::Values;
 
 use crate::compare::diff::DiffBackend;
 use crate::compare::diff::copy::CopyRefusal;
@@ -64,7 +63,7 @@ fn all_changes(backend: &DiffBackend, left: &Path, right: &Path) -> Vec<CopyChan
     let pair = request(9, left, right);
     let _control = backend.open_pair(
         pair.clone(),
-        &CompareOptions::from_values(&Values::default()),
+        &CompareOptions::default(),
         sink,
     );
     let DiffUpdate::Opened { text, .. } = receiver.recv_timeout(WAIT).unwrap() else {
