@@ -37,6 +37,8 @@ pub struct DiffBackend {
     side: SideFn,
     viewed: Arc<LazyViewed>,
     copy: Option<CopyService>,
+    /// Whether pairs may spool Git blobs under Navo's profile.
+    spool: bool,
 }
 
 impl Default for DiffBackend {
@@ -54,7 +56,13 @@ impl DiffBackend {
             side,
             viewed: Arc::new(LazyViewed::new(open)),
             copy: None,
+            spool: true,
         }
+    }
+
+    /// The engine plan for `settings`; it spools only when this backend may write the profile.
+    fn plan(&self, settings: CompareSettings) -> EnginePlan {
+        EnginePlan::new(settings, self.spool)
     }
 
     /// A backend whose copies run through `factory` and write with `ops`.
@@ -71,7 +79,10 @@ impl DiffBackend {
     /// end with the process, no spool folder is swept, and every copy is refused.
     #[must_use]
     pub fn in_memory() -> Self {
-        Self::with_parts(Arc::new(side_of), Arc::new(memory_viewed))
+        Self {
+            spool: false,
+            ..Self::with_parts(Arc::new(side_of), Arc::new(memory_viewed))
+        }
     }
 }
 
@@ -100,7 +111,7 @@ impl DiffHooks for DiffBackend {
         sink: DiffSink,
     ) -> Box<dyn PairControl> {
         let settings = settings_from(options);
-        let plan = EnginePlan::new(settings.clone(), true);
+        let plan = self.plan(settings.clone());
         let side = Arc::clone(&self.side);
         let pair = request.clone();
         let opener = Box::new(move || input_of(&pair, &settings, &side).map(Arc::new));
@@ -116,7 +127,7 @@ impl DiffHooks for DiffBackend {
         let load: LoadFn =
             Arc::new(move |request| Some(input_or_unreadable(request, &load_settings, &side)));
         let viewed: Arc<dyn ViewedMarks> = self.viewed.clone();
-        let detail = Some(cards::detail_fn(EnginePlan::new(settings, true)));
+        let detail = Some(cards::detail_fn(self.plan(settings)));
         Box::new(StreamSession::start_with(
             sink,
             budget,
@@ -225,7 +236,21 @@ fn input(left: Option<Side>, right: Option<Side>) -> LoadInput {
 
 #[cfg(test)]
 mod in_memory_tests {
+    use super::super::pair::spool_path;
     use super::*;
+
+    #[test]
+    fn in_memory_never_spools() {
+        let backend = DiffBackend::in_memory();
+        let plan = backend.plan(CompareSettings::default());
+        assert!(spool_path(&plan).is_none());
+    }
+
+    #[test]
+    fn default_backend_keeps_spooling() {
+        let backend = DiffBackend::with_parts(Arc::new(side_of), Arc::new(memory_viewed));
+        assert!(backend.spool);
+    }
 
     #[test]
     fn in_memory_marks_persist_for_the_process() {
