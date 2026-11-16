@@ -5,7 +5,9 @@ use std::io;
 use std::ops::ControlFlow;
 use std::path::Path;
 
-use navo_compare::model::{CancelToken, ReadHint, Reason, RelPath, SideEntry, SideSource};
+use navo_compare::model::{
+    CancelToken, EntryKind, ReadHint, Reason, RelPath, SideEntry, SideSource,
+};
 use navo_core::ProviderPath;
 
 use super::{location, write};
@@ -63,10 +65,28 @@ fn tree(root: &Path) {
     }
 }
 
+/// The listing with folder times cleared on Windows, where NTFS updates a folder's time in its
+/// parent's index lazily, so two listings of the same tree may differ by a millisecond.
+fn comparable(mut entries: Vec<SideEntry>) -> Vec<SideEntry> {
+    if cfg!(windows) {
+        for entry in entries
+            .iter_mut()
+            .filter(|entry| entry.kind == EntryKind::Folder)
+        {
+            entry.modified = None;
+        }
+    }
+    entries
+}
+
 /// Asserts both sides list `folder` alike and give equal stamps for every entry.
 fn assert_same_folder(std: &StdSide, local: &LocalSide, folder: &RelPath) -> Vec<SideEntry> {
     let entries = list(local, folder);
-    assert_eq!(list(std, folder), entries, "listing of {folder:?}");
+    assert_eq!(
+        comparable(list(std, folder)),
+        comparable(entries.clone()),
+        "listing of {folder:?}"
+    );
     for entry in &entries {
         let (a, b) = (std.stamp(&entry.rel), local.stamp(&entry.rel));
         let a = a.map(|s| (s.size, s.modified, s.file_id));
