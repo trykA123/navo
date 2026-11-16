@@ -24,6 +24,7 @@ pub mod git;
 mod host_os;
 pub mod job_card;
 pub mod job_row;
+pub mod kit_probe;
 pub mod languages;
 pub mod modifier_hints;
 pub mod multi_rename;

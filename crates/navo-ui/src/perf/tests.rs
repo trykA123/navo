@@ -1,7 +1,12 @@
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::recorder::Recorder;
-use super::{FrameStart, Latency, UiFlag, UiState};
+use super::{
+    FrameStart, Latency, PerfService, ProcessSample, Recording, SystemFacts, UiFlag, UiState,
+};
+use crate::kit_probe::{self, Probe};
 
 const MS: Duration = Duration::from_millis(1);
 const WINDOW: u64 = 42;
@@ -244,4 +249,32 @@ fn the_frame_hooks_never_grow_the_recording_storage() {
     }
     assert_eq!(reserved(&recorder), before);
     assert_eq!(recorder.recording.frames.len(), 20_000);
+}
+
+struct NoService;
+
+impl PerfService for NoService {
+    fn start(&self) {}
+    fn sample(&self) -> ProcessSample {
+        ProcessSample::default()
+    }
+    fn system(&self) -> SystemFacts {
+        SystemFacts::default()
+    }
+    fn save(&self, _: &Recording, _: Instant, _: &SystemFacts) -> Result<PathBuf, String> {
+        Err(String::new())
+    }
+}
+
+#[test]
+fn a_kit_menu_event_reaches_the_recorder() {
+    super::install(Arc::new(NoService));
+    let now = Instant::now();
+    super::start(now, None).expect("no other recording on this thread");
+    let frame = super::frame_begin(|| (WINDOW, UiState::default())).expect("recording");
+    kit_probe::emit(Probe::MenuRendered);
+    super::with(|recorder| recorder.finish_frame(frame, now, now));
+    let (recording, _) = super::stop().expect("recording");
+    let frame = recording.frames.iter().next().expect("one frame");
+    assert!(frame.state.has(UiFlag::ContextMenu));
 }

@@ -27,6 +27,7 @@ use navo_l10n::tr;
 pub(crate) use keys::{MenuDown, MenuEnter, MenuEscape, MenuUp};
 pub use state::ContextMenuEvent;
 
+use crate::kit_probe::Probe;
 use crate::primitives::{TextFieldState, text_field_state};
 use crate::tokens;
 use icons::ShellIcons;
@@ -106,7 +107,7 @@ impl ContextMenu {
             _field: subscription,
         };
         menu.settle(cx);
-        crate::perf::ready(crate::perf::Latency::ContextMenu);
+        crate::kit_probe::emit(Probe::MenuReady);
         menu
     }
 
@@ -251,7 +252,7 @@ impl ContextMenu {
             let opacity = motion::progress(view.opened, now, fade);
             let loading = flyout::bar_for(view, now, fade, reduce);
             if level == 0 {
-                crate::perf::animating(crate::perf::Latency::MenuOpen, opacity < 1.);
+                crate::kit_probe::emit(Probe::MenuAnimating(opacity < 1.));
             }
             is_moving |= opacity < 1. || loading.is_some_and(flyout::Bar::is_moving);
             let look = PanelLook {
@@ -277,7 +278,7 @@ impl ContextMenu {
 impl Render for ContextMenu {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
-        crate::perf::note(crate::perf::UiFlag::ContextMenu);
+        crate::kit_probe::emit(Probe::MenuRendered);
         let panels = self.panels(&t, window, cx);
         let area = self.bounds;
         let layer = div()
