@@ -15,7 +15,8 @@ const MAX_DEPTH: usize = 256;
 const MAX_LAYERS: usize = 16;
 const NESTED: &str = "This SVG is nested too deeply to show here.";
 
-pub(super) fn unzipped(bytes: &[u8], limit: u64) -> Result<Cow<'_, [u8]>, String> {
+#[doc(hidden)]
+pub fn unzipped(bytes: &[u8], limit: u64) -> Result<Cow<'_, [u8]>, String> {
     if !bytes.starts_with(&GZIP) {
         return Ok(Cow::Borrowed(bytes));
     }

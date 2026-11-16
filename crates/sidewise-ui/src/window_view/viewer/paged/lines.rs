@@ -9,12 +9,12 @@ pub enum PagedKind {
     Text,
 }
 
-pub(crate) struct HexLine {
-    pub(crate) start: u64,
-    pub(crate) row: HexRow,
+pub struct HexLine {
+    pub start: u64,
+    pub row: HexRow,
 }
 
-pub(super) struct TextLine {
+pub struct TextLine {
     pub start: u64,
     pub text_from: u64,
     pub end: u64,
@@ -23,7 +23,7 @@ pub(super) struct TextLine {
     pub line: Option<u64>,
 }
 
-pub(super) struct Screen<L> {
+pub struct Screen<L> {
     pub lines: Vec<L>,
 }
 
@@ -31,7 +31,7 @@ fn byte_len(start: u64, end: u64) -> usize {
     usize::try_from(end.saturating_sub(start)).unwrap_or(usize::MAX)
 }
 
-pub(super) fn hex_lines<S: ByteSource + ?Sized>(
+pub fn hex_lines<S: ByteSource + ?Sized>(
     src: &S,
     top: u64,
     count: usize,
@@ -69,7 +69,7 @@ fn counted(index: &LineIndex, offset: u64) -> bool {
     index.is_done() || offset < index.scanned()
 }
 
-pub(super) fn text_lines<S: ByteSource + ?Sized>(
+pub fn text_lines<S: ByteSource + ?Sized>(
     src: &S,
     top: u64,
     count: usize,
@@ -113,7 +113,7 @@ pub(super) fn text_lines<S: ByteSource + ?Sized>(
     Ok(Screen { lines })
 }
 
-pub(super) fn row_start<S: ByteSource + ?Sized>(
+pub fn row_start<S: ByteSource + ?Sized>(
     src: &S,
     kind: PagedKind,
     offset: u64,
@@ -124,11 +124,7 @@ pub(super) fn row_start<S: ByteSource + ?Sized>(
     }
 }
 
-pub(super) fn end_top<S: ByteSource + ?Sized>(
-    src: &S,
-    kind: PagedKind,
-    rows: u64,
-) -> Result<u64, String> {
+pub fn end_top<S: ByteSource + ?Sized>(src: &S, kind: PagedKind, rows: u64) -> Result<u64, String> {
     match kind {
         PagedKind::Hex => Ok(hex_rows(src.len()).saturating_sub(rows) * HEX_WIDTH),
         PagedKind::Text => {
@@ -138,7 +134,7 @@ pub(super) fn end_top<S: ByteSource + ?Sized>(
     }
 }
 
-pub(super) fn step<S: ByteSource + ?Sized>(
+pub fn step<S: ByteSource + ?Sized>(
     src: &S,
     kind: PagedKind,
     top: u64,

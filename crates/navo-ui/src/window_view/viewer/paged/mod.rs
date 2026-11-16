@@ -4,13 +4,13 @@ mod find;
 mod follow;
 mod found;
 mod jobs;
-mod lines;
+use sidewise_ui::window_view::viewer::paged::lines;
 mod marking;
 mod moves;
-mod row_view;
+use sidewise_ui::window_view::viewer::paged::row_view;
 mod rows;
-mod scroll;
-mod spans;
+use sidewise_ui::window_view::viewer::paged::scroll;
+use sidewise_ui::window_view::viewer::paged::spans;
 mod view;
 
 use std::collections::HashMap;

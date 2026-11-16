@@ -64,7 +64,6 @@ pub(in crate::window_view) use keys::{
     TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewMenu, ZoomIn, ZoomOut,
 };
 pub(in crate::window_view) use keys::{Back, BackspaceKey, KeepViewDefault, ResetView};
-mod shared_actions;
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use menu::viewer_menu;
 pub(crate) use paged::{ByteScroll, HexLine, hex_row_tinted};
@@ -72,6 +71,7 @@ pub use paged::{PagedKind, PagedView};
 pub use pdf::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
 pub use search::memory::MemoryLink;
 pub(in crate::window_view) use shared_actions::*;
+use sidewise_ui::window_view::viewer::shared_actions;
 pub use space::{FileBytes, FileBytesBar, FilePart, Legend, RegionHead, UsageBar, UsageLine};
 pub use space::{
     Item as StripItem, Label as StripLabel, MemoryStrip, Step as StripStep, StripData, StripEvent,

@@ -1,4 +1,4 @@
-mod entries;
+use sidewise_ui::window_view::viewer::menu::entries;
 mod marking;
 
 use gpui_kit::{Bounds, MouseButton, MouseUpEvent, Stateful, point};

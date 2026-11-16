@@ -12,7 +12,8 @@ use crate::tokens::Theme;
 const SHOWN_CHARS: usize = 1000;
 const MATCH_OPACITY: f32 = 0.3;
 
-pub(crate) struct RowLook<'a> {
+#[doc(hidden)]
+pub struct RowLook<'a> {
     pub t: &'a Theme,
     pub height: Pixels,
     pub painted: Painted<'a>,
@@ -20,7 +21,8 @@ pub(crate) struct RowLook<'a> {
     pub line_ends: bool,
 }
 
-pub(super) struct TextLook {
+#[doc(hidden)]
+pub struct TextLook {
     pub digits: usize,
     pub shift: usize,
     pub numbers: bool,
@@ -105,7 +107,8 @@ fn hex_ranges(slots: &[(usize, Paint)]) -> (Runs, Runs) {
         .unzip()
 }
 
-pub(crate) fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyElement {
+#[doc(hidden)]
+pub fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyElement {
     let (hex_paint, ascii_paint) = hex_ranges(&hex_slots(line.start, &look.painted));
     let is_bookmarked = look.is_bookmarked(line.start..line.start + HEX_WIDTH);
     let styles = (look.styled(hex_paint), look.styled(ascii_paint));
@@ -114,7 +117,8 @@ pub(crate) fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyEl
 
 /// One hex row of the compare diff: the shared frame and aria label, tinted with the diff
 /// tokens for the changed byte slots and a stronger tint for the current region.
-pub(crate) fn hex_row_tinted(
+#[doc(hidden)]
+pub fn hex_row_tinted(
     t: &Theme,
     index: usize,
     line: &HexLine,
@@ -204,12 +208,8 @@ fn line_end_glyph(
     )
 }
 
-pub(super) fn text_row(
-    look: &RowLook<'_>,
-    text: &TextLook,
-    index: usize,
-    line: &TextLine,
-) -> AnyElement {
+#[doc(hidden)]
+pub fn text_row(look: &RowLook<'_>, text: &TextLook, index: usize, line: &TextLine) -> AnyElement {
     let number = line
         .line
         .map(|number| number.to_string())
@@ -260,7 +260,8 @@ pub(super) fn text_row(
         .into_any_element()
 }
 
-pub(super) fn missing_row(look: &RowLook<'_>, index: usize) -> AnyElement {
+#[doc(hidden)]
+pub fn missing_row(look: &RowLook<'_>, index: usize) -> AnyElement {
     row_frame(look, index, String::new())
         .text_color(look.t.colors.muted)
         .into_any_element()

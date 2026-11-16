@@ -9,7 +9,8 @@ pub(super) enum Paint {
     Match,
 }
 
-pub(crate) struct Painted<'a> {
+#[doc(hidden)]
+pub struct Painted<'a> {
     pub hit: Option<&'a Range<u64>>,
     pub marks: &'a [(Range<u64>, u8)],
     pub matches: &'a [Range<u64>],
