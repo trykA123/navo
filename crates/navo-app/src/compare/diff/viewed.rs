@@ -9,7 +9,7 @@ mod store;
 
 #[cfg(test)]
 pub(crate) use store::ViewedStore;
-pub(crate) use store::open_viewed;
+pub(crate) use store::opener;
 
 /// A Viewed store failure, kept as its message so hosts need no store error type.
 #[derive(Debug)]
@@ -86,7 +86,6 @@ impl ViewedMarks for LazyViewed {
 
 /// Viewed marks kept in memory only, for a host with no profile cache.
 #[derive(Default)]
-#[expect(dead_code, reason = "the default backend takes it in G2c")]
 pub(crate) struct MemoryViewed(Mutex<HashSet<[u8; 64]>>);
 
 impl ViewedMarks for MemoryViewed {

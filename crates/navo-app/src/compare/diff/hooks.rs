@@ -2,6 +2,7 @@
 //!
 //! The hooks only start workers: sides and the Viewed store are opened on those workers.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use navo_compare::model::Reason;
@@ -23,7 +24,7 @@ use super::pair::{EnginePlan, PairDiff};
 use super::sides::{side_of, unreadable_side};
 use super::sources::Sources;
 use super::stream::{LoadFn, StreamParts, StreamSession};
-use super::viewed::{LazyViewed, OpenViewed, ViewedMarks, open_viewed};
+use super::viewed::{LazyViewed, MemoryViewed, OpenViewed, ViewedMarks, opener};
 use crate::compare::convert::settings_from;
 use crate::compare::dirs::CompareDirs;
 
@@ -49,9 +50,13 @@ pub(crate) struct BackendParts {
 }
 
 impl Default for DiffBackend {
-    /// Real local and Git sides and the profile cache, with no spool and no sweep.
+    /// Local sides only, no spool and no sweep, and Viewed marks kept in memory.
     fn default() -> Self {
-        Self::new(navo_parts(CompareDirs::default()))
+        Self::new(BackendParts {
+            dirs: CompareDirs::default(),
+            side: Arc::new(side_of),
+            viewed: Arc::new(|| Arc::new(MemoryViewed::default())),
+        })
     }
 }
 
@@ -89,18 +94,23 @@ impl DiffBackend {
         self
     }
 
+    /// The Viewed marks this backend reads and writes, opened on first use.
+    pub(super) fn viewed(&self) -> Arc<dyn ViewedMarks> {
+        self.viewed.clone()
+    }
+
     /// The engine plan for one pair or Stream under `settings`, spooling in the host's root.
     pub(super) fn plan(&self, settings: CompareSettings) -> EnginePlan {
         EnginePlan::new(settings, self.dirs.spool.clone())
     }
 }
 
-/// Navo's sides and Viewed opener over `dirs`.
-pub(super) fn navo_parts(dirs: CompareDirs) -> BackendParts {
+/// Navo's sides over `dirs`, with Viewed marks in the cache file `cache_db` (memory if `None`).
+pub(super) fn navo_parts(dirs: CompareDirs, cache_db: Option<PathBuf>) -> BackendParts {
     BackendParts {
         dirs,
         side: Arc::new(side_of),
-        viewed: Arc::new(open_viewed),
+        viewed: opener(cache_db),
     }
 }
 
@@ -128,7 +138,7 @@ impl DiffHooks for DiffBackend {
         let load_settings = settings.clone();
         let load: LoadFn =
             Arc::new(move |request| Some(input_or_unreadable(request, &load_settings, &side)));
-        let viewed: Arc<dyn ViewedMarks> = self.viewed.clone();
+        let viewed = self.viewed();
         let detail = Some(cards::detail_fn(self.plan(settings)));
         Box::new(StreamSession::start_with(
             sink,

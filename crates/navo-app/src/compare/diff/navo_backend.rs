@@ -2,6 +2,7 @@
 //!
 //! It sits beside the hooks so the glue can build its backend without reaching into `hooks`.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use navo_fs::ProviderOps;
@@ -13,13 +14,15 @@ use super::sources::SPOOL_DIR;
 use crate::compare::dirs::CompareDirs;
 
 /// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
-/// `dirs` are Navo's compare folders, built once from the profile by `navo_compare_dirs`.
+/// `dirs` are Navo's compare folders, built once from the profile by `navo_compare_dirs`;
+/// `cache_db` is the profile's `cache.db`, which holds the Viewed marks (memory if `None`).
 pub fn diff_backend(
     copy: Option<LogFactory>,
     local: &Arc<dyn ProviderOps>,
     dirs: CompareDirs,
+    cache_db: Option<PathBuf>,
 ) -> Arc<DiffBackend> {
-    let backend = DiffBackend::new(navo_parts(dirs));
+    let backend = DiffBackend::new(navo_parts(dirs, cache_db));
     Arc::new(match copy {
         Some(factory) => backend.copying(factory, local.clone()),
         None => backend,

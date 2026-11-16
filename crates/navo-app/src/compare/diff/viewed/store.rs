@@ -1,11 +1,13 @@
 //! The cache-backed Viewed store and its opener (D28); Navo's only Viewed backend.
 
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use navo_store::{CacheDb, StoreDirs};
+use navo_store::CacheDb;
 
-use super::{NoViewed, ViewedError, ViewedMarks};
+use super::{NoViewed, OpenViewed, ViewedError, ViewedMarks};
 
 /// The `compare-viewed` table behind a mutex, so writes never reach the UI thread.
 pub(crate) struct ViewedStore {
@@ -56,11 +58,19 @@ fn now_ms() -> i64 {
         })
 }
 
-/// Open the profile cache for Viewed marks, or fall back to memory and a no-op store.
-pub(crate) fn open_viewed() -> Arc<dyn ViewedMarks> {
-    let db = StoreDirs::detect()
-        .filter(|dirs| dirs.ensure().is_ok())
-        .and_then(|dirs| CacheDb::open(&dirs.data.join("cache.db")).ok())
+/// An opener for the Viewed store: the cache at `cache_db` (its folder is created), else memory.
+pub(crate) fn opener(cache_db: Option<PathBuf>) -> OpenViewed {
+    Arc::new(move || open_viewed(cache_db.as_deref()))
+}
+
+/// Open the cache file for Viewed marks, or fall back to memory and then a no-op store.
+fn open_viewed(cache_db: Option<&Path>) -> Arc<dyn ViewedMarks> {
+    let db = cache_db
+        .filter(|path| {
+            path.parent()
+                .is_none_or(|dir| fs::create_dir_all(dir).is_ok())
+        })
+        .and_then(|path| CacheDb::open(path).ok())
         .map(|(db, _)| db);
     match db.or_else(|| CacheDb::open_in_memory().ok()) {
         Some(db) => Arc::new(ViewedStore::new(db)),
