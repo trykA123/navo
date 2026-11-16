@@ -15,7 +15,7 @@ use super::face::{FontFace, FontFormat, font_format};
 use super::register;
 use super::sfnt::{self, Table};
 
-const INTER: &[u8] = include_bytes!("../../../../fonts/Inter-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../../sidewise-kit/fonts/Inter-Regular.ttf");
 const NAME_IDS: [u16; 5] = [1, 4, 6, 16, 21];
 static KEEP: AtomicBool = AtomicBool::new(false);
 

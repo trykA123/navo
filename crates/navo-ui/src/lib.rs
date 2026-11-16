@@ -2,9 +2,7 @@
 
 pub mod activity;
 pub mod activity_strip;
-mod app;
 pub mod app_menu;
-mod assets;
 pub mod browser;
 pub mod clip_palette;
 pub mod command_center;
@@ -21,13 +19,10 @@ pub mod drag;
 pub(crate) mod file_icons;
 pub mod file_list;
 pub mod fkey_bar;
-mod format;
 pub mod git;
-mod host_os;
 pub mod job_card;
 pub mod job_row;
 pub mod kit_probe;
-pub mod languages;
 mod list_actions;
 pub mod modifier_hints;
 pub mod multi_rename;
@@ -38,7 +33,6 @@ pub mod perf;
 #[cfg(not(feature = "tester"))]
 #[path = "perf_off.rs"]
 pub mod perf;
-pub mod prelude;
 pub mod primitives;
 pub mod prompt_dialog;
 pub mod recently_deleted;
@@ -49,7 +43,6 @@ pub mod shortcuts;
 pub mod side_sheet;
 pub mod status_bar;
 pub mod title_bar;
-pub mod tokens;
 pub mod window_view;
 
 #[cfg(test)]
@@ -61,8 +54,6 @@ mod test_pointer;
 #[cfg(test)]
 mod test_window;
 
-pub use app::{UiError, application, init};
-pub use assets::Assets;
 pub use commands::kit_keys;
 pub use gpui_kit::open_window;
 pub use gpui_kit::prelude::FluentBuilder;
@@ -72,4 +63,7 @@ pub use gpui_kit::{
     ParentElement, Pixels, Point, Render, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, Window, WindowBounds, WindowOptions, div, px, relative, size,
 };
+pub use sidewise_kit::{Assets, UiError, application, init};
+pub(crate) use sidewise_kit::{assets, format, host_os};
+pub use sidewise_kit::{languages, prelude, tokens};
 pub use title_bar::{BrandMark, HeaderSearch, NavoTitleBar, window_options};

@@ -7,7 +7,7 @@ use crate::window_view::tests::{fake, press, settle, viewer_open};
 use crate::window_view::viewer::font::{SAMPLE, SIZES};
 use crate::window_view::viewer::{FileHooks, Kinds};
 
-const INTER: &[u8] = include_bytes!("../../../../fonts/Inter-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../../sidewise-kit/fonts/Inter-Regular.ttf");
 
 type Limits = Arc<Mutex<Vec<u64>>>;
 

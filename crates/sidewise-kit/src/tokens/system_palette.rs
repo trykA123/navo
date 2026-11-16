@@ -152,7 +152,7 @@ fn contrast_shadows(p: &SystemPalette) -> super::Shadows {
 }
 
 impl Theme {
-    pub(crate) fn selected_content(&self, is_selected: bool) -> std::borrow::Cow<'_, Self> {
+    pub fn selected_content(&self, is_selected: bool) -> std::borrow::Cow<'_, Self> {
         if !is_selected || !self.is_contrast {
             return std::borrow::Cow::Borrowed(self);
         }
@@ -189,14 +189,11 @@ impl Theme {
     }
 }
 
-pub(crate) fn with_system_palette(
-    base: &Theme,
-    read: impl FnOnce() -> Option<SystemPalette>,
-) -> Theme {
+pub fn with_system_palette(base: &Theme, read: impl FnOnce() -> Option<SystemPalette>) -> Theme {
     read().map_or_else(|| base.clone(), |palette| contrast_theme(base, &palette))
 }
 
-pub(crate) fn map_contrast_colors(theme: &Theme, k: &mut gpui_kit::component::theme::ThemeColor) {
+pub fn map_contrast_colors(theme: &Theme, k: &mut gpui_kit::component::theme::ThemeColor) {
     if !theme.is_contrast {
         return;
     }

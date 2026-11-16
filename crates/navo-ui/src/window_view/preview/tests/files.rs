@@ -18,7 +18,7 @@ use crate::window_view::preview::Shown;
 use crate::window_view::preview::file::read_only;
 use crate::window_view::{FileHooks, FileStamp, FileText, Head, Paged, Save};
 
-const INTER: &[u8] = include_bytes!("../../../../fonts/Inter-Regular.ttf");
+const INTER: &[u8] = include_bytes!("../../../../../sidewise-kit/fonts/Inter-Regular.ttf");
 const ZIP_HEAD: &[u8] = b"PK\x03\x04\x14\x00\x00\x00\x08\x00";
 
 struct Bytes(Vec<u8>);
