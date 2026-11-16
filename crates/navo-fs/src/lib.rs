@@ -3,7 +3,6 @@
 
 pub mod archive;
 mod code_page;
-mod drive_class;
 mod durable_replace;
 mod exists;
 mod fake;
@@ -15,8 +14,6 @@ mod io_queue;
 mod job;
 mod local;
 mod measure;
-mod network_walk;
-mod paged;
 mod protection;
 mod provider;
 mod scan;
@@ -26,7 +23,6 @@ pub mod view;
 mod watch;
 
 pub use code_page::{ansi_code_page, encoding_for_code_page};
-pub use drive_class::{DriveClass, drive_class};
 pub use durable_replace::native_replace_durable;
 pub(crate) use exists::{ALREADY_EXISTS_CODES, already_exists};
 pub use fake::{FakeFs, FakeOp, Fault};
@@ -53,13 +49,6 @@ pub use measure::{
     LiveRequest, LiveSink, LiveSnapshot, PROGRESS_EVERY, ProfileHandle, ProfileSink, ProfileState,
     RANKING_LIMIT, Ranking, Tally, folder_profile, folder_size, spawn_live, spawn_profile,
 };
-pub use network_walk::{
-    NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME, NetworkStop, NetworkWalkBudget,
-    needs_network_bound,
-};
-pub use paged::{
-    CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
-};
 pub use protection::{ResolvedPlan, check_mutation, check_relocation, check_resolved_mutation};
 pub use provider::{
     AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
@@ -68,6 +57,14 @@ pub use provider::{
     UnixAccess, VerifiedRename,
 };
 pub use scan::{existing_at, scan};
+pub use sidewise_fs::{
+    CACHE_PAGES, INDEX_PROGRESS_EVERY, IndexResult, PAGE_SIZE, PagedFile, index_lines,
+};
+pub use sidewise_fs::{DriveClass, drive_class};
+pub use sidewise_fs::{
+    NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME, NetworkStop, NetworkWalkBudget,
+    needs_network_bound,
+};
 pub use slow::SlowFs;
 pub use snapshot::{FolderSnapshot, load_folder, load_folder_reporting};
 pub use watch::{WATCH_MAX_DELAY, WATCH_QUIET, Watch, WatchChange, WatchEvent, WatchSink};

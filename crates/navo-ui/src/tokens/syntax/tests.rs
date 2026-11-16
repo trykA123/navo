@@ -1,7 +1,6 @@
 use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::{FontStyle, FontWeight, TestAppContext};
-use navo_syntax::{LineState, TokenKind, builtin, lex_line};
 
 use super::{FALLBACKS, SyntaxTheme, highlight_theme, roles};
 use crate::languages::HIGHLIGHT_NAMES;
@@ -11,20 +10,21 @@ use crate::tokens::{
 
 const MODES: [Mode; 2] = [Mode::Light, Mode::Dark];
 const MINIMUM_CONTRAST: f32 = 4.5;
-const KINDS: [TokenKind; 13] = [
-    TokenKind::Keyword,
-    TokenKind::Type,
-    TokenKind::Function,
-    TokenKind::Constant,
-    TokenKind::Attribute,
-    TokenKind::Tag,
-    TokenKind::Property,
-    TokenKind::Variable,
-    TokenKind::Comment,
-    TokenKind::String,
-    TokenKind::Number,
-    TokenKind::Operator,
-    TokenKind::Delimiter,
+/// The highlight names of the 13 lexer token kinds (see `syntax_lexer_tests`).
+const LEXER_NAMES: [&str; 13] = [
+    "keyword",
+    "type",
+    "function",
+    "constant",
+    "attribute",
+    "tag",
+    "property",
+    "variable.special",
+    "comment",
+    "string",
+    "number",
+    "operator",
+    "punctuation.delimiter",
 ];
 
 fn built_in(syntax: SyntaxTheme, mode: Mode, color_theme: ColorTheme) -> (HighlightTheme, Theme) {
@@ -42,11 +42,7 @@ fn built(syntax: SyntaxTheme, mode: Mode) -> (HighlightTheme, Theme) {
 }
 
 fn every_name() -> Vec<&'static str> {
-    HIGHLIGHT_NAMES
-        .iter()
-        .copied()
-        .chain(KINDS.map(TokenKind::highlight_name))
-        .collect()
+    HIGHLIGHT_NAMES.iter().copied().chain(LEXER_NAMES).collect()
 }
 
 #[test]
@@ -139,30 +135,6 @@ fn the_editor_surface_uses_the_navo_tokens() {
     let (theme, ours) = built(SyntaxTheme::OxidisedIron, Mode::Dark);
     assert_eq!(theme.style.editor_background, Some(ours.colors.background));
     assert_eq!(theme.style.editor_foreground, Some(ours.colors.text));
-}
-
-#[test]
-fn lexer_tokens_of_the_built_in_languages_reach_the_theme() {
-    let languages = builtin();
-    assert!(!languages.is_empty());
-    for syntax in SyntaxTheme::ALL {
-        let (theme, _) = built(syntax, Mode::Light);
-        for language in &languages {
-            let words: Vec<&str> = language
-                .keywords
-                .iter()
-                .flat_map(|group| group.words.iter().map(String::as_str))
-                .collect();
-            let (tokens, _) = lex_line(language, &words.join(" "), LineState::Normal);
-            assert!(!tokens.is_empty(), "{} lexes to nothing", language.name);
-            for token in tokens {
-                let colour = theme
-                    .style(token.kind.highlight_name())
-                    .and_then(|style| style.color);
-                assert!(colour.is_some(), "{}: {:?}", language.name, token.kind);
-            }
-        }
-    }
 }
 
 #[gpui_kit::test]

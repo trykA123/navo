@@ -202,12 +202,13 @@ pub(crate) fn open(mut launch: Launch) {
     let (search, visits) = search_hooks(services.memory.clone(), remember, dirs.as_ref(), &local);
     #[cfg(windows)]
     crate::index_service::start_version_step(dirs.as_ref().map(|dirs| dirs.data.as_path()));
+    let compare_dirs = crate::compare::diff::navo_compare_dirs(dirs.as_ref());
     let (save, autosave) = session_saver(dirs, disk.clone(), cache.clone(), keys.clone());
     let copy = services
         .sessions
         .as_ref()
         .map(|holds| holds.compare_factory(launch.experimental_retention.then(|| local.clone())));
-    let diff = crate::compare::diff::diff_backend(copy, &local);
+    let diff = crate::compare::diff::diff_backend(copy, &local, compare_dirs);
     let exit = (disk, visits, services.sessions);
     files::prewarm_pdf(PDF_WARM_DELAY);
     let quit_git = git.clone();

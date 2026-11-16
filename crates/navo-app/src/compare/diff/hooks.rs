@@ -26,6 +26,7 @@ use super::sources::Sources;
 use super::stream::{LoadFn, StreamParts, StreamSession};
 use super::viewed::{LazyViewed, NoViewed, OpenViewed, ViewedMarks, ViewedStore};
 use crate::compare::convert::settings_from;
+use crate::compare::dirs::CompareDirs;
 
 /// Builds one side from its `Location`; it touches the file system, so only workers call it.
 pub(crate) type SideFn =
@@ -34,44 +35,74 @@ pub(crate) type SideFn =
 /// The app's `DiffHooks`: builds local and Git file sides and owns the Viewed store. Copying a
 /// change needs the compare job factory; without one every copy is refused.
 pub struct DiffBackend {
+    dirs: CompareDirs,
     side: SideFn,
     viewed: Arc<LazyViewed>,
     copy: Option<CopyService>,
 }
 
+/// What a host passes to build a backend: its folders, its side builder and its Viewed opener.
+/// Crate-visible until `SideFn` and `OpenViewed` are public (G4).
+pub(crate) struct BackendParts {
+    pub dirs: CompareDirs,
+    pub side: SideFn,
+    pub viewed: OpenViewed,
+}
+
 impl Default for DiffBackend {
-    /// Real local and Git sides and the profile cache, both opened later on workers.
+    /// Real local and Git sides and the profile cache, with no spool and no sweep.
     fn default() -> Self {
-        Sources::sweep_startup();
-        Self::with_parts(Arc::new(side_of), Arc::new(open_viewed))
+        Self::new(navo_parts(CompareDirs::default()))
     }
 }
 
 impl DiffBackend {
-    /// A backend over this side builder and Viewed opener; neither is called here.
-    pub(crate) fn with_parts(side: SideFn, open: OpenViewed) -> Self {
+    /// A backend over `parts`; it sweeps dead spool folders in `parts.dirs.spool` only, and
+    /// calls neither the side builder nor the Viewed opener here.
+    pub(crate) fn new(parts: BackendParts) -> Self {
+        Sources::sweep_startup(parts.dirs.spool.as_deref());
         Self {
-            side,
-            viewed: Arc::new(LazyViewed::new(open)),
+            dirs: parts.dirs,
+            side: parts.side,
+            viewed: Arc::new(LazyViewed::new(parts.viewed)),
             copy: None,
         }
     }
 
-    /// A backend whose copies run through `factory` and write with `ops`.
+    /// A backend over this side builder and Viewed opener, with no spool; for tests.
+    pub(crate) fn with_parts(side: SideFn, open: OpenViewed) -> Self {
+        Self::new(BackendParts {
+            dirs: CompareDirs::default(),
+            side,
+            viewed: open,
+        })
+    }
+
+    /// The default backend whose copies run through `factory` and write with `ops`.
+    #[cfg(test)]
     pub(crate) fn with_copy(factory: LogFactory, ops: Arc<dyn ProviderOps>) -> Self {
-        Self {
-            copy: Some(CopyService::new(factory, ops)),
-            ..Self::default()
-        }
+        Self::default().copying(factory, ops)
+    }
+
+    /// This backend with its copies run through `factory`, writing with `ops`.
+    pub(crate) fn copying(mut self, factory: LogFactory, ops: Arc<dyn ProviderOps>) -> Self {
+        self.copy = Some(CopyService::new(factory, ops));
+        self
+    }
+
+    /// The engine plan for one pair or Stream under `settings`, spooling in the host's root.
+    pub(super) fn plan(&self, settings: CompareSettings) -> EnginePlan {
+        EnginePlan::new(settings, self.dirs.spool.clone())
     }
 }
 
-/// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
-pub fn diff_backend(copy: Option<LogFactory>, local: &Arc<dyn ProviderOps>) -> Arc<DiffBackend> {
-    Arc::new(match copy {
-        Some(factory) => DiffBackend::with_copy(factory, local.clone()),
-        None => DiffBackend::default(),
-    })
+/// Navo's sides and Viewed opener over `dirs`.
+pub(super) fn navo_parts(dirs: CompareDirs) -> BackendParts {
+    BackendParts {
+        dirs,
+        side: Arc::new(side_of),
+        viewed: Arc::new(open_viewed),
+    }
 }
 
 impl DiffHooks for DiffBackend {
@@ -83,7 +114,7 @@ impl DiffHooks for DiffBackend {
         sink: DiffSink,
     ) -> Box<dyn PairControl> {
         let settings = settings_from(options);
-        let plan = EnginePlan::new(settings.clone(), true);
+        let plan = self.plan(settings.clone());
         let side = Arc::clone(&self.side);
         let pair = request.clone();
         let opener = Box::new(move || input_of(&pair, &settings, &side).map(Arc::new));
@@ -99,7 +130,7 @@ impl DiffHooks for DiffBackend {
         let load: LoadFn =
             Arc::new(move |request| Some(input_or_unreadable(request, &load_settings, &side)));
         let viewed: Arc<dyn ViewedMarks> = self.viewed.clone();
-        let detail = Some(cards::detail_fn(EnginePlan::new(settings, true)));
+        let detail = Some(cards::detail_fn(self.plan(settings)));
         Box::new(StreamSession::start_with(
             sink,
             budget,

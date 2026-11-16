@@ -2,6 +2,8 @@ mod elide;
 mod keys;
 
 #[cfg(test)]
+mod key_tests;
+#[cfg(test)]
 mod tests;
 
 use std::rc::Rc;
@@ -13,8 +15,6 @@ use gpui_kit::{
     IntoElement, ParentElement, RenderOnce, Role, SharedString, Stateful,
     StatefulInteractiveElement, Styled, Subscription, Toggled, Window, div, px,
 };
-
-pub use keys::bind_keys;
 
 use crate::dialog_focus::{Stop, focus_ring};
 use crate::primitives::{

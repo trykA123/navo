@@ -25,7 +25,7 @@ use super::FileHooks;
 use super::body::{Attach, ViewerBody};
 use crate::prelude::*;
 
-pub const EDIT_LIMIT: u64 = 16 * 1024 * 1024;
+pub use crate::compare_diff::EDIT_LIMIT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Slot {

@@ -1,5 +1,5 @@
 use gpui_kit::base::ObservedElement;
-use gpui_kit::{App, Context, Div, InteractiveElement, Stateful, Window};
+use gpui_kit::{Context, Div, InteractiveElement, Stateful, Window};
 
 use super::ContextMenu;
 use super::place::ROW;
@@ -21,10 +21,6 @@ gpui_kit::actions!(
         MenuClassic,
     ]
 );
-
-pub fn bind_keys(cx: &mut App) {
-    crate::commands::bind_namespace(cx, "context_menu");
-}
 
 pub(super) fn register(
     layer: ObservedElement<Stateful<Div>>,

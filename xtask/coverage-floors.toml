@@ -1,6 +1,7 @@
 [floors]
 navo-core = 90
 navo-fs = 80
+sidewise-fs = 80
 navo-store = 85
 navo-cache = 85
 navo-ui = 60

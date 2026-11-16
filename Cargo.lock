@@ -6284,6 +6284,7 @@ dependencies = [
  "sevenz-rust2",
  "sha2 0.11.1",
  "sidewise-engine",
+ "sidewise-fs",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
@@ -9243,6 +9244,18 @@ dependencies = [
  "similar 3.2.1",
  "tempfile",
  "xxhash-rust",
+]
+
+[[package]]
+name = "sidewise-fs"
+version = "0.7.0"
+dependencies = [
+ "encoding_rs",
+ "rustix",
+ "same-file",
+ "sidewise-core",
+ "tempfile",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

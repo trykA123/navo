@@ -1,44 +1,7 @@
 use super::Group;
 use super::contexts::GLOBAL;
 
-gpui_kit::actions!(
-    compare,
-    [
-        WithOtherPane,
-        Refs,
-        NextDifference,
-        PreviousDifference,
-        CopyRight,
-        CopyLeft,
-        Enter,
-        Up,
-        Exit,
-        Save,
-        StopChecking,
-        Continue,
-        ViewBytes,
-        ViewText,
-        ShowBytesHere,
-        Stream,
-        NextFile,
-        PreviousFile,
-        ViewMenu,
-        Changes,
-        Details,
-        ToggleViewed,
-        Fold,
-        OpenFile,
-        Search,
-        CopyAllLeft,
-        CopyAllRight,
-        PickDown,
-        PickUp,
-        PickToggle,
-        RemovePicked,
-        ShowMenu,
-        ToggleWrap
-    ]
-);
+pub use super::compare_actions::*;
 
 pub(super) const GROUPS: [Group; 5] = [
     Group {

@@ -1,0 +1,25 @@
+# Paged files, volume ids and native path helpers shared by the compare stack.
+[package]
+name = "sidewise-fs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+navo-core = { package = "sidewise-core", path = "../sidewise-core" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1.1.6", features = ["fs"] }
+
+[target.'cfg(windows)'.dependencies]
+same-file = "1.0.6"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_RestartManager", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+
+[dev-dependencies]
+encoding_rs = "0.8.44"
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

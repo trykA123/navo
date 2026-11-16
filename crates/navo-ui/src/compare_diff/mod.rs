@@ -40,3 +40,7 @@ pub use stream_model::{
     EscStep, Stop, StreamItem, StreamList, StreamModel, is_stream_item, stream_items,
 };
 pub use ticks::{OnTick, PickSide, Ticks, line_on};
+
+/// Largest file, in bytes, that the text viewer opens for editing and the compare syntax
+/// paths parse.
+pub const EDIT_LIMIT: u64 = 16 * 1024 * 1024;

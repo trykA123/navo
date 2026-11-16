@@ -283,8 +283,8 @@ fn open_stream_runs_the_detail_lane_for_a_binary_pair() {
     write(dir.path(), "left.bin", b"a\0b");
     write(dir.path(), "right.bin", b"a\0c");
     let (sink, receiver) = channel();
-    let stream =
-        DiffBackend::default().open_stream(&CompareOptions::from_values(&Values::default()), sink);
+    let backend = DiffBackend::with_parts(Arc::new(side_of), Arc::new(|| Arc::new(NoViewed)));
+    let stream = backend.open_stream(&CompareOptions::from_values(&Values::default()), sink);
     let left = dir.path().join("left.bin");
     let right = dir.path().join("right.bin");
     stream.focus(vec![8]);
@@ -309,4 +309,30 @@ fn open_stream_runs_the_detail_lane_for_a_binary_pair() {
             _ => {}
         }
     }
+}
+
+#[test]
+fn navo_dirs_put_the_spool_under_the_profile_data() {
+    let profile = navo_store::StoreDirs::in_profile(Path::new("profile"));
+    let dirs = crate::compare::diff::navo_backend::navo_compare_dirs(Some(&profile));
+    assert_eq!(
+        dirs.spool,
+        Some(profile.data.join("compare-spool")),
+        "Navo keeps its spool in the profile data folder, beside cache.db"
+    );
+    assert_eq!(
+        crate::compare::diff::navo_backend::navo_compare_dirs(None),
+        crate::compare::dirs::CompareDirs::default(),
+        "without a profile there is no spool to write or sweep"
+    );
+}
+
+#[test]
+fn a_backend_without_a_spool_plans_none() {
+    let backend = DiffBackend::with_parts(Arc::new(side_of), Arc::new(|| Arc::new(NoViewed)));
+    let plan = backend.plan(crate::compare::settings::CompareSettings::default());
+    assert_eq!(
+        plan.spool, None,
+        "a host without a spool must never get Navo's profile spool"
+    );
 }

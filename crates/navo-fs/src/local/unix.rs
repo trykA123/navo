@@ -6,13 +6,13 @@
     )
 )]
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::fs::{self, Metadata};
 use std::io;
 use std::ops::ControlFlow;
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use navo_core::{FsError, FsErrorKind, Location, ProviderPath};
@@ -27,11 +27,6 @@ const OWNER_WRITE: u32 = 0o200;
 const NO_HARD_LINK_CODES: [i32; 3] = [1, 38, 95];
 #[cfg(not(target_os = "linux"))]
 const NO_HARD_LINK_CODES: [i32; 3] = [1, 78, 45];
-
-pub(super) fn os_path(path: &ProviderPath) -> Option<PathBuf> {
-    path.to_bytes()
-        .map(|bytes| PathBuf::from(OsString::from_vec(bytes)))
-}
 
 pub(super) fn entry_name(name: &OsStr) -> ProviderPath {
     ProviderPath::from_bytes(name.as_bytes())
