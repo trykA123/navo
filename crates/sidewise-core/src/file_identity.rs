@@ -1,3 +1,6 @@
+//! File identity kinds that tell whether two paths point at the same file.
+//! Used by the engine to detect duplicates and links.
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FileIdentityKind {

@@ -1,3 +1,6 @@
+//! Memory use counters for app components.
+//! Lets the app report how much memory each part holds.
+
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::{Mutex, Once, PoisonError};
 
