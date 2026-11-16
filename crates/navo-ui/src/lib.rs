@@ -17,6 +17,7 @@ pub mod context_menu;
 pub mod crash_notice;
 mod dialog_focus;
 pub mod drag;
+pub(crate) mod file_icons;
 pub mod file_list;
 pub mod fkey_bar;
 mod format;
