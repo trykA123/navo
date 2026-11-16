@@ -4,10 +4,11 @@ use std::path::Path;
 
 use navo_compare::model::Budget;
 use navo_compare::session::{CheckMode, NetworkCap};
+use navo_compare::settings::CompareGitEngine;
 use navo_fs::{NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME};
 use navo_git::cli::MIN_GIT_VERSION;
 use navo_git::{Choice, CliGit, EngineKind, EngineSetting, GitFound, RepoFormat, choose};
-use navo_store::{Compare, CompareGitEngine, ContentCheck};
+use navo_store::{Compare, ContentCheck};
 
 /// The shared network-walk bound (D103) as the compare engine takes it.
 pub(crate) fn network_cap() -> NetworkCap {
@@ -20,7 +21,7 @@ pub(crate) fn network_cap() -> NetworkCap {
 /// The `[compare]` settings as the compare backend reads them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompareSettings {
-    pub git_engine: EngineSetting,
+    pub git_engine: CompareGitEngine,
     pub ignore_list: Vec<String>,
     pub respect_gitignore: bool,
     pub memory_budget_mib: u32,
@@ -30,7 +31,7 @@ pub(crate) struct CompareSettings {
 impl Default for CompareSettings {
     fn default() -> Self {
         Self {
-            git_engine: EngineSetting::default(),
+            git_engine: CompareGitEngine::default(),
             ignore_list: Vec::new(),
             respect_gitignore: true,
             memory_budget_mib: Budget::DEFAULT_MIB,
@@ -42,11 +43,7 @@ impl Default for CompareSettings {
 impl From<&Compare> for CompareSettings {
     fn from(stored: &Compare) -> Self {
         Self {
-            git_engine: match stored.git_engine {
-                CompareGitEngine::Git => EngineSetting::Git,
-                CompareGitEngine::Gix => EngineSetting::Gix,
-                CompareGitEngine::Auto => EngineSetting::Auto,
-            },
+            git_engine: stored.git_engine,
             ignore_list: stored.ignore_list.clone(),
             respect_gitignore: stored.respect_gitignore,
             memory_budget_mib: stored.memory_budget_mib,
@@ -74,7 +71,16 @@ pub(crate) fn choose_engine(
     format: &RepoFormat,
     git: GitFound,
 ) -> Choice {
-    choose(settings.git_engine, format, git)
+    choose(engine_setting(settings.git_engine), format, git)
+}
+
+/// Maps the stored engine setting to the Git crate's own setting type.
+fn engine_setting(stored: CompareGitEngine) -> EngineSetting {
+    match stored {
+        CompareGitEngine::Git => EngineSetting::Git,
+        CompareGitEngine::Gix => EngineSetting::Gix,
+        CompareGitEngine::Auto => EngineSetting::Auto,
+    }
 }
 
 /// The engine for one repository. An unreadable format keeps the CLI, whose open reports the error.
