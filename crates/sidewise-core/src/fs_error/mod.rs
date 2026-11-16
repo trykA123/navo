@@ -1,3 +1,6 @@
+//! File system error kinds and the error type that carries them with a location.
+//! Lets the app show clear messages for OS failures.
+
 use crate::Location;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

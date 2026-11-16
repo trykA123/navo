@@ -1,3 +1,6 @@
+//! Locations: where an item lives, with helpers for paths, parents and ancestors.
+//! The common address type of the core crate.
+
 mod ancestors;
 mod parent;
 mod path;

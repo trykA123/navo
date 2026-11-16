@@ -1,3 +1,6 @@
+//! Text encoding: detect, decode and encode file bytes (UTF-8, UTF-16 and others).
+//! Used by the engine when it reads and writes text files.
+
 mod detect;
 mod encode;
 mod utf16;

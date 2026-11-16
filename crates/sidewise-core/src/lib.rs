@@ -31,5 +31,7 @@ pub use op_plan::{
     write_many_plan, write_plan,
 };
 
+/// Suffix added to a file name while it is being written.
 pub const TEMP_SUFFIX: &str = ".navo-part";
+/// Largest number of nodes one operation plan may hold.
 pub const MAX_PLAN_NODES: usize = 100_000;

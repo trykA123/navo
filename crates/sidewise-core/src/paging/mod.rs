@@ -1,3 +1,6 @@
+//! Paging helpers: row counts, indexes and hex rows for long lists and files.
+//! Used by the views to show one page at a time.
+
 mod count;
 mod hex;
 mod index;

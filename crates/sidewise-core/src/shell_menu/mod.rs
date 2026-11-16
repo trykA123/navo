@@ -1,3 +1,6 @@
+//! Shell menu model: actions, filtering and rows of the context menu.
+//! The UI draws the rows this module builds.
+
 mod actions;
 mod filter;
 mod rows;

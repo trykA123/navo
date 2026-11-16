@@ -6230,7 +6230,6 @@ name = "navo-core"
 version = "0.7.0"
 dependencies = [
  "aho-corasick",
- "chardetng",
  "encoding_rs",
  "gungraun",
  "insta",

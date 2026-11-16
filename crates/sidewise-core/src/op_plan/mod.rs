@@ -1,3 +1,6 @@
+//! Operation plans for copy, move and delete: build the plan, name items, handle drops.
+//! The engine runs the plans this module produces.
+
 mod build;
 mod drop;
 mod names;
