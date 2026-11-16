@@ -10,6 +10,7 @@ pub mod clip_palette;
 pub mod command_center;
 pub mod commands;
 pub mod compare_diff;
+pub mod compare_keys;
 pub mod compare_list;
 mod compare_visible;
 pub mod confirm_dialog;

@@ -23,8 +23,7 @@ pub(crate) use parse::also_in;
 pub use parse::{KeymapError, normal as normal_key};
 pub use shown::shown;
 
-/// The compare screen's keys, which Sidewise's keymap includes (NC11).
-pub const COMPARE_KEYMAP: &str = include_str!("../compare_keymap.toml");
+pub use crate::compare_keys::COMPARE_KEYMAP;
 
 const BUILTIN: &str = concat!(
     include_str!("../keymap.toml"),
