@@ -12,10 +12,6 @@ gpui_kit::actions!(
     [Next, Previous, NextButton, PreviousButton, Press]
 );
 
-pub(crate) fn bind_keys(cx: &mut App) {
-    crate::commands::bind_namespace(cx, "dialog_focus");
-}
-
 pub(crate) fn cycle(stops: &[FocusHandle], forward: bool, window: &mut Window, cx: &mut App) {
     let count = stops.len();
     let current = stops.iter().position(|stop| stop.is_focused(window));

@@ -1,0 +1,41 @@
+// The compare screen's action types, named by the keymap, menus and tests.
+// Their groups, labels and hidden rules stay in `compare.rs`.
+
+gpui_kit::actions!(
+    compare,
+    [
+        WithOtherPane,
+        Refs,
+        NextDifference,
+        PreviousDifference,
+        CopyRight,
+        CopyLeft,
+        Enter,
+        Up,
+        Exit,
+        Save,
+        StopChecking,
+        Continue,
+        ViewBytes,
+        ViewText,
+        ShowBytesHere,
+        Stream,
+        NextFile,
+        PreviousFile,
+        ViewMenu,
+        Changes,
+        Details,
+        ToggleViewed,
+        Fold,
+        OpenFile,
+        Search,
+        CopyAllLeft,
+        CopyAllRight,
+        PickDown,
+        PickUp,
+        PickToggle,
+        RemovePicked,
+        ShowMenu,
+        ToggleWrap
+    ]
+);

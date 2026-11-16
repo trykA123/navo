@@ -26,6 +26,7 @@
 
 mod convert;
 pub mod diff;
+pub mod dirs;
 mod entry;
 pub mod git_side;
 pub mod handle;

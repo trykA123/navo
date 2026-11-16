@@ -96,9 +96,9 @@ fn main() -> ExitCode {
             report(&error.to_string());
         }
         navo_ui::clip_palette::bind_keys(cx);
-        navo_ui::confirm_dialog::bind_keys(cx);
+        navo_ui::kit_keys::bind_confirm_dialog(cx);
         navo_ui::prompt_dialog::bind_keys(cx);
-        navo_ui::context_menu::bind_keys(cx);
+        navo_ui::kit_keys::bind_context_menu(cx);
         navo_ui::pane_chrome::bind_keys(cx);
         navo_ui::window_view::bind_viewer_keys(cx);
         let opened = navo_ui::open_window(window_options(cx), cx, |window, cx| {

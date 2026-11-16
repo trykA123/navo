@@ -24,7 +24,9 @@ pub mod git;
 mod host_os;
 pub mod job_card;
 pub mod job_row;
+pub mod kit_probe;
 pub mod languages;
+mod list_actions;
 pub mod modifier_hints;
 pub mod multi_rename;
 mod name_match;
@@ -49,12 +51,17 @@ pub mod tokens;
 pub mod window_view;
 
 #[cfg(test)]
+mod kit_test_window;
+#[cfg(test)]
+mod syntax_lexer_tests;
+#[cfg(test)]
 mod test_pointer;
 #[cfg(test)]
 mod test_window;
 
 pub use app::{UiError, application, init};
 pub use assets::Assets;
+pub use commands::kit_keys;
 pub use gpui_kit::open_window;
 pub use gpui_kit::prelude::FluentBuilder;
 pub use gpui_kit::{

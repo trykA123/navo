@@ -9,7 +9,9 @@ use super::git_keys::{GitCommit, GitDiff, GitLog, GitPull, GitPush, OpenGitMenu}
 use super::{FileListAction, ListContext, SortBy};
 use crate::git::GitAction;
 
-pub(crate) const CONTEXT: &str = "FileList";
+pub use crate::list_actions::UndoLast;
+
+pub(crate) const CONTEXT: &str = crate::list_actions::LIST_CONTEXT;
 
 gpui_kit::actions!(
     file_list,
@@ -37,7 +39,6 @@ gpui_kit::actions!(
         ClearFilter,
         RenameItem,
         MultiRename,
-        UndoLast,
         NewFolder,
         NewFile,
         CopyPath,

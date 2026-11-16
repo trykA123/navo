@@ -15,6 +15,7 @@ pub use navo_diag::perf::{
     UiState,
 };
 
+use crate::kit_probe::Probe;
 use crate::prelude::*;
 use recorder::Recorder;
 
@@ -49,6 +50,16 @@ thread_local! {
 
 pub fn install(service: Arc<dyn PerfService>) {
     SERVICE.with_borrow_mut(|slot| *slot = Some(service));
+    crate::kit_probe::set_probe(kit_event);
+}
+
+/// Maps a kit widget's probe event back onto the recorder hooks.
+fn kit_event(event: Probe) {
+    match event {
+        Probe::MenuReady => ready(Latency::ContextMenu),
+        Probe::MenuAnimating(on) => animating(Latency::MenuOpen, on),
+        Probe::MenuRendered => note(UiFlag::ContextMenu),
+    }
 }
 
 pub(crate) fn service() -> Option<Arc<dyn PerfService>> {

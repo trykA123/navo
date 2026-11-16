@@ -2,6 +2,7 @@
 //! themselves, the copy into them, and the start-up sweep of folders whose process is gone.
 
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -203,12 +204,22 @@ pub(in crate::compare::diff) fn sweep_with(base: &Path, before_delete: &mut dyn 
         }
     };
     for entry in entries.flatten() {
-        // A link or junction is never followed: only real folders are swept.
-        if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+        // A link or junction is never followed, and only folders named like an owner's are swept.
+        if is_owner_name(&entry.file_name()) && entry.file_type().is_ok_and(|kind| kind.is_dir()) {
             sweep_folder(&entry.path(), before_delete);
         }
     }
     drop(gate);
+}
+
+/// True when `name` has the exact `<pid>-<start-nanos>` shape that `Owner::open` creates.
+fn is_owner_name(name: &OsStr) -> bool {
+    let Some((pid, nanos)) = name.to_str().and_then(|name| name.split_once('-')) else {
+        return false;
+    };
+    // `parse` alone accepts a leading `+`; the shape is digits only.
+    let digits = |text: &str| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
+    digits(pid) && digits(nanos) && pid.parse::<u32>().is_ok() && nanos.parse::<u128>().is_ok()
 }
 
 /// Remove one folder while holding its free lock; a missing lock means a leftover that never

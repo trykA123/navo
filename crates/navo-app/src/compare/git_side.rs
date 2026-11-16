@@ -12,7 +12,8 @@ use navo_fs::git::{GitFs, location, provider_id};
 use navo_fs::{CancelToken as FsCancel, Provider};
 use navo_git::{CliGit, CliOptions, EngineKind, GixGit};
 
-use super::entry::{feed, reason_of, segments};
+use super::entry::{reason_of, segments};
+use super::local::feed;
 
 /// The files of `repo@rev`. Submodules list as plain folders and cannot be entered.
 pub struct GitSide {

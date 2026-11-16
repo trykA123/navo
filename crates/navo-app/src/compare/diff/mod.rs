@@ -12,6 +12,7 @@ mod hooks;
 mod image;
 mod large;
 mod load;
+mod navo_backend;
 mod pair;
 mod sheet_hook;
 mod sides;
@@ -19,7 +20,8 @@ mod sources;
 mod stream;
 mod viewed;
 
-pub use hooks::{DiffBackend, diff_backend};
+pub use hooks::DiffBackend;
+pub use navo_backend::{diff_backend, navo_compare_dirs};
 
 #[cfg(test)]
 mod tests;

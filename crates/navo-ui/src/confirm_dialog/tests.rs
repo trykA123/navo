@@ -5,11 +5,11 @@ use gpui_kit::{
 };
 
 use super::{Choice, ConfirmDialog, ConfirmProps};
-use crate::test_window::open;
+use crate::kit_test_window::open;
 
-const DIALOG: &str = "dialog";
+pub(super) const DIALOG: &str = "dialog";
 
-fn props(lines: usize, more: u64) -> ConfirmProps {
+pub(super) fn props(lines: usize, more: u64) -> ConfirmProps {
     ConfirmProps {
         title: "Delete 8 items permanently?".into(),
         lines: (0..lines)
@@ -26,15 +26,15 @@ fn props(lines: usize, more: u64) -> ConfirmProps {
 }
 
 #[derive(Default)]
-struct Counts {
-    confirmed: usize,
-    cancelled: usize,
-    toggled: usize,
+pub(super) struct Counts {
+    pub(super) confirmed: usize,
+    pub(super) cancelled: usize,
+    pub(super) toggled: usize,
 }
 
-struct Harness {
-    props: ConfirmProps,
-    counts: Counts,
+pub(super) struct Harness {
+    pub(super) props: ConfirmProps,
+    pub(super) counts: Counts,
 }
 
 impl Render for Harness {
@@ -61,7 +61,7 @@ fn open_dialog(cx: &mut TestAppContext, props: ConfirmProps) -> (AnyWindowHandle
     (window, harness)
 }
 
-fn press(window: AnyWindowHandle, keys: &[&str], cx: &mut TestAppContext) {
+pub(super) fn press(window: AnyWindowHandle, keys: &[&str], cx: &mut TestAppContext) {
     for key in keys {
         cx.update_window(window, |_, window, cx| window.press(key, cx))
             .expect("window");
@@ -69,7 +69,7 @@ fn press(window: AnyWindowHandle, keys: &[&str], cx: &mut TestAppContext) {
     }
 }
 
-fn counts(harness: &Entity<Harness>, cx: &mut TestAppContext) -> (usize, usize) {
+pub(super) fn counts(harness: &Entity<Harness>, cx: &mut TestAppContext) -> (usize, usize) {
     harness.read_with(cx, |harness, _| {
         (harness.counts.confirmed, harness.counts.cancelled)
     })
@@ -135,52 +135,6 @@ fn a_short_list_has_no_more_line(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn escape_cancels(cx: &mut TestAppContext) {
-    let (window, harness) = open_dialog(cx, props(1, 0));
-    press(window, &["escape"], cx);
-    assert_eq!(counts(&harness, cx), (0, 1));
-}
-
-#[gpui_kit::test]
-fn with_danger_enter_right_away_cancels(cx: &mut TestAppContext) {
-    let (window, harness) = open_dialog(cx, props(1, 0));
-    cx.update_window(window, |_, window, _| {
-        assert_eq!(window.within(DIALOG).find("cancel").focused(), Some(true));
-        assert_eq!(window.within(DIALOG).find("confirm").focused(), Some(false));
-    })
-    .expect("window");
-    press(window, &["enter"], cx);
-    assert_eq!(counts(&harness, cx), (0, 1));
-}
-
-#[gpui_kit::test]
-fn with_danger_tab_then_enter_confirms(cx: &mut TestAppContext) {
-    let (window, harness) = open_dialog(cx, props(1, 0));
-    press(window, &["tab", "enter"], cx);
-    assert_eq!(counts(&harness, cx), (1, 0));
-}
-
-#[gpui_kit::test]
-fn tab_and_shift_tab_move_between_the_buttons(cx: &mut TestAppContext) {
-    let (window, harness) = open_dialog(cx, props(1, 0));
-    press(
-        window,
-        &["tab", "tab", "shift-tab", "shift-tab", "enter"],
-        cx,
-    );
-    assert_eq!(counts(&harness, cx), (0, 1));
-}
-
-#[gpui_kit::test]
-fn without_danger_enter_confirms(cx: &mut TestAppContext) {
-    let mut safe = props(1, 0);
-    safe.danger = false;
-    let (window, harness) = open_dialog(cx, safe);
-    press(window, &["enter"], cx);
-    assert_eq!(counts(&harness, cx), (1, 0));
-}
-
-#[gpui_kit::test]
 fn clicks_on_the_buttons_confirm_and_cancel(cx: &mut TestAppContext) {
     let (window, harness) = open_dialog(cx, props(1, 0));
     cx.update_window(window, |_, window, cx| {
@@ -191,7 +145,7 @@ fn clicks_on_the_buttons_confirm_and_cancel(cx: &mut TestAppContext) {
     assert_eq!(counts(&harness, cx), (1, 1));
 }
 
-fn typed() -> ConfirmProps {
+pub(super) fn typed() -> ConfirmProps {
     let mut protected = props(1, 0);
     protected.typed = Some("DELETE".into());
     protected
@@ -205,7 +159,7 @@ fn click_confirm(window: AnyWindowHandle, cx: &mut TestAppContext) {
     cx.run_until_parked();
 }
 
-fn type_text(window: AnyWindowHandle, text: &str, cx: &mut TestAppContext) {
+pub(super) fn type_text(window: AnyWindowHandle, text: &str, cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| window.input(text, cx))
         .expect("window");
     cx.run_until_parked();
@@ -243,14 +197,6 @@ fn the_exact_word_enables_confirm(cx: &mut TestAppContext) {
     assert_eq!(counts(&harness, cx), (2, 0));
 }
 
-#[gpui_kit::test]
-fn escape_in_the_field_cancels(cx: &mut TestAppContext) {
-    let (window, harness) = open_dialog(cx, typed());
-    type_text(window, "DEL", cx);
-    press(window, &["escape"], cx);
-    assert_eq!(counts(&harness, cx), (0, 1));
-}
-
 #[test]
 fn hidden_counts_the_cut_lines_and_the_rest() {
     assert_eq!(props(7, 1).hidden(), 3);
@@ -258,7 +204,7 @@ fn hidden_counts_the_cut_lines_and_the_rest() {
     assert_eq!(props(2, 4).hidden(), 4);
 }
 
-fn focused(window: AnyWindowHandle, cx: &mut TestAppContext) -> Vec<&'static str> {
+pub(super) fn focused(window: AnyWindowHandle, cx: &mut TestAppContext) -> Vec<&'static str> {
     cx.update_window(window, |_, window, _| {
         ["typed", "choice", "confirm", "cancel"]
             .into_iter()
@@ -286,41 +232,6 @@ fn a_safe_dialog_opens_with_confirm_focused(cx: &mut TestAppContext) {
 fn a_danger_dialog_opens_with_cancel_focused(cx: &mut TestAppContext) {
     let (window, _) = open_dialog(cx, props(1, 0));
     assert_eq!(focused(window, cx), ["cancel"]);
-}
-
-#[gpui_kit::test]
-fn tab_wraps_forward_and_shift_tab_wraps_back(cx: &mut TestAppContext) {
-    let (window, _) = open_dialog(cx, props(1, 0));
-    press(window, &["tab"], cx);
-    assert_eq!(focused(window, cx), ["confirm"]);
-    press(window, &["tab"], cx);
-    assert_eq!(focused(window, cx), ["cancel"]);
-    press(window, &["shift-tab"], cx);
-    assert_eq!(focused(window, cx), ["confirm"]);
-    press(window, &["shift-tab"], cx);
-    assert_eq!(focused(window, cx), ["cancel"]);
-}
-
-#[gpui_kit::test]
-fn the_arrow_keys_move_between_the_buttons_and_wrap(cx: &mut TestAppContext) {
-    let (window, _) = open_dialog(cx, props(1, 0));
-    press(window, &["left"], cx);
-    assert_eq!(focused(window, cx), ["confirm"]);
-    press(window, &["left"], cx);
-    assert_eq!(focused(window, cx), ["cancel"]);
-    press(window, &["right"], cx);
-    assert_eq!(focused(window, cx), ["confirm"]);
-    press(window, &["right"], cx);
-    assert_eq!(focused(window, cx), ["cancel"]);
-}
-
-#[gpui_kit::test]
-fn space_activates_the_focused_button(cx: &mut TestAppContext) {
-    let (window, harness) = open_dialog(cx, props(1, 0));
-    press(window, &["space"], cx);
-    assert_eq!(counts(&harness, cx), (0, 1));
-    press(window, &["tab", "space"], cx);
-    assert_eq!(counts(&harness, cx), (1, 1));
 }
 
 #[gpui_kit::test]
@@ -368,7 +279,7 @@ fn a_dialog_without_a_mode_has_no_mode_label(cx: &mut TestAppContext) {
     assert_eq!(label(window, "mode", cx), None);
 }
 
-fn with_choice() -> ConfirmProps {
+pub(super) fn with_choice() -> ConfirmProps {
     let mut safe = props(1, 0);
     safe.danger = false;
     safe.choice = Some(Choice {
@@ -378,29 +289,8 @@ fn with_choice() -> ConfirmProps {
     safe
 }
 
-fn toggled(harness: &Entity<Harness>, cx: &mut TestAppContext) -> usize {
+pub(super) fn toggled(harness: &Entity<Harness>, cx: &mut TestAppContext) -> usize {
     harness.read_with(cx, |harness, _| harness.counts.toggled)
-}
-
-#[gpui_kit::test]
-fn a_choice_is_a_checkbox_stop_before_the_buttons(cx: &mut TestAppContext) {
-    let (window, harness) = open_dialog(cx, with_choice());
-    assert_eq!(focused(window, cx), ["confirm"]);
-    cx.update_window(window, |_, window, _| {
-        assert_eq!(
-            window.within(DIALOG).find("choice").role(),
-            Some(Role::CheckBox)
-        );
-    })
-    .expect("window");
-    press(window, &["shift-tab"], cx);
-    assert_eq!(focused(window, cx), ["choice"]);
-    press(window, &["space"], cx);
-    assert_eq!(toggled(&harness, cx), 1);
-    assert_eq!(focused(window, cx), ["choice"]);
-    assert_eq!(counts(&harness, cx), (0, 0));
-    press(window, &["tab", "enter"], cx);
-    assert_eq!(counts(&harness, cx), (1, 0));
 }
 
 #[gpui_kit::test]

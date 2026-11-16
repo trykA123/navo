@@ -12,7 +12,7 @@ pub(super) const BUTTON: &str = "PromptButton DialogButton";
 gpui_kit::actions!(prompt_dialog, [Dismiss]);
 
 pub fn bind_keys(cx: &mut App) {
-    dialog_focus::bind_keys(cx);
+    crate::commands::kit_keys::bind_dialog_focus(cx);
     crate::commands::bind_namespace(cx, "prompt_dialog");
 }
 
