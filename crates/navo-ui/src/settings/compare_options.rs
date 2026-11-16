@@ -43,6 +43,7 @@ fn json_of(value: SettingValue) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::settings::{Field, Value};
 
     /// Default settings values give the default compare options.
     #[test]
@@ -51,5 +52,27 @@ mod tests {
             compare_options(&Values::default()),
             CompareOptions::default()
         );
+    }
+
+    /// Non-default compare values reach the options through the stored-settings rules.
+    #[test]
+    fn non_default_values_reach_the_compare_options() {
+        let changes = [
+            (Field::CompareBudgetMib, Value::Number(100)),
+            (
+                Field::CompareIgnoreList,
+                Value::Text("*.{o,obj}, target".into()),
+            ),
+            (Field::CompareRespectGitignore, Value::Flag(false)),
+        ];
+        let values = changes
+            .into_iter()
+            .fold(Values::default(), |values, (field, value)| {
+                values.with(&Change { field, value })
+            });
+        let options = compare_options(&values);
+        assert_eq!(options.compare.memory_budget_mib, 256);
+        assert_eq!(options.compare.ignore_list, ["*.{o,obj}", "target"]);
+        assert!(!options.compare.respect_gitignore);
     }
 }
