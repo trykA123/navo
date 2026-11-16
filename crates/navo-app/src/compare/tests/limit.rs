@@ -60,7 +60,7 @@ fn network_open(
         );
         Ok(Opened {
             session,
-            git_sides: Vec::new(),
+            refresh: Vec::new(),
         })
     }
 }

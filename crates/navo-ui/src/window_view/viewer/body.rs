@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use gpui_kit::{Action, AnyView, FocusHandle};
+use gpui_kit::{AnyView, FocusHandle};
 use navo_core::Location;
 use navo_core::encoding::TextEncoding;
 use navo_core::marks::{Bookmarks, MarkSet};
@@ -46,11 +46,7 @@ pub enum BodyAct {
     Follow,
 }
 
-pub enum MenuEntry {
-    Run(SharedString, Box<dyn Action>, bool),
-    Submenu(&'static str, Vec<MenuEntry>),
-    Break,
-}
+pub use super::menu::MenuEntry;
 
 pub struct Attach {
     pub loaded: Box<dyn Any + Send>,

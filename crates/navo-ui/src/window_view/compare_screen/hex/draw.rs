@@ -117,6 +117,7 @@ fn row_element(
     let right = div()
         .flex_1()
         .min_w_0()
+        .overflow_hidden()
         .border_l_1()
         .border_color(t.colors.line)
         .pl(t.spacing.xl)
@@ -132,7 +133,7 @@ fn row_element(
         .items_center()
         .gap(t.spacing.md)
         .h(t.spacing.row_height)
-        .child(div().flex_1().min_w_0().child(side_cell(
+        .child(div().flex_1().min_w_0().overflow_hidden().child(side_cell(
             (t, at, false),
             map.left,
             bytes.left(map.left),
@@ -166,8 +167,7 @@ fn side_cell(
     let index = at * 2 + usize::from(right);
     div()
         .id(ElementId::from(("compare-hex-side", index)))
-        .flex()
-        .items_center()
+        .w_full()
         .child(hex_row_tinted(
             t,
             index,

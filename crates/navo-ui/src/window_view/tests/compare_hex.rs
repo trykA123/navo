@@ -190,7 +190,7 @@ pub(super) fn frame(cx: &mut TestAppContext, rig: &Rig) {
 }
 
 /// Opens the selected row as a binary pair and sends one byte snapshot per region.
-fn open_hex(
+pub(super) fn open_hex(
     cx: &mut TestAppContext,
     rig: &Rig,
     regions: &[(Range<u64>, Range<u64>)],

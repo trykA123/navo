@@ -22,6 +22,7 @@ use crate::window_view::OpenHooks;
 use crate::window_view::compare_screen::FileState;
 
 pub(super) mod body;
+mod look_defaults;
 mod map_jump;
 mod refresh;
 mod sideways;

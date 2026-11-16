@@ -209,7 +209,7 @@ impl ScreenOwner {
             rows,
             list: state,
             layout: Layout::SideBySide,
-            look: Look::rich(),
+            look: Look::from_defaults(self.look_defaults()),
             wrapped: false,
             menu: None,
             details: false,

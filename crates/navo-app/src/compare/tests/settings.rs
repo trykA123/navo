@@ -6,7 +6,8 @@ use navo_git::{
 use navo_compare::settings::CompareGitEngine;
 use navo_store::{Compare, ContentCheck};
 
-use crate::compare::settings::{CompareSettings, choose_engine};
+use crate::compare::git_side::choose_engine;
+use crate::compare::settings::CompareSettings;
 
 fn format(object_format: ObjectFormat) -> RepoFormat {
     RepoFormat {

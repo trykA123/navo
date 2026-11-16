@@ -3,6 +3,7 @@
 use std::fs::File;
 use std::io::{self, Read};
 use std::ops::ControlFlow;
+use std::sync::Arc;
 
 use navo_compare::model::{
     CancelToken, EntryKind, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource, Stamp,
@@ -14,6 +15,9 @@ use navo_fs::{
 };
 
 use super::entry::{child_rel, reason_of, segments};
+use super::handle::CompareTarget;
+use super::hash_cache::memory_cache;
+use super::pane::{LocalTarget, PaneCompare};
 
 /// A local folder. Names are matched as text, so a name that is not valid text cannot be opened.
 pub(crate) struct LocalSide {
@@ -64,6 +68,21 @@ impl LocalSide {
         }
         Ok(location)
     }
+}
+
+/// Navo's target builder: each location opens as a `LocalSide` on the session thread.
+pub(crate) fn local_target() -> LocalTarget {
+    Arc::new(|location: &Location| {
+        let location = location.clone();
+        CompareTarget::Side(Box::new(move || {
+            LocalSide::new(location).map(|side| Arc::new(side) as Arc<dyn SideSource>)
+        }))
+    })
+}
+
+/// Navo's pane compare: the in-memory hash cache and `local_target`.
+pub(crate) fn navo_pane_compare() -> PaneCompare {
+    PaneCompare::new(memory_cache(), local_target())
 }
 
 pub(super) fn side_entry(parent: &RelPath, entry: FsEntry) -> SideEntry {
