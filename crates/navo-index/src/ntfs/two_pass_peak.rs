@@ -23,6 +23,8 @@ impl PeakHarness {
     pub(super) fn new(files: Option<u32>) -> Self {
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("peak.index");
+        // Start rayon's global pool and its workers now, so their allocations stay outside the probe.
+        rayon::broadcast(|_| {});
         let probe = Probe::start();
         let old = files.map(|files| DeepMft::ordered(files).read().index);
         let hint = old.as_ref().map_or_else(SizeHint::default, hint);

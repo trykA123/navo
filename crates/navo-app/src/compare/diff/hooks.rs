@@ -2,29 +2,26 @@
 //!
 //! The hooks only start workers: sides and the Viewed store are opened on those workers.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use navo_compare::model::Reason;
 use navo_compare::text::Options;
 use navo_core::Location;
-use navo_fs::ProviderOps;
-use navo_store::{CacheDb, StoreDirs};
-use navo_ui::browser::LogFactory;
 use navo_ui::compare_diff::{
     CompareOptions, CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest, SheetPlan,
-    SheetPlanSink, SheetResult, SheetSink, StreamControl, StreamSink,
+    SheetPlanSink, SheetSink, StreamControl, StreamSink,
 };
 
 use super::super::settings::CompareSettings;
 use super::cards;
-use super::copy::CopyRefusal;
-use super::copy_hook::{CopyService, unavailable};
+use super::copy_port::{CopyHost, refuse_change, refuse_sheet};
 use super::load::{LoadInput, Side};
 use super::pair::{EnginePlan, PairDiff};
-use super::sides::{side_of, unreadable_side};
+use super::sides::{navo_side_of, side_of, unreadable_side};
 use super::sources::Sources;
 use super::stream::{LoadFn, StreamParts, StreamSession};
-use super::viewed::{LazyViewed, NoViewed, OpenViewed, ViewedMarks, ViewedStore};
+use super::viewed::{LazyViewed, MemoryViewed, OpenViewed, ViewedMarks, opener};
 use crate::compare::convert::settings_from;
 use crate::compare::dirs::CompareDirs;
 
@@ -32,13 +29,13 @@ use crate::compare::dirs::CompareDirs;
 pub(crate) type SideFn =
     Arc<dyn Fn(&Location, &CompareSettings) -> Result<Side, Reason> + Send + Sync>;
 
-/// The app's `DiffHooks`: builds local and Git file sides and owns the Viewed store. Copying a
-/// change needs the compare job factory; without one every copy is refused.
+/// The app's `DiffHooks`: builds local and Git file sides and owns the Viewed store. Copies and
+/// saves go only through the host's `CopyHost`; without one every write is refused (read-only).
 pub struct DiffBackend {
     dirs: CompareDirs,
     side: SideFn,
     viewed: Arc<LazyViewed>,
-    copy: Option<CopyService>,
+    copy: Option<Arc<dyn CopyHost>>,
 }
 
 /// What a host passes to build a backend: its folders, its side builder and its Viewed opener.
@@ -50,9 +47,13 @@ pub(crate) struct BackendParts {
 }
 
 impl Default for DiffBackend {
-    /// Real local and Git sides and the profile cache, with no spool and no sweep.
+    /// Local sides only, no spool and no sweep, and Viewed marks kept in memory.
     fn default() -> Self {
-        Self::new(navo_parts(CompareDirs::default()))
+        Self::new(BackendParts {
+            dirs: CompareDirs::default(),
+            side: Arc::new(side_of),
+            viewed: Arc::new(|| Arc::new(MemoryViewed::default())),
+        })
     }
 }
 
@@ -78,16 +79,15 @@ impl DiffBackend {
         })
     }
 
-    /// The default backend whose copies run through `factory` and write with `ops`.
-    #[cfg(test)]
-    pub(crate) fn with_copy(factory: LogFactory, ops: Arc<dyn ProviderOps>) -> Self {
-        Self::default().copying(factory, ops)
+    /// This backend with every copy and save written through `host`.
+    pub fn with_copy_host(mut self, host: Arc<dyn CopyHost>) -> Self {
+        self.copy = Some(host);
+        self
     }
 
-    /// This backend with its copies run through `factory`, writing with `ops`.
-    pub(crate) fn copying(mut self, factory: LogFactory, ops: Arc<dyn ProviderOps>) -> Self {
-        self.copy = Some(CopyService::new(factory, ops));
-        self
+    /// The Viewed marks this backend reads and writes, opened on first use.
+    pub(super) fn viewed(&self) -> Arc<dyn ViewedMarks> {
+        self.viewed.clone()
     }
 
     /// The engine plan for one pair or Stream under `settings`, spooling in the host's root.
@@ -96,12 +96,12 @@ impl DiffBackend {
     }
 }
 
-/// Navo's sides and Viewed opener over `dirs`.
-pub(super) fn navo_parts(dirs: CompareDirs) -> BackendParts {
+/// Navo's sides over `dirs`, with Viewed marks in the cache file `cache_db` (memory if `None`).
+pub(super) fn navo_parts(dirs: CompareDirs, cache_db: Option<PathBuf>) -> BackendParts {
     BackendParts {
         dirs,
-        side: Arc::new(side_of),
-        viewed: Arc::new(open_viewed),
+        side: Arc::new(navo_side_of),
+        viewed: opener(cache_db),
     }
 }
 
@@ -129,7 +129,7 @@ impl DiffHooks for DiffBackend {
         let load_settings = settings.clone();
         let load: LoadFn =
             Arc::new(move |request| Some(input_or_unreadable(request, &load_settings, &side)));
-        let viewed: Arc<dyn ViewedMarks> = self.viewed.clone();
+        let viewed = self.viewed();
         let detail = Some(cards::detail_fn(self.plan(settings)));
         Box::new(StreamSession::start_with(
             sink,
@@ -142,35 +142,36 @@ impl DiffHooks for DiffBackend {
         ))
     }
 
-    /// Copy one change on a new thread, or refuse when the app has no job factory.
+    /// Copy one change through the host, or refuse when there is no host.
     fn copy_change(&self, change: CopyChange, done: CopySink) {
         match &self.copy {
-            Some(service) => service.start(change, done),
-            None => unavailable(&change, &done),
+            Some(host) => host.copy_change(change, done),
+            None => refuse_change(&change, &done),
         }
     }
 
-    /// Plan many changes on a new thread, or report an empty plan without a job factory.
+    /// Plan many changes through the host, or report an empty plan when there is no host.
     fn plan_sheet(&self, changes: Vec<CopyChange>, planned: SheetPlanSink) {
         match &self.copy {
-            Some(service) => service.plan_sheet(changes, planned),
+            Some(host) => host.plan_sheet(changes, planned),
             None => planned(SheetPlan::default()),
         }
     }
 
-    /// Run the last plan as one job on a new thread, or refuse without a job factory.
+    /// Run the last plan through the host, or refuse when there is no host.
     fn run_sheet(&self, done: SheetSink) {
         match &self.copy {
-            Some(service) => service.run_sheet(done),
-            None => done(SheetResult::Refused(CopyRefusal::NotCopyable.text())),
+            Some(host) => host.run_sheet(done),
+            None => refuse_sheet(done),
         }
     }
 
-    /// Copy several changes of one pair as one job, or refuse when there is no job factory.
+    /// Copy several changes of one pair through the host as one job; without a host, refuse the
+    /// first change only. No changes send nothing.
     fn copy_changes(&self, changes: Vec<CopyChange>, done: CopySink) {
         match (&self.copy, changes.first()) {
-            (Some(service), Some(_)) => service.start_many(changes, done),
-            (None, Some(first)) => unavailable(first, &done),
+            (Some(host), Some(_)) => host.copy_changes(changes, done),
+            (None, Some(first)) => refuse_change(first, &done),
             (_, None) => {}
         }
     }
@@ -180,18 +181,6 @@ impl DiffHooks for DiffBackend {
 /// change against a fresh diff, so it must use the same ones.
 pub(super) fn rules() -> (Options, &'static encoding_rs::Encoding) {
     (Options::default(), encoding_rs::UTF_8)
-}
-
-/// Open the profile cache for Viewed marks, or fall back to memory and a no-op store.
-fn open_viewed() -> Arc<dyn ViewedMarks> {
-    let db = StoreDirs::detect()
-        .filter(|dirs| dirs.ensure().is_ok())
-        .and_then(|dirs| CacheDb::open(&dirs.data.join("cache.db")).ok())
-        .map(|(db, _)| db);
-    match db.or_else(|| CacheDb::open_in_memory().ok()) {
-        Some(db) => Arc::new(ViewedStore::new(db)),
-        None => Arc::new(NoViewed),
-    }
 }
 
 /// Build one pair, reporting the first side that cannot open.

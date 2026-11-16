@@ -1,9 +1,8 @@
 use navo_core::{Command, CursorMove, Location, PaneId};
 
 use super::super::Browser;
-use super::RowStatus;
+use super::super::compare::{CompareFilter, ExitStep, RowStatus};
 use super::binding::Saved;
-use super::mode::ExitStep;
 
 impl Browser {
     /// Enter: a folder pair opens in both panes, a file row asks for the file diff.
@@ -83,7 +82,7 @@ impl Browser {
             .by_path(path)
             .is_some_and(|row| !mode.filter().keeps(row));
         if hidden {
-            mode.set_filter(super::CompareFilter::All);
+            mode.set_filter(CompareFilter::All);
         }
         mode.select(path);
         true
@@ -157,7 +156,7 @@ impl Browser {
     }
 
     /// Shows only the rows of `filter`.
-    pub fn compare_filter(&mut self, filter: super::CompareFilter) -> bool {
+    pub fn compare_filter(&mut self, filter: CompareFilter) -> bool {
         let Some(mode) = self.hooks.compare.mode.as_mut() else {
             return false;
         };

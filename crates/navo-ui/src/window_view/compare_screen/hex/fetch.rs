@@ -9,7 +9,7 @@ use navo_core::Location;
 use navo_core::paging::{ByteSource, HexRow, hex_row, read_full};
 use navo_l10n::tr;
 
-use super::super::super::FileHooks;
+use super::super::files::CompareFiles;
 use super::HexView;
 use super::hex_rows::{RowAt, RowSpan};
 use crate::compare_diff::PairRequest;
@@ -138,10 +138,10 @@ fn read_side(
     Some(hex_row(span.at, bytes.get(..read)?, wide))
 }
 
-/// Opens one side through the viewer's paged hook, or keeps the reason it failed.
+/// Opens one side through the host's file source, or keeps the reason it failed.
 fn side(
     location: Option<&Location>,
-    files: &FileHooks,
+    files: &CompareFiles,
 ) -> (
     Option<Arc<dyn ByteSource + Send + Sync>>,
     Option<SharedString>,
@@ -149,17 +149,17 @@ fn side(
     let Some(location) = location else {
         return (None, Some(tr("compare-hex-no-side").into()));
     };
-    match (files.paged)(location) {
-        Ok(paged) => (Some(paged.source), None),
+    match (files.source)(location) {
+        Ok(source) => (Some(source), None),
         Err(error) => (None, Some(error.into())),
     }
 }
 
 impl HexView {
-    /// Opens both sides through the viewer's paged hooks; runs on a background thread.
+    /// Opens both sides through the host's file source; runs on a background thread.
     pub(in crate::window_view::compare_screen) fn open_sides(
         request: &PairRequest,
-        files: &FileHooks,
+        files: &CompareFiles,
     ) -> SidesOpened {
         let (left, left_error) = side(request.left.as_ref(), files);
         let (right, right_error) = side(request.right.as_ref(), files);

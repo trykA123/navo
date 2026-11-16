@@ -28,13 +28,14 @@ pub struct WalkEntry {
 /// Lists `dir` with `std::fs::read_dir` + `symlink_metadata`, in OS order; checks `cancel` per entry.
 ///
 /// Fails with the open or read error of `dir` (never an empty list for an unreadable folder),
-/// and with `ErrorKind::Interrupted` once `cancel` is set. An entry deleted mid-walk is skipped.
+/// and with `ErrorKind::Interrupted` once `cancel` is set. An entry deleted mid-walk, or one
+/// whose type cannot be read, is skipped.
 pub fn list_dir(dir: &Path, cancel: &AtomicBool) -> io::Result<Vec<WalkEntry>> {
     check(cancel)?;
     let mut entries = Vec::new();
     for child in fs::read_dir(dir)? {
         check(cancel)?;
-        if let Some(entry) = child_entry(&child?)? {
+        if let Some(entry) = child_entry(&child?) {
             entries.push(entry);
         }
     }
@@ -62,16 +63,16 @@ fn check(cancel: &AtomicBool) -> io::Result<()> {
 /// One listed child; `None` when it vanished between `read_dir` and `symlink_metadata`.
 ///
 /// Other metadata errors keep the entry with its `read_dir` type and no size or time, as `LocalFs` does.
-fn child_entry(child: &DirEntry) -> io::Result<Option<WalkEntry>> {
+/// When the type is unknown too, the child is skipped, as `LocalFs` (and so `LocalSide`) skips it.
+fn child_entry(child: &DirEntry) -> Option<WalkEntry> {
     let path = child.path();
     match fs::symlink_metadata(&path) {
-        Ok(metadata) => Ok(Some(with_metadata(child.file_name(), &metadata, &path))),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(_) => match child.file_type() {
-            Ok(file_type) => Ok(Some(bare(child.file_name(), file_type, &path))),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e),
-        },
+        Ok(metadata) => Some(with_metadata(child.file_name(), &metadata, &path)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+        Err(_) => child
+            .file_type()
+            .ok()
+            .map(|file_type| bare(child.file_name(), file_type, &path)),
     }
 }
 

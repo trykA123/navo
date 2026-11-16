@@ -126,3 +126,13 @@ fn viewed_error_from_cache_error_keeps_the_message() {
     assert_eq!(error.to_string(), message);
     assert!(error.0.contains("disk gone"));
 }
+
+/// The default backend has no profile: its Viewed marks live in memory and never reach a file.
+#[test]
+fn default_backend_keeps_viewed_marks_in_memory() {
+    let marks = crate::compare::diff::DiffBackend::default().viewed();
+    let key = [3u8; 64];
+    assert!(!marks.get(&key).unwrap());
+    marks.set(&key, true).unwrap();
+    assert!(marks.get(&key).unwrap());
+}

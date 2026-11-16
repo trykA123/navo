@@ -209,9 +209,12 @@ fn nested_differences_preserve_one_sided_and_checking_folder_tones() {
         deliver(&mut browser, &calls, rows(1, vec![folder]));
         let mode = browser.compare_mode().expect("compare mode");
         let view = &pane_rows(mode, side)[0];
-        let (tone, _) = super::super::view::look_of(status);
+        let (tone, _) = super::super::super::compare::look_of(status);
         assert_eq!(view.tone, tone, "{status:?} keeps its own colour");
-        assert_eq!(view.status, super::super::view::status_text(status, None));
+        assert_eq!(
+            view.status,
+            super::super::super::compare::status_text(status, None)
+        );
     }
 }
 

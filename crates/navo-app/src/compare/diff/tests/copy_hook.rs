@@ -13,13 +13,13 @@ use navo_fs::LocalFs;
 use navo_store::StoreDirs;
 use navo_ui::compare_diff::{
     CompareOptions, CopyChange, CopyDirection, CopyDone, CopyResult, CopySink, DiffHooks, DiffSink,
-    DiffUpdate, PairRequest, SheetPlan, SheetResult,
+    DiffUpdate, PairRequest, SheetPlan, SheetPlanSink, SheetResult, SheetSink,
 };
-use navo_ui::settings::Values;
 
-use crate::compare::diff::DiffBackend;
 use crate::compare::diff::copy::CopyRefusal;
+use crate::compare::diff::copy_hook::navo_copy_backend;
 use crate::compare::diff::copy_port::{refuse_change, refuse_sheet};
+use crate::compare::diff::{CopyHost, DiffBackend};
 use crate::jobs::{SessionHolds, open};
 
 const WAIT: Duration = Duration::from_secs(20);
@@ -62,11 +62,7 @@ fn copy_sink() -> (CopySink, Receiver<CopyDone>) {
 fn all_changes(backend: &DiffBackend, left: &Path, right: &Path) -> Vec<CopyChange> {
     let (sink, receiver) = sink();
     let pair = request(9, left, right);
-    let _control = backend.open_pair(
-        pair.clone(),
-        &CompareOptions::from_values(&Values::default()),
-        sink,
-    );
+    let _control = backend.open_pair(pair.clone(), &CompareOptions::default(), sink);
     let DiffUpdate::Opened { text, .. } = receiver.recv_timeout(WAIT).unwrap() else {
         panic!("expected Opened");
     };
@@ -117,7 +113,7 @@ fn a_copy_through_the_backend_writes_the_right_file_and_reports_copied() {
     dirs.ensure().unwrap();
     let journal = open(&dirs.journal_file()).unwrap();
     let factory = SessionHolds::new(journal, dirs).compare_factory(None);
-    let backend = DiffBackend::with_copy(factory, Arc::new(LocalFs::new()));
+    let backend = navo_copy_backend(factory, Arc::new(LocalFs::new()));
     let change = first_change(
         &backend,
         &dir.path().join("left.txt"),
@@ -157,7 +153,7 @@ fn a_sheet_through_the_backend_plans_then_writes_once() {
     dirs.ensure().unwrap();
     let journal = open(&dirs.journal_file()).unwrap();
     let factory = SessionHolds::new(journal, dirs).compare_factory(None);
-    let backend = DiffBackend::with_copy(factory, Arc::new(LocalFs::new()));
+    let backend = navo_copy_backend(factory, Arc::new(LocalFs::new()));
     let change = first_change(
         &backend,
         &dir.path().join("left.txt"),
@@ -207,7 +203,7 @@ fn picked_lines_of_two_changes_copy_as_one_job() {
     dirs.ensure().unwrap();
     let journal = open(&dirs.journal_file()).unwrap();
     let factory = SessionHolds::new(journal, dirs).compare_factory(None);
-    let backend = DiffBackend::with_copy(factory, Arc::new(LocalFs::new()));
+    let backend = navo_copy_backend(factory, Arc::new(LocalFs::new()));
     let mut changes = all_changes(
         &backend,
         &dir.path().join("left.txt"),
@@ -289,4 +285,84 @@ fn the_read_only_refusal_matches_the_copy_refusal() {
         results.recv_timeout(WAIT).unwrap(),
         SheetResult::Refused(text)
     );
+}
+
+/// A change of pair `id` with no sides, enough for a backend that never reads the files.
+fn bare_change(id: u64) -> CopyChange {
+    CopyChange {
+        pair: PairRequest {
+            id,
+            path: "left.txt".to_owned(),
+            left: None,
+            right: None,
+        },
+        left_bytes: 0..1,
+        right_bytes: 0..1,
+        digest: [0; 16],
+        direction: CopyDirection::ToRight,
+        lines: None,
+    }
+}
+
+/// A host that records the pair id of every `copy_change` call and writes nothing.
+#[derive(Default)]
+struct RecordingHost {
+    copied: std::sync::Mutex<Vec<u64>>,
+}
+
+impl CopyHost for RecordingHost {
+    fn copy_change(&self, change: CopyChange, _done: CopySink) {
+        self.copied.lock().unwrap().push(change.pair.id);
+    }
+    fn copy_changes(&self, _changes: Vec<CopyChange>, _done: CopySink) {
+        panic!("not called");
+    }
+    fn plan_sheet(&self, _changes: Vec<CopyChange>, _planned: SheetPlanSink) {
+        panic!("not called");
+    }
+    fn run_sheet(&self, _done: SheetSink) {
+        panic!("not called");
+    }
+}
+
+#[test]
+fn a_copy_host_receives_the_change() {
+    let host = Arc::new(RecordingHost::default());
+    let backend = DiffBackend::default().with_copy_host(host.clone());
+    let (done, ends) = copy_sink();
+    backend.copy_change(bare_change(5), done);
+    assert_eq!(*host.copied.lock().unwrap(), vec![5]);
+    assert!(
+        ends.try_recv().is_err(),
+        "the host answers, not the backend"
+    );
+}
+
+#[test]
+fn a_backend_without_a_host_refuses_every_write() {
+    let backend = DiffBackend::default();
+    let refused = CopyResult::Refused(CopyRefusal::NotCopyable.text());
+    let (done, ends) = copy_sink();
+    backend.copy_change(bare_change(1), done.clone());
+    backend.copy_changes(vec![bare_change(2), bare_change(3)], done.clone());
+    backend.copy_changes(Vec::new(), done);
+    let got: Vec<(u64, CopyResult)> = ends
+        .try_iter()
+        .map(|end| (end.request, end.result))
+        .collect();
+    assert_eq!(
+        got,
+        vec![(1, refused.clone()), (2, refused)],
+        "first change only"
+    );
+    let (planned, plans) = mpsc::channel();
+    backend.plan_sheet(
+        vec![bare_change(4)],
+        Arc::new(move |plan| drop(planned.send(plan))),
+    );
+    assert_eq!(plans.try_recv().unwrap(), SheetPlan::default());
+    let (sender, results) = mpsc::channel();
+    backend.run_sheet(Arc::new(move |result| drop(sender.send(result))));
+    let text = CopyRefusal::NotCopyable.text();
+    assert_eq!(results.try_recv().unwrap(), SheetResult::Refused(text));
 }

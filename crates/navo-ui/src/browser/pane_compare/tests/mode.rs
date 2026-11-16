@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
+use super::super::super::compare::{CompareFilter, CompareRefusal, CompareUpdate, RowStatus};
 use super::super::super::tests::settle;
-use super::super::{CompareFilter, CompareRefusal, CompareUpdate, RowStatus};
 use super::{browser, cursor_names, cursor_on, pane_locations, row, rows, sides};
 use crate::browser::Browser;
 use crate::settings::Values;

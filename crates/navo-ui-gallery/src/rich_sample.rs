@@ -4,7 +4,7 @@ use navo_ui::prelude::*;
 use navo_ui::window_view::{ArchiveSource, ArchiveView, FileHooks, FontFace, FontView};
 
 const FONT_ENV: &str = "NAVO_SAMPLE_FONT";
-const INTER: &[u8] = include_bytes!("../../navo-ui/fonts/Inter-SemiBold.ttf");
+const INTER: &[u8] = include_bytes!("../../sidewise-kit/fonts/Inter-SemiBold.ttf");
 
 const ENTRIES: [(&str, u64, u8); 14] = [
     ("navo/", 0, 9),

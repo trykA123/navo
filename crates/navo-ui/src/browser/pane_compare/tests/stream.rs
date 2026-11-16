@@ -1,8 +1,8 @@
 //! What the Stream reads from a folder compare (V20): rows under the folder depth first, the pair
 //! of one row, a stamp that moves with every row update, and `compare_reveal` on the way back.
 
+use super::super::super::compare::{CompareFilter, RowStatus};
 use super::super::super::tests::settle;
-use super::super::{CompareFilter, RowStatus};
 use super::mode::{deliver, root_rows, selected, start};
 use super::{browser, cursor_names, pane_locations, row, rows, sides};
 
@@ -17,7 +17,7 @@ fn deep_sides() -> std::sync::Arc<navo_fs::FakeFs> {
 }
 
 /// `root_rows` plus the folder `docs/deep` and its file `docs/deep/c.txt`.
-fn deep_rows() -> super::super::CompareUpdate {
+fn deep_rows() -> super::super::super::compare::CompareUpdate {
     rows(
         1,
         vec![

@@ -8,9 +8,9 @@ use std::time::{Duration, Instant};
 use navo_compare::model::{ContentKey, HashCache};
 use navo_compare::session::CheckMode;
 use navo_core::Location;
+use navo_store::{Compare, ContentCheck};
 use navo_ui::browser::{CompareHooks, CompareSink, CompareUpdate, RowStatus};
 use navo_ui::compare_diff::CompareOptions;
-use navo_ui::settings::{Change, Field, Value, Values};
 
 use super::{location, write};
 use crate::compare::convert::settings_from;
@@ -72,11 +72,7 @@ fn a_pane_compare_sends_plain_rows_until_it_finishes() {
     let hooks = PaneCompare::new(Arc::new(NoCache), local_target());
     let (sink, receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
-    let _control = hooks.start(
-        sides,
-        &CompareOptions::from_values(&Values::default()),
-        sink,
-    );
+    let _control = hooks.start(sides, &CompareOptions::default(), sink);
     let rows = finished(&receiver);
     let expected = [
         ("left.txt", RowStatus::OnlyLeft),
@@ -98,11 +94,7 @@ fn a_missing_folder_fails_with_the_could_not_start_text() {
     let hooks = PaneCompare::new(Arc::new(NoCache), local_target());
     let (sink, receiver) = sink();
     let sides = (&location(&missing), &location(right.path()));
-    let _control = hooks.start(
-        sides,
-        &CompareOptions::from_values(&Values::default()),
-        sink,
-    );
+    let _control = hooks.start(sides, &CompareOptions::default(), sink);
     let update = receiver.recv_timeout(WAIT).unwrap();
     let text = navo_l10n::tr("compare-could-not-start");
     assert_eq!(update, CompareUpdate::Failed(text));
@@ -118,11 +110,7 @@ fn dropping_the_control_returns_at_once_and_ends_the_forwarding() {
     let hooks = PaneCompare::new(Arc::new(NoCache), local_target());
     let (sink, _receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
-    let control = hooks.start(
-        sides,
-        &CompareOptions::from_values(&Values::default()),
-        Arc::clone(&sink),
-    );
+    let control = hooks.start(sides, &CompareOptions::default(), Arc::clone(&sink));
     let dropped = Instant::now();
     drop(control);
     assert!(dropped.elapsed() < Duration::from_millis(200));
@@ -134,22 +122,16 @@ fn dropping_the_control_returns_at_once_and_ends_the_forwarding() {
 }
 
 #[test]
-fn the_compare_values_map_through_the_stored_settings_rules() {
-    let changes = [
-        (Field::CompareContentCheck, Value::Pick(1)),
-        (Field::CompareBudgetMib, Value::Number(100)),
-        (
-            Field::CompareIgnoreList,
-            Value::Text("*.{o,obj}, target".into()),
-        ),
-        (Field::CompareRespectGitignore, Value::Flag(false)),
-    ];
-    let values = changes
-        .into_iter()
-        .fold(Values::default(), |values, (field, value)| {
-            values.with(&Change { field, value })
-        });
-    let settings = settings_from(&CompareOptions::from_values(&values));
+fn the_stored_compare_table_maps_to_the_engine_settings() {
+    let settings = settings_from(&CompareOptions {
+        compare: Compare {
+            content_check: ContentCheck::SizeTime,
+            memory_budget_mib: 256,
+            ignore_list: vec!["*.{o,obj}".into(), "target".into()],
+            respect_gitignore: false,
+            ..Compare::default()
+        },
+    });
     assert_eq!(settings.content_check, CheckMode::SizeTime);
     assert_eq!(settings.memory_budget_mib, 256);
     assert_eq!(settings.ignore_list, ["*.{o,obj}", "target"]);
@@ -158,7 +140,7 @@ fn the_compare_values_map_through_the_stored_settings_rules() {
 
 #[test]
 fn default_values_give_the_default_compare_settings() {
-    let settings = settings_from(&CompareOptions::from_values(&Values::default()));
+    let settings = settings_from(&CompareOptions::default());
     assert_eq!(
         settings,
         crate::compare::settings::CompareSettings::default()
@@ -175,11 +157,7 @@ fn a_folder_row_carries_the_flag_of_a_difference_below_it() {
     let hooks = PaneCompare::new(Arc::new(NoCache), local_target());
     let (sink, receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
-    let _control = hooks.start(
-        sides,
-        &CompareOptions::from_values(&Values::default()),
-        sink,
-    );
+    let _control = hooks.start(sides, &CompareOptions::default(), sink);
     let mut flagged = std::collections::BTreeMap::new();
     loop {
         match receiver.recv_timeout(WAIT).unwrap() {
@@ -229,11 +207,7 @@ fn a_pane_compare_asks_its_target_builder_for_both_sides() {
     let hooks = PaneCompare::new(Arc::new(NoCache), local);
     let (sink, receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
-    let _control = hooks.start(
-        sides,
-        &CompareOptions::from_values(&Values::default()),
-        sink,
-    );
+    let _control = hooks.start(sides, &CompareOptions::default(), sink);
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     let rows = finished(&receiver);
     assert_eq!(rows, vec![("a.txt".to_owned(), RowStatus::Same)]);

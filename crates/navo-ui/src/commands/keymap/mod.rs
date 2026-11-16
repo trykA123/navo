@@ -25,11 +25,11 @@ pub use shown::shown;
 
 pub use crate::compare_keys::COMPARE_KEYMAP;
 
-const BUILTIN: &str = concat!(
-    include_str!("../keymap.toml"),
-    "\n",
-    include_str!("../compare_keymap.toml")
-);
+/// Returns the built-in key file text: the main file, a newline, then the compare file.
+fn builtin() -> &'static str {
+    static TEXT: OnceLock<String> = OnceLock::new();
+    TEXT.get_or_init(|| format!("{}\n{COMPARE_KEYMAP}", include_str!("../keymap.toml")))
+}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Bind {
@@ -56,7 +56,7 @@ impl Keymap {
     #[must_use]
     pub fn builtin() -> &'static Self {
         static PARSED: OnceLock<Keymap> = OnceLock::new();
-        PARSED.get_or_init(|| Self::parse(BUILTIN).unwrap_or_default())
+        PARSED.get_or_init(|| Self::parse(builtin()).unwrap_or_default())
     }
 
     pub fn overlay(&self, user: &str) -> Result<Overlaid, UserKeymapError> {
@@ -128,7 +128,7 @@ impl Keymap {
 
 #[cfg(test)]
 mod fragment_tests {
-    use super::{BUILTIN, COMPARE_KEYMAP, Keymap};
+    use super::{COMPARE_KEYMAP, Keymap, builtin};
 
     #[test]
     fn compare_fragment_holds_only_compare_contexts() {
@@ -146,12 +146,19 @@ mod fragment_tests {
 
     #[test]
     fn builtin_keymap_parses_with_the_fragment() {
-        let keymap = Keymap::parse(BUILTIN).expect("builtin keymap");
+        let keymap = Keymap::parse(builtin()).expect("builtin keymap");
         let main = Keymap::parse(include_str!("../keymap.toml")).expect("main keymap");
         let compare = Keymap::parse(COMPARE_KEYMAP).expect("compare keymap");
         assert_eq!(
             keymap.binds().len(),
             main.binds().len() + compare.binds().len()
         );
+    }
+
+    /// Characterization test: the built-in text is the main file, then the compare file.
+    #[test]
+    fn the_builtin_text_is_navo_then_compare() {
+        assert!(builtin().ends_with(COMPARE_KEYMAP));
+        assert!(builtin().starts_with(include_str!("../keymap.toml")));
     }
 }

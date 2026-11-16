@@ -132,7 +132,7 @@ impl AssetSource for Assets {
     }
 }
 
-pub(crate) fn load_fonts(cx: &mut App) -> Result<(), UiError> {
+pub fn load_fonts(cx: &mut App) -> Result<(), UiError> {
     let fonts = vec![
         font!("Inter-Regular"),
         font!("Inter-Medium"),
@@ -152,7 +152,7 @@ struct MonoFonts(OnceLock<Result<(), UiError>>);
 
 impl Global for MonoFonts {}
 
-pub(crate) fn load_mono_fonts(cx: &App) {
+pub fn load_mono_fonts(cx: &App) {
     let Some(fonts) = cx.try_global::<MonoFonts>() else {
         return;
     };

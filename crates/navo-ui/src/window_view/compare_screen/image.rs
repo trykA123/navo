@@ -1,6 +1,6 @@
 //! The image diff body (V40, from I4): the two pictures side by side, an overlay wipe with a
 //! slider, and the difference mask. The sides are read and decoded on a worker through the
-//! window's file hooks; the scores and the mask come from the app (D24, D58).
+//! host's file source; the scores and the mask come from the app (D24, D58).
 
 mod glue;
 mod view;
@@ -14,12 +14,13 @@ use image::RgbaImage;
 use navo_core::Location;
 use navo_l10n::{t, tr};
 
+use super::files::CompareFiles;
 use crate::compare_diff::image_body::{self, ImageBody, ImageMode};
 use crate::compare_diff::{ImageMask, ImageScores, PairRequest};
 use crate::prelude::*;
 use crate::primitives::{gpu_images, new_image, release_image};
+use crate::window_view::ScreenOwner;
 use crate::window_view::viewer::{IMAGE_LIMIT, Picture, decode_image};
-use crate::window_view::{FileHooks, ScreenOwner};
 
 #[cfg(test)]
 pub(in crate::window_view) use glue::Probe;
@@ -246,14 +247,14 @@ impl Pictures {
     }
 
     /// Starts the jobs that read the sides and build the mask picture; true when one started.
-    fn ensure_load(&mut self, files: &FileHooks, cx: &mut Context<ScreenOwner>) -> bool {
+    fn ensure_load(&mut self, files: &CompareFiles, cx: &mut Context<ScreenOwner>) -> bool {
         let sides = self.load_sides(files, cx);
         let mask = self.build_mask(cx);
         sides | mask
     }
 
     /// Reads both sides once the scores say the pair is worth decoding.
-    fn load_sides(&mut self, files: &FileHooks, cx: &mut Context<ScreenOwner>) -> bool {
+    fn load_sides(&mut self, files: &CompareFiles, cx: &mut Context<ScreenOwner>) -> bool {
         if !self.model.wants_sides() || self.load.is_some() {
             return false;
         }
@@ -337,7 +338,7 @@ impl Pictures {
 }
 
 /// Reads and decodes one side off the UI thread; `None` for a side the pair does not have.
-fn read(side: (Option<Location>, String), hooks: &FileHooks) -> Option<Loaded> {
+fn read(side: (Option<Location>, String), hooks: &CompareFiles) -> Option<Loaded> {
     let (location, name) = side;
     let Ok(bytes) = (hooks.bytes)(&location?, IMAGE_LIMIT) else {
         return Some(Loaded::Failed);
