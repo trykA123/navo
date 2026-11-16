@@ -2,6 +2,8 @@ mod elide;
 mod keys;
 
 #[cfg(test)]
+mod key_tests;
+#[cfg(test)]
 mod tests;
 
 use std::rc::Rc;

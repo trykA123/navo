@@ -49,6 +49,8 @@ pub mod tokens;
 pub mod window_view;
 
 #[cfg(test)]
+mod kit_test_window;
+#[cfg(test)]
 mod test_pointer;
 #[cfg(test)]
 mod test_window;
