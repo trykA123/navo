@@ -12,10 +12,10 @@
 //!    in order and `Finished` follows the last batch. `Failed` means the compare never started.
 //! 4. Call `focus`, `stop_row`, `stop_all`, `refresh` and `cancel` on the handle; none blocks.
 //!    Dropping the handle cancels and joins on a helper thread.
-//! 5. Show the `Choice::note` of `settings::choose_engine` next to the Git engine setting.
+//! 5. Show the `Choice::note` of `git_side::choose_engine` next to the Git engine setting.
 //!
 //! `ReadHint::Map` maps nothing: S4 found under 3 % gain, so every side reads buffered.
-//! `git_side::GitSide` reads with the engine that `settings::engine_for` chose for the repository.
+//! `git_side::GitSide` reads with the engine that `git_side::engine_for` chose for the repository.
 //! Ignore rules read the root `.gitignore` and `.git/info/exclude` of each side, not nested files.
 //! Public for Sidewise (NC52): `PaneCompare` and `diff::{DiffBackend, diff_backend}`.
 

@@ -2,18 +2,23 @@
 
 use std::io::Read;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use navo_compare::model::{
     CancelToken, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource, Stamp,
 };
+use navo_compare::settings::CompareGitEngine;
 use navo_core::{FileIdentity, Location, ProviderId, ProviderPath};
 use navo_fs::git::{GitFs, location, provider_id};
 use navo_fs::{CancelToken as FsCancel, Provider};
-use navo_git::{CliGit, CliOptions, EngineKind, GixGit};
+use navo_git::cli::MIN_GIT_VERSION;
+use navo_git::{
+    Choice, CliGit, CliOptions, EngineKind, EngineSetting, GitFound, GixGit, RepoFormat, choose,
+};
 
 use super::entry::{reason_of, segments};
 use super::local::feed;
+use super::settings::CompareSettings;
 
 /// The files of `repo@rev`. Submodules list as plain folders and cannot be entered.
 pub struct GitSide {
@@ -151,6 +156,39 @@ impl SideSource for GitSide {
 
     fn may_have_unknown_size(&self) -> bool {
         true
+    }
+}
+
+/// Picks the Git engine for a repository from the setting, its format and the `git` found.
+pub(crate) fn choose_engine(
+    settings: &CompareSettings,
+    format: &RepoFormat,
+    git: GitFound,
+) -> Choice {
+    choose(engine_setting(settings.git_engine), format, git)
+}
+
+/// Maps the stored engine setting to the Git crate's own setting type.
+fn engine_setting(stored: CompareGitEngine) -> EngineSetting {
+    match stored {
+        CompareGitEngine::Git => EngineSetting::Git,
+        CompareGitEngine::Gix => EngineSetting::Gix,
+        CompareGitEngine::Auto => EngineSetting::Auto,
+    }
+}
+
+/// The engine for one repository. An unreadable format keeps the CLI, whose open reports the error.
+pub(crate) fn engine_for(settings: &CompareSettings, repo: &Path) -> EngineKind {
+    let Ok(format) = RepoFormat::read(repo) else {
+        return EngineKind::Cli;
+    };
+    choose_engine(settings, &format, git_found(repo)).engine
+}
+
+fn git_found(repo: &Path) -> GitFound {
+    match CliGit::new(repo) {
+        Ok(_) => GitFound::version(MIN_GIT_VERSION.0, MIN_GIT_VERSION.1),
+        Err(_) => GitFound::missing(),
     }
 }
 

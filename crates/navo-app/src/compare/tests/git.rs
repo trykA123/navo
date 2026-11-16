@@ -18,9 +18,10 @@ use std::ops::ControlFlow;
 use super::handle::{final_status, finish};
 use super::{location, write};
 use crate::compare::git_side::GitSide;
+use crate::compare::git_side::engine_for;
 use crate::compare::handle::{CompareHandle, CompareStart, CompareTarget};
 use crate::compare::hash_cache::StoreHashCache;
-use crate::compare::settings::{CompareSettings, engine_for};
+use crate::compare::settings::CompareSettings;
 
 fn git(repo: &Path, args: &[&str]) -> Option<String> {
     let output = Command::new("git")

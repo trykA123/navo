@@ -13,9 +13,10 @@ use navo_ui::compare_diff::CompareOptions;
 
 use super::convert::settings_from;
 use super::git_side::GitSide;
+use super::git_side::engine_for;
 use super::local::LocalSide;
 use super::rules;
-use super::settings::{CompareSettings, engine_for, network_cap};
+use super::settings::{CompareSettings, network_cap};
 
 const POLL: Duration = Duration::from_millis(10);
 
