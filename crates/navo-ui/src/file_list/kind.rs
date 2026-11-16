@@ -1,31 +1,7 @@
-use gpui_kit::Hsla;
 use navo_fs::{EntryKind, FsEntry};
 
-use super::icons;
+pub(crate) use crate::file_icons::{icon, split_name};
 use crate::format;
-use crate::primitives::IconName;
-use crate::tokens::Colors;
-
-pub(crate) fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
-    if kind == EntryKind::Folder {
-        return (name, "");
-    }
-    match name.rfind('.') {
-        Some(dot) if dot > 0 && dot + 1 < name.len() => (&name[..dot], &name[dot + 1..]),
-        _ => (name, ""),
-    }
-}
-
-pub(crate) fn icon(kind: EntryKind, extension: &str, colors: &Colors) -> (IconName, Hsla) {
-    match kind {
-        EntryKind::Folder => (IconName::Folder, colors.folder),
-        EntryKind::Link => (IconName::ArrowRight, colors.muted),
-        EntryKind::File => match icons::lookup(extension) {
-            Some(group) => (group.icon, (group.tone)(colors)),
-            None => (IconName::FileText, colors.muted),
-        },
-    }
-}
 
 pub(super) fn size_text(entry: &FsEntry) -> String {
     match entry.kind {

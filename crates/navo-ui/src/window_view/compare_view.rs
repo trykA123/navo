@@ -12,11 +12,10 @@ use super::compare_screen::{CompareScreen, DiffSlot};
 use super::{FileHooks, NavoWindow, OpenHooks};
 use crate::FocusHandle;
 use crate::browser::{RowView, bar_view, empty_text, pane_rows};
-use crate::compare_diff::CompareOptions;
 use crate::compare_list::{BarEvent, CompareBar, CompareEvent, CompareList};
 use crate::prelude::*;
 use crate::primitives::ListScroll;
-use crate::settings::Values;
+use crate::settings::{Values, compare_options};
 use gpui_kit::EntityId;
 
 /// The rows built for one run and revision, so a frame does not rebuild 66,000 of them.
@@ -46,8 +45,7 @@ impl CompareView {
         cx: &mut Context<NavoWindow>,
     ) -> Self {
         let diff = DiffSlot::new(open.diff.clone(), NavoWindow::waker(cx));
-        let screen = cx
-            .new(|_| CompareScreen::new(diff, CompareOptions::from_values(values), files.clone()));
+        let screen = cx.new(|_| CompareScreen::new(diff, compare_options(values), files.clone()));
         cx.subscribe_in(&screen, window, |view, _, event, window, cx| {
             view.on_screen_event(event, Some(window), cx);
         })

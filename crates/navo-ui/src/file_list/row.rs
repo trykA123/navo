@@ -3,13 +3,13 @@ use std::ops::Range;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    BoxShadow, Div, FontWeight, HighlightStyle, Hsla, InteractiveElement, IntoElement,
-    ParentElement, Pixels, Role, SharedString, Stateful, StatefulInteractiveElement, Styled,
-    StyledText, div, point, px,
+    Div, FontWeight, HighlightStyle, Hsla, InteractiveElement, IntoElement, ParentElement, Pixels,
+    Role, SharedString, Stateful, StatefulInteractiveElement, Styled, StyledText, div, px,
 };
 use navo_fs::{EntryKind, FsEntry};
 
 use super::git_cell::{self, GitSlot};
+pub(crate) use super::row_look::{cursor_bar, inset_ring};
 use super::widths::ColumnWidths;
 use super::{ListParts, SortBy, kind};
 use crate::name_match::{Needle, Scratch};
@@ -39,16 +39,6 @@ pub(super) fn check_column(t: &Theme) -> Pixels {
     t.spacing.xxl + t.spacing.xs
 }
 
-pub(crate) fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
-    vec![BoxShadow {
-        color,
-        offset: point(px(0.), px(0.)),
-        blur_radius: px(0.),
-        spread_radius: px(1.),
-        inset: true,
-    }]
-}
-
 pub(super) fn columns(t: &Theme) -> Div {
     div()
         .flex()
@@ -73,19 +63,6 @@ fn check_cell(look: &RowLook) -> Div {
                 t.colors.mark,
             ))
         })
-}
-
-pub(crate) fn cursor_bar(t: &Theme) -> impl IntoElement + use<> {
-    div()
-        .id("cursor-bar")
-        .test_support()
-        .absolute()
-        .left_0()
-        .top(t.spacing.xs)
-        .bottom(t.spacing.xs)
-        .w(px(3.))
-        .rounded(t.radii.xs)
-        .bg(t.surfaces.card_ring)
 }
 
 fn right_cell(column: usize, width: Pixels, text: impl Into<SharedString>) -> impl IntoElement {

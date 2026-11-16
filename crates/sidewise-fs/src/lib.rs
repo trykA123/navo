@@ -6,6 +6,7 @@ pub mod native;
 mod network_walk;
 mod paged;
 mod volume;
+pub mod walk;
 
 pub use drive_class::{DriveClass, drive_class};
 pub use native::{native_identity, os_path};

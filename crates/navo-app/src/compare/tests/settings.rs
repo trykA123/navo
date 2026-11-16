@@ -1,10 +1,10 @@
 use navo_compare::session::CheckMode;
 use navo_git::{
-    EngineKind, EngineSetting, GitFound, ObjectFormat, RefStorage, RepoFormat,
-    UNSUPPORTED_FORMAT_NOTE,
+    EngineKind, GitFound, ObjectFormat, RefStorage, RepoFormat, UNSUPPORTED_FORMAT_NOTE,
 };
 
-use navo_store::{Compare, CompareGitEngine, ContentCheck};
+use navo_compare::settings::CompareGitEngine;
+use navo_store::{Compare, ContentCheck};
 
 use crate::compare::settings::{CompareSettings, choose_engine};
 
@@ -32,7 +32,7 @@ fn defaults_match_the_plan() {
     let settings = CompareSettings::default();
     assert!(settings.respect_gitignore);
     assert!(settings.ignore_list.is_empty());
-    assert_eq!(settings.git_engine, EngineSetting::Git);
+    assert_eq!(settings.git_engine, CompareGitEngine::Git);
     assert_eq!(budget_mib(settings.memory_budget_mib), 1024);
 }
 
@@ -67,7 +67,7 @@ fn the_git_setting_picks_the_cli_when_git_is_usable() {
 #[test]
 fn the_gix_setting_falls_back_to_the_cli_for_sha256() {
     let settings = CompareSettings {
-        git_engine: EngineSetting::Gix,
+        git_engine: CompareGitEngine::Gix,
         ..CompareSettings::default()
     };
     let choice = choose_engine(
@@ -97,7 +97,7 @@ fn every_stored_value_maps_across() {
         content_check: ContentCheck::SizeTime,
     };
     let plain = CompareSettings::from(&stored);
-    assert_eq!(plain.git_engine, EngineSetting::Gix);
+    assert_eq!(plain.git_engine, CompareGitEngine::Gix);
     assert_eq!(plain.ignore_list, ["*.o"]);
     assert!(!plain.respect_gitignore);
     assert_eq!(plain.memory_budget_mib, 4096);
@@ -106,5 +106,8 @@ fn every_stored_value_maps_across() {
         git_engine: CompareGitEngine::Auto,
         ..Compare::default()
     };
-    assert_eq!(CompareSettings::from(&auto).git_engine, EngineSetting::Auto);
+    assert_eq!(
+        CompareSettings::from(&auto).git_engine,
+        CompareGitEngine::Auto
+    );
 }

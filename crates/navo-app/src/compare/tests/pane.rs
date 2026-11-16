@@ -66,7 +66,7 @@ fn a_pane_compare_sends_plain_rows_until_it_finishes() {
     write(left.path(), "sub/diff.txt", b"aaa");
     write(right.path(), "sub/diff.txt", b"bbb");
     write(left.path(), "left.txt", b"l");
-    let hooks = PaneCompare::with_cache(Arc::new(NoCache));
+    let hooks = PaneCompare::new(Arc::new(NoCache));
     let (sink, receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
     let _control = hooks.start(
@@ -92,7 +92,7 @@ fn a_pane_compare_sends_plain_rows_until_it_finishes() {
 fn a_missing_folder_fails_with_the_could_not_start_text() {
     let right = tempfile::tempdir().unwrap();
     let missing = right.path().join("gone");
-    let hooks = PaneCompare::with_cache(Arc::new(NoCache));
+    let hooks = PaneCompare::new(Arc::new(NoCache));
     let (sink, receiver) = sink();
     let sides = (&location(&missing), &location(right.path()));
     let _control = hooks.start(
@@ -112,7 +112,7 @@ fn dropping_the_control_returns_at_once_and_ends_the_forwarding() {
         write(left.path(), &format!("f{at}.txt"), b"x");
         write(right.path(), &format!("f{at}.txt"), b"y");
     }
-    let hooks = PaneCompare::with_cache(Arc::new(NoCache));
+    let hooks = PaneCompare::new(Arc::new(NoCache));
     let (sink, _receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
     let control = hooks.start(
@@ -169,7 +169,7 @@ fn a_folder_row_carries_the_flag_of_a_difference_below_it() {
     write(right.path(), "a/b/x.txt", b"two");
     write(left.path(), "c/y.txt", b"same");
     write(right.path(), "c/y.txt", b"same");
-    let hooks = PaneCompare::with_cache(Arc::new(NoCache));
+    let hooks = PaneCompare::new(Arc::new(NoCache));
     let (sink, receiver) = sink();
     let sides = (&location(left.path()), &location(right.path()));
     let _control = hooks.start(
@@ -204,7 +204,7 @@ fn a_folder_row_carries_the_flag_of_a_difference_below_it() {
 
 #[test]
 fn only_local_panes_can_be_compared() {
-    let hooks = PaneCompare::with_cache(Arc::new(NoCache));
+    let hooks = PaneCompare::new(Arc::new(NoCache));
     let dir = tempfile::tempdir().unwrap();
     assert!(hooks.supports(&location(dir.path())));
     let archive = navo_core::Location::new(r"archive://C:\a.zip").unwrap();

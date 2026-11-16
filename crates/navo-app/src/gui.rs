@@ -325,7 +325,9 @@ fn open_hooks(
         on_shown: splash.on_shown(),
         window_shown: crate::resident::window_shown(),
         resident: None,
-        compare: Some(Arc::new(crate::compare::PaneCompare::default())),
+        compare: Some(Arc::new(crate::compare::PaneCompare::new(
+            crate::compare::hash_cache::memory_cache(),
+        ))),
         diff: Some(diff),
         user_commands: None,
     }
