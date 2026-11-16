@@ -36,7 +36,7 @@ mod pane;
 mod rules;
 pub(crate) mod settings;
 
-pub use pane::PaneCompare;
+pub use pane::{LocalTarget, PaneCompare};
 
 #[cfg(test)]
 mod tests;
