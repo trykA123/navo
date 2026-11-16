@@ -5,9 +5,12 @@
 use std::sync::Arc;
 
 use navo_fs::ProviderOps;
+use navo_store::StoreDirs;
 use navo_ui::browser::LogFactory;
 
 use super::hooks::DiffBackend;
+use super::sources::SPOOL_DIR;
+use crate::compare::dirs::CompareDirs;
 
 /// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
 pub fn diff_backend(copy: Option<LogFactory>, local: &Arc<dyn ProviderOps>) -> Arc<DiffBackend> {
@@ -15,4 +18,12 @@ pub fn diff_backend(copy: Option<LogFactory>, local: &Arc<dyn ProviderOps>) -> A
         Some(factory) => DiffBackend::with_copy(factory, local.clone()),
         None => DiffBackend::default(),
     })
+}
+
+/// Navo's compare folders for profile `dirs`: the spool sits in the profile data folder, beside
+/// `cache.db`. Without a profile there is no spool.
+pub(crate) fn navo_compare_dirs(dirs: Option<&StoreDirs>) -> CompareDirs {
+    CompareDirs {
+        spool: dirs.map(|dirs| dirs.data.join(SPOOL_DIR)),
+    }
 }
