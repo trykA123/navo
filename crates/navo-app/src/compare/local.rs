@@ -5,15 +5,15 @@ use std::io::{self, Read};
 use std::ops::ControlFlow;
 
 use navo_compare::model::{
-    CancelToken, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource, Stamp,
+    CancelToken, EntryKind, ObjectId, ReadHint, Reason, RelPath, SideEntry, SideSource, Stamp,
 };
 use navo_core::{FileIdentity, Location, ProviderId, ProviderPath};
 use navo_fs::{
-    CancelToken as FsCancel, DriveClass, EntryKind as FsKind, LocalFs, Provider, drive_class,
-    needs_network_bound, os_path,
+    CancelToken as FsCancel, DriveClass, EntryBatch, EntryKind as FsKind, FsEntry, LocalFs,
+    Provider, drive_class, needs_network_bound, os_path,
 };
 
-use super::entry::{feed, reason_of, segments};
+use super::entry::{child_rel, reason_of, segments};
 
 /// A local folder. Names are matched as text, so a name that is not valid text cannot be opened.
 pub(crate) struct LocalSide {
@@ -64,6 +64,36 @@ impl LocalSide {
         }
         Ok(location)
     }
+}
+
+pub(super) fn side_entry(parent: &RelPath, entry: FsEntry) -> SideEntry {
+    let kind = match entry.kind {
+        FsKind::File => EntryKind::File,
+        FsKind::Folder => EntryKind::Folder,
+        FsKind::Link => EntryKind::Link,
+    };
+    SideEntry::new(
+        child_rel(parent, &entry.name),
+        kind,
+        entry.size,
+        entry.modified_ms,
+    )
+}
+
+/// Feeds one listing batch to the engine's sink; breaks on cancel or when the sink stops.
+pub(super) fn feed(
+    folder: &RelPath,
+    batch: EntryBatch,
+    sink: &mut dyn FnMut(SideEntry) -> ControlFlow<()>,
+    cancel: &CancelToken,
+) -> ControlFlow<()> {
+    for found in batch.entries {
+        if cancel.is_cancelled() {
+            return ControlFlow::Break(());
+        }
+        sink(side_entry(folder, found))?;
+    }
+    ControlFlow::Continue(())
 }
 
 impl SideSource for LocalSide {
