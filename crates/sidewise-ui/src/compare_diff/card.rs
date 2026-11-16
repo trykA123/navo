@@ -15,14 +15,17 @@ use crate::format;
 use crate::prelude::*;
 use crate::tokens::Theme;
 
-pub(crate) use header::badge;
+#[doc(hidden)]
+pub use header::badge;
 use header::{accent_bar, header};
-pub(crate) use line::LINE_HEIGHT;
+#[doc(hidden)]
+pub use line::LINE_HEIGHT;
 
 /// Height of a header row, in px.
 const HEADER_HEIGHT: f32 = 36.;
 /// Height of a gap, more, placeholder or summary row, in px.
-pub(crate) const NOTE_HEIGHT: f32 = 26.;
+#[doc(hidden)]
+pub const NOTE_HEIGHT: f32 = 26.;
 /// Size of the icons in a header, in px.
 const ICON: f32 = 14.;
 /// Size of the status mark badge, in px.
@@ -161,7 +164,8 @@ fn with_bar(
 }
 
 /// The frame every card row shares: card surface, side edges, rounded bottom on the last row.
-pub(crate) fn frame(t: &Theme, last: bool) -> Div {
+#[doc(hidden)]
+pub fn frame(t: &Theme, last: bool) -> Div {
     div()
         .relative()
         .flex()
@@ -189,7 +193,8 @@ fn note(t: &Theme, last: bool, text: String) -> AnyElement {
 
 /// What a card without rows is, in words: large (with sizes), binary, image, one-sided or why
 /// it is unavailable; a text card or one not built yet has no changes to show.
-pub(crate) fn kind_text(kind: Option<PairKind>) -> String {
+#[doc(hidden)]
+pub fn kind_text(kind: Option<PairKind>) -> String {
     match kind {
         Some(PairKind::Large { left, right }) => t!(
             "compare-card-summary-large",

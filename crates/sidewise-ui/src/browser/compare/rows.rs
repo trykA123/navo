@@ -18,7 +18,8 @@ pub(super) enum Applied {
 
 /// The rows of the newest generation, in arrival order per folder.
 #[derive(Debug, Default)]
-pub(in crate::browser) struct CompareRows {
+#[doc(hidden)]
+pub struct CompareRows {
     generation: u64,
     rows: Vec<CompareRow>,
     by_id: HashMap<u64, usize>,
@@ -201,7 +202,8 @@ impl CompareRows {
         out
     }
 
-    pub(in crate::browser) fn by_path(&self, path: &str) -> Option<&CompareRow> {
+    #[doc(hidden)]
+    pub fn by_path(&self, path: &str) -> Option<&CompareRow> {
         let parent = path.rsplit_once('/').map_or("", |(parent, _)| parent);
         self.children(parent).find(|row| row.path == path)
     }

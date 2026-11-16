@@ -43,6 +43,7 @@ navo-pdf = { path = "../navo-pdf" }
 navo-retention = { path = "../navo-retention" }
 navo-store = { path = "../navo-store" }
 sidewise-kit = { path = "../sidewise-kit" }
+sidewise-ui = { path = "../sidewise-ui" }
 navo-structured = { path = "../navo-structured" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
@@ -60,6 +61,7 @@ proptest = "1.12.0"
 navo-automotive = { path = "../navo-automotive", features = ["sample"] }
 navo-syntax = { path = "../navo-syntax" }
 sidewise-kit = { path = "../sidewise-kit", features = ["test-support"] }
+sidewise-ui = { path = "../sidewise-ui", features = ["test-support"] }
 tempfile = "3.27.0"
 
 [lints]

@@ -7,10 +7,6 @@ pub mod browser;
 pub mod clip_palette;
 pub mod command_center;
 pub mod commands;
-pub mod compare_diff;
-pub mod compare_keys;
-pub mod compare_list;
-mod compare_visible;
 pub mod crash_notice;
 pub mod drag;
 pub mod file_list;
@@ -18,7 +14,6 @@ pub mod fkey_bar;
 pub mod git;
 pub mod job_card;
 pub mod job_row;
-mod list_actions;
 pub mod modifier_hints;
 pub mod multi_rename;
 mod name_match;
@@ -61,3 +56,4 @@ pub(crate) use sidewise_kit::{assets, dialog_focus, format, host_os};
 pub use sidewise_kit::{
     confirm_dialog, context_menu, kit_probe, languages, prelude, title_bar, tokens,
 };
+pub use sidewise_ui::{compare_diff, compare_keys, compare_list, compare_visible, list_actions};

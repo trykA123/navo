@@ -9,8 +9,8 @@ use navo_l10n::tr;
 
 use super::tone;
 use crate::browser::{BarView, CompareFilter, FILTERS};
-use crate::file_list::row::inset_ring;
 use crate::primitives::{Button, ButtonVariant, IconName, Kbd};
+use crate::row_look::inset_ring;
 use crate::tokens::{self, Theme};
 
 /// What the user did on the bar.

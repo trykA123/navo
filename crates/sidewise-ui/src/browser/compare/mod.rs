@@ -5,7 +5,8 @@
 
 mod hooks;
 mod mode;
-mod rows;
+#[doc(hidden)]
+pub mod rows;
 mod stream;
 mod view;
 
@@ -15,7 +16,8 @@ pub use hooks::{
 };
 pub use mode::{CompareFilter, CompareMode, ExitStep, FileDiffRequest, FolderSession};
 pub use view::{BarView, FILTERS, RowView, SideView, Tone, Total, bar_view, empty_text, pane_rows};
-pub(crate) use view::{look_of, status_text};
+#[doc(hidden)]
+pub use view::{look_of, status_text};
 
 /// Why a compare did not start.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

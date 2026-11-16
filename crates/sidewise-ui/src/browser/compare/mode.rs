@@ -54,11 +54,16 @@ pub enum ExitStep {
 
 /// A folder compare's rows, cursor, filter and folder (NC56); index 0 is the left side.
 pub struct FolderSession {
-    pub(in crate::browser) run: u64,
-    pub(in crate::browser) control: Box<dyn CompareControl>,
-    pub(in crate::browser) roots: [Location; 2],
-    pub(in crate::browser) failed: Option<String>,
-    pub(in crate::browser) rows: CompareRows,
+    #[doc(hidden)]
+    pub run: u64,
+    #[doc(hidden)]
+    pub control: Box<dyn CompareControl>,
+    #[doc(hidden)]
+    pub roots: [Location; 2],
+    #[doc(hidden)]
+    pub failed: Option<String>,
+    #[doc(hidden)]
+    pub rows: CompareRows,
     folder: String,
     filter: CompareFilter,
     selected: Option<String>,

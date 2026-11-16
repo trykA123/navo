@@ -24,7 +24,8 @@ const HEAD: usize = 1024;
 /// the language comes from the file name and the head of the text, and `lines` is parsed to the
 /// end. `None` for plain text or a side over `cap` bytes (F3's `EDIT_LIMIT`). Blocks for the
 /// whole parse: call it off the UI thread.
-pub(crate) fn parse_side(path: &str, lines: &[String], cap: u64) -> Option<SideSyntax> {
+#[doc(hidden)]
+pub fn parse_side(path: &str, lines: &[String], cap: u64) -> Option<SideSyntax> {
     let name = std::path::Path::new(path)
         .file_name()
         .and_then(|name| name.to_str())

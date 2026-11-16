@@ -102,14 +102,16 @@ impl ChangeMap {
     }
 
     /// The current hunk, or none.
-    #[cfg(test)]
-    pub(crate) fn current(&self) -> Option<usize> {
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
+    pub fn current(&self) -> Option<usize> {
         self.current
     }
 
     /// The rows on screen, for tests.
-    #[cfg(test)]
-    pub(crate) fn viewport(&self) -> Range<u32> {
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
+    pub fn viewport(&self) -> Range<u32> {
         self.viewport.clone()
     }
 

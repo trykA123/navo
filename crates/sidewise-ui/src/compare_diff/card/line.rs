@@ -15,7 +15,8 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 
 /// Height of a code line, in px.
-pub(crate) const LINE_HEIGHT: f32 = 20.;
+#[doc(hidden)]
+pub const LINE_HEIGHT: f32 = 20.;
 /// Width of a line-number gutter, in px.
 const GUTTER: f32 = 44.;
 /// Width of the sign column in unified, in px.

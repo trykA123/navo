@@ -39,7 +39,6 @@ use navo_fs::view::Rows;
 pub use action::{FileListAction, FilterEdit};
 pub use drop::{DropEvent, DropPayload, DropSpot, ListEdge};
 pub(crate) use git_keys::OpenGitMenu;
-pub(crate) use keys::CONTEXT as LIST_CONTEXT;
 pub use keys::bind_keys;
 pub(crate) use keys::{
     ClearFilter, CopyItems, CursorDown, CursorFirst, CursorLast, CursorUp, EditItem, MoveItems,

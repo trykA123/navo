@@ -5,18 +5,18 @@ const COMPARE_VISIBLE: bool = true;
 
 /// Whether the Compare settings section and the `compare.*` commands and keys are offered.
 #[must_use]
-pub(crate) fn compare_visible() -> bool {
-    #[cfg(test)]
+pub fn compare_visible() -> bool {
+    #[cfg(any(test, feature = "test-support"))]
     if let Some(forced) = tests::FORCED.with(std::cell::Cell::get) {
         return forced;
     }
     COMPARE_VISIBLE
 }
 
-#[cfg(test)]
-pub(crate) use tests::{hide_compare, show_compare};
+#[cfg(any(test, feature = "test-support"))]
+pub use tests::{hide_compare, show_compare};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 mod tests {
     use std::cell::Cell;
 
@@ -25,7 +25,8 @@ mod tests {
     }
 
     /// Forces Compare on or off on this thread until the guard drops.
-    pub(crate) struct Forced;
+    #[doc(hidden)]
+    pub struct Forced;
 
     impl Drop for Forced {
         fn drop(&mut self) {
@@ -34,18 +35,21 @@ mod tests {
     }
 
     #[must_use]
-    pub(crate) fn show_compare() -> Forced {
+    #[doc(hidden)]
+    pub fn show_compare() -> Forced {
         FORCED.with(|forced| forced.set(Some(true)));
         Forced
     }
 
     /// For the tests of the off state.
     #[must_use]
-    pub(crate) fn hide_compare() -> Forced {
+    #[doc(hidden)]
+    pub fn hide_compare() -> Forced {
         FORCED.with(|forced| forced.set(Some(false)));
         Forced
     }
 
+    #[cfg(test)]
     #[test]
     fn compare_is_visible_and_the_seam_can_force_it_off() {
         assert!(super::compare_visible());

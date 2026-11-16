@@ -22,7 +22,7 @@ use crate::window_view::OpenHooks;
 const KEYMAP: &str = concat!(
     include_str!("../../commands/keymap.toml"),
     "\n",
-    include_str!("../../commands/compare_keymap.toml")
+    include_str!("../../../../sidewise-ui/src/commands/compare_keymap.toml")
 );
 
 type Sink = Arc<Mutex<Option<CompareSink>>>;

@@ -12,15 +12,15 @@ use super::{
 
 /// What the fake recorded.
 #[derive(Default)]
-pub(crate) struct Calls {
+pub struct Calls {
     pub(crate) pair_sink: Mutex<Option<DiffSink>>,
     pub(crate) stream_sink: Mutex<Option<StreamSink>>,
     pub(crate) requests: Mutex<Vec<PairRequest>>,
-    pub(crate) spans: Mutex<Vec<Range<u32>>>,
+    pub spans: Mutex<Vec<Range<u32>>>,
     pub(crate) refreshes: Mutex<Vec<u64>>,
     pub(crate) views: Mutex<Vec<(u64, bool)>>,
-    pub(crate) items: Mutex<Vec<(u64, usize)>>,
-    pub(crate) searches: Mutex<Vec<(u64, String)>>,
+    pub items: Mutex<Vec<(u64, usize)>>,
+    pub searches: Mutex<Vec<(u64, String)>>,
     pub(crate) focused: Mutex<Vec<Vec<u64>>>,
     pub(crate) viewed: Mutex<Vec<(u64, bool)>>,
     pub(crate) acks: Mutex<Vec<u64>>,
@@ -39,13 +39,17 @@ pub(crate) struct Calls {
 
 /// A fake that records calls and lets a test push updates.
 #[derive(Default)]
-pub(crate) struct FakeDiffHooks {
-    pub(crate) calls: Arc<Calls>,
+pub struct FakeDiffHooks {
+    pub calls: Arc<Calls>,
 }
 
+#[allow(
+    clippy::expect_used,
+    reason = "the fake test seam panics when a test asks for a sink it never opened"
+)]
 impl FakeDiffHooks {
     /// The sink of the last opened pair; panics when none was opened.
-    pub(crate) fn pair_sink(&self) -> DiffSink {
+    pub fn pair_sink(&self) -> DiffSink {
         self.calls
             .pair_sink
             .lock()
@@ -55,7 +59,7 @@ impl FakeDiffHooks {
     }
 
     /// Every pair request so far, oldest first.
-    pub(crate) fn requests(&self) -> Vec<PairRequest> {
+    pub fn requests(&self) -> Vec<PairRequest> {
         self.calls
             .requests
             .lock()
@@ -64,7 +68,7 @@ impl FakeDiffHooks {
     }
 
     /// The sink of the last opened Stream; panics when none was opened.
-    pub(crate) fn stream_sink(&self) -> StreamSink {
+    pub fn stream_sink(&self) -> StreamSink {
         self.calls
             .stream_sink
             .lock()
@@ -74,7 +78,7 @@ impl FakeDiffHooks {
     }
 
     /// The ids of the last `focus` call, if any.
-    pub(crate) fn last_focus(&self) -> Option<Vec<u64>> {
+    pub fn last_focus(&self) -> Option<Vec<u64>> {
         self.calls
             .focused
             .lock()
@@ -84,7 +88,7 @@ impl FakeDiffHooks {
     }
 
     /// Every `set_viewed` call so far as (id, viewed).
-    pub(crate) fn viewed(&self) -> Vec<(u64, bool)> {
+    pub fn viewed(&self) -> Vec<(u64, bool)> {
         self.calls
             .viewed
             .lock()
@@ -93,7 +97,7 @@ impl FakeDiffHooks {
     }
 
     /// Every `copy_change` request so far, oldest first.
-    pub(crate) fn copies(&self) -> Vec<CopyChange> {
+    pub fn copies(&self) -> Vec<CopyChange> {
         self.calls
             .copies
             .lock()
@@ -102,7 +106,7 @@ impl FakeDiffHooks {
     }
 
     /// The sink of the last copy; panics when none was asked.
-    pub(crate) fn copy_sink(&self) -> CopySink {
+    pub fn copy_sink(&self) -> CopySink {
         self.calls
             .copy_sink
             .lock()
@@ -112,7 +116,7 @@ impl FakeDiffHooks {
     }
 
     /// Every `plan_sheet` call so far: the changes each asked for.
-    pub(crate) fn sheets(&self) -> Vec<Vec<CopyChange>> {
+    pub fn sheets(&self) -> Vec<Vec<CopyChange>> {
         self.calls
             .sheets
             .lock()
@@ -121,7 +125,7 @@ impl FakeDiffHooks {
     }
 
     /// The sink of the last plan; panics when none was asked.
-    pub(crate) fn sheet_plan_sink(&self) -> SheetPlanSink {
+    pub fn sheet_plan_sink(&self) -> SheetPlanSink {
         self.calls
             .sheet_plan_sink
             .lock()
@@ -131,7 +135,7 @@ impl FakeDiffHooks {
     }
 
     /// How many times `run_sheet` was called.
-    pub(crate) fn sheet_runs(&self) -> u32 {
+    pub fn sheet_runs(&self) -> u32 {
         *self
             .calls
             .sheet_runs
@@ -140,7 +144,7 @@ impl FakeDiffHooks {
     }
 
     /// The sink of the last sheet run; panics when none was asked.
-    pub(crate) fn sheet_sink(&self) -> SheetSink {
+    pub fn sheet_sink(&self) -> SheetSink {
         self.calls
             .sheet_sink
             .lock()
@@ -150,7 +154,7 @@ impl FakeDiffHooks {
     }
 
     /// The item ids the Stream was asked to reload, oldest first.
-    pub(crate) fn reloaded(&self) -> Vec<u64> {
+    pub fn reloaded(&self) -> Vec<u64> {
         self.calls
             .reloaded
             .lock()
@@ -159,7 +163,7 @@ impl FakeDiffHooks {
     }
 
     /// How many times an open pair was asked to reload.
-    pub(crate) fn refreshed(&self) -> u32 {
+    pub fn refreshed(&self) -> u32 {
         *self
             .calls
             .refreshed
@@ -168,7 +172,7 @@ impl FakeDiffHooks {
     }
 
     /// Every acknowledgement a pair control received, oldest first.
-    pub(crate) fn acks(&self) -> Vec<u64> {
+    pub fn acks(&self) -> Vec<u64> {
         self.calls
             .acks
             .lock()
@@ -177,7 +181,7 @@ impl FakeDiffHooks {
     }
 
     /// The request id of every pair refresh so far, oldest first.
-    pub(crate) fn refreshes(&self) -> Vec<u64> {
+    pub fn refreshes(&self) -> Vec<u64> {
         self.calls
             .refreshes
             .lock()
@@ -186,7 +190,7 @@ impl FakeDiffHooks {
     }
 
     /// The `(request id, bytes)` of every forced view choice so far, oldest first.
-    pub(crate) fn views(&self) -> Vec<(u64, bool)> {
+    pub fn views(&self) -> Vec<(u64, bool)> {
         self.calls
             .views
             .lock()
@@ -195,7 +199,7 @@ impl FakeDiffHooks {
     }
 
     /// Every large line window a pair control was asked for, oldest first.
-    pub(crate) fn line_requests(&self) -> Vec<Range<u64>> {
+    pub fn line_requests(&self) -> Vec<Range<u64>> {
         self.calls
             .lines
             .lock()
@@ -204,7 +208,7 @@ impl FakeDiffHooks {
     }
 
     /// Every large focus line a pair control was given, oldest first.
-    pub(crate) fn large_focus(&self) -> Vec<u64> {
+    pub fn large_focus(&self) -> Vec<u64> {
         self.calls
             .large_focus
             .lock()
@@ -213,7 +217,7 @@ impl FakeDiffHooks {
     }
 
     /// Whether a pair control was dropped.
-    pub(crate) fn dropped(&self) -> bool {
+    pub fn dropped(&self) -> bool {
         self.calls.dropped.load(Ordering::SeqCst)
     }
 }

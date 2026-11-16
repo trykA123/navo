@@ -226,7 +226,7 @@ impl RenderOnce for CompareList {
         let fill = || div().flex().flex_col().flex_1().min_w_0().min_h_0();
         let shell = fill()
             .id(self.id)
-            .key_context(crate::file_list::LIST_CONTEXT)
+            .key_context(crate::list_actions::LIST_CONTEXT)
             .bg(t.surfaces.card)
             .text_size(t.typography.body);
         // The focused child carries `Compare`, so its keys beat the list's whatever the user binds.

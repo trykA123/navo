@@ -1,7 +1,7 @@
 //! A Stream card's header row: fold chevron, status mark, file icon, path, `+n −m` and the
 //! Viewed tick, with the accent bar that marks the current stop.
 
-use navo_fs::EntryKind;
+use navo_core::EntryKind;
 use navo_l10n::tr;
 
 use super::{BADGE, CardCtx, HEADER_HEIGHT, ICON, frame};
@@ -9,13 +9,14 @@ use crate::browser::look_of;
 use crate::compare_diff::hooks::Card;
 use crate::compare_diff::stream_model::StreamItem;
 use crate::compare_list::tone;
-use crate::file_list::kind;
+use crate::file_icons as kind;
 use crate::prelude::*;
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
 
 /// The status mark badge: a glyph on the tone's wash.
-pub(crate) fn badge(t: &Theme, item: &StreamItem) -> Div {
+#[doc(hidden)]
+pub fn badge(t: &Theme, item: &StreamItem) -> Div {
     let (tone_of, mark) = look_of(item.status);
     div()
         .flex_none()

@@ -5,6 +5,7 @@ use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::{HighlightStyle, Hsla};
 
 use super::{PairSyntax, SideSyntax, SyntaxLook, line_run};
+use crate::compare_diff::EDIT_LIMIT;
 use crate::compare_diff::body::cut::{LineAt, shown_line};
 use crate::compare_diff::body::{BodyLook, RowCut, Side};
 use crate::compare_diff::{
@@ -12,7 +13,6 @@ use crate::compare_diff::{
 };
 use crate::languages::register_languages;
 use crate::tokens::{Mode, Theme, TintLook, highlight_theme, on_tint};
-use crate::window_view::EDIT_LIMIT;
 
 const RUST: [&str; 4] = ["fn main() {", "    let s = \"hi\";", "    // note", "}"];
 

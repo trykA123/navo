@@ -9,8 +9,8 @@ use gpui_kit::{AnyWindowHandle, Entity, Subscription, TestAppContext};
 
 use super::geometry::{MIN_HEIGHT, tick_of};
 use super::*;
-use crate::test_pointer::{dispatch, down, moved, up};
-use crate::test_window::open;
+use sidewise_kit::test_pointer::{dispatch, down, moved, up};
+use sidewise_kit::test_window::open;
 
 fn hunk(rows: Range<u32>, kind: HunkKind) -> MapHunk {
     MapHunk { rows, kind }

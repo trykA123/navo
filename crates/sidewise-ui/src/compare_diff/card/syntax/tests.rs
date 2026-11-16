@@ -8,9 +8,9 @@ use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::{HighlightStyle, Hsla};
 
 use super::{CardKey, CardLook, CardSyntax, TextRun};
+use crate::compare_diff::EDIT_LIMIT;
 use crate::compare_diff::{Card, CardRow, DiffRow, HunkView, PairKind, ViewedKey};
 use crate::tokens::{Mode, Theme, TintLook, highlight_theme, on_tint};
-use crate::window_view::EDIT_LIMIT;
 
 /// The left lines of the card's one hunk: an equal comment, a changed keyword line and a deleted
 /// comment.

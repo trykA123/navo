@@ -271,8 +271,8 @@ pub fn cut_from<S: Clone>(
 
 /// Like [`cut_from`], also returning the characters examined, so a test outside this module can
 /// bound the walk of a cut a body built.
-#[cfg(test)]
-pub(crate) fn cut_examined<S: Clone>(
+#[cfg(any(test, feature = "test-support"))]
+pub fn cut_examined<S: Clone>(
     line: &str,
     runs: &[(Range<usize>, S)],
     cols: Range<u32>,

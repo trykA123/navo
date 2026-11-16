@@ -2,13 +2,13 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     Div, FontWeight, ParentElement, Pixels, SharedString, Styled, div, pattern_slash, px,
 };
-use navo_fs::EntryKind;
+use navo_core::EntryKind;
 
 use super::tone;
 use crate::browser::{CompareKind, RowView, SideView};
-use crate::file_list::kind;
-use crate::file_list::row::{cursor_bar, inset_ring};
+use crate::file_icons as kind;
 use crate::primitives::icon;
+use crate::row_look::{cursor_bar, inset_ring};
 use crate::tokens::Theme;
 
 const STATUS_MAX: Pixels = px(340.);
