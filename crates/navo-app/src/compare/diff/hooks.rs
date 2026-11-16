@@ -18,7 +18,7 @@ use super::cards;
 use super::copy_port::{CopyHost, refuse_change, refuse_sheet};
 use super::load::{LoadInput, Side};
 use super::pair::{EnginePlan, PairDiff};
-use super::sides::{side_of, unreadable_side};
+use super::sides::{navo_side_of, side_of, unreadable_side};
 use super::sources::Sources;
 use super::stream::{LoadFn, StreamParts, StreamSession};
 use super::viewed::{LazyViewed, MemoryViewed, OpenViewed, ViewedMarks, opener};
@@ -100,7 +100,7 @@ impl DiffBackend {
 pub(super) fn navo_parts(dirs: CompareDirs, cache_db: Option<PathBuf>) -> BackendParts {
     BackendParts {
         dirs,
-        side: Arc::new(side_of),
+        side: Arc::new(navo_side_of),
         viewed: opener(cache_db),
     }
 }
