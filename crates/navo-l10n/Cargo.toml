@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 fluent-bundle = "0.16.0"
+sidewise-l10n = { path = "../sidewise-l10n" }
 thiserror = "2.0.21"
 tracing = "0.1.44"
 unic-langid = "0.9.6"

@@ -1,30 +1,24 @@
+//! Navo's shared core types; the compare types are re-exported from `sidewise-core`.
+
 #![forbid(unsafe_code)]
 
 mod apply;
 pub mod brand;
 mod command;
 mod direction;
-pub mod encoding;
-mod file_identity;
 pub mod find;
-mod fs_error;
 mod id;
 mod layout;
 pub mod line_ends;
 pub mod list_text;
-mod location;
 pub mod marks;
 mod name;
-mod network_walk;
-mod op_plan;
-pub mod paging;
 pub mod placement;
 pub mod rename;
 mod replay;
 pub mod retention;
 mod selection;
 mod session;
-pub mod shell_menu;
 mod state;
 
 pub use apply::{
@@ -32,34 +26,32 @@ pub use apply::{
     list_missing, list_unloaded, relist_tab,
 };
 pub use brand::TEMP_SUFFIX;
-pub use command::{Command, CommandId, CursorMove, ParseError, ParseErrorKind, TabCommand};
+pub use command::{Command, CommandId, ParseError, ParseErrorKind, TabCommand};
 pub use direction::Direction;
-pub use file_identity::{FileIdentity, FileIdentityKind};
-pub use fs_error::{FsError, FsErrorKind, LockHolder, RecoveryAction};
 pub use id::{PaneId, TabId, WindowId};
 pub use layout::{
     Applied, Axis, Layout, LayoutError, MAX_PANES, Preset, Rect, SplitInfo, SplitPath, Tiles,
     TilesError,
 };
-pub use location::{
-    AncestorMemo, Location, LocationError, ProviderId, ProviderPath, WindowsFoldKey, typed_location,
-};
 pub use name::{NameError, check_name};
-pub use network_walk::{
-    NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME, NetworkStop, NetworkWalkBudget,
-};
-pub use op_plan::{
-    Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, FileStamp, ItemKind, OpKind,
-    OperationPlan, PlanRequest, Resolution, Risk, ScannedItem, Step, Totals, WriteManyError,
-    WriteTarget, drop_op, is_protected, plan, plan_keeping, relative_folders, right_button_drag,
-    write_many_plan, write_plan,
-};
 pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection, SpanMode};
 pub use session::{
     EntryState, LayoutState, MAX_LAYOUT_DEPTH, PaneState, RowsState, SessionError, SessionState,
     SnapshotState, TabState, WindowState, WorkspaceState,
 };
+pub use sidewise_core::{
+    AncestorMemo, Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, FileIdentity,
+    FileIdentityKind, FileStamp, ItemKind, Location, LocationError, NETWORK_WALK_MAX_ENTRIES,
+    NETWORK_WALK_MAX_TIME, NetworkStop, NetworkWalkBudget, OpKind, OperationPlan, PlanRequest,
+    ProviderId, ProviderPath, Resolution, Risk, ScannedItem, Step, Totals, WindowsFoldKey,
+    WriteManyError, WriteTarget, drop_op, is_protected, plan, plan_keeping, relative_folders,
+    right_button_drag, typed_location, write_many_plan, write_plan,
+};
+pub use sidewise_core::{
+    CursorMove, EntryKind, FsError, FsErrorKind, LockHolder, RecoveryAction, shell_menu,
+};
+pub use sidewise_core::{encoding, paging};
 pub use state::{
     AppState, Entry, History, Listing, MAX_WORKSPACES, Pane, SAVE_ON_SWITCH, Snapshot, StateError,
     Tab, TabMove, ViewState, Window, Workspace, WorkspaceAction, changes,

@@ -1,6 +1,6 @@
 #![deny(unsafe_code)]
 
-pub mod components;
+pub use sidewise_core::components;
 mod disk_use;
 mod event_ring;
 pub mod heap;

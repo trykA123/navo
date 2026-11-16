@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use navo_core::retention::MAX_NODES;
+use navo_core::MAX_PLAN_NODES as MAX_NODES;
 use navo_core::{OperationPlan, Totals};
 
 use super::Sides;

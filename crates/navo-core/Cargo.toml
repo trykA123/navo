@@ -7,6 +7,7 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
+sidewise-core = { path = "../sidewise-core" }
 serde = { version = "1.0.229", features = ["derive"] }
 aho-corasick = "1.1.5"
 chardetng = "1.0.0"

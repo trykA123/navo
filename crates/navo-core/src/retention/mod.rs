@@ -26,7 +26,7 @@ pub use writing::{
 pub const CONTAINER_PREFIX: &str = crate::brand::RETAINED_PREFIX;
 pub const ADOPTED_CONTAINER_PREFIX: &str = crate::brand::HELD_PREFIX;
 pub const VAULT_RECORD_VERSION: u32 = 3;
-pub const MAX_NODES: usize = 100_000;
+pub const MAX_NODES: usize = sidewise_core::MAX_PLAN_NODES;
 pub const MAX_RECORD_BYTES: usize = 32 * 1024 * 1024;
 pub const DAY_MS: i64 = 86_400_000;
 

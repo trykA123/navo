@@ -13,7 +13,10 @@ use std::process::ExitCode;
 
 use check::{ALLOW_FILE, Source, evaluate};
 
-const LOCALES: &str = "crates/navo-l10n/locales/en-US";
+const LOCALES: [&str; 2] = [
+    "crates/navo-l10n/locales/en-US",
+    "crates/sidewise-l10n/locales/en-US",
+];
 const RATCHET_CRATES: [&str; 2] = ["navo-ui", "navo-app"];
 const OWN_CRATE: &str = "navo-l10n";
 
@@ -71,8 +74,10 @@ struct Loaded {
 
 fn load(root: &Path) -> io::Result<Loaded> {
     let mut ftl = Vec::new();
-    for path in files_with(&root.join(LOCALES), "ftl")? {
-        ftl.push((name_of(&path), fs::read_to_string(&path)?));
+    for locale in LOCALES {
+        for path in files_with(&root.join(locale), "ftl")? {
+            ftl.push((name_of(&path), fs::read_to_string(&path)?));
+        }
     }
     let mut sources = Vec::new();
     let mut crates: Vec<_> = fs::read_dir(root.join("crates"))?.collect::<Result<_, _>>()?;

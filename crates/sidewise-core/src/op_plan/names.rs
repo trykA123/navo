@@ -1,4 +1,4 @@
-use crate::brand::TEMP_SUFFIX;
+use crate::TEMP_SUFFIX;
 use crate::location::windows_style;
 use crate::{Location, ProviderPath};
 

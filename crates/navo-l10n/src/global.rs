@@ -28,14 +28,10 @@ impl Reported {
     }
 }
 
-#[cfg(not(test))]
-fn files() -> Vec<(&'static str, &'static str)> {
-    FILES.to_vec()
-}
-
-#[cfg(test)]
 fn files() -> Vec<(&'static str, &'static str)> {
     let mut files = FILES.to_vec();
+    files.extend_from_slice(sidewise_l10n::FILES);
+    #[cfg(test)]
     files.push(("fixture.ftl", crate::tests::FIXTURE));
     files
 }

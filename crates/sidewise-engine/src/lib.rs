@@ -81,4 +81,5 @@ pub mod plan;
 pub mod queue;
 pub mod rules;
 pub mod session;
+pub mod settings;
 pub mod text;

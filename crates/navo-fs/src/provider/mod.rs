@@ -8,19 +8,13 @@ use std::ops::ControlFlow;
 use navo_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 pub use cancel::CancelToken;
+pub use navo_core::EntryKind;
 pub use ops::{FileIdentity, FileIdentityKind, GitPauseGuard, ProviderOps, UnixAccess};
 pub use owned::{CopyControl, OwnedCopy, StreamWrite};
 pub(crate) use verified::Seen;
 pub use verified::{MoveProof, RenameSkip, VerifiedRename};
 
 use crate::{Watch, WatchSink};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EntryKind {
-    File,
-    Folder,
-    Link,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Attributes {
