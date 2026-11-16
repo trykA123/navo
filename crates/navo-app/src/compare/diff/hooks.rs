@@ -66,6 +66,23 @@ impl DiffBackend {
     }
 }
 
+impl DiffBackend {
+    /// A backend for a host without Navo's profile: Viewed marks live in an in-memory cache and
+    /// end with the process, no spool folder is swept, and every copy is refused.
+    #[must_use]
+    pub fn in_memory() -> Self {
+        Self::with_parts(Arc::new(side_of), Arc::new(memory_viewed))
+    }
+}
+
+/// An in-memory Viewed store, or the no-op store when SQLite cannot open one.
+fn memory_viewed() -> Arc<dyn ViewedMarks> {
+    match CacheDb::open_in_memory() {
+        Ok(db) => Arc::new(ViewedStore::new(db)),
+        Err(_) => Arc::new(NoViewed),
+    }
+}
+
 /// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
 pub fn diff_backend(copy: Option<LogFactory>, local: &Arc<dyn ProviderOps>) -> Arc<DiffBackend> {
     Arc::new(match copy {
@@ -203,5 +220,25 @@ fn input(left: Option<Side>, right: Option<Side>) -> LoadInput {
         right,
         options: Options::default(),
         fallback: encoding_rs::UTF_8,
+    }
+}
+
+#[cfg(test)]
+mod in_memory_tests {
+    use super::*;
+
+    #[test]
+    fn in_memory_marks_persist_for_the_process() {
+        let backend = DiffBackend::in_memory();
+        let key = [7u8; 64];
+        assert!(matches!(backend.viewed.get(&key), Ok(false)));
+        backend.viewed.set(&key, true).expect("set the mark");
+        assert!(matches!(backend.viewed.get(&key), Ok(true)));
+    }
+
+    #[test]
+    fn in_memory_refuses_copies() {
+        let backend = DiffBackend::in_memory();
+        assert!(backend.copy.is_none());
     }
 }
