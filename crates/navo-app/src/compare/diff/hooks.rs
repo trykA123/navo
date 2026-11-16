@@ -20,6 +20,7 @@ use super::cards;
 use super::copy::CopyRefusal;
 use super::copy_hook::{CopyService, unavailable};
 use super::load::{LoadInput, Side};
+use super::navo_backend::navo_compare_dirs;
 use super::pair::{EnginePlan, PairDiff};
 use super::sides::{side_of, unreadable_side};
 use super::sources::Sources;
@@ -42,7 +43,11 @@ pub struct DiffBackend {
 impl Default for DiffBackend {
     /// Real local and Git sides and the profile cache, both opened later on workers.
     fn default() -> Self {
-        Sources::sweep_startup();
+        Sources::sweep_startup(
+            navo_compare_dirs(StoreDirs::detect().as_ref())
+                .spool
+                .as_deref(),
+        );
         Self::with_parts(Arc::new(side_of), Arc::new(open_viewed))
     }
 }

@@ -5,7 +5,7 @@
 
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -14,7 +14,6 @@ use navo_compare::text::side::WHOLE_LIMIT;
 use navo_core::Location;
 use navo_core::paging::ByteSource;
 use navo_fs::{PagedFile, os_path};
-use navo_store::StoreDirs;
 
 use super::super::settings::CompareSettings;
 use super::sides::side_of;
@@ -29,11 +28,6 @@ use spool::{Owner, SpoolFile, owner_for, spool_copy, write_reason};
 /// The cache folder that holds one sub-folder per Navo process.
 pub(crate) const SPOOL_DIR: &str = "compare-spool";
 const COPY_CHUNK: usize = 1024 * 1024;
-
-/// The spool root for `dirs`: Navo's cache folder, which holds `cache.db` too.
-pub(super) fn spool_root(dirs: &StoreDirs) -> PathBuf {
-    dirs.data.join(SPOOL_DIR)
-}
 
 /// The sources of one screen; the returned spool sources outlive it until they drop.
 #[derive(Clone)]
@@ -59,16 +53,17 @@ impl Sources {
         }
     }
 
-    /// Remove spool folders left by processes that are no longer running.
-    pub(crate) fn sweep_startup() {
-        if let Some(dirs) = StoreDirs::detect() {
-            Self::sweep_in(&dirs);
+    /// Remove spool folders left by processes that are no longer running, inside `spool` only.
+    /// `None` means the host has no spool, so nothing is swept.
+    pub(crate) fn sweep_startup(spool: Option<&Path>) {
+        if let Some(root) = spool {
+            Self::sweep_root(root);
         }
     }
 
-    /// Sweep the spool root of `dirs`, the same folder spooling sources are created in.
-    pub(super) fn sweep_in(dirs: &StoreDirs) {
-        sweep(&spool_root(dirs));
+    /// Sweep the dead process folders directly inside `root`, where spooling sources create theirs.
+    pub(super) fn sweep_root(root: &Path) {
+        sweep(root);
     }
 
     /// How many sources this screen opened, for the separate-instance test.
