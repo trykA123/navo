@@ -20,6 +20,7 @@ pub mod shown;
 pub mod test_pointer;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_window;
+pub mod title_bar;
 pub mod tokens;
 
 pub use app::{UiError, application, init};

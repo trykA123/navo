@@ -18,9 +18,9 @@ use gpui_kit::{
 
 use crate::tokens::{self, Theme};
 
-pub(crate) use backdrop::{GradientLayer, system_backdrop};
+pub use backdrop::{GradientLayer, system_backdrop};
 pub use brand::BrandMark;
-pub(crate) use brand::icon_for as logo;
+pub use brand::icon_for as logo;
 pub use search::HeaderSearch;
 
 type CloseHandler = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -42,7 +42,7 @@ fn main_window_min_size() -> Size<Pixels> {
     size(px(MAIN_WINDOW_MIN_SIZE.0), px(MAIN_WINDOW_MIN_SIZE.1))
 }
 
-pub(crate) fn at_least_minimum(mut bounds: WindowBounds) -> WindowBounds {
+pub fn at_least_minimum(mut bounds: WindowBounds) -> WindowBounds {
     let minimum = main_window_min_size();
     let (WindowBounds::Windowed(restored)
     | WindowBounds::Maximized(restored)
@@ -52,10 +52,7 @@ pub(crate) fn at_least_minimum(mut bounds: WindowBounds) -> WindowBounds {
     bounds
 }
 
-pub(crate) fn main_window_options(
-    title: impl Into<SharedString>,
-    bounds: WindowBounds,
-) -> WindowOptions {
+pub fn main_window_options(title: impl Into<SharedString>, bounds: WindowBounds) -> WindowOptions {
     WindowOptions {
         window_min_size: Some(main_window_min_size()),
         window_bounds: Some(at_least_minimum(bounds)),
@@ -99,7 +96,7 @@ impl NavoTitleBar {
         self
     }
 
-    pub(crate) fn header_inset(mut self, inset: Pixels) -> Self {
+    pub fn header_inset(mut self, inset: Pixels) -> Self {
         self.header_inset = inset;
         self
     }

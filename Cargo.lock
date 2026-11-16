@@ -6514,7 +6514,6 @@ dependencies = [
  "tracing",
  "unicode-width",
  "url",
- "windows-version",
 ]
 
 [[package]]
@@ -9270,6 +9269,7 @@ dependencies = [
  "tree-sitter-sequel",
  "tree-sitter-xml",
  "ts-parser-perl",
+ "windows-version",
 ]
 
 [[package]]

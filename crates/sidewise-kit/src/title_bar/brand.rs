@@ -29,7 +29,7 @@ static ICON_2X: LazyLock<Arc<Image>> = brand_svg!("navo-48.svg");
 
 const ICON_SIZE: f32 = 24.;
 
-pub(crate) fn icon_for(scale_factor: f32) -> Arc<Image> {
+pub fn icon_for(scale_factor: f32) -> Arc<Image> {
     if scale_factor > 1. {
         ICON_2X.clone()
     } else {

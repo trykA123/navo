@@ -37,7 +37,6 @@ pub mod setup;
 pub mod shortcuts;
 pub mod side_sheet;
 pub mod status_bar;
-pub mod title_bar;
 pub mod window_view;
 
 #[cfg(test)]
@@ -56,7 +55,9 @@ pub use gpui_kit::{
     ParentElement, Pixels, Point, Render, SharedString, StatefulInteractiveElement, Styled,
     TitlebarOptions, Window, WindowBounds, WindowOptions, div, px, relative, size,
 };
+pub use sidewise_kit::title_bar::{BrandMark, HeaderSearch, NavoTitleBar, window_options};
 pub use sidewise_kit::{Assets, UiError, application, init};
 pub(crate) use sidewise_kit::{assets, dialog_focus, format, host_os};
-pub use sidewise_kit::{confirm_dialog, context_menu, kit_probe, languages, prelude, tokens};
-pub use title_bar::{BrandMark, HeaderSearch, NavoTitleBar, window_options};
+pub use sidewise_kit::{
+    confirm_dialog, context_menu, kit_probe, languages, prelude, title_bar, tokens,
+};

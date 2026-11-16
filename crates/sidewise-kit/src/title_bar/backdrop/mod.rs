@@ -18,18 +18,18 @@ use windows as os;
 const FIRST_MICA_BUILD: u32 = 22621;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GradientLayer {
+pub enum GradientLayer {
     Root,
     BelowTitleBar,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Backdrop {
+pub struct Backdrop {
     pub window: WindowBackgroundAppearance,
     pub gradient: GradientLayer,
 }
 
-pub(crate) fn backdrop_for(windows_build: Option<u32>) -> Backdrop {
+pub fn backdrop_for(windows_build: Option<u32>) -> Backdrop {
     match windows_build {
         Some(build) if build >= FIRST_MICA_BUILD => Backdrop {
             window: WindowBackgroundAppearance::MicaBackdrop,
@@ -42,7 +42,7 @@ pub(crate) fn backdrop_for(windows_build: Option<u32>) -> Backdrop {
     }
 }
 
-pub(crate) fn system_backdrop() -> Backdrop {
+pub fn system_backdrop() -> Backdrop {
     static BACKDROP: OnceLock<Backdrop> = OnceLock::new();
     *BACKDROP.get_or_init(|| backdrop_for(os::windows_build()))
 }
