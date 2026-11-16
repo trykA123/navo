@@ -22,6 +22,8 @@ use super::sides::side_of;
 mod spool;
 
 pub use spool::sweep;
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub use spool::sweep_with;
 use spool::{Owner, SpoolFile, owner_for, spool_copy, write_reason};
 
@@ -101,6 +103,8 @@ impl Sources {
     }
 
     /// How many sources this screen opened, for the separate-instance test.
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn opens(&self) -> u64 {
         self.opens.load(Ordering::Relaxed)
     }

@@ -10,6 +10,8 @@ use super::detail_state::Details;
 use super::memory::{card_bytes, count};
 use super::search::{SearchJob, SearchState};
 
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub mod probe;
 
 /// A card ready to send, with the bodies it pushed out and the progress counters.

@@ -17,7 +17,11 @@ use super::stream::detail_state::DetailJob;
 mod bytes;
 mod large;
 
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub use bytes::{BytesJob, run as run_bytes, window_start};
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub use large::{large_card, run};
 
 /// Build the detail function for one engine plan; large and binary pairs have a runner so far.

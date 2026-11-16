@@ -187,6 +187,8 @@ impl StreamControl for StreamSession {
 
 impl StreamSession {
     /// State bytes held, for the budget test.
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn state_held(&self) -> u64 {
         self.lock().held_bytes()
     }

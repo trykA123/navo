@@ -38,6 +38,8 @@ pub struct Ctx {
     pub sink: DiffSink,
 }
 
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub use state::State as TestState;
 
 /// Everything a large diff needs to build its two sides on the workers.

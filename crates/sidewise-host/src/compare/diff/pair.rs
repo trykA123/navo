@@ -31,6 +31,7 @@ pub struct PairDiff {
     commands: Arc<Commands>,
     live: Arc<Live>,
     thread: Option<JoinHandle<()>>,
+    #[cfg(any(test, feature = "test-support"))]
     done: std::sync::mpsc::Receiver<()>,
 }
 
@@ -54,6 +55,7 @@ impl PairDiff {
         let failed = Arc::clone(&sink);
         let worker = Arc::clone(&commands);
         let worker_live = Arc::clone(&live);
+        #[cfg(any(test, feature = "test-support"))]
         let (done_tx, done) = std::sync::mpsc::channel();
         let spawned = thread::Builder::new()
             .name("compare-pair".to_owned())
@@ -66,6 +68,7 @@ impl PairDiff {
                     commands: &worker,
                     live: &worker_live,
                 });
+                #[cfg(any(test, feature = "test-support"))]
                 let _ = done_tx.send(());
             });
         let thread = match spawned {
@@ -83,6 +86,7 @@ impl PairDiff {
             commands,
             live,
             thread,
+            #[cfg(any(test, feature = "test-support"))]
             done,
         }
     }
@@ -140,6 +144,8 @@ impl Drop for PairDiff {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 impl PairDiff {
     /// Cancel the worker before a test releases its blocked read.
     pub fn close_for_test(&self) {
