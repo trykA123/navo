@@ -16,7 +16,10 @@ fn the_startup_sweep_cleans_the_folder_new_spools_go_to() {
     let stale = root.join("222-2");
     fs::create_dir_all(&stale).unwrap();
     fs::write(stale.join("owner.lock"), b"").unwrap();
-    let sources = Sources::new(Some(root.clone()));
+    let sources = Sources::new(
+        Some(root.clone()),
+        std::sync::Arc::new(crate::compare::diff::sides::side_of),
+    );
     let fake = FakeSide::zeros(3 * MIB as u64);
     let entry = entry("big.bin", 3 * MIB as u64);
     let _spooled = sources
@@ -198,6 +201,20 @@ fn a_root_not_named_compare_spool_sweeps_nothing_and_writes_no_gate() {
     assert!(
         !user.join("sweep.lock").exists(),
         "a refused root gets no sweep.lock"
+    );
+}
+
+#[test]
+fn sweep_root_on_a_folder_that_is_not_a_spool_root_sweeps_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("data");
+    let month = user.join("2024-11");
+    fs::create_dir_all(&month).unwrap();
+    fs::write(month.join("photo.jpg"), b"user data").unwrap();
+    Sources::sweep_root(&user);
+    assert!(
+        month.join("photo.jpg").exists(),
+        "a host's direct sweep_root call is checked like the start-up sweep"
     );
 }
 

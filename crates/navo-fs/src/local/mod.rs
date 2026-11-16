@@ -64,7 +64,7 @@ use navo_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, Provider
 pub(crate) use guard::refuse_reserved;
 pub use guard::{MutationLocations, mutation_location, save_location};
 pub use link::make_link;
-#[cfg(any(windows, test))]
+#[cfg(test)]
 pub(crate) use sidewise_fs::native::verbatim;
 pub use sidewise_fs::native::{error, identity, native_identity, os_path};
 

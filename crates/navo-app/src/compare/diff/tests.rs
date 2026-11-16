@@ -12,7 +12,6 @@ mod large;
 mod large_card;
 mod large_far;
 mod large_spool;
-mod lines;
 mod load;
 mod pair;
 mod pair_engine;

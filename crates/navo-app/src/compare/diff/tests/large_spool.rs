@@ -14,7 +14,10 @@ fn dropping_a_large_diff_removes_its_spool_folder() {
     let dir = tempfile::tempdir().unwrap();
     let spool = dir.path().join("spool");
     let mut pair = pair(dir.path(), 1000, 10);
-    pair.sources = crate::compare::diff::sources::Sources::new(Some(spool.clone()));
+    pair.sources = crate::compare::diff::sources::Sources::new(
+        Some(spool.clone()),
+        std::sync::Arc::new(crate::compare::diff::sides::side_of),
+    );
     assert!(
         has_process_folder(&spool),
         "the spool owner created its folder"

@@ -24,20 +24,13 @@
     expect(dead_code, reason = "Git sides (U6) and focus (U5) wire the rest")
 )]
 
-mod convert;
 pub mod diff;
-pub mod dirs;
-mod entry;
 pub mod git_side;
-pub mod handle;
 pub(crate) mod hash_cache;
 pub(crate) mod local;
-mod pane;
-mod rules;
-pub(crate) mod settings;
-mod std_side;
 
 pub use pane::{LocalTarget, PaneCompare};
+pub use sidewise_host::compare::{convert, dirs, entry, handle, pane, rules, settings, std_side};
 
 #[cfg(test)]
 mod tests;

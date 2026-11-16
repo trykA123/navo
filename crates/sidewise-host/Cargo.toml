@@ -1,0 +1,37 @@
+# Sidewise's compare host glue: settings, the session thread, local sides and the diff leaves.
+[package]
+name = "sidewise-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+blake3 = "=1.8.7"
+encoding_rs = "0.8.44"
+imagesize = "=0.13.0"
+image = { version = "=0.25.10", default-features = false, features = [
+  "bmp",
+  "gif",
+  "ico",
+  "jpeg",
+  "png",
+  "tiff",
+  "webp",
+] }
+navo-compare = { package = "sidewise-engine", path = "../sidewise-engine" }
+navo-core = { package = "sidewise-core", path = "../sidewise-core" }
+navo-fs = { package = "sidewise-fs", path = "../sidewise-fs" }
+navo-l10n = { package = "sidewise-l10n", path = "../sidewise-l10n" }
+navo-ui = { package = "sidewise-ui", path = "../sidewise-ui" }
+tracing = "0.1.44"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
