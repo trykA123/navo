@@ -17,7 +17,7 @@ use navo_core::paging::TextLayout;
 use navo_ui::compare_diff::{DiffSink, DiffUpdate, PairControl, PairRequest};
 
 use super::super::settings::CompareSettings;
-use super::sides::navo_side_of;
+use super::hooks::SideFn;
 use super::sources::{Sources, empty_source};
 
 mod acks;
@@ -47,6 +47,8 @@ pub(crate) struct LargeInput {
     pub left: Option<Location>,
     pub right: Option<Location>,
     pub settings: CompareSettings,
+    /// The backend's side builder, so the large view reads as the rest of the backend does.
+    pub side: SideFn,
     pub sources: Sources,
     pub options: Options,
     pub fallback: &'static encoding_rs::Encoding,
@@ -223,7 +225,7 @@ fn build_side(
             layout: TextLayout::default(),
         });
     };
-    let (side, entry) = navo_side_of(location, &input.settings)?;
+    let (side, entry) = (input.side)(location, &input.settings)?;
     let text = TextSide::decode(side.as_ref(), &entry, input.fallback)?;
     let layout = match text {
         TextSide::Whole(whole) => whole.layout,

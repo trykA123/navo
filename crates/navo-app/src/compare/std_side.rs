@@ -41,6 +41,8 @@ impl StdSide {
             .flatten()
             .map_or(0, |identity| identity.volume);
         let network = is_network_class(drive_class(&root));
+        #[cfg(test)]
+        opened::note("StdSide");
         Ok(Self {
             root,
             provider: ProviderId::local(),
@@ -201,5 +203,26 @@ fn io_reason(error: &io::Error) -> Reason {
         io::ErrorKind::NotFound => Reason::NotFound,
         io::ErrorKind::PermissionDenied => Reason::AccessDenied,
         _ => Reason::ReadError,
+    }
+}
+
+/// Test-only record of the last side kind opened on this thread, so tests can tell `StdSide`
+/// from `LocalSide` (both report the local provider and list the same entries).
+#[cfg(test)]
+pub(crate) mod opened {
+    use std::cell::Cell;
+
+    thread_local! {
+        static LAST: Cell<Option<&'static str>> = const { Cell::new(None) };
+    }
+
+    /// Records that a side of `kind` opened on this thread.
+    pub(crate) fn note(kind: &'static str) {
+        LAST.with(|last| last.set(Some(kind)));
+    }
+
+    /// The kind of the last side opened on this thread, if any; reading clears it.
+    pub(crate) fn take() -> Option<&'static str> {
+        LAST.with(Cell::take)
     }
 }

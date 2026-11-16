@@ -50,6 +50,8 @@ impl LocalSide {
             .and_then(|path| navo_fs::native_identity(&path).ok().flatten())
             .map_or(0, |identity| identity.volume);
         let network = is_network_class(class_of(&root));
+        #[cfg(test)]
+        super::std_side::opened::note("LocalSide");
         Ok(Self {
             root,
             fs,

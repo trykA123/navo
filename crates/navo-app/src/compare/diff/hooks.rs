@@ -90,9 +90,10 @@ impl DiffBackend {
         self.viewed.clone()
     }
 
-    /// The engine plan for one pair or Stream under `settings`, spooling in the host's root.
+    /// The engine plan for one pair or Stream under `settings`, spooling in the host's root and
+    /// building sides with this backend's side builder.
     pub(super) fn plan(&self, settings: CompareSettings) -> EnginePlan {
-        EnginePlan::new(settings, self.dirs.spool.clone())
+        EnginePlan::new(settings, self.dirs.spool.clone(), Arc::clone(&self.side))
     }
 }
 

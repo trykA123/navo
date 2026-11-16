@@ -10,8 +10,8 @@ use navo_core::ProviderPath;
 
 use super::{location, write};
 use crate::compare::handle::{CompareTarget, open_side, std_local};
-use crate::compare::local::LocalSide;
-use crate::compare::std_side::StdSide;
+use crate::compare::local::{LocalSide, local_target};
+use crate::compare::std_side::{StdSide, opened};
 
 /// Every entry of `folder` on `side`, sorted by row path.
 fn list(side: &dyn SideSource, folder: &RelPath) -> Vec<SideEntry> {
@@ -160,10 +160,23 @@ fn the_glue_default_opens_a_std_side() {
         matches!(target, CompareTarget::Local(_)),
         "default is not a plain local target"
     );
+    opened::take();
     let side = open_side(target, &mut Vec::new()).unwrap();
+    assert_eq!(opened::take(), Some("StdSide"));
     let direct = StdSide::new(location(dir.path())).unwrap();
     assert_eq!(side.provider(), direct.provider());
     let top = list(&*side, &RelPath::root());
     assert_eq!(top, list(&direct, &RelPath::root()));
     assert!(top.len() >= 5, "listing too short: {top:?}");
+}
+
+#[test]
+fn navos_local_target_still_opens_a_local_side() {
+    let dir = tempfile::tempdir().unwrap();
+    tree(dir.path());
+    let target = local_target()(&location(dir.path()));
+    opened::take();
+    let side = open_side(target, &mut Vec::new()).unwrap();
+    assert_eq!(opened::take(), Some("LocalSide"));
+    assert!(list(&*side, &RelPath::root()).len() >= 5);
 }
