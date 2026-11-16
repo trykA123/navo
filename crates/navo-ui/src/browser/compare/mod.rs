@@ -24,8 +24,8 @@ mod view;
 
 use binding::{PaneBinding, Saved};
 pub use hooks::{
-    CompareControl, CompareHooks, CompareKind, CompareRow, CompareSide, CompareSink, CompareTotals,
-    CompareUpdate, RowProgress, RowStatus, StopBound,
+    CompareControl, CompareHooks, CompareKind, ComparePhase, CompareRow, CompareSide, CompareSink,
+    CompareTotals, CompareUpdate, RowProgress, RowStatus, SlowPath, StopBound,
 };
 pub use mode::{CompareFilter, CompareMode, ExitStep, FileDiffRequest, FolderSession};
 pub use view::{BarView, FILTERS, RowView, SideView, Tone, Total, bar_view, empty_text, pane_rows};
@@ -184,5 +184,22 @@ impl Browser {
             self.leave_compare();
         }
         changed
+    }
+}
+
+#[cfg(test)]
+mod phase_export_tests {
+    use crate::browser::ComparePhase;
+
+    #[test]
+    fn every_compare_phase_is_exported_in_walk_order() {
+        assert_eq!(
+            ComparePhase::ALL,
+            [
+                ComparePhase::Listing,
+                ComparePhase::QuickCheck,
+                ComparePhase::ContentCheck,
+            ]
+        );
     }
 }

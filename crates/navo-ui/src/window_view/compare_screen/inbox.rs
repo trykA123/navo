@@ -11,7 +11,7 @@ use crate::compare_diff::{DiffHooks, DiffSink, DiffUpdate};
 pub(super) type Inbox = Arc<Mutex<Vec<(u64, DiffUpdate)>>>;
 
 /// The app's diff hooks and the inbox their sinks fill; one per window.
-pub(in crate::window_view) struct DiffSlot {
+pub struct DiffSlot {
     pub(super) hooks: Option<Arc<dyn DiffHooks>>,
     pub(super) inbox: Inbox,
     pub(super) wake: Waker,
@@ -24,7 +24,7 @@ pub(in crate::window_view) struct DiffSlot {
 
 impl DiffSlot {
     /// A slot over `hooks` (none until the app wires them) that wakes the window with `wake`.
-    pub(in crate::window_view) fn new(hooks: Option<Arc<dyn DiffHooks>>, wake: Waker) -> Self {
+    pub fn new(hooks: Option<Arc<dyn DiffHooks>>, wake: Waker) -> Self {
         Self {
             hooks,
             inbox: Inbox::default(),

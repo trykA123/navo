@@ -1,7 +1,9 @@
 use navo_core::{CursorMove, Location, ProviderPath};
 
 use super::CompareUpdate;
-use super::hooks::{CompareControl, CompareRow, CompareTotals, RowProgress, RowStatus};
+use super::hooks::{
+    CompareControl, ComparePhase, CompareRow, CompareTotals, RowProgress, RowStatus, SlowPath,
+};
 use super::rows::{Applied, CompareRows};
 
 /// Which rows the panes list.
@@ -208,6 +210,18 @@ impl FolderSession {
     #[must_use]
     pub fn progress(&self, id: u64) -> Option<RowProgress> {
         self.rows.progress(id)
+    }
+
+    /// The walk stage the newest update reported; `None` before the first one.
+    #[must_use]
+    pub fn phase(&self) -> Option<ComparePhase> {
+        self.rows.phase()
+    }
+
+    /// The slow files of this compare, oldest first, at most 64.
+    #[must_use]
+    pub fn slow_paths(&self) -> &[SlowPath] {
+        self.rows.slow_paths()
     }
 
     /// Entries listed so far while the walk waits at the network limit; `None` when it runs.

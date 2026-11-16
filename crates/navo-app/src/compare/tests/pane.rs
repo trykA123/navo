@@ -1,3 +1,5 @@
+//! Pane compare over local folders: rows, failure text and forwarding lifetime.
+
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
@@ -45,7 +47,9 @@ fn finished(receiver: &Receiver<CompareUpdate>) -> Vec<(String, RowStatus)> {
             }
             CompareUpdate::Totals { .. }
             | CompareUpdate::Stopped { .. }
-            | CompareUpdate::Continued { .. } => {}
+            | CompareUpdate::Continued { .. }
+            | CompareUpdate::PhaseProgress { .. }
+            | CompareUpdate::SlowPath { .. } => {}
             CompareUpdate::Finished { .. } => break,
             CompareUpdate::Failed(text) => panic!("compare failed: {text}"),
         }

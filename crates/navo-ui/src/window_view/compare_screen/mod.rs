@@ -37,10 +37,10 @@ use crate::compare_diff::{DiffUpdate, Layout, PairControl, PairKind};
 use crate::compare_diff::{PairRequest, PairText};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
-pub(in crate::window_view) use entity::{CompareScreen, ScreenEvent, ScreenParts};
+pub use entity::{CompareScreen, ScreenEvent};
 pub(in crate::window_view) use entry::items_of;
 pub(in crate::window_view) use entry::neighbour;
-pub(in crate::window_view) use inbox::DiffSlot;
+pub use inbox::DiffSlot;
 #[cfg(test)]
 pub(in crate::window_view) use inbox::coalesce;
 use large::LargeShown;
@@ -244,3 +244,26 @@ mod resync_tests;
 pub(in crate::window_view) use file::SidewaysSeen;
 #[cfg(test)]
 pub(in crate::window_view) use hex::HexProbe;
+
+#[cfg(test)]
+mod mount_tests {
+    use std::sync::Arc;
+
+    use super::{CompareScreen, DiffSlot};
+    use crate::browser::Waker;
+    use crate::compare_diff::CompareOptions;
+    use crate::window_view::FileHooks;
+
+    /// A fresh screen has neither a file diff nor a Stream open.
+    #[test]
+    fn a_new_screen_opens_nothing() {
+        let wake: Waker = Arc::new(|| {});
+        let screen = CompareScreen::new(
+            DiffSlot::new(None, wake),
+            CompareOptions::default(),
+            FileHooks::none(),
+        );
+        assert!(!screen.is_file_open());
+        assert!(!screen.is_stream_open());
+    }
+}
