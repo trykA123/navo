@@ -7,11 +7,14 @@ use std::thread;
 use navo_compare::text::Direction;
 use navo_fs::{CancelToken, ProviderOps};
 use navo_ui::browser::LogFactory;
-use navo_ui::compare_diff::{CopyChange, CopyDirection, CopyDone, CopyResult, CopySink};
+use navo_ui::compare_diff::{
+    CopyChange, CopyDirection, CopyDone, CopyResult, CopySink, SheetPlanSink, SheetSink,
+};
 
 use super::copy::{CopyContext, CopyRefusal, CopyRequest, copy_change};
 use super::copy_many::plan::plan_sheet;
 use super::copy_many::run_sheet;
+use super::copy_port::CopyHost;
 use super::hooks::rules;
 use super::sheet_hook::SheetSlot;
 
@@ -173,4 +176,27 @@ pub(super) fn unavailable(change: &CopyChange, done: &CopySink) {
         direction: change.direction,
         result: CopyResult::Refused(CopyRefusal::NotCopyable.text()),
     });
+}
+
+/// Navo's write side: each copy runs as a compare job through the local provider (NC109).
+impl CopyHost for CopyService {
+    /// Copy one change on a new thread; see `start`.
+    fn copy_change(&self, change: CopyChange, done: CopySink) {
+        self.start(change, done);
+    }
+
+    /// Copy many changes of one pair as one job on a new thread; see `start_many`.
+    fn copy_changes(&self, changes: Vec<CopyChange>, done: CopySink) {
+        self.start_many(changes, done);
+    }
+
+    /// Plan the sheet on a new thread; see `CopyService::plan_sheet`.
+    fn plan_sheet(&self, changes: Vec<CopyChange>, planned: SheetPlanSink) {
+        CopyService::plan_sheet(self, changes, planned);
+    }
+
+    /// Run the kept plan on a new thread; see `CopyService::run_sheet`.
+    fn run_sheet(&self, done: SheetSink) {
+        CopyService::run_sheet(self, done);
+    }
 }

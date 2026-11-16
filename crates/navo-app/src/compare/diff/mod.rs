@@ -8,6 +8,7 @@ mod convert;
 mod copy;
 mod copy_hook;
 mod copy_many;
+mod copy_port;
 mod hooks;
 mod image;
 mod large;
@@ -20,6 +21,7 @@ mod sources;
 mod stream;
 mod viewed;
 
+pub use copy_port::CopyHost;
 pub use hooks::DiffBackend;
 pub use navo_backend::{diff_backend, navo_compare_dirs};
 
