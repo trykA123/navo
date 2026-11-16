@@ -122,7 +122,7 @@ impl ViewedMarks for FailingViewed {
 fn viewed_error_from_cache_error_keeps_the_message() {
     let cache = CacheError::Io(io::Error::other("disk gone"));
     let message = cache.to_string();
-    let error = ViewedError::from(cache);
+    let error = ViewedError::new(cache.to_string());
     assert_eq!(error.to_string(), message);
     assert!(error.0.contains("disk gone"));
 }

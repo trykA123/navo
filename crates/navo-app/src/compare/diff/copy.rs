@@ -8,12 +8,13 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use navo_compare::model::{CancelToken, EntryKind, RelPath, SideEntry};
-use navo_compare::text::{Direction, HunkDigest, Options, Whole};
+use navo_compare::text::{Direction, Options, Whole};
 use navo_core::{FileStamp, FsError, Location, write_plan};
 use navo_fs::{CancelToken as FsCancel, FsEntry, ProviderOps, os_path};
 use navo_ui::browser::LogFactory;
 use navo_ui::compare_diff::{PairKind, PairRequest};
 
+use super::digest::shown_digest;
 use super::load::{LoadInput, Loaded, Side, load_pair};
 use crate::compare::local::LocalSide;
 
@@ -79,18 +80,6 @@ impl CopyRefusal {
             Self::Failed(_) => "compare-copy-failed",
         }
     }
-}
-
-/// The 128-bit digest the UI shows for a change: BLAKE3 over both byte-range digests.
-///
-/// It covers both sides, so an edit to either side after the change was shown is caught.
-pub(crate) fn shown_digest(digest: &HunkDigest) -> [u8; 16] {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(&digest.left);
-    hasher.update(&digest.right);
-    let mut shown = [0u8; 16];
-    shown.copy_from_slice(&hasher.finalize().as_bytes()[..16]);
-    shown
 }
 
 /// Copy one change. Blocks on file reads and the job, so call it from an app thread.

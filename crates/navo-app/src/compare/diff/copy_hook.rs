@@ -175,7 +175,7 @@ impl CopyService {
 /// run as jobs through `factory` and write with `ops`.
 #[cfg(test)]
 pub(crate) fn navo_copy_backend(factory: LogFactory, ops: Arc<dyn ProviderOps>) -> DiffBackend {
-    let parts = super::hooks::navo_parts(crate::compare::dirs::CompareDirs::default(), None);
+    let parts = super::navo_backend::navo_parts(crate::compare::dirs::CompareDirs::default(), None);
     DiffBackend::new(parts).with_copy_host(Arc::new(CopyService::new(factory, ops)))
 }
 

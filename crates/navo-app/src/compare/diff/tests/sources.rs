@@ -64,7 +64,10 @@ fn two_users_get_their_own_local_source() {
 fn a_blob_far_over_the_limit_spools_byte_identical() {
     let dir = tempfile::tempdir().unwrap();
     let spool = dir.path().join("compare-spool");
-    let sources = Sources::new(Some(spool.clone()));
+    let sources = Sources::new(
+        Some(spool.clone()),
+        Arc::new(crate::compare::diff::sides::side_of),
+    );
     let bytes = pattern(5 * MIB + 12_345);
     let fake = FakeSide::bytes(&bytes);
     let source = sources
@@ -85,7 +88,10 @@ fn a_blob_far_over_the_limit_spools_byte_identical() {
 fn a_full_disk_fails_the_spool_with_a_clear_reason_and_removes_it() {
     let dir = tempfile::tempdir().unwrap();
     let spool = dir.path().join("compare-spool");
-    let sources = Sources::new(Some(spool.clone()));
+    let sources = Sources::new(
+        Some(spool.clone()),
+        Arc::new(crate::compare::diff::sides::side_of),
+    );
     let fake = FakeSide::bytes(&pattern(5 * MIB));
     let spill = Spill {
         limit: MIB as u64,
@@ -112,7 +118,10 @@ fn a_full_disk_fails_the_spool_with_a_clear_reason_and_removes_it() {
 fn a_cancel_during_the_spool_copy_stops_it_and_removes_the_file() {
     let dir = tempfile::tempdir().unwrap();
     let spool = dir.path().join("compare-spool");
-    let sources = Sources::new(Some(spool.clone()));
+    let sources = Sources::new(
+        Some(spool.clone()),
+        Arc::new(crate::compare::diff::sides::side_of),
+    );
     let cancel = CancelToken::new();
     let fake = FakeSide::cancelling(4 * MIB, 2 * MIB, cancel.clone());
     let result = sources.open_git_with(blob(&fake, &entry("slow.bin", 10)), &cancel, small());
@@ -127,7 +136,10 @@ fn a_cancel_during_the_spool_copy_stops_it_and_removes_the_file() {
 fn a_git_blob_over_the_limit_is_spooled_then_removed() {
     let dir = tempfile::tempdir().unwrap();
     let spool = dir.path().join("compare-spool");
-    let sources = Sources::new(Some(spool.clone()));
+    let sources = Sources::new(
+        Some(spool.clone()),
+        Arc::new(crate::compare::diff::sides::side_of),
+    );
     let size = WHOLE_LIMIT + 1;
     let fake = FakeSide::zeros(size);
     let source = sources
@@ -150,7 +162,10 @@ fn a_git_blob_over_the_limit_is_spooled_then_removed() {
 fn an_oversized_stream_is_not_trusted_by_its_listed_size() {
     let dir = tempfile::tempdir().unwrap();
     let spool = dir.path().join("compare-spool");
-    let sources = Sources::new(Some(spool.clone()));
+    let sources = Sources::new(
+        Some(spool.clone()),
+        Arc::new(crate::compare::diff::sides::side_of),
+    );
     let real = WHOLE_LIMIT + 1;
     let fake = FakeSide::zeros(real);
     let source = sources
@@ -163,7 +178,10 @@ fn an_oversized_stream_is_not_trusted_by_its_listed_size() {
 #[test]
 fn a_small_git_blob_stays_in_memory() {
     let dir = tempfile::tempdir().unwrap();
-    let sources = Sources::new(Some(dir.path().join("compare-spool")));
+    let sources = Sources::new(
+        Some(dir.path().join("compare-spool")),
+        Arc::new(crate::compare::diff::sides::side_of),
+    );
     let fake = FakeSide::bytes(b"hello\n");
     let source = sources
         .open_git(&fake, &entry("small.txt", 6), &CancelToken::new())

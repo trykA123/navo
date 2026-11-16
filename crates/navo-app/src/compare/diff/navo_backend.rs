@@ -1,4 +1,5 @@
-//! Navo's `DiffBackend` constructor: it builds Navo's parts and adds the copy service as its host.
+//! Navo's `DiffBackend` constructor: it builds Navo's parts (`LocalSide` and Git sides, Viewed
+//! marks in `cache.db`) and adds the copy service as its host.
 //!
 //! It sits beside the hooks so the glue can build its backend without reaching into `hooks`.
 
@@ -10,8 +11,10 @@ use navo_store::StoreDirs;
 use navo_ui::browser::LogFactory;
 
 use super::copy_hook::CopyService;
-use super::hooks::{DiffBackend, navo_parts};
+use super::hooks::{BackendParts, DiffBackend};
+use super::sides::navo_side_of;
 use super::sources::SPOOL_DIR;
+use super::viewed::opener;
 use crate::compare::dirs::CompareDirs;
 
 /// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
@@ -35,5 +38,14 @@ pub fn diff_backend(
 pub fn navo_compare_dirs(dirs: Option<&StoreDirs>) -> CompareDirs {
     CompareDirs {
         spool: dirs.map(|dirs| dirs.data.join(SPOOL_DIR)),
+    }
+}
+
+/// Navo's sides over `dirs`, with Viewed marks in the cache file `cache_db` (memory if `None`).
+pub(super) fn navo_parts(dirs: CompareDirs, cache_db: Option<PathBuf>) -> BackendParts {
+    BackendParts {
+        dirs,
+        side: Arc::new(navo_side_of),
+        viewed: opener(cache_db),
     }
 }

@@ -31,7 +31,7 @@ impl ViewedMarks for ViewedStore {
     fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError> {
         let guard = self.db();
         match guard.as_ref() {
-            Some(db) => db.get_viewed(key).map_err(ViewedError::from),
+            Some(db) => db.get_viewed(key).map_err(store_error),
             None => Ok(false),
         }
     }
@@ -42,11 +42,16 @@ impl ViewedMarks for ViewedStore {
             return Ok(());
         };
         if viewed {
-            db.put_viewed(key, now_ms()).map_err(ViewedError::from)
+            db.put_viewed(key, now_ms()).map_err(store_error)
         } else {
-            db.clear_viewed(key).map(|_| ()).map_err(ViewedError::from)
+            db.clear_viewed(key).map(|_| ()).map_err(store_error)
         }
     }
+}
+
+/// Turns a cache error into a Viewed error, keeping its message.
+fn store_error(error: navo_store::CacheError) -> ViewedError {
+    ViewedError::new(error.to_string())
 }
 
 /// The current time in milliseconds, or zero before the epoch.
