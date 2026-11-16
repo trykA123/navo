@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 use gpui_kit::{App, Global};
-use navo_diag::components::{Held, MemoryUse, Tally};
+use navo_core::components::{Held, MemoryUse, Tally};
 
 #[derive(Default)]
 struct Count {
@@ -28,7 +28,7 @@ impl Count {
 pub struct AppTally(Arc<Count>);
 
 impl AppTally {
-    pub(crate) fn of(tally: &'static Tally, cx: &mut App) -> Self {
+    pub fn of(tally: &'static Tally, cx: &mut App) -> Self {
         cx.default_global::<Tallies>()
             .0
             .entry(key(tally))
@@ -36,7 +36,7 @@ impl AppTally {
             .clone()
     }
 
-    pub(crate) fn hold(&self, tally: &'static Tally, held: MemoryUse) -> AppHeld {
+    pub fn hold(&self, tally: &'static Tally, held: MemoryUse) -> AppHeld {
         self.0.add(held);
         AppHeld {
             _process: tally.hold(held),
@@ -45,7 +45,7 @@ impl AppTally {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn read(&self) -> MemoryUse {
         MemoryUse {
             bytes: self.0.bytes.load(Relaxed),
@@ -63,15 +63,15 @@ fn key(tally: &'static Tally) -> usize {
 
 impl Global for Tallies {}
 
-#[cfg(test)]
-pub(crate) fn read(tally: &'static Tally, cx: &App) -> MemoryUse {
+#[cfg(any(test, feature = "test-support"))]
+pub fn read(tally: &'static Tally, cx: &App) -> MemoryUse {
     cx.try_global::<Tallies>()
         .and_then(|tallies| tallies.0.get(&key(tally)))
         .map(AppTally::read)
         .unwrap_or_default()
 }
 
-pub(crate) struct AppHeld {
+pub struct AppHeld {
     _process: Held,
     count: Arc<Count>,
     held: MemoryUse,

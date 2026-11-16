@@ -11,18 +11,13 @@ pub mod compare_diff;
 pub mod compare_keys;
 pub mod compare_list;
 mod compare_visible;
-pub mod confirm_dialog;
-pub mod context_menu;
 pub mod crash_notice;
-mod dialog_focus;
 pub mod drag;
-pub(crate) mod file_icons;
 pub mod file_list;
 pub mod fkey_bar;
 pub mod git;
 pub mod job_card;
 pub mod job_row;
-pub mod kit_probe;
 mod list_actions;
 pub mod modifier_hints;
 pub mod multi_rename;
@@ -46,11 +41,9 @@ pub mod title_bar;
 pub mod window_view;
 
 #[cfg(test)]
-mod kit_test_window;
-#[cfg(test)]
 mod syntax_lexer_tests;
 #[cfg(test)]
-mod test_pointer;
+use sidewise_kit::test_pointer;
 #[cfg(test)]
 mod test_window;
 
@@ -64,6 +57,6 @@ pub use gpui_kit::{
     TitlebarOptions, Window, WindowBounds, WindowOptions, div, px, relative, size,
 };
 pub use sidewise_kit::{Assets, UiError, application, init};
-pub(crate) use sidewise_kit::{assets, format, host_os};
-pub use sidewise_kit::{languages, prelude, tokens};
+pub(crate) use sidewise_kit::{assets, dialog_focus, format, host_os};
+pub use sidewise_kit::{confirm_dialog, context_menu, kit_probe, languages, prelude, tokens};
 pub use title_bar::{BrandMark, HeaderSearch, NavoTitleBar, window_options};

@@ -5,7 +5,7 @@ use gpui_kit::{
 };
 
 use super::{Choice, ConfirmDialog, ConfirmProps};
-use crate::kit_test_window::open;
+use crate::test_window::open;
 
 pub(super) const DIALOG: &str = "dialog";
 

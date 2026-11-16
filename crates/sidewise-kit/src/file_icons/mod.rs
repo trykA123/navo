@@ -8,7 +8,7 @@ use crate::tokens::Colors;
 
 mod icons;
 
-pub(crate) fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
+pub fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
     if kind == EntryKind::Folder {
         return (name, "");
     }
@@ -18,7 +18,7 @@ pub(crate) fn split_name(name: &str, kind: EntryKind) -> (&str, &str) {
     }
 }
 
-pub(crate) fn icon(kind: EntryKind, extension: &str, colors: &Colors) -> (IconName, Hsla) {
+pub fn icon(kind: EntryKind, extension: &str, colors: &Colors) -> (IconName, Hsla) {
     match kind {
         EntryKind::Folder => (IconName::Folder, colors.folder),
         EntryKind::Link => (IconName::ArrowRight, colors.muted),

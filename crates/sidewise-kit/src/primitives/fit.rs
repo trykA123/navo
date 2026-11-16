@@ -5,13 +5,13 @@ use gpui_kit::{
 
 type Build = Box<dyn FnOnce(Pixels, &mut Window, &mut App) -> AnyElement>;
 
-pub(crate) struct Fit {
+pub struct Fit {
     height: Pixels,
     build: Option<Build>,
 }
 
 impl Fit {
-    pub(crate) fn new(
+    pub fn new(
         height: Pixels,
         build: impl FnOnce(Pixels, &mut Window, &mut App) -> AnyElement + 'static,
     ) -> Self {

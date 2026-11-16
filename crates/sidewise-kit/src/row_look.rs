@@ -5,7 +5,7 @@ use gpui_kit::{BoxShadow, Hsla, InteractiveElement, IntoElement, Styled, div, po
 
 use crate::tokens::Theme;
 
-pub(crate) fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
+pub fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
     vec![BoxShadow {
         color,
         offset: point(px(0.), px(0.)),
@@ -15,7 +15,7 @@ pub(crate) fn inset_ring(color: Hsla) -> Vec<BoxShadow> {
     }]
 }
 
-pub(crate) fn cursor_bar(t: &Theme) -> impl IntoElement + use<> {
+pub fn cursor_bar(t: &Theme) -> impl IntoElement + use<> {
     div()
         .id("cursor-bar")
         .test_support()

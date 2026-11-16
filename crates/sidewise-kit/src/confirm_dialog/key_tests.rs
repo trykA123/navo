@@ -1,5 +1,4 @@
-// Confirm-dialog tests that press keys. They need the host's key bindings (Navo's
-// `test_window`), so they stay in Navo; the kit move must not take this file.
+// Confirm-dialog tests that press keys; they bind the dialog keys themselves (the app binds them from its keymap).
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, Role, TestAppContext};
 
@@ -10,6 +9,7 @@ use super::tests::{
 use crate::test_window::open;
 
 fn open_dialog(cx: &mut TestAppContext, props: ConfirmProps) -> (AnyWindowHandle, Entity<Harness>) {
+    cx.update(bind_dialog_keys);
     let (window, harness) = open(cx, |_, _| Harness {
         props,
         counts: Counts::default(),
@@ -128,4 +128,20 @@ fn a_choice_is_a_checkbox_stop_before_the_buttons(cx: &mut TestAppContext) {
     assert_eq!(counts(&harness, cx), (0, 0));
     press(window, &["tab", "enter"], cx);
     assert_eq!(counts(&harness, cx), (1, 0));
+}
+
+/// Binds the dialog focus and confirm-dialog keys, as Navo's keymap does.
+fn bind_dialog_keys(cx: &mut gpui_kit::App) {
+    use super::keys::Dismiss;
+    use crate::dialog_focus::{Next, NextButton, Press, Previous, PreviousButton};
+    use gpui_kit::KeyBinding;
+    cx.bind_keys([
+        KeyBinding::new("tab", Next, Some("Dialog")),
+        KeyBinding::new("shift-tab", Previous, Some("Dialog")),
+        KeyBinding::new("right", NextButton, Some("DialogButton")),
+        KeyBinding::new("left", PreviousButton, Some("DialogButton")),
+        KeyBinding::new("enter", Press, Some("DialogButton")),
+        KeyBinding::new("space", Press, Some("DialogButton")),
+        KeyBinding::new("escape", Dismiss, Some("ConfirmDialog")),
+    ]);
 }

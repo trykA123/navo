@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use gpui_kit::{App, Global, RenderImage};
 use image::RgbaImage;
+use navo_core::components::{Held, MemoryUse, Tally};
 use navo_core::shell_menu::{Icon, MenuItem, NavoAction, ShellMenu};
-use navo_diag::components::{Held, MemoryUse, Tally};
 
 use crate::primitives::{AppTally, IconName};
 

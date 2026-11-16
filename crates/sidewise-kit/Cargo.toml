@@ -7,6 +7,9 @@ rust-version.workspace = true
 publish.workspace = true
 license.workspace = true
 
+[features]
+test-support = []
+
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 codebook-tree-sitter-latex = "=0.6.1"
@@ -47,6 +50,7 @@ gpui-kit = { version = "=0.9.1", features = [
   "tree-sitter-yaml",
   "tree-sitter-zig",
 ] }
+image = { version = "=0.25.10", default-features = false }
 navo-core = { package = "sidewise-core", path = "../sidewise-core" }
 navo-l10n = { package = "sidewise-l10n", path = "../sidewise-l10n" }
 toml = "1.2.1"

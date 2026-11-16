@@ -4,10 +4,22 @@
 
 pub mod app;
 pub mod assets;
+pub mod confirm_dialog;
+pub mod context_menu;
+pub mod dialog_focus;
+pub mod file_icons;
 pub mod format;
 pub mod host_os;
+pub mod kit_probe;
 pub mod languages;
 pub mod prelude;
+pub mod primitives;
+pub mod row_look;
+pub mod shown;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_pointer;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_window;
 pub mod tokens;
 
 pub use app::{UiError, application, init};

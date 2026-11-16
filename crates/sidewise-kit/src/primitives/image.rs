@@ -3,11 +3,11 @@ use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
 use gpui_kit::{App, ImageId, RenderImage};
 use image::{Frame, RgbaImage};
-use navo_diag::components::{MemoryUse, Tally};
+use navo_core::components::{MemoryUse, Tally};
 
 use super::tally::{AppHeld, AppTally};
 
-pub(crate) static GPU_IMAGES: Tally = Tally::new("gpu images");
+pub static GPU_IMAGES: Tally = Tally::new("gpu images");
 
 static LIVE: LazyLock<Mutex<HashMap<ImageId, AppHeld>>> = LazyLock::new(Mutex::default);
 

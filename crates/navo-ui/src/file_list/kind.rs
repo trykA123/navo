@@ -1,7 +1,7 @@
 use navo_fs::{EntryKind, FsEntry};
 
-pub(crate) use crate::file_icons::{icon, split_name};
 use crate::format;
+pub(crate) use sidewise_kit::file_icons::{icon, split_name};
 
 pub(super) fn size_text(entry: &FsEntry) -> String {
     match entry.kind {

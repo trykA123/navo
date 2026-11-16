@@ -9250,6 +9250,7 @@ dependencies = [
  "chrono",
  "codebook-tree-sitter-latex",
  "gpui-kit",
+ "image",
  "sidewise-core",
  "sidewise-l10n",
  "toml 1.2.1+spec-1.1.0",

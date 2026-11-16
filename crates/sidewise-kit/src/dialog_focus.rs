@@ -12,7 +12,7 @@ gpui_kit::actions!(
     [Next, Previous, NextButton, PreviousButton, Press]
 );
 
-pub(crate) fn cycle(stops: &[FocusHandle], forward: bool, window: &mut Window, cx: &mut App) {
+pub fn cycle(stops: &[FocusHandle], forward: bool, window: &mut Window, cx: &mut App) {
     let count = stops.len();
     let current = stops.iter().position(|stop| stop.is_focused(window));
     let next = match (current, forward) {
@@ -25,14 +25,14 @@ pub(crate) fn cycle(stops: &[FocusHandle], forward: bool, window: &mut Window, c
     }
 }
 
-pub(crate) struct Stop<'a> {
+pub struct Stop<'a> {
     pub id: &'static str,
     pub context: &'static str,
     pub handle: &'a FocusHandle,
     pub button: Button,
 }
 
-pub(crate) fn focus_ring(t: &Theme, stop: Stop<'_>, window: &Window) -> impl IntoElement {
+pub fn focus_ring(t: &Theme, stop: Stop<'_>, window: &Window) -> impl IntoElement {
     let ring = if stop.handle.is_focused(window) {
         t.colors.accent
     } else {

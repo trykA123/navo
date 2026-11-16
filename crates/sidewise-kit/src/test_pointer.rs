@@ -5,7 +5,11 @@ use gpui_kit::{
     MouseUpEvent, Pixels, PlatformInput, Point, TestAppContext,
 };
 
-pub(crate) fn dispatch(cx: &mut TestAppContext, window: AnyWindowHandle, input: PlatformInput) {
+#[allow(
+    clippy::expect_used,
+    reason = "test-support helper; a missing test window must fail loudly"
+)]
+pub fn dispatch(cx: &mut TestAppContext, window: AnyWindowHandle, input: PlatformInput) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.dispatch_event(input, cx);
@@ -16,11 +20,7 @@ pub(crate) fn dispatch(cx: &mut TestAppContext, window: AnyWindowHandle, input: 
         .expect("window");
 }
 
-pub(crate) fn down(
-    button: MouseButton,
-    position: Point<Pixels>,
-    modifiers: Modifiers,
-) -> PlatformInput {
+pub fn down(button: MouseButton, position: Point<Pixels>, modifiers: Modifiers) -> PlatformInput {
     MouseDownEvent {
         button,
         position,
@@ -31,11 +31,7 @@ pub(crate) fn down(
     .to_platform_input()
 }
 
-pub(crate) fn up(
-    button: MouseButton,
-    position: Point<Pixels>,
-    modifiers: Modifiers,
-) -> PlatformInput {
+pub fn up(button: MouseButton, position: Point<Pixels>, modifiers: Modifiers) -> PlatformInput {
     MouseUpEvent {
         button,
         position,
@@ -45,7 +41,7 @@ pub(crate) fn up(
     .to_platform_input()
 }
 
-pub(crate) fn moved(
+pub fn moved(
     pressed_button: Option<MouseButton>,
     position: Point<Pixels>,
     modifiers: Modifiers,
@@ -58,7 +54,7 @@ pub(crate) fn moved(
     .to_platform_input()
 }
 
-pub(crate) fn click(
+pub fn click(
     cx: &mut TestAppContext,
     window: AnyWindowHandle,
     (at, modifiers): (Point<Pixels>, Modifiers),
@@ -67,7 +63,7 @@ pub(crate) fn click(
     dispatch(cx, window, up(MouseButton::Left, at, modifiers));
 }
 
-pub(crate) fn drag(
+pub fn drag(
     cx: &mut TestAppContext,
     window: AnyWindowHandle,
     (button, modifiers): (MouseButton, Modifiers),
@@ -82,14 +78,14 @@ pub(crate) fn drag(
     }
 }
 
-pub(crate) fn ctrl() -> Modifiers {
+pub fn ctrl() -> Modifiers {
     Modifiers {
         control: true,
         ..Modifiers::default()
     }
 }
 
-pub(crate) fn shift() -> Modifiers {
+pub fn shift() -> Modifiers {
     Modifiers {
         shift: true,
         ..Modifiers::default()

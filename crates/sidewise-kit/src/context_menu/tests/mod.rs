@@ -14,6 +14,7 @@ use navo_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submen
 use super::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::test_window::open_sized;
 
+mod bind;
 mod filter;
 mod flyout;
 mod hover;
@@ -168,6 +169,7 @@ pub(super) fn open_menu_in(
     let events: Rc<RefCell<Vec<ContextMenuEvent>>> = Rc::default();
     let sink = events.clone();
     let (window, harness) = open_sized(cx, bounds.size.width, move |window, cx| {
+        bind::bind_menu_keys(cx);
         let restore = cx.focus_handle();
         let input = ContextMenuInput {
             menu,

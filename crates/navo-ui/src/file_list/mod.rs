@@ -15,7 +15,6 @@ mod press;
 mod resize;
 mod right_button;
 pub(crate) mod row;
-mod row_look;
 mod rows;
 mod sort;
 mod watch;

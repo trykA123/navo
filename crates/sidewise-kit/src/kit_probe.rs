@@ -17,7 +17,7 @@ pub fn set_probe(hook: fn(Probe)) {
 }
 
 /// Sends one event to the host's probe; does nothing when none is installed.
-pub(crate) fn emit(event: Probe) {
+pub fn emit(event: Probe) {
     if let Some(hook) = HOOK.get() {
         hook(event);
     }

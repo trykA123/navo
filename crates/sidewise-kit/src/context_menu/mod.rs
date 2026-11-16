@@ -24,7 +24,7 @@ use gpui_kit::{
 use navo_core::shell_menu::{ShellMenu, Submenu};
 use navo_l10n::tr;
 
-pub(crate) use keys::{MenuDown, MenuEnter, MenuEscape, MenuUp};
+pub use keys::{MenuDown, MenuEnter, MenuEscape, MenuUp};
 pub use state::ContextMenuEvent;
 
 use crate::kit_probe::Probe;
