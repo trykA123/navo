@@ -368,6 +368,9 @@ pub trait SideSource: Send + Sync {
     fn may_have_unknown_size(&self) -> bool {
         false
     }
+
+    /// Drops cached reads so the next pass sees the source again.
+    fn refresh(&self) {}
 }
 
 pub trait HashCache: Send + Sync {

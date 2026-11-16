@@ -307,3 +307,13 @@ fn side_sources_and_hash_caches_are_usable_as_trait_objects() {
     let key = content_key(source, &entry);
     assert_eq!(cache.get(&key), None);
 }
+
+#[test]
+fn the_default_refresh_does_nothing() {
+    let source = EmptySource {
+        provider: ProviderId::local(),
+        root: ProviderPath::from_text("root"),
+    };
+    SideSource::refresh(&source);
+    assert!(!source.is_network());
+}

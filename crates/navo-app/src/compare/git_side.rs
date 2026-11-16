@@ -91,6 +91,10 @@ impl SideSource for GitSide {
         &self.provider
     }
 
+    fn refresh(&self) {
+        Self::refresh(self);
+    }
+
     fn list(
         &self,
         folder: &RelPath,

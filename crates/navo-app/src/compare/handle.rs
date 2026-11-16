@@ -92,10 +92,10 @@ enum Command {
     Cancel,
 }
 
-/// An open session and the Git sides it reads, which refresh must reset.
+/// An open session and the sides it reads, which refresh must reset.
 pub(super) struct Opened {
     pub session: Session,
-    pub git_sides: Vec<Arc<GitSide>>,
+    pub refresh: Vec<Arc<dyn SideSource>>,
 }
 
 /// A running compare. Methods only queue a command and never block.
@@ -182,10 +182,10 @@ impl Drop for CompareHandle {
 }
 
 fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
-    let mut git_sides = Vec::new();
+    let mut refresh = Vec::new();
     let settings = &request.settings;
-    let left = open_side(request.left, settings, &mut git_sides).map_err(CompareError::Left)?;
-    let right = open_side(request.right, settings, &mut git_sides).map_err(CompareError::Right)?;
+    let left = open_side(request.left, settings, &mut refresh).map_err(CompareError::Left)?;
+    let right = open_side(request.right, settings, &mut refresh).map_err(CompareError::Right)?;
     let rules = rules::build(&*left, &*right, &request.settings)
         .map_err(|error| CompareError::Rules(error.to_string()))?;
     let options = SessionOptions {
@@ -196,25 +196,25 @@ fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
         network_cap: Some(network_cap()),
     };
     let session = Session::start(left, right, options);
-    Ok(Opened { session, git_sides })
+    Ok(Opened { session, refresh })
 }
 
 fn open_side(
     target: CompareTarget,
     settings: &CompareSettings,
-    git_sides: &mut Vec<Arc<GitSide>>,
+    refresh: &mut Vec<Arc<dyn SideSource>>,
 ) -> Result<Arc<dyn SideSource>, Reason> {
     Ok(match target {
         CompareTarget::Local(root) => Arc::new(LocalSide::new(root)?),
         CompareTarget::Git { repo, rev } => {
             let engine = engine_for(settings, &repo);
             let side = Arc::new(GitSide::new(repo, rev, engine)?);
-            git_sides.push(Arc::clone(&side));
+            refresh.push(Arc::clone(&side) as Arc<dyn SideSource>);
             side
         }
         CompareTarget::GitRawOdb { repo, rev } => {
             let side = Arc::new(GitSide::new_raw_odb(repo, rev)?);
-            git_sides.push(Arc::clone(&side));
+            refresh.push(Arc::clone(&side) as Arc<dyn SideSource>);
             side
         }
     })
@@ -252,7 +252,7 @@ fn run_commands(opened: &mut Opened, inbox: &Receiver<Command>) -> bool {
             }
             Ok(Command::StopAll) => opened.session.stop_all(),
             Ok(Command::Refresh) => {
-                for side in &opened.git_sides {
+                for side in &opened.refresh {
                     side.refresh();
                 }
                 opened.session.refresh();
