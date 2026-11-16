@@ -13,13 +13,13 @@ use navo_core::{
 use navo_fs::view::Rows;
 use navo_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
 
+pub(crate) use compare::status_text;
 pub use compare::{
     BarView, CompareControl, CompareFilter, CompareHooks, CompareKind, CompareMode, ComparePhase,
     CompareRefusal, CompareRow, CompareSide, CompareSink, CompareTotals, CompareUpdate, ExitStep,
     FILTERS, FileDiffRequest, FolderSession, RowProgress, RowStatus, RowView, SideView, SlowPath,
     StopBound, Tone, Total, bar_view, empty_text, pane_rows,
 };
-pub(crate) use compare::{look_of, status_text};
 pub use find::FindResults;
 pub use measure::{
     FolderTotals, FolderTotalsQuery, FolderTotalsSource, SizeMode, TotalsState, no_folder_totals,
@@ -35,9 +35,9 @@ pub use rename_batch::{
     WriteRenameLog, run_undo,
 };
 pub use retained::{NoRetained, RetainedHooks, RetainedKind, RetainedRow, RetainedState};
+pub use sidewise_ui::browser::{Waker, compare};
 pub use {naming::NameProblem, offline::Offline};
 
-pub type Waker = Arc<dyn Fn() + Send + Sync>;
 pub type Launcher = Arc<dyn Fn(&Location) + Send + Sync>;
 
 struct Loaded {
@@ -382,7 +382,6 @@ impl Browser {
 }
 
 mod cached;
-mod compare;
 mod pane_compare;
 #[cfg(test)]
 pub(crate) use cached::tests::gated::Gated as GatedFs;

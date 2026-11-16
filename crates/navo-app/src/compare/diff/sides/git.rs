@@ -1,5 +1,6 @@
 //! Git file sides for the file diff and the Stream: one side built per blob.
-//! The parent `sides` keeps the local and unreadable sides.
+//! The parent `sides` keeps the local and unreadable sides; Navo's local files open here as
+//! `LocalSide`.
 
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use navo_git::{CliGit, EngineKind, GixGit};
 
 use super::super::super::entry::reason_of;
 use super::super::super::git_side::engine_for;
+use super::super::super::local::LocalSide;
 use super::super::super::settings::CompareSettings;
 use super::super::load::Side;
 
@@ -106,7 +108,8 @@ fn git_fs(settings: &CompareSettings) -> GitFs {
     })
 }
 
-/// Navo's side builder: a Git blob for the `git` provider, else the local side (`side_of`).
+/// Navo's side builder: a Git blob for the `git` provider, else a local file through
+/// `LocalSide`, so Navo's own reads stay on `LocalFs` (NC113).
 pub(crate) fn navo_side_of(
     location: &Location,
     settings: &CompareSettings,
@@ -114,6 +117,11 @@ pub(crate) fn navo_side_of(
     if location.provider().as_str() == "git" {
         git_side(location, settings)
     } else {
-        super::side_of(location, settings)
+        super::file_side(location, navo_local_root)
     }
+}
+
+/// Navo's root opener for a local file side: `LocalSide` over `LocalFs`.
+fn navo_local_root(root: Location) -> Result<Arc<dyn SideSource>, Reason> {
+    Ok(Arc::new(LocalSide::new(root)?))
 }

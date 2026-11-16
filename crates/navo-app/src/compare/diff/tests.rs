@@ -1,5 +1,6 @@
 //! Tests for the file diff backend.
 
+mod backend_side;
 mod bytes;
 mod convert;
 mod copy;

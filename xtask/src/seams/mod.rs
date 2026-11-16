@@ -15,8 +15,8 @@ use crate::l10n::tokens::{Spanned, Token, tokenize};
 
 const ROOTS: [&str; 3] = [
     "crates/navo-ui/src/window_view/compare_screen",
-    "crates/navo-ui/src/compare_diff",
-    "crates/navo-ui/src/compare_list",
+    "crates/sidewise-ui/src/compare_diff",
+    "crates/sidewise-ui/src/compare_list",
 ];
 
 /// Walk every `.rs` file under the compare screen roots, tests included, and

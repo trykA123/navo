@@ -171,10 +171,12 @@ impl CopyService {
     }
 }
 
-/// Navo's default backend whose copies run as jobs through `factory` and write with `ops`.
+/// Navo's backend (`navo_parts`: `LocalSide` sides, no spool, Viewed in memory) whose copies
+/// run as jobs through `factory` and write with `ops`.
 #[cfg(test)]
 pub(crate) fn navo_copy_backend(factory: LogFactory, ops: Arc<dyn ProviderOps>) -> DiffBackend {
-    DiffBackend::default().with_copy_host(Arc::new(CopyService::new(factory, ops)))
+    let parts = super::hooks::navo_parts(crate::compare::dirs::CompareDirs::default(), None);
+    DiffBackend::new(parts).with_copy_host(Arc::new(CopyService::new(factory, ops)))
 }
 
 /// Navo's write side: each copy runs as a compare job through the local provider (NC109).

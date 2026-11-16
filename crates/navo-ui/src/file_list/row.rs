@@ -9,12 +9,12 @@ use gpui_kit::{
 use navo_fs::{EntryKind, FsEntry};
 
 use super::git_cell::{self, GitSlot};
-pub(crate) use super::row_look::{cursor_bar, inset_ring};
 use super::widths::ColumnWidths;
 use super::{ListParts, SortBy, kind};
 use crate::name_match::{Needle, Scratch};
 use crate::primitives::{IconName, icon};
 use crate::tokens::Theme;
+pub(crate) use sidewise_kit::row_look::{cursor_bar, inset_ring};
 
 const HIDDEN_ICON_OPACITY: f32 = 0.55;
 

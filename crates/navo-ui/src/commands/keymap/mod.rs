@@ -1,6 +1,5 @@
 mod overlay;
 mod parse;
-mod shown;
 
 #[cfg(test)]
 mod guard_tests;
@@ -21,7 +20,7 @@ pub use overlay::{KeymapWarning, Overlaid, UserKeymapError};
 #[cfg(test)]
 pub(crate) use parse::also_in;
 pub use parse::{KeymapError, normal as normal_key};
-pub use shown::shown;
+pub use sidewise_kit::shown::shown;
 
 pub use crate::compare_keys::COMPARE_KEYMAP;
 

@@ -17,7 +17,7 @@ const LOCALES: [&str; 2] = [
     "crates/navo-l10n/locales/en-US",
     "crates/sidewise-l10n/locales/en-US",
 ];
-const RATCHET_CRATES: [&str; 2] = ["navo-ui", "navo-app"];
+const RATCHET_CRATES: [&str; 3] = ["navo-ui", "navo-app", "sidewise-ui"];
 const OWN_CRATE: &str = "navo-l10n";
 
 pub fn run(args: &[String]) -> ExitCode {
