@@ -28,6 +28,7 @@ pub struct ByteInput {
 pub struct ByteDiff {
     commands: Arc<Commands>,
     thread: Option<JoinHandle<Engine>>,
+    #[cfg(any(test, feature = "test-support"))]
     joined: Arc<AtomicBool>,
 }
 
@@ -43,6 +44,7 @@ impl ByteDiff {
         };
         let align = hex_align(input.align);
         let byte_run = input.run;
+        #[cfg(any(test, feature = "test-support"))]
         let joined = Arc::default();
         let spawned = thread::Builder::new()
             .name("compare-bytes".to_owned())
@@ -62,11 +64,14 @@ impl ByteDiff {
         Self {
             commands,
             thread,
+            #[cfg(any(test, feature = "test-support"))]
             joined,
         }
     }
 
     /// The flag the reaper sets after both workers joined, for tests that drop the control.
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn join_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.joined)
     }
@@ -79,6 +84,7 @@ impl Drop for ByteDiff {
         let Some(thread) = self.thread.take() else {
             return;
         };
+        #[cfg(any(test, feature = "test-support"))]
         let joined = Arc::clone(&self.joined);
         let reaped = thread::Builder::new()
             .name("compare-bytes-join".to_owned())
@@ -87,6 +93,7 @@ impl Drop for ByteDiff {
                     Ok(engine) => engine.join(),
                     Err(_) => tracing::warn!("compare byte thread panicked"),
                 }
+                #[cfg(any(test, feature = "test-support"))]
                 joined.store(true, Ordering::Release);
             });
         if let Err(error) = reaped {

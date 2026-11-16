@@ -205,6 +205,20 @@ fn a_root_not_named_compare_spool_sweeps_nothing_and_writes_no_gate() {
 }
 
 #[test]
+fn sweep_root_on_a_folder_that_is_not_a_spool_root_sweeps_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("data");
+    let month = user.join("2024-11");
+    fs::create_dir_all(&month).unwrap();
+    fs::write(month.join("photo.jpg"), b"user data").unwrap();
+    Sources::sweep_root(&user);
+    assert!(
+        month.join("photo.jpg").exists(),
+        "a host's direct sweep_root call is checked like the start-up sweep"
+    );
+}
+
+#[test]
 fn inside_our_own_compare_spool_an_owner_shaped_folder_without_a_lock_is_swept() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join(SPOOL_DIR);

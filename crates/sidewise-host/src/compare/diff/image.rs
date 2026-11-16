@@ -15,10 +15,14 @@ use super::load::{LoadInput, Side};
 
 mod header;
 mod ico;
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub mod probe;
 pub mod thumb;
 
 pub use self::header::too_large;
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub use self::header::{oversize_decodes, reset_oversize_decodes};
 
 /// The largest encoded side that is decoded, in bytes read; a larger one is hashed only.
@@ -124,10 +128,12 @@ fn prepare(input: &LoadInput, cancel: &CancelToken) -> Result<Prepared, Failure>
         }
         Err(other) => return Err(other),
     };
+    #[cfg(any(test, feature = "test-support"))]
     probe::left_decoded(left, cancel);
     if cancel.is_cancelled() {
         return Err(Failure::Cancelled);
     }
+    #[cfg(any(test, feature = "test-support"))]
     probe::right_decoding(left);
     let second = header::decode(&right_bytes, right_format)?;
     if cancel.is_cancelled() {

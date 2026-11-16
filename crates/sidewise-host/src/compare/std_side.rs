@@ -41,6 +41,7 @@ impl StdSide {
             .flatten()
             .map_or(0, |identity| identity.volume);
         let network = is_network_class(drive_class(&root));
+        #[cfg(any(test, feature = "test-support"))]
         opened::note("StdSide");
         Ok(Self {
             root,
@@ -207,6 +208,8 @@ fn io_reason(error: &io::Error) -> Reason {
 
 /// Test-only record of the last side kind opened on this thread, so tests can tell `StdSide`
 /// from `LocalSide` (both report the local provider and list the same entries).
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
 pub mod opened {
     use std::cell::Cell;
 

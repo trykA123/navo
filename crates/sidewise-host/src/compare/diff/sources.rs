@@ -21,11 +21,12 @@ use super::sides::side_of;
 
 mod spool;
 
-pub use spool::sweep;
+#[cfg(not(any(test, feature = "test-support")))]
+use spool::sweep;
+use spool::{Owner, SpoolFile, owner_for, spool_copy, write_reason};
 #[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
-pub use spool::sweep_with;
-use spool::{Owner, SpoolFile, owner_for, spool_copy, write_reason};
+pub use spool::{sweep, sweep_with};
 
 /// The cache folder that holds one sub-folder per Navo process.
 pub const SPOOL_DIR: &str = "compare-spool";
@@ -86,20 +87,20 @@ impl Sources {
     /// `None` means the host has no spool; a root that fails `check_root` is refused. Both
     /// sweep nothing.
     pub fn sweep_startup(spool: Option<&Path>) {
-        let Some(root) = spool else {
-            return;
-        };
-        match check_root(root) {
-            Ok(()) => Self::sweep_root(root),
-            Err(reason) => {
-                tracing::warn!(path = %root.display(), reason, "compare spool sweep refused");
-            }
+        if let Some(root) = spool {
+            Self::sweep_root(root);
         }
     }
 
     /// Sweep the dead process folders directly inside `root`, where spooling sources create theirs.
+    /// A root that fails `check_root` (not a compare-spool folder, a link, unreadable) is refused.
     pub fn sweep_root(root: &Path) {
-        sweep(root);
+        match check_root(root) {
+            Ok(()) => sweep(root),
+            Err(reason) => {
+                tracing::warn!(path = %root.display(), reason, "compare spool sweep refused");
+            }
+        }
     }
 
     /// How many sources this screen opened, for the separate-instance test.
