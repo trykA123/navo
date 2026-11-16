@@ -58,13 +58,13 @@ pub(crate) fn rebind_app_keys(keymap: Keymap, cx: &mut App) {
 
 pub(crate) fn bind_app_keys(cx: &mut App) {
     crate::file_list::bind_keys(cx);
-    crate::confirm_dialog::bind_keys(cx);
+    crate::commands::kit_keys::bind_confirm_dialog(cx);
     crate::prompt_dialog::bind_keys(cx);
     crate::multi_rename::bind_keys(cx);
     crate::app_menu::bind_keys(cx);
     crate::settings::bind_keys(cx);
     crate::shortcuts::bind_keys(cx);
-    crate::context_menu::bind_keys(cx);
+    crate::commands::kit_keys::bind_context_menu(cx);
     super::viewer::bind_keys(cx);
     bind_keys(cx);
     crate::commands::bind_user_keys(cx);

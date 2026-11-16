@@ -57,6 +57,7 @@ mod test_window;
 
 pub use app::{UiError, application, init};
 pub use assets::Assets;
+pub use commands::kit_keys;
 pub use gpui_kit::open_window;
 pub use gpui_kit::prelude::FluentBuilder;
 pub use gpui_kit::{
