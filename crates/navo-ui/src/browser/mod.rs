@@ -1,3 +1,5 @@
+//! The browser state machine: two panes, listings, compare mode and file operations.
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -12,10 +14,10 @@ use navo_fs::view::Rows;
 use navo_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
 
 pub use compare::{
-    BarView, CompareControl, CompareFilter, CompareHooks, CompareKind, CompareMode, CompareRefusal,
-    CompareRow, CompareSide, CompareSink, CompareTotals, CompareUpdate, ExitStep, FILTERS,
-    FileDiffRequest, FolderSession, RowProgress, RowStatus, RowView, SideView, StopBound, Tone,
-    Total, bar_view, empty_text, pane_rows,
+    BarView, CompareControl, CompareFilter, CompareHooks, CompareKind, CompareMode, ComparePhase,
+    CompareRefusal, CompareRow, CompareSide, CompareSink, CompareTotals, CompareUpdate, ExitStep,
+    FILTERS, FileDiffRequest, FolderSession, RowProgress, RowStatus, RowView, SideView, SlowPath,
+    StopBound, Tone, Total, bar_view, empty_text, pane_rows,
 };
 pub(crate) use compare::{look_of, status_text};
 pub use find::FindResults;

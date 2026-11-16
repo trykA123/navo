@@ -1,3 +1,5 @@
+//! The compare update contract: rows, totals, telemetry and the hooks the app implements.
+
 use std::sync::Arc;
 
 use navo_core::Location;
@@ -151,6 +153,33 @@ pub enum StopBound {
     Time,
 }
 
+/// The walk stage a progress update reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComparePhase {
+    /// Listing folders and entries.
+    Listing,
+    /// Comparing sizes and times without reading contents.
+    QuickCheck,
+    /// Reading contents to confirm a difference.
+    ContentCheck,
+}
+
+impl ComparePhase {
+    /// Every walk stage, in the order a compare reports it.
+    pub const ALL: &'static [ComparePhase] = &[
+        ComparePhase::Listing,
+        ComparePhase::QuickCheck,
+        ComparePhase::ContentCheck,
+    ];
+}
+
+/// A file whose listing or content check took `elapsed_ms` milliseconds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlowPath {
+    pub path: String,
+    pub elapsed_ms: u64,
+}
+
 /// What a running compare reports. Per generation: rows and totals, then `Finished`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompareUpdate {
@@ -175,6 +204,19 @@ pub enum CompareUpdate {
     /// The walk left the stopped state after `CompareControl::continue_walk`.
     Continued {
         generation: u64,
+    },
+    /// Progress inside one walk stage; `total` is unknown while listing.
+    PhaseProgress {
+        generation: u64,
+        phase: ComparePhase,
+        done: u64,
+        total: Option<u64>,
+    },
+    /// A file whose listing or content check took `elapsed_ms` milliseconds.
+    SlowPath {
+        generation: u64,
+        path: String,
+        elapsed_ms: u64,
     },
     /// The compare did not start; nothing follows. The text is shown to the user.
     Failed(String),

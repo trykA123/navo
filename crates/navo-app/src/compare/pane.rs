@@ -10,7 +10,7 @@ use navo_store::CacheDb;
 use navo_ui::browser::{CompareControl, CompareHooks, CompareSink, CompareUpdate};
 use navo_ui::compare_diff::CompareOptions;
 
-use super::convert::{settings_from, update_of};
+use super::convert::{settings_from, updates_of};
 use super::handle::{CompareEvent, CompareHandle, CompareStart, CompareTarget};
 use super::hash_cache::StoreHashCache;
 
@@ -60,7 +60,9 @@ fn forward(receiver: Receiver<CompareEvent>, sink: CompareSink) {
         .name("compare-forward".to_owned())
         .spawn(move || {
             for event in receiver {
-                sink(update_of(event));
+                for update in updates_of(event) {
+                    sink(update);
+                }
             }
         });
     if let Err(error) = spawned {

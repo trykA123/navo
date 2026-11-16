@@ -42,7 +42,7 @@ fn release(file: Option<FileScreen>, cx: &mut App) {
 impl ScreenOwner {
     /// Opens `request` in the file diff, over any Stream, replacing an open file diff and
     /// focusing it; `at` is the change to show first. False when the app has no diff hooks.
-    pub(in crate::window_view) fn show_pair(
+    pub fn show_pair(
         &mut self,
         (request, at): (PairRequest, Option<usize>),
         window: &mut Window,
@@ -101,23 +101,33 @@ impl ScreenOwner {
     }
 
     /// Focuses the open file diff; returns false when none is open.
-    pub(in crate::window_view) fn focus_file_screen(
-        &self,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> bool {
+    pub fn focus_file_screen(&self, window: &mut Window, cx: &mut App) -> bool {
         let file = self.compare.screen.as_ref().and_then(|s| s.file.as_ref());
         file.map(|file| window.focus(&file.focus, cx)).is_some()
+    }
+
+    /// Reloads both sides of the open file diff; false when none is open.
+    pub fn refresh_pair(&mut self, cx: &mut Context<Self>) -> bool {
+        let refreshed = self.refresh_file_screen();
+        if refreshed {
+            cx.notify();
+        }
+        refreshed
+    }
+
+    /// Asks the open file screen's worker to reload both sides; false when none is open.
+    pub(in crate::window_view) fn refresh_file_screen(&mut self) -> bool {
+        let Some(file) = self.compare.screen.as_mut().and_then(|s| s.file.as_mut()) else {
+            return false;
+        };
+        file.refresh();
+        true
     }
 
     /// Drains the inboxes of the Stream and the file diff; updates for a closed or replaced
     /// file screen are dropped. `resynced` is whether the host rebuilt the Stream's items this
     /// poll (N4f2). Returns whether the screen changed.
-    pub(in crate::window_view) fn poll_compare_screen(
-        &mut self,
-        resynced: bool,
-        cx: &mut Context<Self>,
-    ) -> bool {
+    pub fn poll_compare_screen(&mut self, resynced: bool, cx: &mut Context<Self>) -> bool {
         let rows = crate::tokens::current(cx).spacing.row_height;
         self.poll_stream(resynced, cx)
             | self.poll_file_screen(rows, cx)
@@ -188,5 +198,30 @@ impl ScreenOwner {
                 self.emit_screen(ScreenEvent::Closed { reveal: path }, Some(window), cx);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use std::sync::Arc;
+
+    use crate::browser::Waker;
+    use crate::compare_diff::CompareOptions;
+    use crate::prelude::*;
+    use crate::window_view::{CompareScreen, DiffSlot, FileHooks};
+
+    /// A screen with no open pair cannot refresh one.
+    #[gpui_kit::test]
+    fn no_open_pair_refreshes_nothing(cx: &mut gpui_kit::TestAppContext) {
+        let wake: Waker = Arc::new(|| {});
+        let screen = cx.new(|_| {
+            CompareScreen::new(
+                DiffSlot::new(None, wake),
+                CompareOptions::default(),
+                FileHooks::none(),
+            )
+        });
+        let refreshed = cx.update(|cx| screen.update(cx, |screen, cx| screen.refresh_pair(cx)));
+        assert!(!refreshed);
     }
 }

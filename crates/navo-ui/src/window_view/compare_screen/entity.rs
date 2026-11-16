@@ -19,8 +19,8 @@ pub(in crate::window_view) struct ScreenParts {
 }
 
 /// The compare screen and the inputs its window supplies (NC54).
-pub(in crate::window_view) struct CompareScreen {
-    pub(in crate::window_view) compare: super::ScreenParts,
+pub struct CompareScreen {
+    pub(in crate::window_view) compare: ScreenParts,
     options: CompareOptions,
     files: FileHooks,
     sides: SharedString,
@@ -29,11 +29,7 @@ pub(in crate::window_view) struct CompareScreen {
 
 impl CompareScreen {
     /// Creates an empty screen with its diff inbox, compare options and file hooks.
-    pub(in crate::window_view) fn new(
-        diff: DiffSlot,
-        options: CompareOptions,
-        files: FileHooks,
-    ) -> Self {
+    pub fn new(diff: DiffSlot, options: CompareOptions, files: FileHooks) -> Self {
         Self {
             compare: ScreenParts { screen: None, diff },
             options,
@@ -44,38 +40,50 @@ impl CompareScreen {
     }
 
     /// Replaces the folder label and rows stamp before an open or poll.
-    pub(in crate::window_view) fn set_inputs(
-        &mut self,
-        sides: SharedString,
-        stamp: Option<(u64, u64)>,
-    ) {
+    pub fn set_inputs(&mut self, sides: SharedString, stamp: Option<(u64, u64)>) {
         self.sides = sides;
         self.stamp = stamp;
     }
 
     /// Replaces the compare options after the window applies settings.
-    pub(in crate::window_view) fn set_options(&mut self, options: CompareOptions) {
+    pub fn set_options(&mut self, options: CompareOptions) {
         self.options = options;
     }
 
     /// The compare options used when opening a pair or Stream.
-    pub(in crate::window_view) fn screen_options(&self) -> CompareOptions {
+    pub fn screen_options(&self) -> CompareOptions {
         self.options.clone()
     }
 
     /// The app's file hooks, used to read a side's bytes and bodies.
-    pub(in crate::window_view) fn screen_files(&self) -> FileHooks {
+    pub fn screen_files(&self) -> FileHooks {
         self.files.clone()
     }
 
     /// The supplied compare roots' names, or empty outside a compare.
-    pub(in crate::window_view) fn screen_sides(&self) -> SharedString {
+    pub fn screen_sides(&self) -> SharedString {
         self.sides.clone()
     }
 
     /// The supplied rows stamp, or `None` outside a compare.
-    pub(in crate::window_view) fn screen_stamp(&self) -> Option<(u64, u64)> {
+    pub fn screen_stamp(&self) -> Option<(u64, u64)> {
         self.stamp
+    }
+
+    /// Whether a file diff is open in place of the panes.
+    pub fn is_file_open(&self) -> bool {
+        self.compare
+            .screen
+            .as_ref()
+            .is_some_and(|screen| screen.file.is_some())
+    }
+
+    /// Whether the Stream is open in place of the panes.
+    pub fn is_stream_open(&self) -> bool {
+        self.compare
+            .screen
+            .as_ref()
+            .is_some_and(|screen| screen.stream.is_some())
     }
 
     /// Returns no work, a wait, or the rebuild's freshness from the Stream's resync decision.
@@ -156,7 +164,7 @@ impl Render for CompareScreen {
 
 /// What the compare screen asks of its window (NC54).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::window_view) enum ScreenEvent {
+pub enum ScreenEvent {
     /// The screen closed; reveal and select this path in the compare pane.
     Closed { reveal: Option<String> },
     /// Settings should open with this field selected.

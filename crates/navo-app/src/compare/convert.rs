@@ -1,10 +1,10 @@
 //! Engine events and settings as the UI's plain compare types.
 
 use navo_compare::model::{EntryKind, Row, SideEntry, Status};
-use navo_compare::session::{RowBatch, StopBound, Totals};
+use navo_compare::session::{ComparePhase as EnginePhase, RowBatch, StopBound, Totals};
 use navo_ui::browser::{
-    CompareKind, CompareRow, CompareSide, CompareTotals, CompareUpdate, RowProgress, RowStatus,
-    StopBound as UiBound,
+    CompareKind, ComparePhase, CompareRow, CompareSide, CompareTotals, CompareUpdate, RowProgress,
+    RowStatus, StopBound as UiBound,
 };
 use navo_ui::compare_diff::CompareOptions;
 
@@ -16,42 +16,46 @@ pub(super) fn settings_from(options: &CompareOptions) -> CompareSettings {
     CompareSettings::from(&options.compare)
 }
 
-/// The UI update for an event.
-pub(super) fn update_of(event: CompareEvent) -> CompareUpdate {
+/// The UI updates for an event, in the order the UI applies them.
+pub(super) fn updates_of(event: CompareEvent) -> Vec<CompareUpdate> {
     match event {
         CompareEvent::Rows(batch) => rows_of(batch),
-        CompareEvent::Totals { generation, totals } => CompareUpdate::Totals {
+        CompareEvent::Totals { generation, totals } => vec![CompareUpdate::Totals {
             generation: generation.get(),
             totals: totals_of(totals),
-        },
-        CompareEvent::Finished { generation } => CompareUpdate::Finished {
+        }],
+        CompareEvent::Finished { generation } => vec![CompareUpdate::Finished {
             generation: generation.get(),
-        },
+        }],
         CompareEvent::Failed(error) => {
             tracing::warn!(?error, "compare did not start");
-            CompareUpdate::Failed(navo_l10n::tr("compare-could-not-start"))
+            vec![CompareUpdate::Failed(navo_l10n::tr(
+                "compare-could-not-start",
+            ))]
         }
         CompareEvent::StoppedAtLimit {
             generation,
             entries,
             bound,
-        } => CompareUpdate::Stopped {
+        } => vec![CompareUpdate::Stopped {
             generation: generation.get(),
             entries,
             bound: match bound {
                 StopBound::Entries => UiBound::Entries,
                 StopBound::Time => UiBound::Time,
             },
-        },
-        CompareEvent::Continued { generation } => CompareUpdate::Continued {
+        }],
+        CompareEvent::Continued { generation } => vec![CompareUpdate::Continued {
             generation: generation.get(),
-        },
+        }],
     }
 }
 
-fn rows_of(batch: RowBatch) -> CompareUpdate {
-    CompareUpdate::Rows {
-        generation: batch.generation.get(),
+/// A row batch as rows, then its phase progress, then one slow path per file.
+fn rows_of(batch: RowBatch) -> Vec<CompareUpdate> {
+    let generation = batch.generation.get();
+    let mut updates = vec![CompareUpdate::Rows {
+        generation,
         rows: batch.rows.iter().map(row_of).collect(),
         progress: batch
             .progress
@@ -62,6 +66,29 @@ fn rows_of(batch: RowBatch) -> CompareUpdate {
                 bytes_total: step.bytes_total,
             })
             .collect(),
+    }];
+    if let Some(phase) = batch.phase {
+        updates.push(CompareUpdate::PhaseProgress {
+            generation,
+            phase: phase_of(phase.phase),
+            done: phase.done,
+            total: phase.total,
+        });
+    }
+    updates.extend(batch.slow.into_iter().map(|entry| CompareUpdate::SlowPath {
+        generation,
+        path: entry.rel.as_path().to_text(),
+        elapsed_ms: entry.elapsed_ms,
+    }));
+    updates
+}
+
+/// The engine's walk stage as the UI's compare phase.
+fn phase_of(phase: EnginePhase) -> ComparePhase {
+    match phase {
+        EnginePhase::Listing => ComparePhase::Listing,
+        EnginePhase::QuickCheck => ComparePhase::QuickCheck,
+        EnginePhase::ContentCheck => ComparePhase::ContentCheck,
     }
 }
 

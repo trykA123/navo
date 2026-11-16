@@ -241,7 +241,7 @@ impl ScreenOwner {
 
     /// Opens the Stream over `items` (the list and each item's pair) and focuses it; false when
     /// the app has no diff hooks.
-    pub(in crate::window_view) fn open_stream(
+    pub fn open_stream(
         &mut self,
         items: (StreamList, Vec<PairRequest>),
         window: &mut Window,
