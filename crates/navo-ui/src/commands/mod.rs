@@ -1,6 +1,7 @@
 mod bind;
 mod clipboard;
 pub(crate) mod compare;
+mod compare_actions;
 mod contexts;
 pub(crate) mod focus_paths;
 pub(crate) mod git;
