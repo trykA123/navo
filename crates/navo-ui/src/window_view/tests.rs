@@ -29,6 +29,7 @@ mod compare;
 mod compare_copy;
 pub(super) mod compare_here;
 mod compare_hex;
+mod compare_hex_narrow;
 mod compare_image;
 mod compare_large;
 mod compare_large_bar;
