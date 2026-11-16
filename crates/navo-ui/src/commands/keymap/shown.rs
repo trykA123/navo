@@ -1,6 +1,6 @@
 use gpui_kit::Keystroke;
 
-use super::parse::stroke;
+use crate::host_os::parse_keystroke;
 
 #[must_use]
 pub fn shown(key: &str) -> Option<String> {
@@ -9,6 +9,13 @@ pub fn shown(key: &str) -> Option<String> {
         .map(|part| stroke(part).map(|stroke| one(&stroke)))
         .collect::<Option<_>>()?;
     (!strokes.is_empty()).then(|| strokes.join(" "))
+}
+
+/// Parses one key stroke such as `ctrl-a`; `None` when it is invalid or empty.
+fn stroke(part: &str) -> Option<Keystroke> {
+    parse_keystroke(part)
+        .ok()
+        .filter(|stroke| !stroke.key.is_empty())
 }
 
 fn one(stroke: &Keystroke) -> String {
