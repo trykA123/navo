@@ -2,11 +2,13 @@ use gpui_kit::component::kbd::Kbd;
 use gpui_kit::{Action, FocusHandle};
 use navo_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
 
-use super::super::body::MenuEntry;
-use super::super::{
-    ClearMarks, Mark1, Mark2, Mark3, Mark4, Mark5, Mark6, Mark7, Mark8, ToggleBookmark,
-};
 use crate::prelude::*;
+
+pub enum MenuEntry {
+    Run(SharedString, Box<dyn Action>, bool),
+    Submenu(&'static str, Vec<MenuEntry>),
+    Break,
+}
 
 pub fn viewer_menu(entries: &[MenuEntry], focus: &FocusHandle, window: &Window) -> ShellMenu {
     ShellMenu {
@@ -40,23 +42,4 @@ fn hint(action: &dyn Action, focus: &FocusHandle, window: &Window) -> Option<Str
         .map(|keystroke| Kbd::format(keystroke.inner()))
         .collect();
     Some(keys.join(" "))
-}
-
-pub(in crate::window_view::viewer) fn marking_entries() -> Vec<MenuEntry> {
-    let colours: Vec<MenuEntry> = vec![
-        MenuEntry::Run("Mark 1".into(), Box::new(Mark1), false),
-        MenuEntry::Run("Mark 2".into(), Box::new(Mark2), false),
-        MenuEntry::Run("Mark 3".into(), Box::new(Mark3), false),
-        MenuEntry::Run("Mark 4".into(), Box::new(Mark4), false),
-        MenuEntry::Run("Mark 5".into(), Box::new(Mark5), false),
-        MenuEntry::Run("Mark 6".into(), Box::new(Mark6), false),
-        MenuEntry::Run("Mark 7".into(), Box::new(Mark7), false),
-        MenuEntry::Run("Mark 8".into(), Box::new(Mark8), false),
-        MenuEntry::Break,
-        MenuEntry::Run("Clear marks".into(), Box::new(ClearMarks), false),
-    ];
-    vec![
-        MenuEntry::Submenu("Mark colour", colours),
-        MenuEntry::Run("Bookmark".into(), Box::new(ToggleBookmark), false),
-    ]
 }

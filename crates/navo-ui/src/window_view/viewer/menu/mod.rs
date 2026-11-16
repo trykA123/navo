@@ -1,10 +1,11 @@
 mod entries;
+mod marking;
 
 use gpui_kit::{Bounds, MouseButton, MouseUpEvent, Stateful, point};
 use navo_core::shell_menu::ItemId;
 
-pub(in crate::window_view::viewer) use entries::marking_entries;
-pub use entries::viewer_menu;
+pub use entries::{MenuEntry, viewer_menu};
+pub(in crate::window_view::viewer) use marking::marking_entries;
 
 use super::ShowMenu;
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
