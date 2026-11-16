@@ -66,14 +66,6 @@ impl DiffBackend {
     }
 }
 
-/// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
-pub fn diff_backend(copy: Option<LogFactory>, local: &Arc<dyn ProviderOps>) -> Arc<DiffBackend> {
-    Arc::new(match copy {
-        Some(factory) => DiffBackend::with_copy(factory, local.clone()),
-        None => DiffBackend::default(),
-    })
-}
-
 impl DiffHooks for DiffBackend {
     /// Start one pair's worker; it builds the sides and reports `Opened`.
     fn open_pair(
