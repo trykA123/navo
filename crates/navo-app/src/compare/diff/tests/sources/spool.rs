@@ -98,9 +98,9 @@ fn the_sweep_holds_the_folder_lock_until_the_folder_is_gone() {
 }
 
 #[test]
-fn a_sweep_of_a_profile_folder_deletes_only_spool_folders() {
+fn a_sweep_of_a_spool_root_deletes_only_spool_folders() {
     let dir = tempfile::tempdir().unwrap();
-    let data = dir.path().join("data");
+    let data = dir.path().join(SPOOL_DIR);
     let dead = dead_owner(&data);
     for (folder, file) in [
         ("logs", "app.log"),
@@ -132,8 +132,8 @@ fn a_relative_spool_root_sweeps_nothing() {
         .prefix("spool-relative-")
         .tempdir_in(".")
         .unwrap();
-    let dead = dead_owner(dir.path());
-    let relative = PathBuf::from(dir.path().file_name().unwrap());
+    let dead = dead_owner(&dir.path().join(SPOOL_DIR));
+    let relative = PathBuf::from(dir.path().file_name().unwrap()).join(SPOOL_DIR);
     Sources::sweep_startup(Some(&relative));
     assert!(
         dead.exists(),
@@ -144,9 +144,9 @@ fn a_relative_spool_root_sweeps_nothing() {
 #[test]
 fn a_spool_root_with_a_parent_step_sweeps_nothing() {
     let dir = tempfile::tempdir().unwrap();
-    let dead = dead_owner(&dir.path().join("spool"));
+    let dead = dead_owner(&dir.path().join(SPOOL_DIR));
     fs::create_dir_all(dir.path().join("other")).unwrap();
-    let stepped = dir.path().join("other").join("..").join("spool");
+    let stepped = dir.path().join("other").join("..").join(SPOOL_DIR);
     Sources::sweep_startup(Some(&stepped));
     assert!(
         dead.exists(),
@@ -159,7 +159,8 @@ fn a_spool_root_with_a_parent_step_sweeps_nothing() {
 fn a_linked_spool_root_sweeps_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let dead = dead_owner(&dir.path().join("real"));
-    let link = dir.path().join("link");
+    fs::create_dir_all(dir.path().join("links")).unwrap();
+    let link = dir.path().join("links").join(SPOOL_DIR);
     std::os::unix::fs::symlink(dir.path().join("real"), &link).unwrap();
     Sources::sweep_startup(Some(&link));
     assert!(
@@ -180,6 +181,55 @@ fn a_host_without_a_spool_sweeps_nothing() {
         !dead.exists(),
         "the same folder is swept once the host names its root"
     );
+}
+
+#[test]
+fn a_root_not_named_compare_spool_sweeps_nothing_and_writes_no_gate() {
+    let dir = tempfile::tempdir().unwrap();
+    let user = dir.path().join("data");
+    let month = user.join("2024-11");
+    fs::create_dir_all(&month).unwrap();
+    fs::write(month.join("photo.jpg"), b"user data").unwrap();
+    Sources::sweep_startup(Some(&user));
+    assert!(
+        month.join("photo.jpg").exists(),
+        "a user folder named like an owner survives a root that is not ours"
+    );
+    assert!(
+        !user.join("sweep.lock").exists(),
+        "a refused root gets no sweep.lock"
+    );
+}
+
+#[test]
+fn inside_our_own_compare_spool_an_owner_shaped_folder_without_a_lock_is_swept() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(SPOOL_DIR);
+    let month = root.join("2024-11");
+    fs::create_dir_all(&month).unwrap();
+    Sources::sweep_startup(Some(&root));
+    assert!(
+        !month.exists(),
+        "only Navo writes in compare-spool, so a lockless owner-shaped folder is a leftover"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_spool_root_that_cannot_be_checked_sweeps_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let parent = dir.path().join("closed");
+    let dead = dead_owner(&parent.join(SPOOL_DIR));
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o000)).unwrap();
+    // A process that ignores permissions (root) can check the root; the case cannot be built.
+    let checkable = fs::symlink_metadata(parent.join(SPOOL_DIR)).is_ok();
+    Sources::sweep_startup(Some(&parent.join(SPOOL_DIR)));
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+    if checkable {
+        return;
+    }
+    assert!(dead.exists(), "a root that cannot be checked is refused");
 }
 
 /// A dead owner folder under `root`, named the way `Owner::open` names one, with one file.

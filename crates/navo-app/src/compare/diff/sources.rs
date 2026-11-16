@@ -29,14 +29,18 @@ use spool::{Owner, SpoolFile, owner_for, spool_copy, write_reason};
 pub(crate) const SPOOL_DIR: &str = "compare-spool";
 const COPY_CHUNK: usize = 1024 * 1024;
 
-/// Accept only an absolute spool root with no `..` step that is not itself a link; a missing
-/// root passes (the sweep skips it). A root that cannot be checked is refused (fail closed).
+/// Accept only an absolute root named `SPOOL_DIR`, with no `..` step, that is not itself a link;
+/// a missing root passes (the sweep skips it). A root that cannot be checked is refused.
 fn check_root(root: &Path) -> Result<(), &'static str> {
     if root.is_relative() {
         return Err("the root is relative");
     }
     if root.components().any(|part| part == Component::ParentDir) {
         return Err("the root has a `..` step");
+    }
+    // Only our own folder may hold owner-shaped names; a user folder may hold `2024-11`.
+    if root.file_name().is_none_or(|name| name != SPOOL_DIR) {
+        return Err("the root is not a compare-spool folder");
     }
     match std::fs::symlink_metadata(root) {
         Ok(meta) if meta.file_type().is_symlink() => Err("the root is a link"),
