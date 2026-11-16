@@ -7,6 +7,7 @@ use crate::commands::compare::{
     PreviousDifference, PreviousFile, RemovePicked, Search, ShowBytesHere, ToggleViewed, ViewMenu,
 };
 use crate::compare_diff::CopyDirection;
+use crate::window_view::CompareScreen;
 use crate::window_view::viewer::MenuEntry;
 
 /// What a copy at the cursor line would copy.
@@ -145,10 +146,37 @@ pub(super) fn stream_entries(facts: &StreamFacts) -> Vec<MenuEntry> {
     ])
 }
 
+/// Test seam for the registry tests in `commands`: the action names of the file and stream
+/// menus with every fact on.
+impl CompareScreen {
+    #[doc(hidden)]
+    #[must_use]
+    pub fn menu_action_names() -> Vec<&'static str> {
+        let file = FileFacts {
+            copy: Copying::Change,
+            remove: true,
+            pick: Some(true),
+            changes: true,
+            bytes_here: true,
+        };
+        let stream = StreamFacts {
+            item: true,
+            copy: true,
+        };
+        let mut all = file_entries(&file);
+        all.extend(stream_entries(&stream));
+        all.iter()
+            .filter_map(|entry| match entry {
+                MenuEntry::Run(_, action, _) => Some(action.name()),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Copying, FileFacts, StreamFacts, file_entries, stream_entries};
-    use crate::commands::{self, compare::is_hidden};
     use crate::compare_diff::CopyDirection;
     use crate::window_view::viewer::MenuEntry;
 
@@ -194,27 +222,5 @@ mod tests {
         assert!(actions(&file_entries(&long)).contains(&"compare::ShowBytesHere"));
         let bare = actions(&stream_entries(&StreamFacts::default()));
         assert!(!bare.contains(&"compare::OpenFile") && bare.contains(&"compare::Search"));
-    }
-
-    #[test]
-    fn compare_copy_menu_never_lists_a_command_that_is_not_built() {
-        let _shown = crate::compare_visible::show_compare();
-        let file = FileFacts {
-            copy: Copying::Change,
-            remove: true,
-            pick: Some(true),
-            changes: true,
-            bytes_here: true,
-        };
-        let stream = StreamFacts {
-            item: true,
-            copy: true,
-        };
-        let mut all = file_entries(&file);
-        all.extend(stream_entries(&stream));
-        for name in actions(&all) {
-            let spec = commands::for_action(name).expect("a registered action");
-            assert!(!is_hidden(spec.name), "{name}");
-        }
     }
 }
