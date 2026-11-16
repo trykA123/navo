@@ -17,12 +17,12 @@ fn compare_screen_hex_halves_stay_in_their_columns_when_narrow(cx: &mut TestAppC
     VisualTestContext::from_window(rig.window, cx).simulate_resize(size(px(780.), px(560.)));
     cx.run_until_parked();
     frame(cx, &rig);
-    let (left, right, edge) = cx
+    let (left, edge) = cx
         .update_window(rig.window, |_, window, cx| {
             let pad = crate::tokens::current(cx).spacing.xl + px(1.);
             let right = window.find(("paged-row", 1usize)).bounds();
             let left = window.find(("paged-row", 0usize)).bounds();
-            (left, right, right.origin.x - pad)
+            (left, right.origin.x - pad)
         })
         .expect("window");
     assert!(
