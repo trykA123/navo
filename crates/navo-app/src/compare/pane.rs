@@ -12,20 +12,24 @@ use navo_ui::compare_diff::CompareOptions;
 use super::convert::{settings_from, updates_of};
 use super::handle::{CompareEvent, CompareHandle, CompareStart, CompareTarget};
 
-/// Starts folder compares of two local panes. The host picks the hash cache.
+/// Turns a pane's location into a compare target. The host decides what a location opens as.
+pub type LocalTarget = Arc<dyn Fn(&Location) -> CompareTarget + Send + Sync>;
+
+/// Starts folder compares of two panes. The host picks the hash cache and the target builder.
 pub struct PaneCompare {
     cache: Arc<dyn HashCache>,
+    local: LocalTarget,
 }
 
 impl PaneCompare {
-    /// Builds the hooks over the host's hash cache, shared by every compare it starts.
-    pub fn new(cache: Arc<dyn HashCache>) -> Self {
-        Self { cache }
+    /// Builds the hooks over the host's hash cache and target builder, shared by every compare it starts.
+    pub fn new(cache: Arc<dyn HashCache>, local: LocalTarget) -> Self {
+        Self { cache, local }
     }
 }
 
 impl CompareHooks for PaneCompare {
-    /// Only local folders; `CompareTarget::Local` reads nothing else.
+    /// Only local folders; the host's `LocalTarget` opens them.
     fn supports(&self, location: &Location) -> bool {
         location.is_local()
     }
@@ -38,8 +42,8 @@ impl CompareHooks for PaneCompare {
     ) -> Box<dyn CompareControl> {
         let (events, receiver) = mpsc::channel();
         let request = CompareStart {
-            left: CompareTarget::Local(left.clone()),
-            right: CompareTarget::Local(right.clone()),
+            left: (self.local)(left),
+            right: (self.local)(right),
             settings: settings_from(options),
             cache: Arc::clone(&self.cache),
         };

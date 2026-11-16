@@ -7,6 +7,7 @@ mod clipboard;
 mod clipboard_palette;
 mod closing;
 mod command_center;
+mod compare_files;
 mod compare_host;
 mod compare_keys;
 mod compare_screen;
@@ -130,7 +131,7 @@ pub(in crate::window_view) use compare_host::ScreenOwner;
 /// );
 /// assert!(!screen.is_file_open());
 /// ```
-pub use compare_screen::{CompareScreen, DiffSlot, ScreenEvent};
+pub use compare_screen::{CompareScreen, DiffSlot, LookDefaults, LookPreset, ScreenEvent};
 pub use crash::CrashReportService;
 pub use drives::{DriveChanges, DriveHooks, DriveIcon, DriveInfo, DriveSignal};
 pub use drop_menu::drop_items;

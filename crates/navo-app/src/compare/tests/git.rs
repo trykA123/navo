@@ -18,9 +18,12 @@ use std::ops::ControlFlow;
 use super::handle::{final_status, finish};
 use super::{location, write};
 use crate::compare::git_side::GitSide;
+use crate::compare::git_side::engine_for;
+use crate::compare::git_side::git_raw_target;
+use crate::compare::git_side::git_target;
 use crate::compare::handle::{CompareHandle, CompareStart, CompareTarget};
 use crate::compare::hash_cache::StoreHashCache;
-use crate::compare::settings::{CompareSettings, engine_for};
+use crate::compare::settings::CompareSettings;
 
 fn git(repo: &Path, args: &[&str]) -> Option<String> {
     let output = Command::new("git")
@@ -118,10 +121,7 @@ fn a_worktree_compares_equal_to_its_own_revision() {
         Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap()));
     let request = CompareStart {
         left: CompareTarget::Local(location(&path)),
-        right: CompareTarget::Git {
-            repo: path.clone(),
-            rev: "HEAD".to_owned(),
-        },
+        right: git_target(path.clone(), "HEAD".to_owned(), &CompareSettings::default()),
         settings: CompareSettings::default(),
         cache,
     };
@@ -142,10 +142,7 @@ fn refresh_resolves_the_revision_again() {
     let (sender, receiver) = mpsc::channel();
     let request = CompareStart {
         left: CompareTarget::Local(location(folder.path())),
-        right: CompareTarget::Git {
-            repo: path.clone(),
-            rev: "HEAD".to_owned(),
-        },
+        right: git_target(path.clone(), "HEAD".to_owned(), &CompareSettings::default()),
         settings: CompareSettings::default(),
         cache: Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap())),
     };
@@ -301,10 +298,7 @@ fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
             let request = CompareStart::new(
                 (
                     CompareTarget::Local(location(local.path())),
-                    CompareTarget::GitRawOdb {
-                        repo: fixture.promisor.clone(),
-                        rev: "HEAD".to_owned(),
-                    },
+                    git_raw_target(fixture.promisor.clone(), "HEAD".to_owned()),
                 ),
                 &options,
                 Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap())),
@@ -348,14 +342,8 @@ fn git_vs_git_reports_missing_promisor_blob_on_one_or_both_sides() {
             };
             let request = CompareStart::new(
                 (
-                    CompareTarget::GitRawOdb {
-                        repo: fixture.promisor.clone(),
-                        rev: "HEAD".to_owned(),
-                    },
-                    CompareTarget::GitRawOdb {
-                        repo: right_repo.clone(),
-                        rev: "HEAD".to_owned(),
-                    },
+                    git_raw_target(fixture.promisor.clone(), "HEAD".to_owned()),
+                    git_raw_target(right_repo.clone(), "HEAD".to_owned()),
                 ),
                 &options,
                 Arc::new(StoreHashCache::new(CacheDb::open_in_memory().unwrap())),

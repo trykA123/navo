@@ -5,11 +5,12 @@ use std::ops::ControlFlow;
 use std::time::Duration;
 
 use super::NavoWindow;
-use super::compare_screen::{CompareScreen, ScreenEvent, items_of, neighbour};
+use super::compare_screen::{CompareScreen, ScreenEvent, SettingKey, items_of, neighbour};
 use crate::browser::{Browser, FileDiffRequest};
 use crate::compare_diff::PairRequest;
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
+use crate::settings::Field;
 
 /// The entity that owns the compare screen's state and rendering.
 pub(in crate::window_view) type ScreenOwner = CompareScreen;
@@ -150,9 +151,12 @@ impl NavoWindow {
                 }
                 cx.notify();
             }
-            ScreenEvent::OpenSettings(field) => {
+            ScreenEvent::OpenSettings(key) => {
                 if let Some(window) = window {
-                    self.open_settings_at(*field, window, cx);
+                    let field = match key {
+                        SettingKey::CompareBudgetMib => Field::CompareBudgetMib,
+                    };
+                    self.open_settings_at(field, window, cx);
                 }
             }
             ScreenEvent::WalkFile { from, step } => {

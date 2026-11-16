@@ -14,8 +14,9 @@ use navo_fs::git::GitFs;
 use navo_git::{CliGit, EngineKind, GixGit};
 
 use super::super::entry::reason_of;
+use super::super::git_side::engine_for;
 use super::super::local::LocalSide;
-use super::super::settings::{CompareSettings, engine_for};
+use super::super::settings::CompareSettings;
 use super::load::Side;
 
 /// A local or Git file side from one `Location`.

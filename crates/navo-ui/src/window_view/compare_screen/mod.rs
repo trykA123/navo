@@ -8,6 +8,8 @@ mod drawers;
 mod entity;
 mod entry;
 mod file;
+#[allow(dead_code, reason = "the screen reads it from U4b on")]
+pub(in crate::window_view) mod files;
 mod hex;
 mod hex_open;
 mod host;
@@ -37,13 +39,14 @@ use crate::compare_diff::{DiffUpdate, Layout, PairControl, PairKind};
 use crate::compare_diff::{PairRequest, PairText};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
-pub use entity::{CompareScreen, ScreenEvent};
+pub use entity::{CompareScreen, ScreenEvent, SettingKey};
 pub(in crate::window_view) use entry::items_of;
 pub(in crate::window_view) use entry::neighbour;
 pub use inbox::DiffSlot;
 #[cfg(test)]
 pub(in crate::window_view) use inbox::coalesce;
 use large::LargeShown;
+pub use look::{LookDefaults, Preset as LookPreset};
 use sideways::SidewaysHandle;
 pub(super) use state::FileState;
 use state::request_of;

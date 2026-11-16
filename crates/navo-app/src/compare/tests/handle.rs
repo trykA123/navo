@@ -2,7 +2,7 @@ use std::io::Read;
 use std::ops::ControlFlow;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -164,6 +164,8 @@ struct Sleepy {
     listed: Arc<AtomicBool>,
     /// Set when the source is dropped, which happens as the session thread ends.
     gone: Arc<AtomicBool>,
+    /// Counts the `refresh` calls the session thread makes on this source.
+    refreshes: Arc<AtomicUsize>,
 }
 
 impl Drop for Sleepy {
@@ -197,6 +199,10 @@ impl SideSource for Sleepy {
             Listing::Instant => {}
         }
         Ok(())
+    }
+
+    fn refresh(&self) {
+        self.refreshes.fetch_add(1, Ordering::SeqCst);
     }
 
     fn open(&self, _rel: &RelPath, _hint: ReadHint) -> Result<Box<dyn Read + Send>, Reason> {
@@ -233,12 +239,18 @@ struct Probe {
     receiver: Receiver<CompareEvent>,
     listed: Arc<AtomicBool>,
     gone: Arc<AtomicBool>,
+    refreshes: Arc<AtomicUsize>,
 }
 
 fn sleepy_handle(listing: Listing) -> Probe {
     let (sender, receiver) = mpsc::channel();
     let (listed, gone) = (Arc::default(), Arc::default());
-    let flags = (Arc::clone(&listed), Arc::clone(&gone));
+    let refreshes: Arc<AtomicUsize> = Arc::default();
+    let flags = (
+        Arc::clone(&listed),
+        Arc::clone(&gone),
+        Arc::clone(&refreshes),
+    );
     let open = move || {
         let rules = IgnoreRules::new(Vec::<IgnoreSource>::new(), &[], false, CaseRule::Sensitive)
             .map_err(|error| CompareError::Rules(error.to_string()))?
@@ -249,8 +261,10 @@ fn sleepy_handle(listing: Listing) -> Probe {
                 listing,
                 listed: Arc::clone(&flags.0),
                 gone: Arc::clone(&flags.1),
+                refreshes: Arc::clone(&flags.2),
             })
         };
+        let (left, right) = (side(), side());
         let options = SessionOptions {
             rules: Arc::new(rules),
             cache: Arc::new(NoCache),
@@ -259,8 +273,8 @@ fn sleepy_handle(listing: Listing) -> Probe {
             network_cap: None,
         };
         Ok(Opened {
-            session: Session::start(side(), side(), options),
-            git_sides: Vec::new(),
+            session: Session::start(Arc::clone(&left), Arc::clone(&right), options),
+            refresh: vec![left, right],
         })
     };
     let handle = CompareHandle::spawn(open, sender);
@@ -269,6 +283,7 @@ fn sleepy_handle(listing: Listing) -> Probe {
         receiver,
         listed,
         gone,
+        refreshes,
     }
 }
 
@@ -328,4 +343,21 @@ fn a_dropped_receiver_ends_the_thread() {
         probe.gone.load(Ordering::SeqCst),
         "the session thread kept running with no receiver"
     );
+}
+
+#[test]
+fn the_refresh_command_refreshes_each_listed_side_once() {
+    let probe = sleepy_handle(Listing::Instant);
+    loop {
+        if let CompareEvent::Finished { .. } = probe.receiver.recv_timeout(WAIT).unwrap() {
+            break;
+        }
+    }
+    probe.handle.refresh();
+    let until = Instant::now() + Duration::from_secs(10);
+    while probe.refreshes.load(Ordering::SeqCst) < 2 && Instant::now() < until {
+        thread::sleep(Duration::from_millis(10));
+    }
+    thread::sleep(Duration::from_millis(100));
+    assert_eq!(probe.refreshes.load(Ordering::SeqCst), 2);
 }

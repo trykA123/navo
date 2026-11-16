@@ -63,7 +63,7 @@ impl ScreenOwner {
                     .and_then(|s| s.stream.as_ref())
                     .map(|stream| stream.look)
             })
-            .unwrap_or_else(look::Look::rich);
+            .unwrap_or_else(|| look::Look::from_defaults(self.look_defaults()));
         let active = request.id;
         let file = FileScreen {
             tag,

@@ -1,13 +1,9 @@
-//! Compare settings as plain input, and the Git engine choice.
-
-use std::path::Path;
+//! Compare settings as plain input.
 
 use navo_compare::model::Budget;
 use navo_compare::session::{CheckMode, NetworkCap};
 use navo_compare::settings::CompareGitEngine;
 use navo_fs::{NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME};
-use navo_git::cli::MIN_GIT_VERSION;
-use navo_git::{Choice, CliGit, EngineKind, EngineSetting, GitFound, RepoFormat, choose};
 use navo_store::{Compare, ContentCheck};
 
 /// The shared network-walk bound (D103) as the compare engine takes it.
@@ -62,38 +58,5 @@ impl CompareSettings {
             self.memory_budget_mib
                 .clamp(Budget::MIN_MIB, Budget::MAX_MIB),
         )
-    }
-}
-
-/// Picks the Git engine for a repository from the setting, its format and the `git` found.
-pub(crate) fn choose_engine(
-    settings: &CompareSettings,
-    format: &RepoFormat,
-    git: GitFound,
-) -> Choice {
-    choose(engine_setting(settings.git_engine), format, git)
-}
-
-/// Maps the stored engine setting to the Git crate's own setting type.
-fn engine_setting(stored: CompareGitEngine) -> EngineSetting {
-    match stored {
-        CompareGitEngine::Git => EngineSetting::Git,
-        CompareGitEngine::Gix => EngineSetting::Gix,
-        CompareGitEngine::Auto => EngineSetting::Auto,
-    }
-}
-
-/// The engine for one repository. An unreadable format keeps the CLI, whose open reports the error.
-pub(crate) fn engine_for(settings: &CompareSettings, repo: &Path) -> EngineKind {
-    let Ok(format) = RepoFormat::read(repo) else {
-        return EngineKind::Cli;
-    };
-    choose_engine(settings, &format, git_found(repo)).engine
-}
-
-fn git_found(repo: &Path) -> GitFound {
-    match CliGit::new(repo) {
-        Ok(_) => GitFound::version(MIN_GIT_VERSION.0, MIN_GIT_VERSION.1),
-        Err(_) => GitFound::missing(),
     }
 }
