@@ -3,7 +3,7 @@
 use navo_compare::model::{Reason, RelPath};
 use navo_core::{FsErrorKind, ProviderPath};
 
-pub(super) fn reason_of(kind: FsErrorKind) -> Reason {
+pub fn reason_of(kind: FsErrorKind) -> Reason {
     match kind {
         FsErrorKind::NotFound => Reason::NotFound,
         FsErrorKind::Locked => Reason::Locked,
@@ -17,7 +17,7 @@ pub(super) fn reason_of(kind: FsErrorKind) -> Reason {
 }
 
 /// Joins a folder row path and a child name with `/`.
-pub(super) fn child_rel(parent: &RelPath, name: &ProviderPath) -> RelPath {
+pub fn child_rel(parent: &RelPath, name: &ProviderPath) -> RelPath {
     let parent = parent.as_path().to_text();
     let name = name.to_text();
     let text = if parent.is_empty() {
@@ -29,7 +29,7 @@ pub(super) fn child_rel(parent: &RelPath, name: &ProviderPath) -> RelPath {
 }
 
 /// The path segments of a row path, without empty parts.
-pub(super) fn segments(rel: &RelPath) -> Vec<String> {
+pub fn segments(rel: &RelPath) -> Vec<String> {
     rel.as_path()
         .to_text()
         .split('/')

@@ -12,12 +12,12 @@ use super::handle::CompareEvent;
 use super::settings::CompareSettings;
 
 /// The compare settings in `options` as the compare backend reads them.
-pub(super) fn settings_from(options: &CompareOptions) -> CompareSettings {
+pub fn settings_from(options: &CompareOptions) -> CompareSettings {
     CompareSettings::from(&options.compare)
 }
 
 /// The UI updates for an event, in the order the UI applies them.
-pub(super) fn updates_of(event: CompareEvent) -> Vec<CompareUpdate> {
+pub fn updates_of(event: CompareEvent) -> Vec<CompareUpdate> {
     match event {
         CompareEvent::Rows(batch) => rows_of(batch),
         CompareEvent::Totals { generation, totals } => vec![CompareUpdate::Totals {
@@ -120,7 +120,7 @@ fn side_of(entry: &SideEntry) -> CompareSide {
     }
 }
 
-pub(super) fn status_of(status: Status) -> RowStatus {
+pub fn status_of(status: Status) -> RowStatus {
     match status {
         Status::Same => RowStatus::Same,
         Status::SameAfterRules => RowStatus::SameAfterRules,

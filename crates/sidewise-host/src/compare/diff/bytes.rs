@@ -16,7 +16,7 @@ use super::load::Side;
 const POLL: Duration = Duration::from_millis(20);
 
 /// Both sides, the alignment and the memory budget for one byte diff.
-pub(crate) struct ByteInput {
+pub struct ByteInput {
     pub left: Side,
     pub right: Side,
     pub align: Align,
@@ -25,16 +25,15 @@ pub(crate) struct ByteInput {
 }
 
 /// An open byte diff; dropping it cancels and reaps both workers off the caller.
-pub(crate) struct ByteDiff {
+pub struct ByteDiff {
     commands: Arc<Commands>,
     thread: Option<JoinHandle<Engine>>,
-    #[cfg(test)]
     joined: Arc<AtomicBool>,
 }
 
 impl ByteDiff {
     /// Start the adapter; it owns the engine and returns it for reaping.
-    pub(crate) fn start(request: PairRequest, input: ByteInput, sink: DiffSink) -> Self {
+    pub fn start(request: PairRequest, input: ByteInput, sink: DiffSink) -> Self {
         let commands = Arc::new(Commands::new());
         let id = request.id;
         let worker = Arc::clone(&commands);
@@ -44,7 +43,6 @@ impl ByteDiff {
         };
         let align = hex_align(input.align);
         let byte_run = input.run;
-        #[cfg(test)]
         let joined = Arc::default();
         let spawned = thread::Builder::new()
             .name("compare-bytes".to_owned())
@@ -64,14 +62,12 @@ impl ByteDiff {
         Self {
             commands,
             thread,
-            #[cfg(test)]
             joined,
         }
     }
 
     /// The flag the reaper sets after both workers joined, for tests that drop the control.
-    #[cfg(test)]
-    pub(crate) fn join_flag(&self) -> Arc<AtomicBool> {
+    pub fn join_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.joined)
     }
 }
@@ -83,7 +79,6 @@ impl Drop for ByteDiff {
         let Some(thread) = self.thread.take() else {
             return;
         };
-        #[cfg(test)]
         let joined = Arc::clone(&self.joined);
         let reaped = thread::Builder::new()
             .name("compare-bytes-join".to_owned())
@@ -92,7 +87,6 @@ impl Drop for ByteDiff {
                     Ok(engine) => engine.join(),
                     Err(_) => tracing::warn!("compare byte thread panicked"),
                 }
-                #[cfg(test)]
                 joined.store(true, Ordering::Release);
             });
         if let Err(error) = reaped {

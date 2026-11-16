@@ -16,16 +16,12 @@ use super::super::settings::CompareSettings;
 use super::super::std_side::StdSide;
 use super::load::Side;
 
-mod git;
-
-pub(super) use git::navo_side_of;
-
 /// Opens a side root folder; `side_of` uses `StdSide`, Navo's `navo_side_of` uses `LocalSide`.
 type RootOpener = fn(Location) -> Result<Arc<dyn SideSource>, Reason>;
 
 /// A local file side from one `Location`, read through `StdSide`; any other provider is
 /// `Reason::Unsupported`.
-pub(super) fn side_of(location: &Location, _settings: &CompareSettings) -> Result<Side, Reason> {
+pub fn side_of(location: &Location, _settings: &CompareSettings) -> Result<Side, Reason> {
     file_side(location, std_root)
 }
 
@@ -36,7 +32,7 @@ fn std_root(root: Location) -> Result<Arc<dyn SideSource>, Reason> {
 
 /// A local file: its parent folder, opened by `open_root`, is the side root and its name is the
 /// relative path. Fails with `Reason::Unsupported` for a non-local location or one with no parent.
-fn file_side(location: &Location, open_root: RootOpener) -> Result<Side, Reason> {
+pub fn file_side(location: &Location, open_root: RootOpener) -> Result<Side, Reason> {
     if !location.is_local() {
         return Err(Reason::Unsupported);
     }
@@ -54,7 +50,7 @@ fn file_side(location: &Location, open_root: RootOpener) -> Result<Side, Reason>
 
 /// A present side that could not open: every read fails with `reason`, so the loader reports it
 /// Unavailable and never gives it a Viewed key.
-pub(super) fn unreadable_side(location: &Location, reason: Reason) -> Side {
+pub fn unreadable_side(location: &Location, reason: Reason) -> Side {
     let rel = RelPath::new(location.path().clone());
     let entry = SideEntry::new(rel, EntryKind::File, 0, None);
     let side: Arc<dyn SideSource> = Arc::new(UnreadableSource {

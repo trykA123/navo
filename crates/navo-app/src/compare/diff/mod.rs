@@ -2,17 +2,13 @@
 //!
 //! Every step runs on an app thread; the UI receives owned snapshots tagged by request id.
 
-mod bytes;
 mod cards;
 mod convert;
 mod copy;
 mod copy_hook;
 mod copy_many;
-mod copy_port;
 mod hooks;
-mod image;
 mod large;
-mod load;
 mod navo_backend;
 mod pair;
 mod sheet_hook;
@@ -24,6 +20,7 @@ mod viewed;
 pub use copy_port::CopyHost;
 pub use hooks::DiffBackend;
 pub use navo_backend::{diff_backend, navo_compare_dirs};
+pub use sidewise_host::compare::diff::{bytes, copy_port, image, load};
 
 #[cfg(test)]
 mod tests;

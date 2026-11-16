@@ -36,7 +36,7 @@ pub fn std_local() -> LocalTarget {
 pub struct CompareStart {
     pub left: CompareTarget,
     pub right: CompareTarget,
-    pub(crate) settings: CompareSettings,
+    pub settings: CompareSettings,
     pub cache: Arc<dyn HashCache>,
 }
 
@@ -99,7 +99,7 @@ enum Command {
 }
 
 /// An open session and the sides it reads, which refresh must reset.
-pub(super) struct Opened {
+pub struct Opened {
     pub session: Session,
     pub refresh: Vec<Arc<dyn SideSource>>,
 }
@@ -116,7 +116,7 @@ impl CompareHandle {
         Self::spawn(move || open_session(request), events)
     }
 
-    pub(super) fn spawn(
+    pub fn spawn(
         open: impl FnOnce() -> Result<Opened, CompareError> + Send + 'static,
         events: Sender<CompareEvent>,
     ) -> Self {
@@ -205,7 +205,7 @@ fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
 }
 
 /// Opens one side on the session thread; an opener's side is also kept for `refresh`.
-pub(super) fn open_side(
+pub fn open_side(
     target: CompareTarget,
     refresh: &mut Vec<Arc<dyn SideSource>>,
 ) -> Result<Arc<dyn SideSource>, Reason> {

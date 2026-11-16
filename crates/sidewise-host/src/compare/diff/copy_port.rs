@@ -23,7 +23,7 @@ fn not_copyable() -> String {
 }
 
 /// Refuse `change` through `done` with the read-only text; nothing is written.
-pub(crate) fn refuse_change(change: &CopyChange, done: &CopySink) {
+pub fn refuse_change(change: &CopyChange, done: &CopySink) {
     done(CopyDone {
         request: change.pair.id,
         direction: change.direction,
@@ -32,6 +32,6 @@ pub(crate) fn refuse_change(change: &CopyChange, done: &CopySink) {
 }
 
 /// Refuse a sheet run through `done` with the read-only text; nothing is written.
-pub(crate) fn refuse_sheet(done: SheetSink) {
+pub fn refuse_sheet(done: SheetSink) {
     done(SheetResult::Refused(not_copyable()));
 }

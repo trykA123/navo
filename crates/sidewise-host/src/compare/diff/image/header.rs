@@ -17,23 +17,20 @@ pub(super) const WEBP_MAX_PIXELS: u64 = MAX_PIXELS / 4 * 3;
 /// The widest or tallest side the decoder accepts; the 64 MP cap bounds the area.
 const MAX_SIDE: u32 = 64_000_000;
 
-#[cfg(test)]
 static OVERSIZE_DECODES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Number of decoders built for images over 64 MP; tests assert this stays zero.
-#[cfg(test)]
-pub(crate) fn oversize_decodes() -> usize {
+pub fn oversize_decodes() -> usize {
     OVERSIZE_DECODES.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 /// Reset the oversize decoder counter before one test.
-#[cfg(test)]
-pub(crate) fn reset_oversize_decodes() {
+pub fn reset_oversize_decodes() {
     OVERSIZE_DECODES.store(0, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// True when an image has more than 64 million pixels (D20).
-pub(crate) fn too_large(size: ImageSize) -> bool {
+pub fn too_large(size: ImageSize) -> bool {
     u64::from(size.width) * u64::from(size.height) > MAX_PIXELS
 }
 

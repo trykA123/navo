@@ -12,7 +12,7 @@ use super::{Failure, Prepared, prepare};
 use crate::compare::diff::load::LoadInput;
 
 /// Build the image card detail: score, note and both thumbnails, or the failure text.
-pub(crate) fn card(input: &LoadInput, cancel: &CancelToken) -> Option<CardDetail> {
+pub fn card(input: &LoadInput, cancel: &CancelToken) -> Option<CardDetail> {
     if cancel.is_cancelled() {
         return None;
     }

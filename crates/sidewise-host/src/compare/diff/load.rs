@@ -23,10 +23,10 @@ const IMAGE_EXTENSIONS: [&str; 14] = [
 ];
 
 /// One side of a pair to load: its source and its listed entry.
-pub(crate) type Side = (Arc<dyn SideSource>, SideEntry);
+pub type Side = (Arc<dyn SideSource>, SideEntry);
 
 /// Everything `load_pair` needs: both sides, the rule options and the fallback encoding.
-pub(crate) struct LoadInput {
+pub struct LoadInput {
     pub left: Option<Side>,
     pub right: Option<Side>,
     pub options: Options,
@@ -35,7 +35,7 @@ pub(crate) struct LoadInput {
 
 /// A loaded pair. `alignment` is set only when both sides are Whole text.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Loaded {
+pub struct Loaded {
     pub kind: PairKind,
     pub left: Option<Whole>,
     pub right: Option<Whole>,
@@ -59,7 +59,7 @@ enum SideLoad {
 ///
 /// A cancelled token returns `Unavailable` with the stopped reason before any read.
 #[must_use]
-pub(crate) fn load_pair(input: &LoadInput, cancel: &CancelToken) -> Loaded {
+pub fn load_pair(input: &LoadInput, cancel: &CancelToken) -> Loaded {
     if cancel.is_cancelled() {
         return unavailable(Reason::Stopped);
     }

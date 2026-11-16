@@ -15,13 +15,11 @@ use super::load::{LoadInput, Side};
 
 mod header;
 mod ico;
-#[cfg(test)]
-pub(crate) mod probe;
-pub(crate) mod thumb;
+pub mod probe;
+pub mod thumb;
 
-pub(crate) use self::header::too_large;
-#[cfg(test)]
-pub(crate) use self::header::{oversize_decodes, reset_oversize_decodes};
+pub use self::header::too_large;
+pub use self::header::{oversize_decodes, reset_oversize_decodes};
 
 /// The largest encoded side that is decoded, in bytes read; a larger one is hashed only.
 const MAX_READ: usize = 64 * 1024 * 1024;
@@ -66,7 +64,7 @@ enum Prepared {
 
 /// Compare an opened image pair and report `Image`, or `Failed` when a side cannot be read.
 /// Returns false when the pair was closed and no update must be sent.
-pub(crate) fn diff(input: &LoadInput, request: u64, sink: &DiffSink, cancel: &CancelToken) -> bool {
+pub fn diff(input: &LoadInput, request: u64, sink: &DiffSink, cancel: &CancelToken) -> bool {
     let result = compare(input, cancel);
     if cancel.is_cancelled() {
         return false;
@@ -126,12 +124,10 @@ fn prepare(input: &LoadInput, cancel: &CancelToken) -> Result<Prepared, Failure>
         }
         Err(other) => return Err(other),
     };
-    #[cfg(test)]
     probe::left_decoded(left, cancel);
     if cancel.is_cancelled() {
         return Err(Failure::Cancelled);
     }
-    #[cfg(test)]
     probe::right_decoding(left);
     let second = header::decode(&right_bytes, right_format)?;
     if cancel.is_cancelled() {

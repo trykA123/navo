@@ -23,12 +23,12 @@ fn name_of((_, entry): &Side) -> String {
 }
 
 /// Arm the pair whose left file is `name` to cancel right after its left decode.
-pub(crate) fn cancel_after_left_decode(name: &str) {
+pub fn cancel_after_left_decode(name: &str) {
     lock(&ARMED).push(name.to_owned());
 }
 
 /// True when the pair whose left file is `name` decoded its right side.
-pub(crate) fn right_decoded(name: &str) -> bool {
+pub fn right_decoded(name: &str) -> bool {
     lock(&RIGHT).iter().any(|seen| seen == name)
 }
 

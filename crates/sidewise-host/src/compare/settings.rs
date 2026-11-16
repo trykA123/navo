@@ -3,11 +3,11 @@
 use navo_compare::model::Budget;
 use navo_compare::session::{CheckMode, NetworkCap};
 use navo_compare::settings::CompareGitEngine;
+use navo_compare::settings::{Compare, ContentCheck};
 use navo_fs::{NETWORK_WALK_MAX_ENTRIES, NETWORK_WALK_MAX_TIME};
-use navo_store::{Compare, ContentCheck};
 
 /// The shared network-walk bound (D103) as the compare engine takes it.
-pub(crate) fn network_cap() -> NetworkCap {
+pub fn network_cap() -> NetworkCap {
     NetworkCap {
         entries: NETWORK_WALK_MAX_ENTRIES,
         duration: NETWORK_WALK_MAX_TIME,
@@ -16,7 +16,7 @@ pub(crate) fn network_cap() -> NetworkCap {
 
 /// The `[compare]` settings as the compare backend reads them.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct CompareSettings {
+pub struct CompareSettings {
     pub git_engine: CompareGitEngine,
     pub ignore_list: Vec<String>,
     pub respect_gitignore: bool,
@@ -53,7 +53,7 @@ impl From<&Compare> for CompareSettings {
 
 impl CompareSettings {
     /// The memory budget with the setting clamped to 256 MiB through 16,384 MiB.
-    pub(crate) fn budget(&self) -> Budget {
+    pub fn budget(&self) -> Budget {
         Budget::from_mib(
             self.memory_budget_mib
                 .clamp(Budget::MIN_MIB, Budget::MAX_MIB),

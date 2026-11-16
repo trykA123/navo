@@ -21,7 +21,7 @@ use super::entry::{child_rel, reason_of, segments};
 
 /// A local folder read with `std::fs`. Names are kept as `LocalFs` keeps them: a name that is
 /// not valid text is listed with its escaped spelling, which `location` turns back into bytes.
-pub(crate) struct StdSide {
+pub struct StdSide {
     root: Location,
     provider: ProviderId,
     volume: u64,
@@ -30,7 +30,7 @@ pub(crate) struct StdSide {
 
 impl StdSide {
     /// Opens a side on `root`; fails with a reason when it is missing or not a folder.
-    pub(crate) fn new(root: Location) -> Result<Self, Reason> {
+    pub fn new(root: Location) -> Result<Self, Reason> {
         let path = os_path(&root).map_err(|error| reason_of(error.kind))?;
         let found = walk::stat(&path).map_err(|error| fs_reason(&error))?;
         if found.kind != FsKind::Folder && !found.link_to_folder {
@@ -41,7 +41,6 @@ impl StdSide {
             .flatten()
             .map_or(0, |identity| identity.volume);
         let network = is_network_class(drive_class(&root));
-        #[cfg(test)]
         opened::note("StdSide");
         Ok(Self {
             root,
@@ -208,8 +207,7 @@ fn io_reason(error: &io::Error) -> Reason {
 
 /// Test-only record of the last side kind opened on this thread, so tests can tell `StdSide`
 /// from `LocalSide` (both report the local provider and list the same entries).
-#[cfg(test)]
-pub(crate) mod opened {
+pub mod opened {
     use std::cell::Cell;
 
     thread_local! {
@@ -217,12 +215,12 @@ pub(crate) mod opened {
     }
 
     /// Records that a side of `kind` opened on this thread.
-    pub(crate) fn note(kind: &'static str) {
+    pub fn note(kind: &'static str) {
         LAST.with(|last| last.set(Some(kind)));
     }
 
     /// The kind of the last side opened on this thread, if any; reading clears it.
-    pub(crate) fn take() -> Option<&'static str> {
+    pub fn take() -> Option<&'static str> {
         LAST.with(Cell::take)
     }
 }

@@ -6151,6 +6151,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sidewise-engine",
+ "sidewise-host",
  "tempfile",
  "test-assembler",
  "thiserror 2.0.21",
@@ -9241,6 +9242,22 @@ dependencies = [
  "sidewise-core",
  "tempfile",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "sidewise-host"
+version = "0.7.0"
+dependencies = [
+ "blake3",
+ "image",
+ "imagesize 0.13.0",
+ "sidewise-core",
+ "sidewise-engine",
+ "sidewise-fs",
+ "sidewise-l10n",
+ "sidewise-ui",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]
