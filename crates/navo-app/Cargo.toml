@@ -10,7 +10,7 @@ license.workspace = true
 [lib]
 name = "navo"
 path = "src/lib.rs"
-doctest = false
+doctest = true
 
 [[bin]]
 name = "navo"

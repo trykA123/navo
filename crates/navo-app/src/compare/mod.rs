@@ -39,3 +39,20 @@ pub use pane::PaneCompare;
 
 #[cfg(test)]
 mod tests;
+
+/// The app's file hooks, for a host that reads and saves compare sides.
+///
+/// ```
+/// let hooks = navo::compare::file_hooks(None);
+/// let name = format!("navo-file-hooks-{}.txt", std::process::id());
+/// let path = std::env::temp_dir().join(name);
+/// std::fs::write(&path, b"hello").expect("write the sample file");
+/// let location = navo_core::Location::local(navo_core::ProviderPath::from_bytes(
+///     path.to_string_lossy().as_bytes(),
+/// ))
+/// .expect("a local location");
+/// let text = (hooks.read)(&location);
+/// std::fs::remove_file(&path).ok();
+/// assert_eq!(text.map(|text| text.text).ok().as_deref(), Some("hello"));
+/// ```
+pub use crate::files::hooks as file_hooks;
