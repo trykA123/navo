@@ -44,6 +44,7 @@ pub use inbox::DiffSlot;
 #[cfg(test)]
 pub(in crate::window_view) use inbox::coalesce;
 use large::LargeShown;
+pub use look::{LookDefaults, Preset as LookPreset};
 use sideways::SidewaysHandle;
 pub(super) use state::FileState;
 use state::request_of;
