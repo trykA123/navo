@@ -9,6 +9,7 @@ use navo_compare::model::{CancelToken, ReadHint, Reason, RelPath, SideEntry, Sid
 use navo_core::ProviderPath;
 
 use super::{location, write};
+use crate::compare::handle::{CompareTarget, open_side, std_local};
 use crate::compare::local::LocalSide;
 use crate::compare::std_side::StdSide;
 
@@ -148,4 +149,21 @@ fn a_cancelled_std_list_stops_without_entries() {
         &cancel,
     );
     assert_eq!((listed, seen), (Ok(()), 0));
+}
+
+#[test]
+fn the_glue_default_opens_a_std_side() {
+    let dir = tempfile::tempdir().unwrap();
+    tree(dir.path());
+    let target = std_local()(&location(dir.path()));
+    assert!(
+        matches!(target, CompareTarget::Local(_)),
+        "default is not a plain local target"
+    );
+    let side = open_side(target, &mut Vec::new()).unwrap();
+    let direct = StdSide::new(location(dir.path())).unwrap();
+    assert_eq!(side.provider(), direct.provider());
+    let top = list(&*side, &RelPath::root());
+    assert_eq!(top, list(&direct, &RelPath::root()));
+    assert!(top.len() >= 5, "listing too short: {top:?}");
 }

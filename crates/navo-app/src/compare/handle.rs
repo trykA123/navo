@@ -11,19 +11,26 @@ use navo_core::Location;
 use navo_ui::compare_diff::CompareOptions;
 
 use super::convert::settings_from;
-use super::local::LocalSide;
+use super::pane::LocalTarget;
 use super::rules;
 use super::settings::{CompareSettings, network_cap};
+use super::std_side::StdSide;
 
 const POLL: Duration = Duration::from_millis(10);
 
 /// Opens one side of a compare. It runs on the session thread, never on the UI thread.
 pub type SideOpener = Box<dyn FnOnce() -> Result<Arc<dyn SideSource>, Reason> + Send>;
 
-/// One side of a compare: a local folder, or an opener the session thread runs.
+/// One side of a compare: a local folder (opened as a `StdSide`), or an opener the session
+/// thread runs.
 pub enum CompareTarget {
     Local(Location),
     Side(SideOpener),
+}
+
+/// Sidewise's default target builder: each location opens as a `CompareTarget::Local`.
+pub fn std_local() -> LocalTarget {
+    Arc::new(|location: &Location| CompareTarget::Local(location.clone()))
 }
 
 pub struct CompareStart {
@@ -197,12 +204,13 @@ fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
     Ok(Opened { session, refresh })
 }
 
-fn open_side(
+/// Opens one side on the session thread; an opener's side is also kept for `refresh`.
+pub(super) fn open_side(
     target: CompareTarget,
     refresh: &mut Vec<Arc<dyn SideSource>>,
 ) -> Result<Arc<dyn SideSource>, Reason> {
     Ok(match target {
-        CompareTarget::Local(root) => Arc::new(LocalSide::new(root)?),
+        CompareTarget::Local(root) => Arc::new(StdSide::new(root)?),
         CompareTarget::Side(open) => {
             let side = open()?;
             refresh.push(Arc::clone(&side));
