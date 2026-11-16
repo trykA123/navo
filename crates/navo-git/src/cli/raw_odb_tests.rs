@@ -142,6 +142,10 @@ fn delete_loose_object(work: &Path, spec: &str) {
     #[cfg(windows)]
     {
         let mut perms = fs::metadata(&loose).unwrap().permissions();
+        #[expect(
+            clippy::permissions_set_readonly_false,
+            reason = "Windows only: git marks loose objects read-only, which blocks the delete"
+        )]
         perms.set_readonly(false);
         fs::set_permissions(&loose, perms).unwrap();
     }
