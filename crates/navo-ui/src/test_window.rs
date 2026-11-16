@@ -21,8 +21,8 @@ pub(crate) fn open_sized<V: Render>(
         gpui_kit::init(cx);
         tokens::apply(Mode::Light, cx);
         crate::file_list::bind_keys(cx);
-        crate::confirm_dialog::bind_keys(cx);
-        crate::context_menu::bind_keys(cx);
+        crate::commands::kit_keys::bind_confirm_dialog(cx);
+        crate::commands::kit_keys::bind_context_menu(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),
