@@ -5,12 +5,30 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use navo_store::{CacheDb, CacheError};
 
+/// A Viewed store failure, kept as its message so hosts need no store error type.
+#[derive(Debug)]
+pub(crate) struct ViewedError(pub String);
+
+impl std::fmt::Display for ViewedError {
+    /// Writes the stored message.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl From<CacheError> for ViewedError {
+    /// Keeps the store error's message.
+    fn from(error: CacheError) -> Self {
+        Self(error.to_string())
+    }
+}
+
 /// Reads and writes Viewed marks; every call runs on a session worker.
 pub(crate) trait ViewedMarks: Send + Sync {
     /// Whether this 64-byte content key is marked viewed.
-    fn get(&self, key: &[u8; 64]) -> Result<bool, CacheError>;
+    fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError>;
     /// Sets or clears the mark for this 64-byte content key.
-    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), CacheError>;
+    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError>;
 }
 
 /// The `compare-viewed` table behind a mutex, so writes never reach the UI thread.
@@ -32,23 +50,23 @@ impl ViewedStore {
 }
 
 impl ViewedMarks for ViewedStore {
-    fn get(&self, key: &[u8; 64]) -> Result<bool, CacheError> {
+    fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError> {
         let guard = self.db();
         match guard.as_ref() {
-            Some(db) => db.get_viewed(key),
+            Some(db) => db.get_viewed(key).map_err(ViewedError::from),
             None => Ok(false),
         }
     }
 
-    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), CacheError> {
+    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError> {
         let mut guard = self.db();
         let Some(db) = guard.as_mut() else {
             return Ok(());
         };
         if viewed {
-            db.put_viewed(key, now_ms())
+            db.put_viewed(key, now_ms()).map_err(ViewedError::from)
         } else {
-            db.clear_viewed(key).map(|_| ())
+            db.clear_viewed(key).map(|_| ()).map_err(ViewedError::from)
         }
     }
 }
@@ -66,11 +84,11 @@ fn now_ms() -> i64 {
 pub(crate) struct NoViewed;
 
 impl ViewedMarks for NoViewed {
-    fn get(&self, _key: &[u8; 64]) -> Result<bool, CacheError> {
+    fn get(&self, _key: &[u8; 64]) -> Result<bool, ViewedError> {
         Ok(false)
     }
 
-    fn set(&self, _key: &[u8; 64], _viewed: bool) -> Result<(), CacheError> {
+    fn set(&self, _key: &[u8; 64], _viewed: bool) -> Result<(), ViewedError> {
         Ok(())
     }
 }
@@ -100,11 +118,11 @@ impl LazyViewed {
 }
 
 impl ViewedMarks for LazyViewed {
-    fn get(&self, key: &[u8; 64]) -> Result<bool, CacheError> {
+    fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError> {
         self.store().get(key)
     }
 
-    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), CacheError> {
+    fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError> {
         self.store().set(key, viewed)
     }
 }

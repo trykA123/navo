@@ -1,6 +1,6 @@
 //! The folder-compare hash cache over the store's `content-hash` table.
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use navo_compare::model::{ContentKey, HashCache};
 use navo_store::{CacheDb, ContentKey as StoreKey};
@@ -65,4 +65,26 @@ fn store_key(key: &ContentKey) -> Option<StoreKey> {
         modified: key.modified,
         file_id: key.file_id,
     })
+}
+
+/// A hash cache kept for this run only; a store failure gives a cache that always misses.
+pub(crate) fn memory_cache() -> Arc<dyn HashCache> {
+    match CacheDb::open_in_memory() {
+        Ok(db) => Arc::new(StoreHashCache::new(db)),
+        Err(error) => {
+            tracing::warn!(%error, "compare hash cache unavailable");
+            Arc::new(NoHashes)
+        }
+    }
+}
+
+/// The cache used when the store cannot open: every lookup misses.
+struct NoHashes;
+
+impl HashCache for NoHashes {
+    fn get(&self, _key: &ContentKey) -> Option<[u8; 32]> {
+        None
+    }
+
+    fn put(&self, _key: &ContentKey, _hash: [u8; 32]) {}
 }

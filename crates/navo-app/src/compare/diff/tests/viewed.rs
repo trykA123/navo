@@ -13,7 +13,7 @@ use crate::compare::diff::stream::StreamSession;
 use crate::compare::diff::tests::stream::support::{
     PairData, changed_pair, channel, items, simple_load,
 };
-use crate::compare::diff::viewed::{ViewedMarks, ViewedStore};
+use crate::compare::diff::viewed::{ViewedError, ViewedMarks, ViewedStore};
 
 const WAIT: Duration = Duration::from_secs(20);
 const SIXTY_FOUR_MIB: u64 = 64 * 1024 * 1024;
@@ -108,11 +108,21 @@ fn a_store_error_leaves_cards_unviewed() {
 struct FailingViewed;
 
 impl ViewedMarks for FailingViewed {
-    fn get(&self, _key: &[u8; 64]) -> Result<bool, CacheError> {
-        Err(CacheError::Io(io::Error::other("no viewed store")))
+    fn get(&self, _key: &[u8; 64]) -> Result<bool, ViewedError> {
+        Err(ViewedError("no viewed store".to_owned()))
     }
 
-    fn set(&self, _key: &[u8; 64], _viewed: bool) -> Result<(), CacheError> {
-        Err(CacheError::Io(io::Error::other("no viewed store")))
+    fn set(&self, _key: &[u8; 64], _viewed: bool) -> Result<(), ViewedError> {
+        Err(ViewedError("no viewed store".to_owned()))
     }
+}
+
+/// A store error converts to a `ViewedError` that shows the store's message.
+#[test]
+fn viewed_error_from_cache_error_keeps_the_message() {
+    let cache = CacheError::Io(io::Error::other("disk gone"));
+    let message = cache.to_string();
+    let error = ViewedError::from(cache);
+    assert_eq!(error.to_string(), message);
+    assert!(error.0.contains("disk gone"));
 }

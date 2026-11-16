@@ -1,31 +1,26 @@
 //! Pane compare mode over the session thread: `CompareHooks` for the window.
 
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, OnceLock};
 use std::thread;
 
 use navo_compare::model::HashCache;
 use navo_core::Location;
-use navo_store::CacheDb;
 use navo_ui::browser::{CompareControl, CompareHooks, CompareSink, CompareUpdate};
 use navo_ui::compare_diff::CompareOptions;
 
 use super::convert::{settings_from, updates_of};
 use super::handle::{CompareEvent, CompareHandle, CompareStart, CompareTarget};
-use super::hash_cache::StoreHashCache;
 
-/// Starts folder compares of two local panes. Hashes are kept for this run of Navo only.
-#[derive(Default)]
+/// Starts folder compares of two local panes. The host picks the hash cache.
 pub struct PaneCompare {
-    cache: OnceLock<Arc<dyn HashCache>>,
+    cache: Arc<dyn HashCache>,
 }
 
 impl PaneCompare {
-    #[cfg(test)]
-    pub(super) fn with_cache(cache: Arc<dyn HashCache>) -> Self {
-        Self {
-            cache: OnceLock::from(cache),
-        }
+    /// Builds the hooks over the host's hash cache, shared by every compare it starts.
+    pub fn new(cache: Arc<dyn HashCache>) -> Self {
+        Self { cache }
     }
 }
 
@@ -46,7 +41,7 @@ impl CompareHooks for PaneCompare {
             left: CompareTarget::Local(left.clone()),
             right: CompareTarget::Local(right.clone()),
             settings: settings_from(options),
-            cache: Arc::clone(self.cache.get_or_init(memory_cache)),
+            cache: Arc::clone(&self.cache),
         };
         forward(receiver, sink);
         Box::new(Running(CompareHandle::start(request, events)))
@@ -96,24 +91,4 @@ impl CompareControl for Running {
     fn continue_walk(&self) {
         self.0.continue_walk();
     }
-}
-
-fn memory_cache() -> Arc<dyn HashCache> {
-    match CacheDb::open_in_memory() {
-        Ok(db) => Arc::new(StoreHashCache::new(db)),
-        Err(error) => {
-            tracing::warn!(%error, "compare hash cache unavailable");
-            Arc::new(NoHashes)
-        }
-    }
-}
-
-struct NoHashes;
-
-impl HashCache for NoHashes {
-    fn get(&self, _key: &navo_compare::model::ContentKey) -> Option<[u8; 32]> {
-        None
-    }
-
-    fn put(&self, _key: &navo_compare::model::ContentKey, _hash: [u8; 32]) {}
 }

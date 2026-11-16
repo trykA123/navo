@@ -4,14 +4,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 
-use navo_store::CacheError;
 use navo_ui::compare_diff::{
     Card, PairRequest, StreamControl, StreamSink, StreamUpdate, ViewedKey,
 };
 
 use self::state::{Finish, State, ViewedWrite};
 use super::load::LoadInput;
-use super::viewed::ViewedMarks;
+use super::viewed::{ViewedError, ViewedMarks};
 
 pub(crate) mod detail;
 pub(crate) mod detail_state;
@@ -230,7 +229,7 @@ fn join_workers(workers: Vec<JoinHandle<()>>) {
 
 impl Shared {
     /// Log the first Viewed store error only, so one failure does not spam the log.
-    pub(super) fn warn_viewed(&self, error: &CacheError) {
+    pub(super) fn warn_viewed(&self, error: &ViewedError) {
         if !self.viewed_error.swap(true, Ordering::Relaxed) {
             tracing::warn!(%error, "the compare viewed store failed");
         }

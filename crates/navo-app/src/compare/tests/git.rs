@@ -9,8 +9,9 @@ use std::sync::mpsc;
 use navo_compare::model::{
     CancelToken, EntryKind, HashCache, ObjectId, ReadHint, Reason, RelPath, SideSource, Status,
 };
+use navo_compare::settings::CompareGitEngine;
 use navo_core::ProviderPath;
-use navo_git::{EngineKind, EngineSetting};
+use navo_git::EngineKind;
 use navo_store::CacheDb;
 use std::ops::ControlFlow;
 
@@ -202,17 +203,26 @@ fn engine_for_follows_the_setting_and_the_repository_format() {
         git_engine,
         ..CompareSettings::default()
     };
-    assert_eq!(engine_for(&with(EngineSetting::Git), &old), EngineKind::Cli);
     assert_eq!(
-        engine_for(&with(EngineSetting::Auto), &old),
-        EngineKind::Gix
-    );
-    assert_eq!(engine_for(&with(EngineSetting::Gix), &old), EngineKind::Gix);
-    assert_eq!(
-        engine_for(&with(EngineSetting::Auto), &new),
+        engine_for(&with(CompareGitEngine::Git), &old),
         EngineKind::Cli
     );
-    assert_eq!(engine_for(&with(EngineSetting::Gix), &new), EngineKind::Cli);
+    assert_eq!(
+        engine_for(&with(CompareGitEngine::Auto), &old),
+        EngineKind::Gix
+    );
+    assert_eq!(
+        engine_for(&with(CompareGitEngine::Gix), &old),
+        EngineKind::Gix
+    );
+    assert_eq!(
+        engine_for(&with(CompareGitEngine::Auto), &new),
+        EngineKind::Cli
+    );
+    assert_eq!(
+        engine_for(&with(CompareGitEngine::Gix), &new),
+        EngineKind::Cli
+    );
 }
 
 struct PromisorFixture {

@@ -18,6 +18,8 @@ use navo_ui::compare_diff::{
 use navo_ui::settings::Values;
 
 use crate::compare::diff::DiffBackend;
+use crate::compare::diff::copy::CopyRefusal;
+use crate::compare::diff::copy_port::{refuse_change, refuse_sheet};
 use crate::jobs::{SessionHolds, open};
 
 const WAIT: Duration = Duration::from_secs(20);
@@ -258,4 +260,33 @@ fn a_finished_copy_reports_once() {
         CopyResult::Copied
     ));
     assert!(ends.try_recv().is_err());
+}
+
+#[test]
+fn the_read_only_refusal_matches_the_copy_refusal() {
+    let change = CopyChange {
+        pair: PairRequest {
+            id: 4,
+            path: "left.txt".to_owned(),
+            left: None,
+            right: None,
+        },
+        left_bytes: 0..1,
+        right_bytes: 0..1,
+        digest: [0; 16],
+        direction: CopyDirection::ToLeft,
+        lines: None,
+    };
+    let (done, receiver) = copy_sink();
+    refuse_change(&change, &done);
+    let end = receiver.recv_timeout(WAIT).unwrap();
+    assert_eq!((end.request, end.direction), (4, CopyDirection::ToLeft));
+    let text = CopyRefusal::NotCopyable.text();
+    assert_eq!(end.result, CopyResult::Refused(text.clone()));
+    let (sender, results) = mpsc::channel();
+    refuse_sheet(Arc::new(move |result| drop(sender.send(result))));
+    assert_eq!(
+        results.recv_timeout(WAIT).unwrap(),
+        SheetResult::Refused(text)
+    );
 }
