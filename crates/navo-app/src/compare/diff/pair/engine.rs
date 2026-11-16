@@ -13,22 +13,21 @@ use navo_ui::compare_diff::{DiffSink, PairControl, PairKind, PairRequest};
 use super::super::bytes::{ByteDiff, ByteInput};
 use super::super::large::{LargeDiff, LargeInput};
 use super::super::load::{LoadInput, Loaded};
-use super::super::sources::{SPOOL_DIR, Sources};
+use super::super::sources::Sources;
 use crate::compare::settings::CompareSettings;
-use navo_store::StoreDirs;
 
-/// What every pair engine needs: the rules' settings, a memory budget and whether it spools.
+/// What every pair engine needs: the rules' settings, a memory budget and the spool root.
 #[derive(Clone)]
 pub(crate) struct EnginePlan {
     pub settings: CompareSettings,
     pub budget: Budget,
-    /// True when a Git blob may need the on-disk spool.
-    pub spool: bool,
+    /// The Git spool root the host chose; `None` means a large Git blob cannot spool.
+    pub spool: Option<PathBuf>,
 }
 
 impl EnginePlan {
-    /// A plan for `settings`; `spool` asks the worker for the Git spool folder.
-    pub(crate) fn new(settings: CompareSettings, spool: bool) -> Self {
+    /// A plan for `settings` that spools large Git blobs under `spool`, if any.
+    pub(crate) fn new(settings: CompareSettings, spool: Option<PathBuf>) -> Self {
         Self {
             budget: settings.budget(),
             settings,
@@ -40,7 +39,7 @@ impl EnginePlan {
 impl Default for EnginePlan {
     /// Default rules and budget, with no spool folder (local pairs need none).
     fn default() -> Self {
-        Self::new(CompareSettings::default(), false)
+        Self::new(CompareSettings::default(), None)
     }
 }
 
@@ -170,13 +169,9 @@ pub(crate) fn large_input(
     }
 }
 
-/// The spool base, detected on the worker because it stats portable markers.
+/// The spool base the host chose when it built the backend (NC101); `None` spools nothing.
 pub(crate) fn spool_path(plan: &EnginePlan) -> Option<PathBuf> {
-    if plan.spool {
-        StoreDirs::detect().map(|dirs| dirs.data.join(SPOOL_DIR))
-    } else {
-        None
-    }
+    plan.spool.clone()
 }
 
 /// Commands from the screen that must reach the engine, or wait for the next one after a refresh.

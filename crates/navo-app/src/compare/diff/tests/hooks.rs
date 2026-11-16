@@ -326,3 +326,13 @@ fn navo_dirs_put_the_spool_under_the_profile_data() {
         "without a profile there is no spool to write or sweep"
     );
 }
+
+#[test]
+fn a_backend_without_a_spool_plans_none() {
+    let backend = DiffBackend::with_parts(Arc::new(side_of), Arc::new(|| Arc::new(NoViewed)));
+    let plan = backend.plan(crate::compare::settings::CompareSettings::default());
+    assert_eq!(
+        plan.spool, None,
+        "a host without a spool must never get Navo's profile spool"
+    );
+}

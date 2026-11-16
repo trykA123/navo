@@ -1,4 +1,4 @@
-//! Navo's `DiffBackend` constructor: it picks the copy service or the default backend.
+//! Navo's `DiffBackend` constructor: it builds Navo's parts and adds the copy service.
 //!
 //! It sits beside the hooks so the glue can build its backend without reaching into `hooks`.
 
@@ -8,15 +8,17 @@ use navo_fs::ProviderOps;
 use navo_store::StoreDirs;
 use navo_ui::browser::LogFactory;
 
-use super::hooks::DiffBackend;
+use super::hooks::{DiffBackend, navo_parts};
 use super::sources::SPOOL_DIR;
 use crate::compare::dirs::CompareDirs;
 
 /// The diff hooks; with `copy`, copies and saves keep their old files through that job factory.
+/// It detects Navo's profile once, here, for the spool root.
 pub fn diff_backend(copy: Option<LogFactory>, local: &Arc<dyn ProviderOps>) -> Arc<DiffBackend> {
+    let backend = DiffBackend::new(navo_parts(navo_compare_dirs(StoreDirs::detect().as_ref())));
     Arc::new(match copy {
-        Some(factory) => DiffBackend::with_copy(factory, local.clone()),
-        None => DiffBackend::default(),
+        Some(factory) => backend.copying(factory, local.clone()),
+        None => backend,
     })
 }
 
