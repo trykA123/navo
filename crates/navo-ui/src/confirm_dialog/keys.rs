@@ -11,11 +11,6 @@ pub(super) const BUTTON: &str = "ConfirmButton DialogButton";
 
 gpui_kit::actions!(confirm_dialog, [Dismiss]);
 
-pub fn bind_keys(cx: &mut App) {
-    dialog_focus::bind_keys(cx);
-    crate::commands::bind_namespace(cx, "confirm_dialog");
-}
-
 pub(super) struct Keys {
     pub stops: Vec<FocusHandle>,
     pub buttons: Vec<FocusHandle>,

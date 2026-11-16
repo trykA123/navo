@@ -150,7 +150,7 @@ fn the_pane_page_shows_one_pane_of_sample_rows(cx: &mut TestAppContext) {
 fn the_operate_page_shows_both_dialogs_and_every_job_state(cx: &mut TestAppContext) {
     let (window, _) = cx.update(|cx| {
         navo_ui::init(Mode::Light, cx).expect("bundled fonts load");
-        navo_ui::confirm_dialog::bind_keys(cx);
+        navo_ui::kit_keys::bind_confirm_dialog(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: Point::default(),

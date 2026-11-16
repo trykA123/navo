@@ -16,8 +16,6 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Subscription, Toggled, Window, div, px,
 };
 
-pub use keys::bind_keys;
-
 use crate::dialog_focus::{Stop, focus_ring};
 use crate::primitives::{
     Button, ButtonVariant, IconName, TextField, TextFieldState, icon, text_field_state,
