@@ -5,7 +5,7 @@
 
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -28,6 +28,23 @@ use spool::{Owner, SpoolFile, owner_for, spool_copy, write_reason};
 /// The cache folder that holds one sub-folder per Navo process.
 pub(crate) const SPOOL_DIR: &str = "compare-spool";
 const COPY_CHUNK: usize = 1024 * 1024;
+
+/// Accept only an absolute spool root with no `..` step that is not itself a link; a missing
+/// root passes (the sweep skips it). A root that cannot be checked is refused (fail closed).
+fn check_root(root: &Path) -> Result<(), &'static str> {
+    if root.is_relative() {
+        return Err("the root is relative");
+    }
+    if root.components().any(|part| part == Component::ParentDir) {
+        return Err("the root has a `..` step");
+    }
+    match std::fs::symlink_metadata(root) {
+        Ok(meta) if meta.file_type().is_symlink() => Err("the root is a link"),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("the root could not be checked"),
+    }
+}
 
 /// The sources of one screen; the returned spool sources outlive it until they drop.
 #[derive(Clone)]
@@ -54,10 +71,17 @@ impl Sources {
     }
 
     /// Remove spool folders left by processes that are no longer running, inside `spool` only.
-    /// `None` means the host has no spool, so nothing is swept.
+    /// `None` means the host has no spool; a root that fails `check_root` is refused. Both
+    /// sweep nothing.
     pub(crate) fn sweep_startup(spool: Option<&Path>) {
-        if let Some(root) = spool {
-            Self::sweep_root(root);
+        let Some(root) = spool else {
+            return;
+        };
+        match check_root(root) {
+            Ok(()) => Self::sweep_root(root),
+            Err(reason) => {
+                tracing::warn!(path = %root.display(), reason, "compare spool sweep refused");
+            }
         }
     }
 

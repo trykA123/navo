@@ -283,8 +283,8 @@ fn open_stream_runs_the_detail_lane_for_a_binary_pair() {
     write(dir.path(), "left.bin", b"a\0b");
     write(dir.path(), "right.bin", b"a\0c");
     let (sink, receiver) = channel();
-    let stream =
-        DiffBackend::default().open_stream(&CompareOptions::from_values(&Values::default()), sink);
+    let backend = DiffBackend::with_parts(Arc::new(side_of), Arc::new(|| Arc::new(NoViewed)));
+    let stream = backend.open_stream(&CompareOptions::from_values(&Values::default()), sink);
     let left = dir.path().join("left.bin");
     let right = dir.path().join("right.bin");
     stream.focus(vec![8]);

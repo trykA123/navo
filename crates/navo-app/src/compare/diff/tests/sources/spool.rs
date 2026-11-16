@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::fs::OpenOptions;
+use std::path::{Path, PathBuf};
 
 use navo_compare::model::CancelToken;
 
@@ -97,26 +98,74 @@ fn the_sweep_holds_the_folder_lock_until_the_folder_is_gone() {
 }
 
 #[test]
-fn a_sweep_never_deletes_outside_its_spool_root() {
+fn a_sweep_of_a_profile_folder_deletes_only_spool_folders() {
     let dir = tempfile::tempdir().unwrap();
-    let spool = dir.path().join(SPOOL_DIR);
-    let dead = spool.join("222-2");
-    fs::create_dir_all(&dead).unwrap();
-    fs::write(dead.join("x"), b"stale").unwrap();
-    fs::write(dir.path().join("keep.txt"), b"user file").unwrap();
+    let data = dir.path().join("data");
+    let dead = dead_owner(&data);
+    for (folder, file) in [
+        ("logs", "app.log"),
+        ("crash", "dump.dmp"),
+        ("12-notes", "n.txt"),
+    ] {
+        fs::create_dir_all(data.join(folder)).unwrap();
+        fs::write(data.join(folder).join(file), b"user data").unwrap();
+    }
+    fs::write(data.join("keep.txt"), b"user data").unwrap();
+    Sources::sweep_startup(Some(&data));
+    assert!(!dead.exists(), "a dead owner folder is swept");
+    for kept in [
+        "logs/app.log",
+        "crash/dump.dmp",
+        "12-notes/n.txt",
+        "keep.txt",
+    ] {
+        assert!(
+            data.join(kept).exists(),
+            "{kept}: only folders named like a spool owner may be swept"
+        );
+    }
+}
+
+#[test]
+fn a_relative_spool_root_sweeps_nothing() {
+    let dir = tempfile::Builder::new()
+        .prefix("spool-relative-")
+        .tempdir_in(".")
+        .unwrap();
+    let dead = dead_owner(dir.path());
+    let relative = PathBuf::from(dir.path().file_name().unwrap());
+    Sources::sweep_startup(Some(&relative));
+    assert!(
+        dead.exists(),
+        "a relative root depends on the working folder, so it is refused"
+    );
+}
+
+#[test]
+fn a_spool_root_with_a_parent_step_sweeps_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let dead = dead_owner(&dir.path().join("spool"));
     fs::create_dir_all(dir.path().join("other")).unwrap();
-    fs::write(dir.path().join("other").join("y"), b"user file").unwrap();
-    Sources::sweep_root(&spool);
-    assert!(!dead.exists(), "a dead owner inside the root is swept");
+    let stepped = dir.path().join("other").join("..").join("spool");
+    Sources::sweep_startup(Some(&stepped));
     assert!(
-        dir.path().join("other").join("y").exists(),
-        "a folder beside the spool root is never swept"
+        dead.exists(),
+        "a root with `..` may name another folder, so it is refused"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_linked_spool_root_sweeps_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let dead = dead_owner(&dir.path().join("real"));
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(dir.path().join("real"), &link).unwrap();
+    Sources::sweep_startup(Some(&link));
     assert!(
-        dir.path().join("keep.txt").exists(),
-        "a file beside the root stays"
+        dead.exists(),
+        "a root that is a link may point anywhere, so it is refused"
     );
-    assert!(spool.is_dir(), "the spool root itself stays");
 }
 
 #[test]
@@ -131,4 +180,12 @@ fn a_host_without_a_spool_sweeps_nothing() {
         !dead.exists(),
         "the same folder is swept once the host names its root"
     );
+}
+
+/// A dead owner folder under `root`, named the way `Owner::open` names one, with one file.
+fn dead_owner(root: &Path) -> PathBuf {
+    let dead = root.join("222-2");
+    fs::create_dir_all(&dead).unwrap();
+    fs::write(dead.join("x"), b"stale").unwrap();
+    dead
 }
