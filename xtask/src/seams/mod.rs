@@ -14,7 +14,7 @@ use crate::l10n::scan::live_tokens;
 use crate::l10n::tokens::{Spanned, Token, tokenize};
 
 const ROOTS: [&str; 3] = [
-    "crates/navo-ui/src/window_view/compare_screen",
+    "crates/sidewise-ui/src/window_view/compare_screen",
     "crates/sidewise-ui/src/compare_diff",
     "crates/sidewise-ui/src/compare_list",
 ];

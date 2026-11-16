@@ -331,3 +331,4 @@ compare-gutter-checking = { $percent }%
 compare-gutter-pending = …
 compare-gutter-not-checked = unchecked
 compare-gutter-unavailable = can't read
+compare-files-cannot-open = Files cannot be opened here.

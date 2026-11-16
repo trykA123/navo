@@ -4,7 +4,7 @@ use crate::title_bar::{GradientLayer, system_backdrop};
 use crate::tokens;
 use navo_core::PaneId;
 
-pub(super) const ONE_PANE_BELOW: Pixels = px(900.);
+pub(super) use sidewise_ui::window_view::ONE_PANE_BELOW;
 
 impl NavoWindow {
     pub(super) fn shown_panes(&self, window: &Window) -> Vec<PaneId> {

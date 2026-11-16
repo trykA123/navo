@@ -10,7 +10,6 @@ mod command_center;
 mod compare_files;
 mod compare_host;
 mod compare_keys;
-mod compare_screen;
 mod compare_view;
 mod crash;
 mod diagnostics_refresh;
@@ -113,25 +112,8 @@ use crate::tokens::Mode;
 
 pub use app_menu::AppMenuHooks;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
-pub(in crate::window_view) use compare_host::ScreenOwner;
-/// A compare screen a host outside this window can own.
-///
-/// ```
-/// use std::sync::Arc;
-///
-/// use navo_ui::browser::Waker;
-/// use navo_ui::compare_diff::CompareOptions;
-/// use navo_ui::window_view::{CompareScreen, DiffSlot, FileHooks};
-///
-/// let wake: Waker = Arc::new(|| {});
-/// let screen = CompareScreen::new(
-///     DiffSlot::new(None, wake),
-///     CompareOptions::default(),
-///     FileHooks::none(),
-/// );
-/// assert!(!screen.is_file_open());
-/// ```
-pub use compare_screen::{CompareScreen, DiffSlot, LookDefaults, LookPreset, ScreenEvent};
+pub use compare_screen::{CompareFiles, CompareScreen, DiffSlot, LookDefaults, LookPreset};
+pub use compare_screen::{ScreenEvent, ScreenParts, SettingKey};
 pub use crash::CrashReportService;
 pub use drives::{DriveChanges, DriveHooks, DriveIcon, DriveInfo, DriveSignal};
 pub use drop_menu::drop_items;
@@ -170,6 +152,25 @@ pub use shell_menu::{
     BackgroundLook, MenuTarget, Reply, ScreenSpot, ShellHealth, ShellMenuProvider,
     ShellMenuSession, merged_background_menu, merged_file_menu,
 };
+pub use sidewise_ui::window_view::ScreenOwner;
+/// A compare screen a host outside this window can own.
+///
+/// ```
+/// use std::sync::Arc;
+///
+/// use navo_ui::browser::Waker;
+/// use navo_ui::compare_diff::CompareOptions;
+/// use navo_ui::window_view::{CompareScreen, DiffSlot, FileHooks};
+///
+/// let wake: Waker = Arc::new(|| {});
+/// let screen = CompareScreen::new(
+///     DiffSlot::new(None, wake),
+///     CompareOptions::default(),
+///     FileHooks::none(),
+/// );
+/// assert!(!screen.is_file_open());
+/// ```
+pub use sidewise_ui::window_view::compare_screen;
 pub use start::{RunHooks, run};
 pub use start_watch::{StartReport, StartWatch};
 pub use terminal::TerminalHooks;
