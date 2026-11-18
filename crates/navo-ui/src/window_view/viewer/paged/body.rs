@@ -127,6 +127,17 @@ impl ViewerBody for PagedBody {
         (paged.kind == PagedKind::Text).then(|| paged.source.layout().text)
     }
 
+    fn language(&self, cx: &App) -> Option<SharedString> {
+        let paged = self.0.read(cx);
+        let lexer = paged.syntax.lexer.as_ref();
+        (paged.kind == PagedKind::Text).then(|| {
+            lexer
+                .map_or("plain", |lexer| lexer.name())
+                .to_string()
+                .into()
+        })
+    }
+
     fn carry(&self, cx: &App) -> Option<Carried> {
         let marking = self.0.read(cx).marking_now();
         Some(Carried {

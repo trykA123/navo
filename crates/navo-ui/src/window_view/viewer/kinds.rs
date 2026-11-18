@@ -14,6 +14,7 @@ mod text;
 mod trace;
 mod tree;
 
+use super::syntax::LanguageChoice;
 use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -85,7 +86,11 @@ pub struct Load<'a> {
     pub sniff: &'a Sniff<'a>,
     pub cancel: &'a AtomicBool,
     pub encoding: Option<&'static Encoding>,
+    pub(in crate::window_view::viewer) language: &'a LanguageChoice,
 }
+
+/// The choice a fresh `Load` carries until `in_language` replaces it.
+static AUTO: LanguageChoice = LanguageChoice::Auto;
 
 impl<'a> Load<'a> {
     #[must_use]
@@ -101,12 +106,19 @@ impl<'a> Load<'a> {
             sniff,
             cancel,
             encoding: None,
+            language: &AUTO,
         }
     }
 
     #[must_use]
     pub fn in_encoding(self, encoding: Option<&'static Encoding>) -> Self {
         Self { encoding, ..self }
+    }
+
+    /// Sets the language choice the text kind highlights with.
+    #[must_use]
+    pub(in crate::window_view::viewer) fn in_language(self, language: &'a LanguageChoice) -> Self {
+        Self { language, ..self }
     }
 
     pub(super) fn ensure_open(&self) -> Result<(), String> {

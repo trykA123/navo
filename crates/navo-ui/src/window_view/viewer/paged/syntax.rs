@@ -6,8 +6,9 @@ use sidewise_kit::languages::lines::LineLexer;
 #[cfg(test)]
 use sidewise_kit::languages::lines::Span;
 
-use super::{PagedBody, PagedView};
+use super::{PagedBody, PagedKind, PagedView};
 use crate::prelude::*;
+use crate::window_view::viewer::language::language_control;
 use state::{CacheKey, StateCache};
 
 #[cfg(test)]
@@ -62,6 +63,12 @@ impl PagedBody {
 }
 
 impl PagedView {
+    /// The header's Syntax button: text view only, and hidden while a bar crowds a narrow window.
+    pub(super) fn language_control(&self, window: &Window) -> Option<impl IntoElement> {
+        let is_bar_open = self.find.bar.is_some();
+        language_control(self.kind == PagedKind::Text, is_bar_open, window)
+    }
+
     /// Sets the line lexer for the text rows and refills the page when the lexer changes.
     ///
     /// The same lexer (same name and identity, or `None` twice) changes nothing.

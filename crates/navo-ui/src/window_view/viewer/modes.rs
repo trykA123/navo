@@ -19,10 +19,19 @@ pub(super) struct Pick {
     pub edit: bool,
 }
 
+/// Where a reload that follows the file starts: at a line, at the end of the file, or paused on
+/// the row holding a byte offset.
+#[derive(Debug, Clone, Copy)]
+enum FollowAt {
+    Line(u64),
+    End,
+    Paused(u64),
+}
+
 struct Choice {
     kind: Kind,
     edit: bool,
-    follow_from: Option<u64>,
+    follow_from: Option<FollowAt>,
 }
 
 pub(super) struct Shown {
@@ -67,6 +76,8 @@ impl Viewer {
         self.memory = None;
         self.leaving = None;
         self.switching = None;
+        self.reencoding = None;
+        self.relanguage = None;
         self.message = None;
     }
 }
@@ -203,16 +214,29 @@ impl NavoWindow {
         self.load_kind(choice, window, cx);
     }
 
+    /// Reloads the shown kind; a followed log stays followed, from the end of the file, and a
+    /// paused one stays paused on the row it showed.
     pub(super) fn reload_kind(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(kind) = self.viewer.as_ref().and_then(|viewer| viewer.kind.clone()) else {
             return;
         };
+        let follow_from = self.followed_from(cx);
         let choice = Choice {
             kind,
             edit: false,
-            follow_from: None,
+            follow_from,
         };
         self.load_kind(choice, window, cx);
+    }
+
+    /// Where a reload must resume the Follow the shown paged view has, or `None` without one.
+    fn followed_from(&self, cx: &App) -> Option<FollowAt> {
+        let paged = self.viewer.as_ref()?.body.as_ref()?;
+        let paged = PagedBody::of(paged.as_ref())?.0.read(cx);
+        match paged.paused_at() {
+            Some(offset) => Some(FollowAt::Paused(offset)),
+            None => paged.is_following().then_some(FollowAt::End),
+        }
     }
 
     fn load_kind(&mut self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
@@ -250,8 +274,8 @@ impl NavoWindow {
                     return;
                 }
                 view.show_loaded(Shown { picked, edit }, window, cx);
-                if let Some(line) = follow_from {
-                    view.follow_shown_from(line, cx);
+                if let Some(at) = follow_from {
+                    view.follow_shown_from(at, cx);
                 }
             },
         );
@@ -293,13 +317,13 @@ impl NavoWindow {
         let choice = Choice {
             kind,
             edit: false,
-            follow_from: Some(line),
+            follow_from: Some(FollowAt::Line(line)),
         };
         self.load_kind(choice, window, cx);
         true
     }
 
-    fn follow_shown_from(&mut self, line: u64, cx: &mut Context<Self>) {
+    fn follow_shown_from(&mut self, at: FollowAt, cx: &mut Context<Self>) {
         if let Some(viewer) = &self.viewer {
             viewer.relex(cx);
         }
@@ -310,7 +334,11 @@ impl NavoWindow {
             .and_then(|body| PagedBody::of(body.as_ref()))
             .map(|paged| paged.0.clone());
         if let Some(paged) = paged {
-            paged.update(cx, |paged, cx| paged.follow_from_line(line, cx));
+            paged.update(cx, |paged, cx| match at {
+                FollowAt::Line(line) => paged.follow_from_line(line, cx),
+                FollowAt::End => paged.follow_from_end(cx),
+                FollowAt::Paused(offset) => paged.follow_paused_at(offset, cx),
+            });
         }
     }
 }

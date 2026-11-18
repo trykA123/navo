@@ -1,14 +1,10 @@
-use gpui_kit::{Action, Bounds, FocusHandle, Focusable, Stateful, point};
+use gpui_kit::{Action, Bounds, FocusHandle, Focusable, point};
 use navo_core::shell_menu::{ItemId, ShellMenu};
 
 use super::body::{BodyAct, MenuEntry, ViewerBody};
 use super::menu::viewer_menu;
 use super::parts::{PRESET_ACTIONS, PartSet};
-use super::{
-    Back, ChooseEncoding, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds, ToggleCharts,
-    ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector, TogglePreview,
-    ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewCustom, ViewMenu, ViewRich, ViewSimple,
-};
+use super::{ChooseEncoding, ChooseLanguage, KeepViewDefault, ResetView, ViewMenu};
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant};
@@ -16,6 +12,7 @@ use crate::settings::{Change, Field, PRESETS, Value, Values};
 use crate::tokens;
 use crate::window_view::{NavoWindow, SaveReport};
 
+mod actions;
 pub(in crate::window_view) mod labels;
 mod split;
 
@@ -31,6 +28,7 @@ enum ViewOp {
     Keep,
     Reset,
     Encoding,
+    Language,
 }
 
 impl ViewOp {
@@ -70,6 +68,11 @@ pub(in crate::window_view) fn view_entries(
         entries.push(MenuEntry::Run(
             ENCODING.into(),
             Box::new(ChooseEncoding),
+            false,
+        ));
+        entries.push(MenuEntry::Run(
+            navo_l10n::tr("viewer-language-menu").into(),
+            Box::new(ChooseLanguage),
             false,
         ));
     }
@@ -124,6 +127,7 @@ fn op_of(set: &PartSet, name: &str) -> Option<ViewOp> {
             (KeepViewDefault.name(), ViewOp::Keep),
             (ResetView.name(), ViewOp::Reset),
             (ChooseEncoding.name(), ViewOp::Encoding),
+            (ChooseLanguage.name(), ViewOp::Language),
         ]
         .into_iter()
         .find(|(action, _)| *action == name)
@@ -131,50 +135,7 @@ fn op_of(set: &PartSet, name: &str) -> Option<ViewOp> {
     })
 }
 
-fn on_view<A: Action>(
-    root: Stateful<Div>,
-    op: ViewOp,
-    cx: &mut Context<NavoWindow>,
-) -> Stateful<Div> {
-    root.on_action(cx.listener(move |view, _: &A, window, cx| view.run_view(op, window, cx)))
-}
-
 impl NavoWindow {
-    pub(super) fn view_actions(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
-        let root = root
-            .on_action(cx.listener(|view, _: &ViewMenu, window, cx| {
-                view.open_view_menu(window, cx);
-            }))
-            .on_action(cx.listener(|view, _: &ChooseEncoding, window, cx| {
-                view.open_encoding_menu(window, cx);
-            }))
-            .on_action(cx.listener(|view, _: &ShowLineEnds, window, cx| {
-                view.show_line_ends(window, cx);
-            }))
-            .on_action(cx.listener(|view, _: &TogglePreview, window, cx| {
-                view.toggle_split(window, cx);
-            }))
-            .on_action(cx.listener(|view, _: &RightDrawer, window, cx| {
-                view.right_drawer(window, cx);
-            }))
-            .on_action(cx.listener(|view, _: &Back, window, cx| view.close_drawer(window, cx)));
-        let root = on_view::<ToggleLineNumbers>(root, ViewOp::Toggle(Field::TextLineNumbers), cx);
-        let root = on_view::<ToggleInfo>(root, ViewOp::Toggle(Field::ImageDetails), cx);
-        let root =
-            on_view::<ToggleOpensInspector>(root, ViewOp::Toggle(Field::AutomotiveInspector), cx);
-        let root =
-            on_view::<ToggleMemoryStrip>(root, ViewOp::Toggle(Field::AutomotiveMemoryStrip), cx);
-        let root = on_view::<ToggleCharts>(root, ViewOp::Toggle(Field::AutomotiveCharts), cx);
-        let root = on_view::<ToggleRowBars>(root, ViewOp::Toggle(Field::AutomotiveRowBars), cx);
-        let root = on_view::<ToggleUsageBars>(root, ViewOp::Toggle(Field::AutomotiveUsageBars), cx);
-        let root = on_view::<ToggleWhoUses>(root, ViewOp::Toggle(Field::AutomotiveWhoUses), cx);
-        let root = on_view::<ViewSimple>(root, ViewOp::Preset(0), cx);
-        let root = on_view::<ViewRich>(root, ViewOp::Preset(1), cx);
-        let root = on_view::<ViewCustom>(root, ViewOp::Preset(2), cx);
-        let root = on_view::<KeepViewDefault>(root, ViewOp::Keep, cx);
-        on_view::<ResetView>(root, ViewOp::Reset, cx)
-    }
-
     fn body_parts(&self, cx: &App) -> Option<&'static PartSet> {
         self.viewer.as_ref()?.body.as_ref()?.parts(cx)
     }
@@ -195,6 +156,9 @@ impl NavoWindow {
         if op == ViewOp::Encoding {
             return self.open_encoding_menu(window, cx);
         }
+        if op == ViewOp::Language {
+            return self.open_language_menu(window, cx);
+        }
         let Some(set) = self.body_parts(cx) else {
             return;
         };
@@ -207,7 +171,7 @@ impl NavoWindow {
                 viewer.parts.toggle(set, field, &values);
                 Vec::new()
             }
-            ViewOp::Toggle(_) | ViewOp::Encoding => return,
+            ViewOp::Toggle(_) | ViewOp::Encoding | ViewOp::Language => return,
             ViewOp::Preset(at) => {
                 viewer.parts.choose(set, at, &values);
                 Vec::new()
@@ -313,9 +277,11 @@ impl NavoWindow {
             cx.notify();
             return;
         };
+        let from = window.focused(cx);
         let Some(viewer) = self.viewer.as_mut() else {
             return;
         };
+        viewer.focus_before_view_menu = from;
         let t = tokens::current(cx);
         let area = viewer.bounds.get();
         let anchor = point(
@@ -359,6 +325,14 @@ impl NavoWindow {
             Some(op) if op.keeps_menu_open() => {
                 self.run_view(op, window, cx);
                 self.focus_view_menu(window, cx);
+            }
+            Some(ViewOp::Language) => {
+                let from = self
+                    .viewer
+                    .as_mut()
+                    .and_then(|viewer| viewer.focus_before_view_menu.take());
+                self.close_view_menu(cx);
+                self.open_language_menu_from(from, window, cx);
             }
             Some(op) => {
                 self.close_view_menu(cx);

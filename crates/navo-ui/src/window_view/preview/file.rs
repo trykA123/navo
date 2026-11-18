@@ -66,12 +66,12 @@ impl NavoWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> FilePreview {
-        let request = Request {
-            hooks: read_only(&self.files),
-            location: target.location.clone(),
-            name: target.name(),
-            encoding: None,
-        };
+        let request = Request::new(
+            read_only(&self.files),
+            target.location.clone(),
+            target.name(),
+            None,
+        );
         let kinds = self.kinds.clone();
         let owner = self.preview.reads.owner();
         let slot = JobSlot {

@@ -4,7 +4,7 @@ use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::editor::{EditorBody, EditorFile, SplitChoice};
 use crate::window_view::viewer::paged::PagedBody;
-use crate::window_view::viewer::syntax::{LanguageChoice, Pick, choose};
+use crate::window_view::viewer::syntax::{Pick, choose};
 use crate::window_view::viewer::{Paged, PagedKind};
 use sidewise_kit::languages::lines::LineLexer;
 use std::sync::Arc;
@@ -52,6 +52,7 @@ impl ViewerKind for Text {
             location,
             sniff,
             encoding,
+            language,
             ..
         } = load;
         let loaded = if self.editable(sniff) {
@@ -60,7 +61,7 @@ impl ViewerKind for Text {
                 highlight: choose(&Pick {
                     name: sniff.name,
                     head: sniff.head,
-                    choice: &LanguageChoice::Auto,
+                    choice: language,
                     len: Some(sniff.len),
                 }),
                 split: markdown_extension(sniff.name).map(|_| SplitChoice { is_shown: true }),
@@ -69,7 +70,7 @@ impl ViewerKind for Text {
             let lexer = choose(&Pick {
                 name: sniff.name,
                 head: sniff.head,
-                choice: &LanguageChoice::Auto,
+                choice: language,
                 len: Some(sniff.len),
             })
             .paged_lexer();

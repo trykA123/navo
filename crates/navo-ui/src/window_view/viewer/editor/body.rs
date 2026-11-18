@@ -213,6 +213,11 @@ impl ViewerBody for EditorBody {
         Some(self.0.read(cx).encoding)
     }
 
+    fn language(&self, cx: &App) -> Option<SharedString> {
+        let state = self.0.read(cx).editor.read(cx);
+        Some(state.language_name().to_string().into())
+    }
+
     fn show_parts(&self, values: &Values, cx: &mut App) {
         self.0.update(cx, |view, cx| view.show_parts(values, cx));
     }

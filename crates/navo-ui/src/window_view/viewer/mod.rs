@@ -15,6 +15,7 @@ mod image;
 mod keys;
 mod keys_bar;
 mod kinds;
+mod language;
 mod lister;
 mod map;
 mod markdown;
@@ -55,14 +56,15 @@ pub(in crate::window_view) use footprint::{PREVIEW_BODY, VIEWER_DOCUMENTS, hold 
 pub use image::{ExifEntry, IMAGE_LIMIT, ImageView, Picture, decode_image};
 pub use keys::bind_keys;
 pub(in crate::window_view) use keys::{
-    ActualSize, ChooseEncoding, ClearMarks, CloseViewer, CopyFilePath, CopyImage, CopyPathLine,
-    EditFile, FindAll, FindNext, FindOnEnter, FindPrevious, FindSelection, FitImage, FocusPreview,
-    LeavePreview, LeftDrawer, ListClose, ListerHex, ListerRich, ListerText, Mark1, Mark2, Mark3,
-    Mark4, Mark5, Mark6, Mark7, Mark8, MatchCase, NewerSearch, NextBookmark, NextFile, OlderSearch,
-    OpenFind, OpenGoTo, PreviousBookmark, PreviousFile, RightDrawer, SaveFile, ShowHex,
-    ShowLineEnds, ShowMenu, ShowRich, ShowText, SpaceKey, ToggleBookmark, ToggleCharts,
-    ToggleFollow, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector,
-    TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewMenu, ZoomIn, ZoomOut,
+    ActualSize, ChooseEncoding, ChooseLanguage, ClearMarks, CloseViewer, CopyFilePath, CopyImage,
+    CopyPathLine, EditFile, FindAll, FindNext, FindOnEnter, FindPrevious, FindSelection, FitImage,
+    FocusPreview, LeavePreview, LeftDrawer, ListClose, ListerHex, ListerRich, ListerText, Mark1,
+    Mark2, Mark3, Mark4, Mark5, Mark6, Mark7, Mark8, MatchCase, NewerSearch, NextBookmark,
+    NextFile, OlderSearch, OpenFind, OpenGoTo, PreviousBookmark, PreviousFile, RightDrawer,
+    SaveFile, ShowHex, ShowLineEnds, ShowMenu, ShowRich, ShowText, SpaceKey, ToggleBookmark,
+    ToggleCharts, ToggleFollow, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip,
+    ToggleOpensInspector, TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewMenu,
+    ZoomIn, ZoomOut,
 };
 pub(in crate::window_view) use keys::{Back, BackspaceKey, KeepViewDefault, ResetView};
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
@@ -84,6 +86,7 @@ use super::NavoWindow;
 use crate::prelude::*;
 use open::Opening;
 pub(super) use open::{Opened, Picked, Request, Turn, sniff_and_load};
+use syntax::LanguageChoice;
 
 pub(in crate::window_view) const CONTEXT: &str = "Viewer";
 
@@ -112,6 +115,8 @@ pub(super) struct Viewer {
     carried: Option<Carried>,
     menu: Option<(Entity<crate::context_menu::ContextMenu>, Subscription)>,
     is_view_menu: bool,
+    /// The focus held when the View menu opened, so a picker it opens can hand focus back there.
+    focus_before_view_menu: Option<FocusHandle>,
     parts: parts::ViewParts,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     start_line: Option<u64>,
@@ -119,7 +124,11 @@ pub(super) struct Viewer {
     start_note: Option<SharedString>,
     encoding: Option<&'static Encoding>,
     detected: Option<TextEncoding>,
-    reencoding: Option<u64>,
+    /// A pending discard confirmation for a re-encoding: (revision, requested encoding).
+    reencoding: Option<(u64, Option<&'static Encoding>)>,
+    language: LanguageChoice,
+    /// A pending discard confirmation for a language change: (revision, requested choice).
+    relanguage: Option<(u64, LanguageChoice)>,
     memory: Option<crate::primitives::AppHeld>,
     guide: Option<FileHooks>,
     from_browse: bool,
@@ -157,6 +166,7 @@ impl Viewer {
             carried: None,
             menu: None,
             is_view_menu: false,
+            focus_before_view_menu: None,
             parts: parts::ViewParts::default(),
             bounds: Rc::default(),
             start_line: None,
@@ -165,6 +175,8 @@ impl Viewer {
             encoding: None,
             detected: None,
             reencoding: None,
+            language: LanguageChoice::default(),
+            relanguage: None,
             memory: None,
             guide: None,
             from_browse: false,

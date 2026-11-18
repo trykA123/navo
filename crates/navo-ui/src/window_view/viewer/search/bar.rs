@@ -55,6 +55,9 @@ fn small(t: &Theme, color: Hsla) -> Div {
         .text_color(color)
 }
 
+/// The least width, in pixels, the search field shrinks to in a narrow header.
+const MIN_INPUT: f32 = 48.;
+
 pub(in crate::window_view::viewer) fn bar_row(
     t: &Theme,
     look: BarLook<'_>,
@@ -64,16 +67,17 @@ pub(in crate::window_view::viewer) fn bar_row(
         .id(look.id)
         .test_support()
         .flex()
-        .flex_none()
+        .min_w_0()
         .items_center()
         .gap(t.spacing.sm)
         .when(look.is_find, |row| row.key_context(super::FIND_CONTEXT))
         .child(small(t, t.colors.muted).child(look.label))
-        .child(div().w(t.spacing.rail_width).child(TextField::new(
-            look.input_id,
-            look.input,
-            look.label,
-        )));
+        .child(
+            div()
+                .w(t.spacing.rail_width)
+                .min_w(px(MIN_INPUT))
+                .child(TextField::new(look.input_id, look.input, look.label)),
+        );
     row.when_some(look.count, |row, count| {
         row.child(
             small(t, t.colors.muted)

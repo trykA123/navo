@@ -114,6 +114,11 @@ pub(super) const GROUPS: [Group; 6] = [
                 "cmd-viewer-encoding",
             ),
             (
+                "viewer::ChooseLanguage",
+                "viewer.language",
+                "cmd-viewer-language",
+            ),
+            (
                 "viewer::LeftDrawer",
                 "view.left_drawer",
                 "cmd-view-left-drawer",

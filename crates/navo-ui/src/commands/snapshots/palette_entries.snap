@@ -249,6 +249,7 @@ viewer.follow | Viewer | true
 viewer.context_menu | Viewer | true
 viewer.view_menu | Viewer | true
 viewer.encoding | Viewer | true
+viewer.language | Viewer | true
 view.left_drawer | Viewer | true
 view.right_drawer | Viewer | true
 view.line_numbers | Viewer | true

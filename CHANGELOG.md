@@ -14,6 +14,8 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 **Automotive files get colours.** A2L, DBC, LDF, LSL and TASKING map files are coloured in F3 and Ctrl+E, at any size. Navo also reads your Notepad++ user-defined languages from `%APPDATA%\Notepad++\userDefineLangs`, and its own rule files from the profile's `config\languages` folder. A broken or oversized language file is skipped and logged.
 
+**Choose the colours yourself.** Ctrl+Shift+L, View → Language… or the Syntax button in the viewer header opens a language picker: Auto, Plain text, Log, or any built-in or user language. The choice stays while you switch views or follow a log.
+
 ## v0.7.1 — Clicks that do what you mean
 
 *2026-11-18*
