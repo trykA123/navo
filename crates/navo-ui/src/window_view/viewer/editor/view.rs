@@ -89,10 +89,31 @@ impl EditorView {
             .border_b_1()
             .border_color(t.colors.line)
             .bg(t.colors.rail)
+            .child(self.header_facts(t, window, mode))
+            .when_some(self.message(window, cx), |d, note| {
+                d.child(status(t, "viewer-message", note))
+            })
+            .when_some(count, |d, count| d.child(status(t, "find-count", count)))
+            .children(self.bar(t, cx))
+            .child(view_button())
+    }
+
+    /// The title, mode, size, encoding, Syntax button and unsaved mark, clipped when the header
+    /// is crowded; the View menu still reaches the encoding and language pickers.
+    fn header_facts(&self, t: &Theme, window: &Window, mode: &'static str) -> Div {
+        div()
+            .flex()
+            .flex_1()
+            .min_w_0()
+            .overflow_hidden()
+            .items_center()
+            .gap(t.spacing.md)
             .child(
                 div()
                     .id("viewer-title")
                     .test_support()
+                    .min_w_0()
+                    .truncate()
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(self.host.title.clone()),
             )
@@ -114,13 +135,6 @@ impl EditorView {
             .when(self.dirty, |d| {
                 d.child(div().text_color(t.colors.mark).child("●"))
             })
-            .child(div().flex_1())
-            .when_some(self.message(window, cx), |d, note| {
-                d.child(status(t, "viewer-message", note))
-            })
-            .when_some(count, |d, count| d.child(status(t, "find-count", count)))
-            .children(self.bar(t, cx))
-            .child(view_button())
     }
 
     fn find_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -184,6 +198,7 @@ impl EditorView {
 fn status(t: &Theme, id: &'static str, text: SharedString) -> impl IntoElement {
     div()
         .id(id)
+        .flex_none()
         .role(Role::Status)
         .aria_label(text.clone())
         .test_support()
