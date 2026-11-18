@@ -90,8 +90,15 @@ jobs:
           start=$SECONDS
           git checkout --force "$BASE_SHA"
           : > "$RUNNER_TEMP/measured-base.txt"
+          # A bench moved to another crate keeps its file name; match package, bench and features.
+          cargo metadata --no-deps --format-version 1 > "$RUNNER_TEMP/base-metadata.json"
           while read -r pkg bench features; do
-            if ! ls crates/*/benches/"$bench.rs" > /dev/null 2>&1; then
+            if ! jq -e --arg p "$pkg" --arg b "$bench" --arg f "$features" '
+                .packages[] | select(.name == $p)
+                | select(any(.targets[]; .name == $b and (.kind | index("bench"))))
+                | . as $pkg | select($f == "-" or all($f | split(",")[]; . as $x | $pkg.features | has($x)))
+              ' "$RUNNER_TEMP/base-metadata.json" > /dev/null; then
+              echo "base pass: $pkg $bench not in the base workspace; skipped"
               continue
             fi
             args=(-p "$pkg" --bench "$bench")
