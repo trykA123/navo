@@ -1,6 +1,6 @@
 # Syntax colours everywhere in the F3 viewer and its editor
 
-Status: phases A, B, D, C and L done and on main; VB (final VM proof) next (revision 4;
+Status: done — phases A, B, D, C, L and VB on main (revision 4;
 owner answers to Q1, Q2 and Q4 pending, defaults used) · Repo: navo · Branch: `plan/syntax-everywhere-20261118` · Base:
 `origin/main@df7f558e` · Started: 2026-11-18
 
@@ -330,7 +330,7 @@ stop. The `cfg_attr(not(test), …)` form is for items the atom's own tests call
 | L6 | header buttons | ui-builder · Sonnet | medium | L5 | `nextest -p navo-ui viewer::tests` | done |
 | L7 | picker tests | ui-builder · Sonnet | medium | L6 | `nextest -p navo-ui viewer::tests::language_picker` | done |
 | RL | review of phase L | reviewer · Sol 6.1 | high | L7 | written verdict | done |
-| VB | final VM proof | tester · Hydrogen | high | RL (or RC if Q1 is no) | screenshots + import checks | ready |
+| VB | final VM proof | tester · Hydrogen | high | RL (or RC if Q1 is no) | screenshots + import checks | done |
 
 One cargo gate at a time on the build host. Shared files are edited in series (the After column
 already orders them): `lines/mod.rs` (A1, A2a, A2b, A3a, A3b, B1a), `languages/mod.rs` (A1k,
@@ -1333,3 +1333,4 @@ Q3 (compare line colours) is closed: the orchestrator deferred the Sidewise cons
 - 2026-11-18 — Phase C UI lane: C9 and C10 (DeepSeek), C12 (Manwë; red on the C9 code: the editor chose "log"). GHA Callgrind failed C11b's budgets (udl_dense 64.0 M > 30 M, udl_tokens 18.1 M > 5 M); C11c (Sonnet high) adds a byte-class table, a packed short-keyword table and allocation-free trie walks: 16.0 M / 3.77 M / a2l 0.77 M.
 - 2026-11-18 — RC (Sol 6.2 high), four rounds. RC: not ready, 4 must + 6 should — malformed UDL attributes, unbounded rule-file reads, paged chunks lexed as whole lines, lexer rebuilt per open, UTF-32/implausible UTF-16 heads, JSON literal boundary, empty APPDATA, roles outside D5. Fixed by RC-F1, RC-F2a, RC-F2b. RC2: the adapter's chunk-state inference missed escapes and case-folded delimiters; **decision (Manwë):** the rule lexer reports its own chunk-end state (`Lexer::chunk(.., last)`, `ChunkState`), replacing the inference (RC2-G1, G2). RC3: special-cased partial matches still leaked; **decision:** one general hold-back — at a non-last chunk end the lexer carries the earliest step start where any pattern may still be completing and re-lexes it in front of the next chunk; patterns are bounded to 64 bytes and 65,535 openers (RC3-G3). RC4: operators and special keywords join the hold list, `Lexer::new` enforces the bound, the split checker exempts only a cut token's own bytes (RC4-G4). **D5 change:** `ROLES` adds `type`, `operator` and `variable.special`. Accepted: `if„` now colours `if` (a fix; `„` is not a word char). Bench after the redesign: 15.7 M / 3.69 M / 0.77 M. Phase C lands as one squash commit.
 - 2026-11-18 — Phase L built: L0 and the l10n follow-up (Manwë), L1–L3c and L4a–L7 (Sonnet medium). L4a could not pass alone (`every_navo_action_has_a_command` needs L4b's entry); **decision:** L4a and L4b merge. Picker strings live in `viewer.ftl` (the l10n ratchet stays at 657). RL (Sol 6.2 high): not ready — a stale discard confirmation could drop new edits, a rule named `language.auto` collided with a reserved row; Hex, Follow, focus, a narrow header and weak tests. RL-F1 fixed them (the same discard bug was also in the encoding picker) and named rule rows `language:<name>`. RL2: a process-wide `OnceLock` test clash that nextest hid, a paused Follow resuming, focus lost via the View menu, View pushed off at 480 px, Follow polling in Hex; RL-F2 fixed them, measured at 480 px with element bounds. Phase L lands as one squash commit; VB follows on the same build.
+- 2026-11-19 — VB (Hydrogen, release build): 7 of 9 steps pass. Step 4 fails by design: the `language file skipped` line has no path, because logs never carry raw paths. Step 8 was a real bug: at 480 px with Find open, the editor header ran Match case and the match count into View. VB-F1 (Sonnet high) clips the editor's file facts like the paged header, with two 480 px bounds tests (red, then green). The plan is done.
