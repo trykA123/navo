@@ -15,8 +15,13 @@ thiserror = "2.0.21"
 toml = "1.2.1"
 
 [dev-dependencies]
+gungraun = "=0.20.0"
 proptest = "1.12.0"
 tempfile = "3.27.0"
+
+[[bench]]
+name = "rule_lexer"
+harness = false
 
 [lints]
 workspace = true

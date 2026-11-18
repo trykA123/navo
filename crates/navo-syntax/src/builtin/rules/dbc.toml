@@ -1,0 +1,22 @@
+# Built-in DBC (CAN database) rules: comments, strings, statement keywords and operators.
+[[language]]
+name = "dbc"
+extensions = ["dbc"]
+line_comments = ["//"]
+operators = [":", "|", "@", "+", "-", "(", ")", "[", "]", ","]
+
+[[language.keywords]]
+kind = "keyword"
+words = [
+  "VERSION", "NS_", "BS_", "BU_", "BO_", "SG_", "CM_", "BA_DEF_", "BA_DEF_DEF_", "BA_", "VAL_",
+  "VAL_TABLE_", "SIG_VALTYPE_", "BO_TX_BU_", "EV_", "ENVVAR_DATA_", "SG_MUL_VAL_", "SIG_GROUP_",
+]
+
+[[language.keywords]]
+kind = "constant"
+words = ["Vector__XXX"]
+
+[[language.delimiters]]
+open = '"'
+close = '"'
+kind = "string"

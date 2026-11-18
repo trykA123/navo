@@ -1,6 +1,10 @@
+use super::spans::MAX_TOKENS;
 use super::*;
 use crate::{Delimiter, KeywordGroup, TokenKind as K};
 
+mod chunk;
+mod fast;
+mod hold;
 mod props;
 mod rules;
 
@@ -71,4 +75,18 @@ fn spans<'a>(lang: &Language, line: &'a str, state: LineState) -> (Vec<(&'a str,
 
 fn tokens<'a>(lang: &Language, line: &'a str) -> Vec<(&'a str, K)> {
     spans(lang, line, LineState::Normal).0
+}
+
+#[test]
+fn cap_keeps_at_most_4096_tokens() {
+    let line = "if ".repeat(20_000);
+    assert_eq!(tokens(&sample(), &line).len(), MAX_TOKENS);
+}
+
+#[test]
+fn block_comment_after_the_cap_carries_state() {
+    let line = format!("{}/*", "if ".repeat(20_000));
+    let (found, next) = spans(&sample(), &line, LineState::Normal);
+    assert_eq!(found.len(), MAX_TOKENS);
+    assert_eq!(next, LineState::Block(0));
 }

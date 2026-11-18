@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use proptest::prelude::*;
 
 use super::*;
+use crate::lexer::spans::MAX_TOKENS;
 
 fn assert_well_formed(line: &str, found: &[Token]) {
     let mut end = 0;
@@ -44,7 +45,8 @@ fn one_megabyte_line_lexes_in_under_three_seconds() {
     let started = Instant::now();
     let (found, _) = lex_line(&sample(), &line, LineState::Normal);
     let elapsed = started.elapsed();
-    assert_eq!(found.len(), count * 5);
+    // The line is longer than the token cap, so only the first MAX_TOKENS tokens are kept (C6b).
+    assert_eq!(found.len(), (count * 5).min(MAX_TOKENS));
     assert!(elapsed < Duration::from_secs(3), "took {elapsed:?}");
 }
 
@@ -89,6 +91,6 @@ fn five_thousand_special_keywords_on_a_megabyte_line_lex_in_under_three_seconds(
             }
         ]
     );
-    assert_eq!(found.len(), count * 2);
+    assert_eq!(found.len(), (count * 2).min(MAX_TOKENS));
     assert!(elapsed < Duration::from_secs(3), "took {elapsed:?}");
 }

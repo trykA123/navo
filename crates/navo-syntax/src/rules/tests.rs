@@ -100,3 +100,36 @@ fn unknown_key_is_an_error_naming_the_key() {
         "{err:?}"
     );
 }
+
+/// One TOML language with the given extra lines in its table.
+fn with(extra: &str) -> String {
+    format!("[[language]]\nname = \"big\"\n{extra}\n")
+}
+
+#[test]
+fn a_comment_or_string_pattern_over_64_bytes_fails_the_file() {
+    let long = "a".repeat(65);
+    let ok = "a".repeat(64);
+    let toml = |extra: String| from_toml(&with(&extra));
+    for extra in [
+        format!("line_comments = [\"{long}\"]"),
+        format!("block_comments = [[\"{long}\", \"*/\"]]"),
+        format!("block_comments = [[\"/*\", \"{long}\"]]"),
+        format!("[[language.delimiters]]\nopen = \"{long}\"\nclose = \"x\""),
+        format!("[[language.delimiters]]\nopen = \"x\"\nclose = \"{long}\""),
+    ] {
+        assert!(toml(extra.clone()).is_err(), "{extra}");
+    }
+    let fits = format!("line_comments = [\"{ok}\"]\nblock_comments = [[\"{ok}\", \"{ok}\"]]");
+    assert!(toml(fits).is_ok(), "64 bytes is allowed");
+}
+
+#[test]
+fn a_language_with_more_than_65535_openers_fails_the_file() {
+    let many = |count: usize| {
+        let lines: Vec<String> = (0..count).map(|n| format!("\"c{n}\"")).collect();
+        from_toml(&with(&format!("line_comments = [{}]", lines.join(", "))))
+    };
+    assert!(many(65_535).is_ok());
+    assert!(many(65_536).is_err());
+}

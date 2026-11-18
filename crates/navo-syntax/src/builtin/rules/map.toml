@@ -1,0 +1,13 @@
+# Built-in rules for TASKING map reports: `*` comments, separators and section headers.
+[[language]]
+name = "map"
+extensions = ["map"]
+line_comments = ["*"]
+operators = ["|", "+", "-"]
+
+[[language.keywords]]
+kind = "keyword"
+words = [
+  "Section", "Address", "Size", "Name", "Symbol", "Group", "Chip", "Space", "Locate", "Link",
+  "Result", "Processed", "Files", "Overlay", "Cross", "References", "Memory", "Usage", "Total",
+]

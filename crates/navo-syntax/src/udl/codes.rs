@@ -78,7 +78,7 @@ impl Draft {
         let delimiters = (0..8)
             .flat_map(|group| delimiters(&self.delimiters, group))
             .collect();
-        Ok(Language {
+        let language = Language {
             name,
             extensions: self.extensions,
             case_ignored: self.case_ignored,
@@ -88,7 +88,9 @@ impl Draft {
             delimiters,
             operators: self.operators,
             numbers: true,
-        })
+        };
+        language.check_limits()?;
+        Ok(language)
     }
 }
 

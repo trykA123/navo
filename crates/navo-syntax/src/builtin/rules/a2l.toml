@@ -1,0 +1,38 @@
+# Built-in A2L (ASAM MCD-2 MC) rules: comments, strings and the top-level word groups.
+[[language]]
+name = "a2l"
+extensions = ["a2l"]
+line_comments = ["//"]
+block_comments = [["/*", "*/"]]
+
+[[language.keywords]]
+kind = "keyword"
+words = ["/begin", "/end"]
+
+[[language.keywords]]
+kind = "type"
+words = [
+  "PROJECT", "HEADER", "MODULE", "MOD_PAR", "MOD_COMMON", "CHARACTERISTIC", "MEASUREMENT",
+  "AXIS_PTS", "AXIS_DESCR", "COMPU_METHOD", "COMPU_TAB", "COMPU_VTAB", "COMPU_VTAB_RANGE",
+  "RECORD_LAYOUT", "FUNCTION", "FUNCTION_LIST", "GROUP", "SUB_GROUP", "SUB_FUNCTION",
+  "REF_CHARACTERISTIC", "REF_MEASUREMENT", "DEF_CHARACTERISTIC", "IN_MEASUREMENT",
+  "OUT_MEASUREMENT", "LOC_MEASUREMENT", "IF_DATA", "A2ML", "MEMORY_SEGMENT", "MEMORY_LAYOUT",
+  "ANNOTATION", "ANNOTATION_TEXT", "UNIT", "FRAME", "VARIANT_CODING",
+]
+
+[[language.keywords]]
+kind = "constant"
+words = [
+  "UBYTE", "SBYTE", "UWORD", "SWORD", "ULONG", "SLONG", "A_UINT64", "A_INT64", "FLOAT16_IEEE",
+  "FLOAT32_IEEE", "FLOAT64_IEEE", "VALUE", "CURVE", "MAP", "CUBOID", "ASCII", "VAL_BLK",
+  "RAT_FUNC", "TAB_VERB", "TAB_INTP", "TAB_NOINTP", "IDENTICAL", "FORM", "LINEAR",
+  "NO_COMPU_METHOD", "MSB_FIRST", "MSB_LAST", "FNC_VALUES", "COLUMN_DIR", "ROW_DIR",
+  "ECU_ADDRESS", "BYTE_ORDER", "FORMAT", "PHYS_UNIT", "EXTENDED_LIMITS", "READ_ONLY",
+  "MATRIX_DIM", "NUMBER", "BIT_MASK", "DISPLAY_IDENTIFIER",
+]
+
+[[language.delimiters]]
+open = '"'
+close = '"'
+escape = '\'
+kind = "string"

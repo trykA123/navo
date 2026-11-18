@@ -1,0 +1,21 @@
+# Built-in LSL (linker script) rules: comments, strings and the preprocessor/layout keywords.
+[[language]]
+name = "lsl"
+extensions = ["lsl"]
+line_comments = ["//"]
+block_comments = [["/*", "*/"]]
+
+[[language.keywords]]
+kind = "keyword"
+words = [
+  "#include", "#define", "#if", "#ifdef", "#ifndef", "#else", "#endif", "architecture",
+  "derivative", "processor", "memory", "bus", "space", "section_layout", "group", "select",
+  "reserved", "stack", "heap", "copytable", "section_setup", "mau", "map", "size", "type",
+  "priority", "ordered", "contiguous", "fill", "align", "attributes", "run_addr", "load_addr",
+  "dest", "src_offset", "dest_offset", "id", "endianness", "little", "big", "nvram", "ram", "rom",
+]
+
+[[language.delimiters]]
+open = '"'
+close = '"'
+kind = "string"

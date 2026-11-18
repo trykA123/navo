@@ -64,22 +64,84 @@ impl<T: Copy> Trie<T> {
         index
     }
 
-    pub(super) fn matches(&self, text: &str) -> impl Iterator<Item = (usize, T)> {
-        let mut ends = Vec::new();
+    /// True when some inserted word starts with `byte` (after case folding).
+    pub(super) fn starts_with_byte(&self, byte: u8) -> bool {
+        self.child(0, self.fold(byte)).is_some()
+    }
+
+    /// Returns every inserted word that prefixes `text`, longest first, as (length, value).
+    /// Walks the trie once; the node list stays on the stack unless it holds over 4 hits.
+    pub(super) fn matches<'a>(&'a self, text: &str) -> Matches<'a, T> {
+        let mut hits = Hits::default();
         let mut at = 0;
         for (depth, &byte) in text.as_bytes().iter().enumerate() {
             let Some(next) = self.child(at, self.fold(byte)) else {
                 break;
             };
             at = next;
-            ends.push((depth + 1, at));
+            if self.nodes.get(at).is_some_and(|node| !node.ends.is_empty()) {
+                hits.push((depth + 1, at));
+            }
         }
-        ends.into_iter().rev().flat_map(move |(len, at)| {
-            self.nodes
-                .get(at)
-                .into_iter()
-                .flat_map(|node| node.ends.iter())
-                .map(move |value| (len, *value))
-        })
+        let left = hits.len;
+        Matches {
+            trie: self,
+            hits,
+            left,
+            values: [].iter(),
+            len: 0,
+        }
+    }
+}
+
+/// Inline list of (length, node) hits; spills to the heap only past `INLINE` entries.
+#[derive(Default)]
+struct Hits {
+    inline: [(usize, usize); INLINE],
+    len: usize,
+    spill: Vec<(usize, usize)>,
+}
+
+const INLINE: usize = 4;
+
+impl Hits {
+    fn push(&mut self, hit: (usize, usize)) {
+        match self.inline.get_mut(self.len) {
+            Some(slot) => *slot = hit,
+            None => self.spill.push(hit),
+        }
+        self.len += 1;
+    }
+
+    fn get(&self, index: usize) -> Option<(usize, usize)> {
+        match index.checked_sub(INLINE) {
+            Some(spilled) => self.spill.get(spilled).copied(),
+            None => self.inline.get(index).copied(),
+        }
+    }
+}
+
+/// Iterator over the words found by [`Trie::matches`], longest first.
+pub(super) struct Matches<'a, T> {
+    trie: &'a Trie<T>,
+    hits: Hits,
+    left: usize,
+    values: std::slice::Iter<'a, T>,
+    len: usize,
+}
+
+impl<T: Copy> Iterator for Matches<'_, T> {
+    type Item = (usize, T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(value) = self.values.next() {
+                return Some((self.len, *value));
+            }
+            self.left = self.left.checked_sub(1)?;
+            let (len, at) = self.hits.get(self.left)?;
+            self.len = len;
+            self.values = self.trie.nodes.get(at)?.ends.iter();
+        }
     }
 }

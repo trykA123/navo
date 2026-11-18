@@ -1,0 +1,26 @@
+# Built-in LDF (LIN description file) rules: comments, strings, section keywords and types.
+[[language]]
+name = "ldf"
+extensions = ["ldf"]
+line_comments = ["//"]
+block_comments = [["/*", "*/"]]
+operators = ["=", ";", "{", "}", ",", ":"]
+
+[[language.keywords]]
+kind = "keyword"
+words = [
+  "LIN_description_file", "LIN_protocol_version", "LIN_language_version", "LIN_speed",
+  "Channel_name", "Nodes", "Master", "Slaves", "Signals", "Diagnostic_signals", "Frames",
+  "Sporadic_frames", "Event_triggered_frames", "Diagnostic_frames", "Node_attributes",
+  "Schedule_tables", "Signal_groups", "Signal_encoding_types", "Signal_representation",
+  "MasterReq", "SlaveResp",
+]
+
+[[language.keywords]]
+kind = "type"
+words = ["logical_value", "physical_value", "bcd_value", "ascii_value", "delay", "ms", "kbps"]
+
+[[language.delimiters]]
+open = '"'
+close = '"'
+kind = "string"

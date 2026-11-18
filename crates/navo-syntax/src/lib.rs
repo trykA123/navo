@@ -11,9 +11,9 @@ mod udl;
 
 pub use builtin::builtin;
 pub use error::RulesError;
-pub use language::{Delimiter, KeywordGroup, Language};
+pub use language::{Delimiter, KeywordGroup, Language, MAX_OPENERS, MAX_PATTERN_BYTES};
 pub use lexer::{Lexer, lex_line};
 pub use registry::{LoadError, Registry};
 pub use rules::from_toml;
-pub use token::{LineState, Token, TokenKind};
+pub use token::{ChunkState, Inside, LineState, Token, TokenKind};
 pub use udl::from_udl;

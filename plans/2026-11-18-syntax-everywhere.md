@@ -1,6 +1,6 @@
 # Syntax colours everywhere in the F3 viewer and its editor
 
-Status: phases A, B and D done and on main; phase C built, in review; phase L next (revision 4;
+Status: phases A, B, D and C done and on main; phase L next (L0 built) (revision 4;
 owner answers to Q1, Q2 and Q4 pending, defaults used) · Repo: navo · Branch: `plan/syntax-everywhere-20261118` · Base:
 `origin/main@df7f558e` · Started: 2026-11-18
 
@@ -65,7 +65,10 @@ Final for builders. D118 in `docs/decisions.md` records the owner's call; these 
   VERBOSE/DBG → `comment.doc`; dates and times → `attribute`; numbers and hex → `number`;
   double-quoted strings → `string`; single-quoted strings → `string.special`; URLs and paths →
   `link_uri`; GUIDs → `constructor`. `comment.doc` and `string.special` are in `lines::ROLES`
-  and `HIGHLIGHT_NAMES`. Why the two extra roles: D7's exact-coverage rule binds only `comment`
+  and `HIGHLIGHT_NAMES`. Rule languages (C) also emit `type`, `operator` and `variable.special`
+  (`TokenKind::highlight_name`); RC-F2b added them to `lines::ROLES` because both syntax themes
+  style them in both modes and the contrast tests cover them, so `ROLES` is 20 names. Why the
+  two extra roles: D7's exact-coverage rule binds only `comment`
   and `string`, and level words and single-quoted strings are short chunk-local tokens that may
   lose their colour at a cut.
 - D6 — **Caps, all checked before allocation.**
@@ -293,21 +296,21 @@ stop. The `cfg_attr(not(test), …)` form is for items the atom's own tests call
 
 | Atom | What | Role | Effort | After | Check | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| C1 | a2l rules | api-builder · DS | medium | D2 | `nextest -p navo-syntax builtin` | built (in review) |
-| C2 | dbc rules | api-builder · DS | medium | C1 | same | built (in review) |
-| C3 | ldf rules | api-builder · DS | medium | C2 | same | built (in review) |
-| C4 | lsl rules | api-builder · DS | medium | C3 | same | built (in review) |
-| C5 | map rules | api-builder · DS | medium | C4 | same | built (in review) |
-| C6 | `load_udl_dir`, entry errors kept | api-builder · DS | medium | D2 | `nextest -p navo-syntax registry` | built (in review) |
-| C6b | token cap in `Run::push` | api-builder · DS | medium | D2 | `nextest -p navo-syntax lexer` | built (in review) |
-| C7 | `RuleLexer` + `rules()` state | api-builder · DS | high | C6b | `nextest -p navo-ui syntax_rules` | built (in review) |
-| C8 | `load_rules` with folder policy | api-builder · DS | high | C6, C7 | `nextest -p navo-ui syntax_rules` | built (in review) |
-| C9 | start-up thread in navo-app | api-builder · DS | medium | C8 | `nextest -p navo-app --lib languages` | building |
-| C10 | `choose` step 2 (rules) | api-builder · DS | high | C7, C1 | `nextest -p navo-ui viewer::syntax` | building |
-| C11a | `gungraun` dev-dependency of `navo-syntax` + `Cargo.lock` | patcher · Sonnet | low | D2 | `cargo xtask check -p navo-syntax` | built (in review) |
-| C11b | rule lexer bench target, bench, speed IDs | api-builder · DS | medium | C11a, C5, C6b | `cargo bench -p navo-syntax --bench rule_lexer` + ID diff | built (in review) |
-| C12 | rendered Oil test | ui-builder · Sonnet | medium | C10 | `nextest -p navo-ui viewer::tests::language` | blocked |
-| RC | review of phases D and C | reviewer · Sol 6.1 | high | C9, C11b, C12 | written verdict | blocked |
+| C1 | a2l rules | api-builder · DS | medium | D2 | `nextest -p navo-syntax builtin` | done |
+| C2 | dbc rules | api-builder · DS | medium | C1 | same | done |
+| C3 | ldf rules | api-builder · DS | medium | C2 | same | done |
+| C4 | lsl rules | api-builder · DS | medium | C3 | same | done |
+| C5 | map rules | api-builder · DS | medium | C4 | same | done |
+| C6 | `load_udl_dir`, entry errors kept | api-builder · DS | medium | D2 | `nextest -p navo-syntax registry` | done |
+| C6b | token cap in `Run::push` | api-builder · DS | medium | D2 | `nextest -p navo-syntax lexer` | done |
+| C7 | `RuleLexer` + `rules()` state | api-builder · DS | high | C6b | `nextest -p navo-ui syntax_rules` | done |
+| C8 | `load_rules` with folder policy | api-builder · DS | high | C6, C7 | `nextest -p navo-ui syntax_rules` | done |
+| C9 | start-up thread in navo-app | api-builder · DS | medium | C8 | `nextest -p navo-app --lib languages` | done |
+| C10 | `choose` step 2 (rules) | api-builder · DS | high | C7, C1 | `nextest -p navo-ui viewer::syntax` | done |
+| C11a | `gungraun` dev-dependency of `navo-syntax` + `Cargo.lock` | patcher · Sonnet | low | D2 | `cargo xtask check -p navo-syntax` | done |
+| C11b | rule lexer bench target, bench, speed IDs | api-builder · DS | medium | C11a, C5, C6b | `cargo bench -p navo-syntax --bench rule_lexer` + ID diff | done |
+| C12 | rendered Oil test | ui-builder · Sonnet | medium | C10 | `nextest -p navo-ui viewer::tests::language` | done |
+| RC | review of phases D and C | reviewer · Sol 6.1 | high | C9, C11b, C12 | written verdict | done |
 
 ### Phase L — language picker (after RC; Q1 default yes, pending)
 
@@ -1327,3 +1330,5 @@ Q3 (compare line colours) is closed: the orchestrator deferred the Sidewise cons
 - 2026-11-18 — VAB (Hydrogen, one VM build of phases A and B): all 6 steps PASS, including the D12 speed numbers; log colours in dark and light and a plain `blob.bin` checked by Manwë on the screenshots. VA is done.
 - 2026-11-18 — Phase D built: D1a, D1b and D2 by DeepSeek, reviewed by hand. D1a's content sniff broke three paged tests that set XML lexers; they now start from Log. Phases A, B and D land on main as one squash commit.
 - 2026-11-18 — Phase C rules lane built: C11a (Manwë), C6b (DeepSeek, finished by Manwë after two older speed tests met the token cap), C6, C1–C5 and C11b (DeepSeek), each red then green. C11b instruction counts wait for the GHA bench. UI lane: C7 and C8 (DeepSeek) built; C8 waives the 200-line cap on `syntax_rules.rs` because its tests live inside.
+- 2026-11-18 — Phase C UI lane: C9 and C10 (DeepSeek), C12 (Manwë; red on the C9 code: the editor chose "log"). GHA Callgrind failed C11b's budgets (udl_dense 64.0 M > 30 M, udl_tokens 18.1 M > 5 M); C11c (Sonnet high) adds a byte-class table, a packed short-keyword table and allocation-free trie walks: 16.0 M / 3.77 M / a2l 0.77 M.
+- 2026-11-18 — RC (Sol 6.2 high), four rounds. RC: not ready, 4 must + 6 should — malformed UDL attributes, unbounded rule-file reads, paged chunks lexed as whole lines, lexer rebuilt per open, UTF-32/implausible UTF-16 heads, JSON literal boundary, empty APPDATA, roles outside D5. Fixed by RC-F1, RC-F2a, RC-F2b. RC2: the adapter's chunk-state inference missed escapes and case-folded delimiters; **decision (Manwë):** the rule lexer reports its own chunk-end state (`Lexer::chunk(.., last)`, `ChunkState`), replacing the inference (RC2-G1, G2). RC3: special-cased partial matches still leaked; **decision:** one general hold-back — at a non-last chunk end the lexer carries the earliest step start where any pattern may still be completing and re-lexes it in front of the next chunk; patterns are bounded to 64 bytes and 65,535 openers (RC3-G3). RC4: operators and special keywords join the hold list, `Lexer::new` enforces the bound, the split checker exempts only a cut token's own bytes (RC4-G4). **D5 change:** `ROLES` adds `type`, `operator` and `variable.special`. Accepted: `if„` now colours `if` (a fix; `„` is not a word char). Bench after the redesign: 15.7 M / 3.69 M / 0.77 M. Phase C lands as one squash commit.

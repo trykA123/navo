@@ -283,3 +283,66 @@ fn self_closing_user_lang_is_an_empty_language() {
         Ok(vec![("a".to_owned(), owned(&["x"]), 0)])
     );
 }
+
+#[test]
+fn a_malformed_attribute_after_name_and_ext_fails_the_file() {
+    let cases = [
+        "<NotepadPlus><UserLang name=\"oil\" ext=\"oil\" broken/></NotepadPlus>",
+        "<NotepadPlus><UserLang name=\"oil\" ext=\"oil\" a=\"1\" a=\"2\"/></NotepadPlus>",
+        "<NotepadPlus><UserLang name=\"oil\" ext=\"oil\" udlVersion=2.1/></NotepadPlus>",
+        "<NotepadPlus><UserLang name=\"oil\" ext=\"oil\" unused=\"&bogus;\"/></NotepadPlus>",
+        "<NotepadPlus><UserLang name=\"oil\" unused=\"&bogus;\" ext=\"oil\"/></NotepadPlus>",
+        "<NotepadPlus><UserLang name=\"oil\" ext=\"oil\"><Styles><WordsStyle name=\"X\" fgColor=\"&bogus;\"/></Styles></UserLang></NotepadPlus>",
+        "<NotepadPlus><UserLang name=\"oil\" ext=\"oil\"><Settings><Global caseIgnored=\"yes\" bad/></Settings></UserLang></NotepadPlus>",
+    ];
+    for xml in cases {
+        let result = from_udl(xml).map(|langs| langs.len());
+        assert!(
+            matches!(result, Err(RulesError::Xml { .. })),
+            "{xml}: {result:?}"
+        );
+    }
+}
+
+#[test]
+fn a_well_formed_user_lang_without_keyword_lists_stays_valid() {
+    let langs =
+        from_udl("<NotepadPlus><UserLang name=\"oil\" ext=\"oil\"></UserLang></NotepadPlus>");
+    assert_eq!(langs.map(|l| l.len()), Ok(1));
+}
+
+#[test]
+fn a_bad_entity_on_a_tag_outside_a_language_fails_the_file() {
+    let cases = [
+        "<NotepadPlus><Global unused=\"&bogus;\"/><UserLang name=\"oil\" ext=\"oil\"/></NotepadPlus>",
+        "<NotepadPlus><Prefix Keywords1=\"&bogus;\"/><UserLang name=\"oil\" ext=\"oil\"/></NotepadPlus>",
+        "<NotepadPlus><Settings a=\"&bogus;\"/><UserLang name=\"oil\" ext=\"oil\"/></NotepadPlus>",
+    ];
+    for xml in cases {
+        let result = from_udl(xml).map(|langs| langs.len());
+        assert!(
+            matches!(result, Err(RulesError::Xml { .. })),
+            "{xml}: {result:?}"
+        );
+    }
+}
+
+#[test]
+fn a_bad_attribute_on_an_element_nested_in_keywords_fails_the_file() {
+    let cases = [
+        "<Global a=\"1\" a=\"2\"/>",
+        "<Global caseIgnored=\"yes\" bad/>",
+        "<Inner unused=\"&bogus;\"></Inner>",
+        "<A><B x=\"1\" x=\"2\"/></A>",
+    ];
+    for nested in cases {
+        let xml = format!(
+            "<NotepadPlus><UserLang name=\"oil\" ext=\"oil\"><KeywordLists><Keywords name=\"Keywords1\">{nested}if</Keywords></KeywordLists></UserLang></NotepadPlus>"
+        );
+        let result = from_udl(&xml).map(|langs| langs.len());
+        assert!(
+            matches!(result, Err(RulesError::Xml { .. })),
+            "{xml}: {result:?}"
+        );
+    }
+}

@@ -79,7 +79,7 @@ fn language(raw: RawLanguage) -> Result<Language, RulesError> {
         .name
         .filter(|name| !name.trim().is_empty())
         .ok_or(RulesError::MissingName)?;
-    Ok(Language {
+    let language = Language {
         name,
         extensions: raw
             .extensions
@@ -111,7 +111,9 @@ fn language(raw: RawLanguage) -> Result<Language, RulesError> {
             .collect(),
         operators: raw.operators,
         numbers: raw.numbers,
-    })
+    };
+    language.check_limits()?;
+    Ok(language)
 }
 
 #[cfg(test)]
