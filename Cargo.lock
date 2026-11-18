@@ -1641,17 +1641,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
 
 [[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6161,7 +6150,7 @@ dependencies = [
  "tray-icon",
  "velopack",
  "windows-sys 0.61.2",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -6260,7 +6249,7 @@ dependencies = [
  "tracing-subscriber",
  "tracy-client",
  "windows-sys 0.61.2",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -6293,7 +6282,7 @@ dependencies = [
  "trash",
  "windows 0.62.2",
  "windows-sys 0.61.2",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -6407,7 +6396,7 @@ dependencies = [
  "tempfile",
  "windows 0.62.2",
  "windows-sys 0.61.2",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -6422,7 +6411,7 @@ dependencies = [
  "windows 0.62.2",
  "windows-core 0.62.2",
  "windows-sys 0.61.2",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -9662,17 +9651,6 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.109"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-ident",
-]
-
-[[package]]
-name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297"
@@ -10824,12 +10802,6 @@ dependencies = [
 
 [[package]]
 name = "typed-path"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
-
-[[package]]
-name = "typed-path"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
@@ -11193,13 +11165,12 @@ dependencies = [
 
 [[package]]
 name = "velopack"
-version = "1.2.161"
+version = "1.3.39-g8d2844f"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4295172ffaad78f9adbab35f7ffefa97e4ceefee9d2c38bda37fdce4d6c66e5a"
+checksum = "cbfbd9ee9818d1155813c4a1024a459763c3782405d5c1ad8f116bd8adaf0b88"
 dependencies = [
  "anyhow",
  "bitflags 2.13.2",
- "derivative",
  "glob",
  "lazy_static",
  "libc",
@@ -11220,7 +11191,7 @@ dependencies = [
  "waitpid-any",
  "windows 0.62.2",
  "xml",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
@@ -12852,20 +12823,6 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "8.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
-dependencies = [
- "crc32fast",
- "flate2",
- "indexmap",
- "memchr",
- "typed-path 0.12.3",
- "zopfli",
-]
-
-[[package]]
-name = "zip"
 version = "9.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0700e6c427aff64acdbf02e85fbfd946c2ee12319d1af013092f3a2178914ff8"
@@ -12878,7 +12835,7 @@ dependencies = [
  "libc",
  "memchr",
  "nix",
- "typed-path 0.13.0",
+ "typed-path",
  "windows-sys 0.61.2",
  "zeroize",
  "zopfli",

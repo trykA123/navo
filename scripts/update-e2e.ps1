@@ -624,7 +624,7 @@ $manifest = Join-Path $packages 'build.json'
 if (-not $SkipBuild) {
     Assert (-not (Test-Path -LiteralPath $packages)) 'packages already exist; use -SkipBuild or a new -WorkDir'
     $vpk = (Get-Command vpk -ErrorAction Stop).Source
-    Assert ((Run-Checked $vpk @('--help')) -match '\b1\.2\.161\b') 'vpk 1.2.161 is required, as in release.yml'
+    Assert ((Run-Checked $vpk @('--help')) -match '\b1\.3\.39-g8d2844f\b') 'vpk 1.3.39-g8d2844f is required, as in release.yml'
     $workflow = Get-Content -LiteralPath (Join-Path $repo '.github\workflows\release.yml') -Raw
     $runtimeEnv = @{ RUNNER_TEMP = (Join-Path $WorkDir ('fetch-' + [guid]::NewGuid().ToString('N'))) }
     foreach ($key in @('PDFIUM_TAG', 'PDFIUM_SHA256')) {
