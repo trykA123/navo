@@ -14,11 +14,12 @@ use crate::window_view::viewer::body::{
 use crate::window_view::viewer::menu::marking_entries;
 use crate::window_view::viewer::parts::{MARKDOWN_TEXT, PartSet, TEXT};
 use crate::window_view::viewer::search::bar::{FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS};
+use crate::window_view::viewer::syntax::Highlight;
 use crate::window_view::viewer::{CopyPathLine, FindSelection, OpenGoTo, ShowHex, ToggleFollow};
 
 pub(in crate::window_view::viewer) struct EditorFile {
     pub file: FileText,
-    pub language: &'static str,
+    pub highlight: Highlight,
     pub split: Option<SplitChoice>,
 }
 

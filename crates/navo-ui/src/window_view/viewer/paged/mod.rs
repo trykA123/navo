@@ -11,6 +11,7 @@ use sidewise_ui::window_view::viewer::paged::row_view;
 mod rows;
 use sidewise_ui::window_view::viewer::paged::scroll;
 use sidewise_ui::window_view::viewer::paged::spans;
+mod syntax;
 mod view;
 
 use std::collections::HashMap;
@@ -36,6 +37,7 @@ use jobs::{IndexDone, IndexMessage};
 use moves::{Move, MoveQueue};
 use rows::RowCache;
 pub(crate) use scroll::ByteScroll;
+use syntax::PagedSyntax;
 
 const WHEEL_ROWS: f32 = 3.;
 const SHIFT_COLUMNS: usize = 8;
@@ -63,6 +65,7 @@ pub struct PagedView {
     source_rev: u64,
     seen_len: u64,
     cache: RowCache,
+    syntax: PagedSyntax,
     index_done: bool,
     index_failed: bool,
     line_count: Option<u64>,
@@ -109,6 +112,7 @@ impl PagedView {
             index_rev: 0,
             source_rev: 0,
             cache: RowCache::default(),
+            syntax: PagedSyntax::default(),
             index_done: false,
             index_failed: false,
             line_count: None,

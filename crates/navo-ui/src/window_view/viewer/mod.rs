@@ -29,6 +29,7 @@ mod pdf;
 mod rich_header;
 mod search;
 mod space;
+mod syntax;
 mod table;
 mod trace;
 mod tree;

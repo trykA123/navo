@@ -1,11 +1,13 @@
 use super::markdown::markdown_extension;
 use super::{EDIT_LIMIT, Load, Loaded, Slot, Sniff, ViewerKind};
-use crate::languages::detect;
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::editor::{EditorBody, EditorFile, SplitChoice};
 use crate::window_view::viewer::paged::PagedBody;
+use crate::window_view::viewer::syntax::{LanguageChoice, Pick, choose};
 use crate::window_view::viewer::{Paged, PagedKind};
+use sidewise_kit::languages::lines::LineLexer;
+use std::sync::Arc;
 
 const TEXT: u8 = 50;
 const BINARY: u8 = 1;
@@ -14,13 +16,13 @@ const NEEDS_WHOLE_FILE: &str =
 
 enum TextLoad {
     Editor(EditorFile),
-    Paged(Paged),
+    Paged(Paged, Option<Arc<dyn LineLexer>>),
 }
 
 pub(super) struct Text;
 
 pub(in crate::window_view::viewer) fn paged_text(paged: Paged) -> Loaded {
-    Box::new(TextLoad::Paged(paged))
+    Box::new(TextLoad::Paged(paged, None))
 }
 
 impl ViewerKind for Text {
@@ -55,11 +57,21 @@ impl ViewerKind for Text {
         let loaded = if self.editable(sniff) {
             TextLoad::Editor(EditorFile {
                 file: hooks.read_with(location, encoding)?,
-                language: detect(sniff.name, sniff.head),
+                highlight: choose(&Pick {
+                    name: sniff.name,
+                    head: sniff.head,
+                    choice: &LanguageChoice::Auto,
+                }),
                 split: markdown_extension(sniff.name).map(|_| SplitChoice { is_shown: true }),
             })
         } else {
-            TextLoad::Paged(hooks.paged_with(location, encoding)?)
+            let lexer = choose(&Pick {
+                name: sniff.name,
+                head: sniff.head,
+                choice: &LanguageChoice::Auto,
+            })
+            .paged_lexer();
+            TextLoad::Paged(hooks.paged_with(location, encoding)?, lexer)
         };
         Ok(Box::new(loaded))
     }
@@ -82,7 +94,7 @@ impl ViewerKind for Text {
                 }
                 Box::new(body)
             }
-            TextLoad::Paged(paged) => {
+            TextLoad::Paged(paged, lexer) => {
                 let whole = paged.source.layout().needs_whole_file();
                 let kind = if whole {
                     PagedKind::Hex
@@ -93,6 +105,7 @@ impl ViewerKind for Text {
                 if whole {
                     body.set_note(NEEDS_WHOLE_FILE.into(), cx);
                 }
+                body.set_lexer(lexer, cx);
                 Box::new(body)
             }
         })

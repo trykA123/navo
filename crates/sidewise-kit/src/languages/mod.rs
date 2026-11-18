@@ -1,12 +1,15 @@
 mod ambiguous;
 mod captures;
 mod grammars;
+pub mod line_highlighter;
 mod names;
 mod sniff;
 
 #[cfg(test)]
 pub(crate) use captures::HIGHLIGHT_NAMES;
 pub use grammars::register_languages;
+pub use names::{canonical, known_languages};
+pub use navo_core::lines;
 
 #[must_use]
 pub fn detect(name: &str, head: &[u8]) -> &'static str {

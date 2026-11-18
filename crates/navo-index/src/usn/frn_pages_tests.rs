@@ -33,7 +33,7 @@ fn consecutive_records_cost_at_most_six_point_one_bytes() {
     pages.shrink_to_fit();
     assert_eq!(pages.len(), 1_000_000);
     assert_eq!(pages.get(999_999, 1), Some(999_999));
-    let held = probe.read().retained;
+    let held = probe.thread_retained();
     assert_eq!(
         held,
         bytes(&pages) as isize,

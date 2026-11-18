@@ -189,6 +189,7 @@ impl NavoWindow {
         };
         if reused {
             viewer.kind = Some(kind);
+            viewer.relex(cx);
             window.focus(&viewer.focus_target(cx), cx);
             self.show_parts(cx);
             cx.notify();
@@ -299,6 +300,9 @@ impl NavoWindow {
     }
 
     fn follow_shown_from(&mut self, line: u64, cx: &mut Context<Self>) {
+        if let Some(viewer) = &self.viewer {
+            viewer.relex(cx);
+        }
         let paged = self
             .viewer
             .as_ref()

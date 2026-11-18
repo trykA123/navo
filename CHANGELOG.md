@@ -2,6 +2,16 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## Unreleased
+
+### Highlights
+
+**Big files get syntax colours.** An ARXML, XML or JSON file over 16 MiB opens in the paged Text view with colours: tags, attributes, values, comments, keys, strings and numbers. Scrolling stays as fast as plain text, and memory stays the same. Set `NAVO_SYNTAX=off` to turn colours off.
+
+**Logs and plain text get colours.** In `.log`, `.txt` and other text files, Navo colours level words (ERROR, WARN, INFO, DEBUG), dates and times, numbers and hex, quoted text, paths, links and GUIDs. This works in F3, in Ctrl+E while you type, and in files of any size. A line over 10,000 characters stays plain in the editor.
+
+**More files are recognised.** Navo tells XML and JSON apart by their content when the extension says nothing, including UTF-16 files. CDD and ODX diagnostic files open as XML. A file that looks binary stays plain.
+
 ## v0.7.1 — Clicks that do what you mean
 
 *2026-11-18*

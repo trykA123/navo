@@ -1,4 +1,5 @@
 mod grammars;
+mod sniff;
 
 use super::detect;
 

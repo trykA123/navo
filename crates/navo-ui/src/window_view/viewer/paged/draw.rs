@@ -1,4 +1,8 @@
+use std::sync::Arc;
+
 use gpui_kit::base::{ObservedElement, Scrollbar, ScrollbarMode, TestSupportExt};
+use gpui_kit::component::highlighter::HighlightTheme;
+use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::{Role, ScrollEvent, Stateful, canvas};
 
 use super::PagedView;
@@ -39,7 +43,12 @@ impl PagedView {
         }
     }
 
-    fn rows(&self, t: &Theme, screen: &Screenful<'_>) -> Vec<AnyElement> {
+    fn rows(
+        &self,
+        t: &Theme,
+        screen: &Screenful<'_>,
+        syntax: Option<Arc<HighlightTheme>>,
+    ) -> Vec<AnyElement> {
         let marks = self.screen_marks(screen.end);
         let look = RowLook {
             t,
@@ -64,6 +73,7 @@ impl PagedView {
                     shift: self.shift,
                     numbers: self.line_numbers,
                     layout: self.source.layout(),
+                    syntax,
                 };
                 lines
                     .iter()
@@ -124,7 +134,12 @@ impl PagedView {
         })
     }
 
-    fn content(&self, t: &Theme, screen: &Screenful<'_>) -> AnyElement {
+    fn content(
+        &self,
+        t: &Theme,
+        screen: &Screenful<'_>,
+        syntax: Option<Arc<HighlightTheme>>,
+    ) -> AnyElement {
         match screen.shown {
             Shown::Failed(error) => div()
                 .id("paged-error")
@@ -138,29 +153,46 @@ impl PagedView {
             _ => div()
                 .flex()
                 .flex_col()
-                .children(self.rows(t, screen))
+                .children(self.rows(t, screen, syntax))
                 .into_any_element(),
         }
     }
 
+    /// Builds the invisible canvas that measures the viewport and logs the first paint.
+    fn measure(&self, screen: &Screenful<'_>, cx: &mut Context<Self>) -> impl IntoElement {
+        let scroll = self.scroll.clone();
+        let entity = cx.entity_id();
+        let timing = screen.timing.clone();
+        canvas(
+            move |bounds, window, _| {
+                if scroll.measure(bounds) {
+                    window.on_next_frame(move |_, cx| cx.notify(entity));
+                }
+            },
+            move |_, _, _, _| {
+                if let Some(timing) = &timing {
+                    timing.log_first_paint();
+                }
+            },
+        )
+        .absolute()
+        .size_full()
+    }
+
+    /// Builds the paged viewer body: measuring canvas, rows, scrollbar and overview.
     pub(super) fn body(
         &self,
         t: &Theme,
         screen: &Screenful<'_>,
         cx: &mut Context<Self>,
     ) -> ObservedElement<Stateful<Div>> {
-        let scroll = self.scroll.clone();
-        let entity = cx.entity_id();
-        let measure = canvas(
-            move |bounds, window, _| {
-                if scroll.measure(bounds) {
-                    window.on_next_frame(move |_, cx| cx.notify(entity));
-                }
-            },
-            |_, _, _, _| {},
-        )
-        .absolute()
-        .size_full();
+        let syntax = self
+            .syntax
+            .lexer
+            .as_ref()
+            .filter(|_| screen.colours)
+            .and_then(|_| cx.try_global::<KitTheme>())
+            .map(|kit| Arc::clone(&kit.highlight_theme));
         div()
             .id("paged-body")
             .test_support()
@@ -173,8 +205,8 @@ impl PagedView {
             .on_scroll(cx.listener(|view, event: &ScrollEvent, _, cx| {
                 view.scroll_wheel(event, cx);
             }))
-            .child(measure)
-            .child(self.content(t, screen))
+            .child(self.measure(screen, cx))
+            .child(self.content(t, screen, syntax))
             .child(
                 div().absolute().top_0().left_0().size_full().child(
                     Scrollbar::vertical(&self.scroll)

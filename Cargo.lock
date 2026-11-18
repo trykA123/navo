@@ -9194,6 +9194,7 @@ dependencies = [
  "aho-corasick",
  "chardetng",
  "encoding_rs",
+ "gungraun",
  "insta",
  "memchr",
  "proptest",
