@@ -562,9 +562,9 @@ function Test-Case([int]$number) {
             if ($second.HasExited -or $second.MainWindowHandle -eq 0) { throw 'D22d needs a change' }
             Assert-Version '0.0.2' $true
             $processes = @(App-Processes)
-            $windows = @($processes | Where-Object { $_.CommandLine -notmatch '(?:^|\s)--pdf-helper(?:\s|$)' })
+            $windows = @($processes | Where-Object { $_.CommandLine -notmatch '(?:^|\s)--(?:pdf-helper|crash-server)(?:\s|$)' })
             Assert ($windows.Count -eq 2) "expected two profile processes, got $($windows.Count)"
-            Write-Evidence "second_pid=$($second.Id); second_window=$($second.MainWindowHandle); profiles=$($windows.Count); pdf_helpers=$($processes.Count - $windows.Count); current=0.0.2; staged=0.0.3"
+            Write-Evidence "second_pid=$($second.Id); second_window=$($second.MainWindowHandle); profiles=$($windows.Count); helpers=$($processes.Count - $windows.Count); current=0.0.2; staged=0.0.3"
             Stop-Apps
             Apply-Next $profile $feed
             return 'second profile kept its window and blocked apply; after both quit, next start applied N+1'
