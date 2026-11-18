@@ -47,15 +47,15 @@ id = "navo-index/search::search::bench_load.index"
 guarded = false
 
 [[bench]]
-id = "navo-compare/text::text::bench_diff.twenty_thousand"
+id = "sidewise-engine/text::text::bench_diff.twenty_thousand"
 guarded = false
 
 [[bench]]
-id = "navo-compare/text::text::bench_card.default_limits"
+id = "sidewise-engine/text::text::bench_card.default_limits"
 guarded = false
 
 [[bench]]
-id = "navo-compare/text::text::bench_intraline.two_hundred"
+id = "sidewise-engine/text::text::bench_intraline.two_hundred"
 guarded = false
 
 [[bench]]
