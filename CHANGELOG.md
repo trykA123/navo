@@ -2,7 +2,11 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
-## Unreleased
+## v0.8.0 — Colours everywhere
+
+*2026-11-19*
+
+This release brings syntax colours to every text file the viewer opens: huge XML and JSON, logs, automotive files and your own Notepad++ languages. A new picker lets you choose the language yourself.
 
 ### Highlights
 
