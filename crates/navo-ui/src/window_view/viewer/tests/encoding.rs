@@ -18,7 +18,7 @@ fn fallback() -> &'static Encoding {
     Encoding::for_label(b"windows-1250").expect("a known label")
 }
 
-const FRENCH: &str =
+pub(super) const FRENCH: &str =
     "Le café était déjà prêt à côté de l'hôpital, où la clé du théâtre restait oubliée.\n";
 
 struct Bytes(Arc<Vec<u8>>);
@@ -33,7 +33,7 @@ impl ByteSource for Bytes {
     }
 }
 
-fn latin1(text: &str) -> Vec<u8> {
+pub(super) fn latin1(text: &str) -> Vec<u8> {
     text.chars()
         .map(|character| u8::try_from(u32::from(character)).unwrap())
         .collect()
@@ -129,13 +129,13 @@ fn hooks_for(bytes: Vec<u8>, len: u64, calls: &Calls) -> FileHooks {
     }
 }
 
-struct Rig {
-    window: AnyWindowHandle,
-    view: Entity<NavoWindow>,
+pub(super) struct Rig {
+    pub(super) window: AnyWindowHandle,
+    pub(super) view: Entity<NavoWindow>,
     calls: Calls,
 }
 
-fn open(cx: &mut TestAppContext, bytes: Vec<u8>, len: Option<u64>) -> Rig {
+pub(super) fn open(cx: &mut TestAppContext, bytes: Vec<u8>, len: Option<u64>) -> Rig {
     let calls = Calls::default();
     let size = len.unwrap_or(bytes.len() as u64);
     let files = hooks_for(bytes, size, &calls);
@@ -151,7 +151,7 @@ fn open(cx: &mut TestAppContext, bytes: Vec<u8>, len: Option<u64>) -> Rig {
 }
 
 impl Rig {
-    fn press(&self, cx: &mut TestAppContext, key: &str) {
+    pub(super) fn press(&self, cx: &mut TestAppContext, key: &str) {
         press(cx, self.window, &self.view, key);
     }
 
@@ -182,7 +182,7 @@ impl Rig {
             .unwrap_or_default()
     }
 
-    fn choose(&self, cx: &mut TestAppContext, text: &str) {
+    pub(super) fn choose(&self, cx: &mut TestAppContext, text: &str) {
         self.press(cx, "ctrl-shift-e");
         run_item(cx, self.window, text);
         settle(cx, &self.view);
@@ -288,6 +288,46 @@ fn unsaved_edits_survive_until_the_choice_is_repeated(cx: &mut TestAppContext) {
     assert!(text_of(cx, rig.window, "viewer-message").contains("Unsaved changes"));
     rig.choose(cx, "UTF-8");
     assert_eq!(rig.calls.all(), ["read", "read_as UTF-8"]);
+}
+
+#[gpui_kit::test]
+fn a_discard_confirmation_is_spent_by_the_reload_and_scoped_to_its_choice(cx: &mut TestAppContext) {
+    let rig = open(cx, latin1(FRENCH), None);
+    rig.press(cx, "ctrl-e");
+    type_in(cx, rig.window, &rig.view, "x");
+    rig.choose(cx, "UTF-8");
+    rig.choose(cx, "Windows-1251");
+    assert_eq!(rig.calls.all(), ["read"], "a different choice asks again");
+    rig.choose(cx, "Windows-1251");
+    assert_eq!(rig.calls.all(), ["read", "read_as windows-1251"]);
+    rig.press(cx, "ctrl-e");
+    type_in(cx, rig.window, &rig.view, "y");
+    rig.choose(cx, "UTF-8");
+    assert_eq!(
+        rig.calls.all().len(),
+        2,
+        "the spent confirmation stays spent"
+    );
+    assert!(rig.editor_text(cx).starts_with('y'));
+}
+
+#[gpui_kit::test]
+fn a_language_choice_survives_a_re_encoding(cx: &mut TestAppContext) {
+    let rig = open(cx, latin1(FRENCH), None);
+    rig.press(cx, "ctrl-shift-l");
+    run_item(cx, rig.window, "Plain text");
+    settle(cx, &rig.view);
+    redraw(cx, rig.window);
+    let language = |cx: &mut TestAppContext| {
+        rig.view.read_with(cx, |view, cx| {
+            let body = view.viewer.as_ref()?.body.as_ref()?;
+            body.language(cx).map(|name| name.to_string())
+        })
+    };
+    assert_eq!(language(cx).as_deref(), Some("text"));
+    rig.choose(cx, "UTF-8");
+    assert_eq!(rig.calls.all(), ["read", "read", "read_as UTF-8"]);
+    assert_eq!(language(cx).as_deref(), Some("text"));
 }
 
 #[gpui_kit::test]

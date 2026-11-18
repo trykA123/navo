@@ -153,8 +153,9 @@ impl PagedView {
         bar_row(t, look, cx.listener(|view, _, _, cx| view.toggle_case(cx)))
     }
 
-    fn header(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let summary = self.summary.clone().filter(|_| self.kind == PagedKind::Hex);
+    /// The header row: the file facts on the left take whatever room is left and clip; the
+    /// statuses, the search bar and the View button keep their width and never leave the window.
+    fn header(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Div {
         div()
             .flex()
             .flex_none()
@@ -165,28 +166,7 @@ impl PagedView {
             .border_b_1()
             .border_color(t.colors.line)
             .bg(t.colors.rail)
-            .child(
-                div()
-                    .id("viewer-title")
-                    .test_support()
-                    .min_w_0()
-                    .truncate()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(self.title.clone()),
-            )
-            .child(small(t, t.colors.muted).child(self.mode_label()))
-            .child(small(t, t.colors.muted).child(format::size(self.source.len())))
-            .children(self.encoding_control())
-            .when_some(summary, |row, summary| {
-                row.child(small(t, t.colors.muted).child(summary))
-            })
-            .when(self.changed && self.follow_label().is_none(), |row| {
-                row.child(
-                    status(t, "paged-changed", "Changed on disk".into()).text_color(t.colors.warn),
-                )
-            })
-            .children(self.follow_badge(t))
-            .child(div().flex_1())
+            .child(self.header_facts(t, window))
             .children(self.problem_status(t))
             .children(
                 self.index_status()
@@ -203,6 +183,41 @@ impl PagedView {
             )
             .children(self.find.bar.as_ref().map(|bar| self.bar_view(t, bar, cx)))
             .when(self.kind == PagedKind::Text, |row| row.child(view_button()))
+    }
+
+    /// The title, mode, size, encoding, Syntax button, summary and Follow state, clipped when the
+    /// header is crowded; the View menu still reaches the encoding and language pickers.
+    fn header_facts(&self, t: &Theme, window: &Window) -> Div {
+        let summary = self.summary.clone().filter(|_| self.kind == PagedKind::Hex);
+        div()
+            .flex()
+            .flex_1()
+            .min_w_0()
+            .overflow_hidden()
+            .items_center()
+            .gap(t.spacing.md)
+            .child(
+                div()
+                    .id("viewer-title")
+                    .test_support()
+                    .min_w_0()
+                    .truncate()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(self.title.clone()),
+            )
+            .child(small(t, t.colors.muted).child(self.mode_label()))
+            .child(small(t, t.colors.muted).child(format::size(self.source.len())))
+            .children(self.encoding_control())
+            .children(self.language_control(window))
+            .when_some(summary, |row, summary| {
+                row.child(small(t, t.colors.muted).child(summary))
+            })
+            .when(self.changed && self.follow_label().is_none(), |row| {
+                row.child(
+                    status(t, "paged-changed", "Changed on disk".into()).text_color(t.colors.warn),
+                )
+            })
+            .children(self.follow_badge(t))
     }
 
     fn movement_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -293,7 +308,7 @@ impl Render for PagedView {
             .min_h_0()
             .size_full()
             .bg(t.colors.surface)
-            .child(self.header(&t, cx))
+            .child(self.header(&t, window, cx))
             .child(self.body(&t, &screen, cx))
             .children(panel)
     }

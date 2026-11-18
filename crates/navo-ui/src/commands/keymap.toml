@@ -1250,6 +1250,10 @@ command = "viewer.encoding"
 keys = ["ctrl-shift-e"]
 
 [[bind]]
+command = "viewer.language"
+keys = ["ctrl-shift-l"]
+
+[[bind]]
 command = "view.left_drawer"
 keys = ["ctrl-b"]
 

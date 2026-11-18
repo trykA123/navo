@@ -119,4 +119,9 @@ pub trait ViewerBody: Any {
     fn encoding(&self, _: &App) -> Option<TextEncoding> {
         None
     }
+
+    /// The language name the body highlights with, or None when it has no language.
+    fn language(&self, _: &App) -> Option<SharedString> {
+        None
+    }
 }

@@ -132,9 +132,9 @@ impl NavoWindow {
             return;
         }
         if let Some(revision) = viewer.unsaved(cx)
-            && viewer.reencoding != Some(revision)
+            && viewer.reencoding != Some((revision, encoding))
         {
-            viewer.reencoding = Some(revision);
+            viewer.reencoding = Some((revision, encoding));
             viewer.say(UNSAVED, cx);
             cx.notify();
             return;

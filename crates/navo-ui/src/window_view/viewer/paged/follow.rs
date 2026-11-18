@@ -47,16 +47,48 @@ impl PagedView {
             return;
         }
         if self.follower.state == Follow::Off {
-            self.follower = Follower {
-                state: Follow::Following,
-                start_line: None,
-                _poll: Some(self.poll_task(cx)),
-            };
-            self.queue_move(Move::End, cx);
+            self.follow_from_end(cx);
         } else {
             self.follower = Follower::default();
         }
         cx.notify();
+    }
+
+    /// Starts following with the view on the end of the file; the Hex view follows nothing.
+    pub(in crate::window_view::viewer) fn follow_from_end(&mut self, cx: &mut Context<Self>) {
+        if self.kind != PagedKind::Text {
+            self.stop_following();
+            return;
+        }
+        self.follower = Follower {
+            state: Follow::Following,
+            start_line: None,
+            _poll: Some(self.poll_task(cx)),
+        };
+        self.queue_move(Move::End, cx);
+    }
+
+    /// Starts a paused Follow with the view on the row holding byte `offset`, as before a reload.
+    pub(in crate::window_view::viewer) fn follow_paused_at(
+        &mut self,
+        offset: u64,
+        cx: &mut Context<Self>,
+    ) {
+        if self.kind != PagedKind::Text {
+            self.stop_following();
+            return;
+        }
+        self.follower = Follower {
+            state: Follow::Paused,
+            start_line: None,
+            _poll: Some(self.poll_task(cx)),
+        };
+        self.queue_move(Move::Offset(offset), cx);
+    }
+
+    /// The byte offset of the top row while Follow is paused, else `None`.
+    pub(in crate::window_view::viewer) fn paused_at(&self) -> Option<u64> {
+        (self.follower.state == Follow::Paused).then_some(self.top)
     }
 
     pub(in crate::window_view::viewer) fn follow_from_line(
@@ -103,7 +135,7 @@ impl PagedView {
         }
     }
 
-    pub(super) fn is_following(&self) -> bool {
+    pub(in crate::window_view::viewer) fn is_following(&self) -> bool {
         self.follower.state != Follow::Off
     }
 

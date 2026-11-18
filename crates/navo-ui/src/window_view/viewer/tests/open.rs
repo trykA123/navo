@@ -178,13 +178,7 @@ fn open_in_thread(
         let location = navo_core::Location::new(format!("/home/{name}")).expect("location");
         let cancel = AtomicBool::new(false);
         load_while_alive(&Arc::downgrade(&alive), &kind, || {
-            kind.load(Load {
-                hooks: &hooks,
-                location: &location,
-                sniff: &sniff,
-                cancel: &cancel,
-                encoding: None,
-            })
+            kind.load(Load::new(&hooks, &location, &sniff, &cancel).in_encoding(None))
         })
         .is_ok()
     })
@@ -320,13 +314,7 @@ fn open_pdf_in_thread(
         let location = navo_core::Location::new("/home/a.pdf").expect("location");
         let cancel = AtomicBool::new(false);
         load_while_alive(&weak, &kind, || {
-            kind.load(Load {
-                hooks: &hooks,
-                location: &location,
-                sniff: &sniff,
-                cancel: &cancel,
-                encoding: None,
-            })
+            kind.load(Load::new(&hooks, &location, &sniff, &cancel).in_encoding(None))
         })
         .is_ok()
     })

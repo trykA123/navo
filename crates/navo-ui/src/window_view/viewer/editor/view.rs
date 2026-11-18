@@ -9,6 +9,7 @@ use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::EDITOR_CONTEXT;
 use crate::window_view::viewer::encoding::encoding_button;
+use crate::window_view::viewer::language::language_control;
 use crate::window_view::viewer::search::GO_TO_CONTEXT;
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
 use crate::window_view::viewer::search::find_all::{
@@ -105,6 +106,11 @@ impl EditorView {
                     .children(self.stamp.map(|stamp| format::size(stamp.len))),
             )
             .child(encoding_button(self.encoding))
+            .children(language_control(
+                true,
+                self.find.bar.is_some() || self.go_to.is_some(),
+                window,
+            ))
             .when(self.dirty, |d| {
                 d.child(div().text_color(t.colors.mark).child("●"))
             })

@@ -9,6 +9,7 @@ use navo_core::encoding::Encoding;
 use super::cancel::Cancel;
 use super::kinds::{IMAGE_ID, PDF_ID, paged_text};
 use super::modes::Shown;
+use super::syntax::LanguageChoice;
 use super::{Declined, FileHooks, Head, Kind, Kinds, Load, Loaded, Slot, Sniff, Viewer};
 use crate::prelude::*;
 use crate::window_view::NavoWindow;
@@ -111,6 +112,7 @@ pub(in crate::window_view) struct Request {
     pub location: Location,
     pub name: String,
     pub encoding: Option<&'static Encoding>,
+    pub(in crate::window_view::viewer) language: LanguageChoice,
 }
 
 #[derive(Clone, Copy)]
@@ -120,6 +122,22 @@ pub(in crate::window_view) struct Turn<'a> {
 }
 
 impl Request {
+    /// Builds a request for a file with the automatic language choice.
+    pub(in crate::window_view) fn new(
+        hooks: FileHooks,
+        location: Location,
+        name: String,
+        encoding: Option<&'static Encoding>,
+    ) -> Self {
+        Self {
+            hooks,
+            location,
+            name,
+            encoding,
+            language: LanguageChoice::Auto,
+        }
+    }
+
     pub(super) fn paged_text(&self) -> Result<Loaded, String> {
         self.hooks
             .paged_with(&self.location, self.encoding)
@@ -133,13 +151,11 @@ impl Request {
     ) -> impl Fn(&Kind) -> Result<Loaded, String> + 'a {
         move |kind| {
             load_while_alive(turn.alive, kind, || {
-                kind.load(Load {
-                    hooks: &self.hooks,
-                    location: &self.location,
-                    sniff,
-                    cancel: turn.cancel,
-                    encoding: self.encoding,
-                })
+                kind.load(
+                    Load::new(&self.hooks, &self.location, sniff, turn.cancel)
+                        .in_encoding(self.encoding)
+                        .in_language(&self.language),
+                )
             })
         }
     }
@@ -219,6 +235,7 @@ impl NavoWindow {
             location: viewer.location.clone(),
             name: viewer.title.to_string(),
             encoding: viewer.encoding,
+            language: viewer.language.clone(),
         }
     }
 

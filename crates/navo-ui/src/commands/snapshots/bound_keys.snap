@@ -540,6 +540,7 @@ viewer.go_to_start | home | Archive
 viewer.go_to_start | home | CompareView
 viewer.go_to_start | home | Pdf
 viewer.go_to_start | home | Tree
+viewer.language | ctrl-shift-l | Viewer
 viewer.line_down | down | CompareView
 viewer.line_down | down | Viewer
 viewer.line_up | up | CompareView

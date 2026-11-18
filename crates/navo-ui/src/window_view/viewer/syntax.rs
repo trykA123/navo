@@ -17,10 +17,6 @@ pub(in crate::window_view::viewer) enum Highlight {
     Plain,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "L3b's choice_of builds Plain and Named")
-)]
 pub(in crate::window_view::viewer) enum LanguageChoice {
     #[default]
     Auto,
@@ -103,6 +99,15 @@ fn has_bad_surrogates(head: &[u8], truncated: bool) -> bool {
     char::decode_utf16(body.iter().copied()).any(|unit| unit.is_err())
 }
 impl Highlight {
+    /// The language name this highlight stands for (`plain` for none).
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Line(lexer) => lexer.name(),
+            Self::Grammar(name) => name,
+            Self::Plain => "plain",
+        }
+    }
+
     /// Returns the line lexer for paged text, or None for plain text.
     pub fn paged_lexer(self) -> Option<Arc<dyn LineLexer>> {
         match self {
@@ -115,7 +120,7 @@ impl Highlight {
     }
 }
 impl super::Viewer {
-    /// Sets the paged body's lexer from this viewer's own name and head (Auto choice).
+    /// Sets the paged body's lexer from this viewer's own name, head and language choice.
     ///
     /// Does nothing for other bodies; an unchanged lexer is free (`set_lexer`'s same-lexer rule).
     pub(in crate::window_view::viewer) fn relex(&self, cx: &mut gpui_kit::App) {
@@ -130,7 +135,7 @@ impl super::Viewer {
         let lexer = choose(&Pick {
             name: sniff.name,
             head: sniff.head,
-            choice: &LanguageChoice::Auto,
+            choice: &self.language,
             len: Some(sniff.len),
         })
         .paged_lexer();
