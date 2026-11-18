@@ -2,9 +2,10 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub(crate) mod support;
 
@@ -35,23 +36,33 @@ fn small_data(ids: std::ops::Range<u64>) -> HashMap<u64, PairData> {
     .collect()
 }
 
+/// Checks start order, not finish order: every load blocks on a gate, so the four workers
+/// hold exactly the first four queued items and a slow focused load cannot be overtaken.
 #[test]
 fn focused_items_are_queued_before_the_rest() {
-    let data = small_data(0..8);
-    let (sink, receiver) = channel();
-    let load = load_fn(data.clone(), Duration::from_millis(2), None, None);
+    let mut data = small_data(0..8);
+    data.values_mut().for_each(|pair| pair.blocked = true);
+    let (sink, _receiver) = channel();
+    let gate = Arc::new(Gate::default());
+    let inner = load_fn(data.clone(), Duration::ZERO, None, Some(Arc::clone(&gate)));
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&started);
+    let load: LoadFn = Arc::new(move |request| {
+        seen.lock().unwrap().push(request.id);
+        inner(request)
+    });
     let session = StreamSession::start(sink, SIXTY_FOUR_MIB, load, not_viewed());
     session.focus(vec![6, 2]);
     session.set_items(1, items(&data, true));
-    let mut ids = Vec::new();
-    while ids.len() < 4 {
-        if let StreamUpdate::Card { id, .. } = receiver.recv_timeout(WAIT).unwrap() {
-            ids.push(id);
-        }
+    let deadline = Instant::now() + WAIT;
+    while started.lock().unwrap().len() < 4 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
     }
+    let ids = started.lock().unwrap().clone();
+    gate.release();
     assert!(
-        ids.contains(&6) && ids.contains(&2),
-        "focused ids were {ids:?}"
+        ids.len() == 4 && ids.contains(&6) && ids.contains(&2),
+        "started ids were {ids:?}"
     );
 }
 
