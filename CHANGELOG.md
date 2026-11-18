@@ -2,6 +2,51 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.7.1 — Clicks that do what you mean
+
+*2026-11-18*
+
+This release fixes the mouse. A typed path now closes when you click away. Shift+click selects a range again. A small shake of the mouse no longer starts a drag. Setup also shows a real progress bar and starts Navo after the install.
+
+### Highlights
+
+**The path bar closes when you leave it.** You type a path into the path bar and then click elsewhere, switch to another tab, or go back or forward. The typed path now closes. Before, it stayed open. Right-click → Copy on the typed path still copies the path.
+
+**Shift+click selects a range again.** The Shift hint drawer no longer swallows the click. Hold Shift, click a second file, and every file between the two is selected.
+
+| Try it | Key |
+| --- | --- |
+| Select a range | Shift+click |
+| Add or remove one file | Ctrl+click |
+
+**A small mouse movement no longer starts a drag.** While you Shift+click or Ctrl+click, Navo starts a drag only after the mouse moves 6 px. Before, a tiny movement could drag a file you only meant to select.
+
+**Setup shows its real progress.** The Installing page fills a bar and shows "NN %" beside the elapsed time. If Setup cannot read the install log, the bar keeps its soft pulse. It never freezes at a made-up number.
+
+**"Open Navo after install" works.** Before, Navo did not start, and the next start showed "Navo closed unexpectedly last time". Now Navo starts after Setup, and no crash notice follows. If a start fails, the reason goes to the Setup log.
+
+### Also new
+
+- A first full build of an NTFS drive index peaks at about half the memory. At 2 million files the peak falls from 3.29 to 1.61 times the index size. At 5 million files it falls from 3.28 to 1.69 times.
+- The index builds in two passes. It reads the folders first and then the files, so no file waits for its parent folder.
+- In compare, a file from a Git repository whose content is not downloaded yet (a partial clone) now reads "missing content". Before, it could look like an empty file.
+
+### Fixed
+
+- Setup: before, choosing a folder under Program Files said "Setup cannot write to this folder". Now it says that folder needs administrator rights, which Setup cannot ask for yet.
+- Search index: a hard-link change on a drive now makes the service read the folder list again before it refreshes sizes.
+- Security: Velopack is updated to 1.3.39. This closes two published advisories for the zip library.
+
+### Built but not switched on yet
+
+- An old index that stays searchable while a new one builds. The pieces are in, but the service does not use them yet.
+- A "waiting" card for folder sizes while an index rebuilds. The card is drawn, but nothing shows it yet.
+- Compare reports its phase (listing, quick check, content check) and slow files. Nothing shows it yet.
+
+### Known issues
+
+- Setup is not signed yet, so Windows may warn about the file.
+
 ## v0.7.0 — Read every line, install like an app
 
 *2026-11-12*

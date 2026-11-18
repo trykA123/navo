@@ -1,14 +1,14 @@
 # Navo roadmap
 
-Updated 12 November 2026. This document tracks current implementation status. The [original visual outline](../design/roadmap.html) shows the milestone scope. Scope and priority decisions are in [decisions.md](decisions.md), especially D85 and D106. Plain-language specs are in [features/](features/).
+Updated 18 November 2026. This document tracks current implementation status. The [original visual outline](../design/roadmap.html) shows the milestone scope. Scope and priority decisions are in [decisions.md](decisions.md), especially D85 and D106. Plain-language specs are in [features/](features/).
 
 Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versions; a feature release increments the minor version. Windows packages are on [GitHub releases](https://github.com/trykA123/navo/releases).
 
-## Where we are · 12 November 2026
+## Where we are · 18 November 2026
 
 - **Alpha:** done. Signed off on 4 November and released as v0.2.0.
 - **Beta:** about three quarters done. Workspaces, tiled panes, clipboard history, the new layout and fonts, and user commands are finished. Still open:
-  - **Index service memory:** the owner's measurement on a real drive is still open. The `blocked_peak` line in `index-service.log` decides the fix. v0.7.0 already stops the app walking a drive the service indexes and cuts the folder-refresh peak.
+  - **Index service memory:** the owner's measurement on a real drive is still open. The `blocked_peak` line in `index-service.log` decides the fix. v0.7.0 already stops the app walking a drive the service indexes and cuts the folder-refresh peak. v0.7.1 cuts the first-build peak on NTFS drives to about 1.6 times the index size; an old index that stays searchable during a rebuild is built but not switched on.
   - **Delete safety net:** on by default and working; a final review and the help text remain.
   - **Find files:** content search and the results tab work; the results tab's final look and hit lines get a design round.
   - **Accessibility:** the basics are in; polish remains.
@@ -18,13 +18,13 @@ Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versio
   - **Compare:** v0.7.0 ships readable compare. The gutter between the folder panes names each row's result, the newer side carries a ▲ mark, and a change map shows where the folder differs. Changed lines are coloured and changed words are filled. The file diff and the Stream draw syntax colours. Sideways scroll keeps both sides level, Alt+Z wraps the file diff and the Stream, and Alt+↓ and the change map centre a change. Binary pairs open as a hex diff, and Alt+V switches Text and Bytes. Stream cards cover large, binary and image pairs. The sync plan engine is built; the sync screen is not.
   - **Compare follow-ups:** the V42 Windows VM proof left five. Shift+J far down a fresh folder Stream leaves the focused card below the view. PageDown is not bound in the Stream. At 200 % scale, diff rows touch and the Settings popover is clipped. Content jumps while placeholders fill. The hex ASCII column uses the proportional font.
   - **Installer wizard:** released in v0.7.0. `Navo-Setup.exe` walks five pages, installs for one user and never asks for administrator rights. Setup protects the install folder, warns instead of refusing when a parent folder is open to other users (IW-D16), and installs silently on request.
-  - **Installer follow-ups (owner's v0.7.0 install):** "Open Navo after install" did nothing, and the next manual start showed "Navo closed unexpectedly last time". One cause: Navo started by Setup crashed on stale console handles. Fixed on main after v0.7.0 (null stdio; a failed launch now reaches the wizard log); the VM check adds a first start with no crash notice. Still open: the progress bar is a static pulse with no real percentage.
+  - **Installer follow-ups (owner's v0.7.0 install):** fixed in v0.7.1. "Open Navo after install" did nothing, and the next manual start showed "Navo closed unexpectedly last time". Navo started by Setup crashed on stale console handles; a failed launch now reaches the wizard log. The Installing page also shows a real percentage beside the elapsed time.
   - **Native crash reports:** built. An out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
   - **Speed checks that fail the build:** done. Benches measure the hot paths, `perf/speed.toml` holds the speed gate, and a release waits for that gate. Tracy zones are in.
   - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt) is still open.
   - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, the module registry, the mimalloc trial, background work that never waits, and smarter search.
 - **Order after the current work (owner, 12 November):** index service memory, the mimalloc trial, background work that never waits, then smarter search. Speed checks are done, so they leave the order. Accessibility is required for v1.0.
-- **Latest release:** v0.7.0 (readable compare, the installer wizard, index fixes, natural sort, the MIT or Apache-2.0 licence), published on 12 November 2026 after its Windows VM checks.
+- **Latest release:** v0.7.1 (the path bar closes when you click away, Shift+click range selection works again, drags need 6 px with Shift or Ctrl, a real installer progress bar, Navo starts after install, less memory for a first NTFS index build, Velopack 1.3.39), published on 18 November 2026 after its Windows VM checks. Before it: v0.7.0 on 12 November 2026.
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
