@@ -8,6 +8,8 @@ use navo_ui::browser::Operations;
 use crate::jobs::maintenance::MaintenanceTimer;
 use crate::{files, jobs, metrics, rename_hooks, retained_hooks};
 
+mod languages;
+
 pub(super) struct ProfileServices {
     pub(super) memory: Option<files::SharedDb>,
     pub(super) files: navo_ui::window_view::FileHooks,
@@ -29,6 +31,7 @@ pub(super) fn profile_services(
     let memory = journal.clone();
     let files = files::profile_hooks(memory.clone(), dirs, experimental);
     let rename = rename_hooks::profile_hooks(journal, memory.clone(), dirs, experimental);
+    languages::install(dirs);
     metrics::mark("databases opened");
     ProfileServices {
         memory: memory.clone(),

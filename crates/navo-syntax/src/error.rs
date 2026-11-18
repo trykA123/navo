@@ -6,6 +6,8 @@ pub enum RulesError {
     UnknownKey { key: String },
     #[error("invalid UDL XML: {message}")]
     Xml { message: String },
+    #[error("language `{name}` is over a limit: {what}")]
+    Limit { name: String, what: String },
     #[error("a language has no name")]
     MissingName,
     #[error("cannot read rules file: {message}")]

@@ -15,15 +15,33 @@ fn xml_error(error: impl std::fmt::Display) -> RulesError {
     }
 }
 
-/// Reads and unescapes a named attribute; malformed XML attributes fail.
+/// Reads and unescapes a named attribute; a malformed attribute or a bad entity in any value
+/// on the tag fails, even one after the wanted key or on an attribute nobody reads.
 fn attribute(tag: &BytesStart<'_>, key: &str) -> Result<Option<String>, RulesError> {
+    let mut found = None;
     for attr in tag.attributes() {
         let attr = attr.map_err(xml_error)?;
-        if attr.key.as_ref() == key {
-            return Ok(Some(unescape(&attr.value).map_err(xml_error)?.into_owned()));
+        let value = unescape(&attr.value).map_err(xml_error)?;
+        if found.is_none() && attr.key.as_ref() == key {
+            found = Some(value.into_owned());
         }
     }
-    Ok(None)
+    Ok(found)
+}
+
+/// Checks the attributes of every element inside a `Keywords` element, which `read_text` skips
+/// over: a malformed attribute or a bad entity on any of them fails, like on any other tag.
+fn check_nested(inner: &str) -> Result<(), RulesError> {
+    let mut reader = Reader::from_str(inner);
+    loop {
+        match reader.read_event().map_err(xml_error)? {
+            Event::Start(tag) | Event::Empty(tag) => {
+                attribute(&tag, "")?;
+            }
+            Event::Eof => return Ok(()),
+            _ => {}
+        }
+    }
 }
 
 /// Parses UDL text into languages; malformed XML or incomplete rules fail.
@@ -37,6 +55,7 @@ pub fn from_udl(xml: &str) -> Result<Vec<Language>, RulesError> {
             Event::Start(tag) if tag.name().as_ref() == "Keywords" => {
                 let name = attribute(&tag, "name")?.unwrap_or_default();
                 let raw = reader.read_text(tag.name()).map_err(xml_error)?;
+                check_nested(&raw)?;
                 let text = unescape(&raw).map_err(xml_error)?;
                 if let Some(draft) = draft.as_mut() {
                     draft.keywords(&name, &text);
@@ -81,8 +100,10 @@ fn close(
     Ok(())
 }
 
-/// Reads rule attributes from an opening tag; malformed attributes fail.
+/// Reads rule attributes from an opening tag; a malformed attribute or a bad entity on any tag
+/// fails, inside a language or outside it.
 fn open(tag: &BytesStart<'_>, draft: &mut Option<Draft>) -> Result<(), RulesError> {
+    attribute(tag, "")?;
     match tag.name().as_ref() {
         "UserLang" => {
             let extensions = attribute(tag, "ext")?.unwrap_or_default();

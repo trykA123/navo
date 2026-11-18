@@ -1,5 +1,9 @@
 //! Tests viewer highlight selection and paged lexer mapping.
 
+use std::sync::Arc;
+
+use sidewise_kit::languages::lines::LineState;
+
 use super::{Highlight, LanguageChoice, Pick, choose_with};
 use crate::window_view::tests::press;
 use crate::window_view::viewer::EDIT_LIMIT;
@@ -45,6 +49,64 @@ fn detected_languages_select_highlights() {
             Some("xml"),
         ),
     ]);
+}
+
+#[test]
+fn rule_languages_beat_detection_in_auto_and_named() {
+    check_cases([
+        (
+            "cfg.oil",
+            &b""[..],
+            LanguageChoice::Auto,
+            true,
+            Some("line"),
+            Some("oil"),
+        ),
+        (
+            "x.txt",
+            &b""[..],
+            LanguageChoice::Named("oil".into()),
+            true,
+            Some("line"),
+            Some("oil"),
+        ),
+        (
+            "x.a2l",
+            &b""[..],
+            LanguageChoice::Auto,
+            true,
+            Some("line"),
+            Some("a2l"),
+        ),
+        (
+            "x.txt",
+            &b""[..],
+            LanguageChoice::Named("a2l".into()),
+            true,
+            Some("line"),
+            Some("a2l"),
+        ),
+    ]);
+}
+
+#[test]
+fn the_oil_rule_lexer_colours_task_as_keyword() {
+    for choice in [LanguageChoice::Auto, LanguageChoice::Named("oil".into())] {
+        let highlight = choose_with(
+            &Pick {
+                name: "cfg.oil",
+                head: b"",
+                choice: &choice,
+                len: None,
+            },
+            true,
+        );
+        let Highlight::Line(lexer) = highlight else {
+            panic!("expected a rule lexer for {choice:?}");
+        };
+        let (spans, _) = lexer.lex("TASK", LineState(0));
+        assert_eq!(spans, [(0..4, "keyword")], "{choice:?}");
+    }
 }
 
 #[test]
@@ -102,6 +164,7 @@ fn check_cases<const N: usize>(cases: [Case<'_>; N]) {
                 name,
                 head,
                 choice: &choice,
+                len: None,
             },
             enabled,
         );
@@ -168,18 +231,123 @@ fn a_binary_head_gets_no_line_lexer() {
         name: "big.bin",
         head: b"\x00\x07\x0e text",
         choice: &auto,
+        len: None,
     };
     assert!(matches!(choose_with(&binary, true), Highlight::Plain));
     let source = Pick {
         name: "main.rs",
         head: b"fn\x00main",
         choice: &auto,
+        len: None,
     };
     assert!(matches!(choose_with(&source, true), Highlight::Plain));
     let utf16 = Pick {
         name: "app.log",
         head: b"\xff\xfeE\x00R\x00",
         choice: &auto,
+        len: None,
     };
     assert!(matches!(choose_with(&utf16, true), Highlight::Line(_)));
+}
+
+/// A UTF-32 BOM is not UTF-16, and a UTF-16 head must decode as plausible text: else Plain.
+#[test]
+fn only_plausible_utf16_heads_count_as_text() {
+    let auto = LanguageChoice::Auto;
+    let plain = |name: &str, head: &[u8]| {
+        let pick = Pick {
+            name,
+            head,
+            choice: &auto,
+            len: None,
+        };
+        matches!(choose_with(&pick, true), Highlight::Plain)
+    };
+    for head in [
+        &b"\xff\xfe\x00\x00T\x00\x00\x00"[..],
+        b"\x00\x00\xfe\xff\x00\x00\x00T",
+        b"\xff\xfeA\x00\x00\x00B\x00",
+        b"\xfe\xff\x00A\x00\x00\x00B",
+        b"\xff\xfe\x00\xd8A\x00",
+        b"\xff\xfe\x00\xdcA\x00",
+    ] {
+        assert!(plain("cfg.oil", head), "{head:?}");
+    }
+    for head in [
+        &b"\xff\xfeE\x00R\x00"[..],
+        b"\xfe\xff\x00E\x00R",
+        b"\xff\xfe=\xd8\x00\xdeA\x00",
+        b"\xff\xfeA\x00=\xd8",
+    ] {
+        assert!(!plain("cfg.oil", head), "{head:?}");
+    }
+}
+
+/// A trailing high surrogate is excused only when the head is a sample, shorter than the file.
+#[test]
+fn an_orphan_surrogate_ends_a_whole_file_but_not_a_cut_sample() {
+    let auto = LanguageChoice::Auto;
+    let head = b"\xff\xfeA\x00\x00\xd8";
+    let plain = |len: Option<u64>| {
+        let pick = Pick {
+            name: "cfg.oil",
+            head,
+            choice: &auto,
+            len,
+        };
+        matches!(choose_with(&pick, true), Highlight::Plain)
+    };
+    assert!(plain(Some(6)), "the head is the whole file");
+    assert!(!plain(Some(7)), "the file goes on past the head");
+    assert!(!plain(None), "an unknown length counts as a sample");
+}
+
+/// A name no lexer or rule knows takes the Auto path: binary guard first, then extension rules.
+#[test]
+fn an_unresolved_named_choice_falls_back_to_auto() {
+    let unknown = LanguageChoice::Named("no-such-language".into());
+    let binary = Pick {
+        name: "main.rs",
+        head: b"fn\x00main",
+        choice: &unknown,
+        len: None,
+    };
+    assert!(matches!(choose_with(&binary, true), Highlight::Plain));
+    check_cases([
+        (
+            "cfg.oil",
+            &b""[..],
+            unknown.clone(),
+            true,
+            Some("line"),
+            Some("oil"),
+        ),
+        (
+            "main.rs",
+            &b""[..],
+            unknown,
+            true,
+            Some("rust"),
+            Some("log"),
+        ),
+    ]);
+}
+
+#[test]
+fn two_picks_of_one_rule_language_share_one_compiled_lexer() {
+    let pick = Pick {
+        name: "a.oil",
+        head: b"",
+        choice: &LanguageChoice::Auto,
+        len: None,
+    };
+    let (Highlight::Line(first), Highlight::Line(second)) =
+        (choose_with(&pick, true), choose_with(&pick, true))
+    else {
+        panic!("oil is a rule language");
+    };
+    assert!(
+        Arc::ptr_eq(&first, &second),
+        "a second pick must reuse the first lexer"
+    );
 }

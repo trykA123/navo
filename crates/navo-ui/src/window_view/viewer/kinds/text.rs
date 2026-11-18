@@ -61,6 +61,7 @@ impl ViewerKind for Text {
                     name: sniff.name,
                     head: sniff.head,
                     choice: &LanguageChoice::Auto,
+                    len: Some(sniff.len),
                 }),
                 split: markdown_extension(sniff.name).map(|_| SplitChoice { is_shown: true }),
             })
@@ -69,6 +70,7 @@ impl ViewerKind for Text {
                 name: sniff.name,
                 head: sniff.head,
                 choice: &LanguageChoice::Auto,
+                len: Some(sniff.len),
             })
             .paged_lexer();
             TextLoad::Paged(hooks.paged_with(location, encoding)?, lexer)

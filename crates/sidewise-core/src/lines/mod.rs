@@ -20,7 +20,7 @@ pub const MAX_LINE: usize = 64 * 1024;
 pub const MAX_SPANS: usize = 4096;
 pub const MAX_PAGE_BYTES: usize = 1024 * 1024;
 pub const MAX_PAGE_SPANS: usize = 65_536;
-pub const ROLES: [&str; 17] = [
+pub const ROLES: [&str; 20] = [
     "title",
     "keyword",
     "function",
@@ -38,10 +38,17 @@ pub const ROLES: [&str; 17] = [
     "property",
     "boolean",
     "constant",
+    "type",
+    "operator",
+    "variable.special",
 ];
 pub trait LineLexer: Send + Sync {
     /// Returns the short language name.
     fn name(&self) -> &str;
+    /// Tells two lexers with one name apart; 0 (default) means the name alone decides.
+    fn identity(&self) -> usize {
+        0
+    }
     /// Returns chunk-relative spans and the carried state.
     fn lex(&self, chunk: &str, state: LineState) -> (Vec<Span>, LineState);
     /// Lexes a chunk that ends its line, so a token reaching the chunk end is complete.

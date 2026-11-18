@@ -6454,6 +6454,7 @@ dependencies = [
 name = "navo-syntax"
 version = "0.7.1"
 dependencies = [
+ "gungraun",
  "proptest",
  "quick-xml 0.42.0",
  "serde",

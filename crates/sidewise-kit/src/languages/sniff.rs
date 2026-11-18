@@ -98,8 +98,11 @@ fn is_json(text: &str) -> bool {
         '{' | '[' | '"' | ']' | '-' => true,
         digit if digit.is_ascii_digit() => true,
         _ => ["true", "false", "null"].iter().any(|word| {
-            rest.strip_prefix(word)
-                .is_some_and(|tail| !tail.starts_with(char::is_alphabetic))
+            rest.strip_prefix(word).is_some_and(|tail| {
+                tail.chars()
+                    .next()
+                    .is_none_or(|c| c.is_whitespace() || matches!(c, ',' | ']' | '}' | ':'))
+            })
         }),
     }
 }

@@ -12,6 +12,8 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 **More files are recognised.** Navo tells XML and JSON apart by their content when the extension says nothing, including UTF-16 files. CDD and ODX diagnostic files open as XML. A file that looks binary stays plain.
 
+**Automotive files get colours.** A2L, DBC, LDF, LSL and TASKING map files are coloured in F3 and Ctrl+E, at any size. Navo also reads your Notepad++ user-defined languages from `%APPDATA%\Notepad++\userDefineLangs`, and its own rule files from the profile's `config\languages` folder. A broken or oversized language file is skipped and logged.
+
 ## v0.7.1 — Clicks that do what you mean
 
 *2026-11-18*

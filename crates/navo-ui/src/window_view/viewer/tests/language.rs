@@ -132,3 +132,10 @@ fn f3_on_a_small_arxml_opens_the_tree_and_alt_1_shows_xml(cx: &mut TestAppContex
     redraw(cx, window);
     assert_eq!(language_name(cx, &view), "xml");
 }
+
+#[gpui_kit::test]
+fn f3_on_an_oil_file_uses_the_built_in_oil_rules(cx: &mut TestAppContext) {
+    let (window, view) = open_with_f3(cx, "cfg.oil", "TASK Init {\n  PRIORITY = 1;\n};\n");
+    assert_eq!(language_name(cx, &view), "oil");
+    assert!(drew_role(cx, window, "TASK", "keyword"));
+}

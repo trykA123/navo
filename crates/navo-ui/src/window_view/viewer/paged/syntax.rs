@@ -64,7 +64,7 @@ impl PagedBody {
 impl PagedView {
     /// Sets the line lexer for the text rows and refills the page when the lexer changes.
     ///
-    /// The same lexer name (or `None` twice) changes nothing.
+    /// The same lexer (same name and identity, or `None` twice) changes nothing.
     pub(in crate::window_view::viewer) fn set_lexer(
         &mut self,
         lexer: Option<Arc<dyn LineLexer>>,
@@ -72,7 +72,7 @@ impl PagedView {
     ) {
         let same = match (&self.syntax.lexer, &lexer) {
             (None, None) => true,
-            (Some(old), Some(new)) => old.name() == new.name(),
+            (Some(old), Some(new)) => old.name() == new.name() && old.identity() == new.identity(),
             _ => false,
         };
         if same {
@@ -289,6 +289,34 @@ mod tests {
         view.update(cx, |view, cx| view.set_lexer(Some(xml()), cx));
         redraw(cx, window);
         assert_eq!(view.read_with(cx, |view, _| view.fills()), fills);
+    }
+
+    #[gpui_kit::test]
+    fn a_same_name_lexer_from_another_registry_replaces_the_old_one(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use crate::syntax_rules::{RuleLexer, rules};
+        let built_in = RuleLexer::shared(rules().for_name("x.oil").expect("oil"));
+        let mut other = navo_syntax::from_toml(
+            "[[language]]\nname = \"oil\"\nextensions = [\"oil\"]\n\
+             [[language.keywords]]\nkind = \"keyword\"\nwords = [\"CPU\"]\n",
+        )
+        .expect("oil override parses");
+        let other = RuleLexer::shared(Box::leak(Box::new(other.remove(0))));
+        assert_eq!(other.name(), built_in.name());
+        let (window, view, _) = text_window(cx, Setup::huge(b"CPU\n".to_vec()));
+        let view = paged(cx, &view);
+        view.update(cx, |view, cx| view.set_lexer(Some(built_in.clone()), cx));
+        redraw(cx, window);
+        let base = view.read_with(cx, |view, _| view.want().lexer_rev);
+        view.update(cx, |view, cx| view.set_lexer(Some(built_in.clone()), cx));
+        assert_eq!(view.read_with(cx, |view, _| view.want().lexer_rev), base);
+        view.update(cx, |view, cx| view.set_lexer(Some(other), cx));
+        assert_eq!(
+            view.read_with(cx, |view, _| view.want().lexer_rev),
+            base + 1,
+            "a lexer with the same name from another registry is a different lexer"
+        );
     }
 
     #[gpui_kit::test]

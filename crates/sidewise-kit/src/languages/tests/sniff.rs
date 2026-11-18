@@ -70,6 +70,7 @@ fn utf16_odd_trailing_byte_is_dropped() {
     let mut head = utf16("<AUTOSAR>", false);
     head.push(b'x');
     assert_eq!(detect("notes.dat", &head), "xml");
+    assert_eq!(super::super::sniff::head_text(&head), "<AUTOSAR>");
 }
 
 #[test]
@@ -86,6 +87,9 @@ fn json_heads_give_json() {
         "[\"x\"]",
         "[-1]",
         "[]",
+        "[true",
+        "[null,",
+        "[false\n]",
     ] {
         assert_eq!(detect("config.dat", head.as_bytes()), "json", "{head:?}");
     }
@@ -96,6 +100,10 @@ fn non_json_braces_and_brackets_stay_text() {
     for head in [
         "[network]",
         "[trueish]",
+        "[true_1]",
+        "[false2]",
+        "[null_]",
+        "[true-x]",
         "[falsehood]",
         "[nullify]",
         "{abc",

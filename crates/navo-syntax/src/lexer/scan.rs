@@ -2,8 +2,52 @@ pub(super) fn is_word(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
 
+pub(super) const END: u8 = 0;
+pub(super) const WORD: u8 = 1;
+
+/// Byte kinds for [`word_len`]: 0 ends a word, 1 is an ASCII word byte, 2 starts a non-ASCII char.
+pub(super) const WORD_BYTES: [u8; 256] = {
+    let mut table = [0_u8; 256];
+    let mut byte = 0;
+    while byte < 256 {
+        let ascii = byte < 128;
+        table[byte] = if !ascii {
+            2
+        } else if (byte as u8).is_ascii_alphanumeric() || byte == b'_' as usize {
+            WORD
+        } else {
+            END
+        };
+        byte += 1;
+    }
+    table
+};
+
+/// Returns the byte length of the word at the start of `text`; ASCII bytes use a table lookup.
 pub(super) fn word_len(text: &str) -> usize {
-    text.find(|ch: char| !is_word(ch)).unwrap_or(text.len())
+    for (end, &byte) in text.as_bytes().iter().enumerate() {
+        match WORD_BYTES[usize::from(byte)] {
+            WORD => {}
+            END => return end,
+            _ => {
+                let tail = text.get(end..).unwrap_or_default();
+                return end + tail.find(|ch: char| !is_word(ch)).unwrap_or(tail.len());
+            }
+        }
+    }
+    text.len()
+}
+
+/// True when the character just before byte offset `at` is a word character.
+pub(super) fn word_before(text: &str, at: usize) -> bool {
+    match at.checked_sub(1).and_then(|last| text.as_bytes().get(last)) {
+        None => false,
+        Some(byte) if byte.is_ascii() => byte.is_ascii_alphanumeric() || *byte == b'_',
+        Some(_) => text
+            .get(..at)
+            .and_then(|head| head.chars().next_back())
+            .is_some_and(is_word),
+    }
 }
 
 pub(super) fn starts_with(text: &str, prefix: &str, case_ignored: bool) -> bool {
