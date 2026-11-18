@@ -69,7 +69,7 @@ function New-Accounts {
     Set-AutoLogonSecret $password
 }
 
-# Installs a private .NET SDK and vpk 1.2.161 under C:\e2e\tools; sets $script:vpk.
+# Installs a private .NET SDK and vpk 1.3.39-g8d2844f under C:\e2e\tools; sets $script:vpk.
 function Install-Vpk {
     $tools = Join-Path $e2e 'tools'
     $script:vpk = Join-Path $tools 'vpk\vpk.exe'
@@ -84,7 +84,7 @@ function Install-Vpk {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -UseBasicParsing -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installer
     & $installer -Channel 9.0 -InstallDir $dotnetDir -NoPath
-    Run-Checked (Join-Path $dotnetDir 'dotnet.exe') @('tool', 'install', 'vpk', '--version', '1.2.161', '--tool-path', (Join-Path $tools 'vpk')) 600 | Out-Null
+    Run-Checked (Join-Path $dotnetDir 'dotnet.exe') @('tool', 'install', 'vpk', '--version', '1.3.39-g8d2844f', '--tool-path', (Join-Path $tools 'vpk')) 600 | Out-Null
     Assert (Test-Path -LiteralPath $script:vpk) 'vpk.exe was not installed'
 }
 
