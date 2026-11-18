@@ -1,15 +1,22 @@
+//! Builds the file list's scrolling area and its rows, and routes a left press on a row.
+
 use std::ops::Range;
 use std::rc::Rc;
 
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, ClickEvent, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    StatefulInteractiveElement, Window,
+    AnyElement, App, ClickEvent, Div, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement, Pixels, StatefulInteractiveElement, Styled, Window, div,
 };
 use navo_core::{Command, CursorMove, SpanMode};
 
 use super::row::{self, RowLook};
-use super::{FileListAction, ListContext, drop, git_cell, lasso, press, row_number};
+use super::{
+    FileListAction, FileListProps, KnownWidth, ListContext, PageRowsHandler, drop, git_cell, kind,
+    lasso, lift, press, row_number, watch,
+};
 use crate::name_match::Needle;
+use crate::primitives::{ListScroll, RowSemantics, VirtualList};
 use crate::tokens::{self, Theme};
 
 fn render_row(
@@ -65,6 +72,7 @@ impl ListContext {
         self.state.update(cx, |state, _| state.lasso.press());
         let modifiers = event.modifiers;
         if modifiers.control || modifiers.shift {
+            self.gate_down(event.position, cx);
             self.take_focus(window, cx);
             return;
         }
@@ -74,11 +82,16 @@ impl ListContext {
         }
     }
 
+    /// Extends or toggles the marks for a Shift or Ctrl left click on `row`. Uses the modifiers
+    /// held at the press, and ignores a click that GPUI completed with another button's release.
     fn modified_click(&self, (row, event): (u64, &ClickEvent), window: &mut Window, cx: &mut App) {
-        if self.state.read(cx).lasso.swallows_click() {
+        let ClickEvent::Mouse(click) = event else {
+            return;
+        };
+        if !event.standard_click() || self.state.read(cx).lasso.swallows_click() {
             return;
         }
-        let modifiers = event.modifiers();
+        let modifiers = click.down.modifiers;
         let to = CursorMove::Row(row);
         if modifiers.shift {
             let mode = SpanMode::Mark;
@@ -88,4 +101,53 @@ impl ListContext {
             self.send(Command::SelectionToggle, window, cx);
         }
     }
+}
+
+pub(super) fn row_semantics(props: &FileListProps, index: usize) -> RowSemantics {
+    let row = row_number(index);
+    RowSemantics {
+        label: props
+            .rows
+            .get(index)
+            .map(|entry| kind::spoken(entry).into()),
+        is_selected: Some(props.marked.is_marked(row)),
+        is_active_descendant: props.is_active && props.view.cursor == row,
+    }
+}
+
+fn virtual_list(ctx: &Rc<ListContext>, scroll: &ListScroll, row_height: Pixels) -> VirtualList {
+    let semantics = ctx.clone();
+    let label = format!("{} files", ctx.props.folder);
+    VirtualList::new("list", ctx.props.rows.len(), scroll, render_rows(ctx))
+        .row_height(row_height)
+        .label(label)
+        .describe_rows(move |index| row_semantics(&semantics.props, index))
+        .when_some(ctx.focus.clone(), |list, focus| list.track_focus(&focus))
+}
+
+/// Builds the list area below the header: the lifted rows, their size and scroll reports,
+/// the lasso, the drag gate, the lift hold and the folder drop target.
+pub(super) fn list_area(
+    ctx: &Rc<ListContext>,
+    (on_page_rows, known_width): (Option<PageRowsHandler>, Option<KnownWidth>),
+    (scroll, row_height, lift): (&ListScroll, Pixels, Pixels),
+    (t, cx): (&Theme, &App),
+) -> Div {
+    let list = virtual_list(ctx, scroll, row_height);
+    let watch = |state| watch::Watch { state, row_height };
+    let area = div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_h_0()
+        .on_children_prepainted(watch::report_page_rows(
+            (ctx.clone(), on_page_rows, known_width),
+            watch(ctx.state.clone()),
+        ))
+        .on_scroll(watch::report_scroll(ctx, watch(ctx.state.clone())))
+        .on_mouse_down(MouseButton::Right, press::background_down(ctx))
+        .overflow_hidden()
+        .child(lift::lifted(list, lift))
+        .child(lift::hold(ctx));
+    drop::background(lasso::layer(area, ctx, t, cx), ctx)
 }

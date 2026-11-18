@@ -10,6 +10,7 @@ mod keys;
 pub(crate) mod kind;
 mod lasso;
 mod lift;
+mod modified_drag;
 mod parts;
 mod press;
 mod resize;
@@ -31,7 +32,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, Bounds, Entity, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, Keystroke,
-    MouseButton, ParentElement, Pixels, RenderOnce, SharedString, Styled, Window, div,
+    ParentElement, Pixels, RenderOnce, SharedString, Styled, Window, div,
 };
 use navo_core::{Command, Selection, ViewState};
 use navo_fs::view::Rows;
@@ -51,7 +52,7 @@ pub(crate) use row::filter_bar;
 pub use sort::{SortBy, SortKey};
 pub use widths::UserWidths;
 
-use crate::primitives::{ListScroll, RowSemantics, VirtualList};
+use crate::primitives::ListScroll;
 use crate::tokens;
 
 type CommandHandler = Rc<dyn Fn(&Command, &mut Window, &mut App)>;
@@ -190,8 +191,10 @@ struct ListState {
     page_rows: Option<u64>,
     list_bounds: Option<Bounds<Pixels>>,
     lift: Pixels,
+    lift_held: Option<gpui_kit::MouseButton>,
     press: press::Press,
     lasso: lasso::Held,
+    grip_gate: modified_drag::Gate,
     drop_spot: Option<DropSpot>,
     hover_queued: bool,
     pressed_name: Option<SharedString>,
@@ -327,28 +330,6 @@ pub(crate) fn typed_char(keystroke: &Keystroke) -> Option<char> {
     (!ch.is_control() && !ch.is_whitespace()).then_some(ch)
 }
 
-fn row_semantics(props: &FileListProps, index: usize) -> RowSemantics {
-    let row = row_number(index);
-    RowSemantics {
-        label: props
-            .rows
-            .get(index)
-            .map(|entry| kind::spoken(entry).into()),
-        is_selected: Some(props.marked.is_marked(row)),
-        is_active_descendant: props.is_active && props.view.cursor == row,
-    }
-}
-
-fn virtual_list(ctx: &Rc<ListContext>, scroll: &ListScroll, row_height: Pixels) -> VirtualList {
-    let semantics = ctx.clone();
-    let label = format!("{} files", ctx.props.folder);
-    VirtualList::new("list", ctx.props.rows.len(), scroll, rows::render_rows(ctx))
-        .row_height(row_height)
-        .label(label)
-        .describe_rows(move |index| row_semantics(&semantics.props, index))
-        .when_some(ctx.focus.clone(), |list, focus| list.track_focus(&focus))
-}
-
 impl RenderOnce for FileList {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
@@ -356,7 +337,12 @@ impl RenderOnce for FileList {
         let state = window.use_keyed_state(self.id.clone(), cx, |_, _| ListState::default());
         let wanted = (self.props.view.scroll, self.props.rows.len());
         let scroll = watch::follow_scroll(&state, wanted, row_height, cx);
-        let lift = lift::lift_for(&state, (self.props.view.cursor, self.cover), row_height, cx);
+        let lift = lift::lift_for(
+            &state,
+            (self.props.view.cursor, self.cover),
+            row_height,
+            (window, cx),
+        );
         let (parts, widths) = self.fit_columns(&state, window, cx);
         let ctx = Rc::new(ListContext {
             props: self.props,
@@ -370,22 +356,8 @@ impl RenderOnce for FileList {
             find_results: self.find_results,
             right_button: self.right_button,
         });
-        let list = virtual_list(&ctx, &scroll, row_height);
-        let watch = |state| watch::Watch { state, row_height };
-        let area = div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h_0()
-            .on_children_prepainted(watch::report_page_rows(
-                (ctx.clone(), self.on_page_rows, self.known_width),
-                watch(state.clone()),
-            ))
-            .on_scroll(watch::report_scroll(&ctx, watch(state)))
-            .on_mouse_down(MouseButton::Right, press::background_down(&ctx))
-            .overflow_hidden()
-            .child(lift::lifted(list, lift));
-        let area = drop::background(lasso::layer(area, &ctx, &t, cx), &ctx);
+        let reports = (self.on_page_rows, self.known_width);
+        let area = rows::list_area(&ctx, reports, (&scroll, row_height, lift), (&t, cx));
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
             .key_context(keys::CONTEXT)

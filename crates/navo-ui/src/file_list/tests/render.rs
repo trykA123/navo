@@ -6,7 +6,8 @@ use gpui_kit::{Role, TestAppContext};
 use navo_core::{Selection, ViewState};
 
 use super::{MODIFIED_MS, generated_rows, open_list, props, sample_rows};
-use crate::file_list::{kind, row_semantics};
+use crate::file_list::kind;
+use crate::file_list::rows::row_semantics;
 use crate::format;
 use navo_fs::EntryKind;
 

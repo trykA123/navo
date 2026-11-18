@@ -17,11 +17,13 @@ impl Render for NavoWindow {
         super::tests::mouse_cost::note_render();
         let trace = input_trace::frame(window, cx);
         self.sync_workspaces(window, cx);
+        self.sync_path_edit(window, cx);
         self.sync_git();
         let frame = self.perf_frame(window);
         self.watch_start(window, cx);
         let below_title_bar = self.below_title_bar(window, cx);
         let root = root_surface(cx)
+            .child(Self::button_watch(cx))
             .children(trace)
             .child(self.cached.title(cx))
             .child(below_title_bar)
