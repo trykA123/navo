@@ -15,6 +15,8 @@ use crate::file_list::{DropEvent, DropPayload, DropSpot, FileList, FileListProps
 use crate::test_pointer::{self, ctrl, dispatch, down, moved, shift, up};
 use crate::test_window::open;
 
+mod modified;
+
 const PANE: PaneId = PaneId::new(7);
 const SRC: usize = 0;
 const CARGO: usize = 2;

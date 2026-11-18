@@ -21,6 +21,7 @@ pub struct HintsDrawer {
     layer: Layer,
     settings_key: Option<SharedString>,
     on_turn_off: Option<TurnOff>,
+    on_turn_off_press: Option<TurnOff>,
 }
 
 #[must_use]
@@ -41,6 +42,7 @@ impl HintsDrawer {
             layer,
             settings_key: None,
             on_turn_off: None,
+            on_turn_off_press: None,
         }
     }
 
@@ -53,6 +55,13 @@ impl HintsDrawer {
     #[must_use]
     pub fn on_turn_off(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_turn_off = Some(Rc::new(handler));
+        self
+    }
+
+    /// Sets the handler for a left press on Turn off, before its click; the click may still be cancelled.
+    #[must_use]
+    pub fn on_turn_off_press(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_turn_off_press = Some(Rc::new(handler));
         self
     }
 }
@@ -86,7 +95,12 @@ fn chip(t: &Theme, combo: SharedString) -> impl IntoElement {
         .child(combo)
 }
 
-fn turn_off(t: &Theme, key: Option<SharedString>, handler: Option<TurnOff>) -> impl IntoElement {
+/// Builds the Turn off button: a press stays on it (rows below never see it), a release on it clicks.
+fn turn_off(
+    t: &Theme,
+    key: Option<SharedString>,
+    (handler, press): (Option<TurnOff>, Option<TurnOff>),
+) -> impl IntoElement {
     let kbd = key.and_then(|key| Kbd::new("modifier-hints-off-key", &key));
     let shortcut = kbd.as_ref().map(Kbd::text);
     let hover = (t.surfaces.field, t.colors.text);
@@ -108,6 +122,10 @@ fn turn_off(t: &Theme, key: Option<SharedString>, handler: Option<TurnOff>) -> i
         .text_color(t.colors.muted)
         .cursor_pointer()
         .hover(move |button| button.bg(hover.0).text_color(hover.1))
+        .occlude()
+        .when_some(press, |button, press| {
+            button.on_mouse_down(MouseButton::Left, move |_, window, cx| press(window, cx))
+        })
         .when_some(handler, |button, handler| {
             button.on_click(move |_, window, cx| handler(window, cx))
         })
@@ -138,7 +156,7 @@ fn header(t: &Theme, drawer: &mut HintsDrawer) -> Div {
         .child(turn_off(
             t,
             drawer.settings_key.take(),
-            drawer.on_turn_off.take(),
+            (drawer.on_turn_off.take(), drawer.on_turn_off_press.take()),
         ))
 }
 
@@ -259,7 +277,6 @@ impl RenderOnce for HintsDrawer {
             .role(Role::Group)
             .aria_label(label)
             .test_support()
-            .occlude()
             .relative()
             .flex()
             .flex_col()

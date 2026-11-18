@@ -56,6 +56,7 @@ mod git_menu;
 mod git_previews;
 mod hand_off;
 pub(in crate::window_view) mod held;
+mod hint_clicks;
 mod hints;
 mod jobs;
 mod keymap;

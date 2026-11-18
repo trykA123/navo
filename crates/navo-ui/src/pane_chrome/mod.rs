@@ -30,7 +30,7 @@ pub use drive_menu::{DriveMenu, DriveMenuEvent, drive_for_key};
 pub use drive_pill::DrivePill;
 pub use drives::{DriveIcon, DriveInfo, current_drive};
 pub use path_bar::PathBar;
-pub use path_input::PathInput;
+pub use path_input::{InFocus, PathInput};
 pub use segments::{PathSegment, path_segments};
 
 use crate::drag::Landing;

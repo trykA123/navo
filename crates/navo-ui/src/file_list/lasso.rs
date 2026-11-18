@@ -184,6 +184,7 @@ pub(super) fn layer(area: Div, ctx: &Rc<ListContext>, t: &Theme, cx: &App) -> Di
     area.on_mouse_down(MouseButton::Left, below_down(ctx))
         .relative()
         .child(watch(ctx))
+        .child(super::modified_drag::watch(ctx))
         .children(rect(ctx, t, cx))
 }
 

@@ -7,6 +7,7 @@ impl NavoWindow {
     pub(super) fn watches(window: &mut Window, cx: &mut Context<Self>) -> [Subscription; 7] {
         [
             cx.observe_in(&cx.entity(), window, |view, entity, window, cx| {
+                view.close_moved_path_edit(cx);
                 view.follow_cursor(entity, window, cx);
                 view.queue_cached_refresh(window, cx);
             }),
@@ -25,8 +26,10 @@ impl NavoWindow {
     }
 
     fn activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hint_buttons_free();
         self.track_modifiers(window.modifiers(), window, cx);
         if window.is_window_active() {
+            self.recheck_path_focus();
             self.restart_index_activity(cx);
             self.apply_theme(window, cx);
             self.browser.revalidate_unwatched();
