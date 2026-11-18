@@ -30,6 +30,7 @@ mod menu_copy;
 mod menu_kinds;
 mod moves;
 mod open;
+mod paged_syntax;
 mod pdf;
 mod pdf_find;
 mod pdf_links;

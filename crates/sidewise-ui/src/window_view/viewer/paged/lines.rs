@@ -1,3 +1,4 @@
+use navo_core::lines::Span;
 use navo_core::paging::{
     ByteSource, HEX_WIDTH, HexRow, LineIndex, hex_row, hex_row_start, hex_rows, read_full, row_at,
     row_start_at, rows_down, rows_up,
@@ -20,6 +21,7 @@ pub struct TextLine {
     pub end: u64,
     pub next: u64,
     pub text: String,
+    pub spans: Vec<Span>,
     pub line: Option<u64>,
 }
 
@@ -54,7 +56,8 @@ pub fn hex_lines<S: ByteSource + ?Sized>(
     Ok(Screen { lines })
 }
 
-fn starts_line<S: ByteSource + ?Sized>(src: &S, offset: u64) -> Result<bool, String> {
+/// True when `offset` starts a line: it is the file start or follows an LF.
+pub fn starts_line<S: ByteSource + ?Sized>(src: &S, offset: u64) -> Result<bool, String> {
     let layout = src.layout();
     let unit = layout.unit();
     let Some(before) = offset.checked_sub(unit as u64) else {
@@ -102,6 +105,7 @@ pub fn text_lines<S: ByteSource + ?Sized>(
             end: row.end,
             next: row.next,
             text: layout.decode(&bytes[skip..read]),
+            spans: Vec::new(),
             line,
         });
         is_line_start = row.next > row.end;

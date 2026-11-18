@@ -1,11 +1,14 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use gpui_kit::base::{ObservedElement, TestSupportExt};
+use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::{HighlightStyle, Stateful, StyledText};
 use navo_core::paging::{HEX_WIDTH, TextLayout};
 
 use super::lines::{HexLine, TextLine};
 use super::spans::{Paint, Painted, TextCut, hex_slots, line_end, shown_text};
+use super::syntax_runs::{overlay, syntax_runs};
 use crate::prelude::*;
 use crate::tokens::Theme;
 
@@ -27,6 +30,7 @@ pub struct TextLook {
     pub shift: usize,
     pub numbers: bool,
     pub layout: TextLayout,
+    pub syntax: Option<Arc<HighlightTheme>>,
 }
 
 impl RowLook<'_> {
@@ -208,12 +212,13 @@ fn line_end_glyph(
     )
 }
 
-#[doc(hidden)]
-pub fn text_row(look: &RowLook<'_>, text: &TextLook, index: usize, line: &TextLine) -> AnyElement {
-    let number = line
-        .line
-        .map(|number| number.to_string())
-        .unwrap_or_default();
+/// Builds a row's shown text and its paint runs, under syntax colours unless D10 blocks them.
+fn row_highlights(
+    look: &RowLook<'_>,
+    text: &TextLook,
+    line: &TextLine,
+    is_hit: bool,
+) -> (String, Vec<(Range<usize>, HighlightStyle)>) {
     let cut = TextCut {
         start: line.text_from,
         end: line.end,
@@ -222,12 +227,36 @@ pub fn text_row(look: &RowLook<'_>, text: &TextLook, index: usize, line: &TextLi
         layout: text.layout,
     };
     let (shown, runs) = shown_text(&line.text, &cut, &look.painted);
+    let paints = look.styled(runs);
+    let Some(theme) = text
+        .syntax
+        .as_ref()
+        .filter(|_| !is_hit && !look.t.is_contrast)
+    else {
+        return (shown, paints);
+    };
+    let syntax: Vec<_> = syntax_runs(&line.text, text.shift, SHOWN_CHARS, &line.spans)
+        .into_iter()
+        .filter_map(|(range, name)| Some((range, theme.style.syntax.style(name)?)))
+        .collect();
+    let runs = overlay(&syntax, &paints);
+    (shown, runs)
+}
+
+#[doc(hidden)]
+pub fn text_row(look: &RowLook<'_>, text: &TextLook, index: usize, line: &TextLine) -> AnyElement {
+    let number = line
+        .line
+        .map(|number| number.to_string())
+        .unwrap_or_default();
     let span = line.start..line.next.max(line.start + 1);
     let is_hit = look
         .painted
         .hit
         .is_some_and(|hit| span.contains(&hit.start));
-    let runs = look.styled(runs);
+    let (shown, runs) = row_highlights(look, text, line, is_hit);
+    #[cfg(feature = "test-support")]
+    super::run_probe::note(line.start, &shown, &runs);
     let theme = look.t.selected_content(is_hit);
     let look = &RowLook {
         t: &theme,
@@ -266,3 +295,7 @@ pub fn missing_row(look: &RowLook<'_>, index: usize) -> AnyElement {
         .text_color(look.t.colors.muted)
         .into_any_element()
 }
+
+#[cfg(test)]
+#[path = "row_view_tests.rs"]
+mod tests;

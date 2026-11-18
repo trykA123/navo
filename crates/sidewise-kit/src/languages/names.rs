@@ -52,7 +52,8 @@ pub(super) const EXTENSIONS: [(&str, &[&str]); 47] = [
 
 const XML: &[&str] = &[
     "xml", "xaml", "svg", "plist", "csproj", "vcxproj", "vbproj", "fsproj", "props", "targets",
-    "resx", "nuspec", "xsd", "xsl", "xslt", "config", "arxml",
+    "resx", "nuspec", "xsd", "xsl", "xslt", "config", "arxml", "cdd", "odx", "odx-d", "odx-c",
+    "odx-v", "odx-f", "odx-e",
 ];
 
 pub(super) const SPECIAL: [(&str, &str); 3] = [
@@ -105,7 +106,43 @@ pub(super) fn resolve(token: &str) -> Option<&'static str> {
         .or_else(|| by_extension(&token))
 }
 
-#[cfg(test)]
 pub(super) fn all() -> impl Iterator<Item = &'static str> {
     EXTENSIONS.iter().map(|(name, _)| *name)
+}
+
+/// Returns the sorted, unique names of all supported grammars.
+#[must_use]
+pub fn known_languages() -> Vec<&'static str> {
+    let mut names: Vec<_> = all().collect();
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
+/// Resolves a grammar name or alias, ignoring ASCII case; returns None if unknown.
+#[must_use]
+pub fn canonical(name: &str) -> Option<&'static str> {
+    let lower = name.to_ascii_lowercase();
+    all()
+        .find(|grammar| *grammar == lower)
+        .or_else(|| resolve(&lower))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{canonical, known_languages};
+
+    #[test]
+    fn canonical_names_and_extensions() {
+        assert_eq!(canonical("JSON"), Some("json"));
+        assert_eq!(canonical("arxml"), Some("xml"));
+        assert_eq!(canonical("nope"), None);
+    }
+
+    #[test]
+    fn known_names_are_sorted_and_include_xml() {
+        let names = known_languages();
+        assert!(names.contains(&"xml"));
+        assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
+    }
 }

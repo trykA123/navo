@@ -1,8 +1,14 @@
+use std::time::Instant;
+
 use navo_core::paging::{ByteSource, HEX_WIDTH, LineIndex};
+#[cfg(test)]
+use sidewise_kit::languages::lines::Span;
 
 use super::PagedView;
 use super::lines::{HexLine, PagedKind, Screen, TextLine, hex_lines, text_lines};
 use super::moves::{Frame, Move, apply_moves};
+use super::syntax::timing::FillTiming;
+use super::syntax::{PageInputs, fill_page};
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,9 +18,17 @@ pub(super) struct Want {
     pub kind: PagedKind,
     pub index_rev: u64,
     pub source_rev: u64,
+    pub lexer_rev: u64,
 }
 
-enum Drawn {
+impl Want {
+    /// The state-cache key of this want: its source and lexer revisions (D8).
+    pub(super) fn key(&self) -> (u64, u64) {
+        (self.source_rev, self.lexer_rev)
+    }
+}
+
+pub(super) enum Drawn {
     Hex(Screen<HexLine>),
     Text(Screen<TextLine>),
 }
@@ -22,12 +36,15 @@ enum Drawn {
 struct Filled {
     want: Want,
     drawn: Result<Drawn, String>,
+    timing: FillTiming,
 }
 
-struct FillResult {
-    top: u64,
-    note: Option<String>,
-    drawn: Result<Drawn, String>,
+pub(super) struct FillResult {
+    pub top: u64,
+    pub note: Option<String>,
+    pub drawn: Result<Drawn, String>,
+    pub fill_us: u64,
+    pub lex_us: u64,
 }
 
 #[derive(Default)]
@@ -47,6 +64,9 @@ pub(super) struct Screenful<'a> {
     pub shown: Shown<'a>,
     pub missing: usize,
     pub end: u64,
+    /// False when the rows were filled under an older lexer (D9): they draw plain.
+    pub colours: bool,
+    pub timing: Option<FillTiming>,
 }
 
 struct Rows<'a, L> {
@@ -86,6 +106,8 @@ fn empty(want: Want, len: u64) -> Screenful<'static> {
         shown,
         missing,
         end: want.top,
+        colours: false,
+        timing: None,
     }
 }
 
@@ -98,6 +120,19 @@ fn text_span(line: &TextLine) -> (u64, u64) {
 }
 
 impl RowCache {
+    /// Returns the spans of the filled text row at `index` (empty when none is filled).
+    #[cfg(test)]
+    pub(super) fn text_spans(&self, index: usize) -> Vec<Span> {
+        match self.filled.as_ref().map(|filled| &filled.drawn) {
+            Some(Ok(Drawn::Text(screen))) => screen
+                .lines
+                .get(index)
+                .map(|line| line.spans.clone())
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
+
     pub(super) fn screen(&self, want: Want, len: u64) -> Screenful<'_> {
         let Some(filled) = self.filled.as_ref().filter(|filled| {
             filled.want.kind == want.kind && filled.want.source_rev == want.source_rev
@@ -111,6 +146,8 @@ impl RowCache {
                     shown: Shown::Failed(error),
                     missing: 0,
                     end: want.top,
+                    colours: false,
+                    timing: None,
                 };
             }
             Err(_) => None,
@@ -124,6 +161,8 @@ impl RowCache {
                 shown,
                 missing,
                 end,
+                colours: filled.want.lexer_rev == want.lexer_rev,
+                timing: Some(filled.timing.clone()),
             },
             None if same_top => empty(want, 0),
             None => empty(want, len),
@@ -131,7 +170,7 @@ impl RowCache {
     }
 }
 
-fn fill<S: ByteSource + ?Sized>(
+pub(super) fn fill<S: ByteSource + ?Sized>(
     source: &S,
     want: Want,
     moves: &[Move],
@@ -148,7 +187,13 @@ fn fill<S: ByteSource + ?Sized>(
         PagedKind::Hex => hex_lines(source, top, want.count).map(Drawn::Hex),
         PagedKind::Text => text_lines(source, top, want.count, index).map(Drawn::Text),
     };
-    FillResult { top, note, drawn }
+    FillResult {
+        top,
+        note,
+        drawn,
+        fill_us: 0,
+        lex_us: 0,
+    }
 }
 
 impl PagedView {
@@ -159,14 +204,16 @@ impl PagedView {
             kind: self.kind,
             index_rev: self.index_rev,
             source_rev: self.source_rev,
+            lexer_rev: self.syntax.rev,
         }
     }
 
     pub(super) fn request_rows(&mut self, cx: &mut Context<Self>) {
+        let want = self.want();
+        self.syntax.reset_cache(want.key());
         if self.cache.pending.is_some() {
             return;
         }
-        let want = self.want();
         let is_filled = self
             .cache
             .filled
@@ -175,20 +222,36 @@ impl PagedView {
         if is_filled && self.moves.is_empty() {
             return;
         }
+        let requested = Instant::now();
         let source = self.source.clone();
         let index = self.index.clone();
+        let lexer = self.syntax.lexing(want.key());
         let (moves, through) = self.moves.send();
         self.cache.fills += 1;
         self.cache.pending = Some(cx.spawn(async move |this, cx| {
             let filled = cx
-                .background_spawn(async move { fill(&*source, want, &moves, index.as_deref()) })
+                .background_spawn(async move {
+                    let with = PageInputs {
+                        moves: &moves,
+                        index: index.as_deref(),
+                        lexer,
+                    };
+                    fill_page(&*source, want, with)
+                })
                 .await;
-            let _ = this.update(cx, |view, cx| view.rows_filled((want, through), filled, cx));
+            let _ = this.update(cx, |view, cx| {
+                view.rows_filled((want, through, requested), filled, cx)
+            });
         }));
     }
 
-    fn rows_filled(&mut self, sent: (Want, u64), filled: FillResult, cx: &mut Context<Self>) {
-        let (want, through) = sent;
+    fn rows_filled(
+        &mut self,
+        sent: (Want, u64, Instant),
+        filled: FillResult,
+        cx: &mut Context<Self>,
+    ) {
+        let (want, through, requested) = sent;
         self.cache.pending = None;
         self.top = filled.top;
         self.moves.land(through);
@@ -199,9 +262,16 @@ impl PagedView {
             top: filled.top,
             ..want
         };
+        let rows = match &filled.drawn {
+            Ok(Drawn::Hex(screen)) => screen.lines.len(),
+            Ok(Drawn::Text(screen)) => screen.lines.len(),
+            Err(_) => 0,
+        };
+        let timing = FillTiming::new(requested, (filled.fill_us, filled.lex_us), rows);
         self.cache.filled = Some(Filled {
             want,
             drawn: filled.drawn,
+            timing,
         });
         self.request_rows(cx);
         if self.moves.is_empty() {

@@ -8,6 +8,7 @@ pub mod encoding;
 mod entry_kind;
 mod file_identity;
 mod fs_error;
+pub mod lines;
 mod location;
 mod network_walk;
 mod op_plan;
