@@ -39,10 +39,6 @@ mod elevation_limits;
 #[cfg(any(windows, test))]
 mod elevation_result;
 #[cfg(any(windows, test))]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the Windows worker adopts pacing in AF7")
-)]
 mod follow_pace;
 #[cfg(any(windows, test))]
 mod follow_state;
