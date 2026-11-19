@@ -11,17 +11,11 @@ use crate::usn::FrnMap;
 #[derive(Default)]
 pub(super) struct Pending {
     blocked: BlockedRecords,
-    deferred_deletes: Vec<DeferredDelete>,
+    poisoned: HashMap<u128, u128>,
     reported: Vec<UnresolvedChange>,
     removed_subtree: bool,
     pub(super) blocked_peak: usize,
     pub(super) cycle_skips: u64,
-}
-
-struct DeferredDelete {
-    file_id: u128,
-    blocker: u128,
-    changes: VecDeque<TableChange>,
 }
 
 impl Pending {
@@ -35,37 +29,17 @@ impl Pending {
             return Ok(());
         };
         let file_id = change_file_id(&change);
-        if let Some(delete) = self
-            .deferred_deletes
-            .iter_mut()
-            .find(|delete| delete.file_id == file_id)
-        {
-            delete.changes.push_back(change);
-            return Ok(());
-        }
-        if matches!(change, TableChange::Remove { .. })
-            && let Some(blocker) = self.blocked.blocking_descendant(index, file_id)
-        {
-            self.deferred_deletes.push(DeferredDelete {
-                file_id,
-                blocker,
-                changes: VecDeque::from([change]),
+        if let Some(missing_reference) = self.poisoned_dependency(index, &change, file_id) {
+            self.reported.push(UnresolvedChange {
+                missing_reference,
+                change,
             });
             return Ok(());
         }
-        self.apply_one(index, change)?;
-        while let Some(change) = self.take_deferred(index) {
-            self.apply_one(index, change)?;
-        }
-        Ok(())
-    }
-
-    /// Applies a change and drains the waiter groups it wakes.
-    fn apply_one(&mut self, index: &mut NtfsIndex, change: TableChange) -> Result<(), NtfsError> {
-        let change = if let TableChange::Remove { file_id } = change {
+        let change = if matches!(change, TableChange::Remove { .. }) {
             self.blocked.cancel(file_id);
             change
-        } else if let Some(change) = self.blocked.append(change_file_id(&change), change) {
+        } else if let Some(change) = self.blocked.append(file_id, change) {
             change
         } else {
             self.note_blocked();
@@ -79,23 +53,27 @@ impl Pending {
         Ok(())
     }
 
-    /// Takes the next safe change once all ready moves have run.
-    fn take_deferred(&mut self, index: &NtfsIndex) -> Option<TableChange> {
-        for i in 0..self.deferred_deletes.len() {
-            let delete = &mut self.deferred_deletes[i];
-            if matches!(delete.changes.front(), Some(TableChange::Remove { .. }))
-                && let Some(blocker) = self.blocked.blocking_descendant(index, delete.file_id)
-            {
-                delete.blocker = blocker;
-                continue;
-            }
-            let change = delete.changes.pop_front();
-            if delete.changes.is_empty() {
-                self.deferred_deletes.remove(i);
-            }
-            return change;
+    /// Signals a rebuild for an unsafe delete and rejects later changes that depend on it.
+    fn poisoned_dependency(
+        &mut self,
+        index: &NtfsIndex,
+        change: &TableChange,
+        file_id: u128,
+    ) -> Option<u128> {
+        if let Some(&missing) = self.poisoned.get(&file_id) {
+            return Some(missing);
         }
-        None
+        match change {
+            TableChange::Remove { .. } => {
+                let missing = self.blocked.blocking_parent(index, file_id)?;
+                self.poisoned.insert(file_id, missing);
+                Some(missing)
+            }
+            TableChange::Add { parent_id, .. } | TableChange::Rename { parent_id, .. } => {
+                self.poisoned.get(parent_id).copied()
+            }
+            _ => None,
+        }
     }
 
     /// Applies one file's ordered changes; only Add and Rename can wait for a parent.
@@ -159,13 +137,6 @@ impl Pending {
     /// Returns unresolved changes, keeping their missing references and per-file order.
     pub(super) fn finish(mut self) -> Vec<UnresolvedChange> {
         self.reported.extend(self.blocked.finish());
-        for delete in self.deferred_deletes {
-            self.reported
-                .extend(delete.changes.into_iter().map(|change| UnresolvedChange {
-                    missing_reference: delete.blocker,
-                    change,
-                }));
-        }
         self.reported
     }
 }
@@ -173,8 +144,9 @@ impl Pending {
 const RENAME: u8 = 0x10;
 const SIZED: u8 = 0x20;
 const CANCELLED: u8 = 0x40;
+const DELETE_SCAN_LIMIT: usize = 4_096;
 
-/// Flat columns use 37 bytes per slot; the missing parent lives once in the waiter index.
+/// Flat columns use 37 bytes per slot, with parents shared by each waiter group.
 #[derive(Default)]
 struct BlockedRecords {
     files: Vec<u128>,
@@ -202,17 +174,42 @@ impl BlockedRecords {
         self.blocked.len()
     }
 
-    /// Finds a blocked move whose indexed entry would be removed with the folder.
-    fn blocking_descendant(&self, index: &NtfsIndex, file_id: u128) -> Option<u128> {
-        let folder = *index.ids.get(&file_id)?;
-        if self.blocked.is_empty() || !index.table.flags(folder)?.contains(Flags::FOLDER) {
+    /// Returns the missing parent of a blocked move, or a waiter parent above the scan limit.
+    fn blocking_parent(&self, index: &NtfsIndex, file_id: u128) -> Option<u128> {
+        if self.blocked.is_empty() {
             return None;
         }
-        self.blocked.iter().find_map(|(file, _)| {
+        let folder = *index.ids.get(&file_id)?;
+        let totals = index.table.totals(folder)?;
+        if totals.files == 0 && totals.folders == 0 {
+            return None;
+        }
+        if self.len() > DELETE_SCAN_LIMIT {
+            return self.waiters.iter().next().map(|(missing, _)| missing);
+        }
+        let slot = self.blocked.iter().find_map(|(file, slot)| {
             let id = *index.ids.get(&file)?;
             std::iter::successors(index.table.parent(id), |&id| index.table.parent(id))
                 .any(|parent| parent == folder)
-                .then_some(file)
+                .then_some(slot)
+        })?;
+        self.waiter_parent(slot)
+    }
+
+    /// Finds a blocked slot's parent within the scan budget, or returns an unavailable waiter parent.
+    fn waiter_parent(&self, target: u32) -> Option<u128> {
+        let mut remaining = DELETE_SCAN_LIMIT;
+        self.waiters.iter().find_map(|(missing, tail)| {
+            let mut ring = std::iter::successors(Some(tail), |&slot| {
+                let next = self.links[slot as usize];
+                (next != tail).then_some(next)
+            });
+            let found_or_exhausted = ring.any(|slot| {
+                remaining -= 1;
+                // Cancelled slots still use the budget, even when the live blocked count is low.
+                slot == target || remaining == 0
+            });
+            found_or_exhausted.then_some(missing)
         })
     }
 
@@ -370,8 +367,7 @@ impl BlockedRecords {
         self.free = Some(slot);
         self.live -= 1;
         if self.live == 0 {
-            // Release the arena before the completed table trims its capacity.
-            *self = Self::default();
+            self.clear_columns();
         }
         changes
     }
@@ -407,6 +403,11 @@ impl BlockedRecords {
         }
         changes.extend(self.later.remove(&slot).into_iter().flatten());
         changes
+    }
+
+    /// Releases the arena and columns before the completed table trims its own spare capacity.
+    fn clear_columns(&mut self) {
+        *self = Self::default();
     }
 
     /// Returns every unresolved change with its missing parent and original per-file order.
