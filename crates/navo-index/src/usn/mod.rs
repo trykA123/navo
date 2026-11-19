@@ -216,6 +216,25 @@ pub fn parse_batch(bytes: &[u8]) -> Result<UsnBatch, ParseError> {
     Ok(UsnBatch { next_usn, records })
 }
 
+/// Returns the first named record or None after the 8-byte cursor.
+/// Reports malformed input encountered before returning.
+pub fn parse_first(bytes: &[u8]) -> Result<Option<UsnRecord>, ParseError> {
+    let mut remaining = bytes.get(8..).ok_or(ParseError {
+        offset: 0,
+        kind: ParseErrorKind::Truncated,
+    })?;
+    while !remaining.is_empty() {
+        let offset = bytes.len() - remaining.len();
+        let (length, record) =
+            parse_record(remaining).map_err(|kind| ParseError { offset, kind })?;
+        if record.is_some() {
+            return Ok(record);
+        }
+        remaining = &remaining[length..];
+    }
+    Ok(None)
+}
+
 fn read<const N: usize>(bytes: &[u8], at: usize) -> Result<[u8; N], ParseErrorKind> {
     bytes
         .get(at..)

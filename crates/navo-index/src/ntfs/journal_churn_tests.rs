@@ -1,10 +1,10 @@
-//! Journal rejection and live cross-pass churn scripts for the two-pass builder.
+//! Journal replay and live cross-pass churn scripts for the two-pass builder.
 use super::*;
 use crate::ntfs::test_support::{SyntheticRecord, append_record, journal_metadata};
 use crate::pipe::CancelToken;
 const ROOT: u64 = (5 << 48) | 5;
 /// Encodes MFT or journal records with the supplied next cursor and reason flags.
-fn wire(next: u64, records: &[(u64, u64, bool, &'static str, u32)]) -> Vec<u8> {
+pub(super) fn wire(next: u64, records: &[(u64, u64, bool, &'static str, u32)]) -> Vec<u8> {
     let mut bytes = next.to_le_bytes().to_vec();
     for &(file_id, parent_id, folder, name, reason) in records {
         let offset = bytes.len();
@@ -26,6 +26,7 @@ struct Volume {
     when: u8,
     invalid: bool,
     sizes: usize,
+    link_lookups: usize,
     journal: Vec<u8>,
 }
 impl Volume {
@@ -56,8 +57,12 @@ impl VolumeIo for Volume {
         bytes[16..24].copy_from_slice(&next.to_le_bytes());
         Ok(bytes)
     }
-    /// Encodes the current live MFT once per cursor-zero start, with a separate EOF request.
+    /// Encodes the live MFT, including direct lookups of file 20 during follow.
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
+        if cursor == 20 {
+            self.link_lookups += 1;
+            return Ok(Some(wire(21, &[(20, ROOT, false, "original", 0)])));
+        }
         if cursor != 0 {
             return Ok(None);
         }
@@ -80,10 +85,12 @@ impl VolumeIo for Volume {
     fn read_journal(&mut self, _: JournalPosition) -> Result<Vec<u8>, NtfsError> {
         Ok(self.journal.clone())
     }
-    /// Counts size reads; follow-only fixtures return FileGone, builds return ten bytes.
+    /// Counts size reads and returns ten bytes for files reached by the fixture.
     fn file_size(&mut self, _: u128) -> Result<u64, NtfsError> {
         self.sizes += 1;
-        (self.pass > 0).then_some(10).ok_or(NtfsError::FileGone)
+        (self.pass > 0 || self.link_lookups > 0)
+            .then_some(10)
+            .ok_or(NtfsError::FileGone)
     }
 }
 /// Builds through production enumeration and replays churn from the original journal cursor.
@@ -97,17 +104,22 @@ fn build(volume: &mut Volume) -> Result<NtfsIndex, NtfsError> {
     }
     Ok(built.index)
 }
+/// Keeps the cursor moving for both plain and combined hard-link reasons.
 #[test]
-fn journal_churn_hard_links_require_reenumeration_before_size_refresh() {
+fn journal_churn_hard_links_refresh_one_file_and_keep_the_cursor_moving() {
     for reason in [0x10000, 0x10100] {
         let mut volume = Volume {
             journal: wire(120, &[(20, ROOT, false, "link", reason)]),
             ..Volume::default()
         };
         let saved = JournalState::parse(&journal_metadata(7)).unwrap().position;
-        let error = read_volume_journal(&mut volume, saved).err();
-        let rejected = matches!(error, Some(NtfsError::Reenumerate("journal")));
-        assert_eq!((reason, rejected, volume.sizes), (reason, true, 0));
+        let batch = read_volume_journal(&mut volume, saved);
+        assert!(
+            batch.is_ok(),
+            "hard-link reason {reason:#x} rejected: {batch:?}"
+        );
+        assert_eq!(batch.unwrap().next_usn, 120);
+        assert_eq!((volume.link_lookups, volume.sizes), (1, 1));
     }
 }
 #[test]
