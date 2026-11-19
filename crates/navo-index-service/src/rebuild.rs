@@ -248,7 +248,7 @@ impl Rebuilds {
         let changes = match followed {
             Ok(changes) if changes.is_empty() => return Ok(None),
             Ok(changes) => changes,
-            Err(error @ NtfsError::Reenumerate(_)) => {
+            Err(error @ (NtfsError::Reenumerate(_) | NtfsError::LinkRefresh(_))) => {
                 if self.journal_lost() {
                     return Ok(None);
                 }
@@ -257,7 +257,7 @@ impl Rebuilds {
                     self.letter,
                     error_kind(&error)
                 ));
-                return Ok(self.request_journal(shared, now));
+                return Ok(self.request_paused(shared, Cause::new(BuildReason::JournalReset), now));
             }
             Err(error) => return Err(error),
         };
@@ -281,9 +281,34 @@ impl Rebuilds {
         Ok(self.request(shared, cause, now))
     }
 
-    /// Gives journal loss priority without counting an existing deferral twice.
-    fn request_journal(&mut self, shared: &Shared, now: Duration) -> Option<Cause> {
-        let cause = Cause::new(BuildReason::JournalReset);
+    /// Pauses replay and requests a build after a batch failed to apply to the live index.
+    /// The index is never saved again: the pause holds until a regular build is published.
+    pub fn apply_failed(
+        &mut self,
+        shared: &Shared,
+        error: &NtfsError,
+        now: Duration,
+    ) -> Option<Cause> {
+        if self.journal_lost() {
+            return None;
+        }
+        let kind = error_kind(error);
+        self.log
+            .line(format_args!("update error {}: apply {kind}", self.letter));
+        let cause = Cause::new(BuildReason::ApplyFailed);
+        let ready = self.request_paused(shared, cause, now);
+        // Fail closed: saves stay blocked even before the worker starts the build.
+        if ready.is_some() {
+            self.deferred = Some(Deferred {
+                cause,
+                deadline: now,
+            });
+        }
+        ready
+    }
+
+    /// Gives a replay-pausing cause priority without counting an existing deferral twice.
+    fn request_paused(&mut self, shared: &Shared, cause: Cause, now: Duration) -> Option<Cause> {
         if let Some(deferred) = &mut self.deferred {
             deferred.cause = cause;
         }
@@ -322,20 +347,20 @@ impl Rebuilds {
         self.deferred.is_some() || self.verification.is_pending()
     }
 
-    /// Returns whether journal replay must wait for a deferred rebuild.
+    /// Returns whether journal replay must wait for a deferred rebuild (journal lost or apply failed).
     pub fn journal_lost(&self) -> bool {
         self.deferred
-            .is_some_and(|deferred| deferred.cause.reason == BuildReason::JournalReset)
+            .is_some_and(|deferred| pauses_replay(deferred.cause.reason))
     }
 
-    /// Returns whether the journal reset can run at this worker elapsed time.
+    /// Returns whether the replay-pausing rebuild can run at this worker elapsed time.
     pub fn journal_reset_due(&self, now: Duration) -> bool {
         self.journal_lost() && self.due(now).is_some()
     }
 
     pub fn started(&mut self, shared: &Shared, cause: Cause, now: Duration) {
         self.last_start = Some(now);
-        if cause.reason == BuildReason::JournalReset {
+        if pauses_replay(cause.reason) {
             // The worker waits on build backoff before retrying this ready reset.
             self.deferred = Some(Deferred {
                 cause,
@@ -376,6 +401,11 @@ impl Rebuilds {
     }
 }
 
+/// True for causes whose old index must neither replay the journal nor be saved until rebuilt.
+fn pauses_replay(reason: BuildReason) -> bool {
+    matches!(reason, BuildReason::JournalReset | BuildReason::ApplyFailed)
+}
+
 fn update(shared: &Shared, change: impl FnOnce(&mut VolumeBuilds)) {
     change(
         &mut shared
@@ -395,6 +425,7 @@ pub(super) fn error_kind(error: &NtfsError) -> String {
         NtfsError::Parse(_) => "parse".into(),
         NtfsError::Table(_) => "table".into(),
         NtfsError::Reenumerate(cause) => format!("reenumerate({cause})"),
+        NtfsError::LinkRefresh(failed) => format!("reenumerate(hard link) {}", error_kind(failed)),
         NtfsError::FileGone => "file_gone".into(),
         NtfsError::Cancelled => "cancelled".into(),
     }

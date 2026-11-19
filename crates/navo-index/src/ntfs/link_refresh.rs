@@ -44,42 +44,16 @@ pub(super) fn refresh_links(
 }
 
 /// Reads the first MFT record at the requested slot and checks the full file reference.
-/// Fails with `Reenumerate("hard link")` and logs the dropped cause once.
+/// Fails with `LinkRefresh` (carrying the read error) or `Reenumerate("hard link")`.
 fn lookup_link(volume: &mut impl VolumeIo, file_id: u128) -> Result<Option<UsnRecord>, NtfsError> {
-    let Ok(reference) = u64::try_from(file_id) else {
-        tracing::warn!("hard link refresh: file reference wider than 64 bits");
-        return Err(NtfsError::Reenumerate("hard link"));
-    };
+    let reference = u64::try_from(file_id).map_err(|_| NtfsError::Reenumerate("hard link"))?;
     let cursor = reference & 0x0000_ffff_ffff_ffff;
-    let Some(bytes) = volume.enumerate_one(cursor).map_err(|error| {
-        let kind = lookup_kind(&error);
-        tracing::warn!(%kind, "hard link refresh: MFT read failed");
-        NtfsError::Reenumerate("hard link")
-    })?
+    let Some(bytes) = volume
+        .enumerate_one(cursor)
+        .map_err(|error| NtfsError::LinkRefresh(Box::new(error)))?
     else {
         return Ok(None);
     };
-    let record = parse_first(&bytes).map_err(|_| {
-        tracing::warn!("hard link refresh: MFT record did not parse");
-        NtfsError::Reenumerate("hard link")
-    })?;
+    let record = parse_first(&bytes).map_err(|_| NtfsError::Reenumerate("hard link"))?;
     Ok(record.filter(|record| record.file_id == file_id))
-}
-
-/// A log-safe kind for a failed MFT read: OS code or I/O kind, or the variant name; never names.
-fn lookup_kind(error: &NtfsError) -> String {
-    match error {
-        NtfsError::Io { operation, source } => match source.raw_os_error() {
-            Some(code) => format!("io op={operation} os_error={code}"),
-            None => format!("io op={operation} kind={:?}", source.kind()),
-        },
-        NtfsError::InvalidVolume => "invalid_volume".into(),
-        NtfsError::InvalidResponse(what) => format!("invalid_response {what}"),
-        NtfsError::Snapshot(_) => "snapshot".into(),
-        NtfsError::Parse(_) => "parse".into(),
-        NtfsError::Table(_) => "table".into(),
-        NtfsError::Reenumerate(cause) => format!("reenumerate({cause})"),
-        NtfsError::FileGone => "file_gone".into(),
-        NtfsError::Cancelled => "cancelled".into(),
-    }
 }
