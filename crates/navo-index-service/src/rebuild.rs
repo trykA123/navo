@@ -120,12 +120,19 @@ impl fmt::Display for Cause {
     }
 }
 
+/// A queued full build and its deadline in seconds since the worker started.
+#[derive(Clone, Copy)]
+struct Deferred {
+    cause: Cause,
+    deadline: Duration,
+}
+
 /// Decides when a volume's full builds start and keeps their counters and log lines.
 pub(super) struct Rebuilds {
     letter: char,
     log: Log,
     last_start: Option<Duration>,
-    deferred: Option<Cause>,
+    deferred: Option<Deferred>,
     backoff: BuildBackoff,
     retry_delay: Option<Duration>,
     verification: VerifyRebuild,
@@ -172,9 +179,9 @@ impl Rebuilds {
         ));
     }
 
-    /// Takes the original reason when the pending verification is ready to run.
-    pub fn verification_due(&mut self, now: Instant) -> Option<&'static str> {
-        if self.verification.take_due(now) {
+    /// Takes the reason for a ready verification when no journal reset is due.
+    pub fn verification_due(&mut self, now: Instant, elapsed: Duration) -> Option<&'static str> {
+        if !self.journal_reset_due(elapsed) && self.verification.take_due(now) {
             return self.verification_reason.take();
         }
         None
@@ -273,22 +280,23 @@ impl Rebuilds {
     fn request_journal(&mut self, shared: &Shared, now: Duration) -> Option<Cause> {
         let cause = Cause::new(BuildReason::JournalReset);
         if let Some(deferred) = &mut self.deferred {
-            *deferred = cause;
+            deferred.cause = cause;
         }
         self.request(shared, cause, now)
     }
 
     fn request(&mut self, shared: &Shared, cause: Cause, now: Duration) -> Option<Cause> {
-        let Some(since) = self.last_start.map(|start| now.saturating_sub(start)) else {
+        let Some(start) = self.last_start else {
             return Some(cause);
         };
-        if since >= REBUILD_WINDOW {
+        let deadline = start.saturating_add(REBUILD_WINDOW);
+        if now >= deadline {
             return Some(cause);
         }
         if self.deferred.is_none() {
-            self.deferred = Some(cause);
+            self.deferred = Some(Deferred { cause, deadline });
             update(shared, |builds| builds.deferred_rebuilds += 1);
-            let wait = REBUILD_WINDOW.saturating_sub(since).as_secs();
+            let wait = (deadline - now).as_secs();
             self.log.line(format_args!(
                 "rebuild deferred {}: {cause} wait_s={wait}",
                 self.letter
@@ -297,12 +305,11 @@ impl Rebuilds {
         None
     }
 
-    /// The deferred build, once the window since the last build start has passed.
+    /// Returns the deferred build once its deadline has passed.
     pub fn due(&self, now: Duration) -> Option<Cause> {
-        self.deferred.filter(|_| {
-            self.last_start
-                .is_none_or(|start| now.saturating_sub(start) >= REBUILD_WINDOW)
-        })
+        self.deferred
+            .filter(|deferred| now >= deferred.deadline)
+            .map(|deferred| deferred.cause)
     }
 
     /// True while a deferred rebuild or verification may restore missing entries.
@@ -313,12 +320,25 @@ impl Rebuilds {
     /// Returns whether journal replay must wait for a deferred rebuild.
     pub fn journal_lost(&self) -> bool {
         self.deferred
-            .is_some_and(|cause| cause.reason == BuildReason::JournalReset)
+            .is_some_and(|deferred| deferred.cause.reason == BuildReason::JournalReset)
+    }
+
+    /// Returns whether the journal reset can run at this worker elapsed time.
+    pub fn journal_reset_due(&self, now: Duration) -> bool {
+        self.journal_lost() && self.due(now).is_some()
     }
 
     pub fn started(&mut self, shared: &Shared, cause: Cause, now: Duration) {
         self.last_start = Some(now);
-        self.deferred = None;
+        if cause.reason == BuildReason::JournalReset {
+            // The worker waits on build backoff before retrying this ready reset.
+            self.deferred = Some(Deferred {
+                cause,
+                deadline: now,
+            });
+        } else if !self.journal_lost() {
+            self.deferred = None;
+        }
         update(shared, |builds| {
             builds.full_builds += 1;
             builds.last_reason = Some(cause.reason);
@@ -336,6 +356,13 @@ impl Rebuilds {
             "full build done {}: entries={entries} duration_ms={milliseconds}",
             self.letter
         ));
+    }
+
+    /// Clears the pending journal reset after a regular full build replaces the live index.
+    pub fn regular_build_published(&mut self) {
+        if self.journal_lost() {
+            self.deferred = None;
+        }
     }
 
     #[cfg(windows)]
