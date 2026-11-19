@@ -326,3 +326,89 @@ fn a_late_parent_never_materializes_a_cancelled_add() {
     assert!(!index.ids.contains_key(&30));
     assert_eq!(index.table.slots(), slots + 1);
 }
+
+/// Replays a child move out of a folder that is deleted before the destination arrives.
+fn assert_subtree_survives_folder_delete(move_deleted_folder: bool) {
+    let mut index = base();
+    let mut records = vec![
+        record(21, 20, OLD_NAME, "deep"),
+        record(21, 99, NEW_NAME, "deep"),
+    ];
+    if move_deleted_folder {
+        records.extend([
+            record(20, ROOT, OLD_NAME, "trash"),
+            record(20, 99, NEW_NAME, "trash"),
+        ]);
+    }
+    records.extend([
+        record(20, 99, DELETE, "trash"),
+        record(99, ROOT, CREATE, "late"),
+    ]);
+    let unresolved = index
+        .apply_batch(UsnBatch {
+            next_usn: 200,
+            records,
+        })
+        .unwrap();
+    assert!(unresolved.is_empty(), "{unresolved:?}");
+    assert_eq!(
+        index
+            .ids
+            .get(&22)
+            .and_then(|&id| index.table.path_with(id, '\\'))
+            .as_deref(),
+        Some("C:\\late\\deep\\b.txt")
+    );
+    assert!(!index.ids.contains_key(&20));
+}
+
+/// Checks a delete when both the folder and the escaping child have blocked moves.
+#[test]
+fn a_blocked_folder_delete_preserves_its_escaping_subtree() {
+    assert_subtree_survives_folder_delete(true);
+}
+
+/// Checks a delete when only the escaping child has a blocked move.
+#[test]
+fn an_unblocked_folder_delete_preserves_its_escaping_subtree() {
+    assert_subtree_survives_folder_delete(false);
+}
+
+/// Checks that waking a cancelled slot leaves the replacement folder and child blocked.
+#[test]
+fn a_cancelled_waiter_cannot_unblock_a_replacement_folder() {
+    let mut index = NtfsIndex::new('C', POSITION).unwrap();
+    let mut attributes = record(30, 98, 0x4, "folder");
+    attributes.flags = Flags::FOLDER | Flags::HIDDEN;
+    let records = vec![
+        record(30, 99, CREATE, "folder"),
+        record(30, 99, DELETE, "folder"),
+        record(30, 98, CREATE, "folder"),
+        record(31, 30, CREATE, "child.txt"),
+        record(99, ROOT, CREATE, "first"),
+        attributes,
+        record(98, ROOT, CREATE, "second"),
+    ];
+    let mut applying = index
+        .begin_batch(UsnBatch {
+            next_usn: 200,
+            records,
+        })
+        .unwrap();
+    for _ in 0..6 {
+        assert!(applying.step(&mut index, 1).unwrap());
+    }
+    assert!(index.ids.contains_key(&99));
+    assert!(!index.ids.contains_key(&30));
+    assert!(!index.ids.contains_key(&31));
+    let unresolved = applying.finish(&mut index).unwrap();
+    assert!(unresolved.is_empty(), "{unresolved:?}");
+    assert_eq!(
+        index.table.flags(index.ids[&30]),
+        Some(Flags::FOLDER | Flags::HIDDEN)
+    );
+    assert_eq!(
+        index.table.path_with(index.ids[&31], '\\').as_deref(),
+        Some("C:\\second\\folder\\child.txt")
+    );
+}
