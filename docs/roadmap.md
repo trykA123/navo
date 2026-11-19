@@ -12,7 +12,7 @@ Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versio
   - **Delete safety net:** on by default and working; a final review and the help text remain.
   - **Find files:** content search and the results tab work; the results tab's final look and hit lines get a design round.
   - **Accessibility:** the basics are in; polish remains.
-  - **Background work that never waits** (job priorities, folder sizes that cancel): not started.
+  - **Background work that never waits:** done (P43, Parts J, S and B). Listings, previews and folder sizes run in job pools with priorities, shown folder sizes cancel when you leave, sizes count on disk and hard links once, and `cargo xtask bench-walk` times listing, walk and index.
   - **Validation:** the heavy Windows benchmark and the long daily-use check for lost files.
 - **v1.0:** started.
   - **Compare:** v0.7.0 ships readable compare. The gutter between the folder panes names each row's result, the newer side carries a ▲ mark, and a change map shows where the folder differs. Changed lines are coloured and changed words are filled. The file diff and the Stream draw syntax colours. Sideways scroll keeps both sides level, Alt+Z wraps the file diff and the Stream, and Alt+↓ and the change map centre a change. Binary pairs open as a hex diff, and Alt+V switches Text and Bytes. Stream cards cover large, binary and image pairs. The sync plan engine is built; the sync screen is not.
@@ -23,8 +23,8 @@ Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versio
   - **Native crash reports:** built. An out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
   - **Speed checks that fail the build:** done. Benches measure the hot paths, `perf/speed.toml` holds the speed gate, and a release waits for that gate. Tracy zones are in.
   - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt) is still open.
-  - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, the module registry, the mimalloc trial, background work that never waits, and smarter search.
-- **Order after the current work (owner, 12 November):** index service memory, the mimalloc trial, background work that never waits, then smarter search. Speed checks are done, so they leave the order. Accessibility is required for v1.0.
+  - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, the module registry, the mimalloc trial and smarter search.
+- **Order after the current work (owner, 12 November):** index service memory, the mimalloc trial, then smarter search. Speed checks and background work are done, so they leave the order. Accessibility is required for v1.0.
 - **Latest release:** v0.8.0 (syntax colours for big XML/JSON, logs, automotive files and Notepad++ languages, plus a language picker), published on 19 November 2026 after its Windows VM checks. Before it: v0.7.1 (the path bar closes when you click away, Shift+click range selection works again, drags need 6 px with Shift or Ctrl, a real installer progress bar, Navo starts after install, less memory for a first NTFS index build, Velopack 1.3.39), on 18 November 2026.
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
@@ -154,7 +154,7 @@ Also included: the MIT or Apache-2.0 licence, speed checks that fail the build (
 - Code signing. Setup is not signed, so Windows may warn.
 - The owner's real-drive index measurement and the owner's real-PC update check.
 - The Windows crash tests.
-- Background work that never waits, the mimalloc trial and smarter search: not started. The delete safety net review, the Find files design round and accessibility polish are also open.
+- The mimalloc trial and smarter search: not started. The delete safety net review, the Find files design round and accessibility polish are also open.
 
 ## Active work
 
@@ -164,7 +164,7 @@ Also included: the MIT or Apache-2.0 licence, speed checks that fail the build (
 - **Native crash reports:** an out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
 - **Code signing:** Setup is not signed, so Windows may warn about the file.
 - **Move-undo hardening:** finish validation that Ctrl+Z restores only the same file after a move and reports files changed on disk.
-- **Beta completion:** the results-tab design round, the delete safety net review and help text, and accessibility polish. Background work that never waits is not started.
+- **Beta completion:** the results-tab design round, the delete safety net review and help text, and accessibility polish.
 
 ### Validation still to finish
 
@@ -184,7 +184,7 @@ The owner reordered the beta on 27 October 2026 (D85). This is the priority orde
 4. core: up to four panes, tiled like Hyprland (D80): five layouts and your own on Ctrl+L, split, close, swap and resize from the keyboard, Shift+drag swap, divider drag, a strip in narrow windows. Done.
 5. core: find files by content and attributes in Ctrl+K, with results as a tab you can work in; virtual collections (saved searches, snapshots, files picked by hand). Query, content matcher, collection store, results tab (query as the label, progress, hit counts, drag), Ctrl+K modes and Content mode (search inside files, Enter opens at the line) done; a design round for the results tab look and hit lines is next.
 6. module: clipboard history in a Ctrl+K-style palette, as a module you can switch off. Built: it records text, links and file lists you copy, opens with Ctrl+Shift+V or Win+Alt+V from any app, pastes back, and can be paused, cleared or deleted. Saved items (snippets, paths), encrypted secrets and folder notes are built, with a manage view on F2. A pass on a real Windows desktop is done: the pop-up takes focus, secrets clear after 30 s and when Navo quits, and Delete all wipes the data. The summon hotkey and tray are done.
-7. core: background work that never waits: job pools with priorities, folder sizes that cancel when you leave, size on disk, hard links counted once. Not started; existing speed improvements do not complete this work.
+7. core: background work that never waits: job pools with priorities, folder sizes that cancel when you leave, size on disk, hard links counted once. Done (P43, Parts J, S and B; on main since 27 October).
 8. core: accessibility basics: Narrator reads lists, dialogs and Ctrl+K, focus visible everywhere, reduced motion, contrast themes, UI scale. Mostly done.
 
 Done earlier in the beta: responsive layout and new fonts (D80), clone a tab into the other pane, open a terminal here, cache sizes in diagnostics, Follow on Windows, the DBC and A2L outline in F3, every shortcut changeable in Shortcuts (conflict checks, hints that show your keys, old keymaps carried over), a right-button setting for Total Commander or Windows behaviour, and your own commands like Total Commander's: a commands file names a program, its arguments (cursor file, marked files, both folders) and a key, and each command runs from the file list or Ctrl+K. Speed pass: large folders sort by size or date about 2.5× faster, many small files copy about 2× faster, and Ctrl+K searches once per 100 ms while a folder walk grows.
