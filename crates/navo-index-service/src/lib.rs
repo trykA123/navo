@@ -38,6 +38,8 @@ mod elevation_error;
 mod elevation_limits;
 #[cfg(any(windows, test))]
 mod elevation_result;
+#[cfg(any(windows, test))]
+mod follow_state;
 
 pub use elevation_error::{Elevated, ElevationError};
 #[cfg(any(windows, test))]
