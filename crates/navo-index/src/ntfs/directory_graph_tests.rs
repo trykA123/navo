@@ -11,6 +11,11 @@ const POS: JournalPosition = JournalPosition {
 };
 
 fn build(entries: &[(u128, u128, &str, Flags)]) -> Result<NtfsIndex, NtfsError> {
+    build_counted(entries).map(|(index, _)| index)
+}
+
+/// Builds the folder index and returns the number of skipped records.
+fn build_counted(entries: &[(u128, u128, &str, Flags)]) -> Result<(NtfsIndex, u64), NtfsError> {
     let mut graph = DirectoryGraph::new();
     for &(file_id, parent_id, name, flags) in entries {
         graph.push(DirectoryRecord {
@@ -21,8 +26,8 @@ fn build(entries: &[(u128, u128, &str, Flags)]) -> Result<NtfsIndex, NtfsError> 
         })?;
     }
     let mut index = NtfsIndex::new('C', POS)?;
-    graph.insert_into(&mut index)?;
-    Ok(index)
+    let resolved = graph.insert_into(&mut index)?;
+    Ok((index, resolved.skipped + resolved.unplaced.len() as u64))
 }
 
 fn path(index: &NtfsIndex, file_id: u128) -> Option<String> {
@@ -70,22 +75,45 @@ fn directory_graph_normalizes_root_sequence_aliases() {
 }
 
 #[test]
-fn directory_graph_rejects_missing_parent_conflict_and_cycles() {
-    assert_eq!(
-        build(&[(10, ROOT, "d", F), (10, ROOT, "d", F)])
-            .unwrap()
-            .table
-            .len(),
-        2
-    );
-    for bad in [
-        &[(10, ROOT, "d", F), (10, ROOT, "other", F)][..],
-        &[(10, ROOT, "d", F), (10, 20, "d", F)],
-        &[(10, ROOT, "d", F), (10, ROOT, "d", F | Flags::HIDDEN)],
-        &[(10, 999, "orphan", F)],
-        &[(10, 10, "self", F)],
-        &[(10, 20, "a", F), (20, 10, "b", F), (30, 10, "c", F)],
+fn directory_graph_skips_conflicts_and_invalid_parent_chains() {
+    for (records, expected_skipped, expected_path) in [
+        (
+            &[(10, ROOT, "d", F), (10, ROOT, "d", F)][..],
+            0,
+            Some("C:\\d"),
+        ),
+        (
+            &[(10, ROOT, "d", F), (10, ROOT, "other", F)],
+            1,
+            Some("C:\\d"),
+        ),
+        (&[(10, ROOT, "d", F), (10, 20, "d", F)], 1, Some("C:\\d")),
+        (
+            &[(10, ROOT, "d", F), (10, ROOT, "d", F | Flags::HIDDEN)],
+            1,
+            Some("C:\\d"),
+        ),
+        (&[(10, 999, "orphan", F)], 1, None),
+        (&[(10, 10, "self", F)], 1, None),
+        (
+            &[(10, 20, "a", F), (20, 10, "b", F), (30, 10, "c", F)],
+            3,
+            None,
+        ),
     ] {
-        assert!(matches!(build(bad), Err(NtfsError::Reenumerate)));
+        let (index, skipped) = build_counted(records).unwrap();
+        assert_eq!(skipped, expected_skipped);
+        assert_eq!(path(&index, 10).as_deref(), expected_path);
+        if expected_path.is_some() {
+            assert_eq!(index.table.flags(index.ids[&10]), Some(F));
+        }
     }
+}
+
+/// Counts both unreachable folders even when the child appears first.
+#[test]
+fn directory_graph_skips_an_orphan_folder_and_its_child() {
+    let (index, skipped) = build_counted(&[(11, 10, "child", F), (10, 999, "orphan", F)]).unwrap();
+    assert_eq!(skipped, 2);
+    assert_eq!(index.table.len(), 1);
 }

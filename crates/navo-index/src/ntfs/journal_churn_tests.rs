@@ -93,7 +93,7 @@ fn build(volume: &mut Volume) -> Result<NtfsIndex, NtfsError> {
     let batch = read_volume_journal(volume, built.index.position)?;
     built.unresolved.extend(built.index.apply_batch(batch)?);
     if !built.unresolved.is_empty() || !built.index.pending_renames().is_empty() {
-        return Err(NtfsError::Reenumerate);
+        return Err(NtfsError::Reenumerate("journal"));
     }
     Ok(built.index)
 }
@@ -106,7 +106,7 @@ fn journal_churn_hard_links_require_reenumeration_before_size_refresh() {
         };
         let saved = JournalState::parse(&journal_metadata(7)).unwrap().position;
         let error = read_volume_journal(&mut volume, saved).err();
-        let rejected = matches!(error, Some(NtfsError::Reenumerate));
+        let rejected = matches!(error, Some(NtfsError::Reenumerate("journal")));
         assert_eq!((reason, rejected, volume.sizes), (reason, true, 0));
     }
 }
@@ -121,7 +121,7 @@ fn journal_churn_reconciles_paths_totals_or_rejects_invalidated_parents() {
             };
             let result = build(&mut volume);
             if invalid {
-                assert!(matches!(result, Err(NtfsError::Reenumerate)));
+                assert!(matches!(result, Err(NtfsError::Reenumerate("journal"))));
                 continue;
             }
             let index = result.unwrap();

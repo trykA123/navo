@@ -136,7 +136,7 @@ fn a_saved_copy_stays_whole_while_a_batch_applies() {
 }
 
 #[test]
-fn a_failed_batch_returns_the_error_and_keeps_the_checkpoint() {
+fn a_batch_with_a_cyclic_move_keeps_applying_changes() {
     let shared = shared(Some(index()));
     let mut batch = creates();
     let folder = |file_id, parent_id, reason, name| UsnRecord {
@@ -147,12 +147,77 @@ fn a_failed_batch_returns_the_error_and_keeps_the_checkpoint() {
     batch.records.push(folder(50, 5, 0x100, "a"));
     batch.records.push(folder(51, 50, 0x100, "b"));
     batch.records.push(folder(50, 51, 0x2000, "a"));
-    let failed = apply_batch(&shared, batch);
-    assert!(matches!(failed, Err(NtfsError::Table(_))), "{failed:?}");
+    batch.records.push(folder(52, 50, 0x100, "c"));
+    assert!(apply_batch(&shared, batch).unwrap().is_empty());
     let state = shared.read().unwrap();
     let index = state.index.as_ref().unwrap();
-    assert_eq!(index.position.next_usn, 100);
+    assert_eq!(index.position.next_usn, 200);
+    assert_eq!(index.table.parent(index.ids[&52]), Some(index.ids[&50]));
     assert!(index.ids.values().all(|&id| index.table.name(id).is_some()));
+}
+
+/// Counts a stale move against the newer index and keeps the published folder hierarchy.
+#[test]
+fn a_stale_replayed_move_that_would_cycle_is_skipped() {
+    let mut newer = index();
+    let child = newer
+        .table
+        .push(newer.ids[&6], "child", Flags::FOLDER)
+        .unwrap();
+    newer.ids.insert(7, child);
+    let shared = shared(Some(newer));
+    let folder = |parent_id, reason| UsnRecord {
+        flags: Flags::FOLDER,
+        size: None,
+        ..record(6, parent_id, reason, "folder")
+    };
+    let batch = UsnBatch {
+        next_usn: 120,
+        records: vec![folder(5, 0x1000), folder(7, 0x2000)],
+    };
+    assert!(apply_batch(&shared, batch).unwrap().is_empty());
+    let state = shared.read().unwrap();
+    let index = state.index.as_ref().unwrap();
+    assert_eq!(index.table.parent(index.ids[&6]), Some(index.ids[&5]));
+    assert_eq!(index.table.parent(index.ids[&7]), Some(index.ids[&6]));
+    assert_eq!(index.position.next_usn, 120);
+    assert_eq!(state.builds.dropped_changes, 1);
+}
+
+/// Flags the replay when a stale hierarchy causes the only move of A to be skipped.
+#[test]
+fn a_cycle_skipped_replay_move_marks_follow_inexact() {
+    let mut newer = index();
+    let a = newer.ids[&6];
+    let c = newer.table.push(a, "C", Flags::FOLDER).unwrap();
+    let b = newer.table.push(c, "B", Flags::FOLDER).unwrap();
+    newer.ids.insert(7, b);
+    newer.ids.insert(8, c);
+    let shared = shared(Some(newer));
+    let folder = |file_id, parent_id, reason, name| UsnRecord {
+        flags: Flags::FOLDER,
+        size: None,
+        ..record(file_id, parent_id, reason, name)
+    };
+    let batch = UsnBatch {
+        next_usn: 120,
+        records: vec![
+            folder(6, 5, 0x1000, "A"),
+            folder(6, 7, 0x2000, "A"),
+            folder(8, 6, 0x1000, "C"),
+            folder(8, 5, 0x2000, "C"),
+            folder(7, 5, 0x1000, "B"),
+            folder(7, 8, 0x2000, "B"),
+        ],
+    };
+    assert!(apply_batch(&shared, batch).unwrap().is_empty());
+    let state = shared.read().unwrap();
+    assert!(state.replay_inexact, "the stale move made follow inexact");
+    assert_eq!(state.builds.dropped_changes, 1);
+    let index = state.index.as_ref().unwrap();
+    assert_eq!(index.table.parent(a), Some(0));
+    assert_eq!(index.table.parent(c), Some(0));
+    assert_eq!(index.position.next_usn, 120);
 }
 
 #[test]
