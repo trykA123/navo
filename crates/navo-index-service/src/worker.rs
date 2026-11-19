@@ -84,7 +84,8 @@ impl Worker {
         let Some(volume) = volume else {
             return Ok(());
         };
-        if let Some(reason) = self.rebuilds.verification_due(Instant::now())
+        let now = Instant::now();
+        if let Some(reason) = self.rebuilds.verification_due(now, now - self.started)
             && self.verify(volume, reason, cancel)?
         {
             return Ok(());
@@ -114,6 +115,9 @@ impl Worker {
     fn open(&mut self, cancel: &CancelToken) -> Result<Volume, NtfsError> {
         let mut opened = Volume::open(self.drive.letter)?;
         self.drive.serial = opened.serial()?;
+        if self.rebuilds.journal_reset_due(self.started.elapsed()) {
+            return Ok(opened);
+        }
         let mut built = false;
         let mut permit = None;
         let index = restore_or_enumerate(file::load_with_ids(&self.path), self.drive, |reason| {
@@ -130,6 +134,9 @@ impl Worker {
             ));
         }
         self.publish(index);
+        if built {
+            self.rebuilds.regular_build_published();
+        }
         drop(permit);
         Ok(opened)
     }
@@ -143,6 +150,7 @@ impl Worker {
     ) -> Result<(), NtfsError> {
         let (index, permit) = self.build(volume, cause, cancel)?;
         self.publish(index);
+        self.rebuilds.regular_build_published();
         drop(permit);
         Ok(())
     }
