@@ -183,9 +183,10 @@ impl Rebuilds {
         ));
     }
 
-    /// Takes the reason for a ready verification when no journal reset is due.
-    pub fn verification_due(&mut self, now: Instant, elapsed: Duration) -> Option<&'static str> {
-        if !self.journal_reset_due(elapsed) && self.verification.take_due(now) {
+    /// Takes the reason for a ready verification when no journal reset is pending.
+    pub fn verification_due(&mut self, now: Instant) -> Option<&'static str> {
+        // A waiting reset rebuilds anyway; verifying first would start a second full build.
+        if !self.journal_lost() && self.verification.take_due(now) {
             return self.verification_reason.take();
         }
         None
