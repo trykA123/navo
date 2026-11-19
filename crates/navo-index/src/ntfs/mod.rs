@@ -242,7 +242,7 @@ fn validate_journal_cursor(batch: &UsnBatch, saved: JournalPosition) -> Result<(
     if batch.next_usn < saved.next_usn
         || (batch.next_usn == saved.next_usn && !batch.records.is_empty())
     {
-        return Err(NtfsError::InvalidResponse("journal cursor did not advance"));
+        return Err(NtfsError::Reenumerate("cursor"));
     }
     Ok(())
 }

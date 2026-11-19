@@ -230,7 +230,7 @@ fn a_stale_cursor_changes_nothing() {
     };
     assert!(matches!(
         apply_batch(&shared, stale),
-        Err(NtfsError::InvalidResponse(_))
+        Err(NtfsError::Reenumerate("cursor"))
     ));
     assert_eq!(names(&published(&shared).unwrap()), before);
 }
