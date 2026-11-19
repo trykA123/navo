@@ -12,6 +12,7 @@ use navo_index::pipe::CancelToken;
 use super::answer::Shared;
 use super::build_permit::{BUILDS, BuildPermit};
 use super::config::{Drive, index_path};
+use super::follow_state::Updating;
 use super::lifecycle::{
     SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, clear_failures,
     report_unknown_sizes, restore_or_enumerate,
@@ -187,11 +188,7 @@ impl Worker {
         let Some(position) = position else {
             return Ok(Vec::new());
         };
-        self.shared
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-            .status
-            .progress = Some(100);
+        let _updating = Updating::begin(&self.shared);
         let batch = volume.read_journal(position)?;
         let records = batch.records.len();
         let changed = batch.next_usn != position.next_usn;
@@ -201,7 +198,6 @@ impl Worker {
         }
         let replay_inexact = {
             let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
-            state.status.progress = None;
             std::mem::take(&mut state.replay_inexact)
         };
         if replay_inexact {
