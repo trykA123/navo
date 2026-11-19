@@ -8,6 +8,9 @@ use super::{
 use crate::table::{Flags, TableChange, TableError};
 use crate::usn::FrnMap;
 
+#[path = "pending_delete.rs"]
+mod delete;
+
 #[derive(Default)]
 pub(super) struct Pending {
     blocked: BlockedRecords,
@@ -29,14 +32,24 @@ impl Pending {
             return Ok(());
         };
         let file_id = change_file_id(&change);
-        if let Some(missing_reference) = self.poisoned_dependency(index, &change, file_id) {
+        let remove = matches!(change, TableChange::Remove { .. });
+        let subtree = if remove {
+            index
+                .ids
+                .get(&file_id)
+                .copied()
+                .filter(|&id| index.table.has_children(id))
+        } else {
+            None
+        };
+        if let Some(missing_reference) = self.poisoned_dependency(index, &change, subtree) {
             self.reported.push(UnresolvedChange {
                 missing_reference,
                 change,
             });
             return Ok(());
         }
-        let change = if matches!(change, TableChange::Remove { .. }) {
+        let change = if remove && subtree.is_none() {
             self.blocked.cancel(file_id);
             change
         } else if let Some(change) = self.blocked.append(file_id, change) {
@@ -58,14 +71,15 @@ impl Pending {
         &mut self,
         index: &NtfsIndex,
         change: &TableChange,
-        file_id: u128,
+        subtree: Option<u32>,
     ) -> Option<u128> {
+        let file_id = change_file_id(change);
         if let Some(&missing) = self.poisoned.get(&file_id) {
             return Some(missing);
         }
         match change {
             TableChange::Remove { .. } => {
-                let missing = self.blocked.blocking_parent(index, file_id)?;
+                let missing = self.blocked.blocking_parent(index, subtree?)?;
                 self.poisoned.insert(file_id, missing);
                 Some(missing)
             }
@@ -144,7 +158,6 @@ impl Pending {
 const RENAME: u8 = 0x10;
 const SIZED: u8 = 0x20;
 const CANCELLED: u8 = 0x40;
-const DELETE_SCAN_LIMIT: usize = 4_096;
 
 /// Flat columns use 37 bytes per slot, with parents shared by each waiter group.
 #[derive(Default)]
@@ -172,45 +185,6 @@ struct Ready {
 impl BlockedRecords {
     fn len(&self) -> usize {
         self.blocked.len()
-    }
-
-    /// Returns the missing parent of a blocked move, or a waiter parent above the scan limit.
-    fn blocking_parent(&self, index: &NtfsIndex, file_id: u128) -> Option<u128> {
-        if self.blocked.is_empty() {
-            return None;
-        }
-        let folder = *index.ids.get(&file_id)?;
-        let totals = index.table.totals(folder)?;
-        if totals.files == 0 && totals.folders == 0 {
-            return None;
-        }
-        if self.len() > DELETE_SCAN_LIMIT {
-            return self.waiters.iter().next().map(|(missing, _)| missing);
-        }
-        let slot = self.blocked.iter().find_map(|(file, slot)| {
-            let id = *index.ids.get(&file)?;
-            std::iter::successors(index.table.parent(id), |&id| index.table.parent(id))
-                .any(|parent| parent == folder)
-                .then_some(slot)
-        })?;
-        self.waiter_parent(slot)
-    }
-
-    /// Finds a blocked slot's parent within the scan budget, or returns an unavailable waiter parent.
-    fn waiter_parent(&self, target: u32) -> Option<u128> {
-        let mut remaining = DELETE_SCAN_LIMIT;
-        self.waiters.iter().find_map(|(missing, tail)| {
-            let mut ring = std::iter::successors(Some(tail), |&slot| {
-                let next = self.links[slot as usize];
-                (next != tail).then_some(next)
-            });
-            let found_or_exhausted = ring.any(|slot| {
-                remaining -= 1;
-                // Cancelled slots still use the budget, even when the live blocked count is low.
-                slot == target || remaining == 0
-            });
-            found_or_exhausted.then_some(missing)
-        })
     }
 
     /// Discards a file's blocked changes and leaves its slot linked until the waiter is taken.

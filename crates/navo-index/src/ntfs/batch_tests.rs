@@ -268,14 +268,14 @@ fn delete_cancels_a_blocked_rename_and_removes_the_indexed_entry() {
         .apply_batch(UsnBatch {
             next_usn: 200,
             records: vec![
-                record(21, 20, OLD_NAME, "deep"),
-                record(21, 99, NEW_NAME, "deep"),
-                record(21, 99, DELETE, "deep"),
+                record(22, 21, OLD_NAME, "b.txt"),
+                record(22, 99, NEW_NAME, "b.txt"),
+                record(22, 99, DELETE, "b.txt"),
             ],
         })
         .unwrap();
     assert!(unresolved.is_empty(), "{unresolved:?}");
-    assert!(!index.ids.contains_key(&21));
+    assert!(!index.ids.contains_key(&22));
 }
 
 /// Checks that a second creation of the same reference still waits for its parent.
