@@ -280,6 +280,11 @@ impl NameTable {
             .then(|| Flags::from_stored(self.flags[id as usize]))
     }
 
+    /// Tests whether removal of this live entry would follow any child links.
+    pub(crate) fn has_children(&self, id: u32) -> bool {
+        self.is_live(id) && self.children.first_child(id).is_some()
+    }
+
     pub fn parent(&self, id: u32) -> Option<u32> {
         let parent = *self.parents.get(id as usize)?;
         self.is_live(id)
