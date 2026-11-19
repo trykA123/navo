@@ -11,6 +11,11 @@ use super::{
 #[cfg(test)]
 #[path = "journal_churn_tests.rs"]
 mod journal_churn_tests;
+#[path = "link_refresh.rs"]
+mod link_refresh;
+#[cfg(test)]
+#[path = "link_refresh_tests.rs"]
+mod link_refresh_tests;
 #[path = "reconcile.rs"]
 mod reconcile;
 use reconcile::enumerate_with_late_limits;
@@ -27,6 +32,10 @@ thread_local! {
 pub(super) trait VolumeIo {
     fn query_journal(&mut self) -> Result<Vec<u8>, NtfsError>;
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError>;
+    /// Reads an MFT chunk starting at the requested record number, or returns None at EOF.
+    fn enumerate_one(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
+        self.enumerate(cursor)
+    }
     fn read_journal(&mut self, position: JournalPosition) -> Result<Vec<u8>, NtfsError>;
     fn file_size(&mut self, file_id: u128) -> Result<u64, NtfsError>;
     fn current_file_size(&mut self, file_id: u128) -> Result<u64, NtfsError> {
@@ -121,7 +130,7 @@ fn reserve_for_build(
     hint != SizeHint::default()
 }
 
-/// Reads journal changes, rejecting hard-link churn before size refresh or cursor validation.
+/// Reads journal changes, refreshing hard-link names and sizes before validating the cursor.
 pub(super) fn read_volume_journal(
     volume: &mut impl VolumeIo,
     saved: JournalPosition,
@@ -129,9 +138,7 @@ pub(super) fn read_volume_journal(
     JournalState::parse(&volume.query_journal()?)?.check(saved, "journal")?;
     let bytes = volume.read_journal(saved).map_err(journal_error)?;
     let mut batch = parse_batch(&bytes)?;
-    if batch.records.iter().any(|raw| raw.reason & 0x10000 != 0) {
-        return Err(NtfsError::Reenumerate("journal"));
-    }
+    link_refresh::refresh_links(volume, &mut batch)?;
     refresh_sizes(volume, &mut batch);
     validate_journal_cursor(&batch, saved)?;
     Ok(batch)
