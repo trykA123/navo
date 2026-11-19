@@ -6,7 +6,7 @@ use std::sync::PoisonError;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use navo_index::file;
-use navo_index::ntfs::{Enumeration, NtfsError, NtfsIndex, UnresolvedChange, Volume};
+use navo_index::ntfs::{Enumeration, NtfsError, NtfsIndex, Volume};
 use navo_index::pipe::CancelToken;
 
 use super::answer::Shared;
@@ -112,12 +112,8 @@ impl Worker {
         if self.rebuilds.journal_lost() {
             return Ok(());
         }
-        let followed = self.follow(volume);
-        // A follow error keeps the published index; `run` retries with backoff (D121).
-        match self
-            .rebuilds
-            .after_follow(&self.shared, followed, self.started.elapsed())?
-        {
+        // A journal read error keeps the published index; `run` retries with backoff (D121).
+        match self.follow(volume)? {
             None => Ok(()),
             Some(cause) => self.rebuild(volume, cause, cancel),
         }
@@ -211,7 +207,9 @@ impl Worker {
         self.clock.changed(self.started.elapsed());
     }
 
-    fn follow(&mut self, volume: &mut Volume) -> Result<Vec<UnresolvedChange>, NtfsError> {
+    /// Reads and applies one journal batch; returns the full build it requires, if any.
+    /// A failed apply pauses replay and saves, then rebuilds; a read error is returned.
+    fn follow(&mut self, volume: &mut Volume) -> Result<Option<Cause>, NtfsError> {
         let position = self
             .shared
             .read()
@@ -220,14 +218,25 @@ impl Worker {
             .as_ref()
             .map(|index| index.position);
         let Some(position) = position else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
         let _updating = Updating::begin(&self.shared);
-        let batch = volume.read_journal(position)?;
+        let elapsed = self.started.elapsed();
+        let batch = match volume.read_journal(position) {
+            Ok(batch) => batch,
+            Err(error) => {
+                return self
+                    .rebuilds
+                    .after_follow(&self.shared, Err(error), elapsed);
+            }
+        };
         let records = batch.records.len();
         let changed = batch.next_usn != position.next_usn;
         self.moved = changed;
-        let unresolved = super::batch::apply_batch(&self.shared, batch)?;
+        let unresolved = match super::batch::apply_batch(&self.shared, batch) {
+            Ok(unresolved) => unresolved,
+            Err(error) => return Ok(self.rebuilds.apply_failed(&self.shared, &error, elapsed)),
+        };
         if changed {
             self.clock.batch(self.started.elapsed(), records);
         }
@@ -239,7 +248,8 @@ impl Worker {
             self.rebuilds
                 .schedule_verification(Instant::now(), "replay_cycle");
         }
-        Ok(unresolved)
+        self.rebuilds
+            .after_follow(&self.shared, Ok(unresolved), elapsed)
     }
 
     /// Attempts a regular full build and records its retry delay on error.

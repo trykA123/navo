@@ -63,6 +63,9 @@ pub enum NtfsError {
     Table(#[from] TableError),
     #[error("the journal changed or wrapped ({0}); enumerate the volume again")]
     Reenumerate(&'static str),
+    /// A hard-link MFT read failed; like `Reenumerate`, the volume must be enumerated again.
+    #[error("a hard-link MFT read failed; enumerate the volume again")]
+    LinkRefresh(#[source] Box<NtfsError>),
     #[error("the file reference was deleted or reused")]
     FileGone,
     #[error("NTFS enumeration cancelled")]

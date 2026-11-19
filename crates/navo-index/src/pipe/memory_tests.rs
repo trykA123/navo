@@ -326,6 +326,7 @@ fn build_reason_codes_and_labels_are_stable() {
         (3, "snapshot_stale"),
         (4, "journal_reset"),
         (5, "unresolved_changes"),
+        (6, "apply_failed"),
     ] {
         let reason = BuildReason::from_code(code).unwrap();
         assert_eq!((reason.code(), reason.label()), (code, label));

@@ -162,15 +162,30 @@ fn link_refresh_only_looks_up_link_records_and_deduplicates_by_file() {
     assert_eq!(records[1], unchanged.records[0]);
 }
 
-/// Classifies an MFT read failure as hard-link reenumeration.
+/// Carries a failed MFT read and its OS code as hard-link reenumeration, without the record name.
 #[test]
 fn link_refresh_reports_lookup_failure_as_hard_link_reenumeration() {
-    let error = NtfsError::InvalidResponse("MFT lookup failed");
-    let result = read_volume_journal(&mut Volume::new(Err(error)), SAVED);
-    assert!(
-        matches!(result, Err(NtfsError::Reenumerate("hard link"))),
-        "lookup failure should report hard link: {result:?}"
+    let error = NtfsError::Io {
+        operation: "read MFT record",
+        source: std::io::Error::from_raw_os_error(1117),
+    };
+    let mut volume = Volume::new(Err(error));
+    let link = (FILE, 8, false, "sentinel-secret.txt", LINK_CLOSE);
+    volume.journal = wire(120, &[link]);
+    let result = read_volume_journal(&mut volume, SAVED);
+    let code = match &result {
+        Err(NtfsError::LinkRefresh(failed)) => match failed.as_ref() {
+            NtfsError::Io { source, .. } => source.raw_os_error(),
+            _ => None,
+        },
+        _ => None,
+    };
+    assert_eq!(
+        code,
+        Some(1117),
+        "lookup failure should keep its code: {result:?}"
     );
+    assert!(!format!("{result:?}").contains("sentinel-secret"));
 }
 
 /// Turns a link change that also carries a rename pair into plain MFT upserts with no rename left.

@@ -13,14 +13,17 @@ pub enum BuildReason {
     SnapshotStale = 3,
     JournalReset = 4,
     UnresolvedChanges = 5,
+    /// A journal batch failed to apply, so the live index may be half-updated.
+    ApplyFailed = 6,
 }
 
-const REASONS: [(BuildReason, &str); 5] = [
+const REASONS: [(BuildReason, &str); 6] = [
     (BuildReason::SnapshotMissing, "snapshot_missing"),
     (BuildReason::SnapshotInvalid, "snapshot_invalid"),
     (BuildReason::SnapshotStale, "snapshot_stale"),
     (BuildReason::JournalReset, "journal_reset"),
     (BuildReason::UnresolvedChanges, "unresolved_changes"),
+    (BuildReason::ApplyFailed, "apply_failed"),
 ];
 
 impl BuildReason {
