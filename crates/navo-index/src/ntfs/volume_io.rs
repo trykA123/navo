@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use super::directory_graph::MAX_LATE_FOLDERS;
 use super::{
     Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Resume, SizeHint, TableChange,
     UsnBatch, parse_batch, validate_journal_cursor,
@@ -10,6 +11,9 @@ use super::{
 #[cfg(test)]
 #[path = "journal_churn_tests.rs"]
 mod journal_churn_tests;
+#[path = "reconcile.rs"]
+mod reconcile;
+use reconcile::enumerate_with_late_limits;
 #[path = "two_pass.rs"]
 mod two_pass;
 #[path = "two_pass_size.rs"]
@@ -56,11 +60,15 @@ impl JournalState {
         })
     }
 
-    pub(super) fn check(&self, saved: JournalPosition) -> Result<(), NtfsError> {
+    pub(super) fn check(
+        &self,
+        saved: JournalPosition,
+        cause: &'static str,
+    ) -> Result<(), NtfsError> {
         if saved.resume(self.position.journal_id, self.readable_from) == Resume::Reenumerate
             || saved.next_usn > self.position.next_usn
         {
-            return Err(NtfsError::Reenumerate);
+            return Err(NtfsError::Reenumerate(cause));
         }
         Ok(())
     }
@@ -79,7 +87,7 @@ pub(super) fn enumerate_volume(
     clippy::too_many_arguments,
     reason = "the volume, limit, hint and cancel token are separate build inputs"
 )]
-/// Builds folders first, then files within one record budget; rejects churn or cancellation.
+/// Builds folders first, then files within one record budget; checks journal continuity.
 pub(super) fn enumerate_volume_sized(
     volume: &mut impl VolumeIo,
     drive: char,
@@ -87,44 +95,7 @@ pub(super) fn enumerate_volume_sized(
     hint: SizeHint,
     cancel: &crate::pipe::CancelToken,
 ) -> Result<Enumeration, NtfsError> {
-    let scan = super::directory_scan::scan_directories(volume, drive, limit, cancel)?;
-    let mut index = scan.index;
-    let sized = reserve_for_build(&mut index, hint, scan.capacity, drive);
-    let mut cursor = 0;
-    let mut count = 0;
-    let mut sizes_unknown = 0;
-    while count < limit {
-        two_pass::check_cancel(cancel)?;
-        let Some(bytes) = volume.enumerate(cursor)? else {
-            break;
-        };
-        let batch = parse_batch(&bytes)?;
-        let next = batch.next_usn.cast_unsigned();
-        if next <= cursor {
-            return Err(NtfsError::InvalidResponse(
-                "enumeration cursor did not advance",
-            ));
-        }
-        cursor = next;
-        for record in batch.records.into_iter().take(limit - count) {
-            count += 1;
-            sizes_unknown += two_pass::add_file(volume, &mut index, record)?;
-        }
-    }
-    two_pass::check_cancel(cancel)?;
-    JournalState::parse(&volume.query_journal()?)?.check(index.position)?;
-    two_pass::check_cancel(cancel)?;
-    // A sized build keeps its spare until the service has dropped the old index.
-    if !sized {
-        index.table.trim_slack();
-    }
-    index.ids.shrink_to_fit();
-    Ok(Enumeration {
-        index,
-        unresolved: Vec::new(),
-        sizes_unknown,
-        blocked_peak: 0,
-    })
+    enumerate_with_late_limits::<1_000_000, MAX_LATE_FOLDERS>(volume, drive, limit, hint, cancel)
 }
 
 /// Reserves measured or hinted totals, retaining folders and releasing spare on failure.
@@ -155,11 +126,11 @@ pub(super) fn read_volume_journal(
     volume: &mut impl VolumeIo,
     saved: JournalPosition,
 ) -> Result<UsnBatch, NtfsError> {
-    JournalState::parse(&volume.query_journal()?)?.check(saved)?;
+    JournalState::parse(&volume.query_journal()?)?.check(saved, "journal")?;
     let bytes = volume.read_journal(saved).map_err(journal_error)?;
     let mut batch = parse_batch(&bytes)?;
     if batch.records.iter().any(|raw| raw.reason & 0x10000 != 0) {
-        return Err(NtfsError::Reenumerate);
+        return Err(NtfsError::Reenumerate("journal"));
     }
     refresh_sizes(volume, &mut batch);
     validate_journal_cursor(&batch, saved)?;
@@ -227,7 +198,7 @@ pub(super) fn journal_error(error: NtfsError) -> NtfsError {
     const JOURNAL_ENTRY_DELETED: i32 = 1181;
     match error {
         NtfsError::Io { source, .. } if source.raw_os_error() == Some(JOURNAL_ENTRY_DELETED) => {
-            NtfsError::Reenumerate
+            NtfsError::Reenumerate("journal")
         }
         other => other,
     }

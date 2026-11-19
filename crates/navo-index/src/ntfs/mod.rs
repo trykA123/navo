@@ -61,8 +61,8 @@ pub enum NtfsError {
     Parse(#[from] ParseError),
     #[error(transparent)]
     Table(#[from] TableError),
-    #[error("the journal changed or wrapped; enumerate the volume again")]
-    Reenumerate,
+    #[error("the journal changed or wrapped ({0}); enumerate the volume again")]
+    Reenumerate(&'static str),
     #[error("the file reference was deleted or reused")]
     FileGone,
     #[error("NTFS enumeration cancelled")]
@@ -90,6 +90,25 @@ pub struct Enumeration {
     pub unresolved: Vec<UnresolvedChange>,
     pub sizes_unknown: u64,
     pub blocked_peak: usize,
+    /// Records skipped across both passes due to missing or inconsistent directory metadata.
+    pub skipped: u64,
+    /// Whether the build missed entries that may need a verification rebuild.
+    pub inexact: bool,
+    inexact_reason: Option<InexactBuild>,
+}
+
+impl Enumeration {
+    /// Returns the cause of an inexact build, giving precedence to a reached cap.
+    pub fn inexact_reason(&self) -> Option<InexactBuild> {
+        self.inexact_reason
+    }
+}
+
+/// Why a full enumeration needs verification.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InexactBuild {
+    Cycle,
+    HeldCap,
 }
 
 /// Total capacities a build should reserve. `Default` reserves nothing; first builds use it.
@@ -201,11 +220,21 @@ impl BatchApply {
         Ok(self.changes.peek().is_some())
     }
 
-    pub fn finish(mut self, index: &mut NtfsIndex) -> Result<Vec<UnresolvedChange>, NtfsError> {
+    pub fn finish(self, index: &mut NtfsIndex) -> Result<Vec<UnresolvedChange>, NtfsError> {
+        self.finish_with_cycle_skips(index)
+            .map(|(unresolved, _)| unresolved)
+    }
+
+    /// Finishes the batch and returns unresolved changes and the number of skipped cycles.
+    pub fn finish_with_cycle_skips(
+        mut self,
+        index: &mut NtfsIndex,
+    ) -> Result<(Vec<UnresolvedChange>, u64), NtfsError> {
         while self.step(index, usize::MAX)? {}
         index.position.next_usn = self.next_usn;
         index.compact_if_sparse(COMPACT_MIN_SLOTS);
-        Ok(self.pending.finish())
+        let cycle_skips = self.pending.cycle_skips;
+        Ok((self.pending.finish(), cycle_skips))
     }
 }
 
@@ -231,6 +260,16 @@ fn change_file_id(change: &TableChange) -> u128 {
 
 fn is_root(reference: u128) -> bool {
     reference <= u128::from(u64::MAX) && reference & 0x0000_ffff_ffff_ffff == ROOT_REFERENCE
+}
+
+/// Checks whether a reference belongs to an indexed folder.
+#[cfg(any(windows, test, feature = "test-support"))]
+fn is_folder(index: &NtfsIndex, reference: u128) -> bool {
+    index
+        .ids
+        .get(&reference)
+        .and_then(|&id| index.table.flags(id))
+        .is_some_and(|flags| flags.contains(Flags::FOLDER))
 }
 
 fn normalize_root(index: &mut NtfsIndex, mut change: TableChange) -> Option<TableChange> {

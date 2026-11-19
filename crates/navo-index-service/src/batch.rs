@@ -1,3 +1,5 @@
+//! Applies journal changes to the published index and records dropped changes.
+
 use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -40,7 +42,16 @@ pub(super) fn apply_batch(
             Some(Ok(false)) => break,
         }
     }
-    with_index(shared, |index| applying.finish(index)).unwrap_or_else(|| Ok(Vec::new()))
+    let Some(result) = with_index(shared, |index| applying.finish_with_cycle_skips(index)) else {
+        return Ok(Vec::new());
+    };
+    let (unresolved, cycle_skips) = result?;
+    if cycle_skips != 0 {
+        let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
+        state.builds.dropped_changes += cycle_skips;
+        state.replay_inexact = true;
+    }
+    Ok(unresolved)
 }
 
 fn step_for(applying: &mut BatchApply, index: &mut NtfsIndex) -> Result<bool, NtfsError> {

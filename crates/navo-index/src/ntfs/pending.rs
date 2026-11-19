@@ -14,6 +14,7 @@ pub(super) struct Pending {
     reported: Vec<UnresolvedChange>,
     removed_subtree: bool,
     pub(super) blocked_peak: usize,
+    pub(super) cycle_skips: u64,
 }
 
 impl Pending {
@@ -71,6 +72,7 @@ impl Pending {
                     self.note_blocked();
                     return Ok(());
                 }
+                Err(TableError::Cycle(_)) => self.cycle_skips += 1,
                 Err(error) => return Err(error.into()),
             }
         }

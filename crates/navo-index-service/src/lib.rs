@@ -85,6 +85,8 @@ mod storage;
 mod totals;
 #[cfg(any(windows, test))]
 mod upgrade;
+#[cfg(any(windows, test))]
+mod verify_rebuild;
 #[cfg(windows)]
 #[path = "volumes/windows.rs"]
 mod volumes;

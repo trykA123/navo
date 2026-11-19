@@ -6,7 +6,7 @@ use std::sync::PoisonError;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use navo_index::file;
-use navo_index::ntfs::{NtfsError, NtfsIndex, UnresolvedChange, Volume};
+use navo_index::ntfs::{Enumeration, NtfsError, NtfsIndex, UnresolvedChange, Volume};
 use navo_index::pipe::CancelToken;
 
 use super::answer::Shared;
@@ -61,7 +61,14 @@ impl Worker {
                 Ok(()) => self.recover(SAVE_FAILURE),
                 Err(error) => self.error(format!("{SAVE_FAILURE}{error}")),
             }
-            std::thread::park_timeout(Duration::from_millis(500));
+            if cancel.is_cancelled() {
+                break;
+            }
+            if let Some(delay) = self.rebuilds.take_retry_delay() {
+                super::bind_retry::wait_for_retry(cancel, delay);
+            } else {
+                std::thread::park_timeout(Duration::from_millis(500));
+            }
         }
         if let Err(error) = self.save(true) {
             self.error(format!("saving volume index on stop: {error}"));
@@ -76,6 +83,11 @@ impl Worker {
         let Some(volume) = volume else {
             return Ok(());
         };
+        if let Some(reason) = self.rebuilds.verification_due(Instant::now())
+            && self.verify(volume, reason, cancel)?
+        {
+            return Ok(());
+        }
         if let Some(cause) = self.rebuilds.due(self.started.elapsed()) {
             return self.rebuild(volume, cause, cancel);
         }
@@ -116,8 +128,7 @@ impl Worker {
                 self.drive.letter
             ));
         }
-        replace(&self.shared, index);
-        self.clock.changed(self.started.elapsed());
+        self.publish(index);
         drop(permit);
         Ok(opened)
     }
@@ -130,10 +141,39 @@ impl Worker {
         cancel: &CancelToken,
     ) -> Result<(), NtfsError> {
         let (index, permit) = self.build(volume, cause, cancel)?;
-        replace(&self.shared, index);
-        self.clock.changed(self.started.elapsed());
+        self.publish(index);
         drop(permit);
         Ok(())
+    }
+
+    /// Tries a verification beside the live index and reports whether it was replaced.
+    fn verify(
+        &mut self,
+        volume: &mut Volume,
+        reason: &'static str,
+        cancel: &CancelToken,
+    ) -> Result<bool, NtfsError> {
+        let attempted = self.build_candidate(volume, Cause::verification(), cancel);
+        let Some((index, permit)) =
+            self.rebuilds
+                .verification_result(attempted, reason, Instant::now())?
+        else {
+            self.shared
+                .write()
+                .unwrap_or_else(PoisonError::into_inner)
+                .status
+                .progress = None;
+            return Ok(false);
+        };
+        self.publish(index);
+        drop(permit);
+        Ok(true)
+    }
+
+    /// Publishes a completed index and starts its snapshot save clock.
+    fn publish(&mut self, index: NtfsIndex) {
+        replace(&self.shared, index);
+        self.clock.changed(self.started.elapsed());
     }
 
     fn follow(&mut self, volume: &mut Volume) -> Result<Vec<UnresolvedChange>, NtfsError> {
@@ -159,15 +199,31 @@ impl Worker {
         if changed {
             self.clock.batch(self.started.elapsed(), records);
         }
-        self.shared
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-            .status
-            .progress = None;
+        let replay_inexact = {
+            let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
+            state.status.progress = None;
+            std::mem::take(&mut state.replay_inexact)
+        };
+        if replay_inexact {
+            self.rebuilds
+                .schedule_verification(Instant::now(), "replay_cycle");
+        }
         Ok(unresolved)
     }
 
+    /// Attempts a regular full build and records its retry delay on error.
     fn build(
+        &mut self,
+        volume: &mut Volume,
+        cause: Cause,
+        cancel: &CancelToken,
+    ) -> Result<(NtfsIndex, BuildPermit<'static>), NtfsError> {
+        let attempted = self.build_candidate(volume, cause, cancel);
+        self.rebuilds.build_result(attempted)
+    }
+
+    /// Builds a candidate and invalidates the old snapshot only after enumeration for verification.
+    fn build_candidate(
         &mut self,
         volume: &mut Volume,
         cause: Cause,
@@ -175,8 +231,9 @@ impl Worker {
     ) -> Result<(NtfsIndex, BuildPermit<'static>), NtfsError> {
         self.rebuilds
             .started(&self.shared, cause, self.started.elapsed());
-        // The index being replaced must never reach a snapshot, even when this build fails.
-        self.clock.saved();
+        if !cause.verification {
+            self.clock.saved();
+        }
         let started = Instant::now();
         let total_files = volume
             .mft_records()
@@ -191,7 +248,9 @@ impl Worker {
             total_files,
         );
         let hint = rebuild_hint(&self.shared);
-        self.discard_snapshot()?;
+        if !cause.verification {
+            self.discard_snapshot()?;
+        }
         self.log_line(format_args!("build queued {}:", self.drive.letter));
         let permit = BUILDS.acquire(cancel)?;
         self.log_line(format_args!(
@@ -199,12 +258,25 @@ impl Worker {
             self.drive.letter, hint.entries
         ));
         let enumerated = volume.enumerate_sized(hint, cancel)?;
+        if cause.verification {
+            self.discard_snapshot()?;
+            self.clock.saved();
+        }
+        self.report_build(&enumerated, started);
+        Ok((enumerated.index, permit))
+    }
+
+    /// Logs the finished build and schedules verification if the enumeration missed records.
+    fn report_build(&mut self, enumerated: &Enumeration, started: Instant) {
+        let finished = Instant::now();
+        let duration = finished.duration_since(started);
+        let entries = enumerated.index.table.len();
         self.log_line(format_args!(
-            "build done {}: entries={} blocked_peak={} ms={}",
+            "build done {}: entries={entries} blocked_peak={} skipped={} ms={}",
             self.drive.letter,
-            enumerated.index.table.len(),
             enumerated.blocked_peak,
-            started.elapsed().as_millis()
+            enumerated.skipped,
+            duration.as_millis()
         ));
         report_unknown_sizes(
             &mut self
@@ -218,10 +290,9 @@ impl Worker {
         if !enumerated.unresolved.is_empty() {
             self.error(format!("{UNRESOLVED}file references"));
         }
-        let entries = enumerated.index.table.len();
+        self.rebuilds.finished(&self.shared, entries, duration);
         self.rebuilds
-            .finished(&self.shared, entries, started.elapsed());
-        Ok((enumerated.index, permit))
+            .build_quality(enumerated.inexact_reason(), finished);
     }
 
     fn discard_snapshot(&self) -> Result<(), NtfsError> {

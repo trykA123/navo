@@ -1,17 +1,37 @@
+//! Tracks full build timing, retry delays and journal rebuild reasons for one volume.
+
 use std::fmt;
 use std::sync::PoisonError;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use navo_index::file::FileError;
-use navo_index::ntfs::{NtfsError, UnresolvedChange};
+use navo_index::ntfs::{InexactBuild, NtfsError, UnresolvedChange};
 use navo_index::pipe::{BuildReason, VolumeBuilds};
 use navo_index::table::TableChange;
 
 use super::answer::Shared;
 use super::service_log::Log;
+use super::verify_rebuild::VerifyRebuild;
 
 /// At most one full build per volume starts within this window; later causes wait for its end.
 pub(super) const REBUILD_WINDOW: Duration = Duration::from_secs(600);
+
+/// Counts consecutive full builds that failed.
+#[derive(Default)]
+struct BuildBackoff(u32);
+
+impl BuildBackoff {
+    /// Records a build failure and returns its retry delay, capped at 300 seconds.
+    fn failed(&mut self) -> Duration {
+        self.0 = self.0.saturating_add(1);
+        Duration::from_secs((1u64 << self.0.min(9)).min(300))
+    }
+
+    /// Clears the failure streak after a successful build.
+    fn succeeded(&mut self) {
+        self.0 = 0;
+    }
+}
 
 /// Unresolved changes of one journal batch, by kind.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -64,6 +84,7 @@ impl fmt::Display for Unresolved {
 pub(super) struct Cause {
     pub reason: BuildReason,
     pub unresolved: Option<Unresolved>,
+    pub verification: bool,
 }
 
 impl Cause {
@@ -71,13 +92,27 @@ impl Cause {
         Self {
             reason,
             unresolved: None,
+            verification: false,
+        }
+    }
+
+    /// Identifies a scheduled verification so the worker preserves the live generation on failure.
+    pub fn verification() -> Self {
+        Self {
+            verification: true,
+            ..Self::new(BuildReason::UnresolvedChanges)
         }
     }
 }
 
 impl fmt::Display for Cause {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "reason={}", self.reason.label())?;
+        let reason = if self.verification {
+            "verification"
+        } else {
+            self.reason.label()
+        };
+        write!(formatter, "reason={reason}")?;
         match self.unresolved {
             Some(unresolved) => write!(formatter, " {unresolved}"),
             None => Ok(()),
@@ -91,6 +126,10 @@ pub(super) struct Rebuilds {
     log: Log,
     last_start: Option<Duration>,
     deferred: Option<Cause>,
+    backoff: BuildBackoff,
+    retry_delay: Option<Duration>,
+    verification: VerifyRebuild,
+    verification_reason: Option<&'static str>,
 }
 
 impl Rebuilds {
@@ -100,7 +139,91 @@ impl Rebuilds {
             log,
             last_start: None,
             deferred: None,
+            backoff: BuildBackoff::default(),
+            retry_delay: None,
+            verification: VerifyRebuild::default(),
+            verification_reason: None,
         }
+    }
+
+    /// Records whether the finished build needs a delayed verification.
+    pub fn build_quality(&mut self, reason: Option<InexactBuild>, now: Instant) {
+        match reason {
+            Some(InexactBuild::Cycle) => self.schedule_verification(now, "build_cycle"),
+            Some(InexactBuild::HeldCap) => self.schedule_verification(now, "held_cap"),
+            None => {
+                self.verification.exact();
+                self.verification_reason = None;
+            }
+        }
+    }
+
+    /// Schedules and logs one verification unless the drive already has one waiting.
+    pub fn schedule_verification(&mut self, now: Instant, reason: &'static str) {
+        if self.verification.is_pending() {
+            return;
+        }
+        let deadline = self.verification.inexact(now);
+        self.verification_reason = Some(reason);
+        let minutes = deadline.duration_since(now).as_secs() / 60;
+        self.log.line(format_args!(
+            "verify scheduled {}: in {minutes} min ({reason})",
+            self.letter
+        ));
+    }
+
+    /// Takes the original reason when the pending verification is ready to run.
+    pub fn verification_due(&mut self, now: Instant) -> Option<&'static str> {
+        if self.verification.take_due(now) {
+            return self.verification_reason.take();
+        }
+        None
+    }
+
+    /// Finishes a verification attempt and returns any replacement index.
+    pub fn verification_result<T>(
+        &mut self,
+        attempted: Result<T, NtfsError>,
+        reason: &'static str,
+        now: Instant,
+    ) -> Result<Option<T>, NtfsError> {
+        match attempted {
+            Ok(candidate) => Ok(Some(candidate)),
+            Err(NtfsError::Cancelled) => Err(NtfsError::Cancelled),
+            Err(error) => {
+                self.backoff.failed();
+                self.log.line(format_args!(
+                    "verify failed {}: {}",
+                    self.letter,
+                    error_kind(&error)
+                ));
+                self.schedule_verification(now, reason);
+                Ok(None)
+            }
+        }
+    }
+
+    /// Returns a regular full-build result and records the retry delay on failure.
+    pub fn build_result<T>(&mut self, result: Result<T, NtfsError>) -> Result<T, NtfsError> {
+        if result
+            .as_ref()
+            .is_err_and(|error| !matches!(error, NtfsError::Cancelled))
+        {
+            self.retry_delay = Some(self.backoff.failed());
+        }
+        result
+    }
+
+    /// Takes the delay for the next full-build retry.
+    pub fn take_retry_delay(&mut self) -> Option<Duration> {
+        let delay = self.retry_delay.take()?;
+        self.log.line(format_args!(
+            "build retry {}: in {} s after {} failures",
+            self.letter,
+            delay.as_secs(),
+            self.backoff.0
+        ));
+        Some(delay)
     }
 
     /// Turns one follow result into the full build that must start now, if any.
@@ -113,7 +236,12 @@ impl Rebuilds {
         let changes = match followed {
             Ok(changes) if changes.is_empty() => return Ok(None),
             Ok(changes) => changes,
-            Err(NtfsError::Reenumerate) => {
+            Err(error @ NtfsError::Reenumerate(_)) => {
+                self.log.line(format_args!(
+                    "update error {}: {}",
+                    self.letter,
+                    error_kind(&error)
+                ));
                 return Ok(self.request(shared, Cause::new(BuildReason::JournalReset), now));
             }
             Err(error) => return Err(error),
@@ -133,6 +261,7 @@ impl Rebuilds {
         let cause = Cause {
             reason: BuildReason::UnresolvedChanges,
             unresolved: Some(unresolved),
+            verification: false,
         };
         Ok(self.request(shared, cause, now))
     }
@@ -164,9 +293,9 @@ impl Rebuilds {
         })
     }
 
-    /// True while the index misses changes a deferred build will bring back.
+    /// True while a deferred rebuild or verification may restore missing entries.
     pub fn is_deferred(&self) -> bool {
-        self.deferred.is_some()
+        self.deferred.is_some() || self.verification.is_pending()
     }
 
     pub fn started(&mut self, shared: &Shared, cause: Cause, now: Duration) {
@@ -180,7 +309,9 @@ impl Rebuilds {
             .line(format_args!("full build start {}: {cause}", self.letter));
     }
 
-    pub fn finished(&self, shared: &Shared, entries: usize, duration: Duration) {
+    pub fn finished(&mut self, shared: &Shared, entries: usize, duration: Duration) {
+        self.backoff.succeeded();
+        self.retry_delay = None;
         let milliseconds = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
         update(shared, |builds| builds.last_duration_ms = milliseconds);
         self.log.line(format_args!(
@@ -213,7 +344,7 @@ pub(super) fn error_kind(error: &NtfsError) -> String {
         NtfsError::Snapshot(error) => file_error_kind(error),
         NtfsError::Parse(_) => "parse".into(),
         NtfsError::Table(_) => "table".into(),
-        NtfsError::Reenumerate => "reenumerate".into(),
+        NtfsError::Reenumerate(cause) => format!("reenumerate({cause})"),
         NtfsError::FileGone => "file_gone".into(),
         NtfsError::Cancelled => "cancelled".into(),
     }

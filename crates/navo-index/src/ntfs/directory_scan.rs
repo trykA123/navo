@@ -1,7 +1,7 @@
-//! Dormant pass-one NTFS scan: retain folders and count file capacity without size I/O.
+//! Pass-one NTFS scan: retain folders and count file capacity without size I/O.
 #![cfg(any(windows, test, feature = "test-support"))]
 #![cfg_attr(not(test), allow(dead_code, reason = "activated by T3"))]
-use super::directory_graph::{DirectoryGraph, DirectoryRecord};
+use super::directory_graph::{DirectoryGraph, UnplacedFolder};
 use super::volume_io::{JournalState, VolumeIo};
 use super::{Flags, NtfsError, NtfsIndex, SizeHint};
 use crate::{pipe::CancelToken, table::TableError};
@@ -9,6 +9,9 @@ use crate::{pipe::CancelToken, table::TableError};
 pub(super) struct DirectoryScan {
     pub(super) index: NtfsIndex,
     pub(super) capacity: SizeHint,
+    pub(super) skipped: u64,
+    pub(super) late_folders: Vec<UnplacedFolder>,
+    pub(super) held_cap: bool,
 }
 /// Scans a record budget into folders/capacities; fails on graph, cancellation or continuity errors.
 pub(super) fn scan_directories(
@@ -35,12 +38,7 @@ pub(super) fn scan_directories(
         for record in batch.records.into_iter().take(limit - count) {
             count += 1;
             if record.flags.contains(Flags::FOLDER) {
-                graph.push(DirectoryRecord {
-                    file_id: record.file_id,
-                    parent_id: record.parent_id,
-                    name: record.name,
-                    flags: record.flags,
-                })?;
+                graph.push(record.into())?;
             } else {
                 files = files.checked_add(1).ok_or(TableError::Full)?;
                 let bytes = record.name.len() + 1;
@@ -49,8 +47,8 @@ pub(super) fn scan_directories(
         }
     }
     check_cancel(cancel)?;
-    graph.insert_into(&mut index)?;
-    JournalState::parse(&volume.query_journal()?)?.check(state.position)?;
+    let resolved = graph.insert_into(&mut index)?;
+    JournalState::parse(&volume.query_journal()?)?.check(state.position, "pass1_continuity")?;
     check_cancel(cancel)?;
     let folders = index.table.len();
     let bytes = index.table.live_name_bytes();
@@ -59,7 +57,13 @@ pub(super) fn scan_directories(
         folders,
         name_bytes: names.checked_add(bytes).ok_or(TableError::Full)?,
     };
-    Ok(DirectoryScan { index, capacity })
+    Ok(DirectoryScan {
+        index,
+        capacity,
+        skipped: resolved.skipped,
+        late_folders: resolved.unplaced,
+        held_cap: resolved.held_cap,
+    })
 }
 /// Rejects cancellation before traversal work and after resolution or continuity I/O.
 fn check_cancel(cancel: &CancelToken) -> Result<(), NtfsError> {

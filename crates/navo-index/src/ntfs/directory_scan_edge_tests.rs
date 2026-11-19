@@ -73,15 +73,17 @@ fn directory_scan_resolves_later_parents_and_sequenced_roots() {
     assert!(index.ids[&20] < index.ids[&10]);
 }
 #[test]
-fn directory_scan_rejects_missing_and_cyclic_parents() {
+fn directory_scan_holds_folders_with_missing_and_cyclic_parents() {
     for records in [
         &[(10, 999, true)][..],
         &[(10, 10, true)],
         &[(10, 20, true), (20, 10, true)],
     ] {
         let mut volume = Volume::new(records);
-        let result = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new());
-        assert!(matches!(result, Err(NtfsError::Reenumerate)));
+        let scan = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new()).unwrap();
+        assert_eq!(scan.skipped, 0);
+        assert_eq!(scan.late_folders.len(), records.len());
+        assert_eq!(scan.index.table.len(), 1);
     }
 }
 #[test]
@@ -136,7 +138,10 @@ fn directory_scan_reenumerates_if_the_journal_is_recreated_or_leaves_its_readabl
         volume.end[16..24].copy_from_slice(&120i64.to_le_bytes());
         volume.end[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
         let result = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new());
-        assert!(matches!(result, Err(NtfsError::Reenumerate)));
+        assert!(matches!(
+            result,
+            Err(NtfsError::Reenumerate("pass1_continuity"))
+        ));
         assert_eq!(volume.calls, 4);
     }
 }

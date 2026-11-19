@@ -67,7 +67,7 @@ pub(super) fn restore_or_enumerate(
             let journal_id = saved.0.journal_id;
             match NtfsIndex::restore(saved, drive.serial, journal_id) {
                 Ok(index) => return Ok(index),
-                Err(NtfsError::Reenumerate) => BuildReason::SnapshotStale,
+                Err(NtfsError::Reenumerate(_)) => BuildReason::SnapshotStale,
                 Err(_) => BuildReason::SnapshotInvalid,
             }
         }

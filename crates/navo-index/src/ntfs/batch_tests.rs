@@ -177,7 +177,7 @@ fn a_rename_is_never_half_applied_between_steps() {
 }
 
 #[test]
-fn a_failed_step_keeps_the_checkpoint_and_live_references() {
+fn a_cyclic_move_does_not_stop_later_steps() {
     let mut index = base();
     let mut applying = index
         .begin_batch(UsnBatch {
@@ -190,23 +190,13 @@ fn a_failed_step_keeps_the_checkpoint_and_live_references() {
             ],
         })
         .unwrap();
-    let failed = loop {
-        match applying.step(&mut index, 1) {
-            Ok(true) => assert_consistent(&index),
-            Ok(false) => panic!("the cycle must fail"),
-            Err(error) => break error,
-        }
-    };
-    assert!(matches!(failed, NtfsError::Table(TableError::Cycle(_))));
-    assert_eq!(
-        index.position,
-        JournalPosition {
-            next_usn: 110,
-            ..POSITION
-        }
-    );
+    while applying.step(&mut index, 1).unwrap() {
+        assert_consistent(&index);
+    }
+    assert!(applying.finish(&mut index).unwrap().is_empty());
+    assert_eq!(index.position.next_usn, 200);
     assert!(!index.ids.contains_key(&22));
-    assert!(!index.ids.contains_key(&43));
+    assert!(index.ids.contains_key(&43));
     assert!(index.ids.values().all(|&id| index.table.name(id).is_some()));
 }
 

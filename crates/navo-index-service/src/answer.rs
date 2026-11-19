@@ -16,6 +16,8 @@ pub(super) struct State {
     pub(super) status: VolumeStatus,
     pub(super) search: SearchIndex,
     pub(super) builds: VolumeBuilds,
+    /// A successful journal batch skipped a cycle that still needs verification.
+    pub(super) replay_inexact: bool,
 }
 
 pub(super) type Shared = Arc<RwLock<State>>;

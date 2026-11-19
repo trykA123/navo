@@ -27,7 +27,7 @@ impl NtfsIndex {
             || ids.get(&super::ROOT_REFERENCE) != Some(&0)
             || !table.valid_structure()
         {
-            return Err(NtfsError::Reenumerate);
+            return Err(NtfsError::Reenumerate("journal"));
         }
         validate_root(&header, &table)?;
         validate_ids(&table, &ids)?;
@@ -148,7 +148,7 @@ mod tests {
         let saved = (header(&index), index.table, index.ids);
         assert!(matches!(
             NtfsIndex::restore(saved, SERIAL, POSITION.journal_id + 1),
-            Err(NtfsError::Reenumerate)
+            Err(NtfsError::Reenumerate(_))
         ));
     }
 

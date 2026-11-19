@@ -1,33 +1,52 @@
-//! Pass-two file insertion into the resolved NTFS directory graph, without a blocked queue.
+//! Pass-two record classification and size-aware NTFS file insertion.
 
-use super::{Flags, NtfsError, NtfsIndex, TableChange, VolumeIo, two_pass_size};
-use crate::ntfs::{ROOT_REFERENCE, is_root};
+use super::{
+    Flags, NtfsError, NtfsIndex, TableChange, VolumeIo, reconcile::LateRecords, two_pass_size,
+};
+use crate::ntfs::{ROOT_REFERENCE, is_folder, is_root};
 use crate::pipe::CancelToken;
+use crate::usn::UsnRecord;
 
-/// Inserts a pass-two file and its size; rejects absent parents or conflicting folder identities.
-/// Returns the unknown-size count, skipping vanished files and already resolved directories.
-pub(super) fn add_file(
+/// Inserts a file under a known folder or holds the record for reconciliation.
+pub(super) fn add_record(
     volume: &mut impl VolumeIo,
     index: &mut NtfsIndex,
-    mut record: crate::usn::UsnRecord,
+    mut record: UsnRecord,
+    late: &mut LateRecords,
 ) -> Result<u64, NtfsError> {
     let file_id = record.file_id;
     let folder = is_root(file_id) || is_folder(index, file_id);
     if record.flags.contains(Flags::FOLDER) {
-        return folder.then_some(0).ok_or(NtfsError::Reenumerate);
+        if !folder {
+            late.hold_folder(record.into());
+        }
+        return Ok(0);
     }
     if folder {
-        return Err(NtfsError::Reenumerate);
-    }
-    let Some(size) = two_pass_size::read_record_size(volume, &record) else {
+        late.skip();
         return Ok(0);
-    };
+    }
     if is_root(record.parent_id) {
         record.parent_id = ROOT_REFERENCE;
     }
     if !is_folder(index, record.parent_id) {
-        return Err(NtfsError::Reenumerate);
+        late.hold_file(record);
+        return Ok(0);
     }
+    Ok(add_file(volume, index, record)?.unwrap_or(0))
+}
+
+/// Inserts a file under its indexed parent and returns the unknown-size count.
+/// Returns `None` if the file vanished before its size could be read.
+pub(super) fn add_file(
+    volume: &mut impl VolumeIo,
+    index: &mut NtfsIndex,
+    record: UsnRecord,
+) -> Result<Option<u64>, NtfsError> {
+    let Some(size) = two_pass_size::read_record_size(volume, &record) else {
+        return Ok(None);
+    };
+    let file_id = record.file_id;
     index.table.apply_in_batch(
         TableChange::Add {
             file_id,
@@ -42,16 +61,7 @@ pub(super) fn add_file(
             .table
             .apply_in_batch(TableChange::Size { file_id, bytes }, &mut index.ids)?;
     }
-    Ok(size.unknown)
-}
-
-/// Checks whether a reference belongs to a retained directory in the candidate.
-fn is_folder(index: &NtfsIndex, reference: u128) -> bool {
-    index
-        .ids
-        .get(&reference)
-        .and_then(|&id| index.table.flags(id))
-        .is_some_and(|flags| flags.contains(Flags::FOLDER))
+    Ok(Some(size.unknown))
 }
 
 /// Rejects cancellation at traversal and journal boundaries.
@@ -100,6 +110,11 @@ mod tests {
                 cancel_query: 0,
                 cancel_read: None,
             }
+        }
+
+        /// Runs both scripted passes to completion or returns a build error.
+        fn build(&mut self) -> Result<Enumeration, NtfsError> {
+            enumerate_volume(self, 'C', usize::MAX, &CancelToken::new())
         }
     }
 
@@ -221,25 +236,145 @@ mod tests {
 
     #[test]
     fn two_pass_rejects_journal_reset_or_wrap_at_either_boundary() {
-        for query in [2, 3] {
+        for (query, cause) in [(2, "pass1_continuity"), (3, "pass2_continuity")] {
             for wrap in [false, true] {
                 let mut volume = Volume::new();
                 volume.reset_at = query;
                 volume.wrap = wrap;
                 let result = enumerate_volume(&mut volume, 'C', usize::MAX, &CancelToken::new());
                 assert!(
-                    matches!(result, Err(NtfsError::Reenumerate)),
+                    matches!(&result, Err(NtfsError::Reenumerate(_))),
                     "query {query}, wrap {wrap}"
                 );
+                assert!(result.unwrap_err().to_string().contains(cause), "{cause}");
             }
         }
     }
 
+    /// Keeps the stable rows and the subtree reported by pass two.
     #[test]
-    fn two_pass_rejects_files_whose_parent_was_absent_from_pass_one() {
+    fn a_folder_created_between_passes_is_reconciled() {
+        let mut volume = Volume::new();
+        volume.rows[1].extend([(9, ROOT, true, "new"), (21, 9, false, "new-file")]);
+        let built = volume.build().unwrap();
+        assert_eq!(built.skipped, 0);
+        assert_eq!(built.index.table.len(), 5);
+        assert!(built.index.ids.contains_key(&8));
+        assert!(built.index.ids.contains_key(&20));
+        assert!(built.index.ids.contains_key(&21));
+    }
+
+    /// Counts a plain orphan folder and file whose parent never appears in either pass.
+    #[test]
+    fn a_plain_orphan_keeps_the_build_exact() {
+        let mut volume = Volume::new();
+        for rows in &mut volume.rows {
+            rows.extend([
+                (21, 9, false, "orphan-file"),
+                (22, 9, true, "orphan-folder"),
+            ]);
+        }
+        let built = volume.build().unwrap();
+        assert!(!built.inexact, "plain orphans must keep the build exact");
+        assert_eq!(built.skipped, 2);
+        assert!(!built.index.ids.contains_key(&21));
+        assert!(!built.index.ids.contains_key(&22));
+    }
+
+    /// Keeps the pass-one folder when pass two reports a file with its ID.
+    #[test]
+    fn a_reused_folder_id_as_a_file_is_skipped() {
+        let mut volume = Volume::new();
+        volume.rows[1].push((8, ROOT, false, "reused"));
+        let built = volume.build().unwrap();
+        assert_eq!(built.skipped, 1);
+        assert_eq!(built.index.table.name(built.index.ids[&8]), Some("dir"));
+    }
+
+    /// Inserts a file held before its pass-two parent arrives.
+    #[test]
+    fn an_orphan_folder_found_in_pass_two_adopts_its_held_files() {
         let mut volume = Volume::new();
         volume.rows[1] = vec![(20, 9, false, "file"), (9, ROOT, true, "new")];
-        let result = enumerate_volume(&mut volume, 'C', usize::MAX, &CancelToken::new());
-        assert!(matches!(result, Err(NtfsError::Reenumerate)));
+        let built = volume.build().unwrap();
+        assert_eq!(built.skipped, 0);
+        let index = built.index;
+        assert_eq!(index.table.parent(index.ids[&20]), Some(index.ids[&9]));
+        assert_eq!(index.table.size(index.ids[&20]), Some(10));
+    }
+
+    /// Replaces a cyclic pass-one parent with the newer parent and keeps its descendants.
+    #[test]
+    fn a_folder_moved_during_pass_one_keeps_its_subtree() {
+        let mut volume = Volume::new();
+        let b = (9, 8, true, "B");
+        let f = (20, 9, false, "F");
+        volume.rows = [
+            vec![(8, 9, true, "A"), b, f],
+            vec![f, b, (8, ROOT, true, "A")],
+        ];
+        let built = volume.build().unwrap();
+        assert_eq!(built.skipped, 0);
+        let index = built.index;
+        assert_eq!(
+            index.table.path_with(index.ids[&20], '\\').as_deref(),
+            Some("C:\\A\\B\\F")
+        );
+        assert_eq!(index.table.len(), 4);
+    }
+
+    /// Replays the same inconsistent parent reads during both passes of the reviewer scenario.
+    #[test]
+    fn the_reviewers_double_cycle_marks_the_build_inexact() {
+        let mut volume = Volume::new();
+        let rows = vec![(8, 9, true, "A"), (9, 8, true, "B"), (20, 9, false, "F")];
+        volume.rows = [rows.clone(), rows];
+        let built = volume.build().unwrap();
+        assert!(built.inexact, "both scans observed the cycle");
+        assert_eq!(built.skipped, 3);
+        assert_eq!(built.index.table.len(), 1);
+    }
+
+    /// Holds only the first file when both precede their late parent and the cap is one.
+    #[test]
+    fn held_files_over_the_cap_mark_the_build_inexact() {
+        let mut volume = Volume::new();
+        volume.rows[1].extend([
+            (21, 9, false, "held"),
+            (22, 9, false, "skipped"),
+            (9, ROOT, true, "late"),
+        ]);
+        let built = super::super::enumerate_with_late_limits::<1, 1_000_000>(
+            &mut volume,
+            'C',
+            usize::MAX,
+            SizeHint::default(),
+            &CancelToken::new(),
+        )
+        .unwrap();
+        assert!(built.inexact, "a held file was dropped by the cap");
+        assert_eq!(built.skipped, 1);
+        assert!(built.index.ids.contains_key(&21));
+        assert!(!built.index.ids.contains_key(&22));
+    }
+
+    /// Counts a new FRN beyond the folder cap while allowing a retained FRN to be refreshed.
+    #[test]
+    fn late_folders_over_the_cap_mark_the_build_inexact() {
+        let mut volume = Volume::new();
+        volume.rows[0].push((9, 40, true, "old"));
+        volume.rows[1].extend([(10, ROOT, true, "dropped"), (9, ROOT, true, "placed")]);
+        let built = super::super::enumerate_with_late_limits::<1_000_000, 1>(
+            &mut volume,
+            'C',
+            usize::MAX,
+            SizeHint::default(),
+            &CancelToken::new(),
+        )
+        .unwrap();
+        assert!(built.inexact, "a late folder was dropped by the cap");
+        assert_eq!(built.skipped, 1);
+        assert_eq!(built.index.table.name(built.index.ids[&9]), Some("placed"));
+        assert!(!built.index.ids.contains_key(&10));
     }
 }

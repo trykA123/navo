@@ -257,15 +257,14 @@ fn enumeration_rejects_stalled_or_backward_cursors_and_truncated_records() {
 }
 
 #[test]
-fn enumeration_rejects_blocked_orphans_within_the_record_limit() {
+fn enumeration_skips_blocked_orphans_within_the_record_limit() {
     let mut volume = FakeVolume::new(vec![Some(bytes(
         100,
         &[record(8, 9, "orphan"), record(10, ROOT, "known")],
     ))]);
-    assert!(matches!(
-        enumerate_volume(&mut volume, 'C', 1, &crate::pipe::CancelToken::new()),
-        Err(NtfsError::Reenumerate)
-    ));
+    let built = enumerate_volume(&mut volume, 'C', 1, &crate::pipe::CancelToken::new()).unwrap();
+    assert_eq!(built.skipped, 1);
+    assert_eq!(built.index.table.len(), 1);
 }
 
 #[test]
@@ -280,7 +279,7 @@ fn enumeration_requires_a_rebuild_if_the_journal_changes_or_wraps_during_the_sca
                 usize::MAX,
                 &crate::pipe::CancelToken::new()
             ),
-            Err(NtfsError::Reenumerate)
+            Err(NtfsError::Reenumerate("pass1_continuity"))
         ));
     }
 }
@@ -411,7 +410,7 @@ fn journal_reads_use_saved_position_and_refuse_stale_or_future_positions() {
         volume.queries[0] = state;
         assert!(matches!(
             read_volume_journal(&mut volume, POSITION),
-            Err(NtfsError::Reenumerate)
+            Err(NtfsError::Reenumerate("journal"))
         ));
         assert!(volume.reads.is_empty());
     }
@@ -501,7 +500,7 @@ fn only_the_ntfs_root_alias_loses_its_sequence_bits() {
 }
 
 #[test]
-fn journal_keeps_the_checkpoint_when_a_table_change_fails() {
+fn journal_advances_the_checkpoint_when_a_cyclic_move_is_skipped() {
     let mut index = NtfsIndex::new('C', POSITION).unwrap();
     let mut parent = record(8, ROOT, "parent");
     parent.reason = 0x100;
@@ -517,14 +516,17 @@ fn journal_keeps_the_checkpoint_when_a_table_change_fails() {
     old.reason = 0x1000;
     parent.reason = 0x2000;
     parent.parent_id = 9;
-    assert!(matches!(
-        index.apply_batch(UsnBatch {
-            next_usn: 120,
-            records: vec![old, parent]
-        }),
-        Err(NtfsError::Table(TableError::Cycle(_)))
-    ));
-    assert_eq!(index.position.next_usn, 110);
+    assert!(
+        index
+            .apply_batch(UsnBatch {
+                next_usn: 120,
+                records: vec![old, parent]
+            })
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(index.position.next_usn, 120);
+    assert_eq!(index.table.parent(index.ids[&8]), Some(index.ids[&5]));
 }
 
 #[test]
@@ -533,7 +535,7 @@ fn journal_wrap_between_query_and_read_requires_reenumeration() {
     volume.read_error = Some(1181);
     assert!(matches!(
         read_volume_journal(&mut volume, POSITION),
-        Err(NtfsError::Reenumerate)
+        Err(NtfsError::Reenumerate("journal"))
     ));
     volume.read_error = Some(5);
     assert!(matches!(

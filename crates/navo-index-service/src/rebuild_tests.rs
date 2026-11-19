@@ -3,16 +3,143 @@ use std::time::Duration;
 
 use navo_index::file::Header;
 use navo_index::ntfs::{NtfsError, NtfsIndex};
-use navo_index::pipe::{BuildReason, VolumeBuilds};
+use navo_index::pipe::{BuildReason, CancelToken, QueryTerm, Request, VolumeBuilds};
 use navo_index::table::{Flags, NO_PARENT, NameTable};
 use navo_index::usn::{FrnMap, UsnBatch, UsnRecord};
 
 use super::super::answer::{Shared, State};
-use super::super::batch::apply_batch;
+use super::super::batch::{apply_batch, published};
+use super::super::config::Drive;
+use super::super::lifecycle::restore_or_enumerate;
+use super::super::search::SearchIndex;
 use super::super::service_log::{LOG_NAME, Log};
 use super::*;
 
 const MINUTE: Duration = Duration::from_secs(60);
+
+/// Fakes MFT enumeration failing before it can return a candidate index.
+fn enumerate_io_error() -> Result<NtfsIndex, NtfsError> {
+    Err(NtfsError::Io {
+        operation: "enumerate MFT",
+        source: std::io::Error::from_raw_os_error(5),
+    })
+}
+
+/// Keeps the published generation and resumes replay if verification cannot enumerate.
+#[test]
+fn a_failed_verification_keeps_the_published_index_and_reschedules() {
+    let shared = shared();
+    let (directory, log) = logged();
+    let mut rebuilds = Rebuilds::new('C', log);
+    let original = published(&shared).unwrap();
+    let now = Instant::now();
+    let due = now + 10 * MINUTE;
+    rebuilds.schedule_verification(now, "build_cycle");
+    let reason = rebuilds
+        .verification_due(due)
+        .expect("first verification is due");
+    let verified = rebuilds.verification_result(enumerate_io_error(), reason, due);
+    assert!(
+        verified
+            .expect("verification failure must allow the follow tick")
+            .is_none()
+    );
+    let live = published(&shared).unwrap();
+    assert!(Arc::ptr_eq(&original, &live));
+    assert_eq!(live.position.next_usn, 100);
+    let search = SearchIndex::new(&navo_store::Search {
+        drives: vec!["C:\\".into()],
+        ..Default::default()
+    });
+    let request = Request {
+        terms: vec![QueryTerm::Name("kept".into())],
+    };
+    let hits = search.hits(&live.table, &request, &CancelToken::new());
+    assert_eq!(hits[0].path, "C:\\kept.txt");
+    assert_eq!(rebuilds.take_retry_delay(), None);
+    drop((original, live));
+
+    let changes = follow(&shared, 120, vec![record(7, 5, 0x100)]);
+    assert!(changes.is_empty());
+    assert_eq!(entries_and_position(&shared), (3, 120));
+    assert_eq!(rebuilds.verification_due(due + 19 * MINUTE), None);
+    assert!(rebuilds.verification_due(due + 20 * MINUTE).is_some());
+    assert!(log_text(&directory).contains("verify scheduled C: in 20 min (build_cycle)"));
+}
+
+/// Applies the full-build retry delays to consecutive cold-start enumeration errors.
+#[test]
+fn a_cold_build_io_error_backs_off() {
+    let mut rebuilds = Rebuilds::new('C', Log::default());
+    let drive = Drive {
+        letter: 'C',
+        serial: 42,
+        fixed: true,
+        ntfs: true,
+    };
+    for delay in [2, 4] {
+        let missing = Err(FileError::Io(std::io::ErrorKind::NotFound.into()));
+        let result = restore_or_enumerate(missing, drive, |reason| {
+            assert_eq!(reason, BuildReason::SnapshotMissing);
+            rebuilds.build_result(enumerate_io_error())
+        });
+        assert!(matches!(result, Err(NtfsError::Io { .. })));
+        assert_eq!(
+            rebuilds.take_retry_delay(),
+            Some(Duration::from_secs(delay))
+        );
+    }
+}
+
+/// Publishes an inexact result, runs one verification, and keeps searching after it succeeds.
+#[test]
+fn an_inexact_build_schedules_one_verification_and_an_exact_result_stops_it() {
+    let shared = shared();
+    let (directory, log) = logged();
+    let mut rebuilds = Rebuilds::new('C', log);
+    let now = Instant::now();
+    let initial = Cause::new(BuildReason::SnapshotMissing);
+    rebuilds.started(&shared, initial, Duration::ZERO);
+    rebuilds.build_quality(Some(InexactBuild::Cycle), now);
+    rebuilds.build_quality(Some(InexactBuild::Cycle), now + MINUTE);
+    assert_eq!(rebuilds.verification_due(now + 9 * MINUTE), None);
+    assert_eq!(entries_and_position(&shared), (2, 100));
+    let verification = rebuilds
+        .verification_due(now + 10 * MINUTE)
+        .expect("verification is due");
+    assert_eq!(rebuilds.verification_due(now + 10 * MINUTE), None);
+    assert_eq!(verification, "build_cycle");
+    rebuilds.started(&shared, Cause::verification(), 10 * MINUTE);
+    rebuilds.build_quality(None, now + 10 * MINUTE);
+    assert_eq!(rebuilds.verification_due(now + 90 * MINUTE), None);
+    assert_eq!(builds(&shared).full_builds, 2);
+    let text = log_text(&directory);
+    assert_eq!(
+        text.matches("verify scheduled C: in 10 min (build_cycle)")
+            .count(),
+        1
+    );
+}
+
+/// Checks every delay through the cap and one failure beyond it.
+#[test]
+fn build_backoff_doubles_then_caps_the_delay_at_300_seconds() {
+    let mut backoff = BuildBackoff::default();
+    for seconds in [2, 4, 8, 16, 32, 64, 128, 256, 300, 300] {
+        assert_eq!(backoff.failed(), Duration::from_secs(seconds));
+    }
+}
+
+/// Starts a new failure streak at the first delay after a success.
+#[test]
+fn build_backoff_resets_after_a_successful_build() {
+    let mut backoff = BuildBackoff::default();
+    backoff.failed();
+    backoff.failed();
+    backoff.succeeded();
+    assert_eq!(backoff.0, 0);
+    assert_eq!(backoff.failed(), Duration::from_secs(2));
+}
 
 fn shared() -> Shared {
     let mut table = NameTable::new();
@@ -134,7 +261,8 @@ fn two_rebuild_causes_within_the_window_give_one_build_and_the_deferred_one_runs
     let second = create_under_unknown_folder(&shared, 140);
     let later = rebuilds.after_follow(&shared, Ok(second), 5 * MINUTE);
     assert_eq!(later.unwrap(), None, "the second cause must wait");
-    let wrapped = rebuilds.after_follow(&shared, Err(NtfsError::Reenumerate), 6 * MINUTE);
+    let wrapped =
+        rebuilds.after_follow(&shared, Err(NtfsError::Reenumerate("journal")), 6 * MINUTE);
     assert_eq!(wrapped.unwrap(), None);
     assert!(rebuilds.is_deferred());
     assert_eq!(entries_and_position(&shared), (2, 140));
@@ -162,6 +290,7 @@ fn two_rebuild_causes_within_the_window_give_one_build_and_the_deferred_one_runs
         "full build start C: reason=unresolved_changes blocked_add=1 blocked_rename=0 attributes=0 size=1 other=0"
     ));
     assert!(text.contains("full build done C: entries=2 duration_ms=1500"));
+    assert!(text.contains("update error C: reenumerate(journal)"));
     assert!(text.contains("rebuild deferred C: reason=unresolved_changes"));
     assert_eq!(text.matches("rebuild deferred").count(), 1);
     assert!(!text.contains("secret-name"));
@@ -176,7 +305,11 @@ fn a_journal_reset_after_the_window_builds_at_once() {
         Cause::new(BuildReason::SnapshotMissing),
         Duration::ZERO,
     );
-    let decision = rebuilds.after_follow(&shared, Err(NtfsError::Reenumerate), REBUILD_WINDOW);
+    let decision = rebuilds.after_follow(
+        &shared,
+        Err(NtfsError::Reenumerate("journal")),
+        REBUILD_WINDOW,
+    );
     assert_eq!(
         decision.unwrap(),
         Some(Cause::new(BuildReason::JournalReset))
