@@ -116,6 +116,19 @@ impl Volume {
         Ok(u64::from(serial))
     }
 
+    /// Reads up to capacity bytes of MFT records from the cursor, or returns None at EOF.
+    fn enumerate_from(&self, cursor: u64, capacity: usize) -> Result<Option<Vec<u8>>, NtfsError> {
+        match self.control(FSCTL_ENUM_USN_DATA, &enum_request(cursor), capacity) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(NtfsError::Io { source, .. })
+                if source.raw_os_error() == Some(ERROR_HANDLE_EOF as i32) =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     fn control(&self, code: u32, input: &[u8], capacity: usize) -> Result<Vec<u8>, NtfsError> {
         let mut output = vec![0; capacity];
         let returned = self.handle.control(code, input, &mut output)?;
@@ -226,22 +239,20 @@ impl VolumeIo for Volume {
     }
 
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
-        match self.control(FSCTL_ENUM_USN_DATA, &enum_request(cursor), 64 * 1024) {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(NtfsError::Io { source, .. })
-                if source.raw_os_error() == Some(ERROR_HANDLE_EOF as i32) =>
-            {
-                Ok(None)
-            }
-            Err(error) => Err(error),
-        }
+        self.enumerate_from(cursor, 64 * 1024)
+    }
+
+    /// Reads the MFT at the cursor with space for a maximum-length USN v3 name.
+    fn enumerate_one(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
+        self.enumerate_from(cursor, 1024)
     }
 
     fn read_journal(&mut self, position: JournalPosition) -> Result<Vec<u8>, NtfsError> {
+        const JOURNAL_BUFFER: usize = 256 * 1024;
         self.control(
             FSCTL_READ_USN_JOURNAL,
             &journal_request(position),
-            64 * 1024,
+            JOURNAL_BUFFER,
         )
     }
 }
