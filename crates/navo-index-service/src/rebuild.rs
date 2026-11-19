@@ -237,12 +237,15 @@ impl Rebuilds {
             Ok(changes) if changes.is_empty() => return Ok(None),
             Ok(changes) => changes,
             Err(error @ NtfsError::Reenumerate(_)) => {
+                if self.journal_lost() {
+                    return Ok(None);
+                }
                 self.log.line(format_args!(
                     "update error {}: {}",
                     self.letter,
                     error_kind(&error)
                 ));
-                return Ok(self.request(shared, Cause::new(BuildReason::JournalReset), now));
+                return Ok(self.request_journal(shared, now));
             }
             Err(error) => return Err(error),
         };
@@ -264,6 +267,15 @@ impl Rebuilds {
             verification: false,
         };
         Ok(self.request(shared, cause, now))
+    }
+
+    /// Gives journal loss priority without counting an existing deferral twice.
+    fn request_journal(&mut self, shared: &Shared, now: Duration) -> Option<Cause> {
+        let cause = Cause::new(BuildReason::JournalReset);
+        if let Some(deferred) = &mut self.deferred {
+            *deferred = cause;
+        }
+        self.request(shared, cause, now)
     }
 
     fn request(&mut self, shared: &Shared, cause: Cause, now: Duration) -> Option<Cause> {
@@ -296,6 +308,12 @@ impl Rebuilds {
     /// True while a deferred rebuild or verification may restore missing entries.
     pub fn is_deferred(&self) -> bool {
         self.deferred.is_some() || self.verification.is_pending()
+    }
+
+    /// Returns whether journal replay must wait for a deferred rebuild.
+    pub fn journal_lost(&self) -> bool {
+        self.deferred
+            .is_some_and(|cause| cause.reason == BuildReason::JournalReset)
     }
 
     pub fn started(&mut self, shared: &Shared, cause: Cause, now: Duration) {

@@ -279,7 +279,7 @@ fn two_rebuild_causes_within_the_window_give_one_build_and_the_deferred_one_runs
 
     assert_eq!(rebuilds.due(10 * MINUTE + MINUTE / 2), None);
     let due = rebuilds.due(11 * MINUTE).expect("the window has passed");
-    assert_eq!(due.reason, BuildReason::UnresolvedChanges);
+    assert_eq!(due.reason, BuildReason::JournalReset);
     rebuilds.started(&shared, due, 11 * MINUTE);
     assert!(!rebuilds.is_deferred());
     assert_eq!(rebuilds.due(30 * MINUTE), None);
@@ -294,6 +294,48 @@ fn two_rebuild_causes_within_the_window_give_one_build_and_the_deferred_one_runs
     assert!(text.contains("rebuild deferred C: reason=unresolved_changes"));
     assert_eq!(text.matches("rebuild deferred").count(), 1);
     assert!(!text.contains("secret-name"));
+}
+
+/// Logs a lost journal once and replaces the existing deferral within its original window.
+#[test]
+fn a_lost_journal_takes_priority_over_an_unresolved_batch() {
+    let shared = shared();
+    let (directory, log) = logged();
+    let mut rebuilds = Rebuilds::new('C', log.clone());
+    rebuilds.started(&shared, Cause::new(BuildReason::SnapshotMissing), MINUTE);
+    let changes = create_under_unknown_folder(&shared, 120);
+    assert_eq!(
+        rebuilds
+            .after_follow(&shared, Ok(changes), 5 * MINUTE)
+            .unwrap(),
+        None
+    );
+    assert!(!rebuilds.journal_lost());
+
+    for minute in 6..=8 {
+        let followed = Err(NtfsError::Reenumerate("cursor"));
+        assert_eq!(
+            rebuilds
+                .after_follow(&shared, followed, minute * MINUTE)
+                .unwrap(),
+            None
+        );
+        // Heartbeats between attempts prevent the logger from collapsing identical lines.
+        log.line("heartbeat");
+    }
+
+    assert_eq!(
+        log_text(&directory)
+            .matches("update error C: reenumerate(cursor)")
+            .count(),
+        1
+    );
+    assert!(rebuilds.journal_lost());
+    assert_eq!(builds(&shared).deferred_rebuilds, 1);
+    assert_eq!(
+        rebuilds.due(11 * MINUTE),
+        Some(Cause::new(BuildReason::JournalReset))
+    );
 }
 
 #[test]

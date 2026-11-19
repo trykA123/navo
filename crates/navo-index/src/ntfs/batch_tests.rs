@@ -209,7 +209,7 @@ fn a_stale_cursor_is_refused_before_any_change() {
             next_usn: 110,
             records: vec![record(50, ROOT, CREATE, "x")],
         }),
-        Err(NtfsError::InvalidResponse(_))
+        Err(NtfsError::Reenumerate("cursor"))
     ));
     assert_eq!(view(&index), before);
     assert!(index.pending_renames().is_empty());
