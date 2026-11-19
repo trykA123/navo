@@ -350,7 +350,7 @@ fn assert_subtree_survives_folder_delete(move_deleted_folder: bool) {
             records,
         })
         .unwrap();
-    assert!(unresolved.is_empty(), "{unresolved:?}");
+    assert_eq!(unresolved, [unresolved_folder_delete(99)]);
     assert_eq!(
         index
             .ids
@@ -359,7 +359,23 @@ fn assert_subtree_survives_folder_delete(move_deleted_folder: bool) {
             .as_deref(),
         Some("C:\\late\\deep\\b.txt")
     );
-    assert!(!index.ids.contains_key(&20));
+    let folder = if move_deleted_folder {
+        "C:\\late\\trash"
+    } else {
+        "C:\\trash"
+    };
+    assert_eq!(
+        index.table.path_with(index.ids[&20], '\\').as_deref(),
+        Some(folder)
+    );
+}
+
+/// Builds the reported delete for the indexed folder whose child waits for `missing`.
+fn unresolved_folder_delete(missing: u128) -> UnresolvedChange {
+    UnresolvedChange {
+        missing_reference: missing,
+        change: TableChange::Remove { file_id: 20 },
+    }
 }
 
 /// Checks a delete when both the folder and the escaping child have blocked moves.
@@ -412,3 +428,6 @@ fn a_cancelled_waiter_cannot_unblock_a_replacement_folder() {
         Some("C:\\second\\folder\\child.txt")
     );
 }
+
+#[path = "batch_delete_tests.rs"]
+mod batch_delete_tests;
