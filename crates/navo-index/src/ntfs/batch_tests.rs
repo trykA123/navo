@@ -243,3 +243,86 @@ fn a_prepared_batch_refuses_an_index_at_another_position() {
     assert_eq!(view(&moved), before);
     assert!(moved.pending_renames().is_empty());
 }
+
+/// Checks that deleting an unseen file clears its blocked creation.
+#[test]
+fn delete_cancels_a_blocked_add() {
+    let mut index = NtfsIndex::new('C', POSITION).unwrap();
+    let unresolved = index
+        .apply_batch(UsnBatch {
+            next_usn: 200,
+            records: vec![
+                record(30, 99, CREATE, "gone.txt"),
+                record(30, 99, DELETE, "gone.txt"),
+            ],
+        })
+        .unwrap();
+    assert_eq!(unresolved.len(), 0);
+}
+
+/// Checks that deleting an indexed file clears its blocked rename and removes it.
+#[test]
+fn delete_cancels_a_blocked_rename_and_removes_the_indexed_entry() {
+    let mut index = base();
+    let unresolved = index
+        .apply_batch(UsnBatch {
+            next_usn: 200,
+            records: vec![
+                record(21, 20, OLD_NAME, "deep"),
+                record(21, 99, NEW_NAME, "deep"),
+                record(21, 99, DELETE, "deep"),
+            ],
+        })
+        .unwrap();
+    assert!(unresolved.is_empty(), "{unresolved:?}");
+    assert!(!index.ids.contains_key(&21));
+}
+
+/// Checks that a second creation of the same reference still waits for its parent.
+#[test]
+fn a_blocked_add_after_delete_starts_a_new_chain() {
+    let mut index = NtfsIndex::new('C', POSITION).unwrap();
+    let unresolved = index
+        .apply_batch(UsnBatch {
+            next_usn: 200,
+            records: vec![
+                record(30, 99, CREATE, "gone.txt"),
+                record(30, 99, DELETE, "gone.txt"),
+                record(30, 99, CREATE, "new.txt"),
+            ],
+        })
+        .unwrap();
+    assert_eq!(
+        unresolved,
+        [UnresolvedChange {
+            missing_reference: 99,
+            change: TableChange::Add {
+                file_id: 30,
+                parent_id: 99,
+                name: "new.txt".into(),
+                flags: Flags::NONE,
+            },
+        }]
+    );
+}
+
+/// Checks that a late parent adds only its own slot after the child was deleted.
+#[test]
+fn a_late_parent_never_materializes_a_cancelled_add() {
+    let mut index = NtfsIndex::new('C', POSITION).unwrap();
+    let slots = index.table.slots();
+    let unresolved = index
+        .apply_batch(UsnBatch {
+            next_usn: 200,
+            records: vec![
+                record(30, 99, CREATE, "gone.txt"),
+                record(30, 99, DELETE, "gone.txt"),
+                record(99, ROOT, CREATE, "late"),
+            ],
+        })
+        .unwrap();
+    assert!(unresolved.is_empty(), "{unresolved:?}");
+    assert!(index.ids.contains_key(&99));
+    assert!(!index.ids.contains_key(&30));
+    assert_eq!(index.table.slots(), slots + 1);
+}
