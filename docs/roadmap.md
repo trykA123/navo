@@ -23,9 +23,10 @@ Alpha, Beta and v1.0 are product milestones. Release numbers follow Cargo versio
   - **Native crash reports:** built. An out-of-process crash server writes a minidump and a readable summary. The Windows crash tests remain.
   - **Speed checks that fail the build:** done. Benches measure the hot paths, `perf/speed.toml` holds the speed gate, and a release waits for that gate. Tracy zones are in.
   - **Updates:** the in-app updater ships; the owner's real-PC check (one admin prompt) is still open.
-  - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, the module registry, the mimalloc trial and smarter search.
-- **Order after the current work (owner, 12 November):** index service memory, the mimalloc trial, then smarter search. Speed checks and background work are done, so they leave the order. Accessibility is required for v1.0.
-- **Latest release:** v0.8.0 (syntax colours for big XML/JSON, logs, automotive files and Notepad++ languages, plus a language picker), published on 19 November 2026 after its Windows VM checks. Before it: v0.7.1 (the path bar closes when you click away, Shift+click range selection works again, drags need 6 px with Shift or Ctrl, a real installer progress bar, Navo starts after install, less memory for a first NTFS index build, Velopack 1.3.39), on 18 November 2026.
+  - **Not started:** code signing, Navo as the default file manager, the inspector with previews and archives as folders, the module registry and smarter search.
+  - **mimalloc trial:** done, not adopted. In the Windows VM (44 interleaved runs, 19 November) it used about 50 MB more private memory at idle (110 MB against 57 MB) with no gain in start-up or a 100,000-file listing, so Navo keeps the Windows heap. The service's allocator is decided after its soak test (IX11).
+- **Order after the current work (owner, 12 November):** index service memory, then smarter search. Speed checks, background work and the mimalloc trial are done, so they leave the order. Accessibility is required for v1.0.
+- **Latest release:** v0.8.1 (the index service finishes a full build on a busy drive again; since v0.7.1 it could restart forever), published on 19 November 2026 after its Windows VM checks. Before it: v0.8.0 (syntax colours for big XML/JSON, logs, automotive files and Notepad++ languages, plus a language picker), on 19 November 2026. Before it: v0.7.1 (the path bar closes when you click away, Shift+click range selection works again, drags need 6 px with Shift or Ctrl, a real installer progress bar, Navo starts after install, less memory for a first NTFS index build, Velopack 1.3.39), on 18 November 2026.
 
 Kinds: **core** is always on; **module** can be turned off; **package** is data only (themes, keymaps); **infra** is build, CI and release work.
 
@@ -154,7 +155,7 @@ Also included: the MIT or Apache-2.0 licence, speed checks that fail the build (
 - Code signing. Setup is not signed, so Windows may warn.
 - The owner's real-drive index measurement and the owner's real-PC update check.
 - The Windows crash tests.
-- The mimalloc trial and smarter search: not started. The delete safety net review, the Find files design round and accessibility polish are also open.
+- Smarter search: not started. The delete safety net review, the Find files design round and accessibility polish are also open.
 
 ## Active work
 

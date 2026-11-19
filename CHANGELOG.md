@@ -2,6 +2,19 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.1 — The index finishes again
+
+*2026-11-19*
+
+This release fixes the search index on busy drives. Since v0.7.1, the index service could start building a drive over and over and never finish, so Ctrl+K found nothing.
+
+### Fixed
+
+- **The index finishes on a busy drive.** A full build reads folders first and files second. Before, a folder or file that changed between the two reads made the service throw the build away and start again, every few seconds, forever. Now the build keeps going, places late changes at the end, and the change journal fills in the rest.
+- **A failed build waits before it tries again.** The wait grows from 2 seconds to 5 minutes, so a drive that cannot be read no longer keeps the processor busy.
+- **Rare moves during a build are checked later.** If folders moved in a loop while the build ran, the service builds that drive once more after 10 minutes, beside the working index. Search keeps working meanwhile.
+- **The service log says more.** A restart names its cause, and a finished build counts the records it skipped.
+
 ## v0.8.0 — Colours everywhere
 
 *2026-11-19*
