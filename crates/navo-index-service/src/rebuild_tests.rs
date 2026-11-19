@@ -17,6 +17,9 @@ use super::*;
 
 const MINUTE: Duration = Duration::from_secs(60);
 
+#[path = "rebuild_reset_tests.rs"]
+mod reset;
+
 /// Fakes MFT enumeration failing before it can return a candidate index.
 fn enumerate_io_error() -> Result<NtfsIndex, NtfsError> {
     Err(NtfsError::Io {
@@ -36,7 +39,7 @@ fn a_failed_verification_keeps_the_published_index_and_reschedules() {
     let due = now + 10 * MINUTE;
     rebuilds.schedule_verification(now, "build_cycle");
     let reason = rebuilds
-        .verification_due(due, 10 * MINUTE)
+        .verification_due(due)
         .expect("first verification is due");
     let verified = rebuilds.verification_result(enumerate_io_error(), reason, due);
     assert!(
@@ -63,12 +66,8 @@ fn a_failed_verification_keeps_the_published_index_and_reschedules() {
     assert!(changes.is_empty());
     assert_eq!(entries_and_position(&shared), (3, 120));
     let before_retry = due + 19 * MINUTE;
-    assert_eq!(rebuilds.verification_due(before_retry, 29 * MINUTE), None);
-    assert!(
-        rebuilds
-            .verification_due(due + 20 * MINUTE, 30 * MINUTE)
-            .is_some()
-    );
+    assert_eq!(rebuilds.verification_due(before_retry), None);
+    assert!(rebuilds.verification_due(due + 20 * MINUTE).is_some());
     assert!(log_text(&directory).contains("verify scheduled C: in 20 min (build_cycle)"));
 }
 
@@ -108,22 +107,16 @@ fn an_inexact_build_schedules_one_verification_and_an_exact_result_stops_it() {
     rebuilds.build_quality(Some(InexactBuild::Cycle), now);
     rebuilds.build_quality(Some(InexactBuild::Cycle), now + MINUTE);
     let early = 10 * MINUTE;
-    assert_eq!(rebuilds.verification_due(now + early, early), None);
+    assert_eq!(rebuilds.verification_due(now + early), None);
     assert_eq!(entries_and_position(&shared), (2, 100));
     let verification = rebuilds
-        .verification_due(now + 11 * MINUTE, 11 * MINUTE)
+        .verification_due(now + 11 * MINUTE)
         .expect("verification is due");
-    assert_eq!(
-        rebuilds.verification_due(now + 11 * MINUTE, 11 * MINUTE),
-        None
-    );
+    assert_eq!(rebuilds.verification_due(now + 11 * MINUTE), None);
     assert_eq!(verification, "build_cycle");
     rebuilds.started(&shared, Cause::verification(), 10 * MINUTE);
     rebuilds.build_quality(None, now + 10 * MINUTE);
-    assert_eq!(
-        rebuilds.verification_due(now + 90 * MINUTE, 90 * MINUTE),
-        None
-    );
+    assert_eq!(rebuilds.verification_due(now + 90 * MINUTE), None);
     assert_eq!(builds(&shared).full_builds, 2);
     let text = log_text(&directory);
     assert_eq!(
@@ -312,117 +305,6 @@ fn two_rebuild_causes_within_the_window_give_one_build_and_the_deferred_one_runs
     assert!(text.contains("rebuild deferred C: reason=unresolved_changes"));
     assert_eq!(text.matches("rebuild deferred").count(), 1);
     assert!(!text.contains("secret-name"));
-}
-
-/// Runs a due reset before an overdue verification, then schedules verification from its result.
-#[test]
-fn a_due_journal_reset_runs_first_and_restarts_verification() {
-    for quality in [Some(InexactBuild::HeldCap), None] {
-        let shared = shared();
-        let mut rebuilds = Rebuilds::new('C', Log::default());
-        let (now, window) = (Instant::now(), REBUILD_WINDOW);
-        let initial = Cause::new(BuildReason::SnapshotMissing);
-        rebuilds.started(&shared, initial, Duration::ZERO);
-        rebuilds.schedule_verification(now, "build_cycle");
-        let lost = Err(NtfsError::Reenumerate("cursor"));
-        assert_eq!(rebuilds.after_follow(&shared, lost, MINUTE).unwrap(), None);
-        assert_eq!(rebuilds.verification_due(now + window, window), None);
-        let reset = Cause::new(BuildReason::JournalReset);
-        assert_eq!(rebuilds.due(window), Some(reset), "the reset wins");
-        rebuilds.started(&shared, reset, window);
-        rebuilds.build_quality(quality, now + window);
-        rebuilds.regular_build_published();
-        let mut due_after = |wait| rebuilds.verification_due(now + window + wait, window + wait);
-        let checks = [Duration::ZERO, 9 * MINUTE, 10 * MINUTE].map(&mut due_after);
-        // Next tick, 9 min and 10 min after the reset published.
-        assert_eq!(checks, [None, None, quality.and(Some("held_cap"))]);
-    }
-}
-
-/// Keeps a failed journal reset due after its regular build retry delay.
-#[test]
-fn a_failed_journal_reset_stays_pending_for_the_build_retry() {
-    let shared = shared();
-    let mut rebuilds = Rebuilds::new('C', Log::default());
-    let initial = Cause::new(BuildReason::SnapshotMissing);
-    rebuilds.started(&shared, initial, Duration::ZERO);
-    let lost = Err(NtfsError::Reenumerate("cursor"));
-    assert_eq!(rebuilds.after_follow(&shared, lost, MINUTE).unwrap(), None);
-    let cause = rebuilds.due(REBUILD_WINDOW).unwrap();
-    rebuilds.started(&shared, cause, REBUILD_WINDOW);
-    assert!(rebuilds.build_result(enumerate_io_error()).is_err());
-
-    let reset_pending = rebuilds.journal_lost();
-    assert!(reset_pending, "a failed build keeps the reset pending");
-    let backoff = rebuilds.take_retry_delay().unwrap();
-    assert_eq!(backoff, Duration::from_secs(2));
-    assert_eq!(rebuilds.due(REBUILD_WINDOW + backoff), Some(cause));
-}
-
-/// Logs a lost journal once and replaces the existing deferral within its original window.
-#[test]
-fn a_lost_journal_takes_priority_over_an_unresolved_batch() {
-    let shared = shared();
-    let (directory, log) = logged();
-    let mut rebuilds = Rebuilds::new('C', log.clone());
-    rebuilds.started(&shared, Cause::new(BuildReason::SnapshotMissing), MINUTE);
-    let changes = create_under_unknown_folder(&shared, 120);
-    assert_eq!(
-        rebuilds
-            .after_follow(&shared, Ok(changes), 5 * MINUTE)
-            .unwrap(),
-        None
-    );
-    assert!(!rebuilds.journal_lost());
-
-    for minute in 6..=8 {
-        let followed = Err(NtfsError::Reenumerate("cursor"));
-        assert_eq!(
-            rebuilds
-                .after_follow(&shared, followed, minute * MINUTE)
-                .unwrap(),
-            None
-        );
-        // Heartbeats between attempts prevent the logger from collapsing identical lines.
-        log.line("heartbeat");
-    }
-
-    assert_eq!(
-        log_text(&directory)
-            .matches("update error C: reenumerate(cursor)")
-            .count(),
-        1
-    );
-    assert!(rebuilds.journal_lost());
-    assert_eq!(builds(&shared).deferred_rebuilds, 1);
-    assert_eq!(
-        rebuilds.due(11 * MINUTE),
-        Some(Cause::new(BuildReason::JournalReset))
-    );
-}
-
-#[test]
-fn a_journal_reset_after_the_window_builds_at_once() {
-    let shared = shared();
-    let mut rebuilds = Rebuilds::new('C', Log::default());
-    rebuilds.started(
-        &shared,
-        Cause::new(BuildReason::SnapshotMissing),
-        Duration::ZERO,
-    );
-    let decision = rebuilds.after_follow(
-        &shared,
-        Err(NtfsError::Reenumerate("journal")),
-        REBUILD_WINDOW,
-    );
-    assert_eq!(
-        decision.unwrap(),
-        Some(Cause::new(BuildReason::JournalReset))
-    );
-    assert_eq!(
-        builds(&shared).last_reason,
-        Some(BuildReason::SnapshotMissing)
-    );
 }
 
 #[test]
