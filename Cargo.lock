@@ -6103,7 +6103,7 @@ dependencies = [
 
 [[package]]
 name = "navo-app"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "blake3",
  "chrono",
@@ -6155,7 +6155,7 @@ dependencies = [
 
 [[package]]
 name = "navo-automotive"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "a2lfile",
  "can-dbc",
@@ -6172,7 +6172,7 @@ dependencies = [
 
 [[package]]
 name = "navo-bench"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aho-corasick",
  "blake3",
@@ -6189,7 +6189,7 @@ dependencies = [
 
 [[package]]
 name = "navo-cache"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "crc32fast",
  "lz4_flex",
@@ -6205,7 +6205,7 @@ dependencies = [
 
 [[package]]
 name = "navo-clipboard"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "rusqlite",
  "sha2 0.11.1",
@@ -6217,7 +6217,7 @@ dependencies = [
 
 [[package]]
 name = "navo-core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aho-corasick",
  "encoding_rs",
@@ -6237,7 +6237,7 @@ dependencies = [
 
 [[package]]
 name = "navo-diag"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "insta",
  "proptest",
@@ -6254,7 +6254,7 @@ dependencies = [
 
 [[package]]
 name = "navo-fs"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "blake3",
  "crc32fast",
@@ -6287,7 +6287,7 @@ dependencies = [
 
 [[package]]
 name = "navo-git"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "gix",
  "gix-config",
@@ -6301,7 +6301,7 @@ dependencies = [
 
 [[package]]
 name = "navo-index"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "crc32fast",
  "gungraun",
@@ -6320,7 +6320,7 @@ dependencies = [
 
 [[package]]
 name = "navo-index-service"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "embed-resource",
@@ -6339,7 +6339,7 @@ dependencies = [
 
 [[package]]
 name = "navo-l10n"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "fluent-bundle",
  "sidewise-l10n",
@@ -6350,7 +6350,7 @@ dependencies = [
 
 [[package]]
 name = "navo-pdf"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "pdfium-render",
  "proptest",
@@ -6359,11 +6359,11 @@ dependencies = [
 
 [[package]]
 name = "navo-plugins"
-version = "0.8.0"
+version = "0.8.1"
 
 [[package]]
 name = "navo-retention"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "navo-core",
  "navo-fs",
@@ -6378,7 +6378,7 @@ dependencies = [
 
 [[package]]
 name = "navo-setup"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "embed-resource",
  "futures",
@@ -6401,7 +6401,7 @@ dependencies = [
 
 [[package]]
 name = "navo-shell"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "navo-core",
  "rustix",
@@ -6416,7 +6416,7 @@ dependencies = [
 
 [[package]]
 name = "navo-store"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "crc32fast",
  "insta",
@@ -6438,7 +6438,7 @@ dependencies = [
 
 [[package]]
 name = "navo-structured"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "csv",
  "csv-core",
@@ -6452,7 +6452,7 @@ dependencies = [
 
 [[package]]
 name = "navo-syntax"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "gungraun",
  "proptest",
@@ -6466,11 +6466,11 @@ dependencies = [
 
 [[package]]
 name = "navo-term"
-version = "0.8.0"
+version = "0.8.1"
 
 [[package]]
 name = "navo-ui"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "flate2",
@@ -6510,7 +6510,7 @@ dependencies = [
 
 [[package]]
 name = "navo-ui-gallery"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "gpui-kit",
@@ -6524,7 +6524,7 @@ dependencies = [
 
 [[package]]
 name = "navo-update"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "semver",
  "thiserror 2.0.21",
@@ -9190,7 +9190,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "sidewise-core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aho-corasick",
  "chardetng",
@@ -9206,7 +9206,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-engine"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "blake3",
  "fastcdc",
@@ -9225,7 +9225,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-fs"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "encoding_rs",
  "rustix",
@@ -9237,7 +9237,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-host"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "blake3",
  "encoding_rs",
@@ -9254,7 +9254,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-kit"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "codebook-tree-sitter-latex",
@@ -9284,7 +9284,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-l10n"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "fluent-bundle",
  "thiserror 2.0.21",
@@ -9294,7 +9294,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-ui"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "flate2",
  "gpui-kit",
@@ -12483,7 +12483,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "blake3",
  "dua-core",
