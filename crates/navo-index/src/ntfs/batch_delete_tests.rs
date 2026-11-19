@@ -2,6 +2,86 @@
 
 use super::*;
 
+/// Rechecks a queued remove after its folder moves and a descendant starts waiting.
+#[test]
+fn queued_remove_preserves_a_descendants_blocked_subtree() {
+    let mut index = base();
+    let unresolved = index
+        .apply_batch(UsnBatch {
+            next_usn: 200,
+            records: vec![
+                record(20, ROOT, OLD_NAME, "trash"),
+                record(20, 99, NEW_NAME, "trash"),
+                record(20, 99, DELETE, "trash"),
+                record(21, 20, OLD_NAME, "deep"),
+                record(21, 98, NEW_NAME, "deep"),
+                record(99, ROOT, CREATE, "first"),
+                record(98, ROOT, CREATE, "second"),
+            ],
+        })
+        .unwrap();
+    let child = index
+        .ids
+        .get(&22)
+        .and_then(|&id| index.table.path_with(id, '\\'));
+    assert_eq!(
+        (child.as_deref(), unresolved),
+        (
+            Some("C:\\second\\deep\\b.txt"),
+            vec![unresolved_folder_delete(98)]
+        )
+    );
+}
+
+/// Preserves a sibling that is ready to move and poisons the remaining queued changes.
+#[test]
+fn queued_remove_preserves_a_descendants_ready_subtree() {
+    let mut index = base();
+    let unresolved = index
+        .apply_batch(UsnBatch {
+            next_usn: 200,
+            records: vec![
+                record(20, ROOT, OLD_NAME, "trash"),
+                record(20, 99, NEW_NAME, "trash"),
+                record(20, 99, DELETE, "trash"),
+                record(20, 99, 0x4, "trash"),
+                record(21, 20, OLD_NAME, "deep"),
+                record(21, 99, NEW_NAME, "deep"),
+                record(99, ROOT, CREATE, "late"),
+                record(90, 20, CREATE, "child.txt"),
+            ],
+        })
+        .unwrap();
+    let child = index
+        .ids
+        .get(&22)
+        .and_then(|&id| index.table.path_with(id, '\\'));
+    assert_eq!(child.as_deref(), Some("C:\\late\\deep\\b.txt"));
+    assert!(!index.ids.contains_key(&90));
+    assert_eq!(
+        unresolved,
+        [
+            unresolved_folder_delete(99),
+            UnresolvedChange {
+                missing_reference: 99,
+                change: TableChange::Attributes {
+                    file_id: 20,
+                    flags: Flags::FOLDER
+                }
+            },
+            UnresolvedChange {
+                missing_reference: 99,
+                change: TableChange::Add {
+                    file_id: 90,
+                    parent_id: 20,
+                    name: "child.txt".into(),
+                    flags: Flags::NONE
+                }
+            },
+        ]
+    );
+}
+
 /// Preserves a blocked directory move when a carried rename emits a removal.
 #[test]
 fn rename_expiry_queues_the_remove_behind_the_blocked_folder_move() {

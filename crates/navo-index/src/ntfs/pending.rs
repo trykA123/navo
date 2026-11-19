@@ -10,6 +10,7 @@ use crate::usn::FrnMap;
 
 #[path = "pending_delete.rs"]
 mod delete;
+use delete::indexed_subtree;
 
 #[derive(Default)]
 pub(super) struct Pending {
@@ -32,24 +33,14 @@ impl Pending {
             return Ok(());
         };
         let file_id = change_file_id(&change);
-        let remove = matches!(change, TableChange::Remove { .. });
-        let subtree = if remove {
-            index
-                .ids
-                .get(&file_id)
-                .copied()
-                .filter(|&id| index.table.has_children(id))
-        } else {
-            None
-        };
-        if let Some(missing_reference) = self.poisoned_dependency(index, &change, subtree) {
-            self.reported.push(UnresolvedChange {
-                missing_reference,
-                change,
-            });
+        let mut ready = VecDeque::new();
+        if let Some(missing_reference) = self.poisoned_dependency(index, &change, &ready) {
+            self.report_unresolved(missing_reference, [change]);
             return Ok(());
         }
-        let change = if remove && subtree.is_none() {
+        let change = if matches!(change, TableChange::Remove { .. })
+            && indexed_subtree(index, file_id).is_none()
+        {
             self.blocked.cancel(file_id);
             change
         } else if let Some(change) = self.blocked.append(file_id, change) {
@@ -58,7 +49,6 @@ impl Pending {
             self.note_blocked();
             return Ok(());
         };
-        let mut ready = VecDeque::new();
         self.apply_queue(index, VecDeque::from([change]), &mut ready)?;
         while let Some((_, changes)) = self.blocked.pop_ready(&mut ready) {
             self.apply_queue(index, changes, &mut ready)?;
@@ -71,7 +61,7 @@ impl Pending {
         &mut self,
         index: &NtfsIndex,
         change: &TableChange,
-        subtree: Option<u32>,
+        ready: &VecDeque<Ready>,
     ) -> Option<u128> {
         let file_id = change_file_id(change);
         if let Some(&missing) = self.poisoned.get(&file_id) {
@@ -79,7 +69,8 @@ impl Pending {
         }
         match change {
             TableChange::Remove { .. } => {
-                let missing = self.blocked.blocking_parent(index, subtree?)?;
+                let subtree = indexed_subtree(index, file_id)?;
+                let missing = self.blocked.blocking_parent(index, subtree, ready)?;
                 self.poisoned.insert(file_id, missing);
                 Some(missing)
             }
@@ -90,6 +81,19 @@ impl Pending {
         }
     }
 
+    /// Reports each change with the same unavailable parent, in queue order.
+    fn report_unresolved(
+        &mut self,
+        missing_reference: u128,
+        changes: impl IntoIterator<Item = TableChange>,
+    ) {
+        self.reported
+            .extend(changes.into_iter().map(|change| UnresolvedChange {
+                missing_reference,
+                change,
+            }));
+    }
+
     /// Applies one file's ordered changes; only Add and Rename can wait for a parent.
     fn apply_queue(
         &mut self,
@@ -97,7 +101,16 @@ impl Pending {
         mut changes: VecDeque<TableChange>,
         ready: &mut VecDeque<Ready>,
     ) -> Result<(), NtfsError> {
+        // A queued remove follows the named change that originally blocked its file.
+        let queued = changes.len() > 1;
         while let Some(change) = changes.pop_front() {
+            if queued
+                && matches!(change, TableChange::Remove { .. })
+                && let Some(missing_reference) = self.poisoned_dependency(index, &change, ready)
+            {
+                self.report_unresolved(missing_reference, std::iter::once(change).chain(changes));
+                return Ok(());
+            }
             let change = recover_rename(index, change);
             let file_id = change_file_id(&change);
             match index.table.apply_in_batch(change.clone(), &mut index.ids) {
@@ -111,10 +124,7 @@ impl Pending {
                         TableChange::Attributes { .. } | TableChange::Size { .. }
                     ) =>
                 {
-                    self.reported.push(UnresolvedChange {
-                        missing_reference: missing,
-                        change,
-                    });
+                    self.report_unresolved(missing, [change]);
                 }
                 Err(TableError::UnknownFileReference(missing)) => {
                     changes.push_front(change);
