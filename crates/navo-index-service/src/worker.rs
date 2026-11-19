@@ -12,6 +12,7 @@ use navo_index::pipe::CancelToken;
 use super::answer::Shared;
 use super::build_permit::{BUILDS, BuildPermit};
 use super::config::{Drive, index_path};
+use super::follow_pace::{Outcome, Pace};
 use super::follow_state::Updating;
 use super::lifecycle::{
     SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, clear_failures,
@@ -29,6 +30,11 @@ pub(super) struct Worker {
     clock: SaveClock,
     started: Instant,
     rebuilds: Rebuilds,
+    pace: Pace,
+    /// True when the last follow moved the journal cursor; reset at the start of every tick.
+    moved: bool,
+    /// True after a regular build failed, so a reopen must not keep the stale in-memory index.
+    build_failed: bool,
 }
 
 impl Worker {
@@ -40,6 +46,9 @@ impl Worker {
             clock: SaveClock::default(),
             started: Instant::now(),
             rebuilds: Rebuilds::new(drive.letter, log),
+            pace: Pace::default(),
+            moved: false,
+            build_failed: false,
         })
     }
 
@@ -50,6 +59,11 @@ impl Worker {
             if let Err(NtfsError::Cancelled) = result {
                 break;
             }
+            let outcome = match &result {
+                Err(_) => Outcome::Failed,
+                Ok(()) if self.moved => Outcome::Moved,
+                Ok(()) => Outcome::Idle,
+            };
             if let Err(error) = result {
                 let kind = error_kind(&error);
                 self.log_line(format_args!("update error {}: {kind}", self.drive.letter));
@@ -65,11 +79,11 @@ impl Worker {
             if cancel.is_cancelled() {
                 break;
             }
-            if let Some(delay) = self.rebuilds.take_retry_delay() {
-                super::bind_retry::wait_for_retry(cancel, delay);
-            } else {
-                std::thread::park_timeout(Duration::from_millis(500));
-            }
+            let follow_delay = self.pace.next(outcome);
+            wait(
+                cancel,
+                self.rebuilds.take_retry_delay().unwrap_or(follow_delay),
+            );
         }
         if let Err(error) = self.save(true) {
             self.error(format!("saving volume index on stop: {error}"));
@@ -78,6 +92,8 @@ impl Worker {
     }
 
     fn tick(&mut self, volume: &mut Option<Volume>, cancel: &CancelToken) -> Result<(), NtfsError> {
+        // A moving poll followed by an error or a skipped poll must not keep zero-delay ticks.
+        self.moved = false;
         if volume.is_none() {
             *volume = Some(self.open(cancel)?);
         }
@@ -85,7 +101,7 @@ impl Worker {
             return Ok(());
         };
         let now = Instant::now();
-        if let Some(reason) = self.rebuilds.verification_due(now, now - self.started)
+        if let Some(reason) = self.rebuilds.verification_due(now)
             && self.verify(volume, reason, cancel)?
         {
             return Ok(());
@@ -93,29 +109,38 @@ impl Worker {
         if let Some(cause) = self.rebuilds.due(self.started.elapsed()) {
             return self.rebuild(volume, cause, cancel);
         }
+        if self.rebuilds.journal_lost() {
+            return Ok(());
+        }
         let followed = self.follow(volume);
+        // A follow error keeps the published index; `run` retries with backoff (D121).
         match self
             .rebuilds
-            .after_follow(&self.shared, followed, self.started.elapsed())
+            .after_follow(&self.shared, followed, self.started.elapsed())?
         {
-            Ok(None) => Ok(()),
-            Ok(Some(cause)) => self.rebuild(volume, cause, cancel),
-            Err(error) => {
-                {
-                    let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
-                    state.index = None;
-                    state.status.progress = Some(0);
-                }
-                self.clock.saved();
-                Err(error)
-            }
+            None => Ok(()),
+            Some(cause) => self.rebuild(volume, cause, cancel),
         }
     }
 
+    /// Opens the volume; keeps the live index when the serial is unchanged, else restores or builds.
     fn open(&mut self, cancel: &CancelToken) -> Result<Volume, NtfsError> {
         let mut opened = Volume::open(self.drive.letter)?;
-        self.drive.serial = opened.serial()?;
+        let serial = opened.serial()?;
+        let same_volume = serial == self.drive.serial;
+        self.drive.serial = serial;
+        let held = {
+            let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
+            if !same_volume {
+                state.index = None;
+            }
+            state.index.is_some()
+        };
+        // A pending journal reset is checked first, so a reopen never skips it.
         if self.rebuilds.journal_reset_due(self.started.elapsed()) {
+            return Ok(opened);
+        }
+        if held && !self.build_failed {
             return Ok(opened);
         }
         let mut built = false;
@@ -182,6 +207,7 @@ impl Worker {
     /// Publishes a completed index and starts its snapshot save clock.
     fn publish(&mut self, index: NtfsIndex) {
         replace(&self.shared, index);
+        self.build_failed = false;
         self.clock.changed(self.started.elapsed());
     }
 
@@ -200,6 +226,7 @@ impl Worker {
         let batch = volume.read_journal(position)?;
         let records = batch.records.len();
         let changed = batch.next_usn != position.next_usn;
+        self.moved = changed;
         let unresolved = super::batch::apply_batch(&self.shared, batch)?;
         if changed {
             self.clock.batch(self.started.elapsed(), records);
@@ -223,6 +250,10 @@ impl Worker {
         cancel: &CancelToken,
     ) -> Result<(NtfsIndex, BuildPermit<'static>), NtfsError> {
         let attempted = self.build_candidate(volume, cause, cancel);
+        // The snapshot is already discarded; a reopen must build again, not keep the old index.
+        self.build_failed |= attempted
+            .as_ref()
+            .is_err_and(|error| !matches!(error, NtfsError::Cancelled));
         self.rebuilds.build_result(attempted)
     }
 
@@ -358,6 +389,18 @@ impl Worker {
         if !state.status.errors.is_empty() {
             clear_failures(&mut state.status.errors, prefix);
         }
+    }
+}
+
+/// Waits `delay` before the next tick: none for zero, one park up to 500 ms, else cancellable.
+fn wait(cancel: &CancelToken, delay: Duration) {
+    if delay.is_zero() {
+        return;
+    }
+    if delay <= Duration::from_millis(500) {
+        std::thread::park_timeout(delay);
+    } else {
+        super::bind_retry::wait_for_retry(cancel, delay);
     }
 }
 
