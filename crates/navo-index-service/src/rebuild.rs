@@ -153,8 +153,12 @@ impl Rebuilds {
         }
     }
 
-    /// Records whether the finished build needs a delayed verification.
+    /// Recomputes verification from the finished build: exact clears it, inexact waits from `now`.
     pub fn build_quality(&mut self, reason: Option<InexactBuild>, now: Instant) {
+        if reason.is_some() && self.verification.is_pending() {
+            // An older deadline checked the replaced index; restart the delay from this build.
+            self.verification.exact();
+        }
         match reason {
             Some(InexactBuild::Cycle) => self.schedule_verification(now, "build_cycle"),
             Some(InexactBuild::HeldCap) => self.schedule_verification(now, "held_cap"),

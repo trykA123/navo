@@ -107,14 +107,14 @@ fn an_inexact_build_schedules_one_verification_and_an_exact_result_stops_it() {
     rebuilds.started(&shared, initial, Duration::ZERO);
     rebuilds.build_quality(Some(InexactBuild::Cycle), now);
     rebuilds.build_quality(Some(InexactBuild::Cycle), now + MINUTE);
-    let early = 9 * MINUTE;
+    let early = 10 * MINUTE;
     assert_eq!(rebuilds.verification_due(now + early, early), None);
     assert_eq!(entries_and_position(&shared), (2, 100));
     let verification = rebuilds
-        .verification_due(now + 10 * MINUTE, 10 * MINUTE)
+        .verification_due(now + 11 * MINUTE, 11 * MINUTE)
         .expect("verification is due");
     assert_eq!(
-        rebuilds.verification_due(now + 10 * MINUTE, 10 * MINUTE),
+        rebuilds.verification_due(now + 11 * MINUTE, 11 * MINUTE),
         None
     );
     assert_eq!(verification, "build_cycle");
@@ -314,24 +314,29 @@ fn two_rebuild_causes_within_the_window_give_one_build_and_the_deferred_one_runs
     assert!(!text.contains("secret-name"));
 }
 
-/// Selects the journal reset when both rebuilds are ready in the same tick.
+/// Runs a due reset before an overdue verification, then schedules verification from its result.
 #[test]
-fn a_due_journal_reset_runs_before_a_due_verification() {
-    let shared = shared();
-    let mut rebuilds = Rebuilds::new('C', Log::default());
-    let now = Instant::now();
-    let initial = Cause::new(BuildReason::SnapshotMissing);
-    rebuilds.started(&shared, initial, Duration::ZERO);
-    rebuilds.schedule_verification(now, "build_cycle");
-    let lost = Err(NtfsError::Reenumerate("cursor"));
-    assert_eq!(rebuilds.after_follow(&shared, lost, MINUTE).unwrap(), None);
-
-    let cause = rebuilds
-        .verification_due(now + REBUILD_WINDOW, REBUILD_WINDOW)
-        .map(|_| Cause::verification())
-        .or_else(|| rebuilds.due(REBUILD_WINDOW));
-    let expected = Some(BuildReason::JournalReset);
-    assert_eq!(cause.map(|cause| cause.reason), expected);
+fn a_due_journal_reset_runs_first_and_restarts_verification() {
+    for quality in [Some(InexactBuild::HeldCap), None] {
+        let shared = shared();
+        let mut rebuilds = Rebuilds::new('C', Log::default());
+        let (now, window) = (Instant::now(), REBUILD_WINDOW);
+        let initial = Cause::new(BuildReason::SnapshotMissing);
+        rebuilds.started(&shared, initial, Duration::ZERO);
+        rebuilds.schedule_verification(now, "build_cycle");
+        let lost = Err(NtfsError::Reenumerate("cursor"));
+        assert_eq!(rebuilds.after_follow(&shared, lost, MINUTE).unwrap(), None);
+        assert_eq!(rebuilds.verification_due(now + window, window), None);
+        let reset = Cause::new(BuildReason::JournalReset);
+        assert_eq!(rebuilds.due(window), Some(reset), "the reset wins");
+        rebuilds.started(&shared, reset, window);
+        rebuilds.build_quality(quality, now + window);
+        rebuilds.regular_build_published();
+        let mut due_after = |wait| rebuilds.verification_due(now + window + wait, window + wait);
+        let checks = [Duration::ZERO, 9 * MINUTE, 10 * MINUTE].map(&mut due_after);
+        // Next tick, 9 min and 10 min after the reset published.
+        assert_eq!(checks, [None, None, quality.and(Some("held_cap"))]);
+    }
 }
 
 /// Keeps a failed journal reset due after its regular build retry delay.
