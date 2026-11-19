@@ -27,8 +27,12 @@ impl Pending {
         let Some(change) = normalize_root(index, change) else {
             return Ok(());
         };
-        let file_id = change_file_id(&change);
-        let Some(change) = self.blocked.append(file_id, change) else {
+        let change = if let TableChange::Remove { file_id } = change {
+            self.blocked.cancel(file_id);
+            change
+        } else if let Some(change) = self.blocked.append(change_file_id(&change), change) {
+            change
+        } else {
             self.note_blocked();
             return Ok(());
         };
@@ -107,6 +111,7 @@ impl Pending {
 
 const RENAME: u8 = 0x10;
 const SIZED: u8 = 0x20;
+const CANCELLED: u8 = 0x40;
 
 /// Flat columns use 37 bytes per slot; the missing parent lives once in the waiter index.
 #[derive(Default)]
@@ -134,6 +139,14 @@ struct Ready {
 impl BlockedRecords {
     fn len(&self) -> usize {
         self.blocked.len()
+    }
+
+    /// Discards a file's blocked changes and leaves its slot linked until the waiter is taken.
+    fn cancel(&mut self, file: u128) {
+        if let Some(slot) = self.blocked.remove(&file) {
+            self.metadata[slot as usize] |= CANCELLED;
+            self.later.remove(&slot);
+        }
     }
 
     /// Appends to an already blocked file, folding its first Size into the flat record.
@@ -242,7 +255,10 @@ impl BlockedRecords {
         let head = self.links[tail as usize];
         let mut slot = head;
         loop {
-            self.blocked.remove(&self.files[slot as usize]);
+            // A cancelled file may be blocked again in a newer slot.
+            if self.metadata[slot as usize] & CANCELLED == 0 {
+                self.blocked.remove(&self.files[slot as usize]);
+            }
             if slot == tail {
                 break;
             }
@@ -267,8 +283,25 @@ impl BlockedRecords {
         Some((missing, self.take(slot, missing)))
     }
 
-    /// Restores the first change and optional Size, then releases the slot for reuse.
+    /// Returns the slot's changes, or an empty queue if cancelled, and releases the slot.
     fn take(&mut self, slot: u32, parent_id: u128) -> VecDeque<TableChange> {
+        let i = slot as usize;
+        let changes = if self.metadata[i] & CANCELLED == 0 {
+            self.restore_changes(slot, parent_id)
+        } else {
+            VecDeque::new()
+        };
+        self.links[i] = self.free.unwrap_or(u32::MAX);
+        self.free = Some(slot);
+        self.live -= 1;
+        if self.live == 0 {
+            self.clear_columns();
+        }
+        changes
+    }
+
+    /// Reconstructs a live slot's changes in their original order.
+    fn restore_changes(&mut self, slot: u32, parent_id: u128) -> VecDeque<TableChange> {
         let i = slot as usize;
         let (start, end) = self.ranges[i];
         let file_id = self.files[i];
@@ -297,12 +330,6 @@ impl BlockedRecords {
             });
         }
         changes.extend(self.later.remove(&slot).into_iter().flatten());
-        self.links[i] = self.free.unwrap_or(u32::MAX);
-        self.free = Some(slot);
-        self.live -= 1;
-        if self.live == 0 {
-            self.clear_columns();
-        }
         changes
     }
 
