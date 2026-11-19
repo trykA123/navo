@@ -172,3 +172,41 @@ fn link_refresh_reports_lookup_failure_as_hard_link_reenumeration() {
         "lookup failure should report hard link: {result:?}"
     );
 }
+
+/// Turns a link change that also carries a rename pair into plain MFT upserts with no rename left.
+#[test]
+fn link_refresh_settles_a_rename_pair_that_changes_links() {
+    let mft = wire(21, &[(FILE, 9, false, "survivor.txt", 0)]);
+    let mut volume = Volume::new(Ok(Some(mft)));
+    volume.journal = wire(
+        120,
+        &[
+            (FILE, 8, false, "old.txt", 0x11000),
+            (FILE, 8, false, "new.txt", 0x12000),
+        ],
+    );
+    let batch = read_volume_journal(&mut volume, SAVED);
+    assert!(
+        batch.is_ok(),
+        "rename pair with link change should refresh: {batch:?}"
+    );
+    let mut pending = PendingRenames::default();
+    let changes = batch.unwrap().into_changes(&mut pending);
+    assert!(pending.is_empty(), "the MFT name replaces the rename pair");
+    assert_eq!(volume.lookups, 1);
+    let upserts = changes
+        .iter()
+        .filter(|change| !matches!(change, TableChange::Size { .. }))
+        .collect::<Vec<_>>();
+    assert!(
+        !upserts.is_empty(),
+        "the file should be upserted: {changes:?}"
+    );
+    for change in upserts {
+        assert!(
+            matches!(change, TableChange::Add { file_id, parent_id: 9, name, .. }
+                if *file_id == u128::from(FILE) && name == "survivor.txt"),
+            "every name change should be the MFT upsert: {change:?}"
+        );
+    }
+}
