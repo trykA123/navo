@@ -7,6 +7,12 @@ use unic_langid::LanguageIdentifier;
 pub const FILES: &[(&str, &str)] = &[
     ("compare.ftl", include_str!("../locales/en-US/compare.ftl")),
     ("menu.ftl", include_str!("../locales/en-US/menu.ftl")),
+    ("updates.ftl", include_str!("../locales/en-US/updates.ftl")),
+    ("git.ftl", include_str!("../locales/en-US/git.ftl")),
+    (
+        "git-remote.ftl",
+        include_str!("../locales/en-US/git-remote.ftl"),
+    ),
 ];
 
 const LOCALE: &str = "en-US";

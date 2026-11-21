@@ -291,7 +291,7 @@ impl ScreenOwner {
         });
     }
 
-    /// The open View menu of the file diff or the Stream, for the window to draw.
+    /// The open menu of the file diff, else of the Stream; `CompareScreen::render` draws it.
     #[doc(hidden)]
     pub fn compare_menu_view(&self) -> Option<Entity<ContextMenu>> {
         let screen = self.compare.screen.as_ref()?;

@@ -1,8 +1,7 @@
 use std::io::{self, Read};
 
 use crate::model::{
-    ContentClass, ContentKey, EntryKind, HashCache, ObjectId, Reason, SideEntry, SideSource, Stamp,
-    Status,
+    ContentClass, ContentKey, EntryKind, ObjectId, Reason, SideEntry, SideSource, Stamp, Status,
 };
 
 use super::{ContentResult, Side};
@@ -106,19 +105,6 @@ pub(crate) fn probe_zero_size(side: Side<'_>) -> Result<Option<Stamp>, Reason> {
         return Err(Reason::ChangedOnDisk);
     }
     Ok(Some(stamp))
-}
-
-pub(super) fn finish_side(
-    cache: &dyn HashCache,
-    key: &ContentKey,
-    hashes: ([u8; 32], [u8; 32]),
-    saw_nul: bool,
-) -> ContentResult {
-    if hashes.0 == hashes.1 {
-        cache.put(key, hashes.0);
-        return outcome(Status::Same, class(saw_nul));
-    }
-    different(None, different_class(saw_nul))
 }
 
 pub(super) fn unavailable(reason: Reason) -> ContentResult {

@@ -26,6 +26,7 @@ gpui_kit::actions!(
         Changes,
         Details,
         ToggleViewed,
+        ClearViewed,
         Fold,
         OpenFile,
         Search,

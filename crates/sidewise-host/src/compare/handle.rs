@@ -11,6 +11,7 @@ use navo_core::Location;
 use navo_ui::compare_diff::CompareOptions;
 
 use super::convert::settings_from;
+use super::hash_cache::policy::session_cache;
 use super::pane::LocalTarget;
 use super::rules;
 use super::settings::{CompareSettings, network_cap};
@@ -19,7 +20,25 @@ use super::std_side::StdSide;
 const POLL: Duration = Duration::from_millis(10);
 
 /// Opens one side of a compare. It runs on the session thread, never on the UI thread.
-pub type SideOpener = Box<dyn FnOnce() -> Result<Arc<dyn SideSource>, Reason> + Send>;
+pub type SideOpener = Box<dyn FnOnce() -> Result<Arc<dyn SideSource>, OpenFailure> + Send>;
+
+/// Why a side did not open: the engine reason, and the l10n id of a more precise text when
+/// the opener can name the problem (a Git side's "No such revision").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenFailure {
+    pub reason: Reason,
+    pub text_id: Option<&'static str>,
+}
+
+impl From<Reason> for OpenFailure {
+    /// A failure known only by its reason.
+    fn from(reason: Reason) -> Self {
+        Self {
+            reason,
+            text_id: None,
+        }
+    }
+}
 
 /// One side of a compare: a local folder (opened as a `StdSide`), or an opener the session
 /// thread runs.
@@ -58,8 +77,8 @@ impl CompareStart {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompareError {
-    Left(Reason),
-    Right(Reason),
+    Left(OpenFailure),
+    Right(OpenFailure),
     Rules(String),
     /// The session thread did not start.
     Spawn(String),
@@ -102,6 +121,8 @@ enum Command {
 pub struct Opened {
     pub session: Session,
     pub refresh: Vec<Arc<dyn SideSource>>,
+    /// The cache the session uses; the pump flushes it.
+    pub cache: Arc<dyn HashCache>,
 }
 
 /// A running compare. Methods only queue a command and never block.
@@ -193,22 +214,27 @@ fn open_session(request: CompareStart) -> Result<Opened, CompareError> {
     let right = open_side(request.right, &mut refresh).map_err(CompareError::Right)?;
     let rules = rules::build(&*left, &*right, &request.settings)
         .map_err(|error| CompareError::Rules(error.to_string()))?;
+    let cache = session_cache(request.cache, left.is_network() || right.is_network());
     let options = SessionOptions {
         rules: Arc::new(rules),
-        cache: request.cache,
+        cache: Arc::clone(&cache),
         read_hint: ReadHint::Buffered,
         check_mode: request.settings.content_check,
         network_cap: Some(network_cap()),
     };
     let session = Session::start(left, right, options);
-    Ok(Opened { session, refresh })
+    Ok(Opened {
+        session,
+        refresh,
+        cache,
+    })
 }
 
 /// Opens one side on the session thread; an opener's side is also kept for `refresh`.
 pub fn open_side(
     target: CompareTarget,
     refresh: &mut Vec<Arc<dyn SideSource>>,
-) -> Result<Arc<dyn SideSource>, Reason> {
+) -> Result<Arc<dyn SideSource>, OpenFailure> {
     Ok(match target {
         CompareTarget::Local(root) => Arc::new(StdSide::new(root)?),
         CompareTarget::Side(open) => {
@@ -221,7 +247,15 @@ pub fn open_side(
 
 /// Runs until `Cancel`, a closed command channel or a closed event channel.
 /// Leaving drops the session here, which joins its workers off the UI thread.
-fn pump(mut opened: Opened, events: &Sender<CompareEvent>, inbox: &Receiver<Command>) {
+/// The cache is flushed before each final batch is sent and once more when the session is gone.
+fn pump(opened: Opened, events: &Sender<CompareEvent>, inbox: &Receiver<Command>) {
+    let cache = Arc::clone(&opened.cache);
+    pump_batches(opened, events, inbox);
+    cache.flush();
+}
+
+/// The command and batch loop of `pump`; it drops the session when it returns.
+fn pump_batches(mut opened: Opened, events: &Sender<CompareEvent>, inbox: &Receiver<Command>) {
     let mut stopped = None;
     loop {
         if !run_commands(&mut opened, inbox) {
@@ -229,6 +263,10 @@ fn pump(mut opened: Opened, events: &Sender<CompareEvent>, inbox: &Receiver<Comm
         }
         match opened.session.batches().recv_timeout(POLL) {
             Ok(batch) => {
+                // Flush first, so a listener that reopens the store after `Finished` sees the rows.
+                if batch.is_final {
+                    opened.cache.flush();
+                }
                 if !forward_limit(events, &mut stopped, &batch) || !forward(events, batch) {
                     return;
                 }
@@ -299,8 +337,10 @@ fn forward_limit(
 /// Returns false when the receiver is gone.
 fn forward(events: &Sender<CompareEvent>, batch: RowBatch) -> bool {
     let (generation, totals, is_final) = (batch.generation, batch.totals, batch.is_final);
-    let has_content =
-        !batch.rows.is_empty() || !batch.progress.is_empty() || batch.problem.is_some();
+    let has_content = !batch.rows.is_empty()
+        || !batch.progress.is_empty()
+        || batch.problem.is_some()
+        || batch.reading.is_some();
     if has_content && events.send(CompareEvent::Rows(batch)).is_err() {
         return false;
     }

@@ -115,6 +115,10 @@ impl ViewedMarks for FailingViewed {
     fn set(&self, _key: &[u8; 64], _viewed: bool) -> Result<(), ViewedError> {
         Err(ViewedError("no viewed store".to_owned()))
     }
+
+    fn clear_all(&self) -> Result<usize, ViewedError> {
+        Err(ViewedError("no viewed store".to_owned()))
+    }
 }
 
 /// A store error converts to a `ViewedError` that shows the store's message.

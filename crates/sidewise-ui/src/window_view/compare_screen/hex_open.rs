@@ -74,6 +74,9 @@ impl ScreenOwner {
             return;
         };
         hex.take_drag(visible);
+        if hex.fit_width(t, super::sideways::advance(window, t)) {
+            cx.notify();
+        }
         hex.refresh_scroll(visible);
         let Some((sources, reads, range)) = hex.begin_fetch(hex.viewport(visible)) else {
             return;

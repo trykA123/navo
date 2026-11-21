@@ -11,6 +11,7 @@ use navo_ui::compare_diff::CompareOptions;
 
 use super::convert::{settings_from, updates_of};
 use super::handle::{CompareEvent, CompareHandle, CompareStart, CompareTarget};
+use super::hash_cache::policy::RecheckHashes;
 
 /// Turns a pane's location into a compare target. The host decides what a location opens as.
 pub type LocalTarget = Arc<dyn Fn(&Location) -> CompareTarget + Send + Sync>;
@@ -41,11 +42,16 @@ impl CompareHooks for PaneCompare {
         sink: CompareSink,
     ) -> Box<dyn CompareControl> {
         let (events, receiver) = mpsc::channel();
+        let cache: Arc<dyn HashCache> = if options.fresh_hashes {
+            Arc::new(RecheckHashes(Arc::clone(&self.cache)))
+        } else {
+            Arc::clone(&self.cache)
+        };
         let request = CompareStart {
             left: (self.local)(left),
             right: (self.local)(right),
             settings: settings_from(options),
-            cache: Arc::clone(&self.cache),
+            cache,
         };
         forward(receiver, sink);
         Box::new(Running(CompareHandle::start(request, events)))

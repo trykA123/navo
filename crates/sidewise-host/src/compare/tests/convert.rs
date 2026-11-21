@@ -119,3 +119,41 @@ fn a_folder_row_keeps_its_count_of_differences_inside() {
     };
     assert_eq!(rows[0].differences_inside, 3);
 }
+
+#[test]
+fn a_heartbeat_batch_names_the_running_read_after_its_phase() {
+    let batch = RowBatch {
+        generation: Generation::new(5),
+        phase: Some(PhaseTelemetry {
+            phase: EnginePhase::ContentCheck,
+            done: 1,
+            total: Some(2),
+        }),
+        reading: Some(SlowEntry {
+            rel: RelPath::new(ProviderPath::from_text("a/b.bin")),
+            elapsed_ms: 6200,
+        }),
+        ..RowBatch::default()
+    };
+    assert_eq!(
+        updates_of(CompareEvent::Rows(batch)),
+        [
+            CompareUpdate::Rows {
+                generation: 5,
+                rows: Vec::new(),
+                progress: Vec::new(),
+            },
+            CompareUpdate::PhaseProgress {
+                generation: 5,
+                phase: ComparePhase::ContentCheck,
+                done: 1,
+                total: Some(2),
+            },
+            CompareUpdate::Reading {
+                generation: 5,
+                path: "a/b.bin".to_owned(),
+                elapsed_ms: 6200,
+            },
+        ]
+    );
+}

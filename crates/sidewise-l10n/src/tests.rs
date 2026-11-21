@@ -48,6 +48,85 @@ fn a_compare_message_comes_from_the_embedded_file() {
 }
 
 #[test]
+fn the_update_strings_are_embedded() {
+    let ids = [
+        "update-line-off",
+        "update-line-on",
+        "update-turn-on",
+        "update-turn-off",
+        "update-prompt-title",
+        "update-prompt-body",
+        "update-not-now",
+        "update-available",
+        "update-release-page",
+        "update-hide",
+    ];
+    for id in ids {
+        assert!(catalog().has(id), "{id} is missing");
+    }
+}
+
+#[test]
+fn the_update_notice_names_the_version() {
+    assert_eq!(
+        t!("update-available", version = "0.1.0-alpha.3"),
+        "Sidewise 0.1.0-alpha.3 is available."
+    );
+}
+
+#[test]
+fn the_git_strings_are_embedded() {
+    let ids = [
+        "git-chip-revision",
+        "git-chip-not-repository",
+        "git-chip-no-revision",
+        "git-chip-unsupported",
+        "git-chip-broken",
+        "git-start-tip",
+        "git-side-no-file",
+    ];
+    for id in ids {
+        assert!(catalog().has(id), "{id} is missing");
+    }
+}
+
+#[test]
+fn the_git_remote_strings_are_embedded() {
+    let ids = [
+        "git-remote-chip-revision",
+        "git-remote-chip-bad-address",
+        "git-remote-unreachable",
+        "git-remote-not-found",
+        "git-remote-redirected",
+        "git-remote-no-such-revision",
+        "git-remote-too-large",
+        "git-remote-object-too-large",
+        "git-remote-timed-out",
+        "git-remote-broken",
+        "git-remote-cli-refused",
+    ];
+    for id in ids {
+        assert!(catalog().has(id), "{id} is missing");
+    }
+}
+
+#[test]
+fn the_git_remote_not_found_text_is_exact() {
+    assert_eq!(
+        t!("git-remote-not-found"),
+        "Repository not found, or it needs a sign-in (not supported yet)"
+    );
+}
+
+#[test]
+fn the_git_side_without_a_file_names_the_revision() {
+    assert_eq!(
+        t!("git-side-no-file", rev = "main"),
+        "This side is Git revision main; it has no file on disk."
+    );
+}
+
+#[test]
 fn the_macro_passes_named_arguments() {
     assert_eq!(t!("fixture-greeting", name = "Ana"), "Hello, Ana!");
 }

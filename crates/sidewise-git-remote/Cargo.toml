@@ -1,0 +1,26 @@
+# The sidewise-git-remote crate: remote Git sides for Sidewise (location form, cache, WinHTTP fetch).
+[package]
+name = "sidewise-git-remote"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+sidewise-core = { path = "../sidewise-core" }
+sidewise-engine = { path = "../sidewise-engine" }
+sidewise-git = { path = "../sidewise-git" }
+sidewise-git-address = { path = "../sidewise-git-address" }
+blake3 = "=1.8.7"
+gix = { version = "=0.90.0", default-features = false, features = ["sha1", "revision", "parallel", "blocking-network-client"] }
+gix-transport = { version = "=0.62.0", default-features = false, features = ["http-client"] }
+
+[target.'cfg(windows)'.dependencies]
+sidewise-winhttp = { path = "../sidewise-winhttp" }
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+
+[lints]
+workspace = true

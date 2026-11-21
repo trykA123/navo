@@ -377,6 +377,9 @@ pub trait HashCache: Send + Sync {
     fn get(&self, key: &ContentKey) -> Option<[u8; 32]>;
 
     fn put(&self, key: &ContentKey, hash: [u8; 32]);
+
+    /// Writes buffered entries to disk; a cache with nothing to write does nothing.
+    fn flush(&self) {}
 }
 
 #[cfg(test)]

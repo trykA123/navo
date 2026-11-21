@@ -9,6 +9,7 @@ use navo_core::Location;
 
 use super::CompareOptions;
 use super::sheet::{SheetPlan, SheetPlanSink, SheetResult, SheetSink};
+use super::undo::{UndoSink, UndoStart};
 
 mod detail;
 mod image_types;
@@ -256,19 +257,30 @@ pub struct CopyChange {
     pub lines: Option<BTreeSet<usize>>,
 }
 
-/// How a copy ended. A refusal carries the text for the status line; nothing was written.
+/// How a copy or an undo ended. A refusal carries the text for the status line; nothing was
+/// written. `Unconfirmed` carries its text too, but the target may hold new bytes (NC168).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CopyResult {
     Copied,
     Refused(String),
+    Unconfirmed(String),
 }
 
-/// The end of one copy, for the pair whose `request` id was sent.
+impl CopyResult {
+    /// Whether the target may have changed on disk, so the screen reloads it.
+    pub fn may_have_written(&self) -> bool {
+        !matches!(self, Self::Refused(_))
+    }
+}
+
+/// The end of one copy, for the pair whose `request` id was sent; `job` names a committed
+/// copy on the undo stack (NC166).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CopyDone {
     pub request: u64,
     pub direction: CopyDirection,
     pub result: CopyResult,
+    pub job: Option<String>,
 }
 
 /// Receives the end of a copy on any thread; it wakes the window.
@@ -330,6 +342,12 @@ pub trait DiffHooks: Send + Sync {
     /// Opens a Stream using the compare settings in `options`.
     fn open_stream(&self, options: &CompareOptions, sink: StreamSink) -> Box<dyn StreamControl>;
 
+    /// Removes every Viewed mark and returns how many there were. It may block on the disk, so
+    /// callers run it off the UI thread. The default has no store and clears nothing.
+    fn clear_viewed(&self) -> Result<usize, String> {
+        Ok(0)
+    }
+
     /// Copies one change and reports once through `done`, never blocking the caller. The
     /// default refuses, for a backend that cannot write.
     fn copy_change(&self, change: CopyChange, done: CopySink) {
@@ -337,7 +355,14 @@ pub trait DiffHooks: Send + Sync {
             request: change.pair.id,
             direction: change.direction,
             result: CopyResult::Refused(navo_l10n::tr("compare-copy-not-copyable")),
+            job: None,
         });
+    }
+
+    /// Undoes the newest copy, only when it is `job` (any for `None`), and reports once through
+    /// `done`, never blocking; no report unless `Started`. The default has nothing to undo.
+    fn undo_last(&self, _job: Option<&str>, _done: UndoSink) -> UndoStart {
+        UndoStart::Nothing
     }
 
     /// Plans a copy of many changes without writing and reports once through `planned`. The
@@ -363,6 +388,7 @@ pub trait DiffHooks: Send + Sync {
                 request: first.as_ref().map_or(0, |change| change.pair.id),
                 direction: first.map_or(CopyDirection::ToRight, |change| change.direction),
                 result: CopyResult::Refused(navo_l10n::tr("compare-copy-not-copyable")),
+                job: None,
             }),
         }
     }

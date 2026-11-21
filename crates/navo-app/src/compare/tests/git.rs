@@ -294,6 +294,7 @@ fn git_raw_odb_skips_filters_and_reports_missing_promisor_blob() {
                     content_check,
                     ..navo_store::Compare::default()
                 },
+                fresh_hashes: false,
             };
             let request = CompareStart::new(
                 (
@@ -339,6 +340,7 @@ fn git_vs_git_reports_missing_promisor_blob_on_one_or_both_sides() {
                     content_check,
                     ..navo_store::Compare::default()
                 },
+                fresh_hashes: false,
             };
             let request = CompareStart::new(
                 (

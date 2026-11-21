@@ -100,6 +100,7 @@ fn stopped(request: u64, direction: CopyDirection) -> CopyDone {
         request,
         direction,
         result: CopyResult::Refused(why.text()),
+        job: None,
     }
 }
 
@@ -129,6 +130,7 @@ impl CopyService {
                         request,
                         direction,
                         result: service.run(&requests),
+                        job: None,
                     }
                 });
             });
@@ -137,6 +139,7 @@ impl CopyService {
                 request,
                 direction,
                 result: CopyResult::Refused(CopyRefusal::Failed(error.to_string()).text()),
+                job: None,
             });
         }
     }

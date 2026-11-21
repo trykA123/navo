@@ -1,12 +1,14 @@
 //! The hex body of the file diff (V39, D18): two F3-style hex columns, changed-byte tints,
 //! gap rows in content alignment, and next and previous region.
 
+use std::cell::Cell;
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::base::Scrollbar;
 use gpui_kit::{ScrollEvent, canvas};
-use navo_core::paging::ByteSource;
+use navo_core::paging::{ByteSource, HEX_WIDTH};
 use navo_l10n::{t, tr};
 
 use self::draw::{Tints, View, message, rows};
@@ -27,6 +29,7 @@ mod held;
 mod hex_rows;
 mod scroll;
 mod seek;
+mod width;
 
 #[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
@@ -48,6 +51,9 @@ pub(super) struct HexView {
     left_marks: Vec<(Range<u64>, usize)>,
     right_marks: Vec<(Range<u64>, usize)>,
     rows: Rows,
+    /// The bytes per row (B2), and the body width in px the last frame measured.
+    width: u64,
+    body_width: Rc<Cell<Pixels>>,
     /// The drawn state still on screen while the current map's bytes are on the way.
     held: Option<Held>,
     align: HexAlign,
@@ -95,7 +101,9 @@ impl HexView {
             regions: Vec::new(),
             left_marks: Vec::new(),
             right_marks: Vec::new(),
-            rows: Rows::offset((0, 0)),
+            rows: Rows::offset((0, 0), HEX_WIDTH),
+            width: HEX_WIDTH,
+            body_width: Rc::default(),
             held: None,
             align: user_align.unwrap_or(HexAlign::Offset),
             user_align,
@@ -312,10 +320,11 @@ impl HexView {
 
     /// The canvas that gives the scrollbar its viewport bounds.
     fn measure(&self) -> impl IntoElement {
-        let scroll = self.scroll.clone();
+        let (scroll, body_width) = (self.scroll.clone(), self.body_width.clone());
         canvas(
             move |bounds, _, _| {
                 scroll.measure(bounds);
+                body_width.set(bounds.size.width);
             },
             |_, _, _, _| {},
         )
@@ -345,8 +354,8 @@ impl HexView {
     fn rebuild(&mut self) {
         let anchor = self.anchor();
         let rows = match self.align {
-            HexAlign::Offset => Rows::offset(self.lengths),
-            HexAlign::Content => Rows::content(self.lengths, &self.regions),
+            HexAlign::Offset => Rows::offset(self.lengths, self.width),
+            HexAlign::Content => Rows::content(self.lengths, &self.regions, self.width),
         };
         let shown = std::mem::replace(&mut self.rows, rows);
         self.held.get_or_insert(Held::shared(shown));

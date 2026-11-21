@@ -27,6 +27,8 @@ pub trait ViewedMarks: Send + Sync {
     fn get(&self, key: &[u8; 64]) -> Result<bool, ViewedError>;
     /// Sets or clears the mark for this 64-byte content key.
     fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError>;
+    /// Removes every mark and returns how many there were.
+    fn clear_all(&self) -> Result<usize, ViewedError>;
 }
 
 /// A store that never marks anything viewed, used when the cache cannot open.
@@ -39,6 +41,10 @@ impl ViewedMarks for NoViewed {
 
     fn set(&self, _key: &[u8; 64], _viewed: bool) -> Result<(), ViewedError> {
         Ok(())
+    }
+
+    fn clear_all(&self) -> Result<usize, ViewedError> {
+        Ok(0)
     }
 }
 
@@ -74,6 +80,10 @@ impl ViewedMarks for LazyViewed {
     fn set(&self, key: &[u8; 64], viewed: bool) -> Result<(), ViewedError> {
         self.store().set(key, viewed)
     }
+
+    fn clear_all(&self) -> Result<usize, ViewedError> {
+        self.store().clear_all()
+    }
 }
 
 /// Viewed marks kept in memory only, for a host with no profile cache.
@@ -97,5 +107,12 @@ impl ViewedMarks for MemoryViewed {
             marks.remove(key);
         }
         Ok(())
+    }
+
+    fn clear_all(&self) -> Result<usize, ViewedError> {
+        let mut marks = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let count = marks.len();
+        marks.clear();
+        Ok(count)
     }
 }

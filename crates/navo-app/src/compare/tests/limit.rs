@@ -43,9 +43,10 @@ fn network_open(
         let rules = IgnoreRules::new(Vec::<IgnoreSource>::new(), &[], false, CaseRule::Sensitive)
             .unwrap()
             .0;
+        let cache: Arc<dyn navo_compare::model::HashCache> = Arc::new(NoCache);
         let options = SessionOptions {
             rules: Arc::new(rules),
-            cache: Arc::new(NoCache),
+            cache: Arc::clone(&cache),
             read_hint: ReadHint::Buffered,
             check_mode: CheckMode::SizeTime,
             network_cap: Some(NetworkCap {
@@ -61,6 +62,7 @@ fn network_open(
         Ok(Opened {
             session,
             refresh: Vec::new(),
+            cache,
         })
     }
 }

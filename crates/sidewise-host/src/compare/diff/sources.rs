@@ -122,7 +122,7 @@ impl Sources {
         if location.is_local() {
             return open_local(location);
         }
-        if location.provider().as_str() != "git" {
+        if !reads_git(location) {
             return Err(Reason::Unsupported);
         }
         let (side, entry) = (self.side)(location, settings)?;
@@ -165,6 +165,15 @@ impl Sources {
             _spool: Arc::new(spool),
         }))
     }
+}
+
+/// True for the providers whose sides read Git objects through the side hook: `git`,
+/// `git-checkout` and `git-remote`.
+fn reads_git(location: &Location) -> bool {
+    matches!(
+        location.provider().as_str(),
+        "git" | "git-checkout" | "git-remote"
+    )
 }
 
 /// One Git blob to read: the side it lives on and its listing entry.

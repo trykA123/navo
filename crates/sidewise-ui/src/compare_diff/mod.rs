@@ -18,6 +18,7 @@ pub mod sheet;
 pub mod spans;
 pub mod stream_model;
 pub mod ticks;
+pub mod undo;
 
 pub use card::{CardCtx, stream_row_view};
 #[cfg(any(test, feature = "test-support"))]
@@ -41,6 +42,7 @@ pub use stream_model::{
     EscStep, Stop, StreamItem, StreamList, StreamModel, is_stream_item, stream_items,
 };
 pub use ticks::{OnTick, PickSide, Ticks, line_on};
+pub use undo::{UndoDone, UndoSink, UndoStart};
 
 /// Largest file, in bytes, that the text viewer opens for editing and the compare syntax
 /// paths parse.

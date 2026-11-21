@@ -1,0 +1,51 @@
+# The Sidewise desktop app: window shell, start screen, sessions and command line.
+[package]
+name = "navo-compare-app"
+version = "0.1.0-alpha.5"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "sidewise"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { version = "=0.4.45", default-features = false, features = ["clock"] }
+futures = "0.3.34"
+gpui-kit = "=0.9.1"
+image = { version = "=0.25.10", default-features = false }
+navo-compare-cli = { path = "../navo-compare-cli" }
+navo-compare-profile = { path = "../navo-compare-profile" }
+resvg = "=0.49.0"
+sidewise-core = { path = "../sidewise-core" }
+sidewise-engine = { path = "../sidewise-engine" }
+sidewise-fs = { path = "../sidewise-fs" }
+sidewise-git = { path = "../sidewise-git" }
+sidewise-git-remote = { path = "../sidewise-git-remote" }
+sidewise-host = { path = "../sidewise-host" }
+sidewise-journal = { path = "../sidewise-journal" }
+sidewise-kit = { path = "../sidewise-kit" }
+sidewise-l10n = { path = "../sidewise-l10n" }
+sidewise-ui = { path = "../sidewise-ui" }
+sidewise-update = { path = "../sidewise-update" }
+toml = "1.2.1"
+tracing = "0.1.44"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[build-dependencies]
+embed-resource = "3.0.12"
+navo-compare-profile = { path = "../navo-compare-profile" }
+
+[dev-dependencies]
+blake3 = "=1.8.7"
+tempfile = "=3.27.0"
+gpui-kit = { version = "=0.9.1", features = ["test-support"] }
+sidewise-git = { path = "../sidewise-git", features = ["test-support"] }
+sidewise-fs = { path = "../sidewise-fs", features = ["test-support"] }

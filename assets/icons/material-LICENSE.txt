@@ -1,0 +1,65 @@
+Material Icon Theme 5.40.0 (npm material-icon-theme), MIT: the 50 SVGs packed
+unmodified into material-icons.pack.
+Upstream: https://github.com/material-extensions/vscode-material-icon-theme
+Curated copy: navo-proto-sidewise/design/prototypes/sidewise-chosen/icons, see its README.md.
+
+The MIT License (MIT)
+Copyright (c) 2025 Material Extensions
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+SHA-256 of each packed SVG, in pack order (icon stem, without .svg):
+4adba54251e85851f3bcc78f10bfb055f17b24aad8a53d0efbd00085dd202bae  c
+c5f33efa92ce94d240e3dca2041f44c30dcad53e9b1cc937be0e757719a619ce  console
+afe20f8da21f1f2de59b11e0bd0b6bc63866a43e42238af5daca6c5669493cd5  css
+e0679294defea90793f4107d6783fe7b25978d43c57035ae6c21e5c1ae8d7367  database
+5c45ee3a6a63e5292be4d704b29a96238ed67a625e831d42941b68b0c8fd1d8c  dll
+3d032b712bbedea1dd8a1103c40cf5f27ce5b1af83ae0c9312fd15eb3c341c66  docker
+64f5da56de591d5f429d2c7f5f5733388b3ce704762631ba0b487a08475f9452  document
+423e33947323264bcfccb2574a222c816589bf2a02cda0f731fa7167162cb9c8  exe
+083ea33462b93f80b202f29703ddf57174e34aa67f193b3029869137e7f6e1a5  file
+5b8e272caf788ff0e9b6afee97601a9f9c7ad9d381e8d7b1e63ee78368ea1332  folder
+f08a417086b05fa01c6635850a53a545467097ad8d8e46c55d4e9252bfb98f71  folder-config
+b3b8133f4337152f6265b33bca78caa4375ef645c984f6be9e6bd3ca7bfa6bc8  folder-config-open
+71bec357e64761462d18b66fa9c6095fe390ab29e1d5977c1f89e3dbd3e6fca3  folder-docs
+8c33468095ebcf8021b26eeea42e14bf081872326f7ae3cfc42bc9cf33285e0d  folder-docs-open
+1b3c2daf3a63e03300d196d10c6a5c74cc1982c6203c1bd96818c193d5f1d499  folder-github
+1fb7f975362dfba3b6a67bd1dae11e02aa4369b073660c7f37ff7ce9dc9bcfad  folder-github-open
+4046ab975321319fc34c68335e7a0a81bfe98686b6fec235c3fe1944b6d03559  folder-lib
+1d84802e26f090c31adfdbcb1e818c584745671029f32fae97ec0c253b525e9e  folder-lib-open
+532456ac9460902d6f7f9ffdb015c09a3b8d87c2493504948f9d16a2f66e22b7  folder-open
+d333856835c73ed9dad1e0fe7defa7896fa4f31bb67f653c521b5bd66a75434e  folder-resource
+e294a8f74a1fb5a31569974387adb7f1ef291cfc1969a5de9712421bcd5b1eaf  folder-resource-open
+22c08cdb7bdc46362d673f24e8312d824f114686879adb997f363da235fd32ee  folder-scripts
+7f163318b1526485f8069ffef2be8e201ce8ade739182437e122aa9bf3e92585  folder-scripts-open
+0615e08b96c279fe2e62bac2d34209efb3e72e43a34ba000fc4dfab8b2e31f8f  folder-src
+159da562a912929aa265cdee9f31ca544097ffd11abaace2dfafa1780df7db62  folder-src-open
+d44bd5888cbd17ad890eaf19451e0e82ea305c3d9121fcc51eb6ac0b83b20e88  folder-test
+030340c7423e0f152bf29fc1dc872d9602bb857d27f54f20937537c726c3321f  folder-test-open
+53d27d4981cb57323c6c3f24984e4eee7812d4568055cf9eafc65a8a4e2397ba  freemarker
+b0caee7c9cb4e602536e2f5a384740e7c8bc5ab94d98bfdde529f1eb97938213  git
+eb3b74fcad124042c463505961ee93dd335165275a2b84828083fb8dcb5064c9  go
+73fa9417071d70dcda54d5e464c292a5ba59cca3105d0e5634b8702e8bb3fd83  h
+a0fc28268ef0da7fa50b77c9217a07472751ce96704c74e3a8bb50e2c59ba04b  hex
+23e04ad5f1ae9cd16dc79fe52c4290e5bd80f2f7bfe4c0769e7485832b3eb146  html
+838e1953a3a2ebf5c6a06b662892ba17e1c605c4379a77c61737639e51fb4f0a  image
+00eb9422f451901565f2eb8cbaf07718b2da03f9a866fae7f68cdc3807290d6b  javascript
+649ad4f4d01cec788959017710bb0c63281a645db8cef389c50008fbd059da03  json
+4b0a147a39eade32f9164fcd6b8465fd543cda315b71bbc9e28c236a6abf5d09  license
+f28fe89b018236f9de2abd1c10abf278bf3f2ec9b757bb6746a44704ebedc084  lock
+71501c5f23a5b85b8080f2c619b2b84807ee5203fa48e9ed740cf5acef060116  log
+42f95867350ed1f349ab29b3f254405f84ae65e6d42972d74b01442027eddfcd  markdown
+b8ad2264d8f1fe82e7e0a2af062ce85a49083f7d9a8c51a16e77de2a7aec158f  powershell
+798fcd59653af34e5b8124d3fe45412eef79f9c1925e286dadd94f923486fd1f  python
+f5caa02786d9ce9650fa25442b6605630a60e40156083679036be101b145ad37  react_ts
+ed41dbf841368745ed1c9e333c451f45224f53491b4cac4fda0b487df98cfa71  readme
+a58c24641e82c1ba47c74781da039e2a8e372202cfaaaeff39559138a11bcc39  rust
+120ceffcaa97658ae665caab7f0cbd4aed9aa9d069447f7b908548c755934ec0  svg
+eaeb55ba45f14a504d8f162282ec8f87c930426220ca88035bf340dc8b1e7008  toml
+1822f88268b452ced242ed06a770302c15dff46bb8a2e077e95e19597f737397  typescript
+666b724d61cfa091cd085a465faa3727989ba5286c8ac99a6fbf5229cb6c8f9e  yaml
+dad79a45f756542d37abd422502ecfbea15720b92ea1c9d80ef0439ab6b9448a  zip

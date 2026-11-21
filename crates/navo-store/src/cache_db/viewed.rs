@@ -22,6 +22,13 @@ impl CacheDb {
     pub fn clear_viewed(&mut self, key: &[u8; 64]) -> Result<bool, CacheError> {
         self.remove(TABLE, key)
     }
+
+    /// Removes every stored viewed mark and returns how many were cleared.
+    pub fn clear_all_viewed(&mut self) -> Result<usize, CacheError> {
+        let (_, entries) = self.usage(TABLE)?;
+        self.clear(TABLE)?;
+        Ok(usize::try_from(entries).unwrap_or(usize::MAX))
+    }
 }
 
 /// Registers the table with its 4 MiB budget when the cache opens.

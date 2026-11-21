@@ -27,7 +27,10 @@ pub fn compare_options(values: &Values) -> CompareOptions {
     let compare = serde_json::from_value(serde_json::Value::Object(table))
         .inspect_err(|error| tracing::warn!(%error, "compare settings fall back to defaults"))
         .unwrap_or_default();
-    CompareOptions { compare }
+    CompareOptions {
+        compare,
+        fresh_hashes: false,
+    }
 }
 
 /// One stored setting value as the JSON value serde reads the `[compare]` table from.

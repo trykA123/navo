@@ -9,7 +9,7 @@ use navo_compare::text::Options;
 use navo_core::Location;
 use navo_ui::compare_diff::{
     CompareOptions, CopyChange, CopySink, DiffHooks, DiffSink, PairControl, PairRequest, SheetPlan,
-    SheetPlanSink, SheetSink, StreamControl, StreamSink,
+    SheetPlanSink, SheetSink, StreamControl, StreamSink, UndoSink, UndoStart,
 };
 
 use super::super::settings::CompareSettings;
@@ -96,6 +96,11 @@ impl DiffBackend {
 }
 
 impl DiffHooks for DiffBackend {
+    /// Clears every mark of the shared Viewed store; blocks on the disk.
+    fn clear_viewed(&self) -> Result<usize, String> {
+        self.viewed().clear_all().map_err(|error| error.to_string())
+    }
+
     /// Start one pair's worker; it builds the sides and reports `Opened`.
     fn open_pair(
         &self,
@@ -164,6 +169,13 @@ impl DiffHooks for DiffBackend {
             (None, Some(first)) => refuse_change(first, &done),
             (_, None) => {}
         }
+    }
+
+    /// Undo the newest copy (when it is `job`) through the host; `Nothing` without a host.
+    fn undo_last(&self, job: Option<&str>, done: UndoSink) -> UndoStart {
+        self.copy
+            .as_ref()
+            .map_or(UndoStart::Nothing, |host| host.undo_last(job, done))
     }
 }
 

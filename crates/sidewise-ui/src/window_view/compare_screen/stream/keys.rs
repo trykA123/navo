@@ -7,7 +7,8 @@ use gpui_kit::Stateful;
 
 use super::StreamScreen;
 use crate::commands::compare::{
-    Exit, Fold, NextDifference, NextFile, PreviousDifference, PreviousFile, ToggleViewed,
+    ClearViewed, Exit, Fold, NextDifference, NextFile, PreviousDifference, PreviousFile,
+    ToggleViewed,
 };
 use crate::compare_diff::EscStep;
 use crate::prelude::*;
@@ -41,6 +42,7 @@ impl ScreenOwner {
         .on_action(cx.listener(|view, _: &ToggleViewed, _, cx| {
             view.stream_toggle_viewed(cx);
         }))
+        .on_action(cx.listener(|view, _: &ClearViewed, _, cx| view.start_clear_viewed(cx)))
         .on_action(cx.listener(|view, _: &Fold, _, cx| {
             view.stream_step(cx, |stream| {
                 stream.model.toggle_fold();

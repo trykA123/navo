@@ -1,6 +1,7 @@
 //! The full-window compare screen (D23): the file diff stacked over the Stream, drawn where the
 //! viewer draws. This file holds its state: how a file diff opens, takes updates and pops.
 
+mod clear_viewed;
 mod context;
 mod copy;
 mod details;

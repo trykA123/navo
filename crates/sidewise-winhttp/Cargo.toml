@@ -1,0 +1,13 @@
+[package]
+name = "sidewise-winhttp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Networking_WinHttp"] }
+
+[lints]
+workspace = true

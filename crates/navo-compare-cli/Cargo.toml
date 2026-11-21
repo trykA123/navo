@@ -1,0 +1,14 @@
+# Command line of Sidewise: argument parser, side specs and exit codes. No GUI.
+[package]
+name = "navo-compare-cli"
+version = "0.1.0-alpha.5"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+sidewise-git-address = { path = "../sidewise-git-address" }

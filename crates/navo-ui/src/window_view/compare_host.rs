@@ -167,6 +167,9 @@ impl NavoWindow {
                     cx.notify();
                 }
             }
+            ScreenEvent::ViewedCleared { .. } | ScreenEvent::Wrote { .. } => {
+                cx.notify();
+            }
         }
     }
 

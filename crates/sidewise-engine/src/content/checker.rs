@@ -1,6 +1,6 @@
 //! Content comparison with validated file stamps and cached hashes.
 
-use std::io::Read;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use blake3::Hasher;
 
@@ -11,102 +11,27 @@ use crate::model::{
 use super::hash::{block_for, update};
 use super::read::{
     changed, check_kinds, check_object_ids, class, content_key, different, different_class,
-    finish_side, first_difference, open_pair, outcome, probe_zero_size, read_block, read_pair,
-    stamp_matches, stopped, unavailable,
+    first_difference, outcome, read_block, stamp_matches, stopped, unavailable,
 };
+use super::stream::{Counts, Stream, probe_zero_sizes};
 use super::{CheckOptions, ContentProgress, ContentResult, LARGE_CONTENT_THRESHOLD, Side};
 
 type CachedHashes = (Option<[u8; 32]>, Option<[u8; 32]>);
 
+/// A file modified less than this many ms before its check began may still be written
+/// (git's "racy clean"), so its hash is not stored.
+const RACY_MS: i64 = 10_000;
+
 #[derive(Clone, Copy)]
-struct Sides<'a> {
-    left: Side<'a>,
-    right: Side<'a>,
+pub(super) struct Sides<'a> {
+    pub(super) left: Side<'a>,
+    pub(super) right: Side<'a>,
 }
 
 #[derive(Clone, Copy)]
 struct Cached<'a> {
     key: &'a ContentKey,
     hash: [u8; 32],
-}
-
-#[derive(Clone, Copy)]
-struct Counts {
-    done: u64,
-    total: u64,
-}
-
-impl Counts {
-    const fn new(total: u64) -> Self {
-        Self { done: 0, total }
-    }
-
-    fn add(&mut self, read: usize, block: usize) -> bool {
-        self.done = self
-            .done
-            .saturating_add(u64::try_from(read).unwrap_or(u64::MAX));
-        self.done > self.total || (read < block && self.done != self.total)
-    }
-}
-
-fn probe_zero_sizes(
-    left: Side<'_>,
-    right: Side<'_>,
-) -> Result<(Option<Stamp>, Option<Stamp>), ContentResult> {
-    let left_stamp = probe_zero_size(left).map_err(unavailable)?;
-    let right_stamp = probe_zero_size(right).map_err(unavailable)?;
-    Ok((left_stamp, right_stamp))
-}
-
-struct Stream {
-    left_reader: Box<dyn Read + Send>,
-    right_reader: Box<dyn Read + Send>,
-    left_buffer: Vec<u8>,
-    right_buffer: Vec<u8>,
-    left_counts: Counts,
-    right_counts: Counts,
-}
-
-struct Step {
-    left: usize,
-    right: usize,
-    left_eof: bool,
-    right_eof: bool,
-}
-
-impl Stream {
-    fn open(sides: Sides<'_>, hint: ReadHint) -> Result<Self, ContentResult> {
-        let (left_reader, right_reader) = open_pair(sides.left, sides.right, hint)?;
-        let block = block_for(sides.left.entry.size);
-        Ok(Self {
-            left_reader,
-            right_reader,
-            left_buffer: vec![0u8; block],
-            right_buffer: vec![0u8; block],
-            left_counts: Counts::new(sides.left.entry.size),
-            right_counts: Counts::new(sides.right.entry.size),
-        })
-    }
-
-    fn step(&mut self) -> Result<Step, ContentResult> {
-        let (left, right) = read_pair(
-            &mut *self.left_reader,
-            &mut *self.right_reader,
-            &mut self.left_buffer,
-            &mut self.right_buffer,
-        )?;
-        let left_changed = self.left_counts.add(left, self.left_buffer.len());
-        let right_changed = self.right_counts.add(right, self.right_buffer.len());
-        if left_changed || right_changed {
-            return Err(changed());
-        }
-        Ok(Step {
-            left,
-            right,
-            left_eof: left < self.left_buffer.len(),
-            right_eof: right < self.right_buffer.len(),
-        })
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -141,6 +66,7 @@ pub fn check(
         cancel: options.cancel,
         read_hint: options.read_hint,
         known_same: options.known_same,
+        started_ms: now_ms(),
         left_stamp: Stamp::default(),
         right_stamp: Stamp::default(),
         progress,
@@ -153,6 +79,7 @@ struct Checker<'a, 'b> {
     cancel: &'a CancelToken,
     read_hint: ReadHint,
     known_same: bool,
+    started_ms: Option<i64>,
     left_stamp: Stamp,
     right_stamp: Stamp,
     progress: &'b mut dyn FnMut(ContentProgress),
@@ -202,23 +129,24 @@ impl Checker<'_, '_> {
             (Some(left_hash), Some(right_hash)) if left_hash == right_hash => {
                 outcome(Status::Same, ContentClass::Unknown)
             }
-            (Some(_), Some(_)) => different(None, ContentClass::Unknown),
-            (Some(cached), None) => self.one_side(
-                sides,
-                sides.right,
-                Cached {
+            // NC208: a cached hash may only say Same; Different needs a lockstep read.
+            (Some(_), Some(_)) => self.both(sides, keys),
+            (Some(cached), None) => {
+                let cached = Cached {
                     key: keys.1,
                     hash: cached,
-                },
-            ),
-            (None, Some(cached)) => self.one_side(
-                sides,
-                sides.left,
-                Cached {
+                };
+                let one = self.one_side(sides, sides.right, cached);
+                one.unwrap_or_else(|| self.both(sides, keys))
+            }
+            (None, Some(cached)) => {
+                let cached = Cached {
                     key: keys.0,
                     hash: cached,
-                },
-            ),
+                };
+                let one = self.one_side(sides, sides.left, cached);
+                one.unwrap_or_else(|| self.both(sides, keys))
+            }
             (None, None) => self.both(sides, keys),
         }
     }
@@ -270,10 +198,15 @@ impl Checker<'_, '_> {
         }
     }
 
-    fn one_side(&mut self, sides: Sides<'_>, read: Side<'_>, cached: Cached<'_>) -> ContentResult {
+    fn one_side(
+        &mut self,
+        sides: Sides<'_>,
+        read: Side<'_>,
+        cached: Cached<'_>,
+    ) -> Option<ContentResult> {
         let mut reader = match read.source.open(&read.entry.rel, self.read_hint) {
             Ok(reader) => reader,
-            Err(reason) => return unavailable(reason),
+            Err(reason) => return Some(unavailable(reason)),
         };
         let mut counts = Counts::new(read.entry.size);
         let mut hasher = Hasher::new();
@@ -283,14 +216,14 @@ impl Checker<'_, '_> {
         let mut buffer = vec![0u8; block];
         loop {
             if self.cancel.is_cancelled() {
-                return stopped();
+                return Some(stopped());
             }
             let read_bytes = match read_block(&mut *reader, &mut buffer) {
                 Ok(read) => read,
-                Err(_) => return unavailable(Reason::ReadError),
+                Err(_) => return Some(unavailable(Reason::ReadError)),
             };
             if counts.add(read_bytes, buffer.len()) {
-                return changed();
+                return Some(changed());
             }
             if read_bytes == 0 {
                 let digest = Digest {
@@ -368,16 +301,20 @@ impl Checker<'_, '_> {
         }
     }
 
-    fn finish_one(&self, sides: Sides<'_>, cached: Cached<'_>, digest: Digest) -> ContentResult {
-        match self.unchanged(sides) {
-            Ok(()) => finish_side(
-                self.cache,
-                cached.key,
-                (digest.hash, cached.hash),
-                digest.saw_nul,
-            ),
-            Err(result) => result,
+    fn finish_one(
+        &self,
+        sides: Sides<'_>,
+        cached: Cached<'_>,
+        digest: Digest,
+    ) -> Option<ContentResult> {
+        if let Err(result) = self.unchanged(sides) {
+            return Some(result);
         }
+        if digest.hash != cached.hash {
+            return None;
+        }
+        self.store(cached.key, digest.hash);
+        Some(outcome(Status::Same, class(digest.saw_nul)))
     }
 
     fn finish_both(&self, sides: Sides<'_>, completion: Completion<'_>) -> ContentResult {
@@ -393,8 +330,8 @@ impl Checker<'_, '_> {
         hashers: (&Hasher, &Hasher),
         saw_nul: bool,
     ) -> ContentResult {
-        self.cache.put(keys.0, *hashers.0.finalize().as_bytes());
-        self.cache.put(keys.1, *hashers.1.finalize().as_bytes());
+        self.store(keys.0, *hashers.0.finalize().as_bytes());
+        self.store(keys.1, *hashers.1.finalize().as_bytes());
         outcome(Status::Same, class(saw_nul))
     }
 
@@ -416,10 +353,26 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// Stores `hash` only when the file was modified at least `RACY_MS` before the check
+    /// began; a missing time or an unreadable clock stores nothing.
+    fn store(&self, key: &ContentKey, hash: [u8; 32]) {
+        if let (Some(modified), Some(started)) = (key.modified, self.started_ms)
+            && modified <= started.saturating_sub(RACY_MS)
+        {
+            self.cache.put(key, hash);
+        }
+    }
+
     fn report(&mut self, done: u64, total: u64) {
         (self.progress)(ContentProgress {
             bytes_done: done.min(total),
             bytes_total: total,
         });
     }
+}
+
+/// The wall clock in ms since the epoch; `None` when the clock is before 1970 or too large.
+fn now_ms() -> Option<i64> {
+    let since = SystemTime::now().duration_since(UNIX_EPOCH).ok()?;
+    i64::try_from(since.as_millis()).ok()
 }

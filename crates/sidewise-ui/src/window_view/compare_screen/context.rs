@@ -228,11 +228,19 @@ impl ScreenOwner {
         self.show_menu((items, "compare-menu-title", anchor), window, cx);
     }
 
-    /// The window point just under the cursor line, kept inside the window.
+    /// The window point just under the cursor line, kept inside the screen's painted bounds.
     fn cursor_anchor(&mut self, window: &Window, cx: &App) -> Point<Pixels> {
         let t = tokens::current(cx);
         let (head, row) = (t.spacing.path_height, t.spacing.row_height);
-        let viewport = window.viewport_size();
+        let seen = self.painted.get();
+        let area = if seen.size.height > px(0.) {
+            seen
+        } else {
+            Bounds::from_corners(
+                point(px(0.), px(0.)),
+                point(window.viewport_size().width, window.viewport_size().height),
+            )
+        };
         let from_file = self.compare.screen.as_mut().and_then(|s| s.file.as_mut());
         let y = match from_file {
             Some(file) => {
@@ -243,12 +251,17 @@ impl ScreenOwner {
                     .map(|view| std::sync::Arc::clone(view.text()));
                 let spot = text.and_then(|text| file.pick.cursor_spot(&text));
                 let bottom = file.view.as_mut().map(|v| v.line_bottom(layout, spot, row));
-                head + bottom.unwrap_or_default()
+                area.top() + head + bottom.unwrap_or_default()
             }
-            None => self.stream_cursor_bottom().unwrap_or(viewport.height / 2.),
+            None => self
+                .stream_cursor_bottom()
+                .unwrap_or(area.top() + area.size.height / 2.),
         };
-        let y = y.max(head * 2.).min(viewport.height - head * 2.);
-        point(t.spacing.rail_width, y)
+        let y = y.max(area.top() + head * 2.).min(area.bottom() - head * 2.);
+        point(
+            (area.left() + t.spacing.rail_width).min(area.right() - head),
+            y,
+        )
     }
 
     /// The bottom edge of the Stream's current stop, in window px, once its row is drawn.

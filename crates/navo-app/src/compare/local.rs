@@ -77,7 +77,9 @@ pub(crate) fn local_target() -> LocalTarget {
     Arc::new(|location: &Location| {
         let location = location.clone();
         CompareTarget::Side(Box::new(move || {
-            LocalSide::new(location).map(|side| Arc::new(side) as Arc<dyn SideSource>)
+            LocalSide::new(location)
+                .map(|side| Arc::new(side) as Arc<dyn SideSource>)
+                .map_err(Into::into)
         }))
     })
 }

@@ -229,6 +229,12 @@ impl FolderSession {
         self.rows.slow_paths()
     }
 
+    /// The oldest content read still running, with its age; `None` when none runs.
+    #[must_use]
+    pub fn reading(&self) -> Option<&SlowPath> {
+        self.rows.reading()
+    }
+
     /// Entries listed so far while the walk waits at the network limit; `None` when it runs.
     #[must_use]
     pub fn stopped(&self) -> Option<u64> {

@@ -127,6 +127,11 @@ pub(super) const GROUPS: [Group; 5] = [
                 "compare.toggle_viewed",
                 "cmd-compare-toggle-viewed",
             ),
+            (
+                "compare::ClearViewed",
+                "compare.clear_viewed",
+                "cmd-compare-clear-viewed",
+            ),
             ("compare::Fold", "compare.fold", "cmd-compare-fold"),
             (
                 "compare::OpenFile",

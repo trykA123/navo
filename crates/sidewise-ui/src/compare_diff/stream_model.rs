@@ -241,6 +241,14 @@ impl StreamModel {
         Some((id, key, now))
     }
 
+    /// Drops every Viewed mark and the folds that went with them, after the store was cleared.
+    pub fn clear_viewed(&mut self) {
+        for id in std::mem::take(&mut self.viewed) {
+            self.toggled.remove(&id);
+        }
+        self.fix_cursor();
+    }
+
     /// O: folds or opens the current card. A viewed card opens without losing its mark.
     pub fn toggle_fold(&mut self) {
         let Some(id) = self.items.get(self.cursor.item).map(|i| i.id) else {

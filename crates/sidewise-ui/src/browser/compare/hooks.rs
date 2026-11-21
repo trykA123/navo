@@ -218,6 +218,12 @@ pub enum CompareUpdate {
         path: String,
         elapsed_ms: u64,
     },
+    /// The oldest content read still running and its age; the next row batch replaces it.
+    Reading {
+        generation: u64,
+        path: String,
+        elapsed_ms: u64,
+    },
     /// The compare did not start; nothing follows. The text is shown to the user.
     Failed(String),
 }

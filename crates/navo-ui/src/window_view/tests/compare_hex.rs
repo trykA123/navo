@@ -97,7 +97,7 @@ fn hex_rig_len(
         }),
         ..FileHooks::none()
     };
-    rig_with_files(cx, px(1000.), files)
+    rig_with_files(cx, px(1920.), files)
 }
 
 /// A compare screen whose paged sides wait for `gate`.
@@ -111,7 +111,7 @@ fn hex_rig_gated(cx: &mut TestAppContext, gate: Arc<Gate>) -> Rig {
         }),
         ..FileHooks::none()
     };
-    rig_with_files(cx, px(1000.), files)
+    rig_with_files(cx, px(1920.), files)
 }
 
 /// A compare screen whose first pair opens from `first`; every later open waits for `gate`,
@@ -144,7 +144,7 @@ fn hex_rig_reopen(
         }),
         ..FileHooks::none()
     };
-    rig_with_files(cx, px(1000.), files)
+    rig_with_files(cx, px(1920.), files)
 }
 
 /// Refreshes the open binary pair and delivers its second `Opened`; the reopen is started but

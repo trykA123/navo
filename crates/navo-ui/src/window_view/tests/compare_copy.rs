@@ -124,6 +124,7 @@ impl Rig {
         let done = CopyDone {
             request,
             direction,
+            job: matches!(result, CopyResult::Copied).then(|| "job-1".to_owned()),
             result,
         };
         self.diff.copy_sink()(done);
@@ -170,7 +171,7 @@ fn compare_copy_a_copied_change_says_so_with_undo_and_the_pair_reloads(cx: &mut 
     assert_eq!(rig.note(cx), None, "no note while the copy runs");
     rig.finish(cx, CopyDirection::ToRight, CopyResult::Copied);
     let said = tr("compare-copied-right");
-    assert_eq!(rig.note(cx), Some((said, true, false)));
+    assert_eq!(rig.note(cx), Some((said, false, false)));
     assert_eq!(rig.diff.refreshed(), 1, "the pair reloads");
     let opened = DiffUpdate::Opened {
         request: 1,

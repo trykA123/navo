@@ -1,0 +1,16 @@
+# Profile of Sidewise: brand names, folders, format versions and the sessions store. No GUI.
+[package]
+name = "navo-compare-profile"
+version = "0.1.0-alpha.5"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+sidewise-git-address = { path = "../sidewise-git-address" }
+toml = "1.2.1"
+
+[lints]
+workspace = true

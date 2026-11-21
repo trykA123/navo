@@ -5,6 +5,7 @@ pub mod diff;
 pub mod dirs;
 pub mod entry;
 pub mod handle;
+pub mod hash_cache;
 pub mod pane;
 pub mod rules;
 pub mod settings;

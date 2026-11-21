@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use blake3::Hasher;
 use navo_core::{ProviderId, ProviderPath};
 
-use super::fake::{FakeCache, FakeSource, entry, options, side, source};
+use super::fake::{FakeCache, FakeSource, SETTLED_MS, entry, options, side, source};
 use crate::content::read::content_key;
 use crate::content::{
     CONTENT_BLOCK, ContentResult, LARGE_CONTENT_THRESHOLD, PARALLEL_CONTENT_BLOCK, Side, check,
@@ -26,7 +26,7 @@ fn sized(name: &str, bytes: Vec<u8>, size: u64) -> FakeSource {
         name,
         Stamp {
             size,
-            modified: None,
+            modified: Some(SETTLED_MS),
             file_id: None,
         },
     );
@@ -76,7 +76,7 @@ impl FileSource {
             name: name.to_owned(),
             stamp: Stamp {
                 size: PAIR_SIZE,
-                modified: None,
+                modified: Some(SETTLED_MS),
                 file_id: None,
             },
         }

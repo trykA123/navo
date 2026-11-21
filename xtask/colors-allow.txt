@@ -1,3 +1,5 @@
 crates/sidewise-kit/src/tokens/** | the token layer builds every colour the rest of the app reads
+crates/navo-compare-app/src/theme_data/** | Sidewise OKLCH palette definitions feeding the token layer (unified into suite-kit in M1/M4)
+crates/navo-compare-app/src/start_tabs.rs | Sidewise start-screen hero gradient ink derived from palette art tokens
 crates/navo-ui/src/window_view/viewer/image/fixtures.rs | test image whose SVG source carries its own colours
 assets/brand/** | the logo keeps its brand colours

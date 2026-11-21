@@ -1,9 +1,11 @@
 //! The compare screen entity owns its screens and receives plain inputs from its window.
 
+use std::cell::Cell;
 use std::ops::ControlFlow;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gpui_kit::{EventEmitter, Task};
+use gpui_kit::{EventEmitter, Task, canvas};
 
 use super::files::CompareFiles;
 use super::look::{Look, LookDefaults};
@@ -30,6 +32,8 @@ pub struct CompareScreen {
     sides: SharedString,
     stamp: Option<(u64, u64)>,
     look: LookDefaults,
+    /// Where the screen was last painted, in window px; the keyboard menu anchors inside it.
+    pub(super) painted: Rc<Cell<Bounds<Pixels>>>,
 }
 
 impl CompareScreen {
@@ -43,6 +47,7 @@ impl CompareScreen {
             sides: SharedString::default(),
             stamp: None,
             look: LookDefaults::default(),
+            painted: Rc::default(),
         }
     }
 
@@ -187,10 +192,29 @@ impl CompareScreen {
 impl EventEmitter<ScreenEvent> for CompareScreen {}
 
 impl Render for CompareScreen {
-    /// Draws the file diff or Stream, or an empty element while neither is open.
+    /// Draws the file diff or Stream with its open context menu (a window overlay that takes
+    /// no layout space), or an empty element while neither screen is open.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.compare_screen_view(window, cx)
-            .unwrap_or_else(|| div().into_any_element())
+        let menu = self.compare_menu_view();
+        let Some(view) = self.compare_screen_view(window, cx) else {
+            return div();
+        };
+        // The menu sits outside the screens' key contexts: keys it leaves never reach the diff.
+        let painted = Rc::clone(&self.painted);
+        div()
+            .relative()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .child(
+                canvas(move |bounds, _, _| painted.set(bounds), |_, (), _, _| {})
+                    .absolute()
+                    .size_full(),
+            )
+            .child(view)
+            .children(menu)
     }
 }
 
@@ -213,4 +237,14 @@ pub enum ScreenEvent {
     WalkFile { from: u64, step: i32 },
     /// The resync wait ended: rebuild the Stream from the folder compare.
     Resync,
+    /// All Viewed marks were cleared (or could not be): show `text` in a toast; with `cleared`
+    /// set, other screens drop their marks too.
+    ViewedCleared { text: String, cleared: bool },
+    /// A copy or an undo finished: show `text` in a toast, with Undo of copy `job` when set;
+    /// other screens reload the `reload` files, which an undo may have rewritten (NC148).
+    Wrote {
+        text: String,
+        job: Option<String>,
+        reload: Vec<navo_core::Location>,
+    },
 }

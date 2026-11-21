@@ -52,6 +52,7 @@ fn finished(receiver: &Receiver<CompareUpdate>) -> Vec<(String, RowStatus)> {
             | CompareUpdate::Stopped { .. }
             | CompareUpdate::Continued { .. }
             | CompareUpdate::PhaseProgress { .. }
+            | CompareUpdate::Reading { .. }
             | CompareUpdate::SlowPath { .. } => {}
             CompareUpdate::Finished { .. } => break,
             CompareUpdate::Failed(text) => panic!("compare failed: {text}"),
@@ -131,6 +132,7 @@ fn the_stored_compare_table_maps_to_the_engine_settings() {
             respect_gitignore: false,
             ..Compare::default()
         },
+        fresh_hashes: false,
     });
     assert_eq!(settings.content_check, CheckMode::SizeTime);
     assert_eq!(settings.memory_budget_mib, 256);

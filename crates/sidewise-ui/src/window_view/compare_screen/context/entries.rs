@@ -3,8 +3,9 @@
 
 use super::run;
 use crate::commands::compare::{
-    Changes, CopyLeft, CopyRight, Details, Fold, NextDifference, NextFile, OpenFile, PickToggle,
-    PreviousDifference, PreviousFile, RemovePicked, Search, ShowBytesHere, ToggleViewed, ViewMenu,
+    Changes, ClearViewed, CopyLeft, CopyRight, Details, Fold, NextDifference, NextFile, OpenFile,
+    PickToggle, PreviousDifference, PreviousFile, RemovePicked, Search, ShowBytesHere,
+    ToggleViewed, ViewMenu,
 };
 use crate::compare_diff::CopyDirection;
 use crate::window_view::CompareScreen;
@@ -127,6 +128,7 @@ pub(super) fn stream_entries(facts: &StreamFacts) -> Vec<MenuEntry> {
         vec![
             run("cmd-compare-open-file", OpenFile),
             run("cmd-compare-toggle-viewed", ToggleViewed),
+            run("cmd-compare-clear-viewed", ClearViewed),
             run("cmd-compare-fold", Fold),
         ]
     } else {

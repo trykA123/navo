@@ -478,6 +478,7 @@ compare.remove_picked | CompareView | true
 compare.show_menu | CompareView | true
 compare.toggle_wrap | CompareView | true
 compare.toggle_viewed | CompareStream | true
+compare.clear_viewed | CompareStream | true
 compare.fold | CompareStream | true
 compare.open_file | CompareStream | true
 compare.search | CompareStream | true

@@ -7,6 +7,10 @@ rust-version.workspace = true
 publish.workspace = true
 license.workspace = true
 
+[features]
+# `FaultDisk`, the numbered fault and crash layer for data-safety tests.
+test-support = []
+
 [dependencies]
 navo-core = { package = "sidewise-core", path = "../sidewise-core" }
 
@@ -15,10 +19,13 @@ rustix = { version = "1.1.6", features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
 same-file = "1.0.6"
+tracing = "0.1.44"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_RestartManager", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
 
 [dev-dependencies]
 encoding_rs = "0.8.44"
+# Itself with `test-support`, so a plain `cargo test` (and the gate) runs the fault tests.
+sidewise-fs = { path = ".", features = ["test-support"] }
 tempfile = "3.27.0"
 
 [lints]

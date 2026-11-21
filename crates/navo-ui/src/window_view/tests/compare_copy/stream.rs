@@ -75,7 +75,7 @@ fn compare_copy_the_stream_key_copies_the_current_change_and_reloads_its_card(
     rig.finish(cx, CopyDirection::ToRight, CopyResult::Copied);
     assert_eq!(
         rig.note(cx),
-        Some((tr("compare-copied-right"), true, false))
+        Some((tr("compare-copied-right"), false, false))
     );
     assert_eq!(rig.diff.reloaded(), vec![1], "the copied card is rebuilt");
     let generation = screen_read(&rig.view, cx, |view, _| {

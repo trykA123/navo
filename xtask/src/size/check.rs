@@ -22,8 +22,5 @@ pub fn check_files(files: &[(PathBuf, String)], exceptions: &[Exception]) -> Vec
 }
 
 pub(super) fn is_test_file(path: &Path) -> bool {
-    path.file_name().is_some_and(|name| name == "tests.rs")
-        || path
-            .components()
-            .any(|component| component.as_os_str() == "tests")
+    crate::l10n::is_test_path(path)
 }

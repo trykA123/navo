@@ -59,12 +59,17 @@ pub(super) fn spawn(run: Run) -> Vec<JoinHandle<()>> {
         #[cfg(test)]
         settle_hook: run.settle_hook,
     });
-    let mut handles = Vec::with_capacity(workers + 1);
+    let mut handles = Vec::with_capacity(workers + 2);
     let mut started = true;
     for _ in 0..workers {
         let inner = Arc::clone(&context);
         started = started && threads::start(&mut handles, move || worker(&inner));
     }
+    let beat = Arc::clone(&context);
+    started = started
+        && threads::start(&mut handles, move || {
+            beat.shared.beat_until_final(beat.generation, &beat.cancel);
+        });
     let walker = Arc::clone(&context);
     if !(started && threads::start(&mut handles, move || threads::walk_guarded(&walker))) {
         threads::stop(&context);
@@ -183,6 +188,7 @@ fn check_row(context: &Context, mut row: Row, job: &Job) -> Row {
             context.shared.emit_progress(context.generation, progress);
         }
     };
+    let _reading = context.shared.begin_read(job.id, left_entry.rel.clone());
     let started = Instant::now();
     let result = content::check(
         Side {

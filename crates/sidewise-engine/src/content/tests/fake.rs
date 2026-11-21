@@ -12,6 +12,9 @@ use crate::model::{
     SideSource, Stamp,
 };
 
+/// A modified time (ms since the epoch) long settled, so fake files may be cached.
+pub(super) const SETTLED_MS: i64 = 1_000;
+
 #[derive(Default)]
 pub(super) struct Stats {
     opens: AtomicU64,
@@ -22,7 +25,7 @@ pub(super) struct Stats {
 }
 
 impl Stats {
-    fn opens(&self) -> u64 {
+    pub(super) fn opens(&self) -> u64 {
         self.opens.load(Ordering::Relaxed)
     }
 
@@ -262,7 +265,7 @@ impl HashCache for FakeCache {
 pub(super) fn source(name: &str, bytes: Vec<u8>) -> FakeSource {
     let stamp = Stamp {
         size: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
-        modified: None,
+        modified: Some(SETTLED_MS),
         file_id: None,
     };
     let mut files = HashMap::new();
@@ -290,7 +293,7 @@ fn rel(name: &str) -> RelPath {
 }
 
 pub(super) fn entry(name: &str, size: u64) -> SideEntry {
-    SideEntry::new(rel(name), EntryKind::File, size, None)
+    SideEntry::new(rel(name), EntryKind::File, size, Some(SETTLED_MS))
 }
 
 pub(super) fn kind_entry(name: &str, kind: EntryKind) -> SideEntry {

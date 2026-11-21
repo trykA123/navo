@@ -141,7 +141,9 @@ fn a_missing_root_fails_on_its_side() {
     let missing = right.path().join("gone");
     let (_handle, receiver) = start(&missing, right.path());
     match receiver.recv_timeout(WAIT).unwrap() {
-        CompareEvent::Failed(error) => assert_eq!(error, CompareError::Left(Reason::NotFound)),
+        CompareEvent::Failed(error) => {
+            assert_eq!(error, CompareError::Left(Reason::NotFound.into()))
+        }
         other => panic!("expected a failure, got {other:?}"),
     }
 }
@@ -265,9 +267,10 @@ fn sleepy_handle(listing: Listing) -> Probe {
             })
         };
         let (left, right) = (side(), side());
+        let cache: Arc<dyn HashCache> = Arc::new(NoCache);
         let options = SessionOptions {
             rules: Arc::new(rules),
-            cache: Arc::new(NoCache),
+            cache: Arc::clone(&cache),
             read_hint: ReadHint::Buffered,
             check_mode: CheckMode::Content,
             network_cap: None,
@@ -275,6 +278,7 @@ fn sleepy_handle(listing: Listing) -> Probe {
         Ok(Opened {
             session: Session::start(Arc::clone(&left), Arc::clone(&right), options),
             refresh: vec![left, right],
+            cache,
         })
     };
     let handle = CompareHandle::spawn(open, sender);

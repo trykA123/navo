@@ -73,6 +73,7 @@ cmd-compare-view-menu = View menu of the file diff
 cmd-compare-changes = List of changes
 cmd-compare-details = Details of the pair
 cmd-compare-toggle-viewed = Mark file as viewed
+cmd-compare-clear-viewed = Clear all viewed marks
 cmd-compare-fold = Fold or unfold the card
 cmd-compare-open-file = Open the file diff
 cmd-compare-search = Search the differences
@@ -172,7 +173,10 @@ compare-card-summary-text = No changes to show
 compare-copy-changed = Changed since shown. Nothing was copied.
 compare-copy-read-only = This side is read-only. Nothing was copied.
 compare-copy-not-copyable = This change cannot be copied.
+compare-copy-network = Sidewise does not write to network drives. Nothing was copied.
+compare-copy-in-use = Another program is using this file. Close it there, then try again. Nothing was copied.
 compare-copy-failed = The change was not copied: { $reason }
+compare-copy-unconfirmed = The change may have been written, but Sidewise could not confirm it. It cannot be undone now; Sidewise checks the file at the next start.
 compare-copy-bar-left = Copy to left
 compare-copy-bar-right = Copy to right
 compare-copy-pick = Pick a change first. Nothing was copied.
@@ -187,6 +191,59 @@ compare-tick-label = Pick line { $line }
 compare-copied-left = Copied to the left
 compare-copied-right = Copied to the right
 compare-copy-undo = Undo
+compare-undone = Undid the copy
+compare-undo-changed = The file changed after the copy. Nothing was undone.
+compare-undo-failed = The copy was not undone: { $reason }
+compare-undo-not-newest = Only the latest copy can be undone here; use Ctrl+Z.
+compare-undo-gone = That copy was already undone.
+compare-undo-tab-closed = Use Ctrl+Z in an open compare tab.
+compare-viewed-cleared = { $count ->
+    [one] Cleared 1 viewed mark.
+   *[other] Cleared { $count } viewed marks.
+}
+compare-viewed-none = There are no viewed marks to clear.
+compare-viewed-clear-failed = Viewed marks were not cleared: { $reason }
+compare-cache-cleared = { $count ->
+    [one] Cleared 1 file from the compare cache.
+   *[other] Cleared { $shown } files from the compare cache.
+}
+compare-cache-none = The compare cache is already empty.
+compare-cache-busy = Another Sidewise window is using the compare cache. Close it, then clear again.
+compare-cache-clear-failed = Could not clear the compare cache: { $reason }
+compare-writes-off = Copying is off: { $reason }
+compare-recovery-rolled-back = { $count ->
+    [one] Rolled back an interrupted copy.
+   *[other] Rolled back { $count } interrupted copies.
+}
+compare-recovery-restored = Sidewise restored { $count ->
+    [one] 1 file
+   *[other] { $count } files
+} after an interrupted copy.
+compare-recovery-undo-rolled-back = { $count ->
+    [one] An interrupted undo was rolled back; the files are as they were after the copy.
+   *[other] { $count } interrupted undos were rolled back; the files are as they were after the copies.
+}
+compare-recovery-restored-undo = Sidewise restored { $count ->
+    [one] 1 file
+   *[other] { $count } files
+} after an interrupted undo.
+compare-recovery-kept = { $count ->
+    [one] 1 file changed since the interrupted copy and was kept as is.
+   *[other] { $count } files changed since the interrupted copy and were kept as is.
+}
+compare-recovery-failed = { $count ->
+    [one] 1 file
+   *[other] { $count } files
+} could not be restored now; Sidewise tries again at the next start.
+compare-recovery-damaged = { $count ->
+    [one] 1 damaged journal entry was left untouched.
+   *[other] { $count } damaged journal entries were left untouched.
+}
+compare-recovery-sweep-failed = { $count ->
+    [one] 1 old backup
+   *[other] { $count } old backups
+} could not be removed; Sidewise tries again at the next start.
+compare-recovery-folder = The backups stay in { $folder }
 compare-sheet-title-left = Copy all matches to the left
 compare-sheet-title-right = Copy all matches to the right
 compare-sheet-confirm = Copy all
@@ -332,3 +389,5 @@ compare-gutter-pending = …
 compare-gutter-not-checked = unchecked
 compare-gutter-unavailable = can't read
 compare-files-cannot-open = Files cannot be opened here.
+# The Large view while one file is still being read; $seconds is preformatted, e.g. 6.2.
+compare-large-reading = Reading { $path } · { $seconds } s

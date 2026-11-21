@@ -2600,6 +2600,7 @@ dependencies = [
  "gix-command",
  "gix-commitgraph",
  "gix-config",
+ "gix-credentials",
  "gix-date",
  "gix-diff",
  "gix-dir",
@@ -2613,6 +2614,7 @@ dependencies = [
  "gix-ignore",
  "gix-index",
  "gix-lock",
+ "gix-negotiate",
  "gix-note",
  "gix-object",
  "gix-odb",
@@ -2620,6 +2622,7 @@ dependencies = [
  "gix-parallel",
  "gix-path",
  "gix-pathspec",
+ "gix-prompt",
  "gix-protocol",
  "gix-quote",
  "gix-ref",
@@ -2632,6 +2635,7 @@ dependencies = [
  "gix-submodule",
  "gix-tempfile",
  "gix-trace",
+ "gix-transport",
  "gix-traverse",
  "gix-url",
  "gix-utils",
@@ -2748,6 +2752,26 @@ dependencies = [
  "gix-path",
  "gix-utils",
  "libc",
+]
+
+[[package]]
+name = "gix-credentials"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8487f709886267337ee39231a5e68f3c6a4e28fd59e056fc9e66e9638941c633"
+dependencies = [
+ "bstr",
+ "gix-command",
+ "gix-config-value",
+ "gix-date",
+ "gix-error",
+ "gix-path",
+ "gix-prompt",
+ "gix-quote",
+ "gix-sec",
+ "gix-trace",
+ "gix-url",
+ "percent-encoding",
 ]
 
 [[package]]
@@ -2980,6 +3004,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gix-negotiate"
+version = "0.38.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "148bee10394df68d44c245e05b4c0747edf19144405c6c36a9eee29db9bb250d"
+dependencies = [
+ "bitflags 2.13.2",
+ "gix-commitgraph",
+ "gix-date",
+ "gix-error",
+ "gix-hash",
+ "gix-object",
+ "gix-revwalk",
+]
+
+[[package]]
 name = "gix-note"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3044,6 +3083,7 @@ checksum = "e2ef461798b1e6cb652192c69dfc9658dfc1bab457ef812dd1ab85d75104cbef"
 dependencies = [
  "clru",
  "crc32fast",
+ "crossbeam-deque",
  "gix-chunk",
  "gix-error",
  "gix-hash",
@@ -3051,10 +3091,12 @@ dependencies = [
  "gix-object",
  "gix-parallel",
  "gix-path",
+ "gix-tempfile",
  "gix-trace",
  "gix-utils",
  "gix-zlib",
  "memmap2",
+ "parking_lot",
  "smallvec",
 ]
 
@@ -3110,18 +3152,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "gix-prompt"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d9650eedebb85e55577831db217403333416573356de722a040415c416f1cec"
+dependencies = [
+ "gix-command",
+ "gix-config-value",
+ "gix-error",
+ "parking_lot",
+ "rustix",
+]
+
+[[package]]
 name = "gix-protocol"
 version = "0.68.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83677ebae6a1a09dc07f2435b5ebe68470dc51afb74052135e98fd7c11f85ba9"
 dependencies = [
  "bstr",
+ "gix-credentials",
  "gix-date",
  "gix-error",
  "gix-hash",
+ "gix-lock",
  "gix-macros",
+ "gix-negotiate",
+ "gix-object",
  "gix-ref",
+ "gix-refspec",
+ "gix-revwalk",
  "gix-shallow",
+ "gix-trace",
  "gix-transport",
  "gix-utils",
  "nonempty",
@@ -3297,8 +3359,10 @@ version = "0.62.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdcd9cdfd8745aa38f926a4a380c13d76b200d7338de57fc492982cd5a6652ba"
 dependencies = [
+ "base64 0.22.1",
  "bstr",
  "gix-command",
+ "gix-credentials",
  "gix-error",
  "gix-packetline",
  "gix-path",
@@ -3307,6 +3371,7 @@ dependencies = [
  "gix-trace",
  "gix-url",
  "gix-utils",
+ "parking_lot",
 ]
 
 [[package]]
@@ -6213,6 +6278,52 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "zeroize",
+]
+
+[[package]]
+name = "navo-compare-app"
+version = "0.1.0-alpha.5"
+dependencies = [
+ "blake3",
+ "chrono",
+ "embed-resource",
+ "futures",
+ "gpui-kit",
+ "image",
+ "navo-compare-cli",
+ "navo-compare-profile",
+ "resvg 0.49.0",
+ "sidewise-core",
+ "sidewise-engine",
+ "sidewise-fs",
+ "sidewise-git",
+ "sidewise-git-remote",
+ "sidewise-host",
+ "sidewise-journal",
+ "sidewise-kit",
+ "sidewise-l10n",
+ "sidewise-ui",
+ "sidewise-update",
+ "tempfile",
+ "toml 1.2.1+spec-1.1.0",
+ "tracing",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "navo-compare-cli"
+version = "0.1.0-alpha.5"
+dependencies = [
+ "sidewise-git-address",
+]
+
+[[package]]
+name = "navo-compare-profile"
+version = "0.1.0-alpha.5"
+dependencies = [
+ "serde",
+ "sidewise-git-address",
+ "toml 1.2.1+spec-1.1.0",
 ]
 
 [[package]]
@@ -9231,8 +9342,42 @@ dependencies = [
  "rustix",
  "same-file",
  "sidewise-core",
+ "sidewise-fs",
  "tempfile",
+ "tracing",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "sidewise-git"
+version = "0.8.1"
+dependencies = [
+ "gix",
+ "sidewise-core",
+ "sidewise-engine",
+ "tempfile",
+]
+
+[[package]]
+name = "sidewise-git-address"
+version = "0.8.1"
+dependencies = [
+ "blake3",
+]
+
+[[package]]
+name = "sidewise-git-remote"
+version = "0.8.1"
+dependencies = [
+ "blake3",
+ "gix",
+ "gix-transport",
+ "sidewise-core",
+ "sidewise-engine",
+ "sidewise-git",
+ "sidewise-git-address",
+ "sidewise-winhttp",
+ "tempfile",
 ]
 
 [[package]]
@@ -9246,10 +9391,24 @@ dependencies = [
  "sidewise-core",
  "sidewise-engine",
  "sidewise-fs",
+ "sidewise-journal",
  "sidewise-l10n",
  "sidewise-ui",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "sidewise-journal"
+version = "0.8.1"
+dependencies = [
+ "blake3",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sidewise-core",
+ "sidewise-fs",
+ "tempfile",
 ]
 
 [[package]]
@@ -9309,6 +9468,24 @@ dependencies = [
  "sidewise-l10n",
  "toml 1.2.1+spec-1.1.0",
  "unicode-width",
+]
+
+[[package]]
+name = "sidewise-update"
+version = "0.8.1"
+dependencies = [
+ "semver",
+ "serde",
+ "serde_json",
+ "sidewise-winhttp",
+ "tracing",
+]
+
+[[package]]
+name = "sidewise-winhttp"
+version = "0.8.1"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

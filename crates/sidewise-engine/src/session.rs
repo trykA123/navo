@@ -61,6 +61,8 @@ pub struct RowBatch {
     pub limit: Option<LimitStop>,
     pub phase: Option<PhaseTelemetry>,
     pub slow: Vec<SlowEntry>,
+    /// The oldest content read still running and its age so far; `None` when none runs.
+    pub reading: Option<SlowEntry>,
 }
 
 impl Default for RowBatch {
@@ -75,6 +77,7 @@ impl Default for RowBatch {
             limit: None,
             phase: None,
             slow: Vec::new(),
+            reading: None,
         }
     }
 }

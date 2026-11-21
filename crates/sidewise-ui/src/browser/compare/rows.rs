@@ -30,6 +30,8 @@ pub struct CompareRows {
     phase: Option<ComparePhase>,
     /// The slow paths of this generation, oldest first, at most `SLOW_PATHS_MAX`.
     slow_paths: Vec<SlowPath>,
+    /// The oldest content read running at the newest batch; `None` when none runs.
+    reading: Option<SlowPath>,
     checking: bool,
     /// Entries listed so far while the walk waits at the network limit.
     stopped: Option<u64>,
@@ -63,10 +65,9 @@ impl CompareRows {
                 self.totals = totals;
             }
             CompareUpdate::Finished { generation } => {
-                if generation != self.generation {
+                if !self.finish(generation) {
                     return Applied::Ignored;
                 }
-                self.checking = false;
             }
             CompareUpdate::Stopped {
                 generation,
@@ -83,7 +84,9 @@ impl CompareRows {
                     return Applied::Ignored;
                 }
             }
-            CompareUpdate::PhaseProgress { .. } | CompareUpdate::SlowPath { .. } => {
+            CompareUpdate::PhaseProgress { .. }
+            | CompareUpdate::SlowPath { .. }
+            | CompareUpdate::Reading { .. } => {
                 if !self.apply_telemetry(update) {
                     return Applied::Ignored;
                 }
@@ -96,7 +99,17 @@ impl CompareRows {
         Applied::Changed
     }
 
-    /// Stores phase progress or a slow path; false for an older generation or another update.
+    /// Ends the current generation: no check and no read runs any more; false for another one.
+    fn finish(&mut self, generation: u64) -> bool {
+        if generation != self.generation {
+            return false;
+        }
+        self.checking = false;
+        self.reading = None;
+        true
+    }
+
+    /// Stores phase progress, a slow path or the running read; false for an older generation or another update.
     fn apply_telemetry(&mut self, update: CompareUpdate) -> bool {
         match update {
             CompareUpdate::PhaseProgress {
@@ -120,6 +133,16 @@ impl CompareRows {
                 }
                 self.slow_paths.push(SlowPath { path, elapsed_ms });
             }
+            CompareUpdate::Reading {
+                generation,
+                path,
+                elapsed_ms,
+            } => {
+                if !self.admit(generation) {
+                    return false;
+                }
+                self.reading = Some(SlowPath { path, elapsed_ms });
+            }
             _ => return false,
         }
         true
@@ -136,6 +159,8 @@ impl CompareRows {
             return false;
         }
         self.batches += u64::from(!rows.is_empty());
+        // Every batch states the running read; a `Reading` update follows when one runs.
+        self.reading = None;
         rows.into_iter().for_each(|row| self.upsert(row));
         for step in progress {
             self.progress.insert(step.id, step);
@@ -244,6 +269,11 @@ impl CompareRows {
         &self.slow_paths
     }
 
+    /// The oldest content read running at the newest batch, with its age; `None` when none runs.
+    pub fn reading(&self) -> Option<&SlowPath> {
+        self.reading.as_ref()
+    }
+
     /// Row batches received in this generation; it changes whenever a row arrives or changes.
     pub(super) fn batches(&self) -> u64 {
         self.batches
@@ -255,145 +285,4 @@ impl CompareRows {
 }
 
 #[cfg(test)]
-mod telemetry_tests {
-    use super::super::hooks::{ComparePhase, CompareUpdate, SlowPath};
-    use super::{Applied, CompareRows};
-
-    /// Opens `generation` with an empty batch, so it is the newest one.
-    fn start(rows: &mut CompareRows, generation: u64) {
-        let update = CompareUpdate::Rows {
-            generation,
-            rows: Vec::new(),
-            progress: Vec::new(),
-        };
-        assert_eq!(rows.apply(update), Applied::Changed);
-    }
-
-    #[test]
-    fn phase_progress_of_the_current_generation_changes_the_rows() {
-        let mut rows = CompareRows::new();
-        start(&mut rows, 2);
-        let update = CompareUpdate::PhaseProgress {
-            generation: 2,
-            phase: ComparePhase::QuickCheck,
-            done: 4,
-            total: Some(10),
-        };
-        assert_eq!(rows.apply(update), Applied::Changed);
-        assert_eq!(rows.phase(), Some(ComparePhase::QuickCheck));
-    }
-
-    #[test]
-    fn a_slow_path_of_the_current_generation_changes_the_rows() {
-        let mut rows = CompareRows::new();
-        start(&mut rows, 2);
-        let update = CompareUpdate::SlowPath {
-            generation: 2,
-            path: "slow.bin".to_owned(),
-            elapsed_ms: 250,
-        };
-        assert_eq!(rows.apply(update), Applied::Changed);
-        assert_eq!(
-            rows.slow_paths(),
-            [SlowPath {
-                path: "slow.bin".to_owned(),
-                elapsed_ms: 250,
-            }]
-            .as_slice()
-        );
-    }
-
-    #[test]
-    fn the_latest_phase_and_slow_paths_read_back_after_updates() {
-        let mut rows = CompareRows::new();
-        start(&mut rows, 2);
-        rows.apply(CompareUpdate::PhaseProgress {
-            generation: 2,
-            phase: ComparePhase::Listing,
-            done: 0,
-            total: None,
-        });
-        rows.apply(CompareUpdate::PhaseProgress {
-            generation: 2,
-            phase: ComparePhase::ContentCheck,
-            done: 3,
-            total: Some(9),
-        });
-        rows.apply(CompareUpdate::SlowPath {
-            generation: 2,
-            path: "a.bin".to_owned(),
-            elapsed_ms: 250,
-        });
-        rows.apply(CompareUpdate::SlowPath {
-            generation: 2,
-            path: "b.bin".to_owned(),
-            elapsed_ms: 400,
-        });
-        assert_eq!(
-            rows.phase(),
-            Some(ComparePhase::ContentCheck),
-            "the newest phase wins"
-        );
-        assert_eq!(
-            rows.slow_paths(),
-            [
-                SlowPath {
-                    path: "a.bin".to_owned(),
-                    elapsed_ms: 250,
-                },
-                SlowPath {
-                    path: "b.bin".to_owned(),
-                    elapsed_ms: 400,
-                },
-            ]
-            .as_slice(),
-            "slow paths keep arrival order"
-        );
-        start(&mut rows, 3);
-        assert_eq!(rows.phase(), None, "a new compare starts without a phase");
-        assert!(
-            rows.slow_paths().is_empty(),
-            "a new compare starts without slow paths"
-        );
-    }
-
-    #[test]
-    fn slow_paths_keep_only_the_newest_64() {
-        let mut rows = CompareRows::new();
-        start(&mut rows, 2);
-        for step in 0..65 {
-            let update = CompareUpdate::SlowPath {
-                generation: 2,
-                path: format!("{step}.bin"),
-                elapsed_ms: 0,
-            };
-            assert_eq!(rows.apply(update), Applied::Changed);
-        }
-        assert_eq!(rows.slow_paths().len(), 64, "the list is bounded");
-        assert_eq!(rows.slow_paths()[0].path, "1.bin", "the oldest path drops");
-        assert_eq!(
-            rows.slow_paths()[63].path,
-            "64.bin",
-            "the newest path is last"
-        );
-    }
-
-    #[test]
-    fn telemetry_of_an_older_generation_is_ignored() {
-        let mut rows = CompareRows::new();
-        start(&mut rows, 2);
-        let phase = CompareUpdate::PhaseProgress {
-            generation: 1,
-            phase: ComparePhase::Listing,
-            done: 0,
-            total: None,
-        };
-        let slow = CompareUpdate::SlowPath {
-            generation: 1,
-            path: "old.bin".to_owned(),
-            elapsed_ms: 300,
-        };
-        assert_eq!(rows.apply(phase), Applied::Ignored);
-        assert_eq!(rows.apply(slow), Applied::Ignored);
-    }
-}
+mod telemetry_tests;

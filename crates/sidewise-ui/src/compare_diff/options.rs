@@ -7,4 +7,6 @@ use navo_compare::settings::Compare;
 pub struct CompareOptions {
     /// The stored `[compare]` table.
     pub compare: Compare,
+    /// Not stored: true for one start (F5, Recheck all) that ignores remembered hashes and stores fresh ones (NC209).
+    pub fresh_hashes: bool,
 }

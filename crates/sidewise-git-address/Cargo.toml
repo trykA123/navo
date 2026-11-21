@@ -1,0 +1,14 @@
+# The sidewise-git-address crate: parses remote https Git addresses; depends only on blake3.
+[package]
+name = "sidewise-git-address"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = "=1.8.7"
+
+[lints]
+workspace = true

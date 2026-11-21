@@ -42,7 +42,7 @@ pub(super) fn rows(view: View<'_>) -> Vec<AnyElement> {
     range
         .filter_map(|at| {
             let map = rows.row(at)?;
-            Some(row_element((t, at), map, loaded, &tints))
+            Some(row_element((t, at, rows.width()), map, loaded, &tints))
         })
         .collect()
 }
@@ -107,9 +107,10 @@ pub(super) fn message(t: &Theme, text: SharedString) -> AnyElement {
         .into_any_element()
 }
 
-/// One aligned row: the left and right hex rows, each with a gap cell when its side is absent.
+/// One aligned row of `width` bytes per side: the left and right hex rows, each with a gap
+/// cell when its side is absent.
 fn row_element(
-    (t, at): (&Theme, usize),
+    (t, at, width): (&Theme, usize, u64),
     map: RowAt,
     bytes: &ByteCache,
     tints: &Tints<'_>,
@@ -122,7 +123,7 @@ fn row_element(
         .border_color(t.colors.line)
         .pl(t.spacing.xl)
         .child(side_cell(
-            (t, at, true),
+            (t, at, true, width),
             map.right,
             bytes.right(map.right),
             tints,
@@ -134,7 +135,7 @@ fn row_element(
         .gap(t.spacing.md)
         .h(t.spacing.row_height)
         .child(div().flex_1().min_w_0().overflow_hidden().child(side_cell(
-            (t, at, false),
+            (t, at, false, width),
             map.left,
             bytes.left(map.left),
             tints,
@@ -143,9 +144,10 @@ fn row_element(
         .into_any_element()
 }
 
-/// One side of a row: its offset, hex and ASCII, or a hatched gap when it has no bytes.
+/// One side of a row: its offset, hex cut to `width` bytes and ASCII, or a hatched gap when
+/// it has no bytes.
 fn side_cell(
-    (t, at, right): (&Theme, usize, bool),
+    (t, at, right, width): (&Theme, usize, bool, u64),
     span: Option<RowSpan>,
     row: Option<HexRow>,
     tints: &Tints<'_>,
@@ -153,9 +155,10 @@ fn side_cell(
     let Some(span) = span else {
         return gap_cell(t, at, right);
     };
-    let Some(row) = row else {
+    let Some(mut row) = row else {
         return blank_cell(at, right);
     };
+    row.hex.truncate(super::width::hex_columns(width));
     let (marks, current) = match right {
         true => (tints.right, tints.current),
         false => (tints.left, tints.current),
@@ -167,6 +170,7 @@ fn side_cell(
     let index = at * 2 + usize::from(right);
     div()
         .id(ElementId::from(("compare-hex-side", index)))
+        .test_support()
         .w_full()
         .child(hex_row_tinted(
             t,

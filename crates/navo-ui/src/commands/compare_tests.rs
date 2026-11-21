@@ -50,6 +50,7 @@ fn the_compare_commands_are_registered_in_the_planned_contexts() {
             ("compare.show_menu", "CompareView"),
             ("compare.toggle_wrap", "CompareView"),
             ("compare.toggle_viewed", "CompareStream"),
+            ("compare.clear_viewed", "CompareStream"),
             ("compare.fold", "CompareStream"),
             ("compare.open_file", "CompareStream"),
             ("compare.search", "CompareStream"),

@@ -2,6 +2,7 @@
 #![deny(unsafe_code)]
 
 mod drive_class;
+pub mod durable;
 pub mod native;
 mod network_walk;
 mod paged;

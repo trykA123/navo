@@ -1,11 +1,10 @@
 //! Row math of the hex body: offset rows, content rows that split only when the two sides
-//! start a changed region at different lengths, and the row each region starts on.
-
-use navo_core::paging::HEX_WIDTH;
+//! start a changed region at different lengths, and the row each region starts on. A row holds
+//! `width` bytes (16, 8 or 4, B2), so every row and region offset steps by that width.
 
 use crate::compare_diff::{ByteRegionView, HexAlign};
 
-/// The byte offset and count a side shows in one row; the count is at most 16.
+/// The byte offset and count a side shows in one row; the count is at most the row width.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[doc(hidden)]
 pub struct RowSpan {
@@ -56,18 +55,35 @@ struct Segment {
 }
 
 /// The aligned rows and the row each changed region starts on.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 #[doc(hidden)]
 pub struct Rows {
     segments: Vec<Segment>,
     total: usize,
     region_rows: Vec<usize>,
+    /// The bytes per row, never 0.
+    width: u64,
 }
 
 impl Rows {
-    /// Rows by offset over `lengths`; the longer side's tail shows gaps.
-    pub(super) fn offset(lengths: (u64, u64)) -> Self {
-        let mut rows = Self::default();
+    /// No rows yet, `width` bytes per row (at least 1).
+    fn empty(width: u64) -> Self {
+        Self {
+            segments: Vec::new(),
+            total: 0,
+            region_rows: Vec::new(),
+            width: width.max(1),
+        }
+    }
+
+    /// The bytes per row.
+    pub(super) fn width(&self) -> u64 {
+        self.width
+    }
+
+    /// Rows by offset over `lengths`, `width` bytes each; the longer side's tail shows gaps.
+    pub(super) fn offset(lengths: (u64, u64), width: u64) -> Self {
+        let mut rows = Self::empty(width);
         rows.push_segment(Run {
             left: 0,
             right: 0,
@@ -77,10 +93,11 @@ impl Rows {
         rows
     }
 
-    /// Rows by content. Rows split only where the sides shift: an inserted or deleted block,
-    /// or a changed region whose two lengths differ. Equal-length edits stay in lockstep.
-    pub(super) fn content(lengths: (u64, u64), regions: &[ByteRegionView]) -> Self {
-        let mut rows = Self::default();
+    /// Rows by content, `width` bytes each. Rows split only where the sides shift: an inserted
+    /// or deleted block, or a changed region whose two lengths differ. Equal-length edits stay
+    /// in lockstep.
+    pub(super) fn content(lengths: (u64, u64), regions: &[ByteRegionView], width: u64) -> Self {
+        let mut rows = Self::empty(width);
         let (mut left, mut right) = (0, 0);
         let (mut run_left, mut run_right, mut run_row) = (0, 0, 0usize);
         for region in regions {
@@ -90,7 +107,8 @@ impl Rows {
             let right_len = region.right.end.saturating_sub(at_right);
             let aligned = at_left - run_left == at_right - run_right && left_len == right_len;
             if aligned {
-                let row = run_row.saturating_add(row_of(at_left.saturating_sub(run_left)));
+                let row =
+                    run_row.saturating_add(row_of(at_left.saturating_sub(run_left), rows.width));
                 rows.region_rows.push(row);
             } else {
                 run_row = rows.split(
@@ -138,10 +156,10 @@ impl Rows {
         let segment = self.segments.get(at.checked_sub(1)?)?;
         let step = u64::try_from(index - segment.first)
             .ok()?
-            .checked_mul(HEX_WIDTH)?;
+            .checked_mul(self.width)?;
         Some(RowAt {
-            left: span(segment.left, step, segment.left_len),
-            right: span(segment.right, step, segment.right_len),
+            left: span(segment.left, (step, self.width), segment.left_len),
+            right: span(segment.right, (step, self.width), segment.right_len),
         })
     }
 
@@ -181,7 +199,7 @@ impl Rows {
         let Some(segment) = at.and_then(|at| self.segments.get(at)) else {
             return self.total.saturating_sub(1);
         };
-        let inside = offset.saturating_sub(segment.left) / HEX_WIDTH;
+        let inside = offset.saturating_sub(segment.left) / self.width;
         let row = segment
             .first
             .saturating_add(usize::try_from(inside).unwrap_or(0));
@@ -197,7 +215,7 @@ impl Rows {
         let Some(segment) = at.and_then(|at| self.segments.get(at)) else {
             return self.total.saturating_sub(1);
         };
-        let inside = offset.saturating_sub(segment.right) / HEX_WIDTH;
+        let inside = offset.saturating_sub(segment.right) / self.width;
         let row = segment
             .first
             .saturating_add(usize::try_from(inside).unwrap_or(0));
@@ -214,7 +232,7 @@ impl Rows {
         let region = regions.get(at)?;
         let row = match align {
             HexAlign::Content => self.region_rows.get(at).copied(),
-            HexAlign::Offset => usize::try_from(region.left.start / HEX_WIDTH).ok(),
+            HexAlign::Offset => usize::try_from(region.left.start / self.width).ok(),
         }?;
         Some(row.min(self.total.saturating_sub(1)))
     }
@@ -232,7 +250,7 @@ impl Rows {
     /// Adds one run of rows unless it is empty.
     fn push_segment(&mut self, run: Run) {
         let widest = run.left_len.max(run.right_len);
-        let rows = usize::try_from(widest.div_ceil(HEX_WIDTH)).unwrap_or(usize::MAX);
+        let rows = usize::try_from(widest.div_ceil(self.width)).unwrap_or(usize::MAX);
         if rows == 0 {
             return;
         }
@@ -247,20 +265,20 @@ impl Rows {
     }
 }
 
-/// The row a byte offset falls on inside a run.
-fn row_of(offset: u64) -> usize {
-    usize::try_from(offset / HEX_WIDTH).unwrap_or(usize::MAX)
+/// The row a byte offset falls on inside a run of `width`-byte rows.
+fn row_of(offset: u64, width: u64) -> usize {
+    usize::try_from(offset / width).unwrap_or(usize::MAX)
 }
 
-/// The span `step` bytes into a run of `len` bytes, or `None` past its end.
-fn span(start: u64, step: u64, len: u64) -> Option<RowSpan> {
+/// The span `step` bytes into a run of `len` bytes, at most `width` long; `None` past its end.
+fn span(start: u64, (step, width): (u64, u64), len: u64) -> Option<RowSpan> {
     if step >= len {
         return None;
     }
     let left = len - step;
     Some(RowSpan {
         at: start + step,
-        len: usize::try_from(left.min(HEX_WIDTH)).unwrap_or(1),
+        len: usize::try_from(left.min(width)).unwrap_or(1),
     })
 }
 
@@ -281,7 +299,7 @@ mod tests {
 
     #[test]
     fn offset_rows_run_to_the_longer_side_and_gap_its_tail() {
-        let rows = Rows::offset((16, 32));
+        let rows = Rows::offset((16, 32), 16);
         assert_eq!(rows.count(), 2);
         assert_eq!(
             rows.row(0)
@@ -298,7 +316,7 @@ mod tests {
 
     #[test]
     fn content_rows_put_a_gap_at_an_insertion_and_keep_the_rest() {
-        let rows = Rows::content((16, 24), &[region(8..8, 8..16)]);
+        let rows = Rows::content((16, 24), &[region(8..8, 8..16)], 16);
         assert_eq!(rows.count(), 3);
         assert!(!rows.row(0).unwrap().is_gap());
         assert!(rows.row(1).unwrap().is_gap());
@@ -311,7 +329,7 @@ mod tests {
 
     #[test]
     fn equal_length_edits_do_not_split_rows_or_bleed_into_the_next_region() {
-        let rows = Rows::content((24, 24), &[region(4..8, 4..8), region(12..16, 12..16)]);
+        let rows = Rows::content((24, 24), &[region(4..8, 4..8), region(12..16, 12..16)], 16);
         assert_eq!(rows.count(), 2);
         assert_eq!(
             rows.row(0).and_then(|row| row.left),
@@ -332,8 +350,25 @@ mod tests {
     }
 
     #[test]
+    fn eight_byte_rows_step_offsets_and_regions_by_eight() {
+        let regions = [region(20..22, 20..22), region(40..48, 40..56)];
+        let rows = Rows::content((64, 64), &regions, 8);
+        assert_eq!(rows.count(), 9);
+        assert_eq!(rows.row_for_region(0, &regions, HexAlign::Content), Some(2));
+        assert_eq!(rows.row_for_region(1, &regions, HexAlign::Content), Some(5));
+        assert_eq!(
+            rows.row(2).and_then(|row| row.left),
+            Some(super::RowSpan { at: 16, len: 8 })
+        );
+        let rows = Rows::offset((64, 64), 8);
+        assert_eq!(rows.count(), 8);
+        assert_eq!(rows.row_for_region(1, &regions, HexAlign::Offset), Some(5));
+        assert_eq!(rows.row_of_left(20), 2);
+    }
+
+    #[test]
     fn a_short_segment_row_carries_its_own_length() {
-        let rows = Rows::content((8, 24), &[region(8..8, 8..16)]);
+        let rows = Rows::content((8, 24), &[region(8..8, 8..16)], 16);
         assert_eq!(rows.count(), 3);
         assert_eq!(
             rows.row(0).and_then(|row| row.left),

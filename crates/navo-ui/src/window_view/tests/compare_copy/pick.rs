@@ -205,7 +205,7 @@ fn compare_copy_pick_remove_copies_a_one_sided_change_from_the_empty_side(cx: &m
     );
     rig.finish(cx, CopyDirection::ToLeft, CopyResult::Copied);
     let said = tr("compare-removed-left");
-    assert_eq!(rig.note(cx), Some((said, true, false)));
+    assert_eq!(rig.note(cx), Some((said, false, false)));
 }
 
 #[gpui_kit::test]

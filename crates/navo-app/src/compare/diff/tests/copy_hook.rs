@@ -230,6 +230,7 @@ fn a_panicking_copy_still_reports_a_refusal() {
         request: 7,
         direction: CopyDirection::ToLeft,
         result: CopyResult::Refused("stopped".to_owned()),
+        job: None,
     };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         guarded(done, refused, || panic!("copy thread died"));
@@ -249,6 +250,7 @@ fn a_finished_copy_reports_once() {
         request: 3,
         direction: CopyDirection::ToRight,
         result: CopyResult::Copied,
+        job: None,
     };
     guarded(done, || unreachable!("no refusal"), copied);
     assert!(matches!(

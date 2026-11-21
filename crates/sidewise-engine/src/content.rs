@@ -3,6 +3,7 @@ use crate::model::{CancelToken, ContentClass, HashCache, ReadHint, SideEntry, Si
 mod checker;
 mod hash;
 mod read;
+mod stream;
 
 pub use checker::check;
 pub(crate) use read::probe_zero_size;

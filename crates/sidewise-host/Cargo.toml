@@ -28,9 +28,12 @@ navo-core = { package = "sidewise-core", path = "../sidewise-core" }
 navo-fs = { package = "sidewise-fs", path = "../sidewise-fs" }
 navo-l10n = { package = "sidewise-l10n", path = "../sidewise-l10n" }
 navo-ui = { package = "sidewise-ui", path = "../sidewise-ui" }
+sidewise-journal = { path = "../sidewise-journal" }
 tracing = "0.1.44"
 
 [dev-dependencies]
+# `FaultDisk` for the copy and undo fault loop.
+navo-fs = { package = "sidewise-fs", path = "../sidewise-fs", features = ["test-support"] }
 tempfile = "3.27.0"
 
 [lints]

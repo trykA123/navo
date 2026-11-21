@@ -8,7 +8,7 @@ use navo_ui::browser::{
 };
 use navo_ui::compare_diff::CompareOptions;
 
-use super::handle::CompareEvent;
+use super::handle::{CompareError, CompareEvent};
 use super::settings::CompareSettings;
 
 /// The compare settings in `options` as the compare backend reads them.
@@ -29,9 +29,7 @@ pub fn updates_of(event: CompareEvent) -> Vec<CompareUpdate> {
         }],
         CompareEvent::Failed(error) => {
             tracing::warn!(?error, "compare did not start");
-            vec![CompareUpdate::Failed(navo_l10n::tr(
-                "compare-could-not-start",
-            ))]
+            vec![CompareUpdate::Failed(failure_text(&error))]
         }
         CompareEvent::StoppedAtLimit {
             generation,
@@ -51,7 +49,17 @@ pub fn updates_of(event: CompareEvent) -> Vec<CompareUpdate> {
     }
 }
 
-/// A row batch as rows, then its phase progress, then one slow path per file.
+/// The text a failed start shows: the side's own problem when its opener named one, else
+/// "The compare could not start."
+fn failure_text(error: &CompareError) -> String {
+    let named = match error {
+        CompareError::Left(failure) | CompareError::Right(failure) => failure.text_id,
+        CompareError::Rules(_) | CompareError::Spawn(_) => None,
+    };
+    navo_l10n::tr(named.unwrap_or("compare-could-not-start"))
+}
+
+/// A row batch as rows, then its phase progress, the running read, and one slow path per file.
 fn rows_of(batch: RowBatch) -> Vec<CompareUpdate> {
     let generation = batch.generation.get();
     let mut updates = vec![CompareUpdate::Rows {
@@ -73,6 +81,13 @@ fn rows_of(batch: RowBatch) -> Vec<CompareUpdate> {
             phase: phase_of(phase.phase),
             done: phase.done,
             total: phase.total,
+        });
+    }
+    if let Some(entry) = batch.reading {
+        updates.push(CompareUpdate::Reading {
+            generation,
+            path: entry.rel.as_path().to_text(),
+            elapsed_ms: entry.elapsed_ms,
         });
     }
     updates.extend(batch.slow.into_iter().map(|entry| CompareUpdate::SlowPath {

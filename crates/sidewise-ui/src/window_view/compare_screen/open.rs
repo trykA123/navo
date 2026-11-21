@@ -132,7 +132,7 @@ impl ScreenOwner {
         let rows = crate::tokens::current(cx).spacing.row_height;
         self.poll_stream(resynced, cx)
             | self.poll_file_screen(rows, cx)
-            | self.poll_copies()
+            | self.poll_copies(cx)
             | self.poll_sheet()
             | self.load_pictures(cx)
     }

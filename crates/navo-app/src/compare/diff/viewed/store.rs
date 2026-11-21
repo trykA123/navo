@@ -47,6 +47,14 @@ impl ViewedMarks for ViewedStore {
             db.clear_viewed(key).map(|_| ()).map_err(store_error)
         }
     }
+
+    fn clear_all(&self) -> Result<usize, ViewedError> {
+        let mut guard = self.db();
+        let Some(db) = guard.as_mut() else {
+            return Ok(0);
+        };
+        db.clear_all_viewed().map_err(store_error)
+    }
 }
 
 /// Turns a cache error into a Viewed error, keeping its message.
