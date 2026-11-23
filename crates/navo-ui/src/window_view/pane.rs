@@ -64,7 +64,7 @@ impl NavoWindow {
         };
     }
 
-    fn pane_error(&self, pane: PaneId, tab: &Tab) -> Option<SharedString> {
+    pub(super) fn pane_error(&self, pane: PaneId, tab: &Tab) -> Option<SharedString> {
         let is_focused = self.browser.state().focused_pane() == pane;
         self.drives
             .error(pane, tab)
@@ -337,6 +337,7 @@ impl NavoWindow {
             .and_then(|pane| self.browser.find_results(pane.active().id()))
             .map(crate::browser::FindResults::running);
         let list = FileList::new(("list", pane.get()), props)
+            .listing(self.pane_listing(pane))
             .track_focus(focus)
             .find_results(find)
             .right_button(self.values.right_button());

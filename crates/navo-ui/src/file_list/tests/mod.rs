@@ -1,5 +1,6 @@
 mod density;
 mod drag;
+mod empty;
 mod git;
 mod input;
 mod kinds;
@@ -77,6 +78,8 @@ pub(super) struct Harness {
     pub actions: Vec<FileListAction>,
     pub page_rows: Vec<u64>,
     pub right_button: RightButton,
+    pub is_finished: bool,
+    pub listed: u64,
 }
 
 impl Render for Harness {
@@ -84,6 +87,7 @@ impl Render for Harness {
         let list = FileList::new("left", self.props.clone())
             .track_focus(&self.focus)
             .right_button(self.right_button)
+            .listing((self.is_finished, self.listed))
             .on_command(cx.listener(|this, command: &Command, _, _| {
                 this.commands.push(command.clone());
             }))
@@ -117,6 +121,8 @@ pub(super) fn open_list_with(
         actions: Vec::new(),
         page_rows: Vec::new(),
         right_button,
+        is_finished: false,
+        listed: 0,
     });
     cx.update_window(window, |_, window, cx| {
         let focus = harness.read(cx).focus.clone();

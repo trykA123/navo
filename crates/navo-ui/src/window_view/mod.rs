@@ -42,6 +42,7 @@ mod layout;
 mod layout_mode;
 mod layout_switcher;
 mod list_columns;
+mod list_state;
 mod multi_rename;
 mod operate;
 mod pane;

@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{
     Animation, AnimationExt, InteractiveElement, Role, SharedString, Stateful,
@@ -18,9 +17,7 @@ type Tip = ObservedElement<Stateful<Div>>;
 const BAR_HEIGHT: f32 = 6.;
 const TIP_CYCLE: Duration = Duration::from_secs(16);
 const TIP_AREA_HEIGHT: f32 = 24.;
-const BAR_PULSE: Duration = Duration::from_millis(2400);
-/// Shorter than the runner's 250 ms poll, so each new share settles before the next one.
-const FILL_EASE: Duration = Duration::from_millis(200);
+pub(super) const BAR_PULSE: Duration = Duration::from_millis(2400);
 
 /// Formats a duration as minutes and seconds, `3:12`.
 fn clock(elapsed: Duration) -> String {
@@ -55,7 +52,7 @@ fn share_text(c: &Ctx, percent: u8) -> String {
         .replace("{percent}", &percent.to_string())
 }
 
-/// The verified share of the track, eased into place; reduced motion shows it at once.
+/// The verified share of the track, drawn at its final width.
 fn fill(c: &Ctx, fraction: f32) -> AnyElement {
     let fill = div()
         .id("installing-fill")
@@ -64,15 +61,7 @@ fn fill(c: &Ctx, fraction: f32) -> AnyElement {
         .w(relative(fraction))
         .rounded(px(BAR_HEIGHT / 2.))
         .bg(c.t.surfaces.progress_fill);
-    if c.reduce_motion {
-        return fill.into_any_element();
-    }
-    fill.with_animation(
-        "installing-bar-fill",
-        Animation::new(FILL_EASE).with_easing(ease_out_cubic),
-        move |fill, delta| fill.w(relative(fraction * delta)),
-    )
-    .into_any_element()
+    fill.into_any_element()
 }
 
 /// The indeterminate fill: a slow fade, standing still under reduced motion.

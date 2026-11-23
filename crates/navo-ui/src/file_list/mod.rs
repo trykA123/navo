@@ -1,6 +1,7 @@
 mod action;
 mod column_drop;
 mod drop;
+mod empty_line;
 mod find;
 pub(crate) mod git_cell;
 mod git_keys;
@@ -86,6 +87,8 @@ pub struct FileList {
     user_widths: UserWidths,
     find_results: Option<bool>,
     right_button: RightButton,
+    is_finished: bool,
+    listed: u64,
 }
 
 type KnownWidth = Rc<Cell<Option<Pixels>>>;
@@ -106,7 +109,17 @@ impl FileList {
             user_widths: UserWidths::default(),
             find_results: None,
             right_button: RightButton::default(),
+            is_finished: false,
+            listed: 0,
         }
+    }
+
+    /// Sets whether the listing is loaded without an error, and how many entries the folder holds before any
+    /// filter, so zero rows draw the empty line and a filter on an empty folder says the folder is empty.
+    #[must_use]
+    pub(crate) fn listing(mut self, (is_finished, listed): (bool, u64)) -> Self {
+        (self.is_finished, self.listed) = (is_finished, listed);
+        self
     }
 
     #[must_use]
@@ -343,6 +356,7 @@ impl RenderOnce for FileList {
             row_height,
             (window, cx),
         );
+        let (is_finished, listed) = (self.is_finished, self.listed);
         let (parts, widths) = self.fit_columns(&state, window, cx);
         let ctx = Rc::new(ListContext {
             props: self.props,
@@ -358,6 +372,8 @@ impl RenderOnce for FileList {
         });
         let reports = (self.on_page_rows, self.known_width);
         let area = rows::list_area(&ctx, reports, (&scroll, row_height, lift), (&t, cx));
+        let note = (is_finished && ctx.props.rows.is_empty())
+            .then(|| empty_line::empty_line(&t, ctx.props.filter.is_some() && listed > 0));
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
             .key_context(keys::CONTEXT)
@@ -372,6 +388,6 @@ impl RenderOnce for FileList {
                 list.child(row::filter_bar(&t, text, ctx.props.rows.len()))
             })
             .child(header::header(&t, ctx.props.sort, &ctx))
-            .child(area)
+            .child(empty_line::over(area, note))
     }
 }

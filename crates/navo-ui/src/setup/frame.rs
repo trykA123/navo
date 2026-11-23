@@ -1,7 +1,5 @@
 //! The setup window's frame: the step rail on the left, the page, and the button footer below it.
 
-use std::time::Duration;
-
 use gpui_kit::assets::IconName;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::prelude::FluentBuilder;
@@ -10,6 +8,7 @@ use gpui_kit::{
     StatefulInteractiveElement,
 };
 
+use super::installing::BAR_PULSE;
 use super::keys::{FooterButton, StepMark, footer, steps};
 use super::{OnAction, Page, SetupPage, SetupView, Strings};
 use crate::primitives::access_label::plain_text;
@@ -23,8 +22,6 @@ const SCENE_WIDTH: f32 = 84.;
 const SCENE_HEIGHT: f32 = 36.;
 const BAR_WIDTH: f32 = 16.;
 const BAR_HEIGHT: f32 = 4.;
-/// One sparring round of the n and the _ while Setup works (owner-approved exception, W9).
-const SPAR: Duration = Duration::from_millis(2400);
 
 /// Draws the whole window: rail, page and footer. `field` is the editable Folder field and
 /// `primary` the focus the footer's primary button tracks.
@@ -182,7 +179,7 @@ fn dot(color: gpui_kit::Hsla, size: gpui_kit::Pixels) -> Div {
     div().size(size).rounded_full().bg(color)
 }
 
-/// Draws the brand's n and _ in the rail foot; while Installing they spar (off under reduced motion).
+/// Draws the brand's n and _ in the rail foot; while Installing they fade in turn (still under reduced motion).
 fn scene(t: &Theme, spar: bool) -> AnyElement {
     let n = div()
         .absolute()
@@ -209,52 +206,17 @@ fn scene(t: &Theme, spar: bool) -> AnyElement {
     if !spar {
         return stage.child(n).child(bar).into_any_element();
     }
-    let round = Animation::new(SPAR).repeat();
-    let n = n.with_animation("spar-n", round.clone(), |n, delta| {
-        n.left(px(10. + offset(&N_STEPS, delta)))
-    });
+    let round = Animation::new(BAR_PULSE).repeat();
+    let n = n.with_animation("spar-n", round.clone(), |n, delta| n.opacity(fade(delta)));
     let bar = bar.with_animation("spar-bar", round, |bar, delta| {
-        bar.left(px(SCENE_WIDTH - 10. - BAR_WIDTH + offset(&BAR_STEPS, delta)))
+        bar.opacity(fade(delta + 0.5))
     });
     stage.child(n).child(bar).into_any_element()
 }
 
-/// Sideways offsets (progress 0..1, px) of the n, from the prototype's spar keyframes.
-const N_STEPS: [(f32, f32); 9] = [
-    (0., 0.),
-    (0.22, 0.),
-    (0.32, 14.),
-    (0.38, 9.),
-    (0.48, 0.),
-    (0.62, 0.),
-    (0.70, -4.),
-    (0.78, -10.),
-    (0.90, 0.),
-];
-/// Sideways offsets (progress 0..1, px) of the _.
-const BAR_STEPS: [(f32, f32); 9] = [
-    (0., 0.),
-    (0.22, 0.),
-    (0.30, -30.),
-    (0.36, -20.),
-    (0.46, 0.),
-    (0.58, 0.),
-    (0.68, -34.),
-    (0.74, -30.),
-    (0.88, 0.),
-];
-
-/// Interpolates `steps` linearly at `progress` (0..1); past the last step the offset is its value.
-fn offset(steps: &[(f32, f32)], progress: f32) -> f32 {
-    let mut last = (0., 0.);
-    for &(at, value) in steps {
-        if progress <= at {
-            let span = (at - last.0).max(f32::EPSILON);
-            return last.1 + (value - last.1) * (progress - last.0) / span;
-        }
-        last = (at, value);
-    }
-    last.1
+/// Opacity of a spar mark at `progress` of the round: a slow fade, the two marks half a round apart.
+fn fade(progress: f32) -> f32 {
+    0.55 + 0.45 * (progress * std::f32::consts::TAU).sin().abs()
 }
 
 /// Builds the footer: Back, Close and the primary button, right-aligned under the page.

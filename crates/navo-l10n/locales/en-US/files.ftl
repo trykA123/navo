@@ -285,3 +285,6 @@ find-searching = Searching · { $counts } · Esc stop
 find-column-folder = Folder
 files-recycle-confirm = Move { $items } to the { -bin }?
 job-route-recycle = { $from } → { -bin }
+
+pane-empty-folder = This folder is empty
+pane-empty-filter = No files match the filter. Esc clears it.
