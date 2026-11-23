@@ -21,6 +21,8 @@ ptd = "ptd"
 fof = "fof"
 filetimes = "filetimes"
 tage = "tage"
+# `whoami /fo csv` (Windows format flag).
+fo = "fo"
 
 [default.extend-identifiers]
 BA = "BA"
