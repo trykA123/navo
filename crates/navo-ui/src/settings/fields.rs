@@ -125,6 +125,7 @@ pub enum Field {
     TerminalCommand,
     EditorPath,
     CopyMode,
+    CopyVerify,
     RetainDeletes,
     RetainOverwrites,
     RetentionDays,
@@ -227,6 +228,11 @@ pub const PRESETS: [Choice; 3] = [
     choice("Custom", "custom"),
 ];
 pub const COPY_MODES: [Choice; 2] = [choice("Auto", "auto"), choice("Standard", "standard")];
+pub const COPY_VERIFY: [Choice; 3] = [
+    choice("Auto", "auto"),
+    choice("Always", "always"),
+    choice("Off", "off"),
+];
 pub const SYNTAX_THEMES: [Choice; 2] = [
     choice("settings-syntax-theme-oxidised-iron", "oxidised-iron"),
     choice("settings-syntax-theme-mocha", "mocha"),
@@ -297,7 +303,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 86] = join([
+pub const FIELDS: [FieldSpec; 87] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &GIT_FIELDS,

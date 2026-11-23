@@ -387,6 +387,25 @@ fn the_copy_mode_starts_auto_and_follows_the_pick() {
 }
 
 #[test]
+fn the_copy_verify_row_starts_auto_and_maps_each_choice() {
+    let row = spec(Field::CopyVerify);
+    assert_eq!((row.section, row.key), (Section::Copy, "copy.verify"));
+    assert_eq!(Values::default().copy_verify(), navo_fs::VerifyMode::Auto);
+    let modes = [
+        navo_fs::VerifyMode::Auto,
+        navo_fs::VerifyMode::Always,
+        navo_fs::VerifyMode::Off,
+    ];
+    for (at, mode) in modes.into_iter().enumerate() {
+        let picked = Values::default().with(&Change {
+            field: Field::CopyVerify,
+            value: Value::Pick(at),
+        });
+        assert_eq!(picked.copy_verify(), mode, "choice {at}");
+    }
+}
+
+#[test]
 fn files_has_the_drop_confirm_row_defaulting_to_never() {
     let row = spec(Field::DropConfirm);
     assert_eq!(row.section, Section::Files);

@@ -137,6 +137,8 @@ settings-layout-presets-skipped = Skipped { $count ->
    *[other] { $count } layout presets
 } in navo.toml: { $details }
 settings-layout-preset-skipped = line { $line } “{ $name }” — { $problem }
+settings-copy-verify = Verify after copy
+settings-copy-verify-help = Reads each copied file back and compares it with the original. Auto does this for USB drives and network shares.
 settings-retain-deletes = Keep deleted files
 settings-retain-deletes-help = Move deleted files to a hidden folder on the same drive so Ctrl+Z can bring them back.
 settings-retain-overwrites = Keep overwritten files

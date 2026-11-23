@@ -1,3 +1,5 @@
+mod copy;
+
 use gpui_kit::SharedString;
 use navo_core::Tiles;
 use navo_fs::CopyMode;

@@ -1,6 +1,6 @@
 use super::fields::{
-    COLOR_THEMES, COPY_MODES, Choice, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec, HIDDEN,
-    HINTS, Look, RIGHT_BUTTONS, S, SIZE_MODES, SORTS, THEMES, choice, spec,
+    COLOR_THEMES, COPY_MODES, COPY_VERIFY, Choice, Control, DENSITIES, DROP_CONFIRMS, F, FieldSpec,
+    HIDDEN, HINTS, Look, RIGHT_BUTTONS, S, SIZE_MODES, SORTS, THEMES, choice, spec,
 };
 
 const TERMINAL_PROVIDERS: [Choice; 5] = [
@@ -14,7 +14,7 @@ const TERMINAL_PROVIDERS: [Choice; 5] = [
     choice("settings-terminal-provider-custom", "custom"),
 ];
 
-pub(super) const GENERAL: [FieldSpec; 31] = [
+pub(super) const GENERAL: [FieldSpec; 32] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "settings-theme-help"),
@@ -175,6 +175,11 @@ pub(super) const GENERAL: [FieldSpec; 31] = [
             "Auto copies several files at once where the drives allow; Standard copies one file at a time.",
         ),
         Control::Choices(&COPY_MODES, Look::Segments),
+    ),
+    spec(
+        (F::CopyVerify, S::Copy, "copy.verify"),
+        ("settings-copy-verify", "settings-copy-verify-help"),
+        Control::Choices(&COPY_VERIFY, Look::Segments),
     ),
     spec(
         (F::RetainDeletes, S::Safety, "retention.retain-deletes"),

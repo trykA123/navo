@@ -146,6 +146,7 @@ pub(super) fn steer(values: &Values, browser: &mut Browser) {
     browser.set_size_mode(values.size_mode());
     browser.set_measures_shown_folders(values.flag(Field::MeasureShownFolders));
     browser.set_copy_mode(values.copy_mode());
+    browser.set_verify_mode(values.copy_verify());
     browser.set_rename_logging(values.flag(Field::RenameLog));
 }
 
