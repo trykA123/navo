@@ -30,6 +30,11 @@ pub trait FolderTotalsSource: Send + Sync {
     fn wait(&self, folder: &Location, cancel: &CancelToken) -> TotalsState {
         measure_busy::ask(self, folder, cancel, measure_busy::RETRY_EVERY)
     }
+
+    /// Totals for many folders, same length and order as `folders`; the default asks one by one.
+    fn query_many(&self, folders: &[Location]) -> Vec<TotalsState> {
+        measure_many::each(self, folders)
+    }
 }
 
 impl<F> FolderTotalsSource for F
@@ -309,6 +314,8 @@ impl Browser {
 
 #[path = "measure_busy.rs"]
 mod measure_busy;
+#[path = "measure_many.rs"]
+mod measure_many;
 
 #[cfg(test)]
 mod tests {
