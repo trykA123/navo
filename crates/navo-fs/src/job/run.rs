@@ -9,7 +9,7 @@ use super::hold::hold;
 use super::marks::Marks;
 use super::remove::{Removals, remove};
 use super::rename::{is_temporary, prepare};
-use super::{JobContext, JobOutcome, Progress, Sources, StepOutcome};
+use super::{DoneSet, JobContext, JobOutcome, Progress, Sources, StepOutcome};
 
 pub(super) fn current_of(step: &Step) -> Location {
     match step {
@@ -58,12 +58,12 @@ pub(super) struct Job<'p> {
 }
 
 pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
-    run_with((plan, None), done, ctx)
+    run_with((plan, None), &DoneSet::of_plan(plan, done), ctx)
 }
 
 pub(super) fn run_with(
     (plan, sources): (&OperationPlan, Option<&Sources>),
-    done: &[u32],
+    done: &DoneSet,
     ctx: &mut JobContext<'_>,
 ) -> JobOutcome {
     let aside = Aside::new();
@@ -100,7 +100,7 @@ pub(super) fn copier_of<'p, 'a: 'p>(job: Job<'p>, ctx: &JobContext<'a>) -> Copie
     }
 }
 
-fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
+fn walk(job: Job<'_>, done: &DoneSet, ctx: &mut JobContext<'_>) -> JobOutcome {
     let mut marks = Marks::new(job.plan.kind);
     let outcome = walk_marking((job, done), ctx, &mut marks);
     match marks.flush(ctx.log) {
@@ -116,7 +116,7 @@ fn walk(job: Job<'_>, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
     reason = "the walk keeps the pause gate with its step loop"
 )]
 fn walk_marking(
-    (job, done): (Job<'_>, &[u32]),
+    (job, done): (Job<'_>, &DoneSet),
     ctx: &mut JobContext<'_>,
     marks: &mut Marks,
 ) -> JobOutcome {
@@ -185,7 +185,7 @@ fn walk_marking(
 /// Checks every pending WriteFile target before the job writes its first file.
 pub(super) fn precheck_writes(
     job: Job<'_>,
-    done: &[u32],
+    done: &DoneSet,
     ctx: &mut JobContext<'_>,
 ) -> Result<(), (u32, FsError)> {
     let pending = (0_u32..)

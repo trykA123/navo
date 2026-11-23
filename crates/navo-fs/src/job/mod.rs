@@ -1,5 +1,6 @@
 mod aside;
 mod copy;
+mod done_set;
 mod git_pause;
 mod hold;
 mod link;
@@ -22,6 +23,7 @@ mod write_file;
 use navo_core::{FsError, Location, OpKind, OperationPlan};
 
 use crate::{CancelToken, FileIdentity, ProviderOps};
+use done_set::DoneSet;
 
 pub use aside::HELD_PREFIX;
 pub use moved::{PreparedMove, recorded_proof, settle_prepared_move, undo_move};
@@ -218,7 +220,7 @@ pub fn run_job_with_sources(
     ctx: &mut JobContext<'_>,
     sources: &Sources,
 ) -> JobOutcome {
-    run::run_with((plan, Some(sources)), done, ctx)
+    run::run_with((plan, Some(sources)), &DoneSet::of_plan(plan, done), ctx)
 }
 
 /// Parallel form of [`run_job_with_sources`].
@@ -229,6 +231,7 @@ pub fn run_job_parallel_with_sources(
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
+    let done = &DoneSet::of_plan(plan, done);
     if workers <= 1 || plan.kind == OpKind::Rename {
         return run::run_with((plan, Some(sources)), done, ctx);
     }

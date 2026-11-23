@@ -11,7 +11,7 @@ use super::marks::{Marks, is_removal};
 use super::pool::{Event, Task, work};
 use super::remove::Removals;
 use super::run::{Job, apply, copier_of, counted, current_of, holds_kept, namespace_of, note_kept};
-use super::{JobContext, JobOutcome, Progress, Sources, StepOutcome};
+use super::{DoneSet, JobContext, JobOutcome, Progress, Sources, StepOutcome};
 
 mod events;
 
@@ -21,12 +21,12 @@ pub(super) fn run(
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
-    run_with((plan, None), done, ctx, workers)
+    run_with((plan, None), &DoneSet::of_plan(plan, done), ctx, workers)
 }
 
 pub(super) fn run_with(
     (plan, sources): (&OperationPlan, Option<&Sources>),
-    done: &[u32],
+    done: &DoneSet,
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
@@ -64,7 +64,7 @@ pub(super) fn run_with(
 fn coordinate<'p>(
     (job, copier, pauses): (Job<'p>, Copier<'p>, Vec<crate::GitPauseGuard>),
     ctx: &mut JobContext<'_>,
-    done: &[u32],
+    done: &DoneSet,
     workers: usize,
 ) -> JobOutcome {
     let plan = job.plan;
@@ -171,7 +171,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         }
     }
 
-    fn walk(&mut self, done: &[u32]) {
+    fn walk(&mut self, done: &DoneSet) {
         let plan = self.job.plan;
         for (seq, step) in (0_u32..).zip(&plan.steps) {
             if done.contains(&seq) {
