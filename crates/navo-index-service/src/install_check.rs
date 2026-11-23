@@ -40,6 +40,16 @@ pub(super) enum Mismatch {
         found_hash: String,
         wanted_hash: String,
     },
+    /// The elevated run exits with code 10 for this one, not 3.
+    #[error(
+        "image_untrusted: {} is not the service image built with this Navo (sha256 {found} vs {wanted})",
+        image.display()
+    )]
+    Untrusted {
+        image: PathBuf,
+        found: String,
+        wanted: String,
+    },
     #[error("the service is registered as {0}, not the new image")]
     Command(String),
     #[error("the service is not running after the install")]
@@ -79,15 +89,8 @@ pub(super) struct Expected<'a> {
 
 /// The installed image must have the size and SHA-256 of the source image.
 pub(super) fn check_image(source: &Path, image: &Path) -> io::Result<()> {
-    let facts = |path: &Path| -> io::Result<(u64, String)> {
-        let size = std::fs::metadata(path)?.len();
-        let cancel = navo_fs::CancelToken::new();
-        let hash = navo_fs::hash::hash_file(path, navo_fs::hash::Algo::Sha256, &cancel, |_| {})
-            .map_err(|error| io::Error::other(format!("hashing {}: {error:?}", path.display())))?;
-        Ok((size, hash))
-    };
-    let (wanted, wanted_hash) = facts(source)?;
-    let (found, found_hash) = facts(image)?;
+    let (wanted, wanted_hash) = image_facts(source)?;
+    let (found, found_hash) = image_facts(image)?;
     if (found, &found_hash) == (wanted, &wanted_hash) {
         return Ok(());
     }
@@ -97,6 +100,32 @@ pub(super) fn check_image(source: &Path, image: &Path) -> io::Result<()> {
         found_hash,
         wanted_hash,
     }))
+}
+
+/// The image must have the SHA-256 built into `navo.exe`; an empty built-in hash checks nothing.
+pub(super) fn check_source(source: &Path, trusted: &dyn super::ImageHash) -> io::Result<()> {
+    let wanted = trusted.expected_sha256();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let (_, found) = image_facts(source)?;
+    if found.eq_ignore_ascii_case(wanted) {
+        return Ok(());
+    }
+    Err(io::Error::other(Mismatch::Untrusted {
+        image: source.to_path_buf(),
+        found,
+        wanted: wanted.to_owned(),
+    }))
+}
+
+/// The size in bytes and the hex SHA-256 of the image at `path`; fails when it cannot be read.
+fn image_facts(path: &Path) -> io::Result<(u64, String)> {
+    let size = std::fs::metadata(path)?.len();
+    let cancel = navo_fs::CancelToken::new();
+    let hash = navo_fs::hash::hash_file(path, navo_fs::hash::Algo::Sha256, &cancel, |_| {})
+        .map_err(|error| io::Error::other(format!("hashing {}: {error:?}", path.display())))?;
+    Ok((size, hash))
 }
 
 /// The service must be registered with the new command and run a process started after it.
@@ -218,6 +247,14 @@ fn same_text(left: &OsStr, right: &OsStr) -> bool {
 
 pub(super) fn is_mismatch(error: &io::Error) -> bool {
     error.get_ref().is_some_and(|inner| inner.is::<Mismatch>())
+}
+
+/// True when the install refused an image whose SHA-256 is not the one built into `navo.exe`.
+pub(super) fn is_untrusted(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .and_then(|inner| inner.downcast_ref::<Mismatch>())
+        .is_some_and(|mismatch| matches!(mismatch, Mismatch::Untrusted { .. }))
 }
 
 #[cfg(test)]

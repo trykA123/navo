@@ -52,6 +52,7 @@ settings-search-service-install-tip = Asks Windows for permission, then installs
 settings-search-service-remove-tip = Asks Windows for permission, then removes the service.
 settings-search-service-failed = The index service change did not finish. Navo's log has the reason.
 settings-search-service-locked = A Navo file is in use. Close the program using it and try again.
+settings-search-service-untrusted = The service file is not the one built with this Navo. Reinstall Navo.
 settings-search-service-deferred = The index service is removed. Windows deletes its last files at the next restart.
 settings-search-service-windows-only = The index service is a Windows feature. On this system Navo builds the walk index instead.
 index-upgrade-title = Upgrade the index service

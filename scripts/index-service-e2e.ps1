@@ -9,7 +9,7 @@ param(
     [string]$Setup,
     [string]$Revision2Exe,
     [ValidateSet('Run', 'AfterReboot')][string]$Phase = 'Run',
-    [ValidateSet('1','2','2b','3','4a','4b','4c','5','6','7')][string[]]$Checks = @('1','2','2b','3','4a','4b','4c','5','7','6'),
+    [ValidateSet('1','2','2b','3','4a','4b','4c','5','6','7','8')][string[]]$Checks = @('1','2','2b','3','4a','4b','4c','5','7','8','6'),
     [ValidateSet('', 'Lock', 'Mapped', 'Refused', 'Global')][string]$Hold = '',
     [string]$Target,
     [string]$Signal
@@ -392,6 +392,25 @@ function Test-Check([string]$number) {
             Assert ((Invoke-Service 'install').Code -eq 0) 'install did not acquire released lock'
             return 'unelevated global mutex ignored; exclusive file contention timed out at 60/20 seconds with exit 4; released lock acquired'
         }
+        '8' {
+            # Only a release-style build carries the navo-index.exe hash; the release verify step finds it the same way.
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $savedSibling).Hash.ToLowerInvariant()
+            $appText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($app))
+            if (-not $appText.Contains($hash)) { throw 'SKIP: navo.exe carries no navo-index.exe hash (developer build)' }
+            Assert ((Invoke-Service 'install').Code -eq 0) 'trusted install failed'
+            $before = Read-Configuration
+            $installedHash = (Get-FileHash (Join-Path $indexDir 'navo-index.exe')).Hash
+            [IO.File]::WriteAllBytes($sibling, [byte[]]([IO.File]::ReadAllBytes($savedSibling) + [byte]0))
+            $result = Invoke-Service 'install'
+            $leftovers = @(Get-ChildItem $indexDir -Filter '*.tmp' | ForEach-Object FullName)
+            Write-Evidence "untrusted_exit=$($result.Code); leftovers=$($leftovers -join ';')"
+            Assert ($result.Code -eq 10) 'replaced navo-index.exe did not return untrusted exit 10'
+            Assert ((Read-Configuration) -eq $before) 'refused install changed the service configuration'
+            Assert ((Get-FileHash (Join-Path $indexDir 'navo-index.exe')).Hash -eq $installedHash) 'refused install changed the installed image'
+            Assert ($leftovers.Count -eq 0) 'refused install left a temporary copy in Program Files\Navo\Index'
+            Assert ((Get-IndexService).State -eq 'Running') 'refused install left the service stopped'
+            return 'replaced navo-index.exe returned exit 10; service command, image and state unchanged; no temporary copy'
+        }
         '6' {
             Reset-Legacy
             Assert ((Invoke-Service 'install').Code -eq 0) 'migration failed'
@@ -491,6 +510,7 @@ foreach ($number in $Checks) {
         $verdict = 'FAIL'; $reason = $_.Exception.Message
         if ($reason.StartsWith('OWNER: ')) { $verdict = 'OWNER-CHECK'; $reason = $reason.Substring(7) }
         if ($reason.StartsWith('REBOOT: ')) { $verdict = 'REBOOT-CHECK'; $reason = $reason.Substring(8) }
+        if ($reason.StartsWith('SKIP: ')) { $verdict = 'SKIP'; $reason = $reason.Substring(6) }
     } finally { Stop-Apps; if (Test-Path $sibling) { Copy-Item $savedSibling $sibling -Force } }
     foreach ($event in @(Read-Events | Where-Object { $_.msg -match 'index service' } | Select-Object -Last 12)) { Write-Evidence ($event | ConvertTo-Json -Compress -Depth 8) }
     Write-Verdict $number $verdict $reason

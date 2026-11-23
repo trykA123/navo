@@ -12,6 +12,11 @@ pub enum ElevationError {
     Cancelled,
     #[error("index service operation failed: {reason} (exit code {0})", reason = reason(*.0))]
     Failed(u32),
+    /// The service image is not the one built with this Navo; the install kept the old service.
+    #[error(
+        "index service image is not the one built with this Navo, so the old one was kept; reinstall Navo"
+    )]
+    Untrusted,
     #[error("index service image {} is locked; close the program using it and retry", .0.display())]
     LockedImage(std::path::PathBuf),
     #[error("index service elevation: {0}")]

@@ -14,7 +14,7 @@ fn main() -> ExitCode {
     let first = args.next();
     let extra = args.next();
     match (first.as_deref().and_then(|arg| arg.to_str()), extra) {
-        (Some("run"), None) => navo_index_service::run(Action::Run),
+        (Some("run"), None) => navo_index_service::run(Action::Run, None),
         (Some("--version"), None) => {
             attach_console();
             println!("navo-index {}", env!("CARGO_PKG_VERSION"));

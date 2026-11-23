@@ -119,8 +119,17 @@ impl Action {
     }
 }
 
-pub fn run(action: Action) -> std::process::ExitCode {
-    match execute(action) {
+/// Looks up the SHA-256 the service image must have before the elevated install copies it.
+pub trait ImageHash {
+    /// The hex SHA-256 of `navo-index.exe` built into `navo.exe`; empty in a developer or
+    /// tester build, which installs any image.
+    fn expected_sha256(&self) -> &str;
+}
+
+/// Runs one service action and maps the outcome to the elevated exit code. `image` is the
+/// built-in hash lookup of `navo.exe`; without it (`navo-index.exe`) an install is refused.
+pub fn run(action: Action, trusted: Option<&dyn ImageHash>) -> std::process::ExitCode {
+    match execute(action, trusted) {
         Ok(outcome) => std::process::ExitCode::from(success_code(outcome)),
         Err(error) => {
             eprintln!("navo: index service: {error}");
@@ -224,7 +233,7 @@ pub fn dismiss_upgrade_notice(marker: Option<std::path::PathBuf>) -> std::io::Re
 
 /// Runs one service action; an elevated change drops its file lock before the last folder check.
 #[cfg(windows)]
-fn execute(action: Action) -> std::io::Result<Elevated> {
+fn execute(action: Action, trusted: Option<&dyn ImageHash>) -> std::io::Result<Elevated> {
     match action {
         Action::Run => scm::dispatch().map(|()| Elevated::Done),
         Action::Install | Action::Remove if !elevation::is_admin() => {
@@ -232,8 +241,11 @@ fn execute(action: Action) -> std::io::Result<Elevated> {
         }
         Action::Install => {
             let result = {
+                let trusted = trusted.ok_or_else(|| {
+                    std::io::Error::other("only navo.exe installs the index service")
+                })?;
                 let _change = change_lock::machine(elevation_limits::CHANGE_WAIT)?;
-                installation::install()
+                installation::install(trusted)
             };
             if result.is_err() {
                 installation::remove_change_leftovers();
@@ -254,7 +266,7 @@ fn execute(action: Action) -> std::io::Result<Elevated> {
 }
 
 #[cfg(not(windows))]
-fn execute(_: Action) -> std::io::Result<Elevated> {
+fn execute(_: Action, _: Option<&dyn ImageHash>) -> std::io::Result<Elevated> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "requires Windows",

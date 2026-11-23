@@ -25,7 +25,7 @@ use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, FOLDERID_ProgramFiles}
 use super::Elevated;
 use super::directory::{Policy, ProtectedDirectory, known_folder};
 use super::elevation::wide;
-use super::install_check::{delete_legacy, service_command, service_source};
+use super::install_check::{check_source, delete_legacy, service_command, service_source};
 use super::install_plan::{
     CopyPlan, FreshInstall, LEGACY_PRODUCT, SettingsBackup, Step, data_directories, retry,
     run_install,
@@ -57,12 +57,16 @@ struct Installed {
     process: verify::Bound,
 }
 
-pub(super) fn install() -> io::Result<()> {
+/// Installs the image next to `navo.exe`; refuses one whose SHA-256 is not the `trusted` hash.
+pub(super) fn install(trusted: &dyn super::ImageHash) -> io::Result<()> {
     let source = service_source(&std::env::current_exe()?)?;
-    install_service(&source)
+    check_source(&source, trusted)?;
+    install_service(&source, trusted)
 }
 
-fn install_service(source: &Path) -> io::Result<()> {
+/// Upgrades any legacy service, installs `source` as the current one and waits for it to answer;
+/// fails when a step fails or the new service does not run the new image.
+fn install_service(source: &Path, trusted: &dyn super::ImageHash) -> io::Result<()> {
     let legacy = legacy::detect()?;
     let mut installed = None;
     let leftover = run_upgrade(legacy, |step| match step {
@@ -73,7 +77,7 @@ fn install_service(source: &Path) -> io::Result<()> {
                     Some(config) => config,
                     None => super::session::installation_config()?,
                 };
-                install_current(source, &config).map(|done| installed = Some(done))
+                install_current(source, &config, trusted).map(|done| installed = Some(done))
             },
         ),
         UpgradeStep::AwaitNew => match installed.as_ref() {
@@ -109,7 +113,13 @@ fn answer(service: &ServiceHandle, process: Option<&verify::Bound>) -> io::Resul
     verify::answer(service, process, ANSWER_WAIT)
 }
 
-fn install_current(source: &Path, config: &super::config::Config) -> io::Result<Installed> {
+/// Copies `source` into `Program Files\Navo\Index` and registers the service with `config`;
+/// on failure deletes the folders this run created and returns the error.
+fn install_current(
+    source: &Path,
+    config: &super::config::Config,
+    trusted: &dyn super::ImageHash,
+) -> io::Result<Installed> {
     let plan = CopyPlan::new(&known_folder(&FOLDERID_ProgramFiles)?, std::process::id());
     let data = data_directories(&known_folder(&FOLDERID_ProgramData)?);
     let parent = plan
@@ -123,17 +133,20 @@ fn install_current(source: &Path, config: &super::config::Config) -> io::Result<
         data[1].clone(),
     ];
     let mut fresh = FreshInstall::observe(&plan, &directories);
-    let result = install_with((&plan, source), config, &mut fresh);
+    let result = install_with((&plan, source), config, &mut fresh, trusted);
     if result.is_err() {
         let _ = fresh.remove_directories();
     }
     result
 }
 
+/// Runs the install plan steps (stop, copy, replace, configure, start) inside the protected
+/// folder and returns the started service and its process; fails at the first failed step.
 fn install_with(
     (plan, source): (&CopyPlan, &Path),
     config: &super::config::Config,
     fresh: &mut FreshInstall,
+    trusted: &dyn super::ImageHash,
 ) -> io::Result<Installed> {
     let storage = Storage::open(true)?;
     let parent = plan
@@ -153,7 +166,7 @@ fn install_with(
         Step::RecoverOld => fresh.recover_executable(plan),
         Step::Stop => scm_stop::stop(&service, StopLimits::INSTALL)
             .map(|()| started_after = Some(verify::now())),
-        Step::Copy => plan.copy_from(source),
+        Step::Copy => copy_trusted(plan, source, trusted),
         Step::RenameOld => plan.rename_old(),
         Step::Replace => plan.replace(),
         Step::BackupSettings => SettingsBackup::capture(&storage.directory.join("service.json"))
@@ -179,6 +192,17 @@ fn install_with(
     finish_install(result.map(warn_leftover), exists, &service)?;
     let process = process.ok_or_else(unverified)?;
     Ok(Installed { service, process })
+}
+
+/// Stages the image and checks the staged copy, which sits in the protected folder, so a source
+/// swapped after the first check is refused; a refused copy is deleted before the error returns.
+fn copy_trusted(plan: &CopyPlan, source: &Path, trusted: &dyn super::ImageHash) -> io::Result<()> {
+    plan.copy_from(source)?;
+    check_source(&plan.temporary, trusted).inspect_err(|_| {
+        if let Err(error) = plan.discard_copy() {
+            tracing::warn!(%error, "the refused service image copy was not deleted");
+        }
+    })
 }
 
 fn configure(

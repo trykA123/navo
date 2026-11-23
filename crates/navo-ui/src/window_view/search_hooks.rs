@@ -23,6 +23,21 @@ pub enum ServiceOutcome {
     Failed,
     /// A service file is in use; the user closes the program holding it and retries.
     Locked,
+    /// The service image is not the one built with this Navo; the user reinstalls Navo.
+    Untrusted,
+}
+
+impl ServiceOutcome {
+    /// The l10n key of the notice this outcome shows, or `None` for a plain success.
+    pub fn message_key(self) -> Option<&'static str> {
+        match self {
+            Self::Done => None,
+            Self::Deferred => Some("settings-search-service-deferred"),
+            Self::Failed => Some("settings-search-service-failed"),
+            Self::Locked => Some("settings-search-service-locked"),
+            Self::Untrusted => Some("settings-search-service-untrusted"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

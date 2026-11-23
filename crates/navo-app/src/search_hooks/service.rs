@@ -88,6 +88,13 @@ fn report(
             tracing::warn!(?action, path = %path.display(), "index service file is locked");
             ServiceOutcome::Locked
         }
+        Err(ElevationError::Untrusted) => {
+            tracing::warn!(
+                ?action,
+                "index service image is not the one built with this Navo"
+            );
+            ServiceOutcome::Untrusted
+        }
         Err(error) => {
             tracing::warn!(?action, %error, "index service change failed");
             ServiceOutcome::Failed
@@ -267,6 +274,19 @@ mod tests {
         assert_eq!(locked, ServiceOutcome::Locked);
         let cancelled = report(Action::Install, Err(ElevationError::Cancelled));
         assert_eq!(cancelled, ServiceOutcome::Done);
+    }
+
+    #[test]
+    fn a_refused_service_image_says_reinstall_not_failed() {
+        use crate::index_service::Action;
+
+        let refused = report(Action::Install, Err(ElevationError::Untrusted));
+        assert_eq!(refused, ServiceOutcome::Untrusted);
+        let text = navo_l10n::tr(ServiceOutcome::Untrusted.message_key().expect("a notice"));
+        assert!(
+            text.ends_with("service file is not the one built with this Navo. Reinstall Navo."),
+            "{text}"
+        );
     }
 
     #[test]

@@ -207,3 +207,55 @@ fn only_the_registered_legacy_image_in_index_needs_migration() {
         assert!(!super::legacy_command(command), "{command}");
     }
 }
+
+/// A fixed built-in hash, standing in for the one the release writes into `navo.exe`.
+struct Fixed(&'static str);
+
+impl crate::ImageHash for Fixed {
+    fn expected_sha256(&self) -> &str {
+        self.0
+    }
+}
+
+/// SHA-256 of the bytes `navo-index`.
+const IMAGE_SHA256: &str = "c05891e9b5731a00bc398c2f3996bd16fb323cad7953bf9dcf2429663081e64e";
+
+fn image(bytes: &[u8]) -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().expect("temporary folder");
+    let path = dir.path().join("navo-index.exe");
+    std::fs::write(&path, bytes).expect("write the image");
+    (dir, path)
+}
+
+#[test]
+fn a_replaced_service_image_refuses_the_install() {
+    let (_dir, path) = image(b"navo-index, replaced");
+    let error = check_source(&path, &Fixed(IMAGE_SHA256)).expect_err("a replaced image");
+    assert!(
+        is_mismatch(&error),
+        "the elevated run must exit as not replaced: {error}"
+    );
+    assert!(error.to_string().contains("image_untrusted"), "{error}");
+}
+
+#[test]
+fn the_built_image_allows_the_install_in_any_hex_case() {
+    let (_dir, path) = image(b"navo-index");
+    check_source(&path, &Fixed(IMAGE_SHA256)).expect("the built image");
+    let upper = "C05891E9B5731A00BC398C2F3996BD16FB323CAD7953BF9DCF2429663081E64E";
+    check_source(&path, &Fixed(upper)).expect("the built image, upper-case hash");
+}
+
+#[test]
+fn a_developer_build_with_no_built_in_hash_allows_any_image() {
+    let (_dir, path) = image(b"navo-index, built locally");
+    check_source(&path, &Fixed("")).expect("a developer build checks nothing");
+}
+
+#[test]
+fn a_missing_image_with_a_built_in_hash_fails_closed() {
+    let dir = tempfile::tempdir().expect("temporary folder");
+    let error = check_source(&dir.path().join("navo-index.exe"), &Fixed(IMAGE_SHA256))
+        .expect_err("nothing to hash");
+    assert_eq!(error.kind(), io::ErrorKind::NotFound, "{error}");
+}

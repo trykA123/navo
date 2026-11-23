@@ -55,13 +55,7 @@ impl NavoWindow {
         if self.settings.service_generation != generation {
             return;
         }
-        let key = match outcome {
-            ServiceOutcome::Done => None,
-            ServiceOutcome::Deferred => Some("settings-search-service-deferred"),
-            ServiceOutcome::Failed => Some("settings-search-service-failed"),
-            ServiceOutcome::Locked => Some("settings-search-service-locked"),
-        };
-        if let Some(key) = key {
+        if let Some(key) = outcome.message_key() {
             let message: SharedString = navo_l10n::tr(key).into();
             if outcome == ServiceOutcome::Deferred {
                 self.settings.service_notice = Some(message);

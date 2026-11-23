@@ -129,9 +129,30 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-auditable and cargo-audit
         run: cargo install --locked cargo-auditable@0.7.7 cargo-audit@0.22.2
-      - run: cargo auditable build --locked --release -p navo-app -p navo-index-service
+      # navo-index.exe is built first; navo.exe carries its SHA-256 and refuses another image.
+      - run: cargo auditable build --locked --release -p navo-index-service --bin navo-index
         env:
           NAVO_BUILD: ${{ inputs.tag }}
+      - name: Hash the service image for navo.exe
+        id: index-hash
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath target/release/navo-index.exe).Hash.ToLowerInvariant()
+          "sha256=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - run: cargo auditable build --locked --release -p navo-app
+        env:
+          NAVO_BUILD: ${{ inputs.tag }}
+          NAVO_INDEX_SHA256: ${{ steps.index-hash.outputs.sha256 }}
+      - name: navo.exe carries the hash of the unchanged navo-index.exe
+        shell: pwsh
+        env:
+          NAVO_INDEX_SHA256: ${{ steps.index-hash.outputs.sha256 }}
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath target/release/navo-index.exe).Hash.ToLowerInvariant()
+          if ($hash -ne $env:NAVO_INDEX_SHA256) { throw "navo-index.exe changed after its hash was taken: $hash vs $env:NAVO_INDEX_SHA256" }
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath target/release/navo.exe).Path)
+          $text = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if (-not $text.Contains($hash)) { throw "navo.exe does not carry the navo-index.exe hash $hash" }
       - name: Audit the shipped executables for known vulnerabilities
         # Fails on a vulnerability; unmaintained or yanked crates only warn (no --deny).
         run: |

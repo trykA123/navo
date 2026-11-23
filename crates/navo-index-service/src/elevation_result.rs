@@ -11,11 +11,16 @@ const DENIED: u8 = 5;
 const LOCKED_INDEX: u8 = 7;
 const LOCKED_NAVO: u8 = 8;
 const LOCKED_FERRITE: u8 = 9;
+/// The service image is not the one whose SHA-256 is built into `navo.exe`.
+const UNTRUSTED: u8 = 10;
 /// Remove finished and Windows deletes its last files at the next restart.
 pub(super) const DEFERRED: u8 = 6;
 
 /// The exit code of an elevated run, so the app that asked can log why it failed.
 pub(super) fn failure_code(error: &io::Error) -> u8 {
+    if super::install_check::is_untrusted(error) {
+        return UNTRUSTED;
+    }
     if super::install_check::is_mismatch(error) {
         return NOT_REPLACED;
     }
@@ -60,6 +65,7 @@ pub(super) fn from_exit_code(code: u32) -> Result<Elevated, ElevationError> {
     match code {
         0 => Ok(Elevated::Done),
         code if code == u32::from(DEFERRED) => Ok(Elevated::Deferred),
+        code if code == u32::from(UNTRUSTED) => Err(ElevationError::Untrusted),
         code => Err(ElevationError::Failed(code)),
     }
 }
@@ -99,8 +105,8 @@ mod tests {
         assert!(matches!(from_exit_code(0), Ok(Elevated::Done)));
         assert!(matches!(from_exit_code(1), Err(ElevationError::Failed(1))));
         assert!(matches!(
-            from_exit_code(10),
-            Err(ElevationError::Failed(10))
+            from_exit_code(11),
+            Err(ElevationError::Failed(11))
         ));
         assert!(!ElevationError::Cancelled.to_string().is_empty());
     }
@@ -112,6 +118,22 @@ mod tests {
         assert_ne!(code, failure_code(&io::Error::other("anything else")));
         let text = ElevationError::Failed(u32::from(code)).to_string();
         assert!(text.contains("old one was kept"), "{text}");
+    }
+
+    #[test]
+    fn an_untrusted_image_gets_its_own_exit_code_and_error_both_ways() {
+        let untrusted = io::Error::other(super::super::install_check::Mismatch::Untrusted {
+            image: "navo-index.exe".into(),
+            found: "aa".to_owned(),
+            wanted: "bb".to_owned(),
+        });
+        let code = failure_code(&untrusted);
+        assert_eq!(code, UNTRUSTED);
+        let old = io::Error::other(super::super::install_check::Mismatch::OldProcess);
+        assert_ne!(code, failure_code(&old));
+        let error = from_exit_code(u32::from(code)).expect_err("a refused image");
+        assert!(matches!(error, ElevationError::Untrusted), "{error}");
+        assert!(error.to_string().contains("reinstall Navo"), "{error}");
     }
 
     #[test]
