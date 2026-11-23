@@ -99,6 +99,10 @@ jobs:
   build-windows:
     needs: check-tag
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     env:
       TAG: ${{ inputs.tag }}
       NAVO_PUBLISH_SETUP_WIZARD: ${{ vars.NAVO_PUBLISH_SETUP_WIZARD }}
@@ -284,6 +288,16 @@ jobs:
             "$hash  $name"
           }
           [IO.File]::WriteAllText((Join-Path (Get-Location) 'out/SHA256SUMS.txt'), (($lines -join "`n") + "`n"))
+      - name: List the assets to attest
+        id: attest-list
+        shell: pwsh
+        run: |
+          $paths = Get-Content -LiteralPath 'out/assets.txt' | Where-Object { $_ } | ForEach-Object { "out/$_" }
+          "paths<<EOF`n$($paths -join "`n")`nEOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      # Proves each release asset was built by this workflow run from this commit; `gh attestation verify` checks it.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.attest-list.outputs.paths }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: navo-windows-x64-${{ github.sha }}
