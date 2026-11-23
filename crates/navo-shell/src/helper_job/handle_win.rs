@@ -38,9 +38,10 @@ pub fn share_read_handle(file: &File, process: BorrowedHandle<'_>) -> io::Result
 ///
 /// # Safety
 ///
-/// The caller passes only a handle value the parent duplicated into this helper process for one
-/// Open request, and adopts each value at most once. Ownership is then exclusive: the parent
-/// closes nothing it duplicated into the helper and never sends a value twice.
+/// The caller passes only the value from the parent's latest duplication into this helper
+/// process, and adopts it once per duplication. Windows may reuse a value after its handle
+/// closes, so a repeated value from a new duplication is valid. Ownership is then exclusive:
+/// the parent closes nothing it duplicated into the helper.
 pub unsafe fn adopt_shared_file(value: u64) -> io::Result<File> {
     let Ok(bits) = usize::try_from(value) else {
         return Err(refused("the handle value does not fit this process"));
