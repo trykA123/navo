@@ -90,10 +90,10 @@ impl Browser {
             slot,
             Box::new(move |cancel| {
                 let result = plan_for(provider.as_ref(), &request, cancel).map(|plan| {
-                    let (retain_deletes, cannot_retain) = retain::delete_retention(
+                    let (retain_deletes, cannot_retain) = retain::drive_retention(
                         provider.as_ref(),
                         &plan,
-                        &request.sources,
+                        &request,
                         retain_deletes.as_ref(),
                     );
                     PlannedOp {

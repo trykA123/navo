@@ -1,30 +1,43 @@
+//! Retention checks for planned jobs: whether a delete keeps old versions, whether the drive a
+//! delete or an overwrite works on can keep them, and the "run without old versions" question.
+
 use navo_core::retention::RetentionPolicy;
-use navo_core::{Location, OpKind, OperationPlan};
+use navo_core::{OpKind, OperationPlan};
 use navo_fs::ProviderOps;
 
 use navo_retention::KeepCheck;
 
-use super::types::{Ended, KeepOld, LogRefusal, NoKeep, PendingOp, RetainDeletes};
+use super::types::{Ended, KeepOld, LogRefusal, NoKeep, OpRequest, PendingOp, RetainDeletes};
 use crate::browser::{Browser, RenameReport};
 
-/// The policy a delete keeps copies under, or why it keeps none. Every source folder is checked:
-/// one full drive (AD14), one unsupported drive or a failed check plans the whole delete without.
-pub(super) fn delete_retention(
+/// The retention a planned job runs with, and why the dialog warns that its drive keeps nothing.
+/// A delete checks every source folder (AD14: one full or unsupported drive, or a failed check,
+/// plans it without); a copy or move that meets names already there probes the target folder
+/// (AD15), and a failed probe warns. Both need retention on.
+pub(super) fn drive_retention(
     ops: &dyn ProviderOps,
     plan: &OperationPlan,
-    sources: &[Location],
+    request: &OpRequest,
     retain_deletes: Option<&RetainDeletes>,
 ) -> (Option<RetentionPolicy>, Option<NoKeep>) {
-    if plan.kind != OpKind::Delete {
+    let replaces = matches!(plan.kind, OpKind::Copy | OpKind::Move) && !plan.conflicts.is_empty();
+    if plan.kind != OpKind::Delete && !replaces {
         return (None, None);
     }
     let Some(policy) = retain_deletes.and_then(|active| active()) else {
         return (None, None);
     };
-    if sources.is_empty() {
+    if replaces {
+        let kept = request
+            .target
+            .as_ref()
+            .is_some_and(|target| navo_retention::can_retain(ops, target));
+        return (None, (!kept).then_some(NoKeep::Drive));
+    }
+    if request.sources.is_empty() {
         return (None, Some(NoKeep::Drive));
     }
-    match navo_retention::check_keep_all(ops, sources, policy) {
+    match navo_retention::check_keep_all(ops, &request.sources, policy) {
         Ok(KeepCheck::Keep) => (Some(policy), None),
         Ok(KeepCheck::DriveFull) => (None, Some(NoKeep::LowSpace)),
         Ok(KeepCheck::Unsupported) => (None, Some(NoKeep::Drive)),

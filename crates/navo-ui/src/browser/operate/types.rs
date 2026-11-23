@@ -163,6 +163,7 @@ pub struct PendingOp {
     pub target: Option<Location>,
     pub plan: OperationPlan,
     pub retain_deletes: Option<RetentionPolicy>,
+    /// Set when retention is on and the drive the job removes or replaces files on cannot keep them; holds the reason.
     pub cannot_retain: Option<NoKeep>,
     pub keep_old: KeepOld,
     pub(crate) source_tab: TabId,

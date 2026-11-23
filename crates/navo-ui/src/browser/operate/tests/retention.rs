@@ -2,9 +2,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use navo_core::retention::RetentionPolicy;
-use navo_core::{OpKind, OperationPlan};
+use navo_core::{ConflictPolicy, OpKind, OperationPlan};
 use navo_fs::FakeFs;
 
+use super::super::OpRequest;
 use super::{Record, SharedLog, browser, exists, fake, home_beside_dest, settle};
 use crate::browser::Browser;
 use crate::browser::operate::{NoKeep, OpLog, Operations};
@@ -116,7 +117,20 @@ fn a_delete_on_a_full_drive_runs_without_keeping_and_warns() {
 
 /// Plans a delete of `home/a.txt` and `work/b.txt` with the safety net on.
 fn two_drive_delete(fs: &FakeFs) -> (Option<RetentionPolicy>, Option<NoKeep>) {
-    let sources = [fs.location("home/a.txt"), fs.location("work/b.txt")];
+    let state = navo_core::AppState::new(fs.location("home"));
+    let request = OpRequest {
+        id: 1,
+        kind: OpKind::Delete,
+        sources: vec![fs.location("home/a.txt"), fs.location("work/b.txt")],
+        target: None,
+        same_volume: false,
+        protected: Vec::new(),
+        source_tab: state.active_tab().id(),
+        asks: true,
+        structure: None,
+        stream: None,
+        policy: ConflictPolicy::Ask,
+    };
     let plan = OperationPlan {
         kind: OpKind::Delete,
         steps: Vec::new(),
@@ -130,7 +144,7 @@ fn two_drive_delete(fs: &FakeFs) -> (Option<RetentionPolicy>, Option<NoKeep>) {
     };
     let active: crate::browser::operate::RetainDeletes =
         Arc::new(|| Some(RetentionPolicy::default()));
-    crate::browser::operate::retain::delete_retention(fs, &plan, &sources, Some(&active))
+    crate::browser::operate::retain::drive_retention(fs, &plan, &request, Some(&active))
 }
 
 #[test]
@@ -143,4 +157,31 @@ fn a_delete_with_one_source_on_a_full_or_unsupported_drive_keeps_nothing() {
     assert_eq!(two_drive_delete(&fs), (None, Some(NoKeep::LowSpace)));
     fs.set_volume_serial("work", None);
     assert_eq!(two_drive_delete(&fs), (None, Some(NoKeep::Drive)));
+}
+
+/// Opens a copy of `home/docs` into `dest`, where `report.txt` is already there, with retention
+/// on; returns why, if at all, the dialog was told the target drive cannot keep the files it replaces.
+fn copy_over_twin(fs: &Arc<FakeFs>) -> Option<NoKeep> {
+    fs.add_folder("dest/docs");
+    fs.add_file("dest/docs/report.txt", 1);
+    let (mut browser, _) = retaining(fs, &Arc::new(AtomicBool::new(true)));
+    browser.prepare(OpKind::Copy);
+    settle(&mut browser);
+    let pending = browser.pending().expect("a pending copy");
+    assert_eq!(pending.plan.conflicts.len(), 1);
+    pending.cannot_retain
+}
+
+#[test]
+fn a_copy_into_a_drive_without_file_identity_is_told_it_cannot_keep_replaced_files() {
+    let fs = fake();
+    fs.set_volume_serial("dest", None);
+    assert_eq!(copy_over_twin(&fs), Some(NoKeep::Drive));
+}
+
+#[test]
+fn a_copy_into_a_retaining_drive_is_not_warned_even_when_the_source_cannot_retain() {
+    let fs = fake();
+    fs.set_volume_serial("home", None);
+    assert_eq!(copy_over_twin(&fs), None);
 }

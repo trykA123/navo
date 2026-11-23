@@ -121,7 +121,7 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
                 }
                 _ => summary(&pending.plan, protected),
             },
-            &pending.plan,
+            pending,
         )
         .into(),
         confirm_label: label.into(),
@@ -279,6 +279,8 @@ impl NavoWindow {
 
 #[cfg(test)]
 mod conflict_tests;
+#[cfg(test)]
+mod overwrite_tests;
 #[cfg(test)]
 mod switch_tests;
 #[cfg(test)]

@@ -6,7 +6,7 @@ use navo_core::{ConflictPolicy, OpKind, OperationPlan, Resolution};
 use navo_l10n::{t, tr};
 
 use super::super::NavoWindow;
-use crate::browser::{Facts, KeepOld, PendingOp};
+use crate::browser::{Clash, Facts, KeepOld, PendingOp};
 use crate::confirm_dialog::{ConfirmDialog, DetailRow, Details, OptionItem, Options};
 use crate::format;
 use crate::prelude::*;
@@ -87,18 +87,54 @@ fn offers_row(pending: &PendingOp) -> bool {
         && pending.keep_old == KeepOld::AsSet
 }
 
+/// True when `pending` replaces at least one file already at the target. A shown plan says so
+/// itself; while a new pick is planned, the pick and the conflict facts decide, so the warning
+/// follows the pick at once. Conflicts without facts count as replaced (the warning fails closed).
+pub(super) fn replaces_files(pending: &PendingOp) -> bool {
+    let conflicts = &pending.plan.conflicts;
+    if !matches!(pending.plan.kind, OpKind::Copy | OpKind::Move) || conflicts.is_empty() {
+        return false;
+    }
+    if !pending.is_planning() {
+        return conflicts
+            .iter()
+            .any(|c| matches!(c.resolution, Resolution::Overwrite));
+    }
+    match pending.replan.policy {
+        ConflictPolicy::OverwriteAll => true,
+        ConflictPolicy::OverwriteOlder => {
+            conflicts.len() > pending.clashes.len() || pending.clashes.iter().any(replaces_older)
+        }
+        _ => false,
+    }
+}
+
+/// True when Overwrite older may replace `clash`'s target: the source is newer, or a time is
+/// unknown on a side that is a file.
+fn replaces_older(clash: &Clash) -> bool {
+    match (clash.source.modified_ms, clash.target.modified_ms) {
+        (Some(source), Some(target)) => source > target,
+        _ => !clash.source.is_folder && !clash.target.is_folder,
+    }
+}
+
 /// Counts `n` and formats it for a label.
 fn counted(key: &str, n: usize) -> Option<String> {
     let count = u64::try_from(n).unwrap_or(u64::MAX);
     (n > 0).then(|| t!(key, count = count, shown = format::bytes(count)))
 }
 
-/// Puts the conflict line for `plan` on its own line below `summary`, so it is never cut.
-pub(super) fn below(summary: String, plan: &OperationPlan) -> String {
-    match self::summary(plan) {
-        Some(conflicts) => format!("{summary}\n{conflicts}"),
-        None => summary,
+/// Puts the conflict line for `pending` on its own line below `summary`, so it is never cut; it
+/// ends with the drive warning when the job replaces files on a drive that cannot keep them.
+pub(super) fn below(summary: String, pending: &PendingOp) -> String {
+    let Some(conflicts) = self::summary(&pending.plan) else {
+        return summary;
+    };
+    if pending.cannot_retain.is_some() && replaces_files(pending) {
+        let warning = tr("overwrite-cannot-retain");
+        return format!("{summary}\n{conflicts} · {warning}");
     }
+    format!("{summary}\n{conflicts}")
 }
 
 /// The summary part for `plan`'s conflicts: "3 items already there will be skipped", or what
