@@ -2,6 +2,22 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.3 — Your search, your files
+
+*2026-11-23*
+
+This release makes search respect other people's files and makes the installer check what it installs.
+
+### Fixed
+
+- **Search no longer shows other people's files.** On a PC with several Windows accounts, Ctrl+K could list files from the other accounts' profile folders. The index service now hides them, also when a folder is reached through a junction. Your own profile and the shared Public folder stay searchable.
+- **The profiles folder is read correctly.** When Windows stored that path with a variable in it, the service read a few stray characters past its end and looked in the wrong place.
+
+### Changed
+
+- **The installer checks the index service.** Navo knows the fingerprint of the service it ships with. An install now refuses a service file that does not match and tells you why.
+- **Under the hood.** Slow tests get more time on the build machines, so a busy machine no longer fails a release by mistake.
+
 ## v0.8.2 — The index stays put
 
 *2026-11-23*
