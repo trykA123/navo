@@ -2,6 +2,40 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.5 — Your call on conflicts
+
+*2026-11-24*
+
+This release lets you choose what a copy or move does with names already there. It also guards the safety net on full drives, leaves online-only files in the cloud, and puts the PDF viewer in a tighter box.
+
+### Added
+
+- **A choice for names already there.** When a copy or move meets files with the same names, the dialog shows one row: Skip, Overwrite older, Keep both or Overwrite all. Click a choice, or use Tab and the arrow keys, then Enter. The line above the row says what will happen, for example how many items are skipped or overwritten.
+- **A "Show conflicts" list.** The link opens a list of the first 200 clashes in the dialog. Each entry shows the name, then the size and date of the file being copied and of the file already there. Arrow keys, Page Up, Page Down, Home and End scroll it. Esc or Back return to the dialog.
+- **A warning before you replace files that cannot be kept.** When the target drive cannot keep the files you replace, the dialog says so before you confirm. Navo shows no warning when the safety net is off, the same as for a delete.
+- **WSL distributions in the drive list.** Installed WSL distributions appear after the drive letters, as `\\wsl.localhost\<name>\`. Listing the drives never starts a stopped distribution, and Navo never indexes these entries for search.
+- **A cloud mark for online-only files.** A OneDrive file that is not on this PC shows a quiet cloud after its name. The tooltip and the screen reader say "Online-only file — opens after download".
+
+### Changed
+
+- **The safety net on an almost full drive.** Low free space never removes an item kept in the last 24 hours. On a drive below the "Stop below free space" minimum, Navo keeps no new deleted files. The delete dialog says the drive is almost full, and the delete runs without a copy only after you confirm.
+- **Locked files are tried again.** When another program holds a source file open, the copy tries again after 1, 2 and 4 seconds. Only then does it show the error. A cancel during a wait stops the job at once.
+- **Quick view never downloads online-only files.** Quick view does not read a cloud file by itself. It shows "Cloud file — open to download" instead.
+- **Large text files open at once.** A text file above 1 MiB opens in the paged Text view straight away. The editor loads in the background and takes its place on the same top line, with no jump. A Ctrl+E pressed meanwhile starts editing after the swap.
+- **Folder sizes come from the index in one go.** When the list shows folder sizes, Navo asks the search index about all shown folders together, up to 64 per request. Folders the index cannot answer fully are still measured one by one.
+- **Portable mode stays in its folder.** A portable Navo keeps its run files inside its own data folder, and a test proves that a portable start writes nothing to the temp, app data or home folders.
+- **The PDF viewer gets a tighter box on Windows.** Navo opens the PDF itself and hands the viewer helper a read-only handle; the helper never gets a path. The helper starts paused inside a Job Object, so it never runs unconfined. The job blocks the desktop, the clipboard, other programs' windows, global atoms and system settings. The helper also starts with strict handle checks, no extension points, no remote images and no generated code.
+- **Under the hood.** A build guard keeps the compare app's parts and the main app's parts from depending on each other the wrong way. Research picked the parts for a future terminal drawer.
+
+### Fixed
+
+- **Viewing a PDF no longer blocks saving it.** Another program can save the file while Navo shows it.
+- **Quick view stays responsive in a busy folder.** A burst of scan updates keeps only the newest one waiting, so the window no longer falls behind.
+
+### Not switched on yet
+
+- **A copy speed cap.** Copy jobs can run under a speed limit in bytes per second, but there is no setting for it yet.
+
 ## v0.8.4 — Copies you can trust
 
 *2026-11-23*
