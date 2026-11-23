@@ -1,6 +1,10 @@
 //! Boundary guard for the compare screen: the screen, diff and list modules
-//! must not name the window or the browser (NC1, NC15).
+//! must not name the window or the browser (NC1, NC15), and the crate graph
+//! must keep sidewise off navo-app/navo-ui (WS1, see `deps`).
 
+mod deps;
+#[cfg(test)]
+mod deps_tests;
 #[cfg(test)]
 mod tests;
 
@@ -22,7 +26,8 @@ const ROOTS: [&str; 3] = [
 /// Walk every `.rs` file under the compare screen roots, tests included, and
 /// print `path:line: <text>` for each line naming the window or the browser.
 ///
-/// Takes no arguments. Exits 0 when clean, 1 on hits or read errors, 2 on
+/// Then check the workspace dependency graph (`deps`). Takes no arguments.
+/// Exits 0 when clean, 1 on hits, forbidden edges or read errors, 2 on
 /// unexpected arguments.
 pub fn run(args: &[String]) -> ExitCode {
     if !args.is_empty() {
@@ -48,7 +53,17 @@ pub fn run(args: &[String]) -> ExitCode {
             hits += 1;
         }
     }
-    if hits > 0 {
+    let edges = match deps::check(root) {
+        Ok(lines) => lines,
+        Err(error) => {
+            eprintln!("seams: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    for line in &edges {
+        eprintln!("seams: forbidden dependency {line}");
+    }
+    if hits > 0 || !edges.is_empty() {
         return ExitCode::FAILURE;
     }
     println!(
