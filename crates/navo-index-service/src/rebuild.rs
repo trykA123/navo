@@ -4,16 +4,24 @@ use std::fmt;
 use std::sync::PoisonError;
 use std::time::{Duration, Instant};
 
-use navo_index::file::FileError;
-use navo_index::ntfs::{InexactBuild, NtfsError, UnresolvedChange};
+use navo_index::ntfs::{InexactBuild, NtfsError};
 use navo_index::pipe::{BuildReason, VolumeBuilds};
 
 use super::answer::Shared;
 use super::service_log::Log;
 use super::verify_rebuild::VerifyRebuild;
 
+#[path = "error_kinds.rs"]
+mod error_kinds;
+#[path = "replay_point.rs"]
+mod replay_point;
 #[path = "unresolved_refs.rs"]
 mod unresolved_refs;
+pub(super) use error_kinds::error_kind;
+#[cfg(windows)]
+pub(super) use error_kinds::file_error_kind;
+use replay_point::ReplayPoint;
+pub(super) use replay_point::{Followed, SaveCursor, checked};
 pub(super) use unresolved_refs::Unresolved;
 
 /// At most one full build per volume starts within this window; later causes wait for its end.
@@ -94,6 +102,7 @@ pub(super) struct Rebuilds {
     retry_delay: Option<Duration>,
     verification: VerifyRebuild,
     verification_reason: Option<&'static str>,
+    replay: ReplayPoint,
 }
 
 impl Rebuilds {
@@ -107,6 +116,7 @@ impl Rebuilds {
             retry_delay: None,
             verification: VerifyRebuild::default(),
             verification_reason: None,
+            replay: ReplayPoint::default(),
         }
     }
 
@@ -196,13 +206,14 @@ impl Rebuilds {
     }
 
     /// Turns one follow result into the full build that must start now, if any.
-    pub fn after_follow(
+    pub fn after_follow_from(
         &mut self,
         shared: &Shared,
-        followed: Result<Vec<UnresolvedChange>, NtfsError>,
+        followed: Followed,
         now: Duration,
     ) -> Result<Option<Cause>, NtfsError> {
-        let changes = match followed {
+        let Followed { changes, start } = followed;
+        let changes = match changes {
             Ok(changes) if changes.is_empty() => return Ok(None),
             Ok(changes) => changes,
             Err(error @ (NtfsError::Reenumerate(_) | NtfsError::LinkRefresh(_))) => {
@@ -230,6 +241,11 @@ impl Rebuilds {
             tracing::debug!(volume = %self.letter, %unresolved, "dropped changes for files outside the index");
             return Ok(None);
         }
+        self.replay.unresolved_batch(start);
+        let index = super::batch::published(shared);
+        let unresolved = unresolved.classify(index.as_deref());
+        // Release the published index before the rebuild request, which may swap it.
+        drop(index);
         let cause = Cause {
             reason: BuildReason::UnresolvedChanges,
             unresolved: Some(unresolved),
@@ -284,8 +300,11 @@ impl Rebuilds {
             self.deferred = Some(Deferred { cause, deadline });
             update(shared, |builds| builds.deferred_rebuilds += 1);
             let wait = (deadline - now).as_secs();
+            let class = cause
+                .unresolved
+                .map_or("", |unresolved| unresolved.class_field());
             self.log.line(format_args!(
-                "rebuild deferred {}: {cause} wait_s={wait}",
+                "rebuild deferred {}: {cause}{class} wait_s={wait}",
                 self.letter
             ));
         }
@@ -370,41 +389,6 @@ fn update(shared: &Shared, change: impl FnOnce(&mut VolumeBuilds)) {
             .unwrap_or_else(PoisonError::into_inner)
             .builds,
     );
-}
-
-/// A log-safe error kind: static text and OS codes, never names.
-pub(super) fn error_kind(error: &NtfsError) -> String {
-    match error {
-        NtfsError::Io { operation, source } => format!("io op=\"{operation}\" {}", io_kind(source)),
-        NtfsError::InvalidVolume => "invalid_volume".into(),
-        NtfsError::InvalidResponse(what) => format!("invalid_response \"{what}\""),
-        NtfsError::Snapshot(error) => file_error_kind(error),
-        NtfsError::Parse(_) => "parse".into(),
-        NtfsError::Table(_) => "table".into(),
-        NtfsError::Reenumerate(cause) => format!("reenumerate({cause})"),
-        NtfsError::LinkRefresh(failed) => format!("reenumerate(hard link) {}", error_kind(failed)),
-        NtfsError::FileGone => "file_gone".into(),
-        NtfsError::Cancelled => "cancelled".into(),
-    }
-}
-
-pub(super) fn file_error_kind(error: &FileError) -> String {
-    match error {
-        FileError::Io(source) => format!("snapshot_io {}", io_kind(source)),
-        FileError::Allocation(_) => "snapshot_allocation".into(),
-        FileError::BadMagic => "snapshot_bad_magic".into(),
-        FileError::UnsupportedVersion { found, .. } => format!("snapshot_version found={found}"),
-        FileError::BadLength => "snapshot_bad_length".into(),
-        FileError::BadChecksum => "snapshot_bad_checksum".into(),
-        FileError::InvalidData(what) => format!("snapshot_invalid \"{what}\""),
-    }
-}
-
-pub(super) fn io_kind(error: &std::io::Error) -> String {
-    match error.raw_os_error() {
-        Some(code) => format!("os_error={code}"),
-        None => format!("kind={:?}", error.kind()),
-    }
 }
 
 #[cfg(test)]

@@ -2,12 +2,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use navo_index::file::Header;
-use navo_index::ntfs::{NtfsError, NtfsIndex};
-use navo_index::table::{Flags, NO_PARENT, NameTable};
+use navo_index::ntfs::{NtfsError, NtfsIndex, UnresolvedChange};
+use navo_index::table::{Flags, NO_PARENT, NameTable, TableChange};
 use navo_index::usn::{FrnMap, UsnBatch, UsnRecord};
 
 use super::super::answer::{Shared, State};
-use super::{apply_batch, published};
+use super::{apply_batch, note_metadata_folders, published};
 
 const FILES: u32 = 20_000;
 
@@ -297,4 +297,46 @@ fn ids_a_reader_took_before_a_compacting_batch_still_name_the_same_files() {
     assert_ne!(after.ids[&kept], held);
     assert_eq!(reader.table.path(held), path);
     assert_eq!(after.table.path(after.ids[&kept]), path);
+}
+
+/// AF9e: after a restore the index has no metadata-folder set. Once the follower notes
+/// `$Extend\$Deleted` (confirmed from the MFT), a file Windows parks there leaves the index and
+/// the batch reports no named change, so no rebuild is asked for.
+#[test]
+fn a_noted_metadata_folder_resolves_a_rename_into_it_after_a_restore() {
+    const DELETED: u128 = (1 << 48) | 0x1D;
+    let parked = || UsnBatch {
+        next_usn: 130,
+        records: vec![
+            record(8, 6, 0x1000, "x.txt"),
+            record(8, DELETED, 0x2000, "$X8"),
+        ],
+    };
+    let create = UsnBatch {
+        next_usn: 120,
+        records: vec![record(8, 6, 0x100, "x.txt")],
+    };
+    let blocked = shared(Some(index()));
+    assert!(apply_batch(&blocked, create.clone()).unwrap().is_empty());
+    assert!(
+        apply_batch(&blocked, parked())
+            .unwrap()
+            .iter()
+            .any(|item| matches!(item.change, TableChange::Rename { .. }))
+    );
+
+    let shared = shared(Some(index()));
+    assert!(apply_batch(&shared, create).unwrap().is_empty());
+    note_metadata_folders(&shared, vec![DELETED]);
+    let unresolved = apply_batch(&shared, parked()).unwrap();
+    // The size of the departed file has no entry left; sizes alone never ask for a rebuild.
+    let named = |item: &UnresolvedChange| {
+        matches!(
+            item.change,
+            TableChange::Add { .. } | TableChange::Rename { .. }
+        )
+    };
+    assert!(!unresolved.iter().any(named), "{unresolved:?}");
+    let state = shared.read().unwrap();
+    assert!(state.index.as_ref().unwrap().ids.get(&8).is_none());
 }

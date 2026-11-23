@@ -15,9 +15,11 @@ use super::{
     answer::Shared,
     config::Drive,
     lifecycle::{SaveClock, build_hint},
+    rebuild::{SaveCursor, checked},
 };
 
-/// Inputs for one due-checked snapshot write: published index, drive, path, elapsed time.
+/// Inputs for one due-checked snapshot write: published index, drive, path, elapsed time, and
+/// the journal cursor the rebuild state allows.
 #[derive(Clone, Copy)]
 pub(super) struct SaveInput<'a> {
     pub shared: &'a Shared,
@@ -26,6 +28,7 @@ pub(super) struct SaveInput<'a> {
     pub elapsed: Duration,
     pub stopping: bool,
     pub built_at: i64,
+    pub cursor: SaveCursor,
 }
 
 /// Returns the existing build-hint policy applied to the published index.
@@ -52,6 +55,7 @@ pub(super) fn replace(shared: &Shared, index: NtfsIndex) {
 }
 
 /// Streams a due published snapshot using elapsed time and epoch seconds; returns write errors.
+/// Writes nothing when the cursor is `Skip` or not at or before the index's own cursor.
 pub(super) fn save_snapshot(
     input: SaveInput<'_>,
     clock: &mut SaveClock,
@@ -63,7 +67,10 @@ pub(super) fn save_snapshot(
     if !clock.due(input.elapsed, snapshot.as_ref(), input.stopping) {
         return Ok(None);
     }
-    let Some((table, ids, position)) = snapshot else {
+    let Some((table, ids, live)) = snapshot else {
+        return Ok(None);
+    };
+    let Some(position) = checked(live, input.cursor) else {
         return Ok(None);
     };
     let header = Header {
@@ -128,6 +135,7 @@ mod tests {
             elapsed: Duration::from_secs(30),
             stopping: false,
             built_at: 5678,
+            cursor: SaveCursor::Live,
         };
         assert_eq!(save_snapshot(input, &mut clock).unwrap(), Some(1));
         let (saved, table, ids) = file::load_with_ids(&path).unwrap();
@@ -156,6 +164,7 @@ mod tests {
             elapsed: Duration::ZERO,
             stopping: false,
             built_at: 5678,
+            cursor: SaveCursor::Live,
         };
         assert_eq!(save_snapshot(input, &mut clock).unwrap(), None);
         clock.changed(Duration::ZERO);
@@ -187,6 +196,7 @@ mod tests {
             elapsed: Duration::from_secs(30),
             stopping: false,
             built_at: 5678,
+            cursor: SaveCursor::Live,
         };
         assert!(save_snapshot(input, &mut clock).is_err());
         input.path = &path;

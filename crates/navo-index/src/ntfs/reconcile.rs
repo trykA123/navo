@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::super::directory_graph::{DirectoryGraph, DirectoryRecord, UnplacedFolder};
+use super::super::skipped::is_extend;
 use super::super::{InexactBuild, directory_scan, is_folder};
 use super::two_pass::{add_file, add_record, check_cancel};
 use super::{
@@ -88,6 +89,7 @@ impl LateRecords {
         let skipped = self.skipped + resolved.skipped + resolved.unplaced.len() as u64;
         let unplaced = resolved.unplaced.iter().map(|folder| folder.record.file_id);
         index.skipped_folders = unplaced.collect();
+        index.metadata_folders = metadata_folders(&resolved.unplaced);
         let cycles: HashSet<_> = resolved
             .unplaced
             .into_iter()
@@ -119,6 +121,31 @@ impl LateRecords {
         }
         Ok(reconciled)
     }
+}
+
+/// Lists the unplaced folders below `$Extend` (MFT record 11, which the build never places):
+/// its children by their parent reference, then their unplaced subfolders, walked with a stack.
+fn metadata_folders(unplaced: &[UnplacedFolder]) -> HashSet<u128> {
+    let mut children: HashMap<u128, Vec<u128>> = HashMap::new();
+    for folder in unplaced {
+        let record = &folder.record;
+        children
+            .entry(record.parent_id)
+            .or_default()
+            .push(record.file_id);
+    }
+    let mut found = HashSet::new();
+    let mut stack: Vec<u128> = children
+        .iter()
+        .filter(|(parent, _)| is_extend(**parent))
+        .flat_map(|(_, files)| files.iter().copied())
+        .collect();
+    while let Some(folder) = stack.pop() {
+        if found.insert(folder) {
+            stack.extend(children.get(&folder).into_iter().flatten().copied());
+        }
+    }
+    found
 }
 
 /// Builds folders and files, reconciles the late records, and checks journal continuity.

@@ -22,6 +22,8 @@ pub(super) struct Pending {
     pub(super) blocked_peak: usize,
     pub(super) cycle_skips: u64,
     pub(super) sources: RenameSources,
+    /// Files this batch renamed into a metadata folder (deleted while open); see `skipped.rs`.
+    pub(super) departed: std::collections::HashSet<u128>,
 }
 
 impl Pending {

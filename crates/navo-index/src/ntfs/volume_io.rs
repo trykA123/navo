@@ -8,6 +8,14 @@ use super::{
     UsnBatch, parse_batch, validate_journal_cursor,
 };
 
+#[path = "extend_chain.rs"]
+pub(super) mod extend_chain;
+#[cfg(test)]
+#[path = "extend_chain_tests.rs"]
+mod extend_chain_tests;
+#[cfg(test)]
+#[path = "extend_skipped_tests.rs"]
+mod extend_skipped_tests;
 #[cfg(test)]
 #[path = "journal_churn_tests.rs"]
 mod journal_churn_tests;
@@ -43,6 +51,11 @@ pub(super) trait VolumeIo {
     fn file_size(&mut self, file_id: u128) -> Result<u64, NtfsError>;
     fn current_file_size(&mut self, file_id: u128) -> Result<u64, NtfsError> {
         self.file_size(file_id)
+    }
+    /// Returns a file's path without the drive, as UTF-16 units (`\$Extend\$Deleted`), opened
+    /// by its full reference; `None` when the volume has no by-id path query (the default).
+    fn path_by_id(&mut self, _file_id: u128) -> Result<Option<Vec<u16>>, NtfsError> {
+        Ok(None)
     }
 }
 

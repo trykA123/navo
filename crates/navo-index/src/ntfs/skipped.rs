@@ -1,5 +1,6 @@
 //! Resolves journal changes into folders the full build knowingly skipped (unreachable parent
-//! chains), so they never ask for a rebuild that would skip the same folders again.
+//! chains) and into NTFS metadata folders under `$Extend`, so they never ask for a rebuild that
+//! would skip the same folders again.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -11,6 +12,8 @@ const FILE_CREATE: u32 = 0x100;
 const FILE_DELETE: u32 = 0x200;
 const RENAME_OLD_NAME: u32 = 0x1000;
 const RENAME_NEW_NAME: u32 = 0x2000;
+/// `$Extend` is MFT record 11 on every NTFS volume, as the root is record 5.
+const EXTEND_RECORD: u128 = 11;
 
 /// The parent reference and name one link had before a rename.
 struct OldLink {
@@ -94,6 +97,25 @@ fn resolve(
             parent_id,
             flags,
             ..
+        } if into_metadata(index, *parent_id, missing) => {
+            resolve_metadata(index, *file_id, *flags, None)
+        }
+        TableChange::Rename {
+            file_id,
+            parent_id,
+            name,
+            flags,
+        } if into_metadata(index, *parent_id, missing)
+            || (missing == *file_id && is_metadata(index, *parent_id)) =>
+        {
+            let old = sources.take(*file_id, *parent_id, name);
+            resolve_metadata(index, *file_id, *flags, old)
+        }
+        TableChange::Add {
+            file_id,
+            parent_id,
+            flags,
+            ..
         } if into_skipped(index, *parent_id, missing) => Ok(resolve_add(index, *file_id, *flags)),
         TableChange::Rename {
             file_id,
@@ -106,6 +128,88 @@ fn resolve(
         }
         _ => Ok(Resolution::Blocked),
     }
+}
+
+/// What the index knows of a missing parent reference, named in the rebuild log line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MissingClass {
+    /// `$Extend` or a known NTFS metadata folder below it.
+    Metadata,
+    /// A folder the last full build left out (its parent chain never reached the root).
+    Skipped,
+    /// Neither: the index has no record of it.
+    Unknown,
+}
+
+impl NtfsIndex {
+    /// Classifies a missing reference; a folder in both sets counts as metadata, as `resolve` does.
+    pub fn missing_class(&self, reference: u128) -> MissingClass {
+        if is_metadata(self, reference) {
+            MissingClass::Metadata
+        } else if self.skipped_folders.contains(&reference) {
+            MissingClass::Skipped
+        } else {
+            MissingClass::Unknown
+        }
+    }
+}
+
+/// Checks whether a reference is `$Extend` itself, in any sequence number.
+pub(super) fn is_extend(reference: u128) -> bool {
+    reference <= u128::from(u64::MAX) && reference & 0x0000_ffff_ffff_ffff == EXTEND_RECORD
+}
+
+/// Checks that the missing reference is the change's parent and `$Extend` or a folder below it.
+fn into_metadata(index: &NtfsIndex, parent_id: u128, missing: u128) -> bool {
+    parent_id == missing && is_metadata(index, parent_id)
+}
+
+/// Checks whether a reference is `$Extend` or a known NTFS metadata folder below it.
+fn is_metadata(index: &NtfsIndex, reference: u128) -> bool {
+    is_extend(reference) || index.metadata_folders.contains(&reference)
+}
+
+/// Resolves a name that appeared in a metadata folder, given the old link this batch paired with
+/// a rename. Windows renames a file into `$Extend\$Deleted` when its last link is deleted while
+/// open, so the indexed entry leaves with its subtree. A paired old link other than the indexed
+/// one is another hard link: a file then stays (ignored) and a folder blocks. An unpaired file
+/// (an Add, or an old name in an earlier read) blocks: the link that left is unknown; a folder
+/// has one link. Anything the index lacks is ignored. Folders, and the subfolders of a removed
+/// one, join the metadata set. Fails only when the table removal fails.
+fn resolve_metadata(
+    index: &mut NtfsIndex,
+    file_id: u128,
+    flags: Flags,
+    old: Option<OldLink>,
+) -> Result<Resolution, TableError> {
+    let Some(indexed) = indexed_flags(index, file_id) else {
+        if flags.contains(Flags::FOLDER) {
+            index.metadata_folders.insert(file_id);
+        }
+        return Ok(Resolution::Ignored);
+    };
+    if old.is_none() && !indexed.contains(Flags::FOLDER) {
+        return Ok(Resolution::Blocked);
+    }
+    if let Some(old) = old
+        && !holds_link(index, file_id, &old)
+    {
+        // A non-last link parked by a POSIX delete; the indexed link still exists.
+        return Ok(if indexed.contains(Flags::FOLDER) {
+            Resolution::Blocked
+        } else {
+            Resolution::Ignored
+        });
+    }
+    let folders = if indexed.contains(Flags::FOLDER) {
+        subtree_folders(index, file_id)
+    } else {
+        Vec::new()
+    };
+    let remove = TableChange::Remove { file_id };
+    let removed = index.table.apply_in_batch(remove, &mut index.ids)?;
+    index.metadata_folders.extend(folders);
+    Ok(Resolution::Removed(removed))
 }
 
 /// Checks that the missing reference is the change's parent and a folder the build skipped.
@@ -207,14 +311,18 @@ impl Pending {
     ) -> Result<bool, TableError> {
         if let TableChange::Remove { file_id } = change {
             index.skipped_folders.remove(file_id);
+            index.metadata_folders.remove(file_id);
         }
         let (applied, removed) = match index.table.apply_in_batch(change.clone(), &mut index.ids) {
             Ok(removed) => {
                 self.report_if_rejoined(index, change);
                 (true, removed)
             }
+            Err(TableError::UnknownFileReference(_)) if self.departed_update(change) => (false, 0),
             Err(TableError::UnknownFileReference(missing)) => {
-                match resolve(index, change, missing, &mut self.sources)? {
+                let resolution = resolve(index, change, missing, &mut self.sources)?;
+                self.note_departed(index, change, &resolution);
+                match resolution {
                     Resolution::Blocked => return Err(TableError::UnknownFileReference(missing)),
                     Resolution::Ignored => (false, 0),
                     Resolution::Removed(removed) => (false, removed),
@@ -226,11 +334,40 @@ impl Pending {
         Ok(applied)
     }
 
+    /// Remembers a file whose new name in a metadata folder resolved (Windows parks a file deleted
+    /// while open in `$Extend\$Deleted`; an unpaired new name arrives as an Add): the file left
+    /// the namespace, so its later size and attribute records in this batch describe nothing the
+    /// index shows.
+    fn note_departed(&mut self, index: &NtfsIndex, change: &TableChange, resolution: &Resolution) {
+        if let TableChange::Add {
+            file_id, parent_id, ..
+        }
+        | TableChange::Rename {
+            file_id, parent_id, ..
+        } = change
+            && !matches!(resolution, Resolution::Blocked)
+            && is_metadata(index, *parent_id)
+        {
+            self.departed.insert(*file_id);
+        }
+    }
+
+    /// Checks whether a size or attribute record is about a file this batch parked in a metadata
+    /// folder; the caller drops it instead of reporting it unresolved.
+    fn departed_update(&self, change: &TableChange) -> bool {
+        match change {
+            TableChange::Size { file_id, .. } | TableChange::Attributes { file_id, .. } => {
+                self.departed.contains(file_id)
+            }
+            _ => false,
+        }
+    }
+
     /// Reports a skipped folder that a named change put back in the index, and drops it from the
     /// set; the folder itself is the missing reference, so the service asks for a rebuild.
     fn report_if_rejoined(&mut self, index: &mut NtfsIndex, change: &TableChange) {
         if let TableChange::Add { file_id, .. } | TableChange::Rename { file_id, .. } = change
-            && index.skipped_folders.remove(file_id)
+            && (index.skipped_folders.remove(file_id) | index.metadata_folders.remove(file_id))
         {
             self.report_unresolved(*file_id, [change.clone()]);
         }

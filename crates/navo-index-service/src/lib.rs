@@ -261,6 +261,8 @@ fn execute(_: Action) -> std::io::Result<Elevated> {
 mod tests;
 
 #[cfg(test)]
+mod deferred_save_tests;
+#[cfg(test)]
 mod install_replace_tests;
 #[cfg(test)]
 mod install_rollback_tests;

@@ -1,8 +1,8 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use navo_index::file::Header;
-use navo_index::ntfs::{NtfsError, NtfsIndex};
+use navo_index::file::{FileError, Header};
+use navo_index::ntfs::{NtfsError, NtfsIndex, UnresolvedChange};
 use navo_index::pipe::{BuildReason, CancelToken, QueryTerm, Request, VolumeBuilds};
 use navo_index::table::{Flags, NO_PARENT, NameTable};
 use navo_index::usn::{FrnMap, UsnBatch, UsnRecord};
@@ -366,6 +366,28 @@ fn the_rebuild_reason_names_the_first_three_unresolved_references() {
     let text = cause.to_string();
     assert!(
         text.ends_with(" first_missing:file=777:901,777:902,777:903"),
+        "{text}"
+    );
+}
+
+/// AF9g: the rebuild-deferred line names what the index knows of the first missing reference.
+#[test]
+fn a_deferred_rebuild_names_the_class_of_the_first_missing_reference() {
+    let shared = shared();
+    let (directory, log) = logged();
+    let mut rebuilds = Rebuilds::new('C', log);
+    let first = create_under_unknown_folder(&shared, 120);
+    let cause = rebuilds.after_follow(&shared, Ok(first), MINUTE);
+    rebuilds.started(&shared, cause.unwrap().unwrap(), MINUTE);
+    let second = create_under_unknown_folder(&shared, 140);
+    let later = rebuilds.after_follow(&shared, Ok(second), 2 * MINUTE);
+    assert_eq!(later.unwrap(), None, "the second cause must wait");
+    let text = log_text(&directory);
+    let deferred = text
+        .lines()
+        .find(|line| line.contains("rebuild deferred C:"));
+    assert!(
+        deferred.is_some_and(|line| line.contains(" first_class=unknown wait_s=")),
         "{text}"
     );
 }

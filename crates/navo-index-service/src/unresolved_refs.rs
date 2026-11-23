@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use navo_index::ntfs::UnresolvedChange;
+use navo_index::ntfs::{MissingClass, NtfsIndex, UnresolvedChange};
 use navo_index::table::TableChange;
 
 /// Unresolved changes of one journal batch, by kind.
@@ -15,6 +15,8 @@ pub(crate) struct Unresolved {
     size: u64,
     other: u64,
     first: UnresolvedRefs,
+    /// What the index knew of the first missing reference after the batch; see [`Self::classify`].
+    first_class: Option<MissingClass>,
 }
 
 impl Unresolved {
@@ -39,6 +41,26 @@ impl Unresolved {
             *count += 1;
         }
         counts
+    }
+
+    /// Notes what `index` (the one the batch applied to) knows of the first missing reference;
+    /// leaves the class unset without an index or an unresolved change.
+    pub fn classify(mut self, index: Option<&NtfsIndex>) -> Self {
+        let first = self.first.0[0].map(|(missing, _)| missing);
+        self.first_class = index
+            .zip(first)
+            .map(|(index, missing)| index.missing_class(missing));
+        self
+    }
+
+    /// The ` first_class=…` field for the rebuild-deferred line, or "" when the class is unset.
+    pub fn class_field(&self) -> &'static str {
+        match self.first_class {
+            Some(MissingClass::Metadata) => " first_class=metadata",
+            Some(MissingClass::Skipped) => " first_class=skipped",
+            Some(MissingClass::Unknown) => " first_class=unknown",
+            None => "",
+        }
     }
 
     /// Attribute and size changes for files outside the index change nothing in it.

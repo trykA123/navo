@@ -13,7 +13,6 @@ use super::answer::Shared;
 use super::build_permit::{BUILDS, BuildPermit};
 use super::config::{Drive, index_path};
 use super::follow_pace::{Outcome, Pace};
-use super::follow_state::Updating;
 use super::lifecycle::{
     SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, clear_failures,
     report_unknown_sizes, restore_or_enumerate,
@@ -22,6 +21,9 @@ use super::rebuild::{Cause, Rebuilds, error_kind, file_error_kind};
 use super::rebuild_session::{SaveInput, rebuild_hint, replace, save_snapshot};
 use super::service_log::Log;
 use super::storage::Storage;
+
+#[path = "worker_follow.rs"]
+mod follow_batch;
 
 pub(super) struct Worker {
     drive: Drive,
@@ -203,53 +205,9 @@ impl Worker {
     /// Publishes a completed index and starts its snapshot save clock.
     fn publish(&mut self, index: NtfsIndex) {
         replace(&self.shared, index);
+        self.rebuilds.index_published();
         self.build_failed = false;
         self.clock.changed(self.started.elapsed());
-    }
-
-    /// Reads and applies one journal batch; returns the full build it requires, if any.
-    /// A failed apply pauses replay and saves, then rebuilds; a read error is returned.
-    fn follow(&mut self, volume: &mut Volume) -> Result<Option<Cause>, NtfsError> {
-        let position = self
-            .shared
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .index
-            .as_ref()
-            .map(|index| index.position);
-        let Some(position) = position else {
-            return Ok(None);
-        };
-        let _updating = Updating::begin(&self.shared);
-        let elapsed = self.started.elapsed();
-        let batch = match volume.read_journal(position) {
-            Ok(batch) => batch,
-            Err(error) => {
-                return self
-                    .rebuilds
-                    .after_follow(&self.shared, Err(error), elapsed);
-            }
-        };
-        let records = batch.records.len();
-        let changed = batch.next_usn != position.next_usn;
-        self.moved = changed;
-        let unresolved = match super::batch::apply_batch(&self.shared, batch) {
-            Ok(unresolved) => unresolved,
-            Err(error) => return Ok(self.rebuilds.apply_failed(&self.shared, &error, elapsed)),
-        };
-        if changed {
-            self.clock.batch(self.started.elapsed(), records);
-        }
-        let replay_inexact = {
-            let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
-            std::mem::take(&mut state.replay_inexact)
-        };
-        if replay_inexact {
-            self.rebuilds
-                .schedule_verification(Instant::now(), "replay_cycle");
-        }
-        self.rebuilds
-            .after_follow(&self.shared, Ok(unresolved), elapsed)
     }
 
     /// Attempts a regular full build and records its retry delay on error.
@@ -354,12 +312,9 @@ impl Worker {
         }
     }
 
-    /// Saves a due snapshot, logging failures and returning them as I/O errors.
+    /// Saves a due snapshot, logging failures and returning them as I/O errors. While a rebuild
+    /// waits for unresolved changes, the cursor stays before them so a restore replays them.
     fn save(&mut self, stopping: bool) -> io::Result<()> {
-        // A deferred rebuild means the index misses changes; the older snapshot replays them.
-        if self.rebuilds.is_deferred() {
-            return Ok(());
-        }
         let input = SaveInput {
             shared: &self.shared,
             drive: self.drive,
@@ -370,6 +325,7 @@ impl Worker {
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64,
+            cursor: self.rebuilds.save_cursor(),
         };
         let saved = save_snapshot(input, &mut self.clock);
         let letter = self.drive.letter;

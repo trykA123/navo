@@ -8,8 +8,8 @@ use windows_sys::Win32::Foundation::{
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_NO_RECALL,
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_ID_DESCRIPTOR, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
-    FILE_SHARE_READ, FILE_SHARE_WRITE, FileIdType, GetFileSizeEx, GetVolumeInformationByHandleW,
-    OPEN_EXISTING, OpenFileById,
+    FILE_SHARE_READ, FILE_SHARE_WRITE, FileIdType, GetFileSizeEx, GetFinalPathNameByHandleW,
+    GetVolumeInformationByHandleW, OPEN_EXISTING, OpenFileById, VOLUME_NAME_NONE,
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::{
@@ -85,6 +85,12 @@ impl Volume {
 
     pub fn read_journal(&mut self, saved: JournalPosition) -> Result<UsnBatch, NtfsError> {
         read_volume_journal(self, saved)
+    }
+
+    /// Lists the batch's parent folders the index lacks whose MFT parent chain reaches `$Extend`,
+    /// for [`super::NtfsIndex::note_metadata_folders`]. A read error ends the search (logged).
+    pub fn metadata_parents(&mut self, batch: &UsnBatch, index: &super::NtfsIndex) -> Vec<u128> {
+        super::volume_io::extend_chain::metadata_parents(self, batch, index)
     }
 
     /// MFT record slots right now; read again at each build since the MFT only grows.
@@ -197,32 +203,10 @@ impl VolumeIo for Volume {
     fn current_file_size(&mut self, file_id: u128) -> Result<u64, NtfsError> {
         let reference = u64::try_from(file_id)
             .map_err(|_| NtfsError::InvalidResponse("wide NTFS reference"))?;
-        let mut descriptor = FILE_ID_DESCRIPTOR {
-            dwSize: size_of::<FILE_ID_DESCRIPTOR>() as u32,
-            Type: FileIdType,
-            ..Default::default()
-        };
-        descriptor.Anonymous.FileId = reference as i64;
-        // SAFETY: descriptor and the synchronous volume handle remain live through the call.
-        let handle = unsafe {
-            OpenFileById(
-                self.handle.0,
-                &descriptor,
-                FILE_READ_ATTRIBUTES,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                ptr::null(),
-                FILE_FLAG_BACKUP_SEMANTICS
-                    | FILE_FLAG_OPEN_REPARSE_POINT
-                    | FILE_FLAG_OPEN_NO_RECALL,
-            )
-        };
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(size_error(NtfsError::Io {
-                operation: "open file for size",
-                source: io::Error::last_os_error(),
-            }));
-        }
-        let handle = VolumeHandle(handle);
+        let handle = self
+            .handle
+            .open_by_id(reference, "open file for size")
+            .map_err(size_error)?;
         let mut size = 0;
         // SAFETY: handle is live and size is a writable LARGE_INTEGER.
         if unsafe { GetFileSizeEx(handle.0, &mut size) } == 0 {
@@ -232,6 +216,28 @@ impl VolumeIo for Volume {
             });
         }
         u64::try_from(size).map_err(|_| NtfsError::InvalidResponse("negative file size"))
+    }
+
+    /// Opens the file by its full reference and reads its path without the drive letter.
+    fn path_by_id(&mut self, file_id: u128) -> Result<Option<Vec<u16>>, NtfsError> {
+        let reference = u64::try_from(file_id)
+            .map_err(|_| NtfsError::InvalidResponse("wide NTFS reference"))?;
+        let handle = self.handle.open_by_id(reference, "open folder for path")?;
+        let mut path = vec![0u16; 1024];
+        // SAFETY: handle is live and path is a writable buffer of the length passed.
+        let written = unsafe {
+            GetFinalPathNameByHandleW(handle.0, path.as_mut_ptr(), 1024, VOLUME_NAME_NONE)
+        };
+        if written == 0 {
+            return Err(NtfsError::Io {
+                operation: "read folder path",
+                source: io::Error::last_os_error(),
+            });
+        }
+        // A result of the buffer length or more is the size it needs: an empty path, no match.
+        let length = usize::try_from(written).unwrap_or(usize::MAX);
+        path.truncate(if length < path.len() { length } else { 0 });
+        Ok(Some(path))
     }
 
     fn query_journal(&mut self) -> Result<Vec<u8>, NtfsError> {
@@ -254,6 +260,39 @@ impl VolumeIo for Volume {
             &journal_request(position),
             JOURNAL_BUFFER,
         )
+    }
+}
+
+impl VolumeHandle {
+    /// Opens a file or folder on this volume by its full 64-bit reference (sequence included), for
+    /// attribute reads only. Fails with the OS error, as a stale reference or a denied open.
+    fn open_by_id(&self, reference: u64, operation: &'static str) -> Result<Self, NtfsError> {
+        let mut descriptor = FILE_ID_DESCRIPTOR {
+            dwSize: size_of::<FILE_ID_DESCRIPTOR>() as u32,
+            Type: FileIdType,
+            ..Default::default()
+        };
+        descriptor.Anonymous.FileId = reference as i64;
+        // SAFETY: descriptor and the synchronous volume handle remain live through the call.
+        let handle = unsafe {
+            OpenFileById(
+                self.0,
+                &descriptor,
+                FILE_READ_ATTRIBUTES,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                ptr::null(),
+                FILE_FLAG_BACKUP_SEMANTICS
+                    | FILE_FLAG_OPEN_REPARSE_POINT
+                    | FILE_FLAG_OPEN_NO_RECALL,
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(NtfsError::Io {
+                operation,
+                source: io::Error::last_os_error(),
+            });
+        }
+        Ok(Self(handle))
     }
 }
 

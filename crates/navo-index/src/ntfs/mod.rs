@@ -40,6 +40,7 @@ use crate::{
 #[cfg(windows)]
 mod windows;
 pub use compact::COMPACT_MIN_SLOTS;
+pub use skipped::MissingClass;
 #[cfg(windows)]
 pub use windows::Volume;
 
@@ -83,6 +84,8 @@ pub struct NtfsIndex {
     search_only: bool,
     /// Folders the last full build left out because their parent chain never reached the root.
     skipped_folders: HashSet<u128>,
+    /// NTFS metadata folders below `$Extend` (as `$Extend\$Deleted`) the last build saw.
+    metadata_folders: HashSet<u128>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -143,6 +146,7 @@ impl NtfsIndex {
             renames: PendingRenames::default(),
             search_only: false,
             skipped_folders: HashSet::new(),
+            metadata_folders: HashSet::new(),
         })
     }
 
@@ -159,6 +163,17 @@ impl NtfsIndex {
         let mut applying = self.begin_batch(batch)?;
         while applying.step(self, usize::MAX)? {}
         applying.finish(self)
+    }
+
+    /// Records folders a journal read confirmed below `$Extend` (see `Volume::metadata_parents`),
+    /// so changes into them resolve; a reference the index shows is left out.
+    pub fn note_metadata_folders(&mut self, folders: impl IntoIterator<Item = u128>) {
+        for folder in folders {
+            let indexed = self.ids.get(&folder).and_then(|&id| self.table.name(id));
+            if indexed.is_none() {
+                self.metadata_folders.insert(folder);
+            }
+        }
     }
 
     /// Begins journal application, rejecting generations whose update storage was released.
@@ -334,6 +349,8 @@ mod batch_tests;
 mod blocked_peak_tests;
 #[cfg(test)]
 mod directory_graph_tests;
+#[cfg(test)]
+mod extend_folder_tests;
 #[cfg(test)]
 mod memory_tests;
 #[cfg(test)]

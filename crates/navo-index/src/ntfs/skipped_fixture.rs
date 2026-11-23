@@ -1,4 +1,5 @@
-//! Synthetic volume with one folder whose parent chain leaves the MFT, so every build skips it.
+//! Synthetic volumes whose folders the build cannot place: one orphan folder, and NTFS metadata
+//! folders under `$Extend` (MFT record 11, which enumeration never returns).
 
 use super::super::volume_io::{VolumeIo, enumerate_volume};
 use super::super::{Enumeration, JournalPosition, NtfsError};
@@ -14,7 +15,19 @@ const ROWS: [(u64, u64, bool, &str); 4] = [
     (32, 30, true, "sub"),
 ];
 
-struct SkippedFolderMft;
+/// `$Extend\$Deleted` (record 29, as on the VM), `$Extend\$RmMetadata` and its `$Txf` folder,
+/// beside folder 30 ("docs") holding file 21 and subfolder 32, as in [`ROWS`].
+const EXTEND_ROWS: [(u64, u64, bool, &str); 6] = [
+    ((1 << 48) | 0x1D, (11 << 48) | 11, true, "$Deleted"),
+    ((1 << 48) | 27, (11 << 48) | 11, true, "$RmMetadata"),
+    ((1 << 48) | 28, (1 << 48) | 27, true, "$Txf"),
+    (30, 5, true, "docs"),
+    (21, 30, false, "x.txt"),
+    (32, 30, true, "sub"),
+];
+
+/// Hands out its rows as one enumeration chunk.
+struct SkippedFolderMft(&'static [(u64, u64, bool, &'static str)]);
 
 impl VolumeIo for SkippedFolderMft {
     /// Supplies journal 7 at next USN 100.
@@ -28,7 +41,7 @@ impl VolumeIo for SkippedFolderMft {
             return Ok(None);
         }
         let mut bytes = 1u64.to_le_bytes().to_vec();
-        for (file_id, parent_id, folder, name) in ROWS {
+        for &(file_id, parent_id, folder, name) in self.0 {
             let spec = SyntheticRecord {
                 file_id,
                 parent_id,
@@ -53,5 +66,17 @@ impl VolumeIo for SkippedFolderMft {
 
 /// Builds volume C: through the production loop; folder 8 is skipped, `C:\docs\x.txt` is indexed.
 pub fn skipped_folder_build() -> Enumeration {
-    enumerate_volume(&mut SkippedFolderMft, 'C', usize::MAX, &CancelToken::new()).unwrap()
+    enumerate_volume(
+        &mut SkippedFolderMft(&ROWS),
+        'C',
+        usize::MAX,
+        &CancelToken::new(),
+    )
+    .unwrap()
+}
+
+/// Builds volume C: with the `$Extend` metadata folders skipped and `C:\docs\x.txt` indexed.
+pub fn extend_folder_build() -> Enumeration {
+    let mut volume = SkippedFolderMft(&EXTEND_ROWS);
+    enumerate_volume(&mut volume, 'C', usize::MAX, &CancelToken::new()).unwrap()
 }

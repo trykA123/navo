@@ -54,6 +54,12 @@ pub(super) fn apply_batch(
     Ok(unresolved)
 }
 
+/// Records folders a journal read confirmed below `$Extend` in the published index, before the
+/// batch that names them applies; does nothing without an index.
+pub(super) fn note_metadata_folders(shared: &Shared, folders: Vec<u128>) {
+    with_index(shared, |index| index.note_metadata_folders(folders));
+}
+
 fn step_for(applying: &mut BatchApply, index: &mut NtfsIndex) -> Result<bool, NtfsError> {
     let started = Instant::now();
     while applying.step(index, STEP_CHANGES)? {
