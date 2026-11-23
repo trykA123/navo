@@ -21,6 +21,7 @@ pub fn steps(options: &GateOptions) -> Vec<Step> {
         step("l10n", "cargo", &["xtask", "l10n"]),
         step("colors", "cargo", &["xtask", "colors"]),
         step("seams", "cargo", &["xtask", "seams"]),
+        step("paths", "cargo", &["xtask", "paths"]),
         step("deny", "cargo", &["deny", "check"]),
         step("audit", "cargo", &["audit"]),
         step(

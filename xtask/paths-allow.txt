@@ -1,0 +1,21 @@
+# Exceptions for `cargo xtask paths`: <path> | <needle> | <reason>.
+# Blank lines and lines starting with # are ignored. A needle must match a whole
+# path token: the characters around it must not be name characters.
+
+docs/discussion.md | /mnt/c/… | synthetic WSL path in a list of copy-path variants
+docs/spike/fuzzy-bench.md | /home/admin/Documents/café_notes.md | synthetic benchmark path, not a build-machine leak
+plans/2026-11-09-installer-wizard.md | C:\Users\u | synthetic Windows test user in VM test tables
+plans/2026-11-09-installer-wizard-ui.md | C:\Users\u | synthetic Windows test user in VM test tables
+plans/2026-11-10-research-picks.md | C:\Users\someone | synthetic crash path in a research note
+plans/2026-11-10-speed-checks-tracy.md | C:\Users\x\a.txt | synthetic input in a stored-string benchmark case
+plans/2026-11-10-speed-checks-tracy.md | /home/x/main.rs | synthetic input in a stored-string benchmark case
+plans/2026-11-12-installer-anywhere.md | C:\Users\a\Navo | synthetic Windows test user in VM test tables
+plans/2026-11-19-release-trust.md | /mnt/ | the guard's own pattern, as a complete token in the prose
+plans/2026-11-19-release-trust.md | C:\Users\other\secret.txt | synthetic Windows user folder in the AT10 test cases
+plans/2026-11-19-release-trust.md | C:\Users\me\a.txt | synthetic Windows user folder in the AT10 test cases
+plans/2026-11-19-release-trust.md | C:\Users\Public\b.txt | synthetic Windows user folder in the AT10 test cases
+plans/2026-11-19-release-trust.md | claude.ai/code/session | describes the guard's own pattern
+setup-e2e/cases-uninstall.ps1 | C:\Users\u\plant-out | synthetic Windows test user in the uninstall e2e script
+testing/installer-w1-report.md | C:\Users\admin | historical VM test log with the synthetic admin user
+testing/installer-w1-report.md | C:\Users\w1admin2 | historical VM test log with a temporary admin user
+testing/ix8v-vm-report.md | C:\Users\admin | historical VM test log with the synthetic admin user
