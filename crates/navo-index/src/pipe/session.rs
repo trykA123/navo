@@ -85,11 +85,25 @@ pub(super) fn memory() -> (usize, usize) {
     (open * size_of::<Session>(), open)
 }
 
+/// How long a connected client may stay silent before the server drops it and accepts the next.
+pub(super) const IDLE: Duration = Duration::from_secs(30);
+
+/// One server pipe instance: accepts a client, reads its queries and writes the answers.
 pub(super) trait Transport: Sync {
     fn accept(&self, cancel: &Cancellation<'_>) -> Result<(), PipeError>;
     fn disconnect(&self) -> Result<(), PipeError>;
-    fn read_query(&self, cancel: &Cancellation<'_>) -> Result<Query, PipeError>;
+    /// Reads the next query; fails with `TimedOut` once `deadline` passes with no whole frame.
+    fn read_query(
+        &self,
+        deadline: Option<Instant>,
+        cancel: &Cancellation<'_>,
+    ) -> Result<Query, PipeError>;
     fn write_response(&self, response: &Response, deadline: Instant) -> Result<(), PipeError>;
+
+    /// The silence limit for one client; tests shorten it instead of waiting 30 s.
+    fn idle_limit(&self) -> Duration {
+        IDLE
+    }
 }
 
 impl Transport for platform::Pipe {
@@ -101,8 +115,12 @@ impl Transport for platform::Pipe {
         self.disconnect()
     }
 
-    fn read_query(&self, cancel: &Cancellation<'_>) -> Result<Query, PipeError> {
-        self.read(None, cancel)
+    fn read_query(
+        &self,
+        deadline: Option<Instant>,
+        cancel: &Cancellation<'_>,
+    ) -> Result<Query, PipeError> {
+        self.read(deadline, cancel)
     }
 
     fn write_response(&self, response: &Response, deadline: Instant) -> Result<(), PipeError> {
@@ -137,7 +155,8 @@ fn read_queries(
     let tokens: Vec<_> = tokens.iter().copied().chain([&session.stopped]).collect();
     let result = (|| {
         while !session.stopped.is_cancelled() {
-            let query = pipe.read_query(&Cancellation::Tokens(&tokens))?;
+            let idle_until = Instant::now() + pipe.idle_limit();
+            let query = pipe.read_query(Some(idle_until), &Cancellation::Tokens(&tokens))?;
             session
                 .pending
                 .lock()

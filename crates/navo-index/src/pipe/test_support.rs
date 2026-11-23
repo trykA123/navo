@@ -35,7 +35,11 @@ impl Transport for FixturePipe {
         Ok(())
     }
 
-    fn read_query(&self, cancel: &Cancellation<'_>) -> Result<Query, PipeError> {
+    fn read_query(
+        &self,
+        _: Option<Instant>,
+        cancel: &Cancellation<'_>,
+    ) -> Result<Query, PipeError> {
         while !cancel.is_cancelled() {
             match self
                 .queries

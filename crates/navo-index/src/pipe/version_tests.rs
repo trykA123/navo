@@ -252,7 +252,11 @@ impl Transport for OnePipe {
         Ok(())
     }
 
-    fn read_query(&self, cancel: &Cancellation<'_>) -> Result<Query, PipeError> {
+    fn read_query(
+        &self,
+        _: Option<Instant>,
+        cancel: &Cancellation<'_>,
+    ) -> Result<Query, PipeError> {
         if let Some(query) = self.query.lock().unwrap().take() {
             return Ok(query);
         }

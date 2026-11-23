@@ -6,6 +6,7 @@ use super::{Hit, Query, QueryTerm, Request, Response, Status, VolumeStatus};
 mod accept;
 mod client_memory;
 mod clients;
+mod idle;
 
 fn query(generation: u64) -> Query {
     Query {

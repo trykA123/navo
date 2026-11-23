@@ -28,7 +28,7 @@ impl Transport for Failing {
         Ok(())
     }
 
-    fn read_query(&self, _: &Cancellation<'_>) -> Result<Query, PipeError> {
+    fn read_query(&self, _: Option<Instant>, _: &Cancellation<'_>) -> Result<Query, PipeError> {
         Err(PipeError::NotAvailable)
     }
 
@@ -92,7 +92,7 @@ impl Transport for LeavingClient {
         Ok(())
     }
 
-    fn read_query(&self, _: &Cancellation<'_>) -> Result<Query, PipeError> {
+    fn read_query(&self, _: Option<Instant>, _: &Cancellation<'_>) -> Result<Query, PipeError> {
         if self.reads.fetch_add(1, Ordering::SeqCst) == 0 {
             return Ok(Query {
                 request: crate::pipe::Request { terms: Vec::new() },
@@ -168,7 +168,7 @@ impl Transport for TwoClients {
         Ok(())
     }
 
-    fn read_query(&self, _: &Cancellation<'_>) -> Result<Query, PipeError> {
+    fn read_query(&self, _: Option<Instant>, _: &Cancellation<'_>) -> Result<Query, PipeError> {
         let read = self.reads.fetch_add(1, Ordering::SeqCst);
         if read.is_multiple_of(2) {
             return Ok(Query {
@@ -256,7 +256,7 @@ impl Transport for Endless {
         Ok(())
     }
 
-    fn read_query(&self, _: &Cancellation<'_>) -> Result<Query, PipeError> {
+    fn read_query(&self, _: Option<Instant>, _: &Cancellation<'_>) -> Result<Query, PipeError> {
         Err(PipeError::NotAvailable)
     }
 

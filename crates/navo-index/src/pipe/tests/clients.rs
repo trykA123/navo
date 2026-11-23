@@ -80,7 +80,11 @@ impl Transport for Pipe {
         Ok(())
     }
 
-    fn read_query(&self, cancel: &Cancellation<'_>) -> Result<Query, PipeError> {
+    fn read_query(
+        &self,
+        _: Option<Instant>,
+        cancel: &Cancellation<'_>,
+    ) -> Result<Query, PipeError> {
         let connection = self.active.lock().unwrap().as_ref().unwrap().clone();
         let bytes = receive(&connection.queries.lock().unwrap(), cancel)?;
         Ok(frames::decode(&bytes)?)
