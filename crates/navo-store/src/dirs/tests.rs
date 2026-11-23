@@ -282,7 +282,7 @@ fn a_portable_exe_keeps_its_runtime_folder_under_data_run() {
     std::fs::create_dir_all(&portable).unwrap();
     std::fs::write(portable.join("navo.toml"), b"").unwrap();
     assert_eq!(
-        StoreDirs::portable_run_for(&portable.join("navo.exe")),
+        StoreDirs::portable_run_at(&portable.join("navo.exe")),
         Some(portable.join("data").join("run"))
     );
 }
@@ -291,5 +291,5 @@ fn a_portable_exe_keeps_its_runtime_folder_under_data_run() {
 fn an_installed_exe_has_no_portable_runtime_folder() {
     let root = tempfile::tempdir().unwrap();
     let exe = install_exe(&root.path().join("install"));
-    assert_eq!(StoreDirs::portable_run_for(&exe), None);
+    assert_eq!(StoreDirs::portable_run_at(&exe), None);
 }

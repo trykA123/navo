@@ -20,6 +20,8 @@ mod native_client;
 mod native_server;
 #[cfg(any(windows, test))]
 mod native_summary;
+#[cfg(test)]
+mod portable_env_tests;
 #[cfg(any(windows, test))]
 #[cfg_attr(
     all(windows, test),

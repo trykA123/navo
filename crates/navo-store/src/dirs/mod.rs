@@ -13,9 +13,16 @@ impl StoreDirs {
     #[must_use]
     pub fn detect() -> Option<Self> {
         match std::env::current_exe() {
-            Ok(exe) => Self::detect_for(&exe, cfg!(windows), environment),
+            Ok(exe) => Self::detect_at(&exe),
             Err(_) => Self::resolve(cfg!(windows), environment),
         }
+    }
+
+    /// Resolves the folders as if Navo ran from `exe`, reading the real environment; the portable
+    /// audit test (NV9b) uses it to start from a fake portable folder.
+    #[must_use]
+    pub fn detect_at(exe: &Path) -> Option<Self> {
+        Self::detect_for(exe, cfg!(windows), environment)
     }
 
     fn detect_for(exe: &Path, windows: bool, var: impl Fn(&str) -> Option<String>) -> Option<Self> {
@@ -32,11 +39,12 @@ impl StoreDirs {
     /// runtime files go there, so a portable copy writes nothing to the temp folder (NV9a).
     #[must_use]
     pub fn portable_run() -> Option<PathBuf> {
-        Self::portable_run_for(&std::env::current_exe().ok()?)
+        Self::portable_run_at(&std::env::current_exe().ok()?)
     }
 
     /// The portable runtime folder for `exe`; `None` when `exe` is not a portable copy.
-    fn portable_run_for(exe: &Path) -> Option<PathBuf> {
+    #[must_use]
+    pub fn portable_run_at(exe: &Path) -> Option<PathBuf> {
         Some(portable_root(exe)?.join("data").join("run"))
     }
 
