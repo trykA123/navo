@@ -140,9 +140,7 @@ impl Browser {
                     .collect()
             })
             .unwrap_or_default();
-        for name in names {
-            self.measure_entry(&tab, name, Asker::Shown);
-        }
+        self.measure_shown(&tab, names);
     }
 
     fn shows_folders(&self, tab: TabId) -> bool {

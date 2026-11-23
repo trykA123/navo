@@ -127,7 +127,7 @@ pub(super) enum Asker {
 }
 
 pub(super) struct Asked {
-    job: JobId,
+    pub(super) job: JobId,
     pub(super) asker: Asker,
 }
 

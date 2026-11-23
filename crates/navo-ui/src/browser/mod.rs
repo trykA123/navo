@@ -395,6 +395,7 @@ mod operate;
 mod prefetch;
 mod rename_batch;
 mod retained;
+mod shown_batch;
 mod shown_sizes;
 mod size_rows;
 mod sort;

@@ -2,7 +2,7 @@ use navo_core::{Location, TabId};
 use navo_fs::WatchEvent;
 
 use super::operate::JobUpdate;
-use super::{Browser, Loaded, cached, compare, find, measure, naming, view_jobs};
+use super::{Browser, Loaded, cached, compare, find, measure, naming, shown_batch, view_jobs};
 
 pub(super) enum Message {
     Loaded(Loaded),
@@ -10,6 +10,7 @@ pub(super) enum Message {
     Viewed(view_jobs::Viewed),
     Measured(navo_fs::OwnerId, measure::Measured),
     ShownKind(navo_fs::OwnerId, TabId, navo_fs::VolumeKind),
+    ShownBatch(navo_fs::OwnerId, shown_batch::Answered),
     Found(TabId, navo_fs::OwnerId, find::Update),
     Job(JobUpdate),
     Named(naming::Named),
@@ -28,6 +29,7 @@ impl Message {
                 JobUpdate::Progress { .. } | JobUpdate::Waiting { .. } | JobUpdate::Done { .. }
             ) | Self::Measured(..)
                 | Self::ShownKind(..)
+                | Self::ShownBatch(..)
                 | Self::Found(..)
                 | Self::Watched(..)
                 | Self::Recheck(_)
@@ -71,6 +73,7 @@ impl Browser {
                 self.accept_shown_kind(owner, tab, kind);
                 false
             }
+            Message::ShownBatch(owner, answered) => self.accept_shown_batch(owner, answered),
             Message::Found(tab, owner, update) => self.accept_find(tab, owner, update),
             Message::Job(update) => self.accept_job(update),
             Message::Named(named) => self.accept_named(named),
