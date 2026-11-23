@@ -9,15 +9,20 @@ use navo_pdf::protocol::PdfError;
 use navo_pdf::{Document, Launcher};
 use navo_ui::window_view::PdfPages;
 
+/// Puts each helper in a memory-capped Job Object and shares the PDF as a read-only handle,
+/// so the helper never receives a path (S1c).
 #[cfg(windows)]
 fn confined(launcher: Launcher) -> Launcher {
     const HELPER_MEMORY: usize = 1 << 30;
-    launcher.with_confinement(std::sync::Arc::new(|child: &std::process::Child| {
-        let limits = navo_shell::HelperLimits {
-            memory_bytes: HELPER_MEMORY,
-        };
-        navo_shell::confine_helper(child, limits).map(|job| Box::new(job) as Box<dyn Send>)
-    }))
+    let share: navo_pdf::ShareFile = std::sync::Arc::new(navo_shell::share_read_handle);
+    launcher
+        .with_share(share)
+        .with_confinement(std::sync::Arc::new(|child: &std::process::Child| {
+            let limits = navo_shell::HelperLimits {
+                memory_bytes: HELPER_MEMORY,
+            };
+            navo_shell::confine_helper(child, limits).map(|job| Box::new(job) as Box<dyn Send>)
+        }))
 }
 
 #[cfg(not(windows))]
