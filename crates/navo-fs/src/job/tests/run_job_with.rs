@@ -18,6 +18,7 @@ fn run_job_with_four_workers_ends_like_run_job_parallel() {
                     workers: 4,
                     sources: None,
                     verify: None,
+                    speed_cap: None,
                 };
                 run_job_with(&plan, &[], ctx, options)
             }

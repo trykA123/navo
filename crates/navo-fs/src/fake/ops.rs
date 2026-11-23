@@ -92,6 +92,10 @@ impl ProviderOps for FakeFs {
         cancel.is_cancelled()
     }
 
+    fn now(&self) -> std::time::Instant {
+        lock(&self.clock).now()
+    }
+
     fn pause_git(&self, _location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
         lock(&self.pauses).0 += 1;
         Ok(None)

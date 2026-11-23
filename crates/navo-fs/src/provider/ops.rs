@@ -44,10 +44,15 @@ pub struct UnixAccess {
 }
 
 pub trait ProviderOps: Provider {
-    /// Waits `delay` before a job retries a step, waking early on cancel; true when cancelled.
-    /// The job engine's clock: a test provider records the delay instead of sleeping.
+    /// Waits `delay` before a job retries a step or, under a speed cap, sends more bytes; wakes
+    /// early on cancel; true when cancelled. A test provider records the delay instead of sleeping.
     fn wait_to_retry(&self, delay: std::time::Duration, cancel: &CancelToken) -> bool {
         cancel.wait_cancelled(delay)
+    }
+
+    /// The job engine's clock reading; a test provider moves it only by the waits it recorded.
+    fn now(&self) -> std::time::Instant {
+        std::time::Instant::now()
     }
 
     fn hide_retained(&self, location: &Location, identity: FileIdentity) -> Result<(), FsError> {

@@ -14,6 +14,7 @@ pub(super) struct Copier<'a> {
     pub sources: Option<&'a super::Sources>,
     pub targets: &'a super::plan_targets::PlanTargets,
     pub verify: Option<&'a super::VerifyCount>,
+    pub throttle: Option<&'a super::throttle::Throttle>,
 }
 
 pub(super) struct CopyStep<'a> {
@@ -204,7 +205,8 @@ fn write(
     ))
 }
 
-/// Copies the bytes of `step` into `temp` and says where the verify check gets the source hash.
+/// Copies the bytes of `step` into `temp` under the job's speed cap, if any, and says where the
+/// verify check gets the source hash.
 fn transfer(
     copier: &Copier<'_>,
     (step, temp): (&CopyStep<'_>, &Location),
@@ -217,6 +219,8 @@ fn transfer(
         strict,
         ..
     } = *copier;
+    let mut metered = super::throttle::meter(copier, progress);
+    let progress: &mut dyn FnMut(u64) = &mut metered;
     if super::stream::crosses(step) {
         return super::stream::stream(copier, (step, temp), progress, created);
     }

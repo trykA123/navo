@@ -1,16 +1,24 @@
 //! What the fake provider recorded for tests: how often each operation ran, and the delays a
 //! job waited before a retry (the fake clock records them instead of sleeping).
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::{FakeFs, FakeOp, lock, normalize};
 use crate::CancelToken;
 
-/// The fake clock: the retry waits so far, and a token to cancel during the next wait.
+/// The fake clock: the waits so far, a token to cancel during the next wait, and its start.
 #[derive(Debug, Default)]
 pub(super) struct Clock {
     pub(super) waits: Vec<Duration>,
     pub(super) cancels: Option<CancelToken>,
+    origin: Option<Instant>,
+}
+
+impl Clock {
+    /// The fake time: the first reading plus every recorded wait, so only waits move it.
+    pub(super) fn now(&mut self) -> Instant {
+        *self.origin.get_or_insert_with(Instant::now) + self.waits.iter().sum::<Duration>()
+    }
 }
 
 impl FakeFs {

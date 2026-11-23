@@ -17,6 +17,7 @@ mod run;
 mod source;
 mod stream;
 mod temporary;
+mod throttle;
 mod undo;
 mod verify;
 mod workers;
@@ -165,9 +166,9 @@ impl Progress {
     pub fn start(plan: &OperationPlan) -> Self {
         Self {
             bytes_done: 0,
-            bytes_total: run::moved_bytes(plan),
+            bytes_total: moved_bytes(plan),
             files_done: 0,
-            files_total: run::progress_files(plan),
+            files_total: progress_files(plan),
             current: None,
             paused: false,
         }
@@ -181,6 +182,21 @@ impl Progress {
             ..start
         }
     }
+}
+
+/// The files a plan's progress counts: every step of a recycle, else the plan's file total.
+fn progress_files(plan: &OperationPlan) -> u64 {
+    if plan.kind == OpKind::Recycle {
+        return u64::try_from(plan.steps.len()).unwrap_or(u64::MAX);
+    }
+    plan.totals.files
+}
+
+/// The bytes a plan's progress counts, summed over its steps.
+fn moved_bytes(plan: &OperationPlan) -> u64 {
+    plan.steps.iter().fold(0u64, |sum, step| {
+        sum.saturating_add(run::counted(plan.kind, step).0)
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,7 +240,7 @@ pub fn run_job_with_sources(
     sources: &Sources,
 ) -> JobOutcome {
     run::run_with(
-        (plan, Some(sources), None),
+        (plan, Inputs::of(Some(sources), None)),
         &DoneSet::of_plan(plan, done),
         ctx,
     )
@@ -240,16 +256,37 @@ pub fn run_job_parallel_with_sources(
 ) -> JobOutcome {
     let done = &DoneSet::of_plan(plan, done);
     if workers <= 1 || plan.kind == OpKind::Rename {
-        return run::run_with((plan, Some(sources), None), done, ctx);
+        return run::run_with((plan, Inputs::of(Some(sources), None)), done, ctx);
     }
-    parallel::run_with((plan, Some(sources), None), done, ctx, workers)
+    parallel::run_with((plan, Inputs::of(Some(sources), None)), done, ctx, workers)
 }
 
-/// How [`run_job_with`] runs a plan: worker threads, source providers and the verify counter.
+/// How [`run_job_with`] runs a plan: worker threads, source providers, the verify counter and
+/// the speed cap in bytes per second (`None` copies at full speed).
 pub struct JobOptions<'s> {
     pub workers: usize,
     pub sources: Option<&'s Sources>,
     pub verify: Option<&'s VerifyCount>,
+    pub speed_cap: Option<std::num::NonZeroU64>,
+}
+
+/// What a job reads beside its plan: source providers, the verify counter and the speed cap.
+#[derive(Clone, Copy, Default)]
+struct Inputs<'s> {
+    sources: Option<&'s Sources>,
+    verify: Option<&'s VerifyCount>,
+    throttle: Option<&'s throttle::Throttle>,
+}
+
+impl<'s> Inputs<'s> {
+    /// Inputs with `sources` and `verify` and no speed cap.
+    fn of(sources: Option<&'s Sources>, verify: Option<&'s VerifyCount>) -> Self {
+        Self {
+            sources,
+            verify,
+            throttle: None,
+        }
+    }
 }
 
 /// Runs a plan with `options`: step by step for one worker or a rename, else on a worker pool.
@@ -261,7 +298,14 @@ pub fn run_job_with(
     options: JobOptions<'_>,
 ) -> JobOutcome {
     let done = &DoneSet::of_plan(plan, done);
-    let input = (plan, options.sources, options.verify);
+    let throttle = options.speed_cap.map(throttle::Throttle::new);
+    let input = (
+        plan,
+        Inputs {
+            throttle: throttle.as_ref(),
+            ..Inputs::of(options.sources, options.verify)
+        },
+    );
     if options.workers <= 1 || plan.kind == OpKind::Rename {
         return run::run_with(input, done, ctx);
     }

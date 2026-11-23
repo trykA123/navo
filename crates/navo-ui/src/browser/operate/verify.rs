@@ -114,6 +114,7 @@ impl JobWork {
             workers,
             sources,
             verify: self.verify.as_deref(),
+            speed_cap: None,
         };
         run_job_with(&pending.plan, &[], ctx, options)
     }

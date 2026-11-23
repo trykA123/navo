@@ -76,6 +76,7 @@ fn run_with(scene: &Scene, workers: usize, count: Option<&VerifyCount>) -> (JobO
             workers,
             sources: Some(&scene.sources),
             verify: count,
+            speed_cap: None,
         };
         run_job_with(&scene.plan, &[], ctx, options)
     });

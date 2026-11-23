@@ -11,7 +11,7 @@ use super::marks::{Marks, is_removal};
 use super::pool::{Event, Task, work};
 use super::remove::Removals;
 use super::run::{Job, apply, copier_of, counted, current_of, holds_kept, namespace_of, note_kept};
-use super::{DoneSet, JobContext, JobOutcome, Progress, Sources, StepOutcome, VerifyCount};
+use super::{DoneSet, Inputs, JobContext, JobOutcome, Progress, StepOutcome};
 
 mod events;
 
@@ -22,16 +22,16 @@ pub(super) fn run(
     workers: usize,
 ) -> JobOutcome {
     run_with(
-        (plan, None, None),
+        (plan, Inputs::default()),
         &DoneSet::of_plan(plan, done),
         ctx,
         workers,
     )
 }
 
-/// Runs `plan` on a pool of `workers` threads, reading from `sources` and counting checks in `verify` when given.
+/// Runs `plan` on a pool of `workers` threads with its `inputs` (sources, verify and speed cap).
 pub(super) fn run_with(
-    (plan, sources, verify): (&OperationPlan, Option<&Sources>, Option<&VerifyCount>),
+    (plan, inputs): (&OperationPlan, Inputs<'_>),
     done: &DoneSet,
     ctx: &mut JobContext<'_>,
     workers: usize,
@@ -54,9 +54,8 @@ pub(super) fn run_with(
         aside: &aside,
         namespace: namespace.as_deref(),
         removals: &removals,
-        sources,
+        inputs,
         targets: &super::plan_targets::PlanTargets::of(plan),
-        verify,
     };
     if let Err((seq, error)) = super::run::precheck_writes(job, done, ctx) {
         return if error.kind == FsErrorKind::Cancelled {
@@ -90,7 +89,7 @@ fn coordinate<'p>(
         drop(events);
         if started == 0 {
             drop(pauses);
-            return super::run::run_with((plan, job.sources, job.verify), done, ctx);
+            return super::run::run_with((plan, job.inputs), done, ctx);
         }
         let pool = Pool {
             tasks,

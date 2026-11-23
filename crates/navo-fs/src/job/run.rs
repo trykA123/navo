@@ -9,7 +9,7 @@ use super::hold::hold;
 use super::marks::Marks;
 use super::remove::{Removals, remove};
 use super::rename::{is_temporary, prepare};
-use super::{DoneSet, JobContext, JobOutcome, Progress, Sources, StepOutcome, VerifyCount};
+use super::{DoneSet, Inputs, JobContext, JobOutcome, Progress, StepOutcome};
 
 pub(super) fn current_of(step: &Step) -> Location {
     match step {
@@ -34,37 +34,27 @@ pub(super) fn counted(kind: OpKind, step: &Step) -> (u64, u64) {
     }
 }
 
-pub(super) fn progress_files(plan: &OperationPlan) -> u64 {
-    if plan.kind == OpKind::Recycle {
-        return u64::try_from(plan.steps.len()).unwrap_or(u64::MAX);
-    }
-    plan.totals.files
-}
-
-pub(super) fn moved_bytes(plan: &OperationPlan) -> u64 {
-    plan.steps.iter().fold(0u64, |sum, step| {
-        sum.saturating_add(counted(plan.kind, step).0)
-    })
-}
-
 #[derive(Clone, Copy)]
 pub(super) struct Job<'p> {
     pub plan: &'p OperationPlan,
     pub aside: &'p Aside,
     pub namespace: Option<&'p str>,
     pub removals: &'p Removals<'p>,
-    pub sources: Option<&'p Sources>,
+    pub inputs: Inputs<'p>,
     pub targets: &'p super::plan_targets::PlanTargets,
-    pub verify: Option<&'p VerifyCount>,
 }
 
 pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
-    run_with((plan, None, None), &DoneSet::of_plan(plan, done), ctx)
+    run_with(
+        (plan, Inputs::default()),
+        &DoneSet::of_plan(plan, done),
+        ctx,
+    )
 }
 
-/// Runs `plan` step by step, reading copies from `sources` and counting checks in `verify` when given.
+/// Runs `plan` step by step with its `inputs`: source providers, verify counter and speed cap.
 pub(super) fn run_with(
-    (plan, sources, verify): (&OperationPlan, Option<&Sources>, Option<&VerifyCount>),
+    (plan, inputs): (&OperationPlan, Inputs<'_>),
     done: &DoneSet,
     ctx: &mut JobContext<'_>,
 ) -> JobOutcome {
@@ -76,9 +66,8 @@ pub(super) fn run_with(
         aside: &aside,
         namespace: namespace.as_deref(),
         removals: &removals,
-        sources,
+        inputs,
         targets: &super::plan_targets::PlanTargets::of(plan),
-        verify,
     };
     walk(job, done, ctx)
 }
@@ -98,9 +87,10 @@ pub(super) fn copier_of<'p, 'a: 'p>(job: Job<'p>, ctx: &JobContext<'a>) -> Copie
         strict: ctx.log.preserve_overwrites(),
         namespace: job.namespace,
         removals: job.removals,
-        sources: job.sources,
+        sources: job.inputs.sources,
         targets: job.targets,
-        verify: job.verify,
+        verify: job.inputs.verify,
+        throttle: job.inputs.throttle,
     }
 }
 

@@ -5,6 +5,8 @@ use std::time::Duration;
 
 use super::*;
 
+mod throttle;
+
 const SOURCE: &str = "src/two.txt";
 const WAITS: [Duration; 3] = [
     Duration::from_secs(1),

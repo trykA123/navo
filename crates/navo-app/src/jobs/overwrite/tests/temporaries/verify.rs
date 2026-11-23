@@ -31,6 +31,7 @@ fn execute_verified(log: &mut dyn OpLog, plan: &OperationPlan, fs: &FakeFs) -> J
         workers: 1,
         sources: None,
         verify: Some(&count),
+        speed_cap: None,
     };
     let mut context = JobContext {
         ops: fs,

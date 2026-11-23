@@ -21,6 +21,7 @@ fn run_verified(
             workers,
             sources: None,
             verify: count,
+            speed_cap: None,
         };
         run_job_with(plan, &[], ctx, options)
     })

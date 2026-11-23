@@ -33,6 +33,7 @@ fn run_verified(scene: &Scene, workers: usize, count: &VerifyCount) -> JobOutcom
             workers,
             sources: Some(&scene.sources),
             verify: Some(count),
+            speed_cap: None,
         };
         run_job_with(&scene.plan, &[], ctx, options)
     })
@@ -160,6 +161,7 @@ fn a_streamed_digest_that_differs_from_the_target_fails_with_verify_failed() {
         sources: Some(&scene.sources),
         targets: &targets,
         verify: Some(&count),
+        throttle: None,
     };
     let step = CopyStep {
         seq: 0,
