@@ -44,6 +44,7 @@ mod release;
 mod save;
 mod search;
 pub(in crate::window_view::viewer) mod structured;
+mod swap;
 mod view_parts;
 mod view_parts_md;
 mod view_rig;

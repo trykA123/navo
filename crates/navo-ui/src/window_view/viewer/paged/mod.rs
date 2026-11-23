@@ -194,6 +194,15 @@ impl PagedView {
         cx.notify();
     }
 
+    /// The 1-based line at the top of the view, once the line index has reached it.
+    pub(super) fn top_line(&self) -> Option<u64> {
+        let index = self.index.as_ref()?;
+        index
+            .line_number(self.source.as_ref(), self.top)
+            .ok()
+            .flatten()
+    }
+
     pub(super) fn needs_whole_file(&self) -> bool {
         self.source.layout().needs_whole_file()
     }
@@ -214,6 +223,11 @@ impl PagedView {
         }
         self.queue_move(Move::Realign, cx);
         self.start_index(cx);
+    }
+
+    /// The note the view shows below the rows, such as why the file opened as text.
+    pub(super) fn note(&self) -> Option<SharedString> {
+        self.note.clone()
     }
 
     pub(super) fn set_note(&mut self, note: impl Into<SharedString>, cx: &mut Context<Self>) {

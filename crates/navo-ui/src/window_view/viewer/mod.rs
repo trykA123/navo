@@ -30,6 +30,7 @@ mod pdf;
 mod rich_header;
 mod search;
 mod space;
+mod swap;
 mod syntax;
 mod table;
 mod trace;
@@ -109,6 +110,7 @@ pub(super) struct Viewer {
     kind: Option<Kind>,
     body: Option<Box<dyn ViewerBody>>,
     opening: Option<Opening>,
+    swap: Option<swap::Swap>,
     leaving: Option<u64>,
     switching: Option<(Slot, u64)>,
     message: Option<SharedString>,
@@ -160,6 +162,7 @@ impl Viewer {
             kind: None,
             body: None,
             opening: None,
+            swap: None,
             leaving: None,
             switching: None,
             message: None,

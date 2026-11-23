@@ -32,7 +32,9 @@ impl Viewer {
 
     pub(super) fn can_start_editing(&self, cx: &App) -> bool {
         let body = self.body.as_ref();
-        body.is_some_and(|body| body.can_start_editing(cx)) || self.can_switch_to_edit()
+        body.is_some_and(|body| body.can_start_editing(cx))
+            || self.can_switch_to_edit()
+            || self.swap.is_some()
     }
 }
 
@@ -58,6 +60,9 @@ impl NavoWindow {
         if viewer.is_guide() {
             viewer.say(navo_l10n::tr("viewer-guide-read-only"), cx);
             cx.notify();
+            return;
+        }
+        if viewer.edit_after_swap() {
             return;
         }
         let started = viewer

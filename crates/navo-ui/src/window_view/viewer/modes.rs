@@ -5,6 +5,7 @@ use navo_core::{Command, Location};
 
 use super::body::{Attach, Host, OpenFile};
 use super::editor::EditorBody;
+use super::kinds::take_later;
 use super::open::{Picked, load_or_text, load_while_alive, start};
 use super::paged::PagedBody;
 use super::{Kind, Slot, Viewer};
@@ -73,6 +74,7 @@ impl Viewer {
 
     fn clear_body(&mut self) {
         self.body = None;
+        self.swap = None;
         self.memory = None;
         self.leaving = None;
         self.switching = None;
@@ -83,7 +85,7 @@ impl Viewer {
 }
 
 impl NavoWindow {
-    fn host(&self, viewer: &Viewer, window: &Window, cx: &mut Context<Self>) -> Host {
+    pub(super) fn host(&self, viewer: &Viewer, window: &Window, cx: &mut Context<Self>) -> Host {
         let this = cx.weak_entity();
         let open = Self::open_later(this.clone(), window.window_handle());
         Host {
@@ -125,7 +127,7 @@ impl NavoWindow {
 
     pub(super) fn show_loaded(
         &mut self,
-        shown: Shown,
+        mut shown: Shown,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -133,6 +135,7 @@ impl NavoWindow {
             return;
         };
         let host = self.host(viewer, window, cx);
+        let later = take_later(&mut shown.picked.loaded, shown.edit);
         let Picked { kind, loaded, note } = shown.picked;
         let attached = loaded.and_then(|loaded| {
             let attach = Attach {
@@ -174,6 +177,7 @@ impl NavoWindow {
         }
         viewer.note_detected(cx);
         window.focus(&viewer.focus_target(cx), cx);
+        self.plan_swap(later, window, cx);
         self.show_parts(cx);
         cx.notify();
     }

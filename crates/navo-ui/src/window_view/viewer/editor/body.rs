@@ -35,7 +35,7 @@ impl EditorBody {
         Self(cx.new(|cx| EditorView::new(file, host, window, cx)))
     }
 
-    #[cfg(test)]
+    /// The editor state the body draws.
     pub(in crate::window_view::viewer) fn editor(
         &self,
         cx: &App,

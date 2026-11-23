@@ -8,6 +8,7 @@ use gpui_kit::{
 use navo_structured::markdown::MAX_SOURCE;
 
 use super::structured::fake_with;
+use super::swap::until_swapped;
 use super::{Log, Setup, editor_of, has_editor, hooks, press_only, redraw, window_with};
 use crate::tokens;
 use crate::window_view::NavoWindow;
@@ -28,7 +29,7 @@ fn open_editing(
     settle(cx, &view);
     press(cx, window, &view, "ctrl-e");
     settle(cx, &view);
-    redraw(cx, window);
+    until_swapped(cx, window, &view);
     assert!(has_editor(cx, &view), "{name} opens in the editor");
     (window, view)
 }

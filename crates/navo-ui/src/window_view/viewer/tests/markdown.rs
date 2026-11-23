@@ -2,6 +2,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, ScrollDelta, TestAppContext, point, px};
 
 use super::structured::open_named;
+use super::swap::until_swapped;
 use super::{Setup, editor_text, has_editor, redraw, text_of};
 use crate::window_view::NavoWindow;
 use crate::window_view::tests::{press, type_in};
@@ -86,6 +87,7 @@ fn html_and_math_render_as_literal_text(cx: &mut TestAppContext) {
 
 fn opens_as_text_with(cx: &mut TestAppContext, name: &str, source: &str, note: &str) {
     let (window, view) = open(cx, name, source);
+    until_swapped(cx, window, &view);
     assert!(has_editor(cx, &view), "{name} opens in the text view");
     assert_eq!(text_of(cx, window, "viewer-message"), note);
 }

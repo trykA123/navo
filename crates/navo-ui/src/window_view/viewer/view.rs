@@ -1,5 +1,5 @@
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{Role, canvas};
+use gpui_kit::{AnyView, Role, canvas};
 
 use super::{CONTEXT, CloseViewer, SaveFile, Viewer};
 use crate::prelude::*;
@@ -71,6 +71,17 @@ fn waiting(t: &Theme, viewer: &Viewer) -> impl IntoElement {
         .child(status(viewer))
 }
 
+/// A hidden layer the size of the viewer: its child gets a layout but no paint.
+fn staged_layer(staged: AnyView) -> impl IntoElement {
+    div()
+        .absolute()
+        .size_full()
+        .flex()
+        .flex_col()
+        .invisible()
+        .child(staged)
+}
+
 impl NavoWindow {
     pub(in crate::window_view) fn viewer_view(
         &self,
@@ -103,6 +114,11 @@ impl NavoWindow {
             .min_h_0()
             .min_w_0()
             .bg(t.colors.surface);
+        // The staged editor is laid out but not painted, under the paged view it replaces.
+        let root = match viewer.staged_view() {
+            Some(staged) => root.child(staged_layer(staged)),
+            None => root,
+        };
         let root = match &viewer.body {
             Some(body) => root.child(body.view()),
             None => root
