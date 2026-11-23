@@ -16,6 +16,7 @@ pub(super) fn date_text(entry: &FsEntry) -> String {
     entry.modified_ms.map(format::date).unwrap_or_default()
 }
 
+/// The row's spoken label: name, kind or size, date, then the hidden and online-only notes.
 pub(super) fn spoken(entry: &FsEntry) -> String {
     let name = entry.name.display();
     let mut words = match entry.kind {
@@ -29,6 +30,10 @@ pub(super) fn spoken(entry: &FsEntry) -> String {
     }
     if entry.attributes.hidden {
         words.push_str(", hidden");
+    }
+    if entry.attributes.cloud_placeholder {
+        words.push_str(", ");
+        words.push_str(&navo_l10n::tr("files-cloud-placeholder"));
     }
     words
 }

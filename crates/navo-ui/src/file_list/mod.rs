@@ -1,4 +1,5 @@
 mod action;
+mod cloud_badge;
 mod column_drop;
 mod drop;
 mod empty_line;

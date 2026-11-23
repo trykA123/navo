@@ -8,6 +8,7 @@ use gpui_kit::{
 };
 use navo_fs::{EntryKind, FsEntry};
 
+use super::cloud_badge;
 use super::git_cell::{self, GitSlot};
 use super::widths::ColumnWidths;
 use super::{ListParts, SortBy, kind};
@@ -184,7 +185,8 @@ fn name_cell(
                 .min_w_0()
                 .h_full()
                 .when(look.parts.icons, |d| d.child(glyph))
-                .child(name_label(look, text, runs)),
+                .child(name_label(look, text, runs))
+                .children(cloud_badge::badge(t, entry)),
         )
         .child(zone.flex_1().h_full())
 }

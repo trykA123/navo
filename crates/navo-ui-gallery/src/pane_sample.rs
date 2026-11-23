@@ -26,6 +26,7 @@ fn entry(name: &str, kind: EntryKind, size: u64, minutes_ago: i64) -> FsEntry {
         modified_ms: Some(MODIFIED_MS - minutes_ago * MINUTE_MS),
         attributes: Attributes {
             hidden: name.starts_with('.'),
+            cloud_placeholder: matches!(name, "Cargo.lock" | "Cargo.toml" | "layout.rs"),
             ..Attributes::default()
         },
     }

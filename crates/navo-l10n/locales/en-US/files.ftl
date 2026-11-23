@@ -288,3 +288,4 @@ job-route-recycle = { $from } → { -bin }
 
 pane-empty-folder = This folder is empty
 pane-empty-filter = No files match the filter. Esc clears it.
+files-cloud-placeholder = Online-only file — opens after download
