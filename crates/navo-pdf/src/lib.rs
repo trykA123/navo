@@ -7,6 +7,11 @@ mod pdfium;
 pub mod protocol;
 mod serve;
 
+#[cfg(windows)]
+pub use client::ShareFile;
+#[cfg(not(windows))]
+#[doc(hidden)]
+pub use client::TestShare;
 pub use client::{Confine, DEFAULT_TIMEOUT, Document, Launcher};
 pub use pdfium::{MAX_FILE_BYTES, PdfiumEngine, library_beside};
 pub use protocol::OpenSource;

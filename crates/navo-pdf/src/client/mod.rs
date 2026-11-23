@@ -1,6 +1,7 @@
 mod helper;
 mod pool;
 mod reaper;
+mod share;
 
 use std::ffi::OsString;
 use std::io;
@@ -12,6 +13,11 @@ use std::time::{Duration, Instant};
 
 use helper::Helper;
 use pool::Pool;
+use share::Share;
+#[cfg(windows)]
+pub use share::ShareFile;
+#[cfg(not(windows))]
+pub use share::TestShare;
 
 use crate::protocol::{
     Bitmap, OpenSource, Outline, PageLinks, PageText, PdfError, RenderRequest, Request, Response,
@@ -31,6 +37,7 @@ pub struct Launcher {
     timeout: Duration,
     warm_wait: Duration,
     confine: Option<Confine>,
+    share: Option<Share>,
     pool: Arc<Pool<Helper>>,
     shutdowns: Arc<AtomicU64>,
 }
@@ -43,6 +50,7 @@ impl Launcher {
             timeout: DEFAULT_TIMEOUT,
             warm_wait: WARM_WAIT,
             confine: None,
+            share: None,
             pool: Arc::default(),
             shutdowns: Arc::default(),
         }
@@ -182,10 +190,18 @@ impl Document {
 
     pub fn close(self) {}
 
+    /// Opens the document in a helper: with a share hook it opens and size-checks the file first,
+    /// then shares a handle; any failure drops the helper (disposed, never pooled) and the `File`.
     fn start(&mut self, password: Option<&str>) -> Result<&mut Helper, PdfError> {
+        let hook = self.launcher.share.as_ref();
+        let file = hook.map(|_| share::open_checked(&self.path)).transpose()?;
         let mut helper = self.launcher.helper()?;
+        let source = match (hook, &file) {
+            (Some(hook), Some(file)) => OpenSource::Handle(share::share_into(hook, file, &helper)?),
+            _ => OpenSource::Path(self.path.clone()),
+        };
         let open = Request::Open {
-            source: OpenSource::Path(self.path.clone()),
+            source,
             password: password.map(str::to_owned),
         };
         match helper.call(&open, self.launcher.timeout)? {

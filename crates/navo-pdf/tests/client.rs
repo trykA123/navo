@@ -283,3 +283,97 @@ fn shutdown_drops_the_warm_helper_and_stops_warming() {
     assert_eq!(document.page_count().unwrap(), PAGES);
     assert_eq!(starts.load(Ordering::SeqCst), 2);
 }
+
+/// Removes a test file when the test ends, even after a panic.
+struct TempFile(std::path::PathBuf);
+
+impl TempFile {
+    /// Creates `name` in the temp folder, `len` bytes long (a set length, so no bytes are written).
+    /// Fails when the file cannot be created or sized; the guard still removes it then.
+    fn new(name: &str, len: u64) -> io::Result<Self> {
+        let path = std::env::temp_dir().join(format!("navo-pdf-{}-{name}", std::process::id()));
+        let file = Self(path);
+        std::fs::File::create(&file.0)?.set_len(len)?;
+        Ok(file)
+    }
+}
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Confinement guard that counts its own drop: it drops only when its helper is disposed.
+struct Released(Arc<AtomicUsize>);
+
+impl Drop for Released {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// A launcher whose Open shares the file through `share` and counts calls, starts and releases.
+fn sharing(
+    share: impl Fn(&std::fs::File) -> io::Result<u64> + Send + Sync + 'static,
+) -> (Launcher, [Arc<AtomicUsize>; 3]) {
+    let counts = [(); 3].map(|()| Arc::new(AtomicUsize::new(0)));
+    let [calls, starts, released] = counts.clone();
+    let confined = launcher().with_confinement(Arc::new(move |_child| {
+        starts.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(Released(released.clone())))
+    }));
+    let share = move |file: &std::fs::File| {
+        calls.fetch_add(1, Ordering::SeqCst);
+        share(file)
+    };
+    #[cfg(windows)]
+    let launcher = confined.with_share(Arc::new(
+        move |file: &std::fs::File, _process: std::os::windows::io::BorrowedHandle<'_>| share(file),
+    ));
+    #[cfg(not(windows))]
+    let launcher = confined.with_test_share(Arc::new(share));
+    (launcher, counts)
+}
+
+#[test]
+fn a_failed_share_reports_a_dead_helper_and_disposes_it() {
+    let file = TempFile::new("share-fails.pdf", 10).unwrap();
+    let (launcher, [calls, starts, released]) = sharing(|_| Err(io::Error::other("gone")));
+    let opened = Document::open(&launcher, &file.0, None);
+    assert_eq!(opened.err(), Some(PdfError::HelperDied));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+    assert_eq!(released.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_shared_value_the_helper_refuses_disposes_the_helper() {
+    let file = TempFile::new("share-refused.pdf", 10).unwrap();
+    let (launcher, [calls, starts, released]) = sharing(|_| Ok(7));
+    let opened = Document::open(&launcher, &file.0, None);
+    assert!(matches!(opened.err(), Some(PdfError::Unreadable(_))));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+    assert_eq!(released.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_shared_file_above_the_limit_is_too_large_before_any_helper() {
+    let file = TempFile::new("share-huge.pdf", navo_pdf::MAX_FILE_BYTES + 1).unwrap();
+    let (launcher, [calls, starts, _]) = sharing(|_| Ok(7));
+    let opened = Document::open(&launcher, &file.0, None);
+    assert_eq!(opened.err(), Some(PdfError::TooLarge));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(starts.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn a_missing_shared_file_is_unreadable_before_any_helper() {
+    let (launcher, [calls, starts, _]) = sharing(|_| Ok(7));
+    let missing = std::env::temp_dir().join("navo-pdf-share-missing-none.pdf");
+    let opened = Document::open(&launcher, &missing, None);
+    assert!(matches!(opened.err(), Some(PdfError::Unreadable(_))));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(starts.load(Ordering::SeqCst), 0);
+}
