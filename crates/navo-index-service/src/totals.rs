@@ -1,4 +1,5 @@
-//! Answers positional folder totals while distinguishing rebuilds from deadline failure.
+//! Answers positional folder totals while distinguishing rebuilds from deadline failure; a
+//! folder hidden by the profile scope answers like one that does not exist.
 
 use std::time::{Duration, Instant};
 
@@ -6,6 +7,7 @@ use navo_index::pipe::{FolderTotals, FolderTotalsReply, Reply, folder_paths_with
 use navo_index::table::{FolderLookup, FolderLookupExpired};
 
 use super::answer::{SharedVolume, State, read_before};
+use super::profiles::ProfileIds;
 
 /// Answers requested paths within the service's 20 ms read budget.
 pub(super) fn answer(volumes: &[SharedVolume], paths: &[String]) -> Reply {
@@ -40,10 +42,14 @@ fn answer_before(volumes: &[SharedVolume], paths: &[String], deadline: Instant) 
                 continue;
             }
             if lookup.is_none() {
-                lookup = state
-                    .index
-                    .as_ref()
-                    .map(|index| index.table.folder_lookup());
+                lookup = volume_lookup(&state, deadline);
+            }
+            if let Some(VolumeLookup {
+                profiles: ProfileIds::Closed,
+                ..
+            }) = lookup
+            {
+                return unavailable(paths.len());
             }
             match total_for_path(&mut lookup, &state, path, deadline) {
                 Ok(Some(found)) => *total = Some(found),
@@ -80,9 +86,24 @@ fn matches_volume(state: &State, path: &str) -> bool {
         && matches!(path.as_bytes().get(root.len()), None | Some(b'/' | b'\\'))
 }
 
-/// Looks up a matched full-generation path, failing when its deadline expires.
+/// One volume's folder lookup and the profile ids it hides, made once per request.
+struct VolumeLookup<'a> {
+    folders: FolderLookup<'a>,
+    profiles: ProfileIds,
+}
+
+/// Builds the volume's lookup and maps its profile scope before `deadline`; `None` without an
+/// index. A scope that runs out of time comes back `Closed` and is logged once per service start.
+fn volume_lookup(state: &State, deadline: Instant) -> Option<VolumeLookup<'_>> {
+    let mut folders = state.index.as_ref()?.table.folder_lookup();
+    let profiles = state.search.profile_ids_with(&mut folders, deadline);
+    Some(VolumeLookup { folders, profiles })
+}
+
+/// Looks up a matched full-generation path, failing when its deadline expires; a path at or
+/// under a folder the profile scope hides is treated as missing.
 fn total_for_path(
-    lookup: &mut Option<FolderLookup<'_>>,
+    lookup: &mut Option<VolumeLookup<'_>>,
     state: &State,
     path: &str,
     deadline: Instant,
@@ -92,11 +113,17 @@ fn total_for_path(
     }
     let complete =
         state.status.progress.is_none() && state.status.errors.is_empty() && state.index.is_some();
-    let id = lookup
-        .as_mut()
-        .map(|lookup| lookup.find_folder(path, deadline))
-        .transpose()?
-        .flatten();
+    let id = match lookup {
+        Some(VolumeLookup { folders, profiles }) => {
+            folders.find_folder(path, deadline)?.filter(|&id| {
+                state
+                    .index
+                    .as_ref()
+                    .is_none_or(|index| !profiles.hides_path(&index.table, id))
+            })
+        }
+        None => None,
+    };
     let found = state
         .index
         .as_ref()

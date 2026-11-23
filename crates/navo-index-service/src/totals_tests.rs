@@ -195,3 +195,27 @@ fn timeout_after_partial_mixed_work_erases_totals_and_busy() {
         .unwrap();
     assert_eq!((reply.totals, reply.busy), (vec![None; 3], false));
 }
+
+#[test]
+fn totals_profile_timeout_closes_the_volume_and_logs_once() {
+    let folder = tempfile::tempdir().unwrap();
+    let notice = std::sync::Arc::new(crate::profiles::TimeoutNotice::new(
+        crate::service_log::Log::open(folder.path()),
+    ));
+    let scope = crate::profiles::ProfileScope::new(r"C:\Users", r"C:\Users\me").unwrap();
+    let volume = volume();
+    {
+        let mut state = volume.shared.write().unwrap();
+        state.search = crate::search::SearchIndex::default()
+            .with_profiles(Some(scope))
+            .with_timeout_notice(std::sync::Arc::clone(&notice));
+    }
+    let state = volume.shared.read().unwrap();
+    for _ in 0..2 {
+        let lookup = volume_lookup(&state, Instant::now()).unwrap();
+        assert_eq!(lookup.profiles, ProfileIds::Closed);
+    }
+    let log = std::fs::read_to_string(folder.path().join(crate::service_log::LOG_NAME))
+        .unwrap_or_default();
+    assert_eq!(log.matches("profile lookup timed out").count(), 1, "{log}");
+}

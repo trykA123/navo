@@ -1,8 +1,12 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
 
 use navo_index::pipe::{self, CancelToken, Hit, Request};
-use navo_index::table::NameTable;
+use navo_index::table::{FolderLookup, NameTable};
 use navo_store::Search;
+
+use super::profiles::{PROFILE_LOOKUP_BUDGET, ProfileIds, ProfileScope, TimeoutNotice};
 
 const MAX_DEPTH: usize = 4096;
 
@@ -10,6 +14,8 @@ pub(super) struct SearchIndex {
     config: Search,
     names: Vec<String>,
     paths: Vec<String>,
+    profiles: Option<ProfileScope>,
+    timeouts: Option<Arc<TimeoutNotice>>,
 }
 
 impl Default for SearchIndex {
@@ -29,10 +35,43 @@ impl SearchIndex {
             config: config.clone(),
             names,
             paths: paths.iter().map(|path| normalized_path(path)).collect(),
+            profiles: None,
+            timeouts: None,
         }
     }
 
+    /// Hides other users' profile folders from hits; `None` hides nothing.
+    pub fn with_profiles(mut self, profiles: Option<ProfileScope>) -> Self {
+        self.profiles = profiles;
+        self
+    }
+
+    /// Logs, once per service start, when a profile lookup timeout hides this volume's hits.
+    pub fn with_timeout_notice(mut self, notice: Arc<TimeoutNotice>) -> Self {
+        self.timeouts = Some(notice);
+        self
+    }
+
+    /// Maps the profile scope to ids in `table` before `deadline`, under the caller's read lock;
+    /// a lookup that runs out of time hides every hit and is logged once per service start.
+    pub fn profile_ids(&self, table: &NameTable, deadline: Instant) -> ProfileIds {
+        self.profile_ids_with(&mut table.folder_lookup(), deadline)
+    }
+
+    /// Like `profile_ids`, but reuses the caller's folder lookup (its cache) so totals can keep
+    /// it for their own paths; a timeout is logged once per service start.
+    pub fn profile_ids_with(&self, lookup: &mut FolderLookup<'_>, deadline: Instant) -> ProfileIds {
+        let ids = ProfileIds::resolve_with(self.profiles.as_ref(), lookup, deadline);
+        if ids == ProfileIds::Closed
+            && let Some(notice) = &self.timeouts
+        {
+            notice.timed_out();
+        }
+        ids
+    }
+
     pub fn hits(&self, table: &NameTable, request: &Request, cancel: &CancelToken) -> Vec<Hit> {
+        let profiles = self.profile_ids(table, Instant::now() + PROFILE_LOOKUP_BUDGET);
         navo_index::search::search_filtered_with(
             table,
             &request.terms(),
@@ -40,7 +79,7 @@ impl SearchIndex {
                 limit: pipe::MAX_HITS,
                 cancel: &|| cancel.is_cancelled(),
                 include: &|| {
-                    let mut eligibility = Eligibility::new(table, self);
+                    let mut eligibility = Eligibility::new(table, self, &profiles);
                     move |id| eligibility.includes(id)
                 },
             },
@@ -61,16 +100,18 @@ impl SearchIndex {
 struct Eligibility<'a> {
     table: &'a NameTable,
     index: &'a SearchIndex,
+    profiles: &'a ProfileIds,
     folders: HashMap<u32, bool>,
     #[cfg(test)]
     evaluated: usize,
 }
 
 impl<'a> Eligibility<'a> {
-    fn new(table: &'a NameTable, index: &'a SearchIndex) -> Self {
+    fn new(table: &'a NameTable, index: &'a SearchIndex, profiles: &'a ProfileIds) -> Self {
         Self {
             table,
             index,
+            profiles,
             folders: HashMap::new(),
             #[cfg(test)]
             evaluated: 0,
@@ -113,10 +154,13 @@ impl<'a> Eligibility<'a> {
         keep
     }
 
+    /// True when `id` itself is excluded by name, by path or as another user's profile.
     fn self_excluded(&self, id: u32) -> bool {
-        self.table
-            .name(id)
-            .is_none_or(|name| self.index.excluded(self.table, id, name))
+        self.profiles.hides(id, self.table.parent(id))
+            || self
+                .table
+                .name(id)
+                .is_none_or(|name| self.index.excluded(self.table, id, name))
     }
 }
 
@@ -217,7 +261,7 @@ mod tests {
             ..Search::default()
         };
         let index = SearchIndex::new(&config);
-        let mut eligibility = Eligibility::new(&table, &index);
+        let mut eligibility = Eligibility::new(&table, &index, &ProfileIds::Open);
         assert!(matches.iter().all(|&id| eligibility.includes(id)));
         assert_eq!(eligibility.evaluated, 2);
     }

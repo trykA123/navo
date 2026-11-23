@@ -62,6 +62,10 @@ mod memory;
 mod ownership;
 #[cfg(any(windows, test))]
 mod policy;
+#[cfg(any(windows, test))]
+mod profiles;
+#[cfg(windows)]
+mod profiles_windows;
 mod quarantine;
 mod quarantine_recovery;
 #[cfg(any(windows, test))]

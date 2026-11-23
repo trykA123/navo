@@ -8,6 +8,7 @@ use super::answer::{SharedVolume, State, answer};
 use super::config::{Drive, select_volumes};
 use super::lifecycle::guard_worker;
 use super::policy::ServiceError;
+use super::profiles::{ProfileScope, TimeoutNotice};
 use super::search::SearchIndex;
 use super::service_log::Log;
 use super::storage::Storage;
@@ -43,7 +44,9 @@ fn serve(
     let config = storage.read_config().map_err(ServiceError::Configuration)?;
     let available = super::volumes::discover().map_err(ServiceError::Configuration)?;
     let drives = select_volumes(&config.search, &available).map_err(ServiceError::Configuration)?;
-    let volumes = initial_volumes(&drives, &config.search);
+    let profiles = profile_scope(&config.sid, log);
+    let notice = Arc::new(TimeoutNotice::new(log.clone()));
+    let volumes = initial_volumes(&drives, &config.search, profiles.as_ref(), &notice);
     let letters: String = drives.iter().map(|drive| drive.letter).collect();
     log.line(format_args!("volumes {letters}"));
     std::thread::scope(|scope| {
@@ -103,7 +106,32 @@ fn serve_pipe(sid: &str, volumes: &[SharedVolume], cancel: &CancelToken) -> io::
         .map_err(io::Error::other)
 }
 
-fn initial_volumes(drives: &[Drive], search: &navo_store::Search) -> Vec<SharedVolume> {
+/// Reads the installing user's profile scope; one log line says when nothing is hidden, or
+/// when other profiles outside the profiles root stay searchable.
+fn profile_scope(sid: &str, log: &Log) -> Option<ProfileScope> {
+    let scope = super::profiles::installing_user(sid)
+        .inspect_err(|reason| {
+            log.line(format_args!(
+                "profiles unresolved: {reason}; other users' folders stay searchable"
+            ));
+        })
+        .ok()?;
+    if let Some(reason) = scope.others_unread() {
+        log.line(format_args!(
+            "profile list unread: {reason}; profiles outside the profiles root stay searchable"
+        ));
+    }
+    Some(scope)
+}
+
+/// Builds one empty shared volume per drive; each search hides other users' profiles when
+/// `profiles` is known.
+fn initial_volumes(
+    drives: &[Drive],
+    search: &navo_store::Search,
+    profiles: Option<&ProfileScope>,
+    notice: &Arc<TimeoutNotice>,
+) -> Vec<SharedVolume> {
     drives
         .iter()
         .map(|drive| {
@@ -113,7 +141,9 @@ fn initial_volumes(drives: &[Drive], search: &navo_store::Search) -> Vec<SharedV
                     progress: Some(0),
                     ..Default::default()
                 },
-                search: SearchIndex::new(search),
+                search: SearchIndex::new(search)
+                    .with_profiles(profiles.cloned())
+                    .with_timeout_notice(Arc::clone(notice)),
                 ..Default::default()
             })
         })
