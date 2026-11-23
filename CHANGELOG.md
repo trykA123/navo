@@ -2,6 +2,23 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.4 — Copies you can trust
+
+*2026-11-23*
+
+This release checks copies. Navo can now read each copied file back and compare it with the original before it counts the copy as done.
+
+### Added
+
+- **Verify after copy.** After a file is copied, Navo reads it back from the target and compares it with the source. A file that does not match fails that step, and a move keeps its source file. The check reads past the Windows file cache, so it sees what really landed on the drive.
+- **A "Verify after copy" setting.** Settings has a row with Auto, Always and Off. Auto checks copies to USB drives and network shares and skips fast internal drives.
+- **A switch in the copy and move dialog.** The dialog shows whether this copy will be checked, and a click, Tab and Space flip it for this job only.
+- **The job card shows the check.** While a copy is checked, the card says "Verifying…". At the end it says "Done · Verified n files", or "n of m files" when some files could not be checked.
+
+### Changed
+
+- **Copies between different places are checked as they stream.** For a copy out of an archive, a Git history or files pasted from another app, Navo takes a fingerprint of the bytes while it reads them. It then compares the placed file with exactly what it read. A file that the source program writes itself counts as not checked.
+
 ## v0.8.3 — Your search, your files
 
 *2026-11-23*
