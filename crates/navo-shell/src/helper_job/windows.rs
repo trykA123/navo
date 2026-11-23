@@ -30,7 +30,8 @@ pub fn confine_helper(child: &Child, limits: HelperLimits) -> io::Result<HelperJ
 
 impl HelperJob {
     /// Creates an unnamed Job with the memory cap in `limits` (bytes), kill-on-close, death on
-    /// an unhandled exception and one active process. Fails when Windows refuses either call.
+    /// an unhandled exception, one active process and the S2b UI limits. Fails when Windows
+    /// refuses any call.
     pub(super) fn create(limits: HelperLimits) -> io::Result<Self> {
         // SAFETY: null attributes and a null name create an unnamed job with default security; nothing is read from our memory.
         let raw = unsafe { CreateJobObjectW(ptr::null(), ptr::null()) };
@@ -56,6 +57,7 @@ impl HelperJob {
             )
         };
         check(set)?;
+        super::sandbox_win::restrict_ui(job.0.as_handle())?;
         Ok(job)
     }
 
@@ -81,6 +83,12 @@ impl HelperJob {
         };
         check(queried)?;
         Ok(info.ProcessMemoryLimit)
+    }
+
+    /// The Job's UI limits (`JOB_OBJECT_UILIMIT_*` bits). Fails when the query fails.
+    #[cfg(test)]
+    pub(super) fn ui_limits(&self) -> io::Result<u32> {
+        super::sandbox_win::ui_limits(self.0.as_handle())
     }
 
     /// Whether the process behind `process` belongs to this Job. Fails when the query fails.

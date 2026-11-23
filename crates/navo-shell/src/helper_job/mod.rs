@@ -5,6 +5,12 @@ mod platform;
 #[cfg(any(windows, test))]
 mod cmdline;
 
+#[cfg(any(windows, test))]
+mod sandbox_policy;
+
+#[cfg(windows)]
+mod sandbox_win;
+
 #[cfg(windows)]
 mod handle_win;
 

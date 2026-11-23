@@ -172,3 +172,62 @@ fn spawn_confined_refuses_a_nul_in_an_argument() {
     let err = confined_cmd(&["/c", "exit\0"]).err().unwrap();
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
 }
+
+#[test]
+fn every_helper_job_has_the_s2b_ui_limits() {
+    let mut child = waiting_child();
+    let job = confine_helper(&child, LIMITS).unwrap();
+    assert_eq!(job.ui_limits().unwrap(), sandbox_policy::UI_LIMITS);
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
+fn sandbox_policy_bits_match_windows_sys() {
+    use windows_sys::Win32::System::JobObjects as job;
+    let ui = job::JOB_OBJECT_UILIMIT_HANDLES
+        | job::JOB_OBJECT_UILIMIT_READCLIPBOARD
+        | job::JOB_OBJECT_UILIMIT_WRITECLIPBOARD
+        | job::JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
+        | job::JOB_OBJECT_UILIMIT_GLOBALATOMS
+        | job::JOB_OBJECT_UILIMIT_DESKTOP;
+    assert_eq!(sandbox_policy::UI_LIMITS, ui);
+}
+
+/// Reads one `PROCESS_MITIGATION_*_POLICY` of `process` as its flags word.
+fn mitigation_flags(process: BorrowedHandle<'_>, policy: i32) -> u32 {
+    use windows_sys::Win32::System::Threading::GetProcessMitigationPolicy;
+    let mut flags = 0u32;
+    // SAFETY: the process handle is live and `flags` is a live, writable 4-byte buffer, the size of every policy read here.
+    let ok = unsafe {
+        GetProcessMitigationPolicy(process.as_raw_handle(), policy, (&raw mut flags).cast(), 4)
+    };
+    assert_ne!(ok, 0, "{}", std::io::Error::last_os_error());
+    flags
+}
+
+#[test]
+fn spawn_confined_child_has_the_s2b_ui_limits_and_mitigations() {
+    use windows_sys::Win32::System::Threading::{
+        ProcessDynamicCodePolicy, ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy,
+        ProcessStrictHandleCheckPolicy,
+    };
+    let child = confined_cmd(&["/c", "pause"]).unwrap();
+    let process = child.process_handle();
+    assert_eq!(
+        child.process.job().ui_limits().unwrap(),
+        sandbox_policy::UI_LIMITS
+    );
+    // Bit 0 of each flags word: ProhibitDynamicCode, RaiseExceptionOnInvalidHandleReference,
+    // DisableExtensionPoints, NoRemoteImages.
+    for policy in [
+        ProcessDynamicCodePolicy,
+        ProcessStrictHandleCheckPolicy,
+        ProcessExtensionPointDisablePolicy,
+        ProcessImageLoadPolicy,
+    ] {
+        assert_eq!(mitigation_flags(process, policy) & 1, 1, "policy {policy}");
+    }
+    child.kill().unwrap();
+    wait_exited(&child);
+}

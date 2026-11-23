@@ -146,14 +146,16 @@ impl ConfinedProcess {
 }
 
 /// Calls `CreateProcessW` suspended and windowless, with the two handles in `inherit` as stdin
-/// and stdout and as the only inherited handles. Returns the process and thread handles.
+/// and stdout and as the only inherited handles, and the S2b mitigation policy. Returns the
+/// process and thread handles.
 fn create_suspended(
     application: &[u16],
     line: &mut [u16],
     inherit: [HANDLE; 2],
 ) -> io::Result<(OwnedHandle, OwnedHandle)> {
-    let mut list = AttributeList::new(1)?;
+    let mut list = AttributeList::new(2)?;
     list.set_handle_list(&inherit)?;
+    list.set_mitigation_policy()?;
     let mut startup = STARTUPINFOEXW::default();
     startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -191,7 +193,7 @@ fn create_suspended(
 
 /// A `PROC_THREAD_ATTRIBUTE_LIST` in a `usize`-aligned buffer; `'a` keeps the values it points
 /// at alive, because Windows stores the pointers, not copies.
-struct AttributeList<'a> {
+pub(super) struct AttributeList<'a> {
     buffer: Vec<usize>,
     values: PhantomData<&'a [HANDLE]>,
 }
@@ -236,7 +238,7 @@ impl<'a> AttributeList<'a> {
     }
 
     /// The list pointer for `STARTUPINFOEXW` and the attribute calls.
-    fn as_raw(&mut self) -> LPPROC_THREAD_ATTRIBUTE_LIST {
+    pub(super) fn as_raw(&mut self) -> LPPROC_THREAD_ATTRIBUTE_LIST {
         self.buffer.as_mut_ptr().cast()
     }
 }
