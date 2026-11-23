@@ -1,9 +1,9 @@
-use std::sync::mpsc::Sender;
+use std::sync::Weak;
 use std::time::{Duration, Instant};
 
 use navo_fs::{FolderProfile, LiveHandle, LiveSink, LiveSnapshot, ProfileState};
 
-use super::inbox::Arrival;
+use super::inbox::{Latest, put_latest};
 use crate::browser::Waker;
 
 pub(in crate::window_view) enum Phase {
@@ -138,20 +138,21 @@ impl Scan {
     }
 }
 
+/// Scan sink that writes each snapshot into the inbox's latest-wins slot.
 pub(super) struct Snapshots {
-    pub send: Sender<Arrival>,
+    pub latest: Weak<Latest>,
     pub wake: Waker,
     pub run: u64,
     pub every: Duration,
 }
 
 impl LiveSink for Snapshots {
+    /// Replaces the slot's snapshot and wakes the window; does nothing once the inbox is gone.
     fn snapshot(&mut self, live: &LiveSnapshot) {
-        let arrival = Arrival::Snapshot {
-            run: self.run,
-            snapshot: live.clone(),
+        let Some(slot) = self.latest.upgrade() else {
+            return;
         };
-        if self.send.send(arrival).is_ok() {
+        if put_latest(&slot, self.run, live.clone()) {
             (self.wake)();
         }
     }

@@ -74,7 +74,7 @@ impl Preview {
 
     fn scan(&self, request: LiveRequest, run: u64) -> LiveHandle {
         let sink = Snapshots {
-            send: self.inbox.send.clone(),
+            latest: self.inbox.latest(),
             wake: Arc::clone(&self.inbox.wake),
             run,
             every: self.every,

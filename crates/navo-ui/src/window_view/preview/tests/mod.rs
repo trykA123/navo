@@ -4,6 +4,7 @@ mod files;
 mod folders;
 mod follow;
 mod gate;
+mod inbox;
 mod keys;
 mod live;
 mod marks;
