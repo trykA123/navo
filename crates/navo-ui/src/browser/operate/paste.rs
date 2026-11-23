@@ -1,4 +1,4 @@
-use navo_core::{Location, OpKind, TabId, is_protected};
+use navo_core::{ConflictPolicy, Location, OpKind, TabId, is_protected};
 use navo_fs::volume_of;
 
 use super::{Browser, DropConfirm, DropRequest, OpRequest};
@@ -92,6 +92,7 @@ impl Browser {
             asks,
             structure: None,
             stream: None,
+            policy: ConflictPolicy::Ask,
         };
         let id = request.id;
         if self.submit_plan(request) {

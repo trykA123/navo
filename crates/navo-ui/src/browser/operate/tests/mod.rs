@@ -14,6 +14,7 @@ mod concurrent;
 mod drop;
 mod mode;
 mod pause;
+mod policy;
 mod queue;
 mod results;
 mod retention;

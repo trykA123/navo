@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use navo_core::{Location, OpKind, ScannedItem, is_protected};
+use navo_core::{ConflictPolicy, Location, OpKind, ScannedItem, is_protected};
 use navo_fs::{Progress, Sources};
 
 use super::paste::PasteRefusal;
@@ -88,6 +88,7 @@ impl Browser {
             source_tab: self.state.active_tab().id(),
             structure: None,
             stream: Some(paste),
+            policy: ConflictPolicy::Ask,
         };
         let id = request.id;
         if self.submit_plan(request) {

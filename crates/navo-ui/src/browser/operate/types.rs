@@ -1,5 +1,5 @@
 use navo_core::retention::RetentionPolicy;
-use navo_core::{FsError, Location, OpKind, OperationPlan, Risk, TabId};
+use navo_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, Risk, TabId};
 use navo_fs::{
     CancelToken, CopyMode, DriveClass, HeldFile, JobLog, JobOutcome, Progress, ProviderOps,
     StepOutcome, drive_class,
@@ -324,4 +324,6 @@ pub(in crate::browser) struct OpRequest {
     pub(super) asks: bool,
     pub(super) structure: Option<Structure>,
     pub(super) stream: Option<StreamPaste>,
+    /// How the plan resolves names already at the target; `Ask` (skip them) until the sheet sets it.
+    pub(super) policy: ConflictPolicy,
 }

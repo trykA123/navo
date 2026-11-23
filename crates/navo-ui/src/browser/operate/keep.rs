@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use navo_core::{ExistingItem, FsError, Location, OpKind, ScannedItem, Tab, relative_folders};
+use navo_core::{
+    ConflictPolicy, ExistingItem, FsError, Location, OpKind, ScannedItem, Tab, relative_folders,
+};
 use navo_fs::{CancelToken, Provider, existing_at};
 
 use super::{OpRequest, Structure};
@@ -58,6 +60,7 @@ impl Browser {
             asks: true,
             structure: Some(structure.clone()),
             stream: pending.stream.clone(),
+            policy: ConflictPolicy::Ask,
         };
         self.submit_plan(request)
     }

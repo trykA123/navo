@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use navo_core::{Command, FsError, Location, OpKind, Tab};
+use navo_core::{Command, ConflictPolicy, FsError, Location, OpKind, Tab};
 use navo_fs::{CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, volume_of};
 
 use super::{Browser, Message, RenameReport};
@@ -300,6 +300,7 @@ impl Browser {
             asks: true,
             structure,
             stream: None,
+            policy: ConflictPolicy::Ask,
         })
     }
 

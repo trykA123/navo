@@ -1,6 +1,4 @@
-use navo_core::{
-    ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan, plan_keeping,
-};
+use navo_core::{FsError, Location, OpKind, OperationPlan, PlanRequest, plan, plan_keeping};
 use navo_fs::{
     AutoTuning, CancelToken, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
     VerifyCount, WorkerCounts, existing_at, job_workers, scan,
@@ -75,7 +73,7 @@ pub(super) fn plan_for(
         items,
         target: request.target.clone(),
         existing,
-        policy: ConflictPolicy::Ask,
+        policy: request.policy.clone(),
         same_volume,
         protected: request.protected.clone(),
     };
@@ -299,6 +297,7 @@ mod tests {
             asks: true,
             structure: None,
             stream: None,
+            policy: navo_core::ConflictPolicy::Ask,
         };
         plan_for(&fs, &request, &CancelToken::new()).unwrap()
     }
