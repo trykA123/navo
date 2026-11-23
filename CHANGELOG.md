@@ -2,6 +2,37 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.2 — The index stays put
+
+*2026-11-23*
+
+This release keeps the search index calm on a busy Windows drive. Before, a file deleted while a program still had it open made the index service rebuild the whole drive every 7 to 10 minutes. The index also did not save while a rebuild waited, so each restart built the drive again from scratch. Both are fixed, and the fixes passed their checks in the Windows VM.
+
+### Fixed
+
+- **Files deleted while open no longer force a rebuild.** Windows parks such a file in a hidden system folder until the last program closes it. The service now removes the file from the index and carries on.
+- **A restart reuses the index.** The service saves the index while a rebuild waits. After a restart, Ctrl+K works at once instead of waiting for a new full build.
+- **Changes in skipped folders no longer force a rebuild.** A full build leaves out some system folders. New files there are ignored, and a folder moved there leaves the index with everything inside it. Only a change the service cannot prove safe waits for one rebuild.
+- **Fewer full rebuilds.** A file created and deleted a moment later no longer forces a rebuild. A change to a file with several hard links re-reads only that file.
+- **No lost subfolders.** In v0.8.1, a folder deleted right after a subfolder moved out of it could drop that subfolder from the index. The service now keeps the order of changes, or rebuilds when it cannot.
+- **Settings no longer sticks on "Updating".** When the change journal cannot be read, Settings shows the true state of the index.
+- **Settings shows the service memory again.** The app refused the service's memory answer, so the value stayed empty.
+- **A stuck change journal is handled.** The service treats a journal that stops moving as lost. It rebuilds once and logs the problem once, not over and over.
+- **A silent client no longer blocks the index.** The service drops a connection that sends nothing for 30 seconds and serves the next one.
+
+### Changed
+
+- **The index keeps up faster.** The service reads changes without a pause while they arrive. It waits half a second when the drive is quiet, and from 2 seconds to 5 minutes after errors. On Windows it reads the change journal in larger blocks.
+- **The index stays searchable after an error.** A failed journal read, or a batch of changes that cannot be applied, keeps the current index. The service waits for one rebuild and keeps saving meanwhile.
+- **The setup wizard fades between pages** instead of sliding.
+- **Empty folders say so.** A finished folder with no files shows "This folder is empty". A filter that hides every file shows "No files match the filter. Esc clears it."
+- **Settings shows the index build percentage** for each drive.
+- **Settings is tidier.** Rows no longer carry a wrong "Not applied yet" tag. Settings that no longer do anything are hidden, and their saved values are kept.
+- **Large copy and move jobs plan and resume faster.** Each step checks the plan and the finished steps at once instead of scanning the whole list. A damaged job journal can no longer make a resumed job reserve too much memory.
+- **The delete safety net is explained better.** The free-space setting now says what it does.
+- **Security update.** The URL library moves to 2.5.9, which fixes a crash on deeply nested addresses.
+- **Under the hood.** Each release download carries a record of how it was built, two more speed benches can fail the build, two empty components are gone, and the checks are stricter.
+
 ## v0.8.1 — The index finishes again
 
 *2026-11-19*
