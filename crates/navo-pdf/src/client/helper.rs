@@ -1,5 +1,4 @@
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError};
@@ -30,34 +29,17 @@ pub(super) struct Helper {
 }
 
 impl Helper {
-    /// Starts the helper program with piped stdin and stdout, confines it, and wires its replies.
-    /// Fails with `NoHelper` when it cannot start or be confined; a started child is disposed.
+    /// Starts the helper through the launcher's spawn hook (or the default spawn) and wires its
+    /// replies. Fails with `NoHelper` when it cannot start; a failed hook leaves no live child.
     pub(super) fn spawn(launcher: &Launcher, born: u64) -> Result<Self, PdfError> {
         launcher.check_generation(born)?;
-        let mut child = Command::new(&launcher.program)
-            .args(&launcher.args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|error| PdfError::NoHelper(error.to_string()))?;
-        let guard = match launcher.confine.as_ref().map(|confine| confine(&child)) {
-            None => None,
-            Some(Ok(guard)) => Some(guard),
-            Some(Err(error)) => {
-                reaper::dispose(Box::new(child), launcher.shutdowns.clone());
-                return Err(PdfError::NoHelper(format!("cannot confine it: {error}")));
-            }
-        };
-        let (Some(input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
-            reaper::dispose(Box::new(child), launcher.shutdowns.clone());
-            return Err(PdfError::NoHelper("its pipes are missing".into()));
-        };
-        let spawned = Spawned {
-            process: Box::new(child),
-            input: Box::new(input),
-            output: Box::new(output),
-            guard,
+        let spawned = match &launcher.spawn {
+            Some(hook) => hook(&launcher.spec)
+                .map_err(|error| PdfError::NoHelper(format!("cannot confine it: {error}")))?,
+            None => launcher
+                .spec
+                .spawn()
+                .map_err(|error| PdfError::NoHelper(error.to_string()))?,
         };
         Self::adopt(launcher, born, spawned)
     }

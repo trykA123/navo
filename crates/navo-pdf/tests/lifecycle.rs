@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use navo_pdf::fake::{PAGES, PASSWORD, wait_for_idle};
 use navo_pdf::protocol::PdfError;
-use navo_pdf::{Document, Launcher};
+use navo_pdf::{Document, HelperSpec, Launcher, Spawned};
 
 const FAKE: &str = env!("CARGO_BIN_EXE_navo-pdf-fake-helper");
 const STALL: &str = "--pause-prepare=4000";
@@ -80,9 +80,10 @@ fn launcher(watch: &Watch, extra: Option<&str>, timeout: Duration) -> Launcher {
 fn tracked(launcher: Launcher) -> (Launcher, Arc<Mutex<Vec<u32>>>) {
     let ids = Arc::new(Mutex::new(Vec::new()));
     let seen = ids.clone();
-    let tracked = launcher.with_confinement(Arc::new(move |child| {
+    let tracked = launcher.with_spawn(Arc::new(move |spec: &HelperSpec| {
+        let child = spec.command().spawn()?;
         seen.lock().unwrap().push(child.id());
-        Ok(Box::new(()))
+        Spawned::from_child(child, None)
     }));
     (tracked, ids)
 }
@@ -252,10 +253,11 @@ fn shutdown_during_spawn_is_not_missed() {
     let (release, released) = mpsc::channel();
     let released = Mutex::new(released);
     let launcher =
-        launcher(&watch, None, Duration::from_secs(15)).with_confinement(Arc::new(move |_| {
+        launcher(&watch, None, Duration::from_secs(15)).with_spawn(Arc::new(move |spec| {
+            let spawned = spec.spawn()?;
             entered.send(()).unwrap();
             released.lock().unwrap().recv_timeout(PATIENCE).unwrap();
-            Ok(Box::new(()))
+            Ok(spawned)
         }));
     let opening = {
         let launcher = launcher.clone();
@@ -276,10 +278,11 @@ fn shutdown_during_a_prewarm_spawn_is_not_missed() {
     let (release, released) = mpsc::channel();
     let released = Mutex::new(released);
     let launcher =
-        launcher(&watch, None, Duration::from_secs(15)).with_confinement(Arc::new(move |_| {
+        launcher(&watch, None, Duration::from_secs(15)).with_spawn(Arc::new(move |spec| {
+            let spawned = spec.spawn()?;
             entered.send(()).unwrap();
             released.lock().unwrap().recv_timeout(PATIENCE).unwrap();
-            Ok(Box::new(()))
+            Ok(spawned)
         }));
     let warming = {
         let launcher = launcher.clone();

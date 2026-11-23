@@ -13,16 +13,29 @@ use navo_ui::window_view::PdfPages;
 /// so the helper never receives a path (S1c).
 #[cfg(windows)]
 fn confined(launcher: Launcher) -> Launcher {
-    const HELPER_MEMORY: usize = 1 << 30;
     let share: navo_pdf::ShareFile = std::sync::Arc::new(navo_shell::share_read_handle);
     launcher
         .with_share(share)
-        .with_confinement(std::sync::Arc::new(|child: &std::process::Child| {
-            let limits = navo_shell::HelperLimits {
-                memory_bytes: HELPER_MEMORY,
-            };
-            navo_shell::confine_helper(child, limits).map(|job| Box::new(job) as Box<dyn Send>)
-        }))
+        .with_spawn(std::sync::Arc::new(spawn_in_job))
+}
+
+/// Starts the helper, then assigns it to a 1 GiB Job Object. On a Job error it kills and reaps
+/// the child before it returns `Err`, so a failed spawn leaves no live helper (S2a contract).
+#[cfg(windows)]
+fn spawn_in_job(spec: &navo_pdf::HelperSpec) -> std::io::Result<navo_pdf::Spawned> {
+    const HELPER_MEMORY: usize = 1 << 30;
+    let mut child = spec.command().spawn()?;
+    let limits = navo_shell::HelperLimits {
+        memory_bytes: HELPER_MEMORY,
+    };
+    match navo_shell::confine_helper(&child, limits) {
+        Ok(job) => navo_pdf::Spawned::from_child(child, Some(Box::new(job))),
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(error)
+        }
+    }
 }
 
 #[cfg(not(windows))]

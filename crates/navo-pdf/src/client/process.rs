@@ -1,5 +1,5 @@
 //! The helper process as a trait object, so `navo-pdf` does not own `std::process::Child` and a
-//! caller can create the process its own way (S2a0; `navo-shell` spawns it confined later).
+//! caller can create the process its own way (S2a0; a spawn hook builds it, S2a).
 
 use std::io::{self, Read, Write};
 #[cfg(windows)]

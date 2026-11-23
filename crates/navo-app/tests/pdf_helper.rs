@@ -9,11 +9,19 @@ const NAVO: &str = env!("CARGO_BIN_EXE_navo");
 fn launcher() -> Launcher {
     let launcher = Launcher::new(NAVO, [OsString::from("--pdf-helper")]);
     #[cfg(windows)]
-    let launcher = launcher.with_confinement(std::sync::Arc::new(|child: &std::process::Child| {
+    let launcher = launcher.with_spawn(std::sync::Arc::new(|spec: &navo_pdf::HelperSpec| {
+        let mut child = spec.command().spawn()?;
         let limits = navo_shell::HelperLimits {
             memory_bytes: 1 << 30,
         };
-        navo_shell::confine_helper(child, limits).map(|job| Box::new(job) as Box<dyn Send>)
+        match navo_shell::confine_helper(&child, limits) {
+            Ok(job) => navo_pdf::Spawned::from_child(child, Some(Box::new(job))),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                Err(error)
+            }
+        }
     }));
     launcher
 }

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use navo_pdf::fake::{CRASH_PAGE, HANG_PAGE, PAGES, PASSWORD};
 use navo_pdf::protocol::{CharBox, LinkTarget, PdfError, RenderRequest, Rotation};
-use navo_pdf::{Document, Launcher};
+use navo_pdf::{Document, HelperSpec, Launcher, Spawned};
 
 const FAKE: &str = env!("CARGO_BIN_EXE_navo-pdf-fake-helper");
 
@@ -114,22 +114,32 @@ fn a_missing_helper_program_is_reported() {
 }
 
 #[test]
-fn each_start_is_confined_and_a_failed_confinement_refuses_to_run() {
-    let starts = Arc::new(AtomicUsize::new(0));
-    let counter = starts.clone();
-    let confined = launcher().with_confinement(Arc::new(move |_child| {
-        counter.fetch_add(1, Ordering::SeqCst);
-        Ok(Box::new(()))
-    }));
-    let mut document = open(&confined, "a.pdf", None).unwrap();
+fn each_start_goes_through_the_spawn_hook() {
+    let (hooked, starts) = counting(launcher());
+    let mut document = open(&hooked, "a.pdf", None).unwrap();
     let _ = document.render(page(CRASH_PAGE));
     document.render(page(0)).unwrap();
     assert_eq!(starts.load(Ordering::SeqCst), 2);
-    let refused = launcher().with_confinement(Arc::new(|_child| Err(io::Error::other("no job"))));
-    assert!(matches!(
-        open(&refused, "a.pdf", None).err(),
-        Some(PdfError::NoHelper(_))
-    ));
+}
+
+#[test]
+fn a_failing_spawn_hook_is_no_helper_and_leaves_no_process() {
+    let live = Arc::new(AtomicUsize::new(0));
+    let seen = live.clone();
+    let refused = launcher().with_spawn(Arc::new(move |spec: &HelperSpec| {
+        let mut child = spec.command().spawn()?;
+        seen.fetch_add(1, Ordering::SeqCst);
+        child.kill()?;
+        child.wait()?;
+        seen.fetch_sub(1, Ordering::SeqCst);
+        Err(io::Error::other("no job"))
+    }));
+    let opened = open(&refused, "a.pdf", None).err();
+    assert_eq!(
+        opened,
+        Some(PdfError::NoHelper("cannot confine it: no job".into()))
+    );
+    assert_eq!(live.load(Ordering::SeqCst), 0);
 }
 
 #[test]
@@ -210,9 +220,9 @@ fn the_document_outline_crosses_the_fake_helper_pipe() {
 fn counting(launcher: Launcher) -> (Launcher, Arc<AtomicUsize>) {
     let starts = Arc::new(AtomicUsize::new(0));
     let counter = starts.clone();
-    let counted = launcher.with_confinement(Arc::new(move |_child| {
+    let counted = launcher.with_spawn(Arc::new(move |spec: &HelperSpec| {
         counter.fetch_add(1, Ordering::SeqCst);
-        Ok(Box::new(()))
+        spec.spawn()
     }));
     (counted, starts)
 }
@@ -319,9 +329,10 @@ fn sharing(
 ) -> (Launcher, [Arc<AtomicUsize>; 3]) {
     let counts = [(); 3].map(|()| Arc::new(AtomicUsize::new(0)));
     let [calls, starts, released] = counts.clone();
-    let confined = launcher().with_confinement(Arc::new(move |_child| {
+    let confined = launcher().with_spawn(Arc::new(move |spec: &HelperSpec| {
         starts.fetch_add(1, Ordering::SeqCst);
-        Ok(Box::new(Released(released.clone())))
+        let child = spec.command().spawn()?;
+        Spawned::from_child(child, Some(Box::new(Released(released.clone()))))
     }));
     let share = move |file: &std::fs::File| {
         calls.fetch_add(1, Ordering::SeqCst);

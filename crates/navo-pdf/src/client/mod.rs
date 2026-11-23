@@ -3,11 +3,10 @@ mod pool;
 mod process;
 mod reaper;
 mod share;
+mod spawn;
 
 use std::ffi::OsString;
-use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Child;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -20,12 +19,11 @@ use share::Share;
 pub use share::ShareFile;
 #[cfg(not(windows))]
 pub use share::TestShare;
+pub use spawn::{HelperSpec, Spawn};
 
 use crate::protocol::{
     Bitmap, OpenSource, Outline, PageLinks, PageText, PdfError, RenderRequest, Request, Response,
 };
-
-pub type Confine = Arc<dyn Fn(&Child) -> io::Result<Box<dyn Send>> + Send + Sync>;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -34,11 +32,10 @@ const SHUTDOWN_WAIT: Duration = Duration::from_millis(500);
 
 #[derive(Clone)]
 pub struct Launcher {
-    program: PathBuf,
-    args: Vec<OsString>,
+    spec: HelperSpec,
     timeout: Duration,
     warm_wait: Duration,
-    confine: Option<Confine>,
+    spawn: Option<Spawn>,
     share: Option<Share>,
     pool: Arc<Pool<Helper>>,
     shutdowns: Arc<AtomicU64>,
@@ -47,11 +44,13 @@ pub struct Launcher {
 impl Launcher {
     pub fn new(program: impl Into<PathBuf>, args: impl IntoIterator<Item = OsString>) -> Self {
         Self {
-            program: program.into(),
-            args: args.into_iter().collect(),
+            spec: HelperSpec {
+                program: program.into(),
+                args: args.into_iter().collect(),
+            },
             timeout: DEFAULT_TIMEOUT,
             warm_wait: WARM_WAIT,
-            confine: None,
+            spawn: None,
             share: None,
             pool: Arc::default(),
             shutdowns: Arc::default(),
@@ -118,9 +117,10 @@ impl Launcher {
         self
     }
 
+    /// Starts every helper through `spawn` instead of the default `Command` spawn.
     #[must_use]
-    pub fn with_confinement(mut self, confine: Confine) -> Self {
-        self.confine = Some(confine);
+    pub fn with_spawn(mut self, spawn: Spawn) -> Self {
+        self.spawn = Some(spawn);
         self
     }
 }
