@@ -101,14 +101,20 @@ impl Clock for Epoch {
     }
 }
 
-/// A fetch that tells when it was cancelled and then ignores it until released, like a hung Git.
+/// Bounds every wait on the timer threads, so a regression fails fast instead of hanging.
+const EVENT_WAIT: Duration = Duration::from_secs(60);
+
+/// A fetch that tells when it starts and when it was cancelled, then ignores the cancel until
+/// released, like a hung Git.
 struct HungFetch {
+    entered: Sender<()>,
     cancelled: Sender<()>,
     release: Mutex<Receiver<()>>,
 }
 
 impl Fetcher for HungFetch {
     fn fetch(&self, _: &Path, cancel: &Cancel) -> Outcome {
+        self.entered.send(()).unwrap();
         while !cancel.is_cancelled() {
             std::thread::sleep(Duration::from_millis(1));
         }
@@ -121,9 +127,11 @@ impl Fetcher for HungFetch {
 #[test]
 fn a_fetch_timer_that_is_slow_to_stop_never_holds_the_hooks_state() {
     let mut rig = rig(&fetching(15));
+    let (entered, fetching_now) = mpsc::channel();
     let (cancelled, stopping) = mpsc::channel();
     let (hold, release) = mpsc::channel::<()>();
     let fetcher = Arc::new(HungFetch {
+        entered,
         cancelled,
         release: Mutex::new(release),
     });
@@ -137,9 +145,15 @@ fn a_fetch_timer_that_is_slow_to_stop_never_holds_the_hooks_state() {
         FetchTimer::start(settings, ports)
     });
     rig.hooks.apply(&fetching(30));
+    // A stop before the first fetch would end the timer cleanly and never reach the hung fetch.
+    fetching_now
+        .recv_timeout(EVENT_WAIT)
+        .expect("the fetch timer never started its fetch");
     std::thread::scope(|scope| {
         let stop = scope.spawn(|| rig.hooks.apply(&settings(true)));
-        stopping.recv().unwrap();
+        stopping
+            .recv_timeout(EVENT_WAIT)
+            .expect("the fetch never saw the stop's cancel");
         assert!(rig.hooks.state.try_lock().is_ok(), "the state stays locked");
         assert!(rig.hooks.tools().is_empty());
         rig.hooks.focus_regained();
