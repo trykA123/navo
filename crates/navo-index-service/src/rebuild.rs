@@ -7,11 +7,14 @@ use std::time::{Duration, Instant};
 use navo_index::file::FileError;
 use navo_index::ntfs::{InexactBuild, NtfsError, UnresolvedChange};
 use navo_index::pipe::{BuildReason, VolumeBuilds};
-use navo_index::table::TableChange;
 
 use super::answer::Shared;
 use super::service_log::Log;
 use super::verify_rebuild::VerifyRebuild;
+
+#[path = "unresolved_refs.rs"]
+mod unresolved_refs;
+pub(super) use unresolved_refs::Unresolved;
 
 /// At most one full build per volume starts within this window; later causes wait for its end.
 pub(super) const REBUILD_WINDOW: Duration = Duration::from_secs(600);
@@ -30,52 +33,6 @@ impl BuildBackoff {
     /// Clears the failure streak after a successful build.
     fn succeeded(&mut self) {
         self.0 = 0;
-    }
-}
-
-/// Unresolved changes of one journal batch, by kind.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct Unresolved {
-    blocked_add: u64,
-    blocked_rename: u64,
-    attributes: u64,
-    size: u64,
-    other: u64,
-}
-
-impl Unresolved {
-    pub fn count(changes: &[UnresolvedChange]) -> Self {
-        let mut counts = Self::default();
-        for unresolved in changes {
-            let count = match unresolved.change {
-                TableChange::Add { .. } => &mut counts.blocked_add,
-                TableChange::Rename { .. } => &mut counts.blocked_rename,
-                TableChange::Attributes { .. } => &mut counts.attributes,
-                TableChange::Size { .. } => &mut counts.size,
-                TableChange::Remove { .. } | TableChange::JournalReset => &mut counts.other,
-            };
-            *count += 1;
-        }
-        counts
-    }
-
-    /// Attribute and size changes for files outside the index change nothing in it.
-    pub fn needs_rebuild(&self) -> bool {
-        self.blocked_add + self.blocked_rename + self.other > 0
-    }
-
-    fn total(&self) -> u64 {
-        self.blocked_add + self.blocked_rename + self.attributes + self.size + self.other
-    }
-}
-
-impl fmt::Display for Unresolved {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "blocked_add={} blocked_rename={} attributes={} size={} other={}",
-            self.blocked_add, self.blocked_rename, self.attributes, self.size, self.other
-        )
     }
 }
 

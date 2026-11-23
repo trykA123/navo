@@ -326,3 +326,46 @@ fn error_kinds_carry_codes_but_no_text_from_the_system() {
     let snapshot = NtfsError::Snapshot(navo_index::file::FileError::BadChecksum);
     assert_eq!(error_kind(&snapshot), "snapshot_bad_checksum");
 }
+
+/// AF9: a skipped folder added back names itself as missing; it counts as `other`, not as an
+/// add blocked by its parent.
+#[test]
+fn a_skipped_folder_added_back_counts_as_other() {
+    let change = navo_index::table::TableChange::Add {
+        file_id: 30,
+        parent_id: 5,
+        name: "docs".into(),
+        flags: Flags::FOLDER,
+    };
+    let rejoined = navo_index::ntfs::UnresolvedChange {
+        missing_reference: 30,
+        change,
+    };
+    let text = Unresolved::count(&[rejoined]).to_string();
+    assert!(
+        text.starts_with("blocked_add=0 blocked_rename=0 attributes=0 size=0 other=1"),
+        "{text}"
+    );
+}
+
+/// The rebuild reason names the first unresolved references, so a VM log identifies them.
+#[test]
+fn the_rebuild_reason_names_the_first_three_unresolved_references() {
+    let shared = shared();
+    let mut rebuilds = Rebuilds::new('C', Log::default());
+    let created = |n: u128| UsnRecord {
+        size: None,
+        ..record(901 + n, 777, 0x100)
+    };
+    let records = (0..4).map(created).collect();
+    let changes = follow(&shared, 120, records);
+    let cause = rebuilds
+        .after_follow(&shared, Ok(changes), Duration::ZERO)
+        .unwrap()
+        .expect("nothing was built yet");
+    let text = cause.to_string();
+    assert!(
+        text.ends_with(" first_missing:file=777:901,777:902,777:903"),
+        "{text}"
+    );
+}

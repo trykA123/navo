@@ -16,6 +16,9 @@ mod link_refresh;
 #[cfg(test)]
 #[path = "link_refresh_tests.rs"]
 mod link_refresh_tests;
+#[cfg(test)]
+#[path = "orphan_link_rename_tests.rs"]
+mod orphan_link_rename_tests;
 #[path = "reconcile.rs"]
 mod reconcile;
 use reconcile::enumerate_with_late_limits;

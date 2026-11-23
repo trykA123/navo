@@ -86,6 +86,8 @@ impl LateRecords {
         }
         let resolved = graph.insert_into(index)?;
         let skipped = self.skipped + resolved.skipped + resolved.unplaced.len() as u64;
+        let unplaced = resolved.unplaced.iter().map(|folder| folder.record.file_id);
+        index.skipped_folders = unplaced.collect();
         let cycles: HashSet<_> = resolved
             .unplaced
             .into_iter()

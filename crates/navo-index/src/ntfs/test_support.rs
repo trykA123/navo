@@ -8,6 +8,9 @@
 #[path = "deep_mft.rs"]
 mod deep_mft;
 pub use deep_mft::DeepMft;
+#[path = "skipped_fixture.rs"]
+mod skipped_fixture;
+pub use skipped_fixture::skipped_folder_build;
 
 use super::volume_io::{VolumeIo, enumerate_volume};
 use super::{Enumeration, JournalPosition, NtfsError};

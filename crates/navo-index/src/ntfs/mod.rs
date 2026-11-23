@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io;
 
 mod compact;
@@ -14,6 +15,7 @@ use pending::Pending;
 #[cfg(any(windows, test))]
 mod record_size;
 mod search_only;
+mod skipped;
 mod snapshot;
 #[cfg(any(windows, test, feature = "test-support"))]
 #[cfg_attr(
@@ -79,6 +81,8 @@ pub struct NtfsIndex {
     pub position: JournalPosition,
     renames: PendingRenames,
     search_only: bool,
+    /// Folders the last full build left out because their parent chain never reached the root.
+    skipped_folders: HashSet<u128>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -138,6 +142,7 @@ impl NtfsIndex {
             position,
             renames: PendingRenames::default(),
             search_only: false,
+            skipped_folders: HashSet::new(),
         })
     }
 
@@ -180,12 +185,13 @@ impl BatchApply {
         mut renames: PendingRenames,
     ) -> Result<Self, NtfsError> {
         validate_journal_cursor(&batch, position)?;
+        let sources = skipped::RenameSources::collect(&batch.records);
         Ok(Self {
             position,
             next_usn: batch.next_usn,
             changes: batch.into_changes(&mut renames).into_iter().peekable(),
             renames: Some(renames),
-            pending: Pending::default(),
+            pending: Pending::new(sources),
         })
     }
 
@@ -334,6 +340,8 @@ mod memory_tests;
 mod peak_ratio_tests;
 #[cfg(test)]
 mod peak_tests;
+#[cfg(test)]
+mod skipped_folder_tests;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]

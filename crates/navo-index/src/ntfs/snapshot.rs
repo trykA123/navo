@@ -40,6 +40,7 @@ impl NtfsIndex {
             },
             renames: PendingRenames::default(),
             search_only: false,
+            skipped_folders: std::collections::HashSet::new(),
         };
         index.compact_if_sparse(super::COMPACT_MIN_SLOTS);
         Ok(index)

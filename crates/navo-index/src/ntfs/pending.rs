@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
+use super::skipped::RenameSources;
 use super::{
     NtfsError, NtfsIndex, UnresolvedChange, change_file_id, normalize_root, recover_rename,
 };
@@ -17,9 +18,10 @@ pub(super) struct Pending {
     blocked: BlockedRecords,
     poisoned: HashMap<u128, u128>,
     reported: Vec<UnresolvedChange>,
-    removed_subtree: bool,
+    pub(super) removed_subtree: bool,
     pub(super) blocked_peak: usize,
     pub(super) cycle_skips: u64,
+    pub(super) sources: RenameSources,
 }
 
 impl Pending {
@@ -82,7 +84,7 @@ impl Pending {
     }
 
     /// Reports each change with the same unavailable parent, in queue order.
-    fn report_unresolved(
+    pub(super) fn report_unresolved(
         &mut self,
         missing_reference: u128,
         changes: impl IntoIterator<Item = TableChange>,
@@ -113,11 +115,9 @@ impl Pending {
             }
             let change = recover_rename(index, change);
             let file_id = change_file_id(&change);
-            match index.table.apply_in_batch(change.clone(), &mut index.ids) {
-                Ok(removed) => {
-                    self.removed_subtree |= removed > 1;
-                    self.wake_if_present(index, file_id, ready);
-                }
+            match self.apply_tracked(index, &change) {
+                Ok(true) => self.wake_if_present(index, file_id, ready),
+                Ok(false) => {}
                 Err(TableError::UnknownFileReference(missing))
                     if matches!(
                         change,
