@@ -184,6 +184,7 @@ pub fn raw_drives() -> RawDrives {
         }
     }
     raw.remembered = remembered_cached();
+    raw.wsl = super::wsl::installed_distros();
     raw
 }
 

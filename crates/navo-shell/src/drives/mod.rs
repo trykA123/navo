@@ -4,6 +4,7 @@ mod unix;
 mod volumes;
 #[cfg(windows)]
 mod windows;
+mod wsl;
 
 pub use model::{Drive, DriveKind, RawDrives, Space, assemble, parse_mounts};
 pub use volumes::{DeviceEvent, VolumeWatch, device_event, watch_volumes};
@@ -109,3 +110,5 @@ mod tests;
 mod tests_assemble;
 #[cfg(test)]
 mod tests_platform;
+#[cfg(test)]
+mod tests_wsl;

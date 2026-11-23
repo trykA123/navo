@@ -157,6 +157,7 @@ fn assemble_present_drive_wins_over_remembered_and_keeps_mapped_remote() {
         mapped: unc(&[('N', r"\\nas\live")]),
         remembered: unc(&[('N', r"\\nas\old")]),
         unavailable: Vec::new(),
+        wsl: Vec::new(),
     };
     let expected = net('N', r"\\nas\live");
     assert_eq!(assemble(&raw), vec![expected]);
@@ -182,6 +183,7 @@ fn assemble_matches_lowercase_letters_and_outputs_uppercase() {
         mapped: unc(&[('n', r"\\nas\n")]),
         remembered: unc(&[('m', r"\\nas\m")]),
         unavailable: Vec::new(),
+        wsl: Vec::new(),
     };
     assert_eq!(
         assemble(&raw),
@@ -197,6 +199,7 @@ fn assemble_duplicate_entries_first_wins() {
         mapped: unc(&[('D', r"\\first\d"), ('D', r"\\second\d")]),
         remembered: unc(&[('m', r"\\first\m"), ('M', r"\\second\m")]),
         unavailable: Vec::new(),
+        wsl: Vec::new(),
     };
     assert_eq!(
         assemble(&raw),

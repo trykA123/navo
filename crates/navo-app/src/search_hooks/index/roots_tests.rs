@@ -84,3 +84,26 @@ fn a_volume_with_another_error_is_still_not_covered() {
     };
     assert!(!covered(&root, Some(&status)));
 }
+
+#[test]
+fn a_wsl_distro_never_becomes_an_index_root_even_with_network_indexing_on() {
+    let status = Status {
+        volumes: vec![VolumeStatus {
+            root: "C:".into(),
+            entries: 10,
+            ..Default::default()
+        }],
+    };
+    let available = navo_shell::assemble(&navo_shell::RawDrives {
+        mask: 0b100,
+        kinds: vec![('C', DriveKind::Fixed)],
+        wsl: vec!["Ubuntu".to_owned()],
+        ..Default::default()
+    });
+    let options = IndexOptions {
+        network: true,
+        ..IndexOptions::default()
+    };
+    let found = configured(&options, &available, Vec::new(), replied(&status));
+    assert_eq!(found, [Location::new(r"C:\").unwrap()]);
+}

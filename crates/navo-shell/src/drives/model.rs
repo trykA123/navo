@@ -32,6 +32,8 @@ pub struct RawDrives {
     pub mapped: Vec<(char, String)>,
     pub remembered: Vec<(char, String)>,
     pub unavailable: Vec<char>,
+    /// Installed WSL distro names; each becomes a `\\wsl.localhost\<distro>\` entry.
+    pub wsl: Vec<String>,
 }
 
 const PSEUDO: [&str; 9] = [
@@ -66,6 +68,7 @@ fn drive(letter: char, kind: DriveKind, remote: Option<String>, connected: bool)
     }
 }
 
+/// Builds the drive list: letters A to Z (present or remembered shares), then WSL distros.
 #[must_use]
 pub fn assemble(raw: &RawDrives) -> Vec<Drive> {
     (0u8..26)
@@ -85,6 +88,7 @@ pub fn assemble(raw: &RawDrives) -> Vec<Drive> {
                 remembered.map(|remote| drive(letter, DriveKind::Network, Some(remote), false))
             }
         })
+        .chain(super::wsl::wsl_drives(&raw.wsl))
         .collect()
 }
 

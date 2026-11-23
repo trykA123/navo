@@ -42,7 +42,7 @@ impl DriveCache {
             .retain(|root, _| drives.iter().any(|drive| drive.root == *root));
         let stale: Vec<&Drive> = drives
             .iter()
-            .filter(|drive| drive.connected && self.is_stale(drive, now))
+            .filter(|drive| drive.connected && !drive.is_wsl() && self.is_stale(drive, now))
             .collect();
         let read: Vec<(usize, Option<Details>)> = std::thread::scope(|scope| {
             let jobs: Vec<_> = stale

@@ -112,3 +112,26 @@ fn slow_probes_run_together() {
     cache.refresh(drives, &probe, started);
     assert!(started.elapsed() < Duration::from_millis(900));
 }
+
+#[test]
+fn a_wsl_distro_is_never_probed_so_listing_does_not_start_it() {
+    let probed = Mutex::new(Vec::new());
+    let probe = |root: &str| {
+        probed.lock().unwrap().push(root.to_owned());
+        Some((Some("Volume".to_owned()), Some(space(40))))
+    };
+    let drives = navo_shell::assemble(&navo_shell::RawDrives {
+        mask: 0b100,
+        kinds: vec![('C', DriveKind::Fixed)],
+        wsl: vec!["Ubuntu".to_owned()],
+        ..Default::default()
+    });
+    let list = DriveCache::default().refresh(drives, &probe, Instant::now());
+    assert_eq!(*probed.lock().unwrap(), vec!["C:\\".to_owned()]);
+    let wsl = list
+        .iter()
+        .find(|info| info.letter.is_none())
+        .expect("WSL row");
+    assert_eq!(wsl.label.as_deref(), Some("Ubuntu"));
+    assert_eq!(wsl.space, None);
+}
