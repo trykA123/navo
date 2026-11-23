@@ -43,6 +43,7 @@ pub(super) fn check_steps(crates: &[&str]) -> Vec<Step> {
         Step::new("colors", "cargo", &["xtask", "colors"]),
         Step::new("seams", "cargo", &["xtask", "seams"]),
         Step::new("paths", "cargo", &["xtask", "paths"]),
+        Step::new("plans", "cargo", &["xtask", "plans"]),
         Step::new(
             "nextest",
             "cargo",
