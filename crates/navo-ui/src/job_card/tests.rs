@@ -5,7 +5,9 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 use navo_core::OpKind;
 
-use super::{JobCard, JobInfo, JobsSummary, Pause, PillFit, RenameNote, SpeedMeter, time_text};
+use super::{
+    JobCard, JobInfo, JobsSummary, Pause, PillFit, RenameNote, SpeedMeter, VerifyNote, time_text,
+};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::test_window::open;
@@ -127,6 +129,37 @@ fn ended_jobs_name_their_state() {
     assert_eq!(
         with_state(JobRowState::Failed("denied".into())).status_text(),
         "Failed"
+    );
+}
+
+/// The copy job in `state` with a verify note of `verified` and `unverified` files.
+fn verify(state: JobRowState, verified: u64, unverified: u64, verifying: bool) -> JobInfo {
+    let note = VerifyNote {
+        verified,
+        unverified,
+        verifying,
+    };
+    let mut job = with_state(state);
+    job.speed = None;
+    job.rename.verify = Some(note);
+    job
+}
+
+#[test]
+fn a_verifying_job_says_so_and_a_done_one_counts_its_checked_files() {
+    let running = verify(JobRowState::Running, 0, 0, true).status_text();
+    assert_eq!(running, "25% · 1 of 12 files · Verifying…");
+    let mut fast = verify(JobRowState::Running, 0, 0, true);
+    fast.speed = Some(1_000_000);
+    assert!(!fast.status_text().contains("/s"), "{}", fast.status_text());
+    let all = |n| verify(JobRowState::Done, n, 0, false).status_text();
+    assert_eq!(all(12), "Done · Verified 12 files");
+    assert_eq!(all(1), "Done · Verified 1 file");
+    let some = verify(JobRowState::Done, 3, 9, false).status_text();
+    assert_eq!(some, "Done · Verified 3 of 12 files");
+    assert_eq!(
+        verify(JobRowState::Running, 0, 0, false).status_text(),
+        "25% · 1 of 12 files"
     );
 }
 

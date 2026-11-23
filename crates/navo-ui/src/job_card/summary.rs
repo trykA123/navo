@@ -1,3 +1,5 @@
+//! The job card's words: a job's name, route, progress and status line, and the summary of all jobs.
+
 use std::time::Duration;
 
 use gpui_kit::SharedString;
@@ -26,6 +28,16 @@ pub struct RenameNote {
     pub log_error: Option<SharedString>,
     /// Pasted names refused before the job ran, each with its reason.
     pub refused: Vec<SharedString>,
+    /// The verify-after-copy counts, when the job checks its copies.
+    pub verify: Option<VerifyNote>,
+}
+
+/// A snapshot of a job's verify counter: files checked, files copied unchecked, and a pass running.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct VerifyNote {
+    pub verified: u64,
+    pub unverified: u64,
+    pub verifying: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -175,14 +187,23 @@ impl JobInfo {
         match &self.state {
             JobRowState::Queued => return tr("job-queued"),
             JobRowState::Running => {}
-            JobRowState::Done => return "Done".to_owned(),
+            JobRowState::Done => return self.done_text(),
             JobRowState::Cancelled => return "Cancelled".to_owned(),
             JobRowState::Failed(_) => return "Failed".to_owned(),
         }
         let mut parts = vec![self.percent_text(), self.files_text()];
+        let verifying = self
+            .rename
+            .verify
+            .as_ref()
+            .is_some_and(|note| note.verifying);
+        if verifying {
+            parts.push(tr("job-verifying"));
+        }
         match self.pause {
             Pause::Off => {
-                parts.extend(self.speed.map(speed_text));
+                // The card is one line: while verifying, the speed gives way so the time left fits.
+                parts.extend(self.speed.filter(|_| !verifying).map(speed_text));
                 parts.extend(self.left().map(|left| format!("{} left", time_text(left))));
             }
             Pause::Asked => parts.push("Pausing…".to_owned()),
@@ -190,6 +211,25 @@ impl JobInfo {
             Pause::Waiting => parts.push(tr("job-waiting")),
         }
         parts.join(" · ")
+    }
+
+    /// "Done", or "Done · Verified n files" ("n of m files" when some copies went unchecked).
+    fn done_text(&self) -> String {
+        let Some(note) = &self.rename.verify else {
+            return "Done".to_owned();
+        };
+        let total = note.verified.saturating_add(note.unverified);
+        let files = format::bytes(total);
+        if note.unverified == 0 {
+            return t!("job-verified", count = total, files = files);
+        }
+        let shown = format::bytes(note.verified);
+        t!(
+            "job-verified-some",
+            verified = shown,
+            count = total,
+            files = files
+        )
     }
 }
 

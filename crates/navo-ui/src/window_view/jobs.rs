@@ -8,7 +8,7 @@ use super::strip::StripUi;
 
 use crate::activity::Activity;
 use crate::browser::{JobStatus, JobView};
-use crate::job_card::{JobCard, JobInfo, JobsSummary, Pause, RenameNote, SpeedMeter};
+use crate::job_card::{JobCard, JobInfo, JobsSummary, Pause, RenameNote, SpeedMeter, VerifyNote};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
 use crate::tokens;
@@ -88,6 +88,7 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
                 .iter()
                 .map(|item| format!("{} ({})", item.name, item.reason).into())
                 .collect(),
+            verify: None,
         },
     }
 }
@@ -173,7 +174,15 @@ impl NavoWindow {
         self.browser
             .jobs()
             .iter()
-            .map(|job| job_info(job, meter.speed(job.id)))
+            .map(|job| {
+                let mut info = job_info(job, meter.speed(job.id));
+                info.rename.verify = self.browser.verifies(job.id).map(|count| VerifyNote {
+                    verified: count.verified(),
+                    unverified: count.unverified(),
+                    verifying: count.verifying(),
+                });
+                info
+            })
             .collect()
     }
 

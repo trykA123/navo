@@ -1,5 +1,6 @@
 //! AD11c: the copy and move dialog shows the "Verify after copy" switch with the default the
-//! browser resolved, hides it for other jobs, and a click flips the choice.
+//! browser resolved, hides it for other jobs, and a click flips the choice. AD11d: the job card
+//! then counts the checked files.
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
@@ -68,4 +69,17 @@ fn a_click_on_the_switch_turns_verify_off_and_on(cx: &mut TestAppContext) {
         assert_eq!(verifies(cx, &view), on);
         assert_eq!(switch_state(cx, window), Some(on));
     }
+}
+
+#[gpui_kit::test]
+fn a_finished_checked_copy_counts_its_files_on_the_card(cx: &mut TestAppContext) {
+    let (_, view) = dialog_after(cx, &["f5"]);
+    view.update(cx, |view, _| assert!(view.browser.confirm()));
+    settle(cx, &view);
+    let text = view.read_with(cx, |view, _| view.job_infos()[0].status_text());
+    // FakeFs reads through the cache, so each checked copy counts as unverified.
+    assert!(
+        text.starts_with("Done · Verified 0 of "),
+        "card text: {text}"
+    );
 }
