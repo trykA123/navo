@@ -1,4 +1,3 @@
-use std::process::Child;
 use std::sync::atomic::AtomicU64;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, OnceLock};
@@ -7,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use super::helper::{Helper, Prepared};
 use super::pool::Pool;
+use super::process::HelperProcess;
 
 const TICK: Duration = Duration::from_millis(10);
 const REAP_LIMIT: Duration = Duration::from_secs(30);
@@ -14,7 +14,7 @@ const REAP_LIMIT: Duration = Duration::from_secs(30);
 pub(super) const KILL_WAIT: Duration = Duration::from_secs(2);
 
 enum Job {
-    Dispose(Child, Arc<AtomicU64>),
+    Dispose(Box<dyn HelperProcess>, Arc<AtomicU64>),
     Recycle {
         helper: Helper,
         deadline: Instant,
@@ -34,7 +34,7 @@ struct Recycling {
 }
 
 struct Reaping {
-    child: Child,
+    child: Box<dyn HelperProcess>,
     launcher: Arc<AtomicU64>,
     give_up: Instant,
 }
@@ -48,7 +48,7 @@ struct Shutdown {
 
 static WORKER: OnceLock<Option<Sender<Job>>> = OnceLock::new();
 
-pub(super) fn dispose(child: Child, launcher: Arc<AtomicU64>) {
+pub(super) fn dispose(child: Box<dyn HelperProcess>, launcher: Arc<AtomicU64>) {
     if let Err(job) = submit(Job::Dispose(child, launcher))
         && let Job::Dispose(mut child, _) = *job
     {
@@ -204,7 +204,11 @@ fn dispose_helper(reaping: &mut Vec<Reaping>, mut helper: Helper) {
     }
 }
 
-fn start_reaping(reaping: &mut Vec<Reaping>, mut child: Child, launcher: Arc<AtomicU64>) {
+fn start_reaping(
+    reaping: &mut Vec<Reaping>,
+    mut child: Box<dyn HelperProcess>,
+    launcher: Arc<AtomicU64>,
+) {
     let _ = child.kill();
     reaping.push(Reaping {
         child,
@@ -215,6 +219,6 @@ fn start_reaping(reaping: &mut Vec<Reaping>, mut child: Child, launcher: Arc<Ato
 
 fn advance_reaping(reaping: &mut Vec<Reaping>) {
     reaping.retain_mut(|entry| {
-        matches!(entry.child.try_wait(), Ok(None)) && Instant::now() < entry.give_up
+        matches!(entry.child.try_wait(), Ok(false)) && Instant::now() < entry.give_up
     });
 }

@@ -4,7 +4,7 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 #[cfg(windows)]
-use std::os::windows::io::{AsHandle, BorrowedHandle};
+use std::os::windows::io::BorrowedHandle;
 use std::sync::Arc;
 
 use super::Launcher;
@@ -70,7 +70,7 @@ pub(super) fn share_into(share: &Share, file: &File, helper: &Helper) -> Result<
     let shared = helper
         .child
         .as_ref()
-        .map(|child| share(file, child.as_handle()));
+        .map(|process| share(file, process.process_handle()));
     #[cfg(not(windows))]
     let shared = helper.child.as_ref().map(|_| share(file));
     match shared {

@@ -1,5 +1,6 @@
 mod helper;
 mod pool;
+mod process;
 mod reaper;
 mod share;
 
@@ -13,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use helper::Helper;
 use pool::Pool;
+pub use process::{HelperProcess, Spawned};
 use share::Share;
 #[cfg(windows)]
 pub use share::ShareFile;

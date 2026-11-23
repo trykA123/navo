@@ -1,11 +1,12 @@
-use std::io::{BufReader, BufWriter};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use super::process::{HelperProcess, Spawned};
 use super::{Launcher, reaper};
 use crate::protocol::{CodecError, PdfError, Request, Response, read_response, write_request};
 
@@ -20,8 +21,8 @@ pub(super) enum Prepared {
 }
 
 pub(super) struct Helper {
-    pub(super) child: Option<Child>,
-    input: BufWriter<ChildStdin>,
+    pub(super) child: Option<Box<dyn HelperProcess>>,
+    input: BufWriter<Box<dyn Write + Send>>,
     replies: Receiver<Reply>,
     pub(super) shutdowns: Arc<AtomicU64>,
     born: u64,
@@ -29,6 +30,8 @@ pub(super) struct Helper {
 }
 
 impl Helper {
+    /// Starts the helper program with piped stdin and stdout, confines it, and wires its replies.
+    /// Fails with `NoHelper` when it cannot start or be confined; a started child is disposed.
     pub(super) fn spawn(launcher: &Launcher, born: u64) -> Result<Self, PdfError> {
         launcher.check_generation(born)?;
         let mut child = Command::new(&launcher.program)
@@ -38,34 +41,52 @@ impl Helper {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|error| PdfError::NoHelper(error.to_string()))?;
-        let confinement = match launcher.confine.as_ref().map(|confine| confine(&child)) {
+        let guard = match launcher.confine.as_ref().map(|confine| confine(&child)) {
             None => None,
             Some(Ok(guard)) => Some(guard),
             Some(Err(error)) => {
-                reaper::dispose(child, launcher.shutdowns.clone());
+                reaper::dispose(Box::new(child), launcher.shutdowns.clone());
                 return Err(PdfError::NoHelper(format!("cannot confine it: {error}")));
             }
         };
         let (Some(input), Some(output)) = (child.stdin.take(), child.stdout.take()) else {
-            reaper::dispose(child, launcher.shutdowns.clone());
+            reaper::dispose(Box::new(child), launcher.shutdowns.clone());
             return Err(PdfError::NoHelper("its pipes are missing".into()));
         };
+        let spawned = Spawned {
+            process: Box::new(child),
+            input: Box::new(input),
+            output: Box::new(output),
+            guard,
+        };
+        Self::adopt(launcher, born, spawned)
+    }
+
+    /// Wraps a started helper: a reader thread forwards its replies. Fails with `NoHelper` when
+    /// the thread cannot start (the process is disposed) or the launcher shut down meanwhile.
+    fn adopt(launcher: &Launcher, born: u64, spawned: Spawned) -> Result<Self, PdfError> {
+        let Spawned {
+            process,
+            input,
+            output,
+            guard,
+        } = spawned;
         let (sender, replies) = mpsc::sync_channel(1);
         let reader = thread::Builder::new()
             .name("pdf-helper-reader".into())
             .spawn(move || forward_replies(output, &sender))
             .map_err(|error| PdfError::NoHelper(error.to_string()));
         if let Err(error) = reader {
-            reaper::dispose(child, launcher.shutdowns.clone());
+            reaper::dispose(process, launcher.shutdowns.clone());
             return Err(error);
         }
         let helper = Self {
-            child: Some(child),
+            child: Some(process),
             input: BufWriter::new(input),
             replies,
             shutdowns: launcher.shutdowns.clone(),
             born,
-            _confinement: confinement,
+            _confinement: guard,
         };
         launcher.check_generation(born)?;
         Ok(helper)
@@ -141,7 +162,8 @@ impl Drop for Helper {
     }
 }
 
-fn forward_replies(output: ChildStdout, sender: &SyncSender<Reply>) {
+/// Reads replies from the helper's stdout and forwards them until it closes or a read fails.
+fn forward_replies(output: Box<dyn Read + Send>, sender: &SyncSender<Reply>) {
     let mut output = BufReader::new(output);
     loop {
         let reply = match read_response(&mut output) {
