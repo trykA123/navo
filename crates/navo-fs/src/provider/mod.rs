@@ -25,6 +25,9 @@ pub struct Attributes {
     pub system: bool,
     pub readonly: bool,
     pub link_to_folder: bool,
+    /// A cloud file whose bytes are not on this disk (OneDrive Files On-Demand style):
+    /// reading it downloads it. Only the Windows local provider sets it.
+    pub cloud_placeholder: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

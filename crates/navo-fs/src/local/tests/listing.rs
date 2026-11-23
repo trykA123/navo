@@ -347,3 +347,41 @@ mod sizes {
         assert_eq!(seen, 1);
     }
 }
+
+mod cloud_bits {
+    use crate::local::attribute_bits::file_attributes;
+
+    /// What `attrib` reports for a OneDrive "online-only" file: archive, sparse,
+    /// reparse point, offline, unpinned and recall-on-data-access (5248544).
+    const ONEDRIVE_STUB: u32 = 0x0050_1620;
+    /// The same file once downloaded and pinned: archive, reparse point, pinned.
+    const ONEDRIVE_PINNED: u32 = 0x0008_0420;
+    /// A cloud folder whose children are not fetched yet: folder, reparse, recall-on-open.
+    const CLOUD_FOLDER: u32 = 0x0004_0410;
+
+    #[test]
+    fn listing_marks_a_onedrive_stub_as_a_cloud_placeholder() {
+        assert!(file_attributes(ONEDRIVE_STUB).cloud_placeholder);
+    }
+
+    #[test]
+    fn listing_marks_each_recall_or_offline_bit_alone_as_a_cloud_placeholder() {
+        for bit in [0x0040_0000, 0x0004_0000, 0x0000_1000] {
+            assert!(file_attributes(bit).cloud_placeholder, "{bit:#x}");
+        }
+        assert!(file_attributes(CLOUD_FOLDER).cloud_placeholder);
+    }
+
+    #[test]
+    fn listing_keeps_a_downloaded_or_plain_file_local() {
+        assert!(!file_attributes(ONEDRIVE_PINNED).cloud_placeholder);
+        assert!(!file_attributes(0x20).cloud_placeholder);
+        assert!(!file_attributes(0x0010_0420).cloud_placeholder);
+    }
+
+    #[test]
+    fn listing_reads_the_other_bits_of_a_stub_unchanged() {
+        let stub = file_attributes(ONEDRIVE_STUB | 0x7);
+        assert!(stub.readonly && stub.hidden && stub.system && !stub.link_to_folder);
+    }
+}

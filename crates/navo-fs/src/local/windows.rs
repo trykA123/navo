@@ -5,15 +5,12 @@ use std::os::windows::fs::MetadataExt;
 
 use navo_core::{FsErrorKind, ProviderPath};
 
+pub(super) use super::attribute_bits::file_attributes;
 pub(super) use super::win_details::read as details;
 pub(super) use super::win_replace::rename_new as rename_atomic;
 pub(super) use super::win_replace::{rename_new, replace, replace_write_through};
 pub(super) use super::win_volume::volume_serial;
 use crate::Attributes;
-
-const READONLY: u32 = 0x1;
-const HIDDEN: u32 = 0x2;
-const SYSTEM: u32 = 0x4;
 
 pub(super) fn entry_name(name: &OsStr) -> ProviderPath {
     let units: Vec<u16> = name.encode_wide().collect();
@@ -22,15 +19,6 @@ pub(super) fn entry_name(name: &OsStr) -> ProviderPath {
 
 pub(super) fn attributes(_name: &OsStr, metadata: &Metadata) -> Attributes {
     file_attributes(metadata.file_attributes())
-}
-
-pub(super) fn file_attributes(bits: u32) -> Attributes {
-    Attributes {
-        hidden: bits & HIDDEN != 0,
-        system: bits & SYSTEM != 0,
-        readonly: bits & READONLY != 0,
-        ..Attributes::default()
-    }
 }
 
 pub(super) fn name_attributes(_name: &OsStr) -> Attributes {

@@ -1,3 +1,5 @@
+#[cfg(any(windows, test))]
+mod attribute_bits;
 mod copy_pump;
 mod flush;
 mod guard;

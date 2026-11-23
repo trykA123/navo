@@ -230,6 +230,8 @@ fn decode_row(reader: &mut Reader<'_>) -> Result<FsEntry, DecodeError> {
             system: bits & 2 != 0,
             readonly: bits & 4 != 0,
             link_to_folder: bits & 8 != 0,
+            // Format 2 has no cloud bit; the live listing that follows a cached one sets it.
+            cloud_placeholder: false,
         },
     })
 }

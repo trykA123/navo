@@ -34,6 +34,7 @@ fn row(at: u32) -> FsEntry {
             system: at.is_multiple_of(13),
             readonly: at.is_multiple_of(17),
             link_to_folder: false,
+            cloud_placeholder: false,
         },
     }
 }

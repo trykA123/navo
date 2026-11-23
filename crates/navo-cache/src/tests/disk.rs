@@ -31,6 +31,7 @@ fn rich() -> CachedListing {
                 system: false,
                 readonly: true,
                 link_to_folder: false,
+                cloud_placeholder: false,
             },
         },
         FsEntry {
@@ -40,6 +41,7 @@ fn rich() -> CachedListing {
             modified_ms: Some(1_760_000_000_123),
             attributes: Attributes {
                 link_to_folder: true,
+                cloud_placeholder: false,
                 system: true,
                 ..Attributes::default()
             },
@@ -234,6 +236,7 @@ fn any_row() -> impl Strategy<Value = FsEntry> {
                 system: bits[1],
                 readonly: bits[2],
                 link_to_folder: bits[3],
+                cloud_placeholder: false,
             },
         })
 }
