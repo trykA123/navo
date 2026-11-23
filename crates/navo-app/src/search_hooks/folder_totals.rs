@@ -88,14 +88,20 @@ fn chunks(folders: &[Location]) -> Vec<Vec<usize>> {
 
 /// Logs the one count line NV14 reads: folders, requests and answers by state, never paths.
 fn log_counts(answers: &[TotalsState], requests: usize) {
+    tracing::info!("{}", count_line(answers, requests));
+}
+
+/// Builds the count line from the answers and the number of pipe requests; pure, so tests read it.
+fn count_line(answers: &[TotalsState], requests: usize) -> String {
     let count = |want: fn(&TotalsState) -> bool| answers.iter().filter(|a| want(a)).count();
-    tracing::info!(
-        "folder totals: folders={} requests={requests} ready={} busy={} unavailable={}",
+    format!(
+        "folder totals: folders={} requests={requests} complete={} busy={} unavailable={} incomplete={}",
         answers.len(),
-        count(|a| matches!(a, TotalsState::Ready(_))),
+        count(|a| matches!(a, TotalsState::Ready(t) if t.complete)),
         count(|a| matches!(a, TotalsState::Busy)),
         count(|a| matches!(a, TotalsState::Unavailable)),
-    );
+        count(|a| matches!(a, TotalsState::Ready(t) if !t.complete)),
+    )
 }
 
 pub fn query() -> FolderTotalsQuery {
@@ -345,6 +351,25 @@ mod tests {
         assert!(
             batch(recording, &[]).1.is_empty(),
             "no folders send no request"
+        );
+    }
+
+    #[test]
+    fn count_line_splits_ready_answers_into_complete_and_incomplete() {
+        let incomplete = FolderTotals {
+            complete: false,
+            ..totals()
+        };
+        let answers = [
+            TotalsState::Ready(totals()),
+            TotalsState::Ready(totals()),
+            TotalsState::Ready(incomplete),
+            TotalsState::Busy,
+            TotalsState::Unavailable,
+        ];
+        assert_eq!(
+            count_line(&answers, 2),
+            "folder totals: folders=5 requests=2 complete=2 busy=1 unavailable=1 incomplete=1"
         );
     }
 }
