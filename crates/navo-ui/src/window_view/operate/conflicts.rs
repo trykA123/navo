@@ -1,13 +1,13 @@
-//! The copy and move dialog's conflict row: "N already there" on its own summary line and one
-//! choice for all of them (Skip, Overwrite older, Keep both, Overwrite all); a pick rebuilds the
-//! plan.
+//! The copy and move dialog's conflict row: "N already there" on its own summary line, one
+//! choice for all of them (Skip, Overwrite older, Keep both, Overwrite all) whose pick rebuilds the
+//! plan, and "Show conflicts", which lists both sides of the first conflicts.
 
 use navo_core::{ConflictPolicy, OpKind, OperationPlan, Resolution};
 use navo_l10n::{t, tr};
 
 use super::super::NavoWindow;
-use crate::browser::{KeepOld, PendingOp};
-use crate::confirm_dialog::{ConfirmDialog, OptionItem, Options};
+use crate::browser::{Facts, KeepOld, PendingOp};
+use crate::confirm_dialog::{ConfirmDialog, DetailRow, Details, OptionItem, Options};
 use crate::format;
 use crate::prelude::*;
 
@@ -131,6 +131,48 @@ fn summary(plan: &OperationPlan) -> Option<String> {
     ))
 }
 
+/// One side's facts as list text: "12.0 KB · 20.11.2026 14:02", "Folder · …" or "Not readable".
+fn side(facts: &Facts) -> String {
+    let what = match (facts.is_folder, facts.size) {
+        (true, _) => tr("conflict-folder"),
+        (false, Some(size)) => format::size(size),
+        (false, None) => return tr("conflict-unreadable"),
+    };
+    match facts.modified_ms.map(format::date) {
+        Some(date) if !date.is_empty() => format!("{what} · {date}"),
+        _ => what,
+    }
+}
+
+/// The conflict list behind "Show conflicts": the first conflicts with both sides' size and time,
+/// and a line counting the ones not listed.
+fn conflict_list(pending: &PendingOp) -> Details {
+    let conflicts = pending.plan.conflicts.len();
+    let rows = pending
+        .clashes
+        .iter()
+        .map(|clash| DetailRow {
+            name: clash.name.clone().into(),
+            left: side(&clash.source).into(),
+            right: side(&clash.target).into(),
+        })
+        .collect::<Vec<_>>();
+    let incoming = match pending.plan.kind {
+        OpKind::Move => "conflict-column-moved",
+        _ => "conflict-column-copied",
+    };
+    let items = super::items(conflicts);
+    let heading = t!("conflict-list-heading", items = items.as_str());
+    Details {
+        link: tr("conflict-show").into(),
+        heading: heading.into(),
+        columns: [tr(incoming).into(), tr("conflict-column-there").into()],
+        more: counted("conflict-list-more", conflicts.saturating_sub(rows.len())).map(Into::into),
+        rows,
+        back: tr("conflict-back").into(),
+    }
+}
+
 impl NavoWindow {
     /// Adds the conflict row to `dialog` when `pending` offers it; a pick goes to the browser,
     /// which rebuilds the plan with that choice.
@@ -157,6 +199,7 @@ impl NavoWindow {
         };
         let policies: Vec<ConflictPolicy> = choices.iter().map(|c| c.policy.clone()).collect();
         let view = cx.weak_entity();
+        let dialog = dialog.details(conflict_list(pending));
         dialog.options(options, move |index, _, cx| {
             let Some(policy) = policies.get(index).cloned() else {
                 return;

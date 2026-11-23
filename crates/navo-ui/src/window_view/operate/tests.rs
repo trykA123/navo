@@ -46,6 +46,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         structure: None,
         stream: None,
         replan: Default::default(),
+        clashes: Vec::new(),
     }
 }
 

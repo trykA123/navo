@@ -7,6 +7,7 @@ use navo_fs::{
 
 use std::sync::Arc;
 
+use super::clashes::Clash;
 use super::queue::SlowVolumes;
 use super::stream::{Refused, StreamPaste};
 use crate::browser::{RenameReport, UndoOffer};
@@ -18,6 +19,8 @@ pub(in crate::browser) struct PlannedOp {
     pub slow_volumes: SlowVolumes,
     /// Drive class of the target, probed on the planning thread.
     pub target_class: DriveClass,
+    /// Facts of the first conflicts, read on the planning thread.
+    pub clashes: Vec<Clash>,
 }
 
 #[derive(Debug, Clone)]
@@ -169,6 +172,8 @@ pub struct PendingOp {
     /// Set when the files come from another program without paths.
     pub stream: Option<StreamPaste>,
     pub replan: Replan,
+    /// Name, size and time of both sides of the first conflicts, for the conflict list.
+    pub clashes: Vec<Clash>,
 }
 
 /// What a rebuilt plan needs: the conflict policy the user picked, the policy the shown plan was

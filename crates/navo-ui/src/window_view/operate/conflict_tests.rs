@@ -1,6 +1,6 @@
-//! CS2: the copy dialog shows "N already there" and one conflict choice row; a pick by click or
-//! by Left/Right rebuilds the plan, Enter starts the job, and overwrite choices hide when Undo
-//! could not restore an overwritten file.
+//! CS2 and CS3: the copy dialog shows "N already there" and one conflict choice row; a pick by
+//! click or by Left/Right rebuilds the plan, Enter starts the job, overwrite choices hide when
+//! Undo could not restore an overwritten file, and "Show conflicts" lists both sides.
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
@@ -203,4 +203,62 @@ fn an_asking_plan_highlights_what_it_really_does() {
         shown(&plan, ConflictPolicy::OverwriteAll),
         ConflictPolicy::OverwriteAll
     );
+}
+
+/// Says whether the element `id` has focus after a fresh frame.
+fn has_focus(cx: &mut TestAppContext, window: AnyWindowHandle, id: &'static str) -> bool {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.try_find(id).and_then(|found| found.focused()) == Some(true)
+    })
+    .expect("window")
+}
+
+/// The spoken text of the conflict list's rows, empty while the list is closed.
+fn list_rows(cx: &mut TestAppContext, window: AnyWindowHandle) -> Vec<String> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        (0..10usize)
+            .filter_map(|index| {
+                let row = window.try_find(("detail", index))?;
+                row.label().map(str::to_owned)
+            })
+            .collect()
+    })
+    .expect("window")
+}
+
+/// True while the copy dialog is still open.
+fn dialog_open(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> bool {
+    view.read_with(cx, |view, _| view.browser.pending().is_some())
+}
+
+#[gpui_kit::test]
+fn show_conflicts_lists_both_sides_by_keys_and_esc_goes_back(cx: &mut TestAppContext) {
+    let (window, view) = copy_dialog(cx, true);
+    for _ in 0..3 {
+        press(cx, window, &view, "tab");
+    }
+    assert!(has_focus(cx, window, "details-link"));
+    press(cx, window, &view, "enter");
+    assert!(has_focus(cx, window, "details-list"));
+    let rows = list_rows(cx, window);
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    let x = rows.iter().find(|row| row.starts_with("x.txt"));
+    let x = x.expect("x.txt is listed");
+    assert!(x.contains("3 B") && x.contains("1 B"), "{x}");
+    press(cx, window, &view, "escape");
+    assert!(dialog_open(cx, &view));
+    assert!(list_rows(cx, window).is_empty());
+    assert!(has_focus(cx, window, "details-link"));
+}
+
+#[gpui_kit::test]
+fn the_mouse_opens_the_conflict_list_and_back_closes_it(cx: &mut TestAppContext) {
+    let (window, view) = copy_dialog(cx, true);
+    click(cx, window, &view, "details-link-button");
+    assert_eq!(list_rows(cx, window).len(), 3);
+    click(cx, window, &view, "details-back-button");
+    assert!(list_rows(cx, window).is_empty());
+    assert!(dialog_open(cx, &view));
 }

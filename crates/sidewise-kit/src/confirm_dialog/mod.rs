@@ -1,8 +1,10 @@
 //! A modal confirm dialog: title, paths, summary, optional check rows, a typed word and buttons.
+mod details;
 mod elide;
 mod keys;
 mod options;
 mod rows;
+mod summary;
 
 #[cfg(test)]
 mod details_tests;
@@ -17,7 +19,7 @@ use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight, InteractiveElement,
-    IntoElement, ParentElement, RenderOnce, Role, SharedString, Stateful,
+    IntoElement, ParentElement, RenderOnce, Role, ScrollHandle, SharedString, Stateful,
     StatefulInteractiveElement, Styled, Subscription, Window, div, px,
 };
 
@@ -26,6 +28,7 @@ use crate::primitives::{
     Button, ButtonVariant, IconName, TextField, TextFieldState, icon, text_field_state,
 };
 use crate::tokens::{self, Theme};
+pub use details::{DetailRow, Details};
 use keys::Keys;
 pub use options::{OptionItem, Options};
 
@@ -76,6 +79,7 @@ pub struct ConfirmDialog {
     on_switch: Option<Handler>,
     options: Option<Options>,
     on_pick: Option<options::PickHandler>,
+    details: Option<Details>,
 }
 
 impl ConfirmDialog {
@@ -90,6 +94,7 @@ impl ConfirmDialog {
             on_switch: None,
             options: None,
             on_pick: None,
+            details: None,
         }
     }
 
@@ -116,6 +121,12 @@ struct DialogState {
     choice: FocusHandle,
     switch: FocusHandle,
     options: FocusHandle,
+    /// Whether the details list shows in place of the body, with the focus stops it uses.
+    details_open: bool,
+    link: FocusHandle,
+    list: FocusHandle,
+    back: FocusHandle,
+    list_scroll: ScrollHandle,
     field: Option<Entity<TextFieldState>>,
     has_started: bool,
     _field_changes: Option<Subscription>,
@@ -139,6 +150,11 @@ impl DialogState {
             choice: cx.focus_handle(),
             switch: cx.focus_handle(),
             options: cx.focus_handle(),
+            details_open: false,
+            link: cx.focus_handle(),
+            list: cx.focus_handle(),
+            back: cx.focus_handle(),
+            list_scroll: ScrollHandle::new(),
             field,
             has_started: false,
             _field_changes: changes,
@@ -179,37 +195,6 @@ fn start_focus(
     });
     if let Some(handle) = first {
         window.defer(cx, move |window, cx| window.focus(&handle, cx));
-    }
-}
-
-fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &App) -> Keys {
-    let confirm = can_confirm.then(|| state.confirm.clone());
-    let buttons: Vec<FocusHandle> = confirm.into_iter().chain([state.cancel.clone()]).collect();
-    let choice = dialog.props.choice.is_some().then(|| state.choice.clone());
-    let switch = dialog.switch.is_some().then(|| state.switch.clone());
-    let options = dialog.options.is_some().then(|| state.options.clone());
-    let stops = state
-        .field_focus(cx)
-        .into_iter()
-        .chain(options.clone())
-        .chain(choice.clone())
-        .chain(switch.clone())
-        .chain(buttons.clone())
-        .collect();
-    Keys {
-        stops,
-        buttons,
-        confirm: state.confirm.clone(),
-        can_confirm,
-        cancel: state.cancel.clone(),
-        choice,
-        switch,
-        options,
-        on_confirm: dialog.on_confirm,
-        on_cancel: dialog.on_cancel,
-        on_toggle: dialog.on_toggle,
-        on_switch: dialog.on_switch,
-        on_pick: dialog.on_pick,
     }
 }
 
@@ -279,49 +264,6 @@ fn paths(t: &Theme, props: &ConfirmProps) -> Div {
         })
 }
 
-/// The summary: its first line beside the mode label, cut to fit; text after a line break
-/// wraps whole on its own line below.
-fn summary_row(t: &Theme, props: &ConfirmProps) -> Div {
-    let (first, detail) = match props.summary.split_once('\n') {
-        Some((first, detail)) => (first.to_owned().into(), Some(detail.to_owned())),
-        None => (props.summary.clone(), None),
-    };
-    let line = div()
-        .flex()
-        .items_center()
-        .justify_between()
-        .gap(t.spacing.md)
-        .child(label("summary", first).text_color(t.colors.muted))
-        .when_some(props.mode.clone(), |row, mode| {
-            row.child(
-                label("mode", mode)
-                    .flex_none()
-                    .px(t.spacing.sm)
-                    .py(t.spacing.xxs)
-                    .rounded(t.radii.sm)
-                    .border_1()
-                    .border_color(t.colors.line)
-                    .text_size(t.typography.small)
-                    .text_color(t.colors.muted),
-            )
-        });
-    let detail = detail.map(|text| {
-        div()
-            .id("summary-detail")
-            .role(Role::Label)
-            .aria_label(text.clone())
-            .test_support()
-            .text_color(t.colors.muted)
-            .child(text)
-    });
-    div()
-        .flex()
-        .flex_col()
-        .gap(t.spacing.xxs)
-        .child(line)
-        .children(detail)
-}
-
 fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) -> Div {
     let variant = if props.danger {
         ButtonVariant::Danger
@@ -362,6 +304,49 @@ fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) ->
         ))
 }
 
+/// What the dialog body draws: the props, the options row, the switch row, the details link and
+/// the typed-word field.
+struct Parts {
+    props: ConfirmProps,
+    options: Option<Options>,
+    switch: Option<Choice>,
+    details: Option<Details>,
+    field: Option<Entity<TextFieldState>>,
+}
+
+/// The dialog body under the heading: paths, summary, rows, the details link and the buttons.
+fn body(t: &Theme, parts: Parts, keys: &Rc<Keys>, window: &Window) -> Div {
+    let Parts {
+        props,
+        options,
+        switch,
+        details,
+        field,
+    } = parts;
+    let link = details
+        .as_ref()
+        .and_then(|details| details::link(t, details, keys, window));
+    let options = options.and_then(|options| options::options_row(t, options, keys, window));
+    div()
+        .flex()
+        .flex_col()
+        .gap(t.spacing.xl)
+        .child(paths(t, &props))
+        .child(summary::summary_row(t, &props))
+        .children(options)
+        .children(link)
+        .children(rows::check_rows(
+            t,
+            (props.choice.clone(), switch),
+            keys,
+            window,
+        ))
+        .when_some(field, |dialog, field| {
+            dialog.child(TextField::new("typed", &field, "Confirmation word"))
+        })
+        .child(buttons(t, &props, keys, window))
+}
+
 impl RenderOnce for ConfirmDialog {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
@@ -373,11 +358,21 @@ impl RenderOnce for ConfirmDialog {
         let id = self.id.clone();
         let current = state.read(cx);
         let can_confirm = is_typed_ok(&props, current, cx);
-        let field = current.field.clone();
         let root = current.root.clone();
-        let switch = self.switch.clone();
-        let options = self.options.clone();
-        let keys = Rc::new(keys_for(self, current, can_confirm, cx));
+        let parts = Parts {
+            props: props.clone(),
+            options: self.options.clone(),
+            switch: self.switch.clone(),
+            details: self.details.clone(),
+            field: current.field.clone(),
+        };
+        let keys = Rc::new(keys::keys_for(self, &state, can_confirm, cx));
+        let inner = match parts.details.as_ref().filter(|_| keys.details.open) {
+            Some(details) => {
+                details::panel(&t, details, &keys, window).map(IntoElement::into_any_element)
+            }
+            None => Some(body(&t, parts, &keys, window).into_any_element()),
+        };
         keys::register(div().id(id).track_focus(&root), &keys)
             .role(Role::AlertDialog)
             .aria_label(props.title.clone())
@@ -395,18 +390,6 @@ impl RenderOnce for ConfirmDialog {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .child(heading(&t, &props))
-            .child(paths(&t, &props))
-            .child(summary_row(&t, &props))
-            .children(options.and_then(|options| options::options_row(&t, options, &keys, window)))
-            .children(rows::check_rows(
-                &t,
-                (props.choice.clone(), switch),
-                &keys,
-                window,
-            ))
-            .when_some(field, |dialog, field| {
-                dialog.child(TextField::new("typed", &field, "Confirmation word"))
-            })
-            .child(buttons(&t, &props, &keys, window))
+            .children(inner)
     }
 }

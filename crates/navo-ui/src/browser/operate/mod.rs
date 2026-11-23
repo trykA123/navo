@@ -6,6 +6,7 @@ use navo_fs::{CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, vol
 
 use super::{Browser, Message, RenameReport};
 
+mod clashes;
 mod keep;
 mod paste;
 pub(in crate::browser) mod queue;
@@ -16,6 +17,7 @@ mod types;
 mod verify;
 mod work;
 
+pub use clashes::{Clash, Facts, SHOWN as CLASHES_SHOWN};
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
 pub use queue::SlowVolume;
 pub use stream::{Explain, Refused, StreamPaste};
@@ -95,6 +97,7 @@ impl Browser {
                         retain_deletes.as_ref(),
                     );
                     PlannedOp {
+                        clashes: clashes::clashes(provider.as_ref(), &plan),
                         plan,
                         retain_deletes,
                         cannot_retain,
@@ -335,6 +338,7 @@ impl Browser {
                     }),
                     stream: request.stream,
                     replan,
+                    clashes: planned.clashes,
                 };
                 let conflicts = pending.stream.is_some() && !pending.plan.conflicts.is_empty();
                 let asks = request.asks || pending.is_protected() || conflicts;

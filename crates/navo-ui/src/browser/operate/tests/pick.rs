@@ -1,6 +1,6 @@
-//! CS2: a picked conflict policy rebuilds the pending plan through the planning job. A rebuild for
-//! an older pick or a closed dialog is dropped, and overwrites are refused when Undo could not
-//! put the old file back.
+//! CS2 and CS3: a picked conflict policy rebuilds the pending plan through the planning job. A
+//! rebuild for an older pick or a closed dialog is dropped, overwrites are refused when Undo could
+//! not put the old file back, and the plan carries both sides of its first 200 conflicts.
 
 use navo_core::{ConflictPolicy, Resolution};
 
@@ -112,4 +112,30 @@ fn overwrites_are_refused_when_undo_cannot_restore_them() {
     assert!(browser.pick_policy(ConflictPolicy::OverwriteAll));
     settle(&mut browser);
     assert_eq!(resolutions(&browser), vec![Resolution::Overwrite; 3]);
+}
+
+#[test]
+fn the_plan_carries_both_sides_of_its_conflicts() {
+    let (_, browser) = clashing(false);
+    let pending = browser.pending().expect("a pending plan");
+    assert_eq!(pending.clashes.len(), pending.plan.conflicts.len());
+    let x = pending.clashes.iter().find(|c| c.name == "x.txt");
+    let x = x.expect("x.txt is listed");
+    assert_eq!((x.source.size, x.target.size), (Some(3), Some(1)));
+    let read = |f: &crate::browser::Facts| f.is_folder || f.size.is_some();
+    let all_read = pending
+        .clashes
+        .iter()
+        .all(|c| read(&c.source) && read(&c.target));
+    assert!(all_read, "{:?}", pending.clashes);
+}
+
+#[test]
+fn the_list_holds_at_most_the_first_200_conflicts() {
+    let (fs, browser) = clashing(false);
+    let mut plan = browser.pending().expect("a pending plan").plan.clone();
+    let first = plan.conflicts[0].clone();
+    plan.conflicts = vec![first; super::super::CLASHES_SHOWN + 1];
+    let listed = super::super::clashes::clashes(fs.as_ref(), &plan);
+    assert_eq!(listed.len(), 200);
 }

@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use gpui_kit::{App, Div, FocusHandle, InteractiveElement, Stateful, Window};
+use gpui_kit::{App, Div, Entity, FocusHandle, InteractiveElement, ScrollHandle, Stateful, Window};
 
-use super::Handler;
 use super::options::PickHandler;
+use super::{ConfirmDialog, DialogState, Handler};
 use crate::dialog_focus::{self, Next, NextButton, Press, Previous, PreviousButton};
 
 const KEY_CONTEXT: &str = "ConfirmDialog Dialog";
@@ -27,11 +27,27 @@ pub(super) struct Keys {
     pub on_toggle: Option<Handler>,
     pub on_switch: Option<Handler>,
     pub on_pick: Option<PickHandler>,
+    pub details: DetailKeys,
+}
+
+/// The details list's keys: whether it is open, its link, list and Back stops, and the handlers
+/// that open and close it.
+#[derive(Default)]
+pub(super) struct DetailKeys {
+    pub open: bool,
+    pub link: Option<FocusHandle>,
+    pub list: Option<FocusHandle>,
+    pub back: Option<FocusHandle>,
+    pub on_open: Option<Handler>,
+    pub on_close: Option<Handler>,
+    pub scroll: ScrollHandle,
 }
 
 impl Keys {
+    /// Esc and Cancel: closes the details list when it is open, else cancels the dialog.
     pub(super) fn cancel(&self, window: &mut Window, cx: &mut App) {
-        if let Some(handler) = &self.on_cancel {
+        let close = self.details.on_close.as_ref().filter(|_| self.details.open);
+        if let Some(handler) = close.or(self.on_cancel.as_ref()) {
             handler(window, cx);
         }
     }
@@ -70,12 +86,98 @@ impl Keys {
             self.switch(window, cx);
         } else if has_focus(&self.options) {
             return false;
+        } else if has_focus(&self.details.link) {
+            run(self.details.on_open.as_ref(), window, cx);
+        } else if has_focus(&self.details.back) {
+            run(self.details.on_close.as_ref(), window, cx);
         } else if self.cancel.contains_focused(window, cx) {
             self.cancel(window, cx);
         } else if self.can_confirm && self.confirm.contains_focused(window, cx) {
             self.confirm(window, cx);
         }
         true
+    }
+}
+
+/// The dialog's keys: its Tab stops in order, its buttons and its handlers. While the details
+/// list is open, only the list and its Back button are stops.
+/// The details list's keys for `state`; `link` is the link's focus when the dialog has details.
+fn detail_keys(
+    state: &Entity<DialogState>,
+    link: Option<FocusHandle>,
+    open: bool,
+    current: &DialogState,
+) -> DetailKeys {
+    let has = link.is_some();
+    DetailKeys {
+        open,
+        on_open: has.then(|| super::details::show(state, true)),
+        on_close: has.then(|| super::details::show(state, false)),
+        link,
+        list: Some(current.list.clone()),
+        back: Some(current.back.clone()),
+        scroll: current.list_scroll.clone(),
+    }
+}
+
+pub(super) fn keys_for(
+    dialog: ConfirmDialog,
+    state: &Entity<DialogState>,
+    can_confirm: bool,
+    cx: &App,
+) -> Keys {
+    let current = state.read(cx);
+    let open = current.details_open && dialog.details.is_some();
+    let confirm = can_confirm.then(|| current.confirm.clone());
+    let buttons: Vec<FocusHandle> = confirm
+        .into_iter()
+        .chain([current.cancel.clone()])
+        .collect();
+    let choice = dialog
+        .props
+        .choice
+        .is_some()
+        .then(|| current.choice.clone());
+    let switch = dialog.switch.is_some().then(|| current.switch.clone());
+    let options = dialog.options.is_some().then(|| current.options.clone());
+    let link = dialog.details.is_some().then(|| current.link.clone());
+    let (stops, buttons) = if open {
+        let back = current.back.clone();
+        (vec![current.list.clone(), back.clone()], vec![back])
+    } else {
+        let stops = current
+            .field_focus(cx)
+            .into_iter()
+            .chain(options.clone())
+            .chain(link.clone())
+            .chain(choice.clone())
+            .chain(switch.clone())
+            .chain(buttons.clone())
+            .collect();
+        (stops, buttons)
+    };
+    Keys {
+        stops,
+        buttons,
+        confirm: current.confirm.clone(),
+        can_confirm,
+        cancel: current.cancel.clone(),
+        choice,
+        switch,
+        options,
+        details: detail_keys(state, link, open, current),
+        on_confirm: dialog.on_confirm,
+        on_cancel: dialog.on_cancel,
+        on_toggle: dialog.on_toggle,
+        on_switch: dialog.on_switch,
+        on_pick: dialog.on_pick,
+    }
+}
+
+/// Runs `handler` when there is one.
+fn run(handler: Option<&Handler>, window: &mut Window, cx: &mut App) {
+    if let Some(handler) = handler {
+        handler(window, cx);
     }
 }
 

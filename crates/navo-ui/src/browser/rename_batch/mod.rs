@@ -170,6 +170,7 @@ impl Browser {
             structure: None,
             stream: None,
             replan: Default::default(),
+            clashes: Vec::new(),
         }
     }
 }

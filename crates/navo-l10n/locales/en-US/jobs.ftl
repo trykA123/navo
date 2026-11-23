@@ -51,6 +51,15 @@ conflict-renamed = { $count ->
    *[other] { $shown } get new names
 }
 conflict-overwritten = { $shown } overwritten
+conflict-show = Show conflicts
+conflict-list-heading = { $items } already there
+conflict-column-copied = Being copied
+conflict-column-moved = Being moved
+conflict-column-there = Already there
+conflict-list-more = { $shown } more not listed
+conflict-back = Back
+conflict-folder = Folder
+conflict-unreadable = Not readable
 paste-virtual-refused = { $count ->
     [one] Not pasted because its name was refused: { $names }
    *[other] Not pasted because their names were refused: { $names }

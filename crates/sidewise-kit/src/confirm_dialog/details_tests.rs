@@ -1,5 +1,5 @@
-//! The summary's second line: text after a line break in the summary wraps on its own line
-//! below the sizes, so it is never cut with an ellipsis.
+//! The summary's second line wraps whole below the sizes, and the details list scrolls by row
+//! and by page without passing either end.
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
@@ -23,4 +23,16 @@ fn a_second_summary_line_shows_whole_below_the_first(cx: &mut TestAppContext) {
         );
     })
     .expect("window");
+}
+
+#[test]
+fn the_list_scrolls_by_row_and_page_and_stops_at_both_ends() {
+    use super::details::scrolled;
+    assert_eq!(scrolled("down", 0., 500.), Some(-44.));
+    assert_eq!(scrolled("up", -20., 500.), Some(0.));
+    assert_eq!(scrolled("pagedown", -400., 500.), Some(-500.));
+    assert_eq!(scrolled("pageup", -500., 500.), Some(-264.));
+    assert_eq!(scrolled("end", 0., 500.), Some(-500.));
+    assert_eq!(scrolled("home", -300., 500.), Some(0.));
+    assert_eq!(scrolled("a", 0., 500.), None);
 }
