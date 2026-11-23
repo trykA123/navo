@@ -236,3 +236,5 @@ mod git_stream;
 mod immutable;
 #[cfg(unix)]
 mod retained;
+mod verify;
+mod verify_job;

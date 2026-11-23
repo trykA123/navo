@@ -1,6 +1,7 @@
 //! Verify-after-copy: the per-job mode, the shared counters, and the check `write()` runs
 //! before a copied temporary file is placed. The job card reads the counters.
 
+use std::io::Read;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use navo_core::{FsError, FsErrorKind, Location};
@@ -92,10 +93,41 @@ pub(super) enum SourceDigest {
     /// Hash the source again with a second, cached read.
     ReadAgain,
     /// BLAKE3 of the bytes as the stream read them.
-    #[expect(dead_code, reason = "AD9b hashes streamed sources")]
     Streamed([u8; 32]),
-    /// The source cannot be read twice; the file counts as unverified.
+    /// The source program wrote the file itself (or the job does not verify); the file counts as
+    /// unverified.
     Unavailable,
+}
+
+/// A reader that feeds every byte it returns into a BLAKE3 hasher, so a stream that cannot be
+/// read twice still gives the source hash.
+pub(super) struct HashingRead<R> {
+    inner: R,
+    hasher: blake3::Hasher,
+}
+
+impl<R: Read> HashingRead<R> {
+    /// Wraps `inner`; the digest starts empty.
+    pub(super) fn new(inner: R) -> Self {
+        Self {
+            inner,
+            hasher: blake3::Hasher::new(),
+        }
+    }
+
+    /// BLAKE3 of the bytes read so far.
+    pub(super) fn digest(&self) -> [u8; 32] {
+        *self.hasher.finalize().as_bytes()
+    }
+}
+
+impl<R: Read> Read for HashingRead<R> {
+    /// Reads from the inner reader and hashes exactly the bytes handed back; errors hash nothing.
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        self.hasher.update(buf.get(..read).unwrap_or_default());
+        Ok(read)
+    }
 }
 
 /// Compares a copied temporary file `temp` with the source of `step` when the job verifies.
@@ -118,7 +150,7 @@ pub(super) fn check(
             count.note_unverified();
             tracing::info!(
                 step = step.seq,
-                "copy not verified: its source cannot be read twice"
+                "copy not verified: the source program wrote the file itself"
             );
             return Ok(());
         }

@@ -1,8 +1,10 @@
 use std::io::Read;
+use std::time::SystemTime;
 
 use navo_core::{FsError, FsErrorKind, Location};
 
 use super::copy::{Copier, CopyStep, failure};
+use super::verify::{HashingRead, SourceDigest};
 use super::{SourceContent, SourceIdentity};
 use crate::{CopyControl, EntryKind, FileIdentity, StreamWrite};
 
@@ -12,12 +14,14 @@ pub(super) fn crosses(step: &CopyStep<'_>) -> bool {
     step.source.provider() != step.target.provider()
 }
 
+/// Copies a step from another provider into `temp`; returns the bytes written and the streamed
+/// digest when the job verifies. Fails with `ChangedOnDisk` when the source changed meanwhile.
 pub(super) fn stream(
     copier: &Copier<'_>,
     (step, temp): (&CopyStep<'_>, &Location),
     progress: &mut dyn FnMut(u64),
     created: Created<'_>,
-) -> Result<u64, FsError> {
+) -> Result<(u64, SourceDigest), FsError> {
     let reader = copier
         .sources
         .and_then(|sources| sources.find(step.source.provider()))
@@ -38,21 +42,17 @@ pub(super) fn stream(
         let mut announce = || announce_temp(copier, temp, &mut announced, created);
         reader.open_into(step.source, (temp, &mut announce), copier.cancel)?
     };
-    let written = match content {
-        SourceContent::Stream(bytes) => copier.ops.write_new(
-            StreamWrite {
-                bytes: &mut bytes.take(limit),
-                source: step.source,
-                target: temp,
-                created: if copier.strict { Some(created) } else { None },
-                modified: entry.modified,
-            },
-            CopyControl {
-                progress,
-                cancel: copier.cancel,
-            },
+    let (written, digest) = match content {
+        SourceContent::Stream(bytes) => write_stream(
+            copier,
+            (step, temp, entry.modified),
+            &mut bytes.take(limit),
+            (progress, created),
         )?,
-        SourceContent::Written => adopt(copier, temp, progress, (announced, created))?,
+        SourceContent::Written => (
+            adopt(copier, temp, progress, (announced, created))?,
+            SourceDigest::Unavailable,
+        ),
     };
     let after = reader.metadata_with_cancel(step.source, copier.cancel)?;
     if after != entry
@@ -60,7 +60,41 @@ pub(super) fn stream(
     {
         return Err(failure(FsErrorKind::ChangedOnDisk, step.source));
     }
-    Ok(written)
+    Ok((written, digest))
+}
+
+/// Writes `bytes` into the new file `temp` through the target provider. When the job verifies,
+/// the bytes are hashed (BLAKE3) as the provider reads them: the source may not be readable twice.
+fn write_stream(
+    copier: &Copier<'_>,
+    (step, temp, modified): (&CopyStep<'_>, &Location, Option<SystemTime>),
+    bytes: &mut dyn Read,
+    (progress, created): (&mut dyn FnMut(u64), Created<'_>),
+) -> Result<(u64, SourceDigest), FsError> {
+    let mut write = |bytes: &mut dyn Read| {
+        let request = StreamWrite {
+            bytes,
+            source: step.source,
+            target: temp,
+            created: if copier.strict {
+                Some(&mut *created)
+            } else {
+                None
+            },
+            modified,
+        };
+        let control = CopyControl {
+            progress: &mut *progress,
+            cancel: copier.cancel,
+        };
+        copier.ops.write_new(request, control)
+    };
+    if copier.verify.is_none() {
+        return Ok((write(bytes)?, SourceDigest::Unavailable));
+    }
+    let mut hashing = HashingRead::new(bytes);
+    let written = write(&mut hashing)?;
+    Ok((written, SourceDigest::Streamed(hashing.digest())))
 }
 
 /// A file the source wrote itself: the job only learns its size and, when strict, its identity

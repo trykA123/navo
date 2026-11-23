@@ -218,8 +218,7 @@ fn transfer(
         ..
     } = *copier;
     if super::stream::crosses(step) {
-        return super::stream::stream(copier, (step, temp), progress, created)
-            .map(|written| (written, SourceDigest::Unavailable));
+        return super::stream::stream(copier, (step, temp), progress, created);
     }
     let written = if strict {
         ops.copy_file_owned(
