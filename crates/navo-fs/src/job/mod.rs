@@ -6,6 +6,7 @@ mod link;
 mod marks;
 mod moved;
 mod parallel;
+mod plan_targets;
 mod pool;
 mod remove;
 mod rename;

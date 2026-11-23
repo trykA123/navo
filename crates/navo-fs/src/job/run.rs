@@ -1,7 +1,7 @@
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::Aside;
-use super::copy::{Copier, CopyStep, copy, overwrites, place};
+use super::copy::{Copier, CopyStep, copy, place};
 use std::cell::RefCell;
 
 use super::git_pause::{hold_paused, pause_job};
@@ -54,6 +54,7 @@ pub(super) struct Job<'p> {
     pub namespace: Option<&'p str>,
     pub removals: &'p Removals<'p>,
     pub sources: Option<&'p Sources>,
+    pub targets: &'p super::plan_targets::PlanTargets,
 }
 
 pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
@@ -74,6 +75,7 @@ pub(super) fn run_with(
         namespace: namespace.as_deref(),
         removals: &removals,
         sources,
+        targets: &super::plan_targets::PlanTargets::of(plan),
     };
     walk(job, done, ctx)
 }
@@ -88,13 +90,13 @@ pub(super) fn namespace_of(ctx: &JobContext<'_>) -> Option<String> {
 
 pub(super) fn copier_of<'p, 'a: 'p>(job: Job<'p>, ctx: &JobContext<'a>) -> Copier<'p> {
     Copier {
-        plan: job.plan,
         ops: ctx.ops,
         cancel: ctx.cancel,
         strict: ctx.log.preserve_overwrites(),
         namespace: job.namespace,
         removals: job.removals,
         sources: job.sources,
+        targets: job.targets,
     }
 }
 
@@ -231,8 +233,7 @@ fn attempt_step(
     if holds_kept(step, kept) {
         return Ok(StepOutcome::Skipped);
     }
-    prepare(seq, (job.plan, step), ctx)
-        .and_then(|()| apply(job, (seq, step), ctx, progress, pauses))
+    prepare(seq, (job, step), ctx).and_then(|()| apply(job, (seq, step), ctx, progress, pauses))
 }
 
 fn step_failure(
@@ -336,7 +337,7 @@ fn rename_step(
     source: &Location,
     target: &Location,
 ) -> Result<(), FsError> {
-    if overwrites(job.plan, target) {
+    if job.targets.overwrites(target) {
         return job.aside.move_over(ctx, source, target);
     }
     if ctx.log.preserve_overwrites() {

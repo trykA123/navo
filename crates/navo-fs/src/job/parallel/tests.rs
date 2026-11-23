@@ -46,6 +46,7 @@ fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers
     };
     let aside = Aside::new();
     let removals = Removals::of(&plan);
+    let targets = crate::job::plan_targets::PlanTargets::of(&plan);
     let (tasks, _queue) = channel();
     let (_sender, events) = channel();
     let pool = Pool {
@@ -60,6 +61,7 @@ fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers
             namespace: None,
             removals: &removals,
             sources: None,
+            targets: &targets,
         },
         &mut ctx,
         pool,

@@ -49,6 +49,7 @@ pub(super) fn run_with(
         namespace: namespace.as_deref(),
         removals: &removals,
         sources,
+        targets: &super::plan_targets::PlanTargets::of(plan),
     };
     if let Err((seq, error)) = super::run::precheck_writes(job, done, ctx) {
         return if error.kind == FsErrorKind::Cancelled {
@@ -361,7 +362,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
     /// Applies a step that stays on the runner thread; parallel copies own the guard.
     fn apply_step(&mut self, seq: u32, step: &'p Step) -> Result<StepOutcome, FsError> {
         let pauses = std::cell::RefCell::new(None);
-        super::rename::prepare(seq, (self.job.plan, step), self.ctx)
+        super::rename::prepare(seq, (self.job, step), self.ctx)
             .and_then(|()| apply(self.job, (seq, step), self.ctx, &mut self.progress, &pauses))
     }
 

@@ -122,12 +122,19 @@ impl Location {
         self.provider.is_local()
     }
 
+    /// True when `same_place` compares this location without case: a local Windows-style path.
+    /// The choice follows `self` only, so `same_place` is not symmetric for odd first letters.
+    #[must_use]
+    pub fn folds_case(&self) -> bool {
+        self.is_local() && windows_style(&self.text)
+    }
+
     #[must_use]
     pub fn same_place(&self, other: &Self) -> bool {
         if self.provider != other.provider {
             return false;
         }
-        if self.is_local() && windows_style(&self.text) {
+        if self.folds_case() {
             self.path.windows_eq(&other.path)
         } else {
             self.path == other.path

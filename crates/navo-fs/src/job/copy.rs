@@ -5,13 +5,13 @@ use super::{FileStamp, JobContext, PlacedFile, StepOutcome};
 use crate::{CancelToken, CopyControl, FileIdentity, OwnedCopy, ProviderOps};
 
 pub(super) struct Copier<'a> {
-    pub plan: &'a OperationPlan,
     pub ops: &'a dyn ProviderOps,
     pub cancel: &'a CancelToken,
     pub strict: bool,
     pub namespace: Option<&'a str>,
     pub removals: &'a super::remove::Removals<'a>,
     pub sources: Option<&'a super::Sources>,
+    pub targets: &'a super::plan_targets::PlanTargets,
 }
 
 pub(super) struct CopyStep<'a> {
@@ -82,7 +82,7 @@ pub(super) fn copy(
     mut hooks: CopyHooks<'_>,
 ) -> Result<Copied, FsError> {
     let exists = copier.ops.metadata(step.target).is_ok();
-    if exists && !overwrites(copier.plan, step.target) {
+    if exists && !copier.targets.overwrites(step.target) {
         return Ok(Copied::Skipped);
     }
     let temp = copier.temporary(step)?;
@@ -99,7 +99,7 @@ pub(super) fn copy(
             Ok(Copied::Ready {
                 bytes: stamp.size,
                 flush,
-                overwrite: !copier.strict || overwrites(copier.plan, step.target),
+                overwrite: !copier.strict || copier.targets.overwrites(step.target),
                 temporary: temp.clone(),
                 identity,
                 seq: step.seq,
