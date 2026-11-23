@@ -1,7 +1,7 @@
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::Aside;
-use super::copy::{Copier, CopyStep, copy, place};
+use super::copy::{Copier, CopyStep, place};
 use std::cell::RefCell;
 
 use super::git_pause::{hold_paused, pause_job};
@@ -379,7 +379,7 @@ fn copy_in_order(
         hold(cancel, progress, report);
     };
     let mut created = |identity| ctx.log.created_temporary((step.seq, identity), ctx.ops);
-    let copied = copy(
+    let copied = super::retry::copy(
         &copier,
         step,
         super::copy::CopyHooks {

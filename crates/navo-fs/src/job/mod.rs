@@ -12,6 +12,7 @@ mod pool;
 mod remove;
 mod rename;
 mod restore;
+mod retry;
 mod run;
 mod source;
 mod stream;

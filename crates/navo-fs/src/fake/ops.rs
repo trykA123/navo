@@ -83,6 +83,15 @@ impl FakeFs {
 }
 
 impl ProviderOps for FakeFs {
+    fn wait_to_retry(&self, delay: std::time::Duration, cancel: &crate::CancelToken) -> bool {
+        let mut clock = lock(&self.clock);
+        clock.waits.push(delay);
+        if let Some(during) = clock.cancels.take() {
+            during.cancel();
+        }
+        cancel.is_cancelled()
+    }
+
     fn pause_git(&self, _location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
         lock(&self.pauses).0 += 1;
         Ok(None)

@@ -2,6 +2,7 @@ mod bulk;
 mod copy;
 mod ops;
 mod permissions;
+mod record;
 mod tree;
 mod watch;
 
@@ -71,6 +72,7 @@ pub struct FakeFs {
     sizes: Mutex<HashMap<u64, SizeMetadata>>,
     permissions: Mutex<permissions::Permissions>,
     pauses: Mutex<(usize, Vec<usize>)>,
+    clock: Mutex<record::Clock>,
     batch_size: usize,
     watchable: bool,
     watchers: Watchers,
@@ -109,6 +111,7 @@ impl FakeFs {
             sizes: Mutex::new(HashMap::new()),
             permissions: Mutex::default(),
             pauses: Mutex::new((0, Vec::new())),
+            clock: Mutex::default(),
             batch_size: DEFAULT_BATCH,
             watchable: false,
             watchers: Watchers::default(),
@@ -196,14 +199,6 @@ impl FakeFs {
             .entry((normalize(path).to_owned(), op))
             .or_default()
             .push((on_call, fault));
-    }
-
-    #[must_use]
-    pub fn calls(&self, path: &str, op: FakeOp) -> u32 {
-        lock(&self.calls)
-            .get(&(normalize(path).to_owned(), op))
-            .copied()
-            .unwrap_or(0)
     }
 
     pub fn set_on_disk(&self, path: &str, bytes: u64) {

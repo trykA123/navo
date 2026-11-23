@@ -5,7 +5,7 @@ use std::sync::{Mutex, PoisonError};
 use navo_core::{FsError, FsErrorKind, Step};
 
 use super::StepOutcome;
-use super::copy::{Copied, Copier, CopyHooks, CopyStep, copy, failure, remove_if_present, temp_of};
+use super::copy::{Copied, Copier, CopyHooks, CopyStep, failure, remove_if_present, temp_of};
 use super::remove::remove;
 
 pub(super) enum Task<'p> {
@@ -70,7 +70,7 @@ fn copy_one(
             .map_err(|_| failure(FsErrorKind::Unknown, step.target))?
     };
     let result = catch_unwind(AssertUnwindSafe(|| {
-        copy(
+        super::retry::copy(
             copier,
             step,
             CopyHooks {
