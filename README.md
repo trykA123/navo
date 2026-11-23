@@ -131,7 +131,7 @@ The main crates:
 | `navo-cache`, `navo-diag`, `navo-l10n` | Bounded caches, redacted diagnostics, Fluent translations |
 | `navo-app` | The `navo` binary: wiring, single instance, crash handling, the index service |
 
-`navo-plugins` and `navo-term` are placeholders for later phases. [docs/architecture.md](docs/architecture.md) covers state, storage, caching, start-up and safety in depth.
+[docs/architecture.md](docs/architecture.md) covers state, storage, caching, start-up and safety in depth.
 
 ## Build and run
 

@@ -13,7 +13,6 @@ path = "src/main.rs"
 [dependencies]
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 navo-core = { path = "../navo-core" }
-navo-diag = { path = "../navo-diag" }
 navo-fs = { path = "../navo-fs" }
 navo-index = { path = "../navo-index" }
 navo-store = { path = "../navo-store" }
@@ -23,6 +22,7 @@ thiserror = "2.0.21"
 tracing = "0.1.44"
 
 [target.'cfg(windows)'.dependencies]
+navo-diag = { path = "../navo-diag" }
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -40,6 +40,7 @@ windows-sys = { version = "0.61.2", features = [
 ] }
 
 [dev-dependencies]
+navo-diag = { path = "../navo-diag" }
 navo-index = { path = "../navo-index", features = ["test-support"] }
 tempfile = "3.27.0"
 

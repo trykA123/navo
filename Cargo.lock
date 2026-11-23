@@ -6469,10 +6469,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "navo-plugins"
-version = "0.8.1"
-
-[[package]]
 name = "navo-retention"
 version = "0.8.1"
 dependencies = [
@@ -6574,10 +6570,6 @@ dependencies = [
  "thiserror 2.0.21",
  "toml 1.2.1+spec-1.1.0",
 ]
-
-[[package]]
-name = "navo-term"
-version = "0.8.1"
 
 [[package]]
 name = "navo-ui"
