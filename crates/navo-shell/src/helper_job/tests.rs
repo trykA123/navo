@@ -112,3 +112,63 @@ fn a_pipe_handle_is_refused_and_stays_open() {
     reader.read_to_string(&mut text).unwrap();
     assert_eq!(text, "ok");
 }
+
+/// `cmd.exe` by full path, because `spawn_confined` never searches `PATH`.
+fn cmd_exe() -> std::path::PathBuf {
+    std::env::var_os("ComSpec").map_or_else(|| r"C:\Windows\System32\cmd.exe".into(), Into::into)
+}
+
+/// Starts `cmd.exe` with `args` through `spawn_confined`.
+fn confined_cmd(args: &[&str]) -> std::io::Result<ConfinedChild> {
+    let args: Vec<std::ffi::OsString> = args.iter().map(Into::into).collect();
+    spawn_confined(&cmd_exe(), &args, LIMITS)
+}
+
+/// Polls `child` until it reports exited; panics after 5 s.
+fn wait_exited(child: &ConfinedChild) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !child.try_wait().unwrap() {
+        assert!(Instant::now() < deadline, "the confined child did not exit");
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn spawn_confined_child_that_exits_reports_exited() {
+    let child = confined_cmd(&["/c", "exit", "0"]).unwrap();
+    wait_exited(&child);
+}
+
+#[test]
+fn spawn_confined_child_runs_in_its_job_and_kill_ends_it() {
+    let child = confined_cmd(&["/c", "pause"]).unwrap();
+    let job = child.process.job();
+    assert!(job.contains(&child.process_handle()).unwrap());
+    assert_eq!(job.memory_limit().unwrap(), LIMITS.memory_bytes);
+    assert!(!child.try_wait().unwrap());
+    child.kill().unwrap();
+    wait_exited(&child);
+    child.kill().unwrap();
+}
+
+#[test]
+fn spawn_confined_pipes_reach_eof_when_the_child_exits() {
+    let mut child = confined_cmd(&["/c", "echo", "hi"]).unwrap();
+    let mut text = String::new();
+    child.stdout.read_to_string(&mut text).unwrap();
+    assert_eq!(text.trim_end(), "hi");
+    wait_exited(&child);
+}
+
+#[test]
+fn spawn_confined_bad_program_is_an_error() {
+    let missing = std::env::temp_dir().join("navo-no-such-helper-S2a1.exe");
+    let err = spawn_confined(&missing, &[], LIMITS).err().unwrap();
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+}
+
+#[test]
+fn spawn_confined_refuses_a_nul_in_an_argument() {
+    let err = confined_cmd(&["/c", "exit\0"]).err().unwrap();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+}

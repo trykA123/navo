@@ -2,8 +2,17 @@
 #[path = "windows.rs"]
 mod platform;
 
+#[cfg(any(windows, test))]
+mod cmdline;
+
 #[cfg(windows)]
 mod handle_win;
+
+#[cfg(windows)]
+mod spawn_win;
+
+#[cfg(windows)]
+pub use spawn_win::{ConfinedChild, ConfinedProcess, spawn_confined};
 
 #[cfg(windows)]
 pub use handle_win::{adopt_shared_file, share_read_handle};

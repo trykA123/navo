@@ -33,7 +33,10 @@ pub use drives::{
 };
 pub use helper_job::HelperLimits;
 #[cfg(windows)]
-pub use helper_job::{HelperJob, adopt_shared_file, confine_helper, share_read_handle};
+pub use helper_job::{
+    ConfinedChild, ConfinedProcess, HelperJob, adopt_shared_file, confine_helper,
+    share_read_handle, spawn_confined,
+};
 #[cfg(windows)]
 pub use kill_job::{KillJob, spawn_in_kill_job};
 pub use paste_back::{FOCUS_WAIT, Foreground, PasteError, take_focus};

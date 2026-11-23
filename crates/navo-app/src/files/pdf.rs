@@ -1,3 +1,6 @@
+//! Opens PDFs through the pooled helper process; on Windows each helper starts inside its Job
+//! Object and receives a read-only handle, never a path.
+
 use std::ffi::OsString;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,22 +22,42 @@ fn confined(launcher: Launcher) -> Launcher {
         .with_spawn(std::sync::Arc::new(spawn_in_job))
 }
 
-/// Starts the helper, then assigns it to a 1 GiB Job Object. On a Job error it kills and reaps
-/// the child before it returns `Err`, so a failed spawn leaves no live helper (S2a contract).
+/// Starts the helper suspended inside a 1 GiB Job Object, then resumes it, so it never runs
+/// unconfined; `spawn_confined` leaves no live process when it fails (S2a contract, S2a1).
 #[cfg(windows)]
 fn spawn_in_job(spec: &navo_pdf::HelperSpec) -> std::io::Result<navo_pdf::Spawned> {
     const HELPER_MEMORY: usize = 1 << 30;
-    let mut child = spec.command().spawn()?;
     let limits = navo_shell::HelperLimits {
         memory_bytes: HELPER_MEMORY,
     };
-    match navo_shell::confine_helper(&child, limits) {
-        Ok(job) => navo_pdf::Spawned::from_child(child, Some(Box::new(job))),
-        Err(error) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Err(error)
-        }
+    let child = navo_shell::spawn_confined(&spec.program, &spec.args, limits)?;
+    Ok(navo_pdf::Spawned {
+        process: Box::new(JobProcess(child.process)),
+        input: Box::new(child.stdin),
+        output: Box::new(child.stdout),
+        guard: None,
+    })
+}
+
+/// The confined helper as navo-pdf's process; it owns the Job, so dropping it kills the helper.
+#[cfg(windows)]
+struct JobProcess(navo_shell::ConfinedProcess);
+
+#[cfg(windows)]
+impl navo_pdf::HelperProcess for JobProcess {
+    /// Terminates the helper; `Ok` when it has already exited.
+    fn kill(&mut self) -> std::io::Result<()> {
+        self.0.kill()
+    }
+
+    /// Polls whether the helper has exited (`true` = exited).
+    fn try_wait(&mut self) -> std::io::Result<bool> {
+        self.0.try_wait()
+    }
+
+    /// The full-access process handle, so the S1b share hook can duplicate into it.
+    fn process_handle(&self) -> std::os::windows::io::BorrowedHandle<'_> {
+        self.0.process_handle()
     }
 }
 
