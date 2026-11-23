@@ -18,11 +18,12 @@ use super::running::Ticket;
 /// A normal exit reaps the tree at once, so on Unix background descendants are not killed; their
 /// process group id could be reused. Windows still terminates the job object.
 pub(super) struct GitTree {
-    child: Child,
-    ticket: Option<Ticket>,
-    reaped: bool,
+    child: Option<Child>,
     #[cfg(windows)]
     job: Option<navo_shell::KillJob>,
+    ticket: Option<Ticket>,
+    status: Option<ExitStatus>,
+    reaped: bool,
 }
 
 impl GitTree {
@@ -31,8 +32,9 @@ impl GitTree {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
         Ok(Self {
-            child: command.spawn()?,
+            child: Some(command.spawn()?),
             ticket: None,
+            status: None,
             reaped: false,
         })
     }
@@ -41,8 +43,9 @@ impl GitTree {
     pub(super) fn spawn(command: &mut Command) -> io::Result<Self> {
         let (child, job) = navo_shell::spawn_in_kill_job(command)?;
         Ok(Self {
-            child,
+            child: Some(child),
             ticket: None,
+            status: None,
             reaped: false,
             job,
         })
@@ -55,16 +58,26 @@ impl GitTree {
 
     /// Takes the child's stdout and stderr pipes for the reader threads.
     pub(super) fn take_pipes(&mut self) -> (Option<ChildStdout>, Option<ChildStderr>) {
-        (self.child.stdout.take(), self.child.stderr.take())
+        match self.child.as_mut() {
+            Some(child) => (child.stdout.take(), child.stderr.take()),
+            None => (None, None),
+        }
     }
 
-    /// Polls the child; when it has exited, drops its registry ticket and marks the tree reaped.
+    /// Polls the child; when it has exited, ends its job, closes its handle and marks the tree
+    /// reaped. Returns the stored status on a later call.
     pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-        let status = self.child.try_wait()?;
+        let Some(child) = self.child.as_mut() else {
+            return Ok(self.status);
+        };
+        let status = child.try_wait()?;
         if status.is_some() {
-            // On Unix a reaped group id can be reused; Windows ends the job before the ticket.
             let emptied = self.end_job()?;
             self.reaped = true;
+            self.status = status;
+            // The process handle goes before the ticket: a pause wakes only once the exited
+            // child can no longer hold its folder open.
+            self.child = None;
             if emptied {
                 self.ticket = None;
             }
@@ -93,12 +106,24 @@ impl GitTree {
             return result.map(|_| ());
         }
         let descendants = self.stop_descendants();
-        let killed = match self.child.try_wait().map_err(git_io) {
-            Ok(None) => self.child.kill().map_err(git_io),
-            result => result.map(|_| ()),
+        let killed = match self.child.as_mut() {
+            Some(child) => match child.try_wait() {
+                Ok(None) => child.kill().map_err(git_io),
+                result => result.map(|_| ()).map_err(git_io),
+            },
+            None => Ok(()),
         };
-        let waited = self.child.wait().map_err(git_io);
+        let waited = match self.child.as_mut() {
+            Some(child) => child.wait().map(Some).map_err(git_io),
+            None => Ok(None),
+        };
+        if let Ok(Some(status)) = &waited {
+            self.status = Some(*status);
+        }
         self.reaped = true;
+        // Close the handle and end the job before the ticket: a pause wakes only once the
+        // stopped processes can no longer hold their folder open.
+        self.child = None;
         #[cfg(windows)]
         let emptied = self.job.as_ref().is_none_or(wait_for_empty_job);
         #[cfg(not(windows))]
@@ -114,7 +139,10 @@ impl GitTree {
         if let Some(job) = &self.job {
             return job.terminate().map_err(git_io);
         }
-        run_tree_kill(self.child.id())
+        match &self.child {
+            Some(child) => run_tree_kill(child.id()),
+            None => Ok(()),
+        }
     }
 }
 

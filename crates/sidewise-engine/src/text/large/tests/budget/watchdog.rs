@@ -397,6 +397,7 @@ struct SlowCapture {
     bytes: Vec<u8>,
     armed: Arc<AtomicBool>,
     gate: Arc<Gate>,
+    recovery_blocked: Option<std::sync::mpsc::Sender<()>>,
 }
 
 impl ByteSource for SlowCapture {
@@ -406,6 +407,11 @@ impl ByteSource for SlowCapture {
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
         if self.armed.load(Ordering::SeqCst) && buf.len() >= 1024 {
+            if std::thread::current().name() == Some("large-diff-recovery")
+                && let Some(blocked) = &self.recovery_blocked
+            {
+                let _sent = blocked.send(());
+            }
             self.gate.wait();
         }
         self.bytes.as_slice().read_at(offset, buf)
@@ -424,6 +430,7 @@ fn a_full_ledger_finishes_with_a_stalled_worker() {
         bytes: left.into_bytes(),
         armed,
         gate: stalled,
+        recovery_blocked: None,
     });
     let forge: Forge = Arc::new(move |_, _| arm.store(true, Ordering::SeqCst));
     let diff = LargeDiff::start_tuned(
@@ -453,15 +460,18 @@ fn a_full_ledger_finishes_with_a_stalled_worker() {
     assert_within(&diff, Budget::default());
 }
 
-fn cancel_after_six(expired: &Arc<AtomicUsize>, token: &CancelToken) {
-    let wait = Arc::clone(expired);
+/// Cancels once a recovery read has reached the gate, so the cancel lands while it is blocked.
+fn cancel_on_blocked_recovery(
+    blocked: std::sync::mpsc::Receiver<()>,
+    token: &CancelToken,
+) -> std::thread::JoinHandle<()> {
     let cancel = token.clone();
     std::thread::spawn(move || {
-        while wait.load(Ordering::SeqCst) < 6 {
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        blocked
+            .recv_timeout(Duration::from_secs(5))
+            .expect("a recovery read must block before the cancel");
         cancel.cancel();
-    });
+    })
 }
 
 fn collect_short(diff: &LargeDiff) -> Vec<DiffEvent> {
@@ -486,14 +496,14 @@ fn cancel_ends_a_blocked_recovery_read() {
     let stalled = Arc::clone(&gate);
     let armed = Arc::new(AtomicBool::new(false));
     let arm = Arc::clone(&armed);
-    let expired = Arc::new(AtomicUsize::new(0));
-    let expiries = Arc::clone(&expired);
     let token = CancelToken::new();
-    cancel_after_six(&expired, &token);
+    let (blocked, blocked_rx) = std::sync::mpsc::channel();
+    let waiter = cancel_on_blocked_recovery(blocked_rx, &token);
     let source = Arc::new(SlowCapture {
         bytes: left.into_bytes(),
         armed,
         gate: stalled,
+        recovery_blocked: Some(blocked),
     });
     let forge: Forge = Arc::new(move |_, _| arm.store(true, Ordering::SeqCst));
     let diff = LargeDiff::start_tuned(
@@ -511,15 +521,13 @@ fn cancel_ends_a_blocked_recovery_read() {
             batch_lines: 100,
             watchdog: Duration::from_millis(30),
             forge: Some(forge),
-            expired: Some(Arc::new(move |_| {
-                expiries.fetch_add(1, Ordering::SeqCst);
-            })),
             ..Tuning::default()
         },
     );
     let events = collect_short(&diff);
     assert_eq!(failure(&events), Reason::Stopped);
     gate.release();
+    waiter.join().unwrap();
 }
 
 fn wait_for_waiting(diff: &LargeDiff) -> u32 {
@@ -545,6 +553,7 @@ fn a_full_ledger_backs_off_and_reports_waiting() {
         bytes: left.into_bytes(),
         armed,
         gate: stalled,
+        recovery_blocked: None,
     });
     let forge: Forge = Arc::new(move |_, _| arm.store(true, Ordering::SeqCst));
     let diff = LargeDiff::start_tuned(

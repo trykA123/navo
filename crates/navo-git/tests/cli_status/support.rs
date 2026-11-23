@@ -1,3 +1,6 @@
+//! Shared setup for the `cli_status` tests: fixtures and the wrapped Git.
+#[cfg(unix)]
+use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
 
@@ -66,10 +69,14 @@ pub fn diverge_on_a(fixture: &Fixture) {
     commit_file(fixture, "a.txt", "main\n", "main");
 }
 
+/// Git behind a logging wrapper, with no system or user config: a machine's
+/// `safe.directory` must not decide what these tests see.
 #[cfg(unix)]
 pub fn wrapped(fixture: &Fixture, extra: &str) -> (CliGit, PathBuf) {
     let log = sibling(fixture, "git.log");
     let env = sibling(fixture, "git.env");
+    let global = sibling(fixture, "global.gitconfig");
+    fs::write(&global, "").unwrap();
     let script = format!(
         "#!/bin/sh\necho \"$*\" >> '{}'\ncase \" $* \" in *\" status \"*) echo \"$HOME|${{USERPROFILE-unset}}\" > '{}' ;; esac\n{extra}\nexec git \"$@\"\n",
         log.display(),
@@ -79,6 +86,10 @@ pub fn wrapped(fixture: &Fixture, extra: &str) -> (CliGit, PathBuf) {
         fixture.repo(),
         &CliOptions {
             git: Some(fixture.script("git-wrap", &script)),
+            env: vec![
+                (OsString::from("GIT_CONFIG_GLOBAL"), global.into_os_string()),
+                (OsString::from("GIT_CONFIG_NOSYSTEM"), OsString::from("1")),
+            ],
             ..CliOptions::default()
         },
     )
