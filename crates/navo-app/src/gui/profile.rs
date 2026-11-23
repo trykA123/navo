@@ -93,6 +93,7 @@ pub(super) fn operations(
         log: sessions.factory(experimental.then(|| local.clone())),
         log_without_retention: experimental.then(|| sessions.factory_without_retention()),
         protected,
+        undoes_overwrites: true,
     };
     (logged, Some(sessions))
 }
@@ -114,6 +115,7 @@ fn unavailable_operations(
     Operations {
         retain_deletes: None,
         protected,
+        undoes_overwrites: false,
         log: Arc::new(move |_| Err(navo_l10n::tr(message).into())),
         log_without_retention: None,
         write: Some(Arc::new(|location| {

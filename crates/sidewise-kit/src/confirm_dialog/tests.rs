@@ -75,7 +75,10 @@ fn open_dialog(cx: &mut TestAppContext, props: ConfirmProps) -> (AnyWindowHandle
 }
 
 /// Opens a window that draws `harness` and renders its first frame.
-fn open_harness(cx: &mut TestAppContext, harness: Harness) -> (AnyWindowHandle, Entity<Harness>) {
+pub(super) fn open_harness(
+    cx: &mut TestAppContext,
+    harness: Harness,
+) -> (AnyWindowHandle, Entity<Harness>) {
     let (window, harness) = open(cx, |_, _| harness);
     cx.update_window(window, |_, window, cx| window.render_frame(cx))
         .expect("window");

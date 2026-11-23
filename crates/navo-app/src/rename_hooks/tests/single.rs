@@ -25,6 +25,7 @@ fn browser(fs: &Arc<FakeFs>, journal: SharedJournal) -> Browser {
         write: None,
         log: log_factory(journal.clone()),
         protected: Vec::new(),
+        undoes_overwrites: false,
     });
     browser.set_rename_hooks(Some(hooks(Some(journal), None)));
     browser.start();

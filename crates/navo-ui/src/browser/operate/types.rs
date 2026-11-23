@@ -112,6 +112,9 @@ pub struct Operations {
     pub write: Option<WriteFactory>,
     pub retain_deletes: Option<RetainDeletes>,
     pub protected: Vec<Location>,
+    /// True when a job's log holds an overwritten file so Undo can put it back; false for the
+    /// guard log, so the dialog offers no overwrite choice.
+    pub undoes_overwrites: bool,
 }
 
 impl Operations {
@@ -123,6 +126,7 @@ impl Operations {
             write: None,
             retain_deletes: None,
             protected: Vec::new(),
+            undoes_overwrites: false,
         }
     }
 }
@@ -164,6 +168,27 @@ pub struct PendingOp {
     pub structure: Option<Structure>,
     /// Set when the files come from another program without paths.
     pub stream: Option<StreamPaste>,
+    pub replan: Replan,
+}
+
+/// What a rebuilt plan needs: the conflict policy the user picked, the policy the shown plan was
+/// built with (they differ while a rebuild runs), and whether source and target share a volume.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Replan {
+    pub policy: ConflictPolicy,
+    pub(crate) planned: ConflictPolicy,
+    pub(crate) same_volume: bool,
+}
+
+impl Default for Replan {
+    /// A plan that asks (skips names already there) and was built that way.
+    fn default() -> Self {
+        Self {
+            policy: ConflictPolicy::Ask,
+            planned: ConflictPolicy::Ask,
+            same_volume: false,
+        }
+    }
 }
 
 /// Whether a job keeps old versions as the settings say, or skips them once at the user's word.
@@ -195,6 +220,7 @@ impl PendingOp {
     #[must_use]
     pub fn is_planning(&self) -> bool {
         self.structure.as_ref().is_some_and(|s| s.planning)
+            || self.replan.policy != self.replan.planned
     }
 
     #[must_use]

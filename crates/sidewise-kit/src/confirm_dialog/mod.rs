@@ -1,8 +1,11 @@
 //! A modal confirm dialog: title, paths, summary, optional check rows, a typed word and buttons.
 mod elide;
 mod keys;
+mod options;
 mod rows;
 
+#[cfg(test)]
+mod details_tests;
 #[cfg(test)]
 mod key_tests;
 #[cfg(test)]
@@ -24,6 +27,7 @@ use crate::primitives::{
 };
 use crate::tokens::{self, Theme};
 use keys::Keys;
+pub use options::{OptionItem, Options};
 
 type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -70,6 +74,8 @@ pub struct ConfirmDialog {
     on_toggle: Option<Handler>,
     switch: Option<Choice>,
     on_switch: Option<Handler>,
+    options: Option<Options>,
+    on_pick: Option<options::PickHandler>,
 }
 
 impl ConfirmDialog {
@@ -82,6 +88,8 @@ impl ConfirmDialog {
             on_toggle: None,
             switch: None,
             on_switch: None,
+            options: None,
+            on_pick: None,
         }
     }
 
@@ -107,6 +115,7 @@ struct DialogState {
     cancel: FocusHandle,
     choice: FocusHandle,
     switch: FocusHandle,
+    options: FocusHandle,
     field: Option<Entity<TextFieldState>>,
     has_started: bool,
     _field_changes: Option<Subscription>,
@@ -129,6 +138,7 @@ impl DialogState {
             cancel: cx.focus_handle(),
             choice: cx.focus_handle(),
             switch: cx.focus_handle(),
+            options: cx.focus_handle(),
             field,
             has_started: false,
             _field_changes: changes,
@@ -177,9 +187,11 @@ fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &
     let buttons: Vec<FocusHandle> = confirm.into_iter().chain([state.cancel.clone()]).collect();
     let choice = dialog.props.choice.is_some().then(|| state.choice.clone());
     let switch = dialog.switch.is_some().then(|| state.switch.clone());
+    let options = dialog.options.is_some().then(|| state.options.clone());
     let stops = state
         .field_focus(cx)
         .into_iter()
+        .chain(options.clone())
         .chain(choice.clone())
         .chain(switch.clone())
         .chain(buttons.clone())
@@ -192,10 +204,12 @@ fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &
         cancel: state.cancel.clone(),
         choice,
         switch,
+        options,
         on_confirm: dialog.on_confirm,
         on_cancel: dialog.on_cancel,
         on_toggle: dialog.on_toggle,
         on_switch: dialog.on_switch,
+        on_pick: dialog.on_pick,
     }
 }
 
@@ -265,13 +279,19 @@ fn paths(t: &Theme, props: &ConfirmProps) -> Div {
         })
 }
 
+/// The summary: its first line beside the mode label, cut to fit; text after a line break
+/// wraps whole on its own line below.
 fn summary_row(t: &Theme, props: &ConfirmProps) -> Div {
-    div()
+    let (first, detail) = match props.summary.split_once('\n') {
+        Some((first, detail)) => (first.to_owned().into(), Some(detail.to_owned())),
+        None => (props.summary.clone(), None),
+    };
+    let line = div()
         .flex()
         .items_center()
         .justify_between()
         .gap(t.spacing.md)
-        .child(label("summary", props.summary.clone()).text_color(t.colors.muted))
+        .child(label("summary", first).text_color(t.colors.muted))
         .when_some(props.mode.clone(), |row, mode| {
             row.child(
                 label("mode", mode)
@@ -284,7 +304,22 @@ fn summary_row(t: &Theme, props: &ConfirmProps) -> Div {
                     .text_size(t.typography.small)
                     .text_color(t.colors.muted),
             )
-        })
+        });
+    let detail = detail.map(|text| {
+        div()
+            .id("summary-detail")
+            .role(Role::Label)
+            .aria_label(text.clone())
+            .test_support()
+            .text_color(t.colors.muted)
+            .child(text)
+    });
+    div()
+        .flex()
+        .flex_col()
+        .gap(t.spacing.xxs)
+        .child(line)
+        .children(detail)
 }
 
 fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) -> Div {
@@ -341,6 +376,7 @@ impl RenderOnce for ConfirmDialog {
         let field = current.field.clone();
         let root = current.root.clone();
         let switch = self.switch.clone();
+        let options = self.options.clone();
         let keys = Rc::new(keys_for(self, current, can_confirm, cx));
         keys::register(div().id(id).track_focus(&root), &keys)
             .role(Role::AlertDialog)
@@ -361,6 +397,7 @@ impl RenderOnce for ConfirmDialog {
             .child(heading(&t, &props))
             .child(paths(&t, &props))
             .child(summary_row(&t, &props))
+            .children(options.and_then(|options| options::options_row(&t, options, &keys, window)))
             .children(rows::check_rows(
                 &t,
                 (props.choice.clone(), switch),

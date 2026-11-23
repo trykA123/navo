@@ -3,6 +3,7 @@ use std::rc::Rc;
 use gpui_kit::{App, Div, FocusHandle, InteractiveElement, Stateful, Window};
 
 use super::Handler;
+use super::options::PickHandler;
 use crate::dialog_focus::{self, Next, NextButton, Press, Previous, PreviousButton};
 
 const KEY_CONTEXT: &str = "ConfirmDialog Dialog";
@@ -19,10 +20,13 @@ pub(super) struct Keys {
     pub cancel: FocusHandle,
     pub choice: Option<FocusHandle>,
     pub switch: Option<FocusHandle>,
+    /// The options row's focus, when the dialog has one.
+    pub options: Option<FocusHandle>,
     pub on_confirm: Option<Handler>,
     pub on_cancel: Option<Handler>,
     pub on_toggle: Option<Handler>,
     pub on_switch: Option<Handler>,
+    pub on_pick: Option<PickHandler>,
 }
 
 impl Keys {
@@ -51,8 +55,10 @@ impl Keys {
         }
     }
 
-    /// Presses the focused stop: a check row flips, a button confirms or cancels.
-    fn activate(&self, window: &mut Window, cx: &mut App) {
+    /// Presses the focused stop: a check row flips and a button confirms or cancels. On the options
+    /// row the press goes on to the row's own key listener, which confirms on Enter only; returns
+    /// false then.
+    fn activate(&self, window: &mut Window, cx: &mut App) -> bool {
         let has_focus = |handle: &Option<FocusHandle>| {
             handle
                 .as_ref()
@@ -62,11 +68,14 @@ impl Keys {
             self.toggle(window, cx);
         } else if has_focus(&self.switch) {
             self.switch(window, cx);
+        } else if has_focus(&self.options) {
+            return false;
         } else if self.cancel.contains_focused(window, cx) {
             self.cancel(window, cx);
         } else if self.can_confirm && self.confirm.contains_focused(window, cx) {
             self.confirm(window, cx);
         }
+        true
     }
 }
 
@@ -80,8 +89,11 @@ pub(super) fn register(root: Stateful<Div>, keys: &Rc<Keys>) -> Stateful<Div> {
     root.key_context(KEY_CONTEXT)
         .on_action(move |_: &Dismiss, window, cx| dismiss.cancel(window, cx))
         .on_action(move |_: &Press, window, cx| {
-            activate.activate(window, cx);
-            cx.stop_propagation();
+            if activate.activate(window, cx) {
+                cx.stop_propagation();
+            } else {
+                cx.propagate();
+            }
         })
         .on_action(move |_: &Next, window, cx| dialog_focus::cycle(&next.stops, true, window, cx))
         .on_action(move |_: &Previous, window, cx| {

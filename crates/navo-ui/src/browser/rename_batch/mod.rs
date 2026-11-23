@@ -169,6 +169,7 @@ impl Browser {
             slow_volumes: None,
             structure: None,
             stream: None,
+            replan: Default::default(),
         }
     }
 }

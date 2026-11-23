@@ -185,6 +185,7 @@ fn local_job(browser: &mut Browser, source: &str, target: Option<&str>) -> u64 {
             slow_volumes: None,
             structure: None,
             stream: None,
+            replan: Default::default(),
         },
         Run::Plain,
         None,

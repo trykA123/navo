@@ -11,6 +11,8 @@ use crate::confirm_dialog::{Choice, ConfirmDialog, ConfirmProps};
 use crate::format;
 use crate::prelude::*;
 
+mod conflicts;
+
 pub(super) const JOB_LINGER: Duration = Duration::from_secs(2);
 
 fn items(count: usize) -> String {
@@ -97,27 +99,30 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
             .map(|source| source.as_str().to_owned().into())
             .collect(),
         more: 0,
-        summary: match pending.retain_deletes {
-            _ if pending.keep_old == KeepOld::Skip => format!(
-                "{} · {}",
-                summary(&pending.plan, protected),
-                tr("job-retention-unknown-help")
-            ),
-            _ if oversized_retained_delete(pending) => capacity_warning(pending),
-            Some(policy) if pending.plan.kind == OpKind::Delete => format!(
-                "{} · {}",
-                summary(&pending.plan, protected),
-                t!("job-delete-retained-help", days = policy.days())
-            ),
-            None if pending.cannot_retain.is_some() && pending.plan.kind == OpKind::Delete => {
-                format!(
+        summary: conflicts::below(
+            match pending.retain_deletes {
+                _ if pending.keep_old == KeepOld::Skip => format!(
                     "{} · {}",
                     summary(&pending.plan, protected),
-                    tr(no_keep_key(pending.cannot_retain))
-                )
-            }
-            _ => summary(&pending.plan, protected),
-        }
+                    tr("job-retention-unknown-help")
+                ),
+                _ if oversized_retained_delete(pending) => capacity_warning(pending),
+                Some(policy) if pending.plan.kind == OpKind::Delete => format!(
+                    "{} · {}",
+                    summary(&pending.plan, protected),
+                    t!("job-delete-retained-help", days = policy.days())
+                ),
+                None if pending.cannot_retain.is_some() && pending.plan.kind == OpKind::Delete => {
+                    format!(
+                        "{} · {}",
+                        summary(&pending.plan, protected),
+                        tr(no_keep_key(pending.cannot_retain))
+                    )
+                }
+                _ => summary(&pending.plan, protected),
+            },
+            &pending.plan,
+        )
         .into(),
         confirm_label: label.into(),
         danger: pending.plan.kind == OpKind::Delete
@@ -152,10 +157,6 @@ fn summary(plan: &OperationPlan, protected: bool) -> String {
         format::count(totals.folders, "folder", "folders")
     ));
     parts.push(format::size(totals.bytes));
-    if !plan.conflicts.is_empty() {
-        let count = items(plan.conflicts.len());
-        parts.push(format!("{count} already there will be skipped"));
-    }
     parts.join(" · ")
 }
 
@@ -178,6 +179,7 @@ impl NavoWindow {
                     cx.notify();
                 });
             });
+        let dialog = self.conflict_row(dialog, pending, cx);
         let dialog = self.verify_switch(dialog, pending.id, cx);
         Some(
             div()
@@ -275,6 +277,8 @@ impl NavoWindow {
     }
 }
 
+#[cfg(test)]
+mod conflict_tests;
 #[cfg(test)]
 mod switch_tests;
 #[cfg(test)]

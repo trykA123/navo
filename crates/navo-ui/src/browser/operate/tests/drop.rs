@@ -29,6 +29,7 @@ fn a_drop_into_another_folder_moves_on_the_same_volume() {
             Ok(Box::new(SharedLog(Arc::clone(&shared))) as Box<dyn OpLog>)
         }),
         protected: Vec::new(),
+        undoes_overwrites: false,
     });
     let request = request(&fs, OpKind::Move, DropConfirm::Never);
     assert_eq!(

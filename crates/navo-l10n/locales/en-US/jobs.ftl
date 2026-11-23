@@ -38,6 +38,19 @@ job-verified-some = Done · Verified { $verified } of { $count ->
     [one] { $files } file
    *[other] { $files } files
 }
+conflict-choice-label = Names already there
+conflict-skip = Skip
+conflict-overwrite-older = Overwrite older
+conflict-keep-both = Keep both
+conflict-overwrite-all = Overwrite all
+conflict-all-skipped = { $items } already there will be skipped
+conflict-outcome = { $items } already there: { $outcome }
+conflict-skipped = { $shown } skipped
+conflict-renamed = { $count ->
+    [one] { $shown } gets a new name
+   *[other] { $shown } get new names
+}
+conflict-overwritten = { $shown } overwritten
 paste-virtual-refused = { $count ->
     [one] Not pasted because its name was refused: { $names }
    *[other] Not pasted because their names were refused: { $names }

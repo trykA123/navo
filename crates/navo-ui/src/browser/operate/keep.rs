@@ -5,7 +5,7 @@ use navo_core::{
 };
 use navo_fs::{CancelToken, Provider, existing_at};
 
-use super::{OpRequest, Structure};
+use super::{OpRequest, Replan, Structure};
 use crate::browser::Browser;
 
 pub(super) fn selected_names(tab: &Tab) -> Vec<&str> {
@@ -39,8 +39,9 @@ pub(super) fn structure_for(tab: &Tab, kind: OpKind, same_volume: bool) -> Optio
 }
 
 impl Browser {
+    /// Flips "Keep folder structure" and rebuilds the pending plan with the picked conflict policy;
+    /// false when no pending plan offers the choice.
     pub fn toggle_structure(&mut self) -> bool {
-        let protected = self.operations.protected.clone();
         let Some(pending) = self.pending.as_mut() else {
             return false;
         };
@@ -49,33 +50,91 @@ impl Browser {
         };
         structure.keep = !structure.keep;
         structure.planning = true;
+        self.replan()
+    }
+
+    /// Rebuilds the pending plan so names already at the target follow `policy`; false when
+    /// nothing is pending, `policy` is already picked, or it overwrites and Undo could not
+    /// restore the old file.
+    pub fn pick_policy(&mut self, policy: ConflictPolicy) -> bool {
+        let refused = overwrites(&policy) && !self.operations.undoes_overwrites;
+        let Some(pending) = self.pending.as_mut() else {
+            return false;
+        };
+        if refused || pending.replan.policy == policy {
+            return false;
+        }
+        pending.replan.policy = policy;
+        self.replan()
+    }
+
+    /// True when the job may overwrite, so the dialog may offer the overwrite choices.
+    #[must_use]
+    pub fn undoes_overwrites(&self) -> bool {
+        self.operations.undoes_overwrites
+    }
+
+    /// Sends the pending op to the planning job again, with its structure and picked policy.
+    fn replan(&mut self) -> bool {
+        let protected = self.operations.protected.clone();
+        let Some(pending) = self.pending.as_ref() else {
+            return false;
+        };
+        let structure = pending.structure.clone();
         let request = OpRequest {
             id: pending.id,
             kind: pending.plan.kind,
             sources: pending.sources.clone(),
             target: pending.target.clone(),
-            same_volume: structure.same_volume,
+            same_volume: structure
+                .as_ref()
+                .map_or(pending.replan.same_volume, |s| s.same_volume),
             protected,
             source_tab: pending.source_tab,
             asks: true,
-            structure: Some(structure.clone()),
+            structure,
             stream: pending.stream.clone(),
-            policy: ConflictPolicy::Ask,
+            policy: pending.replan.policy.clone(),
         };
         self.submit_plan(request)
     }
 
+    /// True when `request` rebuilds a shown plan and the dialog has moved on: it was closed, or
+    /// the structure or conflict policy now picked differs from the one the request asked for.
     pub(super) fn is_stale_replan(&self, request: &OpRequest) -> bool {
-        let Some(asked) = request.structure.as_ref().filter(|s| s.planning) else {
+        if !is_replan(request) {
             return false;
+        }
+        let Some(current) = self.pending.as_ref().filter(|p| p.id == request.id) else {
+            return true;
         };
-        let current = self
-            .pending
-            .as_ref()
-            .filter(|pending| pending.id == request.id)
-            .and_then(|pending| pending.structure.as_ref());
-        current.is_none_or(|current| current.keep != asked.keep)
+        let keep = |structure: Option<&Structure>| structure.map(|s| s.keep);
+        let structure_moved = keep(request.structure.as_ref()) != keep(current.structure.as_ref());
+        structure_moved || current.replan.policy != request.policy
     }
+}
+
+/// True when `request` rebuilds a plan the dialog shows: a structure flip, or a picked policy
+/// (first plans always ask).
+pub(super) fn is_replan(request: &OpRequest) -> bool {
+    request.structure.as_ref().is_some_and(|s| s.planning) || request.policy != ConflictPolicy::Ask
+}
+
+/// The replan record of a plan built for `request`: its policy is both picked and planned.
+pub(super) fn replan_of(request: &OpRequest) -> Replan {
+    Replan {
+        policy: request.policy.clone(),
+        planned: request.policy.clone(),
+        same_volume: request.same_volume,
+    }
+}
+
+/// True when `policy` may replace a file already at the target.
+fn overwrites(policy: &ConflictPolicy) -> bool {
+    matches!(
+        policy,
+        ConflictPolicy::OverwriteOlder | ConflictPolicy::OverwriteAll
+    )
 }
 
 pub(super) fn existing_kept(

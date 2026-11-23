@@ -184,6 +184,7 @@ impl Journal {
                 Ok(Box::new(Log::new(&journal, job, false)) as Box<dyn OpLog>)
             }),
             protected: Vec::new(),
+            undoes_overwrites: false,
         }
     }
 }

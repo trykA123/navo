@@ -286,3 +286,20 @@ fn a_structure_replan_keeps_verify_off_after_the_user_turned_it_off() {
     assert_eq!(browser.pending().expect("a new plan").id, id);
     assert!(browser.verifies(id).is_none());
 }
+
+#[test]
+fn a_structure_flip_keeps_the_picked_conflict_policy() {
+    let (_fs, mut browser) = results(&TWINS);
+    planned(&mut browser, OpKind::Copy);
+    assert!(browser.pick_policy(navo_core::ConflictPolicy::Rename));
+    settle(&mut browser);
+    assert!(browser.toggle_structure());
+    settle(&mut browser);
+    let pending = browser.pending().expect("a new plan");
+    assert!(pending.structure.as_ref().is_some_and(|s| !s.keep));
+    assert_eq!(pending.replan.policy, navo_core::ConflictPolicy::Rename);
+    assert!(matches!(
+        pending.plan.conflicts[0].resolution,
+        navo_core::Resolution::Rename(_)
+    ));
+}

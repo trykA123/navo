@@ -45,6 +45,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         slow_volumes: None,
         structure: None,
         stream: None,
+        replan: Default::default(),
     }
 }
 
@@ -149,10 +150,9 @@ fn conflicts_are_counted_in_the_summary() {
         resolution: Resolution::Skip,
     });
     let props = confirm_props(&pending(clash, Some(at("/dest"))));
-    assert!(
-        props
-            .summary
-            .ends_with(" · 1 item already there will be skipped")
+    assert_eq!(
+        props.summary,
+        "3 files, 1 folder · 2.0 KB\n1 item already there will be skipped"
     );
 }
 

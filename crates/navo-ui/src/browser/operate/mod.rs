@@ -67,7 +67,7 @@ impl Browser {
         let Some(volume) = planned_on(&request).map(volume_of) else {
             return false;
         };
-        if !request.structure.as_ref().is_some_and(|s| s.planning) {
+        if !keep::is_replan(&request) {
             self.pending = None;
         }
         let retain_deletes = self.operations.retain_deletes.clone();
@@ -317,6 +317,7 @@ impl Browser {
         self.invalidate_undo();
         match result {
             Ok(planned) => {
+                let replan = keep::replan_of(&request);
                 let pending = PendingOp {
                     id: request.id,
                     sources: request.sources,
@@ -333,6 +334,7 @@ impl Browser {
                         ..s
                     }),
                     stream: request.stream,
+                    replan,
                 };
                 let conflicts = pending.stream.is_some() && !pending.plan.conflicts.is_empty();
                 let asks = request.asks || pending.is_protected() || conflicts;
@@ -344,7 +346,7 @@ impl Browser {
                 }
             }
             Err(error) => {
-                if request.structure.as_ref().is_some_and(|s| s.planning) {
+                if keep::is_replan(&request) {
                     self.pending = None;
                 }
                 self.jobs
