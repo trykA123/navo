@@ -37,6 +37,9 @@ env:
 jobs:
   check-tag:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Releases run from main only
         env:
@@ -51,6 +54,14 @@ jobs:
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad tag: $TAG (use vX.Y.Z)"; exit 1; }
           if [ "$DRY_RUN" != "true" ] && gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "release $TAG exists"; exit 1; fi
+      - name: The commit has a green windows-quick run unless full checks are ticked
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_CHECKS: ${{ inputs.full-checks }}
+        run: |
+          [ "$FULL_CHECKS" != "true" ] || exit 0
+          n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/windows-quick.yml/runs?head_sha=$GITHUB_SHA&status=success" --jq '.total_count')
+          [ "${n:-0}" -gt 0 ] || { echo "no green windows-quick run for this commit; tick full-checks or run it first"; exit 1; }
 
   speed:
     needs: check-tag
@@ -305,7 +316,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [clippy-windows, gate-windows, build-windows, speed]
+    needs: [check-tag, clippy-windows, gate-windows, build-windows, speed]
     environment: release
     # Skipped checks count as passed; a failed or cancelled one stops the release.
     if: >-
@@ -345,7 +356,7 @@ jobs:
           done
 
   would-publish:
-    needs: [clippy-windows, gate-windows, build-windows, speed]
+    needs: [check-tag, clippy-windows, gate-windows, build-windows, speed]
     # The dry-run proof of SC8: the same gate as publish, with the dry-run term inverted.
     if: >-
       always() && needs.build-windows.result == 'success'
