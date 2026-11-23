@@ -4,7 +4,7 @@ mod outline;
 use super::types::{CharBox, check_size};
 use super::{
     Bitmap, CodecError, MAX_MESSAGE_BYTES, MAX_PASSWORD_BYTES, MAX_PATH_BYTES, MAX_TEXT_CHARS,
-    PageText, PdfError, RenderRequest, Request, Response, Rotation, TextChar,
+    OpenSource, PageText, PdfError, RenderRequest, Request, Response, Rotation, TextChar,
 };
 
 const CHAR_BYTES: usize = 20;
@@ -12,9 +12,17 @@ const CHAR_BYTES: usize = 20;
 pub fn encode_request(request: &Request) -> Result<Vec<u8>, CodecError> {
     let mut out = Vec::new();
     match request {
-        Request::Open { path, password } => {
-            out.push(1);
-            put_str(&mut out, "path", path, MAX_PATH_BYTES)?;
+        Request::Open { source, password } => {
+            match source {
+                OpenSource::Path(path) => {
+                    out.push(1);
+                    put_str(&mut out, "path", path, MAX_PATH_BYTES)?;
+                }
+                OpenSource::Handle(value) => {
+                    out.push(9);
+                    out.extend_from_slice(&value.to_le_bytes());
+                }
+            }
             put_optional(&mut out, password.as_deref())?;
         }
         Request::PageCount => out.push(2),
@@ -43,7 +51,11 @@ pub fn decode_request(bytes: &[u8]) -> Result<Request, CodecError> {
     let mut input = Input(bytes);
     let request = match input.u8()? {
         1 => Request::Open {
-            path: input.string("path", MAX_PATH_BYTES)?,
+            source: OpenSource::Path(input.string("path", MAX_PATH_BYTES)?),
+            password: input.optional()?,
+        },
+        9 => Request::Open {
+            source: OpenSource::Handle(input.u64()?),
             password: input.optional()?,
         },
         2 => Request::PageCount,
@@ -287,6 +299,13 @@ impl<'a> Input<'a> {
         let mut bytes = [0; 4];
         bytes.copy_from_slice(self.take(4)?);
         Ok(u32::from_le_bytes(bytes))
+    }
+
+    /// Reads a little-endian u64; fails with `Truncated` when fewer than 8 bytes remain.
+    fn u64(&mut self) -> Result<u64, CodecError> {
+        let mut bytes = [0; 8];
+        bytes.copy_from_slice(self.take(8)?);
+        Ok(u64::from_le_bytes(bytes))
     }
 
     fn f32(&mut self) -> Result<f32, CodecError> {

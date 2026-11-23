@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use super::*;
 use crate::fake::{FakeEngine, PAGES};
-use crate::protocol::{LinkTarget, Rotation, read_response, write_request};
+use crate::protocol::{LinkTarget, OpenSource, Rotation, read_response, write_request};
 
 fn exchange(engine: &mut dyn Engine, requests: &[Request]) -> Vec<Response> {
     let mut wire = Vec::new();
@@ -17,7 +17,7 @@ fn exchange(engine: &mut dyn Engine, requests: &[Request]) -> Vec<Response> {
 
 fn open(path: &str) -> Request {
     Request::Open {
-        path: path.into(),
+        source: OpenSource::Path(path.into()),
         password: None,
     }
 }

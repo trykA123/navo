@@ -9,7 +9,8 @@ mod serve;
 
 pub use client::{Confine, DEFAULT_TIMEOUT, Document, Launcher};
 pub use pdfium::{MAX_FILE_BYTES, PdfiumEngine, library_beside};
-pub use serve::{Engine, Unavailable, clip, serve};
+pub use protocol::OpenSource;
+pub use serve::{AdoptFile, Engine, Unavailable, clip, serve, serve_with};
 
 pub const PDFIUM_VERSION: &str = "chromium/8125";
 

@@ -1,3 +1,4 @@
+mod file;
 mod links;
 mod outline;
 
@@ -72,6 +73,10 @@ impl Engine for PdfiumEngine {
         let pages = page_total(&document);
         self.document = Some(document);
         Ok(pages)
+    }
+
+    fn open_file(&mut self, file: std::fs::File, password: Option<&str>) -> Result<u32, PdfError> {
+        file::open_file(self, file, password)
     }
 
     fn page_count(&self) -> Result<u32, PdfError> {

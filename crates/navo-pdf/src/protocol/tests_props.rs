@@ -15,8 +15,18 @@ fn rotation() -> impl Strategy<Value = Rotation> {
 
 fn request() -> impl Strategy<Value = Request> {
     prop_oneof![
-        (".{0,64}", proptest::option::of(".{0,16}"))
-            .prop_map(|(path, password)| Request::Open { path, password }),
+        (".{0,64}", proptest::option::of(".{0,16}")).prop_map(|(path, password)| {
+            Request::Open {
+                source: OpenSource::Path(path),
+                password,
+            }
+        }),
+        (any::<u64>(), proptest::option::of(".{0,16}")).prop_map(|(value, password)| {
+            Request::Open {
+                source: OpenSource::Handle(value),
+                password,
+            }
+        }),
         Just(Request::PageCount),
         (any::<u32>(), any::<u32>(), rotation()).prop_map(|(page, width, rotation)| {
             Request::Render(RenderRequest {

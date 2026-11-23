@@ -5,7 +5,7 @@ use super::{MAX_PIXELS, MAX_SIDE, MAX_TEXT_CHARS, Outline, PageLinks};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     Open {
-        path: String,
+        source: OpenSource,
         password: Option<String>,
     },
     PageCount,
@@ -19,6 +19,13 @@ pub enum Request {
     Outline,
     Close,
     Prepare,
+}
+
+/// Where the helper reads the document: a handle value Navo duplicated into it, or a path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenSource {
+    Handle(u64),
+    Path(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -11,8 +11,8 @@ pub use frame::{
 pub use links::{LinkTarget, PageLink, PageLinks};
 pub use outline::{Outline, OutlineItem};
 pub use types::{
-    Bitmap, CharBox, CodecError, PageText, PdfError, RenderRequest, Request, Response, Rotation,
-    TextChar, check_render_size,
+    Bitmap, CharBox, CodecError, OpenSource, PageText, PdfError, RenderRequest, Request, Response,
+    Rotation, TextChar, check_render_size,
 };
 
 pub const MAX_REQUEST_FRAME: usize = 64 * 1024;

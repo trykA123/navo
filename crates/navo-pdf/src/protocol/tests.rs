@@ -29,11 +29,19 @@ fn sample_text() -> PageText {
 fn every_request_survives_a_round_trip() {
     let requests = [
         Request::Open {
-            path: "C:\\docs\\ünïcode.pdf".into(),
+            source: OpenSource::Path("C:\\docs\\ünïcode.pdf".into()),
             password: Some("secret".into()),
         },
         Request::Open {
-            path: "/tmp/a.pdf".into(),
+            source: OpenSource::Path("/tmp/a.pdf".into()),
+            password: None,
+        },
+        Request::Open {
+            source: OpenSource::Handle(0x1f4),
+            password: Some("secret".into()),
+        },
+        Request::Open {
+            source: OpenSource::Handle(u64::MAX),
             password: None,
         },
         Request::PageCount,
@@ -104,7 +112,7 @@ fn an_oversized_frame_is_rejected_before_its_payload_is_read() {
 fn a_path_over_its_limit_is_refused_on_both_sides() {
     let path = "a".repeat(MAX_PATH_BYTES + 1);
     let open = Request::Open {
-        path,
+        source: OpenSource::Path(path),
         password: None,
     };
     assert!(matches!(
@@ -122,7 +130,7 @@ fn a_path_over_its_limit_is_refused_on_both_sides() {
 #[test]
 fn a_password_over_its_limit_is_refused() {
     let open = Request::Open {
-        path: "a.pdf".into(),
+        source: OpenSource::Path("a.pdf".into()),
         password: Some("p".repeat(MAX_PASSWORD_BYTES + 1)),
     };
     assert!(encode_request(&open).is_err());

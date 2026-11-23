@@ -14,7 +14,7 @@ use helper::Helper;
 use pool::Pool;
 
 use crate::protocol::{
-    Bitmap, Outline, PageLinks, PageText, PdfError, RenderRequest, Request, Response,
+    Bitmap, OpenSource, Outline, PageLinks, PageText, PdfError, RenderRequest, Request, Response,
 };
 
 pub type Confine = Arc<dyn Fn(&Child) -> io::Result<Box<dyn Send>> + Send + Sync>;
@@ -185,7 +185,7 @@ impl Document {
     fn start(&mut self, password: Option<&str>) -> Result<&mut Helper, PdfError> {
         let mut helper = self.launcher.helper()?;
         let open = Request::Open {
-            path: self.path.clone(),
+            source: OpenSource::Path(self.path.clone()),
             password: password.map(str::to_owned),
         };
         match helper.call(&open, self.launcher.timeout)? {
