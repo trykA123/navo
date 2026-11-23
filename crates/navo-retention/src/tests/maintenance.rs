@@ -54,7 +54,11 @@ fn maintenance_rechecks_physical_space_after_each_purge_and_stops_when_recovered
     let at = fs.location("home");
     let result = vault
         .maintain_volume(
-            &request(&at, 100, RetentionPolicy::new(3, 1000, 10).unwrap()),
+            &request(
+                &at,
+                100 + DAY_MS,
+                RetentionPolicy::new(3, 1000, 10).unwrap(),
+            ),
             &mut RetentionRun::new(&CancelToken::new(), &mut |update| {
                 if update.current == first {
                     fs.set_available_space("home", Some(100));

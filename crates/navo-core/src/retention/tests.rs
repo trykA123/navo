@@ -1,6 +1,8 @@
 use super::*;
 use crate::FileIdentity;
 
+mod low_space;
+
 #[test]
 fn adopted_payloads_require_matching_names_a_single_node_and_an_active_owner_reference() {
     let mut adopted = entry(1, 7, 100);
@@ -218,15 +220,18 @@ fn pinned_and_unfinished_entries_count_towards_quota_but_are_not_purged() {
 
 #[test]
 fn low_space_selects_one_entry_and_requires_a_new_observation() {
+    let [mut first, mut second] = [entry(1, 1, 0), entry(2, 1, 0)];
+    first.record.expires_at = 2 * DAY_MS;
+    second.record.expires_at = 2 * DAY_MS;
     let plan = select_purge(
-        &[entry(1, 1, 0), entry(2, 1, 0)],
+        &[first, second],
         RetentionPolicy::new(1, 100, 10).unwrap(),
         PurgeRequest {
             space: VolumeSpace {
                 volume: 7,
                 free_bytes: 0,
             },
-            now: 0,
+            now: DAY_MS,
         },
     )
     .unwrap();

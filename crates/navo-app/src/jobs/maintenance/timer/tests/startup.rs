@@ -60,3 +60,22 @@ fn startup_pressure_cleans_low_space_but_ordinary_expiry_waits(cx: &mut gpui_kit
         assert_eq!(executor.now() - started, Duration::from_secs(60));
     }
 }
+
+#[gpui_kit::test]
+fn startup_low_space_spares_an_item_deleted_today(cx: &mut gpui_kit::TestAppContext) {
+    let profile = Profile::new();
+    profile.delete("home/fresh.txt");
+    profile.fs.set_available_space(".navo-vault", Some(0));
+    let mut schedule = schedule(super::super::super::super::now_ms());
+    let executor = cx.executor();
+    super::super::run_with_pause(
+        (&profile.dirs, profile.fs.as_ref()),
+        (&mut schedule, &CancelToken::new()),
+        |_| {
+            assert_eq!(profile.live(), 1, "low space must not remove today's item");
+            executor.advance_clock(Duration::from_secs(60));
+            false
+        },
+    );
+    assert_eq!(profile.live(), 1);
+}

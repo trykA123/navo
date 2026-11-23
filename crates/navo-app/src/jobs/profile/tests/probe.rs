@@ -375,13 +375,13 @@ fn delete_many(fs: &FakeFs, dirs: &StoreDirs) -> OperationPlan {
 }
 
 #[test]
-fn retention_probe_stops_after_sixteen_vanished_delete_roots() {
+fn retention_probe_checks_every_selected_delete_root() {
     let (_root, dirs, journal) = setup();
     let fs = Arc::new(FakeFs::new());
     let plan = delete_many(&fs, &dirs);
     fail_identity(&fs, "dest/f20", 1..=10);
-    let log = retaining_factory(journal.clone(), dirs, fs.clone())(&plan).unwrap();
-    assert!(journals_retained_delete(&journal));
-    assert_eq!(new_targets_probed(&fs), 16);
-    drop(log);
+    let refused = retaining_factory(journal.clone(), dirs, fs.clone())(&plan);
+    assert!(matches!(refused, Err(LogRefusal::RetentionUnknown)));
+    // Each of the three tries probes f00..f20 and stops at the failing f20.
+    assert_eq!(new_targets_probed(&fs), 3 * 21);
 }

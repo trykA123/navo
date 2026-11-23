@@ -3,6 +3,7 @@
 mod adopt;
 mod ancestry;
 mod capture;
+mod keep;
 mod locking;
 mod maintenance;
 mod place;
@@ -16,6 +17,7 @@ use std::fs::File;
 use std::path::Path;
 
 pub use adopt::AdoptJob;
+pub use keep::{KeepCheck, check_keep, check_keep_all};
 pub use maintenance::{MaintenanceReport, MaintenanceRequest};
 use navo_core::retention::{RetentionEntry, RetentionError, RetentionId, RetentionPolicy};
 use navo_core::{FsError, Location};

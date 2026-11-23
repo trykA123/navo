@@ -3,7 +3,7 @@ use navo_fs::{CancelToken, Progress};
 
 use super::super::jobs::job_info;
 use super::{confirm_props, mode_label};
-use crate::browser::{JobStatus, JobView, KeepOld, PendingOp, RenameReport, Structure};
+use crate::browser::{JobStatus, JobView, KeepOld, NoKeep, PendingOp, RenameReport, Structure};
 use crate::job_row::JobRowState;
 use navo_fs::CopyMode;
 
@@ -38,7 +38,7 @@ fn pending(plan: OperationPlan, target: Option<Location>) -> PendingOp {
         target,
         plan,
         retain_deletes: None,
-        cannot_retain: false,
+        cannot_retain: None,
         keep_old: KeepOld::AsSet,
         source_tab: AppState::new(at("/home")).active_tab().id(),
         undo: None,
@@ -83,7 +83,7 @@ fn a_drive_that_cannot_retain_says_so_in_the_permanent_delete_dialog() {
     let line = navo_l10n::tr("delete-cannot-retain");
     let plain = confirm_props(&pending(plan(OpKind::Delete), None));
     let props = confirm_props(&PendingOp {
-        cannot_retain: true,
+        cannot_retain: Some(NoKeep::Drive),
         ..pending(plan(OpKind::Delete), None)
     });
     assert_eq!(props.title, plain.title);
@@ -93,11 +93,26 @@ fn a_drive_that_cannot_retain_says_so_in_the_permanent_delete_dialog() {
 }
 
 #[test]
+fn a_full_drive_says_so_in_the_permanent_delete_dialog() {
+    let props = confirm_props(&PendingOp {
+        cannot_retain: Some(NoKeep::LowSpace),
+        ..pending(plan(OpKind::Delete), None)
+    });
+    assert_eq!(props.confirm_label, "Delete permanently");
+    assert!(props.summary.contains(&navo_l10n::tr("delete-low-space")));
+    assert!(
+        !props
+            .summary
+            .contains(&navo_l10n::tr("delete-cannot-retain"))
+    );
+}
+
+#[test]
 fn unknown_retention_asks_to_run_without_old_versions() {
     for kind in [OpKind::Delete, OpKind::Copy, OpKind::Move] {
         let props = confirm_props(&PendingOp {
             keep_old: KeepOld::Skip,
-            cannot_retain: true,
+            cannot_retain: Some(NoKeep::Drive),
             ..pending(plan(kind), Some(at("/dest")))
         });
         assert_eq!(props.title, navo_l10n::tr("job-retention-unknown-title"));

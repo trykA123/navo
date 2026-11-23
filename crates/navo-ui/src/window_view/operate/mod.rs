@@ -109,11 +109,13 @@ pub(super) fn confirm_props(pending: &PendingOp) -> ConfirmProps {
                 summary(&pending.plan, protected),
                 t!("job-delete-retained-help", days = policy.days())
             ),
-            None if pending.cannot_retain && pending.plan.kind == OpKind::Delete => format!(
-                "{} · {}",
-                summary(&pending.plan, protected),
-                tr("delete-cannot-retain")
-            ),
+            None if pending.cannot_retain.is_some() && pending.plan.kind == OpKind::Delete => {
+                format!(
+                    "{} · {}",
+                    summary(&pending.plan, protected),
+                    tr(no_keep_key(pending.cannot_retain))
+                )
+            }
             _ => summary(&pending.plan, protected),
         }
         .into(),
@@ -277,3 +279,11 @@ impl NavoWindow {
 mod switch_tests;
 #[cfg(test)]
 mod tests;
+
+/// The confirm-dialog line for a delete that keeps no copy, by reason.
+fn no_keep_key(reason: Option<crate::browser::NoKeep>) -> &'static str {
+    match reason {
+        Some(crate::browser::NoKeep::LowSpace) => "delete-low-space",
+        _ => "delete-cannot-retain",
+    }
+}

@@ -287,8 +287,8 @@ fn maintain(
     }
     let (db, _) = crate::crash::open_db(&dirs.journal_file()).map_err(|error| error.to_string())?;
     let mut vault = Vault::new(db, &dirs.data, ops).map_err(|error| error.to_string())?;
-    let selection_time = if scope == Scope::Pressure { 0 } else { now };
-    let (purged, bytes) = purge_volumes(&mut vault, &live, (policy, selection_time, cancel));
+    // Real time even under pressure: low space spares items kept in the last 24 hours (AD14).
+    let (purged, bytes) = purge_volumes(&mut vault, &live, (policy, now, cancel));
     drop(vault);
     super::super::held::after_trim(journal, &dirs.data);
     let pruned = if scope == Scope::Scheduled {

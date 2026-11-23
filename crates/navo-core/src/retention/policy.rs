@@ -156,7 +156,7 @@ pub fn select_purge_inventory(
         });
         plan.remaining_bytes -= u128::from(entry.bytes);
     }
-    fill_limits(&mut plan, &rest, (policy, request.space));
+    fill_limits(&mut plan, &rest, (policy, request));
     plan.quota_unmet = plan.remaining_bytes > u128::from(policy.max_volume_bytes);
     Ok(plan)
 }
@@ -186,15 +186,21 @@ fn candidates(
     Ok((eligible, total))
 }
 
+/// Adds quota choices, then at most one low-space choice; low space never takes an item kept
+/// less than 24 hours before `request.now` (AD14).
 fn fill_limits(
     plan: &mut PurgePlan,
     eligible: &[Candidate<'_>],
-    (policy, space): (RetentionPolicy, VolumeSpace),
+    (policy, request): (RetentionPolicy, PurgeRequest),
 ) {
+    let low_space = request.space.free_bytes < policy.min_free_bytes;
     for entry in eligible {
         let reason = if plan.remaining_bytes > u128::from(policy.max_volume_bytes) {
             PurgeReason::Quota
-        } else if plan.choices.is_empty() && space.free_bytes < policy.min_free_bytes {
+        } else if plan.choices.is_empty() && low_space {
+            if request.now.saturating_sub(entry.created_at) < DAY_MS {
+                continue;
+            }
             PurgeReason::LowSpace
         } else {
             break;

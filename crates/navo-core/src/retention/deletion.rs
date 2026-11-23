@@ -77,22 +77,26 @@ impl RetainedDeletePlan {
     }
 
     pub fn root_steps(&self) -> Vec<(u32, Location)> {
-        let paths: HashSet<_> = self
-            .plan
-            .steps
-            .iter()
-            .filter_map(|step| removed(step).ok())
-            .collect();
-        (0_u32..)
-            .zip(&self.plan.steps)
-            .filter_map(|(seq, step)| {
-                let path = removed(step).ok()?;
-                let nested = std::iter::successors(path.parent(), Location::parent)
-                    .any(|parent| paths.contains(&parent));
-                (!nested).then(|| (seq, path.clone()))
-            })
+        delete_roots(&self.plan.steps)
+            .into_iter()
+            .map(|(seq, path)| (seq, path.clone()))
             .collect()
     }
+}
+
+/// The top-level items a delete removes, with their step numbers: a removed path whose ancestor
+/// is also removed is dropped. Steps that remove nothing are passed over.
+pub fn delete_roots(steps: &[Step]) -> Vec<(u32, &Location)> {
+    let paths: HashSet<_> = steps.iter().filter_map(|step| removed(step).ok()).collect();
+    (0_u32..)
+        .zip(steps)
+        .filter_map(|(seq, step)| {
+            let path = removed(step).ok()?;
+            let nested = std::iter::successors(path.parent(), Location::parent)
+                .any(|parent| paths.contains(&parent));
+            (!nested).then_some((seq, path))
+        })
+        .collect()
 }
 
 fn removed(step: &Step) -> Result<&Location, RetentionError> {

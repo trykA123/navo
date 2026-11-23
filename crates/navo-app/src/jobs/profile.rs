@@ -71,12 +71,7 @@ pub(super) fn factory(
         } else {
             RetentionSettings::off()
         };
-        let settings =
-            if settings.maintenance_policy().is_some() && !drive_retains(drive.as_ref(), plan)? {
-                RetentionSettings::off()
-            } else {
-                settings
-            };
+        let settings = drive_keeps(settings, drive.as_ref(), plan)?;
         let retained = delete_job(plan, &settings, &dirs)?;
         #[cfg(test)]
         let retained = retained.map(|job| deletion::RetainedJob {
@@ -363,7 +358,9 @@ fn touches_any(paths: &[Location], targets: &[Option<Location>]) -> bool {
 }
 
 mod probe;
-use probe::{drive_retains, overwritten_targets, retains};
+#[cfg(test)]
+use probe::drive_retains;
+use probe::{drive_keeps, overwritten_targets, retains};
 
 #[cfg(test)]
 mod tests;

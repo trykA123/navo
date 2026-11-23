@@ -14,7 +14,7 @@ use crate::browser::{RenameReport, UndoOffer};
 pub(in crate::browser) struct PlannedOp {
     pub plan: OperationPlan,
     pub retain_deletes: Option<RetentionPolicy>,
-    pub cannot_retain: bool,
+    pub cannot_retain: Option<NoKeep>,
     pub slow_volumes: SlowVolumes,
     /// Drive class of the target, probed on the planning thread.
     pub target_class: DriveClass,
@@ -156,7 +156,7 @@ pub struct PendingOp {
     pub target: Option<Location>,
     pub plan: OperationPlan,
     pub retain_deletes: Option<RetentionPolicy>,
-    pub cannot_retain: bool,
+    pub cannot_retain: Option<NoKeep>,
     pub keep_old: KeepOld,
     pub(crate) source_tab: TabId,
     pub undo: Option<UndoOffer>,
@@ -172,6 +172,15 @@ pub enum KeepOld {
     #[default]
     AsSet,
     Skip,
+}
+
+/// Why a delete keeps no copy although the safety net is on; the confirm dialog says which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoKeep {
+    /// The drive cannot keep deleted files, or the check failed.
+    Drive,
+    /// The drive is below "Stop below free space" (AD14).
+    LowSpace,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

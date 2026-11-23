@@ -11,6 +11,7 @@ use crate::{FileIdentity, Location, ProviderPath};
 
 pub use deletion::{
     RETAINED_DELETE_KIND, RetainedDeletePlan, delete_exceeds_capacity, delete_exceeds_limit,
+    delete_roots,
 };
 pub use inventory::RetentionSummary;
 pub use policy::{

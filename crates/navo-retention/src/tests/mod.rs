@@ -11,6 +11,7 @@ mod capture;
 mod interrupted;
 mod legacy;
 mod local;
+mod low_space;
 mod maintenance;
 mod owner;
 mod pauses;

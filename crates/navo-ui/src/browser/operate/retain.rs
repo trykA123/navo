@@ -2,24 +2,36 @@ use navo_core::retention::RetentionPolicy;
 use navo_core::{Location, OpKind, OperationPlan};
 use navo_fs::ProviderOps;
 
-use super::types::{Ended, KeepOld, LogRefusal, PendingOp, RetainDeletes};
+use navo_retention::KeepCheck;
+
+use super::types::{Ended, KeepOld, LogRefusal, NoKeep, PendingOp, RetainDeletes};
 use crate::browser::{Browser, RenameReport};
 
+/// The policy a delete keeps copies under, or why it keeps none. Every source folder is checked:
+/// one full drive (AD14), one unsupported drive or a failed check plans the whole delete without.
 pub(super) fn delete_retention(
     ops: &dyn ProviderOps,
     plan: &OperationPlan,
     sources: &[Location],
     retain_deletes: Option<&RetainDeletes>,
-) -> (Option<RetentionPolicy>, bool) {
+) -> (Option<RetentionPolicy>, Option<NoKeep>) {
     if plan.kind != OpKind::Delete {
-        return (None, false);
+        return (None, None);
     }
     let Some(policy) = retain_deletes.and_then(|active| active()) else {
-        return (None, false);
+        return (None, None);
     };
-    match sources.first() {
-        Some(first) if navo_retention::can_retain(ops, first) => (Some(policy), false),
-        _ => (None, true),
+    if sources.is_empty() {
+        return (None, Some(NoKeep::Drive));
+    }
+    match navo_retention::check_keep_all(ops, sources, policy) {
+        Ok(KeepCheck::Keep) => (Some(policy), None),
+        Ok(KeepCheck::DriveFull) => (None, Some(NoKeep::LowSpace)),
+        Ok(KeepCheck::Unsupported) => (None, Some(NoKeep::Drive)),
+        Err(error) => {
+            tracing::warn!(error_kind = ?error.kind, "keep check failed; delete planned without a copy");
+            (None, Some(NoKeep::Drive))
+        }
     }
 }
 
@@ -46,7 +58,7 @@ impl Browser {
         self.pending = Some(PendingOp {
             id: self.next_op,
             retain_deletes: None,
-            cannot_retain: false,
+            cannot_retain: None,
             keep_old: KeepOld::Skip,
             structure: None,
             ..pending
