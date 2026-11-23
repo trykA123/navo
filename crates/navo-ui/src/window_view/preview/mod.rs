@@ -1,4 +1,5 @@
 mod browse;
+mod cloud;
 mod contents;
 mod contents_view;
 mod file;
@@ -30,6 +31,7 @@ use super::NavoWindow;
 use crate::prelude::*;
 use crate::side_sheet::SheetState;
 pub(in crate::window_view) use browse::bind_keys;
+pub(in crate::window_view) use cloud::may_read;
 use file::FilePreview;
 use folder::FolderPreview;
 use follow::{Key, Target};

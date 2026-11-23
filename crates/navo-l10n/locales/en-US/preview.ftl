@@ -7,3 +7,4 @@ preview-size-links-merged = { $count ->
    *[other] { $count } hard links counted once
 }
 preview-size-links-unchecked = Past the link limit, hard links may count twice
+preview-cloud-file = Cloud file — open to download

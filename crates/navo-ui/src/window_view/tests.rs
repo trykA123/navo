@@ -23,6 +23,7 @@ mod cards;
 pub(in crate::window_view) mod clipboard;
 mod clipboard_palette;
 mod clipboard_palette_popup;
+mod cloud;
 mod column_widths;
 mod command_center;
 mod compare;

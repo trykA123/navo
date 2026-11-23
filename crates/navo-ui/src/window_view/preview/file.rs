@@ -1,8 +1,8 @@
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use gpui_kit::Task;
-use navo_fs::{JobSlot, OwnerGuard, Priority, volume_of};
+use navo_fs::{CancelToken, FsEntry, JobSlot, OwnerGuard, Priority, ProviderOps, volume_of};
 
 use super::follow::Target;
 use super::{Preview, Shown};
@@ -10,8 +10,8 @@ use crate::prelude::*;
 use crate::primitives::AppHeld;
 use crate::window_view::NavoWindow;
 use crate::window_view::viewer::{
-    Attach, FileHooks, Host, Kind, Opened, PREVIEW_BODY, Picked, Request, SaveError, Sniff, Turn,
-    ViewerBody, hold_memory, sniff_and_load,
+    Attach, FileHooks, Host, Kind, Kinds, Opened, PREVIEW_BODY, Picked, Request, SaveError, Sniff,
+    Turn, ViewerBody, hold_memory, sniff_and_load,
 };
 
 const READ_ONLY: &str = "The preview is read-only.";
@@ -50,6 +50,27 @@ pub(super) fn read_only(hooks: &FileHooks) -> FileHooks {
     }
 }
 
+/// What the read worker needs to load one quick-view file.
+struct ReadJob {
+    request: Request,
+    kinds: Kinds,
+    provider: Arc<dyn ProviderOps>,
+    entry: FsEntry,
+}
+
+impl ReadJob {
+    /// Runs on the read worker: the cloud guard first, then sniff and load.
+    /// Fails with the text the preview shows; a cloud placeholder is never read.
+    fn run(&self, alive: &Weak<()>, cancel: &CancelToken) -> Result<Opened, String> {
+        super::may_read(&self.entry, self.provider.as_ref(), &self.request.location)?;
+        let turn = Turn {
+            alive,
+            cancel: cancel.as_atomic_bool(),
+        };
+        sniff_and_load(&self.request, &self.kinds, turn)
+    }
+}
+
 impl Preview {
     fn file_mut(&mut self) -> Option<&mut FilePreview> {
         match &mut self.shown {
@@ -66,13 +87,17 @@ impl NavoWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> FilePreview {
-        let request = Request::new(
-            read_only(&self.files),
-            target.location.clone(),
-            target.name(),
-            None,
-        );
-        let kinds = self.kinds.clone();
+        let job = ReadJob {
+            request: Request::new(
+                read_only(&self.files),
+                target.location.clone(),
+                target.name(),
+                None,
+            ),
+            kinds: self.kinds.clone(),
+            provider: self.provider.clone(),
+            entry: target.entry.clone(),
+        };
         let owner = self.preview.reads.owner();
         let slot = JobSlot {
             volume: volume_of(&target.location),
@@ -84,13 +109,7 @@ impl NavoWindow {
         let weak = Arc::downgrade(&alive);
         self.preview.reads.submit_then(
             slot,
-            move |cancel| {
-                let turn = Turn {
-                    alive: &weak,
-                    cancel: cancel.as_atomic_bool(),
-                };
-                sniff_and_load(&request, &kinds, turn)
-            },
+            move |cancel| job.run(&weak, cancel),
             move |opened| {
                 let _ = sender.send(opened);
             },
