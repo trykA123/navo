@@ -28,6 +28,18 @@ impl StoreDirs {
         Self::resolve(windows, var)
     }
 
+    /// Returns `<root>/data/run` when this exe runs portable, else `None`. Instance and crash
+    /// runtime files go there, so a portable copy writes nothing to the temp folder (NV9a).
+    #[must_use]
+    pub fn portable_run() -> Option<PathBuf> {
+        Self::portable_run_for(&std::env::current_exe().ok()?)
+    }
+
+    /// The portable runtime folder for `exe`; `None` when `exe` is not a portable copy.
+    fn portable_run_for(exe: &Path) -> Option<PathBuf> {
+        Some(portable_root(exe)?.join("data").join("run"))
+    }
+
     #[must_use]
     pub fn in_profile(root: &Path) -> Self {
         Self {

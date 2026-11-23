@@ -69,7 +69,13 @@ pub(super) fn attach(logs: &Path) {
 
 /// Spawns the server, connects and attaches the handler; the error names the failed step.
 fn connect(logs: &Path) -> Result<(), String> {
-    let socket = std::env::temp_dir().join(format!("navo-crash-{}.sock", std::process::id()));
+    let portable = navo_store::StoreDirs::portable_run();
+    let socket = super::socket::path(
+        portable.as_deref(),
+        &std::env::temp_dir(),
+        std::process::id(),
+    )
+    .map_err(|error| format!("portable run folder: {}", error.kind()))?;
     if socket.as_os_str().len() > MAX_SOCKET_BYTES {
         return Err("socket path too long".into());
     }

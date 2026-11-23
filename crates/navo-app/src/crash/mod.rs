@@ -20,6 +20,12 @@ mod native_client;
 mod native_server;
 #[cfg(any(windows, test))]
 mod native_summary;
+#[cfg(any(windows, test))]
+#[cfg_attr(
+    all(windows, test),
+    allow(dead_code, reason = "unit tests never start the crash server")
+)]
+mod socket;
 pub(crate) mod store;
 #[cfg(test)]
 pub(crate) mod test_damage;

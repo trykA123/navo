@@ -37,7 +37,7 @@ pub(crate) fn prepare_instance_with_notice(
     let Some(dirs) = profile.dirs() else {
         return Ok(first(None));
     };
-    let Some(acquired) = instance::acquire(&dirs.data)? else {
+    let Some(acquired) = instance::acquire(&dirs.data, portable_run(profile).as_deref())? else {
         return Ok(first(None));
     };
     match acquired {
@@ -73,5 +73,14 @@ pub(crate) fn prepare_instance_with_notice(
             };
             Ok(ControlFlow::Break(code))
         }
+    }
+}
+
+/// The portable runtime folder for the default profile of a portable copy (NV9a). A `--profile`
+/// or temporary profile keeps the machine runtime folder, so every copy finds one lock path.
+fn portable_run(profile: &Profile) -> Option<std::path::PathBuf> {
+    match profile {
+        Profile::User(Some(_)) => navo_store::StoreDirs::portable_run(),
+        _ => None,
     }
 }

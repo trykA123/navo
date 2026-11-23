@@ -365,7 +365,7 @@ fn trace_without_a_path_is_refused() {
 fn trace_is_refused_instead_of_forwarded_to_a_running_instance() {
     let root = tempfile::tempdir().unwrap();
     let dirs = navo_store::StoreDirs::in_profile(root.path());
-    let acquired = crate::instance::acquire(&dirs.data).unwrap();
+    let acquired = crate::instance::acquire(&dirs.data, None).unwrap();
     let Some(crate::instance::Acquired::First(_guard)) = acquired else {
         panic!("expected the first instance");
     };

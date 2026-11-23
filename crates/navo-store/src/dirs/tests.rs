@@ -274,3 +274,22 @@ fn a_velopack_portable_copy_without_a_settings_marker_keeps_the_user_folders() {
         Some(user_dirs(root.path()))
     );
 }
+
+#[test]
+fn a_portable_exe_keeps_its_runtime_folder_under_data_run() {
+    let root = tempfile::tempdir().unwrap();
+    let portable = root.path().join("Portable");
+    std::fs::create_dir_all(&portable).unwrap();
+    std::fs::write(portable.join("navo.toml"), b"").unwrap();
+    assert_eq!(
+        StoreDirs::portable_run_for(&portable.join("navo.exe")),
+        Some(portable.join("data").join("run"))
+    );
+}
+
+#[test]
+fn an_installed_exe_has_no_portable_runtime_folder() {
+    let root = tempfile::tempdir().unwrap();
+    let exe = install_exe(&root.path().join("install"));
+    assert_eq!(StoreDirs::portable_run_for(&exe), None);
+}
