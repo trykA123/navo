@@ -1,18 +1,1 @@
-# AQ6 lists these plans in plans/README.md and empties this file; delete a line once its plan is linked.
-
-2026-11-04-index-ram.md
-2026-11-09-git-stop-before-fileops.md
-2026-11-09-installer-w0-velopack.md
-2026-11-09-installer-wizard.md
-2026-11-09-installer-wizard-ui.md
-2026-11-10-deps-latest.md
-2026-11-10-research-picks.md
-2026-11-10-speed-checks.md
-2026-11-10-speed-checks-tracy.md
-2026-11-10-speed-checks-vm.md
-2026-11-12-index-two-pass.md
-2026-11-12-index-two-pass-support.md
-2026-11-12-installer-anywhere.md
-2026-11-12-installer-progress.md
-2026-11-14-busy-totals-seams.md
-2026-11-15-rebuild-contract-repair.md
+# Plans allowed to stay out of plans/README.md. Empty: every plan is linked.
