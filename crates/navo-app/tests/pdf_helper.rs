@@ -6,8 +6,12 @@ use navo_pdf::{Document, Launcher, library_beside};
 
 const NAVO: &str = env!("CARGO_BIN_EXE_navo");
 
+/// The helper launcher; on Windows it shares the PDF as a read-only handle, as the app does,
+/// because the Windows helper refuses a path (S1c).
 fn launcher() -> Launcher {
     let launcher = Launcher::new(NAVO, [OsString::from("--pdf-helper")]);
+    #[cfg(windows)]
+    let launcher = launcher.with_share(std::sync::Arc::new(navo_shell::share_read_handle));
     #[cfg(windows)]
     let launcher = launcher.with_spawn(std::sync::Arc::new(|spec: &navo_pdf::HelperSpec| {
         let mut child = spec.command().spawn()?;
