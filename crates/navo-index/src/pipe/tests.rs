@@ -1,7 +1,10 @@
+//! Pipe protocol tests shared by every platform: frames, requests, replies and the accept loop.
+
 use super::frames::{self, FrameError, MAX_FRAME_BYTES};
 use super::{Hit, Query, QueryTerm, Request, Response, Status, VolumeStatus};
 
 mod accept;
+mod client_memory;
 mod clients;
 
 fn query(generation: u64) -> Query {

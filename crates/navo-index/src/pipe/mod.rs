@@ -1,3 +1,5 @@
+//! The index service's named-pipe protocol: client queries and the server that answers them.
+
 mod builds;
 mod cancel;
 pub mod frames;
@@ -154,6 +156,7 @@ impl Client {
         result
     }
 
+    /// Reads frames for one query until its reply is complete; a bad frame ends in an error.
     fn read_reply(
         &self,
         generation: u64,
@@ -161,39 +164,76 @@ impl Client {
         cancel: &impl Fn() -> bool,
     ) -> Result<Reply, PipeError> {
         let pipe = self.pipe.as_ref().ok_or(PipeError::NotAvailable)?;
-        let (mut hits, mut status) = (None, None);
-        while hits.is_none() || status.is_none() {
-            match pipe.read(Some(deadline), &Cancellation::Poll(cancel))? {
-                Response::Hits {
-                    generation: found,
-                    hits: batch,
-                } if found == generation && hits.is_none() && batch.len() <= MAX_HITS => {
-                    hits = Some(batch);
-                }
-                Response::Status {
-                    generation: found,
-                    status: update,
-                } if found == generation && status.is_none() => status = Some(update),
-                Response::Hits {
-                    generation: old, ..
-                }
-                | Response::Status {
-                    generation: old, ..
-                } if old < generation => {}
-                _ => return Err(PipeError::InvalidResponse),
+        let mut state = ReplyState::default();
+        loop {
+            let frame = pipe.read(Some(deadline), &Cancellation::Poll(cancel))?;
+            if let Some(reply) = accept(frame, generation, &mut state)? {
+                return Ok(reply);
             }
         }
-        Ok(Reply {
-            hits: hits.unwrap_or_default(),
-            status: status.unwrap_or_default(),
-            ..Reply::default()
-        })
     }
 
     pub fn query(&mut self, query: &Query) -> Result<Reply, PipeError> {
         self.send_query(query)?;
         self.receive(&|| false)
     }
+}
+
+/// Collects the frames of one query generation until the answer is complete.
+#[derive(Default)]
+struct ReplyState {
+    hits: Option<Vec<Hit>>,
+    status: Option<Status>,
+}
+
+/// Decides one frame for `generation`: a finished reply, `None` while more frames are needed,
+/// or `InvalidResponse` for a frame that does not belong to this answer.
+fn accept(
+    frame: Response,
+    generation: u64,
+    state: &mut ReplyState,
+) -> Result<Option<Reply>, PipeError> {
+    match frame {
+        Response::Hits {
+            generation: found,
+            hits: batch,
+        } if found == generation && state.hits.is_none() && batch.len() <= MAX_HITS => {
+            state.hits = Some(batch);
+        }
+        Response::Status {
+            generation: found,
+            status: update,
+        } if found == generation && state.status.is_none() => {
+            state.status = Some(update);
+        }
+        Response::Hits {
+            generation: old, ..
+        }
+        | Response::Status {
+            generation: old, ..
+        } if old < generation => {}
+        Response::MemoryV1 {
+            generation: found,
+            report,
+        } if found == generation => {
+            return Ok(Some(Reply {
+                memory: Some(report),
+                ..Reply::default()
+            }));
+        }
+        Response::MemoryV1 {
+            generation: old, ..
+        } if old < generation => {}
+        _ => return Err(PipeError::InvalidResponse),
+    }
+    if state.hits.is_some() && state.status.is_some() {
+        return Ok(Some(Reply {
+            hits: state.hits.take().unwrap_or_default(),
+            status: state.status.take().unwrap_or_default(),
+            ..Reply::default()
+        }));
+    }
+    Ok(None)
 }
 
 pub struct Server {

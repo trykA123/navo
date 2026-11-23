@@ -1,5 +1,7 @@
+//! Windows-only pipe tests: real named-pipe round trips, timeouts and cancellation.
+
 use super::*;
-use crate::pipe::{CancelToken, Client, PipeError, Reply, Server};
+use crate::pipe::{CancelToken, Client, MemoryReport, Part, PipeError, Reply, Server};
 use std::{
     sync::{Mutex, mpsc},
     thread,
@@ -29,6 +31,35 @@ fn connection(label: &str) -> (Server, Client, String) {
     server.pipes.truncate(1);
     let client = connect_test(&name);
     (server, client, name)
+}
+
+/// A memory request on the query client returns the service report from a real pipe.
+#[test]
+fn a_memory_request_on_the_query_client_returns_the_memory_report() {
+    let (mut server, mut client, _) = connection("au7-memory");
+    let stop = CancelToken::new();
+    let handler = |request: &Request, _: &CancelToken| {
+        let mut report = MemoryReport::default();
+        report.add(Part::Process, 4096, 0);
+        Reply {
+            memory: request.wants_memory().then_some(report),
+            ..Reply::default()
+        }
+    };
+    thread::scope(|scope| {
+        let _stop = crate::pipe::StopOnDrop(stop.clone());
+        let serving = scope.spawn(|| server.serve(&handler, &stop));
+        let ask = Query {
+            request: Request {
+                terms: vec![QueryTerm::MemoryV1],
+            },
+            generation: 2,
+        };
+        let reply = client.query(&ask).unwrap();
+        assert!(reply.memory.is_some());
+        stop.cancel();
+        assert!(serving.join().unwrap().is_ok());
+    });
 }
 
 #[test]
