@@ -19,6 +19,7 @@ mod results;
 mod retention;
 mod slow;
 mod unknown;
+mod verify;
 
 #[test]
 fn selected_sources_resolve_a_based_tab_under_its_base() {

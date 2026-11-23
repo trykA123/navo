@@ -1,5 +1,7 @@
+//! A modal confirm dialog: title, paths, summary, optional check rows, a typed word and buttons.
 mod elide;
 mod keys;
+mod rows;
 
 #[cfg(test)]
 mod key_tests;
@@ -13,7 +15,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     App, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight, InteractiveElement,
     IntoElement, ParentElement, RenderOnce, Role, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Subscription, Toggled, Window, div, px,
+    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
 };
 
 use crate::dialog_focus::{Stop, focus_ring};
@@ -66,6 +68,8 @@ pub struct ConfirmDialog {
     on_confirm: Option<Handler>,
     on_cancel: Option<Handler>,
     on_toggle: Option<Handler>,
+    switch: Option<Choice>,
+    on_switch: Option<Handler>,
 }
 
 impl ConfirmDialog {
@@ -76,6 +80,8 @@ impl ConfirmDialog {
             on_confirm: None,
             on_cancel: None,
             on_toggle: None,
+            switch: None,
+            on_switch: None,
         }
     }
 
@@ -100,6 +106,7 @@ struct DialogState {
     confirm: FocusHandle,
     cancel: FocusHandle,
     choice: FocusHandle,
+    switch: FocusHandle,
     field: Option<Entity<TextFieldState>>,
     has_started: bool,
     _field_changes: Option<Subscription>,
@@ -121,6 +128,7 @@ impl DialogState {
             confirm: cx.focus_handle(),
             cancel: cx.focus_handle(),
             choice: cx.focus_handle(),
+            switch: cx.focus_handle(),
             field,
             has_started: false,
             _field_changes: changes,
@@ -168,10 +176,12 @@ fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &
     let confirm = can_confirm.then(|| state.confirm.clone());
     let buttons: Vec<FocusHandle> = confirm.into_iter().chain([state.cancel.clone()]).collect();
     let choice = dialog.props.choice.is_some().then(|| state.choice.clone());
+    let switch = dialog.switch.is_some().then(|| state.switch.clone());
     let stops = state
         .field_focus(cx)
         .into_iter()
         .chain(choice.clone())
+        .chain(switch.clone())
         .chain(buttons.clone())
         .collect();
     Keys {
@@ -181,9 +191,11 @@ fn keys_for(dialog: ConfirmDialog, state: &DialogState, can_confirm: bool, cx: &
         can_confirm,
         cancel: state.cancel.clone(),
         choice,
+        switch,
         on_confirm: dialog.on_confirm,
         on_cancel: dialog.on_cancel,
         on_toggle: dialog.on_toggle,
+        on_switch: dialog.on_switch,
     }
 }
 
@@ -275,59 +287,6 @@ fn summary_row(t: &Theme, props: &ConfirmProps) -> Div {
         })
 }
 
-fn choice_row(
-    t: &Theme,
-    choice: Choice,
-    keys: &Rc<Keys>,
-    window: &Window,
-) -> Option<impl IntoElement> {
-    let handle = keys.choice.as_ref()?;
-    let ring = if handle.is_focused(window) {
-        t.colors.accent
-    } else {
-        gpui_kit::transparent_black()
-    };
-    let toggle = keys.clone();
-    let mark = div()
-        .flex()
-        .flex_none()
-        .items_center()
-        .justify_center()
-        .size(px(16.))
-        .rounded(t.radii.sm)
-        .border_1()
-        .border_color(t.colors.line)
-        .when(choice.on, |mark| {
-            mark.child(icon(IconName::Check, px(12.), t.colors.accent_text))
-        });
-    Some(
-        div()
-            .id("choice")
-            .role(Role::CheckBox)
-            .aria_label(choice.label.clone())
-            .aria_toggled(if choice.on {
-                Toggled::True
-            } else {
-                Toggled::False
-            })
-            .test_support()
-            .key_context(keys::BUTTON)
-            .track_focus(handle)
-            .flex()
-            .items_center()
-            .gap(t.spacing.sm)
-            .px(t.spacing.xs)
-            .py(t.spacing.xxs)
-            .rounded(t.radii.md)
-            .border_2()
-            .border_color(ring)
-            .cursor_pointer()
-            .child(mark)
-            .child(choice.label)
-            .on_click(move |_, window, cx| toggle.toggle(window, cx)),
-    )
-}
-
 fn buttons(t: &Theme, props: &ConfirmProps, keys: &Rc<Keys>, window: &Window) -> Div {
     let variant = if props.danger {
         ButtonVariant::Danger
@@ -381,6 +340,7 @@ impl RenderOnce for ConfirmDialog {
         let can_confirm = is_typed_ok(&props, current, cx);
         let field = current.field.clone();
         let root = current.root.clone();
+        let switch = self.switch.clone();
         let keys = Rc::new(keys_for(self, current, can_confirm, cx));
         keys::register(div().id(id).track_focus(&root), &keys)
             .role(Role::AlertDialog)
@@ -401,12 +361,12 @@ impl RenderOnce for ConfirmDialog {
             .child(heading(&t, &props))
             .child(paths(&t, &props))
             .child(summary_row(&t, &props))
-            .children(
-                props
-                    .choice
-                    .clone()
-                    .and_then(|choice| choice_row(&t, choice, &keys, window)),
-            )
+            .children(rows::check_rows(
+                &t,
+                (props.choice.clone(), switch),
+                &keys,
+                window,
+            ))
             .when_some(field, |dialog, field| {
                 dialog.child(TextField::new("typed", &field, "Confirmation word"))
             })

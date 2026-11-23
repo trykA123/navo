@@ -30,11 +30,24 @@ pub(super) struct Counts {
     pub(super) confirmed: usize,
     pub(super) cancelled: usize,
     pub(super) toggled: usize,
+    pub(super) switched: usize,
 }
 
 pub(super) struct Harness {
     pub(super) props: ConfirmProps,
+    pub(super) switch: Option<Choice>,
     pub(super) counts: Counts,
+}
+
+impl Harness {
+    /// A harness for `props` with no switch row and zero counts.
+    pub(super) fn new(props: ConfirmProps) -> Self {
+        Self {
+            props,
+            switch: None,
+            counts: Counts::default(),
+        }
+    }
 }
 
 impl Render for Harness {
@@ -42,19 +55,28 @@ impl Render for Harness {
         let confirm = cx.entity();
         let cancel = cx.entity();
         let toggle = cx.entity();
+        let switch = cx.entity();
         let dialog = ConfirmDialog::new(DIALOG, self.props.clone())
             .on_confirm(move |_, cx| confirm.update(cx, |this, _| this.counts.confirmed += 1))
             .on_cancel(move |_, cx| cancel.update(cx, |this, _| this.counts.cancelled += 1))
             .on_toggle(move |_, cx| toggle.update(cx, |this, _| this.counts.toggled += 1));
+        let dialog = match self.switch.clone() {
+            Some(choice) => dialog.switch(choice, move |_, cx| {
+                switch.update(cx, |this, _| this.counts.switched += 1);
+            }),
+            None => dialog,
+        };
         div().size_full().child(dialog)
     }
 }
 
 fn open_dialog(cx: &mut TestAppContext, props: ConfirmProps) -> (AnyWindowHandle, Entity<Harness>) {
-    let (window, harness) = open(cx, |_, _| Harness {
-        props,
-        counts: Counts::default(),
-    });
+    open_harness(cx, Harness::new(props))
+}
+
+/// Opens a window that draws `harness` and renders its first frame.
+fn open_harness(cx: &mut TestAppContext, harness: Harness) -> (AnyWindowHandle, Entity<Harness>) {
+    let (window, harness) = open(cx, |_, _| harness);
     cx.update_window(window, |_, window, cx| window.render_frame(cx))
         .expect("window");
     cx.run_until_parked();
@@ -206,7 +228,7 @@ fn hidden_counts_the_cut_lines_and_the_rest() {
 
 pub(super) fn focused(window: AnyWindowHandle, cx: &mut TestAppContext) -> Vec<&'static str> {
     cx.update_window(window, |_, window, _| {
-        ["typed", "choice", "confirm", "cancel"]
+        ["typed", "choice", "switch", "confirm", "cancel"]
             .into_iter()
             .filter(|id| {
                 window
@@ -311,4 +333,42 @@ fn without_a_choice_tab_skips_straight_to_the_buttons(cx: &mut TestAppContext) {
     let (window, _) = open_dialog(cx, safe);
     press(window, &["shift-tab"], cx);
     assert_eq!(focused(window, cx), ["cancel"]);
+}
+
+/// A safe dialog with the choice and a "Verify after copy" switch that is off.
+pub(super) fn with_switch() -> Harness {
+    let mut harness = Harness::new(with_choice());
+    harness.switch = Some(Choice {
+        label: "Verify after copy".into(),
+        on: false,
+    });
+    harness
+}
+
+pub(super) fn switched(harness: &Entity<Harness>, cx: &mut TestAppContext) -> usize {
+    harness.read_with(cx, |harness, _| harness.counts.switched)
+}
+
+#[gpui_kit::test]
+fn a_click_on_the_switch_calls_its_handler_only(cx: &mut TestAppContext) {
+    let (window, harness) = open_harness(cx, with_switch());
+    cx.update_window(window, |_, window, cx| {
+        window.within(DIALOG).click("switch", cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    assert_eq!(switched(&harness, cx), 1);
+    assert_eq!(toggled(&harness, cx), 0);
+    assert_eq!(counts(&harness, cx), (0, 0));
+}
+
+#[gpui_kit::test]
+fn the_switch_row_is_absent_when_unset(cx: &mut TestAppContext) {
+    let (window, _) = open_dialog(cx, with_choice());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.within(DIALOG).try_find("choice").is_some());
+        assert!(window.within(DIALOG).try_find("switch").is_none());
+    })
+    .expect("window");
 }

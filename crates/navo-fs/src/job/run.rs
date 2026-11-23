@@ -9,7 +9,7 @@ use super::hold::hold;
 use super::marks::Marks;
 use super::remove::{Removals, remove};
 use super::rename::{is_temporary, prepare};
-use super::{DoneSet, JobContext, JobOutcome, Progress, Sources, StepOutcome};
+use super::{DoneSet, JobContext, JobOutcome, Progress, Sources, StepOutcome, VerifyCount};
 
 pub(super) fn current_of(step: &Step) -> Location {
     match step {
@@ -55,14 +55,16 @@ pub(super) struct Job<'p> {
     pub removals: &'p Removals<'p>,
     pub sources: Option<&'p Sources>,
     pub targets: &'p super::plan_targets::PlanTargets,
+    pub verify: Option<&'p VerifyCount>,
 }
 
 pub(super) fn run(plan: &OperationPlan, done: &[u32], ctx: &mut JobContext<'_>) -> JobOutcome {
-    run_with((plan, None), &DoneSet::of_plan(plan, done), ctx)
+    run_with((plan, None, None), &DoneSet::of_plan(plan, done), ctx)
 }
 
+/// Runs `plan` step by step, reading copies from `sources` and counting checks in `verify` when given.
 pub(super) fn run_with(
-    (plan, sources): (&OperationPlan, Option<&Sources>),
+    (plan, sources, verify): (&OperationPlan, Option<&Sources>, Option<&VerifyCount>),
     done: &DoneSet,
     ctx: &mut JobContext<'_>,
 ) -> JobOutcome {
@@ -76,6 +78,7 @@ pub(super) fn run_with(
         removals: &removals,
         sources,
         targets: &super::plan_targets::PlanTargets::of(plan),
+        verify,
     };
     walk(job, done, ctx)
 }
@@ -97,6 +100,7 @@ pub(super) fn copier_of<'p, 'a: 'p>(job: Job<'p>, ctx: &JobContext<'a>) -> Copie
         removals: job.removals,
         sources: job.sources,
         targets: job.targets,
+        verify: job.verify,
     }
 }
 

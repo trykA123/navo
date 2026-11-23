@@ -269,3 +269,20 @@ fn the_clipboard_sources_of_results_are_the_real_files() {
         [fs.location("w/src/can/a.c"), fs.location("w/lib/a.c")]
     );
 }
+
+fn removable(_: &Location) -> navo_fs::DriveClass {
+    navo_fs::DriveClass::Removable
+}
+
+#[test]
+fn a_structure_replan_keeps_verify_off_after_the_user_turned_it_off() {
+    let (_fs, mut browser) = results(&TWINS);
+    browser.set_class_of(removable);
+    let id = planned(&mut browser, OpKind::Copy).id;
+    assert!(browser.verifies(id).is_some());
+    assert!(!browser.toggle_verify());
+    assert!(browser.toggle_structure());
+    settle(&mut browser);
+    assert_eq!(browser.pending().expect("a new plan").id, id);
+    assert!(browser.verifies(id).is_none());
+}

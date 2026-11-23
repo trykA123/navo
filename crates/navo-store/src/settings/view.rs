@@ -185,6 +185,7 @@ impl Default for WindowView {
 #[serde(default, rename_all = "kebab-case")]
 pub struct CopySettings {
     pub mode: CopyMode,
+    pub verify: VerifyMode,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -193,4 +194,15 @@ pub enum CopyMode {
     #[default]
     Auto,
     Standard,
+}
+
+/// When a copy or move compares each copied file with its source; mirrors the navo-fs
+/// `VerifyMode`. TOML key `copy.verify`; a missing key reads `auto`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum VerifyMode {
+    Off,
+    #[default]
+    Auto,
+    Always,
 }

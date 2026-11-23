@@ -7,6 +7,23 @@ use super::{
 
 pub use navo_core::{FileIdentity, FileIdentityKind};
 
+/// How an uncached content hash read its bytes, so a caller can tell a device read from a weaker one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadSource {
+    /// Read past the system cache (Windows unbuffered handle), or after a cache-drop hint the
+    /// system accepted (Linux, a best-effort hint: dirty pages stay cached).
+    Device,
+    /// Read through the system cache: the provider or volume has no uncached read.
+    CacheFallback,
+}
+
+/// A BLAKE3 content hash and how its bytes were read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UncachedHash {
+    pub hash: [u8; 32],
+    pub source: ReadSource,
+}
+
 /// Keeps Git reads in a folder paused while it lives; dropping it releases the pause.
 #[must_use]
 pub struct GitPauseGuard {
@@ -192,6 +209,19 @@ pub trait ProviderOps: Provider {
         Err(FsError {
             location: Some(location.clone()),
             ..FsError::new(FsErrorKind::NotSupportedYet)
+        })
+    }
+    /// BLAKE3 of the file's bytes read past the system cache where the provider can, with how it
+    /// read them; this default hashes through the cache (`CacheFallback`). Stops with `Cancelled`.
+    fn content_hash_uncached(
+        &self,
+        location: &Location,
+        cancel: &CancelToken,
+    ) -> Result<UncachedHash, FsError> {
+        let hash = self.content_hash(location, cancel)?;
+        Ok(UncachedHash {
+            hash,
+            source: ReadSource::CacheFallback,
         })
     }
 }

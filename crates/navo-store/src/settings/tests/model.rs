@@ -176,6 +176,21 @@ fn copy_mode_reads_both_values() {
 }
 
 #[test]
+fn copy_verify_always_round_trips_through_toml() {
+    let (settings, unknown) = crate::parse_settings("[copy]\nverify = \"always\"\n").unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert_eq!(settings.copy.verify, view::VerifyMode::Always);
+    let text = crate::settings_to_toml(&settings);
+    assert_eq!(crate::parse_settings(&text).unwrap().0, settings);
+}
+
+#[test]
+fn copy_verify_reads_auto_when_the_key_is_missing() {
+    let (settings, _) = crate::parse_settings("[copy]\nmode = \"standard\"\n").unwrap();
+    assert_eq!(settings.copy.verify, view::VerifyMode::Auto);
+}
+
+#[test]
 fn an_unknown_copy_mode_is_reported_with_its_place() {
     let error = crate::parse_settings("[copy]\nmode = \"turbo\"\n").unwrap_err();
     assert!(

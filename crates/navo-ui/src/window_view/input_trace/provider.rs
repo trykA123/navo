@@ -6,8 +6,8 @@ use navo_core::{FsError, Location, ProviderId};
 
 use navo_fs::{
     CancelToken, Capabilities, CopyControl, FileDetails, FileIdentity, FsEntry, GitPauseGuard,
-    ListSink, MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UnixAccess, VerifiedRename,
-    Watch, WatchSink,
+    ListSink, MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UncachedHash, UnixAccess,
+    VerifiedRename, Watch, WatchSink,
 };
 
 pub(super) struct CountingFs {
@@ -241,5 +241,21 @@ impl ProviderOps for CountingFs {
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         self.count();
         self.inner.volume_serial(location)
+    }
+
+    /// Hashes the file through the inner provider and counts one disk call.
+    fn content_hash(&self, location: &Location, cancel: &CancelToken) -> Result<[u8; 32], FsError> {
+        self.count();
+        self.inner.content_hash(location, cancel)
+    }
+
+    /// Hashes the file past the cache through the inner provider and counts one disk call.
+    fn content_hash_uncached(
+        &self,
+        location: &Location,
+        cancel: &CancelToken,
+    ) -> Result<UncachedHash, FsError> {
+        self.count();
+        self.inner.content_hash_uncached(location, cancel)
     }
 }

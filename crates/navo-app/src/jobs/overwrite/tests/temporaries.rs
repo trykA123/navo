@@ -292,6 +292,7 @@ fn identity_registration_failure_leaves_no_unregistered_copied_bytes() {
 
 mod coordination;
 mod recovery;
+mod verify;
 
 mod native;
 

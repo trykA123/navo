@@ -30,5 +30,7 @@ ChangedOnDisk: The file changed after it was opened.
 ChangedOnDisk: “C:\Data\report.xlsx” changed after it was opened.
 SourceFilterFailed: The source content filter failed. Check Git filters and Git LFS, then try again.
 SourceFilterFailed: The source content filter failed for “C:\Data\report.xlsx”. Check Git filters and Git LFS, then try again.
+VerifyFailed: A copy does not match its original. The original was kept.
+VerifyFailed: “C:\Data\report.xlsx” was copied, but the copy does not match the original. The original was kept.
 Unknown: Something went wrong.
 Unknown: Something went wrong with “C:\Data\report.xlsx”.

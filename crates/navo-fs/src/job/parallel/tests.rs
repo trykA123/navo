@@ -62,6 +62,7 @@ fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers
             removals: &removals,
             sources: None,
             targets: &targets,
+            verify: None,
         },
         &mut ctx,
         pool,

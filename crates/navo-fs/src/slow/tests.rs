@@ -60,3 +60,17 @@ fn positive_delay_enables_simulation() {
         Some(Duration::from_millis(30))
     );
 }
+
+#[test]
+fn content_hash_reaches_the_inner_provider() {
+    let fake = Arc::new(FakeFs::new());
+    fake.add_file("folder/file", 42);
+    fake.set_hash("folder/file", [7; 32]);
+    let file = fake.location("folder/file");
+    let slow = SlowFs::new(fake, Duration::from_millis(1));
+
+    assert_eq!(
+        slow.content_hash(&file, &CancelToken::new()).unwrap(),
+        [7; 32]
+    );
+}

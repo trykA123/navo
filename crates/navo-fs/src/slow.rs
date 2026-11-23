@@ -6,8 +6,8 @@ use navo_core::{FsError, Location, ProviderId};
 
 use crate::{
     CancelToken, Capabilities, CopyControl, FileDetails, FileIdentity, FsEntry, ListSink,
-    MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UnixAccess, VerifiedRename, Watch,
-    WatchSink,
+    MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UncachedHash, UnixAccess,
+    VerifiedRename, Watch, WatchSink,
 };
 
 pub struct SlowFs {
@@ -250,6 +250,22 @@ impl ProviderOps for SlowFs {
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         self.sleep();
         self.inner.volume_serial(location)
+    }
+
+    /// Hashes the file through the inner provider after the delay.
+    fn content_hash(&self, location: &Location, cancel: &CancelToken) -> Result<[u8; 32], FsError> {
+        self.sleep();
+        self.inner.content_hash(location, cancel)
+    }
+
+    /// Hashes the file past the cache through the inner provider after the delay.
+    fn content_hash_uncached(
+        &self,
+        location: &Location,
+        cancel: &CancelToken,
+    ) -> Result<UncachedHash, FsError> {
+        self.sleep();
+        self.inner.content_hash_uncached(location, cancel)
     }
 }
 

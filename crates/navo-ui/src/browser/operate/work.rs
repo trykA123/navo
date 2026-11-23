@@ -3,7 +3,7 @@ use navo_core::{
 };
 use navo_fs::{
     AutoTuning, CancelToken, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
-    WorkerCounts, existing_at, job_workers, run_job_parallel, run_job_parallel_with_sources, scan,
+    VerifyCount, WorkerCounts, existing_at, job_workers, scan,
 };
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -114,6 +114,7 @@ pub(in crate::browser) enum Run {
 pub(super) struct JobWork {
     pub id: u64,
     pub copying: Copying,
+    pub verify: Option<Arc<VerifyCount>>,
     pub pending: PendingOp,
     pub ops: Arc<dyn ProviderOps>,
     pub factory: LogFactory,
@@ -230,21 +231,6 @@ impl JobWork {
             (JobOutcome::Failed { .. }, Some(explain)) => explain().map_or(Ok(outcome), Err),
             _ => Ok(outcome),
         }
-    }
-
-    fn run_plain(&self, ctx: &mut JobContext<'_>) -> JobOutcome {
-        let pending = &self.pending;
-        if let Some(stream) = &pending.stream {
-            // Items are served one at a time, so one worker reads them.
-            return run_job_parallel_with_sources((&pending.plan, &stream.sources), &[], ctx, 1);
-        }
-        let workers = worker_count(
-            self.copying,
-            pending.plan.kind,
-            pending.sources.first(),
-            pending.target.as_ref(),
-        );
-        run_job_parallel(&pending.plan, &[], ctx, workers)
     }
 
     fn report_waiting(&self, is_waiting: bool) {

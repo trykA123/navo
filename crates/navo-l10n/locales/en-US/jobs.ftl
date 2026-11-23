@@ -28,6 +28,7 @@ job-delete-retained-help = Kept in Recently deleted for { $days ->
 }
 job-retention-changed = This delete can no longer run as you confirmed it. Nothing was deleted. Check the retention settings, then delete again.
 job-queued = Queued
+job-verify-switch = Verify after copy
 paste-virtual-refused = { $count ->
     [one] Not pasted because its name was refused: { $names }
    *[other] Not pasted because their names were refused: { $names }

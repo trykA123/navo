@@ -76,6 +76,7 @@ largest-files = true
 
 [copy]
 mode = "auto"
+verify = "auto"
 
 [retention]
 retain-deletes = true

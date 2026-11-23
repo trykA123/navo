@@ -18,9 +18,11 @@ pub(super) struct Keys {
     pub can_confirm: bool,
     pub cancel: FocusHandle,
     pub choice: Option<FocusHandle>,
+    pub switch: Option<FocusHandle>,
     pub on_confirm: Option<Handler>,
     pub on_cancel: Option<Handler>,
     pub on_toggle: Option<Handler>,
+    pub on_switch: Option<Handler>,
 }
 
 impl Keys {
@@ -42,13 +44,24 @@ impl Keys {
         }
     }
 
+    /// Runs the switch row's handler, if the dialog has one.
+    pub(super) fn switch(&self, window: &mut Window, cx: &mut App) {
+        if let Some(handler) = &self.on_switch {
+            handler(window, cx);
+        }
+    }
+
+    /// Presses the focused stop: a check row flips, a button confirms or cancels.
     fn activate(&self, window: &mut Window, cx: &mut App) {
-        if self
-            .choice
-            .as_ref()
-            .is_some_and(|choice| choice.contains_focused(window, cx))
-        {
+        let has_focus = |handle: &Option<FocusHandle>| {
+            handle
+                .as_ref()
+                .is_some_and(|h| h.contains_focused(window, cx))
+        };
+        if has_focus(&self.choice) {
             self.toggle(window, cx);
+        } else if has_focus(&self.switch) {
+            self.switch(window, cx);
         } else if self.cancel.contains_focused(window, cx) {
             self.cancel(window, cx);
         } else if self.can_confirm && self.confirm.contains_focused(window, cx) {

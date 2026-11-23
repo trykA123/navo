@@ -16,6 +16,8 @@ pub(in crate::browser) struct PlannedOp {
     pub retain_deletes: Option<RetentionPolicy>,
     pub cannot_retain: bool,
     pub slow_volumes: SlowVolumes,
+    /// Drive class of the target, probed on the planning thread.
+    pub target_class: DriveClass,
 }
 
 #[derive(Debug, Clone)]

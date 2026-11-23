@@ -41,8 +41,8 @@ pub use parse::{parse, parse_retention, to_toml};
 pub use retention::RetentionSettings;
 pub use view::{
     Automotive, AutomotiveView, CopyMode, CopySettings, ImageView, ImageViewer, MarkdownView,
-    MarkdownViewer, PreviewView, PreviewViewer, TextView, TextViewer, ViewPreset, WindowSettings,
-    WindowView,
+    MarkdownViewer, PreviewView, PreviewViewer, TextView, TextViewer, VerifyMode, ViewPreset,
+    WindowSettings, WindowView,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

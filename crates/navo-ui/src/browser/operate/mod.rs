@@ -13,6 +13,7 @@ mod reporter;
 mod retain;
 mod stream;
 mod types;
+mod verify;
 mod work;
 
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
@@ -71,6 +72,7 @@ impl Browser {
         }
         let retain_deletes = self.operations.retain_deletes.clone();
         let slow = self.slow_volume();
+        let class_of = self.copying.class_of;
         let (provider, sender, wake) = (
             Arc::clone(&self.provider),
             self.sender.clone(),
@@ -100,6 +102,7 @@ impl Browser {
                             request.sources.iter().chain(request.target.iter()),
                             &slow,
                         ),
+                        target_class: verify::target_class(class_of, request.target.as_ref()),
                     }
                 });
                 let _ = sender.send(Message::Job(JobUpdate::Planned {
@@ -333,6 +336,7 @@ impl Browser {
                 let conflicts = pending.stream.is_some() && !pending.plan.conflicts.is_empty();
                 let asks = request.asks || pending.is_protected() || conflicts;
                 self.dialog_opened();
+                self.offer_verify(&pending, planned.target_class);
                 self.pending = Some(pending);
                 if !asks {
                     self.confirm();

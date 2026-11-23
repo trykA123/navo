@@ -3,7 +3,7 @@ use crate::ProviderPath;
 use FsErrorKind::*;
 use RecoveryAction::*;
 
-const ALL_KINDS: [FsErrorKind; 15] = [
+const ALL_KINDS: [FsErrorKind; 16] = [
     NotFound,
     AccessDenied,
     SharingViolation,
@@ -18,6 +18,7 @@ const ALL_KINDS: [FsErrorKind; 15] = [
     JournalWriteFailed,
     ChangedOnDisk,
     SourceFilterFailed,
+    VerifyFailed,
     Unknown,
 ];
 
@@ -102,7 +103,7 @@ fn errno_values_map_to_their_kind() {
 
 #[test]
 fn every_kind_has_its_recovery_actions() {
-    let expected: [(FsErrorKind, &[RecoveryAction]); 15] = [
+    let expected: [(FsErrorKind, &[RecoveryAction]); 16] = [
         (NotFound, &[Skip, SkipAll, Cancel]),
         (AccessDenied, &[RetryAsAdmin, Skip, SkipAll, Cancel]),
         (SharingViolation, &[Retry, Skip, SkipAll, Cancel]),
@@ -117,6 +118,7 @@ fn every_kind_has_its_recovery_actions() {
         (JournalWriteFailed, &[Retry, Cancel]),
         (ChangedOnDisk, &[Cancel]),
         (SourceFilterFailed, &[Retry, Skip, SkipAll, Cancel]),
+        (VerifyFailed, &[Retry, Cancel]),
         (Unknown, &[Retry, Skip, Cancel]),
     ];
     let got: Vec<(FsErrorKind, &[RecoveryAction])> = ALL_KINDS
@@ -153,6 +155,18 @@ fn messages_of_every_kind() {
     insta::with_settings!({ prepend_module_to_snapshot => false }, {
         insta::assert_snapshot!("fs_error_messages", lines.join("\n"));
     });
+}
+
+#[test]
+fn verify_failed_messages_say_the_original_was_kept() {
+    assert_eq!(
+        error(VerifyFailed, None).message(),
+        "A copy does not match its original. The original was kept."
+    );
+    assert_eq!(
+        error(VerifyFailed, Some("report.docx")).message(),
+        "\u{201c}report.docx\u{201d} was copied, but the copy does not match the original. The original was kept."
+    );
 }
 
 #[test]

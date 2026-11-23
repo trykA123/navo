@@ -17,6 +17,7 @@ mod source;
 mod stream;
 mod temporary;
 mod undo;
+mod verify;
 mod workers;
 mod write_file;
 
@@ -29,6 +30,7 @@ pub use aside::HELD_PREFIX;
 pub use moved::{PreparedMove, recorded_proof, settle_prepared_move, undo_move};
 pub use rename::{RenameOutcome, is_temporary as is_rename_temporary};
 pub use source::{SourceContent, SourceIdentity, SourceMetadata, SourceOps, Sources, TempCreated};
+pub use verify::{VerifyCount, VerifyMode};
 pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
 
 pub use navo_core::TEMP_SUFFIX;
@@ -220,7 +222,11 @@ pub fn run_job_with_sources(
     ctx: &mut JobContext<'_>,
     sources: &Sources,
 ) -> JobOutcome {
-    run::run_with((plan, Some(sources)), &DoneSet::of_plan(plan, done), ctx)
+    run::run_with(
+        (plan, Some(sources), None),
+        &DoneSet::of_plan(plan, done),
+        ctx,
+    )
 }
 
 /// Parallel form of [`run_job_with_sources`].
@@ -233,9 +239,32 @@ pub fn run_job_parallel_with_sources(
 ) -> JobOutcome {
     let done = &DoneSet::of_plan(plan, done);
     if workers <= 1 || plan.kind == OpKind::Rename {
-        return run::run_with((plan, Some(sources)), done, ctx);
+        return run::run_with((plan, Some(sources), None), done, ctx);
     }
-    parallel::run_with((plan, Some(sources)), done, ctx, workers)
+    parallel::run_with((plan, Some(sources), None), done, ctx, workers)
+}
+
+/// How [`run_job_with`] runs a plan: worker threads, source providers and the verify counter.
+pub struct JobOptions<'s> {
+    pub workers: usize,
+    pub sources: Option<&'s Sources>,
+    pub verify: Option<&'s VerifyCount>,
+}
+
+/// Runs a plan with `options`: step by step for one worker or a rename, else on a worker pool.
+#[must_use]
+pub fn run_job_with(
+    plan: &OperationPlan,
+    done: &[u32],
+    ctx: &mut JobContext<'_>,
+    options: JobOptions<'_>,
+) -> JobOutcome {
+    let done = &DoneSet::of_plan(plan, done);
+    let input = (plan, options.sources, options.verify);
+    if options.workers <= 1 || plan.kind == OpKind::Rename {
+        return run::run_with(input, done, ctx);
+    }
+    parallel::run_with(input, done, ctx, options.workers)
 }
 
 #[must_use]

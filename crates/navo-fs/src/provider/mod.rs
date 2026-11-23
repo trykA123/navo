@@ -9,7 +9,10 @@ use navo_core::{FsError, FsErrorKind, Location, ProviderId, ProviderPath};
 
 pub use cancel::CancelToken;
 pub use navo_core::EntryKind;
-pub use ops::{FileIdentity, FileIdentityKind, GitPauseGuard, ProviderOps, UnixAccess};
+pub use ops::{
+    FileIdentity, FileIdentityKind, GitPauseGuard, ProviderOps, ReadSource, UncachedHash,
+    UnixAccess,
+};
 pub use owned::{CopyControl, OwnedCopy, StreamWrite};
 pub(crate) use verified::Seen;
 pub use verified::{MoveProof, RenameSkip, VerifiedRename};

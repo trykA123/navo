@@ -1,6 +1,6 @@
 use super::ops::{fail_now, vacant};
 use super::tree::split_last;
-use super::{FakeFs, FakeOp, Fault, error};
+use super::{FakeFs, FakeOp, Fault, error, lock};
 use crate::{CopyControl, EntryKind, FsEntry, ProviderOps, WatchChange};
 use navo_core::{FsError, FsErrorKind, Location};
 const CHUNK: u64 = 4096;
@@ -53,7 +53,22 @@ impl FakeFs {
         self.changed(&to, WatchChange::Modified);
         match limit {
             Some((kind, _)) => Err(error(kind, target)),
-            None => Ok(written),
+            None => {
+                self.copy_hash(&from, identity);
+                Ok(written)
+            }
+        }
+    }
+
+    /// Gives the finished copy (tree identity `to`) the hash set on `from`, if it has one,
+    /// so a copied fake file hashes like its source.
+    fn copy_hash(&self, from: &str, to: u64) {
+        let Some(source) = self.tree().identity(from) else {
+            return;
+        };
+        let mut sizes = lock(&self.sizes);
+        if let Some(hash) = sizes.get(&source).and_then(|found| found.hash) {
+            sizes.entry(to).or_default().hash = Some(hash);
         }
     }
 

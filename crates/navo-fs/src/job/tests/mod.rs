@@ -42,6 +42,8 @@ mod recycle;
 mod rename;
 mod replace;
 mod roll_back;
+mod run_job_with;
+mod verify;
 mod volume_proof;
 mod workers;
 mod write;

@@ -176,6 +176,7 @@ impl NavoWindow {
                     cx.notify();
                 });
             });
+        let dialog = self.verify_switch(dialog, pending.id, cx);
         Some(
             div()
                 .id("scrim")
@@ -189,6 +190,23 @@ impl NavoWindow {
                 .child(dialog)
                 .into_any_element(),
         )
+    }
+
+    /// Adds the "Verify after copy" switch to `dialog` when the pending plan `id` may verify; it
+    /// shows the resolved choice and a flip goes to the browser.
+    fn verify_switch(&self, dialog: ConfirmDialog, id: u64, cx: &Context<Self>) -> ConfirmDialog {
+        if !self.browser.can_verify() {
+            return dialog;
+        }
+        let view = cx.weak_entity();
+        let on = self.browser.verifies(id).is_some();
+        let label = tr("job-verify-switch").into();
+        dialog.switch(Choice { label, on }, move |_, cx| {
+            let _ = view.update(cx, |view, cx| {
+                view.browser.toggle_verify();
+                cx.notify();
+            });
+        })
     }
 
     fn close_dialog(&mut self, confirmed: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -255,5 +273,7 @@ impl NavoWindow {
     }
 }
 
+#[cfg(test)]
+mod switch_tests;
 #[cfg(test)]
 mod tests;

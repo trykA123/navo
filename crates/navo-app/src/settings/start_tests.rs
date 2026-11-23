@@ -41,11 +41,12 @@ fn a_fresh_start_writes_every_setting_and_records_the_defaults() {
         "provider = \"system\"",
         "[text.view]\nline-numbers = true",
         "[copy]\nmode = \"auto\"",
+        "verify = \"auto\"",
         "[automotive.view]\npreset = \"simple\"",
     ] {
         assert!(text.contains(key), "{key} missing from {text}");
     }
-    assert_eq!(recorded(&at.ledger), 87);
+    assert_eq!(recorded(&at.ledger), 88);
     assert_eq!(started.default_changes, []);
     let settings = hooks(started.loaded);
     assert_eq!(settings.values, Values::default());
@@ -121,7 +122,7 @@ fn the_background_start_gives_the_same_result() {
     )
     .finish();
     assert!(started.loaded.is_some());
-    assert_eq!(recorded(&at.ledger), 87);
+    assert_eq!(recorded(&at.ledger), 88);
     assert!(
         fs::read_to_string(&at.file)
             .unwrap()

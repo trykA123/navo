@@ -124,7 +124,7 @@ fn pattern() -> Vec<u8> {
 }
 
 #[cfg(unix)]
-fn local(path: &Path) -> Location {
+pub(super) fn local(path: &Path) -> Location {
     use std::os::unix::ffi::OsStrExt;
     Location::local(navo_core::ProviderPath::from_bytes(
         path.as_os_str().as_bytes(),
@@ -133,7 +133,7 @@ fn local(path: &Path) -> Location {
 }
 
 #[cfg(windows)]
-fn local(path: &Path) -> Location {
+pub(super) fn local(path: &Path) -> Location {
     use std::os::windows::ffi::OsStrExt;
     let units: Vec<u16> = path.as_os_str().encode_wide().collect();
     Location::local(navo_core::ProviderPath::from_wide(&units)).unwrap()

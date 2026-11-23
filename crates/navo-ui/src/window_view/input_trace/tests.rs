@@ -313,3 +313,17 @@ fn pause_git_reaches_the_inner_provider_through_the_trace() {
     assert!(wrapped.pause_git(&location).unwrap().is_none());
     assert_eq!(spy.pauses.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn content_hash_reaches_the_inner_provider_and_counts_one_call() {
+    let fs = fake();
+    fs.set_hash("home/a.txt", [7; 32]);
+    let location = fs.location("home/a.txt");
+    let calls = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let wrapped = provider::CountingFs::new(fs, calls.clone());
+
+    let hash = wrapped.content_hash(&location, &navo_fs::CancelToken::new());
+
+    assert_eq!(hash.unwrap(), [7; 32]);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}

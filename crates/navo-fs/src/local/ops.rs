@@ -329,6 +329,16 @@ impl ProviderOps for LocalFs {
             .map_err(|e| io_error(&e, location))?
             .ok_or_else(|| error(FsErrorKind::Cancelled, location))
     }
+
+    fn content_hash_uncached(
+        &self,
+        location: &Location,
+        cancel: &CancelToken,
+    ) -> Result<crate::UncachedHash, FsError> {
+        super::hash::blake3_uncached(&os_path(location)?, cancel)
+            .map_err(|e| io_error(&e, location))?
+            .ok_or_else(|| error(FsErrorKind::Cancelled, location))
+    }
 }
 
 #[cfg(test)]

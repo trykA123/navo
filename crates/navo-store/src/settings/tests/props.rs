@@ -167,8 +167,11 @@ fn viewers() -> impl Strategy<Value = (TextViewer, ImageViewer, Automotive, Copy
     let image = any::<bool>().prop_map(|details| ImageViewer {
         view: ImageView { details },
     });
-    let copy = prop_oneof![Just(CopyMode::Auto), Just(CopyMode::Standard)]
-        .prop_map(|mode| CopySettings { mode });
+    let copy =
+        prop_oneof![Just(CopyMode::Auto), Just(CopyMode::Standard)].prop_map(|mode| CopySettings {
+            mode,
+            ..CopySettings::default()
+        });
     (text, image, automotive(), copy)
 }
 

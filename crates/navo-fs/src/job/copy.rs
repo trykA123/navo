@@ -1,6 +1,7 @@
 use navo_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution, Step};
 
 use super::aside::Aside;
+use super::verify::SourceDigest;
 use super::{FileStamp, JobContext, PlacedFile, StepOutcome};
 use crate::{CancelToken, CopyControl, FileIdentity, OwnedCopy, ProviderOps};
 
@@ -12,6 +13,7 @@ pub(super) struct Copier<'a> {
     pub removals: &'a super::remove::Removals<'a>,
     pub sources: Option<&'a super::Sources>,
     pub targets: &'a super::plan_targets::PlanTargets,
+    pub verify: Option<&'a super::VerifyCount>,
 }
 
 pub(super) struct CopyStep<'a> {
@@ -181,7 +183,7 @@ fn write(
         identity = Some(found);
         Ok(())
     };
-    let written = transfer(copier, (step, temp), hooks.progress, &mut created)?;
+    let (written, digest) = transfer(copier, (step, temp), hooks.progress, &mut created)?;
     if cancel.is_cancelled() {
         return Err(failure(FsErrorKind::Cancelled, step.target));
     }
@@ -192,6 +194,7 @@ fn write(
     if copier.strict && !ops.matches_identity(temp, identity)? {
         return Err(failure(FsErrorKind::IdentityUnavailable, temp));
     }
+    super::verify::check(copier, (step, temp), digest)?;
     Ok((
         FileStamp {
             size: on_disk.size,
@@ -201,12 +204,13 @@ fn write(
     ))
 }
 
+/// Copies the bytes of `step` into `temp` and says where the verify check gets the source hash.
 fn transfer(
     copier: &Copier<'_>,
     (step, temp): (&CopyStep<'_>, &Location),
     progress: &mut dyn FnMut(u64),
     created: &mut dyn FnMut(FileIdentity) -> Result<(), FsError>,
-) -> Result<u64, FsError> {
+) -> Result<(u64, SourceDigest), FsError> {
     let Copier {
         ops,
         cancel,
@@ -214,19 +218,22 @@ fn transfer(
         ..
     } = *copier;
     if super::stream::crosses(step) {
-        return super::stream::stream(copier, (step, temp), progress, created);
+        return super::stream::stream(copier, (step, temp), progress, created)
+            .map(|written| (written, SourceDigest::Unavailable));
     }
-    if !strict {
-        return ops.copy_file(step.source, temp, progress, cancel);
-    }
-    ops.copy_file_owned(
-        OwnedCopy {
-            source: step.source,
-            target: temp,
-            created,
-        },
-        CopyControl { progress, cancel },
-    )
+    let written = if strict {
+        ops.copy_file_owned(
+            OwnedCopy {
+                source: step.source,
+                target: temp,
+                created,
+            },
+            CopyControl { progress, cancel },
+        )
+    } else {
+        ops.copy_file(step.source, temp, progress, cancel)
+    }?;
+    Ok((written, SourceDigest::ReadAgain))
 }
 
 fn flush_folder(ops: &dyn ProviderOps, flush: bool, target: &Location) -> Result<(), FsError> {

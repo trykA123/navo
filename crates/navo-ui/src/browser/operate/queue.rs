@@ -7,6 +7,7 @@ use navo_fs::{
     CancelToken, DriveClass, JobKind, JobSlot, Priority, VolumeId, drive_class, volume_of,
 };
 
+use super::verify::Verifies;
 use super::work::JobWork;
 use super::{Browser, JobStatus, JobUpdate, KeepOld, PendingOp, Run};
 use crate::browser::Message;
@@ -18,6 +19,7 @@ pub(in crate::browser) struct JobQueue {
     slow: SlowVolume,
     waiting: Vec<Waiting>,
     running: HashMap<u64, SlowVolumes>,
+    pub(super) verifies: Verifies,
 }
 
 struct Waiting {
@@ -32,6 +34,7 @@ impl Default for JobQueue {
             slow: Arc::new(is_slow),
             waiting: Vec::new(),
             running: HashMap::new(),
+            verifies: Verifies::default(),
         }
     }
 }
@@ -99,6 +102,7 @@ impl Browser {
         let factory = factory.ok_or_else(|| navo_l10n::tr("job-retention-probe-failed"))?;
         let work = JobWork {
             id: pending.id,
+            verify: self.verifies(pending.id),
             copying: self.copying,
             factory: Arc::clone(factory),
             pending,
