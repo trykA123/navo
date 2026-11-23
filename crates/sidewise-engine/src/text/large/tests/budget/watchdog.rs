@@ -466,9 +466,10 @@ fn cancel_on_blocked_recovery(
     token: &CancelToken,
 ) -> std::thread::JoinHandle<()> {
     let cancel = token.clone();
+    // Event-driven: the channel wakes at once; 60 s is only a hang guard for a loaded runner.
     std::thread::spawn(move || {
         blocked
-            .recv_timeout(Duration::from_secs(5))
+            .recv_timeout(Duration::from_secs(60))
             .expect("a recovery read must block before the cancel");
         cancel.cancel();
     })
@@ -479,7 +480,7 @@ fn collect_short(diff: &LargeDiff) -> Vec<DiffEvent> {
     loop {
         let event = diff
             .events()
-            .recv_timeout(Duration::from_secs(5))
+            .recv_timeout(Duration::from_secs(60))
             .expect("cancel must end the diff");
         let done = matches!(event, DiffEvent::Done(_));
         events.push(event);

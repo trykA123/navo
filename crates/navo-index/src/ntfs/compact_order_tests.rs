@@ -1,3 +1,6 @@
+//! Compaction keeps child order, so a case-folded folder lookup still finds the same folder.
+use std::time::{Duration, Instant};
+
 use super::{CREATE, DELETE, FIRST_FILE, NEW_NAME, OLD_NAME, ROOT, Tree, apply, record};
 use crate::ntfs::{COMPACT_MIN_SLOTS, NtfsIndex};
 use crate::table::Totals;
@@ -14,10 +17,15 @@ fn sized(file: u128, parent: u128, bytes: u64) -> UsnRecord {
     }
 }
 
+/// Folder totals and child names under `PARENT`; the lookup gets a generous deadline.
 fn answer(index: &NtfsIndex) -> (Option<Totals>, Vec<String>) {
     let table = &index.table;
+    // `find_folder` has a 20 ms deadline that a loaded CI runner can miss on a million slots.
+    let deadline = Instant::now() + Duration::from_secs(60);
     let found = table
-        .find_folder("C:/P/case")
+        .folder_lookup()
+        .find_folder("C:/P/case", deadline)
+        .expect("the lookup finishes before its deadline")
         .and_then(|id| table.totals(id));
     let parent = index.ids.get(&PARENT).copied().unwrap_or_default();
     let names = table.child_names(parent).into_iter().map(str::to_owned);

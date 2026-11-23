@@ -132,28 +132,50 @@ fn recovery_crash_loop_at(n: u64, first: Pattern, commit: bool) -> Result<u64, S
     Ok(ops)
 }
 
-/// Runs `recovery_crash_loop_at` from every job crash; returns the most recovery ops seen.
-fn recovery_crash_loop(commit: bool) -> Result<u64, String> {
+/// Runs `recovery_crash_loop_at` from every job crash made with pattern `PATTERNS[first]`;
+/// returns the most recovery ops seen. One slice per first pattern lets nextest run them in parallel.
+fn recovery_crash_loop(commit: bool, first: usize) -> Result<u64, String> {
     let mut most = 0;
     for n in 1..=job_ops(commit) + 1 {
-        for first in PATTERNS {
-            most = most.max(recovery_crash_loop_at(n, first, commit)?);
-        }
+        most = most.max(recovery_crash_loop_at(n, PATTERNS[first], commit)?);
     }
     Ok(most)
 }
 
-#[test]
-fn recover_after_a_crash_at_every_op_of_recovery_itself() {
-    let most = recovery_crash_loop(true).unwrap();
-    assert!(most > 25, "a recovery rolls back two items ({most} ops)");
+/// Makes one test per first-crash pattern for each of the committed and aborted jobs, so the
+/// slow recovery-crash loops run side by side and each stays far below the CI time limit.
+macro_rules! recovery_slices {
+    ($($slice:ident: $first:expr),+ $(,)?) => {
+        mod recovery_of_a_committed_job {
+            use super::recovery_crash_loop;
+            $(
+                #[test]
+                fn $slice() {
+                    let most = recovery_crash_loop(true, $first).unwrap();
+                    assert!(most > 25, "a recovery rolls back two items ({most} ops)");
+                }
+            )+
+        }
+        mod recovery_of_an_aborted_job {
+            use super::recovery_crash_loop;
+            $(
+                #[test]
+                fn $slice() {
+                    let most = recovery_crash_loop(false, $first).unwrap();
+                    assert!(most > 25, "a recovery rolls back two items ({most} ops)");
+                }
+            )+
+        }
+    };
 }
 
-#[test]
-fn recover_after_a_crash_at_every_op_of_recovery_of_an_aborted_job() {
-    let most = recovery_crash_loop(false).unwrap();
-    assert!(most > 25, "a recovery rolls back two items ({most} ops)");
-}
+recovery_slices!(
+    first_crash_all_lost: 0,
+    first_crash_all_kept: 1,
+    first_crash_even_kept_torn: 2,
+    first_crash_odd_kept_mixed: 3,
+    first_crash_none_kept_torn: 4,
+);
 
 #[test]
 fn recover_crash_loop_fails_when_the_backed_line_is_not_synced() {
