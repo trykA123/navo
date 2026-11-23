@@ -38,6 +38,11 @@ jobs:
   check-tag:
     runs-on: ubuntu-latest
     steps:
+      - name: Releases run from main only
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          [ "$REF" = "refs/heads/main" ] || { echo "releases run from main only (ref: $REF)"; exit 1; }
       - name: Tag name is valid and unused outside a dry run
         env:
           GH_TOKEN: ${{ github.token }}
@@ -287,6 +292,7 @@ jobs:
 
   publish:
     needs: [clippy-windows, gate-windows, build-windows, speed]
+    environment: release
     # Skipped checks count as passed; a failed or cancelled one stops the release.
     if: >-
       always() && needs.build-windows.result == 'success'

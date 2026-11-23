@@ -1,7 +1,10 @@
 name: windows-quick
 
-# Clippy and the Windows test suite for one branch, run by hand; no Linux gate, no release build.
+# Clippy and the Windows test suite on every push to main and every pull request, or by hand; no Linux gate, no release build.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
