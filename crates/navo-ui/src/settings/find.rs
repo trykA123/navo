@@ -36,7 +36,8 @@ impl Filter {
         if spec.section == Section::Help {
             return false;
         }
-        if (spec.field.is_windows_only() && !cfg!(windows))
+        if !spec.field.is_shown()
+            || (spec.field.is_windows_only() && !cfg!(windows))
             || self.hidden == Some(spec.field)
             || !spec.section.is_shown()
         {

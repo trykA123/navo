@@ -13,7 +13,6 @@ const DOT_LIFT: f32 = 5.;
 const DEFAULT: &str = "Default";
 const CHANGED: &str = "Changed";
 const LIVE: &str = "Live";
-const NOT_APPLIED: &str = "Not applied yet";
 
 pub(super) fn tag(t: &Theme, index: usize, is_changed: bool) -> impl IntoElement + use<> {
     let (text, color) = if is_changed {
@@ -129,17 +128,9 @@ pub(super) fn notes(
     field: Field,
     taken: (bool, bool),
 ) -> impl Iterator<Item = AnyElement> + use<> {
-    let pending = (!field.is_applied()).then(|| {
-        note(
-            t,
-            "settings-not-applied",
-            NOT_APPLIED.into(),
-            t.colors.muted,
-        )
-    });
-    let taken = taken_note(field, taken)
-        .map(|(id, key)| note(t, id, navo_l10n::tr(key).into(), t.colors.mark));
-    [pending, taken].into_iter().flatten()
+    taken_note(field, taken)
+        .map(|(id, key)| note(t, id, navo_l10n::tr(key).into(), t.colors.mark))
+        .into_iter()
 }
 
 fn note(t: &Theme, id: &'static str, text: SharedString, color: Hsla) -> AnyElement {

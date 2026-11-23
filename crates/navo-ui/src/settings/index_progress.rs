@@ -40,7 +40,7 @@ impl VolumeProgress {
             None => (IndexState::Ready, Some(100)),
             Some(UPDATING..) => (IndexState::Updating, None),
             Some(0) => (IndexState::Building, None),
-            Some(_) => (IndexState::Building, None),
+            Some(percent) => (IndexState::Building, Some(percent)),
         };
         Self {
             root: root.trim_end_matches(['\\', '/']).to_owned().into(),
@@ -185,10 +185,16 @@ mod tests {
                 (IndexState::Building, None),
                 (IndexState::Updating, None),
                 (IndexState::Ready, Some(100)),
-                (IndexState::Building, None),
+                (IndexState::Building, Some(42)),
             ]
         );
         assert_eq!(view.volumes[1].root.as_ref(), "D:");
+    }
+
+    #[test]
+    fn a_building_volume_carries_its_percent() {
+        assert_eq!(VolumeProgress::new("C:", 0, Some(34)).percent, Some(34));
+        assert_eq!(VolumeProgress::new("C:", 0, Some(0)).percent, None);
     }
 
     #[test]

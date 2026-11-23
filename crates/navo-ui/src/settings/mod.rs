@@ -7,6 +7,7 @@ mod compare_fields;
 mod compare_options;
 mod controls;
 mod diagnostics_page;
+mod field_visibility;
 mod fields;
 mod find;
 mod find_bar;
@@ -35,6 +36,8 @@ mod window_fields;
 
 #[cfg(test)]
 mod find_tests;
+#[cfg(test)]
+mod hidden_tests;
 #[cfg(test)]
 mod tests;
 

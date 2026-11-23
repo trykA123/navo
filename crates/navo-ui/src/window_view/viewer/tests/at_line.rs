@@ -96,7 +96,7 @@ fn a_key_that_is_not_in_the_file_opens_at_its_section_header_with_a_note(cx: &mu
     open_at_key(cx, window, &view);
     assert_eq!(cursor_line(cx, &view), Some(1));
     let note = viewer_note(cx, window).unwrap_or_default();
-    assert!(note.contains("appearance.light-theme"), "{note}");
+    assert!(note.contains("appearance.font"), "{note}");
     assert!(note.contains("the default applies"), "{note}");
 }
 

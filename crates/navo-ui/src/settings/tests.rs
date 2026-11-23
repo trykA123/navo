@@ -179,8 +179,6 @@ fn appearance_has_the_modifier_hint_rows() {
     assert_eq!(delay.section, Section::Appearance);
     assert_eq!(delay.key, "appearance.modifier-hints-delay-ms");
     assert_eq!(delay.control, Control::Number);
-    assert!(Field::ModifierHints.is_applied());
-    assert!(Field::ModifierHintsDelay.is_applied());
 }
 
 #[test]
@@ -240,8 +238,6 @@ fn the_display_section_groups_the_window_and_each_viewer_in_order() {
             "automotive.modules",
         ]
     );
-    assert!(!Field::AutomotiveCharts.is_applied());
-    assert!(Field::AutomotiveInspector.is_applied());
 }
 
 #[test]
@@ -303,7 +299,6 @@ fn the_markdown_split_and_both_preview_parts_default_to_on() {
     ] {
         assert!(values.flag(field), "{}", field.spec().key);
         assert!(!values.is_changed(field));
-        assert!(field.is_applied());
     }
     let hidden = values.with(&Change {
         field: Field::PreviewTypeBars,
@@ -332,7 +327,6 @@ fn every_window_part_but_the_fkey_bar_is_on_by_default_and_reads_back() {
     assert!(!WindowParts::of(&hidden).size_column);
     assert!(WindowParts::of(&hidden).date_column);
     assert!(hidden.is_changed(Field::WindowSizeColumn));
-    assert!(Field::WindowContents.is_applied());
 }
 
 #[test]
@@ -377,7 +371,6 @@ fn the_copy_mode_row_sits_in_its_own_section_with_plain_help() {
         "Auto copies several files at once where the drives allow; Standard copies one file at a time."
     );
     assert!(matches!(row.control, Control::Choices(choices, Look::Segments) if choices.len() == 2));
-    assert!(Field::CopyMode.is_applied());
 }
 
 #[test]
@@ -502,7 +495,6 @@ fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
         &Value::Text("$Recycle.Bin, System Volume Information".into())
     );
     assert!(Field::SearchDrives.is_list() && Field::SearchExclude.is_list());
-    assert!(rows_in(Section::Search).all(|(_, spec)| spec.field.is_applied()));
 }
 
 #[test]

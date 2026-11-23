@@ -97,7 +97,7 @@ fn bar(t: &Theme, index: usize, percent: u8) -> impl IntoElement + use<> {
     div()
         .id(("settings-index-bar", index))
         .role(Role::ProgressIndicator)
-        .aria_label(format!("{percent}%"))
+        .aria_label(format!("{percent} %"))
         .test_support()
         .flex_1()
         .min_w(px(48.))
@@ -135,7 +135,7 @@ fn volume_row(t: &Theme, index: usize, volume: &VolumeProgress) -> AnyElement {
         .gap(t.spacing.lg)
         .when_some(volume.percent, |line, percent| {
             line.child(bar(t, index, percent))
-                .child(muted(t, format!("{percent}%")))
+                .child(muted(t, format!("{percent} %")))
         })
         .child(muted(t, files));
     div()

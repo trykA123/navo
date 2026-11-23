@@ -104,21 +104,3 @@ fn patterns_select_folders_when_that_row_is_on(cx: &mut TestAppContext) {
     });
     assert!(marked, "docs is marked");
 }
-
-#[gpui_kit::test]
-fn rows_without_a_consumer_say_they_are_not_applied_yet(cx: &mut TestAppContext) {
-    let rig = rig(cx, ThemeChoice::System);
-    rig.press(cx, "ctrl-,");
-    cx.update_window(rig.window, |_, window, cx| {
-        window.render_frame(cx);
-        let mut note = |row: usize| {
-            window
-                .within(("settings-row", row))
-                .try_find("settings-not-applied")
-                .and_then(|found| found.label().map(str::to_owned))
-        };
-        assert_eq!(note(4).as_deref(), Some("Not applied yet"));
-        assert_eq!(note(1), None);
-    })
-    .expect("window");
-}

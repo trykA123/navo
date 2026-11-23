@@ -385,19 +385,4 @@ impl Field {
     pub fn is_window_part(self) -> bool {
         (Self::WindowTabsWithOne.index()..=Self::WindowContents.index()).contains(&self.index())
     }
-
-    pub fn is_applied(self) -> bool {
-        !matches!(
-            self,
-            Self::LightTheme
-                | Self::DarkTheme
-                | Self::TerminalProvider
-                | Self::TerminalCommand
-                | Self::AutomotiveMemoryStrip
-                | Self::AutomotiveCharts
-                | Self::AutomotiveRowBars
-                | Self::AutomotiveUsageBars
-                | Self::AutomotiveWhoUses
-        )
-    }
 }
