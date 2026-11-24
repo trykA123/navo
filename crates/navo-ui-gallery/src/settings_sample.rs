@@ -3,7 +3,7 @@ use navo_ui::prelude::*;
 use navo_ui::primitives::TextFieldState;
 use navo_ui::settings::{
     self, Change, DefaultShift, Field, Filter, Folds, GitPage, IndexProgress, Moved, SearchPage,
-    ServiceStatus, SettingsBody, Values, VolumeProgress, find_field,
+    ServiceStatus, SettingsBody, Split, Values, VolumeProgress, find_field,
 };
 use navo_ui::side_sheet::{SheetFrame, SheetState, SideSheet};
 use navo_ui::tokens::{Mode, Theme, ThemeChoice};
@@ -43,8 +43,20 @@ fn notice() -> Vec<Moved> {
 fn index_sample() -> IndexProgress {
     IndexProgress {
         volumes: vec![
-            VolumeProgress::new("C:", 1_482_310, None),
-            VolumeProgress::new("D:", 412_907, Some(100)),
+            VolumeProgress {
+                split: Some(Split {
+                    files: 1_301_877,
+                    folders: 180_432,
+                }),
+                ..VolumeProgress::new("C:", 1_482_310, None)
+            },
+            VolumeProgress {
+                split: Some(Split {
+                    files: 371_116,
+                    folders: 41_790,
+                }),
+                ..VolumeProgress::new("D:", 412_907, Some(100))
+            },
             VolumeProgress {
                 percent: Some(37),
                 ..VolumeProgress::new("E: (sample)", 86_240, Some(0))

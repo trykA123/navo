@@ -1,13 +1,14 @@
+//! The Settings index block: service state, counts, indexed drives, memory and per-drive rows.
+
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 
-use super::index_progress::{IndexProgress, IndexState, VolumeProgress};
+use super::index_progress::{IndexProgress, IndexState, Split, VolumeProgress};
 use super::search_page::{heading, row};
 use crate::prelude::*;
 use crate::tokens::Theme;
 
-pub(super) const PROGRESS_WORDS: &str =
-    "index progress building updating ready volume files percent memory service";
+pub(super) const PROGRESS_WORDS: &str = "index progress building updating ready volume drives ntfs files folders percent memory service";
 
 const DOT: f32 = 8.;
 const BAR: f32 = 6.;
@@ -44,6 +45,24 @@ fn muted(t: &Theme, text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 
+/// "X files · Y folders" once the split is known, else the raw entry count as items.
+fn count_text(entries: u64, split: Option<Split>) -> String {
+    match split {
+        Some(split) => navo_l10n::t!(
+            "settings-index-files",
+            files = split.files,
+            files_shown = crate::format::bytes(split.files),
+            folders = split.folders,
+            folders_shown = crate::format::bytes(split.folders)
+        ),
+        None => navo_l10n::t!(
+            "settings-index-entries",
+            count = entries,
+            shown = crate::format::bytes(entries)
+        ),
+    }
+}
+
 fn state_row(t: &Theme, progress: &IndexProgress) -> AnyElement {
     let state = progress.state();
     let chip = state_chip(t, state)
@@ -57,16 +76,43 @@ fn state_row(t: &Theme, progress: &IndexProgress) -> AnyElement {
         controls.push(muted(t, text).into_any_element());
     }
     if progress.is_reachable {
-        let files = navo_l10n::t!(
-            "settings-index-files",
-            count = crate::format::bytes(progress.files())
-        );
-        controls.push(muted(t, files).into_any_element());
+        let counts = count_text(progress.entries(), progress.split());
+        controls.push(muted(t, counts).into_any_element());
     }
     row(
         t,
         "settings-index-progress",
         ("settings-index-state", "settings-index-state-help"),
+        controls,
+    )
+    .into_any_element()
+}
+
+/// The indexed drive roots as small labels, with the NTFS-only help line.
+fn drives_row(t: &Theme, progress: &IndexProgress) -> AnyElement {
+    let drive = |text: SharedString| {
+        div()
+            .flex_none()
+            .px(t.spacing.sm)
+            .rounded(t.radii.sm)
+            .border_1()
+            .border_color(t.surfaces.card_edge)
+            .text_size(t.typography.small)
+            .child(text)
+            .into_any_element()
+    };
+    let mut controls: Vec<AnyElement> = progress
+        .volumes
+        .iter()
+        .map(|volume| drive(volume.root.clone()))
+        .collect();
+    if controls.is_empty() {
+        controls.push(muted(t, navo_l10n::tr("settings-index-drives-none")).into_any_element());
+    }
+    row(
+        t,
+        "settings-index-drives",
+        ("settings-index-drives", "settings-index-drives-help"),
         controls,
     )
     .into_any_element()
@@ -114,10 +160,7 @@ fn bar(t: &Theme, index: usize, percent: u8) -> impl IntoElement + use<> {
 }
 
 fn volume_row(t: &Theme, index: usize, volume: &VolumeProgress) -> AnyElement {
-    let files = navo_l10n::t!(
-        "settings-index-files",
-        count = crate::format::bytes(volume.files)
-    );
+    let files = count_text(volume.entries, volume.split);
     let title = div()
         .flex()
         .items_center()
@@ -155,11 +198,11 @@ fn volume_row(t: &Theme, index: usize, volume: &VolumeProgress) -> AnyElement {
 }
 
 pub(super) fn progress_block(t: &Theme, progress: &IndexProgress) -> Vec<AnyElement> {
-    let mut block = vec![
-        heading(t, "settings-index-heading"),
-        state_row(t, progress),
-        memory_row(t, progress),
-    ];
+    let mut block = vec![heading(t, "settings-index-heading"), state_row(t, progress)];
+    if progress.is_reachable {
+        block.push(drives_row(t, progress));
+    }
+    block.push(memory_row(t, progress));
     block.extend(
         progress
             .volumes

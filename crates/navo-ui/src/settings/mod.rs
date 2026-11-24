@@ -63,7 +63,7 @@ pub use find::{Filter, Line, lines};
 pub use find_bar::find_field;
 pub use fold::{Folds, clamped_row, fold_row, outer_row};
 pub use git_page::GitPage;
-pub use index_progress::{IndexProgress, IndexState, VolumeProgress};
+pub use index_progress::{IndexProgress, IndexState, Split, VolumeProgress};
 pub use search_page::{SearchPage, ServiceStatus};
 pub use steps::{
     HELP_ROW, Nudge, child_of, digit_of, first_row, moved, next_section, nudged, rows_in,

@@ -4,6 +4,7 @@ use gpui_kit::{AsyncApp, Task, WeakEntity};
 use navo_index::pipe::{Query, QueryTerm, Request};
 
 use super::{Section, section_of};
+use crate::browser::{FolderTotalsQuery, TotalsState};
 use crate::command_center::index_source::{PipeAnswer, PipeQueries};
 use crate::command_center::{Cancel, IndexMode, IndexOptions};
 use crate::prelude::*;
@@ -12,8 +13,13 @@ use crate::window_view::NavoWindow;
 
 const EVERY: Duration = Duration::from_secs(1);
 
-/// Asks the service for its status and memory. `None` means it was busy and the last view stands.
-pub(super) fn fetch(pipe: &PipeQueries, options: &IndexOptions) -> Option<IndexProgress> {
+/// Asks the service for its status, memory and each volume root's folder totals (the file/folder
+/// split). `None` means it was busy and the last view stands.
+pub(super) fn fetch(
+    pipe: &PipeQueries,
+    totals: &FolderTotalsQuery,
+    options: &IndexOptions,
+) -> Option<IndexProgress> {
     if !matches!(options.mode, IndexMode::Auto | IndexMode::Service) {
         return Some(IndexProgress::default());
     }
@@ -33,7 +39,23 @@ pub(super) fn fetch(pipe: &PipeQueries, options: &IndexOptions) -> Option<IndexP
         PipeAnswer::Replied(reply) => reply.memory,
         PipeAnswer::Silent | PipeAnswer::Absent => None,
     };
-    Some(IndexProgress::of(Some(&status), memory.as_ref()))
+    let progress = IndexProgress::of(Some(&status), memory.as_ref());
+    let roots = root_totals(totals, &progress.roots());
+    Some(progress.with_totals(&roots))
+}
+
+/// Folder totals for the volume roots; a root that is no valid location stays unavailable.
+fn root_totals(totals: &FolderTotalsQuery, roots: &[String]) -> Vec<TotalsState> {
+    let locations: Option<Vec<_>> = roots
+        .iter()
+        .map(|root| navo_core::Location::new(root).ok())
+        .collect();
+    match locations {
+        Some(locations) if !locations.is_empty() => {
+            totals.query_many(&locations, &navo_fs::CancelToken::new())
+        }
+        _ => Vec::new(),
+    }
 }
 
 impl NavoWindow {
@@ -49,16 +71,17 @@ impl NavoWindow {
     }
 
     async fn poll_index_progress(this: &WeakEntity<Self>, cx: &mut AsyncApp) -> bool {
-        let Ok((pipe, options)) = this.read_with(cx, |view, _| {
+        let Ok((pipe, totals, options)) = this.read_with(cx, |view, _| {
             (
                 view.settings.search.index.pipe.clone(),
+                view.settings.search.folder_totals.clone(),
                 IndexOptions::of(&view.values),
             )
         }) else {
             return false;
         };
         let found = cx
-            .background_spawn(async move { fetch(&pipe, &options) })
+            .background_spawn(async move { fetch(&pipe, &totals, &options) })
             .await;
         this.update(cx, |view, cx| view.receive_index_progress(found, cx))
             .unwrap_or(false)
@@ -98,6 +121,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::browser::no_folder_totals;
     use crate::settings::IndexState;
 
     fn options() -> IndexOptions {
@@ -157,16 +181,41 @@ mod tests {
                 Ok(building())
             }
         }));
-        let view = fetch(&queries, &options()).unwrap();
+        let view = fetch(&queries, &no_folder_totals(), &options()).unwrap();
         assert_eq!(view.state(), IndexState::Building);
-        assert_eq!((view.files(), view.memory), (1234, Some(2048)));
+        assert_eq!((view.entries(), view.memory), (1234, Some(2048)));
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn root_totals_give_each_volume_its_files_and_folders() {
+        let (queries, _) = pipe(Box::new(|query| {
+            if query.request.terms.contains(&QueryTerm::MemoryV1) {
+                Ok(memory(1))
+            } else {
+                Ok(building())
+            }
+        }));
+        let asked = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = asked.clone();
+        let totals: FolderTotalsQuery = Arc::new(move |root: &navo_core::Location| {
+            seen.lock().ok()?.push(root.as_str().to_owned());
+            Some(navo_index::pipe::FolderTotals {
+                files: 1000,
+                folders: 233,
+                ..Default::default()
+            })
+        });
+        let view = fetch(&queries, &totals, &options()).unwrap();
+        let split = view.split().unwrap();
+        assert_eq!((split.files, split.folders), (1000, 233));
+        assert_eq!(asked.lock().unwrap().len(), 1);
     }
 
     #[test]
     fn a_missing_service_is_not_running() {
         let (queries, _) = pipe(Box::new(|_| Err(PipeError::NotAvailable)));
-        let view = fetch(&queries, &options()).unwrap();
+        let view = fetch(&queries, &no_folder_totals(), &options()).unwrap();
         assert_eq!(view.state(), IndexState::NotRunning);
     }
 
@@ -179,7 +228,7 @@ mod tests {
                 Ok(building())
             }
         }));
-        let view = fetch(&queries, &options()).unwrap();
+        let view = fetch(&queries, &no_folder_totals(), &options()).unwrap();
         assert_eq!((view.state(), view.memory), (IndexState::Building, None));
     }
 
@@ -188,7 +237,7 @@ mod tests {
         let (queries, _) = pipe(Box::new(|_| {
             Err(PipeError::Io(std::io::ErrorKind::TimedOut.into()))
         }));
-        assert!(fetch(&queries, &options()).is_none());
+        assert!(fetch(&queries, &no_folder_totals(), &options()).is_none());
     }
 
     #[test]
@@ -196,7 +245,7 @@ mod tests {
         let (queries, calls) = pipe(Box::new(|_| Ok(Reply::default())));
         for mode in [IndexMode::Walk, IndexMode::Off] {
             let options = IndexOptions { mode, ..options() };
-            let view = fetch(&queries, &options).unwrap();
+            let view = fetch(&queries, &no_folder_totals(), &options).unwrap();
             assert_eq!(view.state(), IndexState::NotRunning);
         }
         assert_eq!(calls.load(Ordering::SeqCst), 0);

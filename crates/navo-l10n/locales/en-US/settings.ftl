@@ -216,7 +216,20 @@ settings-index-state-building = Building
 settings-index-state-updating = Updating
 settings-index-state-ready = Ready
 settings-index-current = Working on { $root }
-settings-index-files = { $count } files
+settings-index-files = { $files ->
+    [one] 1 file
+   *[other] { $files_shown } files
+} · { $folders ->
+    [one] 1 folder
+   *[other] { $folders_shown } folders
+}
+settings-index-entries = { $count ->
+    [one] 1 item
+   *[other] { $shown } items
+}
+settings-index-drives = Indexed drives
+settings-index-drives-help = Only fixed NTFS drives are indexed. Counts leave out each drive's root folder.
+settings-index-drives-none = None yet
 settings-index-memory = Service memory
 settings-index-memory-help = Memory the index service uses, as reported by the service.
 settings-index-memory-unknown = Not reported

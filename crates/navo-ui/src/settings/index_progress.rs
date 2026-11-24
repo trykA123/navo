@@ -1,5 +1,9 @@
+//! What Settings shows about the index service: per-volume state, entries, files and folders.
+
 use gpui_kit::SharedString;
 use navo_index::pipe::{MemoryReport, Part, Status};
+
+use crate::browser::TotalsState;
 
 const UPDATING: u8 = 100;
 
@@ -25,17 +29,36 @@ impl IndexState {
     }
 }
 
+/// Files and folders under a volume root; the root itself is not counted.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub struct Split {
+    pub files: u64,
+    pub folders: u64,
+}
+
+impl Split {
+    fn plus(self, other: Self) -> Self {
+        Self {
+            files: self.files.saturating_add(other.files),
+            folders: self.folders.saturating_add(other.folders),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct VolumeProgress {
     pub root: SharedString,
     pub state: IndexState,
-    pub files: u64,
+    /// Every name the index holds on this volume: files, folders and the root.
+    pub entries: u64,
     pub percent: Option<u8>,
+    /// The file/folder split, once the service answers folder totals for the root.
+    pub split: Option<Split>,
 }
 
 impl VolumeProgress {
     #[must_use]
-    pub fn new(root: &str, files: u64, progress: Option<u8>) -> Self {
+    pub fn new(root: &str, entries: u64, progress: Option<u8>) -> Self {
         let (state, percent) = match progress {
             None => (IndexState::Ready, Some(100)),
             Some(UPDATING..) => (IndexState::Updating, None),
@@ -45,8 +68,9 @@ impl VolumeProgress {
         Self {
             root: root.trim_end_matches(['\\', '/']).to_owned().into(),
             state,
-            files,
+            entries,
             percent,
+            split: None,
         }
     }
 }
@@ -97,11 +121,49 @@ impl IndexProgress {
             .find(|volume| volume.state == state && state != IndexState::Ready)
     }
 
+    /// Every name in the index, files, folders and roots together.
     #[must_use]
-    pub fn files(&self) -> u64 {
+    pub fn entries(&self) -> u64 {
         self.volumes
             .iter()
-            .fold(0, |total, volume| total.saturating_add(volume.files))
+            .fold(0, |total, volume| total.saturating_add(volume.entries))
+    }
+
+    /// The indexed volume roots, in service order, as the totals query paths.
+    #[must_use]
+    pub fn roots(&self) -> Vec<String> {
+        self.volumes
+            .iter()
+            .map(|volume| format!("{}\\", volume.root))
+            .collect()
+    }
+
+    /// Takes the root totals, one per volume in order; busy or missing answers leave no split.
+    #[must_use]
+    pub fn with_totals(mut self, totals: &[TotalsState]) -> Self {
+        if totals.len() != self.volumes.len() {
+            return self;
+        }
+        for (volume, total) in self.volumes.iter_mut().zip(totals) {
+            volume.split = match total {
+                TotalsState::Ready(found) => Some(Split {
+                    files: u64::from(found.files),
+                    folders: u64::from(found.folders),
+                }),
+                TotalsState::Busy | TotalsState::Unavailable => None,
+            };
+        }
+        self
+    }
+
+    /// The file/folder split over all volumes, known only when every volume has one.
+    #[must_use]
+    pub fn split(&self) -> Option<Split> {
+        self.volumes
+            .iter()
+            .try_fold(Split::default(), |sum, volume| {
+                Some(sum.plus(volume.split?))
+            })
     }
 }
 
@@ -160,7 +222,7 @@ mod tests {
         let view = IndexProgress::of(None, None);
         assert_eq!(view.state(), IndexState::NotRunning);
         assert!(view.volumes.is_empty() && view.current().is_none());
-        assert_eq!(view.files(), 0);
+        assert_eq!(view.entries(), 0);
     }
 
     #[test]
@@ -209,7 +271,7 @@ mod tests {
         );
         assert_eq!(view.state(), IndexState::Building);
         assert_eq!(view.current().map(|v| v.root.as_ref()), Some("E:"));
-        assert_eq!(view.files(), 18);
+        assert_eq!(view.entries(), 18);
     }
 
     #[test]
@@ -224,7 +286,7 @@ mod tests {
         let view = IndexProgress::of(Some(&status(&[])), None);
         assert_eq!(view.state(), IndexState::Ready);
         let empty = IndexProgress::of(Some(&status(&[("C:", 0, Some(0))])), None);
-        assert_eq!(empty.volumes[0].files, 0);
+        assert_eq!(empty.volumes[0].entries, 0);
         assert_eq!(empty.volumes[0].percent, None);
     }
 
@@ -234,7 +296,39 @@ mod tests {
             Some(&status(&[("C:", u64::MAX, None), ("D:", 5, None)])),
             None,
         );
-        assert_eq!(view.files(), u64::MAX);
+        assert_eq!(view.entries(), u64::MAX);
+    }
+
+    fn root(files: u32, folders: u32) -> TotalsState {
+        TotalsState::Ready(navo_index::pipe::FolderTotals {
+            files,
+            folders,
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn root_totals_split_files_from_folders_per_volume_and_in_sum() {
+        let view = IndexProgress::of(Some(&status(&[("C:", 31, None), ("D:\\", 9, None)])), None)
+            .with_totals(&[root(20, 10), root(5, 3)]);
+        assert_eq!(view.roots(), ["C:\\", "D:\\"]);
+        let split = |files, folders| Some(Split { files, folders });
+        assert_eq!(view.volumes[0].split, split(20, 10));
+        assert_eq!(view.volumes[1].split, split(5, 3));
+        assert_eq!(view.split(), split(25, 13));
+    }
+
+    #[test]
+    fn a_busy_or_missing_root_total_leaves_no_split() {
+        let status = status(&[("C:", 31, Some(0)), ("D:", 9, None)]);
+        let view =
+            IndexProgress::of(Some(&status), None).with_totals(&[TotalsState::Busy, root(5, 3)]);
+        assert_eq!(view.volumes[0].split, None);
+        assert!(view.volumes[1].split.is_some());
+        assert_eq!(view.split(), None);
+        let short = IndexProgress::of(Some(&status), None).with_totals(&[root(1, 1)]);
+        assert_eq!(short.split(), None);
+        assert_eq!(short.volumes[0].split, None);
     }
 
     #[test]
