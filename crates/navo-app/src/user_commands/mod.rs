@@ -124,7 +124,7 @@ fn load(path: &Path) -> Loaded {
             news: UserCommandNews::Invalid(
                 errors
                     .iter()
-                    .map(|error| format!("{FILE}, {error}"))
+                    .map(model::LineError::message)
                     .collect::<Vec<_>>()
                     .join("\n"),
             ),

@@ -6,10 +6,6 @@ use std::path::Path;
 
 use crate::editor::{Search, clean, resolve};
 
-/// The message a placeholder gets when the program is a link or alias.
-pub(super) const UNKNOWN_PROGRAM: &str =
-    "the program name cannot be verified; placeholders are not allowed";
-
 /// How the program file itself appears on disk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum FileKind {

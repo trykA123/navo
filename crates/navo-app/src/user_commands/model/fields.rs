@@ -8,7 +8,7 @@ use crate::terminal::split;
 
 use super::key::normalize_key;
 use super::template::{first_placeholder, literal_text, template};
-use super::{LineError, Part, Placeholder, Token, line_at};
+use super::{Field, LineError, ParseError, Part, Placeholder, Token, line_at};
 
 pub(super) fn read_name(
     text: &str,
@@ -21,12 +21,15 @@ pub(super) fn read_name(
     if name.trim().is_empty() {
         errors.push(LineError {
             line,
-            message: "`name` cannot be empty".to_owned(),
+            error: ParseError::Empty(Field::Name),
         });
     } else if let Some(first) = names.insert(name.clone(), line) {
         errors.push(LineError {
             line,
-            message: format!("`{name}` is already defined at line {first}"),
+            error: ParseError::DuplicateName {
+                name: name.clone(),
+                first_line: first,
+            },
         });
     }
     name
@@ -40,18 +43,18 @@ pub(super) fn read_program(
     let line = line_at(text, program.span().start);
     let token = match template(program.get_ref()) {
         Ok(token) => token,
-        Err(message) => {
-            errors.push(LineError { line, message });
+        Err(error) => {
+            errors.push(LineError {
+                line,
+                error: ParseError::Template(error),
+            });
             return None;
         }
     };
     if let Some(placeholder) = first_placeholder(&token) {
         errors.push(LineError {
             line,
-            message: format!(
-                "`program` cannot contain `{{{}}}`; it is the program to start",
-                placeholder.name()
-            ),
+            error: ParseError::ProgramPlaceholder(placeholder),
         });
         return None;
     }
@@ -59,7 +62,7 @@ pub(super) fn read_program(
     if program.trim().is_empty() {
         errors.push(LineError {
             line,
-            message: "`program` cannot be empty".to_owned(),
+            error: ParseError::Empty(Field::Program),
         });
         None
     } else {
@@ -77,10 +80,14 @@ pub(super) fn read_args(
         return (Vec::new(), Vec::new(), block_line);
     };
     let line = line_at(text, args.span().start);
-    let words = match split(args.get_ref()).map_err(|error| error.message()) {
+    // `split` fails only on an open quotation mark.
+    let words = match split(args.get_ref()) {
         Ok(words) => words,
-        Err(message) => {
-            errors.push(LineError { line, message });
+        Err(_) => {
+            errors.push(LineError {
+                line,
+                error: ParseError::UnclosedQuote,
+            });
             return (Vec::new(), Vec::new(), line);
         }
     };
@@ -88,7 +95,10 @@ pub(super) fn read_args(
     for word in &words {
         match template(word) {
             Ok(token) => tokens.push(token),
-            Err(message) => errors.push(LineError { line, message }),
+            Err(error) => errors.push(LineError {
+                line,
+                error: ParseError::Template(error),
+            }),
         }
     }
     (tokens, words, line)
@@ -111,25 +121,25 @@ pub(super) fn read_start_in(
     let line = line_at(text, start_in.span().start);
     let token = match template(start_in.get_ref()) {
         Ok(token) => token,
-        Err(message) => {
-            errors.push(LineError { line, message });
+        Err(error) => {
+            errors.push(LineError {
+                line,
+                error: ParseError::Template(error),
+            });
             return (Vec::new(), line);
         }
     };
     if token.parts.is_empty() {
         errors.push(LineError {
             line,
-            message: "`start-in` cannot be empty".to_owned(),
+            error: ParseError::Empty(Field::StartIn),
         });
         return (Vec::new(), line);
     }
     if let Some(placeholder) = unsupported_start_in(&token) {
         errors.push(LineError {
             line,
-            message: format!(
-                "`{{{}}}` cannot be used in `start-in`; only `{{folder}}` and `{{other-folder}}` are allowed",
-                placeholder.name()
-            ),
+            error: ParseError::StartInPlaceholder(placeholder),
         });
     }
     (vec![token], line)
@@ -155,8 +165,11 @@ pub(super) fn read_key(
     let line = line_at(text, key.span().start);
     match normalize_key(key.get_ref()) {
         Ok(key) => Some(key),
-        Err(message) => {
-            errors.push(LineError { line, message });
+        Err(error) => {
+            errors.push(LineError {
+                line,
+                error: ParseError::Key(error),
+            });
             None
         }
     }

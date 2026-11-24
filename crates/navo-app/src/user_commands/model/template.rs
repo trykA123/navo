@@ -3,9 +3,11 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use super::{Part, Placeholder, Token};
+use super::{Part, Placeholder, TemplateError, Token};
 
-pub(super) fn template(text: &str) -> Result<Token, String> {
+/// Splits one value into literal text and placeholders; fails on a stray brace, an unknown
+/// name or a `{marked}` that is not the whole value.
+pub(super) fn template(text: &str) -> Result<Token, TemplateError> {
     let mut parts = Vec::new();
     let mut literal = String::new();
     let mut chars = text.chars().peekable();
@@ -25,7 +27,7 @@ pub(super) fn template(text: &str) -> Result<Token, String> {
                 parts.push(Part::Placeholder(placeholder));
             }
             '}' => {
-                return Err("a lone `}` is not allowed; write `}}` for a literal brace".to_owned());
+                return Err(TemplateError::LoneBrace);
             }
             other => literal.push(other),
         }
@@ -36,7 +38,7 @@ pub(super) fn template(text: &str) -> Result<Token, String> {
         .iter()
         .any(|part| matches!(part, Part::Placeholder(Placeholder::Marked)));
     if marked && !whole {
-        return Err("`{marked}` must be a whole argument".to_owned());
+        return Err(TemplateError::MarkedNotWhole);
     }
     Ok(Token { parts })
 }
@@ -59,16 +61,15 @@ pub(super) fn literal_text(token: &Token) -> String {
         .collect()
 }
 
-fn placeholder(chars: &mut Peekable<Chars<'_>>) -> Result<Placeholder, String> {
+fn placeholder(chars: &mut Peekable<Chars<'_>>) -> Result<Placeholder, TemplateError> {
     let mut name = String::new();
     for next in chars.by_ref() {
         if next == '}' {
-            return Placeholder::named(&name)
-                .ok_or_else(|| format!("`{{{name}}}` is not a placeholder"));
+            return Placeholder::named(&name).ok_or(TemplateError::UnknownPlaceholder { name });
         }
         name.push(next);
     }
-    Err("a `{` is not closed; write `{{` for a literal brace".to_owned())
+    Err(TemplateError::UnclosedBrace)
 }
 
 fn flush(parts: &mut Vec<Part>, literal: &mut String) {

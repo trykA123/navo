@@ -2,31 +2,41 @@
 
 use navo_ui::commands::normal_key;
 
+use super::KeyError;
+
 const MODIFIERS: [&str; 10] = [
     "ctrl", "control", "alt", "shift", "fn", "function", "platform", "win", "super", "cmd",
 ];
 
-pub(super) fn normalize_key(key: &str) -> Result<String, String> {
+/// Turns a `key` value into the app's normal form, such as `ctrl-shift-e`; fails when it is
+/// not one usable shortcut.
+pub(super) fn normalize_key(key: &str) -> Result<String, KeyError> {
     if key.split_whitespace().count() != 1 {
-        return Err("a shortcut must be one key".to_owned());
+        return Err(KeyError::NotOneKey);
     }
-    let normal = normal_key(key).ok_or_else(|| format!("`{key}` is not a key"))?;
-    let (key_name, modifiers) =
-        split_normal(&normal).ok_or_else(|| format!("`{key}` is not a key"))?;
+    let not_a_key = || KeyError::NotAKey {
+        key: key.to_owned(),
+    };
+    let normal = normal_key(key).ok_or_else(not_a_key)?;
+    let (key_name, modifiers) = split_normal(&normal).ok_or_else(not_a_key)?;
     if MODIFIERS.contains(&key_name) {
-        return Err(format!("`{key}` is a modifier alone; add another key"));
+        return Err(KeyError::ModifierAlone {
+            key: key.to_owned(),
+        });
     }
     if bare(key_name, &modifiers) {
-        return Err(format!(
-            "`{key}` is a bare letter or digit; add Ctrl or Alt"
-        ));
+        return Err(KeyError::Bare {
+            key: key.to_owned(),
+        });
     }
     if modifiers
         .iter()
         .any(|modifier| matches!(*modifier, "win" | "super" | "cmd" | "platform"))
         || os_reserved(key_name, &modifiers)
     {
-        return Err(format!("`{key}` is reserved by the operating system"));
+        return Err(KeyError::Reserved {
+            key: key.to_owned(),
+        });
     }
     Ok(normal)
 }

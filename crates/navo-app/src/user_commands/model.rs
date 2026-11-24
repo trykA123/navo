@@ -1,18 +1,19 @@
 //! The user command file: TOML into commands and line errors.
 
 use std::collections::HashMap;
-use std::fmt;
 
 use serde::Deserialize;
 use toml::Spanned;
 
 use crate::editor::Search;
 
+mod error;
 mod fields;
 mod key;
 mod shell;
 mod template;
 
+pub use self::error::{Field, KeyError, LineError, ParseError, TemplateError};
 use self::fields::{read_args, read_key, read_name, read_program, read_start_in};
 use self::shell::Shell;
 pub(super) use self::shell::{is_shell_word, is_terminal, terminal_error};
@@ -98,21 +99,6 @@ impl Placeholder {
         })
     }
 }
-
-/// What is wrong in the file and where.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LineError {
-    pub line: usize,
-    pub message: String,
-}
-
-impl fmt::Display for LineError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "line {}: {}", self.line, self.message)
-    }
-}
-
-impl std::error::Error for LineError {}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -227,10 +213,10 @@ fn validate_program(shell: Shell<'_>, search: Option<&Search>, errors: &mut Vec<
         errors.push(error);
         return;
     }
-    if let Some(message) = terminal_error(shell.program, shell.args) {
+    if terminal_error(shell.program, shell.args).is_some() {
         errors.push(LineError {
             line: shell.args_line,
-            message: message.to_owned(),
+            error: ParseError::TerminalPlaceholder,
         });
     }
 }
@@ -243,7 +229,7 @@ fn note_unknown_program(shell: &Shell<'_>, search: &Search, errors: &mut Vec<Lin
     }
     errors.push(LineError {
         line: shell.program_line,
-        message: super::program::UNKNOWN_PROGRAM.to_owned(),
+        error: ParseError::UnknownProgram,
     });
     true
 }
@@ -261,7 +247,9 @@ fn syntax_error(text: &str, error: &toml::de::Error) -> LineError {
     let line = error.span().map_or(1, |span| line_at(text, span.start));
     LineError {
         line,
-        message: error.message().to_owned(),
+        error: ParseError::Syntax {
+            detail: error.message().to_owned(),
+        },
     }
 }
 

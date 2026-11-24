@@ -5,7 +5,8 @@ use crate::editor::Search;
 
 use super::super::program::{FileKind, with_probe};
 use super::{
-    Console, LineError, Part, Placeholder, Token, UserCommand, parse, parse_without_identity,
+    Console, Field, KeyError, LineError, ParseError, Part, Placeholder, TemplateError, Token,
+    UserCommand, parse, parse_without_identity,
 };
 
 fn command(fields: &str) -> String {
@@ -124,7 +125,10 @@ fn marked_must_be_a_whole_argument() {
     );
     let error = only_error(&command("args = 'pre{marked}post'\n"));
     assert_eq!(error.line, 4);
-    assert!(error.message.contains("whole argument"), "{error}");
+    assert_eq!(
+        error.error,
+        ParseError::Template(TemplateError::MarkedNotWhole)
+    );
 }
 
 #[test]
@@ -137,13 +141,58 @@ fn literal_braces_write_braces() {
 fn an_unknown_placeholder_names_its_line() {
     let error = only_error(&command("args = 'x {{ }} {what}'\n"));
     assert_eq!(error.line, 4);
-    assert!(error.message.contains("{what}"), "{error}");
+    assert_eq!(
+        error.error,
+        ParseError::Template(TemplateError::UnknownPlaceholder {
+            name: "what".to_owned()
+        })
+    );
 }
 
 #[test]
 fn an_unclosed_brace_is_an_error() {
     let error = only_error(&command("args = 'x {file'\n"));
     assert_eq!(error.line, 4);
+    assert_eq!(
+        error.error,
+        ParseError::Template(TemplateError::UnclosedBrace)
+    );
+}
+
+#[test]
+fn a_lone_closing_brace_is_an_error() {
+    let error = only_error(&command("args = 'x }'\n"));
+    assert_eq!(error.line, 4);
+    assert_eq!(error.error, ParseError::Template(TemplateError::LoneBrace));
+}
+
+#[test]
+fn an_open_quote_in_args_is_an_error() {
+    let error = only_error(&command("args = '\"a b'\n"));
+    assert_eq!(error.line, 4);
+    assert_eq!(error.error, ParseError::UnclosedQuote);
+}
+
+#[test]
+fn an_empty_field_names_the_field() {
+    let cases = [
+        (
+            "[[command]]\nname = \" \"\nprogram = \"tool.exe\"\n".to_owned(),
+            2,
+            Field::Name,
+        ),
+        (
+            "[[command]]\nname = \"x\"\nprogram = \"\"\n".to_owned(),
+            3,
+            Field::Program,
+        ),
+        (command("start-in = ''\n"), 4, Field::StartIn),
+    ];
+    for (text, line, field) in cases {
+        let error = only_error(&text);
+        assert_eq!(error.line, line, "{text}");
+        assert_eq!(error.error, ParseError::Empty(field), "{text}");
+    }
 }
 
 #[test]
@@ -160,23 +209,46 @@ fn a_duplicate_name_is_an_error() {
                 [[command]]\nname = \"diff\"\nprogram = \"other.exe\"\n";
     let error = only_error(text);
     assert_eq!(error.line, 6);
-    assert!(error.message.contains("diff"), "{error}");
+    assert_eq!(
+        error.error,
+        ParseError::DuplicateName {
+            name: "diff".to_owned(),
+            first_line: 2
+        }
+    );
 }
 
 #[test]
 fn a_placeholder_in_program_is_an_error() {
     let error = only_error("[[command]]\nname = \"x\"\nprogram = \"{file}\"\n");
     assert_eq!(error.line, 3);
-    assert!(error.message.contains("program"), "{error}");
+    assert_eq!(
+        error.error,
+        ParseError::ProgramPlaceholder(Placeholder::File)
+    );
 }
 
 #[test]
 fn a_bad_key_is_an_error() {
-    for key in ["ctrl", "a", "7", "ctrl-a-b", "ctrl-k ctrl-c", ""] {
+    let key = |key: &str| key.to_owned();
+    let cases = [
+        ("ctrl", KeyError::ModifierAlone { key: key("ctrl") }),
+        ("a", KeyError::Bare { key: key("a") }),
+        ("7", KeyError::Bare { key: key("7") }),
+        (
+            "ctrl-a-b",
+            KeyError::NotAKey {
+                key: key("ctrl-a-b"),
+            },
+        ),
+        ("ctrl-k ctrl-c", KeyError::NotOneKey),
+        ("", KeyError::NotOneKey),
+    ];
+    for (key, expected) in cases {
         let text = command(&format!("key = \"{key}\"\n"));
         let error = only_error(&text);
         assert_eq!(error.line, 4, "{key:?}");
-        assert!(!error.message.is_empty(), "{key:?}");
+        assert_eq!(error.error, ParseError::Key(expected), "{key:?}");
     }
 }
 
@@ -194,7 +266,13 @@ fn a_reserved_key_is_an_error() {
         let text = command(&format!("key = \"{key}\"\n"));
         let error = only_error(&text);
         assert_eq!(error.line, 4, "{key:?}");
-        assert!(error.message.contains("reserved"), "{key:?}: {error}");
+        assert_eq!(
+            error.error,
+            ParseError::Key(KeyError::Reserved {
+                key: key.to_owned()
+            }),
+            "{key:?}"
+        );
     }
 }
 
@@ -220,7 +298,13 @@ fn a_shell_command_may_not_use_placeholders() {
     for (text, line) in errors {
         let error = only_error(&text);
         assert_eq!(error.line, line, "{text}");
-        assert!(error.message.contains("shell"), "{text}: {error}");
+        assert!(
+            matches!(
+                error.error,
+                ParseError::ShellPlaceholder(_) | ParseError::ShellDefaultStart
+            ),
+            "{text}: {error:?}"
+        );
     }
 }
 
@@ -228,7 +312,10 @@ fn a_shell_command_may_not_use_placeholders() {
 fn a_quoted_shell_program_is_a_load_error() {
     let text = with_program("\"cmd.exe\"", "args = '{file}'\nstart-in = 'C:\\work'\n");
     let error = only_error(&text);
-    assert!(error.message.contains("shell"), "{error}");
+    assert!(
+        matches!(error.error, ParseError::ShellPlaceholder(_)),
+        "{error:?}"
+    );
 }
 
 #[test]
@@ -238,7 +325,10 @@ fn a_script_word_with_a_trailing_dot_is_a_load_error() {
         "args = 'run.ps1. {file}'\nstart-in = 'C:\\work'\n",
     );
     let error = only_error(&text);
-    assert!(error.message.contains("shell"), "{error}");
+    assert!(
+        matches!(error.error, ParseError::ShellPlaceholder(_)),
+        "{error:?}"
+    );
 }
 
 #[test]
@@ -276,8 +366,7 @@ fn a_terminal_command_with_a_placeholder_is_a_load_error() {
     for (text, line) in errors {
         let error = only_error(&text);
         assert_eq!(error.line, line, "{text}");
-        assert!(error.message.contains("start-in"), "{error}");
-        assert!(error.message.contains("wt -d ."), "{error}");
+        assert_eq!(error.error, ParseError::TerminalPlaceholder, "{text}");
     }
 
     assert_eq!(
@@ -295,7 +384,7 @@ fn a_shortcut_program_with_a_placeholder_is_a_load_error() {
     let text = with_program(&program.to_string_lossy(), "args = '{file}'\n");
     let error = only_error_with(&text, &search());
     assert_eq!(error.line, 3);
-    assert!(error.message.contains("cannot be verified"), "{error}");
+    assert_eq!(error.error, ParseError::UnknownProgram);
 }
 
 #[cfg(unix)]
@@ -309,7 +398,7 @@ fn a_linked_program_with_a_placeholder_is_a_load_error() {
     let text = with_program(&link.to_string_lossy(), "args = '{file}'\n");
     let error = only_error_with(&text, &search());
     assert_eq!(error.line, 3);
-    assert!(error.message.contains("cannot be verified"), "{error}");
+    assert_eq!(error.error, ParseError::UnknownProgram);
 }
 
 #[test]
@@ -349,7 +438,10 @@ fn a_program_that_resolves_to_a_shell_is_a_load_error() {
     let text = with_program("code", "args = '{file}'\nstart-in = 'C:\\work'\n");
     let error = only_error_with(&text, &search);
     assert_eq!(error.line, 4);
-    assert!(error.message.contains("shell"), "{error}");
+    assert!(
+        matches!(error.error, ParseError::ShellPlaceholder(_)),
+        "{error:?}"
+    );
     let text = with_program("code", "args = '--new'\nstart-in = 'C:\\work'\n");
     assert_eq!(parse(&text, &search).expect("no placeholder").len(), 1);
 }
@@ -358,8 +450,7 @@ fn a_program_that_resolves_to_a_shell_is_a_load_error() {
 fn the_default_start_folder_is_named_in_the_shell_error() {
     let error = only_error(&with_program("cmd", ""));
     assert_eq!(error.line, 1);
-    assert!(error.message.contains("start-in"), "{error}");
-    assert!(error.message.contains("default"), "{error}");
+    assert_eq!(error.error, ParseError::ShellDefaultStart);
 }
 
 #[test]
@@ -370,7 +461,7 @@ fn a_probe_error_with_a_placeholder_is_a_load_error() {
     let text = with_program(&program.to_string_lossy(), "args = '{file}'\n");
     let error = with_probe(FileKind::Uncertain, || only_error_with(&text, &search()));
     assert_eq!(error.line, 3);
-    assert!(error.message.contains("cannot be verified"), "{error}");
+    assert_eq!(error.error, ParseError::UnknownProgram);
 }
 
 #[cfg(unix)]
@@ -385,7 +476,7 @@ fn a_bare_name_found_on_path_that_is_a_link_is_a_load_error() {
     let text = with_program("terminal", "args = '{file}'\n");
     let error = only_error_with(&text, &search_in(&bin));
     assert_eq!(error.line, 3);
-    assert!(error.message.contains("cannot be verified"), "{error}");
+    assert_eq!(error.error, ParseError::UnknownProgram);
 }
 
 #[test]
@@ -401,7 +492,10 @@ fn a_shell_command_without_placeholders_is_allowed() {
 fn start_in_allows_only_folders() {
     let error = only_error(&with_program("tool.exe", "start-in = '{file}'\n"));
     assert_eq!(error.line, 4);
-    assert!(error.message.contains("start-in"), "{error}");
+    assert_eq!(
+        error.error,
+        ParseError::StartInPlaceholder(Placeholder::File)
+    );
     let command = &loaded(&with_program(
         "tool.exe",
         "start-in = '{other-folder}\\x'\n",
@@ -423,7 +517,10 @@ fn braces_in_the_program_are_literal() {
 fn broken_toml_is_a_lined_error() {
     let error = only_error("[[command]\n");
     assert_eq!(error.line, 1);
-    assert!(!error.message.is_empty());
+    assert!(
+        matches!(&error.error, ParseError::Syntax { detail } if !detail.is_empty()),
+        "{error:?}"
+    );
 }
 
 #[test]

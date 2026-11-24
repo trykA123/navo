@@ -3,7 +3,7 @@
 use crate::terminal::is_shell_program;
 
 use super::template::first_placeholder;
-use super::{LineError, Part, Placeholder, Token};
+use super::{LineError, ParseError, Part, Placeholder, Token};
 
 pub(super) struct Shell<'a> {
     pub(super) program: &'a str,
@@ -34,7 +34,7 @@ impl Shell<'_> {
         if self.default_start {
             return Some(LineError {
                 line: self.start_in_line,
-                message: "a command that starts a shell needs a literal `start-in`; the default start folder counts as `{folder}`".to_owned(),
+                error: ParseError::ShellDefaultStart,
             });
         }
         Some(error(self.start_in_line, placeholder))
@@ -93,9 +93,6 @@ fn has_placeholder(token: &Token) -> bool {
 fn error(line: usize, placeholder: Placeholder) -> LineError {
     LineError {
         line,
-        message: format!(
-            "a command that starts a shell cannot contain `{{{}}}`",
-            placeholder.name()
-        ),
+        error: ParseError::ShellPlaceholder(placeholder),
     }
 }
