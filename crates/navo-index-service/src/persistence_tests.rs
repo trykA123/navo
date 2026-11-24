@@ -159,3 +159,22 @@ fn a_corrupt_snapshot_falls_back_to_a_full_read() {
         bytes[last] ^= 0x80;
     });
 }
+
+#[test]
+fn a_published_build_saves_at_once_over_the_old_snapshot() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("volume.index");
+    let mut clock = SaveClock::default();
+    clock.changed(Duration::ZERO);
+    save(&mut clock, &path, &index(), true);
+    let mut built = index();
+    built.table.push(0, "built.txt", Flags::NONE).unwrap();
+    clock.built(Duration::ZERO);
+    save(&mut clock, &path, &built, false);
+    let (_, table, _) = file::load_with_ids(&path).unwrap();
+    assert_eq!(
+        table.name(1),
+        Some("built.txt"),
+        "the build replaced the old snapshot"
+    );
+}

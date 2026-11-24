@@ -17,7 +17,8 @@ use super::Worker;
 impl Worker {
     /// Reads and applies one journal batch; returns the full build it requires, if any.
     /// A failed apply pauses replay and saves, then rebuilds; a read error is returned. A stop
-    /// mid-batch also pauses saves (the index holds part of the batch) and returns `Cancelled`.
+    /// mid-batch blocks saves (the index holds part of the batch), requests no build and returns
+    /// `Cancelled`.
     pub(super) fn follow(
         &mut self,
         volume: &mut Volume,
@@ -55,8 +56,7 @@ impl Worker {
         let unresolved = match journal_batch::apply_batch(&self.shared, batch, stop) {
             Ok(unresolved) => unresolved,
             Err(NtfsError::Cancelled) => {
-                self.rebuilds
-                    .apply_failed(&self.shared, &NtfsError::Cancelled, elapsed);
+                self.rebuilds.apply_cancelled();
                 return Err(NtfsError::Cancelled);
             }
             Err(error) => return Ok(self.rebuilds.apply_failed(&self.shared, &error, elapsed)),

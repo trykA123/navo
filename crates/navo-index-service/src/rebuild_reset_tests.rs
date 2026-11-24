@@ -206,3 +206,23 @@ fn a_failed_apply_after_the_window_builds_at_once_without_saving() {
     assert_eq!(cause, Some(Cause::new(BuildReason::ApplyFailed)));
     assert!(rebuilds.is_deferred() && rebuilds.journal_lost());
 }
+
+/// Blocks saves after a stop mid-batch, without an update error, a deferral or a rebuild (IXH1).
+#[test]
+fn a_cancelled_apply_blocks_saves_without_a_rebuild() {
+    let shared = shared();
+    let (directory, log) = logged();
+    let mut rebuilds = Rebuilds::new('C', log);
+    rebuilds.started(&shared, Cause::new(BuildReason::SnapshotMissing), MINUTE);
+    rebuilds.apply_cancelled();
+    assert_eq!(
+        rebuilds.save_cursor(),
+        SaveCursor::Skip,
+        "the half-applied index is never saved"
+    );
+    assert_eq!(rebuilds.due(MINUTE + REBUILD_WINDOW), None);
+    assert_eq!(builds(&shared).deferred_rebuilds, 0);
+    let text = log_text(&directory);
+    assert!(!text.contains("update error"), "{text}");
+    assert!(!text.contains("rebuild deferred"), "{text}");
+}

@@ -41,6 +41,11 @@ impl Rebuilds {
         self.replay.cursor(self.is_deferred())
     }
 
+    /// Blocks saves after a stop left part of a batch in the index; logs and requests nothing.
+    pub fn apply_cancelled(&mut self) {
+        self.replay.cancelled();
+    }
+
     /// Forgets the replay point once any built or restored index is published.
     pub fn index_published(&mut self) {
         self.replay.published();
@@ -65,7 +70,8 @@ pub(crate) enum SaveCursor {
 }
 
 /// The cursor before the first batch that left changes unresolved since the last published index.
-/// `Some(None)` means that batch began with half of a rename pending, so no cursor is safe.
+/// `Some(None)` means that batch began with half of a rename pending, or a stop cut a batch, so no
+/// cursor is safe.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ReplayPoint(Option<Option<JournalPosition>>);
 
@@ -73,6 +79,11 @@ impl ReplayPoint {
     /// Keeps the start of the first unresolved batch; `start` is `None` when renames were pending.
     pub fn unresolved_batch(&mut self, start: Option<JournalPosition>) {
         self.0.get_or_insert(start);
+    }
+
+    /// Leaves no safe cursor after a stop mid-batch, so saves skip until an index is published.
+    pub fn cancelled(&mut self) {
+        self.0 = Some(None);
     }
 
     /// Forgets the point once a built or restored index is published: its own cursor is exact.

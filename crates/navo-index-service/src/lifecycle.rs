@@ -80,7 +80,8 @@ pub(super) struct SaveClock {
     changed: Option<Duration>,
     retry_at: Option<Duration>,
     failed: bool,
-    large_batch: bool,
+    /// A large batch or a fresh build: save on the next tick, not after 30 s.
+    due_now: bool,
 }
 
 impl SaveClock {
@@ -88,9 +89,15 @@ impl SaveClock {
         self.changed = Some(now);
     }
 
+    /// Marks a freshly built index as due at once, so a crash never waits on the save timer.
+    pub fn built(&mut self, now: Duration) {
+        self.changed(now);
+        self.due_now = true;
+    }
+
     pub fn batch(&mut self, now: Duration, records: usize) {
         self.changed(now);
-        self.large_batch |= records > 10_000;
+        self.due_now |= records > 10_000;
     }
 
     pub fn due<T>(&self, now: Duration, snapshot: Option<&T>, stopping: bool) -> bool {
@@ -98,10 +105,7 @@ impl SaveClock {
             && self.changed.is_some_and(|changed| {
                 stopping
                     || self.retry_at.map_or_else(
-                        || {
-                            self.large_batch
-                                || now.saturating_sub(changed) >= Duration::from_secs(30)
-                        },
+                        || self.due_now || now.saturating_sub(changed) >= Duration::from_secs(30),
                         |retry| now >= retry,
                     )
             })
@@ -111,7 +115,7 @@ impl SaveClock {
         self.changed = None;
         self.retry_at = None;
         self.failed = false;
-        self.large_batch = false;
+        self.due_now = false;
     }
 
     pub fn failed(&mut self, now: Duration) {

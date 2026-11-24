@@ -22,7 +22,6 @@ use super::rebuild::{Cause, Rebuilds, error_kind, file_error_kind};
 use super::rebuild_session::{SaveInput, rebuild_hint, replace, save_snapshot};
 use super::restore_log::restored_line;
 use super::service_log::Log;
-use super::snapshot_discard::{discard_snapshot, enumerate_then_discard};
 use super::storage::Storage;
 
 #[path = "worker_follow.rs"]
@@ -160,13 +159,13 @@ impl Worker {
             permit = Some(held);
             Ok(index)
         })?;
-        if !built {
+        if built {
+            self.publish_built(index);
+            self.rebuilds.regular_build_published();
+        } else {
             let entries = index.table.len();
             self.log_line(restored_line(self.drive.letter, entries, started.elapsed()));
-        }
-        self.publish(index);
-        if built {
-            self.rebuilds.regular_build_published();
+            self.publish(index);
         }
         drop(permit);
         Ok(opened)
@@ -180,7 +179,7 @@ impl Worker {
         cancel: &CancelToken,
     ) -> Result<(), NtfsError> {
         let (index, permit) = self.build(volume, cause, cancel)?;
-        self.publish(index);
+        self.publish_built(index);
         self.rebuilds.regular_build_published();
         drop(permit);
         Ok(())
@@ -205,7 +204,7 @@ impl Worker {
                 .progress = None;
             return Ok(false);
         };
-        self.publish(index);
+        self.publish_built(index);
         drop(permit);
         Ok(true)
     }
@@ -216,6 +215,13 @@ impl Worker {
         self.rebuilds.index_published();
         self.build_failed = false;
         self.clock.changed(self.started.elapsed());
+    }
+
+    /// Publishes a fresh build and saves it on the next tick: the old snapshot stays on disk
+    /// until this save replaces it atomically, and a crash meanwhile replays from that snapshot.
+    fn publish_built(&mut self, index: NtfsIndex) {
+        self.publish(index);
+        self.clock.built(self.started.elapsed());
     }
 
     /// Attempts a regular full build and records its retry delay on error.
@@ -233,8 +239,8 @@ impl Worker {
         self.rebuilds.build_result(attempted)
     }
 
-    /// Builds a candidate and removes the old snapshot only after enumeration succeeded, so a
-    /// stop or a failed build leaves it for the next start (IXH1).
+    /// Builds a candidate; the snapshot on disk is left alone, so a stop or a failed build keeps
+    /// it for the next start and only the next save replaces it (IXH1).
     fn build_candidate(
         &mut self,
         volume: &mut Volume,
@@ -260,23 +266,14 @@ impl Worker {
             total_files,
         );
         let hint = rebuild_hint(&self.shared);
-        let path = self.path.clone();
-        let ((enumerated, permit), discarded) = enumerate_then_discard(
-            || {
-                self.log_line(format_args!("build queued {}:", self.drive.letter));
-                let permit = BUILDS.acquire(cancel)?;
-                self.log_line(format_args!(
-                    "build start {}: hint_entries={}",
-                    self.drive.letter, hint.entries
-                ));
-                let continuity = self.rebuilds.continuity(cause);
-                Ok((volume.enumerate_sized(hint, continuity, cancel)?, permit))
-            },
-            || discard_snapshot(&path),
-        )?;
-        if discarded {
-            self.log_line(format_args!("snapshot discarded {}:", self.drive.letter));
-        }
+        self.log_line(format_args!("build queued {}:", self.drive.letter));
+        let permit = BUILDS.acquire(cancel)?;
+        self.log_line(format_args!(
+            "build start {}: hint_entries={}",
+            self.drive.letter, hint.entries
+        ));
+        let continuity = self.rebuilds.continuity(cause);
+        let enumerated = volume.enumerate_sized(hint, continuity, cancel)?;
         if cause.verification {
             self.clock.saved();
         }

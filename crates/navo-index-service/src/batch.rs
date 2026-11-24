@@ -28,6 +28,17 @@ pub(super) fn apply_batch(
     batch: UsnBatch,
     stop: impl Fn() -> bool,
 ) -> Result<Vec<UnresolvedChange>, NtfsError> {
+    apply_in_slices(shared, batch, stop, |started, _| started.elapsed() >= HOLD)
+}
+
+/// Like [`apply_batch`]; `slice_full(slice start, steps taken)` ends a write slice, so tests can
+/// cut slices by step count instead of by the wall clock.
+fn apply_in_slices(
+    shared: &Shared,
+    batch: UsnBatch,
+    stop: impl Fn() -> bool,
+    slice_full: impl Fn(Instant, usize) -> bool,
+) -> Result<Vec<UnresolvedChange>, NtfsError> {
     let journal = shared
         .read()
         .unwrap_or_else(PoisonError::into_inner)
@@ -42,7 +53,7 @@ pub(super) fn apply_batch(
         if stop() {
             return Err(NtfsError::Cancelled);
         }
-        match with_index(shared, |index| step_for(&mut applying, index)) {
+        match with_index(shared, |index| step_for(&mut applying, index, &slice_full)) {
             None => return Ok(Vec::new()),
             Some(Err(error)) => return Err(error),
             Some(Ok(true)) => std::thread::sleep(YIELD),
@@ -67,10 +78,17 @@ pub(super) fn note_metadata_folders(shared: &Shared, folders: Vec<u128>) {
     with_index(shared, |index| index.note_metadata_folders(folders));
 }
 
-fn step_for(applying: &mut BatchApply, index: &mut NtfsIndex) -> Result<bool, NtfsError> {
+/// Applies steps until `slice_full` says the slice is over; returns true while steps remain.
+fn step_for(
+    applying: &mut BatchApply,
+    index: &mut NtfsIndex,
+    slice_full: impl Fn(Instant, usize) -> bool,
+) -> Result<bool, NtfsError> {
     let started = Instant::now();
+    let mut steps = 0;
     while applying.step(index, STEP_CHANGES)? {
-        if started.elapsed() >= HOLD {
+        steps += 1;
+        if slice_full(started, steps) {
             return Ok(true);
         }
     }

@@ -8,13 +8,18 @@ use navo_index::table::{Flags, NO_PARENT, NameTable, TableChange};
 use navo_index::usn::{FrnMap, UsnBatch, UsnRecord};
 
 use super::super::answer::{Shared, State};
-use super::{apply_batch, note_metadata_folders, published};
+use super::{apply_batch, apply_in_slices, note_metadata_folders, published};
 
 const FILES: u32 = 20_000;
 
 /// A stop check that never asks the batch to stop.
 fn never() -> bool {
     false
+}
+
+/// Ends each write slice after one step, so slices never depend on the machine's speed.
+fn one_step(_: std::time::Instant, steps: usize) -> bool {
+    steps >= 1
 }
 
 fn index() -> NtfsIndex {
@@ -112,7 +117,7 @@ fn a_large_batch_lets_readers_in_between_steps_and_matches_one_batch() {
     let done = AtomicBool::new(false);
     let partial = std::thread::scope(|scope| {
         let reader = scope.spawn(|| partial_reads(&shared, &done));
-        let applied = apply_batch(&shared, creates(), never);
+        let applied = apply_in_slices(&shared, creates(), never, one_step);
         done.store(true, Ordering::Release);
         assert!(applied.unwrap().is_empty());
         reader.join().unwrap()
@@ -134,7 +139,7 @@ fn a_stop_between_slices_returns_before_the_cursor_moves() {
         polls.get() > 1
     };
     assert!(matches!(
-        apply_batch(&shared, creates(), stop),
+        apply_in_slices(&shared, creates(), stop, one_step),
         Err(NtfsError::Cancelled)
     ));
     assert_eq!(

@@ -108,7 +108,7 @@ fn record(file_id: u128, parent_id: u128, reason: u32, name: &str) -> UsnRecord 
 /// Applies `records` to `volume` as one journal batch ending at `next_usn`.
 fn apply(volume: &SharedVolume, next_usn: i64, records: Vec<UsnRecord>) {
     let batch = UsnBatch { next_usn, records };
-    let unresolved = crate::batch::apply_batch(&volume.shared, batch).unwrap();
+    let unresolved = crate::batch::apply_batch(&volume.shared, batch, || false).unwrap();
     assert!(unresolved.is_empty(), "{unresolved:?}");
 }
 
