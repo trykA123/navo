@@ -4,7 +4,7 @@
 
 A keyboard-first file manager for Windows. Two panes, every action on a key, and no waiting.
 
-[![Navo showreel: a still from the product film](design/showreel/poster.png)](design/showreel/navo-showreel.mp4)
+[![Navo showreel: a still from the product film](assets/showreel/poster.png)](assets/showreel/navo-showreel.mp4)
 
 The still links to a two-and-a-half-minute product film. It shows the planned product, not only what is built today. The [film note](#about-the-film-the-name-and-the-crates) at the end says which scenes are real.
 
@@ -46,7 +46,7 @@ Ctrl+Shift+D compares the two panes. A narrow column between them names each res
 
 ### The installer
 
-`Navo-Setup.exe` is a guided installer for one user. It has five pages, never asks for administrator rights and works offline. It checks the folder you pick, updates an existing install in place, and Windows Settings removes it. See [docs/features/install.md](docs/features/install.md). It is built and tested, and comes with v0.7.0.
+`Navo-Setup.exe` is a guided installer for one user. It has five pages, never asks for administrator rights and works offline. It checks the folder you pick, updates an existing install in place, and Windows Settings removes it. It is built and tested, and comes with v0.7.0.
 
 ## What Navo is
 
@@ -54,7 +54,7 @@ Navo is for people who move files all day and want to do it from the keyboard. I
 
 It is also built for engineers who work with build output, which is why the F3 viewer reads ELF, MAP, HEX, S-record and CAN files.
 
-Navo ships for Windows as a portable zip with `navo.exe` and as a Velopack installer. Both are on the [releases page](https://github.com/trykA123/navo/releases). A guided installer with a choice of folder is built but not released yet; see [docs/features/install.md](docs/features/install.md). It also builds and runs on Linux, which is where most development happens.
+Navo ships for Windows as a portable zip with `navo.exe` and as a Velopack installer. Both are on the [releases page](https://github.com/trykA123/navo/releases). A guided installer with a choice of folder is built but not released yet. It also builds and runs on Linux, which is where most development happens.
 
 ## The ideas behind it
 
@@ -78,7 +78,6 @@ Navo is in its alpha (v0.5). It is usable, but it is not finished, and it is not
 
 - The foundation phase (v0.1) closed on 15 October 2026.
 - The alpha is now limited to four features: multi-select with drag and drop, the rich ELF and MAP views, Ctrl+K, and multi-rename. Everything else waits for the beta.
-- The [roadmap page](design/roadmap.html) counted 215 of 247 alpha items done on 21 October 2026.
 - Each green build of `main` becomes a Windows pre-release on the [releases page](https://github.com/trykA123/rusty/releases). [CHANGELOG.md](CHANGELOG.md) lists what each one changed.
 
 What works today, in short: two panes with tabs, history and session restore; a virtualised file list with sorting and a quick filter; copy, move, rename, new folder, Recycle Bin and Shift+Del with a journal; marking with keys, mouse and lasso; drag and drop between panes and onto tabs, crumbs and drives; copy and paste with Explorer; multi-rename; Ctrl+K with the file index; folder and file compare with the Stream; the preview drawer; the activity strip; settings; light and dark themes.
@@ -95,8 +94,6 @@ Known gap: drag and drop with other apps is not finished. Dragging files from Na
 | v1.0 | Replaces Total Commander for daily work: find by content, archives as folders, compare and sync, checksums | Planned |
 | v1.1 and v1.2 | Preview pane and thumbnails; Git, duplicates, disk usage, tray and summon hotkey | Planned |
 | v2.0 | Open platform: WebAssembly plugins, plugin SDK, embedded terminal, remote file systems | Planned |
-
-The full list, with each item's kind and exit criteria, is in [docs/roadmap.md](docs/roadmap.md).
 
 ## How it works
 
@@ -131,11 +128,22 @@ The main crates:
 | `navo-cache`, `navo-diag`, `navo-l10n` | Bounded caches, redacted diagnostics, Fluent translations |
 | `navo-app` | The `navo` binary: wiring, single instance, crash handling, the index service |
 
-[docs/architecture.md](docs/architecture.md) covers state, storage, caching, start-up and safety in depth.
-
 ## Build and run
 
-You need Rust 1.99.0, which `rust-toolchain.toml` pins, and the tools listed in [docs/dev-tools.md](docs/dev-tools.md).
+You need Rust 1.99.0, which `rust-toolchain.toml` pins, and these tools for the gate:
+
+| Tool | Version | Installed from | Used for |
+| --- | --- | --- | --- |
+| Rust toolchain | 1.99.0 | rustup / Arch `rust` | build, fmt, clippy |
+| cargo-nextest | 0.9.148 | crates.io (`cargo install --locked`) | test runner |
+| typos-cli | 1.51.1 | crates.io (`cargo install --locked`) | spelling |
+| cargo-deny | 0.20.2 | Arch package | licences, advisories, sources |
+| cargo-audit | 0.22.2 | Arch package | security advisories |
+| cargo-llvm-cov | 0.9.1 | Arch package | coverage |
+| actionlint | 1.7.12 | Arch package | workflow lint |
+| taplo | 0.10.0 | Arch package | TOML check |
+
+Run `git config core.hooksPath .githooks` once per clone to turn on the commit-msg hook.
 
 ```sh
 cargo run -p navo-app --release     # the app, navo
@@ -172,28 +180,18 @@ The gate runs, in order:
 
 Other subcommands: `cargo xtask size`, `cargo xtask l10n [--list]`, `cargo xtask colors`, `cargo xtask coverage`, `cargo xtask binsize <path>`, `cargo xtask bench-copy` and `cargo xtask perf-fixture`.
 
-CI is Windows-first. Every push runs clippy, nextest and the doc tests on Windows, and builds `navo.exe` with its PDB and `pdfium.dll` as an artifact. Pushes to `main` also run a start-up and memory benchmark, described in [docs/perf.md](docs/perf.md). The full gate on Linux runs only when started by hand. The binary size and copy speed checks are informational for now.
+CI is Windows-first. Every push runs clippy, nextest and the doc tests on Windows, and builds `navo.exe` with its PDB and `pdfium.dll` as an artifact. Pushes to `main` also run a start-up and memory benchmark. The full gate on Linux runs only when started by hand. The binary size and copy speed checks are informational for now.
 
 ## Contributing
 
 Changes merge locally as one squash commit per branch; pull requests are not used yet. If you want to help, open an issue first.
 
-- Each feature has a plain-language spec in [docs/features/](docs/features/). The owner approves it before work starts.
-- Plans in [plans/](plans/README.md) cut each feature into small atoms, and each plan ends in a gate.
 - Code follows the limits the gate enforces: no `unwrap`, `expect` or `panic`, size limits per file and function, and tests beside each module.
-- Text follows [docs/writing.md](docs/writing.md): short sentences, plain words, no internal ids in anything a person reads.
 
 ## Documentation
 
-- [Discussion](docs/discussion.md): how the project started, and why Rust and GPUI
-- [Architecture](docs/architecture.md): crates, state, storage, caching, start-up, safety
-- [Plugins](docs/plugins.md): what a plugin can do, permissions, lifecycle
-- [Decisions](docs/decisions.md): every product and design decision, dated
-- [Roadmap](docs/roadmap.md), and its visual version in [`design/roadmap.html`](design/roadmap.html)
-- [Feature specs](docs/features/): Ctrl+K, multi-rename, multi-select and drag and drop, rich ELF and MAP, compare
-- [Performance](docs/perf.md): how start-up and memory are measured, and the baseline
-- Chosen designs: the prototypes in [`design/prototypes/`](design/prototypes/) open in a browser
-- [Showreel sources](design/showreel/README.md)
+- [User guide](docs/user-guide.md): the keys to learn first and how each part of Navo works
+- [CHANGELOG.md](CHANGELOG.md): what each release changed
 
 ## Licence
 
