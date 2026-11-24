@@ -22,53 +22,82 @@ fn answer_before(volumes: &[SharedVolume], paths: &[String], deadline: Instant) 
     if !folder_paths_within_limits(paths) {
         return unavailable(0);
     }
-    let mut totals = vec![None; paths.len()];
-    let mut busy = false;
+    let mut answering = Answering {
+        totals: vec![None; paths.len()],
+        busy: false,
+    };
     let mut expired = false;
-    'volumes: for volume in volumes {
-        let state = (Instant::now() < deadline)
-            .then(|| read_before(&volume.shared, deadline))
-            .flatten();
-        let Some(state) = state else {
-            expired = true;
-            break;
-        };
-        let mut lookup = None;
-        for (path, total) in paths.iter().zip(&mut totals) {
-            if !matches_volume(&state, path) {
-                continue;
+    for volume in volumes {
+        match answer_volume(volume, paths, &mut answering, deadline) {
+            VolumeAnswer::Continue => {}
+            VolumeAnswer::Expired => {
+                expired = true;
+                break;
             }
-            if is_search_only(&state) {
-                busy = true;
-                continue;
-            }
-            if lookup.is_none() {
-                lookup = volume_lookup(&state, deadline);
-            }
-            if lookup
-                .as_ref()
-                .is_some_and(|lookup| *lookup.profiles == ProfileIds::Closed)
-            {
-                return unavailable(paths.len());
-            }
-            match total_for_path(&mut lookup, &state, path, deadline) {
-                Ok(Some(found)) => *total = Some(found),
-                Ok(None) => {}
-                Err(FolderLookupExpired) => {
-                    expired = true;
-                    break 'volumes;
-                }
-            }
+            VolumeAnswer::Closed => return unavailable(paths.len()),
         }
     }
     let expired = expired || Instant::now() >= deadline;
     Reply {
         totals: Some(FolderTotalsReply {
-            totals,
-            busy: busy && !expired,
+            totals: answering.totals,
+            busy: answering.busy && !expired,
         }),
         ..Reply::default()
     }
+}
+
+/// The positions resolved so far and whether a search-only volume left some of them busy.
+struct Answering {
+    totals: Vec<Option<FolderTotals>>,
+    busy: bool,
+}
+
+/// How one volume's pass ended: go on, stop at the deadline, or clear every position.
+enum VolumeAnswer {
+    Continue,
+    Expired,
+    Closed,
+}
+
+/// Fills the positions of `paths` on `volume` before `deadline`.
+fn answer_volume(
+    volume: &SharedVolume,
+    paths: &[String],
+    answering: &mut Answering,
+    deadline: Instant,
+) -> VolumeAnswer {
+    let state = (Instant::now() < deadline)
+        .then(|| read_before(&volume.shared, deadline))
+        .flatten();
+    let Some(state) = state else {
+        return VolumeAnswer::Expired;
+    };
+    let mut lookup = None;
+    for (path, total) in paths.iter().zip(&mut answering.totals) {
+        if !matches_volume(&state, path) {
+            continue;
+        }
+        if is_search_only(&state) {
+            answering.busy = true;
+            continue;
+        }
+        if lookup.is_none() {
+            lookup = volume_lookup(&state, deadline);
+        }
+        if lookup
+            .as_ref()
+            .is_some_and(|lookup| *lookup.profiles == ProfileIds::Closed)
+        {
+            return VolumeAnswer::Closed;
+        }
+        match total_for_path(&mut lookup, &state, path, deadline) {
+            Ok(Some(found)) => *total = Some(found),
+            Ok(None) => {}
+            Err(FolderLookupExpired) => return VolumeAnswer::Expired,
+        }
+    }
+    VolumeAnswer::Continue
 }
 
 /// Returns an unavailable reply with one empty position per validated path.

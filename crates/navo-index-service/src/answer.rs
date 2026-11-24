@@ -9,6 +9,8 @@ use super::answer_stats::BUSY_REPLIES;
 use super::search::SearchIndex;
 
 const READ_WAIT: Duration = Duration::from_millis(20);
+/// All volumes' read waits end by then: the client drops a reply after `QUERY_TIMEOUT` (200 ms).
+const ANSWER_BUDGET: Duration = Duration::from_millis(120);
 const READ_POLL: Duration = Duration::from_millis(1);
 const UPDATING: u8 = 100;
 
@@ -39,8 +41,8 @@ impl SharedVolume {
     }
 }
 
-/// Answers one pipe request; each volume waits at most `READ_WAIT` for its read lock and a
-/// volume that stays busy answers with its last status, marked updating.
+/// Answers one pipe request; each volume waits at most `READ_WAIT` for its read lock, all of them
+/// within `ANSWER_BUDGET`, and a volume that stays busy answers with its last status, marked updating.
 pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &CancelToken) -> Reply {
     if let Some(paths) = request.folder_paths() {
         return super::totals::answer(volumes, paths);
@@ -49,12 +51,14 @@ pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &Cance
         return super::memory::answer(volumes);
     }
     let mut reply = Reply::default();
+    let overall = Instant::now() + ANSWER_BUDGET;
     for volume in volumes {
         if cancel.is_cancelled() {
             break;
         }
         // Each volume gets its own wait, so a slow first volume cannot starve the next one.
-        let read = read_before(&volume.shared, Instant::now() + READ_WAIT)
+        let deadline = (Instant::now() + READ_WAIT).min(overall);
+        let read = read_before(&volume.shared, deadline)
             .map(|state| search(&state, request, cancel, &mut reply.hits));
         let mut last = volume.last.lock().unwrap_or_else(PoisonError::into_inner);
         let status = match read {
@@ -217,6 +221,32 @@ mod tests {
         assert_eq!(
             reply.status.volumes[1].progress, None,
             "the second volume must get its own wait, not the first one's leftover"
+        );
+    }
+
+    #[test]
+    fn many_busy_volumes_answer_before_the_client_gives_up() {
+        let volumes: Vec<_> = (0..12).map(|_| building_volume()).collect();
+        let _writing: Vec<_> = volumes.iter().map(|v| v.shared.write().unwrap()).collect();
+        let (reply, took) = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let started = Instant::now();
+                    let reply = answer(&volumes, &Request::default(), &CancelToken::new());
+                    (reply, started.elapsed())
+                })
+                .join()
+                .unwrap()
+        });
+        let limit = pipe::QUERY_TIMEOUT - Duration::from_millis(40);
+        assert!(took < limit, "answered after {took:?}");
+        assert_eq!(reply.status.volumes.len(), volumes.len());
+        assert!(
+            reply
+                .status
+                .volumes
+                .iter()
+                .all(|status| status.progress == Some(UPDATING))
         );
     }
 
