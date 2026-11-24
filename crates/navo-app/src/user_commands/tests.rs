@@ -302,6 +302,7 @@ fn runner_refuses_like_a_named_command() {
 }
 
 /// A launch seam that records the expanded plan instead of starting a program.
+#[cfg(unix)]
 fn recording_launch() -> (
     Launch,
     std::sync::Arc<std::sync::Mutex<Vec<super::expand::Plan>>>,
@@ -317,6 +318,7 @@ fn recording_launch() -> (
     (launch, recorded)
 }
 
+#[cfg(unix)]
 fn wait_for_plan(recorded: &std::sync::Mutex<Vec<super::expand::Plan>>) -> super::expand::Plan {
     let deadline = Instant::now() + NEWS_WAIT;
     loop {

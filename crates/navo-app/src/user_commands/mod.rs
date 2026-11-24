@@ -212,7 +212,7 @@ impl Runner {
     }
 
     /// Replaces the process launch with `launch`, so a test can record the plan.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn with_launch(mut self, launch: Launch) -> Self {
         self.launch = launch;
         self
