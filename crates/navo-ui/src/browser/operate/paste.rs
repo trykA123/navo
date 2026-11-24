@@ -114,7 +114,7 @@ impl Browser {
         }
     }
 
-    fn drop_source_tab(&self, sources: &[Location]) -> TabId {
+    pub(super) fn drop_source_tab(&self, sources: &[Location]) -> TabId {
         let parent = sources.first().and_then(Location::parent);
         self.state
             .window_ids()

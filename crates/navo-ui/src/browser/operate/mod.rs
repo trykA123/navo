@@ -7,6 +7,7 @@ use navo_fs::{CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, vol
 use super::{Browser, Message, RenameReport};
 
 mod clashes;
+mod from_results;
 mod keep;
 mod paste;
 pub(in crate::browser) mod queue;
@@ -18,6 +19,7 @@ mod verify;
 mod work;
 
 pub use clashes::{Clash, Facts, SHOWN as CLASHES_SHOWN};
+pub use from_results::ResultsRequest;
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
 pub use queue::SlowVolume;
 use stream::planned_on;
