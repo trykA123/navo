@@ -9,7 +9,8 @@ use gpui_kit::{AppContext as _, Bounds, ElementId, Pixels, TestAppContext, px};
 
 use super::app_menu::{Rig, rig, rig_git_sized};
 use super::git_menu::{Fake, menu_items, modified};
-use crate::settings::{Change, FIELDS, Field, Section, Values, rows_in};
+use super::settings_sheet::go_to;
+use crate::settings::{Change, FIELDS, Field, Section, Values};
 use crate::tokens::{self, Density, ThemeChoice};
 
 const ROW: f32 = 36.;
@@ -25,20 +26,6 @@ fn row_of(field: Field) -> usize {
         .iter()
         .position(|spec| spec.field == field)
         .expect("every field has a row")
-}
-
-/// Presses Down from the first row until `field` has focus; Down walks the rows in page order.
-fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
-    let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
-    let steps = Section::ALL
-        .into_iter()
-        .flat_map(rows_in)
-        .take_while(|(_, spec)| spec.field != field)
-        .filter(|(_, spec)| filter.admits(spec))
-        .count();
-    for _ in 0..steps {
-        rig.press(cx, "down");
-    }
 }
 
 fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
@@ -147,6 +134,19 @@ fn open_the_line_in_the_inspector_runs_the_f3_path(cx: &mut TestAppContext) {
     // The rig has no settings file, so F3 and the button both say so in the message line.
     assert_eq!(label(cx, &rig, "settings-error"), None);
     rig.click(cx, "settings-locate");
+    assert_eq!(
+        label(cx, &rig, "settings-error").as_deref(),
+        Some("There is no settings file in this session.")
+    );
+}
+
+#[gpui_kit::test]
+fn f3_on_the_help_row_opens_the_updates_line(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    rig.click(cx, ("settings-section", Section::ALL.len() - 1));
+    assert_eq!(label(cx, &rig, "settings-error"), None);
+    rig.press(cx, "f3");
     assert_eq!(
         label(cx, &rig, "settings-error").as_deref(),
         Some("There is no settings file in this session.")

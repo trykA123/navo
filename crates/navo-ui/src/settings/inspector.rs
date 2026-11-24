@@ -7,11 +7,12 @@ use gpui_kit::{RenderOnce, Role, canvas};
 
 use super::controls::{self, Picks};
 use super::fields::{Control, Field, FieldSpec, Look as ChoiceLook};
+use super::fold;
 use super::git_page;
 use super::nav::NAV_WIDTH;
 use super::row_state;
 use super::values::{Value, Values};
-use super::view::{Look, section_label, spoken};
+use super::view::{Look, section_label, send_on_click, spoken};
 use super::{HELP_ROW, SheetEvent};
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, IconName, Kbd};
@@ -31,8 +32,17 @@ const LABEL_W: f32 = 56.;
 /// Gap between a value and its mark, or a button and its key cap (px).
 const NEAR: f32 = 6.;
 
+/// The inspector body for the focused row: the setting's details, the settings inside a
+/// fold row (Find empty), or `None` for a row the filter hides.
+pub(super) fn details(look: &Look) -> Option<AnyElement> {
+    if fold::group_of_fold(look.row).is_some() {
+        return look.filter.is_empty().then(|| fold_details(look, look.row));
+    }
+    focused(look).map(|(index, spec)| inspector(look, index, spec))
+}
+
 /// The focused row and its spec, if the focused row is a setting the filter shows.
-pub(super) fn focused(look: &Look) -> Option<(usize, &'static FieldSpec)> {
+fn focused(look: &Look) -> Option<(usize, &'static FieldSpec)> {
     if look.row == HELP_ROW {
         return Some((HELP_ROW, Field::CheckUpdates.spec()));
     }
@@ -106,7 +116,7 @@ fn frame(t: &Theme, is_stacked: bool, inner: AnyElement) -> impl IntoElement + u
 }
 
 /// The inspector body for the focused row `index` with `spec`.
-pub(super) fn inspector(look: &Look, index: usize, spec: &'static FieldSpec) -> AnyElement {
+fn inspector(look: &Look, index: usize, spec: &'static FieldSpec) -> AnyElement {
     let t = look.theme;
     let is_changed = look.values.is_changed(spec.field);
     div()
@@ -135,6 +145,73 @@ pub(super) fn inspector(look: &Look, index: usize, spec: &'static FieldSpec) -> 
         // Pictures go last, so Reset and the key stay in view on a short dialog.
         .children(pictures(look, spec))
         .into_any_element()
+}
+
+/// The inspector on fold row `fold`: the group, how many settings it holds, and each one with
+/// its value; a click opens the fold and selects that setting.
+fn fold_details(look: &Look, fold: usize) -> AnyElement {
+    let t = look.theme;
+    let fields = fold::fold_fields(look.filter, fold);
+    let heading = fold::count_text(fields.len());
+    let items = fields.iter().map(|field| fold_item(look, *field));
+    div()
+        .id("settings-inspector-fold")
+        .role(Role::Group)
+        .aria_label(heading.clone())
+        .test_support()
+        .flex()
+        .flex_col()
+        .gap(t.spacing.xl)
+        .p(t.spacing.xl)
+        .children(fields.first().map(|field| eyebrow(t, field.spec())))
+        .child(
+            div()
+                .id("settings-inspector-name")
+                .role(Role::Heading)
+                .aria_label(heading.clone())
+                .test_support()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(heading),
+        )
+        .child(
+            div()
+                .text_color(t.colors.muted)
+                .child(navo_l10n::tr("settings-fold-help")),
+        )
+        .child(div().flex().flex_col().gap(t.spacing.xxs).children(items))
+        .into_any_element()
+}
+
+/// One setting in the fold inspector: its label and current value on one line.
+fn fold_item(look: &Look, field: Field) -> AnyElement {
+    let t = look.theme;
+    let spec = field.spec();
+    let value = shown_value(value_text(look, spec, look.values.get(field)));
+    let item = div()
+        .id(("settings-inspector-advanced", field.index()))
+        .role(Role::Button)
+        .aria_label(spec.label())
+        .aria_value(value.clone())
+        .test_support()
+        .flex()
+        .items_center()
+        .gap(t.spacing.xl)
+        .px(t.spacing.md)
+        .py(t.spacing.xs)
+        .rounded(t.radii.md)
+        .cursor_pointer()
+        .hover(|item| item.bg(t.colors.hover))
+        .text_size(t.typography.small)
+        .child(div().flex_1().min_w_0().truncate().child(spec.label()))
+        .child(
+            div()
+                .flex_none()
+                .max_w(relative(0.5))
+                .truncate()
+                .text_color(t.colors.muted)
+                .child(value),
+        );
+    send_on_click(item, look.send.as_ref(), SheetEvent::Select(field.index())).into_any_element()
 }
 
 fn eyebrow(t: &Theme, spec: &FieldSpec) -> impl IntoElement + use<> {
@@ -203,13 +280,18 @@ fn state(look: &Look, spec: &FieldSpec, is_changed: bool) -> impl IntoElement + 
         .children(default)
 }
 
+/// The words shown for a value: `text`, or "Not set" when it is empty.
+fn shown_value(text: SharedString) -> SharedString {
+    if text.is_empty() {
+        navo_l10n::tr("settings-value-not-set").into()
+    } else {
+        text
+    }
+}
+
 /// A value in the Now / Default lines, named `text` for assistive tech, with an optional mark.
 fn value_cell(id: &'static str, text: SharedString, mark: Option<Div>) -> AnyElement {
-    let shown = if text.is_empty() {
-        SharedString::from(navo_l10n::tr("settings-value-not-set"))
-    } else {
-        text.clone()
-    };
+    let shown = shown_value(text.clone());
     div()
         .id(id)
         .role(Role::Label)

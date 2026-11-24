@@ -109,7 +109,12 @@ pub(super) fn spoken(spec: &FieldSpec, value: &Value) -> SharedString {
         (Control::Choices(options, _), Value::Pick(at)) => options
             .get(*at)
             .map_or_else(SharedString::default, |option| option.text()),
-        (_, Value::Flag(on)) => if *on { "On" } else { "Off" }.into(),
+        (_, Value::Flag(on)) => navo_l10n::tr(if *on {
+            "settings-value-on"
+        } else {
+            "settings-value-off"
+        })
+        .into(),
         (_, Value::Text(text)) => text.clone(),
         (_, Value::Number(number)) => number.to_string().into(),
         _ => SharedString::default(),
@@ -203,6 +208,10 @@ fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div
             look.values.is_changed(spec.field),
         ))
         .child(label)
+        .children(
+            (!look.filter.is_empty() && spec.field.is_advanced())
+                .then(|| super::fold::advanced_tag(content_look.theme, index)),
+        )
         .children(control(content_look, spec).map(|control| div().flex_none().child(control)))
 }
 
@@ -360,11 +369,9 @@ pub(super) fn content(
         .overflow_y_scroll()
         .when_some(scroll, |list, scroll| list.track_scroll(scroll))
         .children(rows);
-    let details =
-        inspector::focused(look).map(|(index, spec)| inspector::inspector(look, index, spec));
     inspector::Split {
         rows: list.into_any_element(),
-        inspector: details,
+        inspector: inspector::details(look),
     }
 }
 

@@ -174,6 +174,8 @@ settings-layout-presets-skipped = Skipped { $count ->
    *[other] { $count } layout presets
 } in navo.toml: { $details }
 settings-layout-preset-skipped = line { $line } “{ $name }” — { $problem }
+settings-copy-mode = Copy mode
+settings-copy-mode-help = Auto copies several files at once where the drives allow; Standard copies one file at a time.
 settings-copy-verify = Verify after copy
 settings-copy-verify-help = Reads each copied file back and compares it with the original. Auto does this for USB drives and network shares.
 settings-retain-deletes = Keep deleted files
@@ -302,3 +304,11 @@ settings-value-not-set = Not set
 settings-in-file = In navo.toml
 settings-open-line = Open the line
 settings-open-line-tip = Open navo.toml at this setting
+
+# Settings advanced folds: the fold row, its inspector and the Find tag.
+settings-fold-count = { $count ->
+    [one] { $count } advanced setting
+   *[other] { $count } advanced settings
+}
+settings-fold-help = Rare settings of this group. Pick one to open the fold, or press Right.
+settings-advanced-tag = Advanced

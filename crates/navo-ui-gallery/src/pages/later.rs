@@ -1,7 +1,7 @@
 use super::{Page, PageInfo, info};
 
 /// The pages that follow `HEAD` in the table, in order.
-pub(super) const ALL: [PageInfo; 60] = [
+pub(super) const ALL: [PageInfo; 64] = [
     info(
         Page::SettingsUpgrade,
         "Settings, upgrade notice",
@@ -195,6 +195,30 @@ pub(super) const ALL: [PageInfo; 60] = [
         Page::SettingsGitMinimum,
         "Settings, Git, 480",
         "settings-git-480",
+        false,
+    ),
+    info(
+        Page::SettingsFold,
+        "Settings, fold inspector",
+        "settings-fold",
+        false,
+    ),
+    info(
+        Page::SettingsFold390,
+        "Settings, fold inspector, 390",
+        "settings-fold-390",
+        false,
+    ),
+    info(
+        Page::SettingsFindAdvanced,
+        "Settings, find advanced",
+        "settings-find-advanced",
+        false,
+    ),
+    info(
+        Page::SettingsFindAdvanced390,
+        "Settings, find advanced, 390",
+        "settings-find-advanced-390",
         false,
     ),
 ];

@@ -170,10 +170,7 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
     ),
     spec(
         (F::CopyMode, S::CopyDelete, "copy.mode"),
-        (
-            "Copy mode",
-            "Auto copies several files at once where the drives allow; Standard copies one file at a time.",
-        ),
+        ("settings-copy-mode", "settings-copy-mode-help"),
         Control::Choices(&COPY_MODES, Look::Segments),
     ),
     spec(

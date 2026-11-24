@@ -306,7 +306,6 @@ fn register(root: Div, body: &SettingsBody) -> Div {
 
 fn register_fields(root: Div, body: &SettingsBody) -> Div {
     let row = body.row;
-    let field = FIELDS.get(row).map(|spec| spec.field);
     let filter = &body.filter;
     let up = on_event(body, Some(SheetEvent::Select(moved(filter, row, false))));
     let down = on_event(body, Some(keyboard_page::down_event(filter, row)));
@@ -316,7 +315,10 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
     let (back, forward) = (on_event(body, back), on_event(body, forward));
     let flip = on_event(body, body.flip_event());
     let edit = on_event(body, body.edit_event());
-    let locate = on_event(body, field.map(SheetEvent::Locate));
+    let locate = on_event(
+        body,
+        body.shown_spec().map(|spec| SheetEvent::Locate(spec.field)),
+    );
     let reset = on_event(body, body.reset_event());
     let undo = on_event(body, Some(SheetEvent::Undo));
     root.on_action(move |_: &RowUp, window, cx| up(window, cx))

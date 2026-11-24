@@ -331,7 +331,7 @@ fn the_copy_mode_row_sits_in_its_own_section_with_plain_help() {
     assert_eq!(row.section, Section::CopyDelete);
     assert_eq!(row.key, "copy.mode");
     assert_eq!(
-        row.help,
+        row.help(),
         "Auto copies several files at once where the drives allow; Standard copies one file at a time."
     );
     assert!(matches!(row.control, Control::Choices(choices, Look::Segments) if choices.len() == 2));

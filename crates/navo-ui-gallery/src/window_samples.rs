@@ -106,12 +106,50 @@ pub fn settings_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage
                     find,
                     is_scrolled_to_end,
                     update: None,
+                    on_fold: false,
                 },
                 shortcuts: None,
             };
             cx.new(|cx| WindowPage::with_sheet(shows, cx))
         },
     )
+}
+
+/// The advanced folds: the inspector on a fold row, and Find with an Advanced tag, each at
+/// full width and at 390 px.
+pub fn fold_windows(window: &mut Window, cx: &mut App) -> [Entity<WindowPage>; 4] {
+    let mut find = || {
+        let input = text_field_state("Find a setting by name, key or help", window, cx);
+        input.update(cx, |state, cx| state.set_value("width", window, cx));
+        Some((input, "width"))
+    };
+    [(None, true), (find(), false), (None, true), (find(), false)].map(|(find, on_fold)| {
+        let shows = SheetShows {
+            active: Side::Left,
+            window_width: None,
+            is_ringed: false,
+            settings: Some(Field::WindowExtWidth),
+            extras: Extras {
+                find,
+                on_fold,
+                ..Extras::default()
+            },
+            shortcuts: None,
+        };
+        cx.new(|cx| WindowPage::with_sheet(shows, cx))
+    })
+}
+
+/// The fold page for `page`, if it is one.
+pub fn fold_element(page: Page, windows: &[Entity<WindowPage>; 4]) -> Option<AnyElement> {
+    let [fold, find, fold_phone, find_phone] = windows;
+    match page {
+        Page::SettingsFold => Some(fold.clone().into_any_element()),
+        Page::SettingsFindAdvanced => Some(find.clone().into_any_element()),
+        Page::SettingsFold390 => Some(fixed(PHONE, fold_phone)),
+        Page::SettingsFindAdvanced390 => Some(fixed(PHONE, find_phone)),
+        _ => None,
+    }
 }
 
 pub fn settings_element(page: Page, windows: &[Entity<WindowPage>; 7]) -> Option<AnyElement> {

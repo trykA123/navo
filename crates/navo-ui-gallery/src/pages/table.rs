@@ -261,8 +261,8 @@ const HEAD: [PageInfo; 83] = [
     ),
 ];
 
-const MID: [PageInfo; 143] = join(&HEAD, &later::ALL);
+const MID: [PageInfo; 147] = join(&HEAD, &later::ALL);
 
-const MORE: [PageInfo; 166] = join(&MID, &clip_palette::ALL);
+const MORE: [PageInfo; 170] = join(&MID, &clip_palette::ALL);
 
-pub const PAGES: [PageInfo; 187] = join(&MORE, &setup::ALL);
+pub const PAGES: [PageInfo; 191] = join(&MORE, &setup::ALL);

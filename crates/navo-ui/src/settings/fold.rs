@@ -14,6 +14,7 @@ use super::steps::HELP_ROW;
 use super::view::{Look, row_frame, send_on_click};
 use crate::prelude::*;
 use crate::primitives::{IconName, icon};
+use crate::tokens::Theme;
 
 /// The row id of the first group's fold row; fold rows sit above every setting and the Help row.
 const FIRST_FOLD: usize = HELP_ROW + 1;
@@ -110,10 +111,11 @@ pub fn clamped_row(row: usize) -> usize {
 }
 
 /// The index in `GROUPS` of fold row `row`, or `None` for any other row.
-fn group_of_fold(row: usize) -> Option<usize> {
+pub(super) fn group_of_fold(row: usize) -> Option<usize> {
     row.checked_sub(FIRST_FOLD).filter(|at| *at < GROUPS.len())
 }
 
+/// The page a group sits on: the page of its first setting.
 fn page_of(group: &Group) -> Option<Section> {
     group.fields.first().map(|field| field.spec().section)
 }
@@ -134,6 +136,7 @@ pub(super) fn page_rows(filter: &Filter, page: Section) -> Vec<usize> {
         .collect()
 }
 
+/// One group's rows in walk order (see `page_rows`); `at` is its index in `GROUPS`.
 fn group_rows(filter: &Filter, at: usize, group: &Group) -> Vec<usize> {
     let shown = |advanced: bool| {
         group
@@ -144,6 +147,47 @@ fn group_rows(filter: &Filter, at: usize, group: &Group) -> Vec<usize> {
     };
     let fold = (filter.is_empty() && advanced_count(filter, group) > 0).then_some(FIRST_FOLD + at);
     shown(false).chain(fold).chain(shown(true)).collect()
+}
+
+/// The advanced settings in fold row `fold` that Find admits, in group order; empty for any
+/// other row.
+pub(super) fn fold_fields(filter: &Filter, fold: usize) -> Vec<Field> {
+    group_of_fold(fold)
+        .and_then(|at| GROUPS.get(at))
+        .map(|group| {
+            group
+                .fields
+                .iter()
+                .copied()
+                .filter(|field| field.is_advanced() && filter.matches(field.spec()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// "N advanced settings", with the plural from the locale.
+pub(super) fn count_text(count: usize) -> SharedString {
+    navo_l10n::t!("settings-fold-count", count = count).into()
+}
+
+/// The small "Advanced" tag a Find result from a fold shows after its label, in the row's
+/// muted colour and a hairline border (theme tokens only).
+pub(super) fn advanced_tag(t: &Theme, index: usize) -> AnyElement {
+    let text = navo_l10n::tr("settings-advanced-tag");
+    div()
+        .id(("settings-advanced-tag", index))
+        .role(Role::Label)
+        .aria_label(text.clone())
+        .test_support()
+        .flex_none()
+        .px(t.spacing.xs)
+        .rounded(t.radii.sm)
+        .border_1()
+        .border_color(t.colors.line)
+        .text_size(t.typography.tiny)
+        .text_color(t.colors.muted)
+        .child(text)
+        .into_any_element()
 }
 
 /// How many advanced settings of `group` would show with the fold open.
@@ -162,6 +206,7 @@ pub(super) fn left_event(filter: &Filter, row: usize) -> Option<SheetEvent> {
     filter.is_empty().then_some(SheetEvent::Fold(fold, false))
 }
 
+/// The fold row that holds setting row `row`, or `None` when it is not advanced.
 fn fold_of(row: usize) -> Option<usize> {
     FIELDS.get(row).and_then(|spec| fold_row(spec.field))
 }
@@ -180,10 +225,7 @@ pub(super) fn fold_line(look: &Look, fold: usize) -> AnyElement {
     let count = group_of_fold(fold)
         .and_then(|at| GROUPS.get(at))
         .map_or(0, |group| advanced_count(look.filter, group));
-    let text: SharedString = match count {
-        1 => "1 advanced setting".into(),
-        _ => format!("{count} advanced settings").into(),
-    };
+    let text = count_text(count);
     let glyph = if is_open {
         IconName::ChevronDown
     } else {

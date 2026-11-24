@@ -143,3 +143,78 @@ fn escape_from_a_find_with_no_match_keeps_the_fold_row(cx: &mut TestAppContext) 
     settle(cx);
     assert_eq!(row(cx, &rig), columns_fold());
 }
+
+#[gpui_kit::test]
+fn the_inspector_on_a_fold_row_lists_its_settings_and_a_click_opens_one(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open_at_date_column(cx, &rig);
+    rig.press(cx, "down");
+    assert_eq!(row(cx, &rig), columns_fold());
+    assert!(shows(cx, &rig, "settings-inspector-fold"));
+    let size = (
+        "settings-inspector-advanced",
+        Field::WindowSizeWidth.index(),
+    );
+    assert!(shows(cx, &rig, size));
+    assert!(!shows(
+        cx,
+        &rig,
+        (
+            "settings-inspector-advanced",
+            Field::WindowFreeSpace.index()
+        )
+    ));
+    rig.click(cx, size);
+    assert_eq!(row(cx, &rig), Field::WindowSizeWidth.index());
+    assert!(shows_row(cx, &rig, Field::WindowSizeWidth));
+}
+
+#[gpui_kit::test]
+fn find_tags_advanced_results_only(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open_at_date_column(cx, &rig);
+    rig.press(cx, "ctrl-f");
+    type_in(cx, rig.window, &rig.view, "window.view.date");
+    settle(cx);
+    assert!(shows_row(cx, &rig, Field::WindowDateColumn));
+    let tag = |field: Field| ("settings-advanced-tag", field.index());
+    assert!(shows(cx, &rig, tag(Field::WindowDateWidth)));
+    assert!(!shows(cx, &rig, tag(Field::WindowDateColumn)));
+    rig.click(cx, ("settings-row", Field::WindowDateWidth.index()));
+    rig.press(cx, "escape");
+    settle(cx);
+    assert!(shows_row(cx, &rig, Field::WindowDateWidth));
+    assert!(!shows(cx, &rig, tag(Field::WindowDateWidth)));
+}
+
+#[gpui_kit::test]
+fn undo_restores_a_value_and_reopens_its_closed_fold(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open_at_date_column(cx, &rig);
+    rig.press(cx, "down");
+    rig.click(
+        cx,
+        (
+            "settings-inspector-advanced",
+            Field::WindowSizeWidth.index(),
+        ),
+    );
+    let before = rig.view.read_with(cx, |view, _| view.values.clone());
+    rig.press(cx, "right");
+    settle(cx);
+    assert_ne!(
+        rig.view.read_with(cx, |view, _| view.values.clone()),
+        before
+    );
+    rig.press(cx, "left");
+    assert_eq!(row(cx, &rig), columns_fold());
+    assert!(!shows_row(cx, &rig, Field::WindowSizeWidth));
+    rig.press(cx, "ctrl-z");
+    settle(cx);
+    assert_eq!(
+        rig.view.read_with(cx, |view, _| view.values.clone()),
+        before
+    );
+    assert_eq!(row(cx, &rig), Field::WindowSizeWidth.index());
+    assert!(shows_row(cx, &rig, Field::WindowSizeWidth));
+}

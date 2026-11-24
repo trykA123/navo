@@ -103,6 +103,7 @@ pub struct Gallery {
     menu_window: Entity<WindowPage>,
     sheet_windows: [Entity<WindowPage>; 9],
     help_windows: [Entity<WindowPage>; 3],
+    fold_windows: [Entity<WindowPage>; 4],
     settings_windows: [Entity<WindowPage>; 7],
     hint_windows: [Entity<WindowPage>; 4],
     notice_windows: [Entity<WindowPage>; 2],
@@ -169,6 +170,7 @@ impl Gallery {
             sheet_windows: sheet_windows(window, cx),
             settings_windows: settings_windows(window, cx),
             help_windows: help_windows(cx),
+            fold_windows: crate::window_samples::fold_windows(window, cx),
             hint_windows: hint_windows(cx),
             notice_windows: crate::window_samples::notice_windows(cx),
             parts_windows: parts_windows(cx),
@@ -333,7 +335,9 @@ impl Render for Gallery {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let root = root(&t);
-        if let Some(sheet) = settings_element(self.page, &self.settings_windows) {
+        if let Some(sheet) = settings_element(self.page, &self.settings_windows)
+            .or_else(|| crate::window_samples::fold_element(self.page, &self.fold_windows))
+        {
             return root.child(sheet);
         }
         if let Some(page) = self

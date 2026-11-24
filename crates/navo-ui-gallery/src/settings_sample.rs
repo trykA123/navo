@@ -15,6 +15,8 @@ pub struct Extras {
     pub find: Option<(Entity<TextFieldState>, &'static str)>,
     pub is_scrolled_to_end: bool,
     pub update: Option<UpdateView>,
+    /// Selects the fold row that holds the field instead of the field, with the fold closed.
+    pub on_fold: bool,
 }
 
 pub struct Shown<'a> {
@@ -106,7 +108,11 @@ pub fn sheet(t: &Theme, state: &Entity<SheetState>, frame: SheetFrame, shown: &S
         .with(&Change::theme(theme))
         .with(&Change::text(Field::EditorPath, r"C:\Tools\code.exe"));
     let (values, git) = git_sample(values, shown.field);
-    let row = shown.field.row();
+    let fold = shown
+        .extras
+        .on_fold
+        .then(|| settings::fold_row(shown.field));
+    let row = fold.flatten().unwrap_or_else(|| shown.field.row());
     let page = SearchPage {
         status: ServiceStatus::NotAvailable,
         is_windows: true,
