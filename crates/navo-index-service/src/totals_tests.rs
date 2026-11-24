@@ -223,7 +223,7 @@ fn totals_profile_timeout_closes_the_volume_and_logs_once() {
     let state = volume.shared.read().unwrap();
     for _ in 0..2 {
         let lookup = volume_lookup(&state, Instant::now()).unwrap();
-        assert_eq!(lookup.profiles, ProfileIds::Closed);
+        assert_eq!(*lookup.profiles, ProfileIds::Closed);
     }
     let log = std::fs::read_to_string(folder.path().join(crate::service_log::LOG_NAME))
         .unwrap_or_default();

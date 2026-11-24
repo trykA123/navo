@@ -77,8 +77,11 @@ fn step_for(applying: &mut BatchApply, index: &mut NtfsIndex) -> Result<bool, Nt
     Ok(false)
 }
 
+/// Runs `change` on the published index under the write lock, copying it when a reader still
+/// holds it; drops the cached profile ids first, since any change may move a profile folder.
 fn with_index<T>(shared: &Shared, change: impl FnOnce(&mut NtfsIndex) -> T) -> Option<T> {
     let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
+    state.search.forget_profile_ids();
     let index = state.index.as_mut()?;
     let index = match Arc::get_mut(index) {
         Some(index) => index,

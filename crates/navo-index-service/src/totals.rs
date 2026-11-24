@@ -2,6 +2,7 @@
 //! deadline keeps the resolved positions, and a folder hidden by the profile scope answers like
 //! one that does not exist.
 
+use std::borrow::Cow;
 use std::time::{Duration, Instant};
 
 use navo_index::pipe::{FolderTotals, FolderTotalsReply, Reply, folder_paths_within_limits};
@@ -46,7 +47,7 @@ fn answer_before(volumes: &[SharedVolume], paths: &[String], deadline: Instant) 
             }
             if lookup
                 .as_ref()
-                .is_some_and(|lookup| lookup.profiles == ProfileIds::Closed)
+                .is_some_and(|lookup| *lookup.profiles == ProfileIds::Closed)
             {
                 return unavailable(paths.len());
             }
@@ -100,15 +101,18 @@ fn matches_volume(state: &State, path: &str) -> bool {
 /// One volume's folder lookup and the profile ids it hides, made once per request.
 struct VolumeLookup<'a> {
     folders: FolderLookup<'a>,
-    profiles: ProfileIds,
+    profiles: Cow<'a, ProfileIds>,
 }
 
-/// Builds the volume's lookup and maps its profile scope before `deadline`; `None` without an
-/// index. A scope that runs out of time comes back `Closed` and is logged once per service start.
+/// Builds the volume's lookup and takes its profile ids (cached per table) before `deadline`;
+/// `None` without an index. A scope that runs out of time comes back `Closed` and is logged once.
 fn volume_lookup(state: &State, deadline: Instant) -> Option<VolumeLookup<'_>> {
-    let mut folders = state.index.as_ref()?.table.folder_lookup();
-    let profiles = state.search.profile_ids_with(&mut folders, deadline);
-    Some(VolumeLookup { folders, profiles })
+    let table = &state.index.as_ref()?.table;
+    let profiles = state.search.profile_ids(table, deadline);
+    Some(VolumeLookup {
+        folders: table.folder_lookup(),
+        profiles,
+    })
 }
 
 /// Looks up a matched full-generation path, failing when its deadline expires; a path at or

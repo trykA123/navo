@@ -14,6 +14,7 @@ const UPDATING: u8 = 100;
 
 #[derive(Default)]
 pub(super) struct State {
+    /// The published index; whoever changes or replaces it calls `search.forget_profile_ids()`.
     pub(super) index: Option<Arc<NtfsIndex>>,
     pub(super) status: VolumeStatus,
     pub(super) search: SearchIndex,

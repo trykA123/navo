@@ -1,9 +1,10 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use navo_index::pipe::{self, CancelToken, Hit, Request};
-use navo_index::table::{FolderLookup, NameTable};
+use navo_index::table::NameTable;
 use navo_store::Search;
 
 use super::profiles::{PROFILE_LOOKUP_BUDGET, ProfileIds, ProfileScope, TimeoutNotice};
@@ -16,6 +17,13 @@ pub(super) struct SearchIndex {
     paths: Vec<String>,
     profiles: Option<ProfileScope>,
     timeouts: Option<Arc<TimeoutNotice>>,
+    /// The scope's ids in the volume's current table, keyed by the table's address (a cache
+    /// filled under the read lock); `forget_profile_ids` empties it whenever the table changes.
+    /// Never holds `Closed`.
+    profile_cache: OnceLock<(usize, ProfileIds)>,
+    /// Counts profile scope resolutions, so tests can prove a cache hit.
+    #[cfg(test)]
+    resolutions: std::sync::atomic::AtomicUsize,
 }
 
 impl Default for SearchIndex {
@@ -37,6 +45,9 @@ impl SearchIndex {
             paths: paths.iter().map(|path| normalized_path(path)).collect(),
             profiles: None,
             timeouts: None,
+            profile_cache: OnceLock::new(),
+            #[cfg(test)]
+            resolutions: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -52,22 +63,45 @@ impl SearchIndex {
         self
     }
 
-    /// Maps the profile scope to ids in `table` before `deadline`, under the caller's read lock;
-    /// a lookup that runs out of time hides every hit and is logged once per service start.
-    pub fn profile_ids(&self, table: &NameTable, deadline: Instant) -> ProfileIds {
-        self.profile_ids_with(&mut table.folder_lookup(), deadline)
-    }
-
-    /// Like `profile_ids`, but reuses the caller's folder lookup (its cache) so totals can keep
-    /// it for their own paths; a timeout is logged once per service start.
-    pub fn profile_ids_with(&self, lookup: &mut FolderLookup<'_>, deadline: Instant) -> ProfileIds {
-        let ids = ProfileIds::resolve_with(self.profiles.as_ref(), lookup, deadline);
-        if ids == ProfileIds::Closed
-            && let Some(notice) = &self.timeouts
+    /// Maps the profile scope to ids in `table` before `deadline`, under the caller's read lock,
+    /// once per table change; a lookup that runs out of time hides every hit, is not cached and
+    /// is logged once per service start.
+    pub fn profile_ids(&self, table: &NameTable, deadline: Instant) -> Cow<'_, ProfileIds> {
+        // The table's address keys the cache, so ids from another table are never reused.
+        let key = std::ptr::from_ref(table).addr();
+        if let Some((cached, ids)) = self.profile_cache.get()
+            && *cached == key
         {
+            return Cow::Borrowed(ids);
+        }
+        #[cfg(test)]
+        self.resolutions
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let ids =
+            ProfileIds::resolve_with(self.profiles.as_ref(), &mut table.folder_lookup(), deadline);
+        if ids != ProfileIds::Closed {
+            // Readers racing here hold the same read lock, so they resolved the same table.
+            let (cached, kept) = self.profile_cache.get_or_init(|| (key, ids.clone()));
+            if *cached == key {
+                return Cow::Borrowed(kept);
+            }
+            return Cow::Owned(ids);
+        }
+        if let Some(notice) = &self.timeouts {
             notice.timed_out();
         }
-        ids
+        Cow::Owned(ids)
+    }
+
+    /// Drops the cached profile ids; call it under the write lock before the table changes.
+    pub fn forget_profile_ids(&mut self) {
+        self.profile_cache.take();
+    }
+
+    /// How many times the profile scope was mapped to table ids.
+    #[cfg(test)]
+    pub fn profile_resolutions(&self) -> usize {
+        self.resolutions.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn hits(&self, table: &NameTable, request: &Request, cancel: &CancelToken) -> Vec<Hit> {

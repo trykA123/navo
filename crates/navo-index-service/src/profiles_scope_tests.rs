@@ -259,7 +259,7 @@ fn search_scope_timeout_closes_the_volume_and_logs_once() {
     let table = NameTable::new();
     for _ in 0..2 {
         assert_eq!(
-            index.profile_ids(&table, Instant::now()),
+            *index.profile_ids(&table, Instant::now()),
             ProfileIds::Closed
         );
     }

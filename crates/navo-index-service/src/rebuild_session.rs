@@ -42,9 +42,11 @@ pub(super) fn rebuild_hint(shared: &Shared) -> SizeHint {
     )
 }
 
-/// Publishes a new index, drops the old generation, then trims the new table.
+/// Publishes a new index, drops the old generation and its cached profile ids, then trims the
+/// new table.
 pub(super) fn replace(shared: &Shared, index: NtfsIndex) {
     let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
+    state.search.forget_profile_ids();
     state.status.progress = None;
     let old = state.index.replace(Arc::new(index));
     drop(old);

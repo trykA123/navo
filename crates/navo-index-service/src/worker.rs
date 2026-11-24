@@ -140,6 +140,7 @@ impl Worker {
             let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
             if !same_volume {
                 state.index = None;
+                state.search.forget_profile_ids();
             }
             state.index.is_some()
         };
