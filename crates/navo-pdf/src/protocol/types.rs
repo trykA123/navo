@@ -210,6 +210,9 @@ pub enum PdfError {
     NoHelper(String),
     #[error("the PDF helper broke the protocol: {0}")]
     Protocol(String),
+    /// The helper could not be confined, so it was not started; the text names the failed step.
+    #[error("the PDF cannot be opened safely: {0}")]
+    Unconfined(String),
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -68,6 +68,11 @@ impl ContainerSid {
         Ok(Self(sid))
     }
 
+    /// The raw SID for `SECURITY_CAPABILITIES`; valid while `self` lives.
+    pub(crate) fn as_psid(&self) -> PSID {
+        self.0
+    }
+
     /// The SID as text (`S-1-15-2-…`) for logs. Fails at `FormatSid` with the Win32 error.
     pub(crate) fn to_sddl(&self) -> Result<String, GrantError> {
         let mut text: *mut u16 = ptr::null_mut();

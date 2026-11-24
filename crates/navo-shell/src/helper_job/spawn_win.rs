@@ -1,5 +1,6 @@
-//! Starts the PDF helper suspended, puts it in its Job, then lets it run, so it never executes
-//! outside the Job; only its two pipe ends are inherited (S2a1; `navo-app` plugs it into navo-pdf).
+//! Starts the PDF helper suspended inside its AppContainer, puts it in its Job, then lets it run,
+//! so it never executes unconfined; only its two pipe ends are inherited (S2a1, S2c2; `navo-app`
+//! plugs it into navo-pdf).
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
@@ -23,6 +24,7 @@ use windows_sys::Win32::System::Threading::{
 
 use super::HelperLimits;
 use super::cmdline::command_line;
+use super::container_win::Container;
 use super::platform::HelperJob;
 
 /// A helper started by `spawn_confined`: the parent's pipe ends and the confined process.
@@ -39,9 +41,10 @@ pub struct ConfinedProcess {
     job: HelperJob,
 }
 
-/// Starts `program` with `args` suspended and windowless, assigns it to a new Job with `limits`,
-/// then resumes it. Fails on any step; after `CreateProcessW` a failure terminates the process
-/// first, so an `Err` leaves no live process.
+/// Starts `program` with `args` suspended, windowless and inside the helper's AppContainer, assigns
+/// it to a new Job with `limits`, then resumes it. Fails on any step; a failed grant or attribute
+/// fails closed with a `ContainerError` inside the `io::Error` and creates no process. After
+/// `CreateProcessW` a failure terminates the process first, so an `Err` leaves no live process.
 pub fn spawn_confined(
     program: &Path,
     args: &[OsString],
@@ -55,13 +58,17 @@ pub fn spawn_confined(
     let mut line = command_line(&application, args.iter().map(Vec::as_slice));
     line.push(0);
     application.push(0);
+    let container = Container::prepare(program)?;
     let job = HelperJob::create(limits)?;
     let (child_in, parent_in) = io::pipe()?;
     let (parent_out, child_out) = io::pipe()?;
     let child_in = inheritable(child_in.into())?;
     let child_out = inheritable(child_out.into())?;
-    let inherit = [child_in.as_raw_handle(), child_out.as_raw_handle()];
-    let (handle, thread) = create_suspended(&application, &mut line, inherit)?;
+    let setup = ChildSetup {
+        inherit: [child_in.as_raw_handle(), child_out.as_raw_handle()],
+        container: &container,
+    };
+    let (handle, thread) = create_suspended(&application, &mut line, &setup)?;
     // The child holds its own copies now; ours must close, or its stdout never reaches EOF.
     drop((child_in, child_out));
     let process = ConfinedProcess { handle, job };
@@ -145,22 +152,30 @@ impl ConfinedProcess {
     }
 }
 
-/// Calls `CreateProcessW` suspended and windowless, with the two handles in `inherit` as stdin
-/// and stdout and as the only inherited handles, and the S2b mitigation policy. Returns the
-/// process and thread handles.
+/// What the child starts with besides its command line: the stdin and stdout handles (its only
+/// inherited ones) and its AppContainer.
+struct ChildSetup<'a> {
+    inherit: [HANDLE; 2],
+    container: &'a Container,
+}
+
+/// Calls `CreateProcessW` suspended and windowless, with `setup.inherit` as stdin and stdout and
+/// as the only inherited handles, the S2b mitigation policy and the S2c2 AppContainer. Returns the
+/// process and thread handles; a refused attribute fails before any process exists.
 fn create_suspended(
     application: &[u16],
     line: &mut [u16],
-    inherit: [HANDLE; 2],
+    setup: &ChildSetup<'_>,
 ) -> io::Result<(OwnedHandle, OwnedHandle)> {
-    let mut list = AttributeList::new(2)?;
-    list.set_handle_list(&inherit)?;
+    let mut list = AttributeList::new(3)?;
+    list.set_handle_list(&setup.inherit)?;
     list.set_mitigation_policy()?;
+    list.set_security_capabilities(setup.container)?;
     let mut startup = STARTUPINFOEXW::default();
     startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-    startup.StartupInfo.hStdInput = inherit[0];
-    startup.StartupInfo.hStdOutput = inherit[1];
+    startup.StartupInfo.hStdInput = setup.inherit[0];
+    startup.StartupInfo.hStdOutput = setup.inherit[1];
     startup.lpAttributeList = list.as_raw();
     let mut info = PROCESS_INFORMATION::default();
     let flags = CREATE_SUSPENDED | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT;

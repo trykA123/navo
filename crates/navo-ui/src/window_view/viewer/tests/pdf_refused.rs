@@ -116,6 +116,20 @@ fn the_card_never_shows_the_engines_raw_error(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn an_unconfined_helper_shows_cannot_open_safely_without_the_raw_step(cx: &mut TestAppContext) {
+    let raw = "AppContainer grant failed at WriteDacl on C:\\navo\\pdfium.dll: OS error 0x5";
+    let open: OpenPdf = Arc::new(move |_, _| Err(PdfError::Unconfined(raw.to_owned())));
+    let (window, _view) = engineless_with(cx, open);
+    let card = text(cx, window, "pdf-refused");
+    assert!(card.starts_with("Cannot open this PDF safely."), "{card}");
+    assert!(
+        !card.contains("WriteDacl") && !card.contains("0x5"),
+        "{card}"
+    );
+    assert!(super::pdf::shown(cx, window, "pdf-as-hex"));
+}
+
+#[gpui_kit::test]
 fn stepping_from_another_viewer_onto_a_refused_pdf_keeps_every_key(cx: &mut TestAppContext) {
     let fs = fake();
     fs.add_file("home/a-table.csv", 4);

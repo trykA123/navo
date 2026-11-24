@@ -11,28 +11,39 @@ use crate::window_view::viewer::{CloseViewer, ShowHex};
 
 const CARD_WIDTH: f32 = 480.;
 
-pub(super) fn refusal(error: &PdfError) -> (&'static str, String) {
+/// The headline and the one-line reason the refused card shows for `error`.
+pub(super) fn refusal(error: &PdfError) -> (SharedString, String) {
     match error {
-        PdfError::NoEngine(_) => ("The PDF engine is missing.", t!("pdf-no-engine-detail")),
-        PdfError::NoHelper(_) => ("The PDF helper did not start.", t!("pdf-no-helper-detail")),
+        PdfError::NoEngine(_) => (
+            "The PDF engine is missing.".into(),
+            t!("pdf-no-engine-detail"),
+        ),
+        PdfError::NoHelper(_) => (
+            "The PDF helper did not start.".into(),
+            t!("pdf-no-helper-detail"),
+        ),
         PdfError::Corrupt => (
-            "The file is damaged.",
+            "The file is damaged.".into(),
             "Its structure cannot be read, so its pages cannot be found.".to_owned(),
         ),
         PdfError::TooLarge => (
-            "The PDF is too large.",
+            "The PDF is too large.".into(),
             "It is over the limits of the PDF helper (1 GB per file).".to_owned(),
         ),
         PdfError::Timeout => (
-            "The PDF took too long to open.",
+            "The PDF took too long to open.".into(),
             "The PDF helper stopped it. Navo and your files are fine.".to_owned(),
         ),
         PdfError::HelperDied => (
-            "The PDF helper stopped while opening it.",
+            "The PDF helper stopped while opening it.".into(),
             "Navo and your files are fine.".to_owned(),
         ),
-        PdfError::Unreadable(detail) => ("The file cannot be read.", detail.clone()),
-        other => ("The PDF could not be opened.", other.to_string()),
+        PdfError::Unreadable(detail) => ("The file cannot be read.".into(), detail.clone()),
+        PdfError::Unconfined(_) => (
+            t!("pdf-unconfined-title").into(),
+            t!("pdf-unconfined-detail"),
+        ),
+        other => ("The PDF could not be opened.".into(), other.to_string()),
     }
 }
 

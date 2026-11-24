@@ -22,20 +22,42 @@ fn confined(launcher: Launcher) -> Launcher {
         .with_spawn(std::sync::Arc::new(spawn_in_job))
 }
 
-/// Starts the helper suspended inside a 1 GiB Job Object, then resumes it, so it never runs
-/// unconfined; `spawn_confined` leaves no live process when it fails (S2a contract, S2a1).
+/// Starts the helper suspended inside its AppContainer and a 1 GiB Job Object, then resumes it,
+/// so it never runs unconfined; `spawn_confined` leaves no live process when it fails (S2a1, S2c2).
 #[cfg(windows)]
 fn spawn_in_job(spec: &navo_pdf::HelperSpec) -> std::io::Result<navo_pdf::Spawned> {
     const HELPER_MEMORY: usize = 1 << 30;
     let limits = navo_shell::HelperLimits {
         memory_bytes: HELPER_MEMORY,
     };
-    let child = navo_shell::spawn_confined(&spec.program, &spec.args, limits)?;
+    let child =
+        navo_shell::spawn_confined(&spec.program, &spec.args, limits).map_err(unconfined)?;
     Ok(navo_pdf::Spawned {
         process: Box::new(JobProcess(child.process)),
         input: Box::new(child.stdin),
         output: Box::new(child.stdout),
         guard: None,
+    })
+}
+
+/// Turns the shell's AppContainer refusal into navo-pdf's `Unconfined` ("cannot open safely"),
+/// keeping whether a retry may help; any other spawn error passes through unchanged.
+#[cfg(windows)]
+fn unconfined(error: std::io::Error) -> std::io::Error {
+    let refusal = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<navo_shell::ContainerError>());
+    let Some(refusal) = refusal else {
+        return error;
+    };
+    let permanence = if refusal.is_transient() {
+        navo_pdf::Permanence::Transient
+    } else {
+        navo_pdf::Permanence::Permanent
+    };
+    std::io::Error::other(navo_pdf::Unconfined {
+        reason: refusal.to_string(),
+        permanence,
     })
 }
 

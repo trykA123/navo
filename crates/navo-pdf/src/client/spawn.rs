@@ -16,8 +16,25 @@ pub struct HelperSpec {
     pub args: Vec<OsString>,
 }
 
-/// Starts a helper from a spec. Contract: a hook that returns `Err` has no live child left.
+/// Starts a helper from a spec. Contract: a hook that returns `Err` has no live child left. A hook
+/// that cannot confine the helper returns `io::Error::other(Unconfined { .. })`.
 pub type Spawn = Arc<dyn Fn(&HelperSpec) -> io::Result<Spawned> + Send + Sync>;
+
+/// Whether a confinement failure may clear on a later try (a lock, low memory) or never will.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Permanence {
+    Transient,
+    Permanent,
+}
+
+/// A spawn hook's refusal: it could not confine the helper, so it started nothing. The client
+/// reports `PdfError::Unconfined`; after a `Permanent` one it never calls the hook again.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{reason}")]
+pub struct Unconfined {
+    pub reason: String,
+    pub permanence: Permanence,
+}
 
 impl HelperSpec {
     /// A `Command` for this helper with piped stdin and stdout and a null stderr.

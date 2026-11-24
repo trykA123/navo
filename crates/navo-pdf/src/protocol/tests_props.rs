@@ -73,6 +73,7 @@ fn error() -> impl Strategy<Value = PdfError> {
         ".{0,32}".prop_map(PdfError::Unreadable),
         ".{0,32}".prop_map(PdfError::NoHelper),
         ".{0,32}".prop_map(PdfError::Protocol),
+        ".{0,32}".prop_map(PdfError::Unconfined),
         (any::<u32>(), any::<u32>()).prop_map(|(page, count)| PdfError::NoSuchPage { page, count }),
     ]
 }

@@ -195,6 +195,7 @@ fn put_error(out: &mut Vec<u8>, error: &PdfError) -> Result<(), CodecError> {
         PdfError::Unreadable(message) => (10, Some(message)),
         PdfError::NoHelper(message) => (11, Some(message)),
         PdfError::Protocol(message) => (12, Some(message)),
+        PdfError::Unconfined(message) => (13, Some(message)),
     };
     out.push(tag);
     match message {
@@ -278,6 +279,7 @@ fn error(input: &mut Input<'_>) -> Result<PdfError, CodecError> {
         10 => PdfError::Unreadable(input.message()?),
         11 => PdfError::NoHelper(input.message()?),
         12 => PdfError::Protocol(input.message()?),
+        13 => PdfError::Unconfined(input.message()?),
         _ => return Err(CodecError::Malformed("unknown error")),
     })
 }

@@ -42,7 +42,7 @@ const NO_SYSTEM_RESOURCES: u32 = 1450;
 /// The step of a grant that failed; the diagnostics log names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GrantStep {
-    /// The running exe's path is unknown or has no folder, so the targets cannot be named.
+    /// The helper exe's path has no file name or no folder, so the targets cannot be named.
     LocateExe,
     DeriveSid,
     FormatSid,
@@ -174,19 +174,9 @@ pub fn helper_targets(exe: &Path) -> Result<[PathBuf; 2], GrantError> {
     }
 }
 
-/// Grants the running exe and its `pdfium.dll` with `grant`, in that order, and fails closed:
-/// the first error stops the run and is returned, so the helper must not start.
-pub fn grant_helper_files<F>(grant: F) -> Result<(), GrantError>
-where
-    F: FnMut(&Path) -> Result<GrantOutcome, GrantError>,
-{
-    let exe = std::env::current_exe()
-        .map_err(|e| GrantError::new(GrantStep::LocateExe, None, e.raw_os_error().unwrap_or(-1)))?;
-    grant_targets_of(&exe, grant)
-}
-
-/// Grants `helper_targets(exe)` in order with `grant`; the first error stops the run.
-fn grant_targets_of<F>(exe: &Path, mut grant: F) -> Result<(), GrantError>
+/// Grants the helper `exe` being started and the `pdfium.dll` beside it with `grant`, in that
+/// order, and fails closed: the first error stops the run and is returned, so the helper must not start.
+pub fn grant_helper_files<F>(exe: &Path, mut grant: F) -> Result<(), GrantError>
 where
     F: FnMut(&Path) -> Result<GrantOutcome, GrantError>,
 {
@@ -294,22 +284,22 @@ mod tests {
     }
 
     #[test]
-    fn the_running_exe_and_its_pdfium_are_granted_in_order() {
-        let exe = std::env::current_exe().unwrap();
+    fn the_helper_exe_and_its_pdfium_are_granted_in_order() {
+        let exe = Path::new("/opt/navo/navo.exe");
         let mut seen = Vec::new();
-        let result = grant_helper_files(|path| {
+        let result = grant_helper_files(exe, |path| {
             seen.push(path.to_path_buf());
             Ok(GrantOutcome::Added)
         });
         assert_eq!(result, Ok(()));
-        assert_eq!(seen, [exe.clone(), exe.with_file_name("pdfium.dll")]);
+        assert_eq!(seen, [exe.to_path_buf(), exe.with_file_name("pdfium.dll")]);
     }
 
     #[test]
     fn a_failed_grant_stops_the_run_and_is_returned() {
         let exe = Path::new("/opt/navo/navo.exe");
         let mut calls = 0;
-        let result = grant_targets_of(exe, |path| {
+        let result = grant_helper_files(exe, |path| {
             calls += 1;
             Err(denied(path))
         });
@@ -321,7 +311,7 @@ mod tests {
     fn a_failure_on_pdfium_still_fails_closed() {
         let exe = Path::new("/opt/navo/navo.exe");
         let dll = Path::new("/opt/navo/pdfium.dll");
-        let result = grant_targets_of(exe, |path| {
+        let result = grant_helper_files(exe, |path| {
             if path == dll {
                 Err(denied(path))
             } else {

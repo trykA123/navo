@@ -1,4 +1,4 @@
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError};
@@ -6,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::process::{HelperProcess, Spawned};
+use super::spawn::{Permanence, Unconfined};
 use super::{Launcher, reaper};
 use crate::protocol::{CodecError, PdfError, Request, Response, read_response, write_request};
 
@@ -30,12 +31,15 @@ pub(super) struct Helper {
 
 impl Helper {
     /// Starts the helper through the launcher's spawn hook (or the default spawn) and wires its
-    /// replies. Fails with `NoHelper` when it cannot start; a failed hook leaves no live child.
+    /// replies. Fails with `NoHelper` when it cannot start, or `Unconfined` when the hook could not
+    /// confine it; after a permanent `Unconfined` it fails at once and never calls the hook again.
     pub(super) fn spawn(launcher: &Launcher, born: u64) -> Result<Self, PdfError> {
         launcher.check_generation(born)?;
+        if let Some(reason) = launcher.unconfinable.get() {
+            return Err(PdfError::Unconfined(reason.clone()));
+        }
         let spawned = match &launcher.spawn {
-            Some(hook) => hook(&launcher.spec)
-                .map_err(|error| PdfError::NoHelper(format!("cannot confine it: {error}")))?,
+            Some(hook) => hook(&launcher.spec).map_err(|error| hook_failure(launcher, &error))?,
             None => launcher
                 .spec
                 .spawn()
@@ -142,6 +146,21 @@ impl Drop for Helper {
             reaper::dispose(child, self.shutdowns.clone());
         }
     }
+}
+
+/// Maps a failed spawn hook: `Unconfined` (remembered on the launcher when permanent) or `NoHelper`.
+fn hook_failure(launcher: &Launcher, error: &io::Error) -> PdfError {
+    let refusal = error
+        .get_ref()
+        .and_then(|inner| inner.downcast_ref::<Unconfined>());
+    let Some(refusal) = refusal else {
+        return PdfError::NoHelper(format!("cannot confine it: {error}"));
+    };
+    if refusal.permanence == Permanence::Permanent {
+        // A second thread may have stored the same refusal first; either text names the cause.
+        let _ = launcher.unconfinable.set(refusal.reason.clone());
+    }
+    PdfError::Unconfined(refusal.reason.clone())
 }
 
 /// Reads replies from the helper's stdout and forwards them until it closes or a read fails.

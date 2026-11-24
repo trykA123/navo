@@ -7,8 +7,8 @@ mod spawn;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use helper::Helper;
@@ -19,7 +19,7 @@ use share::Share;
 pub use share::ShareFile;
 #[cfg(not(windows))]
 pub use share::TestShare;
-pub use spawn::{HelperSpec, Spawn};
+pub use spawn::{HelperSpec, Permanence, Spawn, Unconfined};
 
 use crate::protocol::{
     Bitmap, OpenSource, Outline, PageLinks, PageText, PdfError, RenderRequest, Request, Response,
@@ -39,6 +39,8 @@ pub struct Launcher {
     share: Option<Share>,
     pool: Arc<Pool<Helper>>,
     shutdowns: Arc<AtomicU64>,
+    /// Set by the first permanent `Unconfined` refusal; from then on no helper is spawned.
+    unconfinable: Arc<OnceLock<String>>,
 }
 
 impl Launcher {
@@ -54,6 +56,7 @@ impl Launcher {
             share: None,
             pool: Arc::default(),
             shutdowns: Arc::default(),
+            unconfinable: Arc::default(),
         }
     }
 

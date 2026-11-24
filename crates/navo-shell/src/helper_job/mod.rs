@@ -11,12 +11,17 @@ mod sandbox_policy;
 #[cfg(windows)]
 mod sandbox_win;
 
-// Test-only until S2c2 adds the spawn-time caller; S2c2 widens both cfgs to `any(windows, test)` / `windows`.
-#[cfg(test)]
+#[cfg(any(windows, test))]
 mod appcontainer_policy;
 
-#[cfg(all(windows, test))]
+#[cfg(windows)]
 mod appcontainer_win;
+
+#[cfg(any(windows, test))]
+mod container_error;
+
+#[cfg(windows)]
+mod container_win;
 
 #[cfg(windows)]
 mod handle_win;
@@ -26,6 +31,9 @@ mod spawn_win;
 
 #[cfg(windows)]
 pub use spawn_win::{ConfinedChild, ConfinedProcess, spawn_confined};
+
+#[cfg(windows)]
+pub use container_error::ContainerError;
 
 #[cfg(windows)]
 pub use handle_win::{adopt_shared_file, share_read_handle};

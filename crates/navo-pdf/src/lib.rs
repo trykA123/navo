@@ -12,7 +12,10 @@ pub use client::ShareFile;
 #[cfg(not(windows))]
 #[doc(hidden)]
 pub use client::TestShare;
-pub use client::{DEFAULT_TIMEOUT, Document, HelperProcess, HelperSpec, Launcher, Spawn, Spawned};
+pub use client::{
+    DEFAULT_TIMEOUT, Document, HelperProcess, HelperSpec, Launcher, Permanence, Spawn, Spawned,
+    Unconfined,
+};
 pub use pdfium::{MAX_FILE_BYTES, PdfiumEngine, library_beside};
 pub use protocol::OpenSource;
 pub use serve::{AdoptFile, Engine, Unavailable, clip, serve, serve_with};

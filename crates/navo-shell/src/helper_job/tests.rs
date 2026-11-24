@@ -114,14 +114,33 @@ fn a_pipe_handle_is_refused_and_stays_open() {
 }
 
 /// `cmd.exe` by full path, because `spawn_confined` never searches `PATH`.
-fn cmd_exe() -> std::path::PathBuf {
+fn system_cmd() -> std::path::PathBuf {
     std::env::var_os("ComSpec").map_or_else(|| r"C:\Windows\System32\cmd.exe".into(), Into::into)
+}
+
+/// A copy of `cmd.exe` in a fresh folder, with a `pdfium.dll` beside it when `with_pdfium`, because
+/// `spawn_confined` grants the AppContainer the exe and its pdfium.dll (S2c2).
+fn cmd_copy(with_pdfium: bool) -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let exe = dir.path().join("cmd.exe");
+    std::fs::copy(system_cmd(), &exe).unwrap();
+    if with_pdfium {
+        std::fs::write(dir.path().join("pdfium.dll"), b"stand-in").unwrap();
+    }
+    (dir, exe)
+}
+
+/// The shared `cmd.exe` copy; its folder is never removed, because a running exe cannot be deleted.
+fn cmd_exe() -> &'static std::path::Path {
+    static COPY: std::sync::OnceLock<(tempfile::TempDir, std::path::PathBuf)> =
+        std::sync::OnceLock::new();
+    &COPY.get_or_init(|| cmd_copy(true)).1
 }
 
 /// Starts `cmd.exe` with `args` through `spawn_confined`.
 fn confined_cmd(args: &[&str]) -> std::io::Result<ConfinedChild> {
     let args: Vec<std::ffi::OsString> = args.iter().map(Into::into).collect();
-    spawn_confined(&cmd_exe(), &args, LIMITS)
+    spawn_confined(cmd_exe(), &args, LIMITS)
 }
 
 /// Polls `child` until it reports exited; panics after 5 s.
@@ -165,6 +184,21 @@ fn spawn_confined_bad_program_is_an_error() {
     let missing = std::env::temp_dir().join("navo-no-such-helper-S2a1.exe");
     let err = spawn_confined(&missing, &[], LIMITS).err().unwrap();
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+}
+
+#[test]
+fn spawn_confined_without_pdfium_fails_closed_at_the_grant() {
+    let (_dir, exe) = cmd_copy(false);
+    let error = spawn_confined(&exe, &[], LIMITS).err().unwrap();
+    let typed = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<ContainerError>());
+    let text = typed.map(ToString::to_string).unwrap_or_default();
+    assert!(
+        text.contains("OpenFile") && text.contains("pdfium.dll"),
+        "{error}"
+    );
+    assert!(!typed.unwrap().is_transient());
 }
 
 #[test]

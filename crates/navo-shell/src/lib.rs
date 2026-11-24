@@ -34,7 +34,7 @@ pub use drives::{
 pub use helper_job::HelperLimits;
 #[cfg(windows)]
 pub use helper_job::{
-    ConfinedChild, ConfinedProcess, HelperJob, adopt_shared_file, confine_helper,
+    ConfinedChild, ConfinedProcess, ContainerError, HelperJob, adopt_shared_file, confine_helper,
     share_read_handle, spawn_confined,
 };
 #[cfg(windows)]

@@ -106,7 +106,7 @@ impl PdfView {
         match &self.phase {
             Phase::Refused(error) => {
                 let (headline, _) = super::card::refusal(error);
-                Some(headline.into())
+                Some(headline)
             }
             Phase::Ready(doc) => {
                 let trouble = &doc.trouble;
