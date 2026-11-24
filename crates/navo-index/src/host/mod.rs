@@ -1,3 +1,4 @@
+mod lookup;
 mod scan;
 
 use std::path::PathBuf;

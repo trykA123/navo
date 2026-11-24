@@ -6,7 +6,7 @@ use std::time::Instant;
 use navo_fs::{CancelToken, FakeFs, FakeOp, IoQueue, JobSlot, Priority, volume_of};
 
 use super::super::{HostOptions, HostStatus, Worker};
-use super::{Flags, Location, NO_PARENT, NameTable};
+use super::{Flags, Location, NO_PARENT, NameTable, subtree_len};
 use crate::latest::Latest;
 use crate::walker::Limits;
 
@@ -143,4 +143,40 @@ fn a_queued_root_is_walked_again_and_leaves_the_queue() {
     let found = paths(&table);
     assert!(found.contains("tree/left/big/new.txt"));
     assert!(!found.contains("tree/left/big/old-0.txt"));
+}
+
+/// The count before the children DFS: live entries whose parent chain reaches `old`.
+fn chain_len(table: &NameTable, old: u32) -> usize {
+    table
+        .iter()
+        .filter(|(id, _)| {
+            std::iter::successors(Some(*id), |&id| table.parent(id))
+                .take(table.slots() as usize)
+                .any(|id| id == old)
+        })
+        .count()
+}
+
+#[test]
+fn the_children_dfs_counts_every_subtree_like_the_parent_chain() {
+    let mut table = merge_fixture(40);
+    let other = table.find_folder("tree/other").unwrap();
+    let mut parent = other;
+    for depth in 0..6 {
+        parent = table
+            .push(parent, &format!("deep-{depth}"), Flags::FOLDER)
+            .unwrap();
+        for at in 0..3 {
+            table
+                .push(parent, &format!("file-{at}.txt"), Flags::NONE)
+                .unwrap();
+        }
+    }
+    let gone = table
+        .find_folder("tree/other/deep-0/deep-1/deep-2")
+        .unwrap();
+    table.remove(gone);
+    for (id, _) in table.iter() {
+        assert_eq!(subtree_len(&table, id), chain_len(&table, id), "entry {id}");
+    }
 }

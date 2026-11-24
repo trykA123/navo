@@ -1,13 +1,18 @@
 use std::sync::{Arc, PoisonError, mpsc};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use navo_core::{FsError, Location, ProviderPath};
 use navo_fs::{CancelToken, EntryKind, FsEntry, WatchChange, WatchEvent};
 
 use super::Worker;
+use super::lookup::BatchLookup;
 use crate::ntfs::COMPACT_MIN_SLOTS;
 use crate::table::{Flags, NO_PARENT, NameTable};
 use crate::walker::{self, Outcome, Progress, WalkResult};
+
+/// How long one batch may hold the write lock for lookups; later changes of the batch are
+/// reconciled by rescanning their folders after the lock is released.
+const LOCK_BUDGET: Duration = Duration::from_millis(20);
 
 /// One watch change with its disk metadata already read, so applying it holds
 /// the table write lock for table work only.
@@ -111,7 +116,11 @@ impl Worker {
         root: &Location,
         walked: &NameTable,
     ) -> Result<bool, String> {
-        let old = folder(table, root).ok_or("unknown index subtree")?;
+        let old = BatchLookup::new(&self.options.root)
+            .folder(table, root)
+            .ok()
+            .flatten()
+            .ok_or("unknown index subtree")?;
         if table.len() - subtree_len(table, old) + walked.len() > self.options.limits.max_entries {
             return Err("index entry limit reached".into());
         }
@@ -170,19 +179,25 @@ impl Worker {
         };
         let prepared = self.prepare(changes);
         let shared = Arc::clone(&self.table);
+        let mut lookup = BatchLookup::until(&self.options.root, &self.clock, LOCK_BUDGET);
         let mut table = shared.write().unwrap_or_else(PoisonError::into_inner);
         let before = (table.len(), table.slots());
         let mut roots = Vec::new();
         for change in prepared {
-            if let Err(error) = self.apply(&mut table, change, &mut roots) {
+            if let Err(error) = self.apply(&mut table, &mut lookup, change, &mut roots) {
                 self.error(format!("updating index: {error}"));
             }
         }
         if before != (table.len(), table.slots()) {
             self.dirty = Some((self.clock)());
         }
-        let roots = self.rescan_roots(&table, roots);
         drop(table);
+        // This worker is the only writer, so the batch's maps stay valid under a read lock.
+        lookup.unbounded();
+        let table = shared.read().unwrap_or_else(PoisonError::into_inner);
+        let roots = self.rescan_roots(&table, &mut lookup, roots);
+        drop(table);
+        drop(lookup);
         self.publish();
         for root in roots {
             self.scan_root(&root);
@@ -217,55 +232,66 @@ impl Worker {
         Some(Prepared::Refreshed { location, entry })
     }
 
+    /// Applies one change; a lookup past the lock budget leaves its folder for a rescan.
     fn apply(
         &self,
         table: &mut NameTable,
+        lookup: &mut BatchLookup,
         change: Prepared,
         roots: &mut Vec<Location>,
     ) -> Result<(), String> {
         match change {
-            Prepared::Removed(location) => {
-                let id = location.and_then(|location| self.entry(table, &location));
-                table.remove(id.unwrap_or(NO_PARENT));
-            }
+            Prepared::Removed(None) => {}
+            Prepared::Removed(Some(location)) => match lookup.entry(table, &location) {
+                Ok(id) => remove(table, lookup, id),
+                Err(_) => roots.push(self.parent_of(&location)),
+            },
             Prepared::Refreshed { location, entry } => {
-                if let Some(root) = self.refresh(table, &location, entry)? {
+                if let Some(root) = self.refresh(table, lookup, &location, entry)? {
                     roots.push(root);
                 }
             }
             Prepared::Renamed { from, to } => {
-                roots.extend([from, to].into_iter().flatten().map(|location| {
-                    location
-                        .parent()
-                        .unwrap_or_else(|| self.options.root.clone())
-                }));
+                roots.extend(
+                    [from, to]
+                        .into_iter()
+                        .flatten()
+                        .map(|location| self.parent_of(&location)),
+                );
             }
         }
         Ok(())
     }
 
+    fn parent_of(&self, location: &Location) -> Location {
+        location
+            .parent()
+            .unwrap_or_else(|| self.options.root.clone())
+    }
+
     fn refresh(
         &self,
         table: &mut NameTable,
+        lookup: &mut BatchLookup,
         location: &Location,
         entry: Result<FsEntry, FsError>,
     ) -> Result<Option<Location>, String> {
-        let old = self.entry(table, location);
+        let parent_location = self.parent_of(location);
+        let Ok(old) = lookup.entry(table, location) else {
+            return Ok(Some(parent_location));
+        };
         let entry = match entry {
             Ok(entry) => entry,
             Err(error) if error.kind == navo_core::FsErrorKind::NotFound => {
-                table.remove(old.unwrap_or(NO_PARENT));
+                remove(table, lookup, old);
                 return Ok(None);
             }
             Err(error) => return Err(error.message()),
         };
-        let parent_location = location
-            .parent()
-            .unwrap_or_else(|| self.options.root.clone());
         if entry.kind == EntryKind::Folder {
             return Ok(Some(parent_location));
         }
-        let Some(parent) = folder(table, &parent_location) else {
+        let Ok(Some(parent)) = lookup.folder(table, &parent_location) else {
             return Ok(Some(parent_location));
         };
         if table
@@ -278,30 +304,25 @@ impl Worker {
         if old.is_some_and(|id| table.flags(id) == Some(flags)) {
             return Ok(None);
         }
-        table.remove(old.unwrap_or(NO_PARENT));
+        remove(table, lookup, old);
         if table.len() >= self.options.limits.max_entries {
             return Err("index entry limit reached".into());
         }
-        table
+        let id = table
             .push(parent, &entry.name.to_text(), flags)
             .map_err(|error| error.to_string())?;
+        if let Some(name) = table.name(id) {
+            lookup.pushed(table, parent, id, name);
+        }
         Ok(None)
     }
 
-    /// Finds a live entry by path: its parent folder through `FolderLookup`,
-    /// then the matching child of that folder.
-    fn entry(&self, table: &NameTable, location: &Location) -> Option<u32> {
-        if location.same_place(&self.options.root) {
-            return Some(0);
-        }
-        let parent = folder(table, &location.parent()?)?;
-        table.children(parent).find(|&child| {
-            self.location(table, child)
-                .is_some_and(|child| child.same_place(location))
-        })
-    }
-
-    fn rescan_roots(&self, table: &NameTable, roots: Vec<Location>) -> Vec<Location> {
+    fn rescan_roots(
+        &self,
+        table: &NameTable,
+        lookup: &mut BatchLookup,
+        roots: Vec<Location>,
+    ) -> Vec<Location> {
         let mut distinct = Vec::new();
         for root in roots {
             if distinct.iter().any(|parent| contains(parent, &root)) {
@@ -312,7 +333,7 @@ impl Worker {
         }
         let mut roots = Vec::new();
         for root in distinct {
-            let Some(id) = folder(table, &root) else {
+            let Ok(Some(id)) = lookup.folder(table, &root) else {
                 return vec![self.options.root.clone()];
             };
             if table
@@ -327,17 +348,12 @@ impl Worker {
     }
 }
 
-/// Finds a folder by path through `FolderLookup`, in O(depth) instead of a
-/// full-table scan.
-fn folder(table: &NameTable, location: &Location) -> Option<u32> {
-    table
-        .folder_lookup()
-        .find_folder(
-            &location.path().to_text(),
-            Instant::now() + Duration::from_millis(20),
-        )
-        .ok()
-        .flatten()
+/// Removes `id` from the table and from the batch's name maps.
+fn remove(table: &mut NameTable, lookup: &mut BatchLookup, id: Option<u32>) {
+    if let Some(id) = id {
+        lookup.removing(table, id);
+        table.remove(id);
+    }
 }
 
 fn contains(parent: &Location, location: &Location) -> bool {

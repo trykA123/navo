@@ -266,7 +266,7 @@ fn refresh(host: &Host, mutate: impl FnOnce()) -> HostStatus {
     host.statuses
         .wait(
             revision,
-            WATCH_MAX_DELAY + WATCH_QUIET + Duration::from_secs(10),
+            WATCH_MAX_DELAY + WATCH_QUIET + Duration::from_secs(1),
         )
         .expect("the watcher batch did not reach the host");
     built(host)
@@ -922,5 +922,31 @@ fn a_two_hundred_file_batch_reads_metadata_before_the_write_lock() {
         2 + FILES + BATCH,
         "subtree {}",
         subtree(&table, "tree/big")
+    );
+}
+
+/// Every clock read moves a second, so each lookup deadline has passed when checked:
+/// the removal must still land, through a rescan of its folder outside the lock.
+#[test]
+fn an_expired_lookup_rescans_the_folder_and_keeps_the_removal() {
+    let rig = Rig::new();
+    rig.fs.add_folder("tree/docs");
+    rig.fs.add_file("tree/docs/gone.txt", 1);
+    rig.fs.add_file("tree/docs/kept.txt", 1);
+    let (ticks, base) = (Arc::new(AtomicU64::new(0)), rig.base);
+    let clock = move || base + Duration::from_secs(ticks.fetch_add(1, Ordering::SeqCst));
+    let host = Host::start_with_clock(rig.options(rig.fs.clone()), Arc::new(clock)).unwrap();
+    built(&host);
+    let lists = rig.fs.calls("tree/docs", FakeOp::List);
+    let status = refresh(&host, || rig.fs.remove("tree/docs/gone.txt"));
+    assert!(status.errors.is_empty(), "{:?}", status.errors);
+    let found = names(&host.table().read().unwrap());
+    assert!(
+        !found.contains("gone.txt") && found.contains("kept.txt"),
+        "{found:?}"
+    );
+    assert!(
+        rig.fs.calls("tree/docs", FakeOp::List) > lists,
+        "the expired removal was not reconciled by a folder rescan"
     );
 }
