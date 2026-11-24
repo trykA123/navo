@@ -208,10 +208,11 @@ impl Rig {
     pub(in crate::window_view) fn open_page(&self, cx: &mut TestAppContext) {
         self.press(cx, "ctrl-,");
         self.settle_motion(cx);
-        self.click(
-            cx,
-            ("settings-section", crate::settings::Section::ALL.len()),
-        );
+        let keyboard = crate::settings::Section::ALL
+            .iter()
+            .position(|page| *page == crate::settings::Section::Keyboard);
+        self.click(cx, ("settings-section", keyboard.expect("a Keyboard page")));
+        self.click(cx, "settings-keyboard-shortcuts");
     }
 
     fn page(&self, cx: &mut TestAppContext) -> Entity<ShortcutsPage> {

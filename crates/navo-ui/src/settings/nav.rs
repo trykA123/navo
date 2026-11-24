@@ -1,28 +1,47 @@
+//! The Settings nav: ten pages in three clusters, each page's Ctrl+digit while Ctrl is held,
+//! and the greyed-out Modules page that waits for the first optional module.
+
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 
 use super::SheetEvent;
 use super::fields::Section;
-use super::steps::first_row;
+use super::steps::digit_of;
 use super::view::{DIMMED, Look, section_label, send_on_click};
 use crate::prelude::*;
-use crate::primitives::{IconName, icon};
+use crate::primitives::{IconName, Kbd, icon};
 
-const NAV_WIDTH: f32 = 148.;
+const NAV_WIDTH: f32 = 200.;
 const NAV_ITEM: f32 = 30.;
 const MARKER: (f32, f32) = (3., 14.);
-const SHORTCUTS: &str = "Shortcuts";
+/// The nav draws a divider after these pages: the end of each cluster.
+const CLUSTER_ENDS: [Section; 2] = [Section::CopyDelete, Section::TrayClipboard];
 
 struct NavItem {
     index: usize,
-    label: SharedString,
-    glyph: IconName,
+    page: Section,
     is_on: bool,
-    is_empty: bool,
-    event: SheetEvent,
+    event: Option<SheetEvent>,
 }
 
-fn nav_item(look: &Look, item: NavItem) -> AnyElement {
+/// What the nav needs besides the look: the shown page (`None` while the shortcut list
+/// has focus, which belongs to Keyboard) and whether Ctrl is held.
+pub(super) struct NavState {
+    current: Option<Section>,
+    shows_digits: bool,
+}
+
+impl NavState {
+    /// The nav state for the shown page; the digits show while Ctrl is held.
+    pub(super) fn new(current: Option<Section>, window: &Window) -> Self {
+        Self {
+            current,
+            shows_digits: window.modifiers().control,
+        }
+    }
+}
+
+fn nav_item(look: &Look, item: NavItem, shows_digits: bool) -> AnyElement {
     let theme = look.theme.selected_content(item.is_on);
     let t = &theme;
     let marker = div()
@@ -38,11 +57,15 @@ fn nav_item(look: &Look, item: NavItem) -> AnyElement {
     } else {
         t.colors.muted
     };
+    let digit = digit_of(item.page);
+    let cap = Kbd::new(("settings-digit", item.index), &digit.to_string())
+        .filter(|_| shows_digits && item.event.is_some());
     let element = div()
         .id(("settings-section", item.index))
         .role(Role::Tab)
-        .aria_label(item.label.clone())
+        .aria_label(section_label(item.page))
         .aria_selected(item.is_on)
+        .aria_keyshortcuts(format!("Control+{digit}"))
         .test_support()
         .relative()
         .flex()
@@ -53,7 +76,7 @@ fn nav_item(look: &Look, item: NavItem) -> AnyElement {
         .rounded(t.radii.md)
         .cursor_pointer()
         .whitespace_nowrap()
-        .when(item.is_empty, |element| element.opacity(DIMMED))
+        .when(item.event.is_none(), |element| element.opacity(DIMMED))
         .hover(|element| element.bg(t.colors.hover))
         .when(item.is_on, |element| {
             element
@@ -62,42 +85,73 @@ fn nav_item(look: &Look, item: NavItem) -> AnyElement {
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(marker)
         })
-        .child(icon(item.glyph, t.spacing.icon, tint))
-        .child(item.label);
-    let send = look.send.as_ref().filter(|_| !item.is_empty);
-    send_on_click(element, send, item.event).into_any_element()
+        .child(icon(item.page.icon(), t.spacing.icon, tint))
+        .child(div().flex_1().min_w_0().child(section_label(item.page)))
+        .children(cap);
+    match item.event {
+        Some(event) => send_on_click(element, look.send.as_ref(), event).into_any_element(),
+        None => element.into_any_element(),
+    }
 }
 
-pub(super) fn nav(look: &Look, current: Option<Section>) -> impl IntoElement + use<> {
+/// The page that waits for optional modules: greyed out, never clickable, announced as
+/// unavailable.
+fn modules_item(look: &Look) -> AnyElement {
     let t = look.theme;
-    let sections = Section::ALL
-        .iter()
-        .enumerate()
-        .map(|(index, section)| NavItem {
+    let label = navo_l10n::tr("settings-modules");
+    div()
+        .id("settings-modules")
+        .role(Role::Tab)
+        .aria_label(label.clone())
+        .aria_description(navo_l10n::tr("settings-modules-unavailable"))
+        .aria_selected(false)
+        .test_support()
+        .flex()
+        .items_center()
+        .gap(t.spacing.md)
+        .h(px(NAV_ITEM))
+        .px(t.spacing.lg)
+        .opacity(DIMMED)
+        .text_color(t.colors.faint)
+        .child(icon(IconName::Layers, t.spacing.icon, t.colors.faint))
+        .child(label)
+        .into_any_element()
+}
+
+fn divider(look: &Look) -> AnyElement {
+    let t = look.theme;
+    div()
+        .flex_none()
+        .h(px(1.))
+        .mx(t.spacing.md)
+        .my(t.spacing.sm)
+        .bg(t.colors.line)
+        .into_any_element()
+}
+
+/// Builds the nav column: the pages in nav order with cluster dividers, then Modules.
+pub(super) fn nav(look: &Look, state: &NavState) -> impl IntoElement + use<> {
+    let t = look.theme;
+    let shown = state.current.unwrap_or(Section::Keyboard);
+    let mut items = Vec::new();
+    for (index, page) in Section::ALL.into_iter().enumerate() {
+        let item = NavItem {
             index,
-            label: section_label(*section),
-            glyph: section.icon(),
-            is_on: current == Some(*section),
-            is_empty: look.filter.first_in(*section).is_none(),
-            event: SheetEvent::Select(
-                look.filter
-                    .first_in(*section)
-                    .unwrap_or(first_row(*section)),
-            ),
-        });
-    let shortcuts = NavItem {
-        index: Section::ALL.len(),
-        label: SHORTCUTS.into(),
-        glyph: IconName::Keyboard,
-        is_on: current.is_none(),
-        is_empty: false,
-        event: SheetEvent::Shortcuts,
-    };
-    let items = sections.chain([shortcuts]).map(|item| nav_item(look, item));
+            page,
+            is_on: shown == page,
+            event: look.filter.first_in(page).map(SheetEvent::Select),
+        };
+        items.push(nav_item(look, item, state.shows_digits));
+        if CLUSTER_ENDS.contains(&page) {
+            items.push(divider(look));
+        }
+    }
+    items.push(divider(look));
+    items.push(modules_item(look));
     div()
         .id("settings-nav")
         .role(Role::TabList)
-        .aria_label("Sections")
+        .aria_label("Pages")
         .test_support()
         .flex()
         .flex_col()

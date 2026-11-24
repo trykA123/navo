@@ -85,3 +85,9 @@ fn down_from_the_last_row_of_a_page_goes_to_the_next_page_first_row() {
         Field::Font.index(),
     );
 }
+
+#[test]
+fn ctrl_digits_follow_the_nav_and_about_takes_zero() {
+    let digits = Section::ALL.map(digit_of);
+    assert_eq!(digits, [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]);
+}

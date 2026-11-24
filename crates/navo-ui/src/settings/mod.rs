@@ -19,6 +19,7 @@ mod help_page;
 mod index_page;
 mod index_progress;
 mod inspector;
+mod keyboard_page;
 mod nav;
 mod pages;
 mod row_state;
@@ -61,7 +62,8 @@ pub use git_page::GitPage;
 pub use index_progress::{IndexProgress, IndexState, VolumeProgress};
 pub use search_page::{SearchPage, ServiceStatus};
 pub use steps::{
-    HELP_ROW, Nudge, child_of, first_row, moved, next_section, nudged, rows_in, section_of,
+    HELP_ROW, Nudge, child_of, digit_of, first_row, moved, next_section, nudged, rows_in,
+    section_of,
 };
 pub use stored::stored_value;
 pub use summon_key::{SummonKey, SummonKeyError, parse_summon_key};
@@ -77,7 +79,6 @@ use crate::window_view::UpdateView;
 pub use diagnostics_page::DiagnosticRow;
 
 pub const CONTEXT: &str = "SettingsSheet";
-const LAST_SECTION: Section = Section::ALL[Section::ALL.len() - 1];
 pub const FIELD_CONTEXT: &str = "SettingsField";
 pub const FIND_CONTEXT: &str = "SettingsFind";
 
@@ -243,27 +244,15 @@ impl SettingsBody {
         }
     }
 
+    /// The next or previous page; the shortcut list counts as the Keyboard page.
     fn section_event(&self, forward: bool) -> Option<SheetEvent> {
-        let edge = if forward {
-            LAST_SECTION
-        } else {
-            Section::Appearance
+        let row = match self.shortcuts {
+            Some(_) => first_row(Section::Keyboard),
+            None => self.row,
         };
-        match (self.shortcuts.is_some(), forward) {
-            (true, true) => self
-                .filter
-                .first_in(Section::Appearance)
-                .map(SheetEvent::Select),
-            (true, false) => self.filter.first_in(LAST_SECTION).map(SheetEvent::Select),
-            (false, _) if self.filter.is_empty() && section_of(self.row) == edge => {
-                Some(SheetEvent::Shortcuts)
-            }
-            (false, _) => Some(SheetEvent::Select(next_section(
-                &self.filter,
-                self.row,
-                forward,
-            ))),
-        }
+        let next = next_section(&self.filter, row, forward);
+        let is_shown = FIELDS.get(next).is_none_or(|spec| self.filter.admits(spec));
+        is_shown.then_some(SheetEvent::Select(next))
     }
 
     fn reset_event(&self) -> Option<SheetEvent> {
@@ -313,7 +302,7 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
     let field = FIELDS.get(row).map(|spec| spec.field);
     let filter = &body.filter;
     let up = on_event(body, Some(SheetEvent::Select(moved(filter, row, false))));
-    let down = on_event(body, Some(SheetEvent::Select(moved(filter, row, true))));
+    let down = on_event(body, Some(keyboard_page::down_event(filter, row)));
     let find = on_event(body, Some(SheetEvent::Find));
     let back = on_event(body, body.event_for(Nudge::Back));
     let forward = on_event(body, body.event_for(Nudge::Forward));
@@ -335,14 +324,14 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
 }
 
 impl RenderOnce for SettingsBody {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         let keys = register(div().key_context(CONTEXT), &self);
         let section = section_of(self.row);
         let look = view::Look {
             theme: &t,
             values: &self.values,
-            row: self.row,
+            row: keyboard_page::shown_row(self.row, self.shortcuts.is_some()),
             filter: &self.filter,
             page: &self.page,
             git: &self.git,
@@ -360,10 +349,8 @@ impl RenderOnce for SettingsBody {
             .filter(|_| !self.upgrade.is_empty())
             .map(|_| upgrade::card(&t, &self.upgrade, self.on_event.as_ref()));
         let footer = shown.map(|_| row_state::footer(&t, &self.values));
-        let content = match self.shortcuts {
-            Some(page) => page,
-            None => view::content(&look, section, self.scroll.as_ref()).into_any_element(),
-        };
+        let content = keyboard_page::content(&look, section, self.shortcuts, self.scroll.as_ref());
+        let nav = nav::NavState::new(shown, window);
         let keyed = keys
             .id("settings-body")
             .role(Role::Group)
@@ -374,7 +361,7 @@ impl RenderOnce for SettingsBody {
             .flex_1()
             .min_h_0()
             .min_w_0()
-            .child(nav::nav(&look, shown))
+            .child(nav::nav(&look, &nav))
             .child(
                 column()
                     .children(self.error.map(|message| view::error_line(&t, message)))

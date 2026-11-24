@@ -87,6 +87,7 @@ mod settings_git;
 mod settings_help;
 mod settings_inspector;
 mod settings_layer;
+mod settings_nav;
 mod settings_news;
 mod settings_search;
 mod settings_sheet;

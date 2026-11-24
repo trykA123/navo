@@ -177,7 +177,10 @@ fn tab_from_shortcuts_lands_on_a_shown_row_or_nowhere() {
         on_shortcuts("appearance.density").section_event(true),
         Some(SheetEvent::Select(density))
     );
-    assert_eq!(on_shortcuts("files.sort").section_event(true), None);
+    assert_eq!(
+        on_shortcuts("files.sort").section_event(true),
+        Some(SheetEvent::Select(Field::Sort.index()))
+    );
     assert_eq!(on_shortcuts("zzz").section_event(false), None);
     assert!(on_shortcuts("").section_event(true).is_some());
 }

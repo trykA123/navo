@@ -229,13 +229,11 @@ fn walk_pages(cx: &mut TestAppContext) {
         "Tray and clipboard",
         "Keyboard",
         "About",
-        "Shortcuts",
         "Appearance",
     ];
     for (step, name) in pages.iter().enumerate() {
         rig.press(cx, "tab");
-        let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
-        assert!(in_sheet, "after tab {step}");
+        assert!(sheet_has_focus(cx, &rig), "after tab {step}");
         let current = (0..=Section::ALL.len()).find(|index| {
             cx.update_window(rig.window, |_, window, cx| {
                 window.render_frame(cx);
@@ -246,7 +244,7 @@ fn walk_pages(cx: &mut TestAppContext) {
         let shown = current.and_then(|index| label(cx, &rig, ("settings-section", index)));
         assert_eq!(shown.as_deref(), Some(*name));
     }
-    for _ in 0..10 {
+    for _ in 0..9 {
         rig.press(cx, "shift-tab");
     }
     assert_eq!(

@@ -123,3 +123,9 @@ pub fn child_of(filter: &Filter, row: usize) -> Option<usize> {
         .iter()
         .position(|line| *line == Line::Row(row))
 }
+
+/// The Ctrl+digit of a page: 1 to 9 in nav order, then 0 for the tenth page (About).
+pub fn digit_of(page: Section) -> u8 {
+    let position = Section::ALL.iter().position(|shown| *shown == page);
+    position.map_or(0, |position| ((position + 1) % 10) as u8)
+}
