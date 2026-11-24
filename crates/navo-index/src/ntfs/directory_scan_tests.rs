@@ -47,8 +47,10 @@ fn directory_scan_resolves_reverse_deep_order() {
         &mut volume,
         'C',
         usize::MAX,
-        Continuity::Strict,
-        &CancelToken::new(),
+        BuildPass {
+            continuity: Continuity::Strict,
+            cancel: &CancelToken::new(),
+        },
     )
     .unwrap();
     let index = scan.index;
@@ -67,8 +69,10 @@ fn directory_scan_counts_files_and_utf8_names_without_retaining_files() {
         &mut volume,
         'C',
         usize::MAX,
-        Continuity::Strict,
-        &CancelToken::new(),
+        BuildPass {
+            continuity: Continuity::Strict,
+            cancel: &CancelToken::new(),
+        },
     )
     .unwrap();
     let cap = scan.capacity;

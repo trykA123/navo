@@ -262,8 +262,10 @@ mod tests {
                 &mut volume,
                 'C',
                 SizeHint::default(),
-                Continuity::AllowWrap,
-                &CancelToken::new(),
+                BuildPass {
+                    continuity: Continuity::AllowWrap,
+                    cancel: &CancelToken::new(),
+                },
             )
             .unwrap_or_else(|error| panic!("query {query}, wrap {wrap}: {error}"));
             let latest = match (query, wrap) {
@@ -290,8 +292,10 @@ mod tests {
             &mut volume,
             'C',
             SizeHint::default(),
-            Continuity::AllowWrap,
-            &CancelToken::new(),
+            BuildPass {
+                continuity: Continuity::AllowWrap,
+                cancel: &CancelToken::new(),
+            },
         )
         .unwrap();
         assert_eq!(built.inexact_reason(), None);

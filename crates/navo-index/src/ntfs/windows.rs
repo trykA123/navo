@@ -63,7 +63,8 @@ impl Volume {
         cancel: &crate::pipe::CancelToken,
     ) -> Result<Enumeration, NtfsError> {
         let drive = self.drive;
-        enumerate_volume_with_continuity(self, drive, hint, continuity, cancel)
+        let pass = super::directory_scan::BuildPass { continuity, cancel };
+        enumerate_volume_with_continuity(self, drive, hint, pass)
     }
 
     pub fn read_journal(&mut self, saved: JournalPosition) -> Result<UsnBatch, NtfsError> {

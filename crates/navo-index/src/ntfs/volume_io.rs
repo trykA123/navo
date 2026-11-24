@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::directory_graph::MAX_LATE_FOLDERS;
+use super::directory_scan::BuildPass;
 use super::{
     Continuity, Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Resume, SizeHint,
     TableChange, UsnBatch, parse_batch, validate_journal_cursor,
@@ -145,25 +146,20 @@ pub(super) fn enumerate_volume_sized(
     )
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the volume, hint, continuity and cancel token are separate build inputs"
-)]
-/// Builds the whole volume like `enumerate_volume_sized`, treating a journal wrap as `continuity` says.
+/// Builds the whole volume like `enumerate_volume_sized`, treating a journal wrap as `pass.continuity` says.
 pub(super) fn enumerate_volume_with_continuity(
     volume: &mut impl VolumeIo,
     drive: char,
     hint: SizeHint,
-    continuity: Continuity,
-    cancel: &crate::pipe::CancelToken,
+    pass: BuildPass<'_>,
 ) -> Result<Enumeration, NtfsError> {
     enumerate_with_late_limits::<1_000_000, MAX_LATE_FOLDERS>(
         volume,
         drive,
         usize::MAX,
         hint,
-        continuity,
-        cancel,
+        pass.continuity,
+        pass.cancel,
     )
 }
 

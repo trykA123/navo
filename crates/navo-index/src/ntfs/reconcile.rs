@@ -3,8 +3,9 @@
 use std::collections::{HashMap, HashSet};
 
 use super::super::directory_graph::{DirectoryGraph, DirectoryRecord, UnplacedFolder};
+use super::super::directory_scan::{BuildPass, scan_directories};
 use super::super::skipped::is_extend;
-use super::super::{InexactBuild, directory_scan, is_folder};
+use super::super::{InexactBuild, is_folder};
 use super::two_pass::{add_file, add_record, check_cancel};
 use super::{
     Continuity, Enumeration, JournalState, NtfsError, NtfsIndex, SizeHint, VolumeIo,
@@ -163,7 +164,7 @@ pub(super) fn enumerate_with_late_limits<const CAP: usize, const FOLDER_CAP: usi
     continuity: Continuity,
     cancel: &CancelToken,
 ) -> Result<Enumeration, NtfsError> {
-    let scan = directory_scan::scan_directories(volume, drive, limit, continuity, cancel)?;
+    let scan = scan_directories(volume, drive, limit, BuildPass { continuity, cancel })?;
     let mut index = scan.index;
     let sized = reserve_for_build(&mut index, hint, scan.capacity, drive);
     let mut late = LateRecords::new(scan.late_folders, CAP, FOLDER_CAP);

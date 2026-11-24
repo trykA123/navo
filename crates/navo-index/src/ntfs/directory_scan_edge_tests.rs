@@ -69,8 +69,10 @@ fn directory_scan_resolves_later_parents_and_sequenced_roots() {
         &mut volume,
         'C',
         usize::MAX,
-        Continuity::Strict,
-        &CancelToken::new(),
+        BuildPass {
+            continuity: Continuity::Strict,
+            cancel: &CancelToken::new(),
+        },
     )
     .unwrap();
     let index = scan.index;
@@ -91,8 +93,10 @@ fn directory_scan_holds_folders_with_missing_and_cyclic_parents() {
             &mut volume,
             'C',
             usize::MAX,
-            Continuity::Strict,
-            &CancelToken::new(),
+            BuildPass {
+                continuity: Continuity::Strict,
+                cancel: &CancelToken::new(),
+            },
         )
         .unwrap();
         assert_eq!(scan.skipped, 0);
@@ -114,8 +118,10 @@ fn directory_scan_limits_count_folders_and_files_including_exact_eof() {
             &mut volume,
             'C',
             limit,
-            Continuity::Strict,
-            &CancelToken::new(),
+            BuildPass {
+                continuity: Continuity::Strict,
+                cancel: &CancelToken::new(),
+            },
         )
         .unwrap();
         let count = limit.min(3);
@@ -145,7 +151,15 @@ fn directory_scan_cancellation_is_checked_before_batches_after_limit_or_eof_and_
             if at == 0 {
                 cancel.cancel();
             }
-            let result = scan_directories(&mut volume, 'C', limit, Continuity::Strict, &cancel);
+            let result = scan_directories(
+                &mut volume,
+                'C',
+                limit,
+                BuildPass {
+                    continuity: Continuity::Strict,
+                    cancel: &cancel,
+                },
+            );
             assert!(matches!(result, Err(NtfsError::Cancelled)), "I/O call {at}");
             assert_eq!(volume.calls, at.max(1));
         }
@@ -162,8 +176,10 @@ fn directory_scan_reenumerates_if_the_journal_is_recreated_or_leaves_its_readabl
             &mut volume,
             'C',
             usize::MAX,
-            Continuity::Strict,
-            &CancelToken::new(),
+            BuildPass {
+                continuity: Continuity::Strict,
+                cancel: &CancelToken::new(),
+            },
         );
         assert!(matches!(
             result,

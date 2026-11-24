@@ -15,19 +15,21 @@ pub(super) struct DirectoryScan {
     /// True when `Continuity::AllowWrap` kept a scan the journal outran.
     pub(super) journal_wrapped: bool,
 }
+/// How a build pass treats a journal wrap, and the token that cancels it; shared by both passes.
+#[derive(Clone, Copy)]
+pub(super) struct BuildPass<'a> {
+    pub(super) continuity: Continuity,
+    pub(super) cancel: &'a CancelToken,
+}
 /// Scans a record budget into folders/capacities; fails on graph, cancellation or continuity errors
 /// (a journal wrap fails only under `Continuity::Strict`).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the volume, limit, continuity and cancel token are separate build inputs"
-)]
 pub(super) fn scan_directories(
     volume: &mut impl VolumeIo,
     drive: char,
     limit: usize,
-    continuity: Continuity,
-    cancel: &CancelToken,
+    pass: BuildPass<'_>,
 ) -> Result<DirectoryScan, NtfsError> {
+    let BuildPass { continuity, cancel } = pass;
     let state = JournalState::parse(&volume.query_journal()?)?;
     let mut index = NtfsIndex::new(drive, state.position)?;
     let mut graph = DirectoryGraph::new();
