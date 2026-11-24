@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use gpui_kit::SharedString;
 use navo_core::Location;
-use navo_core::find::{FindQuery, TokenKind};
+use navo_core::find::{FindQuery, TokenError, TokenKind};
 use navo_fs::CancelToken;
 use navo_fs::find::{FindError, FindProgress, FoundBatch};
 
@@ -47,7 +47,7 @@ impl ContentQuery {
             .filter(|token| token.kind != TokenKind::Text || token.message.is_some())
             .map(|token| ContentChip {
                 label: input[token.span.clone()].to_owned().into(),
-                message: token.message.clone().map(Into::into),
+                message: token.message.as_ref().map(token_message),
             })
             .collect();
         for (enabled, key) in [
@@ -63,6 +63,32 @@ impl ContentQuery {
         }
         Self { find, chips }
     }
+}
+
+/// Resolves a rejected token's error through its Fluent message.
+fn token_message(error: &TokenError) -> SharedString {
+    match error {
+        TokenError::UnclosedQuote => navo_l10n::t!("find-token-error-unclosed-quote"),
+        TokenError::Size => navo_l10n::t!("find-token-error-size"),
+        TokenError::Modified => navo_l10n::t!("find-token-error-modified"),
+        TokenError::Attribute => navo_l10n::t!("find-token-error-attribute"),
+        TokenError::Within => navo_l10n::t!("find-token-error-within"),
+        TokenError::Archives => navo_l10n::t!("find-token-error-archives"),
+        TokenError::Git => navo_l10n::t!("find-token-error-git"),
+        TokenError::Regex => navo_l10n::t!("find-token-error-regex"),
+        TokenError::RegexSyntax(error) => {
+            navo_l10n::t!("find-token-error-regex-syntax", error = error.as_str())
+        }
+        TokenError::Extensions => navo_l10n::t!("find-token-error-extensions"),
+        TokenError::Name => navo_l10n::t!("find-token-error-name"),
+        TokenError::Depth { max } => {
+            navo_l10n::t!("find-token-error-depth", max = i64::from(*max))
+        }
+        TokenError::Toggle { key } => navo_l10n::t!("find-token-error-toggle", key = *key),
+        TokenError::Hex { max } => navo_l10n::t!("find-token-error-hex", max = i64::from(*max)),
+        TokenError::Encoding => navo_l10n::t!("find-token-error-encoding"),
+    }
+    .into()
 }
 
 #[derive(Clone)]

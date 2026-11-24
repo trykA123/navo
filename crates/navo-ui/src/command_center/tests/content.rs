@@ -74,3 +74,39 @@ fn preview_stops_after_twenty_hits() {
     }
     assert_eq!(count, 20);
 }
+
+#[test]
+fn every_token_error_resolves_through_its_fluent_message() {
+    for (input, expected) in [
+        (r#""open"#, "Unclosed quote"),
+        ("size:bad", "size: needs a number, like <50MB"),
+        ("mod:bad", "mod: use 7d, <7d, >2026-10-01 or today"),
+        (
+            "attr:bad",
+            "attr: use hidden, readonly, system or archive; prefix - to exclude",
+        ),
+        ("in:", "in: needs a folder"),
+        ("arc:bad", "arc: use on or off"),
+        ("git:bad", "git: use on or off"),
+        ("re:", "re: needs a pattern"),
+        ("ext:", "ext: needs extensions, like c,h,map"),
+        ("name:", "name: use masks like *.rs;!test* or /regex/"),
+        ("depth:65", "depth: use a number from 0 to 64"),
+        ("word:x", "word: use on or off"),
+        ("docs:x", "docs: use on or off"),
+        ("hex:+f", "hex: use pairs like 4D 5A, up to 256 bytes"),
+        ("enc:x", "enc: use auto, ansi, dos, utf8 or utf16"),
+    ] {
+        let query = ContentQuery::parse(input, false, false);
+        assert_eq!(query.chips[0].message.as_deref(), Some(expected), "{input}");
+    }
+    let query = ContentQuery::parse("re:[", false, false);
+    assert!(
+        query.chips[0]
+            .message
+            .as_deref()
+            .is_some_and(|message| message.starts_with("re: ")),
+        "{:?}",
+        query.chips[0].message
+    );
+}
