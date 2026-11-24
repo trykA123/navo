@@ -7,3 +7,4 @@ mod rank;
 mod results;
 mod source;
 mod view;
+mod merge_cost;
