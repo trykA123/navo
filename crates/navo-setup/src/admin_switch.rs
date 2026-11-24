@@ -14,10 +14,13 @@ pub(crate) trait Identity {
 }
 
 /// Runs `f` on Setup's own token, then acts as the user again if the thread was acting as the user.
-/// Fails without running `f` if the revert fails. A failed re-entry, after `f` or while `f` panics,
-/// calls `fatal` and never returns: the thread must not go on with the admin token.
+/// A failed revert (before `f`, which then never runs) or a failed re-entry (after `f` or while `f`
+/// panics) calls `fatal` and never returns: the thread's token would be wrong or unknown.
 pub(crate) fn as_admin_with<T>(identity: &impl Identity, f: impl FnOnce() -> T) -> io::Result<T> {
-    let armed = identity.revert()?;
+    let armed = match identity.revert() {
+        Ok(armed) => armed,
+        Err(error) => identity.fatal(error),
+    };
     let _reenter = Reenter { identity, armed };
     Ok(f())
 }

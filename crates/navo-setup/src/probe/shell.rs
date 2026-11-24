@@ -9,7 +9,7 @@
 
 use std::cell::Cell;
 use std::ffi::c_void;
-use std::io;
+use std::io::{self, Write};
 use std::mem::size_of;
 use std::os::windows::io::{AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle};
 use std::ptr::{null, null_mut};
@@ -101,6 +101,11 @@ impl Shell {
     pub fn process(&self) -> BorrowedHandle<'_> {
         self.process.as_handle()
     }
+
+    /// The impersonation copy of the shell user's token (query and impersonate rights).
+    pub(super) fn token(&self) -> BorrowedHandle<'_> {
+        self.token.as_handle()
+    }
 }
 
 /// Stores the shell for the whole process; a second call is `AlreadyExists` and drops its shell.
@@ -120,7 +125,7 @@ pub fn installed() -> Option<&'static Shell> {
 
 /// Impersonates the shell user on this thread; with no shell installed it does nothing.
 /// Fails with the `SetThreadToken` error, or when Windows lowered the token below impersonation
-/// (then it reverts first); either failure is recorded for this thread.
+/// (then it reverts first, and aborts if that revert fails); either failure is recorded.
 pub fn enter_as_user() -> io::Result<()> {
     let Some(shell) = installed() else {
         return Ok(());
@@ -137,7 +142,10 @@ pub fn enter_as_user() -> io::Result<()> {
         ENTERED.set(Some(false));
         // SAFETY: no arguments; ends the unusable impersonation set just above.
         if unsafe { RevertToSelf() } == 0 {
-            return Err(io::Error::last_os_error());
+            abort_on_identity(
+                "could not stop a lowered impersonation",
+                &io::Error::last_os_error(),
+            );
         }
         return Err(error);
     }
@@ -158,9 +166,10 @@ pub fn as_user<T>(f: impl FnOnce() -> T) -> io::Result<T> {
     Ok(f())
 }
 
-/// Runs `f` on Setup's own token, then impersonates again if this thread was entered.
-/// Fails without running `f` if the revert fails. If entering again fails, after `f` or while `f`
-/// panics, it writes one stderr line and aborts: the thread must not go on as the admin.
+/// Runs `f` on Setup's own token, then impersonates again if this thread was entered. A failed
+/// revert, or a failed re-entry after `f` or while `f` panics, aborts: the thread's identity would
+/// be wrong. The `Result` stays for the contract's callers. A panic hook or a destructor inside `f`
+/// still runs on the admin token, so keep user-side cleanup outside `f`.
 pub fn as_admin<T>(f: impl FnOnce() -> T) -> io::Result<T> {
     as_admin_with(&ThreadIdentity, f)
 }
@@ -211,15 +220,19 @@ impl Identity for ThreadIdentity {
         enter_as_user()
     }
 
-    /// Aborts: the thread is on Setup's admin token and must not run on.
+    /// Aborts: the thread's token is wrong or unknown and it must not run on.
     fn fatal(&self, error: io::Error) -> ! {
-        abort_on_identity("could not act as the desktop user again", &error)
+        abort_on_identity(
+            "could not switch between the desktop user and Setup",
+            &error,
+        )
     }
 }
 
-/// Writes one stderr line and aborts when this thread's identity is wrong or unknown (IW39).
+/// Writes one stderr line and aborts when this thread's identity is wrong or unknown (IW39). The
+/// write ignores its own failure, so nothing can unwind before the abort.
 fn abort_on_identity(what: &str, error: &io::Error) -> ! {
-    super::facts::warn(format_args!("{what}: {error}"));
+    let _ = writeln!(io::stderr().lock(), "navo-setup: {what}: {error}");
     std::process::abort()
 }
 

@@ -1,6 +1,6 @@
 //! Checks the Windows command-line quoting copied from `navo-shell` (H3).
 
-use crate::cmdline::command_line;
+use crate::cmdline::{command_line, is_absolute};
 
 /// Builds the command line from `&str` parts and returns it as a `String`.
 fn line(program: &str, args: &[&str]) -> String {
@@ -39,4 +39,29 @@ fn trailing_backslashes_are_doubled_only_inside_quotes() {
     assert_eq!(line("a", &[r"C:\dir\"]), r#""a" C:\dir\"#);
     assert_eq!(line("a", &[r"C:\my dir\"]), r#""a" "C:\my dir\\""#);
     assert_eq!(line("a", &[r"a\\b"]), r#""a" a\\b"#);
+}
+
+/// Whether `path` is an absolute Windows path, as `is_absolute` reads it.
+fn absolute(path: &str) -> bool {
+    is_absolute(&path.encode_utf16().collect::<Vec<u16>>())
+}
+
+#[test]
+fn drive_and_unc_paths_are_absolute() {
+    assert!(absolute(r"C:\Windows\System32\cmd.exe"));
+    assert!(absolute("c:/tools/navo.exe"));
+    assert!(absolute(r"\\server\share\navo.exe"));
+    assert!(absolute(r"\\?\C:\long\navo.exe"));
+}
+
+#[test]
+fn relative_drive_relative_and_rooted_paths_are_not_absolute() {
+    assert!(!absolute("navo.exe"));
+    assert!(!absolute(r".\navo.exe"));
+    assert!(!absolute(r"..\navo.exe"));
+    assert!(!absolute("C:navo.exe"));
+    assert!(!absolute(r"\Windows\navo.exe"));
+    assert!(!absolute(r"\\"));
+    assert!(!absolute("1:\\navo.exe"));
+    assert!(!absolute(""));
 }

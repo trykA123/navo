@@ -63,13 +63,20 @@ fn thread_not_entered_stays_on_its_own_token() {
 }
 
 #[test]
-fn failed_revert_does_not_run_f() {
+fn failed_revert_is_fatal_and_does_not_run_f() {
     let fake = Fake {
         revert_fails: true,
         ..Fake::new(true)
     };
     let ran = Cell::new(false);
-    assert!(as_admin_with(&fake, || ran.set(true)).is_err());
+    let outcome = catch_unwind(AssertUnwindSafe(|| as_admin_with(&fake, || ran.set(true))));
+    let fatal = outcome
+        .err()
+        .and_then(|payload| payload.downcast::<Fatal>().ok());
+    assert_eq!(
+        fatal.map(|boxed| *boxed),
+        Some(Fatal("revert refused".to_owned()))
+    );
     assert!(!ran.get());
     assert_eq!(fake.enters.get(), 0);
 }
