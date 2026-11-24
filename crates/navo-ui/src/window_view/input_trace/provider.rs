@@ -5,9 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use navo_core::{FsError, Location, ProviderId};
 
 use navo_fs::{
-    CancelToken, Capabilities, CopyControl, FileDetails, FileIdentity, FsEntry, GitPauseGuard,
-    ListSink, MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry, UncachedHash, UnixAccess,
-    VerifiedRename, Watch, WatchSink,
+    CancelToken, Capabilities, CopiedSource, CopyControl, FileDetails, FileIdentity, FsEntry,
+    GitPauseGuard, ListSink, MoveCopy, MoveProof, OwnedCopy, Provider, ProviderOps, SizeEntry,
+    UncachedHash, UnixAccess, VerifiedRename, Watch, WatchSink,
 };
 
 pub(super) struct CountingFs {
@@ -102,6 +102,26 @@ impl ProviderOps for CountingFs {
     ) -> Result<(), FsError> {
         self.count();
         self.inner.remove_owned_file(location, identity)
+    }
+
+    /// Copies a move's source through the inner provider, so the proof comes from its own read.
+    fn copy_moved_file(
+        &self,
+        request: MoveCopy<'_>,
+        control: CopyControl<'_>,
+    ) -> Result<(u64, Option<CopiedSource>), FsError> {
+        self.count();
+        self.inner.copy_moved_file(request, control)
+    }
+
+    /// Removes a moved source through the inner provider's own check and delete.
+    fn remove_copied_source(
+        &self,
+        location: &Location,
+        expected: CopiedSource,
+    ) -> Result<(), FsError> {
+        self.count();
+        self.inner.remove_copied_source(location, expected)
     }
 
     fn available_space(&self, location: &Location) -> Result<Option<u64>, FsError> {
@@ -241,6 +261,12 @@ impl ProviderOps for CountingFs {
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         self.count();
         self.inner.volume_serial(location)
+    }
+
+    /// Resolves the path through the inner provider, so an Overwrite without file IDs can compare.
+    fn canonical(&self, location: &Location) -> Result<Option<Location>, FsError> {
+        self.count();
+        self.inner.canonical(location)
     }
 
     /// Hashes the file through the inner provider and counts one disk call.

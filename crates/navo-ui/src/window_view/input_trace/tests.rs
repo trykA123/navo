@@ -327,3 +327,79 @@ fn content_hash_reaches_the_inner_provider_and_counts_one_call() {
     assert_eq!(hash.unwrap(), [7; 32]);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
+
+struct Quiet;
+
+impl navo_fs::JobLog for Quiet {
+    fn step(&mut self, _: u32, _: navo_fs::StepOutcome) -> Result<(), navo_core::FsError> {
+        Ok(())
+    }
+
+    fn undone(&mut self, _: u32, _: navo_fs::StepOutcome) -> Result<(), navo_core::FsError> {
+        Ok(())
+    }
+
+    fn journal_held(&mut self, _: &navo_fs::HeldFile) -> Result<bool, navo_core::FsError> {
+        Ok(false)
+    }
+}
+
+#[test]
+fn an_overwrite_on_a_volume_without_ids_resolves_paths_through_the_inner_provider() {
+    let fs = fake();
+    fs.add_file("dest/a.txt", 9);
+    fs.set_without_ids("home");
+    fs.set_without_ids("dest");
+    let calls = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let wrapped = provider::CountingFs::new(fs.clone(), calls);
+    let cancel = navo_fs::CancelToken::new();
+    let (source, target) = (fs.location("home/a.txt"), fs.location("dest"));
+    let items = navo_fs::scan(&wrapped, &[source], &cancel).unwrap();
+    let existing = navo_fs::existing_at(&wrapped, &items, &target, &cancel).unwrap();
+    let plan = navo_core::plan(&navo_core::PlanRequest {
+        kind: navo_core::OpKind::Copy,
+        items,
+        target: Some(target),
+        existing,
+        policy: navo_core::ConflictPolicy::OverwriteAll,
+        same_volume: false,
+        protected: Vec::new(),
+    });
+    let mut ctx = navo_fs::JobContext {
+        ops: &wrapped,
+        log: &mut Quiet,
+        cancel: &cancel,
+        progress: &mut |_| {},
+    };
+
+    let outcome = navo_fs::run_job(&plan, &[], &mut ctx);
+
+    assert_eq!(outcome, navo_fs::JobOutcome::Done);
+    assert_eq!(fs.metadata(&fs.location("dest/a.txt")).unwrap().size, 3);
+}
+
+#[test]
+fn a_move_copies_and_removes_its_source_through_the_inner_provider() {
+    let fs = fake();
+    let (source, target) = (fs.location("home/a.txt"), fs.location("dest/a.txt"));
+    let calls = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let wrapped = provider::CountingFs::new(fs.clone(), calls.clone());
+    let cancel = navo_fs::CancelToken::new();
+    let request = navo_fs::MoveCopy {
+        source: &source,
+        target: &target,
+        created: None,
+    };
+    let control = navo_fs::CopyControl {
+        progress: &mut |_| {},
+        cancel: &cancel,
+    };
+
+    let (written, read) = wrapped.copy_moved_file(request, control).unwrap();
+    assert_eq!((written, calls.load(Ordering::SeqCst)), (3, 1));
+    wrapped
+        .remove_copied_source(&source, read.unwrap())
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert!(fs.metadata(&source).is_err());
+}

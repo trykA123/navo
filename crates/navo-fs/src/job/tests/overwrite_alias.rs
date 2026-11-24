@@ -1,5 +1,5 @@
-//! Red tests: a target that is a second name of its source (mapped drive and its share, SUBST,
-//! a mount point, a hard link). Paths differ, so the planner and the job treat it as another file.
+//! Overwrite onto a second name of the source (mapped drive and its share, SUBST, a mount point,
+//! a hard link): the paths differ, yet the job refuses and keeps both files unchanged.
 
 #[cfg(unix)]
 use std::path::Path;
