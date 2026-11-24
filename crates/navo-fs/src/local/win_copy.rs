@@ -4,7 +4,9 @@ use std::any::Any;
 use std::ffi::c_void;
 use std::fs::{self, File};
 use std::io;
+use std::mem::ManuallyDrop;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::FromRawHandle;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::path::Path;
 
@@ -21,7 +23,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 use super::{AutoTuning, error, io_error, os_path};
-use crate::{CancelToken, CopyControl, OwnedCopy};
+use crate::{CancelToken, CopiedSource, CopyControl, MoveCopy, OwnedCopy};
 
 mod registration;
 use registration::Registration;
@@ -37,6 +39,9 @@ pub(super) struct CopyProgress<'a> {
     flushed: bool,
     flush_error: Option<io::Error>,
     panic: Option<Box<dyn Any + Send>>,
+    /// Set for a move: `read` then holds the source as `CopyFile2`'s own source handle saw it.
+    proving: bool,
+    read: Option<CopiedSource>,
 }
 
 impl<'a> CopyProgress<'a> {
@@ -50,6 +55,8 @@ impl<'a> CopyProgress<'a> {
             flushed: false,
             flush_error: None,
             panic: None,
+            proving: false,
+            read: None,
         }
     }
 
@@ -74,6 +81,9 @@ impl<'a> CopyProgress<'a> {
             COPYFILE2_CALLBACK_STREAM_STARTED => {
                 // SAFETY: Type selects the initialized StreamStarted union member.
                 let info = unsafe { message.Info.StreamStarted };
+                if self.proving && info.dwStreamNumber == 1 {
+                    self.read = read_through(info.hSourceFile);
+                }
                 return self
                     .ownership
                     .as_mut()
@@ -106,6 +116,15 @@ impl<'a> CopyProgress<'a> {
     }
 }
 
+/// The source as seen through `CopyFile2`'s read handle; `None` proves nothing, so the move
+/// keeps the source.
+fn read_through(handle: HANDLE) -> Option<CopiedSource> {
+    // SAFETY: CopyFile2 keeps the source handle open for the callback; ManuallyDrop never closes it.
+    let file = ManuallyDrop::new(unsafe { File::from_raw_handle(handle) });
+    let metadata = file.metadata().ok()?;
+    super::copied_source(&file, &metadata).ok()
+}
+
 fn flush_handle(handle: HANDLE) -> io::Result<()> {
     // SAFETY: CopyFile2 keeps the destination handle open for the duration of the callback.
     if unsafe { FlushFileBuffers(handle) } == 0 {
@@ -128,6 +147,39 @@ pub(super) fn copy(
     tuning: &AutoTuning,
     mut progress: CopyProgress<'_>,
 ) -> Result<u64, FsError> {
+    copy_with(source, target, tuning, &mut progress)
+}
+
+/// Copies a move's source; returns the bytes written and the source as the copy read it.
+pub(super) fn copy_moved(
+    request: MoveCopy<'_>,
+    control: CopyControl<'_>,
+    tuning: &AutoTuning,
+) -> Result<(u64, Option<CopiedSource>), FsError> {
+    let MoveCopy {
+        source,
+        target,
+        created,
+    } = request;
+    let mut progress = CopyProgress::new(control.progress, control.cancel);
+    if let Some(created) = created {
+        progress = progress.with_created(OwnedCopy {
+            source,
+            target,
+            created,
+        });
+    }
+    progress.proving = true;
+    let written = copy_with(source, target, tuning, &mut progress)?;
+    Ok((written, progress.read))
+}
+
+fn copy_with(
+    source: &Location,
+    target: &Location,
+    tuning: &AutoTuning,
+    progress: &mut CopyProgress<'_>,
+) -> Result<u64, FsError> {
     if progress.cancel.is_cancelled() {
         return Err(error(FsErrorKind::Cancelled, target));
     }
@@ -146,10 +198,10 @@ pub(super) fn copy(
     if progress.ownership.is_none() && size >= tuning.unbuffered_from {
         flags |= COPY_FILE_NO_BUFFERING;
     }
-    let mut result = attempt(&paths, flags, &mut progress)?;
+    let mut result = attempt(&paths, flags, progress)?;
     if result < 0 && retries_buffered(flags, win32_code(result)) {
         remove_part(&target_path, target)?;
-        result = attempt(&paths, flags & !COPY_FILE_NO_BUFFERING, &mut progress)?;
+        result = attempt(&paths, flags & !COPY_FILE_NO_BUFFERING, progress)?;
     }
     if let Some(owner) = progress.ownership.as_mut() {
         owner.check(result >= 0)?;
@@ -161,7 +213,7 @@ fn finish(
     result: i32,
     source_path: &Path,
     paths: &Paths<'_>,
-    mut progress: CopyProgress<'_>,
+    progress: &mut CopyProgress<'_>,
 ) -> Result<u64, FsError> {
     let target = paths.target;
     if let Some(failure) = progress.flush_error.take() {
@@ -207,6 +259,7 @@ fn wide(path: &Path) -> Vec<u16> {
 fn attempt(paths: &Paths<'_>, flags: u32, progress: &mut CopyProgress<'_>) -> Result<i32, FsError> {
     progress.flushed = false;
     progress.flush_error = None;
+    progress.read = None;
     let parameters = COPYFILE2_EXTENDED_PARAMETERS {
         dwSize: u32::try_from(size_of::<COPYFILE2_EXTENDED_PARAMETERS>())
             .map_err(|_| error(FsErrorKind::Unknown, paths.target))?,

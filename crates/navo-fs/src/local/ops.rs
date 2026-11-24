@@ -64,6 +64,22 @@ impl ProviderOps for LocalFs {
         super::owned::copy(request, control)
     }
 
+    /// Takes the proof from the handle the copy reads: `CopyFile2`'s source handle on Windows.
+    fn copy_moved_file(
+        &self,
+        request: crate::MoveCopy<'_>,
+        control: crate::CopyControl<'_>,
+    ) -> Result<(u64, Option<crate::CopiedSource>), FsError> {
+        #[cfg(windows)]
+        {
+            win_copy::copy_moved(request, control, &self.auto_tuning)
+        }
+        #[cfg(not(windows))]
+        {
+            super::owned::copy_moved(request, control).map(|(written, read)| (written, Some(read)))
+        }
+    }
+
     fn write_new(
         &self,
         request: crate::StreamWrite<'_>,

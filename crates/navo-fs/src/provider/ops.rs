@@ -1,7 +1,7 @@
 use navo_core::{FsError, FsErrorKind, Location};
 
 use super::{
-    CancelToken, CopyControl, EntryKind, MoveProof, OwnedCopy, Provider, StreamWrite,
+    CancelToken, CopyControl, EntryKind, MoveCopy, MoveProof, OwnedCopy, Provider, StreamWrite,
     VerifiedRename,
 };
 
@@ -43,13 +43,70 @@ pub struct UnixAccess {
     pub mode: u32,
 }
 
-/// A move's source file as its copy started: the move removes the source only while it still
-/// matches (file ID where the provider has one, size and modified time).
+/// A move's source file as its copy read it: the move removes the source only while it still
+/// matches. A provider with handles takes it from the handle the copy reads from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CopiedSource {
+    /// Volume serial and file ID; `None` where the volume keeps none (FAT, exFAT, some SMB).
     pub identity: Option<FileIdentity>,
     pub size: u64,
     pub modified_ms: Option<i64>,
+    /// Creation time and Windows attribute bits stand in for a missing file ID.
+    pub created_ms: Option<i64>,
+    pub attributes: Option<u32>,
+}
+
+impl CopiedSource {
+    /// True when this can tell the copied file from a replacement: a file ID, or else modified
+    /// time, creation time and attributes together. A move never removes a source without one.
+    #[must_use]
+    pub fn proves(&self) -> bool {
+        self.identity.is_some()
+            || (self.modified_ms.is_some()
+                && self.created_ms.is_some()
+                && self.attributes.is_some())
+    }
+
+    /// True when `now` is still this file, unchanged. Without a file ID, a replacement with the
+    /// same size, times and attributes passes: the known limit on volumes that keep no IDs.
+    #[must_use]
+    pub fn still(&self, now: &Self) -> bool {
+        let same = self.size == now.size && self.modified_ms == now.modified_ms;
+        match self.identity {
+            Some(_) => same && now.identity == self.identity,
+            None => {
+                same && self.proves()
+                    && now.created_ms == self.created_ms
+                    && now.attributes == self.attributes
+            }
+        }
+    }
+}
+
+/// What `location` is by path: `None` when it is not a plain file. A provider without handles has
+/// no creation time or attributes, so without a file ID this proves nothing.
+fn seen_by_path<P: ProviderOps + ?Sized>(
+    ops: &P,
+    location: &Location,
+) -> Result<Option<CopiedSource>, FsError> {
+    let entry = ops.metadata(location)?;
+    if entry.kind != EntryKind::File {
+        return Ok(None);
+    }
+    Ok(Some(CopiedSource {
+        identity: ops.file_identity(location)?,
+        size: entry.size,
+        modified_ms: entry.modified_ms,
+        created_ms: None,
+        attributes: None,
+    }))
+}
+
+fn changed(location: &Location) -> FsError {
+    FsError {
+        location: Some(location.clone()),
+        ..FsError::new(FsErrorKind::ChangedOnDisk)
+    }
 }
 
 pub trait ProviderOps: Provider {
@@ -107,28 +164,47 @@ pub trait ProviderOps: Provider {
         }
         self.remove_file(location)
     }
+    /// Copies a move's source file and returns the bytes written with the source as the copy read
+    /// it (`None` when that cannot be proved). This default, for providers without handles, reads
+    /// the source by path before and after the copy: a source swapped away and back during the
+    /// copy escapes it. `LocalFs` and `FakeFs` take the proof from the read itself.
+    fn copy_moved_file(
+        &self,
+        request: MoveCopy<'_>,
+        control: CopyControl<'_>,
+    ) -> Result<(u64, Option<CopiedSource>), FsError> {
+        let MoveCopy {
+            source,
+            target,
+            created,
+        } = request;
+        let before = seen_by_path(self, source)?;
+        let written = match created {
+            Some(created) => self.copy_file_owned(
+                OwnedCopy {
+                    source,
+                    target,
+                    created,
+                },
+                control,
+            )?,
+            None => self.copy_file(source, target, control.progress, control.cancel)?,
+        };
+        let after = seen_by_path(self, source).ok().flatten();
+        Ok((written, before.filter(|seen| after.as_ref() == Some(seen))))
+    }
     /// Removes a moved file's source only while it is still the file that was copied; fails with
-    /// `ChangedOnDisk` and keeps it otherwise. This default checks by path, then removes by path;
-    /// a provider with handles checks and deletes through one handle.
+    /// `ChangedOnDisk` and keeps it otherwise. This default checks by path, then removes by path,
+    /// and `LocalFs` uses it on Linux and macOS: a replacement that lands between the check and
+    /// the unlink is deleted (a known limit). Windows checks and deletes through one handle.
     fn remove_copied_source(
         &self,
         location: &Location,
         expected: CopiedSource,
     ) -> Result<(), FsError> {
-        let entry = self.metadata(location)?;
-        let same_identity = match expected.identity {
-            Some(identity) => self.file_identity(location)? == Some(identity),
-            None => true,
-        };
-        let same = entry.kind == EntryKind::File
-            && entry.size == expected.size
-            && entry.modified_ms == expected.modified_ms
-            && same_identity;
-        if !same {
-            return Err(FsError {
-                location: Some(location.clone()),
-                ..FsError::new(FsErrorKind::ChangedOnDisk)
-            });
+        let now = seen_by_path(self, location)?;
+        if !now.is_some_and(|now| expected.still(&now)) {
+            return Err(changed(location));
         }
         self.remove_file(location)
     }

@@ -13,7 +13,7 @@ pub use ops::{
     CopiedSource, FileIdentity, FileIdentityKind, GitPauseGuard, ProviderOps, ReadSource,
     UncachedHash, UnixAccess,
 };
-pub use owned::{CopyControl, OwnedCopy, StreamWrite};
+pub use owned::{CopyControl, MoveCopy, OwnedCopy, StreamWrite};
 pub(crate) use verified::Seen;
 pub use verified::{MoveProof, RenameSkip, VerifiedRename};
 

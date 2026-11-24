@@ -11,6 +11,14 @@ pub struct OwnedCopy<'a> {
     pub created: &'a mut dyn FnMut(FileIdentity) -> Result<(), FsError>,
 }
 
+/// A move's copy of `source` into the new file `target`; with `created` set it is an owned copy
+/// (see [`OwnedCopy`]) whose `created` sees the new file's identity before any byte.
+pub struct MoveCopy<'a> {
+    pub source: &'a Location,
+    pub target: &'a Location,
+    pub created: Option<&'a mut dyn FnMut(FileIdentity) -> Result<(), FsError>>,
+}
+
 pub struct CopyControl<'a> {
     pub progress: &'a mut dyn FnMut(u64),
     pub cancel: &'a CancelToken,

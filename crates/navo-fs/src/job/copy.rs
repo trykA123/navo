@@ -3,7 +3,7 @@ use navo_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution, Step}
 use super::aside::Aside;
 use super::verify::SourceDigest;
 use super::{FileStamp, JobContext, PlacedFile, StepOutcome};
-use crate::{CancelToken, CopyControl, FileIdentity, OwnedCopy, ProviderOps};
+use crate::{CancelToken, CopyControl, FileIdentity, MoveCopy, OwnedCopy, ProviderOps};
 
 pub(super) struct Copier<'a> {
     pub ops: &'a dyn ProviderOps,
@@ -87,9 +87,6 @@ pub(super) fn copy(
     let exists = copier.ops.metadata(step.target).is_ok();
     if exists && !copier.targets.overwrites(step.target) {
         return Ok(Copied::Skipped);
-    }
-    if !super::stream::crosses(step) {
-        copier.removals.note_copy_start(copier.ops, step.source)?;
     }
     let temp = copier.temporary(step)?;
     if copier.strict {
@@ -227,17 +224,23 @@ fn transfer(
     if super::stream::crosses(step) {
         return super::stream::stream(copier, (step, temp), progress, created);
     }
-    let written = if strict {
-        ops.copy_file_owned(
-            OwnedCopy {
-                source: step.source,
-                target: temp,
-                created,
-            },
-            CopyControl { progress, cancel },
-        )
+    let control = CopyControl { progress, cancel };
+    let written = if copier.removals.moves() {
+        let request = MoveCopy {
+            source: step.source,
+            target: temp,
+            created: strict.then_some(created),
+        };
+        copier.removals.copy_source(ops, request, control)
+    } else if strict {
+        let request = OwnedCopy {
+            source: step.source,
+            target: temp,
+            created,
+        };
+        ops.copy_file_owned(request, control)
     } else {
-        ops.copy_file(step.source, temp, progress, cancel)
+        ops.copy_file(step.source, temp, control.progress, cancel)
     }?;
     Ok((written, SourceDigest::ReadAgain))
 }

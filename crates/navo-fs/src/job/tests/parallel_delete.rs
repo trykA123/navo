@@ -120,6 +120,10 @@ impl ProviderOps for Watched<'_> {
         self.fs.copy_file(source, target, progress, cancel)
     }
 
+    fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
+        self.fs.file_identity(location)
+    }
+
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {
         self.fs.rename(source, target)
     }

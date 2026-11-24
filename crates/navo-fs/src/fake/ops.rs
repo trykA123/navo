@@ -1,11 +1,10 @@
 use navo_core::{FsError, FsErrorKind, Location};
 
-use super::copy::CopyRequest;
 use super::tree::{Tree, fold_text, split_last};
 use super::{FakeFs, FakeOp, Fault, error, lock};
 use crate::{
-    ALREADY_EXISTS_CODES, Attributes, CancelToken, CopyControl, EntryKind, FsEntry, OwnedCopy,
-    ProviderOps, WatchChange,
+    ALREADY_EXISTS_CODES, Attributes, CancelToken, CopyControl, EntryKind, FsEntry, MoveCopy,
+    OwnedCopy, ProviderOps, WatchChange,
 };
 
 const DEFAULT_VOLUME: u64 = 1;
@@ -198,14 +197,13 @@ impl ProviderOps for FakeFs {
         progress: &mut dyn FnMut(u64),
         cancel: &CancelToken,
     ) -> Result<u64, FsError> {
-        self.transfer(
-            CopyRequest {
-                source,
-                target,
-                created: None,
-            },
-            CopyControl { progress, cancel },
-        )
+        let request = MoveCopy {
+            source,
+            target,
+            created: None,
+        };
+        self.transfer(request, CopyControl { progress, cancel })
+            .map(|(written, _)| written)
     }
 
     fn copy_file_owned(
@@ -213,14 +211,20 @@ impl ProviderOps for FakeFs {
         request: OwnedCopy<'_>,
         control: CopyControl<'_>,
     ) -> Result<u64, FsError> {
-        self.transfer(
-            CopyRequest {
-                source: request.source,
-                target: request.target,
-                created: Some(request.created),
-            },
-            control,
-        )
+        let request = MoveCopy {
+            source: request.source,
+            target: request.target,
+            created: Some(request.created),
+        };
+        self.transfer(request, control).map(|(written, _)| written)
+    }
+
+    fn copy_moved_file(
+        &self,
+        request: MoveCopy<'_>,
+        control: CopyControl<'_>,
+    ) -> Result<(u64, Option<crate::CopiedSource>), FsError> {
+        self.transfer(request, control)
     }
 
     fn rename(&self, source: &Location, target: &Location) -> Result<(), FsError> {

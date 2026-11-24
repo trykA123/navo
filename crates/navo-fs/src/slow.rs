@@ -100,6 +100,15 @@ impl ProviderOps for SlowFs {
         self.inner.copy_file_owned(request, control)
     }
 
+    fn copy_moved_file(
+        &self,
+        request: crate::MoveCopy<'_>,
+        control: CopyControl<'_>,
+    ) -> Result<(u64, Option<crate::CopiedSource>), FsError> {
+        self.sleep();
+        self.inner.copy_moved_file(request, control)
+    }
+
     fn remove_owned_file(
         &self,
         location: &Location,

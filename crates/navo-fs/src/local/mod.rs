@@ -59,7 +59,7 @@ use std::ffi::OsStr;
 use std::fs::{self, DirEntry, Metadata};
 use std::io;
 use std::path::Path;
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use navo_core::{FsError, FsErrorKind, Location, LockHolder, ProviderId, ProviderPath};
 
@@ -316,12 +316,32 @@ fn bare_entry(child: &DirEntry, name: &OsStr) -> Option<FsEntry> {
 }
 
 fn modified_ms(metadata: &Metadata) -> Option<i64> {
-    match metadata.modified().ok()?.duration_since(UNIX_EPOCH) {
+    ms_of(metadata.modified().ok()?)
+}
+
+fn ms_of(time: SystemTime) -> Option<i64> {
+    match time.duration_since(UNIX_EPOCH) {
         Ok(after) => i64::try_from(after.as_millis()).ok(),
         Err(before) => i64::try_from(before.duration().as_millis())
             .ok()
             .map(i64::wrapping_neg),
     }
+}
+
+/// A move's source as read through its open handle `file`: file ID where the volume keeps one,
+/// size, times and (on Windows) attribute bits.
+fn copied_source(file: &fs::File, metadata: &Metadata) -> io::Result<crate::CopiedSource> {
+    #[cfg(windows)]
+    let attributes = Some(std::os::windows::fs::MetadataExt::file_attributes(metadata));
+    #[cfg(not(windows))]
+    let attributes = None;
+    Ok(crate::CopiedSource {
+        identity: identity::from_file(file)?,
+        size: metadata.len(),
+        modified_ms: modified_ms(metadata),
+        created_ms: metadata.created().ok().and_then(ms_of),
+        attributes,
+    })
 }
 
 fn io_error(failure: &io::Error, location: &Location) -> FsError {

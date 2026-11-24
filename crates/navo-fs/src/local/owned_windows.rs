@@ -13,8 +13,8 @@ use windows_sys::Win32::Storage::FileSystem::{
     FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
     FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX, FILE_FLAG_BACKUP_SEMANTICS,
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
-    FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo,
-    FileDispositionInfoEx, GetFileInformationByHandleEx, SetFileInformationByHandle,
+    FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo, FileDispositionInfoEx,
+    GetFileInformationByHandleEx, SetFileInformationByHandle,
 };
 
 pub(super) fn remove(path: &Path, expected: crate::FileIdentity) -> io::Result<()> {
@@ -39,22 +39,22 @@ pub(super) fn remove(path: &Path, expected: crate::FileIdentity) -> io::Result<(
     dispose(&file)
 }
 
-/// Deletes the moved source at `path` only while it is still `expected`: volume serial and file ID
-/// (where the volume has them), size and modified time are checked and the file is deleted through
-/// one handle, so a file put there meanwhile is never deleted. `Ok(false)` when it changed.
+/// Deletes the moved source at `path` only while it is still `expected` (see
+/// [`crate::CopiedSource::still`]), checked and deleted through one handle, so a file put there
+/// meanwhile is never deleted. `Ok(false)` when it changed.
+///
+/// The handle shares no write access: while another program holds the file open for writing the
+/// open fails with a sharing violation and the source stays (reported as in use), and no writer
+/// can open it between the check and the delete. NTFS can defer a modified-time update until a
+/// writer closes its handle; refusing write sharing is what closes that gap here.
 pub(super) fn remove_unchanged(path: &Path, expected: crate::CopiedSource) -> io::Result<bool> {
     let file = OpenOptions::new()
         .access_mode(DELETE | FILE_READ_ATTRIBUTES)
-        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;
     let metadata = file.metadata()?;
-    let identity = super::identity::from_file(&file)?;
-    let unchanged = metadata.is_file()
-        && metadata.len() == expected.size
-        && super::modified_ms(&metadata) == expected.modified_ms
-        && expected.identity.is_none_or(|seen| identity == Some(seen));
-    if !unchanged {
+    if !metadata.is_file() || !expected.still(&super::copied_source(&file, &metadata)?) {
         return Ok(false);
     }
     match dispose_posix(&file) {

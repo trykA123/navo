@@ -16,5 +16,14 @@ pub(super) fn copy(request: OwnedCopy<'_>, control: CopyControl<'_>) -> Result<u
     }
 }
 
+/// Copies a move's source on Linux and macOS; Windows has its own in `win_copy`.
+#[cfg(not(windows))]
+pub(super) fn copy_moved(
+    request: crate::MoveCopy<'_>,
+    control: CopyControl<'_>,
+) -> Result<(u64, crate::CopiedSource), FsError> {
+    buffered::copy_moved(request, control)
+}
+
 #[cfg(test)]
 mod tests;

@@ -196,6 +196,31 @@ fn holds_only_done_copies(run: &Interrupted) -> bool {
     })
 }
 
+/// True when the interruption left a move's copy done but its source not removed: the resumed
+/// job has no proof of that source from this run, so it keeps it and reports.
+fn unproven_move(run: &Interrupted) -> bool {
+    let removed = |source: &navo_core::Location| {
+        (0_u32..).zip(&run.plan.steps).any(|(seq, step)| {
+            matches!(step, Step::RemoveFile { location } if location == source)
+                && run.done.contains(&seq)
+        })
+    };
+    run.plan.kind == OpKind::Move
+        && (0_u32..).zip(&run.plan.steps).any(|(seq, step)| {
+            matches!(step, Step::CopyFile { source, .. } if run.done.contains(&seq) && !removed(source))
+        })
+}
+
+/// Every planned file is still at its source or at its target.
+fn no_source_lost(run: &Interrupted) -> bool {
+    run.plan.steps.iter().all(|step| match step {
+        Step::CopyFile { source, target, .. } => {
+            run.fs.metadata(source).is_ok() || run.fs.metadata(target).is_ok()
+        }
+        _ => true,
+    })
+}
+
 fn overwrites(plan: &OperationPlan, target: &navo_core::Location) -> bool {
     plan.conflicts
         .iter()
@@ -234,10 +259,17 @@ proptest! {
         for (run, workers) in [(&standard, 0), (&parallel, spec.workers)] {
             prop_assert_eq!(leftovers(&run.fs), Vec::<String>::new());
             prop_assert!(holds_only_done_copies(run), "{} workers", workers);
-            prop_assert_eq!(
-                resumed(run, workers),
-                (JobOutcome::Done, clean.clone(), Vec::new())
-            );
+            let (outcome, tree, left) = resumed(run, workers);
+            prop_assert_eq!(left, Vec::<String>::new());
+            if unproven_move(run) {
+                prop_assert_eq!(
+                    failure(&outcome).map(|(_, kind)| kind),
+                    Some(FsErrorKind::IdentityUnavailable)
+                );
+                prop_assert!(no_source_lost(run), "{} workers", workers);
+            } else {
+                prop_assert_eq!((outcome, tree), (JobOutcome::Done, clean.clone()));
+            }
         }
     }
 }
