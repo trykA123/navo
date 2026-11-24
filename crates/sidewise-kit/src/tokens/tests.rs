@@ -10,6 +10,7 @@ mod git;
 mod kit;
 mod light_dark;
 mod surfaces;
+mod terminal;
 
 const MODES: [Mode; 2] = [Mode::Light, Mode::Dark];
 

@@ -12,6 +12,8 @@ mod shadows;
 mod surfaces;
 mod syntax;
 mod system_palette;
+mod terminal;
+mod terminal_schemes;
 mod treemap;
 
 #[cfg(test)]
@@ -37,6 +39,8 @@ pub use system_palette::{
     SystemPalette, contrast_theme, from_colorref, set_system_palette_reader, system_palette,
 };
 pub use system_palette::{map_contrast_colors, with_system_palette};
+pub use terminal::{GUTTER, HEADER_HEIGHT, RULER, SIDE_WIDTH, TerminalColors};
+pub use terminal_schemes::TerminalScheme;
 pub use treemap::{TreemapLook, treemap_look};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -188,6 +192,7 @@ pub struct Theme {
     pub is_contrast: bool,
     pub color_theme: ColorTheme,
     pub colors: Colors,
+    pub terminal: TerminalColors,
     pub typography: Typography,
     pub spacing: Spacing,
     pub radii: Radii,
@@ -225,11 +230,13 @@ impl Theme {
         let colors = palette::colors(&tokens);
         let surfaces = surfaces::surfaces(mode, &colors, &tokens);
         let spacing = design_b::spacing();
+        let terminal = TerminalColors::follow(mode, &colors);
         Self {
             mode,
             is_contrast: false,
             color_theme: look.color_theme,
             colors,
+            terminal,
             typography: design_b::typography(),
             rows: density::rows(look.density, &spacing),
             density: look.density,
