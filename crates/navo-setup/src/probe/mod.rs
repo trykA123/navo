@@ -8,3 +8,4 @@ pub mod elevate_launch;
 pub mod facts;
 mod parent_acl;
 pub mod pin;
+pub mod shell;
