@@ -14,7 +14,8 @@ fn overwrite_on(
     fs.add_file("src/a", 5);
     fs.add_file("dest/a", 9);
     if !identity {
-        fs.set_volume_serial("dest", None);
+        // Like FAT: the serial reads, file IDs do not, so nothing can be retained.
+        fs.set_without_ids("dest");
     }
     let plan = overwrite(
         fs.as_ref(),
