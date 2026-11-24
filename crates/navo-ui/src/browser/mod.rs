@@ -11,7 +11,7 @@ use navo_core::{
     TabId, apply_event, list_missing,
 };
 use navo_fs::view::Rows;
-use navo_fs::{FsEntry, JobKind, JobSlot, OwnerGuard, Pools, Priority, ProviderOps, volume_of};
+use navo_fs::{FsEntry, JobKind, OwnerGuard, Pools, ProviderOps};
 
 pub use compare::{
     BarView, CompareControl, CompareFilter, CompareHooks, CompareKind, CompareMode, ComparePhase,
@@ -51,6 +51,7 @@ pub struct Browser {
     provider: Arc<dyn ProviderOps>,
     pools: &'static Pools,
     owner: OwnerGuard,
+    listing_owners: listing_owner::ListingOwners,
     size_owners: HashMap<TabId, OwnerGuard>,
     finds: HashMap<TabId, find::FindResults>,
     find_walk: find::FindWalk,
@@ -119,6 +120,7 @@ impl Browser {
             provider,
             pools,
             owner: pools.queue(JobKind::Listing).owner(),
+            listing_owners: listing_owner::ListingOwners::default(),
             size_owners: HashMap::new(),
             finds: HashMap::new(),
             find_walk: find::walker(),
@@ -268,6 +270,7 @@ impl Browser {
     }
 
     fn run(&mut self, effects: Vec<Effect>) {
+        self.retain_listing_owners();
         self.retain_size_owners();
         self.retain_finds();
         for effect in effects {
@@ -287,30 +290,6 @@ impl Browser {
         self.sync_pins();
         self.sync_disk_folders();
         self.sync_watches();
-    }
-
-    fn submit(&mut self, tab: TabId, location: Location, request: u64) {
-        let fetch = self.fetch(tab, &location, request);
-        let (sender, wake) = (self.sender.clone(), Arc::clone(&self.wake));
-        let slot = JobSlot {
-            volume: volume_of(&location),
-            priority: Priority::Visible,
-            owner: self.owner.id(),
-        };
-        self.in_flight += 1;
-        self.pools.queue(JobKind::Listing).submit(
-            slot,
-            Box::new(move |cancel| {
-                let result = fetch.run(cancel);
-                let _ = sender.send(Message::Loaded(Loaded {
-                    tab,
-                    location,
-                    request,
-                    result,
-                }));
-                wake();
-            }),
-        );
     }
 
     fn accept(&mut self, loaded: Loaded) -> bool {
@@ -386,6 +365,7 @@ mod pane_compare;
 pub(crate) use cached::tests::gated::Gated as GatedFs;
 mod filter;
 mod find;
+mod listing_owner;
 mod measure;
 mod message;
 mod naming;

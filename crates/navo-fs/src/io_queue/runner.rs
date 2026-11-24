@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 
+use super::abort_win::{AbortStore, ThreadAbort};
 use super::{JobId, Limits, OwnerId, Priority, Scheduler, VolumeId, VolumeKind};
 use crate::drive_class;
 use crate::provider::CancelToken;
@@ -25,6 +26,7 @@ struct State {
     scheduler: Scheduler,
     jobs: HashMap<JobId, Job>,
     tokens: HashMap<JobId, CancelToken>,
+    aborts: AbortStore,
     workers: HashMap<VolumeId, usize>,
     handles: Vec<JoinHandle<()>>,
     closed: bool,
@@ -74,6 +76,7 @@ impl Shared {
                 .iter()
                 .filter_map(|job| state.tokens.get(job))
                 .for_each(CancelToken::cancel);
+            state.aborts.abort(&cancelled.running);
             cancelled
                 .queued
                 .iter()
@@ -137,12 +140,26 @@ fn work(shared: &Arc<Shared>, volume: &VolumeId) {
         if classify {
             classify_volume(shared, volume);
         }
+        register_abort(shared, volume, id);
         if let Some(job) = job {
             let _ = catch_unwind(AssertUnwindSafe(|| job(&token)));
         }
         let mut state = shared.lock();
+        state.aborts.remove(id);
         state.tokens.remove(&id);
         state.scheduler.finish(id);
+    }
+}
+
+/// Stores this worker thread's abort handle for `id` when its volume is a network share, so
+/// `cancel_owner` can interrupt a blocked call; the handle leaves under the same lock at job end.
+fn register_abort(shared: &Shared, volume: &VolumeId, id: JobId) {
+    let mut state = shared.lock();
+    if state.scheduler.kind(volume) != VolumeKind::Network || state.closed {
+        return;
+    }
+    if let Some(handle) = ThreadAbort::current() {
+        state.aborts.insert(id, handle);
     }
 }
 
@@ -243,6 +260,7 @@ impl IoQueue {
             let mut state = self.shared.lock();
             state.closed = true;
             state.tokens.values().for_each(CancelToken::cancel);
+            state.aborts.abort_all();
             let dropped: Vec<Job> = state.jobs.drain().map(|(_, job)| job).collect();
             (dropped, std::mem::take(&mut state.handles))
         };

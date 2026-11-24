@@ -2,7 +2,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use navo_cache::{CacheKeys, ListingCache};
-use navo_core::{FsError, Location, Tab, TabId};
+use navo_core::{FsError, FsErrorKind, Location, Tab, TabId};
 use navo_fs::{CancelToken, JobKind, JobSlot, OwnerGuard, Priority, volume_of};
 
 use super::cached::{Fetch, Fresh};
@@ -67,6 +67,8 @@ pub(super) struct Prefetches {
 
 struct Finished {
     id: u64,
+    handoff: Arc<Handoff>,
+    location: Location,
     cache: ListingCache,
     keys: CacheKeys,
     sender: Sender<Message>,
@@ -74,24 +76,35 @@ struct Finished {
 }
 
 impl Finished {
-    fn hand_over(self, handoff: &Handoff, location: Location, result: Result<Fresh, FsError>) {
-        if let Some((tab, request)) = handoff.close() {
-            if let Some(key) = self.keys.key(&location) {
+    /// Gives the result to the tab that adopted this prefetch, if any; the cache keeps it on disk.
+    fn hand_over(self, result: Result<Fresh, FsError>) {
+        if let Some((tab, request)) = self.handoff.close() {
+            if let Some(key) = self.keys.key(&self.location) {
                 self.cache.persist(&key);
             }
-            let loaded = Loaded {
-                tab,
-                location,
-                request,
-                result,
-            };
-            let _ = self.sender.send(Message::Loaded(loaded));
+            self.send_loaded(tab, request, result);
         }
+    }
+
+    /// Sends the adopted request's `Loaded`, which also lowers the browser's in-flight count.
+    fn send_loaded(&self, tab: TabId, request: u64, result: Result<Fresh, FsError>) {
+        let location = self.location.clone();
+        let loaded = Loaded {
+            tab,
+            location,
+            request,
+            result,
+        };
+        let _ = self.sender.send(Message::Loaded(loaded));
     }
 }
 
 impl Drop for Finished {
     fn drop(&mut self) {
+        // An adopted job dropped unrun (cancelled while queued) still answers its listing.
+        if let Some((tab, request)) = self.handoff.close() {
+            self.send_loaded(tab, request, Err(FsError::new(FsErrorKind::Cancelled)));
+        }
         let _ = self.sender.send(Message::Prefetched(self.id));
         (self.wake)();
     }
@@ -143,7 +156,13 @@ impl Browser {
             .iter_mut()
             .find(|running| running.is_live() && &running.location == location)?;
         running.is_adopted = running.handoff.adopt(tab, request);
-        running.is_adopted.then(|| running.progress.clone())
+        if !running.is_adopted {
+            return None;
+        }
+        if let Some(owner) = running.owner.take() {
+            self.listing_owners.hold(tab, request, owner);
+        }
+        Some(running.progress.clone())
     }
 
     fn wants_prefetch(&self, location: &Location) -> bool {
@@ -151,7 +170,7 @@ impl Browser {
             .prefetches
             .running
             .iter()
-            .any(|running| running.owner.is_some() && &running.location == location);
+            .any(|r| (r.owner.is_some() || r.is_adopted) && &r.location == location);
         let Some(key) = self.keys.key(location) else {
             return false;
         };
@@ -188,6 +207,8 @@ impl Browser {
         };
         let finished = Finished {
             id,
+            handoff: Arc::clone(&handoff),
+            location: location.clone(),
             cache: self.cache.clone(),
             keys: self.keys.clone(),
             sender: self.sender.clone(),
@@ -198,13 +219,7 @@ impl Browser {
             priority: Priority::Prefetch,
             owner: owner.id(),
         };
-        let job = Box::new({
-            let (handoff, location) = (Arc::clone(&handoff), location.clone());
-            move |cancel: &CancelToken| {
-                let result = fetch.run(cancel);
-                finished.hand_over(&handoff, location, result);
-            }
-        });
+        let job = Box::new(move |cancel: &CancelToken| finished.hand_over(fetch.run(cancel)));
         self.prefetches.running.push(Running {
             id,
             location,

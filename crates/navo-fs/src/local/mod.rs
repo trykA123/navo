@@ -9,6 +9,7 @@ mod hidden;
 mod link;
 #[cfg(target_os = "linux")]
 mod linux_watch;
+mod listing;
 mod owned;
 #[cfg(windows)]
 mod owned_windows;
@@ -57,7 +58,6 @@ use win_watch as platform_watch;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry, Metadata};
 use std::io;
-use std::iter::Peekable;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
@@ -74,7 +74,7 @@ pub use sidewise_fs::native::{error, identity, native_identity, os_path};
 use crate::SizeEntry;
 #[cfg(any(windows, target_os = "linux"))]
 use crate::watch::Depth;
-use crate::{CancelToken, Capabilities, EntryBatch, EntryKind, FsEntry, ListSink, Provider};
+use crate::{CancelToken, Capabilities, EntryKind, FsEntry, ListSink, Provider};
 #[cfg(any(windows, target_os = "linux"))]
 use crate::{Watch, WatchSink};
 
@@ -145,24 +145,6 @@ impl LocalFs {
             ..self
         }
     }
-
-    fn children<'a>(&self, path: &Path, folder: &'a Location) -> Result<Children<'a>, FsError> {
-        #[cfg(windows)]
-        if !self.std_listing {
-            let children = win_list::open(path).map_err(|e| open_failure(&e, path, folder))?;
-            return Ok(Box::new(
-                children.map(move |child| child.map_err(|e| io_error(&e, folder))),
-            ));
-        }
-        let children = fs::read_dir(path).map_err(|e| open_failure(&e, path, folder))?;
-        Ok(Box::new(
-            children.filter_map(move |child| std_entry(child, folder)),
-        ))
-    }
-
-    fn read_batch(&self, children: &mut Peekable<Children<'_>>) -> Result<Vec<FsEntry>, FsError> {
-        children.by_ref().take(self.batch_size).collect()
-    }
 }
 
 impl Default for LocalFs {
@@ -190,17 +172,9 @@ impl Provider for LocalFs {
         cancel: &CancelToken,
     ) -> Result<(), FsError> {
         let path = os_path(folder)?;
-        let mut children = self.children(&path, folder)?.peekable();
-        loop {
-            let entries = self.read_batch(&mut children)?;
-            let last = children.peek().is_none();
-            if cancel.is_cancelled() {
-                return Err(error(FsErrorKind::Cancelled, folder));
-            }
-            if sink.batch(EntryBatch { entries, last }).is_break() || last {
-                return Ok(());
-            }
-        }
+        let children = self.children(&path, folder, cancel)?;
+        let job = listing::Job { folder, cancel };
+        listing::pump(children, self.batch_size, sink, &job)
     }
 
     #[cfg(unix)]

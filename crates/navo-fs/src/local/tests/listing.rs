@@ -385,3 +385,33 @@ mod cloud_bits {
         assert!(stub.readonly && stub.hidden && stub.system && !stub.link_to_folder);
     }
 }
+
+/// Yields `total` copies of `entry`, counting every read (a read may block on a dead share).
+fn counted<'a>(entry: &FsEntry, total: usize, reads: &'a std::cell::Cell<usize>) -> Children<'a> {
+    let entry = entry.clone();
+    Box::new((0..total).map(move |_| {
+        reads.set(reads.get() + 1);
+        Ok(entry.clone())
+    }))
+}
+
+#[test]
+fn a_cancel_between_batches_reads_nothing_more() {
+    let (_dir, folder) = temp();
+    let entry = LocalFs::new().metadata(&folder).unwrap();
+    let reads = std::cell::Cell::new(0);
+    let cancel = CancelToken::new();
+    let mut sink = |_: EntryBatch| {
+        cancel.cancel();
+        ControlFlow::Continue(())
+    };
+    let children = counted(&entry, 10, &reads);
+    let job = super::super::listing::Job {
+        folder: &folder,
+        cancel: &cancel,
+    };
+    let result = super::super::listing::pump(children, 3, &mut sink, &job);
+    assert_eq!(kind_of(result), Some(FsErrorKind::Cancelled));
+    // Batch 1 reads three entries and peeks a fourth; a fifth read is a blocking call after cancel.
+    assert_eq!(reads.get(), 4);
+}

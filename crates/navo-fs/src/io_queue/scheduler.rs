@@ -181,11 +181,14 @@ impl Scheduler {
     }
 
     pub(super) fn limit(&self, volume: &VolumeId) -> usize {
-        let kind = self
-            .volumes
+        self.limits.limit(self.kind(volume))
+    }
+
+    /// The volume's classified kind; `Unknown` before classification or for an unseen volume.
+    pub(super) fn kind(&self, volume: &VolumeId) -> VolumeKind {
+        self.volumes
             .get(volume)
-            .map_or(VolumeKind::Unknown, |v| v.kind);
-        self.limits.limit(kind)
+            .map_or(VolumeKind::Unknown, |v| v.kind)
     }
 }
 

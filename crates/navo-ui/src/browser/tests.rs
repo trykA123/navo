@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use navo_core::{AppState, Command, CursorMove, FsErrorKind, Location};
-use navo_fs::{CancelToken, FakeFs, FakeOp, Fault, Provider, ProviderOps};
+use navo_fs::{CancelToken, FakeFs, FakeOp, Fault, Provider, ProviderOps, volume_of};
 
 use super::*;
 
@@ -541,6 +541,7 @@ fn a_link_to_a_file_is_not_opened_as_a_folder() {
     assert_eq!(here(&browser), fs.location("home").as_str());
 }
 
+mod listing_owner;
 mod measure;
 mod rename_batch;
 mod shown_sizes;
