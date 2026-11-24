@@ -19,6 +19,8 @@ const MINUTE: Duration = Duration::from_secs(60);
 
 #[path = "rebuild_reset_tests.rs"]
 mod reset;
+#[path = "rebuild_wrap_tests.rs"]
+mod wrap;
 
 /// Fakes MFT enumeration failing before it can return a candidate index.
 fn enumerate_io_error() -> Result<NtfsIndex, NtfsError> {

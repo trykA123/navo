@@ -4,8 +4,8 @@ use std::collections::{HashMap, HashSet};
 
 use super::directory_graph::MAX_LATE_FOLDERS;
 use super::{
-    Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Resume, SizeHint, TableChange,
-    UsnBatch, parse_batch, validate_journal_cursor,
+    Continuity, Enumeration, Flags, JournalPosition, NtfsError, NtfsIndex, Resume, SizeHint,
+    TableChange, UsnBatch, parse_batch, validate_journal_cursor,
 };
 
 #[path = "extend_chain.rs"]
@@ -97,6 +97,21 @@ impl JournalState {
         }
         Ok(())
     }
+
+    /// Checks continuity under `continuity`; returns whether an allowed journal wrap happened.
+    /// Fails with `NtfsError::Reenumerate(cause)` on a wrap when `continuity` is strict.
+    pub(super) fn check_with(
+        &self,
+        saved: JournalPosition,
+        cause: &'static str,
+        continuity: Continuity,
+    ) -> Result<bool, NtfsError> {
+        match (self.check(saved, cause), continuity) {
+            (Ok(()), _) => Ok(false),
+            (Err(NtfsError::Reenumerate(_)), Continuity::AllowWrap) => Ok(true),
+            (Err(error), _) => Err(error),
+        }
+    }
 }
 
 pub(super) fn enumerate_volume(
@@ -120,7 +135,36 @@ pub(super) fn enumerate_volume_sized(
     hint: SizeHint,
     cancel: &crate::pipe::CancelToken,
 ) -> Result<Enumeration, NtfsError> {
-    enumerate_with_late_limits::<1_000_000, MAX_LATE_FOLDERS>(volume, drive, limit, hint, cancel)
+    enumerate_with_late_limits::<1_000_000, MAX_LATE_FOLDERS>(
+        volume,
+        drive,
+        limit,
+        hint,
+        Continuity::Strict,
+        cancel,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the volume, hint, continuity and cancel token are separate build inputs"
+)]
+/// Builds the whole volume like `enumerate_volume_sized`, treating a journal wrap as `continuity` says.
+pub(super) fn enumerate_volume_with_continuity(
+    volume: &mut impl VolumeIo,
+    drive: char,
+    hint: SizeHint,
+    continuity: Continuity,
+    cancel: &crate::pipe::CancelToken,
+) -> Result<Enumeration, NtfsError> {
+    enumerate_with_late_limits::<1_000_000, MAX_LATE_FOLDERS>(
+        volume,
+        drive,
+        usize::MAX,
+        hint,
+        continuity,
+        cancel,
+    )
 }
 
 /// Reserves measured or hinted totals, retaining folders and releasing spare on failure.

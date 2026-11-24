@@ -251,6 +251,54 @@ mod tests {
         }
     }
 
+    /// Keeps a build the journal outran at either boundary, resuming at the journal's end (AF12).
+    #[test]
+    fn allow_wrap_keeps_a_wrapped_build_as_journal_wrapped_at_the_latest_cursor() {
+        for (query, wrap) in [(2, false), (2, true), (3, false), (3, true)] {
+            let mut volume = Volume::new();
+            volume.reset_at = query;
+            volume.wrap = wrap;
+            let built = enumerate_volume_with_continuity(
+                &mut volume,
+                'C',
+                SizeHint::default(),
+                Continuity::AllowWrap,
+                &CancelToken::new(),
+            )
+            .unwrap_or_else(|error| panic!("query {query}, wrap {wrap}: {error}"));
+            let latest = match (query, wrap) {
+                (3, false) => (8, 120),
+                (3, true) => (7, 120),
+                _ => (7, 100),
+            };
+            let position = built.index.position;
+            assert_eq!((position.journal_id, position.next_usn), latest);
+            assert_eq!(
+                built.inexact_reason(),
+                Some(crate::ntfs::InexactBuild::JournalWrapped)
+            );
+            assert!(built.inexact, "query {query}, wrap {wrap}");
+            assert_eq!(built.index.table.len(), 3);
+        }
+    }
+
+    /// Leaves an unbroken journal exact under `AllowWrap`, at the build's start cursor.
+    #[test]
+    fn allow_wrap_on_an_unbroken_journal_stays_exact() {
+        let mut volume = Volume::new();
+        let built = enumerate_volume_with_continuity(
+            &mut volume,
+            'C',
+            SizeHint::default(),
+            Continuity::AllowWrap,
+            &CancelToken::new(),
+        )
+        .unwrap();
+        assert_eq!(built.inexact_reason(), None);
+        assert!(!built.inexact);
+        assert_eq!(built.index.position.next_usn, 100);
+    }
+
     /// Keeps the stable rows and the subtree reported by pass two.
     #[test]
     fn a_folder_created_between_passes_is_reconciled() {
@@ -349,6 +397,7 @@ mod tests {
             'C',
             usize::MAX,
             SizeHint::default(),
+            Continuity::Strict,
             &CancelToken::new(),
         )
         .unwrap();
@@ -369,6 +418,7 @@ mod tests {
             'C',
             usize::MAX,
             SizeHint::default(),
+            Continuity::Strict,
             &CancelToken::new(),
         )
         .unwrap();

@@ -3,7 +3,7 @@
 #![cfg_attr(not(test), allow(dead_code, reason = "activated by T3"))]
 use super::directory_graph::{DirectoryGraph, UnplacedFolder};
 use super::volume_io::{JournalState, VolumeIo};
-use super::{Flags, NtfsError, NtfsIndex, SizeHint};
+use super::{Continuity, Flags, NtfsError, NtfsIndex, SizeHint};
 use crate::{pipe::CancelToken, table::TableError};
 /// Resolved folders and total build capacities; the index retains the initial journal cursor.
 pub(super) struct DirectoryScan {
@@ -12,12 +12,20 @@ pub(super) struct DirectoryScan {
     pub(super) skipped: u64,
     pub(super) late_folders: Vec<UnplacedFolder>,
     pub(super) held_cap: bool,
+    /// True when `Continuity::AllowWrap` kept a scan the journal outran.
+    pub(super) journal_wrapped: bool,
 }
-/// Scans a record budget into folders/capacities; fails on graph, cancellation or continuity errors.
+/// Scans a record budget into folders/capacities; fails on graph, cancellation or continuity errors
+/// (a journal wrap fails only under `Continuity::Strict`).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the volume, limit, continuity and cancel token are separate build inputs"
+)]
 pub(super) fn scan_directories(
     volume: &mut impl VolumeIo,
     drive: char,
     limit: usize,
+    continuity: Continuity,
     cancel: &CancelToken,
 ) -> Result<DirectoryScan, NtfsError> {
     let state = JournalState::parse(&volume.query_journal()?)?;
@@ -48,7 +56,11 @@ pub(super) fn scan_directories(
     }
     check_cancel(cancel)?;
     let resolved = graph.insert_into(&mut index)?;
-    JournalState::parse(&volume.query_journal()?)?.check(state.position, "pass1_continuity")?;
+    let journal_wrapped = JournalState::parse(&volume.query_journal()?)?.check_with(
+        state.position,
+        "pass1_continuity",
+        continuity,
+    )?;
     check_cancel(cancel)?;
     let folders = index.table.len();
     let bytes = index.table.live_name_bytes();
@@ -63,6 +75,7 @@ pub(super) fn scan_directories(
         skipped: resolved.skipped,
         late_folders: resolved.unplaced,
         held_cap: resolved.held_cap,
+        journal_wrapped,
     })
 }
 /// Rejects cancellation before traversal work and after resolution or continuity I/O.

@@ -7,7 +7,8 @@ use super::super::skipped::is_extend;
 use super::super::{InexactBuild, directory_scan, is_folder};
 use super::two_pass::{add_file, add_record, check_cancel};
 use super::{
-    Enumeration, JournalState, NtfsError, NtfsIndex, SizeHint, VolumeIo, reserve_for_build,
+    Continuity, Enumeration, JournalState, NtfsError, NtfsIndex, SizeHint, VolumeIo,
+    reserve_for_build,
 };
 use crate::pipe::CancelToken;
 use crate::usn::{UsnRecord, parse_batch};
@@ -148,19 +149,21 @@ fn metadata_folders(unplaced: &[UnplacedFolder]) -> HashSet<u128> {
     found
 }
 
-/// Builds folders and files, reconciles the late records, and checks journal continuity.
+/// Builds folders and files, reconciles the late records, and checks journal continuity
+/// (a wrap fails the build under `Continuity::Strict`, else marks it `JournalWrapped`).
 #[expect(
     clippy::too_many_arguments,
-    reason = "the volume, limit, hint and cancel token are separate build inputs"
+    reason = "the volume, limit, hint, continuity and cancel token are separate build inputs"
 )]
 pub(super) fn enumerate_with_late_limits<const CAP: usize, const FOLDER_CAP: usize>(
     volume: &mut impl VolumeIo,
     drive: char,
     limit: usize,
     hint: SizeHint,
+    continuity: Continuity,
     cancel: &CancelToken,
 ) -> Result<Enumeration, NtfsError> {
-    let scan = directory_scan::scan_directories(volume, drive, limit, cancel)?;
+    let scan = directory_scan::scan_directories(volume, drive, limit, continuity, cancel)?;
     let mut index = scan.index;
     let sized = reserve_for_build(&mut index, hint, scan.capacity, drive);
     let mut late = LateRecords::new(scan.late_folders, CAP, FOLDER_CAP);
@@ -187,7 +190,7 @@ pub(super) fn enumerate_with_late_limits<const CAP: usize, const FOLDER_CAP: usi
     check_cancel(cancel)?;
     let reconciled = late.insert_into(volume, &mut index, cancel)?;
     check_cancel(cancel)?;
-    JournalState::parse(&volume.query_journal()?)?.check(index.position, "pass2_continuity")?;
+    let wrapped = check_pass_two(volume, &mut index, continuity, scan.journal_wrapped)?;
     check_cancel(cancel)?;
     // A sized build keeps its spare until the service has dropped the old index.
     if !sized {
@@ -200,7 +203,29 @@ pub(super) fn enumerate_with_late_limits<const CAP: usize, const FOLDER_CAP: usi
         sizes_unknown: sizes_unknown + reconciled.sizes_unknown,
         blocked_peak: 0,
         skipped: scan.skipped + reconciled.skipped,
-        inexact: reconciled.inexact_reason.is_some(),
-        inexact_reason: reconciled.inexact_reason,
+        inexact: wrapped || reconciled.inexact_reason.is_some(),
+        inexact_reason: if wrapped {
+            Some(InexactBuild::JournalWrapped)
+        } else {
+            reconciled.inexact_reason
+        },
     })
+}
+
+/// Checks pass-two continuity from the build's start; returns whether an allowed wrap happened.
+/// After a wrap anywhere in the build the index resumes at the journal's latest position, so
+/// replay never asks for records the journal dropped; the verification covers the gap.
+fn check_pass_two(
+    volume: &mut impl VolumeIo,
+    index: &mut NtfsIndex,
+    continuity: Continuity,
+    pass_one_wrapped: bool,
+) -> Result<bool, NtfsError> {
+    let latest = JournalState::parse(&volume.query_journal()?)?;
+    let wrapped = latest.check_with(index.position, "pass2_continuity", continuity)?;
+    if wrapped || pass_one_wrapped {
+        index.position = latest.position;
+        return Ok(true);
+    }
+    Ok(false)
 }

@@ -65,7 +65,14 @@ fn directory_scan_resolves_later_parents_and_sequenced_roots() {
     let root = (5 << 48) | 5;
     let records = [(10, 20, true), (20, root, true), (root, root, true)];
     let mut volume = Volume::new(&records);
-    let scan = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new()).unwrap();
+    let scan = scan_directories(
+        &mut volume,
+        'C',
+        usize::MAX,
+        Continuity::Strict,
+        &CancelToken::new(),
+    )
+    .unwrap();
     let index = scan.index;
     let path = index.table.path_with(index.ids[&10], '\\');
     assert_eq!(path.as_deref(), Some("C:\\x\\x"));
@@ -80,7 +87,14 @@ fn directory_scan_holds_folders_with_missing_and_cyclic_parents() {
         &[(10, 20, true), (20, 10, true)],
     ] {
         let mut volume = Volume::new(records);
-        let scan = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new()).unwrap();
+        let scan = scan_directories(
+            &mut volume,
+            'C',
+            usize::MAX,
+            Continuity::Strict,
+            &CancelToken::new(),
+        )
+        .unwrap();
         assert_eq!(scan.skipped, 0);
         assert_eq!(scan.late_folders.len(), records.len());
         assert_eq!(scan.index.table.len(), 1);
@@ -96,7 +110,14 @@ fn directory_scan_limits_count_folders_and_files_including_exact_eof() {
             chunk.extend_from_slice(&record[8..]);
         }
         volume.chunks = vec![chunk];
-        let scan = scan_directories(&mut volume, 'C', limit, &CancelToken::new()).unwrap();
+        let scan = scan_directories(
+            &mut volume,
+            'C',
+            limit,
+            Continuity::Strict,
+            &CancelToken::new(),
+        )
+        .unwrap();
         let count = limit.min(3);
         let folders = 1 + usize::from(count >= 1) + usize::from(count >= 3);
         assert_eq!(
@@ -124,7 +145,7 @@ fn directory_scan_cancellation_is_checked_before_batches_after_limit_or_eof_and_
             if at == 0 {
                 cancel.cancel();
             }
-            let result = scan_directories(&mut volume, 'C', limit, &cancel);
+            let result = scan_directories(&mut volume, 'C', limit, Continuity::Strict, &cancel);
             assert!(matches!(result, Err(NtfsError::Cancelled)), "I/O call {at}");
             assert_eq!(volume.calls, at.max(1));
         }
@@ -137,7 +158,13 @@ fn directory_scan_reenumerates_if_the_journal_is_recreated_or_leaves_its_readabl
         volume.end = journal_metadata(7);
         volume.end[16..24].copy_from_slice(&120i64.to_le_bytes());
         volume.end[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
-        let result = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new());
+        let result = scan_directories(
+            &mut volume,
+            'C',
+            usize::MAX,
+            Continuity::Strict,
+            &CancelToken::new(),
+        );
         assert!(matches!(
             result,
             Err(NtfsError::Reenumerate("pass1_continuity"))

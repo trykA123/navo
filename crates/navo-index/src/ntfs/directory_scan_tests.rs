@@ -43,7 +43,14 @@ impl VolumeIo for Volume {
 #[test]
 fn directory_scan_resolves_reverse_deep_order() {
     let mut volume = Volume(0);
-    let scan = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new()).unwrap();
+    let scan = scan_directories(
+        &mut volume,
+        'C',
+        usize::MAX,
+        Continuity::Strict,
+        &CancelToken::new(),
+    )
+    .unwrap();
     let index = scan.index;
     assert_eq!(index.table.len(), 4500);
     for id in 6..4505 {
@@ -56,7 +63,14 @@ fn directory_scan_resolves_reverse_deep_order() {
 #[test]
 fn directory_scan_counts_files_and_utf8_names_without_retaining_files() {
     let mut volume = Volume(0);
-    let scan = scan_directories(&mut volume, 'C', usize::MAX, &CancelToken::new()).unwrap();
+    let scan = scan_directories(
+        &mut volume,
+        'C',
+        usize::MAX,
+        Continuity::Strict,
+        &CancelToken::new(),
+    )
+    .unwrap();
     let cap = scan.capacity;
     let totals = (cap.entries, cap.folders, cap.name_bytes);
     assert_eq!(totals, (9000, 4500, 40501));

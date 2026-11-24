@@ -4,7 +4,7 @@ use std::fmt;
 use std::sync::PoisonError;
 use std::time::{Duration, Instant};
 
-use navo_index::ntfs::{InexactBuild, NtfsError};
+use navo_index::ntfs::{Continuity, InexactBuild, NtfsError};
 use navo_index::pipe::{BuildReason, VolumeBuilds};
 
 use super::answer::Shared;
@@ -13,6 +13,8 @@ use super::verify_rebuild::VerifyRebuild;
 
 #[path = "error_kinds.rs"]
 mod error_kinds;
+#[path = "journal_wraps.rs"]
+mod journal_wraps;
 #[path = "replay_point.rs"]
 mod replay_point;
 #[path = "unresolved_refs.rs"]
@@ -20,6 +22,7 @@ mod unresolved_refs;
 pub(super) use error_kinds::error_kind;
 #[cfg(windows)]
 pub(super) use error_kinds::file_error_kind;
+use journal_wraps::JournalWraps;
 use replay_point::ReplayPoint;
 pub(super) use replay_point::{Followed, SaveCursor, checked};
 pub(super) use unresolved_refs::Unresolved;
@@ -99,6 +102,7 @@ pub(super) struct Rebuilds {
     last_start: Option<Duration>,
     deferred: Option<Deferred>,
     backoff: BuildBackoff,
+    wraps: JournalWraps,
     retry_delay: Option<Duration>,
     verification: VerifyRebuild,
     verification_reason: Option<&'static str>,
@@ -113,6 +117,7 @@ impl Rebuilds {
             last_start: None,
             deferred: None,
             backoff: BuildBackoff::default(),
+            wraps: JournalWraps::default(),
             retry_delay: None,
             verification: VerifyRebuild::default(),
             verification_reason: None,
@@ -129,6 +134,9 @@ impl Rebuilds {
         match reason {
             Some(InexactBuild::Cycle) => self.schedule_verification(now, "build_cycle"),
             Some(InexactBuild::HeldCap) => self.schedule_verification(now, "held_cap"),
+            Some(InexactBuild::JournalWrapped) => {
+                self.schedule_verification(now, "journal_wrapped");
+            }
             None => {
                 self.verification.exact();
                 self.verification_reason = None;
@@ -184,13 +192,22 @@ impl Rebuilds {
 
     /// Returns a regular full-build result and records the retry delay on failure.
     pub fn build_result<T>(&mut self, result: Result<T, NtfsError>) -> Result<T, NtfsError> {
-        if result
-            .as_ref()
-            .is_err_and(|error| !matches!(error, NtfsError::Cancelled))
-        {
-            self.retry_delay = Some(self.backoff.failed());
+        if let Err(error) = &result {
+            self.wraps.failed(error);
+            if !matches!(error, NtfsError::Cancelled) {
+                self.retry_delay = Some(self.backoff.failed());
+            }
         }
         result
+    }
+
+    /// Returns how this build treats a journal wrap: verifications stay strict; a regular build
+    /// allows one after two consecutive continuity failures.
+    pub fn continuity(&self, cause: Cause) -> Continuity {
+        if cause.verification {
+            return Continuity::Strict;
+        }
+        self.wraps.continuity()
     }
 
     /// Takes the delay for the next full-build retry.
@@ -355,6 +372,7 @@ impl Rebuilds {
 
     pub fn finished(&mut self, shared: &Shared, entries: usize, duration: Duration) {
         self.backoff.succeeded();
+        self.wraps.succeeded();
         self.retry_delay = None;
         let milliseconds = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
         update(shared, |builds| builds.last_duration_ms = milliseconds);

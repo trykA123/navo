@@ -108,7 +108,7 @@ pub struct Enumeration {
 }
 
 impl Enumeration {
-    /// Returns the cause of an inexact build, giving precedence to a reached cap.
+    /// Returns the cause of an inexact build: a journal wrap first, then a reached cap.
     pub fn inexact_reason(&self) -> Option<InexactBuild> {
         self.inexact_reason
     }
@@ -119,6 +119,18 @@ impl Enumeration {
 pub enum InexactBuild {
     Cycle,
     HeldCap,
+    /// The USN journal lost the build's start position; the index resumes at the journal's end.
+    JournalWrapped,
+}
+
+/// How a full build treats a USN journal that no longer holds the build's start position.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Continuity {
+    /// Fails the build with `NtfsError::Reenumerate` (the normal path).
+    #[default]
+    Strict,
+    /// Keeps the build, marks it `InexactBuild::JournalWrapped` and moves its cursor forward.
+    AllowWrap,
 }
 
 /// Total capacities a build should reserve. `Default` reserves nothing; first builds use it.

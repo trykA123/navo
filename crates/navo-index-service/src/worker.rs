@@ -266,7 +266,8 @@ impl Worker {
             "build start {}: hint_entries={}",
             self.drive.letter, hint.entries
         ));
-        let enumerated = volume.enumerate_sized(hint, cancel)?;
+        let continuity = self.rebuilds.continuity(cause);
+        let enumerated = volume.enumerate_sized(hint, continuity, cancel)?;
         if cause.verification {
             self.discard_snapshot()?;
             self.clock.saved();
