@@ -2,6 +2,7 @@
 //! Reports parse problems as byte ranges plus 1-based line and column for the editor (E5).
 
 mod csv_lint;
+mod format;
 mod json;
 mod toml;
 mod xml;
@@ -9,6 +10,8 @@ mod yaml;
 
 #[cfg(test)]
 mod tests;
+
+pub use format::format;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintKind {
