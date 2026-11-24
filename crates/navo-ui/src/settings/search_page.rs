@@ -141,6 +141,22 @@ fn button(
         })
 }
 
+/// The muted line above the install button that says what the index lists and for whom (D126).
+/// It takes a whole line of the wrapping controls row, so the buttons start below it.
+fn scope_note(t: &Theme) -> AnyElement {
+    div()
+        .id("settings-service-scope")
+        .role(Role::Note)
+        .aria_label(navo_l10n::tr("settings-search-service-scope"))
+        .test_support()
+        .w_full()
+        .text_size(t.typography.small)
+        .text_color(t.colors.muted)
+        .child(navo_l10n::tr("settings-search-service-scope"))
+        .into_any_element()
+}
+
+/// The service status row: the scope note, the status chip, Install (or Update) and Remove.
 fn service_row(t: &Theme, page: SearchPage, send: Option<&Handler>) -> AnyElement {
     let status = page.status;
     let install_label = if status == ServiceStatus::Outdated {
@@ -164,6 +180,7 @@ fn service_row(t: &Theme, page: SearchPage, send: Option<&Handler>) -> AnyElemen
     .variant(ButtonVariant::Ghost)
     .tooltip(navo_l10n::tr("settings-search-service-remove-tip"));
     let controls = vec![
+        scope_note(t),
         status_chip(t, status).into_any_element(),
         install.into_any_element(),
         remove.into_any_element(),

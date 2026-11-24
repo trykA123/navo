@@ -64,7 +64,7 @@ clip-size-files = { $count ->
    *[other] { $count } files
 }
 clip-size-hidden = Hidden
-clip-secret-note = Copied without showing, cleared from the clipboard after 30 s, never recorded in history. Stored encrypted on this PC.
+clip-secret-note = Copied without showing, cleared from the clipboard after 30 s, never recorded in history. Protected by your Windows sign-in.
 
 clip-kept = { $count } of 500 kept
 clip-matches = { $count ->
@@ -75,7 +75,7 @@ clip-items = { $count ->
     [one] { $count } item
    *[other] { $count } items
 }
-clip-vault-line = Encrypted on this PC
+clip-vault-line = Protected by your Windows sign-in
 clip-intro = Navo keeps what you copy on this PC. Settings › Clipboard turns it off.
 
 clip-empty-history-title = Nothing copied yet
@@ -85,7 +85,7 @@ clip-empty-saved-body = Keep snippets, commands and paths here.
 clip-empty-notes-title = No notes yet
 clip-empty-notes-body = A note you write for a folder appears here, with the global note.
 clip-empty-secrets-title = No secrets yet
-clip-empty-secrets-body = Secrets stay masked, are stored encrypted on this PC and leave the clipboard after 30 s.
+clip-empty-secrets-body = Secrets stay masked, are protected by your Windows sign-in and leave the clipboard after 30 s. Other programs you run can read them.
 clip-empty-search-title = No matches
 clip-empty-search-body = Nothing in history or saved items has this text. Secrets match by name and user only.
 

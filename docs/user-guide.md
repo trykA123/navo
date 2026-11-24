@@ -300,7 +300,7 @@ Workspaces save themselves. They come back when you restart Navo.
 
 ## Clipboard history
 
-Navo keeps what you copy on this PC: text, links and file lists. It also keeps saved items, secrets (stored encrypted, shown masked, cleared from the clipboard after 30 s) and folder notes. Secrets need Windows. It is on by default. Copies that password managers or Windows mark as private are never recorded. The history stays in your profile folder and keeps the newest 500 entries.
+Navo keeps what you copy on this PC: text, links and file lists. It also keeps saved items, secrets (protected by your Windows sign-in, shown masked, cleared from the clipboard after 30 s; other programs you run can read them) and folder notes. Secrets need Windows. It is on by default. Copies that password managers or Windows mark as private are never recorded. The history stays in your profile folder and keeps the newest 500 entries.
 
 | Key | What it does |
 | --- | --- |

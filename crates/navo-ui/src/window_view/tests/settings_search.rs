@@ -183,6 +183,28 @@ fn a_deferred_removal_shows_the_restart_notice_and_not_installed(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
+fn the_service_row_says_what_the_index_lists_above_the_install_button(cx: &mut TestAppContext) {
+    let (rig, _) = open_search(cx, ServiceStatus::NotInstalled, true);
+    assert_eq!(
+        label(cx, &rig, "settings-service-scope"),
+        Some(navo_l10n::tr("settings-search-service-scope"))
+    );
+    let (scope, install) = cx
+        .update_window(rig.window, |_, window, _| {
+            let bounds = |id: &'static str| window.find(id).bounds();
+            (
+                bounds("settings-service-scope"),
+                bounds("settings-service-install"),
+            )
+        })
+        .expect("window");
+    assert!(
+        scope.bottom() <= install.top(),
+        "{scope:?} sits above {install:?}"
+    );
+}
+
+#[gpui_kit::test]
 fn without_windows_the_page_says_the_service_is_a_windows_feature(cx: &mut TestAppContext) {
     let (rig, _) = open_search(cx, ServiceStatus::NotAvailable, false);
     assert!(label(cx, &rig, "settings-service-note").is_some());

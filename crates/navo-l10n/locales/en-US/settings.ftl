@@ -40,6 +40,7 @@ settings-search-remember-help = Keeps what you opened and ran from Ctrl+K, so th
 settings-search-service-heading = Index service
 settings-search-service = Service status
 settings-search-service-help = A Windows service that reads each NTFS drive, so a new file shows up within a second.
+settings-search-service-scope = The index lists the names of all files on the chosen drives. Only you can search it, and its results leave out the folders of other users on this PC.
 settings-search-service-not-installed = Not installed
 settings-search-service-running = Running
 settings-search-service-stopped = Stopped
