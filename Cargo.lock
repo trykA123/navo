@@ -6555,6 +6555,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "toml_edit 0.25.19+spec-1.1.0",
 ]
 
 [[package]]
