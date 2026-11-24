@@ -110,14 +110,6 @@ impl FileDacl {
             .ok_or(ERROR_INVALID_ACL)
     }
 
-    /// The descriptor's DACL control bits that a write must keep: protected and auto-inherited.
-    fn dacl_control(&self) -> Result<u16, i32> {
-        let bytes = as_bytes(&self.descriptor);
-        let control = bytes.get(2..4).ok_or(ERROR_INVALID_ACL)?;
-        let control = u16::from_le_bytes([control[0], control[1]]);
-        Ok(control & (SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED))
-    }
-
     /// The DACL for Win32 calls, valid while `self` lives.
     fn acl(&self) -> Result<*const ACL, i32> {
         self.bytes().map(|bytes| bytes.as_ptr().cast())
@@ -159,9 +151,7 @@ pub(crate) fn grant_read_execute(
         .acl()
         .and_then(|acl| merge_grant(acl, sid))
         .map_err(|code| fail(GrantStep::BuildDacl, code))?;
-    current
-        .dacl_control()
-        .and_then(|control| write_dacl(&writable, merged.0.cast(), control))
+    write_dacl(&writable, merged.0.cast(), current.span.control)
         .map_err(|code| fail(GrantStep::WriteDacl, code))?;
     Ok(GrantOutcome::Added)
 }
@@ -198,7 +188,7 @@ fn well_known_sid(sddl: &str) -> Result<LocalMem, i32> {
     Ok(LocalMem(sid))
 }
 
-/// Reads the DACL and its protection bit through `file`. The DACL is bounded by the bytes Windows
+/// Reads the DACL and its kept control bits (protected, auto-inherited) through `file`. The DACL is bounded by the bytes Windows
 /// wrote into Navo's buffer before any slice is made. Fails with the Win32 error; a malformed,
 /// missing or NULL DACL fails with `ERROR_INVALID_ACL`.
 fn read_dacl(file: &File) -> Result<FileDacl, i32> {
@@ -211,7 +201,8 @@ fn read_dacl(file: &File) -> Result<FileDacl, i32> {
 }
 
 /// Reads `file`'s self-relative security descriptor (DACL part) through the same handle into a
-/// buffer Navo owns: one size query, then the read. Returns the buffer and the bytes written.
+/// buffer Navo owns: a size query, then the read, retried up to `READ_ATTEMPTS` times while the
+/// DACL keeps growing. Returns the buffer and the bytes written.
 fn read_descriptor(file: &File) -> Result<(Vec<u32>, usize), i32> {
     let mut words: Vec<u32> = Vec::new();
     for _ in 0..READ_ATTEMPTS {
@@ -341,7 +332,37 @@ mod tests {
     }
 
     fn control_of(path: &Path) -> u16 {
-        open_dacl(path).1.dacl_control().unwrap()
+        open_dacl(path).1.span.control
+    }
+
+    /// Rewrites `path`'s DACL the way pre-Windows 2000 tools left it: the same ACEs with every
+    /// flag cleared and no auto-inherited bit, written raw so nothing re-derives them. Returns the
+    /// DACL bytes written.
+    fn make_legacy(path: &Path) -> Vec<u8> {
+        let (file, dacl) = open_dacl(path);
+        let mut bytes = dacl.bytes().unwrap().to_vec();
+        let mut offset = 8;
+        while offset < bytes.len() {
+            bytes[offset + 1] = 0;
+            offset += usize::from(u16::from_le_bytes([bytes[offset + 2], bytes[offset + 3]]));
+        }
+        let words: Vec<u32> = bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|word| u32::from_ne_bytes(*word))
+            .collect();
+        let mut descriptor = SECURITY_DESCRIPTOR::default();
+        let sd: PSECURITY_DESCRIPTOR = (&raw mut descriptor).cast();
+        // SAFETY: `sd` is a live absolute descriptor pointing at the live ACL in `words`; the
+        // handle has WRITE_DAC. No control bit is set, so the kernel stores the ACL as given.
+        let ok = unsafe {
+            InitializeSecurityDescriptor(sd, SD_REVISION) != 0
+                && SetSecurityDescriptorDacl(sd, 1, words.as_ptr().cast(), 0) != 0
+                && SetKernelObjectSecurity(file.as_raw_handle(), DACL_SECURITY_INFORMATION, sd) != 0
+        };
+        assert!(ok);
+        bytes
     }
 
     /// The raw ACE flags as stored, in order.
@@ -484,6 +505,28 @@ mod tests {
     }
 
     #[test]
+    fn a_legacy_dacl_keeps_its_aces_and_gains_only_the_grant() {
+        let dir = auto_inherited_dir();
+        let path = dir.path().join("pdfium.dll");
+        std::fs::write(&path, b"x").unwrap();
+        let legacy = make_legacy(&path);
+        let sid = ContainerSid::derive().unwrap();
+        let (before, count_before) = read_back(&path, &sid);
+        assert!(before.is_empty());
+        assert_eq!(control_of(&path), 0);
+        assert!(count_before > 0);
+
+        assert_eq!(grant_read_execute(&path, &sid), Ok(GrantOutcome::Added));
+        let (after, count_after) = read_back(&path, &sid);
+        assert_eq!(after, [(0, READ_EXECUTE)]);
+        assert_eq!(count_after, count_before + 1);
+        assert_eq!(control_of(&path), 0);
+        let written = open_dacl(&path).1.bytes().unwrap().to_vec();
+        let grant = usize::from(u16::from_le_bytes([written[10], written[11]]));
+        assert_eq!(written[8 + grant..], legacy[8..]);
+    }
+
+    #[test]
     fn a_missing_file_fails_at_open_file_and_names_it() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("missing.dll");
@@ -532,6 +575,7 @@ mod tests {
             GetSecurityDescriptorControl(descriptor.0, &raw mut control, &raw mut revision)
         };
         assert_ne!(ok, 0);
-        assert_eq!(ours.span.protected, control & SE_DACL_PROTECTED != 0);
+        let kept = SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED;
+        assert_eq!(ours.span.control, control & kept);
     }
 }

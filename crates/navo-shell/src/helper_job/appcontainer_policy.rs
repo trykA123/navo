@@ -53,6 +53,7 @@ const SD_HEADER: usize = 20;
 const SD_REVISION: u8 = 1;
 const SD_DACL_OFFSET: usize = 16;
 const SE_DACL_PRESENT: u16 = 0x0004;
+const SE_DACL_AUTO_INHERITED: u16 = 0x0400;
 const SE_DACL_PROTECTED: u16 = 0x1000;
 const SE_SELF_RELATIVE: u16 = 0x8000;
 const ACE_HEADER_AND_MASK: usize = 8;
@@ -211,13 +212,14 @@ pub fn already_granted(aces: &[AceView]) -> bool {
     allowed & READ_EXECUTE == READ_EXECUTE
 }
 
-/// Where a self-relative security descriptor's DACL lies, and whether it is protected.
+/// Where a self-relative security descriptor's DACL lies, and the DACL control bits a write keeps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaclSpan {
     /// The DACL's header and `AclSize` bytes, as offsets into the descriptor.
     pub range: Range<usize>,
-    /// `SE_DACL_PROTECTED`: the DACL does not inherit from the parent folder.
-    pub protected: bool,
+    /// The descriptor's `SE_DACL_PROTECTED` (no inheritance from the parent folder) and
+    /// `SE_DACL_AUTO_INHERITED` bits; every other control bit is cleared.
+    pub control: u16,
 }
 
 /// Finds the DACL in `descriptor`, the self-relative bytes Windows wrote into a buffer Navo owns.
@@ -242,7 +244,7 @@ pub fn locate_dacl(descriptor: &[u8]) -> Result<DaclSpan, i32> {
     }
     Ok(DaclSpan {
         range: offset..offset + size,
-        protected: control & SE_DACL_PROTECTED != 0,
+        control: control & (SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED),
     })
 }
 
@@ -814,17 +816,19 @@ mod tests {
     }
 
     #[test]
-    fn the_dacl_is_located_by_its_offset_and_size_with_its_protection() {
+    fn the_dacl_is_located_by_its_offset_and_size_with_its_kept_control_bits() {
         let acl = container_acl();
         let mut descriptor = raw_descriptor(0x0004, &acl);
         descriptor.extend([0xEE; 8]);
         let span = DaclSpan {
             range: 20..20 + acl.len(),
-            protected: false,
+            control: 0,
         };
         assert_eq!(locate_dacl(&descriptor), Ok(span));
-        let protected = raw_descriptor(0x1004, &acl);
-        assert_eq!(locate_dacl(&protected).map(|span| span.protected), Ok(true));
+        let protected = raw_descriptor(0x1404, &acl);
+        assert_eq!(locate_dacl(&protected).map(|span| span.control), Ok(0x1400));
+        let other_bits = raw_descriptor(0x0A04, &acl);
+        assert_eq!(locate_dacl(&other_bits).map(|span| span.control), Ok(0));
     }
 
     #[test]
