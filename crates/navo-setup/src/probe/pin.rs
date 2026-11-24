@@ -29,6 +29,8 @@ use crate::probe::chain::resolve_path;
 const HOLD_ACCESS: u32 = FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
 const HOLD_FLAGS: u32 = FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT;
 
+#[path = "pin_adopt.rs"]
+mod adopt;
 #[cfg(test)]
 #[path = "pin_tests.rs"]
 mod tests;
@@ -41,6 +43,7 @@ pub enum PinError {
     Identity,
     NotFolder,
     Reparse,
+    Descriptor,
     Io(io::Error),
 }
 
@@ -53,6 +56,7 @@ impl fmt::Display for PinError {
             Self::Identity => formatter.write_str("pin folder identity changed"),
             Self::NotFolder => formatter.write_str("pin path is not a folder"),
             Self::Reparse => formatter.write_str("pin folder is a reparse point"),
+            Self::Descriptor => formatter.write_str("pin folder security is not the expected one"),
             Self::Io(error) => write!(formatter, "{error}"),
         }
     }

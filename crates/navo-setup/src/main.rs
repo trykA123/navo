@@ -9,6 +9,8 @@
 use std::ffi::OsString;
 use std::process::ExitCode;
 
+#[cfg(any(windows, test))]
+mod adopt_rule;
 pub mod cli;
 #[cfg_attr(
     not(test),
