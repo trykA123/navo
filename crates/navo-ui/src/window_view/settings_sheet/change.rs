@@ -1,3 +1,4 @@
+use super::controls::Status;
 use super::{Change, NavoWindow};
 use crate::prelude::*;
 
@@ -26,7 +27,9 @@ impl NavoWindow {
             return false;
         }
         self.settings.undo.push(old);
+        let status = Status::of_change(change.field, &change.value);
         self.change_setting(change, window, cx);
+        self.settings.status = Some(status);
         true
     }
 
@@ -34,7 +37,9 @@ impl NavoWindow {
         let Some(old) = self.settings.undo.pop() else {
             return;
         };
-        self.select_setting(old.field.row(), window, cx);
+        let field = old.field;
+        self.select_setting(field.row(), window, cx);
         self.change_setting(old, window, cx);
+        self.settings.status = Some(Status::Undid(field));
     }
 }

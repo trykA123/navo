@@ -90,6 +90,7 @@ mod settings_news;
 mod settings_search;
 mod settings_sheet;
 mod settings_state;
+mod settings_status;
 mod settings_updates;
 mod settings_upgrade;
 mod shell_menu;

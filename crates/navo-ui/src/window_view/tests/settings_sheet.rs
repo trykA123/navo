@@ -17,7 +17,7 @@ fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
         .expect("window");
 }
 
-fn open(cx: &mut TestAppContext, rig: &Rig) {
+pub(super) fn open(cx: &mut TestAppContext, rig: &Rig) {
     rig.press(cx, "ctrl-,");
     settle_motion(cx, rig);
 }
@@ -26,7 +26,11 @@ fn is_open(cx: &mut TestAppContext, rig: &Rig) -> bool {
     rig.view.read_with(cx, |view, _| view.settings.is_open())
 }
 
-fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+pub(super) fn label(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    id: impl Into<ElementId>,
+) -> Option<String> {
     let id = id.into();
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
@@ -38,7 +42,7 @@ fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option
     .expect("window")
 }
 
-fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
+pub(super) fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
     let id = id.into();
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
@@ -47,7 +51,7 @@ fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
     .expect("window")
 }
 
-fn sheet_has_focus(cx: &mut TestAppContext, rig: &Rig) -> bool {
+pub(super) fn sheet_has_focus(cx: &mut TestAppContext, rig: &Rig) -> bool {
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         window.find("settings-body").focused() == Some(true)
@@ -62,7 +66,7 @@ fn row_of(field: Field) -> usize {
         .expect("every field has a row")
 }
 
-fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
+pub(super) fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
     let steps = FIELDS[..row_of(field)]
         .iter()
@@ -73,7 +77,7 @@ fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     }
 }
 
-fn last_change(rig: &Rig) -> Option<Change> {
+pub(super) fn last_change(rig: &Rig) -> Option<Change> {
     rig.store.changes.lock().expect("changes").last().cloned()
 }
 
