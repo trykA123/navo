@@ -62,6 +62,10 @@ fn spacing_sizes(spacing: Spacing) -> Vec<(&'static str, Pixels)> {
         header_height,
         status_height,
         fkey_height,
+        button_bar_height,
+        button_size,
+        button_icon,
+        button_separator,
         rail_width,
         rail_item_height,
         drawer_height,
@@ -84,6 +88,10 @@ fn spacing_sizes(spacing: Spacing) -> Vec<(&'static str, Pixels)> {
         ("header_height", header_height),
         ("status_height", status_height),
         ("fkey_height", fkey_height),
+        ("button_bar_height", button_bar_height),
+        ("button_size", button_size),
+        ("button_icon", button_icon),
+        ("button_separator", button_separator),
         ("rail_width", rail_width),
         ("rail_item_height", rail_item_height),
         ("drawer_height", drawer_height),
@@ -474,19 +482,35 @@ fn the_colour_theme_survives_a_mode_change_and_reaches_the_kit(cx: &mut TestAppC
 }
 
 #[test]
-fn ui_scale_multiplies_dimensions_and_preserves_defaults_at_100_percent() {
+fn ui_scale_multiplies_spacing_and_dimensions_and_preserves_defaults_at_100_percent() {
     let themes = MODES.into_iter().flat_map(|mode| {
         [Density::Compact, Density::Normal, Density::Comfortable]
             .map(|density| Theme::with_density(mode, density))
     });
     for defaults in themes {
-        for percent in [80, 100, 150] {
+        for percent in [80, 100, 150, 200] {
             let mut scaled = defaults.clone();
             scaled.scale(percent);
             let factor = f32::from(percent) / 100.;
             assert_eq!(scaled.typography.body, defaults.typography.body * factor);
             assert_eq!(scaled.spacing.md, defaults.spacing.md * factor);
             assert_eq!(scaled.spacing.icon, defaults.spacing.icon * factor);
+            assert_eq!(
+                scaled.spacing.button_bar_height,
+                defaults.spacing.button_bar_height * factor
+            );
+            assert_eq!(
+                scaled.spacing.button_size,
+                defaults.spacing.button_size * factor
+            );
+            assert_eq!(
+                scaled.spacing.button_icon,
+                defaults.spacing.button_icon * factor
+            );
+            assert_eq!(
+                scaled.spacing.button_separator,
+                defaults.spacing.button_separator * factor
+            );
             assert_eq!(scaled.radii.md, defaults.radii.md * factor);
             assert_eq!(scaled.rows.height, defaults.rows.height * factor);
             if percent == 100 {

@@ -136,6 +136,10 @@ impl Theme {
         spacing.header_height *= factor;
         spacing.status_height *= factor;
         spacing.fkey_height *= factor;
+        spacing.button_bar_height *= factor;
+        spacing.button_size *= factor;
+        spacing.button_icon *= factor;
+        spacing.button_separator *= factor;
         spacing.rail_width *= factor;
         spacing.rail_item_height *= factor;
         spacing.drawer_height *= factor;
