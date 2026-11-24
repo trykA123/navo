@@ -11,6 +11,14 @@ mod sandbox_policy;
 #[cfg(windows)]
 mod sandbox_win;
 
+#[cfg(any(windows, test))]
+#[allow(dead_code, reason = "S2c2 calls the grant before each helper spawn")]
+mod appcontainer_policy;
+
+#[cfg(windows)]
+#[allow(dead_code, reason = "S2c2 calls the grant before each helper spawn")]
+mod appcontainer_win;
+
 #[cfg(windows)]
 mod handle_win;
 

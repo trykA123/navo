@@ -1,0 +1,307 @@
+//! Derives the PDF helper's AppContainer SID from Navo's fixed name (no profile is created) and
+//! grants it read+execute on one file (S2c1). The rules live in `appcontainer_policy.rs`.
+
+use std::ffi::c_void;
+use std::fs::{File, OpenOptions};
+use std::mem::size_of;
+use std::os::windows::fs::OpenOptionsExt;
+use std::os::windows::io::AsRawHandle;
+use std::path::Path;
+use std::ptr;
+
+use windows_sys::Win32::Foundation::LocalFree;
+use windows_sys::Win32::Security::Authorization::{
+    ConvertSidToStringSidW, EXPLICIT_ACCESS_W, GRANT_ACCESS, GetSecurityInfo, NO_MULTIPLE_TRUSTEE,
+    SE_FILE_OBJECT, SetEntriesInAclW, SetSecurityInfo, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN,
+    TRUSTEE_W,
+};
+use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
+use windows_sys::Win32::Security::{
+    ACCESS_ALLOWED_ACE, ACL, ACL_SIZE_INFORMATION, AclSizeInformation, DACL_SECURITY_INFORMATION,
+    EqualSid, FreeSid, GetAce, GetAclInformation, GetSecurityDescriptorControl, NO_INHERITANCE,
+    PROTECTED_DACL_SECURITY_INFORMATION, PSID, SE_DACL_PROTECTED,
+    UNPROTECTED_DACL_SECURITY_INFORMATION,
+};
+use windows_sys::Win32::Storage::FileSystem::{READ_CONTROL, WRITE_DAC};
+
+use super::appcontainer_policy::{
+    CONTAINER_NAME, GrantError, GrantOutcome, GrantStep, READ_EXECUTE, ace_is_grant,
+};
+
+/// `ERROR_INVALID_ACL`: reported for a file with a NULL DACL, which Navo refuses to edit.
+const ERROR_INVALID_ACL: i32 = 1336;
+
+/// The helper's AppContainer SID; freed with `FreeSid` on drop.
+pub(crate) struct ContainerSid(PSID);
+
+/// Memory Windows allocated with `LocalAlloc`; freed with `LocalFree` on drop.
+struct LocalMem(*mut c_void);
+
+impl Drop for LocalMem {
+    fn drop(&mut self) {
+        // SAFETY: the pointer came from a Win32 call that hands LocalAlloc memory to the caller.
+        unsafe { LocalFree(self.0) };
+    }
+}
+
+impl Drop for ContainerSid {
+    fn drop(&mut self) {
+        // SAFETY: the SID came from DeriveAppContainerSidFromAppContainerName, which says FreeSid.
+        unsafe { FreeSid(self.0) };
+    }
+}
+
+impl ContainerSid {
+    /// Derives the SID from `CONTAINER_NAME`. Fails at `DeriveSid` with the HRESULT.
+    pub(crate) fn derive() -> Result<Self, GrantError> {
+        let name: Vec<u16> = CONTAINER_NAME.encode_utf16().chain([0]).collect();
+        let mut sid: PSID = ptr::null_mut();
+        // SAFETY: `name` is NUL-terminated and `sid` is a live out-pointer.
+        let hr = unsafe { DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &raw mut sid) };
+        if hr < 0 || sid.is_null() {
+            return Err(GrantError::new(GrantStep::DeriveSid, None, hr));
+        }
+        Ok(Self(sid))
+    }
+
+    /// The SID as text (`S-1-15-2-…`) for logs. Fails at `FormatSid` with the Win32 error.
+    pub(crate) fn to_sddl(&self) -> Result<String, GrantError> {
+        let mut text: *mut u16 = ptr::null_mut();
+        // SAFETY: the SID is live and `text` is a live out-pointer.
+        if unsafe { ConvertSidToStringSidW(self.0, &raw mut text) } == 0 {
+            return Err(GrantError::new(GrantStep::FormatSid, None, last_error()));
+        }
+        let owned = LocalMem(text.cast());
+        // SAFETY: Windows wrote a NUL-terminated string at `text`, owned by `owned`.
+        let len = (0..).take_while(|&i| unsafe { *text.add(i) } != 0).count();
+        // SAFETY: the `len` units before the NUL are initialised and live while `owned` is.
+        let units = unsafe { std::slice::from_raw_parts(text, len) };
+        let sddl = String::from_utf16_lossy(units);
+        drop(owned);
+        Ok(sddl)
+    }
+}
+
+/// A file's DACL as read through its handle; the descriptor owns the memory `dacl` points into.
+struct FileDacl {
+    _descriptor: LocalMem,
+    dacl: *mut ACL,
+    protected: bool,
+}
+
+/// Grants `sid` read+execute on `path` with one explicit, non-inherited ACE, through one handle
+/// so the file cannot be swapped between check and write. Idempotent; fails closed at a named step.
+pub(crate) fn grant_read_execute(
+    path: &Path,
+    sid: &ContainerSid,
+) -> Result<GrantOutcome, GrantError> {
+    let fail = |step, code| GrantError::new(step, Some(path), code);
+    let file = OpenOptions::new()
+        .access_mode(READ_CONTROL | WRITE_DAC)
+        .open(path)
+        .map_err(|e| fail(GrantStep::OpenFile, e.raw_os_error().unwrap_or(-1)))?;
+    let current = read_dacl(&file).map_err(|code| fail(GrantStep::ReadDacl, code))?;
+    let aces = allow_aces_for(current.dacl, sid).map_err(|code| fail(GrantStep::ScanDacl, code))?;
+    if aces
+        .iter()
+        .any(|&(flags, mask)| ace_is_grant(0, flags, mask))
+    {
+        return Ok(GrantOutcome::AlreadyGranted);
+    }
+    let merged = merge_grant(current.dacl, sid).map_err(|code| fail(GrantStep::BuildDacl, code))?;
+    write_dacl(&file, merged.0.cast(), current.protected)
+        .map_err(|code| fail(GrantStep::WriteDacl, code))?;
+    Ok(GrantOutcome::Added)
+}
+
+/// Reads the DACL and its protection bit through `file`. Fails with the Win32 error; a NULL
+/// DACL fails with `ERROR_INVALID_ACL`, because merging into it would drop "everyone" access.
+fn read_dacl(file: &File) -> Result<FileDacl, i32> {
+    let mut dacl: *mut ACL = ptr::null_mut();
+    let mut descriptor = ptr::null_mut();
+    // SAFETY: the handle is live; the out-pointers are live; owner, group and SACL are not asked.
+    let status = unsafe {
+        GetSecurityInfo(
+            file.as_raw_handle(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &raw mut dacl,
+            ptr::null_mut(),
+            &raw mut descriptor,
+        )
+    };
+    if status != 0 {
+        return Err(status as i32);
+    }
+    let descriptor = LocalMem(descriptor);
+    if dacl.is_null() {
+        return Err(ERROR_INVALID_ACL);
+    }
+    let (mut control, mut revision) = (0u16, 0u32);
+    // SAFETY: the descriptor is live and both out-pointers are live.
+    if unsafe { GetSecurityDescriptorControl(descriptor.0, &raw mut control, &raw mut revision) }
+        == 0
+    {
+        return Err(last_error());
+    }
+    Ok(FileDacl {
+        _descriptor: descriptor,
+        dacl,
+        protected: control & SE_DACL_PROTECTED != 0,
+    })
+}
+
+/// Lists `(flags, mask)` of every allow ACE in `dacl` whose SID is `sid`. Fails with the Win32 error.
+fn allow_aces_for(dacl: *mut ACL, sid: &ContainerSid) -> Result<Vec<(u8, u32)>, i32> {
+    let mut info = ACL_SIZE_INFORMATION::default();
+    let bytes = size_of::<ACL_SIZE_INFORMATION>() as u32;
+    // SAFETY: `dacl` is a live ACL and `info` a live buffer of `bytes` bytes.
+    let ok = unsafe { GetAclInformation(dacl, (&raw mut info).cast(), bytes, AclSizeInformation) };
+    if ok == 0 {
+        return Err(last_error());
+    }
+    let mut found = Vec::new();
+    for index in 0..info.AceCount {
+        let mut ace: *mut c_void = ptr::null_mut();
+        // SAFETY: `index` is below the ACE count and `ace` is a live out-pointer.
+        if unsafe { GetAce(dacl, index, &raw mut ace) } == 0 {
+            return Err(last_error());
+        }
+        let allow = ace.cast::<ACCESS_ALLOWED_ACE>();
+        // SAFETY: every ACE type starts with a 4-byte header and a 4-byte mask; `SidStart` is only
+        // an address here, and it is read as a SID only for type 0 (ACCESS_ALLOWED_ACE).
+        let (header, mask, ace_sid) = unsafe {
+            let header = (*allow).Header;
+            (
+                header,
+                (*allow).Mask,
+                (&raw mut (*allow).SidStart).cast::<c_void>(),
+            )
+        };
+        // SAFETY: for an allow ACE `ace_sid` points at a valid SID inside the ACL.
+        if header.AceType == 0 && unsafe { EqualSid(ace_sid, sid.0) } != 0 {
+            found.push((header.AceFlags, mask));
+        }
+    }
+    Ok(found)
+}
+
+/// Builds a new ACL: `dacl` plus an explicit read+execute allow for `sid`. Fails with the Win32 error.
+fn merge_grant(dacl: *mut ACL, sid: &ContainerSid) -> Result<LocalMem, i32> {
+    let access = EXPLICIT_ACCESS_W {
+        grfAccessPermissions: READ_EXECUTE,
+        grfAccessMode: GRANT_ACCESS,
+        grfInheritance: NO_INHERITANCE,
+        Trustee: TRUSTEE_W {
+            pMultipleTrustee: ptr::null_mut(),
+            MultipleTrusteeOperation: NO_MULTIPLE_TRUSTEE,
+            TrusteeForm: TRUSTEE_IS_SID,
+            TrusteeType: TRUSTEE_IS_UNKNOWN,
+            ptstrName: sid.0.cast(),
+        },
+    };
+    let mut merged: *mut ACL = ptr::null_mut();
+    // SAFETY: one live entry, a live old ACL and a live out-pointer; the SID outlives the call.
+    let status = unsafe { SetEntriesInAclW(1, &raw const access, dacl, &raw mut merged) };
+    if status != 0 {
+        return Err(status as i32);
+    }
+    Ok(LocalMem(merged.cast()))
+}
+
+/// Writes `dacl` through `file`, keeping the file's protected or inheriting state as it was.
+fn write_dacl(file: &File, dacl: *const ACL, protected: bool) -> Result<(), i32> {
+    let inherit = if protected {
+        PROTECTED_DACL_SECURITY_INFORMATION
+    } else {
+        UNPROTECTED_DACL_SECURITY_INFORMATION
+    };
+    // SAFETY: the handle has WRITE_DAC and `dacl` is a live ACL; owner, group and SACL are unchanged.
+    let status = unsafe {
+        SetSecurityInfo(
+            file.as_raw_handle(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | inherit,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            dacl,
+            ptr::null(),
+        )
+    };
+    if status == 0 {
+        Ok(())
+    } else {
+        Err(status as i32)
+    }
+}
+
+/// The calling thread's last Win32 error.
+fn last_error() -> i32 {
+    std::io::Error::last_os_error().raw_os_error().unwrap_or(-1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Reads back `(flags, mask)` of the allow ACEs for `sid` on `path`, and the total ACE count.
+    fn read_back(path: &Path, sid: &ContainerSid) -> (Vec<(u8, u32)>, u32) {
+        let file = OpenOptions::new()
+            .access_mode(READ_CONTROL)
+            .open(path)
+            .unwrap();
+        let dacl = read_dacl(&file).unwrap();
+        let mut info = ACL_SIZE_INFORMATION::default();
+        let bytes = size_of::<ACL_SIZE_INFORMATION>() as u32;
+        // SAFETY: the DACL is live and `info` a live buffer of `bytes` bytes.
+        let ok = unsafe {
+            GetAclInformation(dacl.dacl, (&raw mut info).cast(), bytes, AclSizeInformation)
+        };
+        assert_ne!(ok, 0);
+        (allow_aces_for(dacl.dacl, sid).unwrap(), info.AceCount)
+    }
+
+    #[test]
+    fn the_container_sid_is_stable_and_an_appcontainer_sid() {
+        let first = ContainerSid::derive().unwrap().to_sddl().unwrap();
+        let second = ContainerSid::derive().unwrap().to_sddl().unwrap();
+        assert_eq!(first, second);
+        assert!(first.starts_with("S-1-15-2-"), "{first}");
+    }
+
+    #[test]
+    fn a_grant_adds_one_explicit_read_execute_ace_and_a_second_adds_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pdfium.dll");
+        std::fs::write(&path, b"x").unwrap();
+        let sid = ContainerSid::derive().unwrap();
+        let (before, count_before) = read_back(&path, &sid);
+        assert!(before.is_empty());
+
+        assert_eq!(grant_read_execute(&path, &sid), Ok(GrantOutcome::Added));
+        let (after, count_after) = read_back(&path, &sid);
+        assert_eq!(after, [(0, READ_EXECUTE)]);
+        assert_eq!(count_after, count_before + 1);
+
+        assert_eq!(
+            grant_read_execute(&path, &sid),
+            Ok(GrantOutcome::AlreadyGranted)
+        );
+        let (again, count_again) = read_back(&path, &sid);
+        assert_eq!(again, [(0, READ_EXECUTE)]);
+        assert_eq!(count_again, count_after);
+    }
+
+    #[test]
+    fn a_missing_file_fails_at_open_file_and_names_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing.dll");
+        let sid = ContainerSid::derive().unwrap();
+        let error = grant_read_execute(&path, &sid).unwrap_err();
+        assert_eq!(error.step, GrantStep::OpenFile);
+        assert_eq!(error.target.as_deref(), Some(path.as_path()));
+        assert_eq!(error.code, 2);
+    }
+}
