@@ -138,7 +138,7 @@ pub(super) fn inspector(look: &Look, index: usize, spec: &'static FieldSpec) -> 
 
 fn eyebrow(t: &Theme, spec: &FieldSpec) -> impl IntoElement + use<> {
     let page = section_label(spec.section);
-    let text: SharedString = match spec.group() {
+    let text: SharedString = match super::pages::group_of(spec.field) {
         Some(group) => format!("{page} · {group}").into(),
         None => page,
     };
