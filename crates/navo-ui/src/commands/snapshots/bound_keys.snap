@@ -196,6 +196,8 @@ editor.add_cursor_below | ctrl-alt-down | Editor
 editor.focus_preview | f6 | Viewer
 editor.leave_preview | escape | MarkdownPreview
 editor.leave_preview | f6 | MarkdownPreview
+editor.next_problem | f8 | Editor
+editor.previous_problem | shift-f8 | Editor
 editor.toggle_preview | ctrl-shift-v | Viewer
 elf.pick_item | enter | Elf
 elf.sort_by_address | ctrl-f5 | Elf

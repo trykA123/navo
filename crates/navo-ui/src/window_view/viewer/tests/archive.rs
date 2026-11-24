@@ -163,14 +163,14 @@ fn a_user_key_for_close_closes_an_archive_with_a_filter_at_once(cx: &mut TestApp
     let files = archive_hooks(Ok(listing()), &Reads::default());
     let rig = rig_on(cx, options_with(fs, files, Kinds::builtin()), file);
     rig.open_page(cx);
-    rig.record_on(cx, "viewer.close", "f8");
+    rig.record_on(cx, "viewer.close", "f12");
     rig.press(cx, "escape");
     rig.press(cx, "down");
     rig.press(cx, "f3");
     redraw(cx, rig.window);
     rig.press(cx, "d");
     assert!(text_of(cx, rig.window, "filter").starts_with("Filter d"));
-    rig.press(cx, "f8");
+    rig.press(cx, "f12");
     assert!(!viewer_open(cx, &rig.view));
 }
 

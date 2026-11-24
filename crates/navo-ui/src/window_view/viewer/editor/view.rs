@@ -101,6 +101,7 @@ impl EditorView {
                 d.child(status(t, "viewer-message", note))
             })
             .when_some(count, |d, count| d.child(status(t, "find-count", count)))
+            .children(self.lint_status(t))
             .children(self.bar(t, cx))
             .child(view_button())
     }
@@ -246,7 +247,8 @@ impl Render for EditorView {
         let rows = self.found_rows(cx);
         let panel = find_all_panel(&t, &self.marking, rows);
         let root = div().id("editor-view").key_context(EDITOR_CONTEXT);
-        Self::preview_keys(Self::list_keys(Self::find_keys(root, cx), cx), cx)
+        let root = Self::lint_keys(Self::find_keys(root, cx), cx);
+        Self::preview_keys(Self::list_keys(root, cx), cx)
             .flex()
             .flex_col()
             .flex_1()

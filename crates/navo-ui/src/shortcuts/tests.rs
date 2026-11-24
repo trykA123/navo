@@ -266,10 +266,10 @@ const END_CONTEXTS: [Option<&str>; 5] = [
 
 #[test]
 fn a_command_bound_in_several_contexts_is_recorded_in_each() {
-    let edits = edits(Keymap::builtin(), &proposal("viewer.go_to_end", &["f8"]));
+    let edits = edits(Keymap::builtin(), &proposal("viewer.go_to_end", &["f12"]));
     let expected: Vec<Edit> = END_CONTEXTS
         .iter()
-        .map(|&context| set_in("viewer.go_to_end", context, &["f8"]))
+        .map(|&context| set_in("viewer.go_to_end", context, &["f12"]))
         .collect();
     assert_eq!(edits, expected);
 }
@@ -286,13 +286,13 @@ fn an_unbind_clears_every_context_of_the_command() {
 
 #[test]
 fn the_home_context_is_written_without_a_context() {
-    let edits = edits(Keymap::builtin(), &proposal("viewer.go_to_start", &["f8"]));
+    let edits = edits(Keymap::builtin(), &proposal("viewer.go_to_start", &["f12"]));
     let expected = [
-        set_in("viewer.go_to_start", None, &["f8"]),
-        set_in("viewer.go_to_start", Some("Archive"), &["f8"]),
-        set_in("viewer.go_to_start", Some("Tree"), &["f8"]),
-        set_in("viewer.go_to_start", Some("Pdf"), &["f8"]),
-        set_in("viewer.go_to_start", Some("CompareView"), &["f8"]),
+        set_in("viewer.go_to_start", None, &["f12"]),
+        set_in("viewer.go_to_start", Some("Archive"), &["f12"]),
+        set_in("viewer.go_to_start", Some("Tree"), &["f12"]),
+        set_in("viewer.go_to_start", Some("Pdf"), &["f12"]),
+        set_in("viewer.go_to_start", Some("CompareView"), &["f12"]),
     ];
     assert_eq!(edits, expected);
 }

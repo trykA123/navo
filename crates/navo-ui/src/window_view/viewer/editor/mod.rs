@@ -1,6 +1,7 @@
 mod body;
 mod find;
 mod lines;
+mod lint;
 mod marking;
 mod overlay;
 mod preview;
@@ -31,6 +32,7 @@ use crate::prelude::*;
 use crate::settings::{Field, Values};
 use crate::tokens::Mode;
 use find::EditorFind;
+use lint::Lint;
 use marking::text_source;
 use preview::Split;
 
@@ -59,6 +61,7 @@ pub(super) struct EditorView {
     overview: Overview,
     recount: Option<Task<()>>,
     split: Option<Split>,
+    lint: Lint,
     _changes: Subscription,
 }
 
@@ -136,6 +139,7 @@ impl EditorView {
         let shared: Arc<str> = Arc::from(file.text.as_str());
         let (persists, link) = memory_link(&file, &shared, &host);
         let note = file.read_only.then(|| read_only_note(&file));
+        let lint = Lint::for_location(&host.location);
         let editor = cx.new(|cx| read_only_state(file.text, &highlight, window, cx));
         let decorations = editor.update(cx, |state, cx| {
             state.create_range_decorations_collection(Vec::new(), cx)
@@ -171,9 +175,11 @@ impl EditorView {
             overview: Overview::default(),
             recount: None,
             split,
+            lint,
             _changes: changes,
         };
         attach_memory(&mut view, link, cx);
+        view.lint_later(std::time::Duration::ZERO, cx);
         view
     }
 
@@ -221,6 +227,7 @@ impl EditorView {
         self.note = None;
         self.text_edited(cx);
         self.preview_edited(cx);
+        self.lint_edited(cx);
         cx.notify();
     }
 

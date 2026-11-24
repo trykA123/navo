@@ -238,6 +238,16 @@ pub(super) const GROUPS: [Group; 7] = [
                 "editor.focus_preview",
                 "cmd-editor-focus-preview",
             ),
+            (
+                "viewer::NextProblem",
+                "editor.next_problem",
+                "cmd-editor-next-problem",
+            ),
+            (
+                "viewer::PreviousProblem",
+                "editor.previous_problem",
+                "cmd-editor-previous-problem",
+            ),
         ],
     },
     Group {

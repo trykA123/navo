@@ -1419,6 +1419,16 @@ keys = ["ctrl-alt-up"]
 command = "editor.add_cursor_below"
 keys = ["ctrl-alt-down"]
 
+[[bind]]
+command = "editor.next_problem"
+keys = ["f8"]
+context = "Editor"
+
+[[bind]]
+command = "editor.previous_problem"
+keys = ["shift-f8"]
+context = "Editor"
+
 # MarkdownPreview
 
 [[bind]]

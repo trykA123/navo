@@ -157,3 +157,11 @@ editor-replace-label = Replace
 editor-replace-placeholder = Replace with
 editor-replace-one = Replace
 editor-replace-all = Replace all
+viewer-lint-errors = { $count ->
+    [one] { $count } error
+   *[other] { $count } errors
+}
+viewer-lint-warnings = { $count ->
+    [one] { $count } warning
+   *[other] { $count } warnings
+}

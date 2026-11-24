@@ -71,6 +71,8 @@ gpui_kit::actions!(
         TogglePreview,
         FocusPreview,
         LeavePreview,
+        NextProblem,
+        PreviousProblem,
     ]
 );
 

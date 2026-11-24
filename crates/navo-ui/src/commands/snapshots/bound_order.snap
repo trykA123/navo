@@ -243,6 +243,8 @@ bookmark.next | f2 | Viewer
 bookmark.previous | shift-f2 | Viewer
 editor.toggle_preview | ctrl-shift-v | Viewer
 editor.focus_preview | f6 | Viewer
+editor.next_problem | f8 | Editor
+editor.previous_problem | shift-f8 | Editor
 editor.leave_preview | escape | MarkdownPreview
 editor.leave_preview | f6 | MarkdownPreview
 find.older_search | up | ViewerFind > Input

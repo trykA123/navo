@@ -288,6 +288,8 @@ editor.toggle_preview | Viewer | true
 editor.focus_preview | Viewer | true
 editor.add_cursor_above | Editor | true
 editor.add_cursor_below | Editor | true
+editor.next_problem | Viewer | true
+editor.previous_problem | Viewer | true
 editor.leave_preview | MarkdownPreview | true
 find.older_search | ViewerFind | true
 find.newer_search | ViewerFind | true

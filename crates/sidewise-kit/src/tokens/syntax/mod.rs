@@ -10,7 +10,7 @@ mod tint_tests;
 
 pub use tint::{TintLook, on_tint};
 
-use gpui_kit::component::highlighter::{HighlightTheme, SyntaxColors};
+use gpui_kit::component::highlighter::{HighlightTheme, StatusColors, SyntaxColors};
 use gpui_kit::component::theme::ThemeMode;
 use gpui_kit::{Hsla, Rgba};
 
@@ -108,6 +108,24 @@ fn syntax_colors(roles: &[Role]) -> Option<SyntaxColors> {
     toml::Value::Table(table).try_into().ok()
 }
 
+/// The kit's status colours with error, warning, info and hint taken from `colors` (danger,
+/// warn, accent, muted); the editor paints lint squiggles from these. `None` if serde rejects it.
+fn status_colors(base: &StatusColors, colors: &Colors) -> Option<StatusColors> {
+    // The fields are private, so the table round-trips through serde (8-bit RGBA hex).
+    let toml::Value::Table(mut table) = toml::Value::try_from(base).ok()? else {
+        return None;
+    };
+    for (name, color) in [
+        ("error", colors.mark),
+        ("warning", colors.warn),
+        ("info", colors.accent),
+        ("hint", colors.muted),
+    ] {
+        table.insert(name.into(), hex(color).into());
+    }
+    toml::Value::Table(table).try_into().ok()
+}
+
 pub fn highlight_theme(
     syntax: SyntaxTheme,
     mode: Mode,
@@ -123,6 +141,9 @@ pub fn highlight_theme(
     };
     if let Some(syntax) = syntax_colors(&roles(syntax, mode, colors)) {
         theme.style.syntax = syntax;
+    }
+    if let Some(status) = status_colors(&theme.style.status, colors) {
+        theme.style.status = status;
     }
     let style = &mut theme.style;
     style.editor_background = Some(colors.background);
