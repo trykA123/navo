@@ -366,12 +366,12 @@ mod tests {
     }
 
     /// Hands out generations `0..1_000`, holding `1..` until the test opens the
-    /// burst, then idles until the session stops.
+    /// burst, then idles until the session stops. Writes report each response's
+    /// generation and, for hits, the first hit's path.
     struct BurstPipe {
         next: Mutex<u64>,
         burst: Mutex<Option<mpsc::Receiver<()>>>,
-        all_sent: mpsc::Sender<()>,
-        written: mpsc::Sender<u64>,
+        written: mpsc::Sender<(u64, Option<String>)>,
     }
 
     impl BurstPipe {
@@ -413,10 +413,7 @@ mod tests {
             if generation == 1
                 && let Some(opened) = self.burst.lock().unwrap().take()
             {
-                opened.recv().unwrap();
-            }
-            if generation == 999 {
-                self.all_sent.send(()).unwrap();
+                let _ = opened.recv();
             }
             Ok(Query {
                 request: Request {
@@ -427,6 +424,10 @@ mod tests {
         }
 
         fn write_response(&self, response: &Response, _: Instant) -> Result<(), PipeError> {
+            let path = match response {
+                Response::Hits { hits, .. } => hits.first().map(|hit| hit.path.clone()),
+                _ => None,
+            };
             let generation = match response {
                 Response::Hits { generation, .. }
                 | Response::Status { generation, .. }
@@ -436,9 +437,59 @@ mod tests {
                 | Response::VersionV1 { generation, .. } => *generation,
             };
             self.written
-                .send(generation)
+                .send((generation, path))
                 .map_err(|_| PipeError::NotAvailable)
         }
+    }
+
+    /// Unblocks every scoped thread when dropped, so a failed assertion unwinds
+    /// through the scope instead of hanging its join.
+    struct Teardown<'a> {
+        stop: &'a CancelToken,
+        answers: &'a Latest<Job>,
+        burst: Option<mpsc::Sender<()>>,
+        release: Option<mpsc::Sender<()>>,
+    }
+
+    impl Drop for Teardown<'_> {
+        fn drop(&mut self) {
+            self.answers.close();
+            for gate in [self.burst.take(), self.release.take()]
+                .into_iter()
+                .flatten()
+            {
+                let _ = gate.send(());
+            }
+            self.stop.cancel();
+        }
+    }
+
+    /// Records each answered generation, parks on the first, and replies with
+    /// one hit named after the request's generation.
+    fn burst_handler(
+        stall: Stall,
+        answered: Arc<Mutex<Vec<u64>>>,
+    ) -> impl Fn(&Request, &CancelToken) -> Reply + Sync {
+        let first = AtomicBool::new(true);
+        move |request: &Request, _: &CancelToken| {
+            let generation = generation(request);
+            answered.lock().unwrap().push(generation);
+            stall.park_first(&first, generation);
+            Reply {
+                hits: vec![frames::Hit {
+                    path: generation.to_string(),
+                    flags: 0,
+                    score: 1,
+                    indices: Vec::new(),
+                }],
+                ..Reply::default()
+            }
+        }
+    }
+
+    /// The generation of the job waiting in the mailbox, if any.
+    fn pending_generation(answers: &Latest<Job>) -> Option<u64> {
+        answers.peek(|job| job.map(|job| generation(&job.request)))
     }
 
     #[test]
@@ -446,34 +497,27 @@ mod tests {
         let (stalled_sender, stalled) = mpsc::channel();
         let (release_sender, releases) = mpsc::channel();
         let (burst_sender, burst) = mpsc::channel();
-        let (all_sent, sent) = mpsc::channel();
         let (written, responses) = mpsc::channel();
-        let stall = Arc::new(Stall {
+        let stall = Stall {
             entered: stalled_sender,
             release: Mutex::new(releases),
-        });
-        let first = Arc::new(AtomicBool::new(true));
-        let answered = Arc::new(Mutex::new(Vec::new()));
-        let handler = {
-            let stall = Arc::clone(&stall);
-            let first = Arc::clone(&first);
-            let answered = Arc::clone(&answered);
-            move |request: &Request, _: &CancelToken| {
-                let generation = generation(request);
-                answered.lock().unwrap().push(generation);
-                stall.park_first(&first, generation);
-                Reply::default()
-            }
         };
+        let answered = Arc::new(Mutex::new(Vec::new()));
+        let handler = burst_handler(stall, Arc::clone(&answered));
         let pipe = BurstPipe {
             next: Mutex::new(0),
             burst: Mutex::new(Some(burst)),
-            all_sent,
             written,
         };
         let answers = Arc::new(Latest::default());
         let stop = CancelToken::new();
         std::thread::scope(|scope| {
+            let mut teardown = Teardown {
+                stop: &stop,
+                answers: &answers,
+                burst: Some(burst_sender),
+                release: Some(release_sender),
+            };
             let worker = {
                 let answers = Arc::clone(&answers);
                 scope.spawn(move || answer_jobs(answers, &handler))
@@ -485,22 +529,33 @@ mod tests {
             };
             assert_eq!(stalled.recv_timeout(WAIT).unwrap(), 0);
             assert_eq!(answers.revision(), 1, "one job while the worker is stalled");
-            burst_sender.send(()).unwrap();
-            sent.recv_timeout(WAIT).unwrap();
+            assert_eq!(pending_generation(&answers), None, "the worker took job 0");
+            teardown.burst.take().unwrap().send(()).unwrap();
             let deadline = Instant::now() + WAIT;
-            while answers.revision() < 2 {
+            while pending_generation(&answers) != Some(999) {
                 assert!(
                     Instant::now() < deadline,
-                    "the newest generation was never published"
+                    "generation 999 was never published"
                 );
                 std::thread::yield_now();
             }
-            assert!(answers.pending(), "the newest job is the only one pending");
+            assert!(answers.revision() >= 2, "the burst published no job");
+            assert_eq!(
+                pending_generation(&answers),
+                Some(999),
+                "exactly one job, the newest, is pending"
+            );
             answers.close();
-            release_sender.send(()).unwrap();
-            assert_eq!(responses.recv_timeout(WAIT).unwrap(), 999);
-            assert_eq!(responses.recv_timeout(WAIT).unwrap(), 999);
-            stop.cancel();
+            teardown.release.take().unwrap().send(()).unwrap();
+            let hits = responses.recv_timeout(WAIT).unwrap();
+            assert_eq!(
+                hits,
+                (999, Some("999".to_owned())),
+                "the reply is 999's own"
+            );
+            assert_eq!(responses.recv_timeout(WAIT).unwrap(), (999, None));
+            assert!(!answers.pending(), "the worker took the last job");
+            drop(teardown);
             assert!(worker.join().is_ok());
             assert!(session.join().is_ok());
         });

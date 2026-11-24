@@ -110,6 +110,18 @@ impl<T> Latest<T> {
             .is_some()
     }
 
+    /// Reads the waiting value, if any, without consuming it.
+    #[cfg(test)]
+    pub(crate) fn peek<R>(&self, read: impl FnOnce(Option<&T>) -> R) -> R {
+        read(
+            self.state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .value
+                .as_ref(),
+        )
+    }
+
     /// Clones the newest value without consuming it.
     #[cfg(test)]
     pub(crate) fn latest(&self) -> Option<T>
