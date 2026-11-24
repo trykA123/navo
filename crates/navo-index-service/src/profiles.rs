@@ -34,7 +34,7 @@ pub(super) struct ProfileScope {
     others_unread: Option<String>,
 }
 
-/// Why the profile scope could not be read; nothing is hidden then.
+/// Why the profile scope could not be read; the fail-closed fallback scope applies then.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub(super) enum ProfileUnresolved {
     #[error("the profiles root is missing from the registry")]
@@ -154,10 +154,17 @@ fn both_forms(source: &impl ProfileSource, path: &str) -> Result<Vec<String>, Pr
     Ok(std::iter::once(named).chain(differs).collect())
 }
 
-/// Reads the installing user's scope from the registry `ProfileList` and the file system.
+/// Reads the installing user's scope from the registry `ProfileList` and the file system; when
+/// that fails, logs why and returns the fail-closed fallback scope.
 #[cfg(windows)]
-pub(super) fn installing_user(sid: &str) -> Result<ProfileScope, ProfileUnresolved> {
-    scope_from(sid, &super::profiles_windows::System)
+pub(super) fn installing_user(sid: &str, log: &Log) -> ProfileScope {
+    let system_drive = std::env::var("SystemDrive").ok();
+    fallback::scope_or_fallback(
+        sid,
+        &super::profiles_windows::System,
+        system_drive.as_deref(),
+        log,
+    )
 }
 
 /// Trims a `X:\a\b` path to `X:\a\b` with backslashes; rejects anything not below a drive letter.
@@ -311,6 +318,9 @@ impl TimeoutNotice {
         }
     }
 }
+
+#[path = "profiles_fallback.rs"]
+mod fallback;
 
 #[cfg(test)]
 #[path = "profiles_tests.rs"]

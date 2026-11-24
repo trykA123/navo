@@ -81,7 +81,7 @@ impl ProfileSource for Fake {
 }
 
 /// A volume `root` holding one sized file at each path in `files`, folders made on the way.
-fn volume(root: &str, files: &[&str], scope: Option<ProfileScope>) -> SharedVolume {
+pub(super) fn volume(root: &str, files: &[&str], scope: Option<ProfileScope>) -> SharedVolume {
     let mut table = NameTable::new();
     let top = table.push(NO_PARENT, root, Flags::FOLDER).unwrap();
     let mut folders = HashMap::new();
@@ -120,7 +120,7 @@ fn volume(root: &str, files: &[&str], scope: Option<ProfileScope>) -> SharedVolu
 }
 
 /// Every `.txt` hit path, sorted, through the real service answer.
-fn hits(volume: &SharedVolume) -> Vec<String> {
+pub(super) fn hits(volume: &SharedVolume) -> Vec<String> {
     let request = Request {
         terms: vec![QueryTerm::Name("txt".into())],
     };
@@ -131,7 +131,7 @@ fn hits(volume: &SharedVolume) -> Vec<String> {
 }
 
 /// Folder totals `(bytes, files)` per path, through the real service answer.
-fn totals(volume: &SharedVolume, paths: &[&str]) -> Vec<Option<(u64, u32)>> {
+pub(super) fn totals(volume: &SharedVolume, paths: &[&str]) -> Vec<Option<(u64, u32)>> {
     let request = Request {
         terms: vec![QueryTerm::FolderTotalsV1(
             paths.iter().map(|path| (*path).to_owned()).collect(),

@@ -46,7 +46,7 @@ fn serve(
     let drives = select_volumes(&config.search, &available).map_err(ServiceError::Configuration)?;
     let profiles = profile_scope(&config.sid, log);
     let notice = Arc::new(TimeoutNotice::new(log.clone()));
-    let volumes = initial_volumes(&drives, &config.search, profiles.as_ref(), &notice);
+    let volumes = initial_volumes(&drives, &config.search, Some(&profiles), &notice);
     let letters: String = drives.iter().map(|drive| drive.letter).collect();
     log.line(format_args!("volumes {letters}"));
     std::thread::scope(|scope| {
@@ -106,22 +106,16 @@ fn serve_pipe(sid: &str, volumes: &[SharedVolume], cancel: &CancelToken) -> io::
         .map_err(io::Error::other)
 }
 
-/// Reads the installing user's profile scope; one log line says when nothing is hidden, or
-/// when other profiles outside the profiles root stay searchable.
-fn profile_scope(sid: &str, log: &Log) -> Option<ProfileScope> {
-    let scope = super::profiles::installing_user(sid)
-        .inspect_err(|reason| {
-            log.line(format_args!(
-                "profiles unresolved: {reason}; other users' folders stay searchable"
-            ));
-        })
-        .ok()?;
+/// Reads the installing user's profile scope (a fail-closed fallback when it is unresolved);
+/// one log line says when other profiles outside the profiles root stay searchable.
+fn profile_scope(sid: &str, log: &Log) -> ProfileScope {
+    let scope = super::profiles::installing_user(sid, log);
     if let Some(reason) = scope.others_unread() {
         log.line(format_args!(
             "profile list unread: {reason}; profiles outside the profiles root stay searchable"
         ));
     }
-    Some(scope)
+    scope
 }
 
 /// Builds one empty shared volume per drive; each search hides other users' profiles when
