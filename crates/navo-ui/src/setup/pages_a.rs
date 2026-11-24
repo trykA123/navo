@@ -83,7 +83,7 @@ pub(super) fn licence(c: &Ctx) -> AnyElement {
         .text_size(c.t.typography.small)
         .text_color(c.t.colors.text)
         .child(c.strings.licence_text.clone());
-    let url = c.strings.apache_url.clone();
+    let open = c.on_action.clone();
     let link = div()
         .id("licence-apache")
         .role(Role::Link)
@@ -94,7 +94,7 @@ pub(super) fn licence(c: &Ctx) -> AnyElement {
         .cursor_pointer()
         .text_size(c.t.typography.small)
         .text_color(c.t.colors.accent_text)
-        .on_click(move |_, _, cx: &mut App| cx.open_url(&url))
+        .on_click(move |_, window, cx: &mut App| open(SetupAction::OpenLicence, window, cx))
         .child(access_label(&c.strings.licence_apache, c.view.show_keys));
     let send = c.on_action.clone();
     let accept = CheckBox::new("licence-accept", c.strings.licence_accept.clone())

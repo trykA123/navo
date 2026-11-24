@@ -106,7 +106,7 @@ fn a_locked_folder_turns_browse_off(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn licence_accept_box_shows_its_state_and_sends_a_toggle(cx: &mut TestAppContext) {
+fn licence_page_sends_a_toggle_and_the_link_sends_open_licence(cx: &mut TestAppContext) {
     let view = SetupView {
         page: SetupPage::Licence,
         licence_accepted: true,
@@ -121,11 +121,15 @@ fn licence_accept_box_shows_its_state_and_sends_a_toggle(cx: &mut TestAppContext
         assert_eq!(accept.checked(), Some(true));
         assert_eq!(window.find("licence-apache").role(), Some(Role::Link));
         window.click("licence-accept", cx);
+        window.click("licence-apache", cx);
     })
     .expect("window");
     assert_eq!(
         *sent.borrow(),
-        [SetupAction::Toggle(SetupCheck::AcceptLicence)]
+        [
+            SetupAction::Toggle(SetupCheck::AcceptLicence),
+            SetupAction::OpenLicence
+        ]
     );
 }
 

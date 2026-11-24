@@ -71,6 +71,8 @@ pub enum SetupAction {
     TryAgain,
     OpenFolder,
     CopyDetails,
+    /// Open the Apache licence page; the host opens it, so it can choose which user opens it.
+    OpenLicence,
 }
 
 /// The phase the installer's own log has reached.

@@ -172,3 +172,13 @@ fn focus_starts_on_the_primary_button_so_space_presses_it(cx: &mut TestAppContex
         "Enter on the focused Install runs it once: {jobs:?}"
     );
 }
+
+#[gpui_kit::test]
+fn open_licence_opens_the_apache_licence_url(cx: &mut TestAppContext) {
+    let mut w = open(cx);
+    w.act(SetupAction::OpenLicence);
+    let view = w.view.clone();
+    let url =
+        w.cx.update(|_, cx| view.read(cx).strings.apache_url.clone());
+    assert_eq!(w.cx.opened_url().as_deref(), Some(&*url));
+}

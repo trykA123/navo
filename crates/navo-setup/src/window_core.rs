@@ -50,6 +50,8 @@ pub enum Out {
     /// Open the native folder picker.
     Browse,
     OpenFolder(PathBuf),
+    /// Open the Apache licence page in the browser.
+    OpenLicence,
     Copy(String),
     /// Append one line to a log file; a write error never stops the wizard.
     Log {
@@ -124,6 +126,7 @@ impl Shell {
                 return vec![Out::OpenFolder(self.flow.folder().path().to_owned())];
             }
             SetupAction::CopyDetails => return vec![Out::Copy(self.view().details)],
+            SetupAction::OpenLicence => return vec![Out::OpenLicence],
         };
         self.handle(event)
     }
