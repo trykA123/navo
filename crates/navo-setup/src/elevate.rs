@@ -2,6 +2,7 @@
 //! codes. Built on every OS; the Windows probe (E4–E8) launches, runs and verifies with it.
 
 use std::ffi::OsString;
+use std::io;
 use std::path::PathBuf;
 
 use crate::placement::FileId;
@@ -90,6 +91,21 @@ pub fn helper_command_line(args: &HelperArgs) -> Option<String> {
         "{HELPER_FLAG} --root \"{root}\" --for {} --parent {:016x}:{:032x}",
         args.user_sid, args.parent.volume, args.parent.id
     ))
+}
+
+/// The helper's parameters for `ShellExecuteExW`: `helper_command_line` as NUL-terminated UTF-16.
+/// Fails closed with `InvalidInput`, before any prompt, when the root is refused, the SID is not a
+/// user SID (it is written unquoted) or a NUL would cut the line short.
+pub fn launch_parameters(args: &HelperArgs) -> io::Result<Vec<u16>> {
+    let refused = |what| io::Error::new(io::ErrorKind::InvalidInput, what);
+    if !valid_user_sid(&args.user_sid) {
+        return Err(refused("the helper's user SID is not a user SID"));
+    }
+    let line = helper_command_line(args).ok_or_else(|| refused("the helper refuses this root"))?;
+    if line.contains('\0') {
+        return Err(refused("the helper's command line holds a NUL"));
+    }
+    Ok(line.encode_utf16().chain(Some(0)).collect())
 }
 
 /// Parses the six arguments after `HELPER_FLAG`: `--root <path> --for <sid> --parent <vol>:<id>`.

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use super::{
     AceView, HELPER_FLAG, HelperArgs, HelperExit, admin_descriptor_ok, admin_root_sddl,
-    helper_command_line, parse_helper_args, valid_user_sid,
+    helper_command_line, launch_parameters, parse_helper_args, valid_user_sid,
 };
 use crate::placement::FileId;
 
@@ -354,5 +354,27 @@ fn helper_exit_codes_round_trip() {
     }
     for code in [1, 19, 26, 255, u32::MAX] {
         assert_eq!(HelperExit::from_code(code), None, "{code}");
+    }
+}
+
+#[test]
+fn launch_parameters_are_the_command_line_nul_terminated() {
+    let args = sample(r"C:\Program Files\Navo App");
+    let line = helper_command_line(&args).expect("valid root");
+    let wide = launch_parameters(&args).expect("valid arguments");
+    assert_eq!(
+        wide.split_last(),
+        Some((&0, line.encode_utf16().collect::<Vec<_>>().as_slice()))
+    );
+}
+
+#[test]
+fn launch_parameters_refuse_before_any_prompt() {
+    let mut bad_sid = sample(r"C:\Navo");
+    bad_sid.user_sid = format!("{USER} --root C:\\Windows");
+    let refused = [sample(r"C:\Navo\..\Windows"), sample("C:\\Na\0vo"), bad_sid];
+    for args in refused {
+        let error = launch_parameters(&args).expect_err("refused");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput, "{args:?}");
     }
 }
