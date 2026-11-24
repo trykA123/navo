@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use navo_cache::{CacheKeys, ListingCache};
@@ -485,4 +485,46 @@ fn a_batch_over_the_patch_limit_drops_the_folder_profile_and_its_children() {
     let big = WatchEvent::Changed((0..=PATCH_LIMIT).map(created).collect());
     browser.forget_profiles(&home, &big);
     assert!(browser.profiles().is_empty());
+}
+
+/// Holds every waker call while armed; dropping it releases them, also when a test unwinds.
+struct HeldWake(Arc<AtomicBool>);
+
+impl Drop for HeldWake {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+#[test]
+fn a_failure_behind_a_full_watch_queue_still_installs_the_fallback() {
+    let fs = fake();
+    let (armed, entered) = (
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(AtomicUsize::new(0)),
+    );
+    let (held, inside) = (Arc::clone(&armed), Arc::clone(&entered));
+    let wake = Arc::new(move || {
+        if held.load(Ordering::Acquire) {
+            inside.fetch_add(1, Ordering::AcqRel);
+        }
+        while held.load(Ordering::Acquire) {
+            std::thread::yield_now();
+        }
+    });
+    let mut browser = Browser::new(AppState::new(fs.location("home")), fs.clone(), wake);
+    browser.set_listing_cache(ListingCache::default(), CacheKeys::default());
+    browser.start();
+    settle(&mut browser);
+    let home = fs.location("home");
+    let release = HeldWake(Arc::clone(&armed));
+    armed.store(true, Ordering::Release);
+    fs.add_file("home/first.txt", 1);
+    assert!(eventually(|| entered.load(Ordering::Acquire) > 0));
+    for index in 0..5_000 {
+        fs.add_file(&format!("home/f{index}.txt"), 1);
+    }
+    fs.fail_watchers("home", FsErrorKind::NetworkLost);
+    drop(release);
+    assert!(wait_until(&mut browser, WITHIN, |b| is_fallback(b, &home)));
 }

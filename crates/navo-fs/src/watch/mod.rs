@@ -1,9 +1,9 @@
 mod batch;
 mod translate;
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -42,6 +42,8 @@ pub(crate) enum Raw {
     Change(WatchChange),
     Overflow,
     Failed(FsError),
+    /// Carries nothing: it only makes the debouncer read `Signals`.
+    Wake,
     Stop,
 }
 
@@ -52,6 +54,14 @@ struct Signals {
     lost: AtomicBool,
     /// The watch is dropping; the debouncer returns at its next wake-up.
     stop: AtomicBool,
+    /// The latest failure that met a full queue; the debouncer delivers it at its next wake-up.
+    failed: Mutex<Option<FsError>>,
+}
+
+impl Signals {
+    fn failure(&self) -> MutexGuard<'_, Option<FsError>> {
+        self.failed.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -83,11 +93,16 @@ impl RawSender {
         self.send(Raw::Overflow)
     }
 
-    /// A failure that meets a full queue arrives as an overflow; `is_live` still turns false.
+    /// A failure that meets a full queue waits in its own slot, so it is never lost.
     pub(crate) fn failed(&self, error: FsError) {
         self.count.fetch_add(1, Ordering::Release);
         self.live.store(false, Ordering::Release);
-        let _ = self.send(Raw::Failed(error));
+        if let Err(TrySendError::Full(Raw::Failed(error))) =
+            self.sender.try_send(Raw::Failed(error))
+        {
+            *self.signals.failure() = Some(error);
+            self.wake();
+        }
     }
 
     /// Queues without blocking the OS watcher thread; false once the debouncer is gone.
@@ -96,12 +111,17 @@ impl RawSender {
             Ok(()) => true,
             Err(TrySendError::Full(_)) => {
                 self.signals.lost.store(true, Ordering::Release);
-                // Wakes a debouncer that drained the queue before the flag was set.
-                let _ = self.sender.try_send(Raw::Overflow);
+                self.wake();
                 true
             }
             Err(TrySendError::Disconnected(_)) => false,
         }
+    }
+
+    /// Wakes a debouncer that drained the queue before a signal was set; the wake itself
+    /// changes nothing, so a loss the debouncer already took never relists twice.
+    fn wake(&self) {
+        let _ = self.sender.try_send(Raw::Wake);
     }
 }
 
@@ -202,12 +222,12 @@ impl Watch {
 }
 
 impl Drop for Watch {
-    // The backend goes first so no new notification races the stop; nothing here blocks on a full
-    // queue, because the debouncer checks `stop` after every message it takes.
+    // Nothing here blocks on a full queue: the debouncer checks `stop` after every message it
+    // takes. Later notifications from the backend are ignored once `stop` is set.
     fn drop(&mut self) {
-        drop(self.backend.take());
         self.signals.stop.store(true, Ordering::Release);
         let _ = self.raw.try_send(Raw::Stop);
+        drop(self.backend.take());
         if let Some(debouncer) = self.debouncer.take() {
             let _ = debouncer.join();
         }
@@ -223,12 +243,9 @@ fn debounce(events: &Receiver<Raw>, mut sink: WatchSink, mut batch: Batch, signa
         match next {
             Ok(Raw::Change(change)) => batch.push(change, Instant::now()),
             Ok(Raw::Overflow) => batch.overflow(Instant::now()),
-            Ok(Raw::Failed(error)) => {
-                batch.take().into_iter().for_each(&mut sink);
-                sink(WatchEvent::Failed(error));
-            }
+            Ok(Raw::Failed(error)) => fail(&mut sink, &mut batch, error),
             Ok(Raw::Stop) | Err(RecvTimeoutError::Disconnected) => return,
-            Err(RecvTimeoutError::Timeout) => {}
+            Ok(Raw::Wake) | Err(RecvTimeoutError::Timeout) => {}
         }
         if signals.stop.load(Ordering::Acquire) {
             return;
@@ -236,10 +253,20 @@ fn debounce(events: &Receiver<Raw>, mut sink: WatchSink, mut batch: Batch, signa
         if signals.lost.swap(false, Ordering::AcqRel) {
             batch.overflow(Instant::now());
         }
+        let failure = signals.failure().take();
+        if let Some(error) = failure {
+            fail(&mut sink, &mut batch, error);
+        }
         if let Some(event) = batch.take_due(Instant::now()) {
             sink(event);
         }
     }
+}
+
+/// Flushes the pending batch, then reports the failure.
+fn fail(sink: &mut WatchSink, batch: &mut Batch, error: FsError) {
+    batch.take().into_iter().for_each(&mut *sink);
+    sink(WatchEvent::Failed(error));
 }
 
 #[cfg(test)]

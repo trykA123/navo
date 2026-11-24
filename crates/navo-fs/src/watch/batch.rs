@@ -5,13 +5,16 @@ use navo_core::ProviderPath;
 
 use super::{WATCH_MAX_DELAY, WATCH_QUIET, WatchChange, WatchEvent};
 
-/// Paths one batch buffers before it gives up and reports an overflow (the folder is relisted).
+/// Path endpoints one batch buffers (a rename counts two) before it reports an overflow (the
+/// folder is relisted). Removed entries keep their slot, so slots share the same bound.
 const MAX_PATHS: usize = 4_096;
 
 #[derive(Default)]
 pub(super) struct Batch {
     changes: Vec<Option<WatchChange>>,
     latest: HashMap<ProviderPath, usize>,
+    /// Path endpoints the live changes hold.
+    paths: usize,
     drops_passing: bool,
     overflowed: bool,
     first: Option<Instant>,
@@ -39,24 +42,32 @@ impl Batch {
         };
         let is_new = matches!(earlier, WatchChange::Created(_));
         let was_renamed = matches!(earlier, WatchChange::Renamed { .. });
+        let earlier_paths = ends(earlier);
         if matches!(change, WatchChange::Modified(_)) && (is_new || was_renamed) {
             return;
         }
         if self.drops_passing && is_new && matches!(change, WatchChange::Removed(_)) {
             self.latest.remove(name_of(&change));
             self.changes[at] = None;
+            self.paths = self.paths.saturating_sub(earlier_paths);
             return;
         }
         if was_renamed {
             return self.append(change, now);
         }
+        self.paths = self.paths.saturating_sub(earlier_paths) + ends(&change);
+        if self.paths > MAX_PATHS {
+            return self.overflow(now);
+        }
         self.changes[at] = Some(change);
     }
 
     fn append(&mut self, change: WatchChange, now: Instant) {
-        if self.changes.len() >= MAX_PATHS {
+        let paths = self.paths + ends(&change);
+        if paths > MAX_PATHS || self.changes.len() >= MAX_PATHS {
             return self.overflow(now);
         }
+        self.paths = paths;
         self.latest
             .insert(name_of(&change).clone(), self.changes.len());
         self.changes.push(Some(change));
@@ -66,6 +77,7 @@ impl Batch {
         self.overflowed = true;
         self.changes = Vec::new();
         self.latest = HashMap::new();
+        self.paths = 0;
         self.touch(now);
     }
 
@@ -97,6 +109,14 @@ impl Batch {
     fn touch(&mut self, now: Instant) {
         self.first.get_or_insert(now);
         self.last = Some(now);
+    }
+}
+
+fn ends(change: &WatchChange) -> usize {
+    if matches!(change, WatchChange::Renamed { .. }) {
+        2
+    } else {
+        1
     }
 }
 

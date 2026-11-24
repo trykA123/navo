@@ -334,12 +334,14 @@ fn a_batch_over_the_path_cap_overflows() {
 }
 
 /// A watch whose sink blocks on its first event until the gate sender drops.
+///
+/// `gate` is declared first so a failed assert drops it before `watch` joins the debouncer.
 struct Gated {
+    gate: Option<mpsc::Sender<()>>,
     watch: Watch,
     raw: RawSender,
     events: mpsc::Receiver<WatchEvent>,
     entered: mpsc::Receiver<()>,
-    gate: Option<mpsc::Sender<()>>,
 }
 
 /// Starts a gated watch; with `gate_in_backend` only dropping the backend releases the sink.
@@ -364,11 +366,11 @@ fn gated_watch(gate_in_backend: bool) -> Gated {
     })
     .unwrap();
     Gated {
+        gate,
         watch,
         raw: raw.unwrap(),
         events,
         entered,
-        gate,
     }
 }
 
@@ -399,6 +401,8 @@ fn a_flood_against_a_stalled_sink_never_blocks_and_ends_in_one_overflow() {
     assert_eq!(gated.events.try_iter().count(), 0);
 }
 
+/// The sink stays blocked until the backend drops, which `Drop` does only after its stop attempt,
+/// so that attempt always meets the full queue.
 #[test]
 fn dropping_a_watch_with_a_full_channel_returns() {
     let gated = gated_watch(true);
@@ -413,4 +417,45 @@ fn dropping_a_watch_with_a_full_channel_returns() {
     });
     assert_eq!(dropped.recv_timeout(Duration::from_secs(30)), Ok(()));
     assert!(!gated.raw.change(created("after")));
+}
+
+#[test]
+fn a_failure_against_a_full_queue_still_reaches_the_sink() {
+    let mut gated = gated_watch(false);
+    gated.raw.change(created("first"));
+    gated.entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(flood(gated.raw.clone(), 5_000), Some(true));
+    let error = FsError::new(FsErrorKind::NetworkLost);
+    gated.raw.failed(error.clone());
+    drop(gated.gate.take());
+    let wait = Duration::from_secs(5);
+    let failed = std::iter::from_fn(|| gated.events.recv_timeout(wait).ok())
+        .find(|event| matches!(event, WatchEvent::Failed(_)));
+    assert_eq!(failed, Some(WatchEvent::Failed(error)));
+}
+
+#[test]
+fn a_wake_after_its_loss_was_consumed_adds_no_second_overflow() {
+    let (_watch, raw, events, _) = manual_watch();
+    raw.signals.lost.store(true, Ordering::Release);
+    raw.change(created("a"));
+    let wait = Duration::from_secs(5);
+    assert_eq!(events.recv_timeout(wait), Ok(WatchEvent::Overflow));
+    raw.wake();
+    let quiet = WATCH_MAX_DELAY + WATCH_QUIET;
+    assert_eq!(
+        events.recv_timeout(quiet),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    );
+}
+
+#[test]
+fn a_batch_counts_both_ends_of_a_rename_against_the_cap() {
+    let start = Instant::now();
+    let mut batch = Batch::default();
+    for index in 0..2_100 {
+        let (from, to) = (name(&format!("a{index}")), name(&format!("b{index}")));
+        batch.push(WatchChange::Renamed { from, to }, start);
+    }
+    assert_eq!(batch.take(), Some(WatchEvent::Overflow));
 }
