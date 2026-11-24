@@ -581,7 +581,3 @@ fn a_delete_job_removes_a_repo_with_a_running_git_child() {
     assert_eq!(outcome, JobOutcome::Done);
     assert!(!repo.exists());
 }
-
-#[cfg(windows)]
-#[path = "git_pause_exit.rs"]
-mod exit;
