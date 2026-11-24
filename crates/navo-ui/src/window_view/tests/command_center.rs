@@ -18,6 +18,7 @@ mod content;
 mod late;
 mod modes;
 mod open;
+mod press_cost;
 mod user;
 
 struct Fixed(Vec<Hit>);

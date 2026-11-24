@@ -3,6 +3,7 @@ use crate::prelude::*;
 mod commands_source;
 pub(crate) mod content_source;
 mod context_name;
+mod places;
 pub use content_source::{ContentQuery, ContentSource};
 mod file_sources;
 pub mod flights;

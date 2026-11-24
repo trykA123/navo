@@ -12,6 +12,7 @@ use navo_index::pipe::{self as protocol, Reply};
 use navo_index::table::Flags;
 
 use super::file_sources::Frecents;
+use super::places::Places;
 use super::rank;
 use super::{Cancel, Group, Hit, HitSink, Request, ResultSource, Scopes, Target, Term};
 pub use metadata::IndexMetadata;
@@ -304,22 +305,23 @@ impl ResultSource for IndexSource {
     }
 }
 
+/// Keeps one index hit per place, the best-scored one, at the first place's position.
 fn deduplicate(hits: Vec<protocol::Hit>) -> Vec<protocol::Hit> {
-    let mut places: Vec<(Location, protocol::Hit)> = Vec::new();
+    let mut places: Places<usize> = Places::default();
+    let mut kept: Vec<protocol::Hit> = Vec::new();
     for hit in hits {
         let Ok(location) = Location::new(&hit.path) else {
             continue;
         };
-        if let Some((_, kept)) = places
-            .iter_mut()
-            .find(|(place, _)| place.same_place(&location))
-        {
-            if hit.score > kept.score {
-                *kept = hit;
+        let key = places.key(&location);
+        if let Some(best) = places.find(&key).and_then(|at| kept.get_mut(at)) {
+            if hit.score > best.score {
+                *best = hit;
             }
             continue;
         }
-        places.push((location, hit));
+        places.insert(key, kept.len());
+        kept.push(hit);
     }
-    places.into_iter().map(|(_, hit)| hit).collect()
+    kept
 }

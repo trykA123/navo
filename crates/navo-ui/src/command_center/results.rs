@@ -4,6 +4,7 @@ use gpui_kit::SharedString;
 use navo_core::Location;
 use navo_diag::components::{MemoryUse, Tally};
 
+use super::places::Places;
 use super::query::Scope;
 use super::source::{Capped, Group, Hit, Offline, Target};
 
@@ -110,45 +111,48 @@ fn place_of(hit: &Hit) -> Option<&Location> {
     }
 }
 
-fn one_per_place(mut hits: Vec<Hit>) -> Vec<Hit> {
-    let of = |hits: &[Hit], source: &str| -> Vec<usize> {
-        (0..hits.len())
-            .filter(|&at| hits[at].source == source && place_of(&hits[at]).is_some())
-            .collect()
-    };
-    let mut dropped = vec![false; hits.len()];
-    let mut absorb = |hits: &mut [Hit], kept: &[usize], at: usize| {
-        let winner = kept.iter().copied().find(|&win| {
-            matches!((place_of(&hits[win]), place_of(&hits[at])), (Some(a), Some(b)) if a.same_place(b))
-        });
-        if let Some(win) = winner {
-            hits[win].score = hits[win].score.max(hits[at].score);
-            dropped[at] = true;
-        }
-        winner.is_none()
-    };
-    let mut kept: Vec<usize> = Vec::new();
-    for at in of(&hits, "tabs") {
-        if absorb(&mut hits, &kept, at) {
-            kept.push(at);
-        }
-    }
-    let recents: Vec<usize> = of(&hits, "recent")
-        .into_iter()
-        .filter(|&at| absorb(&mut hits, &kept, at))
-        .collect();
-    kept.extend(recents);
-    let paths: Vec<usize> = of(&hits, "paths")
-        .into_iter()
-        .filter(|&at| absorb(&mut hits, &kept, at))
-        .collect();
-    kept.extend(paths);
-    for source in ["here", "index"] {
-        for at in of(&hits, source) {
-            if absorb(&mut hits, &kept, at) {
-                kept.push(at);
+/// When a source's new places join the kept set: at once (they absorb each other) or after the
+/// whole source (recents and typed paths never absorb their own kind).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Keep {
+    AtOnce,
+    AfterSource,
+}
+
+const PASSES: [(&str, Keep); 5] = [
+    ("tabs", Keep::AtOnce),
+    ("recent", Keep::AfterSource),
+    ("paths", Keep::AfterSource),
+    ("here", Keep::AtOnce),
+    ("index", Keep::AtOnce),
+];
+
+/// Keeps one hit per place, in source priority order; a dropped hit lends its score to the
+/// earliest kept hit of the same place. Linear: each place is hashed once.
+pub(super) fn one_per_place(mut hits: Vec<Hit>) -> Vec<Hit> {
+    let mut places: Places<usize> = Places::default();
+    let mut absorbed: Vec<(usize, usize)> = Vec::new();
+    for (source, keep) in PASSES {
+        let mut pending = Vec::new();
+        for (at, hit) in hits.iter().enumerate() {
+            let Some(location) = place_of(hit).filter(|_| hit.source == source) else {
+                continue;
+            };
+            let key = places.key(location);
+            match places.find(&key) {
+                Some(winner) => absorbed.push((winner, at)),
+                None if keep == Keep::AtOnce => places.insert(key, at),
+                None => pending.push((key, at)),
             }
         }
+        for (key, at) in pending {
+            places.insert(key, at);
+        }
+    }
+    let mut dropped = vec![false; hits.len()];
+    for (winner, at) in absorbed {
+        hits[winner].score = hits[winner].score.max(hits[at].score);
+        dropped[at] = true;
     }
     let mut at = 0;
     hits.retain(|_| {

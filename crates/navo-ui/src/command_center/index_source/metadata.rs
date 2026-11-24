@@ -5,6 +5,7 @@ use navo_core::{FsError, FsErrorKind, Location};
 use navo_fs::FsEntry;
 
 use crate::command_center::flights::{Answer, Ask, Flights, Rules};
+use crate::command_center::places::Places;
 use crate::command_center::{Cancel, Hit, Target};
 
 pub type LoadMetadata = Arc<dyn Fn(&Location) -> Result<FsEntry, FsError> + Send + Sync>;
@@ -52,28 +53,35 @@ impl IndexMetadata {
     }
 }
 
+/// Metadata of the index hits already shown, looked up by place in one hash step.
 pub(super) struct Shown {
     opened: Instant,
-    entries: Mutex<Vec<(Location, FsEntry)>>,
+    entries: Mutex<ShownEntries>,
+}
+
+/// The loaded entries and a place index into them; the first entry of a place wins.
+#[derive(Default)]
+struct ShownEntries {
+    places: Places<usize>,
+    entries: Vec<FsEntry>,
 }
 
 impl Default for Shown {
     fn default() -> Self {
         Self {
             opened: Instant::now(),
-            entries: Mutex::new(Vec::new()),
+            entries: Mutex::new(ShownEntries::default()),
         }
     }
 }
 
 impl Shown {
+    /// Returns the loaded metadata of the same place as `location`, if any.
     pub(super) fn get(&self, location: &Location) -> Option<FsEntry> {
-        self.entries
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .iter()
-            .find(|(path, _)| path.same_place(location))
-            .map(|(_, entry)| entry.clone())
+        let shown = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+        let key = shown.places.key(location);
+        let at = shown.places.find(&key)?;
+        shown.entries.get(at).cloned()
     }
 
     pub(super) fn load(&self, loader: &IndexMetadata, hits: &[Hit], cancel: &Cancel) {
@@ -88,10 +96,11 @@ impl Shown {
                 continue;
             }
             if let Some(entry) = loader.load(location, self.opened, cancel) {
-                self.entries
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .push((location.clone(), entry));
+                let mut shown = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+                let key = shown.places.key(location);
+                let at = shown.entries.len();
+                shown.places.insert(key, at);
+                shown.entries.push(entry);
             }
         }
     }
