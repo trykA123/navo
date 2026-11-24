@@ -35,7 +35,7 @@ pub use helper_job::HelperLimits;
 #[cfg(windows)]
 pub use helper_job::{
     ConfinedChild, ConfinedProcess, ContainerError, HelperJob, MissingFile, adopt_shared_file,
-    confine_helper, share_read_handle, spawn_confined,
+    confine_helper, remove_pdf_container_profile, share_read_handle, spawn_confined,
 };
 #[cfg(windows)]
 pub use kill_job::{KillJob, spawn_in_kill_job};

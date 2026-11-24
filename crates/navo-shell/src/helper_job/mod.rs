@@ -24,6 +24,9 @@ mod container_error;
 mod container_win;
 
 #[cfg(windows)]
+pub use container_win::remove_pdf_container_profile;
+
+#[cfg(windows)]
 mod handle_win;
 
 #[cfg(windows)]

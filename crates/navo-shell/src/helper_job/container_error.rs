@@ -96,6 +96,26 @@ impl fmt::Display for ContainerError {
     }
 }
 
+/// HRESULTs `DeleteAppContainerProfile` returns when no profile is left: `S_OK`,
+/// `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)`, `HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)` and
+/// `E_INVALIDARG` (Windows 10/11 answer for a missing profile under a valid name).
+const PROFILE_GONE: [i32; 4] = [
+    0,
+    0x8007_0490_u32 as i32,
+    0x8007_0002_u32 as i32,
+    0x8007_0057_u32 as i32,
+];
+
+/// Maps the HRESULT of `DeleteAppContainerProfile` to the removal result: `Ok` when nothing is
+/// left, `Err(hr)` for any other code (access denied, a locked profile).
+pub(super) fn profile_removal(hr: i32) -> Result<(), i32> {
+    if PROFILE_GONE.contains(&hr) {
+        Ok(())
+    } else {
+        Err(hr)
+    }
+}
+
 impl std::error::Error for ContainerError {}
 
 impl From<ContainerError> for io::Error {
@@ -168,5 +188,21 @@ mod tests {
         assert_eq!(inner, Some(&typed));
         assert!(error.to_string().contains("OpenFile"), "{error}");
         assert!(error.to_string().contains("pdfium.dll"), "{error}");
+    }
+
+    #[test]
+    fn a_removed_or_missing_profile_is_ok_and_other_codes_are_errors() {
+        assert_eq!(profile_removal(0), Ok(()));
+        assert_eq!(profile_removal(0x8007_0490_u32 as i32), Ok(()));
+        assert_eq!(profile_removal(0x8007_0002_u32 as i32), Ok(()));
+        assert_eq!(profile_removal(0x8007_0057_u32 as i32), Ok(()));
+        for hr in [
+            1,
+            0x8007_0005_u32 as i32,
+            0x8007_0020_u32 as i32,
+            0x8000_4005_u32 as i32,
+        ] {
+            assert_eq!(profile_removal(hr), Err(hr), "{hr:#x}");
+        }
     }
 }

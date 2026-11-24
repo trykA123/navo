@@ -1,14 +1,16 @@
 //! Puts the PDF helper in its AppContainer at spawn (S2c2): registers the container's profile,
 //! grants the helper exe and its pdfium.dll to the container SID, then adds
 //! `SECURITY_CAPABILITIES` (zero capabilities) to the spawn's attribute list. Every failure is a
-//! `ContainerError` and no process is created.
+//! `ContainerError` and no process is created. Uninstall removes the profile again (U3a).
 
 use std::io;
 use std::mem::size_of;
 use std::path::Path;
 use std::ptr;
 
-use windows_sys::Win32::Security::Isolation::CreateAppContainerProfile;
+use windows_sys::Win32::Security::Isolation::{
+    CreateAppContainerProfile, DeleteAppContainerProfile,
+};
 use windows_sys::Win32::Security::{FreeSid, PSID, SECURITY_CAPABILITIES};
 use windows_sys::Win32::System::Threading::{
     PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, UpdateProcThreadAttribute,
@@ -16,7 +18,7 @@ use windows_sys::Win32::System::Threading::{
 
 use super::appcontainer_policy::{CONTAINER_NAME, GrantError, GrantStep, grant_helper_files};
 use super::appcontainer_win::{ContainerSid, grant_read_execute};
-use super::container_error::ContainerError;
+use super::container_error::{ContainerError, profile_removal};
 use super::spawn_win::AttributeList;
 
 /// The helper's AppContainer: its SID and the capabilities value Windows reads during
@@ -107,6 +109,15 @@ fn register_profile() -> Result<(), GrantError> {
     }
 }
 
+/// Deletes the `CONTAINER_NAME` AppContainer profile (uninstall). `Ok` when no profile is left,
+/// also when none existed; fails with the HRESULT of any other answer.
+pub fn remove_pdf_container_profile() -> Result<(), i32> {
+    let name: Vec<u16> = CONTAINER_NAME.encode_utf16().chain([0]).collect();
+    // SAFETY: `name` is NUL-terminated and lives for the call.
+    let hr = unsafe { DeleteAppContainerProfile(name.as_ptr()) };
+    profile_removal(hr)
+}
+
 /// Logs a failed grant step with the container SID (for the ACL fix) and wraps it.
 fn refused(error: GrantError, sid: Option<&ContainerSid>) -> ContainerError {
     let error = ContainerError::grant(error);
@@ -118,4 +129,23 @@ fn refused(error: GrantError, sid: Option<&ContainerSid>) -> ContainerError {
 /// The SID as `S-1-15-2-…`, or the reason it cannot be formatted.
 fn sid_text(sid: &ContainerSid) -> String {
     sid.to_sddl().unwrap_or_else(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_registered_profile_is_removed_twice_in_a_row() {
+        register_profile().unwrap();
+        assert_eq!(remove_pdf_container_profile(), Ok(()));
+        let name: Vec<u16> = CONTAINER_NAME.encode_utf16().chain([0]).collect();
+        // SAFETY: `name` is NUL-terminated and lives for the call.
+        let hr = unsafe { DeleteAppContainerProfile(name.as_ptr()) };
+        eprintln!(
+            "second DeleteAppContainerProfile HRESULT: {:#010x}",
+            hr as u32
+        );
+        assert_eq!(profile_removal(hr), Ok(()), "{:#010x}", hr as u32);
+    }
 }

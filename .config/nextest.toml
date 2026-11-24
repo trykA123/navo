@@ -1,4 +1,5 @@
 [test-groups]
+appcontainer = { max-threads = 1 }
 clipboard = { max-threads = 1 }
 process = { max-threads = 1 }
 shell = { max-threads = 1 }
@@ -25,6 +26,11 @@ retries = 2
 [[profile.default.overrides]]
 filter = "package(navo-app) & (test(/^index_service::timing_tests::/) | test(/^jobs::profile::timing_tests::/))"
 test-group = "timing"
+
+# U3a's test deletes the PDF helper's AppContainer profile; a confined spawn needs it to exist.
+[[profile.default.overrides]]
+filter = "package(navo-shell) & (test(/^helper_job::tests::spawn_confined/) | test(/^helper_job::container_win::tests::/))"
+test-group = "appcontainer"
 
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 5 }
