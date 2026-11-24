@@ -12,7 +12,6 @@ use std::mem::size_of;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
-use navo_core::brand;
 use windows_sys::Win32::Foundation::{CloseHandle, E_FAIL, HANDLE, INVALID_HANDLE_VALUE, TRUE};
 use windows_sys::Win32::Globalization::{CSTR_EQUAL, CompareStringOrdinal};
 use windows_sys::Win32::Storage::FileSystem::{
@@ -25,87 +24,27 @@ use windows_sys::Win32::Storage::FileSystem::{
 use windows_sys::Win32::System::Com::CoTaskMemFree;
 use windows_sys::Win32::System::SystemServices::FILE_CS_FLAG_CASE_SENSITIVE_DIR;
 use windows_sys::Win32::UI::Shell::{
-    FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads, FOLDERID_LocalAppData,
-    FOLDERID_LocalAppDataLow, FOLDERID_Music, FOLDERID_Pictures, FOLDERID_Profile,
-    FOLDERID_ProgramData, FOLDERID_ProgramFiles, FOLDERID_ProgramFilesCommon,
-    FOLDERID_ProgramFilesX86, FOLDERID_Public, FOLDERID_RoamingAppData, FOLDERID_SkyDrive,
-    FOLDERID_StartMenu, FOLDERID_Startup, FOLDERID_System, FOLDERID_UserProgramFiles,
-    FOLDERID_Videos, FOLDERID_Windows, KF_FLAG_CREATE, KF_FLAG_DEFAULT, KF_FLAG_DONT_VERIFY,
-    SHGetKnownFolderPath,
+    KF_FLAG_CREATE, KF_FLAG_DEFAULT, KF_FLAG_DONT_VERIFY, SHGetKnownFolderPath,
 };
 use windows_sys::core::{GUID, PWSTR};
 
-use crate::placement::{Chain, FileId, Link, NameEq, Protected, Refused};
+use crate::placement::{Chain, FileId, Link, NameEq, Protected};
 use crate::syntax::Candidate;
 
 #[cfg(test)]
 #[path = "chain_tests.rs"]
 mod tests;
 
+#[path = "refused.rs"]
+mod refused;
+pub use refused::refused;
+
 /// Win32 `HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)`.
 const HRESULT_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32;
-
-/// Velopack's pack id, which is also the legacy root folder's name.
-const NAVO_APP_ROOT: &str = "NavoApp";
 
 /// Resolves the existing ancestors of a candidate and the names Setup would create.
 pub fn resolve_chain(candidate: &Candidate) -> io::Result<Chain> {
     resolve_path(candidate.path())
-}
-
-/// Builds the IW8a refused folders, anchoring absent folders at their nearest existing parent.
-pub fn refused() -> io::Result<Refused> {
-    let mut never_inside = Vec::new();
-    add_known(&mut never_inside, &FOLDERID_Windows, &[])?;
-    add_known(&mut never_inside, &FOLDERID_System, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFiles, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFilesX86, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFilesCommon, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramData, &[])?;
-    add_known(&mut never_inside, &FOLDERID_LocalAppData, &[brand::NAME])?;
-    add_known(&mut never_inside, &FOLDERID_RoamingAppData, &[brand::NAME])?;
-    add_known(
-        &mut never_inside,
-        &FOLDERID_LocalAppData,
-        &[brand::LEGACY_NAME],
-    )?;
-    add_known(
-        &mut never_inside,
-        &FOLDERID_RoamingAppData,
-        &[brand::LEGACY_NAME],
-    )?;
-    add_known(&mut never_inside, &FOLDERID_SkyDrive, &[])?;
-    add_known(&mut never_inside, &FOLDERID_Startup, &[])?;
-
-    let mut never_equal = Vec::new();
-    add_known(&mut never_equal, &FOLDERID_Profile, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Desktop, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Documents, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Downloads, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Pictures, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Music, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Videos, &[])?;
-    add_known(&mut never_equal, &FOLDERID_LocalAppData, &[])?;
-    add_known(&mut never_equal, &FOLDERID_RoamingAppData, &[])?;
-    add_known(&mut never_equal, &FOLDERID_LocalAppDataLow, &[])?;
-    add_known_unverified(&mut never_equal, &FOLDERID_UserProgramFiles)?;
-    add_known(&mut never_equal, &FOLDERID_StartMenu, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Public, &[])?;
-
-    let mut fresh_only = Vec::new();
-    add_known(&mut fresh_only, &FOLDERID_LocalAppData, &[NAVO_APP_ROOT])?;
-
-    // Atom 0: the same two folders also refuse with NeedsAdministrator; E10 removes this group.
-    let mut admin_only = Vec::new();
-    add_known(&mut admin_only, &FOLDERID_ProgramFiles, &[])?;
-    add_known(&mut admin_only, &FOLDERID_ProgramFilesX86, &[])?;
-
-    Ok(Refused {
-        never_inside,
-        never_equal,
-        fresh_only,
-        admin_only,
-    })
 }
 
 /// Compares names with `CompareStringOrdinal` and case folding, as IW8a requires.
