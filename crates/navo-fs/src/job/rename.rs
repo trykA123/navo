@@ -115,7 +115,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
         progress: &mut **progress,
     };
     let first = match run::run(plan, &[], &mut inner) {
-        JobOutcome::Done => return RenameOutcome::Done,
+        JobOutcome::Done | JobOutcome::Kept { .. } => return RenameOutcome::Done,
         JobOutcome::Cancelled => None,
         JobOutcome::Failed { seq, error } => Some((seq, error)),
     };
@@ -141,7 +141,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
             (*ops, &tracking),
             (error, &done, first.as_ref().map(|(seq, _)| *seq)),
         ),
-        JobOutcome::Done | JobOutcome::Cancelled => match first {
+        JobOutcome::Done | JobOutcome::Cancelled | JobOutcome::Kept { .. } => match first {
             Some((seq, error)) => RenameOutcome::PutBack { seq, error },
             None => RenameOutcome::Cancelled,
         },

@@ -39,6 +39,8 @@ pub(in crate::compare::diff) fn run(
             }
             Ok(())
         }
+        // Only a move keeps its sources; a copy never ends this way.
+        JobOutcome::Kept { .. } => Err(CopyRefusal::Changed),
         JobOutcome::Failed { error, .. } if error.kind == FsErrorKind::ChangedOnDisk => {
             Err(CopyRefusal::Changed)
         }

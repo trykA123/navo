@@ -113,8 +113,8 @@ impl Runner<'_, '_, '_> {
         self.marks.failed(self.ctx.log, seq);
         if let Some(source) = self.job.removals.kept((seq, step), &error) {
             self.ctx.log.kept_source(&source);
-            self.kept.push(source.location);
-            self.note_failure(seq, error);
+            self.kept.push(source.location.clone());
+            self.sources.push(source);
             return;
         }
         if self.job.plan.kind == OpKind::Recycle {

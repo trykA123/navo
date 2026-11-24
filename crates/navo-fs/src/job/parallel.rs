@@ -11,7 +11,7 @@ use super::marks::{Marks, is_removal};
 use super::pool::{Event, Task, work};
 use super::remove::Removals;
 use super::run::{Job, apply, copier_of, counted, current_of, holds_kept, namespace_of, note_kept};
-use super::{DoneSet, Inputs, JobContext, JobOutcome, Progress, StepOutcome};
+use super::{DoneSet, Inputs, JobContext, JobOutcome, KeptSource, Progress, StepOutcome};
 
 mod events;
 
@@ -50,7 +50,9 @@ pub(super) fn run_with(
         }
     };
     let aside = Aside::new();
-    let removals = Removals::of(plan, ctx.ops);
+    let Some(removals) = Removals::of(plan, ctx.ops, (ctx.cancel, &mut *ctx.progress)) else {
+        return JobOutcome::Cancelled;
+    };
     let namespace = namespace_of(ctx);
     let job = Job {
         plan,
@@ -119,6 +121,8 @@ struct Runner<'p, 'c, 'a> {
     settled: u64,
     progress: Progress,
     kept: Vec<Location>,
+    /// The move sources kept in place, in the order they were reported.
+    sources: Vec<KeptSource>,
     marks: Marks,
     pauses: Option<Vec<crate::GitPauseGuard>>,
     failed: Option<(u32, FsError)>,
@@ -172,6 +176,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
             settled: 0,
             progress,
             kept: Vec::new(),
+            sources: Vec::new(),
             marks: Marks::new(plan.kind),
             pauses: Some(pauses),
             failed: None,
@@ -216,10 +221,7 @@ impl<'p, 'c, 'a> Runner<'p, 'c, 'a> {
         if self.cancelled {
             return JobOutcome::Cancelled;
         }
-        match self.failed.or(self.partial) {
-            Some((seq, error)) => JobOutcome::Failed { seq, error },
-            None => JobOutcome::Done,
-        }
+        super::run::ended(self.failed.or(self.partial), self.sources)
     }
 
     fn stopped(&mut self) -> bool {

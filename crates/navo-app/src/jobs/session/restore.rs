@@ -178,6 +178,7 @@ impl HeldUndo {
             JobOutcome::Done => Ok(StepOutcome::Done),
             JobOutcome::Failed { error, .. } => Err(error),
             JobOutcome::Cancelled => Err(FsError::new(FsErrorKind::Cancelled)),
+            JobOutcome::Kept { .. } => Err(FsError::new(FsErrorKind::ChangedOnDisk)),
         }
     }
 }

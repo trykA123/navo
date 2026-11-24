@@ -262,3 +262,27 @@ fn owned_copy_preserves_alternate_streams_before_source_removal() {
         b"alternate data"
     );
 }
+
+/// `/dev/null` belongs to root, so setting its times fails for any other user, like a mount
+/// that refuses `set_modified`.
+#[cfg(unix)]
+#[test]
+fn a_move_copy_goes_on_when_the_target_refuses_its_modified_time() {
+    use buffered::{Stamp, stamp_times};
+
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    std::fs::write(&source, b"bytes").unwrap();
+    let metadata = std::fs::metadata(&source).unwrap();
+    let refusing = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/null")
+        .unwrap();
+    if stamp_times(&refusing, &metadata, Stamp::Strict).is_ok() {
+        return; // root may set any file's times: this host cannot show the refusal.
+    }
+    assert!(
+        stamp_times(&refusing, &metadata, Stamp::BestEffort).is_ok(),
+        "a move to a mount that refuses times must copy as it did before move proofs"
+    );
+}

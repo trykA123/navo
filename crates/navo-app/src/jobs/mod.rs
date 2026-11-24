@@ -331,11 +331,14 @@ impl OpLog for JournalLog {
             JobOutcome::Done if self.undoing => JobState::Undone,
             _ if self.undoing => JobState::RestorePending,
             JobOutcome::Done => JobState::Done,
-            JobOutcome::Cancelled | JobOutcome::Failed { .. } if self.stranded => {
+            JobOutcome::Cancelled | JobOutcome::Failed { .. } | JobOutcome::Kept { .. }
+                if self.stranded =>
+            {
                 JobState::RestorePending
             }
             JobOutcome::Cancelled => JobState::Cancelled,
-            JobOutcome::Failed { .. } => JobState::Failed,
+            // A move that kept sources stays journaled as failed: recovery and undo treat it so.
+            JobOutcome::Failed { .. } | JobOutcome::Kept { .. } => JobState::Failed,
         };
         if let JobOutcome::Failed { seq, error } = outcome {
             tracing::warn!(
@@ -344,6 +347,13 @@ impl OpLog for JournalLog {
                 step = seq,
                 error = ?error.kind,
                 "job failed"
+            );
+        } else if let JobOutcome::Kept { sources } = outcome {
+            tracing::warn!(
+                job = self.job.0,
+                kind = self.kind,
+                kept = sources.len(),
+                "move kept sources"
             );
         } else {
             tracing::info!(

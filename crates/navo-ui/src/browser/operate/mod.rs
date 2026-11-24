@@ -354,6 +354,12 @@ impl Browser {
             Ok(JobOutcome::Done) => JobStatus::Done,
             Ok(JobOutcome::Cancelled) => JobStatus::Cancelled,
             Ok(JobOutcome::Failed { error, .. }) => JobStatus::Failed(failure_text(&error)),
+            Ok(JobOutcome::Kept { sources }) => JobStatus::Failed(
+                sources
+                    .first()
+                    .map(|kept| kept.error().message())
+                    .unwrap_or_default(),
+            ),
             Err(message) => JobStatus::Failed(message),
         };
         let mut source_tab = None;

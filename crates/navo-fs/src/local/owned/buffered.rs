@@ -32,6 +32,10 @@ pub(super) fn copy_moved(
         copied_source(&input, &metadata).map_err(|failure| io_error(&failure, request.source))?;
     let mut output =
         open(&os_path(request.target)?).map_err(|failure| io_error(&failure, request.target))?;
+    let stamp = match request.created {
+        Some(_) => Stamp::Strict,
+        None => Stamp::BestEffort,
+    };
     if let Some(created) = request.created {
         let identity = identity::from_file(&output)
             .map_err(|failure| io_error(&failure, request.target))?
@@ -40,7 +44,9 @@ pub(super) fn copy_moved(
     }
     let total = copy_pump::pump(&mut input, &mut output, &mut control)
         .map_err(|failure| failure.located(request.source, request.target))?;
-    finish(&output, &metadata).map_err(|failure| io_error(&failure, request.target))?;
+    stamp_times(&output, &metadata, stamp)
+        .and_then(|()| output.sync_all())
+        .map_err(|failure| io_error(&failure, request.target))?;
     Ok((total, read))
 }
 
@@ -50,12 +56,30 @@ fn open(path: &std::path::Path) -> std::io::Result<File> {
     options.open(path)
 }
 
-fn finish(output: &File, metadata: &std::fs::Metadata) -> std::io::Result<()> {
+/// How a copy treats a target that refuses the source's modified time or read-only flag.
+#[derive(Clone, Copy)]
+pub(super) enum Stamp {
+    /// An owned copy fails, as it always did.
+    Strict,
+    /// A plain move's copy goes on, like the plain copy: some mounts refuse `set_modified`.
+    BestEffort,
+}
+
+/// Gives `output` the source's modified time and read-only flag, as `stamp` allows.
+pub(super) fn stamp_times(
+    output: &File,
+    metadata: &std::fs::Metadata,
+    stamp: Stamp,
+) -> std::io::Result<()> {
+    let allowed = |result: std::io::Result<()>| match stamp {
+        Stamp::Strict => result,
+        Stamp::BestEffort => Ok(()),
+    };
     if let Ok(modified) = metadata.modified() {
-        output.set_modified(modified)?;
+        allowed(output.set_modified(modified))?;
     }
     if metadata.permissions().readonly() {
-        output.set_permissions(metadata.permissions())?;
+        allowed(output.set_permissions(metadata.permissions()))?;
     }
-    output.sync_all()
+    Ok(())
 }

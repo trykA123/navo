@@ -122,7 +122,9 @@ fn roll_back_job(
     match outcome {
         JobOutcome::Done if settled.unresolved == 0 && log.refused == 0 => JobState::RolledBack,
         JobOutcome::Done => JobState::RestorePending,
-        JobOutcome::Cancelled | JobOutcome::Failed { .. } => unrestored(&held.files, renames),
+        JobOutcome::Cancelled | JobOutcome::Failed { .. } | JobOutcome::Kept { .. } => {
+            unrestored(&held.files, renames)
+        }
     }
 }
 

@@ -252,7 +252,7 @@ impl OpLog for Log {
             JobOutcome::Done => State::Done,
             _ if self.undoing => State::RestorePending,
             JobOutcome::Cancelled => State::Cancelled,
-            JobOutcome::Failed { .. } => State::Failed,
+            JobOutcome::Failed { .. } | JobOutcome::Kept { .. } => State::Failed,
         };
         Ok(())
     }

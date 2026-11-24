@@ -23,7 +23,7 @@ mod verify;
 mod workers;
 mod write_file;
 
-use navo_core::{FsError, Location, OpKind, OperationPlan};
+use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan};
 
 use crate::{CancelToken, FileIdentity, ProviderOps};
 use done_set::DoneSet;
@@ -44,7 +44,7 @@ pub enum StepOutcome {
     Failed,
 }
 
-/// Why a move left a source file in place after its copy landed.
+/// Why a move left a source file or folder in place after its copy landed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeptReason {
     /// The source changed after, or while, its copy read it.
@@ -53,16 +53,32 @@ pub enum KeptReason {
     Unconfirmed,
     /// The job resumed after the copy, so this run holds no proof of what the copy read.
     Resumed,
-    /// Removing the source failed for another reason.
+    /// Removing the source failed for another reason, such as a folder that is no longer empty.
     NotRemoved(FsError),
 }
 
-/// A move's source file that stayed in place: its copy landed and the original was kept.
+/// A move's source that stayed in place: its copy landed and the original was kept.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeptSource {
     pub seq: u32,
     pub location: Location,
     pub reason: KeptReason,
+}
+
+impl KeptSource {
+    /// The file error that stands for this kept source where a single error is shown.
+    #[must_use]
+    pub fn error(&self) -> FsError {
+        let kind = match &self.reason {
+            KeptReason::Changed => FsErrorKind::ChangedOnDisk,
+            KeptReason::Unconfirmed | KeptReason::Resumed => FsErrorKind::IdentityUnavailable,
+            KeptReason::NotRemoved(error) => return error.clone(),
+        };
+        FsError {
+            location: Some(self.location.clone()),
+            ..FsError::new(kind)
+        }
+    }
 }
 
 /// The result of undoing a Save plan: its steps and how many done steps had no held old file.
@@ -162,7 +178,7 @@ pub trait JobLog {
         Ok(())
     }
     fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
-    /// Reports a move's source kept in place; the move goes on and ends failed at the first one.
+    /// Reports a move's source kept in place; the move goes on and ends `JobOutcome::Kept`.
     fn kept_source(&mut self, _kept: &KeptSource) {}
     fn held_stranded(&mut self, _held: &HeldFile) {}
 }
@@ -225,7 +241,14 @@ fn moved_bytes(plan: &OperationPlan) -> u64 {
 pub enum JobOutcome {
     Done,
     Cancelled,
-    Failed { seq: u32, error: FsError },
+    Failed {
+        seq: u32,
+        error: FsError,
+    },
+    /// Every step ran, but a move kept these sources in place: it completed with problems.
+    Kept {
+        sources: Vec<KeptSource>,
+    },
 }
 
 pub struct JobContext<'a> {

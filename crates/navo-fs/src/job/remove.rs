@@ -3,8 +3,10 @@ use std::sync::{Mutex, PoisonError};
 
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
-use super::{KeptReason, KeptSource, StepOutcome};
-use crate::{CopiedSource, CopyControl, FileIdentity, FileIdentityKind, MoveCopy, ProviderOps};
+use super::{KeptReason, KeptSource, Progress, StepOutcome};
+use crate::{
+    CancelToken, CopiedSource, CopyControl, FileIdentity, FileIdentityKind, MoveCopy, ProviderOps,
+};
 
 /// What a move's copy learned about its source.
 #[derive(Clone, Copy)]
@@ -28,7 +30,13 @@ pub(super) struct Removals<'p> {
 }
 
 impl<'p> Removals<'p> {
-    pub(super) fn of(plan: &'p OperationPlan, ops: &dyn ProviderOps) -> Self {
+    /// Reads what a job's removals need before its first step; a move reads its folders' IDs
+    /// and reports each folder as current. `None` when the job was cancelled meanwhile.
+    pub(super) fn of(
+        plan: &'p OperationPlan,
+        ops: &dyn ProviderOps,
+        (cancel, progress): (&CancelToken, &mut dyn FnMut(&Progress)),
+    ) -> Option<Self> {
         let folders = match plan.kind {
             OpKind::Delete => plan
                 .steps
@@ -40,12 +48,12 @@ impl<'p> Removals<'p> {
                 .collect(),
             _ => HashSet::new(),
         };
-        Self {
+        Some(Self {
             kind: plan.kind,
             folders,
             copied: Mutex::new(HashMap::new()),
-            folder_ids: folder_ids(plan, ops),
-        }
+            folder_ids: folder_ids(plan, ops, (cancel, progress))?,
+        })
     }
 
     /// Removes an empty folder; a move first checks it is still the folder it started with.
@@ -114,21 +122,27 @@ impl<'p> Removals<'p> {
     }
 
     /// The move source a failed `step` keeps in place, and why; `None` for any other failure,
-    /// which stops the job as before.
+    /// which stops the job as before. A source folder that is gone still stops it.
     pub(super) fn kept(&self, (seq, step): (u32, &Step), error: &FsError) -> Option<KeptSource> {
         let location = match step {
             Step::RemoveFile { location } => location,
-            Step::RemoveFolder { location } if error.kind == FsErrorKind::ChangedOnDisk => location,
+            Step::RemoveFolder { location } if error.kind != FsErrorKind::NotFound => location,
             _ => return None,
         };
         if !self.moves() {
             return None;
         }
-        if matches!(step, Step::RemoveFolder { .. }) {
-            return Some(KeptSource {
+        let kept = |reason| {
+            Some(KeptSource {
                 seq,
                 location: location.clone(),
-                reason: KeptReason::Changed,
+                reason,
+            })
+        };
+        if matches!(step, Step::RemoveFolder { .. }) {
+            return kept(match error.kind {
+                FsErrorKind::ChangedOnDisk => KeptReason::Changed,
+                _ => KeptReason::NotRemoved(error.clone()),
             });
         }
         let reason = match (self.copied().get(location), error.kind) {
@@ -139,11 +153,7 @@ impl<'p> Removals<'p> {
             }
             (Some(Read::Proof(_)), _) => KeptReason::NotRemoved(error.clone()),
         };
-        Some(KeptSource {
-            seq,
-            location: location.clone(),
-            reason,
-        })
+        kept(reason)
     }
 
     fn copied(&self) -> std::sync::MutexGuard<'_, HashMap<Location, Read>> {
@@ -201,26 +211,36 @@ pub(super) fn remove(
     }
 }
 
-/// The native file ID of each folder a move removes, read once before any step runs.
+/// The native file ID of each folder a move removes, read once before any step runs. Each
+/// folder is reported as current, and Cancel stops the scan. A folder whose ID cannot be read is
+/// removed when empty, as before (it fails open, like a volume without IDs).
 fn folder_ids<'p>(
     plan: &'p OperationPlan,
     ops: &dyn ProviderOps,
-) -> HashMap<&'p Location, FileIdentity> {
+    (cancel, progress): (&CancelToken, &mut dyn FnMut(&Progress)),
+) -> Option<HashMap<&'p Location, FileIdentity>> {
+    let mut ids = HashMap::new();
     if plan.kind != OpKind::Move {
-        return HashMap::new();
+        return Some(ids);
     }
-    plan.steps
-        .iter()
-        .filter_map(|step| match step {
-            Step::RemoveFolder { location } => Some(location),
-            _ => None,
-        })
-        .filter_map(|location| {
-            let identity = ops.file_identity(location).ok().flatten()?;
-            let native = !matches!(identity.kind, FileIdentityKind::Fingerprint { .. });
-            native.then_some((location, identity))
-        })
-        .collect()
+    let mut seen = Progress::start(plan);
+    for step in &plan.steps {
+        let Step::RemoveFolder { location } = step else {
+            continue;
+        };
+        if cancel.is_cancelled() {
+            return None;
+        }
+        seen.current = Some(location.clone());
+        progress(&seen);
+        let Some(identity) = ops.file_identity(location).ok().flatten() else {
+            continue;
+        };
+        if !matches!(identity.kind, FileIdentityKind::Fingerprint { .. }) {
+            ids.insert(location, identity);
+        }
+    }
+    Some(ids)
 }
 
 fn already_gone(ops: &dyn ProviderOps, removals: &Removals<'_>, location: &Location) -> bool {

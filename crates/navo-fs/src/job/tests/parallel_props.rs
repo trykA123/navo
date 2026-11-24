@@ -262,10 +262,9 @@ proptest! {
             let (outcome, tree, left) = resumed(run, workers);
             prop_assert_eq!(left, Vec::<String>::new());
             if unproven_move(run) {
-                prop_assert_eq!(
-                    failure(&outcome).map(|(_, kind)| kind),
-                    Some(FsErrorKind::IdentityUnavailable)
-                );
+                let reasons = reasons_of(&outcome);
+                prop_assert!(!reasons.is_empty(), "{} workers: {:?}", workers, outcome);
+                prop_assert!(reasons.iter().all(|why| *why == crate::KeptReason::Resumed));
                 prop_assert!(no_source_lost(run), "{} workers", workers);
             } else {
                 prop_assert_eq!((outcome, tree), (JobOutcome::Done, clean.clone()));

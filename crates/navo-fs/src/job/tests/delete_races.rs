@@ -368,7 +368,7 @@ fn a_failed_journal_batch_fails_the_whole_job_without_blaming_a_file() {
         let outcome = harness.run(&fs, &plan, &[]);
         let blamed = match outcome {
             JobOutcome::Failed { seq, error } => Some((seq, error.kind, error.location)),
-            JobOutcome::Done | JobOutcome::Cancelled => None,
+            JobOutcome::Done | JobOutcome::Cancelled | JobOutcome::Kept { .. } => None,
         };
         assert_eq!(
             blamed,

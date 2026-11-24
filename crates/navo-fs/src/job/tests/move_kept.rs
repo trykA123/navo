@@ -49,9 +49,9 @@ fn a_move_goes_on_past_a_kept_source_and_reports_it() {
         assert!(exists(&fs, "dst/b/c.txt") && exists(&fs, "dst/b/d.txt"));
         assert!(tree_of(&fs, "src").contains(&entry("b/d.txt", EntryKind::File, REPLACEMENT)));
         assert_eq!(
-            failure(&outcome),
-            Some((seq, FsErrorKind::ChangedOnDisk)),
-            "workers {workers}"
+            kept_of(&outcome),
+            [(seq, KeptReason::Changed)],
+            "workers {workers}: a move that only kept sources completed with problems"
         );
         let kept = KeptSource {
             seq,
@@ -99,8 +99,8 @@ fn a_by_path_move_reports_a_source_swapped_during_its_copy_as_changed() {
             tree_of(&fs, "src").contains(&entry("b/c.txt", EntryKind::File, REPLACEMENT)),
             "workers {workers}: the swapped-in file was deleted ({outcome:?})"
         );
-        let kind = failure(&outcome).map(|(_, kind)| kind);
-        assert_eq!(kind, Some(FsErrorKind::ChangedOnDisk), "workers {workers}");
+        let reasons: Vec<_> = kept_of(&outcome).into_iter().map(|(_, why)| why).collect();
+        assert_eq!(reasons, [KeptReason::Changed], "workers {workers}");
         let reasons: Vec<_> = harness.log.kept.iter().map(|kept| &kept.reason).collect();
         assert_eq!(reasons, [&KeptReason::Changed], "workers {workers}");
     }
@@ -139,8 +139,8 @@ fn a_move_skips_the_folder_of_a_kept_source() {
         let outcome = run_changing(workers, &fs, (&plan, "src/b/c.txt"), &replace);
         let seq = removal_of(&plan, &fs, "src/b/c.txt");
         assert_eq!(
-            failure(&outcome),
-            Some((seq, FsErrorKind::ChangedOnDisk)),
+            kept_of(&outcome),
+            [(seq, KeptReason::Changed)],
             "workers {workers}: the folder removal ran past the kept source"
         );
     }
@@ -203,10 +203,72 @@ fn a_move_keeps_an_empty_folder_put_in_place_of_its_source_folder() {
             "workers {workers}: the empty replacement folder was removed ({outcome:?})"
         );
         assert!(!exists(&fs, "src/e"), "workers {workers}: the move stopped");
+        let reasons: Vec<_> = kept_of(&outcome).into_iter().map(|(_, why)| why).collect();
+        assert_eq!(reasons, [KeptReason::Changed], "workers {workers}");
+    }
+}
+
+#[test]
+fn a_move_keeps_a_source_folder_that_gained_a_file_and_goes_on() {
+    for workers in MODES {
+        let fs = fixture(&[
+            ("src/e/f.txt", BIG),
+            ("src/b/c.txt", BIG),
+            ("src/g/h.txt", BIG),
+        ]);
+        let plan = plan(&request(
+            &fs,
+            OpKind::Move,
+            &["src/e", "src/b", "src/g"],
+            "dst",
+        ));
+        let drop_in = || fs.add_file("src/b/new.txt", 5);
+        let outcome = run_changing(workers, &fs, (&plan, "src/b"), &drop_in);
+        assert!(exists(&fs, "src/b/new.txt") && !exists(&fs, "src/b/c.txt"));
+        assert!(
+            !exists(&fs, "src/e") && !exists(&fs, "src/g"),
+            "workers {workers}: the non-empty folder stopped the move ({outcome:?})"
+        );
+        let folder = fs.location("src/b");
+        let seq = (0_u32..)
+            .zip(&plan.steps)
+            .find(
+                |(_, step)| matches!(step, Step::RemoveFolder { location } if *location == folder),
+            )
+            .map(|(seq, _)| seq);
+        let kept: Vec<_> = kept_of(&outcome).into_iter().map(|(seq, _)| seq).collect();
         assert_eq!(
-            failure(&outcome).map(|(_, kind)| kind),
-            Some(FsErrorKind::ChangedOnDisk),
+            kept,
+            seq.into_iter().collect::<Vec<_>>(),
             "workers {workers}"
+        );
+    }
+}
+
+#[test]
+fn a_move_reports_its_folder_scan_and_stops_there_when_cancelled() {
+    for workers in MODES {
+        let fs = fixture(&[("src/b/c.txt", BIG), ("src/b/d/e.txt", BIG)]);
+        let plan = move_plan(&fs);
+        let mut harness = Harness {
+            workers,
+            cancel_after_files: Some(0),
+            ..Harness::default()
+        };
+        let outcome = harness.run(&fs, &plan, &[]);
+        assert_eq!(outcome, JobOutcome::Cancelled, "workers {workers}");
+        assert!(
+            !exists(&fs, "dst/b"),
+            "workers {workers}: a step ran after Cancel during the folder scan"
+        );
+        let folders = [fs.location("src/b"), fs.location("src/b/d")];
+        let first = harness
+            .progress
+            .first()
+            .and_then(|seen| seen.current.clone());
+        assert!(
+            first.is_some_and(|at| folders.contains(&at)),
+            "workers {workers}: the folder scan sent no progress"
         );
     }
 }

@@ -9,7 +9,7 @@ use super::hold::hold;
 use super::marks::Marks;
 use super::remove::{Removals, remove};
 use super::rename::{is_temporary, prepare};
-use super::{DoneSet, Inputs, JobContext, JobOutcome, Progress, StepOutcome};
+use super::{DoneSet, Inputs, JobContext, JobOutcome, KeptSource, Progress, StepOutcome};
 
 pub(super) fn current_of(step: &Step) -> Location {
     match step {
@@ -62,7 +62,9 @@ pub(super) fn run_with(
         return JobOutcome::Failed { seq, error };
     }
     let aside = Aside::new();
-    let removals = Removals::of(plan, ctx.ops);
+    let Some(removals) = Removals::of(plan, ctx.ops, (ctx.cancel, &mut *ctx.progress)) else {
+        return JobOutcome::Cancelled;
+    };
     let namespace = namespace_of(ctx);
     let job = Job {
         plan,
@@ -131,6 +133,7 @@ fn walk_marking(
     });
     let mut progress = Progress::start(plan);
     let mut kept = Vec::new();
+    let mut sources = Vec::new();
     let mut failed = None;
     for (seq, step) in (0_u32..).zip(&plan.steps) {
         if done.contains(&seq) {
@@ -164,17 +167,23 @@ fn walk_marking(
             }
             Err(error) => {
                 let failure = (seq, step, error);
-                if let Some(outcome) =
-                    step_failure(job, failure, (marks, ctx), (&mut failed, &mut kept))
-                {
+                let leftovers = (&mut failed, &mut kept, &mut sources);
+                if let Some(outcome) = step_failure(job, failure, (marks, ctx), leftovers) {
                     return outcome;
                 }
             }
         }
     }
+    ended(failed, sources)
+}
+
+/// The end of a job that ran every step: failed at its first failure, else kept or done.
+pub(super) fn ended(failed: Option<(u32, FsError)>, mut sources: Vec<KeptSource>) -> JobOutcome {
+    sources.sort_by_key(|kept| kept.seq);
     match failed {
         Some((seq, error)) => JobOutcome::Failed { seq, error },
-        None => JobOutcome::Done,
+        None if sources.is_empty() => JobOutcome::Done,
+        None => JobOutcome::Kept { sources },
     }
 }
 
@@ -228,13 +237,18 @@ fn attempt_step(
     prepare(seq, (job, step), ctx).and_then(|()| apply(job, (seq, step), ctx, progress, pauses))
 }
 
-/// Stops the job at a failed step, except a recycle and a move's kept source: those go on and
-/// the job ends failed at the first such step. A kept source is reported and its folders stay.
+/// Stops the job at a failed step, except a recycle and a move's kept source: a recycle goes on
+/// and ends failed at its first failure; a kept source is reported, its folders stay, and the
+/// job ends `Kept` unless something else failed.
 fn step_failure(
     job: Job<'_>,
     (seq, step, error): (u32, &Step, FsError),
     (marks, ctx): (&mut Marks, &mut JobContext<'_>),
-    (failed, kept): (&mut Option<(u32, FsError)>, &mut Vec<Location>),
+    (failed, kept, sources): (
+        &mut Option<(u32, FsError)>,
+        &mut Vec<Location>,
+        &mut Vec<KeptSource>,
+    ),
 ) -> Option<JobOutcome> {
     if error.kind == FsErrorKind::Cancelled || ctx.cancel.is_cancelled() {
         return Some(JobOutcome::Cancelled);
@@ -242,8 +256,11 @@ fn step_failure(
     marks.failed(ctx.log, seq);
     if let Some(source) = job.removals.kept((seq, step), &error) {
         ctx.log.kept_source(&source);
-        kept.push(source.location);
-    } else if job.plan.kind != OpKind::Recycle {
+        kept.push(source.location.clone());
+        sources.push(source);
+        return None;
+    }
+    if job.plan.kind != OpKind::Recycle {
         return Some(JobOutcome::Failed { seq, error });
     }
     failed.get_or_insert((seq, error));

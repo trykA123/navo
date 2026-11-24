@@ -7,7 +7,7 @@ use navo_core::{Location, ProviderId};
 
 use super::delete_races::BeforeRemove;
 use super::*;
-use crate::{Capabilities, CopyControl, ListSink, MoveCopy, OwnedCopy};
+use crate::{Capabilities, CopyControl, KeptReason, ListSink, MoveCopy, OwnedCopy};
 
 pub(super) const REPLACEMENT: u64 = 777;
 
@@ -62,8 +62,11 @@ fn a_move_stops_at_a_replaced_source_as_changed_on_disk() {
             fs.add_file("src/b/c.txt", REPLACEMENT);
         };
         let outcome = run_changing(workers, &fs, (&plan, "src/b/c.txt"), &replace);
-        let kind = failure(&outcome).map(|(_, kind)| kind);
-        assert_eq!(kind, Some(FsErrorKind::ChangedOnDisk), "workers {workers}");
+        assert_eq!(
+            reasons_of(&outcome),
+            [KeptReason::Changed],
+            "workers {workers}"
+        );
     }
 }
 
@@ -85,10 +88,7 @@ fn a_move_keeps_a_same_size_same_time_replacement_by_its_file_id() {
         };
         let outcome = run_changing(workers, &fs, (&plan, "src/b/c.txt"), &twin);
         assert!(exists(&fs, "src/b/c.txt"), "workers {workers}: {outcome:?}");
-        assert_eq!(
-            failure(&outcome).map(|(_, kind)| kind),
-            Some(FsErrorKind::ChangedOnDisk)
-        );
+        assert_eq!(reasons_of(&outcome), [KeptReason::Changed]);
     }
 }
 
@@ -137,10 +137,9 @@ fn a_move_keeps_a_source_on_a_volume_without_file_ids() {
             exists(&fs, "src/b/c.txt"),
             "workers {workers}: a source without proof was deleted ({outcome:?})"
         );
-        let kind = failure(&outcome).map(|(_, kind)| kind);
         assert_eq!(
-            kind,
-            Some(FsErrorKind::IdentityUnavailable),
+            reasons_of(&outcome),
+            [KeptReason::Unconfirmed],
             "workers {workers}"
         );
     }
@@ -167,10 +166,9 @@ fn a_move_resumed_after_its_copy_keeps_the_source() {
             exists(&fs, "src/b/c.txt"),
             "workers {workers}: a resumed move deleted a source it never proved ({outcome:?})"
         );
-        let kind = failure(&outcome).map(|(_, kind)| kind);
         assert_eq!(
-            kind,
-            Some(FsErrorKind::IdentityUnavailable),
+            reasons_of(&outcome),
+            [KeptReason::Resumed],
             "workers {workers}"
         );
     }
@@ -201,8 +199,11 @@ fn a_move_keeps_a_source_swapped_away_while_its_copy_opened() {
             exists(&fs, "src/b/c.txt"),
             "workers {workers}: the move deleted a source its copy never read ({outcome:?})"
         );
-        let kind = failure(&outcome).map(|(_, kind)| kind);
-        assert_eq!(kind, Some(FsErrorKind::ChangedOnDisk), "workers {workers}");
+        assert_eq!(
+            reasons_of(&outcome),
+            [KeptReason::Changed],
+            "workers {workers}"
+        );
     }
 }
 

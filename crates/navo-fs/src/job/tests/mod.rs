@@ -302,7 +302,23 @@ fn placed_exactly_the_done_copies(fs: &FakeFs, plan: &OperationPlan, done: &[u32
 fn failure(outcome: &JobOutcome) -> Option<(u32, FsErrorKind)> {
     match outcome {
         JobOutcome::Failed { seq, error } => Some((*seq, error.kind)),
-        JobOutcome::Done | JobOutcome::Cancelled => None,
+        JobOutcome::Done | JobOutcome::Cancelled | JobOutcome::Kept { .. } => None,
+    }
+}
+
+/// Why a move kept each source in place, when it completed with problems.
+fn reasons_of(outcome: &JobOutcome) -> Vec<crate::KeptReason> {
+    kept_of(outcome).into_iter().map(|(_, why)| why).collect()
+}
+
+/// The sources a move kept in place, with why, when it completed with problems.
+fn kept_of(outcome: &JobOutcome) -> Vec<(u32, crate::KeptReason)> {
+    match outcome {
+        JobOutcome::Kept { sources } => sources
+            .iter()
+            .map(|kept| (kept.seq, kept.reason.clone()))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 
