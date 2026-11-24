@@ -38,6 +38,7 @@ pub mod runner;
 mod runner_fake;
 #[cfg(windows)]
 pub mod shortcuts;
+pub mod start_mode;
 pub mod syntax;
 
 #[cfg(windows)]
