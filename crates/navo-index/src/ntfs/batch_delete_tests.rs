@@ -82,9 +82,9 @@ fn queued_remove_preserves_a_descendants_ready_subtree() {
     );
 }
 
-/// Preserves a blocked directory move when a carried rename emits a removal.
+/// Preserves a blocked directory move when an aged rename pairs and the file is then deleted.
 #[test]
-fn rename_expiry_queues_the_remove_behind_the_blocked_folder_move() {
+fn a_delete_after_an_aged_rename_queues_behind_the_blocked_folder_move() {
     let mut index = base();
     let original = view(&index);
     for age in 0..=crate::usn::MAX_CARRIED_READS {
@@ -105,7 +105,7 @@ fn rename_expiry_queues_the_remove_behind_the_blocked_folder_move() {
             next_usn: 200,
             records: vec![
                 record(20, 99, NEW_NAME, "moved"),
-                record(20, 99, OLD_NAME, "moved"),
+                record(20, 99, DELETE, "moved"),
             ],
         })
         .unwrap();

@@ -5,6 +5,7 @@ use std::sync::PoisonError;
 use std::time::Instant;
 
 use navo_index::ntfs::{NtfsError, Volume};
+use navo_index::pipe::CancelToken;
 use navo_index::usn::UsnBatch;
 
 use super::super::answer::Shared;
@@ -15,8 +16,13 @@ use super::Worker;
 
 impl Worker {
     /// Reads and applies one journal batch; returns the full build it requires, if any.
-    /// A failed apply pauses replay and saves, then rebuilds; a read error is returned.
-    pub(super) fn follow(&mut self, volume: &mut Volume) -> Result<Option<Cause>, NtfsError> {
+    /// A failed apply pauses replay and saves, then rebuilds; a read error is returned. A stop
+    /// mid-batch also pauses saves (the index holds part of the batch) and returns `Cancelled`.
+    pub(super) fn follow(
+        &mut self,
+        volume: &mut Volume,
+        cancel: &CancelToken,
+    ) -> Result<Option<Cause>, NtfsError> {
         let position = self
             .shared
             .read()
@@ -45,8 +51,14 @@ impl Worker {
         let records = batch.records.len();
         let changed = batch.next_usn != position.next_usn;
         self.moved = changed;
-        let unresolved = match journal_batch::apply_batch(&self.shared, batch) {
+        let stop = || cancel.is_cancelled();
+        let unresolved = match journal_batch::apply_batch(&self.shared, batch, stop) {
             Ok(unresolved) => unresolved,
+            Err(NtfsError::Cancelled) => {
+                self.rebuilds
+                    .apply_failed(&self.shared, &NtfsError::Cancelled, elapsed);
+                return Err(NtfsError::Cancelled);
+            }
             Err(error) => return Ok(self.rebuilds.apply_failed(&self.shared, &error, elapsed)),
         };
         if changed {

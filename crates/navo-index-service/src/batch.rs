@@ -20,9 +20,13 @@ pub(super) fn published(shared: &Shared) -> Option<Arc<NtfsIndex>> {
         .clone()
 }
 
+/// Applies `batch` to the published index in short write slices and returns unresolved changes.
+/// `stop` is polled before each slice; a stop returns `Cancelled` with the cursor unmoved, and the
+/// index may hold part of the batch, so the caller must never save it.
 pub(super) fn apply_batch(
     shared: &Shared,
     batch: UsnBatch,
+    stop: impl Fn() -> bool,
 ) -> Result<Vec<UnresolvedChange>, NtfsError> {
     let journal = shared
         .read()
@@ -35,6 +39,9 @@ pub(super) fn apply_batch(
     };
     let mut applying = BatchApply::new(batch, position, renames)?;
     loop {
+        if stop() {
+            return Err(NtfsError::Cancelled);
+        }
         match with_index(shared, |index| step_for(&mut applying, index)) {
             None => return Ok(Vec::new()),
             Some(Err(error)) => return Err(error),

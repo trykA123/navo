@@ -181,7 +181,7 @@ fn record(file_id: u128, parent_id: u128, reason: u32) -> UsnRecord {
 
 /// Applies one journal batch to the shared index, as the worker's follow does.
 fn follow(shared: &Shared, next_usn: i64, records: Vec<UsnRecord>) -> Vec<UnresolvedChange> {
-    apply_batch(shared, UsnBatch { next_usn, records }).unwrap()
+    apply_batch(shared, UsnBatch { next_usn, records }, || false).unwrap()
 }
 
 fn overwrite_unknown_file(shared: &Shared, next_usn: i64) -> Vec<UnresolvedChange> {

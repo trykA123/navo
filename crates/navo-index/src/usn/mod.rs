@@ -55,13 +55,21 @@ impl PendingRenames {
         self.waiting.capacity() * size_of::<(u128, u32)>()
     }
 
+    /// Ages the old names still open after a read and removes those past `MAX_CARRIED_READS`.
+    /// An old name `seen` in this read starts its wait again, so a second rename keeps the file.
     fn settle(&mut self, mut open: HashSet<u128>, seen: &[u128], aged: bool) -> Vec<TableChange> {
         let mut removed = Vec::new();
+        // A set, so a rename burst with many waiting names stays linear.
+        let fresh: HashSet<u128> = seen.iter().copied().collect();
         for (file_id, reads) in std::mem::take(&mut self.waiting) {
             if !open.remove(&file_id) {
                 continue;
             }
-            let reads = reads + u32::from(aged);
+            let reads = if fresh.contains(&file_id) {
+                0
+            } else {
+                reads + u32::from(aged)
+            };
             if reads > MAX_CARRIED_READS {
                 removed.push(TableChange::Remove { file_id });
             } else {
@@ -323,5 +331,7 @@ fn validate_ranges(bytes: &[u8]) -> Result<(), ParseErrorKind> {
     Ok(())
 }
 
+#[cfg(test)]
+mod rename_age_tests;
 #[cfg(test)]
 mod tests;

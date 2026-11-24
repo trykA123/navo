@@ -92,6 +92,8 @@ mod service_log;
 #[cfg(windows)]
 #[path = "session/windows.rs"]
 mod session;
+#[cfg(any(windows, test))]
+mod snapshot_discard;
 #[cfg(windows)]
 #[path = "storage/windows.rs"]
 mod storage;

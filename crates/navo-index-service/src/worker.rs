@@ -22,6 +22,7 @@ use super::rebuild::{Cause, Rebuilds, error_kind, file_error_kind};
 use super::rebuild_session::{SaveInput, rebuild_hint, replace, save_snapshot};
 use super::restore_log::restored_line;
 use super::service_log::Log;
+use super::snapshot_discard::{discard_snapshot, enumerate_then_discard};
 use super::storage::Storage;
 
 #[path = "worker_follow.rs"]
@@ -120,7 +121,7 @@ impl Worker {
             return Ok(());
         }
         // A journal read error keeps the published index; `run` retries with backoff (D121).
-        match self.follow(volume)? {
+        match self.follow(volume, cancel)? {
             None => Ok(()),
             Some(cause) => self.rebuild(volume, cause, cancel),
         }
@@ -224,14 +225,15 @@ impl Worker {
         cancel: &CancelToken,
     ) -> Result<(NtfsIndex, BuildPermit<'static>), NtfsError> {
         let attempted = self.build_candidate(volume, cause, cancel);
-        // The snapshot is already discarded; a reopen must build again, not keep the old index.
+        // A reopen restores the snapshot on disk or builds; it never keeps this in-memory index.
         self.build_failed |= attempted
             .as_ref()
             .is_err_and(|error| !matches!(error, NtfsError::Cancelled));
         self.rebuilds.build_result(attempted)
     }
 
-    /// Builds a candidate and invalidates the old snapshot only after enumeration for verification.
+    /// Builds a candidate and removes the old snapshot only after enumeration succeeded, so a
+    /// stop or a failed build leaves it for the next start (IXH1).
     fn build_candidate(
         &mut self,
         volume: &mut Volume,
@@ -257,19 +259,24 @@ impl Worker {
             total_files,
         );
         let hint = rebuild_hint(&self.shared);
-        if !cause.verification {
-            self.discard_snapshot()?;
+        let path = self.path.clone();
+        let ((enumerated, permit), discarded) = enumerate_then_discard(
+            || {
+                self.log_line(format_args!("build queued {}:", self.drive.letter));
+                let permit = BUILDS.acquire(cancel)?;
+                self.log_line(format_args!(
+                    "build start {}: hint_entries={}",
+                    self.drive.letter, hint.entries
+                ));
+                let continuity = self.rebuilds.continuity(cause);
+                Ok((volume.enumerate_sized(hint, continuity, cancel)?, permit))
+            },
+            || discard_snapshot(&path),
+        )?;
+        if discarded {
+            self.log_line(format_args!("snapshot discarded {}:", self.drive.letter));
         }
-        self.log_line(format_args!("build queued {}:", self.drive.letter));
-        let permit = BUILDS.acquire(cancel)?;
-        self.log_line(format_args!(
-            "build start {}: hint_entries={}",
-            self.drive.letter, hint.entries
-        ));
-        let continuity = self.rebuilds.continuity(cause);
-        let enumerated = volume.enumerate_sized(hint, continuity, cancel)?;
         if cause.verification {
-            self.discard_snapshot()?;
             self.clock.saved();
         }
         self.report_build(&enumerated, started);
@@ -303,20 +310,6 @@ impl Worker {
         self.rebuilds.finished(&self.shared, entries, duration);
         self.rebuilds
             .build_quality(enumerated.inexact_reason(), finished);
-    }
-
-    fn discard_snapshot(&self) -> Result<(), NtfsError> {
-        match std::fs::remove_file(&self.path) {
-            Ok(()) => {
-                self.log_line(format_args!("snapshot discarded {}:", self.drive.letter));
-                Ok(())
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            Err(source) => Err(NtfsError::Io {
-                operation: "discard snapshot",
-                source,
-            }),
-        }
     }
 
     /// Saves a due snapshot, logging failures and returning them as I/O errors. While a rebuild

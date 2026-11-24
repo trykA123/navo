@@ -141,7 +141,7 @@ fn rebuilds_after_a_build(shared: &Shared) -> Rebuilds {
 fn follow(shared: &Shared, rebuilds: &mut Rebuilds, batch: UsnBatch, start: bool) {
     let start = start.then(|| shared.read().unwrap().index.as_ref().unwrap().position);
     let followed = Followed {
-        changes: apply_batch(shared, batch),
+        changes: apply_batch(shared, batch, || false),
         start,
     };
     let cause = rebuilds.after_follow_from(shared, followed, MINUTE);

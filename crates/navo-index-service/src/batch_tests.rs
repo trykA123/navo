@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -10,6 +11,11 @@ use super::super::answer::{Shared, State};
 use super::{apply_batch, note_metadata_folders, published};
 
 const FILES: u32 = 20_000;
+
+/// A stop check that never asks the batch to stop.
+fn never() -> bool {
+    false
+}
 
 fn index() -> NtfsIndex {
     let mut table = NameTable::new();
@@ -106,7 +112,7 @@ fn a_large_batch_lets_readers_in_between_steps_and_matches_one_batch() {
     let done = AtomicBool::new(false);
     let partial = std::thread::scope(|scope| {
         let reader = scope.spawn(|| partial_reads(&shared, &done));
-        let applied = apply_batch(&shared, creates());
+        let applied = apply_batch(&shared, creates(), never);
         done.store(true, Ordering::Release);
         assert!(applied.unwrap().is_empty());
         reader.join().unwrap()
@@ -120,11 +126,40 @@ fn a_large_batch_lets_readers_in_between_steps_and_matches_one_batch() {
 }
 
 #[test]
+fn a_stop_between_slices_returns_before_the_cursor_moves() {
+    let shared = shared(Some(index()));
+    let polls = Cell::new(0);
+    let stop = || {
+        polls.set(polls.get() + 1);
+        polls.get() > 1
+    };
+    assert!(matches!(
+        apply_batch(&shared, creates(), stop),
+        Err(NtfsError::Cancelled)
+    ));
+    assert_eq!(
+        polls.get(),
+        2,
+        "the batch stops at the first slice after the stop"
+    );
+    let index = published(&shared).unwrap();
+    assert_eq!(
+        index.position.next_usn, 100,
+        "the cursor never passes changes not applied"
+    );
+    let added = index.table.len() - 2;
+    assert!(
+        added > 0 && added < FILES as usize,
+        "the stop came mid-batch: {added}"
+    );
+}
+
+#[test]
 fn a_saved_copy_stays_whole_while_a_batch_applies() {
     let shared = shared(Some(index()));
     let saved = published(&shared).unwrap();
     let before = names(&saved);
-    apply_batch(&shared, creates()).unwrap();
+    apply_batch(&shared, creates(), never).unwrap();
     assert_eq!(names(&saved), before);
     assert_eq!(saved.position.next_usn, 100);
     assert!(saved.snapshot().is_some());
@@ -148,7 +183,7 @@ fn a_batch_with_a_cyclic_move_keeps_applying_changes() {
     batch.records.push(folder(51, 50, 0x100, "b"));
     batch.records.push(folder(50, 51, 0x2000, "a"));
     batch.records.push(folder(52, 50, 0x100, "c"));
-    assert!(apply_batch(&shared, batch).unwrap().is_empty());
+    assert!(apply_batch(&shared, batch, never).unwrap().is_empty());
     let state = shared.read().unwrap();
     let index = state.index.as_ref().unwrap();
     assert_eq!(index.position.next_usn, 200);
@@ -175,7 +210,7 @@ fn a_stale_replayed_move_that_would_cycle_is_skipped() {
         next_usn: 120,
         records: vec![folder(5, 0x1000), folder(7, 0x2000)],
     };
-    assert!(apply_batch(&shared, batch).unwrap().is_empty());
+    assert!(apply_batch(&shared, batch, never).unwrap().is_empty());
     let state = shared.read().unwrap();
     let index = state.index.as_ref().unwrap();
     assert_eq!(index.table.parent(index.ids[&6]), Some(index.ids[&5]));
@@ -210,7 +245,7 @@ fn a_cycle_skipped_replay_move_marks_follow_inexact() {
             folder(7, 8, 0x2000, "B"),
         ],
     };
-    assert!(apply_batch(&shared, batch).unwrap().is_empty());
+    assert!(apply_batch(&shared, batch, never).unwrap().is_empty());
     let state = shared.read().unwrap();
     assert!(state.replay_inexact, "the stale move made follow inexact");
     assert_eq!(state.builds.dropped_changes, 1);
@@ -229,7 +264,7 @@ fn a_stale_cursor_changes_nothing() {
         ..creates()
     };
     assert!(matches!(
-        apply_batch(&shared, stale),
+        apply_batch(&shared, stale, never),
         Err(NtfsError::Reenumerate("cursor"))
     ));
     assert_eq!(names(&published(&shared).unwrap()), before);
@@ -238,7 +273,7 @@ fn a_stale_cursor_changes_nothing() {
 #[test]
 fn a_batch_without_an_index_changes_nothing() {
     let shared = shared(None);
-    assert!(apply_batch(&shared, creates()).unwrap().is_empty());
+    assert!(apply_batch(&shared, creates(), never).unwrap().is_empty());
     assert!(published(&shared).is_none());
 }
 
@@ -248,7 +283,7 @@ fn a_batch_after_the_reader_is_dropped_updates_in_place() {
     let reader = published(&shared).unwrap();
     let before = Arc::as_ptr(&reader);
     drop(reader);
-    apply_batch(&shared, creates()).unwrap();
+    apply_batch(&shared, creates(), never).unwrap();
     let after = published(&shared).unwrap();
     assert_eq!(Arc::as_ptr(&after), before);
     assert_eq!(after.ids.len(), 2 + FILES as usize);
@@ -275,7 +310,7 @@ fn ids_a_reader_took_before_a_compacting_batch_still_name_the_same_files() {
     let files = navo_index::ntfs::COMPACT_MIN_SLOTS + 1_000;
     let shared = shared(Some(index()));
     assert!(
-        apply_batch(&shared, churn_files(files, 0x100, 200))
+        apply_batch(&shared, churn_files(files, 0x100, 200), never)
             .unwrap()
             .is_empty()
     );
@@ -287,7 +322,7 @@ fn ids_a_reader_took_before_a_compacting_batch_still_name_the_same_files() {
         path.as_deref()
             .is_some_and(|path| path.ends_with(&format!("c{}.txt", files - 1)))
     );
-    apply_batch(&shared, churn_files(files - 10, 0x200, 300)).unwrap();
+    apply_batch(&shared, churn_files(files - 10, 0x200, 300), never).unwrap();
     let after = published(&shared).unwrap();
     assert_eq!(
         after.table.slots() as usize,
@@ -317,18 +352,22 @@ fn a_noted_metadata_folder_resolves_a_rename_into_it_after_a_restore() {
         records: vec![record(8, 6, 0x100, "x.txt")],
     };
     let blocked = shared(Some(index()));
-    assert!(apply_batch(&blocked, create.clone()).unwrap().is_empty());
     assert!(
-        apply_batch(&blocked, parked())
+        apply_batch(&blocked, create.clone(), never)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        apply_batch(&blocked, parked(), never)
             .unwrap()
             .iter()
             .any(|item| matches!(item.change, TableChange::Rename { .. }))
     );
 
     let shared = shared(Some(index()));
-    assert!(apply_batch(&shared, create).unwrap().is_empty());
+    assert!(apply_batch(&shared, create, never).unwrap().is_empty());
     note_metadata_folders(&shared, vec![DELETED]);
-    let unresolved = apply_batch(&shared, parked()).unwrap();
+    let unresolved = apply_batch(&shared, parked(), never).unwrap();
     // The size of the departed file has no entry left; sizes alone never ask for a rebuild.
     let named = |item: &UnresolvedChange| {
         matches!(

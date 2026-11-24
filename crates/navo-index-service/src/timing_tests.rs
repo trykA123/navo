@@ -298,7 +298,7 @@ fn usn_batch(records: u32) {
     let during = during_operation(&volume, &label, |begin| {
         begin.wait();
         let started = Instant::now();
-        let unresolved = apply_batch(&volume.shared, batch).unwrap();
+        let unresolved = apply_batch(&volume.shared, batch, || false).unwrap();
         let elapsed = started.elapsed();
         assert!(unresolved.is_empty());
         elapsed
