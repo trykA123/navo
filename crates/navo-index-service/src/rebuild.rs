@@ -176,7 +176,11 @@ impl Rebuilds {
     ) -> Result<Option<T>, NtfsError> {
         match attempted {
             Ok(candidate) => Ok(Some(candidate)),
-            Err(NtfsError::Cancelled) => Err(NtfsError::Cancelled),
+            Err(NtfsError::Cancelled) => {
+                // Still unverified: keep it pending so the inexact index never reaches the disk.
+                self.schedule_verification(now, reason);
+                Err(NtfsError::Cancelled)
+            }
             Err(error) => {
                 self.backoff.failed();
                 self.log.line(format_args!(

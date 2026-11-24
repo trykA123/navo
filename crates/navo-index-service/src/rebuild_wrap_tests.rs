@@ -98,3 +98,27 @@ fn a_cancelled_build_keeps_the_streak() {
     let regular = Cause::new(BuildReason::JournalReset);
     assert_eq!(rebuilds.continuity(regular), Continuity::AllowWrap);
 }
+
+#[test]
+fn a_cancelled_verification_keeps_the_wrapped_index_off_the_disk() {
+    let shared = shared();
+    let mut rebuilds = Rebuilds::new('C', Log::default());
+    rebuilds.build_result(wrapped()).unwrap_err();
+    rebuilds.build_result(wrapped()).unwrap_err();
+    let now = Instant::now();
+    succeed(&mut rebuilds, &shared);
+    rebuilds.build_quality(Some(InexactBuild::JournalWrapped), now);
+    rebuilds.regular_build_published();
+    assert_eq!(rebuilds.save_cursor(), SaveCursor::Skip);
+    let due = now + 10 * MINUTE;
+    let reason = rebuilds.verification_due(due).unwrap();
+    // The service stops while the strict verification runs.
+    rebuilds
+        .verification_result::<()>(Err(NtfsError::Cancelled), reason, due)
+        .unwrap_err();
+    assert_eq!(
+        rebuilds.save_cursor(),
+        SaveCursor::Skip,
+        "a cancelled verification must leave the wrapped index unsaved"
+    );
+}
