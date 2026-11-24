@@ -45,6 +45,10 @@ pub enum FolderProblem {
     ReparsePoint,
     ProtectedFolder,
     NeedsAdministrator,
+    ServiceFolder,
+    OtherUserFolder,
+    AdminDeclined,
+    AdminFailed,
     DriveNotLocal,
     SubstDrive,
     NotWritable,
@@ -90,6 +94,12 @@ impl FolderProblem {
             Self::NeedsAdministrator => {
                 "Program Files needs administrator rights, and this version of Setup cannot ask for them yet."
             }
+            Self::ServiceFolder => "Navo's index service uses this folder.",
+            Self::OtherUserFolder => "This folder belongs to another user of this PC.",
+            Self::AdminDeclined => {
+                "Windows did not give Setup administrator rights, so the folder was not created."
+            }
+            Self::AdminFailed => "Setup could not create this folder with administrator rights.",
             Self::DriveNotLocal => "Setup can install only on a fixed or removable local drive.",
             Self::SubstDrive => {
                 "This drive is a mapped alias for another folder, which Setup cannot use."
@@ -123,6 +133,14 @@ impl FolderProblem {
             Self::NeedsAdministrator => {
                 r"Choose a folder such as C:\Navo, or keep the default folder."
             }
+            Self::ServiceFolder => r"Choose another name, such as C:\Program Files\Navo App.",
+            Self::OtherUserFolder => {
+                r"Choose a folder in your own user folder, or one outside C:\Users, such as C:\Navo."
+            }
+            Self::AdminDeclined => {
+                r"Choose Install again and approve the Windows prompt, or choose a folder you can write to, such as C:\Navo."
+            }
+            Self::AdminFailed => r"Choose another folder, such as C:\Navo.",
             Self::SubstDrive => "Choose the folder on its real drive.",
             Self::NotWritable => "Choose a folder you can write to, or fix its permissions.",
             Self::NotEnoughSpace => "Free some space or choose another drive.",

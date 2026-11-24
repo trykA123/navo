@@ -1,11 +1,12 @@
-// Tests for Atom 0: Program Files refuses with NeedsAdministrator, before the writable check.
+// Tests for Atom 0 and E2: Program Files refuses with NeedsAdministrator before the writable
+// check, and the index service folders refuse with ServiceFolder before that.
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 use super::{
-    Chain, DriveKind, Facts, FileId, Link, NameEq, Protected, Refused, Space, check,
-    refused_problem,
+    Chain, DriveKind, Facts, FileId, FolderWarning, Link, NameEq, Protected, Refused, Space, check,
+    refused_problem, warning,
 };
 use crate::syntax::FolderProblem;
 
@@ -266,4 +267,95 @@ fn an_admin_only_anchor_with_unknown_case_refuses_every_candidate_below_it() {
             "{case_sensitive:?}"
         );
     }
+}
+
+/// The E2 refused sets: `Program Files (x86)\Navo` is the service folder, inside admin-only.
+fn with_service() -> Refused {
+    Refused {
+        service: vec![protected(2, &["Navo"])],
+        ..refused()
+    }
+}
+
+#[test]
+fn a_service_folder_gives_service_folder_before_needs_administrator() {
+    for missing in [&["Navo"][..], &["NAVO", "Tools"][..]] {
+        let chain = chain(program_files("PROGRA~2"), missing);
+        assert_eq!(
+            check_with(&chain, &with_service(), &facts(false)),
+            Err(FolderProblem::ServiceFolder),
+            "{missing:?}"
+        );
+        assert_eq!(
+            refused_problem(&chain, &with_service(), &AsciiNames),
+            Some(FolderProblem::ServiceFolder),
+            "{missing:?}"
+        );
+    }
+}
+
+#[test]
+fn a_sibling_of_the_service_folder_still_gives_needs_administrator() {
+    let chain = chain(program_files("Program Files (x86)"), &["Navo App"]);
+    assert_eq!(
+        check_with(&chain, &with_service(), &facts(false)),
+        Err(FolderProblem::NeedsAdministrator)
+    );
+}
+
+#[test]
+fn the_profiles_group_is_not_read_yet() {
+    let refused = Refused {
+        profiles: vec![protected(2, &[])],
+        ..Refused::default()
+    };
+    let chain = chain(vec![link("C:", 1), link("Users", 2)], &["other", "Navo"]);
+    assert_eq!(refused_problem(&chain, &refused, &AsciiNames), None);
+    assert_eq!(
+        check_with(&chain, &refused, &facts(false)),
+        Err(FolderProblem::NotWritable)
+    );
+}
+
+#[test]
+fn warning_still_ignores_an_unwritable_folder() {
+    assert_eq!(warning(&facts(false)), None);
+}
+
+#[test]
+fn the_e2_problems_say_what_is_wrong_and_what_to_choose() {
+    let texts = [
+        (
+            FolderProblem::ServiceFolder,
+            "Navo's index service uses this folder.",
+            r"Choose another name, such as C:\Program Files\Navo App.",
+        ),
+        (
+            FolderProblem::OtherUserFolder,
+            "This folder belongs to another user of this PC.",
+            r"Choose a folder in your own user folder, or one outside C:\Users, such as C:\Navo.",
+        ),
+        (
+            FolderProblem::AdminDeclined,
+            "Windows did not give Setup administrator rights, so the folder was not created.",
+            r"Choose Install again and approve the Windows prompt, or choose a folder you can write to, such as C:\Navo.",
+        ),
+        (
+            FolderProblem::AdminFailed,
+            "Setup could not create this folder with administrator rights.",
+            r"Choose another folder, such as C:\Navo.",
+        ),
+    ];
+    for (problem, message, fix) in texts {
+        assert_eq!(problem.message(), message, "{problem:?}");
+        assert_eq!(problem.fix(), fix, "{problem:?}");
+    }
+}
+
+#[test]
+fn the_administrator_warning_says_windows_asks_once() {
+    assert_eq!(
+        FolderWarning::Administrator.message(),
+        "Windows will ask for administrator rights once, to create this folder. Updates and uninstall then need none."
+    );
 }

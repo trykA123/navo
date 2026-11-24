@@ -71,5 +71,7 @@ pub fn refused() -> io::Result<Refused> {
         never_equal,
         fresh_only,
         admin_only,
+        service: Vec::new(),
+        profiles: Vec::new(),
     })
 }

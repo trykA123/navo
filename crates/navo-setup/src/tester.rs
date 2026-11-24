@@ -154,6 +154,7 @@ fn verdict_json(result: Result<(), FolderProblem>) -> Value {
 fn warning_json(warning: Option<FolderWarning>) -> Value {
     match warning {
         Some(FolderWarning::ParentOpen) => json!("parent_open"),
+        Some(FolderWarning::Administrator) => json!("administrator"),
         None => Value::Null,
     }
 }

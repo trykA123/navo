@@ -52,6 +52,10 @@ pub struct Refused {
     pub fresh_only: Vec<Protected>,
     /// Atom 0: Program Files folders that need administrator rights; removed by E10.
     pub admin_only: Vec<Protected>,
+    /// IW28: the index service folders; a candidate inside one gives `ServiceFolder`.
+    pub service: Vec<Protected>,
+    /// IW28: `FOLDERID_UserProfiles`; E10 refuses an unwritable candidate inside it.
+    pub profiles: Vec<Protected>,
 }
 
 /// The drive kind returned by `GetDriveTypeW`.
@@ -68,12 +72,21 @@ pub enum DriveKind {
 pub enum FolderWarning {
     /// Another user can change an existing folder above the candidate.
     ParentOpen,
+    /// IW28: Setup cannot write the parent, so Windows asks for administrator rights once.
+    Administrator,
 }
 
 impl FolderWarning {
-    /// One user-facing line saying why the folder is less safe and what is safer.
+    /// One user-facing line saying why the folder needs attention and what follows.
     pub fn message(self) -> &'static str {
-        "Other people on this PC can change a folder above this one. Navo still works here, but a folder directly on a drive, such as C:\\Navo, is safer."
+        match self {
+            Self::ParentOpen => {
+                "Other people on this PC can change a folder above this one. Navo still works here, but a folder directly on a drive, such as C:\\Navo, is safer."
+            }
+            Self::Administrator => {
+                "Windows will ask for administrator rights once, to create this folder. Updates and uninstall then need none."
+            }
+        }
     }
 }
 
@@ -161,13 +174,21 @@ pub fn check(
 
 /// The refused-folder rule: the first group the candidate falls in, or `None`.
 ///
-/// IW28's admin-only folders come first, so Program Files says what it needs instead of
-/// `NotWritable`; the IW8a groups follow unchanged.
+/// IW28's service folders come first, because they sit inside Program Files; then the
+/// admin-only folders, so Program Files says what it needs instead of `NotWritable`; the IW8a
+/// groups follow unchanged. `profiles` is not read until E10.
 pub fn refused_problem(
     chain: &Chain,
     refused: &Refused,
     names: &dyn NameEq,
 ) -> Option<FolderProblem> {
+    if refused
+        .service
+        .iter()
+        .any(|folder| inside(chain, folder, names))
+    {
+        return Some(FolderProblem::ServiceFolder);
+    }
     if refused
         .admin_only
         .iter()
