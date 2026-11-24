@@ -19,6 +19,7 @@ mod cmdline;
 mod cmdline_tests;
 #[cfg(any(windows, test))]
 pub mod default_root;
+pub mod elevate;
 pub mod flow;
 pub mod flow_outcome;
 pub mod host;
