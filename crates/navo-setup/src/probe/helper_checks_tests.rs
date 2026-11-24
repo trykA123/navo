@@ -2,9 +2,12 @@
 
 #![cfg(windows)]
 
+use std::fs::OpenOptions;
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_LIST_DIRECTORY};
 use windows_sys::Win32::UI::Shell::{FOLDERID_Profile, FOLDERID_Windows};
 
 use super::{checked_chain, helper_chain};
@@ -214,4 +217,20 @@ fn a_remote_or_unknown_drive_is_refused_by_the_helper() {
     );
     let unreadable = with_drive(|_| Err(std::io::Error::other("no drive type")));
     assert_eq!(unreadable, Some(HelperExit::Refused));
+}
+
+/// A folder another process holds without sharing is `Busy`, which a retry may pass, not `Refused`.
+#[test]
+fn a_folder_held_without_sharing_is_busy() {
+    let temp = outside_profiles();
+    let parent = id_of(temp.path());
+    let blocker = OpenOptions::new()
+        .access_mode(FILE_LIST_DIRECTORY)
+        .share_mode(0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(temp.path())
+        .expect("an exclusive hold on the parent");
+    let exit = helper_chain(&args(temp.path().join("Navo"), parent)).err();
+    drop(blocker);
+    assert_eq!(exit, Some(HelperExit::Busy));
 }

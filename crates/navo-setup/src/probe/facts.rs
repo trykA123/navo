@@ -50,6 +50,8 @@ pub fn facts(chain: &Chain) -> io::Result<Facts> {
         .last()
         .ok_or_else(|| io::Error::other("chain has no existing folder"))?;
     // The placement check refuses a link anyway; probing through one would write in its target.
+    // E5: the write probe still opens `nearest.path` by absolute path after the chain's holds have
+    // closed, so a junction swapped in meanwhile can redirect it; E5 creates through held handles.
     let through_link = chain.existing.iter().any(|link| link.reparse);
     Ok(Facts {
         drive: drive_kind(&root.path)?,

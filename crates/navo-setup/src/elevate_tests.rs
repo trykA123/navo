@@ -347,12 +347,13 @@ fn helper_exit_codes_round_trip() {
         (HelperExit::Changed, 23),
         (HelperExit::Exists, 24),
         (HelperExit::CreateFailed, 25),
+        (HelperExit::Busy, 26),
     ];
     for (exit, code) in all {
         assert_eq!(exit.code(), code);
         assert_eq!(HelperExit::from_code(code), Some(exit));
     }
-    for code in [1, 19, 26, 255, u32::MAX] {
+    for code in [1, 19, 27, 255, u32::MAX] {
         assert_eq!(HelperExit::from_code(code), None, "{code}");
     }
 }

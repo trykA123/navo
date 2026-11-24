@@ -5,6 +5,8 @@
 use std::io;
 use std::path::Path;
 
+use windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION;
+
 use crate::elevate::{HelperArgs, HelperExit};
 use crate::payload::platform::security;
 use crate::placement::{Chain, DriveKind, inside, link_problem, refused_problem};
@@ -22,7 +24,8 @@ mod tests;
 /// In order: a SID that is not the caller's or an unresolvable root is `Refused`; a root with
 /// nothing missing is `Exists`; a reparse link is `Refused`; a nearest folder whose id is not
 /// `args.parent` is `Changed`; a drive that is not local, a `subst` drive, a refused folder or a
-/// root inside a user profile is `Refused`. Every error while checking refuses.
+/// root inside a user profile is `Refused`. A held folder that became a link since the walk is
+/// `Refused`. A sharing violation is `Busy`, which a retry may pass; every other error refuses.
 ///
 /// Every existing ancestor stays open, without delete sharing, for as long as the result lives.
 pub fn helper_chain(args: &HelperArgs) -> Result<HeldChain, HelperExit> {
@@ -37,7 +40,7 @@ fn checked_chain(
     if !sid_is_caller(&args.user_sid) {
         return Err(HelperExit::Refused);
     }
-    let held = resolve_held(&args.root).map_err(|_| HelperExit::Refused)?;
+    let held = resolve_held(&args.root).map_err(|error| exit_for(&error))?;
     let chain = &held.chain;
     if chain.missing.is_empty() {
         return Err(HelperExit::Exists);
@@ -63,7 +66,20 @@ fn checked_chain(
     {
         return Err(HelperExit::Refused);
     }
+    held.recheck().map_err(|error| exit_for(&error))?;
     Ok(held)
+}
+
+/// Maps a chain error to the helper's exit: another process holding a folder without sharing is
+/// `Busy` (try again); anything else is `Refused`. Both fail closed.
+fn exit_for(error: &io::Error) -> HelperExit {
+    let busy =
+        i32::try_from(ERROR_SHARING_VIOLATION).is_ok_and(|code| error.raw_os_error() == Some(code));
+    if busy {
+        HelperExit::Busy
+    } else {
+        HelperExit::Refused
+    }
 }
 
 /// Whether `placement::link_problem` passes: no reparse link, no `subst`, a Fixed or Removable drive.

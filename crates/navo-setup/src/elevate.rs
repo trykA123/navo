@@ -56,11 +56,13 @@ pub enum HelperExit {
     Changed = 23,
     Exists = 24,
     CreateFailed = 25,
+    /// Another process holds a folder of the chain without sharing; a retry may pass.
+    Busy = 26,
 }
 
 impl HelperExit {
     /// Every variant, for the code lookup.
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 8] = [
         Self::Created,
         Self::NotElevated,
         Self::BadArguments,
@@ -68,6 +70,7 @@ impl HelperExit {
         Self::Changed,
         Self::Exists,
         Self::CreateFailed,
+        Self::Busy,
     ];
 
     /// The process exit code for this result.

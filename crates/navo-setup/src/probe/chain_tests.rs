@@ -1,15 +1,25 @@
 // Windows tests for the chain probe: NTFS name comparison, protected targets, mandatory folders.
 
 use std::ffi::{OsStr, OsString};
+use std::fs::OpenOptions;
+use std::io;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::OpenOptionsExt;
+use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 use std::process::Command;
 
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_SHARING_VIOLATION};
-use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
+use windows_sys::Win32::Storage::FileSystem::{
+    CreateDirectoryW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
+    FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES,
+};
+use windows_sys::Win32::System::IO::DeviceIoControl;
+use windows_sys::Win32::System::SystemServices::IO_REPARSE_TAG_MOUNT_POINT;
 
 use super::{
-    OrdinalNames, add_base, add_required_from, protected_from, resolve_held, resolve_path,
+    OrdinalNames, absent_after, add_base, add_required_from, protected_from, resolve_held,
+    resolve_path,
 };
 use crate::placement::{FileId, NameEq};
 
@@ -89,6 +99,127 @@ fn a_held_ancestor_cannot_be_renamed() {
     );
     drop(held);
     std::fs::rename(&parent, root.path().join("moved")).expect("free once the chain drops");
+}
+
+/// The hold covers every ancestor, not only the nearest one.
+///
+/// A folder whose subtree has an open handle refuses a rename with access denied, so only a
+/// sharing violation proves the grandparent itself is held.
+#[test]
+fn a_held_older_ancestor_cannot_be_renamed() {
+    let root = tempfile::tempdir().expect("temp folder");
+    let older = root.path().join("older");
+    let parent = older.join("parent");
+    std::fs::create_dir_all(&parent).expect("nested folders");
+    let held = resolve_held(&parent.join("Navo")).expect("chain resolves");
+    let renamed = std::fs::rename(&older, root.path().join("moved"));
+    let sharing_violation = i32::try_from(ERROR_SHARING_VIOLATION).expect("error code fits i32");
+    assert_eq!(
+        renamed.map_err(|error| error.raw_os_error()),
+        Err(Some(sharing_violation))
+    );
+    drop(held);
+    std::fs::rename(&older, root.path().join("moved")).expect("free once the chain drops");
+}
+
+/// An ancestor that denies listing but allows traverse still resolves and is held.
+#[test]
+fn an_ancestor_that_denies_listing_still_resolves() {
+    let root = tempfile::tempdir().expect("temp folder");
+    let locked = root.path().join("locked");
+    std::fs::create_dir_all(locked.join("child")).expect("nested folders");
+    let icacls = |args: &[&str]| {
+        let status = Command::new("icacls").arg(&locked).args(args).status();
+        assert!(status.expect("icacls runs").success(), "icacls {args:?}");
+    };
+    icacls(&["/deny", "*S-1-1-0:(RD)"]);
+    let held = resolve_held(&locked.join("child").join("Navo")).map(|held| held.chain);
+    icacls(&["/remove:d", "*S-1-1-0"]);
+    let chain = held.expect("traverse and attribute rights are enough");
+    assert_eq!(chain.missing, [OsString::from("Navo")]);
+}
+
+/// A held empty folder can still take a mount point in place; the recheck sees it and refuses.
+#[test]
+fn a_held_folder_that_becomes_a_link_fails_the_recheck() {
+    let root = tempfile::tempdir().expect("temp folder");
+    let parent = root.path().join("parent");
+    let elsewhere = root.path().join("elsewhere");
+    std::fs::create_dir(&parent).expect("parent folder");
+    std::fs::create_dir(&elsewhere).expect("link target");
+    let held = resolve_held(&parent.join("Navo")).expect("chain resolves");
+    held.recheck().expect("control: nothing changed yet");
+    mount_point_in_place(&parent, &elsewhere)
+        .expect("the hold's share mode does not stop an attribute-write open from linking");
+    assert!(
+        held.recheck().is_err(),
+        "a held folder that became a link refuses"
+    );
+}
+
+/// Only a not-found no-follow reopen counts as absent; a link that opens or any other error refuses.
+#[test]
+fn only_a_not_found_reopen_counts_as_absent() {
+    assert!(absent_after::<()>(Err(io::ErrorKind::NotFound.into())).is_ok());
+    assert!(absent_after(Ok(())).is_err());
+    let denied = absent_after::<()>(Err(io::ErrorKind::PermissionDenied.into()));
+    assert_eq!(
+        denied.map_err(|error| error.kind()),
+        Err(io::ErrorKind::PermissionDenied)
+    );
+}
+
+/// Sets a mount point on an existing empty folder through an open with attribute-write access only.
+fn mount_point_in_place(folder: &Path, target: &Path) -> io::Result<()> {
+    /// `FSCTL_SET_REPARSE_POINT`, not exported by the enabled `windows-sys` features.
+    const FSCTL_SET_REPARSE_POINT: u32 = 0x0009_00A4;
+    let file = OpenOptions::new()
+        .access_mode(FILE_WRITE_ATTRIBUTES)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(folder)?;
+    let buffer = mount_point_buffer(target);
+    let size = u32::try_from(buffer.len()).expect("buffer size fits u32");
+    let mut returned = 0u32;
+    // SAFETY: the handle is live, the input buffer is initialized for `size` bytes, no output
+    // buffer is passed and `returned` is writable.
+    let ok = unsafe {
+        DeviceIoControl(
+            file.as_raw_handle(),
+            FSCTL_SET_REPARSE_POINT,
+            buffer.as_ptr().cast(),
+            size,
+            std::ptr::null_mut(),
+            0,
+            &raw mut returned,
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// A mount-point `REPARSE_DATA_BUFFER` for `target`, with an empty print name.
+fn mount_point_buffer(target: &Path) -> Vec<u8> {
+    let substitute: Vec<u16> = OsStr::new(r"\??\")
+        .encode_wide()
+        .chain(target.as_os_str().encode_wide())
+        .collect();
+    let substitute_bytes = u16::try_from(substitute.len() * 2).expect("name fits u16");
+    // The substitute name, its NUL, then an empty print name and its NUL.
+    let names: Vec<u16> = substitute.into_iter().chain([0, 0]).collect();
+    let data_length = u16::try_from(8 + names.len() * 2).expect("buffer fits u16");
+    let mut buffer = Vec::new();
+    buffer.extend(IO_REPARSE_TAG_MOUNT_POINT.to_le_bytes());
+    for field in [data_length, 0, 0, substitute_bytes, substitute_bytes + 2, 0] {
+        buffer.extend(field.to_le_bytes());
+    }
+    for unit in names {
+        buffer.extend(unit.to_le_bytes());
+    }
+    buffer
 }
 
 /// A mandatory known folder without a path refuses; only an optional one is skipped.

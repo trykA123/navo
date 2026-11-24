@@ -25,8 +25,8 @@ use windows_sys::Win32::Globalization::{CSTR_EQUAL, CompareStringOrdinal};
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO,
     FILE_CASE_SENSITIVE_INFO, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-    FILE_ID_INFO, FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
-    FILE_SHARE_WRITE, FileAttributeTagInfo, FileCaseSensitiveInfo, FileIdInfo,
+    FILE_ID_INFO, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    FILE_TRAVERSE, FileAttributeTagInfo, FileCaseSensitiveInfo, FileIdInfo,
     GetFileInformationByHandleEx, OPEN_EXISTING, SYNCHRONIZE,
 };
 use windows_sys::Win32::System::Com::CoTaskMemFree;
@@ -48,11 +48,20 @@ pub(crate) mod tests;
 mod refused;
 pub use refused::refused;
 
-/// The walk's access: listing access takes part in share checks, so the missing delete share
-/// blocks a rename or delete; attribute access alone would not.
-const HOLD_ACCESS: u32 = FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
+/// The walk's access: traverse and attributes, never listing, so a folder that denies listing
+/// still resolves.
+///
+/// `FILE_TRAVERSE` is `FILE_EXECUTE`'s bit, which share checks count as read access, so the
+/// missing delete share still blocks a rename or delete; attribute access alone would not. A
+/// relative `NtCreateFile` open needs no access on its `RootDirectory` handle: the file system
+/// checks traverse against the parent's DACL, or skips it under the bypass-traverse privilege.
+const HOLD_ACCESS: u32 = FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
 
 /// The walk's share mode: read and write, never delete.
+///
+/// Denying write sharing would not stop `FSCTL_SET_REPARSE_POINT`: MS-FSA lets it run on an open
+/// granted only `FILE_WRITE_ATTRIBUTES`, and such an open takes no part in share checks. So write
+/// stays shared and `HeldChain::recheck` re-reads every tag before the helper answers instead.
 const HOLD_SHARE: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE;
 
 /// Opens a folder, never through a final reparse point.
@@ -87,13 +96,31 @@ pub(crate) fn resolve_path(path: &Path) -> io::Result<Chain> {
 
 /// A resolved chain whose existing folders stay open until it drops.
 ///
-/// Every folder is held with read access and without delete sharing, so no ancestor can be
+/// Every folder is held with traverse access and without delete sharing, so no ancestor can be
 /// renamed or deleted while the chain is held, and what was checked is what stays in place.
 pub struct HeldChain {
     /// The existing ancestors and missing names, read through the held handles.
     pub chain: Chain,
     /// One open handle per `chain.existing` link, drive root first.
-    _handles: Vec<Owned>,
+    handles: Vec<Owned>,
+}
+
+impl HeldChain {
+    /// Re-reads every held folder's attributes and reparse tag; one that is now a link or no
+    /// longer a folder refuses.
+    ///
+    /// The holds stop renames and deletes, not a reparse point set in place on an empty folder, so
+    /// call this last, right before answering. Only an empty folder can take one (MS-FSA refuses a
+    /// non-empty one), so the nearest folder is the exposed one; E5 creates through its handle.
+    pub fn recheck(&self) -> io::Result<()> {
+        for handle in &self.handles {
+            let (_, reparse, directory) = read_link(handle)?;
+            if reparse || !directory {
+                return Err(io::Error::other("a held folder became a link"));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Resolves a path and keeps every existing ancestor open.
@@ -128,7 +155,7 @@ pub(crate) fn resolve_held(path: &Path) -> io::Result<HeldChain> {
                 let missing = std::iter::once(child).chain(names).collect();
                 return Ok(HeldChain {
                     chain: Chain { existing, missing },
-                    _handles: handles,
+                    handles,
                 });
             }
             Err(error) => return Err(error),
@@ -139,7 +166,7 @@ pub(crate) fn resolve_held(path: &Path) -> io::Result<HeldChain> {
             existing,
             missing: names.collect(),
         },
-        _handles: handles,
+        handles,
     })
 }
 
@@ -322,16 +349,25 @@ fn protected_from(path: &Path) -> io::Result<Protected> {
                 });
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                if open_directory(&anchor, false).is_ok() {
-                    return Err(io::Error::other(
-                        "a protected link's target cannot be resolved",
-                    ));
-                }
+                absent_after(open_directory(&anchor, false))?;
                 tail.push(missing_name(&anchor)?);
                 anchor.pop();
             }
             Err(error) => return Err(error),
         }
+    }
+}
+
+/// Judges the no-follow reopen of a name whose followed open was not found: only a not-found
+/// reopen means the name is truly absent. A link that opens, or any other error such as access
+/// denied, refuses, so a protected anchor never falls back to its lexical parent.
+fn absent_after<T>(reopen: io::Result<T>) -> io::Result<()> {
+    match reopen {
+        Ok(_) => Err(io::Error::other(
+            "a protected link's target cannot be resolved",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
     }
 }
 
