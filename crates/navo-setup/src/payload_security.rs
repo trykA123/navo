@@ -116,7 +116,7 @@ pub(crate) fn root_descriptor() -> io::Result<Local> {
 }
 
 /// Converts one SDDL string to an allocated, self-relative security descriptor.
-fn descriptor(sddl: &str) -> io::Result<Local> {
+pub(crate) fn descriptor(sddl: &str) -> io::Result<Local> {
     let wide: Vec<u16> = sddl.encode_utf16().chain(Some(0)).collect();
     let mut descriptor = ptr::null_mut();
     // SAFETY: SDDL is NUL-terminated; output is allocated by the API on success.

@@ -33,6 +33,8 @@ windows = { version = "=0.62.2", features = [
   "Win32_UI_Shell_Common",
 ] }
 windows-sys = { version = "0.61.2", features = [
+  "Wdk_Foundation",
+  "Wdk_Storage_FileSystem",
   "Win32_Foundation",
   "Win32_Globalization",
   "Win32_Security",
