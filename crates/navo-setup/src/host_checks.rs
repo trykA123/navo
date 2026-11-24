@@ -23,7 +23,7 @@ pub(super) fn refuse_existing(chain: &Chain) -> io::Result<()> {
     Ok(())
 }
 
-/// Refuses a root inside a never-inside folder or equal to a never-equal one.
+/// Refuses a root inside a never-inside or service folder, or equal to a never-equal one.
 /// `fresh` also refuses fresh-only folders: an upgrade of the legacy root is allowed (IW8a).
 pub(super) fn refuse_existing_folders(
     chain: &Chain,
@@ -33,8 +33,7 @@ pub(super) fn refuse_existing_folders(
     let names = chain::OrdinalNames;
     let fresh_only: &[Protected] = if fresh { &refused.fresh_only } else { &[] };
     let inside = refused
-        .never_inside
-        .iter()
+        .blocked_inside()
         .chain(fresh_only)
         .any(|folder| placement::inside(chain, folder, &names));
     let equal = refused

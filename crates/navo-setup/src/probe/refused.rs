@@ -8,18 +8,20 @@ use windows_sys::Win32::UI::Shell::{
     FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads, FOLDERID_LocalAppData,
     FOLDERID_LocalAppDataLow, FOLDERID_Music, FOLDERID_Pictures, FOLDERID_Profile,
     FOLDERID_ProgramData, FOLDERID_ProgramFiles, FOLDERID_ProgramFilesCommon,
-    FOLDERID_ProgramFilesX86, FOLDERID_Public, FOLDERID_RoamingAppData, FOLDERID_SkyDrive,
-    FOLDERID_StartMenu, FOLDERID_Startup, FOLDERID_System, FOLDERID_UserProgramFiles,
-    FOLDERID_Videos, FOLDERID_Windows,
+    FOLDERID_ProgramFilesCommonX86, FOLDERID_ProgramFilesX86, FOLDERID_Public,
+    FOLDERID_RoamingAppData, FOLDERID_SkyDrive, FOLDERID_StartMenu, FOLDERID_Startup,
+    FOLDERID_System, FOLDERID_UserProfiles, FOLDERID_UserProgramFiles, FOLDERID_Videos,
+    FOLDERID_Windows,
 };
 
 use super::{add_known, add_known_unverified};
-use crate::placement::Refused;
+use crate::placement::{Protected, Refused};
 
 /// Velopack's pack id, which is also the legacy root folder's name.
 const NAVO_APP_ROOT: &str = "NavoApp";
 
-/// Builds the IW8a refused folders, anchoring absent folders at their nearest existing parent.
+/// Builds the IW8a and IW28 refused folders; an absent one anchors at its nearest existing parent.
+/// Fails when a known folder gives an error other than the allowed `E_FAIL` or not-found skip.
 pub fn refused() -> io::Result<Refused> {
     let mut never_inside = Vec::new();
     add_known(&mut never_inside, &FOLDERID_Windows, &[])?;
@@ -27,6 +29,8 @@ pub fn refused() -> io::Result<Refused> {
     add_known(&mut never_inside, &FOLDERID_ProgramFiles, &[])?;
     add_known(&mut never_inside, &FOLDERID_ProgramFilesX86, &[])?;
     add_known(&mut never_inside, &FOLDERID_ProgramFilesCommon, &[])?;
+    add_known(&mut never_inside, &FOLDERID_ProgramFilesCommonX86, &[])?;
+    add_known(&mut never_inside, &FOLDERID_ProgramFiles, &["WindowsApps"])?;
     add_known(&mut never_inside, &FOLDERID_ProgramData, &[])?;
     add_known(&mut never_inside, &FOLDERID_LocalAppData, &[brand::NAME])?;
     add_known(&mut never_inside, &FOLDERID_RoamingAppData, &[brand::NAME])?;
@@ -71,7 +75,22 @@ pub fn refused() -> io::Result<Refused> {
         never_equal,
         fresh_only,
         admin_only,
-        service: Vec::new(),
-        profiles: Vec::new(),
+        service: service()?,
+        profiles: profiles()?,
     })
+}
+
+/// The IW28 index service folders, under the current and the legacy brand name.
+fn service() -> io::Result<Vec<Protected>> {
+    let mut service = Vec::new();
+    add_known(&mut service, &FOLDERID_ProgramFiles, &[brand::NAME])?;
+    add_known(&mut service, &FOLDERID_ProgramFiles, &[brand::LEGACY_NAME])?;
+    Ok(service)
+}
+
+/// The IW28 parent of every user's profile, usually `C:\Users`.
+fn profiles() -> io::Result<Vec<Protected>> {
+    let mut profiles = Vec::new();
+    add_known(&mut profiles, &FOLDERID_UserProfiles, &[])?;
+    Ok(profiles)
 }

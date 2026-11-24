@@ -99,7 +99,7 @@ fn install_at(root: &Path, refused: &Refused) -> io::Result<Option<Install>> {
     }))
 }
 
-/// Checks IW6, IW7 and IW8a without requiring the folder to be writable or empty.
+/// Checks IW6, IW7, IW8a and the IW28 service folders without requiring a writable or empty folder.
 fn chain_is_safe(root: &Path, chain: &Chain, refused: &Refused, facts: &Facts) -> bool {
     if parse_candidate(root.as_os_str()).is_err() {
         return false;
@@ -112,8 +112,7 @@ fn chain_is_safe(root: &Path, chain: &Chain, refused: &Refused, facts: &Facts) -
     }
     let names = OrdinalNames;
     if refused
-        .never_inside
-        .iter()
+        .blocked_inside()
         .any(|folder| inside(chain, folder, &names))
     {
         return false;
@@ -130,8 +129,7 @@ fn chain_is_safe(root: &Path, chain: &Chain, refused: &Refused, facts: &Facts) -
     }
     // A case-sensitive or unknown anchor refuses every candidate whose chain holds it.
     refused
-        .never_inside
-        .iter()
+        .blocked_inside()
         .chain(&refused.never_equal)
         .all(|folder| {
             folder.anchor_case_sensitive == Some(false)

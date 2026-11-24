@@ -58,6 +58,13 @@ pub struct Refused {
     pub profiles: Vec<Protected>,
 }
 
+impl Refused {
+    /// The folders no install root may sit inside: never-inside plus the IW28 service folders.
+    pub fn blocked_inside(&self) -> impl Iterator<Item = &Protected> {
+        self.never_inside.iter().chain(&self.service)
+    }
+}
+
 /// The drive kind returned by `GetDriveTypeW`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriveKind {

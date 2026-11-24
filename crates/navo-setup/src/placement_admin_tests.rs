@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use super::{
     Chain, DriveKind, Facts, FileId, FolderWarning, Link, NameEq, Protected, Refused, Space, check,
-    refused_problem, warning,
+    inside, refused_problem, warning,
 };
 use crate::syntax::FolderProblem;
 
@@ -315,6 +315,31 @@ fn the_profiles_group_is_not_read_yet() {
         check_with(&chain, &refused, &facts(false)),
         Err(FolderProblem::NotWritable)
     );
+}
+
+#[test]
+fn blocked_inside_holds_the_service_folders_beside_never_inside() {
+    let below = chain(program_files("Program Files (x86)"), &["NAVO", "Tools"]);
+    let blocked = |refused: &Refused| {
+        refused
+            .blocked_inside()
+            .any(|folder| inside(&below, folder, &AsciiNames))
+    };
+    let only_service = Refused {
+        service: vec![protected(2, &["Navo"])],
+        ..Refused::default()
+    };
+    let only_never_inside = Refused {
+        never_inside: vec![protected(2, &[])],
+        ..Refused::default()
+    };
+    assert!(blocked(&only_service));
+    assert!(blocked(&only_never_inside));
+    assert!(!blocked(&Refused {
+        admin_only: vec![protected(2, &[])],
+        profiles: vec![protected(2, &[])],
+        ..Refused::default()
+    }));
 }
 
 #[test]
