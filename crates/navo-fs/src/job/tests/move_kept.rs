@@ -26,23 +26,21 @@ fn a_move_goes_on_past_a_kept_source_and_reports_it() {
             fs.add_file("src/b/d.txt", REPLACEMENT);
         };
         let at = fs.location("src/b/d.txt");
-        let (outcome, harness) = {
-            let mut harness = Harness {
-                workers,
-                ..Harness::default()
-            };
-            let fired = std::sync::atomic::AtomicBool::new(false);
-            let hook = |location: &Location| {
-                if *location == at && !fired.swap(true, std::sync::atomic::Ordering::SeqCst) {
-                    replace();
-                }
-            };
-            let ops = super::delete_races::BeforeRemove {
-                fs: &fs,
-                hook: &hook,
-            };
-            (harness.run(&ops, &plan, &[]), harness)
+        let mut harness = Harness {
+            workers,
+            ..Harness::default()
         };
+        let fired = std::sync::atomic::AtomicBool::new(false);
+        let hook = |location: &Location| {
+            if *location == at && !fired.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                replace();
+            }
+        };
+        let ops = super::delete_races::BeforeRemove {
+            fs: &fs,
+            hook: &hook,
+        };
+        let outcome = harness.run(&ops, &plan, &[]);
         let seq = removal_of(&plan, &fs, "src/b/d.txt");
         assert!(
             !exists(&fs, "src/b/c.txt"),
