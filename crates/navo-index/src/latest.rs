@@ -100,6 +100,16 @@ impl<T> Latest<T> {
             .waiting
     }
 
+    /// Whether a value is waiting for a reader.
+    #[cfg(test)]
+    pub(crate) fn pending(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .value
+            .is_some()
+    }
+
     /// Clones the newest value without consuming it.
     #[cfg(test)]
     pub(crate) fn latest(&self) -> Option<T>

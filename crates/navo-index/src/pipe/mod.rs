@@ -322,11 +322,22 @@ fn serve_instance_with(
         let jobs = Arc::clone(&answers);
         let answering = scope.spawn(move || session::answer_jobs(jobs, handler));
         let gone = || answering.is_finished();
+        let close = CloseOnDrop(&answers);
         let served = accept_sessions(pipe, (&answers, &gone), &[cancel, stopped], backoff);
-        answers.close();
+        drop(close);
         let joined = answering.join().map_err(|_| PipeError::NotAvailable);
         served.and(joined)
     })
+}
+
+/// Closes the answer mailbox while the scope unwinds, so a panic before the
+/// normal close cannot leave the idle worker waiting forever.
+struct CloseOnDrop<'a>(&'a Latest<session::Job>);
+
+impl Drop for CloseOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.close();
+    }
 }
 
 fn accept_sessions(

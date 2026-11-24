@@ -335,9 +335,14 @@ impl Drop for StopOnDrop {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    };
 
     use super::*;
+
+    const WAIT: Duration = Duration::from_secs(5);
 
     fn generation(request: &Request) -> u64 {
         let [super::super::QueryTerm::Name(name), ..] = request.terms.as_slice() else {
@@ -346,70 +351,159 @@ mod tests {
         name.parse().unwrap()
     }
 
-    struct Gate {
-        entered: mpsc::Sender<()>,
+    struct Stall {
+        entered: mpsc::Sender<u64>,
         release: Mutex<mpsc::Receiver<()>>,
     }
 
-    fn stall_at_gate(gate: &Gate) {
-        gate.entered.send(()).unwrap();
-        gate.release.lock().unwrap().recv().unwrap();
+    impl Stall {
+        fn park_first(&self, first: &AtomicBool, generation: u64) {
+            if first.swap(false, Ordering::SeqCst) {
+                self.entered.send(generation).unwrap();
+                self.release.lock().unwrap().recv().unwrap();
+            }
+        }
     }
 
-    fn record(gate: &Gate, answered: &Mutex<Vec<u64>>, request: &Request) {
-        let generation = generation(request);
-        answered.lock().unwrap().push(generation);
-        if generation == 0 {
-            stall_at_gate(gate);
+    /// Hands out generations `0..1_000`, holding `1..` until the test opens the
+    /// burst, then idles until the session stops.
+    struct BurstPipe {
+        next: Mutex<u64>,
+        burst: Mutex<Option<mpsc::Receiver<()>>>,
+        all_sent: mpsc::Sender<()>,
+        written: mpsc::Sender<u64>,
+    }
+
+    impl BurstPipe {
+        fn take_generation(&self) -> Option<u64> {
+            let mut next = self.next.lock().unwrap();
+            if *next >= 1_000 {
+                return None;
+            }
+            let generation = *next;
+            *next += 1;
+            Some(generation)
+        }
+    }
+
+    fn idle(cancel: &Cancellation<'_>) {
+        while !cancel.is_cancelled() {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    impl Transport for BurstPipe {
+        fn accept(&self, _: &Cancellation<'_>) -> Result<(), PipeError> {
+            Ok(())
+        }
+
+        fn disconnect(&self) -> Result<(), PipeError> {
+            Ok(())
+        }
+
+        fn read_query(
+            &self,
+            _: Option<Instant>,
+            cancel: &Cancellation<'_>,
+        ) -> Result<Query, PipeError> {
+            let Some(generation) = self.take_generation() else {
+                idle(cancel);
+                return Err(PipeError::Cancelled);
+            };
+            if generation == 1
+                && let Some(opened) = self.burst.lock().unwrap().take()
+            {
+                opened.recv().unwrap();
+            }
+            if generation == 999 {
+                self.all_sent.send(()).unwrap();
+            }
+            Ok(Query {
+                request: Request {
+                    terms: vec![super::super::QueryTerm::Name(generation.to_string())],
+                },
+                generation,
+            })
+        }
+
+        fn write_response(&self, response: &Response, _: Instant) -> Result<(), PipeError> {
+            let generation = match response {
+                Response::Hits { generation, .. }
+                | Response::Status { generation, .. }
+                | Response::FolderTotalsV1 { generation, .. }
+                | Response::MemoryV1 { generation, .. }
+                | Response::StatusV1 { generation, .. }
+                | Response::VersionV1 { generation, .. } => *generation,
+            };
+            self.written
+                .send(generation)
+                .map_err(|_| PipeError::NotAvailable)
         }
     }
 
     #[test]
-    fn a_stalled_worker_keeps_one_pending_answer() {
-        let (entered, first_entered) = mpsc::channel();
-        let (release, released) = mpsc::channel();
-        let gate = Arc::new(Gate {
-            entered,
-            release: Mutex::new(released),
+    fn a_thousand_generation_bumps_keep_one_pending_answer() {
+        let (stalled_sender, stalled) = mpsc::channel();
+        let (release_sender, releases) = mpsc::channel();
+        let (burst_sender, burst) = mpsc::channel();
+        let (all_sent, sent) = mpsc::channel();
+        let (written, responses) = mpsc::channel();
+        let stall = Arc::new(Stall {
+            entered: stalled_sender,
+            release: Mutex::new(releases),
         });
+        let first = Arc::new(AtomicBool::new(true));
         let answered = Arc::new(Mutex::new(Vec::new()));
         let handler = {
-            let gate = Arc::clone(&gate);
+            let stall = Arc::clone(&stall);
+            let first = Arc::clone(&first);
             let answered = Arc::clone(&answered);
             move |request: &Request, _: &CancelToken| {
-                record(&gate, &answered, request);
+                let generation = generation(request);
+                answered.lock().unwrap().push(generation);
+                stall.park_first(&first, generation);
                 Reply::default()
             }
         };
+        let pipe = BurstPipe {
+            next: Mutex::new(0),
+            burst: Mutex::new(Some(burst)),
+            all_sent,
+            written,
+        };
         let answers = Arc::new(Latest::default());
-        let jobs = Arc::clone(&answers);
-        let worker = std::thread::spawn(move || answer_jobs(jobs, &handler));
-        let mut replies = Vec::new();
-        for order in 0..1_000 {
-            let (reply, answered) = mpsc::sync_channel(1);
-            replies.push(answered);
-            assert!(answers.publish(Job {
-                request: Request {
-                    terms: vec![super::super::QueryTerm::Name(order.to_string())],
-                },
-                cancel: CancelToken::new(),
-                reply,
-            }));
-            if order == 0 {
-                first_entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        let stop = CancelToken::new();
+        std::thread::scope(|scope| {
+            let worker = {
+                let answers = Arc::clone(&answers);
+                scope.spawn(move || answer_jobs(answers, &handler))
+            };
+            let session = {
+                let answers = Arc::clone(&answers);
+                let stop = stop.clone();
+                scope.spawn(move || serve_session(&pipe, &answers, &[&stop]))
+            };
+            assert_eq!(stalled.recv_timeout(WAIT).unwrap(), 0);
+            assert_eq!(answers.revision(), 1, "one job while the worker is stalled");
+            burst_sender.send(()).unwrap();
+            sent.recv_timeout(WAIT).unwrap();
+            let deadline = Instant::now() + WAIT;
+            while answers.revision() < 2 {
+                assert!(
+                    Instant::now() < deadline,
+                    "the newest generation was never published"
+                );
+                std::thread::yield_now();
             }
-        }
-        release.send(()).unwrap();
-        answers.close();
-        worker.join().unwrap();
-        let received = replies
-            .iter()
-            .filter(|reply| reply.try_recv().is_ok())
-            .count();
-        assert!(received <= 2, "answered {received} pending jobs");
-        assert!(
-            answered.lock().unwrap().contains(&999),
-            "the newest answer was lost"
-        );
+            assert!(answers.pending(), "the newest job is the only one pending");
+            answers.close();
+            release_sender.send(()).unwrap();
+            assert_eq!(responses.recv_timeout(WAIT).unwrap(), 999);
+            assert_eq!(responses.recv_timeout(WAIT).unwrap(), 999);
+            stop.cancel();
+            assert!(worker.join().is_ok());
+            assert!(session.join().is_ok());
+        });
+        assert_eq!(*answered.lock().unwrap(), [0, 999]);
     }
 }

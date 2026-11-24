@@ -1,11 +1,14 @@
 use std::{
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
     time::{Duration, Instant},
 };
 
 use crate::latest::Latest;
 use crate::pipe::{
-    CancelToken, Cancellation, PipeError, Query, Reply, Response, next_backoff,
+    CancelToken, Cancellation, PipeError, Query, Reply, Request, Response, next_backoff,
     serve_instance_with, session::Transport,
 };
 
@@ -280,4 +283,47 @@ fn an_instance_stops_accepting_once_its_answer_thread_is_gone() {
     );
     assert!(matches!(result, Err(PipeError::NotAvailable)));
     assert_eq!(pipe.accepts.load(Ordering::SeqCst), 1);
+}
+
+struct Panicking;
+
+impl Transport for Panicking {
+    fn accept(&self, _: &Cancellation<'_>) -> Result<(), PipeError> {
+        panic!("the accept path panicked");
+    }
+
+    fn disconnect(&self) -> Result<(), PipeError> {
+        Ok(())
+    }
+
+    fn read_query(&self, _: Option<Instant>, _: &Cancellation<'_>) -> Result<Query, PipeError> {
+        Err(PipeError::NotAvailable)
+    }
+
+    fn write_response(&self, _: &Response, _: Instant) -> Result<(), PipeError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn a_panicking_accept_closes_the_answer_mailbox() {
+    let (finished, done) = mpsc::channel();
+    let runner = std::thread::spawn(move || {
+        let result = std::panic::catch_unwind(|| {
+            let handler = |_: &Request, _: &CancelToken| Reply::default();
+            let _ = serve_instance_with(
+                &Panicking,
+                &handler,
+                (&CancelToken::new(), &CancelToken::new()),
+                (Duration::ZERO, Duration::ZERO),
+            );
+        });
+        let _ = finished.send(result.is_err());
+    });
+    assert_eq!(
+        done.recv_timeout(Duration::from_secs(5)).ok(),
+        Some(true),
+        "the scope did not return after a panicking accept"
+    );
+    runner.join().unwrap();
 }
