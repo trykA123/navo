@@ -21,6 +21,7 @@ mod l10n;
 mod paths;
 mod perf;
 mod plans;
+mod ratchet;
 mod seams;
 mod size;
 pub mod speed;
@@ -48,6 +49,7 @@ fn main() -> ExitCode {
         Some("seams") => seams::run(rest),
         Some("paths") => paths::run(rest),
         Some("plans") => plans::run(rest),
+        Some("ratchet") => ratchet::run(rest),
         Some("perf-fixture") => perf::fixture(rest),
         Some("perf-summary") => perf::summary(rest),
         Some("bench-copy") => bench_copy::run(rest),
