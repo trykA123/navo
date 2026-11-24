@@ -3,6 +3,7 @@
 //! `appcontainer_win.rs` calls Win32.
 
 use std::fmt;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 /// The fixed AppContainer name; Windows derives the same SID from it on every call.
@@ -45,6 +46,15 @@ const DENY_ACE_TYPES: [u8; 4] = [1, 6, 0x0A, 0x0C];
 /// Byte sizes in an ACL: its header, an ACE header plus mask, an object ACE's `Flags`, a GUID,
 /// and a SID's fixed part (revision, count, 6-byte authority).
 const ACL_HEADER: usize = 8;
+/// ACL revisions Windows accepts (`ACL_REVISION` 2 up to `ACL_REVISION_DS` 4).
+const ACL_REVISIONS: [u8; 3] = [2, 3, 4];
+/// A self-relative descriptor's header: revision, padding, control, then owner, group, SACL and DACL offsets.
+const SD_HEADER: usize = 20;
+const SD_REVISION: u8 = 1;
+const SD_DACL_OFFSET: usize = 16;
+const SE_DACL_PRESENT: u16 = 0x0004;
+const SE_DACL_PROTECTED: u16 = 0x1000;
+const SE_SELF_RELATIVE: u16 = 0x8000;
 const ACE_HEADER_AND_MASK: usize = 8;
 const OBJECT_FLAGS: usize = 4;
 const GUID: usize = 16;
@@ -199,6 +209,41 @@ pub fn already_granted(aces: &[AceView]) -> bool {
         }
     }
     allowed & READ_EXECUTE == READ_EXECUTE
+}
+
+/// Where a self-relative security descriptor's DACL lies, and whether it is protected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DaclSpan {
+    /// The DACL's header and `AclSize` bytes, as offsets into the descriptor.
+    pub range: Range<usize>,
+    /// `SE_DACL_PROTECTED`: the DACL does not inherit from the parent folder.
+    pub protected: bool,
+}
+
+/// Finds the DACL in `descriptor`, the self-relative bytes Windows wrote into a buffer Navo owns.
+/// Only `descriptor.len()` bounds the result: the DACL offset must be DWORD-aligned and past the
+/// header, and the ACL header and its `AclSize` must fit. Fails with `ERROR_INVALID_ACL` otherwise,
+/// and for a missing or NULL DACL, because merging into it would drop "everyone" access.
+pub fn locate_dacl(descriptor: &[u8]) -> Result<DaclSpan, i32> {
+    let control = read_u16(descriptor, 2)?;
+    let offset =
+        usize::try_from(read_u32(descriptor, SD_DACL_OFFSET)?).map_err(|_| ERROR_INVALID_ACL)?;
+    let header_ok = read_u8(descriptor, 0)? == SD_REVISION && control & SE_SELF_RELATIVE != 0;
+    let present = control & SE_DACL_PRESENT != 0 && offset != 0;
+    if !header_ok || !present || offset < SD_HEADER || !offset.is_multiple_of(4) {
+        return Err(ERROR_INVALID_ACL);
+    }
+    let acl = descriptor.get(offset..).ok_or(ERROR_INVALID_ACL)?;
+    let revision = read_u8(acl, 0)?;
+    let size = usize::from(read_u16(acl, 2)?);
+    let size_ok = size >= ACL_HEADER && size.is_multiple_of(4) && size <= acl.len();
+    if !ACL_REVISIONS.contains(&revision) || !size_ok {
+        return Err(ERROR_INVALID_ACL);
+    }
+    Ok(DaclSpan {
+        range: offset..offset + size,
+        protected: control & SE_DACL_PROTECTED != 0,
+    })
 }
 
 /// Describes every ACE in the raw `acl` bytes (header included). The whole layout is checked
@@ -752,5 +797,68 @@ mod tests {
         let text = denied(Path::new("pdfium.dll")).to_string();
         assert!(text.contains("WriteDacl"), "{text}");
         assert!(text.contains("pdfium.dll"), "{text}");
+    }
+
+    /// A self-relative descriptor with `control` (plus `SE_SELF_RELATIVE`), its DACL at offset 20.
+    fn raw_descriptor(control: u16, acl: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![1, 0];
+        bytes.extend((control | 0x8000).to_le_bytes());
+        bytes.extend([0; 12]);
+        bytes.extend(20u32.to_le_bytes());
+        bytes.extend(acl);
+        bytes
+    }
+
+    fn container_acl() -> Vec<u8> {
+        raw_acl(&[raw_ace(0, READ_EXECUTE, &known_sid(Trustee::Container))])
+    }
+
+    #[test]
+    fn the_dacl_is_located_by_its_offset_and_size_with_its_protection() {
+        let acl = container_acl();
+        let mut descriptor = raw_descriptor(0x0004, &acl);
+        descriptor.extend([0xEE; 8]);
+        let span = DaclSpan {
+            range: 20..20 + acl.len(),
+            protected: false,
+        };
+        assert_eq!(locate_dacl(&descriptor), Ok(span));
+        let protected = raw_descriptor(0x1004, &acl);
+        assert_eq!(locate_dacl(&protected).map(|span| span.protected), Ok(true));
+    }
+
+    #[test]
+    fn a_dacl_outside_the_buffer_unaligned_or_null_is_refused() {
+        let acl = container_acl();
+        let good = raw_descriptor(0x0004, &acl);
+        let with = |at: usize, value: &[u8]| {
+            let mut bytes = good.clone();
+            bytes[at..at + value.len()].copy_from_slice(value);
+            bytes
+        };
+        let past = (good.len() as u32 + 4).to_le_bytes();
+        let size = |size: usize| (size as u16).to_le_bytes();
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("descriptor header truncated", good[..19].to_vec()),
+            ("descriptor revision", with(0, &[2])),
+            ("absolute descriptor", with(2, &0x0004u16.to_le_bytes())),
+            ("no DACL", with(2, &0x8000u16.to_le_bytes())),
+            ("NULL DACL", with(16, &0u32.to_le_bytes())),
+            ("offset inside the header", with(16, &8u32.to_le_bytes())),
+            ("offset unaligned", with(16, &22u32.to_le_bytes())),
+            ("offset past the buffer", with(16, &past)),
+            (
+                "offset far past the buffer",
+                with(16, &0xFFFF_FFFCu32.to_le_bytes()),
+            ),
+            ("ACL header truncated", good[..22].to_vec()),
+            ("ACL revision", with(20, &[1])),
+            ("AclSize past the buffer", with(22, &size(acl.len() + 4))),
+            ("AclSize unaligned", with(22, &size(acl.len() - 2))),
+            ("AclSize below the header", with(22, &size(4))),
+        ];
+        for (name, descriptor) in cases {
+            assert_eq!(locate_dacl(&descriptor), Err(ERROR_INVALID_ACL), "{name}");
+        }
     }
 }

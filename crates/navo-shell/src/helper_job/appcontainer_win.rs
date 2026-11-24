@@ -4,23 +4,21 @@
 
 use std::ffi::c_void;
 use std::fs::{File, OpenOptions};
-use std::mem::size_of;
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::ptr;
 
-use windows_sys::Win32::Foundation::{INVALID_HANDLE_VALUE, LocalFree};
+use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, INVALID_HANDLE_VALUE, LocalFree};
 use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, ConvertStringSidToSidW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
-    GetSecurityInfo, NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, SetEntriesInAclW, SetSecurityInfo,
-    TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+    NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, SetEntriesInAclW, SetSecurityInfo, TRUSTEE_IS_SID,
+    TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
 use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
 use windows_sys::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, EqualSid, FreeSid, GetSecurityDescriptorControl,
-    GetSecurityDescriptorLength, NO_INHERITANCE, PROTECTED_DACL_SECURITY_INFORMATION, PSID,
-    SE_DACL_PROTECTED, UNPROTECTED_DACL_SECURITY_INFORMATION,
+    ACL, DACL_SECURITY_INFORMATION, EqualSid, FreeSid, GetKernelObjectSecurity, NO_INHERITANCE,
+    PROTECTED_DACL_SECURITY_INFORMATION, PSID, UNPROTECTED_DACL_SECURITY_INFORMATION,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
@@ -28,9 +26,13 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 use super::appcontainer_policy::{
-    ALL_APP_PACKAGES, AceView, CONTAINER_NAME, ERROR_INVALID_ACL, EVERYONE, GrantError,
-    GrantOutcome, GrantStep, READ_EXECUTE, Trustee, already_granted, check_plain_file, parse_dacl,
+    ALL_APP_PACKAGES, AceView, CONTAINER_NAME, DaclSpan, ERROR_INVALID_ACL, EVERYONE, GrantError,
+    GrantOutcome, GrantStep, READ_EXECUTE, Trustee, already_granted, check_plain_file, locate_dacl,
+    parse_dacl,
 };
+
+/// Size queries before giving up when the DACL keeps growing between the query and the read.
+const READ_ATTEMPTS: usize = 3;
 
 /// The helper's AppContainer SID; freed with `FreeSid` on drop.
 pub(crate) struct ContainerSid(PSID);
@@ -88,11 +90,33 @@ impl ContainerSid {
     }
 }
 
-/// A file's DACL as read through its handle; the descriptor owns the memory `dacl` points into.
+/// A file's security descriptor, read through its handle into a buffer Navo owns, and where its
+/// DACL lies in it. The `u32` buffer keeps the DWORD-aligned DACL aligned for Win32.
 struct FileDacl {
-    descriptor: LocalMem,
-    dacl: *mut ACL,
-    protected: bool,
+    descriptor: Vec<u32>,
+    span: DaclSpan,
+}
+
+impl FileDacl {
+    /// The DACL's bytes; `locate_dacl` checked that they lie inside the buffer.
+    fn bytes(&self) -> Result<&[u8], i32> {
+        let range = self.span.range.clone();
+        as_bytes(&self.descriptor)
+            .get(range)
+            .ok_or(ERROR_INVALID_ACL)
+    }
+
+    /// The DACL for Win32 calls, valid while `self` lives.
+    fn acl(&self) -> Result<*const ACL, i32> {
+        self.bytes().map(|bytes| bytes.as_ptr().cast())
+    }
+}
+
+/// `words` seen as bytes.
+fn as_bytes(words: &[u32]) -> &[u8] {
+    // SAFETY: every byte of a `u32` is initialised and any value is a valid `u8`; the view borrows
+    // `words` and covers exactly its bytes.
+    unsafe { std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), size_of_val(words)) }
 }
 
 /// Grants `sid` read+execute on `path` with one explicit, non-inherited ACE when the DACL does not
@@ -119,8 +143,11 @@ pub(crate) fn grant_read_execute(
         return Ok(GrantOutcome::AlreadyGranted);
     }
     let writable = reopen_for_write(&file).map_err(|code| fail(GrantStep::OpenForWrite, code))?;
-    let merged = merge_grant(current.dacl, sid).map_err(|code| fail(GrantStep::BuildDacl, code))?;
-    write_dacl(&writable, merged.0.cast(), current.protected)
+    let merged = current
+        .acl()
+        .and_then(|acl| merge_grant(acl, sid))
+        .map_err(|code| fail(GrantStep::BuildDacl, code))?;
+    write_dacl(&writable, merged.0.cast(), current.span.protected)
         .map_err(|code| fail(GrantStep::WriteDacl, code))?;
     Ok(GrantOutcome::Added)
 }
@@ -157,43 +184,52 @@ fn well_known_sid(sddl: &str) -> Result<LocalMem, i32> {
     Ok(LocalMem(sid))
 }
 
-/// Reads the DACL and its protection bit through `file`. Fails with the Win32 error; a NULL
-/// DACL fails with `ERROR_INVALID_ACL`, because merging into it would drop "everyone" access.
+/// Reads the DACL and its protection bit through `file`. The DACL is bounded by the bytes Windows
+/// wrote into Navo's buffer before any slice is made. Fails with the Win32 error; a malformed,
+/// missing or NULL DACL fails with `ERROR_INVALID_ACL`.
 fn read_dacl(file: &File) -> Result<FileDacl, i32> {
-    let mut dacl: *mut ACL = ptr::null_mut();
-    let mut descriptor = ptr::null_mut();
-    // SAFETY: the handle is live; the out-pointers are live; owner, group and SACL are not asked.
-    let status = unsafe {
-        GetSecurityInfo(
-            file.as_raw_handle(),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            &raw mut dacl,
-            ptr::null_mut(),
-            &raw mut descriptor,
-        )
-    };
-    if status != 0 {
-        return Err(status as i32);
+    let (descriptor, written) = read_descriptor(file)?;
+    let bytes = as_bytes(&descriptor)
+        .get(..written)
+        .ok_or(ERROR_INVALID_ACL)?;
+    let span = locate_dacl(bytes)?;
+    Ok(FileDacl { descriptor, span })
+}
+
+/// Reads `file`'s self-relative security descriptor (DACL part) through the same handle into a
+/// buffer Navo owns: one size query, then the read. Returns the buffer and the bytes written.
+fn read_descriptor(file: &File) -> Result<(Vec<u32>, usize), i32> {
+    let mut words: Vec<u32> = Vec::new();
+    for _ in 0..READ_ATTEMPTS {
+        let capacity =
+            u32::try_from(size_of_val(words.as_slice())).map_err(|_| ERROR_INVALID_ACL)?;
+        let buffer = if words.is_empty() {
+            ptr::null_mut()
+        } else {
+            words.as_mut_ptr().cast()
+        };
+        let mut needed = 0u32;
+        // SAFETY: the handle is live with READ_CONTROL; Windows writes at most `capacity` bytes at
+        // `buffer`, which `words` owns, and `needed` is a live out-pointer.
+        let ok = unsafe {
+            GetKernelObjectSecurity(
+                file.as_raw_handle(),
+                DACL_SECURITY_INFORMATION,
+                buffer,
+                capacity,
+                &raw mut needed,
+            )
+        };
+        if ok != 0 {
+            return Ok((words, needed.min(capacity) as usize));
+        }
+        let error = last_error();
+        if error != ERROR_INSUFFICIENT_BUFFER as i32 || needed <= capacity {
+            return Err(error);
+        }
+        words = vec![0; (needed as usize).div_ceil(4)];
     }
-    let descriptor = LocalMem(descriptor);
-    if dacl.is_null() {
-        return Err(ERROR_INVALID_ACL);
-    }
-    let (mut control, mut revision) = (0u16, 0u32);
-    // SAFETY: the descriptor is live and both out-pointers are live.
-    if unsafe { GetSecurityDescriptorControl(descriptor.0, &raw mut control, &raw mut revision) }
-        == 0
-    {
-        return Err(last_error());
-    }
-    Ok(FileDacl {
-        descriptor,
-        dacl,
-        protected: control & SE_DACL_PROTECTED != 0,
-    })
+    Err(ERROR_INSUFFICIENT_BUFFER as i32)
 }
 
 /// Describes every ACE in `current`'s DACL, naming allow and deny ACEs for `sid`, ALL APPLICATION
@@ -201,7 +237,7 @@ fn read_dacl(file: &File) -> Result<FileDacl, i32> {
 fn ace_views(current: &FileDacl, sid: &ContainerSid) -> Result<Vec<AceView>, i32> {
     let packages = well_known_sid(ALL_APP_PACKAGES)?;
     let everyone = well_known_sid(EVERYONE)?;
-    parse_dacl(acl_bytes(current)?, |known, ace_sid| {
+    parse_dacl(current.bytes()?, |known, ace_sid| {
         let other: PSID = match known {
             Trustee::Container => sid.0,
             Trustee::AllAppPackages => packages.0,
@@ -215,30 +251,8 @@ fn ace_views(current: &FileDacl, sid: &ContainerSid) -> Result<Vec<AceView>, i32
     })
 }
 
-/// The DACL's `AclSize` bytes, once its header and those bytes are known to lie inside the
-/// descriptor `GetSecurityInfo` returned. Fails with `ERROR_INVALID_ACL` otherwise.
-fn acl_bytes(current: &FileDacl) -> Result<&[u8], i32> {
-    // SAFETY: the descriptor is the live, self-relative one GetSecurityInfo allocated.
-    let total = unsafe { GetSecurityDescriptorLength(current.descriptor.0) } as usize;
-    let room = current
-        .dacl
-        .addr()
-        .checked_sub(current.descriptor.0.addr())
-        .and_then(|offset| total.checked_sub(offset))
-        .filter(|&room| room >= size_of::<ACL>())
-        .ok_or(ERROR_INVALID_ACL)?;
-    // SAFETY: the ACL header lies inside the live descriptor (checked above); read unaligned.
-    let size = usize::from(unsafe { ptr::read_unaligned(&raw const (*current.dacl).AclSize) });
-    if size > room {
-        return Err(ERROR_INVALID_ACL);
-    }
-    // SAFETY: these `size` bytes lie inside the descriptor, which `current` owns and keeps alive
-    // for the slice's lifetime; nothing writes to it meanwhile.
-    Ok(unsafe { std::slice::from_raw_parts(current.dacl.cast::<u8>(), size) })
-}
-
 /// Builds a new ACL: `dacl` plus an explicit read+execute allow for `sid`. Fails with the Win32 error.
-fn merge_grant(dacl: *mut ACL, sid: &ContainerSid) -> Result<LocalMem, i32> {
+fn merge_grant(dacl: *const ACL, sid: &ContainerSid) -> Result<LocalMem, i32> {
     let access = EXPLICIT_ACCESS_W {
         grfAccessPermissions: READ_EXECUTE,
         grfAccessMode: GRANT_ACCESS,
@@ -294,8 +308,10 @@ fn last_error() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows_sys::Win32::Security::Authorization::GetSecurityInfo;
     use windows_sys::Win32::Security::{
-        ACL_SIZE_INFORMATION, AclSizeInformation, GetAclInformation,
+        ACL_SIZE_INFORMATION, AclSizeInformation, GetAclInformation, GetSecurityDescriptorControl,
+        SE_DACL_PROTECTED,
     };
 
     /// Reads back `(flags, mask)` of the allow ACEs for `sid` on `path`, and the total ACE count.
@@ -309,7 +325,12 @@ mod tests {
         let bytes = size_of::<ACL_SIZE_INFORMATION>() as u32;
         // SAFETY: the DACL is live and `info` a live buffer of `bytes` bytes.
         let ok = unsafe {
-            GetAclInformation(dacl.dacl, (&raw mut info).cast(), bytes, AclSizeInformation)
+            GetAclInformation(
+                dacl.acl().unwrap(),
+                (&raw mut info).cast(),
+                bytes,
+                AclSizeInformation,
+            )
         };
         assert_ne!(ok, 0);
         let own = ace_views(&dacl, sid)
@@ -361,5 +382,46 @@ mod tests {
         assert_eq!(error.step, GrantStep::OpenFile);
         assert_eq!(error.target.as_deref(), Some(path.as_path()));
         assert_eq!(error.code, 2);
+    }
+
+    #[test]
+    fn the_dacl_in_navo_memory_matches_the_one_get_security_info_returns() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pdfium.dll");
+        std::fs::write(&path, b"x").unwrap();
+        let sid = ContainerSid::derive().unwrap();
+        assert_eq!(grant_read_execute(&path, &sid), Ok(GrantOutcome::Added));
+        let file = OpenOptions::new()
+            .access_mode(READ_CONTROL)
+            .open(&path)
+            .unwrap();
+        let ours = read_dacl(&file).unwrap();
+        let (mut dacl, mut descriptor) = (ptr::null_mut::<ACL>(), ptr::null_mut());
+        // SAFETY: the handle is live and the out-pointers are live; only the DACL is asked.
+        let status = unsafe {
+            GetSecurityInfo(
+                file.as_raw_handle(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                &raw mut dacl,
+                ptr::null_mut(),
+                &raw mut descriptor,
+            )
+        };
+        assert_eq!(status, 0);
+        let descriptor = LocalMem(descriptor);
+        // SAFETY: Windows returned a valid DACL inside the live descriptor.
+        let theirs =
+            unsafe { std::slice::from_raw_parts(dacl.cast::<u8>(), usize::from((*dacl).AclSize)) };
+        assert_eq!(ours.bytes().unwrap(), theirs);
+        let (mut control, mut revision) = (0u16, 0u32);
+        // SAFETY: the descriptor is live and both out-pointers are live.
+        let ok = unsafe {
+            GetSecurityDescriptorControl(descriptor.0, &raw mut control, &raw mut revision)
+        };
+        assert_ne!(ok, 0);
+        assert_eq!(ours.span.protected, control & SE_DACL_PROTECTED != 0);
     }
 }
