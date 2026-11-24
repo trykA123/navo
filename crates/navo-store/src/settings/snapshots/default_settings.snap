@@ -32,6 +32,24 @@ right-button = "total-commander"
 
 [terminal]
 provider = "system"
+shell = ""
+start-in = "pane"
+prompt-marks = true
+font = "JetBrains Mono"
+font-size = 13
+line-height = 1.4
+cursor = "block"
+blink = true
+scheme = "navo"
+keep-readable = true
+opacity = 100
+padding = 8
+drawer-height = 40
+side-width = 440
+scrollback = 10000
+copy-on-select = false
+ctrl-c-copies = true
+bell = "tab"
 
 [editor]
 

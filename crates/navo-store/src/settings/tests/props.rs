@@ -209,8 +209,11 @@ fn selection() -> impl Strategy<Value = SelectionSettings> {
 
 pub(super) fn settings() -> impl Strategy<Value = Settings> {
     let selection = selection();
-    let terminal =
-        (TEXT, option::of(TEXT)).prop_map(|(provider, command)| Terminal { provider, command });
+    let terminal = (TEXT, option::of(TEXT)).prop_map(|(provider, command)| Terminal {
+        provider,
+        command,
+        ..Terminal::default()
+    });
     let experimental = btree_map(TEXT, any::<bool>(), 0..4);
     let editor = option::of(TEXT).prop_map(|path| Editor { path });
     (

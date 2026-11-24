@@ -58,7 +58,7 @@ path.show_hidden | Show hidden path folders | NavoPane
 preview.browse | Browse in preview | NavoPane
 crash_notice.focus | Go to the crash notice | NavoPane
 activity.focus | Go to the activity strip | NavoPane
-files.open_terminal | Open terminal here | NavoPane
+files.open_terminal | Open in external terminal | NavoPane
 files.reset_column_widths | Reset column widths | NavoPane
 crash_notice.open_folder | Open the recovery folder | CrashNotice
 crash_notice.save | Save crash report | CrashNotice

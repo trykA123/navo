@@ -155,7 +155,10 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
     ),
     spec(
         (F::TerminalProvider, S::Tools, "terminal.provider"),
-        ("Terminal", "The terminal Navo opens in a folder"),
+        (
+            "settings-external-terminal",
+            "settings-external-terminal-help",
+        ),
         Control::Choices(&TERMINAL_PROVIDERS, Look::Segments),
     ),
     spec(

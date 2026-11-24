@@ -437,7 +437,7 @@ cmd-multi-rename-toggle-row = Exclude or include the row
 command-center-indexing = Indexing { $root } · { $count } files
 command-center-index-busy = Index service is busy · type to try again
 
-cmd-files-open-terminal = Open terminal here
+cmd-files-open-terminal = Open in external terminal
 cmd-files-reset-column-widths = Reset column widths
 cmd-user-commands-run = Run user command
 cmd-user-commands-edit = Edit user commands

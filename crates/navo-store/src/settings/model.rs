@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::terminal::Terminal;
 use super::view::{
     Automotive, CopySettings, ImageViewer, MarkdownViewer, PreviewViewer, TextViewer,
     WindowSettings,
@@ -216,23 +217,6 @@ impl Default for SelectionSettings {
             space_measures_folders: true,
             patterns_select_folders: false,
             right_button: RightButton::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "kebab-case")]
-pub struct Terminal {
-    pub provider: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub command: Option<String>,
-}
-
-impl Default for Terminal {
-    fn default() -> Self {
-        Self {
-            provider: "system".to_owned(),
-            command: None,
         }
     }
 }

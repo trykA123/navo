@@ -56,6 +56,61 @@ fn terminal_defaults() {
     let t = Settings::default().terminal;
     assert_eq!(t.provider, "system");
     assert_eq!(t.command, None);
+    assert_eq!(t.shell, "");
+    assert_eq!(t.start_in, TerminalStart::Pane);
+    assert!(t.prompt_marks);
+    assert_eq!(t.font, "JetBrains Mono");
+    assert_eq!(t.font_size, 13);
+    assert_eq!(t.line_height, LineHeight::default());
+    assert_eq!(t.cursor, TerminalCursor::Block);
+    assert!(t.blink);
+    assert_eq!(t.scheme, TerminalScheme::Navo);
+    assert!(t.keep_readable);
+    assert_eq!(t.opacity, 100);
+    assert_eq!(t.padding, 8);
+    assert_eq!(t.drawer_height, 40);
+    assert_eq!(t.side_width, 440);
+    assert_eq!(t.scrollback, 10_000);
+    assert!(!t.copy_on_select);
+    assert!(t.ctrl_c_copies);
+    assert_eq!(t.bell, TerminalBell::Tab);
+}
+
+#[test]
+fn line_height_reads_a_tenth_and_refuses_an_out_of_range_value() {
+    let (settings, _) = crate::parse_settings("[terminal]\nline-height = 1.4\n").unwrap();
+    assert_eq!(settings.terminal.line_height, LineHeight::DEFAULT);
+    let (settings, _) = crate::parse_settings("[terminal]\nline-height = 2.0\n").unwrap();
+    assert_eq!(settings.terminal.line_height.tenths(), 20);
+    assert!(crate::parse_settings("[terminal]\nline-height = 0.1\n").is_err());
+    assert!(crate::parse_settings("[terminal]\nline-height = 3.0\n").is_err());
+}
+
+#[test]
+fn an_old_terminal_file_gets_every_module_default() {
+    let old = "[terminal]\nprovider = \"windows-terminal\"\n";
+    let (settings, unknown) = crate::parse_settings(old).unwrap();
+    assert!(unknown.is_empty());
+    let t = settings.terminal;
+    assert_eq!(t.provider, "windows-terminal");
+    assert_eq!(t.shell, "");
+    assert_eq!(t.start_in, TerminalStart::Pane);
+    assert!(t.prompt_marks);
+    assert_eq!(t.font, "JetBrains Mono");
+    assert_eq!(t.font_size, 13);
+    assert_eq!(t.line_height, LineHeight::default());
+    assert_eq!(t.cursor, TerminalCursor::Block);
+    assert!(t.blink);
+    assert_eq!(t.scheme, TerminalScheme::Navo);
+    assert!(t.keep_readable);
+    assert_eq!(t.opacity, 100);
+    assert_eq!(t.padding, 8);
+    assert_eq!(t.drawer_height, 40);
+    assert_eq!(t.side_width, 440);
+    assert_eq!(t.scrollback, 10_000);
+    assert!(!t.copy_on_select);
+    assert!(t.ctrl_c_copies);
+    assert_eq!(t.bell, TerminalBell::Tab);
 }
 
 #[test]

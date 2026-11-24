@@ -19,7 +19,7 @@ const LOADING_ROWS: [&str; 7] = [
     "Sort by",
     "Refresh",
     "Copy folder path",
-    "Open terminal here",
+    "Open in external terminal",
     "-",
     "Loading Windows items…",
     "New file…",
@@ -210,7 +210,7 @@ fn sort_by_and_refresh_lead_and_new_file_follows_new(cx: &mut TestAppContext) {
             "Sort by",
             "Refresh",
             "Copy folder path",
-            "Open terminal here",
+            "Open in external terminal",
             "-",
             "Open in Terminal",
             "-",
@@ -235,7 +235,7 @@ fn without_a_windows_menu_the_folder_menu_lists_every_navo_item(cx: &mut TestApp
             "Refresh",
             "Sort by",
             "Copy folder path",
-            "Open terminal here",
+            "Open in external terminal",
         ]
     );
 }

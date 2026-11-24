@@ -18,6 +18,7 @@ mod parse;
 mod pending;
 mod retention;
 mod saving;
+mod terminal;
 mod view;
 
 pub use complete::DefaultChange;
@@ -35,10 +36,13 @@ pub use layout::{
 pub use model::{
     Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles, ModifierHints,
     PopUpPosition, RightButton, Search, SearchIndex, SelectionSettings, Settings, SizeMode,
-    SortKey, Terminal, ThemeMode,
+    SortKey, ThemeMode,
 };
 pub use parse::{parse, parse_retention, to_toml};
 pub use retention::RetentionSettings;
+pub use terminal::{
+    LineHeight, Terminal, TerminalBell, TerminalCursor, TerminalScheme, TerminalStart,
+};
 pub use view::{
     Automotive, AutomotiveView, CopyMode, CopySettings, ImageView, ImageViewer, MarkdownView,
     MarkdownViewer, PreviewView, PreviewViewer, TextView, TextViewer, VerifyMode, ViewPreset,
