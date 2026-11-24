@@ -44,7 +44,7 @@ fn a_pause_requested_by_the_resume_report_is_reported_before_waiting_for_workers
         progress: &mut report,
     };
     let aside = Aside::new();
-    let removals = Removals::of(&plan);
+    let removals = Removals::of(&plan, &fs);
     let targets = crate::job::plan_targets::PlanTargets::of(&plan);
     let (tasks, _queue) = channel();
     let (_sender, events) = channel();

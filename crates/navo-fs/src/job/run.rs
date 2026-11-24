@@ -62,7 +62,7 @@ pub(super) fn run_with(
         return JobOutcome::Failed { seq, error };
     }
     let aside = Aside::new();
-    let removals = Removals::of(plan);
+    let removals = Removals::of(plan, ctx.ops);
     let namespace = namespace_of(ctx);
     let job = Job {
         plan,

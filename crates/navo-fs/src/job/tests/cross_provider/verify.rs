@@ -150,7 +150,10 @@ fn a_streamed_digest_that_differs_from_the_target_fails_with_verify_failed() {
     let Some(Step::CopyFile { source, target, .. }) = scene.plan.steps.first() else {
         panic!("the scene holds one copy step");
     };
-    let (removals, targets) = (Removals::of(&scene.plan), PlanTargets::of(&scene.plan));
+    let (removals, targets) = (
+        Removals::of(&scene.plan, &LocalFs::new()),
+        PlanTargets::of(&scene.plan),
+    );
     let (ops, count) = (LocalFs::new(), VerifyCount::default());
     let copier = Copier {
         ops: &ops,

@@ -184,6 +184,35 @@ fn a_streamed_move_is_refused_before_any_step() {
     }
 }
 
+#[test]
+fn a_move_keeps_an_empty_folder_put_in_place_of_its_source_folder() {
+    for workers in MODES {
+        let fs = fixture(&[("src/e/f.txt", BIG), ("src/g/h.txt", BIG)]);
+        fs.add_folder("src/b");
+        let plan = plan(&request(
+            &fs,
+            OpKind::Move,
+            &["src/e", "src/b", "src/g"],
+            "dst",
+        ));
+        let replace = || {
+            fs.remove("src/b");
+            fs.add_folder("src/b");
+        };
+        let outcome = run_changing(workers, &fs, (&plan, "src/g/h.txt"), &replace);
+        assert!(
+            exists(&fs, "src/b"),
+            "workers {workers}: the empty replacement folder was removed ({outcome:?})"
+        );
+        assert!(!exists(&fs, "src/e"), "workers {workers}: the move stopped");
+        assert_eq!(
+            failure(&outcome).map(|(_, kind)| kind),
+            Some(FsErrorKind::ChangedOnDisk),
+            "workers {workers}"
+        );
+    }
+}
+
 /// A provider without handles: its move proof comes from the default by-path check. Swaps `at`
 /// for another file once, right after its copy, and leaves the swap in place.
 struct SwapAfterCopy<'a> {

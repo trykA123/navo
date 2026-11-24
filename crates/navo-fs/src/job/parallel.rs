@@ -50,7 +50,7 @@ pub(super) fn run_with(
         }
     };
     let aside = Aside::new();
-    let removals = Removals::of(plan);
+    let removals = Removals::of(plan, ctx.ops);
     let namespace = namespace_of(ctx);
     let job = Job {
         plan,
