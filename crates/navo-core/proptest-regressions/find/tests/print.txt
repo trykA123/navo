@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 7cdcdd48f6600bf3ec07c7cbc7eef9ea82962a6924b0b926d410639154a0ae19 # shrinks to input = "\"\\a\\\"\" \" \""
+cc 28395bd0f5e70351de0aa393d072de07da580a4a29eff256060ed6a3f4b24ba5 # shrinks to input = "\"\\\"\"\" \""

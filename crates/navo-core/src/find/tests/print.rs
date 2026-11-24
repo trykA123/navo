@@ -210,9 +210,7 @@ fn a_real_escaped_quote_inside_text_round_trips() {
 
 #[test]
 fn regex_text_with_a_quote_before_a_space_round_trips() {
-    let input = r#"re:"a \"b\"" c"#;
-    assert_round_trip(input);
-    assert_eq!(FindQuery::parse(input).to_text(), input);
+    assert_round_trip(r#"re:"a \"b\"" c"#);
 }
 
 #[test]
@@ -236,11 +234,28 @@ fn quoted_segments_keep_every_space_between_them() {
 }
 
 fn text_pieces() -> impl Strategy<Value = String> {
-    proptest::collection::vec(
-        prop_oneof![Just('a'), Just('\\'), Just('"'), Just(' ')],
-        0..32,
+    (
+        any::<bool>(),
+        proptest::collection::vec(
+            prop_oneof![
+                Just('a'),
+                Just('\\'),
+                Just('"'),
+                Just(' '),
+                Just('\t'),
+                Just('['),
+                Just(']'),
+            ],
+            0..32,
+        ),
     )
-    .prop_map(|chars| chars.into_iter().collect())
+        .prop_map(|(regex, chars)| {
+            let mut text: String = chars.into_iter().collect();
+            if regex {
+                text.insert_str(0, "re:");
+            }
+            text
+        })
 }
 
 proptest! {
@@ -254,4 +269,22 @@ proptest! {
         parsed.tokens.clear();
         prop_assert_eq!(parsed, expected, "printed: {}", printed);
     }
+}
+
+#[test]
+fn a_regex_prefix_goes_on_a_segment_that_compiles_alone() {
+    assert_round_trip(r#""[\"" re:"]""#);
+}
+
+#[test]
+fn a_tab_after_a_quote_round_trips_exactly() {
+    let expected = FindQuery {
+        text: "a\"\tb".to_owned(),
+        ..FindQuery::default()
+    };
+    let printed = expected.to_text();
+    let mut parsed = FindQuery::parse(&printed);
+    parsed.tokens.clear();
+    assert_eq!(parsed, expected);
+    assert_eq!(printed, "\"a\\\"\"\"\tb\"");
 }

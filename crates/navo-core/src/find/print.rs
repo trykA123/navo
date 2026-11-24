@@ -12,7 +12,7 @@ impl FindQuery {
         let mut parts = Vec::new();
         if !self.text.is_empty() {
             if self.regex {
-                push_regex_text(&mut parts, &self.text);
+                parts.push(format!("re:{}", encoded_token(&self.text)));
             } else {
                 parts.push(plain_text(&self.text));
             }
@@ -83,7 +83,12 @@ fn quoted_value(value: &str) -> String {
 
 /// Prints plain search text so that it reparses as the same text, not as filters.
 fn plain_text(text: &str) -> String {
-    let segments = quote_segments(text);
+    if quote_before_other_space(text) {
+        return encoded_token(text);
+    }
+    let Some(segments) = quote_segments(text) else {
+        return encoded_token(text);
+    };
     if segments.len() > 1 {
         return segments
             .iter()
@@ -98,14 +103,39 @@ fn plain_text(text: &str) -> String {
     }
 }
 
-/// Pushes a regex as `re:` plus the text words after a quote that a space follows.
-fn push_regex_text(parts: &mut Vec<String>, text: &str) {
-    let segments = quote_segments(text);
-    let first = segments.first().map_or(text, |segment| *segment);
-    parts.push(format!("re:{}", quoted_value(first)));
-    for segment in segments.iter().skip(1) {
-        parts.push(text_word(segment));
+/// Whether a literal quote is followed by whitespace other than a space.
+fn quote_before_other_space(text: &str) -> bool {
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '"'
+            && chars
+                .peek()
+                .is_some_and(|next| next.is_whitespace() && *next != ' ')
+        {
+            return true;
+        }
     }
+    false
+}
+
+/// Encodes text as one quoted token, closing and reopening the quote where a
+/// literal quote is followed by whitespace so the parser keeps it.
+fn encoded_token(text: &str) -> String {
+    let mut out = String::from("\"");
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '"' {
+            if chars.peek().is_some_and(|next| next.is_whitespace()) {
+                out.push_str("\\\"\"\"");
+            } else {
+                out.push_str("\\\"");
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn text_word(word: &str) -> String {
@@ -116,9 +146,9 @@ fn text_word(word: &str) -> String {
     }
 }
 
-/// Splits after every literal quote that whitespace follows, so a piece ending
-/// in a quote can be one quoted token that the parser still closes.
-fn quote_segments(text: &str) -> Vec<&str> {
+/// Splits after every literal quote followed by one space, so a piece ending in
+/// a quote can be one token; `None` when the text ends on that space.
+fn quote_segments(text: &str) -> Option<Vec<&str>> {
     let mut segments = Vec::new();
     let mut start = 0;
     let mut chars = text.char_indices().peekable();
@@ -126,24 +156,20 @@ fn quote_segments(text: &str) -> Vec<&str> {
         if ch != '"' {
             continue;
         }
-        let Some((next, ws)) = chars.peek().copied() else {
+        let Some((next, ' ')) = chars.peek().copied() else {
             continue;
         };
-        if !ws.is_whitespace() {
-            continue;
-        }
         segments.push(&text[start..=index]);
-        if ws == ' ' {
-            chars.next();
-            start = next + 1;
-        } else {
-            start = next;
-        }
+        chars.next();
+        start = next + 1;
+    }
+    if start > 0 && start >= text.len() {
+        return None;
     }
     if start < text.len() {
         segments.push(&text[start..]);
     }
-    segments
+    Some(segments)
 }
 
 fn text_needs_quoting(text: &str) -> bool {
