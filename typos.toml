@@ -1,12 +1,8 @@
 [files]
 extend-exclude = [
     "target/",
-    "design/prototypes/",
-    "design/showreel/",
     "vendor/",
     "crates/navo-syntax/src/builtin/rules/",
-    # VM logs quote random Velopack temp names.
-    "testing/installer-w1-report.md",
     "*.png",
     "*.ttf",
 ]

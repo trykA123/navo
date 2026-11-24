@@ -66,7 +66,7 @@ guarded = false
 id = "navo-core/rename::rename::bench_check.ten_thousand"
 guarded = false
 
-# plans/2026-11-18-syntax-everywhere.md A4b
+# Syntax atom A4b
 [[bench]]
 id = "sidewise-core/line_lexers::line_lexers::bench_page.arxml_typical"
 guarded = false
@@ -83,7 +83,7 @@ guarded = false
 id = "sidewise-core/line_lexers::line_lexers::bench_page.xml_capped"
 guarded = false
 
-# plans/2026-11-18-syntax-everywhere.md B3
+# Syntax atom B3
 [[bench]]
 id = "sidewise-core/line_lexers::line_lexers::bench_page.log_typical"
 guarded = false
@@ -100,7 +100,7 @@ guarded = false
 id = "sidewise-core/line_lexers::line_lexers::bench_cap.line_over_max"
 guarded = false
 
-# plans/2026-11-18-syntax-everywhere.md C11b
+# Syntax atom C11b
 [[bench]]
 id = "navo-syntax/rule_lexer::rule_lexer::bench_page.a2l"
 guarded = false
