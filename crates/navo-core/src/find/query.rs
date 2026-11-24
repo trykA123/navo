@@ -3,7 +3,7 @@ use std::ops::Range;
 use super::filters::{
     AttributeFilter, ModifiedFilter, SizeFilter, parse_attrs, parse_modified, parse_size,
 };
-use super::tokens::{self, TextEncoding};
+use super::tokens::{self, TextEncoding, TokenError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
@@ -30,7 +30,7 @@ pub enum TokenKind {
 pub struct TokenSpan {
     pub kind: TokenKind,
     pub span: Range<usize>,
-    pub message: Option<String>,
+    pub message: Option<TokenError>,
 }
 
 /// Whether find in files skips what `.gitignore` files list (`git:on`, the default) or not (`git:off`).
@@ -72,7 +72,7 @@ impl FindQuery {
             let word = tokens::unquote(source);
             let kind = tokens::token_kind(source);
             let message = if !closed {
-                Some("Unclosed quote".to_owned())
+                Some(TokenError::UnclosedQuote)
             } else {
                 query.apply_token(kind, &word).err()
             };
@@ -85,7 +85,7 @@ impl FindQuery {
         query
     }
 
-    fn apply_token(&mut self, kind: TokenKind, word: &str) -> Result<(), String> {
+    fn apply_token(&mut self, kind: TokenKind, word: &str) -> Result<(), TokenError> {
         let value = word.split_once(':').map_or(word, |(_, value)| value);
         match kind {
             TokenKind::Name
@@ -99,19 +99,17 @@ impl FindQuery {
             TokenKind::Text => self.push_text(word)?,
             TokenKind::Ext => self.ext.extend(parse_extensions(value)?),
             TokenKind::Size => {
-                self.size = Some(parse_size(value).ok_or("size: needs a number, like <50MB")?);
+                self.size = Some(parse_size(value).ok_or(TokenError::Size)?);
             }
             TokenKind::Modified => {
-                self.modified =
-                    Some(parse_modified(value).ok_or("mod: use 7d, <7d, >2026-10-01 or today")?);
+                self.modified = Some(parse_modified(value).ok_or(TokenError::Modified)?);
             }
-            TokenKind::Attrs => self.attrs.extend(
-                parse_attrs(value)
-                    .ok_or("attr: use hidden, readonly, system or archive; prefix - to exclude")?,
-            ),
+            TokenKind::Attrs => self
+                .attrs
+                .extend(parse_attrs(value).ok_or(TokenError::Attribute)?),
             TokenKind::Within => {
                 if value.is_empty() {
-                    return Err("in: needs a folder".to_owned());
+                    return Err(TokenError::Within);
                 }
                 self.within.push(value.to_owned());
             }
@@ -119,14 +117,14 @@ impl FindQuery {
                 self.archives = match value {
                     "on" => true,
                     "off" => false,
-                    _ => return Err("arc: use on or off".to_owned()),
+                    _ => return Err(TokenError::Archives),
                 };
             }
             TokenKind::Git => {
                 self.git_rules = match value {
                     "on" => GitRules::On,
                     "off" => GitRules::Off,
-                    _ => return Err("git: use on or off".to_owned()),
+                    _ => return Err(TokenError::Git),
                 };
             }
             TokenKind::Regex => self.push_regex(value)?,
@@ -134,25 +132,26 @@ impl FindQuery {
         Ok(())
     }
 
-    fn push_regex(&mut self, value: &str) -> Result<(), String> {
+    fn push_regex(&mut self, value: &str) -> Result<(), TokenError> {
         if value.is_empty() {
-            return Err("re: needs a pattern".to_owned());
+            return Err(TokenError::Regex);
         }
-        regex::Regex::new(value).map_err(|error| format!("re: {error}"))?;
+        let syntax = |error: regex::Error| TokenError::RegexSyntax(error.to_string());
+        regex::Regex::new(value).map_err(syntax)?;
         let text = self.composed(value);
-        regex::Regex::new(&text).map_err(|error| format!("re: {error}"))?;
+        regex::Regex::new(&text).map_err(syntax)?;
         self.text = text;
         self.regex = true;
         Ok(())
     }
 
-    fn push_text(&mut self, word: &str) -> Result<(), String> {
+    fn push_text(&mut self, word: &str) -> Result<(), TokenError> {
         if word.is_empty() {
             return Ok(());
         }
         let text = self.composed(word);
         if self.regex {
-            regex::Regex::new(&text).map_err(|error| format!("re: {error}"))?;
+            regex::Regex::new(&text).map_err(|error| TokenError::RegexSyntax(error.to_string()))?;
         }
         self.text = text;
         Ok(())
@@ -168,13 +167,13 @@ impl FindQuery {
     }
 }
 
-fn parse_extensions(value: &str) -> Result<Vec<String>, String> {
+fn parse_extensions(value: &str) -> Result<Vec<String>, TokenError> {
     value
         .split(',')
         .map(|ext| {
             let ext = ext.trim_start_matches('.');
             if ext.is_empty() || ext.contains(['/', '\\']) {
-                return Err("ext: needs extensions, like c,h,map".to_owned());
+                return Err(TokenError::Extensions);
             }
             Ok(ext.to_lowercase())
         })

@@ -1,4 +1,6 @@
-use crate::find::{Attribute, Date, FindQuery, GitRules, ModifiedFilter, SizeFilter, TokenKind};
+use crate::find::{
+    Attribute, Date, FindQuery, GitRules, ModifiedFilter, SizeFilter, TokenError, TokenKind,
+};
 
 #[test]
 fn words_and_quoted_phrases_form_text() {
@@ -145,10 +147,7 @@ fn spans_are_source_byte_offsets() {
         .map(|token| &input[token.span.clone()])
         .collect();
     assert_eq!(source, ["é", "ext:c", "in:\"a b\"", "size:bad"]);
-    assert_eq!(
-        query.tokens[3].message.as_deref(),
-        Some("size: needs a number, like <50MB")
-    );
+    assert_eq!(query.tokens[3].message.as_ref(), Some(&TokenError::Size));
 }
 
 #[test]

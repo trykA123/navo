@@ -1,4 +1,4 @@
-use crate::find::{FindQuery, TextEncoding, TokenKind};
+use crate::find::{FindQuery, TextEncoding, TokenError, TokenKind};
 
 fn parsed(input: &str) -> FindQuery {
     let query = FindQuery::parse(input);
@@ -10,11 +10,11 @@ fn parsed(input: &str) -> FindQuery {
     query
 }
 
-fn error(input: &str) -> String {
+fn error(input: &str) -> TokenError {
     FindQuery::parse(input).tokens[0]
         .message
         .clone()
-        .unwrap_or_default()
+        .expect("a token error")
 }
 
 #[test]
@@ -51,16 +51,13 @@ fn name_accepts_a_case_insensitive_regex() {
 #[test]
 fn name_rejects_an_empty_mask_or_part() {
     for input in ["name:", "name:*.rs;", "name:!"] {
-        assert_eq!(error(input), "name: use masks like *.rs;!test* or /regex/");
+        assert_eq!(error(input), TokenError::Name);
     }
 }
 
 #[test]
 fn name_rejects_an_invalid_regex() {
-    assert_eq!(
-        error("name:/(/"),
-        "name: use masks like *.rs;!test* or /regex/"
-    );
+    assert_eq!(error("name:/(/"), TokenError::Name);
 }
 
 #[test]
@@ -72,7 +69,7 @@ fn depth_accepts_zero_to_sixty_four() {
 #[test]
 fn depth_rejects_out_of_range_and_text() {
     for input in ["depth:65", "depth:x", "depth:-1"] {
-        assert_eq!(error(input), "depth: use a number from 0 to 64");
+        assert_eq!(error(input), TokenError::Depth { max: 64 });
     }
 }
 
@@ -92,7 +89,7 @@ fn word_not_and_case_toggle_on_and_off() {
 #[test]
 fn toggles_reject_other_values() {
     for (input, key) in [("word:yes", "word"), ("not:x", "not"), ("case:1", "case")] {
-        assert_eq!(error(input), format!("{key}: use on or off"));
+        assert_eq!(error(input), TokenError::Toggle { key });
     }
 }
 
@@ -108,13 +105,10 @@ fn hex_drops_separators_and_keeps_bytes() {
 #[test]
 fn hex_rejects_bad_pairs_and_size() {
     for input in ["hex:", "hex:4", "hex:zz", "hex:\"4D 5G\""] {
-        assert_eq!(error(input), "hex: use pairs like 4D 5A, up to 256 bytes");
+        assert_eq!(error(input), TokenError::Hex { max: 256 });
     }
     let too_long = format!("hex:{}", "ab".repeat(257));
-    assert_eq!(
-        error(&too_long),
-        "hex: use pairs like 4D 5A, up to 256 bytes"
-    );
+    assert_eq!(error(&too_long), TokenError::Hex { max: 256 });
 }
 
 #[test]
@@ -134,7 +128,7 @@ fn enc_keeps_the_named_list_in_order() {
 #[test]
 fn enc_rejects_unknown_empty_and_duplicate_names() {
     for input in ["enc:", "enc:utf8,", "enc:latin", "enc:auto,auto"] {
-        assert_eq!(error(input), "enc: use auto, ansi, dos, utf8 or utf16");
+        assert_eq!(error(input), TokenError::Encoding);
     }
 }
 
@@ -142,20 +136,17 @@ fn enc_rejects_unknown_empty_and_duplicate_names() {
 fn docs_toggles_on_and_off() {
     assert!(parsed("docs:on").docs);
     assert!(!parsed("docs:off").docs);
-    assert_eq!(error("docs:yes"), "docs: use on or off");
+    assert_eq!(error("docs:yes"), TokenError::Toggle { key: "docs" });
 }
 
 #[test]
 fn depth_rejects_a_leading_plus() {
-    assert_eq!(error("depth:+5"), "depth: use a number from 0 to 64");
+    assert_eq!(error("depth:+5"), TokenError::Depth { max: 64 });
 }
 
 #[test]
 fn hex_rejects_a_leading_plus() {
-    assert_eq!(
-        error("hex:+f"),
-        "hex: use pairs like 4D 5A, up to 256 bytes"
-    );
+    assert_eq!(error("hex:+f"), TokenError::Hex { max: 256 });
 }
 
 #[test]
@@ -163,4 +154,11 @@ fn the_last_repeated_token_wins() {
     assert_eq!(parsed("depth:1 depth:2").depth, Some(2));
     assert_eq!(parsed("enc:utf8 enc:auto").encodings, [TextEncoding::Auto]);
     assert_eq!(parsed("hex:aa hex:bb").hex, Some(vec![0xbb]));
+}
+
+#[test]
+fn token_errors_are_typed_variants() {
+    assert_eq!(error("depth:65"), TokenError::Depth { max: 64 });
+    assert_eq!(error("name:"), TokenError::Name);
+    assert_eq!(error("word:x"), TokenError::Toggle { key: "word" });
 }
