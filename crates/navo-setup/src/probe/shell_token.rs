@@ -66,13 +66,17 @@ pub(super) fn require_impersonation(level: SECURITY_IMPERSONATION_LEVEL) -> io::
 
 /// The Win32 name of an impersonation level, for error text.
 fn level_name(level: SECURITY_IMPERSONATION_LEVEL) -> String {
-    match level {
-        SecurityAnonymous => "anonymous".to_owned(),
-        SecurityIdentification => "identification".to_owned(),
-        SecurityImpersonation => "impersonation".to_owned(),
-        SecurityDelegation => "delegation".to_owned(),
-        other => format!("unknown level {other}"),
-    }
+    // A lookup table, not a `match`: the Win32 names are not upper case, so clippy refuses them as patterns.
+    let names = [
+        (SecurityAnonymous, "anonymous"),
+        (SecurityIdentification, "identification"),
+        (SecurityImpersonation, "impersonation"),
+        (SecurityDelegation, "delegation"),
+    ];
+    names.iter().find(|(known, _)| *known == level).map_or_else(
+        || format!("unknown level {level}"),
+        |(_, name)| (*name).to_owned(),
+    )
 }
 
 #[cfg(test)]
