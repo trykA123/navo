@@ -52,10 +52,10 @@ pub use measure::{
 };
 pub use protection::{ResolvedPlan, check_mutation, check_relocation, check_resolved_mutation};
 pub use provider::{
-    AclRow, Attributes, CancelToken, Capabilities, CopyControl, DetailAttributes, EntryBatch,
-    EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, GitPauseGuard, LinkKey,
-    ListSink, MoveProof, OwnedCopy, Provider, ProviderOps, ReadSource, RenameSkip, SizeEntry,
-    StreamWrite, UncachedHash, UnixAccess, VerifiedRename,
+    AclRow, Attributes, CancelToken, Capabilities, CopiedSource, CopyControl, DetailAttributes,
+    EntryBatch, EntryKind, FileDetails, FileIdentity, FileIdentityKind, FsEntry, GitPauseGuard,
+    LinkKey, ListSink, MoveProof, OwnedCopy, Provider, ProviderOps, ReadSource, RenameSkip,
+    SizeEntry, StreamWrite, UncachedHash, UnixAccess, VerifiedRename,
 };
 pub use scan::{existing_at, scan};
 pub use sidewise_fs::walk;

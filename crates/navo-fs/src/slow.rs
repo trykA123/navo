@@ -109,6 +109,15 @@ impl ProviderOps for SlowFs {
         self.inner.remove_owned_file(location, identity)
     }
 
+    fn remove_copied_source(
+        &self,
+        location: &Location,
+        expected: crate::CopiedSource,
+    ) -> Result<(), FsError> {
+        self.sleep();
+        self.inner.remove_copied_source(location, expected)
+    }
+
     fn pause_git(&self, location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
         self.inner.pause_git(location)
     }

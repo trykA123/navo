@@ -88,6 +88,9 @@ pub(super) fn copy(
     if exists && !copier.targets.overwrites(step.target) {
         return Ok(Copied::Skipped);
     }
+    if !super::stream::crosses(step) {
+        copier.removals.note_copy_start(copier.ops, step.source)?;
+    }
     let temp = copier.temporary(step)?;
     if copier.strict {
         if super::aside::presence(copier.ops, &temp)?.is_some() {

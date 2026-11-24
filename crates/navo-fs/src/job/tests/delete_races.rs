@@ -71,6 +71,19 @@ impl ProviderOps for BeforeRemove<'_> {
         self.fs.remove_file(location)
     }
 
+    fn remove_copied_source(
+        &self,
+        location: &Location,
+        expected: crate::CopiedSource,
+    ) -> Result<(), FsError> {
+        (self.hook)(location);
+        self.fs.remove_copied_source(location, expected)
+    }
+
+    fn file_identity(&self, location: &Location) -> Result<Option<crate::FileIdentity>, FsError> {
+        self.fs.file_identity(location)
+    }
+
     fn make_link(&self, target_of: &Location, at: &Location) -> Result<(), FsError> {
         self.fs.make_link(target_of, at)
     }

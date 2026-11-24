@@ -83,6 +83,23 @@ impl ProviderOps for LocalFs {
     }
 
     #[cfg(windows)]
+    fn remove_copied_source(
+        &self,
+        location: &Location,
+        expected: crate::CopiedSource,
+    ) -> Result<(), FsError> {
+        let path = os_path(location)?;
+        match super::owned_windows::remove_unchanged(&path, expected) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(FsError {
+                location: Some(location.clone()),
+                ..FsError::new(FsErrorKind::ChangedOnDisk)
+            }),
+            Err(error) => Err(io_error(&error, location)),
+        }
+    }
+
+    #[cfg(windows)]
     fn hide_retained(
         &self,
         location: &Location,

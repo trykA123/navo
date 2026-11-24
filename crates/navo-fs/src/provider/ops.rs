@@ -43,6 +43,15 @@ pub struct UnixAccess {
     pub mode: u32,
 }
 
+/// A move's source file as its copy started: the move removes the source only while it still
+/// matches (file ID where the provider has one, size and modified time).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CopiedSource {
+    pub identity: Option<FileIdentity>,
+    pub size: u64,
+    pub modified_ms: Option<i64>,
+}
+
 pub trait ProviderOps: Provider {
     /// Waits `delay` before a job retries a step or, under a speed cap, sends more bytes; wakes
     /// early on cancel; true when cancelled. A test provider records the delay instead of sleeping.
@@ -94,6 +103,31 @@ pub trait ProviderOps: Provider {
             return Err(FsError {
                 location: Some(location.clone()),
                 ..FsError::new(FsErrorKind::IdentityUnavailable)
+            });
+        }
+        self.remove_file(location)
+    }
+    /// Removes a moved file's source only while it is still the file that was copied; fails with
+    /// `ChangedOnDisk` and keeps it otherwise. This default checks by path, then removes by path;
+    /// a provider with handles checks and deletes through one handle.
+    fn remove_copied_source(
+        &self,
+        location: &Location,
+        expected: CopiedSource,
+    ) -> Result<(), FsError> {
+        let entry = self.metadata(location)?;
+        let same_identity = match expected.identity {
+            Some(identity) => self.file_identity(location)? == Some(identity),
+            None => true,
+        };
+        let same = entry.kind == EntryKind::File
+            && entry.size == expected.size
+            && entry.modified_ms == expected.modified_ms
+            && same_identity;
+        if !same {
+            return Err(FsError {
+                location: Some(location.clone()),
+                ..FsError::new(FsErrorKind::ChangedOnDisk)
             });
         }
         self.remove_file(location)

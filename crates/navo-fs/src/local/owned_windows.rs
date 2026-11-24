@@ -4,12 +4,17 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 
+use windows_sys::Win32::Foundation::{
+    ERROR_INVALID_FUNCTION, ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED,
+};
 use windows_sys::Win32::Storage::FileSystem::{
     DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_READONLY,
-    FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_DISPOSITION_INFO,
-    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES,
-    FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo, GetFileInformationByHandleEx,
-    SetFileInformationByHandle,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_DISPOSITION_FLAG_DELETE,
+    FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
+    FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo,
+    FileDispositionInfoEx, GetFileInformationByHandleEx, SetFileInformationByHandle,
 };
 
 pub(super) fn remove(path: &Path, expected: crate::FileIdentity) -> io::Result<()> {
@@ -32,6 +37,67 @@ pub(super) fn remove(path: &Path, expected: crate::FileIdentity) -> io::Result<(
         set_basic(&file, &info)?;
     }
     dispose(&file)
+}
+
+/// Deletes the moved source at `path` only while it is still `expected`: volume serial and file ID
+/// (where the volume has them), size and modified time are checked and the file is deleted through
+/// one handle, so a file put there meanwhile is never deleted. `Ok(false)` when it changed.
+pub(super) fn remove_unchanged(path: &Path, expected: crate::CopiedSource) -> io::Result<bool> {
+    let file = OpenOptions::new()
+        .access_mode(DELETE | FILE_READ_ATTRIBUTES)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)?;
+    let metadata = file.metadata()?;
+    let identity = super::identity::from_file(&file)?;
+    let unchanged = metadata.is_file()
+        && metadata.len() == expected.size
+        && super::modified_ms(&metadata) == expected.modified_ms
+        && expected.identity.is_none_or(|seen| identity == Some(seen));
+    if !unchanged {
+        return Ok(false);
+    }
+    match dispose_posix(&file) {
+        Err(error) if rejects_ex(&error) => dispose(&file),
+        other => other,
+    }
+    .map(|()| true)
+}
+
+/// True when the volume (FAT, SMB) does not take the `FileDispositionInfoEx` form.
+fn rejects_ex(error: &io::Error) -> bool {
+    [
+        ERROR_INVALID_PARAMETER,
+        ERROR_NOT_SUPPORTED,
+        ERROR_INVALID_FUNCTION,
+    ]
+    .iter()
+    .any(|code| error.raw_os_error() == Some(code.cast_signed()))
+}
+
+#[allow(
+    unsafe_code,
+    reason = "a moved source is deleted through the handle its identity was checked on"
+)]
+fn dispose_posix(file: &File) -> io::Result<()> {
+    let info = FILE_DISPOSITION_INFO_EX {
+        Flags: FILE_DISPOSITION_FLAG_DELETE
+            | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
+            | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
+    };
+    // SAFETY: the live DELETE-capable handle and initialized input buffer survive the update.
+    let ok = unsafe {
+        SetFileInformationByHandle(
+            file.as_raw_handle(),
+            FileDispositionInfoEx,
+            (&raw const info).cast(),
+            std::mem::size_of::<FILE_DISPOSITION_INFO_EX>() as u32,
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 #[allow(
