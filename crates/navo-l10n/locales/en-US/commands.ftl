@@ -279,6 +279,7 @@ cmd-editor-previous-problem = Previous problem
 cmd-editor-leave-preview = Leave Markdown preview
 cmd-editor-add-cursor-above = Add cursor above
 cmd-editor-add-cursor-below = Add cursor below
+cmd-editor-toggle-soft-wrap = Turn soft wrap on or off
 cmd-find-older-search = Older search
 cmd-find-newer-search = Newer search
 cmd-find-all = Find all

@@ -1434,6 +1434,10 @@ command = "editor.previous_problem"
 keys = ["shift-f8"]
 context = "Editor"
 
+[[bind]]
+command = "editor.toggle_soft_wrap"
+keys = ["alt-z"]
+
 # MarkdownPreview
 
 [[bind]]

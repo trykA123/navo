@@ -68,7 +68,9 @@ pub(in crate::window_view) use keys::{
     ToggleOpensInspector, TogglePreview, ToggleRegex, ToggleRowBars, ToggleUsageBars,
     ToggleWhoUses, ViewMenu, ZoomIn, ZoomOut,
 };
-pub(in crate::window_view) use keys::{Back, BackspaceKey, KeepViewDefault, ResetView};
+pub(in crate::window_view) use keys::{
+    Back, BackspaceKey, KeepViewDefault, ResetView, ToggleSoftWrap,
+};
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};
 pub use menu::viewer_menu;
 pub use paged::{PagedKind, PagedView};

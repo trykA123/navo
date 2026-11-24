@@ -78,6 +78,7 @@ gpui_kit::actions!(
         LeavePreview,
         NextProblem,
         PreviousProblem,
+        ToggleSoftWrap,
     ]
 );
 

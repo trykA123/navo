@@ -264,6 +264,11 @@ pub(super) const GROUPS: [Group; 6] = [
                 "editor.add_cursor_below",
                 "cmd-editor-add-cursor-below",
             ),
+            (
+                "viewer::ToggleSoftWrap",
+                "editor.toggle_soft_wrap",
+                "cmd-editor-toggle-soft-wrap",
+            ),
         ],
     },
     Group {

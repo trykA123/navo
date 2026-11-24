@@ -222,6 +222,18 @@ impl ViewerBody for EditorBody {
         self.0.update(cx, |view, cx| view.show_parts(values, cx));
     }
 
+    fn soft_wrap(&self, cx: &App) -> Option<bool> {
+        let view = self.0.read(cx);
+        view.editing.then_some(view.soft_wrap)
+    }
+
+    fn show_soft_wrap(&self, on: bool, cx: &mut App) {
+        self.0.update(cx, |view, cx| {
+            view.soft_wrap = on;
+            cx.notify();
+        });
+    }
+
     fn menu_anchor(&self, cx: &App) -> Option<Point<Pixels>> {
         let state = self.0.read(cx).editor.read(cx);
         let cursor = state.cursor();

@@ -4,7 +4,7 @@ use navo_core::shell_menu::{ItemId, ShellMenu};
 use super::body::{BodyAct, MenuEntry, ViewerBody};
 use super::menu::viewer_menu;
 use super::parts::{PRESET_ACTIONS, PartSet};
-use super::{ChooseEncoding, ChooseLanguage, KeepViewDefault, ResetView, ViewMenu};
+use super::{ChooseEncoding, ChooseLanguage, KeepViewDefault, ResetView, ToggleSoftWrap, ViewMenu};
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant};
@@ -15,6 +15,7 @@ use crate::window_view::{NavoWindow, SaveReport};
 mod actions;
 pub(in crate::window_view) mod labels;
 mod split;
+mod wrap;
 
 use labels::{
     ENCODING, KEEP_LABEL, KEPT, MENU_TITLE, NO_PARTS, NOT_KEPT, NOT_SAVED, RESET_LABEL,
@@ -29,11 +30,12 @@ enum ViewOp {
     Reset,
     Encoding,
     Language,
+    SoftWrap,
 }
 
 impl ViewOp {
     fn keeps_menu_open(self) -> bool {
-        matches!(self, Self::Toggle(_) | Self::Preset(_))
+        matches!(self, Self::Toggle(_) | Self::Preset(_) | Self::SoftWrap)
     }
 }
 
@@ -102,6 +104,7 @@ pub fn view_menu(
     let mut entries = view_entries(set, shown, body.is_editing(cx), has_encoding);
     let tools_at = entries.len().saturating_sub(3);
     entries.splice(tools_at..tools_at, body.view_tools(cx));
+    wrap::add_soft_wrap(&mut entries, body, cx);
     Some(viewer_menu(&entries, &focus, window))
 }
 
@@ -130,6 +133,7 @@ fn op_of(set: &PartSet, name: &str) -> Option<ViewOp> {
             (ResetView.name(), ViewOp::Reset),
             (ChooseEncoding.name(), ViewOp::Encoding),
             (ChooseLanguage.name(), ViewOp::Language),
+            (ToggleSoftWrap.name(), ViewOp::SoftWrap),
         ]
         .into_iter()
         .find(|(action, _)| *action == name)
@@ -149,17 +153,18 @@ impl NavoWindow {
         let Some(body) = &viewer.body else {
             return;
         };
+        body.show_soft_wrap(self.editor_wraps, cx);
         if body.parts(cx).is_some() {
             body.show_parts(&viewer.parts.effective(&self.values), cx);
         }
     }
 
     fn run_view(&mut self, op: ViewOp, window: &mut Window, cx: &mut Context<Self>) {
-        if op == ViewOp::Encoding {
-            return self.open_encoding_menu(window, cx);
-        }
-        if op == ViewOp::Language {
-            return self.open_language_menu(window, cx);
+        match op {
+            ViewOp::Encoding => return self.open_encoding_menu(window, cx),
+            ViewOp::Language => return self.open_language_menu(window, cx),
+            ViewOp::SoftWrap => return self.toggle_soft_wrap(window, cx),
+            _ => {}
         }
         let Some(set) = self.body_parts(cx) else {
             return;
@@ -173,7 +178,7 @@ impl NavoWindow {
                 viewer.parts.toggle(set, field, &values);
                 Vec::new()
             }
-            ViewOp::Toggle(_) | ViewOp::Encoding | ViewOp::Language => return,
+            ViewOp::Toggle(_) | ViewOp::Encoding | ViewOp::Language | ViewOp::SoftWrap => return,
             ViewOp::Preset(at) => {
                 viewer.parts.choose(set, at, &values);
                 Vec::new()

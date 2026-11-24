@@ -10,8 +10,8 @@ use crate::window_view::NavoWindow;
 use crate::window_view::viewer::{
     Back, ChooseEncoding, ChooseLanguage, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds,
     ToggleCharts, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector,
-    TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewCustom, ViewMenu, ViewRich,
-    ViewSimple,
+    TogglePreview, ToggleRowBars, ToggleSoftWrap, ToggleUsageBars, ToggleWhoUses, ViewCustom,
+    ViewMenu, ViewRich, ViewSimple,
 };
 
 /// Binds action `A` on `root` to run the View operation `op`; returns the extended root.
@@ -44,6 +44,9 @@ impl NavoWindow {
             }))
             .on_action(cx.listener(|view, _: &TogglePreview, window, cx| {
                 view.toggle_split(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &ToggleSoftWrap, window, cx| {
+                view.toggle_soft_wrap(window, cx);
             }))
             .on_action(cx.listener(|view, _: &RightDrawer, window, cx| {
                 view.right_drawer(window, cx);

@@ -20,6 +20,23 @@ impl NavoWindow {
         ]
     }
 
+    /// Polls the browser, jobs and preview after a background wake-up; redraws when one changed.
+    pub(super) fn wake(&mut self, cx: &mut Context<Self>) {
+        let polled = self.browser.poll() | self.show_compare_notice();
+        self.note_seen(cx);
+        self.clear_finished_cuts();
+        self.sync_git();
+        self.jobs_woke(cx);
+        if polled {
+            self.drag_list_changed(cx);
+        }
+        if self.poll_preview() | self.host_poll(cx) || polled {
+            cx.notify();
+        }
+        self.linger_ended(cx);
+        self.release_first_keys(cx);
+    }
+
     fn appearance_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.apply_theme(window, cx);
         cx.notify();

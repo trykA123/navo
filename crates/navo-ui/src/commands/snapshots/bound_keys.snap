@@ -199,6 +199,7 @@ editor.leave_preview | f6 | MarkdownPreview
 editor.next_problem | f8 | Editor
 editor.previous_problem | shift-f8 | Editor
 editor.toggle_preview | ctrl-shift-v | Viewer
+editor.toggle_soft_wrap | alt-z | Editor
 elf.pick_item | enter | Elf
 elf.sort_by_address | ctrl-f5 | Elf
 elf.sort_by_name | ctrl-f3 | Elf

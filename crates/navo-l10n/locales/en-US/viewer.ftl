@@ -151,6 +151,7 @@ viewer-language-log = Log
 viewer-language-not-text = Languages apply to the text view. Alt+1 switches to it.
 viewer-language-unsaved = Unsaved changes. Ctrl+S saves; choose the language again to discard them.
 viewer-language-menu = Language…
+viewer-soft-wrap-menu = Soft wrap
 viewer-language-button = Syntax
 viewer-language-tooltip = Syntax colours (Ctrl+Shift+L)
 editor-replace-label = Replace

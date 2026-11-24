@@ -45,6 +45,7 @@ fn rows(is_split: bool) -> Vec<(String, bool)> {
     vec![
         ("Line numbers".to_owned(), true),
         ("Preview split".to_owned(), is_split),
+        ("Soft wrap".to_owned(), true),
         (String::new(), false),
         ("Encoding\u{2026}".to_owned(), false),
         ("Language\u{2026}".to_owned(), false),

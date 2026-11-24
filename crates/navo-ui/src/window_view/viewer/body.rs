@@ -121,6 +121,14 @@ pub trait ViewerBody: Any {
         Vec::new()
     }
 
+    /// Whether the body soft-wraps long lines now, or None when it offers no soft-wrap choice.
+    fn soft_wrap(&self, _: &App) -> Option<bool> {
+        None
+    }
+
+    /// Sets whether the body soft-wraps long lines while it edits (`on`).
+    fn show_soft_wrap(&self, _on: bool, _: &mut App) {}
+
     fn encoding(&self, _: &App) -> Option<TextEncoding> {
         None
     }

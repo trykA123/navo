@@ -56,6 +56,9 @@ pub(super) struct EditorView {
     marking: Marking,
     line_numbers: bool,
     gutter: Option<bool>,
+    /// The window's soft-wrap choice for edit mode; `wrapped` is what the widget does now.
+    soft_wrap: bool,
+    wrapped: bool,
     decorations: RangeDecorationCollection,
     decorated: Option<(u64, Mode)>,
     overview: Overview,
@@ -170,6 +173,8 @@ impl EditorView {
             marking: Marking::new(text_source(shared)),
             line_numbers: true,
             gutter: None,
+            soft_wrap: true,
+            wrapped: true,
             decorations,
             decorated: None,
             overview: Overview::default(),
@@ -202,6 +207,21 @@ impl EditorView {
     #[cfg(test)]
     pub(super) fn shows_line_numbers(&self) -> bool {
         self.gutter == Some(true)
+    }
+
+    /// Applies soft wrap to the widget: the window's choice while editing, always on while viewing.
+    fn sync_soft_wrap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let wanted = !self.editing || self.soft_wrap;
+        if self.wrapped != wanted {
+            self.wrapped = wanted;
+            self.editor
+                .update(cx, |state, cx| state.set_soft_wrap(wanted, window, cx));
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn wraps(&self) -> bool {
+        self.wrapped
     }
 
     #[cfg(test)]

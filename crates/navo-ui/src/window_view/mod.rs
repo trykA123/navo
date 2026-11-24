@@ -247,6 +247,8 @@ pub struct NavoWindow {
     files: FileHooks,
     kinds: viewer::Kinds,
     viewer: Option<viewer::Viewer>,
+    /// Whether the F3 editor soft-wraps in edit mode: one choice per window for the session.
+    editor_wraps: bool,
     next_prompt: u64,
     provider: Arc<dyn ProviderOps>,
     drives: drives::Drives,
@@ -319,6 +321,7 @@ impl NavoWindow {
             files: options.files,
             kinds: options.kinds,
             viewer: None,
+            editor_wraps: true,
             next_prompt: 0,
             command_center: CommandCenterState::new(options.search, &options.provider),
             provider: options.provider,
@@ -385,22 +388,6 @@ impl NavoWindow {
     #[cfg(test)]
     fn waker(_: &mut Context<Self>) -> Waker {
         Arc::new(|| {})
-    }
-
-    fn wake(&mut self, cx: &mut Context<Self>) {
-        let polled = self.browser.poll() | self.show_compare_notice();
-        self.note_seen(cx);
-        self.clear_finished_cuts();
-        self.sync_git();
-        self.jobs_woke(cx);
-        if polled {
-            self.drag_list_changed(cx);
-        }
-        if self.poll_preview() | self.host_poll(cx) || polled {
-            cx.notify();
-        }
-        self.linger_ended(cx);
-        self.release_first_keys(cx);
     }
 
     fn handle(&mut self, pane: PaneId, cx: &mut Context<Self>) -> FocusHandle {

@@ -243,6 +243,7 @@ impl Render for EditorView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::current(cx).clone();
         self.sync_line_numbers(window, cx);
+        self.sync_soft_wrap(window, cx);
         self.sync_decorations(&t, cx);
         self.update_overview(&t, cx);
         self.marking.sync_find_all();
