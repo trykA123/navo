@@ -1,3 +1,3 @@
 # Unbounded channel constructions in tracked Rust outside test code (AM7).
 # The ratchet only goes down; `cargo xtask channels` prints the new number.
-38
+39
