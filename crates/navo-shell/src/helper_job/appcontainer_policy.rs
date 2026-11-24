@@ -20,13 +20,42 @@ pub const EVERYONE: &str = "S-1-1-0";
 /// The PDF engine the helper loads; it sits next to navo.exe.
 const PDFIUM_DLL: &str = "pdfium.dll";
 
+/// `ERROR_INVALID_ACL`: a NULL DACL, or ACL bytes whose sizes or SIDs do not add up.
+pub const ERROR_INVALID_ACL: i32 = 1336;
+
 /// `ACCESS_ALLOWED_ACE_TYPE` and the `INHERIT_ONLY_ACE` flag (winnt.h).
 const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
 const INHERIT_ONLY_ACE: u8 = 0x08;
 
 /// ACE types whose SID directly follows the header and mask: allowed, denied and their callback
-/// forms (winnt.h). Object ACEs put GUIDs first, so their SID is never read.
+/// forms (winnt.h).
 const PLAIN_SID_ACE_TYPES: [u8; 4] = [0, 1, 9, 0x0A];
+
+/// Object ACE types (allowed, denied and their callback forms): `Flags` and up to two GUIDs sit
+/// between the mask and the SID.
+const OBJECT_ACE_TYPES: [u8; 4] = [5, 6, 0x0B, 0x0C];
+
+/// Allow ACE types: they never block the grant. Only a plain allow counts towards it.
+const ALLOW_ACE_TYPES: [u8; 4] = [0, 5, 9, 0x0B];
+
+/// Deny ACE types: plain, object and their callback forms. They block when their trustee reaches
+/// the container; any type in none of these lists blocks (fail closed).
+const DENY_ACE_TYPES: [u8; 4] = [1, 6, 0x0A, 0x0C];
+
+/// Byte sizes in an ACL: its header, an ACE header plus mask, an object ACE's `Flags`, a GUID,
+/// and a SID's fixed part (revision, count, 6-byte authority).
+const ACL_HEADER: usize = 8;
+const ACE_HEADER_AND_MASK: usize = 8;
+const OBJECT_FLAGS: usize = 4;
+const GUID: usize = 16;
+const SID_HEADER: usize = 8;
+
+/// `ACE_OBJECT_TYPE_PRESENT`, `ACE_INHERITED_OBJECT_TYPE_PRESENT`, `SID_REVISION` and
+/// `SID_MAX_SUB_AUTHORITIES` (winnt.h).
+const OBJECT_TYPE_PRESENT: u32 = 0x1;
+const INHERITED_OBJECT_TYPE_PRESENT: u32 = 0x2;
+const SID_REVISION: u8 = 1;
+const SID_MAX_SUB_AUTHORITIES: usize = 15;
 
 /// A deny ACE blocks the grant when it touches read+execute or any generic or MAXIMUM_ALLOWED bit.
 const DENY_RELEVANT: u32 = READ_EXECUTE | 0xF200_0000;
@@ -136,7 +165,7 @@ pub enum Trustee {
     Everyone,
     /// Any other SID; a deny ACE for it does not block the grant.
     Other,
-    /// An object ACE, whose SID is not read; a deny ACE of this kind blocks the grant.
+    /// An ACE of a type whose layout Navo does not decode; it blocks the grant.
     Unknown,
 }
 
@@ -149,39 +178,133 @@ pub struct AceView {
     pub trustee: Trustee,
 }
 
-/// True when the DACL already lets the container read and execute the file: allow ACEs for the
-/// container or ALL APPLICATION PACKAGES (inherited too) cover every bit, and no deny-like ACE that
-/// reaches the container (its SID, ALL APPLICATION PACKAGES, Everyone or an unread SID) touches them.
+/// True when the DACL already lets the container read and execute the file: plain allow ACEs for
+/// the container or ALL APPLICATION PACKAGES (inherited too) cover every bit, no deny ACE that
+/// reaches the container (its SID, ALL APPLICATION PACKAGES or Everyone) touches them, and no ACE
+/// is of an unknown type. Callback and object allows are conditional: they neither grant nor block.
 pub fn already_granted(aces: &[AceView]) -> bool {
     let mut allowed = 0;
     for ace in aces.iter().filter(|ace| ace.flags & INHERIT_ONLY_ACE == 0) {
-        if ace.ace_type != ACCESS_ALLOWED_ACE_TYPE {
-            // A deny for another SID cannot block the container; any other deny-like entry that
-            // touches the rights blocks: fail closed.
-            if ace.trustee != Trustee::Other && ace.mask & DENY_RELEVANT != 0 {
+        let reaches = ace.trustee != Trustee::Other;
+        if ace.ace_type == ACCESS_ALLOWED_ACE_TYPE {
+            if matches!(ace.trustee, Trustee::Container | Trustee::AllAppPackages) {
+                allowed |= ace.mask;
+            }
+        } else if DENY_ACE_TYPES.contains(&ace.ace_type) {
+            if reaches && ace.mask & DENY_RELEVANT != 0 {
                 return false;
             }
-        } else if matches!(ace.trustee, Trustee::Container | Trustee::AllAppPackages) {
-            allowed |= ace.mask;
+        } else if !ALLOW_ACE_TYPES.contains(&ace.ace_type) {
+            return false;
         }
     }
     allowed & READ_EXECUTE == READ_EXECUTE
 }
 
-/// Names the trustee of an ACE of `ace_type`. `names(known)` says whether the ACE's SID equals the
-/// SID of `known`; it is never called for object ACEs, whose SID sits elsewhere (`Unknown`).
-pub fn classify_trustee(ace_type: u8, mut names: impl FnMut(Trustee) -> bool) -> Trustee {
-    if !PLAIN_SID_ACE_TYPES.contains(&ace_type) {
-        return Trustee::Unknown;
+/// Describes every ACE in the raw `acl` bytes (header included). The whole layout is checked
+/// first; only then does `names(known, sid)` say whether an ACE's SID bytes name `known`, and it
+/// only sees SIDs that are valid and lie inside their ACE. Fails with `ERROR_INVALID_ACL` when the
+/// header, an `AceSize` or a SID breaks the layout.
+pub fn parse_dacl(
+    acl: &[u8],
+    mut names: impl FnMut(Trustee, &[u8]) -> bool,
+) -> Result<Vec<AceView>, i32> {
+    let size = usize::from(read_u16(acl, 2)?);
+    let count = read_u16(acl, 4)?;
+    let acl = acl
+        .get(..size)
+        .filter(|_| size >= ACL_HEADER)
+        .ok_or(ERROR_INVALID_ACL)?;
+    let mut checked = Vec::with_capacity(count.into());
+    let mut offset = ACL_HEADER;
+    for _ in 0..count {
+        let ace_size = usize::from(read_u16(acl, offset + 2)?);
+        let ace = acl
+            .get(offset..offset + ace_size)
+            .filter(|_| ace_size >= ACE_HEADER_AND_MASK && ace_size % 4 == 0)
+            .ok_or(ERROR_INVALID_ACL)?;
+        checked.push(checked_ace(ace)?);
+        offset += ace_size;
     }
-    [
+    let known = [
         Trustee::Container,
         Trustee::AllAppPackages,
         Trustee::Everyone,
-    ]
-    .into_iter()
-    .find(|&known| names(known))
-    .unwrap_or(Trustee::Other)
+    ];
+    let mut name = |sid: Option<&[u8]>| match sid {
+        Some(sid) => known
+            .into_iter()
+            .find(|&known| names(known, sid))
+            .unwrap_or(Trustee::Other),
+        None => Trustee::Unknown,
+    };
+    Ok(checked
+        .into_iter()
+        .map(|(mut view, sid)| {
+            view.trustee = name(sid);
+            view
+        })
+        .collect())
+}
+
+/// Checks one ACE whose bytes are exactly `ace` and returns its view (trustee not named yet) and
+/// its SID. The SID offset follows the type; an object ACE's `Flags` say which GUIDs come first.
+/// An unknown type has no SID read.
+fn checked_ace(ace: &[u8]) -> Result<(AceView, Option<&[u8]>), i32> {
+    let ace_type = read_u8(ace, 0)?;
+    let sid_start = if PLAIN_SID_ACE_TYPES.contains(&ace_type) {
+        Some(ACE_HEADER_AND_MASK)
+    } else if OBJECT_ACE_TYPES.contains(&ace_type) {
+        let object_flags = read_u32(ace, ACE_HEADER_AND_MASK)?;
+        let guids = [OBJECT_TYPE_PRESENT, INHERITED_OBJECT_TYPE_PRESENT]
+            .into_iter()
+            .filter(|bit| object_flags & bit != 0)
+            .count();
+        Some(ACE_HEADER_AND_MASK + OBJECT_FLAGS + GUID * guids)
+    } else {
+        None
+    };
+    let sid = sid_start.map(|start| sid_at(ace, start)).transpose()?;
+    let view = AceView {
+        ace_type,
+        flags: read_u8(ace, 1)?,
+        mask: read_u32(ace, 4)?,
+        trustee: Trustee::Unknown,
+    };
+    Ok((view, sid))
+}
+
+/// The SID that starts at `start` in `ace`, exactly as long as its sub-authority count says.
+/// Fails unless its revision is 1, it has at most 15 sub-authorities and it ends inside `ace`.
+fn sid_at(ace: &[u8], start: usize) -> Result<&[u8], i32> {
+    let revision = read_u8(ace, start)?;
+    let subs = usize::from(read_u8(ace, start + 1)?);
+    if revision != SID_REVISION || subs > SID_MAX_SUB_AUTHORITIES {
+        return Err(ERROR_INVALID_ACL);
+    }
+    ace.get(start..start + SID_HEADER + 4 * subs)
+        .ok_or(ERROR_INVALID_ACL)
+}
+
+/// The byte at `at`, or `ERROR_INVALID_ACL` past the end.
+fn read_u8(bytes: &[u8], at: usize) -> Result<u8, i32> {
+    bytes.get(at).copied().ok_or(ERROR_INVALID_ACL)
+}
+
+/// The little-endian `u16` at `at`, or `ERROR_INVALID_ACL` past the end.
+fn read_u16(bytes: &[u8], at: usize) -> Result<u16, i32> {
+    let field = bytes
+        .get(at..at + 2)
+        .and_then(|field| field.try_into().ok());
+    field.map(u16::from_le_bytes).ok_or(ERROR_INVALID_ACL)
+}
+
+/// The little-endian `u32` at `at`, or `ERROR_INVALID_ACL` past the end.
+fn read_u32(bytes: &[u8], at: usize) -> Result<u32, i32> {
+    let field = bytes
+        .get(at..at + 4)
+        .and_then(|field| field.try_into().ok());
+    field.map(u32::from_le_bytes).ok_or(ERROR_INVALID_ACL)
 }
 
 /// Refuses a target whose `attributes` mark a reparse point or a folder; returns the Win32 error.
@@ -309,9 +432,9 @@ mod tests {
             let deny = ace(1, 0, READ_EXECUTE, trustee);
             assert!(!already_granted(&[allow, deny]), "{trustee:?}");
         }
-        // A deny object ACE (type 6) has no SID read: it still blocks.
+        // An object deny (type 6) for the container blocks like a plain one.
         assert!(!already_granted(&[
-            ace(6, 0, 0x20, Trustee::Unknown),
+            ace(6, 0, 0x20, Trustee::Container),
             allow
         ]));
     }
@@ -345,28 +468,181 @@ mod tests {
         )]));
     }
 
-    #[test]
-    fn trustees_are_named_from_the_sid_only_for_plain_ace_types() {
-        for ace_type in [0, 1, 9, 0x0A] {
-            let named = |wanted| move |known| known == wanted;
-            assert_eq!(
-                classify_trustee(ace_type, named(Trustee::Container)),
-                Trustee::Container
-            );
-            assert_eq!(
-                classify_trustee(ace_type, named(Trustee::AllAppPackages)),
-                Trustee::AllAppPackages
-            );
-            assert_eq!(
-                classify_trustee(ace_type, named(Trustee::Everyone)),
-                Trustee::Everyone
-            );
-            assert_eq!(classify_trustee(ace_type, |_| false), Trustee::Other);
+    /// A SID with identifier `authority` and `subs` sub-authorities, as Windows lays it out.
+    fn sid(authority: u8, subs: &[u32]) -> Vec<u8> {
+        let mut bytes = vec![1, subs.len() as u8, 0, 0, 0, 0, 0, authority];
+        subs.iter().for_each(|sub| bytes.extend(sub.to_le_bytes()));
+        bytes
+    }
+
+    fn known_sid(known: Trustee) -> Vec<u8> {
+        match known {
+            Trustee::Container => sid(15, &[2, 7, 8, 9]),
+            Trustee::AllAppPackages => sid(15, &[2, 1]),
+            Trustee::Everyone => sid(1, &[0]),
+            Trustee::Other | Trustee::Unknown => sid(5, &[11]),
         }
-        // Object ACEs (allowed/denied, plain and callback) never have their SID read.
-        for ace_type in [5, 6, 0x0B, 0x0C] {
-            let trustee = classify_trustee(ace_type, |_| panic!("SID read for type {ace_type}"));
-            assert_eq!(trustee, Trustee::Unknown);
+    }
+
+    /// One raw ACE: header, mask and `body`, padded to a DWORD boundary.
+    fn raw_ace(ace_type: u8, mask: u32, body: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![ace_type, 0, 0, 0];
+        bytes.extend(mask.to_le_bytes());
+        bytes.extend(body);
+        bytes.resize(bytes.len().next_multiple_of(4), 0);
+        let size = bytes.len() as u16;
+        bytes[2..4].copy_from_slice(&size.to_le_bytes());
+        bytes
+    }
+
+    /// An object ACE body: `flags`, one GUID per flag bit set, then the SID.
+    fn object_body(flags: u32, sid: &[u8]) -> Vec<u8> {
+        let guids = (flags & 1) + (flags >> 1 & 1);
+        let mut body = flags.to_le_bytes().to_vec();
+        body.extend(vec![0xAB; 16 * guids as usize]);
+        body.extend(sid);
+        body
+    }
+
+    /// A raw ACL: revision 2, its size, the ACE count, then `aces`.
+    fn raw_acl(aces: &[Vec<u8>]) -> Vec<u8> {
+        let size = 8 + aces.iter().map(Vec::len).sum::<usize>();
+        let mut bytes = vec![2, 0];
+        bytes.extend((size as u16).to_le_bytes());
+        bytes.extend((aces.len() as u16).to_le_bytes());
+        bytes.extend([0, 0]);
+        aces.iter().for_each(|ace| bytes.extend(ace));
+        bytes
+    }
+
+    fn parse(acl: &[u8]) -> Result<Vec<AceView>, i32> {
+        parse_dacl(acl, |known, found| found == known_sid(known).as_slice())
+    }
+
+    fn trustees(acl: &[u8]) -> Vec<Trustee> {
+        parse(acl).unwrap().iter().map(|ace| ace.trustee).collect()
+    }
+
+    #[test]
+    fn plain_and_callback_aces_name_their_trustee_and_keep_type_flags_and_mask() {
+        let known = [
+            Trustee::Container,
+            Trustee::AllAppPackages,
+            Trustee::Everyone,
+            Trustee::Other,
+        ];
+        for ace_type in [0, 1, 9, 0x0A] {
+            let aces: Vec<_> = known
+                .iter()
+                .map(|&trustee| raw_ace(ace_type, 0x20, &known_sid(trustee)))
+                .collect();
+            assert_eq!(trustees(&raw_acl(&aces)), known, "{ace_type}");
+        }
+        let mut inherited = raw_ace(1, 0x8000_0000, &known_sid(Trustee::Everyone));
+        inherited[1] = 0x18;
+        let parsed = parse(&raw_acl(&[inherited])).unwrap();
+        assert_eq!(parsed, [ace(1, 0x18, 0x8000_0000, Trustee::Everyone)]);
+    }
+
+    #[test]
+    fn a_relevant_callback_deny_blocks_and_a_callback_allow_does_not() {
+        let allow = raw_ace(0, READ_EXECUTE, &known_sid(Trustee::Container));
+        let mut callback = known_sid(Trustee::Everyone);
+        callback.extend(b"app data");
+        let deny = raw_ace(0x0A, 0x20, &callback);
+        assert_eq!(
+            trustees(&raw_acl(&[allow.clone(), deny.clone()])),
+            [Trustee::Container, Trustee::Everyone]
+        );
+        assert!(!already_granted(
+            &parse(&raw_acl(&[allow.clone(), deny])).unwrap()
+        ));
+        let callback_allow = raw_ace(9, READ_EXECUTE, &known_sid(Trustee::Container));
+        let object_allow = raw_ace(
+            5,
+            READ_EXECUTE,
+            &object_body(1, &known_sid(Trustee::Container)),
+        );
+        let acl = raw_acl(&[callback_allow, object_allow, allow]);
+        assert!(already_granted(&parse(&acl).unwrap()));
+    }
+
+    #[test]
+    fn an_object_deny_is_matched_by_the_sid_after_its_guids() {
+        let allow = raw_ace(0, READ_EXECUTE, &known_sid(Trustee::Container));
+        for (ace_type, flags) in [(6, 0), (6, 1), (6, 2), (6, 3), (0x0C, 3)] {
+            let own = raw_ace(
+                ace_type,
+                0x20,
+                &object_body(flags, &known_sid(Trustee::Container)),
+            );
+            let acl = raw_acl(&[allow.clone(), own]);
+            assert_eq!(trustees(&acl), [Trustee::Container, Trustee::Container]);
+            assert!(
+                !already_granted(&parse(&acl).unwrap()),
+                "{ace_type} {flags}"
+            );
+            let other = raw_ace(
+                ace_type,
+                0x20,
+                &object_body(flags, &known_sid(Trustee::Other)),
+            );
+            let acl = raw_acl(&[allow.clone(), other]);
+            assert_eq!(trustees(&acl), [Trustee::Container, Trustee::Other]);
+            assert!(already_granted(&parse(&acl).unwrap()), "{ace_type} {flags}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_ace_type_blocks_whatever_its_mask() {
+        let allow = raw_ace(0, READ_EXECUTE, &known_sid(Trustee::Container));
+        let label = raw_ace(0x11, 0, &known_sid(Trustee::Other));
+        let acl = raw_acl(&[allow, label]);
+        assert_eq!(trustees(&acl), [Trustee::Container, Trustee::Unknown]);
+        assert!(!already_granted(&parse(&acl).unwrap()));
+    }
+
+    #[test]
+    fn a_malformed_acl_is_an_error_and_no_sid_is_compared() {
+        let good = raw_ace(1, 0x20, &known_sid(Trustee::Container));
+        let mut cases: Vec<(&str, Vec<u8>)> = Vec::new();
+        cases.push(("no header", vec![2, 0, 8]));
+        let mut short = raw_acl(std::slice::from_ref(&good));
+        short.truncate(short.len() - 1);
+        cases.push(("AclSize past the buffer", short));
+        let mut tiny = raw_acl(&[]);
+        tiny[2] = 4;
+        cases.push(("AclSize below the header", tiny));
+        let mut count = raw_acl(std::slice::from_ref(&good));
+        count[4] = 2;
+        cases.push(("AceCount past AclSize", count));
+        let mut truncated = raw_acl(std::slice::from_ref(&good));
+        truncated[2] -= 4;
+        cases.push(("ACE past AclSize", truncated));
+        for (name, ace_size) in [
+            ("AceSize unaligned", 18u16),
+            ("AceSize below header", 4),
+            ("AceSize zero", 0),
+        ] {
+            let mut acl = raw_acl(std::slice::from_ref(&good));
+            acl[10..12].copy_from_slice(&ace_size.to_le_bytes());
+            cases.push((name, acl));
+        }
+        let mut overrun = good.clone();
+        overrun[9] = 5;
+        cases.push(("SID past the ACE", raw_acl(&[overrun])));
+        let mut revision = good.clone();
+        revision[8] = 2;
+        cases.push(("SID revision", raw_acl(&[revision])));
+        let mut subs = good.clone();
+        subs[9] = 16;
+        cases.push(("too many sub-authorities", raw_acl(&[subs])));
+        cases.push(("no SID", raw_acl(&[raw_ace(1, 0x20, &[])])));
+        let guids = raw_ace(6, 0x20, &3u32.to_le_bytes());
+        cases.push(("object GUIDs past the ACE", raw_acl(&[guids])));
+        for (name, acl) in cases {
+            let result = parse_dacl(&acl, |_, _| panic!("{name}: SID compared"));
+            assert_eq!(result, Err(ERROR_INVALID_ACL), "{name}");
         }
     }
 
