@@ -66,15 +66,18 @@ impl Window {
         crate::placement::remember(&mut self.placement, setup, placement);
     }
 
+    /// The find results memory owned by this window.
     #[must_use]
     pub fn find_memory(&self) -> &FindMemory {
         &self.find
     }
 
+    /// The find results memory owned by this window, for edits.
     pub(crate) fn find_memory_mut(&mut self) -> &mut FindMemory {
         &mut self.find
     }
 
+    /// Sets the find results memory restored from the session.
     #[allow(dead_code, reason = "FR24 restores it from the session")]
     pub(crate) fn restore_find(&mut self, find: FindMemory) {
         self.find = find;

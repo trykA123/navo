@@ -1,7 +1,10 @@
 //! Canonical text for a find query.
 
+use super::query::token_kind;
 use super::tokens::TextEncoding;
-use super::{Attribute, AttributeFilter, FindQuery, GitRules, ModifiedFilter, SizeFilter};
+use super::{
+    Attribute, AttributeFilter, FindQuery, GitRules, ModifiedFilter, SizeFilter, TokenKind,
+};
 
 impl FindQuery {
     /// Prints the query as one canonical line that [`FindQuery::parse`] reads back.
@@ -10,13 +13,13 @@ impl FindQuery {
         let mut parts = Vec::new();
         if !self.text.is_empty() {
             if self.regex {
-                parts.push(format!("re:{}", quoted(&self.text)));
+                parts.push(format!("re:{}", quoted_value(&self.text)));
             } else {
-                parts.push(self.text.clone());
+                parts.push(plain_text(&self.text));
             }
         }
         if !self.ext.is_empty() {
-            parts.push(format!("ext:{}", self.ext.join(",")));
+            parts.push(format!("ext:{}", quoted_value(&self.ext.join(","))));
         }
         if let Some(size) = self.size {
             parts.push(size_text(size));
@@ -29,7 +32,7 @@ impl FindQuery {
             parts.push(format!("attr:{}", names.join(",")));
         }
         for within in &self.within {
-            parts.push(format!("in:{}", quoted(within)));
+            parts.push(format!("in:{}", quoted_value(within)));
         }
         if self.archives {
             parts.push("arc:on".to_owned());
@@ -38,7 +41,7 @@ impl FindQuery {
             parts.push("git:off".to_owned());
         }
         if let Some(name) = &self.name {
-            parts.push(format!("name:{}", quoted(name)));
+            parts.push(format!("name:{}", quoted_value(name)));
         }
         if let Some(depth) = self.depth {
             parts.push(format!("depth:{depth}"));
@@ -70,13 +73,38 @@ impl FindQuery {
     }
 }
 
-/// Wraps a value that would split into two tokens or carry a stray colon.
-fn quoted(value: &str) -> String {
-    if value.contains(char::is_whitespace) || value.contains(':') {
-        format!("\"{value}\"")
+/// Wraps a token value that holds whitespace, a colon or a quote.
+fn quoted_value(value: &str) -> String {
+    if value.contains(char::is_whitespace) || value.contains(':') || value.contains('"') {
+        format!("\"{}\"", escaped(value))
     } else {
         value.to_owned()
     }
+}
+
+/// Prints plain search text so that it reparses as the same text, not as filters.
+fn plain_text(text: &str) -> String {
+    if text_needs_quoting(text) {
+        format!("\"{}\"", escaped(text))
+    } else {
+        text.to_owned()
+    }
+}
+
+fn text_needs_quoting(text: &str) -> bool {
+    text.starts_with(' ')
+        || text.ends_with(' ')
+        || text.contains("  ")
+        || text.contains('"')
+        || text.chars().any(|ch| ch.is_whitespace() && ch != ' ')
+        || text
+            .split(' ')
+            .any(|word| !matches!(token_kind(word), TokenKind::Text))
+}
+
+/// Escapes a literal double quote for the tokenizer.
+fn escaped(value: &str) -> String {
+    value.replace('"', "\\\"")
 }
 
 fn hex_text(bytes: &[u8]) -> String {

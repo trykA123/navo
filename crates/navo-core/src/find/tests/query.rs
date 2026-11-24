@@ -189,3 +189,9 @@ fn malformed_quotes_are_reported() {
     assert_eq!(query.text, "before");
     assert!(query.tokens[1].message.is_some());
 }
+
+#[test]
+fn a_text_word_that_breaks_an_earlier_regex_is_rejected() {
+    let query = FindQuery::parse("re:a [");
+    assert!(query.tokens[1].message.is_some());
+}

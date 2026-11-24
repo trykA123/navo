@@ -63,6 +63,29 @@ fn set_queries_keeps_the_last_twelve() {
 }
 
 #[test]
+fn set_queries_drops_whitespace_only_text() {
+    let mut memory = FindMemory::default();
+    memory.set_queries(vec![saved(" "), saved("needle"), saved("\t")]);
+    assert_eq!(texts(&memory), ["needle"]);
+}
+
+#[test]
+fn a_repeated_query_is_kept_once_at_the_newest_slot() {
+    let mut memory = FindMemory::default();
+    memory.set_queries(vec![saved("a"), saved("b"), saved("a")]);
+    assert_eq!(texts(&memory), ["b", "a"]);
+}
+
+#[test]
+fn the_same_text_in_another_folder_is_kept() {
+    let mut memory = FindMemory::default();
+    let mut other = saved("a");
+    other.base = Location::new("/other").unwrap();
+    memory.set_queries(vec![saved("a"), other]);
+    assert_eq!(memory.queries().len(), 2);
+}
+
+#[test]
 fn set_queries_drops_empty_text() {
     let mut memory = FindMemory::default();
     memory.set_queries(vec![saved(""), saved("needle"), saved("")]);

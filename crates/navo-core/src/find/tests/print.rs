@@ -117,3 +117,59 @@ fn in_path_with_spaces_prints_quoted() {
     let query = FindQuery::parse(r#"in:"C:\My files""#);
     assert_eq!(query.to_text(), r#"in:"C:\My files""#);
 }
+
+#[test]
+fn text_that_looks_like_a_token_reprints_as_text() {
+    for input in [r#""ext:rs""#, r#""-hidden""#, r#""in:x""#] {
+        assert_round_trip(input);
+        assert_eq!(FindQuery::parse(input).to_text(), input);
+    }
+}
+
+#[test]
+fn runs_of_spaces_in_text_survive_reprinting() {
+    let query = FindQuery::parse(r#""two  spaces""#);
+    assert_round_trip(r#""two  spaces""#);
+    assert_eq!(query.text, "two  spaces");
+    assert_eq!(query.to_text(), r#""two  spaces""#);
+}
+
+#[test]
+fn extension_lists_with_spaces_quote_their_value() {
+    let query = FindQuery::parse(r#"ext:"foo bar,rs""#);
+    assert_eq!(query.ext, ["foo bar", "rs"]);
+    assert_eq!(query.to_text(), r#"ext:"foo bar,rs""#);
+    assert_round_trip(r#"ext:"foo bar,rs""#);
+}
+
+#[test]
+fn regex_text_with_spaces_round_trips() {
+    assert_round_trip(r#"re:"a b""#);
+    assert_eq!(FindQuery::parse(r#"re:"a b""#).to_text(), r#"re:"a b""#);
+}
+
+#[test]
+fn literal_quotes_in_text_print_escaped() {
+    let query = FindQuery::parse(r#""he said \"hi\"""#);
+    assert_eq!(query.text, r#"he said "hi""#);
+    assert_eq!(query.to_text(), r#""he said \"hi\"""#);
+}
+
+#[test]
+fn literal_quotes_round_trip_in_text_regex_and_paths() {
+    for input in [
+        r#""he said \"hi\"""#,
+        r#"re:"a \"b\" c""#,
+        r#"in:"C:\My \"files\"""#,
+    ] {
+        assert_round_trip(input);
+    }
+}
+
+#[test]
+fn a_path_can_end_with_a_backslash() {
+    let query = FindQuery::parse(r#"in:"C:\My files\""#);
+    assert_eq!(query.within, [r"C:\My files\"]);
+    assert_eq!(query.to_text(), r#"in:"C:\My files\""#);
+    assert_round_trip(r#"in:"C:\My files\""#);
+}

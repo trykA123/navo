@@ -117,11 +117,13 @@ impl AppState {
         self.focused.remember(setup, placement);
     }
 
+    /// The focused window's find results memory.
     #[must_use]
     pub fn find_memory(&self) -> &FindMemory {
         self.focused.find_memory()
     }
 
+    /// The focused window's find results memory, for edits.
     pub fn find_memory_mut(&mut self) -> &mut FindMemory {
         self.focused.find_memory_mut()
     }
