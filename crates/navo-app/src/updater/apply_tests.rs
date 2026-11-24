@@ -4,7 +4,7 @@ use std::io;
 
 use navo_update::{InstallKind, Version};
 
-use super::{Apply, Reason, Staged, apply_decision, has_relative_value};
+use super::{Apply, Reason, Staged, apply_decision, has_relative_value, start_gate};
 use crate::cli::{Command, Start};
 
 fn open() -> Command {
@@ -142,6 +142,37 @@ fn relative_values_wait_but_flags_and_absolute_paths_do_not() {
     assert!(!has_relative_value(&args(&["--left", "/data/docs"])));
     #[cfg(windows)]
     assert!(!has_relative_value(&args(&["--left", r"C:\data\docs"])));
+}
+
+#[test]
+fn a_root_the_account_cannot_write_applies_nothing_at_start() {
+    assert_eq!(
+        start_gate(&open(), &[], || false),
+        Err(Reason::RootNotWritable)
+    );
+    assert_eq!(start_gate(&open(), &[], || true), Ok(()));
+}
+
+#[test]
+fn the_root_check_runs_only_for_a_window_start_with_usable_args() {
+    let asked = Cell::new(false);
+    let ask = || {
+        asked.set(true);
+        false
+    };
+    assert_eq!(
+        start_gate(&Command::Version, &[], ask),
+        Err(Reason::NotWindow)
+    );
+    let relative = [OsString::from("docs")];
+    assert_eq!(
+        start_gate(&open(), &relative, ask),
+        Err(Reason::RelativeArgs)
+    );
+    assert!(
+        !asked.get(),
+        "Velopack's locator is read only when it matters"
+    );
 }
 
 #[test]

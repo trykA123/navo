@@ -34,6 +34,26 @@ pub(crate) enum Reason {
     OthersRunning,
     QueryFailed,
     RelativeArgs,
+    RootNotWritable,
+}
+
+/// `Err` with the reason when a start must not even open Velopack: no window, a relative
+/// value, or a root this account cannot write (IW35; `root_writable` runs last).
+fn start_gate(
+    command: &Command,
+    args: &[OsString],
+    root_writable: impl FnOnce() -> bool,
+) -> Result<(), Reason> {
+    if !matches!(command, Command::Open(_)) {
+        return Err(Reason::NotWindow);
+    }
+    if has_relative_value(args) {
+        return Err(Reason::RelativeArgs);
+    }
+    if !root_writable() {
+        return Err(Reason::RootNotWritable);
+    }
+    Ok(())
 }
 
 /// `Now` only for an installed copy opening a window, with a staged newer package and no
@@ -66,12 +86,17 @@ pub(crate) fn apply_decision<A>(
 /// Applies a staged package and restarts with `args`; returns when the package waits.
 /// On success Velopack exits this process, so call it before anything else starts.
 pub(crate) fn at_start(command: &Command, args: &[OsString]) {
-    if !matches!(command, Command::Open(_)) {
-        return;
-    }
-    if has_relative_value(args) {
-        tracing::debug!(reason = ?Reason::RelativeArgs, "update: nothing applied at start");
-        return;
+    match start_gate(command, args, super::root_access::current) {
+        Ok(()) => {}
+        Err(Reason::NotWindow) => return,
+        Err(Reason::RootNotWritable) => {
+            tracing::info!("update: off, this account cannot write the install folder");
+            return;
+        }
+        Err(reason) => {
+            tracing::debug!(?reason, "update: nothing applied at start");
+            return;
+        }
     }
     let Ok(manager) = UpdateManager::new(NoneSource {}, None, None) else {
         return;
