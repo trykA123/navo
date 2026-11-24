@@ -2,12 +2,14 @@ mod export;
 mod filter;
 mod outline;
 mod path;
+mod query;
 
 use std::collections::HashMap;
 
 pub use export::{Exported, Syntax};
 pub use filter::Filtered;
 pub use outline::{Outline, Row, Step};
+pub use query::Query;
 
 use crate::preview::{KEY_CHARS, PREVIEW_CHARS, clip, one_line};
 
@@ -298,5 +300,7 @@ impl Tree {
 
 #[cfg(test)]
 mod export_tests;
+#[cfg(test)]
+mod query_tests;
 #[cfg(test)]
 mod tests;
