@@ -32,7 +32,8 @@ env:
   NAVO_EXPECT_PDFIUM: "1"
   PDFIUM_TAG: chromium/8125
   PDFIUM_SHA256: 9a964261760cff52570aabf038ab346d3a5034dd8b30d0d5fe8861235d356b8b
-  BUILD_HOST_TESTS: "package(xtask) | (package(navo-bench) & test(privacy::api_tests))"
+  # Debug builds read gpui-kit icons from the cargo registry (rust-embed without debug-embed); shard runners have none.
+  BUILD_HOST_TESTS: "package(xtask) | (package(navo-bench) & test(privacy::api_tests)) | (package(navo-compare-app) & test(chrome_monochrome_icons_are_in_the_default_bundle))"
 
 jobs:
   clippy:
