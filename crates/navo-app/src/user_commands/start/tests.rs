@@ -1,5 +1,6 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 
@@ -37,6 +38,7 @@ const EXIT_WAIT: Duration = Duration::from_secs(60);
 fn held_program(marker: &Path) -> (&'static str, Vec<String>) {
     let marker = marker.to_string_lossy().into_owned();
     if cfg!(windows) {
+        let marker = marker.replace('\'', "''");
         let script = format!(
             "$watch = [Diagnostics.Stopwatch]::StartNew(); \
              while (-not (Test-Path '{marker}') -and $watch.Elapsed.TotalSeconds -lt 120) \
@@ -85,15 +87,16 @@ impl Drop for Release {
         let _ = std::fs::write(&self.marker, b"");
         let Some(pid) = self.pid.take() else { return };
         let pid = pid.to_string();
-        let _ = if cfg!(windows) {
-            std::process::Command::new("taskkill")
-                .args(["/F", "/T", "/PID", &pid])
-                .status()
+        let mut kill = if cfg!(windows) {
+            let mut kill = std::process::Command::new("taskkill");
+            kill.args(["/F", "/T", "/PID", &pid]);
+            kill
         } else {
-            std::process::Command::new("kill")
-                .args(["-9", &pid])
-                .status()
+            let mut kill = std::process::Command::new("kill");
+            kill.args(["-9", &pid]);
+            kill
         };
+        let _ = kill.stdout(Stdio::null()).stderr(Stdio::null()).status();
     }
 }
 
@@ -230,8 +233,9 @@ fn start_writes_the_list_and_removes_it_after_exit() {
     assert!(pid.is_file(), "the pid sidecar");
     release.track(&pid);
     std::fs::write(&marker, b"").expect("the release marker");
-    assert_eq!(receiver.recv_timeout(EXIT_WAIT).expect("the exit"), Some(0));
+    let code = receiver.recv_timeout(EXIT_WAIT).expect("the exit");
     release.exited();
+    assert_eq!(code, Some(0));
     assert!(!list.exists(), "the list is removed after the exit");
     assert!(!pid.exists(), "the sidecar is removed after the exit");
 }
