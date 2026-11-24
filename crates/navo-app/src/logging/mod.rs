@@ -25,6 +25,10 @@ const MAX_FILE_BYTES: u64 = 256 * 1024;
 #[cfg(not(feature = "tester"))]
 const FILES: usize = 2;
 
+/// Target for uninstall events; shipped builds record them at INFO so a clean uninstall is
+/// visible in the log, while every other target stays at the quiet default.
+pub const UNINSTALL_TARGET: &str = "navo_uninstall";
+
 static FLUSH: OnceLock<navo_diag::LogFlush> = OnceLock::new();
 
 pub fn flush() {
@@ -85,7 +89,7 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
         std::env::var(LEGACY_ENV_VAR).ok(),
     );
     #[cfg(not(feature = "tester"))]
-    let filter = EnvFilter::new(DEFAULT_LEVEL);
+    let filter = release_filter();
     let misses = opened.misses();
     let flush = opened.layer.as_ref().map(LogLayer::flush_handle);
     #[cfg(not(feature = "tracy"))]
@@ -109,6 +113,13 @@ pub fn install(data: Option<&Path>) -> Diagnostics {
         misses,
         caches,
     }
+}
+
+/// The shipped filter: the quiet default plus INFO for uninstall events.
+#[cfg(not(feature = "tester"))]
+fn release_filter() -> EnvFilter {
+    EnvFilter::try_new(format!("{DEFAULT_LEVEL},{UNINSTALL_TARGET}=info"))
+        .unwrap_or_else(|_| EnvFilter::new(DEFAULT_LEVEL))
 }
 
 pub fn log_start() {
@@ -205,5 +216,15 @@ mod release_tests {
             EnvFilter::new(DEFAULT_LEVEL).max_level_hint(),
             Some(tracing::level_filters::LevelFilter::WARN)
         );
+    }
+
+    #[test]
+    fn release_logs_record_uninstall_info_but_no_other_info() {
+        let subscriber = Registry::default().with(release_filter());
+        tracing::subscriber::with_default(subscriber, || {
+            assert!(tracing::enabled!(target: UNINSTALL_TARGET, tracing::Level::INFO));
+            assert!(!tracing::enabled!(target: "navo_app", tracing::Level::INFO));
+            assert!(tracing::enabled!(target: "navo_app", tracing::Level::WARN));
+        });
     }
 }
