@@ -1,9 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use navo_core::{
-    ConflictPolicy, FsError, Location, OpKind, OperationPlan, ScannedItem, is_protected,
-};
+use navo_core::{ConflictPolicy, Location, OpKind, OperationPlan, ScannedItem, is_protected};
 use navo_fs::{CancelToken, Progress, ProviderOps, Sources};
 
 use super::paste::PasteRefusal;
@@ -74,16 +72,20 @@ pub(super) fn planned_on(request: &OpRequest) -> Option<&Location> {
 }
 
 /// Plans `request` on `provider`. With a `scanner`, it first lists the request's archive entries
-/// into its empty stream, so the plan copies them. Fails when a source cannot be read.
+/// into its empty stream, so the plan copies them. Rows from Find results are checked first.
+/// Fails, with the text to show, when a source cannot be read or a check refuses the plan.
 pub(super) fn plan_scanned(
     request: &mut OpRequest,
     (provider, scanner): (&dyn ProviderOps, Option<&dyn ProviderOps>),
     cancel: &CancelToken,
-) -> Result<OperationPlan, FsError> {
+) -> Result<OperationPlan, String> {
     if let (Some(scanner), Some(stream)) = (scanner, request.stream.as_mut()) {
-        stream.items = navo_fs::scan(scanner, &request.sources, cancel)?;
+        stream.items = navo_fs::scan(scanner, &request.sources, cancel).map_err(|e| e.message())?;
     }
-    super::work::plan_for(provider, request, cancel)
+    match request.results.clone() {
+        Some(stamps) => super::from_results::plan_rows(provider, request, &stamps, cancel),
+        None => super::work::plan_for(provider, request, cancel).map_err(|e| e.message()),
+    }
 }
 
 impl Browser {
@@ -127,6 +129,7 @@ impl Browser {
             structure: None,
             stream: Some(paste),
             policy: ConflictPolicy::Ask,
+            results: None,
         };
         let id = request.id;
         if self.submit_plan(request) {

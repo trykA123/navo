@@ -105,6 +105,7 @@ impl Browser {
             stream: self.archive_stream(&sources),
             sources,
             policy: ConflictPolicy::Ask,
+            results: None,
         };
         let id = request.id;
         if self.submit_plan(request) {

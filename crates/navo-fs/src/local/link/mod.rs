@@ -52,8 +52,10 @@ pub(super) fn link_target(at: &Location) -> Result<Option<Location>, FsError> {
     let place = super::os_path(at)?;
     #[cfg(unix)]
     let found = std::fs::read_link(&place);
+    // Symlinks, junctions and mount points first; a file that is no reparse point may be a
+    // shell shortcut.
     #[cfg(windows)]
-    let found = windows::read_target(&place);
+    let found = std::fs::read_link(&place).or_else(|_| windows::read_target(&place));
     match found {
         Ok(target) => Ok(Location::local(super::platform::entry_name(target.as_os_str())).ok()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Err(super::io_error(&error, at)),

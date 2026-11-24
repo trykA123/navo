@@ -130,6 +130,7 @@ fn two_drive_delete(fs: &FakeFs) -> (Option<RetentionPolicy>, Option<NoKeep>) {
         structure: None,
         stream: None,
         policy: ConflictPolicy::Ask,
+        results: None,
     };
     let plan = OperationPlan {
         kind: OpKind::Delete,

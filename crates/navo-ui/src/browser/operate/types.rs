@@ -9,6 +9,7 @@ use navo_fs::{
 
 use std::sync::Arc;
 
+use super::RowStamp;
 use super::clashes::Clash;
 use super::queue::SlowVolumes;
 use super::stream::{Refused, StreamPaste};
@@ -209,6 +210,8 @@ pub struct Replan {
     pub policy: ConflictPolicy,
     pub(crate) planned: ConflictPolicy,
     pub(crate) same_volume: bool,
+    /// The kept rows' search-time stamps when the plan came from Find results.
+    pub(crate) results: Option<Arc<[RowStamp]>>,
 }
 
 impl Default for Replan {
@@ -218,6 +221,7 @@ impl Default for Replan {
             policy: ConflictPolicy::Ask,
             planned: ConflictPolicy::Ask,
             same_volume: false,
+            results: None,
         }
     }
 }
@@ -350,7 +354,7 @@ impl JobView {
 pub(in crate::browser) enum JobUpdate {
     Planned {
         request: Box<OpRequest>,
-        result: Result<PlannedOp, FsError>,
+        result: Result<PlannedOp, String>,
     },
     Classified {
         id: u64,
@@ -393,4 +397,7 @@ pub(in crate::browser) struct OpRequest {
     pub(super) stream: Option<StreamPaste>,
     /// How the plan resolves names already at the target; `Ask` (skip them) until the sheet sets it.
     pub(super) policy: ConflictPolicy,
+    /// Search-time stamps of `sources`, in order, for F5/F6 from Find results; every plan
+    /// checks the rows against them again.
+    pub(super) results: Option<Arc<[RowStamp]>>,
 }

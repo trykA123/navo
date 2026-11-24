@@ -96,3 +96,34 @@ fn location_of(path: &Path) -> navo_core::Location {
 fn shortcut_target(path: &Path) -> PathBuf {
     read_target(path).unwrap()
 }
+
+#[test]
+fn a_junction_and_a_folder_symlink_read_as_links_to_their_folder() {
+    let (directory, _, target) = fixture();
+    let junction = directory.path().join("junction");
+    let made = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&junction)
+        .arg(&target)
+        .status()
+        .unwrap();
+    assert!(made.success());
+    let mut links = vec![junction];
+    let symlink = directory.path().join("symlink");
+    // Folder symlinks need Developer Mode or elevation; junctions never do.
+    if std::os::windows::fs::symlink_dir(&target, &symlink).is_ok() {
+        links.push(symlink);
+    }
+    for link in links {
+        let found = super::super::link_target(&location_of(&link))
+            .unwrap()
+            .unwrap();
+        let found = crate::local::os_path(&found).unwrap();
+        assert_eq!(
+            fs::canonicalize(found).unwrap(),
+            fs::canonicalize(&target).unwrap(),
+            "{}",
+            link.display()
+        );
+    }
+}

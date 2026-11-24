@@ -43,6 +43,7 @@ fn copy_plan(policy: ConflictPolicy) -> (FakeFs, navo_core::OperationPlan) {
         structure: None,
         stream: None,
         policy,
+        results: None,
     };
     let plan = plan_for(&fs, &request, &CancelToken::new()).unwrap();
     (fs, plan)

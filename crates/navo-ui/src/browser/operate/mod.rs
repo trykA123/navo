@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use navo_core::{Command, ConflictPolicy, FsError, Location, OpKind, Tab};
+use navo_core::{Command, ConflictPolicy, Location, OpKind, Tab};
 use navo_fs::{CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, volume_of};
 
 use super::{Browser, Message, RenameReport};
@@ -19,7 +19,7 @@ mod verify;
 mod work;
 
 pub use clashes::{Clash, Facts, SHOWN as CLASHES_SHOWN};
-pub use from_results::ResultsRequest;
+pub use from_results::{ResultRow, ResultsRequest, RowStamp};
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
 pub use queue::SlowVolume;
 use stream::planned_on;
@@ -296,6 +296,7 @@ impl Browser {
             structure,
             sources,
             policy: ConflictPolicy::Ask,
+            results: None,
         })
     }
 
@@ -305,7 +306,7 @@ impl Browser {
             .map(|pane| pane.active().location().clone())
     }
 
-    fn accept_plan(&mut self, request: OpRequest, result: Result<PlannedOp, FsError>) -> bool {
+    fn accept_plan(&mut self, request: OpRequest, result: Result<PlannedOp, String>) -> bool {
         if self.is_stale_replan(&request) {
             return false;
         }
@@ -323,12 +324,11 @@ impl Browser {
                     self.confirm();
                 }
             }
-            Err(error) => {
+            Err(message) => {
                 if keep::is_replan(&request) {
                     self.pending = None;
                 }
-                self.jobs
-                    .push(JobView::plan_failed(request, error.message()));
+                self.jobs.push(JobView::plan_failed(request, message));
             }
         }
         true

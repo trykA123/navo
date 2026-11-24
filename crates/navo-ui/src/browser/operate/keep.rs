@@ -100,6 +100,7 @@ impl Browser {
             structure,
             stream: pending.stream.clone(),
             policy: pending.replan.policy.clone(),
+            results: pending.replan.results.clone(),
         };
         self.submit_plan(request)
     }
@@ -131,6 +132,7 @@ pub(super) fn replan_of(request: &OpRequest) -> Replan {
         policy: request.policy.clone(),
         planned: request.policy.clone(),
         same_volume: request.same_volume,
+        results: request.results.clone(),
     }
 }
 

@@ -298,6 +298,7 @@ mod tests {
             structure: None,
             stream: None,
             policy: navo_core::ConflictPolicy::Ask,
+            results: None,
         };
         plan_for(&fs, &request, &CancelToken::new()).unwrap()
     }

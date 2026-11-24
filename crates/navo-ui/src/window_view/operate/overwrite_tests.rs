@@ -62,6 +62,7 @@ fn copy(
             policy: picked,
             planned,
             same_volume: false,
+            results: None,
         },
         clashes: vec![Clash {
             name: "x.txt".to_owned(),

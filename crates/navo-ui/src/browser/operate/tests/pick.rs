@@ -53,6 +53,7 @@ fn request_for(pending: &PendingOp, policy: ConflictPolicy) -> OpRequest {
         structure: None,
         stream: None,
         policy,
+        results: None,
     }
 }
 
