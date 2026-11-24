@@ -8,6 +8,7 @@ use navo_l10n::{t, tr};
 
 use super::PagedView;
 use super::inspect::{INSPECT_BYTES, Inspection, inspect};
+use super::inspect_scan::InspectorScan;
 use super::lines::PagedKind;
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName};
@@ -30,6 +31,7 @@ pub(super) struct HexInspector {
     sheet: Entity<SheetState>,
     read: Option<Read>,
     job: Option<(ReadKey, Task<()>)>,
+    pub(super) scan: InspectorScan,
 }
 
 impl HexInspector {
@@ -38,6 +40,7 @@ impl HexInspector {
             sheet: cx.new(|_| SheetState::new()),
             read: None,
             job: None,
+            scan: InspectorScan::new(cx),
         }
     }
 }
@@ -58,13 +61,13 @@ fn value_row(t: &Theme, at: usize, label: String, value: String) -> ObservedElem
         )
 }
 
-fn inspector_body(t: &Theme, inspection: Inspection) -> Stateful<Div> {
+fn decode_rows(t: &Theme, inspection: Inspection) -> Stateful<Div> {
     div()
         .id("hex-inspector-body")
         .flex()
         .flex_col()
-        .flex_1()
-        .min_h_0()
+        .flex_none()
+        .max_h(relative(0.45))
         .overflow_y_scroll()
         .gap(t.spacing.xs)
         .p(t.spacing.xl)
@@ -78,7 +81,7 @@ fn inspector_body(t: &Theme, inspection: Inspection) -> Stateful<Div> {
 }
 
 impl PagedView {
-    fn is_inspecting(&self, cx: &App) -> bool {
+    pub(super) fn is_inspecting(&self, cx: &App) -> bool {
         self.kind == PagedKind::Hex && self.inspector.sheet.read(cx).is_open()
     }
 
@@ -114,6 +117,7 @@ impl PagedView {
         if !self.is_inspecting(cx) {
             return;
         }
+        self.request_scan(cx);
         let key = (self.cursor, self.source_rev);
         let is_read = self
             .inspector
@@ -154,6 +158,17 @@ impl PagedView {
         })
     }
 
+    /// The decoded values above, the hashes and strings below.
+    fn drawer_body(&self, t: &Theme, bytes: &[u8], cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(decode_rows(t, inspect(bytes)))
+            .child(self.scan_section(t, cx))
+    }
+
     /// The inspector drawer over the rows, while it is open or closing.
     pub(super) fn inspector_drawer(
         &self,
@@ -173,7 +188,8 @@ impl PagedView {
             }) => Some(error.clone()),
             Some(read) if read.key == key => None,
             _ => Some(tr("hex-inspector-reading")),
-        };
+        }
+        .or_else(|| self.inspector.scan.copied_note());
         let bytes = read
             .and_then(|read| read.bytes.as_deref().ok())
             .unwrap_or(&[]);
@@ -192,8 +208,10 @@ impl PagedView {
             .close("ctrl-i", move |_, cx| {
                 let _ = this.update(cx, |view, cx| view.right_drawer(cx));
             })
-            .body(inspector_body(t, inspect(bytes)))
+            .body(self.drawer_body(t, bytes, cx))
             .hint(&["←", "→", "↑", "↓"], tr("hex-inspector-move"))
+            .hint(&["tab"], tr("hex-inspector-tab"))
+            .hint(&["enter"], tr("hex-inspector-enter"))
             .hint(&["escape"], tr("hex-inspector-close"));
         if let Some(status) = status {
             drawer = drawer.status(status);

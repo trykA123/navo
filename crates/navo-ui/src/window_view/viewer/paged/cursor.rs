@@ -79,6 +79,13 @@ impl PagedView {
         self.user_move(if end { Move::End } else { Move::Offset(0) }, cx);
     }
 
+    /// Moves the cursor to byte `at` (clamped to the file) and scrolls it into view.
+    pub(super) fn go_to_byte(&mut self, at: u64, cx: &mut Context<Self>) {
+        self.cursor = at.min(self.last_byte());
+        self.reveal_cursor(cx);
+        cx.notify();
+    }
+
     /// Puts the cursor on the clicked byte and gives the view the keyboard focus.
     fn pick_byte(&mut self, at: u64, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);

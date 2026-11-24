@@ -20,6 +20,7 @@ mod font;
 mod guide;
 mod header_fit;
 mod hex_inspector;
+mod hex_inspector_scan;
 mod image;
 mod image_tools;
 mod key_bar;

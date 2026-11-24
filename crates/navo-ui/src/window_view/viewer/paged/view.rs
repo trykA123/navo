@@ -304,6 +304,7 @@ impl Render for PagedView {
             .key_context(PAGED_CONTEXT)
             .track_focus(&self.focus);
         let root = Self::find_keys(Self::movement_keys(root, cx), cx);
+        let root = Self::inspector_tab_keys(root, cx);
         Self::list_keys(root, cx)
             .flex()
             .flex_col()

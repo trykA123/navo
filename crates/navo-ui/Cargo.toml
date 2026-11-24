@@ -15,7 +15,9 @@ ignored = ["object"]
 tester = []
 
 [dependencies]
+blake3 = "=1.8.7"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+crc32fast = "=1.5.5"
 flate2 = "=1.1.11"
 futures = "0.3.34"
 gpui-kit = "=0.9.1"
@@ -49,6 +51,7 @@ sidewise-ui = { path = "../sidewise-ui" }
 navo-structured = { path = "../navo-structured" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha2 = "=0.11.1"
 toml = "1.2.1"
 tracing = "0.1.44"
 tree-sitter = "=0.26.13"
