@@ -25,6 +25,24 @@ mod unknown;
 mod verify;
 
 #[test]
+fn a_same_file_refusal_names_the_target_and_says_nothing_changed() {
+    let fs = fake();
+    let error = navo_core::FsError {
+        location: Some(fs.location("home/docs")),
+        ..navo_core::FsError::new(FsErrorKind::SameFile)
+    };
+    let text = super::failure_text(&error);
+    assert!(
+        text.contains("docs") && text.contains("Nothing was changed."),
+        "{text}"
+    );
+    assert_eq!(
+        super::failure_text(&navo_core::FsError::new(FsErrorKind::Locked)),
+        "The item is locked."
+    );
+}
+
+#[test]
 fn selected_sources_resolve_a_based_tab_under_its_base() {
     let fs = fake();
     let browser = browser(&fs, AppState::new(fs.location("home/docs")));

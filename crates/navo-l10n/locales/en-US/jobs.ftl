@@ -38,6 +38,7 @@ job-verified-some = Done · Verified { $verified } of { $count ->
     [one] { $files } file
    *[other] { $files } files
 }
+job-same-file = “{ $path }” is the same file as its source under another name. Nothing was changed.
 conflict-choice-label = Names already there
 conflict-skip = Skip
 conflict-overwrite-older = Overwrite older

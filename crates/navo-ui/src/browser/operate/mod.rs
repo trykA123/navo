@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use navo_core::{Command, ConflictPolicy, Location, OpKind, Tab};
+use navo_core::{Command, ConflictPolicy, FsError, FsErrorKind, Location, OpKind, Tab};
 use navo_fs::{CancelToken, CopyMode, JobKind, JobOutcome, JobSlot, Priority, volume_of};
 
 use super::{Browser, Message, RenameReport};
@@ -353,7 +353,7 @@ impl Browser {
         let status = match outcome {
             Ok(JobOutcome::Done) => JobStatus::Done,
             Ok(JobOutcome::Cancelled) => JobStatus::Cancelled,
-            Ok(JobOutcome::Failed { error, .. }) => JobStatus::Failed(error.message()),
+            Ok(JobOutcome::Failed { error, .. }) => JobStatus::Failed(failure_text(&error)),
             Err(message) => JobStatus::Failed(message),
         };
         let mut source_tab = None;
@@ -394,6 +394,19 @@ fn selected_sources(tab: &Tab) -> Vec<Location> {
         .into_iter()
         .filter_map(|name| tab.entry_location(name).ok())
         .collect()
+}
+
+/// The text a failed job shows. A refusal to write over the source under another name reads from
+/// the catalog; other kinds keep the shared error text.
+fn failure_text(error: &FsError) -> String {
+    match (&error.location, error.kind) {
+        (Some(location), FsErrorKind::SameFile) => {
+            let mut args = navo_l10n::FluentArgs::new();
+            args.set("path", location.path().display().into_owned());
+            navo_l10n::tr_args("job-same-file", &args)
+        }
+        _ => error.message(),
+    }
 }
 
 #[cfg(test)]
