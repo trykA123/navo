@@ -14,18 +14,20 @@ use std::ptr;
 use windows_sys::Win32::Foundation::{ERROR_NO_MORE_FILES, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
 use windows_sys::Win32::Security::{
-    ACCESS_ALLOWED_ACE, ACL, DACL_SECURITY_INFORMATION, GetAce, GetSecurityDescriptorControl,
-    OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SE_DACL_PROTECTED,
+    ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce,
+    GetSecurityDescriptorControl, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
+    SE_DACL_PROTECTED,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_ID_BOTH_DIR_INFO, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    FileIdBothDirectoryRestartInfo, GetFileInformationByHandleEx, OPEN_EXISTING, READ_CONTROL,
+    CreateFileW, FILE_ID_BOTH_DIR_INFO, FILE_INFO_BY_HANDLE_CLASS, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo,
+    GetFileInformationByHandleEx, OPEN_EXISTING, READ_CONTROL,
 };
 
 use super::{
     HOLD_ACCESS, HOLD_FLAGS, Held, Owned, Pin, PinError, ancestors_unchanged, read_id, wide_z,
 };
-use crate::adopt_rule::{self, NAME_OFFSET, ShapeError};
+use crate::adopt_rule::{self, Batch, Emptiness, NAME_OFFSET, ShapeError};
 use crate::elevate::{AceView, admin_descriptor_ok};
 use crate::payload::platform::security;
 use crate::placement::{Chain, Link};
@@ -182,56 +184,80 @@ fn read_ace(acl: *const ACL, index: u32) -> io::Result<AceView> {
     if unsafe { GetAce(acl, index, &mut raw) } == 0 {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY: every ACE starts with a header and an access mask.
-    let ace = unsafe { &*raw.cast::<ACCESS_ALLOWED_ACE>() };
-    let kind = ace.Header.AceType;
+    let base = raw.cast::<u8>().cast_const();
+    // SAFETY: GetAce returned a live ACE, and every ACE starts with a 4-byte `ACE_HEADER`.
+    let header = unsafe { ptr::read_unaligned(base.cast::<ACE_HEADER>()) };
+    let size = usize::from(header.AceSize);
+    if size < offset_of!(ACCESS_ALLOWED_ACE, SidStart) {
+        return Err(short_ace());
+    }
+    // SAFETY: `AceSize` covers the mask, which sits at the same offset in every ACE type.
+    let mask = unsafe {
+        ptr::read_unaligned(base.add(offset_of!(ACCESS_ALLOWED_ACE, Mask)).cast::<u32>())
+    };
+    let kind = header.AceType;
     let sid = if kind <= 1 {
-        // SAFETY: allow (0) and deny (1) ACEs store their SID at `SidStart`.
-        let sid = unsafe {
-            raw.cast::<u8>()
-                .add(offset_of!(ACCESS_ALLOWED_ACE, SidStart))
-        };
-        security::sid_text(sid.cast())?
+        let start = offset_of!(ACCESS_ALLOWED_ACE, SidStart);
+        // A SID is 8 header bytes plus 4 per sub-authority; its count is the byte at offset 1.
+        if size < start + 8 {
+            return Err(short_ace());
+        }
+        // SAFETY: allow (0) and deny (1) ACEs store their SID at `SidStart`; 8 bytes are in bounds.
+        let sid = unsafe { base.add(start) };
+        // SAFETY: offset 1 is inside the 8 SID header bytes checked above.
+        let count = usize::from(unsafe { sid.add(1).read() });
+        if size < start + 8 + 4 * count {
+            return Err(short_ace());
+        }
+        security::sid_text(sid.cast_mut().cast())?
     } else {
         String::new()
     };
     Ok(AceView {
         kind,
-        flags: ace.Header.AceFlags,
-        mask: ace.Mask,
+        flags: header.AceFlags,
+        mask,
         sid,
     })
 }
 
+/// The error for an ACE whose `AceSize` does not cover its mask or SID; the check fails closed.
+fn short_ace() -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, "ACE is shorter than its fields")
+}
+
 /// Lists the held root from its start; only `.` and `..` (or nothing) count as empty.
+///
+/// After an all-dots first batch it lists once more, since some file systems return the dots alone.
 fn root_empty(handle: &Owned) -> Result<bool, PinError> {
+    let first = list_batch(handle, FileIdBothDirectoryRestartInfo);
+    match adopt_rule::root_emptiness(first, || list_batch(handle, FileIdBothDirectoryInfo)) {
+        Emptiness::Empty => Ok(true),
+        Emptiness::NotEmpty => Ok(false),
+        Emptiness::Failed(error) => Err(error.into()),
+        Emptiness::Malformed => Err(PinError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "folder listing is malformed",
+        ))),
+    }
+}
+
+/// Reads one `class` listing batch of the held folder into bytes; the end is `NoMoreFiles`.
+fn list_batch(handle: &Owned, class: FILE_INFO_BY_HANDLE_CLASS) -> Batch<Vec<u8>, io::Error> {
     let mut words = vec![0_u64; LISTING_WORDS];
-    let size = u32::try_from(LISTING_WORDS * size_of::<u64>()).map_err(io::Error::other)?;
-    // SAFETY: the handle is live and `words` is a writable, 8-byte aligned buffer of `size` bytes.
-    let ok = unsafe {
-        GetFileInformationByHandleEx(
-            handle.0,
-            FileIdBothDirectoryRestartInfo,
-            words.as_mut_ptr().cast(),
-            size,
-        )
+    let Ok(size) = u32::try_from(LISTING_WORDS * size_of::<u64>()) else {
+        return Batch::Failed(io::Error::other("listing buffer too large"));
     };
+    // SAFETY: the handle is live and `words` is a writable, 8-byte aligned buffer of `size` bytes.
+    let ok =
+        unsafe { GetFileInformationByHandleEx(handle.0, class, words.as_mut_ptr().cast(), size) };
     if ok == 0 {
         let error = io::Error::last_os_error();
         return if error.raw_os_error() == Some(ERROR_NO_MORE_FILES.cast_signed()) {
-            Ok(true)
+            Batch::NoMoreFiles
         } else {
-            Err(error.into())
+            Batch::Failed(error)
         };
     }
-    let bytes = words
-        .iter()
-        .flat_map(|word| word.to_ne_bytes())
-        .collect::<Vec<_>>();
-    adopt_rule::listing_empty(&bytes).ok_or_else(|| {
-        PinError::Io(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "folder listing is malformed",
-        ))
-    })
+    Batch::Entries(words.iter().flat_map(|word| word.to_ne_bytes()).collect())
 }

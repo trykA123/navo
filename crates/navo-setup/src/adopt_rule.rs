@@ -92,6 +92,45 @@ pub(crate) fn listing_empty(buffer: &[u8]) -> Option<bool> {
     }
 }
 
+/// One directory listing call on the held root: a batch of entries, the end, or another error.
+pub(crate) enum Batch<B, E> {
+    Entries(B),
+    NoMoreFiles,
+    Failed(E),
+}
+
+/// The root verdict: empty, not empty, a malformed batch, or a listing error (callers refuse).
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Emptiness<E> {
+    Empty,
+    NotEmpty,
+    Malformed,
+    Failed(E),
+}
+
+/// Decides whether the root is empty from its first batch, reading `next` only after all dots.
+///
+/// A file system may return `.` and `..` in a batch of their own, so the root is empty only when
+/// the call after an all-dots batch ends with no more files; any entry or other error refuses.
+pub(crate) fn root_emptiness<B: AsRef<[u8]>, E>(
+    first: Batch<B, E>,
+    next: impl FnOnce() -> Batch<B, E>,
+) -> Emptiness<E> {
+    match first {
+        Batch::NoMoreFiles => Emptiness::Empty,
+        Batch::Failed(error) => Emptiness::Failed(error),
+        Batch::Entries(bytes) => match listing_empty(bytes.as_ref()) {
+            None => Emptiness::Malformed,
+            Some(false) => Emptiness::NotEmpty,
+            Some(true) => match next() {
+                Batch::NoMoreFiles => Emptiness::Empty,
+                Batch::Entries(_) => Emptiness::NotEmpty,
+                Batch::Failed(error) => Emptiness::Failed(error),
+            },
+        },
+    }
+}
+
 /// Reads a little-endian `u32` at `offset` as a `usize`; `None` past the end.
 fn read_u32(bytes: &[u8], offset: usize) -> Option<usize> {
     let raw = bytes.get(offset..offset.checked_add(4)?)?;
@@ -103,7 +142,9 @@ mod tests {
     use std::ffi::{OsStr, OsString};
     use std::path::PathBuf;
 
-    use super::{NAME_OFFSET, ShapeError, adopt_shape, listing_empty};
+    use super::{
+        Batch, Emptiness, NAME_OFFSET, ShapeError, adopt_shape, listing_empty, root_emptiness,
+    };
     use crate::placement::{Chain, FileId, Link, NameEq};
 
     /// ASCII case-insensitive names for the pure tests; Windows supplies the ordinal rule.
@@ -269,5 +310,33 @@ mod tests {
         past_end[0..4].copy_from_slice(&4090_u32.to_le_bytes());
         assert_eq!(listing_empty(&past_end), None);
         assert_eq!(listing_empty(&[0_u8; 50]), None);
+    }
+
+    /// Runs the root rule with an all-dots first batch and `second` as the follow-up call.
+    fn after_dots(second: Batch<Vec<u8>, i32>) -> Emptiness<i32> {
+        root_emptiness(Batch::Entries(listing(&[".", ".."])), || second)
+    }
+
+    #[test]
+    fn all_dots_then_no_more_files_is_empty() {
+        assert_eq!(after_dots(Batch::NoMoreFiles), Emptiness::Empty);
+    }
+
+    #[test]
+    fn all_dots_then_a_second_batch_with_an_entry_is_not_empty() {
+        let planted = Batch::Entries(listing(&["navo.exe"]));
+        assert_eq!(after_dots(planted), Emptiness::NotEmpty);
+    }
+
+    #[test]
+    fn all_dots_then_another_error_refuses() {
+        assert_eq!(after_dots(Batch::Failed(5)), Emptiness::Failed(5));
+    }
+
+    #[test]
+    fn a_first_batch_with_an_entry_never_reads_the_next() {
+        let first = Batch::Entries(listing(&[".", "..", "navo.exe"]));
+        let verdict = root_emptiness::<_, i32>(first, || unreachable!("second call"));
+        assert_eq!(verdict, Emptiness::NotEmpty);
     }
 }
