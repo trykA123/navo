@@ -1,5 +1,6 @@
 //! Builds the file list's scrolling area and its rows, and routes a left press on a row.
 
+use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -15,18 +16,20 @@ use super::{
     FileListAction, FileListProps, KnownWidth, ListContext, PageRowsHandler, drop, git_cell, kind,
     lasso, lift, press, row_number, watch,
 };
-use crate::name_match::Needle;
+use crate::name_match::{Needle, Scratch};
 use crate::primitives::{ListScroll, RowSemantics, VirtualList};
 use crate::tokens::{self, Theme};
 
+/// Builds the row at `index` from its entry, or None past the last row.
 fn render_row(
     ctx: &Rc<ListContext>,
-    (theme, needle): (&Theme, Option<&Needle>),
+    (theme, needle, scratch): (&Theme, Option<&Needle>, &RefCell<Scratch>),
     index: usize,
 ) -> Option<AnyElement> {
     let entry = ctx.props.rows.get(index)?;
     let row = row_number(index);
-    let note = ctx.note_of.and_then(|note| note(&entry.name.display()));
+    let display = entry.name.display();
+    let note = ctx.note_of.and_then(|note| note(&display));
     let look = RowLook {
         theme,
         entry,
@@ -39,6 +42,8 @@ fn render_row(
         needle,
         git: git_cell::slot(ctx, (entry, row)),
         note: note.as_ref(),
+        display: &display,
+        scratch,
     };
     let (left, right, click) = (ctx.clone(), ctx.clone(), ctx.clone());
     let zones = (drop::grip(ctx, row), lasso::start_zone(ctx, row));
@@ -56,6 +61,8 @@ fn render_row(
     Some(drop::target(element, ctx, (row, theme)).into_any_element())
 }
 
+/// Returns the list's row builder: per frame it parses the filter once and shares one
+/// filter scratch across the visible rows.
 pub(super) fn render_rows(
     ctx: &Rc<ListContext>,
 ) -> impl Fn(Range<usize>, &mut Window, &mut App) -> Vec<AnyElement> + 'static {
@@ -63,8 +70,9 @@ pub(super) fn render_rows(
     move |range, _, cx| {
         let theme = tokens::current(cx);
         let needle = ctx.props.filter.as_deref().map(Needle::parse);
+        let scratch = RefCell::new(Scratch::default());
         range
-            .filter_map(|index| render_row(&ctx, (theme, needle.as_ref()), index))
+            .filter_map(|index| render_row(&ctx, (theme, needle.as_ref(), &scratch), index))
             .collect()
     }
 }

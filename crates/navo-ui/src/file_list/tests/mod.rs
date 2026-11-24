@@ -3,6 +3,7 @@ mod density;
 mod drag;
 mod empty;
 mod git;
+mod hot_path;
 mod input;
 mod kinds;
 mod lasso;

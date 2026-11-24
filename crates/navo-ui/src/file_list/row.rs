@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ops::Range;
 
 use gpui_kit::base::TestSupportExt;
@@ -31,6 +32,10 @@ pub(super) struct RowLook<'a> {
     pub needle: Option<&'a Needle>,
     pub git: Option<GitSlot<'a>>,
     pub note: Option<&'a SharedString>,
+    /// The entry's display name, computed once per row by the caller.
+    pub display: &'a str,
+    /// The filter's fold buffers, shared by every visible row of one frame.
+    pub scratch: &'a RefCell<Scratch>,
 }
 
 fn fixed_width(look: &RowLook, by: SortBy) -> Pixels {
@@ -100,21 +105,35 @@ pub(super) fn name_text(
 
 type Run = (Range<usize>, HighlightStyle);
 
-fn match_runs(look: &RowLook, full: &str, text: &str) -> Vec<Run> {
+/// Finds the filter's first match in the name `full` and maps it onto the shown text: a folder's
+/// `[` moves it one byte right, and the shown length `text_len` cuts it. None when nothing shows.
+pub(super) fn found_range(
+    needle: &Needle,
+    full: &str,
+    (text_len, is_folder): (usize, bool),
+    scratch: &mut Scratch,
+) -> Option<Range<usize>> {
+    let found = needle.find(full, scratch).unwrap_or(0..0);
+    let shift = usize::from(is_folder);
+    let range = found.start + shift..(found.end + shift).min(text_len);
+    (!range.is_empty()).then_some(range)
+}
+
+fn match_runs(look: &RowLook, text: &str) -> Vec<Run> {
     let Some(needle) = look.needle.filter(|_| !look.is_find) else {
         return Vec::new();
     };
-    let found = needle.find(full, &mut Scratch::default()).unwrap_or(0..0);
-    let shift = usize::from(look.entry.kind == EntryKind::Folder);
-    let range = found.start + shift..(found.end + shift).min(text.len());
+    let is_folder = look.entry.kind == EntryKind::Folder;
+    let mut scratch = look.scratch.borrow_mut();
+    let Some(range) = found_range(needle, look.display, (text.len(), is_folder), &mut scratch)
+    else {
+        return Vec::new();
+    };
     let style = HighlightStyle {
         color: Some(look.theme.colors.accent_text),
         font_weight: Some(FontWeight::MEDIUM),
         ..HighlightStyle::default()
     };
-    if range.is_empty() {
-        return Vec::new();
-    }
     vec![(range, style)]
 }
 
@@ -156,7 +175,7 @@ fn name_cell(
     let (glyph, glyph_color) = kind::icon(entry.kind, extension, c);
     let is_folder = entry.kind == EntryKind::Folder;
     let text = name_text((name, extension), is_folder, look.parts.ext);
-    let runs = match_runs(look, &entry.name.display(), &text);
+    let runs = match_runs(look, &text);
     let glyph = div()
         .id("row-icon")
         .test_support()
@@ -255,11 +274,10 @@ pub(super) fn cells(look: &RowLook, zones: (Stateful<Div>, Div)) -> Div {
     let t = look.theme;
     let c = &t.colors;
     let entry = look.entry;
-    let display = entry.name.display();
     let (display, folder) = if look.is_find {
-        super::find::split(&display)
+        super::find::split(look.display)
     } else {
-        (display.as_ref(), "")
+        (look.display, "")
     };
     let (name, extension) = kind::split_name(display, entry.kind);
     let is_active_cursor = look.is_cursor && look.is_active_pane;
