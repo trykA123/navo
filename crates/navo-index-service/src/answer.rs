@@ -224,6 +224,34 @@ mod tests {
         );
     }
 
+    /// Replays the Windows VM flake: the releasing thread is descheduled for longer than
+    /// `READ_WAIT` after the first volume gives up (load, timer slack), so the second lock frees
+    /// only after the second volume's own wait already ran out. The original test hard-codes that
+    /// this gap stays under 20 ms of wall clock.
+    #[test]
+    #[ignore = "red: the slow-first-volume test assumes the releasing thread runs within READ_WAIT"]
+    fn a_slow_first_volume_test_fails_when_the_release_is_preempted_past_read_wait() {
+        let volumes = [building_volume(), building_volume()];
+        let _first = volumes[0].shared.write().unwrap();
+        let second = volumes[1].shared.write().unwrap();
+        let gave_up = BUSY_REPLIES.load(Ordering::Relaxed);
+        let reply = std::thread::scope(|scope| {
+            let asking = scope.spawn(|| answer(&volumes, &Request::default(), &CancelToken::new()));
+            while BUSY_REPLIES.load(Ordering::Relaxed) == gave_up {
+                std::thread::yield_now();
+            }
+            // A loaded scheduler delays this thread past the second volume's whole wait.
+            std::thread::sleep(READ_WAIT + Duration::from_millis(10));
+            drop(second);
+            asking.join().unwrap()
+        });
+        assert_eq!(reply.status.volumes[0].progress, Some(UPDATING));
+        assert_eq!(
+            reply.status.volumes[1].progress, None,
+            "the second volume must get its own wait, not the first one's leftover"
+        );
+    }
+
     #[test]
     fn many_busy_volumes_answer_before_the_client_gives_up() {
         let volumes: Vec<_> = (0..12).map(|_| building_volume()).collect();
