@@ -37,6 +37,13 @@ pub const FILE: &str = "user-commands.toml";
 
 type Run = Arc<dyn Fn(&str, UserInvocation) + Send + Sync>;
 
+/// Starts one expanded plan; `on_exit` gets its exit code later.
+type Launch = Arc<
+    dyn Fn(expand::Plan, Box<dyn FnOnce(Option<i32>) + Send>) -> Result<(), UserCommandError>
+        + Send
+        + Sync,
+>;
+
 const TEMPLATE: &str = "\
 # User commands for Navo.
 # Each [[command]] table is one command; uncomment and edit the example.
@@ -54,8 +61,10 @@ const TEMPLATE: &str = "\
 #[must_use]
 pub fn hooks(dirs: Option<&StoreDirs>) -> (UserCommandHooks, Option<Watch>, Runner) {
     let sender_slot = Arc::new(Mutex::new(None));
+    let launch: Launch = Arc::new(launch);
     let runner = Runner {
         sender: Arc::clone(&sender_slot),
+        launch: Arc::clone(&launch),
     };
     let Some(dirs) = dirs.filter(|dirs| dirs.ensure().is_ok()) else {
         return (no_hooks(), None, runner);
@@ -64,7 +73,7 @@ pub fn hooks(dirs: Option<&StoreDirs>) -> (UserCommandHooks, Option<Watch>, Runn
     let loaded = load(&path);
     report(&loaded.news);
     let commands = Arc::new(Mutex::new(loaded.commands.unwrap_or_default()));
-    let run = run_hook(Arc::clone(&commands), Arc::clone(&sender_slot));
+    let run = run_hook(Arc::clone(&commands), Arc::clone(&sender_slot), launch);
     let (hooks, sender) = UserCommandHooks::channel(run, location_of(&path));
     let template = path.clone();
     let hooks = hooks.with_edit(Arc::new(move || {
@@ -165,13 +174,21 @@ fn watch(
 fn run_hook(
     commands: Arc<Mutex<Vec<model::UserCommand>>>,
     sender: Arc<Mutex<Option<UserCommandSender>>>,
+    launch: Launch,
 ) -> Run {
     Arc::new(move |name, invocation| {
         let name = name.to_owned();
         let worker_commands = Arc::clone(&commands);
         let worker_sender = Arc::clone(&sender);
+        let worker_launch = Arc::clone(&launch);
         spawn_worker(name.clone(), Arc::clone(&sender), move || {
-            run_one(&name, invocation, &worker_commands, &worker_sender);
+            run_one(
+                &name,
+                invocation,
+                &worker_commands,
+                &worker_sender,
+                &worker_launch,
+            );
         });
     })
 }
@@ -179,6 +196,7 @@ fn run_hook(
 /// Starts loaded commands directly, sharing the run hook's news channel.
 pub(crate) struct Runner {
     sender: Arc<Mutex<Option<UserCommandSender>>>,
+    launch: Launch,
 }
 
 impl Runner {
@@ -186,9 +204,17 @@ impl Runner {
     pub(crate) fn run(&self, command: UserCommand, invocation: UserInvocation) {
         let name = command.name.clone();
         let worker_sender = Arc::clone(&self.sender);
+        let worker_launch = Arc::clone(&self.launch);
         spawn_worker(name, Arc::clone(&self.sender), move || {
-            run_command(command, invocation, &worker_sender);
+            run_command(command, invocation, &worker_sender, &worker_launch);
         });
+    }
+
+    /// Replaces the process launch with `launch`, so a test can record the plan.
+    #[cfg(test)]
+    pub(crate) fn with_launch(mut self, launch: Launch) -> Self {
+        self.launch = launch;
+        self
     }
 }
 
@@ -216,9 +242,10 @@ fn run_one(
     invocation: UserInvocation,
     commands: &Mutex<Vec<UserCommand>>,
     sender: &Mutex<Option<UserCommandSender>>,
+    launch: &Launch,
 ) {
     match find_command(name, commands) {
-        Ok(command) => run_command(command, invocation, sender),
+        Ok(command) => run_command(command, invocation, sender, launch),
         Err(error) => {
             if let Some(sender) = lock(sender).clone() {
                 refuse(&sender, name, &error);
@@ -232,6 +259,7 @@ fn run_command(
     command: UserCommand,
     invocation: UserInvocation,
     sender: &Mutex<Option<UserCommandSender>>,
+    launch: &Launch,
 ) {
     let Some(sender) = lock(sender).clone() else {
         return;

@@ -6,8 +6,7 @@ use navo_ui::window_view::{UserCommandHooks, UserCommandInfo, UserCommandNews, U
 
 use super::expand::Refusal;
 use super::{
-    FILE, Runner, UserCommandError, edit, find_command, hooks, launch, model, run_command, run_one,
-    search,
+    FILE, Launch, UserCommandError, edit, find_command, hooks, launch, model, run_command, search,
 };
 
 const NEWS_WAIT: Duration = Duration::from_secs(10);
@@ -216,8 +215,14 @@ fn a_refused_plan_keeps_its_refusal() {
     let (hooks, sender) = UserCommandHooks::channel(std::sync::Arc::new(|_, _| {}), None);
     let mut news = hooks.news.expect("news");
     let sender = std::sync::Mutex::new(Some(sender));
+    let boundary: Launch = std::sync::Arc::new(launch);
 
-    run_command(command("Build"), UserInvocation::default(), &sender);
+    run_command(
+        command("Build"),
+        UserInvocation::default(),
+        &sender,
+        &boundary,
+    );
 
     let UserCommandNews::Refused { name, message } = next(&mut news) else {
         unreachable!()
@@ -257,30 +262,100 @@ fn a_program_that_cannot_start_is_a_start_error() {
 
 #[test]
 fn runner_refuses_like_a_named_command() {
-    let (hooks, sender) = UserCommandHooks::channel(std::sync::Arc::new(|_, _| {}), None);
+    let (_root, dirs) = dirs();
+    let text = "[[command]]\nname = \"Build\"\nprogram = \"tool\"\nargs = \"{file}\"\n";
+    std::fs::write(dirs.user_commands_file(), text).expect("a command file");
+    let (hooks, _watch, runner) = hooks(Some(&dirs));
     let mut news = hooks.news.expect("news");
-    let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(sender)));
-    let commands = std::sync::Mutex::new(vec![command("Build")]);
+    assert!(matches!(
+        next(&mut news),
+        UserCommandNews::Applied(commands, _) if commands.len() == 1
+    ));
     let cursor = UserInvocation {
         file: Some(navo_core::Location::new("..").expect("a dot dot")),
         ..UserInvocation::default()
     };
+    let expected = UserCommandNews::Refused {
+        name: "Build".to_owned(),
+        message: UserCommandError::Refused(Refusal::DotDot).message("Build"),
+    };
+    let mut commands = model::parse(text, &search()).expect("a command");
 
-    run_one("Build", cursor.clone(), &commands, &slot);
-    let named = wait_for(&mut news, |news| {
-        matches!(news, UserCommandNews::Refused { .. })
-    });
-
-    Runner {
-        sender: std::sync::Arc::clone(&slot),
-    }
-    .run(command("Build"), cursor);
-    let through_runner = wait_for(&mut news, |news| {
-        matches!(news, UserCommandNews::Refused { .. })
-    });
-
+    (hooks.run)("Build", cursor.clone());
     assert_eq!(
-        through_runner, named,
-        "the runner refuses like the run hook"
+        wait_for(&mut news, |news| matches!(
+            news,
+            UserCommandNews::Refused { .. }
+        )),
+        expected
     );
+
+    runner.run(commands.remove(0), cursor);
+    assert_eq!(
+        wait_for(&mut news, |news| matches!(
+            news,
+            UserCommandNews::Refused { .. }
+        )),
+        expected
+    );
+}
+
+/// A launch seam that records the expanded plan instead of starting a program.
+fn recording_launch() -> (
+    Launch,
+    std::sync::Arc<std::sync::Mutex<Vec<super::expand::Plan>>>,
+) {
+    let recorded = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let record = std::sync::Arc::clone(&recorded);
+    let launch: Launch = std::sync::Arc::new(
+        move |plan: super::expand::Plan, _on_exit: Box<dyn FnOnce(Option<i32>) + Send>| {
+            record.lock().expect("the recording").push(plan);
+            Ok(())
+        },
+    );
+    (launch, recorded)
+}
+
+fn wait_for_plan(recorded: &std::sync::Mutex<Vec<super::expand::Plan>>) -> super::expand::Plan {
+    let deadline = Instant::now() + NEWS_WAIT;
+    loop {
+        if let Some(plan) = recorded.lock().expect("the recording").pop() {
+            return plan;
+        }
+        assert!(Instant::now() < deadline, "no plan was launched");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_runner_run_expands_the_arguments_and_the_start_folder() {
+    let (root, dirs) = dirs();
+    let work = root.path().join("work");
+    std::fs::create_dir(&work).expect("a work folder");
+    let file = work.join("a b.txt");
+    std::fs::write(&file, b"").expect("a file");
+    let text = format!(
+        "[[command]]\nname = \"Build\"\nprogram = \"/bin/echo\"\nargs = \"--file {{file}}\"\n\
+         start-in = '{}'\n",
+        work.display()
+    );
+    std::fs::write(dirs.user_commands_file(), &text).expect("a command file");
+    let (_hooks, _watch, runner) = hooks(Some(&dirs));
+    let (boundary, recorded) = recording_launch();
+    let runner = runner.with_launch(boundary);
+    let mut commands = model::parse(&text, &search()).expect("a command");
+    let invocation = UserInvocation {
+        file: Some(navo_core::Location::new(file.to_string_lossy()).expect("a file")),
+        folder: Some(navo_core::Location::new(work.to_string_lossy()).expect("a folder")),
+        ..UserInvocation::default()
+    };
+
+    runner.run(commands.remove(0), invocation);
+
+    let plan = wait_for_plan(&recorded);
+    let file_text = file.to_string_lossy();
+    assert_eq!(plan.program, std::path::Path::new("/bin/echo"));
+    assert_eq!(plan.args, ["--file", file_text.as_ref()]);
+    assert_eq!(plan.start_in, work);
 }
