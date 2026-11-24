@@ -11,9 +11,9 @@ use crate::{Capabilities, ListSink};
 
 const WAIT: Duration = Duration::from_secs(5);
 
-struct BeforeRemove<'a> {
-    fs: &'a FakeFs,
-    hook: &'a (dyn Fn(&Location) + Sync),
+pub(super) struct BeforeRemove<'a> {
+    pub(super) fs: &'a FakeFs,
+    pub(super) hook: &'a (dyn Fn(&Location) + Sync),
 }
 
 impl Provider for BeforeRemove<'_> {
