@@ -236,7 +236,8 @@ pub fn parse_text(text: &str) -> Result<IconSpec, SpecError> {
     }
     let Some((set, name)) = text.split_once(':') else {
         return Err(SpecError(format!(
-            "icon `{text}` is not `set:name` or `image:file`"
+            "icon `{}` is not `set:name` or `image:file`",
+            excerpt(text)
         )));
     };
     if set == "brands" {
@@ -263,9 +264,12 @@ pub fn parse_table(table: &toml::Table) -> Result<IconSpec, SpecError> {
         .filter(|key| is_form_key(key))
         .collect();
     match forms.as_slice() {
-        [] => Err(SpecError(
-            "icon needs one of `set`, `letters`, `glyph` or `svg`".to_owned(),
-        )),
+        [] => match table.keys().next() {
+            Some(key) => Err(SpecError(format!("unknown icon key `{}`", excerpt(key)))),
+            None => Err(SpecError(
+                "icon needs one of `set`, `letters`, `glyph` or `svg`".to_owned(),
+            )),
+        },
         [form] => parse_form(form, table),
         [first, second, ..] => Err(SpecError(format!("icon mixes `{first}` and `{second}`"))),
     }
@@ -278,21 +282,22 @@ pub fn to_fields(spec: &IconSpec) -> IconFields {
             set,
             name,
             tone: None,
-        } => IconFields::Text(format!("{set}:{name}")),
+        } if set != "image" && set != "brands" => IconFields::Text(format!("{set}:{name}")),
         IconSpec::Image { file } => IconFields::Text(format!("image:{file}")),
         IconSpec::Brand {
             name,
             colour: BrandColour::Theme,
         } => IconFields::Text(format!("brands:{name}")),
-        IconSpec::Set {
-            set,
-            name,
-            tone: Some(tone),
-        } => IconFields::Table(vec![
-            ("set", FieldValue::Text(set.clone())),
-            ("name", FieldValue::Text(name.clone())),
-            ("tone", FieldValue::Text(tone.name().to_owned())),
-        ]),
+        IconSpec::Set { set, name, tone } => {
+            let mut fields = vec![
+                ("set", FieldValue::Text(set.clone())),
+                ("name", FieldValue::Text(name.clone())),
+            ];
+            if let Some(tone) = tone {
+                fields.push(("tone", FieldValue::Text(tone.name().to_owned())));
+            }
+            IconFields::Table(fields)
+        }
         IconSpec::Brand {
             name,
             colour: BrandColour::Brand,
@@ -373,7 +378,7 @@ fn parse_brand_form(table: &toml::Table) -> Result<IconSpec, SpecError> {
     let colour = match optional_text(table, "colour")? {
         None => BrandColour::Theme,
         Some(text) => BrandColour::named(text)
-            .ok_or_else(|| SpecError(format!("unknown icon colour `{text}`")))?,
+            .ok_or_else(|| SpecError(format!("unknown icon colour `{}`", excerpt(text))))?,
     };
     Ok(IconSpec::Brand {
         name: name.to_owned(),
@@ -384,18 +389,23 @@ fn parse_brand_form(table: &toml::Table) -> Result<IconSpec, SpecError> {
 fn parse_letters_form(table: &toml::Table) -> Result<IconSpec, SpecError> {
     allow_keys(table, &["letters", "shape", "tone"])?;
     let source = text_field(table, "letters")?;
+    let mut chars = source.chars();
+    let valid = match (chars.next(), chars.next(), chars.next()) {
+        (Some(first), None, None) => first.is_alphanumeric(),
+        (Some(first), Some(second), None) => first.is_alphanumeric() && second.is_alphanumeric(),
+        _ => false,
+    };
+    if !valid {
+        return Err(invalid_letters(source));
+    }
     let letters: String = source.chars().flat_map(char::to_uppercase).collect();
-    let count = letters.chars().count();
-    if count == 0 || count > 2 || !letters.chars().all(char::is_alphanumeric) {
-        return Err(SpecError(format!(
-            "icon letters `{source}` must be one or two alphanumeric characters"
-        )));
+    if letters.chars().count() > 2 {
+        return Err(invalid_letters(source));
     }
     let shape = match optional_text(table, "shape")? {
         None => Shape::Soft,
-        Some(text) => {
-            Shape::named(text).ok_or_else(|| SpecError(format!("unknown icon shape `{text}`")))?
-        }
+        Some(text) => Shape::named(text)
+            .ok_or_else(|| SpecError(format!("unknown icon shape `{}`", excerpt(text))))?,
     };
     let tone = optional_tone(table, "tone")?.unwrap_or(Tone::Accent);
     Ok(IconSpec::Letters {
@@ -432,7 +442,7 @@ fn parse_svg_form(table: &toml::Table) -> Result<IconSpec, SpecError> {
 fn allow_keys(table: &toml::Table, allowed: &[&str]) -> Result<(), SpecError> {
     for key in table.keys() {
         if !allowed.contains(&key.as_str()) {
-            return Err(SpecError(format!("unknown icon key `{key}`")));
+            return Err(SpecError(format!("unknown icon key `{}`", excerpt(key))));
         }
     }
     Ok(())
@@ -472,32 +482,52 @@ fn optional_tone(table: &toml::Table, key: &str) -> Result<Option<Tone>, SpecErr
         None => Ok(None),
         Some(text) => Tone::named(text)
             .map(Some)
-            .ok_or_else(|| SpecError(format!("unknown icon tone `{text}`"))),
+            .ok_or_else(|| SpecError(format!("unknown icon tone `{}`", excerpt(text)))),
+    }
+}
+
+fn invalid_letters(source: &str) -> SpecError {
+    SpecError(format!(
+        "icon letters `{}` must be one or two alphanumeric characters",
+        excerpt(source)
+    ))
+}
+
+fn excerpt(text: &str) -> &str {
+    match text.char_indices().nth(64) {
+        Some((end, _)) => &text[..end],
+        None => text,
     }
 }
 
 fn check_set(set: &str) -> Result<(), SpecError> {
+    if set.len() > 24 {
+        return Err(SpecError(format!("invalid icon set `{}`", excerpt(set))));
+    }
     let mut chars = set.chars();
     let starts_right = chars.next().is_some_and(|first| first.is_ascii_lowercase());
     let rest_right = chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-');
-    if starts_right && rest_right && set.len() <= 24 {
+    if starts_right && rest_right {
         Ok(())
     } else {
-        Err(SpecError(format!("invalid icon set `{set}`")))
+        Err(SpecError(format!("invalid icon set `{}`", excerpt(set))))
     }
 }
 
 fn check_name(name: &str) -> Result<(), SpecError> {
+    if name.len() > 64 {
+        return Err(SpecError(format!("invalid icon name `{}`", excerpt(name))));
+    }
     let mut chars = name.chars();
     let starts_right = chars
         .next()
         .is_some_and(|first| first.is_ascii_lowercase() || first.is_ascii_digit());
     let rest_right =
         chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-');
-    if starts_right && rest_right && name.len() <= 64 {
+    if starts_right && rest_right {
         Ok(())
     } else {
-        Err(SpecError(format!("invalid icon name `{name}`")))
+        Err(SpecError(format!("invalid icon name `{}`", excerpt(name))))
     }
 }
 
@@ -508,11 +538,14 @@ fn check_file(file: &str, extensions: &[&str]) -> Result<(), SpecError> {
     {
         Ok(())
     } else {
-        Err(SpecError(format!("invalid icon file `{file}`")))
+        Err(SpecError(format!("invalid icon file `{}`", excerpt(file))))
     }
 }
 
 fn file_matches(file: &str, extension: &str) -> bool {
+    if file.len() > 45 {
+        return false;
+    }
     let Some(stem_and_hash) = file.strip_suffix(extension) else {
         return false;
     };

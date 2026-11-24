@@ -2,4 +2,5 @@
 
 #![forbid(unsafe_code)]
 
+/// Parses and writes icon specs from user text and inline TOML tables.
 pub mod spec;
