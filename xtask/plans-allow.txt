@@ -1,1 +1,0 @@
-# Plans allowed to stay out of plans/README.md. Empty: every plan is linked.
