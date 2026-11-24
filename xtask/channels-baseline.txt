@@ -11,4 +11,11 @@
 #   crates/navo-ui/src/window_view/input_trace.rs:61, crates/navo-ui/src/window_view/lane.rs:25,
 #   crates/navo-ui/src/window_view/mod.rs:375, crates/navo-ui/src/window_view/viewer/background.rs:50,
 #   crates/navo-ui/src/window_view/viewer/search/jobs.rs:42, crates/sidewise-git-remote/src/capped.rs:219.
-70
+# 2026-11-24: `_tests` folders and inner `#![cfg(test)]` are test code, a bounded `channel(n)` is not,
+#   and an imported bare std `mpsc::channel` counts (70 -> 72).
+#   added: crates/navo-app/src/clip_module/lifecycle.rs:145, crates/navo-app/src/git/previews.rs:31,
+#   crates/navo-clipboard/src/service/requests.rs:141, crates/navo-fs/src/job/parallel.rs:77,
+#   crates/navo-fs/src/job/parallel.rs:79, crates/navo-shell/src/clipboard/virtual_files/ole/mod.rs:89.
+#   removed: crates/navo-app/src/git/scan_tests/limits.rs:197, :209, :246,
+#   crates/navo-ui/src/window_view/index_activity.rs:62.
+72

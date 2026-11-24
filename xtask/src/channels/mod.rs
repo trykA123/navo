@@ -138,11 +138,15 @@ fn is_excluded(rel: &str) -> bool {
         .any(|part| part == "vendor" || part == "target")
 }
 
-/// True when `rel` names test code by file name or a `tests/` folder.
+/// True when `rel` names test code by file name, `tests/` or `*_tests/`.
 fn is_test_path(rel: &str) -> bool {
     let parts: Vec<&str> = rel.split('/').collect();
     let name = parts.last().copied().unwrap_or(rel);
-    name == "tests.rs" || name.ends_with("_tests.rs") || parts.contains(&"tests")
+    name == "tests.rs"
+        || name.ends_with("_tests.rs")
+        || parts
+            .iter()
+            .any(|part| *part == "tests" || part.ends_with("_tests"))
 }
 
 /// Scan `files` (repo-relative under `root`) and return each counted call.
@@ -170,23 +174,32 @@ pub fn scan(root: &Path, files: &[String]) -> io::Result<Vec<Hit>> {
     Ok(hits)
 }
 
-/// Bare `unbounded` constructors imported by one file.
+/// Unbounded constructors imported by name in one file.
 #[derive(Debug, Clone, Copy, Default)]
 struct Imported {
     unbounded: bool,
     unbounded_channel: bool,
+    channel: bool,
 }
 
 impl Imported {
-    /// Read the `use ...mpsc...` statements of `masked` for bare imports.
+    /// Read the `use ...` statements of `masked` for bare constructor imports.
     fn new(masked: &str) -> Self {
         let mut imported = Self::default();
         for statement in masked.split(';') {
-            if !statement.contains("use ") || !statement.contains("mpsc") {
+            let mpsc = statement.contains("mpsc");
+            if !statement.contains("use ")
+                || !(mpsc || statement.contains("crossbeam") || statement.contains("flume"))
+            {
                 continue;
             }
             imported.unbounded |= has_name(statement, "unbounded");
-            imported.unbounded_channel |= has_name(statement, "unbounded_channel");
+            imported.unbounded_channel |= mpsc && has_name(statement, "unbounded_channel");
+            // `std::sync::mpsc` and crossbeam's `channel()` are unbounded. Tokio's
+            // and futures' `channel(n)` take a capacity, so they stay uncounted.
+            let unbounded_channel =
+                statement.contains("std::sync::mpsc") || statement.contains("crossbeam_channel");
+            imported.channel |= unbounded_channel && has_name(statement, "channel");
         }
         imported
     }
@@ -215,10 +228,10 @@ fn is_channel_call(line: &str, at: usize, name: &str, imported: Imported) -> boo
         return false;
     }
     let after = turbofish_end(line, at + name.len()).unwrap_or(at + name.len());
-    if !line[after..].starts_with('(') {
+    if !line[after..].starts_with("()") {
         return false;
     }
-    if is_definition(line, at) {
+    if is_definition(line, at) || line[..at].trim_end().ends_with('.') {
         return false;
     }
     let before = &line[..at];
@@ -236,6 +249,7 @@ fn is_channel_call(line: &str, at: usize, name: &str, imported: Imported) -> boo
     match name {
         "unbounded" => imported.unbounded,
         "unbounded_channel" => imported.unbounded_channel,
+        "channel" => imported.channel,
         _ => false,
     }
 }

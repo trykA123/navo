@@ -84,6 +84,10 @@ fn channels_skip_tests_and_bounded() {
     tree.write("src/bounded.rs", "let (a, b) = mpsc::sync_channel(8);\n");
     tree.write("src/tests.rs", "let (a, b) = mpsc::channel();\n");
     tree.write("src/worker_tests.rs", "let (a, b) = unbounded();\n");
+    tree.write(
+        "src/scan_tests/limits.rs",
+        "let (a, b) = mpsc::channel();\n",
+    );
     tree.write("src/tests/helper.rs", "let (a, b) = mpsc::channel();\n");
     tree.write(
         "src/cfg.rs",
@@ -93,6 +97,7 @@ fn channels_skip_tests_and_bounded() {
         "src/bounded.rs",
         "src/tests.rs",
         "src/worker_tests.rs",
+        "src/scan_tests/limits.rs",
         "src/tests/helper.rs",
         "src/cfg.rs",
     ]);
@@ -231,6 +236,40 @@ fn channels_count_turbofish_constructors_only() {
     tree.write("src/b.rs", "fn f() { let _ = unbounded(); }\n");
     let hits = tree.scan(&["src/a.rs", "src/b.rs"]);
     assert_eq!(lines(&hits), vec![3, 4, 5]);
+}
+
+#[test]
+fn channels_count_only_unbounded_imported_channel() {
+    let tree = Tree::new("bare-channel");
+    tree.write(
+        "src/a.rs",
+        "use std::sync::mpsc::channel;\nfn f() { let (a, b) = channel(); }\n",
+    );
+    tree.write(
+        "src/b.rs",
+        "use tokio::sync::mpsc::channel;\nfn f() { let (a, b) = channel(4); }\n",
+    );
+    tree.write(
+        "src/c.rs",
+        "use std::sync::mpsc::channel;\nfn f(hooks: Hooks) { let (a, b) = hooks.channel(); }\n",
+    );
+    let hits = tree.scan(&["src/a.rs", "src/b.rs", "src/c.rs"]);
+    assert_eq!(lines(&hits), vec![2]);
+}
+
+#[test]
+fn channels_skip_inner_cfg_test_files_and_blocks() {
+    let tree = Tree::new("inner");
+    tree.write(
+        "src/a.rs",
+        "#![cfg(test)]\nfn a() { let (a, b) = mpsc::channel(); }\nfn b() { let (c, d) = mpsc::channel(); }\n",
+    );
+    tree.write(
+        "src/b.rs",
+        "mod tests {\n    #![cfg(test)]\n    fn a() { let (a, b) = mpsc::channel(); }\n    fn b() { let (c, d) = mpsc::channel(); }\n}\nlet (e, f) = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs", "src/b.rs"]);
+    assert_eq!(lines(&hits), vec![6]);
 }
 
 #[test]

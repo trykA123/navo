@@ -5,6 +5,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     CfgTest,
+    InnerCfgTest,
     OpenBrace,
     CloseBrace,
     OpenParen,
@@ -46,15 +47,8 @@ fn lex(text: &str) -> Lexed {
     };
     let mut index = 0usize;
     while index < text.len() {
-        if let Some((end, is_test)) = attribute(text, index) {
-            if is_test {
-                lexed.tokens.push(Token {
-                    kind: Kind::CfgTest,
-                    start: index,
-                    end,
-                });
-            }
-            lexed.hidden.push((index, end));
+        if let Some((end, is_test, inner)) = attribute(text, index) {
+            push_attribute(&mut lexed, index, end, is_test, inner);
             index = end;
             continue;
         }
@@ -78,15 +72,28 @@ fn lex(text: &str) -> Lexed {
     lexed
 }
 
-/// End and test-only verdict of an attribute starting at `start`, if any.
-fn attribute(text: &str, start: usize) -> Option<(usize, bool)> {
-    let bracket = match &text.as_bytes()[start..] {
-        [b'#', b'[', ..] => start + 1,
-        [b'#', b'!', b'[', ..] => start + 2,
+/// Record an attribute: always hidden, and a token when it is test-only.
+fn push_attribute(lexed: &mut Lexed, start: usize, end: usize, is_test: bool, inner: bool) {
+    if is_test {
+        let kind = if inner {
+            Kind::InnerCfgTest
+        } else {
+            Kind::CfgTest
+        };
+        lexed.tokens.push(Token { kind, start, end });
+    }
+    lexed.hidden.push((start, end));
+}
+
+/// End, test-only verdict and inner flag of the attribute at `start`, if any.
+fn attribute(text: &str, start: usize) -> Option<(usize, bool, bool)> {
+    let (bracket, inner) = match &text.as_bytes()[start..] {
+        [b'#', b'[', ..] => (start + 1, false),
+        [b'#', b'!', b'[', ..] => (start + 2, true),
         _ => return None,
     };
     let end = attribute_end(text, bracket);
-    Some((end, test_only_cfg(&text[start..end])))
+    Some((end, test_only_cfg(&text[start..end]), inner))
 }
 
 /// End of the attribute whose `[` is at `bracket`, honouring nested brackets.
@@ -319,6 +326,15 @@ fn test_ranges(text: &str, tokens: &[Token]) -> Vec<(usize, usize)> {
     let mut index = 0usize;
     while index < tokens.len() {
         let token = tokens[index];
+        if token.kind == Kind::InnerCfgTest {
+            let (next, start, end) = inner_range(tokens, index, brace);
+            ranges.push((start, end));
+            for skipped in &tokens[index..next] {
+                apply_depth(skipped.kind, &mut paren, &mut brace);
+            }
+            index = next.max(index + 1);
+            continue;
+        }
         if token.kind != Kind::CfgTest {
             apply_depth(token.kind, &mut paren, &mut brace);
             index += 1;
@@ -332,6 +348,47 @@ fn test_ranges(text: &str, tokens: &[Token]) -> Vec<(usize, usize)> {
         index = next.max(index + 1);
     }
     ranges
+}
+
+/// Range and next token index of the file or block `#![cfg(test)]` covers.
+fn inner_range(tokens: &[Token], index: usize, brace: usize) -> (usize, usize, usize) {
+    if brace == 0 {
+        return (
+            tokens.len(),
+            0,
+            tokens.last().map_or(tokens[index].end, |token| token.end),
+        );
+    }
+    let start = enclosing_brace(tokens, index).unwrap_or(0);
+    let mut depth = brace;
+    for (offset, token) in tokens[index + 1..].iter().enumerate() {
+        match token.kind {
+            Kind::OpenBrace => depth += 1,
+            Kind::CloseBrace => {
+                depth -= 1;
+                if depth < brace {
+                    return (index + offset + 2, start, token.end);
+                }
+            }
+            _ => {}
+        }
+    }
+    let end = tokens.last().map_or(start, |token| token.end);
+    (tokens.len(), start, end)
+}
+
+/// Start of the brace block that encloses the token at `index`.
+fn enclosing_brace(tokens: &[Token], index: usize) -> Option<usize> {
+    let mut balance = 0usize;
+    for token in tokens[..index].iter().rev() {
+        match token.kind {
+            Kind::CloseBrace => balance += 1,
+            Kind::OpenBrace if balance == 0 => return Some(token.start),
+            Kind::OpenBrace => balance -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Return the token index just past the item and its final byte offset.
@@ -382,7 +439,7 @@ fn item_end(
             Kind::Semi if paren_depth == paren && brace_depth == brace => {
                 return (start + offset + 1, token.end);
             }
-            Kind::CfgTest | Kind::Comma | Kind::Semi => {}
+            Kind::CfgTest | Kind::InnerCfgTest | Kind::Comma | Kind::Semi => {}
         }
     }
     (tokens.len(), tokens.last().map_or(0, |token| token.end))
@@ -409,7 +466,7 @@ fn apply_depth(kind: Kind, paren: &mut usize, brace: &mut usize) {
         Kind::CloseParen => *paren = paren.saturating_sub(1),
         Kind::OpenBrace => *brace += 1,
         Kind::CloseBrace => *brace = brace.saturating_sub(1),
-        Kind::CfgTest | Kind::Comma | Kind::Semi => {}
+        Kind::CfgTest | Kind::InnerCfgTest | Kind::Comma | Kind::Semi => {}
     }
 }
 
