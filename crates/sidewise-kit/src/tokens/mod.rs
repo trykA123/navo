@@ -202,6 +202,7 @@ pub struct Theme {
     pub mem: MemColors,
     pub diff: DiffColors,
     pub git: GitColors,
+    /// Find hit colours; see [`FindColors`].
     pub find: FindColors,
     pub surfaces: Surfaces,
     pub shadows: Shadows,

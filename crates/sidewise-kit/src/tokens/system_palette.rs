@@ -264,30 +264,32 @@ pub fn system_palette() -> Option<SystemPalette> {
     READER.get().and_then(|read| read())
 }
 
+/// The black and white system fixtures that both high-contrast tests drive.
+#[cfg(test)]
+pub(super) fn palette(is_dark: bool) -> SystemPalette {
+    let (window, window_text) = if is_dark {
+        (gpui_kit::black(), gpui_kit::white())
+    } else {
+        (gpui_kit::white(), gpui_kit::black())
+    };
+    SystemPalette {
+        window,
+        window_text,
+        highlight: window_text,
+        highlight_text: window,
+        button_face: window_text,
+        button_text: window,
+        gray_text: gpui_kit::rgb(0x767676).into(),
+        hot_light: window_text,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{black, px, rgb, white};
+    use gpui_kit::{px, rgb};
 
     use super::*;
     use crate::tokens::{ColorTheme, Mode, ThemeLook, contrast_ratio};
-
-    fn palette(is_dark: bool) -> SystemPalette {
-        let (window, window_text) = if is_dark {
-            (black(), white())
-        } else {
-            (white(), black())
-        };
-        SystemPalette {
-            window,
-            window_text,
-            highlight: window_text,
-            highlight_text: window,
-            button_face: window_text,
-            button_text: window,
-            gray_text: rgb(0x767676).into(),
-            hot_light: window_text,
-        }
-    }
 
     #[test]
     fn a_colorref_is_read_as_blue_green_red() {
