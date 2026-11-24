@@ -13,6 +13,7 @@ use super::answer::Shared;
 use super::build_permit::{BUILDS, BuildPermit};
 use super::config::{Drive, index_path};
 use super::follow_pace::{Outcome, Pace};
+use super::journal_create::JournalCreate;
 use super::lifecycle::{
     SAVE_FAILURE, SaveClock, UNRESOLVED, UPDATE_FAILURE, begin_build, clear_failures,
     report_unknown_sizes, restore_or_enumerate,
@@ -37,6 +38,8 @@ pub(super) struct Worker {
     moved: bool,
     /// True after a regular build failed, so a reopen must not keep the stale in-memory index.
     build_failed: bool,
+    /// Creates this selected volume's missing USN journal once (IXJ).
+    journal: JournalCreate,
 }
 
 impl Worker {
@@ -51,6 +54,7 @@ impl Worker {
             pace: Pace::default(),
             moved: false,
             build_failed: false,
+            journal: JournalCreate::default(),
         })
     }
 
@@ -124,6 +128,9 @@ impl Worker {
     /// Opens the volume; keeps the live index when the serial is unchanged, else restores or builds.
     fn open(&mut self, cancel: &CancelToken) -> Result<Volume, NtfsError> {
         let mut opened = Volume::open(self.drive.letter)?;
+        // A worker exists only for a selected volume, so the create never reaches another one.
+        self.journal
+            .ensure(&mut opened, self.drive.letter, self.rebuilds.log());
         let serial = opened.serial()?;
         let same_volume = serial == self.drive.serial;
         self.drive.serial = serial;

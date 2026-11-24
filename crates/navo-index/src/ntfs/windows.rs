@@ -3,7 +3,7 @@
 use std::{io, ptr};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, ERROR_HANDLE_EOF, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE,
+    CloseHandle, ERROR_HANDLE_EOF, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_NO_RECALL,
@@ -13,8 +13,8 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 use windows_sys::Win32::System::IO::DeviceIoControl;
 use windows_sys::Win32::System::Ioctl::{
-    FSCTL_ENUM_USN_DATA, FSCTL_GET_NTFS_FILE_RECORD, FSCTL_GET_NTFS_VOLUME_DATA,
-    FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL,
+    FSCTL_CREATE_USN_JOURNAL, FSCTL_ENUM_USN_DATA, FSCTL_GET_NTFS_FILE_RECORD,
+    FSCTL_GET_NTFS_VOLUME_DATA, FSCTL_QUERY_USN_JOURNAL, FSCTL_READ_USN_JOURNAL,
 };
 
 use super::{
@@ -33,27 +33,8 @@ struct VolumeHandle(HANDLE);
 
 impl Volume {
     pub fn open(drive: char) -> Result<Self, NtfsError> {
-        let path = volume_path(drive)?;
-        // SAFETY: path is NUL-terminated and lives through this synchronous call; optional pointers are NULL.
-        let handle = unsafe {
-            CreateFileW(
-                path.as_ptr(),
-                GENERIC_READ,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                ptr::null(),
-                OPEN_EXISTING,
-                0,
-                ptr::null_mut(),
-            )
-        };
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(NtfsError::Io {
-                operation: "open volume",
-                source: io::Error::last_os_error(),
-            });
-        }
         let mut volume = Self {
-            handle: VolumeHandle(handle),
+            handle: VolumeHandle::open_volume(drive, GENERIC_READ, "open volume")?,
             drive,
             record_buffer: Vec::new(),
         };
@@ -96,6 +77,28 @@ impl Volume {
     /// MFT record slots right now; read again at each build since the MFT only grows.
     pub fn mft_records(&self) -> Result<u64, NtfsError> {
         super::mft_records(&self.control(FSCTL_GET_NTFS_VOLUME_DATA, &[], 96)?)
+    }
+
+    /// Queries the USN journal; fails with the OS error, as 1179 (`ERROR_JOURNAL_NOT_ACTIVE`).
+    pub fn query_journal_status(&self) -> Result<(), NtfsError> {
+        self.control(FSCTL_QUERY_USN_JOURNAL, &[], 56).map(drop)
+    }
+
+    /// Creates the volume's USN journal with a size limit and growth step in bytes, through a
+    /// separate read-write volume handle as `fsutil` uses. Fails with the OS error (5 unelevated).
+    pub fn create_journal(
+        &self,
+        maximum_size: u64,
+        allocation_delta: u64,
+    ) -> Result<(), NtfsError> {
+        let handle =
+            VolumeHandle::open_volume(self.drive, GENERIC_READ | GENERIC_WRITE, "open volume rw")?;
+        let mut input = [0u8; 16];
+        input[..8].copy_from_slice(&maximum_size.to_le_bytes());
+        input[8..].copy_from_slice(&allocation_delta.to_le_bytes());
+        handle
+            .control(FSCTL_CREATE_USN_JOURNAL, &input, &mut [])
+            .map(drop)
     }
 
     pub fn serial(&self) -> Result<u64, NtfsError> {
@@ -144,6 +147,30 @@ impl Volume {
 }
 
 impl VolumeHandle {
+    /// Opens the volume device of a drive letter with the given access, sharing everything.
+    fn open_volume(drive: char, access: u32, operation: &'static str) -> Result<Self, NtfsError> {
+        let path = volume_path(drive)?;
+        // SAFETY: path is NUL-terminated and lives through this synchronous call; optional pointers are NULL.
+        let handle = unsafe {
+            CreateFileW(
+                path.as_ptr(),
+                access,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                ptr::null(),
+                OPEN_EXISTING,
+                0,
+                ptr::null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(NtfsError::Io {
+                operation,
+                source: io::Error::last_os_error(),
+            });
+        }
+        Ok(Self(handle))
+    }
+
     fn control(&self, code: u32, input: &[u8], output: &mut [u8]) -> Result<usize, NtfsError> {
         let input_size = u32::try_from(input.len())
             .map_err(|_| NtfsError::InvalidResponse("input buffer too large"))?;

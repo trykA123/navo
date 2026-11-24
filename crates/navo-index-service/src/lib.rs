@@ -54,6 +54,8 @@ mod install_plan;
 #[path = "installation/windows.rs"]
 mod installation;
 #[cfg(any(windows, test))]
+mod journal_create;
+#[cfg(any(windows, test))]
 mod lifecycle;
 #[cfg(any(windows, test))]
 mod memory;
@@ -282,6 +284,8 @@ mod deferred_save_tests;
 mod install_replace_tests;
 #[cfg(test)]
 mod install_rollback_tests;
+#[cfg(test)]
+mod journal_create_tests;
 #[cfg(test)]
 mod persistence_tests;
 #[cfg(test)]
