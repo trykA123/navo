@@ -5,8 +5,6 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child as ProcessChild, Command, Stdio};
-use std::time::{Duration, Instant};
 
 use navo_core::{FileIdentity, FileIdentityKind};
 
@@ -28,6 +26,8 @@ use crate::upgrade::{self, Staged};
 mod checks;
 #[path = "host_files.rs"]
 mod files;
+#[path = "host_spawn.rs"]
+mod spawn;
 use checks::{folder_error, refuse_existing, refuse_existing_folders, refuse_fresh};
 use files::{hash_reader, marker_id, open_regular};
 
@@ -209,16 +209,7 @@ impl Host for WindowsHost {
 
     /// Spawns one child with no shell and detached standard streams.
     fn spawn(&mut self, args: &[OsString]) -> io::Result<Box<dyn Child>> {
-        let (program, rest) = args
-            .split_first()
-            .ok_or_else(|| io::Error::other("empty Velopack argument array"))?;
-        let child = Command::new(program)
-            .args(rest)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
-        Ok(Box::new(Process(child)))
+        spawn::spawn_detached(args)
     }
 
     /// Serves IW4 checks 2 and 3 from the root.
@@ -351,34 +342,5 @@ fn same_root(path: &Path, held: &Held) -> bool {
                     .is_some_and(|link| link.id == held.identity)
         }
         Err(_) => false,
-    }
-}
-
-/// The one Velopack child, polled at 25 ms so IW4's progress events stay close to seconds.
-struct Process(ProcessChild);
-
-impl Child for Process {
-    /// Polls until the deadline; `None` means the child still runs.
-    fn wait_timeout(&mut self, timeout: Duration) -> io::Result<Option<i32>> {
-        let deadline = Instant::now() + timeout;
-        loop {
-            if let Some(status) = self.0.try_wait()? {
-                return Ok(Some(status.code().unwrap_or(-1)));
-            }
-            let now = Instant::now();
-            if now >= deadline {
-                return Ok(None);
-            }
-            std::thread::sleep(
-                deadline
-                    .saturating_duration_since(now)
-                    .min(Duration::from_millis(25)),
-            );
-        }
-    }
-
-    /// Waits without a deadline and returns the exit code.
-    fn wait(&mut self) -> io::Result<i32> {
-        Ok(self.0.wait()?.code().unwrap_or(-1))
     }
 }
