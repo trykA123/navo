@@ -13,6 +13,7 @@ pub mod line_ends;
 pub mod list_text;
 pub mod marks;
 mod name;
+pub mod natural;
 pub mod placement;
 pub mod rename;
 mod replay;
@@ -20,6 +21,7 @@ pub mod retention;
 mod selection;
 mod session;
 mod state;
+pub mod transforms;
 
 pub use apply::{
     CommandError, Effect, Event, apply, apply_event, apply_workspace, list_active_tabs,

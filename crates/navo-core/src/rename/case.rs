@@ -21,7 +21,7 @@ pub enum ExtCase {
 }
 
 impl NameCase {
-    pub(super) fn apply(self, text: &str) -> String {
+    pub(crate) fn apply(self, text: &str) -> String {
         match self {
             Self::Unchanged => text.to_owned(),
             Self::Lower => text.to_lowercase(),
