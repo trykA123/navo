@@ -372,6 +372,7 @@ fn folder_move(fs: &FakeFs) -> OperationPlan {
     })
 }
 
+/// An overwrite choice skips a folder planned over a folder (CS5): the job finishes, nothing moves.
 #[test]
 fn a_folder_moved_onto_a_folder_is_not_held_or_merged_by_the_rename() {
     for workers in MODES {
@@ -386,12 +387,13 @@ fn a_folder_moved_onto_a_folder_is_not_held_or_merged_by_the_rename() {
                 tree_of(&fs, ""),
                 harness.log.held.len()
             ),
-            (Some(0), before, 0),
+            (None, before, 0),
             "workers {workers}"
         );
     }
 }
 
+/// An overwrite choice skips a folder planned over a file (CS5): the job finishes, nothing moves.
 #[test]
 fn a_folder_moved_onto_a_file_is_not_held() {
     for workers in MODES {
@@ -406,7 +408,7 @@ fn a_folder_moved_onto_a_file_is_not_held() {
                 tree_of(&fs, ""),
                 harness.log.held.len()
             ),
-            (Some(0), before, 0),
+            (None, before, 0),
             "workers {workers}"
         );
     }
