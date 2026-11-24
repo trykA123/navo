@@ -25,6 +25,11 @@ impl Input {
             Err(TrySendError::Disconnected(_)) => Err(TermError::Exited),
         }
     }
+
+    /// A second way into the queue, for answers the session sends on its own.
+    pub(super) fn replies(&self) -> SyncSender<Vec<u8>> {
+        self.queue.clone()
+    }
 }
 
 /// Starts the writer thread. It stops at the first failed write (the shell is gone).

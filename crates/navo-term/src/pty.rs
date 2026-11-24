@@ -1,8 +1,10 @@
 //! The real backend: a `portable-pty` session (ConPTY on Windows). Four threads do the work:
 //! one owner ends, reaps and resizes the shell, a reader drains output, a sink thread hands
-//! it to the `Sink`, and a writer feeds input. The caller never waits on any of them.
+//! it to the `Sink`, and a writer feeds input. The caller never waits on any of them. On
+//! Windows the reader answers ConPTY's start-up cursor query through the writer.
 
 mod child;
+mod handshake;
 mod input;
 mod output;
 
@@ -64,9 +66,12 @@ impl PtyBackend {
         let process = (child, pair.master);
         let outbox = Arc::new(Outbox::default());
         // Each step that fails ends and reaps the shell; the read handle is gone by then.
-        let started = output::read(reader, &outbox)
-            .and_then(|()| output::deliver(&outbox, sink))
-            .and_then(|()| input::start(writer));
+        let started = input::start(writer).and_then(|input| {
+            let replies = cfg!(windows).then(|| input.replies());
+            output::read(reader, handshake::Handshake::new(replies), &outbox)
+                .and_then(|()| output::deliver(&outbox, sink))
+                .map(|()| input)
+        });
         let input = match started {
             Ok(input) => input,
             Err(error) => {

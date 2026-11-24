@@ -7,6 +7,7 @@ use std::ops::ControlFlow;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
+use super::handshake::Handshake;
 use super::run_thread;
 use crate::Sink;
 
@@ -153,23 +154,34 @@ impl Outbox {
 
 /// Starts the reader: it drains until EOF or a read error (a closed PTY reports EIO on Unix)
 /// and drops the read handle as it ends, so a closing ConPTY never waits on it. On failure
-/// the read handle is dropped before this returns.
-pub(super) fn read(output: Box<dyn Read + Send>, outbox: &Arc<Outbox>) -> io::Result<()> {
+/// the read handle is dropped before this returns. `handshake` answers ConPTY's start-up
+/// cursor query.
+pub(super) fn read(
+    output: Box<dyn Read + Send>,
+    handshake: Handshake,
+    outbox: &Arc<Outbox>,
+) -> io::Result<()> {
     let outbox = Arc::clone(outbox);
-    let started = run_thread("navo-term-read", output, move |mut output| {
-        drain(&mut *output, &outbox);
-        drop(output);
-        outbox.end();
-    });
-    started.map(drop).map_err(|(error, _output)| error)
+    let state = (output, handshake);
+    let started = run_thread(
+        "navo-term-read",
+        state,
+        move |(mut output, mut handshake)| {
+            drain(&mut *output, &mut handshake, &outbox);
+            drop(output);
+            outbox.push(&handshake.finish());
+            outbox.end();
+        },
+    );
+    started.map(drop).map_err(|(error, _state)| error)
 }
 
-fn drain(output: &mut dyn Read, outbox: &Outbox) {
+fn drain(output: &mut dyn Read, handshake: &mut Handshake, outbox: &Outbox) {
     let mut buffer = vec![0; READ_CHUNK];
     loop {
         match output.read(&mut buffer) {
             Ok(0) => return,
-            Ok(read) => outbox.push(buffer.get(..read).unwrap_or_default()),
+            Ok(read) => outbox.push(&handshake.feed(buffer.get(..read).unwrap_or_default())),
             Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
             Err(error) => {
                 tracing::debug!(%error, "terminal output closed");
