@@ -108,6 +108,7 @@ fn info(name: &str, key: &str) -> UserCommandInfo {
     UserCommandInfo {
         name: name.to_owned(),
         key: Some(key.to_owned()),
+        takes_files: false,
     }
 }
 

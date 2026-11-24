@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::editor::Search;
 
 use super::super::program::{FileKind, with_probe};
+use super::files::takes_files;
 use super::{
     Console, Field, KeyError, LineError, ParseError, Part, Placeholder, TemplateError, Token,
     UserCommand, parse, parse_without_identity,
@@ -533,4 +534,17 @@ fn unknown_fields_and_missing_fields_are_errors() {
 fn crlf_and_bom_files_parse() {
     let text = "\u{feff}[[command]]\r\nname = \"x\"\r\nprogram = \"tool.exe\"\r\n";
     assert_eq!(loaded(text)[0].name, "x");
+}
+
+#[test]
+fn takes_files_follows_file_placeholders() {
+    assert!(takes_files(
+        &loaded(&command("args = \"{file}\"\n"))[0].args
+    ));
+    assert!(!takes_files(
+        &loaded(&command("args = \"{folder}\"\n"))[0].args
+    ));
+    assert!(takes_files(
+        &loaded(&command("args = \"{marked-list}\"\n"))[0].args
+    ));
 }

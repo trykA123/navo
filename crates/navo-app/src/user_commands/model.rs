@@ -9,6 +9,7 @@ use crate::editor::Search;
 
 mod error;
 mod fields;
+pub(crate) mod files;
 mod key;
 mod shell;
 mod template;

@@ -19,6 +19,8 @@ use crate::status_bar::StatusNotice;
 pub struct UserCommandInfo {
     pub name: String,
     pub key: Option<String>,
+    /// Whether the command takes files or names from the pane.
+    pub takes_files: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

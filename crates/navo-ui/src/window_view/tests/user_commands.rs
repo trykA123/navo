@@ -11,6 +11,7 @@ fn info(name: &str, key: Option<&str>) -> UserCommandInfo {
     UserCommandInfo {
         name: name.to_owned(),
         key: key.map(str::to_owned),
+        takes_files: false,
     }
 }
 

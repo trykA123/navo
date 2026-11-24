@@ -87,6 +87,7 @@ fn a_valid_file_gives_applied() {
             vec![UserCommandInfo {
                 name: "List".to_owned(),
                 key: Some("ctrl-alt-l".to_owned()),
+                takes_files: false,
             }],
             Vec::new(),
         )

@@ -126,6 +126,7 @@ fn load(path: &Path) -> Loaded {
                 .map(|command| UserCommandInfo {
                     name: command.name.clone(),
                     key: command.key.clone(),
+                    takes_files: model::files::takes_files(&command.args),
                 })
                 .collect();
             Loaded {

@@ -38,6 +38,7 @@ fn apply(cx: &mut TestAppContext, rig: &Rig, sender: &UserCommandSender, names: 
         .map(|(name, key)| UserCommandInfo {
             name: (*name).to_owned(),
             key: Some((*key).to_owned()),
+            takes_files: false,
         })
         .collect();
     assert!(sender.send(UserCommandNews::Applied(list, Vec::new())));
