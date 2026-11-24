@@ -191,3 +191,60 @@ fn a_rollback_over_a_held_file_restores_it_while_the_source_is_proved_unchanged(
         (Some(OLD), Some(BIG))
     );
 }
+
+#[test]
+fn a_rollback_keeps_the_copy_when_its_proof_has_no_file_id() {
+    let (fs, plan) = moving();
+    let mut harness = copied_only(&fs, &plan, Harness::default());
+    fs.set_volume_serial("", None);
+    for file in &mut harness.log.placed {
+        let proof = file
+            .source
+            .as_mut()
+            .expect("a move journals its source proof");
+        proof.identity = None;
+        proof.created_ms = Some(500);
+        proof.attributes = Some(0x20);
+        assert!(proof.proves(), "times and attributes prove the source");
+    }
+    rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+    assert_eq!(
+        (exists(&fs, "dst/a.txt"), size(&fs, "src/a.txt")),
+        (true, Some(BIG)),
+        "without a file ID a path read cannot prove the source, so the copy stays (D164)"
+    );
+}
+
+/// Journals a stale proof row and the proved one for the same copy, `stale_last` deciding order.
+fn two_proof_rows(stale_last: bool) -> (FakeFs, OperationPlan, Harness) {
+    let (fs, plan) = moving();
+    let mut harness = copied_only(&fs, &plan, Harness::default());
+    let proved = harness.log.placed.pop().expect("one placed copy");
+    let mut stale = proved.clone();
+    let proof = stale
+        .source
+        .as_mut()
+        .expect("a move journals its source proof");
+    let identity = proof.identity.as_mut().expect("the volume keeps file IDs");
+    identity.file[0] ^= 1;
+    let rows = if stale_last {
+        [proved, stale]
+    } else {
+        [stale, proved]
+    };
+    harness.log.placed.extend(rows);
+    (fs, plan, harness)
+}
+
+#[test]
+fn the_newest_proof_row_for_a_copy_decides_its_rollback() {
+    for stale_last in [true, false] {
+        let (fs, plan, harness) = two_proof_rows(stale_last);
+        rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+        assert_eq!(
+            (exists(&fs, "dst/a.txt"), size(&fs, "src/a.txt")),
+            (stale_last, Some(BIG)),
+            "stale proof last: {stale_last}"
+        );
+    }
+}

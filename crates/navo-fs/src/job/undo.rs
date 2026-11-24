@@ -244,11 +244,13 @@ fn only_copy(
     if job.plan.kind != OpKind::Move || !job.done.contains(&seq) {
         return Ok(false);
     }
+    // The newest row wins: a retried copy journals again, and its proof describes the copy on disk.
     let proof = job
         .placed
         .iter()
-        .filter(|file| file.target.same_place(target))
-        .find_map(|file| file.source);
+        .rev()
+        .find(|file| file.target.same_place(target))
+        .and_then(|file| file.source);
     let proved = match proof {
         Some(proof) => proof.still_at(ops, source)?,
         None => false,
