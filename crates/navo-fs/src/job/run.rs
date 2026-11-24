@@ -58,6 +58,9 @@ pub(super) fn run_with(
     done: &DoneSet,
     ctx: &mut JobContext<'_>,
 ) -> JobOutcome {
+    if let Err((seq, error)) = super::remove::refuse_streamed_move(plan) {
+        return JobOutcome::Failed { seq, error };
+    }
     let aside = Aside::new();
     let removals = Removals::of(plan);
     let namespace = namespace_of(ctx);

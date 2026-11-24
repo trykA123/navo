@@ -119,6 +119,32 @@ impl<'p> Removals<'p> {
     }
 }
 
+/// Refuses a move that streams a copy from another provider, before any step runs: a streamed
+/// copy takes no proof of its source, so the move could never remove it safely.
+pub(super) fn refuse_streamed_move(plan: &OperationPlan) -> Result<(), (u32, FsError)> {
+    if plan.kind != OpKind::Move {
+        return Ok(());
+    }
+    let streamed = (0_u32..)
+        .zip(&plan.steps)
+        .find_map(|(seq, step)| match step {
+            Step::CopyFile { source, target, .. } if source.provider() != target.provider() => {
+                Some((seq, source))
+            }
+            _ => None,
+        });
+    match streamed {
+        Some((seq, source)) => Err((
+            seq,
+            FsError {
+                location: Some(source.clone()),
+                ..FsError::new(FsErrorKind::NotSupportedYet)
+            },
+        )),
+        None => Ok(()),
+    }
+}
+
 pub(super) fn remove(
     ops: &dyn ProviderOps,
     removals: &Removals<'_>,

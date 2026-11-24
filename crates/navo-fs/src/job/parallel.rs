@@ -36,6 +36,9 @@ pub(super) fn run_with(
     ctx: &mut JobContext<'_>,
     workers: usize,
 ) -> JobOutcome {
+    if let Err((seq, error)) = super::remove::refuse_streamed_move(plan) {
+        return JobOutcome::Failed { seq, error };
+    }
     let pauses = match super::git_pause::pause_job(plan, ctx) {
         Ok(pauses) => pauses,
         Err(error) => {

@@ -1,7 +1,7 @@
 //! A move whose source must stay in place goes on with the other sources and reports each kept
 //! one on its own, with the reason it was kept.
 
-use navo_core::{Location, ProviderId};
+use navo_core::{Location, ProviderId, Totals};
 
 use super::move_races::{REPLACEMENT, move_plan, run_changing};
 use super::*;
@@ -145,6 +145,42 @@ fn a_move_skips_the_folder_of_a_kept_source() {
             Some((seq, FsErrorKind::ChangedOnDisk)),
             "workers {workers}: the folder removal ran past the kept source"
         );
+    }
+}
+
+#[test]
+fn a_streamed_move_is_refused_before_any_step() {
+    for workers in MODES {
+        let fs = fixture(&[]);
+        let source = Location::new("mem:///far/a.bin").unwrap();
+        let plan = OperationPlan {
+            kind: OpKind::Move,
+            steps: vec![
+                Step::MakeFolder {
+                    target: fs.location("dst/sub"),
+                },
+                Step::CopyFile {
+                    source: source.clone(),
+                    target: fs.location("dst/sub/a.bin"),
+                    size: 3,
+                },
+                Step::RemoveFile { location: source },
+            ],
+            totals: Totals {
+                files: 1,
+                folders: 1,
+                bytes: 3,
+            },
+            conflicts: Vec::new(),
+            risks: Vec::new(),
+        };
+        let (outcome, harness) = run_in(workers, &fs, &plan);
+        assert_eq!(
+            failure(&outcome),
+            Some((1, FsErrorKind::NotSupportedYet)),
+            "workers {workers}"
+        );
+        assert!(!exists(&fs, "dst/sub") && harness.logged().is_empty());
     }
 }
 
