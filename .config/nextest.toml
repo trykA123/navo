@@ -14,7 +14,7 @@ test-group = "clipboard"
 
 # GitHub's Windows runners sometimes deliver no clipboard update within the tests' 5 s wait.
 [[profile.default.overrides]]
-filter = "binary(clipboard_text_windows) & test(/^the_watcher_/)"
+filter = "(binary(clipboard_text_windows) & test(/^the_watcher_/)) | binary(clipboard_watch_windows)"
 retries = 2
 
 [[profile.default.overrides]]
