@@ -3,7 +3,9 @@ use navo_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution, Step}
 use super::aside::Aside;
 use super::verify::SourceDigest;
 use super::{FileStamp, JobContext, PlacedFile, StepOutcome};
-use crate::{CancelToken, CopyControl, FileIdentity, MoveCopy, OwnedCopy, ProviderOps};
+use crate::{
+    CancelToken, CopiedSource, CopyControl, FileIdentity, MoveCopy, OwnedCopy, ProviderOps,
+};
 
 pub(super) struct Copier<'a> {
     pub ops: &'a dyn ProviderOps,
@@ -55,17 +57,20 @@ impl Copier<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Copied {
     Skipped,
+    /// `source` is a move's source proof, journaled with the placed copy.
     Placed {
         stamp: FileStamp,
         flush: bool,
+        source: Option<CopiedSource>,
     },
     Ready {
-        bytes: u64,
+        stamp: FileStamp,
         flush: bool,
         overwrite: bool,
         temporary: Location,
         identity: Option<FileIdentity>,
         seq: u32,
+        source: Option<CopiedSource>,
     },
 }
 
@@ -74,7 +79,7 @@ impl Copied {
         match self {
             Self::Skipped => None,
             Self::Placed { stamp, .. } => Some(stamp.size),
-            Self::Ready { bytes, .. } => Some(*bytes),
+            Self::Ready { stamp, .. } => Some(stamp.size),
         }
     }
 }
@@ -101,20 +106,26 @@ pub(super) fn copy(
     }
     let flush = super::stream::crosses(step);
     let result = write(copier, (step, &temp), &mut hooks).and_then(|(stamp, identity)| {
+        let source = copier.removals.proof_of(step.source);
         if exists || copier.strict {
             Ok(Copied::Ready {
-                bytes: stamp.size,
+                stamp,
                 flush,
                 overwrite: !copier.strict || copier.targets.overwrites(step.target),
                 temporary: temp.clone(),
                 identity,
                 seq: step.seq,
+                source,
             })
         } else {
             copier
                 .ops
                 .rename(&temp, step.target)
-                .map(|()| Copied::Placed { stamp, flush })
+                .map(|()| Copied::Placed {
+                    stamp,
+                    flush,
+                    source,
+                })
         }
     });
     if result.is_err() && !copier.strict {
@@ -131,8 +142,12 @@ pub(super) fn place(
 ) -> Result<StepOutcome, FsError> {
     match copied {
         Copied::Skipped => Ok(StepOutcome::Skipped),
-        Copied::Placed { stamp, flush } => {
-            journal_placed(ctx, target, stamp)?;
+        Copied::Placed {
+            stamp,
+            flush,
+            source,
+        } => {
+            journal(ctx, target, stamp, source)?;
             flush_folder(ctx.ops, flush, target).map(|()| StepOutcome::Done)
         }
         Copied::Ready {
@@ -141,7 +156,8 @@ pub(super) fn place(
             temporary,
             identity,
             seq,
-            ..
+            stamp,
+            source,
         } => {
             let placed = aside.place_over(
                 ctx,
@@ -156,6 +172,10 @@ pub(super) fn place(
                 let _ = temp_of(target).map(|temp| remove_if_present(ctx.ops, &temp));
             }
             placed?;
+            if source.is_some() {
+                // The copy now holds the target; its move source goes only in a later step.
+                journal(ctx, target, stamp, source)?;
+            }
             if identity.is_some() {
                 ctx.log.retire_temporary(seq, ctx.ops)?;
             }
@@ -210,9 +230,20 @@ pub(super) fn journal_placed(
     target: &Location,
     stamp: FileStamp,
 ) -> Result<(), FsError> {
+    journal(ctx, target, stamp, None)
+}
+
+/// Journals a placed copy and, for a move, the source proof a crash rollback checks.
+fn journal(
+    ctx: &mut JobContext<'_>,
+    target: &Location,
+    stamp: FileStamp,
+    source: Option<CopiedSource>,
+) -> Result<(), FsError> {
     ctx.log.journal_placed(&PlacedFile {
         target: target.clone(),
         stamp,
+        source,
     })
 }
 

@@ -91,6 +91,9 @@ pub struct HeldFile {
 pub struct PlacedFile {
     pub target: Location,
     pub stamp: FileStamp,
+    /// A move's source as its copy read it: a rollback removes the copy only while the source
+    /// path still holds that file. `None` for plain copies and for rows from older builds.
+    pub source: Option<crate::CopiedSource>,
 }
 
 pub trait JobLog {

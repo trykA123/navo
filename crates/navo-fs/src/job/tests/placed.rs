@@ -38,6 +38,7 @@ fn stamp(modified_ms: Option<i64>) -> Vec<PlacedFile> {
             size: BIG,
             modified_ms,
         },
+        source: None,
     }]
 }
 

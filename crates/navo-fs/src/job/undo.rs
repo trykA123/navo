@@ -64,7 +64,7 @@ fn checked_undo(
     } else if unsure {
         undo_unsure(ctx.ops, step)
     } else {
-        undo(job, step, held, ctx)
+        undo(job, (seq, step), held, ctx)
     }
 }
 
@@ -105,14 +105,14 @@ fn placed_for(step: &Step, placed: &[PlacedFile]) -> Option<FileStamp> {
 
 fn undo(
     job: &Journaled<'_>,
-    step: &Step,
+    (seq, step): (u32, &Step),
     held: Option<&HeldFile>,
     ctx: &mut JobContext<'_>,
 ) -> Result<StepOutcome, FsError> {
     let ops = ctx.ops;
     match step {
         Step::CopyFile { source, target, .. } => {
-            if source_gone(job, source, held, ops)? {
+            if source_gone(job, source, held, ops)? || only_copy(job, (seq, source, target), ops)? {
                 return held.map_or(Ok(StepOutcome::Skipped), |held| {
                     settle(keep(ops, held)?, held, ctx)
                 });
@@ -231,6 +231,35 @@ fn source_gone(
         return Ok(true);
     }
     gone_or_folder_deleted(ops, source, held.and_then(|file| file.volume))
+}
+
+/// True when a done copy of a move may be the only copy left: its source removal may have run
+/// before a crash, and the source path does not prove it still holds the file the copy read
+/// (another file there, or a journal row without a proof). Such a copy stays.
+fn only_copy(
+    job: &Journaled<'_>,
+    (seq, source, target): (u32, &Location, &Location),
+    ops: &dyn ProviderOps,
+) -> Result<bool, FsError> {
+    if job.plan.kind != OpKind::Move || !job.done.contains(&seq) {
+        return Ok(false);
+    }
+    let proof = job
+        .placed
+        .iter()
+        .filter(|file| file.target.same_place(target))
+        .find_map(|file| file.source);
+    let proved = match proof {
+        Some(proof) => proof.still_at(ops, source)?,
+        None => false,
+    };
+    if !proved {
+        tracing::warn!(
+            seq,
+            "move rollback kept a copy: its source is not proved to be the original"
+        );
+    }
+    Ok(!proved)
 }
 
 pub(super) fn settle(

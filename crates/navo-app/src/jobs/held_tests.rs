@@ -386,3 +386,60 @@ fn a_missing_source_volume_keeps_the_job_waiting_for_its_restore() {
         (Some(7), 1, 1)
     );
 }
+
+fn placed_job(journal: &SharedJournal) -> navo_store::JobId {
+    lock(journal).create_job("move", b"{}", 0, 0).unwrap()
+}
+
+#[test]
+fn a_placed_row_from_an_older_build_reads_back_without_a_source_proof() {
+    let journal = journal();
+    let job = placed_job(&journal);
+    let target = FakeFs::new().location("dst/a.txt");
+    let old = serde_json::json!({ "placed_target": target, "size": 5, "modified_ms": 9 });
+    lock(&journal)
+        .record_held(job, &serde_json::to_vec(&old).unwrap(), 0)
+        .unwrap();
+    let held = super::held::held_of(&journal, job).unwrap();
+    assert_eq!(
+        (held.unreadable, held.placed.len(), held.placed[0].source),
+        (0, 1, None)
+    );
+}
+
+#[test]
+fn a_placed_row_keeps_its_source_proof_and_older_builds_still_read_it() {
+    #[derive(serde::Deserialize)]
+    struct OlderPlaced {
+        #[expect(dead_code, reason = "only parsed, as an older build would")]
+        placed_target: navo_core::Location,
+        size: u64,
+    }
+    let journal = journal();
+    let job = placed_job(&journal);
+    let source = navo_fs::CopiedSource {
+        identity: Some(navo_fs::FileIdentity {
+            volume: 7,
+            file: [3; 16],
+            kind: navo_fs::FileIdentityKind::Native,
+        }),
+        size: 5,
+        modified_ms: Some(9),
+        created_ms: Some(4),
+        attributes: Some(32),
+    };
+    let placed = navo_fs::PlacedFile {
+        target: FakeFs::new().location("dst/a.txt"),
+        stamp: navo_fs::FileStamp {
+            size: 5,
+            modified_ms: Some(9),
+        },
+        source: Some(source),
+    };
+    super::held::record_placed(&journal, job, &placed).unwrap();
+    let held = super::held::held_of(&journal, job).unwrap();
+    assert_eq!(held.placed, vec![placed]);
+    let row = lock(&journal).held(job).unwrap().remove(0);
+    let older: OlderPlaced = serde_json::from_slice(&row).unwrap();
+    assert_eq!(older.size, 5);
+}

@@ -83,6 +83,16 @@ impl CopiedSource {
             }
         }
     }
+
+    /// True when the file at `location`, read by path, is still this one. A path read has no
+    /// creation time or attributes, so a proof without a file ID never matches here.
+    pub(crate) fn still_at<P: ProviderOps + ?Sized>(
+        &self,
+        ops: &P,
+        location: &Location,
+    ) -> Result<bool, FsError> {
+        Ok(seen_by_path(ops, location)?.is_some_and(|now| self.still(&now)))
+    }
 }
 
 /// What `location` is by path: `None` when it is not a plain file. A provider without handles has
@@ -205,8 +215,7 @@ pub trait ProviderOps: Provider {
         location: &Location,
         expected: CopiedSource,
     ) -> Result<(), FsError> {
-        let now = seen_by_path(self, location)?;
-        if !now.is_some_and(|now| expected.still(&now)) {
+        if !expected.still_at(self, location)? {
             return Err(changed(location));
         }
         self.remove_file(location)

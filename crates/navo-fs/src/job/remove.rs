@@ -86,6 +86,11 @@ impl<'p> Removals<'p> {
         Ok(written)
     }
 
+    /// The proof the last copy of `source` left in this run, for the journal.
+    pub(super) fn proof_of(&self, source: &Location) -> Option<CopiedSource> {
+        self.copied().get(source).copied()
+    }
+
     /// Removes a file. A move removes a source only through the proof its copy left in this run;
     /// without one (a resumed job, a changed source, a volume that proves nothing) it keeps it.
     fn remove_file(&self, ops: &dyn ProviderOps, location: &Location) -> Result<(), FsError> {

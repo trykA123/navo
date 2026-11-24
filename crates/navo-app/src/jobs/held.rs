@@ -2,7 +2,9 @@
 
 use navo_core::retention::{OverwriteProof, ProvedOverwrite};
 use navo_core::{FsError, FsErrorKind, Location};
-use navo_fs::{FileStamp, HeldFile, PlacedFile, ProviderOps, release_held};
+use navo_fs::{
+    CopiedSource, FileIdentity, FileStamp, HeldFile, PlacedFile, ProviderOps, release_held,
+};
 use navo_store::{JobId, JobState, JournalError};
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +42,48 @@ struct PlacedRecord {
     size: u64,
     #[serde(default)]
     modified_ms: Option<i64>,
+    /// A move's source as its copy read it; rows from older builds have none, and builds that
+    /// predate it ignore the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<SourceRecord>,
+}
+
+/// The stored form of [`CopiedSource`].
+#[derive(Clone, Copy, Serialize, Deserialize)]
+struct SourceRecord {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    identity: Option<FileIdentity>,
+    size: u64,
+    #[serde(default)]
+    modified_ms: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    created_ms: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    attributes: Option<u32>,
+}
+
+impl From<CopiedSource> for SourceRecord {
+    fn from(source: CopiedSource) -> Self {
+        Self {
+            identity: source.identity,
+            size: source.size,
+            modified_ms: source.modified_ms,
+            created_ms: source.created_ms,
+            attributes: source.attributes,
+        }
+    }
+}
+
+impl From<SourceRecord> for CopiedSource {
+    fn from(record: SourceRecord) -> Self {
+        Self {
+            identity: record.identity,
+            size: record.size,
+            modified_ms: record.modified_ms,
+            created_ms: record.created_ms,
+            attributes: record.attributes,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -65,6 +109,7 @@ pub(super) fn record_placed(
         placed_target: placed.target.clone(),
         size: placed.stamp.size,
         modified_ms: placed.stamp.modified_ms,
+        source: placed.source.map(SourceRecord::from),
     };
     let bytes = serde_json::to_vec(&record).map_err(|_| FsError::new(FsErrorKind::Unknown))?;
     lock(journal)
@@ -174,6 +219,7 @@ pub(super) fn held_of(journal: &SharedJournal, job: JobId) -> Result<Held, Journ
                     size: record.size,
                     modified_ms: record.modified_ms,
                 },
+                source: record.source.map(CopiedSource::from),
             }),
             Err(error) => {
                 held.unreadable += 1;

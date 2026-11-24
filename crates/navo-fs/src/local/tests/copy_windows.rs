@@ -167,6 +167,7 @@ fn rolling_back_a_job_removes_a_copy_of_a_readonly_source() {
             size: copy.size,
             modified_ms: copy.modified_ms,
         },
+        source: None,
     }];
     let job = Journaled {
         plan: &plan,
