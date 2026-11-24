@@ -131,6 +131,17 @@ fn a_silent_install_with_an_open_parent_warns_and_succeeds() {
     );
 }
 
+/// A refused elevated start exits 7 and tells the user to start Setup from their own desktop.
+#[test]
+fn silent_elevated_start_logs_own_desktop_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut host = FakeHost::new();
+    host.elevated.push_back(Ok(true));
+    let (exit, text, _) = run_logged(&mut host, ROOT, dir.path());
+    assert_eq!(exit, ExitCode::from(7), "{text}");
+    assert!(text.contains("from your own desktop"), "{text:?}");
+}
+
 /// Each reachable IW17 failure maps to its documented exit code.
 #[test]
 fn silent_failures_map_to_iw17_codes() {

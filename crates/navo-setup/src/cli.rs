@@ -101,7 +101,10 @@ impl CliError {
             Self::Usage(message) => message.clone(),
             Self::Payload(error) => error.to_string(),
             Self::Discovery => "Setup could not read the installed copy.".to_owned(),
-            Self::Elevated => "start Setup normally, without Run as administrator".to_owned(),
+            Self::Elevated => {
+                "Setup was started as administrator from another account or outside your desktop; start Setup normally from your own desktop"
+                    .to_owned()
+            }
             Self::AlreadyInstalled(root) => format!(
                 "Navo is already installed in `{}`; Setup updates it there",
                 root.display()

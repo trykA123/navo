@@ -12,7 +12,10 @@ use crate::{
 /// Describes one runner failure with the root and child that produced it.
 pub(super) fn install_message(error: &InstallError, fallback_root: &Path, upgrade: bool) -> String {
     match error {
-        InstallError::Elevated => "start Setup normally, without Run as administrator".to_owned(),
+        InstallError::Elevated => {
+            "Setup was started as administrator from another account or outside your desktop; start Setup normally from your own desktop"
+                .to_owned()
+        }
         InstallError::Blocked => "Navo is running; close Navo and run Setup again".to_owned(),
         InstallError::AlreadyInstalled(root) => {
             format!("Navo is already installed in `{}`", root.display())
