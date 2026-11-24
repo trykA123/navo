@@ -37,7 +37,11 @@ impl Handshake {
             return Cow::Borrowed(bytes);
         };
         self.held.extend_from_slice(bytes);
-        if let Some(at) = find(&self.held, QUERY) {
+        let found = find(&self.held, QUERY);
+        // Only a query that comes before any text and within the limit is the start-up one.
+        let early =
+            found.filter(|&at| at <= HELD_LIMIT && self.held.get(..at).is_some_and(only_csi));
+        if let Some(at) = early {
             if reply.try_send(REPLY.to_vec()).is_err() {
                 tracing::warn!("terminal could not answer the console's cursor query");
             }
@@ -110,6 +114,17 @@ mod tests {
         assert_eq!(&*handshake.feed(b"\x1b[0mC:\\>"), b"\x1b[0mC:\\>");
         assert_eq!(&*handshake.feed(b"\x1b[6n"), b"\x1b[6n");
         assert!(replies.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_query_after_text_in_the_same_chunk_passes_through_unanswered() {
+        let (mut handshake, replies) = answering();
+        assert_eq!(&*handshake.feed(b"C:\\>\x1b[6n"), b"C:\\>\x1b[6n");
+        let (mut long, long_replies) = answering();
+        let late = [b"\x1b[?25l".repeat(HELD_LIMIT / 6 + 1), b"\x1b[6n".to_vec()].concat();
+        assert_eq!(&*long.feed(&late), late.as_slice());
+        assert!(replies.try_recv().is_err());
+        assert!(long_replies.try_recv().is_err());
     }
 
     #[test]

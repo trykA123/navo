@@ -11,7 +11,7 @@ pub trait Backend: Send {
     fn resize(&mut self, size: Size) -> Result<(), TermError>;
 }
 
-/// Receives a backend's output on its reader thread. Calls arrive in order; `exited` comes
+/// Receives a backend's output on its sink thread. Calls arrive in order; `exited` comes
 /// last, once, after all output.
 pub trait Sink: Send + Sync {
     /// Bytes the process printed, in arbitrary chunks.
