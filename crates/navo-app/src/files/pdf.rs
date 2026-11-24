@@ -41,7 +41,8 @@ fn spawn_in_job(spec: &navo_pdf::HelperSpec) -> std::io::Result<navo_pdf::Spawne
 }
 
 /// Turns the shell's AppContainer refusal into navo-pdf's `Unconfined` ("cannot open safely"),
-/// keeping whether a retry may help; any other spawn error passes through unchanged.
+/// keeping whether a retry may help. A missing pdfium.dll becomes `NoEngine` and a missing helper
+/// exe passes through (`NoHelper`), so neither sets the permanent latch; other errors pass through.
 #[cfg(windows)]
 fn unconfined(error: std::io::Error) -> std::io::Error {
     let refusal = error
@@ -50,6 +51,13 @@ fn unconfined(error: std::io::Error) -> std::io::Error {
     let Some(refusal) = refusal else {
         return error;
     };
+    match refusal.missing_file() {
+        Some(navo_shell::MissingFile::Engine) => {
+            return std::io::Error::other(PdfError::NoEngine(refusal.to_string()));
+        }
+        Some(navo_shell::MissingFile::Helper) => return error,
+        None => {}
+    }
     let permanence = if refusal.is_transient() {
         navo_pdf::Permanence::Transient
     } else {

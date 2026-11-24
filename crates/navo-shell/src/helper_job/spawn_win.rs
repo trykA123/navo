@@ -45,6 +45,7 @@ pub struct ConfinedProcess {
 /// it to a new Job with `limits`, then resumes it. Fails on any step; a failed grant or attribute
 /// fails closed with a `ContainerError` inside the `io::Error` and creates no process. After
 /// `CreateProcessW` a failure terminates the process first, so an `Err` leaves no live process.
+/// `program` must be Navo's own helper exe: the read+execute grant on it and its pdfium.dll persists.
 pub fn spawn_confined(
     program: &Path,
     args: &[OsString],

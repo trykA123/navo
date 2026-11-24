@@ -17,7 +17,8 @@ pub struct HelperSpec {
 }
 
 /// Starts a helper from a spec. Contract: a hook that returns `Err` has no live child left. A hook
-/// that cannot confine the helper returns `io::Error::other(Unconfined { .. })`.
+/// that cannot confine the helper returns `io::Error::other(Unconfined { .. })`; one that found a
+/// helper file missing returns `io::Error::other(PdfError::NoEngine(..))`, reported as is.
 pub type Spawn = Arc<dyn Fn(&HelperSpec) -> io::Result<Spawned> + Send + Sync>;
 
 /// Whether a confinement failure may clear on a later try (a lock, low memory) or never will.

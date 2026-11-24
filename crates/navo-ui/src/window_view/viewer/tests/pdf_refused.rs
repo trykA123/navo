@@ -126,6 +126,9 @@ fn an_unconfined_helper_shows_cannot_open_safely_without_the_raw_step(cx: &mut T
         !card.contains("WriteDacl") && !card.contains("0x5"),
         "{card}"
     );
+    // The card offers only View as Hex, so the detail must not promise View as Text.
+    assert!(card.contains("View as Hex still works."), "{card}");
+    assert!(!card.contains("View as Text"), "{card}");
     assert!(super::pdf::shown(cx, window, "pdf-as-hex"));
 }
 

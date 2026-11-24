@@ -130,17 +130,13 @@ fn cmd_copy(with_pdfium: bool) -> (tempfile::TempDir, std::path::PathBuf) {
     (dir, exe)
 }
 
-/// The shared `cmd.exe` copy; its folder is never removed, because a running exe cannot be deleted.
-fn cmd_exe() -> &'static std::path::Path {
-    static COPY: std::sync::OnceLock<(tempfile::TempDir, std::path::PathBuf)> =
-        std::sync::OnceLock::new();
-    &COPY.get_or_init(|| cmd_copy(true)).1
-}
-
-/// Starts `cmd.exe` with `args` through `spawn_confined`.
-fn confined_cmd(args: &[&str]) -> std::io::Result<ConfinedChild> {
+/// Starts this test's own `cmd.exe` copy with `args` through `spawn_confined`. Bind the folder
+/// first (`let (_dir, child)`) so it drops last, after the child has exited.
+fn confined_cmd(args: &[&str]) -> std::io::Result<(tempfile::TempDir, ConfinedChild)> {
+    let (dir, exe) = cmd_copy(true);
     let args: Vec<std::ffi::OsString> = args.iter().map(Into::into).collect();
-    spawn_confined(cmd_exe(), &args, LIMITS)
+    let child = spawn_confined(&exe, &args, LIMITS)?;
+    Ok((dir, child))
 }
 
 /// Polls `child` until it reports exited; panics after 5 s.
@@ -154,13 +150,13 @@ fn wait_exited(child: &ConfinedChild) {
 
 #[test]
 fn spawn_confined_child_that_exits_reports_exited() {
-    let child = confined_cmd(&["/c", "exit", "0"]).unwrap();
+    let (_dir, child) = confined_cmd(&["/c", "exit", "0"]).unwrap();
     wait_exited(&child);
 }
 
 #[test]
 fn spawn_confined_child_runs_in_its_job_and_kill_ends_it() {
-    let child = confined_cmd(&["/c", "pause"]).unwrap();
+    let (_dir, child) = confined_cmd(&["/c", "pause"]).unwrap();
     let job = child.process.job();
     assert!(job.contains(&child.process_handle()).unwrap());
     assert_eq!(job.memory_limit().unwrap(), LIMITS.memory_bytes);
@@ -172,7 +168,7 @@ fn spawn_confined_child_runs_in_its_job_and_kill_ends_it() {
 
 #[test]
 fn spawn_confined_pipes_reach_eof_when_the_child_exits() {
-    let mut child = confined_cmd(&["/c", "echo", "hi"]).unwrap();
+    let (_dir, mut child) = confined_cmd(&["/c", "echo", "hi"]).unwrap();
     let mut text = String::new();
     child.stdout.read_to_string(&mut text).unwrap();
     assert_eq!(text.trim_end(), "hi");
@@ -246,7 +242,7 @@ fn spawn_confined_child_has_the_s2b_ui_limits_and_mitigations() {
         ProcessDynamicCodePolicy, ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy,
         ProcessStrictHandleCheckPolicy,
     };
-    let child = confined_cmd(&["/c", "pause"]).unwrap();
+    let (_dir, child) = confined_cmd(&["/c", "pause"]).unwrap();
     let process = child.process_handle();
     assert_eq!(
         child.process.job().ui_limits().unwrap(),

@@ -69,3 +69,22 @@ fn any_other_hook_error_stays_no_helper() {
         Some(PdfError::NoHelper("cannot confine it: no job".into()))
     );
 }
+
+#[test]
+fn a_hook_reporting_a_missing_engine_is_no_engine_and_sets_no_latch() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = calls.clone();
+    let launcher = Launcher::new(FAKE, []).with_spawn(Arc::new(move |_: &HelperSpec| {
+        seen.fetch_add(1, Ordering::SeqCst);
+        Err(io::Error::other(PdfError::NoEngine("pdfium.dll".into())))
+    }));
+    assert_eq!(
+        open(&launcher),
+        Some(PdfError::NoEngine("pdfium.dll".into()))
+    );
+    assert_eq!(
+        open(&launcher),
+        Some(PdfError::NoEngine("pdfium.dll".into()))
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}

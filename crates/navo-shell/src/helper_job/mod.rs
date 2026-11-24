@@ -33,7 +33,7 @@ mod spawn_win;
 pub use spawn_win::{ConfinedChild, ConfinedProcess, spawn_confined};
 
 #[cfg(windows)]
-pub use container_error::ContainerError;
+pub use container_error::{ContainerError, MissingFile};
 
 #[cfg(windows)]
 pub use handle_win::{adopt_shared_file, share_read_handle};

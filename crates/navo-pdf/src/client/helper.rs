@@ -148,8 +148,15 @@ impl Drop for Helper {
     }
 }
 
-/// Maps a failed spawn hook: `Unconfined` (remembered on the launcher when permanent) or `NoHelper`.
+/// Maps a failed spawn hook: a `PdfError` it carries as is (a missing engine), `Unconfined`
+/// (remembered on the launcher when permanent), or else `NoHelper`.
 fn hook_failure(launcher: &Launcher, error: &io::Error) -> PdfError {
+    if let Some(reported) = error
+        .get_ref()
+        .and_then(|inner| inner.downcast_ref::<PdfError>())
+    {
+        return reported.clone();
+    }
     let refusal = error
         .get_ref()
         .and_then(|inner| inner.downcast_ref::<Unconfined>());

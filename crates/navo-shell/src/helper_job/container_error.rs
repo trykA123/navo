@@ -4,7 +4,21 @@
 use std::fmt;
 use std::io;
 
-use super::appcontainer_policy::{ErrorKind, GrantError};
+use super::appcontainer_policy::{ErrorKind, GrantError, GrantStep};
+
+/// Win32 ERROR_FILE_NOT_FOUND and ERROR_PATH_NOT_FOUND.
+const FILE_NOT_FOUND: i32 = 2;
+const PATH_NOT_FOUND: i32 = 3;
+
+/// A helper file the grant could not open because it does not exist: no install problem with
+/// confinement, so the caller reports the engine or the helper as missing, not as unsafe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingFile {
+    /// `pdfium.dll` beside the helper exe.
+    Engine,
+    /// The helper exe itself.
+    Helper,
+}
 
 /// A failed AppContainer setup: `spawn_confined` started no process. Reach it from the returned
 /// `io::Error` with `get_ref()` and `downcast_ref::<ContainerError>()`.
@@ -38,6 +52,26 @@ impl ContainerError {
             Cause::Grant(error) => error.kind() == ErrorKind::Transient,
             Cause::Attribute(_) => false,
         }
+    }
+
+    /// Which helper file was missing when the grant's OpenFile step failed with "file or path not
+    /// found"; `None` for every other failure.
+    pub fn missing_file(&self) -> Option<MissingFile> {
+        let Cause::Grant(error) = &self.0 else {
+            return None;
+        };
+        if error.step != GrantStep::OpenFile
+            || !matches!(error.code, FILE_NOT_FOUND | PATH_NOT_FOUND)
+        {
+            return None;
+        }
+        let name = error.target.as_deref().and_then(std::path::Path::file_name);
+        let is_engine = name.is_some_and(|name| name.eq_ignore_ascii_case("pdfium.dll"));
+        Some(if is_engine {
+            MissingFile::Engine
+        } else {
+            MissingFile::Helper
+        })
     }
 
     /// The Win32 error or HRESULT of the failed step.
@@ -87,6 +121,30 @@ mod tests {
         assert!(grant(GrantStep::OpenFile, 32).is_transient());
         assert!(!grant(GrantStep::WriteDacl, 5).is_transient());
         assert!(!grant(GrantStep::DeriveSid, 0x8007_0005_u32 as i32).is_transient());
+    }
+
+    #[test]
+    fn a_missing_helper_file_is_named_not_refused() {
+        let at = |step, file: &str, code| {
+            ContainerError::grant(GrantError::new(step, Some(Path::new(file)), code))
+        };
+        let dll = "C:/Navo/pdfium.dll";
+        let exe = "C:/Navo/navo.exe";
+        assert_eq!(
+            at(GrantStep::OpenFile, dll, 2).missing_file(),
+            Some(MissingFile::Engine)
+        );
+        assert_eq!(
+            at(GrantStep::OpenFile, "PDFIUM.DLL", 3).missing_file(),
+            Some(MissingFile::Engine)
+        );
+        assert_eq!(
+            at(GrantStep::OpenFile, exe, 2).missing_file(),
+            Some(MissingFile::Helper)
+        );
+        assert_eq!(at(GrantStep::OpenFile, dll, 5).missing_file(), None);
+        assert_eq!(at(GrantStep::ReadDacl, dll, 2).missing_file(), None);
+        assert_eq!(ContainerError::attribute(2).missing_file(), None);
     }
 
     #[test]
