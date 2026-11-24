@@ -190,6 +190,12 @@ pub(super) const GROUPS: [Group; 7] = [
                 "find.match_case",
                 "cmd-find-match-case",
             ),
+            ("viewer::OpenReplace", "find.replace", "cmd-find-replace"),
+            (
+                "viewer::ReplaceAll",
+                "find.replace_all",
+                "cmd-find-replace-all",
+            ),
             ("viewer::Mark1", "mark.colour_one", "cmd-mark-colour-one"),
             ("viewer::Mark2", "mark.colour_two", "cmd-mark-colour-two"),
             (

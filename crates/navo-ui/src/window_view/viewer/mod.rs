@@ -61,11 +61,11 @@ pub(in crate::window_view) use keys::{
     CopyPathLine, EditFile, FindAll, FindNext, FindOnEnter, FindPrevious, FindSelection, FitImage,
     FocusPreview, LeavePreview, LeftDrawer, ListClose, ListerHex, ListerRich, ListerText, Mark1,
     Mark2, Mark3, Mark4, Mark5, Mark6, Mark7, Mark8, MatchCase, NewerSearch, NextBookmark,
-    NextFile, OlderSearch, OpenFind, OpenGoTo, PreviousBookmark, PreviousFile, RightDrawer,
-    SaveFile, ShowHex, ShowLineEnds, ShowMenu, ShowRich, ShowText, SpaceKey, ToggleBookmark,
-    ToggleCharts, ToggleFollow, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip,
-    ToggleOpensInspector, TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewMenu,
-    ZoomIn, ZoomOut,
+    NextFile, OlderSearch, OpenFind, OpenGoTo, OpenReplace, PreviousBookmark, PreviousFile,
+    ReplaceAll, RightDrawer, SaveFile, ShowHex, ShowLineEnds, ShowMenu, ShowRich, ShowText,
+    SpaceKey, ToggleBookmark, ToggleCharts, ToggleFollow, ToggleInfo, ToggleLineNumbers,
+    ToggleMemoryStrip, ToggleOpensInspector, TogglePreview, ToggleRowBars, ToggleUsageBars,
+    ToggleWhoUses, ViewMenu, ZoomIn, ZoomOut,
 };
 pub(in crate::window_view) use keys::{Back, BackspaceKey, KeepViewDefault, ResetView};
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};

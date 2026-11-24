@@ -88,13 +88,11 @@ fn find_selection_opens_find_with_the_selected_text(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn find_selection_in_f4_fills_the_editor_search(cx: &mut TestAppContext) {
+fn find_selection_in_f4_fills_navos_find_bar(cx: &mut TestAppContext) {
     let (window, view, _) = text_window(cx, Setup::new(LINES.to_vec()));
     press(cx, window, &view, "ctrl-e");
     press_key(cx, window, "ctrl-f3");
-    let editor = editor_of(cx, &view).expect("the text editor is open");
-    let query = editor.read_with(cx, |state, _| state.search_session().query.clone());
-    assert_eq!(query, "hello");
+    assert_eq!(find_text(cx, &view).as_deref(), Some("hello"));
 }
 
 #[gpui_kit::test]

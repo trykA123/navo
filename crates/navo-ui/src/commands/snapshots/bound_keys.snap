@@ -282,6 +282,8 @@ find.next | f3 | Viewer
 find.older_search | up | ViewerFind > Input
 find.open | ctrl-f | Viewer
 find.previous | shift-f3 | Viewer
+find.replace | ctrl-h | Editor
+find.replace_all | ctrl-alt-enter | Editor
 find.result_down | down | CompareOutline
 find.result_down | down | FindAll
 find.result_up | up | CompareOutline

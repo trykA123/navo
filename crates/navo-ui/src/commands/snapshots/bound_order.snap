@@ -218,6 +218,8 @@ find.next | f3 | Viewer
 find.previous | shift-f3 | Viewer
 find.selection | ctrl-f3 | Viewer
 find.match_case | alt-c | Viewer
+find.replace | ctrl-h | Editor
+find.replace_all | ctrl-alt-enter | Editor
 mark.colour_one | ctrl-1 | Paged
 mark.colour_one | ctrl-1 | Editor
 mark.colour_two | ctrl-2 | Paged

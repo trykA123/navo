@@ -153,3 +153,7 @@ viewer-language-unsaved = Unsaved changes. Ctrl+S saves; choose the language aga
 viewer-language-menu = Language…
 viewer-language-button = Syntax
 viewer-language-tooltip = Syntax colours (Ctrl+Shift+L)
+editor-replace-label = Replace
+editor-replace-placeholder = Replace with
+editor-replace-one = Replace
+editor-replace-all = Replace all

@@ -1290,6 +1290,16 @@ command = "find.match_case"
 keys = ["alt-c"]
 
 [[bind]]
+command = "find.replace"
+keys = ["ctrl-h"]
+context = "Editor"
+
+[[bind]]
+command = "find.replace_all"
+keys = ["ctrl-alt-enter"]
+context = "Editor"
+
+[[bind]]
 command = "mark.colour_one"
 keys = ["ctrl-1"]
 context = "Paged"

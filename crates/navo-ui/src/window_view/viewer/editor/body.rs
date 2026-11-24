@@ -110,7 +110,7 @@ impl ViewerBody for EditorBody {
         }
         let mut keys: Vec<Key> = vec![("Ctrl+F", "Find"), ("F3", "Next")];
         if view.editing {
-            keys.push(("Ctrl+S", "Save"));
+            keys.extend([("Ctrl+H", "Replace"), ("Ctrl+S", "Save")]);
         }
         if view.editing && view.has_split() {
             keys.push(("Ctrl+Shift+V", "Preview"));

@@ -230,12 +230,9 @@ impl EditorView {
         }
         if !self.editing {
             self.editing = true;
-            self.find.bar = None;
             self.marking.find_all = None;
-            self.editor.update(cx, |state, cx| {
-                state.set_readonly(false, cx);
-                state.set_searchable(true, cx);
-            });
+            self.editor
+                .update(cx, |state, cx| state.set_readonly(false, cx));
             self.refresh_preview(cx);
             cx.notify();
         }

@@ -270,6 +270,8 @@ find.next | Viewer | true
 find.previous | Viewer | true
 find.selection | Viewer | true
 find.match_case | Viewer | true
+find.replace | Viewer | true
+find.replace_all | Viewer | true
 mark.colour_one | Viewer | true
 mark.colour_two | Viewer | true
 mark.colour_three | Viewer | true

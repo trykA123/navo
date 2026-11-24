@@ -23,6 +23,8 @@ gpui_kit::actions!(
         OpenFind,
         OpenGoTo,
         MatchCase,
+        OpenReplace,
+        ReplaceAll,
         Back,
         Mark1,
         Mark2,

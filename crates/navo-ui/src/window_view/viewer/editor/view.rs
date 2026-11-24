@@ -19,7 +19,7 @@ use crate::window_view::viewer::search::overview::StripLook;
 use crate::window_view::viewer::view_menu::view_button;
 use crate::window_view::viewer::{
     Back, CopyPathLine, FindAll, FindSelection, ListClose, ListDown, ListGo, ListUp, MatchCase,
-    NewerSearch, OlderSearch, OpenFind, OpenGoTo, PageDown,
+    NewerSearch, OlderSearch, OpenFind, OpenGoTo, OpenReplace, PageDown, ReplaceAll,
 };
 
 impl EditorView {
@@ -62,7 +62,14 @@ impl EditorView {
             error: bar.error.clone(),
         };
         let row = bar_row(t, look, cx.listener(|view, _, _, cx| view.toggle_case(cx)));
-        Some(row.into_any_element())
+        let bar = div()
+            .flex()
+            .min_w_0()
+            .items_center()
+            .gap(t.spacing.md)
+            .child(row)
+            .children(self.replace_row(t, cx));
+        Some(bar.into_any_element())
     }
 
     fn message(&self, window: &Window, cx: &App) -> Option<SharedString> {
@@ -141,6 +148,12 @@ impl EditorView {
         root.on_action(cx.listener(|view, _: &OpenFind, window, cx| view.open_find(window, cx)))
             .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
             .on_action(cx.listener(|view, _: &MatchCase, _, cx| view.toggle_case(cx)))
+            .on_action(cx.listener(|view, _: &OpenReplace, window, cx| {
+                view.open_replace(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &ReplaceAll, window, cx| {
+                view.replace_all_matches(window, cx);
+            }))
             .on_action(cx.listener(|view, _: &OlderSearch, window, cx| {
                 view.recall(true, window, cx);
             }))
