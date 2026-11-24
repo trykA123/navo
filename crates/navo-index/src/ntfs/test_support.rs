@@ -11,6 +11,8 @@ pub use deep_mft::DeepMft;
 #[path = "skipped_fixture.rs"]
 mod skipped_fixture;
 pub use skipped_fixture::{extend_folder_build, skipped_folder_build};
+#[path = "test_support_realistic.rs"]
+mod test_support_realistic;
 
 use super::volume_io::{VolumeIo, enumerate_volume};
 use super::{Enumeration, JournalPosition, NtfsError};
@@ -55,10 +57,10 @@ impl VolumeIo for MftFixture {
         Ok(journal_metadata(self.journal_id))
     }
 
-    /// Emits up to 512 records starting at `cursor` (1 when `cursor == 0`) within 64 KiB.
+    /// Emits the next chunk for the fixture at `cursor`, logging normal fixture cursors.
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
-        if let Some(cursors) = &mut self.enumeration_cursors {
-            cursors.push(cursor);
+        if let Some(chunk) = test_support_realistic::step(self, cursor) {
+            return Ok(Some(chunk));
         }
         let start = if cursor == 0 {
             1
