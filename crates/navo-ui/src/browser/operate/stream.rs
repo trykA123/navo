@@ -72,13 +72,18 @@ pub(super) fn planned_on(request: &OpRequest) -> Option<&Location> {
 }
 
 /// Plans `request` on `provider`. With a `scanner`, it first lists the request's archive entries
-/// into its empty stream, so the plan copies them. Rows from Find results are checked first.
-/// Fails, with the text to show, when a source cannot be read or a check refuses the plan.
+/// into its empty stream, so the plan copies them. Rows from Find results pass their name checks
+/// (`screen`) before any listing. Fails, with the text to show, when a source cannot be read or a
+/// check refuses the plan.
 pub(super) fn plan_scanned(
     request: &mut OpRequest,
     (provider, scanner): (&dyn ProviderOps, Option<&dyn ProviderOps>),
     cancel: &CancelToken,
 ) -> Result<OperationPlan, String> {
+    let screened = request.target.clone().filter(|_| request.results.is_some());
+    if let Some(target) = screened {
+        super::from_results::screen(request, &target)?;
+    }
     if let (Some(scanner), Some(stream)) = (scanner, request.stream.as_mut()) {
         stream.items = navo_fs::scan(scanner, &request.sources, cancel).map_err(|e| e.message())?;
     }

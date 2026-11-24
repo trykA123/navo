@@ -1,7 +1,9 @@
+use navo_core::find::FindQuery;
 use navo_core::{EntryKind, Location, ProviderPath, Step};
+use navo_fs::find::FindProgress;
 
 use super::*;
-use crate::browser::{PasteRefusal, ResultRow, ResultsRequest, RowStamp};
+use crate::browser::{ResultRow, ResultsRequest, RowStamp};
 use crate::drag::Refusal;
 
 fn hits() -> Arc<FakeFs> {
@@ -111,6 +113,53 @@ fn drop_refusals_arrive_from_the_planning_job() {
     }
 }
 
+/// The planning job refuses `request` with `refusal`'s text and writes nothing.
+fn refused_on_the_job(fs: &FakeFs, mut browser: Browser, request: ResultsRequest, no: Refusal) {
+    let id = browser.prepare_from_results(request).expect("queued");
+    assert!(
+        browser.jobs().is_empty(),
+        "nothing refused on the UI thread"
+    );
+    settle(&mut browser);
+    assert_eq!(failed(&browser, id), no.text().to_string());
+    assert!(!exists(fs, "dest/top.c"));
+}
+
+#[test]
+fn a_copy_into_an_archive_is_refused_by_the_planning_job() {
+    let fs = hits();
+    let browser = browser(&fs, AppState::new(fs.location("home")));
+    let archive = std::env::temp_dir().join("navo-results-target.zip");
+    let mut request = request(&fs, OpKind::Copy, &["w/top.c"], "dest");
+    request.target = navo_fs::archive::location(&archive, "inner").expect("archive location");
+    refused_on_the_job(&fs, browser, request, Refusal::ReadOnlyArchive);
+}
+
+#[test]
+fn a_copy_into_a_results_tab_is_refused_by_the_planning_job() {
+    let fs = hits();
+    let mut browser = browser(&fs, AppState::new(fs.location("home")));
+    browser.find_walk = Arc::new(|_, _, _, _| Ok(FindProgress::default()));
+    let pane = browser.state.focused_pane();
+    browser.start_find(pane, FindQuery::parse("x"), fs.location("w"));
+    settle(&mut browser);
+    let mut request = request(&fs, OpKind::Copy, &["w/top.c"], "dest");
+    request.target = browser.state.active_tab().location().clone();
+    refused_on_the_job(&fs, browser, request, Refusal::Results);
+}
+
+/// The archive does not exist, so listing it first would fail with the listing's own error.
+#[test]
+fn a_move_out_of_an_archive_is_refused_before_the_archive_is_listed() {
+    let fs = hits();
+    let browser = browser(&fs, AppState::new(fs.location("home")));
+    let archive = std::env::temp_dir().join("navo-results-missing-source.zip");
+    let mut request = request(&fs, OpKind::Move, &["w/top.c"], "dest");
+    request.rows[0].location =
+        navo_fs::archive::location(&archive, "top.c").expect("archive location");
+    refused_on_the_job(&fs, browser, request, Refusal::ReadOnlyArchive);
+}
+
 #[test]
 fn a_row_below_another_rows_folder_still_offers_the_structure() {
     let fs = hits();
@@ -137,15 +186,12 @@ fn only_copy_and_move_are_planned() {
     let mut browser = browser(&fs, AppState::new(fs.location("home")));
     for kind in [OpKind::Link, OpKind::Delete, OpKind::Recycle] {
         let request = request(&fs, kind, &["w/top.c"], "dest");
-        assert_eq!(
-            browser.prepare_from_results(request),
-            Err(PasteRefusal::Nothing)
-        );
+        assert_eq!(browser.prepare_from_results(request), None);
     }
     assert!(
         browser
             .prepare_from_results(request(&fs, OpKind::Copy, &[], "dest"))
-            .is_err()
+            .is_none()
     );
 }
 

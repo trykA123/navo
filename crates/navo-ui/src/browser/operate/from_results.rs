@@ -76,11 +76,12 @@ impl RowStamp {
 }
 
 impl Browser {
-    /// Plans `request` like a drop and always asks before writing; returns the pending op's id.
-    /// Only copy and move are offered. The planning job checks each row against its stamp,
-    /// plans repeated rows, aliases and rows inside another row's folder once, and fails the
-    /// plan as a failed job, by name, when a row changed or a write would land on a source.
-    pub fn prepare_from_results(&mut self, request: ResultsRequest) -> Result<u64, PasteRefusal> {
+    /// Queues a plan of `request` like a drop that always asks before writing; returns the
+    /// planning job's id, or None for a kind other than copy and move or when nothing is queued.
+    /// Every refusal arrives later as that failed job, by name: the drop refusals, archive
+    /// writes, changed rows and writes that would land on a source. The job plans repeated rows,
+    /// aliases and rows inside another row's folder once.
+    pub fn prepare_from_results(&mut self, request: ResultsRequest) -> Option<u64> {
         let ResultsRequest {
             kind,
             rows,
@@ -88,7 +89,7 @@ impl Browser {
             target,
         } = request;
         if !matches!(kind, OpKind::Copy | OpKind::Move) {
-            return Err(PasteRefusal::Nothing);
+            return None;
         }
         let (sources, stamps): (Vec<Location>, Vec<RowStamp>) = rows
             .into_iter()
@@ -119,11 +120,7 @@ impl Browser {
             results: Some(Arc::from(stamps)),
         };
         let id = request.id;
-        if self.submit_plan(request) {
-            Ok(id)
-        } else {
-            Err(PasteRefusal::Nothing)
-        }
+        self.submit_plan(request).then_some(id)
     }
 }
 

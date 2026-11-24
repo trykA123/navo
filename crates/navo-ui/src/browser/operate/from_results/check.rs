@@ -28,9 +28,9 @@ struct Top {
     identity: Option<FileIdentity>,
 }
 
-/// Plans a results request: refuses what a drop refuses, partial paths, changed rows, targets
-/// inside a selected folder and writes over a selected source, each by name. Leaves `request` holding the kept
-/// rows and their stamps, so a rebuilt plan checks them again.
+/// Plans a results request after `screen` passed it: refuses partial paths, changed rows,
+/// targets inside a selected folder and writes over a selected source, each by name. Leaves
+/// `request` holding the kept rows and their stamps, so a rebuilt plan checks them again.
 pub(in crate::browser::operate) fn plan_rows(
     provider: &dyn ProviderOps,
     request: &mut OpRequest,
@@ -41,7 +41,6 @@ pub(in crate::browser::operate) fn plan_rows(
     if stamps.len() != request.sources.len() {
         return Err(nothing());
     }
-    super::screen(request, &target)?;
     if is_partial(&target) {
         return Err(said("results-partial-path", &target, None));
     }
