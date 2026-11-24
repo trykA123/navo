@@ -30,7 +30,7 @@ fn steps_without_coverage_follow_the_exact_order() {
         ("seams", "cargo", &["xtask", "seams"]),
         ("channels", "cargo", &["xtask", "channels"]),
         ("paths", "cargo", &["xtask", "paths"]),
-        ("plans", "cargo", &["xtask", "plans"]),
+        ("internal", "cargo", &["xtask", "internal"]),
         ("ratchet", "cargo", &["xtask", "ratchet"]),
         ("deny", "cargo", &["deny", "check"]),
         ("audit", "cargo", &["audit"]),
@@ -221,7 +221,7 @@ fn check_steps_for_one_crate_follow_the_exact_order() {
         ("colors", "cargo", strings(&["xtask", "colors"])),
         ("seams", "cargo", strings(&["xtask", "seams"])),
         ("paths", "cargo", strings(&["xtask", "paths"])),
-        ("plans", "cargo", strings(&["xtask", "plans"])),
+        ("internal", "cargo", strings(&["xtask", "internal"])),
         (
             "nextest",
             "cargo",
