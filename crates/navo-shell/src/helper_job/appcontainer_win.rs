@@ -12,13 +12,14 @@ use std::ptr;
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, INVALID_HANDLE_VALUE, LocalFree};
 use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, ConvertStringSidToSidW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
-    NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, SetEntriesInAclW, SetSecurityInfo, TRUSTEE_IS_SID,
-    TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+    NO_MULTIPLE_TRUSTEE, SetEntriesInAclW, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
 use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
 use windows_sys::Win32::Security::{
-    ACL, DACL_SECURITY_INFORMATION, EqualSid, FreeSid, GetKernelObjectSecurity, NO_INHERITANCE,
-    PROTECTED_DACL_SECURITY_INFORMATION, PSID, UNPROTECTED_DACL_SECURITY_INFORMATION,
+    ACL, DACL_SECURITY_INFORMATION, EqualSid, FreeSid, GetKernelObjectSecurity,
+    InitializeSecurityDescriptor, NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID,
+    SE_DACL_AUTO_INHERIT_REQ, SE_DACL_AUTO_INHERITED, SE_DACL_PROTECTED, SECURITY_DESCRIPTOR,
+    SetKernelObjectSecurity, SetSecurityDescriptorControl, SetSecurityDescriptorDacl,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
@@ -30,6 +31,9 @@ use super::appcontainer_policy::{
     GrantOutcome, GrantStep, READ_EXECUTE, Trustee, already_granted, check_plain_file, locate_dacl,
     parse_dacl,
 };
+
+/// `SECURITY_DESCRIPTOR_REVISION` (winnt.h).
+const SD_REVISION: u32 = 1;
 
 /// Size queries before giving up when the DACL keeps growing between the query and the read.
 const READ_ATTEMPTS: usize = 3;
@@ -106,6 +110,14 @@ impl FileDacl {
             .ok_or(ERROR_INVALID_ACL)
     }
 
+    /// The descriptor's DACL control bits that a write must keep: protected and auto-inherited.
+    fn dacl_control(&self) -> Result<u16, i32> {
+        let bytes = as_bytes(&self.descriptor);
+        let control = bytes.get(2..4).ok_or(ERROR_INVALID_ACL)?;
+        let control = u16::from_le_bytes([control[0], control[1]]);
+        Ok(control & (SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED))
+    }
+
     /// The DACL for Win32 calls, valid while `self` lives.
     fn acl(&self) -> Result<*const ACL, i32> {
         self.bytes().map(|bytes| bytes.as_ptr().cast())
@@ -147,7 +159,9 @@ pub(crate) fn grant_read_execute(
         .acl()
         .and_then(|acl| merge_grant(acl, sid))
         .map_err(|code| fail(GrantStep::BuildDacl, code))?;
-    write_dacl(&writable, merged.0.cast(), current.span.protected)
+    current
+        .dacl_control()
+        .and_then(|control| write_dacl(&writable, merged.0.cast(), control))
         .map_err(|code| fail(GrantStep::WriteDacl, code))?;
     Ok(GrantOutcome::Added)
 }
@@ -274,30 +288,28 @@ fn merge_grant(dacl: *const ACL, sid: &ContainerSid) -> Result<LocalMem, i32> {
     Ok(LocalMem(merged.cast()))
 }
 
-/// Writes `dacl` through `file`, keeping the file's protected or inheriting state as it was.
-fn write_dacl(file: &File, dacl: *const ACL, protected: bool) -> Result<(), i32> {
-    let inherit = if protected {
-        PROTECTED_DACL_SECURITY_INFORMATION
+/// Writes `dacl` through `file` as given, with the DACL `control` bits read before. The kernel
+/// stores it unchanged: inherited ACEs stay inherited and none are added again. `SetSecurityInfo`
+/// would re-derive them from the parent and keep a legacy DACL's ACEs as explicit copies. The
+/// kernel keeps the auto-inherited bit only when the write requests it.
+fn write_dacl(file: &File, dacl: *const ACL, control: u16) -> Result<(), i32> {
+    let mut descriptor = SECURITY_DESCRIPTOR::default();
+    let sd: PSECURITY_DESCRIPTOR = (&raw mut descriptor).cast();
+    let bits = SE_DACL_PROTECTED | SE_DACL_AUTO_INHERITED | SE_DACL_AUTO_INHERIT_REQ;
+    let control = if control & SE_DACL_AUTO_INHERITED == 0 {
+        control
     } else {
-        UNPROTECTED_DACL_SECURITY_INFORMATION
+        control | SE_DACL_AUTO_INHERIT_REQ
     };
-    // SAFETY: the handle has WRITE_DAC and `dacl` is a live ACL; owner, group and SACL are unchanged.
-    let status = unsafe {
-        SetSecurityInfo(
-            file.as_raw_handle(),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | inherit,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            dacl,
-            ptr::null(),
-        )
+    // SAFETY: `sd` points at a live absolute descriptor that outlives every call here; `dacl` is a
+    // live ACL it only points at, and the handle has WRITE_DAC.
+    let ok = unsafe {
+        InitializeSecurityDescriptor(sd, SD_REVISION) != 0
+            && SetSecurityDescriptorDacl(sd, 1, dacl, 0) != 0
+            && SetSecurityDescriptorControl(sd, bits, control) != 0
+            && SetKernelObjectSecurity(file.as_raw_handle(), DACL_SECURITY_INFORMATION, sd) != 0
     };
-    if status == 0 {
-        Ok(())
-    } else {
-        Err(status as i32)
-    }
+    if ok { Ok(()) } else { Err(last_error()) }
 }
 
 /// The calling thread's last Win32 error.
@@ -308,11 +320,67 @@ fn last_error() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use windows_sys::Win32::Security::Authorization::GetSecurityInfo;
+    use windows_sys::Win32::Security::Authorization::{
+        GetSecurityInfo, SE_FILE_OBJECT, SetSecurityInfo,
+    };
     use windows_sys::Win32::Security::{
         ACL_SIZE_INFORMATION, AclSizeInformation, GetAclInformation, GetSecurityDescriptorControl,
-        SE_DACL_PROTECTED,
+        INHERITED_ACE, PROTECTED_DACL_SECURITY_INFORMATION, UNPROTECTED_DACL_SECURITY_INFORMATION,
     };
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+
+    /// Opens a file or folder for DACL reads and writes and reads its DACL.
+    fn open_dacl(path: &Path) -> (File, FileDacl) {
+        let file = OpenOptions::new()
+            .access_mode(READ_CONTROL | WRITE_DAC)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+            .unwrap();
+        let dacl = read_dacl(&file).unwrap();
+        (file, dacl)
+    }
+
+    fn control_of(path: &Path) -> u16 {
+        open_dacl(path).1.dacl_control().unwrap()
+    }
+
+    /// The raw ACE flags as stored, in order.
+    fn raw_flags(path: &Path, sid: &ContainerSid) -> Vec<u8> {
+        let dacl = open_dacl(path).1;
+        let aces = ace_views(&dacl, sid).unwrap();
+        aces.iter().map(|ace| ace.flags).collect()
+    }
+
+    /// Rewrites `path`'s DACL through `SetSecurityInfo`, which marks it auto-inherited, protected
+    /// when `protect` holds. Files created later in a folder rewritten so store real inherited flags.
+    fn rewrite_with_set_security_info(path: &Path, protect: bool) {
+        let (file, dacl) = open_dacl(path);
+        let inherit = if protect {
+            PROTECTED_DACL_SECURITY_INFORMATION
+        } else {
+            UNPROTECTED_DACL_SECURITY_INFORMATION
+        };
+        // SAFETY: the handle has WRITE_DAC and the DACL is live; only the DACL is set.
+        let status = unsafe {
+            SetSecurityInfo(
+                file.as_raw_handle(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | inherit,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                dacl.acl().unwrap(),
+                ptr::null(),
+            )
+        };
+        assert_eq!(status, 0);
+    }
+
+    /// A temp folder whose files inherit through an auto-inherited DACL, as under Program Files.
+    fn auto_inherited_dir() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        rewrite_with_set_security_info(dir.path(), false);
+        dir
+    }
 
     /// Reads back `(flags, mask)` of the allow ACEs for `sid` on `path`, and the total ACE count.
     fn read_back(path: &Path, sid: &ContainerSid) -> (Vec<(u8, u32)>, u32) {
@@ -358,11 +426,13 @@ mod tests {
         let sid = ContainerSid::derive().unwrap();
         let (before, count_before) = read_back(&path, &sid);
         assert!(before.is_empty());
+        let control = control_of(&path);
 
         assert_eq!(grant_read_execute(&path, &sid), Ok(GrantOutcome::Added));
         let (after, count_after) = read_back(&path, &sid);
         assert_eq!(after, [(0, READ_EXECUTE)]);
         assert_eq!(count_after, count_before + 1);
+        assert_eq!(control_of(&path), control);
 
         assert_eq!(
             grant_read_execute(&path, &sid),
@@ -371,6 +441,46 @@ mod tests {
         let (again, count_again) = read_back(&path, &sid);
         assert_eq!(again, [(0, READ_EXECUTE)]);
         assert_eq!(count_again, count_after);
+    }
+
+    #[test]
+    fn a_protected_dacl_stays_protected_and_gains_only_the_grant() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pdfium.dll");
+        std::fs::write(&path, b"x").unwrap();
+        rewrite_with_set_security_info(&path, true);
+        let sid = ContainerSid::derive().unwrap();
+        let (_, count_before) = read_back(&path, &sid);
+        assert_ne!(control_of(&path) & SE_DACL_PROTECTED, 0);
+
+        assert_eq!(grant_read_execute(&path, &sid), Ok(GrantOutcome::Added));
+        let (after, count_after) = read_back(&path, &sid);
+        assert_eq!(after, [(0, READ_EXECUTE)]);
+        assert_eq!(count_after, count_before + 1);
+        assert_ne!(control_of(&path) & SE_DACL_PROTECTED, 0);
+    }
+
+    #[test]
+    fn inherited_aces_stay_inherited_and_the_grant_is_the_only_explicit_ace() {
+        let dir = auto_inherited_dir();
+        let path = dir.path().join("pdfium.dll");
+        std::fs::write(&path, b"x").unwrap();
+        let sid = ContainerSid::derive().unwrap();
+        let before = raw_flags(&path, &sid);
+        assert!(!before.is_empty());
+        assert!(
+            before
+                .iter()
+                .all(|&flags| u32::from(flags) & INHERITED_ACE != 0),
+            "{before:?}"
+        );
+        let control = control_of(&path);
+
+        assert_eq!(grant_read_execute(&path, &sid), Ok(GrantOutcome::Added));
+        let mut expected = vec![0];
+        expected.extend(&before);
+        assert_eq!(raw_flags(&path, &sid), expected);
+        assert_eq!(control_of(&path), control);
     }
 
     #[test]
@@ -386,7 +496,7 @@ mod tests {
 
     #[test]
     fn the_dacl_in_navo_memory_matches_the_one_get_security_info_returns() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = auto_inherited_dir();
         let path = dir.path().join("pdfium.dll");
         std::fs::write(&path, b"x").unwrap();
         let sid = ContainerSid::derive().unwrap();
