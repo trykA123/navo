@@ -10,6 +10,13 @@ use std::ffi::OsString;
 use std::process::ExitCode;
 
 pub mod cli;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "H4's child spawn is the first caller")
+)]
+mod cmdline;
+#[cfg(test)]
+mod cmdline_tests;
 #[cfg(any(windows, test))]
 pub mod default_root;
 pub mod flow;
