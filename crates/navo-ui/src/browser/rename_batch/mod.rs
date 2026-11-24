@@ -171,6 +171,7 @@ impl Browser {
             stream: None,
             replan: Default::default(),
             clashes: Vec::new(),
+            undoes_overwrites: false,
         }
     }
 }

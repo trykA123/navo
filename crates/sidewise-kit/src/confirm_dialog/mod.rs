@@ -326,7 +326,7 @@ fn body(t: &Theme, parts: Parts, keys: &Rc<Keys>, window: &Window) -> Div {
     let link = details
         .as_ref()
         .and_then(|details| details::link(t, details, keys, window));
-    let options = options.and_then(|options| options::options_row(t, options, keys, window));
+    let options = options.and_then(|options| options::options_block(t, options, keys, window));
     div()
         .flex()
         .flex_col()

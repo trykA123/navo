@@ -5,6 +5,7 @@ mod conflicts;
 mod copy;
 mod delete;
 mod keep;
+mod kinds;
 mod link;
 mod move_;
 mod planned;

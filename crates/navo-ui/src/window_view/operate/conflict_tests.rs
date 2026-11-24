@@ -1,6 +1,6 @@
 //! CS2 and CS3: the copy dialog shows "N already there" and one conflict choice row; a pick by
-//! click or by Left/Right rebuilds the plan, Enter starts the job, overwrite choices hide when
-//! Undo could not restore an overwritten file, and "Show conflicts" lists both sides.
+//! click or by Left/Right rebuilds the plan, Enter starts the job, a warning line says so when Undo
+//! could not restore an overwritten file, and "Show conflicts" lists both sides.
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext};
@@ -32,7 +32,7 @@ fn copy_dialog(cx: &mut TestAppContext, undoes: bool) -> (AnyWindowHandle, Entit
     let options = options_for(fs, state);
     let options = crate::window_view::StartOptions {
         operations: Operations {
-            undoes_overwrites: undoes,
+            retain_overwrites: Some(std::sync::Arc::new(move || undoes)),
             ..Operations::unlogged()
         },
         ..options
@@ -117,11 +117,37 @@ fn the_row_shows_four_choices_in_order_with_skip_picked(cx: &mut TestAppContext)
     assert_eq!(row[0], ("conflict-skip", true));
 }
 
+/// Renders a frame and returns the warning line under the choices, when the dialog draws one.
+fn warning(cx: &mut TestAppContext, window: AnyWindowHandle) -> Option<String> {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .try_find("options-warning")?
+            .label()
+            .map(str::to_owned)
+    })
+    .expect("window")
+}
+
 #[gpui_kit::test]
-fn overwrite_choices_hide_when_undo_cannot_restore_them(cx: &mut TestAppContext) {
-    let (window, _) = copy_dialog(cx, false);
+fn overwrite_choices_stay_with_a_warning_when_undo_cannot_restore_them(cx: &mut TestAppContext) {
+    let (window, view) = copy_dialog(cx, false);
     let ids: Vec<_> = drawn(cx, window).iter().map(|(id, _)| *id).collect();
-    assert_eq!(ids, ["conflict-skip", "conflict-keep-both"]);
+    assert_eq!(ids, ALL);
+    assert_eq!(
+        warning(cx, window).as_deref(),
+        Some("Overwritten files cannot be undone.")
+    );
+    click(cx, window, &view, "conflict-overwrite-all");
+    assert_eq!(policy(cx, &view), Some(ConflictPolicy::OverwriteAll));
+    press(cx, window, &view, "enter");
+    assert!(view.read_with(cx, |view, _| view.browser.pending().is_none()));
+}
+
+#[gpui_kit::test]
+fn no_warning_shows_when_undo_can_restore_overwrites(cx: &mut TestAppContext) {
+    let (window, _) = copy_dialog(cx, true);
+    assert_eq!(warning(cx, window), None);
 }
 
 #[gpui_kit::test]
@@ -172,6 +198,23 @@ fn space_on_the_row_does_not_start_the_job_but_enter_does(cx: &mut TestAppContex
     press(cx, window, &view, "enter");
     assert_eq!(policy(cx, &view), None);
     assert_eq!(view.read_with(cx, |view, _| view.job_infos().len()), 1);
+}
+
+#[test]
+fn conflict_lines_take_their_plural_from_the_message_file() {
+    let line = |key: &str, count: u64| navo_l10n::t!(key, count = count, shown = count.to_string());
+    assert_eq!(
+        line("conflict-all-skipped", 1),
+        "1 item already there will be skipped"
+    );
+    assert_eq!(line("conflict-list-heading", 2), "2 items already there");
+    let outcome = navo_l10n::t!(
+        "conflict-outcome",
+        count = 1_u64,
+        shown = "1",
+        outcome = "1 overwritten"
+    );
+    assert_eq!(outcome, "1 item already there: 1 overwritten");
 }
 
 #[test]

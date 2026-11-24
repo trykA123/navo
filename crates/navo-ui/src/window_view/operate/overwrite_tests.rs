@@ -68,6 +68,7 @@ fn copy(
             source: file(source),
             target: file(target),
         }],
+        undoes_overwrites: false,
     }
 }
 

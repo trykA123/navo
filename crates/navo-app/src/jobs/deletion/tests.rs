@@ -516,7 +516,7 @@ fn browser_worker_routes_confirmed_delete_through_the_retention_adapter() {
         log: super::super::experimental_factory(journal, dirs.clone()),
         write: Some(super::super::write_factory(dirs.clone(), true)),
         protected: vec![],
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.start();
     settle(&mut browser);

@@ -311,7 +311,7 @@ fn a_journal_that_cannot_start_stops_the_job() {
         write: None,
         log: Arc::new(|_: &OperationPlan| Err("journal is read-only".to_owned().into())),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);
@@ -338,7 +338,7 @@ fn every_step_and_the_end_reach_the_log() {
             Ok(Box::new(SharedLog(Arc::clone(&shared))) as Box<dyn OpLog>)
         }),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);
@@ -368,7 +368,7 @@ fn a_cancelled_job_stops_before_its_first_step() {
             Ok(Box::new(SharedLog(Arc::default())) as Box<dyn OpLog>)
         }),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);
@@ -420,7 +420,7 @@ fn shutdown_cancels_a_running_job_and_waits_for_its_end() {
             Ok(Box::new(SharedLog(Arc::clone(&shared))) as Box<dyn OpLog>)
         }),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);
@@ -457,7 +457,7 @@ fn a_job_that_panics_ends_as_failed() {
             },
         ),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);
@@ -491,7 +491,7 @@ fn a_failed_job_stays_until_dismissed() {
         write: None,
         log: Arc::new(|_: &OperationPlan| Err("journal is read-only".to_owned().into())),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);
@@ -522,7 +522,7 @@ fn a_running_job_is_never_forgotten() {
             Ok(Box::new(SharedLog(Arc::default())) as Box<dyn OpLog>)
         }),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);

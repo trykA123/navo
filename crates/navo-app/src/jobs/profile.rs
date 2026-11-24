@@ -211,6 +211,21 @@ pub(crate) fn retains_deletes(dirs: &StoreDirs) -> Option<navo_core::retention::
     }
 }
 
+/// True when "Keep overwritten files" is on, so a copy or move keeps each file it replaces and
+/// Undo can put it back; false (fail closed) when the settings cannot be read.
+pub(crate) fn retains_overwrites(dirs: &StoreDirs) -> bool {
+    match settings(dirs) {
+        Ok(settings) => settings.overwrite_policy().is_some(),
+        Err(_) => {
+            tracing::warn!(
+                error_kind = "settings",
+                "overwrite confirmation cannot read retention settings"
+            );
+            false
+        }
+    }
+}
+
 fn retention_for(plan: &OperationPlan, dirs: &StoreDirs) -> Result<RetentionSettings, String> {
     settings(dirs).or_else(|error| {
         if plan.kind == OpKind::Delete || overwritten_targets(plan).next().is_some() {

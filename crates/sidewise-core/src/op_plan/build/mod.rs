@@ -143,10 +143,16 @@ impl<'a> Walk<'a> {
         }
     }
 
+    /// How `item` meets `found` at `target` under the request's policy. An overwrite choice skips
+    /// a folder or a name of another kind: folders merge by walking, never replace as a whole.
     fn resolve(&self, item: &ScannedItem, found: &ExistingItem, target: &Location) -> Resolution {
+        let replaceable = item.kind != ItemKind::Folder && item.kind == found.kind;
         match self.request.policy {
             ConflictPolicy::Skip => Resolution::Skip,
             ConflictPolicy::Rename => self.free_name(target),
+            ConflictPolicy::OverwriteAll | ConflictPolicy::OverwriteOlder if !replaceable => {
+                Resolution::Skip
+            }
             ConflictPolicy::OverwriteAll => Resolution::Overwrite,
             ConflictPolicy::Ask => Resolution::Ask,
             ConflictPolicy::OverwriteOlder => match (item.modified_ms, found.modified_ms) {

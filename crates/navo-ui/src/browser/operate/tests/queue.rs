@@ -187,6 +187,7 @@ fn local_job(browser: &mut Browser, source: &str, target: Option<&str>) -> u64 {
             stream: None,
             replan: Default::default(),
             clashes: Vec::new(),
+            undoes_overwrites: false,
         },
         Run::Plain,
         None,

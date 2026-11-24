@@ -66,24 +66,17 @@ impl Browser {
     }
 
     /// Rebuilds the pending plan so names already at the target follow `policy`; false when
-    /// nothing is pending, `policy` is already picked, or it overwrites and Undo could not
-    /// restore the old file.
+    /// nothing is pending or `policy` is already picked. An overwrite pick is the user's call:
+    /// the dialog warns when Undo could not restore the old file.
     pub fn pick_policy(&mut self, policy: ConflictPolicy) -> bool {
-        let refused = overwrites(&policy) && !self.operations.undoes_overwrites;
         let Some(pending) = self.pending.as_mut() else {
             return false;
         };
-        if refused || pending.replan.policy == policy {
+        if pending.replan.policy == policy {
             return false;
         }
         pending.replan.policy = policy;
         self.replan()
-    }
-
-    /// True when the job may overwrite, so the dialog may offer the overwrite choices.
-    #[must_use]
-    pub fn undoes_overwrites(&self) -> bool {
-        self.operations.undoes_overwrites
     }
 
     /// Sends the pending op to the planning job again, with its structure and picked policy.
@@ -139,14 +132,6 @@ pub(super) fn replan_of(request: &OpRequest) -> Replan {
         planned: request.policy.clone(),
         same_volume: request.same_volume,
     }
-}
-
-/// True when `policy` may replace a file already at the target.
-fn overwrites(policy: &ConflictPolicy) -> bool {
-    matches!(
-        policy,
-        ConflictPolicy::OverwriteOlder | ConflictPolicy::OverwriteAll
-    )
 }
 
 pub(super) fn existing_kept(

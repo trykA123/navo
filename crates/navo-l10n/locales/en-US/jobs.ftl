@@ -43,8 +43,15 @@ conflict-skip = Skip
 conflict-overwrite-older = Overwrite older
 conflict-keep-both = Keep both
 conflict-overwrite-all = Overwrite all
-conflict-all-skipped = { $items } already there will be skipped
-conflict-outcome = { $items } already there: { $outcome }
+conflict-no-undo = Overwritten files cannot be undone.
+conflict-all-skipped = { $count ->
+    [one] { $shown } item already there will be skipped
+   *[other] { $shown } items already there will be skipped
+}
+conflict-outcome = { $count ->
+    [one] { $shown } item already there: { $outcome }
+   *[other] { $shown } items already there: { $outcome }
+}
 conflict-skipped = { $shown } skipped
 conflict-renamed = { $count ->
     [one] { $shown } gets a new name
@@ -52,7 +59,10 @@ conflict-renamed = { $count ->
 }
 conflict-overwritten = { $shown } overwritten
 conflict-show = Show conflicts
-conflict-list-heading = { $items } already there
+conflict-list-heading = { $count ->
+    [one] { $shown } item already there
+   *[other] { $shown } items already there
+}
 conflict-column-copied = Being copied
 conflict-column-moved = Being moved
 conflict-column-there = Already there

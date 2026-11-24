@@ -27,7 +27,7 @@ fn retaining(fs: &Arc<FakeFs>, retaining: &Arc<AtomicBool>) -> (Browser, Arc<Mut
             Ok(Box::new(SharedLog(Arc::clone(&shared))) as Box<dyn OpLog>)
         }),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     (browser, record)
 }

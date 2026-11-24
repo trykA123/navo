@@ -83,6 +83,7 @@ pub(super) fn operations(
         return (unavailable, None);
     };
     let retention_dirs = dirs.clone();
+    let overwrite_dirs = dirs.clone();
     let sessions = jobs::SessionHolds::new(journal, dirs.clone());
     let logged = Operations {
         retain_deletes: experimental.then(|| {
@@ -93,7 +94,10 @@ pub(super) fn operations(
         log: sessions.factory(experimental.then(|| local.clone())),
         log_without_retention: experimental.then(|| sessions.factory_without_retention()),
         protected,
-        undoes_overwrites: true,
+        retain_overwrites: experimental.then(|| {
+            Arc::new(move || jobs::retains_overwrites(&overwrite_dirs))
+                as Arc<dyn Fn() -> bool + Send + Sync>
+        }),
     };
     (logged, Some(sessions))
 }
@@ -115,7 +119,7 @@ fn unavailable_operations(
     Operations {
         retain_deletes: None,
         protected,
-        undoes_overwrites: false,
+        retain_overwrites: None,
         log: Arc::new(move |_| Err(navo_l10n::tr(message).into())),
         log_without_retention: None,
         write: Some(Arc::new(|location| {

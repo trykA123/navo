@@ -21,6 +21,8 @@ pub(in crate::browser) struct PlannedOp {
     pub target_class: DriveClass,
     /// Facts of the first conflicts, read on the planning thread.
     pub clashes: Vec<Clash>,
+    /// Whether Undo can put back a file this plan overwrites, read on the planning thread.
+    pub undoes_overwrites: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +107,9 @@ impl From<String> for LogRefusal {
 pub type LogFactory =
     Arc<dyn Fn(&OperationPlan) -> Result<Box<dyn OpLog>, LogRefusal> + Send + Sync>;
 pub type RetainDeletes = Arc<dyn Fn() -> Option<RetentionPolicy> + Send + Sync>;
+/// Reads, when a copy or move plan is built, whether its job keeps each overwritten file so
+/// Undo can put it back; false when the setting cannot be read.
+pub type RetainOverwrites = Arc<dyn Fn() -> bool + Send + Sync>;
 pub type WriteFactory = Arc<dyn Fn(&Location) -> Result<Box<dyn Send>, FsError> + Send + Sync>;
 
 #[derive(Clone)]
@@ -115,9 +120,16 @@ pub struct Operations {
     pub write: Option<WriteFactory>,
     pub retain_deletes: Option<RetainDeletes>,
     pub protected: Vec<Location>,
-    /// True when a job's log holds an overwritten file so Undo can put it back; false for the
-    /// guard log, so the dialog offers no overwrite choice.
-    pub undoes_overwrites: bool,
+    /// Asked for each copy or move plan; `None` (the guard log, retention off) never keeps an
+    /// overwritten file, so the dialog warns that overwrites cannot be undone.
+    pub retain_overwrites: Option<RetainOverwrites>,
+}
+
+/// The retention checks a planning job runs on its own thread.
+#[derive(Clone)]
+pub(in crate::browser) struct RetentionChecks {
+    pub deletes: Option<RetainDeletes>,
+    pub overwrites: Option<RetainOverwrites>,
 }
 
 impl Operations {
@@ -129,7 +141,15 @@ impl Operations {
             write: None,
             retain_deletes: None,
             protected: Vec::new(),
-            undoes_overwrites: false,
+            retain_overwrites: None,
+        }
+    }
+
+    /// The checks a planning job runs, cloned to take onto its thread.
+    pub(in crate::browser) fn retention_checks(&self) -> RetentionChecks {
+        RetentionChecks {
+            deletes: self.retain_deletes.clone(),
+            overwrites: self.retain_overwrites.clone(),
         }
     }
 }
@@ -175,6 +195,9 @@ pub struct PendingOp {
     pub replan: Replan,
     /// Name, size and time of both sides of the first conflicts, for the conflict list.
     pub clashes: Vec<Clash>,
+    /// True when the job keeps each file it overwrites, so Undo can put it back; read when the
+    /// plan was built (retention on, "Keep overwritten files" on, old versions kept).
+    pub undoes_overwrites: bool,
 }
 
 /// What a rebuilt plan needs: the conflict policy the user picked, the policy the shown plan was

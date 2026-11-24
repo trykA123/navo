@@ -295,6 +295,28 @@ fn delete_confirmation_retention_requires_the_flag_and_the_current_setting() {
     assert!(active().is_none());
 }
 
+#[test]
+fn overwrite_undo_requires_retention_and_kept_overwrites_when_the_dialog_opens() {
+    let root = tempfile::tempdir().unwrap();
+    let dirs = store(&root);
+    dirs.ensure().unwrap();
+    let _start = crate::crash::store::check_with(Some(&dirs.data), false, &FakeFs::new(), false);
+    let local =
+        || std::sync::Arc::new(navo_fs::LocalFs::new()) as std::sync::Arc<dyn navo_fs::ProviderOps>;
+    let (off, _) = super::operations((Some(&dirs), None), &home(), false, &local());
+    assert!(off.retain_overwrites.is_none());
+    let (on, _) = super::operations((Some(&dirs), None), &home(), true, &local());
+    let undoes = on.retain_overwrites.unwrap();
+    assert!(undoes());
+    let settings = dirs.settings_file();
+    std::fs::write(&settings, "[retention]\nretain-overwrites = false\n").unwrap();
+    assert!(!undoes());
+    std::fs::write(&settings, "[retention]\nretain-overwrites = true\n").unwrap();
+    assert!(undoes());
+    std::fs::write(&settings, "[retention\nbroken").unwrap();
+    assert!(!undoes(), "an unreadable setting fails closed");
+}
+
 mod main_compat;
 
 mod startup;

@@ -42,18 +42,6 @@ const CHOICES: [ConflictChoice; 4] = [
     },
 ];
 
-/// The choices shown: all four, or only Skip and Keep both when Undo could not restore an
-/// overwritten file (`undoes_overwrites` false).
-fn shown(undoes_overwrites: bool) -> Vec<&'static ConflictChoice> {
-    CHOICES
-        .iter()
-        .filter(|choice| {
-            undoes_overwrites
-                || matches!(choice.policy, ConflictPolicy::Skip | ConflictPolicy::Rename)
-        })
-        .collect()
-}
-
 /// The index among `choices` of the choice `shown_policy` highlights.
 fn picked(choices: &[&ConflictChoice], policy: &ConflictPolicy, plan: &OperationPlan) -> usize {
     let policy = shown_policy(policy, plan);
@@ -144,7 +132,6 @@ fn summary(plan: &OperationPlan) -> Option<String> {
     if conflicts.is_empty() {
         return None;
     }
-    let items = super::items(conflicts.len());
     let count = |wanted: fn(&Resolution) -> bool| {
         conflicts.iter().filter(|c| wanted(&c.resolution)).count()
     };
@@ -152,7 +139,7 @@ fn summary(plan: &OperationPlan) -> Option<String> {
     let renamed = count(|r| matches!(r, Resolution::Rename(_)));
     let skipped = conflicts.len() - overwritten - renamed;
     if skipped == conflicts.len() {
-        return Some(t!("conflict-all-skipped", items = items.as_str()));
+        return counted("conflict-all-skipped", conflicts.len());
     }
     let outcome = [
         counted("conflict-overwritten", overwritten),
@@ -160,9 +147,11 @@ fn summary(plan: &OperationPlan) -> Option<String> {
         counted("conflict-skipped", skipped),
     ];
     let outcome = outcome.into_iter().flatten().collect::<Vec<_>>().join(", ");
+    let total = u64::try_from(conflicts.len()).unwrap_or(u64::MAX);
     Some(t!(
         "conflict-outcome",
-        items = items.as_str(),
+        count = total,
+        shown = format::bytes(total),
         outcome = outcome
     ))
 }
@@ -197,8 +186,7 @@ fn conflict_list(pending: &PendingOp) -> Details {
         OpKind::Move => "conflict-column-moved",
         _ => "conflict-column-copied",
     };
-    let items = super::items(conflicts);
-    let heading = t!("conflict-list-heading", items = items.as_str());
+    let heading = counted("conflict-list-heading", conflicts).unwrap_or_default();
     Details {
         link: tr("conflict-show").into(),
         heading: heading.into(),
@@ -210,8 +198,8 @@ fn conflict_list(pending: &PendingOp) -> Details {
 }
 
 impl NavoWindow {
-    /// Adds the conflict row to `dialog` when `pending` offers it; a pick goes to the browser,
-    /// which rebuilds the plan with that choice.
+    /// Adds the conflict row to `dialog` when `pending` offers it, with a warning line when Undo
+    /// could not restore an overwritten file; a pick goes to the browser, which rebuilds the plan.
     pub(super) fn conflict_row(
         &self,
         dialog: ConfirmDialog,
@@ -221,7 +209,7 @@ impl NavoWindow {
         if !offers_row(pending) {
             return dialog;
         }
-        let choices = shown(self.browser.undoes_overwrites());
+        let choices: Vec<&ConflictChoice> = CHOICES.iter().collect();
         let options = Options {
             label: tr("conflict-choice-label").into(),
             items: choices
@@ -232,6 +220,7 @@ impl NavoWindow {
                 })
                 .collect(),
             picked: picked(&choices, &pending.replan.policy, &pending.plan),
+            warning: (!pending.undoes_overwrites).then(|| tr("conflict-no-undo").into()),
         };
         let policies: Vec<ConflictPolicy> = choices.iter().map(|c| c.policy.clone()).collect();
         let view = cx.weak_entity();

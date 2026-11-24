@@ -36,7 +36,9 @@ pub(crate) use held::{forget_held_at, forget_retired, record as hold_record, sav
 #[cfg(test)]
 pub use pending::still_pending;
 pub use pending::{StillPending, log_pending};
-pub(crate) use profile::{claim_write, read_retention, retains_deletes, write_factory};
+pub(crate) use profile::{
+    claim_write, read_retention, retains_deletes, retains_overwrites, write_factory,
+};
 #[cfg(test)]
 pub use profile::{confined_factory, experimental_factory, profile_factory, retaining_factory};
 pub use recovery::{RecoveryReport, recover_profile};

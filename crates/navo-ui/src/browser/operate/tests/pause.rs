@@ -15,7 +15,7 @@ pub(super) fn gated(browser: &mut Browser) -> Arc<AtomicBool> {
             Ok(Box::new(SharedLog(Arc::default())) as Box<dyn OpLog>)
         }),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     gate
 }
@@ -151,7 +151,7 @@ fn a_job_waiting_for_another_operation_shows_it_until_cancelled() {
         write: None,
         log: Arc::new(|_: &OperationPlan| Ok(Box::new(WaitingLog) as Box<dyn OpLog>)),
         protected: Vec::new(),
-        undoes_overwrites: false,
+        retain_overwrites: None,
     });
     browser.prepare(OpKind::Copy);
     settle(&mut browser);

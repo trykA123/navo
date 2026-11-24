@@ -29,12 +29,14 @@ pub struct OptionItem {
     pub label: SharedString,
 }
 
-/// The options row: the spoken name of the group, its choices in order and the picked index.
+/// The options row: the spoken name of the group, its choices in order, the picked index and
+/// an optional warning line drawn below it in the theme's warning colour.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Options {
     pub label: SharedString,
     pub items: Vec<OptionItem>,
     pub picked: usize,
+    pub warning: Option<SharedString>,
 }
 
 impl Options {
@@ -121,6 +123,18 @@ fn enter_only(keys: &Keys, event: &KeyDownEvent, window: &mut Window, cx: &mut A
     }
 }
 
+/// The row's warning line, in the warning colour and read out as a label.
+fn warning_line(t: &Theme, text: SharedString) -> ObservedElement<Stateful<Div>> {
+    div()
+        .id("options-warning")
+        .role(Role::Label)
+        .aria_label(text.clone())
+        .test_support()
+        .text_color(t.colors.warn)
+        .text_size(t.typography.small)
+        .child(text)
+}
+
 /// The sunken rail the segments sit on.
 fn rail(t: &Theme) -> Div {
     div()
@@ -135,7 +149,7 @@ fn rail(t: &Theme) -> Div {
 }
 
 /// The focusable row: a ring that follows `handle`, Left/Right picks and a click per choice.
-pub(super) fn options_row(
+fn options_row(
     t: &Theme,
     options: Options,
     keys: &Rc<Keys>,
@@ -177,6 +191,25 @@ pub(super) fn options_row(
             .border_2()
             .border_color(ring(&handle, t, window))
             .child(group),
+    )
+}
+
+/// The options row with its warning line below it, when it has one.
+pub(super) fn options_block(
+    t: &Theme,
+    options: Options,
+    keys: &Rc<Keys>,
+    window: &Window,
+) -> Option<impl IntoElement + use<>> {
+    let warning = options.warning.clone().map(|text| warning_line(t, text));
+    let row = options_row(t, options, keys, window)?;
+    Some(
+        div()
+            .flex()
+            .flex_col()
+            .gap(t.spacing.xxs)
+            .child(row)
+            .children(warning),
     )
 }
 

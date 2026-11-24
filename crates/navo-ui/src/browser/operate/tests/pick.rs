@@ -1,6 +1,7 @@
 //! CS2 and CS3: a picked conflict policy rebuilds the pending plan through the planning job. A
-//! rebuild for an older pick or a closed dialog is dropped, overwrites are refused when Undo could
-//! not put the old file back, and the plan carries both sides of its first 200 conflicts.
+//! rebuild for an older pick or a closed dialog is dropped, each plan says whether Undo can put an
+//! overwritten file back (the overwrite choices stay open either way), and the plan carries both
+//! sides of its first 200 conflicts.
 
 use navo_core::{ConflictPolicy, Resolution};
 
@@ -19,7 +20,7 @@ fn clashing(undoes: bool) -> (Arc<FakeFs>, Browser) {
     }
     let mut browser = browser(&fs, home_beside_dest(&fs));
     browser.set_operations(Operations {
-        undoes_overwrites: undoes,
+        retain_overwrites: Some(Arc::new(move || undoes)),
         ..Operations::unlogged()
     });
     assert!(browser.prepare(OpKind::Copy));
@@ -100,18 +101,42 @@ fn the_last_pick_wins_when_two_rebuilds_race() {
 }
 
 #[test]
-fn overwrites_are_refused_when_undo_cannot_restore_them() {
+fn overwrites_may_be_picked_when_undo_cannot_restore_them() {
     let (_, mut browser) = clashing(false);
-    assert!(!browser.pick_policy(ConflictPolicy::OverwriteAll));
-    assert!(!browser.pick_policy(ConflictPolicy::OverwriteOlder));
-    assert_eq!(
-        browser.pending().map(|p| p.replan.policy.clone()),
-        Some(ConflictPolicy::Ask)
-    );
-    let (_, mut browser) = clashing(true);
+    assert!(browser.pending().is_some_and(|p| !p.undoes_overwrites));
     assert!(browser.pick_policy(ConflictPolicy::OverwriteAll));
     settle(&mut browser);
     assert_eq!(resolutions(&browser), vec![Resolution::Overwrite; 3]);
+    let (_, browser) = clashing(true);
+    assert!(browser.pending().is_some_and(|p| p.undoes_overwrites));
+}
+
+#[test]
+fn each_plan_reads_the_retention_setting_when_it_is_built() {
+    let keeps = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let (_, mut browser) = clashing(true);
+    let read = Arc::clone(&keeps);
+    browser.set_operations(Operations {
+        retain_overwrites: Some(Arc::new(move || {
+            read.load(std::sync::atomic::Ordering::SeqCst)
+        })),
+        ..Operations::unlogged()
+    });
+    keeps.store(false, std::sync::atomic::Ordering::SeqCst);
+    assert!(browser.pick_policy(ConflictPolicy::OverwriteAll));
+    settle(&mut browser);
+    assert!(browser.pending().is_some_and(|p| !p.undoes_overwrites));
+}
+
+#[test]
+fn a_profile_without_the_check_never_claims_undo() {
+    let fs = fake();
+    fs.add_file("home/docs/x.txt", 3);
+    fs.add_file("dest/docs/x.txt", 1);
+    let mut browser = browser(&fs, home_beside_dest(&fs));
+    assert!(browser.prepare(OpKind::Copy));
+    settle(&mut browser);
+    assert!(browser.pending().is_some_and(|p| !p.undoes_overwrites));
 }
 
 #[test]

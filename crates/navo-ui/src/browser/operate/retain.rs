@@ -10,21 +10,23 @@ use navo_retention::KeepCheck;
 use super::queue::{self, SlowVolume};
 use super::types::{
     ClassOf, Ended, KeepOld, LogRefusal, NoKeep, OpRequest, PendingOp, PlannedOp, RetainDeletes,
+    RetentionChecks, Structure,
 };
 use super::{clashes, verify};
 use crate::browser::{Browser, RenameReport};
 
 /// Builds what the confirm dialog shows for a finished plan: its clashes, the retention it runs
-/// with, the slow volumes it touches and the target's drive class. `facts` is (retention, slow
-/// volume check, drive classifier).
+/// with, whether Undo can restore an overwrite, the slow volumes it touches and the target's
+/// drive class. `facts` is (retention checks, slow volume check, drive classifier).
 pub(super) fn planned_op(
     ops: &dyn ProviderOps,
     plan: OperationPlan,
     request: &OpRequest,
-    facts: (Option<&RetainDeletes>, &SlowVolume, ClassOf),
+    facts: (&RetentionChecks, &SlowVolume, ClassOf),
 ) -> PlannedOp {
-    let (retain, slow, class_of) = facts;
-    let (retain_deletes, cannot_retain) = drive_retention(ops, &plan, request, retain);
+    let (checks, slow, class_of) = facts;
+    let (retain_deletes, cannot_retain) =
+        drive_retention(ops, &plan, request, checks.deletes.as_ref());
     let places = request.sources.iter().chain(request.target.iter());
     PlannedOp {
         clashes: clashes::clashes(ops, &plan),
@@ -33,6 +35,32 @@ pub(super) fn planned_op(
         cannot_retain,
         slow_volumes: queue::slow_volumes(places, slow),
         target_class: verify::target_class(class_of, request.target.as_ref()),
+        undoes_overwrites: checks.overwrites.as_ref().is_some_and(|keeps| keeps()),
+    }
+}
+
+/// The pending op the confirm dialog shows for `planned`, the plan built for `request`.
+pub(super) fn pending_op(request: OpRequest, planned: PlannedOp) -> PendingOp {
+    let replan = super::keep::replan_of(&request);
+    PendingOp {
+        id: request.id,
+        sources: request.sources,
+        target: request.target,
+        plan: planned.plan,
+        retain_deletes: planned.retain_deletes,
+        cannot_retain: planned.cannot_retain,
+        keep_old: KeepOld::AsSet,
+        source_tab: request.source_tab,
+        undo: None,
+        slow_volumes: Some(planned.slow_volumes),
+        structure: request.structure.map(|s| Structure {
+            planning: false,
+            ..s
+        }),
+        stream: request.stream,
+        replan,
+        clashes: planned.clashes,
+        undoes_overwrites: planned.undoes_overwrites,
     }
 }
 
@@ -100,6 +128,7 @@ impl Browser {
             cannot_retain: None,
             keep_old: KeepOld::Skip,
             structure: None,
+            undoes_overwrites: false,
             ..pending
         });
         true

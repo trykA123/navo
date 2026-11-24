@@ -73,7 +73,7 @@ impl Browser {
         if !keep::is_replan(&request) {
             self.pending = None;
         }
-        let retain_deletes = self.operations.retain_deletes.clone();
+        let retention = self.operations.retention_checks();
         let slow = self.slow_volume();
         let (class_of, scanner) = (self.copying.class_of, self.stream_scanner(&request));
         let (provider, sender, wake) = (
@@ -92,7 +92,7 @@ impl Browser {
             Box::new(move |cancel| {
                 let scan = (provider.as_ref(), scanner.as_deref());
                 let result = stream::plan_scanned(&mut request, scan, cancel).map(|plan| {
-                    let facts = (retain_deletes.as_ref(), &slow, class_of);
+                    let facts = (&retention, &slow, class_of);
                     retain::planned_op(provider.as_ref(), plan, &request, facts)
                 });
                 let _ = sender.send(Message::Job(JobUpdate::Planned {
@@ -307,30 +307,12 @@ impl Browser {
         self.invalidate_undo();
         match result {
             Ok(planned) => {
-                let replan = keep::replan_of(&request);
-                let pending = PendingOp {
-                    id: request.id,
-                    sources: request.sources,
-                    target: request.target,
-                    plan: planned.plan,
-                    retain_deletes: planned.retain_deletes,
-                    cannot_retain: planned.cannot_retain,
-                    keep_old: KeepOld::AsSet,
-                    source_tab: request.source_tab,
-                    undo: None,
-                    slow_volumes: Some(planned.slow_volumes),
-                    structure: request.structure.map(|s| Structure {
-                        planning: false,
-                        ..s
-                    }),
-                    stream: request.stream,
-                    replan,
-                    clashes: planned.clashes,
-                };
+                let (asks, target_class) = (request.asks, planned.target_class);
+                let pending = retain::pending_op(request, planned);
                 let conflicts = pending.stream.is_some() && !pending.plan.conflicts.is_empty();
-                let asks = request.asks || pending.is_protected() || conflicts;
+                let asks = asks || pending.is_protected() || conflicts;
                 self.dialog_opened();
-                self.offer_verify(&pending, planned.target_class);
+                self.offer_verify(&pending, target_class);
                 self.pending = Some(pending);
                 if !asks {
                     self.confirm();
