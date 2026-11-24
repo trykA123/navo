@@ -1,5 +1,6 @@
 //! Canonical text for a find query.
 
+use super::tokens::TextEncoding;
 use super::{Attribute, AttributeFilter, FindQuery, GitRules, ModifiedFilter, SizeFilter};
 
 impl FindQuery {
@@ -51,6 +52,20 @@ impl FindQuery {
         if self.case {
             parts.push("case:on".to_owned());
         }
+        if let Some(hex) = &self.hex {
+            parts.push(format!("hex:{}", hex_text(hex)));
+        }
+        if !self.encodings.is_empty() {
+            let names = self
+                .encodings
+                .iter()
+                .map(|encoding| encoding_text(*encoding))
+                .collect::<Vec<_>>();
+            parts.push(format!("enc:{}", names.join(",")));
+        }
+        if self.docs {
+            parts.push("docs:on".to_owned());
+        }
         parts.join(" ")
     }
 }
@@ -61,6 +76,20 @@ fn quoted(value: &str) -> String {
         format!("\"{value}\"")
     } else {
         value.to_owned()
+    }
+}
+
+fn hex_text(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn encoding_text(encoding: TextEncoding) -> &'static str {
+    match encoding {
+        TextEncoding::Auto => "auto",
+        TextEncoding::Ansi => "ansi",
+        TextEncoding::Dos => "dos",
+        TextEncoding::Utf8 => "utf8",
+        TextEncoding::Utf16 => "utf16",
     }
 }
 

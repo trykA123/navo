@@ -48,6 +48,12 @@ fn every_filter_round_trips() {
         "not:on",
         "case:on",
         "needle git:off name:*.rs depth:2 word:on not:on case:on",
+        "hex:4d5a",
+        "hex:\"4D 5A-CD:EF\"",
+        "enc:auto,ansi,dos,utf8,utf16",
+        "docs:on",
+        "docs:off",
+        "needle hex:4d5a enc:utf8,auto docs:on",
         "arc:on",
         "arc:off",
         "git:off",
@@ -80,6 +86,24 @@ fn new_token_kinds_print_after_git() {
         query.to_text(),
         "needle git:off name:*.rs depth:2 word:on not:on case:on"
     );
+}
+
+#[test]
+fn hex_prints_lowercase_pairs_without_separators() {
+    let query = FindQuery::parse("hex:\"4D 5A-CD:EF\"");
+    assert_eq!(query.to_text(), "hex:4d5acdef");
+}
+
+#[test]
+fn encodings_print_in_their_parsed_order() {
+    let query = FindQuery::parse("enc:utf8,auto,utf16");
+    assert_eq!(query.to_text(), "enc:utf8,auto,utf16");
+}
+
+#[test]
+fn typed_tokens_print_after_case() {
+    let query = FindQuery::parse("needle case:on docs:on enc:utf8 hex:4d5a");
+    assert_eq!(query.to_text(), "needle case:on hex:4d5a enc:utf8 docs:on");
 }
 
 #[test]

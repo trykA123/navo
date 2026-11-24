@@ -94,6 +94,21 @@ fn two_in_tokens_keep_both_in_order() {
 }
 
 #[test]
+fn bare_modified_units_mean_younger_than() {
+    assert_eq!(
+        FindQuery::parse("mod:7d").modified,
+        FindQuery::parse("mod:<7d").modified
+    );
+}
+
+#[test]
+fn a_bare_date_is_not_a_modified_filter() {
+    let query = FindQuery::parse("mod:2026-10-01");
+    assert_eq!(query.modified, None);
+    assert!(query.tokens[0].message.is_some());
+}
+
+#[test]
 fn archive_switches_are_explicit() {
     assert!(!FindQuery::parse("").archives);
     assert!(FindQuery::parse("arc:on").archives);

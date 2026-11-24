@@ -3,7 +3,7 @@ use std::ops::Range;
 use super::filters::{
     AttributeFilter, ModifiedFilter, SizeFilter, parse_attrs, parse_modified, parse_size,
 };
-use super::tokens;
+use super::tokens::{self, TextEncoding};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
@@ -21,6 +21,9 @@ pub enum TokenKind {
     Word,
     Not,
     Case,
+    Hex,
+    Enc,
+    Docs,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,6 +50,9 @@ pub struct FindQuery {
     pub depth: Option<u32>,
     pub word: bool,
     pub invert: bool,
+    pub hex: Option<Vec<u8>>,
+    pub encodings: Vec<TextEncoding>,
+    pub docs: bool,
     pub ext: Vec<String>,
     pub size: Option<SizeFilter>,
     pub modified: Option<ModifiedFilter>,
@@ -164,6 +170,9 @@ fn token_kind(word: &str) -> TokenKind {
         "word" => TokenKind::Word,
         "not" => TokenKind::Not,
         "case" => TokenKind::Case,
+        "hex" => TokenKind::Hex,
+        "enc" => TokenKind::Enc,
+        "docs" => TokenKind::Docs,
         _ => TokenKind::Text,
     }
 }

@@ -66,11 +66,12 @@ pub(super) fn parse_modified(value: &str) -> Option<ModifiedFilter> {
     if value.eq_ignore_ascii_case("today") {
         return Some(ModifiedFilter::Today);
     }
-    let comparison = value.chars().next()?;
-    if !matches!(comparison, '<' | '>') {
-        return None;
-    }
-    let value = &value[1..];
+    let first = value.chars().next()?;
+    let (comparison, value) = match first {
+        '<' | '>' => (first, &value[1..]),
+        _ if !value.contains('-') => ('<', value),
+        _ => return None,
+    };
     if let Some(days) = value.strip_suffix('d') {
         let days = days.parse().ok()?;
         return Some(if comparison == '<' {
