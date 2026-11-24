@@ -28,19 +28,72 @@ fn plan(
     }
 }
 
-/// A program that runs until the marker file exists.
+/// How long a test waits for a started program to exit; a cold PowerShell start alone can take
+/// several seconds on a loaded Windows runner, and nextest's slow-timeout still catches a hang.
+const EXIT_WAIT: Duration = Duration::from_secs(60);
+
+/// A program that loops until `marker` exists, giving up after about 120 s so it never outlives
+/// its test for long.
 fn held_program(marker: &Path) -> (&'static str, Vec<String>) {
     let marker = marker.to_string_lossy().into_owned();
     if cfg!(windows) {
-        let script =
-            format!("while (-not (Test-Path '{marker}')) {{ Start-Sleep -Milliseconds 50 }}");
+        let script = format!(
+            "$watch = [Diagnostics.Stopwatch]::StartNew(); \
+             while (-not (Test-Path '{marker}') -and $watch.Elapsed.TotalSeconds -lt 120) \
+             {{ Start-Sleep -Milliseconds 50 }}"
+        );
         (
             "powershell",
             vec!["-NoProfile".to_owned(), "-Command".to_owned(), script],
         )
     } else {
-        let script = "while [ ! -e \"$0\" ]; do sleep 0.05; done".to_owned();
+        let script =
+            "n=0; while [ ! -e \"$0\" ] && [ $n -lt 2400 ]; do sleep 0.05; n=$((n+1)); done"
+                .to_owned();
         ("sh", vec!["-c".to_owned(), script, marker])
+    }
+}
+
+/// Releases a held program on drop and kills it when the test never saw it exit.
+struct Release {
+    marker: PathBuf,
+    pid: Option<u32>,
+}
+
+impl Release {
+    fn new(marker: &Path) -> Self {
+        Self {
+            marker: marker.to_owned(),
+            pid: None,
+        }
+    }
+
+    /// Remembers the pid from a published sidecar so a failed test can kill the program.
+    fn track(&mut self, sidecar: &Path) {
+        self.pid = std::fs::read_to_string(sidecar)
+            .ok()
+            .and_then(|text| text.trim().parse().ok());
+    }
+
+    fn exited(&mut self) {
+        self.pid = None;
+    }
+}
+
+impl Drop for Release {
+    fn drop(&mut self) {
+        let _ = std::fs::write(&self.marker, b"");
+        let Some(pid) = self.pid.take() else { return };
+        let pid = pid.to_string();
+        let _ = if cfg!(windows) {
+            std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid])
+                .status()
+        } else {
+            std::process::Command::new("kill")
+                .args(["-9", &pid])
+                .status()
+        };
     }
 }
 
@@ -147,6 +200,7 @@ fn start_writes_the_list_and_removes_it_after_exit() {
     let root = tempfile::tempdir().expect("a temporary folder");
     let work = work_dir(&root);
     let marker = root.path().join("release");
+    let mut release = Release::new(&marker);
     let (program, args) = held_program(&marker);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let plan = plan(
@@ -174,13 +228,10 @@ fn start_writes_the_list_and_removes_it_after_exit() {
     );
     let pid = sidecar(list);
     assert!(pid.is_file(), "the pid sidecar");
+    release.track(&pid);
     std::fs::write(&marker, b"").expect("the release marker");
-    assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(15))
-            .expect("the exit"),
-        Some(0)
-    );
+    assert_eq!(receiver.recv_timeout(EXIT_WAIT).expect("the exit"), Some(0));
+    release.exited();
     assert!(!list.exists(), "the list is removed after the exit");
     assert!(!pid.exists(), "the sidecar is removed after the exit");
 }
@@ -190,6 +241,7 @@ fn a_waiter_that_cannot_start_stops_the_start_and_removes_the_list() {
     let root = tempfile::tempdir().expect("a temporary folder");
     let work = work_dir(&root);
     let marker = root.path().join("release");
+    let _release = Release::new(&marker);
     let (program, args) = held_program(&marker);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let plan = plan(&work, program, &args, Some(vec!["C:\\a.txt".to_owned()]));
@@ -201,7 +253,6 @@ fn a_waiter_that_cannot_start_stops_the_start_and_removes_the_list() {
     assert_eq!(result, Err(StartError::Waiter(ErrorKind::Other)));
     assert!(list_files(&work).is_empty(), "the list is removed");
     assert!(pid_files(&work).is_empty(), "no sidecar stays");
-    std::fs::write(&marker, b"").expect("the release marker");
 }
 
 #[test]
@@ -609,10 +660,5 @@ fn a_hidden_command_reports_its_exit_code() {
         )
     })
     .expect("the command starts");
-    assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(15))
-            .expect("the exit"),
-        Some(3)
-    );
+    assert_eq!(receiver.recv_timeout(EXIT_WAIT).expect("the exit"), Some(3));
 }
