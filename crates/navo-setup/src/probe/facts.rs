@@ -49,11 +49,13 @@ pub fn facts(chain: &Chain) -> io::Result<Facts> {
         .existing
         .last()
         .ok_or_else(|| io::Error::other("chain has no existing folder"))?;
+    // The placement check refuses a link anyway; probing through one would write in its target.
+    let through_link = chain.existing.iter().any(|link| link.reparse);
     Ok(Facts {
         drive: drive_kind(&root.path)?,
         subst: subst_drive(&root.path),
         parent_open: parent_acl::parent_open(chain)?,
-        writable: write_probe(&nearest.path, !chain.missing.is_empty())?,
+        writable: !through_link && write_probe(&nearest.path, !chain.missing.is_empty())?,
         free: free_space(&nearest.path)?,
     })
 }
@@ -263,6 +265,21 @@ mod tests {
         let temp = tempfile::tempdir()?;
         assert!(write_probe(temp.path(), true)?);
         assert_eq!(std::fs::read_dir(temp.path())?.count(), 0);
+        Ok(())
+    }
+
+    /// A chain through a junction is never probed: its writable target still reads as unwritable.
+    #[test]
+    fn a_chain_through_a_junction_is_not_write_probed() -> io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let real = temp.path().join("real");
+        let link = temp.path().join("link");
+        std::fs::create_dir(&real)?;
+        crate::probe::chain::tests::junction(&link, &real);
+        assert!(write_probe(&real, true)?, "the target itself is writable");
+        let chain = crate::probe::chain::resolve_path(&link.join("Navo"))?;
+        assert!(chain.existing.last().is_some_and(|last| last.reparse));
+        assert!(!facts(&chain)?.writable);
         Ok(())
     }
 }

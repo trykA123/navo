@@ -5,10 +5,12 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::process::Command;
 
-use windows_sys::Win32::Foundation::ERROR_ALREADY_EXISTS;
+use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_SHARING_VIOLATION};
 use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
 
-use super::{OrdinalNames, add_base, add_required_from, protected_from, resolve_path};
+use super::{
+    OrdinalNames, add_base, add_required_from, protected_from, resolve_held, resolve_path,
+};
 use crate::placement::{FileId, NameEq};
 
 /// Plants a junction at `link` that points at `target`; `mklink /J` needs no elevation.
@@ -49,6 +51,44 @@ fn a_protected_link_anchors_at_its_target() {
     let below = protected_from(&link.join("missing")).expect("missing tail resolves");
     assert_eq!(below.anchor, target);
     assert_eq!(below.tail, [OsString::from("missing")]);
+}
+
+/// A protected link whose target is gone refuses; it never falls back to its parent folder.
+#[test]
+fn a_dangling_protected_link_refuses() {
+    let root = tempfile::tempdir().expect("temp folder");
+    let real = root.path().join("real");
+    let link = root.path().join("link");
+    std::fs::create_dir(&real).expect("junction target");
+    junction(&link, &real);
+    std::fs::remove_dir(&real).expect("the target goes away");
+    assert!(protected_from(&link).is_err(), "the link itself refuses");
+    assert!(
+        protected_from(&link.join("missing")).is_err(),
+        "a name below the link refuses"
+    );
+    assert!(
+        protected_from(&root.path().join("absent")).is_ok(),
+        "a truly absent name still anchors at its parent"
+    );
+}
+
+/// A held chain keeps its ancestors in place: renaming one fails with a sharing violation.
+#[test]
+fn a_held_ancestor_cannot_be_renamed() {
+    let root = tempfile::tempdir().expect("temp folder");
+    let parent = root.path().join("parent");
+    std::fs::create_dir(&parent).expect("parent folder");
+    let held = resolve_held(&parent.join("Navo")).expect("chain resolves");
+    assert_eq!(held.chain.missing, [OsString::from("Navo")]);
+    let renamed = std::fs::rename(&parent, root.path().join("moved"));
+    let sharing_violation = i32::try_from(ERROR_SHARING_VIOLATION).expect("error code fits i32");
+    assert_eq!(
+        renamed.map_err(|error| error.raw_os_error()),
+        Err(Some(sharing_violation))
+    );
+    drop(held);
+    std::fs::rename(&parent, root.path().join("moved")).expect("free once the chain drops");
 }
 
 /// A mandatory known folder without a path refuses; only an optional one is skipped.
