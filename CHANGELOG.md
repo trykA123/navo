@@ -2,6 +2,41 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.6 — A sharper F3
+
+*2026-11-24*
+
+This release makes the F3 editor a real workbench: regex find and replace, Filter Lines, lint marks for structured files, soft wrap, saving in another encoding, a hex inspector, an image eyedropper and a query bar for JSON trees. Archives now open right in the pane.
+
+### Added
+
+- **Regex find and replace in the editor.** The find bar now works while you edit. Alt+R turns on regex mode; Replace fills in `$1`-style groups, and Replace all is one undo step. On large files the match count runs in the background and stops at 100,000, shown as "100,000+".
+- **Filter Lines.** A "Filter lines" menu on the find bar, and four Ctrl+K commands, keep, remove, copy or bookmark the lines that match the find pattern. Keep and Remove are one undo step each, and every line keeps its own line ending.
+- **Lint marks for structured files.** JSON, TOML, YAML, XML and CSV files show their problems as squiggles in the theme's error and warning colours. F8 and Shift+F8 jump between them, and the header counts them.
+- **Soft wrap you can turn off.** Alt+Z, the View menu or Ctrl+K turns soft wrap off and on while you edit. The choice holds for the window.
+- **More cursors.** Ctrl+Alt+Up and Ctrl+Alt+Down add a cursor above or below.
+- **Save in another encoding or line ending.** The encoding picker can save the file as another encoding, or with LF or CRLF line endings. Navo refuses the save, and writes nothing, when a character would not read back the same, for example ¥ in Shift_JIS.
+- **A hex inspector.** In hex mode, the arrow keys or a click move a byte cursor, and Ctrl+I opens a drawer that reads the bytes there as integers (both byte orders), floats, UTF-8 and UTF-16 characters, a Unix time and bits.
+- **An image eyedropper and pixel grid.** E turns on the eyedropper: the status line shows the colour under the pointer as Hex, RGB and OKLCH, and a click copies it. Past 800 % zoom, a grid shows the pixel edges.
+- **A query bar for JSON and other trees.** Ctrl+Shift+F in the tree view opens a query bar (`$.store.book[0]`, `..name`, `[*]`). Enter and Shift+Enter step through the matches, and a breadcrumb shows the selected node's path; click a part to select it.
+- **Archives in the pane.** Enter or a double-click opens a zip, 7z or tar file as a folder. F5 or a drag copies entries out. Archives stay read-only, and every write says why it is refused.
+- **Allowlisted tools for the editor (not in the menu yet).** The engine that runs a command-line tool on the open file is in: no shell, `.bat` and `.cmd` refused, tools from inside a repository refused, a 5 s limit and a 16 MiB output cap.
+
+### Changed
+
+- **Leaving a folder stops its listing.** Leaving, replacing or closing a folder that is still loading cancels its job, even a network read that is stuck in a call.
+- **The index service creates a missing change journal.** On a selected drive without a USN journal, the service creates one once instead of failing.
+- **Clearer trust wording.** The index service row in Settings says what the index lists and who can search it. Clipboard secrets are described as protected by your Windows sign-in, and readable by other programs you run.
+- **The index service log says more.** The heartbeat counts busy replies, and the "snapshot restored" line says how long the load took.
+- **Under the hood.** Two new build checks stop the number of unbounded channels, lint exceptions and sleeps in tests from growing.
+
+### Fixed
+
+- **Overwrite choices tell the truth about Undo.** When the safety net does not keep overwritten files, the copy and move dialog says "Overwritten files cannot be undone." under the choices.
+- **No more half-finished moves over a folder.** Overwrite older and Overwrite all now skip a folder, or a name that is a file on one side and a folder on the other, instead of planning an overwrite the job then refused partway.
+- **Conflict counts in other languages.** The conflict lines take "item" or "items" from the message files, so translations can use their own plural forms.
+- **Large-file swap lands on the right line.** When the editor takes over from the paged view, it now lands on the right top line in UTF-16 and other non-UTF-8 files, and ignores a late frame from the previous file.
+
 ## v0.8.5 — Your call on conflicts
 
 *2026-11-24*
