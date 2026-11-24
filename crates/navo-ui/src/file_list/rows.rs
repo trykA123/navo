@@ -26,6 +26,7 @@ fn render_row(
 ) -> Option<AnyElement> {
     let entry = ctx.props.rows.get(index)?;
     let row = row_number(index);
+    let note = ctx.note_of.and_then(|note| note(&entry.name.display()));
     let look = RowLook {
         theme,
         entry,
@@ -37,6 +38,7 @@ fn render_row(
         is_find: ctx.find_results.is_some(),
         needle,
         git: git_cell::slot(ctx, (entry, row)),
+        note: note.as_ref(),
     };
     let (left, right, click) = (ctx.clone(), ctx.clone(), ctx.clone());
     let zones = (drop::grip(ctx, row), lasso::start_zone(ctx, row));

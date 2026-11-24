@@ -269,6 +269,7 @@ impl Browser {
         };
         let folder = tab.location().clone();
         let tab = tab.id();
+        let provider = self.provider_for(&target);
         let (Some(space), Some(work)) = (self.size_owners.get(&tab), self.sizes.work.get_mut(&tab))
         else {
             return;
@@ -279,11 +280,7 @@ impl Browser {
         if asker == Asker::Shown && work.asked.contains_key(&name) {
             return;
         }
-        let (provider, sender, wake) = (
-            Arc::clone(&self.provider),
-            self.sender.clone(),
-            Arc::clone(&self.wake),
-        );
+        let (sender, wake) = (self.sender.clone(), Arc::clone(&self.wake));
         let totals = Arc::clone(&self.folder_totals);
         let key = name.clone();
         let slot = JobSlot {

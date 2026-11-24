@@ -18,6 +18,7 @@ mod activity;
 mod app_menu;
 mod app_menu_save;
 mod applied;
+mod archive_pane;
 mod cached;
 mod cards;
 pub(in crate::window_view) mod clipboard;

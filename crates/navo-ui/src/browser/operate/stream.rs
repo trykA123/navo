@@ -1,8 +1,10 @@
 use std::fmt;
 use std::sync::Arc;
 
-use navo_core::{ConflictPolicy, Location, OpKind, ScannedItem, is_protected};
-use navo_fs::{Progress, Sources};
+use navo_core::{
+    ConflictPolicy, FsError, Location, OpKind, OperationPlan, ScannedItem, is_protected,
+};
+use navo_fs::{CancelToken, Progress, ProviderOps, Sources};
 
 use super::paste::PasteRefusal;
 use super::{Browser, OpRequest};
@@ -63,13 +65,49 @@ impl StreamPaste {
     }
 }
 
+/// Plans list the sources, except a streamed copy, which only lists its target.
+pub(super) fn planned_on(request: &OpRequest) -> Option<&Location> {
+    match &request.stream {
+        Some(_) => request.target.as_ref(),
+        None => request.sources.first(),
+    }
+}
+
+/// Plans `request` on `provider`. With a `scanner`, it first lists the request's archive entries
+/// into its empty stream, so the plan copies them. Fails when a source cannot be read.
+pub(super) fn plan_scanned(
+    request: &mut OpRequest,
+    (provider, scanner): (&dyn ProviderOps, Option<&dyn ProviderOps>),
+    cancel: &CancelToken,
+) -> Result<OperationPlan, FsError> {
+    if let (Some(scanner), Some(stream)) = (scanner, request.stream.as_mut()) {
+        stream.items = navo_fs::scan(scanner, &request.sources, cancel)?;
+    }
+    super::work::plan_for(provider, request, cancel)
+}
+
 impl Browser {
+    /// The provider that lists a streamed request's archive entries before planning; None when
+    /// the request is not an unlisted copy out of an archive.
+    pub(super) fn stream_scanner(&self, request: &OpRequest) -> Option<Arc<dyn ProviderOps>> {
+        request.stream.as_ref().filter(|s| s.items.is_empty())?;
+        let source = request
+            .sources
+            .first()
+            .filter(|source| crate::browser::archive::is_inside(source))?;
+        Some(self.provider_for(source))
+    }
+
     /// Plans a copy of `paste` into `target`. Conflicts are asked before any byte is read.
+    /// Refused into search results or into an archive, which is read-only.
     pub fn paste_stream(
         &mut self,
         paste: StreamPaste,
         target: Location,
     ) -> Result<u64, PasteRefusal> {
+        if crate::browser::archive::writes_archive(OpKind::Copy, &[], Some(&target)) {
+            return Err(PasteRefusal::ReadOnlyArchive);
+        }
         if crate::browser::find::is_results(&target) {
             return Err(PasteRefusal::IntoResults);
         }

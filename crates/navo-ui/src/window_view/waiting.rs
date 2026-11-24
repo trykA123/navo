@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{FocusHandle, Role};
-use navo_core::{Command, PaneId, Tab, TabId};
+use navo_core::{Command, Location, PaneId, Tab, TabId};
 
 use super::NavoWindow;
 use super::keys::{LeaveWaiting, RetryListing, WAITING};
@@ -40,9 +40,14 @@ fn millis(at: SystemTime) -> Option<i64> {
     i64::try_from(since.as_millis()).ok()
 }
 
+/// The text a waiting pane shows for `location`: a readable path, also inside an archive.
+fn shown_path(location: &Location) -> String {
+    navo_fs::archive::shown_path(location).unwrap_or_else(|| location.path().display().into_owned())
+}
+
 impl Waited {
     fn label_and_title(&self) -> (String, String) {
-        let path = self.tab.location().path().display();
+        let path = shown_path(self.tab.location());
         if self.is_offline {
             (
                 format!("{path} is not answering · retrying"),
@@ -159,7 +164,7 @@ impl NavoWindow {
     ) -> AnyElement {
         let t = tokens::current(cx).clone();
         let pane = waited.pane;
-        let path = waited.tab.location().path().display().into_owned();
+        let path = shown_path(waited.tab.location());
         let (label, title) = waited.label_and_title();
         let small = |text: SharedString| {
             div()

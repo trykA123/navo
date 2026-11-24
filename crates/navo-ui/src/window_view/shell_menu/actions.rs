@@ -62,8 +62,13 @@ impl NavoWindow {
     }
 }
 
+/// Puts the paths of `items` on the text clipboard, one per line; an archive entry reads as a
+/// plain path such as `C:\work\a.zip\docs`.
 pub(in crate::window_view) fn put_paths_on_clipboard(items: &[Location], cx: &mut App) {
-    let text: Vec<&str> = items.iter().map(Location::as_str).collect();
+    let shown = |item: &Location| {
+        navo_fs::archive::shown_path(item).unwrap_or_else(|| item.as_str().to_owned())
+    };
+    let text: Vec<String> = items.iter().map(shown).collect();
     let line_break = if cfg!(windows) { "\r\n" } else { "\n" };
     cx.write_to_clipboard(ClipboardItem::new_string(text.join(line_break)));
 }

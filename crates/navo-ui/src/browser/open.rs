@@ -59,7 +59,11 @@ impl Browser {
         let Ok(location) = tab.entry_location(&entry.name) else {
             return false;
         };
-        self.open_location(location, entry.is_folder || is_link)
+        let folder = entry.is_folder || is_link;
+        if !folder && self.open_archive(&location) {
+            return true;
+        }
+        self.open_location(location, folder)
     }
 
     pub fn open_location(&mut self, location: Location, folder: bool) -> bool {
@@ -76,6 +80,9 @@ impl Browser {
     }
 
     pub fn go_up(&mut self) -> bool {
+        if let Some(left) = self.leave_archive() {
+            return left;
+        }
         let tab = self.state.active_tab();
         let Some(parent) = tab.location().parent() else {
             return false;

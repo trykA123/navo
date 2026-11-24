@@ -122,6 +122,11 @@ impl NavoWindow {
         {
             return;
         }
+        if let Some(refused) = self.browser.archive_refusal() {
+            self.refuse_paste(refused);
+            cx.notify();
+            return;
+        }
         let batch = match gather::gather(&self.browser) {
             gather::Gathered::Ready(batch) => batch,
             gather::Gathered::Loading => {

@@ -13,7 +13,7 @@ impl Walk<'_> {
         found: &FoundFile,
         compiled: &Compiled,
     ) -> Result<(), FindError> {
-        if !has_archive_extension(&found.entry.name.to_text()) {
+        if !archive::has_archive_name(&found.entry.name.to_text()) {
             return Ok(());
         }
         let path = os_path(location).map_err(FindError::Filesystem)?;
@@ -81,24 +81,6 @@ impl Walk<'_> {
         }
         self.record(found)
     }
-}
-
-fn has_archive_extension(name: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    [
-        ".zip",
-        ".7z",
-        ".tar",
-        ".tar.gz",
-        ".tgz",
-        ".tar.xz",
-        ".txz",
-        ".tar.zst",
-        ".tar.zstd",
-        ".tzst",
-    ]
-    .iter()
-    .any(|extension| name.ends_with(extension))
 }
 
 fn describe(entry: &ArchiveEntry) -> FsEntry {

@@ -6,7 +6,10 @@ use navo_fs::JobOutcome;
 use super::{Browser, NameProblem};
 
 impl Browser {
+    /// Renames the active tab's entry `from` to `to`; fails on an unchanged, bad or taken name,
+    /// while another rename runs, or inside an archive.
     pub fn rename(&mut self, from: &str, to: &str) -> Result<(), NameProblem> {
+        self.writable()?;
         if from == to {
             return Err(NameProblem::Unchanged);
         }

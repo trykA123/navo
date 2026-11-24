@@ -289,3 +289,15 @@ job-route-recycle = { $from } → { -bin }
 pane-empty-folder = This folder is empty
 pane-empty-filter = No files match the filter. Esc clears it.
 files-cloud-placeholder = Online-only file — opens after download
+
+archive-unsafe-parent = Unsafe name: it leads out of the archive (..)
+archive-unsafe-absolute = Unsafe name: it starts at a disk root
+archive-unsafe-drive = Unsafe name: it names a drive
+archive-unsafe-nul = Unsafe name: it holds a null character
+archive-unsafe-windows = Unsafe name: Windows cannot use it
+archive-read-only = Archives are read-only here. Copy files out with F5.
+archive-no-clipboard = Archive entries can't go on the clipboard. Copy them out with F5.
+archive-skipped-unsafe = { $count ->
+    [one] 1 item skipped: unsafe name
+   *[other] { $count } items skipped: unsafe names
+}

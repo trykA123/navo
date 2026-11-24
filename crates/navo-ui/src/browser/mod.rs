@@ -96,6 +96,7 @@ pub struct Browser {
     prefetches: prefetch::Prefetches,
     hooks: retained::HookSlots,
     view_jobs: view_jobs::ViewJobs,
+    archives: Arc<navo_fs::archive::ArchiveFs>,
 }
 
 impl Browser {
@@ -165,6 +166,7 @@ impl Browser {
             prefetches: prefetch::Prefetches::default(),
             hooks: retained::HookSlots::default(),
             view_jobs: view_jobs::ViewJobs::default(),
+            archives: archive::reader(),
         }
     }
 
@@ -359,6 +361,7 @@ impl Browser {
     }
 }
 
+mod archive;
 mod cached;
 mod pane_compare;
 #[cfg(test)]

@@ -12,62 +12,10 @@ use navo_fs::{
 
 use super::{fake, home_beside_dest, open_options, options_for, press};
 use crate::browser::{JobStatus, Operations, StreamPaste};
-use crate::window_view::{
-    ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService, NavoWindow,
-};
+use crate::window_view::{ClipboardEffect, ClipboardFiles, FileClipboardService, NavoWindow};
 
-#[derive(Default)]
-pub(in crate::window_view) struct FakeClipboard {
-    pub held: std::sync::Mutex<Option<ClipboardFiles>>,
-    pub writes: std::sync::Mutex<Vec<ClipboardFiles>>,
-    pub clears: std::sync::Mutex<Vec<ClipboardFiles>>,
-    pub unsupported: bool,
-    pub virtual_files: std::sync::Mutex<Option<StreamPaste>>,
-}
-
-impl FileClipboardService for FakeClipboard {
-    fn write(&self, files: &ClipboardFiles) -> Result<(), ClipboardFault> {
-        if self.unsupported {
-            return Err(ClipboardFault::Unsupported);
-        }
-        self.writes.lock().unwrap().push(files.clone());
-        *self.held.lock().unwrap() = Some(files.clone());
-        Ok(())
-    }
-
-    fn read(&self) -> Result<Option<ClipboardFiles>, ClipboardFault> {
-        if self.unsupported {
-            return Err(ClipboardFault::Unsupported);
-        }
-        Ok(self.held.lock().unwrap().clone())
-    }
-
-    fn has_files(&self) -> bool {
-        let held = self.held.lock().unwrap();
-        !self.unsupported && held.as_ref().is_some_and(|files| !files.items.is_empty())
-    }
-
-    fn clear_if_same(&self, files: &ClipboardFiles) -> Result<bool, ClipboardFault> {
-        if self.unsupported {
-            return Err(ClipboardFault::Unsupported);
-        }
-        self.clears.lock().unwrap().push(files.clone());
-        let mut held = self.held.lock().unwrap();
-        let is_same = held.as_ref() == Some(files);
-        if is_same {
-            *held = None;
-        }
-        Ok(is_same)
-    }
-
-    fn read_virtual(&self) -> Result<Option<StreamPaste>, ClipboardFault> {
-        Ok(self.virtual_files.lock().unwrap().take())
-    }
-
-    fn has_virtual_files(&self) -> bool {
-        self.virtual_files.lock().unwrap().is_some()
-    }
-}
+mod fake;
+pub(in crate::window_view) use fake::FakeClipboard;
 
 /// A source that writes each pasted file itself, as a mail would, and counts the opens.
 struct Pasted {

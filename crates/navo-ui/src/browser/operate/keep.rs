@@ -39,6 +39,18 @@ pub(super) fn structure_for(tab: &Tab, kind: OpKind, same_volume: bool) -> Optio
 }
 
 impl Browser {
+    /// How many selected rows have no safe location (an archive entry such as `../evil.txt`),
+    /// so `selected_sources` leaves them out of F5, a drag or the clipboard; 0 when none.
+    #[must_use]
+    pub fn skipped_sources(&self) -> usize {
+        let tab = self.state.active_tab();
+        let names = selected_names(tab);
+        names
+            .into_iter()
+            .filter(|name| tab.entry_location(name).is_err())
+            .count()
+    }
+
     /// Flips "Keep folder structure" and rebuilds the pending plan with the picked conflict policy;
     /// false when no pending plan offers the choice.
     pub fn toggle_structure(&mut self) -> bool {

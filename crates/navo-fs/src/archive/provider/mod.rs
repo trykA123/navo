@@ -4,10 +4,14 @@ mod errors;
 mod index;
 mod listing;
 mod location;
+mod pane;
 mod reading;
 
 pub use diagnostics::{ArchiveProblem, UnsafeReason};
 pub use location::{location, raw_location};
+pub use pane::{
+    archive_root, has_archive_name, leave_archive, shown_parts, shown_path, unsafe_name,
+};
 
 use std::io::Read;
 use std::path::Path;

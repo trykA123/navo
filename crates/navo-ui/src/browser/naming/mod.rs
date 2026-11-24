@@ -14,6 +14,8 @@ pub enum NameProblem {
     Exists,
     Unchanged,
     Busy,
+    /// The active tab shows an archive, which is read-only in the pane.
+    ReadOnly,
 }
 
 impl fmt::Display for NameProblem {
@@ -23,6 +25,7 @@ impl fmt::Display for NameProblem {
             Self::Exists => f.write_str("Something with this name is already here."),
             Self::Unchanged => f.write_str("The name is the same."),
             Self::Busy => f.write_str(&navo_l10n::tr("rename-busy")),
+            Self::ReadOnly => f.write_str(&navo_l10n::tr("archive-read-only")),
         }
     }
 }
@@ -48,7 +51,10 @@ impl Browser {
         self.create(name, Change::CreateFile)
     }
 
+    /// Creates `name` in the active tab's folder as `change` says; fails on a bad or taken name,
+    /// or inside an archive.
     fn create(&mut self, name: &str, change: fn(Location) -> Change) -> Result<(), NameProblem> {
+        self.writable()?;
         check_name(name).map_err(NameProblem::Invalid)?;
         if self.taken(name, None) {
             return Err(NameProblem::Exists);
@@ -81,6 +87,14 @@ impl Browser {
         }
         self.relist_answering();
         true
+    }
+
+    /// Fails with `ReadOnly` while the active tab shows an archive, so no caller writes into one.
+    fn writable(&self) -> Result<(), NameProblem> {
+        match self.archive_refusal() {
+            Some(_) => Err(NameProblem::ReadOnly),
+            None => Ok(()),
+        }
     }
 
     fn here(&self, name: &str) -> Option<Location> {

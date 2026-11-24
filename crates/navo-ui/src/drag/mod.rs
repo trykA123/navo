@@ -95,6 +95,7 @@ pub enum Refusal {
     IntoItself,
     ListChanged,
     Results,
+    ReadOnlyArchive,
 }
 
 impl Refusal {
@@ -105,6 +106,7 @@ impl Refusal {
             Self::IntoItself => "drag-refused-into-itself",
             Self::ListChanged => "drag-refused-list-changed",
             Self::Results => "drag-refused-results",
+            Self::ReadOnlyArchive => "archive-read-only",
         };
         tr(id).into()
     }

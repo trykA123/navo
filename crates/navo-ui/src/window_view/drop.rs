@@ -1,4 +1,4 @@
-use gpui_kit::{AnyWindowHandle, Modifiers, Subscription};
+use gpui_kit::{Modifiers, Subscription};
 use navo_core::{DropKeys, DropOp, Location, PaneId, Tab, TabId, drop_op};
 
 use super::NavoWindow;
@@ -34,6 +34,8 @@ pub(super) struct Carried {
     pub(super) folders: Vec<Location>,
     pub(super) first: SharedString,
     pub(super) tab: Option<TabId>,
+    /// Rows left out because their names are unsafe (archive entries such as `../evil.txt`).
+    pub(super) skipped: usize,
 }
 
 pub(super) type Target = Result<Location, Refusal>;
@@ -56,6 +58,7 @@ pub(super) fn refusal_of(refused: PasteRefusal) -> Option<Refusal> {
         PasteRefusal::AlreadyHere => Some(Refusal::SameFolder),
         PasteRefusal::IntoItself => Some(Refusal::IntoItself),
         PasteRefusal::IntoResults => Some(Refusal::Results),
+        PasteRefusal::ReadOnlyArchive => Some(Refusal::ReadOnlyArchive),
         PasteRefusal::Nothing => None,
     }
 }
@@ -75,26 +78,6 @@ fn empty_badge(cx: &mut App) -> Entity<DragBadge> {
         keys_line: false,
     });
     cx.new(|cx| DragBadge::new(state, cx))
-}
-
-pub(super) fn escape_cancels(window: &Window, cx: &mut Context<NavoWindow>) -> Subscription {
-    let view = cx.weak_entity();
-    let own: AnyWindowHandle = window.window_handle();
-    cx.intercept_keystrokes(move |event, window, cx| {
-        let is_escape = event.keystroke.key == "escape";
-        if !is_escape || window.window_handle() != own || !cx.has_active_drag() {
-            return;
-        }
-        cx.stop_active_drag(window);
-        cx.stop_propagation();
-        let _ = view.update(cx, |view, cx| {
-            view.set_drop_effect(None, window);
-            if let Some(session) = view.end_drag() {
-                view.focus_pane(session.source_pane);
-            }
-            cx.notify();
-        });
-    })
 }
 
 impl NavoWindow {
@@ -149,6 +132,7 @@ impl NavoWindow {
             .collect();
         Some(Carried {
             parents: parents_of(tab, &sources),
+            skipped: entries.len() - sources.len(),
             sources,
             folders: entries
                 .iter()
@@ -180,6 +164,7 @@ impl NavoWindow {
             cx.notify();
             return empty_badge(cx);
         };
+        self.note_skipped(carried.skipped);
         let state = cx.new(|_| DragState {
             count: carried.sources.len(),
             first_name: carried.first.clone(),
@@ -200,7 +185,7 @@ impl NavoWindow {
             native: None,
             error: None,
             spring: super::spring::Spring::default(),
-            _escape: escape_cancels(window, cx),
+            _escape: super::drop_external::escape_cancels(window, cx),
         });
         cx.notify();
         cx.new(|cx| DragBadge::new(state, cx))

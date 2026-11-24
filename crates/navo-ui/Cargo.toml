@@ -63,6 +63,7 @@ navo-automotive = { path = "../navo-automotive", features = ["sample"] }
 sidewise-kit = { path = "../sidewise-kit", features = ["test-support"] }
 sidewise-ui = { path = "../sidewise-ui", features = ["test-support"] }
 tempfile = "3.27.0"
+zip = { version = "=9.5.0", default-features = false, features = ["deflate-flate2"] }
 
 [lints]
 workspace = true

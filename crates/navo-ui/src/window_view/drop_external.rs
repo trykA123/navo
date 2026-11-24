@@ -1,14 +1,35 @@
 use gpui_kit::{
-    DispatchPhase, DragMoveEvent, ExternalDragPayload, ExternalPaths, FileDragPaths, FileDropEvent,
-    MouseUpEvent,
+    AnyWindowHandle, DispatchPhase, DragMoveEvent, ExternalDragPayload, ExternalPaths,
+    FileDragPaths, FileDropEvent, MouseUpEvent, Subscription,
 };
 use navo_core::{DropKeys, DropOp, Location};
 
 use super::NavoWindow;
-use super::drop::{Carried, DragSession, escape_cancels, keys_of};
+use super::drop::{Carried, DragSession, keys_of};
 use super::drop_platform::native_handle;
 use crate::drag::{DragState, FileDrag};
 use crate::prelude::*;
+
+/// Escape during a drag stops it in this window, cancels the drop and refocuses the source pane.
+pub(super) fn escape_cancels(window: &Window, cx: &mut Context<NavoWindow>) -> Subscription {
+    let view = cx.weak_entity();
+    let own: AnyWindowHandle = window.window_handle();
+    cx.intercept_keystrokes(move |event, window, cx| {
+        let is_escape = event.keystroke.key == "escape";
+        if !is_escape || window.window_handle() != own || !cx.has_active_drag() {
+            return;
+        }
+        cx.stop_active_drag(window);
+        cx.stop_propagation();
+        let _ = view.update(cx, |view, cx| {
+            view.set_drop_effect(None, window);
+            if let Some(session) = view.end_drag() {
+                view.focus_pane(session.source_pane);
+            }
+            cx.notify();
+        });
+    })
+}
 
 #[derive(Clone)]
 pub(super) struct NativeDrop {
@@ -105,6 +126,7 @@ impl NavoWindow {
             folders: Vec::new(),
             first: SharedString::default(),
             tab: None,
+            skipped: 0,
         });
         let state = cx.new(|_| DragState {
             count: carried.sources.len(),
@@ -150,6 +172,7 @@ impl NavoWindow {
                 .unwrap_or_default(),
             sources,
             tab: None,
+            skipped: 0,
         })
     }
 

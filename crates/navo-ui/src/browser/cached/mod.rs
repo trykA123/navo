@@ -253,7 +253,7 @@ impl Browser {
             None => (None, None),
         };
         Fetch {
-            provider: Arc::clone(&self.provider),
+            provider: self.provider_for(location),
             cache: self.cache.clone(),
             keys: self.keys.clone(),
             location: location.clone(),

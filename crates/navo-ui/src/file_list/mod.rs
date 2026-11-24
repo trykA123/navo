@@ -13,6 +13,7 @@ pub(crate) mod kind;
 mod lasso;
 mod lift;
 mod modified_drag;
+mod note;
 mod parts;
 mod press;
 mod resize;
@@ -48,6 +49,7 @@ pub(crate) use keys::{
     MultiRename, NewFile, NewFolder, OpenRow, PageDown, PageUp, Paste, RecycleItems, Refresh,
     RenameItem, SwitchPane, UndoLast, ViewItem,
 };
+pub use note::NoteFn;
 pub use parts::ListParts;
 pub use right_button::RightButton;
 pub(crate) use row::filter_bar;
@@ -87,6 +89,7 @@ pub struct FileList {
     known_width: Option<KnownWidth>,
     user_widths: UserWidths,
     find_results: Option<bool>,
+    note_of: Option<NoteFn>,
     right_button: RightButton,
     is_finished: bool,
     listed: u64,
@@ -109,6 +112,7 @@ impl FileList {
             known_width: None,
             user_widths: UserWidths::default(),
             find_results: None,
+            note_of: None,
             right_button: RightButton::default(),
             is_finished: false,
             listed: 0,
@@ -224,6 +228,7 @@ struct ListContext {
     parts: ListParts,
     widths: widths::ColumnWidths,
     find_results: Option<bool>,
+    note_of: Option<NoteFn>,
     right_button: RightButton,
     drag: drop::Wiring,
 }
@@ -369,6 +374,7 @@ impl RenderOnce for FileList {
             widths,
             drag: self.drag,
             find_results: self.find_results,
+            note_of: self.note_of,
             right_button: self.right_button,
         });
         let reports = (self.on_page_rows, self.known_width);

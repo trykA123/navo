@@ -14,7 +14,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use detect::detect;
 pub use provider::{
-    ArchiveFs, ArchiveProblem, READ_ONLY, UnsafeReason, location, provider_id, raw_location,
+    ArchiveFs, ArchiveProblem, READ_ONLY, UnsafeReason, archive_root, has_archive_name,
+    leave_archive, location, provider_id, raw_location, shown_parts, shown_path, unsafe_name,
 };
 
 pub const ENTRY_LIMIT: u64 = 64 * 1024 * 1024;

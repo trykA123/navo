@@ -6609,6 +6609,7 @@ dependencies = [
  "tracing",
  "unicode-width",
  "url",
+ "zip",
 ]
 
 [[package]]

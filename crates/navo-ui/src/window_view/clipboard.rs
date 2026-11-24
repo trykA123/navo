@@ -5,6 +5,7 @@ use navo_core::{Command, CommandError, LayoutError, Location, OpKind, StateError
 use super::NavoWindow;
 use super::shell_menu::put_paths_on_clipboard;
 use crate::browser::{JobStatus, PasteRefusal, StreamPaste};
+use crate::file_list::FileListAction;
 use crate::format;
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
@@ -115,6 +116,7 @@ fn refusal_text(refused: PasteRefusal) -> SharedString {
         PasteRefusal::AlreadyHere => "The files are already in this folder".into(),
         PasteRefusal::IntoItself => "Cannot paste a folder into itself".into(),
         PasteRefusal::IntoResults => crate::drag::Refusal::Results.text(),
+        PasteRefusal::ReadOnlyArchive => crate::drag::Refusal::ReadOnlyArchive.text(),
     }
 }
 
@@ -178,11 +180,50 @@ impl NavoWindow {
         self.clipboard.notice = Some(info(refusal_text(refused)));
     }
 
+    /// Refuses a list action before it starts and says why: an operation into search results,
+    /// or a write into or out of an archive. True when the action was refused.
+    pub(super) fn refuse_action(&mut self, action: &FileListAction) -> bool {
+        let refused = match action {
+            FileListAction::Operate(kind) => self.browser.operate_refusal(*kind),
+            FileListAction::Rename(_)
+            | FileListAction::NewFolder
+            | FileListAction::NewFile
+            | FileListAction::Paste => self.browser.archive_refusal(),
+            _ => None,
+        };
+        let Some(refused) = refused else {
+            return false;
+        };
+        self.refuse_paste(refused);
+        true
+    }
+
+    /// Opens the `kind` dialog for the selection; says how many unsafe rows it left out.
+    pub(super) fn prepare_operation(&mut self, kind: OpKind) {
+        let skipped = self.browser.skipped_sources();
+        self.browser.prepare(kind);
+        self.note_skipped(skipped);
+    }
+
+    /// Says that `skipped` selected rows were left out for unsafe names; nothing for 0.
+    pub(super) fn note_skipped(&mut self, skipped: usize) {
+        if skipped > 0 {
+            let count = u64::try_from(skipped).unwrap_or(u64::MAX);
+            self.show_notice(info(t!("archive-skipped-unsafe", count = count)));
+        }
+    }
+
     pub(super) fn forget_clipboard_notice(&mut self) {
         self.clipboard.notice = None;
     }
 
+    /// Puts the selection on the system clipboard to copy or cut. Archive entries have no OS
+    /// path, so they are refused here, before the clipboard is touched.
     pub(super) fn put_on_clipboard(&mut self, effect: ClipboardEffect) {
+        if self.browser.archive_refusal().is_some() {
+            self.clipboard.notice = Some(info(navo_l10n::tr("archive-no-clipboard")));
+            return;
+        }
         let items = self.browser.selected_sources();
         if items.is_empty() {
             return;

@@ -30,6 +30,7 @@ pub(super) struct RowLook<'a> {
     pub is_find: bool,
     pub needle: Option<&'a Needle>,
     pub git: Option<GitSlot<'a>>,
+    pub note: Option<&'a SharedString>,
 }
 
 fn fixed_width(look: &RowLook, by: SortBy) -> Pixels {
@@ -186,7 +187,8 @@ fn name_cell(
                 .h_full()
                 .when(look.parts.icons, |d| d.child(glyph))
                 .child(name_label(look, text, runs))
-                .children(cloud_badge::badge(t, entry)),
+                .children(cloud_badge::badge(t, entry))
+                .children(look.note.map(|text| super::note::note(t, text))),
         )
         .child(zone.flex_1().h_full())
 }

@@ -20,11 +20,12 @@ mod work;
 pub use clashes::{Clash, Facts, SHOWN as CLASHES_SHOWN};
 pub use paste::{PasteRefusal, drop_refusal, refusal_from, same_volume};
 pub use queue::SlowVolume;
+use stream::planned_on;
 pub use stream::{Explain, Refused, StreamPaste};
 use types::PlannedOp;
 pub use types::*;
 pub(in crate::browser) use work::Run;
-use work::{lands_inside, plan_for, start_progress};
+use work::{lands_inside, start_progress};
 
 impl Browser {
     pub fn set_operations(&mut self, operations: Operations) {
@@ -65,7 +66,7 @@ impl Browser {
             .is_some_and(|request| self.submit_plan(request))
     }
 
-    fn submit_plan(&mut self, request: OpRequest) -> bool {
+    fn submit_plan(&mut self, mut request: OpRequest) -> bool {
         let Some(volume) = planned_on(&request).map(volume_of) else {
             return false;
         };
@@ -74,7 +75,7 @@ impl Browser {
         }
         let retain_deletes = self.operations.retain_deletes.clone();
         let slow = self.slow_volume();
-        let class_of = self.copying.class_of;
+        let (class_of, scanner) = (self.copying.class_of, self.stream_scanner(&request));
         let (provider, sender, wake) = (
             Arc::clone(&self.provider),
             self.sender.clone(),
@@ -89,7 +90,8 @@ impl Browser {
         self.pools.queue(JobKind::Listing).submit(
             slot,
             Box::new(move |cancel| {
-                let result = plan_for(provider.as_ref(), &request, cancel).map(|plan| {
+                let scan = (provider.as_ref(), scanner.as_deref());
+                let result = stream::plan_scanned(&mut request, scan, cancel).map(|plan| {
                     let (retain_deletes, cannot_retain) = retain::drive_retention(
                         provider.as_ref(),
                         &plan,
@@ -295,14 +297,14 @@ impl Browser {
         Some(OpRequest {
             id: self.next_op,
             kind,
-            sources,
             target,
             same_volume,
             protected: self.operations.protected.clone(),
             source_tab,
             asks: true,
+            stream: self.archive_stream(&sources),
             structure,
-            stream: None,
+            sources,
             policy: ConflictPolicy::Ask,
         })
     }
@@ -410,14 +412,6 @@ impl Browser {
         self.check_left(id);
         self.release_job(id);
         true
-    }
-}
-
-/// Plans list the sources, except a paste without paths, which only lists its target.
-fn planned_on(request: &OpRequest) -> Option<&Location> {
-    match &request.stream {
-        Some(_) => request.target.as_ref(),
-        None => request.sources.first(),
     }
 }
 

@@ -280,6 +280,9 @@ impl NavoWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.refuse_action(action) {
+            return true;
+        }
         match action {
             FileListAction::Open(row) => {
                 self.browser.open_row(*row);
@@ -289,12 +292,7 @@ impl NavoWindow {
                 self.browser.go_up();
             }
             FileListAction::SwitchPane => self.switch_pane(window, cx),
-            FileListAction::Operate(kind) => match self.browser.operate_refusal(*kind) {
-                Some(refused) => self.refuse_paste(refused),
-                None => {
-                    self.browser.prepare(*kind);
-                }
-            },
+            FileListAction::Operate(kind) => self.prepare_operation(*kind),
             FileListAction::CopyToClipboard => self.put_on_clipboard(ClipboardEffect::Copy),
             FileListAction::CutToClipboard => self.put_on_clipboard(ClipboardEffect::Move),
             FileListAction::Paste => self.paste(),
@@ -340,6 +338,7 @@ impl NavoWindow {
             .listing(self.pane_listing(pane))
             .track_focus(focus)
             .find_results(find)
+            .note_of(self.browser.row_notes(pane))
             .right_button(self.values.right_button());
         Self::wire_drops(list, pane, cx)
             .on_command(

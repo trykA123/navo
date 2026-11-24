@@ -9,6 +9,8 @@ pub enum PasteRefusal {
     AlreadyHere,
     IntoItself,
     IntoResults,
+    /// The write would change an archive; only a copy out of one is allowed.
+    ReadOnlyArchive,
 }
 
 #[must_use]
@@ -42,11 +44,18 @@ pub fn refusal_from(
 }
 
 impl Browser {
+    /// Why `kind` on the active tab's selection is refused before planning, if it is: into
+    /// search results, or a write into or out of an archive.
     #[must_use]
     pub fn operate_refusal(&self, kind: OpKind) -> Option<PasteRefusal> {
         let targets = matches!(kind, OpKind::Copy | OpKind::Move | OpKind::Link);
-        self.other_location()
-            .filter(|target| targets && crate::browser::find::is_results(target))
+        let target = self.other_location().filter(|_| targets);
+        let here = [self.state.active_tab().location().clone()];
+        if crate::browser::archive::writes_archive(kind, &here, target.as_ref()) {
+            return Some(PasteRefusal::ReadOnlyArchive);
+        }
+        target
+            .filter(crate::browser::find::is_results)
             .map(|_| PasteRefusal::IntoResults)
     }
 
@@ -71,6 +80,9 @@ impl Browser {
         if let Some(refused) = drop_refusal(&target, &sources) {
             return Err(refused);
         }
+        if crate::browser::archive::writes_archive(kind, &sources, Some(&target)) {
+            return Err(PasteRefusal::ReadOnlyArchive);
+        }
         let source_tab = source_tab
             .filter(|tab| self.state.tab(*tab).is_some())
             .unwrap_or_else(|| self.drop_source_tab(&sources));
@@ -84,14 +96,14 @@ impl Browser {
         let request = OpRequest {
             id: self.next_op,
             kind,
-            sources,
             target: Some(target),
             same_volume,
             protected: self.operations.protected.clone(),
             source_tab,
             asks,
             structure: None,
-            stream: None,
+            stream: self.archive_stream(&sources),
+            sources,
             policy: ConflictPolicy::Ask,
         };
         let id = request.id;

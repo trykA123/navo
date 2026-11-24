@@ -292,7 +292,7 @@ impl Browser {
             let _ = sender.send(Message::Watched(at.clone(), event));
             wake();
         });
-        match self.provider.watch(location, sink) {
+        match self.provider_for(location).watch(location, sink) {
             Ok(watch) => Folder::Live { watch },
             Err(_) => self.fallback(location),
         }

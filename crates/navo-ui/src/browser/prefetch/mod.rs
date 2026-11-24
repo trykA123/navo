@@ -192,7 +192,7 @@ impl Browser {
         let owner = queue.owner();
         let (handoff, progress) = (Arc::new(Handoff::default()), Progress::default());
         let fetch = Fetch {
-            provider: Arc::clone(&self.provider),
+            provider: self.provider_for(&location),
             cache: self.cache.clone(),
             keys: self.keys.clone(),
             location: location.clone(),
