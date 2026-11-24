@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::fixture::{DATA_SETS, DataSet};
+use super::fixture::{ALL_SETS, DATA_SETS, DataSet};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Options {
@@ -51,7 +51,7 @@ fn parse_runs(value: &str) -> Result<usize, String> {
 fn parse_sets(value: &str) -> Result<Vec<DataSet>, String> {
     let mut sets = Vec::new();
     for name in value.split(',') {
-        let set = DATA_SETS
+        let set = ALL_SETS
             .iter()
             .find(|set| set.name == name)
             .ok_or_else(|| format!("unknown data set: {name}"))?;

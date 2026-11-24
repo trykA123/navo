@@ -216,3 +216,42 @@ fn simplified_strips_the_verbatim_prefix() {
         assert_eq!(simplified(&PathBuf::from(input)), PathBuf::from(expected));
     }
 }
+
+#[test]
+fn steps_set_has_100k_files_in_100_folders() {
+    assert_eq!(
+        (
+            fixture::STEPS.name,
+            fixture::STEPS.files,
+            fixture::STEPS.folders,
+            fixture::STEPS.file_bytes,
+            fixture::STEPS.bytes(),
+        ),
+        ("steps", 100_000, 100, 16, 1_600_000)
+    );
+    assert_eq!(fixture::STEPS.files / fixture::STEPS.folders, 1_000);
+}
+
+#[test]
+fn per_step_ratio_is_last_over_first() {
+    use std::time::Duration;
+
+    let twice = super::runner::per_step_ratio(
+        Duration::from_secs(1),
+        10_000,
+        Duration::from_secs(2),
+        10_000,
+    );
+    assert!((twice - 2.0).abs() < 1e-9, "ratio was {twice}");
+    let quarter =
+        super::runner::per_step_ratio(Duration::from_secs(1), 1_000, Duration::from_secs(1), 4_000);
+    assert!((quarter - 0.25).abs() < 1e-9, "ratio was {quarter}");
+}
+
+#[test]
+fn options_accepts_steps_set() {
+    let options = options::parse(&args(&["destination", "--sets", "steps"])).unwrap();
+    assert_eq!(options.sets, vec![fixture::STEPS]);
+    let defaults = options::parse(&args(&["destination"])).unwrap();
+    assert!(!defaults.sets.contains(&fixture::STEPS));
+}

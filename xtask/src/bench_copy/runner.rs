@@ -1,6 +1,11 @@
-use std::{path::Path, time::Instant};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
-use navo_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, plan};
+use navo_core::{
+    ConflictPolicy, FsError, Location, OpKind, OperationPlan, PlanRequest, Step, plan,
+};
 use navo_fs::{
     AutoTuning, CancelToken, HeldFile, JobContext, JobLog, JobOutcome, LocalFs, StepOutcome,
     WorkerCounts, copy_workers, drive_class, existing_at, run_job, run_job_parallel, scan,
@@ -36,6 +41,12 @@ struct Benchmark<'a> {
     workspace: &'a Workspace,
     ops: LocalFs,
     workers: usize,
+    runs: usize,
+}
+
+struct Samples {
+    rows: Vec<Measurement>,
+    steps_lines: Vec<String>,
 }
 
 pub(super) fn measure(options: &Options, workspace: &Workspace) -> Result<String, String> {
@@ -57,6 +68,7 @@ pub(super) fn measure(options: &Options, workspace: &Workspace) -> Result<String
         workspace,
         ops: LocalFs::with_auto_tuning(&tuning),
         workers,
+        runs: options.runs,
     };
     let methods = [
         Method::Standard,
@@ -64,29 +76,52 @@ pub(super) fn measure(options: &Options, workspace: &Workspace) -> Result<String
         #[cfg(windows)]
         Method::Robocopy,
     ];
-    let mut rows = Vec::new();
+    let mut samples = Samples {
+        rows: Vec::new(),
+        steps_lines: Vec::new(),
+    };
     for &set in &options.sets {
-        let source = workspace.source.join(set.name);
+        benchmark.measure_set(set, &methods, &mut samples)?;
+    }
+    let mut output = report::markdown(&samples.rows, classes, workers, options.runs);
+    for line in samples.steps_lines {
+        output.push_str(&line);
+        output.push('\n');
+    }
+    Ok(output)
+}
+
+impl Benchmark<'_> {
+    /// Generates one set and measures it, collecting rows or the steps line.
+    fn measure_set(
+        &self,
+        set: fixture::DataSet,
+        methods: &[Method],
+        samples: &mut Samples,
+    ) -> Result<(), String> {
+        let source = self.workspace.source.join(set.name);
         eprintln!(
             "bench-copy: generating {} ({} bytes)",
             set.name,
             set.bytes()
         );
         fixture::generate(&source, set)?;
-        let plan = build_plan(&benchmark.ops, &source, &workspace.target)?;
-        for method in methods {
-            let seconds = benchmark.measure_method(&plan, method, options.runs)?;
-            rows.push(Measurement {
+        if set == fixture::STEPS {
+            samples.steps_lines.push(self.measure_steps(&source)?);
+            return Ok(());
+        }
+        let plan = build_plan(&self.ops, &source, &self.workspace.target)?;
+        for &method in methods {
+            let seconds = self.measure_method(&plan, method, self.runs)?;
+            samples.rows.push(Measurement {
                 set,
                 method: method.name(),
                 seconds,
             });
         }
+        Ok(())
     }
-    Ok(report::markdown(&rows, classes, workers, options.runs))
-}
 
-impl Benchmark<'_> {
     fn measure_method(
         &self,
         plan: &OperationPlan,
@@ -126,6 +161,38 @@ impl Benchmark<'_> {
             JobOutcome::Done => Ok(()),
             outcome => Err(format!("{} copy failed: {outcome:?}", method.name())),
         }
+    }
+
+    fn measure_steps(&self, source: &Path) -> Result<String, String> {
+        let plan = build_plan(&self.ops, source, &self.workspace.target)?;
+        let copy_total = plan
+            .steps
+            .iter()
+            .filter(|step| matches!(step, Step::CopyFile { .. }))
+            .count() as u64;
+        if copy_total != fixture::STEPS.files {
+            return Err(format!(
+                "steps plan has {copy_total} copy steps, expected {}",
+                fixture::STEPS.files
+            ));
+        }
+        eprintln!("bench-copy: steps run 1/1");
+        let cancel = CancelToken::new();
+        let mut log = StepLog::new(&plan);
+        let mut progress = |_: &navo_fs::Progress| {};
+        let mut context = JobContext {
+            ops: &self.ops,
+            log: &mut log,
+            cancel: &cancel,
+            progress: &mut progress,
+        };
+        match run_job(&plan, &[], &mut context) {
+            JobOutcome::Done => {}
+            outcome => return Err(format!("steps copy failed: {outcome:?}")),
+        }
+        let line = log.line()?;
+        self.workspace.reset_target()?;
+        Ok(line)
     }
 }
 
@@ -209,4 +276,101 @@ fn robocopy(plan: &OperationPlan, workspace: &Workspace) -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr)
         ))
     }
+}
+
+const SAMPLE_STEPS: u64 = 10_000;
+
+/// Per-step log that keeps the first and last 10,000 copy-step durations.
+struct StepLog<'a> {
+    plan: &'a OperationPlan,
+    started: Instant,
+    copy_index: u64,
+    copy_total: u64,
+    first: Duration,
+    first_steps: u64,
+    last: Duration,
+    last_steps: u64,
+}
+
+impl<'a> StepLog<'a> {
+    fn new(plan: &'a OperationPlan) -> Self {
+        let copy_total = plan
+            .steps
+            .iter()
+            .filter(|step| matches!(step, Step::CopyFile { .. }))
+            .count() as u64;
+        Self {
+            plan,
+            started: Instant::now(),
+            copy_index: 0,
+            copy_total,
+            first: Duration::ZERO,
+            first_steps: 0,
+            last: Duration::ZERO,
+            last_steps: 0,
+        }
+    }
+
+    fn line(&self) -> Result<String, String> {
+        if self.copy_index != self.copy_total
+            || self.first_steps != SAMPLE_STEPS
+            || self.last_steps != SAMPLE_STEPS
+        {
+            return Err(format!(
+                "steps sample incomplete: {} of {} steps, first {}, last {}",
+                self.copy_index, self.copy_total, self.first_steps, self.last_steps
+            ));
+        }
+        let first_us = self.first.as_secs_f64() * 1_000_000.0 / self.first_steps as f64;
+        let last_us = self.last.as_secs_f64() * 1_000_000.0 / self.last_steps as f64;
+        let ratio = per_step_ratio(self.first, self.first_steps, self.last, self.last_steps);
+        Ok(format!(
+            "bench-copy: steps={} first10k={first_us:.2} last10k={last_us:.2} ratio={ratio:.2}",
+            self.copy_total
+        ))
+    }
+}
+
+impl JobLog for StepLog<'_> {
+    fn step(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError> {
+        let now = Instant::now();
+        let elapsed = now.saturating_duration_since(self.started);
+        self.started = now;
+        let Some(step) = self.plan.steps.get(seq as usize) else {
+            return Ok(());
+        };
+        if !matches!(step, Step::CopyFile { .. }) || outcome != StepOutcome::Done {
+            return Ok(());
+        }
+        if self.copy_index < SAMPLE_STEPS {
+            self.first += elapsed;
+            self.first_steps += 1;
+        }
+        if self.copy_index >= self.copy_total.saturating_sub(SAMPLE_STEPS) {
+            self.last += elapsed;
+            self.last_steps += 1;
+        }
+        self.copy_index += 1;
+        Ok(())
+    }
+
+    fn undone(&mut self, _seq: u32, _outcome: StepOutcome) -> Result<(), FsError> {
+        Ok(())
+    }
+
+    fn journal_held(&mut self, _held: &HeldFile) -> Result<bool, FsError> {
+        Ok(false)
+    }
+}
+
+/// Returns the last per-step duration divided by the first, from each sample's totals.
+pub(super) fn per_step_ratio(
+    first: Duration,
+    first_steps: u64,
+    last: Duration,
+    last_steps: u64,
+) -> f64 {
+    let first = first.as_secs_f64() / first_steps.max(1) as f64;
+    let last = last.as_secs_f64() / last_steps.max(1) as f64;
+    last / first
 }
