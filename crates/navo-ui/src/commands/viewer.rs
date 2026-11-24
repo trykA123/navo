@@ -1,6 +1,6 @@
 use super::Group;
 
-pub(super) const GROUPS: [Group; 6] = [
+pub(super) const GROUPS: [Group; 7] = [
     Group {
         context: "Viewer",
         commands: &[
@@ -231,6 +231,21 @@ pub(super) const GROUPS: [Group; 6] = [
                 "viewer::FocusPreview",
                 "editor.focus_preview",
                 "cmd-editor-focus-preview",
+            ),
+        ],
+    },
+    Group {
+        context: "Editor",
+        commands: &[
+            (
+                "input::AddCursorAbove",
+                "editor.add_cursor_above",
+                "cmd-editor-add-cursor-above",
+            ),
+            (
+                "input::AddCursorBelow",
+                "editor.add_cursor_below",
+                "cmd-editor-add-cursor-below",
             ),
         ],
     },

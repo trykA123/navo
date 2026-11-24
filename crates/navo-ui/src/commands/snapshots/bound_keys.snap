@@ -191,6 +191,8 @@ drive_menu.close | escape | DriveMenu
 drive_menu.down | down | DriveMenu
 drive_menu.open | enter | DriveMenu
 drive_menu.up | up | DriveMenu
+editor.add_cursor_above | ctrl-alt-up | Editor
+editor.add_cursor_below | ctrl-alt-down | Editor
 editor.focus_preview | f6 | Viewer
 editor.leave_preview | escape | MarkdownPreview
 editor.leave_preview | f6 | MarkdownPreview

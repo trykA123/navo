@@ -42,6 +42,9 @@ const NAMESPACES: [&str; 30] = [
     "viewer_tree",
 ];
 
+/// Kit widget actions that Navo's keymap binds (editor cursors); their names must still exist.
+const WIDGET_ACTIONS: [&str; 2] = ["input::AddCursorAbove", "input::AddCursorBelow"];
+
 struct Bound {
     action: &'static str,
     context: String,
@@ -145,7 +148,9 @@ fn every_navo_action_has_a_command(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn every_command_action_exists(cx: &mut TestAppContext) {
-    let known = ours(cx);
+    let mut known = ours(cx);
+    let names = cx.update(|cx: &mut App| cx.all_action_names().to_vec());
+    known.extend(WIDGET_ACTIONS.iter().filter(|name| names.contains(name)));
     let unknown: Vec<&str> = all()
         .filter_map(|spec| spec.action)
         .filter(|action| !known.contains(action))

@@ -1399,6 +1399,16 @@ keys = ["ctrl-shift-v"]
 command = "editor.focus_preview"
 keys = ["f6"]
 
+# Editor
+
+[[bind]]
+command = "editor.add_cursor_above"
+keys = ["ctrl-alt-up"]
+
+[[bind]]
+command = "editor.add_cursor_below"
+keys = ["ctrl-alt-down"]
+
 # MarkdownPreview
 
 [[bind]]

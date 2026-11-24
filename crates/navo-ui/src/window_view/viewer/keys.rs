@@ -72,8 +72,10 @@ gpui_kit::actions!(
     ]
 );
 
+/// Binds the viewer keys, the editor widget keys from the keymap (namespace `input`) and each body kind.
 pub fn bind_keys(cx: &mut App) {
     crate::commands::bind_namespace(cx, "viewer");
+    crate::commands::bind_namespace(cx, "input");
     tree::bind_keys(cx);
     table::bind_keys(cx);
     markdown::bind_keys(cx);

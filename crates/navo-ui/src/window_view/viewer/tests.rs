@@ -3,6 +3,7 @@ mod at_line;
 mod can_trace;
 mod can_trace_blf;
 mod content;
+mod editor_cursors;
 pub(in crate::window_view::viewer) mod elf_rich;
 mod elf_view;
 mod encoding;

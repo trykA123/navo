@@ -275,6 +275,9 @@ viewer.scroll_right | right | CompareView
 find.result_up | up | CompareOutline
 find.result_down | down | CompareOutline
 find.go_to_result | enter | CompareOutline
+[input]
+editor.add_cursor_above | ctrl-alt-up | Editor
+editor.add_cursor_below | ctrl-alt-down | Editor
 [viewer_tree]
 tree.expand_branch | alt-right | Tree
 tree.collapse_branch | alt-left | Tree
