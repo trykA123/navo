@@ -142,9 +142,12 @@ fn silent(
     host: &mut dyn CliHost,
     logs: &LogPaths,
 ) -> ExitCode {
-    match host.elevated() {
-        Ok(false) => {}
-        _ => return fail(&CliError::Elevated, logs),
+    if let Some(reason) = host.start_refusal() {
+        write_log_line(
+            &logs.wizard,
+            &format!("navo-setup: start refused ({reason:?})"),
+        );
+        return fail(&CliError::Elevated, logs);
     }
     let discovery = match host.discover() {
         Ok(discovery) => discovery,

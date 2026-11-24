@@ -24,7 +24,7 @@ pub fn initial_flow(host: &mut dyn Host, payload: Option<&Payload>, default: Pat
         let fresh = Flow::new(Mode::Fresh, default.clone());
         flow::step(fresh, Event::SetupExited(exit)).0
     };
-    if !matches!(host.elevated(), Ok(false)) {
+    if host.start_refusal().is_some() {
         return refuse(SetupExit::Elevated);
     }
     let Some(payload) = payload else {
