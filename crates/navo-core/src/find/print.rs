@@ -123,21 +123,21 @@ fn quote_segments(text: &str) -> Vec<&str> {
     let mut start = 0;
     let mut chars = text.char_indices().peekable();
     while let Some((index, ch)) = chars.next() {
-        if ch == '"'
-            && chars
-                .peek()
-                .copied()
-                .is_some_and(|(_, next)| next.is_whitespace())
-        {
-            segments.push(&text[start..=index]);
-            while chars
-                .peek()
-                .copied()
-                .is_some_and(|(_, next)| next.is_whitespace())
-            {
-                chars.next();
-            }
-            start = chars.peek().map_or(text.len(), |(next, _)| *next);
+        if ch != '"' {
+            continue;
+        }
+        let Some((next, ws)) = chars.peek().copied() else {
+            continue;
+        };
+        if !ws.is_whitespace() {
+            continue;
+        }
+        segments.push(&text[start..=index]);
+        if ws == ' ' {
+            chars.next();
+            start = next + 1;
+        } else {
+            start = next;
         }
     }
     if start < text.len() {

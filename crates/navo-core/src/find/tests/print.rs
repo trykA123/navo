@@ -1,4 +1,5 @@
 use crate::find::FindQuery;
+use proptest::prelude::*;
 
 /// Prints and reads back: `parse(to_text(q))` equals `q` without its token spans.
 fn assert_round_trip(input: &str) {
@@ -220,4 +221,37 @@ fn a_failed_regex_leaves_the_query_unchanged() {
     assert!(query.tokens[1].message.is_some());
     assert!(!query.regex);
     assert_round_trip("[ re:a");
+}
+
+#[test]
+fn quoted_segments_keep_every_space_between_them() {
+    for input in [
+        r#""a\"" " b""#,
+        r#""a\"" " ""#,
+        r#"re:"a\"" " b""#,
+        r#"re:"a\"" " ""#,
+    ] {
+        assert_round_trip(input);
+    }
+}
+
+fn text_pieces() -> impl Strategy<Value = String> {
+    proptest::collection::vec(
+        prop_oneof![Just('a'), Just('\\'), Just('"'), Just(' ')],
+        0..32,
+    )
+    .prop_map(|chars| chars.into_iter().collect())
+}
+
+proptest! {
+    #[test]
+    fn every_clean_parse_round_trips(input in text_pieces()) {
+        let mut expected = FindQuery::parse(&input);
+        prop_assume!(expected.tokens.iter().all(|token| token.message.is_none()));
+        expected.tokens.clear();
+        let printed = expected.to_text();
+        let mut parsed = FindQuery::parse(&printed);
+        parsed.tokens.clear();
+        prop_assert_eq!(parsed, expected, "printed: {}", printed);
+    }
 }
