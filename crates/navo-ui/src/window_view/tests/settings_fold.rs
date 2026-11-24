@@ -128,3 +128,18 @@ fn a_click_toggles_the_fold_and_closing_settings_closes_it(cx: &mut TestAppConte
     settle(cx);
     assert!(!shows_row(cx, &rig, Field::WindowExtWidth));
 }
+
+#[gpui_kit::test]
+fn escape_from_a_find_with_no_match_keeps_the_fold_row(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open_at_date_column(cx, &rig);
+    rig.press(cx, "down");
+    assert_eq!(row(cx, &rig), columns_fold());
+    rig.press(cx, "ctrl-f");
+    type_in(cx, rig.window, &rig.view, "zzqxnomatch");
+    settle(cx);
+    assert_eq!(row(cx, &rig), columns_fold());
+    rig.press(cx, "escape");
+    settle(cx);
+    assert_eq!(row(cx, &rig), columns_fold());
+}

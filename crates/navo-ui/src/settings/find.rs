@@ -1,7 +1,7 @@
 //! Find in Settings: which rows a search admits, and the lines a page or a search shows.
 
 use super::fields::{FIELDS, Field, FieldSpec, Section};
-use super::fold::{Folds, page_rows};
+use super::fold::{Folds, fold_section, page_rows};
 use super::help_page::WORDS;
 use super::index_page::PROGRESS_WORDS;
 use super::pages::{group_of, ordered_rows};
@@ -100,8 +100,13 @@ impl Filter {
             .map(|(index, _)| index)
     }
 
+    /// The row to select after the filter changes: `row` while it stays shown (a fold row
+    /// with Find empty, or an admitted setting), else the first admitted row, else `row`.
     #[must_use]
     pub fn nearest(&self, row: usize) -> usize {
+        if self.is_empty() && fold_section(row).is_some() {
+            return row;
+        }
         match FIELDS.get(row) {
             Some(spec) if self.admits(spec) => row,
             _ => self.first_row().unwrap_or(row),
