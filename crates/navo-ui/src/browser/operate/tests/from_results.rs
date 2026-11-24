@@ -525,3 +525,34 @@ fn a_rename_whose_target_left_the_volume_after_planning_is_refused_on_confirm() 
     assert!(message.contains("another drive"), "{message}");
     assert!(exists(&fs, "w/top.c") && !exists(&fs, "dest/top.c"));
 }
+
+#[test]
+fn links_that_loop_refuse_the_plan() {
+    let fs = hits();
+    fs.make_link(&fs.location("dest/b"), &fs.location("dest/a"))
+        .expect("a link");
+    fs.make_link(&fs.location("dest/a"), &fs.location("dest/b"))
+        .expect("a link");
+    let (browser, id) = prepared(&fs, request(&fs, OpKind::Copy, &["w/top.c"], "dest/a"));
+    let message = failed(&browser, id);
+    assert!(message.contains("too many links"), "{message}");
+    assert!(exists(&fs, "w/top.c"));
+}
+
+#[test]
+fn a_policy_change_checks_the_rows_again() {
+    let fs = hits();
+    fs.add_file("dest/top.c", 9);
+    let sources = ["w/top.c", "w/lib/a.c"];
+    let (mut browser, id) = prepared(&fs, request(&fs, OpKind::Move, &sources, "dest"));
+    assert!(browser.pending().is_some());
+    fs.add_file("w/lib/a.c", 11);
+    assert!(browser.pick_policy(navo_core::ConflictPolicy::OverwriteAll));
+    settle(&mut browser);
+    let message = failed(&browser, id);
+    assert!(
+        message.contains("lib/a.c") && message.contains("changed since the search"),
+        "{message}"
+    );
+    assert!(exists(&fs, "w/top.c") && exists(&fs, "w/lib/a.c"));
+}
