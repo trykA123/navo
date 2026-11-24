@@ -35,6 +35,11 @@ ignore = true
 
 [bans]
 multiple-versions = "warn"
+skip = [
+    { crate = "nix@0.28.0", reason = "portable-pty 0.9.0 (navo-term, latest release) pins nix 0.28; the rest of the tree is on 0.31; recheck on every portable-pty update" },
+    { crate = "cfg_aliases@0.1.1", reason = "build dependency of nix 0.28 through portable-pty 0.9.0; recheck on every portable-pty update" },
+    { crate = "winreg@0.10.1", reason = "portable-pty 0.9.0 (navo-term, latest release) pins winreg 0.10 on Windows; recheck on every portable-pty update" },
+]
 
 [sources]
 unknown-registry = "deny"

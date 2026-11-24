@@ -6,7 +6,7 @@ mod pty;
 pub mod shells;
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub use backend::{Backend, Sink};
@@ -21,8 +21,14 @@ pub enum TermError {
     /// The shell's program does not exist; holds the shell's label.
     #[error("shell not found: {0}")]
     ShellMissing(String),
+    /// The start folder does not exist (checked right before the shell starts).
+    #[error("start folder not found: {}", .0.display())]
+    CwdMissing(PathBuf),
     #[error("could not start the shell: {0}")]
     Spawn(#[source] io::Error),
+    /// The shell is not reading its input fast enough; the bytes were not sent.
+    #[error("terminal input is full; try again")]
+    InputFull,
     #[error("terminal input or output failed: {0}")]
     Io(#[source] io::Error),
     #[error("the shell has exited")]

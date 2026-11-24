@@ -1,3 +1,5 @@
+#[cfg(unix)]
+mod close;
 mod session;
 mod shells;
 #[cfg(windows)]
@@ -42,14 +44,19 @@ impl Recorder {
 
     /// Waits until `done` holds; on timeout fails with the last state.
     fn wait_for(&self, done: impl Fn(&Recorded) -> bool) -> Recorded {
+        self.wait_within(DEADLINE, done)
+    }
+
+    /// Like `wait_for` with a tighter `limit`.
+    fn wait_within(&self, limit: Duration, done: impl Fn(&Recorded) -> bool) -> Recorded {
         let start = Instant::now();
         let mut seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
         while !done(&seen) {
-            let left = DEADLINE.checked_sub(start.elapsed());
+            let left = limit.checked_sub(start.elapsed());
             let Some(left) = left else {
                 let output = String::from_utf8_lossy(&seen.output);
                 panic!(
-                    "condition not met in {DEADLINE:?}; exit {:?}, output {output:?}",
+                    "condition not met in {limit:?}; exit {:?}, output {output:?}",
                     seen.exit
                 );
             };

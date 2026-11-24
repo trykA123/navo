@@ -1,39 +1,36 @@
-//! The real backend: a `portable-pty` session (ConPTY on Windows). A reader thread drains output
-//! into the sink, a waiter thread reaps the child; drop kills the child and closes off-thread.
+//! The real backend: a `portable-pty` session (ConPTY on Windows). Four threads do the work:
+//! one owner ends, reaps and resizes the shell, a reader drains output, a sink thread hands
+//! it to the `Sink`, and a writer feeds input. The caller never waits on any of them.
+
+mod child;
+mod input;
+mod output;
 
 use std::error::Error;
-use std::io::{self, Read, Write};
+use std::io;
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 
-use portable_pty::{Child, ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 use crate::backend::{Backend, Sink};
 use crate::shells::ShellSpec;
 use crate::{Size, TermError};
 
-/// The PTY master, shared with the waiter so it can close the console once the child exits
-/// (ConPTY keeps the output pipe open until then).
-type SharedMaster = Arc<Mutex<Option<Box<dyn MasterPty + Send>>>>;
+use output::Outbox;
 
-const READ_CHUNK: usize = 16 * 1024;
-/// R2: how long a dropped session waits for its reader before detaching it.
-const READER_LIMIT: Duration = Duration::from_secs(2);
-
-/// A shell running in a pseudo terminal.
+/// A shell running in a pseudo terminal. Dropping it asks the owner to end the shell.
 pub struct PtyBackend {
-    master: SharedMaster,
-    writer: Option<Box<dyn Write + Send>>,
-    killer: Box<dyn ChildKiller + Send + Sync>,
-    reader: Option<JoinHandle<()>>,
-    reader_done: Option<Receiver<()>>,
+    input: input::Input,
+    control: child::Control,
+    /// Only the Unix close tests read it.
+    #[cfg(all(test, unix))]
+    outbox: Arc<Outbox>,
 }
 
 impl PtyBackend {
-    /// Starts `shell` in `cwd` (the home folder if `cwd` is gone); output goes to `sink`.
+    /// Starts `shell` in `cwd`; output and then the exit go to `sink`.
     pub fn spawn(
         shell: &ShellSpec,
         cwd: &Path,
@@ -55,69 +52,54 @@ impl PtyBackend {
             .master
             .take_writer()
             .map_err(|error| TermError::Io(os_error(&*error)))?;
+        // portable-pty silently starts in the home folder when `cwd` is gone; refuse instead.
+        if !cwd.is_dir() {
+            return Err(TermError::CwdMissing(cwd.to_path_buf()));
+        }
         let child = pair
             .slave
             .spawn_command(command(shell, cwd))
-            .map_err(|error| spawn_error(shell, &*error))?;
+            .map_err(|error| spawn_error(shell, cwd, &*error))?;
         drop(pair.slave);
-        let mut killer = child.clone_killer();
-        let master: SharedMaster = Arc::new(Mutex::new(Some(pair.master)));
-        let started = start_threads(child, reader, &master, sink);
-        let (reader, reader_done) = started.inspect_err(|_| {
-            if let Err(error) = killer.kill() {
-                tracing::warn!(%error, "terminal child not killed after a failed start");
+        let process = (child, pair.master);
+        let outbox = Arc::new(Outbox::default());
+        // Each step that fails ends and reaps the shell; the read handle is gone by then.
+        let started = output::read(reader, &outbox)
+            .and_then(|()| output::deliver(&outbox, sink))
+            .and_then(|()| input::start(writer));
+        let input = match started {
+            Ok(input) => input,
+            Err(error) => {
+                child::abandon(process, &outbox);
+                return Err(TermError::Io(error));
             }
-        })?;
+        };
+        let control = child::start(process, &outbox).map_err(TermError::Io)?;
         Ok(Self {
-            master,
-            writer: Some(writer),
-            killer,
-            reader: Some(reader),
-            reader_done: Some(reader_done),
+            input,
+            control,
+            #[cfg(all(test, unix))]
+            outbox,
         })
     }
 }
 
 impl Backend for PtyBackend {
     fn write(&mut self, bytes: &[u8]) -> Result<(), TermError> {
-        let writer = self.writer.as_mut().ok_or(TermError::Exited)?;
-        writer
-            .write_all(bytes)
-            .and_then(|()| writer.flush())
-            .map_err(TermError::Io)
+        self.input.send(bytes)
     }
 
     fn resize(&mut self, size: Size) -> Result<(), TermError> {
         size.check()?;
-        let master = self.master.lock().unwrap_or_else(PoisonError::into_inner);
-        let master = master.as_ref().ok_or(TermError::Exited)?;
-        master
-            .resize(pty_size(size))
-            .map_err(|error| TermError::Io(os_error(&*error)))
+        self.control.resize(size)
     }
 }
 
-impl Drop for PtyBackend {
-    /// R2's close order: kill the child, then on a helper thread close input, close the
-    /// console (which can block until output is drained) and give the reader 2 s to finish.
-    fn drop(&mut self) {
-        if let Err(error) = self.killer.kill() {
-            tracing::debug!(%error, "terminal child already gone");
-        }
-        let writer = self.writer.take();
-        let master = Arc::clone(&self.master);
-        let reader = self.reader.take();
-        let reader_done = self.reader_done.take();
-        let closer = thread::Builder::new()
-            .name(String::from("navo-term-close"))
-            .spawn(move || {
-                drop(writer);
-                close(&master);
-                finish_reader(reader, reader_done);
-            });
-        if let Err(error) = closer {
-            tracing::warn!(%error, "terminal close thread did not start; reader detached");
-        }
+#[cfg(all(test, unix))]
+impl PtyBackend {
+    /// Whether the reader finished within `limit`.
+    pub(crate) fn reader_ends_within(&self, limit: std::time::Duration) -> bool {
+        self.outbox.ended_within(limit)
     }
 }
 
@@ -132,72 +114,29 @@ fn command(shell: &ShellSpec, cwd: &Path) -> CommandBuilder {
     command
 }
 
-/// Starts the waiter (reaps the child, then closes the console) and the reader (drains
-/// output, then reports the waiter's exit code). The reader signals `done` last.
-fn start_threads(
-    mut child: Box<dyn Child + Send + Sync>,
-    mut output: Box<dyn Read + Send>,
-    master: &SharedMaster,
-    sink: Arc<dyn Sink>,
-) -> Result<(JoinHandle<()>, Receiver<()>), TermError> {
-    let waiter_master = Arc::clone(master);
-    let waiter = thread::Builder::new()
-        .name(String::from("navo-term-wait"))
+/// Runs `body(state)` on a named thread. If the thread cannot start, hands `state` back so
+/// the caller can clean up what it owns (`std` would drop it with the closure).
+fn run_thread<T, R>(
+    name: &str,
+    state: T,
+    body: impl FnOnce(T) -> R + Send + 'static,
+) -> Result<JoinHandle<Option<R>>, (io::Error, Option<T>)>
+where
+    T: Send + 'static,
+    R: Send + 'static,
+{
+    let slot = Arc::new(Mutex::new(Some(state)));
+    let theirs = Arc::clone(&slot);
+    let spawned = thread::Builder::new()
+        .name(String::from(name))
         .spawn(move || {
-            let code = child.wait().ok().map(|status| status.exit_code());
-            close(&waiter_master);
-            code
-        })
-        .map_err(TermError::Io)?;
-    let (done_tx, done_rx) = mpsc::sync_channel(1);
-    let reader = thread::Builder::new()
-        .name(String::from("navo-term-read"))
-        .spawn(move || {
-            drain(&mut *output, &*sink);
-            sink.exited(waiter.join().ok().flatten());
-            // The receiver is gone only when the session stopped waiting; nothing to tell.
-            let _ = done_tx.send(());
-        })
-        .map_err(TermError::Io)?;
-    Ok((reader, done_rx))
-}
-
-/// Reads until EOF or a read error (a closed PTY reports EIO on Unix).
-fn drain(output: &mut dyn Read, sink: &dyn Sink) {
-    let mut buffer = vec![0; READ_CHUNK];
-    loop {
-        match output.read(&mut buffer) {
-            Ok(0) => return,
-            Ok(read) => sink.output(buffer.get(..read).unwrap_or_default()),
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => {
-                tracing::debug!(%error, "terminal output closed");
-                return;
-            }
-        }
-    }
-}
-
-/// Drops the master outside the lock: on Windows this is `ClosePseudoConsole`, which can block.
-fn close(master: &SharedMaster) {
-    let taken = master.lock().unwrap_or_else(PoisonError::into_inner).take();
-    drop(taken);
-}
-
-fn finish_reader(reader: Option<JoinHandle<()>>, done: Option<Receiver<()>>) {
-    let (Some(reader), Some(done)) = (reader, done) else {
-        return;
-    };
-    match done.recv_timeout(READER_LIMIT) {
-        Ok(()) | Err(RecvTimeoutError::Disconnected) => {
-            if reader.join().is_err() {
-                tracing::warn!("terminal reader panicked");
-            }
-        }
-        Err(RecvTimeoutError::Timeout) => {
-            tracing::warn!("terminal reader still running after 2 s; detached");
-        }
-    }
+            let state = theirs.lock().unwrap_or_else(PoisonError::into_inner).take();
+            state.map(body)
+        });
+    spawned.map_err(|error| {
+        let state = slot.lock().unwrap_or_else(PoisonError::into_inner).take();
+        (error, state)
+    })
 }
 
 fn pty_size(size: Size) -> PtySize {
@@ -209,8 +148,12 @@ fn pty_size(size: Size) -> PtySize {
     }
 }
 
-/// A missing program is `ShellMissing`; any other failure keeps its OS error kind.
-fn spawn_error(shell: &ShellSpec, error: &(dyn Error + 'static)) -> TermError {
+/// `CwdMissing` when the start folder vanished meanwhile, `ShellMissing` for a program that
+/// does not exist, otherwise `Spawn` with the OS error kind.
+fn spawn_error(shell: &ShellSpec, cwd: &Path, error: &(dyn Error + 'static)) -> TermError {
+    if !cwd.is_dir() {
+        return TermError::CwdMissing(cwd.to_path_buf());
+    }
     let error = os_error(error);
     match error.kind() {
         io::ErrorKind::NotFound => TermError::ShellMissing(shell.label.clone()),
@@ -218,12 +161,33 @@ fn spawn_error(shell: &ShellSpec, error: &(dyn Error + 'static)) -> TermError {
     }
 }
 
-/// Finds the `io::Error` in an error chain and keeps its kind with the full message.
+/// Keeps the full message with the most precise kind: an `io::Error` in the chain, else the
+/// `(os error N)` that portable-pty formats into Windows `CreateProcessW` failures, else its
+/// Unix program lookup messages.
 fn os_error(error: &(dyn Error + 'static)) -> io::Error {
+    let message = error.to_string();
     let kind = std::iter::successors(Some(error), |&inner| inner.source())
         .find_map(|inner| inner.downcast_ref::<io::Error>())
-        .map_or(io::ErrorKind::Other, io::Error::kind);
-    io::Error::new(kind, error.to_string())
+        .map(io::Error::kind)
+        .or_else(|| raw_os_error(&message).map(|code| io::Error::from_raw_os_error(code).kind()))
+        .unwrap_or_else(|| lookup_kind(&message));
+    io::Error::new(kind, message)
+}
+
+fn raw_os_error(message: &str) -> Option<i32> {
+    let (_, rest) = message.rsplit_once("(os error ")?;
+    rest.split_once(')')?.0.parse().ok()
+}
+
+fn lookup_kind(message: &str) -> io::ErrorKind {
+    let missing = ["does not exist", "doesn't exist", "No viable candidates"];
+    if missing.iter().any(|text| message.contains(text)) {
+        io::ErrorKind::NotFound
+    } else if message.contains("not executable") {
+        io::ErrorKind::PermissionDenied
+    } else {
+        io::ErrorKind::Other
+    }
 }
 
 #[cfg(test)]
@@ -236,6 +200,14 @@ mod tests {
     #[error("spawn failed")]
     struct Wrapped(#[source] io::Error);
 
+    #[derive(Debug, thiserror::Error)]
+    #[error("{0}")]
+    struct Flat(String);
+
+    fn kind_of(message: &str) -> io::ErrorKind {
+        os_error(&Flat(String::from(message))).kind()
+    }
+
     #[test]
     fn spawn_errors_keep_the_os_error_kind_from_the_chain() {
         let denied = Wrapped(io::Error::from(io::ErrorKind::PermissionDenied));
@@ -244,5 +216,17 @@ mod tests {
             os_error(&Wrapped(io::Error::other("x"))).kind(),
             io::ErrorKind::Other
         );
+    }
+
+    #[test]
+    fn flattened_spawn_errors_get_their_kind_back_from_the_message() {
+        // 2 is "not found" on both Unix (ENOENT) and Windows (ERROR_FILE_NOT_FOUND).
+        let windows = "CreateProcessW `x` in cwd `None` failed: gone (os error 2)";
+        assert_eq!(kind_of(windows), io::ErrorKind::NotFound);
+        let lookup = "Unable to spawn x because:\nNo viable candidates found in PATH";
+        assert_eq!(kind_of(lookup), io::ErrorKind::NotFound);
+        let denied = "Unable to spawn /x because it is not executable (EACCES)";
+        assert_eq!(kind_of(denied), io::ErrorKind::PermissionDenied);
+        assert_eq!(kind_of("something else"), io::ErrorKind::Other);
     }
 }

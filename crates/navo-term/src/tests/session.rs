@@ -61,7 +61,13 @@ fn sizes_outside_one_to_i16_max_are_refused() {
 
 #[test]
 fn a_missing_shell_program_is_shell_missing() {
-    let ghost = shell("/nonexistent/navo-term/ghost-shell", &[]);
+    // Drive-absolute on Windows: a rooted path without a drive is not absolute there.
+    let ghost = if cfg!(windows) {
+        r"C:\nonexistent\navo-term\ghost-shell.exe"
+    } else {
+        "/nonexistent/navo-term/ghost-shell"
+    };
+    let ghost = shell(ghost, &[]);
     let result = Session::spawn(&ghost, Path::new("/"), SIZE, Arc::new(Recorder::default()));
     assert!(matches!(result, Err(TermError::ShellMissing(label)) if label == "test shell"));
 }
@@ -94,4 +100,21 @@ fn a_real_shell_runs_typed_input_and_dropping_the_session_ends_it() {
     drop(session);
     let seen = sink.wait_for(|seen| seen.exit.is_some());
     assert_eq!(seen.exits, 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_bare_program_name_not_on_path_is_shell_missing() {
+    let ghost = shell("navo-term-ghost-shell", &[]);
+    let result = Session::spawn(&ghost, Path::new("/"), SIZE, Arc::new(Recorder::default()));
+    assert!(matches!(result, Err(TermError::ShellMissing(label)) if label == "test shell"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_missing_start_folder_is_cwd_missing_not_the_home_folder() {
+    let gone = Path::new("/nonexistent/navo-term/start-folder");
+    let script = shell("/bin/sh", &["-c", "exit 0"]);
+    let result = Session::spawn(&script, gone, SIZE, Arc::new(Recorder::default()));
+    assert!(matches!(result, Err(TermError::CwdMissing(path)) if path == gone));
 }
