@@ -3,6 +3,7 @@ use std::ops::Range;
 use super::filters::{
     AttributeFilter, ModifiedFilter, SizeFilter, parse_attrs, parse_modified, parse_size,
 };
+use super::tokens;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
@@ -15,6 +16,11 @@ pub enum TokenKind {
     Archives,
     Git,
     Regex,
+    Name,
+    Depth,
+    Word,
+    Not,
+    Case,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,6 +43,10 @@ pub struct FindQuery {
     pub text: String,
     pub case: bool,
     pub regex: bool,
+    pub name: Option<String>,
+    pub depth: Option<u32>,
+    pub word: bool,
+    pub invert: bool,
     pub ext: Vec<String>,
     pub size: Option<SizeFilter>,
     pub modified: Option<ModifiedFilter>,
@@ -70,12 +80,10 @@ impl FindQuery {
     }
 
     fn apply_token(&mut self, kind: TokenKind, word: &str) -> Result<(), String> {
-        if kind == TokenKind::Text {
-            self.push_text(word);
-            return Ok(());
-        }
         let value = word.split_once(':').map_or(word, |(_, value)| value);
         match kind {
+            kind if tokens::handles(kind) => return tokens::apply(self, kind, value),
+            TokenKind::Text => self.push_text(word),
             TokenKind::Ext => self.ext.extend(parse_extensions(value)?),
             TokenKind::Size => {
                 self.size = Some(parse_size(value).ok_or("size: needs a number, like <50MB")?);
@@ -109,7 +117,7 @@ impl FindQuery {
                 };
             }
             TokenKind::Regex => self.push_regex(value)?,
-            TokenKind::Text => {}
+            _ => {}
         }
         Ok(())
     }
@@ -151,6 +159,11 @@ fn token_kind(word: &str) -> TokenKind {
         "arc" => TokenKind::Archives,
         "git" => TokenKind::Git,
         "re" => TokenKind::Regex,
+        "name" => TokenKind::Name,
+        "depth" => TokenKind::Depth,
+        "word" => TokenKind::Word,
+        "not" => TokenKind::Not,
+        "case" => TokenKind::Case,
         _ => TokenKind::Text,
     }
 }

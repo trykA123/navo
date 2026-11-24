@@ -39,6 +39,15 @@ fn every_filter_round_trips() {
         r"in:\\host\share",
         "in:\"my folder\"",
         "in:src in:lib",
+        "needle name:*.rs;!test*",
+        "name:/^lib.*[.]rs$/",
+        r"name:/C:\lib/",
+        "depth:0",
+        "depth:64",
+        "word:on",
+        "not:on",
+        "case:on",
+        "needle git:off name:*.rs depth:2 word:on not:on case:on",
         "arc:on",
         "arc:off",
         "git:off",
@@ -62,6 +71,15 @@ fn filters_print_in_canonical_order_with_plain_byte_counts() {
 fn every_in_entry_prints_in_order() {
     let query = FindQuery::parse("in:src in:\"my folder\"");
     assert_eq!(query.to_text(), "in:src in:\"my folder\"");
+}
+
+#[test]
+fn new_token_kinds_print_after_git() {
+    let query = FindQuery::parse("needle git:off case:on not:on word:on depth:2 name:*.rs");
+    assert_eq!(
+        query.to_text(),
+        "needle git:off name:*.rs depth:2 word:on not:on case:on"
+    );
 }
 
 #[test]

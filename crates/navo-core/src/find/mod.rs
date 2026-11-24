@@ -2,6 +2,7 @@ mod filters;
 mod matcher;
 mod print;
 mod query;
+mod tokens;
 
 pub use filters::{Attribute, AttributeFilter, Date, ModifiedFilter, SizeFilter};
 pub use matcher::{Compiled, FileHits, LineHit, Skip, scan};

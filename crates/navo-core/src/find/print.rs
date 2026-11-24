@@ -36,6 +36,21 @@ impl FindQuery {
         if self.git_rules == GitRules::Off {
             parts.push("git:off".to_owned());
         }
+        if let Some(name) = &self.name {
+            parts.push(format!("name:{}", quoted(name)));
+        }
+        if let Some(depth) = self.depth {
+            parts.push(format!("depth:{depth}"));
+        }
+        if self.word {
+            parts.push("word:on".to_owned());
+        }
+        if self.invert {
+            parts.push("not:on".to_owned());
+        }
+        if self.case {
+            parts.push("case:on".to_owned());
+        }
         parts.join(" ")
     }
 }
