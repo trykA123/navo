@@ -1,5 +1,8 @@
+//! Keyboard steps in Settings: moving between rows and pages, and nudging a value.
+
 use super::fields::{Control, FIELDS, Field, FieldSpec, Section};
 use super::find::{Filter, Line, lines};
+use super::pages::ordered_rows;
 use super::values::Value;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -42,18 +45,22 @@ pub fn nudged(spec: &FieldSpec, value: &Value, nudge: Nudge) -> Option<Value> {
     }
 }
 
+/// The row one step up or down from `row` among the rows `filter` admits, in page order;
+/// `row` itself at either end or when `row` is not one of them.
 pub fn moved(filter: &Filter, row: usize, down: bool) -> usize {
-    let mut admitted = FIELDS
-        .iter()
-        .enumerate()
+    let admitted: Vec<usize> = ordered_rows()
         .filter(|(_, spec)| filter.admits(spec))
-        .map(|(index, _)| index);
-    let found = if down {
-        admitted.find(|index| *index > row)
-    } else {
-        admitted.rfind(|index| *index < row)
+        .map(|(index, _)| index)
+        .collect();
+    let Some(at) = admitted.iter().position(|index| *index == row) else {
+        return row;
     };
-    found.unwrap_or(row)
+    let to = if down {
+        at.checked_add(1)
+    } else {
+        at.checked_sub(1)
+    };
+    to.and_then(|to| admitted.get(to)).copied().unwrap_or(row)
 }
 
 pub const DIAGNOSTICS_ROW: usize = FIELDS.len();
@@ -70,28 +77,22 @@ impl Field {
     }
 }
 
+/// The page that shows `row`; the Help and Diagnostics rows are on About.
 pub fn section_of(row: usize) -> Section {
-    if row == DIAGNOSTICS_ROW {
-        return Section::Diagnostics;
-    }
-    if row >= HELP_ROW {
-        return Section::Help;
+    if row >= DIAGNOSTICS_ROW {
+        return Section::About;
     }
     FIELDS
         .get(row)
         .map_or(Section::Appearance, |spec| spec.section)
 }
 
-pub fn first_row(section: Section) -> usize {
-    match section {
-        Section::Diagnostics => return DIAGNOSTICS_ROW,
-        Section::Help => return HELP_ROW,
-        _ => {}
+/// The first row of `page`: the Help row on About, else its first grouped setting.
+pub fn first_row(page: Section) -> usize {
+    if page == Section::About {
+        return HELP_ROW;
     }
-    FIELDS
-        .iter()
-        .position(|spec| spec.section == section)
-        .unwrap_or(0)
+    rows_in(page).next().map_or(0, |(index, _)| index)
 }
 
 pub fn next_section(filter: &Filter, row: usize, forward: bool) -> usize {
@@ -112,11 +113,9 @@ pub fn next_section(filter: &Filter, row: usize, forward: bool) -> usize {
         .unwrap_or(row)
 }
 
-pub fn rows_in(section: Section) -> impl Iterator<Item = (usize, &'static FieldSpec)> {
-    FIELDS
-        .iter()
-        .enumerate()
-        .filter(move |(_, spec)| spec.section == section)
+/// The grouped rows of `page` as `(row, spec)`, in the order the page lists them.
+pub fn rows_in(page: Section) -> impl Iterator<Item = (usize, &'static FieldSpec)> {
+    ordered_rows().filter(move |(_, spec)| spec.section == page)
 }
 
 pub fn child_of(filter: &Filter, row: usize) -> Option<usize> {

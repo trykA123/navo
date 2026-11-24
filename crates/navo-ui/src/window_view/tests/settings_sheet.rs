@@ -68,9 +68,11 @@ fn row_of(field: Field) -> usize {
 
 pub(super) fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
-    let steps = FIELDS[..row_of(field)]
-        .iter()
-        .filter(|spec| filter.admits(spec))
+    let steps = Section::ALL
+        .into_iter()
+        .flat_map(crate::settings::rows_in)
+        .take_while(|(row, _)| *row != row_of(field))
+        .filter(|(_, spec)| filter.admits(spec))
         .count();
     for _ in 0..steps {
         rig.press(cx, "down");
@@ -138,10 +140,13 @@ fn the_focused_row_shows_its_toml_key_and_down_moves_on(cx: &mut TestAppContext)
         Some("appearance.mode")
     );
     rig.press(cx, "down");
-    assert_eq!(rig.view.read_with(cx, |view, _| view.settings_row()), 1);
+    assert_eq!(
+        rig.view.read_with(cx, |view, _| view.settings_row()),
+        row_of(Field::ColorTheme)
+    );
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
-        Some("appearance.density")
+        Some("appearance.color-theme")
     );
     rig.press(cx, "up");
     rig.press(cx, "up");
@@ -171,6 +176,7 @@ fn space_on_hidden_files_hides_them_in_the_live_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     rig.press(cx, "tab");
+    rig.press(cx, "tab");
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
         Some("files.hidden-files")
@@ -199,58 +205,48 @@ fn space_flips_a_toggle(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn tab_walks_the_sections_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) {
+fn tab_walks_the_pages_and_focus_stays_in_the_sheet(cx: &mut TestAppContext) {
     let _hidden = crate::compare_visible::hide_compare();
-    walk_sections(cx, false);
+    walk_pages(cx);
 }
 
 #[gpui_kit::test]
-fn tab_also_visits_compare_once_it_is_visible(cx: &mut TestAppContext) {
+fn tab_walks_the_same_pages_while_compare_is_visible(cx: &mut TestAppContext) {
     let _shown = crate::compare_visible::show_compare();
-    walk_sections(cx, true);
+    walk_pages(cx);
 }
 
-fn walk_sections(cx: &mut TestAppContext, with_compare: bool) {
-    let tab_exists =
-        |index: usize| with_compare || Section::ALL.get(index) != Some(&Section::Compare);
+fn walk_pages(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    let mut sections = vec![
+    let pages = [
+        "Window",
         "Files",
-        "Selection",
-        "Terminal",
-        "Editor",
-        "Copy",
-        "Safety net",
+        "Copy and delete",
         "Search",
-        "Git",
-        "Display",
+        "Viewers",
+        "Tools",
+        "Tray and clipboard",
+        "Keyboard",
+        "About",
+        "Shortcuts",
+        "Appearance",
     ];
-    if cfg!(windows) {
-        sections.push("Tray");
-    }
-    sections.push("Clipboard");
-    if with_compare {
-        sections.push("Compare");
-    }
-    sections.extend(["Diagnostics", "Help", "Shortcuts", "Appearance"]);
-    for (step, name) in sections.iter().enumerate() {
+    for (step, name) in pages.iter().enumerate() {
         rig.press(cx, "tab");
         let in_sheet = *name == "Shortcuts" || sheet_has_focus(cx, &rig);
         assert!(in_sheet, "after tab {step}");
-        let current = (0..16usize)
-            .filter(|index| tab_exists(*index))
-            .find(|index| {
-                cx.update_window(rig.window, |_, window, cx| {
-                    window.render_frame(cx);
-                    window.find(("settings-section", *index)).selected() == Some(true)
-                })
-                .expect("window")
-            });
+        let current = (0..=Section::ALL.len()).find(|index| {
+            cx.update_window(rig.window, |_, window, cx| {
+                window.render_frame(cx);
+                window.find(("settings-section", *index)).selected() == Some(true)
+            })
+            .expect("window")
+        });
         let shown = current.and_then(|index| label(cx, &rig, ("settings-section", index)));
         assert_eq!(shown.as_deref(), Some(*name));
     }
-    for _ in 0..5 + usize::from(with_compare) + usize::from(cfg!(windows)) {
+    for _ in 0..10 {
         rig.press(cx, "shift-tab");
     }
     assert_eq!(
@@ -265,8 +261,8 @@ fn the_display_section_starts_with_the_window_group_and_flips_a_part(cx: &mut Te
     open(cx, &rig);
     go_to(cx, &rig, Field::WindowPathBar);
     assert_eq!(
-        label(cx, &rig, "settings-group-window").as_deref(),
-        Some("Window")
+        label(cx, &rig, "settings-group-window parts").as_deref(),
+        Some("Window parts")
     );
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
@@ -287,13 +283,17 @@ fn the_display_section_has_markdown_and_preview_groups_whose_toggles_save(cx: &m
     for (field, group, key) in [
         (
             Field::MarkdownPreviewSplit,
-            "Markdown",
+            "Images and Markdown",
             "markdown.view.preview-split",
         ),
-        (Field::PreviewTypeBars, "Preview", "preview.view.type-bars"),
+        (
+            Field::PreviewTypeBars,
+            "Folder preview",
+            "preview.view.type-bars",
+        ),
         (
             Field::PreviewLargestFiles,
-            "Preview",
+            "Folder preview",
             "preview.view.largest-files",
         ),
     ] {
@@ -548,8 +548,8 @@ fn the_display_section_groups_the_viewer_parts_and_flips_one(cx: &mut TestAppCon
     open(cx, &rig);
     go_to(cx, &rig, Field::TextLineEnds);
     assert_eq!(
-        label(cx, &rig, "settings-group-text").as_deref(),
-        Some("Text")
+        label(cx, &rig, "settings-group-text and code").as_deref(),
+        Some("Text and code")
     );
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
@@ -568,7 +568,7 @@ fn the_display_section_groups_the_viewer_parts_and_flips_one(cx: &mut TestAppCon
     );
     rig.press(cx, "down");
     assert_eq!(
-        label(cx, &rig, "settings-group-image").as_deref(),
-        Some("Image")
+        label(cx, &rig, "settings-group-images and markdown").as_deref(),
+        Some("Images and Markdown")
     );
 }

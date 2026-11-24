@@ -8,17 +8,17 @@ const ENGINES: [Choice; 3] = [
 
 pub(super) const GIT_FIELDS: [FieldSpec; 7] = [
     spec(
-        (F::GitBadges, S::Git, "git.badges"),
+        (F::GitBadges, S::Tools, "git.badges"),
         ("settings-git-badges", "settings-git-badges-help"),
         Control::Toggle,
     ),
     spec(
-        (F::GitTool, S::Git, "git.tool"),
+        (F::GitTool, S::Tools, "git.tool"),
         ("settings-git-tool", "settings-git-tool-help"),
         Control::Tool,
     ),
     spec(
-        (F::GitToolCommand, S::Git, "git.tool-command"),
+        (F::GitToolCommand, S::Tools, "git.tool-command"),
         (
             "settings-git-tool-command",
             "settings-git-tool-command-help",
@@ -26,17 +26,17 @@ pub(super) const GIT_FIELDS: [FieldSpec; 7] = [
         Control::Text,
     ),
     spec(
-        (F::GitEngine, S::Git, "git.engine"),
+        (F::GitEngine, S::Tools, "git.engine"),
         ("settings-git-engine", "settings-git-engine-help"),
         Control::Choices(&ENGINES, Look::Segments),
     ),
     spec(
-        (F::GitFetch, S::Git, "git.fetch"),
+        (F::GitFetch, S::Tools, "git.fetch"),
         ("settings-git-fetch", "settings-git-fetch-help"),
         Control::Toggle,
     ),
     spec(
-        (F::GitFetchMinutes, S::Git, "git.fetch-minutes"),
+        (F::GitFetchMinutes, S::Tools, "git.fetch-minutes"),
         (
             "settings-git-fetch-minutes",
             "settings-git-fetch-minutes-help",
@@ -44,7 +44,7 @@ pub(super) const GIT_FIELDS: [FieldSpec; 7] = [
         Control::Number,
     ),
     spec(
-        (F::GitNetwork, S::Git, "git.network"),
+        (F::GitNetwork, S::Tools, "git.network"),
         ("settings-git-network", "settings-git-network-help"),
         Control::Toggle,
     ),

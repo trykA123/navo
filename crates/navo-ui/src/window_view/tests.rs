@@ -630,9 +630,11 @@ fn f4_without_an_editor_asks_once_then_opens_directly(cx: &mut TestAppContext) {
 fn f4_uses_the_editor_set_in_settings(cx: &mut TestAppContext) {
     let (window, view, log) = editor_window(cx, Some("code.exe"));
     press(cx, window, &view, "ctrl-,");
-    for _ in 0..4 {
+    for _ in 0..6 {
         press(cx, window, &view, "tab");
     }
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "down");
     press(cx, window, &view, "enter");
     press(cx, window, &view, "ctrl-a");
     type_in(cx, window, &view, "vim.exe");

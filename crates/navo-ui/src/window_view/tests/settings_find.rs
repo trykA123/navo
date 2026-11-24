@@ -97,9 +97,9 @@ fn find_lists_matches_from_every_section_and_hides_empty_headings(cx: &mut TestA
     open(cx, &rig);
     find(cx, &rig, "line numbers");
     assert!(shows_row(cx, &rig, Field::TextLineNumbers));
-    assert!(shows(cx, &rig, "settings-group-text"));
-    assert!(!shows(cx, &rig, "settings-group-window"));
-    assert!(!shows(cx, &rig, "settings-group-image"));
+    assert!(shows(cx, &rig, "settings-group-text and code"));
+    assert!(!shows(cx, &rig, "settings-group-window parts"));
+    assert!(!shows(cx, &rig, "settings-group-images and markdown"));
     assert!(!shows(cx, &rig, "settings-no-match"));
 }
 
@@ -132,7 +132,7 @@ fn no_match_shows_a_short_message(cx: &mut TestAppContext) {
 fn escape_clears_the_find_and_a_second_escape_closes(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    find(cx, &rig, "density");
+    find(cx, &rig, "appearance.color-theme");
     assert!(!shows_row(cx, &rig, Field::Theme));
     rig.press(cx, "escape");
     settle_motion(cx, &rig);
@@ -157,7 +157,7 @@ fn typing_in_the_list_does_not_fill_the_find_or_change_rows(cx: &mut TestAppCont
 fn closing_the_sheet_clears_the_find(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    find(cx, &rig, "density");
+    find(cx, &rig, "appearance.color-theme");
     rig.press(cx, "escape");
     rig.press(cx, "escape");
     open(cx, &rig);

@@ -64,6 +64,9 @@ fn auto_names_the_tool_it_resolved_to(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn picking_a_tool_writes_the_setting(cx: &mut TestAppContext) {
     let rig = open(cx, Values::default(), &fake());
+    // The found tools grow the row after it was scrolled to; a step away and back shows it whole.
+    rig.press(cx, "down");
+    rig.press(cx, "up");
     // The tool list sits last in the inspector; a short window scrolls it into view.
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);

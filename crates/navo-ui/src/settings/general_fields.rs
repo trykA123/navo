@@ -56,14 +56,14 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
         Control::Number,
     ),
     spec(
-        (F::ModifierHints, S::Appearance, "appearance.modifier-hints"),
+        (F::ModifierHints, S::Keyboard, "appearance.modifier-hints"),
         ("Modifier hints", "What holding Ctrl, Shift or Alt shows"),
         Control::Choices(&HINTS, Look::Segments),
     ),
     spec(
         (
             F::ModifierHintsDelay,
-            S::Appearance,
+            S::Keyboard,
             "appearance.modifier-hints-delay-ms",
         ),
         ("Hint delay", "Milliseconds to hold, 150 to 2000"),
@@ -127,7 +127,7 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
     spec(
         (
             F::SpaceMeasuresFolders,
-            S::Selection,
+            S::Files,
             "selection.space-measures-folders",
         ),
         (
@@ -139,7 +139,7 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
     spec(
         (
             F::PatternsSelectFolders,
-            S::Selection,
+            S::Files,
             "selection.patterns-select-folders",
         ),
         (
@@ -149,27 +149,27 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
         Control::Toggle,
     ),
     spec(
-        (F::RightButton, S::Selection, "selection.right-button"),
+        (F::RightButton, S::Files, "selection.right-button"),
         ("settings-right-button", "settings-right-button-help"),
         Control::Choices(&RIGHT_BUTTONS, Look::Segments),
     ),
     spec(
-        (F::TerminalProvider, S::Terminal, "terminal.provider"),
+        (F::TerminalProvider, S::Tools, "terminal.provider"),
         ("Terminal", "The terminal Navo opens in a folder"),
         Control::Choices(&TERMINAL_PROVIDERS, Look::Segments),
     ),
     spec(
-        (F::TerminalCommand, S::Terminal, "terminal.command"),
+        (F::TerminalCommand, S::Tools, "terminal.command"),
         ("Command", "Your own command line; {path} is the folder"),
         Control::Text,
     ),
     spec(
-        (F::EditorPath, S::Editor, "editor.path"),
+        (F::EditorPath, S::Tools, "editor.path"),
         ("Editor", "The program F4 opens files with"),
         Control::Text,
     ),
     spec(
-        (F::CopyMode, S::Copy, "copy.mode"),
+        (F::CopyMode, S::CopyDelete, "copy.mode"),
         (
             "Copy mode",
             "Auto copies several files at once where the drives allow; Standard copies one file at a time.",
@@ -177,19 +177,19 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
         Control::Choices(&COPY_MODES, Look::Segments),
     ),
     spec(
-        (F::CopyVerify, S::Copy, "copy.verify"),
+        (F::CopyVerify, S::CopyDelete, "copy.verify"),
         ("settings-copy-verify", "settings-copy-verify-help"),
         Control::Choices(&COPY_VERIFY, Look::Segments),
     ),
     spec(
-        (F::RetainDeletes, S::Safety, "retention.retain-deletes"),
+        (F::RetainDeletes, S::CopyDelete, "retention.retain-deletes"),
         ("settings-retain-deletes", "settings-retain-deletes-help"),
         Control::Toggle,
     ),
     spec(
         (
             F::RetainOverwrites,
-            S::Safety,
+            S::CopyDelete,
             "retention.retain-overwrites",
         ),
         (
@@ -199,17 +199,25 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
         Control::Toggle,
     ),
     spec(
-        (F::RetentionDays, S::Safety, "retention.days"),
+        (F::RetentionDays, S::CopyDelete, "retention.days"),
         ("settings-retention-days", "settings-retention-days-help"),
         Control::Number,
     ),
     spec(
-        (F::RetentionCapMib, S::Safety, "retention.max-volume-mib"),
+        (
+            F::RetentionCapMib,
+            S::CopyDelete,
+            "retention.max-volume-mib",
+        ),
         ("settings-retention-cap", "settings-retention-cap-help"),
         Control::Number,
     ),
     spec(
-        (F::RetentionMinFreeMib, S::Safety, "retention.min-free-mib"),
+        (
+            F::RetentionMinFreeMib,
+            S::CopyDelete,
+            "retention.min-free-mib",
+        ),
         (
             "settings-retention-min-free",
             "settings-retention-min-free-help",

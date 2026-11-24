@@ -16,16 +16,29 @@ fn every_field_sits_at_its_own_index() {
     }
 }
 
+/// The TOML tables a page may hold: the page regroups whole tables.
+fn tables_of(page: Section) -> &'static [&'static str] {
+    match page {
+        Section::Appearance | Section::Keyboard => &["appearance"],
+        Section::Window => &["window"],
+        Section::Files => &["files", "selection"],
+        Section::CopyDelete => &["copy", "retention"],
+        Section::Search => &["search"],
+        Section::Viewers => &["text", "image", "markdown", "preview", "automotive"],
+        Section::Tools => &["terminal", "editor", "git", "compare"],
+        Section::TrayClipboard => &["tray", "clipboard"],
+        Section::About => &["updates"],
+    }
+}
+
 #[test]
-fn every_key_is_unique_and_lives_in_its_section() {
+fn every_key_is_unique_and_lives_in_its_page() {
     for spec in &FIELDS {
-        let home = match spec.section {
-            Section::Display => spec.group().map(str::to_lowercase),
-            Section::Safety => Some("retention".to_owned()),
-            Section::Help => Some("updates".to_owned()),
-            section => Some(section.label().to_lowercase()),
-        };
-        assert_eq!(Some(spec.table().to_owned()), home, "{}", spec.key);
+        assert!(
+            tables_of(spec.section).contains(&spec.table()),
+            "{}",
+            spec.key
+        );
         assert_eq!(
             FIELDS.iter().filter(|other| other.key == spec.key).count(),
             1
@@ -34,22 +47,15 @@ fn every_key_is_unique_and_lives_in_its_section() {
 }
 
 #[test]
-fn sections_run_in_order_without_gaps() {
-    let order: Vec<Section> = FIELDS.iter().map(|spec| spec.section).collect();
+fn pages_run_in_nav_order_without_gaps() {
     let mut seen: Vec<Section> = Vec::new();
-    for section in order {
-        if seen.last() != Some(&section) {
-            assert!(!seen.contains(&section), "{section:?} split");
-            seen.push(section);
+    for (_, spec) in super::pages::ordered_rows() {
+        if seen.last() != Some(&spec.section) {
+            assert!(!seen.contains(&spec.section), "{:?} split", spec.section);
+            seen.push(spec.section);
         }
     }
-    assert_eq!(
-        seen,
-        Section::ALL
-            .into_iter()
-            .filter(|section| *section != Section::Diagnostics)
-            .collect::<Vec<_>>()
-    );
+    assert_eq!(seen, Section::ALL);
 }
 
 #[test]
@@ -106,43 +112,24 @@ fn arrows_step_a_number_and_text_needs_editing() {
 }
 
 #[test]
-fn tab_jumps_to_the_next_section_and_wraps() {
-    assert_eq!(
-        section_of(next_section(&Filter::default(), 0, true)),
-        Section::Files
-    );
-    let last = first_row(Section::Help);
-    assert_eq!(next_section(&Filter::default(), last, true), 0);
-    assert_eq!(
-        section_of(next_section(&Filter::default(), 0, false)),
-        Section::Help
-    );
-    assert_eq!(
-        section_of(next_section(&Filter::default(), FIELDS.len() - 2, true)),
-        Section::Diagnostics
-    );
-    assert_eq!(
-        section_of(next_section(
-            &Filter::default(),
-            first_row(Section::Diagnostics),
-            true
-        )),
-        Section::Help
-    );
+fn tab_jumps_to_the_next_page_and_wraps() {
+    let walk = |row, forward| section_of(next_section(&Filter::default(), row, forward));
+    assert_eq!(walk(0, true), Section::Window);
+    assert_eq!(next_section(&Filter::default(), HELP_ROW, true), 0);
+    assert_eq!(walk(0, false), Section::About);
+    assert_eq!(walk(first_row(Section::Keyboard), true), Section::About);
 }
 
 #[test]
-fn rows_move_across_sections_and_stop_at_the_ends() {
-    let last_appearance = first_row(Section::Files) - 1;
+fn rows_move_across_pages_and_stop_at_the_ends() {
+    let filter = Filter::default();
     assert_eq!(
-        section_of(moved(&Filter::default(), last_appearance, true)),
-        Section::Files
+        section_of(moved(&filter, Field::Font.index(), true)),
+        Section::Window
     );
-    assert_eq!(moved(&Filter::default(), 0, false), 0);
-    assert_eq!(
-        moved(&Filter::default(), FIELDS.len() - 1, true),
-        FIELDS.len() - 1
-    );
+    assert_eq!(moved(&filter, 0, false), 0);
+    let last = Field::ModifierHintsDelay.index();
+    assert_eq!(moved(&filter, last, true), last);
 }
 
 #[test]
@@ -166,9 +153,9 @@ fn a_menu_tile_toggle_becomes_a_change_of_its_field() {
 }
 
 #[test]
-fn appearance_has_the_modifier_hint_rows() {
+fn keyboard_has_the_modifier_hint_rows() {
     let hints = spec(Field::ModifierHints);
-    assert_eq!(hints.section, Section::Appearance);
+    assert_eq!(hints.section, Section::Keyboard);
     assert_eq!(hints.key, "appearance.modifier-hints");
     let Control::Choices(options, Look::Segments) = hints.control else {
         panic!("modifier hints are not segments: {:?}", hints.control);
@@ -176,7 +163,7 @@ fn appearance_has_the_modifier_hint_rows() {
     let toml: Vec<&str> = options.iter().map(|option| option.toml).collect();
     assert_eq!(toml, ["off", "fkeys", "all"]);
     let delay = spec(Field::ModifierHintsDelay);
-    assert_eq!(delay.section, Section::Appearance);
+    assert_eq!(delay.section, Section::Keyboard);
     assert_eq!(delay.key, "appearance.modifier-hints-delay-ms");
     assert_eq!(delay.control, Control::Number);
 }
@@ -192,50 +179,23 @@ fn modifier_hints_default_to_every_shortcut_after_400_ms() {
 }
 
 #[test]
-fn the_display_section_groups_the_window_and_each_viewer_in_order() {
-    let keys: Vec<(Option<&str>, &str)> = FIELDS
-        .iter()
-        .filter(|spec| spec.section == Section::Display)
-        .map(|spec| (spec.group(), spec.key))
+fn the_viewers_page_groups_each_viewer_in_order() {
+    let rows: Vec<(Option<&str>, &str)> = rows_in(Section::Viewers)
+        .map(|(_, spec)| (super::pages::group_of(spec.field), spec.key))
         .collect();
-    let groups: Vec<Option<&str>> = keys.iter().map(|(group, _)| *group).collect();
-    let expected = [
-        ("Window", 15),
-        ("Text", 3),
-        ("Image", 1),
-        ("Markdown", 1),
-        ("Preview", 2),
-        ("Automotive", 8),
-    ];
-    let expected: Vec<Option<&str>> = expected
-        .iter()
-        .flat_map(|(group, count)| std::iter::repeat_n(Some(*group), *count))
-        .collect();
-    assert_eq!(groups, expected);
-    let keys: Vec<&str> = keys.into_iter().map(|(_, key)| key).collect();
-    assert_eq!(keys[0], "window.view.tabs-with-one");
-    assert_eq!(keys[11], "window.view.contents");
     assert_eq!(
-        keys[12..],
+        rows,
         [
-            "window.view.ext-width",
-            "window.view.size-width",
-            "window.view.date-width",
-            "text.view.line-numbers",
-            "text.view.line-ends",
-            "text.view.syntax-theme",
-            "image.view.details",
-            "markdown.view.preview-split",
-            "preview.view.type-bars",
-            "preview.view.largest-files",
-            "automotive.view.preset",
-            "automotive.view.inspector",
-            "automotive.view.memory-strip",
-            "automotive.view.charts",
-            "automotive.view.row-bars",
-            "automotive.view.usage-bars",
-            "automotive.view.who-uses",
-            "automotive.modules",
+            (Some("Text and code"), "text.view.line-numbers"),
+            (Some("Text and code"), "text.view.line-ends"),
+            (Some("Text and code"), "text.view.syntax-theme"),
+            (Some("Images and Markdown"), "image.view.details"),
+            (Some("Images and Markdown"), "markdown.view.preview-split"),
+            (Some("Folder preview"), "preview.view.type-bars"),
+            (Some("Folder preview"), "preview.view.largest-files"),
+            (Some("Automotive files"), "automotive.view.preset"),
+            (Some("Automotive files"), "automotive.view.inspector"),
+            (Some("Automotive files"), "automotive.modules"),
         ]
     );
 }
@@ -269,10 +229,10 @@ fn the_inspector_opens_by_itself_only_in_rich_or_when_custom_asks() {
 }
 
 #[test]
-fn every_display_row_has_a_one_sentence_hint() {
+fn every_window_and_viewer_row_has_a_one_sentence_hint() {
     for spec in FIELDS
         .iter()
-        .filter(|spec| spec.section == Section::Display)
+        .filter(|spec| matches!(spec.section, Section::Window | Section::Viewers))
     {
         let help = spec.help();
         assert!(help.ends_with('.'), "{}", spec.key);
@@ -354,17 +314,17 @@ fn the_scroll_child_of_a_row_counts_the_group_headings_above_it() {
             FIELDS.iter().position(|spec| spec.field == field).unwrap(),
         )
     };
-    assert_eq!(child(Field::Theme), Some(1));
+    assert_eq!(child(Field::Theme), Some(2));
     assert_eq!(child(Field::WindowTabsWithOne), Some(2));
-    assert_eq!(child(Field::WindowContents), Some(13));
-    assert_eq!(child(Field::TextLineNumbers), Some(18));
-    assert_eq!(child(Field::ImageDetails), Some(22));
+    assert_eq!(child(Field::WindowContents), Some(18));
+    assert_eq!(child(Field::TextLineNumbers), Some(2));
+    assert_eq!(child(Field::ImageDetails), Some(6));
 }
 
 #[test]
 fn the_copy_mode_row_sits_in_its_own_section_with_plain_help() {
     let row = spec(Field::CopyMode);
-    assert_eq!(row.section, Section::Copy);
+    assert_eq!(row.section, Section::CopyDelete);
     assert_eq!(row.key, "copy.mode");
     assert_eq!(
         row.help,
@@ -389,7 +349,7 @@ fn the_copy_mode_starts_auto_and_follows_the_pick() {
 #[test]
 fn the_copy_verify_row_starts_auto_and_maps_each_choice() {
     let row = spec(Field::CopyVerify);
-    assert_eq!((row.section, row.key), (Section::Copy, "copy.verify"));
+    assert_eq!((row.section, row.key), (Section::CopyDelete, "copy.verify"));
     assert_eq!(Values::default().copy_verify(), navo_fs::VerifyMode::Auto);
     let modes = [
         navo_fs::VerifyMode::Auto,
@@ -419,9 +379,9 @@ fn files_has_the_drop_confirm_row_defaulting_to_never() {
 }
 
 #[test]
-fn selection_has_the_right_button_row_defaulting_to_total_commander() {
+fn files_has_the_right_button_row_defaulting_to_total_commander() {
     let row = spec(Field::RightButton);
-    assert_eq!(row.section, Section::Selection);
+    assert_eq!(row.section, Section::Files);
     assert_eq!(row.key, "selection.right-button");
     let Control::Choices(options, Look::Segments) = row.control else {
         panic!("right button is not segments: {:?}", row.control);
@@ -498,10 +458,10 @@ fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
         keys,
         [
             "search.index",
-            "search.drives",
-            "search.exclude",
             "search.network",
             "search.removable",
+            "search.drives",
+            "search.exclude",
             "search.remember",
         ]
     );
@@ -551,11 +511,10 @@ fn ui_scale_is_next_to_font_size_and_steps_by_ten() {
 }
 
 #[test]
-fn the_safety_net_section_lists_its_five_retention_fields() {
-    let keys: Vec<&str> = FIELDS
-        .iter()
-        .filter(|spec| spec.section == Section::Safety)
-        .map(|spec| spec.key)
+fn the_safety_net_group_lists_its_five_retention_fields() {
+    let keys: Vec<&str> = rows_in(Section::CopyDelete)
+        .filter(|(_, spec)| super::pages::group_of(spec.field) == Some("Safety net"))
+        .map(|(_, spec)| spec.key)
         .collect();
     assert_eq!(
         keys,
@@ -567,7 +526,6 @@ fn the_safety_net_section_lists_its_five_retention_fields() {
             "retention.min-free-mib",
         ]
     );
-    assert_eq!(Section::Safety.label(), "settings-safety");
     assert!(spec(Field::RetentionDays).help().contains("Not a backup"));
 }
 
@@ -605,26 +563,23 @@ fn the_tray_settings_are_windows_only() {
     for field in [Field::KeepInTray, Field::SummonKey] {
         assert_eq!(Filter::new("").admits(spec(field)), cfg!(windows));
     }
-    assert_eq!(
-        Filter::default().first_in(Section::Tray).is_some(),
-        cfg!(windows)
-    );
 }
 
 #[test]
-fn the_git_section_follows_search_with_seven_rows() {
-    let at = |section| Section::ALL.iter().position(|s| *s == section);
-    assert_eq!(at(Section::Git), at(Section::Search).map(|i| i + 1));
-    let keys: Vec<&str> = rows_in(Section::Git).map(|(_, spec)| spec.key).collect();
+fn the_git_group_on_tools_has_seven_rows() {
+    let keys: Vec<&str> = rows_in(Section::Tools)
+        .filter(|(_, spec)| spec.table() == "git")
+        .map(|(_, spec)| spec.key)
+        .collect();
     assert_eq!(
         keys,
         [
             "git.badges",
             "git.tool",
             "git.tool-command",
-            "git.engine",
             "git.fetch",
             "git.fetch-minutes",
+            "git.engine",
             "git.network"
         ]
     );
@@ -703,7 +658,7 @@ fn git_rows_are_found_by_their_words() {
     ] {
         assert!(Filter::new(words).admits(spec(field)), "{words}");
     }
-    assert!(Filter::new("git").first_in(Section::Git).is_some());
+    assert!(Filter::new("git").first_in(Section::Tools).is_some());
 }
 
 fn tool_row(id: &str, label: &str, path: &str, selected: bool) -> crate::git::ToolRow {
@@ -749,8 +704,8 @@ fn the_git_tool_defaults_to_auto_and_hides_the_command() {
 fn a_hidden_row_is_skipped_by_the_arrow_keys_and_the_list() {
     let filter = Filter::default().hiding(Some(Field::GitToolCommand));
     let tool = Field::GitTool.index();
-    assert_eq!(moved(&filter, tool, true), Field::GitEngine.index());
-    assert!(!lines(&filter, Section::Git).contains(&Line::Row(Field::GitToolCommand.index())));
+    assert_eq!(moved(&filter, tool, true), Field::GitFetch.index());
+    assert!(!lines(&filter, Section::Tools).contains(&Line::Row(Field::GitToolCommand.index())));
 }
 
 #[test]
@@ -799,7 +754,7 @@ fn only_the_clipboard_switch_shows_off_windows() {
     assert!(shown(Field::ClipboardOn));
     assert_eq!(shown(Field::ClipboardRecord), cfg!(windows));
     assert_eq!(shown(Field::ClipboardKey), cfg!(windows));
-    assert!(Filter::default().first_in(Section::Clipboard).is_some());
+    assert!(Filter::default().first_in(Section::TrayClipboard).is_some());
 }
 
 #[test]
@@ -811,25 +766,23 @@ fn an_older_service_can_be_updated_and_removed() {
 }
 
 #[test]
-fn the_compare_section_lists_its_five_fields_in_order() {
-    let keys: Vec<&str> = FIELDS
-        .iter()
-        .filter(|spec| spec.section == Section::Compare)
-        .map(|spec| spec.key)
+fn the_compare_group_lists_its_five_fields_in_order() {
+    let keys: Vec<&str> = rows_in(Section::Tools)
+        .filter(|(_, spec)| spec.table() == "compare")
+        .map(|(_, spec)| spec.key)
         .collect();
     assert_eq!(
         keys,
         [
-            "compare.git-engine",
             "compare.ignore-list",
             "compare.respect-gitignore",
-            "compare.memory-budget-mib",
             "compare.content-check",
+            "compare.git-engine",
+            "compare.memory-budget-mib",
         ]
     );
-    assert_eq!(Section::Compare.label(), "Compare");
     let _shown = show_compare();
-    assert!(Filter::default().first_in(Section::Compare).is_some());
+    assert!(Filter::default().admits(spec(Field::CompareIgnoreList)));
 }
 
 #[test]
@@ -857,10 +810,7 @@ fn the_compare_choices_use_the_stored_names() {
 
 #[test]
 fn the_compare_rows_have_texts_and_the_ignore_list_is_a_list() {
-    for spec in FIELDS
-        .iter()
-        .filter(|spec| spec.section == Section::Compare)
-    {
+    for spec in FIELDS.iter().filter(|spec| spec.table() == "compare") {
         assert!(!spec.label().starts_with("settings-"), "{}", spec.key);
         assert!(!spec.help().starts_with("settings-"), "{}", spec.key);
     }
@@ -880,26 +830,22 @@ fn the_search_finds_the_compare_rows_on_every_platform() {
 }
 
 #[test]
-fn a_hidden_compare_section_has_no_rows_hits_or_lines() {
+fn a_hidden_compare_group_has_no_rows_hits_or_lines() {
     let _hidden = hide_compare();
-    let hit = |query: &str| Filter::new(query).first_row().map(section_of);
-    assert_eq!(Filter::default().first_in(Section::Compare), None);
+    let hit = |query: &str| Filter::new(query).first_row();
+    assert!(!Filter::default().admits(spec(Field::CompareIgnoreList)));
     assert_eq!(hit("git revisions"), None);
     assert_eq!(hit("memory budget"), None);
-    let shown: Vec<Line> = lines(&Filter::new("compare"), Section::Appearance);
-    assert!(!shown.contains(&Line::Section(Section::Compare)));
-    let walked = next_section(&Filter::default(), first_row(Section::Clipboard), true);
-    assert_eq!(section_of(walked), Section::Diagnostics);
+    let shown: Vec<Line> = lines(&Filter::default(), Section::Tools);
+    assert!(!shown.contains(&Line::Group("Compare")));
 }
 
 #[test]
-fn a_visible_compare_section_has_rows_hits_and_a_stop_in_the_walk() {
+fn a_visible_compare_group_has_rows_hits_and_lines() {
     let _shown = show_compare();
     let hit = Filter::new("git revisions").first_row().map(section_of);
-    assert_eq!(hit, Some(Section::Compare));
-    let walked = next_section(&Filter::default(), first_row(Section::Clipboard), true);
-    assert_eq!(section_of(walked), Section::Compare);
-    assert!(lines(&Filter::default(), Section::Compare).contains(&Line::Section(Section::Compare)));
+    assert_eq!(hit, Some(Section::Tools));
+    assert!(lines(&Filter::default(), Section::Tools).contains(&Line::Group("Compare")));
 }
 
 #[test]

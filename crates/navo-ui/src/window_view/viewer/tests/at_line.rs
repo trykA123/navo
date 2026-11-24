@@ -80,6 +80,7 @@ fn f3_on_a_row_opens_navo_toml_at_its_key(cx: &mut TestAppContext) {
     let (window, view) = settings_window(cx);
     press(cx, window, &view, "ctrl-,");
     press(cx, window, &view, "down");
+    press(cx, window, &view, "down");
     open_at_key(cx, window, &view);
     let location = view.read_with(cx, |view, _| view.viewer_location().cloned());
     assert!(location.is_some_and(|at| at.as_str().ends_with("navo.toml")));
@@ -128,6 +129,7 @@ fn a_key_whose_section_is_not_in_the_file_opens_at_the_last_line(cx: &mut TestAp
 fn a_key_in_the_file_opens_without_a_note(cx: &mut TestAppContext) {
     let (window, view) = settings_window(cx);
     press(cx, window, &view, "ctrl-,");
+    press(cx, window, &view, "down");
     press(cx, window, &view, "down");
     open_at_key(cx, window, &view);
     assert_eq!(viewer_note(cx, window), None);
@@ -209,6 +211,7 @@ fn waiting_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<NavoWindo
 fn f3_right_after_a_change_waits_for_its_save(cx: &mut TestAppContext) {
     let (window, view, log) = waiting_window(cx);
     press(cx, window, &view, "ctrl-,");
+    press(cx, window, &view, "down");
     press(cx, window, &view, "down");
     cx.update_window(window, |_, window, cx| {
         window.press("left", cx);

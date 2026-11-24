@@ -2,100 +2,13 @@ use super::clipboard_fields::CLIPBOARD_FIELDS;
 use super::compare_fields::COMPARE_FIELDS;
 use super::general_fields::GENERAL;
 use super::git_fields::GIT_FIELDS;
+pub use super::pages::Section;
 use super::search_fields::SEARCH_ROWS;
 use super::tray_fields::TRAY_FIELDS;
 use super::update_fields::UPDATE_FIELDS;
 use super::viewer_fields::VIEWER_FIELDS;
 use super::window_fields::WINDOW_FIELDS;
 use crate::prelude::SharedString;
-use crate::primitives::IconName;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Section {
-    Appearance,
-    Files,
-    Selection,
-    Terminal,
-    Editor,
-    Copy,
-    Safety,
-    Search,
-    Git,
-    Display,
-    Tray,
-    Clipboard,
-    Compare,
-    Diagnostics,
-    Help,
-}
-
-impl Section {
-    pub const ALL: [Self; 15] = [
-        Self::Appearance,
-        Self::Files,
-        Self::Selection,
-        Self::Terminal,
-        Self::Editor,
-        Self::Copy,
-        Self::Safety,
-        Self::Search,
-        Self::Git,
-        Self::Display,
-        Self::Tray,
-        Self::Clipboard,
-        Self::Compare,
-        Self::Diagnostics,
-        Self::Help,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Appearance => "Appearance",
-            Self::Files => "Files",
-            Self::Selection => "Selection",
-            Self::Terminal => "Terminal",
-            Self::Editor => "Editor",
-            Self::Copy => "Copy",
-            Self::Safety => "settings-safety",
-            Self::Search => "Search",
-            Self::Git => "Git",
-            Self::Display => "Display",
-            Self::Tray => "Tray",
-            Self::Clipboard => "Clipboard",
-            Self::Compare => "Compare",
-            Self::Diagnostics => "settings-diagnostics",
-            Self::Help => "settings-help",
-        }
-    }
-
-    /// False for Compare while the compare feature is hidden.
-    pub fn is_shown(self) -> bool {
-        self != Self::Compare || crate::compare_visible::compare_visible()
-    }
-
-    pub fn is_translated(self) -> bool {
-        matches!(self, Self::Diagnostics | Self::Safety | Self::Help)
-    }
-
-    pub fn icon(self) -> IconName {
-        match self {
-            Self::Appearance => IconName::Contrast,
-            Self::Files => IconName::Folder,
-            Self::Selection => IconName::MousePointer,
-            Self::Terminal => IconName::SquareTerminal,
-            Self::Editor => IconName::FilePen,
-            Self::Copy => IconName::Copy,
-            Self::Safety => IconName::Undo2,
-            Self::Search => IconName::Search,
-            Self::Git => IconName::GitBranch,
-            Self::Display | Self::Diagnostics => IconName::Eye,
-            Self::Tray => IconName::PanelBottom,
-            Self::Clipboard => IconName::Clipboard,
-            Self::Compare => IconName::GitCompare,
-            Self::Help => IconName::BookOpen,
-        }
-    }
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Field {
@@ -332,15 +245,6 @@ const fn join<const N: usize>(parts: [&[FieldSpec]; 9]) -> [FieldSpec; N] {
     all
 }
 
-const GROUPS: [(&str, &str); 6] = [
-    ("window", "Window"),
-    ("text", "Text"),
-    ("image", "Image"),
-    ("markdown", "Markdown"),
-    ("preview", "Preview"),
-    ("automotive", "Automotive"),
-];
-
 const MESSAGE_PREFIX: &str = "settings-";
 
 fn shown(text: &'static str) -> SharedString {
@@ -368,14 +272,6 @@ impl FieldSpec {
 
     pub fn table(&self) -> &'static str {
         self.key.split('.').next().unwrap_or_default()
-    }
-
-    pub fn group(&self) -> Option<&'static str> {
-        let table = self.table();
-        GROUPS
-            .iter()
-            .find(|(name, _)| *name == table)
-            .map(|(_, label)| *label)
     }
 }
 

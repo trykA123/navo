@@ -1,7 +1,9 @@
+//! The Diagnostics group of the About page: cache and storage sizes, with a refresh button.
+
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 
-use super::{Handler, Section, SheetEvent};
+use super::{Handler, SheetEvent};
 use crate::prelude::*;
 use crate::primitives::Button;
 use crate::tokens::Theme;
@@ -105,9 +107,10 @@ fn save_button() -> Option<Button> {
     None
 }
 
+/// The Diagnostics group of the About page: one row per cache or store.
 pub(super) fn render(look: &super::view::Look) -> Vec<AnyElement> {
     let t = look.theme;
-    let mut rows = vec![super::view::section_heading(t, Section::Diagnostics)];
+    let mut rows = vec![super::help_page::group_title(t, "settings-diagnostics")];
     rows.extend(
         look.diagnostics
             .iter()

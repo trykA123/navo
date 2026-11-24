@@ -2,7 +2,7 @@ use super::fields::{Control, F, FieldSpec, Look, PRESETS, S, SYNTAX_THEMES, spec
 
 pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
     spec(
-        (F::TextLineNumbers, S::Display, "text.view.line-numbers"),
+        (F::TextLineNumbers, S::Viewers, "text.view.line-numbers"),
         (
             "Line numbers",
             "Shows the number of each line at its start.",
@@ -10,17 +10,17 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::TextLineEnds, S::Display, "text.view.line-ends"),
+        (F::TextLineEnds, S::Viewers, "text.view.line-ends"),
         ("Line ends", "Marks where each line ends, as LF or CRLF."),
         Control::Toggle,
     ),
     spec(
-        (F::TextSyntaxTheme, S::Display, "text.view.syntax-theme"),
+        (F::TextSyntaxTheme, S::Viewers, "text.view.syntax-theme"),
         ("settings-syntax-theme", "settings-syntax-theme-help"),
         Control::Choices(&SYNTAX_THEMES, Look::Segments),
     ),
     spec(
-        (F::ImageDetails, S::Display, "image.view.details"),
+        (F::ImageDetails, S::Viewers, "image.view.details"),
         (
             "Details",
             "Shows a panel with the camera, date and other EXIF data.",
@@ -30,7 +30,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
     spec(
         (
             F::MarkdownPreviewSplit,
-            S::Display,
+            S::Viewers,
             "markdown.view.preview-split",
         ),
         (
@@ -40,7 +40,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::PreviewTypeBars, S::Display, "preview.view.type-bars"),
+        (F::PreviewTypeBars, S::Viewers, "preview.view.type-bars"),
         (
             "Type bars",
             "Draws a size bar on each file type in a folder preview.",
@@ -50,7 +50,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
     spec(
         (
             F::PreviewLargestFiles,
-            S::Display,
+            S::Viewers,
             "preview.view.largest-files",
         ),
         (
@@ -60,7 +60,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::AutomotivePreset, S::Display, "automotive.view.preset"),
+        (F::AutomotivePreset, S::Viewers, "automotive.view.preset"),
         (
             "View",
             "Simple keeps the view calm, Rich turns every part on, Custom uses the toggles below.",
@@ -70,7 +70,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
     spec(
         (
             F::AutomotiveInspector,
-            S::Display,
+            S::Viewers,
             "automotive.view.inspector",
         ),
         (
@@ -82,7 +82,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
     spec(
         (
             F::AutomotiveMemoryStrip,
-            S::Display,
+            S::Viewers,
             "automotive.view.memory-strip",
         ),
         (
@@ -92,7 +92,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::AutomotiveCharts, S::Display, "automotive.view.charts"),
+        (F::AutomotiveCharts, S::Viewers, "automotive.view.charts"),
         (
             "Charts",
             "Shows bars, sparklines, bus load and signal curves where a view has them.",
@@ -100,7 +100,7 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::AutomotiveRowBars, S::Display, "automotive.view.row-bars"),
+        (F::AutomotiveRowBars, S::Viewers, "automotive.view.row-bars"),
         (
             "Row bars",
             "Shows a size bar and counts on each row of the ranges list.",
@@ -110,19 +110,19 @@ pub(super) const VIEWER_FIELDS: [FieldSpec; 15] = [
     spec(
         (
             F::AutomotiveUsageBars,
-            S::Display,
+            S::Viewers,
             "automotive.view.usage-bars",
         ),
         ("settings-usage-bars", "settings-usage-bars-help"),
         Control::Toggle,
     ),
     spec(
-        (F::AutomotiveWhoUses, S::Display, "automotive.view.who-uses"),
+        (F::AutomotiveWhoUses, S::Viewers, "automotive.view.who-uses"),
         ("settings-who-uses", "settings-who-uses-help"),
         Control::Toggle,
     ),
     spec(
-        (F::AutomotiveModules, S::Display, "automotive.modules"),
+        (F::AutomotiveModules, S::Viewers, "automotive.modules"),
         ("settings-module-prefixes", "settings-module-prefixes-help"),
         Control::Text,
     ),

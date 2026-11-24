@@ -2,11 +2,7 @@ use super::fields::{Control, F, FieldSpec, S, spec};
 
 pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
     spec(
-        (
-            F::WindowTabsWithOne,
-            S::Display,
-            "window.view.tabs-with-one",
-        ),
+        (F::WindowTabsWithOne, S::Window, "window.view.tabs-with-one"),
         (
             "Tabs row with one tab",
             "Shows the tabs row of a pane even when it holds a single tab.",
@@ -14,7 +10,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowPathBar, S::Display, "window.view.path-bar"),
+        (F::WindowPathBar, S::Window, "window.view.path-bar"),
         (
             "Path bar",
             "Shows the folder path above the file list, and Alt+D opens the path field without it.",
@@ -22,7 +18,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowDriveButton, S::Display, "window.view.drive-button"),
+        (F::WindowDriveButton, S::Window, "window.view.drive-button"),
         (
             "Drive button",
             "Shows the drive button in the pane header, and Alt+F1 and Alt+F2 open the drive list without it.",
@@ -30,12 +26,12 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowTitleSearch, S::Display, "window.view.title-search"),
+        (F::WindowTitleSearch, S::Window, "window.view.title-search"),
         ("Search box", "Shows the search box in the title bar."),
         Control::Toggle,
     ),
     spec(
-        (F::WindowFkeyBar, S::Display, "window.view.fkey-bar"),
+        (F::WindowFkeyBar, S::Window, "window.view.fkey-bar"),
         (
             "F-key bar",
             "Shows the function keys along the bottom, and the keys work without it.",
@@ -43,7 +39,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowIcons, S::Display, "window.view.icons"),
+        (F::WindowIcons, S::Window, "window.view.icons"),
         (
             "File icons",
             "Shows a small icon before each name in the file list.",
@@ -51,7 +47,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowExtColumn, S::Display, "window.view.ext-column"),
+        (F::WindowExtColumn, S::Window, "window.view.ext-column"),
         (
             "Extension column",
             "Shows the Ext column in the file list, and Ctrl+F4 sorts by extension without it.",
@@ -59,7 +55,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowSizeColumn, S::Display, "window.view.size-column"),
+        (F::WindowSizeColumn, S::Window, "window.view.size-column"),
         (
             "Size column",
             "Shows the Size column in the file list, and Ctrl+F6 sorts by size without it.",
@@ -67,7 +63,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowDateColumn, S::Display, "window.view.date-column"),
+        (F::WindowDateColumn, S::Window, "window.view.date-column"),
         (
             "Date column",
             "Shows the Date column in the file list, and Ctrl+F5 sorts by date without it.",
@@ -75,7 +71,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowFreeSpace, S::Display, "window.view.free-space"),
+        (F::WindowFreeSpace, S::Window, "window.view.free-space"),
         (
             "Free space",
             "Shows the free space of the current drive in the pane footer.",
@@ -85,7 +81,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
     spec(
         (
             F::WindowMarkedTotals,
-            S::Display,
+            S::Window,
             "window.view.marked-totals",
         ),
         (
@@ -95,7 +91,7 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowContents, S::Display, "window.view.contents"),
+        (F::WindowContents, S::Window, "window.view.contents"),
         (
             "Folder contents",
             "Shows the file and folder count and the total size in the pane footer.",
@@ -103,17 +99,17 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         Control::Toggle,
     ),
     spec(
-        (F::WindowExtWidth, S::Display, "window.view.ext-width"),
+        (F::WindowExtWidth, S::Window, "window.view.ext-width"),
         ("settings-ext-width", "settings-column-width-help"),
         Control::Number,
     ),
     spec(
-        (F::WindowSizeWidth, S::Display, "window.view.size-width"),
+        (F::WindowSizeWidth, S::Window, "window.view.size-width"),
         ("settings-size-width", "settings-column-width-help"),
         Control::Number,
     ),
     spec(
-        (F::WindowDateWidth, S::Display, "window.view.date-width"),
+        (F::WindowDateWidth, S::Window, "window.view.date-width"),
         ("settings-date-width", "settings-column-width-help"),
         Control::Number,
     ),

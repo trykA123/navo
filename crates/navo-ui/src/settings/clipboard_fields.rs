@@ -8,12 +8,16 @@ const POSITIONS: [Choice; 3] = [
 
 pub(super) const CLIPBOARD_FIELDS: [FieldSpec; 4] = [
     spec(
-        (F::ClipboardOn, S::Clipboard, "clipboard.enabled"),
+        (F::ClipboardOn, S::TrayClipboard, "clipboard.enabled"),
         ("settings-clipboard-on", "settings-clipboard-on-help"),
         Control::Toggle,
     ),
     spec(
-        (F::ClipboardRecord, S::Clipboard, "clipboard.record-history"),
+        (
+            F::ClipboardRecord,
+            S::TrayClipboard,
+            "clipboard.record-history",
+        ),
         (
             "settings-clipboard-record",
             "settings-clipboard-record-help",
@@ -21,14 +25,14 @@ pub(super) const CLIPBOARD_FIELDS: [FieldSpec; 4] = [
         Control::Toggle,
     ),
     spec(
-        (F::ClipboardKey, S::Clipboard, "clipboard.summon-key"),
+        (F::ClipboardKey, S::TrayClipboard, "clipboard.summon-key"),
         ("settings-clipboard-key", "settings-clipboard-key-help"),
         Control::Text,
     ),
     spec(
         (
             F::ClipboardPosition,
-            S::Clipboard,
+            S::TrayClipboard,
             "clipboard.popup-position",
         ),
         (

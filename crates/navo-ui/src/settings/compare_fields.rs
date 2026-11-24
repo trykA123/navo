@@ -15,7 +15,7 @@ pub(super) const BUDGET_MIB: (i64, i64) = (256, 16_384);
 
 pub(super) const COMPARE_FIELDS: [FieldSpec; 5] = [
     spec(
-        (F::CompareGitEngine, S::Compare, "compare.git-engine"),
+        (F::CompareGitEngine, S::Tools, "compare.git-engine"),
         (
             "settings-compare-git-engine",
             "settings-compare-git-engine-help",
@@ -23,7 +23,7 @@ pub(super) const COMPARE_FIELDS: [FieldSpec; 5] = [
         Control::Choices(&GIT_ENGINES, Look::Segments),
     ),
     spec(
-        (F::CompareIgnoreList, S::Compare, "compare.ignore-list"),
+        (F::CompareIgnoreList, S::Tools, "compare.ignore-list"),
         (
             "settings-compare-ignore-list",
             "settings-compare-ignore-list-help",
@@ -33,7 +33,7 @@ pub(super) const COMPARE_FIELDS: [FieldSpec; 5] = [
     spec(
         (
             F::CompareRespectGitignore,
-            S::Compare,
+            S::Tools,
             "compare.respect-gitignore",
         ),
         (
@@ -43,7 +43,7 @@ pub(super) const COMPARE_FIELDS: [FieldSpec; 5] = [
         Control::Toggle,
     ),
     spec(
-        (F::CompareBudgetMib, S::Compare, "compare.memory-budget-mib"),
+        (F::CompareBudgetMib, S::Tools, "compare.memory-budget-mib"),
         (
             "settings-compare-memory-budget",
             "settings-compare-memory-budget-help",
@@ -51,7 +51,7 @@ pub(super) const COMPARE_FIELDS: [FieldSpec; 5] = [
         Control::Number,
     ),
     spec(
-        (F::CompareContentCheck, S::Compare, "compare.content-check"),
+        (F::CompareContentCheck, S::Tools, "compare.content-check"),
         (
             "settings-compare-content-check",
             "settings-compare-content-check-help",

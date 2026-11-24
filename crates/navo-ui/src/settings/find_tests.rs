@@ -41,8 +41,9 @@ fn find_needs_every_word_and_an_empty_find_keeps_all_rows() {
     let here = FIELDS
         .iter()
         .filter(|spec| cfg!(windows) || !spec.field.is_windows_only())
-        .filter(|spec| spec.section != Section::Help)
-        .filter(|spec| spec.section.is_shown() && spec.field.is_shown())
+        .filter(|spec| spec.section != Section::About)
+        .filter(|spec| spec.field.is_shown())
+        .filter(|spec| spec.table() != "compare" || crate::compare_visible::compare_visible())
         .count();
     assert_eq!(matching("   ").len(), here);
     assert!(matching("zzzz").is_empty());
@@ -53,7 +54,14 @@ fn headings_without_a_match_do_not_appear() {
     let filter = Filter::new("files.sort-desc");
     let shown = lines(&filter, Section::Appearance);
     assert_eq!(shown[0], Line::Section(Section::Files));
-    assert!(shown.iter().all(|line| !matches!(line, Line::Group(_))));
+    assert_eq!(shown[1], Line::Group("In the list"));
+    assert_eq!(
+        shown
+            .iter()
+            .filter(|line| matches!(line, Line::Group(_)))
+            .count(),
+        1
+    );
     assert_eq!(
         shown
             .iter()
@@ -69,8 +77,8 @@ fn a_group_heading_shows_only_with_a_match_under_it() {
     assert_eq!(
         lines(&filter, Section::Appearance),
         [
-            Line::Section(Section::Display),
-            Line::Group("Text"),
+            Line::Section(Section::Viewers),
+            Line::Group("Text and code"),
             Line::Row(
                 FIELDS
                     .iter()
@@ -116,7 +124,7 @@ fn the_scroll_child_follows_the_filtered_list() {
         .iter()
         .position(|s| s.field == Field::SortDescending)
         .unwrap();
-    assert_eq!(child_of(&filter, descending), Some(2));
+    assert_eq!(child_of(&filter, descending), Some(3));
 }
 
 #[test]

@@ -1,6 +1,9 @@
+//! Find in Settings: which rows a search admits, and the lines a page or a search shows.
+
 use super::fields::{FIELDS, Field, FieldSpec, Section};
 use super::help_page::WORDS;
 use super::index_page::PROGRESS_WORDS;
+use super::pages::{group_of, ordered_rows};
 use super::search_page::{HISTORY_WORDS, SERVICE_WORDS};
 use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, rows_in};
 
@@ -33,13 +36,13 @@ impl Filter {
 
     #[must_use]
     pub fn admits(&self, spec: &FieldSpec) -> bool {
-        if spec.section == Section::Help {
+        if spec.section == Section::About {
             return false;
         }
         if !spec.field.is_shown()
             || (spec.field.is_windows_only() && !cfg!(windows))
             || self.hidden == Some(spec.field)
-            || !spec.section.is_shown()
+            || (spec.table() == "compare" && !crate::compare_visible::compare_visible())
         {
             return false;
         }
@@ -57,19 +60,18 @@ impl Filter {
 
     #[must_use]
     pub fn first_row(&self) -> Option<usize> {
-        FIELDS.iter().position(|spec| self.admits(spec))
+        ordered_rows()
+            .find(|(_, spec)| self.admits(spec))
+            .map(|(index, _)| index)
     }
 
     #[must_use]
     pub fn first_in(&self, section: Section) -> Option<usize> {
-        match section {
-            Section::Diagnostics => {
-                return self
-                    .admits_text("diagnostics cache storage report")
-                    .then_some(DIAGNOSTICS_ROW);
-            }
-            Section::Help => return self.admits_text(WORDS).then_some(HELP_ROW),
-            _ => {}
+        if section == Section::About {
+            return self.admits_text(WORDS).then_some(HELP_ROW).or_else(|| {
+                self.admits_text("diagnostics cache storage report")
+                    .then_some(DIAGNOSTICS_ROW)
+            });
         }
         rows_in(section)
             .find(|(_, spec)| self.admits(spec))
@@ -117,8 +119,8 @@ fn section_lines(filter: &Filter, section: Section) -> Vec<Line> {
     let mut group = None;
     let mut found = vec![Line::Section(section)];
     for (index, spec) in rows {
-        if section == Section::Display && spec.group() != group {
-            group = spec.group();
+        if group_of(spec.field) != group {
+            group = group_of(spec.field);
             found.extend(group.map(Line::Group));
         }
         found.push(Line::Row(index));

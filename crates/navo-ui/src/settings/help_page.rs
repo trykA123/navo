@@ -1,8 +1,10 @@
+//! The Help part of the About page: guide and keys buttons, the version, and updates.
+
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 
 use super::view::Look;
-use super::{Field, HELP_ROW, Handler, Section, SheetEvent};
+use super::{Field, HELP_ROW, Handler, SheetEvent};
 use crate::prelude::*;
 use crate::primitives::{Button, Kbd};
 use crate::tokens::Theme;
@@ -184,11 +186,30 @@ fn auto_unavailable(t: &Theme) -> AnyElement {
         .into_any_element()
 }
 
+/// A small titled group heading on the About page; `id` is the ftl message of the title.
+pub(super) fn group_title(t: &Theme, id: &'static str) -> AnyElement {
+    let label = navo_l10n::tr(id);
+    div()
+        .id(id)
+        .role(Role::Heading)
+        .aria_label(label.clone())
+        .test_support()
+        .flex_none()
+        .px(t.spacing.xl)
+        .pt(t.spacing.md)
+        .text_size(t.typography.tiny)
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(t.colors.muted)
+        .child(label)
+        .into_any_element()
+}
+
+/// The Help group of the About page, below Diagnostics.
 pub(super) fn render(look: &Look) -> Vec<AnyElement> {
     let t = look.theme;
     let toggle = super::view::row(look, HELP_ROW, Field::CheckUpdates.spec());
     let mut page = vec![
-        super::view::section_heading(t, Section::Help),
+        group_title(t, "settings-help"),
         controls(t, look.send.as_ref()),
         version(t, look.version),
         update_line(look),

@@ -113,6 +113,7 @@ fn the_echo_of_a_sheet_change_applies_nothing(cx: &mut TestAppContext) {
     rig.press(cx, "ctrl-,");
     settle_motion(cx, &rig);
     rig.press(cx, "down");
+    rig.press(cx, "down");
     rig.press(cx, "right");
     assert_eq!(density(cx), Density::Comfortable);
     send(cx, &rig, on_disk(Density::Comfortable));

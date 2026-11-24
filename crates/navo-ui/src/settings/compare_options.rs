@@ -2,17 +2,14 @@
 
 use navo_store::SettingValue;
 
-use super::{Change, FIELDS, Section, Values, stored_value};
+use super::{Change, FIELDS, Values, stored_value};
 use crate::compare_diff::CompareOptions;
 
 /// The `[compare]` settings the user sees in `values`; a table that does not parse
 /// falls back to the defaults with a warning.
 pub fn compare_options(values: &Values) -> CompareOptions {
     let mut table = serde_json::Map::new();
-    for spec in FIELDS
-        .iter()
-        .filter(|spec| spec.section == Section::Compare)
-    {
+    for spec in FIELDS.iter().filter(|spec| spec.table() == "compare") {
         let Some(key) = spec.key.strip_prefix("compare.") else {
             continue;
         };

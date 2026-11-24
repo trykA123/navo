@@ -5,7 +5,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, Hsla, TestAppContext};
 
 use super::app_menu::{Rig, rig};
-use crate::settings::{Change, FIELDS, Field, Values};
+use crate::settings::{Change, FIELDS, Field, Section, Values};
 use crate::tokens::{self, ColorTheme, Density, SyntaxTheme, ThemeChoice};
 use crate::window_view::SettingsNews;
 
@@ -30,9 +30,11 @@ fn row_of(field: Field) -> usize {
 
 fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
-    let steps = FIELDS[..row_of(field)]
-        .iter()
-        .filter(|spec| filter.admits(spec))
+    let steps = Section::ALL
+        .into_iter()
+        .flat_map(crate::settings::rows_in)
+        .take_while(|(row, _)| *row != row_of(field))
+        .filter(|(_, spec)| filter.admits(spec))
         .count();
     for _ in 0..steps {
         rig.press(cx, "down");
@@ -101,6 +103,7 @@ fn every_row_starts_at_default_with_a_live_chip(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     assert_eq!(state(cx, &rig, Field::Theme).as_deref(), Some("Default"));
+    go_to(cx, &rig, Field::Density);
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Default"));
     assert!(!shows(cx, &rig, ("settings-reset", row_of(Field::Density))));
     assert_eq!(label(cx, &rig, "settings-live").as_deref(), Some("Live"));
@@ -118,7 +121,10 @@ fn a_change_in_the_sheet_marks_its_row_changed_with_a_dot_and_reset(cx: &mut Tes
     assert!(shows(cx, &rig, ("settings-dot", row)));
     assert!(shows(cx, &rig, ("settings-reset", row)));
     rig.press(cx, "up");
-    assert_eq!(state(cx, &rig, Field::Theme).as_deref(), Some("Default"));
+    assert_eq!(
+        state(cx, &rig, Field::ColorTheme).as_deref(),
+        Some("Default")
+    );
     assert_eq!(footer(cx, &rig), footer_for(1));
 }
 
@@ -126,6 +132,7 @@ fn a_change_in_the_sheet_marks_its_row_changed_with_a_dot_and_reset(cx: &mut Tes
 fn a_hand_edit_marks_its_row_changed(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
+    go_to(cx, &rig, Field::Density);
     let edited = Values::default().with(&Change::density(Density::Compact));
     send(cx, &rig, edited, 1);
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Changed"));
@@ -136,6 +143,7 @@ fn a_hand_edit_marks_its_row_changed(cx: &mut TestAppContext) {
 fn a_value_the_ledger_follows_stays_default_off_the_built_in_default(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
+    go_to(cx, &rig, Field::Density);
     let following = Values::default()
         .with(&Change::density(Density::Compact))
         .marked(|_| false);

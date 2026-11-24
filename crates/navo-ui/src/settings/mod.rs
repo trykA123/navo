@@ -20,6 +20,7 @@ mod index_page;
 mod index_progress;
 mod inspector;
 mod nav;
+mod pages;
 mod row_state;
 mod search_fields;
 mod search_page;
@@ -39,6 +40,8 @@ mod window_fields;
 mod find_tests;
 #[cfg(test)]
 mod hidden_tests;
+#[cfg(test)]
+mod pages_tests;
 #[cfg(test)]
 mod tests;
 
