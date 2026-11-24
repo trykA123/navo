@@ -2,6 +2,40 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.7 — Settings, rearranged
+
+*2026-11-24*
+
+This release starts the new Settings: ten pages, one line per setting with a details column, folds for rare settings, page keys and Undo for each change. The modifier hints become a ribbon you can also open with the mouse, and the file list repaints faster while a filter is on. Setup gets the groundwork for installing in any folder, Program Files included, but that part is not switched on yet. v0.9.0 switches it on and completes the new Settings.
+
+### Added
+
+- **Ten Settings pages.** Settings now has ten pages: Appearance, Window, Files, Copy and delete, Search, Viewers, Tools, Tray and clipboard, Keyboard and About. Compare sits under Tools, and Diagnostics and Help share About. Shortcuts moved into Keyboard, behind a Show shortcuts button. A greyed-out Modules page marks where modules will appear later.
+- **Page keys.** Ctrl+Tab or Ctrl+PgDn goes to the next page, and Ctrl+Shift+Tab or Ctrl+PgUp to the previous one. Ctrl+1 to Ctrl+9 and Ctrl+0 jump to a page; hold Ctrl to see each page's digit. Down from the last row of a page moves on to the next page.
+- **One line per setting, with a details column.** Each row shows only a changed dot, the name and the control. The column beside the list shows the focused setting's value, its default once changed, help, pictures, Reset to default (F8) and its `navo.toml` key with Open the line (F3). In a window narrower than 960 px, the column moves under the list.
+- **Nested settings.** A setting that depends on another sits indented under it, with a guide line. For example, Descending sits under Sort by. While the parent is off, the nested row is dimmed and its value does not change.
+- **Folds for rare settings.** 14 rare settings sit in a closed "N advanced settings" fold at the end of their group. Right or a click opens a fold, and Left closes it. Find still reaches every advanced setting and opens its fold.
+- **Undo after each change.** After a change, the status line names the setting and offers Undo. The text edit bar has Save and Cancel buttons. You set the tray keys (summon, clipboard) by pressing the key you want.
+- **The modifier ribbon.** Holding Ctrl, Shift or Alt shows a card with that modifier's keys in named groups, such as Files, Tabs and Window for Ctrl. Each key has a short label, and the full command name is its tooltip. The header counts the keys, names the layers one modifier away ("+ Shift 10 more") and has a Turn off button. The three cards share one height, so the card does not jump when you switch modifiers. Delete permanently is marked as dangerous. F1 to F10 get their own row while the F-key bar is hidden.
+- **The ribbon by mouse.** A click on the Shift, Ctrl or Alt pill in the F-key bar pins that card open. A second click on the pill, Turn off or Esc closes it. Pinning needs modifier hints turned on.
+
+### Changed
+
+- **A faster file list filter.** While a filter is on, each repaint works out a row's display name once and shares one work buffer across all rows. The rows look the same as before.
+- **Updates stay off for a folder you cannot write.** When your account cannot write the install folder, Navo turns updates off and logs why. Before, it asked at every start.
+- **Faster checks for contributors.** The windows-quick check runs about 1.5 to 2 times faster: it builds the tests once and runs them on four machines at the same time. Every job has a time limit, and release builds use the locked dependency versions. Reusable workflows now live in the `trykA123/ci` repository.
+- **The repository holds only the product.** Plans and design documents moved to a separate repository.
+
+### Not switched on yet
+
+- **Setup in any folder.** The groundwork to install Navo in any folder, Program Files included, is in. It covers Setup started as administrator from your own desktop, a helper that creates protected folders after a Windows prompt, and new folder checks. The new folder rules are still off. Setup still installs for one user and still refuses a start as administrator. v0.9.0 switches this on.
+- **Removing the PDF sandbox on uninstall.** The step that deletes the PDF viewer's Windows sandbox profile is built. A fix makes it accept only the answers Windows really gives when the profile is already gone. Uninstall does not run this step yet.
+
+### Known issues
+
+- **The new Settings is not complete.** A fold row shows only its arrow and count, and Find does not tag advanced settings yet. The rest of Settings v2 comes in v0.9.0.
+- **Setup's administrator message runs ahead.** When you start Setup as administrator, it says it was started from another account or outside your desktop. In this release, Setup refuses every start as administrator. Start Setup normally from your desktop.
+
 ## v0.8.6 — A sharper F3
 
 *2026-11-24*
