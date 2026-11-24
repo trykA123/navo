@@ -102,3 +102,4 @@ results-link-unreadable = “{ $path }” is a link Navo could not follow, so no
 results-into-source = “{ $path }” is inside the selected folder “{ $inside }”, so nothing was copied or moved.
 results-overwrites-source = “{ $path }” is a selected source or holds one, so nothing was copied or moved.
 results-identity-unreadable = Navo could not tell which file “{ $path }” is, so nothing was copied or moved.
+results-volume-changed = “{ $path }” now leads to another drive, so nothing was copied or moved.

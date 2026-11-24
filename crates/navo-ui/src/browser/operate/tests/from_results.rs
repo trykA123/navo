@@ -488,3 +488,40 @@ fn an_existing_target_navo_cannot_identify_is_refused() {
     );
     assert!(exists(&fs, "w/top.c"));
 }
+
+#[test]
+fn a_kept_folder_relinked_into_another_row_after_planning_is_refused_on_confirm() {
+    let fs = hits();
+    fs.add_file("w/d/a.c", 7);
+    fs.add_file("w/e/a.c", 8);
+    fs.add_file("dest/d/a.c", 9);
+    let request = request(&fs, OpKind::Move, &["w/d/a.c", "w/e"], "dest");
+    let (mut browser, id) = prepared(&fs, request);
+    assert!(browser.pick_policy(navo_core::ConflictPolicy::OverwriteAll));
+    settle(&mut browser);
+    assert!(browser.pending().is_some_and(|p| !p.is_planning()));
+    fs.remove("dest/d");
+    fs.make_link(&fs.location("w/e"), &fs.location("dest/d"))
+        .expect("a link");
+    assert!(browser.confirm());
+    settle(&mut browser);
+    let message = run_failed(&browser, id);
+    assert!(
+        message.contains("dest/d/a.c") && message.contains("selected source"),
+        "{message}"
+    );
+    assert!(exists(&fs, "w/e/a.c") && exists(&fs, "w/d/a.c"));
+}
+
+#[test]
+fn a_rename_whose_target_left_the_volume_after_planning_is_refused_on_confirm() {
+    let fs = hits();
+    let (mut browser, id) = prepared(&fs, request(&fs, OpKind::Move, &["w/top.c"], "dest"));
+    assert!(renames(&browser));
+    fs.set_volume_serial("dest", Some(2));
+    assert!(browser.confirm());
+    settle(&mut browser);
+    let message = run_failed(&browser, id);
+    assert!(message.contains("another drive"), "{message}");
+    assert!(exists(&fs, "w/top.c") && !exists(&fs, "dest/top.c"));
+}

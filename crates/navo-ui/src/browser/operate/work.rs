@@ -161,11 +161,8 @@ impl JobWork {
         progress: &mut dyn FnMut(&Progress),
     ) -> Result<(JobOutcome, RenameReport), LogRefusal> {
         if let (Run::Plain, Some(stamps)) = (&self.run, &self.pending.replan.results) {
-            let planned = (
-                self.pending.sources.as_slice(),
-                self.pending.target.as_ref(),
-            );
-            super::from_results::recheck(self.ops.as_ref(), planned, stamps)?;
+            let ops = self.ops.as_ref();
+            super::from_results::recheck(ops, &self.pending, stamps, &self.cancel)?;
         }
         let mut log = match &self.run {
             Run::Undo { offer, log } => log(offer)?,

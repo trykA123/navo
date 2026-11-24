@@ -11,7 +11,7 @@ use navo_core::{
 use navo_fs::{CancelToken, ProviderOps, volume_of};
 use navo_l10n::FluentArgs;
 
-use super::super::OpRequest;
+use super::super::{OpRequest, PendingOp, Structure};
 use super::RowStamp;
 use super::alias::{Aliases, Place, Unresolved, is_partial, place};
 use super::identity::{Clash, Identities, Row};
@@ -49,13 +49,9 @@ pub(in crate::browser::operate) fn plan_rows(
     let tops = distinct_tops(provider, &mut aliases, (&request.sources, stamps), cancel)?;
     let mut identities = identities_of(provider, &tops);
     refuse_inside(&mut identities, &tops, (&target, &real_target))?;
-    let kept = request
-        .structure
-        .as_ref()
-        .filter(|structure| structure.keep)
-        .map(|structure| structure.base.clone());
+    let kept = kept_base(request.structure.as_ref());
     let both = (provider, &mut aliases);
-    request.same_volume = all_on_volume(both, &tops, &target, kept.as_ref());
+    request.same_volume = all_on_volume(both, &tops, &target, kept);
     if let Some(structure) = request.structure.as_mut() {
         structure.same_volume = request.same_volume;
     }
@@ -172,33 +168,41 @@ impl RowStamp {
     }
 }
 
-/// Before a confirmed plan from Find results runs: each kept row must still be what the search
-/// saw, and the target must still lie outside every row. Refuses the run by the row's name.
+/// Before a confirmed plan from Find results runs, checks it again on the job thread: each kept
+/// row must still be what the search saw, the target and every write must still miss every row
+/// (by place and identity), and a move that renames must still stay on one volume.
 pub(in crate::browser::operate) fn recheck(
     provider: &dyn ProviderOps,
-    (sources, target): (&[Location], Option<&Location>),
+    pending: &PendingOp,
     stamps: &[RowStamp],
+    cancel: &CancelToken,
 ) -> Result<(), String> {
-    let target = target.ok_or_else(nothing)?;
-    if stamps.len() != sources.len() {
+    let target = pending.target.as_ref().ok_or_else(nothing)?;
+    if stamps.len() != pending.sources.len() {
         return Err(nothing());
     }
     let mut aliases = Aliases::new(provider);
-    let mut tops_at = HashSet::new();
-    for (location, stamp) in sources.iter().zip(stamps) {
-        let real = aliases.real_entry(location).map_err(unresolved)?;
-        if !stamp.still_at(provider, &real).unwrap_or(false) {
-            return Err(said("results-changed", location, None));
-        }
-        tops_at.insert(place(&real));
-    }
     let real_target = aliases.real(target).map_err(unresolved)?;
-    match std::iter::successors(Some(real_target), Location::parent)
-        .find(|folder| tops_at.contains(&place(folder)))
-    {
-        Some(inside) => Err(said("results-into-source", target, Some(&inside))),
-        None => Ok(()),
+    let tops = distinct_tops(provider, &mut aliases, (&pending.sources, stamps), cancel)?;
+    let mut identities = identities_of(provider, &tops);
+    refuse_inside(&mut identities, &tops, (target, &real_target))?;
+    let kept = kept_base(pending.structure.as_ref());
+    if pending.replan.same_volume && !all_on_volume((provider, &mut aliases), &tops, target, kept) {
+        return Err(said("results-volume-changed", target, None));
     }
+    refuse_overwrites(
+        (&mut aliases, &mut identities),
+        &pending.plan,
+        &tops,
+        cancel,
+    )
+}
+
+/// The base the rows keep their folders below, when the structure is kept.
+fn kept_base(structure: Option<&Structure>) -> Option<&Location> {
+    structure
+        .filter(|structure| structure.keep)
+        .map(|structure| &structure.base)
 }
 
 /// True when a move may rename: each row's folder and the folder it lands in (below `target`
