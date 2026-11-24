@@ -47,9 +47,4 @@ impl Values {
     pub fn git_network(&self) -> bool {
         self.flag(Field::GitNetwork)
     }
-
-    /// False for a row whose controlling setting is off.
-    pub fn is_enabled(&self, field: Field) -> bool {
-        field != Field::GitFetchMinutes || self.git_fetch()
-    }
 }

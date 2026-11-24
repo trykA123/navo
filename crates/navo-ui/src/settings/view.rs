@@ -9,6 +9,7 @@ use super::find::{Filter, Line, lines};
 use super::git_page::{self, GitPage};
 use super::index_page;
 use super::inspector;
+use super::nested;
 use super::row_state;
 use super::search_page::{self, SearchPage};
 use super::values::{Value, Values};
@@ -246,6 +247,8 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .when(!is_current, |row| row.hover(|row| row.bg(t.colors.hover)))
         .child(line(look, &content_look, index, spec))
         .children(under_line(t, notes));
+    let is_nested = spec.field.is_nested() && look.filter.is_empty();
+    let row = nested::indented(t, row, is_nested);
     select_on_click(row, look.send.as_ref(), index).into_any_element()
 }
 

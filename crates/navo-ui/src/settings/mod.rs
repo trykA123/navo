@@ -21,6 +21,7 @@ mod index_progress;
 mod inspector;
 mod keyboard_page;
 mod nav;
+mod nested;
 mod page_keys;
 mod pages;
 mod row_state;
