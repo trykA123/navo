@@ -124,7 +124,7 @@ jobs:
   build-windows:
     needs: check-tag
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write
