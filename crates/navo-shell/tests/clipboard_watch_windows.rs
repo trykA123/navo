@@ -182,3 +182,34 @@ fn drop_stops_the_thread_and_a_new_watcher_starts() {
     let _owner = set_text("after restart", &[]);
     assert_eq!(next_text(&received).unwrap().0, "after restart");
 }
+
+/// How long the AG18 test keeps the clipboard open after a write, as a slow reader would.
+const HOLD: Duration = Duration::from_millis(300);
+
+/// Writes `text`, then reopens the clipboard at once and keeps it open for `HOLD`.
+fn set_text_and_hold(text: &str) -> Owner {
+    let owner = set_text(text, &[]);
+    // SAFETY: owner is a live window created on this thread.
+    assert_ne!(unsafe { OpenClipboard(owner.0) }, 0);
+    std::thread::sleep(HOLD);
+    // SAFETY: this thread opened the clipboard above.
+    assert_ne!(unsafe { CloseClipboard() }, 0);
+    owner
+}
+
+/// AG18 red test: a change must still arrive when another reader holds the clipboard while
+/// the watcher handles its update (a loaded runner's clipboard history or a second listener).
+#[test]
+fn a_change_still_arrives_after_another_reader_held_the_clipboard() {
+    let (_watcher, received) = watch();
+    for round in 0..3 {
+        let text = format!("held copy {round}");
+        let _owner = set_text_and_hold(&text);
+        let got = next_text(&received).map(|(text, _)| text);
+        assert_eq!(
+            got.as_deref(),
+            Some(text.as_str()),
+            "round {round}: the change read while the clipboard was held for {HOLD:?} was dropped"
+        );
+    }
+}
