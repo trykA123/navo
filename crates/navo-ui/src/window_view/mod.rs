@@ -141,8 +141,8 @@ pub use preset_edit::{
 };
 pub use preview::folder_summary;
 pub use search_hooks::{
-    CommandUse, Frecent, Frecents, RecentCommands, SearchHooks, ServiceHooks, ServiceOutcome,
-    ServiceStatus,
+    CommandUse, FindHooks, Frecent, Frecents, RecentCommands, SavedSearch, SearchHooks,
+    ServiceHooks, ServiceOutcome, ServiceStatus, WindowOrder,
 };
 pub use settings_news::{SettingsInbox, SettingsNews, SettingsSender};
 pub use settings_save::{SaveReport, SaveSettings};

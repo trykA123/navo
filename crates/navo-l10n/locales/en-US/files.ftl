@@ -301,6 +301,7 @@ find-path-filtered = search: { $text } · { $filters }
 find-counts = { $hits } hits in { $files } files
 find-searching = Searching · { $counts } · Esc stop
 find-column-folder = Folder
+find-save-off = Saving is off
 files-recycle-confirm = Move { $items } to the { -bin }?
 job-route-recycle = { $from } → { -bin }
 

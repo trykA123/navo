@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use super::hand_off::RawWindowHandle;
 use crate::browser::{FolderTotalsQuery, no_folder_totals};
 pub use crate::settings::ServiceStatus;
 
@@ -69,6 +70,47 @@ impl ServiceHooks {
     }
 }
 
+/// Orders the results window above its owner (`true`) or takes that order away.
+pub type WindowOrder = Arc<dyn Fn(RawWindowHandle, bool) + Send + Sync>;
+
+/// A find the user saved: its name, query text and the folder it starts in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SavedSearch {
+    pub id: i64,
+    pub name: String,
+    pub query: String,
+    pub base: Option<String>,
+}
+
+/// Saves a find under a name, with its query text and an optional starting folder.
+type SaveSearch = Arc<dyn Fn(&str, &str, Option<&str>) -> Result<i64, String> + Send + Sync>;
+/// Saves the current results under a name, with the paths they cover.
+type SaveSnapshot =
+    Arc<dyn Fn(&str, &str, Option<&str>, &[String]) -> Result<i64, String> + Send + Sync>;
+
+/// The app's side of the find results window; the core UI replaces the saves with real ones.
+#[derive(Clone)]
+pub struct FindHooks {
+    pub pin: WindowOrder,
+    pub save_search: SaveSearch,
+    pub save_snapshot: SaveSnapshot,
+    pub saved: Arc<dyn Fn() -> Vec<SavedSearch> + Send + Sync>,
+    pub delete_saved: Arc<dyn Fn(i64) -> Result<(), String> + Send + Sync>,
+}
+
+impl FindHooks {
+    #[must_use]
+    pub fn none() -> Self {
+        Self {
+            pin: Arc::new(|_, _| {}),
+            save_search: Arc::new(|_, _, _| Err(navo_l10n::tr("find-save-off").to_owned())),
+            save_snapshot: Arc::new(|_, _, _, _| Err(navo_l10n::tr("find-save-off").to_owned())),
+            saved: Arc::new(Vec::new),
+            delete_saved: Arc::new(|_| Err(navo_l10n::tr("find-save-off").to_owned())),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct SearchHooks {
     pub index: crate::command_center::IndexHooks,
@@ -80,6 +122,7 @@ pub struct SearchHooks {
     pub clear: ClearSearch,
     pub service: ServiceHooks,
     pub folder_totals: FolderTotalsQuery,
+    pub find: FindHooks,
 }
 
 impl SearchHooks {
@@ -95,6 +138,7 @@ impl SearchHooks {
             clear: Arc::new(|| {}),
             service: ServiceHooks::none(),
             folder_totals: no_folder_totals(),
+            find: FindHooks::none(),
         }
     }
 }
