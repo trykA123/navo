@@ -21,10 +21,13 @@ use navo_ui::window_view::{
 use crate::editor::Search;
 use crate::watch_file::watch_file;
 
+mod error;
 mod expand;
 mod model;
 mod program;
 mod start;
+
+pub use error::UserCommandError;
 
 #[cfg(test)]
 mod tests;
@@ -171,15 +174,13 @@ fn run_hook(
         if let Err(error) = spawned {
             tracing::warn!(%error, "could not start the user command thread");
             if let Some(sender) = lock(&failure_sender).clone() {
-                let _ = sender.send(UserCommandNews::Refused {
-                    name: failure_name,
-                    message: format!("could not start the command: {error}"),
-                });
+                refuse(&sender, &failure_name, &UserCommandError::from(error));
             }
         }
     })
 }
 
+/// Runs the named command on a worker thread and sends its refusal or exit as news.
 fn run_one(
     name: &str,
     invocation: UserInvocation,
@@ -189,17 +190,37 @@ fn run_one(
     let Some(sender) = lock(sender).clone() else {
         return;
     };
+    let plan = match find_plan(name, invocation, commands, &search()) {
+        Ok(plan) => plan,
+        Err(error) => return refuse(&sender, name, &error),
+    };
+    let exit_sender = sender.clone();
+    let exit_name = name.to_owned();
+    let hidden = plan.console == model::Console::Hide;
+    let on_exit = Box::new(move |code| {
+        let _ = exit_sender.send(UserCommandNews::Exited {
+            name: exit_name,
+            code,
+            hidden,
+        });
+    });
+    if let Err(error) = launch(plan, on_exit) {
+        refuse(&sender, name, &error);
+    }
+}
+
+/// Finds the command called `name` and expands it for this invocation.
+fn find_plan(
+    name: &str,
+    invocation: UserInvocation,
+    commands: &Mutex<Vec<model::UserCommand>>,
+    search: &Search,
+) -> Result<expand::Plan, UserCommandError> {
     let command = lock(commands)
         .iter()
         .find(|command| command.name == name)
-        .cloned();
-    let Some(command) = command else {
-        let _ = sender.send(UserCommandNews::Refused {
-            name: name.to_owned(),
-            message: format!("there is no user command named `{name}`"),
-        });
-        return;
-    };
+        .cloned()
+        .ok_or(UserCommandError::NoCommand)?;
     let invocation = expand::Invocation {
         file: invocation.file,
         marked: invocation.marked,
@@ -207,35 +228,23 @@ fn run_one(
         other_folder: invocation.other_folder,
         other_file: invocation.other_file,
     };
-    let plan = match expand::plan(&command, &invocation, &search()) {
-        Ok(plan) => plan,
-        Err(error) => {
-            let _ = sender.send(UserCommandNews::Refused {
-                name: name.to_owned(),
-                message: error.to_string(),
-            });
-            return;
-        }
-    };
-    let exit_sender = sender.clone();
-    let exit_name = name.to_owned();
-    let hidden = plan.console == model::Console::Hide;
-    let started = start::start(
-        plan,
-        Box::new(move |code| {
-            let _ = exit_sender.send(UserCommandNews::Exited {
-                name: exit_name,
-                code,
-                hidden,
-            });
-        }),
-    );
-    if let Err(message) = started {
-        let _ = sender.send(UserCommandNews::Refused {
-            name: name.to_owned(),
-            message,
-        });
-    }
+    expand::plan(&command, &invocation, search).map_err(UserCommandError::Refused)
+}
+
+/// Starts the expanded command; `on_exit` gets its exit code later.
+fn launch(
+    plan: expand::Plan,
+    on_exit: Box<dyn FnOnce(Option<i32>) + Send>,
+) -> Result<(), UserCommandError> {
+    start::start(plan, on_exit).map_err(UserCommandError::Start)
+}
+
+/// Sends the localized refusal for `name` to the window.
+fn refuse(sender: &UserCommandSender, name: &str, error: &UserCommandError) {
+    let _ = sender.send(UserCommandNews::Refused {
+        name: name.to_owned(),
+        message: error.message(name),
+    });
 }
 
 fn report(news: &UserCommandNews) {

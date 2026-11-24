@@ -4,7 +4,8 @@ use futures::channel::mpsc::UnboundedReceiver;
 use navo_store::StoreDirs;
 use navo_ui::window_view::{UserCommandInfo, UserCommandNews, UserInvocation};
 
-use super::{FILE, edit, hooks, model, search};
+use super::expand::Refusal;
+use super::{FILE, UserCommandError, edit, find_plan, hooks, launch, model, search};
 
 const NEWS_WAIT: Duration = Duration::from_secs(10);
 
@@ -187,4 +188,55 @@ fn an_exit_news_says_whether_the_console_was_hidden() {
             }
         );
     }
+}
+
+fn command(name: &str) -> model::UserCommand {
+    model::UserCommand {
+        name: name.to_owned(),
+        program: "anything".to_owned(),
+        args: Vec::new(),
+        start_in: Vec::new(),
+        console: model::Console::Hide,
+        key: None,
+    }
+}
+
+#[test]
+fn an_unknown_name_is_no_command() {
+    let commands = std::sync::Mutex::new(vec![command("Build")]);
+    let result = find_plan("Deploy", UserInvocation::default(), &commands, &search());
+    assert_eq!(result, Err(UserCommandError::NoCommand));
+}
+
+#[test]
+fn a_refused_plan_keeps_its_refusal() {
+    let commands = std::sync::Mutex::new(vec![command("Build")]);
+    let result = find_plan("Build", UserInvocation::default(), &commands, &search());
+    assert_eq!(result, Err(UserCommandError::Refused(Refusal::NoCursor)));
+}
+
+#[test]
+fn a_failed_thread_is_a_spawn_error() {
+    let error = std::io::Error::from(std::io::ErrorKind::OutOfMemory);
+    assert_eq!(
+        UserCommandError::from(error),
+        UserCommandError::Spawn(std::io::ErrorKind::OutOfMemory)
+    );
+}
+
+#[test]
+fn a_program_that_cannot_start_is_a_start_error() {
+    let root = tempfile::tempdir().expect("a temporary folder");
+    let plan = super::expand::Plan {
+        program: root.path().join("missing-program"),
+        args: Vec::new(),
+        start_in: root.path().to_owned(),
+        console: model::Console::Hide,
+        list: None,
+    };
+    let result = launch(plan, Box::new(|_code| {}));
+    assert!(
+        matches!(result, Err(UserCommandError::Start(_))),
+        "{result:?}"
+    );
 }
