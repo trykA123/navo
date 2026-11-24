@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use navo_core::Location;
+use navo_fs::CancelToken;
 use navo_index::pipe::{Client, FolderTotals, FolderTotalsReply, folder_paths_within_limits};
 use navo_ui::browser::{FolderTotalsQuery, FolderTotalsSource, TotalsState};
 
@@ -29,11 +30,15 @@ impl FolderTotalsSource for ServiceTotals {
     }
 
     /// Asks in as few requests as the pipe limits allow, one chunk after another; a failed
-    /// request makes only its own chunk `Unavailable`. Keeps the input's length and order.
-    fn query_many(&self, folders: &[Location]) -> Vec<TotalsState> {
+    /// request makes only its own chunk `Unavailable`. Once `cancel` fires, no further chunk is
+    /// sent and the rest stay `Unavailable`. Keeps the input's length and order.
+    fn query_many(&self, folders: &[Location], cancel: &CancelToken) -> Vec<TotalsState> {
         let mut answers = vec![TotalsState::Unavailable; folders.len()];
         let mut requests = 0;
         for chunk in chunks(folders) {
+            if cancel.is_cancelled() {
+                break;
+            }
             let paths: Vec<String> = chunk
                 .iter()
                 .map(|&i| folders[i].as_str().to_owned())
@@ -227,6 +232,7 @@ mod tests {
 
     thread_local! {
         static SENT: std::cell::RefCell<Vec<Vec<String>>> = const { std::cell::RefCell::new(Vec::new()) };
+        static STOP: CancelToken = CancelToken::new();
     }
 
     /// Records each request and answers Ready, with `files` set to the path's trailing number.
@@ -255,6 +261,12 @@ mod tests {
         recording(paths)
     }
 
+    /// Records the request, then fires `STOP`, as a user leaving the folder mid-batch does.
+    fn leave_after_reply(paths: &[String]) -> Option<FolderTotalsReply> {
+        STOP.with(CancelToken::cancel);
+        recording(paths)
+    }
+
     /// Answers no totals with the busy flag set, as a rebuilding volume does.
     fn all_busy(paths: &[String]) -> Option<FolderTotalsReply> {
         Some(FolderTotalsReply {
@@ -269,7 +281,7 @@ mod tests {
         folders: &[Location],
     ) -> (Vec<TotalsState>, Vec<usize>) {
         SENT.with(|sent| sent.borrow_mut().clear());
-        let answers = ServiceTotals { reply }.query_many(folders);
+        let answers = ServiceTotals { reply }.query_many(folders, &STOP.with(CancelToken::clone));
         let sizes = SENT.with(|sent| sent.borrow().iter().map(Vec::len).collect());
         (answers, sizes)
     }
@@ -333,6 +345,14 @@ mod tests {
         assert_eq!(sizes, [64, 6]);
         assert!(answers[..64].iter().all(|a| *a == TotalsState::Unavailable));
         assert_eq!(answers[64..], (64..70).map(ready).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_cancel_after_the_first_chunk_sends_no_further_request() {
+        let (answers, sizes) = batch(leave_after_reply, &numbered(150));
+        assert_eq!(sizes, [64], "no chunk is sent after the cancel");
+        assert_eq!(answers[..64], (0..64).map(ready).collect::<Vec<_>>());
+        assert!(answers[64..].iter().all(|a| *a == TotalsState::Unavailable));
     }
 
     #[test]

@@ -5,7 +5,9 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
 use navo_core::{Location, Tab, TabId};
-use navo_fs::{FolderSize, JobKind, JobSlot, OwnerGuard, OwnerId, Priority, volume_of};
+use navo_fs::{
+    CancelToken, FolderSize, JobKind, JobSlot, OwnerGuard, OwnerId, Priority, volume_of,
+};
 
 use super::measure::{Asked, Asker, FolderTotalsQuery, Measured, TotalsState};
 use super::{Browser, Message};
@@ -47,7 +49,10 @@ impl Browser {
         work.shown_pending += 1;
         let job = self.pools.queue(JobKind::Size).submit_then(
             slot,
-            move |_| answer(&totals, tab_id, &folder, asked),
+            move |cancel| {
+                let states = ask(&totals, &asked, cancel);
+                answer(tab_id, &folder, asked, states)
+            },
             move |answered| {
                 let _ = sender.send(Message::ShownBatch(owner, answered));
                 wake();
@@ -94,16 +99,25 @@ impl Browser {
     }
 }
 
-/// Runs on the size job: one `query_many` for all `asked` folders. A complete total is ready;
-/// anything else, a short answer or a panicking source leaves the folder to be measured alone.
-fn answer(
+/// Runs on the size job: one `query_many` for all `asked` folders, stopped by the job's
+/// `cancel`. A panicking source answers nothing.
+fn ask(
     totals: &FolderTotalsQuery,
+    asked: &[(String, Location)],
+    cancel: &CancelToken,
+) -> Vec<TotalsState> {
+    let targets: Vec<Location> = asked.iter().map(|(_, target)| target.clone()).collect();
+    catch_unwind(AssertUnwindSafe(|| totals.query_many(&targets, cancel))).unwrap_or_default()
+}
+
+/// Sorts the batch `states` for `asked`: a complete total is ready; anything else or a short
+/// answer leaves the folder to be measured alone.
+fn answer(
     tab: TabId,
     folder: &Location,
     asked: Vec<(String, Location)>,
+    states: Vec<TotalsState>,
 ) -> Answered {
-    let targets: Vec<Location> = asked.iter().map(|(_, target)| target.clone()).collect();
-    let states = catch_unwind(AssertUnwindSafe(|| totals.query_many(&targets))).unwrap_or_default();
     let mut states = states.into_iter();
     let (mut ready, mut rest) = (Vec::new(), Vec::new());
     for (name, _) in asked {
@@ -123,10 +137,11 @@ fn answer(
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
 
     use navo_core::Location;
-    use navo_fs::{FakeFs, FakeOp, VolumeKind};
+    use navo_fs::{CancelToken, FakeFs, FakeOp, VolumeKind};
 
     use crate::browser::tests::{browser_at, settle};
     use crate::browser::{Browser, FolderTotals, FolderTotalsSource, TotalsState};
@@ -159,7 +174,7 @@ mod tests {
             answer(folder)
         }
 
-        fn query_many(&self, folders: &[Location]) -> Vec<TotalsState> {
+        fn query_many(&self, folders: &[Location], _: &CancelToken) -> Vec<TotalsState> {
             self.batches.fetch_add(1, Ordering::SeqCst);
             folders.iter().map(answer).collect()
         }
@@ -239,7 +254,7 @@ mod tests {
             TotalsState::Unavailable
         }
 
-        fn query_many(&self, _: &[Location]) -> Vec<TotalsState> {
+        fn query_many(&self, _: &[Location], _: &CancelToken) -> Vec<TotalsState> {
             panic!("batch path broke")
         }
     }
@@ -257,6 +272,60 @@ mod tests {
             fs.calls("list/a", FakeOp::List),
             1,
             "walked once after the panic"
+        );
+    }
+
+    /// A batch that holds its job until the job's token fires (at most 5 s), as a long chunked
+    /// request does, and records whether it saw the cancel.
+    #[derive(Default)]
+    struct Held {
+        entered: AtomicBool,
+        done: AtomicBool,
+        saw_cancel: AtomicBool,
+    }
+
+    impl FolderTotalsSource for Held {
+        fn query(&self, _: &Location) -> TotalsState {
+            TotalsState::Unavailable
+        }
+
+        fn query_many(&self, folders: &[Location], cancel: &CancelToken) -> Vec<TotalsState> {
+            self.entered.store(true, Ordering::SeqCst);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !cancel.is_cancelled() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            self.saw_cancel
+                .store(cancel.is_cancelled(), Ordering::SeqCst);
+            self.done.store(true, Ordering::SeqCst);
+            vec![TotalsState::Unavailable; folders.len()]
+        }
+    }
+
+    /// Polls `browser` until `flag` is set, failing after 10 s.
+    fn wait_for(browser: &mut Browser, flag: &AtomicBool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !flag.load(Ordering::SeqCst) {
+            assert!(Instant::now() < deadline, "the batch job never got there");
+            browser.poll();
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn leaving_shown_sizes_cancels_the_running_batch() {
+        let names: Vec<String> = ["a", "b"].map(String::from).to_vec();
+        let (mut browser, _, _) = shown(&names);
+        let held = Arc::new(Held::default());
+        browser.set_folder_totals(held.clone());
+        browser.set_measures_shown_folders(false);
+        browser.set_measures_shown_folders(true);
+        wait_for(&mut browser, &held.entered);
+        browser.set_measures_shown_folders(false);
+        wait_for(&mut browser, &held.done);
+        assert!(
+            held.saw_cancel.load(Ordering::SeqCst),
+            "the batch must see the size job's token fire"
         );
     }
 }

@@ -18,6 +18,8 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use navo_fs::CancelToken;
+
     use super::super::{FolderTotals, FolderTotalsQuery};
     use super::*;
 
@@ -55,7 +57,7 @@ mod tests {
     fn default_query_many_asks_once_per_folder_in_order() {
         let source = Counting::default();
         let shown = folders(&["a", "busy", "bb", "gone", "ccc"]);
-        let answers = source.query_many(&shown);
+        let answers = source.query_many(&shown, &CancelToken::new());
         assert_eq!(source.calls.load(Ordering::SeqCst), shown.len());
         let expected: Vec<TotalsState> = shown.iter().map(|f| source.query(f)).collect();
         assert_eq!(answers, expected);
@@ -66,14 +68,14 @@ mod tests {
         let counting = Arc::new(Counting::default());
         let source: FolderTotalsQuery = counting.clone();
         let shown = folders(&["a", "b", "c", "d", "e", "f", "g"]);
-        assert_eq!(source.query_many(&shown).len(), 7);
+        assert_eq!(source.query_many(&shown, &CancelToken::new()).len(), 7);
         assert_eq!(counting.calls.load(Ordering::SeqCst), 7);
     }
 
     #[test]
     fn default_query_many_with_no_folders_asks_nothing() {
         let source = Counting::default();
-        assert!(source.query_many(&[]).is_empty());
+        assert!(source.query_many(&[], &CancelToken::new()).is_empty());
         assert_eq!(source.calls.load(Ordering::SeqCst), 0);
     }
 }

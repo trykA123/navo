@@ -31,8 +31,9 @@ pub trait FolderTotalsSource: Send + Sync {
         measure_busy::ask(self, folder, cancel, measure_busy::RETRY_EVERY)
     }
 
-    /// Totals for many folders, same length and order as `folders`; the default asks one by one.
-    fn query_many(&self, folders: &[Location]) -> Vec<TotalsState> {
+    /// Totals for many folders, same length and order as `folders`. A batching source stops
+    /// between requests once `cancel` fires; the default asks one by one and ignores it.
+    fn query_many(&self, folders: &[Location], _cancel: &CancelToken) -> Vec<TotalsState> {
         measure_many::each(self, folders)
     }
 }
