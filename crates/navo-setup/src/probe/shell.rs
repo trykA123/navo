@@ -31,6 +31,7 @@ use windows_sys::Win32::System::Threading::{
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetShellWindow, GetWindowThreadProcessId};
 
 use super::shell_token;
+use crate::admin_switch::{Identity, as_admin_with};
 use crate::start_mode::ShellFacts;
 
 /// The shell after `install`; set once per process.
@@ -158,23 +159,10 @@ pub fn as_user<T>(f: impl FnOnce() -> T) -> io::Result<T> {
 }
 
 /// Runs `f` on Setup's own token, then impersonates again if this thread was entered.
-/// Fails without running `f` if the revert fails, and after `f` if entering again fails.
+/// Fails without running `f` if the revert fails. If entering again fails, after `f` or while `f`
+/// panics, it writes one stderr line and aborts: the thread must not go on as the admin.
 pub fn as_admin<T>(f: impl FnOnce() -> T) -> io::Result<T> {
-    let was_entered = is_entered();
-    // SAFETY: no arguments; ends this thread's impersonation, if any.
-    if unsafe { RevertToSelf() } == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    let mut reenter = Reenter { armed: was_entered };
-    if was_entered {
-        ENTERED.set(None);
-    }
-    let value = f();
-    reenter.armed = false;
-    if was_entered {
-        enter_as_user()?;
-    }
-    Ok(value)
+    as_admin_with(&ThreadIdentity, f)
 }
 
 /// Whether this thread is impersonating the shell user.
@@ -192,28 +180,47 @@ impl Drop for Revert {
     fn drop(&mut self) {
         // SAFETY: no arguments; ends this thread's impersonation.
         if unsafe { RevertToSelf() } == 0 {
-            let error = io::Error::last_os_error();
-            super::facts::warn(format_args!(
-                "could not stop acting as the desktop user: {error}"
-            ));
-            std::process::abort();
+            abort_on_identity(
+                "could not stop acting as the desktop user",
+                &io::Error::last_os_error(),
+            );
         }
         ENTERED.set(self.before);
     }
 }
 
-/// Impersonates again when `as_admin`'s `f` panics, so the thread never stays on the admin token.
-struct Reenter {
-    armed: bool,
+/// This thread's identity as `as_admin` switches it.
+struct ThreadIdentity;
+
+impl Identity for ThreadIdentity {
+    /// Reverts to Setup's own token; returns whether the thread was entered.
+    fn revert(&self) -> io::Result<bool> {
+        let was_entered = is_entered();
+        // SAFETY: no arguments; ends this thread's impersonation, if any.
+        if unsafe { RevertToSelf() } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if was_entered {
+            ENTERED.set(None);
+        }
+        Ok(was_entered)
+    }
+
+    /// Impersonates the shell user again.
+    fn enter(&self) -> io::Result<()> {
+        enter_as_user()
+    }
+
+    /// Aborts: the thread is on Setup's admin token and must not run on.
+    fn fatal(&self, error: io::Error) -> ! {
+        abort_on_identity("could not act as the desktop user again", &error)
+    }
 }
 
-impl Drop for Reenter {
-    /// Enters again on unwind; a failure is recorded in `ENTERED` by `enter_as_user`.
-    fn drop(&mut self) {
-        if self.armed {
-            let _ = enter_as_user();
-        }
-    }
+/// Writes one stderr line and aborts when this thread's identity is wrong or unknown (IW39).
+fn abort_on_identity(what: &str, error: &io::Error) -> ! {
+    super::facts::warn(format_args!("{what}: {error}"));
+    std::process::abort()
 }
 
 /// The shell window and its process id, or `None` when there is no shell.

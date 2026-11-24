@@ -10,11 +10,15 @@ use std::ffi::OsString;
 use std::process::ExitCode;
 
 #[cfg(any(windows, test))]
+mod admin_switch;
+#[cfg(test)]
+mod admin_switch_tests;
+#[cfg(any(windows, test))]
 mod adopt_rule;
 pub mod cli;
 #[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "H4's child spawn is the first caller")
+    not(any(test, windows)),
+    expect(dead_code, reason = "only the Windows child spawn calls it")
 )]
 mod cmdline;
 #[cfg(test)]

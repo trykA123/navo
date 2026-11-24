@@ -10,4 +10,5 @@ pub mod helper_checks;
 mod parent_acl;
 pub mod pin;
 pub mod shell;
+pub mod shell_spawn;
 mod shell_token;
