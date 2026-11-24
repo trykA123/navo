@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 
+use super::error::StartError;
 use super::expand::{LIST_PATH_MARKER, MAX_COMMAND_LINE, Plan, command_line_units};
 use super::model::Console;
 
@@ -27,7 +28,7 @@ const PENDING: &str = "pending";
 pub(super) fn start(
     plan: Plan,
     on_exit: Box<dyn FnOnce(Option<i32>) + Send>,
-) -> Result<(), String> {
+) -> Result<(), StartError> {
     start_with(plan, on_exit, |job| {
         std::thread::Builder::new()
             .name("navo-user-command-wait".to_owned())
@@ -43,7 +44,7 @@ fn start_with(
     plan: Plan,
     on_exit: Box<dyn FnOnce(Option<i32>) + Send>,
     spawn_waiter: impl FnOnce(WaitJob) -> std::io::Result<()>,
-) -> Result<(), String> {
+) -> Result<(), StartError> {
     let list_path = prepare(&plan)?;
     let mut command = match command(&plan, list_path.as_deref()) {
         Ok(command) => command,
@@ -64,19 +65,19 @@ fn start_with(
     });
     if let Err(error) = spawn_waiter(job) {
         remove_list_if(list_path.as_deref());
-        return Err(format!("could not start the command: {error}"));
+        return Err(StartError::Waiter(error.kind()));
     }
     let child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
             remove_list_if(list_path.as_deref());
-            return Err(format!("could not start the command: {error}"));
+            return Err(StartError::Program(error.kind()));
         }
     };
     if let Some(path) = &list_path
         && let Err(error) = publish_pid(&sidecar(path), child.id())
     {
-        tracing::warn!(%error, "could not publish the user command pid");
+        tracing::warn!(?error, "could not publish the user command pid");
     }
     if child_sender.send(child).is_err() {
         tracing::warn!("the user command wait thread ended early");
@@ -90,7 +91,7 @@ fn remove_list_if(path: Option<&Path>) {
     }
 }
 
-fn prepare(plan: &Plan) -> Result<Option<PathBuf>, String> {
+fn prepare(plan: &Plan) -> Result<Option<PathBuf>, StartError> {
     let list_path = match &plan.list {
         Some(paths) => {
             let dir = list_dir()?;
@@ -107,13 +108,10 @@ fn prepare(plan: &Plan) -> Result<Option<PathBuf>, String> {
     Ok(list_path)
 }
 
-fn command(plan: &Plan, list_path: Option<&Path>) -> Result<Command, String> {
+fn command(plan: &Plan, list_path: Option<&Path>) -> Result<Command, StartError> {
     let args = spawn_args(&plan.args, list_path)?;
     if command_line_units(&plan.program, &args) > MAX_COMMAND_LINE {
-        return Err(
-            "the command line is over 32,000 UTF-16 units; use `{marked-list}` for many files"
-                .to_owned(),
-        );
+        return Err(StartError::TooLong);
     }
     let mut command = Command::new(&plan.program);
     for arg in &args {
@@ -128,10 +126,10 @@ fn command(plan: &Plan, list_path: Option<&Path>) -> Result<Command, String> {
     Ok(command)
 }
 
-fn spawn_args(args: &[String], list_path: Option<&Path>) -> Result<Vec<String>, String> {
+fn spawn_args(args: &[String], list_path: Option<&Path>) -> Result<Vec<String>, StartError> {
     let Some(list_path) = list_path else {
         if args.iter().any(|arg| arg.contains(LIST_PATH_MARKER)) {
-            return Err("the marked list has no file".to_owned());
+            return Err(StartError::ListMarker);
         }
         return Ok(args.to_vec());
     };
@@ -141,17 +139,17 @@ fn spawn_args(args: &[String], list_path: Option<&Path>) -> Result<Vec<String>, 
         .map(|arg| arg.replace(LIST_PATH_MARKER, &path))
         .collect();
     if replaced.iter().any(|arg| arg.contains(LIST_PATH_MARKER)) {
-        return Err("the marked list path could not be inserted".to_owned());
+        return Err(StartError::ListMarker);
     }
     Ok(replaced)
 }
 
-fn write_list(dir: &Path, paths: &[String]) -> Result<PathBuf, String> {
+fn write_list(dir: &Path, paths: &[String]) -> Result<PathBuf, StartError> {
     if paths
         .iter()
         .any(|path| path.chars().any(|ch| ch == '\r' || ch == '\n'))
     {
-        return Err("a list path contains a line break".to_owned());
+        return Err(StartError::ListLineBreak);
     }
     private_dir(dir)?;
     let mut content = String::new();
@@ -163,25 +161,23 @@ fn write_list(dir: &Path, paths: &[String]) -> Result<PathBuf, String> {
         .prefix("list-")
         .suffix(".txt")
         .tempfile_in(dir)
-        .map_err(|error| format!("could not create the list file: {error}"))?;
+        .map_err(|error| StartError::ListFile(error.kind()))?;
     file.write_all(content.as_bytes())
-        .map_err(|error| format!("could not write the list file: {error}"))?;
+        .map_err(|error| StartError::ListFile(error.kind()))?;
     file.flush()
-        .map_err(|error| format!("could not write the list file: {error}"))?;
+        .map_err(|error| StartError::ListFile(error.kind()))?;
     let (file, path) = file
         .keep()
-        .map_err(|error| format!("could not keep the list file: {error}"))?;
+        .map_err(|error| StartError::ListFile(error.error.kind()))?;
     drop(file);
     Ok(path)
 }
 
-fn create_pid(path: &Path) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| "the pid sidecar has no folder".to_owned())?;
+fn create_pid(path: &Path) -> Result<(), StartError> {
+    let parent = path.parent().ok_or(StartError::ListFolderNotPrivate)?;
     let trusted = list_dir()?;
     if trusted.as_path() != parent {
-        return Err("the pid sidecar is not in the list folder".to_owned());
+        return Err(StartError::ListFolderNotPrivate);
     }
     private_dir(parent)?;
     let mut options = std::fs::OpenOptions::new();
@@ -193,15 +189,15 @@ fn create_pid(path: &Path) -> Result<(), String> {
     }
     let mut file = options
         .open(path)
-        .map_err(|error| format!("could not create the pid sidecar: {error}"))?;
+        .map_err(|error| StartError::Sidecar(error.kind()))?;
     file.write_all(PENDING.as_bytes())
-        .map_err(|error| format!("could not write the pid sidecar: {error}"))?;
+        .map_err(|error| StartError::Sidecar(error.kind()))?;
     file.flush()
-        .map_err(|error| format!("could not write the pid sidecar: {error}"))?;
+        .map_err(|error| StartError::Sidecar(error.kind()))?;
     Ok(())
 }
 
-fn publish_pid(path: &Path, pid: u32) -> Result<(), String> {
+fn publish_pid(path: &Path, pid: u32) -> Result<(), StartError> {
     publish_pid_with(path, pid, |from, to| std::fs::rename(from, to))
 }
 
@@ -209,24 +205,21 @@ fn publish_pid_with(
     path: &Path,
     pid: u32,
     replace: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
-) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| "the pid sidecar has no folder".to_owned())?;
+) -> Result<(), StartError> {
+    let parent = path.parent().ok_or(StartError::ListFolderNotPrivate)?;
     let mut temp = tempfile::Builder::new()
         .prefix(".pid-")
         .suffix(".tmp")
         .tempfile_in(parent)
-        .map_err(|error| format!("could not create the pid temp file: {error}"))?;
+        .map_err(|error| StartError::Sidecar(error.kind()))?;
     temp.write_all(pid.to_string().as_bytes())
-        .map_err(|error| format!("could not write the pid temp file: {error}"))?;
+        .map_err(|error| StartError::Sidecar(error.kind()))?;
     temp.flush()
-        .map_err(|error| format!("could not flush the pid temp file: {error}"))?;
+        .map_err(|error| StartError::Sidecar(error.kind()))?;
     temp.as_file()
         .sync_all()
-        .map_err(|error| format!("could not flush the pid temp file: {error}"))?;
-    replace(temp.path(), path)
-        .map_err(|error| format!("could not publish the pid sidecar: {error}"))
+        .map_err(|error| StartError::Sidecar(error.kind()))?;
+    replace(temp.path(), path).map_err(|error| StartError::Sidecar(error.kind()))
 }
 
 /// Whether a process from a pid sidecar still runs.

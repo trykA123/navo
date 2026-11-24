@@ -9,6 +9,8 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
+use crate::user_commands::error::StartError;
+
 #[cfg(test)]
 thread_local! {
     static LIST_ROOT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
@@ -23,7 +25,7 @@ pub(super) fn with_list_root<T>(root: &Path, run: impl FnOnce() -> T) -> T {
 }
 
 /// The folder is checked and then created by path; a local attacker winning that window is out of scope.
-pub(super) fn list_dir() -> Result<PathBuf, String> {
+pub(super) fn list_dir() -> Result<PathBuf, StartError> {
     #[cfg(test)]
     if let Some(root) = LIST_ROOT.with(|slot| slot.borrow().clone()) {
         return Ok(root);
@@ -32,7 +34,7 @@ pub(super) fn list_dir() -> Result<PathBuf, String> {
 }
 
 #[cfg(windows)]
-fn local_app_data() -> Result<PathBuf, String> {
+fn local_app_data() -> Result<PathBuf, StartError> {
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::System::Com::CoTaskMemFree;
@@ -60,7 +62,7 @@ fn local_app_data() -> Result<PathBuf, String> {
     } else {
         // SAFETY: text is null or the allocation returned by SHGetKnownFolderPath.
         unsafe { CoTaskMemFree(text.cast()) };
-        return Err("could not find the local app data folder".to_owned());
+        return Err(StartError::NoListRoot);
     };
     // SAFETY: text is null or the allocation returned by SHGetKnownFolderPath.
     unsafe { CoTaskMemFree(text.cast()) };
@@ -68,7 +70,7 @@ fn local_app_data() -> Result<PathBuf, String> {
 }
 
 #[cfg(windows)]
-fn system_list_dir() -> Result<PathBuf, String> {
+fn system_list_dir() -> Result<PathBuf, StartError> {
     use std::os::windows::fs::MetadataExt;
 
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
@@ -79,19 +81,19 @@ fn system_list_dir() -> Result<PathBuf, String> {
         match std::fs::create_dir(path) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(format!("could not create the list folder: {error}")),
+            Err(error) => return Err(StartError::ListFolder(error.kind())),
         }
         let metadata = std::fs::symlink_metadata(path)
-            .map_err(|error| format!("could not inspect the list folder: {error}"))?;
+            .map_err(|error| StartError::ListFolder(error.kind()))?;
         if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-            return Err("a list folder component is not a real directory".to_owned());
+            return Err(StartError::ListFolderNotPrivate);
         }
     }
     Ok(lists)
 }
 
 #[cfg(unix)]
-fn system_list_dir() -> Result<PathBuf, String> {
+fn system_list_dir() -> Result<PathBuf, StartError> {
     if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
@@ -103,7 +105,7 @@ fn system_list_dir() -> Result<PathBuf, String> {
     }
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
-        .ok_or_else(|| "the home folder is not known".to_owned())?;
+        .ok_or(StartError::NoListRoot)?;
     let parent = home.join(".local/state/navo");
     create_list_dir(&parent)?;
     let leaf = parent.join("lists");
@@ -113,7 +115,7 @@ fn system_list_dir() -> Result<PathBuf, String> {
 }
 
 #[cfg(unix)]
-fn create_list_dir(path: &Path) -> Result<(), String> {
+fn create_list_dir(path: &Path) -> Result<(), StartError> {
     use std::os::unix::fs::DirBuilderExt;
 
     let mut builder = std::fs::DirBuilder::new();
@@ -121,54 +123,52 @@ fn create_list_dir(path: &Path) -> Result<(), String> {
     match builder.create(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        Err(error) => Err(format!("could not create the list folder: {error}")),
+        Err(error) => Err(StartError::ListFolder(error.kind())),
     }
 }
 
 #[cfg(unix)]
-fn check_unix_list(leaf: &Path, allowed_parent: Option<&Path>) -> Result<(), String> {
+fn check_unix_list(leaf: &Path, allowed_parent: Option<&Path>) -> Result<(), StartError> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-    let metadata = std::fs::symlink_metadata(leaf)
-        .map_err(|error| format!("could not inspect the list folder: {error}"))?;
+    let metadata =
+        std::fs::symlink_metadata(leaf).map_err(|error| StartError::ListFolder(error.kind()))?;
     // SAFETY: geteuid takes no arguments and returns the calling process's effective user ID.
     let uid = unsafe { libc::geteuid() };
     if !metadata.is_dir() || metadata.uid() != uid || metadata.permissions().mode() & 0o777 != 0o700
     {
-        return Err("the list folder is not private to this user".to_owned());
+        return Err(StartError::ListFolderNotPrivate);
     }
-    let parent = leaf
-        .parent()
-        .ok_or_else(|| "the list folder has no parent".to_owned())?;
+    let parent = leaf.parent().ok_or(StartError::ListFolderNotPrivate)?;
     if allowed_parent == Some(parent) || special_parent(parent) {
         return Ok(());
     }
-    let parent_metadata = std::fs::symlink_metadata(parent)
-        .map_err(|error| format!("could not inspect the list folder parent: {error}"))?;
+    let parent_metadata =
+        std::fs::symlink_metadata(parent).map_err(|error| StartError::ListFolder(error.kind()))?;
     if !parent_metadata.is_dir()
         || parent_metadata.uid() != uid
         || parent_metadata.permissions().mode() & 0o777 != 0o700
     {
-        return Err("the list folder parent is not private to this user".to_owned());
+        return Err(StartError::ListFolderNotPrivate);
     }
     Ok(())
 }
 
 #[cfg(windows)]
-pub(super) fn private_dir(dir: &Path) -> Result<(), String> {
+pub(super) fn private_dir(dir: &Path) -> Result<(), StartError> {
     use std::os::windows::fs::MetadataExt;
 
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
-    let metadata = std::fs::symlink_metadata(dir)
-        .map_err(|error| format!("could not inspect the list folder: {error}"))?;
+    let metadata =
+        std::fs::symlink_metadata(dir).map_err(|error| StartError::ListFolder(error.kind()))?;
     if !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-        return Err("the list folder is not a real directory".to_owned());
+        return Err(StartError::ListFolderNotPrivate);
     }
     Ok(())
 }
 
 #[cfg(unix)]
-pub(super) fn private_dir(dir: &Path) -> Result<(), String> {
+pub(super) fn private_dir(dir: &Path) -> Result<(), StartError> {
     check_unix_list(dir, None)
 }
 

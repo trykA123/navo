@@ -36,7 +36,7 @@ pub(super) fn sweep_with(
     let dir = match list_dir() {
         Ok(dir) => dir,
         Err(error) => {
-            tracing::warn!(%error, "could not find the user command list folder");
+            tracing::warn!(?error, "could not find the user command list folder");
             return;
         }
     };

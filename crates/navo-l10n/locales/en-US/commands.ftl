@@ -493,6 +493,13 @@ user-command-unknown-program = The program name cannot be verified, so placehold
 user-command-terminal-placeholder = A Windows Terminal command cannot use placeholders. Put the folder in start-in and write wt -d . in user-commands.toml.
 user-command-spawn-error = Could not start the command ({ $error }). Close some programs and run the command again.
 user-command-start-error = The command did not start ({ $error }). Check the command in user-commands.toml and run it again.
+user-command-list-root = Could not find your local app data or home folder for the list file. Check that your user profile is complete and run the command again.
+user-command-list-folder-error = Could not prepare the folder for list files ({ $error }). Check that your profile folder is writable and run the command again.
+user-command-list-folder-unsafe = The folder for list files is not a private, real folder. Remove any link there or make it private to you, then run the command again.
+user-command-list-line-break = A marked file name contains a line break, so it cannot go in a list file. Rename the file and run the command again.
+user-command-list-file-error = Could not write the list file ({ $error }). Free some disk space and run the command again.
+user-command-pid-file-error = Could not write the process file next to the list file ({ $error }). Free some disk space and run the command again.
+user-command-list-marker = The marked-list placeholder could not be filled in. Give it its own argument in user-commands.toml and run the command again.
 
 cmd-workspace-preview-first = Preview workspace 1
 cmd-workspace-preview-second = Preview workspace 2

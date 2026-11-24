@@ -1,7 +1,9 @@
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 
+use crate::user_commands::error::StartError;
 use crate::user_commands::expand::{LIST_PATH_MARKER, Plan};
 use crate::user_commands::model::Console;
 
@@ -196,7 +198,7 @@ fn a_waiter_that_cannot_start_stops_the_start_and_removes_the_list() {
             Err(std::io::Error::other("no thread"))
         })
     });
-    assert!(result.is_err());
+    assert_eq!(result, Err(StartError::Waiter(ErrorKind::Other)));
     assert!(list_files(&work).is_empty(), "the list is removed");
     assert!(pid_files(&work).is_empty(), "no sidecar stays");
     std::fs::write(&marker, b"").expect("the release marker");
@@ -212,7 +214,10 @@ fn a_failed_spawn_removes_the_list() {
         &[],
         Some(vec!["C:\\a.txt".to_owned()]),
     );
-    assert!(with_list_root(&work, || start(plan, Box::new(|_code| {}))).is_err());
+    assert_eq!(
+        with_list_root(&work, || start(plan, Box::new(|_code| {}))),
+        Err(StartError::Program(ErrorKind::NotFound))
+    );
     assert!(list_files(&work).is_empty(), "the list is removed");
     assert!(pid_files(&work).is_empty(), "no sidecar appears");
 }
@@ -241,7 +246,11 @@ fn no_marker_reaches_a_spawned_argument() {
     assert_eq!(args[0], format!("a{}b", list.display()));
     assert_eq!(args[1], list.display().to_string());
     assert_eq!(args[2], "plain");
-    assert!(command(&plan, None).is_err(), "a marker needs a list file");
+    assert_eq!(
+        command(&plan, None).err(),
+        Some(StartError::ListMarker),
+        "a marker needs a list file"
+    );
 }
 
 #[test]
@@ -261,7 +270,7 @@ fn a_list_path_that_overflows_the_command_line_is_refused() {
         console: Console::Hide,
         list: Some(Vec::new()),
     };
-    assert!(command(&plan, Some(&list)).is_err());
+    assert_eq!(command(&plan, Some(&list)).err(), Some(StartError::TooLong));
 }
 
 #[cfg(windows)]
@@ -281,7 +290,13 @@ fn a_list_folder_must_be_real_and_private() {
     let root = tempfile::tempdir().expect("a temporary folder");
     let file = root.path().join("not-a-dir");
     std::fs::write(&file, b"x").expect("a file");
-    assert!(write_list(&file, &["C:\\a".to_owned()]).is_err());
+    let private = Err(StartError::ListFolderNotPrivate);
+    assert_eq!(write_list(&file, &["C:\\a".to_owned()]), private);
+    let missing = root.path().join("missing");
+    assert_eq!(
+        write_list(&missing, &["C:\\a".to_owned()]),
+        Err(StartError::ListFolder(ErrorKind::NotFound))
+    );
 
     let work = work_dir(&root);
     write_list(&work, &["C:\\a".to_owned()]).expect("a private list folder");
@@ -300,18 +315,19 @@ fn a_list_folder_must_be_real_and_private() {
         std::fs::create_dir(&broad).expect("a broad folder");
         std::fs::set_permissions(&broad, std::fs::Permissions::from_mode(0o777))
             .expect("broad permissions");
-        assert!(write_list(&broad, &["C:\\a".to_owned()]).is_err());
+        assert_eq!(write_list(&broad, &["C:\\a".to_owned()]), private);
         let target = root.path().join("target");
         std::fs::create_dir(&target).expect("a target folder");
         let link = root.path().join("link");
         std::os::unix::fs::symlink(&target, &link).expect("a folder link");
-        assert!(write_list(&link, &["C:\\a".to_owned()]).is_err());
+        assert_eq!(write_list(&link, &["C:\\a".to_owned()]), private);
         let orphan = root.path().join("orphan");
         std::fs::create_dir(&orphan).expect("an orphan folder");
         std::fs::set_permissions(&orphan, std::fs::Permissions::from_mode(0o700))
             .expect("a private orphan");
-        assert!(
-            write_list(&orphan, &["C:\\a".to_owned()]).is_err(),
+        assert_eq!(
+            write_list(&orphan, &["C:\\a".to_owned()]),
+            private,
             "a private leaf under a shared parent is refused"
         );
     }
@@ -320,7 +336,10 @@ fn a_list_folder_must_be_real_and_private() {
 #[test]
 fn a_path_with_a_line_break_is_refused() {
     let root = tempfile::tempdir().expect("a temporary folder");
-    assert!(write_list(root.path(), &["/work/x\r\n/sensitive/victim".to_owned()]).is_err());
+    assert_eq!(
+        write_list(root.path(), &["/work/x\r\n/sensitive/victim".to_owned()]),
+        Err(StartError::ListLineBreak)
+    );
     assert!(list_files(root.path()).is_empty());
 }
 
@@ -339,7 +358,15 @@ fn a_pid_sidecar_is_created_new_and_does_not_follow_links() {
         assert_eq!(std::fs::read_to_string(&pid).expect("the pid"), "7");
 
         std::fs::write(&pid, "keep").expect("an existing file");
-        assert!(create_pid(&pid).is_err());
+        assert_eq!(
+            create_pid(&pid),
+            Err(StartError::Sidecar(ErrorKind::AlreadyExists))
+        );
+        assert_eq!(
+            create_pid(&root.path().join("outside.pid")),
+            Err(StartError::ListFolderNotPrivate),
+            "a sidecar outside the list folder is refused"
+        );
         assert_eq!(
             std::fs::read_to_string(&pid).expect("the kept file"),
             "keep"
@@ -351,7 +378,10 @@ fn a_pid_sidecar_is_created_new_and_does_not_follow_links() {
             std::fs::write(&target, "safe").expect("a target file");
             let link = work.join("linked.pid");
             std::os::unix::fs::symlink(&target, &link).expect("a sidecar link");
-            assert!(create_pid(&link).is_err());
+            assert_eq!(
+                create_pid(&link),
+                Err(StartError::Sidecar(ErrorKind::AlreadyExists))
+            );
             assert_eq!(
                 std::fs::read_to_string(&target).expect("the target"),
                 "safe"
@@ -396,7 +426,7 @@ fn a_failed_pid_publish_keeps_pending_and_leaves_no_temp_file() {
             Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
         })
         .expect_err("a failed publish");
-        assert!(error.contains("pid"), "{error}");
+        assert_eq!(error, StartError::Sidecar(ErrorKind::PermissionDenied));
         assert_eq!(
             std::fs::read_to_string(&pid).expect("the pending sidecar"),
             "pending"
