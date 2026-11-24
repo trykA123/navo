@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -162,6 +162,8 @@ enum Listing {
 struct Sleepy {
     provider: ProviderId,
     listing: Listing,
+    /// Gets one message when a stubborn list begins.
+    started: Sender<()>,
     /// Set when a stubborn list has returned.
     listed: Arc<AtomicBool>,
     /// Set when the source is dropped, which happens as the session thread ends.
@@ -195,6 +197,7 @@ impl SideSource for Sleepy {
                 }
             }
             Listing::Stubborn(hold) => {
+                let _ = self.started.send(());
                 thread::sleep(hold);
                 self.listed.store(true, Ordering::SeqCst);
             }
@@ -239,6 +242,7 @@ impl SideSource for Sleepy {
 struct Probe {
     handle: CompareHandle,
     receiver: Receiver<CompareEvent>,
+    started: Receiver<()>,
     listed: Arc<AtomicBool>,
     gone: Arc<AtomicBool>,
     refreshes: Arc<AtomicUsize>,
@@ -252,6 +256,7 @@ fn sleepy_handle(listing: Listing) -> Probe {
 /// as a thread on a loaded runner may.
 fn sleepy_handle_late(listing: Listing, late: Duration) -> Probe {
     let (sender, receiver) = mpsc::channel();
+    let (started_sender, started) = mpsc::channel();
     let (listed, gone) = (Arc::default(), Arc::default());
     let refreshes: Arc<AtomicUsize> = Arc::default();
     let flags = (
@@ -268,6 +273,7 @@ fn sleepy_handle_late(listing: Listing, late: Duration) -> Probe {
             Arc::new(Sleepy {
                 provider: ProviderId::local(),
                 listing,
+                started: started_sender.clone(),
                 listed: Arc::clone(&flags.0),
                 gone: Arc::clone(&flags.1),
                 refreshes: Arc::clone(&flags.2),
@@ -292,6 +298,7 @@ fn sleepy_handle_late(listing: Listing, late: Duration) -> Probe {
     Probe {
         handle,
         receiver,
+        started,
         listed,
         gone,
         refreshes,
@@ -309,10 +316,15 @@ fn thread_ends(receiver: &Receiver<CompareEvent>) -> bool {
     false
 }
 
+/// Waits up to 10 s for a stubborn list to begin.
+fn list_starts(probe: &Probe) -> bool {
+    probe.started.recv_timeout(Duration::from_secs(10)).is_ok()
+}
+
 #[test]
 fn dropping_the_handle_returns_at_once_and_ends_the_thread() {
     let probe = sleepy_handle(Listing::Stubborn(Duration::from_millis(600)));
-    thread::sleep(Duration::from_millis(100));
+    assert!(list_starts(&probe), "the list never started");
     let started = Instant::now();
     drop(probe.handle);
     assert!(started.elapsed() < Duration::from_millis(100));
@@ -327,16 +339,14 @@ fn dropping_the_handle_returns_at_once_and_ends_the_thread() {
     );
 }
 
-/// The test above sleeps 100 ms and assumes the list has started by then.
-/// A session thread that starts later sees the cancel first, never lists and ends at once.
+/// A session thread that opens late, as on a loaded runner, still lists before the drop.
 #[test]
-#[ignore = "red: dropping_the_handle_… assumes the list starts within 100 ms"]
-fn dropping_the_handle_before_the_list_starts_fails_the_drop_test() {
+fn a_late_session_thread_still_lists_before_the_drop() {
     let probe = sleepy_handle_late(
         Listing::Stubborn(Duration::from_millis(600)),
         Duration::from_millis(300),
     );
-    thread::sleep(Duration::from_millis(100));
+    assert!(list_starts(&probe), "the list never started");
     drop(probe.handle);
     assert!(thread_ends(&probe.receiver));
     assert!(
