@@ -78,6 +78,8 @@ mod rebuild;
 mod rebuild_session;
 #[cfg(any(windows, test))]
 mod removal;
+#[cfg(any(windows, test))]
+mod restore_log;
 #[cfg(windows)]
 mod runtime;
 #[cfg(windows)]

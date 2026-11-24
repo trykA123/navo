@@ -20,6 +20,7 @@ use super::lifecycle::{
 };
 use super::rebuild::{Cause, Rebuilds, error_kind, file_error_kind};
 use super::rebuild_session::{SaveInput, rebuild_hint, replace, save_snapshot};
+use super::restore_log::restored_line;
 use super::service_log::Log;
 use super::storage::Storage;
 
@@ -150,6 +151,7 @@ impl Worker {
         }
         let mut built = false;
         let mut permit = None;
+        let started = Instant::now();
         let index = restore_or_enumerate(file::load_with_ids(&self.path), self.drive, |reason| {
             built = true;
             let (index, held) = self.build(&mut opened, Cause::new(reason), cancel)?;
@@ -158,10 +160,7 @@ impl Worker {
         })?;
         if !built {
             let entries = index.table.len();
-            self.log_line(format_args!(
-                "snapshot restored {}: entries={entries}",
-                self.drive.letter
-            ));
+            self.log_line(restored_line(self.drive.letter, entries, started.elapsed()));
         }
         self.publish(index);
         if built {
@@ -349,7 +348,7 @@ impl Worker {
         saved.map(drop).map_err(io::Error::other)
     }
 
-    fn log_line(&self, text: std::fmt::Arguments<'_>) {
+    fn log_line(&self, text: impl std::fmt::Display) {
         self.rebuilds.log().line(text);
     }
 
