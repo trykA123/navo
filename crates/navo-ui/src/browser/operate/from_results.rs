@@ -1,13 +1,15 @@
 //! F5 and F6 from the Find results window: plans a copy or move of hit files from many folders
 //! through the same refusals and planning job as a drop, keeping folders below the search root.
-//! The UI only refuses what it sees in the names; the planning job checks the disk (`check`).
+//! The UI only queues the request; the planning job checks names and disk (`check`), so a large
+//! selection never holds a frame.
 
 use std::sync::Arc;
 
-use navo_core::{ConflictPolicy, EntryKind, FileIdentity, FsError, Location, OpKind};
+use navo_core::{ConflictPolicy, EntryKind, FileIdentity, FsError, FsErrorKind, Location, OpKind};
 use navo_fs::{FsEntry, ProviderOps};
 
 use super::{Browser, OpRequest, PasteRefusal, Structure, drop_refusal};
+use crate::drag::Refusal;
 
 mod alias;
 mod check;
@@ -92,23 +94,14 @@ impl Browser {
             .into_iter()
             .map(|row| (row.location, row.stamp))
             .unzip();
-        if let Some(refused) = drop_refusal(&target, &sources) {
-            return Err(refused);
-        }
-        if crate::browser::archive::writes_archive(kind, &sources, Some(&target)) {
-            return Err(PasteRefusal::ReadOnlyArchive);
-        }
-        let nested = sources.iter().any(|source| {
-            source
-                .parent()
-                .is_none_or(|parent| !parent.same_place(&base))
-        });
-        // The planning job decides `same_volume` from every row.
-        let structure = nested.then_some(Structure {
+        // The planning job refuses by name, then decides the structure choice and
+        // `same_volume` from every row (`screen`).
+        let structure = Some(Structure {
             base,
             keep: true,
             planning: false,
             same_volume: false,
+            deciding: true,
         });
         self.next_op += 1;
         let request = OpRequest {
@@ -132,4 +125,43 @@ impl Browser {
             Err(PasteRefusal::Nothing)
         }
     }
+}
+
+/// The name-only checks of a first results plan, on the planning job: the drop refusals and
+/// archive writes, refused with the drop's text, then whether any row sits below the search
+/// root, which keeps the structure choice. A replan keeps the choice its first plan made.
+pub(super) fn screen(request: &mut OpRequest, target: &Location) -> Result<(), String> {
+    if let Some(refused) = drop_refusal(target, &request.sources) {
+        return Err(refusal_text(refused));
+    }
+    let (kind, sources) = (request.kind, &request.sources);
+    if crate::browser::archive::writes_archive(kind, sources, Some(target)) {
+        return Err(refusal_text(PasteRefusal::ReadOnlyArchive));
+    }
+    let Some(structure) = request.structure.as_mut().filter(|s| s.deciding) else {
+        return Ok(());
+    };
+    let base = &structure.base;
+    let nested = sources.iter().any(|source| {
+        source
+            .parent()
+            .is_none_or(|parent| !parent.same_place(base))
+    });
+    structure.deciding = false;
+    if !nested {
+        request.structure = None;
+    }
+    Ok(())
+}
+
+/// The text a failed results plan shows for `refused`, as a drop would say it.
+fn refusal_text(refused: PasteRefusal) -> String {
+    let refusal = match refused {
+        PasteRefusal::Nothing => return FsError::new(FsErrorKind::NotFound).message(),
+        PasteRefusal::AlreadyHere => Refusal::SameFolder,
+        PasteRefusal::IntoItself => Refusal::IntoItself,
+        PasteRefusal::IntoResults => Refusal::Results,
+        PasteRefusal::ReadOnlyArchive => Refusal::ReadOnlyArchive,
+    };
+    refusal.text().to_string()
 }

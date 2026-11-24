@@ -35,6 +35,7 @@ pub(super) fn structure_for(tab: &Tab, kind: OpKind, same_volume: bool) -> Optio
         keep: true,
         planning: false,
         same_volume,
+        deciding: false,
     })
 }
 

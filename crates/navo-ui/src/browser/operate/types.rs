@@ -249,6 +249,8 @@ pub struct Structure {
     pub keep: bool,
     pub(crate) planning: bool,
     pub(crate) same_volume: bool,
+    /// True until the planning job decides, from every Find row, whether the choice is offered.
+    pub(crate) deciding: bool,
 }
 
 impl PendingOp {

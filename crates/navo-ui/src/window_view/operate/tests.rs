@@ -319,6 +319,7 @@ fn the_keep_structure_choice_shows_only_when_the_pending_op_offers_it() {
         keep: true,
         planning: false,
         same_volume: false,
+        deciding: false,
     });
     let choice = confirm_props(&from_results).choice.expect("a choice");
     assert!(choice.on);

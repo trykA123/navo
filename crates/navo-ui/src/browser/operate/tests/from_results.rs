@@ -2,6 +2,7 @@ use navo_core::{EntryKind, Location, ProviderPath, Step};
 
 use super::*;
 use crate::browser::{PasteRefusal, ResultRow, ResultsRequest, RowStamp};
+use crate::drag::Refusal;
 
 fn hits() -> Arc<FakeFs> {
     let fs = fake();
@@ -89,16 +90,45 @@ fn sources_all_in_the_base_offer_no_structure() {
     assert!(pending.structure.is_none());
 }
 
+/// The drop refusals scan every row, so the planning job runs them, never the UI thread.
 #[test]
-fn a_target_inside_a_source_is_refused() {
+fn drop_refusals_arrive_from_the_planning_job() {
     let fs = hits();
-    let mut browser = browser(&fs, AppState::new(fs.location("home")));
-    let request = request(&fs, OpKind::Copy, &["w/src", "w/top.c"], "w/src/can");
-    assert_eq!(
-        browser.prepare_from_results(request),
-        Err(PasteRefusal::IntoItself)
+    let cases = [
+        (&["w/src", "w/top.c"][..], "w/src/can", Refusal::IntoItself),
+        (&["w/lib/a.c", "w/top.c"][..], "w", Refusal::SameFolder),
+    ];
+    for (sources, target, refusal) in cases {
+        let mut browser = browser(&fs, AppState::new(fs.location("home")));
+        let request = request(&fs, OpKind::Copy, sources, target);
+        let id = browser.prepare_from_results(request).expect("queued");
+        assert!(
+            browser.jobs().is_empty(),
+            "nothing refused on the UI thread"
+        );
+        settle(&mut browser);
+        assert_eq!(failed(&browser, id), refusal.text().to_string());
+    }
+}
+
+#[test]
+fn a_row_below_another_rows_folder_still_offers_the_structure() {
+    let fs = hits();
+    let sources = ["w/src", "w/src/can/a.c"];
+    let (mut browser, _) = prepared(&fs, request(&fs, OpKind::Copy, &sources, "dest"));
+    assert!(
+        browser
+            .pending()
+            .and_then(|p| p.structure.as_ref())
+            .is_some()
     );
-    assert!(browser.pending().is_none());
+    assert!(browser.toggle_structure());
+    settle(&mut browser);
+    let structure = browser.pending().and_then(|p| p.structure.as_ref());
+    assert!(
+        structure.is_some_and(|s| !s.keep),
+        "a replan keeps the choice"
+    );
 }
 
 #[test]
