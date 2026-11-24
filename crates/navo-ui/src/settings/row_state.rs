@@ -1,3 +1,6 @@
+//! Row state of the Settings sheet: the changed dot, Reset, the footer, the Live chip and
+//! the notes for refused keys.
+
 use gpui_kit::Role;
 use gpui_kit::base::TestSupportExt;
 
@@ -9,26 +12,24 @@ use crate::primitives::{Button, ButtonVariant, IconName, icon};
 use crate::tokens::Theme;
 
 const DOT: f32 = 6.;
-const DOT_LIFT: f32 = 5.;
+/// Width of the left gutter that holds a row's changed dot (px).
+pub(super) const GUTTER: f32 = 14.;
 const DEFAULT: &str = "Default";
 const CHANGED: &str = "Changed";
 const LIVE: &str = "Live";
 
-pub(super) fn tag(t: &Theme, index: usize, is_changed: bool) -> impl IntoElement + use<> {
-    let (text, color) = if is_changed {
-        (CHANGED, t.colors.accent_text)
-    } else {
-        (DEFAULT, t.colors.muted)
-    };
-    let dot = div()
-        .id(("settings-dot", index))
-        .test_support()
+/// The accent dot that marks a changed setting.
+pub(super) fn dot(t: &Theme) -> Div {
+    div()
         .flex_none()
         .size(px(DOT))
-        .relative()
-        .top(px(-DOT_LIFT))
         .rounded(t.radii.full)
-        .bg(t.colors.accent);
+        .bg(t.colors.accent)
+}
+
+/// The row's left gutter: the changed dot, or nothing; it names the state for assistive tech.
+pub(super) fn gutter(t: &Theme, index: usize, is_changed: bool) -> impl IntoElement + use<> {
+    let text = if is_changed { CHANGED } else { DEFAULT };
     div()
         .id(("settings-state", index))
         .role(Role::Note)
@@ -36,24 +37,35 @@ pub(super) fn tag(t: &Theme, index: usize, is_changed: bool) -> impl IntoElement
         .test_support()
         .flex()
         .flex_none()
-        .items_baseline()
-        .gap(t.spacing.xs)
-        .text_size(t.typography.small)
-        .text_color(color)
-        .when(is_changed, |tag| tag.child(dot))
-        .child(text)
+        .items_center()
+        .justify_center()
+        .size(px(GUTTER))
+        .when(is_changed, |gutter| {
+            gutter.child(dot(t).id(("settings-dot", index)).test_support())
+        })
 }
 
-pub(super) fn reset(index: usize, field: Field, send: Option<&Handler>) -> impl IntoElement {
-    let send = send.cloned();
-    Button::new(("settings-reset", index), "Reset")
-        .variant(ButtonVariant::Ghost)
-        .icon(IconName::RotateCcw)
-        .tooltip("Write the default to navo.toml")
-        .when_some(send, |button, send| {
-            let event = SheetEvent::Set(Change::reset(field));
-            button.on_click(move |_, window, cx| send(&event, window, cx))
-        })
+/// Reset to default for `field`; disabled while the value is already the default. It sends
+/// the same reset change as F8.
+pub(super) fn reset(
+    index: usize,
+    field: Field,
+    send: Option<&Handler>,
+    is_changed: bool,
+) -> impl IntoElement {
+    let send = send.cloned().filter(|_| is_changed);
+    Button::new(
+        ("settings-reset", index),
+        navo_l10n::tr("settings-reset-default"),
+    )
+    .variant(ButtonVariant::Secondary)
+    .icon(IconName::RotateCcw)
+    .disabled(!is_changed)
+    .tooltip("Write the default to navo.toml")
+    .when_some(send, |button, send| {
+        let event = SheetEvent::Set(Change::reset(field));
+        button.on_click(move |_, window, cx| send(&event, window, cx))
+    })
 }
 
 pub(super) fn footer(t: &Theme, values: &Values) -> impl IntoElement + use<> {

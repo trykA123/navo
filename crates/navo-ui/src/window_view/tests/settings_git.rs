@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, Bounds, ElementId, Pixels, TestAppContext, px};
+use gpui_kit::{
+    AppContext as _, Bounds, ElementId, Pixels, ScrollDelta, TestAppContext, point, px,
+};
 
 use super::app_menu::{Rig, rig_git, rig_git_sized};
 use super::git_menu::{Fake, menu_items, modified};
@@ -62,6 +64,13 @@ fn auto_names_the_tool_it_resolved_to(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn picking_a_tool_writes_the_setting(cx: &mut TestAppContext) {
     let rig = open(cx, Values::default(), &fake());
+    // The tool list sits last in the inspector; a short window scrolls it into view.
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        let down = ScrollDelta::Pixels(point(px(0.), px(-400.)));
+        window.scroll("settings-inspector", down, cx);
+    })
+    .expect("window");
     rig.click(cx, ("settings-tool", FAKE));
     assert_eq!(
         last_change(&rig),
@@ -134,8 +143,8 @@ fn open_sized(cx: &mut TestAppContext, width: f32) -> Rig {
     rig
 }
 
-/// The badges row at `width`: its row, label, title and toggle boxes.
-fn badges_row(cx: &mut TestAppContext, width: f32) -> [Bounds<Pixels>; 4] {
+/// The badges row at `width`: its row, label and toggle boxes.
+fn badges_row(cx: &mut TestAppContext, width: f32) -> [Bounds<Pixels>; 3] {
     let rig = open_sized(cx, width);
     let at = FIELDS
         .iter()
@@ -147,7 +156,6 @@ fn badges_row(cx: &mut TestAppContext, width: f32) -> [Bounds<Pixels>; 4] {
         [
             window.find(("settings-row", at)).bounds(),
             window.find(("settings-label", at)).bounds(),
-            window.find(("settings-title", at)).bounds(),
             toggle.bounds(),
         ]
     })
@@ -155,22 +163,18 @@ fn badges_row(cx: &mut TestAppContext, width: f32) -> [Bounds<Pixels>; 4] {
 }
 
 #[gpui_kit::test]
-fn at_480_px_the_toggle_drops_under_the_title_and_the_label_wraps(cx: &mut TestAppContext) {
-    let [row, label, title, toggle] = badges_row(cx, NARROW);
-    assert!(toggle.top() >= title.bottom(), "{toggle:?} {title:?}");
+fn at_480_px_the_label_stays_one_line_inside_the_row(cx: &mut TestAppContext) {
+    let [row, label, toggle] = badges_row(cx, NARROW);
     assert!(label.right() <= row.right(), "{label:?} {row:?}");
-    assert!(title.right() <= row.right(), "{title:?} {row:?}");
-    assert!(
-        label.size.height > px(24.),
-        "the label did not wrap: {label:?}"
-    );
+    assert!(toggle.right() <= row.right(), "{toggle:?} {row:?}");
+    assert!(label.size.height < px(24.), "the label wrapped: {label:?}");
 }
 
 #[gpui_kit::test]
-fn at_normal_width_the_toggle_stays_beside_the_title(cx: &mut TestAppContext) {
-    let [row, label, title, toggle] = badges_row(cx, 1400.);
-    assert!(toggle.top() < title.bottom(), "{toggle:?} {title:?}");
-    assert!(toggle.left() > title.right(), "{toggle:?} {title:?}");
+fn at_normal_width_the_toggle_stays_beside_the_label(cx: &mut TestAppContext) {
+    let [row, label, toggle] = badges_row(cx, 1400.);
+    assert!(toggle.top() < label.bottom(), "{toggle:?} {label:?}");
+    assert!(toggle.left() > label.right(), "{toggle:?} {label:?}");
     assert!(label.size.height < px(24.), "{label:?}");
     assert!(toggle.right() <= row.right());
 }

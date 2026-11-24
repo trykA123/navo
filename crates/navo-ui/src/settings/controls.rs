@@ -13,7 +13,8 @@ use crate::tokens::{ColorTheme, Colors, Density, Mode, Surfaces, Theme, ThemeLoo
 const TOGGLE: (f32, f32) = (34., 18.);
 const KNOB: f32 = 10.;
 const SEGMENT_HEIGHT: f32 = 24.;
-const THUMB_WIDTH: f32 = 96.;
+/// Three thumbs fit one line of the 300 px inspector.
+const THUMB_WIDTH: f32 = 80.;
 const SWATCH_HEIGHT: f32 = 48.;
 const STRIP: f32 = 8.;
 const BAR: f32 = 3.;

@@ -8,6 +8,7 @@ use super::fields::{Control, FIELDS, Field, FieldSpec, Look as ChoiceLook, Secti
 use super::find::{Filter, Line, lines};
 use super::git_page::{self, GitPage};
 use super::index_page;
+use super::inspector;
 use super::row_state;
 use super::search_page::{self, SearchPage};
 use super::values::{Value, Values};
@@ -16,9 +17,10 @@ use crate::prelude::*;
 use crate::tokens::Theme;
 use crate::window_view::UpdateView;
 
-const ROW_MIN: f32 = 48.;
-/// The title column asks for this much; a control that no longer fits beside it drops below.
-const TITLE_BASIS: f32 = 240.;
+/// Height of a setting row in px (README `SET_ROW`).
+const ROW: f32 = 36.;
+/// The label asks for this much (px); a control that no longer fits beside it drops below.
+const LABEL_BASIS: f32 = 150.;
 const NO_MATCH: &str = "No setting matches";
 pub(super) const DIMMED: f32 = 0.45;
 
@@ -99,7 +101,7 @@ pub(super) fn notice_line(t: &Theme, message: SharedString) -> impl IntoElement 
         .child(message)
 }
 
-fn spoken(spec: &FieldSpec, value: &Value) -> SharedString {
+pub(super) fn spoken(spec: &FieldSpec, value: &Value) -> SharedString {
     match (spec.control, value) {
         (Control::Choices(options, _), Value::Pick(at)) => options
             .get(*at)
@@ -111,12 +113,18 @@ fn spoken(spec: &FieldSpec, value: &Value) -> SharedString {
     }
 }
 
+/// The row's control. Picture choices show segments (or the colour theme's name) here; their
+/// pictures and the Git tool list live in the inspector.
 fn control(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
     let t = look.theme;
     let value = look.values.get(spec.field);
     let send = look.send.as_ref();
     match (spec.control, value) {
-        (Control::Choices(options, ChoiceLook::Segments), Value::Pick(at)) => {
+        (Control::Choices(options, ChoiceLook::ColorPictures), Value::Pick(at)) => {
+            let name = options.get(*at).map(super::fields::Choice::text);
+            Some(quiet_value(t, name.unwrap_or_default()))
+        }
+        (Control::Choices(options, _), Value::Pick(at)) => {
             let picks = Picks {
                 t,
                 field: spec.field,
@@ -133,53 +141,30 @@ fn control(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
         (Control::Text | Control::Number, value) => {
             Some(controls::value_box(t, &spoken(spec, value)))
         }
+        (Control::Tool, _) => {
+            let current = look.values.git_tool();
+            let name = look
+                .git
+                .options(current)
+                .into_iter()
+                .find(|tool| tool.id == current);
+            Some(quiet_value(
+                t,
+                name.map(|tool| tool.label).unwrap_or_default().into(),
+            ))
+        }
         _ => None,
     }
 }
 
-fn pictures(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
-    if spec.control == Control::Tool {
-        let current = look.values.git_tool();
-        return Some(git_page::tool_list(
-            look.theme,
-            look.git,
-            current,
-            look.send.as_ref(),
-        ));
-    }
-    let (Control::Choices(options, choice_look), Value::Pick(at)) =
-        (spec.control, look.values.get(spec.field))
-    else {
-        return None;
-    };
-    if choice_look == ChoiceLook::Segments {
-        return None;
-    }
-    let picks = Picks {
-        t: look.theme,
-        field: spec.field,
-        options,
-        at: *at,
-        send: look.send.as_ref(),
-    };
-    Some(controls::pictures(&picks, choice_look).into_any_element())
-}
-
-fn key_line(t: &Theme, spec: &FieldSpec, is_current: bool) -> impl IntoElement + use<> {
-    let line = div()
-        .font_family(t.typography.mono_font.clone())
+/// A value shown as muted text; it changes with the arrows or in the inspector.
+fn quiet_value(t: &Theme, text: SharedString) -> AnyElement {
+    div()
+        .flex_none()
+        .whitespace_nowrap()
         .text_size(t.typography.small)
-        .child(spec.key);
-    if !is_current {
-        return line
-            .text_color(gpui_kit::transparent_black())
-            .into_any_element();
-    }
-    line.id("settings-key")
-        .role(Role::Label)
-        .aria_label(spec.key)
-        .test_support()
-        .text_color(t.colors.accent_text)
+        .text_color(t.colors.muted)
+        .child(text)
         .into_any_element()
 }
 
@@ -192,74 +177,34 @@ fn command_problem(look: &Look, field: Field) -> Option<AnyElement> {
     Some(git_page::problem_note(look.theme, problem))
 }
 
-fn title(look: &Look, index: usize, spec: &FieldSpec) -> impl IntoElement + use<> {
-    let t = look.theme;
-    let name = div()
-        .flex()
-        .items_baseline()
-        .gap(t.spacing.md)
-        .child(
-            div()
-                .id(("settings-label", index))
-                .test_support()
-                .min_w_0()
-                .font_weight(FontWeight::MEDIUM)
-                .child(spec.label()),
-        )
-        .child(row_state::tag(t, index, look.values.is_changed(spec.field)));
-    div()
-        .id(("settings-title", index))
-        .test_support()
-        .flex()
-        .flex_col()
-        .flex_grow(1.)
-        .flex_shrink(1.)
-        .flex_basis(px(TITLE_BASIS))
-        .min_w_0()
-        .child(name)
-        .child(
-            div()
-                .text_size(t.typography.small)
-                .text_color(t.colors.muted)
-                .child(spec.help()),
-        )
-        .children(row_state::notes(
-            t,
-            spec.field,
-            (look.summon_key_taken, look.clipboard_key_taken),
-        ))
-        .children(command_problem(look, spec.field))
-        .child(key_line(t, spec, index == look.row))
-}
-
-/// The title, then the Reset button and the control. The tail wraps under the title when it
-/// does not fit beside it.
+/// One line: the changed dot, the label and the control. The control wraps under the label
+/// only when the list is too narrow for both.
 fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div {
     let t = look.theme;
-    let reset = look
-        .values
-        .is_changed(spec.field)
-        .then(|| row_state::reset(index, spec.field, look.send.as_ref()).into_any_element());
-    let tail: Vec<AnyElement> = reset.into_iter().chain(control(look, spec)).collect();
+    let label = div()
+        .id(("settings-label", index))
+        .test_support()
+        .flex_grow(1.)
+        .flex_shrink(1.)
+        .flex_basis(px(LABEL_BASIS))
+        .min_w_0()
+        .truncate()
+        .child(spec.label());
     div()
         .flex()
         .flex_wrap()
         .items_center()
         .gap_x(t.spacing.xl)
-        .gap_y(t.spacing.md)
-        .child(title(content_look, index, spec))
-        .when(!tail.is_empty(), |line| {
-            line.child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(t.spacing.xl)
-                    .children(tail),
-            )
-        })
+        .child(row_state::gutter(
+            t,
+            index,
+            look.values.is_changed(spec.field),
+        ))
+        .child(label)
+        .children(control(content_look, spec))
 }
 
+/// A setting row: one 36 px line, plus a red note under it while its value is refused.
 pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     let t = look.theme;
     let is_current = index == look.row;
@@ -270,7 +215,13 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         ..*look
     };
     let value = look.values.get(spec.field);
-    let line = line(look, &content_look, index, spec);
+    let notes: Vec<AnyElement> = row_state::notes(
+        t,
+        spec.field,
+        (look.summon_key_taken, look.clipboard_key_taken),
+    )
+    .chain(command_problem(look, spec.field))
+    .collect();
     let row = div()
         .id(("settings-row", index))
         .role(Role::ListItem)
@@ -280,24 +231,31 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .test_support()
         .flex()
         .flex_col()
+        .justify_center()
         .flex_none()
-        .min_h(px(ROW_MIN))
+        .min_h(px(ROW))
         .when(!look.is_enabled(spec.field), |row| row.opacity(DIMMED))
-        .px(t.spacing.xl)
-        .py(t.spacing.md)
+        .pr(t.spacing.md)
         .rounded(t.radii.md)
         .border_1()
-        .border_color(if is_current {
-            t.colors.accent
-        } else {
-            gpui_kit::transparent_black()
-        })
+        .border_color(t.colors.accent.opacity(if is_current { 1. } else { 0. }))
         .when(is_current, |row| {
             row.bg(t.colors.selection).text_color(t.colors.on_selection)
         })
-        .child(line)
-        .children(pictures(&content_look, spec));
+        .when(!is_current, |row| row.hover(|row| row.bg(t.colors.hover)))
+        .child(line(look, &content_look, index, spec))
+        .children(under_line(t, notes));
     select_on_click(row, look.send.as_ref(), index).into_any_element()
+}
+
+/// The red notes under a row's line, indented past the gutter; none when `notes` is empty.
+fn under_line(t: &Theme, notes: Vec<AnyElement>) -> Option<Div> {
+    (!notes.is_empty()).then(|| {
+        div()
+            .pl(px(row_state::GUTTER) + t.spacing.xl)
+            .pb(t.spacing.sm)
+            .children(notes)
+    })
 }
 
 fn group_heading(t: &Theme, label: &'static str) -> AnyElement {
@@ -310,7 +268,7 @@ fn group_heading(t: &Theme, label: &'static str) -> AnyElement {
         .aria_label(label)
         .test_support()
         .flex_none()
-        .px(t.spacing.xl)
+        .pl(px(row_state::GUTTER) + t.spacing.xl)
         .pt(t.spacing.md)
         .text_size(t.typography.tiny)
         .font_weight(FontWeight::SEMIBOLD)
@@ -322,7 +280,7 @@ fn group_heading(t: &Theme, label: &'static str) -> AnyElement {
 pub(super) fn section_heading(t: &Theme, section: Section) -> AnyElement {
     div()
         .flex_none()
-        .px(t.spacing.xl)
+        .pl(px(row_state::GUTTER) + t.spacing.xl)
         .pt(t.spacing.lg)
         .pb(t.spacing.xs)
         .text_size(t.typography.small)
@@ -377,18 +335,26 @@ pub(super) fn content(
     if rows.is_empty() {
         rows.push(no_match(t));
     }
-    div()
+    let list = div()
         .id("settings-rows")
+        .test_support()
         .flex()
         .flex_col()
         .flex_1()
         .min_h_0()
+        .min_w_0()
         .gap(t.spacing.xxs)
         .px(t.spacing.md)
         .pb(t.spacing.md)
         .overflow_y_scroll()
         .when_some(scroll, |list, scroll| list.track_scroll(scroll))
-        .children(rows)
+        .children(rows);
+    let details =
+        inspector::focused(look).map(|(index, spec)| inspector::inspector(look, index, spec));
+    inspector::Split {
+        rows: list.into_any_element(),
+        inspector: details,
+    }
 }
 
 fn is_page_shown(look: &Look, section: Section, page: Section) -> bool {

@@ -66,17 +66,21 @@ fn row_under_the_job_card(cx: &mut TestAppContext, rig: &Rig) -> Option<(usize, 
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         let card = window.find("job-card").bounds();
-        let list_end = window.find("settings-footer").bounds().top();
+        let list_end = window.find("settings-rows").bounds().bottom();
         (0..FIELDS.len()).find_map(|index| {
             let row = window.try_find(("settings-row", index))?.bounds();
             let top = row.top().max(card.top());
             let bottom = row.bottom().min(card.bottom()).min(list_end);
-            let x = row.center().x;
-            let is_over = top < bottom && card.left() <= x && x <= card.right();
+            let left = row.left().max(card.left());
+            let right = row.right().min(card.right());
+            let is_over = top < bottom && left < right;
             is_over.then(|| {
                 (
                     index,
-                    point(row.size.width / 2., (top + bottom) / 2. - row.top()),
+                    point(
+                        (left + right) / 2. - row.left(),
+                        (top + bottom) / 2. - row.top(),
+                    ),
                 )
             })
         })
@@ -87,8 +91,9 @@ fn row_under_the_job_card(cx: &mut TestAppContext, rig: &Rig) -> Option<(usize, 
 #[gpui_kit::test]
 fn the_job_card_stays_under_the_settings_sheet(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    // A small window makes the centred dialog reach over the job card corner.
-    VisualTestContext::from_window(rig.window, cx).simulate_resize(size(px(900.), px(640.)));
+    // A short window makes the centred dialog reach over the job card corner; at 1000 px the
+    // inspector still sits beside the rows, so rows cover the card's left part.
+    VisualTestContext::from_window(rig.window, cx).simulate_resize(size(px(1000.), px(640.)));
     rig.press(cx, "tab");
     open_settings(cx, &rig);
     add_running_copy(cx, &rig);

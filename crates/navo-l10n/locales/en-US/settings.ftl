@@ -258,3 +258,11 @@ settings-edit-hint = Enter saves { $key } · Esc cancels
 settings-edit-save = Save
 settings-edit-cancel = Cancel
 settings-record-hint = Press the new key, like Ctrl+Alt+N · Delete clears · Esc cancels
+
+# Settings inspector: the column that describes the focused setting.
+settings-inspector-region = Setting details
+settings-reset-default = Reset to default
+settings-value-not-set = Not set
+settings-in-file = In navo.toml
+settings-open-line = Open the line
+settings-open-line-tip = Open navo.toml at this setting

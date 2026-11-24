@@ -18,6 +18,7 @@ mod git_values;
 mod help_page;
 mod index_page;
 mod index_progress;
+mod inspector;
 mod nav;
 mod row_state;
 mod search_fields;

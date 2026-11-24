@@ -64,6 +64,15 @@ fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
     .expect("window")
 }
 
+fn is_disabled(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<bool> {
+    let id = id.into();
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window.try_find(id).and_then(|found| found.disabled())
+    })
+    .expect("window")
+}
+
 fn footer(cx: &mut TestAppContext, rig: &Rig) -> Option<String> {
     label(cx, rig, "settings-footer")
 }
@@ -147,7 +156,10 @@ fn reset_returns_the_row_to_default_and_the_count_drops(cx: &mut TestAppContext)
     assert_eq!(last, Some(Change::reset(Field::Density)));
     assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Normal);
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Default"));
-    assert!(!shows(cx, &rig, ("settings-reset", row_of(Field::Density))));
+    assert_eq!(
+        is_disabled(cx, &rig, ("settings-reset", row_of(Field::Density))),
+        Some(true)
+    );
     assert_eq!(footer(cx, &rig), footer_for(0));
 }
 
