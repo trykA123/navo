@@ -82,15 +82,14 @@ impl HelperExit {
 
 /// Builds the helper's arguments as one Windows command line, starting with `HELPER_FLAG`.
 /// Trailing `\` are stripped from the root so they cannot escape its closing quote; IW6 refuses `"`.
-pub fn helper_command_line(args: &HelperArgs) -> String {
-    let root = args.root.to_string_lossy();
-    format!(
-        "{HELPER_FLAG} --root \"{}\" --for {} --parent {:016x}:{:032x}",
-        root.trim_end_matches('\\'),
-        args.user_sid,
-        args.parent.volume,
-        args.parent.id
-    )
+/// `None` when the root has no UTF-8 form or the helper's `parse_candidate` would refuse it.
+pub fn helper_command_line(args: &HelperArgs) -> Option<String> {
+    let root = args.root.to_str()?.trim_end_matches('\\');
+    parse_candidate(root.as_ref()).ok()?;
+    Some(format!(
+        "{HELPER_FLAG} --root \"{root}\" --for {} --parent {:016x}:{:032x}",
+        args.user_sid, args.parent.volume, args.parent.id
+    ))
 }
 
 /// Parses the six arguments after `HELPER_FLAG`: `--root <path> --for <sid> --parent <vol>:<id>`.
@@ -128,11 +127,12 @@ fn parse_file_id(text: &str) -> Option<FileId> {
     })
 }
 
-/// True for a local or domain user (`S-1-5-21-a-b-c-r`, `r >= 1000`) or an Entra ID user
-/// (`S-1-12-1-a-b-c-d`); each part a decimal `u32` without leading zeros.
+/// True for a local or domain user (`S-1-5-21-a-b-c-r`, `r >= 1000` or the built-in
+/// Administrator `r == 500`) or an Entra ID user (`S-1-12-1-a-b-c-d`); each part a decimal `u32`
+/// without leading zeros.
 pub fn valid_user_sid(sid: &str) -> bool {
     if let Some(rest) = sid.strip_prefix("S-1-5-21-") {
-        return u32_parts(rest).is_some_and(|parts| parts[3] >= 1000);
+        return u32_parts(rest).is_some_and(|parts| parts[3] == 500 || parts[3] >= 1000);
     }
     sid.strip_prefix("S-1-12-1-")
         .is_some_and(|rest| u32_parts(rest).is_some())

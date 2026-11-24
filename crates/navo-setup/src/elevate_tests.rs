@@ -84,7 +84,7 @@ fn os(items: &[&str]) -> Vec<OsString> {
 
 /// Round-trips a command line through Windows argv rules, dropping the flag.
 fn round_trip(args: &HelperArgs) -> Result<HelperArgs, HelperExit> {
-    let argv = windows_argv(&helper_command_line(args));
+    let argv = windows_argv(&helper_command_line(args).expect("valid root"));
     assert_eq!(argv.first().map(String::as_str), Some(HELPER_FLAG));
     let rest: Vec<OsString> = argv[1..].iter().map(OsString::from).collect();
     parse_helper_args(&rest)
@@ -94,10 +94,25 @@ fn round_trip(args: &HelperArgs) -> Result<HelperArgs, HelperExit> {
 fn command_line_has_the_exact_shape() {
     assert_eq!(
         helper_command_line(&sample(r"C:\Program Files\Navo App")),
-        format!(
+        Some(format!(
             r#"--elevated-create --root "C:\Program Files\Navo App" --for {USER} --parent 00abcdef01234567:000000000000000100000000000000ff"#
-        )
+        ))
     );
+}
+
+#[test]
+fn command_line_refuses_a_root_the_helper_would_refuse() {
+    assert_eq!(helper_command_line(&sample(r"C:\Navo\..\Windows")), None);
+    assert_eq!(helper_command_line(&sample(r"C:\Navo\..")), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn command_line_refuses_a_root_without_utf8_form() {
+    use std::os::unix::ffi::OsStringExt;
+    let mut args = sample(r"C:\Navo");
+    args.root = PathBuf::from(OsString::from_vec(b"C:\\Na\xffvo".to_vec()));
+    assert_eq!(helper_command_line(&args), None);
 }
 
 #[test]
@@ -190,6 +205,7 @@ fn user_sids_accept_only_domain_or_entra_users() {
         "S-1-5-21-4294967295-1-2-4294967295",
         "S-1-12-1-1-2-3-4",
         "S-1-12-1-3263168403-1251543410-2391458196-3712425316",
+        "S-1-5-21-1-2-3-500",
     ] {
         assert!(valid_user_sid(good), "{good}");
     }
@@ -198,7 +214,10 @@ fn user_sids_accept_only_domain_or_entra_users() {
         SYSTEM,
         ADMINS,
         "S-1-5-21-1-2-3-999",
-        "S-1-5-21-1-2-3-500",
+        "S-1-5-21-1-2-3-501",
+        "S-1-5-21-1-2-3-502",
+        "S-1-5-21-1-2-3-512",
+        "S-1-5-21-1-2-3-544",
         "S-1-5-21-01-2-3-1000",
         "S-1-5-21-1-2-3-01000",
         "S-1-5-21-1-2-3",
@@ -282,6 +301,23 @@ fn descriptor_ok_refuses_every_deviation() {
                 "edit {n} ace {index}"
             );
         }
+    }
+}
+
+#[test]
+fn descriptor_ok_refuses_generic_all_on_the_user_ace() {
+    let mut aces = iw25_aces();
+    aces[2].mask |= 0x1000_0000;
+    assert!(!admin_descriptor_ok(ADMINS, true, &aces, USER));
+}
+
+#[test]
+fn descriptor_ok_refuses_administrators_or_system_as_the_user() {
+    for user in [ADMINS, SYSTEM] {
+        assert!(
+            !admin_descriptor_ok(ADMINS, true, &iw25_aces(), user),
+            "{user}"
+        );
     }
 }
 
