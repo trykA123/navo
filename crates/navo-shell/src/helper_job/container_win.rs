@@ -150,10 +150,6 @@ mod tests {
         assert_eq!(remove_pdf_container_profile(), Ok(()));
         // SAFETY: `name` is NUL-terminated and lives for the call.
         let hr = unsafe { DeleteAppContainerProfile(name.as_ptr()) };
-        eprintln!(
-            "second DeleteAppContainerProfile HRESULT: {:#010x}",
-            hr as u32
-        );
         assert_eq!(profile_removal(hr), Ok(()), "{:#010x}", hr as u32);
         assert_eq!(remove_pdf_container_profile(), Ok(()));
     }
