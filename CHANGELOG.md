@@ -6,7 +6,7 @@ Each entry is a pre-release build for Windows. Downloads are on the GitHub relea
 
 *2026-11-24*
 
-This release makes the F3 editor a real workbench: regex find and replace, Filter Lines, lint marks for structured files, soft wrap, saving in another encoding, a hex inspector, an image eyedropper and a query bar for JSON trees. Archives now open right in the pane.
+This release makes the F3 editor a real workbench: regex find and replace, Filter Lines, lint marks for structured files, soft wrap, saving in another encoding, a hex inspector, an image eyedropper and a query bar for JSON trees. Archives now open right in the pane. Settings opens as a dialog, PDF previews run in a sandbox, the index service answers faster, and Ctrl+K stays quick with many results.
 
 ### Added
 
@@ -22,6 +22,9 @@ This release makes the F3 editor a real workbench: regex find and replace, Filte
 - **Archives in the pane.** Enter or a double-click opens a zip, 7z or tar file as a folder. F5 or a drag copies entries out. Archives stay read-only, and every write says why it is refused.
 - **Allowlisted tools for the editor (not in the menu yet).** The engine that runs a command-line tool on the open file is in: no shell, `.bat` and `.cmd` refused, tools from inside a repository refused, a 5 s limit and a 16 MiB output cap.
 
+- **An outline of the file.** Ctrl+Shift+O in the F3 editor lists the file's symbols; type to filter, Enter or a click jumps to the line. The View menu lists it too, and the outline is parsed in the background.
+- **Checksums and strings in the hex inspector.** The inspector shows CRC32, SHA-256 and BLAKE3 of the whole file and a list of the strings in it.
+
 ### Changed
 
 - **Leaving a folder stops its listing.** Leaving, replacing or closing a folder that is still loading cancels its job, even a network read that is stuck in a call.
@@ -30,12 +33,23 @@ This release makes the F3 editor a real workbench: regex find and replace, Filte
 - **The index service log says more.** The heartbeat counts busy replies, and the "snapshot restored" line says how long the load took.
 - **Under the hood.** Two new build checks stop the number of unbounded channels, lint exceptions and sleeps in tests from growing.
 
+- **Settings opens as a dialog.** Settings floats in the middle of the window over a dimmed background, at most 1040 × 800. Esc, the close button or a click outside closes it, and focus goes back to the pane you were in.
+- **PDF previews run in a sandbox.** The PDF helper now starts in a Windows AppContainer that can read only its own files. When the sandbox cannot be set up, the preview says "cannot open safely" instead of opening the PDF unprotected. An install on a FAT or exFAT drive (a portable USB stick) cannot set the sandbox up, so it cannot preview PDFs.
+- **A faster, steadier index service.** Each drive gets its own wait for a search answer within one 120 ms budget, so one busy drive no longer slows the others. Profile lookups are cached per drive (from about 0.7 ms to a few microseconds per request). A failed rebuild keeps the last good index, and after the change journal wraps twice in a row the service keeps the new index and checks it in the background.
+- **Folder sizes stop when you leave.** Leaving a folder cancels its size calculation between requests, so the next folder's sizes start at once.
+- **Finished copies count what really happened.** The finished-job text counts only the items really placed and says how many the conflict sheet skipped.
+
 ### Fixed
 
 - **Overwrite choices tell the truth about Undo.** When the safety net does not keep overwritten files, the copy and move dialog says "Overwritten files cannot be undone." under the choices.
 - **No more half-finished moves over a folder.** Overwrite older and Overwrite all now skip a folder, or a name that is a file on one side and a folder on the other, instead of planning an overwrite the job then refused partway.
 - **Conflict counts in other languages.** The conflict lines take "item" or "items" from the message files, so translations can use their own plural forms.
 - **Large-file swap lands on the right line.** When the editor takes over from the paged view, it now lands on the right top line in UTF-16 and other non-UTF-8 files, and ignores a late frame from the previous file.
+- **Ctrl+K no longer lags with many results.** Holding an arrow key in Ctrl+K with hundreds of results moved the selection slowly; merging the results is now about a hundred times faster.
+- **Index search never shows other users' folders by mistake.** When the service cannot tell whose profile a folder belongs to, it hides that folder instead of showing it.
+- **Closing Navo no longer waits on a stuck network drive.** A cancelled job on a drive that is still being identified is dropped unrun, and closing waits at most 2 s for background work.
+- **Closed tabs let go of their folder.** A closed tab no longer keeps its last folder loaded in the background.
+- **Lint marks on large files appear sooner.** The editor maps all problem positions in one pass.
 
 ## v0.8.5 — Your call on conflicts
 
