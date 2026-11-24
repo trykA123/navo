@@ -1,6 +1,7 @@
-use std::sync::{Mutex, mpsc};
+use std::sync::Mutex;
 
 use super::*;
+use crate::latest::Latest;
 use crate::pipe::session::{Transport, serve_session};
 use crate::pipe::status::Identified;
 use crate::pipe::{CancelToken, Cancellation, Hit, MemoryReport, Query, Status, frames};
@@ -284,9 +285,9 @@ fn the_session_answers_the_version_term_without_the_handler() {
         responses: Mutex::new(Vec::new()),
         stop: stop.clone(),
     };
-    let (answers, jobs) = mpsc::channel();
-    drop(jobs);
-    // The closed handler channel fails the test if the session sends a job.
+    let answers = Latest::default();
+    answers.close();
+    // The closed mailbox fails the test if the session sends a job.
     let _ = serve_session(&pipe, &answers, &[&stop]);
     assert_eq!(
         *pipe.responses.lock().unwrap(),

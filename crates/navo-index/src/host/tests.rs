@@ -771,7 +771,7 @@ fn status_updates_without_a_reader_keep_one_value() {
 
 #[test]
 fn ten_thousand_status_updates_keep_only_the_newest() {
-    let slot = StatusSlot::default();
+    let slot = Latest::default();
     for entries in 0..10_000 {
         slot.publish(HostStatus {
             entries,

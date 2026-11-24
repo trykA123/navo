@@ -5,6 +5,7 @@ pub mod fuzzy;
 #[cfg(test)]
 mod heap_probe;
 pub mod host;
+mod latest;
 pub mod ntfs;
 pub mod pipe;
 pub mod search;

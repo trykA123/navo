@@ -15,8 +15,10 @@ mod version;
 #[cfg(windows)]
 mod windows;
 
+use std::sync::Arc;
 use std::time::Instant;
 
+use crate::latest::Latest;
 pub use builds::{BuildReason, VolumeBuilds};
 pub use cancel::CancelToken;
 use cancel::Cancellation;
@@ -316,11 +318,12 @@ fn serve_instance_with(
 ) -> Result<(), PipeError> {
     let _stop = StopOnDrop(stopped.clone());
     std::thread::scope(|scope| {
-        let (answers, jobs) = std::sync::mpsc::channel();
+        let answers = Arc::new(Latest::default());
+        let jobs = Arc::clone(&answers);
         let answering = scope.spawn(move || session::answer_jobs(jobs, handler));
         let gone = || answering.is_finished();
         let served = accept_sessions(pipe, (&answers, &gone), &[cancel, stopped], backoff);
-        drop(answers);
+        answers.close();
         let joined = answering.join().map_err(|_| PipeError::NotAvailable);
         served.and(joined)
     })
@@ -328,7 +331,7 @@ fn serve_instance_with(
 
 fn accept_sessions(
     pipe: &impl session::Transport,
-    (answers, answer_gone): (&std::sync::mpsc::Sender<session::Job>, &dyn Fn() -> bool),
+    (answers, answer_gone): (&Latest<session::Job>, &dyn Fn() -> bool),
     tokens: &[&CancelToken],
     (start, max): (std::time::Duration, std::time::Duration),
 ) -> Result<(), PipeError> {

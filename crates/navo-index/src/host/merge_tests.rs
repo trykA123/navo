@@ -5,8 +5,9 @@ use std::time::Instant;
 
 use navo_fs::{CancelToken, FakeFs, FakeOp, IoQueue, JobSlot, Priority, volume_of};
 
-use super::super::{HostOptions, HostStatus, StatusSlot, Worker};
+use super::super::{HostOptions, HostStatus, Worker};
 use super::{Flags, Location, NO_PARENT, NameTable};
+use crate::latest::Latest;
 use crate::walker::Limits;
 
 /// A worker over `table` and the `tree/left/big` root it merges, without a host thread.
@@ -14,7 +15,7 @@ fn worker_over(fs: &Arc<FakeFs>, table: NameTable) -> (Worker, Location) {
     let queue = Arc::new(IoQueue::new());
     let owner = queue.owner();
     let (root, big) = (fs.location("tree"), fs.location("tree/left/big"));
-    let statuses = Arc::new(StatusSlot::default());
+    let statuses = Arc::new(Latest::default());
     let (_sender, events) = mpsc::channel();
     let worker = Worker {
         status: HostStatus::default(),

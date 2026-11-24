@@ -3,6 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::latest::Latest;
 use crate::pipe::{
     CancelToken, Cancellation, PipeError, Query, Reply, Response, next_backoff,
     serve_instance_with, session::Transport,
@@ -270,7 +271,7 @@ fn an_instance_stops_accepting_once_its_answer_thread_is_gone() {
     let pipe = Endless {
         accepts: AtomicUsize::new(0),
     };
-    let (answers, _) = std::sync::mpsc::channel();
+    let answers: Latest<crate::pipe::session::Job> = Latest::default();
     let result = crate::pipe::accept_sessions(
         &pipe,
         (&answers, &|| pipe.accepts.load(Ordering::SeqCst) > 0),

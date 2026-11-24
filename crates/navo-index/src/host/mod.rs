@@ -2,7 +2,7 @@ mod scan;
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Condvar, Mutex, PoisonError, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -12,6 +12,7 @@ use navo_fs::{
 };
 
 use crate::file::{self, FileError, Header};
+use crate::latest::Latest;
 use crate::table::NameTable;
 use crate::walker::{Limits, Progress};
 
@@ -34,79 +35,6 @@ pub struct HostStatus {
     pub errors: Vec<String>,
 }
 
-/// One-slot status mailbox: a new status replaces an unread one, so a reader
-/// that falls behind never queues updates.
-#[derive(Default)]
-struct StatusSlot {
-    state: Mutex<SlotState>,
-    wake: Condvar,
-}
-
-#[derive(Default)]
-struct SlotState {
-    status: Option<HostStatus>,
-    revision: u64,
-}
-
-impl StatusSlot {
-    /// Replaces any unread status with `status` and wakes waiting readers.
-    fn publish(&self, status: HostStatus) {
-        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        state.status = Some(status);
-        state.revision = state.revision.wrapping_add(1);
-        drop(state);
-        self.wake.notify_all();
-    }
-
-    /// Takes the newest status, or `None` when nothing was published since the
-    /// last take.
-    fn take(&self) -> Option<HostStatus> {
-        self.state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .status
-            .take()
-    }
-
-    /// Clones the newest status without consuming it.
-    #[cfg(test)]
-    fn latest(&self) -> Option<HostStatus> {
-        self.state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .status
-            .clone()
-    }
-
-    /// The number of publishes so far; with `wait`, lets a reader wait for a
-    /// new status instead of spinning on the slot.
-    #[cfg(test)]
-    fn revision(&self) -> u64 {
-        self.state
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .revision
-    }
-
-    /// Waits up to `timeout` for the status published after `revision`.
-    #[cfg(test)]
-    fn wait(&self, revision: u64, timeout: Duration) -> Option<HostStatus> {
-        let deadline = Instant::now() + timeout;
-        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        loop {
-            if state.revision > revision {
-                return state.status.clone();
-            }
-            let remaining = deadline.checked_duration_since(Instant::now())?;
-            state = self
-                .wake
-                .wait_timeout(state, remaining)
-                .unwrap_or_else(PoisonError::into_inner)
-                .0;
-        }
-    }
-}
-
 enum Message {
     Watch(WatchEvent),
     Stop,
@@ -116,7 +44,7 @@ enum Message {
 
 pub struct Host {
     table: Arc<RwLock<NameTable>>,
-    statuses: Arc<StatusSlot>,
+    statuses: Arc<Latest<HostStatus>>,
     sender: Sender<Message>,
     cancel: CancelToken,
     owner: Option<OwnerGuard>,
@@ -130,7 +58,7 @@ impl Host {
 
     fn start_with_clock(options: HostOptions, clock: Clock) -> std::io::Result<Self> {
         let (sender, events) = mpsc::channel();
-        let statuses = Arc::new(StatusSlot::default());
+        let statuses = Arc::new(Latest::default());
         let table = Arc::new(RwLock::new(NameTable::new()));
         let cancel = CancelToken::new();
         let owner = options.queue.owner();
@@ -190,7 +118,7 @@ struct Worker {
     clock: Clock,
     table: Arc<RwLock<NameTable>>,
     events: Receiver<Message>,
-    statuses: Arc<StatusSlot>,
+    statuses: Arc<Latest<HostStatus>>,
     cancel: CancelToken,
     slot: JobSlot,
     status: HostStatus,

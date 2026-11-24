@@ -1,6 +1,6 @@
 use std::{
     sync::{
-        PoisonError,
+        Arc, PoisonError,
         atomic::{AtomicUsize, Ordering::Relaxed},
         mpsc,
     },
@@ -11,6 +11,7 @@ use super::{
     CancelToken, Cancellation, MAX_HITS, PipeError, QUERY_TIMEOUT, Query, Reply, Request, Response,
     SERVICE_REVISION, Status, VolumeStatus, build_id, frames, platform,
 };
+use crate::latest::Latest;
 
 #[derive(Default)]
 pub(super) struct Pending {
@@ -40,10 +41,10 @@ pub(super) struct Job {
 }
 
 pub(super) fn answer_jobs(
-    jobs: mpsc::Receiver<Job>,
+    jobs: Arc<Latest<Job>>,
     handler: &(impl Fn(&Request, &CancelToken) -> Reply + Sync),
 ) {
-    for job in jobs {
+    while let Some(job) = jobs.next() {
         if !job.cancel.is_cancelled() {
             let answered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 answer_request(&job.request, handler, &job.cancel)
@@ -130,7 +131,7 @@ impl Transport for platform::Pipe {
 
 pub(super) fn serve_session(
     pipe: &impl Transport,
-    answers: &mpsc::Sender<Job>,
+    answers: &Latest<Job>,
     tokens: &[&CancelToken],
 ) -> Result<(), PipeError> {
     let _open = Open::count();
@@ -179,7 +180,7 @@ fn read_queries(
 
 fn send_replies(
     pipe: &impl Transport,
-    answers: &mpsc::Sender<Job>,
+    answers: &Latest<Job>,
     session: &Session,
     events: &mpsc::Receiver<()>,
 ) -> Result<(), PipeError> {
@@ -204,13 +205,13 @@ fn send_replies(
         }
         let detailed_status = query.request.wants_status();
         let (reply, answered) = mpsc::sync_channel(1);
-        answers
-            .send(Job {
-                request: query.request,
-                cancel: cancel.clone(),
-                reply,
-            })
-            .map_err(|_| PipeError::NotAvailable)?;
+        if !answers.publish(Job {
+            request: query.request,
+            cancel: cancel.clone(),
+            reply,
+        }) {
+            return Err(PipeError::NotAvailable);
+        }
         let Some(reply) = wait_for_reply(&answered, &cancel, session) else {
             continue;
         };
@@ -329,5 +330,86 @@ pub(super) struct StopOnDrop(pub(super) CancelToken);
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
         self.0.cancel();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::*;
+
+    fn generation(request: &Request) -> u64 {
+        let [super::super::QueryTerm::Name(name), ..] = request.terms.as_slice() else {
+            panic!("test requests carry one name term");
+        };
+        name.parse().unwrap()
+    }
+
+    struct Gate {
+        entered: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
+    }
+
+    fn stall_at_gate(gate: &Gate) {
+        gate.entered.send(()).unwrap();
+        gate.release.lock().unwrap().recv().unwrap();
+    }
+
+    fn record(gate: &Gate, answered: &Mutex<Vec<u64>>, request: &Request) {
+        let generation = generation(request);
+        answered.lock().unwrap().push(generation);
+        if generation == 0 {
+            stall_at_gate(gate);
+        }
+    }
+
+    #[test]
+    fn a_stalled_worker_keeps_one_pending_answer() {
+        let (entered, first_entered) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let gate = Arc::new(Gate {
+            entered,
+            release: Mutex::new(released),
+        });
+        let answered = Arc::new(Mutex::new(Vec::new()));
+        let handler = {
+            let gate = Arc::clone(&gate);
+            let answered = Arc::clone(&answered);
+            move |request: &Request, _: &CancelToken| {
+                record(&gate, &answered, request);
+                Reply::default()
+            }
+        };
+        let answers = Arc::new(Latest::default());
+        let jobs = Arc::clone(&answers);
+        let worker = std::thread::spawn(move || answer_jobs(jobs, &handler));
+        let mut replies = Vec::new();
+        for order in 0..1_000 {
+            let (reply, answered) = mpsc::sync_channel(1);
+            replies.push(answered);
+            assert!(answers.publish(Job {
+                request: Request {
+                    terms: vec![super::super::QueryTerm::Name(order.to_string())],
+                },
+                cancel: CancelToken::new(),
+                reply,
+            }));
+            if order == 0 {
+                first_entered.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+        }
+        release.send(()).unwrap();
+        answers.close();
+        worker.join().unwrap();
+        let received = replies
+            .iter()
+            .filter(|reply| reply.try_recv().is_ok())
+            .count();
+        assert!(received <= 2, "answered {received} pending jobs");
+        assert!(
+            answered.lock().unwrap().contains(&999),
+            "the newest answer was lost"
+        );
     }
 }
