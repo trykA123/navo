@@ -76,9 +76,13 @@ pub type WindowOrder = Arc<dyn Fn(RawWindowHandle, bool) + Send + Sync>;
 /// A find the user saved: its name, query text and the folder it starts in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SavedSearch {
+    /// The saved row's id in the app's store.
     pub id: i64,
+    /// The name the user gave the find.
     pub name: String,
+    /// The query text to run again.
     pub query: String,
+    /// The folder the find starts in, when it has one.
     pub base: Option<String>,
 }
 
@@ -91,18 +95,27 @@ type SaveSnapshot =
 /// The app's side of the find results window; the core UI replaces the saves with real ones.
 #[derive(Clone)]
 pub struct FindHooks {
+    /// Keeps the results window above its owner, or drops that order.
     pub pin: WindowOrder,
+    /// Fixes the results window's owner and says whether it had to.
+    pub ensure_owner: Arc<dyn Fn(RawWindowHandle, RawWindowHandle) -> bool + Send + Sync>,
+    /// Saves a find under a name, returning its id.
     pub save_search: SaveSearch,
+    /// Saves the current results under a name, returning the saved row's id.
     pub save_snapshot: SaveSnapshot,
+    /// Lists the finds the user saved.
     pub saved: Arc<dyn Fn() -> Vec<SavedSearch> + Send + Sync>,
+    /// Deletes a saved find by id.
     pub delete_saved: Arc<dyn Fn(i64) -> Result<(), String> + Send + Sync>,
 }
 
 impl FindHooks {
+    /// A default that pins nothing, saves nothing and fixes no owner.
     #[must_use]
     pub fn none() -> Self {
         Self {
             pin: Arc::new(|_, _| {}),
+            ensure_owner: Arc::new(|_, _| false),
             save_search: Arc::new(|_, _, _| Err(navo_l10n::tr("find-save-off").to_owned())),
             save_snapshot: Arc::new(|_, _, _, _| Err(navo_l10n::tr("find-save-off").to_owned())),
             saved: Arc::new(Vec::new),
