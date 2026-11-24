@@ -136,6 +136,15 @@ fn read_only_state(
     state
 }
 
+/// Calls `text_changed` on every edit of the editor widget; the view keeps the subscription.
+fn on_text_change(editor: &Entity<EditorState>, cx: &mut Context<EditorView>) -> Subscription {
+    cx.subscribe(editor, |view, _, event: &InputEvent, cx| {
+        if matches!(event, InputEvent::Change) {
+            view.text_changed(cx);
+        }
+    })
+}
+
 impl EditorView {
     fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let EditorFile {
@@ -152,11 +161,7 @@ impl EditorView {
             state.create_range_decorations_collection(Vec::new(), cx)
         });
         let split = split.map(|choice| Split::new(choice, host.clone(), &editor, cx));
-        let changes = cx.subscribe(&editor, |view, _, event: &InputEvent, cx| {
-            if matches!(event, InputEvent::Change) {
-                view.text_changed(cx);
-            }
-        });
+        let changes = on_text_change(&editor, cx);
         let mut view = Self {
             host,
             editor,
