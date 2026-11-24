@@ -235,7 +235,7 @@ fn quoted_segments_keep_every_space_between_them() {
 
 fn text_pieces() -> impl Strategy<Value = String> {
     (
-        any::<bool>(),
+        0..4u8,
         proptest::collection::vec(
             prop_oneof![
                 Just('a'),
@@ -249,10 +249,13 @@ fn text_pieces() -> impl Strategy<Value = String> {
             0..32,
         ),
     )
-        .prop_map(|(regex, chars)| {
+        .prop_map(|(prefix, chars)| {
             let mut text: String = chars.into_iter().collect();
-            if regex {
-                text.insert_str(0, "re:");
+            match prefix {
+                1 => text.insert_str(0, "re:"),
+                2 => text.insert_str(0, "name:"),
+                3 => text.insert_str(0, "in:"),
+                _ => {}
             }
             text
         })
@@ -287,4 +290,15 @@ fn a_tab_after_a_quote_round_trips_exactly() {
     parsed.tokens.clear();
     assert_eq!(parsed, expected);
     assert_eq!(printed, "\"a\\\"\"\"\tb\"");
+}
+
+#[test]
+fn filter_values_with_quotes_round_trip() {
+    for input in [
+        r#"name:"/a\"\"\" b/""#,
+        r#"name:"/a\""" b/""#,
+        r#"in:"a\""" b""#,
+    ] {
+        assert_round_trip(input);
+    }
 }

@@ -75,7 +75,7 @@ impl FindQuery {
 /// Wraps a token value that holds whitespace, a colon or a quote.
 fn quoted_value(value: &str) -> String {
     if value.contains(char::is_whitespace) || value.contains(':') || value.contains('"') {
-        format!("\"{}\"", escaped(value))
+        encoded_token(value)
     } else {
         value.to_owned()
     }
