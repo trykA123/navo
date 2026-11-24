@@ -1,4 +1,4 @@
-// Ferrite patches to gpui-pre-windows 0.3.12:
+// Navo patches to gpui-pre-windows 0.3.12 (FERRITE_GPU keeps its legacy name for existing setups):
 // - directx_devices.rs: prefer the low-power GPU; FERRITE_GPU=default|high-performance overrides.
 // - window.rs: the drop target stores grfKeyState, dispatches first, returns the effect the app
 //   set (None without a hint), never returns DROPEFFECT_MOVE from Drop, and exports
