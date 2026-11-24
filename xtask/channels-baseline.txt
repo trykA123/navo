@@ -18,4 +18,5 @@
 #   crates/navo-fs/src/job/parallel.rs:79, crates/navo-shell/src/clipboard/virtual_files/ole/mod.rs:89.
 #   removed: crates/navo-app/src/git/scan_tests/limits.rs:197, :209, :246,
 #   crates/navo-ui/src/window_view/index_activity.rs:62.
-72
+# 2026-11-25: re-measured after batch b12-4 (72 -> 69); the batch adds no channel site.
+69
