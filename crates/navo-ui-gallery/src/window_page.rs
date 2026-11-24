@@ -14,7 +14,7 @@ use navo_ui::crash_notice::{CrashKeys, CrashNotice, RecoveryContent};
 use navo_ui::file_list::SortKey;
 use navo_ui::fkey_bar::{FKeyBar, KeyLayer};
 use navo_ui::job_card::JobCard;
-use navo_ui::modifier_hints::{Combo, Cover, HintsDrawer, Layer, drawer_height, layer_where};
+use navo_ui::modifier_hints::{Combo, Cover, Fit, HintsDrawer, Layer, drawer_height, layer_where};
 use navo_ui::pane_chrome::DriveInfo;
 use navo_ui::prelude::*;
 use navo_ui::primitives::{Button, ButtonVariant, Splitter, SplitterState};
@@ -261,9 +261,11 @@ impl WindowPage {
         })
     }
 
-    fn hints_layer(&self, t: &Theme) -> Option<impl IntoElement + use<>> {
+    fn hints_layer(&self, t: &Theme, window: &Window) -> Option<impl IntoElement + use<>> {
         let shown = self.hints?;
-        let drawer = HintsDrawer::new(self.hint_layer(shown.combo)).settings_key(Some("ctrl-,"));
+        let fit = Fit::in_window(t, window.viewport_size().width, self.parts.fkey_bar);
+        let drawer =
+            HintsDrawer::new(self.hint_layer(shown.combo), fit).settings_key(Some("ctrl-,"));
         Some(
             div()
                 .absolute()
@@ -285,7 +287,12 @@ impl WindowPage {
         };
         let bottom = window.viewport_size().height - bar;
         Some(Cover {
-            top: bottom - drawer_height(t, &layer),
+            top: bottom
+                - drawer_height(
+                    t,
+                    &layer,
+                    Fit::in_window(t, window.viewport_size().width, self.parts.fkey_bar),
+                ),
             gap: t.spacing.md,
         })
     }
@@ -416,7 +423,7 @@ impl Render for WindowPage {
                     .child(panes)
                     .children(self.job_card(&t))
                     .children(sheet)
-                    .children(self.hints_layer(&t))
+                    .children(self.hints_layer(&t, window))
                     .children(self.activity_drawer(&t)),
             )
             .children(self.activity_row())

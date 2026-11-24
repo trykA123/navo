@@ -83,6 +83,44 @@ fn holding_ctrl_in_the_file_list_opens_the_drawer_after_the_delay(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn the_header_counts_the_keys_and_the_layers_one_modifier_away(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, Rc::default());
+    hold_open(cx, window);
+    let label = |cx: &mut TestAppContext, id: &str| {
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .within("modifier-hints")
+                .find(id.to_owned())
+                .label()
+                .unwrap_or_default()
+                .to_owned()
+        })
+        .expect("window")
+    };
+    assert_eq!(label(cx, "modifier-hints-more-Shift"), "9 more with Shift");
+    assert_eq!(label(cx, "modifier-hints-more-Alt"), "4 more with Alt");
+    assert_eq!(
+        label(cx, "modifier-hints-count"),
+        "25 keys in the file list"
+    );
+}
+
+#[gpui_kit::test]
+fn the_card_shows_the_f_row_only_while_the_f_key_bar_is_hidden(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, Rc::default());
+    hold_open(cx, window);
+    assert!(drawer(cx, window).is_some());
+    assert!(!has_entry(cx, window, "hint-F3"));
+    assert!(has_entry(cx, window, "hint-files.clipboard_copy"));
+    let values = Values::default().with(&Change::modifier_hints(HintsMode::All));
+    let rig = rig_on(cx, values, None);
+    hold_open(cx, rig.window);
+    assert!(has_entry(cx, rig.window, "hint-F3"));
+    assert!(has_entry(cx, rig.window, "hint-F1"));
+}
+
+#[gpui_kit::test]
 fn ctrl_c_never_opens_the_drawer(cx: &mut TestAppContext) {
     let (window, view) = open(cx, Rc::default());
     hold(cx, window, CTRL);

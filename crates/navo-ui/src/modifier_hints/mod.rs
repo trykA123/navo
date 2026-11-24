@@ -1,5 +1,6 @@
 mod combo;
 mod drawer;
+mod drawer_header;
 mod groups;
 mod hold;
 mod layer;
@@ -11,9 +12,9 @@ mod tests;
 use gpui_kit::Pixels;
 
 pub use combo::Combo;
-pub use drawer::{HintsDrawer, TurnOff, drawer_height};
+pub use drawer::{Fit, HintsDrawer, TurnOff, drawer_height, rows_to_fit};
 pub use hold::{Arm, Delay, Hold};
-pub use layer::{Entry, Group, Layer, key_cap, layer_in, layer_where};
+pub use layer::{Entry, Group, Layer, More, Shape, key_cap, layer_in, layer_where};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum HintsMode {

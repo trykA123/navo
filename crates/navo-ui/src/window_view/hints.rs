@@ -1,3 +1,6 @@
+//! Modifier hints in the window: tracks held modifiers and mouse buttons, and places
+//! the ribbon card above the F-key bar when it fits.
+
 use gpui_kit::{
     AnyWindowHandle, DispatchPhase, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, NavigationDirection, Subscription, Task, WeakEntity, canvas,
@@ -7,10 +10,10 @@ use super::NavoWindow;
 use crate::commands::{CommandSpec, active};
 use crate::fkey_bar::KeyLayer;
 use crate::modifier_hints::{
-    Arm, Combo, Cover, Delay, HintsDrawer, HintsMode, Hold, Layer, drawer_height, layer_where,
+    Arm, Combo, Cover, Delay, Fit, HintsDrawer, HintsMode, Hold, Layer, drawer_height, layer_where,
 };
 use crate::prelude::*;
-use crate::settings::{Change, Field};
+use crate::settings::{Change, Field, WindowParts};
 use crate::tokens;
 
 const MODIFIER_KEYS: [&str; 6] = [
@@ -199,12 +202,18 @@ impl NavoWindow {
         Some(layer_where(active(cx), combo, &is_handled))
     }
 
+    /// Where the drawer sits: the window's width and whether the F-key bar shows.
+    fn hint_fit(&self, window: &Window, t: &tokens::Theme) -> Fit {
+        let has_bar = WindowParts::of(&self.values).fkey_bar;
+        Fit::in_window(t, window.viewport_size().width, has_bar)
+    }
+
     pub(super) fn hint_cover(&self, window: &Window, cx: &App) -> Option<Cover> {
         let layer = self.hint_layer(window, cx)?;
         let t = tokens::current(cx);
         let bottom = window.viewport_size().height - self.fkey_strip_height(t);
         Some(Cover {
-            top: bottom - drawer_height(t, &layer),
+            top: bottom - drawer_height(t, &layer, self.hint_fit(window, t)),
             gap: t.spacing.md,
         })
     }
@@ -221,7 +230,7 @@ impl NavoWindow {
             .next()
             .map(str::to_owned);
         let (this, pressed) = (cx.weak_entity(), cx.weak_entity());
-        let drawer = HintsDrawer::new(layer)
+        let drawer = HintsDrawer::new(layer, self.hint_fit(window, &t))
             .settings_key(key.as_deref())
             .on_turn_off(move |window, cx| {
                 let _ = this.update(cx, |view, cx| view.turn_off_hints(window, cx));

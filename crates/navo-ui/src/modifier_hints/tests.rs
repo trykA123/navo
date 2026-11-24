@@ -463,3 +463,78 @@ fn a_command_without_a_handler_is_left_out() {
     });
     assert!(!commands(&group(&wired, "Files").entries).contains(&"files.paste"));
 }
+
+fn fit(width: f32, has_frow: bool) -> Fit {
+    Fit {
+        width: px(width),
+        has_frow,
+    }
+}
+
+#[test]
+fn ctrl_shift_and_alt_cards_share_one_height_at_every_width() {
+    use crate::tokens::{Mode, Theme};
+    let t = Theme::new(Mode::Dark);
+    let layers =
+        [Combo::CTRL, Combo::SHIFT, Combo::ALT].map(|combo| layer_in(Keymap::builtin(), combo));
+    for width in [700., 1036., 1836.] {
+        for has_frow in [true, false] {
+            let heights = layers
+                .each_ref()
+                .map(|layer| drawer_height(&t, layer, fit(width, has_frow)));
+            assert_eq!(
+                heights[0], heights[1],
+                "Ctrl and Shift at {width} px, F-row {has_frow}"
+            );
+            assert_eq!(
+                heights[0], heights[2],
+                "Ctrl and Alt at {width} px, F-row {has_frow}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_row_count_grows_only_when_the_band_is_too_narrow() {
+    use crate::tokens::{Mode, Theme};
+    let t = Theme::new(Mode::Dark);
+    let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
+    assert_eq!(rows_to_fit(&t, &ctrl, px(1836.)), 4);
+    assert_eq!(rows_to_fit(&t, &ctrl, px(1036.)), 4);
+    assert!(rows_to_fit(&t, &ctrl, px(700.)) > 4);
+    assert_eq!(rows_to_fit(&t, &ctrl, px(10.)), 7);
+}
+
+#[test]
+fn the_f_row_adds_height_only_for_one_held_modifier() {
+    use crate::tokens::{Mode, Theme};
+    let t = Theme::new(Mode::Light);
+    let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
+    assert!(
+        drawer_height(&t, &ctrl, fit(1036., true)) > drawer_height(&t, &ctrl, fit(1036., false))
+    );
+    let both = layer_in(Keymap::builtin(), Combo::CTRL_SHIFT);
+    assert_eq!(
+        drawer_height(&t, &both, fit(1036., true)),
+        drawer_height(&t, &both, fit(1036., false))
+    );
+}
+
+#[test]
+fn delete_for_good_uses_the_mark_colour_and_reads_at_aa() {
+    use crate::tokens::{Mode, Theme, contrast_ratio};
+    let shift = layer_in(Keymap::builtin(), Combo::SHIFT);
+    let delete = shift
+        .fkeys
+        .iter()
+        .find(|entry| entry.is_danger)
+        .expect("F8");
+    let mark_up = &shift.groups[0].entries[0];
+    for mode in [Mode::Light, Mode::Dark] {
+        let t = Theme::new(mode);
+        assert_eq!(super::drawer::entry_color(&t, delete), t.colors.mark);
+        assert_eq!(super::drawer::entry_color(&t, mark_up), t.colors.text);
+        let ratio = contrast_ratio(t.colors.mark, t.surfaces.sheet);
+        assert!(ratio >= 4.5, "{mode:?} mark on sheet: {ratio}");
+    }
+}

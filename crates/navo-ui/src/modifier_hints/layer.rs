@@ -46,6 +46,13 @@ pub struct Group {
     pub entries: Vec<Entry>,
 }
 
+/// The size of one group, for fitting the band: its entries and its widest first key cap.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Shape {
+    pub entries: usize,
+    pub cap_chars: usize,
+}
+
 /// A layer one modifier away, for the header: "+ Shift 8 more".
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct More {
@@ -60,6 +67,9 @@ pub struct Layer {
     /// Entries on F1 to F10, one key each, in key order.
     pub fkeys: Vec<Entry>,
     pub more: Vec<More>,
+    /// Group shapes of the Ctrl, Shift and Alt layers and this one; the card takes the
+    /// row count at which all of them fit, so its height never jumps.
+    pub shapes: Vec<Vec<Shape>>,
 }
 
 impl Layer {
@@ -251,6 +261,18 @@ fn more_of(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<More> {
         .collect()
 }
 
+/// The shape of each group: entry count and the widest first key cap, in characters.
+fn shape_of(groups: &[Group]) -> Vec<Shape> {
+    let first_cap = |entry: &Entry| entry.keys.first().map_or(0, |key| key.chars().count());
+    groups
+        .iter()
+        .map(|group| Shape {
+            entries: group.entries.len(),
+            cap_chars: group.entries.iter().map(first_cap).max().unwrap_or(0),
+        })
+        .collect()
+}
+
 #[must_use]
 pub fn layer_in(keymap: &Keymap, combo: Combo) -> Layer {
     layer_where(keymap, combo, &|spec| spec.action.is_some())
@@ -259,10 +281,19 @@ pub fn layer_in(keymap: &Keymap, combo: Combo) -> Layer {
 #[must_use]
 pub fn layer_where(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Layer {
     let (listed, fkeys) = entries(keymap, combo, is_handled);
+    let groups = grouped(listed);
+    let peers = [Combo::CTRL, Combo::SHIFT, Combo::ALT]
+        .into_iter()
+        .filter(|peer| *peer != combo);
+    let mut shapes: Vec<Vec<Shape>> = peers
+        .map(|peer| shape_of(&grouped(entries(keymap, peer, is_handled).0)))
+        .collect();
+    shapes.push(shape_of(&groups));
     Layer {
         combo,
-        groups: grouped(listed),
+        groups,
         fkeys,
         more: more_of(keymap, combo, is_handled),
+        shapes,
     }
 }
