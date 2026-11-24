@@ -1,3 +1,4 @@
+mod find_memory;
 mod history;
 mod listing;
 mod pane;
@@ -12,6 +13,7 @@ use std::collections::BTreeMap;
 
 use crate::placement::{MonitorSetup, Placement};
 use crate::{Applied, Direction, LayoutError, Location, PaneId, SplitPath, TabId, Tiles, WindowId};
+pub use find_memory::{FindMemory, SavedFind};
 pub use history::History;
 pub use listing::{Entry, Listing};
 pub use pane::Pane;
@@ -113,6 +115,15 @@ impl AppState {
 
     pub fn remember_placement(&mut self, setup: &MonitorSetup, placement: Placement) {
         self.focused.remember(setup, placement);
+    }
+
+    #[must_use]
+    pub fn find_memory(&self) -> &FindMemory {
+        self.focused.find_memory()
+    }
+
+    pub fn find_memory_mut(&mut self) -> &mut FindMemory {
+        self.focused.find_memory_mut()
     }
 
     #[must_use]

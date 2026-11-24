@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
+use super::find_memory::FindMemory;
 use super::{ClosedTab, Pane, StateError, Workspace};
 use crate::placement::{MonitorSetup, Placement};
 use crate::{Applied, Direction, Layout, MAX_PANES, PaneId, SplitPath, Tiles, WindowId};
@@ -14,6 +15,7 @@ pub struct Window {
     pub(super) others: BTreeMap<PaneId, Pane>,
     pub(super) target: Option<PaneId>,
     placement: Vec<Placement>,
+    find: FindMemory,
     pub(super) last_marks: Option<Vec<String>>,
     pub(super) workspaces: Vec<Workspace>,
     pub(super) active: usize,
@@ -64,6 +66,20 @@ impl Window {
         crate::placement::remember(&mut self.placement, setup, placement);
     }
 
+    #[must_use]
+    pub fn find_memory(&self) -> &FindMemory {
+        &self.find
+    }
+
+    pub(crate) fn find_memory_mut(&mut self) -> &mut FindMemory {
+        &mut self.find
+    }
+
+    #[allow(dead_code, reason = "FR24 restores it from the session")]
+    pub(crate) fn restore_find(&mut self, find: FindMemory) {
+        self.find = find;
+    }
+
     pub(crate) fn restore(
         id: WindowId,
         layout: Layout,
@@ -90,6 +106,7 @@ impl Window {
             others,
             target: None,
             placement,
+            find: FindMemory::default(),
             last_marks: None,
             workspaces: Vec::new(),
             active: 0,
@@ -108,6 +125,7 @@ impl Window {
             others: BTreeMap::new(),
             target: None,
             placement: Vec::new(),
+            find: FindMemory::default(),
             last_marks: None,
             workspaces: Vec::new(),
             active: 0,

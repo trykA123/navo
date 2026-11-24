@@ -55,6 +55,6 @@ pub use sidewise_core::{
 };
 pub use sidewise_core::{encoding, paging};
 pub use state::{
-    AppState, Entry, History, Listing, MAX_WORKSPACES, Pane, SAVE_ON_SWITCH, Snapshot, StateError,
-    Tab, TabMove, ViewState, Window, Workspace, WorkspaceAction, changes,
+    AppState, Entry, FindMemory, History, Listing, MAX_WORKSPACES, Pane, SAVE_ON_SWITCH, SavedFind,
+    Snapshot, StateError, Tab, TabMove, ViewState, Window, Workspace, WorkspaceAction, changes,
 };

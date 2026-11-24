@@ -2,6 +2,7 @@ use super::{Entry, Listing, Tab};
 use crate::{Location, TabId};
 
 mod app;
+mod find_memory;
 mod history;
 mod listing;
 mod pane;
