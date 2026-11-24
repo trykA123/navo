@@ -14,6 +14,18 @@ const ANSWER_BUDGET: Duration = Duration::from_millis(120);
 const READ_POLL: Duration = Duration::from_millis(1);
 const UPDATING: u8 = 100;
 
+/// How long one answer waits for read locks: per volume and for all volumes together.
+#[derive(Clone, Copy)]
+struct Waits {
+    read: Duration,
+    budget: Duration,
+}
+
+const WAITS: Waits = Waits {
+    read: READ_WAIT,
+    budget: ANSWER_BUDGET,
+};
+
 #[derive(Default)]
 pub(super) struct State {
     /// The published index; whoever changes or replaces it calls `search.forget_profile_ids()`.
@@ -44,6 +56,16 @@ impl SharedVolume {
 /// Answers one pipe request; each volume waits at most `READ_WAIT` for its read lock, all of them
 /// within `ANSWER_BUDGET`, and a volume that stays busy answers with its last status, marked updating.
 pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &CancelToken) -> Reply {
+    answer_with(volumes, request, cancel, WAITS)
+}
+
+/// `answer` with injectable waits, so tests can outlast scheduler jitter on a loaded host.
+fn answer_with(
+    volumes: &[SharedVolume],
+    request: &Request,
+    cancel: &CancelToken,
+    waits: Waits,
+) -> Reply {
     if let Some(paths) = request.folder_paths() {
         return super::totals::answer(volumes, paths);
     }
@@ -51,13 +73,13 @@ pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &Cance
         return super::memory::answer(volumes);
     }
     let mut reply = Reply::default();
-    let overall = Instant::now() + ANSWER_BUDGET;
+    let overall = Instant::now() + waits.budget;
     for volume in volumes {
         if cancel.is_cancelled() {
             break;
         }
         // Each volume gets its own wait, so a slow first volume cannot starve the next one.
-        let deadline = (Instant::now() + READ_WAIT).min(overall);
+        let deadline = (Instant::now() + waits.read).min(overall);
         let read = read_before(&volume.shared, deadline)
             .map(|state| search(&state, request, cancel, &mut reply.hits));
         let mut last = volume.last.lock().unwrap_or_else(PoisonError::into_inner);
@@ -201,46 +223,26 @@ mod tests {
         reply.status.volumes[0].clone()
     }
 
+    /// The release lands `READ_WAIT + 10 ms` after the first volume gives up, as when a loaded
+    /// host preempts this thread; a generous injected wait keeps that inside the second volume's
+    /// own wait, while a wait shared with the first volume would already be spent.
     #[test]
     fn a_slow_first_volume_leaves_the_second_its_own_read_wait() {
+        let waits = Waits {
+            read: Duration::from_millis(250),
+            budget: Duration::from_secs(1),
+        };
         let volumes = [building_volume(), building_volume()];
         let _first = volumes[0].shared.write().unwrap();
         let second = volumes[1].shared.write().unwrap();
         let gave_up = BUSY_REPLIES.load(Ordering::Relaxed);
         let reply = std::thread::scope(|scope| {
-            let asking = scope.spawn(|| answer(&volumes, &Request::default(), &CancelToken::new()));
+            let asking = scope
+                .spawn(|| answer_with(&volumes, &Request::default(), &CancelToken::new(), waits));
             while BUSY_REPLIES.load(Ordering::Relaxed) == gave_up {
                 std::thread::yield_now();
             }
-            // The second lock frees just after the first volume's wait ran out.
-            std::thread::sleep(Duration::from_millis(3));
-            drop(second);
-            asking.join().unwrap()
-        });
-        assert_eq!(reply.status.volumes[0].progress, Some(UPDATING));
-        assert_eq!(
-            reply.status.volumes[1].progress, None,
-            "the second volume must get its own wait, not the first one's leftover"
-        );
-    }
-
-    /// Replays the Windows VM flake: the releasing thread is descheduled for longer than
-    /// `READ_WAIT` after the first volume gives up (load, timer slack), so the second lock frees
-    /// only after the second volume's own wait already ran out. The original test hard-codes that
-    /// this gap stays under 20 ms of wall clock.
-    #[test]
-    #[ignore = "red: the slow-first-volume test assumes the releasing thread runs within READ_WAIT"]
-    fn a_slow_first_volume_test_fails_when_the_release_is_preempted_past_read_wait() {
-        let volumes = [building_volume(), building_volume()];
-        let _first = volumes[0].shared.write().unwrap();
-        let second = volumes[1].shared.write().unwrap();
-        let gave_up = BUSY_REPLIES.load(Ordering::Relaxed);
-        let reply = std::thread::scope(|scope| {
-            let asking = scope.spawn(|| answer(&volumes, &Request::default(), &CancelToken::new()));
-            while BUSY_REPLIES.load(Ordering::Relaxed) == gave_up {
-                std::thread::yield_now();
-            }
-            // A loaded scheduler delays this thread past the second volume's whole wait.
+            // The second lock frees after the first volume's wait ran out.
             std::thread::sleep(READ_WAIT + Duration::from_millis(10));
             drop(second);
             asking.join().unwrap()
