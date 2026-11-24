@@ -1,3 +1,8 @@
+//! The F-key bar under the panes: its labels per modifier layer, and the pills that pin
+//! the ribbon card.
+
+use std::rc::Rc;
+
 use super::NavoWindow;
 use crate::commands::{Keymap, normal_key};
 use crate::fkey_bar::{FKeyBar, KeyLayer};
@@ -163,17 +168,29 @@ impl NavoWindow {
 
     fn keys_bar(&self, cx: &mut Context<Self>) -> FKeyBar {
         let is_fixed = self.values.modifier_hints() == HintsMode::Off;
-        let held = self.hints.held.filter(|_| !is_fixed);
+        let held = self.hints.held.or(self.hints.pinned).filter(|_| !is_fixed);
+        let this = cx.weak_entity();
+        let on_pin: crate::fkey_bar::OnPin = Rc::new(move |layer, _, cx| {
+            let _ = this.update(cx, |view, cx| view.pin_hints(layer, cx));
+        });
+        let pins = |bar: FKeyBar| {
+            if is_fixed {
+                bar
+            } else {
+                bar.pins(self.hints.pinned, on_pin)
+            }
+        };
         match &self.viewer {
             Some(viewer) => FKeyBar::new("fkeys", viewer.keys(cx)),
             None if self.settings.is_open() => {
                 let labels = settings_labels_in(crate::commands::active(cx));
-                FKeyBar::new("fkeys", keys_in_layer(&labels, held)).layers(held, labels)
+                pins(FKeyBar::new("fkeys", keys_in_layer(&labels, held)).layers(held, labels))
             }
             None => {
                 let keymap = crate::commands::active(cx);
                 let bar = FKeyBar::new("fkeys", layer_keys_in(keymap, held))
                     .layers(held, key_labels_in(keymap));
+                let bar = pins(bar);
                 match delete_warning_in(keymap) {
                     Some((layer, index)) => bar.warn(layer, index, DELETE_WARNING),
                     None => bar,

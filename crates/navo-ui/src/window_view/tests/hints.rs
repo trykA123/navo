@@ -284,3 +284,68 @@ fn commands_without_a_handler_are_left_out_of_the_drawer(cx: &mut TestAppContext
     assert!(has_entry(cx, window, "hint-tab.go_to_first"));
     assert!(!has_entry(cx, window, "hint-window.new"));
 }
+
+const CTRL_PILL: (&str, usize) = ("fkey-mod", 1);
+const SHIFT_PILL: (&str, usize) = ("fkey-mod", 0);
+
+fn filter_text(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> Option<String> {
+    view.read_with(cx, |view, _| {
+        let tab = view.browser.state().active_tab().id();
+        view.browser.filter_text(tab).map(str::to_owned)
+    })
+}
+
+#[gpui_kit::test]
+fn a_click_on_a_modifier_pill_pins_its_card_until_the_same_pill_is_clicked(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig_with_hints(cx, HintsMode::All);
+    rig.click(cx, CTRL_PILL);
+    assert_eq!(drawer(cx, rig.window).as_deref(), Some("Ctrl shortcuts"));
+    assert_eq!(
+        key_labels(cx, rig.window).1,
+        [Some(false), Some(true), Some(false)]
+    );
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window.within(("pane", 2usize)).click(("row", 2usize), cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    assert_eq!(drawer(cx, rig.window).as_deref(), Some("Ctrl shortcuts"));
+    rig.click(cx, SHIFT_PILL);
+    assert_eq!(drawer(cx, rig.window).as_deref(), Some("Shift shortcuts"));
+    rig.click(cx, SHIFT_PILL);
+    assert_eq!(drawer(cx, rig.window), None);
+    assert_eq!(key_labels(cx, rig.window).1, [Some(false); 3]);
+}
+
+#[gpui_kit::test]
+fn escape_unpins_the_card_first_and_the_next_escape_reaches_the_list(cx: &mut TestAppContext) {
+    let rig = rig_with_hints(cx, HintsMode::All);
+    rig.press(cx, "d");
+    assert_eq!(filter_text(cx, &rig.view).as_deref(), Some("d"));
+    rig.click(cx, CTRL_PILL);
+    rig.press(cx, "escape");
+    assert_eq!(drawer(cx, rig.window), None);
+    assert_eq!(filter_text(cx, &rig.view).as_deref(), Some("d"));
+    rig.press(cx, "escape");
+    assert_eq!(filter_text(cx, &rig.view), None);
+}
+
+#[gpui_kit::test]
+fn turn_off_unpins_the_card(cx: &mut TestAppContext) {
+    let rig = rig_with_hints(cx, HintsMode::All);
+    rig.click(cx, CTRL_PILL);
+    rig.click(cx, "modifier-hints-off");
+    assert_eq!(drawer(cx, rig.window), None);
+    assert_eq!(key_labels(cx, rig.window).1, [Some(false); 3]);
+}
+
+#[gpui_kit::test]
+fn a_pill_click_never_pins_while_hints_are_off(cx: &mut TestAppContext) {
+    let rig = rig_with_hints(cx, HintsMode::Off);
+    rig.click(cx, CTRL_PILL);
+    assert_eq!(drawer(cx, rig.window), None);
+    assert_eq!(key_labels(cx, rig.window).1, [Some(false); 3]);
+}

@@ -2,8 +2,8 @@
 //! the ribbon card above the F-key bar when it fits.
 
 use gpui_kit::{
-    AnyWindowHandle, DispatchPhase, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, NavigationDirection, Subscription, Task, WeakEntity, canvas,
+    AnyWindowHandle, DispatchPhase, KeystrokeEvent, Modifiers, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, NavigationDirection, Subscription, Task, WeakEntity, canvas,
 };
 
 use super::NavoWindow;
@@ -22,6 +22,8 @@ const MODIFIER_KEYS: [&str; 6] = [
 
 pub(super) struct Hints {
     pub(super) held: Option<KeyLayer>,
+    /// The layer a modifier pill pinned open; it stays until unpinned.
+    pub(super) pinned: Option<KeyLayer>,
     hold: Hold,
     buttons: Buttons,
     keeps_open: bool,
@@ -51,16 +53,23 @@ impl Buttons {
 
 impl Hints {
     pub(super) fn new(window: &Window, cx: &mut Context<NavoWindow>) -> Self {
-        let this = cx.weak_entity();
         let own: AnyWindowHandle = window.window_handle();
-        let keys = cx.intercept_keystrokes(move |event, window, cx| {
+        let keys = cx.listener(move |view, event: &KeystrokeEvent, window, cx| {
             let key = event.keystroke.key.as_str();
-            if window.window_handle() == own && !MODIFIER_KEYS.contains(&key) {
-                let _ = this.update(cx, |view, _| view.hints.hold.key_pressed());
+            if window.window_handle() != own || MODIFIER_KEYS.contains(&key) {
+                return;
             }
+            if key == "escape" && view.hints.pinned.take().is_some() {
+                cx.stop_propagation();
+                cx.notify();
+                return;
+            }
+            view.hints.hold.key_pressed();
         });
+        let keys = cx.intercept_keystrokes(keys);
         Self {
             held: None,
+            pinned: None,
             hold: Hold::default(),
             buttons: Buttons::default(),
             keeps_open: false,
@@ -186,13 +195,36 @@ impl NavoWindow {
         }
     }
 
+    /// Pins the pill's layer open, or unpins it when it is already pinned.
+    pub(super) fn pin_hints(&mut self, layer: KeyLayer, cx: &mut Context<Self>) {
+        let is_same = self.hints.pinned == Some(layer);
+        self.hints.pinned = (!is_same).then_some(layer);
+        cx.notify();
+    }
+
+    /// The pinned layer's combo while a card may show: hints on, no viewer, settings closed.
+    /// Unlike a held modifier, it ignores list focus and held mouse buttons.
+    fn pinned_combo(&self) -> Option<Combo> {
+        let is_on = self.values.modifier_hints() == HintsMode::All;
+        let is_free = self.viewer.is_none() && !self.settings.is_open();
+        let combo = match self.hints.pinned? {
+            KeyLayer::Shift => Combo::SHIFT,
+            KeyLayer::Ctrl => Combo::CTRL,
+            KeyLayer::Alt => Combo::ALT,
+        };
+        (is_on && is_free).then_some(combo)
+    }
+
     fn hint_layer(&self, window: &Window, cx: &App) -> Option<Layer> {
-        let combo = self
+        let held = self
             .hints
             .hold
             .shown()
-            .filter(|_| self.hints_fit(window) && !self.workspace_keys.visible)
-            .filter(|_| !self.hints.buttons.is_any() || self.hints.keeps_open)?;
+            .filter(|_| self.hints_fit(window))
+            .filter(|_| !self.hints.buttons.is_any() || self.hints.keeps_open);
+        let combo = held
+            .or_else(|| self.pinned_combo())
+            .filter(|_| !self.workspace_keys.visible)?;
         let focus = self.focus.get(&self.browser.state().focused_pane())?;
         let is_handled = |spec: &CommandSpec| {
             spec.action
@@ -251,6 +283,7 @@ impl NavoWindow {
 
     fn turn_off_hints(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.hints.hold.cancel();
+        self.hints.pinned = None;
         self.change_setting(Change::modifier_hints(HintsMode::Fkeys), window, cx);
         self.open_settings_at(Field::ModifierHints, window, cx);
         cx.notify();

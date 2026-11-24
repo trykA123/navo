@@ -1,3 +1,6 @@
+//! The F-key bar: ten function keys with their labels for the held or pinned modifier
+//! layer, and the Shift, Ctrl and Alt pills.
+
 use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::{
@@ -6,10 +9,15 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 
+use self::pills::{Pins, modifier_pills};
 use crate::FluentBuilder as _;
 use crate::job_card::PillFit;
 use crate::primitives::{IconName, Tooltip, icon};
 use crate::tokens::{self, Theme};
+
+mod pills;
+
+pub use pills::OnPin;
 
 const KEY_HEIGHT: f32 = 24.;
 const CHIP_HEIGHT: f32 = 18.;
@@ -56,6 +64,7 @@ pub struct FKeyBar {
     layers: Option<Layers>,
     warning: Option<Warning>,
     pill_width: Option<Pixels>,
+    pins: Pins,
     left: Option<AnyElement>,
     right: Option<AnyElement>,
 }
@@ -86,6 +95,7 @@ impl FKeyBar {
             layers: None,
             warning: None,
             pill_width: None,
+            pins: Pins::default(),
             left: None,
             right: None,
         }
@@ -109,6 +119,17 @@ impl FKeyBar {
             index,
             spoken: spoken.to_owned().into(),
         });
+        self
+    }
+
+    /// Makes the modifier pills buttons: a click calls `on_pin` with the pill's layer, and
+    /// the `pinned` pill reads as pressed.
+    #[must_use]
+    pub fn pins(mut self, pinned: Option<KeyLayer>, on_pin: OnPin) -> Self {
+        self.pins = Pins {
+            pinned,
+            on_pin: Some(on_pin),
+        };
         self
     }
 
@@ -136,6 +157,7 @@ impl FKeyBar {
     }
 }
 
+/// The rounded pill shape shared by the modifier pills.
 fn pill(t: &Theme) -> Div {
     div()
         .flex()
@@ -164,33 +186,6 @@ fn chip(t: &Theme, key: SharedString) -> Div {
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.colors.accent_text)
         .child(key)
-}
-
-fn modifier_pills(t: &Theme, held: Option<KeyLayer>) -> Vec<AnyElement> {
-    let s = &t.surfaces;
-    KeyLayer::ALL
-        .into_iter()
-        .enumerate()
-        .map(|(index, layer)| {
-            let is_lit = held == Some(layer);
-            pill(t)
-                .id(("fkey-mod", index))
-                .role(Role::Label)
-                .aria_label(layer.name())
-                .aria_selected(is_lit)
-                .test_support()
-                .flex_none()
-                .px(t.spacing.md)
-                .text_size(t.typography.small)
-                .when(is_lit, |pill| {
-                    pill.bg(s.keycap_lit)
-                        .border_color(s.keycap_lit)
-                        .text_color(s.keycap_lit_label)
-                })
-                .child(layer.name())
-                .into_any_element()
-        })
-        .collect()
 }
 
 struct Cell {
@@ -401,7 +396,9 @@ impl RenderOnce for FKeyBar {
             .min_w_0()
             .items_center()
             .gap(t.spacing.xs)
-            .when(is_layered, |group| group.children(modifier_pills(t, held)))
+            .when(is_layered, |group| {
+                group.children(modifier_pills(t, held, &self.pins))
+            })
             .children(cells);
         div()
             .id(self.id)
