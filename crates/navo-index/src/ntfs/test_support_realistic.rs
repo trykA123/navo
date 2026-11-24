@@ -1,7 +1,7 @@
 //! Realistic MFT fixture: seeded name lengths, record holes and a folder tree.
 //!
-//! The plan rides in the existing cursor field, so `MftFixture::new` and the record
-//! helpers stay unchanged and enumeration asks this module for each chunk.
+//! The fixture keeps its seed and record plan in its own `realistic` field, so the
+//! journal id and the cursor log keep their real meaning.
 
 #![allow(
     clippy::print_stdout,
@@ -11,8 +11,8 @@
 
 use super::{MftFixture, SyntheticRecord, append_record, stream_chunk};
 
-/// First bit pattern in the cursor field; a normal cursor log starts at 0.
-const PLAN_MAGIC: u64 = 0x414d_315f_5245_414c;
+/// Journal id every realistic fixture reports; the seed shapes only the records.
+const JOURNAL_ID: u64 = 1;
 /// Root MFT reference used by every synthetic fixture.
 const ROOT: u64 = 5;
 /// First file record, past the NTFS metadata records.
@@ -26,63 +26,55 @@ const STEP: u64 = 0x9e37_79b9_7f4a_7c15;
 /// Lowercase letters, digits and safe punctuation for synthetic names.
 const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789-_. ";
 
+/// The seed and the `(record number, parent record number)` pairs of a realistic fixture.
+pub(super) struct RealisticPlan {
+    seed: u64,
+    records: Vec<(u64, u64)>,
+}
+
 impl MftFixture {
     /// Builds a deterministic realistic MFT with `entries` records from `seed`; never fails.
     pub fn realistic(entries: u32, seed: u64) -> Self {
         Self {
             entries,
-            journal_id: seed,
-            enumeration_cursors: Some(build_plan(entries, seed)),
+            journal_id: JOURNAL_ID,
+            enumeration_cursors: None,
+            realistic: Some(RealisticPlan {
+                seed,
+                records: build_plan(entries, seed),
+            }),
         }
     }
 }
 
-/// Returns the realistic chunk at `cursor`, or logs a normal cursor and returns `None`.
-pub(super) fn step(fixture: &mut MftFixture, cursor: u64) -> Option<Vec<u8>> {
-    let entries = fixture.entries;
-    let seed = fixture.journal_id;
-    let Some(plan) = &mut fixture.enumeration_cursors else {
-        return None;
-    };
-    if plan.first() != Some(&PLAN_MAGIC) {
-        plan.push(cursor);
-        return None;
+impl RealisticPlan {
+    /// Returns the chunk of plan records from `cursor`, or `None` past the last of `entries`.
+    pub(super) fn chunk(&self, entries: u32, cursor: u64) -> Option<Vec<u8>> {
+        let start = u32::try_from(cursor).ok()?;
+        if start >= entries {
+            return None;
+        }
+        let end = start.saturating_add(CHUNK_RECORDS).min(entries);
+        let bytes = stream_chunk(start, end, |buf, at| {
+            let (file_id, parent_id) = self.records.get(at as usize).copied().unwrap_or_default();
+            let name = name(self.seed, at);
+            append_record(
+                buf,
+                SyntheticRecord {
+                    file_id,
+                    parent_id,
+                    folder: at.is_multiple_of(GROUP),
+                    name: &name,
+                },
+            );
+        });
+        Some(bytes)
     }
-    let start = u32::try_from(cursor).ok()?;
-    if start >= entries {
-        return None;
-    }
-    let end = start.saturating_add(CHUNK_RECORDS).min(entries);
-    let plan = fixture.enumeration_cursors.as_ref()?;
-    let bytes = stream_chunk(start, end, |buf, at| {
-        let (file_id, parent_id) = plan_record(plan, at);
-        let name = name(seed, at);
-        append_record(
-            buf,
-            SyntheticRecord {
-                file_id,
-                parent_id,
-                folder: at.is_multiple_of(GROUP),
-                name: &name,
-            },
-        );
-    });
-    Some(bytes)
 }
 
-/// Returns the record number and parent record number stored for plan index `at`.
-fn plan_record(plan: &[u64], at: u32) -> (u64, u64) {
-    let base = 1 + 2 * at as usize;
-    (
-        plan.get(base).copied().unwrap_or_default(),
-        plan.get(base + 1).copied().unwrap_or_default(),
-    )
-}
-
-/// Packs `entries` record numbers and parents behind [`PLAN_MAGIC`].
-fn build_plan(entries: u32, seed: u64) -> Vec<u64> {
-    let mut plan = Vec::with_capacity(1 + 2 * entries as usize);
-    plan.push(PLAN_MAGIC);
+/// Lays out `entries` record numbers with seeded holes and their parent folders.
+fn build_plan(entries: u32, seed: u64) -> Vec<(u64, u64)> {
+    let mut plan = Vec::with_capacity(entries as usize);
     let mut number = FIRST_RECORD;
     let mut folders: Vec<u64> = Vec::new();
     for at in 0..entries {
@@ -102,8 +94,7 @@ fn build_plan(entries: u32, seed: u64) -> Vec<u64> {
         } else {
             folders.last().copied().unwrap_or(ROOT)
         };
-        plan.push(number);
-        plan.push(parent);
+        plan.push((number, parent));
     }
     plan
 }
@@ -157,6 +148,7 @@ fn mix(state: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ntfs::volume_io::VolumeIo;
     use crate::ntfs::{Flags, NtfsIndex};
     use crate::table::NO_PARENT;
 
@@ -248,6 +240,19 @@ mod tests {
         }
         assert!(current == root, "record {frn} does not reach the root");
         depth
+    }
+
+    #[test]
+    fn realistic_fixture_keeps_a_real_journal_id() {
+        let journal = |seed| MftFixture::realistic(100, seed).query_journal().unwrap();
+        assert_eq!(journal(7), journal(8));
+    }
+
+    #[test]
+    fn realistic_fixture_logs_real_cursors() {
+        let (enumeration, cursors) = MftFixture::realistic(2_000, 7).read_with_cursors();
+        assert_eq!(cursors.first(), Some(&0));
+        assert_eq!(rows(&enumeration.index), rows(&index(2_000, 7)));
     }
 
     #[test]

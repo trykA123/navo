@@ -26,6 +26,7 @@ pub struct MftFixture {
     entries: u32,
     journal_id: u64,
     enumeration_cursors: Option<Vec<u64>>,
+    realistic: Option<test_support_realistic::RealisticPlan>,
 }
 
 impl MftFixture {
@@ -35,6 +36,7 @@ impl MftFixture {
             entries,
             journal_id,
             enumeration_cursors: None,
+            realistic: None,
         }
     }
 
@@ -57,10 +59,13 @@ impl VolumeIo for MftFixture {
         Ok(journal_metadata(self.journal_id))
     }
 
-    /// Emits the next chunk for the fixture at `cursor`, logging normal fixture cursors.
+    /// Emits the next chunk for the fixture at `cursor`, logging the cursor when asked to.
     fn enumerate(&mut self, cursor: u64) -> Result<Option<Vec<u8>>, NtfsError> {
-        if let Some(chunk) = test_support_realistic::step(self, cursor) {
-            return Ok(Some(chunk));
+        if let Some(log) = &mut self.enumeration_cursors {
+            log.push(cursor);
+        }
+        if let Some(plan) = &self.realistic {
+            return Ok(plan.chunk(self.entries, cursor));
         }
         let start = if cursor == 0 {
             1
