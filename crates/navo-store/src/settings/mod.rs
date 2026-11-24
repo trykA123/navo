@@ -34,9 +34,9 @@ pub use layout::{
     LayoutPreset, LayoutSettings, remove_layout_preset, replace_layout_preset, save_layout_preset,
 };
 pub use model::{
-    Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles, ModifierHints,
-    PopUpPosition, RightButton, Search, SearchIndex, SelectionSettings, Settings, SizeMode,
-    SortKey, ThemeMode,
+    AltF7Opens, Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles,
+    ModifierHints, PopUpPosition, RightButton, Search, SearchIndex, SelectionSettings, Settings,
+    SizeMode, SortKey, ThemeMode,
 };
 pub use parse::{parse, parse_retention, to_toml};
 pub use retention::RetentionSettings;

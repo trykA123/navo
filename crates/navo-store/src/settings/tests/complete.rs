@@ -105,6 +105,7 @@ exclude = [\"$Recycle.Bin\", \"System Volume Information\"]
 network = false
 removable = false
 remember = true
+alt-f7-opens = \"palette\"
 
 [automotive]
 modules = []
@@ -147,7 +148,7 @@ fetch-minutes = 15
 network = false
 ";
 
-const DEFAULT_KEYS: [(&str, &str); 106] = [
+const DEFAULT_KEYS: [(&str, &str); 107] = [
     ("appearance.mode", "\"system\""),
     ("appearance.color-theme", "\"open-sea\""),
     ("appearance.light-theme", "\"Navo Light\""),
@@ -231,6 +232,7 @@ const DEFAULT_KEYS: [(&str, &str); 106] = [
     ("search.network", "false"),
     ("search.removable", "false"),
     ("search.remember", "true"),
+    ("search.alt-f7-opens", "\"palette\""),
     ("automotive.modules", "[]"),
     ("automotive.view.preset", "\"simple\""),
     ("automotive.view.inspector", "false"),
@@ -306,7 +308,7 @@ fn a_complete_file_is_left_as_it_is() {
 fn missing_keys_join_their_section_and_missing_sections_follow_in_model_order() {
     let before =
         "# mine\n[files]\nsort = \"size\" # by size\n\n[appearance]\n# the look\nmode = \"dark\"\n";
-    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\nsize-mode = \"apparent\"\nmeasure-shown-folders = false\ndrop-confirm = \"never\"\nrename-log = false\n\n[appearance]\n# the look\nmode = \"dark\"\ncolor-theme = \"open-sea\"\nlight-theme = \"Navo Light\"\ndark-theme = \"Navo Dark\"\nfont = \"Inter\"\nfont-size = 13\nui-scale = 100\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\nright-button = \"total-commander\"\n\n[terminal]\nprovider = \"system\"\nshell = \"\"\nstart-in = \"pane\"\nprompt-marks = true\nfont = \"JetBrains Mono\"\nfont-size = 13\nline-height = 1.4\ncursor = \"block\"\nblink = true\nscheme = \"navo\"\nkeep-readable = true\nopacity = 100\npadding = 8\ndrawer-height = 40\nside-width = 440\nscrollback = 10000\ncopy-on-select = false\nctrl-c-copies = true\nbell = \"tab\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\next-width = 0\nsize-width = 0\ndate-width = 0\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview]\ninspector = false\ninspector-width = 360\ninspector-properties = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\nverify = \"auto\"\n\n[retention]\nretain-deletes = true\nretain-overwrites = true\ndays = 3\nmax-volume-mib = 1024\nmin-free-mib = 256\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\n\n[automotive]\nmodules = []\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n\n[tray]\nkeep-running = false\nsummon-key = \"Win+Alt+N\"\n\n[clipboard]\nenabled = true\nrecord-history = true\nsummon-key = \"Win+Alt+V\"\npopup-position = \"last\"\n\n[updates]\ncheck = true\n\n[compare]\ngit-engine = \"git\"\nignore-list = []\nrespect-gitignore = true\nmemory-budget-mib = 1024\ncontent-check = \"content\"\n\n[git]\nbadges = true\nengine = \"auto\"\ntool = \"auto\"\nfetch = false\nfetch-minutes = 15\nnetwork = false\n";
+    let after = "# mine\n[files]\nsort = \"size\" # by size\nhidden-files = \"shown\"\nshow-system = false\nfolders-first = true\nsort-descending = false\nsize-mode = \"apparent\"\nmeasure-shown-folders = false\ndrop-confirm = \"never\"\nrename-log = false\n\n[appearance]\n# the look\nmode = \"dark\"\ncolor-theme = \"open-sea\"\nlight-theme = \"Navo Light\"\ndark-theme = \"Navo Dark\"\nfont = \"Inter\"\nfont-size = 13\nui-scale = 100\ndensity = \"normal\"\nmodifier-hints = \"all\"\nmodifier-hints-delay-ms = 400\n\n[selection]\nspace-measures-folders = true\npatterns-select-folders = false\nright-button = \"total-commander\"\n\n[terminal]\nprovider = \"system\"\nshell = \"\"\nstart-in = \"pane\"\nprompt-marks = true\nfont = \"JetBrains Mono\"\nfont-size = 13\nline-height = 1.4\ncursor = \"block\"\nblink = true\nscheme = \"navo\"\nkeep-readable = true\nopacity = 100\npadding = 8\ndrawer-height = 40\nside-width = 440\nscrollback = 10000\ncopy-on-select = false\nctrl-c-copies = true\nbell = \"tab\"\n\n[window.view]\ntabs-with-one = true\npath-bar = true\ndrive-button = true\ntitle-search = true\nfkey-bar = false\nicons = true\next-column = true\nsize-column = true\ndate-column = true\nfree-space = true\nmarked-totals = true\ncontents = true\next-width = 0\nsize-width = 0\ndate-width = 0\n\n[text.view]\nline-numbers = true\nline-ends = false\nsyntax-theme = \"oxidised-iron\"\n\n[image.view]\ndetails = false\n\n[markdown.view]\npreview-split = true\n\n[preview]\ninspector = false\ninspector-width = 360\ninspector-properties = true\n\n[preview.view]\ntype-bars = true\nlargest-files = true\n\n[copy]\nmode = \"auto\"\nverify = \"auto\"\n\n[retention]\nretain-deletes = true\nretain-overwrites = true\ndays = 3\nmax-volume-mib = 1024\nmin-free-mib = 256\n\n[search]\nindex = \"auto\"\ndrives = []\nwalk-roots = []\nexclude = [\"$Recycle.Bin\", \"System Volume Information\"]\nnetwork = false\nremovable = false\nremember = true\nalt-f7-opens = \"palette\"\n\n[automotive]\nmodules = []\n\n[automotive.view]\npreset = \"simple\"\ninspector = false\nmemory-strip = false\ncharts = false\nrow-bars = false\nusage-bars = false\nwho-uses = false\n\n[tray]\nkeep-running = false\nsummon-key = \"Win+Alt+N\"\n\n[clipboard]\nenabled = true\nrecord-history = true\nsummon-key = \"Win+Alt+V\"\npopup-position = \"last\"\n\n[updates]\ncheck = true\n\n[compare]\ngit-engine = \"git\"\nignore-list = []\nrespect-gitignore = true\nmemory-budget-mib = 1024\ncontent-check = \"content\"\n\n[git]\nbadges = true\nengine = \"auto\"\ntool = \"auto\"\nfetch = false\nfetch-minutes = 15\nnetwork = false\n";
     assert_eq!(completed(before), after);
 }
 

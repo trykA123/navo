@@ -238,6 +238,7 @@ pub struct Search {
     pub network: bool,
     pub removable: bool,
     pub remember: bool,
+    pub alt_f7_opens: AltF7Opens,
 }
 
 impl Default for Search {
@@ -253,6 +254,7 @@ impl Default for Search {
             network: false,
             removable: false,
             remember: true,
+            alt_f7_opens: AltF7Opens::default(),
         }
     }
 }
@@ -314,6 +316,15 @@ pub enum PopUpPosition {
     Last,
     Cursor,
     Center,
+}
+
+/// What Alt+F7 opens: the command palette's find mode or the classic Find dialog.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AltF7Opens {
+    #[default]
+    Palette,
+    Classic,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

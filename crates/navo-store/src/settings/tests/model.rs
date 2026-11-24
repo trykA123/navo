@@ -31,6 +31,15 @@ fn modifier_hints_read_their_three_values_and_the_delay() {
 }
 
 #[test]
+fn alt_f7_opens_reads_palette_and_classic() {
+    let (settings, unknown) =
+        crate::parse_settings("[search]\nalt-f7-opens = \"classic\"\n").unwrap();
+    assert!(unknown.is_empty());
+    assert_eq!(settings.search.alt_f7_opens, AltF7Opens::Classic);
+    assert_eq!(Settings::default().search.alt_f7_opens, AltF7Opens::Palette);
+}
+
+#[test]
 fn files_defaults() {
     let f = Settings::default().files;
     assert_eq!(f.hidden_files, HiddenFiles::Shown);

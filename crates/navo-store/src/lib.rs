@@ -42,17 +42,18 @@ pub use session::{
     read_session_file, write_session,
 };
 pub use settings::{
-    Appearance, Automotive, AutomotiveView, ColorTheme, Compare, CompareGitEngine, Completion,
-    ContentCheck, CopyMode, CopySettings, DefaultChange, Density, DropConfirm, Editor, Files,
-    GitEngine, GitSettings, HiddenFiles, ImageView, ImageViewer, LayoutPreset, LayoutSettings,
-    LineHeight, LoadReport, MAX_BUDGET_MIB, MIN_BUDGET_MIB, MarkdownView, MarkdownViewer,
-    ModifierHints, PopUpPosition, PreviewView, PreviewViewer, RetentionSettings, RightButton,
-    Saved, Search, SearchIndex, SelectionSettings, SessionBackup, SettingValue, Settings,
-    SettingsError, SettingsLedger, SettingsStore, SizeMode, SortKey, Terminal, TerminalBell,
-    TerminalCursor, TerminalScheme, TerminalStart, TextView, TextViewer, ThemeMode, VerifyMode,
-    ViewPreset, WindowSettings, WindowView, key_line as settings_key_line, parse as parse_settings,
-    parse_retention as parse_retention_settings, remove_layout_preset, replace_layout_preset,
-    save_layout_preset, section_line as settings_section_line, to_toml as settings_to_toml,
+    AltF7Opens, Appearance, Automotive, AutomotiveView, ColorTheme, Compare, CompareGitEngine,
+    Completion, ContentCheck, CopyMode, CopySettings, DefaultChange, Density, DropConfirm, Editor,
+    Files, GitEngine, GitSettings, HiddenFiles, ImageView, ImageViewer, LayoutPreset,
+    LayoutSettings, LineHeight, LoadReport, MAX_BUDGET_MIB, MIN_BUDGET_MIB, MarkdownView,
+    MarkdownViewer, ModifierHints, PopUpPosition, PreviewView, PreviewViewer, RetentionSettings,
+    RightButton, Saved, Search, SearchIndex, SelectionSettings, SessionBackup, SettingValue,
+    Settings, SettingsError, SettingsLedger, SettingsStore, SizeMode, SortKey, Terminal,
+    TerminalBell, TerminalCursor, TerminalScheme, TerminalStart, TextView, TextViewer, ThemeMode,
+    VerifyMode, ViewPreset, WindowSettings, WindowView, key_line as settings_key_line,
+    parse as parse_settings, parse_retention as parse_retention_settings, remove_layout_preset,
+    replace_layout_preset, save_layout_preset, section_line as settings_section_line,
+    to_toml as settings_to_toml,
 };
 
 #[cfg(feature = "test-support")]
