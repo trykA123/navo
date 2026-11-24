@@ -134,7 +134,7 @@ impl<'a> Aliases<'a> {
                 if self.hops > MAX_HOPS {
                     return Err(Unresolved::Loop(location.clone()));
                 }
-                let to = beside(&here, &to).ok_or_else(|| Unresolved::Partial(to.clone()))?;
+                let to = beside(&here, &to)?;
                 self.follow(&to)?
             }
             None => here,
@@ -163,18 +163,29 @@ impl<'a> Aliases<'a> {
     }
 }
 
-/// A link's target `to` as a full location: a relative target counts from the link's folder.
-fn beside(link: &Location, to: &Location) -> Option<Location> {
+/// A link's target `to` as a full location: a relative target counts from the link's folder,
+/// a rooted one (`\w`) from the link's drive or share. A drive-relative target (`C:foo`)
+/// depends on that drive's current folder, so it is unreadable.
+fn beside(link: &Location, to: &Location) -> Result<Location, Unresolved> {
     if !is_partial(to) {
-        return Some(to.clone());
+        return Ok(to.clone());
     }
-    let text = to.path().as_str()?;
+    let partial = || Unresolved::Partial(to.clone());
+    let text = to.path().as_str().ok_or_else(partial)?;
+    let start = match text.as_bytes() {
+        [letter, b':', ..] if letter.is_ascii_alphabetic() => {
+            return Err(Unresolved::Unreadable(link.clone()));
+        }
+        [b'\\' | b'/', ..] => std::iter::successors(Some(link.clone()), Location::parent).last(),
+        _ => link.parent(),
+    };
     text.split(['/', '\\'])
-        .try_fold(link.parent()?, |folder, part| match part {
+        .try_fold(start.ok_or_else(partial)?, |folder, part| match part {
             "" | "." => Some(folder),
             ".." => folder.parent(),
             name => folder.join(&ProviderPath::from_text(name)).ok(),
         })
+        .ok_or_else(partial)
 }
 
 #[cfg(test)]
@@ -217,6 +228,29 @@ mod tests {
     fn a_path_rooted_on_no_drive_is_partial() {
         assert!(is_partial(&local(r"\foo")));
         assert_eq!(is_partial(&local("/home/x")), cfg!(windows));
+    }
+
+    #[test]
+    fn a_rooted_link_target_counts_from_the_links_drive_or_share() {
+        let cases = [
+            (r"C:\a\b\l", r"\w\x", r"C:\w\x"),
+            (r"\\srv\share\a\l", r"\w", r"\\srv\share\w"),
+            (r"C:\a\b\l", r"..\w", r"C:\a\w"),
+        ];
+        for (link, to, lands) in cases {
+            let found = beside(&local(link), &local(to)).ok();
+            assert_eq!(
+                found.map(|it| place(&it)),
+                Some(place(&local(lands))),
+                "{to}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_drive_relative_link_target_is_unreadable() {
+        let found = beside(&local(r"C:\a\l"), &local("C:foo"));
+        assert!(matches!(found, Err(Unresolved::Unreadable(_))), "{found:?}");
     }
 
     #[test]
