@@ -3,7 +3,7 @@ mod translate;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -14,6 +14,9 @@ pub(crate) use translate::{RawKind, Translate};
 
 pub const WATCH_QUIET: Duration = Duration::from_millis(100);
 pub const WATCH_MAX_DELAY: Duration = Duration::from_millis(500);
+
+/// Raw notifications queued for the debouncer; a full queue turns into one overflow (relist).
+const RAW_CAPACITY: usize = 4_096;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchChange {
@@ -42,11 +45,21 @@ pub(crate) enum Raw {
     Stop,
 }
 
+/// Flags the debouncer reads after every wake-up, so no producer or `Drop` ever blocks on the queue.
+#[derive(Debug, Default)]
+struct Signals {
+    /// A notification did not fit the queue; the next batch is an overflow.
+    lost: AtomicBool,
+    /// The watch is dropping; the debouncer returns at its next wake-up.
+    stop: AtomicBool,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct RawSender {
-    sender: Sender<Raw>,
+    sender: SyncSender<Raw>,
     live: Arc<AtomicBool>,
     count: Arc<AtomicU64>,
+    signals: Arc<Signals>,
 }
 
 impl RawSender {
@@ -62,23 +75,39 @@ impl RawSender {
 
     pub(crate) fn change(&self, change: WatchChange) -> bool {
         self.count.fetch_add(1, Ordering::Release);
-        self.sender.send(Raw::Change(change)).is_ok()
+        self.send(Raw::Change(change))
     }
 
     pub(crate) fn overflow(&self) -> bool {
         self.count.fetch_add(1, Ordering::Release);
-        self.sender.send(Raw::Overflow).is_ok()
+        self.send(Raw::Overflow)
     }
 
+    /// A failure that meets a full queue arrives as an overflow; `is_live` still turns false.
     pub(crate) fn failed(&self, error: FsError) {
         self.count.fetch_add(1, Ordering::Release);
         self.live.store(false, Ordering::Release);
-        let _ = self.sender.send(Raw::Failed(error));
+        let _ = self.send(Raw::Failed(error));
+    }
+
+    /// Queues without blocking the OS watcher thread; false once the debouncer is gone.
+    fn send(&self, raw: Raw) -> bool {
+        match self.sender.try_send(raw) {
+            Ok(()) => true,
+            Err(TrySendError::Full(_)) => {
+                self.signals.lost.store(true, Ordering::Release);
+                // Wakes a debouncer that drained the queue before the flag was set.
+                let _ = self.sender.try_send(Raw::Overflow);
+                true
+            }
+            Err(TrySendError::Disconnected(_)) => false,
+        }
     }
 }
 
 pub struct Watch {
-    raw: Sender<Raw>,
+    raw: SyncSender<Raw>,
+    signals: Arc<Signals>,
     live: Arc<AtomicBool>,
     count: Arc<AtomicU64>,
     backend: Option<Box<dyn Send>>,
@@ -130,23 +159,27 @@ impl Watch {
             Depth::Folder => Batch::default(),
             Depth::Subtree => Batch::for_tree(),
         };
-        let (raw, events) = mpsc::channel();
+        let (raw, events) = mpsc::sync_channel(RAW_CAPACITY);
+        let signals = Arc::new(Signals::default());
         let live = Arc::new(AtomicBool::new(false));
         let count = Arc::new(AtomicU64::new(0));
         let backend = backend(RawSender {
             sender: raw.clone(),
             live: Arc::clone(&live),
             count: Arc::clone(&count),
+            signals: Arc::clone(&signals),
         })?;
+        let flags = Arc::clone(&signals);
         let debouncer = std::thread::Builder::new()
             .name("folder-watch".to_owned())
-            .spawn(move || debounce(&events, sink, batch))
+            .spawn(move || debounce(&events, sink, batch, &flags))
             .map_err(|_| FsError {
                 location: Some(folder.clone()),
                 ..FsError::new(FsErrorKind::Unknown)
             })?;
         Ok(Self {
             raw,
+            signals,
             live,
             count,
             backend: Some(Box::new(backend)),
@@ -169,16 +202,19 @@ impl Watch {
 }
 
 impl Drop for Watch {
+    // The backend goes first so no new notification races the stop; nothing here blocks on a full
+    // queue, because the debouncer checks `stop` after every message it takes.
     fn drop(&mut self) {
-        let _ = self.raw.send(Raw::Stop);
         drop(self.backend.take());
+        self.signals.stop.store(true, Ordering::Release);
+        let _ = self.raw.try_send(Raw::Stop);
         if let Some(debouncer) = self.debouncer.take() {
             let _ = debouncer.join();
         }
     }
 }
 
-fn debounce(events: &Receiver<Raw>, mut sink: WatchSink, mut batch: Batch) {
+fn debounce(events: &Receiver<Raw>, mut sink: WatchSink, mut batch: Batch, signals: &Signals) {
     loop {
         let next = match batch.deadline() {
             Some(at) => events.recv_timeout(at.saturating_duration_since(Instant::now())),
@@ -193,6 +229,12 @@ fn debounce(events: &Receiver<Raw>, mut sink: WatchSink, mut batch: Batch) {
             }
             Ok(Raw::Stop) | Err(RecvTimeoutError::Disconnected) => return,
             Err(RecvTimeoutError::Timeout) => {}
+        }
+        if signals.stop.load(Ordering::Acquire) {
+            return;
+        }
+        if signals.lost.swap(false, Ordering::AcqRel) {
+            batch.overflow(Instant::now());
         }
         if let Some(event) = batch.take_due(Instant::now()) {
             sink(event);

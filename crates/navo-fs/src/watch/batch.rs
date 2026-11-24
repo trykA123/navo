@@ -5,6 +5,9 @@ use navo_core::ProviderPath;
 
 use super::{WATCH_MAX_DELAY, WATCH_QUIET, WatchChange, WatchEvent};
 
+/// Paths one batch buffers before it gives up and reports an overflow (the folder is relisted).
+const MAX_PATHS: usize = 4_096;
+
 #[derive(Default)]
 pub(super) struct Batch {
     changes: Vec<Option<WatchChange>>,
@@ -29,10 +32,10 @@ impl Batch {
             return;
         }
         let Some(&at) = self.latest.get(name_of(&change)) else {
-            return self.append(change);
+            return self.append(change, now);
         };
         let Some(earlier) = &self.changes[at] else {
-            return self.append(change);
+            return self.append(change, now);
         };
         let is_new = matches!(earlier, WatchChange::Created(_));
         let was_renamed = matches!(earlier, WatchChange::Renamed { .. });
@@ -45,12 +48,15 @@ impl Batch {
             return;
         }
         if was_renamed {
-            return self.append(change);
+            return self.append(change, now);
         }
         self.changes[at] = Some(change);
     }
 
-    fn append(&mut self, change: WatchChange) {
+    fn append(&mut self, change: WatchChange, now: Instant) {
+        if self.changes.len() >= MAX_PATHS {
+            return self.overflow(now);
+        }
         self.latest
             .insert(name_of(&change).clone(), self.changes.len());
         self.changes.push(Some(change));

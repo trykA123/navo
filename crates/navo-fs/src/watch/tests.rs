@@ -309,3 +309,108 @@ fn a_tree_batch_keeps_a_name_created_again_after_its_removal() {
         Some(WatchEvent::Changed(vec![created("a.tmp")]))
     );
 }
+
+#[test]
+fn a_batch_keeps_paths_up_to_the_cap() {
+    let start = Instant::now();
+    let mut batch = Batch::default();
+    for index in 0..4_096 {
+        batch.push(created(&format!("f{index}")), start);
+    }
+    let Some(WatchEvent::Changed(changes)) = batch.take() else {
+        panic!("a batch at the cap keeps its changes");
+    };
+    assert_eq!(changes.len(), 4_096);
+}
+
+#[test]
+fn a_batch_over_the_path_cap_overflows() {
+    let start = Instant::now();
+    let mut batch = Batch::default();
+    for index in 0..5_000 {
+        batch.push(created(&format!("f{index}")), start);
+    }
+    assert_eq!(batch.take(), Some(WatchEvent::Overflow));
+}
+
+/// A watch whose sink blocks on its first event until the gate sender drops.
+struct Gated {
+    watch: Watch,
+    raw: RawSender,
+    events: mpsc::Receiver<WatchEvent>,
+    entered: mpsc::Receiver<()>,
+    gate: Option<mpsc::Sender<()>>,
+}
+
+/// Starts a gated watch; with `gate_in_backend` only dropping the backend releases the sink.
+fn gated_watch(gate_in_backend: bool) -> Gated {
+    let (gate, held_gate) = mpsc::channel::<()>();
+    let (entered_tx, entered) = mpsc::channel();
+    let (sender, events) = mpsc::channel();
+    let mut first = true;
+    let sink: WatchSink = Box::new(move |event| {
+        if std::mem::take(&mut first) {
+            let _ = entered_tx.send(());
+            let _ = held_gate.recv();
+        }
+        let _ = sender.send(event);
+    });
+    let mut gate = Some(gate);
+    let backend_gate = if gate_in_backend { gate.take() } else { None };
+    let mut raw = None;
+    let watch = Watch::start(&Location::new("/").unwrap(), sink, |sender| {
+        raw = Some(sender);
+        Ok(backend_gate)
+    })
+    .unwrap();
+    Gated {
+        watch,
+        raw: raw.unwrap(),
+        events,
+        entered,
+        gate,
+    }
+}
+
+/// Sends `count` changes on another thread; `None` means the producer blocked past the deadline.
+fn flood(raw: RawSender, count: usize) -> Option<bool> {
+    let (done, finished) = mpsc::channel();
+    std::thread::spawn(move || {
+        let delivered = (0..count).all(|index| raw.change(created(&format!("f{index}"))));
+        let _ = done.send(delivered);
+    });
+    finished.recv_timeout(Duration::from_secs(30)).ok()
+}
+
+#[test]
+fn a_flood_against_a_stalled_sink_never_blocks_and_ends_in_one_overflow() {
+    let mut gated = gated_watch(false);
+    gated.raw.change(created("first"));
+    gated.entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(flood(gated.raw.clone(), 10_000), Some(true));
+    drop(gated.gate.take());
+    let wait = Duration::from_secs(5);
+    assert_eq!(
+        gated.events.recv_timeout(wait),
+        Ok(WatchEvent::Changed(vec![created("first")]))
+    );
+    assert_eq!(gated.events.recv_timeout(wait), Ok(WatchEvent::Overflow));
+    drop(gated.watch);
+    assert_eq!(gated.events.try_iter().count(), 0);
+}
+
+#[test]
+fn dropping_a_watch_with_a_full_channel_returns() {
+    let gated = gated_watch(true);
+    gated.raw.change(created("first"));
+    gated.entered.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(flood(gated.raw.clone(), 5_000), Some(true));
+    let (done, dropped) = mpsc::channel();
+    let watch = gated.watch;
+    std::thread::spawn(move || {
+        drop(watch);
+        let _ = done.send(());
+    });
+    assert_eq!(dropped.recv_timeout(Duration::from_secs(30)), Ok(()));
+    assert!(!gated.raw.change(created("after")));
+}
