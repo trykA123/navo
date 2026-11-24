@@ -97,14 +97,9 @@ impl fmt::Display for ContainerError {
 }
 
 /// HRESULTs `DeleteAppContainerProfile` returns when no profile is left: `S_OK`,
-/// `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)`, `HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)` and
-/// `E_INVALIDARG` (Windows 10/11 answer for a missing profile under a valid name).
-const PROFILE_GONE: [i32; 4] = [
-    0,
-    0x8007_0490_u32 as i32,
-    0x8007_0002_u32 as i32,
-    0x8007_0057_u32 as i32,
-];
+/// `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` and `HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)`.
+/// A second delete of a removed profile returns S_OK (Windows runner, 2026-11-24).
+const PROFILE_GONE: [i32; 3] = [0, 0x8007_0490_u32 as i32, 0x8007_0002_u32 as i32];
 
 /// Maps the HRESULT of `DeleteAppContainerProfile` to the removal result: `Ok` when nothing is
 /// left, `Err(hr)` for any other code (access denied, a locked profile).
@@ -195,9 +190,9 @@ mod tests {
         assert_eq!(profile_removal(0), Ok(()));
         assert_eq!(profile_removal(0x8007_0490_u32 as i32), Ok(()));
         assert_eq!(profile_removal(0x8007_0002_u32 as i32), Ok(()));
-        assert_eq!(profile_removal(0x8007_0057_u32 as i32), Ok(()));
         for hr in [
             1,
+            0x8007_0057_u32 as i32,
             0x8007_0005_u32 as i32,
             0x8007_0020_u32 as i32,
             0x8000_4005_u32 as i32,
