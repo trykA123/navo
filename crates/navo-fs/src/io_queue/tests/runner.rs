@@ -361,13 +361,14 @@ fn an_owner_guard_outliving_its_queue_drops_cleanly() {
 }
 
 /// AD16: app exit must not wait on a job stuck in network I/O that ignores its cancel token.
+/// A 200 ms cap keeps the test fast; the blocked job holds its worker for 5 s without one.
 #[test]
-fn shutdown_returns_within_the_cap_while_a_job_stays_blocked() {
+fn close_returns_within_the_cap_while_a_job_stays_blocked() {
     let queue = queue_with(VolumeKind::Network);
     let release = blocker(&queue, A);
     let began = Instant::now();
-    queue.shutdown();
+    queue.close_within(Duration::from_millis(200));
     let took = began.elapsed();
     release.open();
-    assert!(took < Duration::from_secs(3), "shutdown took {took:?}");
+    assert!(took < Duration::from_millis(1500), "close took {took:?}");
 }

@@ -7,7 +7,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use super::abort_win::{AbortStore, ThreadAbort};
+use super::abort_win::{Abort, AbortStore, ThreadAbort};
 use super::{JobId, Limits, OwnerId, Priority, Scheduler, VolumeId, VolumeKind};
 use crate::drive_class;
 use crate::provider::CancelToken;
@@ -72,7 +72,9 @@ impl Shared {
     }
 
     /// Waits at most `cap` for every worker in `handles` to end; returns early once all have.
-    /// A detached worker only finishes its own job: the queue is closed and its token cancelled.
+    /// A detached worker starts no new job, but nothing interrupts its volume classification:
+    /// only this cap bounds it, and the worker exits after the classifier returns, because
+    /// `register_abort` then sees `closed`.
     fn wait_for_exit(&self, handles: &[(VolumeId, JoinHandle<()>)], cap: Duration) {
         let deadline = Instant::now() + cap;
         let mut state = self.lock();
@@ -184,15 +186,27 @@ fn register_abort(shared: &Shared, volume: &VolumeId, id: JobId, token: &CancelT
     if token.is_cancelled() || state.closed {
         return false;
     }
-    // Unknown too: a second worker can start before the first one finishes classifying.
-    if matches!(
-        state.scheduler.kind(volume),
-        VolumeKind::Network | VolumeKind::Unknown
-    ) && let Some(handle) = ThreadAbort::current()
-    {
-        state.aborts.insert(id, handle);
-    }
+    let State {
+        scheduler, aborts, ..
+    } = &mut *state;
+    store_network_abort(aborts, scheduler.kind(volume), id, ThreadAbort::current);
     true
+}
+
+/// Stores `handle()` for job `id` in `aborts` when the volume `kind` is (or may be) a network
+/// share; a `None` handle stores nothing. Generic over the handle so tests can inject a fake.
+pub(super) fn store_network_abort<H: Abort>(
+    aborts: &mut AbortStore<H>,
+    kind: VolumeKind,
+    id: JobId,
+    handle: impl FnOnce() -> Option<H>,
+) {
+    // Unknown too: a second worker can start before the first one finishes classifying.
+    if matches!(kind, VolumeKind::Network | VolumeKind::Unknown)
+        && let Some(handle) = handle()
+    {
+        aborts.insert(id, handle);
+    }
 }
 
 impl IoQueue {
@@ -286,7 +300,14 @@ impl IoQueue {
         drop(self);
     }
 
+    /// Closes the queue and waits up to `CLOSE_JOIN_CAP` for its workers; see `close_within`.
     fn close(&self) {
+        self.close_within(CLOSE_JOIN_CAP);
+    }
+
+    /// Closes the queue: cancels every job, drops the queued ones, and waits at most `cap` in
+    /// total for the workers; a worker still blocked then is detached and logged (AD16).
+    pub(super) fn close_within(&self, cap: Duration) {
         let (dropped, handles) = {
             let _delivery = self.shared.delivery_gate();
             let mut state = self.shared.lock();
@@ -302,7 +323,7 @@ impl IoQueue {
             .into_iter()
             .filter(|(_, handle)| handle.thread().id() != me)
             .collect();
-        self.shared.wait_for_exit(&handles, CLOSE_JOIN_CAP);
+        self.shared.wait_for_exit(&handles, cap);
         for (volume, handle) in handles {
             if handle.is_finished() {
                 let _ = handle.join();

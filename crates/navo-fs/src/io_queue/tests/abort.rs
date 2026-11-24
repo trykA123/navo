@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use crate::io_queue::abort_win::{Abort, AbortStore};
+use crate::io_queue::runner::store_network_abort;
 
 /// A fake thread handle that records which job it aborted and when it was closed.
 struct Recorder {
@@ -122,4 +123,25 @@ fn cancel_owner_frees_a_network_job_blocked_in_read_file_within_a_second() {
     drop(writer);
     let read = answer.expect("the blocked read returned within 1 s of cancel_owner");
     assert_eq!(read, Err(Some(995)), "ERROR_OPERATION_ABORTED");
+}
+
+/// AD16: a second worker can start on a volume still being classified, so an Unknown volume
+/// stores the handle too, and a cancel of that job reaches it.
+#[test]
+fn a_job_on_an_unknown_volume_stores_a_handle_that_cancel_reaches() {
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let mut scheduler = Scheduler::new();
+    let mut store = AbortStore::default();
+    let job = scheduler.push(vol("new"), Priority::Visible, A);
+    assert_eq!(scheduler.start_next_on(&vol("new")), Some(job));
+    let recorder = Recorder {
+        job: job.0,
+        log: Arc::clone(&log),
+    };
+    let kind = scheduler.kind(&vol("new"));
+    assert_eq!(kind, VolumeKind::Unknown);
+    store_network_abort(&mut store, kind, job, || Some(recorder));
+    assert_eq!(store.len(), 1);
+    store.abort(&scheduler.cancel_owner(A).running);
+    assert_eq!(log.lock().unwrap()[0], format!("abort {}", job.0));
 }
