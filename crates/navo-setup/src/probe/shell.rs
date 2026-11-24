@@ -9,7 +9,7 @@
 
 use std::cell::Cell;
 use std::ffi::c_void;
-use std::io::{self, Write};
+use std::io;
 use std::mem::size_of;
 use std::os::windows::io::{AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle};
 use std::ptr::{null, null_mut};
@@ -142,10 +142,7 @@ pub fn enter_as_user() -> io::Result<()> {
         ENTERED.set(Some(false));
         // SAFETY: no arguments; ends the unusable impersonation set just above.
         if unsafe { RevertToSelf() } == 0 {
-            abort_on_identity(
-                "could not stop a lowered impersonation",
-                &io::Error::last_os_error(),
-            );
+            abort_on_identity();
         }
         return Err(error);
     }
@@ -189,10 +186,7 @@ impl Drop for Revert {
     fn drop(&mut self) {
         // SAFETY: no arguments; ends this thread's impersonation.
         if unsafe { RevertToSelf() } == 0 {
-            abort_on_identity(
-                "could not stop acting as the desktop user",
-                &io::Error::last_os_error(),
-            );
+            abort_on_identity();
         }
         ENTERED.set(self.before);
     }
@@ -221,18 +215,14 @@ impl Identity for ThreadIdentity {
     }
 
     /// Aborts: the thread's token is wrong or unknown and it must not run on.
-    fn fatal(&self, error: io::Error) -> ! {
-        abort_on_identity(
-            "could not switch between the desktop user and Setup",
-            &error,
-        )
+    fn fatal(&self, _error: io::Error) -> ! {
+        abort_on_identity()
     }
 }
 
-/// Writes one stderr line and aborts when this thread's identity is wrong or unknown (IW39). The
-/// write ignores its own failure, so nothing can unwind before the abort.
-fn abort_on_identity(what: &str, error: &io::Error) -> ! {
-    let _ = writeln!(io::stderr().lock(), "navo-setup: {what}: {error}");
+/// Aborts at once when this thread's identity is wrong or unknown (IW39): no diagnostic, since a
+/// stderr lock or a full pipe could block while the thread still runs with the wrong token.
+fn abort_on_identity() -> ! {
     std::process::abort()
 }
 

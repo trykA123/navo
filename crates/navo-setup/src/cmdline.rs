@@ -23,6 +23,7 @@ const QUOTE: u16 = b'"' as u16;
 const BACKSLASH: u16 = b'\\' as u16;
 const SLASH: u16 = b'/' as u16;
 const COLON: u16 = b':' as u16;
+const QUESTION: u16 = b'?' as u16;
 
 /// Appends one argument: bare when it has no space, tab, newline or quote; otherwise quoted, with
 /// each run of backslashes doubled when a quote (or the closing quote) follows it.
@@ -53,15 +54,21 @@ fn push_arg(line: &mut Vec<u16>, arg: &[u16]) {
 }
 
 /// Whether `path` (UTF-16 code units) is an absolute Windows path: a drive and a root (`C:\`),
-/// or two separators and a name (`\\server\share`, `\\?\C:\`). A bare name, `C:name` and
-/// `\name` resolve against the current folder or drive, so they are not.
+/// a UNC server and share (`\\server\share`), or a verbatim prefix (`\\?\C:\`). A bare name,
+/// `C:name` and `\name` resolve against the current folder or drive, and a host-only `\\server`
+/// names no share, so they are not.
 pub(crate) fn is_absolute(path: &[u16]) -> bool {
     let is_separator = |unit: &u16| *unit == BACKSLASH || *unit == SLASH;
     match path {
+        [first, second, rest @ ..] if is_separator(first) && is_separator(second) => {
+            let mut parts = rest.split(is_separator);
+            rest.first() == Some(&QUESTION)
+                || (parts.next().is_some_and(|server| !server.is_empty())
+                    && parts.next().is_some_and(|share| !share.is_empty()))
+        }
         [first, second, third, ..] => {
             let drive = u8::try_from(*first).is_ok_and(|byte| byte.is_ascii_alphabetic());
-            (drive && *second == COLON && is_separator(third))
-                || (is_separator(first) && is_separator(second) && !is_separator(third))
+            drive && *second == COLON && is_separator(third)
         }
         _ => false,
     }

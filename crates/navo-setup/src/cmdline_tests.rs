@@ -52,6 +52,15 @@ fn drive_and_unc_paths_are_absolute() {
     assert!(absolute("c:/tools/navo.exe"));
     assert!(absolute(r"\\server\share\navo.exe"));
     assert!(absolute(r"\\?\C:\long\navo.exe"));
+    assert!(absolute(r"\\server\share"));
+    assert!(absolute("//server/share/navo.exe"));
+}
+
+#[test]
+fn unc_paths_without_a_share_are_not_absolute() {
+    assert!(!absolute(r"\\server"));
+    assert!(!absolute(r"\\server\"));
+    assert!(!absolute(r"\\server\\share"));
 }
 
 #[test]
