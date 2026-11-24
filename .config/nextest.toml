@@ -34,6 +34,11 @@ test-group = "appcontainer"
 
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 5 }
+archive.include = [
+  { path = "debug/pdfium.dll", relative-to = "target", on-missing = "ignore" },
+  { path = "debug/navo.pdb", relative-to = "target", on-missing = "ignore" },
+  { path = "debug/examples/testee.exe", relative-to = "target", on-missing = "ignore" },
+]
 
 [profile.ci]
 fail-fast = false

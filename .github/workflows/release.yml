@@ -27,6 +27,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
   PDFIUM_TAG: chromium/8125
   PDFIUM_SHA256: 9a964261760cff52570aabf038ab346d3a5034dd8b30d0d5fe8861235d356b8b
   KEEP_RELEASES: 5
@@ -80,6 +81,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: win-clippy
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -88,14 +90,23 @@ jobs:
     if: inputs.full-checks
     runs-on: windows-latest
     env:
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_PROFILE_TEST_DEBUG: line-tables-only
       NAVO_EXPECT_PDFIUM: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+      - name: Enable bundled rust-lld as lld-link
+        shell: pwsh
+        run: |
+          $sysroot = (rustc --print sysroot).Trim()
+          $rustLld = Join-Path $sysroot 'lib\rustlib\x86_64-pc-windows-msvc\bin\rust-lld.exe'
+          $dir = Join-Path $env:RUNNER_TEMP 'rust-lld-bin'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item -LiteralPath $rustLld -Destination (Join-Path $dir 'lld-link.exe') -Force
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $dir
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value 'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=lld-link'
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: win-test
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
@@ -126,9 +137,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: win-release
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-auditable and cargo-audit
-        run: cargo install --locked cargo-auditable@0.7.7 cargo-audit@0.22.2
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-auditable@0.7.7,cargo-audit@0.22.2
       # navo-index.exe is built first; navo.exe carries its SHA-256 and refuses another image.
       - run: cargo auditable build --locked --release -p navo-index-service --bin navo-index
         env:

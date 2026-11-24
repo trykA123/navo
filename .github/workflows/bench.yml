@@ -21,6 +21,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   instructions:
@@ -43,6 +44,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: linux-bench
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install valgrind and the gungraun runner
         run: |

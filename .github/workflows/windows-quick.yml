@@ -1,11 +1,23 @@
 name: windows-quick
 
-# Clippy and the Windows test suite on every push to main and every pull request, or by hand; no Linux gate, no release build.
+# Parallel Windows clippy + build-once nextest archive + 4 test shards (or inline targeted crates on non-main branches).
+# Mirrors ci-shared/.github/workflows/rust-windows-check.yml so Navo can switch to workflow_call once trykA123/ci is live.
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      packages:
+        description: "Space-separated crates to check on feature/ci branches (empty = full workspace; forbidden on main)"
+        required: false
+        type: string
+        default: ""
+      shards:
+        description: "Parallel Windows test shards for full-workspace runs (1..8)"
+        required: false
+        type: number
+        default: 4
 
 permissions:
   contents: read
@@ -16,34 +28,180 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_PROFILE_DEV_DEBUG: line-tables-only
-  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: "0"
   NAVO_EXPECT_PDFIUM: "1"
   PDFIUM_TAG: chromium/8125
   PDFIUM_SHA256: 9a964261760cff52570aabf038ab346d3a5034dd8b30d0d5fe8861235d356b8b
+  BUILD_HOST_TESTS: "package(xtask) | (package(navo-bench) & test(privacy::api_tests))"
 
 jobs:
-  windows:
+  clippy:
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
+    env:
+      INPUT_PACKAGES: ${{ inputs.packages || '' }}
     steps:
+      - name: Reject targeted runs on main
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -eq 'refs/heads/main' -and -not [string]::IsNullOrWhiteSpace($env:INPUT_PACKAGES)) {
+            throw 'Targeted package runs are forbidden on main; run the full workspace.'
+          }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
         with:
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          shared-key: win-clippy
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Run clippy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $args = [Collections.Generic.List[string]]::new()
+          $args.Add('clippy')
+          $pkgs = @($env:INPUT_PACKAGES -split '\s+' | Where-Object { $_ })
+          if ($pkgs.Count -gt 0) {
+            foreach ($p in $pkgs) {
+              if ($p -notmatch '^[A-Za-z0-9_-]+$') { throw "invalid package name: $p" }
+              $args.Add('-p')
+              $args.Add($p)
+            }
+          } else {
+            $args.Add('--workspace')
+          }
+          $args.AddRange([string[]]@('--all-targets', '--', '-D', 'warnings'))
+          & cargo @args
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      shard_count: ${{ steps.plan.outputs.shard_count }}
+      run_shards: ${{ steps.plan.outputs.run_shards }}
+    env:
+      INPUT_PACKAGES: ${{ inputs.packages || '' }}
+      INPUT_SHARDS: ${{ inputs.shards || 4 }}
+    steps:
+      - name: Plan shard count and validate main invariant
+        id: plan
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pkgs = @($env:INPUT_PACKAGES -split '\s+' | Where-Object { $_ })
+          if ($env:GITHUB_REF -eq 'refs/heads/main' -and $pkgs.Count -gt 0) {
+            throw 'Targeted package runs are forbidden on main; run the full workspace.'
+          }
+          foreach ($p in $pkgs) {
+            if ($p -notmatch '^[A-Za-z0-9_-]+$') { throw "invalid package name: $p" }
+          }
+          $requested = [int]$env:INPUT_SHARDS
+          if ($requested -lt 1 -or $requested -gt 8) { throw "shards must be 1..8, got $requested" }
+          $useShards = ($pkgs.Count -eq 0 -and $requested -gt 1)
+          if ($useShards) {
+            $list = (1..$requested) -join ','
+            "shards=[$list]" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "shard_count=$requested" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            'run_shards=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            'shards=[]' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            'shard_count=0' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            'run_shards=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
+      - name: Enable bundled rust-lld as lld-link
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sysroot = (rustc --print sysroot).Trim()
+          $rustLld = Join-Path $sysroot 'lib\rustlib\x86_64-pc-windows-msvc\bin\rust-lld.exe'
+          $dir = Join-Path $env:RUNNER_TEMP 'rust-lld-bin'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item -LiteralPath $rustLld -Destination (Join-Path $dir 'lld-link.exe') -Force
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $dir
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value 'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=lld-link'
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: win-test
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest@0.9.148
-      - run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Put pdfium.dll next to the test build of navo.exe
         shell: pwsh
         run: ./.github/scripts/fetch-pdfium.ps1 -Destination target/debug
-      - run: cargo nextest run --workspace --profile ci
+      - name: Build test archive and run toolchain-dependent tests
+        if: steps.plan.outputs.run_shards == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo nextest archive --workspace --profile ci --archive-file nextest-archive.tar.zst
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo nextest run --workspace --profile ci -E $env:BUILD_HOST_TESTS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run targeted or single-shard tests inline
+        if: steps.plan.outputs.run_shards != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $args = [Collections.Generic.List[string]]::new()
+          $args.AddRange([string[]]@('nextest', 'run'))
+          $pkgs = @($env:INPUT_PACKAGES -split '\s+' | Where-Object { $_ })
+          if ($pkgs.Count -gt 0) {
+            foreach ($p in $pkgs) { $args.Add('-p'); $args.Add($p) }
+          } else {
+            $args.Add('--workspace')
+          }
+          $args.AddRange([string[]]@('--profile', 'ci'))
+          & cargo @args
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.plan.outputs.run_shards == 'true'
+        with:
+          name: nextest-archive-${{ github.run_id }}-${{ github.run_attempt }}
+          path: nextest-archive.tar.zst
+          retention-days: 1
+          compression-level: 0
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: junit-windows-quick
+          name: junit-windows-quick-build
           path: target/nextest/ci/junit.xml
+          retention-days: 7
+          if-no-files-found: ignore
+
+  test:
+    needs: build
+    if: needs.build.outputs.run_shards == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.build.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest@0.9.148
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nextest-archive-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .
+      - name: Run shard ${{ matrix.shard }} of ${{ needs.build.outputs.shard_count }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo nextest run --archive-file nextest-archive.tar.zst --extract-to . --extract-overwrite --workspace-remap . --profile ci -E "not ($env:BUILD_HOST_TESTS)" --partition "hash:${{ matrix.shard }}/${{ needs.build.outputs.shard_count }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: junit-windows-quick-shard-${{ matrix.shard }}
+          path: target/nextest/ci/junit.xml
+          retention-days: 7
+          if-no-files-found: ignore
