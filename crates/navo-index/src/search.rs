@@ -166,6 +166,7 @@ impl<C: Fn() -> bool + Sync> Search<'_, C> {
                 break;
             }
             if let Some(score) = matchers.score_only(self.table, id, name)
+                && can_enter(&hits, (Reverse(score), id), self.limit)
                 && include(id)
             {
                 keep_hit(&mut hits, (Reverse(score), id), self.limit);
@@ -183,6 +184,11 @@ impl<C: Fn() -> bool + Sync> Search<'_, C> {
         }
         left
     }
+}
+
+/// True when `hit` would enter the top-`limit` heap; checked before the costlier include filter.
+fn can_enter(hits: &Candidates, hit: (Reverse<u32>, u32), limit: usize) -> bool {
+    hits.len() < limit || hits.peek().is_some_and(|&worst| hit < worst)
 }
 
 fn keep_hit(hits: &mut Candidates, hit: (Reverse<u32>, u32), limit: usize) {

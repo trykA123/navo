@@ -179,7 +179,7 @@ fn search_only_totals_preserve_healthy_positions_and_search_hits() {
 }
 
 #[test]
-fn timeout_after_partial_mixed_work_erases_totals_and_busy() {
+fn timeout_after_partial_mixed_work_keeps_resolved_totals_and_drops_busy() {
     let volumes = [volume(), volume_at("D:"), volume_at("E:")];
     std::sync::Arc::get_mut(volumes[0].shared.write().unwrap().index.as_mut().unwrap())
         .unwrap()
@@ -193,7 +193,17 @@ fn timeout_after_partial_mixed_work_erases_totals_and_busy() {
     let reply = answer_before(&volumes, &paths, Instant::now() + Duration::from_millis(20))
         .totals
         .unwrap();
-    assert_eq!((reply.totals, reply.busy), (vec![None; 3], false));
+    let resolved = Some(FolderTotals {
+        bytes: 100,
+        files: 1,
+        folders: 0,
+        complete: true,
+    });
+    assert_eq!(
+        (reply.totals, reply.busy),
+        (vec![None, resolved, None], false),
+        "a late deadline keeps D: and marks only the unresolved rest unavailable, never Busy"
+    );
 }
 
 #[test]

@@ -38,6 +38,8 @@ impl SharedVolume {
     }
 }
 
+/// Answers one pipe request; each volume waits at most `READ_WAIT` for its read lock and a
+/// volume that stays busy answers with its last status, marked updating.
 pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &CancelToken) -> Reply {
     if let Some(paths) = request.folder_paths() {
         return super::totals::answer(volumes, paths);
@@ -45,13 +47,13 @@ pub(super) fn answer(volumes: &[SharedVolume], request: &Request, cancel: &Cance
     if request.wants_memory() {
         return super::memory::answer(volumes);
     }
-    let deadline = Instant::now() + READ_WAIT;
     let mut reply = Reply::default();
     for volume in volumes {
         if cancel.is_cancelled() {
             break;
         }
-        let read = read_before(&volume.shared, deadline)
+        // Each volume gets its own wait, so a slow first volume cannot starve the next one.
+        let read = read_before(&volume.shared, Instant::now() + READ_WAIT)
             .map(|state| search(&state, request, cancel, &mut reply.hits));
         let mut last = volume.last.lock().unwrap_or_else(PoisonError::into_inner);
         let status = match read {
@@ -192,6 +194,29 @@ mod tests {
         let reply = answer(std::slice::from_ref(volume), &request, &CancelToken::new());
         assert!(reply.hits.is_empty(), "a status request never searches");
         reply.status.volumes[0].clone()
+    }
+
+    #[test]
+    fn a_slow_first_volume_leaves_the_second_its_own_read_wait() {
+        let volumes = [building_volume(), building_volume()];
+        let _first = volumes[0].shared.write().unwrap();
+        let second = volumes[1].shared.write().unwrap();
+        let gave_up = BUSY_REPLIES.load(Ordering::Relaxed);
+        let reply = std::thread::scope(|scope| {
+            let asking = scope.spawn(|| answer(&volumes, &Request::default(), &CancelToken::new()));
+            while BUSY_REPLIES.load(Ordering::Relaxed) == gave_up {
+                std::thread::yield_now();
+            }
+            // The second lock frees just after the first volume's wait ran out.
+            std::thread::sleep(Duration::from_millis(3));
+            drop(second);
+            asking.join().unwrap()
+        });
+        assert_eq!(reply.status.volumes[0].progress, Some(UPDATING));
+        assert_eq!(
+            reply.status.volumes[1].progress, None,
+            "the second volume must get its own wait, not the first one's leftover"
+        );
     }
 
     #[test]

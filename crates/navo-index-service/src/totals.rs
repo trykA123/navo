@@ -1,5 +1,6 @@
-//! Answers positional folder totals while distinguishing rebuilds from deadline failure; a
-//! folder hidden by the profile scope answers like one that does not exist.
+//! Answers positional folder totals while distinguishing rebuilds from deadline failure; a late
+//! deadline keeps the resolved positions, and a folder hidden by the profile scope answers like
+//! one that does not exist.
 
 use std::time::{Duration, Instant};
 
@@ -14,55 +15,57 @@ pub(super) fn answer(volumes: &[SharedVolume], paths: &[String]) -> Reply {
     answer_before(volumes, paths, Instant::now() + Duration::from_millis(20))
 }
 
-/// Returns positional totals, or clears all results when the deadline or a lookup expires.
+/// Returns positional totals. When the deadline or a lookup expires, the resolved positions stay
+/// and the rest are unavailable, never Busy; a closed profile scope clears every position.
 fn answer_before(volumes: &[SharedVolume], paths: &[String], deadline: Instant) -> Reply {
     if !folder_paths_within_limits(paths) {
         return unavailable(0);
     }
     let mut totals = vec![None; paths.len()];
     let mut busy = false;
-    for volume in volumes {
-        if Instant::now() >= deadline {
-            return unavailable(paths.len());
-        }
-        let Some(state) = read_before(&volume.shared, deadline) else {
-            return unavailable(paths.len());
+    let mut expired = false;
+    'volumes: for volume in volumes {
+        let state = (Instant::now() < deadline)
+            .then(|| read_before(&volume.shared, deadline))
+            .flatten();
+        let Some(state) = state else {
+            expired = true;
+            break;
         };
         let mut lookup = None;
         for (path, total) in paths.iter().zip(&mut totals) {
             if !matches_volume(&state, path) {
                 continue;
             }
-            if state
-                .index
-                .as_ref()
-                .is_some_and(|index| index.is_search_only())
-            {
+            if is_search_only(&state) {
                 busy = true;
                 continue;
             }
             if lookup.is_none() {
                 lookup = volume_lookup(&state, deadline);
             }
-            if let Some(VolumeLookup {
-                profiles: ProfileIds::Closed,
-                ..
-            }) = lookup
+            if lookup
+                .as_ref()
+                .is_some_and(|lookup| lookup.profiles == ProfileIds::Closed)
             {
                 return unavailable(paths.len());
             }
             match total_for_path(&mut lookup, &state, path, deadline) {
                 Ok(Some(found)) => *total = Some(found),
                 Ok(None) => {}
-                Err(_) => return unavailable(paths.len()),
+                Err(FolderLookupExpired) => {
+                    expired = true;
+                    break 'volumes;
+                }
             }
         }
     }
-    if Instant::now() >= deadline {
-        return unavailable(paths.len());
-    }
+    let expired = expired || Instant::now() >= deadline;
     Reply {
-        totals: Some(FolderTotalsReply { totals, busy }),
+        totals: Some(FolderTotalsReply {
+            totals,
+            busy: busy && !expired,
+        }),
         ..Reply::default()
     }
 }
@@ -76,6 +79,14 @@ fn unavailable(count: usize) -> Reply {
         }),
         ..Reply::default()
     }
+}
+
+/// True while the volume's index is a search-only generation that has no totals yet.
+fn is_search_only(state: &State) -> bool {
+    state
+        .index
+        .as_ref()
+        .is_some_and(|index| index.is_search_only())
 }
 
 /// Checks the volume prefix and separator before accessing its totals storage.

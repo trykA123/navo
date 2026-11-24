@@ -305,6 +305,27 @@ fn a_parent_cycle_a_child_of_a_deleted_folder_and_a_child_of_a_file_do_not_load(
 }
 
 #[test]
+fn byte_only_ancestor_updates_match_a_full_rebuild() {
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+    let mut parent = root;
+    let mut files = Vec::new();
+    for depth in 0..6u64 {
+        parent = table.push(parent, "deeper", Flags::FOLDER).unwrap();
+        let file = table.push(parent, "file", Flags::NONE).unwrap();
+        table.set_size(file, 10 * (depth + 1)).unwrap();
+        files.push(file);
+    }
+    table.set_size(files[5], 7).unwrap();
+    table.set_size(files[0], 0).unwrap();
+    let mut rebuilt = table.clone();
+    assert!(rebuilt.rebuild_totals());
+    for id in 0..table.slots() {
+        assert_eq!(table.totals(id), rebuilt.totals(id), "folder {id}");
+    }
+}
+
+#[test]
 fn a_self_looping_link_and_a_missing_child_fail_the_rebuild() {
     let (mut looped, [_, _, ann, notes, docs]) = tree();
     assert_eq!(looped.children.of(ann).collect::<Vec<_>>(), [docs, notes]);

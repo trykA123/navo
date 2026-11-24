@@ -334,6 +334,45 @@ fn search_million_names_timing() {
 }
 
 #[test]
+fn the_top_n_bound_skips_the_filter_for_hits_that_cannot_enter_and_keeps_the_results() {
+    let mut table = NameTable::new();
+    let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+    for at in 0..40_000u32 {
+        let name = if at.is_multiple_of(3) {
+            "match"
+        } else {
+            "xmatchx"
+        };
+        table.push(root, name, Flags::NONE).unwrap();
+    }
+    let calls = AtomicUsize::new(0);
+    let keep = |id: u32| id.is_multiple_of(2);
+    let hits = super::search_filtered_with(
+        &table,
+        &[Term::Name("match")],
+        &super::SearchOptions {
+            limit: 50,
+            cancel: &|| false,
+            include: &|| {
+                |id| {
+                    calls.fetch_add(1, Ordering::Relaxed);
+                    keep(id)
+                }
+            },
+        },
+    );
+    let mut expected = search(&table, &[Term::Name("match")], usize::MAX, &|| false);
+    expected.retain(|hit| keep(hit.id));
+    expected.truncate(50);
+    assert_eq!(hits, expected);
+    let calls = calls.load(Ordering::Relaxed);
+    assert!(
+        calls < 20_000,
+        "{calls} filter calls: hits that cannot beat a full heap must skip the filter"
+    );
+}
+
+#[test]
 fn search_path_terms_never_put_a_backslash_in_the_pattern() {
     let mut table = NameTable::new();
     let folder = table.push(NO_PARENT, "work", Flags::FOLDER).unwrap();

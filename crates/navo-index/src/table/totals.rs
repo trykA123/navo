@@ -151,7 +151,10 @@ impl NameTable {
             } else {
                 self.bytes[at] = self.bytes[at].saturating_sub(totals.bytes);
             }
-            if let Some(counts) = self.folder_counts_mut(id) {
+            // A byte-only change skips the binary search for the folder's counts.
+            if (totals.files != 0 || totals.folders != 0)
+                && let Some(counts) = self.folder_counts_mut(id)
+            {
                 adjust_counts(counts, totals, add);
             }
             id = self.parents[at];
