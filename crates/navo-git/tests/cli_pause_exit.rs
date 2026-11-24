@@ -1,6 +1,7 @@
 //! AG18 red test for the flaky Windows rename: a pause must return only after every process of
 //! the stopped Git tree has exited, so the folder it held can be renamed at once.
 #![cfg(windows)]
+#![allow(clippy::unwrap_used, reason = "test fixture fails loudly")]
 
 mod fixture;
 
