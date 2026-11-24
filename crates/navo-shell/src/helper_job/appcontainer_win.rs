@@ -29,8 +29,8 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 use super::appcontainer_policy::{
-    ALL_APP_PACKAGES, AceView, CONTAINER_NAME, GrantError, GrantOutcome, GrantStep, READ_EXECUTE,
-    Trustee, already_granted, check_plain_file,
+    ALL_APP_PACKAGES, AceView, CONTAINER_NAME, EVERYONE, GrantError, GrantOutcome, GrantStep,
+    READ_EXECUTE, Trustee, already_granted, check_plain_file, classify_trustee,
 };
 
 /// `ERROR_INVALID_ACL`: reported for a file with a NULL DACL, which Navo refuses to edit.
@@ -149,9 +149,10 @@ fn reopen_for_write(file: &File) -> Result<File, i32> {
     Ok(unsafe { File::from_raw_handle(handle) })
 }
 
-/// ALL APPLICATION PACKAGES as a SID, owned by `LocalMem`. Fails with the Win32 error.
-fn all_app_packages_sid() -> Result<LocalMem, i32> {
-    let text: Vec<u16> = ALL_APP_PACKAGES.encode_utf16().chain([0]).collect();
+/// The well-known SID written as `sddl` (e.g. `S-1-1-0`), owned by `LocalMem`. Fails with the
+/// Win32 error.
+fn well_known_sid(sddl: &str) -> Result<LocalMem, i32> {
+    let text: Vec<u16> = sddl.encode_utf16().chain([0]).collect();
     let mut sid: PSID = ptr::null_mut();
     // SAFETY: `text` is NUL-terminated and `sid` is a live out-pointer.
     if unsafe { ConvertStringSidToSidW(text.as_ptr(), &raw mut sid) } == 0 {
@@ -199,10 +200,11 @@ fn read_dacl(file: &File) -> Result<FileDacl, i32> {
     })
 }
 
-/// Describes every ACE in `dacl`, naming allow ACEs for `sid` or ALL APPLICATION PACKAGES.
-/// Fails with the Win32 error.
+/// Describes every ACE in `dacl`, naming allow and deny ACEs for `sid`, ALL APPLICATION PACKAGES
+/// or Everyone. Fails with the Win32 error.
 fn ace_views(dacl: *mut ACL, sid: &ContainerSid) -> Result<Vec<AceView>, i32> {
-    let packages = all_app_packages_sid()?;
+    let packages = well_known_sid(ALL_APP_PACKAGES)?;
+    let everyone = well_known_sid(EVERYONE)?;
     let mut info = ACL_SIZE_INFORMATION::default();
     let bytes = size_of::<ACL_SIZE_INFORMATION>() as u32;
     // SAFETY: `dacl` is a live ACL and `info` a live buffer of `bytes` bytes.
@@ -217,27 +219,29 @@ fn ace_views(dacl: *mut ACL, sid: &ContainerSid) -> Result<Vec<AceView>, i32> {
         if unsafe { GetAce(dacl, index, &raw mut ace) } == 0 {
             return Err(last_error());
         }
-        let allow = ace.cast::<ACCESS_ALLOWED_ACE>();
+        let plain = ace.cast::<ACCESS_ALLOWED_ACE>();
         // SAFETY: every ACE type starts with a 4-byte header and a 4-byte mask; `SidStart` is only
-        // an address here, and it is read as a SID only for type 0 (ACCESS_ALLOWED_ACE).
+        // an address here, and `classify_trustee` reads it as a SID only for the plain-layout
+        // types (allowed, denied and their callback forms), which all share ACCESS_ALLOWED_ACE's.
         let (header, mask, ace_sid) = unsafe {
-            let header = (*allow).Header;
+            let header = (*plain).Header;
             (
                 header,
-                (*allow).Mask,
-                (&raw mut (*allow).SidStart).cast::<c_void>(),
+                (*plain).Mask,
+                (&raw mut (*plain).SidStart).cast::<c_void>(),
             )
         };
-        let same = |other: PSID| {
-            // SAFETY: only called for an allow ACE, whose `ace_sid` is a valid SID inside the ACL.
-            let equal = unsafe { EqualSid(ace_sid, other) };
-            equal != 0
-        };
-        let trustee = match header.AceType {
-            0 if same(sid.0) => Trustee::Container,
-            0 if same(packages.0) => Trustee::AllAppPackages,
-            _ => Trustee::Other,
-        };
+        let trustee = classify_trustee(header.AceType, |known| {
+            let other: PSID = match known {
+                Trustee::Container => sid.0,
+                Trustee::AllAppPackages => packages.0,
+                Trustee::Everyone => everyone.0,
+                Trustee::Other | Trustee::Unknown => return false,
+            };
+            // SAFETY: only called for a plain-layout ACE, whose `ace_sid` is a valid SID inside
+            // the ACL; `other` is a live SID.
+            unsafe { EqualSid(ace_sid, other) != 0 }
+        });
         found.push(AceView {
             ace_type: header.AceType,
             flags: header.AceFlags,

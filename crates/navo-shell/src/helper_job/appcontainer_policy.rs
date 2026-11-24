@@ -14,12 +14,19 @@ pub const READ_EXECUTE: u32 = 0x0012_00A9;
 /// ALL APPLICATION PACKAGES: an allow ACE for it reaches every AppContainer, ours included.
 pub const ALL_APP_PACKAGES: &str = "S-1-15-2-1";
 
+/// Everyone: the container's token holds it, so a deny ACE for it blocks the container too.
+pub const EVERYONE: &str = "S-1-1-0";
+
 /// The PDF engine the helper loads; it sits next to navo.exe.
 const PDFIUM_DLL: &str = "pdfium.dll";
 
 /// `ACCESS_ALLOWED_ACE_TYPE` and the `INHERIT_ONLY_ACE` flag (winnt.h).
 const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
 const INHERIT_ONLY_ACE: u8 = 0x08;
+
+/// ACE types whose SID directly follows the header and mask: allowed, denied and their callback
+/// forms (winnt.h). Object ACEs put GUIDs first, so their SID is never read.
+const PLAIN_SID_ACE_TYPES: [u8; 4] = [0, 1, 9, 0x0A];
 
 /// A deny ACE blocks the grant when it touches read+execute or any generic or MAXIMUM_ALLOWED bit.
 const DENY_RELEVANT: u32 = READ_EXECUTE | 0xF200_0000;
@@ -126,7 +133,11 @@ impl std::error::Error for GrantError {}
 pub enum Trustee {
     Container,
     AllAppPackages,
+    Everyone,
+    /// Any other SID; a deny ACE for it does not block the grant.
     Other,
+    /// An object ACE, whose SID is not read; a deny ACE of this kind blocks the grant.
+    Unknown,
 }
 
 /// One DACL entry: its type, flags, access mask and trustee.
@@ -139,20 +150,38 @@ pub struct AceView {
 }
 
 /// True when the DACL already lets the container read and execute the file: allow ACEs for the
-/// container or ALL APPLICATION PACKAGES (inherited too) cover every bit and no deny ACE touches them.
+/// container or ALL APPLICATION PACKAGES (inherited too) cover every bit, and no deny-like ACE that
+/// reaches the container (its SID, ALL APPLICATION PACKAGES, Everyone or an unread SID) touches them.
 pub fn already_granted(aces: &[AceView]) -> bool {
     let mut allowed = 0;
     for ace in aces.iter().filter(|ace| ace.flags & INHERIT_ONLY_ACE == 0) {
         if ace.ace_type != ACCESS_ALLOWED_ACE_TYPE {
-            // Any deny-like entry that touches the rights is treated as blocking: fail closed.
-            if ace.mask & DENY_RELEVANT != 0 {
+            // A deny for another SID cannot block the container; any other deny-like entry that
+            // touches the rights blocks: fail closed.
+            if ace.trustee != Trustee::Other && ace.mask & DENY_RELEVANT != 0 {
                 return false;
             }
-        } else if ace.trustee != Trustee::Other {
+        } else if matches!(ace.trustee, Trustee::Container | Trustee::AllAppPackages) {
             allowed |= ace.mask;
         }
     }
     allowed & READ_EXECUTE == READ_EXECUTE
+}
+
+/// Names the trustee of an ACE of `ace_type`. `names(known)` says whether the ACE's SID equals the
+/// SID of `known`; it is never called for object ACEs, whose SID sits elsewhere (`Unknown`).
+pub fn classify_trustee(ace_type: u8, mut names: impl FnMut(Trustee) -> bool) -> Trustee {
+    if !PLAIN_SID_ACE_TYPES.contains(&ace_type) {
+        return Trustee::Unknown;
+    }
+    [
+        Trustee::Container,
+        Trustee::AllAppPackages,
+        Trustee::Everyone,
+    ]
+    .into_iter()
+    .find(|&known| names(known))
+    .unwrap_or(Trustee::Other)
 }
 
 /// Refuses a target whose `attributes` mark a reparse point or a folder; returns the Win32 error.
@@ -214,6 +243,7 @@ mod tests {
     fn the_container_name_is_pinned_because_the_sid_derives_from_it() {
         assert_eq!(CONTAINER_NAME, "Navo.PdfHelper");
         assert_eq!(ALL_APP_PACKAGES, "S-1-15-2-1");
+        assert_eq!(EVERYONE, "S-1-1-0");
     }
 
     #[test]
@@ -249,19 +279,95 @@ mod tests {
     #[test]
     fn a_deny_touching_read_execute_means_not_granted() {
         let allow = ace(0, 0, READ_EXECUTE, Trustee::Container);
-        assert!(!already_granted(&[ace(1, 0, 0x20, Trustee::Other), allow]));
+        assert!(!already_granted(&[
+            ace(1, 0, 0x20, Trustee::Container),
+            allow
+        ]));
         assert!(!already_granted(&[
             allow,
-            ace(1, 0, 0x8000_0000, Trustee::Other)
+            ace(1, 0, 0x8000_0000, Trustee::Everyone)
         ]));
         assert!(already_granted(&[
-            ace(1, 0, 0x0004_0000, Trustee::Other),
+            ace(1, 0, 0x0004_0000, Trustee::Container),
             allow
         ]));
         assert!(already_granted(&[
-            ace(1, 0x08, READ_EXECUTE, Trustee::Other),
+            ace(1, 0x08, READ_EXECUTE, Trustee::Everyone),
             allow
         ]));
+    }
+
+    #[test]
+    fn a_deny_for_the_container_all_app_packages_everyone_or_an_unread_sid_blocks() {
+        let allow = ace(0, 0, READ_EXECUTE, Trustee::Container);
+        for trustee in [
+            Trustee::Container,
+            Trustee::AllAppPackages,
+            Trustee::Everyone,
+            Trustee::Unknown,
+        ] {
+            let deny = ace(1, 0, READ_EXECUTE, trustee);
+            assert!(!already_granted(&[allow, deny]), "{trustee:?}");
+        }
+        // A deny object ACE (type 6) has no SID read: it still blocks.
+        assert!(!already_granted(&[
+            ace(6, 0, 0x20, Trustee::Unknown),
+            allow
+        ]));
+    }
+
+    #[test]
+    fn a_deny_for_an_unrelated_trustee_keeps_the_grant() {
+        let allow = ace(0, 0, READ_EXECUTE, Trustee::Container);
+        assert!(already_granted(&[
+            ace(1, 0, READ_EXECUTE, Trustee::Other),
+            allow
+        ]));
+        assert!(already_granted(&[
+            allow,
+            ace(0x0A, 0x10, 0x8000_0000, Trustee::Other)
+        ]));
+    }
+
+    #[test]
+    fn an_allow_for_everyone_does_not_reach_the_container() {
+        assert!(!already_granted(&[ace(
+            0,
+            0,
+            READ_EXECUTE,
+            Trustee::Everyone
+        )]));
+        assert!(!already_granted(&[ace(
+            0,
+            0,
+            READ_EXECUTE,
+            Trustee::Unknown
+        )]));
+    }
+
+    #[test]
+    fn trustees_are_named_from_the_sid_only_for_plain_ace_types() {
+        for ace_type in [0, 1, 9, 0x0A] {
+            let named = |wanted| move |known| known == wanted;
+            assert_eq!(
+                classify_trustee(ace_type, named(Trustee::Container)),
+                Trustee::Container
+            );
+            assert_eq!(
+                classify_trustee(ace_type, named(Trustee::AllAppPackages)),
+                Trustee::AllAppPackages
+            );
+            assert_eq!(
+                classify_trustee(ace_type, named(Trustee::Everyone)),
+                Trustee::Everyone
+            );
+            assert_eq!(classify_trustee(ace_type, |_| false), Trustee::Other);
+        }
+        // Object ACEs (allowed/denied, plain and callback) never have their SID read.
+        for ace_type in [5, 6, 0x0B, 0x0C] {
+            let trustee = classify_trustee(ace_type, |_| panic!("SID read for type {ace_type}"));
+            assert_eq!(trustee, Trustee::Unknown);
+        }
     }
 
     #[test]
