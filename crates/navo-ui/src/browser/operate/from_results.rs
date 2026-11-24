@@ -11,6 +11,7 @@ use super::{Browser, OpRequest, PasteRefusal, Structure, drop_refusal};
 
 mod alias;
 mod check;
+mod identity;
 
 pub(super) use check::{plan_rows, recheck};
 

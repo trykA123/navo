@@ -101,3 +101,4 @@ results-link-loop = “{ $path }” has too many links to follow, so nothing was
 results-link-unreadable = “{ $path }” is a link Navo could not follow, so nothing was copied or moved.
 results-into-source = “{ $path }” is inside the selected folder “{ $inside }”, so nothing was copied or moved.
 results-overwrites-source = “{ $path }” is a selected source or holds one, so nothing was copied or moved.
+results-identity-unreadable = Navo could not tell which file “{ $path }” is, so nothing was copied or moved.

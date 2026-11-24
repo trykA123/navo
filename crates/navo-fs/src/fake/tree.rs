@@ -229,6 +229,13 @@ impl Tree {
         self.find(path).map(|node| node.identity)
     }
 
+    /// Gives the entry at `path` the file identity `identity`; false when it does not exist.
+    pub(super) fn set_identity(&mut self, path: &str, identity: u64) -> bool {
+        self.find_mut(path)
+            .map(|node| node.identity = identity)
+            .is_some()
+    }
+
     pub(super) fn children(&self, path: &str) -> Result<Vec<FsEntry>, FsErrorKind> {
         let node = self.find(path).ok_or(FsErrorKind::NotFound)?;
         if node.entry.kind != EntryKind::Folder {

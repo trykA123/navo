@@ -444,3 +444,47 @@ fn a_move_copies_when_a_volume_serial_is_unknown() {
     let (browser, _) = prepared(&fs, request(&fs, OpKind::Move, &sources, "dest"));
     assert!(renames(&browser), "one known volume still renames");
 }
+
+#[test]
+fn an_overwrite_onto_a_second_name_of_a_source_is_refused() {
+    let fs = hits();
+    fs.add_file("z/lib/a.c", 4);
+    fs.share_identity("z/lib/a.c", "w/lib/a.c");
+    let request = request(&fs, OpKind::Move, &["w/lib/a.c", "w/top.c"], "z");
+    let (browser, id) = prepared(&fs, request);
+    let message = failed(&browser, id);
+    assert!(
+        message.contains("z/lib/a.c") && message.contains("selected source"),
+        "{message}"
+    );
+    assert!(exists(&fs, "w/lib/a.c") && exists(&fs, "w/top.c"));
+}
+
+#[test]
+fn a_target_inside_a_second_name_of_a_selected_folder_is_refused() {
+    let fs = hits();
+    fs.add_folder("z/can");
+    fs.share_identity("z", "w/src");
+    let request = request(&fs, OpKind::Copy, &["w/src", "w/top.c"], "z/can");
+    let (browser, id) = prepared(&fs, request);
+    let message = failed(&browser, id);
+    assert!(message.contains("inside the selected folder"), "{message}");
+    assert!(!exists(&fs, "z/can/top.c"));
+}
+
+#[test]
+fn an_existing_target_navo_cannot_identify_is_refused() {
+    let fs = hits();
+    fs.add_file("dest/top.c", 9);
+    for call in 1..=8 {
+        let denied = Fault::Fail(FsErrorKind::AccessDenied);
+        fs.fault("dest/top.c", FakeOp::Identity, call, denied);
+    }
+    let (browser, id) = prepared(&fs, request(&fs, OpKind::Copy, &["w/top.c"], "dest"));
+    let message = failed(&browser, id);
+    assert!(
+        message.contains("dest/top.c") && message.contains("could not tell"),
+        "{message}"
+    );
+    assert!(exists(&fs, "w/top.c"));
+}

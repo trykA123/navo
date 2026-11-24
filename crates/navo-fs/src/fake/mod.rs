@@ -172,6 +172,15 @@ impl FakeFs {
         self.changed(path, WatchChange::Removed);
     }
 
+    /// Makes `path` a second name of `of`: both report one file identity, like a hard link, a
+    /// mapped drive and its share, or a SUBST drive. The two entries keep their own contents.
+    pub fn share_identity(&self, path: &str, of: &str) {
+        let mut tree = self.tree();
+        if let Some(identity) = tree.identity(normalize(of)) {
+            tree.set_identity(normalize(path), identity);
+        }
+    }
+
     pub fn rename_entry(&self, from: &str, to: &str) {
         self.tree().move_node(normalize(from), normalize(to));
         self.moved(from, to);

@@ -14,6 +14,10 @@ use navo_l10n::FluentArgs;
 use super::super::OpRequest;
 use super::RowStamp;
 use super::alias::{Aliases, Place, Unresolved, is_partial, place};
+use super::identity::{Clash, Identities, Row};
+
+/// How many plan steps `refuse_overwrites` checks between two looks at the cancel token.
+const CANCEL_EVERY: usize = 1024;
 
 /// A kept row: the location the plan uses and its resolved place.
 struct Top {
@@ -43,12 +47,8 @@ pub(in crate::browser::operate) fn plan_rows(
     let mut aliases = Aliases::new(provider);
     let real_target = aliases.real(&target).map_err(unresolved)?;
     let tops = distinct_tops(provider, &mut aliases, (&request.sources, stamps), cancel)?;
-    let tops_at: HashSet<Place> = tops.iter().map(|top| place(&top.real)).collect();
-    if let Some(inside) = std::iter::successors(Some(real_target.clone()), Location::parent)
-        .find(|place_of| tops_at.contains(&place(place_of)))
-    {
-        return Err(said("results-into-source", &target, Some(&inside)));
-    }
+    let mut identities = identities_of(provider, &tops);
+    refuse_inside(&mut identities, &tops, (&target, &real_target))?;
     let kept = request
         .structure
         .as_ref()
@@ -62,7 +62,7 @@ pub(in crate::browser::operate) fn plan_rows(
     request.results = Some(tops.iter().map(|top| top.stamp).collect::<Arc<[_]>>());
     request.sources = tops.iter().map(|top| top.location.clone()).collect();
     let plan = super::super::work::plan_for(provider, request, cancel).map_err(|e| e.message())?;
-    refuse_overwrites(&mut aliases, &plan, &tops)?;
+    refuse_overwrites((&mut aliases, &mut identities), &plan, &tops, cancel)?;
     Ok(plan)
 }
 
@@ -92,7 +92,9 @@ fn distinct_tops(
         rows.push(Top {
             location: location.clone(),
             stamp: *stamp,
-            identity: provider.file_identity(&real).ok().flatten(),
+            identity: provider
+                .file_identity(&real)
+                .map_err(|_| said("results-identity-unreadable", location, None))?,
             real,
         });
     }
@@ -239,12 +241,45 @@ fn known_serial(provider: &dyn ProviderOps, folder: &Location) -> Option<u64> {
         .flatten()
 }
 
+/// The identity check over the kept rows.
+fn identities_of<'a>(provider: &'a dyn ProviderOps, tops: &[Top]) -> Identities<'a> {
+    let rows: Vec<Row<'_>> = tops
+        .iter()
+        .map(|top| Row {
+            real: &top.real,
+            identity: top.identity,
+            folder: top.stamp.kind == EntryKind::Folder,
+        })
+        .collect();
+    Identities::new(provider, &rows)
+}
+
+/// Refuses a `target` (resolved to `real`) inside a selected folder: by place first, then by
+/// the identity of `real` and each folder above it.
+fn refuse_inside(
+    identities: &mut Identities<'_>,
+    tops: &[Top],
+    (target, real): (&Location, &Location),
+) -> Result<(), String> {
+    let tops_at: HashSet<Place> = tops.iter().map(|top| place(&top.real)).collect();
+    if let Some(inside) = std::iter::successors(Some(real.clone()), Location::parent)
+        .find(|place_of| tops_at.contains(&place(place_of)))
+    {
+        return Err(said("results-into-source", target, Some(&inside)));
+    }
+    identities
+        .inside(real)
+        .map_err(|clash| clashed(clash, target))
+}
+
 /// Refuses the plan when a write or a listed conflict lands on a selected source, inside a
-/// selected folder, or on a folder that holds a selected source.
+/// selected folder, or on a folder that holds a selected source: by place first, then by
+/// identity. Each name already at the target is a listed conflict, so only those are read.
 fn refuse_overwrites(
-    aliases: &mut Aliases<'_>,
+    (aliases, identities): (&mut Aliases<'_>, &mut Identities<'_>),
     plan: &OperationPlan,
     tops: &[Top],
+    cancel: &CancelToken,
 ) -> Result<(), String> {
     let tops_at: HashSet<Place> = tops.iter().map(|top| place(&top.real)).collect();
     let holders: HashSet<Place> = tops
@@ -252,21 +287,45 @@ fn refuse_overwrites(
         .flat_map(|top| std::iter::successors(top.real.parent(), Location::parent))
         .map(|folder| place(&folder))
         .collect();
-    let writes = plan.steps.iter().filter_map(written);
-    let conflicts = plan.conflicts.iter().map(|c| (Some(&c.source), &c.target));
-    for (source, target) in writes.chain(conflicts) {
+    let writes = plan.steps.iter().filter_map(written).map(|it| (it, false));
+    let conflicts = plan
+        .conflicts
+        .iter()
+        .map(|c| ((Some(&c.source), &c.target), true));
+    for (index, ((source, target), existing)) in writes.chain(conflicts).enumerate() {
+        if index % CANCEL_EVERY == 0 && cancel.is_cancelled() {
+            return Err(FsError::new(FsErrorKind::Cancelled).message());
+        }
         if source.is_some_and(|source| source.same_place(target)) {
             continue;
         }
         let real = aliases.real_entry(target).map_err(unresolved)?;
         let lands_on = holders.contains(&place(&real))
-            || std::iter::successors(Some(real), Location::parent)
+            || std::iter::successors(Some(real.clone()), Location::parent)
                 .any(|place_of| tops_at.contains(&place(&place_of)));
         if lands_on {
             return Err(said("results-overwrites-source", target, None));
         }
+        let folder = real
+            .parent()
+            .map_or(Ok(()), |folder| identities.inside(&folder));
+        folder
+            .and_then(|()| match existing {
+                true => identities.write_onto(&real),
+                false => Ok(()),
+            })
+            .map_err(|clash| clashed(clash, target))?;
     }
     Ok(())
+}
+
+/// The message for an identity `clash` met while checking `target`.
+fn clashed(clash: Clash, target: &Location) -> String {
+    match clash {
+        Clash::Source => said("results-overwrites-source", target, None),
+        Clash::Inside(row) => said("results-into-source", target, Some(&row)),
+        Clash::Unknown(at) => said("results-identity-unreadable", &at, None),
+    }
 }
 
 /// The place a step writes and the source it copies from, for steps that write a name.
@@ -331,6 +390,34 @@ mod tests {
 
     fn texts(rows: &[Top]) -> Vec<&str> {
         rows.iter().map(|row| row.location.as_str()).collect()
+    }
+
+    #[test]
+    fn a_cancelled_overwrite_check_stops() {
+        let fs = navo_fs::FakeFs::new();
+        fs.add_file("w/a.c", 1);
+        let (source, target) = (fs.location("w/a.c"), fs.location("dest/a.c"));
+        let plan = OperationPlan {
+            kind: navo_core::OpKind::Copy,
+            steps: vec![Step::CopyFile {
+                source,
+                target,
+                size: 1,
+            }],
+            totals: navo_core::Totals {
+                files: 1,
+                folders: 0,
+                bytes: 1,
+            },
+            conflicts: Vec::new(),
+            risks: Vec::new(),
+        };
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let mut identities = Identities::new(&fs, &[]);
+        let both = (&mut Aliases::new(&fs), &mut identities);
+        let refused = refuse_overwrites(both, &plan, &[], &cancel);
+        assert_eq!(refused, Err(FsError::new(FsErrorKind::Cancelled).message()));
     }
 
     #[test]
