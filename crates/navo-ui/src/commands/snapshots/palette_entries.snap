@@ -292,6 +292,10 @@ editor.previous_problem | Viewer | true
 editor.add_cursor_above | Editor | true
 editor.add_cursor_below | Editor | true
 editor.toggle_soft_wrap | Editor | true
+editor.keep_matching_lines | Editor | true
+editor.remove_matching_lines | Editor | true
+editor.copy_matching_lines | Editor | true
+editor.bookmark_matching_lines | Editor | true
 editor.leave_preview | MarkdownPreview | true
 find.older_search | ViewerFind | true
 find.newer_search | ViewerFind | true

@@ -79,6 +79,10 @@ gpui_kit::actions!(
         NextProblem,
         PreviousProblem,
         ToggleSoftWrap,
+        KeepMatchingLines,
+        RemoveMatchingLines,
+        CopyMatchingLines,
+        BookmarkMatchingLines,
     ]
 );
 

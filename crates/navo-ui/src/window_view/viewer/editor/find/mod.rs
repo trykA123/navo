@@ -1,10 +1,14 @@
 //! The editor's find bar: its state, opening and closing it, and the typed needle.
 //! Searching and stepping live in `bar.rs`, regex mode in `regex.rs`, and the edit-mode
-//! replace field in `replace.rs`.
+//! replace field in `replace.rs`, and Filter Lines in `filter.rs` and `filter_menu.rs`.
 
 mod bar;
+mod filter;
+mod filter_menu;
 mod regex;
 mod replace;
+
+pub(super) use filter::FilterAction;
 
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::{Focusable, Subscription, Task};
@@ -12,6 +16,7 @@ use navo_core::paging::Needle;
 
 use super::EditorView;
 use crate::prelude::*;
+use crate::primitives::popup_menu::PopupMenu;
 use crate::primitives::{TextFieldState, text_field_state};
 use crate::window_view::viewer::search::count::count_after_pause;
 
@@ -22,6 +27,8 @@ pub(super) struct FindBar {
     pub input: Entity<TextFieldState>,
     pub error: Option<SharedString>,
     pub replace: replace::ReplaceField,
+    /// The "Filter lines" menu's open state and keyboard selection.
+    pub filter_menu: Entity<PopupMenu>,
     _enter: Subscription,
 }
 
@@ -36,6 +43,8 @@ pub(super) struct EditorFind {
     pub regex_count: regex::RegexCount,
     pub hit: Option<u64>,
     counting: Option<Task<()>>,
+    /// A Filter Lines run over a text past 1 MiB; dropping it cancels the run.
+    filtering: Option<Task<()>>,
 }
 
 impl EditorView {
@@ -65,6 +74,7 @@ impl EditorView {
             input,
             error: None,
             replace: replace::replace_field(window, cx),
+            filter_menu: cx.new(|cx| PopupMenu::new(cx)),
             _enter: enter,
         });
         cx.notify();

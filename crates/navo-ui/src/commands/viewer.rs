@@ -269,6 +269,26 @@ pub(super) const GROUPS: [Group; 6] = [
                 "editor.toggle_soft_wrap",
                 "cmd-editor-toggle-soft-wrap",
             ),
+            (
+                "viewer::KeepMatchingLines",
+                "editor.keep_matching_lines",
+                "cmd-editor-keep-matching-lines",
+            ),
+            (
+                "viewer::RemoveMatchingLines",
+                "editor.remove_matching_lines",
+                "cmd-editor-remove-matching-lines",
+            ),
+            (
+                "viewer::CopyMatchingLines",
+                "editor.copy_matching_lines",
+                "cmd-editor-copy-matching-lines",
+            ),
+            (
+                "viewer::BookmarkMatchingLines",
+                "editor.bookmark_matching_lines",
+                "cmd-editor-bookmark-matching-lines",
+            ),
         ],
     },
     Group {

@@ -86,6 +86,21 @@ pub(in crate::window_view::viewer) fn toggle_bookmark<V: Marked>(
     marks::marks_changed(view, cx);
 }
 
+/// Sets a bookmark on every line start in `starts` (byte offsets) that has none yet; lines
+/// already bookmarked stay bookmarked. Saves the bookmarks once.
+pub(in crate::window_view::viewer) fn bookmark_all<V: Marked>(
+    view: &mut V,
+    starts: &[u64],
+    cx: &mut Context<V>,
+) {
+    let bookmarks = &mut view.marking().bookmarks;
+    let old: std::collections::BTreeSet<u64> = bookmarks.iter().collect();
+    for &at in starts.iter().filter(|at| !old.contains(at)) {
+        bookmarks.toggle(at);
+    }
+    marks::marks_changed(view, cx);
+}
+
 pub(in crate::window_view::viewer) fn source_changed<V: Marked>(
     view: &mut V,
     appended_to: Option<u64>,

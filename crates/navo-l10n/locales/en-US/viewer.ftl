@@ -195,3 +195,17 @@ viewer-save-as-pending = Ctrl+S saves it as { $name } with { $endings ->
 tree-query-label = Query
 tree-query-placeholder = $..name
 tree-query-error = { $message } at column { $column }
+editor-filter-button = Filter lines
+editor-filter-keep = Keep matching lines
+editor-filter-remove = Remove matching lines
+editor-filter-copy = Copy matching lines
+editor-filter-bookmark = Bookmark matching lines
+editor-filter-edit-first = Keep and Remove change the text. Ctrl+E edits first.
+editor-filter-copied = { $count ->
+    [one] Copied 1 line.
+   *[other] Copied { $count } lines.
+}
+editor-filter-bookmarked = { $count ->
+    [one] Bookmarked 1 line.
+   *[other] Bookmarked { $count } lines.
+}

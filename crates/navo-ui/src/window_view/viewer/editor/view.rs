@@ -3,12 +3,16 @@ use gpui_kit::component::input::{Editor, MovePageDown};
 use gpui_kit::{Role, Stateful};
 
 use super::EditorView;
+use super::find::FilterAction;
 use super::overlay::{OverlayLook, overlay};
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::EDITOR_CONTEXT;
 use crate::window_view::viewer::encoding::encoding_button;
+use crate::window_view::viewer::keys::{
+    BookmarkMatchingLines, CopyMatchingLines, KeepMatchingLines, RemoveMatchingLines,
+};
 use crate::window_view::viewer::language::language_control;
 use crate::window_view::viewer::search::GO_TO_CONTEXT;
 use crate::window_view::viewer::search::bar::{BarLook, bar_row};
@@ -69,6 +73,7 @@ impl EditorView {
             .gap(t.spacing.md)
             .child(row)
             .child(self.regex_button(cx))
+            .children(self.filter_menu(t, cx))
             .children(self.replace_row(t, cx));
         Some(bar.into_any_element())
     }
@@ -176,6 +181,22 @@ impl EditorView {
             })
     }
 
+    /// Wires the four Filter Lines commands (Ctrl+K) to the view.
+    fn filter_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        root.on_action(cx.listener(|view, _: &KeepMatchingLines, window, cx| {
+            view.filter_lines(FilterAction::Keep, window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &RemoveMatchingLines, window, cx| {
+            view.filter_lines(FilterAction::Remove, window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &CopyMatchingLines, window, cx| {
+            view.filter_lines(FilterAction::Copy, window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &BookmarkMatchingLines, window, cx| {
+            view.filter_lines(FilterAction::Bookmark, window, cx);
+        }))
+    }
+
     fn list_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &ListUp, _, cx| move_in_find_all(view, false, cx)))
             .on_action(cx.listener(|view, _: &ListDown, _, cx| move_in_find_all(view, true, cx)))
@@ -251,6 +272,7 @@ impl Render for EditorView {
         let panel = find_all_panel(&t, &self.marking, rows);
         let root = div().id("editor-view").key_context(EDITOR_CONTEXT);
         let root = Self::lint_keys(Self::find_keys(root, cx), cx);
+        let root = Self::filter_keys(root, cx);
         Self::preview_keys(Self::list_keys(root, cx), cx)
             .flex()
             .flex_col()

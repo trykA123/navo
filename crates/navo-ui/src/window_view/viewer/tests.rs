@@ -5,6 +5,7 @@ mod can_trace_blf;
 mod content;
 mod editor_cursors;
 mod editor_diagnostics;
+mod editor_filter;
 mod editor_find;
 mod editor_outline;
 mod editor_save;
