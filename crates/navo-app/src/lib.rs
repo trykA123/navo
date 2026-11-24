@@ -21,6 +21,8 @@ mod diag;
 mod drag;
 mod drives;
 mod editor;
+#[allow(dead_code, reason = "E8b wires the tool runner in")]
+mod editor_tools;
 mod files;
 mod git;
 mod gui;
