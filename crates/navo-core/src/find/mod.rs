@@ -1,5 +1,6 @@
 mod filters;
 mod matcher;
+mod print;
 mod query;
 
 pub use filters::{Attribute, AttributeFilter, Date, ModifiedFilter, SizeFilter};
