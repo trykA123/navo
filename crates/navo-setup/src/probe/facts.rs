@@ -121,11 +121,16 @@ fn write_probe(parent: &Path, fresh: bool) -> io::Result<bool> {
     }
 }
 
-/// Creates and removes a uniquely named probe folder; false means the folder is not writable.
+/// Writes one `navo-setup:` warning line to stderr, the probes' only channel before Setup stops.
 #[allow(
     clippy::print_stderr,
-    reason = "a probe folder that cannot be removed deserves one warning"
+    reason = "a leftover probe folder or a failed revert deserves one terminal warning"
 )]
+pub(super) fn warn(message: std::fmt::Arguments<'_>) {
+    eprintln!("navo-setup: {message}");
+}
+
+/// Creates and removes a uniquely named probe folder; false means the folder is not writable.
 fn folder_probe(parent: &Path) -> io::Result<bool> {
     let path = parent.join(format!("{PROBE_PREFIX}{}", random_hex()?));
     let wide = wide_z(&path);
@@ -136,11 +141,11 @@ fn folder_probe(parent: &Path) -> io::Result<bool> {
     }
     // SAFETY: the wide path is NUL-terminated; the folder exists and is empty.
     if unsafe { RemoveDirectoryW(wide.as_ptr()) } == 0 {
-        eprintln!(
-            "navo-setup: cannot remove the write probe {}: {}",
+        warn(format_args!(
+            "cannot remove the write probe {}: {}",
             path.display(),
             io::Error::last_os_error()
-        );
+        ));
     }
     Ok(true)
 }

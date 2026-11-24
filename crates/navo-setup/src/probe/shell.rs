@@ -189,15 +189,13 @@ struct Revert {
 
 impl Drop for Revert {
     /// Reverts to Setup's own token; a failed revert aborts, since the thread's identity is unknown.
-    #[allow(
-        clippy::print_stderr,
-        reason = "the last line before abort names why Setup stopped"
-    )]
     fn drop(&mut self) {
         // SAFETY: no arguments; ends this thread's impersonation.
         if unsafe { RevertToSelf() } == 0 {
             let error = io::Error::last_os_error();
-            eprintln!("navo-setup: could not stop acting as the desktop user: {error}");
+            super::facts::warn(format_args!(
+                "could not stop acting as the desktop user: {error}"
+            ));
             std::process::abort();
         }
         ENTERED.set(self.before);

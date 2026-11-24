@@ -17,10 +17,6 @@ pub mod compare_visible;
 pub mod list_actions;
 pub mod window_view;
 
-#[allow(
-    unused_imports,
-    reason = "NV still reaches these modules through sidewise-ui"
-)]
 pub(crate) use sidewise_kit::{
     assets, confirm_dialog, context_menu, file_icons, format, languages, prelude, primitives,
     row_look, tokens,
