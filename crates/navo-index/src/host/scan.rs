@@ -1,12 +1,27 @@
 use std::sync::{Arc, PoisonError, mpsc};
+use std::time::{Duration, Instant};
 
-use navo_core::{Location, ProviderPath};
+use navo_core::{FsError, Location, ProviderPath};
 use navo_fs::{CancelToken, EntryKind, FsEntry, WatchChange, WatchEvent};
 
 use super::Worker;
 use crate::ntfs::COMPACT_MIN_SLOTS;
 use crate::table::{Flags, NO_PARENT, NameTable};
 use crate::walker::{self, Outcome, Progress, WalkResult};
+
+/// One watch change with its disk metadata already read, so applying it holds
+/// the table write lock for table work only.
+enum Prepared {
+    Removed(Option<Location>),
+    Refreshed {
+        location: Location,
+        entry: Result<FsEntry, FsError>,
+    },
+    Renamed {
+        from: Option<Location>,
+        to: Option<Location>,
+    },
+}
 
 impl Worker {
     pub(super) fn scan(&mut self) {
@@ -96,7 +111,7 @@ impl Worker {
         root: &Location,
         walked: &NameTable,
     ) -> Result<bool, String> {
-        let old = self.find(table, root).ok_or("unknown index subtree")?;
+        let old = folder(table, root).ok_or("unknown index subtree")?;
         if table.len() - subtree_len(table, old) + walked.len() > self.options.limits.max_entries {
             return Err("index entry limit reached".into());
         }
@@ -153,12 +168,13 @@ impl Worker {
                 return self.publish();
             }
         };
+        let prepared = self.prepare(changes);
         let shared = Arc::clone(&self.table);
         let mut table = shared.write().unwrap_or_else(PoisonError::into_inner);
         let before = (table.len(), table.slots());
         let mut roots = Vec::new();
-        for change in changes {
-            if let Err(error) = self.patch(&mut table, change, &mut roots) {
+        for change in prepared {
+            if let Err(error) = self.apply(&mut table, change, &mut roots) {
                 self.error(format!("updating index: {error}"));
             }
         }
@@ -173,31 +189,56 @@ impl Worker {
         }
     }
 
-    fn patch(
+    /// Reads the disk metadata of every created or modified path before the
+    /// table lock is taken, so the lock is held for table work only.
+    fn prepare(&self, changes: Vec<WatchChange>) -> Vec<Prepared> {
+        let mut prepared = Vec::with_capacity(changes.len());
+        for change in changes {
+            match change {
+                WatchChange::Removed(path) => {
+                    prepared.push(Prepared::Removed(self.resolve(&path)));
+                }
+                WatchChange::Created(path) | WatchChange::Modified(path) => {
+                    prepared.extend(self.prepared_refresh(&path));
+                }
+                WatchChange::Renamed { from, to } => prepared.push(Prepared::Renamed {
+                    from: self.resolve(&from),
+                    to: self.resolve(&to),
+                }),
+            }
+        }
+        prepared
+    }
+
+    /// Resolves one created or modified path and reads its metadata.
+    fn prepared_refresh(&self, path: &ProviderPath) -> Option<Prepared> {
+        let location = self.resolve(path)?;
+        let entry = self.options.provider.metadata(&location);
+        Some(Prepared::Refreshed { location, entry })
+    }
+
+    fn apply(
         &self,
         table: &mut NameTable,
-        change: WatchChange,
+        change: Prepared,
         roots: &mut Vec<Location>,
     ) -> Result<(), String> {
         match change {
-            WatchChange::Removed(path) => {
-                let location = self.resolve(&path);
-                let id = location.and_then(|location| self.find(table, &location));
+            Prepared::Removed(location) => {
+                let id = location.and_then(|location| self.entry(table, &location));
                 table.remove(id.unwrap_or(NO_PARENT));
             }
-            WatchChange::Created(path) | WatchChange::Modified(path) => {
-                if let Some(root) = self.refresh(table, &path)? {
+            Prepared::Refreshed { location, entry } => {
+                if let Some(root) = self.refresh(table, &location, entry)? {
                     roots.push(root);
                 }
             }
-            WatchChange::Renamed { from, to } => {
-                roots.extend([from, to].iter().filter_map(|path| self.resolve(path)).map(
-                    |location| {
-                        location
-                            .parent()
-                            .unwrap_or_else(|| self.options.root.clone())
-                    },
-                ));
+            Prepared::Renamed { from, to } => {
+                roots.extend([from, to].into_iter().flatten().map(|location| {
+                    location
+                        .parent()
+                        .unwrap_or_else(|| self.options.root.clone())
+                }));
             }
         }
         Ok(())
@@ -206,13 +247,11 @@ impl Worker {
     fn refresh(
         &self,
         table: &mut NameTable,
-        path: &ProviderPath,
+        location: &Location,
+        entry: Result<FsEntry, FsError>,
     ) -> Result<Option<Location>, String> {
-        let Some(location) = self.resolve(path) else {
-            return Ok(None);
-        };
-        let old = self.find(table, &location);
-        let entry = match self.options.provider.metadata(&location) {
+        let old = self.entry(table, location);
+        let entry = match entry {
             Ok(entry) => entry,
             Err(error) if error.kind == navo_core::FsErrorKind::NotFound => {
                 table.remove(old.unwrap_or(NO_PARENT));
@@ -226,7 +265,7 @@ impl Worker {
         if entry.kind == EntryKind::Folder {
             return Ok(Some(parent_location));
         }
-        let Some(parent) = self.find(table, &parent_location) else {
+        let Some(parent) = folder(table, &parent_location) else {
             return Ok(Some(parent_location));
         };
         if table
@@ -249,6 +288,19 @@ impl Worker {
         Ok(None)
     }
 
+    /// Finds a live entry by path: its parent folder through `FolderLookup`,
+    /// then the matching child of that folder.
+    fn entry(&self, table: &NameTable, location: &Location) -> Option<u32> {
+        if location.same_place(&self.options.root) {
+            return Some(0);
+        }
+        let parent = folder(table, &location.parent()?)?;
+        table.children(parent).find(|&child| {
+            self.location(table, child)
+                .is_some_and(|child| child.same_place(location))
+        })
+    }
+
     fn rescan_roots(&self, table: &NameTable, roots: Vec<Location>) -> Vec<Location> {
         let mut distinct = Vec::new();
         for root in roots {
@@ -260,7 +312,7 @@ impl Worker {
         }
         let mut roots = Vec::new();
         for root in distinct {
-            let Some(id) = self.find(table, &root) else {
+            let Some(id) = folder(table, &root) else {
                 return vec![self.options.root.clone()];
             };
             if table
@@ -273,6 +325,19 @@ impl Worker {
         }
         roots
     }
+}
+
+/// Finds a folder by path through `FolderLookup`, in O(depth) instead of a
+/// full-table scan.
+fn folder(table: &NameTable, location: &Location) -> Option<u32> {
+    table
+        .folder_lookup()
+        .find_folder(
+            &location.path().to_text(),
+            Instant::now() + Duration::from_millis(20),
+        )
+        .ok()
+        .flatten()
 }
 
 fn contains(parent: &Location, location: &Location) -> bool {
@@ -301,14 +366,13 @@ fn reserve_append(table: &mut NameTable, walked: &NameTable, name: &str) -> Resu
 
 /// Live entries at or below `old`, for the limit check before the subtree goes.
 fn subtree_len(table: &NameTable, old: u32) -> usize {
-    table
-        .iter()
-        .filter(|(id, _)| {
-            std::iter::successors(Some(*id), |&id| table.parent(id))
-                .take(table.slots() as usize)
-                .any(|id| id == old)
-        })
-        .count()
+    let mut count = 0;
+    let mut pending = vec![old];
+    while let Some(id) = pending.pop() {
+        count += 1;
+        pending.extend(table.children(id));
+    }
+    count
 }
 
 fn append_children(table: &mut NameTable, root: u32, walked: &NameTable) -> Result<(), String> {

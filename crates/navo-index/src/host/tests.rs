@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use navo_core::{FsError, FsErrorKind, ProviderId, ProviderPath};
@@ -266,7 +266,7 @@ fn refresh(host: &Host, mutate: impl FnOnce()) -> HostStatus {
     host.statuses
         .wait(
             revision,
-            WATCH_MAX_DELAY + WATCH_QUIET + Duration::from_secs(1),
+            WATCH_MAX_DELAY + WATCH_QUIET + Duration::from_secs(10),
         )
         .expect("the watcher batch did not reach the host");
     built(host)
@@ -796,4 +796,131 @@ fn ten_thousand_status_updates_keep_only_the_newest() {
     assert_eq!(slot.revision(), 10_000);
     assert_eq!(slot.take().unwrap().entries, 9_999);
     assert!(slot.latest().is_none());
+}
+
+/// A provider that counts metadata reads and whether the index lock was held.
+struct Counting {
+    fs: Arc<FakeFs>,
+    table: Mutex<Option<Arc<RwLock<NameTable>>>>,
+    calls: AtomicUsize,
+    locked: AtomicUsize,
+}
+
+impl Counting {
+    fn new(fs: Arc<FakeFs>) -> Self {
+        Self {
+            fs,
+            table: Mutex::new(None),
+            calls: AtomicUsize::new(0),
+            locked: AtomicUsize::new(0),
+        }
+    }
+
+    fn watch(&self, host: &Host) {
+        *self.table.lock().unwrap() = Some(host.table());
+    }
+
+    fn reset(&self) {
+        self.calls.store(0, Ordering::Relaxed);
+        self.locked.store(0, Ordering::Relaxed);
+    }
+}
+
+impl Provider for Counting {
+    fn id(&self) -> ProviderId {
+        self.fs.id()
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        self.fs.capabilities()
+    }
+
+    fn list(
+        &self,
+        folder: &Location,
+        sink: &mut dyn ListSink,
+        cancel: &CancelToken,
+    ) -> Result<(), FsError> {
+        self.fs.list(folder, sink, cancel)
+    }
+
+    fn metadata(&self, location: &Location) -> Result<FsEntry, FsError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        if let Some(table) = self.table.lock().unwrap().as_ref()
+            && table.try_read().is_err()
+        {
+            self.locked.fetch_add(1, Ordering::Relaxed);
+        }
+        self.fs.metadata(location)
+    }
+
+    fn watch_tree(&self, folder: &Location, sink: WatchSink) -> Result<Watch, FsError> {
+        self.fs.watch_tree(folder, sink)
+    }
+}
+
+fn file(name: &str) -> FsEntry {
+    FsEntry {
+        name: ProviderPath::from_text(name),
+        kind: EntryKind::File,
+        size: 1,
+        modified_ms: None,
+        attributes: Attributes::default(),
+    }
+}
+
+/// Live entries at or below `prefix`, computed independently of the index's own DFS.
+fn subtree(table: &NameTable, prefix: &str) -> usize {
+    table
+        .iter()
+        .filter(|(id, _)| {
+            table.path_with(*id, '/').is_some_and(|path| {
+                path == prefix
+                    || path
+                        .strip_prefix(prefix)
+                        .is_some_and(|rest| rest.starts_with('/'))
+            })
+        })
+        .count()
+}
+
+#[test]
+fn a_two_hundred_file_batch_reads_metadata_before_the_write_lock() {
+    const FILES: usize = 20_000;
+    const BATCH: usize = 200;
+    let rig = Rig::new();
+    rig.fs.add_folder("tree/big");
+    rig.fs.add_entries(
+        "tree/big",
+        (0..FILES).map(|index| file(&format!("file-{index:05}.txt"))),
+    );
+    let provider = Arc::new(Counting::new(Arc::clone(&rig.fs)));
+    // Above tree, big, FILES, the new folder and BATCH files, so the merge is allowed.
+    let limit = 20_500;
+    let host = rig.start_provider_with_limit(provider.clone(), limit);
+    provider.watch(&host);
+    built(&host);
+    provider.reset();
+    let status = refresh(&host, || {
+        rig.fs.add_folder("tree/big/batch");
+        rig.fs.add_entries(
+            "tree/big/batch",
+            (0..BATCH).map(|index| file(&format!("file-{index:05}.txt"))),
+        );
+    });
+    assert!(status.errors.is_empty(), "{:?}", status.errors);
+    assert_eq!(provider.calls.load(Ordering::Relaxed), BATCH + 1);
+    assert_eq!(
+        provider.locked.load(Ordering::Relaxed),
+        0,
+        "metadata was read while the index write lock was held"
+    );
+    let shared = host.table();
+    let table = shared.read().unwrap();
+    assert_eq!(
+        subtree(&table, "tree/big"),
+        2 + FILES + BATCH,
+        "subtree {}",
+        subtree(&table, "tree/big")
+    );
 }

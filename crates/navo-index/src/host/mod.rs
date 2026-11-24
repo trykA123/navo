@@ -232,12 +232,6 @@ impl Worker {
         Location::with_provider(provider, ProviderPath::from_text(&path)).ok()
     }
 
-    fn find(&self, table: &NameTable, location: &Location) -> Option<u32> {
-        table
-            .iter()
-            .find_map(|(id, _)| self.location(table, id)?.same_place(location).then_some(id))
-    }
-
     fn save_due(&mut self) {
         let Some(at) = self.dirty else {
             return;

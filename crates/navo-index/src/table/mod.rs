@@ -285,6 +285,11 @@ impl NameTable {
         self.is_live(id) && self.children.first_child(id).is_some()
     }
 
+    /// Live children of `id` in their linked order.
+    pub(crate) fn children(&self, id: u32) -> impl Iterator<Item = u32> + '_ {
+        self.children.of(id)
+    }
+
     pub fn parent(&self, id: u32) -> Option<u32> {
         let parent = *self.parents.get(id as usize)?;
         self.is_live(id)
