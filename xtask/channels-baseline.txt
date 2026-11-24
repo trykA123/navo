@@ -1,4 +1,14 @@
 # Unbounded channel constructions in tracked Rust outside test code (AM7).
 # The ratchet only goes down; `cargo xtask channels` prints the new number.
 # 2026-11-24: the scan now skips only `#[cfg(test)]` items, not every line below the first attribute; re-baselined from the 39 the old scan undercounted.
-52
+# 2026-11-24: turbofish constructors and compound cfgs re-measured it from 52; added:
+#   crates/navo-app/src/crash/native_server.rs:171, crates/navo-app/src/git/scan_tests/limits.rs:197,
+#   crates/navo-app/src/git/scan_tests/limits.rs:246, crates/navo-app/src/launch/mod.rs:52,
+#   crates/navo-app/src/resident/thread.rs:96, crates/navo-app/src/search_hooks/index/retirement.rs:18,
+#   crates/navo-app/src/user_commands/start.rs:56, crates/navo-git/src/gix_source/status/watch.rs:26,
+#   crates/navo-shell/src/clipboard/watch.rs:54, crates/navo-ui/src/browser/watched/recheck.rs:12,
+#   crates/navo-ui/src/clip_palette/refresh.rs:26, crates/navo-ui/src/window_view/git_badges.rs:69,
+#   crates/navo-ui/src/window_view/input_trace.rs:61, crates/navo-ui/src/window_view/lane.rs:25,
+#   crates/navo-ui/src/window_view/mod.rs:375, crates/navo-ui/src/window_view/viewer/background.rs:50,
+#   crates/navo-ui/src/window_view/viewer/search/jobs.rs:42, crates/sidewise-git-remote/src/capped.rs:219.
+70

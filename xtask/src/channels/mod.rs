@@ -16,8 +16,8 @@ use std::process::{Command, ExitCode};
 /// Baseline file, relative to the repository root.
 const BASELINE_FILE: &str = "xtask/channels-baseline.txt";
 
-/// Substrings that mark an unbounded channel construction.
-const PATTERNS: [&str; 3] = ["mpsc::channel(", "unbounded(", "unbounded_channel("];
+/// Constructor names that build an unbounded channel.
+const CALLS: [&str; 3] = ["unbounded_channel", "unbounded", "channel"];
 
 /// One counted call at a 1-based line in a repo-relative file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,12 +156,10 @@ pub fn scan(root: &Path, files: &[String]) -> io::Result<Vec<Hit>> {
             continue;
         }
         let text = fs::read_to_string(root.join(rel))?;
-        let source = skip::scanned(&text);
-        for (index, line) in source.code.iter().enumerate() {
-            if source.is_test[index] {
-                continue;
-            }
-            for _ in 0..counted(line) {
+        let masked = skip::masked(&text);
+        let imported = Imported::new(&masked);
+        for (index, line) in masked.lines().enumerate() {
+            for _ in 0..counted(line, imported) {
                 hits.push(Hit {
                     path: rel.clone(),
                     line: index + 1,
@@ -172,24 +170,125 @@ pub fn scan(root: &Path, files: &[String]) -> io::Result<Vec<Hit>> {
     Ok(hits)
 }
 
-/// Count unbounded channel constructions on one source line.
-fn counted(line: &str) -> usize {
-    PATTERNS
-        .iter()
-        .map(|pattern| occurrences(line, pattern))
-        .sum()
+/// Bare `unbounded` constructors imported by one file.
+#[derive(Debug, Clone, Copy, Default)]
+struct Imported {
+    unbounded: bool,
+    unbounded_channel: bool,
 }
 
-/// Count `pattern` in `line` where it starts an identifier, not a longer name.
-fn occurrences(line: &str, pattern: &str) -> usize {
-    line.match_indices(pattern)
-        .filter(|(index, _)| {
-            line[..*index]
-                .chars()
-                .next_back()
-                .is_none_or(|c| !is_name_char(c))
-        })
-        .count()
+impl Imported {
+    /// Read the `use ...mpsc...` statements of `masked` for bare imports.
+    fn new(masked: &str) -> Self {
+        let mut imported = Self::default();
+        for statement in masked.split(';') {
+            if !statement.contains("use ") || !statement.contains("mpsc") {
+                continue;
+            }
+            imported.unbounded |= has_name(statement, "unbounded");
+            imported.unbounded_channel |= has_name(statement, "unbounded_channel");
+        }
+        imported
+    }
+}
+
+/// Count unbounded channel constructions on one line of `masked` code.
+fn counted(line: &str, imported: Imported) -> usize {
+    let mut count = 0;
+    for name in CALLS {
+        let mut from = 0;
+        while let Some(offset) = line[from..].find(name) {
+            let at = from + offset;
+            if is_channel_call(line, at, name, imported) {
+                count += 1;
+            }
+            from = at + name.len();
+        }
+    }
+    count
+}
+
+/// True when `name` at `at` is a channel constructor called with `(`, not a
+/// longer name, a definition, or an unrelated function.
+fn is_channel_call(line: &str, at: usize, name: &str, imported: Imported) -> bool {
+    if line[..at].chars().next_back().is_some_and(is_name_char) {
+        return false;
+    }
+    let after = turbofish_end(line, at + name.len()).unwrap_or(at + name.len());
+    if !line[after..].starts_with('(') {
+        return false;
+    }
+    if is_definition(line, at) {
+        return false;
+    }
+    let before = &line[..at];
+    let mpsc_qualified = before.strip_suffix("mpsc::").is_some_and(|path| {
+        path.chars()
+            .next_back()
+            .is_none_or(|character| !is_name_char(character))
+    });
+    if mpsc_qualified {
+        return true;
+    }
+    if before.ends_with("::") {
+        return false;
+    }
+    match name {
+        "unbounded" => imported.unbounded,
+        "unbounded_channel" => imported.unbounded_channel,
+        _ => false,
+    }
+}
+
+/// End of a `::<...>` turbofish starting at `start`, if one starts there.
+fn turbofish_end(line: &str, start: usize) -> Option<usize> {
+    line[start..].strip_prefix("::<")?;
+    let bytes = line.as_bytes();
+    let mut depth = 1usize;
+    let mut at = start + 3;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'<' => depth += 1,
+            b'>' if bytes.get(at - 1) != Some(&b'-') => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(at + 1);
+                }
+            }
+            _ => {}
+        }
+        at += 1;
+    }
+    None
+}
+
+/// True when the word before `at` is a definition keyword.
+fn is_definition(line: &str, at: usize) -> bool {
+    let before = line[..at].trim_end();
+    let word = before
+        .rsplit(|character: char| !is_name_char(character))
+        .next();
+    matches!(
+        word,
+        Some("fn" | "struct" | "enum" | "trait" | "union" | "type" | "use" | "mod" | "const")
+    )
+}
+
+/// True when `name` appears in `text` as a whole identifier.
+fn has_name(text: &str, name: &str) -> bool {
+    let mut from = 0;
+    while let Some(offset) = text[from..].find(name) {
+        let at = from + offset;
+        let before = text[..at].chars().next_back();
+        let after = text[at + name.len()..].chars().next();
+        if before.is_none_or(|character| !is_name_char(character))
+            && after.is_none_or(|character| !is_name_char(character))
+        {
+            return true;
+        }
+        from = at + name.len();
+    }
+    false
 }
 
 /// True when `c` may continue a Rust identifier.

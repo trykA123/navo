@@ -63,11 +63,11 @@ fn channels_fail_above_baseline() {
     let tree = Tree::new("above");
     tree.write(
         "src/a.rs",
-        "fn f() {\n    let _ = unbounded();\n    let _ = unbounded_channel();\n    let _ = mpsc::channel();\n}\n",
+        "use futures::channel::mpsc::{unbounded, unbounded_channel};\nfn f() {\n    let _ = unbounded();\n    let _ = unbounded_channel();\n    let _ = mpsc::channel();\n}\n",
     );
     let hits = tree.scan(&["src/a.rs"]);
     assert_eq!(hits.len(), 3);
-    assert_eq!(lines(&hits), vec![2, 3, 4]);
+    assert_eq!(lines(&hits), vec![3, 4, 5]);
     let (code, out) = tree.report(&hits, 2);
     assert_eq!(code, ExitCode::FAILURE);
     assert_eq!(
@@ -164,6 +164,73 @@ fn channels_in_comments_and_strings_are_not_counted() {
     );
     let hits = tree.scan(&["src/a.rs"]);
     assert_eq!(lines(&hits), vec![4]);
+}
+
+#[test]
+fn channels_share_a_line_with_test_items() {
+    let tree = Tree::new("shared-line");
+    tree.write(
+        "src/a.rs",
+        "fn f() { #[cfg(test)] let hook = (); let _ = mpsc::channel(); }\n#[cfg(test)] fn t() { let _ = mpsc::channel(); } let _ = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![1, 2]);
+}
+
+#[test]
+fn channels_skip_stacked_attributes_and_where_clauses() {
+    let tree = Tree::new("stacked");
+    tree.write(
+        "src/a.rs",
+        "#[cfg(test)]\n#[allow(dead_code)]\nfn helper<T>(value: T) -> T\nwhere\n    T: Copy,\n{\n    let (a, b) = mpsc::channel();\n}\nlet (c, d) = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![9]);
+}
+
+#[test]
+fn channels_read_compound_cfgs() {
+    let tree = Tree::new("compound");
+    tree.write(
+        "src/a.rs",
+        "#[cfg( test )]\nfn spaced() { let (a, b) = mpsc::channel(); }\n#[cfg(all(test, unix))]\nfn all_test() { let (a, b) = mpsc::channel(); }\n#[cfg(any(test, feature = \"test-support\"))]\nfn any_test() { let (c, d) = mpsc::channel(); }\n#[cfg(not(test))]\nfn not_test() { let (e, f) = mpsc::channel(); }\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![6, 8]);
+}
+
+#[test]
+fn channels_skip_braces_in_attributes_and_code() {
+    let tree = Tree::new("braces");
+    tree.write(
+        "src/a.rs",
+        "#[cfg(test)]\n#[doc = stringify!{x}]\nfn t<T>() where T: Trait<{1}> {\n    let (a, b) = mpsc::channel();\n}\nlet (c, d) = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![6]);
+}
+
+#[test]
+fn channels_skip_raw_strings_and_nested_comments() {
+    let tree = Tree::new("raw");
+    tree.write(
+        "src/a.rs",
+        "#[cfg(test)]\n/* outer /* inner */ } */\nfn t<'a>(value: &'a str) {\n    let doc = r#\"}\"#;\n    let (a, b) = mpsc::channel();\n}\nlet (c, d) = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![7]);
+}
+
+#[test]
+fn channels_count_turbofish_constructors_only() {
+    let tree = Tree::new("turbofish");
+    tree.write(
+        "src/a.rs",
+        "use futures::channel::mpsc::unbounded;\nfn f() {\n    let _ = unbounded::<u8>();\n    let _ = futures::channel::mpsc::unbounded::<u8>();\n    let _ = mpsc::channel::<u8>();\n    let _ = not_unbounded();\n    let _ = other::unbounded();\n}\n",
+    );
+    tree.write("src/b.rs", "fn f() { let _ = unbounded(); }\n");
+    let hits = tree.scan(&["src/a.rs", "src/b.rs"]);
+    assert_eq!(lines(&hits), vec![3, 4, 5]);
 }
 
 #[test]

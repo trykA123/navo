@@ -1,8 +1,5 @@
-//! Locates the items that `#[cfg(test)]` makes test-only and blanks comments
-//! and literals, so they hide no braces or channel patterns.
-
-/// The `#[cfg(test)]` attribute this scanner looks for.
-const CFG_TEST: &str = "#[cfg(test)]";
+//! Locates the items that `#[cfg(test)]` makes test-only and blanks them along
+//! with comments and literals, so only countable code remains.
 
 /// Structural tokens the test-skip scan needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,84 +13,189 @@ enum Kind {
     Semi,
 }
 
-/// One structural token at a 1-based line.
+/// One structural token over a byte range of the source.
 #[derive(Debug, Clone, Copy)]
 struct Token {
     kind: Kind,
-    line: usize,
+    start: usize,
+    end: usize,
 }
 
-/// The tokens of one file and, per line, its code with comments and literals
-/// blanked out.
+/// The tokens of one file and the byte ranges that hold no code.
 struct Lexed {
     tokens: Vec<Token>,
-    code: Vec<String>,
+    hidden: Vec<(usize, usize)>,
 }
 
-/// Test-only lines and per-line code of one source file.
-pub(super) struct Scanned {
-    /// True per 1-based line that belongs to test-only code.
-    pub(super) is_test: Vec<bool>,
-    /// The file's code per line, with comments and literals blanked out.
-    pub(super) code: Vec<String>,
-}
-
-/// Scan `text` for test-only lines and for countable code.
-pub(super) fn scanned(text: &str) -> Scanned {
-    let lexed = lex(text);
-    let is_test = test_lines(&lexed.tokens, lexed.code.len());
-    Scanned {
-        is_test,
-        code: lexed.code,
-    }
-}
-
-/// Split `text` into structural tokens and per-line code.
+/// Return `text` with test-only items, comments and literals blanked out.
 ///
-/// Comments and literals are blanked out of `code`, so their braces are not
-/// structural and their text cannot look like a channel construction.
+/// Only the test item itself is blanked, so a live call on the same line as a
+/// test attribute is still read.
+pub(super) fn masked(text: &str) -> String {
+    let lexed = lex(text);
+    let mut hidden = lexed.hidden;
+    hidden.extend(test_ranges(text, &lexed.tokens));
+    blank(text, hidden)
+}
+
+/// Tokenise `text`, collecting the byte ranges that hold no code.
 fn lex(text: &str) -> Lexed {
     let mut lexed = Lexed {
         tokens: Vec::new(),
-        code: vec![String::new()],
+        hidden: Vec::new(),
     };
-    let mut line = 1usize;
     let mut index = 0usize;
     while index < text.len() {
-        let rest = &text[index..];
-        let Some(first) = rest.chars().next() else {
-            break;
-        };
-        if first == '\n' {
-            lexed.code.push(String::new());
-            line += 1;
-            index += 1;
-            continue;
-        }
-        if rest.starts_with(CFG_TEST) {
-            lexed.tokens.push(Token {
-                kind: Kind::CfgTest,
-                line,
-            });
-            let end = index + CFG_TEST.len();
-            consume(text, index, end, &mut line, &mut lexed.code);
+        if let Some((end, is_test)) = attribute(text, index) {
+            if is_test {
+                lexed.tokens.push(Token {
+                    kind: Kind::CfgTest,
+                    start: index,
+                    end,
+                });
+            }
+            lexed.hidden.push((index, end));
             index = end;
             continue;
         }
         if let Some(end) = non_code_end(text, index) {
-            consume(text, index, end, &mut line, &mut lexed.code);
+            lexed.hidden.push((index, end));
             index = end;
             continue;
         }
-        if let Some(kind) = punctuation(first) {
-            lexed.tokens.push(Token { kind, line });
+        let Some(character) = text[index..].chars().next() else {
+            break;
+        };
+        if let Some(kind) = punctuation(character) {
+            lexed.tokens.push(Token {
+                kind,
+                start: index,
+                end: index + 1,
+            });
         }
-        if let Some(current) = lexed.code.last_mut() {
-            current.push(first);
-        }
-        index += first.len_utf8();
+        index += character.len_utf8();
     }
     lexed
+}
+
+/// End and test-only verdict of an attribute starting at `start`, if any.
+fn attribute(text: &str, start: usize) -> Option<(usize, bool)> {
+    let bracket = match &text.as_bytes()[start..] {
+        [b'#', b'[', ..] => start + 1,
+        [b'#', b'!', b'[', ..] => start + 2,
+        _ => return None,
+    };
+    let end = attribute_end(text, bracket);
+    Some((end, test_only_cfg(&text[start..end])))
+}
+
+/// End of the attribute whose `[` is at `bracket`, honouring nested brackets.
+fn attribute_end(text: &str, bracket: usize) -> usize {
+    let mut depth = 1usize;
+    let mut at = bracket + 1;
+    while at < text.len() {
+        if let Some(end) = non_code_end(text, at) {
+            at = end;
+            continue;
+        }
+        let Some(character) = text[at..].chars().next() else {
+            break;
+        };
+        match character {
+            '[' => depth += 1,
+            ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    return at + 1;
+                }
+            }
+            _ => {}
+        }
+        at += character.len_utf8();
+    }
+    text.len()
+}
+
+/// True when the attribute is compiled only in tests.
+///
+/// `test`, `#[cfg( test )]` and any `all(...)` with a test-only conjunct are
+/// test-only. `any(...)` and `not(...)` stay live: they can build without
+/// `test`, so their calls are counted rather than hidden.
+fn test_only_cfg(attribute: &str) -> bool {
+    let inner = attribute
+        .trim_start_matches('#')
+        .trim_start_matches('!')
+        .trim();
+    let Some(cfg) = inner
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .map(str::trim)
+        .and_then(|rest| rest.strip_prefix("cfg"))
+        .map(str::trim_start)
+    else {
+        return false;
+    };
+    let Some(expr) = cfg
+        .strip_prefix('(')
+        .and_then(|rest| rest.strip_suffix(')'))
+    else {
+        return false;
+    };
+    cfg_test_only(expr.trim())
+}
+
+/// True when `expr` is true only under `cfg(test)`.
+fn cfg_test_only(expr: &str) -> bool {
+    if expr == "test" {
+        return true;
+    }
+    let Some(inner) = strip_call(expr, "all") else {
+        return false;
+    };
+    split_args(inner)
+        .iter()
+        .any(|argument| cfg_test_only(argument.trim()))
+}
+
+/// The arguments of `name(...)`, when `expr` is exactly that call.
+fn strip_call<'a>(expr: &'a str, name: &str) -> Option<&'a str> {
+    let rest = expr.strip_prefix(name)?.trim_start();
+    rest.strip_prefix('(')?.strip_suffix(')')
+}
+
+/// Split comma-separated `cfg` arguments at the top level.
+fn split_args(inner: &str) -> Vec<&str> {
+    let mut args = Vec::new();
+    let mut depth = 0usize;
+    let mut quoted = false;
+    let mut escaped = false;
+    let mut start = 0usize;
+    for (at, character) in inner.char_indices() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                quoted = false;
+            }
+            continue;
+        }
+        match character {
+            '"' => quoted = true,
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                args.push(&inner[start..at]);
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    if start < inner.len() {
+        args.push(&inner[start..]);
+    }
+    args
 }
 
 /// End of a comment or literal starting at `start`, if one does.
@@ -118,19 +220,6 @@ fn non_code_end(text: &str, start: usize) -> Option<usize> {
         return char_literal_end(text, start);
     }
     raw_string_end(text, start)
-}
-
-/// Blank a non-code span and record every newline it holds.
-fn consume(text: &str, from: usize, to: usize, line: &mut usize, code: &mut Vec<String>) {
-    if let Some(current) = code.last_mut() {
-        current.push(' ');
-    }
-    for character in text[from..to].chars() {
-        if character == '\n' {
-            code.push(String::new());
-            *line += 1;
-        }
-    }
 }
 
 /// End of the block comment starting at `start`, honouring nesting.
@@ -222,9 +311,9 @@ fn punctuation(character: char) -> Option<Kind> {
     }
 }
 
-/// Return, per 1-based line, whether the line is test-only code.
-fn test_lines(tokens: &[Token], line_count: usize) -> Vec<bool> {
-    let mut is_test = vec![false; line_count];
+/// Return the byte ranges of the items that `#[cfg(test)]` makes test-only.
+fn test_ranges(text: &str, tokens: &[Token]) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
     let mut paren = 0usize;
     let mut brace = 0usize;
     let mut index = 0usize;
@@ -235,60 +324,82 @@ fn test_lines(tokens: &[Token], line_count: usize) -> Vec<bool> {
             index += 1;
             continue;
         }
-        let end = item_end(tokens, index + 1, paren, brace);
-        let last = tokens
-            .get(end.saturating_sub(1))
-            .map_or(token.line, |item| item.line);
-        for line in token.line..=last {
-            if let Some(flag) = is_test.get_mut(line - 1) {
-                *flag = true;
-            }
-        }
-        for skipped in &tokens[index..end] {
+        let (next, end) = item_end(text, tokens, index + 1, paren, brace);
+        ranges.push((token.start, end.max(token.end)));
+        for skipped in &tokens[index..next] {
             apply_depth(skipped.kind, &mut paren, &mut brace);
         }
-        index = end.max(index + 1);
+        index = next.max(index + 1);
     }
-    is_test
+    ranges
 }
 
-/// Return the token index just past the item a `#[cfg(test)]` applies to.
+/// Return the token index just past the item and its final byte offset.
 ///
 /// `paren` and `brace` are the depths at the attribute. A comma at those
 /// depths ends a field, variant, match arm or parameter, but only inside a
-/// block: a top-level item ends at its `;` or at its balanced `{ ... }`.
-fn item_end(tokens: &[Token], start: usize, paren: usize, brace: usize) -> usize {
+/// block: a top-level item ends at its `;` or at its body `{ ... }`.
+fn item_end(
+    text: &str,
+    tokens: &[Token],
+    start: usize,
+    paren: usize,
+    brace: usize,
+) -> (usize, usize) {
     let mut paren_depth = paren;
     let mut brace_depth = brace;
+    let mut body = false;
     for (offset, token) in tokens[start..].iter().enumerate() {
         match token.kind {
             Kind::OpenParen => paren_depth += 1,
             Kind::CloseParen => {
                 if paren_depth <= paren {
-                    return start + offset + 1;
+                    return (start + offset + 1, token.end);
                 }
                 paren_depth -= 1;
             }
-            Kind::OpenBrace => brace_depth += 1,
+            Kind::OpenBrace => {
+                brace_depth += 1;
+                if brace_depth == brace + 1 {
+                    body = is_body_brace(text, token.start);
+                }
+            }
             Kind::CloseBrace => {
                 if brace_depth <= brace {
-                    return start + offset;
+                    return (start + offset, token.start);
                 }
                 brace_depth -= 1;
-                if brace_depth == brace && paren_depth == paren {
-                    return start + offset + 1;
+                if brace_depth == brace && paren_depth == paren && body {
+                    return (start + offset + 1, token.end);
+                }
+                if brace_depth == brace {
+                    body = false;
                 }
             }
             Kind::Comma if paren_depth == paren && brace_depth == brace && brace > 0 => {
-                return start + offset + 1;
+                return (start + offset + 1, token.end);
             }
             Kind::Semi if paren_depth == paren && brace_depth == brace => {
-                return start + offset + 1;
+                return (start + offset + 1, token.end);
             }
             Kind::CfgTest | Kind::Comma | Kind::Semi => {}
         }
     }
-    tokens.len()
+    (tokens.len(), tokens.last().map_or(0, |token| token.end))
+}
+
+/// False for a brace group in a generic argument list (`Trait<{1}>`).
+///
+/// If the heuristic is ever wrong it ends the skip early, which counts a call
+/// rather than hiding it.
+fn is_body_brace(text: &str, at: usize) -> bool {
+    !matches!(
+        text[..at]
+            .chars()
+            .rev()
+            .find(|character| !character.is_whitespace()),
+        Some('<')
+    )
 }
 
 /// Track the paren and brace depths across one token.
@@ -300,4 +411,27 @@ fn apply_depth(kind: Kind, paren: &mut usize, brace: &mut usize) {
         Kind::CloseBrace => *brace = brace.saturating_sub(1),
         Kind::CfgTest | Kind::Comma | Kind::Semi => {}
     }
+}
+
+/// Blank every hidden range, keeping newlines so line numbers do not move.
+fn blank(text: &str, mut ranges: Vec<(usize, usize)>) -> String {
+    ranges.retain(|(start, end)| start < end);
+    ranges.sort_unstable();
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0usize;
+    for (start, end) in ranges {
+        if end <= last {
+            continue;
+        }
+        if start > last {
+            out.push_str(&text[last..start]);
+        }
+        let from = start.max(last);
+        for character in text[from..end].chars() {
+            out.push(if character == '\n' { '\n' } else { ' ' });
+        }
+        last = end;
+    }
+    out.push_str(&text[last..]);
+    out
 }
