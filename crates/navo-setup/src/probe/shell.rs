@@ -30,6 +30,7 @@ use windows_sys::Win32::System::Threading::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetShellWindow, GetWindowThreadProcessId};
 
+use super::shell_token;
 use crate::start_mode::ShellFacts;
 
 /// The shell after `install`; set once per process.
@@ -117,7 +118,8 @@ pub fn installed() -> Option<&'static Shell> {
 }
 
 /// Impersonates the shell user on this thread; with no shell installed it does nothing.
-/// Fails with the `SetThreadToken` error and records the failure for this thread.
+/// Fails with the `SetThreadToken` error, or when Windows lowered the token below impersonation
+/// (then it reverts first); either failure is recorded for this thread.
 pub fn enter_as_user() -> io::Result<()> {
     let Some(shell) = installed() else {
         return Ok(());
@@ -129,12 +131,22 @@ pub fn enter_as_user() -> io::Result<()> {
         ENTERED.set(Some(false));
         return Err(error);
     }
+    // Without SeImpersonatePrivilege the kernel may quietly drop the thread to identification.
+    if let Err(error) = shell_token::thread_level().and_then(shell_token::require_impersonation) {
+        ENTERED.set(Some(false));
+        // SAFETY: no arguments; ends the unusable impersonation set just above.
+        if unsafe { RevertToSelf() } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        return Err(error);
+    }
     ENTERED.set(Some(true));
     Ok(())
 }
 
 /// Runs `f` as the shell user and reverts afterwards, also when `f` panics (IW39).
 /// Runs `f` directly with no shell or when already entered; fails without running `f` if entering fails.
+/// Threads spawned inside `f` do not inherit the impersonation; they run as Setup's admin token.
 pub fn as_user<T>(f: impl FnOnce() -> T) -> io::Result<T> {
     if installed().is_none() || is_entered() {
         return Ok(f());
@@ -369,7 +381,9 @@ fn is_code(error: &io::Error, code: u32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{Shell, as_admin, as_user, enter_as_user, installed, is_entered};
+    use super::{Found, Shell, as_admin, as_user, enter_as_user, installed, is_entered};
+    use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
     #[test]
     fn nothing_installed_enter_is_ok_and_not_entered() {
@@ -389,5 +403,13 @@ mod tests {
     fn find_returns_ok_on_the_runner() {
         let found = Shell::find();
         assert!(found.is_ok(), "{found:?}");
+        if let Ok(Found::Shell(shell)) = found {
+            assert!(shell.facts().sid.starts_with("S-1-"), "{:?}", shell.facts());
+            let mut session = u32::MAX;
+            // SAFETY: value argument and a writable u32 slot.
+            let read = unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &raw mut session) };
+            assert_ne!(read, 0, "{}", std::io::Error::last_os_error());
+            assert_eq!(shell.facts().session, session);
+        }
     }
 }
