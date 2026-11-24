@@ -1,9 +1,11 @@
 use std::fmt::Write;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use navo_diag::ProcessMemory;
 
 use super::answer::{SharedVolume, State, read_before};
+use super::answer_stats::BUSY_REPLIES;
 #[cfg(windows)]
 use super::service_log::Log;
 
@@ -41,6 +43,7 @@ pub(super) fn line(volumes: &[SharedVolume], memory: Option<ProcessMemory>) -> S
             None => line.push_str(" | volume busy"),
         }
     }
+    let _ = write!(line, " busy={}", BUSY_REPLIES.swap(0, Ordering::Relaxed));
     line
 }
 
@@ -71,7 +74,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn busy_replies_count_since_the_last_heartbeat() {
+        // nextest runs each test in its own process, so this process-global count starts at zero.
+        // The reset keeps a shared `cargo test` binary from carrying another test's count in.
+        super::super::answer_stats::BUSY_REPLIES.store(0, std::sync::atomic::Ordering::Relaxed);
+        let volume = SharedVolume::new(State {
+            status: VolumeStatus {
+                root: "C:".into(),
+                ..VolumeStatus::default()
+            },
+            ..State::default()
+        });
+        let writing = volume.shared.write().unwrap();
+        assert!(read_before(&volume.shared, Instant::now()).is_none());
+        assert!(read_before(&volume.shared, Instant::now()).is_none());
+        drop(writing);
+        let first = line(std::slice::from_ref(&volume), None);
+        assert!(first.ends_with(" busy=2"), "{first}");
+        let second = line(std::slice::from_ref(&volume), None);
+        assert!(second.ends_with(" busy=0"), "{second}");
+    }
+
+    #[test]
     fn a_heartbeat_names_the_process_memory_and_each_volume_by_letter_only() {
+        BUSY_REPLIES.store(0, Ordering::Relaxed);
         let volume = SharedVolume::new(State {
             status: VolumeStatus {
                 root: "C:".into(),
@@ -93,7 +119,7 @@ mod tests {
         assert_eq!(
             text,
             format!(
-                "heartbeat pid={} working_set=73400320 private=681574400 | C: entries=0 slots=0 progress=0 full_builds=2 deferred=1 unresolved_batches=0 dropped=0",
+                "heartbeat pid={} working_set=73400320 private=681574400 | C: entries=0 slots=0 progress=0 full_builds=2 deferred=1 unresolved_batches=0 dropped=0 busy=0",
                 std::process::id()
             )
         );
@@ -104,6 +130,6 @@ mod tests {
                 .join()
                 .unwrap()
         });
-        assert!(busy.ends_with("memory=unknown | volume busy"));
+        assert!(busy.ends_with("memory=unknown | volume busy busy=1"));
     }
 }

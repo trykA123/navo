@@ -1,9 +1,11 @@
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 use navo_index::ntfs::NtfsIndex;
 use navo_index::pipe::{self, CancelToken, Hit, Reply, Request, VolumeBuilds, VolumeStatus};
 
+use super::answer_stats::BUSY_REPLIES;
 use super::search::SearchIndex;
 
 const READ_WAIT: Duration = Duration::from_millis(20);
@@ -102,7 +104,10 @@ pub(super) fn read_before<T>(
             Err(TryLockError::WouldBlock) if Instant::now() < deadline => {
                 std::thread::sleep(READ_POLL);
             }
-            Err(TryLockError::WouldBlock) => return None,
+            Err(TryLockError::WouldBlock) => {
+                BUSY_REPLIES.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
         }
     }
 }

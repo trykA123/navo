@@ -10,6 +10,8 @@
 #[cfg(any(windows, test))]
 mod answer;
 #[cfg(any(windows, test))]
+mod answer_stats;
+#[cfg(any(windows, test))]
 mod batch;
 #[cfg(any(windows, test))]
 mod bind_retry;
