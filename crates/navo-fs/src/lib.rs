@@ -32,7 +32,7 @@ pub use io_queue::{
 };
 pub use job::{
     CopyMode, FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOptions, JobOutcome,
-    Journaled, PlacedFile, PreparedMove, Progress, RenameOutcome, SaveUndo, SourceContent,
+    Journaled, KeptReason, KeptSource, PlacedFile, PreparedMove, Progress, RenameOutcome, SaveUndo, SourceContent,
     SourceIdentity, SourceMetadata, SourceOps, Sources, StepOutcome, TEMP_SUFFIX, TempCreated,
     VerifyCount, VerifyMode, WorkerCounts, clean_up, copy_workers, is_rename_temporary,
     job_workers, recorded_proof, release_held, roll_back, run_job, run_job_parallel,

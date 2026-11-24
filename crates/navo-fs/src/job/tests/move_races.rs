@@ -9,14 +9,14 @@ use super::delete_races::BeforeRemove;
 use super::*;
 use crate::{Capabilities, CopyControl, ListSink, MoveCopy, OwnedCopy};
 
-const REPLACEMENT: u64 = 777;
+pub(super) const REPLACEMENT: u64 = 777;
 
-fn move_plan(fs: &FakeFs) -> OperationPlan {
+pub(super) fn move_plan(fs: &FakeFs) -> OperationPlan {
     plan(&request(fs, OpKind::Move, &["src/b"], "dst"))
 }
 
 /// Runs `plan` and calls `change` once, just before the job first removes `at`.
-fn run_changing(
+pub(super) fn run_changing(
     workers: usize,
     fs: &FakeFs,
     (plan, at): (&OperationPlan, &str),

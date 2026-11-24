@@ -160,7 +160,10 @@ fn walk_marking(
                 (ctx.progress)(&progress);
             }
             Err(error) => {
-                if let Some(outcome) = step_failure(plan, (seq, error), (marks, ctx), &mut failed) {
+                let failure = (seq, step, error);
+                if let Some(outcome) =
+                    step_failure(job, failure, (marks, ctx), (&mut failed, &mut kept))
+                {
                     return outcome;
                 }
             }
@@ -222,17 +225,22 @@ fn attempt_step(
     prepare(seq, (job, step), ctx).and_then(|()| apply(job, (seq, step), ctx, progress, pauses))
 }
 
+/// Stops the job at a failed step, except a recycle and a move's kept source: those go on and
+/// the job ends failed at the first such step. A kept source is reported and its folders stay.
 fn step_failure(
-    plan: &OperationPlan,
-    (seq, error): (u32, FsError),
+    job: Job<'_>,
+    (seq, step, error): (u32, &Step, FsError),
     (marks, ctx): (&mut Marks, &mut JobContext<'_>),
-    failed: &mut Option<(u32, FsError)>,
+    (failed, kept): (&mut Option<(u32, FsError)>, &mut Vec<Location>),
 ) -> Option<JobOutcome> {
     if error.kind == FsErrorKind::Cancelled || ctx.cancel.is_cancelled() {
         return Some(JobOutcome::Cancelled);
     }
     marks.failed(ctx.log, seq);
-    if plan.kind != OpKind::Recycle {
+    if let Some(source) = job.removals.kept((seq, step), &error) {
+        ctx.log.kept_source(&source);
+        kept.push(source.location);
+    } else if job.plan.kind != OpKind::Recycle {
         return Some(JobOutcome::Failed { seq, error });
     }
     failed.get_or_insert((seq, error));

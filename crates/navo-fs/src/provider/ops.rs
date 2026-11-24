@@ -167,9 +167,10 @@ pub trait ProviderOps: Provider {
         self.remove_file(location)
     }
     /// Copies a move's source file and returns the bytes written with the source as the copy read
-    /// it (`None` when that cannot be proved). This default, for providers without handles, reads
-    /// the source by path before and after the copy: a source swapped away and back during the
-    /// copy escapes it. `LocalFs` and `FakeFs` take the proof from the read itself.
+    /// it; `None` when it changed during the copy or the read could not be checked, and the move
+    /// then keeps it as changed on disk. This default, for providers without handles, reads the
+    /// source by path before and after the copy: a source swapped away and back during the copy
+    /// escapes it. `LocalFs` and `FakeFs` take the proof from the read itself.
     fn copy_moved_file(
         &self,
         request: MoveCopy<'_>,

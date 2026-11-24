@@ -44,6 +44,27 @@ pub enum StepOutcome {
     Failed,
 }
 
+/// Why a move left a source file in place after its copy landed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeptReason {
+    /// The source changed after, or while, its copy read it.
+    Changed,
+    /// The source's volume keeps nothing that tells the copied file from a replacement.
+    Unconfirmed,
+    /// The job resumed after the copy, so this run holds no proof of what the copy read.
+    Resumed,
+    /// Removing the source failed for another reason.
+    NotRemoved(FsError),
+}
+
+/// A move's source file that stayed in place: its copy landed and the original was kept.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptSource {
+    pub seq: u32,
+    pub location: Location,
+    pub reason: KeptReason,
+}
+
 /// The result of undoing a Save plan: its steps and how many done steps had no held old file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SaveUndo {
@@ -138,6 +159,8 @@ pub trait JobLog {
         Ok(())
     }
     fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
+    /// Reports a move's source kept in place; the move goes on and ends failed at the first one.
+    fn kept_source(&mut self, _kept: &KeptSource) {}
     fn held_stranded(&mut self, _held: &HeldFile) {}
 }
 

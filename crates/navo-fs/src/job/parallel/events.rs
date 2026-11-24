@@ -100,16 +100,23 @@ impl Runner<'_, '_, '_> {
             {
                 self.cancelled = true;
             }
-            Err(error) => self.settle_failure(seq, error),
+            Err(error) => self.settle_failure((seq, step), error),
         }
     }
 
-    fn settle_failure(&mut self, seq: u32, error: FsError) {
+    /// Like the sequential runner: a recycle and a move's kept source go on, the rest stop.
+    fn settle_failure(&mut self, (seq, step): (u32, &Step), error: FsError) {
         if error.kind == FsErrorKind::Cancelled || self.ctx.cancel.is_cancelled() {
             self.cancelled = true;
             return;
         }
         self.marks.failed(self.ctx.log, seq);
+        if let Some(source) = self.job.removals.kept((seq, step), &error) {
+            self.ctx.log.kept_source(&source);
+            self.kept.push(source.location);
+            self.note_failure(seq, error);
+            return;
+        }
         if self.job.plan.kind == OpKind::Recycle {
             self.note_failure(seq, error);
             return;

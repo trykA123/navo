@@ -28,6 +28,7 @@ mod kept_aside_late;
 mod kept_aside_race;
 mod link;
 mod move_;
+mod move_kept;
 mod move_over;
 mod move_over_crash;
 mod move_over_race;
@@ -72,6 +73,7 @@ struct Log {
     writes: usize,
     retaining: bool,
     proofs: Vec<(HeldFile, navo_core::retention::OverwriteProof)>,
+    kept: Vec<crate::KeptSource>,
 }
 
 fn log_error() -> FsError {
@@ -141,6 +143,10 @@ impl JobLog for Log {
 
     fn held_stranded(&mut self, held: &HeldFile) {
         self.stranded.push(held.clone());
+    }
+
+    fn kept_source(&mut self, kept: &crate::KeptSource) {
+        self.kept.push(kept.clone());
     }
 }
 

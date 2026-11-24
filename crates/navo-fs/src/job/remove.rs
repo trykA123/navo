@@ -3,14 +3,25 @@ use std::sync::{Mutex, PoisonError};
 
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
-use super::StepOutcome;
+use super::{KeptReason, KeptSource, StepOutcome};
 use crate::{CopiedSource, CopyControl, MoveCopy, ProviderOps};
+
+/// What a move's copy learned about its source.
+#[derive(Clone, Copy)]
+enum Read {
+    /// The source as the copy read it: its removal checks it still matches.
+    Proof(CopiedSource),
+    /// The source changed while it was copied, or its read could not be checked.
+    Changed,
+    /// The source's volume keeps nothing that tells it from a replacement.
+    Unconfirmed,
+}
 
 pub(super) struct Removals<'p> {
     kind: OpKind,
     folders: HashSet<&'p Location>,
-    /// Each move source as its copy read it, so its removal can tell whether it changed since.
-    copied: Mutex<HashMap<Location, CopiedSource>>,
+    /// What each move source's copy read in this run, so its removal can tell whether it changed.
+    copied: Mutex<HashMap<Location, Read>>,
 }
 
 impl<'p> Removals<'p> {
@@ -48,31 +59,62 @@ impl<'p> Removals<'p> {
         let source = request.source.clone();
         self.copied().remove(&source);
         let (written, read) = ops.copy_moved_file(request, control)?;
-        if let Some(read) = read.filter(CopiedSource::proves) {
-            self.copied().insert(source, read);
-        }
+        let read = match read {
+            Some(read) if read.proves() => Read::Proof(read),
+            Some(_) => Read::Unconfirmed,
+            None => Read::Changed,
+        };
+        self.copied().insert(source, read);
         Ok(written)
     }
 
     /// Removes a file. A move removes a source only through the proof its copy left in this run;
-    /// without one (a resumed job, a volume that proves nothing) it keeps the source.
+    /// without one (a resumed job, a changed source, a volume that proves nothing) it keeps it.
     fn remove_file(&self, ops: &dyn ProviderOps, location: &Location) -> Result<(), FsError> {
         if !self.moves() {
             return ops.remove_file(location);
         }
         let seen = self.copied().get(location).copied();
-        let Some(expected) = seen else {
-            return Err(FsError {
-                location: Some(location.clone()),
-                ..FsError::new(FsErrorKind::IdentityUnavailable)
-            });
+        let kind = match seen {
+            Some(Read::Proof(expected)) => {
+                ops.remove_copied_source(location, expected)?;
+                self.copied().remove(location);
+                return Ok(());
+            }
+            Some(Read::Changed) => FsErrorKind::ChangedOnDisk,
+            Some(Read::Unconfirmed) | None => FsErrorKind::IdentityUnavailable,
         };
-        ops.remove_copied_source(location, expected)?;
-        self.copied().remove(location);
-        Ok(())
+        Err(FsError {
+            location: Some(location.clone()),
+            ..FsError::new(kind)
+        })
     }
 
-    fn copied(&self) -> std::sync::MutexGuard<'_, HashMap<Location, CopiedSource>> {
+    /// The move source a failed `step` keeps in place, and why; `None` for any other failure,
+    /// which stops the job as before.
+    pub(super) fn kept(&self, (seq, step): (u32, &Step), error: &FsError) -> Option<KeptSource> {
+        let Step::RemoveFile { location } = step else {
+            return None;
+        };
+        if !self.moves() {
+            return None;
+        }
+        let reason = match (self.copied().get(location), error.kind) {
+            (None, _) => KeptReason::Resumed,
+            (Some(Read::Unconfirmed), _) => KeptReason::Unconfirmed,
+            (Some(Read::Changed), _) | (Some(Read::Proof(_)), FsErrorKind::ChangedOnDisk) => {
+                KeptReason::Changed
+            }
+            (Some(Read::Proof(_)), _) => KeptReason::NotRemoved(error.clone()),
+        };
+        Some(KeptSource {
+            seq,
+            location: location.clone(),
+            reason,
+        })
+    }
+
+    fn copied(&self) -> std::sync::MutexGuard<'_, HashMap<Location, Read>> {
         self.copied.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
