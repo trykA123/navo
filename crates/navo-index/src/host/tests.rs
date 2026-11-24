@@ -258,15 +258,17 @@ fn built(host: &Host) -> HostStatus {
         .expect("the worker publishes a final status")
 }
 
-/// Waits for the pending watcher batch to reach the host, then for its rescan.
-fn settled(host: &Host) -> HostStatus {
+/// Runs `mutate`, waits for the watcher batch it causes to reach the host, then
+/// returns the final status. Fails when no batch is acknowledged.
+fn refresh(host: &Host, mutate: impl FnOnce()) -> HostStatus {
     let revision = host.statuses.revision();
-    // The watcher emits a batch after its quiet period; that first status is
-    // enough to know the event arrived before the barrier waits out the rescan.
-    let _ = host.statuses.wait(
-        revision,
-        WATCH_MAX_DELAY + WATCH_QUIET + Duration::from_secs(1),
-    );
+    mutate();
+    host.statuses
+        .wait(
+            revision,
+            WATCH_MAX_DELAY + WATCH_QUIET + Duration::from_secs(1),
+        )
+        .expect("the watcher batch did not reach the host");
     built(host)
 }
 
@@ -364,9 +366,10 @@ fn applies_created_and_deleted_files_in_one_watcher_batch() {
     rig.fs.add_file("tree/old.txt", 1);
     let host = rig.start();
     built(&host);
-    rig.fs.add_file("tree/new.txt", 1);
-    rig.fs.remove("tree/old.txt");
-    let status = settled(&host);
+    let status = refresh(&host, || {
+        rig.fs.add_file("tree/new.txt", 1);
+        rig.fs.remove("tree/old.txt");
+    });
     assert_eq!(status.entries, 2);
     assert!(status.errors.is_empty());
     assert_eq!(
@@ -382,10 +385,12 @@ fn overflow_rescans_the_root_and_recovers_the_missing_changes() {
     rig.fs.add_file("tree/old.txt", 1);
     let host = rig.start();
     built(&host);
-    rig.fs.remove("tree/old.txt");
-    rig.fs.add_file("tree/deep/new.txt", 1);
-    rig.fs.overflow_watchers("tree");
-    assert_eq!(settled(&host).entries, 3);
+    let status = refresh(&host, || {
+        rig.fs.remove("tree/old.txt");
+        rig.fs.add_file("tree/deep/new.txt", 1);
+        rig.fs.overflow_watchers("tree");
+    });
+    assert_eq!(status.entries, 3);
     assert_eq!(rig.fs.calls("tree", FakeOp::List), 2);
     assert_eq!(
         names(&host.table().read().unwrap()),
@@ -400,8 +405,7 @@ fn saves_only_after_thirty_seconds_without_changes() {
     built(&host);
     rig.tick(&host, 29_999);
     assert!(!rig.path().exists());
-    rig.fs.add_file("tree/later.txt", 1);
-    settled(&host);
+    refresh(&host, || rig.fs.add_file("tree/later.txt", 1));
     rig.tick(&host, 30_000);
     assert!(!rig.path().exists());
     rig.tick(&host, 59_999);
@@ -435,8 +439,7 @@ fn excluded_names_never_enter_loaded_walked_or_watched_tables() {
     built(&host);
     assert!(!names(&host.table().read().unwrap()).contains("skip"));
     assert_eq!(rig.fs.calls("tree/skip", FakeOp::List), 0);
-    rig.fs.add_file("tree/skip/new.txt", 1);
-    settled(&host);
+    refresh(&host, || rig.fs.add_file("tree/skip/new.txt", 1));
     assert!(!names(&host.table().read().unwrap()).contains("new.txt"));
     assert_eq!(rig.fs.calls("tree/skip/new.txt", FakeOp::Metadata), 0);
 }
@@ -519,11 +522,12 @@ fn an_entry_limit_rescan_keeps_the_old_table() {
     let built = built(&host);
     assert!(built.errors.is_empty());
     assert_eq!(built.entries, 6);
-    for number in 5..25 {
-        rig.fs.add_file(&format!("tree/file-{number}.txt"), 1);
-    }
-    rig.fs.overflow_watchers("tree");
-    let status = settled(&host);
+    let status = refresh(&host, || {
+        for number in 5..25 {
+            rig.fs.add_file(&format!("tree/file-{number}.txt"), 1);
+        }
+        rig.fs.overflow_watchers("tree");
+    });
     assert!(
         status
             .errors
@@ -557,9 +561,11 @@ fn renaming_a_deep_file_walks_only_its_parent() {
     rig.fs.add_file("tree/unrelated/kept.txt", 1);
     let host = rig.start();
     built(&host);
-    rig.fs
-        .rename_entry("tree/left/deep/old.txt", "tree/left/deep/new.txt");
-    assert!(settled(&host).errors.is_empty());
+    let status = refresh(&host, || {
+        rig.fs
+            .rename_entry("tree/left/deep/old.txt", "tree/left/deep/new.txt");
+    });
+    assert!(status.errors.is_empty());
     let found = names(&host.table().read().unwrap());
     assert!(found.contains("new.txt"));
     assert!(!found.contains("old.txt"));
@@ -577,8 +583,10 @@ fn created_folder_with_files_walks_only_its_parent() {
     rig.fs.add_file("tree/unrelated/kept.txt", 1);
     let host = rig.start();
     built(&host);
-    rig.fs.add_file("tree/left/deep/created/child.txt", 1);
-    assert!(settled(&host).errors.is_empty());
+    let status = refresh(&host, || {
+        rig.fs.add_file("tree/left/deep/created/child.txt", 1);
+    });
+    assert!(status.errors.is_empty());
     let shared = host.table();
     let table = shared.read().unwrap();
     let paths: HashSet<_> = table
@@ -619,9 +627,10 @@ fn a_refreshed_folder_compacts_after_its_dead_slots_double() {
     let provider = Arc::new(Generated::new(Arc::clone(&rig.fs), 60_000));
     let host = rig.start_provider(provider.clone());
     built(&host);
-    for refresh in 0..2 {
-        provider.add_folder(&format!("refresh-{refresh}"));
-        settled(&host);
+    for round in 0..2 {
+        refresh(&host, || {
+            provider.add_folder(&format!("refresh-{round}"));
+        });
     }
     let shared = host.table();
     let table = shared.read().unwrap();
@@ -646,8 +655,7 @@ fn host_refresh_timing() {
     let host = rig.start_provider_with_limit(provider.clone(), usize::MAX);
     built(&host);
 
-    provider.add_folder("refresh-0");
-    settled(&host);
+    refresh(&host, || provider.add_folder("refresh-0"));
     let shared = host.table();
     let (before, live) = {
         let table = shared.read().unwrap();
@@ -672,8 +680,7 @@ fn host_refresh_timing() {
     let reader = spawn_reader(shared, Arc::clone(&done), Arc::clone(&longest));
 
     let probe = Probe::start();
-    provider.add_folder("refresh-1");
-    settled(&host);
+    refresh(&host, || provider.add_folder("refresh-1"));
     let measured = probe.read();
     done.store(true, Ordering::Release);
     reader.join().unwrap();
@@ -701,13 +708,21 @@ fn a_subtree_refresh_peaks_within_two_and_a_half_tables() {
     let provider = Arc::new(Generated::new(Arc::clone(&rig.fs), FILES).with_batch(512));
     let host = rig.start_provider(provider.clone());
     built(&host);
-    provider.add_folder("refresh-0");
-    settled(&host);
+    refresh(&host, || provider.add_folder("refresh-0"));
     let before = host.table().read().unwrap().memory_bytes();
 
     let probe = Probe::start();
-    provider.add_folder("refresh-1");
-    settled(&host);
+    let status = refresh(&host, || provider.add_folder("refresh-1"));
+    let shared = host.table();
+    let table = shared.read().unwrap();
+    let refreshed = table.iter().any(|(_, name)| name == "refresh-1");
+    assert!(
+        refreshed,
+        "the refreshed subtree is missing before the peak is measured"
+    );
+    assert_eq!(status.entries, table.len());
+    drop(table);
+    drop(shared);
     let peak = before + probe.read().peak;
     println!(
         "subtree refresh: peak {} KiB, before {} KiB, ratio {:.3}",
@@ -732,8 +747,8 @@ fn a_refreshed_subtree_keeps_every_nested_path_and_the_unrelated_branch() {
     rig.fs.add_file("tree/keep/kept.txt", 1);
     let host = rig.start();
     built(&host);
-    rig.fs.add_folder("tree/big/added");
-    assert!(settled(&host).errors.is_empty());
+    let status = refresh(&host, || rig.fs.add_folder("tree/big/added"));
+    assert!(status.errors.is_empty());
     let shared = host.table();
     let table = shared.read().unwrap();
     assert_eq!(

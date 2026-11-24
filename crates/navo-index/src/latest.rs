@@ -15,6 +15,12 @@ struct State<T> {
     value: Option<T>,
     revision: u64,
     open: bool,
+    /// Readers parked in `next`; read by the parked-reader test.
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "only the parked-reader test reads it")
+    )]
+    waiting: usize,
 }
 
 impl<T> Default for Latest<T> {
@@ -24,6 +30,7 @@ impl<T> Default for Latest<T> {
                 value: None,
                 revision: 0,
                 open: true,
+                waiting: 0,
             }),
             wake: Condvar::new(),
         }
@@ -65,10 +72,12 @@ impl<T> Latest<T> {
             if !state.open {
                 return None;
             }
+            state.waiting += 1;
             state = self
                 .wake
                 .wait(state)
                 .unwrap_or_else(PoisonError::into_inner);
+            state.waiting -= 1;
         }
     }
 
@@ -80,6 +89,15 @@ impl<T> Latest<T> {
             .unwrap_or_else(PoisonError::into_inner)
             .open = false;
         self.wake.notify_all();
+    }
+
+    /// How many readers are parked on the wake condvar.
+    #[cfg(test)]
+    pub(crate) fn waiting(&self) -> usize {
+        self.state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .waiting
     }
 
     /// Clones the newest value without consuming it.
@@ -124,5 +142,29 @@ impl<T> Latest<T> {
                 .unwrap_or_else(PoisonError::into_inner)
                 .0;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::thread;
+
+    use super::*;
+
+    #[test]
+    fn a_parked_reader_is_woken_by_a_replacement() {
+        let slot = Arc::new(Latest::<u64>::default());
+        let reader = {
+            let slot = Arc::clone(&slot);
+            thread::spawn(move || slot.next())
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while slot.waiting() == 0 {
+            assert!(Instant::now() < deadline, "the reader never parked");
+            thread::yield_now();
+        }
+        assert!(slot.publish(7));
+        assert_eq!(reader.join().unwrap(), Some(7));
     }
 }
