@@ -105,10 +105,6 @@ fn walk(job: Job<'_>, done: &DoneSet, ctx: &mut JobContext<'_>) -> JobOutcome {
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "the walk keeps the pause gate with its step loop"
-)]
 fn walk_marking(
     (job, done): (Job<'_>, &DoneSet),
     ctx: &mut JobContext<'_>,
@@ -213,10 +209,6 @@ pub(super) fn precheck_writes(
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the walk context is passed beside the pauses"
-)]
 fn attempt_step(
     job: Job<'_>,
     (seq, step): (u32, &Step),
@@ -274,10 +266,6 @@ fn advance(progress: &mut Progress, kind: OpKind, step: &Step) {
     progress.files_done += files;
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the walk context is passed beside the pauses"
-)]
 pub(super) fn apply(
     job: Job<'_>,
     (seq, step): (u32, &Step),
@@ -341,10 +329,6 @@ fn rename_step(
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the walk context is passed beside the pauses"
-)]
 fn copy_in_order(
     job: Job<'_>,
     step: &CopyStep<'_>,

@@ -4,10 +4,6 @@ use super::*;
 
 /// Running scans and file checks fail closed with IW17's codes for both modes.
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one test covers both running checks and both sq.version failures"
-)]
 fn a_running_navo_a_scan_error_and_bad_sq_version_fail_closed() {
     let dir = tempfile::tempdir().unwrap();
     let payload = payload(dir.path());

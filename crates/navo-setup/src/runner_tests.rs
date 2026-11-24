@@ -214,10 +214,6 @@ fn expected_upgrade(payload: &Payload) -> Vec<std::ffi::OsString> {
 
 /// Successful fresh and upgrade runs, nonzero exits and the 180 s progress text.
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one test covers the success, failure and deadline cases from the plan bullet"
-)]
 fn success_fresh_and_upgrade_exit_codes_and_progress() {
     let dir = tempfile::tempdir().unwrap();
     let payload = payload(dir.path());
@@ -307,10 +303,6 @@ fn the_spawned_arrays_equal_iw3s_for_both_modes() {
 
 /// A change before spawn refuses without extracting or spawning; after exit it fails with code 5.
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one test covers the before-spawn, after-exit and identity-mismatch cases"
-)]
 fn a_changed_ancestor_identity_or_held_folder_fails_closed() {
     let dir = tempfile::tempdir().unwrap();
     let payload = payload(dir.path());

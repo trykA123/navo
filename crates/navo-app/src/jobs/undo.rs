@@ -57,10 +57,6 @@ fn undo_record(journal: &SharedJournal, job: JobId) -> JournalLog {
 
 impl JournalLog {
     /// Restores every old file of this Save job, newest written step first.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the hook passes the plan, its done steps and the operation context"
-    )]
     pub(super) fn restore_saved(
         &mut self,
         plan: &OperationPlan,

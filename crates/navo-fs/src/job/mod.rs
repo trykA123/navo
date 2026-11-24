@@ -123,10 +123,6 @@ pub trait JobLog {
     fn undone(&mut self, seq: u32, outcome: StepOutcome) -> Result<(), FsError>;
 
     /// Restores the old files of a Save plan; `None` when this log cannot undo saves.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the log needs the plan, its done steps and the operation context"
-    )]
     fn undo_save(
         &mut self,
         _plan: &OperationPlan,

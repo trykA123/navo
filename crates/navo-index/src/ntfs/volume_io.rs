@@ -124,10 +124,6 @@ pub(super) fn enumerate_volume(
     enumerate_volume_sized(volume, drive, limit, SizeHint::default(), cancel)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the volume, limit, hint and cancel token are separate build inputs"
-)]
 /// Builds folders first, then files within one record budget; checks journal continuity.
 pub(super) fn enumerate_volume_sized(
     volume: &mut impl VolumeIo,

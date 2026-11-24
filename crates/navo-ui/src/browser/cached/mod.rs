@@ -55,7 +55,6 @@ pub(super) struct Fetch {
 }
 
 impl Fetch {
-    #[expect(clippy::too_many_lines, reason = "one listing fetch path")]
     pub(super) fn run(mut self, cancel: &CancelToken) -> Result<Fresh, FsError> {
         let _span = tracing::debug_span!("listing.load").entered();
         if let Some(early) = self.early.take().filter(|_| !cancel.is_cancelled()) {

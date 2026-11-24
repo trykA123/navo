@@ -167,10 +167,6 @@ pub trait ProviderOps: Provider {
         Ok(None)
     }
     fn create_file(&self, location: &Location) -> Result<(), FsError>;
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "signature fixed by the P8 O5 contract"
-    )]
     fn copy_file(
         &self,
         source: &Location,

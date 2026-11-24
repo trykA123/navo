@@ -24,10 +24,6 @@ pub(super) enum ResyncStep {
 /// (`built`), `Wait` for the rest of the 500 ms after `last` while the compare is `checking`,
 /// else `Rebuild`, `fresh` when the generation changed or nothing was built yet. `now` is the
 /// executor clock the last rebuild was stamped with.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the decision reads five facts (N4f1)"
-)]
 pub(super) fn resync_step(
     built: Option<(u64, u64)>,
     last: Option<Instant>,
@@ -62,10 +58,6 @@ impl StreamScreen {
 
     /// Records `stamp` and `now` as the items' build and replaces them with `items`, under the
     /// next generation when `fresh`, else the same one. False when nothing changed.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the build records four facts (N4f1)"
-    )]
     pub(super) fn resync_apply(
         &mut self,
         stamp: (u64, u64),

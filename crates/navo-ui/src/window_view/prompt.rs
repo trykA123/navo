@@ -37,7 +37,6 @@ pub(super) fn stem_end(name: &str) -> usize {
     name.rfind('.').filter(|dot| *dot > 0).unwrap_or(name.len())
 }
 
-#[expect(clippy::too_many_lines, reason = "prompt variants are kept together")]
 pub(super) fn prompt_props(kind: &PromptKind, error: Option<SharedString>) -> PromptProps {
     match kind {
         PromptKind::Rename { from } => PromptProps {

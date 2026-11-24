@@ -19,10 +19,6 @@ type Prepared = (Mode, Session, Option<Staged>, Option<[u8; 32]>, bool);
 use super::steps;
 
 /// Runs W8b's eleven steps; success closes the session and deletes no installed file.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the request, payload, log, host and progress are all inputs"
-)]
 pub fn install(
     request: Request,
     payload: &Payload,
@@ -34,10 +30,6 @@ pub fn install(
 }
 
 /// Retries one retained empty fresh root without another discovery or pin.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the retained session, payload, log, host and progress are all inputs"
-)]
 pub fn retry(
     session: Session,
     payload: &Payload,
@@ -66,7 +58,6 @@ pub fn retry(
 
 /// Runs one install, optionally resuming the retained empty root of a failed fresh run.
 #[expect(
-    clippy::too_many_arguments,
     clippy::too_many_lines,
     reason = "the eleven-step order is the contract and stays readable in one place"
 )]
@@ -193,10 +184,6 @@ fn child_code(code: i32) -> u32 {
 }
 
 /// Steps 1-5 for a normal run: elevation, discovery, hold, recheck and upgrade preparation.
-#[expect(
-    clippy::too_many_lines,
-    reason = "the discovery, hold and upgrade preparation stay together"
-)]
 fn start_session(
     request: &Request,
     payload: &Payload,

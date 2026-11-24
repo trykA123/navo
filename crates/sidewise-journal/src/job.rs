@@ -90,10 +90,6 @@ impl Job {
     /// modified time; `None` keeps the write time. Returns the item number. On any error the
     /// whole job is rolled back and closed, and the error says why (NC147); `NotRolledBack`
     /// when some items could not be rolled back now, so those targets may hold new bytes.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the J2 signature of the P1 plan: target, expect, restore time and fill"
-    )]
     pub fn overwrite(
         &mut self,
         target: &Path,

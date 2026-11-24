@@ -62,10 +62,6 @@ impl Db {
         }))
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "signature fixed by the P15 A5 contract"
-    )]
     pub fn save_viewer_memory(
         &self,
         path: &str,

@@ -119,7 +119,6 @@ pub struct Gallery {
 }
 
 impl Gallery {
-    #[expect(clippy::too_many_lines, reason = "one field per gallery page")]
     pub fn new(mode: Mode, window: &mut Window, cx: &mut App) -> Self {
         shortcuts_sample::use_user_keymap(cx);
         Self {

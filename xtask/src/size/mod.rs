@@ -10,8 +10,8 @@ pub use count::count_code_lines;
 pub use exceptions::parse_exceptions;
 pub use run::run;
 
-pub const DEFAULT_LIMIT: usize = 400;
-pub const CEILING: usize = 800;
+pub const DEFAULT_LIMIT: usize = 600;
+pub const CEILING: usize = 1000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exception {

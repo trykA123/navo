@@ -168,10 +168,6 @@ fn check_cuts(line: &str, cuts: &[usize]) -> Result<(), String> {
 
 /// Checks split safety, returning a description of the first mismatch.
 /// Every chunk, and the whole line, is lexed with `lex`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "The streaming contract fixes this public signature."
-)]
 pub fn check_split(
     lexer: &dyn LineLexer,
     line: &str,
@@ -184,10 +180,6 @@ pub fn check_split(
 
 /// Checks split safety like production: the whole line and the final chunk are
 /// lexed with `lex_last` (they end the line), the earlier chunks with `lex`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "The streaming contract fixes this public signature."
-)]
 pub fn check_split_line_end(
     lexer: &dyn LineLexer,
     line: &str,
@@ -199,10 +191,6 @@ pub fn check_split_line_end(
 }
 
 /// Shared split check; `line_end` lexes the whole line and the last chunk with `lex_last`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "It mirrors the public signature plus the mode flag."
-)]
 fn check_split_mode(
     lexer: &dyn LineLexer,
     line: &str,

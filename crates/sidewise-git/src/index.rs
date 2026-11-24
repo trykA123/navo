@@ -76,10 +76,6 @@ impl TreeIndex {
     /// Sets every file to its checkout size through `checkout.fix_child`, reading blobs with
     /// `read`; folders in sorted key order, children in their order. Fails with `Stopped`
     /// when `cancel` is set before a file; the index is then half-converted and must be dropped.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the G17 plan fixes this signature; the side calls it once per build"
-    )]
     pub(crate) fn convert_sizes(
         &mut self,
         checkout: &mut Checkout,

@@ -117,7 +117,6 @@ impl CommandId {
     ];
 
     #[must_use]
-    #[expect(clippy::too_many_lines, reason = "one arm per command id")]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PaneOpenTab => "pane.open-tab",

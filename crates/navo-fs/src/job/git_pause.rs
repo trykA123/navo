@@ -9,7 +9,6 @@ use super::{JobContext, JobOutcome, Progress};
 use crate::GitPauseGuard;
 
 /// Releases the job-wide pause for a user pause, then takes it back before the next step.
-#[expect(clippy::too_many_arguments, reason = "the walk state has five parts")]
 pub(super) fn hold_paused(
     plan: &OperationPlan,
     seq: u32,

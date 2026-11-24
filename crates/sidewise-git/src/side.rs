@@ -63,10 +63,6 @@ impl GitTreeSide {
 
     /// Opens `path` with `opener`, resolves `rev` and builds the side around it. A checkout
     /// side also builds its converter, reading the system config through `system` (only then).
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the G17 plan adds `system` to this private constructor"
-    )]
     fn with_opener(
         path: &Path,
         opener: Opener,

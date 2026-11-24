@@ -296,7 +296,6 @@ pub struct NavoWindow {
 
 impl NavoWindow {
     /// Builds the window and its screen entities from startup hooks and saved settings.
-    #[expect(clippy::too_many_lines, reason = "one field per window part")]
     fn new(options: StartOptions, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let browser = Self::browser(&options, cx);
         let totals = options.search.folder_totals.clone();

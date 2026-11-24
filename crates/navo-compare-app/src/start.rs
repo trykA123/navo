@@ -181,10 +181,6 @@ impl StartScreen {
             reason = "the launch atom sets sides; the view tests use it now"
         )
     )]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the U1 brief fixes this signature"
-    )]
     pub fn set_sides(
         &mut self,
         left: &str,

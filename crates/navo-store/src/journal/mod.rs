@@ -115,10 +115,6 @@ impl JobJournal {
         Ok(Self { db })
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "signature fixed by the P8 O3 contract"
-    )]
     pub fn create_job(
         &mut self,
         kind: &str,
@@ -143,10 +139,6 @@ impl JobJournal {
         Ok(JobId(id))
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "signature fixed by the P8 O3 contract"
-    )]
     pub fn mark_step(
         &mut self,
         job: JobId,

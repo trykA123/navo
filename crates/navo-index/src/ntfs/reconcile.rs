@@ -152,10 +152,6 @@ fn metadata_folders(unplaced: &[UnplacedFolder]) -> HashSet<u128> {
 
 /// Builds folders and files, reconciles the late records, and checks journal continuity
 /// (a wrap fails the build under `Continuity::Strict`, else marks it `JournalWrapped`).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the volume, limit, hint, continuity and cancel token are separate build inputs"
-)]
 pub(super) fn enumerate_with_late_limits<const CAP: usize, const FOLDER_CAP: usize>(
     volume: &mut impl VolumeIo,
     drive: char,

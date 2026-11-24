@@ -32,10 +32,6 @@ pub struct ScanResult {
     pub lines: u64,
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "signature fixed by the L1 contract"
-)]
 pub fn scan<S: ByteSource + ?Sized>(
     source: &S,
     layout: TextLayout,

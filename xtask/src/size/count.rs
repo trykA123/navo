@@ -1,5 +1,8 @@
+//! Counts non-blank, non-comment product code lines in Rust source files,
+//! skipping inline `#[cfg(test)]` and `#[test]` items.
+
 #[derive(Default)]
-enum State {
+enum Lexer {
     #[default]
     Code,
     BlockComment(usize),
@@ -7,12 +10,35 @@ enum State {
     RawString(usize),
 }
 
-pub fn count_code_lines(source: &str) -> usize {
-    let mut state = State::default();
-    source.lines().filter(|line| state.count_line(line)).count()
+#[derive(Default)]
+enum CfgTest {
+    #[default]
+    None,
+    Pending {
+        attr_brackets: usize,
+    },
+    InBlock(usize),
 }
 
-impl State {
+#[derive(Default)]
+struct Counter {
+    lexer: Lexer,
+    cfg_test: CfgTest,
+}
+
+/// Count non-blank, non-comment product code lines in `source`.
+///
+/// Inline `#[cfg(test)]` and `#[test]` items are excluded so unit tests beside
+/// the code do not count toward file size limits.
+pub fn count_code_lines(source: &str) -> usize {
+    let mut counter = Counter::default();
+    source
+        .lines()
+        .filter(|line| counter.count_line(line))
+        .count()
+}
+
+impl Counter {
     fn count_line(&mut self, line: &str) -> bool {
         let mut remaining = line.trim();
         let mut has_code = false;
@@ -25,12 +51,19 @@ impl State {
     }
 
     fn consume(&mut self, input: &str) -> (usize, bool) {
-        match *self {
-            Self::Code => self.consume_code(input),
-            Self::BlockComment(depth) => (self.consume_comment(input, depth), false),
-            Self::String => (self.consume_string(input), true),
-            Self::RawString(hashes) => (self.consume_raw_string(input, hashes), true),
+        match self.lexer {
+            Lexer::Code => self.consume_code(input),
+            Lexer::BlockComment(depth) => (self.consume_comment(input, depth), false),
+            Lexer::String => (self.consume_string(input), self.in_product_code()),
+            Lexer::RawString(hashes) => (
+                self.consume_raw_string(input, hashes),
+                self.in_product_code(),
+            ),
         }
+    }
+
+    fn in_product_code(&self) -> bool {
+        matches!(self.cfg_test, CfgTest::None)
     }
 
     fn consume_code(&mut self, input: &str) -> (usize, bool) {
@@ -38,36 +71,67 @@ impl State {
             return (input.len(), false);
         }
         if input.starts_with("/*") {
-            *self = Self::BlockComment(1);
+            self.lexer = Lexer::BlockComment(1);
             return (2, false);
         }
+        if self.in_product_code()
+            && let Some(length) = test_attribute_length(input)
+        {
+            self.cfg_test = CfgTest::Pending { attr_brackets: 0 };
+            return (length, false);
+        }
         if let Some((length, hashes)) = raw_string_start(input.as_bytes()) {
-            *self = Self::RawString(hashes);
-            return (length, true);
+            self.lexer = Lexer::RawString(hashes);
+            return (length, self.in_product_code());
         }
         if let Some(length) = char_literal_length(input) {
-            return (length, true);
+            return (length, self.in_product_code());
         }
-        let character = input.chars().next();
-        if character == Some('"') {
-            *self = Self::String;
+        let Some(character) = input.chars().next() else {
+            return (0, false);
+        };
+        if character == '"' {
+            self.lexer = Lexer::String;
+            return (1, self.in_product_code());
         }
-        (
-            character.map_or(0, char::len_utf8),
-            character.is_some_and(|character| !character.is_whitespace()),
-        )
+        let is_code = self.in_product_code() && !character.is_whitespace();
+        self.advance_cfg_test(character);
+        (character.len_utf8(), is_code)
+    }
+
+    fn advance_cfg_test(&mut self, character: char) {
+        match &mut self.cfg_test {
+            CfgTest::None => {}
+            CfgTest::Pending { attr_brackets } => match character {
+                '[' => *attr_brackets += 1,
+                ']' if *attr_brackets > 0 => *attr_brackets -= 1,
+                ';' if *attr_brackets == 0 => self.cfg_test = CfgTest::None,
+                '{' if *attr_brackets == 0 => self.cfg_test = CfgTest::InBlock(1),
+                _ => {}
+            },
+            CfgTest::InBlock(depth) => match character {
+                '{' => *depth += 1,
+                '}' => {
+                    *depth -= 1;
+                    if *depth == 0 {
+                        self.cfg_test = CfgTest::None;
+                    }
+                }
+                _ => {}
+            },
+        }
     }
 
     fn consume_comment(&mut self, input: &str, depth: usize) -> usize {
         if input.starts_with("/*") {
-            *self = Self::BlockComment(depth + 1);
+            self.lexer = Lexer::BlockComment(depth + 1);
             return 2;
         }
         if input.starts_with("*/") {
-            *self = if depth == 1 {
-                Self::Code
+            self.lexer = if depth == 1 {
+                Lexer::Code
             } else {
-                Self::BlockComment(depth - 1)
+                Lexer::BlockComment(depth - 1)
             };
             return 2;
         }
@@ -81,7 +145,7 @@ impl State {
                 .nth(1)
                 .map_or(1, |character| 1 + character.len_utf8()),
             Some('"') => {
-                *self = Self::Code;
+                self.lexer = Lexer::Code;
                 1
             }
             character => character.map_or(0, char::len_utf8),
@@ -95,11 +159,36 @@ impl State {
                 .get(1..hashes + 1)
                 .is_some_and(|suffix| suffix.iter().all(|&byte| byte == b'#'));
         if closes {
-            *self = Self::Code;
+            self.lexer = Lexer::Code;
             return hashes + 1;
         }
         input.chars().next().map_or(0, char::len_utf8)
     }
+}
+
+fn test_attribute_length(input: &str) -> Option<usize> {
+    if !input.starts_with("#[") {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (offset, character) in input[1..].char_indices() {
+        match character {
+            '[' => depth += 1,
+            ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    let end = offset + 2;
+                    let compact: String = input[..end]
+                        .chars()
+                        .filter(|c| !c.is_ascii_whitespace())
+                        .collect();
+                    return (compact == "#[cfg(test)]" || compact == "#[test]").then_some(end);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn raw_string_start(input: &[u8]) -> Option<(usize, usize)> {

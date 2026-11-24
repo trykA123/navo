@@ -49,10 +49,6 @@ fn retryable_lock_error(error: &io::Error) -> bool {
 }
 
 /// Retries `open` until it succeeds, the decided error is not retryable, or `wait` ends.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the lock retry loop keeps its open, retry, clock and pause inputs explicit"
-)]
 fn acquire_file<T>(
     wait: Duration,
     mut open: impl FnMut() -> io::Result<T>,

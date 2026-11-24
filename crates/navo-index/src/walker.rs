@@ -39,10 +39,6 @@ pub struct WalkResult {
     pub outcome: Outcome,
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "signature follows the walker contract"
-)]
 pub fn walk(
     provider: &dyn Provider,
     root: &Location,

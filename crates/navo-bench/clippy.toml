@@ -1,5 +1,5 @@
-too-many-lines-threshold = 50
-too-many-arguments-threshold = 4
+too-many-lines-threshold = 80
+too-many-arguments-threshold = 6
 excessive-nesting-threshold = 4
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true

@@ -154,10 +154,6 @@ impl Checkout {
     /// Sets `child.size` to its checkout size, or `child.readable` to false when it cannot be
     /// known within the caps. Reads the blob through `read` only when a conversion applies; a
     /// read error leaves the child as stored, so opening it reports the error later.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the G17 plan fixes this signature; the index calls it once per file"
-    )]
     pub fn fix_child(
         &mut self,
         repo: &gix::Repository,

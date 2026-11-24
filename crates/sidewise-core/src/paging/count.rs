@@ -11,10 +11,6 @@ pub struct Counted {
     pub done: bool,
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "signature fixed by the P15 A5 contract"
-)]
 pub fn count<S: ByteSource + ?Sized>(
     src: &S,
     needle: &Needle,

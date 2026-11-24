@@ -121,10 +121,6 @@ pub trait NameEq {
 /// Checks a fresh folder against IW7 and IW8a; every unknown fact refuses.
 ///
 /// `space` carries the Setup.exe size and the nupkg sizes Velopack checks.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the chain, refused sets, facts, space inputs and name equality are all inputs"
-)]
 pub fn check(
     chain: &Chain,
     refused: &Refused,

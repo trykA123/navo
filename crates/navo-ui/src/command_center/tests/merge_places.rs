@@ -28,10 +28,6 @@ const PATHS: [&str; 14] = [
 ];
 
 /// The pairwise merge as it was before the hashed lookup: the reference result.
-#[expect(
-    clippy::too_many_lines,
-    reason = "a verbatim copy of the replaced merge"
-)]
 fn pairwise(mut hits: Vec<Hit>) -> Vec<Hit> {
     let place_of = |hit: &Hit| -> Option<Location> {
         match (&hit.target, hit.source) {

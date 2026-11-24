@@ -190,10 +190,6 @@ impl FakeFs {
         self.changed(path, change);
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "signature fixed by the P6 F3 contract"
-    )]
     pub fn fault(&self, path: &str, op: FakeOp, on_call: u32, fault: Fault) {
         lock(&self.faults)
             .entry((normalize(path).to_owned(), op))

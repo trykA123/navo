@@ -136,10 +136,6 @@ pub trait GitHooks: Send + Sync {
     fn run(&self, repo: &Location, action: GitAction) -> Result<GitStarted, String>;
     /// `run` for a menu row: `shown` is the `GitMenuItem::confirm` text the user confirmed and
     /// `confirm_id` its id. Hooks refuse when they are not the confirmation they still hold.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "a row's text and id are each optional, as `GitMenuItem` holds them"
-    )]
     fn run_confirmed(
         &self,
         repo: &Location,

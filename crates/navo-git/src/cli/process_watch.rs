@@ -79,10 +79,6 @@ struct Idle {
 }
 
 impl Watchdog {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the start carries the child, timeout, outcome, cancel control and stop flag"
-    )]
     pub(super) fn start(
         child: ChildSlot,
         timeout: Duration,

@@ -53,48 +53,48 @@ fn string_literal_with_slashes_is_counted() {
 
 #[test]
 fn file_over_the_default_limit_is_a_violation() {
-    let files = [file("src/big.rs", code(401))];
+    let files = [file("src/big.rs", code(601))];
     let expected = SizeViolation {
         path: PathBuf::from("src/big.rs"),
-        lines: 401,
-        limit: 400,
+        lines: 601,
+        limit: 600,
     };
     assert_eq!(check_files(&files, &[]), vec![expected]);
 }
 
 #[test]
 fn file_at_the_default_limit_is_not_a_violation() {
-    let files = [file("src/ok.rs", code(400))];
+    let files = [file("src/ok.rs", code(600))];
     assert!(check_files(&files, &[]).is_empty());
 }
 
 #[test]
 fn exception_raises_the_limit_for_its_own_path_only() {
-    let files = [file("src/a.rs", code(500)), file("src/b.rs", code(500))];
-    let violations = check_files(&files, &[exception("src/a.rs", 600)]);
+    let files = [file("src/a.rs", code(700)), file("src/b.rs", code(700))];
+    let violations = check_files(&files, &[exception("src/a.rs", 800)]);
     let expected = SizeViolation {
         path: PathBuf::from("src/b.rs"),
-        lines: 500,
-        limit: 400,
-    };
-    assert_eq!(violations, vec![expected]);
-}
-
-#[test]
-fn exception_limit_is_still_enforced() {
-    let files = [file("src/a.rs", code(601))];
-    let violations = check_files(&files, &[exception("src/a.rs", 600)]);
-    let expected = SizeViolation {
-        path: PathBuf::from("src/a.rs"),
-        lines: 601,
+        lines: 700,
         limit: 600,
     };
     assert_eq!(violations, vec![expected]);
 }
 
 #[test]
+fn exception_limit_is_still_enforced() {
+    let files = [file("src/a.rs", code(801))];
+    let violations = check_files(&files, &[exception("src/a.rs", 800)]);
+    let expected = SizeViolation {
+        path: PathBuf::from("src/a.rs"),
+        lines: 801,
+        limit: 800,
+    };
+    assert_eq!(violations, vec![expected]);
+}
+
+#[test]
 fn violations_follow_input_order() {
-    let files = [file("src/z.rs", code(401)), file("src/a.rs", code(402))];
+    let files = [file("src/z.rs", code(601)), file("src/a.rs", code(602))];
     let paths: Vec<PathBuf> = check_files(&files, &[])
         .into_iter()
         .map(|v| v.path)
@@ -139,17 +139,17 @@ fn entry(limit: usize) -> String {
 
 #[test]
 fn limit_above_ceiling_is_rejected() {
-    let error = parse_exceptions(&entry(801)).unwrap_err();
+    let error = parse_exceptions(&entry(1001)).unwrap_err();
     let expected = SizeError::LimitAboveCeiling {
         path: PathBuf::from("a.rs"),
-        limit: 801,
+        limit: 1001,
     };
     assert_eq!(error, expected);
 }
 
 #[test]
 fn limit_at_ceiling_is_accepted() {
-    assert_eq!(parse_exceptions(&entry(800)).unwrap().len(), 1);
+    assert_eq!(parse_exceptions(&entry(1000)).unwrap().len(), 1);
 }
 
 #[test]
@@ -252,6 +252,60 @@ fn block_comment_opening_after_code_counts_only_the_code_line() {
 }
 
 #[test]
+fn inline_cfg_test_module_is_not_counted() {
+    let source = "\
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adds_numbers() {
+        let brace = \"}\";
+        let raw = r#\"{\"#;
+        assert_eq!(add(1, 2), 3);
+        let _ = (brace, raw);
+    }
+}
+";
+    assert_eq!(count_code_lines(source), 3);
+}
+
+#[test]
+fn external_cfg_test_mod_declaration_does_not_skip_following_code() {
+    let source = "\
+#[cfg(test)]
+mod tests;
+
+pub fn keep() -> i32 {
+    42
+}
+";
+    assert_eq!(count_code_lines(source), 3);
+}
+
+#[test]
+fn cfg_test_with_stacked_attributes_is_not_counted() {
+    let source = "\
+pub fn live() {}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    fn helper() {
+        let _ = Some(1).unwrap();
+    }
+}
+
+pub fn after() {}
+";
+    assert_eq!(count_code_lines(source), 2);
+}
+
+#[test]
 fn invalid_size_exceptions_display_the_parse_message() {
     let error = SizeError::InvalidToml("bad syntax".to_owned());
     assert_eq!(error.to_string(), "invalid size exceptions: bad syntax");
@@ -261,11 +315,11 @@ fn invalid_size_exceptions_display_the_parse_message() {
 fn excessive_size_exception_displays_the_path_limit_and_ceiling() {
     let error = SizeError::LimitAboveCeiling {
         path: PathBuf::from("src/large.rs"),
-        limit: 801,
+        limit: 1001,
     };
     assert_eq!(
         error.to_string(),
-        "src/large.rs: exception limit 801 exceeds ceiling 800"
+        "src/large.rs: exception limit 1001 exceeds ceiling 1000"
     );
 }
 
@@ -348,19 +402,19 @@ fn walk_sorts_rust_sources_and_skips_build_test_and_other_files() {
 }
 
 #[test]
-fn root_check_rejects_a_401_line_source() {
+fn root_check_rejects_a_601_line_source() {
     let tree = TestTree::new();
-    tree.write("crates/a/src/lib.rs", code(401));
+    tree.write("crates/a/src/lib.rs", code(601));
     assert!(!run::run_check(&tree.0).unwrap());
 }
 
 #[test]
 fn root_check_applies_the_repository_exception_file() {
     let tree = TestTree::new();
-    tree.write("crates/a/src/lib.rs", code(401));
+    tree.write("crates/a/src/lib.rs", code(601));
     tree.write(
         "size-exceptions.toml",
-        "[[exception]]\npath = \"crates/a/src/lib.rs\"\nlimit = 401\nreason = \"state machine\"\n",
+        "[[exception]]\npath = \"crates/a/src/lib.rs\"\nlimit = 601\nreason = \"state machine\"\n",
     );
     assert!(run::run_check(&tree.0).unwrap());
 }

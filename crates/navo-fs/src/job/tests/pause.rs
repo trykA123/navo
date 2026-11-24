@@ -411,7 +411,6 @@ impl ProviderOps for RetakeFail<'_> {
     }
 }
 
-#[expect(clippy::too_many_lines, reason = "one pause and retake scenario")]
 #[test]
 fn a_failed_retake_reports_the_next_pending_seq() {
     let fs = FakeFs::new();

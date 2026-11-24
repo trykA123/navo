@@ -23,10 +23,6 @@ fn root() -> (NameTable, FrnMap) {
     (table, ids)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "test helper mirrors the fields of one Add change"
-)]
 fn entry(
     table: &mut NameTable,
     ids: &mut FrnMap,

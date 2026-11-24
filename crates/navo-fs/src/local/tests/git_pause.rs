@@ -302,7 +302,6 @@ fn move_plan(source: &Path, target: &Path, size: u64) -> OperationPlan {
 
 /// Runs a move that the user pauses during the copy, then resumes.
 #[cfg(unix)]
-#[expect(clippy::too_many_lines, reason = "one pause and resume scenario")]
 fn user_paused_move(parallel: bool) {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("paused-move-repo");
@@ -373,7 +372,6 @@ fn a_paused_parallel_copy_releases_git() {
 
 /// Runs a delete that the user pauses before its first step, then resumes.
 #[cfg(unix)]
-#[expect(clippy::too_many_lines, reason = "one pause and resume scenario")]
 fn user_paused_delete(parallel: bool) {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("paused-job-repo");

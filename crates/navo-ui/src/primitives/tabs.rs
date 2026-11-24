@@ -221,7 +221,6 @@ fn closable(
         })
 }
 
-#[expect(clippy::too_many_lines, reason = "tab rendering remains together")]
 fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
     let theme = props
         .theme
@@ -298,7 +297,6 @@ struct Row {
     bar: Option<Theme>,
 }
 
-#[expect(clippy::too_many_lines, reason = "tab layout remains together")]
 fn build_row(row: Row, width: Pixels, cx: &mut App) -> AnyElement {
     let count = row.tabs.len();
     let budget = Budget {

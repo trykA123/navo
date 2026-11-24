@@ -108,7 +108,6 @@ impl Browser {
         Self::with_pools(state, provider, wake, pools)
     }
 
-    #[expect(clippy::too_many_lines, reason = "one field per browser part")]
     fn with_pools(
         state: AppState,
         provider: Arc<dyn ProviderOps>,

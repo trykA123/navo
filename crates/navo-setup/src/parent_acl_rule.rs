@@ -26,10 +26,6 @@ const DENY_ACE_TYPES: [u8; 4] = [1, 6, 10, 12];
 const AUDIT_ACE_TYPES: [u8; 8] = [2, 3, 7, 8, 13, 14, 15, 16];
 
 /// Whether one ACE gives an untrusted SID rights over a folder, or over a drive root.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the ACE type, flags, mask, root and trust are the rule's whole table"
-)]
 pub(crate) fn ace_opens(ace_type: u8, flags: u32, mask: u32, is_root: bool, trusted: bool) -> bool {
     if trusted || DENY_ACE_TYPES.contains(&ace_type) || AUDIT_ACE_TYPES.contains(&ace_type) {
         return false;

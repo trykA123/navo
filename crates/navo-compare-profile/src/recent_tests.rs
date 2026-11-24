@@ -26,7 +26,6 @@ fn git(text: &str, rev: Option<&str>) -> SideRef {
 }
 
 /// Builds a pair session; `opened` is in Unix seconds.
-#[expect(clippy::too_many_arguments, reason = "test fixture")]
 fn session(id: &str, name: Option<&str>, left: SideRef, right: SideRef, opened: i64) -> Session {
     Session {
         version: SESSION_VERSION,

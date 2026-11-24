@@ -167,7 +167,6 @@ impl NavoWindow {
         self.tab_menu.0.as_ref().map(|(view, _)| view.clone())
     }
 
-    #[expect(clippy::too_many_arguments, reason = "GPUI event context")]
     pub(super) fn open_tab_menu(
         &mut self,
         pane: PaneId,
@@ -211,7 +210,6 @@ impl NavoWindow {
         cx.notify();
     }
 
-    #[expect(clippy::too_many_arguments, reason = "GPUI event context")]
     fn tab_menu_event(
         &mut self,
         id: TabId,
@@ -229,11 +227,6 @@ impl NavoWindow {
         cx.notify();
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        clippy::too_many_lines,
-        reason = "GPUI event context and menu actions"
-    )]
     fn run_tab_menu(&mut self, id: TabId, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         let Some(tab) = self.browser.state().tab(id) else {
             return;

@@ -22,10 +22,6 @@ use crate::{candidates, choose, problem_of};
 
 /// Fetches `rev` of `url` into the bare repository at `repo_dir` (created when missing or empty)
 /// through `http`, within `limits`. Returns the local ref name; a panic inside is `Broken`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the signature is fixed by plan row RG5b; RG6a calls it as is"
-)]
 pub fn fetch_with<H: Http>(
     repo_dir: &Path,
     url: &RemoteUrl,

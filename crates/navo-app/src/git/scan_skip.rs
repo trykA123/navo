@@ -119,10 +119,6 @@ pub(crate) fn confirm(facts: &Facts, fingerprint: impl FnOnce() -> Option<Finger
 }
 
 /// A proof, only when both fingerprints agree and the upstream did not change.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the plan fixes this proof input list"
-)]
 pub(crate) fn proof(
     pre_mark: Option<Mark>,
     pre: Option<Fingerprint>,
