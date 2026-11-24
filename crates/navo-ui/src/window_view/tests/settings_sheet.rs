@@ -82,25 +82,21 @@ fn density(cx: &mut TestAppContext) -> Density {
 }
 
 #[gpui_kit::test]
-fn ctrl_comma_opens_settings_over_the_passive_pane_with_focus_inside(cx: &mut TestAppContext) {
+fn ctrl_comma_opens_settings_as_a_centred_dialog_with_focus_inside(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     assert!(!shows(cx, &rig, "settings-sheet"));
     open(cx, &rig);
     assert!(is_open(cx, &rig));
     assert!(shows(cx, &rig, "settings-sheet"));
     assert!(sheet_has_focus(cx, &rig));
-    let (active, passive) = rig.view.read_with(cx, |view, _| {
-        let active = view.browser.state().focused_pane();
-        let passive = view.panes().into_iter().find(|pane| *pane != active);
-        (active.get(), passive.expect("two panes").get())
-    });
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         let sheet = window.find("settings-sheet").bounds().center().x;
-        let covered = window.find(("list", passive)).bounds();
-        let live = window.find(("list", active)).bounds();
-        assert!(covered.left() <= sheet && sheet <= covered.right());
-        assert!(!(live.left() <= sheet && sheet <= live.right()));
+        let middle = window.viewport_size().width / 2.;
+        assert!(
+            (sheet - middle).abs() <= gpui_kit::px(1.),
+            "{sheet:?} vs {middle:?}"
+        );
     })
     .expect("window");
 }

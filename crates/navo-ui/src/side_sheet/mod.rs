@@ -1,3 +1,6 @@
+//! Side sheet: a drawer beside the active pane, or (floating) a centred dialog over a
+//! scrim; both fade in and out and share one header, body and key-hint footer.
+
 mod frame;
 mod motion;
 mod state;
@@ -72,6 +75,7 @@ pub struct SideSheet {
     status: Option<SharedString>,
     close: Option<(SharedString, CloseHandler)>,
     is_ringed: bool,
+    is_floating: bool,
 }
 
 impl SideSheet {
@@ -87,6 +91,7 @@ impl SideSheet {
             status: None,
             close: None,
             is_ringed: false,
+            is_floating: false,
         }
     }
 
@@ -141,6 +146,14 @@ impl SideSheet {
         self.is_ringed = is_ringed;
         self
     }
+
+    /// Shows the sheet as a centred dialog over a scrim instead of a side drawer: no
+    /// resize grip, and a click on the scrim runs the close handler.
+    #[must_use]
+    pub fn floating(mut self) -> Self {
+        self.is_floating = true;
+        self
+    }
 }
 
 fn entered_at(sheet: &SideSheet, opened: usize, window: &mut Window, cx: &mut App) -> Instant {
@@ -178,15 +191,39 @@ fn look(sheet: &SideSheet, window: &mut Window, cx: &mut App) -> Option<Look> {
     }
 }
 
-fn place(t: &Theme, side: Side, look: Look) -> gpui_kit::Div {
+/// Places a side drawer against its edge at `width`, faded to `look`.
+fn place(t: &Theme, side: Side, look: Look, width: gpui_kit::Pixels) -> gpui_kit::Div {
     let sheet = div().absolute().top_0().bottom_0();
     match side {
         Side::Right => sheet.right_0(),
         Side::Left => sheet.left_0(),
     }
     .opacity(look.opacity)
+    .w(width)
     .rounded(t.radii.sheet)
     .bg(t.surfaces.sheet)
+}
+
+/// Resizes the sheet while its own grip is dragged; drags of another sheet's grip pass by.
+fn resize_on_drag(
+    state: Entity<SheetState>,
+    frame: SheetFrame,
+) -> impl Fn(&DragMoveEvent<DraggedGrip>, &mut Window, &mut App) + 'static {
+    let (owner, side) = (state.entity_id(), frame.side());
+    move |event, _, cx| {
+        if event.drag(cx).0 != owner {
+            return;
+        }
+        let (x, bounds) = (event.event.position.x, event.bounds);
+        let wanted = match side {
+            Side::Right => bounds.right() - x,
+            Side::Left => x - bounds.left(),
+        };
+        state.update(cx, |state, cx| {
+            state.resize_to(wanted, &frame);
+            cx.notify();
+        });
+    }
 }
 
 impl RenderOnce for SideSheet {
@@ -202,42 +239,40 @@ impl RenderOnce for SideSheet {
         let side = self.frame.side();
         let width = self.state.read(cx).width(&self.frame);
         let owner = self.state.entity_id();
-        let (state, frame) = (self.state.clone(), self.frame);
         let shadow = if self.is_ringed {
             t.shadows.sheet_ring.clone()
         } else {
             t.shadows.sheet.clone()
         };
-        let sheet = place(t, side, look)
+        let (base, role) = if self.is_floating {
+            (view::dialog(t), Role::Dialog)
+        } else {
+            (place(t, side, look, width), Role::Complementary)
+        };
+        // A leaving dialog lets clicks through, so its fade never blocks input.
+        let is_leaving = self.is_floating && !self.state.read(cx).is_open();
+        let base = if is_leaving { base } else { base.occlude() };
+        let on_scrim = self.close.as_ref().map(|(_, on_close)| on_close.clone());
+        let on_scrim = on_scrim.filter(|_| !is_leaving);
+        let sheet = base
             .id(self.id)
-            .role(Role::Complementary)
+            .role(role)
             .aria_label(self.label)
             .aria_selected(self.is_ringed)
             .test_support()
-            .occlude()
-            .w(width)
             .flex()
             .flex_col()
             .shadow(shadow)
             .text_color(t.colors.text)
-            .on_drag_move(move |event: &DragMoveEvent<DraggedGrip>, _, cx| {
-                if event.drag(cx).0 != owner {
-                    return;
-                }
-                let (x, bounds) = (event.event.position.x, event.bounds);
-                let wanted = match side {
-                    Side::Right => bounds.right() - x,
-                    Side::Left => x - bounds.left(),
-                };
-                state.update(cx, |state, cx| {
-                    state.resize_to(wanted, &frame);
-                    cx.notify();
-                });
-            })
+            .on_drag_move(resize_on_drag(self.state.clone(), self.frame))
             .child(view::header(t, self.title, self.close))
             .child(view::body(self.body))
-            .children(view::footer(t, self.hints, self.status))
-            .child(view::grip(t, side, owner));
-        sheet.into_any_element()
+            .children(view::footer(t, self.hints, self.status));
+        if self.is_floating {
+            return view::scrim(t, look.opacity, on_scrim)
+                .child(sheet)
+                .into_any_element();
+        }
+        sheet.child(view::grip(t, side, owner)).into_any_element()
     }
 }

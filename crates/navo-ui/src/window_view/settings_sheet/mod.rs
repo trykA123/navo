@@ -405,16 +405,7 @@ impl NavoWindow {
                 let _ = this.update(cx, |view, cx| view.close_settings(window, cx));
             },
         );
-        Some(
-            div()
-                .absolute()
-                .top(t.spacing.xs)
-                .bottom(t.spacing.xs)
-                .left(t.spacing.md)
-                .right(t.spacing.md)
-                .child(sheet)
-                .into_any_element(),
-        )
+        Some(sheet.into_any_element())
     }
 }
 

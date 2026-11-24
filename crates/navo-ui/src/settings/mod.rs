@@ -129,8 +129,11 @@ pub enum SheetEvent {
 
 type Handler = Rc<dyn Fn(&SheetEvent, &mut Window, &mut App)>;
 
+/// Builds the Settings dialog: a floating sheet with the title, `body` and the key hints
+/// that fit the shown page (Shortcuts or a settings section).
 pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) -> SideSheet {
     let sheet = SideSheet::new("settings-sheet", state, frame)
+        .floating()
         .label("Settings")
         .header(SheetTitle);
     if body.shortcuts.is_some() {

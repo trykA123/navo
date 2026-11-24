@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, Pixels, Point, TestAppContext, point};
+use gpui_kit::{
+    AppContext as _, Pixels, Point, TestAppContext, VisualTestContext, point, px, size,
+};
 use navo_core::{Location, OpKind};
 use navo_fs::{CancelToken, Progress};
 
@@ -85,6 +87,8 @@ fn row_under_the_job_card(cx: &mut TestAppContext, rig: &Rig) -> Option<(usize, 
 #[gpui_kit::test]
 fn the_job_card_stays_under_the_settings_sheet(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
+    // A small window makes the centred dialog reach over the job card corner.
+    VisualTestContext::from_window(rig.window, cx).simulate_resize(size(px(900.), px(640.)));
     rig.press(cx, "tab");
     open_settings(cx, &rig);
     add_running_copy(cx, &rig);

@@ -1,9 +1,13 @@
+//! Side sheet parts: header, close button, body, footer, resize grip, and the
+//! scrim and card of the floating (dialog) form.
+
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::component::Icon;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, AppContext, Context, Div, Empty, EntityId, InteractiveElement, IntoElement,
-    ParentElement, Render, Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    MouseButton, ParentElement, Render, Role, SharedString, StatefulInteractiveElement, Styled,
+    Window, div, px,
 };
 
 use super::frame::Side;
@@ -17,6 +21,8 @@ const CLOSE_HEIGHT: f32 = 28.;
 const GRIP_WIDTH: f32 = 12.;
 const GRIP_BAR: (f32, f32) = (4., 36.);
 const GRIP_GROUP: &str = "side-sheet-grip";
+const DIALOG_MAX: (f32, f32) = (1040., 800.);
+const DIALOG_MARGIN: f32 = 24.;
 
 #[derive(Clone, Copy)]
 pub(super) struct DraggedGrip(pub EntityId);
@@ -121,6 +127,45 @@ pub(super) fn header(
                 .children(title),
         )
         .children(close.map(|(key, on_close)| close_button(t, &key, &on_close)))
+}
+
+/// Builds the card of a floating sheet: it fills the scrim's padded area up to
+/// `DIALOG_MAX` logical px, so it shrinks with the window and keeps `DIALOG_MARGIN`.
+pub(super) fn dialog(t: &Theme) -> Div {
+    div()
+        .relative()
+        .w_full()
+        .h_full()
+        .max_w(px(DIALOG_MAX.0))
+        .max_h(px(DIALOG_MAX.1))
+        .rounded(t.radii.sheet)
+        .bg(t.surfaces.sheet)
+}
+
+/// Builds the dimmed layer under a floating sheet; `opacity` carries the fade. With a
+/// close handler it blocks the window and a left click outside the card closes; with
+/// `None` (while leaving) clicks pass through.
+pub(super) fn scrim(
+    t: &Theme,
+    opacity: f32,
+    on_close: Option<CloseHandler>,
+) -> impl ParentElement + IntoElement + use<> {
+    div()
+        .id("side-sheet-scrim")
+        .test_support()
+        .absolute()
+        .inset_0()
+        .p(px(DIALOG_MARGIN))
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(t.surfaces.scrim)
+        .opacity(opacity)
+        .when_some(on_close, |scrim, on_close| {
+            scrim
+                .occlude()
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| on_close(window, cx))
+        })
 }
 
 pub(super) fn body(content: Vec<AnyElement>) -> Div {

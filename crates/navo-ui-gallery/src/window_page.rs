@@ -352,14 +352,18 @@ impl WindowPage {
                 None => sheet_sample::sheet(t, &sheet.state, frame),
             },
         };
+        let (block, inline) = if self.shows_settings() {
+            (px(0.), px(0.))
+        } else {
+            (t.spacing.xs, t.spacing.md)
+        };
         let layer = div()
             .absolute()
-            .top(t.spacing.xs)
-            .bottom(t.spacing.xs)
-            .left(t.spacing.md)
-            .right(t.spacing.md)
-            .child(shown.accent_ring(sheet.shows.is_ringed));
-        Some(layer)
+            .top(block)
+            .bottom(block)
+            .left(inline)
+            .right(inline);
+        Some(layer.child(shown.accent_ring(sheet.shows.is_ringed)))
     }
 
     fn menu(&self, t: &Theme) -> Option<AnyElement> {
