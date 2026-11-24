@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8319057309c78ed7f44becd7d4ec051a81ee0928cd572e7c2ecc4dda088c4eaf # shrinks to spec = Spec { folders: [], files: [(0, 2537), (0, 13101)], existing: [], policy: Skip, kind: Move, workers: 1 }, interruption = Fail(2098643618142368909)
