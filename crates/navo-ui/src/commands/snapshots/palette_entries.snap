@@ -220,6 +220,16 @@ activity.act | ActivityStrip | false
 activity.leave | ActivityStrip | false
 activity.previous_item | ActivityDrawer | false
 activity.next_item | ActivityDrawer | false
+settings.page_appearance | SettingsSheet | false
+settings.page_window | SettingsSheet | false
+settings.page_files | SettingsSheet | false
+settings.page_copy_delete | SettingsSheet | false
+settings.page_search | SettingsSheet | false
+settings.page_viewers | SettingsSheet | false
+settings.page_tools | SettingsSheet | false
+settings.page_tray_clipboard | SettingsSheet | false
+settings.page_keyboard | SettingsSheet | false
+settings.page_about | SettingsSheet | false
 viewer.save | Viewer | true
 viewer.close | Viewer | true
 viewer.edit | Viewer | true

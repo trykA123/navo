@@ -16,6 +16,7 @@ mod paths;
 mod perf;
 mod popup;
 mod retained;
+mod settings_pages;
 mod space;
 mod structured;
 mod tab_menu;
@@ -160,6 +161,7 @@ fn registry() -> impl Iterator<Item = CommandSpec> {
         marks::GROUPS.as_slice(),
         paths::GROUPS.as_slice(),
         overlays::GROUPS.as_slice(),
+        settings_pages::GROUPS.as_slice(),
         viewer::GROUPS.as_slice(),
         space::GROUPS.as_slice(),
         structured::GROUPS.as_slice(),

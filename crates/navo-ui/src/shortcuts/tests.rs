@@ -146,7 +146,7 @@ fn a_key_search_takes_modifiers_in_any_order_and_spaces() {
     for typed in ["f5 ctrl", "F5+CTRL", "ctrl - f5", "ctrl f5", " f5-ctrl "] {
         assert_eq!(shown(&rows, typed), CTRL_F5, "{typed}");
     }
-    let tab = ["tab.previous"];
+    let tab = ["settings.previous_section", "tab.previous"];
     assert_eq!(shown(&rows, "shift+ctrl+tab"), tab);
     assert_eq!(shown(&rows, "tab shift ctrl"), tab);
 }

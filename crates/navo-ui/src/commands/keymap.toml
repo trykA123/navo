@@ -906,11 +906,51 @@ keys = ["space"]
 
 [[bind]]
 command = "settings.next_section"
-keys = ["tab"]
+keys = ["tab", "ctrl-tab", "ctrl-pagedown"]
 
 [[bind]]
 command = "settings.previous_section"
-keys = ["shift-tab"]
+keys = ["shift-tab", "ctrl-shift-tab", "ctrl-pageup"]
+
+[[bind]]
+command = "settings.page_appearance"
+keys = ["ctrl-1"]
+
+[[bind]]
+command = "settings.page_window"
+keys = ["ctrl-2"]
+
+[[bind]]
+command = "settings.page_files"
+keys = ["ctrl-3"]
+
+[[bind]]
+command = "settings.page_copy_delete"
+keys = ["ctrl-4"]
+
+[[bind]]
+command = "settings.page_search"
+keys = ["ctrl-5"]
+
+[[bind]]
+command = "settings.page_viewers"
+keys = ["ctrl-6"]
+
+[[bind]]
+command = "settings.page_tools"
+keys = ["ctrl-7"]
+
+[[bind]]
+command = "settings.page_tray_clipboard"
+keys = ["ctrl-8"]
+
+[[bind]]
+command = "settings.page_keyboard"
+keys = ["ctrl-9"]
+
+[[bind]]
+command = "settings.page_about"
+keys = ["ctrl-0"]
 
 [[bind]]
 command = "settings.edit_value"

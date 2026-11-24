@@ -102,3 +102,22 @@ fn down_from_the_last_keyboard_row_opens_the_shortcut_list_on_the_same_page(
     rig.press(cx, "tab");
     assert!(is_selected(cx, &rig, Section::About));
 }
+
+#[gpui_kit::test]
+fn ctrl_digits_and_ctrl_tab_change_the_page(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    for (key, page) in [
+        ("ctrl-3", Section::Files),
+        ("ctrl-0", Section::About),
+        ("ctrl-tab", Section::Appearance),
+        ("ctrl-pagedown", Section::Window),
+        ("ctrl-shift-tab", Section::Appearance),
+        ("ctrl-pageup", Section::About),
+        ("ctrl-9", Section::Keyboard),
+    ] {
+        rig.press(cx, key);
+        assert!(is_selected(cx, &rig, page), "{key} shows {page:?}");
+    }
+    assert!(rig.view.read_with(cx, |view, _| view.settings.is_open()));
+}

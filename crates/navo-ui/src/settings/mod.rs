@@ -21,6 +21,7 @@ mod index_progress;
 mod inspector;
 mod keyboard_page;
 mod nav;
+mod page_keys;
 mod pages;
 mod row_state;
 mod search_fields;
@@ -147,14 +148,14 @@ pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) 
             .hint(&["↑", "↓"], "Move")
             .hint(&["enter"], "Record")
             .hint(&["ctrl-r"], "Reset")
-            .hint(&["tab"], "Section");
+            .hint(&["ctrl-tab"], "Page");
     }
     let can_reset = body.reset_event().is_some();
     let sheet = sheet
         .body(body)
         .hint(&["↑", "↓"], "Move")
         .hint(&["←", "→"], "Change")
-        .hint(&["tab"], "Section")
+        .hint(&["ctrl-tab"], "Page")
         .hint(&["f3"], "TOML line");
     let sheet = if can_reset {
         sheet.hint(&["f8"], "Reset")
@@ -291,6 +292,7 @@ fn register(root: Div, body: &SettingsBody) -> Div {
         .on_action(move |_: &NextSection, window, cx| next(window, cx))
         .on_action(move |_: &PreviousSection, window, cx| previous(window, cx))
         .on_action(move |_: &CloseSettings, window, cx| close(window, cx));
+    let root = page_keys::register(root, body);
     if body.shortcuts.is_some() {
         return root;
     }

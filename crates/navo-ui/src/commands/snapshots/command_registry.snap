@@ -220,6 +220,16 @@ activity.act | Press the activity button | ActivityStrip
 activity.leave | Back to the file list | ActivityStrip
 activity.previous_item | Previous activity | ActivityDrawer
 activity.next_item | Next activity | ActivityDrawer
+settings.page_appearance | Settings page: Appearance | SettingsSheet
+settings.page_window | Settings page: Window | SettingsSheet
+settings.page_files | Settings page: Files | SettingsSheet
+settings.page_copy_delete | Settings page: Copy and delete | SettingsSheet
+settings.page_search | Settings page: Search | SettingsSheet
+settings.page_viewers | Settings page: Viewers | SettingsSheet
+settings.page_tools | Settings page: Tools | SettingsSheet
+settings.page_tray_clipboard | Settings page: Tray and clipboard | SettingsSheet
+settings.page_keyboard | Settings page: Keyboard | SettingsSheet
+settings.page_about | Settings page: About | SettingsSheet
 viewer.save | Save | Viewer
 viewer.close | Close viewer | Viewer
 viewer.edit | Edit file | Viewer
