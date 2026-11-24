@@ -232,8 +232,7 @@ fn write_using(
             .map_err(|error| SaveError::Failed(error.to_string()))?,
         None => (line_endings(save.text, save.crlf), None),
     };
-    let bytes = encode(&text, &save.encoding)
-        .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
+    let bytes = encode(&text, &save.encoding).map_err(SaveError::Encode)?;
     replace(&path, &bytes)
         .map_err(|error| SaveError::Failed(format!("Could not save: {error}")))?;
     Ok(Saved {

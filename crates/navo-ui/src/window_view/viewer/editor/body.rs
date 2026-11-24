@@ -7,7 +7,6 @@ use navo_core::encoding::TextEncoding;
 use super::{EditorView, SplitChoice};
 use crate::prelude::*;
 use crate::settings::Values;
-use crate::window_view::viewer::FileText;
 use crate::window_view::viewer::body::{
     BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody,
 };
@@ -16,6 +15,7 @@ use crate::window_view::viewer::parts::{MARKDOWN_TEXT, PartSet, TEXT};
 use crate::window_view::viewer::search::bar::{FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS};
 use crate::window_view::viewer::syntax::Highlight;
 use crate::window_view::viewer::{CopyPathLine, FindSelection, OpenGoTo, ShowHex, ToggleFollow};
+use crate::window_view::viewer::{FileText, SaveAs};
 
 pub(in crate::window_view::viewer) struct EditorFile {
     pub file: FileText,
@@ -211,6 +211,15 @@ impl ViewerBody for EditorBody {
 
     fn encoding(&self, cx: &App) -> Option<TextEncoding> {
         Some(self.0.read(cx).encoding)
+    }
+
+    fn save_as(&self, cx: &App) -> Option<SaveAs> {
+        let view = self.0.read(cx);
+        view.editing.then_some(view.save_as)
+    }
+
+    fn set_save_as(&self, plan: SaveAs, cx: &mut App) {
+        self.0.update(cx, |view, cx| view.set_save_as(plan, cx));
     }
 
     fn language(&self, cx: &App) -> Option<SharedString> {

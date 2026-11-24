@@ -121,6 +121,9 @@ impl NavoWindow {
     }
 
     fn refresh_after_save(&mut self, cx: &mut Context<Self>) {
+        if let Some(viewer) = self.viewer.as_mut() {
+            viewer.adopt_saved_encoding(cx);
+        }
         let _ = self.browser.command(&Command::PaneRefresh);
         cx.notify();
     }

@@ -1,4 +1,4 @@
-use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE, WINDOWS_1252};
+use encoding_rs::{EUC_JP, Encoding, SHIFT_JIS, UTF_8, UTF_16BE, UTF_16LE, WINDOWS_1252};
 
 use super::{found, utf16};
 use crate::encoding::{DetectedBy, EncodeError, PICKER, TextEncoding, decode_as, encode};
@@ -85,6 +85,40 @@ fn an_unmappable_character_names_its_line() {
             character: '日'
         })
     );
+}
+
+#[test]
+fn shift_jis_refuses_a_yen_sign_it_would_write_as_a_backslash() {
+    let refused = encode("\u{A5}100\n", &plain(SHIFT_JIS));
+    assert_eq!(
+        refused,
+        Err(EncodeError::Unmappable {
+            line: 1,
+            character: '\u{A5}'
+        })
+    );
+}
+
+#[test]
+fn euc_jp_refuses_a_minus_sign_it_would_read_back_as_a_fullwidth_hyphen() {
+    let refused = encode("a\nb \u{2212} c\n", &plain(EUC_JP));
+    assert_eq!(
+        refused,
+        Err(EncodeError::Unmappable {
+            line: 2,
+            character: '\u{2212}'
+        })
+    );
+}
+
+#[test]
+fn ascii_and_latin1_text_still_round_trips_in_legacy_encodings() {
+    let latin = "café déjà 100\\\n";
+    let bytes = encode(latin, &plain(WINDOWS_1252)).unwrap();
+    assert_eq!(decode_as(&bytes, WINDOWS_1252).text, latin);
+    let ascii = "path\\to 100~\n";
+    let bytes = encode(ascii, &plain(SHIFT_JIS)).unwrap();
+    assert_eq!(bytes, ascii.as_bytes());
 }
 
 #[test]

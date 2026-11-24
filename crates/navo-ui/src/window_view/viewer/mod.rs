@@ -28,6 +28,7 @@ mod paged;
 pub(in crate::window_view) mod parts;
 mod pdf;
 mod rich_header;
+mod save_as;
 mod search;
 mod space;
 mod swap;
@@ -75,6 +76,7 @@ pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, Vi
 pub use menu::viewer_menu;
 pub use paged::{PagedKind, PagedView};
 pub use pdf::{OpenPdf, PdfLook, PdfPages, PdfStart, PdfView};
+pub use save_as::{LineEnding, SaveAs};
 pub use search::memory::MemoryLink;
 pub(in crate::window_view) use shared_actions::*;
 use sidewise_ui::window_view::viewer::shared_actions;

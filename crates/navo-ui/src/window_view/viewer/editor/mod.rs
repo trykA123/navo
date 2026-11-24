@@ -22,6 +22,7 @@ pub(super) use body::{EditorBody, EditorFile};
 pub(super) use preview::SplitChoice;
 
 use super::body::{Carried, Host};
+use super::save_as::SaveAs;
 use super::search::Marking;
 use super::search::crlf::CrlfOffsets;
 use super::search::memory::{MemoryLink, attach_memory};
@@ -44,9 +45,12 @@ pub(super) struct EditorView {
     crlf: bool,
     ends: Option<Arc<LineEnds>>,
     encoding: TextEncoding,
+    save_as: SaveAs,
     stamp: Option<FileStamp>,
     persists: bool,
     dirty: bool,
+    /// The text differs from the file on disk; a pending conversion alone leaves it false.
+    edited: bool,
     revision: u64,
     overwrite: bool,
     saving: Option<Task<()>>,
@@ -161,9 +165,11 @@ impl EditorView {
             crlf: file.crlf,
             ends: file.ends.clone(),
             encoding: file.encoding,
+            save_as: SaveAs::default(),
             stamp: file.stamp,
             persists,
             dirty: false,
+            edited: false,
             revision: 0,
             overwrite: false,
             saving: None,
@@ -241,6 +247,7 @@ impl EditorView {
 
     fn text_changed(&mut self, cx: &mut Context<Self>) {
         self.dirty = true;
+        self.edited = true;
         self.revision += 1;
         self.marking.freeze_bookmarks();
         self.overwrite = false;

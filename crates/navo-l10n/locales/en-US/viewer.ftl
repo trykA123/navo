@@ -180,3 +180,15 @@ editor-regex-too-complex = Pattern is too complex
 editor-regex-find-all = Find all uses plain text. Turn off Regex (Alt+R) first.
 editor-regex-capped = { $shown }+ matches
 editor-regex-capped-place = { $place } of { $shown }+
+viewer-save-as = Save as
+viewer-save-as-encoding = Save as { $name }
+viewer-line-endings = Line endings
+viewer-line-endings-loaded = Line endings as loaded
+viewer-line-endings-lf = Unix line endings (LF)
+viewer-line-endings-crlf = Windows line endings (CRLF)
+viewer-save-unmappable = Could not save: '{ $character }' on line { $line } cannot be saved in this encoding. Nothing was written.
+viewer-save-as-pending = Ctrl+S saves it as { $name } with { $endings ->
+    [lf] LF line endings
+    [crlf] CRLF line endings
+   *[loaded] the loaded line endings
+}.

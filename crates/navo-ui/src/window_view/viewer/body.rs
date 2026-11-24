@@ -8,6 +8,7 @@ use navo_core::marks::{Bookmarks, MarkSet};
 
 use super::FileHooks;
 use super::parts::PartSet;
+use super::save_as::SaveAs;
 use crate::prelude::*;
 use crate::settings::Values;
 
@@ -132,6 +133,14 @@ pub trait ViewerBody: Any {
     fn encoding(&self, _: &App) -> Option<TextEncoding> {
         None
     }
+
+    /// The conversion the next save applies, or None when the body is not editing text.
+    fn save_as(&self, _: &App) -> Option<SaveAs> {
+        None
+    }
+
+    /// Sets the conversion the next save applies; a body that cannot save ignores it.
+    fn set_save_as(&self, _: SaveAs, _: &mut App) {}
 
     /// The language name the body highlights with, or None when it has no language.
     fn language(&self, _: &App) -> Option<SharedString> {

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use navo_core::encoding::{Encoding, TextEncoding};
+use navo_core::encoding::{EncodeError, Encoding, TextEncoding};
 use navo_core::line_ends::LineEnds;
 use navo_core::marks::{Bookmarks, MarkSet, SearchHistory};
 use navo_core::paging::{ByteSource, LineIndex, Needle};
@@ -65,6 +65,8 @@ impl From<Option<FileStamp>> for Saved {
 pub enum SaveError {
     Changed,
     Failed(String),
+    /// The text holds a character the target encoding cannot write or would read back changed.
+    Encode(EncodeError),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

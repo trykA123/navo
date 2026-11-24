@@ -1,5 +1,6 @@
 use std::fs;
 
+use navo_core::encoding::EncodeError;
 use navo_ui::window_view::{FileText, Save, SaveError};
 
 use super::at;
@@ -83,7 +84,13 @@ fn a_character_the_encoding_cannot_hold_fails_the_save_and_keeps_the_file() {
     };
     let saved = write(&at(&file), &save);
     assert!(
-        matches!(&saved, Err(SaveError::Failed(message)) if message.contains('日') && message.contains("line 2")),
+        matches!(
+            saved,
+            Err(SaveError::Encode(EncodeError::Unmappable {
+                line: 2,
+                character: '日'
+            }))
+        ),
         "{saved:?}"
     );
     assert_eq!(fs::read(&file).unwrap(), bytes);

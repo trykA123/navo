@@ -67,7 +67,7 @@ pub struct Decoded {
     pub lossless: bool,
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, thiserror::Error, PartialEq, Eq)]
 pub enum EncodeError {
     #[error("'{character}' on line {line} cannot be saved in this encoding")]
     Unmappable { line: u64, character: char },

@@ -7,6 +7,7 @@ mod editor_cursors;
 mod editor_diagnostics;
 mod editor_find;
 mod editor_outline;
+mod editor_save;
 pub(in crate::window_view::viewer) mod elf_rich;
 mod elf_view;
 mod encoding;
