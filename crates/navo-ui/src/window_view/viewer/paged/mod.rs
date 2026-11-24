@@ -203,6 +203,11 @@ impl PagedView {
             .flatten()
     }
 
+    /// True when the line index failed, so `top_line` stays unknown.
+    pub(super) fn index_failed(&self) -> bool {
+        self.index_failed
+    }
+
     pub(super) fn needs_whole_file(&self) -> bool {
         self.source.layout().needs_whole_file()
     }
@@ -329,6 +334,22 @@ impl PagedView {
     pub(super) fn bar_text(&self, cx: &App) -> Option<String> {
         let bar = self.find.bar.as_ref()?;
         Some(bar.input.read(cx).value().to_string())
+    }
+}
+
+#[cfg(test)]
+impl PagedView {
+    /// Delivers a finished line index as the index job does when it ends.
+    pub(in crate::window_view::viewer) fn finish_index(
+        &mut self,
+        index: navo_core::paging::LineIndex,
+        cx: &mut Context<Self>,
+    ) {
+        let done = IndexDone {
+            result: Ok(Some(index)),
+            line_count: None,
+        };
+        self.index_message(IndexMessage::Done(done), cx);
     }
 }
 

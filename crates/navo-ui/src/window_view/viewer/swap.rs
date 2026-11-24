@@ -38,9 +38,8 @@ pub(super) struct Swap {
 /// The built editor, laid out unseen under the paged view until its top line is set.
 struct Staged {
     body: EditorBody,
-    /// The paged view's top (byte offset) and its 1-based line the editor is pinned to.
+    /// The paged view's top (byte offset) the editor is pinned to.
     top: u64,
-    line: u64,
     /// True while the layout, pin and show frames are under way.
     pinning: bool,
     /// Pins that found no layout yet.
@@ -73,13 +72,6 @@ fn is_busy(viewer: &Viewer, paged: &Entity<PagedView>, cx: &App) -> bool {
         .is_some_and(|body| body.is_typing(cx) || matches!(body.keys(cx), BodyKeys::Modal(_)));
     let view = paged.read(cx);
     typing || view.is_following() || view.kind != PagedKind::Text
-}
-
-/// The 1-based line of byte `top` in `text`, counted when the paged line index has not reached it.
-fn counted_line(text: &str, top: u64) -> u64 {
-    let end = usize::try_from(top).unwrap_or(usize::MAX).min(text.len());
-    let newlines = text.as_bytes()[..end].iter().filter(|byte| **byte == b'\n');
-    newlines.count() as u64 + 1
 }
 
 /// Scrolls a laid-out editor so buffer row `row` is its top row; false before the first layout.
@@ -181,8 +173,14 @@ impl NavoWindow {
             return;
         }
         let paged = swap.paged.clone();
-        if !is_busy(viewer, &paged, cx) {
-            self.stage(window, cx);
+        let view = paged.read(cx);
+        let line = view.top_line();
+        if line.is_none() && view.index_failed() {
+            viewer.swap = None;
+            return;
+        }
+        if let Some(line) = line.filter(|_| !is_busy(viewer, &paged, cx)) {
+            self.stage(line, window, cx);
             return;
         }
         if let Some(swap) = viewer.swap.as_mut().filter(|swap| swap.retry.is_none()) {
@@ -192,9 +190,9 @@ impl NavoWindow {
         }
     }
 
-    /// Builds the editor once, then pins it to the paged view's top line while it is drawn
-    /// hidden; the paged view keeps the focus until the editor is shown.
-    fn stage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Builds the editor once, then pins it to the paged view's 1-based top `line` while it is
+    /// drawn hidden; the paged view keeps the focus until the editor is shown.
+    fn stage(&mut self, line: u64, window: &mut Window, cx: &mut Context<Self>) {
         let Some(paged) = self.swap_mut().map(|swap| swap.paged.clone()) else {
             return;
         };
@@ -206,12 +204,10 @@ impl NavoWindow {
         let Some(staged) = self.staged_mut().filter(|staged| !staged.pinning) else {
             return;
         };
-        let view = paged.read(cx);
-        staged.top = view.top;
-        staged.line = view.top_line().unwrap_or(staged.line);
+        staged.top = paged.read(cx).top;
         staged.pinning = true;
-        staged.body.go_to_line(staged.line, window, cx);
-        let row = usize::try_from(staged.line.saturating_sub(1)).unwrap_or(usize::MAX);
+        staged.body.go_to_line(line, window, cx);
+        let row = usize::try_from(line.saturating_sub(1)).unwrap_or(usize::MAX);
         pin_then_show(this, staged.body.editor(cx), row, window);
         if focused {
             window.focus(&paged.focus_handle(cx), cx);
@@ -219,7 +215,7 @@ impl NavoWindow {
         cx.notify();
     }
 
-    /// Builds the hidden editor from the read text, with the paged view's marks and top line.
+    /// Builds the hidden editor from the read text, with the paged view's marks.
     fn build(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(viewer) = self.viewer.as_mut() else {
             return;
@@ -231,8 +227,6 @@ impl NavoWindow {
             return;
         };
         let top = swap.paged.read(cx).top;
-        let line = swap.paged.read(cx).top_line();
-        let line = line.unwrap_or_else(|| counted_line(&file.text, top));
         viewer.carried = viewer.body.as_ref().and_then(|body| body.carry(cx));
         let Some(viewer) = self.viewer.as_ref() else {
             return;
@@ -252,7 +246,6 @@ impl NavoWindow {
             swap.staged = Some(Staged {
                 body,
                 top,
-                line,
                 pinning: false,
                 misses: 0,
             });
@@ -261,7 +254,14 @@ impl NavoWindow {
 
     /// Shows the staged editor once its pin held on an unmoved paged view; otherwise pins it
     /// again, or waits while the paged view is busy. After three missed layouts it shows anyway.
-    fn show_staged(&mut self, pinned: bool, window: &mut Window, cx: &mut Context<Self>) {
+    /// `pin` is the editor that was pinned and whether its pin held; a late frame for an editor
+    /// that is no longer staged (another file) is ignored.
+    fn show_staged(
+        &mut self,
+        (editor, pinned): (&Entity<EditorState>, bool),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(swap) = self.swap_mut() else {
             return;
         };
@@ -269,6 +269,9 @@ impl NavoWindow {
         let Some(staged) = swap.staged.as_mut() else {
             return;
         };
+        if staged.body.editor(cx) != *editor {
+            return;
+        }
         staged.pinning = false;
         staged.misses += u8::from(!pinned);
         let ready = pinned || staged.misses >= 3;
@@ -343,14 +346,21 @@ fn pin_then_show(
     window.on_next_frame(move |window, _| {
         window.on_next_frame(move |window, cx| {
             let pinned = editor.update(cx, |state, cx| scroll_to_row(state, row, cx));
-            show_next_frame(this, pinned, window);
+            show_next_frame(this, editor, pinned, window);
         });
     });
 }
 
-/// Shows the staged editor at the start of the next frame.
-fn show_next_frame(this: WeakEntity<NavoWindow>, pinned: bool, window: &Window) {
+/// Shows the staged `editor` at the start of the next frame, if it is still the staged one.
+fn show_next_frame(
+    this: WeakEntity<NavoWindow>,
+    editor: Entity<EditorState>,
+    pinned: bool,
+    window: &Window,
+) {
     window.on_next_frame(move |window, cx| {
-        let _ = this.update(cx, |view, cx| view.show_staged(pinned, window, cx));
+        let _ = this.update(cx, |view, cx| {
+            view.show_staged((&editor, pinned), window, cx)
+        });
     });
 }
