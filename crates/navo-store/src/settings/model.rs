@@ -238,6 +238,7 @@ pub struct Search {
     pub network: bool,
     pub removable: bool,
     pub remember: bool,
+    /// What Alt+F7 opens; the command palette by default.
     pub alt_f7_opens: AltF7Opens,
 }
 
@@ -322,8 +323,10 @@ pub enum PopUpPosition {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AltF7Opens {
+    /// The command palette opens in find mode.
     #[default]
     Palette,
+    /// The classic Find dialog opens.
     Classic,
 }
 
