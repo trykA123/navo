@@ -280,6 +280,7 @@ cmd-editor-leave-preview = Leave Markdown preview
 cmd-editor-add-cursor-above = Add cursor above
 cmd-editor-add-cursor-below = Add cursor below
 cmd-editor-toggle-soft-wrap = Turn soft wrap on or off
+cmd-editor-outline = Go to symbol in file
 cmd-editor-keep-matching-lines = Keep matching lines
 cmd-editor-remove-matching-lines = Remove matching lines
 cmd-editor-copy-matching-lines = Copy matching lines

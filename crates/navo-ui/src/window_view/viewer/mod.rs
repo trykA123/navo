@@ -24,6 +24,7 @@ mod memory;
 mod menu;
 mod modes;
 mod open;
+mod outline;
 mod paged;
 pub(in crate::window_view) mod parts;
 mod pdf;

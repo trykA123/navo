@@ -1438,6 +1438,10 @@ context = "Editor"
 command = "editor.toggle_soft_wrap"
 keys = ["alt-z"]
 
+[[bind]]
+command = "editor.outline"
+keys = ["ctrl-shift-o"]
+
 # MarkdownPreview
 
 [[bind]]

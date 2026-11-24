@@ -270,6 +270,11 @@ pub(super) const GROUPS: [Group; 6] = [
                 "cmd-editor-toggle-soft-wrap",
             ),
             (
+                "viewer::ShowOutline",
+                "editor.outline",
+                "cmd-editor-outline",
+            ),
+            (
                 "viewer::KeepMatchingLines",
                 "editor.keep_matching_lines",
                 "cmd-editor-keep-matching-lines",

@@ -247,6 +247,7 @@ editor.focus_preview | f6 | Viewer
 editor.next_problem | f8 | Editor
 editor.previous_problem | shift-f8 | Editor
 editor.toggle_soft_wrap | alt-z | Editor
+editor.outline | ctrl-shift-o | Editor
 editor.leave_preview | escape | MarkdownPreview
 editor.leave_preview | f6 | MarkdownPreview
 find.older_search | up | ViewerFind > Input

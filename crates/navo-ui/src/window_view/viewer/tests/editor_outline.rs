@@ -1,11 +1,13 @@
-//! F3 editor folding: files with a syntax highlighter get fold candidates from the
-//! grammar; plain text gets none.
+//! F3 editor folding and outline: files with a syntax highlighter get fold candidates from the
+//! grammar, plain text gets none; Ctrl+Shift+O lists the file's symbols and jumps to one.
 
 use std::sync::Arc;
 
-use gpui_kit::{AnyWindowHandle, Entity, TestAppContext};
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, MouseButton, TestAppContext};
 use navo_fs::FakeFs;
 
+use super::menu::{click_with, press_key, rows};
 use super::{Setup, editor_of, redraw, window_on};
 use crate::window_view::NavoWindow;
 use crate::window_view::tests::press;
@@ -73,4 +75,124 @@ fn markdown_headings_offer_a_fold(cx: &mut TestAppContext) {
 fn plain_text_offers_no_fold(cx: &mut TestAppContext) {
     let lines = fold_lines(cx, "notes.txt", "fn a() {\n    1\n}\n");
     assert!(lines.is_empty(), "{lines:?}");
+}
+
+const RUST: &str =
+    "struct Point {\n    x: i32,\n}\n\nfn alpha() {}\n\nimpl Point {\n    fn beta(&self) {}\n}\n";
+
+/// The (name, line) rows of the open outline popup, empty when none is open.
+fn outline_rows(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> Vec<(String, String)> {
+    view.read_with(cx, |view, cx| {
+        let menu = view.viewer_menu_view()?;
+        let items = menu.read(cx).menu().items.clone();
+        let rows = items.into_iter().map(|item| {
+            let line = item.accelerator.unwrap_or_default();
+            (item.text, line)
+        });
+        Some(rows.collect())
+    })
+    .unwrap_or_default()
+}
+
+/// Opens `name` in the editor, presses Ctrl+Shift+O and returns the outline rows.
+fn outline_of(cx: &mut TestAppContext, name: &str, text: &str) -> Vec<(String, String)> {
+    let (window, view) = open_in_editor(cx, name, text);
+    press(cx, window, &view, "ctrl-shift-o");
+    outline_rows(cx, &view)
+}
+
+/// Turns `(name, line)` pairs into owned rows for comparing with `outline_rows`.
+fn want(rows: &[(&str, u32)]) -> Vec<(String, String)> {
+    rows.iter()
+        .map(|(name, line)| ((*name).to_owned(), line.to_string()))
+        .collect()
+}
+
+/// The open editor's cursor line (0-based).
+fn cursor_line(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> u32 {
+    let editor = editor_of(cx, view).expect("the text editor is open");
+    editor.read_with(cx, |state, _| state.cursor_position().line)
+}
+
+#[gpui_kit::test]
+fn the_rust_outline_lists_items_with_their_lines(cx: &mut TestAppContext) {
+    let rows = outline_of(cx, "lib.rs", RUST);
+    let expected = [
+        ("Point", 1),
+        ("x", 2),
+        ("alpha", 5),
+        ("impl Point", 7),
+        ("beta", 8),
+    ];
+    assert_eq!(rows, want(&expected));
+}
+
+#[gpui_kit::test]
+fn the_python_outline_lists_classes_and_defs(cx: &mut TestAppContext) {
+    let text = "class Shape:\n    def area(self):\n        return 0\n\ndef main():\n    pass\n";
+    let rows = outline_of(cx, "run.py", text);
+    assert_eq!(rows, want(&[("Shape", 1), ("area", 2), ("main", 5)]));
+}
+
+#[gpui_kit::test]
+fn the_json_outline_lists_keys(cx: &mut TestAppContext) {
+    let text = "{\n  \"name\": \"navo\",\n  \"deps\": {\n    \"gpui\": 1\n  }\n}\n";
+    let rows = outline_of(cx, "data.json", text);
+    assert_eq!(rows, want(&[("name", 2), ("deps", 3), ("gpui", 4)]));
+}
+
+#[gpui_kit::test]
+fn the_markdown_outline_lists_headings(cx: &mut TestAppContext) {
+    let rows = outline_of(cx, "notes.md", "# Intro\n\ntext\n\n## Usage\n\nmore\n");
+    assert_eq!(rows, want(&[("Intro", 1), ("Usage", 5)]));
+}
+
+#[gpui_kit::test]
+fn typing_narrows_the_outline_and_enter_jumps_to_the_symbol(cx: &mut TestAppContext) {
+    let (window, view) = open_in_editor(cx, "lib.rs", RUST);
+    press(cx, window, &view, "ctrl-shift-o");
+    assert_eq!(rows(cx, window).len(), 5, "{:?}", rows(cx, window));
+    cx.update_window(window, |_, window, cx| window.input("beta", cx))
+        .expect("window");
+    cx.run_until_parked();
+    assert_eq!(rows(cx, window).len(), 1, "{:?}", rows(cx, window));
+    press_key(cx, window, "enter");
+    assert!(
+        outline_rows(cx, &view).is_empty(),
+        "Enter closes the outline"
+    );
+    assert_eq!(cursor_line(cx, &view), 7);
+}
+
+#[gpui_kit::test]
+fn escape_closes_the_outline_and_a_click_jumps(cx: &mut TestAppContext) {
+    let (window, view) = open_in_editor(cx, "lib.rs", RUST);
+    press(cx, window, &view, "ctrl-shift-o");
+    press_key(cx, window, "escape");
+    assert!(outline_rows(cx, &view).is_empty(), "Esc closes the outline");
+    assert_eq!(cursor_line(cx, &view), 0);
+    press(cx, window, &view, "ctrl-shift-o");
+    let at = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let mut root = window.within("context-menu");
+            root.within(("menu-level", 0usize))
+                .find(("menu-row", 2usize))
+                .bounds()
+                .center()
+        })
+        .expect("window");
+    click_with(cx, window, (MouseButton::Left, at), true);
+    click_with(cx, window, (MouseButton::Left, at), false);
+    redraw(cx, window);
+    assert!(
+        outline_rows(cx, &view).is_empty(),
+        "a click closes the outline"
+    );
+    assert_eq!(cursor_line(cx, &view), 4);
+}
+
+#[gpui_kit::test]
+fn plain_text_has_no_outline(cx: &mut TestAppContext) {
+    assert!(outline_of(cx, "notes.txt", "fn a() {}\n").is_empty());
 }

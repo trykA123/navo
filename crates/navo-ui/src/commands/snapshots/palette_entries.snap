@@ -292,6 +292,7 @@ editor.previous_problem | Viewer | true
 editor.add_cursor_above | Editor | true
 editor.add_cursor_below | Editor | true
 editor.toggle_soft_wrap | Editor | true
+editor.outline | Editor | true
 editor.keep_matching_lines | Editor | true
 editor.remove_matching_lines | Editor | true
 editor.copy_matching_lines | Editor | true

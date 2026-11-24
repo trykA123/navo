@@ -7,6 +7,7 @@ use super::ViewOp;
 use crate::prelude::*;
 use crate::settings::Field;
 use crate::window_view::NavoWindow;
+use crate::window_view::viewer::keys::ShowOutline;
 use crate::window_view::viewer::{
     Back, ChooseEncoding, ChooseLanguage, KeepViewDefault, ResetView, RightDrawer, ShowLineEnds,
     ToggleCharts, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip, ToggleOpensInspector,
@@ -47,6 +48,9 @@ impl NavoWindow {
             }))
             .on_action(cx.listener(|view, _: &ToggleSoftWrap, window, cx| {
                 view.toggle_soft_wrap(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &ShowOutline, window, cx| {
+                view.open_outline(window, cx);
             }))
             .on_action(cx.listener(|view, _: &RightDrawer, window, cx| {
                 view.right_drawer(window, cx);

@@ -292,6 +292,7 @@ editor.previous_problem | Previous problem | Viewer
 editor.add_cursor_above | Add cursor above | Editor
 editor.add_cursor_below | Add cursor below | Editor
 editor.toggle_soft_wrap | Turn soft wrap on or off | Editor
+editor.outline | Go to symbol in file | Editor
 editor.keep_matching_lines | Keep matching lines | Editor
 editor.remove_matching_lines | Remove matching lines | Editor
 editor.copy_matching_lines | Copy matching lines | Editor
