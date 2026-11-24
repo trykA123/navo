@@ -137,9 +137,17 @@ mod tests {
 
     #[test]
     fn a_registered_profile_is_removed_twice_in_a_row() {
+        let name: Vec<u16> = CONTAINER_NAME.encode_utf16().chain([0]).collect();
+        register_profile().unwrap();
+        // SAFETY: `name` is NUL-terminated and lives for the call.
+        let first = unsafe { DeleteAppContainerProfile(name.as_ptr()) };
+        assert_eq!(
+            first, 0,
+            "a registered profile is deleted: {:#010x}",
+            first as u32
+        );
         register_profile().unwrap();
         assert_eq!(remove_pdf_container_profile(), Ok(()));
-        let name: Vec<u16> = CONTAINER_NAME.encode_utf16().chain([0]).collect();
         // SAFETY: `name` is NUL-terminated and lives for the call.
         let hr = unsafe { DeleteAppContainerProfile(name.as_ptr()) };
         eprintln!(
@@ -147,5 +155,6 @@ mod tests {
             hr as u32
         );
         assert_eq!(profile_removal(hr), Ok(()), "{:#010x}", hr as u32);
+        assert_eq!(remove_pdf_container_profile(), Ok(()));
     }
 }
