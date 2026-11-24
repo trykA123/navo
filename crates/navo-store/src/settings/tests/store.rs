@@ -558,6 +558,23 @@ fn an_explicit_fkey_bar_true_in_the_file_still_shows_the_bar() {
 }
 
 #[test]
+fn window_view_defaults_hide_the_button_bar() {
+    let dir = tmp();
+    let path = settings_file(&dir);
+    write(
+        &path,
+        "[window.view]\nbutton-bar = true\nbutton-bar-names = true\n",
+    );
+    let (store, _) = SettingsStore::load(&path);
+    assert!(store.current().window.view.button_bar);
+    assert!(store.current().window.view.button_bar_names);
+    let other = tmp();
+    let (empty, _) = SettingsStore::load(&settings_file(&other));
+    assert!(!empty.current().window.view.button_bar);
+    assert!(!empty.current().window.view.button_bar_names);
+}
+
+#[test]
 fn hiding_a_window_part_writes_its_key_and_keeps_comments() {
     let dir = tmp();
     let path = settings_file(&dir);

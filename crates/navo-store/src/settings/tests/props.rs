@@ -111,13 +111,15 @@ fn automotive() -> impl Strategy<Value = Automotive> {
 }
 
 fn window() -> impl Strategy<Value = WindowSettings> {
-    (any::<[bool; 12]>(), any::<[u16; 3]>()).prop_map(|(flags, widths)| {
+    (any::<[bool; 14]>(), any::<[u16; 3]>()).prop_map(|(flags, widths)| {
         let [
             tabs_with_one,
             path_bar,
             drive_button,
             title_search,
             fkey_bar,
+            button_bar,
+            button_bar_names,
             icons,
             ext_column,
             size_column,
@@ -134,6 +136,8 @@ fn window() -> impl Strategy<Value = WindowSettings> {
                 drive_button,
                 title_search,
                 fkey_bar,
+                button_bar,
+                button_bar_names,
                 icons,
                 ext_column,
                 size_column,
