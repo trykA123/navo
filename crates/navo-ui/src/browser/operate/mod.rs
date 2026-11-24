@@ -92,23 +92,8 @@ impl Browser {
             Box::new(move |cancel| {
                 let scan = (provider.as_ref(), scanner.as_deref());
                 let result = stream::plan_scanned(&mut request, scan, cancel).map(|plan| {
-                    let (retain_deletes, cannot_retain) = retain::drive_retention(
-                        provider.as_ref(),
-                        &plan,
-                        &request,
-                        retain_deletes.as_ref(),
-                    );
-                    PlannedOp {
-                        clashes: clashes::clashes(provider.as_ref(), &plan),
-                        plan,
-                        retain_deletes,
-                        cannot_retain,
-                        slow_volumes: queue::slow_volumes(
-                            request.sources.iter().chain(request.target.iter()),
-                            &slow,
-                        ),
-                        target_class: verify::target_class(class_of, request.target.as_ref()),
-                    }
+                    let facts = (retain_deletes.as_ref(), &slow, class_of);
+                    retain::planned_op(provider.as_ref(), plan, &request, facts)
                 });
                 let _ = sender.send(Message::Job(JobUpdate::Planned {
                     request: Box::new(request),

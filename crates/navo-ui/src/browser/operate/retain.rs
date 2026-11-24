@@ -7,8 +7,34 @@ use navo_fs::ProviderOps;
 
 use navo_retention::KeepCheck;
 
-use super::types::{Ended, KeepOld, LogRefusal, NoKeep, OpRequest, PendingOp, RetainDeletes};
+use super::queue::{self, SlowVolume};
+use super::types::{
+    ClassOf, Ended, KeepOld, LogRefusal, NoKeep, OpRequest, PendingOp, PlannedOp, RetainDeletes,
+};
+use super::{clashes, verify};
 use crate::browser::{Browser, RenameReport};
+
+/// Builds what the confirm dialog shows for a finished plan: its clashes, the retention it runs
+/// with, the slow volumes it touches and the target's drive class. `facts` is (retention, slow
+/// volume check, drive classifier).
+pub(super) fn planned_op(
+    ops: &dyn ProviderOps,
+    plan: OperationPlan,
+    request: &OpRequest,
+    facts: (Option<&RetainDeletes>, &SlowVolume, ClassOf),
+) -> PlannedOp {
+    let (retain, slow, class_of) = facts;
+    let (retain_deletes, cannot_retain) = drive_retention(ops, &plan, request, retain);
+    let places = request.sources.iter().chain(request.target.iter());
+    PlannedOp {
+        clashes: clashes::clashes(ops, &plan),
+        plan,
+        retain_deletes,
+        cannot_retain,
+        slow_volumes: queue::slow_volumes(places, slow),
+        target_class: verify::target_class(class_of, request.target.as_ref()),
+    }
+}
 
 /// The retention a planned job runs with, and why the dialog warns that its drive keeps nothing.
 /// A delete checks every source folder (AD14: one full or unsupported drive, or a failed check,
