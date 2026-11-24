@@ -328,6 +328,26 @@ pub(super) const GROUPS: [Group; 6] = [
             ),
             ("viewer::CopyImage", "image.copy", "cmd-image-copy"),
             (
+                "viewer::ToggleEyedropper",
+                "image.eyedropper",
+                "cmd-image-eyedropper",
+            ),
+            (
+                "viewer::CopyColourHex",
+                "image.copy_hex",
+                "cmd-image-copy-hex",
+            ),
+            (
+                "viewer::CopyColourRgb",
+                "image.copy_rgb",
+                "cmd-image-copy-rgb",
+            ),
+            (
+                "viewer::CopyColourOklch",
+                "image.copy_oklch",
+                "cmd-image-copy-oklch",
+            ),
+            (
                 "viewer::CopyFilePath",
                 "image.copy_path",
                 "cmd-image-copy-path",

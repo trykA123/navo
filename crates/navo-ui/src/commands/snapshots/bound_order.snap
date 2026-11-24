@@ -264,6 +264,7 @@ image.zoom_out | - | Image
 image.toggle_info | i | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
+image.eyedropper | e | Image
 viewer.go_to_start | home | Pdf
 viewer.go_to_end | end | Pdf
 viewer.line_up | up | CompareView

@@ -1499,6 +1499,10 @@ keys = ["ctrl-c"]
 command = "image.copy_path"
 keys = ["ctrl-shift-c"]
 
+[[bind]]
+command = "image.eyedropper"
+keys = ["e"]
+
 # Pdf
 
 [[bind]]

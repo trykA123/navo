@@ -130,7 +130,9 @@ impl ImageView {
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> ObservedElement<Stateful<Div>> {
-        let cursor = if self.drag.is_some() {
+        let cursor = if self.eyedropper.is_on {
+            CursorStyle::Crosshair
+        } else if self.drag.is_some() {
             CursorStyle::ClosedHand
         } else {
             CursorStyle::OpenHand
@@ -151,6 +153,9 @@ impl ImageView {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|view, event: &MouseDownEvent, _, cx| {
+                    if view.eyedropper.is_on {
+                        return view.pick_pixel(event.position, cx);
+                    }
                     view.drag = Some(event.position);
                     cx.notify();
                 }),
@@ -164,7 +169,16 @@ impl ImageView {
             )
             .on_mouse_move(cx.listener(|view, event: &MouseMoveEvent, _, cx| {
                 view.drag_to(event, cx);
+                if view.eyedropper.is_on {
+                    view.hover_pixel(Some(event.position), cx);
+                }
+            }))
+            .on_hover(cx.listener(|view, is_hovered: &bool, _, cx| {
+                if !is_hovered {
+                    view.hover_pixel(None, cx);
+                }
             }))
             .child(self.painter(t, cx))
+            .children(self.grid(t))
     }
 }

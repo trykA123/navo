@@ -66,3 +66,20 @@ impl NavoWindow {
         on_view::<ResetView>(root, ViewOp::Reset, cx)
     }
 }
+
+impl NavoWindow {
+    /// Runs a body's own View-menu tool (`ViewerBody::view_tools`) by its action `name` on the body.
+    /// Names that are not a registered action do nothing.
+    pub(super) fn run_view_tool(&self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(body) = self.viewer.as_ref().and_then(|viewer| viewer.body.as_ref()) else {
+            return;
+        };
+        let Ok(action) = cx.build_action(name, None) else {
+            return;
+        };
+        let focus = body.focus_handle(cx);
+        window.defer(cx, move |window, cx| {
+            focus.dispatch_action(action.as_ref(), window, cx)
+        });
+    }
+}

@@ -297,6 +297,7 @@ help.user_guide | shift-f1 | global
 image.actual_size | ctrl-1 | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image
+image.eyedropper | e | Image
 image.fit | 0 | Image
 image.fit | ctrl-0 | Image
 image.toggle_info | i | Image

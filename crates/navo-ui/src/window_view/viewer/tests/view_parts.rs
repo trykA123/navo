@@ -182,6 +182,7 @@ fn ctrl_i_and_i_show_the_image_details_and_escape_closes_them_first(cx: &mut Tes
         rig.rows(cx),
         [
             ("Details".to_owned(), true),
+            ("Eyedropper".to_owned(), false),
             (String::new(), false),
             ("Keep as default".to_owned(), false),
             ("Reset to defaults".to_owned(), false),

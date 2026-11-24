@@ -18,6 +18,7 @@ mod font;
 mod guide;
 mod header_fit;
 mod image;
+mod image_tools;
 mod key_bar;
 mod kind;
 mod language;

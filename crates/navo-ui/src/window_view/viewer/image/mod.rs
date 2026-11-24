@@ -1,7 +1,10 @@
+mod colour;
 mod copy;
 use sidewise_ui::window_view::viewer::image::decode;
 mod draw;
+mod eyedropper;
 use sidewise_ui::window_view::viewer::image::exif;
+mod grid;
 #[cfg(test)]
 use sidewise_ui::window_view::viewer::image::svg;
 mod view;
@@ -22,6 +25,7 @@ use super::keys_bar::{hint, next_previous, pair};
 use super::parts::{IMAGE, PartSet};
 use crate::prelude::*;
 use crate::settings::{Field, Values};
+use eyedropper::Eyedropper;
 use zoom::{STEP, Viewport, Zoom};
 
 const PAN_STEP: f32 = 64.;
@@ -37,6 +41,7 @@ pub struct ImageView {
     drag: Option<Point<Pixels>>,
     focus: FocusHandle,
     copying: Option<Task<()>>,
+    eyedropper: Eyedropper,
 }
 
 impl ImageView {
@@ -65,6 +70,7 @@ impl ImageView {
             drag: None,
             focus: cx.focus_handle(),
             copying: None,
+            eyedropper: Eyedropper::default(),
         }
     }
 
@@ -170,14 +176,29 @@ impl ViewerBody for ImageBody {
 
     fn find_again(&self, _: bool, _: &mut Window, _: &mut App) {}
 
-    fn menu(&self, _: bool, _: &mut App) -> Vec<MenuEntry> {
-        vec![
+    fn menu(&self, _: bool, cx: &mut App) -> Vec<MenuEntry> {
+        let mut entries = vec![
             MenuEntry::Run("Copy image".into(), Box::new(super::CopyImage), false),
             MenuEntry::Run("Copy path".into(), Box::new(super::CopyFilePath), false),
+        ];
+        if self.0.read(cx).eyedropper.is_on {
+            entries.extend(eyedropper::copy_entries());
+        }
+        entries.extend([
             MenuEntry::Break,
             MenuEntry::Run("Fit".into(), Box::new(super::FitImage), false),
             MenuEntry::Run("100 %".into(), Box::new(super::ActualSize), false),
-        ]
+        ]);
+        entries
+    }
+
+    fn view_tools(&self, cx: &App) -> Vec<MenuEntry> {
+        let is_on = self.0.read(cx).eyedropper.is_on;
+        vec![MenuEntry::Run(
+            navo_l10n::tr("viewer-image-eyedropper").into(),
+            Box::new(super::ToggleEyedropper),
+            is_on,
+        )]
     }
 
     fn set_note(&self, note: SharedString, cx: &mut App) {

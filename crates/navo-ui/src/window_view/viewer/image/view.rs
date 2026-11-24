@@ -3,14 +3,15 @@ use gpui_kit::Stateful;
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 
 use super::ImageView;
+use super::colour::ColourFormat;
 use crate::format;
 use crate::prelude::*;
 use crate::primitives::{IconButton, IconName};
 use crate::tokens::{self, Theme};
 use crate::window_view::viewer::view_menu::view_button;
 use crate::window_view::viewer::{
-    ActualSize, CopyImage, FitImage, IMAGE_CONTEXT, RowDown, RowUp, ScrollLeft, ScrollRight,
-    ToggleInfo, ZoomIn, ZoomOut,
+    ActualSize, CopyColourHex, CopyColourOklch, CopyColourRgb, CopyImage, FitImage, IMAGE_CONTEXT,
+    RowDown, RowUp, ScrollLeft, ScrollRight, ToggleEyedropper, ToggleInfo, ZoomIn, ZoomOut,
 };
 
 const NO_EXIF: &str = "No EXIF data in this file.";
@@ -138,6 +139,15 @@ impl ImageView {
             .on_action(cx.listener(|view, _: &RowUp, _, cx| view.pan_step(0., 1., cx)))
             .on_action(cx.listener(|view, _: &RowDown, _, cx| view.pan_step(0., -1., cx)))
     }
+
+    /// Binds the eyedropper toggle and its three copy actions on the image root.
+    fn colour_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        use ColourFormat::{Hex, Oklch, Rgb};
+        root.on_action(cx.listener(|view, _: &ToggleEyedropper, _, cx| view.toggle_eyedropper(cx)))
+            .on_action(cx.listener(|view, _: &CopyColourHex, _, cx| view.copy_colour(Hex, cx)))
+            .on_action(cx.listener(|view, _: &CopyColourRgb, _, cx| view.copy_colour(Rgb, cx)))
+            .on_action(cx.listener(|view, _: &CopyColourOklch, _, cx| view.copy_colour(Oklch, cx)))
+    }
 }
 
 impl Render for ImageView {
@@ -149,6 +159,7 @@ impl Render for ImageView {
             .id("image")
             .key_context(IMAGE_CONTEXT)
             .track_focus(&self.focus);
+        let root = Self::colour_keys(root, cx);
         Self::view_keys(root, cx)
             .flex()
             .flex_col()
@@ -165,5 +176,6 @@ impl Render for ImageView {
                     .child(self.stage(&t, cx))
                     .when(self.info, |row| row.child(self.info_panel(&t))),
             )
+            .children(self.colour_line(&t, cx))
     }
 }

@@ -165,3 +165,11 @@ viewer-lint-warnings = { $count ->
     [one] { $count } warning
    *[other] { $count } warnings
 }
+viewer-image-eyedropper = Eyedropper
+viewer-image-colour-hint = Point at a pixel to read its colour; a click copies its Hex.
+viewer-image-colour-hex = Hex
+viewer-image-colour-rgb = RGB
+viewer-image-colour-oklch = OKLCH
+viewer-image-colour-copy = Copy { $format }
+viewer-image-colour-copied = Copied { $value }
+viewer-image-colour-none = Point at a pixel first.

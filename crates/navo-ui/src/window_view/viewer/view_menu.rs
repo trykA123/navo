@@ -99,7 +99,9 @@ pub fn view_menu(
     let set = body.parts(cx)?;
     let focus = body.focus_handle(cx);
     let has_encoding = body.encoding(cx).is_some();
-    let entries = view_entries(set, shown, body.is_editing(cx), has_encoding);
+    let mut entries = view_entries(set, shown, body.is_editing(cx), has_encoding);
+    let tools_at = entries.len().saturating_sub(3);
+    entries.splice(tools_at..tools_at, body.view_tools(cx));
     Some(viewer_menu(&entries, &focus, window))
 }
 
@@ -338,7 +340,12 @@ impl NavoWindow {
                 self.close_view_menu(cx);
                 self.run_view(op, window, cx);
             }
-            None => self.close_view_menu(cx),
+            None => {
+                self.close_view_menu(cx);
+                if let ContextMenuEvent::Chosen(ItemId::Action(name)) = event {
+                    self.run_view_tool(name, window, cx);
+                }
+            }
         }
     }
 

@@ -304,6 +304,10 @@ image.zoom_in | Image | true
 image.zoom_out | Image | true
 image.toggle_info | Image | true
 image.copy | Image | true
+image.eyedropper | Image | true
+image.copy_hex | Image | true
+image.copy_rgb | Image | true
+image.copy_oklch | Image | true
 image.copy_path | Image | true
 space.next_part | Space | false
 space.previous_part | Space | false

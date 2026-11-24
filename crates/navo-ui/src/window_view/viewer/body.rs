@@ -116,6 +116,11 @@ pub trait ViewerBody: Any {
 
     fn show_parts(&self, _: &Values, _: &mut App) {}
 
+    /// Extra View-menu toggles the body runs itself (not saved view parts), placed after the parts.
+    fn view_tools(&self, _: &App) -> Vec<MenuEntry> {
+        Vec::new()
+    }
+
     fn encoding(&self, _: &App) -> Option<TextEncoding> {
         None
     }
