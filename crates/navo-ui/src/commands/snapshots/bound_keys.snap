@@ -513,6 +513,7 @@ tree.expand_all | ctrl-shift-right | Tree
 tree.expand_branch | alt-right | Tree
 tree.expand_branch_or_type | * | Tree
 tree.filter_backspace | backspace | Tree
+tree.query | ctrl-shift-f | Tree
 tree.show_depth_eight | ctrl-8 | Tree
 tree.show_depth_five | ctrl-5 | Tree
 tree.show_depth_four | ctrl-4 | Tree

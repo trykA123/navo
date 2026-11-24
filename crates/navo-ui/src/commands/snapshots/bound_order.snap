@@ -303,6 +303,7 @@ tree.show_depth_eight | ctrl-8 | Tree
 tree.show_depth_nine | ctrl-9 | Tree
 tree.copy_value | ctrl-c | Tree
 tree.copy_path | ctrl-shift-c | Tree
+tree.query | ctrl-shift-f | Tree
 tree.filter_backspace | backspace | Tree
 tree.type_n | n | Tree
 tree.type_p | p | Tree

@@ -192,3 +192,6 @@ viewer-save-as-pending = Ctrl+S saves it as { $name } with { $endings ->
     [crlf] CRLF line endings
    *[loaded] the loaded line endings
 }.
+tree-query-label = Query
+tree-query-placeholder = $..name
+tree-query-error = { $message } at column { $column }

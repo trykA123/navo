@@ -61,6 +61,17 @@ impl Findable for TreeView {
     }
 
     fn show_hit(&mut self, node: Self::Hit, cx: &mut Context<Self>) {
+        self.reveal(node, cx);
+    }
+
+    fn body_focus(&self) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl TreeView {
+    /// Selects `node`, clearing a filter and opening its folded ancestors so its row shows.
+    pub(super) fn reveal(&mut self, node: NodeId, cx: &mut Context<Self>) {
         if self.is_filtering() {
             self.clear_filter(cx);
         }
@@ -89,12 +100,6 @@ impl Findable for TreeView {
         self.follow(Step::Done, cx);
     }
 
-    fn body_focus(&self) -> FocusHandle {
-        self.focus.clone()
-    }
-}
-
-impl TreeView {
     pub(super) fn find_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
         root.on_action(cx.listener(|view, _: &OpenFind, window, cx| open_find(view, window, cx)))
     }
@@ -113,7 +118,7 @@ impl TreeView {
     }
 
     pub(super) fn is_typing_in_bar(&self, window: &Window, cx: &App) -> bool {
-        is_find_focused(self.find.as_ref(), window, cx)
+        is_find_focused(self.find.as_ref(), window, cx) || self.is_query_focused(window, cx)
     }
 
     pub(super) fn tint_found(&self, t: &Theme, node: NodeId, row: AnyElement) -> AnyElement {

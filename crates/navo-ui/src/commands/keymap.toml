@@ -1647,6 +1647,10 @@ command = "tree.copy_path"
 keys = ["ctrl-shift-c"]
 
 [[bind]]
+command = "tree.query"
+keys = ["ctrl-shift-f"]
+
+[[bind]]
 command = "tree.filter_backspace"
 keys = ["backspace"]
 

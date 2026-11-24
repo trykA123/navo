@@ -131,7 +131,8 @@ impl TreeView {
                         is_open: ready.outline.is_open(row.node),
                         is_loading: this.loads.iter().any(|(node, _)| *node == row.node),
                     };
-                    Some(this.tint_found(&t, row.node, tree_row(&look, &view)))
+                    let row = this.tint_found(&t, row.node, tree_row(&look, &view));
+                    Some(this.tint_query(&t, look.row.node, row))
                 })
                 .collect()
         })
@@ -192,7 +193,7 @@ impl Render for TreeView {
             title: self.title.clone(),
             mode: self.format.label().into(),
             len: self.len,
-            detail: self.path.clone().map(|path| ("tree-path", path)),
+            detail: None,
             status: self.status(),
         };
         let root = div()
@@ -209,7 +210,9 @@ impl Render for TreeView {
             .bg(t.colors.surface)
             .text_size(t.typography.body)
             .child(header(&t, parts))
+            .children(self.crumbs_view(&t, cx))
             .children(self.find.as_ref().map(|find| find_strip(&t, find)))
+            .children(self.query_strip(&t))
             .children(self.filter_view(&t))
             .child(self.body(&t, cx))
     }

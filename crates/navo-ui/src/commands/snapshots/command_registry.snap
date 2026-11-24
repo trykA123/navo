@@ -342,6 +342,7 @@ tree.show_depth_nine | Show depth 9 | Tree
 tree.copy_value | Copy value | Tree
 tree.copy_key | Copy key | Tree
 tree.copy_path | Copy path | Tree
+tree.query | Query tree | Tree
 tree.filter_backspace | Delete last filter character | Tree
 tree.type_n | Type n while filtering | Tree
 tree.type_p | Type p while filtering | Tree

@@ -19,7 +19,7 @@ pub(super) struct RowLook<'a> {
     pub is_loading: bool,
 }
 
-fn key_text(tree: &Tree, node: NodeId) -> String {
+pub(super) fn key_text(tree: &Tree, node: NodeId) -> String {
     match tree.key(node) {
         Key::Name(name) => name.to_owned(),
         Key::Index(index) => index.to_string(),

@@ -90,6 +90,7 @@ pub(super) const GROUPS: [Group; 10] = [
                 "tree.copy_path",
                 "cmd-tree-copy-path",
             ),
+            ("viewer_tree::OpenQuery", "tree.query", "cmd-tree-query"),
             (
                 "viewer_tree::FilterBack",
                 "tree.filter_backspace",

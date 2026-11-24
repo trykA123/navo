@@ -313,6 +313,7 @@ cmd-tree-show-depth-nine = Show depth 9
 cmd-tree-copy-value = Copy value
 cmd-tree-copy-key = Copy key
 cmd-tree-copy-path = Copy path
+cmd-tree-query = Query tree
 cmd-tree-filter-backspace = Delete last filter character
 cmd-tree-type-n = Type n while filtering
 cmd-tree-type-p = Type p while filtering

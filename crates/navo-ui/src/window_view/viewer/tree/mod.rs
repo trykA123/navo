@@ -1,9 +1,11 @@
 mod copy;
+mod crumbs;
 mod draw;
 mod filter;
 mod find;
 mod jobs;
 mod keys;
+mod query;
 mod row;
 
 use std::any::Any;
@@ -100,6 +102,7 @@ pub(in crate::window_view::viewer) struct TreeView {
     path: Option<SharedString>,
     filter: String,
     find: Option<ViewFind<NodeId>>,
+    query: Option<query::TreeQuery>,
     filter_wait: Option<Task<()>>,
     filter_job: Option<Job>,
     pending: Vec<(NodeId, Children)>,
@@ -128,6 +131,7 @@ impl TreeView {
             path: None,
             filter: String::new(),
             find: None,
+            query: None,
             filter_wait: None,
             filter_job: None,
             pending: Vec::new(),
@@ -212,6 +216,7 @@ impl ViewerBody for TreeBody {
                 ("Ctrl+1–9", "Depth"),
                 ("Ctrl+C", "Copy value"),
                 ("Ctrl+Shift+C", "Copy path"),
+                ("Ctrl+Shift+F", "Query"),
             ],
             TreeState::Indexing(_) => vec![("Esc", "Stop indexing")],
             TreeState::Failed(_) | TreeState::Stopped => Vec::new(),

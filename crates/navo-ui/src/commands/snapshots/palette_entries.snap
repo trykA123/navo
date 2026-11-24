@@ -342,6 +342,7 @@ tree.show_depth_nine | Tree | true
 tree.copy_value | Tree | true
 tree.copy_key | Tree | true
 tree.copy_path | Tree | true
+tree.query | Tree | true
 tree.filter_backspace | Tree | false
 tree.type_n | Tree | false
 tree.type_p | Tree | false

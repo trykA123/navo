@@ -19,6 +19,7 @@ gpui_kit::actions!(
         CopyPath,
         CopyValue,
         CopyKey,
+        OpenQuery,
         FilterBack,
         TypeN,
         TypeP,
@@ -61,6 +62,7 @@ pub(super) fn menu_entries() -> Vec<MenuEntry> {
         MenuEntry::Run("Copy value".into(), Box::new(CopyValue), false),
         MenuEntry::Run("Copy key".into(), Box::new(CopyKey), false),
         MenuEntry::Run("Copy path".into(), Box::new(CopyPath), false),
+        MenuEntry::Run("Query…".into(), Box::new(OpenQuery), false),
         MenuEntry::Break,
         MenuEntry::Run("Fold branch".into(), Box::new(CloseSubtree), false),
         MenuEntry::Run("Fold all".into(), Box::new(CloseAll), false),
@@ -170,7 +172,7 @@ impl TreeView {
     }
 
     fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.close_bar(window, cx) {
+        if self.close_bar(window, cx) || self.close_query(window, cx) {
             return;
         }
         if self.is_filtering() {
@@ -222,6 +224,9 @@ impl TreeView {
         .on_action(cx.listener(|view, _: &CopyPath, _, cx| view.copy_path(cx)))
         .on_action(cx.listener(|view, _: &CopyValue, _, cx| view.copy_value(cx)))
         .on_action(cx.listener(|view, _: &CopyKey, _, cx| view.copy_key(cx)))
+        .on_action(cx.listener(|view, _: &OpenQuery, window, cx| {
+            view.open_query(window, cx);
+        }))
         .on_action(cx.listener(|view, _: &FilterBack, window, cx| {
             view.filter_back(window, cx);
         }))

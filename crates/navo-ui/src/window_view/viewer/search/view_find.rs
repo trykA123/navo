@@ -24,11 +24,11 @@ impl<H: Copy + Eq + Hash> Found<H> {
         Self { hits, set, current }
     }
 
-    fn current(&self) -> Option<H> {
+    pub(in crate::window_view::viewer) fn current(&self) -> Option<H> {
         self.hits.get(self.current).copied()
     }
 
-    fn step(&mut self, backward: bool) -> Option<H> {
+    pub(in crate::window_view::viewer) fn step(&mut self, backward: bool) -> Option<H> {
         let len = self.hits.len();
         if len == 0 {
             return None;
@@ -41,7 +41,12 @@ impl<H: Copy + Eq + Hash> Found<H> {
         self.current()
     }
 
-    fn label(&self) -> String {
+    /// Reports whether `hit` is one of the found hits.
+    pub(in crate::window_view::viewer) fn contains(&self, hit: H) -> bool {
+        self.set.contains(&hit)
+    }
+
+    pub(in crate::window_view::viewer) fn label(&self) -> String {
         if self.hits.is_empty() {
             return t!("viewer-find-none");
         }
@@ -65,9 +70,7 @@ impl<H: Copy + Eq + Hash> ViewFind<H> {
     }
 
     pub(in crate::window_view::viewer) fn is_hit(&self, hit: H) -> bool {
-        self.found
-            .as_ref()
-            .is_some_and(|found| found.set.contains(&hit))
+        self.found.as_ref().is_some_and(|found| found.contains(hit))
     }
 }
 
