@@ -69,6 +69,7 @@ mod settings_sheet;
 mod shell_menu;
 mod spring;
 mod start;
+mod start_options;
 mod start_watch;
 mod status;
 mod strip;
@@ -100,16 +101,14 @@ use std::sync::Arc;
 
 use command_center::CommandCenterState;
 use gpui_kit::{FocusHandle, Subscription};
-use navo_cache::{CacheKeys, ListingCache};
-use navo_core::{AppState, Command, PaneId};
+use navo_core::{Command, PaneId};
 use navo_fs::ProviderOps;
 
 use crate::app_menu::Identity;
-use crate::browser::{Browser, Launcher, Operations, RenameHooks, RetainedHooks, Waker};
+use crate::browser::{Browser, Waker};
 use crate::clip_palette::ClipboardHooks;
 use crate::prelude::*;
 use crate::settings::Values;
-use crate::tokens::Mode;
 
 pub use app_menu::AppMenuHooks;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
@@ -173,6 +172,7 @@ pub use sidewise_ui::window_view::ScreenOwner;
 /// ```
 pub use sidewise_ui::window_view::compare_screen;
 pub use start::{RunHooks, run};
+pub use start_options::{BackgroundSaveSession, SaveSession, StartOptions};
 pub use start_watch::{StartReport, StartWatch};
 pub use terminal::TerminalHooks;
 pub use update_hooks::{UpdateFailure, UpdateHooks, UpdateView};
@@ -194,40 +194,6 @@ pub use viewer::{Treemap, TreemapEvent, TreemapGroup, TreemapPart};
 pub use viewer::{bind_keys as bind_viewer_keys, encoding_picker, view_menu, viewer_menu};
 pub use window_menu::window_view_menu;
 pub use workspace_tray::{OnTrayAction, TrayAction, TrayCard, TrayTile, WorkspaceTray};
-
-pub type SaveSession = Rc<dyn Fn(&AppState)>;
-pub type BackgroundSaveSession = Arc<dyn Fn(&AppState) + Send + Sync>;
-
-pub struct StartOptions {
-    pub state: AppState,
-    pub provider: Arc<dyn ProviderOps>,
-    pub on_save: SaveSession,
-    pub mode: Mode,
-    pub operations: Operations,
-    pub launcher: Launcher,
-    pub editor: EditorHooks,
-    pub terminal: TerminalHooks,
-    pub files: FileHooks,
-    pub kinds: Kinds,
-    pub drives: DriveHooks,
-    pub app_menu: AppMenuHooks,
-    pub settings: SettingsHooks,
-    pub keymap: KeymapHooks,
-    pub view: Option<navo_core::Location>,
-    pub listing_cache: ListingCache,
-    pub cache_keys: CacheKeys,
-    pub shell_menu: Option<Rc<dyn ShellMenuProvider>>,
-    pub file_clipboard: Option<Arc<dyn FileClipboardService>>,
-    pub drop_platform: Option<Rc<dyn DropPlatform>>,
-    pub start_watch: Option<StartWatch>,
-    pub open: OpenHooks,
-    pub crash_report: Option<Arc<dyn CrashReportService>>,
-    pub search: SearchHooks,
-    pub rename: Option<RenameHooks>,
-    pub retained: Arc<dyn RetainedHooks>,
-    pub git: Option<Arc<dyn crate::git::GitHooks>>,
-    pub clipboard: Option<Arc<dyn ClipboardHooks>>,
-}
 
 pub struct NavoWindow {
     browser: Browser,
