@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use navo_fs::{CancelToken, FakeFs, FakeOp, IoQueue, JobSlot, Priority, volume_of};
 
-use super::super::{HostOptions, HostStatus, Worker};
+use super::super::{HostOptions, HostStatus, StatusSlot, Worker};
 use super::{Flags, Location, NO_PARENT, NameTable};
 use crate::walker::Limits;
 
@@ -14,7 +14,7 @@ fn worker_over(fs: &Arc<FakeFs>, table: NameTable) -> (Worker, Location) {
     let queue = Arc::new(IoQueue::new());
     let owner = queue.owner();
     let (root, big) = (fs.location("tree"), fs.location("tree/left/big"));
-    let (updates, _statuses) = mpsc::channel();
+    let statuses = Arc::new(StatusSlot::default());
     let (_sender, events) = mpsc::channel();
     let worker = Worker {
         status: HostStatus::default(),
@@ -35,7 +35,7 @@ fn worker_over(fs: &Arc<FakeFs>, table: NameTable) -> (Worker, Location) {
         },
         clock: Arc::new(Instant::now),
         events,
-        updates,
+        statuses,
         table: Arc::new(RwLock::new(table)),
         cancel: CancelToken::new(),
         dirty: None,

@@ -6,7 +6,7 @@ use std::time::Duration;
 use navo_core::{FsError, FsErrorKind, ProviderId, ProviderPath};
 use navo_fs::{
     Attributes, CancelToken, Capabilities, EntryBatch, EntryKind, FakeFs, FakeOp, Fault, FsEntry,
-    ListSink, Watch, WatchChange, WatchSink,
+    ListSink, WATCH_MAX_DELAY, WATCH_QUIET, Watch, WatchChange, WatchSink,
 };
 
 use super::*;
@@ -247,13 +247,27 @@ fn names(table: &NameTable) -> HashSet<String> {
     table.iter().map(|(_, name)| name.to_owned()).collect()
 }
 
+/// Sends a barrier and returns the final status, so a status a fast scan
+/// coalesced away cannot make the wait miss it.
+fn built(host: &Host) -> HostStatus {
+    let (sender, receiver) = mpsc::channel();
+    host.sender.send(Message::Barrier(sender)).unwrap();
+    receiver.recv_timeout(Duration::from_secs(120)).unwrap();
+    host.statuses
+        .latest()
+        .expect("the worker publishes a final status")
+}
+
+/// Waits for the pending watcher batch to reach the host, then for its rescan.
 fn settled(host: &Host) -> HostStatus {
-    loop {
-        let status = host.statuses.recv_timeout(WAIT).unwrap();
-        if status.progress.is_none() && status.entries > 0 {
-            return status;
-        }
-    }
+    let revision = host.statuses.revision();
+    // The watcher emits a batch after its quiet period; that first status is
+    // enough to know the event arrived before the barrier waits out the rescan.
+    let _ = host.statuses.wait(
+        revision,
+        WATCH_MAX_DELAY + WATCH_QUIET + Duration::from_secs(1),
+    );
+    built(host)
 }
 
 fn spawn_reader(
@@ -271,17 +285,6 @@ fn spawn_reader(
             thread::sleep(Duration::from_millis(1));
         }
     })
-}
-
-fn refreshed(host: &Host) -> HostStatus {
-    let wait = Duration::from_secs(120);
-    while host.statuses.recv_timeout(wait).unwrap().progress.is_some() {}
-    settled(host)
-}
-
-fn built(host: &Host) -> HostStatus {
-    while host.statuses.recv_timeout(WAIT).unwrap().progress.is_none() {}
-    settled(host)
 }
 
 struct Gate {
@@ -342,8 +345,12 @@ fn loads_the_snapshot_before_rescanning_changes_made_while_closed() {
     let (gate, waiting, release) = rig.gate(false);
     let host = rig.start_provider(gate);
     waiting.recv_timeout(WAIT).unwrap();
-    assert_eq!(settled(&host).entries, 2);
-    assert!(names(&host.table().read().unwrap()).contains("old.txt"));
+    let shared = host.table();
+    let table = shared.read().unwrap();
+    assert_eq!(table.len(), 2);
+    assert!(names(&table).contains("old.txt"));
+    drop(table);
+    drop(shared);
     release.send(()).unwrap();
     assert_eq!(built(&host).entries, 2);
     let found = names(&host.table().read().unwrap());
@@ -378,7 +385,7 @@ fn overflow_rescans_the_root_and_recovers_the_missing_changes() {
     rig.fs.remove("tree/old.txt");
     rig.fs.add_file("tree/deep/new.txt", 1);
     rig.fs.overflow_watchers("tree");
-    assert_eq!(built(&host).entries, 3);
+    assert_eq!(settled(&host).entries, 3);
     assert_eq!(rig.fs.calls("tree", FakeOp::List), 2);
     assert_eq!(
         names(&host.table().read().unwrap()),
@@ -442,15 +449,18 @@ fn progress_rescan(rig: &Rig) -> (Host, Sender<()>) {
     let (gate, waiting, release) = rig.gate(true);
     let host = rig.start_provider(gate);
     waiting.recv_timeout(WAIT).unwrap();
+    let mut revision = host.statuses.revision();
     loop {
-        let status = host.statuses.recv_timeout(WAIT).unwrap();
-        if status
-            .progress
-            .is_some_and(|progress| progress.entries >= 10_000)
+        if let Some(status) = host.statuses.latest()
+            && status
+                .progress
+                .is_some_and(|progress| progress.entries >= 10_000)
         {
             assert_eq!(status.entries, 10_000);
             return (host, release);
         }
+        let _ = host.statuses.wait(revision, WAIT).unwrap();
+        revision = host.statuses.revision();
     }
 }
 
@@ -461,7 +471,7 @@ fn rescan_progress_keeps_the_loaded_snapshot_searchable() {
     let found = names(&host.table().read().unwrap());
     release.send(()).unwrap();
     assert!(found == HashSet::from(["tree".into(), "snapshot.txt".into()]));
-    assert_eq!(settled(&host).entries, 10_001);
+    assert_eq!(built(&host).entries, 10_001);
 }
 
 #[test]
@@ -549,7 +559,7 @@ fn renaming_a_deep_file_walks_only_its_parent() {
     built(&host);
     rig.fs
         .rename_entry("tree/left/deep/old.txt", "tree/left/deep/new.txt");
-    assert!(built(&host).errors.is_empty());
+    assert!(settled(&host).errors.is_empty());
     let found = names(&host.table().read().unwrap());
     assert!(found.contains("new.txt"));
     assert!(!found.contains("old.txt"));
@@ -568,7 +578,7 @@ fn created_folder_with_files_walks_only_its_parent() {
     let host = rig.start();
     built(&host);
     rig.fs.add_file("tree/left/deep/created/child.txt", 1);
-    assert!(built(&host).errors.is_empty());
+    assert!(settled(&host).errors.is_empty());
     let shared = host.table();
     let table = shared.read().unwrap();
     let paths: HashSet<_> = table
@@ -611,7 +621,7 @@ fn a_refreshed_folder_compacts_after_its_dead_slots_double() {
     built(&host);
     for refresh in 0..2 {
         provider.add_folder(&format!("refresh-{refresh}"));
-        refreshed(&host);
+        settled(&host);
     }
     let shared = host.table();
     let table = shared.read().unwrap();
@@ -637,7 +647,7 @@ fn host_refresh_timing() {
     built(&host);
 
     provider.add_folder("refresh-0");
-    refreshed(&host);
+    settled(&host);
     let shared = host.table();
     let (before, live) = {
         let table = shared.read().unwrap();
@@ -663,7 +673,7 @@ fn host_refresh_timing() {
 
     let probe = Probe::start();
     provider.add_folder("refresh-1");
-    refreshed(&host);
+    settled(&host);
     let measured = probe.read();
     done.store(true, Ordering::Release);
     reader.join().unwrap();
@@ -692,12 +702,12 @@ fn a_subtree_refresh_peaks_within_two_and_a_half_tables() {
     let host = rig.start_provider(provider.clone());
     built(&host);
     provider.add_folder("refresh-0");
-    refreshed(&host);
+    settled(&host);
     let before = host.table().read().unwrap().memory_bytes();
 
     let probe = Probe::start();
     provider.add_folder("refresh-1");
-    refreshed(&host);
+    settled(&host);
     let peak = before + probe.read().peak;
     println!(
         "subtree refresh: peak {} KiB, before {} KiB, ratio {:.3}",
@@ -723,7 +733,7 @@ fn a_refreshed_subtree_keeps_every_nested_path_and_the_unrelated_branch() {
     let host = rig.start();
     built(&host);
     rig.fs.add_folder("tree/big/added");
-    assert!(refreshed(&host).errors.is_empty());
+    assert!(settled(&host).errors.is_empty());
     let shared = host.table();
     let table = shared.read().unwrap();
     assert_eq!(
@@ -744,4 +754,31 @@ fn a_refreshed_subtree_keeps_every_nested_path_and_the_unrelated_branch() {
             .all(|(id, _)| table.path_with(id, '/').is_some())
     );
     assert!(table.valid_structure());
+}
+
+#[test]
+fn status_updates_without_a_reader_keep_one_value() {
+    let rig = Rig::new();
+    for index in 0..10_000 {
+        rig.fs.add_file(&format!("tree/file-{index}.txt"), 1);
+    }
+    let host = rig.start();
+    rig.tick(&host, 0);
+    let status = host.statuses.take().unwrap();
+    assert_eq!(status.entries, 10_001);
+    assert!(host.statuses.latest().is_none());
+}
+
+#[test]
+fn ten_thousand_status_updates_keep_only_the_newest() {
+    let slot = StatusSlot::default();
+    for entries in 0..10_000 {
+        slot.publish(HostStatus {
+            entries,
+            ..HostStatus::default()
+        });
+    }
+    assert_eq!(slot.revision(), 10_000);
+    assert_eq!(slot.take().unwrap().entries, 9_999);
+    assert!(slot.latest().is_none());
 }

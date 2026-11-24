@@ -21,7 +21,7 @@ impl Worker {
         let (sender, result) = mpsc::channel();
         let options = self.options.clone();
         let cancel = self.cancel.clone();
-        let updates = self.updates.clone();
+        let updates = Arc::clone(&self.statuses);
         self.status.progress = Some(Progress::default());
         self.publish();
         let mut status = self.status.clone();
@@ -31,7 +31,7 @@ impl Worker {
             }
             status.entries = progress.entries;
             status.progress = Some(progress);
-            let _ = updates.send(status.clone());
+            updates.publish(status.clone());
         };
         let cancel = self.cancel.clone();
         let scan_root = root.clone();
