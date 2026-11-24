@@ -41,7 +41,7 @@ pub struct FindQuery {
     pub size: Option<SizeFilter>,
     pub modified: Option<ModifiedFilter>,
     pub attrs: Vec<AttributeFilter>,
-    pub within: Option<String>,
+    pub within: Vec<String>,
     pub archives: bool,
     pub git_rules: GitRules,
     pub tokens: Vec<TokenSpan>,
@@ -92,7 +92,7 @@ impl FindQuery {
                 if value.is_empty() {
                     return Err("in: needs a folder".to_owned());
                 }
-                self.within = Some(value.to_owned());
+                self.within.push(value.to_owned());
             }
             TokenKind::Archives => {
                 self.archives = match value {

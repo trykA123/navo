@@ -27,7 +27,7 @@ impl FindQuery {
             let names = self.attrs.iter().map(attribute_text).collect::<Vec<_>>();
             parts.push(format!("attr:{}", names.join(",")));
         }
-        if let Some(within) = &self.within {
+        for within in &self.within {
             parts.push(format!("in:{}", quoted(within)));
         }
         if self.archives {

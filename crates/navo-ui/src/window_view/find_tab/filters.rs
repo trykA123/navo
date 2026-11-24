@@ -11,7 +11,14 @@ pub(super) fn text(query: &FindQuery) -> String {
             TokenKind::Size => query.size.map(size),
             TokenKind::Modified => query.modified.map(modified),
             TokenKind::Attrs => Some(attributes(query)),
-            TokenKind::Within => query.within.as_ref().map(|path| format!("in:{path}")),
+            TokenKind::Within if !query.within.is_empty() => Some(
+                query
+                    .within
+                    .iter()
+                    .map(|path| format!("in:{path}"))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
             TokenKind::Archives => {
                 Some(format!("arc:{}", if query.archives { "on" } else { "off" }))
             }

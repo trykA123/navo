@@ -53,7 +53,7 @@ pub fn find_files(
     cancel: &CancelToken,
     sink: impl FnMut(FoundBatch) -> ControlFlow<()>,
 ) -> Result<FindProgress, FindError> {
-    let root = scope(base, query)?;
+    let root = search_root(base, query.within.last().map(String::as_str))?;
     if cancel.is_cancelled() {
         return Err(FindError::Cancelled);
     }
@@ -91,7 +91,7 @@ pub fn walk_files(
     cancel: &CancelToken,
     mut sink: impl FnMut(FoundBatch) -> ControlFlow<()>,
 ) -> Result<FindProgress, FindError> {
-    let root = scope(base, query)?;
+    let root = search_root(base, query.within.last().map(String::as_str))?;
     if cancel.is_cancelled() {
         return Err(FindError::Cancelled);
     }
@@ -151,15 +151,15 @@ pub(super) enum Event {
     Done(Result<FindProgress, FindError>),
 }
 
-fn scope(base: &Location, query: &FindQuery) -> Result<Location, FindError> {
+/// Turns the base folder and the last `in:` value into the folder the walk starts from.
+pub fn search_root(base: &Location, within: Option<&str>) -> Result<Location, FindError> {
     if !base.is_local() {
         return Err(FindError::Unsupported);
     }
-    let Some(within) = &query.within else {
+    let Some(within) = within else {
         return Ok(base.clone());
     };
-    let location =
-        Location::new(within.clone()).map_err(|error| FindError::Invalid(error.to_string()))?;
+    let location = Location::new(within).map_err(|error| FindError::Invalid(error.to_string()))?;
     if !location.is_local() {
         return Err(FindError::Unsupported);
     }
@@ -174,7 +174,7 @@ fn scope(base: &Location, query: &FindQuery) -> Result<Location, FindError> {
             if part == ".." {
                 return folder
                     .parent()
-                    .ok_or_else(|| FindError::Invalid(within.clone()));
+                    .ok_or_else(|| FindError::Invalid(within.to_owned()));
             }
             folder
                 .join(&ProviderPath::from_text(part))

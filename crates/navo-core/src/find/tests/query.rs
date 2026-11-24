@@ -72,14 +72,25 @@ fn attributes_can_be_required_or_excluded() {
 fn scope_paths_preserve_relative_absolute_and_quoted_values() {
     for folder in ["src", "/tmp", "C:\\work", "\\\\host\\share"] {
         assert_eq!(
-            FindQuery::parse(&format!("in:{folder}")).within.as_deref(),
+            FindQuery::parse(&format!("in:{folder}"))
+                .within
+                .last()
+                .map(String::as_str),
             Some(folder)
         );
     }
     assert_eq!(
-        FindQuery::parse("in:\"my folder\"").within.as_deref(),
+        FindQuery::parse("in:\"my folder\"")
+            .within
+            .last()
+            .map(String::as_str),
         Some("my folder")
     );
+}
+
+#[test]
+fn two_in_tokens_keep_both_in_order() {
+    assert_eq!(FindQuery::parse("in:src in:lib").within, ["src", "lib"]);
 }
 
 #[test]

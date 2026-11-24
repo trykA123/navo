@@ -38,6 +38,7 @@ fn every_filter_round_trips() {
         r"in:C:\work",
         r"in:\\host\share",
         "in:\"my folder\"",
+        "in:src in:lib",
         "arc:on",
         "arc:off",
         "git:off",
@@ -55,6 +56,12 @@ fn filters_print_in_canonical_order_with_plain_byte_counts() {
         query.to_text(),
         "needle ext:rs size:<1048576 mod:<7d attr:-hidden in:/tmp arc:on git:off"
     );
+}
+
+#[test]
+fn every_in_entry_prints_in_order() {
+    let query = FindQuery::parse("in:src in:\"my folder\"");
+    assert_eq!(query.to_text(), "in:src in:\"my folder\"");
 }
 
 #[test]
