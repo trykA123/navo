@@ -33,6 +33,7 @@ mod move_over;
 mod move_over_crash;
 mod move_over_race;
 mod move_races;
+mod overwrite_alias;
 mod parallel;
 mod parallel_delete;
 mod parallel_pause;
