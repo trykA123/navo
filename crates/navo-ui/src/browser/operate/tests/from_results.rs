@@ -556,3 +556,65 @@ fn a_policy_change_checks_the_rows_again() {
     );
     assert!(exists(&fs, "w/top.c") && exists(&fs, "w/lib/a.c"));
 }
+
+/// An SD card at `w` and a stick at `f`, both FAT: each has a volume serial but no file IDs.
+fn fat(fs: &FakeFs) {
+    fs.add_folder("f");
+    for (at, serial) in [("w", 5), ("f", 6)] {
+        fs.set_volume_serial(at, Some(serial));
+        fs.set_without_ids(at);
+    }
+}
+
+#[test]
+fn folders_from_one_fat_volume_copy_to_another() {
+    let fs = hits();
+    fat(&fs);
+    fs.add_file("f/top.c", 9);
+    let sources = ["w/src", "w/lib", "w/top.c"];
+    let (mut browser, _) = prepared(&fs, request(&fs, OpKind::Copy, &sources, "f"));
+    assert!(browser.pick_policy(navo_core::ConflictPolicy::OverwriteAll));
+    settle(&mut browser);
+    assert!(browser.confirm());
+    settle(&mut browser);
+    assert!(exists(&fs, "f/src/can/a.c") && exists(&fs, "f/lib/a.c"));
+    assert!(exists(&fs, "w/src/can/a.c"));
+}
+
+#[test]
+fn a_move_on_one_fat_volume_into_another_folder_goes_ahead() {
+    let fs = hits();
+    fat(&fs);
+    fs.add_folder("w/sorted");
+    let sources = ["w/src", "w/top.c"];
+    let (mut browser, _) = prepared(&fs, request(&fs, OpKind::Move, &sources, "w/sorted"));
+    assert!(browser.confirm());
+    settle(&mut browser);
+    assert!(exists(&fs, "w/sorted/src/can/a.c") && exists(&fs, "w/sorted/top.c"));
+    assert!(!exists(&fs, "w/src/can/a.c"));
+}
+
+#[test]
+fn a_move_on_one_fat_volume_onto_a_selected_folder_is_refused() {
+    let fs = hits();
+    fat(&fs);
+    fs.make_link(&fs.location("w/src"), &fs.location("w/sorted"))
+        .expect("a link");
+    let request = request(&fs, OpKind::Move, &["w/src", "w/top.c"], "w/sorted");
+    let (browser, id) = prepared(&fs, request);
+    let message = failed(&browser, id);
+    assert!(message.contains("inside the selected folder"), "{message}");
+    assert!(exists(&fs, "w/src/can/a.c") && exists(&fs, "w/top.c"));
+}
+
+#[test]
+fn a_fat_copy_to_a_volume_whose_serial_is_unreadable_is_refused() {
+    let fs = hits();
+    fat(&fs);
+    fs.set_volume_serial("f", None);
+    let request = request(&fs, OpKind::Copy, &["w/src", "w/top.c"], "f");
+    let (browser, id) = prepared(&fs, request);
+    let message = failed(&browser, id);
+    assert!(message.contains("could not tell"), "{message}");
+    assert!(!exists(&fs, "f/top.c"));
+}

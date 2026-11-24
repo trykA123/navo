@@ -68,6 +68,7 @@ pub struct FakeFs {
     links: Mutex<HashMap<String, String>>,
     volumes: Mutex<HashMap<String, Option<u64>>>,
     mounts: Mutex<HashMap<String, Option<u64>>>,
+    without_ids: Mutex<Vec<String>>,
     space: Mutex<HashMap<String, Option<u64>>>,
     sizes: Mutex<HashMap<u64, SizeMetadata>>,
     permissions: Mutex<permissions::Permissions>,
@@ -107,6 +108,7 @@ impl FakeFs {
             links: Mutex::new(HashMap::new()),
             volumes: Mutex::new(HashMap::new()),
             mounts: Mutex::new(HashMap::new()),
+            without_ids: Mutex::new(Vec::new()),
             space: Mutex::new(HashMap::new()),
             sizes: Mutex::new(HashMap::new()),
             permissions: Mutex::default(),
@@ -230,6 +232,12 @@ impl FakeFs {
 
     pub fn set_mount_identity(&self, path: &str, mount: Option<u64>) {
         lock(&self.mounts).insert(normalize(path).trim_end_matches('/').to_owned(), mount);
+    }
+
+    /// Makes the entries at and below `path` report no stable file ID, like FAT or exFAT; their
+    /// volume serial still reads.
+    pub fn set_without_ids(&self, path: &str) {
+        lock(&self.without_ids).push(normalize(path).trim_end_matches('/').to_owned());
     }
 
     pub fn set_available_space(&self, path: &str, bytes: Option<u64>) {

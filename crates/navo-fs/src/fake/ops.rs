@@ -137,6 +137,12 @@ impl ProviderOps for FakeFs {
             .tree()
             .identity(&path)
             .ok_or_else(|| error(FsErrorKind::NotFound, location))?;
+        let without_ids = lock(&self.without_ids)
+            .iter()
+            .any(|at| path == *at || path.starts_with(&format!("{at}/")));
+        if without_ids {
+            return Ok(None);
+        }
         Ok(self
             .volume_serial(location)?
             .map(|volume| crate::FileIdentity {
