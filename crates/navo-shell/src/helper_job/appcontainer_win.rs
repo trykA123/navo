@@ -1,19 +1,19 @@
 //! Derives the PDF helper's AppContainer SID from Navo's fixed name (no profile is created) and
-//! grants it read+execute on one file (S2c1). The rules live in `appcontainer_policy.rs`.
+//! grants it read+execute on one file when it lacks access (S2c1). The rules live in `appcontainer_policy.rs`.
 
 use std::ffi::c_void;
 use std::fs::{File, OpenOptions};
 use std::mem::size_of;
-use std::os::windows::fs::OpenOptionsExt;
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::ptr;
 
-use windows_sys::Win32::Foundation::LocalFree;
+use windows_sys::Win32::Foundation::{INVALID_HANDLE_VALUE, LocalFree};
 use windows_sys::Win32::Security::Authorization::{
-    ConvertSidToStringSidW, EXPLICIT_ACCESS_W, GRANT_ACCESS, GetSecurityInfo, NO_MULTIPLE_TRUSTEE,
-    SE_FILE_OBJECT, SetEntriesInAclW, SetSecurityInfo, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN,
-    TRUSTEE_W,
+    ConvertSidToStringSidW, ConvertStringSidToSidW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
+    GetSecurityInfo, NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, SetEntriesInAclW, SetSecurityInfo,
+    TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
 use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
 use windows_sys::Win32::Security::{
@@ -22,10 +22,14 @@ use windows_sys::Win32::Security::{
     PROTECTED_DACL_SECURITY_INFORMATION, PSID, SE_DACL_PROTECTED,
     UNPROTECTED_DACL_SECURITY_INFORMATION,
 };
-use windows_sys::Win32::Storage::FileSystem::{READ_CONTROL, WRITE_DAC};
+use windows_sys::Win32::Storage::FileSystem::{
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, READ_CONTROL, ReOpenFile, WRITE_DAC,
+};
 
 use super::appcontainer_policy::{
-    CONTAINER_NAME, GrantError, GrantOutcome, GrantStep, READ_EXECUTE, ace_is_grant,
+    ALL_APP_PACKAGES, AceView, CONTAINER_NAME, GrantError, GrantOutcome, GrantStep, READ_EXECUTE,
+    Trustee, already_granted, check_plain_file,
 };
 
 /// `ERROR_INVALID_ACL`: reported for a file with a NULL DACL, which Navo refuses to edit.
@@ -89,29 +93,65 @@ struct FileDacl {
     protected: bool,
 }
 
-/// Grants `sid` read+execute on `path` with one explicit, non-inherited ACE, through one handle
-/// so the file cannot be swapped between check and write. Idempotent; fails closed at a named step.
+/// Grants `sid` read+execute on `path` with one explicit, non-inherited ACE when the DACL does not
+/// already give it. Checks with READ_CONTROL only and asks for WRITE_DAC by reopening the same
+/// handle, so the file cannot be swapped between check and write. Refuses reparse points and folders.
 pub(crate) fn grant_read_execute(
     path: &Path,
     sid: &ContainerSid,
 ) -> Result<GrantOutcome, GrantError> {
     let fail = |step, code| GrantError::new(step, Some(path), code);
     let file = OpenOptions::new()
-        .access_mode(READ_CONTROL | WRITE_DAC)
+        .access_mode(READ_CONTROL | FILE_READ_ATTRIBUTES)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)
         .map_err(|e| fail(GrantStep::OpenFile, e.raw_os_error().unwrap_or(-1)))?;
+    let attributes = file
+        .metadata()
+        .map_err(|e| fail(GrantStep::CheckTarget, e.raw_os_error().unwrap_or(-1)))?
+        .file_attributes();
+    check_plain_file(attributes).map_err(|code| fail(GrantStep::CheckTarget, code))?;
     let current = read_dacl(&file).map_err(|code| fail(GrantStep::ReadDacl, code))?;
-    let aces = allow_aces_for(current.dacl, sid).map_err(|code| fail(GrantStep::ScanDacl, code))?;
-    if aces
-        .iter()
-        .any(|&(flags, mask)| ace_is_grant(0, flags, mask))
-    {
+    let aces = ace_views(current.dacl, sid).map_err(|code| fail(GrantStep::ScanDacl, code))?;
+    if already_granted(&aces) {
         return Ok(GrantOutcome::AlreadyGranted);
     }
+    let writable = reopen_for_write(&file).map_err(|code| fail(GrantStep::OpenForWrite, code))?;
     let merged = merge_grant(current.dacl, sid).map_err(|code| fail(GrantStep::BuildDacl, code))?;
-    write_dacl(&file, merged.0.cast(), current.protected)
+    write_dacl(&writable, merged.0.cast(), current.protected)
         .map_err(|code| fail(GrantStep::WriteDacl, code))?;
     Ok(GrantOutcome::Added)
+}
+
+/// Reopens the same file object as `file` with WRITE_DAC added. Fails with the Win32 error, for
+/// example access denied when the user may not change the file's permissions.
+fn reopen_for_write(file: &File) -> Result<File, i32> {
+    let share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    // SAFETY: the handle is live; ReOpenFile returns a new handle the caller owns.
+    let handle = unsafe {
+        ReOpenFile(
+            file.as_raw_handle(),
+            READ_CONTROL | WRITE_DAC,
+            share,
+            FILE_FLAG_OPEN_REPARSE_POINT,
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE || handle.is_null() {
+        return Err(last_error());
+    }
+    // SAFETY: `handle` is a fresh, valid file handle owned by nobody else.
+    Ok(unsafe { File::from_raw_handle(handle) })
+}
+
+/// ALL APPLICATION PACKAGES as a SID, owned by `LocalMem`. Fails with the Win32 error.
+fn all_app_packages_sid() -> Result<LocalMem, i32> {
+    let text: Vec<u16> = ALL_APP_PACKAGES.encode_utf16().chain([0]).collect();
+    let mut sid: PSID = ptr::null_mut();
+    // SAFETY: `text` is NUL-terminated and `sid` is a live out-pointer.
+    if unsafe { ConvertStringSidToSidW(text.as_ptr(), &raw mut sid) } == 0 {
+        return Err(last_error());
+    }
+    Ok(LocalMem(sid))
 }
 
 /// Reads the DACL and its protection bit through `file`. Fails with the Win32 error; a NULL
@@ -153,8 +193,10 @@ fn read_dacl(file: &File) -> Result<FileDacl, i32> {
     })
 }
 
-/// Lists `(flags, mask)` of every allow ACE in `dacl` whose SID is `sid`. Fails with the Win32 error.
-fn allow_aces_for(dacl: *mut ACL, sid: &ContainerSid) -> Result<Vec<(u8, u32)>, i32> {
+/// Describes every ACE in `dacl`, naming allow ACEs for `sid` or ALL APPLICATION PACKAGES.
+/// Fails with the Win32 error.
+fn ace_views(dacl: *mut ACL, sid: &ContainerSid) -> Result<Vec<AceView>, i32> {
+    let packages = all_app_packages_sid()?;
     let mut info = ACL_SIZE_INFORMATION::default();
     let bytes = size_of::<ACL_SIZE_INFORMATION>() as u32;
     // SAFETY: `dacl` is a live ACL and `info` a live buffer of `bytes` bytes.
@@ -180,10 +222,22 @@ fn allow_aces_for(dacl: *mut ACL, sid: &ContainerSid) -> Result<Vec<(u8, u32)>, 
                 (&raw mut (*allow).SidStart).cast::<c_void>(),
             )
         };
-        // SAFETY: for an allow ACE `ace_sid` points at a valid SID inside the ACL.
-        if header.AceType == 0 && unsafe { EqualSid(ace_sid, sid.0) } != 0 {
-            found.push((header.AceFlags, mask));
-        }
+        let same = |other: PSID| {
+            // SAFETY: only called for an allow ACE, whose `ace_sid` is a valid SID inside the ACL.
+            let equal = unsafe { EqualSid(ace_sid, other) };
+            equal != 0
+        };
+        let trustee = match header.AceType {
+            0 if same(sid.0) => Trustee::Container,
+            0 if same(packages.0) => Trustee::AllAppPackages,
+            _ => Trustee::Other,
+        };
+        found.push(AceView {
+            ace_type: header.AceType,
+            flags: header.AceFlags,
+            mask,
+            trustee,
+        });
     }
     Ok(found)
 }
@@ -260,7 +314,13 @@ mod tests {
             GetAclInformation(dacl.dacl, (&raw mut info).cast(), bytes, AclSizeInformation)
         };
         assert_ne!(ok, 0);
-        (allow_aces_for(dacl.dacl, sid).unwrap(), info.AceCount)
+        let own = ace_views(dacl.dacl, sid)
+            .unwrap()
+            .into_iter()
+            .filter(|ace| ace.ace_type == 0 && ace.trustee == Trustee::Container)
+            .map(|ace| (ace.flags, ace.mask))
+            .collect();
+        (own, info.AceCount)
     }
 
     #[test]

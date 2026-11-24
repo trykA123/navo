@@ -11,12 +11,11 @@ mod sandbox_policy;
 #[cfg(windows)]
 mod sandbox_win;
 
-#[cfg(any(windows, test))]
-#[allow(dead_code, reason = "S2c2 calls the grant before each helper spawn")]
+// Test-only until S2c2 adds the spawn-time caller; S2c2 widens both cfgs to `any(windows, test)` / `windows`.
+#[cfg(test)]
 mod appcontainer_policy;
 
-#[cfg(windows)]
-#[allow(dead_code, reason = "S2c2 calls the grant before each helper spawn")]
+#[cfg(all(windows, test))]
 mod appcontainer_win;
 
 #[cfg(windows)]
