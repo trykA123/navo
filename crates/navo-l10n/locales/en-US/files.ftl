@@ -102,6 +102,22 @@ activity-moved = Moved { $count ->
     [one] { $items } item
    *[other] { $items } items
 } to { $target }
+activity-copied-skipped = Copied { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+} to { $target }, skipped { $skipped }
+activity-moved-skipped = Moved { $count ->
+    [one] { $items } item
+   *[other] { $items } items
+} to { $target }, skipped { $skipped }
+activity-copied-none = Nothing copied: { $count ->
+    [one] { $items } item already there was skipped
+   *[other] { $items } items already there were skipped
+}
+activity-moved-none = Nothing moved: { $count ->
+    [one] { $items } item already there was skipped
+   *[other] { $items } items already there were skipped
+}
 activity-recycled = Moved { $count ->
     [one] { $items } item
    *[other] { $items } items
@@ -177,6 +193,8 @@ activity-chip-linked = Created { $count ->
    *[other] { $items } shortcuts
 }
 activity-chip-saved = Saved
+activity-chip-copied-none = Nothing copied
+activity-chip-moved-none = Nothing moved
 activity-strip = Activity
 activity-pause = Pause
 activity-resume = Resume

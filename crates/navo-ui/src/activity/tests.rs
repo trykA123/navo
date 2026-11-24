@@ -530,3 +530,64 @@ fn a_paste_lists_the_names_it_refused_when_done_or_failed() {
     let detail = primary(&activity).detail.clone().unwrap();
     assert!(detail.starts_with("Access denied · Not pasted"), "{detail}");
 }
+
+fn placed(kind: OpKind, items: usize, skipped: usize) -> JobInfo {
+    JobInfo {
+        kind,
+        items,
+        target: Some(r"C:\d2".into()),
+        rename: RenameNote {
+            skipped,
+            ..RenameNote::default()
+        },
+        ..done(1)
+    }
+}
+
+fn done_texts(job: JobInfo) -> (String, String) {
+    let mut activity = Activity::default();
+    activity.sync(&[job], Instant::now());
+    let item = primary(&activity);
+    (item.title.to_string(), item.chip.to_string())
+}
+
+#[test]
+fn a_copy_or_move_with_nothing_skipped_counts_every_item() {
+    let copied = done_texts(placed(OpKind::Copy, 4, 0));
+    assert_eq!(
+        copied,
+        ("Copied 4 items to d2".into(), "Copied 4 items".into())
+    );
+    let moved = done_texts(placed(OpKind::Move, 1, 0));
+    assert_eq!(moved, ("Moved 1 item to d2".into(), "Moved 1 item".into()));
+}
+
+#[test]
+fn a_copy_or_move_counts_only_placed_items_and_says_how_many_were_skipped() {
+    let copied = done_texts(placed(OpKind::Copy, 5, 1));
+    assert_eq!(
+        copied,
+        (
+            "Copied 4 items to d2, skipped 1".into(),
+            "Copied 4 items".into()
+        )
+    );
+    let moved = done_texts(placed(OpKind::Move, 3, 2));
+    assert_eq!(
+        moved,
+        (
+            "Moved 1 item to d2, skipped 2".into(),
+            "Moved 1 item".into()
+        )
+    );
+}
+
+#[test]
+fn a_copy_or_move_that_skipped_everything_says_nothing_was_placed() {
+    let copied = done_texts(placed(OpKind::Copy, 2, 2));
+    let none = "Nothing copied: 2 items already there were skipped";
+    assert_eq!(copied, (none.into(), "Nothing copied".into()));
+    let moved = done_texts(placed(OpKind::Move, 1, 1));
+    let none = "Nothing moved: 1 item already there was skipped";
+    assert_eq!(moved, (none.into(), "Nothing moved".into()));
+}

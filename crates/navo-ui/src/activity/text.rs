@@ -22,6 +22,46 @@ fn items_of(job: &JobInfo) -> u64 {
     u64::try_from(job.items).unwrap_or(u64::MAX)
 }
 
+/// Top-level items of a copy or move that the conflict sheet skipped, at most the job's items;
+/// zero for other kinds, whose `rename.skipped` counts something else.
+fn skipped_of(job: &JobInfo) -> u64 {
+    if !matches!(job.kind, OpKind::Copy | OpKind::Move) {
+        return 0;
+    }
+    u64::try_from(job.rename.skipped)
+        .unwrap_or(u64::MAX)
+        .min(items_of(job))
+}
+
+/// The done title of a copy or move into `target`: only the items really placed, then how many
+/// were skipped ("Moved 4 items to d2, skipped 1", "Nothing moved: 1 item … was skipped").
+fn placed_title(job: &JobInfo, target: String) -> String {
+    let skipped = skipped_of(job);
+    let count = items_of(job) - skipped;
+    let is_copy = job.kind == OpKind::Copy;
+    if skipped > 0 && count == 0 {
+        let id = if is_copy {
+            "activity-copied-none"
+        } else {
+            "activity-moved-none"
+        };
+        return t!(id, count = skipped, items = format::bytes(skipped));
+    }
+    let id = match (is_copy, skipped > 0) {
+        (true, false) => "activity-copied",
+        (false, false) => "activity-moved",
+        (true, true) => "activity-copied-skipped",
+        (false, true) => "activity-moved-skipped",
+    };
+    t!(
+        id,
+        count = count,
+        items = format::bytes(count),
+        target = target,
+        skipped = format::bytes(skipped)
+    )
+}
+
 pub(super) fn job_title(job: &JobInfo) -> String {
     let (count, files) = (job.files_total, format::bytes(job.files_total));
     if job.rename.undo {
@@ -99,18 +139,7 @@ pub(super) fn done_title(job: &JobInfo) -> String {
     }
     let target = leaf(&target_of(job)).to_owned();
     match job.kind {
-        OpKind::Copy => t!(
-            "activity-copied",
-            count = count,
-            items = items,
-            target = target
-        ),
-        OpKind::Move => t!(
-            "activity-moved",
-            count = count,
-            items = items,
-            target = target
-        ),
+        OpKind::Copy | OpKind::Move => placed_title(job, target),
         OpKind::Recycle => t!("activity-recycled", count = count, items = items),
         OpKind::Delete => t!("activity-deleted", count = count, items = items),
         OpKind::Rename => t!("activity-renamed", count = count, items = items),
@@ -175,8 +204,12 @@ pub(super) fn failure_chip(job: &JobInfo) -> String {
 }
 
 pub(super) fn done_chip(job: &JobInfo) -> String {
-    let (count, items) = (items_of(job), format::bytes(items_of(job)));
+    let skipped = skipped_of(job);
+    let count = items_of(job) - skipped;
+    let items = format::bytes(count);
     let id = match job.kind {
+        OpKind::Copy if skipped > 0 && count == 0 => "activity-chip-copied-none",
+        OpKind::Move if skipped > 0 && count == 0 => "activity-chip-moved-none",
         OpKind::Rename if job.rename.undo => "activity-chip-undone",
         OpKind::Copy => "activity-chip-copied",
         OpKind::Move => "activity-chip-moved",

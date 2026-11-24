@@ -1,5 +1,7 @@
 use navo_core::retention::RetentionPolicy;
-use navo_core::{ConflictPolicy, FsError, Location, OpKind, OperationPlan, Risk, TabId};
+use navo_core::{
+    ConflictPolicy, FsError, Location, OpKind, OperationPlan, Resolution, Risk, TabId,
+};
 use navo_fs::{
     CancelToken, CopyMode, DriveClass, HeldFile, JobLog, JobOutcome, Progress, ProviderOps,
     StepOutcome, drive_class,
@@ -257,6 +259,16 @@ impl PendingOp {
         self.plan.risks.iter().any(
             |risk| matches!(risk, Risk::Protected(place) if Some(place) != self.target.as_ref()),
         )
+    }
+
+    /// The chosen items the plan skips as a whole because a name is already there.
+    pub(crate) fn skipped_sources(&self) -> usize {
+        let skips =
+            |c: &&navo_core::Conflict| matches!(c.resolution, Resolution::Skip | Resolution::Ask);
+        let conflicts = self.plan.conflicts.iter().filter(skips);
+        conflicts
+            .filter(|c| self.sources.iter().any(|s| s.same_place(&c.source)))
+            .count()
     }
 }
 

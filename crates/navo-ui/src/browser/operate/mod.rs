@@ -149,7 +149,10 @@ impl Browser {
             cancel: cancel.clone(),
             source_tab: pending.source_tab,
             undo: matches!(run, Run::Undo { .. }),
-            report: RenameReport::default(),
+            report: RenameReport {
+                skipped: pending.skipped_sources(),
+                ..RenameReport::default()
+            },
             first_new,
             refused: pending
                 .stream
@@ -342,7 +345,7 @@ impl Browser {
         let Ended {
             progress,
             outcome,
-            report,
+            mut report,
         } = ended;
         self.note_rename_error(id, &outcome);
         let status = match outcome {
@@ -364,6 +367,8 @@ impl Browser {
             }
             job.status = status;
             job.is_waiting = false;
+            // Keeps the conflict skips counted at start (start_job) next to the run's own.
+            report.skipped += job.report.skipped;
             job.report = report;
             source_tab = Some(job.source_tab);
             landing = job.landing();
