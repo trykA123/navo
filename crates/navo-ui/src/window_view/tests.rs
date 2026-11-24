@@ -93,6 +93,7 @@ mod settings_updates;
 mod settings_upgrade;
 mod shell_menu;
 pub(in crate::window_view) mod shortcuts;
+mod soak;
 mod start_watch;
 mod tab_close;
 mod tab_drag;

@@ -200,6 +200,7 @@ impl Browser {
         self.full.retain(|tab, _| is_open(tab));
         self.details.retain(|tab, _| is_open(tab));
         self.sorted.retain(|tab, _| is_open(tab));
+        self.shown.retain(|tab, _| is_open(tab));
     }
 
     pub(super) fn remember_sizes(&mut self, tab: TabId, sizes: &[(String, u64)]) {

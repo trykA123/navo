@@ -381,6 +381,8 @@ mod retained;
 mod shown_batch;
 mod shown_sizes;
 mod size_rows;
+#[cfg(test)]
+mod soak_counts;
 mod sort;
 #[cfg(test)]
 mod tests;
