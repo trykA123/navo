@@ -19,7 +19,7 @@ use crate::window_view::viewer::search::overview::StripLook;
 use crate::window_view::viewer::view_menu::view_button;
 use crate::window_view::viewer::{
     Back, CopyPathLine, FindAll, FindSelection, ListClose, ListDown, ListGo, ListUp, MatchCase,
-    NewerSearch, OlderSearch, OpenFind, OpenGoTo, OpenReplace, PageDown, ReplaceAll,
+    NewerSearch, OlderSearch, OpenFind, OpenGoTo, OpenReplace, PageDown, ReplaceAll, ToggleRegex,
 };
 
 impl EditorView {
@@ -68,6 +68,7 @@ impl EditorView {
             .items_center()
             .gap(t.spacing.md)
             .child(row)
+            .child(self.regex_button(cx))
             .children(self.replace_row(t, cx));
         Some(bar.into_any_element())
     }
@@ -149,6 +150,7 @@ impl EditorView {
         root.on_action(cx.listener(|view, _: &OpenFind, window, cx| view.open_find(window, cx)))
             .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
             .on_action(cx.listener(|view, _: &MatchCase, _, cx| view.toggle_case(cx)))
+            .on_action(cx.listener(|view, _: &ToggleRegex, _, cx| view.toggle_regex(cx)))
             .on_action(cx.listener(|view, _: &OpenReplace, window, cx| {
                 view.open_replace(window, cx);
             }))

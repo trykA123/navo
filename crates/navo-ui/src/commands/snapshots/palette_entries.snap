@@ -272,6 +272,7 @@ find.selection | Viewer | true
 find.match_case | Viewer | true
 find.replace | Viewer | true
 find.replace_all | Viewer | true
+find.regex | Viewer | true
 mark.colour_one | Viewer | true
 mark.colour_two | Viewer | true
 mark.colour_three | Viewer | true

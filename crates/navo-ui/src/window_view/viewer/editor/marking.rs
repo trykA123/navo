@@ -131,11 +131,29 @@ impl EditorView {
         self.recount = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(RECOUNT_AFTER).await;
             let _ = this.update(cx, |view, cx| {
-                let text: Arc<str> = Arc::from(view.editor.read(cx).text().to_string());
-                view.marking.source = text_source(text);
-                source_changed(view, None, cx);
+                view.recount = None;
+                view.refresh_source(cx);
             });
         }));
+    }
+
+    /// Rescans the live text now when an edit is still waiting for its recount, so the
+    /// match count and Find all never read the text as it was before the edit.
+    pub(super) fn sync_live_source(&mut self, cx: &mut Context<Self>) {
+        if self.recount.take().is_some() {
+            self.refresh_source(cx);
+        }
+    }
+
+    /// Points the count, marks and Find all at the live text and recounts; in regex mode
+    /// the regex count is redone too.
+    fn refresh_source(&mut self, cx: &mut Context<Self>) {
+        let text: Arc<str> = Arc::from(self.editor.read(cx).text().to_string());
+        self.marking.source = text_source(text);
+        source_changed(self, None, cx);
+        if self.find.regex {
+            self.recount_typed(cx);
+        }
     }
 
     pub(super) fn sync_decorations(&mut self, t: &Theme, cx: &mut Context<Self>) {

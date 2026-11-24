@@ -1,7 +1,9 @@
 //! The editor's find bar: its state, opening and closing it, and the typed needle.
-//! Searching and stepping live in `bar.rs`; the edit-mode replace field in `replace.rs`.
+//! Searching and stepping live in `bar.rs`, regex mode in `regex.rs`, and the edit-mode
+//! replace field in `replace.rs`.
 
 mod bar;
+mod regex;
 mod replace;
 
 use gpui_kit::component::input::InputEvent;
@@ -28,6 +30,10 @@ pub(super) struct EditorFind {
     pub bar: Option<FindBar>,
     pub last: Option<String>,
     pub match_case: bool,
+    /// Regex mode; off by default and kept only while this view lives.
+    pub regex: bool,
+    /// The regex-mode match count over the live text; plain mode counts through `marking`.
+    pub regex_count: regex::RegexCount,
     pub hit: Option<u64>,
     counting: Option<Task<()>>,
 }
@@ -45,6 +51,9 @@ impl EditorView {
             window,
             |view, _, event: &InputEvent, _, cx| match event {
                 InputEvent::PressEnter { shift, .. } => view.submit_find(*shift, cx),
+                InputEvent::Change if view.find.regex => {
+                    view.find.counting = Some(regex::recount_after_pause(cx));
+                }
                 InputEvent::Change => {
                     view.find.counting = Some(count_after_pause(Self::typed_needle, cx));
                 }
@@ -91,8 +100,11 @@ impl EditorView {
             .filter(|text| !text.is_empty())
     }
 
+    /// The typed text as a plain needle, or `None` in regex mode or when nothing is typed.
     fn typed_needle(&self, cx: &App) -> Option<Needle> {
-        self.typed(cx).map(|text| self.needle(&text))
+        self.typed(cx)
+            .filter(|_| !self.find.regex)
+            .map(|text| self.needle(&text))
     }
 
     pub(super) fn needle(&self, text: &str) -> Needle {

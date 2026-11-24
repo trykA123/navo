@@ -196,6 +196,7 @@ pub(super) const GROUPS: [Group; 6] = [
                 "find.replace_all",
                 "cmd-find-replace-all",
             ),
+            ("viewer::ToggleRegex", "find.regex", "cmd-find-regex"),
             ("viewer::Mark1", "mark.colour_one", "cmd-mark-colour-one"),
             ("viewer::Mark2", "mark.colour_two", "cmd-mark-colour-two"),
             (

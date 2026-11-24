@@ -65,8 +65,8 @@ pub(in crate::window_view) use keys::{
     OpenGoTo, OpenReplace, PreviousBookmark, PreviousFile, ReplaceAll, RightDrawer, SaveFile,
     ShowHex, ShowLineEnds, ShowMenu, ShowRich, ShowText, SpaceKey, ToggleBookmark, ToggleCharts,
     ToggleEyedropper, ToggleFollow, ToggleInfo, ToggleLineNumbers, ToggleMemoryStrip,
-    ToggleOpensInspector, TogglePreview, ToggleRowBars, ToggleUsageBars, ToggleWhoUses, ViewMenu,
-    ZoomIn, ZoomOut,
+    ToggleOpensInspector, TogglePreview, ToggleRegex, ToggleRowBars, ToggleUsageBars,
+    ToggleWhoUses, ViewMenu, ZoomIn, ZoomOut,
 };
 pub(in crate::window_view) use keys::{Back, BackspaceKey, KeepViewDefault, ResetView};
 pub use kinds::{Declined, EDIT_LIMIT, Kind, Kinds, Load, Loaded, Slot, Sniff, ViewerKind};

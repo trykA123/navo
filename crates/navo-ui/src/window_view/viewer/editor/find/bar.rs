@@ -5,6 +5,7 @@ use std::ops::Range;
 
 use gpui_kit::base::input::RopeExt;
 use gpui_kit::component::input::EditorState;
+use navo_l10n::tr;
 
 use super::{NOT_FOUND, TYPE_FIRST};
 use crate::prelude::*;
@@ -66,10 +67,15 @@ impl EditorView {
         }
     }
 
+    /// Steps to the next (or previous) match of `text`, in regex or plain mode, and counts.
     fn run_search(&mut self, text: String, backward: bool, cx: &mut Context<Self>) {
-        let needle = self.needle(&text);
         self.find.last = Some(text.clone());
         self.find.counting = None;
+        if self.find.regex {
+            return self.regex_search(&text, backward, cx);
+        }
+        let needle = self.needle(&text);
+        self.sync_live_source(cx);
         count_search(self, needle.clone(), cx);
         self.marking.remember_search(&needle, cx);
         let case_insensitive = !self.find.match_case;
@@ -94,6 +100,9 @@ impl EditorView {
 
     pub(in super::super) fn toggle_case(&mut self, cx: &mut Context<Self>) {
         self.find.match_case = !self.find.match_case;
+        if self.find.regex {
+            self.recount_typed(cx);
+        }
         cx.notify();
     }
 
@@ -126,15 +135,28 @@ impl EditorView {
         let Some(text) = self.typed(cx) else {
             return self.set_find_error(Some(TYPE_FIRST), cx);
         };
+        if self.find.regex {
+            return self.set_find_error(Some(&tr("editor-regex-find-all")), cx);
+        }
         let needle = self.needle(&text);
         self.find.last = Some(text);
+        self.sync_live_source(cx);
         self.marking.remember_search(&needle, cx);
         self.set_find_error(None, cx);
         open_find_all(self, needle, window, cx);
     }
 
     pub(in super::super) fn count_text(&self) -> Option<SharedString> {
-        let counted = self.marking.counted()?;
+        let counted = if self.find.regex {
+            let count = &self.find.regex_count;
+            let counted = count.counted.as_ref()?;
+            if count.capped {
+                return Some(super::regex::capped_label(counted, self.find.hit).into());
+            }
+            counted
+        } else {
+            self.marking.counted()?
+        };
         Some(count_label(counted, self.find.hit).into())
     }
 }

@@ -6599,6 +6599,7 @@ dependencies = [
  "object 0.41.0",
  "proptest",
  "raw-window-handle",
+ "regex",
  "resvg 0.49.0",
  "serde",
  "serde_json",

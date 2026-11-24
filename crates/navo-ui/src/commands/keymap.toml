@@ -1300,6 +1300,11 @@ keys = ["ctrl-alt-enter"]
 context = "Editor"
 
 [[bind]]
+command = "find.regex"
+keys = ["alt-r"]
+context = "Editor"
+
+[[bind]]
 command = "mark.colour_one"
 keys = ["ctrl-1"]
 context = "Paged"

@@ -1,5 +1,6 @@
-//! Plain replace in the editor's find bar, shown in edit mode only: Replace changes the
-//! current match and steps on; Replace all rewrites every match as one undo step.
+//! Replace in the editor's find bar, shown in edit mode only: Replace changes the current
+//! match and steps on; Replace all rewrites every match as one undo step. Plain mode is
+//! literal; regex mode expands `$1`, `${name}` and `$$`.
 
 use std::ops::Range;
 
@@ -77,6 +78,9 @@ impl EditorView {
         let Some((text, with)) = self.replace_inputs(cx) else {
             return;
         };
+        if self.find.regex {
+            return self.regex_replace_one((&text, &with), window, cx);
+        }
         let case_insensitive = !self.find.match_case;
         let done = self.editor.update(cx, |state, cx| {
             state.set_search_query(text, case_insensitive, cx);
@@ -97,6 +101,9 @@ impl EditorView {
         let Some((text, with)) = self.replace_inputs(cx) else {
             return;
         };
+        if self.find.regex {
+            return self.regex_replace_all((&text, &with), window, cx);
+        }
         let case_insensitive = !self.find.match_case;
         let count = self.editor.update(cx, |state, cx| {
             state.set_search_query(text, case_insensitive, cx);

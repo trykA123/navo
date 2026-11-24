@@ -272,6 +272,7 @@ find.selection | Find selection | Viewer
 find.match_case | Match case | Viewer
 find.replace | Replace | Viewer
 find.replace_all | Replace all | Viewer
+find.regex | Regular expression | Viewer
 mark.colour_one | Mark 1 | Viewer
 mark.colour_two | Mark 2 | Viewer
 mark.colour_three | Mark 3 | Viewer

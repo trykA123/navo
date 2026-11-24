@@ -259,6 +259,7 @@ cmd-find-selection = Find selection
 cmd-find-match-case = Match case
 cmd-find-replace = Replace
 cmd-find-replace-all = Replace all
+cmd-find-regex = Regular expression
 cmd-mark-colour-one = Mark 1
 cmd-mark-colour-two = Mark 2
 cmd-mark-colour-three = Mark 3

@@ -25,6 +25,7 @@ gpui_kit::actions!(
         MatchCase,
         OpenReplace,
         ReplaceAll,
+        ToggleRegex,
         Back,
         Mark1,
         Mark2,
