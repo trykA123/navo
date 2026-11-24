@@ -10,6 +10,7 @@ pub mod commands;
 pub mod crash_notice;
 pub mod drag;
 pub mod file_list;
+pub mod find_results;
 pub mod fkey_bar;
 pub mod git;
 pub mod job_card;
