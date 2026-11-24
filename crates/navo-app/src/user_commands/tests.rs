@@ -2,10 +2,13 @@ use std::time::{Duration, Instant};
 
 use futures::channel::mpsc::UnboundedReceiver;
 use navo_store::StoreDirs;
-use navo_ui::window_view::{UserCommandInfo, UserCommandNews, UserInvocation};
+use navo_ui::window_view::{UserCommandHooks, UserCommandInfo, UserCommandNews, UserInvocation};
 
 use super::expand::Refusal;
-use super::{FILE, UserCommandError, edit, find_plan, hooks, launch, model, search};
+use super::{
+    FILE, Runner, UserCommandError, edit, find_command, hooks, launch, model, run_command, run_one,
+    search,
+};
 
 const NEWS_WAIT: Duration = Duration::from_secs(10);
 
@@ -76,7 +79,7 @@ fn a_valid_file_gives_applied() {
          start-in = \"/work\"\nkey = \"ctrl-alt-l\"\n",
     )
     .expect("a command file");
-    let (hooks, _watch) = hooks(Some(&dirs));
+    let (hooks, _watch, _runner) = hooks(Some(&dirs));
     let mut news = hooks.news.expect("news");
 
     assert_eq!(
@@ -104,7 +107,7 @@ fn a_broken_edit_gives_invalid_and_keeps_the_list() {
     );
     let path = dirs.user_commands_file();
     std::fs::write(&path, text).expect("a command file");
-    let (hooks, _watch) = hooks(Some(&dirs));
+    let (hooks, _watch, _runner) = hooks(Some(&dirs));
     let mut news = hooks.news.expect("news");
     assert!(matches!(
         next(&mut news),
@@ -167,7 +170,7 @@ fn an_exit_news_says_whether_the_console_was_hidden() {
         ));
     }
     std::fs::write(dirs.user_commands_file(), text).expect("a command file");
-    let (hooks, _watch) = hooks(Some(&dirs));
+    let (hooks, _watch, _runner) = hooks(Some(&dirs));
     let mut news = hooks.news.expect("news");
     let file = navo_core::Location::new(work.join("a.txt").to_string_lossy()).expect("a file");
     for (name, hidden) in [("Shown", false), ("Hidden", true)] {
@@ -204,15 +207,26 @@ fn command(name: &str) -> model::UserCommand {
 #[test]
 fn an_unknown_name_is_no_command() {
     let commands = std::sync::Mutex::new(vec![command("Build")]);
-    let result = find_plan("Deploy", UserInvocation::default(), &commands, &search());
+    let result = find_command("Deploy", &commands);
     assert_eq!(result, Err(UserCommandError::NoCommand));
 }
 
 #[test]
 fn a_refused_plan_keeps_its_refusal() {
-    let commands = std::sync::Mutex::new(vec![command("Build")]);
-    let result = find_plan("Build", UserInvocation::default(), &commands, &search());
-    assert_eq!(result, Err(UserCommandError::Refused(Refusal::NoCursor)));
+    let (hooks, sender) = UserCommandHooks::channel(std::sync::Arc::new(|_, _| {}), None);
+    let mut news = hooks.news.expect("news");
+    let sender = std::sync::Mutex::new(Some(sender));
+
+    run_command(command("Build"), UserInvocation::default(), &sender);
+
+    let UserCommandNews::Refused { name, message } = next(&mut news) else {
+        unreachable!()
+    };
+    assert_eq!(name, "Build");
+    assert_eq!(
+        message,
+        UserCommandError::Refused(Refusal::NoCursor).message("Build")
+    );
 }
 
 #[test]
@@ -238,5 +252,35 @@ fn a_program_that_cannot_start_is_a_start_error() {
     assert!(
         matches!(result, Err(UserCommandError::Start(_))),
         "{result:?}"
+    );
+}
+
+#[test]
+fn runner_refuses_like_a_named_command() {
+    let (hooks, sender) = UserCommandHooks::channel(std::sync::Arc::new(|_, _| {}), None);
+    let mut news = hooks.news.expect("news");
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(sender)));
+    let commands = std::sync::Mutex::new(vec![command("Build")]);
+    let cursor = UserInvocation {
+        file: Some(navo_core::Location::new("..").expect("a dot dot")),
+        ..UserInvocation::default()
+    };
+
+    run_one("Build", cursor.clone(), &commands, &slot);
+    let named = wait_for(&mut news, |news| {
+        matches!(news, UserCommandNews::Refused { .. })
+    });
+
+    Runner {
+        sender: std::sync::Arc::clone(&slot),
+    }
+    .run(command("Build"), cursor);
+    let through_runner = wait_for(&mut news, |news| {
+        matches!(news, UserCommandNews::Refused { .. })
+    });
+
+    assert_eq!(
+        through_runner, named,
+        "the runner refuses like the run hook"
     );
 }

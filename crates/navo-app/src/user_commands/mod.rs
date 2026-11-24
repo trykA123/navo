@@ -28,6 +28,7 @@ mod program;
 mod start;
 
 pub use error::UserCommandError;
+pub(crate) use model::UserCommand;
 
 #[cfg(test)]
 mod tests;
@@ -51,15 +52,18 @@ const TEMPLATE: &str = "\
 
 /// Loads the command file, watches it and sweeps old list files before returning.
 #[must_use]
-pub fn hooks(dirs: Option<&StoreDirs>) -> (UserCommandHooks, Option<Watch>) {
+pub fn hooks(dirs: Option<&StoreDirs>) -> (UserCommandHooks, Option<Watch>, Runner) {
+    let sender_slot = Arc::new(Mutex::new(None));
+    let runner = Runner {
+        sender: Arc::clone(&sender_slot),
+    };
     let Some(dirs) = dirs.filter(|dirs| dirs.ensure().is_ok()) else {
-        return (no_hooks(), None);
+        return (no_hooks(), None, runner);
     };
     let path = dirs.user_commands_file();
     let loaded = load(&path);
     report(&loaded.news);
     let commands = Arc::new(Mutex::new(loaded.commands.unwrap_or_default()));
-    let sender_slot = Arc::new(Mutex::new(None));
     let run = run_hook(Arc::clone(&commands), Arc::clone(&sender_slot));
     let (hooks, sender) = UserCommandHooks::channel(run, location_of(&path));
     let template = path.clone();
@@ -76,7 +80,7 @@ pub fn hooks(dirs: Option<&StoreDirs>) -> (UserCommandHooks, Option<Watch>) {
             "the settings folder is not watched; user-commands.toml changes apply at the next start"
         );
     }
-    (hooks, watching)
+    (hooks, watching, runner)
 }
 
 /// Writes the commented template only when the file is absent.
@@ -166,36 +170,86 @@ fn run_hook(
         let name = name.to_owned();
         let worker_commands = Arc::clone(&commands);
         let worker_sender = Arc::clone(&sender);
-        let failure_name = name.clone();
-        let failure_sender = Arc::clone(&sender);
-        let spawned = std::thread::Builder::new()
-            .name("navo-user-command".to_owned())
-            .spawn(move || run_one(&name, invocation, &worker_commands, &worker_sender));
-        if let Err(error) = spawned {
-            tracing::warn!(%error, "could not start the user command thread");
-            if let Some(sender) = lock(&failure_sender).clone() {
-                refuse(&sender, &failure_name, &UserCommandError::from(error));
-            }
-        }
+        spawn_worker(name.clone(), Arc::clone(&sender), move || {
+            run_one(&name, invocation, &worker_commands, &worker_sender);
+        });
     })
+}
+
+/// Starts loaded commands directly, sharing the run hook's news channel.
+pub(crate) struct Runner {
+    sender: Arc<Mutex<Option<UserCommandSender>>>,
+}
+
+impl Runner {
+    /// Runs `command` for `invocation` on a worker thread.
+    pub(crate) fn run(&self, command: UserCommand, invocation: UserInvocation) {
+        let name = command.name.clone();
+        let worker_sender = Arc::clone(&self.sender);
+        spawn_worker(name, Arc::clone(&self.sender), move || {
+            run_command(command, invocation, &worker_sender);
+        });
+    }
+}
+
+/// Spawns `work` on the command thread; a failed spawn is refused as `name`.
+fn spawn_worker(
+    name: String,
+    sender: Arc<Mutex<Option<UserCommandSender>>>,
+    work: impl FnOnce() + Send + 'static,
+) {
+    let failure_sender = Arc::clone(&sender);
+    let spawned = std::thread::Builder::new()
+        .name("navo-user-command".to_owned())
+        .spawn(work);
+    if let Err(error) = spawned {
+        tracing::warn!(%error, "could not start the user command thread");
+        if let Some(sender) = lock(&failure_sender).clone() {
+            refuse(&sender, &name, &UserCommandError::from(error));
+        }
+    }
 }
 
 /// Runs the named command on a worker thread and sends its refusal or exit as news.
 fn run_one(
     name: &str,
     invocation: UserInvocation,
-    commands: &Mutex<Vec<model::UserCommand>>,
+    commands: &Mutex<Vec<UserCommand>>,
+    sender: &Mutex<Option<UserCommandSender>>,
+) {
+    match find_command(name, commands) {
+        Ok(command) => run_command(command, invocation, sender),
+        Err(error) => {
+            if let Some(sender) = lock(sender).clone() {
+                refuse(&sender, name, &error);
+            }
+        }
+    }
+}
+
+/// Expands `command` for `invocation` and starts it, sending its refusal or exit as news.
+fn run_command(
+    command: UserCommand,
+    invocation: UserInvocation,
     sender: &Mutex<Option<UserCommandSender>>,
 ) {
     let Some(sender) = lock(sender).clone() else {
         return;
     };
-    let plan = match find_plan(name, invocation, commands, &search()) {
+    let name = command.name.clone();
+    let invocation = expand::Invocation {
+        file: invocation.file,
+        marked: invocation.marked,
+        folder: invocation.folder,
+        other_folder: invocation.other_folder,
+        other_file: invocation.other_file,
+    };
+    let plan = match expand::plan(&command, &invocation, &search()) {
         Ok(plan) => plan,
-        Err(error) => return refuse(&sender, name, &error),
+        Err(error) => return refuse(&sender, &name, &UserCommandError::Refused(error)),
     };
     let exit_sender = sender.clone();
-    let exit_name = name.to_owned();
+    let exit_name = name.clone();
     let hidden = plan.console == model::Console::Hide;
     let on_exit = Box::new(move |code| {
         let _ = exit_sender.send(UserCommandNews::Exited {
@@ -205,30 +259,20 @@ fn run_one(
         });
     });
     if let Err(error) = launch(plan, on_exit) {
-        refuse(&sender, name, &error);
+        refuse(&sender, &name, &error);
     }
 }
 
-/// Finds the command called `name` and expands it for this invocation.
-fn find_plan(
+/// Finds the command called `name` in the loaded list.
+fn find_command(
     name: &str,
-    invocation: UserInvocation,
-    commands: &Mutex<Vec<model::UserCommand>>,
-    search: &Search,
-) -> Result<expand::Plan, UserCommandError> {
-    let command = lock(commands)
+    commands: &Mutex<Vec<UserCommand>>,
+) -> Result<UserCommand, UserCommandError> {
+    lock(commands)
         .iter()
         .find(|command| command.name == name)
         .cloned()
-        .ok_or(UserCommandError::NoCommand)?;
-    let invocation = expand::Invocation {
-        file: invocation.file,
-        marked: invocation.marked,
-        folder: invocation.folder,
-        other_folder: invocation.other_folder,
-        other_file: invocation.other_file,
-    };
-    expand::plan(&command, &invocation, search).map_err(UserCommandError::Refused)
+        .ok_or(UserCommandError::NoCommand)
 }
 
 /// Starts the expanded command; `on_exit` gets its exit code later.

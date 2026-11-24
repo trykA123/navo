@@ -144,7 +144,7 @@ pub(crate) fn open(mut launch: Launch) {
         launch.experimental_retention,
     );
     let (keymap, _keymap_watch) = keymap::hooks(dirs.as_ref());
-    let (user_commands, _user_commands_watch) = user_commands::hooks(dirs.as_ref());
+    let (user_commands, _user_commands_watch, _user_runner) = user_commands::hooks(dirs.as_ref());
     let home = home_location(|name| std::env::var(name).ok());
     let state = session_state(dirs.as_ref(), &home, launch.panes, &launch.splash);
     let local = local_provider(launch.trace.as_ref());
