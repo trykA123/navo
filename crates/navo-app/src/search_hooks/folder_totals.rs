@@ -1,7 +1,7 @@
 //! The index service as the browser's folder-totals source: one pipe request per chunk of
 //! shown folders, cut to the pipe limits (64 paths, 4,096 path components).
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use navo_core::Location;
@@ -92,8 +92,19 @@ fn chunks(folders: &[Location]) -> Vec<Vec<usize>> {
 }
 
 /// Logs the one count line NV14 reads: folders, requests and answers by state, never paths.
+/// A line equal to the previous one drops to DEBUG, so the Settings poll does not flood INFO.
 fn log_counts(answers: &[TotalsState], requests: usize) {
-    tracing::info!("{}", count_line(answers, requests));
+    static LAST: Mutex<String> = Mutex::new(String::new());
+    let line = count_line(answers, requests);
+    let repeated = LAST
+        .lock()
+        .map(|mut last| std::mem::replace(&mut *last, line.clone()) == line)
+        .unwrap_or(false);
+    if repeated {
+        tracing::debug!("{line}");
+    } else {
+        tracing::info!("{line}");
+    }
 }
 
 /// Builds the count line from the answers and the number of pipe requests; pure, so tests read it.

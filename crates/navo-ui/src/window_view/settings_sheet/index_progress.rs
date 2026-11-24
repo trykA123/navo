@@ -44,18 +44,23 @@ pub(super) fn fetch(
     Some(progress.with_totals(&roots))
 }
 
-/// Folder totals for the volume roots; a root that is no valid location stays unavailable.
+/// Folder totals for the volume roots, one per root in order; a root that is no valid location
+/// stays unavailable on its own and the others are still asked.
 fn root_totals(totals: &FolderTotalsQuery, roots: &[String]) -> Vec<TotalsState> {
-    let locations: Option<Vec<_>> = roots
+    let mut answers = vec![TotalsState::Unavailable; roots.len()];
+    let (slots, locations): (Vec<usize>, Vec<navo_core::Location>) = roots
         .iter()
-        .map(|root| navo_core::Location::new(root).ok())
-        .collect();
-    match locations {
-        Some(locations) if !locations.is_empty() => {
-            totals.query_many(&locations, &navo_fs::CancelToken::new())
-        }
-        _ => Vec::new(),
+        .enumerate()
+        .filter_map(|(slot, root)| Some((slot, navo_core::Location::new(root).ok()?)))
+        .unzip();
+    if locations.is_empty() {
+        return answers;
     }
+    let found = totals.query_many(&locations, &navo_fs::CancelToken::new());
+    for (slot, answer) in slots.into_iter().zip(found) {
+        answers[slot] = answer;
+    }
+    answers
 }
 
 impl NavoWindow {
@@ -203,6 +208,7 @@ mod tests {
             Some(navo_index::pipe::FolderTotals {
                 files: 1000,
                 folders: 233,
+                complete: true,
                 ..Default::default()
             })
         });
@@ -210,6 +216,25 @@ mod tests {
         let split = view.split().unwrap();
         assert_eq!((split.files, split.folders), (1000, 233));
         assert_eq!(asked.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_invalid_root_is_unavailable_alone_and_the_others_keep_their_totals() {
+        let totals: FolderTotalsQuery = Arc::new(|root: &navo_core::Location| {
+            Some(navo_index::pipe::FolderTotals {
+                files: u32::try_from(root.as_str().len()).ok()?,
+                complete: true,
+                ..Default::default()
+            })
+        });
+        let roots = ["C:\\".to_owned(), "D\0:\\".to_owned(), "EE:\\".to_owned()];
+        let answers = root_totals(&totals, &roots);
+        let files = |answer: &TotalsState| match answer {
+            TotalsState::Ready(found) => Some(found.files),
+            TotalsState::Busy | TotalsState::Unavailable => None,
+        };
+        let files: Vec<_> = answers.iter().map(files).collect();
+        assert_eq!(files, [Some(3), None, Some(4)]);
     }
 
     #[test]

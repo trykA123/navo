@@ -138,7 +138,8 @@ impl IndexProgress {
             .collect()
     }
 
-    /// Takes the root totals, one per volume in order; busy or missing answers leave no split.
+    /// Takes the root totals, one per volume in order. Only complete totals give a split; busy,
+    /// missing or still-building (incomplete) answers leave the volume on its item count.
     #[must_use]
     pub fn with_totals(mut self, totals: &[TotalsState]) -> Self {
         if totals.len() != self.volumes.len() {
@@ -146,11 +147,11 @@ impl IndexProgress {
         }
         for (volume, total) in self.volumes.iter_mut().zip(totals) {
             volume.split = match total {
-                TotalsState::Ready(found) => Some(Split {
+                TotalsState::Ready(found) if found.complete => Some(Split {
                     files: u64::from(found.files),
                     folders: u64::from(found.folders),
                 }),
-                TotalsState::Busy | TotalsState::Unavailable => None,
+                TotalsState::Ready(_) | TotalsState::Busy | TotalsState::Unavailable => None,
             };
         }
         self
@@ -303,8 +304,25 @@ mod tests {
         TotalsState::Ready(navo_index::pipe::FolderTotals {
             files,
             folders,
+            complete: true,
             ..Default::default()
         })
+    }
+
+    #[test]
+    fn incomplete_root_totals_of_a_building_drive_leave_no_split() {
+        let status = status(&[("C:", 1234, Some(0)), ("D:", 9, None)]);
+        let building = TotalsState::Ready(navo_index::pipe::FolderTotals::default());
+        let view = IndexProgress::of(Some(&status), None).with_totals(&[building, root(5, 3)]);
+        assert_eq!(view.volumes[0].split, None);
+        assert_eq!(
+            view.volumes[1].split,
+            Some(Split {
+                files: 5,
+                folders: 3
+            })
+        );
+        assert_eq!(view.split(), None);
     }
 
     #[test]
