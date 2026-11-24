@@ -131,6 +131,21 @@ fn ambiguous_unsafe_name_shows_its_own_text_and_never_says_uninstall(cx: &mut Te
 }
 
 #[gpui_kit::test]
+fn elevated_tells_the_user_to_start_setup_from_their_own_desktop(cx: &mut TestAppContext) {
+    let (window, _) = open(cx, view(SetupPage::Elevated));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("elevated-text").label(),
+            Some(
+                "Setup was started as administrator from another account, or outside your desktop. Close it and start Setup normally from your desktop. Windows asks for an administrator's password when a folder needs it."
+            )
+        );
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
 fn elevated_and_no_payload_offer_only_close(cx: &mut TestAppContext) {
     for (page, text, close) in [
         (SetupPage::Elevated, "elevated-text", "elevated-close"),
