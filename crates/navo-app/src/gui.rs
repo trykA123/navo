@@ -1,3 +1,4 @@
+mod hooks;
 mod profile;
 mod quit;
 
@@ -249,7 +250,7 @@ pub(crate) fn open(mut launch: Launch) {
                         .as_ref()
                         .map(crate::resident::ResidentHandle::hooks),
                 )),
-                ..open_hooks(launch.path, launch.instance_requests, launch.splash, diff)
+                ..hooks::open_hooks(launch.path, launch.instance_requests, launch.splash, diff)
             },
             rename: Some(services.rename),
             retained: services.retained,
@@ -312,24 +313,6 @@ fn finish_startup(
 fn mark_window_open(viewer: bool) {
     tracing::info!(viewer, "window opening");
     metrics::mark("window opening");
-}
-
-fn open_hooks(
-    path: Option<PathBuf>,
-    inbox: OpenInbox,
-    splash: crate::splash::Splash,
-    diff: Arc<crate::compare::diff::DiffBackend>,
-) -> OpenHooks {
-    OpenHooks {
-        path: path.and_then(|path| path_location(&path)),
-        inbox: Some(inbox),
-        on_shown: splash.on_shown(),
-        window_shown: crate::resident::window_shown(),
-        resident: None,
-        compare: Some(Arc::new(crate::compare::local::navo_pane_compare())),
-        diff: Some(diff),
-        user_commands: None,
-    }
 }
 
 fn finish_settings(
