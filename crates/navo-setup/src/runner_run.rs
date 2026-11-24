@@ -298,9 +298,8 @@ fn discover(
     payload: &Payload,
     request: &Request,
 ) -> Result<Mode, InstallError> {
-    match host.elevated() {
-        Ok(false) => {}
-        _ => return Err(InstallError::Elevated),
+    if host.start_refusal().is_some() {
+        return Err(InstallError::Elevated);
     }
     let discovery = host
         .discover()

@@ -13,6 +13,7 @@ use crate::{
     payload::Payload,
     placement::Space,
     runner::{Child, Cleanup, Extracted, MarkerId, Pin, Registry, Verified},
+    start_mode::StartRefusal,
     syntax::FolderProblem,
     upgrade::Staged,
 };
@@ -52,6 +53,13 @@ pub struct ShortcutReport {
 pub trait Host {
     /// Whether Setup runs elevated; any error counts as elevated (IW13).
     fn elevated(&mut self) -> io::Result<bool>;
+    /// Why Setup may not start, or `None` to run; only a non-elevated token runs (others: `Unknown`).
+    fn start_refusal(&mut self) -> Option<StartRefusal> {
+        match self.elevated() {
+            Ok(false) => None,
+            _ => Some(StartRefusal::Unknown),
+        }
+    }
     /// Reads the registry and legacy installs for the mode decision.
     fn discover(&mut self) -> io::Result<Discovery>;
     /// Creates and holds every missing folder for a fresh root with its space need.
