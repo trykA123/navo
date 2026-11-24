@@ -1,29 +1,79 @@
-pub const OTHER: &str = "Other";
+//! Ribbon groups: the short group each command sits in, the group order per layer,
+//! and which commands use the danger style.
 
-pub const ORDER: [&str; 9] = [
-    "Clipboard",
-    "Tabs",
-    "Sort",
-    "Files",
-    "Pane",
-    "View",
-    "Navigation",
-    "Window",
-    OTHER,
+use super::combo::Combo;
+
+const GO: &str = "ribbon-group-go";
+const MARKS: &str = "ribbon-group-marks";
+const FILES: &str = "ribbon-group-files";
+const TABS: &str = "ribbon-group-tabs";
+const PANES: &str = "ribbon-group-panes";
+const FILES_AND_PANES: &str = "ribbon-group-files-and-panes";
+const WINDOW: &str = "ribbon-group-window";
+const WORKSPACES: &str = "ribbon-group-workspaces";
+
+/// Group order for every layer except Ctrl+Shift, which leads with its tabs.
+const ORDER: [&str; 8] = [
+    GO,
+    MARKS,
+    FILES,
+    TABS,
+    PANES,
+    FILES_AND_PANES,
+    WINDOW,
+    WORKSPACES,
+];
+const CTRL_SHIFT_ORDER: [&str; 8] = [
+    TABS,
+    PANES,
+    FILES,
+    GO,
+    MARKS,
+    FILES_AND_PANES,
+    WINDOW,
+    WORKSPACES,
 ];
 
+/// Commands per group, in the order they show; one list serves every layer.
 const GROUPS: [(&str, &[&str]); 8] = [
+    (GO, &["pane.go_back", "pane.go_forward", "pane.edit_path"]),
     (
-        "Clipboard",
-        &["files.clipboard_copy", "files.clipboard_cut", "files.paste"],
+        MARKS,
+        &[
+            "files.extend_up",
+            "files.extend_down",
+            "files.extend_page_up",
+            "files.extend_page_down",
+            "files.extend_first",
+            "files.extend_last",
+        ],
     ),
     (
-        "Tabs",
+        FILES,
+        &[
+            "files.clipboard_copy",
+            "files.clipboard_cut",
+            "files.paste",
+            "files.undo",
+            "files.mark_all",
+            "files.unmark_all",
+            "files.multi_rename",
+            "files.refresh",
+            "files.mark_extension",
+            "files.unmark_extension",
+            "files.context_menu",
+            "git.menu",
+        ],
+    ),
+    (
+        TABS,
         &[
             "tab.new",
             "tab.close",
+            "tab.reopen_closed",
             "tab.next",
             "tab.previous",
+            "tab.clone",
             "tab.go_to_first",
             "tab.go_to_second",
             "tab.go_to_third",
@@ -36,112 +86,94 @@ const GROUPS: [(&str, &[&str]); 8] = [
         ],
     ),
     (
-        "Sort",
+        PANES,
         &[
-            "files.sort_by_name",
-            "files.sort_by_extension",
-            "files.sort_by_date",
-            "files.sort_by_size",
-        ],
-    ),
-    (
-        "Files",
-        &[
-            "files.open",
-            "files.open_parent",
-            "files.view",
-            "files.edit",
-            "files.edit_with",
-            "files.copy",
-            "files.move",
-            "files.rename",
-            "files.multi_rename",
-            "files.undo",
-            "files.new_folder",
-            "files.new_file",
-            "files.recycle",
-            "files.delete",
-            "files.toggle_mark",
-            "files.toggle_mark_down",
-            "files.mark_pattern",
-            "files.unmark_pattern",
-            "files.invert_marks",
-            "files.mark_all",
-            "files.unmark_all",
-            "files.restore_marks",
-            "files.mark_extension",
-            "files.unmark_extension",
-            "files.extend_up",
-            "files.extend_down",
-            "files.extend_page_up",
-            "files.extend_page_down",
-            "files.extend_first",
-            "files.extend_last",
-            "files.context_menu",
-        ],
-    ),
-    (
-        "Pane",
-        &[
-            "pane.edit_path",
-            "files.refresh",
-            "files.clear_filter",
-            "pane.switch",
-            "pane.switch_back",
-            "pane.drive_menu_first",
-            "pane.drive_menu_second",
-            "pane.reset_split",
             "layout.split_right",
             "layout.split_below",
             "layout.close_pane",
-        ],
-    ),
-    (
-        "View",
-        &[
-            "window.view_menu",
+            "layout.focus_pane_first",
+            "layout.focus_pane_second",
+            "layout.focus_pane_third",
+            "layout.focus_pane_fourth",
+            "pane.reset_split",
+            "compare.with_other_pane",
             "preview.browse",
-            "sheet.narrower",
-            "sheet.wider",
         ],
     ),
+    (FILES_AND_PANES, &["files.delete", "pane.switch_back"]),
     (
-        "Navigation",
-        &[
-            "files.cursor_up",
-            "files.cursor_down",
-            "files.page_up",
-            "files.page_down",
-            "files.cursor_first",
-            "files.cursor_last",
-            "pane.go_back",
-            "pane.go_forward",
-        ],
-    ),
-    (
-        "Window",
+        WINDOW,
         &[
             "app.command_palette",
             "jobs.toggle",
-            "activity.focus",
             "settings.toggle",
-            "app_menu.toggle",
-            "window.new",
-            "help.key_map",
-            "help.user_guide",
-            "app.quit",
+            "layout.switcher",
+            "workspace.save",
+            "sheet.narrower",
+            "sheet.wider",
+            "window.view_menu",
+            "activity.focus",
+            "workspace.new",
+            "workspace.preview_first",
+            "workspace.preview_second",
+            "workspace.preview_third",
+            "workspace.preview_fourth",
+            "workspace.preview_fifth",
+            "workspace.preview_sixth",
+            "workspace.preview_seventh",
+            "workspace.preview_eighth",
+            "workspace.preview_ninth",
+            "workspace.cancel_preview",
         ],
     ),
+    (WORKSPACES, &["workspace.move_left", "workspace.move_right"]),
 ];
 
+/// Commands that destroy data without Undo; the ribbon draws them in the mark colour.
+const DANGER: [&str; 1] = ["files.delete"];
+
+/// True when the command destroys data without Undo.
 #[must_use]
-pub fn place_of(command: &str) -> (usize, usize) {
+pub fn is_danger(command: &str) -> bool {
+    DANGER.contains(&command)
+}
+
+/// Picks a group for a command no list names (a user binding), by its prefix.
+fn fallback(command: &str) -> &'static str {
+    match command.split_once('.').map(|(prefix, _)| prefix) {
+        Some("tab") => TABS,
+        Some("pane" | "layout") => PANES,
+        Some("files") => FILES,
+        _ => WINDOW,
+    }
+}
+
+/// Returns the l10n id of the command's group.
+#[must_use]
+pub fn group_of(command: &str) -> &'static str {
     GROUPS
         .iter()
-        .enumerate()
-        .find_map(|(group, (_, commands))| {
-            let at = commands.iter().position(|name| *name == command)?;
-            Some((group, at))
-        })
-        .unwrap_or((ORDER.len() - 1, usize::MAX))
+        .find(|(_, commands)| commands.contains(&command))
+        .map_or_else(|| fallback(command), |(group, _)| group)
+}
+
+/// Sort key of a command on a layer: its group's rank, then its place in the group
+/// (unlisted commands last).
+#[must_use]
+pub fn place_of(command: &str, combo: Combo) -> (usize, usize) {
+    let order = if combo == Combo::CTRL_SHIFT {
+        &CTRL_SHIFT_ORDER
+    } else {
+        &ORDER
+    };
+    let group = group_of(command);
+    let rank = order
+        .iter()
+        .position(|id| *id == group)
+        .unwrap_or(order.len());
+    let at = GROUPS
+        .iter()
+        .find_map(|(_, commands)| commands.iter().position(|name| *name == command))
+        .unwrap_or(usize::MAX);
+    (rank, at)
 }

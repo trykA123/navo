@@ -69,10 +69,11 @@ impl HintsDrawer {
 fn summary(layer: &Layer) -> String {
     let count = layer.count();
     let noun = if count == 1 { "shortcut" } else { "shortcuts" };
-    let more = match layer.more.len() {
-        0 => String::new(),
-        extra => format!(" · add Shift for {extra} more"),
-    };
+    let more: String = layer
+        .more
+        .iter()
+        .map(|more| format!(" + {} {} more", more.modifier, more.count))
+        .collect();
     format!("{count} {noun} in the file list{more} · release to hide")
 }
 
@@ -252,19 +253,14 @@ fn body(t: &Theme, layer: &Layer) -> AnyElement {
             .into_any_element();
     }
     let groups = layer.groups.iter().map(|group| Column {
-        title: group.name.to_uppercase().into(),
+        title: group.name.clone(),
         entries: &group.entries,
         is_more: false,
-    });
-    let more = (!layer.more.is_empty()).then(|| Column {
-        title: "+ SHIFT".into(),
-        entries: &layer.more,
-        is_more: true,
     });
     div()
         .flex()
         .gap(t.spacing.xxl + t.spacing.md)
-        .children(groups.chain(more).map(|shown| column(t, &shown)))
+        .children(groups.map(|shown| column(t, &shown)))
         .into_any_element()
 }
 

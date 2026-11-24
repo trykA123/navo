@@ -5,8 +5,19 @@ use gpui_kit::{Modifiers, px};
 use super::*;
 use crate::commands::Keymap;
 
-fn names(layer: &Layer) -> Vec<&'static str> {
-    layer.groups.iter().map(|group| group.name).collect()
+fn names(layer: &Layer) -> Vec<String> {
+    layer
+        .groups
+        .iter()
+        .map(|group| group.name.to_string())
+        .collect()
+}
+
+fn shorts(entries: &[Entry]) -> Vec<String> {
+    entries
+        .iter()
+        .map(|entry| entry.short.to_string())
+        .collect()
 }
 
 fn commands(entries: &[Entry]) -> Vec<&'static str> {
@@ -32,90 +43,85 @@ fn delay() -> Delay {
 }
 
 #[test]
-fn the_ctrl_layer_groups_follow_the_fixed_order() {
+fn the_ctrl_layer_has_three_groups_with_short_labels() {
     let layer = layer_in(Keymap::builtin(), Combo::CTRL);
+    assert_eq!(names(&layer), ["Files", "Tabs", "Window"]);
+    let files = &group(&layer, "Files").entries;
     assert_eq!(
-        names(&layer),
+        shorts(files),
         [
-            "Clipboard",
-            "Tabs",
-            "Sort",
-            "Files",
-            "Pane",
-            "View",
-            "Window",
-            "Other"
+            "Copy",
+            "Cut",
+            "Paste",
+            "Undo",
+            "Mark all",
+            "Unmark all",
+            "Rename several",
+            "Refresh"
         ]
     );
+    assert_eq!(files[0].label, "Copy to clipboard");
+    assert_eq!(files[0].keys, ["C"]);
     assert_eq!(
-        commands(&group(&layer, "Files").entries),
+        shorts(&group(&layer, "Window").entries),
         [
-            "files.multi_rename",
-            "files.undo",
-            "files.mark_all",
-            "files.unmark_all"
-        ]
-    );
-    let clipboard = &group(&layer, "Clipboard").entries;
-    assert_eq!(
-        commands(clipboard),
-        ["files.clipboard_copy", "files.clipboard_cut", "files.paste"]
-    );
-    assert_eq!(clipboard[0].label, "Copy to clipboard");
-    assert_eq!(clipboard[0].keys, ["C"]);
-    assert_eq!(
-        commands(&group(&layer, "Sort").entries),
-        [
-            "files.sort_by_name",
-            "files.sort_by_extension",
-            "files.sort_by_date",
-            "files.sort_by_size"
+            "Command center",
+            "Jobs",
+            "Settings",
+            "Layouts",
+            "Save workspace",
+            "Narrower sheet",
+            "Wider sheet"
         ]
     );
     assert_eq!(layer.count(), 25);
 }
 
 #[test]
-fn the_alt_and_shift_layers_map_their_commands_to_groups() {
+fn the_alt_and_shift_layers_use_their_own_groups() {
     let alt = layer_in(Keymap::builtin(), Combo::ALT);
+    assert_eq!(names(&alt), ["Go", "Files", "Window"]);
     assert_eq!(
-        names(&alt),
-        ["Files", "Pane", "View", "Navigation", "Window", "Other"]
+        shorts(&group(&alt, "Go").entries),
+        ["Back", "Forward", "Edit path"]
     );
     assert_eq!(
-        commands(&group(&alt, "Navigation").entries),
-        ["pane.go_back", "pane.go_forward"]
-    );
-    let shift = layer_in(Keymap::builtin(), Combo::SHIFT);
-    assert_eq!(names(&shift), ["Files", "Pane", "Window"]);
-    assert_eq!(
-        commands(&group(&shift, "Pane").entries),
-        ["pane.switch_back"]
-    );
-    assert_eq!(
-        commands(&group(&shift, "Files").entries),
+        shorts(&group(&alt, "Window").entries),
         [
-            "files.edit_with",
-            "files.rename",
-            "files.new_file",
-            "files.delete",
-            "files.extend_up",
-            "files.extend_down",
-            "files.extend_page_up",
-            "files.extend_page_down",
-            "files.extend_first",
-            "files.extend_last",
-            "files.context_menu"
+            "View menu",
+            "Activity",
+            "New workspace",
+            "Workspace 1–9",
+            "Cancel preview"
         ]
     );
+    let shift = layer_in(Keymap::builtin(), Combo::SHIFT);
+    assert_eq!(names(&shift), ["Marks", "Files and panes"]);
+    assert_eq!(
+        shorts(&group(&shift, "Marks").entries),
+        [
+            "Mark up",
+            "Mark down",
+            "Mark page up",
+            "Mark page down",
+            "Mark to top",
+            "Mark to bottom"
+        ]
+    );
+    assert_eq!(
+        shorts(&group(&shift, "Files and panes").entries),
+        ["Delete for good", "Previous pane"]
+    );
+    let both = layer_in(Keymap::builtin(), Combo::CTRL_SHIFT);
+    assert_eq!(names(&both), ["Tabs", "Panes", "Files", "Window"]);
 }
 
 #[test]
-fn a_command_without_a_group_goes_to_other() {
+fn a_command_without_a_group_goes_by_its_prefix() {
     let keymap = user("[[bind]]\ncommand = \"workspace.list\"\nkeys = [\"ctrl-alt-shift-w\"]\n");
     let layer = layer_where(&keymap, Combo::new(true, true, true), &|_| true);
-    assert_eq!(names(&layer), ["Other"]);
-    assert_eq!(layer.groups[0].entries[0].label, "Workspaces");
+    assert_eq!(names(&layer), ["Window"]);
+    assert_eq!(layer.groups[0].entries[0].short, "Workspaces");
 }
 
 #[test]
@@ -125,40 +131,85 @@ fn a_command_with_two_keys_is_one_entry_with_both_caps() {
     let next: Vec<&Entry> = tabs.iter().filter(|e| e.command == "tab.next").collect();
     assert_eq!(next.len(), 1);
     assert_eq!(next[0].keys, ["Tab", "PgDn"]);
-    let delete = layer_in(Keymap::builtin(), Combo::SHIFT);
-    let files = &group(&delete, "Files").entries;
-    let entry = files.iter().find(|e| e.command == "files.delete");
+}
+
+#[test]
+fn single_modifier_layers_count_the_layers_one_modifier_away() {
+    let more = |combo| {
+        layer_in(Keymap::builtin(), combo)
+            .more
+            .iter()
+            .map(|more| (more.modifier, more.count))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(more(Combo::CTRL), [("Shift", 10), ("Alt", 4)]);
+    assert_eq!(more(Combo::SHIFT), [("Ctrl", 10), ("Alt", 2)]);
+    assert_eq!(more(Combo::ALT), [("Shift", 2), ("Ctrl", 4)]);
+    assert!(more(Combo::CTRL_SHIFT).is_empty());
+    let without_crash = layer_where(Keymap::builtin(), Combo::CTRL, &|spec| {
+        spec.action.is_some() && spec.name != "crash_notice.focus"
+    });
+    assert_eq!(without_crash.more[0].count, 9);
+}
+
+#[test]
+fn f_keys_leave_the_groups_for_the_f_row() {
+    let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
     assert_eq!(
-        entry.map(|e| e.keys.clone()),
-        Some(vec!["Del".into(), "F8".into()])
+        shorts(&ctrl.fkeys),
+        ["By name", "By ext", "By date", "By size"]
+    );
+    assert_eq!(ctrl.fkeys[0].keys, ["F3"]);
+    let shift = layer_in(Keymap::builtin(), Combo::SHIFT);
+    let row: Vec<(String, String)> = shift
+        .fkeys
+        .iter()
+        .map(|entry| (entry.keys[0].to_string(), entry.short.to_string()))
+        .collect();
+    let row: Vec<(&str, &str)> = row.iter().map(|(k, s)| (k.as_str(), s.as_str())).collect();
+    assert_eq!(
+        row,
+        [
+            ("F1", "Guide"),
+            ("F4", "Edit with"),
+            ("F6", "Rename"),
+            ("F7", "New file"),
+            ("F8", "Delete"),
+            ("F10", "Context")
+        ]
+    );
+    assert_eq!(shift.count(), 14);
+    let alt = layer_in(Keymap::builtin(), Combo::ALT);
+    assert_eq!(
+        shorts(&alt.fkeys),
+        ["Left drive", "Right drive", "Find in files"]
     );
 }
 
 #[test]
-fn the_ctrl_layer_lists_the_ctrl_shift_keys_in_a_last_column() {
-    let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
+fn delete_for_good_is_danger_in_the_list_and_the_f_row() {
+    let shift = layer_in(Keymap::builtin(), Combo::SHIFT);
+    let danger: Vec<(String, String)> = shift
+        .groups
+        .iter()
+        .flat_map(|group| &group.entries)
+        .chain(&shift.fkeys)
+        .filter(|entry| entry.is_danger)
+        .map(|entry| (entry.keys[0].to_string(), entry.short.to_string()))
+        .collect();
     assert_eq!(
-        commands(&ctrl.more),
+        danger,
         [
-            "tab.previous",
-            "files.unmark_all",
-            "pane.reset_split",
-            "preview.browse",
-            "clipboard.open",
-            "tab.clone",
-            "tab.reopen_closed",
-            "crash_notice.focus",
-            "layout.focus_pane_first",
-            "compare.with_other_pane"
+            ("Del".to_owned(), "Delete for good".to_owned()),
+            ("F8".to_owned(), "Delete".to_owned())
         ]
     );
-    assert_eq!(ctrl.more[0].keys, ["Tab"]);
-    assert_eq!(ctrl.more[4].keys, ["V"]);
-    assert!(layer_in(Keymap::builtin(), Combo::SHIFT).more.is_empty());
+    let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
     assert!(
-        layer_in(Keymap::builtin(), Combo::CTRL_SHIFT)
-            .more
-            .is_empty()
+        ctrl.groups
+            .iter()
+            .flat_map(|g| &g.entries)
+            .all(|e| !e.is_danger)
     );
 }
 
@@ -174,13 +225,11 @@ fn a_layer_without_bindings_is_empty() {
 fn a_user_rebind_moves_the_entry_to_its_new_layer() {
     let keymap = user("[[bind]]\ncommand = \"files.paste\"\nkeys = [\"ctrl-shift-v\"]\n");
     let ctrl = layer_in(&keymap, Combo::CTRL);
-    assert_eq!(
-        commands(&group(&ctrl, "Clipboard").entries),
-        ["files.clipboard_copy", "files.clipboard_cut"]
-    );
-    assert!(commands(&ctrl.more).contains(&"files.paste"));
+    assert!(!commands(&group(&ctrl, "Files").entries).contains(&"files.paste"));
     let both = layer_in(&keymap, Combo::CTRL_SHIFT);
-    assert_eq!(group(&both, "Clipboard").entries[0].keys, ["V"]);
+    let files = &group(&both, "Files").entries;
+    assert_eq!(commands(files), ["files.paste", "files.unmark_all"]);
+    assert_eq!(files[0].keys, ["V"]);
 }
 
 #[test]
@@ -376,14 +425,14 @@ fn a_numbered_run_folds_into_one_row() {
     let layer = layer_in(Keymap::builtin(), Combo::CTRL);
     let tabs = &group(&layer, "Tabs").entries;
     assert_eq!(
-        labels(tabs),
+        shorts(tabs),
         [
             "New tab",
             "Close tab",
             "Next tab",
             "Previous tab",
-            "Go to tab 1–8",
-            "Go to last tab"
+            "Tab 1–8",
+            "Last tab"
         ]
     );
     let run = tabs
@@ -391,7 +440,7 @@ fn a_numbered_run_folds_into_one_row() {
         .find(|e| e.label == "Go to tab 1–8")
         .expect("run");
     assert_eq!(run.keys, ["1–8"]);
-    assert_eq!(layer.rows(), 10);
+    assert_eq!(layer.rows(), 8);
 }
 
 #[test]
@@ -409,10 +458,8 @@ fn a_command_without_a_handler_is_left_out() {
     let ctrl = layer_in(Keymap::builtin(), Combo::CTRL);
     let window = &group(&ctrl, "Window").entries;
     assert!(!commands(window).contains(&"window.new"));
-    let alt = layer_in(Keymap::builtin(), Combo::ALT);
-    assert_eq!(commands(&group(&alt, "Window").entries), ["activity.focus"]);
     let wired = layer_where(Keymap::builtin(), Combo::CTRL, &|spec| {
         spec.name != "files.paste" && spec.action.is_some()
     });
-    assert!(!commands(&group(&wired, "Clipboard").entries).contains(&"files.paste"));
+    assert!(!commands(&group(&wired, "Files").entries).contains(&"files.paste"));
 }

@@ -467,7 +467,13 @@ fn every_cmd_message_in_the_files_belongs_to_a_command() {
         .iter()
         .flat_map(|(_, source)| source.lines())
         .filter_map(|line| line.split(" =").next())
-        .filter(|id| id.starts_with("cmd-") && !labels.contains(id))
+        .filter(|id| {
+            let base = ["-short", "-fkey"]
+                .iter()
+                .find_map(|suffix| id.strip_suffix(suffix))
+                .unwrap_or(id);
+            id.starts_with("cmd-") && !labels.contains(base)
+        })
         .filter(|id| cfg!(feature = "tester") || !TESTER_LABELS.contains(id))
         .filter(|id| !WINDOW_ENTRY_LABELS.contains(id))
         .collect();

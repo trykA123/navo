@@ -79,7 +79,7 @@ fn holding_ctrl_in_the_file_list_opens_the_drawer_after_the_delay(cx: &mut TestA
     let label = drawer(cx, window).expect("the drawer is open");
     assert!(label.contains("Ctrl"), "{label}");
     assert!(has_entry(cx, window, "hint-files.clipboard_copy"));
-    assert!(has_entry(cx, window, "hint-more-preview.browse"));
+    assert!(!has_entry(cx, window, "hint-preview.browse"));
 }
 
 #[gpui_kit::test]
@@ -119,12 +119,13 @@ fn adding_shift_switches_the_drawer_to_ctrl_shift_at_once(cx: &mut TestAppContex
 #[gpui_kit::test]
 fn a_rebind_shows_in_the_drawer_at_once(cx: &mut TestAppContext) {
     let (window, _) = open(cx, Rc::default());
-    let text = "[[bind]]\ncommand = \"files.refresh\"\nkeys = [\"ctrl-shift-f9\"]\n";
+    let text = "[[bind]]\ncommand = \"files.refresh\"\nkeys = [\"ctrl-shift-y\"]\n";
     let keymap = Keymap::builtin().overlay(text).expect("keymap").keymap;
     cx.update(|cx| set_active(cx, keymap));
     hold_open(cx, window);
     assert!(!has_entry(cx, window, "hint-files.refresh"));
-    assert!(has_entry(cx, window, "hint-more-files.refresh"));
+    hold(cx, window, CTRL_SHIFT);
+    assert!(has_entry(cx, window, "hint-files.refresh"));
 }
 
 #[gpui_kit::test]

@@ -1,8 +1,11 @@
+//! Builds a ribbon layer from the keymap: entries with short labels, grouped per layer,
+//! the F-row entries apart, and the counts of the combo layers one modifier away.
+
 use gpui_kit::SharedString;
-use navo_l10n::tr;
+use navo_l10n::{catalog, tr};
 
 use super::combo::Combo;
-use super::groups::{ORDER, place_of};
+use super::groups::{group_of, is_danger, place_of};
 use super::runs::folded;
 use crate::commands::{Bind, CommandSpec, GLOBAL, Keymap};
 use crate::host_os::parse_keystroke;
@@ -29,32 +32,47 @@ const CAPS: [(&str, &str); 14] = [
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Entry {
     pub command: &'static str,
+    /// The full command name: the accessible name and the tooltip.
     pub label: SharedString,
+    /// The short label the ribbon shows.
+    pub short: SharedString,
     pub keys: Vec<SharedString>,
+    pub is_danger: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Group {
-    pub name: &'static str,
+    pub name: SharedString,
     pub entries: Vec<Entry>,
+}
+
+/// A layer one modifier away, for the header: "+ Shift 8 more".
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct More {
+    pub modifier: &'static str,
+    pub count: usize,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Layer {
     pub combo: Combo,
     pub groups: Vec<Group>,
-    pub more: Vec<Entry>,
+    /// Entries on F1 to F10, one key each, in key order.
+    pub fkeys: Vec<Entry>,
+    pub more: Vec<More>,
 }
 
 impl Layer {
+    /// Number of keys in the file list: group entries plus F-row entries.
     #[must_use]
     pub fn count(&self) -> usize {
-        self.groups.iter().map(|group| group.entries.len()).sum()
+        let grouped: usize = self.groups.iter().map(|group| group.entries.len()).sum();
+        grouped + self.fkeys.len()
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.groups.is_empty()
+        self.groups.is_empty() && self.fkeys.is_empty()
     }
 
     #[must_use]
@@ -62,7 +80,6 @@ impl Layer {
         self.groups
             .iter()
             .map(|group| group.entries.len())
-            .chain([self.more.len()])
             .max()
             .unwrap_or(0)
     }
@@ -90,8 +107,50 @@ fn caps_on(bind: &Bind, combo: Combo) -> Vec<SharedString> {
 
 pub type IsHandled<'a> = &'a dyn Fn(&CommandSpec) -> bool;
 
-fn entries(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<Entry> {
-    let mut entries: Vec<Entry> = Vec::new();
+/// The layers one modifier away from a single-modifier layer, in header order.
+const NEIGHBOURS: [(Combo, [(&str, Combo); 2]); 3] = [
+    (
+        Combo::CTRL,
+        [
+            ("Shift", Combo::CTRL_SHIFT),
+            ("Alt", Combo::new(true, true, false)),
+        ],
+    ),
+    (
+        Combo::SHIFT,
+        [
+            ("Ctrl", Combo::CTRL_SHIFT),
+            ("Alt", Combo::new(false, true, true)),
+        ],
+    ),
+    (
+        Combo::ALT,
+        [
+            ("Shift", Combo::new(false, true, true)),
+            ("Ctrl", Combo::new(true, true, false)),
+        ],
+    ),
+];
+
+/// Looks up `<id><suffix>` and falls back to the next suffix, then to the id itself.
+fn label_of(id: &str, suffixes: &[&str]) -> SharedString {
+    suffixes
+        .iter()
+        .map(|suffix| format!("{id}{suffix}"))
+        .find(|candidate| catalog().has(candidate))
+        .map_or_else(|| tr(id), |candidate| tr(&candidate))
+        .into()
+}
+
+/// The F-key number of a key cap, for F1 to F10 only.
+fn fkey_number(cap: &str) -> Option<u8> {
+    let number: u8 = cap.strip_prefix('F')?.parse().ok()?;
+    (1..=10).contains(&number).then_some(number)
+}
+
+/// Entries on a combo, merged per command with duplicate caps removed.
+fn merged(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<(Entry, &'static str)> {
+    let mut entries: Vec<(Entry, &'static str)> = Vec::new();
     let binds = keymap
         .binds()
         .iter()
@@ -102,17 +161,20 @@ fn entries(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<Entry> {
             continue;
         }
         let name = bind.spec.name;
-        let Some(entry) = entries.iter_mut().find(|entry| entry.command == name) else {
-            entries.push(Entry {
+        let Some((entry, _)) = entries.iter_mut().find(|(entry, _)| entry.command == name) else {
+            let entry = Entry {
                 command: name,
                 label: tr(bind.spec.label).into(),
+                short: label_of(bind.spec.label, &["-short"]),
                 keys: caps,
-            });
+                is_danger: is_danger(name),
+            };
+            entries.push((entry, bind.spec.label));
             continue;
         };
         entry.keys.extend(caps);
     }
-    for entry in &mut entries {
+    for (entry, _) in &mut entries {
         let mut seen = Vec::new();
         entry.keys.retain(|key| {
             let is_new = !seen.contains(key);
@@ -120,23 +182,73 @@ fn entries(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<Entry> {
             is_new
         });
     }
-    entries.sort_by_key(|entry| place_of(entry.command));
-    folded(&entries)
+    entries
+}
+
+/// Splits a combo's entries into the grouped list (folded runs) and the F-row.
+fn entries(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> (Vec<Entry>, Vec<Entry>) {
+    let mut listed = Vec::new();
+    let mut fkeys: Vec<(u8, Entry)> = Vec::new();
+    for (mut entry, label_id) in merged(keymap, combo, is_handled) {
+        for key in &entry.keys {
+            let Some(number) = fkey_number(key) else {
+                continue;
+            };
+            let short = label_of(label_id, &["-fkey", "-short"]);
+            let keys = vec![key.clone()];
+            fkeys.push((
+                number,
+                Entry {
+                    short,
+                    keys,
+                    ..entry.clone()
+                },
+            ));
+        }
+        entry.keys.retain(|key| fkey_number(key).is_none());
+        if !entry.keys.is_empty() {
+            listed.push(entry);
+        }
+    }
+    listed.sort_by_key(|entry| place_of(entry.command, combo));
+    fkeys.sort_by_key(|(number, _)| *number);
+    (
+        folded(&listed),
+        fkeys.into_iter().map(|(_, entry)| entry).collect(),
+    )
 }
 
 fn grouped(entries: Vec<Entry>) -> Vec<Group> {
-    let mut groups: Vec<Group> = Vec::new();
+    let mut groups: Vec<(&'static str, Group)> = Vec::new();
     for entry in entries {
-        let name = ORDER[place_of(entry.command).0];
-        match groups.last_mut().filter(|group| group.name == name) {
-            Some(group) => group.entries.push(entry),
-            None => groups.push(Group {
-                name,
-                entries: vec![entry],
-            }),
+        let id = group_of(entry.command);
+        match groups.last_mut().filter(|(group, _)| *group == id) {
+            Some((_, group)) => group.entries.push(entry),
+            None => groups.push((
+                id,
+                Group {
+                    name: tr(id).into(),
+                    entries: vec![entry],
+                },
+            )),
         }
     }
-    groups
+    groups.into_iter().map(|(_, group)| group).collect()
+}
+
+/// Counts of the layers one modifier away; empty ones are left out.
+fn more_of(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Vec<More> {
+    let Some((_, neighbours)) = NEIGHBOURS.iter().find(|(own, _)| *own == combo) else {
+        return Vec::new();
+    };
+    neighbours
+        .iter()
+        .filter_map(|&(modifier, other)| {
+            let (listed, fkeys) = entries(keymap, other, is_handled);
+            let count = listed.len() + fkeys.len();
+            (count > 0).then_some(More { modifier, count })
+        })
+        .collect()
 }
 
 #[must_use]
@@ -146,14 +258,11 @@ pub fn layer_in(keymap: &Keymap, combo: Combo) -> Layer {
 
 #[must_use]
 pub fn layer_where(keymap: &Keymap, combo: Combo, is_handled: IsHandled) -> Layer {
-    let is_ctrl = combo == Combo::CTRL;
+    let (listed, fkeys) = entries(keymap, combo, is_handled);
     Layer {
         combo,
-        groups: grouped(entries(keymap, combo, is_handled)),
-        more: if is_ctrl {
-            entries(keymap, combo.with_shift(), is_handled)
-        } else {
-            Vec::new()
-        },
+        groups: grouped(listed),
+        fkeys,
+        more: more_of(keymap, combo, is_handled),
     }
 }

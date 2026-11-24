@@ -1,3 +1,5 @@
+//! Folds numbered runs of ribbon entries (Tab 1 to Tab 8) into one entry with a key range.
+
 use gpui_kit::SharedString;
 
 use super::layer::Entry;
@@ -36,15 +38,22 @@ fn run_at(entries: &[Entry], start: usize) -> Option<usize> {
     (len >= SHORTEST_RUN && is_whole && is_run).then_some(len)
 }
 
+/// Folds a run into one entry: "Tab 1–8" on keys "1–8"; None when a member lacks a number.
 fn fold(members: &[Entry]) -> Option<Entry> {
     let (first, last) = (members.first()?, members.last()?);
     let (prefix, from) = numbered(&first.label)?;
     let (_, to) = numbered(&last.label)?;
     let keys = format!("{}–{}", first.keys.first()?, last.keys.first()?);
+    let short = match (numbered(&first.short), numbered(&last.short)) {
+        (Some((short, from)), Some((_, to))) => format!("{short} {from}–{to}"),
+        _ => format!("{prefix} {from}–{to}"),
+    };
     Some(Entry {
         command: first.command,
         label: SharedString::from(format!("{prefix} {from}–{to}")),
+        short: short.into(),
         keys: vec![keys.into()],
+        is_danger: first.is_danger,
     })
 }
 
