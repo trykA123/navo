@@ -159,7 +159,7 @@ fn literal_quotes_in_text_print_escaped() {
 fn literal_quotes_round_trip_in_text_regex_and_paths() {
     for input in [
         r#""he said \"hi\"""#,
-        r#"re:"a \"b\" c""#,
+        r#"re:"a \"b\"""#,
         r#"in:"C:\My \"files\"""#,
     ] {
         assert_round_trip(input);
@@ -172,4 +172,52 @@ fn a_path_can_end_with_a_backslash() {
     assert_eq!(query.within, [r"C:\My files\"]);
     assert_eq!(query.to_text(), r#"in:"C:\My files\""#);
     assert_round_trip(r#"in:"C:\My files\""#);
+}
+
+#[test]
+fn a_quoted_folder_ending_in_a_backslash_closes_its_token() {
+    for input in [r#"in:"C:\" in:"D:\""#, r#"in:"C:\My files\" ext:"foo bar""#] {
+        let query = FindQuery::parse(input);
+        assert!(
+            query.tokens.iter().all(|token| token.message.is_none()),
+            "{input}: {:?}",
+            query.tokens
+        );
+        assert_round_trip(input);
+    }
+    assert_eq!(
+        FindQuery::parse(r#"in:"C:\" in:"D:\""#).within,
+        [r"C:\", r"D:\"]
+    );
+}
+
+#[test]
+fn a_path_ending_in_a_backslash_is_a_clean_last_token() {
+    let input = r#"in:"C:\My files\""#;
+    let query = FindQuery::parse(input);
+    assert!(query.tokens.iter().all(|token| token.message.is_none()));
+    assert_eq!(query.within, [r"C:\My files\"]);
+    assert_round_trip(input);
+}
+
+#[test]
+fn a_real_escaped_quote_inside_text_round_trips() {
+    let input = r#""he said \"hi\"" again"#;
+    assert_round_trip(input);
+    assert_eq!(FindQuery::parse(input).to_text(), input);
+}
+
+#[test]
+fn regex_text_with_a_quote_before_a_space_round_trips() {
+    let input = r#"re:"a \"b\"" c"#;
+    assert_round_trip(input);
+    assert_eq!(FindQuery::parse(input).to_text(), input);
+}
+
+#[test]
+fn a_failed_regex_leaves_the_query_unchanged() {
+    let query = FindQuery::parse("[ re:a");
+    assert!(query.tokens[1].message.is_some());
+    assert!(!query.regex);
+    assert_round_trip("[ re:a");
 }

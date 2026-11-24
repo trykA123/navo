@@ -12,7 +12,7 @@ impl FindQuery {
         let mut parts = Vec::new();
         if !self.text.is_empty() {
             if self.regex {
-                parts.push(format!("re:{}", quoted_value(&self.text)));
+                push_regex_text(&mut parts, &self.text);
             } else {
                 parts.push(plain_text(&self.text));
             }
@@ -83,11 +83,67 @@ fn quoted_value(value: &str) -> String {
 
 /// Prints plain search text so that it reparses as the same text, not as filters.
 fn plain_text(text: &str) -> String {
+    let segments = quote_segments(text);
+    if segments.len() > 1 {
+        return segments
+            .iter()
+            .map(|segment| text_word(segment))
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
     if text_needs_quoting(text) {
         format!("\"{}\"", escaped(text))
     } else {
         text.to_owned()
     }
+}
+
+/// Pushes a regex as `re:` plus the text words after a quote that a space follows.
+fn push_regex_text(parts: &mut Vec<String>, text: &str) {
+    let segments = quote_segments(text);
+    let first = segments.first().map_or(text, |segment| *segment);
+    parts.push(format!("re:{}", quoted_value(first)));
+    for segment in segments.iter().skip(1) {
+        parts.push(text_word(segment));
+    }
+}
+
+fn text_word(word: &str) -> String {
+    if text_needs_quoting(word) {
+        format!("\"{}\"", escaped(word))
+    } else {
+        word.to_owned()
+    }
+}
+
+/// Splits after every literal quote that whitespace follows, so a piece ending
+/// in a quote can be one quoted token that the parser still closes.
+fn quote_segments(text: &str) -> Vec<&str> {
+    let mut segments = Vec::new();
+    let mut start = 0;
+    let mut chars = text.char_indices().peekable();
+    while let Some((index, ch)) = chars.next() {
+        if ch == '"'
+            && chars
+                .peek()
+                .copied()
+                .is_some_and(|(_, next)| next.is_whitespace())
+        {
+            segments.push(&text[start..=index]);
+            while chars
+                .peek()
+                .copied()
+                .is_some_and(|(_, next)| next.is_whitespace())
+            {
+                chars.next();
+            }
+            start = chars.peek().map_or(text.len(), |(next, _)| *next);
+        }
+    }
+    if start < text.len() {
+        segments.push(&text[start..]);
+    }
+    segments
 }
 
 fn text_needs_quoting(text: &str) -> bool {

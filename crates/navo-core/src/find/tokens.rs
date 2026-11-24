@@ -181,13 +181,17 @@ pub(super) fn split_tokens(input: &str) -> Vec<(Range<usize>, bool)> {
     tokens
 }
 
-/// Says whether a `\` + `"` pair keeps the token quoted.
+/// Says whether a `\` + `"` pair keeps the token quoted: a quote followed by
+/// whitespace or the end is the closing one, so a Windows folder may end in `\`.
 fn split_escape(input: &str, chars: &mut Peekable<CharIndices<'_>>) -> bool {
     let Some((quote, '"')) = chars.peek().copied() else {
         return true;
     };
     chars.next();
-    input[quote + 1..].contains('"')
+    input[quote + 1..]
+        .chars()
+        .next()
+        .is_some_and(|next| !next.is_whitespace())
 }
 
 /// Drops the quoting characters from one token and turns `\"` into a literal quote.
@@ -212,7 +216,11 @@ fn unquote_escape(source: &str, chars: &mut Peekable<CharIndices<'_>>, word: &mu
         return true;
     };
     chars.next();
-    if source[quote + 1..].contains('"') {
+    if source[quote + 1..]
+        .chars()
+        .next()
+        .is_some_and(|next| !next.is_whitespace())
+    {
         word.push('"');
         true
     } else {

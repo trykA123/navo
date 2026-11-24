@@ -139,24 +139,32 @@ impl FindQuery {
             return Err("re: needs a pattern".to_owned());
         }
         regex::Regex::new(value).map_err(|error| format!("re: {error}"))?;
+        let text = self.composed(value);
+        regex::Regex::new(&text).map_err(|error| format!("re: {error}"))?;
+        self.text = text;
         self.regex = true;
-        self.push_text(value)
+        Ok(())
     }
 
     fn push_text(&mut self, word: &str) -> Result<(), String> {
         if word.is_empty() {
             return Ok(());
         }
-        let mut text = self.text.clone();
-        if !text.is_empty() {
-            text.push(' ');
-        }
-        text.push_str(word);
+        let text = self.composed(word);
         if self.regex {
             regex::Regex::new(&text).map_err(|error| format!("re: {error}"))?;
         }
         self.text = text;
         Ok(())
+    }
+
+    fn composed(&self, word: &str) -> String {
+        let mut text = self.text.clone();
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        text.push_str(word);
+        text
     }
 }
 
