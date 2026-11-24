@@ -82,7 +82,7 @@ pub fn elevated() -> io::Result<bool> {
 }
 
 /// Maps `GetDriveTypeW` to the placement drive kind.
-fn drive_kind(root: &Path) -> io::Result<DriveKind> {
+pub(crate) fn drive_kind(root: &Path) -> io::Result<DriveKind> {
     let root = wide_z(&drive_root(root)?);
     // SAFETY: the root path is NUL-terminated and live for the call.
     let kind = unsafe { GetDriveTypeW(root.as_ptr()) };
@@ -95,7 +95,7 @@ fn drive_kind(root: &Path) -> io::Result<DriveKind> {
 }
 
 /// Whether `QueryDosDeviceW` maps the drive through `\??\`; any error counts as `subst`.
-fn subst_drive(root: &Path) -> bool {
+pub(crate) fn subst_drive(root: &Path) -> bool {
     let Ok(letter) = drive_letter(root) else {
         return true;
     };
