@@ -11,7 +11,8 @@ use super::view::{DIMMED, Look, section_label, send_on_click};
 use crate::prelude::*;
 use crate::primitives::{IconName, Kbd, icon};
 
-const NAV_WIDTH: f32 = 200.;
+/// Nav width in px (README `SET_NAV_W`).
+pub(super) const NAV_WIDTH: f32 = 200.;
 const NAV_ITEM: f32 = 30.;
 const MARKER: (f32, f32) = (3., 14.);
 /// The nav draws a divider after these pages: the end of each cluster.

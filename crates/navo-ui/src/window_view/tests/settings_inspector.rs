@@ -9,7 +9,7 @@ use gpui_kit::{AppContext as _, Bounds, ElementId, Pixels, TestAppContext, px};
 
 use super::app_menu::{Rig, rig, rig_git_sized};
 use super::git_menu::{Fake, menu_items, modified};
-use crate::settings::{Change, FIELDS, Field, Values};
+use crate::settings::{Change, FIELDS, Field, Section, Values, rows_in};
 use crate::tokens::{self, Density, ThemeChoice};
 
 const ROW: f32 = 36.;
@@ -27,11 +27,14 @@ fn row_of(field: Field) -> usize {
         .expect("every field has a row")
 }
 
+/// Presses Down from the first row until `field` has focus; Down walks the rows in page order.
 fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
-    let steps = FIELDS[..row_of(field)]
-        .iter()
-        .filter(|spec| filter.admits(spec))
+    let steps = Section::ALL
+        .into_iter()
+        .flat_map(rows_in)
+        .take_while(|(_, spec)| spec.field != field)
+        .filter(|(_, spec)| filter.admits(spec))
         .count();
     for _ in 0..steps {
         rig.press(cx, "down");
@@ -173,4 +176,16 @@ fn the_inspector_moves_under_the_list_on_a_small_dialog(cx: &mut TestAppContext)
     let inspector = bounds(cx, &rig, "settings-inspector");
     assert!(inspector.top() >= rows.bottom(), "{inspector:?} {rows:?}");
     assert_eq!(inspector.left(), rows.left());
+}
+
+#[gpui_kit::test]
+fn the_density_row_stays_one_line_on_the_narrowest_side_by_side_dialog(cx: &mut TestAppContext) {
+    let rig = open_sized(cx, 960.);
+    let rows = bounds(cx, &rig, "settings-rows");
+    let inspector = bounds(cx, &rig, "settings-inspector");
+    assert!(inspector.left() >= rows.right(), "{inspector:?} {rows:?}");
+    let height = bounds(cx, &rig, ("settings-row", row_of(Field::Density)))
+        .size
+        .height;
+    assert_eq!(height, px(ROW));
 }

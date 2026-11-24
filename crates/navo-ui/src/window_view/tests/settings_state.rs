@@ -105,7 +105,10 @@ fn every_row_starts_at_default_with_a_live_chip(cx: &mut TestAppContext) {
     assert_eq!(state(cx, &rig, Field::Theme).as_deref(), Some("Default"));
     go_to(cx, &rig, Field::Density);
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Default"));
-    assert!(!shows(cx, &rig, ("settings-reset", row_of(Field::Density))));
+    assert_eq!(
+        is_disabled(cx, &rig, ("settings-reset", row_of(Field::Density))),
+        Some(true)
+    );
     assert_eq!(label(cx, &rig, "settings-live").as_deref(), Some("Live"));
     assert_eq!(footer(cx, &rig), footer_for(0));
 }

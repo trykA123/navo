@@ -8,6 +8,7 @@ use gpui_kit::{RenderOnce, Role, canvas};
 use super::controls::{self, Picks};
 use super::fields::{Control, Field, FieldSpec, Look as ChoiceLook};
 use super::git_page;
+use super::nav::NAV_WIDTH;
 use super::row_state;
 use super::values::{Value, Values};
 use super::view::{Look, section_label, spoken};
@@ -18,8 +19,8 @@ use crate::tokens::{self, Theme};
 
 /// Inspector width in px beside the rows (README `SET_INSP_W`).
 pub(super) const WIDTH: f32 = 300.;
-/// Dialog margins (2 × 24 px) and the 148 px nav: what a window loses before the rows.
-const GUESS_TAKEN: f32 = 196.;
+/// Dialog margins (2 × 24 px) and the nav: what a window loses before the rows.
+const GUESS_TAKEN: f32 = 48. + NAV_WIDTH;
 /// Rows plus inspector narrower than this (px) stack the inspector under the rows: a
 /// 960 px window (README "Inspector") once the margins and the nav are taken off.
 const STACK_BELOW: f32 = 960. - GUESS_TAKEN;

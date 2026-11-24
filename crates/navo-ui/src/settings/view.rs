@@ -19,8 +19,10 @@ use crate::window_view::UpdateView;
 
 /// Height of a setting row in px (README `SET_ROW`).
 const ROW: f32 = 36.;
-/// The label asks for this much (px); a control that no longer fits beside it drops below.
+/// The label asks for this much (px).
 const LABEL_BASIS: f32 = 150.;
+/// The label shrinks to this width (px) with an ellipsis before the row runs out of room.
+const LABEL_MIN: f32 = 112.;
 const NO_MATCH: &str = "No setting matches";
 pub(super) const DIMMED: f32 = 0.45;
 
@@ -177,8 +179,8 @@ fn command_problem(look: &Look, field: Field) -> Option<AnyElement> {
     Some(git_page::problem_note(look.theme, problem))
 }
 
-/// One line: the changed dot, the label and the control. The control wraps under the label
-/// only when the list is too narrow for both.
+/// One line: the changed dot, the label and the control. On a narrow list the label shrinks
+/// with an ellipsis; the control keeps its width and never wraps.
 fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div {
     let t = look.theme;
     let label = div()
@@ -187,12 +189,11 @@ fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div
         .flex_grow(1.)
         .flex_shrink(1.)
         .flex_basis(px(LABEL_BASIS))
-        .min_w_0()
+        .min_w(px(LABEL_MIN))
         .truncate()
         .child(spec.label());
     div()
         .flex()
-        .flex_wrap()
         .items_center()
         .gap_x(t.spacing.xl)
         .child(row_state::gutter(
@@ -201,7 +202,7 @@ fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div
             look.values.is_changed(spec.field),
         ))
         .child(label)
-        .children(control(content_look, spec))
+        .children(control(content_look, spec).map(|control| div().flex_none().child(control)))
 }
 
 /// A setting row: one 36 px line, plus a red note under it while its value is refused.
