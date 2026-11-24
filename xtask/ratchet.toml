@@ -4,4 +4,5 @@
 max = 189
 
 [test_sleeps]
-max = 233
+# 234: the IXH2 answer test times a lock release against the 120 ms read budget.
+max = 234

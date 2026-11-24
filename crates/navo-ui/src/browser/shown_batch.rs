@@ -291,10 +291,7 @@ mod tests {
 
         fn query_many(&self, folders: &[Location], cancel: &CancelToken) -> Vec<TotalsState> {
             self.entered.store(true, Ordering::SeqCst);
-            let deadline = Instant::now() + Duration::from_secs(5);
-            while !cancel.is_cancelled() && Instant::now() < deadline {
-                std::thread::sleep(Duration::from_millis(1));
-            }
+            cancel.wait_cancelled(Duration::from_secs(5));
             self.saw_cancel
                 .store(cancel.is_cancelled(), Ordering::SeqCst);
             self.done.store(true, Ordering::SeqCst);
@@ -308,7 +305,7 @@ mod tests {
         while !flag.load(Ordering::SeqCst) {
             assert!(Instant::now() < deadline, "the batch job never got there");
             browser.poll();
-            std::thread::sleep(Duration::from_millis(1));
+            std::thread::yield_now();
         }
     }
 
