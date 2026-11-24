@@ -44,15 +44,15 @@ impl TerminalScheme {
         }
     }
 
-    /// Name shown on a scheme card.
-    pub fn label(self) -> &'static str {
+    /// Fluent message id for the scheme picker; the UI resolves it through `navo-l10n`.
+    pub fn label_key(self) -> &'static str {
         match self {
-            Self::Navo => "Follow Navo theme",
-            Self::OneDark => "One Dark",
-            Self::Catppuccin => "Catppuccin",
-            Self::TokyoNight => "Tokyo Night",
-            Self::Gruvbox => "Gruvbox",
-            Self::Dracula => "Dracula",
+            Self::Navo => "settings-terminal-scheme-navo",
+            Self::OneDark => "settings-terminal-scheme-one-dark",
+            Self::Catppuccin => "settings-terminal-scheme-catppuccin",
+            Self::TokyoNight => "settings-terminal-scheme-tokyo-night",
+            Self::Gruvbox => "settings-terminal-scheme-gruvbox",
+            Self::Dracula => "settings-terminal-scheme-dracula",
         }
     }
 

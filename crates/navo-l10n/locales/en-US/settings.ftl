@@ -198,6 +198,12 @@ settings-terminal-provider-cmd = Command Prompt
 settings-terminal-provider-custom = Custom
 settings-external-terminal = External terminal
 settings-external-terminal-help = The external terminal Navo opens in a folder
+settings-terminal-scheme-navo = Follow Navo theme
+settings-terminal-scheme-one-dark = One Dark
+settings-terminal-scheme-catppuccin = Catppuccin
+settings-terminal-scheme-tokyo-night = Tokyo Night
+settings-terminal-scheme-gruvbox = Gruvbox
+settings-terminal-scheme-dracula = Dracula
 settings-theme-help = { PLATFORM() ->
     [windows] Follow Windows, or keep light or dark
    *[other] Follow system, or keep light or dark

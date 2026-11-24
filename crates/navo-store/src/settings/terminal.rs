@@ -118,7 +118,7 @@ pub struct Terminal {
     pub font: String,
     /// The grid font size, in points.
     pub font_size: u16,
-    /// Line height in tenths; 140 is 1.4.
+    /// Line height in tenths of a line; the default 14 is 1.4.
     pub line_height: LineHeight,
     /// The cursor shape.
     pub cursor: TerminalCursor,

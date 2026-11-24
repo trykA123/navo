@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 
 use gpui_kit::Hsla;
 
-use super::Theme;
+use super::{TerminalColors, Theme};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SystemPalette {
@@ -20,6 +20,7 @@ pub fn contrast_theme(base: &Theme, p: &SystemPalette) -> Theme {
     let mut theme = base.clone();
     theme.is_contrast = true;
     theme.colors = contrast_colors(p);
+    theme.terminal = TerminalColors::follow(theme.mode, &theme.colors);
     theme.surfaces = contrast_surfaces(p);
     theme.shadows = contrast_shadows(p);
     theme.marks = super::MarkColors {
@@ -330,6 +331,23 @@ mod tests {
             assert!(theme.is_contrast);
             assert_eq!(base, Theme::new(Mode::Light));
         }
+    }
+
+    #[test]
+    fn contrast_mode_moves_the_terminal_group_to_the_system_palette() {
+        let base = Theme::new(Mode::Dark);
+        let palette = palette(false);
+        let theme = contrast_theme(&base, &palette);
+        assert_eq!(theme.terminal.background, palette.window);
+        assert_eq!(theme.terminal.text, palette.window_text);
+        assert_eq!(theme.terminal.selection, palette.highlight);
+        assert_eq!(theme.terminal.cursor, palette.hot_light);
+        assert_eq!(theme.terminal.chrome, palette.window);
+        assert_ne!(
+            theme.terminal.background, base.terminal.background,
+            "Follow Navo must move with the contrast palette"
+        );
+        assert!(contrast_ratio(theme.terminal.muted, theme.terminal.background) >= 4.5);
     }
 
     #[test]
