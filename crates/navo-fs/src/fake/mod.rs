@@ -69,6 +69,7 @@ pub struct FakeFs {
     volumes: Mutex<HashMap<String, Option<u64>>>,
     mounts: Mutex<HashMap<String, Option<u64>>>,
     without_ids: Mutex<Vec<String>>,
+    aliases: Mutex<Vec<(String, String)>>,
     space: Mutex<HashMap<String, Option<u64>>>,
     sizes: Mutex<HashMap<u64, SizeMetadata>>,
     permissions: Mutex<permissions::Permissions>,
@@ -109,6 +110,7 @@ impl FakeFs {
             volumes: Mutex::new(HashMap::new()),
             mounts: Mutex::new(HashMap::new()),
             without_ids: Mutex::new(Vec::new()),
+            aliases: Mutex::new(Vec::new()),
             space: Mutex::new(HashMap::new()),
             sizes: Mutex::new(HashMap::new()),
             permissions: Mutex::default(),
@@ -238,6 +240,20 @@ impl FakeFs {
     /// volume serial still reads.
     pub fn set_without_ids(&self, path: &str) {
         lock(&self.without_ids).push(normalize(path).trim_end_matches('/').to_owned());
+    }
+
+    /// Makes `path` and everything below it resolve to `real` in `canonical`, like a SUBST drive
+    /// or a second mapping of one folder.
+    pub fn set_alias(&self, path: &str, real: &str) {
+        let trim = |at: &str| normalize(at).trim_end_matches('/').to_owned();
+        lock(&self.aliases).push((trim(path), trim(real)));
+    }
+
+    /// True when `path` sits at or below one of `prefixes`.
+    fn under(path: &str, prefixes: &[String]) -> bool {
+        prefixes
+            .iter()
+            .any(|at| path == at || path.starts_with(&format!("{at}/")))
     }
 
     pub fn set_available_space(&self, path: &str, bytes: Option<u64>) {

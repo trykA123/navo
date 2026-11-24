@@ -137,10 +137,7 @@ impl ProviderOps for FakeFs {
             .tree()
             .identity(&path)
             .ok_or_else(|| error(FsErrorKind::NotFound, location))?;
-        let without_ids = lock(&self.without_ids)
-            .iter()
-            .any(|at| path == *at || path.starts_with(&format!("{at}/")));
-        if without_ids {
+        if FakeFs::under(&path, &lock(&self.without_ids)) {
             return Ok(None);
         }
         Ok(self
@@ -345,6 +342,21 @@ impl ProviderOps for FakeFs {
     fn link_target(&self, at: &Location) -> Result<Option<Location>, FsError> {
         let path = self.own_path(at)?;
         Ok(FakeFs::link_target(self, &path).map(|target| self.location(&target)))
+    }
+
+    fn canonical(&self, location: &Location) -> Result<Option<Location>, FsError> {
+        let path = self.own_path(location)?;
+        if self.tree().metadata(&path).is_none() {
+            return Err(error(FsErrorKind::NotFound, location));
+        }
+        let aliases = lock(&self.aliases);
+        let real = aliases
+            .iter()
+            .find(|(at, _)| FakeFs::under(&path, std::slice::from_ref(at)))
+            .map_or(path.clone(), |(at, real)| {
+                format!("{real}{}", &path[at.len()..])
+            });
+        Ok(Some(self.location(&real)))
     }
 
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {

@@ -221,3 +221,82 @@ fn a_target_without_a_readable_identity_is_refused() {
         assert_eq!(tree_of(&fs, "dst"), before, "workers {workers}");
     }
 }
+
+/// `two_files` on a volume that keeps no file IDs, as FAT or exFAT does.
+fn without_ids() -> FakeFs {
+    let fs = two_files();
+    fs.set_without_ids("src");
+    fs.set_without_ids("dst");
+    fs
+}
+
+#[test]
+fn without_ids_another_volume_serial_still_overwrites() {
+    for workers in MODES {
+        let fs = without_ids();
+        fs.set_volume("dst", 7);
+        assert_eq!(
+            copy_over(&fs, workers),
+            JobOutcome::Done,
+            "workers {workers}"
+        );
+        assert_eq!(size(&fs, "dst/a.txt"), Some(BIG), "workers {workers}");
+    }
+}
+
+#[test]
+fn without_ids_on_one_volume_another_path_still_overwrites() {
+    for workers in MODES {
+        let fs = without_ids();
+        assert_eq!(
+            copy_over(&fs, workers),
+            JobOutcome::Done,
+            "workers {workers}"
+        );
+        assert_eq!(size(&fs, "dst/a.txt"), Some(BIG), "workers {workers}");
+    }
+}
+
+#[test]
+fn without_ids_on_one_volume_the_same_resolved_path_is_refused() {
+    for workers in MODES {
+        let fs = without_ids();
+        fs.set_alias("dst", "src");
+        let before = (tree_of(&fs, "src"), tree_of(&fs, "dst"));
+        let outcome = copy_over(&fs, workers);
+        assert_eq!(
+            failure(&outcome).map(|(_, kind)| kind),
+            Some(FsErrorKind::SameFile)
+        );
+        assert_eq!(
+            (tree_of(&fs, "src"), tree_of(&fs, "dst")),
+            before,
+            "workers {workers}"
+        );
+    }
+}
+
+#[test]
+fn without_ids_an_unreadable_volume_serial_is_refused() {
+    for workers in MODES {
+        let fs = without_ids();
+        fs.set_volume_serial("src", None);
+        let before = tree_of(&fs, "dst");
+        let outcome = copy_over(&fs, workers);
+        assert_eq!(
+            failure(&outcome).map(|(_, kind)| kind),
+            Some(FsErrorKind::IdentityUnavailable),
+            "workers {workers}"
+        );
+        assert_eq!(tree_of(&fs, "dst"), before, "workers {workers}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_local_alias_resolves_to_its_source_path() {
+    let (_dir, home, dest) = aliased();
+    let fs = LocalFs::new();
+    let real = |at: &Path| fs.canonical(&local(&at.join("a.txt"))).unwrap().unwrap();
+    assert!(real(&dest).same_place(&real(&home)));
+}

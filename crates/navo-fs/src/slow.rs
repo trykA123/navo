@@ -155,6 +155,11 @@ impl ProviderOps for SlowFs {
         self.inner.file_identity(location)
     }
 
+    fn canonical(&self, location: &Location) -> Result<Option<Location>, FsError> {
+        self.sleep();
+        self.inner.canonical(location)
+    }
+
     fn matches_identity(
         &self,
         location: &Location,

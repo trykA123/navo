@@ -165,18 +165,44 @@ pub(super) fn place(
 }
 
 /// Refuses to write over an existing `target` that may be `source` under another name (a SUBST or
-/// mapped drive, a mount point, a link, a hard link): `SameFile` when both report one identity,
-/// `IdentityUnavailable` when either reports none. Checked before anything is moved aside.
+/// mapped drive, a mount point, a link, a hard link), before anything is moved aside. With file
+/// IDs on both sides they decide. Without, another volume serial clears the target and the same
+/// serial falls back to the resolved paths; known limit: a SUBST drive or second mapping onto
+/// one FAT volume that resolving cannot join (FAT has no hard links). Anything unreadable refuses.
 pub(super) fn refuse_alias(
     ops: &dyn ProviderOps,
     source: &Location,
     target: &Location,
 ) -> Result<(), FsError> {
-    match (ops.file_identity(source)?, ops.file_identity(target)?) {
-        (Some(source), Some(found)) if source != found => Ok(()),
-        (Some(_), Some(_)) => Err(failure(FsErrorKind::SameFile, target)),
-        _ => Err(failure(FsErrorKind::IdentityUnavailable, target)),
+    let unavailable = || failure(FsErrorKind::IdentityUnavailable, target);
+    let same = if let (Some(from), Some(found)) =
+        (ops.file_identity(source)?, ops.file_identity(target)?)
+    {
+        (serial(from.volume), from.file) == (serial(found.volume), found.file)
+    } else {
+        let volume = |at| ops.volume_serial(at).ok().flatten().map(serial);
+        let (Some(from), Some(found)) = (volume(source), volume(target)) else {
+            return Err(unavailable());
+        };
+        if from != found {
+            return Ok(());
+        }
+        let real = |at| ops.canonical(at).ok().flatten();
+        let (Some(from), Some(found)) = (real(source), real(target)) else {
+            return Err(unavailable());
+        };
+        from.same_place(&found)
+    };
+    if same {
+        return Err(failure(FsErrorKind::SameFile, target));
     }
+    Ok(())
+}
+
+/// A volume serial cut to 32 bits: `FILE_ID_INFO` reports 64 bits and `dwVolumeSerialNumber` 32,
+/// so both forms of one volume match. Extra matches only refuse more.
+fn serial(volume: u64) -> u32 {
+    volume as u32
 }
 
 pub(super) fn journal_placed(

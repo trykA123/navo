@@ -347,6 +347,11 @@ impl ProviderOps for LocalFs {
         super::link::points_at(at, target_of)
     }
 
+    fn canonical(&self, location: &Location) -> Result<Option<Location>, FsError> {
+        let real = fs::canonicalize(os_path(location)?).map_err(|e| io_error(&e, location))?;
+        Ok(Location::local(super::platform::entry_name(real.as_os_str())).ok())
+    }
+
     fn volume_serial(&self, location: &Location) -> Result<Option<u64>, FsError> {
         super::platform::volume_serial(&os_path(location)?)
             .map(Some)

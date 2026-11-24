@@ -316,6 +316,11 @@ pub trait ProviderOps: Provider {
     fn volume_serial(&self, _location: &Location) -> Result<Option<u64>, FsError> {
         Ok(None)
     }
+    /// The full path of `location` with links, SUBST drives and mappings resolved; `None` when
+    /// the provider cannot resolve one.
+    fn canonical(&self, _location: &Location) -> Result<Option<Location>, FsError> {
+        Ok(None)
+    }
     /// Makes a file's bytes, or a folder's entries, durable on disk.
     fn flush(&self, _location: &Location) -> Result<(), FsError> {
         Ok(())
