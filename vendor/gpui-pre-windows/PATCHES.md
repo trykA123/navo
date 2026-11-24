@@ -22,5 +22,6 @@ One line per patch: the files it changes, what it does, and why.
 - `window.rs`, `events.rs`: a resizable pop-up window gets edge sizing without a visible frame. Reason: the clipboard pop-up can be resized by its edges.
 - `platform.rs`: since 0.3.12 key downs skip the window procedure, so accelerator translation also wakes the VSync thread. Reason: keep the VSync park working after the 0.3.12 rebase.
 - `keyboard.rs`: the keyboard mapper returns bindings unchanged when key equivalents are off. Reason: keymaps stay independent of the keyboard layout, as they were before 0.3.12.
+- `window.rs`, `events.rs`: a `Floating` window is owned by the active window but stays non-modal (no `EnableWindow(false)`, no `WS_EX_APPWINDOW`), and a new `parent_modal` flag limits the destroy-time re-enable and foreground to `Dialog`. Reason: the find results window stays above Navo, hides with it and has no taskbar button (FR21).
 
 The header of `src/gpui_windows.rs` lists the patches in short form; it does not yet name the pop-up and keyboard patches.

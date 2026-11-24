@@ -122,6 +122,8 @@ pub(crate) struct WindowsWindowInner {
     pub(crate) main_receiver: PriorityQueueReceiver<RunnableVariant>,
     pub(crate) platform_window_handle: HWND,
     pub(crate) parent_hwnd: Option<HWND>,
+    /// True when `parent_hwnd` was disabled for a modal `Dialog` and must be re-enabled on destroy.
+    pub(crate) parent_modal: bool,
 }
 
 impl WindowsWindowState {
@@ -319,6 +321,7 @@ impl WindowsWindowInner {
             platform_window_handle: context.platform_window_handle,
             system_settings: WindowsSystemSettings::new(),
             parent_hwnd: context.parent_hwnd,
+            parent_modal: context.parent_modal,
         }))
     }
 
@@ -469,6 +472,7 @@ struct WindowCreateContext {
     invalidate_devices: Arc<AtomicBool>,
     draw_coordinator: Rc<DrawCoordinator>,
     parent_hwnd: Option<HWND>,
+    parent_modal: bool,
 }
 
 impl WindowsWindow {
@@ -498,7 +502,8 @@ impl WindowsWindow {
             draw_coordinator,
         } = creation_info;
         register_window_class(icon);
-        let parent_hwnd = if params.kind == WindowKind::Dialog {
+        let parent_modal = params.kind == WindowKind::Dialog;
+        let parent_hwnd = if parent_modal {
             let parent_window = unsafe { GetActiveWindow() };
             if parent_window.is_invalid() {
                 None
@@ -509,6 +514,11 @@ impl WindowsWindow {
                 };
                 Some(parent_window)
             }
+        } else if params.kind == WindowKind::Floating {
+            // Navo: a Floating window is owned by the active window but stays non-modal, so it
+            // stays above its owner, hides when the owner is minimised and dies with it.
+            let owner = unsafe { GetActiveWindow() };
+            (!owner.is_invalid()).then_some(owner)
         } else {
             None
         };
@@ -547,6 +557,9 @@ impl WindowsWindow {
             let dwexstyle = if params.kind == WindowKind::Dialog {
                 dwstyle |= WS_POPUP | WS_CAPTION;
                 WS_EX_DLGMODALFRAME
+            } else if params.kind == WindowKind::Floating {
+                // Navo: no WS_EX_APPWINDOW, so the owned window gets no taskbar button.
+                WINDOW_EX_STYLE(0)
             } else {
                 WS_EX_APPWINDOW
             };
@@ -589,6 +602,7 @@ impl WindowsWindow {
             invalidate_devices,
             draw_coordinator,
             parent_hwnd,
+            parent_modal,
         };
         let creation_result = unsafe {
             CreateWindowExW(

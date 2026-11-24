@@ -9,6 +9,7 @@
 //   hidden or minimised or idle; showing, restoring, activating or stopping wakes it, a park lasts
 //   at most 250 ms, and the first frame after a park sleeps one interval instead of DwmFlush.
 // - platform.rs: since 0.3.12 key downs skip the window procedure; translate_accelerator wakes VSync.
+// - window.rs, events.rs: a Floating window is owned (GetActiveWindow) and non-modal; no taskbar.
 #![cfg(target_os = "windows")]
 
 mod clipboard;
