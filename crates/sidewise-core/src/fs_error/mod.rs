@@ -22,6 +22,9 @@ pub enum FsErrorKind {
     SourceFilterFailed,
     MissingPromisorBlob,
     VerifyFailed,
+    /// The target is the source under another name (a SUBST or mapped drive, a mount point, a
+    /// link or a hard link): writing over it would destroy the source.
+    SameFile,
     Unknown,
 }
 
@@ -135,6 +138,7 @@ impl FsError {
             }
             // No Skip: a skipped move step would look done.
             FsErrorKind::VerifyFailed => &[Retry, Cancel],
+            FsErrorKind::SameFile => &[Skip, SkipAll, Cancel],
             FsErrorKind::Unknown => &[Retry, Skip, Cancel],
         }
     }
@@ -212,6 +216,9 @@ fn with_location(kind: FsErrorKind, place: &str) -> String {
         FsErrorKind::VerifyFailed => format!(
             "\u{201c}{place}\u{201d} was copied, but the copy does not match the original. The original was kept."
         ),
+        FsErrorKind::SameFile => format!(
+            "\u{201c}{place}\u{201d} is the same file as its source under another name. Nothing was changed."
+        ),
         FsErrorKind::Unknown => format!("Something went wrong with \u{201c}{place}\u{201d}."),
     }
 }
@@ -239,6 +246,9 @@ fn without_location(kind: FsErrorKind) -> &'static str {
             "The Git promisor blob is missing locally. Lazy fetch is disabled."
         }
         FsErrorKind::VerifyFailed => "A copy does not match its original. The original was kept.",
+        FsErrorKind::SameFile => {
+            "The target is the same file as its source under another name. Nothing was changed."
+        }
         FsErrorKind::Unknown => "Something went wrong.",
     }
 }

@@ -88,6 +88,9 @@ pub(super) fn copy(
     if exists && !copier.targets.overwrites(step.target) {
         return Ok(Copied::Skipped);
     }
+    if exists && !super::stream::crosses(step) {
+        refuse_alias(copier.ops, step.source, step.target)?;
+    }
     let temp = copier.temporary(step)?;
     if copier.strict {
         if super::aside::presence(copier.ops, &temp)?.is_some() {
@@ -158,6 +161,21 @@ pub(super) fn place(
             }
             flush_folder(ctx.ops, flush, target).map(|()| StepOutcome::Done)
         }
+    }
+}
+
+/// Refuses to write over an existing `target` that may be `source` under another name (a SUBST or
+/// mapped drive, a mount point, a link, a hard link): `SameFile` when both report one identity,
+/// `IdentityUnavailable` when either reports none. Checked before anything is moved aside.
+pub(super) fn refuse_alias(
+    ops: &dyn ProviderOps,
+    source: &Location,
+    target: &Location,
+) -> Result<(), FsError> {
+    match (ops.file_identity(source)?, ops.file_identity(target)?) {
+        (Some(source), Some(found)) if source != found => Ok(()),
+        (Some(_), Some(_)) => Err(failure(FsErrorKind::SameFile, target)),
+        _ => Err(failure(FsErrorKind::IdentityUnavailable, target)),
     }
 }
 

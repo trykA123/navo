@@ -32,5 +32,7 @@ SourceFilterFailed: The source content filter failed. Check Git filters and Git 
 SourceFilterFailed: The source content filter failed for “C:\Data\report.xlsx”. Check Git filters and Git LFS, then try again.
 VerifyFailed: A copy does not match its original. The original was kept.
 VerifyFailed: “C:\Data\report.xlsx” was copied, but the copy does not match the original. The original was kept.
+SameFile: The target is the same file as its source under another name. Nothing was changed.
+SameFile: “C:\Data\report.xlsx” is the same file as its source under another name. Nothing was changed.
 Unknown: Something went wrong.
 Unknown: Something went wrong with “C:\Data\report.xlsx”.

@@ -331,6 +331,9 @@ fn rename_step(
     target: &Location,
 ) -> Result<(), FsError> {
     if job.targets.overwrites(target) {
+        if ctx.ops.metadata(target).is_ok() {
+            super::copy::refuse_alias(ctx.ops, source, target)?;
+        }
         return job.aside.move_over(ctx, source, target);
     }
     if ctx.log.preserve_overwrites() {

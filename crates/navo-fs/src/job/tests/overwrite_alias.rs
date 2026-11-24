@@ -13,6 +13,7 @@ use super::*;
 #[cfg(unix)]
 use crate::LocalFs;
 
+#[cfg(unix)]
 const BYTES: &[u8] = b"the only copy";
 
 /// A move or copy of `home/a.txt` into `dest` with Overwrite all, `dest/a.txt` already listed.
@@ -83,12 +84,13 @@ fn listing(home: &Path) -> Vec<String> {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "red: a move with Overwrite onto an alias of its source copies the file onto itself \
-            and then deletes the only copy"]
 fn a_move_with_overwrite_onto_an_alias_of_its_source_keeps_the_file() {
-    for workers in MODES {
+    for (workers, same_volume) in [(0, false), (4, false), (0, true)] {
         let (_dir, home, dest) = aliased();
-        let plan = alias_plan(OpKind::Move, &home, &dest);
+        let mut plan = alias_plan(OpKind::Move, &home, &dest);
+        if same_volume {
+            plan = rename_plan(&home, &dest);
+        }
         let outcome = Harness::default().with(&LocalFs::new(), |ctx| {
             run_job_with(&plan, &[], ctx, options(workers))
         });
@@ -98,7 +100,27 @@ fn a_move_with_overwrite_onto_an_alias_of_its_source_keeps_the_file() {
             "workers {workers}: the move ended {outcome:?} and a.txt is gone; left in home: {:?}",
             listing(&home)
         );
+        assert_eq!(
+            failure(&outcome).map(|(_, kind)| kind),
+            Some(FsErrorKind::SameFile)
+        );
+        assert_eq!(
+            listing(&home),
+            ["a.txt"],
+            "workers {workers}: nothing is held aside"
+        );
     }
+}
+
+/// The same move planned on one volume: a rename over the alias instead of a copy.
+#[cfg(unix)]
+fn rename_plan(home: &Path, dest: &Path) -> OperationPlan {
+    let mut plan = alias_plan(OpKind::Move, home, dest);
+    plan.steps = vec![Step::Rename {
+        source: local(&home.join("a.txt")),
+        target: local(&dest.join("a.txt")),
+    }];
+    plan
 }
 
 #[cfg(unix)]
@@ -119,7 +141,6 @@ fn a_copy_with_overwrite_onto_an_alias_of_its_source_keeps_the_bytes() {
 }
 
 #[test]
-#[ignore = "red: the job overwrites a target whose file identity is the source's own"]
 fn a_move_refuses_a_target_with_the_source_identity() {
     for workers in MODES {
         let fs = fixture(&[("src/a.txt", BIG), ("dst/a.txt", BIG)]);
@@ -135,5 +156,68 @@ fn a_move_refuses_a_target_with_the_source_identity() {
             "workers {workers}: the move ended {outcome:?} and removed a source whose identity \
              is the target's"
         );
+        assert_eq!(
+            failure(&outcome).map(|(_, kind)| kind),
+            Some(FsErrorKind::SameFile)
+        );
+    }
+}
+
+/// `src/a.txt` and a smaller `dst/a.txt`, so an overwrite shows in the target's size.
+fn two_files() -> FakeFs {
+    fixture(&[("src/a.txt", BIG), ("dst/a.txt", 7)])
+}
+
+/// Runs a copy of `src/a.txt` into `dst` with Overwrite all.
+fn copy_over(fs: &FakeFs, workers: usize) -> JobOutcome {
+    let plan = plan(&PlanRequest {
+        policy: ConflictPolicy::OverwriteAll,
+        ..request(fs, OpKind::Copy, &["src/a.txt"], "dst")
+    });
+    Harness::default().with(fs, |ctx| run_job_with(&plan, &[], ctx, options(workers)))
+}
+
+#[test]
+fn a_copy_onto_its_own_alias_is_refused_and_changes_nothing() {
+    for workers in MODES {
+        let fs = two_files();
+        fs.share_identity("dst/a.txt", "src/a.txt");
+        let before = (tree_of(&fs, "src"), tree_of(&fs, "dst"));
+        let outcome = copy_over(&fs, workers);
+        assert_eq!(
+            failure(&outcome).map(|(_, kind)| kind),
+            Some(FsErrorKind::SameFile)
+        );
+        assert_eq!(
+            (tree_of(&fs, "src"), tree_of(&fs, "dst")),
+            before,
+            "workers {workers}"
+        );
+    }
+}
+
+#[test]
+fn a_different_file_at_the_target_is_still_overwritten() {
+    for workers in MODES {
+        let fs = two_files();
+        let outcome = copy_over(&fs, workers);
+        assert_eq!(outcome, JobOutcome::Done, "workers {workers}");
+        assert_eq!(size(&fs, "dst/a.txt"), Some(BIG), "workers {workers}");
+    }
+}
+
+#[test]
+fn a_target_without_a_readable_identity_is_refused() {
+    for workers in MODES {
+        let fs = two_files();
+        fs.set_volume_serial("dst", None);
+        let before = tree_of(&fs, "dst");
+        let outcome = copy_over(&fs, workers);
+        assert_eq!(
+            failure(&outcome).map(|(_, kind)| kind),
+            Some(FsErrorKind::IdentityUnavailable),
+            "workers {workers}"
+        );
+        assert_eq!(tree_of(&fs, "dst"), before, "workers {workers}");
     }
 }
