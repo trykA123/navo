@@ -140,7 +140,10 @@ pub const PRESETS: [Choice; 3] = [
     choice("Rich", "rich"),
     choice("Custom", "custom"),
 ];
-pub const COPY_MODES: [Choice; 2] = [choice("Auto", "auto"), choice("Standard", "standard")];
+pub const COPY_MODES: [Choice; 2] = [
+    choice("settings-copy-mode-auto", "auto"),
+    choice("settings-copy-mode-standard", "standard"),
+];
 pub const COPY_VERIFY: [Choice; 3] = [
     choice("Auto", "auto"),
     choice("Always", "always"),
