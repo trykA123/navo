@@ -537,7 +537,8 @@ fn a_rename_stops_a_running_git_child() {
     LocalFs::new().rename(&source, &target).unwrap();
     paused_within(child, began);
     assert!(moved.exists() && !repo.exists());
-    fs::rename(&moved, &repo).unwrap();
+    // No rename back: on Windows the stopped Git child can hold the folder a moment longer
+    // (sharing violation), and the temp dir is removed under either name.
 }
 
 #[cfg(windows)]

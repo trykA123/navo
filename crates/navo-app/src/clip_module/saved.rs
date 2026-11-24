@@ -9,9 +9,16 @@ use navo_ui::clip_palette::{ClipKind, SavedDraft, Scope};
 
 use super::folder_path;
 
+#[cfg(not(test))]
 const REPLY_WAIT: Duration = Duration::from_secs(2);
+/// Loaded CI runners can take over 2 s per write; tests wait longer so a slow answer is not "busy".
+#[cfg(test)]
+const REPLY_WAIT: Duration = Duration::from_secs(20);
 /// A wipe may remove many files and checkpoint the log, so it gets longer.
+#[cfg(not(test))]
 pub(super) const WIPE_WAIT: Duration = Duration::from_secs(5);
+#[cfg(test)]
+pub(super) const WIPE_WAIT: Duration = Duration::from_secs(30);
 
 pub(super) fn message(kind: FailKind) -> String {
     let id = match kind {

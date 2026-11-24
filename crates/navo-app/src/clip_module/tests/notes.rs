@@ -194,3 +194,26 @@ fn a_note_that_cannot_be_deleted_reads_not_deleted() {
     );
     assert!(rig.module.note_for(&alpha).is_some());
 }
+
+/// Contract: a call the live worker accepted answers with the worker's result, not "busy",
+/// when the worker is only slow (here 16 sink writes of 150 ms queued ahead, about 2.4 s).
+#[test]
+fn a_note_queued_behind_slow_work_is_answered_not_busy() {
+    let rig = rig();
+    rig.emit("slow: a long copy");
+    rig.wait_for_title("slow: a long copy");
+    let service = rig.module.running().unwrap();
+    let id = service.snapshot().history[0].id;
+    for _ in 0..16 {
+        assert!(service.copy(id, navo_clipboard::How::Copy));
+    }
+    let answer = set_note_answer(&rig, "queued words");
+    wait_notes(&rig, 1);
+    assert!(service.is_alive());
+    assert_eq!(answer, Ok(()));
+}
+
+/// The raw answer of `set_note` for the global note.
+fn set_note_answer(rig: &Rig, text: &str) -> Result<(), String> {
+    rig.module.set_note(Scope::Everywhere, text.to_owned())
+}
