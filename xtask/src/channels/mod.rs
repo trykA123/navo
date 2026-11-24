@@ -2,6 +2,8 @@
 //! Rust outside test code and fails when the count rises above the baseline.
 //! Runs as `cargo xtask channels` and as a step of the gate.
 
+mod skip;
+
 #[cfg(test)]
 mod tests;
 
@@ -145,7 +147,7 @@ fn is_test_path(rel: &str) -> bool {
 
 /// Scan `files` (repo-relative under `root`) and return each counted call.
 ///
-/// Test files and lines from the first `#[cfg(test)]` line on are skipped.
+/// Test files and the items that `#[cfg(test)]` applies to are skipped.
 /// Fails when a listed file cannot be read as UTF-8.
 pub fn scan(root: &Path, files: &[String]) -> io::Result<Vec<Hit>> {
     let mut hits = Vec::new();
@@ -154,28 +156,20 @@ pub fn scan(root: &Path, files: &[String]) -> io::Result<Vec<Hit>> {
             continue;
         }
         let text = fs::read_to_string(root.join(rel))?;
-        let cutoff = cfg_test_line(&text);
-        for (index, line) in text.lines().enumerate() {
-            let number = index + 1;
-            if cutoff.is_some_and(|cut| number >= cut) {
-                break;
+        let source = skip::scanned(&text);
+        for (index, line) in source.code.iter().enumerate() {
+            if source.is_test[index] {
+                continue;
             }
             for _ in 0..counted(line) {
                 hits.push(Hit {
                     path: rel.clone(),
-                    line: number,
+                    line: index + 1,
                 });
             }
         }
     }
     Ok(hits)
-}
-
-/// Return the 1-based line of the first `#[cfg(test)]` attribute in `text`.
-fn cfg_test_line(text: &str) -> Option<usize> {
-    text.lines()
-        .position(|line| line.trim_start().starts_with("#[cfg(test)]"))
-        .map(|index| index + 1)
 }
 
 /// Count unbounded channel constructions on one source line.

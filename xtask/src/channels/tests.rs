@@ -101,6 +101,72 @@ fn channels_skip_tests_and_bounded() {
 }
 
 #[test]
+fn channels_after_test_module_declaration_are_counted() {
+    let tree = Tree::new("after-declaration");
+    tree.write(
+        "src/a.rs",
+        "#[cfg(test)]\nmod tests;\n\nlet (a, b) = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![4]);
+}
+
+#[test]
+fn channels_inside_inline_test_module_are_skipped() {
+    let tree = Tree::new("inline");
+    tree.write(
+        "src/a.rs",
+        "#[cfg(test)]\nmod tests {\n    const A: &str = \"}\";\n    const B: char = '{';\n    /* } */\n    let (a, b) = mpsc::channel();\n}\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert!(hits.is_empty(), "{hits:?}");
+}
+
+#[test]
+fn channels_after_inline_test_module_are_counted() {
+    let tree = Tree::new("after-inline");
+    tree.write(
+        "src/a.rs",
+        "#[cfg(test)]\nmod tests {\n    fn t() {\n        let (a, b) = mpsc::channel();\n    }\n}\n\nfn live() {\n    let (a, b) = mpsc::channel();\n}\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![9]);
+}
+
+#[test]
+fn channels_skip_test_items_but_not_later_code() {
+    let tree = Tree::new("items");
+    tree.write(
+        "src/a.rs",
+        "#[cfg(test)]\nuse a::b;\n#[cfg(test)]\nfn helper(a: u8, b: u8) {\n    let (c, d) = mpsc::channel();\n}\n#[cfg(test)]\nimpl X {\n    fn h(&self) { let (a, b) = mpsc::channel(); }\n}\nlet (e, f) = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![11]);
+}
+
+#[test]
+fn channels_after_test_parameter_are_counted() {
+    let tree = Tree::new("parameter");
+    tree.write(
+        "src/a.rs",
+        "fn build(#[cfg(test)] hook: Option<u8>, live: u8) {\n    let (a, b) = mpsc::channel();\n}\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![2]);
+}
+
+#[test]
+fn channels_in_comments_and_strings_are_not_counted() {
+    let tree = Tree::new("masked");
+    tree.write(
+        "src/a.rs",
+        "// let (a, b) = mpsc::channel();\nconst S: &str = \"unbounded()\";\n/* let (c, d) = unbounded(); */\nlet (e, f) = mpsc::channel();\n",
+    );
+    let hits = tree.scan(&["src/a.rs"]);
+    assert_eq!(lines(&hits), vec![4]);
+}
+
+#[test]
 fn channels_say_lower_the_baseline() {
     let tree = Tree::new("lower");
     tree.write("src/a.rs", "let (a, b) = mpsc::channel();\n");

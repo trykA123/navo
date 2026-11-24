@@ -1,3 +1,4 @@
 # Unbounded channel constructions in tracked Rust outside test code (AM7).
 # The ratchet only goes down; `cargo xtask channels` prints the new number.
-38
+# 2026-11-24: the scan now skips only `#[cfg(test)]` items, not every line below the first attribute; re-baselined from the 39 the old scan undercounted.
+52
