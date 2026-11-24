@@ -4,7 +4,7 @@
 use std::ops::Range;
 use std::time::Duration;
 
-use gpui_kit::base::input::DiagnosticSeverity;
+use gpui_kit::base::input::{DiagnosticSeverity, Position};
 use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::{AnyWindowHandle, Entity, Hsla, Rgba, TestAppContext};
 use navo_structured::lint::{LintKind, lint};
@@ -14,6 +14,7 @@ use super::{Setup, editor_of, editor_text, press_only, redraw, text_of};
 use crate::tokens::{self, Mode};
 use crate::window_view::NavoWindow;
 use crate::window_view::tests::{press, settle};
+use crate::window_view::viewer::editor::lint::{SCANNED, positions};
 
 const BROKEN: &[u8] = br#"{"a":1,}"#;
 
@@ -156,5 +157,56 @@ fn squiggles_take_the_theme_tokens_in_both_modes(cx: &mut TestAppContext) {
             )
         });
         assert_eq!(painted.map(shown_rgba), wanted.map(shown_rgba), "{mode:?}");
+    }
+}
+
+/// The pre-E5b mapping, kept as the oracle: rescans `text` from byte 0 for one offset.
+fn rescan_position(text: &str, offset: usize) -> Position {
+    let mut offset = offset.min(text.len());
+    while !text.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    let before = &text[..offset];
+    let line = before.bytes().filter(|byte| *byte == b'\n').count();
+    let line_start = before.rfind('\n').map_or(0, |at| at + 1);
+    let column = before[line_start..].chars().count();
+    Position::new(line as u32, column as u32)
+}
+
+#[test]
+fn offsets_map_like_the_rescan_on_crlf_emoji_and_an_open_last_line() {
+    let text = "{\"a\": 1,\r\n  \"\u{e9}\u{20ac}\": \"\u{1f600}x\"\n\n\u{1f44d}\u{1f3fd} end";
+    // Every byte, mid-character bytes and offsets past the end, in descending (unsorted) order.
+    let offsets: Vec<usize> = (0..text.len() + 3).rev().collect();
+    let wanted: Vec<Position> = offsets
+        .iter()
+        .map(|offset| rescan_position(text, *offset))
+        .collect();
+    assert_eq!(positions(text, &offsets), wanted);
+}
+
+#[test]
+fn a_thousand_problems_on_two_mib_walk_the_text_once() {
+    let line = "  \"k\u{e9}y\": \"\u{1f600}\u{20ac} value\",\r\n";
+    let text = line.repeat((2 << 20) / line.len());
+    let step = text.len() / 1000;
+    let offsets: Vec<usize> = (0..1000)
+        .flat_map(|at| [at * step + 3, at * step + 9])
+        .collect();
+    SCANNED.with(|count| count.set(0));
+    let found = positions(&text, &offsets);
+    let scanned = SCANNED.with(std::cell::Cell::get);
+    assert!(
+        scanned <= text.len(),
+        "walked {scanned} bytes of {}",
+        text.len()
+    );
+    for at in (0..offsets.len()).step_by(97) {
+        assert_eq!(
+            found[at],
+            rescan_position(&text, offsets[at]),
+            "offset {}",
+            offsets[at]
+        );
     }
 }

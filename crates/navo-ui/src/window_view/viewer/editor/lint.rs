@@ -51,21 +51,43 @@ impl Lint {
     }
 }
 
-/// 0-based line and character column of byte `offset` in `text`, as the editor widget counts them
-/// (lines end at `\n`; the offset is clamped to the text and moved back to a char boundary).
-fn position(text: &str, offset: usize) -> Position {
-    let mut offset = offset.min(text.len());
-    while !text.is_char_boundary(offset) {
-        offset -= 1;
+#[cfg(test)]
+thread_local! {
+    /// Test probe: bytes of text this thread has walked while mapping offsets to positions.
+    pub(in crate::window_view::viewer) static SCANNED: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// The 0-based line and character column of every byte offset in `offsets` over `text`, in the
+/// input order, as the editor widget counts them (lines end at `\n`; each offset is clamped to the
+/// text and moved back to a char boundary). One sorted walk: O(N + D log D) for D offsets.
+pub(in crate::window_view::viewer) fn positions(text: &str, offsets: &[usize]) -> Vec<Position> {
+    let mut order: Vec<usize> = (0..offsets.len()).collect();
+    order.sort_unstable_by_key(|index| offsets[*index]);
+    let mut found = vec![Position::default(); offsets.len()];
+    let (mut walked, mut line, mut column) = (0, 0usize, 0usize);
+    for index in order {
+        let mut offset = offsets[index].min(text.len());
+        while !text.is_char_boundary(offset) {
+            offset -= 1;
+        }
+        for char in text[walked..offset].chars() {
+            if char == '\n' {
+                line += 1;
+                column = 0;
+            } else {
+                column += 1;
+            }
+        }
+        #[cfg(test)]
+        SCANNED.with(|count| count.set(count.get() + offset - walked));
+        walked = offset;
+        found[index] = Position::new(
+            u32::try_from(line).unwrap_or(u32::MAX),
+            u32::try_from(column).unwrap_or(u32::MAX),
+        );
     }
-    let before = &text[..offset];
-    let line = before.bytes().filter(|byte| *byte == b'\n').count();
-    let line_start = before.rfind('\n').map_or(0, |at| at + 1);
-    let column = before[line_start..].chars().count();
-    Position::new(
-        u32::try_from(line).unwrap_or(u32::MAX),
-        u32::try_from(column).unwrap_or(u32::MAX),
-    )
+    found
 }
 
 /// Converts lint problems over `text` into widget diagnostics plus (errors, warnings) counts.
@@ -75,15 +97,20 @@ fn marked(text: &str, found: Vec<Diagnostic>) -> (Vec<Marked>, (usize, usize)) {
         .filter(|problem| problem.severity == Severity::Error)
         .count();
     let warnings = found.len() - errors;
+    let offsets: Vec<usize> = found
+        .iter()
+        .flat_map(|problem| [problem.range.start, problem.range.end])
+        .collect();
+    let points = positions(text, &offsets);
     let marks = found
         .into_iter()
-        .map(|problem| {
+        .zip(points.as_chunks::<2>().0)
+        .map(|(problem, [start, end])| {
             let severity = match problem.severity {
                 Severity::Error => DiagnosticSeverity::Error,
                 Severity::Warning => DiagnosticSeverity::Warning,
             };
-            let range = position(text, problem.range.start)..position(text, problem.range.end);
-            Marked::new(range, problem.message).with_severity(severity)
+            Marked::new(*start..*end, problem.message).with_severity(severity)
         })
         .collect();
     (marks, (errors, warnings))

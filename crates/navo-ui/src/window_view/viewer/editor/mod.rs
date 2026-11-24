@@ -1,7 +1,7 @@
 mod body;
 mod find;
 mod lines;
-mod lint;
+pub(super) mod lint;
 mod marking;
 mod overlay;
 mod preview;
