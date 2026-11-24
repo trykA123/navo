@@ -145,3 +145,35 @@ fn panicking_classifier_keeps_unknown_limit_and_jobs_run() {
     wait_done.recv_timeout(WAIT).expect("next job runs");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
+
+/// AD16: a cancel that lands while the first worker is stuck classifying a dead share must still
+/// stop the job; the job closure is dropped unrun, so its sender disconnects.
+#[test]
+fn cancel_during_a_blocked_classification_never_runs_the_job() {
+    let classify_gate = Arc::new(Gate::default());
+    let (classifying, wait_classifying) = mpsc::channel();
+    let gate = Arc::clone(&classify_gate);
+    let queue = IoQueue::with(
+        Limits::LISTING,
+        Arc::new(move |_| {
+            classifying.send(()).expect("classification reported");
+            assert!(gate.wait());
+            VolumeKind::Network
+        }),
+    );
+    let (ran, wait_ran) = mpsc::channel::<()>();
+    queue.submit(
+        slot("N:"),
+        Box::new(move |_| ran.send(()).expect("job reported")),
+    );
+    wait_classifying
+        .recv_timeout(WAIT)
+        .expect("classifier started");
+    queue.cancel_owner(A);
+    classify_gate.open();
+    assert_eq!(
+        wait_ran.recv_timeout(WAIT),
+        Err(mpsc::RecvTimeoutError::Disconnected),
+        "the cancelled job must be dropped unrun"
+    );
+}

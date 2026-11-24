@@ -5,6 +5,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use super::abort_win::{AbortStore, ThreadAbort};
 use super::{JobId, Limits, OwnerId, Priority, Scheduler, VolumeId, VolumeKind};
@@ -13,6 +14,10 @@ use crate::provider::CancelToken;
 
 pub type Job = Box<dyn FnOnce(&CancelToken) + Send + 'static>;
 pub type Classifier = Arc<dyn Fn(&VolumeId) -> VolumeKind + Send + Sync>;
+
+/// Longest time `close` waits for workers in total; a worker stuck in network I/O past it is
+/// detached so app exit never hangs on a dead share (AD16).
+const CLOSE_JOIN_CAP: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobSlot {
@@ -28,7 +33,7 @@ struct State {
     tokens: HashMap<JobId, CancelToken>,
     aborts: AbortStore,
     workers: HashMap<VolumeId, usize>,
-    handles: Vec<JoinHandle<()>>,
+    handles: Vec<(VolumeId, JoinHandle<()>)>,
     closed: bool,
 }
 
@@ -66,6 +71,26 @@ impl Shared {
         Some(self.delivery.lock().unwrap_or_else(PoisonError::into_inner))
     }
 
+    /// Waits at most `cap` for every worker in `handles` to end; returns early once all have.
+    /// A detached worker only finishes its own job: the queue is closed and its token cancelled.
+    fn wait_for_exit(&self, handles: &[(VolumeId, JoinHandle<()>)], cap: Duration) {
+        let deadline = Instant::now() + cap;
+        let mut state = self.lock();
+        while handles.iter().any(|(_, handle)| !handle.is_finished()) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return;
+            }
+            // A worker notifies `idle` just before its thread ends, so re-check shortly after.
+            let step = left.min(Duration::from_millis(10));
+            state = self
+                .idle
+                .wait_timeout(state, step)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+    }
+
     fn cancel_owner(&self, owner: OwnerId) {
         let delivery = self.delivery_gate();
         let dropped: Vec<Job> = {
@@ -93,7 +118,7 @@ fn spawn_workers(shared: &Arc<Shared>, state: &mut State, volume: &VolumeId) {
     let wanted = state.scheduler.queued(volume);
     let live = state.workers.get(volume).copied().unwrap_or(0);
     let room = limit.saturating_sub(live).min(wanted);
-    state.handles.retain(|handle| !handle.is_finished());
+    state.handles.retain(|(_, handle)| !handle.is_finished());
     for _ in 0..room {
         let (worker_shared, worker_volume) = (Arc::clone(shared), volume.clone());
         let spawned = thread::Builder::new()
@@ -102,7 +127,7 @@ fn spawn_workers(shared: &Arc<Shared>, state: &mut State, volume: &VolumeId) {
         let Ok(handle) = spawned else {
             break;
         };
-        state.handles.push(handle);
+        state.handles.push((volume.clone(), handle));
         *state.workers.entry(volume.clone()).or_default() += 1;
     }
 }
@@ -140,7 +165,7 @@ fn work(shared: &Arc<Shared>, volume: &VolumeId) {
         if classify {
             classify_volume(shared, volume);
         }
-        register_abort(shared, volume, id);
+        let job = job.filter(|_| register_abort(shared, volume, id, &token));
         if let Some(job) = job {
             let _ = catch_unwind(AssertUnwindSafe(|| job(&token)));
         }
@@ -151,16 +176,23 @@ fn work(shared: &Arc<Shared>, volume: &VolumeId) {
     }
 }
 
-/// Stores this worker thread's abort handle for `id` when its volume is a network share, so
-/// `cancel_owner` can interrupt a blocked call; the handle leaves under the same lock at job end.
-fn register_abort(shared: &Shared, volume: &VolumeId, id: JobId) {
+/// Under one state lock, re-checks `token` and stores this worker thread's abort handle for `id`
+/// when its volume is (or may be) a network share, so a `cancel_owner` either finds the handle or
+/// is seen here (AD16). Returns false when the job was cancelled before it started: skip it.
+fn register_abort(shared: &Shared, volume: &VolumeId, id: JobId, token: &CancelToken) -> bool {
     let mut state = shared.lock();
-    if state.scheduler.kind(volume) != VolumeKind::Network || state.closed {
-        return;
+    if token.is_cancelled() || state.closed {
+        return false;
     }
-    if let Some(handle) = ThreadAbort::current() {
+    // Unknown too: a second worker can start before the first one finishes classifying.
+    if matches!(
+        state.scheduler.kind(volume),
+        VolumeKind::Network | VolumeKind::Unknown
+    ) && let Some(handle) = ThreadAbort::current()
+    {
         state.aborts.insert(id, handle);
     }
+    true
 }
 
 impl IoQueue {
@@ -266,9 +298,16 @@ impl IoQueue {
         };
         drop(dropped);
         let me = thread::current().id();
-        for handle in handles {
-            if handle.thread().id() != me {
+        let handles: Vec<_> = handles
+            .into_iter()
+            .filter(|(_, handle)| handle.thread().id() != me)
+            .collect();
+        self.shared.wait_for_exit(&handles, CLOSE_JOIN_CAP);
+        for (volume, handle) in handles {
+            if handle.is_finished() {
                 let _ = handle.join();
+            } else {
+                tracing::warn!(volume = %volume.0, "io worker still blocked at exit; detached");
             }
         }
     }
