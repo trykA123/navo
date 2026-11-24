@@ -1,6 +1,7 @@
 mod activity;
 mod builders;
 mod card;
+mod sides;
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -34,6 +35,7 @@ use crate::pane_sample;
 use crate::settings_sample::{self, Extras, Shown};
 use crate::sheet_sample;
 use crate::shortcuts_sample;
+use sides::{SIDES, Side};
 
 #[derive(Default)]
 struct ViewMenuShown {
@@ -43,28 +45,6 @@ struct ViewMenuShown {
 }
 
 const FRAMES_BEFORE_MENU: u8 = 2;
-
-struct Side {
-    tabs: &'static [&'static str],
-    path: &'static str,
-    cursor: u64,
-    marked: &'static [u64],
-}
-
-const SIDES: [Side; 2] = [
-    Side {
-        tabs: &["commander", "Downloads", "Steam"],
-        path: r"C:\work\commander",
-        cursor: 9,
-        marked: &[7, 11],
-    },
-    Side {
-        tabs: &["2026-10", "photos"],
-        path: r"Z:\archive\2026-10",
-        cursor: 4,
-        marked: &[],
-    },
-];
 
 pub struct SheetShows {
     pub active: PaneSide,
