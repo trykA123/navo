@@ -5,8 +5,8 @@ use std::rc::Rc;
 use gpui_kit::{FocusHandle, ScrollHandle};
 
 use super::{
-    DiagnosticRow, Filter, GitPage, HELP_ROW, IndexProgress, Moved, SearchPage, SettingsBody,
-    SheetEvent, Values,
+    DiagnosticRow, Filter, GitPage, IndexProgress, Moved, SearchPage, SettingsBody, SheetEvent,
+    Values,
 };
 use crate::prelude::*;
 use crate::window_view::UpdateView;
@@ -16,7 +16,7 @@ impl SettingsBody {
         Self {
             filter: Filter::default().hiding(values.hidden_row()),
             values,
-            row: row.min(HELP_ROW),
+            row: super::clamped_row(row),
             error: None,
             notice: None,
             editor: None,

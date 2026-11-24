@@ -42,7 +42,7 @@ fn find_needs_every_word_and_an_empty_find_keeps_all_rows() {
         .iter()
         .filter(|spec| cfg!(windows) || !spec.field.is_windows_only())
         .filter(|spec| spec.section != Section::About)
-        .filter(|spec| spec.field.is_shown())
+        .filter(|spec| spec.field.is_shown() && !spec.field.is_advanced())
         .filter(|spec| spec.table() != "compare" || crate::compare_visible::compare_visible())
         .count();
     assert_eq!(matching("   ").len(), here);

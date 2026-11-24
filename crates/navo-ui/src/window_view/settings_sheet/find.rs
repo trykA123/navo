@@ -48,9 +48,13 @@ impl NavoWindow {
         if filter == self.settings.filter {
             return;
         }
+        if filter.is_empty() {
+            self.settings.folds.reveal(self.settings.row);
+        }
         let row = filter
             .clone()
             .hiding(self.values.hidden_row())
+            .folding(self.settings.folds)
             .nearest(self.settings.row);
         let from = section_of(self.settings.row);
         self.settings.row = row;

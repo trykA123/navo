@@ -26,8 +26,8 @@ use super::settings_save::{SaveReport, SaveSettings, Saver};
 use super::{NavoWindow, SearchHooks};
 use crate::prelude::*;
 use crate::settings::{
-    Change, Field, Filter, HELP_ROW, Section, ServiceStatus, SheetEvent, Values, child_of,
-    section_of,
+    Change, Field, Filter, Folds, Section, ServiceStatus, SheetEvent, Values, child_of,
+    clamped_row, outer_row, section_of,
 };
 use crate::side_sheet::SheetState;
 
@@ -85,6 +85,7 @@ pub(super) struct SettingsPanel {
     is_open: bool,
     row: usize,
     filter: Filter,
+    folds: Folds,
     find: Option<find::Find>,
     upgrade: upgrade::Upgrade,
     undo: undo::UndoStack,
@@ -152,6 +153,7 @@ impl SettingsPanel {
             is_open: false,
             row: 0,
             filter: Filter::default(),
+            folds: Folds::default(),
             find: None,
             upgrade: upgrade::Upgrade::default(),
             undo: undo::UndoStack::default(),
@@ -273,6 +275,8 @@ impl NavoWindow {
         self.settings.is_history_cleared = false;
         self.settings.undo.clear();
         self.clear_find(window, cx);
+        self.settings.row = outer_row(self.settings.row);
+        self.settings.folds = Folds::default();
         self.pause_shortcuts(cx);
         self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
         if std::mem::take(&mut self.settings.restore_preview) {
@@ -302,6 +306,10 @@ impl NavoWindow {
     fn settings_event(&mut self, event: SheetEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event {
             SheetEvent::Select(row) => self.select_setting(row, window, cx),
+            SheetEvent::Fold(row, open) => {
+                self.settings.folds.set(row, open);
+                self.select_setting(row, window, cx);
+            }
             SheetEvent::Shortcuts => self.show_shortcuts(window, cx),
             SheetEvent::Set(change) => self.set_from_sheet(change, window, cx),
             SheetEvent::Edit(field) => self.start_edit(field, window, cx),
@@ -325,7 +333,8 @@ impl NavoWindow {
 
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
         let from = section_of(self.settings.row);
-        self.settings.row = row.min(HELP_ROW);
+        self.settings.row = clamped_row(row);
+        self.settings.folds.reveal(self.settings.row);
         self.settings.notice = None;
         self.settings.status = None;
         self.settings.service_notice = None;

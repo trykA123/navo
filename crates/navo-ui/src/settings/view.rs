@@ -224,7 +224,7 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
     )
     .chain(command_problem(look, spec.field))
     .collect();
-    let row = div()
+    let row = row_frame(t, is_current)
         .id(("settings-row", index))
         .role(Role::ListItem)
         .aria_label(spec.label())
@@ -234,9 +234,20 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .flex()
         .flex_col()
         .justify_center()
+        .when(!look.is_enabled(spec.field), |row| row.opacity(DIMMED))
+        .child(line(look, &content_look, index, spec))
+        .children(under_line(t, notes));
+    let is_nested = spec.field.is_nested() && look.filter.is_empty();
+    let row = nested::indented(t, row, is_nested);
+    select_on_click(row, look.send.as_ref(), index).into_any_element()
+}
+
+/// The 36 px frame a setting row and a fold row share: the accent ring and fill while
+/// current, a hover tint otherwise.
+pub(super) fn row_frame(t: &Theme, is_current: bool) -> Div {
+    div()
         .flex_none()
         .min_h(px(ROW))
-        .when(!look.is_enabled(spec.field), |row| row.opacity(DIMMED))
         .pr(t.spacing.md)
         .rounded(t.radii.md)
         .border_1()
@@ -245,11 +256,6 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
             row.bg(t.colors.selection).text_color(t.colors.on_selection)
         })
         .when(!is_current, |row| row.hover(|row| row.bg(t.colors.hover)))
-        .child(line(look, &content_look, index, spec))
-        .children(under_line(t, notes));
-    let is_nested = spec.field.is_nested() && look.filter.is_empty();
-    let row = nested::indented(t, row, is_nested);
-    select_on_click(row, look.send.as_ref(), index).into_any_element()
 }
 
 /// The red notes under a row's line, indented past the gutter; none when `notes` is empty.
@@ -325,6 +331,7 @@ pub(super) fn content(
                 .map(|spec| row(look, index, spec))
                 .into_iter()
                 .collect(),
+            Line::Fold(fold) => vec![super::fold::fold_line(look, fold)],
             Line::Progress => index_page::progress_block(t, look.index),
             Line::Service => search_page::service_block(t, *look.page, send),
             Line::History => search_page::history_block(t, *look.page, send),

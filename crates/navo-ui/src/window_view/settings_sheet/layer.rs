@@ -26,7 +26,7 @@ impl NavoWindow {
             .summon_key_taken(self.summon_key_taken())
             .clipboard_key_taken(self.clipboard_key_taken())
             .messages(error, self.settings.service_notice.clone())
-            .filter(self.settings.filter.clone())
+            .filter(self.settings_filter())
             .find(self.find_bar(&t, cx))
             .upgrade(self.settings.upgrade.items())
             .index_progress(self.settings.index_progress.clone())

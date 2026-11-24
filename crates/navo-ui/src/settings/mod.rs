@@ -11,6 +11,7 @@ mod field_visibility;
 mod fields;
 mod find;
 mod find_bar;
+mod fold;
 mod general_fields;
 mod git_fields;
 mod git_page;
@@ -60,6 +61,7 @@ pub use fields::{
 };
 pub use find::{Filter, Line, lines};
 pub use find_bar::find_field;
+pub use fold::{Folds, clamped_row, fold_row, outer_row};
 pub use git_page::GitPage;
 pub use index_progress::{IndexProgress, IndexState, VolumeProgress};
 pub use search_page::{SearchPage, ServiceStatus};
@@ -115,6 +117,8 @@ pub fn bind_keys(cx: &mut App) {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SheetEvent {
     Select(usize),
+    /// Opens (`true`) or closes the fold on this fold row, and selects the row.
+    Fold(usize, bool),
     Shortcuts,
     Set(Change),
     Edit(Field),
@@ -307,8 +311,9 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
     let up = on_event(body, Some(SheetEvent::Select(moved(filter, row, false))));
     let down = on_event(body, Some(keyboard_page::down_event(filter, row)));
     let find = on_event(body, Some(SheetEvent::Find));
-    let back = on_event(body, body.event_for(Nudge::Back));
-    let forward = on_event(body, body.event_for(Nudge::Forward));
+    let back = fold::left_event(filter, row).or_else(|| body.event_for(Nudge::Back));
+    let forward = fold::right_event(filter, row).or_else(|| body.event_for(Nudge::Forward));
+    let (back, forward) = (on_event(body, back), on_event(body, forward));
     let flip = on_event(body, body.flip_event());
     let edit = on_event(body, body.edit_event());
     let locate = on_event(body, field.map(SheetEvent::Locate));

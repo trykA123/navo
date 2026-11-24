@@ -5,7 +5,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, Hsla, TestAppContext};
 
 use super::app_menu::{Rig, rig};
-use crate::settings::{Change, FIELDS, Field, Section, Values};
+use crate::settings::{Change, FIELDS, Field, Values};
 use crate::tokens::{self, ColorTheme, Density, SyntaxTheme, ThemeChoice};
 use crate::window_view::SettingsNews;
 
@@ -29,16 +29,13 @@ fn row_of(field: Field) -> usize {
 }
 
 fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
-    let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
-    let steps = Section::ALL
-        .into_iter()
-        .flat_map(crate::settings::rows_in)
-        .take_while(|(row, _)| *row != row_of(field))
-        .filter(|(_, spec)| filter.admits(spec))
-        .count();
-    for _ in 0..steps {
+    for _ in 0..FIELDS.len() * 2 {
+        if rig.view.read_with(cx, |view, _| view.settings_row()) == row_of(field) {
+            return;
+        }
         rig.press(cx, "down");
     }
+    panic!("{field:?} is not reachable with the down key");
 }
 
 fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {

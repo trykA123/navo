@@ -1,6 +1,7 @@
 //! Find in Settings: which rows a search admits, and the lines a page or a search shows.
 
 use super::fields::{FIELDS, Field, FieldSpec, Section};
+use super::fold::{Folds, page_rows};
 use super::help_page::WORDS;
 use super::index_page::PROGRESS_WORDS;
 use super::pages::{group_of, ordered_rows};
@@ -11,6 +12,7 @@ use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, rows_in};
 pub struct Filter {
     words: Vec<String>,
     hidden: Option<Field>,
+    folds: Folds,
 }
 
 impl Filter {
@@ -19,7 +21,20 @@ impl Filter {
         Self {
             words: text.split_whitespace().map(str::to_lowercase).collect(),
             hidden: None,
+            folds: Folds::default(),
         }
+    }
+
+    /// Shows the advanced settings of the open folds in `folds` while the words are empty.
+    #[must_use]
+    pub fn folding(mut self, folds: Folds) -> Self {
+        self.folds = folds;
+        self
+    }
+
+    #[must_use]
+    pub fn folds(&self) -> Folds {
+        self.folds
     }
 
     /// Hides the row of `field` whatever the words say; `None` hides nothing.
@@ -34,8 +49,15 @@ impl Filter {
         self.words.is_empty()
     }
 
+    /// True when the row of `spec` is shown: Find admits it and, with no words, its fold
+    /// (if any) is open.
     #[must_use]
     pub fn admits(&self, spec: &FieldSpec) -> bool {
+        self.matches(spec) && (!self.is_empty() || self.folds.shows(spec.field))
+    }
+
+    /// True when Find admits `spec`, whatever the fold state.
+    pub(super) fn matches(&self, spec: &FieldSpec) -> bool {
         if spec.section == Section::About {
             return false;
         }
@@ -92,6 +114,7 @@ pub enum Line {
     Section(Section),
     Group(&'static str),
     Row(usize),
+    Fold(usize),
     Progress,
     Service,
     History,
@@ -109,16 +132,18 @@ pub fn lines(filter: &Filter, current: Section) -> Vec<Line> {
 }
 
 fn section_lines(filter: &Filter, section: Section) -> Vec<Line> {
-    let rows: Vec<_> = rows_in(section)
-        .filter(|(_, spec)| filter.admits(spec))
-        .collect();
+    let rows = page_rows(filter, section);
     let extras = extra_lines(filter, section);
     if rows.is_empty() && extras.is_empty() {
         return Vec::new();
     }
     let mut group = None;
     let mut found = vec![Line::Section(section)];
-    for (index, spec) in rows {
+    for index in rows {
+        let Some(spec) = FIELDS.get(index) else {
+            found.push(Line::Fold(index));
+            continue;
+        };
         if group_of(spec.field) != group {
             group = group_of(spec.field);
             found.extend(group.map(Line::Group));

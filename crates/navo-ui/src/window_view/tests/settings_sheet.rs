@@ -7,7 +7,7 @@ use super::app_menu::{Rig, rig};
 use super::drive_fs::{Setup, drive_window};
 use super::press;
 use crate::app_menu::{Item, MenuCommand, index_of};
-use crate::settings::{Change, FIELDS, Field, Section, Value, Values};
+use crate::settings::{Change, FIELDS, Field, Section, Value};
 use crate::tokens::{self, Density, ThemeChoice};
 
 fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
@@ -67,16 +67,13 @@ fn row_of(field: Field) -> usize {
 }
 
 pub(super) fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
-    let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
-    let steps = Section::ALL
-        .into_iter()
-        .flat_map(crate::settings::rows_in)
-        .take_while(|(row, _)| *row != row_of(field))
-        .filter(|(_, spec)| filter.admits(spec))
-        .count();
-    for _ in 0..steps {
+    for _ in 0..FIELDS.len() * 2 {
+        if rig.view.read_with(cx, |view, _| view.settings_row()) == row_of(field) {
+            return;
+        }
         rig.press(cx, "down");
     }
+    panic!("{field:?} is not reachable with the down key");
 }
 
 pub(super) fn last_change(rig: &Rig) -> Option<Change> {

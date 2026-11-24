@@ -316,7 +316,11 @@ fn the_scroll_child_of_a_row_counts_the_group_headings_above_it() {
     };
     assert_eq!(child(Field::Theme), Some(2));
     assert_eq!(child(Field::WindowTabsWithOne), Some(2));
-    assert_eq!(child(Field::WindowContents), Some(18));
+    assert_eq!(
+        child(Field::WindowContents),
+        Some(16),
+        "the closed width fold is one line"
+    );
     assert_eq!(child(Field::TextLineNumbers), Some(2));
     assert_eq!(child(Field::ImageDetails), Some(6));
 }
@@ -478,7 +482,7 @@ fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
 
 #[test]
 fn drives_and_removable_rows_show_only_on_windows() {
-    let shown = |field: Field| Filter::default().admits(spec(field));
+    let shown = |field: Field| Filter::default().matches(spec(field));
     assert_eq!(shown(Field::SearchDrives), cfg!(windows));
     assert_eq!(shown(Field::SearchRemovable), cfg!(windows));
     assert!(shown(Field::SearchIndex) && shown(Field::SearchExclude));

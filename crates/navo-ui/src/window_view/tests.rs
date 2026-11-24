@@ -83,6 +83,7 @@ mod recent_sheet;
 mod screen_access;
 mod settings_dialog;
 mod settings_find;
+mod settings_fold;
 mod settings_git;
 mod settings_help;
 mod settings_inspector;

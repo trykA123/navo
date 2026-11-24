@@ -8,6 +8,7 @@ impl NavoWindow {
             .filter
             .clone()
             .hiding(self.values.hidden_row())
+            .folding(self.settings.folds)
     }
 
     pub(super) fn git_page(&self) -> GitPage {

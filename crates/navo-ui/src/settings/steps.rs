@@ -2,6 +2,7 @@
 
 use super::fields::{Control, FIELDS, Field, FieldSpec, Section};
 use super::find::{Filter, Line, lines};
+use super::fold::{fold_section, page_rows};
 use super::pages::ordered_rows;
 use super::values::Value;
 
@@ -45,12 +46,13 @@ pub fn nudged(spec: &FieldSpec, value: &Value, nudge: Nudge) -> Option<Value> {
     }
 }
 
-/// The row one step up or down from `row` among the rows `filter` admits, in page order;
+/// The row one step up or down from `row` among the rows `filter` admits and the fold rows,
+/// in page order;
 /// `row` itself at either end or when `row` is not one of them.
 pub fn moved(filter: &Filter, row: usize, down: bool) -> usize {
-    let admitted: Vec<usize> = ordered_rows()
-        .filter(|(_, spec)| filter.admits(spec))
-        .map(|(index, _)| index)
+    let admitted: Vec<usize> = Section::ALL
+        .into_iter()
+        .flat_map(|page| page_rows(filter, page))
         .collect();
     let Some(at) = admitted.iter().position(|index| *index == row) else {
         return row;
@@ -77,8 +79,11 @@ impl Field {
     }
 }
 
-/// The page that shows `row`; the Help and Diagnostics rows are on About.
+/// The page that shows `row` (a fold row too); the Help and Diagnostics rows are on About.
 pub fn section_of(row: usize) -> Section {
+    if let Some(page) = fold_section(row) {
+        return page;
+    }
     if row >= DIAGNOSTICS_ROW {
         return Section::About;
     }
@@ -121,7 +126,7 @@ pub fn rows_in(page: Section) -> impl Iterator<Item = (usize, &'static FieldSpec
 pub fn child_of(filter: &Filter, row: usize) -> Option<usize> {
     lines(filter, section_of(row))
         .iter()
-        .position(|line| *line == Line::Row(row))
+        .position(|line| matches!(line, Line::Row(at) | Line::Fold(at) if *at == row))
 }
 
 /// The Ctrl+digit of a page: 1 to 9 in nav order, then 0 for the tenth page (About).

@@ -2,7 +2,7 @@ use navo_ui::git::ToolRow;
 use navo_ui::prelude::*;
 use navo_ui::primitives::TextFieldState;
 use navo_ui::settings::{
-    self, Change, DefaultShift, Field, Filter, GitPage, IndexProgress, Moved, SearchPage,
+    self, Change, DefaultShift, Field, Filter, Folds, GitPage, IndexProgress, Moved, SearchPage,
     ServiceStatus, SettingsBody, Values, VolumeProgress, find_field,
 };
 use navo_ui::side_sheet::{SheetFrame, SheetState, SideSheet};
@@ -112,7 +112,10 @@ pub fn sheet(t: &Theme, state: &Entity<SheetState>, frame: SheetFrame, shown: &S
         is_windows: true,
         is_cleared: false,
     };
+    let mut folds = Folds::default();
+    folds.reveal(row);
     let body = SettingsBody::new(values, row)
+        .filter(Filter::default().folding(folds))
         .search_page(page)
         .git_page(git)
         .index_progress(index_sample())

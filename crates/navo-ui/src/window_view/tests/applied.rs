@@ -11,16 +11,7 @@ fn names(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
 
 fn open_at(cx: &mut TestAppContext, rig: &Rig, field: Field) {
     rig.press(cx, "ctrl-,");
-    let filter = crate::settings::Filter::default().hiding(Values::default().hidden_row());
-    let row = crate::settings::Section::ALL
-        .into_iter()
-        .flat_map(crate::settings::rows_in)
-        .filter(|(_, spec)| filter.admits(spec))
-        .position(|(_, spec)| spec.field == field)
-        .expect("a row");
-    for _ in 0..row {
-        rig.press(cx, "down");
-    }
+    super::settings_sheet::go_to(cx, rig, field);
 }
 
 fn sort_by(name: &str) -> Change {
