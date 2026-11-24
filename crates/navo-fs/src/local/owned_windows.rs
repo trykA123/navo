@@ -5,7 +5,7 @@ use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 
 use windows_sys::Win32::Foundation::{
-    ERROR_INVALID_FUNCTION, ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED,
+    ERROR_ACCESS_DENIED, ERROR_INVALID_FUNCTION, ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_READONLY,
@@ -48,20 +48,49 @@ pub(super) fn remove(path: &Path, expected: crate::FileIdentity) -> io::Result<(
 /// can open it between the check and the delete. NTFS can defer a modified-time update until a
 /// writer closes its handle; refusing write sharing is what closes that gap here.
 pub(super) fn remove_unchanged(path: &Path, expected: crate::CopiedSource) -> io::Result<bool> {
-    let file = OpenOptions::new()
-        .access_mode(DELETE | FILE_READ_ATTRIBUTES)
-        .share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE)
-        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)?;
+    let file = match open_source(path, FILE_WRITE_ATTRIBUTES) {
+        Err(error) if error.raw_os_error() == Some(ERROR_ACCESS_DENIED.cast_signed()) => {
+            open_source(path, 0)?
+        }
+        other => other?,
+    };
     let metadata = file.metadata()?;
     if !metadata.is_file() || !expected.still(&super::copied_source(&file, &metadata)?) {
         return Ok(false);
     }
     match dispose_posix(&file) {
-        Err(error) if rejects_ex(&error) => dispose(&file),
+        Err(error) if rejects_ex(&error) => dispose_writable(&file),
         other => other,
     }
     .map(|()| true)
+}
+
+/// Opens a moved source for its check and delete, with `extra` access (write attributes, so a
+/// read-only source can be cleared on this handle); never shares write access.
+fn open_source(path: &Path, extra: u32) -> io::Result<File> {
+    OpenOptions::new()
+        .access_mode(DELETE | FILE_READ_ATTRIBUTES | extra)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+}
+
+/// The classic disposition refuses a read-only file: clear the flag on this checked handle first
+/// and put it back when the delete still fails. Without write-attribute access the source stays.
+fn dispose_writable(file: &File) -> io::Result<()> {
+    let info = basic(file)?;
+    if info.FileAttributes & FILE_ATTRIBUTE_READONLY == 0 {
+        return dispose(file);
+    }
+    let mut writable = info;
+    writable.FileAttributes &= !FILE_ATTRIBUTE_READONLY;
+    if writable.FileAttributes == 0 {
+        writable.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+    }
+    set_basic(file, &writable)?;
+    dispose(file).inspect_err(|_| {
+        let _ = set_basic(file, &info);
+    })
 }
 
 /// True when the volume (FAT, SMB) does not take the `FileDispositionInfoEx` form.
