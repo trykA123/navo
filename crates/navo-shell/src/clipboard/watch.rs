@@ -18,8 +18,8 @@ use windows_sys::Win32::System::Threading::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
-    GetWindowThreadProcessId, HWND_MESSAGE, MSG, PostMessageW, RegisterClassExW, WM_APP,
-    WM_CLIPBOARDUPDATE, WNDCLASSEXW,
+    GetWindowThreadProcessId, HWND_MESSAGE, KillTimer, MSG, PostMessageW, RegisterClassExW,
+    SetTimer, WM_APP, WM_CLIPBOARDUPDATE, WM_TIMER, WNDCLASSEXW,
 };
 
 use super::capture::{admits_history, exe_stem, text_from_bytes};
@@ -32,6 +32,12 @@ const CHANGED: u32 = WM_APP + 1;
 const STOP: u32 = WM_APP + 2;
 pub(super) const BUSY_ATTEMPTS: u32 = 5;
 pub(super) const BUSY_DELAY: Duration = Duration::from_millis(20);
+/// The first wait before a busy change is read again; each further retry doubles it.
+const RETRY_FIRST: Duration = Duration::from_millis(50);
+/// The longest wait between retries of a busy change.
+const RETRY_MAX: Duration = Duration::from_secs(2);
+/// The watcher window's timer id for retrying a busy change.
+const RETRY_TIMER: usize = 1;
 const START_WAIT: Duration = Duration::from_secs(5);
 const STOP_WAIT: Duration = Duration::from_secs(2);
 const IMAGE_UNITS: usize = 32_768;
@@ -119,35 +125,84 @@ fn run(on_change: &OnChange, ready: &SyncSender<Result<usize, ClipboardError>>) 
         }
     };
     if ready.send(Ok(window.0 as usize)).is_ok() {
-        pump(on_change);
+        let mut reader = Reader {
+            window: window.0,
+            on_change,
+            last: None,
+            backoff: None,
+        };
+        reader.pump();
     }
 }
 
-fn pump(on_change: &OnChange) {
-    let mut last = None;
-    let mut message = MSG::default();
-    loop {
-        // SAFETY: message outlives the call; a null window reads every message of this thread.
-        let got = unsafe { GetMessageW(&mut message, ptr::null_mut(), 0, 0) };
-        if got == 0 || got == -1 || message.message == STOP {
-            return;
+/// Reads clipboard changes on the watcher thread. A change the clipboard is too busy to read
+/// is kept and retried on a timer with a doubling wait (at most `RETRY_MAX`) until it reads, so
+/// the message loop never sleeps on a busy clipboard.
+struct Reader<'a> {
+    window: HWND,
+    on_change: &'a OnChange,
+    last: Option<u32>,
+    /// The wait before the pending retry, while a busy change waits to be read.
+    backoff: Option<Duration>,
+}
+
+impl Reader<'_> {
+    fn pump(&mut self) {
+        let mut message = MSG::default();
+        loop {
+            // SAFETY: message outlives the call; a null window reads every message of this thread.
+            let got = unsafe { GetMessageW(&mut message, ptr::null_mut(), 0, 0) };
+            if got == 0 || got == -1 || message.message == STOP {
+                return;
+            }
+            let retry = message.message == WM_TIMER && message.wParam == RETRY_TIMER;
+            if retry || message.message == CHANGED || message.message == WM_CLIPBOARDUPDATE {
+                self.read();
+                continue;
+            }
+            // SAFETY: message came from GetMessageW on this thread.
+            unsafe { DispatchMessageW(&message) };
         }
-        if message.message == CHANGED || message.message == WM_CLIPBOARDUPDATE {
-            changed(&mut last, on_change);
-            continue;
+    }
+
+    /// Reads the current change; a busy clipboard schedules a retry instead of dropping it.
+    fn read(&mut self) {
+        if changed(&mut self.last, self.on_change) {
+            self.retry_later();
+        } else if self.backoff.take().is_some() {
+            // SAFETY: the window is live and owned by this thread; a missing timer only fails.
+            unsafe { KillTimer(self.window, RETRY_TIMER) };
         }
-        // SAFETY: message came from GetMessageW on this thread.
-        unsafe { DispatchMessageW(&message) };
+    }
+
+    fn retry_later(&mut self) {
+        let wait = self
+            .backoff
+            .map_or(RETRY_FIRST, |wait| wait.saturating_mul(2).min(RETRY_MAX));
+        self.backoff = Some(wait);
+        let millis = u32::try_from(wait.as_millis()).unwrap_or(u32::MAX);
+        // SAFETY: the window is live and owned by this thread; the same id replaces a pending timer.
+        if unsafe { SetTimer(self.window, RETRY_TIMER, millis, None) } == 0 {
+            self.backoff = None;
+            let error = std::io::Error::last_os_error();
+            tracing::debug!(%error, "clipboard retry timer not set; change dropped");
+        }
     }
 }
 
-fn changed(last: &mut Option<u32>, on_change: &OnChange) {
+/// Reads one change and hands it to `on_change`; returns true when the clipboard was busy and
+/// the change must be read again.
+fn changed(last: &mut Option<u32>, on_change: &OnChange) -> bool {
     let capture = match read_change(last) {
         Ok(Some(capture)) => capture,
-        Ok(None) => return,
+        Ok(None) => return false,
+        Err(ClipboardError::Busy) => {
+            tracing::debug!("clipboard busy; change kept for a retry");
+            return true;
+        }
         Err(error) => {
             tracing::debug!(error = error_kind(&error), "clipboard change dropped");
-            return;
+            return false;
         }
     };
     tracing::debug!(
@@ -158,6 +213,7 @@ fn changed(last: &mut Option<u32>, on_change: &OnChange) {
     if catch_unwind(AssertUnwindSafe(|| on_change(capture))).is_err() {
         tracing::debug!("clipboard change handler panicked");
     }
+    false
 }
 
 fn read_change(last: &mut Option<u32>) -> Result<Option<ShellCapture>, ClipboardError> {

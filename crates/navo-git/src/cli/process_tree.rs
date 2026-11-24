@@ -85,13 +85,12 @@ impl GitTree {
         Ok(status)
     }
 
-    /// Ends the Windows kill job and waits up to 1 s for it to empty.
+    /// Ends the Windows kill job and waits up to 1 s for every process in it to exit.
     /// Returns true when no process is left (always true without a job); fails when ending the job fails.
     fn end_job(&self) -> io::Result<bool> {
         #[cfg(windows)]
         if let Some(job) = &self.job {
-            job.terminate()?;
-            return Ok(wait_for_empty_job(job));
+            return end_and_wait(job);
         }
         Ok(true)
     }
@@ -105,7 +104,7 @@ impl GitTree {
             }
             return result.map(|_| ());
         }
-        let descendants = self.stop_descendants();
+        let (descendants, emptied) = self.stop_descendants();
         let killed = match self.child.as_mut() {
             Some(child) => match child.try_wait() {
                 Ok(None) => child.kill().map_err(git_io),
@@ -121,27 +120,27 @@ impl GitTree {
             self.status = Some(*status);
         }
         self.reaped = true;
-        // Close the handle and end the job before the ticket: a pause wakes only once the
-        // stopped processes can no longer hold their folder open.
+        // Close the handle after every job process exited and before the ticket: a pause
+        // wakes only once the stopped processes can no longer hold their folder open.
         self.child = None;
-        #[cfg(windows)]
-        let emptied = self.job.as_ref().is_none_or(wait_for_empty_job);
-        #[cfg(not(windows))]
-        let emptied = true;
         if emptied {
             self.ticket = None;
         }
         descendants.and(killed).and(waited.map(|_| ()))
     }
 
-    fn stop_descendants(&self) -> Result<(), GitError> {
+    /// Ends the job and waits for its processes to exit, or kills the process tree when there
+    /// is no job. The flag is false while a job process may still hold the folder.
+    fn stop_descendants(&self) -> (Result<(), GitError>, bool) {
         #[cfg(windows)]
-        if let Some(job) = &self.job {
-            return job.terminate().map_err(git_io);
+        if self.job.is_some() {
+            let ended = self.end_job().map_err(git_io);
+            let emptied = matches!(ended, Ok(true));
+            return (ended.map(|_| ()), emptied);
         }
         match &self.child {
-            Some(child) => run_tree_kill(child.id()),
-            None => Ok(()),
+            Some(child) => (run_tree_kill(child.id()), true),
+            None => (Ok(()), true),
         }
     }
 }
@@ -163,43 +162,19 @@ impl Drop for GitTree {
     }
 }
 
-/// Waits up to one second for the terminated job to lose every active process.
+/// Terminates the job and waits up to one second for every process in it to fully exit.
+/// Returns false, and reports it, when one is still exiting; the folder is then not free.
 #[cfg(windows)]
-fn wait_for_empty_job(job: &navo_shell::KillJob) -> bool {
-    let started = Instant::now();
-    loop {
-        match job.active_processes() {
-            Ok(0) => return true,
-            Ok(active) => {
-                if started.elapsed() >= Duration::from_secs(1) {
-                    log_still_running(active);
-                    return false;
-                }
-            }
-            Err(error) => {
-                log_query_failure(&error);
-                return false;
-            }
-        }
-        thread::sleep(Duration::from_millis(5));
+fn end_and_wait(job: &navo_shell::KillJob) -> io::Result<bool> {
+    let exited = job.terminate_and_wait(Duration::from_secs(1))?;
+    if !exited {
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr(),
+            "git job processes still exiting after 1 s"
+        );
     }
-}
-
-/// Reports a job whose descendants outlived the one-second wait.
-#[cfg(windows)]
-fn log_still_running(active: u32) {
-    use std::io::Write;
-    let _ = writeln!(
-        std::io::stderr(),
-        "git job still has {active} active processes after 1 s"
-    );
-}
-
-/// Reports a job accounting query that could not be read.
-#[cfg(windows)]
-fn log_query_failure(error: &io::Error) {
-    use std::io::Write;
-    let _ = writeln!(std::io::stderr(), "git job accounting failed: {error}");
+    Ok(exited)
 }
 
 fn run_tree_kill(pid: u32) -> Result<(), GitError> {
