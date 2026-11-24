@@ -5,13 +5,10 @@ use super::{GateOptions, Step, steps};
 
 #[test]
 fn steps_without_coverage_follow_the_exact_order() {
-    let actual: Vec<_> = steps(&GateOptions {
+    let actual: Vec<Step> = steps(&GateOptions {
         with_coverage: false,
-    })
-    .into_iter()
-    .map(|step| (step.name, step.program, step.args))
-    .collect();
-    let expected: [(&str, &str, &[&str]); 14] = [
+    });
+    let expected: [(&str, &str, &[&str]); 15] = [
         ("fmt", "cargo", &["fmt", "--all", "--check"]),
         (
             "clippy",
@@ -31,6 +28,7 @@ fn steps_without_coverage_follow_the_exact_order() {
         ("l10n", "cargo", &["xtask", "l10n"]),
         ("colors", "cargo", &["xtask", "colors"]),
         ("seams", "cargo", &["xtask", "seams"]),
+        ("channels", "cargo", &["xtask", "channels"]),
         ("paths", "cargo", &["xtask", "paths"]),
         ("plans", "cargo", &["xtask", "plans"]),
         ("deny", "cargo", &["deny", "check"]),
@@ -45,14 +43,6 @@ fn steps_without_coverage_follow_the_exact_order() {
     let expected: Vec<_> = expected
         .into_iter()
         .map(|(name, program, args)| Step::new(name, program, args))
-        .collect();
-    let actual: Vec<_> = actual
-        .into_iter()
-        .map(|(name, program, args)| Step {
-            name,
-            program,
-            args,
-        })
         .collect();
     assert_eq!(actual, expected);
 }
@@ -82,24 +72,24 @@ fn no_step_repeats() {
 }
 
 #[test]
-fn steps_without_coverage_have_fourteen_steps() {
+fn steps_without_coverage_have_fifteen_steps() {
     assert_eq!(
         steps(&GateOptions {
             with_coverage: false,
         })
         .len(),
-        14
+        15
     );
 }
 
 #[test]
-fn steps_with_coverage_have_fifteen_steps() {
+fn steps_with_coverage_have_sixteen_steps() {
     assert_eq!(
         steps(&GateOptions {
             with_coverage: true,
         })
         .len(),
-        15
+        16
     );
 }
 

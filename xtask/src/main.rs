@@ -12,6 +12,7 @@ mod bench_diff;
 mod bench_large;
 mod bench_walk;
 mod binsize;
+mod channels;
 mod colors;
 mod coverage;
 mod gate;
@@ -38,6 +39,7 @@ fn main() -> ExitCode {
         Some("size") => size::run(rest),
         Some("coverage") => coverage::run(rest),
         Some("binsize") => binsize::run(rest),
+        Some("channels") => channels::run(rest),
         Some("gate") => gate::run(rest),
         Some("check") => gate::check(rest),
         Some("index-diff") => index_diff::run(rest),
