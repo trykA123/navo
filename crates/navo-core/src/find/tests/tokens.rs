@@ -144,3 +144,23 @@ fn docs_toggles_on_and_off() {
     assert!(!parsed("docs:off").docs);
     assert_eq!(error("docs:yes"), "docs: use on or off");
 }
+
+#[test]
+fn depth_rejects_a_leading_plus() {
+    assert_eq!(error("depth:+5"), "depth: use a number from 0 to 64");
+}
+
+#[test]
+fn hex_rejects_a_leading_plus() {
+    assert_eq!(
+        error("hex:+f"),
+        "hex: use pairs like 4D 5A, up to 256 bytes"
+    );
+}
+
+#[test]
+fn the_last_repeated_token_wins() {
+    assert_eq!(parsed("depth:1 depth:2").depth, Some(2));
+    assert_eq!(parsed("enc:utf8 enc:auto").encodings, [TextEncoding::Auto]);
+    assert_eq!(parsed("hex:aa hex:bb").hex, Some(vec![0xbb]));
+}

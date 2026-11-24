@@ -1,7 +1,6 @@
 //! Canonical text for a find query.
 
-use super::query::token_kind;
-use super::tokens::TextEncoding;
+use super::tokens::{TextEncoding, token_kind};
 use super::{
     Attribute, AttributeFilter, FindQuery, GitRules, ModifiedFilter, SizeFilter, TokenKind,
 };
