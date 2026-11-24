@@ -10,18 +10,27 @@ use std::ffi::{OsStr, OsString, c_void};
 use std::io;
 use std::mem::size_of;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
-use windows_sys::Win32::Foundation::{CloseHandle, E_FAIL, HANDLE, INVALID_HANDLE_VALUE, TRUE};
+use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
+use windows_sys::Wdk::Storage::FileSystem::{
+    FILE_OPEN, FILE_OPEN_FOR_BACKUP_INTENT, FILE_OPEN_REPARSE_POINT as NT_OPEN_REPARSE_POINT,
+    FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
+};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, E_FAIL, HANDLE, INVALID_HANDLE_VALUE, OBJ_CASE_INSENSITIVE, RtlNtStatusToDosError,
+    TRUE, UNICODE_STRING,
+};
 use windows_sys::Win32::Globalization::{CSTR_EQUAL, CompareStringOrdinal};
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO,
     FILE_CASE_SENSITIVE_INFO, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_ID_INFO, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
     FileAttributeTagInfo, FileCaseSensitiveInfo, FileIdInfo, GetFileInformationByHandleEx,
-    OPEN_EXISTING,
+    OPEN_EXISTING, SYNCHRONIZE,
 };
 use windows_sys::Win32::System::Com::CoTaskMemFree;
+use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
 use windows_sys::Win32::System::SystemServices::FILE_CS_FLAG_CASE_SENSITIVE_DIR;
 use windows_sys::Win32::UI::Shell::{
     KF_FLAG_CREATE, KF_FLAG_DEFAULT, KF_FLAG_DONT_VERIFY, SHGetKnownFolderPath,
@@ -33,7 +42,7 @@ use crate::syntax::Candidate;
 
 #[cfg(test)]
 #[path = "chain_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 #[path = "refused.rs"]
 mod refused;
@@ -62,50 +71,86 @@ impl NameEq for OrdinalNames {
 }
 
 /// Resolves a path into its existing ancestors and missing names.
+///
+/// Opens the drive root, then each folder relative to its held parent without following links.
+/// The walk ends at the first reparse point: the names below it count as missing and are never
+/// resolved, so every caller that refuses a reparse link refuses the chain.
 pub(crate) fn resolve_path(path: &Path) -> io::Result<Chain> {
     if !path.is_absolute() {
         return Err(io::Error::other("chain path is not absolute"));
     }
-    let mut ancestors: Vec<&Path> = path.ancestors().collect();
-    ancestors.reverse();
-
-    let mut existing = Vec::new();
-    let mut missing = Vec::new();
-    let mut absent = false;
-    for ancestor in ancestors {
-        if absent {
-            missing.push(missing_name(ancestor)?);
-            continue;
-        }
-        match open_directory(ancestor) {
+    let (root, names) = split_root(path)?;
+    let mut parent = open_directory(&root, false)?;
+    let mut existing = vec![link_of(&parent, root.clone(), name(&root))?];
+    let mut current = root;
+    let mut names = names.into_iter();
+    while existing.last().is_some_and(|link| !link.reparse) {
+        let Some(child) = names.next() else {
+            break;
+        };
+        current.push(&child);
+        match open_child(&parent, &child) {
             Ok(handle) => {
-                let (id, reparse, directory) = read_link(&handle)?;
-                if !directory {
-                    return Err(io::Error::other("chain ancestor is not a folder"));
-                }
-                existing.push(Link {
-                    path: ancestor.to_path_buf(),
-                    name: name(ancestor),
-                    id,
-                    reparse,
-                });
+                existing.push(link_of(&handle, current.clone(), child)?);
+                // The parent is released only now, after its child is open.
+                parent = handle;
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                absent = true;
-                missing.push(missing_name(ancestor)?);
+                return Ok(Chain {
+                    existing,
+                    missing: std::iter::once(child).chain(names).collect(),
+                });
             }
             Err(error) => return Err(error),
         }
     }
-    if existing.is_empty() {
-        return Err(io::Error::other("chain has no existing ancestor"));
-    }
-    Ok(Chain { existing, missing })
+    Ok(Chain {
+        existing,
+        missing: names.collect(),
+    })
 }
 
-/// Opens an existing folder with the flags IW7a names, without following a reparse point.
-fn open_directory(path: &Path) -> io::Result<Owned> {
+/// Splits an absolute path into its drive root and folder names; `..` and stream names refuse.
+fn split_root(path: &Path) -> io::Result<(PathBuf, Vec<OsString>)> {
+    let mut root = PathBuf::new();
+    let mut names = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir if names.is_empty() => {
+                root.push(component.as_os_str());
+            }
+            Component::Normal(name) if !wide(name).contains(&u16::from(b':')) => {
+                names.push(name.to_os_string());
+            }
+            Component::CurDir => {}
+            _ => return Err(io::Error::other("chain path has an unsupported part")),
+        }
+    }
+    Ok((root, names))
+}
+
+/// Reads one folder's link through its handle; a file is not a folder and refuses.
+fn link_of(handle: &Owned, path: PathBuf, name: OsString) -> io::Result<Link> {
+    let (id, reparse, directory) = read_link(handle)?;
+    if !directory {
+        return Err(io::Error::other("chain ancestor is not a folder"));
+    }
+    Ok(Link {
+        path,
+        name,
+        id,
+        reparse,
+    })
+}
+
+/// Opens a folder with the flags IW7a names; `follow` decides whether a final link is followed.
+fn open_directory(path: &Path, follow: bool) -> io::Result<Owned> {
     let path = wide_z(path);
+    let flags = if follow {
+        FILE_FLAG_BACKUP_SEMANTICS
+    } else {
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT
+    };
     // SAFETY: the wide path is NUL-terminated and live for the call; no security attributes are used.
     let handle = unsafe {
         CreateFileW(
@@ -114,12 +159,57 @@ fn open_directory(path: &Path) -> io::Result<Owned> {
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             std::ptr::null(),
             OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            flags,
             std::ptr::null_mut(),
         )
     };
     if handle == INVALID_HANDLE_VALUE {
         return Err(io::Error::last_os_error());
+    }
+    Ok(Owned(handle))
+}
+
+/// Opens one child by name relative to its held parent, without following a reparse point.
+fn open_child(parent: &Owned, name: &OsStr) -> io::Result<Owned> {
+    let mut units = wide(name);
+    let length = u16::try_from(units.len().saturating_mul(2)).map_err(io::Error::other)?;
+    let object_name = UNICODE_STRING {
+        Length: length,
+        MaximumLength: length,
+        Buffer: units.as_mut_ptr(),
+    };
+    let attributes = OBJECT_ATTRIBUTES {
+        Length: u32::try_from(size_of::<OBJECT_ATTRIBUTES>()).map_err(io::Error::other)?,
+        RootDirectory: parent.0,
+        ObjectName: &raw const object_name,
+        Attributes: OBJ_CASE_INSENSITIVE,
+        ..OBJECT_ATTRIBUTES::default()
+    };
+    let mut handle: HANDLE = std::ptr::null_mut();
+    let mut status_block = IO_STATUS_BLOCK::default();
+    // SAFETY: the parent handle, name buffer and attribute structs stay live for the call, and
+    // `handle` and `status_block` are writable; no allocation size or EA buffer is passed.
+    let status = unsafe {
+        NtCreateFile(
+            &raw mut handle,
+            FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            &raw const attributes,
+            &raw mut status_block,
+            std::ptr::null(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            FILE_OPEN,
+            NT_OPEN_REPARSE_POINT | FILE_OPEN_FOR_BACKUP_INTENT | FILE_SYNCHRONOUS_IO_NONALERT,
+            std::ptr::null(),
+            0,
+        )
+    };
+    if status < 0 {
+        // SAFETY: a pure status-code conversion with no pointers.
+        let code = unsafe { RtlNtStatusToDosError(status) };
+        return Err(io::Error::from_raw_os_error(
+            i32::try_from(code).map_err(io::Error::other)?,
+        ));
     }
     Ok(Owned(handle))
 }
@@ -155,8 +245,7 @@ fn read_link(handle: &Owned) -> io::Result<(FileId, bool, bool)> {
 }
 
 /// Reads an anchor's case sensitivity; an error is `None`, which IW8a treats as unknown.
-fn case_sensitive(path: &Path) -> Option<bool> {
-    let handle = open_directory(path).ok()?;
+fn case_sensitive(handle: &Owned) -> Option<bool> {
     let mut info = FILE_CASE_SENSITIVE_INFO::default();
     let size = u32::try_from(size_of::<FILE_CASE_SENSITIVE_INFO>()).ok()?;
     let info_ptr = std::ptr::from_mut(&mut info).cast::<c_void>();
@@ -170,27 +259,58 @@ fn case_sensitive(path: &Path) -> Option<bool> {
 }
 
 /// Turns one known folder plus a suffix into a `Protected` anchor and tail.
+///
+/// The anchor is the nearest existing folder opened through any link or mount point, so it is the
+/// target's identity, which a candidate reaches by any path; an error other than not-found refuses.
 fn protected_from(path: &Path) -> io::Result<Protected> {
-    let chain = resolve_path(path)?;
-    let Some(anchor) = chain.existing.last() else {
-        return Err(io::Error::other(
-            "protected folder has no existing ancestor",
-        ));
-    };
-    Ok(Protected {
-        anchor: anchor.id,
-        anchor_case_sensitive: case_sensitive(&anchor.path),
-        tail: chain.missing,
-    })
+    let mut anchor = path.to_path_buf();
+    let mut tail = Vec::new();
+    loop {
+        match open_directory(&anchor, true) {
+            Ok(handle) => {
+                let (id, _, directory) = read_link(&handle)?;
+                if !directory {
+                    return Err(io::Error::other("protected folder is not a folder"));
+                }
+                tail.reverse();
+                return Ok(Protected {
+                    anchor: id,
+                    anchor_case_sensitive: case_sensitive(&handle),
+                    tail,
+                });
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                tail.push(missing_name(&anchor)?);
+                anchor.pop();
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
-/// Adds one known folder to a refused set, skipping only an unresolvable known folder.
-fn add_known(out: &mut Vec<Protected>, id: &GUID, suffix: &[&str]) -> io::Result<()> {
+/// Adds a mandatory known folder: its configured path counts even when absent, and a failed
+/// lookup refuses instead of dropping the anchor.
+fn add_required(out: &mut Vec<Protected>, id: &GUID, suffix: &[&str]) -> io::Result<()> {
+    add_required_from(out, known_folder_unverified(id), suffix)
+}
+
+/// Adds the result of a mandatory lookup; no path is an error.
+fn add_required_from(
+    out: &mut Vec<Protected>,
+    base: io::Result<Option<PathBuf>>,
+    suffix: &[&str],
+) -> io::Result<()> {
+    let base = base?.ok_or_else(|| io::Error::other("a mandatory known folder has no path"))?;
+    add_base(out, Some(base), suffix)
+}
+
+/// Adds an explicitly optional known folder; only an `E_FAIL` or not-found lookup is skipped.
+fn add_optional(out: &mut Vec<Protected>, id: &GUID, suffix: &[&str]) -> io::Result<()> {
     add_base(out, known_folder(id)?, suffix)
 }
 
-/// Adds a known folder whose path counts even when the folder does not exist yet.
-fn add_known_unverified(out: &mut Vec<Protected>, id: &GUID) -> io::Result<()> {
+/// Adds an optional known folder whose path counts even when the folder does not exist yet.
+fn add_optional_unverified(out: &mut Vec<Protected>, id: &GUID) -> io::Result<()> {
     add_base(out, known_folder_unverified(id)?, &[])
 }
 

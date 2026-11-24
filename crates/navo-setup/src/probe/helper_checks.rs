@@ -4,7 +4,7 @@
 
 use crate::elevate::{HelperArgs, HelperExit};
 use crate::payload::platform::security;
-use crate::placement::{Chain, DriveKind, inside, refused_problem};
+use crate::placement::{Chain, inside, link_problem, refused_problem};
 
 use super::chain::{OrdinalNames, refused, resolve_path};
 use super::facts::{drive_kind, subst_drive};
@@ -48,17 +48,16 @@ pub fn helper_chain(args: &HelperArgs) -> Result<Chain, HelperExit> {
     Ok(chain)
 }
 
-/// Whether no link is a reparse point and the drive is a local, non-`subst` Fixed or Removable one.
+/// Whether `placement::link_problem` passes: no reparse link, no `subst`, a Fixed or Removable drive.
+/// A drive whose kind cannot be read is unsafe.
 fn drive_is_safe(chain: &Chain) -> bool {
-    if chain.existing.iter().any(|link| link.reparse) {
-        return false;
-    }
     let Some(root) = chain.existing.first() else {
         return false;
     };
-    let local = drive_kind(&root.path)
-        .is_ok_and(|kind| matches!(kind, DriveKind::Fixed | DriveKind::Removable));
-    local && !subst_drive(&root.path)
+    let Ok(drive) = drive_kind(&root.path) else {
+        return false;
+    };
+    link_problem(chain, subst_drive(&root.path), drive).is_none()
 }
 
 /// Whether `sid` is this process's token user or the desktop shell's user (E1 review carry).

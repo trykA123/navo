@@ -5,13 +5,15 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use windows_sys::Win32::UI::Shell::FOLDERID_Profile;
+use windows_sys::Win32::UI::Shell::{FOLDERID_Profile, FOLDERID_Windows};
 
 use super::helper_chain;
 use crate::elevate::{HelperArgs, HelperExit, valid_user_sid};
 use crate::payload::platform::security;
-use crate::placement::FileId;
+use crate::placement::{DriveKind, FileId};
+use crate::probe::chain::tests::junction;
 use crate::probe::chain::{known_folder, resolve_path};
+use crate::probe::facts::drive_kind;
 
 /// A temp folder at the system drive's root: `%TEMP%` sits inside a user profile, which refuses.
 fn outside_profiles() -> tempfile::TempDir {
@@ -76,13 +78,7 @@ fn a_junction_in_the_chain_is_refused() {
     let real = temp.path().join("real");
     let link = temp.path().join("link");
     std::fs::create_dir(&real).expect("junction target");
-    let status = Command::new("cmd")
-        .args(["/C", "mklink", "/J"])
-        .arg(&link)
-        .arg(&real)
-        .status()
-        .expect("cmd runs");
-    assert!(status.success(), "mklink /J plants the junction unelevated");
+    junction(&link, &real);
     // The parent id is the junction's own, so only the reparse rule can refuse.
     let result = helper_chain(&args(link.join("Navo"), id_of(&link)));
     assert_eq!(result, Err(HelperExit::Refused));
@@ -120,5 +116,70 @@ fn a_root_inside_a_user_profile_is_refused_whatever_its_separators() {
         .expect("this account has a profile");
     let text = format!("{}//.navo-e4-missing/Navo", profile.display());
     let result = helper_chain(&args(PathBuf::from(text), id_of(&profile)));
+    assert_eq!(result, Err(HelperExit::Refused));
+}
+
+#[test]
+fn an_intermediate_junction_ends_the_walk_and_is_refused() {
+    let temp = outside_profiles();
+    let real = temp.path().join("real");
+    let link = temp.path().join("link");
+    std::fs::create_dir_all(real.join("sub")).expect("junction target with a child");
+    junction(&link, &real);
+    let root = link.join("sub").join("Navo");
+    let chain = resolve_path(&root).expect("chain resolves");
+    let last = chain.existing.last().expect("an existing folder");
+    assert!(
+        last.reparse && last.path == link,
+        "the walk stops at the junction"
+    );
+    assert_eq!(chain.missing, ["sub", "Navo"], "nothing behind it resolves");
+    // The parent id is the junction's own, so only the reparse rule can refuse.
+    let result = helper_chain(&args(root, last.id));
+    assert_eq!(result, Err(HelperExit::Refused));
+}
+
+#[test]
+fn a_root_inside_the_windows_folder_with_its_true_parent_is_refused() {
+    let windows = known_folder(&FOLDERID_Windows)
+        .expect("Windows lookup")
+        .expect("the Windows folder exists");
+    let root = windows.join(".navo-e4-missing").join("Navo");
+    // The parent id matches and the drive is local, so only the refused folders can refuse.
+    let result = helper_chain(&args(root, id_of(&windows)));
+    assert_eq!(result, Err(HelperExit::Refused));
+}
+
+/// Removes a `subst` drive when the test ends, even when it fails.
+struct Subst(String);
+
+impl Drop for Subst {
+    fn drop(&mut self) {
+        let _ = Command::new("subst").args([self.0.as_str(), "/D"]).status();
+    }
+}
+
+#[test]
+fn a_subst_drive_is_refused() {
+    let temp = outside_profiles();
+    let letter = ('M'..='Z')
+        .rev()
+        .find(|letter| !Path::new(&format!("{letter}:\\")).exists())
+        .expect("a free drive letter");
+    let drive = format!("{letter}:");
+    let status = Command::new("subst")
+        .arg(&drive)
+        .arg(temp.path())
+        .status()
+        .expect("subst runs");
+    assert!(status.success(), "subst maps the drive unelevated");
+    let _undo = Subst(drive.clone());
+    let root = PathBuf::from(format!("{drive}\\"));
+    assert_eq!(
+        drive_kind(&root).ok(),
+        Some(DriveKind::Fixed),
+        "only the subst rule can refuse"
+    );
+    let result = helper_chain(&args(root.join("Navo"), id_of(&root)));
     assert_eq!(result, Err(HelperExit::Refused));
 }

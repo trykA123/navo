@@ -1,14 +1,64 @@
-// Windows test for the chain probe's NTFS name comparison.
+// Windows tests for the chain probe: NTFS name comparison, protected targets, mandatory folders.
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
+use std::process::Command;
 
 use windows_sys::Win32::Foundation::ERROR_ALREADY_EXISTS;
 use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
 
-use super::OrdinalNames;
-use crate::placement::NameEq;
+use super::{OrdinalNames, add_base, add_required_from, protected_from, resolve_path};
+use crate::placement::{FileId, NameEq};
+
+/// Plants a junction at `link` that points at `target`; `mklink /J` needs no elevation.
+pub(crate) fn junction(link: &Path, target: &Path) {
+    let status = Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .status()
+        .expect("cmd runs");
+    assert!(status.success(), "mklink /J plants the junction unelevated");
+}
+
+/// The identity of the last existing folder of `path`, without following a final link.
+fn own_id(path: &Path) -> FileId {
+    resolve_path(path)
+        .expect("chain resolves")
+        .existing
+        .last()
+        .expect("path exists")
+        .id
+}
+
+/// A protected path that is a link (junction or mount point) anchors at what it points to.
+#[test]
+fn a_protected_link_anchors_at_its_target() {
+    let root = tempfile::tempdir().expect("temp folder");
+    let real = root.path().join("real");
+    let link = root.path().join("link");
+    std::fs::create_dir(&real).expect("junction target");
+    junction(&link, &real);
+    let target = own_id(&real);
+    assert_ne!(own_id(&link), target, "the junction has its own id");
+
+    let protected = protected_from(&link).expect("protected link resolves");
+    assert_eq!(protected.anchor, target);
+    assert!(protected.tail.is_empty());
+    let below = protected_from(&link.join("missing")).expect("missing tail resolves");
+    assert_eq!(below.anchor, target);
+    assert_eq!(below.tail, [OsString::from("missing")]);
+}
+
+/// A mandatory known folder without a path refuses; only an optional one is skipped.
+#[test]
+fn a_mandatory_known_folder_without_a_path_refuses() {
+    let mut out = Vec::new();
+    assert!(add_required_from(&mut out, Ok(None), &[]).is_err());
+    assert!(add_base(&mut out, None, &[]).is_ok());
+    assert!(out.is_empty());
+}
 
 /// Creates the first name, then asks NTFS whether the second is the same name.
 #[cfg(windows)]

@@ -154,14 +154,8 @@ pub fn check(
     if chain.missing.is_empty() {
         return Err(FolderProblem::RootExists);
     }
-    if chain.existing.iter().any(|link| link.reparse) {
-        return Err(FolderProblem::ReparsePoint);
-    }
-    if facts.subst {
-        return Err(FolderProblem::SubstDrive);
-    }
-    if !matches!(facts.drive, DriveKind::Fixed | DriveKind::Removable) {
-        return Err(FolderProblem::DriveNotLocal);
+    if let Some(problem) = link_problem(chain, facts.subst, facts.drive) {
+        return Err(problem);
     }
     if let Some(problem) = refused_problem(chain, refused, names) {
         return Err(problem);
@@ -177,6 +171,20 @@ pub fn check(
         return Err(FolderProblem::NotEnoughSpace);
     }
     Ok(())
+}
+
+/// The reparse, `subst` and drive rules that `check` and the elevated helper share, in that order.
+pub fn link_problem(chain: &Chain, subst: bool, drive: DriveKind) -> Option<FolderProblem> {
+    if chain.existing.iter().any(|link| link.reparse) {
+        return Some(FolderProblem::ReparsePoint);
+    }
+    if subst {
+        return Some(FolderProblem::SubstDrive);
+    }
+    if !matches!(drive, DriveKind::Fixed | DriveKind::Removable) {
+        return Some(FolderProblem::DriveNotLocal);
+    }
+    None
 }
 
 /// The refused-folder rule: the first group the candidate falls in, or `None`.

@@ -14,61 +14,62 @@ use windows_sys::Win32::UI::Shell::{
     FOLDERID_Windows,
 };
 
-use super::{add_known, add_known_unverified};
+use super::{add_optional, add_optional_unverified, add_required};
 use crate::placement::{Protected, Refused};
 
 /// Velopack's pack id, which is also the legacy root folder's name.
 const NAVO_APP_ROOT: &str = "NavoApp";
 
 /// Builds the IW8a and IW28 refused folders; an absent one anchors at its nearest existing parent.
-/// Fails when a known folder gives an error other than the allowed `E_FAIL` or not-found skip.
+/// The Windows, Program Files, ProgramData, profile and app-data folders are mandatory: a failed
+/// lookup fails. Only the `add_optional` folders may skip an `E_FAIL` or not-found lookup.
 pub fn refused() -> io::Result<Refused> {
     let mut never_inside = Vec::new();
-    add_known(&mut never_inside, &FOLDERID_Windows, &[])?;
-    add_known(&mut never_inside, &FOLDERID_System, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFiles, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFilesX86, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFilesCommon, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFilesCommonX86, &[])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramFiles, &["WindowsApps"])?;
-    add_known(&mut never_inside, &FOLDERID_ProgramData, &[])?;
-    add_known(&mut never_inside, &FOLDERID_LocalAppData, &[brand::NAME])?;
-    add_known(&mut never_inside, &FOLDERID_RoamingAppData, &[brand::NAME])?;
-    add_known(
+    add_required(&mut never_inside, &FOLDERID_Windows, &[])?;
+    add_required(&mut never_inside, &FOLDERID_System, &[])?;
+    add_required(&mut never_inside, &FOLDERID_ProgramFiles, &[])?;
+    add_optional(&mut never_inside, &FOLDERID_ProgramFilesX86, &[])?;
+    add_optional(&mut never_inside, &FOLDERID_ProgramFilesCommon, &[])?;
+    add_optional(&mut never_inside, &FOLDERID_ProgramFilesCommonX86, &[])?;
+    add_required(&mut never_inside, &FOLDERID_ProgramFiles, &["WindowsApps"])?;
+    add_required(&mut never_inside, &FOLDERID_ProgramData, &[])?;
+    add_required(&mut never_inside, &FOLDERID_LocalAppData, &[brand::NAME])?;
+    add_required(&mut never_inside, &FOLDERID_RoamingAppData, &[brand::NAME])?;
+    add_required(
         &mut never_inside,
         &FOLDERID_LocalAppData,
         &[brand::LEGACY_NAME],
     )?;
-    add_known(
+    add_required(
         &mut never_inside,
         &FOLDERID_RoamingAppData,
         &[brand::LEGACY_NAME],
     )?;
-    add_known(&mut never_inside, &FOLDERID_SkyDrive, &[])?;
-    add_known(&mut never_inside, &FOLDERID_Startup, &[])?;
+    add_optional(&mut never_inside, &FOLDERID_SkyDrive, &[])?;
+    add_optional(&mut never_inside, &FOLDERID_Startup, &[])?;
 
     let mut never_equal = Vec::new();
-    add_known(&mut never_equal, &FOLDERID_Profile, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Desktop, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Documents, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Downloads, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Pictures, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Music, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Videos, &[])?;
-    add_known(&mut never_equal, &FOLDERID_LocalAppData, &[])?;
-    add_known(&mut never_equal, &FOLDERID_RoamingAppData, &[])?;
-    add_known(&mut never_equal, &FOLDERID_LocalAppDataLow, &[])?;
-    add_known_unverified(&mut never_equal, &FOLDERID_UserProgramFiles)?;
-    add_known(&mut never_equal, &FOLDERID_StartMenu, &[])?;
-    add_known(&mut never_equal, &FOLDERID_Public, &[])?;
+    add_required(&mut never_equal, &FOLDERID_Profile, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_Desktop, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_Documents, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_Downloads, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_Pictures, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_Music, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_Videos, &[])?;
+    add_required(&mut never_equal, &FOLDERID_LocalAppData, &[])?;
+    add_required(&mut never_equal, &FOLDERID_RoamingAppData, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_LocalAppDataLow, &[])?;
+    add_optional_unverified(&mut never_equal, &FOLDERID_UserProgramFiles)?;
+    add_optional(&mut never_equal, &FOLDERID_StartMenu, &[])?;
+    add_optional(&mut never_equal, &FOLDERID_Public, &[])?;
 
     let mut fresh_only = Vec::new();
-    add_known(&mut fresh_only, &FOLDERID_LocalAppData, &[NAVO_APP_ROOT])?;
+    add_required(&mut fresh_only, &FOLDERID_LocalAppData, &[NAVO_APP_ROOT])?;
 
     // Atom 0: the same two folders also refuse with NeedsAdministrator; E10 removes this group.
     let mut admin_only = Vec::new();
-    add_known(&mut admin_only, &FOLDERID_ProgramFiles, &[])?;
-    add_known(&mut admin_only, &FOLDERID_ProgramFilesX86, &[])?;
+    add_required(&mut admin_only, &FOLDERID_ProgramFiles, &[])?;
+    add_optional(&mut admin_only, &FOLDERID_ProgramFilesX86, &[])?;
 
     Ok(Refused {
         never_inside,
@@ -83,14 +84,14 @@ pub fn refused() -> io::Result<Refused> {
 /// The IW28 index service folders, under the current and the legacy brand name.
 fn service() -> io::Result<Vec<Protected>> {
     let mut service = Vec::new();
-    add_known(&mut service, &FOLDERID_ProgramFiles, &[brand::NAME])?;
-    add_known(&mut service, &FOLDERID_ProgramFiles, &[brand::LEGACY_NAME])?;
+    add_required(&mut service, &FOLDERID_ProgramFiles, &[brand::NAME])?;
+    add_required(&mut service, &FOLDERID_ProgramFiles, &[brand::LEGACY_NAME])?;
     Ok(service)
 }
 
 /// The IW28 parent of every user's profile, usually `C:\Users`.
 fn profiles() -> io::Result<Vec<Protected>> {
     let mut profiles = Vec::new();
-    add_known(&mut profiles, &FOLDERID_UserProfiles, &[])?;
+    add_required(&mut profiles, &FOLDERID_UserProfiles, &[])?;
     Ok(profiles)
 }
