@@ -1,5 +1,6 @@
 pub(crate) mod apply;
 pub(crate) mod feed;
+pub(crate) mod root_access;
 mod schedule;
 pub(crate) mod service;
 #[cfg(feature = "tester")]

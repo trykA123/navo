@@ -28,8 +28,13 @@ pub(crate) struct VelopackFeed {
 }
 
 impl VelopackFeed {
-    /// No feed when this copy is unpackaged or its tester override is invalid.
+    /// No feed when this copy is unpackaged, its tester override is invalid, or the user cannot
+    /// write its install root (IW35: `Err(Installed)`, so Velopack never prompts at each start).
     pub(crate) fn detect() -> Result<Self, InstallKind> {
+        if !super::root_access::current() {
+            tracing::info!("update: off, this account cannot write the install folder");
+            return Err(InstallKind::Installed);
+        }
         let options = UpdateOptions {
             AllowVersionDowngrade: false,
             ..Default::default()
