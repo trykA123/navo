@@ -1,8 +1,11 @@
 mod body;
+mod cursor;
 mod draw;
 mod find;
 mod follow;
 mod found;
+pub(in crate::window_view::viewer) mod inspect;
+mod inspector;
 mod jobs;
 use sidewise_ui::window_view::viewer::paged::lines;
 mod marking;
@@ -33,6 +36,7 @@ use crate::prelude::*;
 use crate::settings::{Field, Values};
 use find::{BarKind, FindState};
 use follow::Follower;
+use inspector::HexInspector;
 use jobs::{IndexDone, IndexMessage};
 use moves::{Move, MoveQueue};
 use rows::RowCache;
@@ -51,6 +55,9 @@ pub struct PagedView {
     index_run: IndexRun,
     pub(super) kind: PagedKind,
     pub(super) top: u64,
+    /// The hex cursor: the byte offset the inspector decodes.
+    pub(super) cursor: u64,
+    inspector: HexInspector,
     moves: MoveQueue,
     shift: usize,
     focus: FocusHandle,
@@ -99,6 +106,8 @@ impl PagedView {
             index_run: paged.index,
             kind,
             top: 0,
+            cursor: 0,
+            inspector: HexInspector::new(cx),
             moves: MoveQueue::default(),
             shift: 0,
             focus: cx.focus_handle(),
@@ -224,6 +233,7 @@ impl PagedView {
         self.marking.find_all = None;
         self.previews.clear();
         if kind == PagedKind::Hex {
+            self.cursor = self.top;
             self.stop_following();
         }
         self.queue_move(Move::Realign, cx);

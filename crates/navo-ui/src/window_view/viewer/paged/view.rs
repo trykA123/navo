@@ -5,7 +5,6 @@ use gpui_kit::{Stateful, Window};
 use super::PagedView;
 use super::find::{Bar, BarKind};
 use super::lines::PagedKind;
-use super::moves::Move;
 use crate::format;
 use crate::prelude::*;
 use crate::tokens::{self, Theme};
@@ -21,8 +20,8 @@ use crate::window_view::viewer::search::find_all::{
 use crate::window_view::viewer::view_menu::view_button;
 use crate::window_view::viewer::{
     Back, FindAll, GoEnd, GoStart, ListClose, ListDown, ListGo, ListUp, MatchCase, NewerSearch,
-    OlderSearch, OpenFind, OpenGoTo, PAGED_CONTEXT, PageDown, PageUp, RowDown, RowUp, ScrollLeft,
-    ScrollRight,
+    OlderSearch, OpenFind, OpenGoTo, PAGED_CONTEXT, PageDown, PageUp, RightDrawer, RowDown, RowUp,
+    ScrollLeft, ScrollRight,
 };
 
 fn small(t: &Theme, color: Hsla) -> Div {
@@ -74,6 +73,7 @@ impl PagedView {
         let mut keys = vec![("Ctrl+F", "Find"), ("F3", "Next"), go_to];
         if self.kind == PagedKind::Hex {
             keys.extend(MARK_KEYS);
+            keys.push(("Ctrl+I", "Inspector"));
             return keys;
         }
         let follow = if self.is_following() {
@@ -182,6 +182,7 @@ impl PagedView {
                     .map(|text| status(t, "find-count", text)),
             )
             .children(self.find.bar.as_ref().map(|bar| self.bar_view(t, bar, cx)))
+            .children(self.inspector_button(cx))
             .when(self.kind == PagedKind::Text, |row| row.child(view_button()))
     }
 
@@ -221,20 +222,15 @@ impl PagedView {
     }
 
     fn movement_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
-        root.on_action(cx.listener(|view, _: &RowUp, _, cx| view.scroll_rows(-1, cx)))
-            .on_action(cx.listener(|view, _: &RowDown, _, cx| view.scroll_rows(1, cx)))
-            .on_action(cx.listener(|view, _: &PageUp, _, cx| {
-                view.scroll_rows(-view.page(), cx);
-            }))
-            .on_action(cx.listener(|view, _: &PageDown, _, cx| {
-                view.scroll_rows(view.page(), cx);
-            }))
-            .on_action(cx.listener(|view, _: &GoStart, _, cx| {
-                view.user_move(Move::Offset(0), cx);
-            }))
-            .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.user_move(Move::End, cx)))
-            .on_action(cx.listener(|view, _: &ScrollLeft, _, cx| view.shift_by(false, cx)))
-            .on_action(cx.listener(|view, _: &ScrollRight, _, cx| view.shift_by(true, cx)))
+        root.on_action(cx.listener(|view, _: &RowUp, _, cx| view.row_key(-1, cx)))
+            .on_action(cx.listener(|view, _: &RowDown, _, cx| view.row_key(1, cx)))
+            .on_action(cx.listener(|view, _: &PageUp, _, cx| view.page_key(false, cx)))
+            .on_action(cx.listener(|view, _: &PageDown, _, cx| view.page_key(true, cx)))
+            .on_action(cx.listener(|view, _: &GoStart, _, cx| view.ends_key(false, cx)))
+            .on_action(cx.listener(|view, _: &GoEnd, _, cx| view.ends_key(true, cx)))
+            .on_action(cx.listener(|view, _: &ScrollLeft, _, cx| view.column_key(false, cx)))
+            .on_action(cx.listener(|view, _: &ScrollRight, _, cx| view.column_key(true, cx)))
+            .on_action(cx.listener(|view, _: &RightDrawer, _, cx| view.right_drawer(cx)))
     }
 
     fn find_keys(root: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -245,7 +241,11 @@ impl PagedView {
             view.open_bar(BarKind::GoTo, window, cx);
         }))
         .on_action(cx.listener(|view, _: &MatchCase, _, cx| view.toggle_case(cx)))
-        .on_action(cx.listener(|view, _: &Back, window, cx| view.back(window, cx)))
+        .on_action(cx.listener(|view, _: &Back, window, cx| {
+            if !view.close_inspector(cx) {
+                view.back(window, cx);
+            }
+        }))
         .on_action(cx.listener(|view, _: &OlderSearch, window, cx| {
             view.recall(true, window, cx);
         }))
@@ -289,11 +289,14 @@ impl Render for PagedView {
         self.follow_drag(cx);
         self.rows = self.fitting_rows(window);
         self.follow_changes(cx);
+        self.clamp_cursor();
         self.request_rows(cx);
+        self.request_inspection(cx);
         self.update_overview(&t);
         self.marking.sync_find_all();
         let rows = self.found_rows(cx);
         let panel = find_all_panel(&t, &self.marking, rows);
+        let drawer = self.inspector_drawer(&t, window, cx);
         let screen = self.cache.screen(self.want(), self.source.len());
         self.show_position(screen.end);
         let root = div()
@@ -309,7 +312,7 @@ impl Render for PagedView {
             .size_full()
             .bg(t.colors.surface)
             .child(self.header(&t, window, cx))
-            .child(self.body(&t, &screen, cx))
+            .child(self.body(&t, &screen, cx).children(drawer))
             .children(panel)
     }
 }

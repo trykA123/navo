@@ -1,9 +1,10 @@
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::component::highlighter::HighlightTheme;
-use gpui_kit::{HighlightStyle, Stateful, StyledText};
+use gpui_kit::{HighlightStyle, InteractiveText, Stateful, StyledText, UnderlineStyle};
 use navo_core::paging::{HEX_WIDTH, TextLayout};
 
 use super::lines::{HexLine, TextLine};
@@ -14,6 +15,17 @@ use crate::tokens::Theme;
 
 const SHOWN_CHARS: usize = 1000;
 const MATCH_OPACITY: f32 = 0.3;
+const CURSOR_UNDERLINE: f32 = 1.;
+
+/// What a click on a hex or ASCII byte does: it gets the byte's file offset.
+pub type PickByte = Rc<dyn Fn(u64, &mut Window, &mut App)>;
+
+/// The hex cursor a viewer row draws: the byte it sits on and what a click on a byte does.
+#[doc(hidden)]
+pub struct HexCursor {
+    pub at: Option<u64>,
+    pub pick: Option<PickByte>,
+}
 
 #[doc(hidden)]
 pub struct RowLook<'a> {
@@ -104,19 +116,75 @@ type Runs = Vec<(Range<usize>, Paint)>;
 fn hex_ranges(slots: &[(usize, Paint)]) -> (Runs, Runs) {
     slots
         .iter()
-        .map(|(slot, paint)| {
-            let at = slot * 3 + usize::from(*slot >= 8);
-            ((at..at + 2, *paint), (*slot..slot + 1, *paint))
-        })
+        .map(|(slot, paint)| ((hex_range(*slot), *paint), (*slot..slot + 1, *paint)))
         .unzip()
 }
 
+/// The cursor look: the selection fill with an accent underline, so it is not colour alone.
+fn cursor_style(t: &Theme) -> HighlightStyle {
+    HighlightStyle {
+        background_color: Some(t.colors.selection),
+        color: Some(t.colors.text),
+        underline: Some(UnderlineStyle {
+            thickness: px(CURSOR_UNDERLINE),
+            color: Some(t.colors.accent),
+            wavy: false,
+        }),
+        ..HighlightStyle::default()
+    }
+}
+
+/// Puts the cursor style on `range`, replacing any paint it overlaps; keeps the runs sorted.
+fn with_cursor(mut styles: Styles, range: Range<usize>, style: HighlightStyle) -> Styles {
+    styles.retain(|(run, _)| run.end <= range.start || run.start >= range.end);
+    let at = styles.partition_point(|(run, _)| run.start < range.start);
+    styles.insert(at, (range, style));
+    styles
+}
+
+/// The text range of byte `slot` (0–15) in a row's hex text: two digits, a wider gap after 8.
+fn hex_range(slot: usize) -> Range<usize> {
+    let at = slot * 3 + usize::from(slot >= 8);
+    at..at + 2
+}
+
 #[doc(hidden)]
-pub fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine) -> AnyElement {
+pub fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine, cursor: &HexCursor) -> AnyElement {
     let (hex_paint, ascii_paint) = hex_ranges(&hex_slots(line.start, &look.painted));
     let is_bookmarked = look.is_bookmarked(line.start..line.start + HEX_WIDTH);
-    let styles = (look.styled(hex_paint), look.styled(ascii_paint));
-    hex_body(look, (index, line, is_bookmarked), styles)
+    let (mut hex, mut ascii) = (look.styled(hex_paint), look.styled(ascii_paint));
+    let slot = cursor
+        .at
+        .and_then(|at| at.checked_sub(line.start))
+        .filter(|slot| *slot < HEX_WIDTH)
+        .and_then(|slot| usize::try_from(slot).ok());
+    if let Some(slot) = slot.filter(|slot| *slot < line.row.ascii.len()) {
+        hex = with_cursor(hex, hex_range(slot), cursor_style(look.t));
+        ascii = with_cursor(ascii, slot..slot + 1, cursor_style(look.t));
+    }
+    hex_body(
+        look,
+        (index, line, is_bookmarked),
+        (hex, ascii),
+        cursor.pick.as_ref(),
+    )
+}
+
+/// A row's hex or ASCII text; with `pick`, a click on byte `n` of the row picks that byte.
+fn byte_text(
+    id: (&'static str, usize),
+    styled: StyledText,
+    (line, ranges): (&HexLine, Vec<Range<usize>>),
+    pick: Option<&PickByte>,
+) -> AnyElement {
+    let Some(pick) = pick.cloned() else {
+        return styled.into_any_element();
+    };
+    let start = line.start;
+    let text = InteractiveText::new(id, styled).on_click(ranges, move |slot, window, cx| {
+        pick(start + slot as u64, window, cx);
+    });
+    div().id(id).test_support().child(text).into_any_element()
 }
 
 /// One hex row of the compare diff: the shared frame and aria label, tinted with the diff
@@ -139,7 +207,7 @@ pub fn hex_row_tinted(
         bookmarks: &[],
         line_ends: false,
     };
-    hex_body(&look, (index, line, false), tint_styles(t, tints))
+    hex_body(&look, (index, line, false), tint_styles(t, tints), None)
 }
 
 /// The one body both hex rows draw, at the look's height: gutter, offset, hex and ASCII.
@@ -147,9 +215,15 @@ fn hex_body(
     look: &RowLook<'_>,
     (index, line, is_bookmarked): (usize, &HexLine, bool),
     (hex_styles, ascii_styles): (Styles, Styles),
+    pick: Option<&PickByte>,
 ) -> AnyElement {
     let row = &line.row;
     let label = format!("{}  {}  {}", row.offset, row.hex, row.ascii);
+    let bytes = row.ascii.len();
+    let hex = StyledText::new(row.hex.clone()).with_highlights(hex_styles);
+    let ascii = StyledText::new(row.ascii.clone()).with_highlights(ascii_styles);
+    let hex_ranges = (0..bytes).map(hex_range).collect();
+    let ascii_ranges = (0..bytes).map(|slot| slot..slot + 1).collect();
     row_frame(look, index, label)
         .child(look.gutter(index, is_bookmarked))
         .child(
@@ -157,12 +231,18 @@ fn hex_body(
                 .text_color(look.t.colors.muted)
                 .child(row.offset.clone()),
         )
-        .child(StyledText::new(row.hex.clone()).with_highlights(hex_styles))
-        .child(
-            div()
-                .text_color(look.t.colors.muted)
-                .child(StyledText::new(row.ascii.clone()).with_highlights(ascii_styles)),
-        )
+        .child(byte_text(
+            ("paged-hex", index),
+            hex,
+            (line, hex_ranges),
+            pick,
+        ))
+        .child(div().text_color(look.t.colors.muted).child(byte_text(
+            ("paged-ascii", index),
+            ascii,
+            (line, ascii_ranges),
+            pick,
+        )))
         .into_any_element()
 }
 
@@ -181,8 +261,7 @@ fn tint_styles(t: &Theme, slots: &[(usize, bool)]) -> (Styles, Styles) {
             background_color: Some(colour),
             ..HighlightStyle::default()
         };
-        let at = slot * 3 + usize::from(slot >= 8);
-        hex.push((at..at + 2, style));
+        hex.push((hex_range(slot), style));
         ascii.push((slot..slot + 1, style));
     }
     (hex, ascii)

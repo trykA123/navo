@@ -7,7 +7,7 @@ use gpui_kit::{Role, ScrollEvent, Stateful, canvas};
 
 use super::PagedView;
 use super::moves::Move;
-use super::row_view::{RowLook, TextLook, hex_row, missing_row, text_row};
+use super::row_view::{HexCursor, RowLook, TextLook, hex_row, missing_row, text_row};
 use super::rows::{Screenful, Shown};
 use super::spans::Painted;
 use crate::prelude::*;
@@ -47,7 +47,7 @@ impl PagedView {
         &self,
         t: &Theme,
         screen: &Screenful<'_>,
-        syntax: Option<Arc<HighlightTheme>>,
+        (syntax, cursor): (Option<Arc<HighlightTheme>>, &HexCursor),
     ) -> Vec<AnyElement> {
         let marks = self.screen_marks(screen.end);
         let look = RowLook {
@@ -65,7 +65,7 @@ impl PagedView {
             Shown::Hex(lines) => lines
                 .iter()
                 .enumerate()
-                .map(|(index, line)| hex_row(&look, index, line))
+                .map(|(index, line)| hex_row(&look, index, line, cursor))
                 .collect(),
             Shown::Text(lines) => {
                 let text = TextLook {
@@ -138,7 +138,7 @@ impl PagedView {
         &self,
         t: &Theme,
         screen: &Screenful<'_>,
-        syntax: Option<Arc<HighlightTheme>>,
+        drawn: (Option<Arc<HighlightTheme>>, &HexCursor),
     ) -> AnyElement {
         match screen.shown {
             Shown::Failed(error) => div()
@@ -153,7 +153,7 @@ impl PagedView {
             _ => div()
                 .flex()
                 .flex_col()
-                .children(self.rows(t, screen, syntax))
+                .children(self.rows(t, screen, drawn))
                 .into_any_element(),
         }
     }
@@ -193,6 +193,7 @@ impl PagedView {
             .filter(|_| screen.colours)
             .and_then(|_| cx.try_global::<KitTheme>())
             .map(|kit| Arc::clone(&kit.highlight_theme));
+        let cursor = self.hex_cursor(cx);
         div()
             .id("paged-body")
             .test_support()
@@ -206,7 +207,7 @@ impl PagedView {
                 view.scroll_wheel(event, cx);
             }))
             .child(self.measure(screen, cx))
-            .child(self.content(t, screen, syntax))
+            .child(self.content(t, screen, (syntax, &cursor)))
             .child(
                 div().absolute().top_0().left_0().size_full().child(
                     Scrollbar::vertical(&self.scroll)

@@ -19,6 +19,7 @@ mod follow_reload;
 mod font;
 mod guide;
 mod header_fit;
+mod hex_inspector;
 mod image;
 mod image_tools;
 mod key_bar;
@@ -408,7 +409,11 @@ fn ctrl_end_shows_the_last_screen_and_ctrl_home_the_first(cx: &mut TestAppContex
     press(cx, window, &view, "pagedown");
     assert_eq!(top(cx, &view), rows * HEX_WIDTH);
     press(cx, window, &view, "down");
-    assert_eq!(top(cx, &view), (rows + 1) * HEX_WIDTH);
+    assert_eq!(
+        top(cx, &view),
+        rows * HEX_WIDTH,
+        "the cursor row is still on screen"
+    );
 }
 
 #[gpui_kit::test]

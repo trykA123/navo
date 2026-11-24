@@ -209,3 +209,33 @@ editor-filter-bookmarked = { $count ->
     [one] Bookmarked 1 line.
    *[other] Bookmarked { $count } lines.
 }
+hex-inspector-label = Inspector
+hex-inspector-title = Offset { $offset }
+hex-inspector-button = Inspector (Ctrl+I)
+hex-inspector-reading = Reading the bytes…
+hex-inspector-move = Move the cursor
+hex-inspector-close = Close
+hex-inspector-i8 = i8
+hex-inspector-u8 = u8
+hex-inspector-i16-le = i16 LE
+hex-inspector-i16-be = i16 BE
+hex-inspector-u16-le = u16 LE
+hex-inspector-u16-be = u16 BE
+hex-inspector-i32-le = i32 LE
+hex-inspector-i32-be = i32 BE
+hex-inspector-u32-le = u32 LE
+hex-inspector-u32-be = u32 BE
+hex-inspector-i64-le = i64 LE
+hex-inspector-i64-be = i64 BE
+hex-inspector-u64-le = u64 LE
+hex-inspector-u64-be = u64 BE
+hex-inspector-f32-le = f32 LE
+hex-inspector-f32-be = f32 BE
+hex-inspector-f64-le = f64 LE
+hex-inspector-f64-be = f64 BE
+hex-inspector-utf8 = UTF-8 char
+hex-inspector-utf16-le = UTF-16 LE char
+hex-inspector-utf16-be = UTF-16 BE char
+hex-inspector-unix-u32 = Unix time (u32 LE)
+hex-inspector-unix-i64 = Unix time (i64 LE)
+hex-inspector-bits = Bits
