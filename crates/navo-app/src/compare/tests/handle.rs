@@ -245,6 +245,12 @@ struct Probe {
 }
 
 fn sleepy_handle(listing: Listing) -> Probe {
+    sleepy_handle_late(listing, Duration::ZERO)
+}
+
+/// Like `sleepy_handle`, but the session thread waits `late` before it opens the session,
+/// as a thread on a loaded runner may.
+fn sleepy_handle_late(listing: Listing, late: Duration) -> Probe {
     let (sender, receiver) = mpsc::channel();
     let (listed, gone) = (Arc::default(), Arc::default());
     let refreshes: Arc<AtomicUsize> = Arc::default();
@@ -254,6 +260,7 @@ fn sleepy_handle(listing: Listing) -> Probe {
         Arc::clone(&refreshes),
     );
     let open = move || {
+        thread::sleep(late);
         let rules = IgnoreRules::new(Vec::<IgnoreSource>::new(), &[], false, CaseRule::Sensitive)
             .map_err(|error| CompareError::Rules(error.to_string()))?
             .0;
@@ -313,6 +320,24 @@ fn dropping_the_handle_returns_at_once_and_ends_the_thread() {
         !probe.listed.load(Ordering::SeqCst),
         "list ended before the drop"
     );
+    assert!(thread_ends(&probe.receiver));
+    assert!(
+        probe.listed.load(Ordering::SeqCst),
+        "the thread ended while a list was still running"
+    );
+}
+
+/// The test above sleeps 100 ms and assumes the list has started by then.
+/// A session thread that starts later sees the cancel first, never lists and ends at once.
+#[test]
+#[ignore = "red: dropping_the_handle_… assumes the list starts within 100 ms"]
+fn dropping_the_handle_before_the_list_starts_fails_the_drop_test() {
+    let probe = sleepy_handle_late(
+        Listing::Stubborn(Duration::from_millis(600)),
+        Duration::from_millis(300),
+    );
+    thread::sleep(Duration::from_millis(100));
+    drop(probe.handle);
     assert!(thread_ends(&probe.receiver));
     assert!(
         probe.listed.load(Ordering::SeqCst),
