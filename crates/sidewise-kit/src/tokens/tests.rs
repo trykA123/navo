@@ -6,6 +6,7 @@ use super::{
     apply_with, current,
 };
 
+mod find;
 mod git;
 mod kit;
 mod light_dark;

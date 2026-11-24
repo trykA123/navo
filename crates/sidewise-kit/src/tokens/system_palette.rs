@@ -61,6 +61,11 @@ pub fn contrast_theme(base: &Theme, p: &SystemPalette) -> Theme {
         quiet: p.gray_text,
         ..super::GitColors::uniform(p.window_text)
     };
+    theme.find = super::FindColors {
+        hit: p.highlight,
+        hit_text: p.highlight_text,
+        bad: p.window_text,
+    };
     theme
 }
 
