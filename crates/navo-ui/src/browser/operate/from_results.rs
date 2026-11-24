@@ -4,15 +4,15 @@
 
 use std::sync::Arc;
 
-use navo_core::{ConflictPolicy, EntryKind, Location, OpKind};
-use navo_fs::FsEntry;
+use navo_core::{ConflictPolicy, EntryKind, FileIdentity, FsError, Location, OpKind};
+use navo_fs::{FsEntry, ProviderOps};
 
 use super::{Browser, OpRequest, PasteRefusal, Structure, drop_refusal};
 
 mod alias;
 mod check;
 
-pub(super) use check::plan_rows;
+pub(super) use check::{plan_rows, recheck};
 
 /// A copy or move of result rows into `target`; `base` is the root the search ran in.
 /// The caller leaves archive entries out before building it.
@@ -31,24 +31,44 @@ pub struct ResultRow {
     pub stamp: RowStamp,
 }
 
-/// An entry's kind, size and modified time when the search listed it. A row whose entry no
-/// longer matches is refused as changed since the search.
+/// What the search saw at a row: kind, size, modified time and the object's identity (its file
+/// ID, or else its creation time). A row whose entry no longer matches is refused as changed
+/// since the search.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RowStamp {
     pub kind: EntryKind,
     pub size: u64,
     pub modified_ms: Option<i64>,
+    pub identity: Option<FileIdentity>,
+    pub created_ms: Option<i64>,
 }
 
 impl RowStamp {
-    /// The stamp of a listed entry.
+    /// The stamp of a listed entry, without its identity; `read` adds it.
     #[must_use]
     pub fn of(entry: &FsEntry) -> Self {
         Self {
             kind: entry.kind,
             size: entry.size,
             modified_ms: entry.modified_ms,
+            identity: None,
+            created_ms: None,
         }
+    }
+
+    /// Reads the stamp of `location` when the search lists it: its file ID where the provider
+    /// has one, else its creation time.
+    pub fn read(provider: &dyn ProviderOps, location: &Location) -> Result<Self, FsError> {
+        let identity = provider.file_identity(location).ok().flatten();
+        let created_ms = match identity {
+            Some(_) => None,
+            None => provider.details(location).ok().and_then(|it| it.created_ms),
+        };
+        Ok(Self {
+            identity,
+            created_ms,
+            ..Self::of(&provider.metadata(location)?)
+        })
     }
 }
 

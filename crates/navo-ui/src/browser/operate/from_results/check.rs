@@ -5,7 +5,9 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use navo_core::{EntryKind, FileIdentity, FsError, FsErrorKind, Location, OperationPlan, Step};
+use navo_core::{
+    EntryKind, FileIdentity, FsError, FsErrorKind, Location, OperationPlan, Step, relative_folders,
+};
 use navo_fs::{CancelToken, ProviderOps, volume_of};
 use navo_l10n::FluentArgs;
 
@@ -47,7 +49,13 @@ pub(in crate::browser::operate) fn plan_rows(
     {
         return Err(said("results-into-source", &target, Some(&inside)));
     }
-    request.same_volume = all_on_volume(provider, &tops, &real_target);
+    let kept = request
+        .structure
+        .as_ref()
+        .filter(|structure| structure.keep)
+        .map(|structure| structure.base.clone());
+    let both = (provider, &mut aliases);
+    request.same_volume = all_on_volume(both, &tops, &target, kept.as_ref());
     if let Some(structure) = request.structure.as_mut() {
         structure.same_volume = request.same_volume;
     }
@@ -75,8 +83,10 @@ fn distinct_tops(
             return Err(said("results-partial-path", location, None));
         }
         let real = aliases.real_entry(location).map_err(unresolved)?;
-        let entry = provider.metadata(&real).map_err(|error| error.message())?;
-        if !stamp.matches(&RowStamp::of(&entry)) {
+        if !stamp
+            .still_at(provider, &real)
+            .map_err(|error| error.message())?
+        {
             return Err(said("results-changed", location, None));
         }
         rows.push(Top {
@@ -143,26 +153,90 @@ fn differ(a: Option<FileIdentity>, b: Option<FileIdentity>) -> bool {
 }
 
 impl RowStamp {
-    /// Same kind, and for a file the same size and time; folder times change with their content.
-    fn matches(&self, now: &Self) -> bool {
-        self.kind == now.kind && (self.kind != EntryKind::File || self == now)
+    /// True when `location` still holds what the search saw: the same kind, the same object
+    /// (file ID, else creation time, for files, folders and links alike) and, for a file, the
+    /// same size and time. Folder times change with their content.
+    fn still_at(&self, provider: &dyn ProviderOps, location: &Location) -> Result<bool, FsError> {
+        let entry = provider.metadata(location)?;
+        let file = (entry.size, entry.modified_ms) == (self.size, self.modified_ms);
+        if entry.kind != self.kind || (self.kind == EntryKind::File && !file) {
+            return Ok(false);
+        }
+        Ok(match (self.identity, self.created_ms) {
+            (Some(identity), _) => provider.file_identity(location)? == Some(identity),
+            (None, Some(created)) => provider.details(location)?.created_ms == Some(created),
+            (None, None) => true,
+        })
     }
 }
 
-/// True when every row and the target share a volume, so a move may rename. Row order never
-/// decides: one row on another drive makes every row copy, then remove.
-fn all_on_volume(provider: &dyn ProviderOps, tops: &[Top], target: &Location) -> bool {
-    let serial = |location: &Location| provider.volume_serial(location).ok().flatten();
-    let target_serial = serial(target);
-    let mut folders: HashMap<Place, Option<u64>> = HashMap::new();
+/// Before a confirmed plan from Find results runs: each kept row must still be what the search
+/// saw, and the target must still lie outside every row. Refuses the run by the row's name.
+pub(in crate::browser::operate) fn recheck(
+    provider: &dyn ProviderOps,
+    (sources, target): (&[Location], Option<&Location>),
+    stamps: &[RowStamp],
+) -> Result<(), String> {
+    let target = target.ok_or_else(nothing)?;
+    if stamps.len() != sources.len() {
+        return Err(nothing());
+    }
+    let mut aliases = Aliases::new(provider);
+    let mut tops_at = HashSet::new();
+    for (location, stamp) in sources.iter().zip(stamps) {
+        let real = aliases.real_entry(location).map_err(unresolved)?;
+        if !stamp.still_at(provider, &real).unwrap_or(false) {
+            return Err(said("results-changed", location, None));
+        }
+        tops_at.insert(place(&real));
+    }
+    let real_target = aliases.real(target).map_err(unresolved)?;
+    match std::iter::successors(Some(real_target), Location::parent)
+        .find(|folder| tops_at.contains(&place(folder)))
+    {
+        Some(inside) => Err(said("results-into-source", target, Some(&inside))),
+        None => Ok(()),
+    }
+}
+
+/// True when a move may rename: each row's folder and the folder it lands in (below `target`
+/// by its folders under `kept`, when the structure is kept) sit on one volume whose serial is
+/// known. Otherwise every row copies, then removes; row order never decides.
+fn all_on_volume(
+    (provider, aliases): (&dyn ProviderOps, &mut Aliases<'_>),
+    tops: &[Top],
+    target: &Location,
+    kept: Option<&Location>,
+) -> bool {
+    let mut serials: HashMap<Location, Option<u64>> = HashMap::new();
+    let mut serial = |folder: Location| {
+        *serials
+            .entry(folder)
+            .or_insert_with_key(|folder| known_serial(provider, folder))
+    };
     tops.iter().all(|top| {
-        let folder = top.real.parent().unwrap_or_else(|| top.real.clone());
-        let source_serial = *folders
-            .entry(place(&folder))
-            .or_insert_with(|| serial(&folder));
-        let known = source_serial.zip(target_serial);
-        volume_of(&top.real) == volume_of(target) && known.is_none_or(|(a, b)| a == b)
+        let lands = kept
+            .map_or_else(Vec::new, |base| relative_folders(base, &top.location))
+            .iter()
+            .try_fold(target.clone(), |folder, name| folder.join(name).ok())
+            .and_then(|folder| aliases.real(&folder).ok());
+        let (Some(from), Some(to)) = (top.real.parent(), lands) else {
+            return false;
+        };
+        volume_of(&from) == volume_of(&to)
+            && matches!((serial(from), serial(to)), (Some(a), Some(b)) if a == b)
     })
+}
+
+/// The volume serial of `folder`, or of its nearest existing folder when it is not made yet;
+/// `None` when the provider cannot tell.
+fn known_serial(provider: &dyn ProviderOps, folder: &Location) -> Option<u64> {
+    std::iter::successors(Some(folder.clone()), Location::parent)
+        .find_map(|at| match provider.volume_serial(&at) {
+            Err(error) if error.kind == FsErrorKind::NotFound => None,
+            found => Some(found.ok().flatten()),
+        })
+        .flatten()
 }
 
 /// Refuses the plan when a write or a listed conflict lands on a selected source, inside a
@@ -243,6 +317,8 @@ mod tests {
                 kind: EntryKind::File,
                 size: 1,
                 modified_ms: None,
+                identity: None,
+                created_ms: None,
             },
             real: location,
             identity: file.map(|file| FileIdentity {

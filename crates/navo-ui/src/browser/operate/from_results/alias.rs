@@ -118,15 +118,17 @@ impl<'a> Aliases<'a> {
         if let Some(found) = self.known.get(&plain) {
             return Ok(found.clone());
         }
-        // A root is never a link.
-        let (Some(parent), Some(name)) = plain.parent_and_name() else {
-            return Ok(plain);
+        let (here, strict) = match plain.parent_and_name() {
+            (Some(parent), Some(name)) => (
+                self.follow(&parent)?
+                    .join(&name)
+                    .map_err(|_| Unresolved::Partial(location.clone()))?,
+                true,
+            ),
+            // A drive or share root may not read as an entry; a top-level link still counts.
+            _ => (plain.clone(), false),
         };
-        let here = self
-            .follow(&parent)?
-            .join(&name)
-            .map_err(|_| Unresolved::Partial(location.clone()))?;
-        let real = match self.link_at(&here)? {
+        let real = match self.link_at(&here, strict)? {
             Some(to) => {
                 self.hops += 1;
                 if self.hops > MAX_HOPS {
@@ -142,8 +144,9 @@ impl<'a> Aliases<'a> {
     }
 
     /// Where the link at `here` points; `None` when `here` is no link or does not exist yet (a
-    /// new folder at the target). A link whose target cannot be read refuses the plan.
-    fn link_at(&self, here: &Location) -> Result<Option<Location>, Unresolved> {
+    /// new folder at the target). A link whose target cannot be read refuses the plan, and so
+    /// does an unreadable name when `strict`.
+    fn link_at(&self, here: &Location, strict: bool) -> Result<Option<Location>, Unresolved> {
         let unreadable = || Unresolved::Unreadable(here.clone());
         match self.provider.metadata(here) {
             Ok(entry) if entry.kind == EntryKind::Link => self
@@ -154,7 +157,7 @@ impl<'a> Aliases<'a> {
                 .map(Some)
                 .ok_or_else(unreadable),
             Ok(_) => Ok(None),
-            Err(error) if error.kind == FsErrorKind::NotFound => Ok(None),
+            Err(error) if error.kind == FsErrorKind::NotFound || !strict => Ok(None),
             Err(_) => Err(unreadable()),
         }
     }

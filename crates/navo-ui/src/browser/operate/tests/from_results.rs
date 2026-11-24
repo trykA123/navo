@@ -16,13 +16,13 @@ const GONE: RowStamp = RowStamp {
     kind: EntryKind::File,
     size: 0,
     modified_ms: None,
+    identity: None,
+    created_ms: None,
 };
 
 fn row(fs: &FakeFs, path: &str) -> ResultRow {
     let location = fs.location(path);
-    let stamp = fs
-        .metadata(&location)
-        .map_or(GONE, |entry| RowStamp::of(&entry));
+    let stamp = RowStamp::read(fs, &location).unwrap_or(GONE);
     ResultRow { location, stamp }
 }
 
@@ -340,4 +340,107 @@ fn a_partial_target_is_refused() {
     let message = failed(&browser, id);
     assert!(message.contains("not a full path"), "{message}");
     assert!(!exists(&fs, "dest/top.c"));
+}
+
+#[test]
+fn a_same_size_replacement_or_another_folder_is_refused_as_changed() {
+    let new_file = |fs: &FakeFs| {
+        fs.remove("w/lib/a.c");
+        fs.add_file("w/lib/a.c", 4);
+    };
+    let new_folder = |fs: &FakeFs| {
+        fs.remove("w/src");
+        fs.add_file("w/src/can/a.c", 3);
+    };
+    for (change, path) in [
+        (&new_file as &dyn Fn(&FakeFs), "w/lib/a.c"),
+        (&new_folder, "w/src"),
+    ] {
+        let fs = hits();
+        let request = request(&fs, OpKind::Move, &["w/top.c", path], "dest");
+        change(&fs);
+        let (browser, id) = prepared(&fs, request);
+        let message = failed(&browser, id);
+        assert!(
+            message.contains(path) && message.contains("changed since the search"),
+            "{message}"
+        );
+        assert!(exists(&fs, "w/top.c") && !exists(&fs, "dest/top.c"));
+    }
+}
+
+/// The message of the job `id` that ran and failed.
+fn run_failed(browser: &Browser, id: u64) -> String {
+    let job = browser.jobs().iter().find(|job| job.id == id);
+    match job.map(|job| &job.status) {
+        Some(JobStatus::Failed(message)) => message.clone(),
+        other => panic!("expected a failed job, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_source_replaced_after_planning_is_refused_on_confirm() {
+    let fs = hits();
+    let sources = ["w/top.c", "w/lib/a.c"];
+    let (mut browser, id) = prepared(&fs, request(&fs, OpKind::Move, &sources, "dest"));
+    fs.remove("w/lib/a.c");
+    fs.add_file("w/lib/a.c", 4);
+    assert!(browser.confirm());
+    settle(&mut browser);
+    let message = run_failed(&browser, id);
+    assert!(
+        message.contains("lib/a.c") && message.contains("changed since the search"),
+        "{message}"
+    );
+    assert!(exists(&fs, "w/top.c") && exists(&fs, "w/lib/a.c"));
+    assert!(!exists(&fs, "dest/top.c") && !exists(&fs, "dest/lib/a.c"));
+}
+
+#[test]
+fn a_target_relinked_into_a_source_after_planning_is_refused_on_confirm() {
+    let fs = hits();
+    fs.add_folder("dest");
+    let sources = ["w/src", "w/top.c"];
+    let (mut browser, id) = prepared(&fs, request(&fs, OpKind::Copy, &sources, "dest"));
+    fs.remove("dest");
+    fs.make_link(&fs.location("w/src/can"), &fs.location("dest"))
+        .expect("a link");
+    assert!(browser.confirm());
+    settle(&mut browser);
+    let message = run_failed(&browser, id);
+    assert!(message.contains("inside the selected folder"), "{message}");
+    assert!(!exists(&fs, "w/src/can/top.c"));
+}
+
+/// True when the pending plan renames anything instead of copying, then removing.
+fn renames(browser: &Browser) -> bool {
+    let plan = &browser.pending().expect("asks before writing").plan;
+    plan.steps
+        .iter()
+        .any(|step| matches!(step, Step::Rename { .. }))
+}
+
+#[test]
+fn a_move_copies_when_a_kept_folder_sits_on_another_volume() {
+    let fs = hits();
+    fs.add_folder("dest/src");
+    fs.set_volume_serial("dest/src", Some(2));
+    let sources = ["w/src/can/a.c", "w/top.c"];
+    let (mut browser, _) = prepared(&fs, request(&fs, OpKind::Move, &sources, "dest"));
+    assert!(!renames(&browser));
+    assert!(browser.confirm());
+    settle(&mut browser);
+    assert!(exists(&fs, "dest/src/can/a.c") && !exists(&fs, "w/src/can/a.c"));
+}
+
+#[test]
+fn a_move_copies_when_a_volume_serial_is_unknown() {
+    let fs = hits();
+    fs.set_volume_serial("other", None);
+    let sources = ["other/b.c", "w/top.c"];
+    let (browser, _) = prepared(&fs, request(&fs, OpKind::Move, &sources, "dest"));
+    assert!(!renames(&browser));
+    let fs = hits();
+    let (browser, _) = prepared(&fs, request(&fs, OpKind::Move, &sources, "dest"));
+    assert!(renames(&browser), "one known volume still renames");
 }
