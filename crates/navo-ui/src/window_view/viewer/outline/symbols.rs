@@ -21,13 +21,22 @@ const TABLES: [&str; 2] = ["table", "table_array_element"];
 /// Kind endings of named definitions across grammars (`function_item`, `class_definition`, …).
 const DEFINITIONS: [&str; 3] = ["_item", "_definition", "_declaration"];
 
+/// The tree-sitter grammar the editor highlights `language` with, if it has one.
+fn grammar(language: &str) -> Option<tree_sitter::Language> {
+    LanguageRegistry::singleton()
+        .language(language)
+        .and_then(|config| config.language)
+}
+
+/// Whether `language` has a tree-sitter grammar, so an outline can list anything (a quick lookup).
+pub(super) fn has_grammar(language: &str) -> bool {
+    grammar(language).is_some()
+}
+
 /// Lists the symbols of `text` in document order for the grammar named `language`.
 /// A language without a tree-sitter grammar, or text that fails to parse, gives none.
 pub(super) fn symbols(language: &str, text: &str) -> Vec<Symbol> {
-    let Some(grammar) = LanguageRegistry::singleton()
-        .language(language)
-        .and_then(|config| config.language)
-    else {
+    let Some(grammar) = grammar(language) else {
         return Vec::new();
     };
     let mut parser = Parser::new();

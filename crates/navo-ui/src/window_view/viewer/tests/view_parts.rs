@@ -28,6 +28,7 @@ fn text_rows(numbers: bool, ends: bool) -> Vec<(String, bool)> {
         (String::new(), false),
         ("Encoding\u{2026}".to_owned(), false),
         ("Language\u{2026}".to_owned(), false),
+        ("Outline\u{2026}".to_owned(), false),
         (String::new(), false),
         ("Keep as default".to_owned(), false),
         ("Reset to defaults".to_owned(), false),
@@ -147,7 +148,9 @@ fn line_numbers_off_hides_them_in_the_paged_text_view(cx: &mut TestAppContext) {
     );
     assert!(shows(cx, rig.window, ("paged-line", 0usize)));
     rig.press(cx, "alt-v");
-    assert_eq!(rig.rows(cx), text_rows(true, false));
+    let mut paged = text_rows(true, false);
+    paged.retain(|(text, _)| text != "Outline\u{2026}");
+    assert_eq!(rig.rows(cx), paged, "the paged view has no editor outline");
     run_item(cx, rig.window, "Line numbers");
     assert!(!shows(cx, rig.window, ("paged-line", 0usize)));
 }

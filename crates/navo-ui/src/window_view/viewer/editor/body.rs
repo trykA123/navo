@@ -1,3 +1,5 @@
+//! The F3 text editor as a viewer body: its keys, menus, View parts and tools, and saving.
+
 use std::any::Any;
 
 use gpui_kit::component::input::{Copy, Cut, Paste, SelectAll};
@@ -10,6 +12,7 @@ use crate::settings::Values;
 use crate::window_view::viewer::body::{
     BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody,
 };
+use crate::window_view::viewer::keys::ShowOutline;
 use crate::window_view::viewer::menu::marking_entries;
 use crate::window_view::viewer::parts::{MARKDOWN_TEXT, PartSet, TEXT};
 use crate::window_view::viewer::search::bar::{FIND_KEYS, GO_TO_KEYS, LIST_KEYS, MARK_KEYS};
@@ -211,6 +214,15 @@ impl ViewerBody for EditorBody {
 
     fn encoding(&self, cx: &App) -> Option<TextEncoding> {
         Some(self.0.read(cx).encoding)
+    }
+
+    /// The View menu's "Outline…" entry, so the mouse reaches Ctrl+Shift+O too.
+    fn view_tools(&self, _: &App) -> Vec<MenuEntry> {
+        vec![MenuEntry::Run(
+            navo_l10n::tr("viewer-outline-menu").into(),
+            Box::new(ShowOutline),
+            false,
+        )]
     }
 
     fn save_as(&self, cx: &App) -> Option<SaveAs> {

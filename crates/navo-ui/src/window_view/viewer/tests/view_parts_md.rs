@@ -49,6 +49,7 @@ fn rows(is_split: bool) -> Vec<(String, bool)> {
         (String::new(), false),
         ("Encoding\u{2026}".to_owned(), false),
         ("Language\u{2026}".to_owned(), false),
+        ("Outline\u{2026}".to_owned(), false),
         (String::new(), false),
         ("Keep as default".to_owned(), false),
         ("Reset to defaults".to_owned(), false),

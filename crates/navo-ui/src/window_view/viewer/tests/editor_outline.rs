@@ -7,7 +7,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, MouseButton, TestAppContext};
 use navo_fs::FakeFs;
 
-use super::menu::{click_with, press_key, rows};
+use super::menu::{click_with, press_key, rows, run_item};
 use super::{Setup, editor_of, redraw, window_on};
 use crate::window_view::NavoWindow;
 use crate::window_view::tests::press;
@@ -195,4 +195,69 @@ fn escape_closes_the_outline_and_a_click_jumps(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn plain_text_has_no_outline(cx: &mut TestAppContext) {
     assert!(outline_of(cx, "notes.txt", "fn a() {}\n").is_empty());
+}
+
+/// Presses `key` and draws once, without running the background executor (no `run_until_parked`).
+fn press_unparked(cx: &mut TestAppContext, window: AnyWindowHandle, key: &str) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.press(key, cx);
+        window.render_frame(cx);
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn the_outline_opens_reading_and_fills_when_the_parse_lands(cx: &mut TestAppContext) {
+    let (window, view) = open_in_editor(cx, "lib.rs", RUST);
+    press_unparked(cx, window, "ctrl-shift-o");
+    let reading = [("Reading outline\u{2026}".to_owned(), String::new())];
+    assert_eq!(outline_rows(cx, &view), reading);
+    cx.run_until_parked();
+    assert_eq!(
+        outline_rows(cx, &view).len(),
+        5,
+        "{:?}",
+        outline_rows(cx, &view)
+    );
+}
+
+#[gpui_kit::test]
+fn the_view_menu_lists_outline_with_its_key_and_opens_it(cx: &mut TestAppContext) {
+    let (window, view) = open_in_editor(cx, "lib.rs", RUST);
+    press(cx, window, &view, "alt-v");
+    let entry = ("Outline\u{2026}".to_owned(), "Ctrl+Shift+O".to_owned());
+    let listed = outline_rows(cx, &view);
+    assert!(listed.contains(&entry), "{listed:?}");
+    run_item(cx, window, "Outline\u{2026}");
+    cx.run_until_parked();
+    assert_eq!(
+        outline_rows(cx, &view).len(),
+        5,
+        "{:?}",
+        outline_rows(cx, &view)
+    );
+}
+
+#[gpui_kit::test]
+fn a_result_for_an_older_text_revision_is_dropped(cx: &mut TestAppContext) {
+    let (window, view) = open_in_editor(cx, "lib.rs", RUST);
+    press_unparked(cx, window, "ctrl-shift-o");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.land_stale_outline(window, cx));
+    })
+    .expect("window");
+    let reading = [("Reading outline\u{2026}".to_owned(), String::new())];
+    assert_eq!(
+        outline_rows(cx, &view),
+        reading,
+        "the stale rows are dropped"
+    );
+    cx.run_until_parked();
+    assert_eq!(
+        outline_rows(cx, &view).len(),
+        5,
+        "{:?}",
+        outline_rows(cx, &view)
+    );
 }
