@@ -44,6 +44,8 @@ const NO_SYSTEM_RESOURCES: u32 = 1450;
 pub enum GrantStep {
     /// The helper exe's path has no file name or no folder, so the targets cannot be named.
     LocateExe,
+    /// Registering the AppContainer profile failed; `CreateProcessW` needs it (S2c2).
+    CreateProfile,
     DeriveSid,
     FormatSid,
     OpenFile,
@@ -333,6 +335,7 @@ mod tests {
     fn every_step_is_named_in_the_message() {
         let steps = [
             GrantStep::LocateExe,
+            GrantStep::CreateProfile,
             GrantStep::DeriveSid,
             GrantStep::FormatSid,
             GrantStep::OpenFile,

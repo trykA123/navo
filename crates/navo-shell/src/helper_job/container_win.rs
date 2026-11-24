@@ -1,18 +1,20 @@
-//! Puts the PDF helper in its AppContainer at spawn (S2c2): grants the helper exe and its
-//! pdfium.dll to the container SID, then adds `SECURITY_CAPABILITIES` (zero capabilities) to the
-//! spawn's attribute list. Every failure is a `ContainerError` and no process is created.
+//! Puts the PDF helper in its AppContainer at spawn (S2c2): registers the container's profile,
+//! grants the helper exe and its pdfium.dll to the container SID, then adds
+//! `SECURITY_CAPABILITIES` (zero capabilities) to the spawn's attribute list. Every failure is a
+//! `ContainerError` and no process is created.
 
 use std::io;
 use std::mem::size_of;
 use std::path::Path;
 use std::ptr;
 
-use windows_sys::Win32::Security::SECURITY_CAPABILITIES;
+use windows_sys::Win32::Security::Isolation::CreateAppContainerProfile;
+use windows_sys::Win32::Security::{FreeSid, PSID, SECURITY_CAPABILITIES};
 use windows_sys::Win32::System::Threading::{
     PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, UpdateProcThreadAttribute,
 };
 
-use super::appcontainer_policy::{GrantError, grant_helper_files};
+use super::appcontainer_policy::{CONTAINER_NAME, GrantError, GrantStep, grant_helper_files};
 use super::appcontainer_win::{ContainerSid, grant_read_execute};
 use super::container_error::ContainerError;
 use super::spawn_win::AttributeList;
@@ -25,9 +27,11 @@ pub(super) struct Container {
 }
 
 impl Container {
-    /// Derives the container SID and grants it read+execute on `program` and the `pdfium.dll`
-    /// beside it. Fails closed with the step that failed; the diagnostics log names it too.
+    /// Registers the container's profile, derives its SID and grants it read+execute on `program`
+    /// and the `pdfium.dll` beside it. Fails closed with the step that failed; the diagnostics log
+    /// names it too.
     pub(super) fn prepare(program: &Path) -> Result<Self, ContainerError> {
+        register_profile().map_err(|error| refused(error, None))?;
         let sid = ContainerSid::derive().map_err(|error| refused(error, None))?;
         grant_helper_files(program, |target| grant_read_execute(target, &sid))
             .map_err(|error| refused(error, Some(&sid)))?;
@@ -68,6 +72,38 @@ impl<'a> AttributeList<'a> {
             return Err(error);
         }
         Ok(())
+    }
+}
+
+/// `HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)`: the profile is registered already.
+const PROFILE_EXISTS: i32 = 0x8007_00B7_u32 as i32;
+
+/// Registers the `CONTAINER_NAME` AppContainer profile (zero capabilities) unless it exists.
+/// `CreateProcessW` looks the container up there and fails with ERROR_FILE_NOT_FOUND without it.
+/// Fails at `CreateProfile` with the HRESULT.
+fn register_profile() -> Result<(), GrantError> {
+    let wide = |text: &str| text.encode_utf16().chain([0]).collect::<Vec<u16>>();
+    let (name, display) = (wide(CONTAINER_NAME), wide("Navo PDF helper"));
+    let mut sid: PSID = ptr::null_mut();
+    // SAFETY: the strings are NUL-terminated and live for the call; zero capabilities need no
+    // array; `sid` is a live out-pointer.
+    let hr = unsafe {
+        CreateAppContainerProfile(
+            name.as_ptr(),
+            display.as_ptr(),
+            display.as_ptr(),
+            ptr::null(),
+            0,
+            &raw mut sid,
+        )
+    };
+    if !sid.is_null() {
+        // SAFETY: CreateAppContainerProfile returned this SID and says to free it with FreeSid.
+        unsafe { FreeSid(sid) };
+    }
+    match hr {
+        0.. | PROFILE_EXISTS => Ok(()),
+        _ => Err(GrantError::new(GrantStep::CreateProfile, None, hr)),
     }
 }
 

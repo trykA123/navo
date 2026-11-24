@@ -1,4 +1,5 @@
-//! Derives the PDF helper's AppContainer SID from Navo's fixed name (no profile is created) and
+//! Derives the PDF helper's AppContainer SID from Navo's fixed name (its profile is registered in
+//! `container_win.rs`) and
 //! grants it read+execute on one file when it lacks access (S2c1). The rules live in `appcontainer_policy.rs`.
 
 use std::ffi::c_void;
