@@ -22,6 +22,7 @@ env:
 jobs:
   gate-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
@@ -44,6 +45,7 @@ jobs:
 
   clippy-windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
@@ -57,6 +59,7 @@ jobs:
 
   gate-windows:
     runs-on: windows-latest
+    timeout-minutes: 60
     # Three runners share the test list (nextest hash partition); shard 1 also runs the extras.
     strategy:
       fail-fast: false
@@ -124,6 +127,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
@@ -131,7 +135,7 @@ jobs:
         with:
           shared-key: win-release
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --release -p navo-app --features tester
+      - run: cargo build --release --locked -p navo-app --features tester
       - run: cargo build --release --locked -p navo-index-service
       - run: cargo build --release --locked -p navo-bench
       - run: cargo build --release --locked -p xtask
@@ -192,7 +196,7 @@ jobs:
           name: navo-windows-x64-${{ github.sha }}
           path: dist/
       - name: Build the mimalloc A/B exe
-        run: cargo build --release -p navo-app --features mimalloc,tester --target-dir target/mimalloc
+        run: cargo build --release --locked -p navo-app --features mimalloc,tester --target-dir target/mimalloc
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: navo-windows-x64-mimalloc-${{ github.sha }}
@@ -268,6 +272,7 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: [gate-linux, gate-windows]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -279,7 +284,7 @@ jobs:
         with:
           shared-key: linux-release
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --release -p navo-app
+      - run: cargo build --release --locked -p navo-app
       - name: Binary size (informational until the alpha features are in)
         continue-on-error: true
         run: cargo xtask binsize target/release/navo

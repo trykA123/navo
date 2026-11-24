@@ -38,6 +38,7 @@ env:
 jobs:
   check-tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: read
@@ -74,6 +75,7 @@ jobs:
     needs: check-tag
     if: inputs.full-checks
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@fb523f40495206854c36b250850817ae0f83e3d1 # 1.99.0
@@ -89,6 +91,7 @@ jobs:
     needs: check-tag
     if: inputs.full-checks
     runs-on: windows-latest
+    timeout-minutes: 90
     env:
       NAVO_EXPECT_PDFIUM: "1"
     steps:
@@ -121,6 +124,7 @@ jobs:
   build-windows:
     needs: check-tag
     runs-on: windows-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -361,6 +365,7 @@ jobs:
       && needs.speed.result == 'success'
       && !inputs.dry-run
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     env:
@@ -400,6 +405,7 @@ jobs:
       && needs.speed.result == 'success'
       && inputs.dry-run
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       TAG: ${{ inputs.tag }}
     steps:
