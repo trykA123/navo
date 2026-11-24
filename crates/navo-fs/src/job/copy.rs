@@ -172,8 +172,10 @@ pub(super) fn place(
                 let _ = temp_of(target).map(|temp| remove_if_present(ctx.ops, &temp));
             }
             placed?;
-            if source.is_some() {
-                // The copy now holds the target; its move source goes only in a later step.
+            // The copy now holds the target; its move source goes only in a later step. A
+            // retained job's undo rows are overwrite proofs only (retention completion, also in
+            // older builds, rejects any other row), so its rollback keeps the copy instead.
+            if source.is_some() && !ctx.log.preserve_overwrites() {
                 journal(ctx, target, stamp, source)?;
             }
             if identity.is_some() {

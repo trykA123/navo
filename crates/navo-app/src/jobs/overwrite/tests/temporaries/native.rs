@@ -47,6 +47,37 @@ fn native_cancel_leaves_only_a_proved_partial_and_recovery_cleans_it_before_retr
     assert_eq!(entries(&dirs).len(), 1);
 }
 
+/// A retained job's undo rows are overwrite proofs only: a move's copy writes no placed row that
+/// retention completion (this build's or an older one's) would read as a proof.
+#[test]
+fn retained_copy_then_remove_move_completes_retention() {
+    let (_root, dirs, journal) = setup();
+    let files = tempfile::tempdir().unwrap();
+    let source = files.path().join("source");
+    let dest = files.path().join("dest");
+    std::fs::write(&source, b"new data").unwrap();
+    std::fs::create_dir(&dest).unwrap();
+    std::fs::write(dest.join("source"), b"old data").unwrap();
+    let fs = LocalFs::new();
+    let items = scan(&fs, &[at(&source)], &CancelToken::new()).unwrap();
+    let existing = existing_at(&fs, &items, &at(&dest), &CancelToken::new()).unwrap();
+    let plan = plan(&PlanRequest {
+        kind: OpKind::Move,
+        items,
+        target: Some(at(&dest)),
+        existing,
+        policy: ConflictPolicy::OverwriteAll,
+        same_volume: false,
+        protected: vec![],
+    });
+    let mut log = profile_factory(journal, dirs.clone())(&plan).unwrap();
+    assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);
+    log.finish(&JobOutcome::Done, &fs).unwrap();
+    assert!(!source.exists());
+    assert_eq!(std::fs::read(dest.join("source")).unwrap(), b"new data");
+    assert_eq!(entries(&dirs).len(), 1);
+}
+
 #[cfg(windows)]
 #[test]
 fn retained_copy_then_remove_move_preserves_new_and_old_alternate_streams() {
