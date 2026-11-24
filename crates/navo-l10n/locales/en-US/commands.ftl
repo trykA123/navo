@@ -471,7 +471,10 @@ terminal-command-empty = Set a terminal command in settings.
 terminal-provider-unknown = Choose a terminal provider in settings.
 terminal-command-quotes = Close the quotation marks in the terminal command.
 terminal-command-path = Pass the folder as a separate argument to a terminal launcher. Shells inherit the working directory.
-terminal-spawn-error = Could not start the terminal: { $error }
+terminal-spawn-error = Could not start the terminal ({ $error }). Choose another terminal in Settings → Terminal.
+editor-no-program = No program at that path. Type the path of another editor.
+editor-not-local = Only local files open in an editor. Copy the file to a local folder first.
+editor-spawn-error = Could not start the editor ({ $error }). Type the path of another editor.
 
 cmd-workspace-preview-first = Preview workspace 1
 cmd-workspace-preview-second = Preview workspace 2

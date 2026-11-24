@@ -43,7 +43,9 @@ pub(super) fn windows_provider(
     }
 }
 
-pub(super) fn terminal_command(folder: &Path) -> Result<(String, Vec<String>), String> {
+pub(super) fn terminal_command(
+    folder: &Path,
+) -> Result<(String, Vec<String>), super::TerminalError> {
     static CHOSEN: OnceLock<(&str, Option<String>)> = OnceLock::new();
     let (provider, template) = CHOSEN.get_or_init(discover);
     super::command_line(provider, template.as_deref(), folder)

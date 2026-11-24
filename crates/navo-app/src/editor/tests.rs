@@ -2,7 +2,7 @@ use std::fs;
 
 use navo_core::Location;
 
-use super::{hooks, resolve};
+use super::{EditorError, hooks, resolve};
 
 fn exe(dir: &std::path::Path, name: &str) -> String {
     let path = dir.join(name);
@@ -84,4 +84,25 @@ fn editor_discovery_is_lazy_and_keeps_its_first_result() {
     assert_eq!(discover(), Some(program.clone()));
     fs::remove_file(dir.path().join("edit.exe")).unwrap();
     assert_eq!(discover(), Some(program));
+}
+
+#[test]
+fn each_editor_failure_names_its_cause() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir
+        .path()
+        .join("missing-editor")
+        .to_string_lossy()
+        .into_owned();
+    let remote = Location::new("fake://home/a.txt").unwrap();
+    let local = Location::new(dir.path().to_string_lossy().as_ref()).unwrap();
+    assert_eq!(
+        super::found("no/such/editor", &search(dir.path(), "")),
+        Err(EditorError::NoProgram)
+    );
+    assert_eq!(super::open("edit", &remote), Err(EditorError::NotLocal));
+    assert_eq!(
+        super::open(&missing, &local),
+        Err(EditorError::Spawn(std::io::ErrorKind::NotFound))
+    );
 }

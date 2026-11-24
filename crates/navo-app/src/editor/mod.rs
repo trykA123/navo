@@ -1,3 +1,4 @@
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, OnceLock};
@@ -32,8 +33,8 @@ pub fn hooks(var: impl Fn(&str) -> Option<String>) -> EditorHooks {
     let candidates = candidates(&var);
     EditorHooks {
         suggestion: Arc::new(suggest(candidates)),
-        resolve: Arc::new(move |program| found(program, &search)),
-        open: Arc::new(|program, file| open(&clean(program), file)),
+        resolve: Arc::new(move |program| found(program, &search).map_err(EditorError::message)),
+        open: Arc::new(|program, file| open(&clean(program), file).map_err(EditorError::message)),
     }
 }
 
@@ -88,21 +89,45 @@ pub fn resolve(program: &str, search: &Search) -> Option<PathBuf> {
     })
 }
 
-fn found(program: &str, search: &Search) -> Result<String, String> {
-    resolve(&clean(program), search)
-        .map(|found| found.to_string_lossy().into_owned())
-        .ok_or_else(|| "No program at that path.".to_owned())
+/// Why the editor launcher failed; the hooks turn each case into a localized message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorError {
+    /// The chosen program is not a file and not on the search path.
+    NoProgram,
+    /// The file is not on a local disk, so no editor can open it.
+    NotLocal,
+    /// The operating system refused to start the program.
+    Spawn(io::ErrorKind),
 }
 
-fn open(program: &str, file: &Location) -> Result<(), String> {
+impl EditorError {
+    /// The en-US (or current locale) text for this failure, ending with the next step.
+    pub fn message(self) -> String {
+        match self {
+            Self::NoProgram => navo_l10n::tr("editor-no-program"),
+            Self::NotLocal => navo_l10n::tr("editor-not-local"),
+            Self::Spawn(kind) => navo_l10n::t!("editor-spawn-error", error = kind.to_string()),
+        }
+    }
+}
+
+/// Resolves a chosen program to its full path; fails with `NoProgram` when nothing matches.
+fn found(program: &str, search: &Search) -> Result<String, EditorError> {
+    resolve(&clean(program), search)
+        .map(|found| found.to_string_lossy().into_owned())
+        .ok_or(EditorError::NoProgram)
+}
+
+/// Starts `program` with the local `file` as its argument; fails for remote files or a failed spawn.
+fn open(program: &str, file: &Location) -> Result<(), EditorError> {
     if !file.is_local() {
-        return Err("Only local files open in an editor.".to_owned());
+        return Err(EditorError::NotLocal);
     }
     Command::new(program)
         .arg(file.as_str())
         .spawn()
         .map(|_| ())
-        .map_err(|error| format!("Could not start {program}: {error}"))
+        .map_err(|error| EditorError::Spawn(error.kind()))
 }
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+use std::io;
 use std::iter::Peekable;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -9,11 +10,39 @@ use navo_ui::window_view::TerminalHooks;
 
 mod system;
 
+/// Why the terminal launcher failed; the hook turns each case into a localized message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalError {
+    /// The provider setting names no known terminal.
+    UnknownProvider,
+    /// The custom command has no program.
+    CommandEmpty,
+    /// The custom command puts the folder where a shell could run it.
+    CommandPath,
+    /// The custom command leaves a quotation mark open.
+    CommandQuotes,
+    /// The operating system refused to start the terminal.
+    Spawn(io::ErrorKind),
+}
+
+impl TerminalError {
+    /// The localized text for this failure, ending with the next step.
+    pub fn message(self) -> String {
+        match self {
+            Self::UnknownProvider => navo_l10n::tr("terminal-provider-unknown"),
+            Self::CommandEmpty => navo_l10n::tr("terminal-command-empty"),
+            Self::CommandPath => navo_l10n::tr("terminal-command-path"),
+            Self::CommandQuotes => navo_l10n::tr("terminal-command-quotes"),
+            Self::Spawn(kind) => navo_l10n::t!("terminal-spawn-error", error = kind.to_string()),
+        }
+    }
+}
+
 pub fn command_line(
     provider: &str,
     template: Option<&str>,
     folder: &Path,
-) -> Result<(String, Vec<String>), String> {
+) -> Result<(String, Vec<String>), TerminalError> {
     let folder = folder.to_string_lossy().into_owned();
     let (program, args) = match provider {
         "windows-terminal" => ("wt.exe", vec!["-d".to_owned(), ".".to_owned()]),
@@ -24,7 +53,7 @@ pub fn command_line(
         }
         "cmd" => ("cmd.exe", vec![]),
         "custom" => return custom_command(template.unwrap_or_default(), &folder),
-        _ => return Err(navo_l10n::tr("terminal-provider-unknown")),
+        _ => return Err(TerminalError::UnknownProvider),
     };
     Ok((program.to_owned(), args))
 }
@@ -41,14 +70,14 @@ fn powershell() -> &'static str {
     }
 }
 
-fn custom_command(template: &str, folder: &str) -> Result<(String, Vec<String>), String> {
+fn custom_command(template: &str, folder: &str) -> Result<(String, Vec<String>), TerminalError> {
     let mut words = split(template)?.into_iter();
     let program = words
         .next()
         .filter(|word| !word.is_empty())
-        .ok_or_else(|| navo_l10n::tr("terminal-command-empty"))?;
+        .ok_or(TerminalError::CommandEmpty)?;
     if program.contains("{path}") {
-        return Err(navo_l10n::tr("terminal-command-path"));
+        return Err(TerminalError::CommandPath);
     }
     let mut shell = is_shell_program(&program);
     let folder = if program_identity(&program) == "wt" {
@@ -59,7 +88,7 @@ fn custom_command(template: &str, folder: &str) -> Result<(String, Vec<String>),
     let mut args = Vec::new();
     for word in words {
         if word.contains("{path}") && (word != "{path}" || shell) {
-            return Err(navo_l10n::tr("terminal-command-path"));
+            return Err(TerminalError::CommandPath);
         }
         shell |= is_shell_program(&word);
         args.push(if word == "{path}" {
@@ -128,7 +157,7 @@ fn windows_creation_flags(provider: &str) -> u32 {
     console | 0x0000_0200
 }
 
-pub(crate) fn split(template: &str) -> Result<Vec<String>, String> {
+pub(crate) fn split(template: &str) -> Result<Vec<String>, TerminalError> {
     let mut chars = template.chars().peekable();
     let mut words = Vec::new();
     loop {
@@ -140,7 +169,7 @@ pub(crate) fn split(template: &str) -> Result<Vec<String>, String> {
     }
 }
 
-fn word(chars: &mut Peekable<Chars<'_>>) -> Result<String, String> {
+fn word(chars: &mut Peekable<Chars<'_>>) -> Result<String, TerminalError> {
     let mut word = String::new();
     let mut quoted = false;
     while let Some(&ch) = chars.peek() {
@@ -161,7 +190,7 @@ fn word(chars: &mut Peekable<Chars<'_>>) -> Result<String, String> {
         }
     }
     if quoted {
-        return Err(navo_l10n::tr("terminal-command-quotes"));
+        return Err(TerminalError::CommandQuotes);
     }
     Ok(word)
 }
@@ -186,7 +215,7 @@ fn launch_command(
     provider: &str,
     template: Option<&str>,
     folder: &Path,
-) -> Result<Command, String> {
+) -> Result<Command, TerminalError> {
     let (program, args) = if provider == "system" || (cfg!(unix) && provider != "custom") {
         system::terminal_command(folder)?
     } else {
@@ -206,7 +235,8 @@ pub fn hooks(values: &Values) -> TerminalHooks {
     TerminalHooks {
         open: Arc::new(move |folder| {
             let mut command =
-                launch_command(provider, template.as_deref(), Path::new(folder.as_str()))?;
+                launch_command(provider, template.as_deref(), Path::new(folder.as_str()))
+                    .map_err(TerminalError::message)?;
             #[cfg(windows)]
             let detached = {
                 use std::os::windows::process::CommandExt as _;
@@ -227,9 +257,9 @@ pub fn hooks(values: &Values) -> TerminalHooks {
                 use std::os::unix::process::CommandExt as _;
                 command.process_group(0);
             }
-            let mut child = command.spawn().map_err(|error| {
-                navo_l10n::t!("terminal-spawn-error", error = error.to_string())
-            })?;
+            let mut child = command
+                .spawn()
+                .map_err(|error| TerminalError::Spawn(error.kind()).message())?;
             let _ = std::thread::Builder::new()
                 .name("navo-terminal-wait".to_owned())
                 .spawn(move || {

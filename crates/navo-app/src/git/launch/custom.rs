@@ -11,7 +11,7 @@ pub(super) fn expand(
     repo: &str,
 ) -> Result<Process, LaunchError> {
     let mut words = split(template.unwrap_or_default())
-        .map_err(LaunchError::Command)?
+        .map_err(|error| LaunchError::Command(error.message()))?
         .into_iter();
     let program = words
         .next()

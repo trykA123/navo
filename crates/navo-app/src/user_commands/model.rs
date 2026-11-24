@@ -325,7 +325,7 @@ fn read_args(
         return (Vec::new(), Vec::new(), block_line);
     };
     let line = line_at(text, args.span().start);
-    let words = match split(args.get_ref()) {
+    let words = match split(args.get_ref()).map_err(|error| error.message()) {
         Ok(words) => words,
         Err(message) => {
             errors.push(LineError { line, message });

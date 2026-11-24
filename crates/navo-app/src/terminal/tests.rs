@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::system::{unix_terminal, windows_provider};
-use super::{command_line, launch_command, split, windows_creation_flags};
+use super::{TerminalError, command_line, launch_command, split, windows_creation_flags};
 
 #[test]
 fn windows_terminal_never_puts_the_folder_in_arguments() {
@@ -255,4 +255,20 @@ fn the_windows_choice_maps_to_the_folder_command() {
     let (program, args) = command_line(windows_provider(None, false), None, folder).unwrap();
     assert_eq!(program, "cmd.exe");
     assert!(args.is_empty());
+}
+
+#[test]
+fn each_terminal_failure_names_its_cause() {
+    let folder = Path::new("folder");
+    let custom = |template| command_line("custom", Some(template), folder).unwrap_err();
+    assert_eq!(
+        command_line("unknown", None, folder).unwrap_err(),
+        TerminalError::UnknownProvider
+    );
+    assert_eq!(custom("   "), TerminalError::CommandEmpty);
+    assert_eq!(
+        custom("terminal \"unfinished"),
+        TerminalError::CommandQuotes
+    );
+    assert_eq!(custom("bash {path}"), TerminalError::CommandPath);
 }
