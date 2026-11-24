@@ -68,7 +68,9 @@ impl CopiedSource {
     }
 
     /// True when `now` is still this file, unchanged. Without a file ID, a replacement with the
-    /// same size, times and attributes passes: the known limit on volumes that keep no IDs.
+    /// same size, times and attributes passes: the known limit on volumes that keep no IDs. Windows
+    /// name tunneling (FAT and NTFS) gives a file created under the same name within about 15 s of
+    /// a rename or delete the old creation time, so an editor's safe-save there can pass too.
     #[must_use]
     pub fn still(&self, now: &Self) -> bool {
         let same = self.size == now.size && self.modified_ms == now.modified_ms;
@@ -340,5 +342,65 @@ pub trait ProviderOps: Provider {
             hash,
             source: ReadSource::CacheFallback,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CopiedSource;
+
+    /// A source read on a volume without file IDs (FAT, exFAT, some SMB shares).
+    fn without_id() -> CopiedSource {
+        CopiedSource {
+            identity: None,
+            size: 10,
+            modified_ms: Some(1_000),
+            created_ms: Some(500),
+            attributes: Some(0x20),
+        }
+    }
+
+    #[test]
+    fn without_a_file_id_an_equal_record_proves_the_source() {
+        let read = without_id();
+        assert!(read.proves());
+        assert!(read.still(&without_id()));
+    }
+
+    #[test]
+    fn without_a_file_id_a_new_creation_time_or_attributes_is_a_replacement() {
+        let read = without_id();
+        let created = CopiedSource {
+            created_ms: Some(501),
+            ..read
+        };
+        let attributes = CopiedSource {
+            attributes: Some(0x21),
+            ..read
+        };
+        assert!(!read.still(&created));
+        assert!(!read.still(&attributes));
+    }
+
+    #[test]
+    fn without_a_file_id_a_missing_creation_time_or_attributes_proves_nothing() {
+        let read = without_id();
+        for partial in [
+            CopiedSource {
+                created_ms: None,
+                ..read
+            },
+            CopiedSource {
+                attributes: None,
+                ..read
+            },
+            CopiedSource {
+                modified_ms: None,
+                ..read
+            },
+        ] {
+            assert!(!partial.proves());
+            assert!(!partial.still(&partial));
+        }
     }
 }
