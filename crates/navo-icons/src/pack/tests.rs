@@ -326,3 +326,65 @@ fn pack_write_is_deterministic() {
         "icon order in a draft does not matter"
     );
 }
+
+/// A zstd frame with no content size whose header declares a `2^(10 + exp)` byte window, then one
+/// empty last raw block.
+fn frame_with_window(exp: u8) -> Vec<u8> {
+    let mut frame = vec![0x28, 0xB5, 0x2F, 0xFD, 0x00, exp << 3];
+    frame.extend_from_slice(&[0x01, 0x00, 0x00]);
+    frame
+}
+
+#[test]
+fn pack_decode_refuses_a_large_declared_window() {
+    assert_eq!(
+        decode(&frame_with_window(10), MAX_TAGS_RAW),
+        Ok(Vec::new()),
+        "a 1 MiB window decodes"
+    );
+    for exp in [11, 16] {
+        assert!(
+            matches!(
+                decode(&frame_with_window(exp), MAX_TAGS_RAW),
+                Err(PackError::Zstd(_))
+            ),
+            "a 2^{} byte window is refused before it is reserved",
+            10 + exp
+        );
+    }
+}
+
+#[test]
+fn pack_unsorted_names_find_nothing() {
+    let bytes = packed();
+    let brands = RECORD + RECORD_LEN;
+    let names_at = usize::try_from(read_u32(&bytes, brands + 56)).unwrap();
+    let names_len = usize::try_from(read_u32(&bytes, brands + 60)).unwrap();
+    let table = &bytes[names_at..names_at + names_len];
+    let first = ENTRY_FIXED_LEN + usize::from(table[0]);
+    let mut swapped = bytes.clone();
+    swapped[names_at..names_at + names_len]
+        .copy_from_slice(&[&table[first..], &table[..first]].concat());
+    let pack = Pack::open(&swapped).unwrap();
+    assert_eq!(pack.find("brands", "github"), None);
+    assert_eq!(pack.find("brands", "rust"), None);
+    assert!(pack.names("brands").is_empty());
+    assert_eq!(pack.names("lucide").len(), 71, "the other set still reads");
+}
+
+#[test]
+fn pack_tags_refuse_over_cap() {
+    let mut bytes = packed();
+    let frame = ruzstd::encoding::compress_to_vec(
+        vec![b'a'; MAX_TAGS_RAW + 1].as_slice(),
+        ruzstd::encoding::CompressionLevel::Fastest,
+    );
+    let at = u32::try_from(bytes.len()).unwrap();
+    let len = u32::try_from(frame.len()).unwrap();
+    bytes.extend_from_slice(&frame);
+    bytes[RECORD + 64..RECORD + 68].copy_from_slice(&at.to_le_bytes());
+    bytes[RECORD + 68..RECORD + 72].copy_from_slice(&len.to_le_bytes());
+    let pack = Pack::open(&bytes).unwrap();
+    assert_eq!(pack.tags("lucide"), Err(PackError::TooLarge));
+    assert!(pack.tags("brands").is_ok());
+}
