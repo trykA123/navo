@@ -6469,6 +6469,7 @@ dependencies = [
 name = "navo-icons"
 version = "0.8.8"
 dependencies = [
+ "ruzstd",
  "thiserror 2.0.21",
  "toml 1.2.1+spec-1.1.0",
 ]
