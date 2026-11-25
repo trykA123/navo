@@ -409,21 +409,24 @@ pub fn stalling_fetch(fixture: &Fixture) -> (PathBuf, PathBuf) {
     (stalled, go)
 }
 
+/// Polls until `marker` exists or `DEADLINE` passes; returns whether it exists.
+pub fn wait_for(marker: &Path) -> bool {
+    let started = std::time::Instant::now();
+    while !marker.exists() && started.elapsed() < DEADLINE {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    marker.exists()
+}
+
 /// Runs `operation` while another thread waits for `stalled`, runs `change`, then creates `go`.
 pub fn change_while_stalled<T>(
     (stalled, go): (&Path, &Path),
     change: impl FnOnce() + Send,
     operation: impl FnOnce() -> T,
 ) -> T {
-    use std::time::Instant;
-
     std::thread::scope(|scope| {
         let changer = scope.spawn(move || {
-            let started = Instant::now();
-            while !stalled.exists() && started.elapsed() < DEADLINE {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            assert!(stalled.exists(), "the fetch never started");
+            assert!(wait_for(stalled), "the fetch never started");
             change();
             fs::write(go, b"").unwrap();
         });

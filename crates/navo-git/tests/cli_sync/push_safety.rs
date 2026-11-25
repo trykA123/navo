@@ -224,10 +224,9 @@ fn a_live_stalled_sleep_is_caught() {
         ids: super::cli_remote_support::sibling(&fixture, "stalled.pid"),
         git,
     };
-    let started = std::time::Instant::now();
-    while !marker.exists() && started.elapsed() < DEADLINE {
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    assert!(marker.exists(), "the stall never started");
+    assert!(
+        super::cli_sync_support::wait_for(&marker),
+        "the stall never started"
+    );
     nothing_left(&fixture);
 }
