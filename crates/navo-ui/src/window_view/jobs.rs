@@ -10,6 +10,7 @@ use super::strip::StripUi;
 
 use crate::activity::Activity;
 use crate::browser::{JobStatus, JobView};
+use crate::commands::active;
 use crate::job_card::{JobCard, JobInfo, JobsSummary, Pause, RenameNote, SpeedMeter, VerifyNote};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
@@ -227,7 +228,12 @@ impl NavoWindow {
         let is_ended = JobsSummary::of(&jobs).is_ended();
         let (shrink, pause, resume) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
         let (cancel, dismiss, more) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
+        let focus_key = active(cx)
+            .keys_of("activity.focus")
+            .next()
+            .map(str::to_owned);
         let card = JobCard::new(jobs)
+            .more_key(focus_key.as_deref())
             .when(is_ended, |card| card.fade_out(JOB_LINGER))
             .on_shrink(move |_, cx| {
                 let _ = shrink.update(cx, |view, cx| view.toggle_jobs(cx));

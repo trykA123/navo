@@ -547,3 +547,22 @@ fn a_single_kept_file_reaches_its_full_line_by_key(cx: &mut TestAppContext) {
         "Kept the original of 0.txt: it changed while Navo copied it"
     );
 }
+
+#[gpui_kit::test]
+fn show_all_names_the_bound_activity_key_and_hides_it_when_unbound(cx: &mut TestAppContext) {
+    use crate::commands::{Keymap, set_active};
+    let (window, view) = open_at(cx, 1280.);
+    end_kept(cx, &view, 1);
+    key(cx, window, "ctrl-j");
+    cx.run_until_parked();
+    assert_eq!(label(cx, window, ("job-kept-all-key", 1u64)), "Alt+J");
+    let rebound = "[[bind]]\ncommand = \"activity.focus\"\nkeys = [\"ctrl-alt-k\"]\n";
+    let keymap = Keymap::builtin().overlay(rebound).expect("keymap").keymap;
+    cx.update(|cx| set_active(cx, keymap));
+    assert_eq!(label(cx, window, ("job-kept-all-key", 1u64)), "Ctrl+Alt+K");
+    let unbound = "[[bind]]\ncommand = \"activity.focus\"\nkeys = []\n";
+    let keymap = Keymap::builtin().overlay(unbound).expect("keymap").keymap;
+    cx.update(|cx| set_active(cx, keymap));
+    assert!(!is_shown(cx, window, ("job-kept-all-key", 1u64)));
+    assert!(is_shown(cx, window, ("job-kept-all", 1u64)));
+}

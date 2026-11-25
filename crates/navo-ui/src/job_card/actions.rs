@@ -11,6 +11,8 @@ pub(super) struct Actions {
     pub cancel: Option<JobHandler>,
     pub dismiss: Option<JobHandler>,
     pub more: Option<JobHandler>,
+    /// The bound key beside "Show all", if any.
+    pub more_key: Option<SharedString>,
     pub is_compact: bool,
 }
 

@@ -20,6 +20,7 @@ fn card(count: usize) -> JobCard {
         .on_shrink(|_, _| {})
         .on_dismiss(|_, _, _| {})
         .on_more(|_, _, _| {})
+        .more_key(Some("alt-j"))
 }
 
 fn drawer() -> ActivityDrawer {

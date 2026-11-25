@@ -122,7 +122,13 @@ fn badge(t: &Theme, summary: &JobsSummary, single: Option<navo_core::OpKind>) ->
         .child(content)
 }
 
-fn bar(t: &Theme, fraction: f32) -> Div {
+/// The pill's progress line; a failed or kept job fills it in the warn colour, as the card does.
+fn bar(t: &Theme, summary: &JobsSummary) -> Div {
+    let fill = if summary.has_failed && !summary.is_running {
+        t.colors.warn
+    } else {
+        t.surfaces.progress_fill
+    };
     div()
         .absolute()
         .left(px(BADGE) + t.spacing.sm)
@@ -132,12 +138,7 @@ fn bar(t: &Theme, fraction: f32) -> Div {
         .rounded(px(BAR_HEIGHT / 2.))
         .overflow_hidden()
         .bg(t.surfaces.progress_track)
-        .child(
-            div()
-                .h_full()
-                .w(relative(fraction))
-                .bg(t.surfaces.progress_fill),
-        )
+        .child(div().h_full().w(relative(summary.fraction)).bg(fill))
 }
 
 impl JobPill {
@@ -216,7 +217,7 @@ impl JobPill {
         parts.extend(name.map(IntoElement::into_any_element));
         parts.extend(status.map(IntoElement::into_any_element));
         parts.extend(left.map(IntoElement::into_any_element));
-        parts.push(bar(t, s.fraction).into_any_element());
+        parts.push(bar(t, s).into_any_element());
         parts
     }
 }

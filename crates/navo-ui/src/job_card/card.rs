@@ -30,6 +30,7 @@ pub struct JobCard {
     on_cancel: Option<JobHandler>,
     on_dismiss: Option<JobHandler>,
     on_more: Option<JobHandler>,
+    more_key: Option<SharedString>,
 }
 
 impl JobCard {
@@ -43,6 +44,7 @@ impl JobCard {
             on_cancel: None,
             on_dismiss: None,
             on_more: None,
+            more_key: None,
         }
     }
 
@@ -86,6 +88,13 @@ impl JobCard {
     #[must_use]
     pub fn on_more(mut self, handler: impl Fn(u64, &mut Window, &mut App) + 'static) -> Self {
         self.on_more = Some(Rc::new(handler));
+        self
+    }
+
+    /// The key that opens the activity drawer, shown beside "Show all"; `None` hides the hint.
+    #[must_use]
+    pub fn more_key(mut self, key: Option<&str>) -> Self {
+        self.more_key = key.map(|key| SharedString::from(key.to_owned()));
         self
     }
 }
@@ -196,7 +205,8 @@ fn detail(t: &Theme, job: &JobInfo) -> Option<Div> {
 }
 
 /// "Show all" under the kept lines, with its key: it opens the drawer, where every line wraps.
-fn show_all(t: &Theme, id: u64, count: usize, handler: JobHandler) -> Div {
+fn show_all(t: &Theme, id: u64, count: usize, actions: &Actions) -> Option<Div> {
+    let handler = actions.more.clone()?;
     let text = if count > KEPT_SHOWN {
         t!(
             "job-kept-all-count",
@@ -209,16 +219,17 @@ fn show_all(t: &Theme, id: u64, count: usize, handler: JobHandler) -> Div {
         .variant(ButtonVariant::Ghost)
         .on_click(move |_, window, cx| handler(id, window, cx));
     // An icon-wide gap; the ghost button's own padding then lines its text up with the lines.
-    let key = Kbd::new(("job-kept-all-key", id), "alt-j");
-    row(t)
+    let key = (actions.more_key.as_deref()).and_then(|key| Kbd::new(("job-kept-all-key", id), key));
+    let line = row(t)
         .gap_0()
         .child(div().w(t.spacing.icon).flex_none())
         .child(button)
-        .children(key.map(|key| div().ml(t.spacing.sm).child(key)))
+        .children(key.map(|key| div().ml(t.spacing.sm).child(key)));
+    Some(line)
 }
 
 /// The first kept-file lines, each with its reason, and "Show all" to read them in full.
-fn kept_lines(t: &Theme, job: &JobInfo, more: Option<&JobHandler>) -> Option<Div> {
+fn kept_lines(t: &Theme, job: &JobInfo, actions: &Actions) -> Option<Div> {
     let lines = &job.rename.kept;
     if lines.is_empty() {
         return None;
@@ -238,7 +249,7 @@ fn kept_lines(t: &Theme, job: &JobInfo, more: Option<&JobHandler>) -> Option<Div
                         .truncate(),
                 )
         });
-    let more = more.map(|handler| show_all(t, job.id, lines.len(), handler.clone()));
+    let more = show_all(t, job.id, lines.len(), actions);
     let column = div().flex().flex_col().gap(t.spacing.xs);
     Some(
         column
@@ -272,7 +283,7 @@ fn body(t: &Theme, job: &JobInfo, actions: &Actions) -> Div {
         .flex_col()
         .gap(t.spacing.sm)
         .children(detail(t, job))
-        .children(kept_lines(t, job, actions.more.as_ref()))
+        .children(kept_lines(t, job, actions))
         .child(progress_bar(t, job))
         .child(foot(t, job, actions))
 }
@@ -345,6 +356,7 @@ impl RenderOnce for JobCard {
             cancel: self.on_cancel.clone(),
             dismiss: self.on_dismiss.clone(),
             more: self.on_more.clone(),
+            more_key: self.more_key.clone(),
             is_compact: self.jobs.len() > 1,
         };
         let content: Vec<AnyElement> = match self.jobs.as_slice() {
