@@ -237,3 +237,41 @@ fn a_crash_while_paused_mid_copy_is_rolled_back_at_start() {
     assert!(exists(&fs, "home/docs/video.bin"));
     assert!(lock(&journal).unfinished().unwrap().is_empty());
 }
+
+#[test]
+fn every_job_log_hands_over_its_kept_files_after_a_failure() {
+    use navo_fs::{KeptCopy, KeptFile, KeptReason, KeptSource};
+
+    let fs = fake();
+    let plan = copy_plan(&fs);
+    let source = KeptSource {
+        seq: 0,
+        location: fs.location("home/docs/report.txt"),
+        reason: KeptReason::Resumed,
+    };
+    let copy = KeptCopy {
+        seq: 1,
+        location: fs.location("dest/docs/report.txt"),
+    };
+    let failed = JobOutcome::Failed {
+        seq: 1,
+        error: navo_core::FsError::new(navo_core::FsErrorKind::DiskFull),
+    };
+    let logs = [
+        log_factory(journal())(&plan).unwrap(),
+        super::guard_factory(None)(&plan).unwrap(),
+    ];
+    for mut log in logs {
+        log.kept_source(&source);
+        log.kept_copy(&copy);
+        log.finish(&failed, &fs).unwrap();
+        assert_eq!(
+            log.take_kept(),
+            [
+                KeptFile::Source(source.clone()),
+                KeptFile::Copy(copy.clone())
+            ]
+        );
+        assert!(log.take_kept().is_empty(), "handed over once");
+    }
+}

@@ -1,6 +1,6 @@
 use navo_core::{FsError, Location, OpKind, OperationPlan, PlanRequest, plan, plan_keeping};
 use navo_fs::{
-    AutoTuning, CancelToken, DriveClass, JobContext, JobOutcome, Progress, ProviderOps,
+    AutoTuning, CancelToken, DriveClass, JobContext, JobOutcome, KeptFile, Progress, ProviderOps,
     VerifyCount, WorkerCounts, existing_at, job_workers, scan,
 };
 
@@ -129,11 +129,12 @@ impl JobWork {
             self.pending.stream.as_ref(),
             (&self.sender, &self.wake),
         );
+        let mut kept = Vec::new();
         let outcome = catch_unwind(AssertUnwindSafe(|| {
-            self.execute(&mut |progress| reporter.report(progress))
+            self.execute(&mut |progress| reporter.report(progress), &mut kept)
         }))
         .unwrap_or_else(|_| Err("The job stopped unexpectedly".to_owned().into()));
-        let (outcome, report) = match outcome {
+        let (outcome, mut report) = match outcome {
             Ok((outcome, report)) => (self.explained(outcome), report),
             Err(LogRefusal::RetentionUnknown) if matches!(self.run, Run::Plain) => {
                 let _ = self.sender.send(Message::Job(JobUpdate::RetentionUnknown {
@@ -145,6 +146,8 @@ impl JobWork {
             }
             Err(refusal) => (Err(refusal.message()), RenameReport::default()),
         };
+        // A kept file stays listed even when the job's log then fails to finish.
+        report.kept = kept;
         let _ = self.sender.send(Message::Job(JobUpdate::Done {
             id: self.id,
             ended: Ended {
@@ -159,6 +162,7 @@ impl JobWork {
     fn execute(
         &self,
         progress: &mut dyn FnMut(&Progress),
+        kept: &mut Vec<KeptFile>,
     ) -> Result<(JobOutcome, RenameReport), LogRefusal> {
         if let (Run::Plain, Some(stamps)) = (&self.run, &self.pending.replan.results) {
             let ops = self.ops.as_ref();
@@ -197,6 +201,7 @@ impl JobWork {
             Run::Rename { .. } => run_batch(&self.pending.plan, &mut ctx),
             Run::Undo { offer, .. } => run_undo(&offer.plan, &offer.done, &mut ctx),
         };
+        *kept = log.take_kept();
         let finished = log.finish(&outcome, self.ops.as_ref());
         self.write_rename_log(&outcome, &mut report);
         finished?;

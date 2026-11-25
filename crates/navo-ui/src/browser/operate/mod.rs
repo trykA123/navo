@@ -133,7 +133,7 @@ impl Browser {
     ) {
         self.invalidate_undo();
         self.jobs
-            .retain(|job| job.status.is_active() || matches!(job.status, JobStatus::Failed(_)));
+            .retain(|job| job.status.is_active() || job.status.is_lasting());
         let cancel = CancelToken::new();
         let view = JobView {
             id: pending.id,
@@ -350,18 +350,7 @@ impl Browser {
             mut report,
         } = ended;
         self.note_rename_error(id, &outcome);
-        let status = match outcome {
-            Ok(JobOutcome::Done) => JobStatus::Done,
-            Ok(JobOutcome::Cancelled) => JobStatus::Cancelled,
-            Ok(JobOutcome::Failed { error, .. }) => JobStatus::Failed(failure_text(&error)),
-            Ok(JobOutcome::Kept { sources }) => JobStatus::Failed(
-                sources
-                    .first()
-                    .map(|kept| kept.error().message())
-                    .unwrap_or_default(),
-            ),
-            Err(message) => JobStatus::Failed(message),
-        };
+        let status = ended_status(outcome, &report);
         let mut source_tab = None;
         let mut landing = None;
         let mut undo = false;
@@ -392,6 +381,28 @@ impl Browser {
         self.check_left(id);
         self.release_job(id);
         true
+    }
+}
+
+/// How a finished job reads in the jobs panel. A job that kept files ends `Kept` unless it failed,
+/// also when it was cancelled after keeping some, so its card stays until dismissed.
+fn ended_status(outcome: Result<JobOutcome, String>, report: &RenameReport) -> JobStatus {
+    let kept = || report.kept.first().map(|kept| kept.error().message());
+    match outcome {
+        Ok(JobOutcome::Kept { sources }) => JobStatus::Kept(
+            sources
+                .first()
+                .map(|kept| kept.error().message())
+                .or_else(kept)
+                .unwrap_or_default(),
+        ),
+        Ok(JobOutcome::Done | JobOutcome::Cancelled) if !report.kept.is_empty() => {
+            JobStatus::Kept(kept().unwrap_or_default())
+        }
+        Ok(JobOutcome::Done) => JobStatus::Done,
+        Ok(JobOutcome::Cancelled) => JobStatus::Cancelled,
+        Ok(JobOutcome::Failed { error, .. }) => JobStatus::Failed(failure_text(&error)),
+        Err(message) => JobStatus::Failed(message),
     }
 }
 

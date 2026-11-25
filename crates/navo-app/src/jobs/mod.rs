@@ -5,8 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use navo_core::{FsError, FsErrorKind, OpKind, OperationPlan};
 use navo_fs::{
-    CancelToken, FileIdentity, FileStamp, HeldFile, JobLog, JobOutcome, PlacedFile, ProviderOps,
-    SaveUndo, StepOutcome,
+    CancelToken, FileIdentity, FileStamp, HeldFile, JobLog, JobOutcome, KeptCopy, KeptFile,
+    KeptSource, PlacedFile, ProviderOps, SaveUndo, StepOutcome,
 };
 use navo_store::{JobId, JobJournal, JobState, JournalError};
 use navo_ui::browser::OpLog;
@@ -168,6 +168,8 @@ struct JournalLog {
     deferred_undo: bool,
     profile: Option<navo_store::StoreDirs>,
     session: Option<SessionHolds>,
+    /// Files the job kept in place, for the jobs panel; the journal keeps the job Failed.
+    kept: Vec<KeptFile>,
 }
 
 impl JournalLog {
@@ -191,6 +193,7 @@ impl JournalLog {
             deferred_undo: false,
             profile: None,
             session: None,
+            kept: Vec::new(),
         }
     }
 }
@@ -300,6 +303,14 @@ impl JobLog for JournalLog {
     fn held_stranded(&mut self, _: &HeldFile) {
         self.stranded = true;
     }
+
+    fn kept_source(&mut self, kept: &KeptSource) {
+        self.kept.push(KeptFile::Source(kept.clone()));
+    }
+
+    fn kept_copy(&mut self, kept: &KeptCopy) {
+        self.kept.push(KeptFile::Copy(kept.clone()));
+    }
 }
 
 impl OpLog for JournalLog {
@@ -367,6 +378,10 @@ impl OpLog for JournalLog {
         maintenance::after(self, state, ops);
         trim::after_job(&self.journal);
         Ok(())
+    }
+
+    fn take_kept(&mut self) -> Vec<KeptFile> {
+        std::mem::take(&mut self.kept)
     }
 }
 

@@ -68,7 +68,9 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
             JobStatus::Running => JobRowState::Running,
             JobStatus::Done => JobRowState::Done,
             JobStatus::Cancelled => JobRowState::Cancelled,
-            JobStatus::Failed(message) => JobRowState::Failed(message.clone().into()),
+            JobStatus::Failed(message) | JobStatus::Kept(message) => {
+                JobRowState::Failed(message.clone().into())
+            }
         },
         speed,
         pause: match (job.cancel.is_paused(), progress.paused) {

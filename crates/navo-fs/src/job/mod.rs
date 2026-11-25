@@ -98,6 +98,21 @@ pub enum KeptFile {
     Copy(KeptCopy),
 }
 
+impl KeptFile {
+    /// The file error that stands for this kept file where a single error is shown. A kept copy
+    /// reads as `Unknown` at its target: its source may be the original, so nothing is blamed.
+    #[must_use]
+    pub fn error(&self) -> FsError {
+        match self {
+            Self::Source(kept) => kept.error(),
+            Self::Copy(kept) => FsError {
+                location: Some(kept.location.clone()),
+                ..FsError::new(FsErrorKind::Unknown)
+            },
+        }
+    }
+}
+
 /// The result of undoing a Save plan: its steps and how many done steps had no held old file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SaveUndo {

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use navo_core::{FsError, OperationPlan};
-use navo_fs::{HeldFile, JobLog, JobOutcome, ProviderOps, StepOutcome};
+use navo_fs::{
+    HeldFile, JobLog, JobOutcome, KeptCopy, KeptFile, KeptSource, ProviderOps, StepOutcome,
+};
 use navo_store::StoreDirs;
 use navo_ui::browser::{LogFactory, LoggedOperation, OpLog, WriteFactory};
 
@@ -13,6 +15,7 @@ pub(crate) fn guard_factory(dirs: Option<StoreDirs>) -> LogFactory {
         Ok(Box::new(GuardLog {
             dirs: dirs.clone(),
             hold: None,
+            kept: Vec::new(),
         }) as Box<dyn OpLog>)
     })
 }
@@ -37,6 +40,8 @@ fn guard(plan: &OperationPlan, dirs: Option<&StoreDirs>) -> Result<(), String> {
 struct GuardLog {
     dirs: Option<StoreDirs>,
     hold: Option<default_lock::Hold>,
+    /// Files the job kept in place, for the jobs panel.
+    kept: Vec<KeptFile>,
 }
 
 impl JobLog for GuardLog {
@@ -50,6 +55,14 @@ impl JobLog for GuardLog {
 
     fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
         Ok(false)
+    }
+
+    fn kept_source(&mut self, kept: &KeptSource) {
+        self.kept.push(KeptFile::Source(kept.clone()));
+    }
+
+    fn kept_copy(&mut self, kept: &KeptCopy) {
+        self.kept.push(KeptFile::Copy(kept.clone()));
     }
 }
 
@@ -67,5 +80,9 @@ impl OpLog for GuardLog {
 
     fn finish(&mut self, _: &JobOutcome, _: &dyn ProviderOps) -> Result<(), String> {
         Ok(())
+    }
+
+    fn take_kept(&mut self) -> Vec<KeptFile> {
+        std::mem::take(&mut self.kept)
     }
 }

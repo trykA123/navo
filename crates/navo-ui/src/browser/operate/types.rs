@@ -3,8 +3,8 @@ use navo_core::{
     ConflictPolicy, FsError, Location, OpKind, OperationPlan, Resolution, Risk, TabId,
 };
 use navo_fs::{
-    CancelToken, CopyMode, DriveClass, HeldFile, JobLog, JobOutcome, Progress, ProviderOps,
-    StepOutcome, drive_class,
+    CancelToken, CopyMode, DriveClass, HeldFile, JobLog, JobOutcome, KeptFile, Progress,
+    ProviderOps, StepOutcome, drive_class,
 };
 
 use std::sync::Arc;
@@ -55,6 +55,12 @@ pub trait OpLog: JobLog + Send {
     }
 
     fn finish(&mut self, outcome: &JobOutcome, ops: &dyn ProviderOps) -> Result<(), String>;
+
+    /// Hands over every file the job kept in place (`kept_source`, `kept_copy`), whatever its
+    /// outcome, so the jobs panel never hides one.
+    fn take_kept(&mut self) -> Vec<KeptFile> {
+        Vec::new()
+    }
 }
 
 pub struct LoggedOperation<'a> {
@@ -285,12 +291,21 @@ pub enum JobStatus {
     Done,
     Cancelled,
     Failed(String),
+    /// The job ended with files kept in place ("completed with problems"): every step ran, or it
+    /// was cancelled after keeping some. `JobView::report.kept` lists them; the text names the first.
+    Kept(String),
 }
 
 impl JobStatus {
     #[must_use]
     pub fn is_active(&self) -> bool {
         matches!(self, Self::Queued | Self::Running)
+    }
+
+    /// True for an ended job whose card stays until dismissed: it failed or kept files.
+    #[must_use]
+    pub fn is_lasting(&self) -> bool {
+        matches!(self, Self::Failed(_) | Self::Kept(_))
     }
 }
 

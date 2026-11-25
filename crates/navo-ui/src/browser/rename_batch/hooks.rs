@@ -80,6 +80,8 @@ pub struct RenameReport {
     /// Done save steps whose old file was no longer held, so they could not be restored.
     pub missing: usize,
     pub log_error: Option<String>,
+    /// Files the job kept in place where it meant to remove them, in the order it kept them.
+    pub kept: Vec<navo_fs::KeptFile>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

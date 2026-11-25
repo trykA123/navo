@@ -13,6 +13,7 @@ use crate::browser::Browser;
 mod concurrent;
 mod drop;
 mod from_results;
+mod kept_jobs;
 mod mode;
 mod pause;
 mod pick;
