@@ -183,13 +183,17 @@ pub fn cancel_when<T>(marker: &Path, operation: impl FnOnce(&Cancel) -> T) -> (T
 }
 
 /// Shell lines that touch a marker, then stall past every deadline, and the marker path.
-/// On Windows the stall is a child whose process id is first written to `stalled_pid`.
+/// On Windows the stall is a child whose process id is first written to `stalled_pid`, once
+/// MSYS has exec'd `sleep` (before that the id names the short-lived fork stub).
 pub fn stall_body(fixture: &Fixture) -> (String, PathBuf) {
     let marker = sibling(fixture, "stalled");
     let touch = slashed(&marker);
     #[cfg(windows)]
     let body = format!(
-        "sleep 41 &\ncat /proc/$!/winpid >> '{}'\ntouch '{touch}'\nwait",
+        "sleep 41 &\nc=$! i=0 e=\n\
+         until read -r e 2>/dev/null < /proc/$c/exename && case $e in */sleep|*/sleep.exe) true;; *) false;; esac || [ $i -ge 250 ]; do sleep 0.02; i=$((i+1)); done\n\
+         case $e in */sleep|*/sleep.exe) cat /proc/$c/winpid >> '{}';; esac\n\
+         touch '{touch}'\nwait",
         slashed(&stalled_pid(fixture))
     );
     #[cfg(not(windows))]
@@ -247,13 +251,16 @@ pub fn nothing_left(fixture: &Fixture) {
 
 /// A handle to the stall's `sleep` under `pid`, or `None` when that process is gone and the
 /// id now names another image or a process that started after the id file was `written`.
+/// A process that opens but cannot be queried fails the test rather than hide a survivor.
 #[cfg(windows)]
 fn stalled_child(pid: u32, written: u64) -> Option<std::os::windows::io::OwnedHandle> {
     let process = win_process::open(pid)?;
-    if win_process::exited(&process) || win_process::created(&process)? > written {
+    let fail = |error: std::io::Error| -> ! { panic!("cannot query process {pid}: {error}") };
+    let created = win_process::created(&process).unwrap_or_else(|e| fail(e));
+    if win_process::exited(&process) || created > written {
         return None;
     }
-    let image = win_process::image(&process)?;
+    let image = win_process::image(&process).unwrap_or_else(|e| fail(e));
     let name = Path::new(&image)
         .file_name()?
         .to_string_lossy()
@@ -261,24 +268,72 @@ fn stalled_child(pid: u32, written: u64) -> Option<std::os::windows::io::OwnedHa
     name.eq_ignore_ascii_case("sleep.exe").then_some(process)
 }
 
+/// Ends every process the stall recorded and `git`, so a test that expects a survivor
+/// leaves none behind.
+#[cfg(windows)]
+pub struct StallReaper {
+    /// The stall's id file.
+    pub ids: PathBuf,
+    /// The Git process that runs the stall.
+    pub git: std::process::Child,
+}
+
+#[cfg(windows)]
+impl Drop for StallReaper {
+    fn drop(&mut self) {
+        let ids = fs::read_to_string(&self.ids).unwrap_or_default();
+        for pid in ids.split_whitespace().filter_map(|pid| pid.parse().ok()) {
+            win_process::terminate(pid);
+        }
+        let _ = self.git.kill();
+        let _ = self.git.wait();
+    }
+}
+
 /// Thin wrappers over the Win32 process calls the kill probe needs.
 #[cfg(windows)]
 mod win_process {
+    use std::io::{Error, Result};
     use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
-    use windows_sys::Win32::Foundation::{FILETIME, WAIT_OBJECT_0};
+    use windows_sys::Win32::Foundation::{
+        ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER, FILETIME, WAIT_OBJECT_0,
+    };
     use windows_sys::Win32::System::Threading::{
         GetProcessTimes, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-        PROCESS_SYNCHRONIZE, QueryFullProcessImageNameW, WaitForSingleObject,
+        PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, QueryFullProcessImageNameW, TerminateProcess,
+        WaitForSingleObject,
     };
 
     /// A handle that waits on and queries `pid`; holding it keeps the id from being reused.
+    /// `None` when no process has the id, or when it belongs to another account (the stall's
+    /// own `sleep` always opens); any other failure fails the test.
     pub fn open(pid: u32) -> Option<OwnedHandle> {
         let access = PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION;
         // SAFETY: OpenProcess takes no pointers; the null result is checked before wrapping.
         let raw = unsafe { OpenProcess(access, 0, pid) };
+        if raw.is_null() {
+            let error = Error::last_os_error();
+            let gone = [ERROR_INVALID_PARAMETER, ERROR_ACCESS_DENIED]
+                .map(|code| i32::try_from(code).ok())
+                .contains(&error.raw_os_error());
+            assert!(gone, "cannot open process {pid}: {error}");
+            return None;
+        }
         // SAFETY: raw is a fresh process handle that only the guard owns.
-        (!raw.is_null()).then(|| unsafe { OwnedHandle::from_raw_handle(raw) })
+        Some(unsafe { OwnedHandle::from_raw_handle(raw) })
+    }
+
+    /// Ends `pid` if it still runs; best effort, for test cleanup only.
+    pub fn terminate(pid: u32) {
+        // SAFETY: OpenProcess takes no pointers; the null result is checked before wrapping.
+        let raw = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+        if !raw.is_null() {
+            // SAFETY: raw is a fresh process handle that only the guard owns.
+            let process = unsafe { OwnedHandle::from_raw_handle(raw) };
+            // SAFETY: the handle is live and was opened with terminate access.
+            unsafe { TerminateProcess(process.as_raw_handle(), 1) };
+        }
     }
 
     /// Whether the process has fully exited (its object is signalled).
@@ -288,7 +343,7 @@ mod win_process {
     }
 
     /// The process creation time as a FILETIME tick count.
-    pub fn created(process: &OwnedHandle) -> Option<u64> {
+    pub fn created(process: &OwnedHandle) -> Result<u64> {
         let zero = FILETIME {
             dwLowDateTime: 0,
             dwHighDateTime: 0,
@@ -304,14 +359,16 @@ mod win_process {
                 &mut user,
             )
         };
-        (ok != 0)
-            .then(|| (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime))
+        if ok == 0 {
+            return Err(Error::last_os_error());
+        }
+        Ok((u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime))
     }
 
     /// The full Win32 path of the process image.
-    pub fn image(process: &OwnedHandle) -> Option<String> {
+    pub fn image(process: &OwnedHandle) -> Result<String> {
         let mut buffer = [0u16; 1024];
-        let mut len = u32::try_from(buffer.len()).ok()?;
+        let mut len = 1024;
         // SAFETY: the buffer holds `len` u16s and the call writes at most that many.
         let ok = unsafe {
             QueryFullProcessImageNameW(
@@ -322,10 +379,10 @@ mod win_process {
             )
         };
         if ok == 0 {
-            return None;
+            return Err(Error::last_os_error());
         }
-        let name = buffer.get(..usize::try_from(len).ok()?)?;
-        Some(String::from_utf16_lossy(name))
+        let name = buffer.get(..usize::try_from(len).unwrap()).unwrap();
+        Ok(String::from_utf16_lossy(name))
     }
 }
 

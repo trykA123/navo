@@ -203,3 +203,31 @@ fn a_reused_process_id_is_not_blamed_on_the_kill() {
     std::fs::write(&ids, format!("{}\n", std::process::id())).unwrap();
     nothing_left(&fixture);
 }
+
+/// A stalled `sleep` that is still running when the probe looks is caught, so the probe
+/// cannot pass by skipping the very process it guards against.
+#[cfg(windows)]
+#[test]
+#[should_panic(expected = "outlived the kill")]
+fn a_live_stalled_sleep_is_caught() {
+    let fixture = repo().expect("this test needs git");
+    let (body, marker) = super::cli_sync_support::stall_body(&fixture);
+    let script = super::cli_sync_support::script_file(&fixture, "stall", &body);
+    let alias = format!("!sh '{}'", slashed(&script));
+    fixture.git_ok(&["config", "alias.navo-stall", &alias]);
+    let git = std::process::Command::new("git")
+        .arg("navo-stall")
+        .current_dir(fixture.repo())
+        .spawn()
+        .unwrap();
+    let _reaper = super::cli_sync_support::StallReaper {
+        ids: super::cli_remote_support::sibling(&fixture, "stalled.pid"),
+        git,
+    };
+    let started = std::time::Instant::now();
+    while !marker.exists() && started.elapsed() < DEADLINE {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(marker.exists(), "the stall never started");
+    nothing_left(&fixture);
+}
