@@ -162,6 +162,7 @@ activity-chip-link = Shortcuts { $percent }
 activity-chip-save = Save { $percent }
 activity-chip-paused = { $chip } · Paused
 activity-chip-copy-failed = Copy failed
+activity-chip-kept = Kept files
 activity-chip-move-failed = Move failed
 activity-chip-delete-failed = Delete failed
 activity-chip-recycle-failed = Recycle failed
@@ -335,3 +336,4 @@ archive-skipped-unsafe = { $count ->
     [one] 1 item skipped: unsafe name
    *[other] { $count } items skipped: unsafe names
 }
+activity-kept = { $name }: completed with problems

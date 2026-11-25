@@ -256,7 +256,7 @@ impl NavoWindow {
         cx.notify();
     }
 
-    fn toggle_activity_drawer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn toggle_activity_drawer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.job_ui.strip.is_drawer_open {
             self.leave_strip(window, cx);
             return;

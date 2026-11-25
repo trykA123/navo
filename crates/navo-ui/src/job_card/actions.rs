@@ -10,6 +10,7 @@ pub(super) struct Actions {
     pub resume: Option<JobHandler>,
     pub cancel: Option<JobHandler>,
     pub dismiss: Option<JobHandler>,
+    pub more: Option<JobHandler>,
     pub is_compact: bool,
 }
 
@@ -82,7 +83,7 @@ pub(super) fn job_actions(job: &JobInfo, actions: &Actions) -> Vec<AnyElement> {
                 .clone()
                 .map(|handler| Act::new("job-cancel", "Cancel", handler)),
         ],
-        JobRowState::Failed(_) => vec![
+        JobRowState::Failed(_) | JobRowState::Kept(_) => vec![
             actions
                 .dismiss
                 .clone()

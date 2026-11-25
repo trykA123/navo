@@ -40,6 +40,8 @@ pub struct ActivityItem {
     pub title: SharedString,
     pub chip: SharedString,
     pub detail: Option<SharedString>,
+    /// Every file the job kept in place, one line each, listed in the drawer.
+    pub lines: Vec<SharedString>,
     pub progress: Option<f32>,
     pub paused: bool,
     pub can_pause: bool,
@@ -58,6 +60,7 @@ impl ActivityItem {
             chip: title.clone(),
             title,
             detail: None,
+            lines: Vec::new(),
             progress: None,
             paused: false,
             can_pause: false,
@@ -96,11 +99,24 @@ impl ActivityItem {
             op: Some(job.kind),
             chip: text::failure_chip(job).into(),
             detail: Some(text::failure_detail(job, message).into()),
+            lines: job.rename.kept.clone(),
             ..Self::new(
                 ActivityId::Job(job.id),
                 ActivityKind::Failure,
                 text::failure_title(job),
             )
+        }
+    }
+
+    /// A job that ended with files kept in place: it lasts like a failure and lists every file.
+    fn kept(job: &JobInfo, message: &SharedString) -> Self {
+        let title = navo_l10n::t!("activity-kept", name = job.heading());
+        Self {
+            op: Some(job.kind),
+            chip: navo_l10n::tr("activity-chip-kept").into(),
+            detail: job.rename.kept.is_empty().then(|| message.clone()),
+            lines: job.rename.kept.clone(),
+            ..Self::new(ActivityId::Job(job.id), ActivityKind::Failure, title)
         }
     }
 
@@ -185,6 +201,7 @@ impl Activity {
                 )
             }
             JobRowState::Failed(message) => (ActivityItem::failure(job, message), Life::Lasting),
+            JobRowState::Kept(message) => (ActivityItem::kept(job, message), Life::Lasting),
             JobRowState::Cancelled => {
                 self.ended.insert(job.id);
                 self.remove(ActivityId::Job(job.id));

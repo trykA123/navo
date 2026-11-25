@@ -20,6 +20,7 @@ use crate::compare_page;
 use crate::drives_page::{DrivesPage, Shows};
 use crate::git_badges_page::GitBadgesPage;
 use crate::git_menu_page::GitMenuPage;
+use crate::kept_page;
 use crate::kinds_page::KindsPage;
 use crate::map_sample::{MAP_NAME, MAP_STEPS, MAP_UNREAD_STEPS, map, map_unread};
 use crate::menu_page::{MenuPage, Shows as MenuShows};
@@ -359,6 +360,8 @@ impl Render for Gallery {
             Page::Pane => root.child(self.pane.clone()),
             Page::MouseMarks => root.child(self.mouse.clone()),
             Page::Operate => root.child(self.operate.clone()),
+            Page::KeptJobs => root.child(kept_page::page(false, cx)),
+            Page::KeptJobs390 => root.child(kept_page::page(true, cx)),
             Page::Hex => root.child(self.hex.clone()),
             Page::PagedText => root.child(self.paged_text.clone()),
             Page::Drives => root.child(self.drives.clone()),

@@ -396,3 +396,11 @@ fn a_faded_card_neither_shows_nor_takes_clicks(cx: &mut TestAppContext) {
     .expect("window");
     assert_eq!(under.read_with(cx, |under, _| under.clicks), 1);
 }
+
+#[test]
+fn a_kept_job_reads_completed_with_problems_and_stays_on_the_card() {
+    let kept = with_state(JobRowState::Kept("changed".into()));
+    assert_eq!(kept.status_text(), "Completed with problems");
+    assert_eq!(kept.heading(), "Copied 4 items");
+    assert!(!JobsSummary::of(std::slice::from_ref(&kept)).is_ended());
+}

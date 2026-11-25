@@ -4,6 +4,7 @@ use std::time::Duration;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::{Animation, AnimationExt, RenderOnce, Role};
+use navo_l10n::t;
 
 use super::actions::{Actions, job_actions};
 use super::summary::{JobInfo, JobsSummary, speed_text};
@@ -16,6 +17,8 @@ use crate::tokens::{self, Theme};
 const CARD_WIDTH: f32 = 400.;
 const BAR_HEIGHT: f32 = 6.;
 const FROM_SHRINK: f32 = 100.;
+/// Kept-file lines a card shows before its "n more" link opens the activity drawer.
+const KEPT_SHOWN: usize = 3;
 
 #[derive(IntoElement)]
 pub struct JobCard {
@@ -26,6 +29,7 @@ pub struct JobCard {
     on_resume: Option<JobHandler>,
     on_cancel: Option<JobHandler>,
     on_dismiss: Option<JobHandler>,
+    on_more: Option<JobHandler>,
 }
 
 impl JobCard {
@@ -38,6 +42,7 @@ impl JobCard {
             on_resume: None,
             on_cancel: None,
             on_dismiss: None,
+            on_more: None,
         }
     }
 
@@ -74,6 +79,13 @@ impl JobCard {
     #[must_use]
     pub fn on_dismiss(mut self, handler: impl Fn(u64, &mut Window, &mut App) + 'static) -> Self {
         self.on_dismiss = Some(Rc::new(handler));
+        self
+    }
+
+    /// Runs when the "n more" link under a job's kept-file lines is clicked.
+    #[must_use]
+    pub fn on_more(mut self, handler: impl Fn(u64, &mut Window, &mut App) + 'static) -> Self {
+        self.on_more = Some(Rc::new(handler));
         self
     }
 }
@@ -139,7 +151,7 @@ fn shrink_button(t: &Theme, handler: Option<Handler>) -> impl IntoElement {
 fn progress_bar(t: &Theme, job: &JobInfo) -> impl IntoElement {
     let color = match job.state {
         JobRowState::Done => t.colors.ok,
-        JobRowState::Failed(_) => t.colors.warn,
+        JobRowState::Failed(_) | JobRowState::Kept(_) => t.colors.warn,
         JobRowState::Cancelled => t.colors.faint,
         JobRowState::Queued | JobRowState::Running => t.surfaces.progress_fill,
     };
@@ -160,7 +172,8 @@ fn detail(t: &Theme, job: &JobInfo) -> Option<Div> {
     let id = job.id;
     let line = row(t).justify_between().text_size(t.typography.small);
     match (&job.state, &job.current) {
-        (JobRowState::Failed(message), _) => Some(
+        (JobRowState::Kept(_), _) if !job.rename.kept.is_empty() => None,
+        (JobRowState::Failed(message) | JobRowState::Kept(message), _) => Some(
             line.text_color(t.colors.warn)
                 .child(icon(IconName::TriangleAlert, t.spacing.icon, t.colors.warn))
                 .child(
@@ -182,9 +195,61 @@ fn detail(t: &Theme, job: &JobInfo) -> Option<Div> {
     }
 }
 
+/// The first kept-file lines, each with its reason, and a link that opens the rest in the drawer.
+fn kept_lines(t: &Theme, job: &JobInfo, more: Option<&JobHandler>) -> Option<Div> {
+    let lines = &job.rename.kept;
+    if lines.is_empty() {
+        return None;
+    }
+    let shown = lines
+        .iter()
+        .take(KEPT_SHOWN)
+        .zip(0_u64..)
+        .map(|(line, index)| {
+            row(t)
+                .gap(t.spacing.sm)
+                .child(icon(IconName::TriangleAlert, t.spacing.icon, t.colors.warn))
+                .child(
+                    part(("job-kept", index), line.clone())
+                        .flex_1()
+                        .min_w_0()
+                        .truncate(),
+                )
+        });
+    let hidden = lines.len().saturating_sub(KEPT_SHOWN);
+    let more = more.filter(|_| hidden > 0).map(|handler| {
+        let (id, handler) = (job.id, handler.clone());
+        let count = u64::try_from(hidden).unwrap_or(u64::MAX);
+        let text = t!("job-kept-more", count = count);
+        // A link under the line texts, past an icon-wide gap, so it lines up with them.
+        let link = div()
+            .id(("job-kept-more", id))
+            .role(Role::Button)
+            .aria_label(text.clone())
+            .test_support()
+            .cursor_pointer()
+            .text_color(t.colors.accent_text)
+            .hover(|link| link.underline())
+            .on_click(move |_, window, cx| handler(id, window, cx))
+            .child(text);
+        row(t)
+            .gap(t.spacing.sm)
+            .child(div().w(t.spacing.icon).flex_none())
+            .child(link)
+    });
+    let column = div().flex().flex_col().gap(t.spacing.xs);
+    Some(
+        column
+            .text_size(t.typography.small)
+            .children(shown)
+            .children(more),
+    )
+}
+
 fn foot(t: &Theme, job: &JobInfo, actions: &Actions) -> Div {
     let color = match job.state {
         JobRowState::Done => t.colors.ok,
+        JobRowState::Kept(_) => t.colors.warn,
         _ => t.colors.muted,
     };
     row(t)
@@ -205,6 +270,7 @@ fn body(t: &Theme, job: &JobInfo, actions: &Actions) -> Div {
         .flex_col()
         .gap(t.spacing.sm)
         .children(detail(t, job))
+        .children(kept_lines(t, job, actions.more.as_ref()))
         .child(progress_bar(t, job))
         .child(foot(t, job, actions))
 }
@@ -239,7 +305,9 @@ impl JobCard {
         if let [job] = self.jobs.as_slice() {
             let (glyph, color) = match job.state {
                 JobRowState::Done => (IconName::Check, t.colors.ok),
-                JobRowState::Failed(_) => (IconName::TriangleAlert, t.colors.warn),
+                JobRowState::Failed(_) | JobRowState::Kept(_) => {
+                    (IconName::TriangleAlert, t.colors.warn)
+                }
                 _ => (kind_icon(job.kind), t.colors.accent_text),
             };
             return row(t)
@@ -274,6 +342,7 @@ impl RenderOnce for JobCard {
             resume: self.on_resume.clone(),
             cancel: self.on_cancel.clone(),
             dismiss: self.on_dismiss.clone(),
+            more: self.on_more.clone(),
             is_compact: self.jobs.len() > 1,
         };
         let content: Vec<AnyElement> = match self.jobs.as_slice() {

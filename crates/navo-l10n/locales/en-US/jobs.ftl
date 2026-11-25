@@ -44,6 +44,15 @@ job-verified-some = Done · Verified { $verified } of { $count ->
     [one] { $files } file
    *[other] { $files } files
 }
+job-kept-status = Completed with problems
+job-kept-unlisted = Some files were kept in place
+job-kept-more = { $count } more
+job-kept-source = Kept the original of { $name }: { $reason }
+job-kept-copy = Kept the copy of { $name } after rollback: { $reason }
+job-kept-reason-changed = it changed while it was copied
+job-kept-reason-unconfirmed = this drive cannot confirm the copy matches it
+job-kept-reason-resumed = the move resumed, so the copy was not checked against it
+job-kept-reason-rollback = the original could not be confirmed in place
 job-same-file = “{ $path }” is the same file as its source under another name. Nothing was changed.
 conflict-choice-label = Names already there
 conflict-skip = Skip

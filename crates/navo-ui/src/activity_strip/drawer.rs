@@ -99,6 +99,17 @@ impl ActivityDrawer {
             .progress
             .filter(|_| item.kind != ActivityKind::Failure)
             .map(|progress| bar(t, item, progress));
+        let lines = item.lines.iter().zip(0_u64..).map(|(line, index)| {
+            div()
+                .id(("activity-kept", index))
+                .role(Role::Label)
+                .aria_label(line.clone())
+                .test_support()
+                .min_w_0()
+                .text_size(t.typography.small)
+                .text_color(t.colors.muted)
+                .child(line.clone())
+        });
         div()
             .flex()
             .flex_col()
@@ -113,6 +124,7 @@ impl ActivityDrawer {
                     .child(item.title.clone()),
             )
             .children(detail)
+            .children(lines)
             .children(progress)
     }
 

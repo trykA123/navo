@@ -326,3 +326,47 @@ fn the_keep_structure_choice_shows_only_when_the_pending_op_offers_it() {
     from_results.structure.as_mut().unwrap().keep = false;
     assert!(!confirm_props(&from_results).choice.unwrap().on);
 }
+
+#[test]
+fn a_kept_job_maps_to_a_kept_card_with_one_line_per_kept_file() {
+    use navo_core::{FsError, FsErrorKind};
+    use navo_fs::{KeptCopy, KeptFile, KeptReason, KeptSource};
+
+    let source = |name: &str, reason| {
+        KeptFile::Source(KeptSource {
+            seq: 0,
+            location: at(&format!("/home/{name}")),
+            reason,
+        })
+    };
+    let mut view = job(OpKind::Move, JobStatus::Kept("changed".to_owned()));
+    view.report.kept = vec![
+        source("a.txt", KeptReason::Changed),
+        source("b.txt", KeptReason::Unconfirmed),
+        source("c.txt", KeptReason::Resumed),
+        source(
+            "d",
+            KeptReason::NotRemoved(FsError::new(FsErrorKind::AccessDenied)),
+        ),
+        KeptFile::Copy(KeptCopy {
+            seq: 1,
+            location: at("/dest/e.txt"),
+        }),
+    ];
+    let info = job_info(&view, None);
+    assert_eq!(info.state, JobRowState::Kept("changed".into()));
+    let not_empty = FsError::new(FsErrorKind::AccessDenied).message();
+    assert_eq!(
+        info.rename.kept,
+        [
+            "Kept the original of a.txt: it changed while it was copied".to_owned(),
+            "Kept the original of b.txt: this drive cannot confirm the copy matches it".to_owned(),
+            "Kept the original of c.txt: the move resumed, so the copy was not checked against it"
+                .to_owned(),
+            format!("Kept the original of d: {not_empty}"),
+            "Kept the copy of e.txt after rollback: the original could not be confirmed in place"
+                .to_owned(),
+        ]
+        .map(gpui_kit::SharedString::from)
+    );
+}

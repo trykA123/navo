@@ -60,9 +60,17 @@ fn kept(fs: &FakeFs) -> Vec<KeptFile> {
 
 /// Runs a copy whose log ends with `outcome` after keeping `kept(fs)`.
 fn ended(outcome: JobOutcome) -> (Arc<FakeFs>, Browser) {
+    ended_keeping(outcome, kept)
+}
+
+/// Runs a copy whose log ends with `outcome` after keeping `keep(fs)`.
+fn ended_keeping(
+    outcome: JobOutcome,
+    keep: fn(&FakeFs) -> Vec<KeptFile>,
+) -> (Arc<FakeFs>, Browser) {
     let fs = fake();
     let mut browser = browser(&fs, home_beside_dest(&fs));
-    let (outcome, kept) = (Mutex::new(Some(outcome)), kept(&fs));
+    let (outcome, kept) = (Mutex::new(Some(outcome)), keep(&fs));
     browser.set_operations(Operations {
         log_without_retention: None,
         retain_deletes: None,
@@ -128,4 +136,17 @@ fn a_kept_job_survives_the_next_job() {
     browser.confirm();
     settle(&mut browser);
     assert!(browser.jobs().iter().any(|job| job.id == first));
+}
+
+#[test]
+fn a_kept_outcome_without_kept_files_still_explains_itself() {
+    let sources = Vec::new();
+    let (_, browser) = ended_keeping(JobOutcome::Kept { sources }, |_| Vec::new());
+    let status = &browser.jobs()[0].status;
+    assert_eq!(
+        *status,
+        JobStatus::Kept(navo_l10n::tr("job-kept-unlisted")),
+        "{status:?}"
+    );
+    assert!(!navo_l10n::tr("job-kept-unlisted").is_empty());
 }

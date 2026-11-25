@@ -453,3 +453,69 @@ fn the_speed_survives_a_pause_without_decaying(cx: &mut TestAppContext) {
     let after = view.read_with(cx, |view, _| view.job_ui.meter.speed(1));
     assert_eq!(after, before);
 }
+
+#[gpui_kit::test]
+fn a_kept_job_shows_three_lines_and_its_more_link_opens_the_drawer(cx: &mut TestAppContext) {
+    use navo_fs::{KeptFile, KeptReason, KeptSource};
+
+    let (window, view) = open_at(cx, 1280.);
+    let moving = Fake {
+        kind: OpKind::Move,
+        ..running(1, 400 * MB)
+    };
+    add(cx, &view, moving);
+    // The job ends with its status and kept list together, as `Browser` reports them.
+    view.update(cx, |view, cx| {
+        let job = &mut view.browser.jobs_mut()[0];
+        job.status = JobStatus::Kept("changed".to_owned());
+        job.report.kept = (0..5)
+            .map(|seq| {
+                KeptFile::Source(KeptSource {
+                    seq,
+                    location: at(&format!("/home/commander/{seq}.txt")),
+                    reason: KeptReason::Changed,
+                })
+            })
+            .collect();
+        view.refresh_activity(cx);
+    });
+    key(cx, window, "ctrl-j");
+    cx.executor().advance_clock(Duration::from_secs(10));
+    cx.run_until_parked();
+    assert!(shown(cx, window).card.is_some(), "a kept job stays");
+    let status = label(cx, window, ("job-status", 1u64));
+    assert_eq!(status, "Completed with problems");
+    let first = label(cx, window, ("job-kept", 0u64));
+    assert_eq!(
+        first,
+        "Kept the original of 0.txt: it changed while it was copied"
+    );
+    let is_shown = |cx: &mut TestAppContext, id: (&'static str, u64)| {
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find(id).is_some()
+        })
+        .expect("window")
+    };
+    assert!(is_shown(cx, ("job-kept", 2)));
+    assert!(!is_shown(cx, ("job-kept", 3)), "only the first three");
+    assert_eq!(label(cx, window, ("job-kept-more", 1u64)), "2 more");
+    click(cx, window, ("job-kept-more", 1u64));
+    cx.executor().advance_clock(Duration::from_millis(200));
+    cx.run_until_parked();
+    assert!(
+        shown(cx, window).card.is_none(),
+        "the drawer takes the card's place"
+    );
+    let drawer = cx
+        .update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find("activity-drawer").is_some()
+        })
+        .expect("window");
+    assert!(drawer, "the drawer opens");
+    assert!(
+        is_shown(cx, ("activity-kept", 4)),
+        "the drawer lists all five"
+    );
+}

@@ -265,4 +265,17 @@ const MID: [PageInfo; 147] = join(&HEAD, &later::ALL);
 
 const MORE: [PageInfo; 170] = join(&MID, &clip_palette::ALL);
 
-pub const PAGES: [PageInfo; 191] = join(&MORE, &setup::ALL);
+const SETUP: [PageInfo; 193] = join(&MORE, &setup::ALL);
+
+/// Job cards for moves that kept files in place, at desktop width and in a 390 px column.
+const KEPT: [PageInfo; 2] = [
+    info(Page::KeptJobs, "Kept files", "mr1d4-kept", false),
+    info(
+        Page::KeptJobs390,
+        "Kept files, 390",
+        "mr1d4-kept-390",
+        false,
+    ),
+];
+
+pub const PAGES: [PageInfo; 195] = join(&SETUP, &KEPT);

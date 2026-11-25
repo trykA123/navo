@@ -30,6 +30,8 @@ pub struct RenameNote {
     pub refused: Vec<SharedString>,
     /// The verify-after-copy counts, when the job checks its copies.
     pub verify: Option<VerifyNote>,
+    /// One line per file the job kept in place, with its reason.
+    pub kept: Vec<SharedString>,
 }
 
 /// A snapshot of a job's verify counter: files checked, files copied unchecked, and a pass running.
@@ -120,7 +122,7 @@ impl JobInfo {
         let [name, running, done] = verbs(self.kind, self.rename.undo);
         let verb = match self.state {
             JobRowState::Running => running,
-            JobRowState::Done => done,
+            JobRowState::Done | JobRowState::Kept(_) => done,
             JobRowState::Queued | JobRowState::Failed(_) | JobRowState::Cancelled => name,
         };
         format!("{verb} {}", self.items_text())
@@ -190,6 +192,7 @@ impl JobInfo {
             JobRowState::Done => return self.done_text(),
             JobRowState::Cancelled => return "Cancelled".to_owned(),
             JobRowState::Failed(_) => return "Failed".to_owned(),
+            JobRowState::Kept(_) => return tr("job-kept-status"),
         }
         let mut parts = vec![self.percent_text(), self.files_text()];
         let verifying = self
@@ -240,6 +243,7 @@ pub struct JobsSummary {
     pub fraction: f32,
     pub left: Option<Duration>,
     pub speed: Option<u64>,
+    /// A job failed or kept files in place: the card stays until it is dismissed.
     pub has_failed: bool,
     pub is_running: bool,
     pub is_paused: bool,
@@ -272,7 +276,7 @@ impl JobsSummary {
             speed: (!speeds.is_empty()).then(|| speeds.iter().sum()),
             has_failed: jobs
                 .iter()
-                .any(|job| matches!(job.state, JobRowState::Failed(_))),
+                .any(|job| matches!(job.state, JobRowState::Failed(_) | JobRowState::Kept(_))),
             is_running: running().next().is_some(),
             is_paused: running().next().is_some() && running().all(JobInfo::is_paused),
             is_cancelled: jobs.iter().all(|job| job.state == JobRowState::Cancelled),

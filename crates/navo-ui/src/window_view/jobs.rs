@@ -1,6 +1,8 @@
 use std::time::{Duration, Instant};
 
 use navo_core::Location;
+use navo_fs::{KeptFile, KeptReason};
+use navo_l10n::{t, tr};
 
 use super::NavoWindow;
 use super::operate::JOB_LINGER;
@@ -47,6 +49,28 @@ fn name_of(location: &Location) -> Option<SharedString> {
         .map(|name| name.display().into_owned().into())
 }
 
+/// One card line for a file the job kept in place, naming it and why it stayed.
+fn kept_line(kept: &KeptFile) -> SharedString {
+    let (id, location, reason) = match kept {
+        KeptFile::Source(source) => {
+            let reason = match &source.reason {
+                KeptReason::Changed => tr("job-kept-reason-changed"),
+                KeptReason::Unconfirmed => tr("job-kept-reason-unconfirmed"),
+                KeptReason::Resumed => tr("job-kept-reason-resumed"),
+                KeptReason::NotRemoved(error) => error.message(),
+            };
+            ("job-kept-source", &source.location, reason)
+        }
+        KeptFile::Copy(copy) => (
+            "job-kept-copy",
+            &copy.location,
+            tr("job-kept-reason-rollback"),
+        ),
+    };
+    let name = name_of(location).unwrap_or_else(|| location.as_str().to_owned().into());
+    t!(id, name = name.to_string(), reason = reason).into()
+}
+
 pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
     let progress = &job.progress;
     JobInfo {
@@ -68,9 +92,8 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
             JobStatus::Running => JobRowState::Running,
             JobStatus::Done => JobRowState::Done,
             JobStatus::Cancelled => JobRowState::Cancelled,
-            JobStatus::Failed(message) | JobStatus::Kept(message) => {
-                JobRowState::Failed(message.clone().into())
-            }
+            JobStatus::Failed(message) => JobRowState::Failed(message.clone().into()),
+            JobStatus::Kept(message) => JobRowState::Kept(message.clone().into()),
         },
         speed,
         pause: match (job.cancel.is_paused(), progress.paused) {
@@ -91,6 +114,7 @@ pub(super) fn job_info(job: &JobView, speed: Option<u64>) -> JobInfo {
                 .map(|item| format!("{} ({})", item.name, item.reason).into())
                 .collect(),
             verify: None,
+            kept: job.report.kept.iter().map(kept_line).collect(),
         },
     }
 }
@@ -166,6 +190,16 @@ impl NavoWindow {
         }
     }
 
+    /// Swaps the card for the activity drawer, which lists every file a job kept in place.
+    fn show_kept(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.job_ui.is_card_hidden = true;
+        self.refresh_activity(cx);
+        if !self.job_ui.strip.is_drawer_open {
+            self.toggle_activity_drawer(window, cx);
+        }
+        cx.notify();
+    }
+
     pub(super) fn show_job_card(&mut self, cx: &mut Context<Self>) {
         self.job_ui.is_card_hidden = false;
         cx.notify();
@@ -196,7 +230,7 @@ impl NavoWindow {
         let t = tokens::current(cx).clone();
         let is_ended = JobsSummary::of(&jobs).is_ended();
         let (shrink, pause, resume) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
-        let (cancel, dismiss) = (cx.weak_entity(), cx.weak_entity());
+        let (cancel, dismiss, more) = (cx.weak_entity(), cx.weak_entity(), cx.weak_entity());
         let card = JobCard::new(jobs)
             .when(is_ended, |card| card.fade_out(JOB_LINGER))
             .on_shrink(move |_, cx| {
@@ -213,6 +247,9 @@ impl NavoWindow {
             })
             .on_dismiss(move |id, _, cx| {
                 let _ = dismiss.update(cx, |view, cx| view.dismiss_job(id, cx));
+            })
+            .on_more(move |_, window, cx| {
+                let _ = more.update(cx, |view, cx| view.show_kept(window, cx));
             });
         Some(
             div()

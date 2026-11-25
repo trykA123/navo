@@ -394,7 +394,7 @@ fn ended_status(outcome: Result<JobOutcome, String>, report: &RenameReport) -> J
                 .first()
                 .map(|kept| kept.error().message())
                 .or_else(kept)
-                .unwrap_or_default(),
+                .unwrap_or_else(|| navo_l10n::tr("job-kept-unlisted")),
         ),
         Ok(JobOutcome::Done | JobOutcome::Cancelled) if !report.kept.is_empty() => {
             JobStatus::Kept(kept().unwrap_or_default())

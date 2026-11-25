@@ -105,3 +105,35 @@ pub fn jobs(count: usize) -> Vec<JobInfo> {
     .take(count)
     .collect()
 }
+
+/// Kept-file lines a sample move shows: short names, a long one that truncates, and a copy.
+const KEPT_LINES: [&str; 5] = [
+    "Kept the original of report.txt: it changed while it was copied",
+    "Kept the original of Sinaia-2026-10-panorama-stitched-full-resolution-final-v3.tiff: this drive cannot confirm the copy matches it",
+    "Kept the original of notes: Access denied",
+    "Kept the original of budget.xlsx: the move resumed, so the copy was not checked against it",
+    "Kept the copy of plan.md after rollback: the original could not be confirmed in place",
+];
+
+/// A move that ended with `count` files kept in place (0 to 5); none still reads as kept.
+pub fn kept(id: u64, count: usize) -> JobInfo {
+    let rename = RenameNote {
+        kept: KEPT_LINES
+            .iter()
+            .take(count)
+            .map(|line| (*line).into())
+            .collect(),
+        ..RenameNote::default()
+    };
+    JobInfo {
+        id,
+        items: 6,
+        bytes_done: 5540 * MB,
+        files_done: 6,
+        files_total: 6,
+        speed: None,
+        state: JobRowState::Kept("Some files were kept in place".into()),
+        rename,
+        ..move_to_stick()
+    }
+}

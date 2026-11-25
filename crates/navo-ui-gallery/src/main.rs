@@ -18,6 +18,7 @@ mod git_badges_page;
 mod git_menu_page;
 mod image_sample;
 mod job_sample;
+mod kept_page;
 mod kinds_page;
 mod map_sample;
 mod menu_page;

@@ -24,6 +24,8 @@ pub enum JobRowState {
     Done,
     Failed(SharedString),
     Cancelled,
+    /// Ended with files kept in place ("completed with problems"); the text names the first.
+    Kept(SharedString),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +69,7 @@ impl JobRowProps {
             JobRowState::Done => "Done".to_owned(),
             JobRowState::Failed(_) => "Failed".to_owned(),
             JobRowState::Cancelled => "Cancelled".to_owned(),
+            JobRowState::Kept(_) => navo_l10n::tr("job-kept-status"),
         }
     }
 
@@ -113,7 +116,7 @@ fn state_color(t: &Theme, state: &JobRowState) -> Hsla {
     match state {
         JobRowState::Queued | JobRowState::Running => t.colors.accent,
         JobRowState::Done => t.colors.ok,
-        JobRowState::Failed(_) => t.colors.warn,
+        JobRowState::Failed(_) | JobRowState::Kept(_) => t.colors.warn,
         JobRowState::Cancelled => t.colors.faint,
     }
 }
@@ -162,7 +165,7 @@ fn detail(t: &Theme, props: &JobRowProps) -> Option<impl IntoElement> {
         .font_family(t.typography.mono_font.clone())
         .text_size(t.typography.small);
     match (&props.state, &props.current) {
-        (JobRowState::Failed(message), _) => Some(
+        (JobRowState::Failed(message) | JobRowState::Kept(message), _) => Some(
             line.text_color(t.colors.warn)
                 .child(icon(IconName::TriangleAlert, px(11.), t.colors.warn))
                 .child(label("message", message.clone())),
@@ -208,7 +211,9 @@ fn action(props: &JobRowProps, on_cancel: Option<Handler>, on_dismiss: Option<Ha
         JobRowState::Queued | JobRowState::Running => {
             on_cancel.map(|handler| ("cancel", "Cancel", handler))
         }
-        JobRowState::Failed(_) => on_dismiss.map(|handler| ("dismiss", "Dismiss", handler)),
+        JobRowState::Failed(_) | JobRowState::Kept(_) => {
+            on_dismiss.map(|handler| ("dismiss", "Dismiss", handler))
+        }
         JobRowState::Done | JobRowState::Cancelled => None,
     };
     div()

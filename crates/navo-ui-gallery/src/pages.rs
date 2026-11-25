@@ -203,6 +203,8 @@ pub enum Page {
     SetupAmbiguousNotice,
     SetupElevated,
     SetupNoPayload,
+    KeptJobs,
+    KeptJobs390,
 }
 
 #[derive(Clone, Copy)]
