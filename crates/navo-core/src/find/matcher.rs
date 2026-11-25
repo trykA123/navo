@@ -7,7 +7,7 @@ use encoding_rs::{UTF_16BE, UTF_16LE, WINDOWS_1252};
 use memchr::memmem;
 use regex::{Regex, RegexBuilder};
 
-use super::FindQuery;
+use super::{FindQuery, NameFilter};
 
 const CHUNK: usize = 1024 * 1024;
 const PROBE: usize = 8192;
@@ -16,6 +16,7 @@ const TEXT_LIMIT: usize = 200;
 
 pub struct Compiled {
     kind: Kind,
+    name: Option<NameFilter>,
 }
 
 enum Kind {
@@ -43,7 +44,14 @@ impl Compiled {
                 AhoCorasick::new([query.text.to_lowercase()]).map_err(|error| error.to_string())?,
             )
         };
-        Ok(Self { kind })
+        let name = query.name.as_deref().map(NameFilter::new).transpose()?;
+        Ok(Self { kind, name })
+    }
+
+    /// The `name:` filter, when the query has one.
+    #[must_use]
+    pub fn name_filter(&self) -> Option<&NameFilter> {
+        self.name.as_ref()
     }
 
     fn visit(&self, text: &str, mut visit: impl FnMut(usize) -> bool) {
