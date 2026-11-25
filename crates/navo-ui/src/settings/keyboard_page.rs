@@ -34,11 +34,12 @@ pub(super) fn content(
     section: Section,
     shortcuts: Option<AnyElement>,
     scroll: Option<&ScrollHandle>,
+    cx: &App,
 ) -> AnyElement {
     match shortcuts {
-        Some(list) => with_shortcuts(look, list),
+        Some(list) => with_shortcuts(look, list, cx),
         None => {
-            let rows = super::view::content(look, section, scroll);
+            let rows = super::view::content(look, section, scroll, cx);
             page(look, section, rows.into_any_element())
         }
     }
@@ -92,10 +93,10 @@ fn shortcuts_entry(t: &Theme, send: Option<&Handler>) -> AnyElement {
 }
 
 /// The page while the shortcut list has focus: the hint rows stay on top, unselected.
-fn with_shortcuts(look: &Look, shortcuts: AnyElement) -> AnyElement {
+fn with_shortcuts(look: &Look, shortcuts: AnyElement, cx: &App) -> AnyElement {
     let t = look.theme;
     let hints =
-        [Field::ModifierHints, LAST_ROW].map(|field| row(look, field.index(), field.spec()));
+        [Field::ModifierHints, LAST_ROW].map(|field| row(look, field.index(), field.spec(), cx));
     div()
         .flex()
         .flex_col()

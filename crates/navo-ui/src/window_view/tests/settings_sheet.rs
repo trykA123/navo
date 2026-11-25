@@ -567,3 +567,153 @@ fn the_display_section_groups_the_viewer_parts_and_flips_one(cx: &mut TestAppCon
         Some("Images and Markdown")
     );
 }
+
+#[gpui_kit::test]
+fn external_terminal_renders_as_a_dropdown_without_overflowing(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::TerminalProvider);
+    let row = row_of(Field::TerminalProvider);
+    let dropdown_id = ("settings-dropdown", Field::TerminalProvider.index());
+    assert!(
+        shows(cx, &rig, dropdown_id),
+        "dropdown trigger should render"
+    );
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        let row_bounds = window.find(("settings-row", row)).bounds();
+        let trigger_bounds = window.find(dropdown_id).bounds();
+        assert!(
+            window
+                .within(("settings-row", row))
+                .try_find(("settings-segment", 0usize))
+                .is_none(),
+            "long choice should not render segments"
+        );
+        assert!(
+            trigger_bounds.left() >= row_bounds.left()
+                && trigger_bounds.right() <= row_bounds.right(),
+            "dropdown {trigger_bounds:?} overflows row {row_bounds:?}"
+        );
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn dropdown_opens_on_click_and_picks_an_option(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::TerminalProvider);
+    let trigger = ("settings-dropdown", Field::TerminalProvider.index());
+    let menu = ("settings-dropdown-menu", Field::TerminalProvider.index());
+    rig.click(cx, trigger);
+    assert!(shows(cx, &rig, menu));
+    for (index, expected) in [
+        "System default",
+        "Windows Terminal",
+        "PowerShell",
+        "Command Prompt",
+        "Custom",
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert_eq!(
+            label(cx, &rig, ("settings-dropdown-option", index)).as_deref(),
+            Some(*expected)
+        );
+    }
+    rig.click(cx, ("settings-dropdown-option", 2usize));
+    assert!(!shows(cx, &rig, menu));
+    assert_eq!(
+        last_change(&rig),
+        Some(Change {
+            field: Field::TerminalProvider,
+            value: Value::Pick(2),
+        })
+    );
+    assert_eq!(label(cx, &rig, trigger).as_deref(), Some("PowerShell"));
+}
+
+#[gpui_kit::test]
+fn dropdown_keyboard_open_arrows_choose_escape_and_left_right(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::TerminalProvider);
+    let menu = ("settings-dropdown-menu", Field::TerminalProvider.index());
+    rig.press(cx, "enter");
+    assert!(shows(cx, &rig, menu));
+    rig.press(cx, "escape");
+    assert!(!shows(cx, &rig, menu));
+    assert!(is_open(cx, &rig));
+    assert!(sheet_has_focus(cx, &rig));
+    rig.press(cx, "space");
+    assert!(shows(cx, &rig, menu));
+    rig.press(cx, "down");
+    rig.press(cx, "enter");
+    assert!(!shows(cx, &rig, menu));
+    assert_eq!(
+        last_change(&rig),
+        Some(Change {
+            field: Field::TerminalProvider,
+            value: Value::Pick(1),
+        })
+    );
+    rig.press(cx, "right");
+    assert_eq!(
+        last_change(&rig),
+        Some(Change {
+            field: Field::TerminalProvider,
+            value: Value::Pick(2),
+        })
+    );
+    rig.press(cx, "left");
+    assert_eq!(
+        last_change(&rig),
+        Some(Change {
+            field: Field::TerminalProvider,
+            value: Value::Pick(1),
+        })
+    );
+}
+
+#[gpui_kit::test]
+fn switching_pages_dismisses_an_open_dropdown(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::TerminalProvider);
+    let menu = ("settings-dropdown-menu", Field::TerminalProvider.index());
+    rig.press(cx, "enter");
+    assert!(shows(cx, &rig, menu));
+    rig.press(cx, "ctrl-1");
+    rig.press(cx, "ctrl-7");
+    assert!(!shows(cx, &rig, menu));
+    rig.press(cx, "enter");
+    assert!(shows(cx, &rig, menu));
+    rig.press(cx, "tab");
+    rig.press(cx, "shift-tab");
+    assert!(!shows(cx, &rig, menu));
+}
+
+#[gpui_kit::test]
+fn short_choices_still_render_as_segments(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    go_to(cx, &rig, Field::HiddenFiles);
+    let row = row_of(Field::HiddenFiles);
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            window
+                .within(("settings-row", row))
+                .try_find(("settings-segment", 0usize))
+                .is_some()
+        );
+        assert!(
+            window
+                .try_find(("settings-dropdown", Field::HiddenFiles.index()))
+                .is_none()
+        );
+    })
+    .expect("window");
+}

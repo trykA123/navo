@@ -7,6 +7,7 @@ mod compare_fields;
 mod compare_options;
 mod controls;
 mod diagnostics_page;
+mod dropdown;
 mod field_visibility;
 mod fields;
 mod find;
@@ -52,7 +53,7 @@ mod tests;
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle, Toggled};
+use gpui_kit::{Entity, FocusHandle, RenderOnce, Role, ScrollHandle, Toggled};
 
 pub use compare_options::compare_options;
 pub use fields::{
@@ -76,6 +77,7 @@ pub use values::{Change, Value, Values};
 pub use window::WindowParts;
 
 use crate::prelude::*;
+use crate::primitives::popup_menu::{self, PopupMenu};
 use crate::side_sheet::{SheetFrame, SheetState, SideSheet};
 use crate::tokens;
 use crate::window_view::UpdateView;
@@ -381,6 +383,27 @@ impl SettingsBody {
             matches!(spec.control, Control::Text | Control::Number) && self.is_enabled(spec.field);
         is_editable.then_some(SheetEvent::Edit(spec.field))
     }
+
+    fn focused_dropdown(
+        &self,
+        menus: &[(Field, Entity<PopupMenu>)],
+    ) -> Option<(Entity<PopupMenu>, usize, usize)> {
+        let spec = self.shown_spec()?;
+        if !self.is_enabled(spec.field) {
+            return None;
+        }
+        let (Control::Choices(options, Look::Segments), Value::Pick(at)) =
+            (spec.control, self.values.get(spec.field))
+        else {
+            return None;
+        };
+        let menu = menus
+            .iter()
+            .find(|(field, _)| *field == spec.field)?
+            .1
+            .clone();
+        Some((menu, *at, options.len()))
+    }
 }
 
 fn send(handler: Option<&Handler>, event: Option<SheetEvent>, window: &mut Window, cx: &mut App) {
@@ -397,32 +420,53 @@ fn on_event(
     move |window: &mut Window, cx: &mut App| send(handler.as_ref(), event.clone(), window, cx)
 }
 
-fn register(root: Div, body: &SettingsBody) -> Div {
-    let next = on_event(body, body.section_event(true));
-    let previous = on_event(body, body.section_event(false));
-    let close = on_event(body, Some(SheetEvent::Close));
+fn dismiss_menus(menus: &[Entity<PopupMenu>], cx: &mut App) {
+    for menu in menus {
+        let _ = popup_menu::dismiss(menu, cx);
+    }
+}
+
+pub(super) fn on_event_dismissing(
+    body: &SettingsBody,
+    event: Option<SheetEvent>,
+    menus: &[(Field, Entity<PopupMenu>)],
+) -> impl Fn(&mut Window, &mut App) + use<> {
+    let handler = body.on_event.clone();
+    let open_menus: Vec<Entity<PopupMenu>> = menus.iter().map(|(_, menu)| menu.clone()).collect();
+    move |window: &mut Window, cx: &mut App| {
+        dismiss_menus(&open_menus, cx);
+        send(handler.as_ref(), event.clone(), window, cx);
+    }
+}
+
+fn register(root: Div, body: &SettingsBody, menus: &[(Field, Entity<PopupMenu>)]) -> Div {
+    let next = on_event_dismissing(body, body.section_event(true), menus);
+    let previous = on_event_dismissing(body, body.section_event(false), menus);
+    let close = on_event_dismissing(body, Some(SheetEvent::Close), menus);
     let root = root
         .on_action(move |_: &NextSection, window, cx| next(window, cx))
         .on_action(move |_: &PreviousSection, window, cx| previous(window, cx))
         .on_action(move |_: &CloseSettings, window, cx| close(window, cx));
-    let root = page_keys::register(root, body);
+    let root = page_keys::register(root, body, menus);
     if body.shortcuts.is_some() {
         return root;
     }
-    register_fields(root, body)
+    register_fields(root, body, menus)
 }
 
-fn register_fields(root: Div, body: &SettingsBody) -> Div {
+fn register_fields(root: Div, body: &SettingsBody, menus: &[(Field, Entity<PopupMenu>)]) -> Div {
     let row = body.row;
     let filter = &body.filter;
     let up = on_event(body, Some(SheetEvent::Select(moved(filter, row, false))));
     let down = on_event(body, Some(keyboard_page::down_event(filter, row)));
-    let find = on_event(body, Some(SheetEvent::Find));
+    let find = on_event_dismissing(body, Some(SheetEvent::Find), menus);
     let back = fold::left_event(filter, row).or_else(|| body.event_for(Nudge::Back));
     let forward = fold::right_event(filter, row).or_else(|| body.event_for(Nudge::Forward));
     let (back, forward) = (on_event(body, back), on_event(body, forward));
     let flip = on_event(body, body.flip_event());
     let edit = on_event(body, body.edit_event());
+    let dropdown_for_flip = body.focused_dropdown(menus);
+    let dropdown_for_edit = dropdown_for_flip.clone();
     let locate = on_event(
         body,
         body.shown_spec().map(|spec| SheetEvent::Locate(spec.field)),
@@ -433,8 +477,20 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
         .on_action(move |_: &RowDown, window, cx| down(window, cx))
         .on_action(move |_: &ValueBack, window, cx| back(window, cx))
         .on_action(move |_: &ValueForward, window, cx| forward(window, cx))
-        .on_action(move |_: &ValueFlip, window, cx| flip(window, cx))
-        .on_action(move |_: &EditValue, window, cx| edit(window, cx))
+        .on_action(move |_: &ValueFlip, window, cx| {
+            if let Some((menu, at, count)) = &dropdown_for_flip {
+                dropdown::open_at(menu, (*at, *count), window, cx);
+            } else {
+                flip(window, cx);
+            }
+        })
+        .on_action(move |_: &EditValue, window, cx| {
+            if let Some((menu, at, count)) = &dropdown_for_edit {
+                dropdown::open_at(menu, (*at, *count), window, cx);
+            } else {
+                edit(window, cx);
+            }
+        })
         .on_action(move |_: &OpenKey, window, cx| locate(window, cx))
         .on_action(move |_: &ResetValue, window, cx| reset(window, cx))
         .on_action(move |_: &UndoChange, window, cx| undo(window, cx))
@@ -448,8 +504,10 @@ impl RenderOnce for SettingsBody {
         if self.values.changed_count() == 0 {
             self.filter = self.filter.changed_only(false);
         }
-        let keys = register(div().key_context(CONTEXT), &self);
         let section = section_of(self.row);
+        let menus =
+            dropdown::visible_menus(&self.filter, section, self.shortcuts.is_some(), window, cx);
+        let keys = register(div().key_context(CONTEXT), &self, &menus);
         let look = view::Look {
             theme: &t,
             values: &self.values,
@@ -466,13 +524,15 @@ impl RenderOnce for SettingsBody {
             send: self.on_event.clone(),
             summon_key_taken: self.summon_key_taken,
             clipboard_key_taken: self.clipboard_key_taken,
+            menus: &menus,
         };
         let shown = self.shortcuts.is_none().then_some(section);
         let notice = shown
             .filter(|_| !self.upgrade.is_empty())
             .map(|_| upgrade::card(&t, &self.upgrade, self.on_event.as_ref()));
         let footer = shown.map(|_| row_state::footer(&t, &self.values));
-        let content = keyboard_page::content(&look, section, self.shortcuts, self.scroll.as_ref());
+        let content =
+            keyboard_page::content(&look, section, self.shortcuts, self.scroll.as_ref(), cx);
         let nav = nav::NavState::new(shown, window);
         let keyed = keys
             .id("settings-body")

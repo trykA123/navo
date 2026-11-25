@@ -1,9 +1,10 @@
 //! Row, control and status-line rendering for the settings sheet.
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{HighlightStyle, Role, ScrollHandle, StyledText};
+use gpui_kit::{Entity, HighlightStyle, Role, ScrollHandle, StyledText};
 
 use super::controls::{self, Picks};
+use super::dropdown;
 use super::fields::{Control, FIELDS, Field, FieldSpec, Look as ChoiceLook, Section};
 use super::find::{Filter, Line, lines};
 use super::git_page::{self, GitPage};
@@ -17,6 +18,7 @@ use super::{Handler, SheetEvent};
 use crate::commands::{CommandSpec, Keymap};
 use crate::prelude::*;
 use crate::primitives::Kbd;
+use crate::primitives::popup_menu::PopupMenu;
 use crate::shortcuts;
 use crate::tokens::Theme;
 use crate::window_view::UpdateView;
@@ -46,6 +48,7 @@ pub(super) struct Look<'a> {
     pub send: Option<Handler>,
     pub summon_key_taken: bool,
     pub clipboard_key_taken: bool,
+    pub menus: &'a [(Field, Entity<PopupMenu>)],
 }
 
 /// False for a row whose controlling setting is off, or the update check on a copy that
@@ -57,6 +60,13 @@ pub(super) fn is_row_enabled(values: &Values, update: &UpdateView, field: Field)
 impl Look<'_> {
     pub(super) fn is_enabled(&self, field: Field) -> bool {
         is_row_enabled(self.values, self.update, field)
+    }
+
+    pub(super) fn menu(&self, field: Field) -> Option<&Entity<PopupMenu>> {
+        self.menus
+            .iter()
+            .find(|(item, _)| *item == field)
+            .map(|(_, menu)| menu)
     }
 }
 
@@ -127,7 +137,7 @@ pub(super) fn spoken(spec: &FieldSpec, value: &Value) -> SharedString {
 
 /// The row's control. Picture choices show segments (or the colour theme's name) here; their
 /// pictures and the Git tool list live in the inspector.
-fn control(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
+fn control(look: &Look, spec: &FieldSpec, cx: &App) -> Option<AnyElement> {
     let t = look.theme;
     let value = look.values.get(spec.field);
     let send = look.send.as_ref();
@@ -144,7 +154,16 @@ fn control(look: &Look, spec: &FieldSpec) -> Option<AnyElement> {
                 at: *at,
                 send,
             };
-            Some(controls::segments(&picks).into_any_element())
+            if let Some(menu) = look.menu(spec.field) {
+                Some(dropdown::dropdown(
+                    &picks,
+                    menu,
+                    look.is_enabled(spec.field),
+                    cx,
+                ))
+            } else {
+                Some(controls::segments(&picks).into_any_element())
+            }
         }
         (Control::Toggle, Value::Flag(on)) => {
             let send = send.filter(|_| look.is_enabled(spec.field));
@@ -211,7 +230,7 @@ fn row_label(t: &Theme, filter: &Filter, text: SharedString) -> AnyElement {
 
 /// One line: the changed dot, the label and the control. On a narrow list the label shrinks
 /// with an ellipsis; the control keeps its width and never wraps.
-fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div {
+fn line(look: &Look, content_look: &Look, (index, spec): (usize, &FieldSpec), cx: &App) -> Div {
     let t = look.theme;
     let label = div()
         .id(("settings-label", index))
@@ -236,11 +255,11 @@ fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div
             (!look.filter.is_empty() && spec.field.is_advanced())
                 .then(|| super::fold::advanced_tag(content_look.theme, index)),
         )
-        .children(control(content_look, spec).map(|control| div().flex_none().child(control)))
+        .children(control(content_look, spec, cx).map(|control| div().flex_none().child(control)))
 }
 
 /// A setting row: one 36 px line, plus a red note under it while its value is refused.
-pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
+pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec, cx: &App) -> AnyElement {
     let t = look.theme;
     let is_current = index == look.row;
     let theme = t.selected_content(is_current);
@@ -268,7 +287,7 @@ pub(super) fn row(look: &Look, index: usize, spec: &FieldSpec) -> AnyElement {
         .flex_col()
         .justify_center()
         .when(!look.is_enabled(spec.field), |row| row.opacity(DIMMED))
-        .child(line(look, &content_look, index, spec))
+        .child(line(look, &content_look, (index, spec), cx))
         .children(under_line(t, notes));
     let is_nested = spec.field.is_nested() && look.filter.is_empty();
     let row = nested::indented(t, row, is_nested);
@@ -389,6 +408,7 @@ pub(super) fn content(
     look: &Look,
     section: Section,
     scroll: Option<&ScrollHandle>,
+    cx: &App,
 ) -> impl IntoElement + use<> {
     let t = look.theme;
     let send = look.send.as_ref();
@@ -408,7 +428,7 @@ pub(super) fn content(
             Line::Group(label) => vec![group_heading(t, label)],
             Line::Row(index) => FIELDS
                 .get(index)
-                .map(|spec| row(look, index, spec))
+                .map(|spec| row(look, index, spec, cx))
                 .into_iter()
                 .collect(),
             Line::Fold(fold) => vec![super::fold::fold_line(look, fold)],
@@ -422,7 +442,7 @@ pub(super) fn content(
         rows.extend(super::diagnostics_page::render(look));
     }
     if is_page_shown(look, section, Section::Help) {
-        rows.extend(super::help_page::render(look));
+        rows.extend(super::help_page::render(look, cx));
     }
     if rows.is_empty() {
         rows.push(no_match(t));

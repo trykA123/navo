@@ -205,9 +205,9 @@ pub(super) fn group_title(t: &Theme, id: &'static str) -> AnyElement {
 }
 
 /// The Help group of the About page, below Diagnostics.
-pub(super) fn render(look: &Look) -> Vec<AnyElement> {
+pub(super) fn render(look: &Look, cx: &App) -> Vec<AnyElement> {
     let t = look.theme;
-    let toggle = super::view::row(look, HELP_ROW, Field::CheckUpdates.spec());
+    let toggle = super::view::row(look, HELP_ROW, Field::CheckUpdates.spec(), cx);
     let mut page = vec![
         group_title(t, "settings-help"),
         controls(t, look.send.as_ref()),
