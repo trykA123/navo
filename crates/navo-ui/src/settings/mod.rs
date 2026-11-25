@@ -120,6 +120,8 @@ pub enum SheetEvent {
     /// Opens (`true`) or closes the fold on this fold row, and selects the row.
     Fold(usize, bool),
     Shortcuts,
+    /// Opens the Shortcuts page focused on the named command from a Find hit.
+    Shortcut(&'static str),
     Set(Change),
     Edit(Field),
     Locate(Field),
@@ -456,6 +458,7 @@ impl RenderOnce for SettingsBody {
             page: &self.page,
             git: &self.git,
             index: &self.index,
+            keymap: crate::commands::active(cx),
             diagnostics: &self.diagnostics,
             version: &self.version,
             update: &self.update,

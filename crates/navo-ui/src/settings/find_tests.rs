@@ -73,7 +73,7 @@ fn headings_without_a_match_do_not_appear() {
 
 #[test]
 fn a_group_heading_shows_only_with_a_match_under_it() {
-    let filter = Filter::new("line numbers");
+    let filter = Filter::new("text.view.line-numbers");
     assert_eq!(
         lines(&filter, Section::Appearance),
         [
@@ -102,7 +102,7 @@ fn rows_move_through_matches_only() {
 
 #[test]
 fn tab_skips_sections_without_a_match() {
-    let filter = Filter::new("line numbers");
+    let filter = Filter::new("text.view.line-numbers");
     let row = filter.first_row().unwrap();
     assert_eq!(next_section(&filter, row, true), row);
     let both = Filter::new("e");
@@ -258,4 +258,16 @@ fn settings_changed_filter_lists_only_changed_rows() {
         })
         .collect();
     assert_eq!(shown, [Field::FontSize, Field::WindowExtWidth]);
+}
+
+#[test]
+fn find_matches_choice_option_labels_and_shortcut_names() {
+    assert!(matching("PowerShell").contains(&Field::TerminalProvider));
+    let copy = Filter::new("Copy full path");
+    assert!(copy.count_in(Section::Keyboard) > 0);
+    assert!(
+        lines(&copy, Section::Appearance)
+            .iter()
+            .any(|line| matches!(line, Line::Shortcut(spec) if spec.name == "files.copy_path"))
+    );
 }

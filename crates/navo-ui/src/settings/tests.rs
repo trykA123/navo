@@ -493,10 +493,8 @@ fn the_search_page_ends_with_the_service_and_history_blocks() {
     let found = lines(&Filter::default(), Section::Search);
     assert_eq!(&found[found.len() - 2..], [Line::Service, Line::History]);
     let only_history = lines(&Filter::new("clear"), Section::Search);
-    assert_eq!(
-        only_history,
-        [Line::Section(Section::Search), Line::History]
-    );
+    assert!(only_history.starts_with(&[Line::Section(Section::Search), Line::History]));
+    assert!(!only_history.contains(&Line::Service) && !only_history.contains(&Line::Progress));
 }
 
 #[test]

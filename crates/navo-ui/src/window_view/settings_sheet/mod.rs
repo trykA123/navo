@@ -312,6 +312,7 @@ impl NavoWindow {
                 self.select_setting(row, window, cx);
             }
             SheetEvent::Shortcuts => self.show_shortcuts(window, cx),
+            SheetEvent::Shortcut(command) => self.open_shortcut_from_find(command, window, cx),
             SheetEvent::Set(change) => self.set_from_sheet(change, window, cx),
             SheetEvent::Edit(field) => self.start_edit(field, window, cx),
             SheetEvent::Locate(field) => self.open_settings_file(field, window, cx),
@@ -336,6 +337,21 @@ impl NavoWindow {
             self.settings.filter = self.settings.filter.clone().marking(&self.values);
         }
         cx.notify();
+    }
+
+    fn open_shortcut_from_find(
+        &mut self,
+        command: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.show_shortcuts(window, cx);
+        if let Some(page) = self.shown_shortcuts().cloned() {
+            page.update(cx, |page, cx| {
+                page.set_query("", window, cx);
+                page.select(command, cx);
+            });
+        }
     }
 
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {

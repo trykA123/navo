@@ -350,3 +350,47 @@ fn changed_chip_filters_to_changed_rows_and_clears_in_esc_chain_or_on_last_undo(
     rig.press(cx, "escape");
     assert!(!is_open(cx, &rig));
 }
+
+#[gpui_kit::test]
+fn find_matches_option_labels_and_opens_matching_shortcuts(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+
+    find(cx, &rig, "PowerShell");
+    assert!(shows_row(cx, &rig, Field::TerminalProvider));
+    assert!(!shows_row(cx, &rig, Field::Theme));
+
+    rig.press(cx, "escape");
+    settle_motion(cx, &rig);
+
+    find(cx, &rig, "Copy full path");
+    let keyboard = page_index(Section::Keyboard);
+    let expected = Filter::new("Copy full path")
+        .count_in(Section::Keyboard)
+        .to_string();
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", keyboard)).as_deref(),
+        Some(expected.as_str())
+    );
+    assert!(shows(cx, &rig, "settings-shortcut-hit-files.copy_path"));
+    assert_eq!(
+        label(cx, &rig, "settings-shortcut-key-files.copy_path").as_deref(),
+        Some("F9")
+    );
+
+    rig.click(cx, "settings-shortcut-hit-files.copy_path");
+    settle_motion(cx, &rig);
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.is_showing_shortcuts())
+    );
+    let selected = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .try_find("shortcut-files.copy_path")
+                .and_then(|found| found.selected())
+        })
+        .expect("window");
+    assert_eq!(selected, Some(true));
+}

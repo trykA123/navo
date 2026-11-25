@@ -2,14 +2,15 @@
 
 use std::ops::Range;
 
-use super::fields::{FIELDS, Field, FieldSpec, Section};
+use super::fields::{Control, FIELDS, Field, FieldSpec, Section};
 use super::fold::{Folds, fold_section, page_rows};
 use super::help_page::WORDS;
 use super::index_page::PROGRESS_WORDS;
 use super::pages::{group_of, ordered_rows};
 use super::search_page::{HISTORY_WORDS, SERVICE_WORDS};
-use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, rows_in};
+use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, first_row, rows_in};
 use super::values::Values;
+use crate::commands::{CommandSpec, all as all_commands};
 
 const DIAGNOSTICS_WORDS: &str = "diagnostics cache storage report";
 const _: () = assert!(
@@ -119,8 +120,28 @@ impl Filter {
         if self.words.is_empty() {
             return true;
         }
-        let text = format!("{} {} {}", spec.label(), spec.key, spec.help()).to_lowercase();
+        let options = match spec.control {
+            Control::Choices(options, _) => options
+                .iter()
+                .map(|choice| choice.text().to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+            _ => String::new(),
+        };
+        let text =
+            format!("{} {} {} {options}", spec.label(), spec.key, spec.help()).to_lowercase();
         self.words.iter().all(|word| text.contains(word))
+    }
+
+    fn matching_shortcuts(&self) -> impl Iterator<Item = CommandSpec> + '_ {
+        let active = !self.words.is_empty() && !self.changed_only;
+        all_commands().filter(move |spec| {
+            if !active {
+                return false;
+            }
+            let text = format!("{} {}", navo_l10n::tr(spec.label), spec.name).to_lowercase();
+            self.words.iter().all(|word| text.contains(word))
+        })
     }
 
     #[must_use]
@@ -176,7 +197,7 @@ impl Filter {
                 usize::from(self.admits_text(WORDS))
                     + usize::from(self.admits_text(DIAGNOSTICS_WORDS))
             }
-            Section::Search => extra_lines(self, section).len(),
+            Section::Search | Section::Keyboard => extra_lines(self, section).len(),
             _ => 0,
         };
         rows + extras
@@ -200,6 +221,10 @@ impl Filter {
         rows_in(section)
             .find(|(_, spec)| self.admits(spec))
             .map(|(index, _)| index)
+            .or_else(|| {
+                (section == Section::Keyboard && self.matching_shortcuts().next().is_some())
+                    .then(|| first_row(Section::Keyboard))
+            })
     }
 
     /// The row to select after the filter changes: `row` while it stays shown (a fold row
@@ -225,6 +250,7 @@ pub enum Line {
     Progress,
     Service,
     History,
+    Shortcut(CommandSpec),
 }
 
 #[must_use]
@@ -262,16 +288,17 @@ fn section_lines(filter: &Filter, section: Section) -> Vec<Line> {
 }
 
 fn extra_lines(filter: &Filter, section: Section) -> Vec<Line> {
-    if section != Section::Search {
-        return Vec::new();
+    match section {
+        Section::Search => [
+            (Line::Progress, PROGRESS_WORDS),
+            (Line::Service, SERVICE_WORDS),
+            (Line::History, HISTORY_WORDS),
+        ]
+        .into_iter()
+        .filter(|(_, words)| filter.admits_text(words))
+        .map(|(line, _)| line)
+        .collect(),
+        Section::Keyboard => filter.matching_shortcuts().map(Line::Shortcut).collect(),
+        _ => Vec::new(),
     }
-    [
-        (Line::Progress, PROGRESS_WORDS),
-        (Line::Service, SERVICE_WORDS),
-        (Line::History, HISTORY_WORDS),
-    ]
-    .into_iter()
-    .filter(|(_, words)| filter.admits_text(words))
-    .map(|(line, _)| line)
-    .collect()
 }

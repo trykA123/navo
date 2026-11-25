@@ -14,7 +14,10 @@ use super::row_state;
 use super::search_page::{self, SearchPage};
 use super::values::{Value, Values};
 use super::{Handler, SheetEvent};
+use crate::commands::{CommandSpec, Keymap};
 use crate::prelude::*;
+use crate::primitives::Kbd;
+use crate::shortcuts;
 use crate::tokens::Theme;
 use crate::window_view::UpdateView;
 
@@ -39,6 +42,7 @@ pub(super) struct Look<'a> {
     pub page: &'a SearchPage,
     pub git: &'a GitPage,
     pub index: &'a super::IndexProgress,
+    pub keymap: &'a Keymap,
     pub send: Option<Handler>,
     pub summon_key_taken: bool,
     pub clipboard_key_taken: bool,
@@ -343,6 +347,44 @@ fn no_match(t: &Theme) -> AnyElement {
         .into_any_element()
 }
 
+fn shortcut_line(look: &Look, rows: &[shortcuts::Row], spec: CommandSpec) -> AnyElement {
+    let t = look.theme;
+    let title: SharedString = navo_l10n::tr(spec.label).into();
+    let kbd = rows
+        .iter()
+        .find(|row| row.spec.name == spec.name)
+        .and_then(|row| row.keys.first())
+        .and_then(|key| {
+            Kbd::new(
+                ElementId::Name(format!("settings-shortcut-key-{}", spec.name).into()),
+                key,
+            )
+        });
+    let line = row_frame(t, false)
+        .id(ElementId::Name(
+            format!("settings-shortcut-hit-{}", spec.name).into(),
+        ))
+        .role(Role::Button)
+        .aria_label(title.clone())
+        .test_support()
+        .focusable()
+        .cursor_pointer()
+        .focus_visible(|row| row.border_color(t.colors.accent))
+        .flex()
+        .items_center()
+        .gap_x(t.spacing.xl)
+        .child(div().flex_none().w(px(row_state::GUTTER)))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(row_label(t, look.filter, title)),
+        )
+        .children(kbd);
+    send_on_click(line, look.send.as_ref(), SheetEvent::Shortcut(spec.name)).into_any_element()
+}
+
 pub(super) fn content(
     look: &Look,
     section: Section,
@@ -350,7 +392,16 @@ pub(super) fn content(
 ) -> impl IntoElement + use<> {
     let t = look.theme;
     let send = look.send.as_ref();
-    let mut rows: Vec<AnyElement> = lines(look.filter, section)
+    let shown_lines = lines(look.filter, section);
+    let shortcut_rows = if shown_lines
+        .iter()
+        .any(|line| matches!(line, Line::Shortcut(_)))
+    {
+        shortcuts::rows(look.keymap)
+    } else {
+        Vec::new()
+    };
+    let mut rows: Vec<AnyElement> = shown_lines
         .into_iter()
         .flat_map(|line| match line {
             Line::Section(section) => vec![section_heading(t, section)],
@@ -364,6 +415,7 @@ pub(super) fn content(
             Line::Progress => index_page::progress_block(t, look.index),
             Line::Service => search_page::service_block(t, *look.page, send),
             Line::History => search_page::history_block(t, *look.page, send),
+            Line::Shortcut(spec) => vec![shortcut_line(look, &shortcut_rows, spec)],
         })
         .collect();
     if is_page_shown(look, section, Section::Diagnostics) {
