@@ -76,6 +76,7 @@ struct Log {
     retaining: bool,
     proofs: Vec<(HeldFile, navo_core::retention::OverwriteProof)>,
     kept: Vec<crate::KeptSource>,
+    copies: Vec<crate::KeptCopy>,
 }
 
 fn log_error() -> FsError {
@@ -149,6 +150,10 @@ impl JobLog for Log {
 
     fn kept_source(&mut self, kept: &crate::KeptSource) {
         self.kept.push(kept.clone());
+    }
+
+    fn kept_copy(&mut self, kept: &crate::KeptCopy) {
+        self.copies.push(kept.clone());
     }
 }
 

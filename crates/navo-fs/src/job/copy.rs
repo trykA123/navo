@@ -147,7 +147,15 @@ pub(super) fn place(
             flush,
             source,
         } => {
-            journal(ctx, target, stamp, source)?;
+            // Only a non-strict copy lands without an aside, and strict follows retention: a
+            // retained job's undo rows stay overwrite proofs, as in the `Ready` arm below.
+            debug_assert!(
+                !ctx.log.preserve_overwrites(),
+                "a retained copy placed directly"
+            );
+            if !ctx.log.preserve_overwrites() {
+                journal(ctx, target, stamp, source)?;
+            }
             flush_folder(ctx.ops, flush, target).map(|()| StepOutcome::Done)
         }
         Copied::Ready {

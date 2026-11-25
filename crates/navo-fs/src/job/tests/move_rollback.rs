@@ -111,8 +111,12 @@ fn a_move_journals_the_source_proof_with_its_placed_copy() {
 fn a_rollback_keeps_the_copy_when_the_source_is_gone() {
     let (fs, plan) = moving();
     let (_, harness) = run(&fs, &plan);
-    rolled_back(&fs, &plan, &harness, &crashed_before_marking_removal(&plan));
+    let log = rolled_back(&fs, &plan, &harness, &crashed_before_marking_removal(&plan));
     assert_eq!(size(&fs, "dst/a.txt"), Some(BIG));
+    assert!(
+        log.copies.is_empty(),
+        "the source is gone: the copy is no duplicate"
+    );
 }
 
 #[test]
@@ -127,12 +131,13 @@ fn a_rollback_removes_the_copy_while_the_source_is_proved_unchanged() {
                 ..Harness::default()
             },
         );
-        rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+        let log = rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
         assert_eq!(
             (exists(&fs, "dst/a.txt"), size(&fs, "src/a.txt")),
             (false, Some(BIG)),
             "workers {workers}"
         );
+        assert!(log.copies.is_empty(), "workers {workers}: {:?}", log.copies);
     }
 }
 
@@ -154,6 +159,14 @@ fn an_old_journal_row_without_a_source_proof_keeps_the_copy() {
     assert!(
         log.undone
             .contains(&(copy_seq.unwrap(), StepOutcome::Skipped))
+    );
+    assert_eq!(
+        log.copies,
+        [crate::KeptCopy {
+            seq: copy_seq.unwrap(),
+            location: fs.location("dst/a.txt"),
+        }],
+        "a kept copy is reported, not only logged"
     );
 }
 

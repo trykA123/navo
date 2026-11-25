@@ -6,7 +6,8 @@ use crate::FileIdentity;
 
 use super::aside::presence;
 use super::{
-    HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlacedFile, StepOutcome, roll_back, run,
+    HeldFile, JobContext, JobLog, JobOutcome, Journaled, KeptCopy, KeptSource, PlacedFile,
+    StepOutcome, roll_back, run,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +93,14 @@ impl JobLog for Tracking<'_> {
 
     fn kept_beside(&mut self, held: &HeldFile, beside: &Location) {
         self.inner.kept_beside(held, beside);
+    }
+
+    fn kept_source(&mut self, kept: &KeptSource) {
+        self.inner.kept_source(kept);
+    }
+
+    fn kept_copy(&mut self, kept: &KeptCopy) {
+        self.inner.kept_copy(kept);
     }
 
     fn held_stranded(&mut self, held: &HeldFile) {
@@ -266,4 +275,50 @@ fn confirm_uncertain(
     Ok(ops
         .matches_identity(target, tracking.rename_identity(seq)?)?
         .then_some(seq))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::KeptReason;
+
+    #[derive(Default)]
+    struct Kept {
+        sources: Vec<KeptSource>,
+        copies: Vec<KeptCopy>,
+    }
+
+    impl JobLog for Kept {
+        fn step(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
+            Ok(())
+        }
+        fn undone(&mut self, _: u32, _: StepOutcome) -> Result<(), FsError> {
+            Ok(())
+        }
+        fn journal_held(&mut self, _: &HeldFile) -> Result<bool, FsError> {
+            Ok(false)
+        }
+        fn kept_source(&mut self, kept: &KeptSource) {
+            self.sources.push(kept.clone());
+        }
+        fn kept_copy(&mut self, kept: &KeptCopy) {
+            self.copies.push(kept.clone());
+        }
+    }
+
+    #[test]
+    fn tracking_forwards_kept_files_to_its_log() {
+        let location = Location::new("mem:///a.txt").unwrap();
+        let source = KeptSource {
+            seq: 1,
+            location: location.clone(),
+            reason: KeptReason::Changed,
+        };
+        let copy = KeptCopy { seq: 2, location };
+        let mut inner = Kept::default();
+        let mut tracking = Tracking::new(&mut inner);
+        tracking.kept_source(&source);
+        tracking.kept_copy(&copy);
+        assert_eq!((inner.sources, inner.copies), (vec![source], vec![copy]));
+    }
 }

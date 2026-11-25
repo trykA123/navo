@@ -32,11 +32,11 @@ pub use io_queue::{
 };
 pub use job::{
     CopyMode, FileStamp, HELD_PREFIX, HeldFile, JobContext, JobLog, JobOptions, JobOutcome,
-    Journaled, KeptReason, KeptSource, PlacedFile, PreparedMove, Progress, RenameOutcome, SaveUndo,
-    SourceContent, SourceIdentity, SourceMetadata, SourceOps, Sources, StepOutcome, TEMP_SUFFIX,
-    TempCreated, VerifyCount, VerifyMode, WorkerCounts, clean_up, copy_workers,
-    is_rename_temporary, job_workers, recorded_proof, release_held, roll_back, run_job,
-    run_job_parallel, run_job_parallel_with_sources, run_job_with, run_job_with_sources,
+    Journaled, KeptCopy, KeptFile, KeptReason, KeptSource, PlacedFile, PreparedMove, Progress,
+    RenameOutcome, SaveUndo, SourceContent, SourceIdentity, SourceMetadata, SourceOps, Sources,
+    StepOutcome, TEMP_SUFFIX, TempCreated, VerifyCount, VerifyMode, WorkerCounts, clean_up,
+    copy_workers, is_rename_temporary, job_workers, recorded_proof, release_held, roll_back,
+    run_job, run_job_parallel, run_job_parallel_with_sources, run_job_with, run_job_with_sources,
     run_rename, settle_prepared_move, undo_move, undo_write,
 };
 #[cfg(windows)]

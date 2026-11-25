@@ -6,7 +6,9 @@ use super::link::undo_link;
 use super::restore::{
     Restored, gone_or_folder_deleted, is_placed, keep, matches_stamp, restore, surely_absent,
 };
-use super::{FileStamp, HeldFile, JobContext, JobOutcome, Journaled, PlacedFile, StepOutcome};
+use super::{
+    FileStamp, HeldFile, JobContext, JobOutcome, Journaled, KeptCopy, PlacedFile, StepOutcome,
+};
 use crate::{ProviderOps, already_exists};
 
 pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
@@ -112,7 +114,7 @@ fn undo(
     let ops = ctx.ops;
     match step {
         Step::CopyFile { source, target, .. } => {
-            if source_gone(job, source, held, ops)? || only_copy(job, (seq, source, target), ops)? {
+            if source_gone(job, source, held, ops)? || only_copy(job, (seq, source, target), ctx)? {
                 return held.map_or(Ok(StepOutcome::Skipped), |held| {
                     settle(keep(ops, held)?, held, ctx)
                 });
@@ -235,11 +237,11 @@ fn source_gone(
 
 /// True when a done copy of a move may be the only copy left: its source removal may have run
 /// before a crash, and the source path does not prove it still holds the file the copy read
-/// (another file there, or a journal row without a proof). Such a copy stays.
+/// (another file there, or a journal row without a proof). Such a copy stays and is reported.
 fn only_copy(
     job: &Journaled<'_>,
     (seq, source, target): (u32, &Location, &Location),
-    ops: &dyn ProviderOps,
+    ctx: &mut JobContext<'_>,
 ) -> Result<bool, FsError> {
     if job.plan.kind != OpKind::Move || !job.done.contains(&seq) {
         return Ok(false);
@@ -252,7 +254,7 @@ fn only_copy(
         .find(|file| file.target.same_place(target))
         .and_then(|file| file.source);
     let proved = match proof {
-        Some(proof) => proof.still_at(ops, source)?,
+        Some(proof) => proof.still_at(ctx.ops, source)?,
         None => false,
     };
     if !proved {
@@ -260,6 +262,10 @@ fn only_copy(
             seq,
             "move rollback kept a copy: its source is not proved to be the original"
         );
+        ctx.log.kept_copy(&KeptCopy {
+            seq,
+            location: target.clone(),
+        });
     }
     Ok(!proved)
 }

@@ -83,6 +83,21 @@ impl KeptSource {
     }
 }
 
+/// A move's copy that a rollback left at its target: the source path does not prove it still
+/// holds the file the copy read, so the copy may be the only one, or a duplicate of the source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptCopy {
+    pub seq: u32,
+    pub location: Location,
+}
+
+/// One file a job kept in place where it meant to remove it; the jobs panel lists each one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeptFile {
+    Source(KeptSource),
+    Copy(KeptCopy),
+}
+
 /// The result of undoing a Save plan: its steps and how many done steps had no held old file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SaveUndo {
@@ -184,6 +199,8 @@ pub trait JobLog {
     /// `JobOutcome::Kept`, or `Failed`/`Cancelled` when something later stops it, so a log that
     /// shows kept sources collects them here rather than from the outcome.
     fn kept_source(&mut self, _kept: &KeptSource) {}
+    /// Reports a move's copy that a rollback kept at its target, as soon as it is kept.
+    fn kept_copy(&mut self, _kept: &KeptCopy) {}
     fn held_stranded(&mut self, _held: &HeldFile) {}
 }
 
