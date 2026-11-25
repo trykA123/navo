@@ -386,9 +386,10 @@ mod tests {
         }
     }
 
+    /// Spins until the session cancels; the cancellation offers no blocking wait.
     fn idle(cancel: &Cancellation<'_>) {
         while !cancel.is_cancelled() {
-            std::thread::sleep(Duration::from_millis(1));
+            std::thread::yield_now();
         }
     }
 

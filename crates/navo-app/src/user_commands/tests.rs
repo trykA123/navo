@@ -31,21 +31,37 @@ fn wait_for(
 ) -> UserCommandNews {
     let deadline = Instant::now() + NEWS_WAIT;
     loop {
-        while let Ok(news) = receiver.try_recv() {
-            if wanted(&news) {
-                return news;
-            }
+        let news = next_until(receiver, deadline).expect("no matching news arrived");
+        if wanted(&news) {
+            return news;
         }
-        assert!(Instant::now() < deadline, "no matching news arrived");
-        std::thread::sleep(Duration::from_millis(5));
     }
 }
 
-fn take(
+/// Wakes the waiting test thread when the news channel has an item.
+struct Unpark(std::thread::Thread);
+
+impl futures::task::ArcWake for Unpark {
+    fn wake_by_ref(this: &std::sync::Arc<Self>) {
+        this.0.unpark();
+    }
+}
+
+/// Takes the next news item, parking the thread until it arrives or `deadline` passes.
+fn next_until(
     receiver: &mut UnboundedReceiver<UserCommandNews>,
-    wanted: &impl Fn(&UserCommandNews) -> bool,
+    deadline: Instant,
 ) -> Option<UserCommandNews> {
-    std::iter::from_fn(|| receiver.try_recv().ok()).find(|news| wanted(news))
+    use futures::StreamExt as _;
+    let waker = futures::task::waker(std::sync::Arc::new(Unpark(std::thread::current())));
+    let mut context = std::task::Context::from_waker(&waker);
+    loop {
+        if let std::task::Poll::Ready(news) = receiver.poll_next_unpin(&mut context) {
+            return news;
+        }
+        let left = deadline.checked_duration_since(Instant::now())?;
+        std::thread::park_timeout(left);
+    }
 }
 
 /// Writes `text` again every 500 ms until the news arrives; the folder watch arms asynchronously on Windows.
@@ -59,11 +75,10 @@ fn write_until(
     loop {
         std::fs::write(path, text).expect("an edit");
         let round = Instant::now() + Duration::from_millis(500);
-        while Instant::now() < round {
-            if let Some(news) = take(receiver, &wanted) {
+        while let Some(news) = next_until(receiver, round) {
+            if wanted(&news) {
                 return news;
             }
-            std::thread::sleep(Duration::from_millis(5));
         }
         assert!(Instant::now() < deadline, "no matching news arrived");
     }
@@ -303,15 +318,11 @@ fn runner_refuses_like_a_named_command() {
 
 /// A launch seam that records the expanded plan instead of starting a program.
 #[cfg(unix)]
-fn recording_launch() -> (
-    Launch,
-    std::sync::Arc<std::sync::Mutex<Vec<super::expand::Plan>>>,
-) {
-    let recorded = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let record = std::sync::Arc::clone(&recorded);
+fn recording_launch() -> (Launch, std::sync::mpsc::Receiver<super::expand::Plan>) {
+    let (record, recorded) = std::sync::mpsc::channel();
     let launch: Launch = std::sync::Arc::new(
         move |plan: super::expand::Plan, _on_exit: Box<dyn FnOnce(Option<i32>) + Send>| {
-            record.lock().expect("the recording").push(plan);
+            let _ = record.send(plan);
             Ok(())
         },
     );
@@ -319,15 +330,10 @@ fn recording_launch() -> (
 }
 
 #[cfg(unix)]
-fn wait_for_plan(recorded: &std::sync::Mutex<Vec<super::expand::Plan>>) -> super::expand::Plan {
-    let deadline = Instant::now() + NEWS_WAIT;
-    loop {
-        if let Some(plan) = recorded.lock().expect("the recording").pop() {
-            return plan;
-        }
-        assert!(Instant::now() < deadline, "no plan was launched");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+fn wait_for_plan(recorded: &std::sync::mpsc::Receiver<super::expand::Plan>) -> super::expand::Plan {
+    recorded
+        .recv_timeout(NEWS_WAIT)
+        .expect("no plan was launched")
 }
 
 #[cfg(unix)]

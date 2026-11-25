@@ -12,9 +12,9 @@ use windows_sys::Win32::Storage::FileSystem::{
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_BASIC_INFO, FILE_DISPOSITION_FLAG_DELETE,
     FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
     FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
-    FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo, FileDispositionInfoEx,
-    GetFileInformationByHandleEx, SetFileInformationByHandle,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_INFO_BY_HANDLE_CLASS, FILE_READ_ATTRIBUTES,
+    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo,
+    FileDispositionInfoEx, GetFileInformationByHandleEx, SetFileInformationByHandle,
 };
 
 pub(super) fn remove(path: &Path, expected: crate::FileIdentity) -> io::Result<()> {
@@ -104,29 +104,15 @@ fn rejects_ex(error: &io::Error) -> bool {
     .any(|code| error.raw_os_error() == Some(code.cast_signed()))
 }
 
-#[allow(
-    unsafe_code,
-    reason = "a moved source is deleted through the handle its identity was checked on"
-)]
 fn dispose_posix(file: &File) -> io::Result<()> {
-    let info = FILE_DISPOSITION_INFO_EX {
-        Flags: FILE_DISPOSITION_FLAG_DELETE
-            | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
-            | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
-    };
-    // SAFETY: the live DELETE-capable handle and initialized input buffer survive the update.
-    let ok = unsafe {
-        SetFileInformationByHandle(
-            file.as_raw_handle(),
-            FileDispositionInfoEx,
-            (&raw const info).cast(),
-            std::mem::size_of::<FILE_DISPOSITION_INFO_EX>() as u32,
-        )
-    };
-    if ok == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
+    set_info(
+        file,
+        &FILE_DISPOSITION_INFO_EX {
+            Flags: FILE_DISPOSITION_FLAG_DELETE
+                | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
+                | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
+        },
+    )
 }
 
 #[allow(
@@ -151,39 +137,45 @@ fn basic(file: &File) -> io::Result<FILE_BASIC_INFO> {
     Ok(unsafe { info.assume_init() })
 }
 
-#[allow(
-    unsafe_code,
-    reason = "owned Windows metadata is updated through its verified handle"
-)]
 fn set_basic(file: &File, info: &FILE_BASIC_INFO) -> io::Result<()> {
-    // SAFETY: the live handle and initialized input buffer survive the update.
-    let ok = unsafe {
-        SetFileInformationByHandle(
-            file.as_raw_handle(),
-            FileBasicInfo,
-            std::ptr::from_ref(info).cast(),
-            std::mem::size_of::<FILE_BASIC_INFO>() as u32,
-        )
-    };
-    if ok == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
+    set_info(file, info)
 }
 
+fn dispose(file: &File) -> io::Result<()> {
+    set_info(file, &FILE_DISPOSITION_INFO { DeleteFile: true })
+}
+
+/// A handle information struct paired with the class that `SetFileInformationByHandle` expects.
+trait HandleInfo {
+    const CLASS: FILE_INFO_BY_HANDLE_CLASS;
+}
+
+impl HandleInfo for FILE_BASIC_INFO {
+    const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileBasicInfo;
+}
+
+impl HandleInfo for FILE_DISPOSITION_INFO {
+    const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileDispositionInfo;
+}
+
+impl HandleInfo for FILE_DISPOSITION_INFO_EX {
+    const CLASS: FILE_INFO_BY_HANDLE_CLASS = FileDispositionInfoEx;
+}
+
+/// Updates `file` through its live handle with `info`, whose class matches its type.
 #[allow(
     unsafe_code,
-    reason = "owned Windows deletion must target the verified handle"
+    reason = "owned Windows metadata and deletion go through the verified handle"
 )]
-fn dispose(file: &File) -> io::Result<()> {
-    let info = FILE_DISPOSITION_INFO { DeleteFile: true };
-    // SAFETY: the live DELETE-capable handle and initialized input buffer survive the update.
+fn set_info<T: HandleInfo>(file: &File, info: &T) -> io::Result<()> {
+    // SAFETY: the live handle and initialized input buffer survive the update, and
+    // `HandleInfo` pairs the buffer type with its information class.
     let ok = unsafe {
         SetFileInformationByHandle(
             file.as_raw_handle(),
-            FileDispositionInfo,
-            (&raw const info).cast(),
-            std::mem::size_of::<FILE_DISPOSITION_INFO>() as u32,
+            T::CLASS,
+            std::ptr::from_ref(info).cast(),
+            std::mem::size_of::<T>() as u32,
         )
     };
     if ok == 0 {
