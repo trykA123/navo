@@ -41,6 +41,7 @@ pub enum TableError {
 #[derive(Debug, Clone, Default)]
 pub struct NameTable {
     names: String,
+    live_names: u64,
     offsets: Vec<u32>,
     parents: Vec<u32>,
     flags: Vec<StoredFlags>,
@@ -62,6 +63,7 @@ impl NameTable {
     pub fn with_capacity(entries: usize, name_bytes: usize) -> Self {
         Self {
             names: String::with_capacity(name_bytes),
+            live_names: 0,
             offsets: Vec::with_capacity(entries),
             parents: Vec::with_capacity(entries),
             flags: Vec::with_capacity(entries),
@@ -131,6 +133,7 @@ impl NameTable {
             bytes: Vec::new(),
             counts: Vec::new(),
             names,
+            live_names: 0,
             offsets,
             parents,
             flags,
@@ -140,6 +143,10 @@ impl NameTable {
         if !table.valid_structure() {
             return None;
         }
+        table.live_names = table
+            .live_ids()
+            .map(|id| table.name_unchecked(id).len() as u64 + 1)
+            .sum();
         table.relink();
         if !table.restore_totals(totals.0, totals.1) {
             return None;
@@ -201,7 +208,9 @@ impl NameTable {
         if parent == id {
             return Err(TableError::Cycle(id));
         }
-        let offset = self.append_name(clean(name))?;
+        let name = clean(name);
+        let offset = self.append_name(name)?;
+        self.live_names += name.len() as u64 + 1;
         growth::grow_column(&mut self.offsets);
         self.offsets.push(offset);
         growth::grow_column(&mut self.parents);
@@ -242,8 +251,11 @@ impl NameTable {
             return Err(TableError::Cycle(id));
         }
         let name = clean(name);
-        if self.name(id) != Some(name) {
+        let previous = self.name_unchecked(id);
+        if previous != name {
+            let previous_len = previous.len() as u64;
             self.offsets[id as usize] = self.append_name(name)?;
+            self.live_names = self.live_names - previous_len + name.len() as u64;
         }
         let contribution = self.contribution(id);
         self.adjust_ancestors(self.parents[id as usize], contribution, false);
@@ -356,12 +368,44 @@ impl NameTable {
     }
 
     fn mark_deleted(&mut self, id: u32) {
+        self.live_names -= self.name_unchecked(id).len() as u64 + 1;
         self.flags[id as usize] |= Flags::DELETED;
         self.bytes[id as usize] = 0;
         if let Some(counts) = self.folder_counts_mut(id) {
             *counts = [0; 2];
         }
         self.live -= 1;
+    }
+
+    /// Reclaims old names once the copy is amortized by at least a quarter of the live bytes.
+    /// Preserves entry IDs, so the journal's FRN map and the other columns stay in place.
+    pub(crate) fn reclaim_names(&mut self) {
+        let live = usize::try_from(self.live_names).unwrap_or(usize::MAX);
+        let stale = self.names.len().saturating_sub(live);
+        if stale < (live / 4).max(1024 * 1024) {
+            return;
+        }
+
+        let mut names = String::new();
+        if names.try_reserve_exact(live.max(1)).is_err() {
+            return;
+        }
+        for id in 0..self.slots() {
+            let offset = if self.is_live(id) {
+                let offset = names.len() as u32;
+                names.push_str(self.name_unchecked(id));
+                names.push(NAME_END);
+                offset
+            } else {
+                // Snapshot validation requires a valid name offset even for deleted slots.
+                0
+            };
+            self.offsets[id as usize] = offset;
+        }
+        if names.is_empty() && self.slots() != 0 {
+            names.push(NAME_END);
+        }
+        self.names = names;
     }
 
     fn append_name(&mut self, name: &str) -> Result<u32, TableError> {

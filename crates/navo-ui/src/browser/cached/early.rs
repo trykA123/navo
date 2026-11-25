@@ -4,7 +4,7 @@ use navo_cache::CachedListing;
 use navo_core::TabId;
 use navo_fs::{CancelToken, FsEntry};
 
-use super::{Sorted, WorkerSorted};
+use super::WorkerSorted;
 use crate::browser::Browser;
 use crate::browser::filter::Full;
 use crate::browser::sort::{SortCount, sorted_full};
@@ -53,14 +53,7 @@ impl Browser {
                 if (sorted.key, sorted.folders_first) == current
                     && self.shared_sort(rows, current).is_none() =>
             {
-                self.remember(
-                    tab,
-                    Sorted {
-                        source: Arc::clone(rows),
-                        sort: current,
-                        full: sorted.full.clone(),
-                    },
-                );
+                self.remember(tab, rows, current, &sorted.full);
                 sorted.full
             }
             _ => self.sorted_full(tab, rows),

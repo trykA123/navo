@@ -85,6 +85,53 @@ fn empty() -> NtfsIndex {
     NtfsIndex::new('C', POSITION).unwrap()
 }
 
+#[test]
+fn rename_churn_reclaims_the_arena_without_renumbering_entries() {
+    let mut index = empty();
+    let start = "a".repeat(240);
+    apply(
+        &mut index,
+        vec![
+            record(FIRST_FOLDER, ROOT, CREATE, &start),
+            record(FIRST_FILE, FIRST_FOLDER, CREATE, "child.txt"),
+            record(FIRST_FILE + 1, ROOT, CREATE, "gone.txt"),
+            record(FIRST_FILE + 1, ROOT, DELETE, "gone.txt"),
+        ],
+    );
+    let folder = index.ids[&FIRST_FOLDER];
+    let file = index.ids[&FIRST_FILE];
+    let slots = index.table.slots();
+    let mut records = Vec::new();
+    let mut previous = start;
+    for step in 0..10_000 {
+        let next = format!("{step:04}{}", "é".repeat(117));
+        records.push(record(FIRST_FOLDER, ROOT, OLD_NAME, &previous));
+        records.push(record(FIRST_FOLDER, ROOT, NEW_NAME, &next));
+        previous = next;
+    }
+    apply(&mut index, records);
+    let bytes = index.table.raw_parts().0.len();
+    assert!(bytes < 1024, "rename churn retained {bytes} arena bytes");
+    assert_eq!(index.table.slots(), slots);
+    assert_eq!(index.ids[&FIRST_FOLDER], folder);
+    assert_eq!(index.ids[&FIRST_FILE], file);
+    assert_eq!(index.table.name(folder), Some(previous.as_str()));
+    assert_eq!(index.table.parent(file), Some(folder));
+    assert_eq!(index.table.size(file), Some(file_size(FIRST_FILE)));
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("c.index");
+    let (table, ids, position) = index.snapshot().unwrap();
+    let saved = Header {
+        next_usn: position.next_usn,
+        ..header()
+    };
+    file::save_with_ids(&path, &saved, table, ids).unwrap();
+    let restored = NtfsIndex::restore(file::load_with_ids(&path).unwrap(), 42, 7).unwrap();
+    assert_eq!(restored.table.slots(), slots);
+    assert_eq!(restored.table.path(file), index.table.path(file));
+}
+
 impl Tree {
     fn new(seed: u64, folders: u128, files: u128) -> Self {
         let mut tree = Self {

@@ -46,6 +46,13 @@ impl ListingCache {
         self.lock().get(key)
     }
 
+    /// Checks whether this exact generation is cached without changing its recency.
+    pub fn holds_rows(&self, key: &CacheKey, rows: &Arc<[navo_fs::FsEntry]>) -> bool {
+        self.lock()
+            .peek(key)
+            .is_some_and(|listing| Arc::ptr_eq(&listing.rows, rows))
+    }
+
     pub fn put(&self, key: CacheKey, listing: CachedListing) {
         let entry = SizedListing::new(&key, listing);
         self.lock().put(key, entry);

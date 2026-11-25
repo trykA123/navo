@@ -303,6 +303,57 @@ fn back_reuses_the_sorted_rows_of_the_last_visit() {
 }
 
 #[test]
+fn leaving_an_uncacheable_folder_releases_its_rows() {
+    let fs = big_fake(2_000);
+    fs.add_folder("away");
+    let mut browser = browser_with(fs.clone(), &fs, ListingCache::new(16 * 1024));
+    let tab = browser.state().active_tab().id();
+    assert_eq!(browser.rows(tab).len(), 2_000);
+    let rows = Arc::downgrade(browser.rows(tab).source());
+    let key = browser.keys.key(&fs.location("home")).unwrap();
+    assert!(browser.cache.get(&key).is_none());
+
+    browser
+        .command(&Command::PaneNavigate {
+            location: fs.location("away"),
+        })
+        .unwrap();
+    settle(&mut browser);
+
+    assert!(
+        rows.upgrade().is_none(),
+        "the sort memo retained uncached rows"
+    );
+}
+
+#[test]
+fn loading_another_folder_releases_rows_evicted_from_the_cache() {
+    let fs = big_fake(2_000);
+    for number in 0..2_000 {
+        fs.add_file(&format!("away/f{number:05}.txt"), 1);
+    }
+    let mut browser = browser_with(fs.clone(), &fs, ListingCache::new(240 * 1024));
+    let tab = browser.state().active_tab().id();
+    let rows = Arc::downgrade(browser.rows(tab).source());
+    let key = browser.keys.key(&fs.location("home")).unwrap();
+    assert!(browser.cache.get(&key).is_some());
+
+    browser
+        .command(&Command::PaneNavigate {
+            location: fs.location("away"),
+        })
+        .unwrap();
+    settle(&mut browser);
+    assert_eq!(browser.rows(tab).len(), 2_000);
+    assert!(browser.cache.get(&key).is_none());
+    assert!(browser.cache.stats().evictions > 0);
+    assert!(
+        rows.upgrade().is_none(),
+        "the sort memo retained evicted rows"
+    );
+}
+
+#[test]
 fn an_unchanged_fresh_listing_keeps_the_shown_rows() {
     let fs = fake();
     let mut browser = browser(&fs);

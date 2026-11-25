@@ -188,6 +188,7 @@ fn persist_if(cache: &ListingCache, key: &CacheKey, is_kept_on_disk: bool) {
 }
 
 pub(super) struct Sorted {
+    key: CacheKey,
     source: Arc<[FsEntry]>,
     sort: (SortKey, bool),
     full: Full,
@@ -202,6 +203,7 @@ impl Sorted {
 impl Browser {
     pub fn set_listing_cache(&mut self, cache: ListingCache, keys: CacheKeys) {
         self.release_pins();
+        self.sorted.clear();
         self.cache = cache;
         self.keys = keys;
         self.sync_pins();
@@ -273,6 +275,7 @@ impl Browser {
         location: &Location,
         fresh: Fresh,
     ) -> Listing {
+        self.prune_sort_memo();
         match fresh {
             Fresh::Rows { rows, full } => {
                 let full = self.adopt(tab, &rows, full);
@@ -307,8 +310,7 @@ impl Browser {
         self.state
             .tab(tab)
             .and_then(|t| self.keys.key(t.location()))
-            .and_then(|key| self.cache.get(&key))
-            .is_some_and(|cached| Arc::ptr_eq(&cached.rows, source))
+            .is_some_and(|key| self.cache.holds_rows(&key, source))
     }
 
     pub(super) fn sorted_full(&mut self, tab: TabId, rows: &Arc<[FsEntry]>) -> Full {
@@ -323,14 +325,7 @@ impl Browser {
         let full = self
             .shared_sort(rows, sort)
             .unwrap_or_else(|| self.full_of(tab, rows));
-        self.remember(
-            tab,
-            Sorted {
-                source: Arc::clone(rows),
-                sort,
-                full: full.clone(),
-            },
-        );
+        self.remember(tab, rows, sort, &full);
         full
     }
 
@@ -343,10 +338,38 @@ impl Browser {
             .map(|sorted| sorted.full.clone())
     }
 
-    pub(super) fn remember(&mut self, tab: TabId, sorted: Sorted) {
+    /// Memoizes sorts that a future cache hit can reuse.
+    fn remember(&mut self, tab: TabId, rows: &Arc<[FsEntry]>, sort: (SortKey, bool), full: &Full) {
+        let Some(key) = self
+            .state
+            .tab(tab)
+            .and_then(|t| self.keys.key(t.location()))
+        else {
+            return;
+        };
+        if !self.cache.holds_rows(&key, rows) {
+            return;
+        }
         let memo = self.sorted.entry(tab).or_default();
-        memo.insert(0, sorted);
+        memo.insert(
+            0,
+            Sorted {
+                key,
+                source: Arc::clone(rows),
+                sort,
+                full: full.clone(),
+            },
+        );
         memo.truncate(KEEP_SORTED);
+    }
+
+    /// Releases memoized sorts for generations that the listing cache has replaced or evicted.
+    fn prune_sort_memo(&mut self) {
+        let cache = &self.cache;
+        self.sorted.retain(|_, memo| {
+            memo.retain(|sorted| cache.holds_rows(&sorted.key, &sorted.source));
+            !memo.is_empty()
+        });
     }
 
     fn show_cached(&mut self, tab: TabId, request: u64, rows: &Arc<[FsEntry]>) -> bool {
