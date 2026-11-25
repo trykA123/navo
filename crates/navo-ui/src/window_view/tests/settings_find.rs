@@ -249,3 +249,104 @@ fn nav_shows_page_counts_and_dims_zero_count_pages(cx: &mut TestAppContext) {
     rig.click(cx, ("settings-section", appearance));
     assert_eq!(current_row(cx, &rig), row_of(Field::Theme));
 }
+
+#[gpui_kit::test]
+fn changed_chip_filters_to_changed_rows_and_clears_in_esc_chain_or_on_last_undo(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    assert_eq!(label(cx, &rig, "settings-changed-chip"), None);
+
+    // Change Theme (Appearance) and FoldersFirst (Files).
+    rig.press(cx, "right");
+    super::settings_sheet::go_to(cx, &rig, Field::FoldersFirst);
+    rig.press(cx, "space");
+    settle_motion(cx, &rig);
+
+    assert_eq!(
+        label(cx, &rig, "settings-changed-chip").as_deref(),
+        Some("2 changed")
+    );
+
+    // Tab from Find reaches the changed chip, and Enter toggles the filter on.
+    rig.press(cx, "ctrl-f");
+    cx.update_window(rig.window, |_, window, cx| window.focus_next(cx))
+        .expect("window");
+    settle_motion(cx, &rig);
+    let chip_focused = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window.find("settings-changed-chip").focused() == Some(true)
+        })
+        .expect("window");
+    assert!(chip_focused);
+
+    rig.press(cx, "enter");
+    settle_motion(cx, &rig);
+    assert!(shows_row(cx, &rig, Field::Theme));
+    assert!(shows_row(cx, &rig, Field::FoldersFirst));
+    assert!(!shows_row(cx, &rig, Field::Density));
+    assert!(!shows_row(cx, &rig, Field::ShowSystem));
+
+    let appearance = page_index(Section::Appearance);
+    let files = page_index(Section::Files);
+    let window_page = page_index(Section::Window);
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", appearance)).as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", files)).as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", window_page)).as_deref(),
+        Some("0")
+    );
+    assert!(shows(cx, &rig, ("settings-section-dot", appearance)));
+    assert!(!shows(cx, &rig, ("settings-section-dot", window_page)));
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", Section::ALL.len())),
+        None
+    );
+
+    // 3-step Esc chain: Find words first, then changed-only filter, then close.
+    find(cx, &rig, "theme");
+    assert!(shows_row(cx, &rig, Field::Theme));
+    assert!(!shows_row(cx, &rig, Field::FoldersFirst));
+
+    rig.press(cx, "escape");
+    settle_motion(cx, &rig);
+    assert!(is_open(cx, &rig));
+    assert_eq!(find_text(cx, &rig).as_deref(), Some(""));
+    assert!(shows_row(cx, &rig, Field::FoldersFirst));
+
+    rig.press(cx, "escape");
+    settle_motion(cx, &rig);
+    assert!(is_open(cx, &rig));
+    assert!(shows_row(cx, &rig, Field::Density));
+
+    // Turn changed-only back on by clicking the chip, then undo both changes:
+    // undoing the last change automatically turns off the filter.
+    rig.click(cx, "settings-changed-chip");
+    settle_motion(cx, &rig);
+    assert!(!shows_row(cx, &rig, Field::Density));
+
+    rig.press(cx, "ctrl-z");
+    settle_motion(cx, &rig);
+    assert_eq!(
+        label(cx, &rig, "settings-changed-chip").as_deref(),
+        Some("1 changed")
+    );
+    assert!(!shows_row(cx, &rig, Field::Density));
+
+    rig.press(cx, "ctrl-z");
+    settle_motion(cx, &rig);
+    assert_eq!(label(cx, &rig, "settings-changed-chip"), None);
+    assert!(shows_row(cx, &rig, Field::Density));
+
+    // Esc now closes Settings.
+    rig.press(cx, "escape");
+    assert!(!is_open(cx, &rig));
+}

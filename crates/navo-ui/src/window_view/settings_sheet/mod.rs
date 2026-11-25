@@ -274,6 +274,7 @@ impl NavoWindow {
         self.settings.waiting_locate = None;
         self.settings.is_history_cleared = false;
         self.settings.undo.clear();
+        self.settings.filter = Filter::default();
         self.clear_find(window, cx);
         self.settings.row = outer_row(self.settings.row);
         self.settings.folds = Folds::default();
@@ -316,6 +317,7 @@ impl NavoWindow {
             SheetEvent::Locate(field) => self.open_settings_file(field, window, cx),
             SheetEvent::Undo => self.undo_setting(window, cx),
             SheetEvent::Find => self.focus_find(window, cx),
+            SheetEvent::ToggleChangedFilter => self.toggle_changed_filter(cx),
             SheetEvent::Keep(field) => self.keep_old(field, window, cx),
             SheetEvent::DismissUpgrade => self.dismiss_upgrade(),
             SheetEvent::RefreshDiagnostics => self.refresh_diagnostics(cx),
@@ -327,6 +329,11 @@ impl NavoWindow {
             SheetEvent::InstallService => self.install_index_service(cx),
             SheetEvent::RemoveService => self.remove_index_service(cx),
             SheetEvent::Close => self.escape_settings(window, cx),
+        }
+        if self.settings.filter.is_changed_only() && self.values.changed_count() == 0 {
+            self.set_changed_only(false, cx);
+        } else {
+            self.settings.filter = self.settings.filter.clone().marking(&self.values);
         }
         cx.notify();
     }

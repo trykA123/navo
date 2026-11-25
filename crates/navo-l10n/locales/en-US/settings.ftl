@@ -335,3 +335,7 @@ settings-fold-count = { $count ->
 }
 settings-fold-help = Rare settings of this group. Pick one to open the fold, or press Right.
 settings-advanced-tag = Advanced
+settings-changed-chip = { $count ->
+    [one] { $count } changed
+   *[other] { $count } changed
+}

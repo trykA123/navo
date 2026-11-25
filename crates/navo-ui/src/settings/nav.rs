@@ -6,6 +6,7 @@ use gpui_kit::base::TestSupportExt;
 
 use super::SheetEvent;
 use super::fields::Section;
+use super::row_state;
 use super::steps::digit_of;
 use super::view::{DIMMED, Look, section_label, send_on_click};
 use crate::prelude::*;
@@ -23,6 +24,7 @@ struct NavItem {
     page: Section,
     is_on: bool,
     count: Option<usize>,
+    changed_dot: bool,
     event: Option<SheetEvent>,
 }
 
@@ -43,9 +45,15 @@ impl NavState {
     }
 }
 
-fn count_label(t: &crate::tokens::Theme, index: usize, count: usize, is_on: bool) -> AnyElement {
+fn count_label(
+    t: &crate::tokens::Theme,
+    index: usize,
+    count: usize,
+    is_on: bool,
+    changed_dot: bool,
+) -> AnyElement {
     let text = count.to_string();
-    div()
+    let badge = div()
         .id(("settings-section-count", index))
         .role(Role::Label)
         .aria_label(text.clone())
@@ -57,7 +65,23 @@ fn count_label(t: &crate::tokens::Theme, index: usize, count: usize, is_on: bool
         } else {
             t.colors.muted
         })
-        .child(text)
+        .child(text);
+    if !changed_dot || count == 0 {
+        return badge.into_any_element();
+    }
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(t.spacing.xs)
+        .child(
+            row_state::dot(t)
+                .id(("settings-section-dot", index))
+                .role(Role::Note)
+                .aria_label("Changed")
+                .test_support(),
+        )
+        .child(badge)
         .into_any_element()
 }
 
@@ -85,7 +109,7 @@ fn nav_item(look: &Look, item: NavItem, shows_digits: bool) -> AnyElement {
         .filter(|_| shows_digits && item.event.is_some());
     let count_badge = item
         .count
-        .map(|count| count_label(t, item.index, count, item.is_on));
+        .map(|count| count_label(t, item.index, count, item.is_on, item.changed_dot));
     let element = div()
         .id(("settings-section", item.index))
         .role(Role::Tab)
@@ -170,6 +194,7 @@ pub(super) fn nav(look: &Look, state: &NavState) -> impl IntoElement + use<> {
     let t = look.theme;
     let shown = state.current.unwrap_or(Section::Keyboard);
     let has_find = !look.filter.is_empty();
+    let is_changed_only = look.filter.is_changed_only();
     let mut items = Vec::new();
     for (index, page) in Section::ALL.into_iter().enumerate() {
         let item = NavItem {
@@ -177,6 +202,7 @@ pub(super) fn nav(look: &Look, state: &NavState) -> impl IntoElement + use<> {
             page,
             is_on: shown == page,
             count: has_find.then(|| look.filter.count_in(page)),
+            changed_dot: is_changed_only,
             event: look.filter.first_in(page).map(SheetEvent::Select),
         };
         items.push(nav_item(look, item, state.shows_digits));

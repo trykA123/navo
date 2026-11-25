@@ -9,14 +9,21 @@ use super::index_page::PROGRESS_WORDS;
 use super::pages::{group_of, ordered_rows};
 use super::search_page::{HISTORY_WORDS, SERVICE_WORDS};
 use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, rows_in};
+use super::values::Values;
 
 const DIAGNOSTICS_WORDS: &str = "diagnostics cache storage report";
+const _: () = assert!(
+    FIELDS.len() <= u128::BITS as usize,
+    "one changed bit per field"
+);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
     words: Vec<String>,
     hidden: Option<Field>,
     folds: Folds,
+    changed_only: bool,
+    changed: u128,
 }
 
 impl Filter {
@@ -26,6 +33,8 @@ impl Filter {
             words: text.split_whitespace().map(str::to_lowercase).collect(),
             hidden: None,
             folds: Folds::default(),
+            changed_only: false,
+            changed: 0,
         }
     }
 
@@ -48,9 +57,43 @@ impl Filter {
         self
     }
 
+    /// Restricts admitted rows to fields whose current value differs from the default.
+    #[must_use]
+    pub fn changed_only(mut self, changed_only: bool) -> Self {
+        self.changed_only = changed_only;
+        self
+    }
+
+    /// True when the changed-only filter is active.
+    #[must_use]
+    pub fn is_changed_only(&self) -> bool {
+        self.changed_only
+    }
+
+    /// Records which fields are currently changed from `values` for `changed_only` filtering.
+    #[must_use]
+    pub fn marking(mut self, values: &Values) -> Self {
+        self.changed = FIELDS
+            .iter()
+            .enumerate()
+            .filter(|(_, spec)| values.is_changed(spec.field))
+            .fold(0u128, |mask, (index, _)| mask | (1u128 << index));
+        self
+    }
+
+    /// True when the Find query has at least one search word.
+    #[must_use]
+    pub fn has_words(&self) -> bool {
+        !self.words.is_empty()
+    }
+
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.words.is_empty()
+        self.words.is_empty() && !self.changed_only
+    }
+
+    fn is_field_changed(&self, field: Field) -> bool {
+        self.changed & (1u128 << field.index()) != 0
     }
 
     /// True when the row of `spec` is shown: Find admits it and, with no words, its fold
@@ -69,10 +112,11 @@ impl Filter {
             || (spec.field.is_windows_only() && !cfg!(windows))
             || self.hidden == Some(spec.field)
             || (spec.table() == "compare" && !crate::compare_visible::compare_visible())
+            || (self.changed_only && !self.is_field_changed(spec.field))
         {
             return false;
         }
-        if self.is_empty() {
+        if self.words.is_empty() {
             return true;
         }
         let text = format!("{} {} {}", spec.label(), spec.key, spec.help()).to_lowercase();
@@ -81,7 +125,7 @@ impl Filter {
 
     #[must_use]
     pub fn admits_text(&self, text: &str) -> bool {
-        self.words.iter().all(|word| text.contains(word.as_str()))
+        !self.changed_only && self.words.iter().all(|word| text.contains(word.as_str()))
     }
 
     /// Byte ranges of every search word found in `text` (case-folded when byte lengths match),

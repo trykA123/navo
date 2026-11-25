@@ -229,3 +229,33 @@ fn find_hits_highlights_words_and_merges_overlaps() {
     assert!(Filter::new("i").hits("İ").is_empty());
     assert!(Filter::new("").hits("Theme").is_empty());
 }
+
+#[test]
+fn settings_changed_filter_lists_only_changed_rows() {
+    let values = Values::default()
+        .with(&Change {
+            field: Field::FontSize,
+            value: Value::Number(16),
+        })
+        .with(&Change {
+            field: Field::WindowExtWidth,
+            value: Value::Number(90),
+        });
+    let filter = Filter::default().changed_only(true).marking(&values);
+    assert!(filter.admits(Field::FontSize.spec()));
+    assert!(filter.admits(Field::WindowExtWidth.spec()));
+    assert!(!filter.admits(Field::Theme.spec()));
+    assert_eq!(filter.count_in(Section::Appearance), 1);
+    assert_eq!(filter.count_in(Section::Window), 1);
+    assert_eq!(filter.count_in(Section::Files), 0);
+    assert_eq!(filter.count_in(Section::Search), 0);
+    assert_eq!(filter.count_in(Section::About), 0);
+    let shown: Vec<Field> = lines(&filter, Section::Appearance)
+        .into_iter()
+        .filter_map(|line| match line {
+            Line::Row(index) => Some(FIELDS[index].field),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(shown, [Field::FontSize, Field::WindowExtWidth]);
+}

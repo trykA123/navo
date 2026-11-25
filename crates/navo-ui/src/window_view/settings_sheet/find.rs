@@ -44,11 +44,34 @@ impl NavoWindow {
         let Some(find) = &self.settings.find else {
             return;
         };
-        let filter = Filter::new(&find.input.read(cx).value());
+        let filter = Filter::new(&find.input.read(cx).value())
+            .changed_only(self.settings.filter.is_changed_only())
+            .marking(&self.values);
         if filter == self.settings.filter {
             return;
         }
-        if filter.is_empty() {
+        self.apply_filter(filter, cx);
+    }
+
+    /// Toggles the changed-only filter when at least one setting differs from its default.
+    pub(super) fn toggle_changed_filter(&mut self, cx: &mut Context<Self>) {
+        let next = !self.settings.filter.is_changed_only() && self.values.changed_count() > 0;
+        self.set_changed_only(next, cx);
+    }
+
+    /// Sets the changed-only filter to `on` and moves selection onto an admitted row if needed.
+    pub(super) fn set_changed_only(&mut self, on: bool, cx: &mut Context<Self>) {
+        let filter = self
+            .settings
+            .filter
+            .clone()
+            .changed_only(on)
+            .marking(&self.values);
+        self.apply_filter(filter, cx);
+    }
+
+    fn apply_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
+        if !filter.is_changed_only() {
             self.settings.folds.reveal(self.settings.row);
         }
         let row = filter
@@ -78,13 +101,23 @@ impl NavoWindow {
     }
 
     pub(super) fn escape_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.settings.filter.is_empty() || self.settings.is_shortcuts {
+        if self.settings.is_shortcuts {
             self.close_settings(window, cx);
             return;
         }
-        self.clear_find(window, cx);
-        self.focus_settings(window, cx);
-        cx.notify();
+        if self.settings.filter.has_words() {
+            self.clear_find(window, cx);
+            self.focus_settings(window, cx);
+            cx.notify();
+            return;
+        }
+        if self.settings.filter.is_changed_only() {
+            self.set_changed_only(false, cx);
+            self.focus_settings(window, cx);
+            cx.notify();
+            return;
+        }
+        self.close_settings(window, cx);
     }
 
     pub(super) fn find_bar(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {

@@ -52,7 +52,7 @@ mod tests;
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle};
+use gpui_kit::{FocusHandle, RenderOnce, Role, ScrollHandle, Toggled};
 
 pub use compare_options::compare_options;
 pub use fields::{
@@ -125,6 +125,8 @@ pub enum SheetEvent {
     Locate(Field),
     Undo,
     Find,
+    /// Toggles filtering every page down to settings that differ from their default.
+    ToggleChangedFilter,
     Keep(Field),
     DismissUpgrade,
     RefreshDiagnostics,
@@ -143,10 +145,15 @@ type Handler = Rc<dyn Fn(&SheetEvent, &mut Window, &mut App)>;
 /// Builds the Settings dialog: a floating sheet with the title, `body` and the key hints
 /// that fit the shown page (Shortcuts or a settings section).
 pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) -> SideSheet {
+    let title = SheetTitle {
+        changed_count: body.values.changed_count(),
+        is_changed_only: body.filter.is_changed_only(),
+        on_event: body.on_event.clone(),
+    };
     let sheet = SideSheet::new("settings-sheet", state, frame)
         .floating()
         .label("Settings")
-        .header(SheetTitle);
+        .header(title);
     if body.shortcuts.is_some() {
         return sheet
             .body(body)
@@ -171,12 +178,110 @@ pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) 
 }
 
 #[derive(IntoElement)]
-struct SheetTitle;
+struct SheetTitle {
+    changed_count: usize,
+    is_changed_only: bool,
+    on_event: Option<Handler>,
+}
+
+fn changed_chip(
+    t: &tokens::Theme,
+    count: usize,
+    is_active: bool,
+    handler: Option<&Handler>,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
+    let mut args = navo_l10n::FluentArgs::new();
+    args.set("count", count as i64);
+    let label: SharedString = navo_l10n::tr_args("settings-changed-chip", &args).into();
+    let focus = window
+        .use_keyed_state("settings-changed-chip-focus", cx, |_, cx| {
+            cx.focus_handle().tab_stop(true).tab_index(1)
+        })
+        .read(cx)
+        .clone();
+    let theme = t.selected_content(is_active);
+    let (bg, edge, text_color) = if is_active {
+        (
+            theme.colors.selection,
+            theme.colors.accent,
+            theme.colors.accent_text,
+        )
+    } else {
+        (t.surfaces.field, t.surfaces.card_edge, t.colors.text)
+    };
+    let click_send = handler.cloned();
+    div()
+        .id("settings-changed-chip")
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .aria_selected(is_active)
+        .aria_toggled(if is_active {
+            Toggled::True
+        } else {
+            Toggled::False
+        })
+        .test_support()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(t.spacing.xs)
+        .px(t.spacing.md)
+        .py(t.spacing.xxs)
+        .rounded(t.radii.pill)
+        .border_1()
+        .border_color(edge)
+        .bg(bg)
+        .text_size(t.typography.small)
+        .text_color(text_color)
+        .when(is_active, |chip| chip.font_weight(FontWeight::MEDIUM))
+        .cursor_pointer()
+        .track_focus(&focus)
+        .focus_visible(|chip| chip.border_color(t.colors.accent))
+        .when(!is_active, |chip| {
+            chip.hover(|chip| chip.bg(t.colors.hover))
+        })
+        .on_click(move |_, window, cx| {
+            send(
+                click_send.as_ref(),
+                Some(SheetEvent::ToggleChangedFilter),
+                window,
+                cx,
+            );
+        })
+        .child(row_state::dot(&theme))
+        .child(label)
+        .into_any_element()
+}
 
 impl RenderOnce for SheetTitle {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let t = tokens::current(cx);
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = tokens::current(cx).clone();
+        let changed = (self.changed_count > 0).then(|| {
+            changed_chip(
+                &t,
+                self.changed_count,
+                self.is_changed_only,
+                self.on_event.as_ref(),
+                window,
+                cx,
+            )
+        });
+        let close_send = self.on_event.clone();
+        let find_send = self.on_event.clone();
+        let undo_send = self.on_event.clone();
         div()
+            .key_context(CONTEXT)
+            .on_action(move |_: &CloseSettings, window, cx| {
+                send(close_send.as_ref(), Some(SheetEvent::Close), window, cx);
+            })
+            .on_action(move |_: &FindSetting, window, cx| {
+                send(find_send.as_ref(), Some(SheetEvent::Find), window, cx);
+            })
+            .on_action(move |_: &UndoChange, window, cx| {
+                send(undo_send.as_ref(), Some(SheetEvent::Undo), window, cx);
+            })
             .flex()
             .items_center()
             .gap(t.spacing.lg)
@@ -186,7 +291,8 @@ impl RenderOnce for SheetTitle {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Settings"),
             )
-            .child(row_state::live_chip(t))
+            .child(row_state::live_chip(&t))
+            .children(changed)
     }
 }
 
@@ -334,8 +440,12 @@ fn register_fields(root: Div, body: &SettingsBody) -> Div {
 }
 
 impl RenderOnce for SettingsBody {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx).clone();
+        self.filter = self.filter.marking(&self.values);
+        if self.values.changed_count() == 0 {
+            self.filter = self.filter.changed_only(false);
+        }
         let keys = register(div().key_context(CONTEXT), &self);
         let section = section_of(self.row);
         let look = view::Look {
@@ -371,6 +481,8 @@ impl RenderOnce for SettingsBody {
             .flex_1()
             .min_h_0()
             .min_w_0()
+            .tab_group()
+            .tab_index(2)
             .child(nav::nav(&look, &nav))
             .child(
                 column()
@@ -389,5 +501,6 @@ fn column() -> Div {
 }
 
 fn framed(find: Option<AnyElement>, body: impl IntoElement, editor: Option<AnyElement>) -> Div {
+    let find = find.map(|bar| div().flex_none().tab_group().tab_index(0).child(bar));
     column().children(find).child(body).children(editor)
 }
