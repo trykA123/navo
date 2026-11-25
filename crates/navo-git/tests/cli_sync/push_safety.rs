@@ -192,3 +192,14 @@ fn every_push_address_must_still_hold_the_branch() {
     fixture.git_ok(&["push", "-q", second_dir, "topic@{u}:refs/heads/topic"]);
     assert_eq!(push(&cli).unwrap().commits, 1);
 }
+
+/// A process id that Windows hands to a new, unrelated process after the stalled child died
+/// is not a survivor of the kill. The test process itself stands in for that reused id.
+#[cfg(windows)]
+#[test]
+fn a_reused_process_id_is_not_blamed_on_the_kill() {
+    let Some(fixture) = repo() else { return };
+    let ids = super::cli_remote_support::sibling(&fixture, "stalled.pid");
+    std::fs::write(&ids, format!("{}\n", std::process::id())).unwrap();
+    nothing_left(&fixture);
+}
