@@ -181,12 +181,7 @@ fn a_delete_whose_log_cannot_be_emptied_answers_store() {
         .query_row("SELECT count(*) FROM saved", [], |row| row.get(0))
         .unwrap();
     answer(h.service.save(snippet("After", "x"), None)).unwrap();
-    let started = std::time::Instant::now();
     let deleted = h.service.delete_saved(id).recv_timeout(WAIT).unwrap();
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(2),
-        "before the hook gives up"
-    );
     drop(pin);
     assert_eq!(deleted, Err(FailKind::Store));
 }

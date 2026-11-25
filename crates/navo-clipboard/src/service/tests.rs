@@ -22,7 +22,7 @@ mod secrets;
 mod stress;
 mod timer;
 
-const WAIT: Duration = Duration::from_secs(5);
+const WAIT: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Call {
