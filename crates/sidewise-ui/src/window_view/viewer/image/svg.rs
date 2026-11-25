@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::io::Read;
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, OnceLock};
 
 use flate2::read::GzDecoder;
 use image::RgbaImage;
@@ -89,15 +89,37 @@ fn too_many_layers(root: &usvg::Group) -> bool {
     false
 }
 
-static FONTS: LazyLock<Arc<usvg::fontdb::Database>> = LazyLock::new(|| {
-    let mut fonts = usvg::fontdb::Database::new();
-    fonts.load_system_fonts();
-    Arc::new(fonts)
-});
+/// System fonts, loaded once and only when an SVG has text (loading takes ~0.5 s+).
+static FONTS: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
+static NO_FONTS: LazyLock<Arc<usvg::fontdb::Database>> =
+    LazyLock::new(|| Arc::new(usvg::fontdb::Database::new()));
+const TEXT_TAGS: [&[u8]; 4] = [b"<text", b":text", b"<tspan", b":tspan"];
 
-fn svg_options() -> usvg::Options<'static> {
+/// Whether the SVG may draw text; false positives only cost the font load.
+fn has_text(bytes: &[u8]) -> bool {
+    TEXT_TAGS
+        .iter()
+        .any(|tag| bytes.windows(tag.len()).any(|window| window == *tag))
+}
+
+fn system_fonts() -> Arc<usvg::fontdb::Database> {
+    FONTS
+        .get_or_init(|| {
+            let mut fonts = usvg::fontdb::Database::new();
+            fonts.load_system_fonts();
+            Arc::new(fonts)
+        })
+        .clone()
+}
+
+fn svg_options(bytes: &[u8]) -> usvg::Options<'static> {
+    let fontdb = if has_text(bytes) {
+        system_fonts()
+    } else {
+        NO_FONTS.clone()
+    };
     usvg::Options {
-        fontdb: FONTS.clone(),
+        fontdb,
         image_href_resolver: usvg::ImageHrefResolver {
             resolve_data: usvg::ImageHrefResolver::default_data_resolver(),
             resolve_string: Box::new(|_, _| None),
@@ -135,7 +157,7 @@ pub(super) fn vector(bytes: &[u8]) -> Result<Picture, String> {
 }
 
 fn rendered(bytes: &[u8], size: u64) -> Result<Picture, String> {
-    let tree = usvg::Tree::from_data(bytes, &svg_options())
+    let tree = usvg::Tree::from_data(bytes, &svg_options(bytes))
         .map_err(|error| format!("Cannot show this SVG: {error}"))?;
     if too_many_layers(tree.root()) {
         return Err(NESTED.to_owned());
@@ -167,4 +189,27 @@ fn rendered(bytes: &[u8], size: u64) -> Result<Picture, String> {
         exif: Vec::new(),
         pixels: buffer,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SHAPES: &[u8] =
+        br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><style type="text/css"/><rect width="8" height="8"/></svg>"#;
+    const WORDS: &[u8] =
+        br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><text y="8">Hi<tspan>!</tspan></text></svg>"#;
+
+    #[test]
+    fn a_text_free_svg_never_loads_system_fonts() {
+        assert!(svg_options(SHAPES).fontdb.is_empty());
+        vector(SHAPES).unwrap();
+        assert!(FONTS.get().is_none(), "system fonts loaded");
+    }
+
+    #[test]
+    fn an_svg_with_text_loads_system_fonts() {
+        vector(WORDS).unwrap();
+        assert!(FONTS.get().is_some());
+    }
 }
