@@ -2,7 +2,7 @@ use super::super::{SharedJournal, held, identity, lock};
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan};
 use navo_fs::{
     CancelToken, FileIdentity, FileStamp, HeldFile, JobContext, JobLog, JobOutcome, Journaled,
-    ProviderOps, StepOutcome, clean_up, roll_back,
+    KeptCopy, ProviderOps, StepOutcome, clean_up, roll_back,
 };
 use navo_store::{JobId, JobState, JournalError, StepState, UnfinishedJob};
 
@@ -12,6 +12,7 @@ struct Recovery<'a> {
     kept_beside: u32,
     plain_moves: Vec<u32>,
     refused: u32,
+    kept: Vec<Location>,
 }
 
 impl JobLog for Recovery<'_> {
@@ -47,6 +48,10 @@ impl JobLog for Recovery<'_> {
     fn kept_beside(&mut self, _: &HeldFile, _: &Location) {
         self.kept_beside += 1;
     }
+
+    fn kept_copy(&mut self, kept: &KeptCopy) {
+        self.kept.push(kept.location.clone());
+    }
 }
 
 fn left_to_undo(job: &UnfinishedJob) -> Vec<u32> {
@@ -57,18 +62,20 @@ fn left_to_undo(job: &UnfinishedJob) -> Vec<u32> {
         .collect()
 }
 
+/// Rolls back an unfinished job; also returns the move copies the rollback kept at their targets.
 pub(super) fn undo(
     journal: &SharedJournal,
     job: &UnfinishedJob,
     ops: &dyn ProviderOps,
     experimental: bool,
-) -> Result<JobState, JournalError> {
+) -> Result<(JobState, Vec<Location>), JournalError> {
     let held = held::held_of(journal, job.id)?;
-    let state = roll_back_job(journal, job, &held, (ops, experimental));
-    Ok(match state {
+    let (state, kept) = roll_back_job(journal, job, &held, (ops, experimental));
+    let state = match state {
         JobState::RolledBack if held.unreadable > 0 => JobState::RestorePending,
         other => other,
-    })
+    };
+    Ok((state, kept))
 }
 
 fn roll_back_job(
@@ -76,13 +83,13 @@ fn roll_back_job(
     job: &UnfinishedJob,
     held: &held::Held,
     (ops, experimental): (&dyn ProviderOps, bool),
-) -> JobState {
+) -> (JobState, Vec<Location>) {
     let Ok(plan) = serde_json::from_slice::<OperationPlan>(&job.plan) else {
-        return unrestored(&held.files, false);
+        return (unrestored(&held.files, false), Vec::new());
     };
     let renames = plan.kind == OpKind::Rename || super::moves::has_plain_moves(&plan);
     if experimental && navo_fs::check_mutation(&plan, ops, &CancelToken::new()).is_err() {
-        return JobState::RestorePending;
+        return (JobState::RestorePending, Vec::new());
     }
     let mut done = left_to_undo(job);
     let _ = clean_up(&plan, &done, ops);
@@ -92,6 +99,7 @@ fn roll_back_job(
         kept_beside: 0,
         plain_moves: super::moves::plain_moves(&plan, &held.files),
         refused: 0,
+        kept: Vec::new(),
     };
     let settled = super::moves::settle_pending((&plan, job), &held.files, (&log, ops));
     done.extend(&settled.completed);
@@ -119,13 +127,14 @@ fn roll_back_job(
             "old files restored beside newer ones as \"(before copy)\""
         );
     }
-    match outcome {
+    let state = match outcome {
         JobOutcome::Done if settled.unresolved == 0 && log.refused == 0 => JobState::RolledBack,
         JobOutcome::Done => JobState::RestorePending,
         JobOutcome::Cancelled | JobOutcome::Failed { .. } | JobOutcome::Kept { .. } => {
             unrestored(&held.files, renames)
         }
-    }
+    };
+    (state, log.kept)
 }
 
 fn unsure_step(kind: OpKind, job: &UnfinishedJob) -> Option<u32> {

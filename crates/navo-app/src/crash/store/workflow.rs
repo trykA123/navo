@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use navo_core::Location;
 use navo_fs::ProviderOps;
 use navo_store::{Db, JobId, JobJournal, acknowledge_quarantine, quarantine_database};
 
@@ -53,8 +54,9 @@ pub(super) fn run(
                 refresh::update(data, &mut state, &report, &journal)?;
                 crate::jobs::trim_at_startup(&journal, data, ops)?;
                 clear_sentinel(&path)?;
+                let notice = RecoveryNotice::loaded(data, &state, Some(&journal));
                 return Ok((
-                    RecoveryNotice::loaded(data, &state, Some(&journal)),
+                    RecoveryNotice::with_kept(notice, data, report.kept),
                     Some(journal),
                 ));
             }
@@ -62,9 +64,10 @@ pub(super) fn run(
             Err(error) => return Err(error.into()),
         }
     }
-    let journal = resume(data, &mut state, ops)?;
+    let (journal, kept) = resume(data, &mut state, ops)?;
     clear_sentinel(&path)?;
-    Ok((RecoveryNotice::loaded(data, &state, journal.as_ref()), None))
+    let notice = RecoveryNotice::loaded(data, &state, journal.as_ref());
+    Ok((RecoveryNotice::with_kept(notice, data, kept), None))
 }
 
 fn artifacts(path: &Path) -> Result<bool, Error> {
@@ -95,13 +98,15 @@ fn clear_completed_receipt(data: &Path, state: &State) -> Result<(), Error> {
     Ok(())
 }
 
-/// Returns the journal of the finished recovery, if this run finished one.
+/// Returns the journal of the finished recovery, if this run finished one, and the move copies
+/// that recovery kept.
 fn resume(
     data: &Path,
     state: &mut State,
     ops: &dyn ProviderOps,
-) -> Result<Option<crate::jobs::SharedJournal>, Error> {
+) -> Result<(Option<crate::jobs::SharedJournal>, Vec<Location>), Error> {
     let mut recovered = None;
+    let mut kept = Vec::new();
     while let Some(progress) = state.pending.clone() {
         match progress {
             Progress::Preserve { case } => {
@@ -144,10 +149,14 @@ fn resume(
                 notice,
                 identity,
                 attempted,
-            } => recovered = Some(finish(data, state, (notice, identity, attempted), ops)?),
+            } => {
+                let (journal, copies) = finish(data, state, (notice, identity, attempted), ops)?;
+                recovered = Some(journal);
+                kept = copies;
+            }
         }
     }
-    Ok(recovered)
+    Ok((recovered, kept))
 }
 
 fn finish(
@@ -155,7 +164,7 @@ fn finish(
     state: &mut State,
     (mut notice, identity, attempted): (super::state::Notice, super::state::Identity, Vec<i64>),
     ops: &dyn ProviderOps,
-) -> Result<crate::jobs::SharedJournal, Error> {
+) -> Result<(crate::jobs::SharedJournal, Vec<Location>), Error> {
     build::preserved(data, notice.slot)?;
     let path = navo_store::StoreDirs::journal_in(data);
     if !promote::matches(&path, &identity)? {
@@ -176,7 +185,7 @@ fn finish(
     state.save(data)?;
     acknowledge_quarantine(&path, slot)?;
     crate::jobs::trim_at_startup(&journal, data, ops)?;
-    Ok(journal)
+    Ok((journal, report.kept))
 }
 
 fn recover(

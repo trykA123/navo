@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use navo_core::Location;
 use navo_fs::ProviderOps;
 use navo_store::{JobId, JobState, JournalError, UnfinishedJob};
 
@@ -19,6 +20,9 @@ pub struct RecoveryReport {
     pub unfinished: u32,
     pub restored: Vec<JobId>,
     pub pending: Vec<StillPending>,
+    /// Move copies a rollback kept at their targets: the source path did not prove it still holds
+    /// the original, so both may exist now. The startup notice lists them once.
+    pub kept: Vec<Location>,
 }
 
 pub fn recover_profile(
@@ -38,22 +42,32 @@ fn recover_in(
     let _recovering = super::trim::recovering(journal);
     let unfinished = lock(journal).unfinished()?;
     let mut outcomes = BTreeMap::new();
+    let mut kept = Vec::new();
     for &id in expected {
         let (state, job) = lock(journal).read_job(id)?;
         outcomes.insert(id, (job, state, false));
     }
     for job in unfinished.iter().rev() {
-        recover_one(journal, (ops, data, experimental), (job, &mut outcomes))?;
+        recover_one(
+            journal,
+            (ops, data, experimental),
+            (job, &mut outcomes, &mut kept),
+        )?;
     }
     let pending = lock(journal).restore_pending()?;
     for job in pending.iter().rev() {
-        recover_one(journal, (ops, data, experimental), (job, &mut outcomes))?;
+        recover_one(
+            journal,
+            (ops, data, experimental),
+            (job, &mut outcomes, &mut kept),
+        )?;
     }
     held::release_finished(journal, ops)?;
     let mut report = RecoveryReport {
         unfinished: u32::try_from(unfinished.len()).unwrap_or(u32::MAX),
         restored: Vec::new(),
         pending: Vec::new(),
+        kept,
     };
     for (id, (job, state, stranded)) in outcomes {
         let settled = state == JobState::Failed
@@ -77,7 +91,11 @@ fn recover_in(
 fn recover_one(
     journal: &SharedJournal,
     (ops, data, experimental): (&dyn ProviderOps, &Path, bool),
-    (job, outcomes): (&UnfinishedJob, &mut BTreeMap<JobId, Outcome>),
+    (job, outcomes, kept): (
+        &UnfinishedJob,
+        &mut BTreeMap<JobId, Outcome>,
+        &mut Vec<Location>,
+    ),
 ) -> Result<(), JournalError> {
     let retained = job.kind == navo_core::retention::RETAINED_DELETE_KIND
         || navo_core::retention::is_retained_write(&job.kind);
@@ -98,7 +116,9 @@ fn recover_one(
     {
         JobState::RestorePending
     } else {
-        undo(journal, job, ops, experimental)?
+        let (state, copies) = undo(journal, job, ops, experimental)?;
+        kept.extend(copies);
+        state
     };
     lock(journal).finish(job.id, state)?;
     outcomes.insert(job.id, (job.clone(), state, stranded));

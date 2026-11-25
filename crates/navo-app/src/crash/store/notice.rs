@@ -19,6 +19,8 @@ pub(crate) struct RecoveryNotice {
     attention: BTreeSet<i64>,
     error: Option<String>,
     folder: Option<Location>,
+    /// Move copies this start's recovery kept at their targets; shown once, never saved.
+    kept: Vec<Location>,
 }
 
 impl RecoveryNotice {
@@ -46,7 +48,30 @@ impl RecoveryNotice {
             attention,
             error: None,
             folder: crate::startup::path_location(data),
+            kept: Vec::new(),
         })
+    }
+
+    /// `notice` plus the move copies this start's recovery kept; a notice of only those when there
+    /// is no other. Without kept copies, `notice` as it is.
+    pub(super) fn with_kept(
+        notice: Option<Self>,
+        data: &Path,
+        kept: Vec<Location>,
+    ) -> Option<Self> {
+        if kept.is_empty() {
+            return notice;
+        }
+        let mut notice = notice.unwrap_or_else(|| Self {
+            data: data.to_owned(),
+            notices: Vec::new(),
+            attention: BTreeSet::new(),
+            error: None,
+            folder: crate::startup::path_location(data),
+            kept: Vec::new(),
+        });
+        notice.kept = kept;
+        Some(notice)
     }
 
     pub(super) fn failed(data: &Path, error: &str) -> Self {
@@ -56,6 +81,7 @@ impl RecoveryNotice {
             attention: BTreeSet::new(),
             error: Some(error.chars().take(512).collect()),
             folder: crate::startup::path_location(data),
+            kept: Vec::new(),
         }
     }
 
@@ -74,7 +100,7 @@ impl RecoveryNotice {
                 ],
             };
         }
-        let mut details = Vec::new();
+        let mut details = kept_lines(&self.kept);
         for notice in self.notices.iter().rev().take(3) {
             details.extend(lines(notice, &self.attention));
         }
@@ -84,8 +110,13 @@ impl RecoveryNotice {
                 count = (self.notices.len() - 3) as f64
             ));
         }
+        let title = if self.notices.is_empty() {
+            "job-recovery-kept-title"
+        } else {
+            "store-recovery-title"
+        };
         RecoveryContent {
-            title: navo_l10n::tr("store-recovery-title"),
+            title: navo_l10n::tr(title),
             details,
         }
     }
@@ -106,6 +137,30 @@ impl RecoveryNotice {
         });
         state.save(&self.data).map_err(|error| error.to_string())
     }
+}
+
+/// The kept-copies line and up to eight of their paths; empty without kept copies.
+fn kept_lines(kept: &[Location]) -> Vec<String> {
+    const LISTED: usize = 8;
+    if kept.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = vec![navo_l10n::t!(
+        "job-recovery-kept",
+        count = kept.len() as f64
+    )];
+    lines.extend(
+        kept.iter()
+            .take(LISTED)
+            .map(|copy| copy.as_str().to_owned()),
+    );
+    if kept.len() > LISTED {
+        lines.push(navo_l10n::t!(
+            "job-recovery-kept-more",
+            count = (kept.len() - LISTED) as f64
+        ));
+    }
+    lines
 }
 
 fn lines(notice: &Notice, attention: &BTreeSet<i64>) -> Vec<String> {

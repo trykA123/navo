@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use navo_core::Location;
 use navo_fs::ProviderOps;
 use navo_store::{JobJournal, JournalError};
 
@@ -17,8 +18,12 @@ pub(super) fn start(data: Option<&Path>, unclean: bool, ops: &dyn ProviderOps) -
     let Some(instance) = crate::jobs::claim(&navo_store::StoreDirs::lock_in(data)) else {
         return StoreStart::default();
     };
+    let mut kept = Vec::new();
     let opened = if instance.sole {
-        recover(data, unclean, ops)
+        recover(data, unclean, ops).map(|(journal, copies)| {
+            kept = copies;
+            journal
+        })
     } else {
         crate::jobs::open(&navo_store::StoreDirs::journal_in(data))
     };
@@ -33,20 +38,22 @@ pub(super) fn start(data: Option<&Path>, unclean: bool, ops: &dyn ProviderOps) -
     StoreStart {
         _legacy: instance.share(),
         journal,
+        notice: super::RecoveryNotice::with_kept(None, data, kept),
         ..StoreStart::default()
     }
 }
 
+/// Recovers unfinished jobs; returns the journal and the move copies the recovery kept.
 fn recover(
     data: &Path,
     unclean: bool,
     ops: &dyn ProviderOps,
-) -> Result<crate::jobs::SharedJournal, JournalError> {
+) -> Result<(crate::jobs::SharedJournal, Vec<Location>), JournalError> {
     let (db, _) =
         super::super::unclean::open_legacy(&navo_store::StoreDirs::journal_in(data), unclean)?;
     let journal = Arc::new(Mutex::new(JobJournal::new(db)?));
     let report = crate::jobs::recover_profile(&journal, ops, (data, &[]), false)?;
     crate::jobs::trim_at_startup(&journal, data, ops)?;
     crate::jobs::log_pending(&report.pending);
-    Ok(journal)
+    Ok((journal, report.kept))
 }

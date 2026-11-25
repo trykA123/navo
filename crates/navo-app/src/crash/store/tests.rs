@@ -6,6 +6,7 @@ use navo_store::Db;
 
 mod failures;
 mod jobs;
+mod kept;
 mod retained;
 
 use super::state::{Progress, State};

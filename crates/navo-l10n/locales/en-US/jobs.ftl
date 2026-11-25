@@ -16,6 +16,12 @@ job-retention-unknown-label = Run without
 job-retention-unknown-help = Nothing was changed yet. Without old versions, this cannot be undone.
 job-retention-failed = Previous versions were kept for recovery because retention could not be completed: { $error }
 job-recovery-attention = Navo could not put back an interrupted delete and will not try again. Any copy it kept stays in Recently deleted and is not removed while it needs attention.
+job-recovery-kept-title = Navo finished undoing an interrupted move.
+job-recovery-kept = { $count ->
+    [one] One moved file was kept at its new place, because Navo could not prove the original is unchanged. The file may now be in both places: check both, then delete the copy you do not need.
+   *[other] { $count } moved files were kept at their new places, because Navo could not prove the originals are unchanged. These files may now be in both places: check both, then delete the copies you do not need.
+}
+job-recovery-kept-more = …and { $count } more.
 job-delete-too-large-title = Too large to keep. Delete permanently?
 job-delete-too-large-help = More than { $limit } items; deletion cannot be undone.
 

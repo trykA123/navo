@@ -264,9 +264,10 @@ fn every_job_log_hands_over_its_kept_files_after_a_failure() {
     for mut log in logs {
         log.kept_source(&source);
         log.kept_copy(&copy);
+        let kept = log.take_kept();
         log.finish(&failed, &fs).unwrap();
         assert_eq!(
-            log.take_kept(),
+            kept,
             [
                 KeptFile::Source(source.clone()),
                 KeptFile::Copy(copy.clone())
