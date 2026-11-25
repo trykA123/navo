@@ -3,7 +3,6 @@
 //! snapshot, so a burst never queues repaints.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use alacritty_terminal::event::EventListener;
 use alacritty_terminal::grid::{Dimensions, Scroll};
@@ -11,20 +10,24 @@ use alacritty_terminal::index::{self, Column, Line};
 use alacritty_terminal::term::cell::{Cell as TermCell, Flags};
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{self, CursorShape as TermShape, NamedColor, Processor};
+use parking_lot::{Mutex, MutexGuard};
 
 use crate::{Sink, Size};
 
 /// Default history kept above the visible rows, in lines.
 pub const DEFAULT_SCROLLBACK: usize = 10_000;
-/// Output parsed per lock, so a snapshot never waits long behind a burst.
+/// Output parsed per lock; a fair unlock after each chunk lets a waiting snapshot in.
 const FEED_CHUNK: usize = 64 * 1024;
 
 /// A cell colour: the theme's default, an ANSI palette index (0–255) or a literal RGB.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Color {
+    /// The theme's default foreground or background.
     #[default]
     Default,
+    /// An ANSI palette index: 0–15 the named colours, 16–255 the extended palette.
     Ansi(u8),
+    /// A literal colour as red, green and blue.
     Rgb(u8, u8, u8),
 }
 
@@ -42,15 +45,28 @@ pub enum Width {
 /// One character cell with its colours and style.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
+    /// The character drawn in the cell (a space when empty).
     pub c: char,
+    /// How many columns the character spans.
     pub width: Width,
+    /// The text colour.
     pub fg: Color,
+    /// The background colour.
     pub bg: Color,
+    /// SGR 1: bold text.
     pub bold: bool,
+    /// SGR 2: faint text, painted at reduced strength.
+    pub dim: bool,
+    /// SGR 3: italic text.
     pub italic: bool,
     /// Any underline style (single, double, curly, dotted, dashed).
     pub underline: bool,
+    /// SGR 7: foreground and background swapped.
     pub inverse: bool,
+    /// SGR 8: the character is not drawn.
+    pub hidden: bool,
+    /// SGR 9: a line through the text.
+    pub strikeout: bool,
 }
 
 impl Default for Cell {
@@ -61,9 +77,12 @@ impl Default for Cell {
             fg: Color::Default,
             bg: Color::Default,
             bold: false,
+            dim: false,
             italic: false,
             underline: false,
             inverse: false,
+            hidden: false,
+            strikeout: false,
         }
     }
 }
@@ -165,6 +184,9 @@ pub struct Grid {
     state: Mutex<State>,
     dirty: AtomicBool,
     wake: Box<dyn Fn() + Send + Sync>,
+    /// Runs under the lock after each output chunk, so tests can see the handover.
+    #[cfg(test)]
+    chunk_hook: Option<Box<dyn Fn() + Send + Sync>>,
 }
 
 impl Grid {
@@ -184,11 +206,20 @@ impl Grid {
             state: Mutex::new(state),
             dirty: AtomicBool::new(false),
             wake: Box::new(wake),
+            #[cfg(test)]
+            chunk_hook: None,
         }
     }
 
+    /// Runs `hook` under the lock after each output chunk.
+    #[cfg(test)]
+    pub(crate) fn with_chunk_hook(mut self, hook: impl Fn() + Send + Sync + 'static) -> Self {
+        self.chunk_hook = Some(Box::new(hook));
+        self
+    }
+
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.lock()
     }
 
     /// Sets the dirty flag; only the change from clean wakes the UI.
@@ -256,6 +287,12 @@ impl Sink for Grid {
             let mut state = self.lock();
             let State { term, parser, .. } = &mut *state;
             parser.advance(term, chunk);
+            #[cfg(test)]
+            if let Some(hook) = &self.chunk_hook {
+                hook();
+            }
+            // A plain unlock lets this thread retake the lock before a parked reader wakes.
+            MutexGuard::unlock_fair(state);
         }
         if !bytes.is_empty() {
             self.mark_dirty();
@@ -337,9 +374,12 @@ fn cell(cell: &TermCell) -> Cell {
         fg: color(cell.fg),
         bg: color(cell.bg),
         bold: flags.contains(Flags::BOLD),
+        dim: flags.contains(Flags::DIM),
         italic: flags.contains(Flags::ITALIC),
         underline: flags.intersects(Flags::ALL_UNDERLINES),
         inverse: flags.contains(Flags::INVERSE),
+        hidden: flags.contains(Flags::HIDDEN),
+        strikeout: flags.contains(Flags::STRIKEOUT),
     }
 }
 

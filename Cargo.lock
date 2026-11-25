@@ -6641,6 +6641,7 @@ version = "0.8.8"
 dependencies = [
  "alacritty_terminal",
  "navo-term",
+ "parking_lot",
  "portable-pty",
  "thiserror 2.0.21",
  "tracing",
