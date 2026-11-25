@@ -206,20 +206,37 @@ fn a_name_that_appears_after_the_checks_is_exists_and_stays() {
     assert!(!tools.join("Navo").exists(), "nothing was created below it");
 }
 
-/// A root that no longer resolves to the created folders fails step 3, and the rollback deletes
-/// what this call created, newest first.
+/// A root whose existing part no longer resolves to the held folders fails step 3, and the
+/// rollback deletes what this call created, newest first.
 #[test]
 fn a_root_that_resolves_elsewhere_is_changed_and_rolled_back() {
+    let temp = outside_profiles();
+    let elsewhere = outside_profiles();
+    let me = security::user_sid().expect("token user SID");
+    let parent = id_of(temp.path());
+    let held = helper_chain(&args(temp.path().join("Tools").join("Navo"), parent))
+        .expect("the chain passes the helper's checks");
+    let moved = args(elsewhere.path().join("Tools").join("Navo"), parent);
+    let result = create_verified(&moved, &held, &user_owned_sddl(&me));
+    assert_eq!(result, Err(HelperExit::Changed));
+    drop(held);
+    assert!(is_empty(temp.path()), "the created folders were removed");
+}
+
+/// Missing names that are not the root's last names are `Changed` before any create: a folder
+/// made by someone else at the first name would otherwise give `Exists`.
+#[test]
+fn missing_names_that_are_not_the_root_tail_are_changed_before_any_create() {
     let temp = outside_profiles();
     let me = security::user_sid().expect("token user SID");
     let parent = id_of(temp.path());
     let held = helper_chain(&args(temp.path().join("Tools").join("Navo"), parent))
         .expect("the chain passes the helper's checks");
-    let moved = args(temp.path().join("Other").join("Navo"), parent);
-    let result = create_verified(&moved, &held, &user_owned_sddl(&me));
+    std::fs::create_dir(temp.path().join("Tools")).expect("a folder made by someone else");
+    let other = args(temp.path().join("Other").join("Navo"), parent);
+    let result = create_verified(&other, &held, &user_owned_sddl(&me));
     assert_eq!(result, Err(HelperExit::Changed));
-    drop(held);
-    assert!(is_empty(temp.path()), "the created folders were removed");
+    assert!(is_empty(&temp.path().join("Tools")), "nothing was created");
 }
 
 #[test]
@@ -230,6 +247,29 @@ fn separators_streams_and_dots_are_not_plain_names() {
         assert!(!plain_name(OsStr::new(name)), "{name:?}");
     }
     for name in ["Navo", "Navo.Tools", "..x", " Navo"] {
+        assert!(plain_name(OsStr::new(name)), "{name:?}");
+    }
+}
+
+#[test]
+fn device_names_are_not_plain_names() {
+    for name in [
+        "CON",
+        "prn",
+        "Aux",
+        "NUL",
+        "nul.txt",
+        "COM1",
+        "com9.log",
+        "LPT1",
+        "lpt9",
+        "COM¹",
+        "LPT³.txt",
+        "CON .x",
+    ] {
+        assert!(!plain_name(OsStr::new(name)), "{name:?}");
+    }
+    for name in ["CONSOLE", "COM10", "LPT", "Navo.CON"] {
         assert!(plain_name(OsStr::new(name)), "{name:?}");
     }
 }

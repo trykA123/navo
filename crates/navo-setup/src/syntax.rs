@@ -233,7 +233,7 @@ fn check_components(rest: &str) -> Result<(), FolderProblem> {
 }
 
 /// Whether one name is a Windows device name, with or without an extension.
-fn is_reserved(component: &str) -> bool {
+pub(crate) fn is_reserved(component: &str) -> bool {
     let stem = component
         .split('.')
         .next()
