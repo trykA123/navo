@@ -92,6 +92,9 @@ pub const MAX_CHUNK_RAW: usize = 1024 * 1024;
 pub const MAX_TAGS_RAW: usize = 4 * 1024 * 1024;
 /// The largest icon body.
 pub const MAX_BODY: usize = 64 * 1024;
+/// The largest zstd window a frame may declare, reserved before decoding: one chunk's cap. The
+/// writer's frames declare 128 KiB; a per-call `cap` bound would refuse them for small chunks.
+const MAX_WINDOW: u64 = 1024 * 1024;
 
 /// Where one set's tables sit in the pack; ranges are checked on open.
 struct SetPlace<'a> {
@@ -220,6 +223,8 @@ impl<'a> Pack<'a> {
         let id = text(cursor.take(24)?)?;
         let version = text(cursor.take(12)?)?;
         let licence = text(cursor.take(12)?)?;
+        // `flags` bit 0 says the set has brand colours; the reader ignores it, each names-table
+        // entry carries its own colour or `NO_BRAND`.
         let (grid, _flags, count) = (cursor.u16()?, cursor.u16()?, cursor.u32()?);
         let names = range(self.bytes, cursor.u32()?, cursor.u32()?)?;
         let tags = range(self.bytes, cursor.u32()?, cursor.u32()?)?;
@@ -334,10 +339,11 @@ fn range(bytes: &[u8], offset: u32, len: u32) -> Result<&[u8], PackError> {
     bytes.get(start..end).ok_or(PackError::OutOfRange)
 }
 
-/// Decodes one zstd frame, reading at most `cap + 1` bytes so a bomb stops at the cap.
+/// Decodes one zstd frame, reading at most `cap + 1` bytes so a bomb stops at the cap; a frame
+/// declaring a window over `MAX_WINDOW` is refused before the decoder reserves it.
 fn decode(frame: &[u8], cap: usize) -> Result<Vec<u8>, PackError> {
-    let decoder =
-        StreamingDecoder::new(frame).map_err(|error| PackError::Zstd(error.to_string()))?;
+    let decoder = StreamingDecoder::new_with_max_window_size(frame, MAX_WINDOW)
+        .map_err(|error| PackError::Zstd(error.to_string()))?;
     let limit = u64::try_from(cap)
         .map_err(|_| PackError::TooLarge)?
         .saturating_add(1);
