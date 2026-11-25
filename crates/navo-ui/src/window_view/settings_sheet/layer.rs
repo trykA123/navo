@@ -21,6 +21,8 @@ impl NavoWindow {
         let error = self.saver.error.clone().or(self.settings.notice.clone());
         let body = SettingsBody::new(self.values.clone(), self.settings.row)
             .diagnostics(self.settings.diagnostics.clone())
+            .diagnostics_open(self.settings.diagnostics_open)
+            .selected_diagnostic(self.settings.selected_diagnostic)
             .version(self.identity.version.clone())
             .update(self.settings.updates.view.clone(), self.restart_offered())
             .summon_key_taken(self.summon_key_taken())

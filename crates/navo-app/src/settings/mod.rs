@@ -299,6 +299,7 @@ pub(crate) fn wire_diagnostics(
     dirs: Option<&navo_store::StoreDirs>,
 ) {
     let data = dirs.map(|dirs| dirs.data.clone());
+    hooks.data_folder = data.as_deref().and_then(location_of);
     let scan_data = data.clone();
     hooks.disk_use = Arc::new(move || diagnostic_rows(scan_data.as_deref()));
     #[cfg(feature = "tester")]
@@ -326,6 +327,7 @@ fn wire_report(
 
 fn diagnostic_rows(data: Option<&Path>) -> Vec<navo_ui::settings::DiagnosticRow> {
     let mut stats = data.and_then(|data| DiskListings::stored(&data.join("cache.db")));
+    let user_index = data.map(|data| data.join("index"));
     crate::diag::disk_use(data)
         .locations
         .into_iter()
@@ -334,7 +336,13 @@ fn diagnostic_rows(data: Option<&Path>) -> Vec<navo_ui::settings::DiagnosticRow>
                 DiskKind::ListingCache => "diagnostics-listings",
                 DiskKind::Journal => "diagnostics-journal",
                 DiskKind::Session => "diagnostics-session",
-                DiskKind::Index => "diagnostics-index",
+                DiskKind::Index => {
+                    if user_index.as_deref() == Some(location.path.as_path()) {
+                        "diagnostics-index-user"
+                    } else {
+                        "diagnostics-index-machine"
+                    }
+                }
                 DiskKind::LogsAndCrashes => "diagnostics-logs",
                 DiskKind::PerformanceRecordings => "diagnostics-recordings",
             };

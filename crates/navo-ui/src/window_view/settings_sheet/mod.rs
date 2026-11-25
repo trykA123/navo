@@ -26,8 +26,8 @@ use super::settings_save::{SaveReport, SaveSettings, Saver};
 use super::{NavoWindow, SearchHooks};
 use crate::prelude::*;
 use crate::settings::{
-    Change, Field, Filter, Folds, Section, ServiceStatus, SheetEvent, Values, child_of,
-    clamped_row, outer_row, section_of,
+    Change, DIAGNOSTICS_ROW, Field, Filter, Folds, HELP_ROW, Section, ServiceStatus, SheetEvent,
+    Values, child_of, clamped_row, outer_row, section_of,
 };
 use crate::side_sheet::SheetState;
 
@@ -44,6 +44,7 @@ pub struct SettingsHooks {
     pub load_error: Option<SharedString>,
     pub save: SaveSettings,
     pub file: Option<Location>,
+    pub data_folder: Option<Location>,
     pub line_of: FindLine,
     pub news: Option<SettingsInbox>,
     pub disk_use: Arc<dyn Fn() -> Vec<crate::settings::DiagnosticRow> + Send + Sync>,
@@ -67,6 +68,7 @@ impl SettingsHooks {
                 SaveReport::saved(values.clone())
             }),
             file: None,
+            data_folder: None,
             line_of: Arc::new(|_| None),
             news: None,
             disk_use: Arc::new(Vec::new),
@@ -96,6 +98,7 @@ pub(super) struct SettingsPanel {
     service_notice: Option<SharedString>,
     waiting_locate: Option<Field>,
     file: Option<Location>,
+    data_folder: Option<Location>,
     line_of: FindLine,
     shortcuts: Option<shortcuts::ShortcutsPanel>,
     is_shortcuts: bool,
@@ -113,6 +116,8 @@ pub(super) struct SettingsPanel {
     pub(super) save_diagnostic_report:
         Arc<dyn Fn() -> Result<std::path::PathBuf, String> + Send + Sync>,
     pub(super) diagnostics: Vec<crate::settings::DiagnosticRow>,
+    pub(super) diagnostics_open: bool,
+    pub(super) selected_diagnostic: Option<usize>,
     pub(super) diagnostics_generation: u64,
     #[cfg(feature = "tester")]
     pub(super) is_saving_report: bool,
@@ -136,6 +141,7 @@ impl SettingsPanel {
                 news: hooks.news,
                 updates: updates::Updates::new(hooks.updates),
                 disk_use: hooks.disk_use,
+                data_folder: hooks.data_folder,
                 #[cfg(feature = "tester")]
                 save_diagnostic_report: hooks.save_diagnostic_report,
                 take_guide_hint: hooks.take_guide_hint,
@@ -164,6 +170,7 @@ impl SettingsPanel {
             service_notice: None,
             waiting_locate: None,
             file,
+            data_folder: None,
             line_of,
             shortcuts: None,
             is_shortcuts: false,
@@ -183,6 +190,8 @@ impl SettingsPanel {
             save_diagnostic_report: SettingsHooks::none().save_diagnostic_report,
             take_guide_hint: SettingsHooks::none().take_guide_hint,
             diagnostics: Vec::new(),
+            diagnostics_open: false,
+            selected_diagnostic: None,
             diagnostics_generation: 0,
             #[cfg(feature = "tester")]
             is_saving_report: false,
@@ -278,6 +287,8 @@ impl NavoWindow {
         self.clear_find(window, cx);
         self.settings.row = outer_row(self.settings.row);
         self.settings.folds = Folds::default();
+        self.settings.diagnostics_open = false;
+        self.settings.selected_diagnostic = None;
         self.pause_shortcuts(cx);
         self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
         if std::mem::take(&mut self.settings.restore_preview) {
@@ -322,6 +333,11 @@ impl NavoWindow {
             SheetEvent::Keep(field) => self.keep_old(field, window, cx),
             SheetEvent::DismissUpgrade => self.dismiss_upgrade(),
             SheetEvent::RefreshDiagnostics => self.refresh_diagnostics(cx),
+            SheetEvent::ToggleDiagnosticsFold => self.toggle_diagnostics_fold(),
+            SheetEvent::SelectDiagnostic(index) => self.select_diagnostic(index),
+            SheetEvent::OpenDataFolder => self.open_data_folder(window, cx),
+            SheetEvent::OpenDiagnosticPath(path) => self.open_diagnostic_path(&path, window, cx),
+            SheetEvent::CopyDiagnosticPath(path) => self.copy_diagnostic_path(&path, cx),
             SheetEvent::OpenGuide => self.open_guide_from_settings(window, cx),
             SheetEvent::CheckUpdates => self.check_updates_now(cx),
             SheetEvent::RestartUpdate => self.request_restart(window, cx),
@@ -354,9 +370,35 @@ impl NavoWindow {
         }
     }
 
+    fn toggle_diagnostics_fold(&mut self) {
+        self.settings.diagnostics_open = !self.settings.diagnostics_open;
+        self.settings.notice = None;
+        self.settings.service_notice = None;
+        if !self.settings.diagnostics_open {
+            self.settings.selected_diagnostic = None;
+            if self.settings.row == DIAGNOSTICS_ROW {
+                self.settings.row = HELP_ROW;
+            }
+        }
+    }
+
+    fn select_diagnostic(&mut self, index: usize) {
+        self.settings.diagnostics_open = true;
+        self.settings.selected_diagnostic = Some(index);
+        self.settings.row = DIAGNOSTICS_ROW;
+        self.settings.notice = None;
+        self.settings.service_notice = None;
+    }
+
+    fn copy_diagnostic_path(&mut self, path: &str, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(path.to_owned()));
+        self.settings.notice = None;
+        self.settings.service_notice = Some(navo_l10n::tr("settings-storage-copied").into());
+    }
     fn select_setting(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
         let from = section_of(self.settings.row);
         self.settings.row = clamped_row(row);
+        self.settings.selected_diagnostic = None;
         self.settings.folds.reveal(self.settings.row);
         self.settings.notice = None;
         self.settings.status = None;

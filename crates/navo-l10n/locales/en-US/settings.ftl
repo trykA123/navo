@@ -83,7 +83,7 @@ settings-font-size-clamped = Font size limited to { $size } px. Choose a size fr
 settings-ui-scale = UI scale
 settings-ui-scale-help = Percent, from 80 to 200
 
-settings-diagnostics = Diagnostics
+settings-diagnostics = Storage
 settings-help = Help
 settings-page-appearance = Appearance
 settings-page-window = Window
@@ -161,9 +161,24 @@ diagnostics-failed = Could not save the diagnostic report: { $detail }
 diagnostics-listings = Listing cache
 diagnostics-journal = Journal
 diagnostics-session = Session
-diagnostics-index = Index
+diagnostics-index-user = Index (yours)
+diagnostics-index-machine = Index (all users)
 diagnostics-logs = Logs and crash reports
 diagnostics-recordings = Performance recordings
+settings-storage-summary = Navo data: { $size } on disk
+settings-storage-locations = { $count ->
+    [one] { $count } location
+   *[other] { $count } locations
+}
+settings-storage-open-folder = Open data folder
+settings-storage-show-details = Show details
+settings-storage-hide-details = Hide details
+settings-storage-size = Size
+settings-storage-location = Location
+settings-storage-open-store = Open folder
+settings-storage-copy-path = Copy path
+settings-storage-copied = Path copied to clipboard.
+settings-storage-no-folder = No data folder is available in this session.
 settings-ext-width = Ext column width
 settings-size-width = Size column width
 settings-date-width = Date column width

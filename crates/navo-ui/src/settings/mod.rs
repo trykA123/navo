@@ -67,8 +67,8 @@ pub use git_page::GitPage;
 pub use index_progress::{IndexProgress, IndexState, Split, VolumeProgress};
 pub use search_page::{SearchPage, ServiceStatus};
 pub use steps::{
-    HELP_ROW, Nudge, child_of, digit_of, first_row, moved, next_section, nudged, rows_in,
-    section_of,
+    DIAGNOSTICS_ROW, HELP_ROW, Nudge, child_of, digit_of, first_row, moved, next_section, nudged,
+    rows_in, section_of,
 };
 pub use stored::stored_value;
 pub use summon_key::{SummonKey, SummonKeyError, parse_summon_key};
@@ -134,6 +134,11 @@ pub enum SheetEvent {
     Keep(Field),
     DismissUpgrade,
     RefreshDiagnostics,
+    ToggleDiagnosticsFold,
+    SelectDiagnostic(usize),
+    OpenDataFolder,
+    OpenDiagnosticPath(SharedString),
+    CopyDiagnosticPath(SharedString),
     OpenGuide,
     CheckUpdates,
     RestartUpdate,
@@ -315,6 +320,8 @@ pub struct SettingsBody {
     git: GitPage,
     index: IndexProgress,
     diagnostics: Vec<DiagnosticRow>,
+    diagnostics_open: bool,
+    selected_diagnostic: Option<usize>,
     version: SharedString,
     update: UpdateView,
     restart_offered: bool,
@@ -383,7 +390,6 @@ impl SettingsBody {
             matches!(spec.control, Control::Text | Control::Number) && self.is_enabled(spec.field);
         is_editable.then_some(SheetEvent::Edit(spec.field))
     }
-
     fn focused_dropdown(
         &self,
         menus: &[(Field, Entity<PopupMenu>)],
@@ -403,6 +409,23 @@ impl SettingsBody {
             .1
             .clone();
         Some((menu, *at, options.len()))
+    }
+
+    fn diagnostic_step_event(&self, down: bool) -> Option<SheetEvent> {
+        if !self.diagnostics_open || self.diagnostics.is_empty() {
+            return None;
+        }
+        if let Some(index) = self.selected_diagnostic {
+            if down {
+                let next = (index + 1).min(self.diagnostics.len() - 1);
+                return Some(SheetEvent::SelectDiagnostic(next));
+            }
+            if index > 0 {
+                return Some(SheetEvent::SelectDiagnostic(index - 1));
+            }
+            return Some(SheetEvent::Select(HELP_ROW));
+        }
+        (down && self.row == HELP_ROW).then_some(SheetEvent::SelectDiagnostic(0))
     }
 }
 
@@ -457,8 +480,14 @@ fn register(root: Div, body: &SettingsBody, menus: &[(Field, Entity<PopupMenu>)]
 fn register_fields(root: Div, body: &SettingsBody, menus: &[(Field, Entity<PopupMenu>)]) -> Div {
     let row = body.row;
     let filter = &body.filter;
-    let up = on_event(body, Some(SheetEvent::Select(moved(filter, row, false))));
-    let down = on_event(body, Some(keyboard_page::down_event(filter, row)));
+    let up_event = body
+        .diagnostic_step_event(false)
+        .unwrap_or_else(|| SheetEvent::Select(moved(filter, row, false)));
+    let down_event = body
+        .diagnostic_step_event(true)
+        .unwrap_or_else(|| keyboard_page::down_event(filter, row));
+    let up = on_event(body, Some(up_event));
+    let down = on_event(body, Some(down_event));
     let find = on_event_dismissing(body, Some(SheetEvent::Find), menus);
     let back = fold::left_event(filter, row).or_else(|| body.event_for(Nudge::Back));
     let forward = fold::right_event(filter, row).or_else(|| body.event_for(Nudge::Forward));
@@ -518,6 +547,8 @@ impl RenderOnce for SettingsBody {
             index: &self.index,
             keymap: crate::commands::active(cx),
             diagnostics: &self.diagnostics,
+            diagnostics_open: self.diagnostics_open,
+            selected_diagnostic: self.selected_diagnostic,
             version: &self.version,
             update: &self.update,
             restart_offered: self.restart_offered,

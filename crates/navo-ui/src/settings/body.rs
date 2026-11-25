@@ -27,6 +27,8 @@ impl SettingsBody {
             git: GitPage::default(),
             index: IndexProgress::default(),
             diagnostics: Vec::new(),
+            diagnostics_open: false,
+            selected_diagnostic: None,
             version: SharedString::default(),
             update: UpdateView::Hidden,
             restart_offered: false,
@@ -115,6 +117,18 @@ impl SettingsBody {
     #[must_use]
     pub fn diagnostics(mut self, rows: Vec<DiagnosticRow>) -> Self {
         self.diagnostics = rows;
+        self
+    }
+
+    #[must_use]
+    pub fn diagnostics_open(mut self, is_open: bool) -> Self {
+        self.diagnostics_open = is_open;
+        self
+    }
+
+    #[must_use]
+    pub fn selected_diagnostic(mut self, selected: Option<usize>) -> Self {
+        self.selected_diagnostic = selected;
         self
     }
 

@@ -32,13 +32,24 @@ const LABEL_W: f32 = 56.;
 /// Gap between a value and its mark, or a button and its key cap (px).
 const NEAR: f32 = 6.;
 
-/// The inspector body for the focused row: the setting's details, the settings inside a
-/// fold row (Find empty), or `None` for a row the filter hides.
+/// The inspector body for the focused row: the selected storage store, the setting's
+/// details, the settings inside a fold row (Find empty), or `None` for a row the filter hides.
 pub(super) fn details(look: &Look) -> Option<AnyElement> {
+    if let Some(item) = selected_diagnostic(look) {
+        return Some(super::diagnostics_page::inspector(look, item));
+    }
     if fold::group_of_fold(look.row).is_some() {
         return look.filter.is_empty().then(|| fold_details(look, look.row));
     }
     focused(look).map(|(index, spec)| inspector(look, index, spec))
+}
+
+fn selected_diagnostic<'a>(look: &Look<'a>) -> Option<&'a super::DiagnosticRow> {
+    if !look.diagnostics_open || super::section_of(look.row) != super::Section::About {
+        return None;
+    }
+    look.selected_diagnostic
+        .and_then(|index| look.diagnostics.get(index))
 }
 
 /// The focused row and its spec, if the focused row is a setting the filter shows.
@@ -307,7 +318,11 @@ fn value_cell(id: &'static str, text: SharedString, mark: Option<Div>) -> AnyEle
         .into_any_element()
 }
 
-fn line(t: &Theme, name: &'static str, value: impl IntoElement) -> impl IntoElement {
+pub(super) fn line(
+    t: &Theme,
+    name: impl Into<SharedString>,
+    value: impl IntoElement,
+) -> impl IntoElement {
     div()
         .flex()
         .items_center()
@@ -317,7 +332,7 @@ fn line(t: &Theme, name: &'static str, value: impl IntoElement) -> impl IntoElem
                 .flex_none()
                 .w(px(LABEL_W))
                 .text_color(t.colors.muted)
-                .child(name),
+                .child(name.into()),
         )
         .child(value)
 }

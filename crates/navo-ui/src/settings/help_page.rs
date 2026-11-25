@@ -204,7 +204,7 @@ pub(super) fn group_title(t: &Theme, id: &'static str) -> AnyElement {
         .into_any_element()
 }
 
-/// The Help group of the About page, below Diagnostics.
+/// The Help group of the About page, above Storage.
 pub(super) fn render(look: &Look, cx: &App) -> Vec<AnyElement> {
     let t = look.theme;
     let toggle = super::view::row(look, HELP_ROW, Field::CheckUpdates.spec(), cx);

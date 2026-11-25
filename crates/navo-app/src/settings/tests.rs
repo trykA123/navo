@@ -465,6 +465,11 @@ fn diagnostics_rows_keep_real_paths_and_group_sqlite_side_files() {
     );
     assert_eq!(listing.bytes, 10);
     assert!(!rows.iter().any(|row| row.path.as_ref().ends_with("-wal")));
+    let index = rows
+        .iter()
+        .find(|row| row.path.as_ref() == data.join("index").to_string_lossy().as_ref())
+        .unwrap();
+    assert_eq!(index.name.as_ref(), navo_l10n::tr("diagnostics-index-user"));
 }
 
 #[cfg(feature = "tester")]

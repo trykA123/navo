@@ -38,6 +38,8 @@ pub(super) struct Look<'a> {
     pub row: usize,
     pub filter: &'a Filter,
     pub diagnostics: &'a [super::DiagnosticRow],
+    pub diagnostics_open: bool,
+    pub selected_diagnostic: Option<usize>,
     pub version: &'a SharedString,
     pub update: &'a UpdateView,
     pub restart_offered: bool,
@@ -438,11 +440,11 @@ pub(super) fn content(
             Line::Shortcut(spec) => vec![shortcut_line(look, &shortcut_rows, spec)],
         })
         .collect();
-    if is_page_shown(look, section, Section::Diagnostics) {
-        rows.extend(super::diagnostics_page::render(look));
-    }
     if is_page_shown(look, section, Section::Help) {
         rows.extend(super::help_page::render(look, cx));
+    }
+    if is_page_shown(look, section, Section::Diagnostics) {
+        rows.extend(super::diagnostics_page::render(look));
     }
     if rows.is_empty() {
         rows.push(no_match(t));

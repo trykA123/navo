@@ -27,6 +27,13 @@ impl NavoWindow {
         if self.settings.diagnostics_generation != generation {
             return;
         }
+        if self
+            .settings
+            .selected_diagnostic
+            .is_some_and(|index| index >= rows.len())
+        {
+            self.settings.selected_diagnostic = None;
+        }
         self.settings.diagnostics = rows;
         cx.notify();
     }

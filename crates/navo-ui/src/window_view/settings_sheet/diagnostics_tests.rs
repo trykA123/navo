@@ -44,6 +44,13 @@ fn settings_diagnostics_lists_hook_rows_and_refreshes(cx: &mut TestAppContext) {
         assert!(
             window
                 .try_find(("settings-diagnostic-row", 0usize))
+                .is_none()
+        );
+        window.click("settings-storage-fold", cx);
+        window.render_frame(cx);
+        assert!(
+            window
+                .try_find(("settings-diagnostic-row", 0usize))
                 .is_some()
         );
         window.click("settings-diagnostics-refresh", cx);
@@ -78,4 +85,263 @@ fn settings_diagnostics_empty_hook_renders_an_empty_state(cx: &mut TestAppContex
         );
     })
     .unwrap();
+}
+
+fn open_about_with_rows(
+    cx: &mut TestAppContext,
+    rows: Vec<DiagnosticRow>,
+) -> (gpui_kit::AnyWindowHandle, gpui_kit::Entity<NavoWindow>) {
+    let fs = fake();
+    let mut options = options_for(fs.clone(), two_panes(&fs));
+    options.settings.disk_use = Arc::new(move || rows.clone());
+    let (handle, view) = open_options(cx, options);
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+            view.select_setting(FIELDS.len(), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    (handle, view)
+}
+
+#[gpui_kit::test]
+fn about_storage_hides_paths_until_fold_opens_and_inspects_selected_store(cx: &mut TestAppContext) {
+    let store_path = "/tmp/navo-test-data/profile/cache.db";
+    let (handle, view) = open_about_with_rows(
+        cx,
+        vec![DiagnosticRow {
+            name: "Listing cache".into(),
+            path: store_path.into(),
+            bytes: 4096,
+            at_least: false,
+            entries: Some(12),
+            budget: Some(8192),
+        }],
+    );
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(
+            window
+                .try_find(("settings-diagnostic-row", 0usize))
+                .is_none()
+        );
+        assert!(
+            !gpui_kit::base::test_support::texts(window)
+                .into_iter()
+                .any(|item| item.text().contains(store_path)),
+            "no store path may be drawn while collapsed"
+        );
+        window.click("settings-storage-fold", cx);
+        window.render_frame(cx);
+        assert!(
+            window
+                .try_find(("settings-diagnostic-row", 0usize))
+                .is_some()
+        );
+    })
+    .unwrap();
+    view.read_with(cx, |view, _| view.scroll_settings_to_end());
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click(("settings-diagnostic-row", 0usize), cx);
+        window.render_frame(cx);
+        let inspected = window
+            .try_find("settings-diagnostic-path")
+            .and_then(|found| found.label().map(str::to_owned));
+        assert_eq!(inspected.as_deref(), Some(store_path));
+        window.click("settings-diagnostic-copy", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            cx.read_from_clipboard()
+                .and_then(|item| item.text())
+                .as_deref(),
+            Some(store_path)
+        );
+        assert!(window.try_find("settings-error").is_none());
+        assert_eq!(
+            window
+                .try_find("settings-notice")
+                .and_then(|found| found.label().map(str::to_owned))
+                .as_deref(),
+            Some("Path copied to clipboard.")
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn about_storage_up_and_down_step_through_open_store_rows(cx: &mut TestAppContext) {
+    let first_path = "/tmp/navo-test-data/profile/cache.db";
+    let second_path = "/tmp/navo-test-data/profile/navo.db";
+    let (handle, view) = open_about_with_rows(
+        cx,
+        vec![
+            DiagnosticRow {
+                name: "Listing cache".into(),
+                path: first_path.into(),
+                bytes: 4096,
+                at_least: false,
+                entries: None,
+                budget: None,
+            },
+            DiagnosticRow {
+                name: "Journal".into(),
+                path: second_path.into(),
+                bytes: 2048,
+                at_least: false,
+                entries: None,
+                budget: None,
+            },
+        ],
+    );
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("settings-storage-fold", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    view.read_with(cx, |view, _| view.scroll_settings_to_end());
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click(("settings-diagnostic-row", 0usize), cx);
+        window.render_frame(cx);
+        window.press("down", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            window
+                .try_find("settings-diagnostic-path")
+                .and_then(|found| found.label().map(str::to_owned))
+                .as_deref(),
+            Some(second_path)
+        );
+        window.press("up", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            window
+                .try_find("settings-diagnostic-path")
+                .and_then(|found| found.label().map(str::to_owned))
+                .as_deref(),
+            Some(first_path)
+        );
+        window.press("up", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("settings-diagnostic-path").is_none());
+    })
+    .unwrap();
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.settings_row(), crate::settings::HELP_ROW);
+    });
+}
+
+#[gpui_kit::test]
+fn about_storage_open_data_folder_opens_tab_and_closes_settings(cx: &mut TestAppContext) {
+    let fs = fake();
+    fs.add_folder("home/navo-data");
+    let data = fs.location("home/navo-data");
+    let mut options = options_for(fs.clone(), two_panes(&fs));
+    options.settings.data_folder = Some(data.clone());
+    options.settings.disk_use = Arc::new(move || {
+        vec![DiagnosticRow {
+            name: "Listing cache".into(),
+            path: data
+                .join(&navo_core::ProviderPath::from_text("cache.db"))
+                .expect("join")
+                .path()
+                .to_text()
+                .into(),
+            bytes: 1024,
+            at_least: false,
+            entries: None,
+            budget: None,
+        }]
+    });
+    let (handle, view) = open_options(cx, options);
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+            view.select_setting(FIELDS.len(), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("settings-storage-open-folder", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    view.read_with(cx, |view, _| {
+        assert!(!view.settings.is_open());
+        assert_eq!(
+            view.browser
+                .state()
+                .active_tab()
+                .location()
+                .path()
+                .to_text(),
+            "home/navo-data"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn about_storage_open_store_folder_opens_parent_and_closes_settings(cx: &mut TestAppContext) {
+    let fs = fake();
+    fs.add_folder("home/navo-data");
+    let data = fs.location("home/navo-data");
+    let store_path: crate::prelude::SharedString = data
+        .join(&navo_core::ProviderPath::from_text("cache.db"))
+        .expect("join")
+        .path()
+        .to_text()
+        .into();
+    let mut options = options_for(fs.clone(), two_panes(&fs));
+    options.settings.disk_use = Arc::new(move || {
+        vec![DiagnosticRow {
+            name: "Listing cache".into(),
+            path: store_path.clone(),
+            bytes: 1024,
+            at_least: false,
+            entries: None,
+            budget: None,
+        }]
+    });
+    let (handle, view) = open_options(cx, options);
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+            view.select_setting(FIELDS.len(), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("settings-storage-fold", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    view.read_with(cx, |view, _| view.scroll_settings_to_end());
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click(("settings-diagnostic-row", 0usize), cx);
+        window.render_frame(cx);
+        window.click("settings-diagnostic-open", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    view.read_with(cx, |view, _| {
+        assert!(!view.settings.is_open());
+        assert_eq!(
+            view.browser
+                .state()
+                .active_tab()
+                .location()
+                .path()
+                .to_text(),
+            "home/navo-data"
+        );
+    });
 }
