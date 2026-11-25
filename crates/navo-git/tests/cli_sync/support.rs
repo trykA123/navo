@@ -183,17 +183,14 @@ pub fn cancel_when<T>(marker: &Path, operation: impl FnOnce(&Cancel) -> T) -> (T
 }
 
 /// Shell lines that touch a marker, then stall past every deadline, and the marker path.
-/// On Windows the stall is a child whose process id is first written to `stalled_pid`, once
-/// MSYS has exec'd `sleep` (before that the id names the short-lived fork stub).
+/// On Windows the stall is a child whose process id is first written to `stalled_pid`; the id
+/// names `sleep` or, if MSYS has not exec'd it yet, the fork's shell stub that waits on it.
 pub fn stall_body(fixture: &Fixture) -> (String, PathBuf) {
     let marker = sibling(fixture, "stalled");
     let touch = slashed(&marker);
     #[cfg(windows)]
     let body = format!(
-        "sleep 41 &\nc=$! i=0 e=\n\
-         until read -r e 2>/dev/null < /proc/$c/exename && case $e in */sleep|*/sleep.exe) true;; *) false;; esac || [ $i -ge 250 ]; do sleep 0.02; i=$((i+1)); done\n\
-         case $e in */sleep|*/sleep.exe) cat /proc/$c/winpid >> '{}';; esac\n\
-         touch '{touch}'\nwait",
+        "sleep 41 &\ncat /proc/$!/winpid >> '{}'\ntouch '{touch}'\nwait",
         slashed(&stalled_pid(fixture))
     );
     #[cfg(not(windows))]
@@ -249,8 +246,13 @@ pub fn nothing_left(fixture: &Fixture) {
     }
 }
 
-/// A handle to the stall's `sleep` under `pid`, or `None` when that process is gone and the
-/// id now names another image or a process that started after the id file was `written`.
+/// Images the stall's recorded child can have.
+#[cfg(windows)]
+const STALL_IMAGES: [&str; 3] = ["sleep.exe", "bash.exe", "sh.exe"];
+
+/// A handle to the stall's child under `pid`, or `None` when that process is gone and the
+/// id now names a process that started after the id file was `written` or another image.
+/// The child is `sleep` or the MSYS fork stub (`bash`/`sh`) that lives until `sleep` exits.
 /// A process that opens but cannot be queried fails the test rather than hide a survivor.
 #[cfg(windows)]
 fn stalled_child(pid: u32, written: u64) -> Option<std::os::windows::io::OwnedHandle> {
@@ -265,7 +267,10 @@ fn stalled_child(pid: u32, written: u64) -> Option<std::os::windows::io::OwnedHa
         .file_name()?
         .to_string_lossy()
         .into_owned();
-    name.eq_ignore_ascii_case("sleep.exe").then_some(process)
+    STALL_IMAGES
+        .iter()
+        .any(|stall| name.eq_ignore_ascii_case(stall))
+        .then_some(process)
 }
 
 /// Ends every process the stall recorded and `git`, so a test that expects a survivor
