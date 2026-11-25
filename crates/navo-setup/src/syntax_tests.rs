@@ -100,6 +100,17 @@ fn a_reserved_device_name_is_refused() {
     }
 }
 
+/// COM0 and LPT0 are reserved; longer or non-digit port names stay allowed.
+#[test]
+fn port_zero_is_reserved_but_other_port_names_are_not() {
+    for text in [r"C:\COM0", r"C:\lpt0.txt", r"C:\Com0 .x"] {
+        assert_eq!(refused(text), FolderProblem::ReservedName, "{text:?}");
+    }
+    for text in [r"C:\COM10", r"C:\LPT00", r"C:\COMA"] {
+        accepted(text);
+    }
+}
+
 /// All six superscript device names are reserved with or without an extension.
 #[test]
 fn superscript_device_names_are_refused() {
