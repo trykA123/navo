@@ -96,7 +96,10 @@ impl<'p> Removals<'p> {
 
     /// The proof the last copy of `source` left in this run, for the journal.
     pub(super) fn proof_of(&self, source: &Location) -> Option<CopiedSource> {
-        self.copied().get(source).copied()
+        match self.copied().get(source) {
+            Some(Read::Proof(proof)) => Some(*proof),
+            Some(Read::Changed | Read::Unconfirmed) | None => None,
+        }
     }
 
     /// Removes a file. A move removes a source only through the proof its copy left in this run;
