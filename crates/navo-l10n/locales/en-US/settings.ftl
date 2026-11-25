@@ -354,3 +354,12 @@ settings-changed-chip = { $count ->
     [one] { $count } changed
    *[other] { $count } changed
 }
+settings-title = Settings
+settings-hint-move = Move
+settings-hint-change = Change
+settings-hint-record = Record
+settings-hint-reset = Reset
+settings-hint-page = Page
+settings-hint-toml-line = TOML line
+settings-hint-undo = Undo
+settings-hint-find = Find

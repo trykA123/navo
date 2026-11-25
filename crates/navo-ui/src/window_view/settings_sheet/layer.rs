@@ -6,20 +6,16 @@ use crate::settings::{SearchPage, SettingsBody, SheetEvent};
 use crate::tokens;
 
 impl NavoWindow {
-    /// Builds the settings sheet overlay; returns `None` while a viewer is open or the sheet is hidden.
-    pub(in crate::window_view) fn settings_layer(
+    /// Builds the settings body from the panel state with `on_event` handling user actions.
+    pub(in crate::window_view) fn settings_body(
         &self,
-        window: &Window,
+        on_event: impl Fn(&SheetEvent, &mut Window, &mut App) + 'static,
+        _: &Window,
         cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        if self.viewer.is_some() || !self.settings.sheet.read(cx).is_shown(cx) {
-            return None;
-        }
+    ) -> SettingsBody {
         let t = tokens::current(cx).clone();
-        let frame = self.sheet_frame(&t, window, cx).covering_passive_card();
-        let this = cx.weak_entity();
         let error = self.saver.error.clone().or(self.settings.notice.clone());
-        let body = SettingsBody::new(self.values.clone(), self.settings.row)
+        SettingsBody::new(self.values.clone(), self.settings.row)
             .diagnostics(self.settings.diagnostics.clone())
             .diagnostics_open(self.settings.diagnostics_open)
             .selected_diagnostic(self.settings.selected_diagnostic)
@@ -45,9 +41,25 @@ impl NavoWindow {
             )
             .track_focus(&self.settings.focus)
             .track_scroll(&self.settings.scroll)
-            .on_event(cx.listener(|view, event: &SheetEvent, window, cx| {
-                view.settings_event(event.clone(), window, cx);
-            }));
+            .on_event(on_event)
+    }
+
+    /// Builds the settings sheet overlay; returns `None` while a viewer is open or the sheet is hidden.
+    pub(in crate::window_view) fn settings_layer(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if self.viewer.is_some() || !self.settings.sheet.read(cx).is_shown(cx) {
+            return None;
+        }
+        let t = tokens::current(cx).clone();
+        let frame = self.sheet_frame(&t, window, cx).covering_passive_card();
+        let this = cx.weak_entity();
+        let on_event = cx.listener(|view, event: &SheetEvent, window, cx| {
+            view.settings_event(event.clone(), window, cx);
+        });
+        let body = self.settings_body(on_event, window, cx);
         let sheet = crate::settings::sheet(&self.settings.sheet, frame, body).close(
             "escape",
             move |window, cx| {

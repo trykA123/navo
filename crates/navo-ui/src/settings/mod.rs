@@ -5,6 +5,7 @@ mod clipboard_fields;
 mod clipboard_values;
 mod compare_fields;
 mod compare_options;
+mod content;
 mod controls;
 mod diagnostics_page;
 mod dropdown;
@@ -53,9 +54,10 @@ mod tests;
 use std::rc::Rc;
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{Entity, FocusHandle, RenderOnce, Role, ScrollHandle, Toggled};
+use gpui_kit::{Entity, FocusHandle, RenderOnce, Role, ScrollHandle};
 
 pub use compare_options::compare_options;
+pub use content::{SettingsContent, content};
 pub use fields::{
     COLOR_THEMES, Choice, Control, DENSITIES, FIELDS, Field, FieldSpec, HIDDEN, HINTS, Look,
     PRESETS, SORTS, SYNTAX_THEMES, Section, THEMES,
@@ -154,155 +156,10 @@ type Handler = Rc<dyn Fn(&SheetEvent, &mut Window, &mut App)>;
 /// Builds the Settings dialog: a floating sheet with the title, `body` and the key hints
 /// that fit the shown page (Shortcuts or a settings section).
 pub fn sheet(state: &Entity<SheetState>, frame: SheetFrame, body: SettingsBody) -> SideSheet {
-    let title = SheetTitle {
-        changed_count: body.values.changed_count(),
-        is_changed_only: body.filter.is_changed_only(),
-        on_event: body.on_event.clone(),
-    };
     let sheet = SideSheet::new("settings-sheet", state, frame)
         .floating()
-        .label("Settings")
-        .header(title);
-    if body.shortcuts.is_some() {
-        return sheet
-            .body(body)
-            .hint(&["↑", "↓"], "Move")
-            .hint(&["enter"], "Record")
-            .hint(&["ctrl-r"], "Reset")
-            .hint(&["ctrl-tab"], "Page");
-    }
-    let can_reset = body.reset_event().is_some();
-    let sheet = sheet
-        .body(body)
-        .hint(&["↑", "↓"], "Move")
-        .hint(&["←", "→"], "Change")
-        .hint(&["ctrl-tab"], "Page")
-        .hint(&["f3"], "TOML line");
-    let sheet = if can_reset {
-        sheet.hint(&["f8"], "Reset")
-    } else {
-        sheet
-    };
-    sheet.hint(&["ctrl-z"], "Undo").hint(&["ctrl-f"], "Find")
-}
-
-#[derive(IntoElement)]
-struct SheetTitle {
-    changed_count: usize,
-    is_changed_only: bool,
-    on_event: Option<Handler>,
-}
-
-fn changed_chip(
-    t: &tokens::Theme,
-    count: usize,
-    is_active: bool,
-    handler: Option<&Handler>,
-    window: &mut Window,
-    cx: &mut App,
-) -> AnyElement {
-    let mut args = navo_l10n::FluentArgs::new();
-    args.set("count", count as i64);
-    let label: SharedString = navo_l10n::tr_args("settings-changed-chip", &args).into();
-    let focus = window
-        .use_keyed_state("settings-changed-chip-focus", cx, |_, cx| {
-            cx.focus_handle().tab_stop(true).tab_index(1)
-        })
-        .read(cx)
-        .clone();
-    let theme = t.selected_content(is_active);
-    let (bg, edge, text_color) = if is_active {
-        (
-            theme.colors.selection,
-            theme.colors.accent,
-            theme.colors.accent_text,
-        )
-    } else {
-        (t.surfaces.field, t.surfaces.card_edge, t.colors.text)
-    };
-    let click_send = handler.cloned();
-    div()
-        .id("settings-changed-chip")
-        .role(Role::Button)
-        .aria_label(label.clone())
-        .aria_selected(is_active)
-        .aria_toggled(if is_active {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
-        .test_support()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(t.spacing.xs)
-        .px(t.spacing.md)
-        .py(t.spacing.xxs)
-        .rounded(t.radii.pill)
-        .border_1()
-        .border_color(edge)
-        .bg(bg)
-        .text_size(t.typography.small)
-        .text_color(text_color)
-        .when(is_active, |chip| chip.font_weight(FontWeight::MEDIUM))
-        .cursor_pointer()
-        .track_focus(&focus)
-        .focus_visible(|chip| chip.border_color(t.colors.accent))
-        .when(!is_active, |chip| {
-            chip.hover(|chip| chip.bg(t.colors.hover))
-        })
-        .on_click(move |_, window, cx| {
-            send(
-                click_send.as_ref(),
-                Some(SheetEvent::ToggleChangedFilter),
-                window,
-                cx,
-            );
-        })
-        .child(row_state::dot(&theme))
-        .child(label)
-        .into_any_element()
-}
-
-impl RenderOnce for SheetTitle {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let t = tokens::current(cx).clone();
-        let changed = (self.changed_count > 0).then(|| {
-            changed_chip(
-                &t,
-                self.changed_count,
-                self.is_changed_only,
-                self.on_event.as_ref(),
-                window,
-                cx,
-            )
-        });
-        let close_send = self.on_event.clone();
-        let find_send = self.on_event.clone();
-        let undo_send = self.on_event.clone();
-        div()
-            .key_context(CONTEXT)
-            .on_action(move |_: &CloseSettings, window, cx| {
-                send(close_send.as_ref(), Some(SheetEvent::Close), window, cx);
-            })
-            .on_action(move |_: &FindSetting, window, cx| {
-                send(find_send.as_ref(), Some(SheetEvent::Find), window, cx);
-            })
-            .on_action(move |_: &UndoChange, window, cx| {
-                send(undo_send.as_ref(), Some(SheetEvent::Undo), window, cx);
-            })
-            .flex()
-            .items_center()
-            .gap(t.spacing.lg)
-            .child(
-                div()
-                    .font_family(t.typography.brand_font.clone())
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Settings"),
-            )
-            .child(row_state::live_chip(&t))
-            .children(changed)
-    }
+        .label(navo_l10n::tr("settings-title"));
+    content(body).into_sheet(sheet)
 }
 
 #[derive(IntoElement)]
@@ -568,7 +425,7 @@ impl RenderOnce for SettingsBody {
         let keyed = keys
             .id("settings-body")
             .role(Role::Group)
-            .aria_label("Settings")
+            .aria_label(navo_l10n::tr("settings-title"))
             .test_support()
             .when_some(self.focus.as_ref(), |root, focus| root.track_focus(focus))
             .flex()
