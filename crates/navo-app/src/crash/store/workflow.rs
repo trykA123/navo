@@ -15,10 +15,13 @@ pub(super) struct Mode {
     pub sole: bool,
 }
 
+/// Runs the startup checks and recovery; `kept` collects the move copies recovery kept, also when
+/// a later step fails.
 pub(super) fn run(
     data: &Path,
     mode: &Mode,
     ops: &dyn ProviderOps,
+    kept: &mut Vec<Location>,
 ) -> Result<(Option<RecoveryNotice>, Option<crate::jobs::SharedJournal>), Error> {
     let Mode {
         unclean,
@@ -50,13 +53,12 @@ pub(super) fn run(
         files::regular(&path)?;
         match Db::open(&path, check) {
             Ok((db, _)) => {
-                let (journal, report) = recover(db, ops, (data, &[]))?;
+                let (journal, report) = recover(db, ops, (data, &[]), kept)?;
                 refresh::update(data, &mut state, &report, &journal)?;
                 crate::jobs::trim_at_startup(&journal, data, ops)?;
                 clear_sentinel(&path)?;
-                let notice = RecoveryNotice::loaded(data, &state, Some(&journal));
                 return Ok((
-                    RecoveryNotice::with_kept(notice, data, report.kept),
+                    RecoveryNotice::loaded(data, &state, Some(&journal)),
                     Some(journal),
                 ));
             }
@@ -64,10 +66,9 @@ pub(super) fn run(
             Err(error) => return Err(error.into()),
         }
     }
-    let (journal, kept) = resume(data, &mut state, ops)?;
+    let journal = resume(data, &mut state, (ops, kept))?;
     clear_sentinel(&path)?;
-    let notice = RecoveryNotice::loaded(data, &state, journal.as_ref());
-    Ok((RecoveryNotice::with_kept(notice, data, kept), None))
+    Ok((RecoveryNotice::loaded(data, &state, journal.as_ref()), None))
 }
 
 fn artifacts(path: &Path) -> Result<bool, Error> {
@@ -98,15 +99,14 @@ fn clear_completed_receipt(data: &Path, state: &State) -> Result<(), Error> {
     Ok(())
 }
 
-/// Returns the journal of the finished recovery, if this run finished one, and the move copies
-/// that recovery kept.
+/// Returns the journal of the finished recovery, if this run finished one; `kept` collects the
+/// move copies that recovery kept.
 fn resume(
     data: &Path,
     state: &mut State,
-    ops: &dyn ProviderOps,
-) -> Result<(Option<crate::jobs::SharedJournal>, Vec<Location>), Error> {
+    (ops, kept): (&dyn ProviderOps, &mut Vec<Location>),
+) -> Result<Option<crate::jobs::SharedJournal>, Error> {
     let mut recovered = None;
-    let mut kept = Vec::new();
     while let Some(progress) = state.pending.clone() {
         match progress {
             Progress::Preserve { case } => {
@@ -150,21 +150,20 @@ fn resume(
                 identity,
                 attempted,
             } => {
-                let (journal, copies) = finish(data, state, (notice, identity, attempted), ops)?;
-                recovered = Some(journal);
-                kept = copies;
+                let job = (notice, identity, attempted);
+                recovered = Some(finish(data, state, job, (ops, &mut *kept))?);
             }
         }
     }
-    Ok((recovered, kept))
+    Ok(recovered)
 }
 
 fn finish(
     data: &Path,
     state: &mut State,
     (mut notice, identity, attempted): (super::state::Notice, super::state::Identity, Vec<i64>),
-    ops: &dyn ProviderOps,
-) -> Result<(crate::jobs::SharedJournal, Vec<Location>), Error> {
+    (ops, kept): (&dyn ProviderOps, &mut Vec<Location>),
+) -> Result<crate::jobs::SharedJournal, Error> {
     build::preserved(data, notice.slot)?;
     let path = navo_store::StoreDirs::journal_in(data);
     if !promote::matches(&path, &identity)? {
@@ -174,7 +173,7 @@ fn finish(
     }
     let (db, _) = Db::open(&path, true)?;
     let expected = attempted.into_iter().map(JobId).collect::<Vec<_>>();
-    let (journal, report) = recover(db, ops, (data, &expected))?;
+    let (journal, report) = recover(db, ops, (data, &expected), kept)?;
     notice.recovered_jobs = report.restored.len();
     notice.retry_jobs = refresh::retry_jobs(&report.pending, &journal)?;
     notice.unreadable_jobs += report.pending.len();
@@ -185,17 +184,18 @@ fn finish(
     state.save(data)?;
     acknowledge_quarantine(&path, slot)?;
     crate::jobs::trim_at_startup(&journal, data, ops)?;
-    Ok((journal, report.kept))
+    Ok(journal)
 }
 
 fn recover(
     db: Db,
     ops: &dyn ProviderOps,
     scope: (&Path, &[JobId]),
+    kept: &mut Vec<Location>,
 ) -> Result<(crate::jobs::SharedJournal, crate::jobs::RecoveryReport), Error> {
     db.defer_checkpoint()?;
     let journal = Arc::new(Mutex::new(JobJournal::new(db)?));
-    let report = crate::jobs::recover_profile(&journal, ops, scope, true)?;
+    let report = crate::jobs::recover_keeping(&journal, ops, scope, (true, kept))?;
     tracing::info!(
         unfinished = report.unfinished,
         recovered = report.restored.len(),

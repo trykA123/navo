@@ -52,8 +52,8 @@ impl RecoveryNotice {
         })
     }
 
-    /// `notice` plus the move copies this start's recovery kept; a notice of only those when there
-    /// is no other. Without kept copies, `notice` as it is.
+    /// `notice` plus the move copies this start's recovery kept, each listed once; a notice of only
+    /// those when there is no other. Without kept copies, `notice` as it is.
     pub(super) fn with_kept(
         notice: Option<Self>,
         data: &Path,
@@ -70,8 +70,17 @@ impl RecoveryNotice {
             folder: crate::startup::path_location(data),
             kept: Vec::new(),
         });
-        notice.kept = kept;
+        for copy in kept {
+            if !notice.kept.contains(&copy) {
+                notice.kept.push(copy);
+            }
+        }
         Some(notice)
+    }
+
+    /// The move copies this notice lists, for a notice that replaces it.
+    pub(super) fn into_kept(self) -> Vec<Location> {
+        self.kept
     }
 
     pub(super) fn failed(data: &Path, error: &str) -> Self {
@@ -91,13 +100,15 @@ impl RecoveryNotice {
 
     pub fn content(&self) -> RecoveryContent {
         if let Some(error) = &self.error {
+            let mut details = vec![
+                navo_l10n::tr("store-recovery-restart"),
+                error.clone(),
+                navo_l10n::tr("retention-safe-mode-help"),
+            ];
+            details.extend(kept_lines(&self.kept));
             return RecoveryContent {
                 title: navo_l10n::tr("store-recovery-blocked"),
-                details: vec![
-                    navo_l10n::tr("store-recovery-restart"),
-                    error.clone(),
-                    navo_l10n::tr("retention-safe-mode-help"),
-                ],
+                details,
             };
         }
         let mut details = kept_lines(&self.kept);

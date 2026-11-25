@@ -232,6 +232,7 @@ fn the_completed_receipt_is_acknowledged_on_the_next_start() {
             sole: true,
         },
         &FakeFs::new(),
+        &mut Vec::new(),
     )
     .unwrap();
     let notice = State::load(data.path()).unwrap().notices[0].clone();

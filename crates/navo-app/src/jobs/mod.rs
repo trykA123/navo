@@ -41,7 +41,9 @@ pub(crate) use profile::{
 };
 #[cfg(test)]
 pub use profile::{confined_factory, experimental_factory, profile_factory, retaining_factory};
-pub use recovery::{RecoveryReport, recover_profile};
+#[cfg(test)]
+pub use recovery::recover_profile;
+pub use recovery::{RecoveryReport, recover_keeping};
 pub use session::SessionHolds;
 #[cfg(test)]
 pub use session::{PreviousVersion, RestoreError};

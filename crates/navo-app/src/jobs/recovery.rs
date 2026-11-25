@@ -20,29 +20,30 @@ pub struct RecoveryReport {
     pub unfinished: u32,
     pub restored: Vec<JobId>,
     pub pending: Vec<StillPending>,
-    /// Move copies a rollback kept at their targets: the source path did not prove it still holds
-    /// the original, so both may exist now. The startup notice lists them once.
-    pub kept: Vec<Location>,
 }
 
+#[cfg(test)]
 pub fn recover_profile(
     journal: &SharedJournal,
     ops: &dyn ProviderOps,
     scope: (&Path, &[JobId]),
     experimental: bool,
 ) -> Result<RecoveryReport, JournalError> {
-    recover_in(journal, ops, (scope.0, scope.1, experimental))
+    recover_keeping(journal, ops, scope, (experimental, &mut Vec::new()))
 }
 
-fn recover_in(
+/// Recovers the profile's unfinished jobs. `kept` collects each move copy a rollback kept at its
+/// target, as it is kept, so a caller still has them when a later job or step fails: the source
+/// path did not prove it still holds the original, so both may exist now.
+pub fn recover_keeping(
     journal: &SharedJournal,
     ops: &dyn ProviderOps,
-    (data, expected, experimental): (&Path, &[JobId], bool),
+    (data, expected): (&Path, &[JobId]),
+    (experimental, kept): (bool, &mut Vec<Location>),
 ) -> Result<RecoveryReport, JournalError> {
     let _recovering = super::trim::recovering(journal);
     let unfinished = lock(journal).unfinished()?;
     let mut outcomes = BTreeMap::new();
-    let mut kept = Vec::new();
     for &id in expected {
         let (state, job) = lock(journal).read_job(id)?;
         outcomes.insert(id, (job, state, false));
@@ -51,7 +52,7 @@ fn recover_in(
         recover_one(
             journal,
             (ops, data, experimental),
-            (job, &mut outcomes, &mut kept),
+            (job, &mut outcomes, kept),
         )?;
     }
     let pending = lock(journal).restore_pending()?;
@@ -59,7 +60,7 @@ fn recover_in(
         recover_one(
             journal,
             (ops, data, experimental),
-            (job, &mut outcomes, &mut kept),
+            (job, &mut outcomes, kept),
         )?;
     }
     held::release_finished(journal, ops)?;
@@ -67,7 +68,6 @@ fn recover_in(
         unfinished: u32::try_from(unfinished.len()).unwrap_or(u32::MAX),
         restored: Vec::new(),
         pending: Vec::new(),
-        kept,
     };
     for (id, (job, state, stranded)) in outcomes {
         let settled = state == JobState::Failed

@@ -20,10 +20,7 @@ pub(super) fn start(data: Option<&Path>, unclean: bool, ops: &dyn ProviderOps) -
     };
     let mut kept = Vec::new();
     let opened = if instance.sole {
-        recover(data, unclean, ops).map(|(journal, copies)| {
-            kept = copies;
-            journal
-        })
+        recover(data, unclean, ops, &mut kept)
     } else {
         crate::jobs::open(&navo_store::StoreDirs::journal_in(data))
     };
@@ -43,17 +40,19 @@ pub(super) fn start(data: Option<&Path>, unclean: bool, ops: &dyn ProviderOps) -
     }
 }
 
-/// Recovers unfinished jobs; returns the journal and the move copies the recovery kept.
+/// Recovers unfinished jobs; `kept` collects the move copies the recovery kept, even when a
+/// later step fails.
 fn recover(
     data: &Path,
     unclean: bool,
     ops: &dyn ProviderOps,
-) -> Result<(crate::jobs::SharedJournal, Vec<Location>), JournalError> {
+    kept: &mut Vec<Location>,
+) -> Result<crate::jobs::SharedJournal, JournalError> {
     let (db, _) =
         super::super::unclean::open_legacy(&navo_store::StoreDirs::journal_in(data), unclean)?;
     let journal = Arc::new(Mutex::new(JobJournal::new(db)?));
-    let report = crate::jobs::recover_profile(&journal, ops, (data, &[]), false)?;
+    let report = crate::jobs::recover_keeping(&journal, ops, (data, &[]), (false, kept))?;
     crate::jobs::trim_at_startup(&journal, data, ops)?;
     crate::jobs::log_pending(&report.pending);
-    Ok((journal, report.kept))
+    Ok(journal)
 }

@@ -371,7 +371,6 @@ fn a_retry_that_turns_into_attention_keeps_its_line_after_the_job_is_pruned() {
         unfinished: 1,
         restored: Vec::new(),
         pending: vec![pending(true)],
-        kept: Vec::new(),
     };
     for _ in 0..2 {
         let mut state = State::load(data.path()).unwrap();
@@ -421,7 +420,6 @@ fn a_failed_job_missing_from_the_report_still_gets_its_attention_line() {
         unfinished: 1,
         restored: Vec::new(),
         pending: Vec::new(),
-        kept: Vec::new(),
     };
     for _ in 0..2 {
         let mut state = State::load(data.path()).unwrap();

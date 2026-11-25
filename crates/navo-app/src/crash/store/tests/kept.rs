@@ -52,8 +52,9 @@ fn startup_recovery_reports_the_move_copy_it_kept() {
     let fs = FakeFs::new();
     let copy = crashed_move(data.path(), &fs);
     let journal = crate::jobs::open(&database(data.path())).unwrap();
-    let report = crate::jobs::recover_profile(&journal, &fs, (data.path(), &[]), false).unwrap();
-    assert_eq!(report.kept, std::slice::from_ref(&copy));
+    let mut kept = Vec::new();
+    crate::jobs::recover_keeping(&journal, &fs, (data.path(), &[]), (false, &mut kept)).unwrap();
+    assert_eq!(kept, std::slice::from_ref(&copy));
     assert!(fs.metadata(&copy).is_ok(), "the kept copy stays");
     assert!(fs.metadata(&fs.location("home/a")).is_ok());
 }
@@ -82,5 +83,52 @@ fn startup_recovery_shows_a_kept_move_copy_once_in_the_notice() {
             next.notice.is_none(),
             "experimental {experimental}: shown once"
         );
+    }
+}
+
+#[test]
+fn startup_recovery_after_a_rebuild_shows_the_move_copy_it_kept() {
+    let data = tempfile::tempdir().unwrap();
+    let fs = FakeFs::new();
+    let copy = crashed_move(data.path(), &fs);
+    damaged(data.path());
+    let start = check_with(Some(data.path()), true, &fs, true);
+    let content = start.notice.as_ref().map(RecoveryNotice::content).unwrap();
+    assert_eq!(content.title, navo_l10n::tr("store-recovery-title"));
+    assert!(
+        content.details.iter().any(|line| line == copy.as_str()),
+        "{content:?}"
+    );
+}
+
+/// A startup that fails after recovery already kept a copy still names that copy: the job is
+/// finished, so no later start reports it.
+#[test]
+fn startup_recovery_that_fails_afterwards_still_shows_the_move_copy_it_kept() {
+    let data = tempfile::tempdir().unwrap();
+    let fs = FakeFs::new();
+    let copy = crashed_move(data.path(), &fs);
+    fs::create_dir(crate::crash::sentinel_path(&database(data.path()))).unwrap();
+    let start = check_with(Some(data.path()), true, &fs, true);
+    let content = start.notice.as_ref().map(RecoveryNotice::content).unwrap();
+    assert_eq!(content.title, navo_l10n::tr("store-recovery-blocked"));
+    assert!(
+        content.details.iter().any(|line| line == copy.as_str()),
+        "{content:?}"
+    );
+}
+
+#[test]
+fn a_copy_kept_twice_in_one_start_is_listed_once() {
+    let data = tempfile::tempdir().unwrap();
+    let fs = FakeFs::new();
+    let [copy, first, last] = ["dest/a", "dest/b", "dest/c"].map(|path| fs.location(path));
+    let earlier = vec![copy.clone(), first.clone(), copy.clone()];
+    let notice = RecoveryNotice::with_kept(None, data.path(), earlier);
+    let notice = RecoveryNotice::with_kept(notice, data.path(), vec![last.clone(), copy.clone()]);
+    let content = notice.as_ref().map(RecoveryNotice::content).unwrap();
+    for kept in [&copy, &first, &last] {
+        let listed = content.details.iter().filter(|line| *line == kept.as_str());
+        assert_eq!(listed.count(), 1, "{kept:?}: {content:?}");
     }
 }

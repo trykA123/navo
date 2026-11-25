@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use navo_core::Location;
 use navo_fs::{LocalFs, ProviderOps};
 use navo_store::{DbError, JournalError, RecoveryError};
 
@@ -51,10 +52,14 @@ impl StoreStart {
             if let Some(path) = &self.path {
                 access::block(path, &error.to_string());
                 super::record_failed_check(path);
-                self.notice = Some(RecoveryNotice::failed(
-                    path.parent().unwrap_or(Path::new(".")),
-                    &error.to_string(),
-                ));
+                let data = path.parent().unwrap_or(Path::new("."));
+                let kept = self
+                    .notice
+                    .take()
+                    .map(RecoveryNotice::into_kept)
+                    .unwrap_or_default();
+                let failed = Some(RecoveryNotice::failed(data, &error.to_string()));
+                self.notice = RecoveryNotice::with_kept(failed, data, kept);
             }
             tracing::error!(%error, "cannot share the database session");
         }
@@ -93,6 +98,7 @@ pub(crate) fn check_with(
         }
     };
     access::register(&path, &locks);
+    let mut kept = Vec::new();
     let outcome = workflow::run(
         data,
         &workflow::Mode {
@@ -101,16 +107,17 @@ pub(crate) fn check_with(
             sole: locks.sole,
         },
         ops,
+        &mut kept,
     );
     let (notice, journal) = match outcome {
         Ok((notice, journal)) => {
             access::allow(&path);
             match share_journal(&path, journal, &locks) {
-                Ok(journal) => (notice, Some(journal)),
-                Err(error) => return failed_start(&path, locks, &error.to_string()),
+                Ok(journal) => (RecoveryNotice::with_kept(notice, data, kept), Some(journal)),
+                Err(error) => return failed_start(&path, locks, (&error.to_string(), kept)),
             }
         }
-        Err(error) => return failed_start(&path, locks, &error.to_string()),
+        Err(error) => return failed_start(&path, locks, (&error.to_string(), kept)),
     };
     StoreStart {
         path: Some(path),
@@ -131,17 +138,21 @@ fn share_journal(
     Ok(journal)
 }
 
-fn failed_start(path: &Path, locks: Arc<locks::Locks>, message: &str) -> StoreStart {
+/// The start after recovery stopped with `message`; its notice still lists the move copies that
+/// recovery already `kept`, since their jobs are finished and no later start reports them.
+fn failed_start(
+    path: &Path,
+    locks: Arc<locks::Locks>,
+    (message, kept): (&str, Vec<Location>),
+) -> StoreStart {
     access::block(path, message);
     super::record_failed_check(path);
     tracing::error!(error = message, database = %path.display(), "database startup recovery stopped");
+    let data = path.parent().unwrap_or(Path::new("."));
     StoreStart {
         path: Some(path.to_owned()),
         locks: Some(locks),
-        notice: Some(RecoveryNotice::failed(
-            path.parent().unwrap_or(Path::new(".")),
-            message,
-        )),
+        notice: RecoveryNotice::with_kept(Some(RecoveryNotice::failed(data, message)), data, kept),
         ..StoreStart::default()
     }
 }
