@@ -22,7 +22,7 @@ use crate::file_list::{
     Refresh, SwitchPane,
 };
 use crate::pane_chrome::{
-    PaneTabs, StateCard, pane_active_bar, pane_card, path_segments, state_card, target_outline,
+    PaneTabs, StateCard, pane_card, path_segments, state_card, target_outline,
 };
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, IconName, icon};
@@ -158,7 +158,6 @@ impl NavoWindow {
             }));
         pane_card(("pane", pane.get()), self.card_label(pane), is_active, cx)
             .relative()
-            .child(pane_active_bar(&t, pane.get(), is_active))
             .child(body)
             .children(marks.is_target.then(|| target_outline(&t, pane.get())))
             .child(self.pane_swap_target(pane, window, cx))

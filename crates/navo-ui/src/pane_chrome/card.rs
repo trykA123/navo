@@ -9,23 +9,8 @@ use crate::primitives::{IconName, icon};
 use crate::tokens::{self, Theme};
 
 const HEADER_HEIGHT: f32 = 42.;
-const ACTIVE_BAR_HEIGHT: f32 = 2.;
 const STATE_CARD_MAX_WIDTH: f32 = 360.;
 const STATE_ICON_BOX: f32 = 44.;
-
-/// Builds the 2 px top hairline for a pane card: accent-coloured when active, transparent when idle.
-#[must_use]
-pub fn pane_active_bar(t: &Theme, id: u64, is_active: bool) -> AnyElement {
-    let bar = div().flex_none().w_full().h(px(ACTIVE_BAR_HEIGHT));
-    if is_active {
-        bar.id(("pane-active-bar", id))
-            .test_support()
-            .bg(t.colors.accent)
-            .into_any_element()
-    } else {
-        bar.into_any_element()
-    }
-}
 
 /// Content for a calm centered empty, filtered, or error state card inside a pane.
 pub struct StateCard {

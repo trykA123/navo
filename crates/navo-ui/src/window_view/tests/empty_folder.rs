@@ -59,7 +59,6 @@ fn dual_pane_empty_folder_renders_active_bar_and_empty_card(cx: &mut TestAppCont
         cx.update(|cx| tokens::apply(mode, cx));
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
-            assert!(window.find(("pane-active-bar", pane.get())).visible());
             assert!(
                 window
                     .within(("list", pane.get()))

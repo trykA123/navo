@@ -5,7 +5,7 @@ use gpui_kit::{
 use navo_core::{AppState, PaneId};
 use navo_fs::FakeFs;
 
-use super::super::{fake, open_options_sized, options_for, press, two_panes};
+use super::super::{fake, open_options_sized, options_for, two_panes};
 use super::three_panes;
 use crate::tokens::{self, Mode};
 use crate::window_view::NavoWindow;
@@ -96,49 +96,6 @@ fn one_pane_mode_shows_no_markers_on_the_shown_pane(cx: &mut TestAppContext) {
         let id = focused.get();
         assert!(window.try_find(("pane-number", id)).is_none());
         assert!(window.try_find(("pane-tag-active", id)).is_none());
-    })
-    .expect("window");
-}
-
-#[gpui_kit::test]
-fn two_panes_render_the_active_bar_and_tab_moves_it_without_jump(cx: &mut TestAppContext) {
-    let (window, view) = open_wide(cx, two_panes);
-    let (panes, focused, target) = roles(cx, &view);
-    assert_eq!(panes.len(), 2);
-    let before: Vec<_> = cx
-        .update_window(window, |_, window, cx| {
-            window.render_frame(cx);
-            assert!(window.find(("pane-active-bar", focused.get())).visible());
-            assert!(window.try_find(("pane-active-bar", target.get())).is_none());
-            panes
-                .iter()
-                .map(|pane| {
-                    window
-                        .within(("tabs", pane.get()))
-                        .find(0usize)
-                        .bounds()
-                        .top()
-                })
-                .collect()
-        })
-        .expect("window");
-    press(cx, window, &view, "tab");
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert!(window.find(("pane-active-bar", target.get())).visible());
-        assert!(
-            window
-                .try_find(("pane-active-bar", focused.get()))
-                .is_none()
-        );
-        for (pane, was) in panes.iter().zip(before) {
-            let now = window
-                .within(("tabs", pane.get()))
-                .find(0usize)
-                .bounds()
-                .top();
-            assert!((now - was).abs() <= px(0.5), "pane {} jumped", pane.get());
-        }
     })
     .expect("window");
 }
