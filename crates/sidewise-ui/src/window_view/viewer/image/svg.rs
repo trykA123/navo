@@ -202,14 +202,21 @@ mod tests {
 
     #[test]
     fn a_text_free_svg_never_loads_system_fonts() {
-        assert!(svg_options(SHAPES).fontdb.is_empty());
+        let options = svg_options(SHAPES);
+        assert!(options.fontdb.is_empty());
+        assert!(Arc::ptr_eq(&options.fontdb, &NO_FONTS), "system fonts used");
         vector(SHAPES).unwrap();
-        assert!(FONTS.get().is_none(), "system fonts loaded");
     }
 
     #[test]
     fn an_svg_with_text_loads_system_fonts() {
         vector(WORDS).unwrap();
-        assert!(FONTS.get().is_some());
+        let options = svg_options(WORDS);
+        assert!(!Arc::ptr_eq(&options.fontdb, &NO_FONTS));
+        assert!(
+            FONTS
+                .get()
+                .is_some_and(|fonts| Arc::ptr_eq(fonts, &options.fontdb))
+        );
     }
 }
