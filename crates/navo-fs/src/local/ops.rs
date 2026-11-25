@@ -115,6 +115,18 @@ impl ProviderOps for LocalFs {
         }
     }
 
+    /// Reads creation time and attribute bits too, through one handle opened by path, so a source
+    /// proof without a file ID (FAT, exFAT) can match. Any failure to open or read proves nothing.
+    #[cfg(windows)]
+    fn copied_source_at(
+        &self,
+        location: &Location,
+    ) -> Result<Option<crate::CopiedSource>, FsError> {
+        Ok(os_path(location)
+            .ok()
+            .and_then(|path| super::owned_windows::source_at(&path)))
+    }
+
     #[cfg(windows)]
     fn hide_retained(
         &self,

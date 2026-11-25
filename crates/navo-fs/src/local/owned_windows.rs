@@ -13,8 +13,9 @@ use windows_sys::Win32::Storage::FileSystem::{
     FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
     FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX, FILE_FLAG_BACKUP_SEMANTICS,
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_INFO_BY_HANDLE_CLASS, FILE_READ_ATTRIBUTES,
-    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo,
-    FileDispositionInfoEx, GetFileInformationByHandleEx, SetFileInformationByHandle,
+    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES, FileBasicInfo,
+    FileDispositionInfo, FileDispositionInfoEx, GetFileInformationByHandleEx,
+    SetFileInformationByHandle,
 };
 
 pub(super) fn remove(path: &Path, expected: crate::FileIdentity) -> io::Result<()> {
@@ -63,6 +64,24 @@ pub(super) fn remove_unchanged(path: &Path, expected: crate::CopiedSource) -> io
         other => other,
     }
     .map(|()| true)
+}
+
+/// The file at `path` as a move's source proof, read through one handle opened by path with
+/// attribute access only, so creation time and attribute bits come from the same file as size and
+/// times. `None` when it is not a plain file (a link is not followed) or any open or read fails:
+/// that proves nothing, and a rollback keeps its copy.
+pub(super) fn source_at(path: &Path) -> Option<crate::CopiedSource> {
+    let file = OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .ok()?;
+    let metadata = file.metadata().ok()?;
+    if !metadata.is_file() {
+        return None;
+    }
+    super::copied_source(&file, &metadata).ok()
 }
 
 /// Opens a moved source for its check and delete, with `extra` access (write attributes, so a

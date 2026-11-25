@@ -308,6 +308,25 @@ impl ProviderOps for PauseSpy {
         self.proved.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
+
+    fn copied_source_at(
+        &self,
+        _: &navo_core::Location,
+    ) -> Result<Option<navo_fs::CopiedSource>, navo_core::FsError> {
+        self.proved.fetch_add(1, Ordering::SeqCst);
+        Ok(Some(spied_proof()))
+    }
+}
+
+/// A source proof without a file ID, as `LocalFs` reads one by path on Windows.
+fn spied_proof() -> navo_fs::CopiedSource {
+    navo_fs::CopiedSource {
+        identity: None,
+        size: 1,
+        modified_ms: Some(1),
+        created_ms: Some(1),
+        attributes: Some(0x20),
+    }
 }
 
 #[test]
@@ -346,6 +365,25 @@ fn a_moved_source_is_removed_by_the_inner_provider_through_the_trace() {
         attributes: Some(0),
     };
     wrapped.remove_copied_source(&location, expected).unwrap();
+    assert_eq!(spy.proved.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_moved_source_is_read_by_path_through_the_inner_provider_and_the_trace() {
+    let dir = tempfile::tempdir().unwrap();
+    let trace = InputTrace::new(dir.path().join("proof.jsonl")).unwrap();
+    let spy = Arc::new(PauseSpy {
+        fs: fake(),
+        pauses: AtomicUsize::new(0),
+        proved: AtomicUsize::new(0),
+    });
+    let inner: Arc<dyn ProviderOps> = spy.clone();
+    let wrapped = trace.provider(inner);
+    let location = spy.fs.location("home/a");
+    assert_eq!(
+        wrapped.copied_source_at(&location).unwrap(),
+        Some(spied_proof())
+    );
     assert_eq!(spy.proved.load(Ordering::SeqCst), 1);
 }
 

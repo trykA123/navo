@@ -127,6 +127,14 @@ impl ProviderOps for SlowFs {
         self.inner.remove_copied_source(location, expected)
     }
 
+    fn copied_source_at(
+        &self,
+        location: &Location,
+    ) -> Result<Option<crate::CopiedSource>, FsError> {
+        self.sleep();
+        self.inner.copied_source_at(location)
+    }
+
     fn pause_git(&self, location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
         self.inner.pause_git(location)
     }

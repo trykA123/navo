@@ -84,14 +84,17 @@ impl CopiedSource {
         }
     }
 
-    /// True when the file at `location`, read by path, is still this one. A path read has no
-    /// creation time or attributes, so a proof without a file ID never matches here.
+    /// True when the file at `location`, read by path ([`ProviderOps::copied_source_at`]), is
+    /// still this one. Where that read has no creation time or attributes, a proof without a file
+    /// ID never matches.
     pub(crate) fn still_at<P: ProviderOps + ?Sized>(
         &self,
         ops: &P,
         location: &Location,
     ) -> Result<bool, FsError> {
-        Ok(seen_by_path(ops, location)?.is_some_and(|now| self.still(&now)))
+        Ok(ops
+            .copied_source_at(location)?
+            .is_some_and(|now| self.still(&now)))
     }
 }
 
@@ -235,6 +238,12 @@ pub trait ProviderOps: Provider {
             location: Some(source.clone()),
             ..FsError::new(FsErrorKind::NotSupportedYet)
         })
+    }
+    /// The file at `location` read by path, in the shape of a move's source proof; `None` when it
+    /// is not a plain file or, where a provider says so, could not be read. This default has no
+    /// creation time or attributes, so without a file ID it proves nothing.
+    fn copied_source_at(&self, location: &Location) -> Result<Option<CopiedSource>, FsError> {
+        seen_by_path(self, location)
     }
     fn mount_identity(&self, _location: &Location) -> Result<Option<u64>, FsError> {
         Ok(None)

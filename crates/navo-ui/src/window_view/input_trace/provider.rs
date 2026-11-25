@@ -124,6 +124,12 @@ impl ProviderOps for CountingFs {
         self.inner.remove_copied_source(location, expected)
     }
 
+    /// Reads a moved source by path through the inner provider, so its proof has the same fields.
+    fn copied_source_at(&self, location: &Location) -> Result<Option<CopiedSource>, FsError> {
+        self.count();
+        self.inner.copied_source_at(location)
+    }
+
     fn available_space(&self, location: &Location) -> Result<Option<u64>, FsError> {
         self.count();
         self.inner.available_space(location)
