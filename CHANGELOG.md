@@ -2,6 +2,45 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.9 — Kept files, in plain sight
+
+*2026-11-25*
+
+This release shows the files a move kept. When Navo keeps a file in place to protect it, the job card now says "Completed with problems" and lists each file with its reason. Startup recovery names the copies it kept, and it finishes fast even after a very large move. Cancelling work on a slow network share stops at once. Find, the built-in terminal, the button bar and Setup get more groundwork that is not switched on yet.
+
+### Added
+
+- **"Completed with problems" on the job card.** A job that kept files in place no longer looks failed. Its card reads "Completed with problems" in the warning colour and stays until you dismiss it. The card lists the first three kept files, one line each with its reason, such as "Kept the original of a.txt: it changed while Navo copied it". The job pill reads "With problems".
+- **Show all kept files.** Every card with kept files has a Show all button. It opens the activity drawer, which lists every kept file. Its key is Alt+J; the button shows the key you bound, or no key when the command is unbound. Esc returns focus to where you were.
+- **Kept copies after a crash.** When Navo undoes an interrupted move at startup and keeps a copy, the startup notice now names each kept copy. It shows once and does not come back at the next start. The notice also lists them when Navo could not open its saved data.
+
+### Fixed
+
+- **Cancelling work on a network share.** A cancel that arrived just before a network read started could leave that read waiting 18 to 21 seconds for the share to time out. Navo now repeats the cancel until the read ends. Closing Navo does the same, so it no longer waits up to 2 seconds for such a read.
+- **Crash rollback on drives without file IDs.** On FAT, exFAT and some network shares, Navo now reads the file at the source path the same way the copy did. Before, a rollback after a crash always kept the copy on these drives. Now it removes the copy only when the files match and their contents are the same byte for byte. Any difference or read error keeps the copy.
+- **More reserved names refused.** COM0 and LPT0 now count as reserved device names in Setup's install folder check. Compare's copy checks also refuse COM0, LPT0 and the superscript forms such as COM¹.
+
+### Changed
+
+- **Fast recovery and undo for large moves.** Startup recovery of a crashed move with 100,000 files no longer does billions of comparisons before the window opens. Undo of a large held copy or move is fast too. Both give the same results as before.
+- **Faster first SVG preview.** The first SVG preview no longer loads every system font when the picture has no text. That load stalled the first preview by 0.6 seconds or more.
+- **For contributors.** The Git push test no longer fails when Windows reuses a process ID, and font and clipboard tests tolerate a slow host.
+
+### Under the hood
+
+None of this can be tried yet.
+
+- **Find.** `name:` masks now filter names, and excluded words match inside names. Find has a reader for the text inside office documents. It refuses a hostile document instead of expanding it. The Find window's list draws its rows from the results and runs one search over every chosen folder in the background. Each window saves its Find window in the session.
+- **A built-in terminal.** The terminal keeps a screen grid with scrollback and snapshots. It hands the screen to a waiting reader between bursts of output.
+- **A button bar.** Navo can read and write its own icon pack format, with a size limit on each frame.
+- **Setup in any folder.** The helper for protected folders now creates the missing folders through the folder handles it already checked. It refuses device names and odd names, and it removes what it created if a step fails.
+
+### Known issues
+
+- **Drives without file IDs.** On FAT, exFAT and some network shares, a move proves a source by its size, times and attributes. Windows can give a file that is deleted and recreated under the same name within seconds its old creation time. If size and modified time also match, the move cannot tell that replacement apart. Crash rollback now compares the contents too.
+- **The new Settings is not complete.** The rest of Settings v2 comes in v0.9.0.
+- **Setup's administrator message runs ahead.** When you start Setup as administrator, it says it was started from another account or outside your desktop. In this release, Setup refuses every start as administrator. Start Setup normally from your desktop.
+
 ## v0.8.8 — Moves that keep your files
 
 *2026-11-25*
