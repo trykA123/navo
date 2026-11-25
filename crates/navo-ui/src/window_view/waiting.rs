@@ -7,8 +7,9 @@ use navo_core::{Command, Location, PaneId, Tab, TabId};
 
 use super::NavoWindow;
 use super::keys::{LeaveWaiting, RetryListing, WAITING};
+use crate::pane_chrome::{StateCard, state_card};
 use crate::prelude::*;
-use crate::primitives::Button;
+use crate::primitives::{Button, ButtonVariant, IconName};
 use crate::status_bar::ListingMark;
 use crate::tokens;
 
@@ -166,13 +167,22 @@ impl NavoWindow {
         let pane = waited.pane;
         let path = shown_path(waited.tab.location());
         let (label, title) = waited.label_and_title();
-        let small = |text: SharedString| {
-            div()
-                .text_size(t.typography.small)
-                .text_color(t.colors.faint)
-                .child(text)
+        let subtitle: SharedString = match (waited.is_offline, waited.hint()) {
+            (true, Some(hint)) => format!("{path} · {hint}").into(),
+            (true, None) => path.into(),
+            (false, Some(hint)) => hint.into(),
+            (false, None) => path.into(),
         };
-        let retry_button = Self::retry_button(pane, cx);
+        let glyph = if waited.is_offline {
+            IconName::TriangleAlert
+        } else {
+            IconName::RefreshCw
+        };
+        let action = waited.is_offline.then(|| {
+            Self::retry_button(pane, cx)
+                .variant(ButtonVariant::Primary)
+                .into_any_element()
+        });
         div()
             .id(("waiting", pane.get()))
             .key_context(WAITING)
@@ -195,24 +205,26 @@ impl NavoWindow {
             .flex_col()
             .flex_1()
             .min_h_0()
-            .items_center()
-            .justify_center()
-            .gap(t.spacing.xs)
-            .bg(t.colors.surface)
-            .text_color(t.colors.muted)
-            .child(title)
-            .when(waited.is_offline, |this| {
-                this.child(small(path.into()))
-                    .child(div().py(t.spacing.sm).child(retry_button))
-            })
-            .when_some(waited.hint(), |this, hint| this.child(small(hint.into())))
+            .child(state_card(
+                &t,
+                StateCard {
+                    card_id: ("waiting-card", pane.get()).into(),
+                    icon: glyph,
+                    is_error: waited.is_offline,
+                    title: title.into(),
+                    subtitle,
+                    action,
+                },
+            ))
             .into_any_element()
     }
 
     fn retry_button(pane: PaneId, cx: &mut Context<Self>) -> Button {
         let view = cx.weak_entity();
-        Button::new(("retry", pane.get()), "Retry").on_click(move |_, _, cx| {
-            let _ = view.update(cx, |view, cx| view.retry_pane(pane, cx));
-        })
+        Button::new(("retry", pane.get()), navo_l10n::tr("pane-error-retry")).on_click(
+            move |_, _, cx| {
+                let _ = view.update(cx, |view, cx| view.retry_pane(pane, cx));
+            },
+        )
     }
 }

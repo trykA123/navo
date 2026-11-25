@@ -5,9 +5,103 @@ use gpui_kit::{
     ParentElement, Role, SharedString, Stateful, StatefulInteractiveElement, Styled, div, px,
 };
 
+use crate::primitives::{IconName, icon};
 use crate::tokens::{self, Theme};
 
 const HEADER_HEIGHT: f32 = 42.;
+const ACTIVE_BAR_HEIGHT: f32 = 2.;
+const STATE_CARD_MAX_WIDTH: f32 = 360.;
+const STATE_ICON_BOX: f32 = 44.;
+
+/// Builds the 2 px top hairline for a pane card: accent-coloured when active, transparent when idle.
+#[must_use]
+pub fn pane_active_bar(t: &Theme, id: u64, is_active: bool) -> AnyElement {
+    let bar = div().flex_none().w_full().h(px(ACTIVE_BAR_HEIGHT));
+    if is_active {
+        bar.id(("pane-active-bar", id))
+            .test_support()
+            .bg(t.colors.accent)
+            .into_any_element()
+    } else {
+        bar.into_any_element()
+    }
+}
+
+/// Content for a calm centered empty, filtered, or error state card inside a pane.
+pub struct StateCard {
+    pub card_id: ElementId,
+    pub icon: IconName,
+    pub is_error: bool,
+    pub title: SharedString,
+    pub subtitle: SharedString,
+    pub action: Option<AnyElement>,
+}
+
+/// Builds a calm centered `surfaces.card` card for empty, no-match, or error pane states.
+#[must_use]
+pub fn state_card(t: &Theme, card: StateCard) -> AnyElement {
+    let (icon_bg, icon_edge, icon_color) = if card.is_error {
+        (
+            t.colors.mark.opacity(0.1),
+            t.colors.mark.opacity(0.35),
+            t.colors.mark,
+        )
+    } else {
+        (t.surfaces.field, t.colors.line, t.colors.muted)
+    };
+    let badge = div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(STATE_ICON_BOX))
+        .rounded(t.radii.sheet)
+        .bg(icon_bg)
+        .border_1()
+        .border_color(icon_edge)
+        .child(icon(card.icon, t.spacing.icon + t.spacing.xs, icon_color));
+    let card_box = div()
+        .id(card.card_id)
+        .test_support()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(t.spacing.md)
+        .max_w(px(STATE_CARD_MAX_WIDTH))
+        .p(t.spacing.xxl)
+        .rounded(t.radii.card)
+        .bg(t.surfaces.card)
+        .border_1()
+        .border_color(t.colors.line)
+        .child(badge)
+        .child(
+            div()
+                .text_size(t.typography.body + px(1.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t.colors.text)
+                .text_center()
+                .child(card.title),
+        )
+        .child(
+            div()
+                .text_size(t.typography.small)
+                .text_color(t.colors.muted)
+                .text_center()
+                .child(card.subtitle),
+        )
+        .when_some(card.action, |d, action| {
+            d.child(div().pt(t.spacing.xs).child(action))
+        });
+    div()
+        .flex()
+        .flex_1()
+        .size_full()
+        .items_center()
+        .justify_center()
+        .p(t.spacing.xxl)
+        .child(card_box)
+        .into_any_element()
+}
 
 #[must_use]
 pub fn card_shadow(t: &Theme, is_active: bool) -> Vec<BoxShadow> {

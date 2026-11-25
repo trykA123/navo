@@ -45,9 +45,9 @@ pub use drop::{DropEvent, DropPayload, DropSpot, ListEdge};
 pub(crate) use git_keys::OpenGitMenu;
 pub use keys::bind_keys;
 pub(crate) use keys::{
-    ClearFilter, CopyItems, CursorDown, CursorFirst, CursorLast, CursorUp, EditItem, MoveItems,
-    MultiRename, NewFile, NewFolder, OpenRow, PageDown, PageUp, Paste, RecycleItems, Refresh,
-    RenameItem, SwitchPane, UndoLast, ViewItem,
+    ClearFilter, CopyItems, CursorDown, CursorFirst, CursorLast, CursorUp, EditItem, GoBack,
+    MoveItems, MultiRename, NewFile, NewFolder, OpenParent, OpenRow, PageDown, PageUp, Paste,
+    RecycleItems, Refresh, RenameItem, SwitchPane, UndoLast, ViewItem,
 };
 pub use note::NoteFn;
 pub use parts::ListParts;
@@ -379,8 +379,15 @@ impl RenderOnce for FileList {
         });
         let reports = (self.on_page_rows, self.known_width);
         let area = rows::list_area(&ctx, reports, (&scroll, row_height, lift), (&t, cx));
-        let note = (is_finished && ctx.props.rows.is_empty())
-            .then(|| empty_line::empty_line(&t, ctx.props.filter.is_some() && listed > 0));
+        let on_clear: Option<empty_line::ClearHandler> =
+            ctx.on_list_action.clone().map(|handler| {
+                Rc::new(move |window: &mut Window, cx: &mut App| {
+                    handler(&FileListAction::Filter(FilterEdit::Clear), window, cx);
+                }) as empty_line::ClearHandler
+            });
+        let note = (is_finished && ctx.props.rows.is_empty()).then(|| {
+            empty_line::empty_line(&t, ctx.props.filter.is_some() && listed > 0, on_clear)
+        });
         press::release_on(keys::register(div().id(self.id), &ctx), &ctx)
             .test_support()
             .key_context(keys::CONTEXT)

@@ -322,7 +322,13 @@ files-recycle-confirm = Move { $items } to the { -bin }?
 job-route-recycle = { $from } → { -bin }
 
 pane-empty-folder = This folder is empty
+pane-empty-folder-hint = Drop files here or press F7 to create a folder.
 pane-empty-filter = No files match the filter. Esc clears it.
+pane-empty-filter-title = No items match
+pane-empty-filter-hint = Items in this folder are hidden by the active filter.
+pane-empty-clear-filter = Clear filter
+pane-error-title = Could not open this folder
+pane-error-retry = Retry
 files-cloud-placeholder = Online-only file — opens after download
 
 archive-unsafe-parent = Unsafe name: it leads out of the archive (..)

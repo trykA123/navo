@@ -17,9 +17,15 @@ use super::list_columns::{column_keys, list_parts, user_widths};
 use super::status::footer_parts;
 use super::user_commands::user_command_keys;
 use crate::FocusHandle;
-use crate::file_list::{ClearFilter, FileList, FileListAction, FileListProps, FilterEdit};
-use crate::pane_chrome::{PaneTabs, pane_card, path_segments, target_outline};
+use crate::file_list::{
+    ClearFilter, FileList, FileListAction, FileListProps, FilterEdit, GoBack, OpenParent, OpenRow,
+    Refresh, SwitchPane,
+};
+use crate::pane_chrome::{
+    PaneTabs, StateCard, pane_active_bar, pane_card, path_segments, state_card, target_outline,
+};
 use crate::prelude::*;
+use crate::primitives::{Button, ButtonVariant, IconName, icon};
 use crate::settings::WindowParts;
 use crate::status_bar::{StatusBar, StatusBarProps};
 use crate::tokens;
@@ -40,10 +46,19 @@ fn error_line(t: &tokens::Theme, pane: PaneId, message: SharedString) -> impl In
         .role(Role::Alert)
         .aria_label(message.clone())
         .test_support()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(t.spacing.sm)
         .px(t.spacing.xl)
         .py(t.spacing.sm)
+        .bg(t.colors.mark.opacity(0.08))
+        .border_b_1()
+        .border_color(t.colors.line)
+        .text_size(t.typography.small)
         .text_color(t.colors.mark)
-        .child(message)
+        .child(icon(IconName::TriangleAlert, t.spacing.icon, t.colors.mark))
+        .child(div().min_w_0().flex_1().truncate().child(message))
 }
 
 impl NavoWindow {
@@ -86,6 +101,9 @@ impl NavoWindow {
         let tab = core_pane.active();
         let waited = self.waited(pane, tab);
         let is_active = state.focused_pane() == pane;
+        let folder_failed = tab.listing().is_none()
+            || (self.browser.error(tab.id()).is_some()
+                && tab.listing().is_none_or(|l| l.is_empty()));
         let error = self.pane_error(pane, tab);
         let has_cursor = is_active && !self.preview.is_browsing(window, cx);
         let props = self.list_props(pane, tab, has_cursor);
@@ -95,10 +113,17 @@ impl NavoWindow {
         let chrome = self.ensure_chrome(pane, window, cx);
         let parts = WindowParts::of(&self.values);
         let path = self.path_row(pane, parts, cx);
-        let list = match (self.compare_list(pane, &focus, cx), waited) {
-            (Some(list), _) => list,
-            (None, Some(waited)) => Self::waiting_view(&waited, &focus, cx),
-            (None, None) => self
+        let compare = self.compare_list(pane, &focus, cx);
+        let inline_error = error
+            .clone()
+            .filter(|_| !folder_failed || compare.is_some());
+        let list = match (compare, waited, error) {
+            (Some(list), _, _) => list,
+            (None, Some(waited), _) => Self::waiting_view(&waited, &focus, cx),
+            (None, None, Some(message)) if folder_failed => {
+                Self::error_card((&t, &focus), pane, message, cx)
+            }
+            (None, None, _) => self
                 .file_list((pane, props), &focus, cx)
                 .parts(list_parts(parts))
                 .column_widths(user_widths(&self.values))
@@ -107,26 +132,101 @@ impl NavoWindow {
                 .into_any_element(),
         };
         let marks = self.pane_marks(pane, window);
-        let header = self.pane_header(pane, marks, cx);
+        let header = self.pane_header(pane, marks, cx).map(|header| {
+            header.when(!is_active && !marks.is_filled, |header| {
+                header.bg(t.colors.rail).text_color(t.colors.muted)
+            })
+        });
         let footer = self.pane_footer(pane, status, cx);
         let body = Self::pane_keys(div().key_context(PANE), cx)
             .flex()
             .flex_col()
             .flex_1()
-            .size_full()
+            .w_full()
             .min_w_0()
             .min_h_0()
             .child(Self::pane_swap_header(pane, (header, path), cx))
-            .when_some(error, |this, message| {
+            .when_some(inline_error, |this, message| {
                 this.child(error_line(&t, pane, message))
             })
             .child(list)
-            .children((!footer.is_empty()).then_some(footer));
+            .children((!footer.is_empty()).then(|| {
+                div()
+                    .flex_none()
+                    .when(!is_active, |d| d.bg(t.colors.rail))
+                    .child(footer)
+            }));
         pane_card(("pane", pane.get()), self.card_label(pane), is_active, cx)
             .relative()
+            .child(pane_active_bar(&t, pane.get(), is_active))
             .child(body)
             .children(marks.is_target.then(|| target_outline(&t, pane.get())))
             .child(self.pane_swap_target(pane, window, cx))
+            .into_any_element()
+    }
+
+    fn error_card(
+        (t, focus): (&tokens::Theme, &FocusHandle),
+        pane: PaneId,
+        message: SharedString,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let retry = Button::new(
+            ("pane-error-retry", pane.get()),
+            navo_l10n::tr("pane-error-retry"),
+        )
+        .variant(ButtonVariant::Primary)
+        .on_click(cx.listener(move |this: &mut Self, _, window, cx| {
+            this.focus_pane(pane);
+            this.apply(&Command::PaneRefresh, window, cx);
+        }))
+        .into_any_element();
+        div()
+            .id(("pane-error", pane.get()))
+            .key_context(crate::list_actions::LIST_CONTEXT)
+            .role(Role::Alert)
+            .aria_label(message.clone())
+            .test_support()
+            .track_focus(focus)
+            .on_action(cx.listener(|this: &mut Self, _: &SwitchPane, window, cx| {
+                this.switch_pane(window, cx);
+            }))
+            .on_action(
+                cx.listener(move |this: &mut Self, _: &Refresh, window, cx| {
+                    this.focus_pane(pane);
+                    this.apply(&Command::PaneRefresh, window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(move |this: &mut Self, _: &OpenRow, window, cx| {
+                    this.focus_pane(pane);
+                    this.apply(&Command::PaneRefresh, window, cx);
+                }),
+            )
+            .on_action(cx.listener(move |this: &mut Self, _: &GoBack, window, cx| {
+                this.focus_pane(pane);
+                this.apply(&Command::PaneBack, window, cx);
+            }))
+            .on_action(cx.listener(move |this: &mut Self, _: &OpenParent, _, cx| {
+                this.focus_pane(pane);
+                this.browser.go_up();
+                cx.notify();
+            }))
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(state_card(
+                t,
+                StateCard {
+                    card_id: ("pane-error-card", pane.get()).into(),
+                    icon: IconName::TriangleAlert,
+                    is_error: true,
+                    title: navo_l10n::tr("pane-error-title").into(),
+                    subtitle: message,
+                    action: Some(retry),
+                },
+            ))
             .into_any_element()
     }
 

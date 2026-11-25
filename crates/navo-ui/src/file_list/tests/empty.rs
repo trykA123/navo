@@ -5,7 +5,7 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{Role, TestAppContext};
 
 use super::{Harness, open_list, props};
-use crate::file_list::FileListProps;
+use crate::file_list::{FileListAction, FileListProps, FilterEdit};
 
 /// Opens a list with no rows, marks it finished or loading, and renders one more frame.
 fn open_empty(
@@ -68,4 +68,38 @@ fn a_filter_on_an_empty_folder_still_says_the_folder_is_empty(cx: &mut TestAppCo
         assert_eq!(line.label(), Some("This folder is empty"));
     })
     .expect("window");
+}
+
+#[gpui_kit::test]
+fn an_empty_listing_renders_the_calm_empty_card(cx: &mut TestAppContext) {
+    let window = open_empty(cx, (true, None, 0));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let list = window.within("left");
+        assert!(list.find("list-empty-card").visible());
+        assert!(list.try_find("list-empty-clear-filter").is_none());
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn a_filtered_empty_card_has_a_clear_filter_button_that_clears(cx: &mut TestAppContext) {
+    let mut empty: FileListProps = props(Vec::new().into());
+    empty.filter = Some("zz".into());
+    let (window, harness) = open_list(cx, empty);
+    harness.update(cx, |harness: &mut Harness, cx| {
+        harness.is_finished = true;
+        harness.listed = 3;
+        cx.notify();
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.within("left").find("list-empty-card").visible());
+        window.within("left").click("list-empty-clear-filter", cx);
+    })
+    .expect("window");
+    assert!(harness.read_with(cx, |h, _| {
+        h.actions
+            .contains(&FileListAction::Filter(FilterEdit::Clear))
+    }));
 }
