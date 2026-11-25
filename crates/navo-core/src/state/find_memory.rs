@@ -26,19 +26,23 @@ pub struct FindMemory {
 
 impl FindMemory {
     /// Rebuilds the memory from saved parts, applying the same limits as live edits.
-    pub(crate) fn from_parts(
-        mut placement: Vec<Placement>,
+    pub(crate) fn from_parts<Q>(
+        placement: impl IntoIterator<Item = Placement>,
         pinned: bool,
-        queries: Vec<SavedFind>,
-    ) -> Self {
-        placement.truncate(crate::placement::MAX_PLACEMENTS);
-        let mut memory = Self {
-            placement,
+        queries: Q,
+    ) -> Self
+    where
+        Q: IntoIterator<Item = SavedFind>,
+        Q::IntoIter: DoubleEndedIterator,
+    {
+        Self {
+            placement: placement
+                .into_iter()
+                .take(crate::placement::MAX_PLACEMENTS)
+                .collect(),
             pinned,
-            queries: Vec::new(),
-        };
-        memory.set_queries(queries);
-        memory
+            queries: newest_queries(queries),
+        }
     }
 
     /// The saved placements, newest first.
@@ -61,23 +65,7 @@ impl FindMemory {
     /// Replaces the saved queries; blank texts drop, repeats keep their newest
     /// slot, and only the last [`MAX_FINDS`] stay.
     pub fn set_queries(&mut self, queries: Vec<SavedFind>) {
-        let mut kept: Vec<SavedFind> = Vec::new();
-        for query in queries {
-            if query.text.trim().is_empty() {
-                continue;
-            }
-            if let Some(index) = kept
-                .iter()
-                .position(|old| old.text == query.text && old.base == query.base)
-            {
-                kept.remove(index);
-            }
-            kept.push(query);
-        }
-        if let Some(excess) = kept.len().checked_sub(MAX_FINDS) {
-            kept.drain(..excess);
-        }
-        self.queries = kept;
+        self.queries = newest_queries(queries);
     }
 
     /// Whether nothing is saved: no placement, no pin and no query.
@@ -85,4 +73,24 @@ impl FindMemory {
     pub fn is_empty(&self) -> bool {
         self.placement.is_empty() && !self.pinned && self.queries.is_empty()
     }
+}
+
+/// Walks queries newest to oldest, skipping blanks and older repeats, and stops
+/// at [`MAX_FINDS`], so a huge saved list costs only the queries it keeps.
+fn newest_queries<Q>(queries: Q) -> Vec<SavedFind>
+where
+    Q: IntoIterator<Item = SavedFind>,
+    Q::IntoIter: DoubleEndedIterator,
+{
+    let mut kept: Vec<SavedFind> = Vec::with_capacity(MAX_FINDS);
+    let mut newest = queries.into_iter().rev();
+    while kept.len() < MAX_FINDS {
+        let Some(query) = newest.next() else { break };
+        let repeat = kept.iter().any(|newer| newer == &query);
+        if !repeat && !query.text.trim().is_empty() {
+            kept.push(query);
+        }
+    }
+    kept.reverse();
+    kept
 }

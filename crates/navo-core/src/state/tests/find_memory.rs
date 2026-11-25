@@ -138,3 +138,48 @@ fn app_state_reaches_the_focused_windows_memory() {
     state.open_window(Location::new("/b").unwrap());
     assert!(!state.find_memory().pinned);
 }
+
+#[test]
+fn from_parts_matches_set_queries_with_repeats_past_the_cap() {
+    let texts_in = [
+        "a", "b", " ", "c", "a", "d", "e", "f", "g", "h", "i", "j", "k", "l", "b", "m", "c", "",
+    ];
+    let queries: Vec<SavedFind> = texts_in.iter().map(|t| saved(t)).collect();
+    let mut live = FindMemory::default();
+    live.set_queries(queries.clone());
+    let one = setup(1.0);
+    let placements = (0..10).map(|i| placement(&one, i % 2 == 0));
+    let loaded = FindMemory::from_parts(placements, true, queries);
+    assert_eq!(loaded.queries(), live.queries());
+    assert_eq!(
+        texts(&loaded),
+        ["d", "e", "f", "g", "h", "i", "j", "k", "l", "b", "m", "c"]
+    );
+    assert_eq!(loaded.placement().len(), 8);
+    assert!(loaded.placement()[0].maximized);
+    assert!(loaded.pinned);
+}
+
+#[test]
+fn from_parts_reads_only_the_newest_queries_and_placements() {
+    use std::cell::Cell;
+    let pulled = Cell::new(0_usize);
+    let queries = (0..5_000)
+        .map(|i| saved(&format!("q{i}")))
+        .collect::<Vec<_>>();
+    let counted = queries
+        .into_iter()
+        .inspect(|_| pulled.set(pulled.get() + 1));
+    let one = setup(1.0);
+    let placed = Cell::new(0_usize);
+    let placements = (0..1_000).map(|_| {
+        placed.set(placed.get() + 1);
+        placement(&one, false)
+    });
+    let memory = FindMemory::from_parts(placements, false, counted);
+    assert_eq!(pulled.get(), MAX_FINDS, "queries read");
+    assert_eq!(placed.get(), 8, "placements read");
+    assert_eq!(memory.queries().len(), MAX_FINDS);
+    assert_eq!(memory.queries()[0].text, "q4988");
+    assert_eq!(memory.queries()[MAX_FINDS - 1].text, "q4999");
+}

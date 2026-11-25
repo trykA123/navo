@@ -57,18 +57,14 @@ fn save_find(memory: &FindMemory) -> FindMemoryState {
 
 /// Rebuilds a window's find memory; a query whose base is no longer a valid location drops.
 fn restore_find(saved: &FindMemoryState) -> FindMemory {
-    let queries = saved
-        .queries
-        .iter()
-        .filter_map(|query| {
-            let base = Location::new(query.base.clone()).ok()?;
-            Some(SavedFind {
-                text: query.text.clone(),
-                base,
-            })
+    let queries = saved.queries.iter().filter_map(|query| {
+        let base = Location::new(query.base.clone()).ok()?;
+        Some(SavedFind {
+            text: query.text.clone(),
+            base,
         })
-        .collect();
-    FindMemory::from_parts(saved.placement.clone(), saved.pinned, queries)
+    });
+    FindMemory::from_parts(saved.placement.iter().cloned(), saved.pinned, queries)
 }
 
 pub(super) fn save_pane(pane: &Pane, rows_per_pane: usize) -> PaneState {

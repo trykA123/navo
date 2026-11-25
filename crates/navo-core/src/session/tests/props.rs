@@ -7,12 +7,24 @@ const POOL: [&str; 4] = ["/home", "/a", "/b", "/c"];
 #[derive(Debug, Clone)]
 enum Step {
     Run(Command),
-    Load { pick: usize, len: usize },
-    PageRows { pick: usize, rows: u64 },
+    Load {
+        pick: usize,
+        len: usize,
+    },
+    PageRows {
+        pick: usize,
+        rows: u64,
+    },
     Scroll(u64),
     OpenWindow(usize),
     FocusWindow(usize),
+    Find {
+        pinned: bool,
+        queries: Vec<(usize, usize)>,
+    },
 }
+
+const FIND_TEXTS: [&str; 4] = ["*.rs", "todo", " ", "needle"];
 
 fn location() -> impl Strategy<Value = Location> {
     prop::sample::select(POOL.to_vec()).prop_map(loc)
@@ -45,6 +57,8 @@ fn step() -> impl Strategy<Value = Step> {
         2 => (0..250_u64).prop_map(Step::Scroll),
         1 => (0..POOL.len()).prop_map(Step::OpenWindow),
         1 => any::<usize>().prop_map(Step::FocusWindow),
+        1 => (any::<bool>(), prop::collection::vec((0..FIND_TEXTS.len(), 0..POOL.len()), 0..20))
+            .prop_map(|(pinned, queries)| Step::Find { pinned, queries }),
     ]
 }
 
@@ -82,6 +96,19 @@ fn perform(state: &mut AppState, step: &Step) {
         Step::FocusWindow(index) => {
             let id = pick(&state.window_ids(), *index);
             let _ = state.focus_window(id);
+        }
+        Step::Find { pinned, queries } => {
+            let memory = state.find_memory_mut();
+            memory.pinned = *pinned;
+            memory.set_queries(
+                queries
+                    .iter()
+                    .map(|&(text, base)| SavedFind {
+                        text: FIND_TEXTS[text].to_owned(),
+                        base: loc(POOL[base]),
+                    })
+                    .collect(),
+            );
         }
     }
 }
