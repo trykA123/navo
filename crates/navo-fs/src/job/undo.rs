@@ -3,7 +3,7 @@ use std::ops::Range;
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::presence;
-use super::copy::{legacy_temp_of, overwrites, remove_if_present, temp_of};
+use super::copy::{legacy_temp_of, remove_if_present, temp_of};
 use super::link::undo_link;
 use super::marks::is_removal;
 use super::restore::{
@@ -23,7 +23,7 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
         if !run.is_done(seq) && held.is_none() && !unsure {
             continue;
         }
-        if awaits_unreadable_row(job, step, held) {
+        if awaits_unreadable_row(&run, step, held) {
             continue;
         }
         let result = if is_plain_move(job.plan.kind, step, held) {
@@ -84,13 +84,13 @@ pub(super) fn held_for<'j>(step: &Step, run: &Rollback<'j>) -> Option<&'j HeldFi
     run.held_for(target)
 }
 
-fn awaits_unreadable_row(job: &Journaled<'_>, step: &Step, held: Option<&HeldFile>) -> bool {
-    if !job.held_unreadable || held.is_some() {
+fn awaits_unreadable_row(run: &Rollback<'_>, step: &Step, held: Option<&HeldFile>) -> bool {
+    if !run.job.held_unreadable || held.is_some() {
         return false;
     }
     match step {
         Step::CopyFile { .. } => true,
-        Step::Rename { target, .. } => overwrites(job.plan, target),
+        Step::Rename { target, .. } => run.overwrites(target),
         Step::WriteFile { .. } => true,
         _ => false,
     }

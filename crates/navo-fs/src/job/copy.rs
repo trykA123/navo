@@ -1,4 +1,4 @@
-use navo_core::{FsError, FsErrorKind, Location, OperationPlan, Resolution, Step};
+use navo_core::{FsError, FsErrorKind, Location};
 
 use super::aside::Aside;
 use super::verify::SourceDigest;
@@ -338,7 +338,10 @@ fn flush_folder(ops: &dyn ProviderOps, flush: bool, target: &Location) -> Result
     ops.flush(&folder)
 }
 
-pub(super) fn overwrites(plan: &OperationPlan, target: &Location) -> bool {
+/// The plan scan `PlanTargets::overwrites` replaces; tests keep it as the oracle.
+#[cfg(test)]
+pub(super) fn overwrites(plan: &navo_core::OperationPlan, target: &Location) -> bool {
+    use navo_core::{Resolution, Step};
     plan.conflicts
         .iter()
         .any(|c| c.resolution == Resolution::Overwrite && c.target.same_place(target))

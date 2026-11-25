@@ -7,7 +7,7 @@ use std::ops::Range;
 use navo_core::{Location, Step};
 
 use super::done_set::DoneSet;
-use super::plan_targets::{Key, key, probes};
+use super::plan_targets::{Key, PlanTargets, key, probes};
 use super::undo::{compared, scanned};
 use super::{HeldFile, Journaled, PlacedFile};
 
@@ -49,10 +49,12 @@ pub(super) struct Rollback<'j> {
     held: Places,
     placed: Places,
     removals: Places,
+    targets: PlanTargets,
 }
 
 impl<'j> Rollback<'j> {
-    /// Indexes the job's done seqs, held and placed rows and source removals in one pass each.
+    /// Indexes the job's done seqs, held and placed rows, source removals and overwrite targets
+    /// in one pass each.
     pub(super) fn of(job: &'j Journaled<'j>) -> Self {
         let removals = job.plan.steps.iter().map(|step| match step {
             Step::RemoveFile { location } => Some(location),
@@ -64,6 +66,7 @@ impl<'j> Rollback<'j> {
             held: Places::of(job.held.iter().map(|file| Some(&file.original))),
             placed: Places::of(job.placed.iter().map(|file| Some(&file.target))),
             removals: Places::of(removals),
+            targets: PlanTargets::of(job.plan),
         }
     }
 
@@ -87,6 +90,12 @@ impl<'j> Rollback<'j> {
     pub(super) fn newest_placed(&self, target: &Location) -> Option<&'j PlacedFile> {
         let rows = self.placed.matching(target);
         rows.last().and_then(|row| self.job.placed.get(*row))
+    }
+
+    /// True when the plan replaces `target`: an overwrite conflict or a `WriteFile` step names it.
+    pub(super) fn overwrites(&self, target: &Location) -> bool {
+        compared();
+        self.targets.overwrites(target)
     }
 
     /// True when a source removal step for `source` is marked done.
@@ -134,17 +143,22 @@ mod tests {
     use super::super::FileStamp;
     use super::*;
 
-    // Drive case, separators, UNC, a non-ASCII first letter (folds one way only) and a provider.
-    const PREFIXES: [&str; 7] = [
+    // Drive case, separators, UNC, `ſ:` with the `S:`/`s:` drives it folds to one way only, and a
+    // provider. Names add the Turkish dotted and dotless I.
+    const PREFIXES: [&str; 9] = [
         r"C:\",
         r"c:\",
         "C:/",
         r"\\srv\share\",
         "/",
         "\u{17F}:\\",
+        r"S:\",
+        "s:/",
         "mem://",
     ];
-    const NAMES: [&str; 6] = ["a", "A", "\u{E4}", "\u{C4}", "ss", "SS"];
+    const NAMES: [&str; 10] = [
+        "a", "A", "\u{E4}", "\u{C4}", "ss", "SS", "\u{130}", "\u{131}", "I", "i",
+    ];
 
     fn places() -> impl Strategy<Value = Location> {
         (0..PREFIXES.len(), 0..NAMES.len()).prop_map(|(prefix, name)| {
@@ -192,6 +206,75 @@ mod tests {
         }
     }
 
+    /// Asks every lookup about `probe` and checks it against the scan it replaced.
+    fn agrees(
+        rows: &[Location],
+        probe: &Location,
+        done: &[u32],
+        window: (u32, u32),
+    ) -> Result<(), TestCaseError> {
+        let placed_rows: Vec<PlacedFile> = (0_u64..)
+            .zip(rows)
+            .map(|(at, row)| placed(row.clone(), at))
+            .collect();
+        let held_rows: Vec<HeldFile> = rows.iter().cloned().map(held).collect();
+        let plan = plan(rows);
+        let job = Journaled {
+            plan: &plan,
+            done,
+            held: &held_rows,
+            placed: &placed_rows,
+            held_unreadable: false,
+            unsure: None,
+            unmarked_removals: None,
+        };
+        let run = Rollback::of(&job);
+        let held_scan = held_rows
+            .iter()
+            .find(|file| file.original == *probe)
+            .or_else(|| {
+                held_rows
+                    .iter()
+                    .find(|file| file.original.same_place(probe))
+            });
+        prop_assert_eq!(run.held_for(probe), held_scan);
+        let placed_scan = placed_rows
+            .iter()
+            .find(|file| file.target == *probe)
+            .or_else(|| {
+                placed_rows
+                    .iter()
+                    .find(|file| file.target.same_place(probe))
+            });
+        prop_assert_eq!(run.placed_for(probe), placed_scan);
+        let newest_scan = placed_rows
+            .iter()
+            .rev()
+            .find(|file| file.target.same_place(probe));
+        prop_assert_eq!(run.newest_placed(probe), newest_scan);
+        let removes = |seq: u32, step: &Step| {
+            matches!(step, Step::RemoveFile { location } if location.same_place(probe))
+                .then_some(seq)
+        };
+        let removed: Vec<u32> = (0_u32..)
+            .zip(&plan.steps)
+            .filter_map(|(seq, step)| removes(seq, step))
+            .collect();
+        prop_assert_eq!(
+            run.removal_done(probe),
+            removed.iter().any(|seq| done.contains(seq))
+        );
+        let window = window.0..window.1;
+        let end = (window.end as usize).min(plan.steps.len());
+        let in_window = plan
+            .steps
+            .get(window.start as usize..end)
+            .unwrap_or_default();
+        let window_scan = in_window.iter().any(|step| removes(0, step).is_some());
+        prop_assert_eq!(run.removes_within(probe, &window), window_scan);
+        Ok(())
+    }
+
     proptest! {
         /// Every lookup answers what the per-copy scans it replaced answered, row for row.
         #[test]
@@ -201,42 +284,22 @@ mod tests {
             done in prop::collection::vec(0_u32..12, 0..12),
             window in (0_u32..14, 0_u32..14),
         ) {
-            let placed_rows: Vec<PlacedFile> =
-                (0_u64..).zip(&rows).map(|(at, row)| placed(row.clone(), at)).collect();
-            let held_rows: Vec<HeldFile> = rows.iter().cloned().map(held).collect();
-            let plan = plan(&rows);
-            let job = Journaled {
-                plan: &plan,
-                done: &done,
-                held: &held_rows,
-                placed: &placed_rows,
-                held_unreadable: false,
-                unsure: None,
-                unmarked_removals: None,
-            };
-            let run = Rollback::of(&job);
-            let held_scan = held_rows.iter().find(|file| file.original == probe)
-                .or_else(|| held_rows.iter().find(|file| file.original.same_place(&probe)));
-            prop_assert_eq!(run.held_for(&probe), held_scan);
-            let placed_scan = placed_rows.iter().find(|file| file.target == probe)
-                .or_else(|| placed_rows.iter().find(|file| file.target.same_place(&probe)));
-            prop_assert_eq!(run.placed_for(&probe), placed_scan);
-            let newest_scan = placed_rows.iter().rev().find(|file| file.target.same_place(&probe));
-            prop_assert_eq!(run.newest_placed(&probe), newest_scan);
-            let removes = |seq: u32, step: &Step| {
-                matches!(step, Step::RemoveFile { location } if location.same_place(&probe))
-                    .then_some(seq)
-            };
-            let removed: Vec<u32> = (0_u32..)
-                .zip(&plan.steps)
-                .filter_map(|(seq, step)| removes(seq, step))
-                .collect();
-            prop_assert_eq!(run.removal_done(&probe), removed.iter().any(|seq| done.contains(seq)));
-            let window = window.0..window.1;
-            let end = (window.end as usize).min(plan.steps.len());
-            let in_window = plan.steps.get(window.start as usize..end).unwrap_or_default();
-            let window_scan = in_window.iter().any(|step| removes(0, step).is_some());
-            prop_assert_eq!(run.removes_within(&probe, &window), window_scan);
+            agrees(&rows, &probe, &done, window)?;
+        }
+    }
+
+    #[test]
+    fn lookups_agree_on_one_way_drive_folds() {
+        let at = |text: &str| Location::new(text).expect("valid place");
+        let pairs = [
+            (r"S:\a", "\u{17F}:\\a"),
+            ("\u{17F}:\\a", r"S:\a"),
+            ("C:\\\u{130}", r"C:\i"),
+            ("C:\\\u{131}", r"C:\I"),
+        ];
+        for (row, probe) in pairs {
+            let rows = [at(row), at(r"C:\other")];
+            agrees(&rows, &at(probe), &[0, 1], (0, 2)).expect("lookups agree");
         }
     }
 }

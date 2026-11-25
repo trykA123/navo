@@ -414,3 +414,49 @@ fn a_folder_moved_onto_a_file_is_not_held() {
         );
     }
 }
+
+/// Renames in the unreadable-row rollback cost test: a per-step plan scan costs ~10^7 compares.
+const MANY_RENAMES: usize = 2_000;
+
+#[test]
+fn an_unreadable_held_row_rollback_over_many_renames_compares_linearly() {
+    let fs = FakeFs::new();
+    let renames: Vec<(Location, Location)> = (0..MANY_RENAMES)
+        .map(|at| {
+            let source = fs.location(&format!("src/f{at}.txt"));
+            (source, fs.location(&format!("dst/f{at}.txt")))
+        })
+        .collect();
+    let conflicts = renames
+        .iter()
+        .map(|(source, target)| navo_core::Conflict {
+            source: source.clone(),
+            target: target.clone(),
+            resolution: navo_core::Resolution::Overwrite,
+        })
+        .collect();
+    let steps: Vec<Step> = renames
+        .into_iter()
+        .map(|(source, target)| Step::Rename { source, target })
+        .collect();
+    let plan = OperationPlan {
+        kind: OpKind::Move,
+        steps,
+        totals: navo_core::Totals {
+            files: 0,
+            folders: 0,
+            bytes: 0,
+        },
+        conflicts,
+        risks: Vec::new(),
+    };
+    super::super::undo::COMPARED.with(|count| count.set(0));
+    let (outcome, _) = undo_with(&fs, &plan, &[], true);
+    let compared = super::super::undo::COMPARED.with(std::cell::Cell::get);
+    assert_eq!(outcome, JobOutcome::Done);
+    let bound = 8 * plan.steps.len() as u64;
+    assert!(
+        compared <= bound,
+        "the rollback compared {compared} times, over {bound}"
+    );
+}
