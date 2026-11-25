@@ -130,6 +130,7 @@ fn valid() -> SessionState {
         }],
         focused_window: 1,
         next_id: 7,
+        settings_window: Vec::new(),
     }
 }
 

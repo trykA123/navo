@@ -19,6 +19,7 @@ pub(super) fn save(state: &AppState, rows_per_pane: usize) -> SessionState {
         windows,
         focused_window: state.focused_window().get(),
         next_id: state.next_id(),
+        settings_window: state.settings_placement().to_vec(),
     }
 }
 
@@ -122,11 +123,13 @@ pub(super) fn restore(session: &SessionState) -> Result<AppState, String> {
         .iter()
         .map(restore_window)
         .collect::<Result<Vec<_>, _>>()?;
-    AppState::restore(
+    let mut app = AppState::restore(
         windows,
         WindowId::new(session.focused_window),
         session.next_id,
-    )
+    )?;
+    app.restore_settings_placement(session.settings_window.clone());
+    Ok(app)
 }
 
 fn restore_window(window: &WindowState) -> Result<Window, String> {

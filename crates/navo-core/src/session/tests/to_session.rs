@@ -26,6 +26,7 @@ fn initial_state_saves_one_window_one_pane_one_tab() {
         }],
         focused_window: 1,
         next_id: 4,
+        settings_window: Vec::new(),
     };
     assert_eq!(AppState::new(loc("C:/start")).to_session(100), expected);
 }
@@ -167,4 +168,41 @@ fn next_id_is_saved() {
     split(&mut state, Direction::Right);
     run(&mut state, &Command::PaneOpenTab { location: None });
     assert_eq!(state.to_session(100).next_id, 7);
+}
+
+#[test]
+fn settings_placement_round_trips_through_the_session() {
+    use crate::placement::{
+        Monitor, MonitorLocalLogicalRect, MonitorSetup, PhysicalRect, Placement,
+    };
+    let bounds = PhysicalRect {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+    };
+    let setup = MonitorSetup::new(vec![Monitor {
+        bounds,
+        work_area: bounds,
+        scale: 1.0,
+        primary: true,
+    }])
+    .unwrap();
+    let placement = Placement {
+        setup: setup.fingerprint(),
+        bounds: MonitorLocalLogicalRect {
+            x: 10.0,
+            y: 20.0,
+            width: 800.0,
+            height: 600.0,
+        },
+        monitor: bounds,
+        maximized: false,
+    };
+    let mut state = home();
+    state.remember_settings(&setup, placement.clone());
+    let session = state.to_session(100);
+    assert_eq!(session.settings_window, vec![placement]);
+    let restored = AppState::from_session(&session).unwrap();
+    assert_eq!(restored.settings_placement(), &session.settings_window[..]);
 }

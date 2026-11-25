@@ -33,6 +33,7 @@ pub struct AppState {
     others: BTreeMap<WindowId, Window>,
     next_id: u64,
     next_request: u64,
+    settings_window: Vec<Placement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -88,6 +89,7 @@ impl AppState {
             others: BTreeMap::new(),
             next_id: 4,
             next_request: 1,
+            settings_window: Vec::new(),
         }
     }
 
@@ -115,6 +117,23 @@ impl AppState {
 
     pub fn remember_placement(&mut self, setup: &MonitorSetup, placement: Placement) {
         self.focused.remember(setup, placement);
+    }
+
+    /// Returns saved placements for the Settings window.
+    #[must_use]
+    pub fn settings_placement(&self) -> &[Placement] {
+        &self.settings_window
+    }
+
+    /// Remembers a Settings window placement for the given monitor setup.
+    pub fn remember_settings(&mut self, setup: &MonitorSetup, placement: Placement) {
+        crate::placement::remember(&mut self.settings_window, setup, placement);
+    }
+
+    /// Restores saved Settings window placements (capped to `MAX_PLACEMENTS`).
+    pub fn restore_settings_placement(&mut self, mut placements: Vec<Placement>) {
+        placements.truncate(crate::placement::MAX_PLACEMENTS);
+        self.settings_window = placements;
     }
 
     /// The focused window's find results memory.
@@ -175,6 +194,7 @@ impl AppState {
             others,
             next_id,
             next_request: 1,
+            settings_window: Vec::new(),
         })
     }
 

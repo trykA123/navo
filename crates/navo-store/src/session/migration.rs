@@ -5,7 +5,7 @@ use navo_core::{
 use serde::Deserialize;
 
 use super::SessionFileError;
-use super::legacy::{PaneV4, SessionV4, SessionV5, panes};
+use super::legacy::{PaneV4, SessionV4, SessionV5, SessionV6, panes};
 
 #[derive(Deserialize)]
 struct SessionV1 {
@@ -91,6 +91,7 @@ impl From<SessionV3> for SessionState {
             windows: old.windows.into_iter().map(WindowState::from).collect(),
             focused_window: old.focused_window,
             next_id: old.next_id,
+            settings_window: Vec::new(),
         }
     }
 }
@@ -174,6 +175,7 @@ pub(super) fn decode(version: u16, body: &[u8]) -> Result<SessionState, SessionF
         windows: old.windows.into_iter().map(WindowState::from).collect(),
         focused_window: old.focused_window,
         next_id: old.next_id,
+        settings_window: Vec::new(),
     };
     let converted = navo_core::AppState::from_session(&session)
         .map_err(|error| SessionFileError::Decode(error.to_string()))?
@@ -195,6 +197,7 @@ fn decode_with_workspaces(version: u16, body: &[u8]) -> Result<SessionState, pos
         3 => postcard::from_bytes::<SessionV3>(body)?.into(),
         4 => postcard::from_bytes::<SessionV4>(body)?.into(),
         5 => postcard::from_bytes::<SessionV5>(body)?.into(),
+        6 => postcard::from_bytes::<SessionV6>(body)?.into(),
         _ => postcard::from_bytes(body)?,
     })
 }

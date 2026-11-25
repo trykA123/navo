@@ -16,6 +16,7 @@ mod find_window;
 mod keep;
 mod load;
 mod migration;
+mod settings_window;
 mod speed;
 mod tabs;
 
@@ -67,6 +68,7 @@ fn one_pane(location: &str) -> SessionState {
         }],
         focused_window: 1,
         next_id: 4,
+        settings_window: Vec::new(),
     }
 }
 
@@ -83,6 +85,7 @@ fn rejected() -> SessionState {
         windows: Vec::new(),
         focused_window: 1,
         next_id: 4,
+        settings_window: Vec::new(),
     }
 }
 
@@ -135,6 +138,7 @@ fn three_panes_of_100_rows() -> SessionState {
         }],
         focused_window: 1,
         next_id: 8,
+        settings_window: Vec::new(),
     }
 }
 

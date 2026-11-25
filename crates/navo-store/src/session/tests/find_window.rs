@@ -3,7 +3,7 @@ use navo_core::placement::{
     Monitor, MonitorLocalLogicalRect, MonitorSetup, PhysicalRect, Placement,
 };
 
-fn placed() -> SessionState {
+pub(super) fn placed() -> SessionState {
     let bounds = PhysicalRect {
         x: 0,
         y: 0,
@@ -93,7 +93,7 @@ fn a_find_window_with_two_queries_and_a_placement_round_trips() {
 }
 
 #[test]
-fn writing_over_a_v5_main_keeps_its_bytes_as_backup_and_writes_v6() {
+fn writing_over_a_v5_main_keeps_its_bytes_as_backup_and_writes_v7() {
     let dir = tmp();
     let path = session_file(&dir);
     fs::write(&path, V5_SESSION).unwrap();
@@ -101,7 +101,7 @@ fn writing_over_a_v5_main_keeps_its_bytes_as_backup_and_writes_v6() {
     write_session(&path, &loaded).unwrap();
     assert_eq!(fs::read(backup_path(&path)).unwrap(), V5_SESSION);
     let header = u16::from_le_bytes(fs::read(&path).unwrap()[16..18].try_into().unwrap());
-    assert_eq!((header, SESSION_VERSION), (6, 6));
+    assert_eq!((header, SESSION_VERSION), (7, 7));
     assert_eq!(read_session_file(&path).unwrap(), loaded);
 }
 

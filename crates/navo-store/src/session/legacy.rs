@@ -117,6 +117,7 @@ impl From<SessionV4> for SessionState {
             windows: old.windows.into_iter().map(WindowState::from).collect(),
             focused_window: old.focused_window,
             next_id: old.next_id,
+            settings_window: Vec::new(),
         }
     }
 }
@@ -176,6 +177,7 @@ impl From<SessionV5> for SessionState {
             windows: old.windows.into_iter().map(WindowState::from).collect(),
             focused_window: old.focused_window,
             next_id: old.next_id,
+            settings_window: Vec::new(),
         }
     }
 }
@@ -192,6 +194,25 @@ impl From<WindowV5> for WindowState {
             placement: window.placement,
             target: window.target,
             find_window: FindMemoryState::default(),
+        }
+    }
+}
+
+/// Session format v6: windows save find results, but the Settings window has no placements yet.
+#[derive(Deserialize)]
+pub(super) struct SessionV6 {
+    windows: Vec<WindowState>,
+    focused_window: u64,
+    next_id: u64,
+}
+
+impl From<SessionV6> for SessionState {
+    fn from(old: SessionV6) -> Self {
+        Self {
+            windows: old.windows,
+            focused_window: old.focused_window,
+            next_id: old.next_id,
+            settings_window: Vec::new(),
         }
     }
 }

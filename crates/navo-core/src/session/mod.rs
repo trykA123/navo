@@ -14,6 +14,9 @@ pub struct SessionState {
     pub windows: Vec<WindowState>,
     pub focused_window: u64,
     pub next_id: u64,
+    /// Saved Settings window placements per monitor setup (at most 8).
+    #[serde(deserialize_with = "crate::placement::deserialize_placements")]
+    pub settings_window: Vec<Placement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
