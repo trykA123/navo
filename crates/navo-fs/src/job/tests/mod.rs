@@ -178,6 +178,8 @@ struct Harness {
     keeps_held: bool,
     held: Vec<HeldFile>,
     placed: Vec<PlacedFile>,
+    /// The steps a rollback sees with no journal row; `None` when unknown.
+    pending: Option<Vec<u32>>,
 }
 
 fn stamps_of_done_copies(
@@ -222,6 +224,7 @@ impl Harness {
         done: &[u32],
     ) -> JobOutcome {
         let held = std::mem::take(&mut self.held);
+        let pending = self.pending.clone();
         let placed = match self.placed.is_empty() {
             true => stamps_of_done_copies(ops, plan, done),
             false => self.placed.clone(),
@@ -233,6 +236,7 @@ impl Harness {
             placed: &placed,
             held_unreadable: false,
             unsure: None,
+            pending: pending.as_deref(),
         };
         let outcome = self.with(ops, |ctx| roll_back(&job, ctx));
         self.held = held;

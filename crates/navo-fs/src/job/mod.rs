@@ -405,6 +405,9 @@ pub struct Journaled<'a> {
     pub placed: &'a [PlacedFile],
     pub held_unreadable: bool,
     pub unsure: Option<u32>,
+    /// The steps with no journal row yet (still pending); `None` when unknown. A move's removal
+    /// with a pending copy, folder or rename step before it never started (D165).
+    pub pending: Option<&'a [u32]>,
 }
 
 #[must_use]

@@ -7,9 +7,14 @@ const VOLUME: u64 = 7;
 const OLD: u64 = 3;
 
 fn moving() -> (FakeFs, OperationPlan) {
-    let fs = fixture(&[("src/a.txt", BIG)]);
+    moving_all(&["src/a.txt"])
+}
+
+fn moving_all(paths: &[&str]) -> (FakeFs, OperationPlan) {
+    let files: Vec<_> = paths.iter().map(|path| (*path, BIG)).collect();
+    let fs = fixture(&files);
     fs.set_volume_serial("", Some(VOLUME));
-    let plan = plan(&request(&fs, OpKind::Move, &["src/a.txt"], "dst"));
+    let plan = plan(&request(&fs, OpKind::Move, paths, "dst"));
     (fs, plan)
 }
 
@@ -86,12 +91,22 @@ fn done_before_removal(plan: &OperationPlan) -> Vec<u32> {
 
 fn rolled_back(fs: &FakeFs, plan: &OperationPlan, ran: &Harness, done: &[u32]) -> Log {
     let mut next_start = Harness {
+        cancel: ran.cancel.clone(),
         held: ran.log.held.clone(),
         placed: ran.log.placed.clone(),
+        pending: ran.pending.clone(),
         ..Harness::default()
     };
     assert_eq!(next_start.roll_back(fs, plan, done), JobOutcome::Done);
     next_start.log
+}
+
+/// The steps startup recovery reads as pending: every step not in `done`.
+fn pending_besides(plan: &OperationPlan, done: &[u32]) -> Vec<u32> {
+    all_seqs(plan)
+        .into_iter()
+        .filter(|seq| !done.contains(seq))
+        .collect()
 }
 
 #[test]
@@ -262,10 +277,16 @@ fn the_newest_proof_row_for_a_copy_decides_its_rollback() {
     }
 }
 
-/// A copied-only move whose proof has no file ID yet matches the source by path on size, times
+/// The bytes every moved file and its copy hold, unless a test changes the source.
+const SAME: [u8; 32] = [9; 32];
+
+/// A copied-only move whose proofs have no file ID yet match their sources by path on size, times
 /// and attributes, as the Windows read of a FAT volume does.
-fn proved_without_id() -> (FakeFs, OperationPlan, Harness) {
-    let (fs, plan) = moving();
+fn proved_without_id(paths: &[&str]) -> (FakeFs, OperationPlan, Harness) {
+    let (fs, plan) = moving_all(paths);
+    for path in paths {
+        fs.set_hash(path, SAME);
+    }
     let mut harness = copied_only(&fs, &plan, Harness::default());
     fs.set_without_ids("src");
     fs.set_path_details(500, 0x20);
@@ -281,6 +302,14 @@ fn proved_without_id() -> (FakeFs, OperationPlan, Harness) {
     (fs, plan, harness)
 }
 
+/// A no-ID proof whose source removal may have run unmarked: every step before it is done.
+fn proved_while_removal_unsure() -> (FakeFs, OperationPlan, Harness, Vec<u32>) {
+    let (fs, plan, mut harness) = proved_without_id(&["src/a.txt"]);
+    let done = done_before_removal(&plan);
+    harness.pending = Some(pending_besides(&plan, &done));
+    (fs, plan, harness, done)
+}
+
 fn kept_copy_of(fs: &FakeFs, plan: &OperationPlan) -> crate::KeptCopy {
     let seq = done_before_removal(plan)
         .into_iter()
@@ -292,22 +321,67 @@ fn kept_copy_of(fs: &FakeFs, plan: &OperationPlan) -> crate::KeptCopy {
     }
 }
 
+fn copy_seq(fs: &FakeFs, plan: &OperationPlan, target: &str) -> u32 {
+    let target = fs.location(target);
+    let at = plan
+        .steps
+        .iter()
+        .position(
+            |step| matches!(step, Step::CopyFile { target: to, .. } if to.same_place(&target)),
+        )
+        .expect("the move copies this file");
+    u32::try_from(at).expect("small plan")
+}
+
+fn content_reads(fs: &FakeFs) -> u32 {
+    fs.calls("src/a.txt", FakeOp::Read) + fs.calls("dst/a.txt", FakeOp::Read)
+}
+
 #[test]
-fn a_no_id_proof_removes_the_copy_when_source_and_copy_hold_the_same_bytes() {
-    let (fs, plan, harness) = proved_without_id();
-    let log = rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+fn a_no_id_proof_reads_no_content_while_the_source_removal_never_started() {
+    let (fs, plan, mut harness) = proved_without_id(&["src/a.txt", "src/b.txt"]);
+    let in_flight = copy_seq(&fs, &plan, "dst/b.txt");
+    assert!(
+        in_flight < removal_seq(&plan),
+        "a move copies before it removes"
+    );
+    let done: Vec<u32> = done_before_removal(&plan)
+        .into_iter()
+        .filter(|seq| *seq != in_flight)
+        .collect();
+    harness.pending = Some(pending_besides(&plan, &done));
+    let before = content_reads(&fs);
+    let log = rolled_back(&fs, &plan, &harness, &done);
+    assert!(!exists(&fs, "dst/a.txt"), "the duplicate copy stayed");
     assert_eq!(
-        (exists(&fs, "dst/a.txt"), size(&fs, "src/a.txt")),
-        (false, Some(BIG))
+        content_reads(&fs),
+        before,
+        "a copy still in flight proves no removal started: no byte compare (D165)"
     );
     assert!(log.copies.is_empty(), "{:?}", log.copies);
 }
 
 #[test]
-fn a_no_id_proof_keeps_the_copy_when_the_source_holds_other_bytes() {
-    let (fs, plan, harness) = proved_without_id();
+fn an_unsure_removal_removes_the_copy_when_source_and_copy_hold_the_same_bytes() {
+    let (fs, plan, harness, done) = proved_while_removal_unsure();
+    let before = content_reads(&fs);
+    let log = rolled_back(&fs, &plan, &harness, &done);
+    assert_eq!(
+        (exists(&fs, "dst/a.txt"), size(&fs, "src/a.txt")),
+        (false, Some(BIG))
+    );
+    assert!(
+        content_reads(&fs) > before,
+        "the copy was removed uncompared"
+    );
+    assert!(log.copies.is_empty(), "{:?}", log.copies);
+}
+
+#[test]
+fn an_unsure_removal_keeps_the_copy_when_the_source_holds_other_bytes() {
+    let (fs, plan, harness, done) = proved_while_removal_unsure();
     fs.set_hash("src/a.txt", [7; 32]);
-    let log = rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+    let log = rolled_back(&fs, &plan, &harness, &done);
     assert!(
         exists(&fs, "dst/a.txt"),
         "a tunneled lookalike with other bytes deleted the only copy (D164)"
@@ -316,9 +390,21 @@ fn a_no_id_proof_keeps_the_copy_when_the_source_holds_other_bytes() {
 }
 
 #[test]
+fn a_cancel_reaching_the_byte_compare_keeps_the_copy() {
+    let (fs, plan, harness, done) = proved_while_removal_unsure();
+    harness.cancel.cancel();
+    let log = rolled_back(&fs, &plan, &harness, &done);
+    assert!(
+        exists(&fs, "dst/a.txt"),
+        "a cancelled compare removed the copy"
+    );
+    assert_eq!(log.copies, [kept_copy_of(&fs, &plan)]);
+}
+
+#[test]
 fn a_no_id_proof_keeps_the_copy_when_either_file_cannot_be_read() {
     for path in ["src/a.txt", "dst/a.txt"] {
-        let (fs, plan, harness) = proved_without_id();
+        let (fs, plan, harness, done) = proved_while_removal_unsure();
         let next = fs.calls(path, FakeOp::Read) + 1;
         fs.fault(
             path,
@@ -326,7 +412,7 @@ fn a_no_id_proof_keeps_the_copy_when_either_file_cannot_be_read() {
             next,
             Fault::Fail(FsErrorKind::AccessDenied),
         );
-        let log = rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+        let log = rolled_back(&fs, &plan, &harness, &done);
         assert!(exists(&fs, "dst/a.txt"), "{path}: copy removed unread");
         assert_eq!(log.copies, [kept_copy_of(&fs, &plan)], "{path}");
     }
@@ -336,10 +422,12 @@ fn a_no_id_proof_keeps_the_copy_when_either_file_cannot_be_read() {
 fn a_proof_with_a_file_id_reads_no_content_before_removing_the_copy() {
     let (fs, plan) = moving();
     let harness = copied_only(&fs, &plan, Harness::default());
-    let reads =
-        |fs: &FakeFs| fs.calls("src/a.txt", FakeOp::Read) + fs.calls("dst/a.txt", FakeOp::Read);
-    let before = reads(&fs);
+    let before = content_reads(&fs);
     rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
     assert!(!exists(&fs, "dst/a.txt"));
-    assert_eq!(reads(&fs), before, "a file ID needs no content compare");
+    assert_eq!(
+        content_reads(&fs),
+        before,
+        "a file ID needs no content compare"
+    );
 }

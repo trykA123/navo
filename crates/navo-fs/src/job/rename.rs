@@ -139,6 +139,7 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
         placed: &[],
         held_unreadable: false,
         unsure: first.as_ref().map(|(seq, _)| *seq),
+        pending: None,
     };
     let mut inner = JobContext {
         ops: *ops,

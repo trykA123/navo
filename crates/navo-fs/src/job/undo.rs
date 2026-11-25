@@ -3,6 +3,7 @@ use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 use super::aside::presence;
 use super::copy::{legacy_temp_of, overwrites, remove_if_present, temp_of};
 use super::link::undo_link;
+use super::marks::is_removal;
 use super::restore::{
     Restored, gone_or_folder_deleted, is_placed, keep, matches_stamp, restore, surely_absent,
 };
@@ -255,7 +256,10 @@ fn only_copy(
         .and_then(|file| file.source);
     let proved = match proof {
         Some(proof) if proof.identity.is_some() => proof.still_at(ctx.ops, source)?,
-        Some(proof) => proof.still_at(ctx.ops, source)? && same_bytes(ctx, source, target),
+        Some(proof) => {
+            proof.still_at(ctx.ops, source)?
+                && (!removal_may_have_run(job, source) || same_bytes(ctx, source, target))
+        }
         None => false,
     };
     if !proved {
@@ -269,6 +273,23 @@ fn only_copy(
         });
     }
     Ok(!proved)
+}
+
+/// True when this job's removal of `source` may have run without its done row (D165). A move
+/// starts a removal only after every earlier copy, folder or rename step wrote its row, so a
+/// pending one of those proves the removal never started. Pending removals prove nothing: a
+/// failed removal's row is best effort, and a move goes on past a kept source.
+fn removal_may_have_run(job: &Journaled<'_>, source: &Location) -> bool {
+    let Some(pending) = job.pending else {
+        return true;
+    };
+    let steps = || (0_u32..).zip(&job.plan.steps);
+    let never_started = steps()
+        .find(|(seq, step)| pending.contains(seq) && !is_removal(step))
+        .map_or(u32::MAX, |(seq, _)| seq);
+    steps().take_while(|(seq, _)| *seq < never_started).any(
+        |(_, step)| matches!(step, Step::RemoveFile { location } if location.same_place(source)),
+    )
 }
 
 /// True when `source` and `copy` hold the same bytes (BLAKE3, streamed). A proof without a file

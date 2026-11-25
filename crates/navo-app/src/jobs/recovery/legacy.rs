@@ -104,6 +104,7 @@ fn roll_back_job(
     let settled = super::moves::settle_pending((&plan, job), &held.files, (&log, ops));
     done.extend(&settled.completed);
     done.sort_unstable();
+    let pending = pending_steps(job);
     let outcome = roll_back(
         &Journaled {
             plan: &plan,
@@ -112,6 +113,7 @@ fn roll_back_job(
             placed: &held.placed,
             held_unreadable: held.unreadable > 0,
             unsure: unsure_step(plan.kind, job),
+            pending: Some(&pending),
         },
         &mut JobContext {
             ops,
@@ -135,6 +137,15 @@ fn roll_back_job(
         }
     };
     (state, log.kept)
+}
+
+/// The steps whose journal row is still pending: they had not finished when the job stopped.
+fn pending_steps(job: &UnfinishedJob) -> Vec<u32> {
+    job.steps
+        .iter()
+        .filter(|step| step.state == StepState::Pending)
+        .map(|step| step.seq)
+        .collect()
 }
 
 fn unsure_step(kind: OpKind, job: &UnfinishedJob) -> Option<u32> {

@@ -103,6 +103,7 @@ fn recover_link(plan: &OperationPlan) -> (JobOutcome, Vec<(u32, StepOutcome)>) {
         placed: &[],
         held_unreadable: false,
         unsure: Some(0),
+        pending: None,
     };
     with_job(|ctx| roll_back(&job, ctx))
 }
@@ -115,6 +116,7 @@ fn undo_link(plan: &OperationPlan) -> (JobOutcome, Vec<(u32, StepOutcome)>) {
         placed: &[],
         held_unreadable: false,
         unsure: None,
+        pending: None,
     };
     with_job(|ctx| roll_back(&job, ctx))
 }

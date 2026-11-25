@@ -31,6 +31,7 @@ fn recover(
         placed: &[],
         held_unreadable: false,
         unsure,
+        pending: None,
     };
     let outcome = harness.with(fs, |ctx| roll_back(&job, ctx));
     (outcome, harness)

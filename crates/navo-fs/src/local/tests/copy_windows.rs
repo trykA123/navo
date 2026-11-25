@@ -176,6 +176,7 @@ fn rolling_back_a_job_removes_a_copy_of_a_readonly_source() {
         placed: &placed,
         held_unreadable: false,
         unsure: None,
+        pending: None,
     };
     let outcome = roll_back(&job, &mut ctx);
     attrib("-r", &source);

@@ -47,6 +47,7 @@ fn undo_with(
         placed: &[],
         held_unreadable: unreadable,
         unsure: None,
+        pending: None,
     };
     let outcome = harness.with(fs, |ctx| roll_back(&job, ctx));
     (outcome, harness.log)
