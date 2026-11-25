@@ -1,5 +1,7 @@
 //! Find in Settings: which rows a search admits, and the lines a page or a search shows.
 
+use std::ops::Range;
+
 use super::fields::{FIELDS, Field, FieldSpec, Section};
 use super::fold::{Folds, fold_section, page_rows};
 use super::help_page::WORDS;
@@ -7,6 +9,8 @@ use super::index_page::PROGRESS_WORDS;
 use super::pages::{group_of, ordered_rows};
 use super::search_page::{HISTORY_WORDS, SERVICE_WORDS};
 use super::steps::{DIAGNOSTICS_ROW, HELP_ROW, rows_in};
+
+const DIAGNOSTICS_WORDS: &str = "diagnostics cache storage report";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
@@ -80,6 +84,60 @@ impl Filter {
         self.words.iter().all(|word| text.contains(word.as_str()))
     }
 
+    /// Byte ranges of every search word found in `text` (case-folded when byte lengths match),
+    /// sorted and merged when overlapping or adjacent.
+    #[must_use]
+    pub fn hits(&self, text: &str) -> Vec<Range<usize>> {
+        if self.words.is_empty() {
+            return Vec::new();
+        }
+        let lower = text.to_lowercase();
+        if lower.len() != text.len() {
+            return Vec::new();
+        }
+        let mut ranges: Vec<Range<usize>> = self
+            .words
+            .iter()
+            .filter(|word| !word.is_empty())
+            .flat_map(|word| {
+                lower
+                    .match_indices(word.as_str())
+                    .filter_map(|(start, found)| {
+                        let end = start + found.len();
+                        (text.is_char_boundary(start) && text.is_char_boundary(end))
+                            .then_some(start..end)
+                    })
+            })
+            .collect();
+        ranges.sort_unstable_by_key(|range| (range.start, range.end));
+        let mut merged: Vec<Range<usize>> = Vec::with_capacity(ranges.len());
+        for range in ranges {
+            match merged.last_mut() {
+                Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+                _ => merged.push(range),
+            }
+        }
+        merged
+    }
+
+    /// Number of admitted setting rows and extra blocks on `section` for the current filter.
+    #[must_use]
+    pub fn count_in(&self, section: Section) -> usize {
+        let rows = page_rows(self, section)
+            .into_iter()
+            .filter(|index| FIELDS.get(*index).is_some())
+            .count();
+        let extras = match section {
+            Section::About => {
+                usize::from(self.admits_text(WORDS))
+                    + usize::from(self.admits_text(DIAGNOSTICS_WORDS))
+            }
+            Section::Search => extra_lines(self, section).len(),
+            _ => 0,
+        };
+        rows + extras
+    }
+
     #[must_use]
     pub fn first_row(&self) -> Option<usize> {
         ordered_rows()
@@ -91,7 +149,7 @@ impl Filter {
     pub fn first_in(&self, section: Section) -> Option<usize> {
         if section == Section::About {
             return self.admits_text(WORDS).then_some(HELP_ROW).or_else(|| {
-                self.admits_text("diagnostics cache storage report")
+                self.admits_text(DIAGNOSTICS_WORDS)
                     .then_some(DIAGNOSTICS_ROW)
             });
         }

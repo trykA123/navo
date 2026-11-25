@@ -22,6 +22,7 @@ struct NavItem {
     index: usize,
     page: Section,
     is_on: bool,
+    count: Option<usize>,
     event: Option<SheetEvent>,
 }
 
@@ -42,6 +43,24 @@ impl NavState {
     }
 }
 
+fn count_label(t: &crate::tokens::Theme, index: usize, count: usize, is_on: bool) -> AnyElement {
+    let text = count.to_string();
+    div()
+        .id(("settings-section-count", index))
+        .role(Role::Label)
+        .aria_label(text.clone())
+        .test_support()
+        .flex_none()
+        .text_size(t.typography.tiny)
+        .text_color(if is_on {
+            t.colors.on_selection
+        } else {
+            t.colors.muted
+        })
+        .child(text)
+        .into_any_element()
+}
+
 fn nav_item(look: &Look, item: NavItem, shows_digits: bool) -> AnyElement {
     let theme = look.theme.selected_content(item.is_on);
     let t = &theme;
@@ -58,9 +77,15 @@ fn nav_item(look: &Look, item: NavItem, shows_digits: bool) -> AnyElement {
     } else {
         t.colors.muted
     };
+    let is_dimmed = item
+        .count
+        .map_or_else(|| item.event.is_none(), |count| count == 0);
     let digit = digit_of(item.page);
     let cap = Kbd::new(("settings-digit", item.index), &digit.to_string())
         .filter(|_| shows_digits && item.event.is_some());
+    let count_badge = item
+        .count
+        .map(|count| count_label(t, item.index, count, item.is_on));
     let element = div()
         .id(("settings-section", item.index))
         .role(Role::Tab)
@@ -75,10 +100,13 @@ fn nav_item(look: &Look, item: NavItem, shows_digits: bool) -> AnyElement {
         .h(px(NAV_ITEM))
         .px(t.spacing.lg)
         .rounded(t.radii.md)
-        .cursor_pointer()
         .whitespace_nowrap()
-        .when(item.event.is_none(), |element| element.opacity(DIMMED))
-        .hover(|element| element.bg(t.colors.hover))
+        .when(is_dimmed, |element| element.opacity(DIMMED))
+        .when(item.event.is_some(), |element| {
+            element
+                .cursor_pointer()
+                .hover(|element| element.bg(t.colors.hover))
+        })
         .when(item.is_on, |element| {
             element
                 .bg(t.colors.selection)
@@ -87,7 +115,14 @@ fn nav_item(look: &Look, item: NavItem, shows_digits: bool) -> AnyElement {
                 .child(marker)
         })
         .child(icon(item.page.icon(), t.spacing.icon, tint))
-        .child(div().flex_1().min_w_0().child(section_label(item.page)))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(section_label(item.page)),
+        )
+        .children(count_badge)
         .children(cap);
     match item.event {
         Some(event) => send_on_click(element, look.send.as_ref(), event).into_any_element(),
@@ -134,12 +169,14 @@ fn divider(look: &Look) -> AnyElement {
 pub(super) fn nav(look: &Look, state: &NavState) -> impl IntoElement + use<> {
     let t = look.theme;
     let shown = state.current.unwrap_or(Section::Keyboard);
+    let has_find = !look.filter.is_empty();
     let mut items = Vec::new();
     for (index, page) in Section::ALL.into_iter().enumerate() {
         let item = NavItem {
             index,
             page,
             is_on: shown == page,
+            count: has_find.then(|| look.filter.count_in(page)),
             event: look.filter.first_in(page).map(SheetEvent::Select),
         };
         items.push(nav_item(look, item, state.shows_digits));

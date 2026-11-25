@@ -201,3 +201,31 @@ fn a_hidden_row_gets_no_key_events() {
     assert_eq!(body.flip_event(), None);
     assert_eq!(body.edit_event(), None);
 }
+
+#[test]
+fn settings_find_counts_hits_per_page() {
+    let git = Filter::new("git");
+    assert!(git.count_in(Section::Tools) > 0);
+    assert_eq!(git.count_in(Section::Appearance), 0);
+    assert_eq!(Filter::new("clear").count_in(Section::Search), 1);
+    assert_eq!(Filter::new("updates").count_in(Section::About), 1);
+    assert_eq!(Filter::new("diagnostics").count_in(Section::About), 1);
+    assert_eq!(Filter::new("e").count_in(Section::About), 2);
+}
+
+#[test]
+fn find_hits_highlights_words_and_merges_overlaps() {
+    let single = |query, text, expected: std::ops::Range<usize>| {
+        assert_eq!(
+            Filter::new(query).hits(text),
+            std::slice::from_ref(&expected)
+        );
+    };
+    single("font", "Interface font", 10..14);
+    assert_eq!(Filter::new("sort").hits("Sort and sort"), [0..4, 9..13]);
+    single("ab bc", "abc", 0..3);
+    single("foo bar", "foobar", 0..6);
+    single("café", "Café", 0..5);
+    assert!(Filter::new("i").hits("İ").is_empty());
+    assert!(Filter::new("").hits("Theme").is_empty());
+}

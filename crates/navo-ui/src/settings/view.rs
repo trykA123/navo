@@ -1,7 +1,7 @@
 //! Row, control and status-line rendering for the settings sheet.
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{Role, ScrollHandle};
+use gpui_kit::{HighlightStyle, Role, ScrollHandle, StyledText};
 
 use super::controls::{self, Picks};
 use super::fields::{Control, FIELDS, Field, FieldSpec, Look as ChoiceLook, Section};
@@ -185,6 +185,26 @@ fn command_problem(look: &Look, field: Field) -> Option<AnyElement> {
     Some(git_page::problem_note(look.theme, problem))
 }
 
+/// Draws a setting label, highlighting matching Find words when the filter is active.
+fn row_label(t: &Theme, filter: &Filter, text: SharedString) -> AnyElement {
+    if filter.is_empty() {
+        return text.into_any_element();
+    }
+    let found = HighlightStyle {
+        color: Some(t.colors.accent_text),
+        font_weight: Some(FontWeight::MEDIUM),
+        ..HighlightStyle::default()
+    };
+    let runs: Vec<_> = filter
+        .hits(&text)
+        .into_iter()
+        .map(|range| (range, found))
+        .collect();
+    StyledText::new(text)
+        .with_highlights(runs)
+        .into_any_element()
+}
+
 /// One line: the changed dot, the label and the control. On a narrow list the label shrinks
 /// with an ellipsis; the control keeps its width and never wraps.
 fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div {
@@ -197,7 +217,7 @@ fn line(look: &Look, content_look: &Look, index: usize, spec: &FieldSpec) -> Div
         .flex_basis(px(LABEL_BASIS))
         .min_w(px(LABEL_MIN))
         .truncate()
-        .child(spec.label());
+        .child(row_label(content_look.theme, look.filter, spec.label()));
     div()
         .flex()
         .items_center()

@@ -5,7 +5,7 @@ use gpui_kit::{AppContext as _, TestAppContext};
 
 use super::app_menu::{Rig, rig};
 use super::type_in;
-use crate::settings::{FIELDS, Field};
+use crate::settings::{FIELDS, Field, Filter, Section};
 use crate::tokens::ThemeChoice;
 
 fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
@@ -181,4 +181,71 @@ fn keys_change_nothing_when_no_row_matches_the_find(cx: &mut TestAppContext) {
         rig.view.read_with(cx, |view, _| view.values.clone()),
         before
     );
+}
+
+fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> Option<String> {
+    let id = id.into();
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .try_find(id)
+            .filter(|found| found.visible())
+            .and_then(|found| found.label().map(str::to_owned))
+    })
+    .expect("window")
+}
+
+fn page_index(page: Section) -> usize {
+    Section::ALL
+        .iter()
+        .position(|shown| *shown == page)
+        .expect("page in Section::ALL")
+}
+
+#[gpui_kit::test]
+fn nav_shows_page_counts_and_dims_zero_count_pages(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+    let appearance = page_index(Section::Appearance);
+    let tools = page_index(Section::Tools);
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", appearance)),
+        None
+    );
+    assert_eq!(label(cx, &rig, ("settings-section-count", tools)), None);
+
+    find(cx, &rig, "git");
+    let hidden = rig.view.read_with(cx, |view, _| view.values.hidden_row());
+    let expected_tools = Filter::new("git").hiding(hidden).count_in(Section::Tools);
+    assert!(expected_tools > 0);
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", appearance)).as_deref(),
+        Some("0")
+    );
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", tools)).as_deref(),
+        Some(expected_tools.to_string().as_str())
+    );
+    assert_eq!(
+        label(cx, &rig, "settings-modules").as_deref(),
+        Some("Modules")
+    );
+    assert!(shows(
+        cx,
+        &rig,
+        ("settings-label", row_of(Field::GitBadges))
+    ));
+
+    let before = current_row(cx, &rig);
+    rig.click(cx, ("settings-section", appearance));
+    assert_eq!(current_row(cx, &rig), before);
+
+    rig.press(cx, "escape");
+    settle_motion(cx, &rig);
+    assert_eq!(
+        label(cx, &rig, ("settings-section-count", appearance)),
+        None
+    );
+    rig.click(cx, ("settings-section", appearance));
+    assert_eq!(current_row(cx, &rig), row_of(Field::Theme));
 }
