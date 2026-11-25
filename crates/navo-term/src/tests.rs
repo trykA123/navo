@@ -1,5 +1,6 @@
 #[cfg(unix)]
 mod close;
+mod grid;
 mod session;
 mod shells;
 #[cfg(windows)]

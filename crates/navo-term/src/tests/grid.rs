@@ -1,0 +1,125 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use crate::grid::{Cell, Color, Grid, Snapshot, Viewport, Width};
+use crate::{Sink, Size};
+
+const SIZE: Size = Size { cols: 80, rows: 24 };
+
+fn grid() -> (Grid, Arc<AtomicUsize>) {
+    let wakes = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&wakes);
+    let grid = Grid::new(SIZE, 10_000, move || {
+        counter.fetch_add(1, Ordering::SeqCst);
+    });
+    (grid, wakes)
+}
+
+fn text(cells: &[Cell]) -> String {
+    let line: String = cells
+        .iter()
+        .filter(|cell| cell.width != Width::Spacer)
+        .map(|cell| cell.c)
+        .collect();
+    line.trim_end().to_owned()
+}
+
+fn bottom(grid: &Grid) -> Snapshot {
+    grid.snapshot(Viewport::default())
+}
+
+#[test]
+fn grid_keeps_the_newest_ten_thousand_lines_of_twenty_thousand() {
+    let (grid, _) = grid();
+    let lines: String = (0..20_000).map(|n| format!("line {n}\r\n")).collect();
+    grid.output(lines.as_bytes());
+    assert_eq!(grid.history_len(), 10_000);
+    let top = grid.snapshot(Viewport { offset: usize::MAX });
+    assert_eq!(top.display_offset, 10_000);
+    let first = top.rows.first().map(|row| text(row));
+    // 10,000 history lines + 24 screen lines, the last of them the empty cursor line.
+    assert_eq!(first.as_deref(), Some("line 9977"));
+    let last = bottom(&grid);
+    let shown = last.rows.get(22).map(|row| text(row));
+    assert_eq!(shown.as_deref(), Some("line 19999"));
+}
+
+#[test]
+fn grid_gives_a_wide_cjk_char_two_cells() {
+    let (grid, _) = grid();
+    grid.output("中a".as_bytes());
+    let snapshot = bottom(&grid);
+    let row = snapshot.rows.first().cloned().unwrap_or_default();
+    let widths: Vec<_> = row
+        .iter()
+        .take(3)
+        .map(|cell| (cell.c, cell.width))
+        .collect();
+    assert_eq!(
+        widths,
+        [
+            ('中', Width::Wide),
+            (' ', Width::Spacer),
+            ('a', Width::Single)
+        ]
+    );
+    let cursor = snapshot.cursor.map(|cursor| (cursor.row, cursor.col));
+    assert_eq!(cursor, Some((0, 3)));
+}
+
+#[test]
+fn grid_reads_sgr_colours_and_flags() {
+    let (grid, _) = grid();
+    grid.output(b"\x1b[31mr\x1b[0;1;3;4;7;38;2;1;2;3;48;5;200mx");
+    let snapshot = bottom(&grid);
+    let row = snapshot.rows.first().cloned().unwrap_or_default();
+    let red = row.first().copied().unwrap_or_default();
+    assert_eq!((red.fg, red.bg), (Color::Ansi(1), Color::Default));
+    let styled = row.get(1).copied().unwrap_or_default();
+    assert_eq!(styled.fg, Color::Rgb(1, 2, 3));
+    assert_eq!(styled.bg, Color::Ansi(200));
+    assert!(styled.bold && styled.italic && styled.underline && styled.inverse);
+}
+
+#[test]
+fn grid_marks_each_visible_row_damaged_once_after_a_one_mib_burst() {
+    let (grid, wakes) = grid();
+    drop(bottom(&grid));
+    let line = format!("{}\r\n", "x".repeat(62));
+    let burst = line.repeat(1024 * 1024 / line.len() + 1);
+    grid.output(burst.as_bytes());
+    grid.output(b"tail");
+    assert_eq!(
+        wakes.load(Ordering::SeqCst),
+        1,
+        "one wake until the next snapshot"
+    );
+    assert!(grid.is_dirty());
+    let snapshot = bottom(&grid);
+    let rows: Vec<u16> = (0..SIZE.rows).collect();
+    assert_eq!(snapshot.damaged, rows);
+    assert!(!grid.is_dirty());
+    assert!(bottom(&grid).damaged.is_empty(), "damage is taken once");
+    grid.output(b"!");
+    assert_eq!(wakes.load(Ordering::SeqCst), 2);
+    assert_eq!(bottom(&grid).damaged, [SIZE.rows - 1]);
+}
+
+#[test]
+fn grid_exposes_bracketed_paste_and_app_cursor_modes() {
+    let (grid, _) = grid();
+    assert_eq!(grid.modes(), crate::grid::Modes::default());
+    grid.output(b"\x1b[?2004h\x1b[?1h");
+    let modes = grid.modes();
+    assert!(modes.bracketed_paste && modes.app_cursor);
+    grid.output(b"\x1b[?2004l");
+    assert!(!grid.modes().bracketed_paste);
+}
+
+#[test]
+fn grid_records_the_exit_and_wakes() {
+    let (grid, wakes) = grid();
+    grid.exited(Some(7));
+    assert_eq!(grid.exit(), Some(Some(7)));
+    assert_eq!(wakes.load(Ordering::SeqCst), 1);
+}

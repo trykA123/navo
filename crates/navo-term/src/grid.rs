@@ -1,0 +1,403 @@
+//! The terminal grid: an `alacritty_terminal::Term` fed by a session's output, read by the UI
+//! as a `Snapshot` in Navo types. Output sets a dirty flag and wakes the UI once until the next
+//! snapshot, so a burst never queues repaints.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, MutexGuard, PoisonError};
+
+use alacritty_terminal::event::EventListener;
+use alacritty_terminal::grid::{Dimensions, Scroll};
+use alacritty_terminal::index::{self, Column, Line};
+use alacritty_terminal::term::cell::{Cell as TermCell, Flags};
+use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
+use alacritty_terminal::vte::ansi::{self, CursorShape as TermShape, NamedColor, Processor};
+
+use crate::{Sink, Size};
+
+/// Default history kept above the visible rows, in lines.
+pub const DEFAULT_SCROLLBACK: usize = 10_000;
+/// Output parsed per lock, so a snapshot never waits long behind a burst.
+const FEED_CHUNK: usize = 64 * 1024;
+
+/// A cell colour: the theme's default, an ANSI palette index (0–255) or a literal RGB.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Color {
+    #[default]
+    Default,
+    Ansi(u8),
+    Rgb(u8, u8, u8),
+}
+
+/// How many columns a cell's character spans.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Width {
+    #[default]
+    Single,
+    /// The first of a wide character's two cells.
+    Wide,
+    /// The second cell of a wide character; draw nothing.
+    Spacer,
+}
+
+/// One character cell with its colours and style.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cell {
+    pub c: char,
+    pub width: Width,
+    pub fg: Color,
+    pub bg: Color,
+    pub bold: bool,
+    pub italic: bool,
+    /// Any underline style (single, double, curly, dotted, dashed).
+    pub underline: bool,
+    pub inverse: bool,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self {
+            c: ' ',
+            width: Width::Single,
+            fg: Color::Default,
+            bg: Color::Default,
+            bold: false,
+            italic: false,
+            underline: false,
+            inverse: false,
+        }
+    }
+}
+
+/// One visible row, one entry per column.
+pub type RowCells = Vec<Cell>;
+
+/// How the cursor is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CursorShape {
+    Block,
+    HollowBlock,
+    Underline,
+    Bar,
+}
+
+/// The cursor's cell in viewport coordinates (row 0 = top visible row).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cursor {
+    pub row: u16,
+    pub col: u16,
+    pub shape: CursorShape,
+}
+
+/// A grid position: `line` 0 is the top screen row, negative lines are in the scrollback.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Point {
+    pub line: i32,
+    pub col: usize,
+}
+
+/// The selected cells, `start` top-left and `end` bottom-right, inclusive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Selection {
+    pub start: Point,
+    pub end: Point,
+    /// A rectangular (block) selection rather than a run of text.
+    pub block: bool,
+}
+
+/// Which part of the history to show: `offset` lines above the bottom (clamped to the history).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Viewport {
+    pub offset: usize,
+}
+
+/// Terminal modes the input encoder needs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Modes {
+    /// Pastes are wrapped in `ESC[200~` … `ESC[201~`.
+    pub bracketed_paste: bool,
+    /// Arrow keys send `ESC O` sequences instead of `ESC [`.
+    pub app_cursor: bool,
+}
+
+/// What the UI paints: the visible rows and which of them changed since the last snapshot.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Snapshot {
+    pub rows: Vec<RowCells>,
+    /// `None` while the shell hides the cursor or it is scrolled out of view.
+    pub cursor: Option<Cursor>,
+    pub selection: Option<Selection>,
+    /// Lines the view is scrolled above the bottom.
+    pub display_offset: usize,
+    /// Visible rows changed since the previous snapshot, ascending, each once.
+    pub damaged: Vec<u16>,
+}
+
+/// Ignores the terminal's events; replies to queries (`PtyWrite`) are not sent back yet.
+struct Quiet;
+
+impl EventListener for Quiet {}
+
+/// `Size` in the shape `Term` wants.
+struct Dims(Size);
+
+impl Dimensions for Dims {
+    fn total_lines(&self) -> usize {
+        self.screen_lines()
+    }
+
+    fn screen_lines(&self) -> usize {
+        usize::from(self.0.rows)
+    }
+
+    fn columns(&self) -> usize {
+        usize::from(self.0.cols)
+    }
+}
+
+struct State {
+    term: Term<Quiet>,
+    parser: Processor,
+    exit: Option<Option<u32>>,
+}
+
+/// A terminal grid shared by the session's sink thread (writer) and the UI (reader).
+pub struct Grid {
+    state: Mutex<State>,
+    dirty: AtomicBool,
+    wake: Box<dyn Fn() + Send + Sync>,
+}
+
+impl Grid {
+    /// A blank grid of `size` keeping `scrollback` history lines. `wake` runs on the output
+    /// thread when the grid turns dirty; it must only schedule a repaint, never block.
+    pub fn new(size: Size, scrollback: usize, wake: impl Fn() + Send + Sync + 'static) -> Self {
+        let config = Config {
+            scrolling_history: scrollback,
+            ..Config::default()
+        };
+        let state = State {
+            term: Term::new(config, &Dims(size), Quiet),
+            parser: Processor::new(),
+            exit: None,
+        };
+        Self {
+            state: Mutex::new(state),
+            dirty: AtomicBool::new(false),
+            wake: Box::new(wake),
+        }
+    }
+
+    fn lock(&self) -> MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Sets the dirty flag; only the change from clean wakes the UI.
+    fn mark_dirty(&self) {
+        if !self.dirty.swap(true, Ordering::AcqRel) {
+            (self.wake)();
+        }
+    }
+
+    /// Whether output arrived since the last snapshot.
+    pub fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Acquire)
+    }
+
+    /// Resizes the grid; the caller resizes the PTY to the same size.
+    pub fn resize(&self, size: Size) {
+        self.lock().term.resize(Dims(size));
+        self.mark_dirty();
+    }
+
+    /// History lines held above the screen.
+    pub fn history_len(&self) -> usize {
+        self.lock().term.grid().history_size()
+    }
+
+    /// The modes the shell turned on, for encoding keys and pastes.
+    pub fn modes(&self) -> Modes {
+        let mode = *self.lock().term.mode();
+        Modes {
+            bracketed_paste: mode.contains(TermMode::BRACKETED_PASTE),
+            app_cursor: mode.contains(TermMode::APP_CURSOR),
+        }
+    }
+
+    /// The shell's exit once it ended: `Some(None)` when its status could not be read.
+    pub fn exit(&self) -> Option<Option<u32>> {
+        self.lock().exit
+    }
+
+    /// Clears the dirty flag and reads the visible rows at `viewport`. Damage is taken: the
+    /// next snapshot reports only rows changed after this one.
+    pub fn snapshot(&self, viewport: Viewport) -> Snapshot {
+        let dirty = self.dirty.swap(false, Ordering::AcqRel);
+        let mut state = self.lock();
+        let term = &mut state.term;
+        let moved = scroll_to(term, viewport.offset);
+        let damaged = if dirty || moved {
+            take_damage(term)
+        } else {
+            Vec::new()
+        };
+        Snapshot {
+            rows: rows(term),
+            cursor: cursor(term),
+            selection: selection(term),
+            display_offset: term.grid().display_offset(),
+            damaged,
+        }
+    }
+}
+
+impl Sink for Grid {
+    fn output(&self, bytes: &[u8]) {
+        for chunk in bytes.chunks(FEED_CHUNK) {
+            let mut state = self.lock();
+            let State { term, parser, .. } = &mut *state;
+            parser.advance(term, chunk);
+        }
+        if !bytes.is_empty() {
+            self.mark_dirty();
+        }
+    }
+
+    fn exited(&self, code: Option<u32>) {
+        self.lock().exit = Some(code);
+        self.mark_dirty();
+    }
+}
+
+/// Moves the view `offset` lines above the bottom; returns whether it moved.
+fn scroll_to(term: &mut Term<Quiet>, offset: usize) -> bool {
+    let current = term.grid().display_offset();
+    let target = offset.min(term.grid().history_size());
+    if target == current {
+        return false;
+    }
+    let distance = i32::try_from(target.abs_diff(current)).unwrap_or(i32::MAX);
+    let delta = if target > current {
+        distance
+    } else {
+        -distance
+    };
+    term.scroll_display(Scroll::Delta(delta));
+    true
+}
+
+fn take_damage(term: &mut Term<Quiet>) -> Vec<u16> {
+    let rows = term.screen_lines();
+    let mut damaged: Vec<u16> = match term.damage() {
+        TermDamage::Full => (0..rows)
+            .filter_map(|row| u16::try_from(row).ok())
+            .collect(),
+        TermDamage::Partial(lines) => lines
+            .map(|bounds| bounds.line)
+            .filter(|&line| line < rows)
+            .filter_map(|line| u16::try_from(line).ok())
+            .collect(),
+    };
+    term.reset_damage();
+    damaged.sort_unstable();
+    damaged.dedup();
+    damaged
+}
+
+/// Grid line of viewport row `row`.
+fn line_of(row: usize, display_offset: usize) -> Line {
+    let row = i32::try_from(row).unwrap_or(i32::MAX);
+    Line(row.saturating_sub(i32::try_from(display_offset).unwrap_or(i32::MAX)))
+}
+
+fn rows(term: &Term<Quiet>) -> Vec<RowCells> {
+    let grid = term.grid();
+    let offset = grid.display_offset();
+    (0..grid.screen_lines())
+        .map(|row| {
+            let line = &grid[line_of(row, offset)];
+            (0..grid.columns())
+                .map(|col| cell(&line[Column(col)]))
+                .collect()
+        })
+        .collect()
+}
+
+fn cell(cell: &TermCell) -> Cell {
+    let flags = cell.flags;
+    let width = if flags.contains(Flags::WIDE_CHAR) {
+        Width::Wide
+    } else if flags.contains(Flags::WIDE_CHAR_SPACER) {
+        Width::Spacer
+    } else {
+        Width::Single
+    };
+    Cell {
+        c: cell.c,
+        width,
+        fg: color(cell.fg),
+        bg: color(cell.bg),
+        bold: flags.contains(Flags::BOLD),
+        italic: flags.contains(Flags::ITALIC),
+        underline: flags.intersects(Flags::ALL_UNDERLINES),
+        inverse: flags.contains(Flags::INVERSE),
+    }
+}
+
+fn color(color: ansi::Color) -> Color {
+    match color {
+        ansi::Color::Spec(rgb) => Color::Rgb(rgb.r, rgb.g, rgb.b),
+        ansi::Color::Indexed(index) => Color::Ansi(index),
+        ansi::Color::Named(named) => named_color(named),
+    }
+}
+
+/// Palette names map to their index, dim colours to their base; the rest is the default.
+fn named_color(named: NamedColor) -> Color {
+    let index = named as usize;
+    let first_dim = NamedColor::DimBlack as usize;
+    let palette = if index < 16 {
+        Some(index)
+    } else if (first_dim..=NamedColor::DimWhite as usize).contains(&index) {
+        Some(index - first_dim)
+    } else {
+        None
+    };
+    palette
+        .and_then(|index| u8::try_from(index).ok())
+        .map_or(Color::Default, Color::Ansi)
+}
+
+fn cursor(term: &Term<Quiet>) -> Option<Cursor> {
+    let content = term.renderable_content();
+    let shape = match content.cursor.shape {
+        TermShape::Block => CursorShape::Block,
+        TermShape::HollowBlock => CursorShape::HollowBlock,
+        TermShape::Underline => CursorShape::Underline,
+        TermShape::Beam => CursorShape::Bar,
+        TermShape::Hidden => return None,
+    };
+    let point = content.cursor.point;
+    let row = point
+        .line
+        .0
+        .checked_add(i32::try_from(content.display_offset).ok()?)?;
+    let row = u16::try_from(row).ok()?;
+    (usize::from(row) < term.screen_lines()).then_some(Cursor {
+        row,
+        col: u16::try_from(point.column.0).ok()?,
+        shape,
+    })
+}
+
+fn selection(term: &Term<Quiet>) -> Option<Selection> {
+    let range = term.renderable_content().selection?;
+    let point = |point: index::Point| Point {
+        line: point.line.0,
+        col: point.column.0,
+    };
+    Some(Selection {
+        start: point(range.start),
+        end: point(range.end),
+        block: range.is_block,
+    })
+}

@@ -1,7 +1,8 @@
-//! Built-in terminal sessions: shell detection and shells running in a pseudo terminal.
+//! Built-in terminal sessions: shell detection, shells running in a pseudo terminal and the grid.
 //! Sessions run on background threads; the UI only writes, resizes and drops them.
 
 mod backend;
+pub mod grid;
 mod pty;
 pub mod shells;
 

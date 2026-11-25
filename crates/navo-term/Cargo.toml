@@ -1,4 +1,4 @@
-# Built-in terminal sessions: PTY processes, shell detection and (later) the grid.
+# Built-in terminal sessions: PTY processes, shell detection and the terminal grid.
 [package]
 name = "navo-term"
 version.workspace = true
@@ -11,6 +11,7 @@ license.workspace = true
 test-support = []
 
 [dependencies]
+alacritty_terminal = { version = "=0.26.0", default-features = false }
 portable-pty = "=0.9.0"
 thiserror = "2.0.21"
 tracing = "0.1.44"
