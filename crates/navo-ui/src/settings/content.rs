@@ -4,7 +4,7 @@ use gpui_kit::base::TestSupportExt;
 use gpui_kit::{RenderOnce, Role, Toggled};
 
 use super::{
-    CloseSettings, CONTEXT, FindSetting, Handler, SettingsBody, SheetEvent, UndoChange, row_state,
+    CONTEXT, CloseSettings, FindSetting, Handler, SettingsBody, SheetEvent, UndoChange, row_state,
     send,
 };
 use crate::prelude::*;
