@@ -33,13 +33,6 @@ pub(super) fn guess_group(verb: Option<&str>, text: &str) -> Group {
     }
 }
 
-pub(super) fn is_unfilled(children: &[RawItem]) -> bool {
-    children
-        .iter()
-        .filter(|child| !child.separator)
-        .all(|child| clean_text(&child.text).text.is_empty())
-}
-
 pub(super) fn to_menu_item(
     raw: RawItem,
     submenu: Option<Submenu>,

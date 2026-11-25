@@ -1,6 +1,6 @@
 use navo_core::shell_menu::{Group, ItemId, ItemKind, Submenu};
 
-use super::{RawItem, guess_group, is_unfilled, to_menu_item};
+use super::{RawItem, guess_group, to_menu_item};
 
 fn raw(command: u32, text: &str, verb: Option<&str>) -> RawItem {
     RawItem {
@@ -70,26 +70,6 @@ fn unknown_items_go_to_the_extensions_group() {
         guess_group(Some("properties"), "&Properties"),
         Group::Extensions
     );
-}
-
-#[test]
-fn a_submenu_with_one_blank_child_is_unfilled() {
-    assert!(is_unfilled(&[raw(9, "", None)]));
-}
-
-#[test]
-fn a_submenu_with_no_children_is_unfilled() {
-    assert!(is_unfilled(&[]));
-}
-
-#[test]
-fn separators_alone_do_not_fill_a_submenu() {
-    assert!(is_unfilled(&[separator(), raw(9, "  ", None)]));
-}
-
-#[test]
-fn a_submenu_with_a_named_child_is_filled() {
-    assert!(!is_unfilled(&[raw(9, "", None), raw(10, "&Desktop", None)]));
 }
 
 #[test]

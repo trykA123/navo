@@ -1,9 +1,11 @@
+//! Owns a Windows context menu and reads one level at a time.
+
 use std::collections::HashMap;
 
 use navo_core::shell_menu::{Group, MenuItem, ShellMenu, Submenu};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Shell::{
-    CMF_EXTENDEDVERBS, CMF_NORMAL, CMF_SYNCCASCADEMENU, IContextMenu, IContextMenu2, IContextMenu3,
+    CMF_EXTENDEDVERBS, CMF_NORMAL, IContextMenu, IContextMenu2, IContextMenu3,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, DestroyMenu, HMENU, WM_INITMENUPOPUP,
@@ -13,10 +15,8 @@ use windows::core::Interface;
 use super::read::{Entry, ID_FIRST, ID_LAST, Verbs, has_named_item, read_level};
 use super::sta::MenuHandler;
 use super::{selection, shell_error};
-use crate::shell_menu::classify::{guess_group, is_unfilled, to_menu_item};
+use crate::shell_menu::classify::{guess_group, to_menu_item};
 use crate::shell_menu::{MenuError, MenuPaths, MenuSource};
-
-const MAX_DEPTH: usize = 4;
 
 #[derive(Clone, Copy)]
 struct SubmenuRef {
@@ -34,6 +34,7 @@ pub(super) struct LoadedMenu {
 }
 
 impl LoadedMenu {
+    /// Queries the shell without forcing synchronous cascade population.
     pub(super) fn query(source: &MenuSource, owner: HWND) -> Result<Self, MenuError> {
         let menu = match &source.paths {
             MenuPaths::Items(paths) => selection::context_menu(paths, owner)?,
@@ -53,7 +54,7 @@ impl LoadedMenu {
         } else {
             0
         };
-        let flags = CMF_NORMAL | CMF_SYNCCASCADEMENU | extended;
+        let flags = CMF_NORMAL | extended;
         // SAFETY: a live menu handle and a valid id range.
         let result = unsafe {
             loaded
@@ -98,6 +99,7 @@ impl LoadedMenu {
         } else {
             Submenu::Failed
         };
+        // A static popup can already have items when no handler accepts WM_INITMENUPOPUP.
         Ok(self.read_filled(target, path).unwrap_or(unfilled))
     }
 
@@ -139,19 +141,24 @@ impl LoadedMenu {
     }
 
     fn submenu(&mut self, hmenu: HMENU, child_path: Vec<usize>, group: Group) -> Submenu {
+        // Idle prefill follows child paths, so stop if this handle leads back to an ancestor.
+        if hmenu == self.hmenu
+            || (1..child_path.len()).any(|depth| {
+                self.submenus
+                    .get(&child_path[..depth])
+                    .is_some_and(|ancestor| ancestor.hmenu == hmenu)
+            })
+        {
+            return Submenu::Failed;
+        }
         let position = child_path.last().copied().unwrap_or(0);
         let reference = SubmenuRef {
             hmenu,
             position: u32::try_from(position).unwrap_or(u32::MAX),
             group,
         };
-        self.submenus.insert(child_path.clone(), reference);
-        let level = read_level(hmenu, &self.verbs());
-        let raws: Vec<_> = level.iter().map(|entry| entry.raw.clone()).collect();
-        if child_path.len() > MAX_DEPTH || is_unfilled(&raws) {
-            return Submenu::Lazy;
-        }
-        Submenu::Filled(self.build(level, &child_path, Some(group)))
+        self.submenus.insert(child_path, reference);
+        Submenu::Lazy
     }
 
     fn init_popup(&self, target: SubmenuRef) -> bool {
@@ -180,3 +187,6 @@ impl Drop for LoadedMenu {
         let _ = unsafe { DestroyMenu(self.hmenu) };
     }
 }
+
+#[cfg(test)]
+mod tests;
