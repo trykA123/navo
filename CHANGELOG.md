@@ -20,7 +20,7 @@ This release finishes Settings v2, makes the right-click context menu open at on
 
 ### Changed
 
-- **Instant context menu on Windows.** Right-clicking or pressing Alt+M no longer waits 150 ms for Windows Shell extensions before opening. Navo's own file actions appear immediately at the top with key caps and danger styling on Delete, while Windows Shell actions load asynchronously below a divider. Windows shell queries no longer force synchronous cascade submenu population and defer submenu reading until opened. Menus anchored near the bottom of the screen now re-clamp upward smoothly as shell items arrive.
+- **Instant context menu on Windows.** Right-clicking or pressing Alt+M no longer waits 150 ms for Windows Shell extensions before opening. Navo's own file actions appear immediately at the top with key caps and danger styling on Delete, while Windows Shell actions load asynchronously below a divider. Windows shell submenus defer reading their items until opened. Menus anchored near the bottom of the screen now re-clamp upward smoothly as shell items arrive.
 
 ### Under the hood
 

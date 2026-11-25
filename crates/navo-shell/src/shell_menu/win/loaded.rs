@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use navo_core::shell_menu::{Group, MenuItem, ShellMenu, Submenu};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Shell::{
-    CMF_EXTENDEDVERBS, CMF_NORMAL, IContextMenu, IContextMenu2, IContextMenu3,
+    CMF_EXTENDEDVERBS, CMF_NORMAL, CMF_SYNCCASCADEMENU, IContextMenu, IContextMenu2, IContextMenu3,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, DestroyMenu, HMENU, WM_INITMENUPOPUP,
@@ -34,7 +34,7 @@ pub(super) struct LoadedMenu {
 }
 
 impl LoadedMenu {
-    /// Queries the shell without forcing synchronous cascade population.
+    /// Queries the shell context menu and defers submenu reading until opened.
     pub(super) fn query(source: &MenuSource, owner: HWND) -> Result<Self, MenuError> {
         let menu = match &source.paths {
             MenuPaths::Items(paths) => selection::context_menu(paths, owner)?,
@@ -54,7 +54,9 @@ impl LoadedMenu {
         } else {
             0
         };
-        let flags = CMF_NORMAL | extended;
+        // Keep synchronous cascade population: without it, shell handlers spawn background
+        // threads that leak USER objects/handles on dropped sessions and return partial Send to lists.
+        let flags = CMF_NORMAL | CMF_SYNCCASCADEMENU | extended;
         // SAFETY: a live menu handle and a valid id range.
         let result = unsafe {
             loaded
