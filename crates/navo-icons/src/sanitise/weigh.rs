@@ -1,6 +1,6 @@
-//! The expansion pre-pass (BB-D9 step 1): before usvg copies anything, weighs what `<use>`,
-//! markers, masks, clip paths, filters and paint servers would copy and measures nesting,
-//! without recursion.
+//! The expansion pre-pass (BB-D9 step 1): before usvg copies anything, refuses duplicate ids,
+//! weighs what `<use>`, markers, masks, clip paths, filters and paint servers would copy and
+//! measures nesting, without recursion.
 
 use std::collections::HashMap;
 
@@ -19,6 +19,7 @@ pub const MAX_DEPTH: u64 = 64;
 struct Cost {
     weight: u64,
     elements: u64,
+    shapes: u64,
     depth: u64,
 }
 
@@ -36,18 +37,13 @@ enum Copies {
     PerVertex,
 }
 
-/// Each id mapped to its last holder, as usvg resolves links.
+/// Each id mapped to the one element that holds it.
 type Ids<'a, 'input> = HashMap<&'a str, Node<'a, 'input>>;
 
-/// Refuses `document` when it expands past `MAX_WEIGHT` or nests past `MAX_DEPTH`; a reference
-/// cycle is refused as too complex.
+/// Refuses `document` when two elements share an id, it expands past `MAX_WEIGHT` or nests past
+/// `MAX_DEPTH`; a reference cycle is refused as too complex.
 pub(super) fn check(document: &Document<'_>) -> Result<(), SvgError> {
-    let mut ids: Ids<'_, '_> = HashMap::new();
-    for node in document.descendants().filter(Node::is_element) {
-        if let Some(id) = node.attribute("id") {
-            ids.insert(id, node);
-        }
-    }
+    let ids = unique_ids(document)?;
     let mut states = vec![State::New; document.descendants().count()];
     let root = document.root_element();
     let mut stack = vec![(root, false)];
@@ -76,9 +72,31 @@ pub(super) fn check(document: &Document<'_>) -> Result<(), SvgError> {
     shared(document, &ids, &states, root)
 }
 
+/// Maps every id to its element, refusing an id held by two elements. Counts every `id`
+/// attribute in any namespace (`id`, `xml:id`, `svg:id`) on every element, known or not: usvg
+/// links `<use>` to the first holder but `url()` to the last one it keeps.
+fn unique_ids<'a, 'input>(document: &'a Document<'input>) -> Result<Ids<'a, 'input>, SvgError> {
+    let mut ids: Ids<'a, 'input> = HashMap::new();
+    for node in document.descendants().filter(Node::is_element) {
+        for attribute in node
+            .attributes()
+            .filter(|attribute| attribute.name() == "id")
+        {
+            if ids
+                .insert(attribute.value(), node)
+                .is_some_and(|held| held != node)
+            {
+                return Err(SvgError::DuplicateId);
+            }
+        }
+    }
+    Ok(ids)
+}
+
 /// Adds the resources a style sheet or an inherited marker or paint may give every element: each
 /// one may nest in the next, so their cost compounds once per resource. Gradient stops hold no
-/// elements, so a shape takes at most a fill and a stroke copy of the heaviest gradient.
+/// elements, so each expanded shape takes at most a fill and a stroke copy of the heaviest
+/// gradient.
 fn shared(
     document: &Document<'_>,
     ids: &Ids<'_, '_>,
@@ -88,23 +106,41 @@ fn shared(
     let mut resources = shared_resources(document, ids);
     resources.sort_by_key(|node| node.id().get());
     resources.dedup_by_key(|node| node.id());
-    let (mut base, mut factor, mut depth, mut gradient) = (0_u64, 0_u64, root.depth, 0_u64);
+    let (mut weight, mut shapes, mut factor) = (0_u64, 0_u64, 0_u64);
+    let (mut depth, mut gradient) = (root.depth, 0_u64);
     for resource in &resources {
         let cost = done(states, *resource)?;
         if is_gradient(*resource) {
             gradient = gradient.max(cost.weight);
             continue;
         }
-        base = base.saturating_add(cost.weight);
+        weight = weight.saturating_add(cost.weight);
+        shapes = shapes.saturating_add(cost.shapes);
         factor = factor.saturating_add(per_copy(cost));
         depth = depth.saturating_add(cost.depth);
     }
     if depth > MAX_DEPTH {
         return Err(SvgError::TooDeep);
     }
-    base = base.saturating_add(gradient.saturating_mul(2));
+    let rounds = resources.len();
+    let copies = per_copy(root);
+    let weight = copies.saturating_mul(compound(weight, factor, rounds));
+    let shapes = copies
+        .saturating_mul(compound(shapes, factor, rounds))
+        .saturating_add(root.shapes);
+    let stops = shapes.saturating_mul(gradient.saturating_mul(2));
+    let total = root.weight.saturating_add(weight).saturating_add(stops);
+    if total > MAX_WEIGHT {
+        return Err(SvgError::TooComplex);
+    }
+    Ok(())
+}
+
+/// What one copy point holds once `rounds` shared resources, each adding `base` and copying the
+/// others `factor` times, nest in one another.
+fn compound(base: u64, factor: u64, rounds: usize) -> u64 {
     let mut each = 0_u64;
-    for _ in &resources {
+    for _ in 0..rounds {
         let next = base.saturating_add(factor.saturating_mul(each));
         let settled = next == each || next > MAX_WEIGHT;
         each = next;
@@ -112,13 +148,7 @@ fn shared(
             break;
         }
     }
-    let total = root
-        .weight
-        .saturating_add(per_copy(root).saturating_mul(each));
-    if total > MAX_WEIGHT {
-        return Err(SvgError::TooComplex);
-    }
-    Ok(())
+    each
 }
 
 /// Resources named by a style sheet, and markers and paint servers named by an element that is
@@ -158,6 +188,7 @@ fn expand(node: Node<'_, '_>, ids: &Ids<'_, '_>, states: &[State]) -> Result<Cos
     let mut cost = Cost {
         weight: numbers.saturating_add(1),
         elements: 1,
+        shapes: u64::from(is_shape(node)),
         depth: 1,
     };
     for (link, copies) in links(node, ids) {
@@ -172,6 +203,9 @@ fn expand(node: Node<'_, '_>, ids: &Ids<'_, '_>, states: &[State]) -> Result<Cos
         cost.elements = cost
             .elements
             .saturating_add(target.elements.saturating_mul(times));
+        cost.shapes = cost
+            .shapes
+            .saturating_add(target.shapes.saturating_mul(times));
         cost.depth = cost.depth.max(target.depth.saturating_add(1));
     }
     if cost.depth > MAX_DEPTH {
@@ -282,7 +316,7 @@ fn numbers(node: Node<'_, '_>) -> u64 {
     }
 }
 
-/// The last holders of the ids named by `url(#id)` in `value`, each once.
+/// The holders of the ids named by `url(#id)` in `value`, each once.
 fn targets<'a, 'input>(value: &str, ids: &Ids<'a, 'input>) -> Vec<Node<'a, 'input>> {
     let mut found: Vec<_> = urls(value).filter_map(|id| ids.get(id).copied()).collect();
     found.sort_by_key(|node| node.id().get());

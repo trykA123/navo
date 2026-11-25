@@ -93,13 +93,17 @@ pub enum SvgError {
     /// Nests elements or references deeper than `MAX_DEPTH`.
     #[error("the SVG nests too deeply")]
     TooDeep,
+    /// Gives two elements the same `id` (in any namespace). Icons never need it, and usvg
+    /// resolves `<use>` and `url()` to different holders, so the weigh could not bound it.
+    #[error("the SVG gives two elements the same id")]
+    DuplicateId,
 }
 
 /// Cleans `bytes` down to solid paths; with `mono` every colour is black.
 ///
-/// Steps of BB-D9 in order: refuse before parsing (size, entities, expansion, nesting), parse
-/// with no resolver, walk the tree, write our own document, refuse too many paths, none or an
-/// output over `SVG_CAP`.
+/// Steps of BB-D9 in order: refuse before parsing (size, entities, duplicate ids, expansion,
+/// nesting), parse with no resolver, walk the tree, write our own document, refuse too many
+/// paths, none or an output over `SVG_CAP`.
 pub fn normalise(bytes: &[u8], mono: bool) -> Result<Cleaned, SvgError> {
     let text = screen(bytes)?;
     let document =

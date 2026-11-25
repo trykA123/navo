@@ -494,36 +494,78 @@ fn sanitise_refuses_paint_server_bombs() {
     );
 }
 
-/// `holders` elements `<tag id="a"/>`, then `names` references to `#a` placed by `naming`.
-fn duplicate_ids(holders: usize, tag: &str, naming: &str) -> String {
-    let defs = format!(r#"<{tag} id="a"/>"#).repeat(holders);
-    let refs = "url(#a)".repeat(600);
-    let body = match naming {
-        "sheet" => format!("<style>{refs}</style>"),
-        "use" => r##"<use href="#a"/>"##.repeat(600),
-        _ => format!(r#"<g x="{refs}"/>"#),
-    };
+/// A heavy group `<use>`d 100 times, with a `decoy` element that reuses its id after it.
+fn heavy_first(decoy: &str) -> String {
     format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs>{defs}</defs>{body}<path d="M0 0h1v1z"/></svg>"#
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><g id="a"><path d="{}"/></g></defs>{}{decoy}</svg>"##,
+        zigzag(3_000),
+        r##"<use href="#a"/>"##.repeat(100)
     )
 }
 
 #[test]
-fn sanitise_weighs_a_duplicate_id_once_by_its_last_holder() {
-    for (tag, naming) in [("mask", "attribute"), ("mask", "sheet"), ("g", "use")] {
-        let svg = duplicate_ids(600, tag, naming);
-        let cleaned = normalise(svg.as_bytes(), false);
-        assert!(cleaned.is_ok(), "{tag} {naming}: {cleaned:?}");
+fn sanitise_refuses_duplicate_ids() {
+    for decoy in [r#"<g id="a"/>"#, r#"<foo id="a"/>"#, r#"<g xml:id="a"/>"#] {
+        assert_eq!(
+            normalise(heavy_first(decoy).as_bytes(), false),
+            Err(SvgError::DuplicateId),
+            "{decoy}"
+        );
     }
-    let last_heavy = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><g id="a"/><path id="a" d="{}"/></defs>{}</svg>"##,
-        zigzag(3_000),
-        r##"<use href="#a"/>"##.repeat(100)
-    );
+    let pattern = pattern_fill(600, 100, "shape").replace("</svg>", r#"<foo id="p"/></svg>"#);
     assert_eq!(
-        normalise(last_heavy.as_bytes(), false),
-        Err(SvgError::TooComplex)
+        normalise(pattern.as_bytes(), false),
+        Err(SvgError::DuplicateId)
     );
+    let masks = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><mask id="m"/><mask id="m"/><path mask="url(#m)" d="M0 0h1v1z"/></svg>"##;
+    assert_eq!(
+        normalise(masks.as_bytes(), false),
+        Err(SvgError::DuplicateId)
+    );
+    let one = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path id="a" xml:id="a" d="M0 0h1v1z"/></svg>"##;
+    assert!(
+        normalise(one.as_bytes(), false).is_ok(),
+        "one element, one id"
+    );
+}
+
+/// An Illustrator-style export: `paths` long paths, each filled through a style sheet class
+/// with one of eight five-stop gradients (or a solid colour).
+fn illustrator(paths: usize, gradients: bool) -> String {
+    let mut sheet = String::new();
+    let mut defs = String::new();
+    for at in 0..8 {
+        defs.push_str(&format!(
+            r#"<linearGradient id="SVGID_{at}_" x1="2" y1="2" x2="22" y2="22">{}</linearGradient>"#,
+            r##"<stop offset="0.5" stop-color="#369"/>"##.repeat(5)
+        ));
+    }
+    let mut body = String::new();
+    for at in 0..paths {
+        let fill = if gradients {
+            format!("url(#SVGID_{}_)", at % 8)
+        } else {
+            "#369".to_owned()
+        };
+        sheet.push_str(&format!(".st{at}{{fill:{fill};}}"));
+        body.push_str(&format!(r#"<path class="st{at}" d="{}"/>"#, zigzag(400)));
+    }
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><style>{sheet}</style>{defs}{body}</svg>"#
+    )
+}
+
+#[test]
+fn sanitise_keeps_an_illustrator_export_with_shared_gradients() {
+    for gradients in [false, true] {
+        let svg = illustrator(40, gradients);
+        let cleaned = normalise(svg.as_bytes(), false);
+        assert!(cleaned.is_ok(), "gradients {gradients}: {cleaned:?}");
+    }
+    let bomb = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><style>.q { fill: url(#g) }</style><linearGradient id="g">STOPS</linearGradient>SHAPES</svg>"##
+        .replace("STOPS", &"<stop/>".repeat(3_000))
+        .replace("SHAPES", &r#"<path class="q" d="M0 0h1v1z"/>"#.repeat(100));
+    assert_eq!(normalise(bomb.as_bytes(), false), Err(SvgError::TooComplex));
 }
 
 #[test]
