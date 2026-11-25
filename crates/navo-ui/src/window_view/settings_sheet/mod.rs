@@ -331,8 +331,8 @@ impl NavoWindow {
             SheetEvent::RemoveService => self.remove_index_service(cx),
             SheetEvent::Close => self.escape_settings(window, cx),
         }
-        if self.settings.filter.is_changed_only() && self.values.changed_count() == 0 {
-            self.set_changed_only(false, cx);
+        if self.settings.filter.is_changed_only() {
+            self.set_changed_only(self.values.changed_count() > 0, cx);
         } else {
             self.settings.filter = self.settings.filter.clone().marking(&self.values);
         }

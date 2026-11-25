@@ -71,7 +71,7 @@ impl NavoWindow {
     }
 
     fn apply_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
-        if !filter.is_changed_only() {
+        if filter.is_empty() {
             self.settings.folds.reveal(self.settings.row);
         }
         let row = filter

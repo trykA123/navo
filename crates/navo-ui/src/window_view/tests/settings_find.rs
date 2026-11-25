@@ -394,3 +394,36 @@ fn find_matches_option_labels_and_opens_matching_shortcuts(cx: &mut TestAppConte
         .expect("window");
     assert_eq!(selected, Some(true));
 }
+
+#[gpui_kit::test]
+fn reverting_one_of_two_changed_rows_in_changed_only_moves_to_remaining_row(
+    cx: &mut TestAppContext,
+) {
+    let rig = rig(cx, ThemeChoice::System);
+    open(cx, &rig);
+
+    // Change Theme, Density (Appearance) and FoldersFirst (Files).
+    rig.press(cx, "right");
+    super::settings_sheet::go_to(cx, &rig, Field::Density);
+    rig.press(cx, "right");
+    super::settings_sheet::go_to(cx, &rig, Field::FoldersFirst);
+    rig.press(cx, "space");
+    settle_motion(cx, &rig);
+
+    rig.click(cx, "settings-changed-chip");
+    rig.click(cx, ("settings-row", row_of(Field::Density)));
+    settle_motion(cx, &rig);
+    assert_eq!(current_row(cx, &rig), row_of(Field::Density));
+
+    // Revert Density while changed-only is active: selection moves to an admitted row,
+    // and Up/Down navigation still steps between Theme and FoldersFirst.
+    rig.press(cx, "f8");
+    settle_motion(cx, &rig);
+    assert_eq!(current_row(cx, &rig), row_of(Field::Theme));
+    assert!(!shows_row(cx, &rig, Field::Density));
+
+    rig.press(cx, "down");
+    assert_eq!(current_row(cx, &rig), row_of(Field::FoldersFirst));
+    rig.press(cx, "up");
+    assert_eq!(current_row(cx, &rig), row_of(Field::Theme));
+}
