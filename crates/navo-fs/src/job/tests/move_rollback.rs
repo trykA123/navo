@@ -465,8 +465,9 @@ fn a_copy_phase_crash_over_many_no_id_files_checks_each_copy_without_scanning_th
     assert!(!exists(&fs, "dst/f0.txt"), "the duplicate copy stayed");
 }
 
-/// Files in the rollback cost test: a per-copy scan of the plan or the journal costs ~10^9 here.
-const HUGE: usize = 20_000;
+/// Files in the rollback cost test: per-copy scans of the plan or the journal cost ~5 * 10^7
+/// compares here, linear lookups under 5 * 10^4.
+const HUGE: usize = 3_000;
 
 #[test]
 fn a_removal_phase_crash_over_huge_moves_rolls_back_in_linear_compares() {
