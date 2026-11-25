@@ -215,32 +215,117 @@ pub fn nothing_left(fixture: &Fixture) {
     assert_eq!(found, Vec::<String>::new());
 }
 
-/// Fails when a stalled child, whose id the script wrote, outlives the kill.
+/// Fails when a stalled child, whose id the script wrote, outlives the kill. Liveness follows
+/// a process handle, never the bare id, because Windows hands ids of dead processes to others.
 #[cfg(windows)]
 pub fn nothing_left(fixture: &Fixture) {
-    use std::process::Command;
+    use std::os::windows::fs::MetadataExt;
     use std::time::Instant;
 
-    let ids = fs::read_to_string(stalled_pid(fixture)).expect("the stall wrote no process id");
+    let path = stalled_pid(fixture);
+    let ids = fs::read_to_string(&path).expect("the stall wrote no process id");
     assert!(
         !ids.trim().is_empty(),
         "the stall wrote an empty process id"
     );
+    let written = fs::metadata(&path).unwrap().last_write_time();
     for pid in ids.split_whitespace() {
-        let alive = || {
-            let listing = Command::new("tasklist.exe")
-                .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-                .output()
-                .unwrap();
-            String::from_utf8_lossy(&listing.stdout)
-                .lines()
-                .any(|line| line.split_whitespace().nth(1) == Some(pid))
+        let pid: u32 = pid.parse().unwrap();
+        let Some(child) = stalled_child(pid, written) else {
+            continue;
         };
         let started = Instant::now();
-        while alive() && started.elapsed() < Duration::from_secs(5) {
+        while !win_process::exited(&child) && started.elapsed() < Duration::from_secs(5) {
             std::thread::sleep(Duration::from_millis(50));
         }
-        assert!(!alive(), "the stalled child {pid} outlived the kill");
+        assert!(
+            win_process::exited(&child),
+            "the stalled child {pid} outlived the kill"
+        );
+    }
+}
+
+/// A handle to the stall's `sleep` under `pid`, or `None` when that process is gone and the
+/// id now names another image or a process that started after the id file was `written`.
+#[cfg(windows)]
+fn stalled_child(pid: u32, written: u64) -> Option<std::os::windows::io::OwnedHandle> {
+    let process = win_process::open(pid)?;
+    if win_process::exited(&process) || win_process::created(&process)? > written {
+        return None;
+    }
+    let image = win_process::image(&process)?;
+    let name = Path::new(&image)
+        .file_name()?
+        .to_string_lossy()
+        .into_owned();
+    name.eq_ignore_ascii_case("sleep.exe").then_some(process)
+}
+
+/// Thin wrappers over the Win32 process calls the kill probe needs.
+#[cfg(windows)]
+mod win_process {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+
+    use windows_sys::Win32::Foundation::{FILETIME, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+        PROCESS_SYNCHRONIZE, QueryFullProcessImageNameW, WaitForSingleObject,
+    };
+
+    /// A handle that waits on and queries `pid`; holding it keeps the id from being reused.
+    pub fn open(pid: u32) -> Option<OwnedHandle> {
+        let access = PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION;
+        // SAFETY: OpenProcess takes no pointers; the null result is checked before wrapping.
+        let raw = unsafe { OpenProcess(access, 0, pid) };
+        // SAFETY: raw is a fresh process handle that only the guard owns.
+        (!raw.is_null()).then(|| unsafe { OwnedHandle::from_raw_handle(raw) })
+    }
+
+    /// Whether the process has fully exited (its object is signalled).
+    pub fn exited(process: &OwnedHandle) -> bool {
+        // SAFETY: the handle is live; a zero timeout only polls.
+        unsafe { WaitForSingleObject(process.as_raw_handle(), 0) == WAIT_OBJECT_0 }
+    }
+
+    /// The process creation time as a FILETIME tick count.
+    pub fn created(process: &OwnedHandle) -> Option<u64> {
+        let zero = FILETIME {
+            dwLowDateTime: 0,
+            dwHighDateTime: 0,
+        };
+        let (mut created, mut exit, mut kernel, mut user) = (zero, zero, zero, zero);
+        // SAFETY: the handle is live and every out pointer names a local FILETIME.
+        let ok = unsafe {
+            GetProcessTimes(
+                process.as_raw_handle(),
+                &mut created,
+                &mut exit,
+                &mut kernel,
+                &mut user,
+            )
+        };
+        (ok != 0)
+            .then(|| (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime))
+    }
+
+    /// The full Win32 path of the process image.
+    pub fn image(process: &OwnedHandle) -> Option<String> {
+        let mut buffer = [0u16; 1024];
+        let mut len = u32::try_from(buffer.len()).ok()?;
+        // SAFETY: the buffer holds `len` u16s and the call writes at most that many.
+        let ok = unsafe {
+            QueryFullProcessImageNameW(
+                process.as_raw_handle(),
+                PROCESS_NAME_WIN32,
+                buffer.as_mut_ptr(),
+                &mut len,
+            )
+        };
+        if ok == 0 {
+            return None;
+        }
+        let name = buffer.get(..usize::try_from(len).ok()?)?;
+        Some(String::from_utf16_lossy(name))
     }
 }
 
