@@ -1,9 +1,11 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use navo_core::retention::{RetainedState, RetentionId};
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 use navo_fs::{
-    CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, ProviderOps, StepOutcome,
+    CancelToken, HeldFile, JobContext, JobLog, JobOutcome, Journaled, PlaceIndex, ProviderOps,
+    StepOutcome,
 };
 use navo_store::{JobId, JobState, RetentionCatalog, StepState, StoreDirs};
 
@@ -142,27 +144,10 @@ impl HeldUndo {
             ctx.log.undone(0, outcome)?;
             return Ok(outcome);
         }
-        let mut remaining = self.done.clone();
-        let steps: Vec<_> = (0_u32..).zip(&self.plan.steps).collect();
-        for (seq, step) in steps.into_iter().rev() {
-            if !remaining.contains(&seq) {
-                continue;
-            }
-            let Step::CopyFile { target, .. } = step else {
-                continue;
-            };
-            let Some(old) = self
-                .held
-                .files
-                .iter()
-                .find(|file| file.original.same_place(target))
-            else {
-                continue;
-            };
+        let remaining = undo_copies(&self.plan, &self.done, &self.held.files, |seq, old| {
             let outcome = navo_fs::undo_write(old, ctx)?;
-            ctx.log.undone(seq, outcome)?;
-            remaining.retain(|done| *done != seq);
-        }
+            ctx.log.undone(seq, outcome)
+        })?;
         let outcome = navo_fs::roll_back(
             &Journaled {
                 plan: &self.plan,
@@ -182,6 +167,49 @@ impl HeldUndo {
             JobOutcome::Kept { .. } => Err(FsError::new(FsErrorKind::ChangedOnDisk)),
         }
     }
+}
+
+/// Undoes the done copy steps newest first through `undo`, each with the first held row at the
+/// same place as its target. Returns the done seqs it did not undo, in journal order. Lookups are
+/// built once, so a big held move costs linear time.
+fn undo_copies(
+    plan: &OperationPlan,
+    done: &[u32],
+    files: &[HeldFile],
+    mut undo: impl FnMut(u32, &HeldFile) -> Result<(), FsError>,
+) -> Result<Vec<u32>, FsError> {
+    let places = PlaceIndex::new(files.iter().map(|file| &file.original));
+    let is_done: HashSet<u32> = done.iter().copied().collect();
+    let mut undone = HashSet::new();
+    let steps: Vec<_> = (0_u32..).zip(&plan.steps).collect();
+    for (seq, step) in steps.into_iter().rev() {
+        if !(probed() && is_done.contains(&seq)) {
+            continue;
+        }
+        let Step::CopyFile { target, .. } = step else {
+            continue;
+        };
+        let row = places.first(target).filter(|_| probed());
+        let Some(old) = row.and_then(|row| files.get(row)) else {
+            continue;
+        };
+        undo(seq, old)?;
+        undone.insert(seq);
+    }
+    let left = done.iter().filter(|seq| probed() && !undone.contains(*seq));
+    Ok(left.copied().collect())
+}
+
+#[cfg(test)]
+thread_local! {
+    static PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one probe in test builds; always true so it can lead a condition.
+fn probed() -> bool {
+    #[cfg(test)]
+    PROBES.with(|count| count.set(count.get() + 1));
+    true
 }
 
 fn held_undo(journal: &SharedJournal, job: JobId) -> Result<HeldUndo, RestoreError> {
@@ -264,4 +292,137 @@ fn ready_entries(dirs: &StoreDirs, job: JobId) -> Result<Vec<RetentionId>, Resto
 
 fn failed(error: impl std::fmt::Display) -> RestoreError {
     RestoreError::Failed(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use navo_core::Totals;
+
+    use super::*;
+
+    fn at(text: &str) -> Location {
+        Location::new(text).unwrap()
+    }
+
+    fn copy(target: &str) -> Step {
+        Step::CopyFile {
+            source: at(&format!("{target}.src")),
+            target: at(target),
+            size: 1,
+        }
+    }
+
+    fn plan(steps: Vec<Step>) -> OperationPlan {
+        let totals = Totals {
+            files: 0,
+            folders: 0,
+            bytes: 0,
+        };
+        OperationPlan {
+            kind: OpKind::Copy,
+            steps,
+            totals,
+            conflicts: Vec::new(),
+            risks: Vec::new(),
+        }
+    }
+
+    fn held(original: &str, tag: &str) -> HeldFile {
+        HeldFile {
+            original: at(original),
+            held: at(&format!("{original}.{tag}")),
+            placed: None,
+            volume: None,
+            placed_hash: None,
+        }
+    }
+
+    /// Runs `undo_copies` and returns the undone (seq, held row) pairs and the seqs left.
+    fn undone(
+        plan: &OperationPlan,
+        done: &[u32],
+        files: &[HeldFile],
+    ) -> (Vec<(u32, Location)>, Vec<u32>) {
+        let mut calls = Vec::new();
+        let left = undo_copies(plan, done, files, |seq, old| {
+            calls.push((seq, old.held.clone()));
+            Ok(())
+        })
+        .unwrap();
+        (calls, left)
+    }
+
+    #[test]
+    fn undo_of_a_big_held_copy_probes_linearly() {
+        const FILES: u32 = 3_000;
+        let names: Vec<String> = (0..FILES).map(|n| format!(r"C:\d\f{n}")).collect();
+        let plan = plan(names.iter().map(|name| copy(name)).collect());
+        let files: Vec<HeldFile> = names.iter().map(|name| held(name, "old")).collect();
+        let done: Vec<u32> = (0..FILES).collect();
+        PROBES.with(|count| count.set(0));
+        let (calls, left) = undone(&plan, &done, &files);
+        let probes = PROBES.with(std::cell::Cell::get);
+        assert_eq!(calls.len(), FILES as usize);
+        assert_eq!(calls[0].0, FILES - 1);
+        assert!(left.is_empty());
+        assert!(
+            probes <= 4 * FILES as usize,
+            "{probes} probes for {FILES} files"
+        );
+    }
+
+    #[test]
+    fn undo_picks_the_first_row_at_the_same_place_and_keeps_journal_order() {
+        let plan = plan(vec![
+            copy(r"C:\d\A"),
+            Step::MakeFolder {
+                target: at(r"C:\d\sub"),
+            },
+            copy(r"C:\d\b"),
+            copy(r"C:\d\c"),
+            copy(r"C:\d\e"),
+        ]);
+        // Case twins: the first row wins even when a later row names the target exactly.
+        let files = [
+            held(r"C:\d\a", "first"),
+            held(r"C:\d\A", "exact"),
+            held(r"C:\d\B", "only"),
+            held(r"C:\d\e", "e"),
+        ];
+        // 4 is done twice, 3 has no held row, 1 is no copy, 9 is past the plan, 2 is not done.
+        let done = [9, 4, 0, 3, 1, 4];
+        let (calls, left) = undone(&plan, &done, &files);
+        assert_eq!(calls, vec![(4, at(r"C:\d\e.e")), (0, at(r"C:\d\a.first")),]);
+        assert_eq!(left, vec![9, 3, 1]);
+    }
+
+    #[test]
+    fn undo_folds_case_one_way_like_same_place() {
+        // A `ſ:` row folds to `S:`, but an `S:` row does not match a `ſ:` target.
+        let plan = plan(vec![copy(r"S:\a"), copy("\u{17F}:\\b")]);
+        let files = [held("\u{17F}:\\a", "fold"), held(r"S:\b", "nofold")];
+        let expect_a = files[0].original.same_place(&at(r"S:\a"));
+        let expect_b = files[1].original.same_place(&at("\u{17F}:\\b"));
+        let (calls, _) = undone(&plan, &[0, 1], &files);
+        let seqs: Vec<u32> = calls.iter().map(|(seq, _)| *seq).collect();
+        let expected: Vec<u32> = [(1, expect_b), (0, expect_a)]
+            .into_iter()
+            .filter_map(|(seq, hit)| hit.then_some(seq))
+            .collect();
+        assert_eq!(seqs, expected);
+        assert_ne!(expect_a, expect_b, "the fixture covers a one-way fold");
+    }
+
+    #[test]
+    fn undo_stops_at_the_first_failure() {
+        let plan = plan(vec![copy(r"C:\d\a"), copy(r"C:\d\b")]);
+        let files = [held(r"C:\d\a", "a"), held(r"C:\d\b", "b")];
+        let mut seen = Vec::new();
+        let result = undo_copies(&plan, &[0, 1], &files, |seq, _| {
+            seen.push(seq);
+            Err(FsError::new(FsErrorKind::ChangedOnDisk))
+        });
+        assert_eq!(result.unwrap_err().kind, FsErrorKind::ChangedOnDisk);
+        assert_eq!(seen, vec![1]);
+    }
 }

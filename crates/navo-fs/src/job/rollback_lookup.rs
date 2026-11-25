@@ -40,6 +40,31 @@ impl Places {
         rows.sort_unstable();
         rows
     }
+
+    /// The lowest row at the same place as `probe`. Each key keeps its rows ascending.
+    fn first(&self, probe: &Location) -> Option<usize> {
+        probes(probe)
+            .iter()
+            .filter_map(|probe| self.0.get(probe)?.first())
+            .min()
+            .copied()
+    }
+}
+
+/// A list of places hashed once, so "the first row at the same place as this target" is a hash
+/// probe instead of a scan. Row `n` matches `target` exactly when `places[n].same_place(target)`.
+pub struct PlaceIndex(Places);
+
+impl PlaceIndex {
+    /// Indexes `places` by row number in one pass.
+    pub fn new<'l>(places: impl IntoIterator<Item = &'l Location>) -> Self {
+        Self(Places::of(places.into_iter().map(Some)))
+    }
+
+    /// The first row whose place `same_place`s `target`, as `places.iter().position` would find.
+    pub fn first(&self, target: &Location) -> Option<usize> {
+        self.0.first(target)
+    }
 }
 
 /// A journaled job under rollback with its lookups, built once in [`Rollback::of`].
@@ -252,6 +277,10 @@ mod tests {
             .rev()
             .find(|file| file.target.same_place(probe));
         prop_assert_eq!(run.newest_placed(probe), newest_scan);
+        prop_assert_eq!(
+            PlaceIndex::new(rows).first(probe),
+            rows.iter().position(|row| row.same_place(probe))
+        );
         let removes = |seq: u32, step: &Step| {
             matches!(step, Step::RemoveFile { location } if location.same_place(probe))
                 .then_some(seq)

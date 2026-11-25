@@ -32,6 +32,7 @@ use done_set::DoneSet;
 pub use aside::HELD_PREFIX;
 pub use moved::{PreparedMove, recorded_proof, settle_prepared_move, undo_move};
 pub use rename::{RenameOutcome, is_temporary as is_rename_temporary};
+pub use rollback_lookup::PlaceIndex;
 pub use source::{SourceContent, SourceIdentity, SourceMetadata, SourceOps, Sources, TempCreated};
 pub use verify::{VerifyCount, VerifyMode};
 pub use workers::{CopyMode, WorkerCounts, copy_workers, job_workers};
