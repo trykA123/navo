@@ -55,7 +55,6 @@ pub(super) struct PendingView {
     pub anchor: Point<Pixels>,
     pub context: SharedString,
     pub restore: FocusHandle,
-    pub until: Instant,
     pub has_classic: bool,
 }
 
@@ -208,10 +207,9 @@ impl MenuRun {
         None
     }
 
-    pub(super) fn reopen(&mut self, now: Instant) {
+    pub(super) fn reopen(&mut self) {
         self.own = self.bare.clone();
         self.show = Some(PendingView {
-            until: now,
             has_classic: false,
             ..self.again.clone()
         });

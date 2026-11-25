@@ -508,16 +508,89 @@ fn alt_m_with_nothing_marked_opens_the_menu_for_the_cursor_row(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn only_a_loading_row_shows_before_the_provider_answers(cx: &mut TestAppContext) {
-    let rig = open_by_key(cx);
-    assert_eq!(rig.rows(cx), ["Loading Windows items…"]);
+fn file_menu_opens_immediately_with_navo_actions_before_shell_answers(cx: &mut TestAppContext) {
+    let rig = rig(cx);
+    rig.press(cx, "down");
+    rig.press(cx, "menu");
+    assert!(rig.is_open(cx));
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+            "-",
+            "Loading Windows items…",
+        ]
+    );
+    rig.answer(cx, Ok(windows_menu()));
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+            "-",
+            "Open",
+            "7-Zip",
+            "Send to",
+            "Cut",
+        ]
+    );
 }
 
 #[gpui_kit::test]
-fn the_windows_list_shows_without_navo_rows(cx: &mut TestAppContext) {
+fn navo_actions_and_loading_row_show_before_the_provider_answers(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+            "-",
+            "Loading Windows items…",
+        ]
+    );
+}
+
+#[gpui_kit::test]
+fn the_windows_list_shows_below_navo_rows(cx: &mut TestAppContext) {
     let rig = open_by_key(cx);
     rig.answer(cx, Ok(windows_menu()));
-    assert_eq!(rig.rows(cx), ["Open", "7-Zip", "Send to", "Cut"]);
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+            "-",
+            "Open",
+            "7-Zip",
+            "Send to",
+            "Cut",
+        ]
+    );
 }
 
 #[gpui_kit::test]
@@ -756,12 +829,39 @@ fn a_slow_windows_menu_offers_classic_and_retry(cx: &mut TestAppContext) {
     rig.wait(cx, 2000);
     assert_eq!(
         rig.rows(cx),
-        ["Windows menu is slow", "Classic menu", "Retry"]
+        [
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+            "-",
+            "Windows menu is slow",
+            "Classic menu",
+            "Retry",
+        ]
     );
     rig.type_text(cx, "retry");
     rig.press(cx, "enter");
     assert_eq!(rig.shell.opened.borrow().len(), 2);
-    assert_eq!(rig.rows(cx), ["Loading Windows items…"]);
+    assert_eq!(
+        rig.rows(cx),
+        [
+            "Open",
+            "View",
+            "Edit",
+            "Copy",
+            "Move",
+            "Rename",
+            "Delete",
+            "Copy path",
+            "-",
+            "Loading Windows items…",
+        ]
+    );
     rig.wait(cx, 2000);
     rig.type_text(cx, "classic");
     rig.press(cx, "enter");
@@ -859,12 +959,10 @@ fn a_prefetched_long_press_opens_in_one_piece(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn items_in_time_open_the_menu_complete_with_no_loading_row(cx: &mut TestAppContext) {
     let rig = rig(cx);
+    *rig.shell.answer.borrow_mut() = Some(Ok(windows_menu()));
     rig.press(cx, "down");
     rig.press(cx, "menu");
-    assert!(!rig.is_open(cx));
-    rig.wait(cx, 80);
-    assert!(!rig.is_open(cx));
-    rig.answer(cx, Ok(windows_menu()));
+    assert!(rig.is_open(cx));
     let rows = rig.rows(cx);
     assert!(rows.iter().any(|row| row == "7-Zip"), "{rows:?}");
     assert!(!rows.iter().any(|row| row == "Loading Windows items…"));
@@ -876,7 +974,9 @@ fn late_items_take_the_place_of_the_loading_row(cx: &mut TestAppContext) {
     reduce_motion(cx);
     let before = rig.menu_row_bounds(cx, 0);
     rig.answer(cx, Ok(windows_menu()));
-    assert!(rig.rows(cx).iter().any(|row| row == "7-Zip"));
+    let rows = rig.rows(cx);
+    assert!(rows.iter().any(|row| row == "7-Zip"));
+    assert!(!rows.iter().any(|row| row == "Loading Windows items…"));
     assert_eq!(rig.menu_row_bounds(cx, 0), before);
 }
 
@@ -953,6 +1053,9 @@ fn only_the_latest_menu_takes_the_answer(cx: &mut TestAppContext) {
     let rig = rig(cx);
     rig.press(cx, "down");
     rig.press(cx, "menu");
+    let handle = rig.view.update(cx, |view, cx| view.handle(rig.pane, cx));
+    cx.update_window(rig.window, |_, window, cx| window.focus(&handle, cx))
+        .expect("window");
     rig.press(cx, "up");
     rig.press(cx, "menu");
     rig.answer(cx, Ok(windows_menu()));
@@ -974,6 +1077,23 @@ fn properties_asks_the_shell_for_its_properties_verb(cx: &mut TestAppContext) {
         verb: Some("properties".to_owned()),
     };
     assert_eq!(*rig.shell.invoked.borrow(), [properties]);
+}
+
+#[gpui_kit::test]
+fn shell_properties_is_not_duplicated_when_typed(cx: &mut TestAppContext) {
+    let rig = open_by_key(cx);
+    let mut menu = windows_menu();
+    menu.items.push(MenuItem::new(
+        ItemId::Shell {
+            command: 99,
+            verb: Some("properties".to_owned()),
+        },
+        "&Properties",
+        Group::Other,
+    ));
+    rig.answer(cx, Ok(menu));
+    rig.type_text(cx, "properties");
+    assert_eq!(rig.rows(cx), ["Properties"]);
 }
 
 #[gpui_kit::test]

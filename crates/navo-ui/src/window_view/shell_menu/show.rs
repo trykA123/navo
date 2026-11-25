@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use gpui_kit::{Bounds, Point};
 
 use super::NavoWindow;
@@ -10,18 +8,13 @@ use crate::prelude::*;
 impl NavoWindow {
     pub(super) fn show_when_ready(
         &mut self,
-        (id, step, now): (u64, &mut Step, Instant),
+        (id, step): (u64, &mut Step),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(run) = self.menu_run.as_mut().filter(|run| run.id == id) else {
             return;
         };
-        let is_due = now >= run.show.as_ref().map_or(now, |show| show.until);
-        let ready = step.menu.is_some() || !run.is_opening();
-        if !(ready || is_due) {
-            return;
-        }
         let Some(show) = run.show.take() else {
             return;
         };

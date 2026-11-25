@@ -1,4 +1,4 @@
-use navo_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, ShellMenu, Submenu};
+use navo_core::shell_menu::{Group, ItemId, ItemKind, MenuItem, NavoAction, ShellMenu, Submenu};
 
 pub(super) const PROPERTIES_VERB: &str = "properties";
 
@@ -49,6 +49,9 @@ pub(super) fn merge(shell: &[MenuItem], own: &Own) -> Merged {
             .for_each(|item| push(item.clone(), None));
     }
     for item in &own.hidden {
+        if already_in_shell(item, shell) {
+            continue;
+        }
         let hidden = MenuItem {
             hidden: true,
             ..item.clone()
@@ -56,6 +59,13 @@ pub(super) fn merge(shell: &[MenuItem], own: &Own) -> Merged {
         push(hidden, None);
     }
     merged
+}
+
+fn already_in_shell(item: &MenuItem, shell: &[MenuItem]) -> bool {
+    if item.id == ItemId::Navo(NavoAction::Properties) && shell.iter().any(is_properties) {
+        return true;
+    }
+    shell.iter().any(|existing| existing.id == item.id)
 }
 
 /// Explorer lists New ▸ just above the separator that leads to Properties.

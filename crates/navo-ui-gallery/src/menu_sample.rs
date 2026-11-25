@@ -3,9 +3,9 @@ use navo_ui::Hsla;
 use navo_ui::file_list::SortKey;
 use navo_ui::window_view::{BackgroundLook, merged_background_menu, merged_file_menu};
 
-pub const OPEN_WITH: usize = 1;
-pub const SEVEN_ZIP: usize = 2;
-pub const SEND_TO: usize = 5;
+pub const OPEN_WITH: usize = 10;
+pub const SEVEN_ZIP: usize = 11;
+pub const SEND_TO: usize = 14;
 pub const NEW: usize = 9;
 const ICON_SIDE: u32 = 16;
 

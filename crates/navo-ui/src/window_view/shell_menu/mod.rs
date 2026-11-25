@@ -7,7 +7,7 @@ mod run;
 mod show;
 mod targets;
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use gpui_kit::{Focusable as _, Point};
 use navo_core::PaneId;
@@ -29,7 +29,6 @@ pub(super) use run::MenuRun;
 use run::{MenuOpen, PendingView, RETRY, Session, ShellCall, Step};
 
 const POLL_EVERY: Duration = Duration::from_millis(16);
-const WAIT_FOR_SHELL: Duration = Duration::from_millis(150);
 const NO_SHELL: &str = "the Windows menu is not available";
 const UNNAMED: &str = "Windows menu";
 
@@ -121,7 +120,6 @@ impl NavoWindow {
             anchor,
             context,
             restore: self.handle(pane, cx),
-            until: cx.background_executor().now() + WAIT_FOR_SHELL,
             has_classic: self.shell_menus.is_some(),
         }
     }
@@ -267,8 +265,8 @@ impl NavoWindow {
         let now = cx.background_executor().now();
         let mut step = run.poll(now);
         let pane = run.pane;
-        Self::fall_back(run, &mut step, now);
-        self.show_when_ready((id, &mut step, now), window, cx);
+        Self::fall_back(run, &mut step);
+        self.show_when_ready((id, &mut step), window, cx);
         let Some(run) = self.menu_run.as_mut().filter(|run| run.id == id) else {
             return false;
         };
@@ -304,7 +302,7 @@ impl NavoWindow {
         });
     }
 
-    fn fall_back(run: &mut MenuRun, step: &mut Step, now: Instant) {
+    fn fall_back(run: &mut MenuRun, step: &mut Step) {
         if step.fallback
             && let Some(error) = run.fall_back()
         {
@@ -312,7 +310,7 @@ impl NavoWindow {
             step.reopen = true;
         }
         if step.reopen {
-            run.reopen(now);
+            run.reopen();
         }
     }
 
@@ -324,35 +322,23 @@ impl NavoWindow {
     }
 }
 
-fn navo_items(has_shell: bool) -> Vec<MenuItem> {
-    let mut items = navo_actions();
-    if !has_shell {
-        items.retain(|item| {
-            !matches!(
-                item.id,
-                ItemId::Navo(NavoAction::Properties | NavoAction::ClassicMenu)
-            )
-        });
-    }
-    items
+fn is_shell_only(item: &MenuItem) -> bool {
+    matches!(
+        item.id,
+        ItemId::Navo(NavoAction::Properties | NavoAction::ClassicMenu)
+    )
 }
 
 fn file_own(has_shell: bool) -> Own {
-    let items = navo_items(has_shell);
-    if has_shell {
-        Own {
-            hidden: items,
-            ..Own::default()
-        }
-    } else {
-        Own {
-            top: items,
-            ..Own::default()
-        }
+    let (hidden, top): (Vec<_>, Vec<_>) = navo_actions().into_iter().partition(is_shell_only);
+    Own {
+        top,
+        hidden: if has_shell { hidden } else { Vec::new() },
+        ..Own::default()
     }
 }
 
-/// The menu a file selection shows on Windows: the shell list, with Navo's actions reached by typing.
+/// The menu a file selection shows on Windows: Navo's fast actions above a divider, then the shell list.
 #[must_use]
 pub fn merged_file_menu(shell: &[MenuItem]) -> ShellMenu {
     merge::merge(shell, &file_own(true)).menu
