@@ -1,7 +1,7 @@
 use navo_core::placement::Placement;
 use navo_core::{
-    LayoutState, PaneState, RowsState, SessionState, SnapshotState, TabState, WindowState,
-    WorkspaceState,
+    FindMemoryState, LayoutState, PaneState, RowsState, SessionState, SnapshotState, TabState,
+    WindowState, WorkspaceState,
 };
 use serde::Deserialize;
 
@@ -140,6 +140,58 @@ impl From<WindowV4> for WindowState {
             active_workspace: window.active_workspace,
             placement: window.placement,
             target: window.target,
+            find_window: FindMemoryState::default(),
+        }
+    }
+}
+
+/// Session format v5: the current shape before windows saved their find results window.
+#[derive(Deserialize)]
+pub(super) struct SessionV5 {
+    windows: Vec<WindowV5>,
+    focused_window: u64,
+    next_id: u64,
+}
+
+/// A v5 window: today's `WindowState` without `find_window`.
+#[derive(Deserialize)]
+struct WindowV5 {
+    id: u64,
+    layout: LayoutState,
+    focused_pane: u64,
+    panes: Vec<PaneState>,
+    #[serde(default)]
+    workspaces: Vec<WorkspaceState>,
+    #[serde(default)]
+    active_workspace: u8,
+    #[serde(default, deserialize_with = "deserialize_placements")]
+    placement: Vec<Placement>,
+    #[serde(default)]
+    target: Option<u64>,
+}
+
+impl From<SessionV5> for SessionState {
+    fn from(old: SessionV5) -> Self {
+        Self {
+            windows: old.windows.into_iter().map(WindowState::from).collect(),
+            focused_window: old.focused_window,
+            next_id: old.next_id,
+        }
+    }
+}
+
+impl From<WindowV5> for WindowState {
+    fn from(window: WindowV5) -> Self {
+        Self {
+            id: window.id,
+            layout: window.layout,
+            focused_pane: window.focused_pane,
+            panes: window.panes,
+            workspaces: window.workspaces,
+            active_workspace: window.active_workspace,
+            placement: window.placement,
+            target: window.target,
+            find_window: FindMemoryState::default(),
         }
     }
 }

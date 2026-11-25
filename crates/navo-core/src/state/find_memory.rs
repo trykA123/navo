@@ -25,6 +25,22 @@ pub struct FindMemory {
 }
 
 impl FindMemory {
+    /// Rebuilds the memory from saved parts, applying the same limits as live edits.
+    pub(crate) fn from_parts(
+        mut placement: Vec<Placement>,
+        pinned: bool,
+        queries: Vec<SavedFind>,
+    ) -> Self {
+        placement.truncate(crate::placement::MAX_PLACEMENTS);
+        let mut memory = Self {
+            placement,
+            pinned,
+            queries: Vec::new(),
+        };
+        memory.set_queries(queries);
+        memory
+    }
+
     /// The saved placements, newest first.
     #[must_use]
     pub fn placement(&self) -> &[Placement] {

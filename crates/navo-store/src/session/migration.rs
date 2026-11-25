@@ -1,9 +1,11 @@
 use navo_core::placement::Placement;
-use navo_core::{LayoutState, SessionState, SnapshotState, WindowState, WorkspaceState};
+use navo_core::{
+    FindMemoryState, LayoutState, SessionState, SnapshotState, WindowState, WorkspaceState,
+};
 use serde::Deserialize;
 
 use super::SessionFileError;
-use super::legacy::{PaneV4, SessionV4, panes};
+use super::legacy::{PaneV4, SessionV4, SessionV5, panes};
 
 #[derive(Deserialize)]
 struct SessionV1 {
@@ -112,6 +114,7 @@ impl From<WindowV3> for WindowState {
             active_workspace: window.active_workspace,
             placement: window.placement,
             target: None,
+            find_window: FindMemoryState::default(),
         }
     }
 }
@@ -135,6 +138,7 @@ impl From<WindowV2> for WindowState {
             active_workspace: 0,
             target: None,
             placement: window.placement,
+            find_window: FindMemoryState::default(),
         }
     }
 }
@@ -190,6 +194,7 @@ fn decode_with_workspaces(version: u16, body: &[u8]) -> Result<SessionState, pos
     Ok(match version {
         3 => postcard::from_bytes::<SessionV3>(body)?.into(),
         4 => postcard::from_bytes::<SessionV4>(body)?.into(),
+        5 => postcard::from_bytes::<SessionV5>(body)?.into(),
         _ => postcard::from_bytes(body)?,
     })
 }

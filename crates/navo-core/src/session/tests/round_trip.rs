@@ -101,3 +101,66 @@ fn new_ids_continue_from_next_id() {
     split(&mut state, Direction::Right);
     assert_eq!(state.focused_pane(), PaneId::new(7));
 }
+
+fn saved(text: &str, base: &str) -> SavedFind {
+    SavedFind {
+        text: text.to_owned(),
+        base: loc(base),
+    }
+}
+
+#[test]
+fn find_memory_round_trips_with_placement_pin_and_queries() {
+    use crate::placement::{Monitor, MonitorLocalLogicalRect, MonitorSetup, PhysicalRect};
+    let bounds = PhysicalRect {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+    };
+    let setup = MonitorSetup::new(vec![Monitor {
+        bounds,
+        work_area: bounds,
+        scale: 1.0,
+        primary: true,
+    }])
+    .unwrap();
+    let mut state = home();
+    let memory = state.find_memory_mut();
+    memory.pinned = true;
+    memory.set_queries(vec![saved("*.rs", "/home"), saved("todo", "/work")]);
+    memory.remember(
+        &setup,
+        crate::placement::Placement {
+            setup: setup.fingerprint(),
+            bounds: MonitorLocalLogicalRect {
+                x: 5.0,
+                y: 6.0,
+                width: 700.0,
+                height: 500.0,
+            },
+            monitor: bounds,
+            maximized: false,
+        },
+    );
+    let session = state.to_session(100);
+    assert_eq!(session.windows[0].find_window.queries.len(), 2);
+    assert_eq!(restored(&state).find_memory(), state.find_memory());
+}
+
+#[test]
+fn a_saved_find_whose_base_fails_is_dropped_on_restore() {
+    let mut session = home().to_session(100);
+    session.windows[0].find_window.queries = vec![
+        SavedFindState {
+            text: "lost".into(),
+            base: String::new(),
+        },
+        SavedFindState {
+            text: "kept".into(),
+            base: "/home".into(),
+        },
+    ];
+    let state = AppState::from_session(&session).unwrap();
+    assert_eq!(state.find_memory().queries(), [saved("kept", "/home")]);
+}

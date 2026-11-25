@@ -19,6 +19,7 @@ fn initial_state_saves_one_window_one_pane_one_tab() {
             }],
             active_workspace: 0,
             target: None,
+            find_window: FindMemoryState::default(),
             layout: LayoutState::Pane(2),
             focused_pane: 2,
             panes: vec![pane_state(2, vec![tab_state(3, "C:/start")])],

@@ -1,7 +1,11 @@
-use super::{EntryState, PaneState, RowsState, SessionState, TabState, WindowState};
+use super::{
+    EntryState, FindMemoryState, PaneState, RowsState, SavedFindState, SessionState, TabState,
+    WindowState,
+};
 use crate::state::tab_label;
 use crate::{
-    AppState, History, Layout, Location, Pane, PaneId, Tab, TabId, ViewState, Window, WindowId,
+    AppState, FindMemory, History, Layout, Location, Pane, PaneId, SavedFind, Tab, TabId,
+    ViewState, Window, WindowId,
 };
 
 pub(super) fn save(state: &AppState, rows_per_pane: usize) -> SessionState {
@@ -32,7 +36,39 @@ fn save_window(window: &Window, rows_per_pane: usize) -> WindowState {
             .into_iter()
             .map(|pane| save_pane(pane, rows_per_pane))
             .collect(),
+        find_window: save_find(window.find_memory()),
     }
+}
+
+fn save_find(memory: &FindMemory) -> FindMemoryState {
+    FindMemoryState {
+        placement: memory.placement().to_vec(),
+        pinned: memory.pinned,
+        queries: memory
+            .queries()
+            .iter()
+            .map(|query| SavedFindState {
+                text: query.text.clone(),
+                base: query.base.as_str().to_owned(),
+            })
+            .collect(),
+    }
+}
+
+/// Rebuilds a window's find memory; a query whose base is no longer a valid location drops.
+fn restore_find(saved: &FindMemoryState) -> FindMemory {
+    let queries = saved
+        .queries
+        .iter()
+        .filter_map(|query| {
+            let base = Location::new(query.base.clone()).ok()?;
+            Some(SavedFind {
+                text: query.text.clone(),
+                base,
+            })
+        })
+        .collect();
+    FindMemory::from_parts(saved.placement.clone(), saved.pinned, queries)
 }
 
 pub(super) fn save_pane(pane: &Pane, rows_per_pane: usize) -> PaneState {
@@ -111,6 +147,7 @@ fn restore_window(window: &WindowState) -> Result<Window, String> {
         window.placement.clone(),
     )?;
     restored.restore_target(window.target.map(PaneId::new));
+    restored.restore_find(restore_find(&window.find_window));
     super::workspaces::restore(&mut restored, window)?;
     Ok(restored)
 }

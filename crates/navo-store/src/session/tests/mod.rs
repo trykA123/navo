@@ -3,7 +3,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use navo_core::{
-    EntryState, LayoutState, PaneState, RowsState, SessionState, TabState, WindowState,
+    EntryState, FindMemoryState, LayoutState, PaneState, RowsState, SavedFindState, SessionState,
+    TabState, WindowState,
 };
 use tempfile::TempDir;
 
@@ -11,6 +12,7 @@ use super::*;
 use crate::backup_path;
 
 mod file;
+mod find_window;
 mod keep;
 mod load;
 mod migration;
@@ -58,6 +60,7 @@ fn one_pane(location: &str) -> SessionState {
             workspaces: Vec::new(),
             active_workspace: 0,
             target: None,
+            find_window: FindMemoryState::default(),
             layout: LayoutState::Pane(2),
             focused_pane: 2,
             panes: vec![pane(2, tab(3, location))],
@@ -122,6 +125,7 @@ fn three_panes_of_100_rows() -> SessionState {
             workspaces: Vec::new(),
             active_workspace: 0,
             target: None,
+            find_window: FindMemoryState::default(),
             layout: split(
                 LayoutState::Pane(2),
                 split(LayoutState::Pane(4), LayoutState::Pane(6)),

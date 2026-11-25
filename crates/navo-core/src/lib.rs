@@ -39,8 +39,9 @@ pub use name::{NameError, check_name};
 pub use replay::{CommandLog, LogEntry, LogError, Record, Recorder};
 pub use selection::{Pattern, PatternError, Selection, SpanMode};
 pub use session::{
-    EntryState, LayoutState, MAX_LAYOUT_DEPTH, PaneState, RowsState, SessionError, SessionState,
-    SnapshotState, TabState, WindowState, WorkspaceState,
+    EntryState, FindMemoryState, LayoutState, MAX_LAYOUT_DEPTH, PaneState, RowsState,
+    SavedFindState, SessionError, SessionState, SnapshotState, TabState, WindowState,
+    WorkspaceState,
 };
 pub use sidewise_core::{
     AncestorMemo, Conflict, ConflictPolicy, DropKeys, DropOp, ExistingItem, FileIdentity,

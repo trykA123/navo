@@ -30,6 +30,37 @@ pub struct WindowState {
     pub placement: Vec<Placement>,
     #[serde(default)]
     pub target: Option<u64>,
+    /// The find results window's memory; always written (session format v6+).
+    pub find_window: FindMemoryState,
+}
+
+/// Saved placement, pin and queries of a window's find results window.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FindMemoryState {
+    /// Saved placements, newest first, at most eight.
+    #[serde(deserialize_with = "crate::placement::deserialize_placements")]
+    pub placement: Vec<Placement>,
+    /// Whether the results window stays above every app.
+    pub pinned: bool,
+    /// Saved searches, oldest first.
+    pub queries: Vec<SavedFindState>,
+}
+
+/// One saved search: its text and its starting folder as location text.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SavedFindState {
+    /// The search text, as the user typed it.
+    pub text: String,
+    /// The folder the search starts from.
+    pub base: String,
+}
+
+impl FindMemoryState {
+    /// Whether nothing is saved: no placement, no pin and no query.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.placement.is_empty() && !self.pinned && self.queries.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

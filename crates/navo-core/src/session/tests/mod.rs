@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     Command, CursorMove, Direction, Entry, Event, History, Layout, Listing, Location, PaneId,
-    TabId, ViewState, WindowId, apply, apply_event,
+    SavedFind, TabId, ViewState, WindowId, apply, apply_event,
 };
 
 mod invalid;
@@ -120,6 +120,7 @@ fn valid() -> SessionState {
             workspaces: Vec::new(),
             active_workspace: 0,
             target: None,
+            find_window: FindMemoryState::default(),
             layout: split_state(true, LayoutState::Pane(2), LayoutState::Pane(4)),
             focused_pane: 4,
             panes: vec![
