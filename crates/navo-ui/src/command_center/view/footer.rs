@@ -6,7 +6,7 @@ use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Role, SharedString,
-    StatefulInteractiveElement, Styled, div, px,
+    StatefulInteractiveElement, Styled, WeakEntity, div, px,
 };
 use navo_l10n::{t, tr};
 
@@ -16,10 +16,11 @@ use super::super::results::Row;
 use super::super::source::{Group, Hit, Target};
 use super::{CommandCenter, CommandCenterEvent};
 use crate::commands::{ArgKind, Keymap};
-use crate::primitives::{IconName, Kbd, icon};
+use crate::primitives::{Button as ActionButton, ButtonVariant, IconName, Kbd, icon};
 use crate::tokens::Theme;
 
 const HEIGHT: f32 = 30.;
+const EMPTY_BADGE: f32 = 40.;
 const SEPARATOR: &str = " · ";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,6 +41,7 @@ const fn hint(keys: &'static str, command: &'static str, label: &'static str) ->
 const RUN_COMMAND: &str = "command_center.run";
 const NEXT_COMMAND: &str = "command_center.next_group";
 pub(super) const BACK_COMMAND: &str = "command_center.back";
+pub(super) const FIND_CONTENT_COMMAND: &str = "command_center.find_content";
 
 const RUN: Hint = hint("enter", RUN_COMMAND, "command-center-key-run");
 const CHOOSE: Hint = hint("enter", RUN_COMMAND, "command-center-key-choose");
@@ -71,7 +73,7 @@ const ARG_COMPLETE: Hint = hint(
 const CLOSE: Hint = hint("escape", BACK_COMMAND, "command-center-key-close");
 const BACK: Hint = hint("escape", BACK_COMMAND, "command-center-key-back");
 
-const HINTED: [&str; 7] = [
+const HINTED: [&str; 8] = [
     RUN_COMMAND,
     "command_center.run_in_new_tab",
     NEXT_COMMAND,
@@ -79,6 +81,7 @@ const HINTED: [&str; 7] = [
     BACK_COMMAND,
     "command_center.reveal",
     "command_center.other_pane",
+    FIND_CONTENT_COMMAND,
 ];
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -162,28 +165,120 @@ pub(super) fn empty_parts(query: &str, is_path: bool) -> (String, String) {
     (tr(id), term.trim().to_owned())
 }
 
-pub(super) fn empty_message(t: &Theme, query: &str, is_path: bool) -> impl IntoElement {
-    let (lead, term) = empty_parts(query, is_path);
+pub(super) struct EmptyState<'a> {
+    pub theme: &'a Theme,
+    pub query: &'a str,
+    pub is_path: bool,
+    pub can_search_content: bool,
+    pub content_key: Option<&'a str>,
+    pub view: WeakEntity<CommandCenter>,
+}
+
+fn empty_actions(state: &EmptyState<'_>) -> Div {
+    let t = state.theme;
+    let (clear_view, content_view) = (state.view.clone(), state.view.clone());
+    let clear_btn = ActionButton::new(
+        "command-center-empty-clear",
+        tr("command-center-empty-clear"),
+    )
+    .variant(ButtonVariant::Secondary)
+    .on_click(move |_, window, cx| {
+        let _ = clear_view.update(cx, |center, cx| center.clear_query(window, cx));
+    });
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .justify_center()
+        .gap(t.spacing.md)
+        .mt(t.spacing.xs)
+        .child(clear_btn)
+        .when(state.can_search_content, |row| {
+            let content_btn = ActionButton::new(
+                "command-center-empty-content",
+                tr("command-center-empty-search-files"),
+            )
+            .variant(ButtonVariant::Primary)
+            .on_click(move |_, _, cx| {
+                let _ = content_view.update(cx, |_, cx| {
+                    cx.emit(CommandCenterEvent::ModeChanged(Mode::Content));
+                });
+            });
+            let key = state
+                .content_key
+                .and_then(|key| Kbd::new("command-center-empty-content-key", key))
+                .map(Kbd::keycap);
+            row.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(t.spacing.xs)
+                    .child(content_btn)
+                    .children(key),
+            )
+        })
+}
+
+pub(super) fn empty_message(state: &EmptyState<'_>) -> impl IntoElement {
+    let t = state.theme;
+    let (lead, term) = empty_parts(state.query, state.is_path);
+    let badge = div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(EMPTY_BADGE))
+        .rounded(t.radii.full)
+        .border_1()
+        .border_color(t.colors.line)
+        .bg(t.surfaces.field)
+        .child(icon(IconName::Search, t.spacing.icon, t.colors.muted));
+    let heading = div()
+        .id("command-center-empty-title")
+        .role(Role::Heading)
+        .aria_label(tr("command-center-empty-title"))
+        .test_support()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .justify_center()
+        .gap(t.spacing.xs)
+        .text_size(t.typography.body)
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(t.colors.text)
+        .child(tr("command-center-empty-title"))
+        .when(!term.is_empty(), |title| {
+            title.child(
+                div()
+                    .font_family(t.typography.mono_font.clone())
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(t.colors.accent_text)
+                    .child(format!("“{term}”")),
+            )
+        });
     div()
         .id("command-center-empty")
         .role(Role::Status)
         .aria_label(format!("{lead} {term}."))
         .test_support()
         .flex()
-        .flex_wrap()
-        .gap(t.spacing.xs)
-        .px(t.spacing.md)
-        .py(t.spacing.xl)
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap(t.spacing.md)
+        .px(t.spacing.xxl)
+        .py(t.spacing.xxl)
         .border_t_1()
         .border_color(t.colors.line)
-        .text_color(t.colors.muted)
-        .child(lead)
+        .child(badge)
+        .child(heading)
         .child(
             div()
-                .text_color(t.colors.text)
-                .font_weight(FontWeight::MEDIUM)
-                .child(format!("{term}.")),
+                .text_size(t.typography.small)
+                .text_color(t.colors.muted)
+                .child(format!("{lead} {term}.")),
         )
+        .child(empty_actions(state))
 }
 
 pub(super) struct FooterLook<'a> {

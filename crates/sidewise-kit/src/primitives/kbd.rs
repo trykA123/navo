@@ -12,6 +12,7 @@ use crate::tokens;
 pub struct Kbd {
     id: ElementId,
     keystroke: Keystroke,
+    is_keycap: bool,
 }
 
 impl Kbd {
@@ -20,7 +21,13 @@ impl Kbd {
         Some(Self {
             id: id.into(),
             keystroke,
+            is_keycap: false,
         })
+    }
+
+    pub fn keycap(mut self) -> Self {
+        self.is_keycap = true;
+        self
     }
 
     pub fn text(&self) -> String {
@@ -37,11 +44,19 @@ impl RenderOnce for Kbd {
             .outline()
             .font_family(t.typography.mono_font.clone())
             .text_size(t.typography.key)
-            .font_weight(FontWeight::MEDIUM)
-            .rounded(t.radii.sm)
-            .bg(transparent_black())
-            .border_color(t.colors.line)
-            .text_color(t.colors.muted);
+            .font_weight(FontWeight::MEDIUM);
+        let key = if self.is_keycap {
+            key.rounded(t.radii.keycap)
+                .bg(t.surfaces.keycap_face)
+                .border_color(t.surfaces.keycap_edge)
+                .text_color(t.surfaces.keycap_label)
+                .shadow(t.shadows.keycap.clone())
+        } else {
+            key.rounded(t.radii.sm)
+                .bg(transparent_black())
+                .border_color(t.colors.line)
+                .text_color(t.colors.muted)
+        };
         div()
             .id(self.id)
             .role(Role::Label)

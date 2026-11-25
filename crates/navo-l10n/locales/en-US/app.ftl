@@ -203,6 +203,9 @@ command-center-mode-content = Content
 command-center-mode-collections = Collections
 command-center-empty-content = Type to search inside files
 command-center-empty-collections = No collections yet
+command-center-empty-title = No matches
+command-center-empty-clear = Clear query
+command-center-empty-search-files = Search inside files
 command-center-key-mode = mode
 
 command-center-scope = in: { $folder }

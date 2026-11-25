@@ -12,9 +12,11 @@ use navo_core::Location;
 
 use crate::command_center::view::{
     Argument, CommandCenter, CommandCenterEvent, CommandCenterProps, Hint, HintKeys,
-    highlight_ranges, hints, hit_icon, place, result_count,
+    highlight_ranges, hints, hit_icon, place, result_count, split_parent_path,
 };
-use crate::command_center::{ArgKind, Group, Heading, Hit, Results, Row, Scope, Selection, Target};
+use crate::command_center::{
+    ArgKind, Group, Heading, Hit, Mode, Results, Row, Scope, Selection, Target,
+};
 use crate::commands::Keymap;
 use crate::primitives::IconName;
 use crate::test_pointer::{dispatch, down, up};
@@ -564,4 +566,119 @@ fn key_caps_are_written_with_capitals(cx: &mut TestAppContext) {
         keys,
         [Some("Ctrl+V".to_owned()), Some("Alt+Left".to_owned())]
     );
+}
+
+#[test]
+fn parent_path_splits_prefix_and_last_two_segments_safely() {
+    assert_eq!(split_parent_path(""), ("", ""));
+    assert_eq!(split_parent_path("C:\\Docs"), ("C:\\Docs", ""));
+    assert_eq!(split_parent_path("/usr/local"), ("/usr/local", ""));
+    assert_eq!(
+        split_parent_path(
+            "C:\\Users\\admin\\homelab\\navo\\crates\\navo-ui\\src\\command_center\\view"
+        ),
+        (
+            "C:\\Users\\admin\\homelab\\navo\\crates\\navo-ui\\src",
+            "\\command_center\\view"
+        )
+    );
+    assert_eq!(
+        split_parent_path("/home/admin/homelab/navo/crates/navo-ui/src"),
+        ("/home/admin/homelab/navo/crates", "/navo-ui/src")
+    );
+    assert_eq!(
+        split_parent_path("C:\\Benutzer\\Jürgen\\Dokumente\\Bücher\\Übersicht"),
+        ("C:\\Benutzer\\Jürgen\\Dokumente", "\\Bücher\\Übersicht")
+    );
+    assert_eq!(
+        split_parent_path("/home/ärger/bücher/résumé/entwurf"),
+        ("/home/ärger/bücher", "/résumé/entwurf")
+    );
+}
+
+#[gpui_kit::test]
+fn no_match_shows_calm_empty_state_with_recovery_actions(cx: &mut TestAppContext) {
+    let center = open(cx, props(Vec::new()));
+    cx.update_window(center.window, |_, window, cx| {
+        center
+            .center
+            .update(cx, |center, cx| center.set_query("qzxv", window, cx));
+    })
+    .expect("window");
+
+    center.read(cx, |window| {
+        assert!(window.find("command-center-empty").visible());
+        assert_eq!(
+            window.find("command-center-empty-title").label(),
+            Some("No matches")
+        );
+        assert!(window.find("command-center-empty-clear").visible());
+        assert!(window.find("command-center-empty-content").visible());
+        assert_eq!(
+            window.find("command-center-empty-content-key").label(),
+            Some("Alt+F7")
+        );
+    });
+
+    cx.update_window(center.window, |_, window, cx| {
+        window
+            .within(ROOT)
+            .click("command-center-empty-content", cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    assert_eq!(
+        center.events().last(),
+        Some(&CommandCenterEvent::ModeChanged(Mode::Content))
+    );
+
+    cx.update_window(center.window, |_, window, cx| {
+        window.within(ROOT).click("command-center-empty-clear", cx);
+    })
+    .expect("window");
+    cx.run_until_parked();
+    let cleared = center
+        .center
+        .read_with(cx, |center, cx| center.query(cx).to_string());
+    assert_eq!(cleared, "");
+    assert_eq!(
+        center.events().last(),
+        Some(&CommandCenterEvent::QueryChanged("".into()))
+    );
+}
+
+#[gpui_kit::test]
+fn rows_keep_alignment_keycaps_right_aligned_and_parent_path_tail_pinned(cx: &mut TestAppContext) {
+    let deep = "C:\\Users\\admin\\homelab\\navo\\crates\\navo-ui\\src\\command_center\\view";
+    let rows = Results::merge(
+        vec![
+            Hit {
+                score: 90,
+                ..command("Copy path", Some("ctrl-shift-c"))
+            },
+            command("Copy", Some("f5")),
+            folder("view", deep, 5),
+        ],
+        Scope::Mixed,
+    );
+    let center = open(cx, props(rows));
+    center.read(cx, |window| {
+        let selected_row = window.find(("command-center-row", 1usize)).bounds();
+        let command_row = window.find(("command-center-row", 3usize)).bounds();
+        assert_eq!(selected_row.left(), command_row.left());
+
+        let key = window
+            .within(("command-center-row", 3usize))
+            .find(("command-center-key", 0usize))
+            .bounds();
+        assert!(key.left() > command_row.center().x);
+        assert!(key.right() <= command_row.right());
+
+        let tail = window
+            .within(("command-center-row", 5usize))
+            .find(("command-center-path-tail", 5usize));
+        assert_eq!(tail.label(), Some("\\command_center\\view"));
+        let folder_bounds = window.find(("command-center-row", 5usize)).bounds();
+        assert!(tail.bounds().right() <= folder_bounds.right());
+    });
 }

@@ -24,7 +24,7 @@ pub use footer::HintKeys;
 pub(crate) use footer::{hints, result_count};
 pub(crate) use place::place;
 #[cfg(test)]
-pub(crate) use row::{highlight_ranges, hit_icon};
+pub(crate) use row::{highlight_ranges, hit_icon, split_parent_path};
 
 use super::Mode;
 use super::results::Row;
@@ -138,6 +138,12 @@ impl CommandCenter {
         self.field
             .update(cx, |field, cx| field.set_value(text, window, cx));
         cx.notify();
+    }
+
+    pub(super) fn clear_query(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_query("", window, cx);
+        window.focus(&self.field.focus_handle(cx), cx);
+        cx.emit(CommandCenterEvent::QueryChanged(SharedString::default()));
     }
 
     pub fn set_props(
@@ -305,13 +311,32 @@ impl CommandCenter {
         let kind = self.props.argument.as_ref().map(|argument| argument.kind);
         let has_query =
             !query.trim().is_empty() && kind != Some(ArgKind::Text) && self.props.error.is_none();
+        if !has_query {
+            return None;
+        }
         let is_path = kind == Some(ArgKind::Path);
-        let query = if kind.is_none() && self.props.mode == Mode::Commands {
+        let display_query = if kind.is_none() && self.props.mode == Mode::Commands {
             format!(">{}", query.trim_start_matches('>'))
         } else {
             query.to_owned()
         };
-        has_query.then(|| footer::empty_message(&paint.theme, &query, is_path).into_any_element())
+        let can_search_content = kind.is_none() && self.props.mode != Mode::Content;
+        let content_key = self
+            .props
+            .key_hints
+            .as_ref()
+            .and_then(|keys| keys.key(footer::FIND_CONTENT_COMMAND));
+        Some(
+            footer::empty_message(&footer::EmptyState {
+                theme: &paint.theme,
+                query: &display_query,
+                is_path,
+                can_search_content,
+                content_key,
+                view: paint.view,
+            })
+            .into_any_element(),
+        )
     }
 
     fn footer(&self, t: &Theme, query: &str) -> AnyElement {
@@ -340,6 +365,7 @@ impl CommandCenter {
 
 impl Render for CommandCenter {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::assets::load_mono_fonts(cx);
         let t = crate::tokens::current(cx).clone();
         let frame = place(self.props.anchor, window.viewport_size());
         let query = self.query(cx).to_string();

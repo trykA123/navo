@@ -36,6 +36,33 @@ pub(super) struct RowLook<'a> {
     pub gutter: Pixels,
 }
 
+pub(crate) fn split_parent_path(path: &str) -> (&str, &str) {
+    let trimmed = path.trim_end_matches(['/', '\\']);
+    let (mut tail_sep, mut prev_tail_sep) = (0usize, 0usize);
+    let (mut count, mut prev_sep, mut in_segment) = (0usize, None, false);
+
+    for (idx, ch) in trimmed.char_indices() {
+        if ch == '/' || ch == '\\' {
+            prev_sep = Some(idx);
+            in_segment = false;
+            continue;
+        }
+        if !in_segment {
+            in_segment = true;
+            if count > 0 {
+                prev_tail_sep = tail_sep;
+                tail_sep = prev_sep.unwrap_or(0);
+            }
+            count += 1;
+        }
+    }
+
+    if count < 3 {
+        return (path, "");
+    }
+    (&path[..prev_tail_sep], &path[prev_tail_sep..])
+}
+
 pub(crate) fn highlight_ranges(text: &str, indices: &[u32]) -> Vec<Range<usize>> {
     let mut wanted: Vec<usize> = indices.iter().map(|index| *index as usize).collect();
     wanted.sort_unstable();
@@ -108,10 +135,14 @@ fn option(look: &RowLook, index: usize, is_selected: bool, height: f32) -> RowEl
         .h(px(height))
         .pl(t.spacing.md)
         .pr(t.spacing.md + look.gutter)
+        .border_l(px(3.))
+        .border_color(gpui_kit::transparent_black())
         .rounded(t.radii.card)
         .cursor_pointer()
         .when(is_selected, |row| {
-            row.bg(t.colors.selection).text_color(t.colors.on_selection)
+            row.bg(t.colors.selection)
+                .text_color(t.colors.on_selection)
+                .border_color(t.colors.accent)
         })
 }
 
@@ -175,6 +206,10 @@ fn is_command(hit: &Hit) -> bool {
     )
 }
 
+fn is_path_hit(hit: &Hit) -> bool {
+    matches!(hit.target, Target::Open { .. } | Target::GoTo(_))
+}
+
 fn detail(t: &Theme, text: &str, chars: usize) -> Div {
     div()
         .flex_1()
@@ -185,6 +220,46 @@ fn detail(t: &Theme, text: &str, chars: usize) -> Div {
         .child(fit_name("", text, chars).rest)
 }
 
+fn path_detail(t: &Theme, path: &str, index: usize) -> Div {
+    let (prefix, tail) = split_parent_path(path);
+    div()
+        .flex()
+        .flex_1()
+        .min_w_0()
+        .overflow_hidden()
+        .items_center()
+        .font_family(t.typography.mono_font.clone())
+        .text_size(t.typography.small)
+        .text_color(t.colors.muted)
+        .child(
+            div()
+                .flex_shrink(1.)
+                .min_w_0()
+                .truncate()
+                .child(prefix.to_owned()),
+        )
+        .when(!tail.is_empty(), |row| {
+            let tail_text: SharedString = tail.to_owned().into();
+            row.child(
+                div()
+                    .id(("command-center-path-tail", index))
+                    .role(Role::Label)
+                    .aria_label(tail_text.clone())
+                    .test_support()
+                    .flex_none()
+                    .child(tail_text),
+            )
+        })
+}
+
+fn hit_detail(t: &Theme, hit: &Hit, chars: usize, index: usize) -> Div {
+    if is_path_hit(hit) {
+        path_detail(t, &hit.detail, index)
+    } else {
+        detail(t, &hit.detail, chars)
+    }
+}
+
 fn shortcut(t: &Theme, keys: Option<&SharedString>) -> Option<Div> {
     let keys = keys?;
     let caps = keys
@@ -192,8 +267,24 @@ fn shortcut(t: &Theme, keys: Option<&SharedString>) -> Option<Div> {
         .enumerate()
         .map(|(index, part)| -> AnyElement {
             match Kbd::new(("command-center-key", index), part) {
-                Some(key) => key.into_any_element(),
-                None => div().child(part.to_owned()).into_any_element(),
+                Some(key) => key.keycap().into_any_element(),
+                None => div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_center()
+                    .px(t.spacing.xs)
+                    .rounded(t.radii.keycap)
+                    .border_1()
+                    .border_color(t.surfaces.keycap_edge)
+                    .bg(t.surfaces.keycap_face)
+                    .shadow(t.shadows.keycap.clone())
+                    .font_family(t.typography.mono_font.clone())
+                    .text_size(t.typography.key)
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(t.surfaces.keycap_label)
+                    .child(part.to_owned())
+                    .into_any_element(),
             }
         });
     Some(
@@ -215,7 +306,7 @@ fn hit_row(look: &RowLook, hit: &Hit, index: usize, is_selected: bool) -> RowEle
         .aria_label(text.clone())
         .child(icon(name, t.spacing.icon, color))
         .child(title(t, hit, text))
-        .child(detail(t, &hit.detail, look.detail_chars))
+        .child(hit_detail(t, hit, look.detail_chars, index))
         .children(shortcut(t, hit.shortcut.as_ref()))
 }
 
@@ -249,13 +340,14 @@ fn top_hit(look: &RowLook, hit: &Hit, index: usize, is_selected: bool) -> RowEle
     let t = look.theme;
     let text = shown_title(hit);
     let (name, color) = hit_icon(t, hit);
-    let line = if is_command(hit) {
-        t!(
+    let subline = if is_command(hit) {
+        let line = t!(
             "command-center-command-detail",
             context = hit.detail.to_string()
-        )
+        );
+        detail(t, &line, look.detail_chars)
     } else {
-        hit.detail.to_string()
+        hit_detail(t, hit, look.detail_chars, index)
     };
     let tile = div()
         .flex()
@@ -274,7 +366,7 @@ fn top_hit(look: &RowLook, hit: &Hit, index: usize, is_selected: bool) -> RowEle
         .flex_1()
         .min_w_0()
         .child(title(t, hit, text.clone()).font_weight(FontWeight::SEMIBOLD))
-        .child(detail(t, &line, look.detail_chars));
+        .child(subline);
     let right = shortcut(t, hit.shortcut.as_ref()).or_else(|| badge(t, hit));
     option(look, index, is_selected, TOP_HIT)
         .aria_label(text)
