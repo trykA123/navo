@@ -6,6 +6,7 @@ use navo_core::{AppState, Command, Direction, PaneId, apply};
 use navo_fs::FakeFs;
 
 use super::{open_options_sized, options_for};
+use crate::tokens::{self, Mode};
 use crate::window_view::NavoWindow;
 
 const DEEP: &str = "home/vehicle-calibration-measurements-2026/powertrain-control-unit-variants/endurance-test-campaign-exports/thermal-soak-and-cold-start-logs";
@@ -491,6 +492,33 @@ fn twenty_tabs_fit_at_800(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn twenty_tabs_fit_at_1280(cx: &mut TestAppContext) {
     tabs_fit(cx, 1280.);
+}
+
+#[gpui_kit::test]
+fn pane_tabs_have_a_gap_above_the_path_bar(cx: &mut TestAppContext) {
+    for width in [390., 1280.] {
+        let (window, view) = open_at(cx, width);
+        let (_, focused) = panes(cx, &view);
+        let id = focused.get();
+        for mode in [Mode::Dark, Mode::Light] {
+            cx.update(|cx| tokens::apply(mode, cx));
+            cx.update_window(window, |_, window, cx| {
+                window.render_frame(cx);
+                let pane = window.find(("pane", id)).bounds();
+                let tabs = window.find(("tabs", id)).bounds();
+                let path = window.find(("path", id)).bounds();
+                // The tabs are centered vertically within the header.
+                let header_inset = tabs.top() - pane.top();
+                let gap = path.top() - tabs.bottom() - header_inset;
+                let expected = tokens::current(cx).spacing.xs;
+                assert!(
+                    x(gap - expected).abs() <= SLACK,
+                    "expected a {expected:?} gap below the tabs header, got {gap:?} at {width}px in {mode:?}"
+                );
+            })
+            .expect("window");
+        }
+    }
 }
 
 #[gpui_kit::test]

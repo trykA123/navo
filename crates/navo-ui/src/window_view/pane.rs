@@ -132,11 +132,7 @@ impl NavoWindow {
                 .into_any_element(),
         };
         let marks = self.pane_marks(pane, window);
-        let header = self.pane_header(pane, marks, cx).map(|header| {
-            header.when(!is_active && !marks.is_filled, |header| {
-                header.bg(t.colors.rail).text_color(t.colors.muted)
-            })
-        });
+        let header = self.pane_header(pane, marks, path.is_some(), cx);
         let footer = self.pane_footer(pane, status, cx);
         let body = Self::pane_keys(div().key_context(PANE), cx)
             .flex()

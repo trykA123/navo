@@ -23,6 +23,7 @@ impl NavoWindow {
         &self,
         pane: PaneId,
         marks: PaneMarks,
+        has_path: bool,
         cx: &mut Context<Self>,
     ) -> Option<Div> {
         let t = tokens::current(cx).clone();
@@ -71,6 +72,11 @@ impl NavoWindow {
             drive.rounded(t.radii.md).bg(t.surfaces.card)
         });
         let header = marked_header(&t, pane.get(), marks)
+            .when(!marks.is_filled && (shows_tabs || !is_active), |header| {
+                header.bg(t.colors.rail)
+            })
+            .when(!is_active, |header| header.text_color(t.colors.muted))
+            .when(shows_tabs && has_path, |header| header.mb(t.spacing.xs))
             .children(tabs)
             .when(!shows_tabs, |header| header.child(div().flex_1()))
             .children(marker_tag(&t, pane.get(), marks, cx));

@@ -52,7 +52,9 @@ pub(super) fn render(
                 .h(super::path_bar::bar_height(&t))
                 .px(t.spacing.sm)
                 .rounded(t.radii.md)
-                .bg(t.surfaces.field)
+                .bg(t.colors.background)
+                .border_1()
+                .border_color(t.colors.line)
                 .text_color(t.colors.muted)
                 .child(div().min_w_0().truncate().child(text)),
         )

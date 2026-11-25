@@ -230,8 +230,10 @@ impl RenderOnce for PathBar {
             .h(height)
             .px(t.spacing.xs)
             .rounded(t.radii.md)
+            .bg(c.background)
+            .border_1()
+            .border_color(c.line)
             .text_color(c.muted)
-            .bg(t.surfaces.field)
             .child(Fit::new(height, move |width, window, cx| {
                 self.crumb_row((width, state), window, cx)
             }))
