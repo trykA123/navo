@@ -977,7 +977,20 @@ fn late_items_take_the_place_of_the_loading_row(cx: &mut TestAppContext) {
     let rows = rig.rows(cx);
     assert!(rows.iter().any(|row| row == "7-Zip"));
     assert!(!rows.iter().any(|row| row == "Loading Windows items…"));
-    assert_eq!(rig.menu_row_bounds(cx, 0), before);
+    let after = rig.menu_row_bounds(cx, 0);
+    assert_eq!(after.origin.x, before.origin.x);
+    assert!(after.origin.y <= before.origin.y, "{before:?} {after:?}");
+    let last = rig.menu_row_bounds(cx, rows.len() - 1);
+    let level = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .within("context-menu")
+                .find(("menu-level", 0usize))
+                .bounds()
+        })
+        .expect("window");
+    assert!(level.top() >= px(8.) && last.bottom() <= level.bottom());
 }
 
 #[gpui_kit::test]

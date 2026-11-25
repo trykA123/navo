@@ -17,6 +17,7 @@ const TEXT_CHAR: f32 = 7.;
 const KEY_CHAR: f32 = 6.5;
 const ROW_CHROME: f32 = 48.;
 const KEY_GAP: f32 = 12.;
+const KEY_PAD: f32 = 12.;
 const CHEVRON: f32 = 28.;
 const OVERLAP: f32 = 2.;
 
@@ -98,7 +99,7 @@ pub(super) fn page_width(rows: &[Row], menu: &ShellMenu) -> f32 {
                 .item(&item.path)
                 .and_then(|source| source.accelerator.as_deref())
                 .filter(|_| !item.opens_submenu)
-                .map_or(0., |keys| KEY_GAP + chars(keys) * KEY_CHAR);
+                .map_or(0., |keys| KEY_GAP + KEY_PAD + chars(keys) * KEY_CHAR);
             let chevron = if item.opens_submenu { CHEVRON } else { 0. };
             ROW_CHROME + label + keys + chevron
         }
@@ -150,7 +151,7 @@ pub(super) fn opening_origin(
     place_root(anchor, Size::new(width, list + chrome), area)
 }
 
-/// Keeps the top-left corner; a wider page moves left and a taller one scrolls, never leaving `area`.
+/// Keeps the top-left corner while it fits; wider or taller pages shift inward to stay inside `area`.
 pub(super) fn panel_frame(panel: Panel, area: Bounds<Pixels>) -> Frame {
     let margin = px(MARGIN);
     let chrome = px(chrome());
@@ -160,8 +161,8 @@ pub(super) fn panel_frame(panel: Panel, area: Bounds<Pixels>) -> Frame {
         area.left() + margin,
         area.right() - margin - width,
     );
-    let below = area.bottom() - margin - panel.origin.y - chrome;
-    let list_height = px(panel.list).min(below.max(px(ROW)));
+    let room = (area.size.height - margin * 2. - chrome).max(px(ROW));
+    let list_height = px(panel.list).min(room);
     let height = list_height + chrome;
     let y = clamp(
         panel.origin.y,

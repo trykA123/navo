@@ -1,8 +1,11 @@
-use gpui_kit::{Bounds, TestAppContext, point, px, size};
+use gpui_kit::test::TestWindowExt as _;
+use gpui_kit::{AppContext as _, Bounds, TestAppContext, point, px, size};
 
 use super::{open_menu, window_bounds};
 use crate::context_menu::aim::is_aiming;
-use crate::context_menu::place::{Flyout, Side, flyout_frame, place_root};
+use crate::context_menu::place::{
+    Flyout, Panel, Side, chrome, flyout_frame, opening_origin, panel_frame, place_root,
+};
 
 #[test]
 fn the_menu_opens_right_and_down_from_the_anchor_when_it_fits() {
@@ -140,4 +143,85 @@ fn a_pointer_inside_the_overlap_strip_still_aims_at_the_flyout_edge() {
         left,
         Side::Left
     ));
+}
+
+#[test]
+fn a_bottom_anchored_menu_shifts_up_when_async_items_grow_it() {
+    let area = Bounds::new(point(px(0.), px(0.)), size(px(1440.), px(900.)));
+    let chrome_h = chrome();
+    let initial = Panel {
+        origin: point(px(400.), px(620.)),
+        width: px(316.),
+        list: 260. - chrome_h,
+    };
+    let origin = opening_origin(initial, initial.origin, area);
+    assert_eq!(origin.y, px(620.));
+    let expanded = Panel {
+        origin,
+        width: px(316.),
+        list: 520. - chrome_h,
+    };
+    let frame = panel_frame(expanded, area);
+    assert_eq!(frame.bounds.size.height, px(520.));
+    assert_eq!(frame.bounds.top(), px(372.));
+    assert_eq!(frame.bounds.bottom(), px(892.));
+}
+
+#[gpui_kit::test]
+fn shortcut_hints_render_as_right_aligned_keycaps_inside_their_rows(cx: &mut TestAppContext) {
+    let menu = super::open_default(cx);
+    assert_eq!(menu.find(("menu-key", 6), cx).as_deref(), Some("Ctrl+X"));
+    assert_eq!(menu.find(("menu-key", 2), cx), None);
+    let row = menu.row_bounds(6, cx);
+    let cap = cx
+        .update_window(menu.window, |_, window, cx| {
+            window.render_frame(cx);
+            window
+                .within(super::ROOT)
+                .within(("menu-level", 0usize))
+                .find(("menu-key", 6usize))
+                .bounds()
+        })
+        .expect("window");
+    assert!(cap.left() > row.center().x, "{row:?} {cap:?}");
+    assert!(cap.right() <= row.right(), "{row:?} {cap:?}");
+    assert!(cap.top() >= row.top() && cap.bottom() <= row.bottom());
+}
+
+#[gpui_kit::test]
+fn rendered_menu_near_bottom_shifts_up_when_async_items_arrive(cx: &mut TestAppContext) {
+    use navo_core::shell_menu::{Group, ShellMenu, navo_actions};
+    let area = Bounds::new(point(px(0.), px(0.)), size(px(1200.), px(900.)));
+    let initial = ShellMenu {
+        items: navo_actions().into_iter().take(5).collect(),
+    };
+    let menu = super::open_menu_in(cx, (point(px(300.), px(640.)), area), initial);
+    let before = menu.level_bounds(cx);
+    assert_eq!(before.top(), px(640.));
+    let mut expanded_items = navo_actions();
+    expanded_items.push(navo_core::shell_menu::MenuItem::separator(Group::Navo));
+    for i in 0..8 {
+        expanded_items.push(super::shell(
+            100 + i,
+            &format!("Shell action {i}"),
+            Group::Extensions,
+        ));
+    }
+    menu.menu.update(cx, |m, cx| {
+        m.set_menu(
+            ShellMenu {
+                items: expanded_items,
+            },
+            cx,
+        );
+    });
+    menu.frame(cx);
+    let after = menu.level_bounds(cx);
+    assert!(after.top() < before.top(), "{before:?} {after:?}");
+    assert!(after.top() >= px(8.), "{after:?}");
+    assert_eq!(after.bottom(), px(892.));
+    assert!(
+        after.size.height > before.size.height,
+        "{before:?} {after:?}"
+    );
 }

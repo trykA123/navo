@@ -79,7 +79,7 @@ impl ContextMenu {
         place::page_width(self.state.root().rows(), self.state.menu()).max(MIN_WIDTH)
     }
 
-    /// The root keeps its top-left corner; each flyout sits beside the row that opened it.
+    /// The root keeps its top-left corner while it fits; each flyout sits beside the row that opened it.
     pub(super) fn frames(&self) -> Vec<Placed> {
         let levels = self.state.levels();
         let root = levels[0].rows();

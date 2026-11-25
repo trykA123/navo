@@ -1,9 +1,9 @@
 use std::time::{Duration, Instant};
 
-use gpui_kit::{TestAppContext, point, px};
+use gpui_kit::{Bounds, TestAppContext, point, px, size};
 use navo_core::shell_menu::{ShellMenu, navo_actions};
 
-use super::{open_menu_with, zip_menu};
+use super::{open_menu_in, open_menu_with, zip_menu};
 use crate::context_menu::motion::progress;
 
 fn navo_only() -> ShellMenu {
@@ -38,7 +38,8 @@ fn the_menu_opens_in_place_on_its_first_frame(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn new_items_show_at_full_height_at_once_without_moving_rows(cx: &mut TestAppContext) {
-    let menu = open_menu_with(cx, point(px(40.), px(20.)), navo_only());
+    let tall = Bounds::new(point(px(0.), px(0.)), size(px(800.), px(900.)));
+    let menu = open_menu_in(cx, (point(px(40.), px(20.)), tall), navo_only());
     menu.wait(200, cx);
     let before = menu.level_bounds(cx);
     let open_row = menu.row_bounds(1, cx);
@@ -53,14 +54,16 @@ fn new_items_show_at_full_height_at_once_without_moving_rows(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
-fn a_menu_placed_above_its_anchor_grows_without_moving(cx: &mut TestAppContext) {
+fn a_menu_placed_above_its_anchor_shifts_up_when_grown_past_bottom(cx: &mut TestAppContext) {
     let menu = open_menu_with(cx, point(px(40.), px(560.)), navo_only());
     let before = menu.level_bounds(cx);
-    let open_row = menu.row_bounds(1, cx);
     menu.menu.update(cx, |menu, cx| menu.set_menu(grown(), cx));
     menu.frame(cx);
-    assert_eq!(menu.level_bounds(cx).origin, before.origin);
-    assert_eq!(menu.row_bounds(1, cx), open_row);
+    let after = menu.level_bounds(cx);
+    assert!(after.origin.y < before.origin.y, "{before:?} {after:?}");
+    assert_eq!(after.origin.y, px(8.));
+    assert!(after.bottom() <= px(592.), "{after:?}");
+    assert!(after.size.height > before.size.height, "{after:?}");
 }
 
 #[gpui_kit::test]
