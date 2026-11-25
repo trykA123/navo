@@ -312,13 +312,135 @@ fn use_fan_out(depth: usize) -> String {
 
 #[test]
 fn sanitise_refuses_use_fan_out() {
-    assert_eq!(
-        normalise(use_fan_out(5).as_bytes(), false),
-        Err(SvgError::TooManyPaths)
+    for depth in [5, 6] {
+        assert_eq!(
+            normalise(use_fan_out(depth).as_bytes(), false),
+            Err(SvgError::TooComplex),
+            "the pre-pass stops 10^{depth} paths before parsing"
+        );
+    }
+}
+
+/// `M0 0` then `segments` line segments of two numbers each.
+fn zigzag(segments: usize) -> String {
+    let mut data = String::from("M0 0");
+    for at in 0..segments {
+        data.push_str(if at % 2 == 0 { "l1 1" } else { "l1-1" });
+    }
+    data
+}
+
+/// `levels` nested groups that each `<use>` the level below `fan` times, over one leaf path.
+fn nested_uses(levels: usize, fan: usize, segments: usize) -> String {
+    let mut defs = format!(r#"<path id="g0" fill="red" d="{}"/>"#, zigzag(segments));
+    for level in 1..=levels {
+        let uses = format!(r##"<use href="#g{}"/>"##, level - 1).repeat(fan);
+        defs.push_str(&format!(r#"<g id="g{level}">{uses}</g>"#));
+    }
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs>{defs}</defs><use href="#g{levels}"/></svg>"##
+    )
+}
+
+/// One path `<use>`d `count` times side by side.
+fn flat_uses(count: usize, data: &str) -> String {
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><path id="a" fill="red" d="{data}"/></defs>{}</svg>"##,
+        r##"<use href="#a"/>"##.repeat(count)
+    )
+}
+
+/// A marker of `segments` segments on every vertex of a path of `segments` segments; with
+/// `css` the marker is set by a style sheet instead of an attribute.
+fn marker_mid(segments: usize, css: bool) -> String {
+    let path = zigzag(segments);
+    let (style, attribute) = if css {
+        ("<style>path { marker-mid: url(#m) }</style>", "")
+    } else {
+        ("", r#" marker-mid="url(#m)""#)
+    };
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{style}<marker id="m" overflow="visible"><path fill="red" d="{path}"/></marker><path fill="none" stroke="#000"{attribute} d="{path}"/></svg>"##
+    )
+}
+
+/// `count` nested `open` elements around one path.
+fn nested(count: usize, open: &str, close: &str) -> String {
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{}<path d="M0 0L5 5L0 5Z"/>{}</svg>"#,
+        open.repeat(count),
+        close.repeat(count)
+    )
+}
+
+#[test]
+fn sanitise_refuses_nested_use_bomb() {
+    let bomb = nested_uses(4, 9, 100);
+    assert!(bomb.len() < 2_000, "a small file: {}", bomb.len());
+    assert_eq!(normalise(bomb.as_bytes(), false), Err(SvgError::TooComplex));
+}
+
+#[test]
+fn sanitise_refuses_flat_use_bomb() {
+    let bomb = flat_uses(100, &zigzag(3_000));
+    assert_eq!(normalise(bomb.as_bytes(), false), Err(SvgError::TooComplex));
+}
+
+#[test]
+fn sanitise_refuses_marker_bomb() {
+    for css in [false, true] {
+        let bomb = marker_mid(600, css);
+        assert_eq!(
+            normalise(bomb.as_bytes(), false),
+            Err(SvgError::TooComplex),
+            "css {css}"
+        );
+    }
+}
+
+#[test]
+fn sanitise_refuses_deep_nesting() {
+    for (open, close) in [("<g>", "</g>"), (r#"<svg viewBox="0 0 24 24">"#, "</svg>")] {
+        let deep = nested(1_000, open, close);
+        assert_eq!(
+            normalise(deep.as_bytes(), false),
+            Err(SvgError::TooDeep),
+            "{open}"
+        );
+    }
+    clean(&nested(60, "<g>", "</g>"), false);
+}
+
+#[test]
+fn sanitise_refuses_output_over_cap() {
+    let data: String = std::iter::once("M0 0")
+        .chain(std::iter::repeat_n("h1v1", 1_000))
+        .collect();
+    let big = flat_uses(50, &data);
+    assert!(big.len() < SVG_CAP);
+    assert_eq!(normalise(big.as_bytes(), false), Err(SvgError::TooLarge));
+}
+
+#[test]
+fn sanitise_keeps_small_uses_and_markers() {
+    let cleaned = clean(&marker_mid(8, false), false);
+    assert_eq!(out(&cleaned).matches("<path").count(), 1 + 7);
+    let cleaned = clean(&nested_uses(2, 3, 4), false);
+    assert_eq!(out(&cleaned).matches("<path").count(), 9);
+}
+
+#[test]
+fn sanitise_refuses_a_viewbox_that_rounds_to_zero() {
+    let tiny = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 0.0001 0.0001"><path d="M0 0L0.0001 0.0001L0 0.0001Z"/></svg>"#;
+    assert_eq!(normalise(tiny.as_bytes(), false), Err(SvgError::Empty));
+}
+
+#[test]
+fn sanitise_keeps_a_style_sheet_clip_path() {
+    let paths = format!(r#"<path d="{}"/>"#, zigzag(20)).repeat(50);
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><style>.a {{ clip-path: url(#c) }}</style><clipPath id="c"><rect width="24" height="24"/></clipPath></defs><g class="a">{paths}</g></svg>"##
     );
-    let million = normalise(use_fan_out(6).as_bytes(), false);
-    assert!(
-        matches!(million, Err(SvgError::Parse(_))),
-        "the parser's node limit stops a million paths: {million:?}"
-    );
+    let cleaned = normalise(svg.as_bytes(), false).unwrap();
+    assert_eq!(cleaned.removed, [Removed::ClipPath]);
 }

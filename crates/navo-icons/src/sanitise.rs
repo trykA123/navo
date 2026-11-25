@@ -10,7 +10,10 @@ use resvg::usvg::{
 
 use write::{Line, Shape};
 
+mod weigh;
 mod write;
+
+pub use weigh::{MAX_DEPTH, MAX_WEIGHT};
 
 /// The largest SVG file accepted; the caller reads with this cap.
 pub const SVG_CAP: usize = 512 * 1024;
@@ -63,7 +66,7 @@ pub struct Cleaned {
 /// Why an SVG is refused.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SvgError {
-    /// Over `SVG_CAP`.
+    /// Over `SVG_CAP`, as read or as cleaned.
     #[error("the SVG is larger than 512 KiB")]
     TooLarge,
     /// A gzip-compressed `.svgz`.
@@ -81,26 +84,42 @@ pub enum SvgError {
     /// More than `MAX_PATHS` paths.
     #[error("the SVG has more than 10,000 paths")]
     TooManyPaths,
-    /// No path is left.
+    /// No path is left, or the canvas rounds to zero.
     #[error("the SVG has nothing to draw")]
     Empty,
+    /// Expands past `MAX_WEIGHT` through `<use>`, markers, masks, clip paths or filters.
+    #[error("the SVG repeats its shapes too many times")]
+    TooComplex,
+    /// Nests elements or references deeper than `MAX_DEPTH`.
+    #[error("the SVG nests too deeply")]
+    TooDeep,
 }
 
 /// Cleans `bytes` down to solid paths; with `mono` every colour is black.
 ///
-/// Steps of BB-D9 in order: refuse before parsing, parse with no resolver, walk the tree,
-/// write our own document, refuse too many paths or none.
+/// Steps of BB-D9 in order: refuse before parsing (size, entities, expansion, nesting), parse
+/// with no resolver, walk the tree, write our own document, refuse too many paths, none or an
+/// output over `SVG_CAP`.
 pub fn normalise(bytes: &[u8], mono: bool) -> Result<Cleaned, SvgError> {
     let text = screen(bytes)?;
+    let document =
+        roxmltree::Document::parse(text).map_err(|error| SvgError::Parse(error.to_string()))?;
+    weigh::check(&document)?;
+    let mut removed = dropped_elements(&document);
     let tree =
         Tree::from_str(text, &options()).map_err(|error| SvgError::Parse(error.to_string()))?;
-    let mut removed = dropped_elements(text);
     let shapes = shapes(tree.root(), &mut removed)?;
-    if shapes.is_empty() {
+    let size = tree.size();
+    if shapes.is_empty()
+        || write::number(size.width()) == "0"
+        || write::number(size.height()) == "0"
+    {
         return Err(SvgError::Empty);
     }
-    let size = tree.size();
     let svg = write::document(size.width(), size.height(), &shapes, mono);
+    if svg.len() > SVG_CAP {
+        return Err(SvgError::TooLarge);
+    }
     Ok(Cleaned {
         svg,
         removed: removed.into_iter().collect(),
@@ -142,11 +161,8 @@ fn options() -> Options<'static> {
 
 /// `<text>` and `<image>` in the source: the parser drops them silently (no fonts, no resolver),
 /// so the notice reads them from the XML.
-fn dropped_elements(text: &str) -> BTreeSet<Removed> {
+fn dropped_elements(document: &roxmltree::Document<'_>) -> BTreeSet<Removed> {
     let mut removed = BTreeSet::new();
-    let Ok(document) = roxmltree::Document::parse(text) else {
-        return removed;
-    };
     for node in document
         .descendants()
         .filter(|node| node.tag_name().namespace() == Some(SVG_NS))
