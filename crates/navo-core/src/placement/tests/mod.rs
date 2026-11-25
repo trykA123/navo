@@ -225,6 +225,28 @@ fn invalid_placement_metadata_falls_back_without_discarding_the_session() {
 }
 
 #[test]
+fn restore_saved_returns_none_for_empty_list() {
+    assert!(restore_saved(&single(), &[]).is_none());
+}
+
+#[test]
+fn restore_saved_returns_none_for_missing_monitor() {
+    let gone = setup(vec![monitor(physical(4000, 0, 1920, 1080), 1.0)]);
+    let saved = placement(&gone, 0);
+    assert!(restore_saved(&single(), &[saved]).is_none());
+}
+
+#[test]
+fn restore_saved_keeps_visible_record_from_another_setup() {
+    let saved = placement(&single(), 0);
+    let current = setup(vec![monitor(physical(0, 0, 1920, 1080), 1.25)]);
+    let result = restore_saved(&current, &[saved]).expect("visible saved placement");
+    assert_eq!(result.bounds, logical(80.0, 64.0, 1000.0, 700.0));
+    assert_eq!(result.monitor, current.monitors()[0].bounds);
+    assert!(!result.maximized);
+}
+
+#[test]
 fn empty_or_invalid_monitor_setups_are_rejected() {
     assert!(MonitorSetup::new(Vec::new()).is_err());
     let valid = monitor(physical(0, 0, 1920, 1080), 1.0);

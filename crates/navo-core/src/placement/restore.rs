@@ -1,7 +1,9 @@
 use super::{Monitor, MonitorLocalLogicalRect, MonitorSetup, Placement, Restored};
 
+/// Restores a saved placement for the current monitor setup, returning `None`
+/// when no saved record matches or overlaps a current monitor.
 #[must_use]
-pub fn restore(current: &MonitorSetup, placements: &[Placement]) -> Restored {
+pub fn restore_saved(current: &MonitorSetup, placements: &[Placement]) -> Option<Restored> {
     let fingerprint = current.fingerprint();
     if let Some((saved, monitor)) = placements.iter().find_map(|saved| {
         if saved.setup != fingerprint || !saved.bounds.is_valid() {
@@ -13,16 +15,20 @@ pub fn restore(current: &MonitorSetup, placements: &[Placement]) -> Restored {
             .find(|m| m.bounds == saved.monitor)
             .map(|monitor| (saved, monitor))
     }) {
-        return Restored {
+        return Some(Restored {
             bounds: clamp_to_work_area(saved.bounds, monitor),
             monitor: saved.monitor,
             maximized: saved.maximized,
-        };
+        });
     }
-    if let Some(restored) = placements
+    placements
         .first()
         .and_then(|saved| restore_visible(current, saved))
-    {
+}
+
+#[must_use]
+pub fn restore(current: &MonitorSetup, placements: &[Placement]) -> Restored {
+    if let Some(restored) = restore_saved(current, placements) {
         return restored;
     }
     let primary = current

@@ -1,7 +1,9 @@
 use gpui_kit::{DisplayId, point};
-use navo_core::placement::{MonitorLocalLogicalRect, PhysicalRect};
+use navo_core::placement::{
+    Monitor, MonitorLocalLogicalRect, MonitorSetup, PhysicalRect, Placement,
+};
 
-use super::{Screen, Shown, keep_on, opening, placement};
+use super::{Screen, Shown, first_place, fit_on, keep_on, opening, opening_saved, placement};
 use crate::prelude::*;
 
 fn logical(x: f32, y: f32, width: f32, height: f32) -> Bounds<Pixels> {
@@ -193,4 +195,66 @@ fn a_window_inside_its_display_keeps_its_origin() {
     let area = office()[0].work_area;
     let inside = WindowBounds::Maximized(logical(100., 80., 900., 600.));
     assert_eq!(keep_on(inside, area), inside);
+}
+
+#[test]
+fn opening_saved_returns_none_when_empty_or_offscreen() {
+    assert_eq!(opening_saved(&office(), &[]), None);
+    let gone = Monitor {
+        bounds: PhysicalRect {
+            x: 4000,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        },
+        work_area: PhysicalRect {
+            x: 4000,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        },
+        scale: 1.0,
+        primary: false,
+    };
+    let setup = MonitorSetup::new(vec![gone]).expect("gone monitor setup");
+    let saved = Placement {
+        setup: setup.fingerprint(),
+        bounds: MonitorLocalLogicalRect {
+            x: 100.,
+            y: 80.,
+            width: 1000.,
+            height: 700.,
+        },
+        monitor: gone.bounds,
+        maximized: false,
+    };
+    assert_eq!(opening_saved(&office(), &[saved]), None);
+}
+
+#[test]
+fn first_place_on_1280x720_gives_1040x624_centred_on_navo() {
+    let screen = Screen {
+        id: DisplayId::new(1),
+        bounds: logical(0., 0., 1280., 720.),
+        work_area: logical(0., 0., 1280., 720.),
+        scale: 1.0,
+        primary: true,
+    };
+    let navo = logical(0., 0., 1280., 720.);
+    let WindowBounds::Windowed(placed) = first_place(navo, &screen) else {
+        panic!("expected a normal window, got a maximized or fullscreen one");
+    };
+    assert_eq!(placed.origin, point(px(120.), px(48.)));
+    assert_eq!(placed.size, size(px(1040.), px(624.)));
+}
+
+#[test]
+fn fit_on_clamps_oversized_150_percent_record_inside_100_percent_work_area() {
+    let area = logical(0., 0., 1280., 720.);
+    let oversized = WindowBounds::Windowed(logical(-100., -50., 1920., 1080.));
+    let WindowBounds::Windowed(fitted) = fit_on(oversized, area) else {
+        panic!("expected a normal window, got a maximized or fullscreen one");
+    };
+    assert_eq!(fitted.size, size(px(1280.), px(720.)));
+    assert_eq!(fitted.origin, point(px(0.), px(0.)));
 }

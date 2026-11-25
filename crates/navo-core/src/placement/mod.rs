@@ -129,7 +129,7 @@ pub(crate) fn deserialize_placements<'de, D: serde::Deserializer<'de>>(
     Ok(placements)
 }
 
-pub use restore::restore;
+pub use restore::{restore, restore_saved};
 
 #[cfg(test)]
 mod tests;
