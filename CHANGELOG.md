@@ -2,6 +2,50 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.8.8 — Moves that keep your files
+
+*2026-11-25*
+
+This release is about data safety. A move or an Overwrite can no longer delete the only copy of a file: Navo refuses to write a file over itself under another name, removes a moved source only when it can prove the copy came from that exact file, and keeps the copy when it rolls back a move after a crash. Settings shows what the index holds, and the folds for rare settings are finished. Find, the built-in terminal and the button bar get groundwork that is not switched on yet.
+
+### Fixed
+
+- **Overwrite onto the same file under another name.** A copy or move with Overwrite could target the source itself under a second name: a SUBST drive, a mapped drive and its network path, a mount point or a link. The move then deleted the only copy. Navo now compares the two files' identities before it writes over a target. When they are the same file, the step stops with "is the same file as its source under another name. Nothing was changed." When Navo cannot read either identity, the step also stops and changes nothing. On drives without file IDs, Navo compares the drive serial numbers, then the full resolved paths.
+- **A move removes only the file it copied.** A move across drives copies each file, then removes its source. Before, if another program replaced the source after the copy, the move deleted the replacement, which was never copied. Navo now records the source's identity, size and time when the copy starts. It removes the source only while it is still that file; on Windows, the check and the delete use one open handle.
+- **A kept source no longer stops the move.** When a source changed, cannot be proved or cannot be removed, Navo keeps it in place and goes on with the other sources. The move ends as kept, not failed, and each kept source is logged with its reason. A source folder that gains a new file during the move is kept as well. A move that resumes after a restart no longer blames the drive for a kept source.
+- **Crash rollback keeps the copy.** When Navo rolls back a move that a crash interrupted, it now removes a placed copy only when the file at the source path is proved to be the original. Another file at that path, or a move started by an older build, keeps the copy. An old file that the copy overwrote is kept beside it.
+- **PDF sandbox permissions.** Giving the PDF viewer's sandbox access to a file no longer adds duplicate permission entries or rewrites older-style permission lists. A deny entry for an unrelated account no longer forces a rewrite. Navo checks the permission data for damage before it reads it.
+- **Busy folders and the clipboard.** A very busy folder no longer lets file-change events grow memory without limit. Past 4,096 changes at once, Navo lists the folder again. Clipboard history no longer misses a copy while another program holds the clipboard; it tries again shortly after.
+- **Renaming a folder with Git status on.** Navo now waits until its Git helper processes have exited before a rename, so the folder is free when the rename starts.
+
+### Added
+
+- **Index counts in Settings.** The index page shows files and folders as separate counts and lists the indexed drives. Only fixed NTFS drives are indexed, and the counts leave out each drive's root folder. A drive that is still building shows its item count until its totals are complete. A drive that cannot be read no longer hides the others.
+- **Finished folds for rare settings.** A fold row reads "N advanced settings". Its details column lists the settings inside, and Right or a click opens the fold. Find marks advanced settings with an Advanced tag.
+
+### Changed
+
+- **Clearer hints for search tokens.** In Ctrl+K content search, a token Navo cannot read shows a hint with an example, such as "size: needs a number, like <50MB". The hints come from the translation files.
+- **External terminal, named as such.** The Open terminal here command is now Open in external terminal. Its setting is called External terminal.
+- **A steadier index service.** The index service keeps one pending answer and one status update at a time, so it cannot pile up memory. It reads the details of changed files before it locks the index, so searches do not wait behind them.
+- **For contributors.** Flaky tests now wait on events instead of fixed sleeps, and a slow CI host no longer times out the index service tests.
+
+### Not switched on yet
+
+- **Safe F5 and F6 from Find results.** Copying or moving Find results is built but not reachable yet. It checks each file's identity again before it runs, refuses a copy into the selected folder itself or into an archive, and does these checks in the background.
+- **More search tokens.** Find reads `name:`, `depth:`, `word:`, `not:`, `case:`, `hex:`, `enc:`, `docs:` and `mod:7d`, and marks a wrong one with a hint. The search does not apply them yet. A query printed back as text reads back as the same search.
+- **A separate Find window.** Groundwork is in: the window can remember its place, pin and queries, results free memory as they are trimmed, and match colours come from the theme. The `search.alt-f7-opens` setting is stored but has no effect yet.
+- **A built-in terminal.** The engine that runs a shell is in, with per-system shell detection. Six colour schemes and the terminal settings keys are in too; the colours follow Windows contrast mode. No terminal shows in the app yet.
+- **A button bar.** The groundwork for a button bar of your own commands is in: a format for icons, a runner for user commands and a stored choice to show the bar and its names. The bar does not show yet.
+- **Setup in any folder.** More groundwork is in: Setup started as administrator can start Navo as your own account, and the helper for protected folders checks every parent folder before it creates anything. Setup still installs for one user only.
+
+### Known issues
+
+- **Kept sources show as one message.** The jobs panel shows only the first kept source's reason. The full list is in the job log.
+- **Drives without file IDs.** On FAT, exFAT and some network shares, Navo proves a file by its size, times and attributes. Windows can give a file that is deleted and recreated under the same name within seconds its old creation time. If size and modified time also match, Navo cannot tell that replacement apart.
+- **The new Settings is not complete.** The rest of Settings v2 comes in v0.9.0.
+- **Setup's administrator message runs ahead.** When you start Setup as administrator, it says it was started from another account or outside your desktop. In this release, Setup refuses every start as administrator. Start Setup normally from your desktop.
+
 ## v0.8.7 — Settings, rearranged
 
 *2026-11-24*

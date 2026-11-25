@@ -6174,7 +6174,7 @@ dependencies = [
 
 [[package]]
 name = "navo-app"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "chrono",
@@ -6226,7 +6226,7 @@ dependencies = [
 
 [[package]]
 name = "navo-automotive"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "a2lfile",
  "can-dbc",
@@ -6243,7 +6243,7 @@ dependencies = [
 
 [[package]]
 name = "navo-bench"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "aho-corasick",
  "blake3",
@@ -6260,7 +6260,7 @@ dependencies = [
 
 [[package]]
 name = "navo-cache"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "crc32fast",
  "lz4_flex",
@@ -6276,7 +6276,7 @@ dependencies = [
 
 [[package]]
 name = "navo-clipboard"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "rusqlite",
  "sha2 0.11.1",
@@ -6334,7 +6334,7 @@ dependencies = [
 
 [[package]]
 name = "navo-core"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "aho-corasick",
  "encoding_rs",
@@ -6354,7 +6354,7 @@ dependencies = [
 
 [[package]]
 name = "navo-diag"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "insta",
  "proptest",
@@ -6371,7 +6371,7 @@ dependencies = [
 
 [[package]]
 name = "navo-fs"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "crc32fast",
@@ -6404,7 +6404,7 @@ dependencies = [
 
 [[package]]
 name = "navo-git"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "gix",
  "gix-config",
@@ -6419,7 +6419,7 @@ dependencies = [
 
 [[package]]
 name = "navo-icons"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "thiserror 2.0.21",
  "toml 1.2.1+spec-1.1.0",
@@ -6427,7 +6427,7 @@ dependencies = [
 
 [[package]]
 name = "navo-index"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "crc32fast",
  "gungraun",
@@ -6446,7 +6446,7 @@ dependencies = [
 
 [[package]]
 name = "navo-index-service"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "chrono",
  "embed-resource",
@@ -6465,7 +6465,7 @@ dependencies = [
 
 [[package]]
 name = "navo-l10n"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "fluent-bundle",
  "sidewise-l10n",
@@ -6476,7 +6476,7 @@ dependencies = [
 
 [[package]]
 name = "navo-pdf"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "pdfium-render",
  "proptest",
@@ -6485,7 +6485,7 @@ dependencies = [
 
 [[package]]
 name = "navo-retention"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "navo-core",
  "navo-fs",
@@ -6500,7 +6500,7 @@ dependencies = [
 
 [[package]]
 name = "navo-setup"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "embed-resource",
  "futures",
@@ -6523,7 +6523,7 @@ dependencies = [
 
 [[package]]
 name = "navo-shell"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "navo-core",
  "rustix",
@@ -6538,7 +6538,7 @@ dependencies = [
 
 [[package]]
 name = "navo-store"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "crc32fast",
  "insta",
@@ -6560,7 +6560,7 @@ dependencies = [
 
 [[package]]
 name = "navo-structured"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "csv",
  "csv-core",
@@ -6575,7 +6575,7 @@ dependencies = [
 
 [[package]]
 name = "navo-syntax"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "gungraun",
  "proptest",
@@ -6589,7 +6589,7 @@ dependencies = [
 
 [[package]]
 name = "navo-term"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "navo-term",
  "portable-pty",
@@ -6599,7 +6599,7 @@ dependencies = [
 
 [[package]]
 name = "navo-ui"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "chrono",
@@ -6645,7 +6645,7 @@ dependencies = [
 
 [[package]]
 name = "navo-ui-gallery"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "chrono",
  "gpui-kit",
@@ -6659,7 +6659,7 @@ dependencies = [
 
 [[package]]
 name = "navo-update"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "semver",
  "thiserror 2.0.21",
@@ -9385,7 +9385,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "sidewise-core"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "aho-corasick",
  "chardetng",
@@ -9401,7 +9401,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-engine"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "fastcdc",
@@ -9420,7 +9420,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-fs"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "encoding_rs",
  "rustix",
@@ -9434,7 +9434,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-git"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "gix",
  "sidewise-core",
@@ -9444,14 +9444,14 @@ dependencies = [
 
 [[package]]
 name = "sidewise-git-address"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
 ]
 
 [[package]]
 name = "sidewise-git-remote"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "gix",
@@ -9466,7 +9466,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-host"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "encoding_rs",
@@ -9484,7 +9484,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-journal"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "proptest",
@@ -9497,7 +9497,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-kit"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "chrono",
  "codebook-tree-sitter-latex",
@@ -9527,7 +9527,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-l10n"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "fluent-bundle",
  "thiserror 2.0.21",
@@ -9537,7 +9537,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-ui"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "flate2",
  "gpui-kit",
@@ -9556,7 +9556,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-update"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "semver",
  "serde",
@@ -9567,7 +9567,7 @@ dependencies = [
 
 [[package]]
 name = "sidewise-winhttp"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "windows-sys 0.61.2",
 ]
@@ -12753,7 +12753,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "blake3",
  "dua-core",
