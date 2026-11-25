@@ -5,6 +5,7 @@
 pub mod chain;
 pub mod discovery;
 pub mod elevate_launch;
+pub mod elevated_create;
 pub mod facts;
 pub mod helper_checks;
 mod parent_acl;

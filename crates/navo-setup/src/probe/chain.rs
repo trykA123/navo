@@ -37,6 +37,7 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::core::{GUID, PWSTR};
 
+use crate::payload::platform::security::Local;
 use crate::placement::{Chain, FileId, Link, NameEq, Protected};
 use crate::syntax::Candidate;
 
@@ -65,7 +66,7 @@ const HOLD_ACCESS: u32 = FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
 const HOLD_SHARE: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE;
 
 /// Opens a folder, never through a final reparse point.
-const HOLD_FLAGS: u32 = FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT;
+pub(super) const HOLD_FLAGS: u32 = FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT;
 
 /// Win32 `HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)`.
 const HRESULT_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32;
@@ -106,6 +107,11 @@ pub struct HeldChain {
 }
 
 impl HeldChain {
+    /// The held handles, one per `chain.existing` link, drive root first.
+    pub(super) fn handles(&self) -> &[Owned] {
+        &self.handles
+    }
+
     /// Re-reads every held folder's attributes and reparse tag; one that is now a link or no
     /// longer a folder refuses.
     ///
@@ -171,7 +177,7 @@ pub(crate) fn resolve_held(path: &Path) -> io::Result<HeldChain> {
 }
 
 /// Splits an absolute path into its drive root and folder names; `..` and stream names refuse.
-fn split_root(path: &Path) -> io::Result<(PathBuf, Vec<OsString>)> {
+pub(super) fn split_root(path: &Path) -> io::Result<(PathBuf, Vec<OsString>)> {
     let mut root = PathBuf::new();
     let mut names = Vec::new();
     for component in path.components() {
@@ -216,7 +222,7 @@ fn open_directory(path: &Path, follow: bool) -> io::Result<Owned> {
 }
 
 /// Opens a folder by path with `CreateFileW`.
-fn open_handle(path: &Path, access: u32, share: u32, flags: u32) -> io::Result<Owned> {
+pub(super) fn open_handle(path: &Path, access: u32, share: u32, flags: u32) -> io::Result<Owned> {
     let path = wide_z(path);
     // SAFETY: the wide path is NUL-terminated and live for the call; no security attributes are used.
     let handle = unsafe {
@@ -236,8 +242,35 @@ fn open_handle(path: &Path, access: u32, share: u32, flags: u32) -> io::Result<O
     Ok(Owned(handle))
 }
 
+/// One relative `NtCreateFile` request: the access, share mode, disposition and options.
+pub(super) struct NtRequest {
+    pub(super) access: u32,
+    pub(super) share: u32,
+    pub(super) disposition: u32,
+    pub(super) options: u32,
+}
+
+/// The walk's open: an existing folder, held, never through a final reparse point.
+const HOLD_OPEN: NtRequest = NtRequest {
+    access: HOLD_ACCESS,
+    share: HOLD_SHARE,
+    disposition: FILE_OPEN,
+    options: NT_OPEN_REPARSE_POINT | FILE_OPEN_FOR_BACKUP_INTENT | FILE_SYNCHRONOUS_IO_NONALERT,
+};
+
 /// Opens one child by name relative to its held parent, without following a reparse point.
 fn open_child(parent: &Owned, name: &OsStr) -> io::Result<Owned> {
+    nt_create(parent, name, &HOLD_OPEN, None)
+}
+
+/// Opens or creates `name` relative to `parent` with `NtCreateFile`; the error is the status's
+/// Win32 code. `descriptor` is a self-relative security descriptor for a new object, or none.
+pub(super) fn nt_create(
+    parent: &Owned,
+    name: &OsStr,
+    request: &NtRequest,
+    descriptor: Option<&Local>,
+) -> io::Result<Owned> {
     let mut units = wide(name);
     let length = u16::try_from(units.len().saturating_mul(2)).map_err(io::Error::other)?;
     let object_name = UNICODE_STRING {
@@ -250,23 +283,24 @@ fn open_child(parent: &Owned, name: &OsStr) -> io::Result<Owned> {
         RootDirectory: parent.0,
         ObjectName: &raw const object_name,
         Attributes: OBJ_CASE_INSENSITIVE,
+        SecurityDescriptor: descriptor.map_or(std::ptr::null(), |local| local.0.cast()),
         ..OBJECT_ATTRIBUTES::default()
     };
     let mut handle: HANDLE = std::ptr::null_mut();
     let mut status_block = IO_STATUS_BLOCK::default();
-    // SAFETY: the parent handle, name buffer and attribute structs stay live for the call, and
-    // `handle` and `status_block` are writable; no allocation size or EA buffer is passed.
+    // SAFETY: the parent handle, name buffer, descriptor and attribute structs stay live for the
+    // call, and `handle` and `status_block` are writable; no allocation size or EA buffer is passed.
     let status = unsafe {
         NtCreateFile(
             &raw mut handle,
-            HOLD_ACCESS,
+            request.access,
             &raw const attributes,
             &raw mut status_block,
             std::ptr::null(),
             0,
-            HOLD_SHARE,
-            FILE_OPEN,
-            NT_OPEN_REPARSE_POINT | FILE_OPEN_FOR_BACKUP_INTENT | FILE_SYNCHRONOUS_IO_NONALERT,
+            request.share,
+            request.disposition,
+            request.options,
             std::ptr::null(),
             0,
         )
@@ -282,7 +316,7 @@ fn open_child(parent: &Owned, name: &OsStr) -> io::Result<Owned> {
 }
 
 /// Reads a folder's identity, reparse flag and directory flag through its handle.
-fn read_link(handle: &Owned) -> io::Result<(FileId, bool, bool)> {
+pub(super) fn read_link(handle: &Owned) -> io::Result<(FileId, bool, bool)> {
     let mut tag = FILE_ATTRIBUTE_TAG_INFO::default();
     let tag_size = u32::try_from(size_of::<FILE_ATTRIBUTE_TAG_INFO>()).map_err(io::Error::other)?;
     let tag_ptr = std::ptr::from_mut(&mut tag).cast::<c_void>();
@@ -483,7 +517,7 @@ impl Drop for KnownPath {
 }
 
 /// A Win32 handle that closes on drop.
-struct Owned(HANDLE);
+pub(super) struct Owned(pub(super) HANDLE);
 
 impl Drop for Owned {
     fn drop(&mut self) {

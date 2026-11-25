@@ -170,7 +170,7 @@ fn only_a_not_found_reopen_counts_as_absent() {
 }
 
 /// Sets a mount point on an existing empty folder through an open with attribute-write access only.
-fn mount_point_in_place(folder: &Path, target: &Path) -> io::Result<()> {
+pub(crate) fn mount_point_in_place(folder: &Path, target: &Path) -> io::Result<()> {
     /// `FSCTL_SET_REPARSE_POINT`, not exported by the enabled `windows-sys` features.
     const FSCTL_SET_REPARSE_POINT: u32 = 0x0009_00A4;
     let file = OpenOptions::new()
