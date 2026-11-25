@@ -78,3 +78,12 @@ fn compiled_query_carries_the_name_filter() {
             .is_none()
     );
 }
+
+#[test]
+fn bare_exclude_word_drops_names_containing_it() {
+    let names = filter("name;!test");
+    assert!(names.matches("name.rs"));
+    assert!(!names.matches("name_test.rs"));
+    assert!(!filter("!test").matches("my-TESTS.txt"));
+    assert!(filter("!test").matches("main.rs"));
+}

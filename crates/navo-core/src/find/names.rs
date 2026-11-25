@@ -61,21 +61,24 @@ fn masks(mask: &str) -> Result<Rule, String> {
         .map(str::trim)
         .filter(|part| !part.is_empty())
     {
-        if let Some(rest) = part.strip_prefix('!') {
-            excludes.push(pattern(rest.trim())?);
-        } else if part.contains(['*', '?']) {
-            includes.push(pattern(part)?);
-        } else {
-            includes.push(pattern(&format!("*{part}*"))?);
+        match part.strip_prefix('!') {
+            Some(rest) => excludes.push(pattern(rest.trim())?),
+            None => includes.push(pattern(part)?),
         }
     }
     Ok(Rule::Masks { includes, excludes })
 }
 
-/// Compiles one mask part; an empty part (a bare `!`) is an error.
+/// Compiles one mask part; a bare word matches inside names (`*word*`) and an empty part (a bare
+/// `!`) is an error.
 fn pattern(part: &str) -> Result<Pattern, String> {
     if part.is_empty() {
         return Err("name: a `!` needs a mask".to_owned());
     }
-    Pattern::parse(part).map_err(|error| error.to_string())
+    let result = if part.contains(['*', '?']) {
+        Pattern::parse(part)
+    } else {
+        Pattern::parse(&format!("*{part}*"))
+    };
+    result.map_err(|error| error.to_string())
 }

@@ -19,12 +19,15 @@ pub enum DocsError {
 const LINE_ENDS: &[&str] = &[
     "w:p", "a:p", "text:p", "text:h", "p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "si",
 ];
+/// Self-closing tab and space elements that stand for one space.
+const SPACES: &[&str] = &["w:tab", "text:tab", "text:s"];
 /// Longest entity looked at, `&` to `;` included (`&#x10FFFF;`, `&#1114111;`).
 const ENTITY_MAX: usize = 11;
 
 /// Appends the text of the XML part `xml` to `out`, at most `limit` bytes.
 ///
-/// Text between tags is kept, CDATA verbatim; comments and processing instructions are skipped.
+/// Text between tags is kept, CDATA verbatim, tab and space elements as one space; comments and
+/// processing instructions are skipped.
 /// Any `<!` other than a comment or CDATA (a `<!DOCTYPE`) fails with [`DocsError::Dtd`]. On an
 /// error `out` may hold part of the text. Unterminated markup ends the text quietly.
 pub fn xml_text(xml: &[u8], out: &mut String, limit: usize) -> Result<(), DocsError> {
@@ -136,6 +139,8 @@ fn markup<'a>(rest: &'a str, sink: &mut Sink<'_>) -> Result<Option<&'a str>, Doc
     };
     if breaks {
         sink.push("\n")?;
+    } else if tag.ends_with('/') && SPACES.contains(&name) {
+        sink.push(" ")?;
     }
     Ok(Some(&rest[close + 1..]))
 }

@@ -80,3 +80,22 @@ fn unterminated_markup_stops_quietly() {
     assert_eq!(text("<t>a</t><unclosed attr=\"x"), "a");
     assert_eq!(text("a<!-- open"), "a");
 }
+
+#[test]
+fn tab_and_space_elements_read_as_spaces() {
+    assert_eq!(
+        text("<w:t>a</w:t><w:tab/><w:t>b</w:t><text:tab/>c<text:s/>d"),
+        "a b c d"
+    );
+}
+
+#[test]
+fn edge_markup_and_entities() {
+    assert_eq!(error(b"<!doctype html><p>x</p>", 100), DocsError::Dtd);
+    assert_eq!(text("a<![CDATA[open"), "a");
+    assert_eq!(text("<t>&#xD800;</t>"), "&#xD800;");
+    let mut out = String::new();
+    xml_text("<t>a\u{e9}</t>".as_bytes(), &mut out, 3).unwrap();
+    assert_eq!(out, "a\u{e9}");
+    assert_eq!(error("<t>a\u{e9}</t>".as_bytes(), 2), DocsError::TooLarge);
+}
