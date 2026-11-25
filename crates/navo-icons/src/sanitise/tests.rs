@@ -444,3 +444,100 @@ fn sanitise_keeps_a_style_sheet_clip_path() {
     let cleaned = normalise(svg.as_bytes(), false).unwrap();
     assert_eq!(cleaned.removed, [Removed::ClipPath]);
 }
+
+/// A pattern of `inside` squares filling `shapes` squares: through a `fill` attribute on each
+/// shape, on their group, or through a style sheet.
+fn pattern_fill(inside: usize, shapes: usize, via: &str) -> String {
+    let square = r#"<path d="M0 0h1v1z"/>"#;
+    let (sheet, group, shape) = match via {
+        "group" => ("", r#" fill="url(#p)""#, square.to_owned()),
+        "sheet" => (
+            "<style>.q { fill: url(#p) }</style>",
+            "",
+            square.replace("<path", r#"<path class="q""#),
+        ),
+        _ => ("", "", square.replace("<path", r#"<path fill="url(#p)""#)),
+    };
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{sheet}<defs><pattern id="p" width="1" height="1">{}</pattern></defs><g{group}>{}</g></svg>"#,
+        square.repeat(inside),
+        shape.repeat(shapes)
+    )
+}
+
+/// A gradient of `stops` stops that a second gradient inherits through `href`; `shapes`
+/// squares fill with the second one.
+fn gradient_fill(stops: usize, shapes: usize) -> String {
+    format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><linearGradient id="g0">{}</linearGradient><linearGradient id="g" href="#g0"/></defs>{}</svg>"##,
+        "<stop/>".repeat(stops),
+        r#"<path fill="url(#g)" d="M0 0h1v1z"/>"#.repeat(shapes)
+    )
+}
+
+#[test]
+fn sanitise_refuses_paint_server_bombs() {
+    for via in ["shape", "group", "sheet"] {
+        let bomb = pattern_fill(600, 100, via);
+        assert_eq!(
+            normalise(bomb.as_bytes(), false),
+            Err(SvgError::TooComplex),
+            "{via}"
+        );
+    }
+    let bomb = gradient_fill(3_000, 100);
+    assert_eq!(normalise(bomb.as_bytes(), false), Err(SvgError::TooComplex));
+    let cycle = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><pattern id="a" href="#b"/><pattern id="b" href="#a"/><path fill="url(#a)" d="M0 0h1v1z"/></svg>"##;
+    assert_eq!(
+        normalise(cycle.as_bytes(), false),
+        Err(SvgError::TooComplex)
+    );
+}
+
+/// `holders` elements `<tag id="a"/>`, then `names` references to `#a` placed by `naming`.
+fn duplicate_ids(holders: usize, tag: &str, naming: &str) -> String {
+    let defs = format!(r#"<{tag} id="a"/>"#).repeat(holders);
+    let refs = "url(#a)".repeat(600);
+    let body = match naming {
+        "sheet" => format!("<style>{refs}</style>"),
+        "use" => r##"<use href="#a"/>"##.repeat(600),
+        _ => format!(r#"<g x="{refs}"/>"#),
+    };
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs>{defs}</defs>{body}<path d="M0 0h1v1z"/></svg>"#
+    )
+}
+
+#[test]
+fn sanitise_weighs_a_duplicate_id_once_by_its_last_holder() {
+    for (tag, naming) in [("mask", "attribute"), ("mask", "sheet"), ("g", "use")] {
+        let svg = duplicate_ids(600, tag, naming);
+        let cleaned = normalise(svg.as_bytes(), false);
+        assert!(cleaned.is_ok(), "{tag} {naming}: {cleaned:?}");
+    }
+    let last_heavy = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><g id="a"/><path id="a" d="{}"/></defs>{}</svg>"##,
+        zigzag(3_000),
+        r##"<use href="#a"/>"##.repeat(100)
+    );
+    assert_eq!(
+        normalise(last_heavy.as_bytes(), false),
+        Err(SvgError::TooComplex)
+    );
+}
+
+#[test]
+fn sanitise_keeps_a_typical_icon_with_paint_and_effects() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#36f"/><stop offset="1" stop-color="#0c9"/></linearGradient>
+<clipPath id="c"><rect width="24" height="24" rx="4"/></clipPath><mask id="m"><rect width="24" height="24" fill="#fff"/></mask>
+<filter id="f"><feGaussianBlur stdDeviation="1"/></filter><style>.b { fill: url(#g) }</style></defs>
+<g clip-path="url(#c)" mask="url(#m)"><path fill="url(#g)" d="M2 2h20v20H2z"/><path class="b" d="M4 4h8v8H4z"/></g>
+<g fill="url(#g)" filter="url(#f)"><circle cx="12" cy="12" r="4"/><path stroke="url(#g)" d="M6 18l12-12"/></g></svg>"##;
+    let cleaned = normalise(svg.as_bytes(), false).unwrap();
+    assert!(
+        out(&cleaned).matches("<path").count() >= 4,
+        "{}",
+        out(&cleaned)
+    );
+}

@@ -1,5 +1,6 @@
 //! The expansion pre-pass (BB-D9 step 1): before usvg copies anything, weighs what `<use>`,
-//! markers, masks, clip paths and filters would copy and measures nesting, without recursion.
+//! markers, masks, clip paths, filters and paint servers would copy and measures nesting,
+//! without recursion.
 
 use std::collections::HashMap;
 
@@ -35,7 +36,8 @@ enum Copies {
     PerVertex,
 }
 
-type Ids<'a, 'input> = HashMap<&'a str, Vec<Node<'a, 'input>>>;
+/// Each id mapped to its last holder, as usvg resolves links.
+type Ids<'a, 'input> = HashMap<&'a str, Node<'a, 'input>>;
 
 /// Refuses `document` when it expands past `MAX_WEIGHT` or nests past `MAX_DEPTH`; a reference
 /// cycle is refused as too complex.
@@ -43,7 +45,7 @@ pub(super) fn check(document: &Document<'_>) -> Result<(), SvgError> {
     let mut ids: Ids<'_, '_> = HashMap::new();
     for node in document.descendants().filter(Node::is_element) {
         if let Some(id) = node.attribute("id") {
-            ids.entry(id).or_default().push(node);
+            ids.insert(id, node);
         }
     }
     let mut states = vec![State::New; document.descendants().count()];
@@ -74,8 +76,9 @@ pub(super) fn check(document: &Document<'_>) -> Result<(), SvgError> {
     shared(document, &ids, &states, root)
 }
 
-/// Adds the resources a style sheet or an inherited marker may give every element: each one may
-/// nest in the next, so their cost compounds once per resource.
+/// Adds the resources a style sheet or an inherited marker or paint may give every element: each
+/// one may nest in the next, so their cost compounds once per resource. Gradient stops hold no
+/// elements, so a shape takes at most a fill and a stroke copy of the heaviest gradient.
 fn shared(
     document: &Document<'_>,
     ids: &Ids<'_, '_>,
@@ -85,9 +88,13 @@ fn shared(
     let mut resources = shared_resources(document, ids);
     resources.sort_by_key(|node| node.id().get());
     resources.dedup_by_key(|node| node.id());
-    let (mut base, mut factor, mut depth) = (0_u64, 0_u64, root.depth);
+    let (mut base, mut factor, mut depth, mut gradient) = (0_u64, 0_u64, root.depth, 0_u64);
     for resource in &resources {
         let cost = done(states, *resource)?;
+        if is_gradient(*resource) {
+            gradient = gradient.max(cost.weight);
+            continue;
+        }
         base = base.saturating_add(cost.weight);
         factor = factor.saturating_add(per_copy(cost));
         depth = depth.saturating_add(cost.depth);
@@ -95,6 +102,7 @@ fn shared(
     if depth > MAX_DEPTH {
         return Err(SvgError::TooDeep);
     }
+    base = base.saturating_add(gradient.saturating_mul(2));
     let mut each = 0_u64;
     for _ in &resources {
         let next = base.saturating_add(factor.saturating_mul(each));
@@ -113,8 +121,8 @@ fn shared(
     Ok(())
 }
 
-/// Resources named by a style sheet, and markers named by an element that is not a shape (its
-/// shapes inherit them); a style sheet may apply them to any element.
+/// Resources named by a style sheet, and markers and paint servers named by an element that is
+/// not a shape (its shapes inherit them); a style sheet may apply them to any element.
 fn shared_resources<'a, 'input>(
     document: &'a Document<'input>,
     ids: &Ids<'a, 'input>,
@@ -130,12 +138,9 @@ fn shared_resources<'a, 'input>(
             .attributes()
             .map(|attribute| attribute.value())
             .chain(texts);
-        let targets = values
-            .flat_map(urls)
-            .flat_map(|id| ids.get(id).into_iter().flatten().copied());
+        let targets = values.flat_map(|value| targets(value, ids));
         found.extend(targets.filter(|target| {
-            (sheet && is_resource(*target))
-                || (target.tag_name().name() == "marker" && !is_shape(node))
+            (sheet && is_resource(*target)) || (is_inherited(*target) && !is_shape(node))
         }));
     }
     found
@@ -179,7 +184,7 @@ fn expand(node: Node<'_, '_>, ids: &Ids<'_, '_>, states: &[State]) -> Result<Cos
 }
 
 /// The element children of `node`, its `href` target and the masks, clip paths, filters and
-/// (on a shape) markers its attributes name; a duplicate id links to every holder.
+/// (on a shape) markers and paint servers its attributes name, each once per attribute.
 fn links<'a, 'input>(
     node: Node<'a, 'input>,
     ids: &Ids<'a, 'input>,
@@ -189,7 +194,6 @@ fn links<'a, 'input>(
         .filter(Node::is_element)
         .map(|child| (child, Copies::Once))
         .collect();
-    let target = |id: &str| ids.get(id).into_iter().flatten().copied();
     for attribute in node.attributes() {
         if attribute.name() == "href" && follows_href(node) {
             let id = attribute
@@ -197,13 +201,14 @@ fn links<'a, 'input>(
                 .trim()
                 .strip_prefix('#')
                 .unwrap_or_default();
-            found.extend(target(id).map(|link| (link, Copies::Once)));
+            found.extend(ids.get(id).map(|link| (*link, Copies::Once)));
             continue;
         }
-        for link in urls(attribute.value()).flat_map(target) {
+        for link in targets(attribute.value(), ids) {
             match (link.tag_name().name(), is_shape(node)) {
                 ("marker", true) => found.push((link, Copies::PerVertex)),
                 ("mask" | "clipPath" | "filter", _) => found.push((link, Copies::Once)),
+                (_, true) if is_paint(link) => found.push((link, Copies::Once)),
                 _ => {}
             }
         }
@@ -226,12 +231,23 @@ fn follows_href(node: Node<'_, '_>) -> bool {
     )
 }
 
-/// Resources usvg may convert again for every element that names them.
+/// Resources usvg may convert or copy again for every element that names them.
 fn is_resource(node: Node<'_, '_>) -> bool {
-    matches!(
-        node.tag_name().name(),
-        "marker" | "mask" | "clipPath" | "filter"
-    )
+    is_inherited(node) || matches!(node.tag_name().name(), "mask" | "clipPath" | "filter")
+}
+
+/// Resources a group passes on to every shape inside it: markers and paint servers.
+fn is_inherited(node: Node<'_, '_>) -> bool {
+    node.tag_name().name() == "marker" || is_paint(node)
+}
+
+/// Paint servers, which usvg copies (pattern content, gradient stops) for every shape they paint.
+fn is_paint(node: Node<'_, '_>) -> bool {
+    node.tag_name().name() == "pattern" || is_gradient(node)
+}
+
+fn is_gradient(node: Node<'_, '_>) -> bool {
+    matches!(node.tag_name().name(), "linearGradient" | "radialGradient")
 }
 
 fn is_shape(node: Node<'_, '_>) -> bool {
@@ -264,6 +280,14 @@ fn numbers(node: Node<'_, '_>) -> u64 {
         "line" => 2,
         _ => 0,
     }
+}
+
+/// The last holders of the ids named by `url(#id)` in `value`, each once.
+fn targets<'a, 'input>(value: &str, ids: &Ids<'a, 'input>) -> Vec<Node<'a, 'input>> {
+    let mut found: Vec<_> = urls(value).filter_map(|id| ids.get(id).copied()).collect();
+    found.sort_by_key(|node| node.id().get());
+    found.dedup_by_key(|node| node.id());
+    found
 }
 
 /// The ids named by `url(#id)` in `value`.
