@@ -267,3 +267,22 @@ fn search_finds_the_help_page_by_updates() {
         );
     }
 }
+
+#[gpui_kit::test]
+fn downloading_renders_progress_bar_and_failed_offers_retry_and_manual_download(
+    cx: &mut TestAppContext,
+) {
+    let (downloading, _, _) = hooks(UpdateView::Downloading {
+        version: "0.9.0".into(),
+        percent: 42,
+    });
+    let rig = rig_updates(cx, downloading);
+    open_help(cx, &rig);
+    assert!(has(cx, &rig, "settings-update-progress"));
+
+    let (failed, _, _) = hooks(UpdateView::Failed(UpdateFailure::Offline));
+    let rig = rig_updates(cx, failed);
+    open_help(cx, &rig);
+    assert!(has(cx, &rig, "settings-update-check"));
+    assert!(has(cx, &rig, "settings-update-installer"));
+}
