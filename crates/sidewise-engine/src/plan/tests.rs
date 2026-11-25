@@ -493,6 +493,24 @@ fn a_reserved_windows_name_is_refused() {
     assert_eq!(refusal, Refusal::NameUnwritable(NameProblem::Reserved));
 }
 
+/// Port 0 and superscript ports are device names; longer or non-digit ports are not.
+#[test]
+fn port_zero_and_superscript_ports_are_dos_names() {
+    for name in [
+        "COM0",
+        "lpt0.txt",
+        "Com0 .x",
+        "COM¹",
+        "lpt³.txt",
+        "LPT² .log",
+    ] {
+        assert!(super::is_dos_name(name), "{name:?}");
+    }
+    for name in ["COM10", "LPT00", "COMA", "COM⁴"] {
+        assert!(!super::is_dos_name(name), "{name:?}");
+    }
+}
+
 #[test]
 fn a_git_source_keeps_its_provider() {
     let git = ProviderId::new("git").expect("provider id");
