@@ -7,7 +7,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use super::abort_win::{Abort, AbortStore, ThreadAbort};
+use super::abort_win::{Abort, AbortFactory, AbortStore, thread_abort};
 use super::{JobId, Limits, OwnerId, Priority, Scheduler, VolumeId, VolumeKind};
 use crate::drive_class;
 use crate::provider::CancelToken;
@@ -18,6 +18,9 @@ pub type Classifier = Arc<dyn Fn(&VolumeId) -> VolumeKind + Send + Sync>;
 /// Longest time `close` waits for workers in total; a worker stuck in network I/O past it is
 /// detached so app exit never hangs on a dead share (AD16).
 const CLOSE_JOIN_CAP: Duration = Duration::from_secs(2);
+
+/// Interval between abort re-sends to a cancelled network job that is still running (AD16b).
+const ABORT_RESEND: Duration = Duration::from_millis(20);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobSlot {
@@ -42,6 +45,7 @@ struct Shared {
     delivery: Mutex<()>,
     idle: Condvar,
     classifier: Classifier,
+    abort_handle: AbortFactory,
 }
 
 pub struct IoQueue {
@@ -93,9 +97,9 @@ impl Shared {
         }
     }
 
-    fn cancel_owner(&self, owner: OwnerId) {
+    fn cancel_owner(self: &Arc<Self>, owner: OwnerId) {
         let delivery = self.delivery_gate();
-        let dropped: Vec<Job> = {
+        let (dropped, aborted): (Vec<Job>, _) = {
             let mut state = self.lock();
             let cancelled = state.scheduler.cancel_owner(owner);
             cancelled
@@ -103,16 +107,45 @@ impl Shared {
                 .iter()
                 .filter_map(|job| state.tokens.get(job))
                 .for_each(CancelToken::cancel);
-            state.aborts.abort(&cancelled.running);
-            cancelled
+            let aborted = state.aborts.abort(&cancelled.running) > 0;
+            let dropped = cancelled
                 .queued
                 .iter()
                 .filter_map(|job| state.jobs.remove(job))
-                .collect()
+                .collect();
+            (dropped, aborted.then_some(cancelled.running))
         };
         drop(delivery);
         drop(dropped);
+        if let Some(running) = aborted {
+            spawn_abort_resend(self, running);
+        }
     }
+}
+
+/// Re-sends the abort to the cancelled `jobs` every `ABORT_RESEND` until none of them holds a
+/// handle or `CLOSE_JOIN_CAP` passes. A cancel that lands before a job enters its blocking call
+/// finds no pending I/O, so the first abort is a no-op (AD16b). Handles are keyed by job and
+/// removed under the state lock before a worker takes its next job, so a re-send never reaches
+/// another job's I/O.
+fn spawn_abort_resend(shared: &Arc<Shared>, jobs: Vec<JobId>) {
+    let shared = Arc::downgrade(shared);
+    let resend = move || {
+        let deadline = Instant::now() + CLOSE_JOIN_CAP;
+        while Instant::now() < deadline {
+            thread::sleep(ABORT_RESEND);
+            let Some(shared) = shared.upgrade() else {
+                return;
+            };
+            if shared.lock().aborts.abort(&jobs) == 0 {
+                return;
+            }
+        }
+    };
+    // If no thread can start, the first abort stands alone, as before AD16b.
+    let _ = thread::Builder::new()
+        .name("navo-io-abort".to_owned())
+        .spawn(resend);
 }
 
 fn spawn_workers(shared: &Arc<Shared>, state: &mut State, volume: &VolumeId) {
@@ -189,7 +222,9 @@ fn register_abort(shared: &Shared, volume: &VolumeId, id: JobId, token: &CancelT
     let State {
         scheduler, aborts, ..
     } = &mut *state;
-    store_network_abort(aborts, scheduler.kind(volume), id, ThreadAbort::current);
+    store_network_abort(aborts, scheduler.kind(volume), id, || {
+        (shared.abort_handle)()
+    });
     true
 }
 
@@ -222,6 +257,16 @@ impl IoQueue {
 
     #[must_use]
     pub fn with(limits: Limits, classifier: Classifier) -> Self {
+        Self::with_abort(limits, classifier, Arc::new(thread_abort))
+    }
+
+    /// Like `with`, but network jobs store the handle `abort_handle` opens, so tests can inject
+    /// a fake `Abort`.
+    pub(super) fn with_abort(
+        limits: Limits,
+        classifier: Classifier,
+        abort_handle: AbortFactory,
+    ) -> Self {
         Self {
             shared: Arc::new(Shared {
                 state: Mutex::new(State {
@@ -231,6 +276,7 @@ impl IoQueue {
                 delivery: Mutex::new(()),
                 idle: Condvar::new(),
                 classifier,
+                abort_handle,
             }),
         }
     }

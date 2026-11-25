@@ -145,3 +145,155 @@ fn a_job_on_an_unknown_volume_stores_a_handle_that_cancel_reaches() {
     store.abort(&scheduler.cancel_owner(A).running);
     assert_eq!(log.lock().unwrap()[0], format!("abort {}", job.0));
 }
+
+/// One fake synchronous call per handle: `abort` frees it only while it is pending, the way
+/// `CancelSynchronousIo` fails harmlessly on a thread with no call in flight (AD16b).
+#[derive(Default)]
+struct FakeIo {
+    calls: Mutex<Vec<FakeCall>>,
+    wake: std::sync::Condvar,
+}
+
+#[derive(Default)]
+struct FakeCall {
+    pending: bool,
+    freed: bool,
+    aborts: usize,
+}
+
+/// The abort handle of call `index` on a shared `FakeIo`.
+struct FakeHandle {
+    io: Arc<FakeIo>,
+    index: usize,
+}
+
+impl Abort for FakeHandle {
+    fn abort(&self) {
+        let mut calls = self.io.calls.lock().unwrap();
+        let call = &mut calls[self.index];
+        call.aborts += 1;
+        if call.pending {
+            call.freed = true;
+            self.io.wake.notify_all();
+        }
+    }
+}
+
+impl FakeIo {
+    /// Blocks call `index` until an abort frees it or `limit` passes; true when aborted.
+    fn block(&self, index: usize, limit: std::time::Duration) -> bool {
+        let mut calls = self.calls.lock().unwrap();
+        calls[index].pending = true;
+        let (mut calls, _) = self
+            .wake
+            .wait_timeout_while(calls, limit, |calls| !calls[index].freed)
+            .unwrap();
+        calls[index].pending = false;
+        calls[index].freed
+    }
+
+    fn aborts(&self, index: usize) -> usize {
+        self.calls.lock().unwrap()[index].aborts
+    }
+}
+
+/// A one-worker network queue whose jobs store `FakeHandle`s, numbered in start order.
+fn fake_queue(io: &Arc<FakeIo>) -> IoQueue {
+    let limits = Limits {
+        network: 1,
+        ..Limits::LISTING
+    };
+    let factory_io = Arc::clone(io);
+    let queue = IoQueue::with_abort(
+        limits,
+        Arc::new(|_| VolumeKind::Network),
+        Arc::new(move || {
+            let mut calls = factory_io.calls.lock().unwrap();
+            calls.push(FakeCall::default());
+            let handle = FakeHandle {
+                io: Arc::clone(&factory_io),
+                index: calls.len() - 1,
+            };
+            Some(Box::new(handle) as crate::io_queue::abort_win::BoxedAbort)
+        }),
+    );
+    queue.set_volume(&vol("net"), VolumeKind::Network);
+    queue
+}
+
+fn net_slot(owner: OwnerId) -> JobSlot {
+    JobSlot {
+        volume: vol("net"),
+        priority: Priority::Visible,
+        owner,
+    }
+}
+
+/// Submits a job that reports its start, waits for `go`, then enters fake call `index`.
+fn blocking_job(
+    queue: &IoQueue,
+    io: &Arc<FakeIo>,
+    owner: OwnerId,
+    index: usize,
+) -> (
+    std::sync::mpsc::Receiver<()>,
+    std::sync::mpsc::Sender<()>,
+    std::sync::mpsc::Receiver<bool>,
+) {
+    use std::sync::mpsc;
+    let (started, wait_start) = mpsc::channel();
+    let (go, wait_go) = mpsc::channel::<()>();
+    let (done, wait_done) = mpsc::channel();
+    let io = Arc::clone(io);
+    queue.submit(
+        net_slot(owner),
+        Box::new(move |_| {
+            started.send(()).unwrap();
+            let _ = wait_go.recv();
+            done.send(io.block(index, std::time::Duration::from_secs(2)))
+                .unwrap();
+        }),
+    );
+    (wait_start, go, wait_done)
+}
+
+/// AD16b: a cancel that lands after the job registered its handle but before it entered its
+/// blocking call is re-sent, so the call still ends well under a second.
+#[test]
+fn a_cancel_before_the_blocking_call_is_resent_until_the_job_ends() {
+    use std::time::{Duration, Instant};
+    let io = Arc::new(FakeIo::default());
+    let queue = fake_queue(&io);
+    let (started, go, done) = blocking_job(&queue, &io, A, 0);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    queue.cancel_owner(A);
+    assert_eq!(io.aborts(0), 1, "the first abort found no pending call");
+    let entered = Instant::now();
+    go.send(()).unwrap();
+    let aborted = done.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(aborted, "a re-sent abort freed the blocking call");
+    assert!(entered.elapsed() < Duration::from_millis(500));
+    assert!(io.aborts(0) >= 2);
+}
+
+/// AD16b: the re-send stops once the cancelled job ends and never reaches the next job that
+/// worker runs.
+#[test]
+fn the_abort_resend_stops_at_job_end_and_spares_the_next_job() {
+    use std::time::Duration;
+    let io = Arc::new(FakeIo::default());
+    let queue = fake_queue(&io);
+    let (started, go, done) = blocking_job(&queue, &io, A, 0);
+    let (next_started, next_go, next_done) = blocking_job(&queue, &io, B, 1);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    queue.cancel_owner(A);
+    go.send(()).unwrap();
+    assert!(done.recv_timeout(Duration::from_secs(5)).unwrap());
+    next_started.recv_timeout(Duration::from_secs(5)).unwrap();
+    let first_aborts = io.aborts(0);
+    next_go.send(()).unwrap();
+    // The next job's call runs its full 2 s: no abort may free it.
+    assert!(!next_done.recv_timeout(Duration::from_secs(5)).unwrap());
+    assert_eq!(io.aborts(1), 0, "the next job was never aborted");
+    assert_eq!(io.aborts(0), first_aborts, "re-sends stopped at job end");
+}

@@ -9,10 +9,11 @@
 )]
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::JobId;
 
-pub(super) use platform::ThreadAbort;
+use platform::ThreadAbort;
 
 /// Interrupts the synchronous I/O of one thread.
 pub(super) trait Abort {
@@ -20,9 +21,26 @@ pub(super) trait Abort {
     fn abort(&self);
 }
 
+/// A type-erased abort handle, so tests can store a fake in the real queue.
+pub(super) type BoxedAbort = Box<dyn Abort + Send>;
+
+/// Opens the abort handle of the calling worker thread; `None` stores nothing.
+pub(super) type AbortFactory = Arc<dyn Fn() -> Option<BoxedAbort> + Send + Sync>;
+
+impl<A: Abort + ?Sized> Abort for Box<A> {
+    fn abort(&self) {
+        (**self).abort();
+    }
+}
+
+/// The production factory: a handle to the calling thread where the OS offers one.
+pub(super) fn thread_abort() -> Option<BoxedAbort> {
+    ThreadAbort::current().map(|handle| Box::new(handle) as BoxedAbort)
+}
+
 /// Abort handles of running network jobs, keyed by job. Every call happens under the queue's
 /// state lock, so a handle is removed before its thread can move on to another job.
-pub(super) struct AbortStore<H: Abort = ThreadAbort> {
+pub(super) struct AbortStore<H: Abort = BoxedAbort> {
     handles: HashMap<JobId, H>,
 }
 
@@ -37,11 +55,13 @@ impl<H: Abort> AbortStore<H> {
         self.handles.remove(&job);
     }
 
-    /// Aborts the stored handles of `jobs`; jobs with no handle (not on a network) are skipped.
-    pub(super) fn abort(&self, jobs: &[JobId]) {
+    /// Aborts the stored handles of `jobs` and returns how many it aborted; jobs with no handle
+    /// (not on a network, or already ended) are skipped.
+    pub(super) fn abort(&self, jobs: &[JobId]) -> usize {
         jobs.iter()
             .filter_map(|job| self.handles.get(job))
-            .for_each(Abort::abort);
+            .inspect(|handle| handle.abort())
+            .count()
     }
 
     /// Aborts every stored handle, for shutdown.
