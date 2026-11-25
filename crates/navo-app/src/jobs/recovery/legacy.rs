@@ -2,7 +2,7 @@ use super::super::{SharedJournal, held, identity, lock};
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan};
 use navo_fs::{
     CancelToken, FileIdentity, FileStamp, HeldFile, JobContext, JobLog, JobOutcome, Journaled,
-    KeptCopy, ProviderOps, StepOutcome, clean_up, roll_back,
+    KeptCopy, ProviderOps, StepOutcome, clean_up, roll_back, unmarked_removals,
 };
 use navo_store::{JobId, JobState, JournalError, StepState, UnfinishedJob};
 
@@ -104,7 +104,7 @@ fn roll_back_job(
     let settled = super::moves::settle_pending((&plan, job), &held.files, (&log, ops));
     done.extend(&settled.completed);
     done.sort_unstable();
-    let pending = pending_steps(job);
+    let unmarked = unmarked_removals(&plan, pending_steps(job));
     let outcome = roll_back(
         &Journaled {
             plan: &plan,
@@ -113,7 +113,7 @@ fn roll_back_job(
             placed: &held.placed,
             held_unreadable: held.unreadable > 0,
             unsure: unsure_step(plan.kind, job),
-            pending: Some(&pending),
+            unmarked_removals: Some(unmarked),
         },
         &mut JobContext {
             ops,
@@ -140,12 +140,11 @@ fn roll_back_job(
 }
 
 /// The steps whose journal row is still pending: they had not finished when the job stopped.
-fn pending_steps(job: &UnfinishedJob) -> Vec<u32> {
+fn pending_steps(job: &UnfinishedJob) -> impl Iterator<Item = u32> + '_ {
     job.steps
         .iter()
         .filter(|step| step.state == StepState::Pending)
         .map(|step| step.seq)
-        .collect()
 }
 
 fn unsure_step(kind: OpKind, job: &UnfinishedJob) -> Option<u32> {

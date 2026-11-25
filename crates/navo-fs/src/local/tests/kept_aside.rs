@@ -45,7 +45,7 @@ impl Overwrite {
             placed: &[],
             held_unreadable: false,
             unsure: None,
-            pending: None,
+            unmarked_removals: None,
         };
         roll_back(
             &job,

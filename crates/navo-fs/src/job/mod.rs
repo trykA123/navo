@@ -405,9 +405,9 @@ pub struct Journaled<'a> {
     pub placed: &'a [PlacedFile],
     pub held_unreadable: bool,
     pub unsure: Option<u32>,
-    /// The steps with no journal row yet (still pending); `None` when unknown. A move's removal
-    /// with a pending copy, folder or rename step before it never started (D165).
-    pub pending: Option<&'a [u32]>,
+    /// The seqs whose removal may have run without its done row, from [`unmarked_removals`];
+    /// `None` when unknown, so every move copy under a no-ID proof compares bytes (D165).
+    pub unmarked_removals: Option<std::ops::Range<u32>>,
 }
 
 #[must_use]
@@ -418,6 +418,15 @@ pub fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
 /// Undoes a finished save: restores the held old file only while the target is the exact placed file.
 pub fn undo_write(held: &HeldFile, ctx: &mut JobContext<'_>) -> Result<StepOutcome, FsError> {
     aside::undo_write(held, ctx)
+}
+
+/// The seqs of `plan` whose removal may have run without its done row, given the steps whose
+/// journal row is still pending; worked out once per rollback for [`Journaled`] (D165).
+pub fn unmarked_removals(
+    plan: &OperationPlan,
+    pending: impl IntoIterator<Item = u32>,
+) -> std::ops::Range<u32> {
+    undo::unmarked_removals(plan, pending)
 }
 
 pub fn release_held(held: &[HeldFile], ops: &dyn ProviderOps) -> Result<(), FsError> {

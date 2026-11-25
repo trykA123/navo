@@ -431,3 +431,36 @@ fn a_proof_with_a_file_id_reads_no_content_before_removing_the_copy() {
         "a file ID needs no content compare"
     );
 }
+
+/// Files in the scale test: enough that a per-copy scan of the plan would show.
+const MANY: usize = 1_000;
+
+#[test]
+fn a_copy_phase_crash_over_many_no_id_files_checks_each_copy_without_scanning_the_plan() {
+    let names: Vec<String> = (0..MANY).map(|at| format!("src/f{at}.txt")).collect();
+    let paths: Vec<&str> = names.iter().map(String::as_str).collect();
+    let (fs, plan, mut harness) = proved_without_id(&paths);
+    let in_flight = copy_seq(&fs, &plan, &format!("dst/f{}.txt", MANY - 1));
+    let done: Vec<u32> = done_before_removal(&plan)
+        .into_iter()
+        .filter(|seq| *seq != in_flight)
+        .collect();
+    harness.pending = Some(pending_besides(&plan, &done));
+    let reads = |fs: &FakeFs| -> u32 {
+        paths
+            .iter()
+            .map(|path| {
+                let copy = path.replacen("src/", "dst/", 1);
+                fs.calls(path, FakeOp::Read) + fs.calls(&copy, FakeOp::Read)
+            })
+            .sum()
+    };
+    let before = reads(&fs);
+    super::super::undo::STEPS_SCANNED.with(|count| count.set(0));
+    let log = rolled_back(&fs, &plan, &harness, &done);
+    let scanned = super::super::undo::STEPS_SCANNED.with(std::cell::Cell::get);
+    assert_eq!(scanned, 0, "the D165 check scanned plan steps per copy");
+    assert_eq!(reads(&fs), before, "a copy-phase crash compares no bytes");
+    assert!(log.copies.is_empty(), "{:?}", log.copies);
+    assert!(!exists(&fs, "dst/f0.txt"), "the duplicate copy stayed");
+}

@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use navo_core::{FsError, FsErrorKind, Location, OpKind, OperationPlan, Step};
 
 use super::aside::presence;
@@ -275,21 +277,51 @@ fn only_copy(
     Ok(!proved)
 }
 
-/// True when this job's removal of `source` may have run without its done row (D165). A move
-/// starts a removal only after every earlier copy, folder or rename step wrote its row, so a
-/// pending one of those proves the removal never started. Pending removals prove nothing: a
-/// failed removal's row is best effort, and a move goes on past a kept source.
+/// True when this job's removal of `source` may have run without its done row (D165): the plan
+/// removes `source` within `job.unmarked_removals`. Unknown pending state counts as maybe.
 fn removal_may_have_run(job: &Journaled<'_>, source: &Location) -> bool {
-    let Some(pending) = job.pending else {
+    let Some(unmarked) = &job.unmarked_removals else {
         return true;
     };
-    let steps = || (0_u32..).zip(&job.plan.steps);
-    let never_started = steps()
-        .find(|(seq, step)| pending.contains(seq) && !is_removal(step))
-        .map_or(u32::MAX, |(seq, _)| seq);
-    steps().take_while(|(seq, _)| *seq < never_started).any(
-        |(_, step)| matches!(step, Step::RemoveFile { location } if location.same_place(source)),
-    )
+    let end = (unmarked.end as usize).min(job.plan.steps.len());
+    let window = job.plan.steps.get(unmarked.start as usize..end);
+    window.unwrap_or_default().iter().any(|step| {
+        scanned();
+        matches!(step, Step::RemoveFile { location } if location.same_place(source))
+    })
+}
+
+/// The seqs whose removal may have run without a done row (D165), worked out once per rollback
+/// from the steps still pending. A move starts a removal only after every earlier copy, folder or
+/// rename step wrote its row, so the window ends at the first pending one of those. Pending
+/// removals do not end it: a failed removal's row is best effort, and a move goes on past a kept
+/// source. Empty when no removal can have started.
+pub(super) fn unmarked_removals(
+    plan: &OperationPlan,
+    pending: impl IntoIterator<Item = u32>,
+) -> Range<u32> {
+    let removes = |seq: u32| plan.steps.get(seq as usize).map(is_removal);
+    let first = (0_u32..)
+        .zip(&plan.steps)
+        .find(|(_, step)| is_removal(step));
+    let unstarted = pending
+        .into_iter()
+        .filter(|seq| removes(*seq) == Some(false))
+        .min();
+    first.map_or(u32::MAX, |(seq, _)| seq)..unstarted.unwrap_or(u32::MAX)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Plan steps the D165 check scanned on this thread, so a test can prove a copy-phase crash
+    /// checks each copy without a scan.
+    pub(super) static STEPS_SCANNED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one scanned step in test builds; does nothing otherwise.
+fn scanned() {
+    #[cfg(test)]
+    STEPS_SCANNED.with(|count| count.set(count.get() + 1));
 }
 
 /// True when `source` and `copy` hold the same bytes (BLAKE3, streamed). A proof without a file

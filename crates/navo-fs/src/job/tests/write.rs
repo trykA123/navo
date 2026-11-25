@@ -34,7 +34,7 @@ fn recover(
         placed: &[],
         held_unreadable: false,
         unsure,
-        pending: None,
+        unmarked_removals: None,
     };
     let outcome = harness.with(fs, |ctx| roll_back(&job, ctx));
     (outcome, harness)
@@ -117,7 +117,7 @@ fn recovery_waits_for_unreadable_held_rows_of_a_write() {
         placed: &[],
         held_unreadable: true,
         unsure: None,
-        pending: None,
+        unmarked_removals: None,
     };
     assert_eq!(
         harness.with(&fs, |ctx| roll_back(&job, ctx)),

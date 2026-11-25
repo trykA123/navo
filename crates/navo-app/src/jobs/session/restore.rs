@@ -171,7 +171,7 @@ impl HeldUndo {
                 placed: &self.held.placed,
                 held_unreadable: false,
                 unsure: None,
-                pending: None,
+                unmarked_removals: None,
             },
             ctx,
         );

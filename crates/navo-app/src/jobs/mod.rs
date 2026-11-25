@@ -400,6 +400,9 @@ mod held_tests;
 mod move_over_tests;
 
 #[cfg(test)]
+mod move_rollback_tests;
+
+#[cfg(test)]
 mod move_undo_tests;
 
 #[cfg(test)]

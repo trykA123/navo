@@ -236,7 +236,7 @@ impl Harness {
             placed: &placed,
             held_unreadable: false,
             unsure: None,
-            pending: pending.as_deref(),
+            unmarked_removals: pending.map(|pending| unmarked_removals(plan, pending)),
         };
         let outcome = self.with(ops, |ctx| roll_back(&job, ctx));
         self.held = held;
