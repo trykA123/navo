@@ -69,6 +69,7 @@ pub struct FakeFs {
     volumes: Mutex<HashMap<String, Option<u64>>>,
     mounts: Mutex<HashMap<String, Option<u64>>>,
     without_ids: Mutex<Vec<String>>,
+    path_details: Mutex<Option<(i64, u32)>>,
     aliases: Mutex<Vec<(String, String)>>,
     space: Mutex<HashMap<String, Option<u64>>>,
     sizes: Mutex<HashMap<u64, SizeMetadata>>,
@@ -110,6 +111,7 @@ impl FakeFs {
             volumes: Mutex::new(HashMap::new()),
             mounts: Mutex::new(HashMap::new()),
             without_ids: Mutex::new(Vec::new()),
+            path_details: Mutex::new(None),
             aliases: Mutex::new(Vec::new()),
             space: Mutex::new(HashMap::new()),
             sizes: Mutex::new(HashMap::new()),
@@ -240,6 +242,12 @@ impl FakeFs {
     /// volume serial still reads.
     pub fn set_without_ids(&self, path: &str) {
         lock(&self.without_ids).push(normalize(path).trim_end_matches('/').to_owned());
+    }
+
+    /// Makes every by-path source read report this creation time and these attributes, like the
+    /// Windows read, so a proof without a file ID can match.
+    pub fn set_path_details(&self, created_ms: i64, attributes: u32) {
+        *lock(&self.path_details) = Some((created_ms, attributes));
     }
 
     /// Makes `path` and everything below it resolve to `real` in `canonical`, like a SUBST drive

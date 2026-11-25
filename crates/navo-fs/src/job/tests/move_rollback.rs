@@ -261,3 +261,85 @@ fn the_newest_proof_row_for_a_copy_decides_its_rollback() {
         );
     }
 }
+
+/// A copied-only move whose proof has no file ID yet matches the source by path on size, times
+/// and attributes, as the Windows read of a FAT volume does.
+fn proved_without_id() -> (FakeFs, OperationPlan, Harness) {
+    let (fs, plan) = moving();
+    let mut harness = copied_only(&fs, &plan, Harness::default());
+    fs.set_without_ids("src");
+    fs.set_path_details(500, 0x20);
+    for file in &mut harness.log.placed {
+        let proof = file
+            .source
+            .as_mut()
+            .expect("a move journals its source proof");
+        proof.identity = None;
+        proof.created_ms = Some(500);
+        proof.attributes = Some(0x20);
+    }
+    (fs, plan, harness)
+}
+
+fn kept_copy_of(fs: &FakeFs, plan: &OperationPlan) -> crate::KeptCopy {
+    let seq = done_before_removal(plan)
+        .into_iter()
+        .find(|seq| matches!(plan.steps[*seq as usize], Step::CopyFile { .. }))
+        .expect("a move copies its file");
+    crate::KeptCopy {
+        seq,
+        location: fs.location("dst/a.txt"),
+    }
+}
+
+#[test]
+fn a_no_id_proof_removes_the_copy_when_source_and_copy_hold_the_same_bytes() {
+    let (fs, plan, harness) = proved_without_id();
+    let log = rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+    assert_eq!(
+        (exists(&fs, "dst/a.txt"), size(&fs, "src/a.txt")),
+        (false, Some(BIG))
+    );
+    assert!(log.copies.is_empty(), "{:?}", log.copies);
+}
+
+#[test]
+fn a_no_id_proof_keeps_the_copy_when_the_source_holds_other_bytes() {
+    let (fs, plan, harness) = proved_without_id();
+    fs.set_hash("src/a.txt", [7; 32]);
+    let log = rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+    assert!(
+        exists(&fs, "dst/a.txt"),
+        "a tunneled lookalike with other bytes deleted the only copy (D164)"
+    );
+    assert_eq!(log.copies, [kept_copy_of(&fs, &plan)]);
+}
+
+#[test]
+fn a_no_id_proof_keeps_the_copy_when_either_file_cannot_be_read() {
+    for path in ["src/a.txt", "dst/a.txt"] {
+        let (fs, plan, harness) = proved_without_id();
+        let next = fs.calls(path, FakeOp::Read) + 1;
+        fs.fault(
+            path,
+            FakeOp::Read,
+            next,
+            Fault::Fail(FsErrorKind::AccessDenied),
+        );
+        let log = rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+        assert!(exists(&fs, "dst/a.txt"), "{path}: copy removed unread");
+        assert_eq!(log.copies, [kept_copy_of(&fs, &plan)], "{path}");
+    }
+}
+
+#[test]
+fn a_proof_with_a_file_id_reads_no_content_before_removing_the_copy() {
+    let (fs, plan) = moving();
+    let harness = copied_only(&fs, &plan, Harness::default());
+    let reads =
+        |fs: &FakeFs| fs.calls("src/a.txt", FakeOp::Read) + fs.calls("dst/a.txt", FakeOp::Read);
+    let before = reads(&fs);
+    rolled_back(&fs, &plan, &harness, &done_before_removal(&plan));
+    assert!(!exists(&fs, "dst/a.txt"));
+    assert_eq!(reads(&fs), before, "a file ID needs no content compare");
+}

@@ -254,7 +254,8 @@ fn only_copy(
         .find(|file| file.target.same_place(target))
         .and_then(|file| file.source);
     let proved = match proof {
-        Some(proof) => proof.still_at(ctx.ops, source)?,
+        Some(proof) if proof.identity.is_some() => proof.still_at(ctx.ops, source)?,
+        Some(proof) => proof.still_at(ctx.ops, source)? && same_bytes(ctx, source, target),
         None => false,
     };
     if !proved {
@@ -268,6 +269,20 @@ fn only_copy(
         });
     }
     Ok(!proved)
+}
+
+/// True when `source` and `copy` hold the same bytes (BLAKE3, streamed). A proof without a file
+/// ID can match a lookalike that Windows name tunneling gave the old creation time; any read
+/// error or cancel counts as different, so the copy stays.
+fn same_bytes(ctx: &JobContext<'_>, source: &Location, copy: &Location) -> bool {
+    let ops = ctx.ops;
+    let compared = ops
+        .content_hash(source, ctx.cancel)
+        .and_then(|left| Ok(left == ops.content_hash(copy, ctx.cancel)?));
+    compared.unwrap_or_else(|error| {
+        tracing::warn!(kind = ?error.kind, "move rollback could not compare a copy with its source");
+        false
+    })
 }
 
 pub(super) fn settle(

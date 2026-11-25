@@ -95,6 +95,24 @@ impl ProviderOps for FakeFs {
         lock(&self.clock).now()
     }
 
+    fn copied_source_at(
+        &self,
+        location: &Location,
+    ) -> Result<Option<crate::CopiedSource>, FsError> {
+        let entry = crate::Provider::metadata(self, location)?;
+        if entry.kind != EntryKind::File {
+            return Ok(None);
+        }
+        let details = *lock(&self.path_details);
+        Ok(Some(crate::CopiedSource {
+            identity: self.file_identity(location)?,
+            size: entry.size,
+            modified_ms: entry.modified_ms,
+            created_ms: details.map(|(created, _)| created),
+            attributes: details.map(|(_, attributes)| attributes),
+        }))
+    }
+
     fn pause_git(&self, _location: &Location) -> Result<Option<crate::GitPauseGuard>, FsError> {
         lock(&self.pauses).0 += 1;
         Ok(None)
