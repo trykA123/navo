@@ -1,6 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, OnceLock};
 
 use crate::grid::{Cell, Color, Grid, Snapshot, Viewport, Width};
 use crate::{Sink, Size};
@@ -138,60 +137,76 @@ fn grid_records_the_exit_and_wakes() {
     assert_eq!(wakes.load(Ordering::SeqCst), 1);
 }
 
-/// Spins (yielding, no sleep) until `done` holds; fails after a generous bound.
-fn spin_until(done: impl Fn() -> bool) {
-    let start = std::time::Instant::now();
-    while !done() {
-        assert!(start.elapsed() < super::DEADLINE, "spin_until timed out");
-        std::thread::yield_now();
-    }
-}
+/// The lock handover test reads `/proc` to see the reader block, so it runs on Linux only.
+#[cfg(target_os = "linux")]
+mod handover {
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Arc, OnceLock};
 
-/// The calling thread's `/proc` stat file, so another thread can see it block.
-fn own_stat() -> PathBuf {
-    let task = std::fs::read_link("/proc/thread-self").unwrap_or_default();
-    Path::new("/proc").join(task).join("stat")
-}
+    use super::SIZE;
+    use crate::Sink;
+    use crate::grid::Grid;
 
-/// Whether the thread behind `stat` sleeps (blocked on the lock). Off Linux: assumed.
-fn sleeping(stat: &Path) -> bool {
-    if !cfg!(target_os = "linux") {
-        return true;
-    }
-    let text = std::fs::read_to_string(stat).unwrap_or_default();
-    let state = text.rsplit_once(") ").map(|(_, rest)| rest);
-    state.is_some_and(|rest| rest.starts_with('S'))
-}
-
-#[test]
-fn grid_hands_the_lock_to_a_waiting_reader_between_output_chunks() {
-    const CHUNKS: usize = 32;
-    let fed = Arc::new(AtomicUsize::new(0));
-    let reader_stat = Arc::new(OnceLock::<PathBuf>::new());
-    let (hook_fed, hook_stat) = (Arc::clone(&fed), Arc::clone(&reader_stat));
-    let grid = Grid::new(SIZE, 10_000, || {}).with_chunk_hook(move || {
-        // The first chunk holds the lock until the reader is blocked waiting for it.
-        if hook_fed.fetch_add(1, Ordering::SeqCst) == 0 {
-            spin_until(|| hook_stat.get().is_some_and(|stat| sleeping(stat)));
+    /// Spins (yielding, no sleep) until `done` holds; fails after a generous bound.
+    fn spin_until(done: impl Fn() -> bool) {
+        let start = std::time::Instant::now();
+        while !done() {
+            assert!(
+                start.elapsed() < crate::tests::DEADLINE,
+                "spin_until timed out"
+            );
+            std::thread::yield_now();
         }
-    });
-    let grid = Arc::new(grid);
-    let line = format!("{}\r\n", "x".repeat(62));
-    let burst = line.repeat(CHUNKS * 64 * 1024 / line.len());
-    let reader = {
-        let (grid, fed, stat) = (Arc::clone(&grid), Arc::clone(&fed), reader_stat);
-        std::thread::spawn(move || {
-            spin_until(|| fed.load(Ordering::SeqCst) >= 1);
-            drop(stat.set(own_stat()));
-            let _ = grid.history_len();
-            fed.load(Ordering::SeqCst)
-        })
-    };
-    grid.output(burst.as_bytes());
-    let seen = reader.join().unwrap_or(usize::MAX);
-    assert_eq!(fed.load(Ordering::SeqCst), CHUNKS);
-    assert!(
-        seen < CHUNKS,
-        "reader got the lock only after {seen} of {CHUNKS} chunks"
-    );
+    }
+
+    /// The calling thread's `/proc` stat file, so another thread can see it block.
+    fn own_stat() -> PathBuf {
+        let task = std::fs::read_link("/proc/thread-self").unwrap_or_default();
+        Path::new("/proc").join(task).join("stat")
+    }
+
+    /// Whether the thread behind `stat` sleeps (blocked on the lock).
+    fn sleeping(stat: &Path) -> bool {
+        let text = std::fs::read_to_string(stat).unwrap_or_default();
+        let state = text.rsplit_once(") ").map(|(_, rest)| rest);
+        state.is_some_and(|rest| rest.starts_with('S'))
+    }
+
+    #[test]
+    fn grid_hands_the_lock_to_a_waiting_reader_between_output_chunks() {
+        const CHUNKS: usize = 32;
+        let fed = Arc::new(AtomicUsize::new(0));
+        let reader_stat = Arc::new(OnceLock::<PathBuf>::new());
+        let done = Arc::new(AtomicBool::new(false));
+        let (hook_fed, hook_stat, hook_done) = (
+            Arc::clone(&fed),
+            Arc::clone(&reader_stat),
+            Arc::clone(&done),
+        );
+        let grid = Grid::new(SIZE, 10_000, || {}).with_chunk_hook(move || {
+            match hook_fed.fetch_add(1, Ordering::SeqCst) {
+                // Chunk 1 holds the lock until the reader is blocked waiting for it.
+                0 => spin_until(|| hook_stat.get().is_some_and(|stat| sleeping(stat))),
+                // Chunk 2 runs only after the reader had the lock: a plain unlock never gets here.
+                1 => spin_until(|| hook_done.load(Ordering::SeqCst)),
+                _ => {}
+            }
+        });
+        let grid = Arc::new(grid);
+        let line = format!("{}\r\n", "x".repeat(62));
+        let burst = line.repeat(CHUNKS * 64 * 1024 / line.len());
+        let reader = {
+            let (grid, fed, stat) = (Arc::clone(&grid), Arc::clone(&fed), reader_stat);
+            std::thread::spawn(move || {
+                spin_until(|| fed.load(Ordering::SeqCst) >= 1);
+                drop(stat.set(own_stat()));
+                let _ = grid.history_len();
+                done.store(true, Ordering::SeqCst);
+            })
+        };
+        grid.output(burst.as_bytes());
+        assert!(reader.join().is_ok());
+        assert_eq!(fed.load(Ordering::SeqCst), CHUNKS);
+    }
 }

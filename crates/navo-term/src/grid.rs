@@ -211,8 +211,8 @@ impl Grid {
         }
     }
 
-    /// Runs `hook` under the lock after each output chunk.
-    #[cfg(test)]
+    /// Runs `hook` under the lock after each output chunk (the Linux-only handover test).
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn with_chunk_hook(mut self, hook: impl Fn() + Send + Sync + 'static) -> Self {
         self.chunk_hook = Some(Box::new(hook));
         self
