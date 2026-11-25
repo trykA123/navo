@@ -115,9 +115,11 @@ pub(super) fn run_rename(plan: &OperationPlan, ctx: &mut JobContext<'_>) -> Rena
         progress: &mut **progress,
     };
     let first = match run::run(plan, &[], &mut inner) {
-        JobOutcome::Done | JobOutcome::Kept { .. } => return RenameOutcome::Done,
+        JobOutcome::Done => return RenameOutcome::Done,
         JobOutcome::Cancelled => None,
         JobOutcome::Failed { seq, error } => Some((seq, error)),
+        // A rename plan keeps no move source; should one appear, fail closed and put it back.
+        JobOutcome::Kept { sources } => sources.first().map(|kept| (kept.seq, kept.error())),
     };
     let done = std::mem::take(&mut tracking.done);
     tracking.failed.clear();

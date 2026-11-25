@@ -66,12 +66,14 @@ pub struct KeptSource {
 }
 
 impl KeptSource {
-    /// The file error that stands for this kept source where a single error is shown.
+    /// The file error that stands for this kept source where a single error is shown. A
+    /// resumed source has no matching kind: it reads as `Unknown`, so it never blames the drive.
     #[must_use]
     pub fn error(&self) -> FsError {
         let kind = match &self.reason {
             KeptReason::Changed => FsErrorKind::ChangedOnDisk,
-            KeptReason::Unconfirmed | KeptReason::Resumed => FsErrorKind::IdentityUnavailable,
+            KeptReason::Unconfirmed => FsErrorKind::IdentityUnavailable,
+            KeptReason::Resumed => FsErrorKind::Unknown,
             KeptReason::NotRemoved(error) => return error.clone(),
         };
         FsError {
@@ -178,7 +180,9 @@ pub trait JobLog {
         Ok(())
     }
     fn kept_beside(&mut self, _held: &HeldFile, _beside: &Location) {}
-    /// Reports a move's source kept in place; the move goes on and ends `JobOutcome::Kept`.
+    /// Reports a move's source kept in place, as soon as it is kept: the move goes on and ends
+    /// `JobOutcome::Kept`, or `Failed`/`Cancelled` when something later stops it, so a log that
+    /// shows kept sources collects them here rather than from the outcome.
     fn kept_source(&mut self, _kept: &KeptSource) {}
     fn held_stranded(&mut self, _held: &HeldFile) {}
 }

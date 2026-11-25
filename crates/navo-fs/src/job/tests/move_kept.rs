@@ -86,6 +86,102 @@ fn a_resumed_move_reports_its_kept_source_as_resumed() {
 }
 
 #[test]
+fn a_resumed_source_does_not_blame_the_drive() {
+    let location = Location::new("mem:///src/b/c.txt").unwrap();
+    let kept = KeptSource {
+        seq: 3,
+        location: location.clone(),
+        reason: KeptReason::Resumed,
+    };
+    let error = kept.error();
+    assert_ne!(error.kind, FsErrorKind::IdentityUnavailable);
+    assert_eq!(error.location, Some(location));
+}
+
+/// The two source files of a two-file move, in the order the move removes them.
+fn removal_order(fs: &FakeFs, plan: &OperationPlan) -> [&'static str; 2] {
+    let (c, d) = ("src/b/c.txt", "src/b/d.txt");
+    match removal_of(plan, fs, c) < removal_of(plan, fs, d) {
+        true => [c, d],
+        false => [d, c],
+    }
+}
+
+/// Runs a move of two files that keeps the first one it removes (replaced after its copy), then
+/// calls `later` just before it removes the second.
+fn kept_then(harness: &mut Harness, later: &(dyn Fn() + Sync)) -> (JobOutcome, u32) {
+    let fs = fixture(&[("src/b/c.txt", BIG), ("src/b/d.txt", BIG)]);
+    let plan = move_plan(&fs);
+    let [first, second] = removal_order(&fs, &plan);
+    let (kept, next) = (fs.location(first), fs.location(second));
+    let hook = |location: &Location| {
+        if *location == kept && size(&fs, first) != Some(REPLACEMENT) {
+            fs.remove(first);
+            fs.add_file(first, REPLACEMENT);
+        } else if *location == next {
+            later();
+        }
+    };
+    let ops = super::delete_races::BeforeRemove {
+        fs: &fs,
+        hook: &hook,
+    };
+    let outcome = harness.run(&ops, &plan, &[]);
+    assert!(exists(&fs, first));
+    let seq = removal_of(&plan, &fs, first);
+    (outcome, seq)
+}
+
+#[test]
+fn a_kept_source_is_reported_when_the_move_is_cancelled_later() {
+    for workers in MODES {
+        let mut harness = Harness {
+            workers,
+            ..Harness::default()
+        };
+        let cancel = harness.cancel.clone();
+        let (outcome, seq) = kept_then(&mut harness, &|| cancel.cancel());
+        assert_eq!(outcome, JobOutcome::Cancelled, "workers {workers}");
+        let kept: Vec<_> = harness
+            .log
+            .kept
+            .iter()
+            .map(|k| (k.seq, &k.reason))
+            .collect();
+        assert_eq!(kept, [(seq, &KeptReason::Changed)], "workers {workers}");
+    }
+}
+
+#[test]
+fn a_kept_source_is_reported_when_the_move_fails_later() {
+    for workers in MODES {
+        let fs = fixture(&[("src/b/c.txt", BIG), ("src/b/d.txt", BIG)]);
+        let plan = move_plan(&fs);
+        let fail_on = Some(removal_of(&plan, &fs, removal_order(&fs, &plan)[1]));
+        let mut harness = Harness {
+            workers,
+            log: Log {
+                fail_on,
+                ..Log::default()
+            },
+            ..Harness::default()
+        };
+        let (outcome, seq) = kept_then(&mut harness, &|| {});
+        assert!(
+            matches!(outcome, JobOutcome::Failed { .. }),
+            "workers {workers}: {outcome:?}"
+        );
+        let kept: Vec<_> = harness
+            .log
+            .kept
+            .iter()
+            .map(|k| (k.seq, &k.reason))
+            .collect();
+        assert_eq!(kept, [(seq, &KeptReason::Changed)], "workers {workers}");
+    }
+}
+
+#[test]
 fn a_by_path_move_reports_a_source_swapped_during_its_copy_as_changed() {
     for workers in MODES {
         let fs = fixture(&[("src/b/c.txt", BIG)]);

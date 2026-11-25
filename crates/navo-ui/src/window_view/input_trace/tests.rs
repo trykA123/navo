@@ -208,6 +208,8 @@ fn an_input_that_paints_no_frame_still_gets_a_line_without_render_time(cx: &mut 
 struct PauseSpy {
     fs: Arc<navo_fs::FakeFs>,
     pauses: AtomicUsize,
+    /// Calls that reached the move's proof-checked removal.
+    proved: AtomicUsize,
 }
 
 impl Provider for PauseSpy {
@@ -297,6 +299,15 @@ impl ProviderOps for PauseSpy {
     fn recycle(&self, location: &navo_core::Location) -> Result<(), navo_core::FsError> {
         self.fs.recycle(location)
     }
+
+    fn remove_copied_source(
+        &self,
+        _: &navo_core::Location,
+        _: navo_fs::CopiedSource,
+    ) -> Result<(), navo_core::FsError> {
+        self.proved.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
 }
 
 #[test]
@@ -306,12 +317,36 @@ fn pause_git_reaches_the_inner_provider_through_the_trace() {
     let spy = Arc::new(PauseSpy {
         fs: fake(),
         pauses: AtomicUsize::new(0),
+        proved: AtomicUsize::new(0),
     });
     let inner: Arc<dyn ProviderOps> = spy.clone();
     let wrapped = trace.provider(inner);
     let location = spy.fs.location("home/a");
     assert!(wrapped.pause_git(&location).unwrap().is_none());
     assert_eq!(spy.pauses.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_moved_source_is_removed_by_the_inner_provider_through_the_trace() {
+    let dir = tempfile::tempdir().unwrap();
+    let trace = InputTrace::new(dir.path().join("move.jsonl")).unwrap();
+    let spy = Arc::new(PauseSpy {
+        fs: fake(),
+        pauses: AtomicUsize::new(0),
+        proved: AtomicUsize::new(0),
+    });
+    let inner: Arc<dyn ProviderOps> = spy.clone();
+    let wrapped = trace.provider(inner);
+    let location = spy.fs.location("home/a");
+    let expected = navo_fs::CopiedSource {
+        identity: None,
+        size: 1,
+        modified_ms: Some(1),
+        created_ms: Some(1),
+        attributes: Some(0),
+    };
+    wrapped.remove_copied_source(&location, expected).unwrap();
+    assert_eq!(spy.proved.load(Ordering::SeqCst), 1);
 }
 
 #[test]
