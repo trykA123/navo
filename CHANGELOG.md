@@ -2,6 +2,37 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.9.0 — Settings v2 complete, instant context menu, and calmer updates
+
+*2026-11-25*
+
+This release finishes Settings v2, makes the right-click context menu open at once, and redraws the update and workspace chrome. Find in Settings highlights matching words, counts hits per page, and searches option labels and keyboard shortcuts. Long choice rows become icon dropdowns, and About replaces its storage wall with a summary card and a collapsed details fold. Right-clicking now shows Navo's own actions immediately while Windows shell items load below them without blocking.
+
+### Added
+
+- **Find highlights, per-page counts, and the Changed filter in Settings.** Typing in Settings Find highlights every matched word in row labels, shows each page's hit count in the sidebar, and dims pages with no hits. A header chip (`N changed`) filters every page to modified settings with changed counts and accent dots in the sidebar, clearing automatically when the last change is undone. Pressing Esc clears Find first, then the Changed filter, then closes Settings.
+- **Options and shortcuts in Settings Find.** Searching in Settings now matches choice option labels (such as "PowerShell") and keyboard shortcut names. Matching shortcuts appear under Keyboard with their current key cap and open Shortcuts directly at that command.
+- **Icon dropdowns for long Settings choices.** Choices with more than three options or long labels (External terminal, Sort by, File index, Git engine) now render as a compact icon dropdown with a checkmark on the active option and full keyboard navigation instead of clipping at the edge.
+- **Redesigned About Storage block.** About now shows one summary card ("Navo data: X on disk") with Open data folder and Refresh actions, keeping the per-store list behind a collapsed "Show details" fold. Store paths truncate in the middle and show their full path with Open folder and Copy path in the inspector. The per-user and machine indexes are named "Index (yours)" and "Index (all users)".
+- **Quiet title-bar update pill and About Updates card.** About now presents update status in a dedicated Navo Updates card with a live download progress bar, a clear Restart to update card when ready, and both Retry and Download manually buttons on failure. In the main window, a dismissible title-bar pill tracks downloading, ready, and failed updates without vanishing on your next command.
+- **Active pane hairline and calm empty/error cards.** The active file pane shows a crisp top accent hairline with zero layout shift when switching panes. Empty folders, empty filter views (with a Clear filter button), and failed folders now display calm centered cards that keep keyboard navigation working.
+- **Command Center polish.** Selected Command Center rows carry a left accent bar, parent paths middle-truncate to keep both the drive and immediate folders visible, command shortcuts render as key caps, and unmatched queries offer Clear query and Search inside files (Alt+F7) recovery buttons.
+
+### Changed
+
+- **Instant context menu on Windows.** Right-clicking or pressing Alt+M no longer waits 150 ms for Windows Shell extensions before opening. Navo's own file actions appear immediately at the top with key caps and danger styling on Delete, while Windows Shell actions load asynchronously below a divider. Windows shell queries no longer force synchronous cascade submenu population and defer submenu reading until opened. Menus anchored near the bottom of the screen now re-clamp upward smoothly as shell items arrive.
+
+### Under the hood
+
+None of this can be tried yet.
+
+- **Settings window groundwork.** Session format bumped to v7 (with full v6 migration and backup preservation) to store Settings window placements, paired with pure placement helpers and a decoupled `settings::content` builder.
+
+### Known issues
+
+- **Long single folder names in Command Center.** A single folder segment wider than the Command Center detail column can clip at its right edge without an ellipsis.
+- **Drives without file IDs.** Same FAT/exFAT/network-share caveat as v0.8.9.
+
 ## v0.8.9 — Kept files, in plain sight
 
 *2026-11-25*
