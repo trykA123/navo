@@ -10,7 +10,7 @@ use navo_core::{
 /// A hashable form of a stored place: a probe of a target equals it exactly when
 /// `stored.same_place(target)` holds.
 #[derive(Debug, PartialEq, Eq, Hash)]
-enum Key {
+pub(super) enum Key {
     /// A local Windows-style place, compared without case.
     Folded(ProviderId, WindowsFoldKey),
     /// Any other place, compared by provider and exact path.
@@ -18,7 +18,7 @@ enum Key {
 }
 
 /// Builds the key of a place the plan stores; its own text picks the comparison, as in `same_place`.
-fn key(stored: &Location) -> Key {
+pub(super) fn key(stored: &Location) -> Key {
     let provider = stored.provider().clone();
     if stored.folds_case() {
         Key::Folded(provider, stored.path().windows_fold_key())
@@ -28,7 +28,7 @@ fn key(stored: &Location) -> Key {
 }
 
 /// The keys a target may match: one per comparison a stored place can use.
-fn probes(target: &Location) -> [Key; 2] {
+pub(super) fn probes(target: &Location) -> [Key; 2] {
     let provider = target.provider().clone();
     [
         Key::Exact(provider.clone(), target.path().clone()),

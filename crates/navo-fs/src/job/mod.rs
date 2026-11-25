@@ -13,6 +13,7 @@ mod remove;
 mod rename;
 mod restore;
 mod retry;
+mod rollback_lookup;
 mod run;
 mod source;
 mod stream;

@@ -1,4 +1,4 @@
-use navo_core::{Location, ProviderPath};
+use navo_core::{Location, ProviderPath, Totals};
 
 use super::kept_aside::{entry_at, keeping, old_entry, over_old};
 use super::*;
@@ -145,7 +145,28 @@ fn a_held_record_with_the_exact_name_wins_over_a_case_twin() {
         target: windows_style(r"C:\dst\a.txt"),
         size: 1,
     };
-    let found = super::super::undo::held_for(&step, &records).map(|file| &file.original);
+    let plan = OperationPlan {
+        kind: OpKind::Copy,
+        steps: vec![step.clone()],
+        totals: Totals {
+            files: 1,
+            folders: 0,
+            bytes: 1,
+        },
+        conflicts: Vec::new(),
+        risks: Vec::new(),
+    };
+    let job = Journaled {
+        plan: &plan,
+        done: &[],
+        held: &records,
+        placed: &[],
+        held_unreadable: false,
+        unsure: None,
+        unmarked_removals: None,
+    };
+    let run = super::super::rollback_lookup::Rollback::of(&job);
+    let found = super::super::undo::held_for(&step, &run).map(|file| &file.original);
     assert_eq!(found, Some(&windows_style(r"C:\dst\a.txt")));
 }
 

@@ -9,18 +9,18 @@ use super::marks::is_removal;
 use super::restore::{
     Restored, gone_or_folder_deleted, is_placed, keep, matches_stamp, restore, surely_absent,
 };
-use super::{
-    FileStamp, HeldFile, JobContext, JobOutcome, Journaled, KeptCopy, PlacedFile, StepOutcome,
-};
+use super::rollback_lookup::Rollback;
+use super::{FileStamp, HeldFile, JobContext, JobOutcome, Journaled, KeptCopy, StepOutcome};
 use crate::{ProviderOps, already_exists};
 
 pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOutcome {
+    let run = Rollback::of(job);
     let steps: Vec<(u32, &Step)> = (0_u32..).zip(&job.plan.steps).collect();
     let mut first = None;
     for &(seq, step) in steps.iter().rev() {
-        let held = held_for(step, job.held);
-        let unsure = job.unsure == Some(seq) && !job.done.contains(&seq) && held.is_none();
-        if !job.done.contains(&seq) && held.is_none() && !unsure {
+        let held = held_for(step, &run);
+        let unsure = job.unsure == Some(seq) && !run.is_done(seq) && held.is_none();
+        if !run.is_done(seq) && held.is_none() && !unsure {
             continue;
         }
         if awaits_unreadable_row(job, step, held) {
@@ -29,7 +29,7 @@ pub(super) fn roll_back(job: &Journaled<'_>, ctx: &mut JobContext<'_>) -> JobOut
         let result = if is_plain_move(job.plan.kind, step, held) {
             super::moved::undo_move(ctx.ops, &*ctx.log, (seq, step))
         } else {
-            checked_undo(job, (seq, step), held, ctx)
+            checked_undo(&run, (seq, step), held, ctx)
         };
         let logged = match result {
             Ok(outcome) => ctx.log.undone(seq, outcome),
@@ -53,13 +53,13 @@ fn is_plain_move(kind: OpKind, step: &Step, held: Option<&HeldFile>) -> bool {
 }
 
 fn checked_undo(
-    job: &Journaled<'_>,
+    run: &Rollback<'_>,
     (seq, step): (u32, &Step),
     held: Option<&HeldFile>,
     ctx: &mut JobContext<'_>,
 ) -> Result<StepOutcome, FsError> {
-    let unsure = job.unsure == Some(seq) && !job.done.contains(&seq) && held.is_none();
-    let verified = if job.plan.kind == OpKind::Rename {
+    let unsure = run.job.unsure == Some(seq) && !run.is_done(seq) && held.is_none();
+    let verified = if run.job.plan.kind == OpKind::Rename {
         super::rename::verified(seq, step, ctx)?
     } else {
         true
@@ -69,20 +69,19 @@ fn checked_undo(
     } else if unsure {
         undo_unsure(ctx.ops, step)
     } else {
-        undo(job, (seq, step), held, ctx)
+        undo(run, (seq, step), held, ctx)
     }
 }
 
-pub(super) fn held_for<'h>(step: &Step, held: &'h [HeldFile]) -> Option<&'h HeldFile> {
+/// The held row for a step's target, if the step writes one.
+pub(super) fn held_for<'j>(step: &Step, run: &Rollback<'j>) -> Option<&'j HeldFile> {
     let target = match step {
         Step::CopyFile { target, .. }
         | Step::Rename { target, .. }
         | Step::WriteFile { target, .. } => target,
         _ => return None,
     };
-    held.iter()
-        .find(|file| file.original == *target)
-        .or_else(|| held.iter().find(|file| file.original.same_place(target)))
+    run.held_for(target)
 }
 
 fn awaits_unreadable_row(job: &Journaled<'_>, step: &Step, held: Option<&HeldFile>) -> bool {
@@ -97,19 +96,8 @@ fn awaits_unreadable_row(job: &Journaled<'_>, step: &Step, held: Option<&HeldFil
     }
 }
 
-fn placed_for(step: &Step, placed: &[PlacedFile]) -> Option<FileStamp> {
-    let Step::CopyFile { target, .. } = step else {
-        return None;
-    };
-    placed
-        .iter()
-        .find(|file| file.target == *target)
-        .or_else(|| placed.iter().find(|file| file.target.same_place(target)))
-        .map(|file| file.stamp)
-}
-
 fn undo(
-    job: &Journaled<'_>,
+    run: &Rollback<'_>,
     (seq, step): (u32, &Step),
     held: Option<&HeldFile>,
     ctx: &mut JobContext<'_>,
@@ -117,14 +105,14 @@ fn undo(
     let ops = ctx.ops;
     match step {
         Step::CopyFile { source, target, .. } => {
-            if source_gone(job, source, held, ops)? || only_copy(job, (seq, source, target), ctx)? {
+            if source_gone(run, source, held, ops)? || only_copy(run, (seq, source, target), ctx)? {
                 return held.map_or(Ok(StepOutcome::Skipped), |held| {
                     settle(keep(ops, held)?, held, ctx)
                 });
             }
             match held {
                 Some(held) => settle(restore(ops, held)?, held, ctx),
-                None => remove_copy(ops, target, placed_for(step, job.placed)),
+                None => remove_copy(ops, target, run.placed_for(target).map(|file| file.stamp)),
             }
         }
         Step::MakeFolder { target } => Ok(match ops.remove_empty_folder(target) {
@@ -223,16 +211,12 @@ fn remove_copy(
 }
 
 fn source_gone(
-    job: &Journaled<'_>,
+    run: &Rollback<'_>,
     source: &Location,
     held: Option<&HeldFile>,
     ops: &dyn ProviderOps,
 ) -> Result<bool, FsError> {
-    let removed_by_job = (0_u32..).zip(&job.plan.steps).any(|(seq, step)| {
-        matches!(step, Step::RemoveFile { location } if location.same_place(source))
-            && job.done.contains(&seq)
-    });
-    if removed_by_job {
+    if run.removal_done(source) {
         return Ok(true);
     }
     gone_or_folder_deleted(ops, source, held.and_then(|file| file.volume))
@@ -242,25 +226,20 @@ fn source_gone(
 /// before a crash, and the source path does not prove it still holds the file the copy read
 /// (another file there, or a journal row without a proof). Such a copy stays and is reported.
 fn only_copy(
-    job: &Journaled<'_>,
+    run: &Rollback<'_>,
     (seq, source, target): (u32, &Location, &Location),
     ctx: &mut JobContext<'_>,
 ) -> Result<bool, FsError> {
-    if job.plan.kind != OpKind::Move || !job.done.contains(&seq) {
+    if run.job.plan.kind != OpKind::Move || !run.is_done(seq) {
         return Ok(false);
     }
     // The newest row wins: a retried copy journals again, and its proof describes the copy on disk.
-    let proof = job
-        .placed
-        .iter()
-        .rev()
-        .find(|file| file.target.same_place(target))
-        .and_then(|file| file.source);
+    let proof = run.newest_placed(target).and_then(|file| file.source);
     let proved = match proof {
         Some(proof) if proof.identity.is_some() => proof.still_at(ctx.ops, source)?,
         Some(proof) => {
             proof.still_at(ctx.ops, source)?
-                && (!removal_may_have_run(job, source) || same_bytes(ctx, source, target))
+                && (!removal_may_have_run(run, source) || same_bytes(ctx, source, target))
         }
         None => false,
     };
@@ -279,16 +258,11 @@ fn only_copy(
 
 /// True when this job's removal of `source` may have run without its done row (D165): the plan
 /// removes `source` within `job.unmarked_removals`. Unknown pending state counts as maybe.
-fn removal_may_have_run(job: &Journaled<'_>, source: &Location) -> bool {
-    let Some(unmarked) = &job.unmarked_removals else {
+fn removal_may_have_run(run: &Rollback<'_>, source: &Location) -> bool {
+    let Some(unmarked) = &run.job.unmarked_removals else {
         return true;
     };
-    let end = (unmarked.end as usize).min(job.plan.steps.len());
-    let window = job.plan.steps.get(unmarked.start as usize..end);
-    window.unwrap_or_default().iter().any(|step| {
-        scanned();
-        matches!(step, Step::RemoveFile { location } if location.same_place(source))
-    })
+    run.removes_within(source, unmarked)
 }
 
 /// The seqs whose removal may have run without a done row (D165), worked out once per rollback
@@ -313,13 +287,22 @@ pub(super) fn unmarked_removals(
 
 #[cfg(test)]
 thread_local! {
-    /// Plan steps the D165 check scanned on this thread, so a test can prove a copy-phase crash
-    /// checks each copy without a scan.
+    /// Removal steps the D165 check looked at on this thread, so a test can prove a copy-phase
+    /// crash checks each copy without a scan.
     pub(super) static STEPS_SCANNED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Probes, rows and seqs a rollback compared on this thread, so a test can prove the whole
+    /// rollback stays linear in the plan size (MR1f).
+    pub(super) static COMPARED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one compare in test builds; does nothing otherwise.
+pub(super) fn compared() {
+    #[cfg(test)]
+    COMPARED.with(|count| count.set(count.get() + 1));
 }
 
 /// Counts one scanned step in test builds; does nothing otherwise.
-fn scanned() {
+pub(super) fn scanned() {
     #[cfg(test)]
     STEPS_SCANNED.with(|count| count.set(count.get() + 1));
 }
@@ -358,6 +341,7 @@ pub(super) fn clean_up(
     done: &[u32],
     ops: &dyn ProviderOps,
 ) -> Result<u32, FsError> {
+    let done = super::done_set::DoneSet::of_plan(plan, done);
     let mut removed = 0;
     for (seq, step) in (0_u32..).zip(&plan.steps) {
         if done.contains(&seq) {

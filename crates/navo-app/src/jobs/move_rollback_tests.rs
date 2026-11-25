@@ -1,6 +1,6 @@
 //! Startup recovery of a cross-volume move whose copy was journaled with a no-ID source proof:
 //! the rollback learns from the journal which removals may have run, so a copy-phase crash
-//! compares no bytes (D165).
+//! compares no bytes, and a removal-phase crash compares them (D165).
 
 use std::sync::Arc;
 
@@ -74,8 +74,13 @@ fn crashed_copying_b(fs: &FakeFs, journal: &SharedJournal, plan: &OperationPlan)
         .iter()
         .position(|step| matches!(step, Step::CopyFile { target, .. } if target.same_place(&b)))
         .unwrap();
+    crashed_at(fs, journal, plan, in_flight);
+}
+
+/// Journals the whole move but runs only its steps before `at`, as if the app died then.
+fn crashed_at(fs: &FakeFs, journal: &SharedJournal, plan: &OperationPlan, at: usize) {
     let mut head = plan.clone();
-    head.steps.truncate(in_flight);
+    head.steps.truncate(at);
     let mut log = log_factory(Arc::clone(journal))(plan).unwrap();
     let outcome = run_job(
         &head,
@@ -115,5 +120,30 @@ fn startup_recovery_of_a_copy_phase_crash_removes_a_no_id_copy_without_reading_i
         content_reads(&fs),
         before,
         "recovery read the copy-phase journal as unknown and compared bytes"
+    );
+}
+
+#[test]
+fn startup_recovery_of_a_removal_phase_crash_keeps_a_no_id_copy_whose_source_bytes_differ() {
+    let fs = sources();
+    let journal = journal();
+    let plan = cross_volume_move(&fs);
+    let first_removal = plan
+        .steps
+        .iter()
+        .position(|step| matches!(step, Step::RemoveFile { .. }))
+        .unwrap();
+    crashed_at(&fs, &journal, &plan, first_removal);
+    proved_without_id(&fs, &journal);
+    fs.set_hash("src/a.txt", [7; 32]);
+    let before = content_reads(&fs);
+    assert_eq!(recover(&journal, &fs).unwrap(), 1);
+    assert!(
+        content_reads(&fs) > before,
+        "recovery read the removal window as empty and compared no bytes"
+    );
+    assert!(
+        fs.metadata(&fs.location("dst/a.txt")).is_ok(),
+        "a lookalike at the source path cost the moved file its only copy"
     );
 }

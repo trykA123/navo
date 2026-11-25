@@ -464,3 +464,114 @@ fn a_copy_phase_crash_over_many_no_id_files_checks_each_copy_without_scanning_th
     assert!(log.copies.is_empty(), "{:?}", log.copies);
     assert!(!exists(&fs, "dst/f0.txt"), "the duplicate copy stayed");
 }
+
+/// Files in the rollback cost test: a per-copy scan of the plan or the journal costs ~10^9 here.
+const HUGE: usize = 20_000;
+
+#[test]
+fn a_removal_phase_crash_over_huge_moves_rolls_back_in_linear_compares() {
+    let names: Vec<String> = (0..HUGE).map(|at| format!("src/f{at}.txt")).collect();
+    let paths: Vec<&str> = names.iter().map(String::as_str).collect();
+    let (fs, plan, mut harness) = proved_without_id(&paths);
+    let removals: Vec<u32> = (removal_seq(&plan)..)
+        .zip(&plan.steps[removal_seq(&plan) as usize..])
+        .filter(|(_, step)| matches!(step, Step::RemoveFile { .. }))
+        .map(|(seq, _)| seq)
+        .collect();
+    assert_eq!(removals.len(), HUGE, "one removal per moved file");
+    let (ran, unsure) = removals.split_at(HUGE / 2);
+    let mut done = done_before_removal(&plan);
+    done.extend(ran);
+    harness.pending = Some(unsure.to_vec());
+    super::super::undo::COMPARED.with(|count| count.set(0));
+    let log = rolled_back(&fs, &plan, &harness, &done);
+    let compared = super::super::undo::COMPARED.with(std::cell::Cell::get);
+    let bound = 8 * plan.steps.len() as u64;
+    assert!(
+        compared <= bound,
+        "the rollback compared {compared} times, over {bound}"
+    );
+    assert!(log.copies.is_empty(), "{:?}", log.copies.len());
+    let copy_of = |removal: u32| {
+        let Step::RemoveFile { location } = &plan.steps[removal as usize] else {
+            unreachable!("a removal seq");
+        };
+        plan.steps.iter().find_map(|step| match step {
+            Step::CopyFile { source, target, .. } if source == location => Some(target.clone()),
+            _ => None,
+        })
+    };
+    let kept = copy_of(ran[0]).expect("a removed source was copied");
+    assert!(
+        fs.metadata(&kept).is_ok(),
+        "a removed source's copy was removed"
+    );
+    let duplicate = copy_of(unsure[0]).expect("an unsure source was copied");
+    assert!(
+        fs.metadata(&duplicate).is_err(),
+        "an unsure removal's duplicate copy stayed"
+    );
+}
+
+#[test]
+fn the_unmarked_removal_window_runs_from_the_first_removal_to_the_first_pending_other_step() {
+    let at =
+        |path: &str| navo_core::Location::local(navo_core::ProviderPath::from_text(path)).unwrap();
+    let copy = |name: &str| Step::CopyFile {
+        source: at(&format!("/src/{name}")),
+        target: at(&format!("/dst/{name}")),
+        size: 1,
+    };
+    let remove = |name: &str| Step::RemoveFile {
+        location: at(&format!("/src/{name}")),
+    };
+    let steps = vec![
+        Step::MakeFolder { target: at("/dst") },
+        copy("a"),
+        remove("a"),
+        copy("b"),
+        remove("b"),
+    ];
+    let plan = OperationPlan {
+        kind: OpKind::Move,
+        steps,
+        totals: navo_core::Totals {
+            files: 2,
+            folders: 1,
+            bytes: 2,
+        },
+        conflicts: Vec::new(),
+        risks: Vec::new(),
+    };
+    assert_eq!(
+        unmarked_removals(&plan, [3, 4]),
+        2..3,
+        "first removal in, copy b out"
+    );
+    assert_eq!(
+        unmarked_removals(&plan, [4]),
+        2..u32::MAX,
+        "a pending removal ends nothing"
+    );
+    assert_eq!(
+        unmarked_removals(&plan, []),
+        2..u32::MAX,
+        "nothing pending: to the plan end"
+    );
+    assert!(
+        unmarked_removals(&plan, [1, 2, 3, 4]).is_empty(),
+        "no removal started"
+    );
+    let mut copies = plan.clone();
+    copies
+        .steps
+        .retain(|step| !matches!(step, Step::RemoveFile { .. }));
+    assert!(
+        unmarked_removals(&copies, [2]).is_empty(),
+        "no removal step"
+    );
+    assert!(
+        unmarked_removals(&copies, []).is_empty(),
+        "no removal step, nothing pending"
+    );
+}
