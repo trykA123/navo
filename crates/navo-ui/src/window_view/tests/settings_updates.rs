@@ -286,3 +286,152 @@ fn downloading_renders_progress_bar_and_failed_offers_retry_and_manual_download(
     assert!(has(cx, &rig, "settings-update-check"));
     assert!(has(cx, &rig, "settings-update-installer"));
 }
+
+fn label(cx: &mut TestAppContext, rig: &Rig, id: &'static str) -> Option<String> {
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window
+            .try_find(id)
+            .and_then(|found| found.label().map(str::to_owned))
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn title_update_pill_survives_user_commands_and_dismisses(cx: &mut TestAppContext) {
+    let restarts = Arc::new(AtomicUsize::new(0));
+    let restart_calls = restarts.clone();
+    let (mut ready, _, _) = hooks(UpdateView::Ready {
+        version: "0.9.0".into(),
+    });
+    ready.restart = Arc::new(move || {
+        restart_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    });
+    let rig = rig_updates(cx, ready);
+    assert_eq!(
+        label(cx, &rig, "title-update-pill").as_deref(),
+        Some("Update 0.9.0")
+    );
+    rig.press(cx, "down");
+    assert!(has(cx, &rig, "title-update-pill"));
+    rig.click(cx, "title-update-pill-dismiss");
+    assert!(!has(cx, &rig, "title-update-pill"));
+    assert_eq!(restarts.load(Ordering::SeqCst), 0);
+    assert!(!has(cx, &rig, "settings-update-card"));
+
+    for quiet in [
+        UpdateView::Hidden,
+        UpdateView::Off,
+        UpdateView::Idle,
+        UpdateView::Checking,
+        UpdateView::UpToDate,
+    ] {
+        let (quiet_hooks, _, _) = hooks(quiet);
+        let rig = rig_updates(cx, quiet_hooks);
+        assert!(!has(cx, &rig, "title-update-pill"));
+    }
+}
+
+#[gpui_kit::test]
+fn title_update_pill_actions_and_state_transitions(cx: &mut TestAppContext) {
+    let (downloading, state, _) = hooks(UpdateView::Downloading {
+        version: "0.9.0".into(),
+        percent: 42,
+    });
+    let rig = rig_updates(cx, downloading);
+    assert_eq!(
+        label(cx, &rig, "title-update-pill").as_deref(),
+        Some("Updating 42%")
+    );
+    rig.click(cx, "title-update-pill-dismiss");
+    assert!(!has(cx, &rig, "title-update-pill"));
+    assert!(!has(cx, &rig, "settings-update-card"));
+
+    *state.lock().expect("state") = UpdateView::Downloading {
+        version: "0.9.0".into(),
+        percent: 80,
+    };
+    rig.view.update(cx, |view, cx| view.refresh_updates(cx));
+    assert!(!has(cx, &rig, "title-update-pill"));
+
+    *state.lock().expect("state") = UpdateView::Ready {
+        version: "0.9.0".into(),
+    };
+    rig.view.update(cx, |view, cx| view.refresh_updates(cx));
+    assert_eq!(
+        label(cx, &rig, "title-update-pill").as_deref(),
+        Some("Update 0.9.0")
+    );
+
+    let (downloading_open, _, _) = hooks(UpdateView::Downloading {
+        version: "0.9.0".into(),
+        percent: 42,
+    });
+    let rig = rig_updates(cx, downloading_open);
+    rig.click(cx, "title-update-pill");
+    assert!(has(cx, &rig, "settings-update-card"));
+
+    let (failed, _, _) = hooks(UpdateView::Failed(UpdateFailure::Offline));
+    let rig = rig_updates(cx, failed);
+    assert_eq!(
+        label(cx, &rig, "title-update-pill").as_deref(),
+        Some("Update failed")
+    );
+    rig.click(cx, "title-update-pill");
+    assert!(has(cx, &rig, "settings-update-card"));
+
+    let restarts = Arc::new(AtomicUsize::new(0));
+    let restart_calls = restarts.clone();
+    let (mut ready, _, _) = hooks(UpdateView::Ready {
+        version: "0.9.0".into(),
+    });
+    ready.restart = Arc::new(move || {
+        restart_calls.fetch_add(1, Ordering::SeqCst);
+        Err(UpdateFailure::Apply)
+    });
+    let rig = rig_updates(cx, ready);
+    rig.click(cx, "title-update-pill");
+    cx.run_until_parked();
+    assert_eq!(restarts.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        label(cx, &rig, "title-update-pill").as_deref(),
+        Some("Update failed")
+    );
+}
+
+#[gpui_kit::test]
+fn title_update_pill_keeps_polling_downloading_after_settings_closes(cx: &mut TestAppContext) {
+    let (downloading, state, _) = hooks(UpdateView::Downloading {
+        version: "0.9.0".into(),
+        percent: 10,
+    });
+    let rig = rig_updates(cx, downloading);
+    open_help(cx, &rig);
+    rig.press(cx, "escape");
+    assert!(!rig.view.read_with(cx, |view, _| view.settings.is_open()));
+
+    *state.lock().expect("state") = UpdateView::Downloading {
+        version: "0.9.0".into(),
+        percent: 55,
+    };
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(1));
+    cx.run_until_parked();
+    assert!(!has(cx, &rig, "settings-update-card"));
+    assert_eq!(
+        label(cx, &rig, "title-update-pill").as_deref(),
+        Some("Updating 55%")
+    );
+
+    *state.lock().expect("state") = UpdateView::Ready {
+        version: "0.9.0".into(),
+    };
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(1));
+    cx.run_until_parked();
+    assert_eq!(
+        label(cx, &rig, "title-update-pill").as_deref(),
+        Some("Update 0.9.0")
+    );
+}

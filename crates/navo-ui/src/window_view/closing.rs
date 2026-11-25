@@ -288,7 +288,9 @@ impl NavoWindow {
             cx.quit();
             return;
         };
-        self.settings.updates.view = super::UpdateView::Failed(failure);
+        self.settings
+            .updates
+            .set_view(super::UpdateView::Failed(failure));
         self.forget_update_notice();
         if self.settings.is_open() {
             self.focus_settings(window, cx);

@@ -47,6 +47,29 @@ impl ReadyPoll {
 /// Where a copy that cannot update itself gets the installer.
 pub(super) const RELEASES_URL: &str = "https://github.com/trykA123/navo/releases/latest";
 
+/// What state/version the title-bar update pill was dismissed for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(in crate::window_view) enum PillKey {
+    Downloading(SharedString),
+    Ready(SharedString),
+    Failed(super::super::UpdateFailure),
+}
+
+impl PillKey {
+    fn of(view: &UpdateView) -> Option<Self> {
+        match view {
+            UpdateView::Downloading { version, .. } => Some(Self::Downloading(version.clone())),
+            UpdateView::Ready { version } => Some(Self::Ready(version.clone())),
+            UpdateView::Failed(failure) => Some(Self::Failed(failure.clone())),
+            UpdateView::Hidden
+            | UpdateView::Off
+            | UpdateView::Idle
+            | UpdateView::Checking
+            | UpdateView::UpToDate => None,
+        }
+    }
+}
+
 /// What Settings → Help shows about updates, read from the hooks.
 pub(in crate::window_view) struct Updates {
     pub(in crate::window_view) hooks: UpdateHooks,
@@ -54,6 +77,7 @@ pub(in crate::window_view) struct Updates {
     is_polling: bool,
     /// The version of the ready notice on show.
     ready: Option<SharedString>,
+    dismissed_pill: Option<PillKey>,
     pub(in crate::window_view) restart: super::super::closing::Restart,
     pub(in crate::window_view) restart_dialogs: u64,
     pub(in crate::window_view) restart_watch: Option<gpui_kit::Subscription>,
@@ -68,12 +92,28 @@ impl Updates {
             hooks,
             is_polling: false,
             ready: None,
+            dismissed_pill: None,
             restart: super::super::closing::Restart::Idle,
             restart_dialogs: 0,
             restart_task: None,
             restart_watch: None,
             restart_focus: None,
         }
+    }
+
+    pub(in crate::window_view) fn set_view(&mut self, view: UpdateView) {
+        if PillKey::of(&view) != self.dismissed_pill {
+            self.dismissed_pill = None;
+        }
+        self.view = view;
+    }
+
+    pub(in crate::window_view) fn is_pill_dismissed(&self) -> bool {
+        PillKey::of(&self.view).is_some_and(|key| self.dismissed_pill.as_ref() == Some(&key))
+    }
+
+    pub(in crate::window_view) fn dismiss_pill(&mut self) {
+        self.dismissed_pill = PillKey::of(&self.view);
     }
 
     fn is_busy(&self) -> bool {
@@ -108,7 +148,7 @@ async fn take_ready(
         .update(cx, |view, cx| {
             if let Some((version, state)) = ready {
                 view.settings.updates.ready = Some(version);
-                view.settings.updates.view = state;
+                view.settings.updates.set_view(state);
                 cx.notify();
             }
         })
@@ -180,13 +220,18 @@ impl NavoWindow {
         self.settings.updates.ready = None;
     }
 
+    pub(in crate::window_view) fn dismiss_update_pill(&mut self, cx: &mut Context<Self>) {
+        self.settings.updates.dismiss_pill();
+        cx.notify();
+    }
+
     pub(in crate::window_view) fn refresh_updates(&mut self, cx: &mut Context<Self>) {
-        self.settings.updates.view = if self.identity.install == crate::app_menu::Install::Portable
-        {
+        let next = if self.identity.install == crate::app_menu::Install::Portable {
             UpdateView::Hidden
         } else {
             (self.settings.updates.hooks.state)()
         };
+        self.settings.updates.set_view(next);
         self.poll_updates(cx);
         cx.notify();
     }
@@ -212,10 +257,12 @@ impl NavoWindow {
     fn poll_tick(&mut self, cx: &mut Context<Self>) -> bool {
         let is_shown = self.settings.is_open && section_of(self.settings.row) == Section::Help;
         let updates = &mut self.settings.updates;
-        if is_shown {
-            updates.view = (updates.hooks.state)();
+        let is_downloading = matches!(updates.view, UpdateView::Downloading { .. });
+        if is_shown || is_downloading {
+            updates.set_view((updates.hooks.state)());
         }
-        updates.is_polling = is_shown && updates.is_busy();
+        let still_downloading = matches!(updates.view, UpdateView::Downloading { .. });
+        updates.is_polling = (is_shown || still_downloading) && updates.is_busy();
         cx.notify();
         updates.is_polling
     }
