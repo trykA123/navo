@@ -172,10 +172,8 @@ impl Abort for FakeHandle {
         let mut calls = self.io.calls.lock().unwrap();
         let call = &mut calls[self.index];
         call.aborts += 1;
-        if call.pending {
-            call.freed = true;
-            self.io.wake.notify_all();
-        }
+        call.freed |= call.pending;
+        self.io.wake.notify_all();
     }
 }
 
@@ -194,6 +192,16 @@ impl FakeIo {
 
     fn aborts(&self, index: usize) -> usize {
         self.calls.lock().unwrap()[index].aborts
+    }
+
+    /// Waits up to `limit` for call `index` to see its first abort; true once it has.
+    fn wait_first_abort(&self, index: usize, limit: std::time::Duration) -> bool {
+        let calls = self.calls.lock().unwrap();
+        let (calls, _) = self
+            .wake
+            .wait_timeout_while(calls, limit, |calls| calls[index].aborts == 0)
+            .unwrap();
+        calls[index].aborts > 0
     }
 }
 
@@ -295,4 +303,26 @@ fn the_abort_resend_stops_at_job_end_and_spares_the_next_job() {
     // The next job's call runs its full 2 s: no abort may free it.
     assert!(!next_done.recv_timeout(Duration::from_secs(5)).unwrap());
     assert_eq!(io.aborts(0), first_aborts, "re-sends stopped at job end");
+}
+
+/// AD16c: a close that lands before a running job enters its blocking call re-sends the abort,
+/// so the call is freed instead of holding its worker until the close cap.
+#[test]
+fn a_close_before_the_blocking_call_resends_the_abort_until_the_job_ends() {
+    use std::time::Duration;
+    let io = Arc::new(FakeIo::default());
+    let queue = fake_queue(&io);
+    let (started, go, done) = blocking_job(&queue, &io, A, 0);
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    std::thread::scope(|scope| {
+        let closing = scope.spawn(|| queue.close_within(Duration::from_secs(2)));
+        assert!(
+            io.wait_first_abort(0, Duration::from_secs(5)),
+            "close sent an abort"
+        );
+        go.send(()).unwrap();
+        let aborted = done.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(aborted, "a re-sent abort freed the blocking call");
+        closing.join().unwrap();
+    });
 }

@@ -76,6 +76,9 @@ impl Shared {
     }
 
     /// Waits at most `cap` for every worker in `handles` to end; returns early once all have.
+    /// Each wake re-sends the abort to every job still holding a handle, since a close that
+    /// lands before a job enters its blocking call finds no pending I/O (AD16c). A closed queue
+    /// starts no new job, so a re-send only reaches the jobs that were running at close.
     /// A detached worker starts no new job, but nothing interrupts its volume classification:
     /// only this cap bounds it, and the worker exits after the classifier returns, because
     /// `register_abort` then sees `closed`.
@@ -94,6 +97,7 @@ impl Shared {
                 .wait_timeout(state, step)
                 .unwrap_or_else(PoisonError::into_inner)
                 .0;
+            state.aborts.abort_all();
         }
     }
 
