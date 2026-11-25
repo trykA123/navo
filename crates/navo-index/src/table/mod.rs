@@ -38,10 +38,11 @@ pub enum TableError {
     Cycle(u32),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct NameTable {
     names: String,
-    live_names: u64,
+    /// Live name bytes including terminators, computed on demand for restored tables.
+    live_names: Option<u64>,
     offsets: Vec<u32>,
     parents: Vec<u32>,
     flags: Vec<StoredFlags>,
@@ -55,6 +56,12 @@ fn clean(name: &str) -> &str {
     name.split(NAME_END).next().unwrap_or_default()
 }
 
+impl Default for NameTable {
+    fn default() -> Self {
+        Self::with_capacity(0, 0)
+    }
+}
+
 impl NameTable {
     pub fn new() -> Self {
         Self::default()
@@ -63,7 +70,7 @@ impl NameTable {
     pub fn with_capacity(entries: usize, name_bytes: usize) -> Self {
         Self {
             names: String::with_capacity(name_bytes),
-            live_names: 0,
+            live_names: Some(0),
             offsets: Vec::with_capacity(entries),
             parents: Vec::with_capacity(entries),
             flags: Vec::with_capacity(entries),
@@ -133,7 +140,7 @@ impl NameTable {
             bytes: Vec::new(),
             counts: Vec::new(),
             names,
-            live_names: 0,
+            live_names: None,
             offsets,
             parents,
             flags,
@@ -143,10 +150,6 @@ impl NameTable {
         if !table.valid_structure() {
             return None;
         }
-        table.live_names = table
-            .live_ids()
-            .map(|id| table.name_unchecked(id).len() as u64 + 1)
-            .sum();
         table.relink();
         if !table.restore_totals(totals.0, totals.1) {
             return None;
@@ -210,7 +213,9 @@ impl NameTable {
         }
         let name = clean(name);
         let offset = self.append_name(name)?;
-        self.live_names += name.len() as u64 + 1;
+        if let Some(live) = &mut self.live_names {
+            *live += name.len() as u64 + 1;
+        }
         growth::grow_column(&mut self.offsets);
         self.offsets.push(offset);
         growth::grow_column(&mut self.parents);
@@ -255,7 +260,9 @@ impl NameTable {
         if previous != name {
             let previous_len = previous.len() as u64;
             self.offsets[id as usize] = self.append_name(name)?;
-            self.live_names = self.live_names - previous_len + name.len() as u64;
+            if let Some(live) = &mut self.live_names {
+                *live = *live - previous_len + name.len() as u64;
+            }
         }
         let contribution = self.contribution(id);
         self.adjust_ancestors(self.parents[id as usize], contribution, false);
@@ -368,7 +375,9 @@ impl NameTable {
     }
 
     fn mark_deleted(&mut self, id: u32) {
-        self.live_names -= self.name_unchecked(id).len() as u64 + 1;
+        if let Some(live) = self.live_names {
+            self.live_names = Some(live - (self.name_unchecked(id).len() as u64 + 1));
+        }
         self.flags[id as usize] |= Flags::DELETED;
         self.bytes[id as usize] = 0;
         if let Some(counts) = self.folder_counts_mut(id) {
@@ -377,10 +386,23 @@ impl NameTable {
         self.live -= 1;
     }
 
+    /// Counts and caches the live name bytes when a restored table first needs them.
+    fn live_names_bytes(&mut self) -> u64 {
+        if let Some(live) = self.live_names {
+            return live;
+        }
+        let live = self
+            .live_ids()
+            .map(|id| self.name_unchecked(id).len() as u64 + 1)
+            .sum();
+        self.live_names = Some(live);
+        live
+    }
+
     /// Reclaims old names once the copy is amortized by at least a quarter of the live bytes.
     /// Preserves entry IDs, so the journal's FRN map and the other columns stay in place.
     pub(crate) fn reclaim_names(&mut self) {
-        let live = usize::try_from(self.live_names).unwrap_or(usize::MAX);
+        let live = usize::try_from(self.live_names_bytes()).unwrap_or(usize::MAX);
         let stale = self.names.len().saturating_sub(live);
         if stale < (live / 4).max(1024 * 1024) {
             return;

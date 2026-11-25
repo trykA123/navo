@@ -47,6 +47,7 @@ impl NameTable {
         }
         let live = next as usize;
         (self.names, self.offsets) = self.kept_names(&map, live);
+        self.live_names = Some(self.names.len() as u64);
         self.flags = kept(&self.flags, &map, live, |flags| flags);
         self.bytes = kept(&self.bytes, &map, live, |bytes| bytes);
         self.parents = kept(&self.parents, &map, live, |parent| {
@@ -145,6 +146,39 @@ mod tests {
         assert_eq!(win(&t, carol).as_deref(), Some("C:\\Users\\carol"));
         assert_eq!((t.len(), t.slots()), (3, 3));
         assert!(!t.names.contains("bob"));
+    }
+
+    #[test]
+    fn restored_table_defers_live_name_count_until_reclaiming_stale_names() {
+        let mut table = NameTable::new();
+        let root = table.push(NO_PARENT, "C:", Flags::FOLDER).unwrap();
+        let old = "x".repeat(1024 * 1024 - 1);
+        let file = table.push(root, &old, Flags::NONE).unwrap();
+        let gone = table.push(root, "gone", Flags::NONE).unwrap();
+        table.rename(file, root, "renamed").unwrap();
+
+        let (names, offsets, parents, flags) = table.raw_parts();
+        let (bytes, counts) = table.stored_totals();
+        let mut loaded = NameTable::from_raw_parts(
+            names.to_owned(),
+            (offsets.to_vec(), parents.to_vec(), flags.to_vec()),
+            (bytes.to_vec(), counts.collect()),
+        )
+        .unwrap();
+        assert_eq!(loaded.live_names, None);
+
+        loaded.rename(file, root, "café").unwrap();
+        let added = loaded.push(root, "live", Flags::NONE).unwrap();
+        assert_eq!(loaded.remove(gone), 1);
+        assert_eq!(loaded.live_names, None);
+
+        loaded.reclaim_names();
+        let expected = "C:\0café\0live\0";
+        assert_eq!(loaded.raw_parts().0, expected);
+        assert_eq!(loaded.live_names, Some(expected.len() as u64));
+        assert_eq!(loaded.name(file), Some("café"));
+        assert_eq!(loaded.name(added), Some("live"));
+        assert_eq!(loaded.name(gone), None);
     }
 
     #[test]
