@@ -2,6 +2,22 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.9.1 — Lower memory retention and crisper pane chrome
+
+*2026-11-25*
+
+A focused polish and memory release on top of v0.9.0. The index service now reclaims stale name-arena bytes left behind by file renames and deletes, the file browser releases uncached and evicted folder rows from its sort memo, and pane tabs and path bars have clearer surface separation.
+
+### Fixed
+
+- **Index service name-arena growth on renames and deletes.** Repeated renames and deletes previously left stale name bytes in `navo-index` until a full slot compaction threshold was reached. The index now tracks live name bytes and repacks the arena automatically when stale bytes reach `max(1 MiB, 25% of live names)`, preserving entry IDs and snapshot format.
+- **File browser retaining uncached and evicted folder rows.** The sort memo in `navo-ui` now checks exact cache generations before retaining a sorted listing and prunes evicted or replaced generations when fresh listings arrive, freeing large folders promptly after you leave them.
+
+### Changed
+
+- **Clearer pane tabs and path bar separation.** The tab strip, breadcrumb/search path bar (with a 1 px hairline outline), and file list now sit on distinct Open Sea surfaces with a 4 px vertical gap between the tabs header and path bar.
+- **Removed redundant active-pane top hairline.** The pane outline remains the single calm active-pane indicator.
+
 ## v0.9.0 — Settings v2 complete, instant context menu, and calmer updates
 
 *2026-11-25*
