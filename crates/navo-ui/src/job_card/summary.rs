@@ -245,6 +245,8 @@ pub struct JobsSummary {
     pub speed: Option<u64>,
     /// A job failed or kept files in place: the card stays until it is dismissed.
     pub has_failed: bool,
+    /// Every job that needs a dismiss kept files in place; none failed outright.
+    pub is_kept: bool,
     pub is_running: bool,
     pub is_paused: bool,
     pub is_cancelled: bool,
@@ -277,6 +279,12 @@ impl JobsSummary {
             has_failed: jobs
                 .iter()
                 .any(|job| matches!(job.state, JobRowState::Failed(_) | JobRowState::Kept(_))),
+            is_kept: jobs
+                .iter()
+                .any(|job| matches!(job.state, JobRowState::Kept(_)))
+                && !jobs
+                    .iter()
+                    .any(|job| matches!(job.state, JobRowState::Failed(_))),
             is_running: running().next().is_some(),
             is_paused: running().next().is_some() && running().all(JobInfo::is_paused),
             is_cancelled: jobs.iter().all(|job| job.state == JobRowState::Cancelled),
@@ -291,12 +299,15 @@ impl JobsSummary {
         self.count > 0 && !self.is_running && !self.has_failed
     }
 
-    pub fn word(&self) -> Option<&'static str> {
-        match (self.is_running, self.has_failed, self.is_cancelled) {
-            (true, ..) => None,
-            (false, true, _) => Some("Failed"),
-            (false, false, true) => Some("Cancelled"),
-            (false, false, false) => Some("Done"),
-        }
+    /// The pill's one-word outcome once no job runs; `None` while one still runs.
+    pub fn word(&self) -> Option<String> {
+        let word = match (self.is_running, self.has_failed, self.is_cancelled) {
+            (true, ..) => return None,
+            (false, true, _) if self.is_kept => return Some(navo_l10n::tr("job-pill-kept")),
+            (false, true, _) => "Failed",
+            (false, false, true) => "Cancelled",
+            (false, false, false) => "Done",
+        };
+        Some(word.to_owned())
     }
 }

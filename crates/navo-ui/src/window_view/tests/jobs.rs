@@ -454,21 +454,19 @@ fn the_speed_survives_a_pause_without_decaying(cx: &mut TestAppContext) {
     assert_eq!(after, before);
 }
 
-#[gpui_kit::test]
-fn a_kept_job_shows_three_lines_and_its_more_link_opens_the_drawer(cx: &mut TestAppContext) {
+/// Ends job 1 as a move that kept `count` sources in place, as `Browser` reports it.
+fn end_kept(cx: &mut TestAppContext, view: &Entity<NavoWindow>, count: u32) {
     use navo_fs::{KeptFile, KeptReason, KeptSource};
 
-    let (window, view) = open_at(cx, 1280.);
     let moving = Fake {
         kind: OpKind::Move,
         ..running(1, 400 * MB)
     };
-    add(cx, &view, moving);
-    // The job ends with its status and kept list together, as `Browser` reports them.
+    add(cx, view, moving);
     view.update(cx, |view, cx| {
         let job = &mut view.browser.jobs_mut()[0];
         job.status = JobStatus::Kept("changed".to_owned());
-        job.report.kept = (0..5)
+        job.report.kept = (0..count)
             .map(|seq| {
                 KeptFile::Source(KeptSource {
                     seq,
@@ -479,6 +477,21 @@ fn a_kept_job_shows_three_lines_and_its_more_link_opens_the_drawer(cx: &mut Test
             .collect();
         view.refresh_activity(cx);
     });
+}
+
+fn is_shown(cx: &mut TestAppContext, window: AnyWindowHandle, id: impl Into<ElementId>) -> bool {
+    let id = id.into();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.try_find(id).is_some()
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn a_kept_job_shows_three_lines_and_show_all_opens_the_drawer(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    end_kept(cx, &view, 5);
     key(cx, window, "ctrl-j");
     cx.executor().advance_clock(Duration::from_secs(10));
     cx.run_until_parked();
@@ -488,34 +501,49 @@ fn a_kept_job_shows_three_lines_and_its_more_link_opens_the_drawer(cx: &mut Test
     let first = label(cx, window, ("job-kept", 0u64));
     assert_eq!(
         first,
-        "Kept the original of 0.txt: it changed while it was copied"
+        "Kept the original of 0.txt: it changed while Navo copied it"
     );
-    let is_shown = |cx: &mut TestAppContext, id: (&'static str, u64)| {
-        cx.update_window(window, |_, window, cx| {
-            window.render_frame(cx);
-            window.try_find(id).is_some()
-        })
-        .expect("window")
-    };
-    assert!(is_shown(cx, ("job-kept", 2)));
-    assert!(!is_shown(cx, ("job-kept", 3)), "only the first three");
-    assert_eq!(label(cx, window, ("job-kept-more", 1u64)), "2 more");
-    click(cx, window, ("job-kept-more", 1u64));
+    assert!(is_shown(cx, window, ("job-kept", 2u64)));
+    assert!(
+        !is_shown(cx, window, ("job-kept", 3u64)),
+        "only the first three"
+    );
+    assert_eq!(label(cx, window, ("job-kept-all", 1u64)), "Show all (5)");
+    click(cx, window, ("job-kept-all", 1u64));
     cx.executor().advance_clock(Duration::from_millis(200));
     cx.run_until_parked();
     assert!(
         shown(cx, window).card.is_none(),
         "the drawer takes the card's place"
     );
-    let drawer = cx
-        .update_window(window, |_, window, cx| {
-            window.render_frame(cx);
-            window.try_find("activity-drawer").is_some()
-        })
-        .expect("window");
-    assert!(drawer, "the drawer opens");
+    assert!(is_shown(cx, window, "activity-drawer"), "the drawer opens");
     assert!(
-        is_shown(cx, ("activity-kept", 4)),
+        is_shown(cx, window, ("activity-kept", 4u64)),
         "the drawer lists all five"
+    );
+}
+
+#[gpui_kit::test]
+fn a_single_kept_file_reaches_its_full_line_by_key(cx: &mut TestAppContext) {
+    let (window, view) = open_at(cx, 1280.);
+    end_kept(cx, &view, 1);
+    key(cx, window, "ctrl-j");
+    cx.run_until_parked();
+    assert_eq!(label(cx, window, ("job-kept-all", 1u64)), "Show all");
+    key(cx, window, "alt-j");
+    cx.executor().advance_clock(Duration::from_millis(200));
+    cx.run_until_parked();
+    assert!(
+        shown(cx, window).card.is_none(),
+        "the drawer takes the card's place"
+    );
+    assert!(
+        is_shown(cx, window, "activity-drawer"),
+        "one kept job opens the drawer"
+    );
+    let line = label(cx, window, ("activity-kept", 0u64));
+    assert_eq!(
+        line,
+        "Kept the original of 0.txt: it changed while Navo copied it"
     );
 }

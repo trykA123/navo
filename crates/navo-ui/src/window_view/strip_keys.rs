@@ -151,14 +151,25 @@ impl NavoWindow {
         }))
     }
 
-    fn focus_activity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Focuses the strip, or the drawer when it holds several items or a job's kept-file lines.
+    pub(super) fn focus_activity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let count = self.job_ui.strip.items.len();
         if count == 0 {
             cx.propagate();
             return;
         }
         self.remember_focus(window, cx);
-        self.job_ui.strip.is_drawer_open = count >= 2;
+        let has_lines = self
+            .job_ui
+            .strip
+            .items
+            .iter()
+            .any(|item| !item.lines.is_empty());
+        if has_lines {
+            // The drawer takes the card's place, so the full lines show where the card was.
+            self.job_ui.is_card_hidden = true;
+        }
+        self.job_ui.strip.is_drawer_open = count >= 2 || has_lines;
         self.job_ui.strip.selected = None;
         let handle = if self.job_ui.strip.is_drawer_open {
             self.job_ui.strip.drawer_focus.clone()
@@ -256,7 +267,7 @@ impl NavoWindow {
         cx.notify();
     }
 
-    pub(super) fn toggle_activity_drawer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn toggle_activity_drawer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.job_ui.strip.is_drawer_open {
             self.leave_strip(window, cx);
             return;

@@ -202,7 +202,7 @@ fn a_summary_knows_when_every_job_ended() {
     let summary = JobsSummary::of(&[done, failed]);
     assert!(!summary.is_ended());
     assert!(summary.has_failed);
-    assert_eq!(summary.word(), Some("Failed"));
+    assert_eq!(summary.word().as_deref(), Some("Failed"));
     assert_eq!(JobsSummary::of(&[copy()]).word(), None);
 }
 
@@ -403,4 +403,16 @@ fn a_kept_job_reads_completed_with_problems_and_stays_on_the_card() {
     assert_eq!(kept.status_text(), "Completed with problems");
     assert_eq!(kept.heading(), "Copied 4 items");
     assert!(!JobsSummary::of(std::slice::from_ref(&kept)).is_ended());
+}
+
+#[test]
+fn the_pill_says_with_problems_for_a_kept_job() {
+    let kept = with_state(JobRowState::Kept("changed".into()));
+    let summary = JobsSummary::of(std::slice::from_ref(&kept));
+    assert_eq!(summary.word().as_deref(), Some("With problems"));
+    let failed = with_state(JobRowState::Failed("denied".into()));
+    assert_eq!(
+        JobsSummary::of(&[kept, failed]).word().as_deref(),
+        Some("Failed")
+    );
 }

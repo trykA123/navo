@@ -4,20 +4,20 @@ use std::time::Duration;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::base::animation::ease_out_cubic;
 use gpui_kit::{Animation, AnimationExt, RenderOnce, Role};
-use navo_l10n::t;
+use navo_l10n::{t, tr};
 
 use super::actions::{Actions, job_actions};
 use super::summary::{JobInfo, JobsSummary, speed_text};
 use super::{Handler, JobHandler, fade_out, kind_icon, part};
 use crate::job_row::JobRowState;
 use crate::prelude::*;
-use crate::primitives::{IconName, Kbd, icon};
+use crate::primitives::{Button, ButtonVariant, IconName, Kbd, icon};
 use crate::tokens::{self, Theme};
 
 const CARD_WIDTH: f32 = 400.;
 const BAR_HEIGHT: f32 = 6.;
 const FROM_SHRINK: f32 = 100.;
-/// Kept-file lines a card shows before its "n more" link opens the activity drawer.
+/// Kept-file lines a card shows; "Show all" opens every line in the activity drawer.
 const KEPT_SHOWN: usize = 3;
 
 #[derive(IntoElement)]
@@ -195,7 +195,29 @@ fn detail(t: &Theme, job: &JobInfo) -> Option<Div> {
     }
 }
 
-/// The first kept-file lines, each with its reason, and a link that opens the rest in the drawer.
+/// "Show all" under the kept lines, with its key: it opens the drawer, where every line wraps.
+fn show_all(t: &Theme, id: u64, count: usize, handler: JobHandler) -> Div {
+    let text = if count > KEPT_SHOWN {
+        t!(
+            "job-kept-all-count",
+            count = u64::try_from(count).unwrap_or(u64::MAX)
+        )
+    } else {
+        tr("job-kept-all")
+    };
+    let button = Button::new(("job-kept-all", id), text)
+        .variant(ButtonVariant::Ghost)
+        .on_click(move |_, window, cx| handler(id, window, cx));
+    // An icon-wide gap; the ghost button's own padding then lines its text up with the lines.
+    let key = Kbd::new(("job-kept-all-key", id), "alt-j");
+    row(t)
+        .gap_0()
+        .child(div().w(t.spacing.icon).flex_none())
+        .child(button)
+        .children(key.map(|key| div().ml(t.spacing.sm).child(key)))
+}
+
+/// The first kept-file lines, each with its reason, and "Show all" to read them in full.
 fn kept_lines(t: &Theme, job: &JobInfo, more: Option<&JobHandler>) -> Option<Div> {
     let lines = &job.rename.kept;
     if lines.is_empty() {
@@ -216,27 +238,7 @@ fn kept_lines(t: &Theme, job: &JobInfo, more: Option<&JobHandler>) -> Option<Div
                         .truncate(),
                 )
         });
-    let hidden = lines.len().saturating_sub(KEPT_SHOWN);
-    let more = more.filter(|_| hidden > 0).map(|handler| {
-        let (id, handler) = (job.id, handler.clone());
-        let count = u64::try_from(hidden).unwrap_or(u64::MAX);
-        let text = t!("job-kept-more", count = count);
-        // A link under the line texts, past an icon-wide gap, so it lines up with them.
-        let link = div()
-            .id(("job-kept-more", id))
-            .role(Role::Button)
-            .aria_label(text.clone())
-            .test_support()
-            .cursor_pointer()
-            .text_color(t.colors.accent_text)
-            .hover(|link| link.underline())
-            .on_click(move |_, window, cx| handler(id, window, cx))
-            .child(text);
-        row(t)
-            .gap(t.spacing.sm)
-            .child(div().w(t.spacing.icon).flex_none())
-            .child(link)
-    });
+    let more = more.map(|handler| show_all(t, job.id, lines.len(), handler.clone()));
     let column = div().flex().flex_col().gap(t.spacing.xs);
     Some(
         column

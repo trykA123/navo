@@ -192,12 +192,8 @@ impl NavoWindow {
 
     /// Swaps the card for the activity drawer, which lists every file a job kept in place.
     fn show_kept(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.job_ui.is_card_hidden = true;
         self.refresh_activity(cx);
-        if !self.job_ui.strip.is_drawer_open {
-            self.toggle_activity_drawer(window, cx);
-        }
-        cx.notify();
+        self.focus_activity(window, cx);
     }
 
     pub(super) fn show_job_card(&mut self, cx: &mut Context<Self>) {

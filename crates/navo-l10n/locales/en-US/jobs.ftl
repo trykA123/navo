@@ -45,14 +45,16 @@ job-verified-some = Done · Verified { $verified } of { $count ->
    *[other] { $files } files
 }
 job-kept-status = Completed with problems
-job-kept-unlisted = Some files were kept in place
-job-kept-more = { $count } more
+job-kept-unlisted = Navo kept some files in place
+job-kept-all = Show all
+job-kept-all-count = Show all ({ $count })
+job-pill-kept = With problems
 job-kept-source = Kept the original of { $name }: { $reason }
 job-kept-copy = Kept the copy of { $name } after rollback: { $reason }
-job-kept-reason-changed = it changed while it was copied
+job-kept-reason-changed = it changed while Navo copied it
 job-kept-reason-unconfirmed = this drive cannot confirm the copy matches it
-job-kept-reason-resumed = the move resumed, so the copy was not checked against it
-job-kept-reason-rollback = the original could not be confirmed in place
+job-kept-reason-resumed = the move resumed, so Navo did not check the copy against it
+job-kept-reason-rollback = Navo could not confirm the original is still in place
 job-same-file = “{ $path }” is the same file as its source under another name. Nothing was changed.
 conflict-choice-label = Names already there
 conflict-skip = Skip

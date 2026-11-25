@@ -1,10 +1,10 @@
-//! Job cards for moves that kept files in place (none, one, five) and the drawer that lists them.
+//! Job cards for moves that kept files in place (none, one, five), their pill and the drawer.
 
 use std::time::Instant;
 
 use navo_ui::activity::Activity;
 use navo_ui::activity_strip::ActivityDrawer;
-use navo_ui::job_card::JobCard;
+use navo_ui::job_card::{JobCard, JobPill, PillFit};
 use navo_ui::prelude::*;
 use navo_ui::tokens;
 
@@ -12,6 +12,7 @@ use crate::job_sample;
 use crate::sections::section;
 
 const PHONE: f32 = 390.;
+const PILL_ROW: f32 = 40.;
 
 fn card(count: usize) -> JobCard {
     let id = u64::try_from(count).unwrap_or_default();
@@ -27,6 +28,14 @@ fn drawer() -> ActivityDrawer {
     ActivityDrawer::new(activity.primary().into_iter().cloned().collect())
 }
 
+/// The pill a hidden kept card leaves in the F-key bar.
+fn pill() -> Div {
+    div()
+        .h(px(PILL_ROW))
+        .flex()
+        .child(JobPill::new(&[job_sample::kept(1, 1)], PillFit::Full))
+}
+
 /// The three cards and the drawer side by side, or stacked in a 390 px column when `is_narrow`.
 pub fn page(is_narrow: bool, cx: &App) -> Div {
     let t = tokens::current(cx).clone();
@@ -37,6 +46,7 @@ pub fn page(is_narrow: bool, cx: &App) -> Div {
         .flex_wrap()
         .items_start()
         .gap(t.spacing.xxl)
+        .child(section(&t, "PILL", pill()))
         .children(cards)
         .child(div().w(px(PHONE)).child(section(&t, "DRAWER", drawer())));
     div()

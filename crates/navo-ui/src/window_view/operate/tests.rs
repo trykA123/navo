@@ -359,12 +359,12 @@ fn a_kept_job_maps_to_a_kept_card_with_one_line_per_kept_file() {
     assert_eq!(
         info.rename.kept,
         [
-            "Kept the original of a.txt: it changed while it was copied".to_owned(),
+            "Kept the original of a.txt: it changed while Navo copied it".to_owned(),
             "Kept the original of b.txt: this drive cannot confirm the copy matches it".to_owned(),
-            "Kept the original of c.txt: the move resumed, so the copy was not checked against it"
+            "Kept the original of c.txt: the move resumed, so Navo did not check the copy against it"
                 .to_owned(),
             format!("Kept the original of d: {not_empty}"),
-            "Kept the copy of e.txt after rollback: the original could not be confirmed in place"
+            "Kept the copy of e.txt after rollback: Navo could not confirm the original is still in place"
                 .to_owned(),
         ]
         .map(gpui_kit::SharedString::from)

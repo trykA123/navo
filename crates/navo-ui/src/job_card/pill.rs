@@ -95,8 +95,8 @@ fn badge(t: &Theme, summary: &JobsSummary, single: Option<navo_core::OpKind>) ->
         icon(name, px(GLYPH), color).into_any_element()
     };
     let content = match (summary.word(), single) {
-        (Some("Failed"), _) => glyph(IconName::TriangleAlert, t.colors.warn),
-        (Some("Done"), _) => glyph(IconName::Check, t.colors.ok),
+        (Some(_), _) if summary.has_failed => glyph(IconName::TriangleAlert, t.colors.warn),
+        (Some(_), _) if !summary.is_cancelled => glyph(IconName::Check, t.colors.ok),
         (Some(_), _) => glyph(IconName::X, t.colors.muted),
         (None, _) if summary.is_paused => div()
             .id("job-pill-paused")
@@ -144,7 +144,7 @@ impl JobPill {
     fn spoken(&self) -> String {
         let s = &self.summary;
         let status = match (s.word(), s.is_paused) {
-            (Some(word), _) => word.to_owned(),
+            (Some(word), _) => word,
             (None, true) => format!("Paused, {}", s.percent_text()),
             (None, false) => s.percent_text(),
         };
@@ -188,7 +188,7 @@ impl JobPill {
     fn parts(&self, t: &Theme) -> Vec<AnyElement> {
         let s = &self.summary;
         let is_glyph_only = self.fit == PillFit::Bare && s.word().is_some();
-        let status = s.word().map_or_else(|| s.percent_text(), str::to_owned);
+        let status = s.word().unwrap_or_else(|| s.percent_text());
         let left = s
             .left
             .filter(|_| self.fit != PillFit::Bare && s.is_running)
