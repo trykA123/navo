@@ -67,8 +67,9 @@ impl CopiedSource {
                 && self.attributes.is_some())
     }
 
-    /// True when `now` is still this file, unchanged. Without a file ID, a replacement with the
-    /// same size, times and attributes passes: the known limit on volumes that keep no IDs. Windows
+    /// True when `now` is still this file, unchanged. Without a file ID, `now` must have none
+    /// either (one with an ID is on another volume), and a replacement with the same size, times
+    /// and attributes passes: the known limit on volumes that keep no IDs. Windows
     /// name tunneling (FAT and NTFS) gives a file created under the same name within about 15 s of
     /// a rename or delete the old creation time, so an editor's safe-save there can pass too.
     #[must_use]
@@ -78,6 +79,7 @@ impl CopiedSource {
             Some(_) => same && now.identity == self.identity,
             None => {
                 same && self.proves()
+                    && now.identity.is_none()
                     && now.created_ms == self.created_ms
                     && now.attributes == self.attributes
             }
@@ -426,5 +428,19 @@ mod tests {
             assert!(!partial.proves());
             assert!(!partial.still(&partial));
         }
+    }
+
+    #[test]
+    fn without_a_file_id_a_file_that_has_one_now_is_another_volume() {
+        let read = without_id();
+        let now = CopiedSource {
+            identity: Some(crate::FileIdentity {
+                volume: 7,
+                file: [9; 16],
+                kind: crate::FileIdentityKind::Native,
+            }),
+            ..read
+        };
+        assert!(!read.still(&now));
     }
 }

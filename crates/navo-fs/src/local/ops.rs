@@ -116,7 +116,9 @@ impl ProviderOps for LocalFs {
     }
 
     /// Reads creation time and attribute bits too, through one handle opened by path, so a source
-    /// proof without a file ID (FAT, exFAT) can match. Any failure to open or read proves nothing.
+    /// proof without a file ID (FAT, exFAT) can match. Unlike the default, this never returns an
+    /// error: any failure to open or read the path is `None`, which matches no proof, so a
+    /// rollback keeps its copy and reports it as kept.
     #[cfg(windows)]
     fn copied_source_at(
         &self,
