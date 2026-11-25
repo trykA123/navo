@@ -1,3 +1,4 @@
+mod docs;
 mod matcher;
 mod names;
 mod print;

@@ -1,3 +1,4 @@
+mod docs;
 mod filters;
 mod matcher;
 mod names;
@@ -5,6 +6,7 @@ mod print;
 mod query;
 mod tokens;
 
+pub use docs::{DocsError, xml_text};
 pub use filters::{Attribute, AttributeFilter, Date, ModifiedFilter, SizeFilter};
 pub use matcher::{Compiled, FileHits, LineHit, Skip, scan};
 pub use names::NameFilter;
