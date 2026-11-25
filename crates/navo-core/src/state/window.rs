@@ -77,9 +77,8 @@ impl Window {
         &mut self.find
     }
 
-    /// Sets the find results memory restored from the session.
-    #[allow(dead_code, reason = "FR24 restores it from the session")]
-    pub(crate) fn restore_find(&mut self, find: FindMemory) {
+    /// Restores this window's find results memory from the session; the Find window calls it.
+    pub fn restore_find(&mut self, find: FindMemory) {
         self.find = find;
     }
 
