@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::{AnyWindowHandle, FocusHandle, WeakEntity};
 use navo_core::{Command, Location};
 
@@ -180,6 +181,7 @@ impl NavoWindow {
         }
         viewer.note_detected(cx);
         window.focus(&viewer.focus_target(cx), cx);
+        let _ = window.focused_input(cx);
         self.plan_swap(later, window, cx);
         self.show_parts(cx);
         cx.notify();
@@ -293,6 +295,7 @@ impl NavoWindow {
             viewer.clear_body();
             viewer.opening = Some(opening);
             window.focus(&viewer.focus, cx);
+            let _ = window.focused_input(cx);
         }
         cx.notify();
     }

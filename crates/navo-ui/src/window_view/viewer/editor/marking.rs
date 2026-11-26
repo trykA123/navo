@@ -26,7 +26,7 @@ const READ_ONLY: &str = "Line endings show while reading.";
 const NO_FOLLOW: &str = "Follow works in the paged view of large text files.";
 const RECOUNT_AFTER: Duration = Duration::from_millis(500);
 
-struct TextBytes(Arc<str>);
+struct TextBytes(Rope);
 
 impl ByteSource for TextBytes {
     fn len(&self) -> u64 {
@@ -34,11 +34,31 @@ impl ByteSource for TextBytes {
     }
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, String> {
-        self.0.as_bytes().read_at(offset, buf)
+        let total = self.0.len();
+        let Ok(at) = usize::try_from(offset) else {
+            return Ok(0);
+        };
+        if at >= total || buf.is_empty() {
+            return Ok(0);
+        }
+        let (chunks, chunk_start) = self.0.chunks_at(at);
+        let mut skip = at - chunk_start;
+        let mut copied = 0;
+        for chunk in chunks {
+            let available = &chunk.as_bytes()[skip..];
+            skip = 0;
+            let take = available.len().min(buf.len() - copied);
+            buf[copied..copied + take].copy_from_slice(&available[..take]);
+            copied += take;
+            if copied == buf.len() {
+                break;
+            }
+        }
+        Ok(copied)
     }
 }
 
-pub(super) fn text_source(text: Arc<str>) -> Reopen {
+pub(super) fn text_source(text: Rope) -> Reopen {
     Arc::new(move || Ok(Box::new(TextBytes(text.clone())) as Box<dyn ByteSource + Send>))
 }
 
@@ -148,7 +168,7 @@ impl EditorView {
     /// Points the count, marks and Find all at the live text and recounts; in regex mode
     /// the regex count is redone too.
     fn refresh_source(&mut self, cx: &mut Context<Self>) {
-        let text: Arc<str> = Arc::from(self.editor.read(cx).text().to_string());
+        let text = self.editor.read(cx).text().clone();
         self.marking.source = text_source(text);
         source_changed(self, None, cx);
         if self.find.regex {
@@ -251,8 +271,22 @@ fn found_in(rope: &Rope, start: u64, width: u64) -> FoundRow {
 #[cfg(test)]
 mod tests {
     use gpui_kit::base::input::Rope;
+    use navo_core::paging::ByteSource;
 
-    use super::found_in;
+    use super::{TextBytes, found_in};
+
+    #[test]
+    fn text_bytes_reads_across_rope_chunks_and_mid_utf8_offsets() {
+        let content = "αβγ\n".repeat(4000);
+        let source = TextBytes(Rope::from_str(&content));
+        assert_eq!(source.len(), content.len() as u64);
+        let mut buf = [0_u8; 777];
+        let offset = 1025_u64;
+        let read = source.read_at(offset, &mut buf).expect("read");
+        assert_eq!(read, buf.len());
+        assert_eq!(&buf[..], &content.as_bytes()[1025..1025 + 777]);
+        assert_eq!(source.read_at(source.len(), &mut buf).expect("eof"), 0);
+    }
 
     #[test]
     fn a_hit_deep_in_a_long_line_shows_only_a_window_around_it() {

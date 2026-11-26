@@ -1,9 +1,8 @@
-use std::sync::Arc;
-
+use gpui_kit::base::input::Rope;
 use navo_core::marks::Bookmarks;
 
 #[derive(Clone)]
-pub struct CrlfOffsets(pub Arc<str>);
+pub struct CrlfOffsets(pub Rope);
 
 fn collect(starts: impl Iterator<Item = u64>) -> Bookmarks {
     let mut starts: Vec<u64> = starts.collect();
@@ -52,8 +51,7 @@ impl CrlfOffsets {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
+    use gpui_kit::base::input::Rope;
     use navo_core::marks::Bookmarks;
 
     use super::CrlfOffsets;
@@ -68,7 +66,7 @@ mod tests {
 
     #[test]
     fn line_starts_move_by_one_byte_per_earlier_line_end() {
-        let offsets = CrlfOffsets(Arc::from("one\ntwo\n\nfour\n"));
+        let offsets = CrlfOffsets(Rope::from_str("one\ntwo\n\nfour\n"));
         let disk = offsets.to_disk(&bookmarks(&[0, 4, 8, 9]));
         assert_eq!(disk.iter().collect::<Vec<_>>(), [0, 5, 10, 12]);
         let buffer = offsets.to_buffer(&disk);

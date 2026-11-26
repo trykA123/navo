@@ -291,3 +291,60 @@ fn a_late_pin_from_the_previous_file_does_not_show_the_next_files_editor(cx: &mu
     }
     panic!("b.txt's editor is not swapped in after {SWAP_FRAMES} frames");
 }
+
+#[gpui_kit::test]
+fn a_large_text_file_disables_soft_wrap_to_avoid_full_file_shaping(cx: &mut TestAppContext) {
+    let (window, view, _) = open_large(cx);
+    until_swapped(cx, window, &view);
+    let wraps = view.read_with(cx, |view, cx| {
+        let body = view
+            .viewer
+            .as_ref()
+            .and_then(|viewer| viewer.body.as_ref())
+            .expect("viewer body");
+        let editor = body
+            .as_any()
+            .downcast_ref::<crate::window_view::viewer::editor::EditorBody>()
+            .expect("editor body");
+        editor.0.read(cx).wraps()
+    });
+    assert!(
+        !wraps,
+        "large files must disable soft wrap so gpui does not shape every line eagerly"
+    );
+}
+
+#[gpui_kit::test]
+fn closing_f3_drops_the_viewer_editor_and_paged_entities(cx: &mut TestAppContext) {
+    let (window, view, _) = open_large(cx);
+    let weak_paged = paged(cx, &view).downgrade();
+    until_swapped(cx, window, &view);
+    let (weak_editor_view, weak_editor_state) = view.read_with(cx, |view, cx| {
+        let body = view
+            .viewer
+            .as_ref()
+            .and_then(|viewer| viewer.body.as_ref())
+            .expect("viewer body");
+        let editor = body
+            .as_any()
+            .downcast_ref::<crate::window_view::viewer::editor::EditorBody>()
+            .expect("editor body");
+        (editor.0.downgrade(), editor.editor(cx).downgrade())
+    });
+    press(cx, window, &view, "escape");
+    redraw(cx, window);
+    redraw(cx, window);
+    cx.run_until_parked();
+    assert!(
+        weak_paged.upgrade().is_none(),
+        "PagedView must be released after swap and viewer close"
+    );
+    assert!(
+        weak_editor_view.upgrade().is_none(),
+        "EditorView must be released when F3 closes"
+    );
+    assert!(
+        weak_editor_state.upgrade().is_none(),
+        "EditorState must be released when F3 closes"
+    );
+}

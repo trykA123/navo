@@ -43,6 +43,7 @@ pub(in crate::window_view) mod view_menu;
 use std::cell::Cell;
 use std::rc::Rc;
 
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::{Bounds, FocusHandle, Subscription};
 use navo_core::Location;
 use navo_core::encoding::{Encoding, TextEncoding};
@@ -304,7 +305,10 @@ impl NavoWindow {
         self.browser.dialog_opened();
         viewer.from_browse = self.preview.is_browsing(window, cx);
         let focus = viewer.focus.clone();
-        window.defer(cx, move |window, cx| window.focus(&focus, cx));
+        window.defer(cx, move |window, cx| {
+            window.focus(&focus, cx);
+            let _ = window.focused_input(cx);
+        });
         self.viewer = Some(viewer);
         cx.notify();
     }
@@ -338,6 +342,8 @@ impl NavoWindow {
         } else {
             self.focus_core_pane(window, cx);
         }
+        // Flush gpui-component's focused_input slot so a closed EditorState is dropped now.
+        let _ = window.focused_input(cx);
         cx.notify();
     }
 }

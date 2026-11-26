@@ -245,7 +245,7 @@ impl ViewerBody for EditorBody {
 
     fn soft_wrap(&self, cx: &App) -> Option<bool> {
         let view = self.0.read(cx);
-        view.editing.then_some(view.soft_wrap)
+        (view.editing && view.can_wrap).then_some(view.soft_wrap)
     }
 
     fn show_soft_wrap(&self, on: bool, cx: &mut App) {

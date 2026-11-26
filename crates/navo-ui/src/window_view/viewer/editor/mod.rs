@@ -12,6 +12,7 @@ mod view;
 
 use std::sync::Arc;
 
+use gpui_kit::base::input::Rope;
 use gpui_kit::component::input::{EditorState, InputEvent, RangeDecorationCollection};
 use gpui_kit::{Subscription, Task};
 use navo_core::encoding::TextEncoding;
@@ -37,11 +38,15 @@ use lint::Lint;
 use marking::text_source;
 use preview::Split;
 
+/// Largest file (bytes) soft-wrapped in the editor; larger files skip eager full-file shaping.
+const SOFT_WRAP_LIMIT: usize = 256 * 1024;
+
 pub(super) struct EditorView {
     host: Host,
     editor: Entity<EditorState>,
     editing: bool,
     can_edit: bool,
+    can_wrap: bool,
     crlf: bool,
     ends: Option<Arc<LineEnds>>,
     encoding: TextEncoding,
@@ -84,14 +89,19 @@ fn read_only_note(file: &FileText) -> SharedString {
     .into()
 }
 
-fn crlf_offsets(file: &FileText, text: &Arc<str>) -> Option<CrlfOffsets> {
-    match &file.ends {
-        Some(ends) => Some(CrlfOffsets(Arc::from(ends.crlf_marks(&file.text)))),
-        None => file.crlf.then(|| CrlfOffsets(text.clone())),
+fn crlf_offsets(crlf: bool, marks: Option<Rope>, text: &Rope) -> Option<CrlfOffsets> {
+    match marks {
+        Some(marks) => Some(CrlfOffsets(marks)),
+        None => crlf.then(|| CrlfOffsets(text.clone())),
     }
 }
 
-fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLink) {
+fn memory_link(
+    file: &FileText,
+    crlf_marks: Option<Rope>,
+    text: &Rope,
+    host: &Host,
+) -> (bool, MemoryLink) {
     let persists =
         file.encoding.encoding.name() == "UTF-8" && !file.encoding.bom && !file.read_only;
     let carried = host.carried.clone().map(|carried| Carried {
@@ -103,7 +113,7 @@ fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLi
         location: host.location.clone(),
         stamp: file.stamp.filter(|_| persists),
         carried,
-        crlf: crlf_offsets(file, text),
+        crlf: crlf_offsets(file.crlf, crlf_marks, text),
     };
     (persists, link)
 }
@@ -112,6 +122,7 @@ fn memory_link(file: &FileText, text: &Arc<str>, host: &Host) -> (bool, MemoryLi
 fn read_only_state(
     text: String,
     highlight: &Highlight,
+    soft_wrap: bool,
     window: &mut Window,
     cx: &mut Context<EditorState>,
 ) -> EditorState {
@@ -122,6 +133,7 @@ fn read_only_state(
         Highlight::Plain => "text".to_owned(),
     };
     let mut state = EditorState::new(window, cx)
+        .soft_wrap(soft_wrap)
         .language(language)
         .default_value(text);
     if let Highlight::Line(lexer) = highlight {
@@ -148,15 +160,21 @@ fn on_text_change(editor: &Entity<EditorState>, cx: &mut Context<EditorView>) ->
 impl EditorView {
     fn new(opened: EditorFile, host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let EditorFile {
-            file,
+            mut file,
             highlight,
             split,
         } = opened;
-        let shared: Arc<str> = Arc::from(file.text.as_str());
-        let (persists, link) = memory_link(&file, &shared, &host);
+        let can_wrap = file.text.len() <= SOFT_WRAP_LIMIT;
+        let crlf_marks = file
+            .ends
+            .as_deref()
+            .map(|ends| Rope::from_str(&ends.crlf_marks(&file.text)));
         let note = file.read_only.then(|| read_only_note(&file));
         let lint = Lint::for_location(&host.location);
-        let editor = cx.new(|cx| read_only_state(file.text, &highlight, window, cx));
+        let text = std::mem::take(&mut file.text);
+        let editor = cx.new(|cx| read_only_state(text, &highlight, can_wrap, window, cx));
+        let shared = editor.read(cx).text().clone();
+        let (persists, link) = memory_link(&file, crlf_marks, &shared, &host);
         let decorations = editor.update(cx, |state, cx| {
             state.create_range_decorations_collection(Vec::new(), cx)
         });
@@ -167,6 +185,7 @@ impl EditorView {
             editor,
             editing: false,
             can_edit: !file.read_only,
+            can_wrap,
             crlf: file.crlf,
             ends: file.ends.clone(),
             encoding: file.encoding,
@@ -184,8 +203,8 @@ impl EditorView {
             marking: Marking::new(text_source(shared)),
             line_numbers: true,
             gutter: None,
-            soft_wrap: true,
-            wrapped: true,
+            soft_wrap: can_wrap,
+            wrapped: can_wrap,
             decorations,
             decorated: None,
             overview: Overview::default(),
@@ -220,9 +239,10 @@ impl EditorView {
         self.gutter == Some(true)
     }
 
-    /// Applies soft wrap to the widget: the window's choice while editing, always on while viewing.
+    /// Applies soft wrap to the widget: the window's choice while editing, always on while viewing,
+    /// disabled for files above `SOFT_WRAP_LIMIT`.
     fn sync_soft_wrap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let wanted = !self.editing || self.soft_wrap;
+        let wanted = self.can_wrap && (!self.editing || self.soft_wrap);
         if self.wrapped != wanted {
             self.wrapped = wanted;
             self.editor
