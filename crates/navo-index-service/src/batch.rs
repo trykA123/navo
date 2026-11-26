@@ -100,6 +100,13 @@ fn step_for(
 fn with_index<T>(shared: &Shared, change: impl FnOnce(&mut NtfsIndex) -> T) -> Option<T> {
     let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
     state.search.forget_profile_ids();
+    let will_copy = state
+        .index
+        .as_ref()
+        .is_some_and(|index| Arc::strong_count(index) > 1);
+    if will_copy {
+        state.follow.index_copies += 1;
+    }
     let index = state.index.as_mut()?;
     let index = match Arc::get_mut(index) {
         Some(index) => index,

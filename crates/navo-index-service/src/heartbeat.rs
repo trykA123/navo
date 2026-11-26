@@ -28,6 +28,7 @@ pub(super) fn run(log: &Log, volumes: &[SharedVolume], cancel: &navo_index::pipe
 }
 
 pub(super) fn line(volumes: &[SharedVolume], memory: Option<ProcessMemory>) -> String {
+    let now = Instant::now();
     let mut line = format!("heartbeat pid={}", std::process::id());
     let _ = match memory {
         Some(memory) => write!(
@@ -38,8 +39,8 @@ pub(super) fn line(volumes: &[SharedVolume], memory: Option<ProcessMemory>) -> S
         None => write!(line, " memory=unknown"),
     };
     for volume in volumes {
-        match read_before(&volume.shared, Instant::now() + READ_WAIT) {
-            Some(state) => push_volume(&mut line, &state),
+        match read_before(&volume.shared, now + READ_WAIT) {
+            Some(state) => push_volume(&mut line, &state, now),
             None => line.push_str(" | volume busy"),
         }
     }
@@ -47,23 +48,36 @@ pub(super) fn line(volumes: &[SharedVolume], memory: Option<ProcessMemory>) -> S
     line
 }
 
-fn push_volume(line: &mut String, state: &State) {
+fn push_volume(line: &mut String, state: &State, now: Instant) {
     let (entries, slots) = state.index.as_ref().map_or((0, 0), |index| {
         (index.table.len() as u64, u64::from(index.table.slots()))
     });
     let builds = &state.builds;
+    let follow = &state.follow;
     let progress = state
         .status
         .progress
         .map_or_else(|| "idle".to_owned(), |percent| percent.to_string());
+    let index_memory_bytes: u64 = state
+        .index
+        .as_ref()
+        .map_or(0, |idx| (idx.table.memory_bytes() + idx.ids.memory_bytes()) as u64);
+    let bytes_per_entry = index_memory_bytes.checked_div(entries).unwrap_or(0);
+    let since_full_build_s = follow.last_full_build.map_or_else(
+        || "none".to_owned(),
+        |instant| now.saturating_duration_since(instant).as_secs().to_string(),
+    );
     let _ = write!(
         line,
-        " | {} entries={entries} slots={slots} progress={progress} full_builds={} deferred={} unresolved_batches={} dropped={}",
+        " | {} entries={entries} slots={slots} progress={progress} full_builds={} deferred={} unresolved_batches={} dropped={} lag_bytes={} follow_errors={} copies={} bytes_per_entry={bytes_per_entry} since_full_build_s={since_full_build_s}",
         state.status.root,
         builds.full_builds,
         builds.deferred_rebuilds,
         builds.unresolved_batches,
-        builds.dropped_changes
+        builds.dropped_changes,
+        follow.lag_bytes,
+        follow.errors,
+        follow.index_copies,
     );
 }
 
@@ -71,6 +85,7 @@ fn push_volume(line: &mut String, state: &State) {
 mod tests {
     use navo_index::pipe::{VolumeBuilds, VolumeStatus};
 
+    use super::super::answer::FollowStats;
     use super::*;
 
     #[test]
@@ -119,7 +134,7 @@ mod tests {
         assert_eq!(
             text,
             format!(
-                "heartbeat pid={} working_set=73400320 private=681574400 | C: entries=0 slots=0 progress=0 full_builds=2 deferred=1 unresolved_batches=0 dropped=0 busy=0",
+                "heartbeat pid={} working_set=73400320 private=681574400 | C: entries=0 slots=0 progress=0 full_builds=2 deferred=1 unresolved_batches=0 dropped=0 lag_bytes=0 follow_errors=0 copies=0 bytes_per_entry=0 since_full_build_s=none busy=0",
                 std::process::id()
             )
         );
@@ -131,5 +146,38 @@ mod tests {
                 .unwrap()
         });
         assert!(busy.ends_with("memory=unknown | volume busy busy=1"));
+    }
+
+    #[test]
+    fn follow_stats_appear_in_the_heartbeat_line() {
+        BUSY_REPLIES.store(0, Ordering::Relaxed);
+        let index = navo_index::ntfs::test_support::MftFixture::new(40, 7)
+            .read()
+            .index;
+        let entries = index.table.len();
+        let memory_per_entry = (index.table.memory_bytes() + index.ids.memory_bytes()) / entries;
+        let volume = SharedVolume::new(State {
+            status: VolumeStatus {
+                root: "D:".into(),
+                ..VolumeStatus::default()
+            },
+            index: Some(std::sync::Arc::new(index)),
+            follow: FollowStats {
+                errors: 3,
+                index_copies: 2,
+                lag_bytes: 4096,
+                last_full_build: Some(Instant::now() - Duration::from_secs(120)),
+            },
+            ..State::default()
+        });
+        let text = line(std::slice::from_ref(&volume), None);
+        assert!(text.contains("lag_bytes=4096"), "{text}");
+        assert!(text.contains("follow_errors=3"), "{text}");
+        assert!(text.contains("copies=2"), "{text}");
+        assert!(
+            text.contains(&format!("bytes_per_entry={memory_per_entry}")),
+            "{text}"
+        );
+        assert!(text.contains("since_full_build_s=12"), "{text}");
     }
 }

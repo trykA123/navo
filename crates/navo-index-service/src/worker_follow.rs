@@ -61,6 +61,7 @@ impl Worker {
             }
             Err(error) => return Ok(self.rebuilds.apply_failed(&self.shared, &error, elapsed)),
         };
+        update_lag(&self.shared, volume);
         if changed {
             self.clock.batch(self.started.elapsed(), records);
         }
@@ -102,4 +103,18 @@ fn note_metadata_parents(shared: &Shared, volume: &mut Volume, journal: &UsnBatc
     if !found.is_empty() {
         journal_batch::note_metadata_folders(shared, found);
     }
+}
+
+/// Queries the journal's current position and stores the byte lag behind the index cursor.
+fn update_lag(shared: &Shared, volume: &Volume) {
+    let Ok(journal_pos) = volume.journal_position() else {
+        return;
+    };
+    let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
+    let index_next_usn = state
+        .index
+        .as_ref()
+        .map_or(journal_pos.next_usn, |index| index.position.next_usn);
+    state.follow.lag_bytes =
+        u64::try_from(journal_pos.next_usn.saturating_sub(index_next_usn)).unwrap_or(0);
 }

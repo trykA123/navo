@@ -71,6 +71,12 @@ impl Volume {
         read_volume_journal(self, saved)
     }
 
+    /// Queries the journal for its current position without reading any records.
+    pub fn journal_position(&self) -> Result<JournalPosition, NtfsError> {
+        let data = self.control(FSCTL_QUERY_USN_JOURNAL, &[], 56)?;
+        Ok(super::JournalState::parse(&data)?.position)
+    }
+
     /// Lists the batch's parent folders the index lacks whose MFT parent chain reaches `$Extend`,
     /// for [`super::NtfsIndex::note_metadata_folders`]. A read error ends the search (logged).
     pub fn metadata_parents(&mut self, batch: &UsnBatch, index: &super::NtfsIndex) -> Vec<u128> {

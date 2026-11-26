@@ -75,6 +75,11 @@ impl Worker {
                 let kind = error_kind(&error);
                 self.log_line(format_args!("update error {}: {kind}", self.drive.letter));
                 self.error(format!("{UPDATE_FAILURE}{error}"));
+                self.shared
+                    .write()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .follow
+                    .errors += 1;
                 volume = None;
             } else {
                 self.recover(UPDATE_FAILURE);
@@ -222,6 +227,11 @@ impl Worker {
     fn publish_built(&mut self, index: NtfsIndex) {
         self.publish(index);
         self.clock.built(self.started.elapsed());
+        self.shared
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .follow
+            .last_full_build = Some(Instant::now());
     }
 
     /// Attempts a regular full build and records its retry delay on error.

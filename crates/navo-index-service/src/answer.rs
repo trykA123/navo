@@ -26,6 +26,15 @@ const WAITS: Waits = Waits {
     budget: ANSWER_BUDGET,
 };
 
+/// Follower counters for the heartbeat; service-internal, not on the wire.
+#[derive(Default)]
+pub(super) struct FollowStats {
+    pub(super) errors: u64,
+    pub(super) index_copies: u64,
+    pub(super) lag_bytes: u64,
+    pub(super) last_full_build: Option<Instant>,
+}
+
 #[derive(Default)]
 pub(super) struct State {
     /// The published index; whoever changes or replaces it calls `search.forget_profile_ids()`.
@@ -33,6 +42,7 @@ pub(super) struct State {
     pub(super) status: VolumeStatus,
     pub(super) search: SearchIndex,
     pub(super) builds: VolumeBuilds,
+    pub(super) follow: FollowStats,
     /// A successful journal batch skipped a cycle that still needs verification.
     pub(super) replay_inexact: bool,
 }
