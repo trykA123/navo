@@ -1,6 +1,7 @@
 //! The application window owns browser panes, shared chrome and subscribed screen entities.
 
 mod app_menu;
+pub mod button_bar;
 mod cached_views;
 mod chrome_state;
 mod clipboard;
@@ -111,6 +112,7 @@ use crate::prelude::*;
 use crate::settings::Values;
 
 pub use app_menu::AppMenuHooks;
+pub use button_bar::*;
 pub use clipboard::{ClipboardEffect, ClipboardFault, ClipboardFiles, FileClipboardService};
 pub use compare_screen::{CompareFiles, CompareScreen, DiffSlot, LookDefaults, LookPreset};
 pub use compare_screen::{ScreenEvent, ScreenParts, SettingKey};

@@ -40,6 +40,7 @@ navo-cache = { path = "../navo-cache" }
 navo-core = { path = "../navo-core" }
 navo-diag = { path = "../navo-diag" }
 navo-fs = { path = "../navo-fs" }
+navo-icons = { path = "../navo-icons" }
 navo-index = { path = "../navo-index" }
 navo-l10n = { path = "../navo-l10n" }
 navo-pdf = { path = "../navo-pdf" }

@@ -1,0 +1,3 @@
+button-bar-edit-buttons = Edit buttons…
+button-bar-unknown-command = Unknown command
+button-bar-stale = The button bar changed; try again
