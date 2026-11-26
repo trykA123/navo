@@ -9,7 +9,7 @@ mod version;
 pub use machine::{Effect, Event, UpdateState, step};
 pub use runner::{CHECK_TIMEOUT, UpdateRunner};
 pub use semver::Version;
-pub use version::{offer, parse_version};
+pub use version::{clear_skipped_if_newer, offer, parse_version, should_skip_update};
 
 /// How this copy of Navo was installed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

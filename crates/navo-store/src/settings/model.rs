@@ -280,11 +280,16 @@ impl Default for Tray {
 #[serde(default, rename_all = "kebab-case")]
 pub struct Updates {
     pub check: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skipped_version: Option<String>,
 }
 
 impl Default for Updates {
     fn default() -> Self {
-        Self { check: true }
+        Self {
+            check: true,
+            skipped_version: None,
+        }
     }
 }
 

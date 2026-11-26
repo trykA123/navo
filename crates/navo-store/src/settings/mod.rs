@@ -36,7 +36,7 @@ pub use layout::{
 pub use model::{
     AltF7Opens, Appearance, ColorTheme, Density, DropConfirm, Editor, Files, HiddenFiles,
     ModifierHints, PopUpPosition, RightButton, Search, SearchIndex, SelectionSettings, Settings,
-    SizeMode, SortKey, ThemeMode,
+    SizeMode, SortKey, ThemeMode, Updates,
 };
 pub use parse::{parse, parse_retention, to_toml};
 pub use retention::RetentionSettings;

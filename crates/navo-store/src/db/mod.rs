@@ -9,6 +9,7 @@ use rusqlite::{Connection, TransactionBehavior};
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 mod collections;
+mod downgrade;
 mod frecency;
 mod migrations;
 mod rename_presets;
@@ -17,6 +18,7 @@ mod vacuum;
 mod viewer;
 
 pub use collections::{Collection, CollectionItem, CollectionKind, NewCollection};
+pub use downgrade::{DowngradeCheck, check_downgrade, check_downgrade_current};
 pub use frecency::Frecent;
 use migrations::MIGRATIONS;
 pub use rename_presets::{RenamePreset, RenamePresets};

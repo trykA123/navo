@@ -412,3 +412,36 @@ fn an_unknown_size_mode_keeps_defaults_and_reports_on_initial_load() {
         "{report:?}"
     );
 }
+
+#[test]
+fn updates_defaults_have_no_skipped_version() {
+    let updates = Settings::default().updates;
+    assert!(updates.check);
+    assert_eq!(updates.skipped_version, None);
+}
+
+#[test]
+fn skipped_version_round_trips_through_toml() {
+    let mut settings = Settings::default();
+    settings.updates.skipped_version = Some("0.9.3".to_owned());
+    let text = crate::settings_to_toml(&settings);
+    let (back, unknown) = crate::parse_settings(&text).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert_eq!(back.updates.skipped_version, Some("0.9.3".to_owned()));
+}
+
+#[test]
+fn skipped_version_is_absent_from_toml_when_none() {
+    let settings = Settings::default();
+    let text = crate::settings_to_toml(&settings);
+    assert!(!text.contains("skipped-version"));
+}
+
+#[test]
+fn old_settings_without_skipped_version_parse_cleanly() {
+    let old_toml = "[updates]\ncheck = true\n";
+    let (settings, unknown) = crate::parse_settings(old_toml).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert!(settings.updates.check);
+    assert_eq!(settings.updates.skipped_version, None);
+}

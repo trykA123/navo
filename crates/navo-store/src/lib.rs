@@ -21,8 +21,9 @@ pub use cache_db::{
     GIT_BADGES_BUDGET,
 };
 pub use db::{
-    Collection, CollectionItem, CollectionKind, Db, DbError, FileMemory, Frecent, NewCollection,
-    OpenReport, RenamePreset, RenamePresets, Stamp,
+    Collection, CollectionItem, CollectionKind, Db, DbError, DowngradeCheck, FileMemory, Frecent,
+    NewCollection, OpenReport, RenamePreset, RenamePresets, Stamp, check_downgrade,
+    check_downgrade_current,
 };
 pub use dirs::StoreDirs;
 pub use journal::{
@@ -50,7 +51,7 @@ pub use settings::{
     RightButton, Saved, Search, SearchIndex, SelectionSettings, SessionBackup, SettingValue,
     Settings, SettingsError, SettingsLedger, SettingsStore, SizeMode, SortKey, Terminal,
     TerminalBell, TerminalCursor, TerminalScheme, TerminalStart, TextView, TextViewer, ThemeMode,
-    VerifyMode, ViewPreset, WindowSettings, WindowView, key_line as settings_key_line,
+    Updates, VerifyMode, ViewPreset, WindowSettings, WindowView, key_line as settings_key_line,
     parse as parse_settings, parse_retention as parse_retention_settings, remove_layout_preset,
     replace_layout_preset, save_layout_preset, section_line as settings_section_line,
     to_toml as settings_to_toml,
