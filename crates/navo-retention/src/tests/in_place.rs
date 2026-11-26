@@ -31,7 +31,9 @@ impl AdoptedFixture {
         fs.add_folder(&container_rel);
         fs.add_file(&held_rel, 8);
         fs.add_file("home/a", 16);
-        if !moved {
+        if moved {
+            fs.add_folder("src");
+        } else {
             fs.add_file("src/a", 16);
         }
 
@@ -241,8 +243,53 @@ fn not_in_place_when_no_replacement_metadata() {
 }
 
 #[test]
-fn not_in_place_when_replacement_was_moved() {
+fn restore_in_place_for_move_returns_moved_file_and_restores_original() {
     let fx = AdoptedFixture::moved();
+    let original_id = fx.fs.file_identity(&fx.held()).unwrap();
+    let moved_id = fx.fs.file_identity(&fx.entry.record.source).unwrap();
+    let mut vault = fx.vault();
+
+    let InPlace::Restored(restored) = restore_in_place(&mut vault, fx.entry.id).unwrap() else {
+        panic!("expected InPlace::Restored");
+    };
+    assert_eq!(restored.state, RetainedState::Restored);
+    assert_eq!(
+        restored.target.as_ref().map(|t| &t.location),
+        Some(&fx.entry.record.source)
+    );
+    assert_eq!(fx.fs.metadata(&fx.entry.record.source).unwrap().size, 8);
+    assert_eq!(
+        fx.fs.file_identity(&fx.entry.record.source).unwrap(),
+        original_id
+    );
+    assert_eq!(fx.fs.metadata(&fx.fs.location("src/a")).unwrap().size, 16);
+    assert_eq!(
+        fx.fs.file_identity(&fx.fs.location("src/a")).unwrap(),
+        moved_id
+    );
+    assert!(fx.fs.metadata(&fx.entry.record.container).is_err());
+}
+
+#[test]
+fn move_not_in_place_when_from_is_occupied() {
+    let fx = AdoptedFixture::moved();
+    fx.fs.add_file("src/a", 99);
+    let mut vault = fx.vault();
+
+    assert_eq!(
+        restore_in_place(&mut vault, fx.entry.id).unwrap(),
+        InPlace::NotInPlace
+    );
+    assert_eq!(vault.get(fx.entry.id).unwrap(), fx.entry);
+    assert_eq!(fx.fs.metadata(&fx.fs.location("src/a")).unwrap().size, 99);
+    assert_eq!(fx.fs.metadata(&fx.entry.record.source).unwrap().size, 16);
+    assert!(fx.fs.metadata(&fx.held()).is_ok());
+}
+
+#[test]
+fn move_not_in_place_when_from_parent_folder_was_deleted() {
+    let fx = AdoptedFixture::moved();
+    fx.fs.remove("src");
     let mut vault = fx.vault();
 
     assert_eq!(
@@ -252,6 +299,93 @@ fn not_in_place_when_replacement_was_moved() {
     assert_eq!(vault.get(fx.entry.id).unwrap(), fx.entry);
     assert_eq!(fx.fs.metadata(&fx.entry.record.source).unwrap().size, 16);
     assert!(fx.fs.metadata(&fx.held()).is_ok());
+}
+
+#[test]
+fn move_not_in_place_when_from_parent_is_on_different_volume() {
+    let fx = AdoptedFixture::moved();
+    let other_volume = fx.entry.record.parent_identity.volume.wrapping_add(1);
+    fx.fs.set_volume("src", other_volume);
+    let mut vault = fx.vault();
+
+    assert_eq!(
+        restore_in_place(&mut vault, fx.entry.id).unwrap(),
+        InPlace::NotInPlace
+    );
+    assert_eq!(vault.get(fx.entry.id).unwrap(), fx.entry);
+    assert_eq!(fx.fs.metadata(&fx.entry.record.source).unwrap().size, 16);
+    assert!(fx.fs.metadata(&fx.held()).is_ok());
+}
+
+#[test]
+fn move_step_3_rename_failure_rolls_from_back_to_source_and_sets_ready() {
+    let fx = AdoptedFixture::moved();
+    let moved_id = fx.fs.file_identity(&fx.entry.record.source).unwrap();
+    fault_next(
+        &fx.fs,
+        &fx.held(),
+        FakeOp::Rename,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    let mut vault = fx.vault();
+
+    assert!(restore_in_place(&mut vault, fx.entry.id).is_err());
+    let after = vault.get(fx.entry.id).unwrap();
+    assert_eq!(after.state, RetainedState::Ready);
+    assert_eq!(after.target, None);
+    assert_eq!(
+        fx.fs.file_identity(&fx.entry.record.source).unwrap(),
+        moved_id
+    );
+    assert!(fx.fs.metadata(&fx.fs.location("src/a")).is_err());
+    assert_eq!(fx.fs.metadata(&fx.held()).unwrap().size, 8);
+}
+
+#[test]
+fn step_3_double_fault_rollback_stays_restoring() {
+    let fx = AdoptedFixture::moved();
+    let moved_id = fx.fs.file_identity(&fx.entry.record.source).unwrap();
+    fault_next(
+        &fx.fs,
+        &fx.held(),
+        FakeOp::Rename,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    fault_next(
+        &fx.fs,
+        &fx.parked(),
+        FakeOp::Rename,
+        Fault::Fail(FsErrorKind::Locked),
+    );
+    let mut vault = fx.vault();
+
+    assert!(restore_in_place(&mut vault, fx.entry.id).is_err());
+    let after = vault.get(fx.entry.id).unwrap();
+    assert_eq!(after.state, RetainedState::Restoring);
+    assert_eq!(
+        after.target.as_ref().map(|t| &t.location),
+        Some(&fx.entry.record.source)
+    );
+    assert!(fx.fs.metadata(&fx.entry.record.source).is_err());
+    assert_eq!(fx.fs.file_identity(&fx.parked()).unwrap(), moved_id);
+    assert_eq!(fx.fs.metadata(&fx.held()).unwrap().size, 8);
+}
+
+#[test]
+fn move_cleanup_record_never_deletes_from() {
+    let fx = AdoptedFixture::moved();
+    let moved_id = fx.fs.file_identity(&fx.entry.record.source).unwrap();
+    fx.fs
+        .rename_atomic(&fx.entry.record.source, &fx.parked())
+        .unwrap();
+    fx.fs
+        .rename_atomic(&fx.held(), &fx.entry.record.source)
+        .unwrap();
+
+    assert!(proof::cleanup_record(&fx.fs, &fx.entry.record).unwrap());
+    assert!(fx.fs.metadata(&fx.entry.record.container).is_err());
+    assert_eq!(fx.fs.file_identity(&fx.parked()).unwrap(), moved_id);
+    assert_eq!(fx.fs.metadata(&fx.parked()).unwrap().size, 16);
 }
 
 #[test]
@@ -609,4 +743,76 @@ fn reconcile_restoring_unexpected_combinations_yield_conflict_without_touching_f
     let settled = reconcile(&mut vault, fx.entry.id).unwrap();
     assert_eq!(settled.state, RetainedState::Conflict);
     assert_eq!(fx.fs.metadata(&fx.entry.record.source).unwrap().size, 16);
+}
+
+#[test]
+fn reconcile_move_restoring_all_four_cases() {
+    // 1. Held present + from absent + source is replacement -> Ready.
+    let fx = AdoptedFixture::moved();
+    let mut vault = fx.vault();
+    begin_restore(&mut vault, fx.entry.id, &fx.entry.record.source);
+
+    let settled = reconcile(&mut vault, fx.entry.id).unwrap();
+    assert_eq!(settled.state, RetainedState::Ready);
+    assert_eq!(settled.target, None);
+    assert_eq!(fx.fs.metadata(&fx.entry.record.source).unwrap().size, 16);
+    assert!(fx.fs.metadata(&fx.parked()).is_err());
+    assert_eq!(fx.fs.metadata(&fx.held()).unwrap().size, 8);
+
+    // 2. Held present + from is replacement + source absent -> rename from back to source -> Ready.
+    let fx = AdoptedFixture::moved();
+    let moved_id = fx.fs.file_identity(&fx.entry.record.source).unwrap();
+    let mut vault = fx.vault();
+    begin_restore(&mut vault, fx.entry.id, &fx.entry.record.source);
+    fx.fs
+        .rename_atomic(&fx.entry.record.source, &fx.parked())
+        .unwrap();
+
+    let settled = reconcile(&mut vault, fx.entry.id).unwrap();
+    assert_eq!(settled.state, RetainedState::Ready);
+    assert_eq!(settled.target, None);
+    assert_eq!(
+        fx.fs.file_identity(&fx.entry.record.source).unwrap(),
+        moved_id
+    );
+    assert!(fx.fs.metadata(&fx.parked()).is_err());
+    assert_eq!(fx.fs.metadata(&fx.held()).unwrap().size, 8);
+
+    // 3. Held absent + source is original -> Restored, container removed, from left intact!
+    let fx = AdoptedFixture::moved();
+    let original_id = fx.fs.file_identity(&fx.held()).unwrap();
+    let moved_id = fx.fs.file_identity(&fx.entry.record.source).unwrap();
+    let mut vault = fx.vault();
+    begin_restore(&mut vault, fx.entry.id, &fx.entry.record.source);
+    fx.fs
+        .rename_atomic(&fx.entry.record.source, &fx.parked())
+        .unwrap();
+    fx.fs
+        .rename_atomic(&fx.held(), &fx.entry.record.source)
+        .unwrap();
+
+    let settled = reconcile(&mut vault, fx.entry.id).unwrap();
+    assert_eq!(settled.state, RetainedState::Restored);
+    assert_eq!(
+        fx.fs.file_identity(&fx.entry.record.source).unwrap(),
+        original_id
+    );
+    assert_eq!(fx.fs.file_identity(&fx.parked()).unwrap(), moved_id);
+    assert_eq!(fx.fs.metadata(&fx.parked()).unwrap().size, 16);
+    assert!(fx.fs.metadata(&fx.entry.record.container).is_err());
+
+    // 4. Unexpected combination (held present + from present + new file at source) -> Conflict, untouched.
+    let fx = AdoptedFixture::moved();
+    let mut vault = fx.vault();
+    begin_restore(&mut vault, fx.entry.id, &fx.entry.record.source);
+    fx.fs
+        .rename_atomic(&fx.entry.record.source, &fx.parked())
+        .unwrap();
+    fx.fs.add_file("home/a", 77);
+
+    let settled = reconcile(&mut vault, fx.entry.id).unwrap();
+    assert_eq!(settled.state, RetainedState::Conflict);
+    assert_eq!(fx.fs.metadata(&fx.entry.record.source).unwrap().size, 77);
+    assert_eq!(fx.fs.metadata(&fx.parked()).unwrap().size, 16);
+    assert_eq!(fx.fs.metadata(&fx.held()).unwrap().size, 8);
 }

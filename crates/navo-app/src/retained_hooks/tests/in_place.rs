@@ -146,14 +146,27 @@ fn locked_copy_at_step_2_falls_back_to_beside() {
 }
 
 #[test]
-fn overwriting_same_drive_move_still_restores_beside() {
+fn undo_of_a_same_drive_move_returns_the_file() {
     let profile = overwrite_profile();
     profile.fs.add_file("home/a", 8);
     profile.fs.add_file("src/a", 16);
+    let original_id = profile.fs.file_identity(&profile.at("home/a")).unwrap();
+    let moved_id = profile.fs.file_identity(&profile.at("src/a")).unwrap();
     let id = overwrite_job(&profile, OpKind::Move, "src/a", "home");
-
-    let landed = profile.hooks().restore(id).unwrap();
-    assert_eq!(landed, profile.at("home/a (restored)"));
     assert_eq!(profile.fs.metadata(&profile.at("home/a")).unwrap().size, 16);
     assert!(!profile.exists("src/a"));
+
+    let landed = profile.hooks().restore(id).unwrap();
+    assert_eq!(landed, profile.at("home/a"));
+    assert_eq!(profile.fs.metadata(&profile.at("home/a")).unwrap().size, 8);
+    assert_eq!(
+        profile.fs.file_identity(&profile.at("home/a")).unwrap(),
+        original_id
+    );
+    assert_eq!(profile.fs.metadata(&profile.at("src/a")).unwrap().size, 16);
+    assert_eq!(
+        profile.fs.file_identity(&profile.at("src/a")).unwrap(),
+        moved_id
+    );
+    assert!(!profile.exists("home/a (restored)"));
 }

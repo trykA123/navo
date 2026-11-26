@@ -1,10 +1,10 @@
-//! In-place restore of an overwritten copy via journaled park-then-place.
+//! In-place restore of an overwritten copy or same-drive move via journaled park-then-place.
 
 use navo_core::retention::{
     Replacement, RestoreTarget, RetainedState, RetentionEntry, RetentionId,
 };
 use navo_core::{FsErrorKind, Location};
-use navo_fs::ProviderOps;
+use navo_fs::{EntryKind, ProviderOps};
 
 use crate::{Error, RetentionRun, Vault, proof, snapshot};
 
@@ -48,6 +48,14 @@ impl Vault<'_> {
             Ok(guard) => guard,
             Err(error) => return self.abort_before_park(&mut entry, error.into()),
         };
+        let _from_pause = if plan.replacement.moved {
+            match self.ops.pause_git(&plan.parked) {
+                Ok(guard) => Some(guard),
+                Err(error) => return self.abort_before_park(&mut entry, error.into()),
+            }
+        } else {
+            None
+        };
         if !self.park_copy(&mut entry, &plan)? {
             return Ok(InPlace::NotInPlace);
         }
@@ -79,9 +87,6 @@ impl Vault<'_> {
         let Some(replacement) = entry.record.replaced_by.clone() else {
             return Ok(None);
         };
-        if replacement.moved {
-            return Ok(None);
-        }
         let Some(parked) = entry.record.parked()? else {
             return Ok(None);
         };
@@ -117,7 +122,13 @@ impl Vault<'_> {
         ))? {
             return Ok(false);
         }
-        if proof::present(self.ops, &plan.replacement.from)?.is_none() {
+        if plan.replacement.moved {
+            if !self
+                .check_move_return_parent(&plan.replacement.from, record.parent_identity.volume)?
+            {
+                return Ok(false);
+            }
+        } else if proof::present(self.ops, &plan.replacement.from)?.is_none() {
             return Ok(false);
         }
         if proof::present(self.ops, &plan.parked)?.is_some() {
@@ -130,6 +141,23 @@ impl Vault<'_> {
             return Ok(false);
         }
         allow_miss_bool(proof::node(self.ops, &plan.held, root))
+    }
+
+    fn check_move_return_parent(&self, from: &Location, volume: u64) -> Result<bool, Error> {
+        let Some(parent) = from.parent() else {
+            return Ok(false);
+        };
+        let Some(entry) = proof::present(self.ops, &parent)? else {
+            return Ok(false);
+        };
+        if entry.kind != EntryKind::Folder {
+            return Ok(false);
+        }
+        match proof::identity(self.ops, &parent) {
+            Ok(id) => Ok(id.volume == volume),
+            Err(error) if precondition_miss(&error) => Ok(false),
+            Err(error) => Err(error),
+        }
     }
 
     fn begin_in_place(&mut self, plan: &InPlacePlan) -> Result<Option<RetentionEntry>, Error> {
@@ -227,7 +255,7 @@ impl Vault<'_> {
     }
 
     fn finish_in_place(&mut self, entry: &RetentionEntry, plan: &InPlacePlan) -> Result<(), Error> {
-        if proof::node(self.ops, &plan.parked, &plan.replacement.node)? {
+        if !plan.replacement.moved && proof::node(self.ops, &plan.parked, &plan.replacement.node)? {
             self.ops.remove_file(&plan.parked)?;
         }
         self.cleanup(entry)
@@ -241,7 +269,14 @@ fn park_replacement(
     replacement: &Replacement,
 ) -> Result<(), Error> {
     ops.rename_atomic(&record.source, parked)?;
-    ops.flush(&record.container)?;
+    let flush_dir = if replacement.moved {
+        parked
+            .parent()
+            .ok_or_else(|| Error::Changed(parked.clone()))?
+    } else {
+        record.container.clone()
+    };
+    ops.flush(&flush_dir)?;
     if !proof::same_object(ops, parked, &replacement.node)? {
         return Err(Error::Changed(parked.clone()));
     }

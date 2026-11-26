@@ -158,6 +158,11 @@ impl Vault<'_> {
         if held_exists && !source_exists && proof::node(self.ops, parked, &replacement.node)? {
             snapshot::verify(self.ops, &entry.record, (held, false), run)?;
             let _source_pause = self.ops.pause_git(&entry.record.source)?;
+            let _from_pause = if replacement.moved {
+                Some(self.ops.pause_git(parked)?)
+            } else {
+                None
+            };
             self.ops.rename_atomic(parked, &entry.record.source)?;
             self.ops.flush(&proof::anchor(&entry.record)?)?;
             if !proof::same_object(self.ops, &entry.record.source, &replacement.node)? {
