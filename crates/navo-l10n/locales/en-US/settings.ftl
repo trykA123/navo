@@ -209,6 +209,10 @@ settings-ext-width = Ext column width
 settings-size-width = Size column width
 settings-date-width = Date column width
 settings-column-width-help = Width in pixels at 100 % scale, where 0 fits the column to its values.
+settings-button-bar = Button bar
+settings-button-bar-help = Shows a row of your own buttons under the title bar.
+settings-button-bar-names = Button names
+settings-button-bar-names-help = Shows each button's name beside its icon.
 settings-deletes-paused = { $problem }. Deletes and overwrites are paused until the file is fixed.
 settings-layout-presets-skipped = Skipped { $count ->
     [one] { $count } layout preset

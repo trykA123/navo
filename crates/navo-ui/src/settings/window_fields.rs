@@ -1,6 +1,6 @@
 use super::fields::{Control, F, FieldSpec, S, spec};
 
-pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
+pub(super) const WINDOW_FIELDS: [FieldSpec; 17] = [
     spec(
         (F::WindowTabsWithOne, S::Window, "window.view.tabs-with-one"),
         (
@@ -36,6 +36,11 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
             "F-key bar",
             "Shows the function keys along the bottom, and the keys work without it.",
         ),
+        Control::Toggle,
+    ),
+    spec(
+        (F::WindowButtonBar, S::Window, "window.view.button-bar"),
+        ("settings-button-bar", "settings-button-bar-help"),
         Control::Toggle,
     ),
     spec(
@@ -95,6 +100,18 @@ pub(super) const WINDOW_FIELDS: [FieldSpec; 15] = [
         (
             "Folder contents",
             "Shows the file and folder count and the total size in the pane footer.",
+        ),
+        Control::Toggle,
+    ),
+    spec(
+        (
+            F::WindowButtonBarNames,
+            S::Window,
+            "window.view.button-bar-names",
+        ),
+        (
+            "settings-button-bar-names",
+            "settings-button-bar-names-help",
         ),
         Control::Toggle,
     ),

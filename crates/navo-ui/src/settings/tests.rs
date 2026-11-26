@@ -290,20 +290,42 @@ fn every_window_part_but_the_fkey_bar_is_on_by_default_and_reads_back() {
 }
 
 #[test]
-fn only_the_twelve_window_fields_are_window_parts() {
+fn only_the_thirteen_window_fields_are_window_parts() {
     let parts: Vec<Field> = FIELDS
         .iter()
         .map(|spec| spec.field)
         .filter(|field| field.is_window_part())
         .collect();
-    assert_eq!(parts.len(), 12);
+    assert_eq!(parts.len(), 13);
     assert!(
         FIELDS
             .iter()
-            .filter(|spec| spec.key.starts_with("window.") && spec.control == Control::Toggle)
+            .filter(|spec| {
+                spec.key.starts_with("window.")
+                    && spec.control == Control::Toggle
+                    && spec.field != Field::WindowButtonBarNames
+            })
             .all(|spec| spec.field.is_window_part())
     );
+    assert!(Field::WindowButtonBar.is_window_part());
+    assert!(!Field::WindowButtonBarNames.is_window_part());
     assert!(!Field::WindowDateWidth.is_window_part());
+}
+
+#[test]
+fn button_bar_fields_are_off_by_default() {
+    let values = Values::default();
+    assert!(!values.flag(Field::WindowButtonBar));
+    assert!(!values.flag(Field::WindowButtonBarNames));
+    assert!(Field::WindowButtonBar.is_window_part());
+    assert!(!Field::WindowButtonBarNames.is_window_part());
+    for field in [Field::WindowButtonBar, Field::WindowButtonBarNames] {
+        let toggled = values.with(&Change {
+            field,
+            value: Value::Flag(true),
+        });
+        assert!(toggled.is_changed(field), "{:?}", field);
+    }
 }
 
 #[test]
@@ -318,7 +340,7 @@ fn the_scroll_child_of_a_row_counts_the_group_headings_above_it() {
     assert_eq!(child(Field::WindowTabsWithOne), Some(2));
     assert_eq!(
         child(Field::WindowContents),
-        Some(16),
+        Some(18),
         "the closed width fold is one line"
     );
     assert_eq!(child(Field::TextLineNumbers), Some(2));

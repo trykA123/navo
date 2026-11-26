@@ -136,7 +136,9 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::SearchExclude => text("$Recycle.Bin, System Volume Information"),
         Field::SummonKey => text("Win+Alt+N"),
         Field::ClipboardKey => text("Win+Alt+V"),
-        Field::WindowFkeyBar => Value::Flag(false),
+        Field::WindowFkeyBar | Field::WindowButtonBar | Field::WindowButtonBarNames => {
+            Value::Flag(false)
+        }
         field if field.is_window_part() => Value::Flag(true),
         _ => match spec.control {
             Control::Choices(..) => Value::Pick(0),

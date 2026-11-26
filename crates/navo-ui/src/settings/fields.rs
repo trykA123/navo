@@ -62,6 +62,7 @@ pub enum Field {
     WindowDriveButton,
     WindowTitleSearch,
     WindowFkeyBar,
+    WindowButtonBar,
     WindowIcons,
     WindowExtColumn,
     WindowSizeColumn,
@@ -69,6 +70,7 @@ pub enum Field {
     WindowFreeSpace,
     WindowMarkedTotals,
     WindowContents,
+    WindowButtonBarNames,
     WindowExtWidth,
     WindowSizeWidth,
     WindowDateWidth,
@@ -219,7 +221,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 87] = join([
+pub const FIELDS: [FieldSpec; 89] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &GIT_FIELDS,

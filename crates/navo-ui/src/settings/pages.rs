@@ -112,6 +112,8 @@ pub const GROUPS: [Group; 23] = [
             F::WindowDriveButton,
             F::WindowTitleSearch,
             F::WindowFkeyBar,
+            F::WindowButtonBar,
+            F::WindowButtonBarNames,
             F::WindowIcons,
         ],
     ),
