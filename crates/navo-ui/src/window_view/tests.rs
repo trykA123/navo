@@ -19,6 +19,7 @@ mod app_menu;
 mod app_menu_save;
 mod applied;
 mod archive_pane;
+mod button_bar_icon;
 mod button_bar_state;
 mod cached;
 mod cards;
