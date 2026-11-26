@@ -58,10 +58,9 @@ fn push_volume(line: &mut String, state: &State, now: Instant) {
         .status
         .progress
         .map_or_else(|| "idle".to_owned(), |percent| percent.to_string());
-    let index_memory_bytes: u64 = state
-        .index
-        .as_ref()
-        .map_or(0, |idx| (idx.table.memory_bytes() + idx.ids.memory_bytes()) as u64);
+    let index_memory_bytes: u64 = state.index.as_ref().map_or(0, |idx| {
+        (idx.table.memory_bytes() + idx.ids.memory_bytes()) as u64
+    });
     let bytes_per_entry = index_memory_bytes.checked_div(entries).unwrap_or(0);
     let since_full_build_s = follow.last_full_build.map_or_else(
         || "none".to_owned(),

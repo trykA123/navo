@@ -43,12 +43,31 @@ pub(super) fn copy_with(session: &Session, factory: &LogFactory) {
 }
 
 #[test]
+fn restoring_under_retention_restores_in_place_for_unedited_copy() {
+    let session = Session::new("[retention]\nretain-overwrites = true\n");
+    copy_with(
+        &session,
+        &session.holds.compare_factory(Some(session.ops())),
+    );
+    let target = session.at("dest/a");
+    assert_eq!(
+        session.restore(),
+        Ok(PreviousVersion::Retained {
+            at: vec![target.clone()]
+        })
+    );
+    assert_eq!(session.fs.metadata(&target).unwrap().size, 2);
+    assert_eq!(session.restore(), Err(RestoreError::NotKept));
+}
+
+#[test]
 fn restoring_under_retention_lands_beside_the_current_file() {
     let session = Session::new("[retention]\nretain-overwrites = true\n");
     copy_with(
         &session,
         &session.holds.compare_factory(Some(session.ops())),
     );
+    session.put("dest/a", (9, 3_000), NEW_HASH);
     let beside = session.at("dest/a (restored)");
     assert_eq!(
         session.restore(),
@@ -56,7 +75,7 @@ fn restoring_under_retention_lands_beside_the_current_file() {
             at: vec![beside.clone()]
         })
     );
-    assert_eq!(session.fs.metadata(&session.at("dest/a")).unwrap().size, 7);
+    assert_eq!(session.fs.metadata(&session.at("dest/a")).unwrap().size, 9);
     assert_eq!(session.fs.metadata(&beside).unwrap().size, 2);
     assert_eq!(session.restore(), Err(RestoreError::NotKept));
 }
