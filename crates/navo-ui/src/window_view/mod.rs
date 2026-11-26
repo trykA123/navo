@@ -175,7 +175,9 @@ pub use start::{RunHooks, run};
 pub use start_options::{BackgroundSaveSession, SaveSession, StartOptions};
 pub use start_watch::{StartReport, StartWatch};
 pub use terminal::TerminalHooks;
-pub use update_hooks::{UpdateFailure, UpdateHooks, UpdateView};
+pub use update_hooks::{
+    RollbackCompatibilityView, RollbackTargetView, UpdateFailure, UpdateHooks, UpdateView,
+};
 pub use user_commands::{
     UserCommandHooks, UserCommandInfo, UserCommandNews, UserCommandSender, UserInvocation,
 };

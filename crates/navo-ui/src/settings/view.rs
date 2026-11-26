@@ -43,6 +43,7 @@ pub(super) struct Look<'a> {
     pub version: &'a SharedString,
     pub update: &'a UpdateView,
     pub restart_offered: bool,
+    pub rollback: &'a super::RollbackState,
     pub page: &'a SearchPage,
     pub git: &'a GitPage,
     pub index: &'a super::IndexProgress,

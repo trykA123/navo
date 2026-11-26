@@ -21,6 +21,7 @@ impl NavoWindow {
             .selected_diagnostic(self.settings.selected_diagnostic)
             .version(self.identity.version.clone())
             .update(self.settings.updates.view.clone(), self.restart_offered())
+            .rollback(self.settings.updates.rollback_state())
             .summon_key_taken(self.summon_key_taken())
             .clipboard_key_taken(self.clipboard_key_taken())
             .messages(error, self.settings.service_notice.clone())

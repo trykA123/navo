@@ -2,11 +2,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, SharedString, TestAppContext};
+use gpui_kit::{AppContext as _, SharedString, TestAppContext, VisualTestContext, px, size};
 
 use super::app_menu::{Rig, rig_updates};
-use crate::settings::{Field, Section};
-use crate::window_view::{UpdateFailure, UpdateHooks, UpdateView};
+use crate::settings::{Change, Field, Section};
+use crate::tokens::{self, Mode, ThemeChoice};
+use crate::window_view::{
+    RollbackCompatibilityView, RollbackTargetView, UpdateFailure, UpdateHooks, UpdateView,
+};
 
 type Shared = Arc<Mutex<UpdateView>>;
 
@@ -39,7 +42,8 @@ fn status(cx: &mut TestAppContext, rig: &Rig) -> Option<String> {
     .expect("window")
 }
 
-fn has(cx: &mut TestAppContext, rig: &Rig, id: &'static str) -> bool {
+fn has(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> bool {
+    let id = id.into();
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).is_some()
@@ -287,7 +291,8 @@ fn downloading_renders_progress_bar_and_failed_offers_retry_and_manual_download(
     assert!(has(cx, &rig, "settings-update-installer"));
 }
 
-fn label(cx: &mut TestAppContext, rig: &Rig, id: &'static str) -> Option<String> {
+fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> Option<String> {
+    let id = id.into();
     cx.update_window(rig.window, |_, window, cx| {
         window.render_frame(cx);
         window
@@ -434,4 +439,213 @@ fn title_update_pill_keeps_polling_downloading_after_settings_closes(cx: &mut Te
         label(cx, &rig, "title-update-pill").as_deref(),
         Some("Update 0.9.0")
     );
+}
+
+fn bounds_of(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    id: impl Into<gpui_kit::ElementId>,
+) -> Option<gpui_kit::Bounds<gpui_kit::Pixels>> {
+    let id = id.into();
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window.try_find(id).map(|found| found.bounds())
+    })
+    .expect("window")
+}
+
+#[gpui_kit::test]
+fn skipped_version_status_renders_and_clears_on_click(cx: &mut TestAppContext) {
+    let skipped = Arc::new(Mutex::new(Some(SharedString::from("0.9.3"))));
+    let cleared = Arc::new(AtomicUsize::new(0));
+    let (read, clear_count, store) = (skipped.clone(), cleared.clone(), skipped.clone());
+    let (mut updates, _, _) = hooks(UpdateView::UpToDate);
+    updates.skipped_version = Arc::new(move || read.lock().expect("skipped").clone());
+    updates.clear_skipped_version = Arc::new(move || {
+        clear_count.fetch_add(1, Ordering::SeqCst);
+        *store.lock().expect("skipped") = None;
+    });
+    let rig = rig_updates(cx, updates);
+    open_help(cx, &rig);
+
+    assert_eq!(
+        label(cx, &rig, "settings-update-skipped").as_deref(),
+        Some("Skipped v0.9.3 after rollback — newer releases still offered")
+    );
+    assert!(has(cx, &rig, "settings-update-clear-skip"));
+
+    rig.click(cx, "settings-update-clear-skip");
+    assert_eq!(cleared.load(Ordering::SeqCst), 1);
+    assert!(skipped.lock().expect("skipped").is_none());
+    assert!(!has(cx, &rig, "settings-update-skipped"));
+    assert!(!has(cx, &rig, "settings-update-clear-skip"));
+}
+
+#[gpui_kit::test]
+fn compatible_rollback_target_requires_two_step_confirmation(cx: &mut TestAppContext) {
+    let applied: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let skipped = Arc::new(Mutex::new(None::<SharedString>));
+    let targets = vec![
+        RollbackTargetView {
+            version: "0.9.2".into(),
+            status: RollbackCompatibilityView::Compatible,
+        },
+        RollbackTargetView {
+            version: "0.9.1".into(),
+            status: RollbackCompatibilityView::CompatibleWithBackup,
+        },
+    ];
+    let (applied_write, skipped_read, skipped_write) =
+        (applied.clone(), skipped.clone(), skipped.clone());
+    let (mut updates, _, _) = hooks(UpdateView::UpToDate);
+    updates.rollback_targets = Arc::new(move || targets.clone());
+    updates.skipped_version = Arc::new(move || skipped_read.lock().expect("skipped").clone());
+    updates.apply_rollback = Arc::new(move |version| {
+        applied_write
+            .lock()
+            .expect("applied")
+            .push(version.to_owned());
+        *skipped_write.lock().expect("skipped") = Some("0.9.3".into());
+        Ok(())
+    });
+    let rig = rig_updates(cx, updates);
+    open_help(cx, &rig);
+
+    // Collapsed by default until user expands "Previous versions".
+    assert!(has(cx, &rig, "settings-update-rollback-fold"));
+    assert!(!has(cx, &rig, ("settings-update-rollback", 0usize)));
+
+    rig.click(cx, "settings-update-rollback-fold");
+    assert!(has(cx, &rig, ("settings-update-rollback", 0usize)));
+    assert!(has(cx, &rig, ("settings-update-rollback", 1usize)));
+    assert_eq!(
+        label(cx, &rig, ("settings-update-rollback-reason", 1usize)).as_deref(),
+        Some("Restores pre-update backup automatically")
+    );
+
+    // First click opens inline confirmation and does NOT invoke rollback yet.
+    rig.click(cx, ("settings-update-rollback", 0usize));
+    assert!(applied.lock().expect("applied").is_empty());
+    assert_eq!(
+        label(cx, &rig, ("settings-update-rollback-confirm-text", 0usize)).as_deref(),
+        Some("Confirm rollback to v0.9.2?")
+    );
+    assert!(has(cx, &rig, ("settings-update-rollback-confirm", 0usize)));
+    assert!(has(cx, &rig, ("settings-update-rollback-cancel", 0usize)));
+
+    // Cancel dismisses confirmation without invoking rollback.
+    rig.click(cx, ("settings-update-rollback-cancel", 0usize));
+    assert!(applied.lock().expect("applied").is_empty());
+    assert!(!has(cx, &rig, ("settings-update-rollback-confirm", 0usize)));
+
+    // Re-open confirmation and confirm invokes rollback.
+    rig.click(cx, ("settings-update-rollback", 0usize));
+    rig.click(cx, ("settings-update-rollback-confirm", 0usize));
+    assert_eq!(applied.lock().expect("applied").as_slice(), ["0.9.2"]);
+    assert!(has(cx, &rig, "settings-update-skipped"));
+}
+
+#[gpui_kit::test]
+fn incompatible_rollback_target_disables_button_and_shows_reason(cx: &mut TestAppContext) {
+    let applied = Arc::new(AtomicUsize::new(0));
+    let reason = "Database schema v8 requires a pre-update backup (none found).";
+    let targets = vec![RollbackTargetView {
+        version: "0.8.9".into(),
+        status: RollbackCompatibilityView::Incompatible {
+            reason: reason.into(),
+        },
+    }];
+    let applied_count = applied.clone();
+    let (mut updates, _, _) = hooks(UpdateView::UpToDate);
+    updates.rollback_targets = Arc::new(move || targets.clone());
+    updates.apply_rollback = Arc::new(move |_| {
+        applied_count.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    });
+    let rig = rig_updates(cx, updates);
+    open_help(cx, &rig);
+    rig.click(cx, "settings-update-rollback-fold");
+
+    assert_eq!(
+        label(cx, &rig, ("settings-update-rollback-reason", 0usize)).as_deref(),
+        Some(reason)
+    );
+    assert!(has(cx, &rig, ("settings-update-rollback", 0usize)));
+    rig.click(cx, ("settings-update-rollback", 0usize));
+    assert_eq!(applied.load(Ordering::SeqCst), 0);
+    assert!(!has(cx, &rig, ("settings-update-rollback-confirm", 0usize)));
+}
+
+#[gpui_kit::test]
+fn rollback_section_renders_in_dark_and_light_at_desktop_and_390px(cx: &mut TestAppContext) {
+    let targets = vec![
+        RollbackTargetView {
+            version: "0.9.2".into(),
+            status: RollbackCompatibilityView::Compatible,
+        },
+        RollbackTargetView {
+            version: "0.9.1".into(),
+            status: RollbackCompatibilityView::CompatibleWithBackup,
+        },
+        RollbackTargetView {
+            version: "0.8.9".into(),
+            status: RollbackCompatibilityView::Incompatible {
+                reason: "Session format v7 is newer than this release.".into(),
+            },
+        },
+    ];
+    let (mut updates, _, _) = hooks(UpdateView::UpToDate);
+    updates.skipped_version = Arc::new(|| Some("0.9.3".into()));
+    updates.rollback_targets = Arc::new(move || targets.clone());
+    let rig = rig_updates(cx, updates);
+    open_help(cx, &rig);
+    rig.click(cx, "settings-update-rollback-fold");
+    rig.click(cx, ("settings-update-rollback", 0usize));
+
+    for (choice, mode) in [
+        (ThemeChoice::Dark, Mode::Dark),
+        (ThemeChoice::Light, Mode::Light),
+    ] {
+        cx.update_window(rig.window, |_, window, cx| {
+            rig.view.update(cx, |view, cx| {
+                view.change_setting(Change::theme(choice), window, cx);
+            });
+        })
+        .expect("window");
+        assert_eq!(cx.read(|cx| tokens::current(cx).mode), mode);
+
+        for width in [1440., 390.] {
+            VisualTestContext::from_window(rig.window, cx)
+                .simulate_resize(size(px(width), px(900.)));
+            let card = bounds_of(cx, &rig, "settings-update-card").expect("update card");
+            let skipped = bounds_of(cx, &rig, "settings-update-skipped").expect("skipped");
+            let clear = bounds_of(cx, &rig, "settings-update-clear-skip").expect("clear skip");
+            let fold = bounds_of(cx, &rig, "settings-update-rollback-fold").expect("fold");
+            let confirm =
+                bounds_of(cx, &rig, ("settings-update-rollback-confirm", 0usize)).expect("confirm");
+            let cancel =
+                bounds_of(cx, &rig, ("settings-update-rollback-cancel", 0usize)).expect("cancel");
+            let reason =
+                bounds_of(cx, &rig, ("settings-update-rollback-reason", 2usize)).expect("reason");
+
+            for (name, box_bounds) in [
+                ("skipped", skipped),
+                ("clear", clear),
+                ("fold", fold),
+                ("confirm", confirm),
+                ("cancel", cancel),
+                ("reason", reason),
+            ] {
+                assert!(
+                    box_bounds.size.width > px(0.) && box_bounds.size.height > px(0.),
+                    "{name} has zero size at {width}px in {mode:?}: {box_bounds:?}"
+                );
+                assert!(
+                    box_bounds.left() >= card.left() - px(1.)
+                        && box_bounds.right() <= card.right() + px(1.),
+                    "{name} overflows card horizontally at {width}px in {mode:?}: {box_bounds:?} vs {card:?}"
+                );
+            }
+        }
+    }
 }

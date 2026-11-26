@@ -14,8 +14,7 @@ const PROGRESS_HEIGHT: f32 = 6.;
 const PROGRESS_MIN_W: f32 = 80.;
 const STATUS_MIN_W: f32 = 140.;
 
-pub(super) const WORDS: &str =
-    "help user guide manual keyboard shortcuts keys version updates update automatically check";
+pub(super) const WORDS: &str = "help user guide manual keyboard shortcuts keys version updates update automatically check rollback previous versions skipped";
 
 fn action_button(
     id: &'static str,
@@ -538,6 +537,15 @@ fn card_body(look: &Look) -> AnyElement {
         UpdateView::Hidden => hidden_body(look),
         UpdateView::Off => off_body(look),
     };
+    let skipped = (*look.update != UpdateView::Hidden)
+        .then(|| {
+            super::rollback_section::skipped_banner(
+                t,
+                look.rollback.skipped_version.as_ref(),
+                look.send.as_ref(),
+            )
+        })
+        .flatten();
     div()
         .flex()
         .flex_col()
@@ -545,6 +553,7 @@ fn card_body(look: &Look) -> AnyElement {
         .px(t.spacing.lg)
         .pb(t.spacing.sm)
         .child(content)
+        .children(skipped)
         .into_any_element()
 }
 
@@ -557,6 +566,9 @@ fn update_card(look: &Look, cx: &App) -> AnyElement {
         .border_color(t.colors.line)
         .px(t.spacing.sm)
         .child(toggle);
+    let rollback = (*look.update != UpdateView::Hidden)
+        .then(|| super::rollback_section::rollback_section(t, look.rollback, look.send.as_ref()))
+        .flatten();
     div()
         .id("settings-update-card")
         .test_support()
@@ -579,6 +591,7 @@ fn update_card(look: &Look, cx: &App) -> AnyElement {
         .child(card_header(t, look.version, look.update))
         .child(card_body(look))
         .child(footer)
+        .children(rollback)
         .into_any_element()
 }
 

@@ -27,6 +27,7 @@ mod nav;
 mod nested;
 mod page_keys;
 mod pages;
+mod rollback_section;
 mod row_state;
 mod search_fields;
 mod search_page;
@@ -67,6 +68,7 @@ pub use find_bar::find_field;
 pub use fold::{Folds, clamped_row, fold_row, outer_row};
 pub use git_page::GitPage;
 pub use index_progress::{IndexProgress, IndexState, Split, VolumeProgress};
+pub use rollback_section::RollbackState;
 pub use search_page::{SearchPage, ServiceStatus};
 pub use steps::{
     DIAGNOSTICS_ROW, HELP_ROW, Nudge, child_of, digit_of, first_row, moved, next_section, nudged,
@@ -145,6 +147,11 @@ pub enum SheetEvent {
     CheckUpdates,
     RestartUpdate,
     OpenReleases,
+    ClearSkippedVersion,
+    ToggleRollbackFold,
+    PromptRollback(SharedString),
+    CancelRollback,
+    ConfirmRollback(SharedString),
     ClearHistory,
     InstallService,
     RemoveService,
@@ -182,6 +189,7 @@ pub struct SettingsBody {
     version: SharedString,
     update: UpdateView,
     restart_offered: bool,
+    rollback: RollbackState,
     focus: Option<FocusHandle>,
     scroll: Option<ScrollHandle>,
     on_event: Option<Handler>,
@@ -409,6 +417,7 @@ impl RenderOnce for SettingsBody {
             version: &self.version,
             update: &self.update,
             restart_offered: self.restart_offered,
+            rollback: &self.rollback,
             send: self.on_event.clone(),
             summon_key_taken: self.summon_key_taken,
             clipboard_key_taken: self.clipboard_key_taken,

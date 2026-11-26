@@ -71,6 +71,7 @@ impl Updater {
             check_now: Arc::new(move || check.check_now()),
             restart: Arc::new(move || restart.restart_with(super::apply::restart)),
             take_ready_notice: Arc::new(move || ready.take_ready().map(|v| v.to_string().into())),
+            ..UpdateHooks::none()
         }
     }
 

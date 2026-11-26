@@ -5,8 +5,8 @@ use std::rc::Rc;
 use gpui_kit::{FocusHandle, ScrollHandle};
 
 use super::{
-    DiagnosticRow, Filter, GitPage, IndexProgress, Moved, SearchPage, SettingsBody, SheetEvent,
-    Values,
+    DiagnosticRow, Filter, GitPage, IndexProgress, Moved, RollbackState, SearchPage, SettingsBody,
+    SheetEvent, Values,
 };
 use crate::prelude::*;
 use crate::window_view::UpdateView;
@@ -32,6 +32,7 @@ impl SettingsBody {
             version: SharedString::default(),
             update: UpdateView::Hidden,
             restart_offered: false,
+            rollback: RollbackState::default(),
             focus: None,
             scroll: None,
             on_event: None,
@@ -143,6 +144,13 @@ impl SettingsBody {
     pub fn update(mut self, update: UpdateView, restart_offered: bool) -> Self {
         self.update = update;
         self.restart_offered = restart_offered;
+        self
+    }
+
+    /// Sets the skipped-version status and previous-version rollback state for the Updates card.
+    #[must_use]
+    pub fn rollback(mut self, rollback: RollbackState) -> Self {
+        self.rollback = rollback;
         self
     }
 

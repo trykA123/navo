@@ -289,6 +289,7 @@ impl NavoWindow {
         self.settings.folds = Folds::default();
         self.settings.diagnostics_open = false;
         self.settings.selected_diagnostic = None;
+        self.settings.updates.reset_rollback_ui();
         self.pause_shortcuts(cx);
         self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
         if std::mem::take(&mut self.settings.restore_preview) {
@@ -342,6 +343,11 @@ impl NavoWindow {
             SheetEvent::CheckUpdates => self.check_updates_now(cx),
             SheetEvent::RestartUpdate => self.request_restart(window, cx),
             SheetEvent::OpenReleases => cx.open_url(updates::RELEASES_URL),
+            SheetEvent::ClearSkippedVersion => self.clear_skipped_version(cx),
+            SheetEvent::ToggleRollbackFold => self.toggle_rollback_fold(),
+            SheetEvent::PromptRollback(version) => self.prompt_rollback(version),
+            SheetEvent::CancelRollback => self.cancel_rollback(),
+            SheetEvent::ConfirmRollback(version) => self.confirm_rollback(&version, cx),
             SheetEvent::ClearHistory => self.clear_search_history(),
             SheetEvent::InstallService => self.install_index_service(cx),
             SheetEvent::RemoveService => self.remove_index_service(cx),

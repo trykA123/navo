@@ -4,8 +4,9 @@ use gpui_kit::{AsyncApp, WeakEntity};
 
 use super::{Section, section_of};
 use crate::prelude::*;
+use crate::settings::RollbackState;
 use crate::status_bar::StatusNotice;
-use crate::window_view::{NavoWindow, UpdateHooks, UpdateView};
+use crate::window_view::{NavoWindow, RollbackTargetView, UpdateHooks, UpdateView};
 
 const POLL: Duration = Duration::from_secs(1);
 const READY_FAST_POLL: Duration = Duration::from_secs(5);
@@ -74,6 +75,11 @@ impl PillKey {
 pub(in crate::window_view) struct Updates {
     pub(in crate::window_view) hooks: UpdateHooks,
     pub(in crate::window_view) view: UpdateView,
+    skipped_version: Option<SharedString>,
+    rollback_targets: Vec<RollbackTargetView>,
+    rollback_open: bool,
+    confirming_rollback: Option<SharedString>,
+    rollback_error: Option<SharedString>,
     is_polling: bool,
     /// The version of the ready notice on show.
     ready: Option<SharedString>,
@@ -89,6 +95,11 @@ impl Updates {
     pub(super) fn new(hooks: UpdateHooks) -> Self {
         Self {
             view: (hooks.state)(),
+            skipped_version: (hooks.skipped_version)(),
+            rollback_targets: (hooks.rollback_targets)(),
+            rollback_open: false,
+            confirming_rollback: None,
+            rollback_error: None,
             hooks,
             is_polling: false,
             ready: None,
@@ -99,6 +110,22 @@ impl Updates {
             restart_watch: None,
             restart_focus: None,
         }
+    }
+
+    pub(super) fn rollback_state(&self) -> RollbackState {
+        RollbackState {
+            skipped_version: self.skipped_version.clone(),
+            targets: self.rollback_targets.clone(),
+            is_open: self.rollback_open,
+            confirming: self.confirming_rollback.clone(),
+            error: self.rollback_error.clone(),
+        }
+    }
+
+    pub(super) fn reset_rollback_ui(&mut self) {
+        self.rollback_open = false;
+        self.confirming_rollback = None;
+        self.rollback_error = None;
     }
 
     pub(in crate::window_view) fn set_view(&mut self, view: UpdateView) {
@@ -226,14 +253,59 @@ impl NavoWindow {
     }
 
     pub(in crate::window_view) fn refresh_updates(&mut self, cx: &mut Context<Self>) {
-        let next = if self.identity.install == crate::app_menu::Install::Portable {
+        let is_portable = self.identity.install == crate::app_menu::Install::Portable;
+        let next = if is_portable {
             UpdateView::Hidden
         } else {
             (self.settings.updates.hooks.state)()
         };
         self.settings.updates.set_view(next);
+        if is_portable {
+            self.settings.updates.skipped_version = None;
+            self.settings.updates.rollback_targets.clear();
+        } else {
+            self.settings.updates.skipped_version = (self.settings.updates.hooks.skipped_version)();
+            self.settings.updates.rollback_targets =
+                (self.settings.updates.hooks.rollback_targets)();
+        }
         self.poll_updates(cx);
         cx.notify();
+    }
+
+    pub(super) fn clear_skipped_version(&mut self, cx: &mut Context<Self>) {
+        (self.settings.updates.hooks.clear_skipped_version)();
+        self.settings.updates.skipped_version = (self.settings.updates.hooks.skipped_version)();
+        cx.notify();
+    }
+
+    pub(super) fn toggle_rollback_fold(&mut self) {
+        self.settings.updates.rollback_open = !self.settings.updates.rollback_open;
+        if !self.settings.updates.rollback_open {
+            self.settings.updates.confirming_rollback = None;
+        }
+        self.settings.updates.rollback_error = None;
+    }
+
+    pub(super) fn prompt_rollback(&mut self, version: SharedString) {
+        self.settings.updates.confirming_rollback = Some(version);
+        self.settings.updates.rollback_error = None;
+    }
+
+    pub(super) fn cancel_rollback(&mut self) {
+        self.settings.updates.confirming_rollback = None;
+    }
+
+    pub(super) fn confirm_rollback(&mut self, version: &str, cx: &mut Context<Self>) {
+        self.settings.updates.confirming_rollback = None;
+        match (self.settings.updates.hooks.apply_rollback)(version) {
+            Ok(()) => {
+                self.settings.updates.rollback_error = None;
+                self.refresh_updates(cx);
+            }
+            Err(reason) => {
+                self.settings.updates.rollback_error = Some(reason);
+            }
+        }
     }
 
     pub(super) fn check_updates_now(&mut self, cx: &mut Context<Self>) {
