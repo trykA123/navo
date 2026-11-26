@@ -12,7 +12,7 @@ use super::{
 pub struct IconDraft {
     /// The icon name, unique in its set (1–255 bytes).
     pub name: String,
-    /// The SVG document (at most 64 KiB).
+    /// The SVG document (at most 256 KiB).
     pub svg: Vec<u8>,
     /// Search words, each without whitespace.
     pub tags: Vec<String>,

@@ -90,8 +90,8 @@ pub(crate) const NO_BRAND: u32 = 0xFFFF_FFFF;
 pub const MAX_CHUNK_RAW: usize = 1024 * 1024;
 /// The largest decoded tag list.
 pub const MAX_TAGS_RAW: usize = 4 * 1024 * 1024;
-/// The largest icon body.
-pub const MAX_BODY: usize = 64 * 1024;
+/// The largest icon body (256 KiB, accommodating normalised detailed brand SVGs).
+pub const MAX_BODY: usize = 256 * 1024;
 /// The largest zstd window a frame may declare, reserved before decoding: one chunk's cap. The
 /// writer's frames declare 128 KiB; a per-call `cap` bound would refuse them for small chunks.
 const MAX_WINDOW: u64 = 1024 * 1024;
@@ -321,7 +321,7 @@ fn entry(names: &[u8], at: usize) -> Option<(&str, IconRef)> {
     ))
 }
 
-/// The body of `icon` inside its decoded chunk; `None` when out of range or over 64 KiB.
+/// The body of `icon` inside its decoded chunk; `None` when out of range or over [`MAX_BODY`].
 pub fn body<'c>(chunk: &'c [u8], icon: &IconRef) -> Option<&'c [u8]> {
     let len = usize::try_from(icon.len).ok()?;
     if len > MAX_BODY {

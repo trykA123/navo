@@ -67,7 +67,7 @@ fn probe(bytes: &[u8]) {
                 continue;
             };
             if let Some(got) = body(&chunk, &found) {
-                assert!(got.len() <= 64 * 1024, "a body is never over its cap");
+                assert!(got.len() <= 256 * 1024, "a body is never over its cap");
             }
         }
     }
@@ -208,11 +208,11 @@ fn pack_chunk_refuses_raw_len_over_cap() {
 fn pack_body_holds_its_cap() {
     let at_cap = IconDraft {
         name: "big".to_owned(),
-        svg: vec![b'x'; 64 * 1024],
+        svg: vec![b'x'; 256 * 1024],
         tags: Vec::new(),
         brand: None,
     };
-    let icons: Vec<IconDraft> = (0..16)
+    let icons: Vec<IconDraft> = (0..4)
         .map(|n| IconDraft {
             name: format!("big-{n:02}"),
             ..at_cap.clone()
@@ -228,12 +228,12 @@ fn pack_body_holds_its_cap() {
     let bytes = write(std::slice::from_ref(&set)).unwrap();
     let pack = Pack::open(&bytes).unwrap();
     assert_eq!(
-        read_body(&pack, "big", "big-15").len(),
-        64 * 1024,
-        "a 1 MiB chunk of 64 KiB bodies reads"
+        read_body(&pack, "big", "big-03").len(),
+        256 * 1024,
+        "a 1 MiB chunk of 256 KiB bodies reads"
     );
     let over = IconDraft {
-        svg: vec![b'x'; 64 * 1024 + 1],
+        svg: vec![b'x'; 256 * 1024 + 1],
         ..at_cap
     };
     let set = SetDraft {
@@ -241,11 +241,11 @@ fn pack_body_holds_its_cap() {
         ..set
     };
     assert_eq!(write(&[set]), Err(PackError::TooLarge));
-    let chunk = vec![0; 70 * 1024];
+    let chunk = vec![0; 260 * 1024];
     let icon = IconRef {
         chunk: 0,
         offset: 0,
-        len: 64 * 1024 + 1,
+        len: 256 * 1024 + 1,
         brand: None,
     };
     assert_eq!(body(&chunk, &icon), None);
@@ -253,12 +253,12 @@ fn pack_body_holds_its_cap() {
         body(
             &chunk,
             &IconRef {
-                len: 64 * 1024,
+                len: 256 * 1024,
                 ..icon
             }
         )
         .map(<[u8]>::len),
-        Some(64 * 1024)
+        Some(256 * 1024)
     );
     assert_eq!(
         body(
