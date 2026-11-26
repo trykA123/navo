@@ -6470,10 +6470,13 @@ name = "navo-icons"
 version = "0.9.3"
 dependencies = [
  "blake3",
+ "flate2",
  "image",
  "resvg 0.49.0",
  "roxmltree 0.21.2",
  "ruzstd",
+ "serde_json",
+ "tar",
  "thiserror 2.0.21",
  "toml 1.2.1+spec-1.1.0",
 ]

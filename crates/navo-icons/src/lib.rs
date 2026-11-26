@@ -10,5 +10,7 @@ pub mod pack;
 pub mod raster;
 /// Security-hardened SVG normaliser with strict allowlist XML pre-parsing.
 pub mod sanitise;
+/// Reads upstream icon tarballs into normalised icon-set drafts.
+pub mod sources;
 /// Parses and writes icon specs from user text and inline TOML tables.
 pub mod spec;
