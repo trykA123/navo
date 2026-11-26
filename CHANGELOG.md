@@ -2,6 +2,18 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.9.3 — Follower heartbeat telemetry, AppContainer probes, and fuzzing gates
+
+*2026-11-26*
+
+An observability, security-verification, and CI hardening release.
+
+### Added
+
+- **Index follower heartbeat counters.** `navo-index-service` heartbeats now log per-volume `lag_bytes`, `follow_errors`, `copies`, `bytes_per_entry`, and `since_full_build_s` so journal lag and memory cost are visible in diagnostics logs.
+- **Windows AppContainer hostile-probe integration test.** Added an automated Windows sandbox probe proving the zero-capability AppContainer denies user-profile reads, loopback TCP connections, clipboard access, and `cmd.exe` spawns.
+- **Live VHD churn gate & nightly fuzzing.** Added `scripts/index-live-gate.ps1` for live NTFS VHD churn verification, four `libfuzzer` targets (`pipe_frame`, `automotive`, `npp_language`, `archive_listing`) with `.github/workflows/fuzz.yml`, and raised release retention to 10 releases (`KEEP_RELEASES: 10`).
+
 ## v0.9.2 — Fast, low-memory F3 on large text files
 
 *2026-11-26*
