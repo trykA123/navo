@@ -13,12 +13,13 @@ const RESET_NAME: &str = "window.reset";
 const RESET_LABEL: &str = "Reset to defaults";
 const FILES_LABEL: &str = "Files";
 
-const WINDOW: [Field; 6] = [
+const WINDOW: [Field; 7] = [
     Field::WindowTabsWithOne,
     Field::WindowPathBar,
     Field::WindowDriveButton,
     Field::WindowTitleSearch,
     Field::WindowFkeyBar,
+    Field::WindowButtonBar,
     Field::WindowIcons,
 ];
 const COLUMNS: [Field; 3] = [

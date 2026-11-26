@@ -74,6 +74,20 @@ fn alt_v_in_the_file_list_opens_the_window_menu(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn view_menu_lists_the_button_bar_after_the_fkey_bar(cx: &mut TestAppContext) {
+    let rig = rig_on(cx, Values::default(), None);
+    rig.press(cx, "alt-v");
+    let shown = items(cx, &rig).expect("the menu opens");
+    let texts: Vec<&str> = shown.iter().map(|item| item.text.as_str()).collect();
+    let fkey = texts
+        .iter()
+        .position(|text| *text == "F-key bar")
+        .expect("the F-key bar row");
+    assert_eq!(texts.get(fkey + 1), Some(&"Button bar"));
+    assert_eq!(checked(cx, &rig, "Button bar"), Some(false));
+}
+
+#[gpui_kit::test]
 fn the_window_groups_come_before_the_other_settings(cx: &mut TestAppContext) {
     let rig = rig_on(cx, Values::default(), None);
     rig.press(cx, "alt-v");

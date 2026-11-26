@@ -8,6 +8,7 @@ pub struct WindowParts {
     pub drive_button: bool,
     pub title_search: bool,
     pub fkey_bar: bool,
+    pub button_bar: bool,
     pub icons: bool,
     pub ext_column: bool,
     pub size_column: bool,
@@ -21,6 +22,7 @@ impl Default for WindowParts {
     fn default() -> Self {
         let mut parts = Self::all(true);
         parts.fkey_bar = false;
+        parts.button_bar = false;
         parts
     }
 }
@@ -34,6 +36,7 @@ impl WindowParts {
             drive_button: is_shown,
             title_search: is_shown,
             fkey_bar: is_shown,
+            button_bar: is_shown,
             icons: is_shown,
             ext_column: is_shown,
             size_column: is_shown,
@@ -52,6 +55,7 @@ impl WindowParts {
             drive_button: values.flag(Field::WindowDriveButton),
             title_search: values.flag(Field::WindowTitleSearch),
             fkey_bar: values.flag(Field::WindowFkeyBar),
+            button_bar: values.flag(Field::WindowButtonBar),
             icons: values.flag(Field::WindowIcons),
             ext_column: values.flag(Field::WindowExtColumn),
             size_column: values.flag(Field::WindowSizeColumn),

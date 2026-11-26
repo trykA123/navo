@@ -273,9 +273,11 @@ fn every_window_part_but_the_fkey_bar_is_on_by_default_and_reads_back() {
     let values = Values::default();
     assert_eq!(WindowParts::of(&values), WindowParts::default());
     assert!(!WindowParts::default().fkey_bar);
+    assert!(!WindowParts::default().button_bar);
     assert_eq!(
         WindowParts {
             fkey_bar: true,
+            button_bar: true,
             ..WindowParts::default()
         },
         WindowParts::all(true)
