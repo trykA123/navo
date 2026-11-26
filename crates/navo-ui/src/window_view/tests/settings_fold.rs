@@ -22,10 +22,14 @@ fn open_at_date_column(cx: &mut TestAppContext, rig: &Rig) {
     rig.press(cx, "ctrl-,");
     settle(cx);
     rig.press(cx, "ctrl-2");
-    for _ in 0..8 {
+    let target = Field::WindowDateColumn.index();
+    for _ in 0..30 {
+        if row(cx, rig) == target {
+            break;
+        }
         rig.press(cx, "down");
     }
-    assert_eq!(row(cx, rig), Field::WindowDateColumn.index());
+    assert_eq!(row(cx, rig), target);
 }
 
 fn row(cx: &mut TestAppContext, rig: &Rig) -> usize {
