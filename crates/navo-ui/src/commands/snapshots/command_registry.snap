@@ -514,6 +514,21 @@ compare.copy_all_left | Copy all matches to the left | CompareStream
 compare.copy_all_right | Copy all matches to the right | CompareStream
 user_commands.run | Run user command | FileList
 user_commands.edit | Edit user commands | global
+button_bar.focus | Go to the button bar | global
+button_bar.edit | Edit button bar | global
+button_bar.previous | Previous button | ButtonBar
+button_bar.next | Next button | ButtonBar
+button_bar.run | Run the focused button | ButtonBar
+button_bar.open_menu | Open the button menu | ButtonBar
+button_bar.context_menu | Button bar menu | ButtonBar
+button_bar.leave | Back to the file list | ButtonBar
+button_bar_editor.move_left | Move button left | ButtonBarEditor
+button_bar_editor.move_right | Move button right | ButtonBarEditor
+button_bar_editor.add | Add button | ButtonBarEditor
+button_bar_editor.remove | Remove button | ButtonBarEditor
+button_bar_editor.duplicate | Duplicate button | ButtonBarEditor
+button_bar_editor.undo | Undo button bar edit | ButtonBarEditor
+button_bar_editor.done | Close button bar editor | ButtonBarEditor
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global

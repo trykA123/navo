@@ -1,4 +1,5 @@
 mod bind;
+mod button_bar;
 mod clipboard;
 pub(crate) mod compare;
 pub(crate) use sidewise_ui::commands::compare_actions;
@@ -172,6 +173,7 @@ fn registry() -> impl Iterator<Item = CommandSpec> {
         clipboard::GROUPS.as_slice(),
         compare::GROUPS.as_slice(),
         user_commands::GROUPS.as_slice(),
+        button_bar::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group
