@@ -8,6 +8,7 @@ use super::*;
 
 mod budget;
 mod capture;
+mod in_place;
 mod interrupted;
 mod legacy;
 mod local;

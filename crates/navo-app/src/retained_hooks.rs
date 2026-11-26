@@ -3,7 +3,7 @@ use std::sync::Arc;
 use navo_core::retention::{RetainedState as Stored, RetentionEntry, RetentionId};
 use navo_core::{FsErrorKind, Location};
 use navo_fs::{CancelToken, ProviderOps};
-use navo_retention::{Error, RestoreRequest, RetentionRun, Vault};
+use navo_retention::{Error, InPlace, RestoreRequest, RetentionRun, Vault};
 use navo_store::{RetentionCatalog, RetentionStoreError, StoreDirs};
 use navo_ui::browser::{NoRetained, RetainedHooks, RetainedKind, RetainedRow, RetainedState};
 
@@ -60,6 +60,16 @@ impl RetainedHooks for VaultHooks {
                 == file.placed_hash
         {
             return in_place::restore(&self.dirs, self.ops.as_ref(), &entry, &file);
+        }
+        if let InPlace::Restored(restored) = vault
+            .restore_in_place(id, &mut RetentionRun::new(&CancelToken::new(), &mut |_| {}))
+            .map_err(|error| failed("retained-restore-failed", &entry, &error))?
+        {
+            tracing::info!(id = id.0, "retained entry restored in place");
+            self.forget_rows(&entry);
+            return Ok(restored
+                .target
+                .map_or_else(|| entry.record.source.clone(), |landed| landed.location));
         }
         if entry.state == Stored::Ready && self.vault_file_gone(&entry) {
             return Err(navo_l10n::t!(

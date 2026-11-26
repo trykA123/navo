@@ -108,10 +108,16 @@ impl Vault<'_> {
         entry: &mut RetentionEntry,
         run: &mut RetentionRun<'_>,
     ) -> Result<RetainedState, Error> {
-        let target = entry.target.as_ref().ok_or(Error::State(entry.id))?;
+        let target = entry.target.clone().ok_or(Error::State(entry.id))?;
         let held = entry.record.held()?;
         run.visit(&held)?;
         proof::owned(self.ops, &entry.record)?;
+        if let Some(replacement) = entry.record.replaced_by.clone()
+            && let Some(parked) = entry.record.parked()?
+            && target.location == entry.record.source
+        {
+            return self.in_place_outcome(entry, (&held, &parked, &target), &replacement, run);
+        }
         let held_exists = proof::present(self.ops, &held)?.is_some();
         // A missing destination folder means the destination does not exist either.
         let target_exists = proof::present(self.ops, &target.location)?.is_some();
@@ -122,13 +128,51 @@ impl Vault<'_> {
                 RetainedState::Ready
             }
             (false, true)
-                if same_folder(self.ops, target)?
+                if same_folder(self.ops, &target)?
                     && proof::same_object(self.ops, &target.location, &entry.record.nodes[0])? =>
             {
                 RetainedState::Restored
             }
             _ => RetainedState::Conflict,
         })
+    }
+
+    fn in_place_outcome(
+        &self,
+        entry: &mut RetentionEntry,
+        (held, parked, target): (&navo_core::Location, &navo_core::Location, &RestoreTarget),
+        replacement: &navo_core::retention::Replacement,
+        run: &mut RetentionRun<'_>,
+    ) -> Result<RetainedState, Error> {
+        let held_exists = proof::present(self.ops, held)?.is_some();
+        let parked_exists = proof::present(self.ops, parked)?.is_some();
+        let source_exists = proof::present(self.ops, &entry.record.source)?.is_some();
+        if held_exists
+            && !parked_exists
+            && proof::node(self.ops, &entry.record.source, &replacement.node)?
+        {
+            snapshot::verify(self.ops, &entry.record, (held, false), run)?;
+            entry.target = None;
+            return Ok(RetainedState::Ready);
+        }
+        if held_exists && !source_exists && proof::node(self.ops, parked, &replacement.node)? {
+            snapshot::verify(self.ops, &entry.record, (held, false), run)?;
+            let _source_pause = self.ops.pause_git(&entry.record.source)?;
+            self.ops.rename_atomic(parked, &entry.record.source)?;
+            self.ops.flush(&proof::anchor(&entry.record)?)?;
+            if !proof::same_object(self.ops, &entry.record.source, &replacement.node)? {
+                return Err(Error::Changed(entry.record.source.clone()));
+            }
+            entry.target = None;
+            return Ok(RetainedState::Ready);
+        }
+        if !held_exists
+            && same_folder(self.ops, target)?
+            && proof::same_object(self.ops, &entry.record.source, &entry.record.nodes[0])?
+        {
+            return Ok(RetainedState::Restored);
+        }
+        Ok(RetainedState::Conflict)
     }
 }
 

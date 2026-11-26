@@ -13,6 +13,7 @@ use navo_ui::browser::{
 use super::hooks;
 use crate::jobs::{SharedJournal, experimental_factory};
 
+mod in_place;
 mod interrupted;
 mod kept;
 mod privacy;

@@ -158,6 +158,7 @@ pub(super) fn cleanup_record(
     }
     owned(ops, record)?;
     if record.version == 2 {
+        remove_parked_copy(ops, record)?;
         let mut occupied = false;
         ops.list(
             &record.container,
@@ -178,4 +179,21 @@ pub(super) fn cleanup_record(
     }
     ops.remove_empty_folder(&record.container)?;
     Ok(true)
+}
+
+/// Removes a parked copy inside the retention container only when it still matches `replaced_by`.
+fn remove_parked_copy(ops: &dyn ProviderOps, record: &RetentionRecord) -> Result<(), Error> {
+    let Some(replacement) = &record.replaced_by else {
+        return Ok(());
+    };
+    if replacement.moved {
+        return Ok(());
+    }
+    let Some(parked) = record.parked()? else {
+        return Ok(());
+    };
+    if node(ops, &parked, &replacement.node)? {
+        ops.remove_file(&parked)?;
+    }
+    Ok(())
 }
