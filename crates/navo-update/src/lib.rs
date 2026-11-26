@@ -3,10 +3,15 @@
 #[cfg(any(test, feature = "test-support"))]
 pub mod fake;
 mod machine;
+mod rollback;
 mod runner;
 mod version;
 
 pub use machine::{Effect, Event, UpdateState, step};
+pub use rollback::{
+    MAX_ROLLBACK_TARGETS, RollbackApplied, RollbackCompatibility, RollbackError, RollbackTarget,
+    apply_rollback, prepare_rollback, recent_targets,
+};
 pub use runner::{CHECK_TIMEOUT, UpdateRunner};
 pub use semver::Version;
 pub use version::{clear_skipped_if_newer, offer, parse_version, should_skip_update};
@@ -67,4 +72,8 @@ pub trait UpdateFeed: Send + Sync {
     fn check(&self) -> Result<Found, FeedError>;
     /// Reports whole percent, 0 to 100.
     fn download(&self, release: &Release, progress: &dyn Fn(u8)) -> Result<(), FeedError>;
+    /// Recent releases from the feed, newest first. Used for rollback target listing.
+    fn recent_releases(&self) -> Result<Vec<Release>, FeedError> {
+        Ok(Vec::new())
+    }
 }

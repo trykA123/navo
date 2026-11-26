@@ -178,4 +178,16 @@ mod tests {
         assert!(!clear_skipped_if_newer(&mut skipped, "garbage"));
         assert_eq!(skipped, Some("0.9.3".to_owned()));
     }
+
+    #[test]
+    fn auto_check_skips_then_unskips_on_strictly_newer() {
+        let mut skipped = Some("0.9.3".to_owned());
+
+        assert!(should_skip_update(skipped.as_deref(), "0.9.3"));
+
+        assert!(clear_skipped_if_newer(&mut skipped, "0.9.4"));
+        assert_eq!(skipped, None);
+
+        assert!(!should_skip_update(skipped.as_deref(), "0.9.4"));
+    }
 }
