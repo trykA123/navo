@@ -16,6 +16,7 @@ mod channels;
 mod colors;
 mod coverage;
 mod gate;
+mod icons;
 mod index_diff;
 mod internal;
 mod l10n;
@@ -43,6 +44,7 @@ fn main() -> ExitCode {
         Some("channels") => channels::run(rest),
         Some("gate") => gate::run(rest),
         Some("check") => gate::check(rest),
+        Some("icons") => icons::run(rest),
         Some("index-diff") => index_diff::run(rest),
         Some("l10n") => l10n::run(rest),
         Some("colors") => colors::run(rest),
@@ -58,7 +60,7 @@ fn main() -> ExitCode {
         Some("bench-walk") => bench_walk::run(rest),
         _ => {
             eprintln!(
-                "usage: cargo xtask <speed-targets --config <file> [--discover] | speed-base | speed-verdict | size | coverage | binsize <path> | gate [--coverage] | check -p <crate> [-p <crate>...] | index-diff --snapshot <file> --root <X:\\> [--allow-missing <n>] | l10n [--list] | colors | seams | paths | internal | perf-fixture <dir> | perf-summary <reports-dir> <summary-file> | bench-copy <target-folder> [--runs N] [--sets small,medium,large] | bench-diff [--quick] [--json <path>] | bench-large [--quick] [--huge] [--json <path>] | bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size]>"
+                "usage: cargo xtask <speed-targets --config <file> [--discover] | speed-base | speed-verdict | size | coverage | binsize <path> | gate [--coverage] | check -p <crate> [-p <crate>...] | icons <pack|verify> --tarballs <dir> [...] | index-diff --snapshot <file> --root <X:\\> [--allow-missing <n>] | l10n [--list] | colors | seams | paths | internal | perf-fixture <dir> | perf-summary <reports-dir> <summary-file> | bench-copy <target-folder> [--runs N] [--sets small,medium,large] | bench-diff [--quick] [--json <path>] | bench-large [--quick] [--huge] [--json <path>] | bench-walk <dir> [--runs N] [--warmup N] [--prepare \"<command>\"] [--targets list,size]>"
             );
             ExitCode::from(2)
         }

@@ -1,0 +1,96 @@
+# Upstream icon sources for `cargo xtask icons` (BB-D6, BB-D8, BB-D12).
+
+download = []
+
+[[bundled]]
+package = "lucide-static"
+version = "1.78.0"
+url = "https://registry.npmjs.org/lucide-static/-/lucide-static-1.78.0.tgz"
+sha256 = "8312fadb97e45c76e2f847f883ece725be167cb360aac53d2540e54e357bc778"
+licence = "ISC"
+
+[[bundled.licences]]
+from = "package/LICENSE"
+to = "lucide-LICENSE"
+
+[[bundled.sets]]
+id = "lucide"
+grid = 24
+kind = "nodes"
+file = "package/icon-nodes.json"
+style = "stroke"
+tags = "package/tags.json"
+
+[[bundled]]
+package = "@tabler/icons"
+version = "3.52.0"
+url = "https://registry.npmjs.org/@tabler/icons/-/icons-3.52.0.tgz"
+sha256 = "626620c7d42afd2f294fba167ce4653b5cb946336d186b4991c70b700e5616af"
+licence = "MIT"
+
+[[bundled.licences]]
+from = "package/LICENSE"
+to = "tabler-LICENSE"
+
+[[bundled.sets]]
+id = "tabler"
+grid = 24
+kind = "nodes"
+file = "package/tabler-nodes-outline.json"
+style = "stroke"
+tags = "package/icons.json"
+
+[[bundled.sets]]
+id = "tabler-filled"
+grid = 24
+kind = "nodes"
+file = "package/tabler-nodes-filled.json"
+style = "fill"
+tags = "package/icons.json"
+
+[[bundled]]
+package = "@phosphor-icons/core"
+version = "2.1.1"
+url = "https://registry.npmjs.org/@phosphor-icons/core/-/core-2.1.1.tgz"
+sha256 = "313332be6190b724da24107addd781799b48bf76b13963f24501112ffe1baadd"
+licence = "MIT"
+
+[[bundled.licences]]
+from = "package/LICENSE"
+to = "phosphor-LICENSE"
+
+[[bundled.sets]]
+id = "phosphor"
+grid = 256
+kind = "svg-dir"
+dir = "package/assets/regular"
+suffix = ".svg"
+strip = ""
+
+[[bundled.sets]]
+id = "phosphor-fill"
+grid = 256
+kind = "svg-dir"
+dir = "package/assets/fill"
+suffix = "-fill.svg"
+strip = ""
+
+[[bundled]]
+package = "simple-icons"
+version = "16.38.1"
+url = "https://registry.npmjs.org/simple-icons/-/simple-icons-16.38.1.tgz"
+sha256 = "8ad81af0009aa0935df4411080feb4547b72e13458bbcf4d803b259b1f078804"
+licence = "CC0-1.0"
+
+[[bundled.licences]]
+from = "package/LICENSE.md"
+to = "simple-icons-LICENSE.md"
+
+[[bundled.licences]]
+from = "package/DISCLAIMER.md"
+to = "simple-icons-DISCLAIMER.md"
+
+[[bundled.sets]]
+id = "brands"
+grid = 24
+kind = "simple-icons"
