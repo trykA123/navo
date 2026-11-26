@@ -1,10 +1,5 @@
 //! Pure density metrics and overflow-fitting helpers for the button bar.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "BB19 seam; wired by the button bar view in BB22")
-)]
-
 use crate::Pixels;
 use crate::tokens::{Density, Spacing};
 

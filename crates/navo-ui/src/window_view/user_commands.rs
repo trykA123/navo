@@ -174,8 +174,7 @@ impl NavoWindow {
         state.run_notice.clone().or_else(|| state.notice.clone())
     }
 
-    #[cfg(test)]
-    pub(super) fn user_command_list(&self) -> &[UserCommandInfo] {
+    pub(in crate::window_view) fn user_command_list(&self) -> &[UserCommandInfo] {
         &self.user_commands.list
     }
 

@@ -4,6 +4,7 @@ pub(crate) mod fit;
 pub(crate) mod icon;
 pub(crate) mod raster_cache;
 pub(crate) mod state;
+pub(crate) mod view;
 
 pub(crate) use state::ButtonBarState;
 
@@ -26,6 +27,12 @@ pub const MSG_EDIT_BUTTONS: &str = "button-bar-edit-buttons";
 pub const MSG_UNKNOWN_COMMAND: &str = "button-bar-unknown-command";
 /// Fluent message id shown when an edit races a newer button bar reload.
 pub const MSG_STALE: &str = "button-bar-stale";
+/// Fluent message id shown in tooltips for commands that take dropped files.
+pub const MSG_TAKES_FILES: &str = "button-bar-takes-files";
+/// Fluent message id for the button bar overflow menu button.
+pub const MSG_MORE: &str = "button-bar-more";
+/// Fluent message id for the button bar landmark label.
+pub const MSG_BAR_LABEL: &str = "button-bar-label";
 
 /// Identifies a compiled program button within a loaded bar generation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

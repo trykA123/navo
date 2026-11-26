@@ -1,10 +1,5 @@
 //! Bounded 64-entry GPU raster cache for colour SVG and PNG button bar icons.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "BB21 seam; wired by the button bar view in BB22")
-)]
-
 use std::collections::VecDeque;
 use std::io::Cursor;
 use std::sync::Arc;

@@ -1,10 +1,5 @@
 //! GPUI icon element and theme-aware colour helpers for resolved button bar icons.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "BB21 seam; wired by the button bar view in BB22")
-)]
-
 use std::sync::Arc;
 
 use gpui_kit::prelude::FluentBuilder;

@@ -21,6 +21,7 @@ mod applied;
 mod archive_pane;
 mod button_bar_icon;
 mod button_bar_state;
+mod button_bar_view;
 mod cached;
 mod cards;
 pub(in crate::window_view) mod clipboard;

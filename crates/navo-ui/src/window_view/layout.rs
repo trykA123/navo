@@ -94,6 +94,7 @@ impl NavoWindow {
             .flex_1()
             .min_h_0()
             .when(has_mica, |below| below.bg(mica))
+            .children(self.button_bar_view(window, cx))
             .children(self.crash_notice_view(window, cx))
             .children(self.index_upgrade_view(cx))
             .children(self.compare_bar(cx))
