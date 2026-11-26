@@ -16,6 +16,8 @@ image = { version = "=0.25.10", default-features = false, features = [
   "png",
   "webp",
 ] }
+resvg = "=0.49.0"
+roxmltree = "=0.21.2"
 ruzstd = { version = "=0.9.1", default-features = false, features = ["std"] }
 thiserror = "2.0.21"
 toml = "1.2.1"
