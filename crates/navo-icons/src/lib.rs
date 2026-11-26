@@ -8,6 +8,8 @@ pub mod io;
 pub mod pack;
 /// Security-hardened raster icon decoder, resizer, and PNG re-encoder.
 pub mod raster;
+/// Resolves icon specs against bundled packs, downloaded packs, and stored user icon files.
+pub mod registry;
 /// Security-hardened SVG normaliser with strict allowlist XML pre-parsing.
 pub mod sanitise;
 /// Reads upstream icon tarballs into normalised icon-set drafts.
