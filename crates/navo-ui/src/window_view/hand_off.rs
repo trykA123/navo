@@ -143,6 +143,7 @@ pub struct OpenHooks {
     pub compare: Option<std::sync::Arc<dyn crate::browser::CompareHooks>>,
     pub diff: Option<std::sync::Arc<dyn crate::compare_diff::DiffHooks>>,
     pub user_commands: Option<super::UserCommandHooks>,
+    pub button_bar: Option<super::ButtonBarHooks>,
 }
 
 impl OpenHooks {

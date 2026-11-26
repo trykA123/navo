@@ -9,7 +9,6 @@
 mod app_menu;
 #[cfg(feature = "tester")]
 mod bench;
-#[allow(dead_code, reason = "BB18 wires button_bar into the app")]
 mod button_bar;
 mod cli;
 mod clip_module;

@@ -23,5 +23,6 @@ pub(super) fn open_hooks(
         compare: Some(Arc::new(crate::compare::local::navo_pane_compare())),
         diff: Some(diff),
         user_commands: None,
+        button_bar: None,
     }
 }

@@ -195,6 +195,7 @@ fn run_hook(
 }
 
 /// Starts loaded commands directly, sharing the run hook's news channel.
+#[derive(Clone)]
 pub(crate) struct Runner {
     sender: Arc<Mutex<Option<UserCommandSender>>>,
     launch: Launch,
@@ -209,6 +210,16 @@ impl Runner {
         spawn_worker(name, Arc::clone(&self.sender), move || {
             run_command(command, invocation, &worker_sender, &worker_launch);
         });
+    }
+
+    /// Sends a refusal message for `name` through the shared user-command news channel.
+    pub(crate) fn refuse(&self, name: &str, message: String) {
+        if let Some(sender) = lock(&self.sender).clone() {
+            let _ = sender.send(UserCommandNews::Refused {
+                name: name.to_owned(),
+                message,
+            });
+        }
     }
 
     /// Replaces the process launch with `launch`, so a test can record the plan.
