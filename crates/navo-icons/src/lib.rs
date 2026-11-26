@@ -12,6 +12,8 @@ pub mod raster;
 pub mod registry;
 /// Security-hardened SVG normaliser with strict allowlist XML pre-parsing.
 pub mod sanitise;
+/// In-memory tag index and ranked search across bundled and downloaded icon sets.
+pub mod search;
 /// Reads upstream icon tarballs into normalised icon-set drafts.
 pub mod sources;
 /// Parses and writes icon specs from user text and inline TOML tables.

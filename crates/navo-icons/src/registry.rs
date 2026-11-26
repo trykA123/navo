@@ -238,6 +238,33 @@ impl Registry {
         Pack::open(&bytes).ok()?.tags(set).ok()
     }
 
+    /// Returns all icon names in `set` in pack order, or an empty list if `set` is absent.
+    pub fn names(&self, set: &str) -> Vec<String> {
+        if let Some(pack) = &self.bundled
+            && pack.sets().iter().any(|info| info.id == set)
+        {
+            return pack.names(set).into_iter().map(str::to_owned).collect();
+        }
+        let Some(bytes) = self.downloaded_bytes(set) else {
+            return Vec::new();
+        };
+        let Ok(pack) = Pack::open(&bytes) else {
+            return Vec::new();
+        };
+        pack.names(set).into_iter().map(str::to_owned).collect()
+    }
+
+    /// Returns whether `set` is provided by a loaded downloaded pack.
+    pub fn is_downloaded(&self, set: &str) -> bool {
+        let downloaded = self
+            .downloaded
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
+        downloaded
+            .iter()
+            .any(|pack| pack.sets.iter().any(|info| info.id == set))
+    }
+
     /// Empties the decoded-chunk LRU cache to release memory.
     pub fn trim(&self) {
         self.cache
