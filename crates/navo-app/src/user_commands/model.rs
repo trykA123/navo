@@ -110,17 +110,17 @@ struct File {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Raw {
-    name: Spanned<String>,
-    program: Spanned<String>,
+pub(crate) struct Raw {
+    pub(crate) name: Spanned<String>,
+    pub(crate) program: Spanned<String>,
     #[serde(default)]
-    args: Option<Spanned<String>>,
+    pub(crate) args: Option<Spanned<String>>,
     #[serde(default, rename = "start-in")]
-    start_in: Option<Spanned<String>>,
+    pub(crate) start_in: Option<Spanned<String>>,
     #[serde(default)]
-    console: Option<Console>,
+    pub(crate) console: Option<Console>,
     #[serde(default)]
-    key: Option<Spanned<String>>,
+    pub(crate) key: Option<Spanned<String>>,
 }
 
 /// Reads the command file. Every problem in the file is returned with its line.
@@ -157,7 +157,7 @@ fn parse_inner(text: &str, search: Option<&Search>) -> Result<Vec<UserCommand>, 
     }
 }
 
-fn read_command(
+pub(crate) fn read_command(
     text: &str,
     entry: Spanned<Raw>,
     names: &mut HashMap<String, usize>,
@@ -254,7 +254,7 @@ fn syntax_error(text: &str, error: &toml::de::Error) -> LineError {
     }
 }
 
-fn line_at(text: &str, offset: usize) -> usize {
+pub(crate) fn line_at(text: &str, offset: usize) -> usize {
     text.get(..offset)
         .map_or(1, |before| before.matches('\n').count() + 1)
 }

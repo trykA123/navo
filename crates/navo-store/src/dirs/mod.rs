@@ -145,6 +145,18 @@ impl StoreDirs {
         self.config.join("user-commands.toml")
     }
 
+    /// Path to `buttonbar.toml` in the config folder.
+    #[must_use]
+    pub fn button_bar_file(&self) -> PathBuf {
+        self.config.join("buttonbar.toml")
+    }
+
+    /// Folder for imported button bar icons in the config folder.
+    #[must_use]
+    pub fn button_bar_icons_dir(&self) -> PathBuf {
+        self.config.join("buttonbar-icons")
+    }
+
     #[must_use]
     pub fn session_file(&self) -> PathBuf {
         self.data.join("session.bin")

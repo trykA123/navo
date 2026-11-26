@@ -23,7 +23,7 @@ use crate::watch_file::watch_file;
 
 mod error;
 mod expand;
-mod model;
+pub(crate) mod model;
 mod program;
 mod start;
 

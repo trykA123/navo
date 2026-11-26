@@ -100,6 +100,27 @@ fn the_user_commands_file_sits_beside_the_settings_file() {
 }
 
 #[test]
+fn the_button_bar_paths_sit_beside_the_settings_file() {
+    let dirs = StoreDirs {
+        config: PathBuf::from("/c"),
+        data: PathBuf::from("/d"),
+    };
+    assert_eq!(dirs.button_bar_file(), PathBuf::from("/c/buttonbar.toml"));
+    assert_eq!(
+        dirs.button_bar_icons_dir(),
+        PathBuf::from("/c/buttonbar-icons")
+    );
+    assert_eq!(
+        dirs.button_bar_file().parent(),
+        dirs.settings_file().parent()
+    );
+    assert_eq!(
+        dirs.button_bar_icons_dir().parent(),
+        dirs.settings_file().parent()
+    );
+}
+
+#[test]
 fn ensure_creates_both_dirs() {
     let root = tempfile::tempdir().unwrap();
     let dirs = StoreDirs {

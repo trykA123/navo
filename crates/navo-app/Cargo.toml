@@ -43,6 +43,7 @@ navo-core = { path = "../navo-core" }
 navo-diag = { path = "../navo-diag" }
 navo-fs = { path = "../navo-fs" }
 navo-git = { path = "../navo-git" }
+navo-icons = { path = "../navo-icons" }
 navo-index = { path = "../navo-index" }
 navo-index-service = { path = "../navo-index-service" }
 navo-l10n = { path = "../navo-l10n" }

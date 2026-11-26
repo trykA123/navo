@@ -6246,6 +6246,7 @@ dependencies = [
  "navo-diag",
  "navo-fs",
  "navo-git",
+ "navo-icons",
  "navo-index",
  "navo-index-service",
  "navo-l10n",
