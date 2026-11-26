@@ -19,6 +19,11 @@ use crate::user_commands::model::{Part, files::takes_files};
 use crate::user_commands::{Runner, UserCommand};
 use crate::watch_file::watch_file;
 
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "button_bar::save wires edit operations in")
+)]
+pub(crate) mod edit;
 pub(crate) mod model;
 
 #[cfg(test)]
