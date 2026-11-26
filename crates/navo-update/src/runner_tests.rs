@@ -216,3 +216,42 @@ fn auto_off_waits_for_check_now() {
     runner.check_now();
     wait_for(&runner, "up to date", |s| *s == UpdateState::UpToDate);
 }
+
+#[test]
+fn auto_check_skips_skipped_version_while_check_now_offers_it() {
+    let feed = feed(InstallKind::Installed);
+    feed.answer_check(Ok(newer()));
+    let runner = UpdateRunner::start_with_skipped(feed.clone(), true, Some("2.0.0".to_owned()));
+    wait_for(&runner, "skipped to up to date", |s| {
+        *s == UpdateState::UpToDate
+    });
+    assert_eq!(feed.download_calls(), 0);
+
+    feed.answer_check(Ok(newer()));
+    let steps = feed.hold_download();
+    runner.check_now();
+    wait_for(&runner, "manual check downloads skipped version", |s| {
+        matches!(s, UpdateState::Downloading { .. })
+    });
+    steps.send(DownloadStep::Done(Ok(()))).expect("done");
+    wait_for(&runner, "ready", |s| matches!(s, UpdateState::Ready { .. }));
+}
+
+#[test]
+fn clearing_skipped_version_reenables_auto_check() {
+    let feed = feed(InstallKind::Installed);
+    feed.answer_check(Ok(newer()));
+    let runner = UpdateRunner::start_with_skipped(feed.clone(), true, Some("2.0.0".to_owned()));
+    wait_for(&runner, "skipped", |s| *s == UpdateState::UpToDate);
+    assert_eq!(feed.download_calls(), 0);
+
+    runner.set_skipped_version(None);
+    feed.answer_check(Ok(newer()));
+    let steps = feed.hold_download();
+    runner.check_auto();
+    wait_for(&runner, "downloading after clear", |s| {
+        matches!(s, UpdateState::Downloading { .. })
+    });
+    steps.send(DownloadStep::Done(Ok(()))).expect("done");
+    wait_for(&runner, "ready", |s| matches!(s, UpdateState::Ready { .. }));
+}

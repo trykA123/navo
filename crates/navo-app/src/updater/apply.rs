@@ -5,7 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use navo_ui::window_view::UpdateFailure;
-use navo_update::{InstallKind, Version, parse_version};
+use navo_update::{FeedError, InstallKind, Version, parse_version};
 use velopack::{UpdateManager, VelopackAsset, sources::NoneSource};
 
 use super::feed::install_kind;
@@ -156,6 +156,42 @@ fn restart_with<A>(
         Apply::Wait(Reason::OthersRunning) => Err(UpdateFailure::OthersRunning),
         Apply::Wait(_) => Err(UpdateFailure::Apply),
     }
+}
+
+/// Applies a downloaded downgrade package and restarts on Windows.
+#[cfg(windows)]
+pub(super) fn apply_downgrade(
+    manager: &UpdateManager,
+    asset: &VelopackAsset,
+) -> Result<(), FeedError> {
+    if install_kind(manager) != InstallKind::Installed {
+        return Err(FeedError::Other(
+            "rollback requires an installed copy".to_owned(),
+        ));
+    }
+    match others_running(root().as_deref()) {
+        Ok(false) => {}
+        Ok(true) => return Err(FeedError::Busy),
+        Err(error) => return Err(FeedError::Other(error.to_string())),
+    }
+    let command = crate::cli::parse(std::env::args_os().skip(1))
+        .map_err(|error| FeedError::Other(error.to_string()))?;
+    let args = restart_args(&command).map_err(|error| FeedError::Other(error.to_string()))?;
+    crate::files::stop_pdf();
+    logging::flush();
+    manager
+        .apply_updates_and_restart_with_args(asset, &args)
+        .map_err(|error| super::feed::classify(&error))
+}
+
+#[cfg(not(windows))]
+pub(super) fn apply_downgrade(
+    _manager: &UpdateManager,
+    _asset: &VelopackAsset,
+) -> Result<(), FeedError> {
+    Err(FeedError::Other(
+        "rollback is only supported on Windows".to_owned(),
+    ))
 }
 
 fn restart_args(command: &Command) -> io::Result<Vec<OsString>> {

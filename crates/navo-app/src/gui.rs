@@ -166,7 +166,7 @@ pub(crate) fn open(mut launch: Launch) {
             .zip(dirs.as_ref())
             .map(|(_, dirs)| dirs.data.join("cache.db")),
     );
-    let updater = crate::updater::launch();
+    let updater = crate::updater::launch(dirs.as_ref());
     let follow = settings::Follow {
         remember: remember.clone(),
         git: {

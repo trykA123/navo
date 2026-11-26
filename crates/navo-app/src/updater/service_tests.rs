@@ -275,3 +275,283 @@ fn a_daily_check_clears_a_restart_failure() {
     updater.tick(&mut timer, DAY);
     assert!(!matches!(view_of(&updater), UpdateView::Failed(_)));
 }
+
+fn temp_settings() -> (
+    tempfile::TempDir,
+    std::path::PathBuf,
+    Arc<Mutex<SettingsStore>>,
+) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("navo.toml");
+    let (store, _) = SettingsStore::load(&path);
+    (dir, path, Arc::new(Mutex::new(store)))
+}
+
+fn rel(text: &str) -> Release {
+    Release {
+        version: version(text),
+        size: 1024,
+    }
+}
+
+fn wait_targets(updater: &Arc<Updater>) -> Vec<navo_ui::window_view::RollbackTargetView> {
+    let hooks = updater.hooks();
+    for _ in 0..400 {
+        let targets = (hooks.rollback_targets)();
+        if !targets.is_empty() {
+            return targets;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    Vec::new()
+}
+
+fn wait_rollback_calls(fake: &Arc<FakeFeed>, expected: usize) -> Vec<Version> {
+    for _ in 0..400 {
+        let calls = fake.rollback_calls();
+        if calls.len() >= expected {
+            return calls;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    fake.rollback_calls()
+}
+
+#[test]
+fn rollback_targets_maps_compatibility_without_blocking() {
+    use navo_ui::window_view::{RollbackCompatibilityView, RollbackTargetView};
+
+    let fake = Arc::new(
+        FakeFeed::new(InstallKind::Installed, version("0.9.4")).with_recent_releases(vec![
+            rel("0.9.4"),
+            rel("0.9.3"),
+            rel("0.9.2"),
+            rel("0.9.1"),
+            rel("0.9.0"),
+        ]),
+    );
+    let compat = Arc::new(
+        |target: &RollbackTarget| match target.version.to_string().as_str() {
+            "0.9.3" => RollbackCompatibility::Compatible,
+            "0.9.2" => RollbackCompatibility::CompatibleWithBackup {
+                backup_path: std::path::PathBuf::from("session.bin.bak"),
+            },
+            _ => RollbackCompatibility::Incompatible {
+                reason: "schema mismatch".to_owned(),
+            },
+        },
+    );
+    let updater = Updater::start_with_rollback(
+        fake,
+        LONG,
+        RollbackConfig {
+            settings: None,
+            compat,
+        },
+    );
+    let targets = wait_targets(&updater);
+    assert_eq!(
+        targets,
+        vec![
+            RollbackTargetView {
+                version: "0.9.3".into(),
+                status: RollbackCompatibilityView::Compatible,
+            },
+            RollbackTargetView {
+                version: "0.9.2".into(),
+                status: RollbackCompatibilityView::CompatibleWithBackup,
+            },
+            RollbackTargetView {
+                version: "0.9.1".into(),
+                status: RollbackCompatibilityView::Incompatible {
+                    reason: "schema mismatch".into(),
+                },
+            },
+        ]
+    );
+}
+
+#[test]
+fn apply_rollback_persists_skipped_version_and_prevents_auto_loop() {
+    let (_dir, path, store) = temp_settings();
+    let fake = Arc::new(
+        FakeFeed::new(InstallKind::Installed, version("0.9.4"))
+            .with_recent_releases(vec![rel("0.9.3")]),
+    );
+    let updater = Updater::start_with_rollback(
+        fake.clone(),
+        LONG,
+        RollbackConfig {
+            settings: Some(store),
+            compat: Arc::new(|_| RollbackCompatibility::Compatible),
+        },
+    );
+    assert!(!wait_targets(&updater).is_empty());
+    let hooks = updater.hooks();
+    assert_eq!((hooks.apply_rollback)("0.9.3"), Ok(()));
+    assert_eq!((hooks.skipped_version)().as_deref(), Some("0.9.4"));
+    let (reloaded, _) = SettingsStore::load(&path);
+    assert_eq!(
+        reloaded.current().updates.skipped_version.as_deref(),
+        Some("0.9.4")
+    );
+    assert_eq!(wait_rollback_calls(&fake, 1), vec![version("0.9.3")]);
+
+    // After restart on 0.9.3, automatic check skips 0.9.4, while manual check_now offers it.
+    let after_store = Arc::new(Mutex::new(reloaded));
+    let after_fake = Arc::new(FakeFeed::new(InstallKind::Installed, version("0.9.3")));
+    after_fake.answer_check(Ok(release("0.9.4")));
+    let after_updater = Updater::start_with_rollback(
+        after_fake.clone(),
+        Duration::from_millis(10),
+        RollbackConfig {
+            settings: Some(after_store),
+            compat: Arc::new(|_| RollbackCompatibility::Compatible),
+        },
+    );
+    wait_for(&after_updater, |view| *view == UpdateView::UpToDate);
+    assert_eq!(after_fake.download_calls(), 0);
+
+    after_fake.answer_check(Ok(release("0.9.4")));
+    let steps = after_fake.hold_download();
+    (after_updater.hooks().check_now)();
+    wait_for(&after_updater, |view| {
+        matches!(view, UpdateView::Downloading { .. })
+    });
+    steps.send(DownloadStep::Done(Ok(()))).expect("done");
+    wait_for(&after_updater, |view| {
+        *view
+            == UpdateView::Ready {
+                version: "0.9.4".into(),
+            }
+    });
+}
+
+#[test]
+fn clear_skipped_version_clears_store_and_reenables_auto_check() {
+    let (_dir, path, store) = temp_settings();
+    store
+        .lock()
+        .expect("store")
+        .save_preserving_edits(
+            "updates.skipped-version",
+            Some(navo_store::SettingValue::Text("0.9.4".to_owned())),
+        )
+        .expect("seed skip");
+    let fake = Arc::new(FakeFeed::new(InstallKind::Installed, version("0.9.3")));
+    let updater = Updater::start_with_rollback(
+        fake.clone(),
+        LONG,
+        RollbackConfig {
+            settings: Some(store),
+            compat: Arc::new(|_| RollbackCompatibility::Compatible),
+        },
+    );
+    updater.set_keep_in_tray(true);
+    let hooks = updater.hooks();
+    assert_eq!((hooks.skipped_version)().as_deref(), Some("0.9.4"));
+    (hooks.clear_skipped_version)();
+    assert_eq!((hooks.skipped_version)(), None);
+    let (reloaded, _) = SettingsStore::load(&path);
+    assert_eq!(reloaded.current().updates.skipped_version, None);
+
+    fake.answer_check(Ok(release("0.9.4")));
+    let steps = fake.hold_download();
+    let mut timer = Schedule::new(Duration::ZERO, Duration::ZERO);
+    updater.tick(&mut timer, Duration::ZERO);
+    wait_for(&updater, |view| {
+        matches!(view, UpdateView::Downloading { .. })
+    });
+    steps.send(DownloadStep::Done(Ok(()))).expect("done");
+    wait_for(&updater, |view| matches!(view, UpdateView::Ready { .. }));
+}
+
+#[test]
+fn incompatible_rollback_target_is_refused_without_skip_or_downgrade() {
+    let (_dir, path, store) = temp_settings();
+    let fake = Arc::new(
+        FakeFeed::new(InstallKind::Installed, version("0.9.4"))
+            .with_recent_releases(vec![rel("0.9.1")]),
+    );
+    let updater = Updater::start_with_rollback(
+        fake.clone(),
+        LONG,
+        RollbackConfig {
+            settings: Some(store),
+            compat: Arc::new(|_| RollbackCompatibility::Incompatible {
+                reason: "schema too new".to_owned(),
+            }),
+        },
+    );
+    assert!(!wait_targets(&updater).is_empty());
+    let hooks = updater.hooks();
+    let err = (hooks.apply_rollback)("0.9.1").expect_err("must refuse incompatible target");
+    assert!(err.contains("schema too new"), "unexpected error: {err}");
+    assert_eq!((hooks.skipped_version)(), None);
+    let (reloaded, _) = SettingsStore::load(&path);
+    assert_eq!(reloaded.current().updates.skipped_version, None);
+    assert!(fake.rollback_calls().is_empty());
+}
+
+#[test]
+fn panicking_rollback_resets_in_flight_flag() {
+    use std::sync::atomic::AtomicUsize;
+
+    struct PanickingRollbackFeed {
+        calls: AtomicUsize,
+    }
+
+    impl UpdateFeed for PanickingRollbackFeed {
+        fn kind(&self) -> InstallKind {
+            InstallKind::Installed
+        }
+        fn current(&self) -> Version {
+            version("0.9.4")
+        }
+        fn staged(&self) -> Option<Version> {
+            None
+        }
+        fn check(&self) -> Result<Found, FeedError> {
+            Ok(Found::Nothing)
+        }
+        fn download(&self, _: &Release, _: &dyn Fn(u8)) -> Result<(), FeedError> {
+            Ok(())
+        }
+        fn recent_releases(&self) -> Result<Vec<Release>, FeedError> {
+            Ok(vec![rel("0.9.3")])
+        }
+        fn rollback(&self, _: &Release) -> Result<(), FeedError> {
+            let n = self.calls.fetch_add(1, Ordering::SeqCst);
+            if n == 0 {
+                panic!("simulated rollback panic");
+            }
+            Ok(())
+        }
+    }
+
+    let feed = Arc::new(PanickingRollbackFeed {
+        calls: AtomicUsize::new(0),
+    });
+    let updater = Updater::start_with_rollback(feed.clone(), LONG, RollbackConfig::default());
+    assert!(!wait_targets(&updater).is_empty());
+    let hooks = updater.hooks();
+
+    assert_eq!((hooks.apply_rollback)("0.9.3"), Ok(()));
+    for _ in 0..400 {
+        if !updater.rollback_in_flight.load(Ordering::SeqCst)
+            && feed.calls.load(Ordering::SeqCst) >= 1
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(!updater.rollback_in_flight.load(Ordering::SeqCst));
+    assert_eq!((hooks.apply_rollback)("0.9.3"), Ok(()));
+    for _ in 0..400 {
+        if feed.calls.load(Ordering::SeqCst) >= 2 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(feed.calls.load(Ordering::SeqCst), 2);
+}

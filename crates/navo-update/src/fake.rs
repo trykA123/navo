@@ -21,8 +21,11 @@ pub struct FakeFeed {
     kind: InstallKind,
     current: Version,
     staged: Option<Version>,
+    recent: Mutex<Vec<Release>>,
     checks: Mutex<VecDeque<CheckReply>>,
     downloads: Mutex<VecDeque<DownloadScript>>,
+    rollback_calls: Mutex<Vec<Version>>,
+    rollback_result: Mutex<Result<(), FeedError>>,
     check_calls: AtomicUsize,
     download_calls: AtomicUsize,
 }
@@ -33,8 +36,11 @@ impl FakeFeed {
             kind,
             current,
             staged: None,
+            recent: Mutex::default(),
             checks: Mutex::default(),
             downloads: Mutex::default(),
+            rollback_calls: Mutex::default(),
+            rollback_result: Mutex::new(Ok(())),
             check_calls: AtomicUsize::new(0),
             download_calls: AtomicUsize::new(0),
         }
@@ -43,6 +49,19 @@ impl FakeFeed {
     pub fn with_staged(mut self, staged: Version) -> Self {
         self.staged = Some(staged);
         self
+    }
+
+    pub fn with_recent_releases(self, releases: Vec<Release>) -> Self {
+        *lock(&self.recent) = releases;
+        self
+    }
+
+    pub fn set_rollback_result(&self, result: Result<(), FeedError>) {
+        *lock(&self.rollback_result) = result;
+    }
+
+    pub fn rollback_calls(&self) -> Vec<Version> {
+        lock(&self.rollback_calls).clone()
     }
 
     /// Queues a check that answers at once.
@@ -108,6 +127,15 @@ impl UpdateFeed for FakeFeed {
                 Err(_) => return Err(FeedError::Interrupted),
             }
         }
+    }
+
+    fn recent_releases(&self) -> Result<Vec<Release>, FeedError> {
+        Ok(lock(&self.recent).clone())
+    }
+
+    fn rollback(&self, target: &Release) -> Result<(), FeedError> {
+        lock(&self.rollback_calls).push(target.version.clone());
+        lock(&self.rollback_result).clone()
     }
 }
 

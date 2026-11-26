@@ -9,11 +9,13 @@ mod view;
 
 use std::sync::Arc;
 
+use navo_store::StoreDirs;
+
 use feed::VelopackFeed;
 use service::{START_DELAY, Updater};
 
 /// The updater of this copy, or `None` without an install or with an invalid tester feed (D22b).
-pub(crate) fn launch() -> Option<Arc<Updater>> {
+pub(crate) fn launch(dirs: Option<&StoreDirs>) -> Option<Arc<Updater>> {
     let feed = VelopackFeed::detect().ok()?;
-    Some(Updater::start(Arc::new(feed), START_DELAY))
+    Some(Updater::start_with_dirs(Arc::new(feed), START_DELAY, dirs))
 }

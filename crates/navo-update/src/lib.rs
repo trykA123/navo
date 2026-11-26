@@ -76,4 +76,10 @@ pub trait UpdateFeed: Send + Sync {
     fn recent_releases(&self) -> Result<Vec<Release>, FeedError> {
         Ok(Vec::new())
     }
+    /// Downloads and applies a downgrade to `target`. Runs off the UI thread.
+    fn rollback(&self, _target: &Release) -> Result<(), FeedError> {
+        Err(FeedError::Other(
+            "rollback is not supported by this feed".to_owned(),
+        ))
+    }
 }

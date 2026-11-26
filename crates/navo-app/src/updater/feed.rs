@@ -7,9 +7,13 @@ use std::thread;
 
 use navo_update::{FeedError, Found, InstallKind, Release, UpdateFeed, Version, parse_version};
 use velopack::sources::{GithubSource, UpdateSource};
-use velopack::{Error, NetworkError, UpdateCheck, UpdateInfo, UpdateManager, UpdateOptions};
+use velopack::{
+    Error, NetworkError, UpdateCheck, UpdateInfo, UpdateManager, UpdateOptions, VelopackAsset,
+};
 
 const REPO: &str = "https://github.com/trykA123/navo";
+/// Caps cached full releases from `releases.<channel>.json` to bound memory.
+const MAX_FEED_ASSETS: usize = 64;
 
 /// Portable when Velopack says so, else installed. Needs a manager, so never `Unpackaged`.
 pub(crate) fn install_kind(manager: &UpdateManager) -> InstallKind {
@@ -25,6 +29,7 @@ pub(crate) struct VelopackFeed {
     manager: UpdateManager,
     kind: InstallKind,
     found: Mutex<Option<UpdateInfo>>,
+    recent_assets: Mutex<Vec<(Version, VelopackAsset)>>,
 }
 
 impl VelopackFeed {
@@ -50,6 +55,7 @@ impl VelopackFeed {
                 kind: install_kind(&manager),
                 manager,
                 found: Mutex::new(None),
+                recent_assets: Mutex::new(Vec::new()),
             }),
             Err(Error::NotInstalled(_)) => Err(InstallKind::Unpackaged),
             Err(error) => {
@@ -88,6 +94,46 @@ impl VelopackFeed {
         } else {
             Err(changed())
         }
+    }
+
+    /// Queries the same allowlisted Velopack source for full release assets, newest first.
+    fn fetch_recent_assets(&self) -> Result<Vec<(Version, VelopackAsset)>, FeedError> {
+        let feed = self
+            .manager
+            .get_release_feed()
+            .map_err(|error| classify(&error))?;
+        let mut assets: Vec<(Version, VelopackAsset)> = feed
+            .Assets
+            .into_iter()
+            .filter(|asset| asset.Type.eq_ignore_ascii_case("Full"))
+            .filter_map(|asset| parse_version(&asset.Version).ok().map(|v| (v, asset)))
+            .collect();
+        assets.sort_by(|a, b| b.0.cmp(&a.0));
+        assets.dedup_by(|a, b| a.0 == b.0);
+        assets.truncate(MAX_FEED_ASSETS);
+        *self
+            .recent_assets
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = assets.clone();
+        Ok(assets)
+    }
+
+    fn asset_for_version(&self, version: &Version) -> Result<VelopackAsset, FeedError> {
+        let cached = self
+            .recent_assets
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .find(|(v, _)| v == version)
+            .map(|(_, asset)| asset.clone());
+        if let Some(asset) = cached {
+            return Ok(asset);
+        }
+        self.fetch_recent_assets()?
+            .into_iter()
+            .find(|(v, _)| v == version)
+            .map(|(_, asset)| asset)
+            .ok_or_else(changed)
     }
 }
 
@@ -141,6 +187,31 @@ impl UpdateFeed for VelopackFeed {
                 "the download stopped unexpectedly".to_owned(),
             )),
         }
+    }
+
+    fn recent_releases(&self) -> Result<Vec<Release>, FeedError> {
+        let assets = self.fetch_recent_assets()?;
+        Ok(assets
+            .into_iter()
+            .map(|(version, asset)| Release {
+                version,
+                size: asset.Size,
+            })
+            .collect())
+    }
+
+    fn rollback(&self, target: &Release) -> Result<(), FeedError> {
+        let asset = self.asset_for_version(&target.version)?;
+        let info = UpdateInfo {
+            TargetFullRelease: asset.clone(),
+            BaseRelease: None,
+            DeltasToTarget: Vec::new(),
+            IsDowngrade: true,
+        };
+        self.manager
+            .download_updates(&info, None)
+            .map_err(|error| classify(&error))?;
+        super::apply::apply_downgrade(&self.manager, &asset)
     }
 }
 
