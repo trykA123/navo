@@ -11,8 +11,8 @@ use super::SourceError;
 
 /// The most tar entries one archive may hold.
 const MAX_ENTRIES: usize = 40_000;
-/// The most bytes one kept entry may hold.
-const MAX_ENTRY: u64 = 1024 * 1024;
+/// The most bytes one kept entry may hold (accommodates whole-set JSON indexes such as `@tabler/icons`).
+const MAX_ENTRY: u64 = 8 * 1024 * 1024;
 /// The most bytes all kept entries may hold together.
 const MAX_TOTAL: usize = 256 * 1024 * 1024;
 

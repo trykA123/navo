@@ -128,8 +128,12 @@ fn sources_svg_dir_strips_suffix_and_skips() {
 }
 
 #[test]
-fn sources_tarball_refuses_entry_over_1_mib() {
-    let big = vec![b'x'; 1024 * 1024 + 1];
+fn sources_tarball_refuses_entry_over_8_mib() {
+    let ok_large = vec![b'x'; 2 * 1024 * 1024];
+    let ok_archive = tgz(&[("package/index.json", ok_large.as_slice())]);
+    assert!(read_tarball(&ok_archive, &|_| true).is_ok());
+
+    let big = vec![b'x'; 8 * 1024 * 1024 + 1];
     let archive = tgz(&[("package/big.svg", big.as_slice())]);
 
     assert_eq!(
