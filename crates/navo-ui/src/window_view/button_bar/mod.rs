@@ -1,6 +1,9 @@
 //! Button bar view types, edit operations, and bounded latest-wins news channel.
 
 pub(crate) mod fit;
+pub(crate) mod state;
+
+pub(crate) use state::ButtonBarState;
 
 use std::sync::{Arc, Mutex, PoisonError};
 
