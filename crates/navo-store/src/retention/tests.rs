@@ -24,6 +24,7 @@ fn record() -> RetentionRecord {
         }],
         created_at: 0,
         expires_at: DAY_MS,
+        replaced_by: None,
     }
 }
 

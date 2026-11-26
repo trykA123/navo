@@ -74,6 +74,14 @@ impl RetainedNode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Replacement {
+    pub node: RetainedNode,
+    pub from: Location,
+    pub moved: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RetentionRecord {
     pub version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -85,6 +93,8 @@ pub struct RetentionRecord {
     pub nodes: Vec<RetainedNode>,
     pub created_at: i64,
     pub expires_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaced_by: Option<Replacement>,
 }
 
 impl RetentionRecord {
@@ -109,6 +119,22 @@ impl RetentionRecord {
         self.nodes.iter().try_fold(0_u64, |total, node| {
             total.checked_add(node.size).ok_or(RetentionError::Overflow)
         })
+    }
+
+    pub fn parked(&self) -> Result<Option<Location>, RetentionError> {
+        let Some(replacement) = &self.replaced_by else {
+            return Ok(None);
+        };
+        if replacement.moved {
+            return Ok(Some(replacement.from.clone()));
+        }
+        let payload = self.payload_name.as_deref().ok_or(RetentionError::Invalid(
+            "missing payload name for parked path",
+        ))?;
+        self.container
+            .join(&ProviderPath::from_text(&format!("{payload}.undone")))
+            .map(Some)
+            .map_err(|_| RetentionError::Invalid("invalid retention container"))
     }
 }
 

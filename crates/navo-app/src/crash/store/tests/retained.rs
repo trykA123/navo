@@ -29,6 +29,7 @@ fn saved(data: &Path, fs: &FakeFs, owner: bool) -> RetentionRecord {
         }],
         created_at: 0,
         expires_at: DAY_MS,
+        replaced_by: None,
     };
     fs.rename(&source, &record.held().unwrap()).unwrap();
     let (db, _) = Db::open(&database(data), false).unwrap();

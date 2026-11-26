@@ -139,6 +139,7 @@ fn add_ready_retained(fixture: &Fixture, job: JobId, now: i64) -> RetentionId {
         }],
         created_at: now - 2 * DAY_MS,
         expires_at: now + 5 * DAY_MS,
+        replaced_by: None,
     };
     let mut transaction = catalog.transaction().unwrap();
     let mut entry = transaction.insert(&record, Some(job)).unwrap();

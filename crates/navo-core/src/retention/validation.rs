@@ -40,7 +40,32 @@ impl RetentionRecord {
             ));
         }
         self.validate_nodes()?;
+        self.validate_replaced_by()?;
         self.bytes()?;
+        Ok(())
+    }
+
+    fn validate_replaced_by(&self) -> Result<(), RetentionError> {
+        let Some(replacement) = &self.replaced_by else {
+            return Ok(());
+        };
+        if self.version != 2 {
+            return Err(RetentionError::Invalid(
+                "replaced_by is only allowed on version 2",
+            ));
+        }
+        if !replacement.node.path.is_empty()
+            || replacement.node.kind != super::RetainedKind::File
+            || replacement.node.identity.volume != self.parent_identity.volume
+        {
+            return Err(RetentionError::Invalid("invalid replaced_by node"));
+        }
+        if !is_absolute(&replacement.from)
+            || !clean_path(&replacement.from)
+            || replacement.from.same_place(&self.source)
+        {
+            return Err(RetentionError::Invalid("invalid replaced_by source"));
+        }
         Ok(())
     }
 

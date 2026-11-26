@@ -242,6 +242,7 @@ fn validate_returned(
                 nodes: vec![saved.proof.node.clone()],
                 created_at: owner.created_at,
                 expires_at: owner.plan.policy().expires_at(owner.created_at)?,
+                replaced_by: None,
             })
         })
         .collect::<Result<Vec<_>, RetentionError>>()?;
@@ -266,6 +267,22 @@ fn validate_records(
             return Err(
                 RetentionError::Invalid("retained version does not match its owner plan").into(),
             );
+        }
+        if let Some(replacement) = &record.replaced_by {
+            let source_matches = plan.plan().steps.iter().any(|step| match step {
+                Step::CopyFile { source, target, .. } | Step::Rename { source, target }
+                    if target.same_place(&record.source) =>
+                {
+                    source.same_place(&replacement.from)
+                }
+                _ => false,
+            });
+            if !source_matches {
+                return Err(RetentionError::Invalid(
+                    "replaced_by from does not match the plan step source",
+                )
+                .into());
+            }
         }
     }
     Ok(())

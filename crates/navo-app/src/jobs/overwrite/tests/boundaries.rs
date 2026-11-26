@@ -39,6 +39,7 @@ fn partial_adoption_cannot_discard_other_durable_overwrite_proofs() {
     let (_root, dirs, journal, fs, _log) = copied_pair();
     let job = lock(&journal).unfinished().unwrap().remove(0);
     let held = super::super::super::held::held_of(&journal, job.id).unwrap();
+    let plan: navo_core::retention::RetainedWritePlan = serde_json::from_slice(&job.plan).unwrap();
     let (db, _) = Db::open(&dirs.journal_file(), false).unwrap();
     let mut vault = Vault::new(db, &dirs.data, &fs).unwrap();
     let result = vault.adopt_job(
@@ -46,6 +47,7 @@ fn partial_adoption_cannot_discard_other_durable_overwrite_proofs() {
             job: job.id,
             state: JobState::Done,
             files: &held.proved[..1],
+            plan: plan.plan(),
             policy: Default::default(),
             created_at: job.created_at,
             keep_evidence: false,
@@ -225,6 +227,7 @@ fn returned_previously_adopted_entries_settle_even_after_a_lost_completion_commi
     let (_root, dirs, journal, fs, log) = copied_pair();
     let job = lock(&journal).unfinished().unwrap().remove(0);
     let held = super::super::super::held::held_of(&journal, job.id).unwrap();
+    let plan: navo_core::retention::RetainedWritePlan = serde_json::from_slice(&job.plan).unwrap();
     let (db, _) = Db::open(&dirs.journal_file(), false).unwrap();
     let mut vault = Vault::new(db, &dirs.data, &fs).unwrap();
     vault
@@ -233,6 +236,7 @@ fn returned_previously_adopted_entries_settle_even_after_a_lost_completion_commi
                 job: job.id,
                 state: JobState::RestorePending,
                 files: &held.proved,
+                plan: plan.plan(),
                 policy: Default::default(),
                 created_at: job.created_at,
                 keep_evidence: false,
@@ -271,7 +275,10 @@ fn returned_previously_adopted_entries_settle_even_after_a_lost_completion_commi
 #[test]
 fn a_terminal_owner_cannot_return_another_jobs_proved_version() {
     let (_root, dirs, journal, fs, mut first) = copied_pair();
-    let owner = lock(&journal).unfinished().unwrap().remove(0).id;
+    let owner_job = lock(&journal).unfinished().unwrap().remove(0);
+    let owner = owner_job.id;
+    let owner_plan: navo_core::retention::RetainedWritePlan =
+        serde_json::from_slice(&owner_job.plan).unwrap();
     first
         .finish(
             &JobOutcome::Failed {
@@ -304,6 +311,7 @@ fn a_terminal_owner_cannot_return_another_jobs_proved_version() {
                     job: owner,
                     state: JobState::Failed,
                     files: &held.proved,
+                    plan: owner_plan.plan(),
                     policy: Default::default(),
                     created_at: lock(&journal).read_job(owner).unwrap().1.created_at,
                     keep_evidence: false,
@@ -354,6 +362,7 @@ fn failed_overwrite_then_touched(kind: OpKind) {
             job: job.id,
             state: JobState::Failed,
             files: &held.proved,
+            plan: &plan,
             policy: Default::default(),
             created_at: job.created_at,
             keep_evidence: false,

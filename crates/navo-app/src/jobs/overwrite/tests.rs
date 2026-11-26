@@ -351,6 +351,7 @@ fn overwrite_adoption_rechecks_prior_payloads_after_progress_callbacks() {
             job: job.id,
             state: JobState::Done,
             files: &held.proved,
+            plan: &plan,
             policy: Default::default(),
             created_at: job.created_at,
             keep_evidence: false,
@@ -418,6 +419,54 @@ fn native_shared_holder_restores_each_version_without_removing_its_neighbor() {
         }
     }
     assert!(!std::path::Path::new(saved[0].record.container.as_str()).exists());
+}
+
+#[test]
+fn an_adopted_copy_records_what_replaced_the_original() {
+    for (kind, expect_moved) in [(OpKind::Copy, false), (OpKind::Move, true)] {
+        let (_root, dirs, journal) = setup();
+        let fs = FakeFs::new();
+        fs.add_file("source/a", 7);
+        fs.add_file("dest/a", 2);
+        let plan = overwrite(&fs, &[fs.location("source/a")], fs.location("dest"), kind);
+        let mut log = profile_factory(journal.clone(), dirs.clone())(&plan).unwrap();
+        assert_eq!(execute(log.as_mut(), &plan, &fs), JobOutcome::Done);
+        log.finish(&JobOutcome::Done, &fs).unwrap();
+        drop(log);
+        let saved = entries(&dirs);
+        assert_eq!(saved.len(), 1);
+        let record = &saved[0].record;
+        assert_eq!(record.version, 2);
+        let replacement = record
+            .replaced_by
+            .as_ref()
+            .expect("replaced_by should be set for an overwrite");
+        assert_eq!(replacement.from, fs.location("source/a"));
+        assert_eq!(replacement.moved, expect_moved);
+        assert_eq!(replacement.node.size, 7);
+        assert!(replacement.node.path.is_empty());
+        assert_eq!(
+            replacement.node.kind,
+            navo_core::retention::RetainedKind::File
+        );
+    }
+}
+
+#[test]
+fn a_v2_record_without_replaced_by_loads_with_none() {
+    let json = r#"{
+        "version": 2,
+        "payload_name": "a",
+        "source": "/dest/a",
+        "container": "/dest/.navo-held-ab",
+        "parent_identity": {"volume": 1, "file": [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+        "container_identity": {"volume": 1, "file": [2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+        "nodes": [{"path": [], "kind": "file", "identity": {"volume": 1, "file": [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}, "size": 7}],
+        "created_at": 100,
+        "expires_at": 200
+    }"#;
+    let record: navo_core::retention::RetentionRecord = serde_json::from_str(json).unwrap();
+    assert_eq!(record.replaced_by, None);
 }
 
 mod boundaries;

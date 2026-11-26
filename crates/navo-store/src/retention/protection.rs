@@ -269,6 +269,7 @@ mod stress {
             nodes,
             created_at: 0,
             expires_at: DAY_MS,
+            replaced_by: None,
         };
         record.validate().unwrap();
         serde_json::to_vec(&record).unwrap()

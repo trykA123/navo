@@ -135,6 +135,7 @@ fn entry(id: i64, size: u64, created_at: i64) -> RetentionEntry {
             }],
             created_at,
             expires_at: created_at + DAY_MS,
+            replaced_by: None,
         },
     }
 }
@@ -425,4 +426,113 @@ fn low_space_never_adds_a_fresh_entry_when_a_failed_entry_has_expired() {
         failed_expired_and_fresh_unexpired(0, 1000),
         [(1, PurgeReason::Expired)]
     );
+}
+
+#[test]
+fn parked_returns_none_without_replaced_by_and_the_container_path_for_a_copy() {
+    let mut adopted = entry(1, 7, 100);
+    adopted.record.version = 2;
+    adopted.record.payload_name = Some("a".to_owned());
+    adopted.record.container = crate::Location::new("/sample/.navo-held-ab").unwrap();
+    adopted.job_id = Some(1);
+    assert_eq!(adopted.record.parked().unwrap(), None);
+    adopted.record.replaced_by = Some(super::Replacement {
+        node: RetainedNode {
+            path: vec![],
+            kind: RetainedKind::File,
+            identity: FileIdentity {
+                kind: crate::FileIdentityKind::Native,
+                volume: 7,
+                file: [2; 16],
+            },
+            size: 7,
+            modified_ms: Some(100),
+        },
+        from: crate::Location::new("/source/a").unwrap(),
+        moved: false,
+    });
+    assert_eq!(
+        adopted.record.parked().unwrap(),
+        Some(crate::Location::new("/sample/.navo-held-ab/a.undone").unwrap())
+    );
+}
+
+#[test]
+fn parked_returns_the_from_location_for_a_move() {
+    let mut adopted = entry(1, 7, 100);
+    adopted.record.version = 2;
+    adopted.record.payload_name = Some("a".to_owned());
+    adopted.record.container = crate::Location::new("/sample/.navo-held-ab").unwrap();
+    adopted.job_id = Some(1);
+    let from = crate::Location::new("/source/a").unwrap();
+    adopted.record.replaced_by = Some(super::Replacement {
+        node: RetainedNode {
+            path: vec![],
+            kind: RetainedKind::File,
+            identity: FileIdentity {
+                kind: crate::FileIdentityKind::Native,
+                volume: 7,
+                file: [2; 16],
+            },
+            size: 7,
+            modified_ms: Some(100),
+        },
+        from: from.clone(),
+        moved: true,
+    });
+    assert_eq!(adopted.record.parked().unwrap(), Some(from));
+}
+
+#[test]
+fn replaced_by_is_rejected_on_non_v2_records() {
+    let mut adopted = entry(1, 7, 100);
+    adopted.record.replaced_by = Some(super::Replacement {
+        node: RetainedNode {
+            path: vec![],
+            kind: RetainedKind::File,
+            identity: FileIdentity {
+                kind: crate::FileIdentityKind::Native,
+                volume: 7,
+                file: [2; 16],
+            },
+            size: 7,
+            modified_ms: Some(100),
+        },
+        from: crate::Location::new("/source/a").unwrap(),
+        moved: false,
+    });
+    assert!(adopted.record.validate().is_err());
+}
+
+#[test]
+fn replaced_by_requires_a_matching_volume_and_a_different_source() {
+    let mut adopted = entry(1, 7, 100);
+    adopted.record.version = 2;
+    adopted.record.payload_name = Some("a".to_owned());
+    adopted.record.container = crate::Location::new("/sample/.navo-held-ab").unwrap();
+    adopted.job_id = Some(1);
+    let mut replacement = super::Replacement {
+        node: RetainedNode {
+            path: vec![],
+            kind: RetainedKind::File,
+            identity: FileIdentity {
+                kind: crate::FileIdentityKind::Native,
+                volume: 7,
+                file: [2; 16],
+            },
+            size: 7,
+            modified_ms: Some(100),
+        },
+        from: crate::Location::new("/source/a").unwrap(),
+        moved: false,
+    };
+    adopted.record.replaced_by = Some(replacement.clone());
+    adopted.record.validate().unwrap();
+    replacement.node.identity.volume = 99;
+    adopted.record.replaced_by = Some(replacement.clone());
+    assert!(adopted.record.validate().is_err());
+    replacement.node.identity.volume = 7;
+    replacement.from = adopted.record.source.clone();
+    adopted.record.replaced_by = Some(replacement);
+    assert!(adopted.record.validate().is_err());
 }

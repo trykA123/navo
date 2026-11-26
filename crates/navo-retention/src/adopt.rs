@@ -2,6 +2,7 @@ use crate::{Error, RetentionRun, Vault, proof};
 use navo_core::retention::{
     OverwriteProof, ProvedOverwrite, RetainedKind, RetentionEntry, RetentionPolicy, RetentionRecord,
 };
+use navo_core::{OperationPlan, Step};
 use navo_fs::HeldFile;
 use navo_store::{JobId, JobState, RetainedCompletion};
 
@@ -9,6 +10,7 @@ pub struct AdoptJob<'a> {
     pub job: JobId,
     pub state: JobState,
     pub files: &'a [(HeldFile, OverwriteProof)],
+    pub plan: &'a OperationPlan,
     pub policy: RetentionPolicy,
     pub created_at: i64,
     pub keep_evidence: bool,
@@ -194,6 +196,7 @@ fn adopted_record(
     {
         return Err(Error::Changed(held.held.clone()));
     }
+    let replaced_by = replacement_for(held, evidence, request);
     let record = RetentionRecord {
         version: 2,
         payload_name: held.held.name().map(|name| name.to_text()),
@@ -204,7 +207,40 @@ fn adopted_record(
         nodes: vec![evidence.node.clone()],
         created_at: request.created_at,
         expires_at: request.policy.expires_at(request.created_at)?,
+        replaced_by,
     };
     record.validate()?;
     Ok(record)
+}
+
+fn replacement_for(
+    held: &HeldFile,
+    evidence: &OverwriteProof,
+    request: &AdoptJob<'_>,
+) -> Option<navo_core::retention::Replacement> {
+    use navo_core::{OpKind, retention::RetainedNode};
+    if request.plan.kind == OpKind::Save {
+        return None;
+    }
+    let placed = held.placed.as_ref()?;
+    let step = request.plan.steps.iter().find_map(|step| match step {
+        Step::CopyFile { source, target, .. } | Step::Rename { source, target }
+            if target.same_place(&held.original) =>
+        {
+            Some((source, matches!(step, Step::Rename { .. })))
+        }
+        _ => None,
+    })?;
+    let (source, is_rename) = step;
+    Some(navo_core::retention::Replacement {
+        node: RetainedNode {
+            path: vec![],
+            kind: RetainedKind::File,
+            identity: evidence.replacement_identity,
+            size: placed.size,
+            modified_ms: placed.modified_ms,
+        },
+        from: source.clone(),
+        moved: is_rename && request.plan.kind == OpKind::Move,
+    })
 }

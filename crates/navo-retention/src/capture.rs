@@ -99,6 +99,7 @@ impl Vault<'_> {
             nodes: source.nodes.clone(),
             created_at: request.created_at,
             expires_at: request.policy.expires_at(request.created_at)?,
+            replaced_by: None,
         };
         record.validate()?;
         let mut tx = self.catalog.transaction()?;

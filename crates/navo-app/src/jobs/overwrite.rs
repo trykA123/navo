@@ -184,6 +184,7 @@ fn adopt(
                 job: job.id,
                 state,
                 files: &held.proved,
+                plan: plan.plan(),
                 policy: plan.policy(),
                 created_at: job.created_at,
                 keep_evidence,
