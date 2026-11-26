@@ -2,6 +2,18 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.9.2 — Fast, low-memory F3 on large text files
+
+*2026-11-26*
+
+A focused fix for opening and closing multi-megabyte plain-text files in F3.
+
+### Fixed
+
+- **F3 freeze and memory spike on large plain-text files (~5 MB+).** Soft wrap now caps automatically at 256 KiB instead of shaping every line of multi-megabyte files eagerly on the UI thread, eliminating the load freeze and ~500 MB spike.
+- **Memory retained after closing F3.** Closing or switching away from the F3 viewer now flushes `WindowState.focused_input` so `EditorState` and its text buffers are released immediately instead of staying alive until another input takes focus.
+- **Duplicate full-file text copies in F3.** `TextBytes`, `CrlfOffsets`, and marking refreshes now share the editor's `Rope` in O(1) instead of cloning full-file strings.
+
 ## v0.9.1 — Lower memory retention and crisper pane chrome
 
 *2026-11-25*
