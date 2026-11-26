@@ -49,6 +49,9 @@ mod probe {
             let _ = std::io::stdout().flush();
             return;
         }
+        if handle_list_args() {
+            return;
+        }
 
         let dir = prepare_probe_exe();
         let listener = bind_loopback_listener();
@@ -94,6 +97,18 @@ mod probe {
             .windows(2)
             .find(|w| w[0] == "--probe-port")
             .and_then(|w| w[1].parse().ok())
+    }
+
+    /// Speaks the libtest `--list` protocol so `cargo nextest` discovery does not spawn a child.
+    fn handle_list_args() -> bool {
+        let args: Vec<String> = env::args().collect();
+        if !args.iter().any(|arg| arg == "--list") {
+            return false;
+        }
+        if !args.iter().any(|arg| arg == "--ignored") {
+            println!("sandbox_probe_denies_hostile_actions: test");
+        }
+        true
     }
 
     /// Command-line arguments for the probe child: port on the command line avoids any
