@@ -15,6 +15,7 @@ use navo_icons::spec::IconSpec;
 use navo_l10n::tr;
 
 use super::editor_tab_button;
+use super::get_more::GetMoreState;
 use super::picker_grid::{PickerRow, build_rows, picker_virtual_list};
 use crate::primitives::{
     Button, ButtonVariant, CheckBox, ListScroll, TextField, TextFieldState, text_field_state,
@@ -41,7 +42,8 @@ pub(crate) struct PickerState {
     search_input: gpui_kit::Entity<TextFieldState>,
     filter: PickerFilter,
     brand_colour: bool,
-    show_licences: bool,
+    pub(super) show_licences: bool,
+    pub(super) get_more: Option<GetMoreState>,
     index: Option<TagIndex>,
     loading: bool,
     scroll: ListScroll,
@@ -63,6 +65,7 @@ impl PickerState {
             filter: PickerFilter::default(),
             brand_colour: false,
             show_licences: false,
+            get_more: None,
             index: None,
             loading: true,
             scroll: ListScroll::new(),
@@ -158,6 +161,9 @@ impl NavoWindow {
         }
         if editor.picker.show_licences {
             return pane.child(self.licences_view(t, cx));
+        }
+        if let Some(get_more) = editor.picker.get_more.as_ref() {
+            return pane.child(self.get_more_view(get_more, t, cx));
         }
         pane.child(self.picker_body(&editor.picker, t, cx))
     }
@@ -302,7 +308,18 @@ impl NavoWindow {
             .flex_none()
             .items_center()
             .justify_end()
+            .gap(t.spacing.sm)
             .pt(t.spacing.xs)
+            .child(
+                Button::new(
+                    "button-bar-picker-get-more",
+                    tr("button-bar-picker-get-more"),
+                )
+                .variant(ButtonVariant::Ghost)
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.open_get_more(window, cx);
+                })),
+            )
             .child(
                 Button::new(
                     "button-bar-picker-licences",
