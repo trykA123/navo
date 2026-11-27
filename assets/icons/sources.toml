@@ -1,7 +1,5 @@
 # Upstream icon sources for `cargo xtask icons` (BB-D6, BB-D8, BB-D12).
 
-download = []
-
 [[bundled]]
 package = "lucide-static"
 version = "1.78.0"
@@ -94,3 +92,88 @@ to = "simple-icons-DISCLAIMER.md"
 id = "brands"
 grid = 24
 kind = "simple-icons"
+
+[[download]]
+id = "fluent"
+package = "@fluentui/svg-icons"
+version = "1.1.347"
+url = "https://registry.npmjs.org/@fluentui/svg-icons/-/svg-icons-1.1.347.tgz"
+sha256 = "2d29b1bf80a52b904db720b28590429dd46b05ed3abff019744293d4d7782e4c"
+size = 2814899
+pack_path = "/trykA123/navo/releases/download/icon-sets-1/fluent.nvic"
+pack_size = 1124133
+pack_sha256 = "de8e78c94bb0c96aa500c5168c8942bca98d86ccb66a0824d37c362ccb0fc31d"
+licence = "MIT"
+licence_local = "assets/icons/licences/fluent-LICENSE"
+licence_path = "/trykA123/navo/releases/download/icon-sets-1/fluent-LICENSE"
+licence_size = 1078
+licence_sha256 = "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f"
+grid = 24
+kind = "svg-dir"
+dir = "package/icons"
+suffix = "_24_regular.svg"
+strip = "underscore"
+
+[[download]]
+id = "fluent-filled"
+package = "@fluentui/svg-icons"
+version = "1.1.347"
+url = "https://registry.npmjs.org/@fluentui/svg-icons/-/svg-icons-1.1.347.tgz"
+sha256 = "2d29b1bf80a52b904db720b28590429dd46b05ed3abff019744293d4d7782e4c"
+size = 2814899
+pack_path = "/trykA123/navo/releases/download/icon-sets-1/fluent-filled.nvic"
+pack_size = 978728
+pack_sha256 = "b6e036afed902ff3654be707b654e3578a56a1c292e9a16c08f0c161bc5508cf"
+licence = "MIT"
+licence_local = "assets/icons/licences/fluent-LICENSE"
+licence_path = "/trykA123/navo/releases/download/icon-sets-1/fluent-filled-LICENSE"
+licence_size = 1078
+licence_sha256 = "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f"
+grid = 24
+kind = "svg-dir"
+dir = "package/icons"
+suffix = "_24_filled.svg"
+strip = "underscore"
+
+[[download]]
+id = "material"
+package = "@material-symbols/svg-400"
+version = "0.49.0"
+url = "https://registry.npmjs.org/@material-symbols/svg-400/-/svg-400-0.49.0.tgz"
+sha256 = "6ff7b8727baecc57c5e0f83e969d440e8fe5dde82ac279b02c98d6c45e67d113"
+size = 1939520
+pack_path = "/trykA123/navo/releases/download/icon-sets-1/material.nvic"
+pack_size = 1266699
+pack_sha256 = "5b60832e56dbe66783047226ad4a3c54bd6b902a51bdfa691348e9fa9cdaafb8"
+licence = "Apache-2.0"
+licence_file = "package/LICENSE"
+licence_path = "/trykA123/navo/releases/download/icon-sets-1/material-LICENSE"
+licence_size = 11358
+licence_sha256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+grid = 24
+kind = "svg-dir"
+dir = "package/outlined"
+suffix = ".svg"
+strip = "underscore"
+skip_suffix = "-fill.svg"
+
+[[download]]
+id = "carbon"
+package = "@carbon/icons"
+version = "11.92.0"
+url = "https://registry.npmjs.org/@carbon/icons/-/icons-11.92.0.tgz"
+sha256 = "ed2635e02e6bb29ecfccd65550b2311230bb550229ffacdaa8a079ad8e6f0321"
+size = 6998677
+pack_path = "/trykA123/navo/releases/download/icon-sets-1/carbon.nvic"
+pack_size = 790294
+pack_sha256 = "e0f91cf73ecc69702fe471d8e81cde65e8acb0f10c331f5c1c16d99cb8a2bad7"
+licence = "Apache-2.0"
+licence_file = "package/LICENSE"
+licence_path = "/trykA123/navo/releases/download/icon-sets-1/carbon-LICENSE"
+licence_size = 11339
+licence_sha256 = "037b3e9eaff51477b270e9082f54b99175e4dd893548654f00995045b68294b8"
+grid = 32
+kind = "svg-dir"
+dir = "package/svg/32"
+suffix = ".svg"
+strip = ""

@@ -124,6 +124,32 @@ pub fn build_set(
     })
 }
 
+/// Builds one optional download icon set, skipping invalid names and broken SVGs.
+pub fn build_set_lenient(
+    files: &BTreeMap<String, Vec<u8>>,
+    spec: &SourceSpec,
+) -> Result<(SetDraft, Vec<String>), SourceError> {
+    let (icons, skipped) = match &spec.reader {
+        Reader::SvgDir {
+            dir,
+            suffix,
+            strip,
+            skip_suffix,
+        } => svg_dir::build_lenient(files, dir, suffix, strip, skip_suffix.as_deref()),
+        Reader::Nodes { .. } | Reader::SimpleIcons => return Ok((build_set(files, spec)?, vec![])),
+    };
+    Ok((
+        SetDraft {
+            id: spec.id.clone(),
+            version: spec.version.clone(),
+            licence: spec.licence.clone(),
+            grid: spec.grid,
+            icons,
+        },
+        skipped,
+    ))
+}
+
 /// Parses one metadata file, mapping serde's message into the source error.
 pub(super) fn parse_json(bytes: &[u8]) -> Result<Value, SourceError> {
     serde_json::from_slice(bytes).map_err(|error| SourceError::Json(error.to_string()))

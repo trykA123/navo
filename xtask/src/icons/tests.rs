@@ -161,6 +161,8 @@ fn icons_sources_toml_parses() {
             pkg.package
         );
     }
+    let dl_ids: Vec<&str> = config.download.iter().map(|dl| dl.id.as_str()).collect();
+    assert_eq!(dl_ids, ["fluent", "fluent-filled", "material", "carbon"]);
 }
 
 /// Writes two tiny fixture tarballs and a matching `sources.toml` under `root`.
@@ -287,26 +289,20 @@ fn icons_pack_prints_one_line_per_set() {
     assert_eq!(verify_lines, ["bundled.nvic matches"]);
 }
 
-#[test]
-fn icons_verify_reports_mismatch_and_downloads() {
-    let temp = TempDir::new("verify-extra");
-    let tarballs = temp.path().join("tarballs");
-    let out_pack = temp.path().join("bundled.nvic");
-    std::fs::create_dir_all(&tarballs).unwrap();
-
-    let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2L20 20" fill="none" stroke="#000" stroke-width="2"/></svg>"##;
-    let tgz = build_tgz(&[("package/svg/box.svg", svg)]);
-    let sha = sha256_hex(&tgz);
-    std::fs::write(tarballs.join("gamma-1.0.0.tgz"), &tgz).unwrap();
-
-    let config_path = temp.path().join("sources.toml");
+/// Writes a `sources.toml` fixture for the `gamma` bundled + download test.
+fn write_gamma_config(
+    path: &Path,
+    tgz: (&str, usize),
+    pack: (&str, usize),
+    licence: (&str, usize),
+) {
     let config = format!(
         r#"
 [[bundled]]
 package = "gamma"
 version = "1.0.0"
 url = "https://example.invalid/gamma/-/gamma-1.0.0.tgz"
-sha256 = "{sha}"
+sha256 = "{tgz_sha}"
 licence = "MIT"
 
 [[bundled.sets]]
@@ -318,25 +314,65 @@ suffix = ".svg"
 strip = ""
 
 [[download]]
+id = "gamma"
 package = "gamma"
 version = "1.0.0"
 url = "https://example.invalid/gamma/-/gamma-1.0.0.tgz"
-sha256 = "{sha}"
+sha256 = "{tgz_sha}"
+size = {tgz_len}
+pack_path = "/trykA123/navo/releases/download/icon-sets-1/gamma.nvic"
+pack_size = {pack_len}
+pack_sha256 = "{pack_sha}"
 licence = "MIT"
-
-[[download.sets]]
-id = "gamma"
+licence_file = "package/LICENSE"
+licence_path = "/trykA123/navo/releases/download/icon-sets-1/gamma-LICENSE"
+licence_size = {lic_len}
+licence_sha256 = "{lic_sha}"
 grid = 24
 kind = "svg-dir"
 dir = "package/svg"
 suffix = ".svg"
 strip = ""
-"#
+"#,
+        tgz_sha = tgz.0,
+        tgz_len = tgz.1,
+        pack_sha = pack.0,
+        pack_len = pack.1,
+        lic_sha = licence.0,
+        lic_len = licence.1,
     );
-    std::fs::write(&config_path, config).unwrap();
+    std::fs::write(path, config).unwrap();
+}
+
+#[test]
+fn icons_verify_reports_mismatch_and_downloads() {
+    let temp = TempDir::new("verify-extra");
+    let tarballs = temp.path().join("tarballs");
+    let out_pack = temp.path().join("bundled.nvic");
+    let dl_out = temp.path().join("packs");
+    std::fs::create_dir_all(&tarballs).unwrap();
+
+    let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2L20 20" fill="none" stroke="#000" stroke-width="2"/></svg>"##;
+    let licence_bytes = b"MIT License Gamma\n";
+    let tgz = build_tgz(&[
+        ("package/svg/box.svg", svg),
+        ("package/LICENSE", licence_bytes),
+    ]);
+    let sha = sha256_hex(&tgz);
+    let lic_sha = sha256_hex(licence_bytes);
+    let zero_sha = "0".repeat(64);
+    std::fs::write(tarballs.join("gamma-1.0.0.tgz"), &tgz).unwrap();
+
+    let config_path = temp.path().join("sources.toml");
+    write_gamma_config(
+        &config_path,
+        (&sha, tgz.len()),
+        (&zero_sha, 0),
+        (&lic_sha, licence_bytes.len()),
+    );
     std::fs::write(&out_pack, b"corrupted pack bytes").unwrap();
 
-    let verify_args: Vec<String> = [
+    let verify_args = [
         "verify",
         "--tarballs",
         tarballs.to_str().unwrap(),
@@ -345,14 +381,37 @@ strip = ""
         "--pack",
         out_pack.to_str().unwrap(),
     ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
+    .map(str::to_owned);
     let err = execute(&verify_args).unwrap_err();
     assert!(err.contains("mismatch"), "{err}");
     assert!(err.contains("offset 0"), "{err}");
 
-    let dl_args: Vec<String> = [
+    let pack_dl_args = [
+        "pack",
+        "--downloads",
+        "--tarballs",
+        tarballs.to_str().unwrap(),
+        "--config",
+        config_path.to_str().unwrap(),
+        "--out",
+        dl_out.to_str().unwrap(),
+    ]
+    .map(str::to_owned);
+    assert_eq!(execute(&pack_dl_args).unwrap().len(), 1);
+    let built_pack = std::fs::read(dl_out.join("gamma.nvic")).unwrap();
+    let built_sha = sha256_hex(&built_pack);
+    assert_eq!(
+        std::fs::read(dl_out.join("gamma-LICENSE")).unwrap(),
+        licence_bytes
+    );
+
+    write_gamma_config(
+        &config_path,
+        (&sha, tgz.len()),
+        (&built_sha, built_pack.len()),
+        (&lic_sha, licence_bytes.len()),
+    );
+    let dl_args = [
         "verify",
         "--downloads",
         "--tarballs",
@@ -360,15 +419,14 @@ strip = ""
         "--config",
         config_path.to_str().unwrap(),
     ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
-    let dl_lines = execute(&dl_args).unwrap();
-    assert_eq!(dl_lines.len(), 1);
-    assert!(
-        dl_lines[0].starts_with(&format!("gamma matches {sha} {} -> ", tgz.len())),
-        "{}",
-        dl_lines[0]
+    .map(str::to_owned);
+    assert_eq!(
+        execute(&dl_args).unwrap(),
+        [format!(
+            "gamma matches pack={built_sha} ({} bytes) licence={lic_sha} ({} bytes)",
+            built_pack.len(),
+            licence_bytes.len()
+        )]
     );
 }
 

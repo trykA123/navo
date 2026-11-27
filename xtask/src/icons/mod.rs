@@ -9,11 +9,15 @@ use navo_icons::sources::{self, Reader, SourceSpec, Style};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+mod downloads;
 #[cfg(test)]
 mod tests;
 
+use downloads::{DownloadSource, pack_downloads, validate_download, verify_downloads};
+
 const DEFAULT_CONFIG: &str = "assets/icons/sources.toml";
 const DEFAULT_OUT: &str = "assets/icons/bundled.nvic";
+const DEFAULT_DOWNLOAD_OUT: &str = "target/icon-packs";
 const DEFAULT_LICENCES: &str = "assets/icons/licences";
 
 /// Parsed contents of `assets/icons/sources.toml`.
@@ -23,9 +27,9 @@ pub(crate) struct SourcesConfig {
     /// Packages built into `assets/icons/bundled.nvic`.
     #[serde(default)]
     pub(crate) bundled: Vec<SourcePackage>,
-    /// Optional single-set packs verified with `--downloads`.
+    /// Optional single-set packs packed/verified with `--downloads`.
     #[serde(default)]
-    pub(crate) download: Vec<SourcePackage>,
+    pub(crate) download: Vec<DownloadSource>,
 }
 
 /// One upstream npm tarball and the icon sets and licence files taken from it.
@@ -114,6 +118,7 @@ pub(crate) enum StyleConfig {
 
 struct PackArgs {
     tarballs: PathBuf,
+    downloads: bool,
     config: PathBuf,
     out: PathBuf,
     licences: PathBuf,
@@ -127,8 +132,6 @@ struct VerifyArgs {
 }
 
 struct VerifiedPackage {
-    tarball_len: usize,
-    sha256: String,
     sets: Vec<SetDraft>,
     licences: Vec<(String, Vec<u8>)>,
 }
@@ -161,7 +164,7 @@ pub(crate) fn execute(args: &[String]) -> Result<Vec<String>, String> {
         Some("pack") => run_pack(&parse_pack_args(rest)?),
         Some("verify") => run_verify(&parse_verify_args(rest)?),
         _ => Err(
-            "usage: cargo xtask icons <pack --tarballs <dir> [--config <sources.toml>] [--out <bundled.nvic>] [--licences <dir>] | verify --tarballs <dir> [--downloads] [--config <sources.toml>] [--pack <bundled.nvic>]>"
+            "usage: cargo xtask icons <pack --tarballs <dir> [--downloads] [--config <sources.toml>] [--out <path>] [--licences <dir>] | verify --tarballs <dir> [--downloads] [--config <sources.toml>] [--pack <bundled.nvic>]>"
                 .to_owned(),
         ),
     }
@@ -173,20 +176,18 @@ pub(crate) fn load_config(path: &Path) -> Result<SourcesConfig, String> {
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let config: SourcesConfig =
         toml::from_str(&text).map_err(|error| format!("invalid {}: {error}", path.display()))?;
-    for pkg in config.bundled.iter().chain(&config.download) {
+    for pkg in &config.bundled {
         validate_package(pkg)?;
+    }
+    for dl in &config.download {
+        validate_download(dl)?;
     }
     Ok(config)
 }
 
 /// Checks required invariants on one `SourcePackage` entry.
 fn validate_package(pkg: &SourcePackage) -> Result<(), String> {
-    if pkg.sha256.len() != 64 || !pkg.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(format!(
-            "invalid sha256 for `{}`: expected 64 hex chars",
-            pkg.package
-        ));
-    }
+    validate_sha256(&pkg.sha256, &pkg.package)?;
     tarball_filename(&pkg.url)?;
     if pkg.sets.is_empty() {
         return Err(format!("package `{}` declares no icon sets", pkg.package));
@@ -197,8 +198,18 @@ fn validate_package(pkg: &SourcePackage) -> Result<(), String> {
     Ok(())
 }
 
+/// Checks that a SHA-256 string is 64 ASCII hex digits.
+pub(super) fn validate_sha256(digest: &str, label: &str) -> Result<(), String> {
+    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(format!(
+            "invalid sha256 for `{label}`: expected 64 hex chars"
+        ));
+    }
+    Ok(())
+}
+
 /// Ensures a licence output name is a single normal filename with no path separators or traversal.
-fn validate_licence_filename(name: &str) -> Result<(), String> {
+pub(super) fn validate_licence_filename(name: &str) -> Result<(), String> {
     if name.is_empty() || name.contains('/') || name.contains('\\') {
         return Err(format!(
             "invalid licence filename `{name}`: must be a single filename without separators"
@@ -216,29 +227,41 @@ fn validate_licence_filename(name: &str) -> Result<(), String> {
 /// Parses arguments for `cargo xtask icons pack`.
 fn parse_pack_args(args: &[String]) -> Result<PackArgs, String> {
     let mut tarballs: Option<PathBuf> = None;
+    let mut downloads = false;
     let mut config = PathBuf::from(DEFAULT_CONFIG);
-    let mut out = PathBuf::from(DEFAULT_OUT);
+    let mut out: Option<PathBuf> = None;
     let mut licences = PathBuf::from(DEFAULT_LICENCES);
     let mut index = 0;
     while index < args.len() {
         let flag = args[index].as_str();
+        if flag == "--downloads" {
+            downloads = true;
+            index += 1;
+            continue;
+        }
         let next = args
             .get(index + 1)
             .ok_or_else(|| format!("missing value for {flag}"))?;
         match flag {
             "--tarballs" => tarballs = Some(PathBuf::from(next)),
             "--config" => config = PathBuf::from(next),
-            "--out" => out = PathBuf::from(next),
+            "--out" => out = Some(PathBuf::from(next)),
             "--licences" => licences = PathBuf::from(next),
             other => return Err(format!("unknown flag for pack: {other}")),
         }
         index += 2;
     }
     let tarballs = tarballs.ok_or_else(|| "missing required --tarballs <dir>".to_owned())?;
+    let default_out = if downloads {
+        DEFAULT_DOWNLOAD_OUT
+    } else {
+        DEFAULT_OUT
+    };
     Ok(PackArgs {
         tarballs,
+        downloads,
         config,
-        out,
+        out: out.unwrap_or_else(|| PathBuf::from(default_out)),
         licences,
     })
 }
@@ -277,9 +300,12 @@ fn parse_verify_args(args: &[String]) -> Result<VerifyArgs, String> {
     })
 }
 
-/// Builds `bundled.nvic`, copies licence files, and returns one summary line per set.
+/// Builds `bundled.nvic` (or `[[download]]` packs when `--downloads` is set).
 fn run_pack(opts: &PackArgs) -> Result<Vec<String>, String> {
     let config = load_config(&opts.config)?;
+    if opts.downloads {
+        return pack_downloads(&config.download, &opts.tarballs, &opts.out);
+    }
     let built = build_bundled(&config.bundled, &opts.tarballs)?;
     let bytes =
         pack::write(&built.sets).map_err(|error| format!("cannot write icon pack: {error}"))?;
@@ -318,26 +344,6 @@ fn run_verify(opts: &VerifyArgs) -> Result<Vec<String>, String> {
         return Ok(vec!["bundled.nvic matches".to_owned()]);
     }
     Err(describe_mismatch(&existing, &rebuilt))
-}
-
-/// Verifies every `[[download]]` tarball and builds its single-set pack in memory.
-fn verify_downloads(packages: &[SourcePackage], tarballs: &Path) -> Result<Vec<String>, String> {
-    let mut lines = Vec::new();
-    for pkg in packages {
-        let verified = read_verified_package(pkg, tarballs)?;
-        for set in verified.sets {
-            let packed = pack::write(std::slice::from_ref(&set))
-                .map_err(|error| format!("cannot pack `{}`: {error}", set.id))?;
-            lines.push(format!(
-                "{} matches {} {} -> {}",
-                set.id,
-                verified.sha256,
-                verified.tarball_len,
-                packed.len()
-            ));
-        }
-    }
-    Ok(lines)
 }
 
 /// Reads and builds all `[[bundled]]` packages into sets and licence pairs.
@@ -403,17 +409,23 @@ fn read_verified_package(pkg: &SourcePackage, tarballs: &Path) -> Result<Verifie
             .map_err(|error| format!("cannot build set `{}`: {error}", set.id))?;
         sets.push(draft);
     }
-    Ok(VerifiedPackage {
-        tarball_len: bytes.len(),
-        sha256: actual,
-        sets,
-        licences,
-    })
+    Ok(VerifiedPackage { sets, licences })
 }
 
 /// Converts a config set entry into `navo_icons::sources::SourceSpec`.
 fn to_source_spec(pkg: &SourcePackage, set: &SetConfig) -> SourceSpec {
-    let reader = match &set.reader {
+    SourceSpec {
+        id: set.id.clone(),
+        version: pkg.version.clone(),
+        licence: pkg.licence.clone(),
+        grid: set.grid,
+        reader: reader_to_source(&set.reader),
+    }
+}
+
+/// Converts a `ReaderConfig` into `navo_icons::sources::Reader`.
+pub(super) fn reader_to_source(reader: &ReaderConfig) -> Reader {
+    match reader {
         ReaderConfig::Nodes { file, style, tags } => Reader::Nodes {
             file: file.clone(),
             style: match style {
@@ -434,13 +446,6 @@ fn to_source_spec(pkg: &SourcePackage, set: &SetConfig) -> SourceSpec {
             skip_suffix: skip_suffix.clone(),
         },
         ReaderConfig::SimpleIcons => Reader::SimpleIcons,
-    };
-    SourceSpec {
-        id: set.id.clone(),
-        version: pkg.version.clone(),
-        licence: pkg.licence.clone(),
-        grid: set.grid,
-        reader,
     }
 }
 
@@ -449,7 +454,12 @@ fn is_wanted(pkg: &SourcePackage, path: &str) -> bool {
     if pkg.licences.iter().any(|licence| licence.from == path) {
         return true;
     }
-    pkg.sets.iter().any(|set| match &set.reader {
+    pkg.sets.iter().any(|set| reader_wants(&set.reader, path))
+}
+
+/// Reports whether a tarball entry path is needed for one `ReaderConfig`.
+pub(super) fn reader_wants(reader: &ReaderConfig, path: &str) -> bool {
+    match reader {
         ReaderConfig::Nodes { file, tags, .. } => path == file || tags.as_deref() == Some(path),
         ReaderConfig::SvgDir {
             dir,
@@ -460,7 +470,8 @@ fn is_wanted(pkg: &SourcePackage, path: &str) -> bool {
             let Some(rest) = under_dir(path, dir) else {
                 return false;
             };
-            rest.ends_with(suffix)
+            !rest.contains('/')
+                && rest.ends_with(suffix)
                 && !skip_suffix
                     .as_deref()
                     .is_some_and(|skip| rest.ends_with(skip))
@@ -471,7 +482,7 @@ fn is_wanted(pkg: &SourcePackage, path: &str) -> bool {
                 || ((path.starts_with("package/icons/") || path.starts_with("icons/"))
                     && path.ends_with(".svg"))
         }
-    })
+    }
 }
 
 /// Returns the relative path below `dir`, matching `navo_icons::sources::svg_dir`.
@@ -484,7 +495,7 @@ fn under_dir<'a>(path: &'a str, dir: &str) -> Option<&'a str> {
 }
 
 /// Extracts the filename component after the last `/` in a tarball URL.
-fn tarball_filename(url: &str) -> Result<&str, String> {
+pub(super) fn tarball_filename(url: &str) -> Result<&str, String> {
     let name = url.rsplit('/').next().unwrap_or_default();
     if name.is_empty() {
         return Err(format!("invalid tarball url `{url}`: missing filename"));
@@ -493,7 +504,7 @@ fn tarball_filename(url: &str) -> Result<&str, String> {
 }
 
 /// Computes the lowercase 64-character SHA-256 hex digest of `bytes`.
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(super) fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     let mut out = String::with_capacity(64);
     for byte in digest {

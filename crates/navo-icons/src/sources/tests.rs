@@ -124,7 +124,52 @@ fn sources_svg_dir_strips_suffix_and_skips() {
     let set = build_set(&files, &spec(reader)).unwrap();
 
     let names: Vec<&str> = set.icons.iter().map(|icon| icon.name.as_str()).collect();
-    assert_eq!(names, ["arrow-left", "nested/dot"]);
+    assert_eq!(names, ["arrow-left"]);
+}
+
+#[test]
+fn sources_svg_dir_skips_nested_subdirectories() {
+    let files = map(&[
+        ("package/icons/mail_24_regular.svg", &svg(PATH)),
+        ("package/icons/ar/mail_24_regular.svg", &svg(PATH)),
+        ("package/icons/de/nested/mail_24_regular.svg", &svg(PATH)),
+    ]);
+    let reader = Reader::SvgDir {
+        dir: "package/icons".to_owned(),
+        suffix: "_24_regular.svg".to_owned(),
+        strip: "underscore".to_owned(),
+        skip_suffix: None,
+    };
+
+    let set = build_set(&files, &spec(reader)).unwrap();
+
+    let names: Vec<&str> = set.icons.iter().map(|icon| icon.name.as_str()).collect();
+    assert_eq!(names, ["mail"]);
+}
+
+#[test]
+fn sources_build_set_lenient_skips_invalid_names_and_broken_svgs() {
+    let long_name = "a".repeat(65);
+    let long_path = format!("package/svg/{long_name}.svg");
+    let files = map(&[
+        ("package/svg/good.svg", &svg(PATH)),
+        ("package/svg/.svg", &svg(PATH)),
+        (&long_path, &svg(PATH)),
+        ("package/svg/broken.svg", b"<svg>not closed"),
+        ("package/svg/nested/ignored.svg", &svg(PATH)),
+    ]);
+    let reader = Reader::SvgDir {
+        dir: "package/svg".to_owned(),
+        suffix: ".svg".to_owned(),
+        strip: String::new(),
+        skip_suffix: None,
+    };
+
+    let (set, skipped) = build_set_lenient(&files, &spec(reader)).unwrap();
+
+    let names: Vec<&str> = set.icons.iter().map(|icon| icon.name.as_str()).collect();
+    assert_eq!(names, ["good"]);
+    assert_eq!(skipped, ["", long_name.as_str(), "broken"]);
 }
 
 #[test]
