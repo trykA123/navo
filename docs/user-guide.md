@@ -127,6 +127,73 @@ Keys in the box:
 
 Some commands ask for a value, such as Go to folder or Mark by pattern. The box turns into a step. Type the value and press `Enter`.
 
+### Button bar
+
+The button bar adds one row of your own buttons under the title bar. It is off by default.
+
+- Turn it on in **Settings** → **Window** → **Button bar**, or from the View menu (`Alt+V`).
+- Turn on **Show names** (in Settings or the bar's right-click menu) to show labels beside icons.
+- Extra buttons fold into a `»` menu on narrow windows. The bar hides in the viewer and Settings.
+
+**Using the bar**
+
+- Click a button to run a Navo command, a user command or a program. Menu buttons open a list.
+- Press `Ctrl+Shift+B` to focus the bar. `Left` and `Right` move, `Enter` runs, `Down` opens a menu, and `Esc` returns to the pane.
+- Right-click a button, or press `Shift+F10`, to open the context menu (`Edit buttons…`, `Edit this button…`, `Remove this button`, `Show names`, `Hide button bar`).
+- Drag files from a pane or Explorer onto buttons that take `{file}` or `{marked}` to run them with those files.
+
+**Editing buttons and icons**
+
+Choose `Edit buttons…` to open the editor overlay. Drag buttons in the top strip to reorder, or use `Alt+Left`/`Alt+Right` to move, `Ins` to add, `Del` to remove, `Ctrl+D` to duplicate and `Ctrl+Z` to undo. Changes save to `buttonbar.toml` at once.
+
+- **Bundled sets:** search or filter across Lucide, Tabler, Phosphor and Brands.
+- **Maker:** build an icon from one or two letters on a shape, or a Lucide glyph with a coloured dot.
+- **Import:** pick a local SVG, PNG, ICO or WebP. Navo strips unsafe content and stores a cleaned copy in `buttonbar-icons\`.
+- **Get more icons…:** optionally download Fluent, Material Symbols or Carbon from Navo's pinned GitHub release with a SHA-256 check.
+
+The `Licences` link in the icon picker lists every set's licence; the release ships the full text in `licenses/icons/NOTICE.txt`.
+
+**File format (`buttonbar.toml`)**
+
+`buttonbar.toml` lives beside `navo.toml` and reloads live. If a line fails to load, Navo keeps the last working bar and shows the error line on the status bar.
+
+```toml
+# Navo button bar. Each [[item]] is one button, separator or menu.
+[[item]]
+name = "Edit"
+icon = "lucide:file-pen"
+user = "Open in Notepad"          # a command from user-commands.toml
+
+[[item]]
+name = "Terminal here"
+icon = "tabler:terminal-2"
+program = "wt.exe"                # inline program
+args = "-d {folder}"
+console = "hide"
+
+[[item]]
+separator = true
+
+[[item]]
+name = "Compare"
+icon = { letters = "C", shape = "soft", tone = "accent" }
+navo = "compare.with_other_pane"  # a Navo command id
+
+[[item]]
+name = "Tools"
+icon = "lucide:archive"
+  [[item.menu]]
+  name = "Hash file"
+  icon = { glyph = "hash", tone = "kind-code", dot = "ok" }
+  program = "certutil.exe"
+  args = "-hashfile {file} SHA256"
+  [[item.menu]]
+  name = "GitHub folder"
+  icon = { set = "brands", name = "github", colour = "brand" }
+  program = "explorer.exe"
+  args = "{folder}"
+```
+
 ### Searching inside files
 
 Press `Alt+F7` to search for text inside the files of the current folder. This opens the Content mode of the command center. You can also type your text in Content mode with `Tab`.
