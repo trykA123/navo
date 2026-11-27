@@ -16,6 +16,7 @@ use navo_l10n::tr;
 
 use super::editor_tab_button;
 use super::get_more::GetMoreState;
+use super::maker_state::MakerState;
 use super::picker_grid::{PickerRow, build_rows, picker_virtual_list};
 use crate::primitives::{
     Button, ButtonVariant, CheckBox, ListScroll, TextField, TextFieldState, text_field_state,
@@ -24,6 +25,14 @@ use crate::tokens::Theme;
 use crate::window_view::NavoWindow;
 use crate::window_view::button_bar::ButtonAction;
 use crate::window_view::button_bar::state::ButtonBarEditorState;
+
+/// Top-level tab inside the icon picker pane (`Sets` or `Maker`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub(crate) enum PickerTab {
+    #[default]
+    Sets,
+    Maker,
+}
 
 /// Active icon-set filter chip in the icon picker.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -39,6 +48,8 @@ pub(crate) enum PickerFilter {
 
 /// Persistent search query, filter, cached grid rows, and background tag index for the picker.
 pub(crate) struct PickerState {
+    tab: PickerTab,
+    pub(super) maker: MakerState,
     search_input: gpui_kit::Entity<TextFieldState>,
     filter: PickerFilter,
     brand_colour: bool,
@@ -61,6 +72,8 @@ impl PickerState {
             }
         });
         Self {
+            tab: PickerTab::default(),
+            maker: MakerState::new(window, cx),
             search_input,
             filter: PickerFilter::default(),
             brand_colour: false,
@@ -75,12 +88,13 @@ impl PickerState {
     }
 
     /// Returns whether the background `TagIndex` has finished loading.
-    #[cfg_attr(
-        not(test),
-        allow(dead_code, reason = "inspected by picker lifecycle tests")
-    )]
     pub(crate) fn has_index(&self) -> bool {
         self.index.is_some()
+    }
+
+    /// Refreshes the Maker tab's Lucide glyph hits from the loaded `TagIndex`.
+    pub(super) fn refresh_maker_glyphs(&mut self, cx: &App) {
+        self.maker.refresh_glyphs(self.index.as_ref(), cx);
     }
 
     fn refresh_rows(&mut self, cx: &App) {
@@ -133,6 +147,7 @@ impl NavoWindow {
         editor.picker.index = Some(index);
         editor.picker.loading = false;
         editor.picker.refresh_rows(cx);
+        editor.picker.refresh_maker_glyphs(cx);
         cx.notify();
     }
 
@@ -165,7 +180,43 @@ impl NavoWindow {
         if let Some(get_more) = editor.picker.get_more.as_ref() {
             return pane.child(self.get_more_view(get_more, t, cx));
         }
-        pane.child(self.picker_body(&editor.picker, t, cx))
+        let body = match editor.picker.tab {
+            PickerTab::Sets => self.picker_body(&editor.picker, t, cx),
+            PickerTab::Maker => self.maker_body(&editor.picker, t, cx),
+        };
+        pane.gap(t.spacing.sm)
+            .child(self.picker_mode_tabs(editor.picker.tab, t, cx))
+            .child(body)
+    }
+
+    fn picker_mode_tabs(&self, active: PickerTab, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
+        let sets_tab = editor_tab_button(
+            "button-bar-picker-tab-sets",
+            tr("button-bar-picker-tab-sets"),
+            active == PickerTab::Sets,
+            t,
+        )
+        .on_click(cx.listener(|view, _, _, cx| view.set_picker_tab(PickerTab::Sets, cx)));
+        let maker_tab = editor_tab_button(
+            "button-bar-picker-tab-maker",
+            tr("button-bar-picker-tab-maker"),
+            active == PickerTab::Maker,
+            t,
+        )
+        .on_click(cx.listener(|view, _, _, cx| view.set_picker_tab(PickerTab::Maker, cx)));
+
+        div()
+            .id("button-bar-picker-mode-tabs")
+            .role(Role::TabList)
+            .aria_label(tr("button-bar-picker-mode-label"))
+            .test_support()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(t.spacing.xs)
+            .child(sets_tab)
+            .child(maker_tab)
+            .into_any_element()
     }
 
     fn picker_body(&self, picker: &PickerState, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
@@ -421,6 +472,15 @@ impl NavoWindow {
     fn toggle_picker_brand_colour(&mut self, cx: &mut Context<Self>) {
         if let Some(editor) = self.button_bar.editor.as_mut() {
             editor.picker.brand_colour = !editor.picker.brand_colour;
+            cx.notify();
+        }
+    }
+
+    fn set_picker_tab(&mut self, tab: PickerTab, cx: &mut Context<Self>) {
+        if let Some(editor) = self.button_bar.editor.as_mut()
+            && editor.picker.tab != tab
+        {
+            editor.picker.tab = tab;
             cx.notify();
         }
     }

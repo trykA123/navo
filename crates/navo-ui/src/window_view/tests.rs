@@ -25,6 +25,7 @@ mod button_bar_form;
 mod button_bar_get_more;
 mod button_bar_icon;
 mod button_bar_keys;
+mod button_bar_maker;
 mod button_bar_menu;
 mod button_bar_picker;
 mod button_bar_run;

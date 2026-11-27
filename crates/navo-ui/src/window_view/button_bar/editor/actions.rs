@@ -26,6 +26,7 @@ impl NavoWindow {
         let Some(selected) = self.button_bar.editor.as_ref().and_then(|e| e.selected) else {
             if let Some(editor) = self.button_bar.editor.as_mut() {
                 editor.form.sync_from_item(None, None, window, cx);
+                editor.picker.maker.sync_from_spec(None, window, cx);
             }
             return;
         };
@@ -34,6 +35,11 @@ impl NavoWindow {
             editor
                 .form
                 .sync_from_item(Some(selected), item.as_ref(), window, cx);
+            editor.picker.maker.sync_from_spec(
+                item.as_ref().and_then(|entry| entry.icon_spec.as_ref()),
+                window,
+                cx,
+            );
         }
     }
 
