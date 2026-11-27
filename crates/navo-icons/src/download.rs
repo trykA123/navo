@@ -8,16 +8,19 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use sha2::{Digest, Sha256};
 
+use crate::io::{self, ReadError};
 use crate::pack::{self, Pack, PackError};
 use crate::sanitise;
 
 /// Most icons accepted from one downloaded pack.
 const MAX_ENTRIES: u32 = 40_000;
+/// Maximum size accepted for `installed.toml` (1 MiB).
+const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
 /// Manifest of installed packs, read by `registry::Registry::load_downloaded`.
 const MANIFEST: &str = "installed.toml";
 /// Longest accepted id or version.
@@ -291,12 +294,22 @@ struct Installed {
 /// Reads `dir/installed.toml`; the flag says whether the file existed.
 fn read_manifest(dir: &Path) -> Result<(Vec<Installed>, bool), InstallError> {
     let path = dir.join(MANIFEST);
-    let text = match fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok((Vec::new(), false)),
-        Err(error) => return Err(io_error(&path, error)),
+    let bytes = match io::read_capped(&path, MAX_MANIFEST_BYTES) {
+        Ok(bytes) => bytes,
+        Err(ReadError::Io(error)) if error.kind() == ErrorKind::NotFound => {
+            return Ok((Vec::new(), false));
+        }
+        Err(ReadError::Io(error)) => return Err(io_error(&path, error)),
+        Err(ReadError::TooLarge) => {
+            return Err(InstallError::Io(format!(
+                "{}: manifest exceeds size limit",
+                path.display()
+            )));
+        }
     };
-    let table: toml::Table = toml::from_str(&text)
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|error| InstallError::Io(format!("{}: {error}", path.display())))?;
+    let table: toml::Table = toml::from_str(text)
         .map_err(|error| InstallError::Io(format!("{}: {error}", path.display())))?;
     Ok((parse_manifest(&table)?, true))
 }
@@ -335,7 +348,7 @@ fn parse_row(row: &toml::Table, key: Option<&str>) -> Result<Installed, InstallE
         .ok_or_else(|| InstallError::Io("installed.toml entry has no `id`".to_owned()))?;
     let file = text_value(row, "file")?;
     let blake3 = text_value(row, "blake3")?;
-    if !is_single_filename(&file) {
+    if !io::is_pack_filename(&file) {
         return Err(InstallError::Io(format!(
             "installed.toml entry `{id}` has an unsafe file name"
         )));
@@ -433,18 +446,6 @@ fn remove_ignoring_missing(path: &Path) -> Result<(), InstallError> {
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => Err(io_error(path, error)),
     }
-}
-
-/// True for one plain filename: no separators, no parent component.
-fn is_single_filename(name: &str) -> bool {
-    if name.is_empty() || name.contains(['/', '\\', '\0']) {
-        return false;
-    }
-    let mut parts = Path::new(name).components();
-    matches!(
-        (parts.next(), parts.next()),
-        (Some(Component::Normal(_)), None)
-    )
 }
 
 /// Wraps an I/O error with the path that failed.

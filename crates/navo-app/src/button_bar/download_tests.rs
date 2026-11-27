@@ -277,3 +277,41 @@ fn download_error_messages_are_plain_language() {
         "Downloads are not available on this system"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn download_get_does_not_follow_symlink_target() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempfile::tempdir().expect("tempdir");
+    let icon_sets_dir = root.path().join("icon-sets");
+    fs::create_dir_all(&icon_sets_dir).expect("create icon_sets_dir");
+    let outside = root.path().join("outside-sentinel.txt");
+    fs::write(&outside, b"untouched").expect("write sentinel");
+    symlink(&outside, icon_sets_dir.join("fluent-1.0.0.nvic")).expect("create pack symlink");
+
+    let pack_bytes = make_pack("fluent", "home");
+    let spec = make_spec("fluent", &pack_bytes, SAMPLE_LICENCE);
+    let fetcher = FakeFetch {
+        bodies: HashMap::from([
+            (spec.pack_path.clone(), pack_bytes),
+            (spec.licence_path.clone(), SAMPLE_LICENCE.to_vec()),
+        ]),
+    };
+    let reg = Registry::empty();
+    let reload = || {};
+    let env = SetEnv {
+        specs: std::slice::from_ref(&spec),
+        fetcher: &fetcher,
+        icon_sets_dir: &icon_sets_dir,
+        registry: &reg,
+        reload: &reload,
+    };
+
+    let _ = handle_action(SetAction::Get("fluent".to_owned()), &env);
+    assert_eq!(
+        fs::read(&outside).expect("read sentinel"),
+        b"untouched",
+        "symlink target outside icon_sets_dir must not be overwritten"
+    );
+}

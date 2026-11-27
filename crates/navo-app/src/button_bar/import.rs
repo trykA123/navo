@@ -9,7 +9,7 @@ use navo_icons::io::read_capped;
 use navo_icons::raster::{RASTER_CAP, reencode, stored_name};
 use navo_icons::sanitise::{SVG_CAP, normalise};
 use navo_icons::spec::IconSpec;
-use navo_store::replace_atomic;
+use navo_store::replace_entry_atomic;
 use navo_ui::window_view::ImportedIcon;
 
 /// Imports a local SVG or raster file into `icons_dir` and returns its icon spec.
@@ -39,7 +39,7 @@ pub(crate) fn import(path: &Path, icons_dir: &Path, mono: bool) -> Result<Import
 /// Rejects network paths and any address that is not a local filesystem path.
 fn is_local_path(path: &Path) -> bool {
     let text = path.to_string_lossy();
-    if text.starts_with(r"\\") || text.starts_with("//") {
+    if matches!(text.as_bytes(), [b'\\' | b'/', b'\\' | b'/', ..]) {
         return false;
     }
     Location::local(ProviderPath::from_text(&text)).is_ok_and(|location| location.is_local())
@@ -88,7 +88,7 @@ fn store(icons_dir: &Path, file: &str, bytes: &[u8]) -> Result<(), String> {
     if read_capped(&target, bytes.len() as u64).is_ok_and(|existing| existing == bytes) {
         return Ok(());
     }
-    replace_atomic(&target, bytes).map_err(|err| err.to_string())
+    replace_entry_atomic(&target, bytes).map_err(|err| err.to_string())
 }
 
 #[cfg(test)]

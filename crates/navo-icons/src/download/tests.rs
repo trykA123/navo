@@ -212,3 +212,16 @@ fn download_install_with_uses_injected_writer() {
             .any(|(path, _)| path.ends_with("installed.toml"))
     );
 }
+
+#[test]
+fn download_refuses_oversize_manifest() {
+    let dir = TempDir::new("oversize-manifest");
+    let big = vec![b'#'; 1024 * 1024 + 1];
+    fs::write(dir.path().join("installed.toml"), big).expect("write oversize manifest");
+
+    let err = remove("sample", dir.path()).expect_err("oversize manifest must be refused");
+    assert!(
+        matches!(err, InstallError::Io(_)),
+        "expected InstallError::Io for oversize manifest, got {err:?}"
+    );
+}

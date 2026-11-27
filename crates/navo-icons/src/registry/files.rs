@@ -1,7 +1,7 @@
 //! File-backed icon resolution and verified loading of downloaded icon packs.
 
 use std::io::ErrorKind;
-use std::path::{Component, Path};
+use std::path::Path;
 use std::sync::Arc;
 
 use super::{DownloadedPack, Resolved};
@@ -219,7 +219,7 @@ fn push_manifest_row(
 
 /// Verifies filename safety, BLAKE3 digest, and `NVIC1` header for one downloaded pack.
 fn load_verified_pack(dir: &Path, entry: &ManifestEntry) -> Result<DownloadedPack, String> {
-    if !is_single_normal_filename(&entry.file) {
+    if !io::is_pack_filename(&entry.file) {
         return Err(format!(
             "downloaded pack `{}` has invalid filename `{}`",
             entry.id, entry.file
@@ -247,7 +247,7 @@ fn load_verified_pack(dir: &Path, entry: &ManifestEntry) -> Result<DownloadedPac
     }
     let pack = Pack::open(&bytes)
         .map_err(|err| format!("downloaded pack `{}` is invalid: {err}", entry.id))?;
-    if !pack.sets().iter().any(|info| info.id == entry.id) {
+    if !matches!(pack.sets(), [info] if info.id == entry.id) {
         return Err(format!(
             "downloaded pack `{}` does not contain set `{}`",
             entry.file, entry.id
@@ -257,17 +257,6 @@ fn load_verified_pack(dir: &Path, entry: &ManifestEntry) -> Result<DownloadedPac
         sets: pack.sets().to_vec(),
         bytes: Arc::from(bytes),
     })
-}
-
-fn is_single_normal_filename(file: &str) -> bool {
-    if file.is_empty() || file.contains(['/', '\\', '\0']) {
-        return false;
-    }
-    let mut components = Path::new(file).components();
-    matches!(
-        (components.next(), components.next()),
-        (Some(Component::Normal(_)), None)
-    )
 }
 
 fn is_blake3_hex(hex: &str) -> bool {

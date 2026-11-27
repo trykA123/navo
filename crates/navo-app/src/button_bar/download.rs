@@ -200,7 +200,7 @@ fn get_set(id: String, env: &SetEnv<'_>) -> Result<SetNews, String> {
         .fetch_release_asset(&spec.licence_path, licence_cap)
         .map_err(|err| err.to_string())?;
     install_with(&pack, &licence, spec, env.icon_sets_dir, &|path, bytes| {
-        navo_store::replace_atomic(path, bytes)
+        navo_store::replace_entry_atomic(path, bytes)
     })
     .map_err(|err| err.to_string())?;
     reload_downloaded(env.registry, env.icon_sets_dir);
@@ -210,7 +210,7 @@ fn get_set(id: String, env: &SetEnv<'_>) -> Result<SetNews, String> {
 
 fn remove_set(id: String, env: &SetEnv<'_>) -> Result<SetNews, String> {
     remove_with(&id, env.icon_sets_dir, &|path, bytes| {
-        navo_store::replace_atomic(path, bytes)
+        navo_store::replace_entry_atomic(path, bytes)
     })
     .map_err(|err| err.to_string())?;
     reload_downloaded(env.registry, env.icon_sets_dir);

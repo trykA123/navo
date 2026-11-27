@@ -93,10 +93,17 @@ fn import_png_reencodes() {
 #[test]
 fn import_refuses_network_path() {
     let (_root, _source, icons) = setup();
-    for name in [r"\\server\share\icon.png", "//server/share/icon.png"] {
+    for name in [
+        r"\\server\share\icon.png",
+        "//server/share/icon.png",
+        r"\/server\share\icon.png",
+        r"/\server\share\icon.png",
+    ] {
+        let err = import(Path::new(name), &icons, false)
+            .expect_err(&format!("network path {name} must be refused"));
         assert!(
-            import(Path::new(name), &icons, false).is_err(),
-            "network path {name} must be refused"
+            err.contains("local path"),
+            "expected local-path rejection for {name}, got {err:?}"
         );
     }
     assert!(entries(&icons).is_empty());
