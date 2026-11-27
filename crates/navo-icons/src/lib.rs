@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+/// Verified install and removal of optional downloaded icon packs.
+pub mod download;
 /// Bounded file readers for untrusted icon inputs.
 pub mod io;
 /// Reads and writes `NVIC1` icon packs.
