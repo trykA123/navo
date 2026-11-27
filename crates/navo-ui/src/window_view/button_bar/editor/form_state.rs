@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::{App, AppContext, Context, Entity, Subscription, Task, Window};
+use navo_icons::spec::IconSpec;
 use navo_l10n::tr;
 
 use crate::commands;
@@ -39,7 +40,8 @@ pub(crate) struct FormState {
     pub(super) user_scroll: ListScroll,
     pub(super) navo_scroll: ListScroll,
     pub(super) error: Option<String>,
-    debounce: Option<Task<()>>,
+    pub(super) picked_icon: Option<IconSpec>,
+    pub(super) debounce: Option<Task<()>>,
     syncing: bool,
     pub(crate) force_resync: bool,
     last_synced_path: Option<ItemPath>,
@@ -82,6 +84,7 @@ impl FormState {
             user_scroll: ListScroll::new(),
             navo_scroll: ListScroll::new(),
             error: None,
+            picked_icon: None,
             debounce: None,
             syncing: false,
             force_resync: false,
@@ -101,6 +104,7 @@ impl FormState {
     ) {
         self.debounce = None;
         self.error = None;
+        self.picked_icon = item.and_then(|entry| entry.icon_spec.clone());
         self.last_submitted = None;
         self.force_resync = false;
         self.last_synced_path = path;
@@ -113,17 +117,17 @@ impl FormState {
         self.name_input
             .update(cx, |state, cx| state.set_value(name, window, cx));
 
-        let (prog, args) = self.apply_action_fields(item.map(|entry| &entry.action));
+        let (prog, args, start_in) = self.apply_action_fields(item.map(|entry| &entry.action));
         self.program_input
             .update(cx, |state, cx| state.set_value(prog, window, cx));
         self.args_input
             .update(cx, |state, cx| state.set_value(args, window, cx));
         self.start_in_input
-            .update(cx, |state, cx| state.set_value(String::new(), window, cx));
+            .update(cx, |state, cx| state.set_value(start_in, window, cx));
         self.syncing = false;
     }
 
-    fn apply_action_fields(&mut self, action: Option<&ButtonAction>) -> (String, String) {
+    fn apply_action_fields(&mut self, action: Option<&ButtonAction>) -> (String, String, String) {
         self.user_name.clear();
         self.navo_id.clear();
         self.hidden_console = false;
@@ -131,18 +135,25 @@ impl FormState {
             Some(ButtonAction::User(name)) => {
                 self.kind = FormKind::User;
                 self.user_name = name.clone();
-                (String::new(), String::new())
+                (String::new(), String::new(), String::new())
             }
             Some(ButtonAction::Navo(id)) => {
                 self.kind = FormKind::Navo;
                 self.navo_id = id.clone();
-                (String::new(), String::new())
+                (String::new(), String::new(), String::new())
             }
-            Some(ButtonAction::Program { line, .. }) => {
+            Some(ButtonAction::Program {
+                line,
+                start_in,
+                hidden_console,
+                ..
+            }) => {
                 self.kind = FormKind::Program;
-                split_program_line(line)
+                self.hidden_console = *hidden_console;
+                let (prog, args) = split_program_line(line);
+                (prog, args, start_in.clone().unwrap_or_default())
             }
-            _ => (String::new(), String::new()),
+            _ => (String::new(), String::new(), String::new()),
         }
     }
 
@@ -271,7 +282,7 @@ impl NavoWindow {
         self.submit_form_update(window, cx);
     }
 
-    fn submit_form_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn submit_form_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(at) = self.button_bar.editor.as_ref().and_then(|e| e.selected) else {
             return;
         };
@@ -342,7 +353,7 @@ fn build_draft(form: &FormState, is_menu: bool, cx: &App) -> ItemDraft {
     ItemDraft {
         name,
         action,
-        icon: None,
+        icon: form.picked_icon.clone(),
     }
 }
 
@@ -403,19 +414,34 @@ fn split_program_line(line: &str) -> (String, String) {
 }
 
 fn draft_matches_item(draft: &ItemDraft, item: &ButtonItem) -> bool {
-    if draft.name != item.name {
+    if draft.name != item.name || draft.icon != item.icon_spec {
         return false;
     }
     match (&draft.action, &item.action) {
         (DraftAction::Navo(a), ButtonAction::Navo(b)) => a == b,
         (DraftAction::User(a), ButtonAction::User(b)) => a == b,
-        (DraftAction::Program { program, args, .. }, ButtonAction::Program { line, .. }) => {
+        (
+            DraftAction::Program {
+                program,
+                args,
+                start_in,
+                hidden_console,
+            },
+            ButtonAction::Program {
+                line,
+                start_in: item_start_in,
+                hidden_console: item_hidden,
+                ..
+            },
+        ) => {
             let expected = if args.is_empty() {
                 program.clone()
             } else {
                 format!("{program} {args}")
             };
             expected == *line
+                && start_in == item_start_in.as_deref().unwrap_or("")
+                && *hidden_console == *item_hidden
         }
         (DraftAction::Menu, ButtonAction::Menu(_))
         | (DraftAction::Separator, ButtonAction::Separator) => true,

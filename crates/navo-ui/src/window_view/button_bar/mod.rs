@@ -69,6 +69,10 @@ pub enum ButtonAction {
         id: ProgramId,
         /// Display summary of the command line.
         line: String,
+        /// Optional working directory template from `start-in`.
+        start_in: Option<String>,
+        /// Whether the console window is hidden (`console = "hide"`).
+        hidden_console: bool,
         /// Whether the program consumes pane file placeholders.
         takes_files: bool,
     },
@@ -85,6 +89,8 @@ pub struct ButtonItem {
     pub name: String,
     /// Resolved icon for the button.
     pub icon: BarIcon,
+    /// Original parsed icon specification used to preserve icons on edit.
+    pub icon_spec: Option<IconSpec>,
     /// Action executed when activated.
     pub action: ButtonAction,
     /// 1-based line number in `buttonbar.toml`.
@@ -374,6 +380,7 @@ mod tests {
             items: vec![ButtonItem {
                 name: label.to_owned(),
                 icon: BarIcon::Missing { dashed: false },
+                icon_spec: None,
                 action: ButtonAction::Navo(String::from("pane.refresh")),
                 line,
             }],

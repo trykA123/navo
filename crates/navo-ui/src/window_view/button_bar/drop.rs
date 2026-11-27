@@ -239,6 +239,7 @@ mod tests {
         ButtonItem {
             name: "Test".to_owned(),
             icon: BarIcon::Missing { dashed: false },
+            icon_spec: None,
             action,
             line: 1,
         }
@@ -265,6 +266,8 @@ mod tests {
                     index: 0,
                 },
                 line: "sha256sum {file}".to_owned(),
+                start_in: None,
+                hidden_console: false,
                 takes_files: true,
             }),
             &cmds,
@@ -276,6 +279,8 @@ mod tests {
                     index: 1,
                 },
                 line: "ping".to_owned(),
+                start_in: None,
+                hidden_console: false,
                 takes_files: false,
             }),
             &cmds,

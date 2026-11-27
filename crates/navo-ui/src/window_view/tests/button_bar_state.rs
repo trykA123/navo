@@ -12,6 +12,7 @@ fn item(name: &str, command: &str, line: usize) -> ButtonItem {
     ButtonItem {
         name: name.to_owned(),
         icon: BarIcon::Missing { dashed: false },
+        icon_spec: None,
         action: ButtonAction::Navo(command.to_owned()),
         line,
     }

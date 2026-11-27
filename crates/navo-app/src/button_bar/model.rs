@@ -41,6 +41,8 @@ pub(crate) struct ParsedItem {
     pub name: String,
     /// Optional parsed icon specification.
     pub icon: Option<IconSpec>,
+    /// Optional `start-in` template preserved for round-trip edits.
+    pub start_in: Option<String>,
     /// What the item does.
     pub kind: ParsedKind,
     /// The 1-based line where the item starts in `buttonbar.toml`.
@@ -183,12 +185,18 @@ impl ParseCtx<'_> {
             return self.read_separator(&raw, line, start_errors);
         }
         let icon = raw.icon.as_ref().and_then(|value| self.read_icon(value));
+        let start_in = raw
+            .start_in
+            .as_ref()
+            .map(|value| value.get_ref().trim().to_owned())
+            .filter(|text| !text.is_empty());
         let name = self.read_name(raw.name.as_ref(), line, raw.program.is_none());
         let kind = self.read_action(span, raw, line, in_menu)?;
         if self.errors.len() == start_errors {
             Some(ParsedItem {
                 name: name.unwrap_or_default(),
                 icon,
+                start_in,
                 kind,
                 line,
             })
@@ -257,6 +265,7 @@ impl ParseCtx<'_> {
             Some(ParsedItem {
                 name: String::new(),
                 icon: None,
+                start_in: None,
                 kind: ParsedKind::Separator,
                 line,
             })

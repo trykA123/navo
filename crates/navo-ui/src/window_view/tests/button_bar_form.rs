@@ -38,6 +38,7 @@ fn bar_item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
             shape: Shape::Soft,
             tone: Tone::Accent,
         },
+        icon_spec: None,
         action,
         line,
     }
@@ -288,6 +289,8 @@ fn button_bar_form_shows_drop_note(cx: &mut TestAppContext) {
                 index: 0,
             },
             line: "certutil.exe".to_owned(),
+            start_in: None,
+            hidden_console: false,
             takes_files: false,
         },
         1,

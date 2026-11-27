@@ -36,6 +36,7 @@ fn bar_item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
             shape: Shape::Soft,
             tone: Tone::Accent,
         },
+        icon_spec: None,
         action,
         line,
     }
@@ -186,6 +187,8 @@ fn button_bar_run_program_passes_generation(cx: &mut TestAppContext) {
         ButtonAction::Program {
             id: expected_id,
             line: "sha256sum {file}".to_owned(),
+            start_in: None,
+            hidden_console: false,
             takes_files: true,
         },
         1,

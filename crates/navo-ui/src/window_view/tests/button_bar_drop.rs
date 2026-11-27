@@ -41,6 +41,7 @@ fn bar_item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
             shape: Shape::Soft,
             tone: Tone::Accent,
         },
+        icon_spec: None,
         action,
         line,
     }
@@ -223,6 +224,8 @@ fn button_bar_drop_runs_with_dropped_files(cx: &mut TestAppContext) {
                 ButtonAction::Program {
                     id: prog_id,
                     line: "zip {marked}".to_owned(),
+                    start_in: None,
+                    hidden_console: false,
                     takes_files: true,
                 },
                 2,
@@ -297,6 +300,8 @@ fn button_bar_drop_on_non_taker_does_nothing(cx: &mut TestAppContext) {
                         index: 0,
                     },
                     line: "ping".to_owned(),
+                    start_in: None,
+                    hidden_console: false,
                     takes_files: false,
                 },
                 3,

@@ -28,6 +28,7 @@ pub(crate) struct ButtonBarEditorState {
     pub(crate) narrow_pane: EditorPane,
     pub(crate) error: Option<String>,
     pub(crate) form: super::editor::FormState,
+    pub(crate) picker: super::editor::PickerState,
 }
 
 /// Button bar items, host hooks, focus handle, focus cursor, load error, and reload task.
@@ -37,6 +38,7 @@ pub(crate) struct ButtonBarState {
     pub(crate) focus: FocusHandle,
     pub(crate) focused: Option<usize>,
     pub(crate) editor: Option<ButtonBarEditorState>,
+    pub(crate) picker_generation: u64,
     pub(crate) drag_over_bar: bool,
     pub(crate) drag_hover_item: Option<usize>,
     pub(crate) error: Option<String>,
@@ -60,6 +62,7 @@ impl ButtonBarState {
             focus: cx.focus_handle(),
             focused: None,
             editor: None,
+            picker_generation: 0,
             drag_over_bar: false,
             drag_hover_item: None,
             error: None,

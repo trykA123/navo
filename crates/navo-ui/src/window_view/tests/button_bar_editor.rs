@@ -36,6 +36,7 @@ fn bar_item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
             shape: Shape::Soft,
             tone: Tone::Accent,
         },
+        icon_spec: None,
         action,
         line,
     }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::channel::mpsc::UnboundedReceiver;
-use navo_icons::spec::{Shape, Tone};
+use navo_icons::spec::{IconSpec, Shape, Tone};
 use navo_store::StoreDirs;
 use navo_ui::window_view::{
     BarIcon, ButtonAction, ButtonBarNews, ButtonBarReceiver, ProgramId, UserCommandNews,
@@ -251,6 +251,15 @@ fn button_bar_resolves_icons_off_the_ui_thread() {
     }
 
     assert_eq!(
+        items[0].icon_spec,
+        Some(IconSpec::Set {
+            set: "lucide".to_owned(),
+            name: "folder".to_owned(),
+            tone: None,
+        })
+    );
+    assert_eq!(items[1].icon_spec, None);
+    assert_eq!(
         items[1].icon,
         BarIcon::Letters {
             letters: "B".to_owned(),
@@ -258,4 +267,50 @@ fn button_bar_resolves_icons_off_the_ui_thread() {
             tone: Tone::Muted,
         }
     );
+}
+
+#[test]
+fn button_bar_preserves_program_start_in_and_console_in_resolved_item() {
+    let (_root, dirs) = temp_dirs();
+    let path = dirs.button_bar_file();
+    std::fs::write(
+        &path,
+        concat!(
+            "[[item]]\n",
+            "name = \"Run\"\n",
+            "icon = \"lucide:folder\"\n",
+            "program = \"tool.exe\"\n",
+            "args = \"{file}\"\n",
+            "start-in = \"{folder}/sub\"\n",
+            "console = \"hide\"\n",
+        ),
+    )
+    .expect("write program buttonbar.toml");
+
+    let (_uc_hooks, _uc_watch, runner) = user_commands::hooks(Some(&dirs));
+    let (mut bar_hooks, _watch) = hooks(Some(&dirs), runner);
+    let mut bar_news = bar_hooks.news.take().expect("bar news");
+    let news = bar_news.try_recv().expect("initial applied");
+    let ButtonBarNews::Applied { items, warnings } = news else {
+        panic!("expected Applied, got {news:?}");
+    };
+    assert!(warnings.is_empty());
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0].icon_spec,
+        Some(IconSpec::Set {
+            set: "lucide".to_owned(),
+            name: "folder".to_owned(),
+            tone: None,
+        })
+    );
+    assert!(matches!(
+        &items[0].action,
+        ButtonAction::Program {
+            start_in: Some(start_in),
+            hidden_console: true,
+            takes_files: true,
+            ..
+        } if start_in == "{folder}/sub"
+    ));
 }

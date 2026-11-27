@@ -15,7 +15,7 @@ use navo_ui::window_view::{
     ProgramId, ProgramRun, UserInvocation,
 };
 
-use crate::user_commands::model::{Part, files::takes_files};
+use crate::user_commands::model::{Console, Part, files::takes_files};
 use crate::user_commands::{Runner, UserCommand};
 use crate::watch_file::watch_file;
 
@@ -177,16 +177,21 @@ impl ResolveCtx<'_> {
 
     fn resolve_item(&mut self, item: model::ParsedItem) -> ButtonItem {
         let icon = self.resolve_icon(&item);
+        let icon_spec = item.icon;
+        let start_in = item.start_in;
         let action = match item.kind {
             model::ParsedKind::Navo(id) => ButtonAction::Navo(id),
             model::ParsedKind::User(name) => ButtonAction::User(name),
-            model::ParsedKind::Program(command) => self.register_program(&item.name, command),
+            model::ParsedKind::Program(command) => {
+                self.register_program(&item.name, command, start_in)
+            }
             model::ParsedKind::Separator => ButtonAction::Separator,
             model::ParsedKind::Menu(children) => ButtonAction::Menu(self.resolve_list(children)),
         };
         ButtonItem {
             name: item.name,
             icon,
+            icon_spec,
             action,
             line: item.line,
         }
@@ -209,10 +214,16 @@ impl ResolveCtx<'_> {
         }
     }
 
-    fn register_program(&mut self, name: &str, command: UserCommand) -> ButtonAction {
+    fn register_program(
+        &mut self,
+        name: &str,
+        command: UserCommand,
+        start_in: Option<String>,
+    ) -> ButtonAction {
         let index = u32::try_from(self.programs.len()).unwrap_or(u32::MAX);
         let line = command_line(&command);
         let takes = takes_files(&command.args);
+        let hidden_console = command.console == Console::Hide;
         self.programs.push((name.to_owned(), command));
         ButtonAction::Program {
             id: ProgramId {
@@ -220,6 +231,8 @@ impl ResolveCtx<'_> {
                 index,
             },
             line,
+            start_in,
+            hidden_console,
             takes_files: takes,
         }
     }

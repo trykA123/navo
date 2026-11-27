@@ -3,9 +3,12 @@
 mod actions;
 mod form;
 mod form_state;
+mod picker;
+mod picker_grid;
 mod strip;
 
 pub(crate) use form_state::FormState;
+pub(crate) use picker::PickerState;
 
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
@@ -13,7 +16,7 @@ use gpui_kit::{
     AnyElement, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
     ParentElement, Role, Stateful, StatefulInteractiveElement, Styled, Window, div, px,
 };
-use navo_l10n::{t as tr_args, tr};
+use navo_l10n::tr;
 
 use actions::default_button_draft;
 
@@ -37,10 +40,7 @@ const MSG_UNDO: &str = "button-bar-editor-undo";
 const MSG_DONE: &str = "button-bar-editor-done";
 const MSG_TAB_BUTTON: &str = "button-bar-editor-tab-button";
 const MSG_TAB_ICON: &str = "button-bar-editor-tab-icon";
-const MSG_SELECT_HINT: &str = "button-bar-editor-select-hint";
-const MSG_ICON_PLACEHOLDER: &str = "button-bar-editor-icon-placeholder";
 const MSG_DEFAULT_BUTTON: &str = "button-bar-editor-default-button";
-const MSG_SEPARATOR: &str = "button-bar-editor-separator";
 
 impl NavoWindow {
     /// Opens the button bar editor overlay, optionally selecting `select`.
@@ -81,13 +81,16 @@ impl NavoWindow {
             None => {
                 let focus = cx.focus_handle();
                 let form = FormState::new(window, cx);
+                let picker = PickerState::new(window, cx);
                 self.button_bar.editor = Some(ButtonBarEditorState {
                     selected: initial,
                     focus: focus.clone(),
                     narrow_pane: EditorPane::default(),
                     error: None,
                     form,
+                    picker,
                 });
+                self.start_picker_load(window, cx);
                 (focus, true)
             }
         };
@@ -105,6 +108,7 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         if self.button_bar.editor.take().is_some() {
+            self.button_bar.picker_generation = self.button_bar.picker_generation.wrapping_add(1);
             self.focus_core_pane(window, cx);
             cx.notify();
         }
@@ -340,22 +344,7 @@ impl NavoWindow {
         if pane == EditorPane::Button {
             return self.editor_button_pane(editor, t, cx);
         }
-        let message = match self.selected_item_label(editor.selected) {
-            Some(name) => tr_args!(MSG_ICON_PLACEHOLDER, name = name),
-            None => tr(MSG_SELECT_HINT),
-        };
-        div()
-            .id("button-bar-editor-icon-pane")
-            .test_support()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h_0()
-            .min_w_0()
-            .p(t.spacing.xl)
-            .text_size(t.typography.small)
-            .text_color(t.colors.muted)
-            .child(message)
+        self.editor_icon_pane(editor, t, cx)
     }
 
     fn set_editor_pane(&mut self, pane: EditorPane, cx: &mut Context<Self>) {

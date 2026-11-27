@@ -27,6 +27,7 @@ fn bar_item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
             shape: Shape::Soft,
             tone: Tone::Accent,
         },
+        icon_spec: None,
         action,
         line,
     }
@@ -36,6 +37,7 @@ fn separator(line: usize) -> ButtonItem {
     ButtonItem {
         name: String::new(),
         icon: BarIcon::Missing { dashed: false },
+        icon_spec: None,
         action: ButtonAction::Separator,
         line,
     }

@@ -3,7 +3,7 @@
 use gpui_kit::{AppContext, Context, Window};
 use navo_l10n::tr;
 
-use super::{MSG_DEFAULT_BUTTON, MSG_SEPARATOR};
+use super::MSG_DEFAULT_BUTTON;
 use crate::window_view::NavoWindow;
 use crate::window_view::button_bar::{
     BarEdit, ButtonAction, ButtonItem, DraftAction, ItemDraft, ItemPath,
@@ -19,15 +19,6 @@ impl NavoWindow {
                 ButtonAction::Menu(children) => children.get(child_idx),
                 _ => None,
             },
-        }
-    }
-
-    pub(super) fn selected_item_label(&self, selected: Option<ItemPath>) -> Option<String> {
-        let item = self.selected_item(selected)?;
-        if matches!(item.action, ButtonAction::Separator) {
-            Some(tr(MSG_SEPARATOR))
-        } else {
-            Some(item.name.clone())
         }
     }
 

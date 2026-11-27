@@ -29,6 +29,7 @@ fn item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
             shape: Shape::Soft,
             tone: Tone::Accent,
         },
+        icon_spec: None,
         action,
         line,
     }
@@ -254,6 +255,8 @@ async fn button_bar_view_tooltip_names_key(cx: &mut TestAppContext) {
                 index: 0,
             },
             line: "certutil.exe -hashfile {file}".to_owned(),
+            start_in: None,
+            hidden_console: false,
             takes_files: true,
         },
         3,
