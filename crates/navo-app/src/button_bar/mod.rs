@@ -20,6 +20,7 @@ use crate::user_commands::{Runner, UserCommand};
 use crate::watch_file::watch_file;
 
 pub(crate) mod edit;
+pub(crate) mod import;
 pub(crate) mod model;
 mod save;
 
@@ -61,6 +62,7 @@ pub(crate) fn hooks(dirs: Option<&StoreDirs>, runner: Runner) -> (ButtonBarHooks
         let reload = Arc::clone(&reload);
         Arc::new(move || saver.undo(reload.as_ref()))
     };
+    hooks.import = Arc::new(move |path, mono| import::import(&path, &icons_dir, mono));
     let watching = watch_file(&file, move || reload());
     if watching.is_none() {
         tracing::warn!(
@@ -77,6 +79,7 @@ fn no_hooks(runner: Runner) -> ButtonBarHooks {
         }),
         edit: Arc::new(|_| Err(NO_SETTINGS_FOLDER.to_owned())),
         undo: Arc::new(|| Err(NO_SETTINGS_FOLDER.to_owned())),
+        import: Arc::new(|_, _| Err(NO_SETTINGS_FOLDER.to_owned())),
         file: None,
         news: None,
     }

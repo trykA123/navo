@@ -182,6 +182,19 @@ pub type BarEditFn = Arc<dyn Fn(BarEdit) -> Result<(), String> + Send + Sync>;
 /// Undoes the last persisted button bar edit, returning an error message on failure.
 pub type BarUndoFn = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
 
+/// Result of importing a user SVG or raster file into the button bar icon folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportedIcon {
+    /// Spec pointing at the stored hashed filename.
+    pub spec: IconSpec,
+    /// Plain-language labels of hostile/unsupported SVG features stripped during import.
+    pub removed: Vec<String>,
+}
+
+/// Imports a local SVG or raster file into `buttonbar-icons/`.
+pub type BarImportFn =
+    Arc<dyn Fn(std::path::PathBuf, bool) -> Result<ImportedIcon, String> + Send + Sync>;
+
 /// Bounded latest-wins sender for pushing button bar reloads to the UI.
 #[derive(Clone, Debug)]
 pub struct ButtonBarSender {
@@ -245,6 +258,8 @@ pub struct ButtonBarHooks {
     pub edit: BarEditFn,
     /// Undoes the most recent edit to `buttonbar.toml`.
     pub undo: BarUndoFn,
+    /// Imports a user icon file into the button bar icon folder.
+    pub import: BarImportFn,
     /// Location of `buttonbar.toml`, if backed by a file.
     pub file: Option<Location>,
     /// Bounded latest-wins stream of bar reload updates.
@@ -266,6 +281,7 @@ impl ButtonBarHooks {
             run_program,
             edit,
             undo,
+            import: Arc::new(|_, _| Err("not ready".to_owned())),
             file,
             news: Some(ButtonBarReceiver {
                 latest: Arc::clone(&latest),
@@ -277,6 +293,13 @@ impl ButtonBarHooks {
             wake: Arc::new(Mutex::new(wake_tx)),
         };
         (hooks, sender)
+    }
+
+    /// Replaces the default refusing icon importer with `import`.
+    #[must_use]
+    pub fn with_import(mut self, import: BarImportFn) -> Self {
+        self.import = import;
+        self
     }
 }
 
