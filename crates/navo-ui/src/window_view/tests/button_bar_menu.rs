@@ -174,6 +174,21 @@ fn button_center_point(
     .expect("button bounds")
 }
 
+fn assert_menu_has(rows: &[String], expected: &[&str], absent: &[&str]) {
+    for label in expected {
+        assert!(
+            rows.iter().any(|r| r == label),
+            "missing `{label}` in {rows:?}"
+        );
+    }
+    for label in absent {
+        assert!(
+            !rows.iter().any(|r| r == label),
+            "unexpected `{label}` in {rows:?}"
+        );
+    }
+}
+
 #[gpui_kit::test]
 fn button_bar_menu_lists_entries(cx: &mut TestAppContext) {
     let rig = open_menu_rig(cx);
@@ -189,21 +204,10 @@ fn button_bar_menu_lists_entries(cx: &mut TestAppContext) {
     let bar_point = bar_edge_point(cx, rig.window);
     right_click(cx, rig.window, bar_point);
     let bar_rows = context_menu_rows(cx, rig.window);
-    assert!(
-        bar_rows.iter().any(|r| r == "Show names"),
-        "rows: {bar_rows:?}"
-    );
-    assert!(
-        bar_rows.iter().any(|r| r == "Hide button bar"),
-        "rows: {bar_rows:?}"
-    );
-    assert!(
-        !bar_rows.iter().any(|r| r == "Remove this button"),
-        "rows: {bar_rows:?}"
-    );
-    assert!(
-        !bar_rows.iter().any(|r| r.contains("Edit")),
-        "rows: {bar_rows:?}"
+    assert_menu_has(
+        &bar_rows,
+        &["Edit buttons…", "Show names", "Hide button bar"],
+        &["Remove this button", "Edit this button…"],
     );
 
     press(cx, rig.window, &rig.view, "escape");
@@ -211,17 +215,16 @@ fn button_bar_menu_lists_entries(cx: &mut TestAppContext) {
     let button_point = button_center_point(cx, rig.window, 0);
     right_click(cx, rig.window, button_point);
     let item_rows = context_menu_rows(cx, rig.window);
-    assert!(
-        item_rows.iter().any(|r| r == "Remove this button"),
-        "rows: {item_rows:?}"
-    );
-    assert!(
-        item_rows.iter().any(|r| r == "Show names"),
-        "rows: {item_rows:?}"
-    );
-    assert!(
-        item_rows.iter().any(|r| r == "Hide button bar"),
-        "rows: {item_rows:?}"
+    assert_menu_has(
+        &item_rows,
+        &[
+            "Edit buttons…",
+            "Edit this button…",
+            "Remove this button",
+            "Show names",
+            "Hide button bar",
+        ],
+        &[],
     );
 
     type_in(cx, rig.window, &rig.view, "remove");

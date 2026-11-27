@@ -125,8 +125,11 @@ impl NavoWindow {
         let popup = popup_state("button-bar-more", window, cx);
         let metrics = fit::metrics(&tokens::current(cx).spacing, tokens::current(cx).density);
         if self.button_bar.items.is_empty() {
-            let empty =
-                Button::new("button-bar-edit", tr(MSG_EDIT_BUTTONS)).variant(ButtonVariant::Ghost);
+            let empty = Button::new("button-bar-edit", tr(MSG_EDIT_BUTTONS))
+                .variant(ButtonVariant::Ghost)
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.open_button_bar_editor(None, window, cx);
+                }));
             return Some(self.bar_shell(metrics, cx).child(empty).into_any_element());
         }
         let show_names = self.values.flag(Field::WindowButtonBarNames);

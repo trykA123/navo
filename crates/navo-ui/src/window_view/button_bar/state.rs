@@ -6,12 +6,28 @@ use std::rc::Rc;
 use gpui_kit::{FocusHandle, Subscription, Task};
 
 use super::menu::{BarBounds, OpenButtonMenu};
-use super::{ButtonBarHooks, ButtonBarNews, ButtonBarReceiver, ButtonItem};
+use super::{ButtonAction, ButtonBarHooks, ButtonBarNews, ButtonBarReceiver, ButtonItem, ItemPath};
 use crate::context_menu::ContextMenu;
 use crate::prelude::*;
 use crate::primitives::popup_menu::{self, PopupMenu};
 use crate::status_bar::StatusNotice;
 use crate::window_view::NavoWindow;
+
+/// Active body tab when the button bar editor is narrower than 820 px.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub(crate) enum EditorPane {
+    #[default]
+    Button,
+    Icon,
+}
+
+/// State owned by the open button bar editor layer.
+pub(crate) struct ButtonBarEditorState {
+    pub(crate) selected: Option<ItemPath>,
+    pub(crate) focus: FocusHandle,
+    pub(crate) narrow_pane: EditorPane,
+    pub(crate) error: Option<String>,
+}
 
 /// Button bar items, host hooks, focus handle, focus cursor, load error, and reload task.
 pub(crate) struct ButtonBarState {
@@ -19,6 +35,7 @@ pub(crate) struct ButtonBarState {
     pub(crate) hooks: Option<ButtonBarHooks>,
     pub(crate) focus: FocusHandle,
     pub(crate) focused: Option<usize>,
+    pub(crate) editor: Option<ButtonBarEditorState>,
     pub(crate) drag_over_bar: bool,
     pub(crate) drag_hover_item: Option<usize>,
     pub(crate) error: Option<String>,
@@ -41,6 +58,7 @@ impl ButtonBarState {
             hooks: None,
             focus: cx.focus_handle(),
             focused: None,
+            editor: None,
             drag_over_bar: false,
             drag_hover_item: None,
             error: None,
@@ -107,13 +125,17 @@ impl NavoWindow {
                     text: text.into(),
                     is_error: false,
                 });
+                sync_editor_applied(&mut self.button_bar);
             }
             ButtonBarNews::Invalid(message) => {
                 self.button_bar.error = Some(message.clone());
                 self.button_bar.notice = Some(StatusNotice {
-                    text: message.into(),
+                    text: message.clone().into(),
                     is_error: true,
                 });
+                if let Some(editor) = self.button_bar.editor.as_mut() {
+                    editor.error = Some(message);
+                }
             }
         }
         cx.notify();
@@ -123,4 +145,27 @@ impl NavoWindow {
     pub(in crate::window_view) fn button_bar_notice(&self) -> Option<StatusNotice> {
         self.button_bar.notice.clone()
     }
+}
+
+fn sync_editor_applied(state: &mut ButtonBarState) {
+    let Some(editor) = state.editor.as_mut() else {
+        return;
+    };
+    editor.error = None;
+    editor.selected = clamp_selected(&state.items, editor.selected);
+}
+
+fn clamp_selected(items: &[ButtonItem], selected: Option<ItemPath>) -> Option<ItemPath> {
+    if items.is_empty() {
+        return None;
+    }
+    let path = selected?;
+    let index = path.index.min(items.len() - 1);
+    let child = path.child.and_then(|child_idx| match &items[index].action {
+        ButtonAction::Menu(children) if !children.is_empty() => {
+            Some(child_idx.min(children.len() - 1))
+        }
+        _ => None,
+    });
+    Some(ItemPath { index, child })
 }

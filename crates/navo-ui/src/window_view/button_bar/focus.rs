@@ -79,7 +79,7 @@ impl NavoWindow {
             }))
     }
 
-    /// Attaches the window-level `FocusButtonBar` action handler to `root`.
+    /// Attaches the window-level `FocusButtonBar` and `EditButtonBar` handlers to `root`.
     pub(in crate::window_view) fn button_bar_focus_key(
         &self,
         root: Div,
@@ -87,6 +87,9 @@ impl NavoWindow {
     ) -> Div {
         root.on_action(cx.listener(|view, _: &keys::FocusButtonBar, window, cx| {
             view.focus_button_bar(window, cx);
+        }))
+        .on_action(cx.listener(|view, _: &keys::EditButtonBar, window, cx| {
+            view.open_button_bar_editor(None, window, cx);
         }))
     }
 

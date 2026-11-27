@@ -11,8 +11,8 @@ use navo_l10n::tr;
 use super::fit;
 use super::view::{PopupRowProps, popup_row, tooltip_text};
 use super::{
-    BarEdit, ButtonAction, ButtonItem, ItemPath, MSG_BAR_LABEL, MSG_HIDE, MSG_REMOVE_BUTTON,
-    MSG_SHOW_NAMES,
+    BarEdit, ButtonAction, ButtonItem, ItemPath, MSG_BAR_LABEL, MSG_EDIT_BUTTONS, MSG_EDIT_THIS,
+    MSG_HIDE, MSG_REMOVE_BUTTON, MSG_SHOW_NAMES,
 };
 use crate::context_menu::{ContextMenu, ContextMenuEvent, ContextMenuInput};
 use crate::prelude::*;
@@ -22,6 +22,8 @@ use crate::status_bar::StatusNotice;
 use crate::tokens;
 use crate::window_view::NavoWindow;
 
+const ACT_EDIT_BUTTONS: &str = "button_bar.edit_buttons";
+const ACT_EDIT_THIS: &str = "button_bar.edit_this";
 const ACT_REMOVE: &str = "button_bar.remove";
 const ACT_SHOW_NAMES: &str = "button_bar.show_names";
 const ACT_HIDE: &str = "button_bar.hide";
@@ -60,15 +62,24 @@ pub(super) struct OpenButtonMenu {
 /// Builds the `ShellMenu` for the button bar context menu.
 #[must_use]
 pub(crate) fn bar_context_menu(has_button: bool, show_names: bool) -> ShellMenu {
-    let mut items = Vec::new();
+    let mut items = vec![MenuItem::new(
+        ItemId::Action(ACT_EDIT_BUTTONS),
+        &tr(MSG_EDIT_BUTTONS),
+        Group::Navo,
+    )];
     if has_button {
+        items.push(MenuItem::new(
+            ItemId::Action(ACT_EDIT_THIS),
+            &tr(MSG_EDIT_THIS),
+            Group::Navo,
+        ));
         items.push(MenuItem::new(
             ItemId::Action(ACT_REMOVE),
             &tr(MSG_REMOVE_BUTTON),
             Group::Navo,
         ));
-        items.push(MenuItem::separator(Group::Navo));
     }
+    items.push(MenuItem::separator(Group::Navo));
     items.push(MenuItem {
         checked: show_names,
         ..MenuItem::new(
@@ -171,6 +182,13 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         match action {
+            ACT_EDIT_BUTTONS => {
+                self.open_button_bar_editor(None, window, cx);
+            }
+            ACT_EDIT_THIS => {
+                let select = target.map(|index| ItemPath { index, child: None });
+                self.open_button_bar_editor(select, window, cx);
+            }
             ACT_REMOVE => {
                 if let Some(index) = target {
                     self.remove_button_bar_item(index, cx);

@@ -1,6 +1,7 @@
 //! Button bar view types, edit operations, and bounded latest-wins news channel.
 
 pub(crate) mod drop;
+pub(crate) mod editor;
 pub(crate) mod fit;
 pub(crate) mod focus;
 pub(crate) mod icon;
@@ -43,6 +44,8 @@ pub const MSG_SHOW_NAMES: &str = "button-bar-show-names";
 pub const MSG_HIDE: &str = "button-bar-hide";
 /// Fluent message id for removing the right-clicked button from the bar.
 pub const MSG_REMOVE_BUTTON: &str = "button-bar-remove-button";
+/// Fluent message id for editing the right-clicked button in the editor.
+pub const MSG_EDIT_THIS: &str = "button-bar-edit-this";
 
 /// Identifies a compiled program button within a loaded bar generation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

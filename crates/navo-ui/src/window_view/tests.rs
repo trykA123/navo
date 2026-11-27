@@ -20,6 +20,7 @@ mod app_menu_save;
 mod applied;
 mod archive_pane;
 mod button_bar_drop;
+mod button_bar_editor;
 mod button_bar_icon;
 mod button_bar_keys;
 mod button_bar_menu;
