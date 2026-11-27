@@ -1,21 +1,36 @@
 //! Window-owned button bar state and latest-wins reload listener.
 
-use gpui_kit::Task;
+use gpui_kit::{FocusHandle, Task};
 
 use super::{ButtonBarHooks, ButtonBarNews, ButtonBarReceiver, ButtonItem};
 use crate::prelude::*;
 use crate::status_bar::StatusNotice;
 use crate::window_view::NavoWindow;
 
-/// Button bar items, host hooks, focus cursor, load error, and reload task owned by a window.
-#[derive(Default)]
+/// Button bar items, host hooks, focus handle, focus cursor, load error, and reload task.
 pub(crate) struct ButtonBarState {
     pub(crate) items: Vec<ButtonItem>,
     pub(crate) hooks: Option<ButtonBarHooks>,
+    pub(crate) focus: FocusHandle,
     pub(crate) focused: Option<usize>,
     pub(crate) error: Option<String>,
     pub(super) notice: Option<StatusNotice>,
     _news_task: Option<Task<()>>,
+}
+
+impl ButtonBarState {
+    /// Creates empty button bar state with a window-owned focus handle.
+    pub(crate) fn new(cx: &mut Context<NavoWindow>) -> Self {
+        Self {
+            items: Vec::new(),
+            hooks: None,
+            focus: cx.focus_handle(),
+            focused: None,
+            error: None,
+            notice: None,
+            _news_task: None,
+        }
+    }
 }
 
 impl NavoWindow {

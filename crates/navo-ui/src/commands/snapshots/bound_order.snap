@@ -597,6 +597,7 @@ jobs.toggle | ctrl-j | global
 help.key_map | f1 | global
 help.user_guide | shift-f1 | global
 clipboard.open | ctrl-shift-v | !Viewer
+button_bar.focus | ctrl-shift-b | global
 tab.new | ctrl-t | NavoPane
 pane.drive_menu_first | alt-f1 | NavoPane
 pane.drive_menu_second | alt-f2 | NavoPane
@@ -640,3 +641,17 @@ layout.close_pane | ctrl-alt-w | FileList
 pane.switch_back | shift-tab | FileList
 deleted.restore | enter | RecentlyDeleted
 deleted.purge | delete | RecentlyDeleted
+button_bar.previous | left | ButtonBar
+button_bar.next | right | ButtonBar
+button_bar.run | enter | ButtonBar
+button_bar.open_menu | down | ButtonBar
+button_bar.context_menu | shift-f10 | ButtonBar
+button_bar.context_menu | menu | ButtonBar
+button_bar.leave | escape | ButtonBar
+button_bar_editor.move_left | alt-left | ButtonBarEditor
+button_bar_editor.move_right | alt-right | ButtonBarEditor
+button_bar_editor.add | insert | ButtonBarEditor
+button_bar_editor.remove | delete | ButtonBarEditor
+button_bar_editor.duplicate | ctrl-d | ButtonBarEditor
+button_bar_editor.undo | ctrl-z | ButtonBarEditor
+button_bar_editor.done | escape | ButtonBarEditor

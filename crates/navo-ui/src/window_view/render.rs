@@ -55,7 +55,7 @@ impl Render for NavoWindow {
         let root = Self::open_window_menu_on(Self::multi_rename_on(root, cx), cx);
         let root = Self::help_on(Self::layout_switcher_on(root, cx), cx);
         let root = self.command_center_on(self.activity_keys(self.crash_keys(root, cx), cx), cx);
-        self.preview_keys(root, window, cx)
+        self.preview_keys(self.button_bar_focus_key(root, cx), window, cx)
     }
 }
 

@@ -320,7 +320,7 @@ impl NavoWindow {
             job_ui: jobs::JobUi::new(window, cx),
             keymap: user_keymap::KeymapState::default(),
             user_commands: user_commands::UserCommandState::default(),
-            button_bar: button_bar::ButtonBarState::default(),
+            button_bar: button_bar::ButtonBarState::new(cx),
             clipboard: clipboard::ClipboardState::new(options.file_clipboard),
             clip: clipboard_palette::ClipboardPanel::new(options.clipboard),
             lane: lane::Lane::new(window, cx, |view| &mut view.lane),

@@ -39,6 +39,10 @@ keys = ["shift-f1"]
 command = "clipboard.open"
 keys = ["ctrl-shift-v"]
 
+[[bind]]
+command = "button_bar.focus"
+keys = ["ctrl-shift-b"]
+
 # NavoPane
 
 [[bind]]
@@ -2353,3 +2357,72 @@ context = "RecentlyDeleted"
 command = "deleted.purge"
 keys = ["delete"]
 context = "RecentlyDeleted"
+
+# ButtonBar
+
+[[bind]]
+command = "button_bar.previous"
+keys = ["left"]
+context = "ButtonBar"
+
+[[bind]]
+command = "button_bar.next"
+keys = ["right"]
+context = "ButtonBar"
+
+[[bind]]
+command = "button_bar.run"
+keys = ["enter"]
+context = "ButtonBar"
+
+[[bind]]
+command = "button_bar.open_menu"
+keys = ["down"]
+context = "ButtonBar"
+
+[[bind]]
+command = "button_bar.context_menu"
+keys = ["shift-f10", "menu"]
+context = "ButtonBar"
+
+[[bind]]
+command = "button_bar.leave"
+keys = ["escape"]
+context = "ButtonBar"
+
+# ButtonBarEditor
+
+[[bind]]
+command = "button_bar_editor.move_left"
+keys = ["alt-left"]
+context = "ButtonBarEditor"
+
+[[bind]]
+command = "button_bar_editor.move_right"
+keys = ["alt-right"]
+context = "ButtonBarEditor"
+
+[[bind]]
+command = "button_bar_editor.add"
+keys = ["insert"]
+context = "ButtonBarEditor"
+
+[[bind]]
+command = "button_bar_editor.remove"
+keys = ["delete"]
+context = "ButtonBarEditor"
+
+[[bind]]
+command = "button_bar_editor.duplicate"
+keys = ["ctrl-d"]
+context = "ButtonBarEditor"
+
+[[bind]]
+command = "button_bar_editor.undo"
+keys = ["ctrl-z"]
+context = "ButtonBarEditor"
+
+[[bind]]
+command = "button_bar_editor.done"
+keys = ["escape"]
+context = "ButtonBarEditor"

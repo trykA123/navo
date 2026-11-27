@@ -23,6 +23,21 @@ app_menu.toggle | f10 | global
 bookmark.next | f2 | Viewer
 bookmark.previous | shift-f2 | Viewer
 bookmark.toggle | ctrl-f2 | Viewer
+button_bar.context_menu | menu | ButtonBar
+button_bar.context_menu | shift-f10 | ButtonBar
+button_bar.focus | ctrl-shift-b | global
+button_bar.leave | escape | ButtonBar
+button_bar.next | right | ButtonBar
+button_bar.open_menu | down | ButtonBar
+button_bar.previous | left | ButtonBar
+button_bar.run | enter | ButtonBar
+button_bar_editor.add | insert | ButtonBarEditor
+button_bar_editor.done | escape | ButtonBarEditor
+button_bar_editor.duplicate | ctrl-d | ButtonBarEditor
+button_bar_editor.move_left | alt-left | ButtonBarEditor
+button_bar_editor.move_right | alt-right | ButtonBarEditor
+button_bar_editor.remove | delete | ButtonBarEditor
+button_bar_editor.undo | ctrl-z | ButtonBarEditor
 clip_palette.back | escape | ClipPalette
 clip_palette.back | escape | ClipPalette > Input
 clip_palette.choose | enter | ClipPalette

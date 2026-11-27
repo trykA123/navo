@@ -23,7 +23,7 @@ use crate::primitives::popup_menu::{
     ChooseHandler, Keys, PopupMenu, choose, note_items, popup_state, toggle, wire_anchor, wire_keys,
 };
 use crate::primitives::{Button, ButtonVariant, Tooltip};
-use crate::settings::{Field, WindowParts};
+use crate::settings::Field;
 use crate::tokens::{self, Theme};
 use crate::window_view::{NavoWindow, UserCommandInfo};
 
@@ -113,30 +113,31 @@ impl NavoWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let parts = WindowParts::of(&self.values);
-        if !parts.button_bar
-            || self.viewer.is_some()
-            || self.settings.is_open()
-            || self.host_screen_open(cx)
-        {
+        if !self.button_bar_shown(cx) {
             return None;
         }
         let popup = popup_state("button-bar-more", window, cx);
-        let t = tokens::current(cx);
-        let metrics = fit::metrics(&t.spacing, t.density);
+        let metrics = fit::metrics(&tokens::current(cx).spacing, tokens::current(cx).density);
         if self.button_bar.items.is_empty() {
             let empty =
                 Button::new("button-bar-edit", tr(MSG_EDIT_BUTTONS)).variant(ButtonVariant::Ghost);
-            return Some(bar_shell(t, metrics).child(empty).into_any_element());
+            return Some(self.bar_shell(metrics, cx).child(empty).into_any_element());
         }
         let show_names = self.values.flag(Field::WindowButtonBarNames);
-        let slots = measure_slots(&self.button_bar.items, show_names, metrics, window, t);
+        let slots = {
+            let t = tokens::current(cx);
+            measure_slots(&self.button_bar.items, show_names, metrics, window, t)
+        };
+        let focused = self
+            .button_bar
+            .focused
+            .filter(|_| self.button_bar.focus.is_focused(window));
         let data = BarData {
             view: cx.entity(),
             items: self.button_bar.items.clone(),
             slots,
             user_commands: self.user_command_list().to_vec(),
-            focused: self.button_bar.focused,
+            focused,
             show_names,
             metrics,
             popup,
@@ -144,23 +145,27 @@ impl NavoWindow {
         let row = Fit::new(metrics.height, move |width, _, cx| {
             build_row(data, width, cx)
         });
-        Some(bar_shell(t, metrics).child(row).into_any_element())
+        Some(self.bar_shell(metrics, cx).child(row).into_any_element())
     }
-}
 
-fn bar_shell(t: &Theme, metrics: BarMetrics) -> ObservedElement<Stateful<gpui_kit::Div>> {
-    div()
-        .id("button-bar")
-        .role(Role::Group)
-        .aria_label(tr(MSG_BAR_LABEL))
-        .test_support()
-        .flex()
-        .flex_none()
-        .items_center()
-        .w_full()
-        .h(metrics.height)
-        .px(t.spacing.xs)
-        .bg(t.colors.rail)
+    fn bar_shell(
+        &self,
+        metrics: BarMetrics,
+        cx: &mut Context<Self>,
+    ) -> ObservedElement<Stateful<gpui_kit::Div>> {
+        let bar = self.button_bar_keys(div().id("button-bar"), cx);
+        let t = tokens::current(cx);
+        bar.role(Role::Group)
+            .aria_label(tr(MSG_BAR_LABEL))
+            .test_support()
+            .flex()
+            .flex_none()
+            .items_center()
+            .w_full()
+            .h(metrics.height)
+            .px(t.spacing.xs)
+            .bg(t.colors.rail)
+    }
 }
 
 fn label_width(window: &Window, t: &Theme, text: &str) -> f32 {
