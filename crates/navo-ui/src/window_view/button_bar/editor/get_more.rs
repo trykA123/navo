@@ -169,6 +169,11 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         if self.button_bar.get_more_generation != generation {
+            if matches!(result, Ok(SetNews::Installed(_) | SetNews::Removed(_)))
+                && self.button_bar.editor.is_some()
+            {
+                self.start_picker_load(window, cx);
+            }
             return;
         }
         let Some(get_more) = self

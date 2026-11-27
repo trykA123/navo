@@ -4,6 +4,7 @@ mod actions;
 mod form;
 mod form_state;
 mod get_more;
+mod import;
 mod maker;
 mod maker_grid;
 mod maker_state;
@@ -115,6 +116,7 @@ impl NavoWindow {
             self.button_bar.picker_generation = self.button_bar.picker_generation.wrapping_add(1);
             self.button_bar.get_more_generation =
                 self.button_bar.get_more_generation.wrapping_add(1);
+            self.button_bar.import_generation = self.button_bar.import_generation.wrapping_add(1);
             self.focus_core_pane(window, cx);
             cx.notify();
         }

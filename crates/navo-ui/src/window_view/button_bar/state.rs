@@ -40,6 +40,7 @@ pub(crate) struct ButtonBarState {
     pub(crate) editor: Option<ButtonBarEditorState>,
     pub(crate) picker_generation: u64,
     pub(crate) get_more_generation: u64,
+    pub(crate) import_generation: u64,
     pub(crate) drag_over_bar: bool,
     pub(crate) drag_hover_item: Option<usize>,
     pub(crate) error: Option<String>,
@@ -65,6 +66,7 @@ impl ButtonBarState {
             editor: None,
             picker_generation: 0,
             get_more_generation: 0,
+            import_generation: 0,
             drag_over_bar: false,
             drag_hover_item: None,
             error: None,
@@ -186,6 +188,11 @@ fn sync_editor_applied(state: &mut ButtonBarState, window: &mut Window, cx: &mut
         editor
             .form
             .sync_from_item(editor.selected, item, window, cx);
+        editor.picker.maker.sync_from_spec(
+            item.and_then(|entry| entry.icon_spec.as_ref()),
+            window,
+            cx,
+        );
     }
 }
 

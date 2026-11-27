@@ -16,6 +16,7 @@ use navo_l10n::tr;
 
 use super::editor_tab_button;
 use super::get_more::GetMoreState;
+use super::import::ImportState;
 use super::maker_state::MakerState;
 use super::picker_grid::{PickerRow, build_rows, picker_virtual_list};
 use crate::primitives::{
@@ -26,12 +27,13 @@ use crate::window_view::NavoWindow;
 use crate::window_view::button_bar::ButtonAction;
 use crate::window_view::button_bar::state::ButtonBarEditorState;
 
-/// Top-level tab inside the icon picker pane (`Sets` or `Maker`).
+/// Top-level tab inside the icon picker pane (`Sets`, `Maker`, or `Import`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub(crate) enum PickerTab {
     #[default]
     Sets,
     Maker,
+    Import,
 }
 
 /// Active icon-set filter chip in the icon picker.
@@ -49,7 +51,8 @@ pub(crate) enum PickerFilter {
 /// Persistent search query, filter, cached grid rows, and background tag index for the picker.
 pub(crate) struct PickerState {
     tab: PickerTab,
-    pub(super) maker: MakerState,
+    pub(crate) maker: MakerState,
+    pub(super) import: ImportState,
     search_input: gpui_kit::Entity<TextFieldState>,
     filter: PickerFilter,
     brand_colour: bool,
@@ -74,6 +77,7 @@ impl PickerState {
         Self {
             tab: PickerTab::default(),
             maker: MakerState::new(window, cx),
+            import: ImportState::new(),
             search_input,
             filter: PickerFilter::default(),
             brand_colour: false,
@@ -183,6 +187,7 @@ impl NavoWindow {
         let body = match editor.picker.tab {
             PickerTab::Sets => self.picker_body(&editor.picker, t, cx),
             PickerTab::Maker => self.maker_body(&editor.picker, t, cx),
+            PickerTab::Import => self.import_body(&editor.picker.import, t, cx),
         };
         pane.gap(t.spacing.sm)
             .child(self.picker_mode_tabs(editor.picker.tab, t, cx))
@@ -204,6 +209,13 @@ impl NavoWindow {
             t,
         )
         .on_click(cx.listener(|view, _, _, cx| view.set_picker_tab(PickerTab::Maker, cx)));
+        let import_tab = editor_tab_button(
+            "button-bar-picker-tab-import",
+            tr("button-bar-picker-tab-import"),
+            active == PickerTab::Import,
+            t,
+        )
+        .on_click(cx.listener(|view, _, _, cx| view.set_picker_tab(PickerTab::Import, cx)));
 
         div()
             .id("button-bar-picker-mode-tabs")
@@ -216,6 +228,7 @@ impl NavoWindow {
             .gap(t.spacing.xs)
             .child(sets_tab)
             .child(maker_tab)
+            .child(import_tab)
             .into_any_element()
     }
 

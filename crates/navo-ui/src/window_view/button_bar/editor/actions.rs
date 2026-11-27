@@ -23,10 +23,12 @@ impl NavoWindow {
     }
 
     pub(super) fn sync_form_from_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.button_bar.import_generation = self.button_bar.import_generation.wrapping_add(1);
         let Some(selected) = self.button_bar.editor.as_ref().and_then(|e| e.selected) else {
             if let Some(editor) = self.button_bar.editor.as_mut() {
                 editor.form.sync_from_item(None, None, window, cx);
                 editor.picker.maker.sync_from_spec(None, window, cx);
+                editor.picker.import.clear_status();
             }
             return;
         };
@@ -40,6 +42,7 @@ impl NavoWindow {
                 window,
                 cx,
             );
+            editor.picker.import.clear_status();
         }
     }
 
