@@ -1,7 +1,11 @@
 //! Button bar editor overlay layer, header, and responsive split/tab body.
 
 mod actions;
+mod form;
+mod form_state;
 mod strip;
+
+pub(crate) use form_state::FormState;
 
 use gpui_kit::base::{ObservedElement, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
@@ -34,7 +38,6 @@ const MSG_DONE: &str = "button-bar-editor-done";
 const MSG_TAB_BUTTON: &str = "button-bar-editor-tab-button";
 const MSG_TAB_ICON: &str = "button-bar-editor-tab-icon";
 const MSG_SELECT_HINT: &str = "button-bar-editor-select-hint";
-const MSG_BUTTON_PLACEHOLDER: &str = "button-bar-editor-button-placeholder";
 const MSG_ICON_PLACEHOLDER: &str = "button-bar-editor-icon-placeholder";
 const MSG_DEFAULT_BUTTON: &str = "button-bar-editor-default-button";
 const MSG_SEPARATOR: &str = "button-bar-editor-separator";
@@ -67,24 +70,30 @@ impl NavoWindow {
                 child: None,
             })
         });
-        let focus = match &mut self.button_bar.editor {
+        let (focus, resync) = match &mut self.button_bar.editor {
             Some(editor) => {
+                let changed = select.is_some() && editor.selected != select;
                 if select.is_some() {
                     editor.selected = select;
                 }
-                editor.focus.clone()
+                (editor.focus.clone(), changed)
             }
             None => {
                 let focus = cx.focus_handle();
+                let form = FormState::new(window, cx);
                 self.button_bar.editor = Some(ButtonBarEditorState {
                     selected: initial,
                     focus: focus.clone(),
                     narrow_pane: EditorPane::default(),
                     error: None,
+                    form,
                 });
-                focus
+                (focus, true)
             }
         };
+        if resync {
+            self.sync_form_from_selected(window, cx);
+        }
         window.focus(&focus, cx);
         cx.notify();
     }
@@ -175,29 +184,35 @@ impl NavoWindow {
 
     fn wire_editor_actions<E: InteractiveElement>(&self, card: E, cx: &mut Context<Self>) -> E {
         card.on_action(
-            cx.listener(|view, _: &keys::ButtonBarEditorMoveLeft, _, cx| {
-                view.editor_move_selected(-1, cx);
+            cx.listener(|view, _: &keys::ButtonBarEditorMoveLeft, window, cx| {
+                view.editor_move_selected(-1, window, cx);
             }),
         )
         .on_action(
-            cx.listener(|view, _: &keys::ButtonBarEditorMoveRight, _, cx| {
-                view.editor_move_selected(1, cx);
+            cx.listener(|view, _: &keys::ButtonBarEditorMoveRight, window, cx| {
+                view.editor_move_selected(1, window, cx);
             }),
         )
-        .on_action(cx.listener(|view, _: &keys::ButtonBarEditorAdd, _, cx| {
-            view.editor_insert_item(default_button_draft(), cx);
-        }))
-        .on_action(cx.listener(|view, _: &keys::ButtonBarEditorRemove, _, cx| {
-            view.editor_remove_selected(cx);
-        }))
         .on_action(
-            cx.listener(|view, _: &keys::ButtonBarEditorDuplicate, _, cx| {
-                view.editor_duplicate_selected(cx);
+            cx.listener(|view, _: &keys::ButtonBarEditorAdd, window, cx| {
+                view.editor_insert_item(default_button_draft(), window, cx);
             }),
         )
-        .on_action(cx.listener(|view, _: &keys::ButtonBarEditorUndo, _, cx| {
-            view.editor_undo(cx);
-        }))
+        .on_action(
+            cx.listener(|view, _: &keys::ButtonBarEditorRemove, window, cx| {
+                view.editor_remove_selected(window, cx);
+            }),
+        )
+        .on_action(
+            cx.listener(|view, _: &keys::ButtonBarEditorDuplicate, window, cx| {
+                view.editor_duplicate_selected(window, cx);
+            }),
+        )
+        .on_action(
+            cx.listener(|view, _: &keys::ButtonBarEditorUndo, window, cx| {
+                view.editor_undo(window, cx);
+            }),
+        )
         .on_action(
             cx.listener(|view, _: &keys::ButtonBarEditorDone, window, cx| {
                 view.close_button_bar_editor(window, cx);
@@ -208,7 +223,7 @@ impl NavoWindow {
     fn editor_header(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
         let undo = Button::new("button-bar-editor-undo", tr(MSG_UNDO))
             .variant(ButtonVariant::Secondary)
-            .on_click(cx.listener(|view, _, _, cx| view.editor_undo(cx)));
+            .on_click(cx.listener(|view, _, window, cx| view.editor_undo(window, cx)));
         let done = Button::new("button-bar-editor-done", tr(MSG_DONE))
             .variant(ButtonVariant::Primary)
             .on_click(cx.listener(|view, _, window, cx| view.close_button_bar_editor(window, cx)));
@@ -258,7 +273,7 @@ impl NavoWindow {
                 .min_h_0()
                 .min_w_0()
                 .child(self.editor_narrow_tabs(editor.narrow_pane, t, cx))
-                .child(self.editor_pane_content(editor, editor.narrow_pane, t))
+                .child(self.editor_pane_content(editor, editor.narrow_pane, t, cx))
                 .into_any_element();
         }
         div()
@@ -269,11 +284,11 @@ impl NavoWindow {
             .min_h_0()
             .min_w_0()
             .child(
-                self.editor_pane_content(editor, EditorPane::Button, t)
+                self.editor_pane_content(editor, EditorPane::Button, t, cx)
                     .border_r_1()
                     .border_color(t.surfaces.card_edge),
             )
-            .child(self.editor_pane_content(editor, EditorPane::Icon, t))
+            .child(self.editor_pane_content(editor, EditorPane::Icon, t, cx))
             .into_any_element()
     }
 
@@ -320,20 +335,17 @@ impl NavoWindow {
         editor: &ButtonBarEditorState,
         pane: EditorPane,
         t: &Theme,
+        cx: &mut Context<Self>,
     ) -> ObservedElement<Stateful<Div>> {
-        let id = match pane {
-            EditorPane::Button => "button-bar-editor-button-pane",
-            EditorPane::Icon => "button-bar-editor-icon-pane",
-        };
+        if pane == EditorPane::Button {
+            return self.editor_button_pane(editor, t, cx);
+        }
         let message = match self.selected_item_label(editor.selected) {
-            Some(name) => match pane {
-                EditorPane::Button => tr_args!(MSG_BUTTON_PLACEHOLDER, name = name),
-                EditorPane::Icon => tr_args!(MSG_ICON_PLACEHOLDER, name = name),
-            },
+            Some(name) => tr_args!(MSG_ICON_PLACEHOLDER, name = name),
             None => tr(MSG_SELECT_HINT),
         };
         div()
-            .id(id)
+            .id("button-bar-editor-icon-pane")
             .test_support()
             .flex()
             .flex_col()

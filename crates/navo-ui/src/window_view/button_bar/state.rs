@@ -27,6 +27,7 @@ pub(crate) struct ButtonBarEditorState {
     pub(crate) focus: FocusHandle,
     pub(crate) narrow_pane: EditorPane,
     pub(crate) error: Option<String>,
+    pub(crate) form: super::editor::FormState,
 }
 
 /// Button bar items, host hooks, focus handle, focus cursor, load error, and reload task.
@@ -78,6 +79,7 @@ impl NavoWindow {
     pub(in crate::window_view) fn take_button_bar(
         &mut self,
         hooks: Option<ButtonBarHooks>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(mut hooks) = hooks else {
@@ -88,25 +90,37 @@ impl NavoWindow {
         let receiver = hooks.news.take();
         self.button_bar.hooks = Some(hooks);
         if let Some(receiver) = receiver {
-            self.listen_button_bar(receiver, cx);
+            self.listen_button_bar(receiver, window, cx);
         } else {
             self.button_bar._news_task = None;
         }
     }
 
     /// Spawns a cancellable listener task that applies button bar reload news to this window.
-    fn listen_button_bar(&mut self, mut receiver: ButtonBarReceiver, cx: &mut Context<Self>) {
-        let task = cx.spawn(async move |this, cx| {
+    fn listen_button_bar(
+        &mut self,
+        mut receiver: ButtonBarReceiver,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let task = cx.spawn_in(window, async move |this, cx| {
             while let Some(news) = receiver.recv().await
                 && this
-                    .update(cx, |view, cx| view.apply_button_bar_news(news, cx))
+                    .update_in(cx, |view, window, cx| {
+                        view.apply_button_bar_news(news, window, cx)
+                    })
                     .is_ok()
             {}
         });
         self.button_bar._news_task = Some(task);
     }
 
-    fn apply_button_bar_news(&mut self, news: ButtonBarNews, cx: &mut Context<Self>) {
+    fn apply_button_bar_news(
+        &mut self,
+        news: ButtonBarNews,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match news {
             ButtonBarNews::Applied { items, warnings } => {
                 self.button_bar.items = items;
@@ -125,7 +139,7 @@ impl NavoWindow {
                     text: text.into(),
                     is_error: false,
                 });
-                sync_editor_applied(&mut self.button_bar);
+                sync_editor_applied(&mut self.button_bar, window, cx);
             }
             ButtonBarNews::Invalid(message) => {
                 self.button_bar.error = Some(message.clone());
@@ -147,12 +161,27 @@ impl NavoWindow {
     }
 }
 
-fn sync_editor_applied(state: &mut ButtonBarState) {
+fn sync_editor_applied(state: &mut ButtonBarState, window: &mut Window, cx: &mut App) {
     let Some(editor) = state.editor.as_mut() else {
         return;
     };
     editor.error = None;
     editor.selected = clamp_selected(&state.items, editor.selected);
+    let item = editor.selected.and_then(|path| {
+        let top = state.items.get(path.index)?;
+        match path.child {
+            None => Some(top),
+            Some(child_idx) => match &top.action {
+                ButtonAction::Menu(children) => children.get(child_idx),
+                _ => None,
+            },
+        }
+    });
+    if !editor.form.should_keep_on_news(editor.selected, item) {
+        editor
+            .form
+            .sync_from_item(editor.selected, item, window, cx);
+    }
 }
 
 fn clamp_selected(items: &[ButtonItem], selected: Option<ItemPath>) -> Option<ItemPath> {

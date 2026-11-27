@@ -228,7 +228,7 @@ impl NavoWindow {
     ) {
         self.window_shown = hooks.window_shown;
         self.listen_user_commands(hooks.user_commands, window, cx);
-        self.take_button_bar(hooks.button_bar, cx);
+        self.take_button_bar(hooks.button_bar, window, cx);
         self.resident = hooks.resident;
         if let Some(on_shown) = hooks.on_shown {
             window.on_next_frame(move |window, _| window.on_next_frame(move |_, _| on_shown()));

@@ -146,12 +146,12 @@ impl NavoWindow {
                 cx.new(|_| TileDragGhost)
             })
             .on_drop(
-                cx.listener(move |view, dragged: &DraggedEditorTile, _, cx| {
-                    view.editor_move_item(dragged.0, index, cx);
+                cx.listener(move |view, dragged: &DraggedEditorTile, window, cx| {
+                    view.editor_move_item(dragged.0, index, window, cx);
                 }),
             )
-            .on_click(cx.listener(move |view, _, _, cx| {
-                view.select_editor_item(ItemPath { index, child: None }, cx);
+            .on_click(cx.listener(move |view, _, window, cx| {
+                view.select_editor_item(ItemPath { index, child: None }, window, cx);
             }));
 
         if is_separator {
@@ -177,18 +177,18 @@ impl NavoWindow {
     fn editor_add_controls(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
         let add_button = Button::new("button-bar-editor-add-button", tr(MSG_ADD_BUTTON))
             .variant(ButtonVariant::Secondary)
-            .on_click(cx.listener(|view, _, _, cx| {
-                view.editor_insert_item(default_button_draft(), cx);
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.editor_insert_item(default_button_draft(), window, cx);
             }));
         let add_separator = Button::new("button-bar-editor-add-separator", tr(MSG_ADD_SEPARATOR))
             .variant(ButtonVariant::Secondary)
-            .on_click(cx.listener(|view, _, _, cx| {
-                view.editor_insert_item(separator_draft(), cx);
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.editor_insert_item(separator_draft(), window, cx);
             }));
         let add_menu = Button::new("button-bar-editor-add-menu", tr(MSG_ADD_MENU))
             .variant(ButtonVariant::Secondary)
-            .on_click(cx.listener(|view, _, _, cx| {
-                view.editor_insert_item(menu_draft(), cx);
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.editor_insert_item(menu_draft(), window, cx);
             }));
 
         div()
