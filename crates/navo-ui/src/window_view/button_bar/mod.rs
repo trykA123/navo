@@ -1,5 +1,6 @@
 //! Button bar view types, edit operations, and bounded latest-wins news channel.
 
+pub(crate) mod drop;
 pub(crate) mod fit;
 pub(crate) mod focus;
 pub(crate) mod icon;

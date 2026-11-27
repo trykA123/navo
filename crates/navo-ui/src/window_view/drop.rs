@@ -300,7 +300,7 @@ impl NavoWindow {
         cx.notify();
     }
 
-    fn take_drag(&mut self, payload: &DropPayload) -> Option<DragSession> {
+    pub(super) fn take_drag(&mut self, payload: &DropPayload) -> Option<DragSession> {
         let matches = self
             .drag
             .session

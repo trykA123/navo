@@ -11,6 +11,7 @@ use gpui_kit::{
 };
 use navo_l10n::tr;
 
+use super::drop::{DragVisual, NON_TAKER_OPACITY, drop_chip, item_takes_files, wire_button_drop};
 use super::fit::{self, BarMetrics, Slot};
 use super::icon::icon_element;
 use super::{
@@ -83,6 +84,7 @@ struct BarData {
     slots: Vec<Slot>,
     user_commands: Vec<UserCommandInfo>,
     focused: Option<usize>,
+    drag: DragVisual,
     show_names: bool,
     metrics: BarMetrics,
     popup: Entity<PopupMenu>,
@@ -138,6 +140,7 @@ impl NavoWindow {
             slots,
             user_commands: self.user_command_list().to_vec(),
             focused,
+            drag: self.button_bar_drag_visual(),
             show_names,
             metrics,
             popup,
@@ -153,7 +156,7 @@ impl NavoWindow {
         metrics: BarMetrics,
         cx: &mut Context<Self>,
     ) -> ObservedElement<Stateful<gpui_kit::Div>> {
-        let bar = self.button_bar_keys(div().id("button-bar"), cx);
+        let bar = self.wire_bar_drag(self.button_bar_keys(div().id("button-bar"), cx), cx);
         let t = tokens::current(cx);
         bar.role(Role::Group)
             .aria_label(tr(MSG_BAR_LABEL))
@@ -286,10 +289,14 @@ fn button_element(
     let m = data.metrics;
     let is_dimmed = is_non_runnable(item);
     let is_focused = data.focused == Some(index);
+    let takes = item_takes_files(item, &data.user_commands);
+    let drag_taker = data.drag.active && takes;
+    let drag_dimmed = data.drag.active && !takes;
+    let show_chip = drag_taker && data.drag.hovered == Some(index) && data.drag.count > 0;
     let tip: SharedString = tooltip_text(item, &data.user_commands).into();
     let (hover, pressed) = (t.colors.hover, t.colors.selection);
     let (view, clicked) = (data.view.clone(), item.clone());
-    div()
+    let button = div()
         .id(("button-bar-item", index))
         .role(Role::Button)
         .aria_label(item.name.clone())
@@ -303,9 +310,12 @@ fn button_element(
         .when(!data.show_names, |d| d.w(m.button))
         .rounded(t.radii.sm)
         .when(is_focused, |d| d.shadow(focus_ring(t.colors.accent)))
-        .when(is_dimmed, |d| {
-            d.opacity(DIMMED_OPACITY).text_color(t.colors.muted)
+        .when(!is_focused && drag_taker, |d| {
+            d.shadow(focus_ring(t.surfaces.card_ring))
         })
+        .when(drag_dimmed, |d| d.opacity(NON_TAKER_OPACITY))
+        .when(!drag_dimmed && is_dimmed, |d| d.opacity(DIMMED_OPACITY))
+        .when(is_dimmed, |d| d.text_color(t.colors.muted))
         .when(!is_dimmed, |d| {
             d.text_color(t.colors.text)
                 .cursor_pointer()
@@ -319,7 +329,20 @@ fn button_element(
         .child(icon_element(&item.icon, m.icon, cx))
         .when(data.show_names, |d| {
             d.child(div().text_size(t.typography.small).child(item.name.clone()))
-        })
+        });
+    let button = if takes {
+        wire_button_drop(button, index, item, data.view.clone())
+    } else {
+        button
+    };
+    if !show_chip {
+        return button.into_any_element();
+    }
+    div()
+        .relative()
+        .flex_none()
+        .child(button)
+        .child(drop_chip(&item.name, data.drag.count, m, t))
         .into_any_element()
 }
 
