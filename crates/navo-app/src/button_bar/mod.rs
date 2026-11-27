@@ -19,12 +19,9 @@ use crate::user_commands::model::{Part, files::takes_files};
 use crate::user_commands::{Runner, UserCommand};
 use crate::watch_file::watch_file;
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "button_bar::save wires edit operations in")
-)]
 pub(crate) mod edit;
 pub(crate) mod model;
+mod save;
 
 #[cfg(test)]
 mod tests;
@@ -32,7 +29,6 @@ mod tests;
 const FILE: &str = "buttonbar.toml";
 const MAX_FILE_BYTES: u64 = 256 * 1024;
 const NO_SETTINGS_FOLDER: &str = "no settings folder";
-const NOT_READY: &str = "not ready";
 
 type ProgramTable = (u32, Vec<(String, UserCommand)>);
 
@@ -45,14 +41,27 @@ pub(crate) fn hooks(dirs: Option<&StoreDirs>, runner: Runner) -> (ButtonBarHooks
     let file = dirs.button_bar_file();
     let icons_dir = dirs.button_bar_icons_dir();
     let programs = Arc::new(Mutex::new((0u32, Vec::new())));
-    let initial = load(&file, &icons_dir, &programs);
+    let saver = Arc::new(save::Saver::new(file.clone()));
+    let initial = load(&file, &icons_dir, &programs, &saver);
     report(&initial);
     let run_program = run_hook(Arc::clone(&programs), runner);
-    let edit = Arc::new(|_| Err(NOT_READY.to_owned()));
-    let undo = Arc::new(|| Err(NOT_READY.to_owned()));
-    let (hooks, sender) = ButtonBarHooks::channel(run_program, edit, undo, location_of(&file));
+    let (mut hooks, sender) = ButtonBarHooks::channel(
+        run_program,
+        Arc::new(|_| Ok(())),
+        Arc::new(|| Ok(())),
+        location_of(&file),
+    );
     let _ = sender.send(initial.clone());
-    let watching = watch(&file, &icons_dir, initial, programs, sender);
+    let reload = make_reload(dirs, programs, Arc::clone(&saver), initial, sender);
+    hooks.edit = {
+        let (saver, reload) = (Arc::clone(&saver), Arc::clone(&reload));
+        Arc::new(move |edit| saver.edit(&edit, reload.as_ref()))
+    };
+    hooks.undo = {
+        let reload = Arc::clone(&reload);
+        Arc::new(move || saver.undo(reload.as_ref()))
+    };
+    let watching = watch_file(&file, move || reload());
     if watching.is_none() {
         tracing::warn!(
             "the settings folder is not watched; buttonbar.toml changes apply at the next start"
@@ -73,10 +82,16 @@ fn no_hooks(runner: Runner) -> ButtonBarHooks {
     }
 }
 
-fn load(file: &Path, icons_dir: &Path, programs: &Mutex<ProgramTable>) -> ButtonBarNews {
+fn load(
+    file: &Path,
+    icons_dir: &Path,
+    programs: &Mutex<ProgramTable>,
+    saver: &save::Saver,
+) -> ButtonBarNews {
     let bytes = match read_capped(file, MAX_FILE_BYTES) {
         Ok(bytes) => bytes,
         Err(ReadError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+            saver.record_loaded("");
             let mut table = lock(programs);
             table.0 = table.0.wrapping_add(1);
             table.1.clear();
@@ -97,7 +112,10 @@ fn load(file: &Path, icons_dir: &Path, programs: &Mutex<ProgramTable>) -> Button
         Err(error) => return ButtonBarNews::Invalid(format!("{FILE}: {error}")),
     };
     match model::parse(&text, None) {
-        Ok((parsed, warnings)) => apply_parsed(parsed, warnings, icons_dir, programs),
+        Ok((parsed, warnings)) => {
+            saver.record_loaded(&text);
+            apply_parsed(parsed, warnings, icons_dir, programs)
+        }
         Err(errors) => {
             let message = errors
                 .first()
@@ -230,22 +248,24 @@ fn command_line(command: &UserCommand) -> String {
     out
 }
 
-fn watch(
-    path: &Path,
-    icons_dir: &Path,
-    start: ButtonBarNews,
+fn make_reload(
+    dirs: &StoreDirs,
     programs: Arc<Mutex<ProgramTable>>,
+    saver: Arc<save::Saver>,
+    start: ButtonBarNews,
     sender: ButtonBarSender,
-) -> Option<Watch> {
-    let file = path.to_owned();
-    let icons_dir = icons_dir.to_owned();
-    let mut last = start;
-    watch_file(path, move || {
-        let news = load(&file, &icons_dir, &programs);
-        if news == last {
+) -> Arc<dyn Fn() + Send + Sync> {
+    let file = dirs.button_bar_file();
+    let icons_dir = dirs.button_bar_icons_dir();
+    let last = Mutex::new(start);
+    Arc::new(move || {
+        let news = load(&file, &icons_dir, &programs, &saver);
+        let mut prev = lock(&last);
+        if news == *prev {
             return;
         }
-        last = news.clone();
+        *prev = news.clone();
+        drop(prev);
         report(&news);
         let _ = sender.send(news);
     })

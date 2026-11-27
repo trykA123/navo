@@ -105,7 +105,7 @@ fn button_bar_missing_file_applies_empty() {
 
     let (mut bar_hooks, _watch) = hooks(Some(&dirs), runner);
     assert!(bar_hooks.file.is_some());
-    assert_eq!((bar_hooks.undo)().unwrap_err(), "not ready");
+    assert_eq!((bar_hooks.undo)().unwrap_err(), "nothing to undo");
     let mut news = bar_hooks.news.take().expect("news receiver");
     assert_eq!(
         news.try_recv(),
