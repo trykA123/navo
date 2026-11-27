@@ -98,6 +98,12 @@ fn import_refuses_network_path() {
         "//server/share/icon.png",
         r"\/server\share\icon.png",
         r"/\server\share\icon.png",
+        r"\??\UNC\srv\share\icon.png",
+        r"\Device\Mup\srv\share\icon.png",
+        r"\Global??\UNC\srv\share\icon.png",
+        r"\device\mup\srv\share\icon.png",
+        r"\GLOBAL??\UNC\srv\share\icon.png",
+        r"\\?\UNC\srv\share\icon.png",
     ] {
         let err = import(Path::new(name), &icons, false)
             .expect_err(&format!("network path {name} must be refused"));

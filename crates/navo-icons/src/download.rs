@@ -19,6 +19,10 @@ use crate::sanitise;
 
 /// Most icons accepted from one downloaded pack.
 const MAX_ENTRIES: u32 = 40_000;
+/// Maximum total decoded chunk bytes accepted across all chunks of one downloaded pack (64 MiB).
+const MAX_UNPACK_BYTES: usize = 64 * 1024 * 1024;
+/// Maximum single SVG body accepted from a downloaded pack (64 KiB, per BB-D12 / BB40).
+const MAX_DOWNLOAD_BODY: usize = 64 * 1024;
 /// Maximum size accepted for `installed.toml` (1 MiB).
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
 /// Manifest of installed packs, read by `registry::Registry::load_downloaded`.
@@ -154,18 +158,29 @@ pub fn remove_with(
     }
     let (entries, had_manifest) = read_manifest(dir)?;
 
+    let prefix = format!("{id}-");
+    let mut to_delete = Vec::new();
     let mut kept = Vec::with_capacity(entries.len());
     for entry in entries {
         if entry.id == id {
-            remove_ignoring_missing(&dir.join(&entry.file))?;
+            if !entry.file.starts_with(&prefix) {
+                return Err(InstallError::Io(format!(
+                    "installed.toml entry `{id}` references mismatched file `{}`",
+                    entry.file
+                )));
+            }
+            to_delete.push(entry.file);
         } else {
             kept.push(entry);
         }
     }
-    remove_ignoring_missing(&dir.join(format!("{id}-LICENSE")))?;
     if had_manifest {
         write_manifest(dir, &kept, write_atomic)?;
     }
+    for file in to_delete {
+        remove_ignoring_missing(&dir.join(&file))?;
+    }
+    remove_ignoring_missing(&dir.join(format!("{id}-LICENSE")))?;
     Ok(())
 }
 
@@ -186,10 +201,11 @@ fn check_names(spec: &DownloadSpec) -> Result<(), InstallError> {
     Ok(())
 }
 
-/// Accepts only `[a-z0-9._-]` with no `..`, so the value is one safe filename part.
+/// Accepts only `[a-z0-9._-]` with no leading `.` or `..`, so the value is one safe filename part.
 fn is_safe_component(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= MAX_NAME
+        && !value.starts_with('.')
         && !value.contains("..")
         && value.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
@@ -234,8 +250,17 @@ fn check_hashes(
     Ok(())
 }
 
-/// Requires exactly the pinned set and re-normalises every icon body.
+/// Requires exactly the pinned set and re-normalises every icon body within the unpack budget.
 fn validate_pack(pack_bytes: &[u8], spec: &DownloadSpec) -> Result<(), InstallError> {
+    validate_pack_with_budget(pack_bytes, spec, MAX_UNPACK_BYTES)
+}
+
+/// Validates one pack while bounding total decoded chunk bytes to `max_unpack_bytes`.
+fn validate_pack_with_budget(
+    pack_bytes: &[u8],
+    spec: &DownloadSpec,
+    max_unpack_bytes: usize,
+) -> Result<(), InstallError> {
     let pack = Pack::open(pack_bytes)?;
     let set = match pack.sets() {
         [set] if set.id == spec.id && set.count <= MAX_ENTRIES => set,
@@ -254,8 +279,13 @@ fn validate_pack(pack_bytes: &[u8], spec: &DownloadSpec) -> Result<(), InstallEr
             .ok_or(InstallError::Pack(PackError::OutOfRange))?;
         by_chunk.entry(icon.chunk).or_default().push((name, icon));
     }
+    let mut total_decoded: usize = 0;
     for (chunk, icons) in by_chunk {
         let decoded = pack.chunk(&set.id, chunk)?;
+        total_decoded = total_decoded
+            .checked_add(decoded.len())
+            .filter(|&total| total <= max_unpack_bytes)
+            .ok_or(InstallError::Pack(PackError::TooLarge))?;
         for (name, icon) in icons {
             validate_body(&decoded, &icon, name)?;
         }
@@ -263,9 +293,12 @@ fn validate_pack(pack_bytes: &[u8], spec: &DownloadSpec) -> Result<(), InstallEr
     Ok(())
 }
 
-/// Normalises one body, refusing both errors and anything the normaliser stripped.
+/// Normalises one body, refusing oversize bodies, errors, and anything the normaliser stripped.
 fn validate_body(chunk: &[u8], icon: &pack::IconRef, name: &str) -> Result<(), InstallError> {
     let body = pack::body(chunk, icon).ok_or(InstallError::Pack(PackError::OutOfRange))?;
+    if body.len() > MAX_DOWNLOAD_BODY {
+        return Err(InstallError::Pack(PackError::TooLarge));
+    }
     let cleaned = sanitise::normalise(body, true).map_err(|error| InstallError::Svg {
         name: name.to_owned(),
         error: error.to_string(),

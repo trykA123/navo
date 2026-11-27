@@ -79,12 +79,14 @@ struct CachedChunk {
 }
 
 struct ChunkLru {
+    generation: u64,
     entries: VecDeque<CachedChunk>,
 }
 
 impl ChunkLru {
     fn new() -> Self {
         Self {
+            generation: 0,
             entries: VecDeque::with_capacity(MAX_CACHED_CHUNKS),
         }
     }
@@ -100,7 +102,10 @@ impl ChunkLru {
         Some(data)
     }
 
-    fn insert(&mut self, set: String, chunk: u16, data: Arc<[u8]>) {
+    fn insert(&mut self, generation: u64, set: String, chunk: u16, data: Arc<[u8]>) {
+        if self.generation != generation {
+            return;
+        }
         if let Some(pos) = self
             .entries
             .iter()
@@ -114,6 +119,7 @@ impl ChunkLru {
     }
 
     fn clear(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
         self.entries.clear();
     }
 
@@ -343,36 +349,51 @@ impl Registry {
             .map(|pack| Arc::clone(&pack.bytes))
     }
 
+    fn cache_generation(&self) -> u64 {
+        self.cache
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .generation
+    }
+
     fn lookup(&self, set: &str, name: &str) -> Option<(IconRef, Arc<[u8]>)> {
         if let Some(pack) = &self.bundled
             && let Some(icon_ref) = pack.find(set, name)
         {
-            let chunk = self.cached_chunk(set, icon_ref.chunk, pack)?;
+            let chunk = self.cached_chunk(set, icon_ref.chunk, pack, None)?;
             let slice = pack::body(&chunk, &icon_ref)?;
             return Some((icon_ref, Arc::from(slice)));
         }
+        let generation = self.cache_generation();
         let bytes = self.downloaded_bytes(set)?;
         let pack = Pack::open(&bytes).ok()?;
         let icon_ref = pack.find(set, name)?;
-        let chunk = self.cached_chunk(set, icon_ref.chunk, &pack)?;
+        let chunk = self.cached_chunk(set, icon_ref.chunk, &pack, Some(generation))?;
         let slice = pack::body(&chunk, &icon_ref)?;
         Some((icon_ref, Arc::from(slice)))
     }
 
-    fn cached_chunk(&self, set: &str, chunk: u16, pack: &Pack<'_>) -> Option<Arc<[u8]>> {
-        if let Some(hit) = self
-            .cache
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(set, chunk)
-        {
-            return Some(hit);
-        }
+    fn cached_chunk(
+        &self,
+        set: &str,
+        chunk: u16,
+        pack: &Pack<'_>,
+        expected_gen: Option<u64>,
+    ) -> Option<Arc<[u8]>> {
+        let generation = {
+            let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+            if expected_gen.is_none_or(|expected| expected == cache.generation)
+                && let Some(hit) = cache.get(set, chunk)
+            {
+                return Some(hit);
+            }
+            expected_gen.unwrap_or(cache.generation)
+        };
         let decoded: Arc<[u8]> = Arc::from(pack.chunk(set, chunk).ok()?);
         self.cache
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .insert(set.to_owned(), chunk, Arc::clone(&decoded));
+            .insert(generation, set.to_owned(), chunk, Arc::clone(&decoded));
         Some(decoded)
     }
 

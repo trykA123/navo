@@ -357,3 +357,36 @@ fn registry_resolves_letters_glyph_and_png() {
     assert!(warn.is_none());
     assert!(matches!(png_res, Resolved::Raster { .. }));
 }
+
+#[test]
+fn registry_stale_chunk_insert_after_trim_is_ignored() {
+    let reg = Registry::new(BUNDLED).expect("open bundled");
+    let pack = Pack::open(BUNDLED).expect("open bundled pack");
+    let icon_ref = pack.find("lucide", "folder").expect("lucide folder");
+
+    let before_trim = reg.cache_generation();
+    reg.trim();
+    assert_ne!(
+        reg.cache_generation(),
+        before_trim,
+        "trim must bump cache generation"
+    );
+
+    // Simulate a decode that started at `before_trim` finishing after `trim()`.
+    let decoded = reg
+        .cached_chunk("lucide", icon_ref.chunk, &pack, Some(before_trim))
+        .expect("decode should still return bytes");
+    assert!(!decoded.is_empty());
+    assert!(
+        !reg.has_cached_chunk("lucide", icon_ref.chunk),
+        "stale-generation decode must not be inserted into the LRU cache"
+    );
+
+    // A fresh decode at the current generation is cached normally.
+    let current = reg.cache_generation();
+    let fresh = reg
+        .cached_chunk("lucide", icon_ref.chunk, &pack, Some(current))
+        .expect("fresh decode");
+    assert_eq!(fresh, decoded);
+    assert!(reg.has_cached_chunk("lucide", icon_ref.chunk));
+}

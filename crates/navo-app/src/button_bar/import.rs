@@ -36,10 +36,14 @@ pub(crate) fn import(path: &Path, icons_dir: &Path, mono: bool) -> Result<Import
     }
 }
 
-/// Rejects network paths and any address that is not a local filesystem path.
+/// Rejects network paths, NT-namespace paths, and any non-local filesystem path.
 fn is_local_path(path: &Path) -> bool {
     let text = path.to_string_lossy();
-    if matches!(text.as_bytes(), [b'\\' | b'/', b'\\' | b'/', ..]) {
+    let bytes = text.as_bytes();
+    // Any leading `\` is either UNC (`\\`, `\/`), an NT-namespace path (`\??\`, `\Device\`,
+    // `\Global??\`, `\\?\UNC\...`), or a root-relative Windows path — never a valid Unix
+    // absolute path or explicit drive-letter path.
+    if matches!(bytes, [b'\\', ..] | [b'/', b'\\' | b'/', ..]) {
         return false;
     }
     Location::local(ProviderPath::from_text(&text)).is_ok_and(|location| location.is_local())

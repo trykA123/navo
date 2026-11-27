@@ -5,8 +5,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use sha2::{Digest, Sha256};
 
-use super::{DownloadSpec, InstallError, downloads, install, install_with, remove};
-use crate::pack::{self, IconDraft, SetDraft};
+use super::{
+    DownloadSpec, InstallError, downloads, install, install_with, remove, remove_with,
+    validate_pack_with_budget,
+};
+use crate::pack::{self, IconDraft, PackError, SetDraft};
 use crate::registry::Registry;
 
 const SAMPLE_SVG: &[u8] =
@@ -224,4 +227,98 @@ fn download_refuses_oversize_manifest() {
         matches!(err, InstallError::Io(_)),
         "expected InstallError::Io for oversize manifest, got {err:?}"
     );
+}
+
+#[test]
+fn download_refuses_oversize_body_over_64kib() {
+    let dir = TempDir::new("oversize-body");
+    let prefix =
+        br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/>"#;
+    let suffix = b"</svg>";
+    let pad = 64 * 1024 + 1 - prefix.len() - suffix.len();
+    let mut big_svg = Vec::with_capacity(64 * 1024 + 1);
+    big_svg.extend_from_slice(prefix);
+    big_svg.resize(prefix.len() + pad, b' ');
+    big_svg.extend_from_slice(suffix);
+    assert_eq!(big_svg.len(), 64 * 1024 + 1);
+
+    let pack_bytes = pack_with("sample", vec![icon("huge", &big_svg)]);
+    let spec = spec_for("sample", &pack_bytes, LICENCE);
+
+    let err = install(&pack_bytes, LICENCE, &spec, dir.path())
+        .expect_err("download icon body over 64 KiB must be refused");
+    assert_eq!(err, InstallError::Pack(PackError::TooLarge));
+    assert_eq!(fs::read_dir(dir.path()).expect("read dir").count(), 0);
+}
+
+#[test]
+fn download_refuses_leading_dot_id() {
+    let dir = TempDir::new("leading-dot");
+    let pack_bytes = pack_with("sample", vec![icon("dot", SAMPLE_SVG)]);
+    let mut spec = spec_for("sample", &pack_bytes, LICENCE);
+    spec.id = ".hidden".to_owned();
+
+    let err = install(&pack_bytes, LICENCE, &spec, dir.path())
+        .expect_err("leading-dot id must be refused");
+    assert!(
+        matches!(err, InstallError::Io(ref msg) if msg.contains("unsafe download id")),
+        "expected unsafe download id error, got {err:?}"
+    );
+    assert_eq!(fs::read_dir(dir.path()).expect("read dir").count(), 0);
+}
+
+#[test]
+fn download_remove_refuses_mismatched_file_and_keeps_other_pack() {
+    let dir = TempDir::new("mismatched-remove");
+    let other_pack = dir.path().join("beta-1.0.0.nvic");
+    fs::write(&other_pack, b"keep me").expect("write other pack");
+    let manifest = concat!(
+        "[[set]]\n",
+        "id = \"alpha\"\n",
+        "file = \"beta-1.0.0.nvic\"\n",
+        "blake3 = \"0000000000000000000000000000000000000000000000000000000000000000\"\n",
+    );
+    fs::write(dir.path().join("installed.toml"), manifest).expect("write manifest");
+
+    let err = remove("alpha", dir.path()).expect_err("mismatched file must be refused");
+    assert!(matches!(err, InstallError::Io(_)));
+    assert!(other_pack.exists(), "other pack must not be deleted");
+}
+
+#[test]
+fn download_remove_keeps_files_when_manifest_write_fails() {
+    let dir = TempDir::new("remove-manifest-fail");
+    let pack_bytes = pack_with("sample", vec![icon("dot", SAMPLE_SVG)]);
+    let spec = spec_for("sample", &pack_bytes, LICENCE);
+    let installed = install(&pack_bytes, LICENCE, &spec, dir.path()).expect("install");
+
+    let failing_writer = |_path: &Path, _bytes: &[u8]| -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "simulated manifest write failure",
+        ))
+    };
+    let err = remove_with("sample", dir.path(), &failing_writer)
+        .expect_err("manifest write failure must fail remove");
+    assert!(matches!(err, InstallError::Io(_)));
+    assert!(
+        installed.exists(),
+        "pack file must remain when manifest rewrite fails"
+    );
+}
+
+#[test]
+fn download_refuses_total_unpack_over_budget() {
+    let pack_bytes = pack_with(
+        "sample",
+        vec![icon("one", SAMPLE_SVG), icon("two", SAMPLE_SVG)],
+    );
+    let spec = spec_for("sample", &pack_bytes, LICENCE);
+    let total_raw = SAMPLE_SVG.len() * 2;
+
+    validate_pack_with_budget(&pack_bytes, &spec, total_raw)
+        .expect("exact unpack budget should pass");
+    let err = validate_pack_with_budget(&pack_bytes, &spec, total_raw - 1)
+        .expect_err("total decoded bytes over budget must be refused");
+    assert_eq!(err, InstallError::Pack(PackError::TooLarge));
 }
