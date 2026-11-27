@@ -19,6 +19,7 @@ use crate::user_commands::model::{Part, files::takes_files};
 use crate::user_commands::{Runner, UserCommand};
 use crate::watch_file::watch_file;
 
+pub(crate) mod download;
 pub(crate) mod edit;
 pub(crate) mod import;
 pub(crate) mod model;
@@ -41,6 +42,10 @@ pub(crate) fn hooks(dirs: Option<&StoreDirs>, runner: Runner) -> (ButtonBarHooks
     };
     let file = dirs.button_bar_file();
     let icons_dir = dirs.button_bar_icons_dir();
+    let icon_sets_dir = dirs.data.join("icon-sets");
+    for warning in registry().load_downloaded(&icon_sets_dir) {
+        tracing::warn!(problem = %warning, "downloaded icon pack warning");
+    }
     let programs = Arc::new(Mutex::new((0u32, Vec::new())));
     let saver = Arc::new(save::Saver::new(file.clone()));
     let initial = load(&file, &icons_dir, &programs, &saver);
@@ -63,6 +68,7 @@ pub(crate) fn hooks(dirs: Option<&StoreDirs>, runner: Runner) -> (ButtonBarHooks
         Arc::new(move || saver.undo(reload.as_ref()))
     };
     hooks.import = Arc::new(move |path, mono| import::import(&path, &icons_dir, mono));
+    hooks = hooks.with_sets(download::sets_hook(icon_sets_dir, Arc::clone(&reload)));
     let watching = watch_file(&file, move || reload());
     if watching.is_none() {
         tracing::warn!(
@@ -80,6 +86,7 @@ fn no_hooks(runner: Runner) -> ButtonBarHooks {
         edit: Arc::new(|_| Err(NO_SETTINGS_FOLDER.to_owned())),
         undo: Arc::new(|| Err(NO_SETTINGS_FOLDER.to_owned())),
         import: Arc::new(|_, _| Err(NO_SETTINGS_FOLDER.to_owned())),
+        sets: Arc::new(|_| Err(NO_SETTINGS_FOLDER.to_owned())),
         file: None,
         news: None,
     }

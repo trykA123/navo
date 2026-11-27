@@ -207,6 +207,46 @@ pub struct ImportedIcon {
 pub type BarImportFn =
     Arc<dyn Fn(std::path::PathBuf, bool) -> Result<ImportedIcon, String> + Send + Sync>;
 
+/// Request sent from the UI to manage optional downloadable icon sets.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetAction {
+    /// Lists all optional icon sets and whether each is installed.
+    List,
+    /// Downloads and installs the optional icon set with this id.
+    Get(String),
+    /// Removes the installed optional icon set with this id.
+    Remove(String),
+}
+
+/// Metadata for one optional downloadable icon set shown in the UI.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetRow {
+    /// Stable set id (for example `"fluent"`).
+    pub id: String,
+    /// Display name shown in the dialog.
+    pub name: String,
+    /// SPDX licence identifier.
+    pub licence: String,
+    /// Pinned `.nvic` pack size in bytes.
+    pub size: u64,
+    /// Whether this set is currently installed.
+    pub installed: bool,
+}
+
+/// Outcome returned after completing a [`SetAction`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetNews {
+    /// Current status of all optional downloadable icon sets.
+    Listed(Vec<SetRow>),
+    /// The named optional icon set was installed and loaded.
+    Installed(String),
+    /// The named optional icon set was removed.
+    Removed(String),
+}
+
+/// Lists, downloads, or removes optional icon sets off the UI thread.
+pub type BarSetsFn = Arc<dyn Fn(SetAction) -> Result<SetNews, String> + Send + Sync>;
+
 /// Bounded latest-wins sender for pushing button bar reloads to the UI.
 #[derive(Clone, Debug)]
 pub struct ButtonBarSender {
@@ -272,6 +312,8 @@ pub struct ButtonBarHooks {
     pub undo: BarUndoFn,
     /// Imports a user icon file into the button bar icon folder.
     pub import: BarImportFn,
+    /// Lists, downloads, or removes optional icon sets.
+    pub sets: BarSetsFn,
     /// Location of `buttonbar.toml`, if backed by a file.
     pub file: Option<Location>,
     /// Bounded latest-wins stream of bar reload updates.
@@ -294,6 +336,7 @@ impl ButtonBarHooks {
             edit,
             undo,
             import: Arc::new(|_, _| Err("not ready".to_owned())),
+            sets: Arc::new(|_| Err("not ready".to_owned())),
             file,
             news: Some(ButtonBarReceiver {
                 latest: Arc::clone(&latest),
@@ -311,6 +354,13 @@ impl ButtonBarHooks {
     #[must_use]
     pub fn with_import(mut self, import: BarImportFn) -> Self {
         self.import = import;
+        self
+    }
+
+    /// Replaces the default refusing icon-set handler with `sets`.
+    #[must_use]
+    pub fn with_sets(mut self, sets: BarSetsFn) -> Self {
+        self.sets = sets;
         self
     }
 }

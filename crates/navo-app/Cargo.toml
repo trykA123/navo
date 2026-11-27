@@ -72,6 +72,7 @@ crash-handler = "=0.8.1"
 gpui-pre-windows = "=0.3.12"
 minidump = "=0.27.0"
 minidumper = "=0.11.0"
+sidewise-winhttp = { path = "../sidewise-winhttp" }
 tray-icon = { version = "=0.26.1", default-features = false }
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
@@ -116,6 +117,7 @@ navo-update = { path = "../navo-update", features = ["test-support"] }
 test-assembler = "=0.1.6"
 zip = { version = "9.5.0", default-features = false, features = ["deflate"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
+sha2 = "=0.11.1"
 
 [build-dependencies]
 embed-resource = "3.0.12"
