@@ -78,6 +78,7 @@ pub(crate) fn tooltip_text(item: &ButtonItem, user_commands: &[UserCommandInfo])
 }
 
 struct BarData {
+    view: Entity<NavoWindow>,
     items: Vec<ButtonItem>,
     slots: Vec<Slot>,
     user_commands: Vec<UserCommandInfo>,
@@ -88,6 +89,7 @@ struct BarData {
 }
 
 struct MoreMenu<'a> {
+    view: Entity<NavoWindow>,
     theme: &'a Theme,
     metrics: BarMetrics,
     folded: &'a [(usize, &'a ButtonItem)],
@@ -130,6 +132,7 @@ impl NavoWindow {
         let show_names = self.values.flag(Field::WindowButtonBarNames);
         let slots = measure_slots(&self.button_bar.items, show_names, metrics, window, t);
         let data = BarData {
+            view: cx.entity(),
             items: self.button_bar.items.clone(),
             slots,
             user_commands: self.user_command_list().to_vec(),
@@ -233,6 +236,7 @@ fn build_row(data: BarData, width: crate::Pixels, cx: &mut App) -> AnyElement {
     let more = (!folded.is_empty()).then(|| {
         more_button(
             MoreMenu {
+                view: data.view.clone(),
                 theme: t,
                 metrics: m,
                 folded: &folded,
@@ -279,6 +283,7 @@ fn button_element(
     let is_focused = data.focused == Some(index);
     let tip: SharedString = tooltip_text(item, &data.user_commands).into();
     let (hover, pressed) = (t.colors.hover, t.colors.selection);
+    let (view, clicked) = (data.view.clone(), item.clone());
     div()
         .id(("button-bar-item", index))
         .role(Role::Button)
@@ -303,6 +308,9 @@ fn button_element(
                 .active(move |s| s.bg(pressed))
         })
         .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+        .on_click(move |_, window, cx| {
+            view.update(cx, |view, cx| view.run_button(&clicked, None, window, cx));
+        })
         .child(icon_element(&item.icon, m.icon, cx))
         .when(data.show_names, |d| {
             d.child(div().text_size(t.typography.small).child(item.name.clone()))
@@ -349,7 +357,17 @@ fn more_popup(menu: MoreMenu<'_>, cx: &App) -> AnyElement {
     let m = menu.metrics;
     let selected = menu.popup.read(cx).selected;
     let count = menu.folded.len();
-    let on_choose: ChooseHandler = Rc::new(|_, _, _| {});
+    let folded_items: Vec<ButtonItem> = menu
+        .folded
+        .iter()
+        .map(|(_, item)| (*item).clone())
+        .collect();
+    let view = menu.view;
+    let on_choose: ChooseHandler = Rc::new(move |position, window, cx| {
+        if let Some(item) = folded_items.get(position) {
+            view.update(cx, |view, cx| view.run_button(item, None, window, cx));
+        }
+    });
     let rows: Vec<AnyElement> = menu
         .folded
         .iter()

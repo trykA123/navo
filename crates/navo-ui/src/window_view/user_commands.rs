@@ -187,15 +187,55 @@ impl NavoWindow {
     }
 
     pub(super) fn run_user_command(&mut self, name: &str, cx: &mut Context<Self>) {
-        let Some(invocation) = self.user_invocation() else {
-            let text = t!("user-command-on-parent", name = name);
-            self.user_commands.run_notice = Some(notice(text, true));
-            cx.notify();
+        self.run_user_command_with(name, None, cx);
+    }
+
+    /// Runs `name`, replacing `file` and `marked` with `dropped` when non-empty.
+    pub(in crate::window_view) fn run_user_command_with(
+        &mut self,
+        name: &str,
+        dropped: Option<Vec<Location>>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(invocation) = self.user_invocation_with_drop(dropped) else {
+            self.refuse_on_parent(name, cx);
             return;
         };
         if let Some(run) = &self.user_commands.run {
             run(name, invocation);
         }
+    }
+
+    /// Shows the refusal notice used when a command cannot run on the `..` parent row.
+    pub(in crate::window_view) fn refuse_on_parent(&mut self, name: &str, cx: &mut Context<Self>) {
+        let text = t!("user-command-on-parent", name = name);
+        self.user_commands.run_notice = Some(notice(text, true));
+        cx.notify();
+    }
+
+    /// The active pane invocation, overriding `file` and `marked` when `dropped` is non-empty.
+    pub(in crate::window_view) fn user_invocation_with_drop(
+        &self,
+        dropped: Option<Vec<Location>>,
+    ) -> Option<UserInvocation> {
+        let Some(paths) = dropped.filter(|p| !p.is_empty()) else {
+            return self.user_invocation();
+        };
+        let state = self.browser.state();
+        let pane = state.focused_pane();
+        let tab = state.pane(pane)?.active();
+        let other = self
+            .browser
+            .target_pane()
+            .and_then(|other| state.pane(other))
+            .map(|other| other.active());
+        Some(UserInvocation {
+            file: paths.first().cloned(),
+            marked: paths,
+            folder: Some(tab.location().clone()),
+            other_folder: other.map(|tab| tab.location().clone()),
+            other_file: other.and_then(cursor_location),
+        })
     }
 
     /// The values of the active pane, or `None` when the cursor is on `..`.

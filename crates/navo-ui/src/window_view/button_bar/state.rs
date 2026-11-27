@@ -14,7 +14,7 @@ pub(crate) struct ButtonBarState {
     pub(crate) hooks: Option<ButtonBarHooks>,
     pub(crate) focused: Option<usize>,
     pub(crate) error: Option<String>,
-    notice: Option<StatusNotice>,
+    pub(super) notice: Option<StatusNotice>,
     _news_task: Option<Task<()>>,
 }
 

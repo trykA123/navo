@@ -3,6 +3,7 @@
 pub(crate) mod fit;
 pub(crate) mod icon;
 pub(crate) mod raster_cache;
+pub(crate) mod run;
 pub(crate) mod state;
 pub(crate) mod view;
 
