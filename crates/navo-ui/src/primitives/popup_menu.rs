@@ -52,6 +52,11 @@ impl PopupMenu {
     pub(crate) fn anchor(&self) -> &FocusHandle {
         &self.anchor
     }
+
+    pub(crate) fn take_dismissed(&mut self, event: &ClickEvent) -> bool {
+        let dismissed = self.dismissed_at.take();
+        pressed_at(event).is_some_and(|pressed| dismissed == Some(pressed))
+    }
 }
 
 pub(crate) fn popup_state(
@@ -92,11 +97,8 @@ pub(crate) fn toggle(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let pressed = pressed_at(event);
-    let (dismissed_now, is_open) = state.update(cx, |menu, _| {
-        let dismissed = menu.dismissed_at.take();
-        (pressed.is_some() && dismissed == pressed, menu.is_open)
-    });
+    let (dismissed_now, is_open) =
+        state.update(cx, |menu, _| (menu.take_dismissed(event), menu.is_open));
     match (dismissed_now, is_open) {
         (true, _) => {}
         (false, true) => close(state, window, cx),

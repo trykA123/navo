@@ -45,7 +45,12 @@ impl NavoWindow {
                     (hooks.run_program)(*id, invocation);
                 }
             }
-            ButtonAction::Menu(_) | ButtonAction::Separator => {}
+            ButtonAction::Menu(children) => {
+                if dropped.is_none() {
+                    self.open_button_menu(item, children, window, cx);
+                }
+            }
+            ButtonAction::Separator => {}
         }
     }
 }

@@ -4,6 +4,7 @@ pub(crate) mod drop;
 pub(crate) mod fit;
 pub(crate) mod focus;
 pub(crate) mod icon;
+pub(crate) mod menu;
 pub(crate) mod raster_cache;
 pub(crate) mod run;
 pub(crate) mod state;
@@ -36,6 +37,12 @@ pub const MSG_TAKES_FILES: &str = "button-bar-takes-files";
 pub const MSG_MORE: &str = "button-bar-more";
 /// Fluent message id for the button bar landmark label.
 pub const MSG_BAR_LABEL: &str = "button-bar-label";
+/// Fluent message id for toggling button labels in the bar context menu.
+pub const MSG_SHOW_NAMES: &str = "button-bar-show-names";
+/// Fluent message id for hiding the button bar from its context menu.
+pub const MSG_HIDE: &str = "button-bar-hide";
+/// Fluent message id for removing the right-clicked button from the bar.
+pub const MSG_REMOVE_BUTTON: &str = "button-bar-remove-button";
 
 /// Identifies a compiled program button within a loaded bar generation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -64,9 +64,16 @@ impl NavoWindow {
             .on_action(cx.listener(|view, _: &keys::ButtonBarRun, window, cx| {
                 view.run_focused_button(window, cx);
             }))
-            .on_action(cx.listener(|view, _: &keys::ButtonBarOpenMenu, _, _| {
-                view.open_focused_button_menu();
-            }))
+            .on_action(
+                cx.listener(|view, _: &keys::ButtonBarOpenMenu, window, cx| {
+                    view.open_focused_button_menu(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|view, _: &keys::ButtonBarContextMenu, window, cx| {
+                    view.open_button_bar_context_menu_at_focus(window, cx);
+                }),
+            )
             .on_action(cx.listener(|view, _: &keys::ButtonBarLeave, window, cx| {
                 view.leave_button_bar(window, cx);
             }))
@@ -114,15 +121,16 @@ impl NavoWindow {
         self.run_button(&item, None, window, cx);
     }
 
-    fn open_focused_button_menu(&self) {
-        let Some(item) = self
-            .button_bar
-            .focused
-            .and_then(|index| self.button_bar.items.get(index))
-        else {
+    fn open_focused_button_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(index) = self.button_bar.focused else {
             return;
         };
-        let _ = matches!(item.action, ButtonAction::Menu(_));
+        let Some(item) = self.button_bar.items.get(index).cloned() else {
+            return;
+        };
+        if let ButtonAction::Menu(children) = &item.action {
+            self.open_button_menu_at(Some(index), &item.name, children, window, cx);
+        }
     }
 
     fn leave_button_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {

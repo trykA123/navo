@@ -1,9 +1,15 @@
 //! Window-owned button bar state and latest-wins reload listener.
 
-use gpui_kit::{FocusHandle, Task};
+use std::cell::RefCell;
+use std::rc::Rc;
 
+use gpui_kit::{FocusHandle, Subscription, Task};
+
+use super::menu::{BarBounds, OpenButtonMenu};
 use super::{ButtonBarHooks, ButtonBarNews, ButtonBarReceiver, ButtonItem};
+use crate::context_menu::ContextMenu;
 use crate::prelude::*;
+use crate::primitives::popup_menu::{self, PopupMenu};
 use crate::status_bar::StatusNotice;
 use crate::window_view::NavoWindow;
 
@@ -17,12 +23,19 @@ pub(crate) struct ButtonBarState {
     pub(crate) drag_hover_item: Option<usize>,
     pub(crate) error: Option<String>,
     pub(super) notice: Option<StatusNotice>,
+    pub(super) context_menu: Option<(Entity<ContextMenu>, Subscription)>,
+    pub(super) menu_popup: Entity<PopupMenu>,
+    pub(super) open_menu: Option<OpenButtonMenu>,
+    pub(super) bounds: Rc<RefCell<BarBounds>>,
+    _menu_watch: Subscription,
     _news_task: Option<Task<()>>,
 }
 
 impl ButtonBarState {
     /// Creates empty button bar state with a window-owned focus handle.
     pub(crate) fn new(cx: &mut Context<NavoWindow>) -> Self {
+        let menu_popup = cx.new(|cx| PopupMenu::new(cx));
+        let menu_watch = cx.observe(&menu_popup, |_, _, cx| cx.notify());
         Self {
             items: Vec::new(),
             hooks: None,
@@ -32,6 +45,11 @@ impl ButtonBarState {
             drag_hover_item: None,
             error: None,
             notice: None,
+            context_menu: None,
+            menu_popup,
+            open_menu: None,
+            bounds: Rc::default(),
+            _menu_watch: menu_watch,
             _news_task: None,
         }
     }
@@ -74,6 +92,9 @@ impl NavoWindow {
         match news {
             ButtonBarNews::Applied { items, warnings } => {
                 self.button_bar.items = items;
+                if self.button_bar.open_menu.take().is_some() {
+                    let _ = popup_menu::dismiss(&self.button_bar.menu_popup, cx);
+                }
                 if self
                     .button_bar
                     .focused

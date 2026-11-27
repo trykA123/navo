@@ -8,3 +8,6 @@ button-bar-run-with = Run { $name } with { $count } { $count ->
     [one] file
    *[other] files
 }
+button-bar-show-names = Show names
+button-bar-hide = Hide button bar
+button-bar-remove-button = Remove this button

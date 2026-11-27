@@ -1,19 +1,21 @@
 //! Button bar strip view, overflow `»` popup menu, and button tooltips.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui_kit::base::{ObservedElement, TestSupportExt};
+use gpui_kit::base::{ElementExt, ObservedElement, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     Anchor, AnyElement, App, BoxShadow, Context, Entity, FontWeight, InteractiveElement,
-    IntoElement, ParentElement, Role, SharedString, Stateful, StatefulInteractiveElement, Styled,
-    TextRun, Window, anchored, deferred, div, font, point, px,
+    IntoElement, MouseButton, MouseDownEvent, ParentElement, Role, SharedString, Stateful,
+    StatefulInteractiveElement, Styled, TextRun, Window, anchored, deferred, div, font, point, px,
 };
 use navo_l10n::tr;
 
 use super::drop::{DragVisual, NON_TAKER_OPACITY, drop_chip, item_takes_files, wire_button_drop};
 use super::fit::{self, BarMetrics, Slot};
 use super::icon::icon_element;
+use super::menu::BarBounds;
 use super::{
     ButtonAction, ButtonItem, MSG_BAR_LABEL, MSG_EDIT_BUTTONS, MSG_MORE, MSG_TAKES_FILES,
     MSG_UNKNOWN_COMMAND,
@@ -88,6 +90,7 @@ struct BarData {
     show_names: bool,
     metrics: BarMetrics,
     popup: Entity<PopupMenu>,
+    bounds: Rc<RefCell<BarBounds>>,
 }
 
 struct MoreMenu<'a> {
@@ -99,13 +102,14 @@ struct MoreMenu<'a> {
     popup: Entity<PopupMenu>,
 }
 
-struct MoreRowProps<'a> {
-    theme: &'a Theme,
-    metrics: BarMetrics,
-    position: usize,
-    is_selected: bool,
-    popup: Entity<PopupMenu>,
-    on_choose: ChooseHandler,
+pub(super) struct PopupRowProps<'a> {
+    pub(super) id: (&'static str, usize),
+    pub(super) theme: &'a Theme,
+    pub(super) icon_size: crate::Pixels,
+    pub(super) position: usize,
+    pub(super) is_selected: bool,
+    pub(super) popup: Entity<PopupMenu>,
+    pub(super) on_choose: ChooseHandler,
 }
 
 impl NavoWindow {
@@ -144,6 +148,7 @@ impl NavoWindow {
             show_names,
             metrics,
             popup,
+            bounds: Rc::clone(&self.button_bar.bounds),
         };
         let row = Fit::new(metrics.height, move |width, _, cx| {
             build_row(data, width, cx)
@@ -158,6 +163,7 @@ impl NavoWindow {
     ) -> ObservedElement<Stateful<gpui_kit::Div>> {
         let bar = self.wire_bar_drag(self.button_bar_keys(div().id("button-bar"), cx), cx);
         let t = tokens::current(cx);
+        let bar_bounds = Rc::clone(&self.button_bar.bounds);
         bar.role(Role::Group)
             .aria_label(tr(MSG_BAR_LABEL))
             .test_support()
@@ -168,6 +174,16 @@ impl NavoWindow {
             .h(metrics.height)
             .px(t.spacing.xs)
             .bg(t.colors.rail)
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|view, event: &MouseDownEvent, window, cx| {
+                    window.prevent_default();
+                    view.open_button_bar_context_menu(None, event.position, window, cx);
+                }),
+            )
+            .on_prepaint(move |bounds, _, _| {
+                bar_bounds.borrow_mut().bar = Some(bounds);
+            })
     }
 }
 
@@ -255,6 +271,7 @@ fn build_row(data: BarData, width: crate::Pixels, cx: &mut App) -> AnyElement {
         )
     });
 
+    let row_bounds = Rc::clone(&data.bounds);
     div()
         .flex()
         .items_center()
@@ -263,6 +280,11 @@ fn build_row(data: BarData, width: crate::Pixels, cx: &mut App) -> AnyElement {
         .gap(m.gap)
         .children(visible)
         .children(more)
+        .on_children_prepainted(move |bounds, _, _| {
+            let mut state = row_bounds.borrow_mut();
+            state.buttons.clear();
+            state.buttons.extend(bounds.iter().take(shown).copied());
+        })
         .into_any_element()
 }
 
@@ -295,7 +317,7 @@ fn button_element(
     let show_chip = drag_taker && data.drag.hovered == Some(index) && data.drag.count > 0;
     let tip: SharedString = tooltip_text(item, &data.user_commands).into();
     let (hover, pressed) = (t.colors.hover, t.colors.selection);
-    let (view, clicked) = (data.view.clone(), item.clone());
+    let (view, menu_view, clicked) = (data.view.clone(), data.view.clone(), item.clone());
     let button = div()
         .id(("button-bar-item", index))
         .role(Role::Button)
@@ -323,8 +345,17 @@ fn button_element(
                 .active(move |s| s.bg(pressed))
         })
         .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
-        .on_click(move |_, window, cx| {
-            view.update(cx, |view, cx| view.run_button(&clicked, None, window, cx));
+        .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+            cx.stop_propagation();
+            window.prevent_default();
+            menu_view.update(cx, |view, cx| {
+                view.open_button_bar_context_menu(Some(index), event.position, window, cx);
+            });
+        })
+        .on_click(move |event, window, cx| {
+            view.update(cx, |view, cx| {
+                view.click_bar_button(index, &clicked, event, window, cx);
+            });
         })
         .child(icon_element(&item.icon, m.icon, cx))
         .when(data.show_names, |d| {
@@ -402,15 +433,16 @@ fn more_popup(menu: MoreMenu<'_>, cx: &App) -> AnyElement {
         .enumerate()
         .map(|(position, &(index, item))| {
             let tip = tooltip_text(item, menu.user_commands);
-            let props = MoreRowProps {
+            let props = PopupRowProps {
+                id: ("button-bar-more-row", index),
                 theme: t,
-                metrics: m,
+                icon_size: m.icon,
                 position,
                 is_selected: position == selected,
                 popup: menu.popup.clone(),
                 on_choose: on_choose.clone(),
             };
-            more_row(index, item, tip, props, cx)
+            popup_row(item, tip, props, cx)
         })
         .collect();
     let keys = Keys {
@@ -446,11 +478,10 @@ fn more_popup(menu: MoreMenu<'_>, cx: &App) -> AnyElement {
     .into_any_element()
 }
 
-fn more_row(
-    index: usize,
+pub(super) fn popup_row(
     item: &ButtonItem,
     tip: String,
-    props: MoreRowProps<'_>,
+    props: PopupRowProps<'_>,
     cx: &App,
 ) -> AnyElement {
     let theme = props.theme.selected_content(props.is_selected);
@@ -464,7 +495,7 @@ fn more_row(
     let (popup, on_choose, position) = (props.popup, props.on_choose, props.position);
     let tip: SharedString = tip.into();
     div()
-        .id(("button-bar-more-row", index))
+        .id(props.id)
         .role(Role::MenuItem)
         .aria_label(item.name.clone())
         .aria_selected(props.is_selected)
@@ -485,7 +516,7 @@ fn more_row(
         .on_click(move |_, window: &mut Window, cx| {
             choose(&popup, (position, &on_choose), window, cx);
         })
-        .child(icon_element(&item.icon, props.metrics.icon, cx))
+        .child(icon_element(&item.icon, props.icon_size, cx))
         .child(div().flex_1().min_w_0().truncate().child(item.name.clone()))
         .into_any_element()
 }
