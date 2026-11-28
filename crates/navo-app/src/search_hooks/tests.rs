@@ -258,34 +258,51 @@ fn without_a_database_the_owner_hook_sets_gw_owner() {
     use std::num::NonZeroIsize;
 
     use raw_window_handle::{RawWindowHandle, Win32WindowHandle};
+    use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         DestroyWindow, GW_OWNER, GWL_STYLE, GetWindow, GetWindowLongPtrW, WS_VISIBLE,
     };
 
-    let navo = hidden_test_window("navo");
-    let find = hidden_test_window("find");
+    struct TestHwnd(HWND);
+    impl Drop for TestHwnd {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                // SAFETY: `self.0` is a live test window owned by this guard on the current thread.
+                unsafe {
+                    DestroyWindow(self.0);
+                }
+            }
+        }
+    }
+
+    let navo = TestHwnd(hidden_test_window("navo"));
+    let find = TestHwnd(hidden_test_window("find"));
     assert!(
-        !navo.is_null() && !find.is_null(),
+        !navo.0.is_null() && !find.0.is_null(),
         "create hidden test windows"
     );
     // SAFETY: both handles are live windows created on this thread.
     unsafe {
-        assert_eq!(GetWindowLongPtrW(navo, GWL_STYLE) & WS_VISIBLE as isize, 0);
-        assert_eq!(GetWindowLongPtrW(find, GWL_STYLE) & WS_VISIBLE as isize, 0);
-        assert!(GetWindow(find, GW_OWNER).is_null(), "find starts unowned");
+        assert_eq!(
+            GetWindowLongPtrW(navo.0, GWL_STYLE) & WS_VISIBLE as isize,
+            0
+        );
+        assert_eq!(
+            GetWindowLongPtrW(find.0, GWL_STYLE) & WS_VISIBLE as isize,
+            0
+        );
+        assert!(GetWindow(find.0, GW_OWNER).is_null(), "find starts unowned");
     }
 
-    let raw = |hwnd: windows_sys::Win32::Foundation::HWND| {
+    let raw = |hwnd: HWND| {
         RawWindowHandle::Win32(Win32WindowHandle::new(
             NonZeroIsize::new(hwnd as isize).expect("non-null window handle"),
         ))
     };
     let hooks = hooks(None, remembering());
-    assert!((hooks.find.ensure_owner)(raw(find), raw(navo)));
+    assert!((hooks.find.ensure_owner)(raw(find.0), raw(navo.0)));
     // SAFETY: both handles are live windows created on this thread.
     unsafe {
-        assert_eq!(GetWindow(find, GW_OWNER), navo, "hook sets the owner");
-        DestroyWindow(find);
-        DestroyWindow(navo);
+        assert_eq!(GetWindow(find.0, GW_OWNER), navo.0, "hook sets the owner");
     }
 }
