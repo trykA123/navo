@@ -10,6 +10,7 @@ use regex::{Regex, RegexBuilder};
 use super::{FindQuery, NameFilter};
 use decode::{bom_len, decode_line, snippet, wide_from_head};
 
+mod bytes;
 mod decode;
 
 const CHUNK: usize = 1024 * 1024;
@@ -26,6 +27,7 @@ enum Kind {
     Literal(Vec<u8>),
     Fold(AhoCorasick),
     Regex(Regex),
+    Bytes(Vec<u8>),
 }
 
 impl Compiled {
@@ -43,9 +45,15 @@ impl Compiled {
         self.name.as_ref()
     }
 
+    /// Whether matching this query requires reading file contents.
+    #[must_use]
+    pub fn needs_scan(&self) -> bool {
+        !matches!(self.kind, Kind::Empty)
+    }
+
     fn visit(&self, text: &str, mut visit: impl FnMut(usize) -> bool) {
         match &self.kind {
-            Kind::Empty => {}
+            Kind::Empty | Kind::Bytes(_) => {}
             Kind::Literal(needle) => {
                 memmem::find_iter(text.as_bytes(), needle).all(visit);
             }
@@ -73,6 +81,13 @@ fn validate_query(query: &FindQuery) -> Result<(), String> {
 }
 
 fn compile_kind(query: &FindQuery) -> Result<Kind, String> {
+    if let Some(hex) = &query.hex {
+        return Ok(if hex.is_empty() {
+            Kind::Empty
+        } else {
+            Kind::Bytes(hex.clone())
+        });
+    }
     if query.text.is_empty() {
         return Ok(Kind::Empty);
     }
@@ -137,6 +152,9 @@ pub fn scan(
     compiled: &Compiled,
     cancel: &AtomicBool,
 ) -> io::Result<FileHits> {
+    if let Kind::Bytes(needle) = &compiled.kind {
+        return bytes::scan_bytes(reader, needle, cancel);
+    }
     let mut head = vec![0; PROBE];
     let mut filled = 0;
     while filled < head.len() && !cancel.load(Ordering::Relaxed) {
@@ -166,7 +184,7 @@ pub fn scan(
     Ok(scanner.found)
 }
 
-fn read_chunk(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<usize> {
+pub(super) fn read_chunk(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<usize> {
     loop {
         match reader.read(buffer) {
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,

@@ -218,16 +218,16 @@ impl<'a> Walk<'a> {
             self.progress.skipped += 1;
             return Ok(());
         }
-        if !self.filters.query.text.is_empty() {
+        if compiled.needs_scan() {
             let Some(hits) = self.scan_file(location, compiled)? else {
                 return Ok(());
             };
             found.hits = hits;
         }
-        self.record(found)
+        self.record(found, compiled.needs_scan())
     }
 
-    fn record(&mut self, found: FoundFile) -> Result<(), FindError> {
+    fn record(&mut self, found: FoundFile, needs_scan: bool) -> Result<(), FindError> {
         if found.hits.skipped == Some(Skip::Cancelled) {
             return Err(FindError::Cancelled);
         }
@@ -238,7 +238,7 @@ impl<'a> Walk<'a> {
         let keep = if self.filters.query.invert {
             found.hits.total == 0
         } else {
-            found.hits.total > 0 || self.filters.query.text.is_empty()
+            found.hits.total > 0 || !needs_scan
         };
         if keep {
             self.progress.hits += u64::from(found.hits.total);

@@ -1,3 +1,4 @@
+mod bytes;
 mod docs;
 mod matcher;
 mod names;

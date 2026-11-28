@@ -61,7 +61,7 @@ impl Walk<'_> {
         if !self.filters.file(None, &found.entry) {
             return Ok(());
         }
-        if !self.filters.query.text.is_empty() {
+        if compiled.needs_scan() {
             let at = EntryAt {
                 index: source.1,
                 limit: ENTRY_LIMIT,
@@ -79,7 +79,7 @@ impl Walk<'_> {
                 }
             }
         }
-        self.record(found)
+        self.record(found, compiled.needs_scan())
     }
 }
 
