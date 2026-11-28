@@ -30,15 +30,22 @@ pub(super) fn fetch(
         };
         pipe.query(options.clone(), query, &Cancel::new())
     };
-    let status = match ask(vec![QueryTerm::StatusV2], 1) {
-        PipeAnswer::Replied(reply) => reply.status,
-        PipeAnswer::Absent => return Some(IndexProgress::default()),
-        PipeAnswer::Silent => match ask(Vec::new(), 1) {
-            PipeAnswer::Replied(reply) => reply.status,
+    let mut status = None;
+    for terms in [
+        vec![QueryTerm::StatusV2],
+        vec![QueryTerm::StatusV1],
+        Vec::new(),
+    ] {
+        match ask(terms, 1) {
+            PipeAnswer::Replied(reply) => {
+                status = Some(reply.status);
+                break;
+            }
             PipeAnswer::Absent => return Some(IndexProgress::default()),
-            PipeAnswer::Silent => return None,
-        },
-    };
+            PipeAnswer::Silent => {}
+        }
+    }
+    let status = status?;
     let memory = match ask(vec![QueryTerm::MemoryV1], 2) {
         PipeAnswer::Replied(reply) => reply.memory,
         PipeAnswer::Silent | PipeAnswer::Absent => None,
@@ -262,23 +269,63 @@ mod tests {
     }
 
     #[test]
-    fn an_old_service_that_drops_the_status_v2_request_still_shows_its_status() {
-        let saw_v2 = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let seen = saw_v2.clone();
+    fn an_old_service_that_drops_the_status_v2_request_falls_back_to_status_v1() {
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorded = seen.clone();
         let (queries, _) = pipe(Box::new(move |query| {
-            if query.request.terms.contains(&QueryTerm::StatusV2) {
-                seen.store(true, Ordering::SeqCst);
+            recorded.lock().unwrap().push(query.request.terms.clone());
+            if query.request.terms == vec![QueryTerm::StatusV2] {
                 Err(PipeError::Io(std::io::ErrorKind::BrokenPipe.into()))
-            } else if query.request.terms.contains(&QueryTerm::MemoryV1) {
+            } else if query.request.terms == vec![QueryTerm::StatusV1] {
+                let mut reply = building();
+                reply.status.volumes[0].total_files = Some(5000);
+                Ok(reply)
+            } else if query.request.terms == vec![QueryTerm::MemoryV1] {
+                Ok(memory(4096))
+            } else {
+                panic!("unexpected fallback query: {:?}", query.request.terms);
+            }
+        }));
+        let view = fetch(&queries, &no_folder_totals(), &options()).unwrap();
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![
+                vec![QueryTerm::StatusV2],
+                vec![QueryTerm::StatusV1],
+                vec![QueryTerm::MemoryV1],
+            ]
+        );
+        assert_eq!(
+            (view.state(), view.entries(), view.memory),
+            (IndexState::Building, 1234, Some(4096))
+        );
+    }
+
+    #[test]
+    fn an_old_service_that_drops_both_status_v2_and_v1_falls_back_to_plain_query() {
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorded = seen.clone();
+        let (queries, _) = pipe(Box::new(move |query| {
+            recorded.lock().unwrap().push(query.request.terms.clone());
+            if query.request.terms == vec![QueryTerm::StatusV2]
+                || query.request.terms == vec![QueryTerm::StatusV1]
+            {
+                Err(PipeError::Io(std::io::ErrorKind::BrokenPipe.into()))
+            } else if query.request.terms == vec![QueryTerm::MemoryV1] {
                 Ok(memory(4096))
             } else {
                 Ok(building())
             }
         }));
         let view = fetch(&queries, &no_folder_totals(), &options()).unwrap();
-        assert!(
-            saw_v2.load(Ordering::SeqCst),
-            "fetch must ask StatusV2 before falling back"
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![
+                vec![QueryTerm::StatusV2],
+                vec![QueryTerm::StatusV1],
+                Vec::new(),
+                vec![QueryTerm::MemoryV1],
+            ]
         );
         assert_eq!(
             (view.state(), view.memory),

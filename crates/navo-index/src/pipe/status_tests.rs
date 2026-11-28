@@ -236,3 +236,22 @@ fn a_wrong_detailed_answer_is_refused() {
         Err(PipeError::InvalidResponse)
     ));
 }
+
+#[test]
+fn a_status_v1_reply_to_status_v2_is_accepted_without_detail() {
+    let mut asked = 0;
+    let (status, detail) = read_status_v2(|request, replies| {
+        asked += 1;
+        assert!(request.wants_status_v2() && replies == 1);
+        Ok(vec![Response::StatusV1 {
+            generation: 1,
+            status: Status {
+                volumes: vec![volume(3, Some(9))],
+            },
+        }])
+    })
+    .unwrap();
+    assert_eq!(asked, 1);
+    assert_eq!(status.volumes[0].total_files, Some(9));
+    assert_eq!(detail, None);
+}

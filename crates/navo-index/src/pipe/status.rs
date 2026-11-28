@@ -96,7 +96,7 @@ pub(super) fn read_status_v2(
         terms: vec![QueryTerm::StatusV2],
     };
     match ask(v2, 1) {
-        Ok(responses) => decode_v2(responses).map(|(status, detail)| (status, Some(detail))),
+        Ok(responses) => decode_v2(responses),
         Err(Failure::Connect(error))
         | Err(Failure::Exchange(error @ (PipeError::TimedOut | PipeError::Cancelled))) => {
             Err(error)
@@ -131,7 +131,9 @@ fn read_status_v1(
     }
 }
 
-fn decode_v2(responses: Vec<Response>) -> Result<(Status, Vec<super::VolumeDetail>), PipeError> {
+fn decode_v2(
+    responses: Vec<Response>,
+) -> Result<(Status, Option<Vec<super::VolumeDetail>>), PipeError> {
     match <[Response; 1]>::try_from(responses) {
         Ok(
             [
@@ -141,7 +143,15 @@ fn decode_v2(responses: Vec<Response>) -> Result<(Status, Vec<super::VolumeDetai
                     detail,
                 },
             ],
-        ) => Ok((status, detail)),
+        ) => Ok((status, Some(detail))),
+        Ok(
+            [
+                Response::StatusV1 {
+                    generation: 1,
+                    status,
+                },
+            ],
+        ) => Ok((status, None)),
         _ => Err(PipeError::InvalidResponse),
     }
 }

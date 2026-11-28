@@ -375,9 +375,7 @@ impl Rebuilds {
             let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
             state.builds.full_builds += 1;
             state.builds.last_reason = Some(cause.reason);
-            if !self.journal_lost() {
-                state.rebuild_due_at = None;
-            }
+            state.rebuild_due_at = None;
         }
         self.log
             .line(format_args!("full build start {}: {cause}", self.letter));

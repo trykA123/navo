@@ -105,7 +105,7 @@ fn answer_with(
         let deadline = (Instant::now() + waits.read).min(overall);
         let read = read_before(&volume.shared, deadline).map(|state| {
             let status = search(&state, request, cancel, &mut reply.hits);
-            let detail = wants_v2.then(|| volume_detail(&state, &status, now));
+            let detail = volume_detail(&state, &status, now);
             (status, detail)
         });
         let mut last = volume.last.lock().unwrap_or_else(PoisonError::into_inner);
@@ -116,17 +116,15 @@ fn answer_with(
         let (status, detail) = match read {
             Some((status, detail)) => {
                 last.clone_from(&status);
-                if let Some(detail) = &detail {
-                    last_detail.clone_from(detail);
-                }
-                (status, detail)
+                last_detail.clone_from(&detail);
+                (status, wants_v2.then_some(detail))
             }
             None => {
                 let status = VolumeStatus {
                     progress: last.progress.or(Some(UPDATING)),
                     ..last.clone()
                 };
-                let detail = wants_v2.then(|| busy_detail(&last_detail));
+                let detail = wants_v2.then(|| busy_detail(&status, &last_detail));
                 (status, detail)
             }
         };
@@ -194,10 +192,16 @@ fn volume_detail(state: &State, status: &VolumeStatus, now: Instant) -> VolumeDe
     }
 }
 
-/// Marks a cached detail as `Updating` when the volume lock is held by a write, preserving higher states.
-fn busy_detail(last: &VolumeDetail) -> VolumeDetail {
+/// Marks a cached detail as `Updating` when the volume lock is held by a write, preserving higher states
+/// and keeping `total_files` and state aligned with the cached `VolumeStatus`.
+fn busy_detail(status: &VolumeStatus, last: &VolumeDetail) -> VolumeDetail {
     let mut detail = last.clone();
-    if matches!(detail.state, VolumeState::Ready | VolumeState::Behind) {
+    detail.total_files = status.total_files;
+    if status.has_blocking_error() {
+        detail.state = VolumeState::Stale;
+    } else if matches!(status.progress, Some(p) if p < UPDATING) {
+        detail.state = VolumeState::Building;
+    } else if matches!(detail.state, VolumeState::Ready | VolumeState::Behind) {
         detail.state = VolumeState::Updating;
     }
     detail
@@ -465,5 +469,115 @@ mod tests {
         let behind_detail = status_v2_of(&behind);
         assert_eq!(behind_detail.state, pipe::VolumeState::Behind);
         assert_eq!(behind_detail.lag_bytes, 1024 * 1024 + 1);
+    }
+
+    #[test]
+    fn a_deferred_journal_reset_reports_building_once_it_starts() {
+        use super::super::lifecycle::begin_build;
+        use super::super::rebuild::{Cause, REBUILD_WINDOW, Rebuilds};
+        use super::super::service_log::Log;
+        use navo_index::ntfs::NtfsError;
+        use navo_index::pipe::BuildReason;
+
+        let volume = building_volume();
+        let mut rebuilds = Rebuilds::new('C', Log::default());
+        let first_at = Duration::from_secs(60);
+        rebuilds.started(
+            &volume.shared,
+            Cause::new(BuildReason::SnapshotMissing),
+            first_at,
+        );
+        rebuilds.finished(&volume.shared, 10, Duration::from_secs(1));
+
+        let deferred = rebuilds.after_follow(
+            &volume.shared,
+            Err(NtfsError::Reenumerate("journal")),
+            first_at + Duration::from_secs(60),
+        );
+        assert_eq!(deferred.unwrap(), None);
+        assert_eq!(
+            status_v2_of(&volume).state,
+            pipe::VolumeState::RebuildWaiting
+        );
+
+        let due_at = first_at + REBUILD_WINDOW;
+        let due = rebuilds
+            .due(due_at)
+            .expect("journal reset should be due after the rebuild window");
+        assert_eq!(due.reason, BuildReason::JournalReset);
+        rebuilds.started(&volume.shared, due, due_at);
+        {
+            let mut state = volume.shared.write().unwrap();
+            begin_build(&mut state.status, Some(100));
+            state.status.progress = Some(25);
+        }
+
+        let detail = status_v2_of(&volume);
+        assert_eq!(detail.state, pipe::VolumeState::Building);
+        assert_eq!(detail.rebuild_in_s, None);
+    }
+
+    fn status_v2_while_writing(volume: &SharedVolume) -> Reply {
+        let writing = volume.shared.write().unwrap();
+        let reply = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let request = Request {
+                        terms: vec![pipe::QueryTerm::StatusV2],
+                    };
+                    answer(std::slice::from_ref(volume), &request, &CancelToken::new())
+                })
+                .join()
+                .unwrap()
+        });
+        drop(writing);
+        reply
+    }
+
+    #[test]
+    fn busy_status_v2_preserves_total_files_and_state_after_status_v1_reads() {
+        let volume = building_volume();
+        {
+            let mut state = volume.shared.write().unwrap();
+            super::super::lifecycle::begin_build(&mut state.status, Some(500));
+            state.status.progress = Some(25);
+            state.builds.full_builds = 1;
+        }
+        // Only StatusV1 runs before the write lock is taken.
+        let v1 = status_of(&volume);
+        assert_eq!(v1.total_files, Some(500));
+
+        let reply = status_v2_while_writing(&volume);
+        let detail = reply.status_detail.expect("StatusV2 must populate detail");
+        assert_eq!(detail[0].total_files, Some(500));
+        assert_eq!(detail[0].state, pipe::VolumeState::Building);
+        assert_eq!(detail[0].full_builds, 1);
+
+        // Verify wire round-trip does not wipe total_files.
+        let wire = pipe::Response::StatusV2 {
+            generation: 1,
+            status: reply.status,
+            detail,
+        };
+        let pipe::Response::StatusV2 { status, detail, .. } =
+            pipe::frames::decode(&pipe::frames::encode(&wire).unwrap()).unwrap()
+        else {
+            panic!("must decode as StatusV2");
+        };
+        assert_eq!(status.volumes[0].total_files, Some(500));
+        assert_eq!(detail[0].total_files, Some(500));
+
+        // Blocking error read via StatusV1 must also surface as Stale under a busy lock.
+        {
+            let mut state = volume.shared.write().unwrap();
+            state.status.progress = None;
+            state.status.errors = vec!["updating volume index: access denied".into()];
+        }
+        let _ = status_of(&volume);
+        let stale_reply = status_v2_while_writing(&volume);
+        let stale_detail = stale_reply
+            .status_detail
+            .expect("StatusV2 must populate detail");
+        assert_eq!(stale_detail[0].state, pipe::VolumeState::Stale);
     }
 }
