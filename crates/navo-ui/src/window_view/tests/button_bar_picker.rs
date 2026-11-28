@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -7,6 +8,7 @@ use gpui_kit::{
     AnyWindowHandle, AppContext as _, Bounds, Entity, Point, Role, TestAppContext, WindowBounds,
     WindowOptions, px, size,
 };
+use navo_core::Location;
 use navo_icons::registry::NOTICE_TXT;
 use navo_icons::spec::{BrandColour, IconSpec, Shape, Tone};
 
@@ -18,7 +20,8 @@ use crate::tokens::{self, Mode};
 use crate::window_view::button_bar::raster_cache::{MAX_PICKER_CACHE_ENTRIES, PickerRasterCache};
 use crate::window_view::{
     BarEdit, BarIcon, ButtonAction, ButtonBarHooks, ButtonBarNews, ButtonBarSender, ButtonItem,
-    DraftAction, ItemDraft, ItemPath, OpenHooks, ProgramId, SettingsHooks, StartOptions,
+    DraftAction, ItemDraft, ItemPath, OpenHooks, ProgramId, ResidentHooks, SettingsHooks,
+    StartOptions, WindowShown,
 };
 
 type Edits = Arc<Mutex<Vec<BarEdit>>>;
@@ -28,6 +31,7 @@ struct PickerRig {
     view: Entity<NavoWindow>,
     bar_tx: ButtonBarSender,
     edits: Edits,
+    sample_file: Location,
 }
 
 fn bar_item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
@@ -44,8 +48,20 @@ fn bar_item(name: &str, action: ButtonAction, line: usize) -> ButtonItem {
     }
 }
 
-fn open_picker_rig(cx: &mut TestAppContext, mode: Mode, (width, height): (f32, f32)) -> PickerRig {
+fn open_picker_rig(cx: &mut TestAppContext, mode: Mode, size_px: (f32, f32)) -> PickerRig {
+    open_picker_rig_with(cx, mode, size_px, &[], None, None)
+}
+
+fn open_picker_rig_with(
+    cx: &mut TestAppContext,
+    mode: Mode,
+    (width, height): (f32, f32),
+    extra_settings: &[Change],
+    window_shown: Option<WindowShown>,
+    resident: Option<Rc<dyn ResidentHooks>>,
+) -> PickerRig {
     let fs = fake();
+    let sample_file = fs.location("home/a.txt");
     let state = home_beside_dest(&fs);
     let edits: Edits = Arc::default();
     let edits_log = Arc::clone(&edits);
@@ -59,10 +75,13 @@ fn open_picker_rig(cx: &mut TestAppContext, mode: Mode, (width, height): (f32, f
         Arc::new(|| Ok(())),
         None,
     );
-    let values = Values::default().with(&Change {
+    let mut values = Values::default().with(&Change {
         field: Field::WindowButtonBar,
         value: Value::Flag(true),
     });
+    for change in extra_settings {
+        values = values.with(change);
+    }
     let options = StartOptions {
         mode,
         settings: SettingsHooks {
@@ -71,6 +90,8 @@ fn open_picker_rig(cx: &mut TestAppContext, mode: Mode, (width, height): (f32, f
         },
         open: OpenHooks {
             button_bar: Some(bar_hooks),
+            window_shown,
+            resident,
             ..OpenHooks::none()
         },
         ..options_for(fs, state)
@@ -97,6 +118,7 @@ fn open_picker_rig(cx: &mut TestAppContext, mode: Mode, (width, height): (f32, f
         view,
         bar_tx,
         edits,
+        sample_file,
     }
 }
 
@@ -578,6 +600,204 @@ fn button_bar_picker_caches_bounded_previews_and_clears_on_close(cx: &mut TestAp
             read_tally(&GPU_IMAGES, cx).items,
             0,
             "close_button_bar_editor must release all picker GPU images"
+        );
+    });
+}
+
+struct PickerFakeResident;
+
+impl ResidentHooks for PickerFakeResident {
+    fn apply(&self, _values: &Values) {}
+
+    fn key_taken(&self) -> bool {
+        false
+    }
+
+    fn clipboard_key_taken(&self) -> bool {
+        false
+    }
+
+    fn has_tray(&self) -> bool {
+        true
+    }
+}
+
+#[gpui_kit::test]
+fn button_bar_picker_tall_scaled_tabler_has_zero_single_frame_evictions(cx: &mut TestAppContext) {
+    let rig = open_picker_rig_with(
+        cx,
+        Mode::Dark,
+        (1400., 960.),
+        &[Change {
+            field: Field::UiScale,
+            value: Value::Number(80),
+        }],
+        None,
+        None,
+    );
+    let button = bar_item("Refresh", ButtonAction::Navo("files.refresh".to_owned()), 1);
+    load_and_open_editor(cx, &rig, vec![button]);
+
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("button-bar-picker-filter-tabler", cx);
+        cx.default_global::<PickerRasterCache>().reset_evictions();
+        window.render_frame(cx);
+        window.render_frame(cx);
+    })
+    .expect("render tabler at 80% scale");
+    cx.run_until_parked();
+
+    cx.read(|cx| {
+        let cache = cx
+            .try_global::<PickerRasterCache>()
+            .expect("picker cache should exist");
+        assert!(
+            cache.len() > 96,
+            "expected > 96 visible Tabler icons at 80% scale in a tall viewport, got {}",
+            cache.len()
+        );
+        assert!(
+            cache.len() <= MAX_PICKER_CACHE_ENTRIES,
+            "cache len {} exceeded cap {MAX_PICKER_CACHE_ENTRIES}",
+            cache.len()
+        );
+        assert_eq!(
+            cache.evictions(),
+            0,
+            "single-frame Tabler viewport + redraw must incur 0 cache evictions"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn button_bar_picker_clears_cache_on_hide_to_tray_and_window_close(cx: &mut TestAppContext) {
+    let hidden = Arc::new(Mutex::new(Vec::new()));
+    let hidden_log = Arc::clone(&hidden);
+    let rig = open_picker_rig_with(
+        cx,
+        Mode::Dark,
+        (1400., 900.),
+        &[Change {
+            field: Field::KeepInTray,
+            value: Value::Flag(true),
+        }],
+        Some(Arc::new(move |_, shown| {
+            hidden_log.lock().expect("hidden").push(shown);
+            true
+        })),
+        Some(Rc::new(PickerFakeResident)),
+    );
+    let button = bar_item("Refresh", ButtonAction::Navo("files.refresh".to_owned()), 1);
+    load_and_open_editor(cx, &rig, vec![button]);
+
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .expect("render open picker");
+    cx.run_until_parked();
+    assert!(
+        cx.read(|cx| cx
+            .try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len))
+            > 0,
+        "picker cache should be populated before hide-to-tray"
+    );
+
+    let closed = cx
+        .update_window(rig.window, |_, window, cx| {
+            rig.view
+                .update(cx, |view, cx| view.close_or_hide(window, cx))
+        })
+        .expect("close_or_hide");
+    cx.run_until_parked();
+    assert!(!closed, "keep-in-tray should hide rather than close");
+    assert_eq!(*hidden.lock().expect("hidden"), vec![false]);
+    cx.read(|cx| {
+        let remaining = cx
+            .try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len);
+        assert_eq!(remaining, 0, "hide-to-tray must clear PickerRasterCache");
+        assert_eq!(
+            read_tally(&GPU_IMAGES, cx).items,
+            0,
+            "hide-to-tray must release all picker GPU images"
+        );
+    });
+
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .expect("re-render open picker");
+    cx.run_until_parked();
+    assert!(
+        cx.read(|cx| cx
+            .try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len))
+            > 0,
+        "picker cache should repopulate before window close"
+    );
+
+    let closed = cx
+        .update_window(rig.window, |_, window, cx| {
+            rig.view.update(cx, |view, cx| view.close(window, cx))
+        })
+        .expect("close");
+    cx.run_until_parked();
+    assert!(closed, "window close should succeed");
+    cx.read(|cx| {
+        let remaining = cx
+            .try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len);
+        assert_eq!(remaining, 0, "window close must clear PickerRasterCache");
+        assert_eq!(
+            read_tally(&GPU_IMAGES, cx).items,
+            0,
+            "window close must release all picker GPU images"
+        );
+    });
+}
+
+#[gpui_kit::test]
+fn button_bar_picker_clears_cache_when_viewer_opens(cx: &mut TestAppContext) {
+    let rig = open_picker_rig(cx, Mode::Dark, (1400., 900.));
+    let button = bar_item("Refresh", ButtonAction::Navo("files.refresh".to_owned()), 1);
+    load_and_open_editor(cx, &rig, vec![button]);
+
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .expect("render open picker");
+    cx.run_until_parked();
+    assert!(
+        cx.read(|cx| cx
+            .try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len))
+            > 0,
+        "picker cache should be populated before viewer opens"
+    );
+
+    let file = rig.sample_file.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        rig.view
+            .update(cx, |view, cx| view.view_location(file, window, cx));
+    })
+    .expect("open viewer over editor");
+    cx.run_until_parked();
+
+    assert!(rig.view.read_with(cx, |view, _| view.viewer.is_some()));
+    cx.read(|cx| {
+        let remaining = cx
+            .try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len);
+        assert_eq!(
+            remaining, 0,
+            "show_viewer must clear PickerRasterCache when covering the editor"
+        );
+        assert_eq!(
+            read_tally(&GPU_IMAGES, cx).items,
+            0,
+            "show_viewer must release all picker GPU images"
         );
     });
 }

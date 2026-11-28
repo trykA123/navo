@@ -303,6 +303,7 @@ impl NavoWindow {
     }
 
     fn show_viewer(&mut self, mut viewer: Viewer, window: &mut Window, cx: &mut Context<Self>) {
+        super::button_bar::raster_cache::clear_picker_cache(cx);
         self.browser.dialog_opened();
         viewer.from_browse = self.preview.is_browsing(window, cx);
         let focus = viewer.focus.clone();

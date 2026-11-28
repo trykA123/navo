@@ -14,7 +14,7 @@ use crate::primitives::{gpu_images, new_image, release_image};
 /// Maximum number of decoded raster icon images retained in the bar icon cache.
 pub(crate) const MAX_CACHE_ENTRIES: usize = 64;
 /// Maximum number of tinted monochrome preview images retained in the picker cache.
-pub(crate) const MAX_PICKER_CACHE_ENTRIES: usize = 96;
+pub(crate) const MAX_PICKER_CACHE_ENTRIES: usize = 192;
 
 const MAX_DECODE_SIDE: u32 = 4096;
 const MAX_DECODE_ALLOC: u64 = 64 * 1024 * 1024;
@@ -29,12 +29,16 @@ struct CacheEntry<K> {
 
 struct LruCache<K, const CAP: usize> {
     entries: VecDeque<CacheEntry<K>>,
+    #[cfg(test)]
+    evictions: usize,
 }
 
 impl<K, const CAP: usize> Default for LruCache<K, CAP> {
     fn default() -> Self {
         Self {
             entries: VecDeque::new(),
+            #[cfg(test)]
+            evictions: 0,
         }
     }
 }
@@ -54,6 +58,10 @@ impl<K: PartialEq, const CAP: usize> LruCache<K, CAP> {
             evicted = self.entries.remove(pos).map(|entry| entry.image);
         } else if self.entries.len() >= CAP {
             evicted = self.entries.pop_front().map(|entry| entry.image);
+            #[cfg(test)]
+            {
+                self.evictions += 1;
+            }
         }
         self.entries.push_back(CacheEntry { key, image });
         evicted
@@ -113,6 +121,16 @@ impl PickerRasterCache {
     pub(crate) fn contains(&self, svg: &[u8], bucket: u32, tint: Hsla) -> bool {
         let key = (blake3::hash(svg), bucket, hsla_to_bgra(tint));
         self.inner.contains(&key)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn evictions(&self) -> usize {
+        self.inner.evictions
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_evictions(&mut self) {
+        self.inner.evictions = 0;
     }
 }
 

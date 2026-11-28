@@ -75,6 +75,7 @@ impl NavoWindow {
         self.save_recording_on_close(cx);
         let _ = self.browser.shutdown(JOB_STOP_WAIT);
         self.close_find(cx);
+        super::button_bar::raster_cache::clear_picker_cache(cx);
         self.save_now(window, cx);
         true
     }
@@ -100,6 +101,7 @@ impl NavoWindow {
         if !self.values.keeps_in_tray() || self.window_shown.is_none() || !has_tray {
             return self.close(window, cx);
         }
+        super::button_bar::raster_cache::clear_picker_cache(cx);
         self.save_now(window, cx);
         !self.set_window_shown(window, false) && self.close(window, cx)
     }
