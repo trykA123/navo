@@ -30,3 +30,20 @@ fn durable_replace_propagates_faults_without_fallback() {
         "propagate errors, never retry, flush before Ok"
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_durable_replace_succeeds_while_target_has_an_open_reader_handle() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let target = dir.path().join("open-target.bin");
+    let source = dir.path().join(".open-target.tmp");
+    fs::write(&target, b"old-bytes").expect("write target");
+    fs::write(&source, b"new-bytes").expect("write source");
+
+    let reader = fs::File::open(&target).expect("hold shared reader handle");
+    native_replace_durable(&source, &target).expect("replace while reader handle is open");
+    drop(reader);
+
+    assert_eq!(fs::read(&target).expect("read replaced"), b"new-bytes");
+    assert!(!source.exists());
+}

@@ -255,6 +255,7 @@ impl NavoWindow {
                 .update(cx, |view, cx| view.close_or_hide(window, cx))
                 .unwrap_or(true)
             {
+                window.remove_window();
                 cx.quit();
             }
         })

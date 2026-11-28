@@ -1,7 +1,12 @@
 use std::path::Path;
 
-use super::system::{unix_terminal, windows_provider};
-use super::{TerminalError, command_line, launch_command, split, windows_creation_flags};
+use super::system::{
+    parse_kde_terminal, parse_xdg_terminals_list, unix_terminal, unix_terminal_with_desktop,
+    windows_provider,
+};
+use super::{
+    LiveTerminal, TerminalError, command_line, launch_command, split, windows_creation_flags,
+};
 
 #[test]
 fn windows_terminal_never_puts_the_folder_in_arguments() {
@@ -211,17 +216,63 @@ fn unix_walks_the_list_in_order() {
     let order = [
         "xdg-terminal-exec",
         "x-terminal-emulator",
+        "ghostty",
         "kitty",
         "alacritty",
-        "foot",
         "wezterm",
-        "gnome-terminal",
+        "foot",
+        "rio",
+        "warp-terminal",
         "konsole",
+        "gnome-terminal",
+        "kgx",
+        "ptyxis",
         "xfce4-terminal",
+        "tilix",
+        "terminator",
+        "lxterminal",
+        "mate-terminal",
+        "urxvt",
+        "st",
+        "sakura",
+        "xterm",
     ];
     for at in 0..order.len() {
         assert_eq!(unix_terminal(None, found(&order[at..])), order[at]);
     }
+}
+
+#[test]
+fn unix_respects_xdg_terminals_list_and_kdeglobals_when_available() {
+    let list = "\n# User default\ncom.mitchellh.ghostty.desktop\nkitty.desktop:new-window\n";
+    let parsed = parse_xdg_terminals_list(list);
+    assert_eq!(parsed, ["ghostty", "kitty"]);
+    // Desktop preference beats generic fallback order when binary is installed.
+    assert_eq!(
+        unix_terminal_with_desktop(None, &parsed, found(&["alacritty", "kitty"])),
+        "kitty"
+    );
+    // $TERMINAL still beats desktop config.
+    assert_eq!(
+        unix_terminal_with_desktop(Some("foot"), &parsed, found(&["ghostty", "foot"])),
+        "foot"
+    );
+    let kde = "[Appearance]\nTheme=Breeze\n[General]\nTerminalApplication=alacritty\n";
+    assert_eq!(parse_kde_terminal(kde).as_deref(), Some("alacritty"));
+}
+
+#[test]
+fn live_terminal_reflects_updated_settings() {
+    let live = LiveTerminal::default();
+    let updated = navo_store::Terminal {
+        provider: "custom".to_owned(),
+        command: Some("ghostty --title=test".to_owned()),
+        ..navo_store::Terminal::default()
+    };
+    live.apply(&updated);
+    let current = live.choice.read().unwrap();
+    assert_eq!(current.provider, "custom");
+    assert_eq!(current.template.as_deref(), Some("ghostty --title=test"));
 }
 
 #[test]

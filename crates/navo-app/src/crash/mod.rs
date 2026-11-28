@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 use std::{fs, io};
 
@@ -40,6 +41,7 @@ pub(crate) use unclean::sentinel_path;
 pub(crate) use unclean::{open_db, record_failed_check};
 
 static RUN_ID: AtomicU64 = AtomicU64::new(0);
+static ACTIVE_RUNNING: Mutex<Option<Arc<Running>>> = Mutex::new(None);
 
 #[derive(Clone)]
 pub(crate) struct Pending {
@@ -48,14 +50,70 @@ pub(crate) struct Pending {
     run: Vec<u8>,
 }
 
+impl Pending {
+    /// Version written into the stale `running` marker, when present.
+    pub(crate) fn version(&self) -> Option<&str> {
+        let text = std::str::from_utf8(&self.run).ok()?;
+        text.lines()
+            .find_map(|line| line.strip_prefix("version="))
+            .map(str::trim)
+            .filter(|version| !version.is_empty())
+    }
+
+    /// True when a stale `running` marker has no crash records and comes from an installer
+    /// restart or a version change rather than a crash.
+    pub(crate) fn is_upgrade_transition(&self, restarted: bool, current_version: &str) -> bool {
+        if !self.files.is_empty() {
+            return false;
+        }
+        restarted || self.version().is_some_and(|prev| prev != current_version)
+    }
+}
+
 pub(crate) struct Running(Pending);
+
+/// Scoped registration of the current process's `running` marker so update/rollback handoffs
+/// can remove it cleanly before the updater replaces the process.
+pub(crate) struct ActiveRunningGuard;
+
+impl Drop for ActiveRunningGuard {
+    fn drop(&mut self) {
+        *ACTIVE_RUNNING
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = None;
+    }
+}
+
+pub(crate) fn register_active(running: &Arc<Running>) -> ActiveRunningGuard {
+    *ACTIVE_RUNNING
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(running));
+    ActiveRunningGuard
+}
+
+/// Removes the active process's `running` marker before an updater/rollback restart.
+pub(crate) fn finish_active() {
+    let active = ACTIVE_RUNNING
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    if let Some(running) = active
+        && let Err(error) = running.finish()
+    {
+        tracing::warn!(%error, "cannot remove the running marker before restart");
+    }
+}
 
 impl Running {
     pub(crate) fn start(data: &Path) -> io::Result<Self> {
+        Self::start_with_version(data, env!("CARGO_PKG_VERSION"))
+    }
+
+    pub(crate) fn start_with_version(data: &Path, version: &str) -> io::Result<Self> {
         fs::create_dir_all(data)?;
         let marker = data.join("running");
         let run = format!(
-            "{}-{}-{}",
+            "{}-{}-{}\nversion={version}\n",
             std::process::id(),
             chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default(),
             RUN_ID.fetch_add(1, Ordering::Relaxed)

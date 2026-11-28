@@ -11,7 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub use backend::{Backend, Sink};
+pub use backend::{Backend, ReplyFn, Sink};
 #[cfg(any(test, feature = "test-support"))]
 pub use backend::{FakeBackend, FakeHandle};
 pub use prompt::{MarkKind, Nonce, PromptMark, PromptSink, PromptState, PtyWriter, SyncWait};

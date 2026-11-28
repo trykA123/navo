@@ -153,13 +153,23 @@ pub(super) fn toggle(t: &Theme, is_on: bool, send: Option<&Handler>, field: Fiel
         .into_any_element()
 }
 
-pub(super) fn value_box(t: &Theme, text: &SharedString) -> AnyElement {
+pub(super) fn value_box(
+    t: &Theme,
+    field: Field,
+    text: &SharedString,
+    send: Option<&Handler>,
+) -> AnyElement {
     let shown = if text.is_empty() {
         SharedString::from("Not set")
     } else {
         text.clone()
     };
-    div()
+    let accent = t.colors.accent;
+    let button = div()
+        .id(("settings-value", field.row()))
+        .role(Role::Button)
+        .aria_label(shown.clone())
+        .test_support()
         .flex()
         .flex_none()
         .items_center()
@@ -178,9 +188,22 @@ pub(super) fn value_box(t: &Theme, text: &SharedString) -> AnyElement {
         } else {
             t.colors.text
         })
+        .when(send.is_some(), |button| {
+            button
+                .cursor_pointer()
+                .hover(move |style| style.border_color(accent))
+        })
         .child(div().min_w_0().truncate().child(shown))
-        .child(icon(IconName::Pencil, t.spacing.icon, t.colors.muted))
-        .into_any_element()
+        .child(icon(IconName::Pencil, t.spacing.icon, t.colors.muted));
+    match send.cloned() {
+        Some(send) => button
+            .on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                send(&SheetEvent::Edit(field), window, cx);
+            })
+            .into_any_element(),
+        None => button.into_any_element(),
+    }
 }
 
 fn swatch_half(t: &Theme, palette: &Palette) -> Div {

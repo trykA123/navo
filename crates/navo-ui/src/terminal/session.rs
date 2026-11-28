@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use futures::StreamExt as _;
@@ -14,7 +14,9 @@ use gpui_kit::{App, AppContext as _, Context, Entity, SharedString, Task};
 use navo_term::grid::{Grid, Modes, Snapshot, Viewport};
 use navo_term::{Backend, PromptState, Session, ShellKind, ShellSpec, Sink, Size, TermError};
 
+use super::palette::theme_rgb;
 use crate::primitives::TabStatus;
+use crate::tokens;
 
 /// Monotonic session id counter for stable tab/session identity within a process.
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
@@ -208,6 +210,7 @@ pub struct TerminalSession {
     grid: Arc<Grid>,
     session: Option<Session>,
     snapshot: Arc<Snapshot>,
+    snapshot_rendered: AtomicBool,
     _wake_task: Task<()>,
 }
 
@@ -353,6 +356,8 @@ impl TerminalSession {
     }
 
     fn finish(init: SessionInit, mut rx: mpsc::Receiver<()>, cx: &mut Context<Self>) -> Self {
+        init.grid
+            .set_theme_rgb(theme_rgb(&tokens::current(cx).terminal));
         let viewport = Viewport::default();
         let snapshot = Arc::new(init.grid.snapshot(viewport));
         let wake_task =
@@ -372,13 +377,26 @@ impl TerminalSession {
             grid: init.grid,
             session: init.session,
             snapshot,
+            snapshot_rendered: AtomicBool::new(false),
             _wake_task: wake_task,
         }
     }
 
+    fn refresh_snapshot(&mut self) {
+        let mut next = self.grid.snapshot(self.viewport);
+        if !self.snapshot_rendered.swap(false, Ordering::AcqRel)
+            && !self.snapshot.damaged.is_empty()
+        {
+            next.damaged.extend_from_slice(&self.snapshot.damaged);
+            next.damaged.sort_unstable();
+            next.damaged.dedup();
+        }
+        self.snapshot = Arc::new(next);
+    }
+
     fn on_wake(&mut self, cx: &mut Context<Self>) {
         if self.grid.is_dirty() {
-            self.snapshot = Arc::new(self.grid.snapshot(self.viewport));
+            self.refresh_snapshot();
             cx.notify();
         }
     }
@@ -388,8 +406,14 @@ impl TerminalSession {
         self.id
     }
 
-    /// Latest grid snapshot for painting.
+    /// Latest grid snapshot without marking it rendered (for inspection and tests).
     pub fn snapshot(&self) -> Arc<Snapshot> {
+        Arc::clone(&self.snapshot)
+    }
+
+    /// Latest grid snapshot for painting, marking accumulated row damage as delivered to the view.
+    pub fn take_render_snapshot(&self) -> Arc<Snapshot> {
+        self.snapshot_rendered.store(true, Ordering::Release);
         Arc::clone(&self.snapshot)
     }
 
@@ -479,7 +503,7 @@ impl TerminalSession {
         let next = spawner(&shell, &self.cwd, self.size, self.grid.clone())?;
         self.session = Some(next);
         self.missing = None;
-        self.snapshot = Arc::new(self.grid.snapshot(self.viewport));
+        self.refresh_snapshot();
         cx.notify();
         Ok(())
     }
@@ -498,7 +522,7 @@ impl TerminalSession {
         self.shell = Some(fallback);
         self.missing = None;
         self.session = Some(next);
-        self.snapshot = Arc::new(self.grid.snapshot(self.viewport));
+        self.refresh_snapshot();
         cx.notify();
         Ok(())
     }
@@ -526,7 +550,7 @@ impl TerminalSession {
         if let Some(session) = self.session.as_mut() {
             session.resize(next)?;
         }
-        self.snapshot = Arc::new(self.grid.snapshot(self.viewport));
+        self.refresh_snapshot();
         Ok(())
     }
 

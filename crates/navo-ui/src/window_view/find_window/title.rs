@@ -67,6 +67,7 @@ impl FindWindow {
                 let _ = close_navo.update(cx, |view, cx| {
                     view.close_find_by_user(close_window, window, cx);
                 });
+                window.remove_window();
             })
     }
 }

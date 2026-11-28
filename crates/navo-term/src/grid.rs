@@ -2,17 +2,18 @@
 //! as a `Snapshot` in Navo types. Output sets a dirty flag and wakes the UI once until the next
 //! snapshot, so a burst never queues repaints.
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use alacritty_terminal::event::EventListener;
+use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{self, Column, Line};
 use alacritty_terminal::term::cell::{Cell as TermCell, Flags};
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
-use alacritty_terminal::vte::ansi::{self, CursorShape as TermShape, NamedColor, Processor};
+use alacritty_terminal::vte::ansi::{self, CursorShape as TermShape, NamedColor, Processor, Rgb};
 use parking_lot::{Mutex, MutexGuard};
 
-use crate::{Sink, Size};
+use crate::{ReplyFn, Sink, Size};
 
 /// Default history kept above the visible rows, in lines.
 pub const DEFAULT_SCROLLBACK: usize = 10_000;
@@ -151,10 +152,64 @@ pub struct Snapshot {
     pub damaged: Vec<u16>,
 }
 
-/// Ignores the terminal's events; replies to queries (`PtyWrite`) are not sent back yet.
-struct Quiet;
+/// Terminal theme RGB defaults used to answer OSC 10/11/12 colour queries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ThemeRgb {
+    pub fg: (u8, u8, u8),
+    pub bg: (u8, u8, u8),
+    pub cursor: (u8, u8, u8),
+}
 
-impl EventListener for Quiet {}
+impl Default for ThemeRgb {
+    fn default() -> Self {
+        Self {
+            fg: (0x1e, 0x24, 0x2b),
+            bg: (0xf6, 0xf8, 0xfa),
+            cursor: (0x0f, 0x76, 0x6e),
+        }
+    }
+}
+
+/// Forwards terminal query replies (`PtyWrite`, OSC 10/11/12 `ColorRequest`) back to the PTY.
+#[derive(Clone, Default)]
+struct GridEvents {
+    reply: Arc<Mutex<Option<ReplyFn>>>,
+    theme: Arc<Mutex<ThemeRgb>>,
+}
+
+impl GridEvents {
+    fn send_reply(&self, bytes: &[u8]) {
+        let sender = self.reply.lock().clone();
+        if let Some(reply) = sender {
+            reply(bytes);
+        }
+    }
+}
+
+impl EventListener for GridEvents {
+    fn send_event(&self, event: Event) {
+        match event {
+            Event::PtyWrite(text) => self.send_reply(text.as_bytes()),
+            Event::ColorRequest(index, formatter) => {
+                let theme = *self.theme.lock();
+                let rgb = if index == NamedColor::Foreground as usize {
+                    Some(theme.fg)
+                } else if index == NamedColor::Background as usize {
+                    Some(theme.bg)
+                } else if index == NamedColor::Cursor as usize {
+                    Some(theme.cursor)
+                } else {
+                    None
+                };
+                if let Some((r, g, b)) = rgb {
+                    let reply = formatter(Rgb { r, g, b });
+                    self.send_reply(reply.as_bytes());
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
 /// `Size` in the shape `Term` wants.
 struct Dims(Size);
@@ -174,7 +229,7 @@ impl Dimensions for Dims {
 }
 
 struct State {
-    term: Term<Quiet>,
+    term: Term<GridEvents>,
     parser: Processor,
     exit: Option<Option<u32>>,
 }
@@ -182,6 +237,7 @@ struct State {
 /// A terminal grid shared by the session's sink thread (writer) and the UI (reader).
 pub struct Grid {
     state: Mutex<State>,
+    events: GridEvents,
     dirty: AtomicBool,
     wake: Box<dyn Fn() + Send + Sync>,
     /// Runs under the lock after each output chunk, so tests can see the handover.
@@ -195,20 +251,29 @@ impl Grid {
     pub fn new(size: Size, scrollback: usize, wake: impl Fn() + Send + Sync + 'static) -> Self {
         let config = Config {
             scrolling_history: scrollback,
+            // Input encoder emits standard xterm sequences; never advertise Kitty CSI-u mode.
+            kitty_keyboard: false,
             ..Config::default()
         };
+        let events = GridEvents::default();
         let state = State {
-            term: Term::new(config, &Dims(size), Quiet),
+            term: Term::new(config, &Dims(size), events.clone()),
             parser: Processor::new(),
             exit: None,
         };
         Self {
             state: Mutex::new(state),
+            events,
             dirty: AtomicBool::new(false),
             wake: Box::new(wake),
             #[cfg(test)]
             chunk_hook: None,
         }
+    }
+
+    /// Updates the RGB colours reported to shells querying OSC 10/11/12.
+    pub fn set_theme_rgb(&self, theme: ThemeRgb) {
+        *self.events.theme.lock() = theme;
     }
 
     /// Runs `hook` under the lock after each output chunk (the Linux-only handover test).
@@ -321,10 +386,14 @@ impl Sink for Grid {
     fn cursor_line(&self) -> Option<usize> {
         Some(self.cursor_line())
     }
+
+    fn attach_reply(&self, reply: ReplyFn) {
+        *self.events.reply.lock() = Some(reply);
+    }
 }
 
 /// Moves the view `offset` lines above the bottom; returns whether it moved.
-fn scroll_to(term: &mut Term<Quiet>, offset: usize) -> bool {
+fn scroll_to(term: &mut Term<GridEvents>, offset: usize) -> bool {
     let current = term.grid().display_offset();
     let target = offset.min(term.grid().history_size());
     if target == current {
@@ -340,7 +409,7 @@ fn scroll_to(term: &mut Term<Quiet>, offset: usize) -> bool {
     true
 }
 
-fn take_damage(term: &mut Term<Quiet>) -> Vec<u16> {
+fn take_damage(term: &mut Term<GridEvents>) -> Vec<u16> {
     let rows = term.screen_lines();
     let mut damaged: Vec<u16> = match term.damage() {
         TermDamage::Full => (0..rows)
@@ -364,7 +433,7 @@ fn line_of(row: usize, display_offset: usize) -> Line {
     Line(row.saturating_sub(i32::try_from(display_offset).unwrap_or(i32::MAX)))
 }
 
-fn rows(term: &Term<Quiet>) -> Vec<RowCells> {
+fn rows(term: &Term<GridEvents>) -> Vec<RowCells> {
     let grid = term.grid();
     let offset = grid.display_offset();
     (0..grid.screen_lines())
@@ -425,7 +494,7 @@ fn named_color(named: NamedColor) -> Color {
         .map_or(Color::Default, Color::Ansi)
 }
 
-fn cursor(term: &Term<Quiet>) -> Option<Cursor> {
+fn cursor(term: &Term<GridEvents>) -> Option<Cursor> {
     let content = term.renderable_content();
     let shape = match content.cursor.shape {
         TermShape::Block => CursorShape::Block,
@@ -447,7 +516,7 @@ fn cursor(term: &Term<Quiet>) -> Option<Cursor> {
     })
 }
 
-fn selection(term: &Term<Quiet>) -> Option<Selection> {
+fn selection(term: &Term<GridEvents>) -> Option<Selection> {
     let range = term.renderable_content().selection?;
     let point = |point: index::Point| Point {
         line: point.line.0,

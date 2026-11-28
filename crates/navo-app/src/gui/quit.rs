@@ -16,7 +16,7 @@ pub(super) fn quitter(
         Option<crate::jobs::SessionHolds>,
     ),
     cleanup: crate::profile::Cleanup,
-    running: Option<crate::crash::Running>,
+    running: Option<Arc<crate::crash::Running>>,
     maintenance: MaintenanceTimer,
 ) -> Rc<dyn Fn()> {
     Rc::new(move || {

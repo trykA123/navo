@@ -1,10 +1,26 @@
 //! Resolves `navo-term` cell colours against `TerminalColors` tokens and coalesces adjacent cell
 //! backgrounds into horizontal runs.
 
-use gpui_kit::Hsla;
-use navo_term::grid::{Cell, Color, Width};
+use gpui_kit::{Hsla, Rgba};
+use navo_term::grid::{Cell, Color, ThemeRgb, Width};
 
 use crate::tokens::{TerminalColors, contrast_ratio};
+
+/// Converts `TerminalColors` into sRGB triples for OSC 10/11/12 query replies.
+#[must_use]
+pub fn theme_rgb(colors: &TerminalColors) -> ThemeRgb {
+    ThemeRgb {
+        fg: hsla_to_rgb(colors.text),
+        bg: hsla_to_rgb(colors.background),
+        cursor: hsla_to_rgb(colors.cursor),
+    }
+}
+
+fn hsla_to_rgb(color: Hsla) -> (u8, u8, u8) {
+    let rgba: Rgba = color.into();
+    let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+    (channel(rgba.r), channel(rgba.g), channel(rgba.b))
+}
 
 /// Opacity applied to explicit ANSI/RGB and inverse foregrounds when SGR 2 (`dim`) is active.
 const DIM_OPACITY: f32 = 0.66;

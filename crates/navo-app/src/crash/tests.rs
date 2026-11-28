@@ -295,7 +295,39 @@ fn running_marker_survives_a_simulated_crash() {
 fn pending_finds_an_unclean_exit_without_crash_files() {
     let dir = tempfile::tempdir().unwrap();
     let _running = Running::start(dir.path()).unwrap();
-    assert!(pending(dir.path()).unwrap().files.is_empty());
+    let found = pending(dir.path()).unwrap();
+    assert!(found.files.is_empty());
+    assert_eq!(found.version(), Some(env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
+fn upgrade_transition_suppresses_false_banner_without_crash_files_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let _old = Running::start_with_version(dir.path(), "0.9.3").unwrap();
+    let stale = pending(dir.path()).unwrap();
+
+    // Same version, not restarted, no crash files -> real unexpected close, keep banner.
+    assert!(!stale.is_upgrade_transition(false, "0.9.3"));
+    // Version changed, no crash files -> upgrade transition, suppress false banner.
+    assert!(stale.is_upgrade_transition(false, "0.9.4"));
+    // Installer restarted flag, no crash files -> upgrade transition, suppress false banner.
+    assert!(stale.is_upgrade_transition(true, "0.9.3"));
+
+    // Legacy marker without version line: suppressed only when installer restarted.
+    fs::write(dir.path().join("running"), b"123-456-0").unwrap();
+    let legacy = pending(dir.path()).unwrap();
+    assert_eq!(legacy.version(), None);
+    assert!(!legacy.is_upgrade_transition(false, "0.9.4"));
+    assert!(legacy.is_upgrade_transition(true, "0.9.4"));
+
+    // Real crash file present -> NEVER suppress banner even across upgrade/restart.
+    let logs = dir.path().join("logs");
+    fs::create_dir(&logs).unwrap();
+    fs::write(logs.join("crash-20261128-160000-1.json"), "{}").unwrap();
+    let _old2 = Running::start_with_version(dir.path(), "0.9.3").unwrap();
+    let real_crash = pending(dir.path()).unwrap();
+    assert!(!real_crash.files.is_empty());
+    assert!(!real_crash.is_upgrade_transition(true, "0.9.4"));
 }
 
 #[test]

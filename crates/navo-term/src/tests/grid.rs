@@ -137,6 +137,101 @@ fn grid_records_the_exit_and_wakes() {
     assert_eq!(wakes.load(Ordering::SeqCst), 1);
 }
 
+#[test]
+fn grid_replies_to_da1_dsr_and_osc11_without_enabling_kitty_keyboard() {
+    let replies = Arc::new(std::sync::Mutex::new(Vec::<Vec<u8>>::new()));
+    let captured = Arc::clone(&replies);
+    let (grid, _) = grid();
+    grid.attach_reply(Arc::new(move |bytes| {
+        captured.lock().unwrap().push(bytes.to_vec());
+    }));
+    // Fish 4.x startup/prompt probe sequence: Kitty query, OSC 11 bg, DSR cursor pos, DA1.
+    grid.output(b"abc\x1b[?u\x1b]11;?\x1b\\\x1b[6n\x1b[0c");
+    let got: Vec<String> = replies
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+        .collect();
+    assert!(
+        got.iter().any(|r| r == "\x1b[?6c"),
+        "expected DA1 reply, got: {got:?}"
+    );
+    assert!(
+        got.iter().any(|r| r == "\x1b[1;4R"),
+        "expected DSR cursor position (row 1, col 4), got: {got:?}"
+    );
+    assert!(
+        got.iter().any(|r| r.starts_with("\x1b]11;rgb:")),
+        "expected OSC 11 background reply, got: {got:?}"
+    );
+    assert!(
+        !got.iter()
+            .any(|r| r.starts_with("\x1b[?") && r.ends_with('u')),
+        "must not advertise Kitty keyboard protocol: {got:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn real_fish_or_posix_shell_boots_and_runs_command_via_grid_replies() {
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant};
+
+    use crate::{PromptState, Session, ShellKind, ShellSpec};
+
+    let fish = PathBuf::from("/bin/fish");
+    let spec = if fish.is_file() {
+        ShellSpec {
+            kind: ShellKind::Fish,
+            program: fish,
+            args: Vec::new(),
+            label: String::from("fish"),
+        }
+    } else {
+        ShellSpec {
+            kind: ShellKind::Bash,
+            program: PathBuf::from("/bin/bash"),
+            args: Vec::new(),
+            label: String::from("bash"),
+        }
+    };
+    let (wakes_tx, wakes_rx) = std::sync::mpsc::sync_channel::<()>(1);
+    let grid = Arc::new(Grid::new(SIZE, 1_000, move || {
+        let _ = wakes_tx.try_send(());
+    }));
+    let cwd = std::env::temp_dir();
+    let sink: Arc<dyn Sink> = grid.clone();
+    let mut session = Session::spawn(&spec, &cwd, SIZE, sink).expect("spawn");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !matches!(session.prompt(), PromptState::AtPrompt { .. }) {
+        assert!(
+            Instant::now() < deadline,
+            "shell {} did not reach prompt within 5s (state: {:?})",
+            spec.label,
+            session.prompt()
+        );
+        let _ = wakes_rx.recv_timeout(Duration::from_millis(50));
+    }
+    session
+        .write(b"echo NAVO_TERM_LIVE_OK\r")
+        .expect("write command");
+    let mut saw_output = false;
+    while Instant::now() < deadline {
+        let snap = bottom(&grid);
+        if snap
+            .rows
+            .iter()
+            .any(|row| text(row).contains("NAVO_TERM_LIVE_OK"))
+        {
+            saw_output = true;
+            break;
+        }
+        let _ = wakes_rx.recv_timeout(Duration::from_millis(50));
+    }
+    assert!(saw_output, "expected command output in grid snapshot");
+}
+
 /// The lock handover test reads `/proc` to see the reader block, so it runs on Linux only.
 #[cfg(target_os = "linux")]
 mod handover {

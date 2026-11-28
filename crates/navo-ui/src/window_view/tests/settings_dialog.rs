@@ -127,11 +127,15 @@ fn a_click_in_navo_leaves_settings_open_and_navo_active(cx: &mut TestAppContext)
 fn the_close_button_closes_settings_and_returns_focus_to_the_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_in(cx, &rig, size(px(1040.), px(800.)));
-    if bounds_in(cx, &rig, Target::Settings, "close").is_some() {
-        rig.click_in(cx, Target::Settings, "close");
-    } else {
-        rig.press_in(cx, Target::Settings, "ctrl-,");
+    let settings = rig.settings_window(cx).expect("settings window");
+    // On Windows the title bar's `"close"` element is a native `WindowControlArea::Close`
+    // region (DWM sends `WM_CLOSE` -> `on_window_should_close`), so simulate the platform close.
+    if let Some(close) = bounds_in(cx, &rig, Target::Settings, "close") {
+        let root = bounds_in(cx, &rig, Target::Settings, "settings-window").expect("root");
+        assert!(root.contains(&close.center()));
     }
+    assert!(VisualTestContext::from_window(settings, cx).simulate_close());
+    cx.run_until_parked();
     assert!(!is_open(cx, &rig));
     assert_eq!(rig.settings_window(cx), None);
     assert!(rig.pane_has_focus(cx));

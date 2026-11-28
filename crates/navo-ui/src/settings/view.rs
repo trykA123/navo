@@ -173,7 +173,13 @@ fn control(look: &Look, spec: &FieldSpec, cx: &App) -> Option<AnyElement> {
             Some(controls::toggle(t, *on, send, spec.field))
         }
         (Control::Text | Control::Number, value) => {
-            Some(controls::value_box(t, &spoken(spec, value)))
+            let send = send.filter(|_| look.is_enabled(spec.field));
+            Some(controls::value_box(
+                t,
+                spec.field,
+                &spoken(spec, value),
+                send,
+            ))
         }
         (Control::Tool, _) => {
             let current = look.values.git_tool();

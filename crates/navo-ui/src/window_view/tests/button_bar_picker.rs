@@ -5,7 +5,7 @@ use std::time::Duration;
 use gpui_kit::base::Scrollbar;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext as _, Bounds, Entity, Point, Role, TestAppContext, WindowBounds,
+    AnyWindowHandle, AppContext as _, Bounds, Entity, Point, TestAppContext, WindowBounds,
     WindowOptions, px, size,
 };
 use navo_core::Location;
@@ -326,11 +326,30 @@ fn button_bar_picker_shows_licence_per_group(cx: &mut TestAppContext) {
             let label = group0.label().expect("group header label");
             assert!(label.contains("Lucide"), "expected Lucide in {label}");
             assert!(label.contains("ISC"), "expected ISC in {label}");
-            assert!(label.contains("48 /"), "expected capped count in {label}");
+            assert!(
+                !label.contains("48 /"),
+                "All filter should show full uncapped Lucide set, got {label}"
+            );
+            assert!(
+                window
+                    .try_find(("button-bar-picker-more", 7usize))
+                    .is_none(),
+                "All filter should scroll freely without a 48-icon dead-end note"
+            );
+            assert!(
+                window.try_find("button-bar-picker-brand-colour").is_none(),
+                "All filter should exclude Brands logos"
+            );
 
-            let more = window.find(("button-bar-picker-more", 7usize));
-            assert_eq!(more.role(), Some(Role::Note));
-            assert_eq!(more.label(), Some("Keep typing to see more…"));
+            window.click("button-bar-picker-filter-brands", cx);
+            window.render_frame(cx);
+            let brands_group = window.find(("button-bar-picker-group", 0usize));
+            let brands_label = brands_group.label().expect("brands group label");
+            assert!(
+                brands_label.contains("Brands") && brands_label.contains("CC0"),
+                "expected Brands + CC0 in {brands_label}"
+            );
+            assert!(window.find("button-bar-picker-brand-colour").visible());
 
             window.click("button-bar-picker-filter-tabler", cx);
             window.render_frame(cx);

@@ -16,7 +16,7 @@ use std::thread::{self, JoinHandle};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
-use crate::backend::{Backend, Sink};
+use crate::backend::{Backend, ReplyFn, Sink};
 use crate::prompt::{Nonce, PromptSink, PtyWriter, ShellHook};
 use crate::shells::ShellSpec;
 use crate::{Size, TermError};
@@ -69,6 +69,7 @@ impl PtyBackend {
         // Each step that fails ends and reaps the shell; the read handle is gone by then.
         let started = input::start(writer).and_then(|input| {
             let replies = cfg!(windows).then(|| input.replies());
+            sink.attach_reply(reply_sender(input.replies()));
             output::read(reader, handshake::Handshake::new(replies), &outbox)
                 .and_then(|()| output::deliver(&outbox, sink))
                 .map(|()| input)
@@ -135,6 +136,7 @@ impl PtyBackend {
             }
         };
         let control = child::start(process, &outbox).map_err(TermError::Io)?;
+        let sink_replies = reply_sender(input.replies());
         let backend = Self {
             input,
             control,
@@ -146,6 +148,7 @@ impl PtyBackend {
             pty_writer.attach_init(init);
         }
         let prompt_sink = Arc::new(PromptSink::for_writer(&pty_writer, sink));
+        prompt_sink.attach_reply(sink_replies);
         if let Err(error) = output::deliver(&outbox, prompt_sink) {
             outbox.close();
             drop(pty_writer);
@@ -172,6 +175,14 @@ impl PtyBackend {
     pub(crate) fn reader_ends_within(&self, limit: std::time::Duration) -> bool {
         self.outbox.ended_within(limit)
     }
+}
+
+fn reply_sender(queue: std::sync::mpsc::SyncSender<Vec<u8>>) -> ReplyFn {
+    Arc::new(move |bytes| {
+        if !bytes.is_empty() && queue.try_send(bytes.to_vec()).is_err() {
+            tracing::debug!("terminal query reply queue full or closed");
+        }
+    })
 }
 
 fn command(shell: &ShellSpec, cwd: &Path, hook: Option<&ShellHook>) -> CommandBuilder {

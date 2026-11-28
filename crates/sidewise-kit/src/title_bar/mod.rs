@@ -268,7 +268,6 @@ impl RenderOnce for NavoTitleBar {
             .when_some(self.on_close, |bar, handler| {
                 bar.on_close_window(move |_, window, cx| {
                     handler(window, cx);
-                    window.remove_window();
                 })
             })
     }

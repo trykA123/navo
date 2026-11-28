@@ -80,7 +80,6 @@ button-bar-picker-no-results = No matching icons.
 button-bar-picker-no-downloaded = No downloaded icon sets installed.
 button-bar-picker-list-label = Icon grid
 button-bar-picker-group-count = { $shown } / { $total }
-button-bar-picker-keep-typing = Keep typing to see more…
 button-bar-picker-licences = Licences
 button-bar-picker-licences-title = Icon set licences
 button-bar-picker-licences-back = Back

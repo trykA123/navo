@@ -50,7 +50,7 @@ pub(crate) struct Launch {
     pub(crate) start_watch: Option<StartWatch>,
     pub(crate) instance_requests: OpenInbox,
     pub(crate) resident: Option<OpenSender>,
-    pub(crate) running: Option<crate::crash::Running>,
+    pub(crate) running: Option<Arc<crate::crash::Running>>,
     pub(crate) crash: crate::crash_report::CrashStart,
     pub(crate) store: crate::crash::store::StoreStart,
 }
@@ -168,6 +168,7 @@ pub(crate) fn open(mut launch: Launch) {
             .map(|(_, dirs)| dirs.data.join("cache.db")),
     );
     let updater = crate::updater::launch(dirs.as_ref());
+    let live_terminal = terminal::LiveTerminal::default();
     let follow = settings::Follow {
         remember: remember.clone(),
         git: {
@@ -183,15 +184,20 @@ pub(crate) fn open(mut launch: Launch) {
                 }
             })
         },
+        terminal: {
+            let live_terminal = live_terminal.clone();
+            Arc::new(move |values| live_terminal.apply(values))
+        },
     };
     let (mut settings, _settings_watch) =
         finish_settings(|| settings_start.finish().into_loaded(), &follow);
+    live_terminal.apply_values(&settings.values);
     settings::wire_diagnostics(&mut settings, &launch.crash, dirs.as_ref());
     settings::wire_guide_hint(&mut settings, dirs.as_ref());
     if let Some(updater) = &updater {
         settings.updates = updater.hooks();
     }
-    let terminal = terminal::hooks(&settings.values);
+    let terminal = live_terminal.hooks();
     git.set_ports(crate::git::launch::start::Ports {
         terminal: terminal.open.clone(),
         url: launch::opener(),

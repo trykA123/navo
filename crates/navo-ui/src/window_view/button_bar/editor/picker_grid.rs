@@ -22,7 +22,6 @@ use crate::window_view::NavoWindow;
 use crate::window_view::button_bar::icon::picker_icon_element;
 
 pub(super) const ICONS_PER_ROW: usize = 8;
-pub(super) const CAP_PER_SET: usize = 48;
 pub(super) const GRID_ROW_HEIGHT: f32 = 40.;
 const ICON_PREVIEW_PX: f32 = 20.;
 const CELL_HEIGHT_PX: f32 = 34.;
@@ -42,44 +41,35 @@ pub(super) enum PickerRow {
         names: Vec<String>,
         start_index: usize,
     },
-    MoreNote,
 }
 
-/// Searches `index` under `filter` and builds fixed-height rows of headers, 8-icon slices, and cap notes.
+/// Searches `index` under `filter` and builds fixed-height rows of headers and 8-icon slices.
+/// `All` browses every non-brand icon pack via full virtual scrolling; brand logos live under
+/// the dedicated `Brands` chip.
 pub(super) fn build_rows(index: &TagIndex, query: &str, filter: PickerFilter) -> Rc<[PickerRow]> {
     let sets = registry().sets();
-    let (hits, capped_filter) = match filter {
-        PickerFilter::All => (search(index, query, &SetFilter::All, CAP_PER_SET + 1), true),
-        PickerFilter::Downloaded => (
-            search(index, query, &SetFilter::Downloaded, CAP_PER_SET + 1),
-            true,
+    let hits = match filter {
+        PickerFilter::All => search(index, query, &SetFilter::All, usize::MAX)
+            .into_iter()
+            .filter(|hit| hit.set != "brands")
+            .collect(),
+        PickerFilter::Downloaded => search(index, query, &SetFilter::Downloaded, usize::MAX),
+        PickerFilter::Lucide => search(
+            index,
+            query,
+            &SetFilter::Set("lucide".to_owned()),
+            usize::MAX,
         ),
-        PickerFilter::Lucide => (
-            search(
-                index,
-                query,
-                &SetFilter::Set("lucide".to_owned()),
-                usize::MAX,
-            ),
-            false,
+        PickerFilter::Brands => search(
+            index,
+            query,
+            &SetFilter::Set("brands".to_owned()),
+            usize::MAX,
         ),
-        PickerFilter::Brands => (
-            search(
-                index,
-                query,
-                &SetFilter::Set("brands".to_owned()),
-                usize::MAX,
-            ),
-            false,
-        ),
-        PickerFilter::Tabler => (
-            search_family(index, query, &sets, &["tabler", "tabler-filled"]),
-            false,
-        ),
-        PickerFilter::Phosphor => (
-            search_family(index, query, &sets, &["phosphor", "phosphor-fill"]),
-            false,
-        ),
+        PickerFilter::Tabler => search_family(index, query, &sets, &["tabler", "tabler-filled"]),
+        PickerFilter::Phosphor => {
+            search_family(index, query, &sets, &["phosphor", "phosphor-fill"])
+        }
     };
 
     let mut rows = Vec::new();
@@ -91,10 +81,7 @@ pub(super) fn build_rows(index: &TagIndex, query: &str, filter: PickerFilter) ->
         while end < hits.len() && hits[end].set == *set_id {
             end += 1;
         }
-        let run = &hits[start..end];
-        let capped = capped_filter && run.len() > CAP_PER_SET;
-        let shown = if capped { &run[..CAP_PER_SET] } else { run };
-        push_group(&mut rows, set_id, shown, capped, &sets, &mut icon_index);
+        push_group(&mut rows, set_id, &hits[start..end], &sets, &mut icon_index);
         start = end;
     }
     Rc::from(rows)
@@ -119,7 +106,6 @@ fn push_group(
     rows: &mut Vec<PickerRow>,
     set_id: &str,
     shown: &[Hit],
-    capped: bool,
     sets: &[SetInfo],
     icon_index: &mut usize,
 ) {
@@ -140,9 +126,6 @@ fn push_group(
             start_index: *icon_index,
         });
         *icon_index += count;
-    }
-    if capped {
-        rows.push(PickerRow::MoreNote);
     }
 }
 
@@ -213,7 +196,6 @@ fn row_semantics_label(row: &PickerRow) -> Option<SharedString> {
             ..
         } => Some(header_aria_label(title, *matched, *total, licence).into()),
         PickerRow::Icons { .. } => None,
-        PickerRow::MoreNote => Some(tr("button-bar-picker-keep-typing").into()),
     }
 }
 
@@ -231,7 +213,6 @@ fn render_row(row_index: usize, row: &PickerRow, ctx: &GridContext<'_>) -> AnyEl
             names,
             start_index,
         } => render_icons_row(row_index, set_id, names, *start_index, ctx),
-        PickerRow::MoreNote => render_more_row(row_index, ctx.theme),
     }
 }
 
@@ -356,25 +337,6 @@ fn icon_cell(global_index: usize, set_id: &str, name: &str, ctx: &GridContext<'_
             view.update(cx, |view, cx| view.pick_editor_icon(chosen, window, cx));
         })
         .child(picker_icon_element(&resolved, px(ICON_PREVIEW_PX), ctx.cx))
-        .into_any_element()
-}
-
-fn render_more_row(row_index: usize, t: &Theme) -> AnyElement {
-    let note = tr("button-bar-picker-keep-typing");
-    div()
-        .id(("button-bar-picker-more", row_index))
-        .role(Role::Note)
-        .aria_label(note.clone())
-        .test_support()
-        .w_full()
-        .h(px(GRID_ROW_HEIGHT))
-        .pl(t.spacing.sm)
-        .pr(t.spacing.sm + Scrollbar::width())
-        .flex()
-        .items_center()
-        .text_size(t.typography.small)
-        .text_color(t.colors.muted)
-        .child(note)
         .into_any_element()
 }
 

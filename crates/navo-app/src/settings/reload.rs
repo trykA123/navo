@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use navo_store::{DefaultChange, GitSettings, Settings, SettingsStore};
+use navo_store::{DefaultChange, GitSettings, Settings, SettingsStore, Terminal};
 use navo_ui::settings::DefaultShift;
 use navo_ui::window_view::SettingsNews;
 
@@ -72,6 +72,7 @@ pub struct Follow {
     pub git: Arc<dyn Fn(&GitSettings) + Send + Sync>,
     /// Gets `updates.check` and `tray.keep-running`.
     pub auto_updates: Arc<dyn Fn(bool, bool) + Send + Sync>,
+    pub terminal: Arc<dyn Fn(&Terminal) + Send + Sync>,
 }
 
 impl Follow {
@@ -79,6 +80,7 @@ impl Follow {
         self.remember.set(settings.search.remember);
         (self.git)(&settings.git);
         (self.auto_updates)(settings.updates.check, settings.tray.keep_running);
+        (self.terminal)(&settings.terminal);
     }
 }
 
@@ -219,6 +221,7 @@ mod tests {
             remember: Remember::default(),
             git: Arc::new(move |git| log.lock().unwrap().push(git.badges)),
             auto_updates: Arc::new(|_, _| {}),
+            terminal: Arc::new(|_| {}),
         };
         let reloader = Reloader::new(store.clone(), None).following(Some(follow));
         (reloader, seen)
@@ -248,6 +251,7 @@ mod tests {
             remember: Remember::default(),
             git: Arc::new(|_| {}),
             auto_updates: Arc::new(move |auto, tray| log.lock().unwrap().push((auto, tray))),
+            terminal: Arc::new(|_| {}),
         };
         let mut reloader = Reloader::new(store, None).following(Some(follow));
         std::fs::write(

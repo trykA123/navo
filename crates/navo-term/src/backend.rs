@@ -1,7 +1,12 @@
 //! The seams of a session: `Backend` is the process side (a real PTY or a fake), `Sink`
 //! receives what the process prints. `FakeBackend` lets UI tests run without a shell.
 
+use std::sync::Arc;
+
 use crate::{Size, TermError};
+
+/// Non-blocking callback sending terminal query replies (DA1, DSR, OSC 10/11) back to the PTY.
+pub type ReplyFn = Arc<dyn Fn(&[u8]) + Send + Sync>;
 
 /// The process side of a session. Dropping it ends the process.
 pub trait Backend: Send {
@@ -23,6 +28,9 @@ pub trait Sink: Send + Sync {
     fn cursor_line(&self) -> Option<usize> {
         None
     }
+    /// Attaches a non-blocking PTY reply sender for terminal query responses (DA1, DSR, OSC 10/11).
+    /// Replies bypass user input tracking so protocol handshakes never mark the prompt as typed.
+    fn attach_reply(&self, _reply: ReplyFn) {}
 }
 
 #[cfg(any(test, feature = "test-support"))]

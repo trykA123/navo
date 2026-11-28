@@ -263,12 +263,20 @@ fn open_window(
     start.log_deprecated_flags();
     migrated.iter().for_each(migration::Report::log);
     install_reporters(profile, &diagnostics);
-    let (pending_crash, running) = prepare_crash(profile, guard.as_ref());
-    let store = check_store(profile, pending_crash.is_some(), &start);
+    let (stale_crash, running) = prepare_crash(profile, guard.as_ref());
+    let unclean = stale_crash.is_some();
+    let pending_crash = filter_upgrade_banner(
+        stale_crash,
+        installer::restarted(),
+        env!("CARGO_PKG_VERSION"),
+    );
+    let store = check_store(profile, unclean, &start);
     let (run, trace) = match instrumentation(&start, clock) {
         Ok(started) => started,
         Err(code) => return code,
     };
+    let running_fallback = running.clone();
+    let _active_running = running.as_ref().map(crash::register_active);
     let inputs = LaunchInputs {
         trace,
         panes,
@@ -285,6 +293,11 @@ fn open_window(
         },
     };
     open(launch(start, profile, run.as_ref(), inputs));
+    if let Some(running) = &running_fallback
+        && let Err(error) = running.finish()
+    {
+        tracing::warn!(%error, "cannot remove the running marker after exit");
+    }
     if let Err(error) = profile.cleanup().run() {
         eprintln!("navo: cannot remove the temporary profile: {error}");
         return ExitCode::FAILURE;
@@ -298,7 +311,7 @@ struct LaunchInputs {
     splash: splash::Splash,
     requests: navo_ui::window_view::OpenInbox,
     resident: Option<OpenSender>,
-    running: Option<crash::Running>,
+    running: Option<std::sync::Arc<crash::Running>>,
     store: crash::store::StoreStart,
     crash: crash_report::CrashStart,
 }
@@ -389,10 +402,31 @@ fn migrate(
     ControlFlow::Continue(Some(report))
 }
 
+fn filter_upgrade_banner(
+    pending: Option<crash::Pending>,
+    restarted: bool,
+    current_version: &str,
+) -> Option<crash::Pending> {
+    let pending = pending?;
+    if pending.is_upgrade_transition(restarted, current_version) {
+        tracing::info!(
+            previous = pending.version().unwrap_or("unknown"),
+            current = current_version,
+            restarted,
+            "skipping unexpected-close banner after version upgrade"
+        );
+        return None;
+    }
+    Some(pending)
+}
+
 fn prepare_crash(
     profile: &Profile,
     guard: Option<&instance::Guard>,
-) -> (Option<crash::Pending>, Option<crash::Running>) {
+) -> (
+    Option<crash::Pending>,
+    Option<std::sync::Arc<crash::Running>>,
+) {
     if guard.is_none() {
         return (None, None);
     }
@@ -402,7 +436,7 @@ fn prepare_crash(
     remove_orphan_temps(dirs);
     let pending = crash::pending(&dirs.data);
     let running = match crash::Running::start(&dirs.data) {
-        Ok(running) => Some(running),
+        Ok(running) => Some(std::sync::Arc::new(running)),
         Err(error) => {
             tracing::warn!(%error, "cannot create the running marker");
             None

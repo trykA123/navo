@@ -3,8 +3,9 @@ use std::iter::Peekable;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::str::Chars;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, PoisonError, RwLock};
 
+use navo_store::Terminal as TerminalSettings;
 use navo_ui::settings::{Field, Value, Values};
 use navo_ui::window_view::TerminalHooks;
 
@@ -226,48 +227,97 @@ fn launch_command(
     Ok(command)
 }
 
-pub fn hooks(values: &Values) -> TerminalHooks {
-    let provider = values.terminal_provider();
-    let template = match values.get(Field::TerminalCommand) {
-        Value::Text(text) => Some(text.to_string()),
-        _ => None,
-    };
-    TerminalHooks {
-        open: Arc::new(move |folder| {
-            let mut command =
-                launch_command(provider, template.as_deref(), Path::new(folder.as_str()))
-                    .map_err(TerminalError::message)?;
-            #[cfg(windows)]
-            let detached = {
-                use std::os::windows::process::CommandExt as _;
-                let flags = windows_creation_flags(&command.get_program().to_string_lossy());
-                command.creation_flags(flags);
-                flags & 0x0000_0008 != 0
-            };
-            #[cfg(not(windows))]
-            let detached = true;
-            if detached {
-                command
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null());
-            }
-            #[cfg(unix)]
-            {
-                use std::os::unix::process::CommandExt as _;
-                command.process_group(0);
-            }
-            let mut child = command
-                .spawn()
-                .map_err(|error| TerminalError::Spawn(error.kind()).message())?;
-            let _ = std::thread::Builder::new()
-                .name("navo-terminal-wait".to_owned())
-                .spawn(move || {
-                    let _ = child.wait();
-                });
-            Ok(())
-        }),
+#[derive(Clone, Debug)]
+struct TerminalChoice {
+    provider: String,
+    template: Option<String>,
+}
+
+impl Default for TerminalChoice {
+    fn default() -> Self {
+        Self {
+            provider: "system".to_owned(),
+            template: None,
+        }
     }
+}
+
+/// Live external terminal configuration shared between Settings reloads and pane launches.
+#[derive(Clone, Default)]
+pub struct LiveTerminal {
+    choice: Arc<RwLock<TerminalChoice>>,
+}
+
+impl LiveTerminal {
+    /// Updates the live external terminal settings from the persisted store struct.
+    pub fn apply(&self, settings: &TerminalSettings) {
+        let mut choice = self.choice.write().unwrap_or_else(PoisonError::into_inner);
+        choice.provider.clone_from(&settings.provider);
+        choice.template.clone_from(&settings.command);
+    }
+
+    /// Updates the live external terminal settings from UI [`Values`].
+    pub fn apply_values(&self, values: &Values) {
+        let template = match values.get(Field::TerminalCommand) {
+            Value::Text(text) if !text.is_empty() => Some(text.to_string()),
+            _ => None,
+        };
+        let mut choice = self.choice.write().unwrap_or_else(PoisonError::into_inner);
+        choice.provider = values.terminal_provider().to_owned();
+        choice.template = template;
+    }
+
+    /// Builds [`TerminalHooks`] reading the latest live settings on every launch.
+    #[must_use]
+    pub fn hooks(&self) -> TerminalHooks {
+        let choice = Arc::clone(&self.choice);
+        TerminalHooks {
+            open: Arc::new(move |folder| {
+                let current = choice
+                    .read()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone();
+                spawn_terminal(
+                    &current.provider,
+                    current.template.as_deref(),
+                    Path::new(folder.as_str()),
+                )
+            }),
+        }
+    }
+}
+
+fn spawn_terminal(provider: &str, template: Option<&str>, folder: &Path) -> Result<(), String> {
+    let mut command = launch_command(provider, template, folder).map_err(TerminalError::message)?;
+    #[cfg(windows)]
+    let detached = {
+        use std::os::windows::process::CommandExt as _;
+        let flags = windows_creation_flags(&command.get_program().to_string_lossy());
+        command.creation_flags(flags);
+        flags & 0x0000_0008 != 0
+    };
+    #[cfg(not(windows))]
+    let detached = true;
+    if detached {
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt as _;
+        command.process_group(0);
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|error| TerminalError::Spawn(error.kind()).message())?;
+    let _ = std::thread::Builder::new()
+        .name("navo-terminal-wait".to_owned())
+        .spawn(move || {
+            let _ = child.wait();
+        });
+    Ok(())
 }
 
 #[cfg(test)]

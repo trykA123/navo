@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use parking_lot::Mutex;
 
-use crate::{Backend, ShellKind, Sink, Size, TermError};
+use crate::{Backend, ReplyFn, ShellKind, Sink, Size, TermError};
 use init::TempInit;
 use osc133::{MAX_COMMAND_LEN, Osc133Event, Osc133Parser};
 
@@ -444,5 +444,9 @@ impl Sink for PromptSink {
 
     fn cursor_line(&self) -> Option<usize> {
         self.inner.cursor_line()
+    }
+
+    fn attach_reply(&self, reply: ReplyFn) {
+        self.inner.attach_reply(reply);
     }
 }

@@ -554,3 +554,45 @@ fn closing_settings_over_a_compare_file_diff_focuses_the_diff(cx: &mut TestAppCo
         "closing Settings returns focus to the compare file diff"
     );
 }
+
+#[gpui_kit::test]
+fn clicking_value_box_opens_inline_editor_and_saves_value(cx: &mut TestAppContext) {
+    let rig = rig(cx, false);
+    open_settings(cx, &rig);
+    let handle = settings_window(&rig, cx).expect("settings window handle");
+
+    // Navigate to Tools section leaving TerminalProvider selected (EditorPath is unselected).
+    go_to(cx, &rig, handle, Field::TerminalProvider);
+
+    let editor_box =
+        ElementId::NamedInteger("settings-value".into(), Field::EditorPath.row() as u64);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.click(editor_box, cx);
+    })
+    .expect("click Editor value box");
+    cx.run_until_parked();
+
+    assert_eq!(
+        rig.view.read_with(cx, |view, _| view.settings_row()),
+        Field::EditorPath.row(),
+        "clicking a value box must also select its row"
+    );
+    assert!(
+        rig.view.read_with(cx, |view, _| view.settings.is_editing()),
+        "clicking Not set value box must open the inline text editor"
+    );
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.input("nvim", cx);
+        window.press("enter", cx);
+    })
+    .expect("type editor path and commit");
+    cx.run_until_parked();
+
+    assert_eq!(
+        rig.view
+            .read_with(cx, |view, _| view.values.get(Field::EditorPath).clone()),
+        Value::Text("nvim".into())
+    );
+}

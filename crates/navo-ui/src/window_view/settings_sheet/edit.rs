@@ -127,11 +127,16 @@ impl NavoWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.values.is_enabled(field) {
+            return;
+        }
         let current = match self.values.get(field) {
             Value::Text(text) => text.to_string(),
             Value::Number(number) => number.to_string(),
             _ => return,
         };
+        self.settings.row = field.row();
+        self.settings.folds.reveal(self.settings.row);
         let entry = if is_recorded(field) {
             let focus = cx.focus_handle();
             self.settings

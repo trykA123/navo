@@ -150,7 +150,7 @@ impl TerminalDrawer {
         mono_font: SharedString,
         cx: &mut Context<Self>,
     ) -> Div {
-        let snapshot = entry.entity.read(cx).snapshot();
+        let snapshot = entry.entity.read(cx).take_render_snapshot();
         let style = GridStyle::default();
         let measured = Rc::clone(&self.measured_dims);
         let weak = cx.weak_entity();

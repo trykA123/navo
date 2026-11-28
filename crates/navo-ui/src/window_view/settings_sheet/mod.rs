@@ -208,6 +208,11 @@ impl SettingsPanel {
         self.is_open
     }
 
+    #[cfg(test)]
+    pub(super) fn is_editing(&self) -> bool {
+        self.edit.is_some()
+    }
+
     pub(super) fn undo_sent(&mut self, fields: &[Field]) {
         self.undo.sent(fields);
     }

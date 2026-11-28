@@ -202,6 +202,7 @@ fn settings_read_is_marked_after_loading_finishes() {
             remember: crate::search_hooks::Remember::default(),
             git: std::sync::Arc::new(|_| {}),
             auto_updates: std::sync::Arc::new(|_, _| {}),
+            terminal: std::sync::Arc::new(|_| {}),
         },
     );
     let at = crate::metrics::all()
@@ -217,7 +218,7 @@ fn settings_read_is_marked_after_loading_finishes() {
 #[test]
 fn clean_quitter_removes_the_crash_running_marker() {
     let dir = tempfile::tempdir().unwrap();
-    let running = crate::crash::Running::start(dir.path()).unwrap();
+    let running = std::sync::Arc::new(crate::crash::Running::start(dir.path()).unwrap());
     let quit = super::quitter(
         (None, None, None),
         crate::profile::Cleanup::default(),

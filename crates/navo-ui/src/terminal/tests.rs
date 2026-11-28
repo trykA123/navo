@@ -538,3 +538,50 @@ fn selection_change_invalidates_only_affected_rows(cx: &mut TestAppContext) {
         "clearing selection on 1 row must reshape exactly 1 row"
     );
 }
+
+#[gpui_kit::test]
+fn multiple_wakes_before_frame_preserve_all_damaged_rows_in_row_cache(cx: &mut TestAppContext) {
+    let mut handle_out = None;
+    let session = cx.update(|cx| {
+        cx.new(|cx| {
+            let (s, h) = TerminalSession::with_fake(Size { cols: 40, rows: 5 }, cx);
+            handle_out = Some(h);
+            s
+        })
+    });
+    let handle = handle_out.expect("fake handle");
+    let initial = cx.update(|cx| session.read(cx).take_render_snapshot());
+    let (window, view, cache) =
+        open_harness(cx, px(800.0), (*initial).clone(), GridStyle::default());
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("initial paint");
+    let after_initial = cx.update(|cx| cache.read(cx).reshape_count());
+
+    // Emit two separate chunks that trigger two wakes BEFORE any frame renders.
+    // Chunk 1 updates row 0, Chunk 2 updates row 2.
+    handle.emit(b"row0-updated");
+    cx.run_until_parked();
+    handle.emit(b"\x1b[3;1Hrow2-updated");
+    cx.run_until_parked();
+
+    let latest = cx.update(|cx| session.read(cx).take_render_snapshot());
+    assert!(
+        latest.damaged.contains(&0) && latest.damaged.contains(&2),
+        "both row 0 and row 2 must remain damaged until painted, got: {:?}",
+        latest.damaged
+    );
+    cx.update(|cx| {
+        view.update(cx, |harness, cx| {
+            harness.snapshot = latest;
+            cx.notify();
+        });
+    });
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("post-burst paint");
+    let after_burst = cx.update(|cx| cache.read(cx).reshape_count());
+    assert!(
+        after_burst - after_initial >= 2,
+        "RowCache must reshape both row 0 and row 2, delta was {}",
+        after_burst - after_initial
+    );
+}

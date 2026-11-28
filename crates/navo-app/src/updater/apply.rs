@@ -132,6 +132,7 @@ pub(crate) fn restart() -> Result<(), UpdateFailure> {
         &command,
     );
     restart_with(decision, crate::files::stop_pdf, |asset| {
+        crate::crash::finish_active();
         logging::flush();
         manager
             .wait_exit_then_apply_updates(&asset, false, true, &args)
@@ -178,6 +179,7 @@ pub(super) fn apply_downgrade(
         .map_err(|error| FeedError::Other(error.to_string()))?;
     let args = restart_args(&command).map_err(|error| FeedError::Other(error.to_string()))?;
     crate::files::stop_pdf();
+    crate::crash::finish_active();
     logging::flush();
     manager
         .apply_updates_and_restart_with_args(asset, &args)
