@@ -165,3 +165,26 @@ pub(super) fn snippet(text: &str, column: usize) -> String {
         .min(length.saturating_sub(TEXT_LIMIT));
     text.chars().skip(start).take(TEXT_LIMIT).collect()
 }
+
+#[cfg(test)]
+thread_local! {
+    static CHUNK_GROWTHS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Records one chunk-buffer capacity growth (test-only).
+#[cfg(test)]
+pub(in crate::find) fn note_chunk_growth() {
+    CHUNK_GROWTHS.with(|cell| cell.set(cell.get() + 1));
+}
+
+/// Resets the chunk-buffer growth counter (test-only).
+#[cfg(test)]
+pub(in crate::find) fn reset_chunk_growths() {
+    CHUNK_GROWTHS.with(|cell| cell.set(0));
+}
+
+/// Reads the chunk-buffer growth counter (test-only).
+#[cfg(test)]
+pub(in crate::find) fn chunk_growths() -> usize {
+    CHUNK_GROWTHS.with(|cell| cell.get())
+}

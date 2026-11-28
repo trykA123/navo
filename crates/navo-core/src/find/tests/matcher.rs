@@ -272,3 +272,23 @@ fn combination_errors_reject_invalid_token_pairs() {
     assert!(Compiled::new(&FindQuery::parse("hex:4D5A")).is_ok());
     assert_eq!(search(b"anything\n", "word:on").total, 0);
 }
+
+#[test]
+fn chunk_buffer_grows_once_across_many_scans() {
+    use crate::find::matcher::{chunk_growths, reset_chunk_growths};
+
+    reset_chunk_growths();
+    let compiled = Compiled::new(&FindQuery::parse("needle")).unwrap();
+    let cancel = AtomicBool::new(false);
+    let bytes = b"NEEDLE needle\nneedle needle";
+    let mut expected: Option<FileHits> = None;
+    for _ in 0..200 {
+        let found = scan(&bytes[..], &compiled, &cancel).unwrap();
+        match &expected {
+            None => expected = Some(found),
+            Some(previous) => assert_eq!(&found, previous),
+        }
+    }
+    assert_eq!(expected.unwrap().total, 4);
+    assert_eq!(chunk_growths(), 1);
+}

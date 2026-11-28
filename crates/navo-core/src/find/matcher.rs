@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::io::{self, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -13,9 +14,16 @@ use decode::{Decoders, bom_len, snippet};
 mod bytes;
 mod decode;
 
+#[cfg(test)]
+pub(in crate::find) use decode::{chunk_growths, reset_chunk_growths};
+
 const CHUNK: usize = 1024 * 1024;
 const PROBE: usize = 8192;
 const HIT_LIMIT: usize = 1000;
+
+thread_local! {
+    static CHUNK_BUFFER: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+}
 
 pub struct Compiled {
     kind: Kind,
@@ -56,7 +64,7 @@ impl Compiled {
         !matches!(self.kind, Kind::Empty)
     }
 
-    fn visit(&self, text: &str, mut visit: impl FnMut(usize) -> bool) {
+    fn visit(&self, text: &str, fold: &mut FoldScratch, mut visit: impl FnMut(usize) -> bool) {
         match &self.kind {
             Kind::Empty | Kind::Bytes(_) => {}
             Kind::Literal(needle) => {
@@ -65,7 +73,7 @@ impl Compiled {
             Kind::Regex(regex) => {
                 regex.find_iter(text).all(|found| visit(found.start()));
             }
-            Kind::Fold(matcher) => visit_folded(matcher, text, visit),
+            Kind::Fold(matcher) => visit_folded(matcher, text, fold, visit),
         }
     }
 }
@@ -116,17 +124,29 @@ fn compile_kind(query: &FindQuery) -> Result<Kind, String> {
         .map_err(|error| error.to_string())
 }
 
-fn visit_folded(matcher: &AhoCorasick, text: &str, mut visit: impl FnMut(usize) -> bool) {
-    let mut folded = String::new();
-    let mut offsets = Vec::new();
+/// Reusable folding buffers, cleared per line so they never reallocate per line.
+#[derive(Default)]
+struct FoldScratch {
+    folded: String,
+    offsets: Vec<usize>,
+}
+
+fn visit_folded(
+    matcher: &AhoCorasick,
+    text: &str,
+    scratch: &mut FoldScratch,
+    mut visit: impl FnMut(usize) -> bool,
+) {
+    scratch.folded.clear();
+    scratch.offsets.clear();
     for (offset, character) in text.char_indices() {
         for lower in character.to_lowercase() {
-            folded.push(lower);
-            offsets.resize(folded.len(), offset);
+            scratch.folded.push(lower);
+            scratch.offsets.resize(scratch.folded.len(), offset);
         }
     }
-    for found in matcher.find_iter(&folded) {
-        if !visit(offsets[found.start()]) {
+    for found in matcher.find_iter(&scratch.folded) {
+        if !visit(scratch.offsets[found.start()]) {
             break;
         }
     }
@@ -176,17 +196,42 @@ pub fn scan(
     }
     let skip = bom_len(&head);
     scanner.push(&head[skip..]);
-    let mut buffer = vec![0; CHUNK];
-    while !scanner.cancelled() {
-        let count = read_chunk(&mut reader, &mut buffer)?;
-        if count == 0 {
-            scanner.finish();
-            scanner.cancelled();
-            break;
+    CHUNK_BUFFER.with(|cell| {
+        let mut fallback = Vec::new();
+        let mut shared = cell.try_borrow_mut().ok();
+        let buffer: &mut Vec<u8> = match shared.as_mut() {
+            Some(guard) => {
+                prepare_chunk(guard);
+                guard
+            }
+            None => {
+                fallback.resize(CHUNK, 0);
+                &mut fallback
+            }
+        };
+        while !scanner.cancelled() {
+            let count = read_chunk(&mut reader, buffer)?;
+            if count == 0 {
+                scanner.finish();
+                scanner.cancelled();
+                break;
+            }
+            scanner.push(&buffer[..count]);
         }
-        scanner.push(&buffer[..count]);
-    }
+        Ok::<(), io::Error>(())
+    })?;
     Ok(scanner.found)
+}
+
+/// Grows the reused chunk buffer to `CHUNK`, counting capacity growths in tests.
+fn prepare_chunk(buffer: &mut Vec<u8>) {
+    if buffer.capacity() < CHUNK {
+        #[cfg(test)]
+        decode::note_chunk_growth();
+    }
+    if buffer.len() < CHUNK {
+        buffer.resize(CHUNK, 0);
+    }
 }
 
 pub(super) fn read_chunk(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<usize> {
@@ -203,6 +248,7 @@ struct Scanner<'a> {
     cancel: &'a AtomicBool,
     wide: Option<&'static encoding_rs::Encoding>,
     decoders: Decoders,
+    fold: FoldScratch,
     pending: Vec<u8>,
     line: u64,
     found: FileHits,
@@ -216,6 +262,7 @@ impl<'a> Scanner<'a> {
             cancel,
             wide,
             decoders: compiled.decoders,
+            fold: FoldScratch::default(),
             pending: Vec::new(),
             line: 1,
             found: FileHits::default(),
@@ -274,7 +321,7 @@ impl<'a> Scanner<'a> {
     fn visit_text(&mut self, text: &str, seen: &mut Vec<u32>) {
         let mut previous = 0;
         let mut column = 0;
-        self.compiled.visit(text, |start| {
+        self.compiled.visit(text, &mut self.fold, |start| {
             if self.cancel.load(Ordering::Relaxed) {
                 return false;
             }
