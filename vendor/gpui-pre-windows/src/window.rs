@@ -503,15 +503,18 @@ impl WindowsWindow {
         } = creation_info;
         register_window_class(icon);
         let parent_modal = params.kind == WindowKind::Dialog;
+        let mut parent_guard = None;
         let parent_hwnd = if parent_modal {
             let parent_window = unsafe { GetActiveWindow() };
             if parent_window.is_invalid() {
                 None
             } else {
                 // Disable the parent window to make this dialog modal
+                // SAFETY: `parent_window` is a valid active HWND on the current thread.
                 unsafe {
                     EnableWindow(parent_window, false).as_bool();
                 };
+                parent_guard = Some(ModalParentGuard::new(parent_window));
                 Some(parent_window)
             }
         } else if params.kind == WindowKind::Floating {
@@ -625,7 +628,15 @@ impl WindowsWindow {
         // so check the inner result first.
         let this = context.inner.take().transpose()?;
         let hwnd = creation_result?;
-        let this = this.unwrap();
+        let this = match this {
+            Some(this) => this,
+            None => {
+                // SAFETY: `hwnd` was just created on this thread and has no owning `WindowsWindow`.
+                let _ = unsafe { DestroyWindow(hwnd) };
+                anyhow::bail!("window state missing after creation");
+            }
+        };
+        let mut destroy_guard = DestroyWindowGuard::new(hwnd);
 
         register_drag_drop(&this)?;
         set_non_rude_hwnd(hwnd, true);
@@ -644,6 +655,11 @@ impl WindowsWindow {
                 placement,
                 state: WindowOpenState::Windowed,
             }));
+        }
+
+        destroy_guard.disarm();
+        if let Some(guard) = parent_guard.as_mut() {
+            guard.disarm();
         }
 
         Ok(Self(this))
@@ -1892,11 +1908,136 @@ fn set_non_rude_hwnd(hwnd: HWND, non_rude: bool) {
     }
 }
 
+/// Restores a modal dialog's disabled owner window if opening the dialog fails.
+struct ModalParentGuard {
+    parent: Option<HWND>,
+}
+
+impl ModalParentGuard {
+    fn new(parent: HWND) -> Self {
+        Self {
+            parent: Some(parent),
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.parent = None;
+    }
+}
+
+impl Drop for ModalParentGuard {
+    fn drop(&mut self) {
+        if let Some(parent) = self.parent.take() {
+            // SAFETY: `parent` is the valid owner HWND disabled before `CreateWindowExW`.
+            // Checking `IsWindowEnabled` avoids a duplicate enable if `DestroyWindow` already
+            // restored it, while guaranteeing the owner is never left disabled.
+            if !unsafe { IsWindowEnabled(parent) }.as_bool() {
+                // SAFETY: `parent` is still disabled on this thread; re-enabling restores input.
+                let _ = unsafe { EnableWindow(parent, true) };
+            }
+        }
+    }
+}
+
+/// Destroys a newly created HWND if `WindowsWindow::open` returns early after `CreateWindowExW`.
+struct DestroyWindowGuard {
+    hwnd: Option<HWND>,
+}
+
+impl DestroyWindowGuard {
+    fn new(hwnd: HWND) -> Self {
+        Self { hwnd: Some(hwnd) }
+    }
+
+    fn disarm(&mut self) {
+        self.hwnd = None;
+    }
+}
+
+impl Drop for DestroyWindowGuard {
+    fn drop(&mut self) {
+        if let Some(hwnd) = self.hwnd.take() {
+            // SAFETY: `hwnd` was created on this thread; revoking drag-drop before destruction is
+            // harmless if registration has not occurred yet.
+            let _ = unsafe { RevokeDragDrop(hwnd) };
+            // SAFETY: `hwnd` has not been handed to a `WindowsWindow` yet; destroying it cleans up
+            // the window and lets `handle_destroy_msg` re-enable a modal owner window.
+            let _ = unsafe { DestroyWindow(hwnd) };
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::ClickState;
     use gpui::{DevicePixels, MouseButton, point};
     use std::time::Duration;
+
+    #[cfg(all(test, target_os = "windows"))]
+    #[test]
+    fn modal_parent_guard_restores_owner_unless_disarmed() {
+        use super::*;
+
+        // SAFETY: Creating a hidden built-in STATIC window on the current thread requires no
+        // custom class registration and is destroyed before the test returns.
+        let parent = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("STATIC"),
+                w!(""),
+                WS_POPUP,
+                0,
+                0,
+                0,
+                0,
+                None,
+                None,
+                None,
+                None,
+            )
+        }
+        .expect("create hidden test parent window");
+
+        struct TestWindowCleanup(HWND);
+        impl Drop for TestWindowCleanup {
+            fn drop(&mut self) {
+                // SAFETY: `self.0` is the hidden HWND created in this test.
+                let _ = unsafe { EnableWindow(self.0, true) };
+                // SAFETY: `self.0` is the hidden HWND created in this test.
+                let _ = unsafe { DestroyWindow(self.0) };
+            }
+        }
+        let _cleanup = TestWindowCleanup(parent);
+
+        // Armed guard re-enables the disabled parent window on drop.
+        // SAFETY: `parent` is a valid HWND created above.
+        let _ = unsafe { EnableWindow(parent, false) };
+        // SAFETY: `parent` is a valid HWND created above.
+        assert!(!unsafe { IsWindowEnabled(parent) }.as_bool());
+        {
+            let _guard = ModalParentGuard::new(parent);
+        }
+        // SAFETY: `parent` is a valid HWND created above.
+        assert!(unsafe { IsWindowEnabled(parent) }.as_bool());
+
+        // Disarmed guard leaves the parent window disabled on drop.
+        // SAFETY: `parent` is a valid HWND created above.
+        let _ = unsafe { EnableWindow(parent, false) };
+        // SAFETY: `parent` is a valid HWND created above.
+        assert!(!unsafe { IsWindowEnabled(parent) }.as_bool());
+        {
+            let mut guard = ModalParentGuard::new(parent);
+            guard.disarm();
+        }
+        // SAFETY: `parent` is a valid HWND created above.
+        assert!(!unsafe { IsWindowEnabled(parent) }.as_bool());
+
+        // Restore enabled state before cleanup destroys the window.
+        // SAFETY: `parent` is a valid HWND created above.
+        let _ = unsafe { EnableWindow(parent, true) };
+        // SAFETY: `parent` is a valid HWND created above.
+        assert!(unsafe { IsWindowEnabled(parent) }.as_bool());
+    }
 
     #[test]
     fn test_double_click_interval() {
