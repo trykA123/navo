@@ -3,8 +3,7 @@ use std::time::Duration;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 
-use super::app_menu::{Rig, rig};
-use super::type_in;
+use super::app_menu::{Rig, Target, rig};
 use crate::settings::{FIELDS, Field, Filter, Section};
 use crate::tokens::ThemeChoice;
 
@@ -13,6 +12,9 @@ fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
     cx.run_until_parked();
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("window");
+    if let Some(settings) = rig.settings_window(cx) {
+        let _ = cx.update_window(settings, |_, window, cx| window.render_frame(cx));
+    }
 }
 
 fn open(cx: &mut TestAppContext, rig: &Rig) {
@@ -32,12 +34,15 @@ fn row_of(field: Field) -> usize {
 }
 
 fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> bool {
+    let Some(window) = rig.settings_window(cx) else {
+        return false;
+    };
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).is_some_and(|found| found.visible())
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn shows_row(cx: &mut TestAppContext, rig: &Rig, field: Field) -> bool {
@@ -49,16 +54,17 @@ fn current_row(cx: &mut TestAppContext, rig: &Rig) -> usize {
 }
 
 fn find_text(cx: &mut TestAppContext, rig: &Rig) -> Option<String> {
-    cx.update_window(rig.window, |_, window, cx| {
+    let window = rig.settings_window(cx).expect("settings window");
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.find("settings-find").value().map(str::to_owned)
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn find(cx: &mut TestAppContext, rig: &Rig, text: &str) {
-    rig.press(cx, "ctrl-f");
-    type_in(cx, rig.window, &rig.view, text);
+    rig.press_in(cx, Target::Settings, "ctrl-f");
+    rig.input_in(cx, Target::Settings, text);
     settle_motion(cx, rig);
 }
 
@@ -109,13 +115,13 @@ fn find_moves_the_row_to_the_first_match_and_arrows_stay_on_matches(cx: &mut Tes
     open(cx, &rig);
     find(cx, &rig, "files.sort");
     assert_eq!(current_row(cx, &rig), row_of(Field::Sort));
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     assert_eq!(current_row(cx, &rig), row_of(Field::Sort));
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     assert_eq!(current_row(cx, &rig), row_of(Field::SortDescending));
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     assert_eq!(current_row(cx, &rig), row_of(Field::SortDescending));
-    rig.press(cx, "up");
+    rig.press_in(cx, Target::Settings, "up");
     assert_eq!(current_row(cx, &rig), row_of(Field::Sort));
 }
 
@@ -134,12 +140,12 @@ fn escape_clears_the_find_and_a_second_escape_closes(cx: &mut TestAppContext) {
     open(cx, &rig);
     find(cx, &rig, "appearance.color-theme");
     assert!(!shows_row(cx, &rig, Field::Theme));
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     settle_motion(cx, &rig);
     assert!(is_open(cx, &rig));
     assert_eq!(find_text(cx, &rig).as_deref(), Some(""));
     assert!(shows_row(cx, &rig, Field::Theme));
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     assert!(!is_open(cx, &rig));
 }
 
@@ -147,7 +153,7 @@ fn escape_clears_the_find_and_a_second_escape_closes(cx: &mut TestAppContext) {
 fn typing_in_the_list_does_not_fill_the_find_or_change_rows(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    type_in(cx, rig.window, &rig.view, "sort");
+    rig.input_in(cx, Target::Settings, "sort");
     assert_eq!(find_text(cx, &rig).as_deref(), Some(""));
     assert!(shows_row(cx, &rig, Field::Theme));
     assert_eq!(current_row(cx, &rig), 0);
@@ -158,8 +164,8 @@ fn closing_the_sheet_clears_the_find(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     find(cx, &rig, "appearance.color-theme");
-    rig.press(cx, "escape");
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     open(cx, &rig);
     assert_eq!(find_text(cx, &rig).as_deref(), Some(""));
     assert!(shows_row(cx, &rig, Field::Theme));
@@ -171,9 +177,9 @@ fn keys_change_nothing_when_no_row_matches_the_find(cx: &mut TestAppContext) {
     open(cx, &rig);
     find(cx, &rig, "zzz");
     let before = rig.view.read_with(cx, |view, _| view.values.clone());
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     for key in ["space", "left", "right", "f8"] {
-        rig.press(cx, key);
+        rig.press_in(cx, Target::Settings, key);
     }
     settle_motion(cx, &rig);
     assert!(rig.store.changes.lock().expect("changes").is_empty());
@@ -184,15 +190,16 @@ fn keys_change_nothing_when_no_row_matches_the_find(cx: &mut TestAppContext) {
 }
 
 fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> Option<String> {
+    let window = rig.settings_window(cx)?;
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
             .filter(|found| found.visible())
             .and_then(|found| found.label().map(str::to_owned))
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn page_index(page: Section) -> usize {
@@ -237,16 +244,16 @@ fn nav_shows_page_counts_and_dims_zero_count_pages(cx: &mut TestAppContext) {
     ));
 
     let before = current_row(cx, &rig);
-    rig.click(cx, ("settings-section", appearance));
+    rig.click_in(cx, Target::Settings, ("settings-section", appearance));
     assert_eq!(current_row(cx, &rig), before);
 
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     settle_motion(cx, &rig);
     assert_eq!(
         label(cx, &rig, ("settings-section-count", appearance)),
         None
     );
-    rig.click(cx, ("settings-section", appearance));
+    rig.click_in(cx, Target::Settings, ("settings-section", appearance));
     assert_eq!(current_row(cx, &rig), row_of(Field::Theme));
 }
 
@@ -256,12 +263,13 @@ fn changed_chip_filters_to_changed_rows_and_clears_in_esc_chain_or_on_last_undo(
 ) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
+    let settings = rig.settings_window(cx).expect("settings window");
     assert_eq!(label(cx, &rig, "settings-changed-chip"), None);
 
     // Change Theme (Appearance) and FoldersFirst (Files).
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     super::settings_sheet::go_to(cx, &rig, Field::FoldersFirst);
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     settle_motion(cx, &rig);
 
     assert_eq!(
@@ -270,19 +278,19 @@ fn changed_chip_filters_to_changed_rows_and_clears_in_esc_chain_or_on_last_undo(
     );
 
     // Tab from Find reaches the changed chip, and Enter toggles the filter on.
-    rig.press(cx, "ctrl-f");
-    cx.update_window(rig.window, |_, window, cx| window.focus_next(cx))
-        .expect("window");
+    rig.press_in(cx, Target::Settings, "ctrl-f");
+    cx.update_window(settings, |_, window, cx| window.focus_next(cx))
+        .expect("settings window");
     settle_motion(cx, &rig);
     let chip_focused = cx
-        .update_window(rig.window, |_, window, cx| {
+        .update_window(settings, |_, window, cx| {
             window.render_frame(cx);
             window.find("settings-changed-chip").focused() == Some(true)
         })
-        .expect("window");
+        .expect("settings window");
     assert!(chip_focused);
 
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "enter");
     settle_motion(cx, &rig);
     assert!(shows_row(cx, &rig, Field::Theme));
     assert!(shows_row(cx, &rig, Field::FoldersFirst));
@@ -316,24 +324,24 @@ fn changed_chip_filters_to_changed_rows_and_clears_in_esc_chain_or_on_last_undo(
     assert!(shows_row(cx, &rig, Field::Theme));
     assert!(!shows_row(cx, &rig, Field::FoldersFirst));
 
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     settle_motion(cx, &rig);
     assert!(is_open(cx, &rig));
     assert_eq!(find_text(cx, &rig).as_deref(), Some(""));
     assert!(shows_row(cx, &rig, Field::FoldersFirst));
 
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     settle_motion(cx, &rig);
     assert!(is_open(cx, &rig));
     assert!(shows_row(cx, &rig, Field::Density));
 
     // Turn changed-only back on by clicking the chip, then undo both changes:
     // undoing the last change automatically turns off the filter.
-    rig.click(cx, "settings-changed-chip");
+    rig.click_in(cx, Target::Settings, "settings-changed-chip");
     settle_motion(cx, &rig);
     assert!(!shows_row(cx, &rig, Field::Density));
 
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     settle_motion(cx, &rig);
     assert_eq!(
         label(cx, &rig, "settings-changed-chip").as_deref(),
@@ -341,13 +349,13 @@ fn changed_chip_filters_to_changed_rows_and_clears_in_esc_chain_or_on_last_undo(
     );
     assert!(!shows_row(cx, &rig, Field::Density));
 
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     settle_motion(cx, &rig);
     assert_eq!(label(cx, &rig, "settings-changed-chip"), None);
     assert!(shows_row(cx, &rig, Field::Density));
 
     // Esc now closes Settings.
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     assert!(!is_open(cx, &rig));
 }
 
@@ -360,7 +368,7 @@ fn find_matches_option_labels_and_opens_matching_shortcuts(cx: &mut TestAppConte
     assert!(shows_row(cx, &rig, Field::TerminalProvider));
     assert!(!shows_row(cx, &rig, Field::Theme));
 
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     settle_motion(cx, &rig);
 
     find(cx, &rig, "Copy full path");
@@ -378,20 +386,25 @@ fn find_matches_option_labels_and_opens_matching_shortcuts(cx: &mut TestAppConte
         Some("F9")
     );
 
-    rig.click(cx, "settings-shortcut-hit-files.copy_path");
+    rig.click_in(
+        cx,
+        Target::Settings,
+        "settings-shortcut-hit-files.copy_path",
+    );
     settle_motion(cx, &rig);
     assert!(
         rig.view
             .read_with(cx, |view, _| view.is_showing_shortcuts())
     );
+    let settings = rig.settings_window(cx).expect("settings window");
     let selected = cx
-        .update_window(rig.window, |_, window, cx| {
+        .update_window(settings, |_, window, cx| {
             window.render_frame(cx);
             window
                 .try_find("shortcut-files.copy_path")
                 .and_then(|found| found.selected())
         })
-        .expect("window");
+        .expect("settings window");
     assert_eq!(selected, Some(true));
 }
 
@@ -403,27 +416,31 @@ fn reverting_one_of_two_changed_rows_in_changed_only_moves_to_remaining_row(
     open(cx, &rig);
 
     // Change Theme, Density (Appearance) and FoldersFirst (Files).
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     super::settings_sheet::go_to(cx, &rig, Field::Density);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     super::settings_sheet::go_to(cx, &rig, Field::FoldersFirst);
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     settle_motion(cx, &rig);
 
-    rig.click(cx, "settings-changed-chip");
-    rig.click(cx, ("settings-row", row_of(Field::Density)));
+    rig.click_in(cx, Target::Settings, "settings-changed-chip");
+    rig.click_in(
+        cx,
+        Target::Settings,
+        ("settings-row", row_of(Field::Density)),
+    );
     settle_motion(cx, &rig);
     assert_eq!(current_row(cx, &rig), row_of(Field::Density));
 
     // Revert Density while changed-only is active: selection moves to an admitted row,
     // and Up/Down navigation still steps between Theme and FoldersFirst.
-    rig.press(cx, "f8");
+    rig.press_in(cx, Target::Settings, "f8");
     settle_motion(cx, &rig);
     assert_eq!(current_row(cx, &rig), row_of(Field::Theme));
     assert!(!shows_row(cx, &rig, Field::Density));
 
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     assert_eq!(current_row(cx, &rig), row_of(Field::FoldersFirst));
-    rig.press(cx, "up");
+    rig.press_in(cx, Target::Settings, "up");
     assert_eq!(current_row(cx, &rig), row_of(Field::Theme));
 }

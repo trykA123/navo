@@ -456,3 +456,101 @@ fn shortcuts_page_inside_settings_window_records_with_enter_and_cancels_with_esc
     assert_eq!(cx.windows().len(), 1);
     assert_eq!(settings_window(&rig, cx), None);
 }
+
+#[gpui_kit::test]
+fn ctrl_comma_twice_in_navo_keeps_one_focused_settings_window(cx: &mut TestAppContext) {
+    let rig = rig(cx, false);
+    assert_eq!(cx.windows().len(), 1);
+
+    super::press(cx, rig.window, &rig.view, "ctrl-,");
+    assert_eq!(cx.windows().len(), 2);
+    let first = settings_window(&rig, cx).expect("ctrl-, opens a Settings window");
+    assert!(rig.view.read_with(cx, |view, _| view.settings.is_open()));
+
+    VisualTestContext::from_window(first, cx).deactivate_window();
+    cx.run_until_parked();
+    let active_before = cx
+        .update_window(first, |_, window, _| window.is_window_active())
+        .expect("settings window");
+    assert!(!active_before);
+
+    super::press(cx, rig.window, &rig.view, "ctrl-,");
+    assert_eq!(cx.windows().len(), 2);
+    assert_eq!(settings_window(&rig, cx), Some(first));
+    assert!(rig.view.read_with(cx, |view, _| view.settings.is_open()));
+    let active_after = cx
+        .update_window(first, |_, window, _| window.is_window_active())
+        .expect("settings window");
+    assert!(active_after, "second Ctrl+, in Navo focuses Settings");
+}
+
+#[gpui_kit::test]
+fn preview_stays_open_across_opening_and_closing_settings(cx: &mut TestAppContext) {
+    let rig = rig(cx, false);
+    super::press(cx, rig.window, &rig.view, "f3");
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(1));
+    cx.run_until_parked();
+    assert!(rig.view.read_with(cx, |view, _| view.preview.is_open()));
+    assert!(shows_in(cx, rig.window, "preview-sheet"));
+
+    super::press(cx, rig.window, &rig.view, "ctrl-,");
+    let handle = settings_window(&rig, cx).expect("ctrl-, opens a Settings window");
+    assert!(
+        rig.view.read_with(cx, |view, _| view.preview.is_open()),
+        "opening Settings leaves preview open"
+    );
+    assert!(
+        shows_in(cx, rig.window, "preview-sheet"),
+        "preview stays drawn in Navo"
+    );
+
+    press_settings(cx, handle, "escape");
+    assert_eq!(settings_window(&rig, cx), None);
+    assert!(
+        rig.view.read_with(cx, |view, _| view.preview.is_open()),
+        "closing Settings leaves preview open"
+    );
+    assert!(shows_in(cx, rig.window, "preview-sheet"));
+}
+
+#[gpui_kit::test]
+fn closing_settings_over_a_compare_file_diff_focuses_the_diff(cx: &mut TestAppContext) {
+    let _shown = crate::compare_visible::show_compare();
+    let rig = super::compare_screen::rig(cx);
+    rig.press(cx, "enter");
+    let file_focused = |cx: &mut TestAppContext| {
+        super::screen_access::screen_update_in(&rig.view, rig.window, cx, |view, window, _| {
+            view.file_screen_focused(window)
+        })
+    };
+    assert!(file_focused(cx), "file diff starts focused");
+
+    rig.press(cx, "ctrl-,");
+    let handle = rig
+        .view
+        .read_with(cx, |view, _| view.settings.host.window_handle())
+        .expect("ctrl-, opens a Settings window");
+    // Move focus away from the diff in Navo so closing Settings must actively refocus it.
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, cx| view.focus_core_pane(window, cx));
+    })
+    .expect("navo window");
+    assert!(!file_focused(cx), "diff focus was moved away before close");
+
+    press_settings(cx, handle, "escape");
+    assert!(
+        !rig.view.read_with(cx, |view, _| view.settings.is_open()),
+        "Settings closed"
+    );
+    assert_eq!(
+        rig.view
+            .read_with(cx, |view, _| view.settings.host.window_handle()),
+        None
+    );
+    assert!(
+        file_focused(cx),
+        "closing Settings returns focus to the compare file diff"
+    );
+}

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AnyWindowHandle, AppContext as _, Entity, TestAppContext, px};
 
-use super::{NavoWindow, StartOptions, fake, press, settle, two_panes};
+use super::{NavoWindow, StartOptions, fake, settle, two_panes};
 use crate::app_menu::{Identity, Install, QuickSettings};
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Density, Mode, ThemeChoice};
@@ -71,6 +71,12 @@ impl FakeStore {
             generation: *generation,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Target {
+    Navo,
+    Settings,
 }
 
 pub(super) struct Rig {
@@ -241,15 +247,72 @@ impl Rig {
         self.view.read_with(cx, |view, _| view.app_menu.is_some())
     }
 
+    pub fn settings_window(&self, cx: &TestAppContext) -> Option<AnyWindowHandle> {
+        self.view
+            .read_with(cx, |view, _| view.settings.host.window_handle())
+    }
+
+    fn target_window(&self, cx: &TestAppContext, target: Target) -> AnyWindowHandle {
+        match target {
+            Target::Navo => self.window,
+            Target::Settings => self.settings_window(cx).expect("settings window is open"),
+        }
+    }
+
     pub fn press(&self, cx: &mut TestAppContext, key: &str) {
-        press(cx, self.window, &self.view, key);
+        self.press_in(cx, Target::Navo, key);
+    }
+
+    pub fn press_in(&self, cx: &mut TestAppContext, target: Target, key: &str) {
+        let window = self.target_window(cx, target);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.press(key, cx);
+        })
+        .expect("window");
+        settle(cx, &self.view);
+        let _ = cx.update_window(window, |_, window, cx| window.render_frame(cx));
+        if window != self.window {
+            let _ = cx.update_window(self.window, |_, window, cx| window.render_frame(cx));
+        }
+        cx.run_until_parked();
     }
 
     pub fn click(&self, cx: &mut TestAppContext, id: impl Into<gpui_kit::ElementId>) {
+        self.click_in(cx, Target::Navo, id);
+    }
+
+    pub fn click_in(
+        &self,
+        cx: &mut TestAppContext,
+        target: Target,
+        id: impl Into<gpui_kit::ElementId>,
+    ) {
+        let window = self.target_window(cx, target);
         let id = id.into();
-        cx.update_window(self.window, |_, window, cx| window.click(id, cx))
-            .expect("window");
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click(id, cx);
+        })
+        .expect("window");
         settle(cx, &self.view);
+        let _ = cx.update_window(window, |_, window, cx| window.render_frame(cx));
+        if window != self.window {
+            let _ = cx.update_window(self.window, |_, window, cx| window.render_frame(cx));
+        }
+        cx.run_until_parked();
+    }
+
+    pub fn input_in(&self, cx: &mut TestAppContext, target: Target, text: &str) {
+        let window = self.target_window(cx, target);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.input(text, cx);
+        })
+        .expect("window");
+        settle(cx, &self.view);
+        let _ = cx.update_window(window, |_, window, cx| window.render_frame(cx));
+        cx.run_until_parked();
     }
 
     pub fn pane_has_focus(&self, cx: &mut TestAppContext) -> bool {

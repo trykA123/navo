@@ -8,6 +8,37 @@ use super::*;
 use crate::settings::{DiagnosticRow, FIELDS};
 use crate::window_view::tests::{fake, open_options, options_for, two_panes};
 
+fn settings_window(
+    cx: &TestAppContext,
+    view: &gpui_kit::Entity<NavoWindow>,
+) -> gpui_kit::AnyWindowHandle {
+    view.read_with(cx, |view, _| view.settings.host.window_handle())
+        .expect("settings window")
+}
+
+fn click_settings(
+    cx: &mut TestAppContext,
+    settings: gpui_kit::AnyWindowHandle,
+    id: impl Into<gpui_kit::ElementId>,
+) {
+    let id = id.into();
+    cx.update_window(settings, |_, window, cx| {
+        window.render_frame(cx);
+        window.click(id, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+fn press_settings(cx: &mut TestAppContext, settings: gpui_kit::AnyWindowHandle, key: &str) {
+    cx.update_window(settings, |_, window, cx| {
+        window.render_frame(cx);
+        window.press(key, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
 #[gpui_kit::test]
 fn settings_diagnostics_lists_hook_rows_and_refreshes(cx: &mut TestAppContext) {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -39,24 +70,27 @@ fn settings_diagnostics_lists_hook_rows_and_refreshes(cx: &mut TestAppContext) {
         assert_eq!(view.settings.diagnostics.len(), 1);
         assert_eq!(view.settings.diagnostics[0].name.as_ref(), "store 1");
     });
-    cx.update_window(handle, |_, window, cx| {
+    let settings = settings_window(cx, &view);
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(
             window
                 .try_find(("settings-diagnostic-row", 0usize))
                 .is_none()
         );
-        window.click("settings-storage-fold", cx);
+    })
+    .unwrap();
+    click_settings(cx, settings, "settings-storage-fold");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(
             window
                 .try_find(("settings-diagnostic-row", 0usize))
                 .is_some()
         );
-        window.click("settings-diagnostics-refresh", cx);
     })
     .unwrap();
-    cx.run_until_parked();
+    click_settings(cx, settings, "settings-diagnostics-refresh");
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     view.read_with(cx, |view, _| {
         assert_eq!(view.settings.diagnostics[0].name.as_ref(), "store 2");
@@ -75,7 +109,8 @@ fn settings_diagnostics_empty_hook_renders_an_empty_state(cx: &mut TestAppContex
     })
     .unwrap();
     cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| {
+    let settings = settings_window(cx, &view);
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("settings-diagnostics-empty").is_some());
         assert!(
@@ -103,13 +138,13 @@ fn open_about_with_rows(
     })
     .unwrap();
     cx.run_until_parked();
-    (handle, view)
+    (settings_window(cx, &view), view)
 }
 
 #[gpui_kit::test]
 fn about_storage_hides_paths_until_fold_opens_and_inspects_selected_store(cx: &mut TestAppContext) {
     let store_path = "/tmp/navo-test-data/profile/cache.db";
-    let (handle, view) = open_about_with_rows(
+    let (settings, view) = open_about_with_rows(
         cx,
         vec![DiagnosticRow {
             name: "Listing cache".into(),
@@ -120,7 +155,7 @@ fn about_storage_hides_paths_until_fold_opens_and_inspects_selected_store(cx: &m
             budget: Some(8192),
         }],
     );
-    cx.update_window(handle, |_, window, cx| {
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(
             window
@@ -133,7 +168,10 @@ fn about_storage_hides_paths_until_fold_opens_and_inspects_selected_store(cx: &m
                 .any(|item| item.text().contains(store_path)),
             "no store path may be drawn while collapsed"
         );
-        window.click("settings-storage-fold", cx);
+    })
+    .unwrap();
+    click_settings(cx, settings, "settings-storage-fold");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(
             window
@@ -143,15 +181,17 @@ fn about_storage_hides_paths_until_fold_opens_and_inspects_selected_store(cx: &m
     })
     .unwrap();
     view.read_with(cx, |view, _| view.scroll_settings_to_end());
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        window.click(("settings-diagnostic-row", 0usize), cx);
+    click_settings(cx, settings, ("settings-diagnostic-row", 0usize));
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         let inspected = window
             .try_find("settings-diagnostic-path")
             .and_then(|found| found.label().map(str::to_owned));
         assert_eq!(inspected.as_deref(), Some(store_path));
-        window.click("settings-diagnostic-copy", cx);
+    })
+    .unwrap();
+    click_settings(cx, settings, "settings-diagnostic-copy");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(
             cx.read_from_clipboard()
@@ -175,7 +215,7 @@ fn about_storage_hides_paths_until_fold_opens_and_inspects_selected_store(cx: &m
 fn about_storage_up_and_down_step_through_open_store_rows(cx: &mut TestAppContext) {
     let first_path = "/tmp/navo-test-data/profile/cache.db";
     let second_path = "/tmp/navo-test-data/profile/navo.db";
-    let (handle, view) = open_about_with_rows(
+    let (settings, view) = open_about_with_rows(
         cx,
         vec![
             DiagnosticRow {
@@ -196,18 +236,11 @@ fn about_storage_up_and_down_step_through_open_store_rows(cx: &mut TestAppContex
             },
         ],
     );
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        window.click("settings-storage-fold", cx);
-        window.render_frame(cx);
-    })
-    .unwrap();
+    click_settings(cx, settings, "settings-storage-fold");
     view.read_with(cx, |view, _| view.scroll_settings_to_end());
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        window.click(("settings-diagnostic-row", 0usize), cx);
-        window.render_frame(cx);
-        window.press("down", cx);
+    click_settings(cx, settings, ("settings-diagnostic-row", 0usize));
+    press_settings(cx, settings, "down");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(
             window
@@ -216,7 +249,10 @@ fn about_storage_up_and_down_step_through_open_store_rows(cx: &mut TestAppContex
                 .as_deref(),
             Some(second_path)
         );
-        window.press("up", cx);
+    })
+    .unwrap();
+    press_settings(cx, settings, "up");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(
             window
@@ -225,7 +261,10 @@ fn about_storage_up_and_down_step_through_open_store_rows(cx: &mut TestAppContex
                 .as_deref(),
             Some(first_path)
         );
-        window.press("up", cx);
+    })
+    .unwrap();
+    press_settings(cx, settings, "up");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("settings-diagnostic-path").is_none());
     })
@@ -266,12 +305,8 @@ fn about_storage_open_data_folder_opens_tab_and_closes_settings(cx: &mut TestApp
     })
     .unwrap();
     cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        window.click("settings-storage-open-folder", cx);
-        window.render_frame(cx);
-    })
-    .unwrap();
+    let settings = settings_window(cx, &view);
+    click_settings(cx, settings, "settings-storage-open-folder");
     view.read_with(cx, |view, _| {
         assert!(!view.settings.is_open());
         assert_eq!(
@@ -317,21 +352,11 @@ fn about_storage_open_store_folder_opens_parent_and_closes_settings(cx: &mut Tes
     })
     .unwrap();
     cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        window.click("settings-storage-fold", cx);
-        window.render_frame(cx);
-    })
-    .unwrap();
+    let settings = settings_window(cx, &view);
+    click_settings(cx, settings, "settings-storage-fold");
     view.read_with(cx, |view, _| view.scroll_settings_to_end());
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        window.click(("settings-diagnostic-row", 0usize), cx);
-        window.render_frame(cx);
-        window.click("settings-diagnostic-open", cx);
-        window.render_frame(cx);
-    })
-    .unwrap();
+    click_settings(cx, settings, ("settings-diagnostic-row", 0usize));
+    click_settings(cx, settings, "settings-diagnostic-open");
     view.read_with(cx, |view, _| {
         assert!(!view.settings.is_open());
         assert_eq!(

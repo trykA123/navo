@@ -8,7 +8,7 @@ use gpui_kit::{
 };
 use navo_core::Location;
 
-use super::{NavoWindow, StartOptions, fake, open_options, options_for, press, settle, two_panes};
+use super::{NavoWindow, StartOptions, fake, open_options, options_for, settle, two_panes};
 use crate::commands::{Keymap, active};
 use crate::shortcuts::{Edit, Saved, ShortcutsPage};
 use crate::window_view::{KeymapHooks, KeymapNews, KeymapSender};
@@ -159,12 +159,30 @@ fn rig_from(cx: &mut TestAppContext, text: &str) -> Rig {
 }
 
 impl Rig {
+    fn active_window(&self, cx: &TestAppContext) -> AnyWindowHandle {
+        self.view
+            .read_with(cx, |view, _| view.settings.host.window_handle())
+            .unwrap_or(self.window)
+    }
+
     pub(in crate::window_view) fn press(&self, cx: &mut TestAppContext, key: &str) {
-        press(cx, self.window, &self.view, key);
+        let target = self.active_window(cx);
+        cx.update_window(target, |_, window, cx| {
+            window.render_frame(cx);
+            window.press(key, cx);
+        })
+        .expect("window");
+        settle(cx, &self.view);
+        let _ = cx.update_window(target, |_, window, cx| window.render_frame(cx));
+        if target != self.window {
+            let _ = cx.update_window(self.window, |_, window, cx| window.render_frame(cx));
+        }
+        cx.run_until_parked();
     }
 
     fn type_text(&self, cx: &mut TestAppContext, text: &str) {
-        cx.update_window(self.window, |_, window, cx| window.input(text, cx))
+        let target = self.active_window(cx);
+        cx.update_window(target, |_, window, cx| window.input(text, cx))
             .expect("window");
         settle(cx, &self.view);
     }
@@ -190,7 +208,8 @@ impl Rig {
 
     fn click(&self, cx: &mut TestAppContext, id: impl Into<ElementId>) {
         let id = id.into();
-        cx.update_window(self.window, |_, window, cx| {
+        let target = self.active_window(cx);
+        cx.update_window(target, |_, window, cx| {
             window.render_frame(cx);
             window.click(id, cx);
         })
@@ -201,7 +220,8 @@ impl Rig {
     fn settle_motion(&self, cx: &mut TestAppContext) {
         cx.executor().advance_clock(Duration::from_secs(1));
         cx.run_until_parked();
-        cx.update_window(self.window, |_, window, cx| window.render_frame(cx))
+        let target = self.active_window(cx);
+        cx.update_window(target, |_, window, cx| window.render_frame(cx))
             .expect("window");
     }
 
@@ -223,7 +243,8 @@ impl Rig {
 
     pub(in crate::window_view) fn search(&self, cx: &mut TestAppContext, query: &str) {
         let page = self.page(cx);
-        cx.update_window(self.window, |_, window, cx| {
+        let target = self.active_window(cx);
+        cx.update_window(target, |_, window, cx| {
             page.update(cx, |page, cx| page.set_query(query, window, cx));
         })
         .expect("window");
@@ -248,7 +269,8 @@ impl Rig {
         id: impl Into<ElementId>,
     ) -> Option<String> {
         let id = id.into();
-        cx.update_window(self.window, |_, window, cx| {
+        let target = self.active_window(cx);
+        cx.update_window(target, |_, window, cx| {
             window.render_frame(cx);
             window
                 .try_find(id)
@@ -260,7 +282,8 @@ impl Rig {
 
     fn shows(&self, cx: &mut TestAppContext, id: impl Into<ElementId>) -> bool {
         let id = id.into();
-        cx.update_window(self.window, |_, window, cx| {
+        let target = self.active_window(cx);
+        cx.update_window(target, |_, window, cx| {
             window.render_frame(cx);
             window.try_find(id).is_some_and(|found| found.visible())
         })
@@ -493,7 +516,8 @@ fn escape_on_a_conflict_saves_nothing(cx: &mut TestAppContext) {
 
 fn move_focus(rig: &Rig, cx: &mut TestAppContext, to_search: bool) {
     let page = rig.page(cx);
-    cx.update_window(rig.window, |_, window, cx| {
+    let target = rig.active_window(cx);
+    cx.update_window(target, |_, window, cx| {
         if to_search {
             let search = page.read(cx).focus_handle(cx);
             window.focus(&search, cx);
@@ -509,11 +533,11 @@ fn move_focus(rig: &Rig, cx: &mut TestAppContext, to_search: bool) {
 #[gpui_kit::test]
 fn leaving_the_search_field_stops_recording(cx: &mut TestAppContext) {
     let rig = rig(cx);
-    let mut visual = VisualTestContext::from_window(rig.window, cx);
+    rig.open_page(cx);
+    let mut visual = VisualTestContext::from_window(rig.active_window(cx), cx);
     visual.deactivate_window();
     visual.update(|window, _| window.activate_window());
     visual.run_until_parked();
-    rig.open_page(cx);
     rig.search(cx, "files.sort_by_size");
     rig.press(cx, "enter");
     assert!(rig.is_recording(cx));

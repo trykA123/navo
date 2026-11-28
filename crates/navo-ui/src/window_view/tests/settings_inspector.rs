@@ -5,9 +5,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AppContext as _, Bounds, ElementId, Pixels, TestAppContext, px};
+use gpui_kit::{
+    AppContext as _, Bounds, ElementId, Pixels, TestAppContext, VisualTestContext, px, size,
+};
 
-use super::app_menu::{Rig, rig, rig_git_sized};
+use super::app_menu::{Rig, Target, rig, rig_git_sized};
 use super::git_menu::{Fake, menu_items, modified};
 use super::settings_sheet::go_to;
 use crate::settings::{Change, FIELDS, Field, Section, Values};
@@ -29,44 +31,48 @@ fn row_of(field: Field) -> usize {
 }
 
 fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+    let window = rig.settings_window(cx)?;
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
             .filter(|found| found.visible())
             .and_then(|found| found.label().map(str::to_owned))
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn bounds(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Bounds<Pixels> {
+    let window = rig.settings_window(cx).expect("settings window");
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.find(id).bounds()
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn is_disabled(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<bool> {
+    let window = rig.settings_window(cx)?;
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).and_then(|found| found.disabled())
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn key_in_row(cx: &mut TestAppContext, rig: &Rig, row: usize) -> bool {
-    cx.update_window(rig.window, |_, window, cx| {
+    let window = rig.settings_window(cx).expect("settings window");
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .within(("settings-row", row))
             .try_find("settings-key")
             .is_some()
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn last_change(rig: &Rig) -> Option<Change> {
@@ -101,7 +107,7 @@ fn the_inspector_shows_now_and_the_default_only_once_changed(cx: &mut TestAppCon
         label(cx, &rig, "settings-key").as_deref(),
         Some("appearance.density")
     );
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert_eq!(
         label(cx, &rig, "settings-inspector-now").as_deref(),
         Some("Compact")
@@ -119,9 +125,9 @@ fn inspector_reset_is_disabled_at_default_and_resets_by_mouse(cx: &mut TestAppCo
     go_to(cx, &rig, Field::Density);
     let reset = ("settings-reset", row_of(Field::Density));
     assert_eq!(is_disabled(cx, &rig, reset), Some(true));
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert_ne!(is_disabled(cx, &rig, reset), Some(true));
-    rig.click(cx, reset);
+    rig.click_in(cx, Target::Settings, reset);
     assert_eq!(last_change(&rig), Some(Change::reset(Field::Density)));
     assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Normal);
     assert_eq!(is_disabled(cx, &rig, reset), Some(true));
@@ -133,7 +139,7 @@ fn open_the_line_in_the_inspector_runs_the_f3_path(cx: &mut TestAppContext) {
     open(cx, &rig);
     // The rig has no settings file, so F3 and the button both say so in the message line.
     assert_eq!(label(cx, &rig, "settings-error"), None);
-    rig.click(cx, "settings-locate");
+    rig.click_in(cx, Target::Settings, "settings-locate");
     assert_eq!(
         label(cx, &rig, "settings-error").as_deref(),
         Some("There is no settings file in this session.")
@@ -144,9 +150,13 @@ fn open_the_line_in_the_inspector_runs_the_f3_path(cx: &mut TestAppContext) {
 fn f3_on_the_help_row_opens_the_updates_line(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    rig.click(cx, ("settings-section", Section::ALL.len() - 1));
+    rig.click_in(
+        cx,
+        Target::Settings,
+        ("settings-section", Section::ALL.len() - 1),
+    );
     assert_eq!(label(cx, &rig, "settings-error"), None);
-    rig.press(cx, "f3");
+    rig.press_in(cx, Target::Settings, "f3");
     assert_eq!(
         label(cx, &rig, "settings-error").as_deref(),
         Some("There is no settings file in this session.")
@@ -157,6 +167,9 @@ fn open_sized(cx: &mut TestAppContext, width: f32) -> Rig {
     let git = Fake::new(menu_items(false), modified());
     let rig = rig_git_sized(cx, Values::default(), Arc::new(git), px(width));
     open(cx, &rig);
+    let settings = rig.settings_window(cx).expect("settings window");
+    VisualTestContext::from_window(settings, cx).simulate_resize(size(px(width), px(600.)));
+    cx.run_until_parked();
     rig
 }
 

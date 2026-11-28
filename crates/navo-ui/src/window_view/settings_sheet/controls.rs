@@ -1,15 +1,45 @@
 //! Settings sheet bottom bar: the open editor, key recording, and the named status line with Undo.
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{KeyDownEvent, Role};
+use gpui_kit::{FocusHandle, KeyDownEvent, Role};
 use navo_l10n::{t, tr};
 
 use super::edit::{Entry, TextEdit};
 use crate::prelude::*;
-use crate::primitives::{Button, ButtonVariant, IconName, Kbd, TextField, icon};
+use crate::primitives::{Button, ButtonVariant, IconName, Kbd, TextField, TextFieldState, icon};
 use crate::settings::{CancelEdit, Control, FIELD_CONTEXT, Field, Value, Values};
 use crate::tokens::Theme;
-use crate::window_view::NavoWindow;
+use crate::window_view::settings_window::SettingsRoute;
+
+/// Cloned snapshot of an active Settings row edit for rendering outside `NavoWindow`.
+#[derive(Clone)]
+pub(super) struct EditSnapshot {
+    pub(super) field: Field,
+    pub(super) entry: EditEntrySnapshot,
+    pub(super) error: Option<SharedString>,
+}
+
+/// Cloned entry handle for an active Settings edit (typed input or key-recording focus).
+#[derive(Clone)]
+pub(super) enum EditEntrySnapshot {
+    Typed(Entity<TextFieldState>),
+    Recorded(FocusHandle),
+}
+
+impl EditSnapshot {
+    /// Captures a cloneable snapshot from the live `TextEdit`.
+    pub(super) fn from_edit(edit: &TextEdit) -> Self {
+        let entry = match &edit.entry {
+            Entry::Typed { input, .. } => EditEntrySnapshot::Typed(input.clone()),
+            Entry::Recorded(focus) => EditEntrySnapshot::Recorded(focus.clone()),
+        };
+        Self {
+            field: edit.field,
+            entry,
+            error: edit.error.clone(),
+        }
+    }
+}
 
 /// The last thing the sheet did to a setting, named in the status line until the row moves.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -80,117 +110,120 @@ fn problem_line(t: &Theme, problem: SharedString) -> impl IntoElement {
         .child(problem)
 }
 
-impl NavoWindow {
-    /// The typed editor: the hint, the text field and a Save button for the mouse.
-    fn typed_editor_row(
-        &self,
-        field: Field,
-        input: &Entity<crate::primitives::TextFieldState>,
-        t: &Theme,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let spec = field.spec();
-        let save = Button::new("settings-edit-save", tr("settings-edit-save"))
-            .on_click(self.settings_action(cx, |view, window, cx| view.commit_edit(window, cx)));
-        div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .gap(t.spacing.sm)
-            .child(t!("settings-edit-hint", key = spec.key))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(t.spacing.sm)
-                    .child(div().flex_1().child(TextField::new(
-                        "settings-input",
-                        input,
-                        spec.label(),
-                    )))
-                    .child(save),
-            )
-            .into_any_element()
-    }
+/// Inputs needed to render the Settings bottom bar (active editor or last-change status).
+pub(super) struct BottomBar<'a> {
+    pub(super) edit: Option<&'a EditSnapshot>,
+    pub(super) status: Option<Status>,
+    pub(super) can_undo: bool,
+    pub(super) values: &'a Values,
+}
 
-    /// The bottom bar: the open editor, else the status of the last change, else nothing.
-    pub(super) fn edit_bar(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
-        match &self.settings.edit {
-            Some(edit) => Some(self.editor(edit, t, cx)),
-            None => self.status_line(t, cx),
-        }
+/// The bottom bar: the open editor, else the status of the last change, else nothing.
+pub(super) fn edit_bar(
+    route: &SettingsRoute,
+    data: &BottomBar<'_>,
+    t: &Theme,
+) -> Option<AnyElement> {
+    match data.edit {
+        Some(edit) => Some(editor(route, edit, t)),
+        None => status_line(route, data, t),
     }
+}
 
-    fn editor(&self, edit: &TextEdit, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        let cancel = Button::new("settings-edit-cancel", tr("settings-edit-cancel"))
-            .variant(ButtonVariant::Ghost)
-            .on_click(self.settings_action(cx, |view, window, cx| view.cancel_edit(window, cx)));
-        let entry = match &edit.entry {
-            Entry::Typed { input, .. } => self.typed_editor_row(edit.field, input, t, cx),
-            Entry::Recorded(focus) => div()
-                .id("settings-record")
-                .role(Role::Status)
-                .aria_label(tr("settings-record-hint"))
-                .test_support()
-                .track_focus(focus)
-                .on_key_down(self.settings_listener_stopping(
-                    cx,
-                    |view, event: &KeyDownEvent, window, cx| {
-                        view.record_key(&event.keystroke, window, cx);
-                    },
-                ))
-                .flex_1()
-                .text_color(t.colors.accent_text)
-                .child(tr("settings-record-hint"))
-                .into_any_element(),
-        };
-        bar(t)
-            .key_context(FIELD_CONTEXT)
-            .on_action(self.settings_action::<CancelEdit>(cx, |view, window, cx| {
-                view.cancel_edit(window, cx);
-            }))
-            .flex_col()
-            .py(t.spacing.lg)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(t.spacing.sm)
-                    .child(entry)
-                    .child(cancel),
-            )
-            .children(edit.error.clone().map(|problem| problem_line(t, problem)))
-            .into_any_element()
-    }
-
-    /// The named status of the last change, with Undo while there is something to undo.
-    fn status_line(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let status = self
-            .settings
-            .status
-            .filter(|_| self.saver.error.is_none())?;
-        let text = status_text(status, &self.values);
-        let can_undo = !self.settings.undo.is_empty();
-        let undo = can_undo.then(|| {
-            Button::new("settings-status-undo", tr("settings-status-undo"))
-                .variant(ButtonVariant::Ghost)
-                .icon(IconName::RotateCcw)
-                .on_click(
-                    self.settings_action(cx, |view, window, cx| view.undo_setting(window, cx)),
+/// The typed editor: the hint, the text field and a Save button for the mouse.
+fn typed_editor_row(
+    route: &SettingsRoute,
+    field: Field,
+    input: &Entity<TextFieldState>,
+    t: &Theme,
+) -> AnyElement {
+    let spec = field.spec();
+    let save = Button::new("settings-edit-save", tr("settings-edit-save"))
+        .on_click(route.action(|view, window, cx| view.commit_edit(window, cx)));
+    div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .gap(t.spacing.sm)
+        .child(t!("settings-edit-hint", key = spec.key))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(t.spacing.sm)
+                .child(
+                    div()
+                        .flex_1()
+                        .child(TextField::new("settings-input", input, spec.label())),
                 )
-        });
-        let line = bar(t)
-            .id("settings-status")
+                .child(save),
+        )
+        .into_any_element()
+}
+
+fn editor(route: &SettingsRoute, edit: &EditSnapshot, t: &Theme) -> AnyElement {
+    let cancel = Button::new("settings-edit-cancel", tr("settings-edit-cancel"))
+        .variant(ButtonVariant::Ghost)
+        .on_click(route.action(|view, window, cx| view.cancel_edit(window, cx)));
+    let entry = match &edit.entry {
+        EditEntrySnapshot::Typed(input) => typed_editor_row(route, edit.field, input, t),
+        EditEntrySnapshot::Recorded(focus) => div()
+            .id("settings-record")
             .role(Role::Status)
-            .aria_label(text.clone())
+            .aria_label(tr("settings-record-hint"))
             .test_support()
-            .items_center()
-            .child(icon(IconName::Check, t.spacing.icon, t.colors.ok))
-            .child(div().flex_1().min_w_0().truncate().child(text))
-            .children(undo)
-            .children(Kbd::new("settings-status-undo-key", "ctrl-z").filter(|_| can_undo));
-        Some(line.into_any_element())
-    }
+            .track_focus(focus)
+            .on_key_down(
+                route.listener_stopping(|view, event: &KeyDownEvent, window, cx| {
+                    view.record_key(&event.keystroke, window, cx);
+                }),
+            )
+            .flex_1()
+            .text_color(t.colors.accent_text)
+            .child(tr("settings-record-hint"))
+            .into_any_element(),
+    };
+    bar(t)
+        .key_context(FIELD_CONTEXT)
+        .on_action(route.action::<CancelEdit>(|view, window, cx| {
+            view.cancel_edit(window, cx);
+        }))
+        .flex_col()
+        .py(t.spacing.lg)
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(t.spacing.sm)
+                .child(entry)
+                .child(cancel),
+        )
+        .children(edit.error.clone().map(|problem| problem_line(t, problem)))
+        .into_any_element()
+}
+
+/// The named status of the last change, with Undo while there is something to undo.
+fn status_line(route: &SettingsRoute, data: &BottomBar<'_>, t: &Theme) -> Option<AnyElement> {
+    let status = data.status?;
+    let text = status_text(status, data.values);
+    let can_undo = data.can_undo;
+    let undo = can_undo.then(|| {
+        Button::new("settings-status-undo", tr("settings-status-undo"))
+            .variant(ButtonVariant::Ghost)
+            .icon(IconName::RotateCcw)
+            .on_click(route.action(|view, window, cx| view.undo_setting(window, cx)))
+    });
+    let line = bar(t)
+        .id("settings-status")
+        .role(Role::Status)
+        .aria_label(text.clone())
+        .test_support()
+        .items_center()
+        .child(icon(IconName::Check, t.spacing.icon, t.colors.ok))
+        .child(div().flex_1().min_w_0().truncate().child(text))
+        .children(undo)
+        .children(Kbd::new("settings-status-undo-key", "ctrl-z").filter(|_| can_undo));
+    Some(line.into_any_element())
 }
 
 #[cfg(test)]

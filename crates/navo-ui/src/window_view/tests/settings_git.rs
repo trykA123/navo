@@ -3,10 +3,11 @@ use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AppContext as _, Bounds, ElementId, Pixels, ScrollDelta, TestAppContext, point, px,
+    AppContext as _, Bounds, ElementId, Pixels, ScrollDelta, TestAppContext, VisualTestContext,
+    point, px, size,
 };
 
-use super::app_menu::{Rig, rig_git, rig_git_sized};
+use super::app_menu::{Rig, Target, rig_git, rig_git_sized};
 use super::git_menu::{Fake, menu_items, modified};
 use crate::settings::{Change, FIELDS, Field, Values};
 
@@ -33,14 +34,15 @@ fn fake() -> Fake {
 }
 
 fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+    let window = rig.settings_window(cx)?;
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
             .and_then(|found| found.label().map(str::to_owned))
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn command_row() -> (&'static str, usize) {
@@ -65,21 +67,22 @@ fn auto_names_the_tool_it_resolved_to(cx: &mut TestAppContext) {
 fn picking_a_tool_writes_the_setting(cx: &mut TestAppContext) {
     let rig = open(cx, Values::default(), &fake());
     // The found tools grow the row after it was scrolled to; a step away and back shows it whole.
-    rig.press(cx, "down");
-    rig.press(cx, "up");
+    rig.press_in(cx, Target::Settings, "down");
+    rig.press_in(cx, Target::Settings, "up");
     // The tool list sits last in the inspector; a short window scrolls it into view.
-    cx.update_window(rig.window, |_, window, cx| {
+    let settings = rig.settings_window(cx).expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         let down = ScrollDelta::Pixels(point(px(0.), px(-400.)));
         window.scroll("settings-inspector", down, cx);
     })
-    .expect("window");
-    rig.click(cx, ("settings-tool", FAKE));
+    .expect("settings window");
+    rig.click_in(cx, Target::Settings, ("settings-tool", FAKE));
     assert_eq!(
         last_change(&rig),
         Some(Change::text(Field::GitTool, "fake"))
     );
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     assert_eq!(
         last_change(&rig),
         Some(Change::text(Field::GitTool, "git-cli"))
@@ -91,14 +94,14 @@ fn only_other_shows_the_command_row(cx: &mut TestAppContext) {
     let rig = open(cx, Values::default(), &fake());
     assert!(label(cx, &rig, command_row()).is_none());
     for _ in 0..OTHER {
-        rig.press(cx, "right");
+        rig.press_in(cx, Target::Settings, "right");
     }
     assert_eq!(
         last_change(&rig),
         Some(Change::text(Field::GitTool, "custom"))
     );
     assert!(label(cx, &rig, command_row()).is_some());
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     assert_eq!(
         last_change(&rig),
         Some(Change::text(Field::GitTool, "none"))
@@ -143,6 +146,9 @@ fn open_sized(cx: &mut TestAppContext, width: f32) -> Rig {
     .expect("window");
     cx.executor().advance_clock(Duration::from_secs(1));
     cx.run_until_parked();
+    let settings = rig.settings_window(cx).expect("settings window");
+    VisualTestContext::from_window(settings, cx).simulate_resize(size(px(width), px(600.)));
+    cx.run_until_parked();
     rig
 }
 
@@ -153,7 +159,8 @@ fn badges_row(cx: &mut TestAppContext, width: f32) -> [Bounds<Pixels>; 3] {
         .iter()
         .position(|spec| spec.field == Field::GitBadges)
         .expect("row");
-    cx.update_window(rig.window, |_, window, cx| {
+    let settings = rig.settings_window(cx).expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         let toggle = window.within(("settings-row", at)).find("settings-toggle");
         [
@@ -162,7 +169,7 @@ fn badges_row(cx: &mut TestAppContext, width: f32) -> [Bounds<Pixels>; 3] {
             toggle.bounds(),
         ]
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 #[gpui_kit::test]

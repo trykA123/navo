@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, TestAppContext};
 
-use super::app_menu::{Rig, rig};
+use super::app_menu::{Rig, Target, rig};
 use crate::settings::Values;
 use crate::settings::{Change, DefaultShift, Field, Value};
 use crate::tokens::ThemeChoice;
@@ -14,6 +14,9 @@ fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
     cx.run_until_parked();
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("window");
+    if let Some(settings) = rig.settings_window(cx) {
+        let _ = cx.update_window(settings, |_, window, cx| window.render_frame(cx));
+    }
 }
 
 fn open(cx: &mut TestAppContext, rig: &Rig) {
@@ -38,9 +41,18 @@ fn send(cx: &mut TestAppContext, rig: &Rig, shifts: Vec<DefaultShift>) {
     cx.run_until_parked();
 }
 
-fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+fn label_in(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    target: Target,
+    id: impl Into<ElementId>,
+) -> Option<String> {
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    let window = match target {
+        Target::Navo => rig.window,
+        Target::Settings => rig.settings_window(cx)?,
+    };
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
@@ -48,6 +60,10 @@ fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option
             .and_then(|found| found.label().map(str::to_owned))
     })
     .expect("window")
+}
+
+fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+    label_in(cx, rig, Target::Settings, id)
 }
 
 fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
@@ -58,7 +74,7 @@ fn status(cx: &mut TestAppContext, rig: &Rig) -> String {
     let pane = rig
         .view
         .read_with(cx, |view, _| view.browser.state().focused_pane());
-    label(cx, rig, ("status", pane.get())).unwrap_or_default()
+    label_in(cx, rig, Target::Navo, ("status", pane.get())).unwrap_or_default()
 }
 
 #[gpui_kit::test]
@@ -100,7 +116,7 @@ fn keep_old_value_saves_the_old_value_and_drops_that_item(cx: &mut TestAppContex
         vec![sort_shift(), shift("files.folders-first", "false", "true")],
     );
     open(cx, &rig);
-    rig.click(cx, ("settings-keep", 0usize));
+    rig.click_in(cx, Target::Settings, ("settings-keep", 0usize));
     settle_motion(cx, &rig);
     let last = rig.store.changes.lock().expect("changes").last().cloned();
     assert_eq!(
@@ -122,7 +138,7 @@ fn dismiss_hides_the_notice_and_the_same_changes_do_not_return(cx: &mut TestAppC
     let rig = rig(cx, ThemeChoice::System);
     send(cx, &rig, vec![sort_shift()]);
     open(cx, &rig);
-    rig.click(cx, "settings-dismiss");
+    rig.click_in(cx, Target::Settings, "settings-dismiss");
     settle_motion(cx, &rig);
     assert!(!shows(cx, &rig, "settings-upgrade"));
     send(cx, &rig, vec![sort_shift()]);
@@ -136,7 +152,7 @@ fn a_different_change_after_a_dismiss_shows_again(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     send(cx, &rig, vec![sort_shift()]);
     open(cx, &rig);
-    rig.click(cx, "settings-dismiss");
+    rig.click_in(cx, Target::Settings, "settings-dismiss");
     send(
         cx,
         &rig,
@@ -161,8 +177,8 @@ fn the_status_line_points_to_a_pending_notice_until_it_is_dismissed(cx: &mut Tes
     send(cx, &rig, vec![sort_shift()]);
     assert!(status(cx, &rig).contains("Defaults changed for 1 setting"));
     open(cx, &rig);
-    rig.click(cx, "settings-dismiss");
-    rig.press(cx, "escape");
+    rig.click_in(cx, Target::Settings, "settings-dismiss");
+    rig.press_in(cx, Target::Settings, "escape");
     settle_motion(cx, &rig);
     assert!(!status(cx, &rig).contains("Defaults changed"));
 }
@@ -188,7 +204,7 @@ fn picking_another_value_in_that_row_drops_the_item(cx: &mut TestAppContext) {
     send(cx, &rig, vec![sort_shift()]);
     open(cx, &rig);
     sort_row(cx, &rig);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     settle_motion(cx, &rig);
     assert!(!shows(cx, &rig, "settings-upgrade"));
 }
@@ -218,7 +234,7 @@ fn a_default_already_changed_in_the_sheet_shows_no_item(cx: &mut TestAppContext)
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     sort_row(cx, &rig);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     settle_motion(cx, &rig);
     send(cx, &rig, vec![sort_shift()]);
     settle_motion(cx, &rig);
@@ -230,10 +246,10 @@ fn ctrl_z_undoes_keep_old_value(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     send(cx, &rig, vec![sort_shift()]);
     open(cx, &rig);
-    rig.click(cx, ("settings-keep", 0usize));
+    rig.click_in(cx, Target::Settings, ("settings-keep", 0usize));
     settle_motion(cx, &rig);
     assert_eq!(last_change(&rig).map(|c| c.value), Some(Value::Pick(2)));
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     settle_motion(cx, &rig);
     assert_eq!(
         last_change(&rig),
@@ -254,7 +270,7 @@ fn a_failed_save_keeps_the_item_and_shows_the_problem(cx: &mut TestAppContext) {
     send(cx, &rig, vec![sort_shift()]);
     open(cx, &rig);
     *rig.store.failure.lock().expect("failure") = Some("disk full".to_owned());
-    rig.click(cx, ("settings-keep", 0usize));
+    rig.click_in(cx, Target::Settings, ("settings-keep", 0usize));
     settle_motion(cx, &rig);
     assert!(shows(cx, &rig, ("settings-upgrade-item", 0usize)));
     assert!(rig.view.read_with(cx, |view, _| view.saver.error.is_some()));

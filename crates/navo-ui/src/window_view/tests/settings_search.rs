@@ -7,7 +7,7 @@ use std::time::Duration;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, TestAppContext};
 
-use super::app_menu::{Rig, rig_search};
+use super::app_menu::{Rig, Target, rig_search};
 use crate::settings::{Field, Values};
 use crate::window_view::{SearchHooks, ServiceHooks, ServiceOutcome, ServiceStatus};
 
@@ -75,17 +75,27 @@ fn open_search(
     .expect("window");
     cx.executor().advance_clock(Duration::from_secs(1));
     cx.run_until_parked();
-    cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
-        .expect("window");
+    let settings = rig.settings_window(cx).expect("settings window");
+    cx.update_window(settings, |_, window, cx| window.render_frame(cx))
+        .expect("settings window");
     view.read_with(cx, |view, _| view.scroll_settings_to_end());
-    cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
-        .expect("window");
+    cx.update_window(settings, |_, window, cx| window.render_frame(cx))
+        .expect("settings window");
     (rig, calls)
 }
 
-fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+fn label_in(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    target: Target,
+    id: impl Into<ElementId>,
+) -> Option<String> {
+    let window = match target {
+        Target::Navo => rig.window,
+        Target::Settings => rig.settings_window(cx)?,
+    };
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
@@ -93,6 +103,10 @@ fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option
             .and_then(|found| found.label().map(str::to_owned))
     })
     .expect("window")
+}
+
+fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+    label_in(cx, rig, Target::Settings, id)
 }
 
 fn count(value: &AtomicUsize) -> usize {
@@ -103,7 +117,7 @@ fn count(value: &AtomicUsize) -> usize {
 fn clear_search_history_calls_the_hook_and_says_so(cx: &mut TestAppContext) {
     let (rig, calls) = open_search(cx, ServiceStatus::NotAvailable, true);
     assert!(label(cx, &rig, "settings-history-cleared").is_none());
-    rig.click(cx, "settings-clear-history");
+    rig.click_in(cx, Target::Settings, "settings-clear-history");
     assert_eq!(count(&calls.clear), 1);
     assert!(label(cx, &rig, "settings-history-cleared").is_some());
 }
@@ -115,8 +129,8 @@ fn a_missing_service_shows_its_status_and_both_buttons_do_nothing(cx: &mut TestA
         label(cx, &rig, "settings-service-status"),
         Some(ServiceStatus::NotAvailable.text().to_string())
     );
-    rig.click(cx, "settings-service-install");
-    rig.click(cx, "settings-service-remove");
+    rig.click_in(cx, Target::Settings, "settings-service-install");
+    rig.click_in(cx, Target::Settings, "settings-service-remove");
     assert_eq!((count(&calls.install), count(&calls.remove)), (0, 0));
 }
 
@@ -127,9 +141,9 @@ fn install_works_only_when_not_installed(cx: &mut TestAppContext) {
         label(cx, &rig, "settings-service-status"),
         Some(ServiceStatus::NotInstalled.text().to_string())
     );
-    rig.click(cx, "settings-service-remove");
+    rig.click_in(cx, Target::Settings, "settings-service-remove");
     assert_eq!(count(&calls.remove), 0);
-    rig.click(cx, "settings-service-install");
+    rig.click_in(cx, Target::Settings, "settings-service-install");
     assert_eq!(count(&calls.install), 1);
 }
 
@@ -141,9 +155,9 @@ fn remove_works_while_the_service_runs_or_is_stopped(cx: &mut TestAppContext) {
             label(cx, &rig, "settings-service-status"),
             Some(status.text().to_string())
         );
-        rig.click(cx, "settings-service-install");
+        rig.click_in(cx, Target::Settings, "settings-service-install");
         assert_eq!(count(&calls.install), 0);
-        rig.click(cx, "settings-service-remove");
+        rig.click_in(cx, Target::Settings, "settings-service-remove");
         assert_eq!(count(&calls.remove), 1);
     }
 }
@@ -153,7 +167,7 @@ fn a_failed_update_says_so_and_keeps_the_update_button(cx: &mut TestAppContext) 
     let (rig, calls) = open_search(cx, ServiceStatus::Outdated, true);
     calls.is_failing.store(true, Ordering::SeqCst);
     assert!(label(cx, &rig, "settings-error").is_none());
-    rig.click(cx, "settings-service-install");
+    rig.click_in(cx, Target::Settings, "settings-service-install");
     cx.run_until_parked();
     assert_eq!(count(&calls.install), 1);
     assert!(label(cx, &rig, "settings-error").is_some());
@@ -168,7 +182,7 @@ fn a_deferred_removal_shows_the_restart_notice_and_not_installed(cx: &mut TestAp
     let (rig, calls) = open_search(cx, ServiceStatus::Running, true);
     calls.is_deferred.store(true, Ordering::SeqCst);
     assert!(label(cx, &rig, "settings-error").is_none());
-    rig.click(cx, "settings-service-remove");
+    rig.click_in(cx, Target::Settings, "settings-service-remove");
     cx.run_until_parked();
     assert_eq!(count(&calls.remove), 1);
     assert!(label(cx, &rig, "settings-error").is_none());
@@ -189,15 +203,16 @@ fn the_service_row_says_what_the_index_lists_above_the_install_button(cx: &mut T
         label(cx, &rig, "settings-service-scope"),
         Some(navo_l10n::tr("settings-search-service-scope"))
     );
+    let settings = rig.settings_window(cx).expect("settings window");
     let (scope, install) = cx
-        .update_window(rig.window, |_, window, _| {
+        .update_window(settings, |_, window, _| {
             let bounds = |id: &'static str| window.find(id).bounds();
             (
                 bounds("settings-service-scope"),
                 bounds("settings-service-install"),
             )
         })
-        .expect("window");
+        .expect("settings window");
     assert!(
         scope.bottom() <= install.top(),
         "{scope:?} sits above {install:?}"
@@ -226,15 +241,19 @@ fn service_actions_finish_after_the_click_handler_and_refresh_status(cx: &mut Te
         ),
     ] {
         let (rig, calls) = open_search(cx, before, true);
-        cx.update_window(rig.window, |_, window, cx| {
+        let settings = rig.settings_window(cx).expect("settings window");
+        cx.update_window(settings, |_, window, cx| {
             window.click(button, cx);
             assert_eq!(count(&calls.install) + count(&calls.remove), 0);
+        })
+        .expect("settings window");
+        cx.update_window(rig.window, |_, window, cx| {
             rig.view.update(cx, |view, cx| {
-                view.toggle_settings(window, cx);
+                view.close_settings(window, cx);
                 view.open_settings_at(Field::SearchIndex, window, cx);
             });
         })
-        .expect("window");
+        .expect("navo window");
         cx.executor().advance_clock(Duration::from_secs(1));
         cx.run_until_parked();
         label(cx, &rig, "settings-service-status");
@@ -257,7 +276,7 @@ fn rendering_uses_cached_status_and_each_search_open_refreshes_once(cx: &mut Tes
         label(cx, &rig, "settings-service-status");
     }
     assert_eq!(count(&calls.status_calls), 0);
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     let view = rig.view.clone();
     cx.update_window(rig.window, |_, window, cx| {
         view.update(cx, |view, cx| {
@@ -286,10 +305,10 @@ fn upgrade_rig(cx: &mut TestAppContext) -> (Rig, Arc<Calls>) {
 #[gpui_kit::test]
 fn the_upgrade_notice_shows_until_dismissed_and_remembers_it_once(cx: &mut TestAppContext) {
     let (rig, calls) = upgrade_rig(cx);
-    assert!(label(cx, &rig, "index-upgrade").is_some());
+    assert!(label_in(cx, &rig, Target::Navo, "index-upgrade").is_some());
     rig.click(cx, "index-upgrade-dismiss");
     cx.run_until_parked();
-    assert!(label(cx, &rig, "index-upgrade").is_none());
+    assert!(label_in(cx, &rig, Target::Navo, "index-upgrade").is_none());
     assert_eq!(count(&calls.dismiss), 1);
     assert_eq!(count(&calls.install), 0);
 }
@@ -301,13 +320,13 @@ fn upgrade_runs_the_install_hook_and_hides_the_notice(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(count(&calls.install), 1);
     assert_eq!(count(&calls.dismiss), 0);
-    assert!(label(cx, &rig, "index-upgrade").is_none());
+    assert!(label_in(cx, &rig, Target::Navo, "index-upgrade").is_none());
 }
 
 #[gpui_kit::test]
 fn no_notice_without_the_old_service(cx: &mut TestAppContext) {
     let (rig, _) = open_search(cx, ServiceStatus::NotInstalled, true);
-    assert!(label(cx, &rig, "index-upgrade").is_none());
+    assert!(label_in(cx, &rig, Target::Navo, "index-upgrade").is_none());
 }
 
 #[gpui_kit::test]
@@ -335,13 +354,14 @@ fn held_journal_lock_does_not_block_clear_history_on_the_ui_thread(cx: &mut Test
     rig.view
         .read_with(cx, |view, _| view.scroll_settings_to_end());
     label(cx, &rig, "settings-clear-history");
+    let settings = rig.settings_window(cx).expect("settings window");
     let held = journal.lock().unwrap();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(settings, |_, window, cx| {
         window.click("settings-clear-history", cx);
-        rig.view
-            .read_with(cx, |view, _| assert!(view.lane.is_pending()));
     })
     .unwrap();
+    rig.view
+        .read_with(cx, |view, _| assert!(view.lane.is_pending()));
     assert!(label(cx, &rig, "settings-history-cleared").is_none());
     drop(held);
     cx.run_until_parked();

@@ -4,7 +4,7 @@ use gpui_kit::component::theme::Theme as KitTheme;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, Hsla, TestAppContext};
 
-use super::app_menu::{Rig, rig};
+use super::app_menu::{Rig, Target, rig};
 use super::settings_sheet::go_to;
 use crate::settings::{Change, FIELDS, Field, Values};
 use crate::tokens::{self, ColorTheme, Density, SyntaxTheme, ThemeChoice};
@@ -15,6 +15,9 @@ fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
     cx.run_until_parked();
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("window");
+    if let Some(settings) = rig.settings_window(cx) {
+        let _ = cx.update_window(settings, |_, window, cx| window.render_frame(cx));
+    }
 }
 
 fn open(cx: &mut TestAppContext, rig: &Rig) {
@@ -30,15 +33,16 @@ fn row_of(field: Field) -> usize {
 }
 
 fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<String> {
+    let window = rig.settings_window(cx)?;
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
             .filter(|found| found.visible())
             .and_then(|found| found.label().map(str::to_owned))
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn state(cx: &mut TestAppContext, rig: &Rig, field: Field) -> Option<String> {
@@ -46,21 +50,25 @@ fn state(cx: &mut TestAppContext, rig: &Rig, field: Field) -> Option<String> {
 }
 
 fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
+    let Some(window) = rig.settings_window(cx) else {
+        return false;
+    };
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).is_some_and(|found| found.visible())
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn is_disabled(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> Option<bool> {
+    let window = rig.settings_window(cx)?;
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).and_then(|found| found.disabled())
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn footer(cx: &mut TestAppContext, rig: &Rig) -> Option<String> {
@@ -74,11 +82,12 @@ fn footer_for(count: usize) -> Option<String> {
 }
 
 fn height_of_row(cx: &mut TestAppContext, rig: &Rig, row: usize) -> gpui_kit::Pixels {
-    cx.update_window(rig.window, |_, window, cx| {
+    let window = rig.settings_window(cx).expect("settings window");
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.find(("settings-row", row)).bounds().size.height
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn send(cx: &mut TestAppContext, rig: &Rig, values: Values, generation: u64) {
@@ -106,12 +115,12 @@ fn a_change_in_the_sheet_marks_its_row_changed_with_a_dot_and_reset(cx: &mut Tes
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     let row = row_of(Field::Density);
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Changed"));
     assert!(shows(cx, &rig, ("settings-dot", row)));
     assert!(shows(cx, &rig, ("settings-reset", row)));
-    rig.press(cx, "up");
+    rig.press_in(cx, Target::Settings, "up");
     assert_eq!(
         state(cx, &rig, Field::ColorTheme).as_deref(),
         Some("Default")
@@ -149,8 +158,12 @@ fn reset_returns_the_row_to_default_and_the_count_drops(cx: &mut TestAppContext)
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "left");
-    rig.click(cx, ("settings-reset", row_of(Field::Density)));
+    rig.press_in(cx, Target::Settings, "left");
+    rig.click_in(
+        cx,
+        Target::Settings,
+        ("settings-reset", row_of(Field::Density)),
+    );
     let last = rig.store.changes.lock().expect("changes").last().cloned();
     assert_eq!(last, Some(Change::reset(Field::Density)));
     assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Normal);
@@ -179,7 +192,7 @@ fn last_change(rig: &Rig) -> Option<Change> {
 
 fn hint_labels(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
     (0..8usize)
-        .filter_map(|index| label(cx, rig, ("side-sheet-hint", index)))
+        .filter_map(|index| label(cx, rig, ("settings-hint", index)))
         .collect()
 }
 
@@ -188,9 +201,13 @@ fn ctrl_z_after_reset_brings_the_old_value_back_as_changed(cx: &mut TestAppConte
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "left");
-    rig.click(cx, ("settings-reset", row_of(Field::Density)));
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "left");
+    rig.click_in(
+        cx,
+        Target::Settings,
+        ("settings-reset", row_of(Field::Density)),
+    );
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     assert_eq!(last_change(&rig), Some(Change::density(Density::Compact)));
     assert_eq!(cx.read(|cx| tokens::current(cx).density), Density::Compact);
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Changed"));
@@ -207,13 +224,13 @@ fn ctrl_z_after_reset_of_a_key_without_a_default_writes_it_back(cx: &mut TestApp
         .push(Field::EditorPath);
     open(cx, &rig);
     go_to(cx, &rig, Field::EditorPath);
-    rig.press(cx, "f8");
+    rig.press_in(cx, Target::Settings, "f8");
     assert_eq!(last_change(&rig), Some(Change::reset(Field::EditorPath)));
     assert_eq!(
         state(cx, &rig, Field::EditorPath).as_deref(),
         Some("Default")
     );
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     assert_eq!(
         last_change(&rig),
         Some(Change::text(Field::EditorPath, "code"))
@@ -231,11 +248,11 @@ fn f8_resets_a_changed_row_and_its_hint_shows_only_there(cx: &mut TestAppContext
     go_to(cx, &rig, Field::Density);
     assert!(!hint_labels(cx, &rig).contains(&"Reset".to_owned()));
     let before = rig.store.changes.lock().expect("changes").len();
-    rig.press(cx, "f8");
+    rig.press_in(cx, Target::Settings, "f8");
     assert_eq!(rig.store.changes.lock().expect("changes").len(), before);
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert!(hint_labels(cx, &rig).contains(&"Reset".to_owned()));
-    rig.press(cx, "f8");
+    rig.press_in(cx, Target::Settings, "f8");
     assert_eq!(last_change(&rig), Some(Change::reset(Field::Density)));
     assert_eq!(state(cx, &rig, Field::Density).as_deref(), Some("Default"));
     assert!(!hint_labels(cx, &rig).contains(&"Reset".to_owned()));
@@ -255,12 +272,12 @@ fn a_syntax_theme_pick_in_the_sheet_recolours_the_highlight_theme_live(cx: &mut 
     go_to(cx, &rig, Field::TextSyntaxTheme);
     let iron = keyword_colour(cx);
     assert!(iron.is_some());
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     let mocha = Change::syntax_theme(SyntaxTheme::Mocha);
     assert_eq!(last_change(&rig), Some(mocha));
     assert_eq!(cx.read(|cx| tokens::current(cx).syntax), SyntaxTheme::Mocha);
     assert_ne!(keyword_colour(cx), iron);
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert_eq!(
         cx.read(|cx| tokens::current(cx).syntax),
         SyntaxTheme::OxidisedIron
@@ -284,7 +301,7 @@ fn a_colour_theme_pick_in_the_sheet_recolours_the_app_live(cx: &mut TestAppConte
     open(cx, &rig);
     go_to(cx, &rig, Field::ColorTheme);
     let sea = cx.read(|cx| tokens::current(cx).colors);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     let red_bill = Change::color_theme(ColorTheme::RedBill);
     assert_eq!(last_change(&rig), Some(red_bill));
     assert_eq!(
@@ -292,7 +309,7 @@ fn a_colour_theme_pick_in_the_sheet_recolours_the_app_live(cx: &mut TestAppConte
         ColorTheme::RedBill
     );
     assert_ne!(cx.read(|cx| tokens::current(cx).colors.accent), sea.accent);
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert_eq!(cx.read(|cx| tokens::current(cx).colors), sea);
 }
 

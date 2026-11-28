@@ -63,8 +63,14 @@ fn cursor_line(cx: &mut TestAppContext, view: &Entity<NavoWindow>) -> Option<u32
     Some(editor.read_with(cx, |state, _| state.cursor_position().line))
 }
 
+fn settings_handle(cx: &TestAppContext, view: &Entity<NavoWindow>) -> AnyWindowHandle {
+    view.read_with(cx, |view, _| view.settings.host.window_handle())
+        .expect("settings window")
+}
+
 fn open_at_key(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<NavoWindow>) {
-    press(cx, window, view, "f3");
+    let settings = settings_handle(cx, view);
+    press(cx, settings, view, "f3");
     for _ in 0..50 {
         cx.run_until_parked();
         settle(cx, view);
@@ -79,8 +85,9 @@ fn open_at_key(cx: &mut TestAppContext, window: AnyWindowHandle, view: &Entity<N
 fn f3_on_a_row_opens_navo_toml_at_its_key(cx: &mut TestAppContext) {
     let (window, view) = settings_window(cx);
     press(cx, window, &view, "ctrl-,");
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "down");
+    let settings = settings_handle(cx, &view);
+    press(cx, settings, &view, "down");
+    press(cx, settings, &view, "down");
     open_at_key(cx, window, &view);
     let location = view.read_with(cx, |view, _| view.viewer_location().cloned());
     assert!(location.is_some_and(|at| at.as_str().ends_with("navo.toml")));
@@ -91,9 +98,10 @@ fn f3_on_a_row_opens_navo_toml_at_its_key(cx: &mut TestAppContext) {
 fn a_key_that_is_not_in_the_file_opens_at_its_section_header_with_a_note(cx: &mut TestAppContext) {
     let (window, view) = settings_window(cx);
     press(cx, window, &view, "ctrl-,");
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "down");
+    let settings = settings_handle(cx, &view);
+    press(cx, settings, &view, "down");
+    press(cx, settings, &view, "down");
+    press(cx, settings, &view, "down");
     open_at_key(cx, window, &view);
     assert_eq!(cursor_line(cx, &view), Some(1));
     let note = viewer_note(cx, window).unwrap_or_default();
@@ -120,7 +128,8 @@ fn the_missing_key_note_stays_beside_a_note_from_opening_the_file() {
 fn a_key_whose_section_is_not_in_the_file_opens_at_the_last_line(cx: &mut TestAppContext) {
     let (window, view) = settings_window(cx);
     press(cx, window, &view, "ctrl-,");
-    press(cx, window, &view, "tab");
+    let settings = settings_handle(cx, &view);
+    press(cx, settings, &view, "tab");
     open_at_key(cx, window, &view);
     assert_eq!(cursor_line(cx, &view), Some(3));
 }
@@ -129,8 +138,9 @@ fn a_key_whose_section_is_not_in_the_file_opens_at_the_last_line(cx: &mut TestAp
 fn a_key_in_the_file_opens_without_a_note(cx: &mut TestAppContext) {
     let (window, view) = settings_window(cx);
     press(cx, window, &view, "ctrl-,");
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "down");
+    let settings = settings_handle(cx, &view);
+    press(cx, settings, &view, "down");
+    press(cx, settings, &view, "down");
     open_at_key(cx, window, &view);
     assert_eq!(viewer_note(cx, window), None);
 }
@@ -143,11 +153,12 @@ fn closing_the_viewer_returns_to_the_open_sheet(cx: &mut TestAppContext) {
     press(cx, window, &view, "escape");
     assert!(view.read_with(cx, |view, _| view.viewer.is_none()));
     assert!(view.read_with(cx, |view, _| view.settings.is_open()));
-    cx.update_window(window, |_, window, cx| {
+    let settings = settings_handle(cx, &view);
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("settings-body").focused(), Some(true));
     })
-    .expect("window");
+    .expect("settings window");
 }
 
 #[gpui_kit::test]
@@ -211,13 +222,14 @@ fn waiting_window(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<NavoWindo
 fn f3_right_after_a_change_waits_for_its_save(cx: &mut TestAppContext) {
     let (window, view, log) = waiting_window(cx);
     press(cx, window, &view, "ctrl-,");
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "down");
-    cx.update_window(window, |_, window, cx| {
+    let settings = settings_handle(cx, &view);
+    press(cx, settings, &view, "down");
+    press(cx, settings, &view, "down");
+    cx.update_window(settings, |_, window, cx| {
         window.press("left", cx);
         window.press("f3", cx);
     })
-    .expect("window");
+    .expect("settings window");
     for _ in 0..50 {
         cx.run_until_parked();
         settle(cx, &view);

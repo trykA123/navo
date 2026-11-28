@@ -1,7 +1,7 @@
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 
-use super::app_menu::{Rig, rig, rig_on};
+use super::app_menu::{Rig, Target, rig, rig_on};
 use crate::settings::{Change, Field, SORTS, Value, Values};
 use crate::tokens::ThemeChoice;
 
@@ -30,7 +30,7 @@ fn sort_by_size_reorders_the_live_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     assert_eq!(names(cx, &rig), ["docs", "a.txt", "b-secret.txt"]);
     open_at(cx, &rig, Field::Sort);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     assert_eq!(names(cx, &rig), ["docs", "b-secret.txt", "a.txt"]);
 }
 
@@ -45,7 +45,7 @@ fn the_saved_sort_orders_the_panes_at_start(cx: &mut TestAppContext) {
 fn descending_reverses_the_live_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_at(cx, &rig, Field::SortDescending);
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     assert_eq!(names(cx, &rig), ["docs", "b-secret.txt", "a.txt"]);
 }
 
@@ -53,7 +53,7 @@ fn descending_reverses_the_live_pane(cx: &mut TestAppContext) {
 fn folders_first_off_mixes_folders_into_the_live_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_at(cx, &rig, Field::FoldersFirst);
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     assert_eq!(names(cx, &rig), ["a.txt", "b-secret.txt", "docs"]);
 }
 
@@ -63,7 +63,7 @@ fn show_system_files_shows_them_in_the_live_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     assert!(!names(cx, &rig).contains(&"c-boot.ini".to_owned()));
     open_at(cx, &rig, Field::ShowSystem);
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     assert!(names(cx, &rig).contains(&"c-boot.ini".to_owned()));
 }
 
@@ -71,8 +71,8 @@ fn show_system_files_shows_them_in_the_live_pane(cx: &mut TestAppContext) {
 fn space_stops_measuring_folders_when_that_row_is_off(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_at(cx, &rig, Field::SpaceMeasuresFolders);
-    rig.press(cx, "left");
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "left");
+    rig.press_in(cx, Target::Settings, "escape");
     rig.press(cx, "space");
     let size = rig.view.read_with(cx, |view, _| {
         let tab = view.browser.state().active_tab().id();
@@ -85,8 +85,8 @@ fn space_stops_measuring_folders_when_that_row_is_off(cx: &mut TestAppContext) {
 fn patterns_select_folders_when_that_row_is_on(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_at(cx, &rig, Field::PatternsSelectFolders);
-    rig.press(cx, "right");
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "right");
+    rig.press_in(cx, Target::Settings, "escape");
     rig.press(cx, "+");
     cx.update_window(rig.window, |_, window, cx| window.input("d*", cx))
         .expect("window");

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, SharedString, TestAppContext, VisualTestContext, px, size};
 
-use super::app_menu::{Rig, rig_updates};
+use super::app_menu::{Rig, Target, rig_updates};
 use crate::settings::{Change, Field, Section};
 use crate::tokens::{self, Mode, ThemeChoice};
 use crate::window_view::{
@@ -29,26 +29,39 @@ fn hooks(start: UpdateView) -> (UpdateHooks, Shared, Arc<AtomicUsize>) {
 
 fn open_help(cx: &mut TestAppContext, rig: &Rig) {
     rig.press(cx, "ctrl-,");
-    rig.click(cx, ("settings-section", Section::ALL.len() - 1));
+    rig.click_in(
+        cx,
+        Target::Settings,
+        ("settings-section", Section::ALL.len() - 1),
+    );
 }
 
 fn status(cx: &mut TestAppContext, rig: &Rig) -> Option<String> {
-    cx.update_window(rig.window, |_, window, cx| {
+    label_in(cx, rig, Target::Settings, "settings-update-status")
+}
+
+fn has_in(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    target: Target,
+    id: impl Into<gpui_kit::ElementId>,
+) -> bool {
+    let id = id.into();
+    let Some(window) = (match target {
+        Target::Navo => Some(rig.window),
+        Target::Settings => rig.settings_window(cx),
+    }) else {
+        return false;
+    };
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window
-            .try_find("settings-update-status")
-            .and_then(|found| found.label().map(str::to_owned))
+        window.try_find(id).is_some()
     })
     .expect("window")
 }
 
 fn has(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> bool {
-    let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
-        window.render_frame(cx);
-        window.try_find(id).is_some()
-    })
-    .expect("window")
+    has_in(cx, rig, Target::Settings, id)
 }
 
 fn cases() -> Vec<(UpdateView, &'static str)> {
@@ -129,7 +142,7 @@ fn a_copy_that_cannot_update_says_why_and_offers_the_installer(cx: &mut TestAppC
 fn the_installer_button_opens_the_latest_release(cx: &mut TestAppContext) {
     let rig = rig_updates(cx, UpdateHooks::none());
     open_help(cx, &rig);
-    rig.click(cx, "settings-update-installer");
+    rig.click_in(cx, Target::Settings, "settings-update-installer");
     assert_eq!(
         cx.opened_url().as_deref(),
         Some("https://github.com/trykA123/navo/releases/latest")
@@ -140,8 +153,8 @@ fn the_installer_button_opens_the_latest_release(cx: &mut TestAppContext) {
 fn the_toggle_is_off_on_a_copy_that_cannot_update(cx: &mut TestAppContext) {
     let rig = rig_updates(cx, UpdateHooks::none());
     open_help(cx, &rig);
-    rig.click(cx, "settings-toggle");
-    rig.press(cx, "space");
+    rig.click_in(cx, Target::Settings, "settings-toggle");
+    rig.press_in(cx, Target::Settings, "space");
     let stored = rig
         .store
         .stored
@@ -209,12 +222,12 @@ fn check_now_calls_the_hook_and_is_off_while_busy(cx: &mut TestAppContext) {
     let (updates, state, calls) = hooks(UpdateView::UpToDate);
     let rig = rig_updates(cx, updates);
     open_help(cx, &rig);
-    rig.click(cx, "settings-update-check");
+    rig.click_in(cx, Target::Settings, "settings-update-check");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     *state.lock().expect("state") = UpdateView::Checking;
     rig.view.update(cx, |view, cx| view.refresh_updates(cx));
     assert_eq!(status(cx, &rig).as_deref(), Some("Checking for updates…"));
-    rig.click(cx, "settings-update-check");
+    rig.click_in(cx, Target::Settings, "settings-update-check");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
@@ -227,7 +240,7 @@ fn the_toggle_writes_updates_check(cx: &mut TestAppContext) {
         .view
         .read_with(cx, |view, _| view.values.flag(Field::CheckUpdates));
     assert!(on);
-    rig.click(cx, "settings-toggle");
+    rig.click_in(cx, Target::Settings, "settings-toggle");
     let stored = rig
         .store
         .stored
@@ -243,7 +256,7 @@ fn the_toggle_is_reached_by_keys_on_the_help_page(cx: &mut TestAppContext) {
     let (updates, _, _) = hooks(UpdateView::UpToDate);
     let rig = rig_updates(cx, updates);
     open_help(cx, &rig);
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     let stored = rig
         .store
         .stored
@@ -251,7 +264,7 @@ fn the_toggle_is_reached_by_keys_on_the_help_page(cx: &mut TestAppContext) {
         .expect("stored")
         .flag(Field::CheckUpdates);
     assert!(!stored);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     let stored = rig
         .store
         .stored
@@ -291,15 +304,28 @@ fn downloading_renders_progress_bar_and_failed_offers_retry_and_manual_download(
     assert!(has(cx, &rig, "settings-update-installer"));
 }
 
-fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> Option<String> {
+fn label_in(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    target: Target,
+    id: impl Into<gpui_kit::ElementId>,
+) -> Option<String> {
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    let window = match target {
+        Target::Navo => rig.window,
+        Target::Settings => rig.settings_window(cx)?,
+    };
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
             .and_then(|found| found.label().map(str::to_owned))
     })
     .expect("window")
+}
+
+fn label(cx: &mut TestAppContext, rig: &Rig, id: impl Into<gpui_kit::ElementId>) -> Option<String> {
+    label_in(cx, rig, Target::Settings, id)
 }
 
 #[gpui_kit::test]
@@ -315,13 +341,13 @@ fn title_update_pill_survives_user_commands_and_dismisses(cx: &mut TestAppContex
     });
     let rig = rig_updates(cx, ready);
     assert_eq!(
-        label(cx, &rig, "title-update-pill").as_deref(),
+        label_in(cx, &rig, Target::Navo, "title-update-pill").as_deref(),
         Some("Update 0.9.0")
     );
     rig.press(cx, "down");
-    assert!(has(cx, &rig, "title-update-pill"));
+    assert!(has_in(cx, &rig, Target::Navo, "title-update-pill"));
     rig.click(cx, "title-update-pill-dismiss");
-    assert!(!has(cx, &rig, "title-update-pill"));
+    assert!(!has_in(cx, &rig, Target::Navo, "title-update-pill"));
     assert_eq!(restarts.load(Ordering::SeqCst), 0);
     assert!(!has(cx, &rig, "settings-update-card"));
 
@@ -334,7 +360,7 @@ fn title_update_pill_survives_user_commands_and_dismisses(cx: &mut TestAppContex
     ] {
         let (quiet_hooks, _, _) = hooks(quiet);
         let rig = rig_updates(cx, quiet_hooks);
-        assert!(!has(cx, &rig, "title-update-pill"));
+        assert!(!has_in(cx, &rig, Target::Navo, "title-update-pill"));
     }
 }
 
@@ -346,11 +372,11 @@ fn title_update_pill_actions_and_state_transitions(cx: &mut TestAppContext) {
     });
     let rig = rig_updates(cx, downloading);
     assert_eq!(
-        label(cx, &rig, "title-update-pill").as_deref(),
+        label_in(cx, &rig, Target::Navo, "title-update-pill").as_deref(),
         Some("Updating 42%")
     );
     rig.click(cx, "title-update-pill-dismiss");
-    assert!(!has(cx, &rig, "title-update-pill"));
+    assert!(!has_in(cx, &rig, Target::Navo, "title-update-pill"));
     assert!(!has(cx, &rig, "settings-update-card"));
 
     *state.lock().expect("state") = UpdateView::Downloading {
@@ -358,14 +384,14 @@ fn title_update_pill_actions_and_state_transitions(cx: &mut TestAppContext) {
         percent: 80,
     };
     rig.view.update(cx, |view, cx| view.refresh_updates(cx));
-    assert!(!has(cx, &rig, "title-update-pill"));
+    assert!(!has_in(cx, &rig, Target::Navo, "title-update-pill"));
 
     *state.lock().expect("state") = UpdateView::Ready {
         version: "0.9.0".into(),
     };
     rig.view.update(cx, |view, cx| view.refresh_updates(cx));
     assert_eq!(
-        label(cx, &rig, "title-update-pill").as_deref(),
+        label_in(cx, &rig, Target::Navo, "title-update-pill").as_deref(),
         Some("Update 0.9.0")
     );
 
@@ -380,7 +406,7 @@ fn title_update_pill_actions_and_state_transitions(cx: &mut TestAppContext) {
     let (failed, _, _) = hooks(UpdateView::Failed(UpdateFailure::Offline));
     let rig = rig_updates(cx, failed);
     assert_eq!(
-        label(cx, &rig, "title-update-pill").as_deref(),
+        label_in(cx, &rig, Target::Navo, "title-update-pill").as_deref(),
         Some("Update failed")
     );
     rig.click(cx, "title-update-pill");
@@ -400,7 +426,7 @@ fn title_update_pill_actions_and_state_transitions(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(restarts.load(Ordering::SeqCst), 1);
     assert_eq!(
-        label(cx, &rig, "title-update-pill").as_deref(),
+        label_in(cx, &rig, Target::Navo, "title-update-pill").as_deref(),
         Some("Update failed")
     );
 }
@@ -413,7 +439,7 @@ fn title_update_pill_keeps_polling_downloading_after_settings_closes(cx: &mut Te
     });
     let rig = rig_updates(cx, downloading);
     open_help(cx, &rig);
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     assert!(!rig.view.read_with(cx, |view, _| view.settings.is_open()));
 
     *state.lock().expect("state") = UpdateView::Downloading {
@@ -425,7 +451,7 @@ fn title_update_pill_keeps_polling_downloading_after_settings_closes(cx: &mut Te
     cx.run_until_parked();
     assert!(!has(cx, &rig, "settings-update-card"));
     assert_eq!(
-        label(cx, &rig, "title-update-pill").as_deref(),
+        label_in(cx, &rig, Target::Navo, "title-update-pill").as_deref(),
         Some("Updating 55%")
     );
 
@@ -436,7 +462,7 @@ fn title_update_pill_keeps_polling_downloading_after_settings_closes(cx: &mut Te
         .advance_clock(std::time::Duration::from_secs(1));
     cx.run_until_parked();
     assert_eq!(
-        label(cx, &rig, "title-update-pill").as_deref(),
+        label_in(cx, &rig, Target::Navo, "title-update-pill").as_deref(),
         Some("Update 0.9.0")
     );
 }
@@ -447,11 +473,12 @@ fn bounds_of(
     id: impl Into<gpui_kit::ElementId>,
 ) -> Option<gpui_kit::Bounds<gpui_kit::Pixels>> {
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    let settings = rig.settings_window(cx)?;
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).map(|found| found.bounds())
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 #[gpui_kit::test]
@@ -474,7 +501,7 @@ fn skipped_version_status_renders_and_clears_on_click(cx: &mut TestAppContext) {
     );
     assert!(has(cx, &rig, "settings-update-clear-skip"));
 
-    rig.click(cx, "settings-update-clear-skip");
+    rig.click_in(cx, Target::Settings, "settings-update-clear-skip");
     assert_eq!(cleared.load(Ordering::SeqCst), 1);
     assert!(skipped.lock().expect("skipped").is_none());
     assert!(!has(cx, &rig, "settings-update-skipped"));
@@ -515,7 +542,7 @@ fn compatible_rollback_target_requires_two_step_confirmation(cx: &mut TestAppCon
     assert!(has(cx, &rig, "settings-update-rollback-fold"));
     assert!(!has(cx, &rig, ("settings-update-rollback", 0usize)));
 
-    rig.click(cx, "settings-update-rollback-fold");
+    rig.click_in(cx, Target::Settings, "settings-update-rollback-fold");
     assert!(has(cx, &rig, ("settings-update-rollback", 0usize)));
     assert!(has(cx, &rig, ("settings-update-rollback", 1usize)));
     assert_eq!(
@@ -524,7 +551,7 @@ fn compatible_rollback_target_requires_two_step_confirmation(cx: &mut TestAppCon
     );
 
     // First click opens inline confirmation and does NOT invoke rollback yet.
-    rig.click(cx, ("settings-update-rollback", 0usize));
+    rig.click_in(cx, Target::Settings, ("settings-update-rollback", 0usize));
     assert!(applied.lock().expect("applied").is_empty());
     assert_eq!(
         label(cx, &rig, ("settings-update-rollback-confirm-text", 0usize)).as_deref(),
@@ -534,13 +561,21 @@ fn compatible_rollback_target_requires_two_step_confirmation(cx: &mut TestAppCon
     assert!(has(cx, &rig, ("settings-update-rollback-cancel", 0usize)));
 
     // Cancel dismisses confirmation without invoking rollback.
-    rig.click(cx, ("settings-update-rollback-cancel", 0usize));
+    rig.click_in(
+        cx,
+        Target::Settings,
+        ("settings-update-rollback-cancel", 0usize),
+    );
     assert!(applied.lock().expect("applied").is_empty());
     assert!(!has(cx, &rig, ("settings-update-rollback-confirm", 0usize)));
 
     // Re-open confirmation and confirm invokes rollback.
-    rig.click(cx, ("settings-update-rollback", 0usize));
-    rig.click(cx, ("settings-update-rollback-confirm", 0usize));
+    rig.click_in(cx, Target::Settings, ("settings-update-rollback", 0usize));
+    rig.click_in(
+        cx,
+        Target::Settings,
+        ("settings-update-rollback-confirm", 0usize),
+    );
     assert_eq!(applied.lock().expect("applied").as_slice(), ["0.9.2"]);
     assert!(has(cx, &rig, "settings-update-skipped"));
 }
@@ -564,14 +599,14 @@ fn incompatible_rollback_target_disables_button_and_shows_reason(cx: &mut TestAp
     });
     let rig = rig_updates(cx, updates);
     open_help(cx, &rig);
-    rig.click(cx, "settings-update-rollback-fold");
+    rig.click_in(cx, Target::Settings, "settings-update-rollback-fold");
 
     assert_eq!(
         label(cx, &rig, ("settings-update-rollback-reason", 0usize)).as_deref(),
         Some(reason)
     );
     assert!(has(cx, &rig, ("settings-update-rollback", 0usize)));
-    rig.click(cx, ("settings-update-rollback", 0usize));
+    rig.click_in(cx, Target::Settings, ("settings-update-rollback", 0usize));
     assert_eq!(applied.load(Ordering::SeqCst), 0);
     assert!(!has(cx, &rig, ("settings-update-rollback-confirm", 0usize)));
 }
@@ -599,8 +634,8 @@ fn rollback_section_renders_in_dark_and_light_at_desktop_and_390px(cx: &mut Test
     updates.rollback_targets = Arc::new(move || targets.clone());
     let rig = rig_updates(cx, updates);
     open_help(cx, &rig);
-    rig.click(cx, "settings-update-rollback-fold");
-    rig.click(cx, ("settings-update-rollback", 0usize));
+    rig.click_in(cx, Target::Settings, "settings-update-rollback-fold");
+    rig.click_in(cx, Target::Settings, ("settings-update-rollback", 0usize));
 
     for (choice, mode) in [
         (ThemeChoice::Dark, Mode::Dark),
@@ -614,9 +649,9 @@ fn rollback_section_renders_in_dark_and_light_at_desktop_and_390px(cx: &mut Test
         .expect("window");
         assert_eq!(cx.read(|cx| tokens::current(cx).mode), mode);
 
+        let settings = rig.settings_window(cx).expect("settings window");
         for width in [1440., 390.] {
-            VisualTestContext::from_window(rig.window, cx)
-                .simulate_resize(size(px(width), px(900.)));
+            VisualTestContext::from_window(settings, cx).simulate_resize(size(px(width), px(900.)));
             let card = bounds_of(cx, &rig, "settings-update-card").expect("update card");
             let skipped = bounds_of(cx, &rig, "settings-update-skipped").expect("skipped");
             let clear = bounds_of(cx, &rig, "settings-update-clear-skip").expect("clear skip");

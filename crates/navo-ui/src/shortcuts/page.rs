@@ -19,6 +19,10 @@ pub enum ShortcutsEvent {
     OpenFile,
 }
 
+/// A failed keymap save kept across Settings window close and reopen so retry is not lost.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FailedSave(Pending, SharedString);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Pending {
     pub(super) spec: CommandSpec,
@@ -124,6 +128,21 @@ impl ShortcutsPage {
         if matches!(self.stage, Stage::Recording(_) | Stage::Conflict(..)) {
             self.stage = Stage::Browse;
         }
+        cx.notify();
+    }
+
+    /// Takes any failed save state so a recreated `ShortcutsPage` can show it again on reopen.
+    pub fn take_failed_save(&mut self) -> Option<FailedSave> {
+        let Stage::Failed(pending, error) = std::mem::replace(&mut self.stage, Stage::Browse)
+        else {
+            return None;
+        };
+        Some(FailedSave(pending, error))
+    }
+
+    /// Restores a failed save state captured when the Settings window previously closed.
+    pub fn restore_failed_save(&mut self, failed: FailedSave, cx: &mut Context<Self>) {
+        self.stage = Stage::Failed(failed.0, failed.1);
         cx.notify();
     }
 

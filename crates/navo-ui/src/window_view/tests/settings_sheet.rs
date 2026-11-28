@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, ElementId, TestAppContext};
 
-use super::app_menu::{Rig, rig};
+use super::app_menu::{Rig, Target, rig};
 use super::drive_fs::{Setup, drive_window};
 use super::press;
 use crate::app_menu::{Item, MenuCommand, index_of};
@@ -15,10 +15,13 @@ fn settle_motion(cx: &mut TestAppContext, rig: &Rig) {
     cx.run_until_parked();
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("window");
+    if let Some(settings) = rig.settings_window(cx) {
+        let _ = cx.update_window(settings, |_, window, cx| window.render_frame(cx));
+    }
 }
 
 pub(super) fn open(cx: &mut TestAppContext, rig: &Rig) {
-    rig.press(cx, "ctrl-,");
+    rig.press_in(cx, Target::Navo, "ctrl-,");
     settle_motion(cx, rig);
 }
 
@@ -31,32 +34,52 @@ pub(super) fn label(
     rig: &Rig,
     id: impl Into<ElementId>,
 ) -> Option<String> {
+    let window = rig.settings_window(cx)?;
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
             .filter(|found| found.visible())
             .and_then(|found| found.label().map(str::to_owned))
     })
-    .expect("window")
+    .expect("settings window")
 }
 
-pub(super) fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
+pub(super) fn shows_in(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    target: Target,
+    id: impl Into<ElementId>,
+) -> bool {
+    let window = match target {
+        Target::Navo => rig.window,
+        Target::Settings => match rig.settings_window(cx) {
+            Some(window) => window,
+            None => return false,
+        },
+    };
     let id = id.into();
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.try_find(id).is_some_and(|found| found.visible())
     })
     .expect("window")
 }
 
+pub(super) fn shows(cx: &mut TestAppContext, rig: &Rig, id: impl Into<ElementId>) -> bool {
+    shows_in(cx, rig, Target::Settings, id)
+}
+
 pub(super) fn sheet_has_focus(cx: &mut TestAppContext, rig: &Rig) -> bool {
-    cx.update_window(rig.window, |_, window, cx| {
+    let Some(window) = rig.settings_window(cx) else {
+        return false;
+    };
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.find("settings-body").focused() == Some(true)
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn row_of(field: Field) -> usize {
@@ -71,7 +94,7 @@ pub(super) fn go_to(cx: &mut TestAppContext, rig: &Rig, field: Field) {
         if rig.view.read_with(cx, |view, _| view.settings_row()) == row_of(field) {
             return;
         }
-        rig.press(cx, "down");
+        rig.press_in(cx, Target::Settings, "down");
     }
     panic!("{field:?} is not reachable with the down key");
 }
@@ -85,35 +108,29 @@ fn density(cx: &mut TestAppContext) -> Density {
 }
 
 #[gpui_kit::test]
-fn ctrl_comma_opens_settings_as_a_centred_dialog_with_focus_inside(cx: &mut TestAppContext) {
+fn ctrl_comma_opens_settings_in_its_own_window_with_focus_inside(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    assert!(!shows(cx, &rig, "settings-sheet"));
+    assert!(!shows_in(cx, &rig, Target::Navo, "settings-sheet"));
+    assert_eq!(rig.settings_window(cx), None);
     open(cx, &rig);
     assert!(is_open(cx, &rig));
-    assert!(shows(cx, &rig, "settings-sheet"));
+    assert!(rig.settings_window(cx).is_some());
+    assert!(shows(cx, &rig, "settings-window"));
+    assert!(!shows_in(cx, &rig, Target::Navo, "settings-sheet"));
     assert!(sheet_has_focus(cx, &rig));
-    cx.update_window(rig.window, |_, window, cx| {
-        window.render_frame(cx);
-        let sheet = window.find("settings-sheet").bounds().center().x;
-        let middle = window.viewport_size().width / 2.;
-        assert!(
-            (sheet - middle).abs() <= gpui_kit::px(1.),
-            "{sheet:?} vs {middle:?}"
-        );
-    })
-    .expect("window");
 }
 
 #[gpui_kit::test]
 fn escape_closes_settings_and_gives_focus_back_to_the_list(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    rig.press(cx, "down");
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "down");
+    rig.press_in(cx, Target::Settings, "escape");
     assert!(!is_open(cx, &rig));
+    assert_eq!(rig.settings_window(cx), None);
     assert!(rig.pane_has_focus(cx));
     settle_motion(cx, &rig);
-    assert!(!shows(cx, &rig, "settings-sheet"));
+    assert!(!shows(cx, &rig, "settings-window"));
 }
 
 #[gpui_kit::test]
@@ -125,6 +142,7 @@ fn the_all_settings_row_of_the_app_menu_opens_settings(cx: &mut TestAppContext) 
     settle_motion(cx, &rig);
     assert!(!rig.is_open(cx));
     assert!(is_open(cx, &rig));
+    assert!(rig.settings_window(cx).is_some());
     assert!(sheet_has_focus(cx, &rig));
 }
 
@@ -136,7 +154,7 @@ fn the_focused_row_shows_its_toml_key_and_down_moves_on(cx: &mut TestAppContext)
         label(cx, &rig, "settings-key").as_deref(),
         Some("appearance.mode")
     );
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     assert_eq!(
         rig.view.read_with(cx, |view, _| view.settings_row()),
         row_of(Field::ColorTheme)
@@ -145,8 +163,8 @@ fn the_focused_row_shows_its_toml_key_and_down_moves_on(cx: &mut TestAppContext)
         label(cx, &rig, "settings-key").as_deref(),
         Some("appearance.color-theme")
     );
-    rig.press(cx, "up");
-    rig.press(cx, "up");
+    rig.press_in(cx, Target::Settings, "up");
+    rig.press_in(cx, Target::Settings, "up");
     assert_eq!(rig.view.read_with(cx, |view, _| view.settings_row()), 0);
 }
 
@@ -155,14 +173,14 @@ fn arrows_change_the_density_live_and_save_only_that_key(cx: &mut TestAppContext
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     assert_eq!(density(cx), Density::Comfortable);
     assert_eq!(
         last_change(&rig),
         Some(Change::density(Density::Comfortable))
     );
-    rig.press(cx, "left");
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert_eq!(density(cx), Density::Compact);
     assert_eq!(last_change(&rig), Some(Change::density(Density::Compact)));
     assert!(sheet_has_focus(cx, &rig));
@@ -172,13 +190,13 @@ fn arrows_change_the_density_live_and_save_only_that_key(cx: &mut TestAppContext
 fn space_on_hidden_files_hides_them_in_the_live_pane(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    rig.press(cx, "tab");
-    rig.press(cx, "tab");
+    rig.press_in(cx, Target::Settings, "tab");
+    rig.press_in(cx, Target::Settings, "tab");
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
         Some("files.hidden-files")
     );
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     let panes = rig.pane_names(cx);
     assert!(
         panes
@@ -193,7 +211,7 @@ fn space_flips_a_toggle(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::FoldersFirst);
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     let change = Change {
         field: Field::FoldersFirst,
         value: Value::Flag(false),
@@ -216,6 +234,7 @@ fn tab_walks_the_same_pages_while_compare_is_visible(cx: &mut TestAppContext) {
 fn walk_pages(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
+    let settings = rig.settings_window(cx).expect("settings window");
     let pages = [
         "Window",
         "Files",
@@ -229,20 +248,20 @@ fn walk_pages(cx: &mut TestAppContext) {
         "Appearance",
     ];
     for (step, name) in pages.iter().enumerate() {
-        rig.press(cx, "tab");
+        rig.press_in(cx, Target::Settings, "tab");
         assert!(sheet_has_focus(cx, &rig), "after tab {step}");
         let current = (0..=Section::ALL.len()).find(|index| {
-            cx.update_window(rig.window, |_, window, cx| {
+            cx.update_window(settings, |_, window, cx| {
                 window.render_frame(cx);
                 window.find(("settings-section", *index)).selected() == Some(true)
             })
-            .expect("window")
+            .expect("settings window")
         });
         let shown = current.and_then(|index| label(cx, &rig, ("settings-section", index)));
         assert_eq!(shown.as_deref(), Some(*name));
     }
     for _ in 0..9 {
-        rig.press(cx, "shift-tab");
+        rig.press_in(cx, Target::Settings, "shift-tab");
     }
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
@@ -263,7 +282,7 @@ fn the_display_section_starts_with_the_window_group_and_flips_a_part(cx: &mut Te
         label(cx, &rig, "settings-key").as_deref(),
         Some("window.view.path-bar")
     );
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     let change = Change {
         field: Field::WindowPathBar,
         value: Value::Flag(false),
@@ -295,14 +314,14 @@ fn the_display_section_has_markdown_and_preview_groups_whose_toggles_save(cx: &m
         if field == Field::MarkdownPreviewSplit {
             go_to(cx, &rig, field);
         } else {
-            rig.press(cx, "down");
+            rig.press_in(cx, Target::Settings, "down");
         }
         assert_eq!(
             label(cx, &rig, format!("settings-group-{}", group.to_lowercase())).as_deref(),
             Some(group)
         );
         assert_eq!(label(cx, &rig, "settings-key").as_deref(), Some(key));
-        rig.press(cx, "space");
+        rig.press_in(cx, Target::Settings, "space");
         let change = Change {
             field,
             value: Value::Flag(false),
@@ -321,15 +340,15 @@ fn ctrl_z_undoes_the_last_change_and_saves_the_old_value(cx: &mut TestAppContext
         .push(Field::Density);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert_eq!(density(cx), Density::Compact);
-    rig.press(cx, "up");
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "up");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     assert_eq!(density(cx), Density::Normal);
     assert_eq!(last_change(&rig), Some(Change::density(Density::Normal)));
     assert_eq!(rig.view.read_with(cx, |view, _| view.settings_row()), 1);
     let saves = rig.store.changes.lock().expect("changes").len();
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     assert_eq!(rig.store.changes.lock().expect("changes").len(), saves);
 }
 
@@ -338,26 +357,29 @@ fn undo_lasts_only_while_the_sheet_is_open(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "left");
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "left");
+    rig.press_in(cx, Target::Settings, "escape");
     open(cx, &rig);
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     assert_eq!(density(cx), Density::Compact);
 }
 
 #[gpui_kit::test]
-fn settings_replace_the_preview_drawer_until_they_close(cx: &mut TestAppContext) {
+fn settings_leave_the_preview_drawer_open_across_open_and_close(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "f3");
-    assert!(rig.view.read_with(cx, |view, _| view.preview.is_open()));
-    open(cx, &rig);
-    assert!(is_open(cx, &rig));
-    assert!(!rig.view.read_with(cx, |view, _| view.preview.is_open()));
-    assert!(!shows(cx, &rig, "preview-sheet"));
-    rig.press(cx, "escape");
     settle_motion(cx, &rig);
     assert!(rig.view.read_with(cx, |view, _| view.preview.is_open()));
-    assert!(shows(cx, &rig, "preview-sheet"));
+    assert!(shows_in(cx, &rig, Target::Navo, "preview-sheet"));
+    open(cx, &rig);
+    assert!(is_open(cx, &rig));
+    assert!(rig.view.read_with(cx, |view, _| view.preview.is_open()));
+    assert!(shows_in(cx, &rig, Target::Navo, "preview-sheet"));
+    rig.press_in(cx, Target::Settings, "escape");
+    settle_motion(cx, &rig);
+    assert!(!is_open(cx, &rig));
+    assert!(rig.view.read_with(cx, |view, _| view.preview.is_open()));
+    assert!(shows_in(cx, &rig, Target::Navo, "preview-sheet"));
     assert!(rig.pane_has_focus(cx));
 }
 
@@ -367,7 +389,7 @@ fn a_failed_save_shows_a_line_in_the_sheet(cx: &mut TestAppContext) {
     *rig.store.failure.lock().expect("failure") = Some("navo.toml: disk full".to_owned());
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     assert_eq!(
         label(cx, &rig, "settings-error").as_deref(),
         Some("navo.toml: disk full")
@@ -380,12 +402,11 @@ fn enter_edits_a_text_row_and_saves_it(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Font);
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "enter");
     assert!(shows(cx, &rig, "settings-input"));
-    rig.press(cx, "ctrl-a");
-    cx.update_window(rig.window, |_, window, cx| window.input("Archivo", cx))
-        .expect("window");
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "ctrl-a");
+    rig.input_in(cx, Target::Settings, "Archivo");
+    rig.press_in(cx, Target::Settings, "enter");
     assert!(!shows(cx, &rig, "settings-input"));
     assert_eq!(
         last_change(&rig),
@@ -399,8 +420,8 @@ fn escape_in_a_text_row_cancels_and_keeps_the_sheet(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Font);
-    rig.press(cx, "enter");
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "enter");
+    rig.press_in(cx, Target::Settings, "escape");
     assert!(is_open(cx, &rig));
     assert!(!shows(cx, &rig, "settings-input"));
     assert!(sheet_has_focus(cx, &rig));
@@ -412,11 +433,10 @@ fn a_font_size_that_is_not_a_number_is_refused(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::FontSize);
-    rig.press(cx, "enter");
-    rig.press(cx, "ctrl-a");
-    cx.update_window(rig.window, |_, window, cx| window.input("big", cx))
-        .expect("window");
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "enter");
+    rig.press_in(cx, Target::Settings, "ctrl-a");
+    rig.input_in(cx, Target::Settings, "big");
+    rig.press_in(cx, Target::Settings, "enter");
     assert!(label(cx, &rig, "settings-edit-error").is_some());
     assert!(rig.store.changes.lock().expect("changes").is_empty());
 }
@@ -425,7 +445,7 @@ fn a_font_size_that_is_not_a_number_is_refused(cx: &mut TestAppContext) {
 fn clicking_a_picture_picks_that_theme(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
-    rig.click(cx, ("settings-theme", 2usize));
+    rig.click_in(cx, Target::Settings, ("settings-theme", 2usize));
     assert_eq!(last_change(&rig), Some(Change::theme(ThemeChoice::Dark)));
     assert_eq!(rig.mode(cx), tokens::Mode::Dark);
 }
@@ -435,12 +455,12 @@ fn undo_of_a_key_that_was_not_in_the_file_unsets_it(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::Density);
-    rig.press(cx, "left");
-    rig.press(cx, "right");
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "left");
+    rig.press_in(cx, Target::Settings, "right");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     let undo_once = Change::density(Density::Compact);
     assert_eq!(last_change(&rig), Some(undo_once));
-    rig.press(cx, "ctrl-z");
+    rig.press_in(cx, Target::Settings, "ctrl-z");
     let unset = Change {
         field: Field::Density,
         value: Value::Unset,
@@ -454,11 +474,12 @@ fn undo_while_a_save_is_in_flight_writes_the_old_value(cx: &mut TestAppContext) 
     let rig = rig(cx, ThemeChoice::System);
     open(cx, &rig);
     go_to(cx, &rig, Field::FoldersFirst);
-    cx.update_window(rig.window, |_, window, cx| {
+    let settings = rig.settings_window(cx).expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
         window.press("space", cx);
         window.press("ctrl-z", cx);
     })
-    .expect("window");
+    .expect("settings window");
     cx.run_until_parked();
     let off = Change {
         field: Field::FoldersFirst,
@@ -472,69 +493,78 @@ fn undo_while_a_save_is_in_flight_writes_the_old_value(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
-fn ctrl_comma_closes_the_open_app_menu_and_opens_settings(cx: &mut TestAppContext) {
+fn the_app_menu_closes_and_opens_settings_focused_in_its_own_window(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "f10");
     assert!(rig.is_open(cx));
-    open(cx, &rig);
+    rig.press(cx, "a");
+    rig.press(cx, "enter");
+    settle_motion(cx, &rig);
     assert!(!rig.is_open(cx));
     assert!(is_open(cx, &rig));
+    let settings = rig.settings_window(cx).expect("settings window");
+    let active = cx
+        .update_window(settings, |_, window, _| window.is_window_active())
+        .expect("settings window");
+    assert!(active);
     assert!(sheet_has_focus(cx, &rig));
 }
 
 #[gpui_kit::test]
-fn ctrl_comma_closes_the_drive_menu(cx: &mut TestAppContext) {
+fn ctrl_comma_opens_settings_without_closing_the_drive_menu(cx: &mut TestAppContext) {
     let rig = drive_window(cx, Setup::default());
     press(cx, rig.window, &rig.view, "alt-f1");
     assert!(rig.view.read_with(cx, |view, _| view.drive_menu.is_some()));
     press(cx, rig.window, &rig.view, "ctrl-,");
-    assert!(rig.view.read_with(cx, |view, _| view.drive_menu.is_none()));
+    assert!(rig.view.read_with(cx, |view, _| view.drive_menu.is_some()));
     assert!(rig.view.read_with(cx, |view, _| view.settings.is_open()));
+    assert!(
+        rig.view
+            .read_with(cx, |view, _| view.settings.host.window_handle().is_some())
+    );
 }
 
 #[gpui_kit::test]
-fn ctrl_comma_closes_the_path_editor(cx: &mut TestAppContext) {
+fn ctrl_comma_opens_settings_without_closing_the_path_editor(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "alt-d");
     assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_some()));
     open(cx, &rig);
-    assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_none()));
+    assert!(rig.view.read_with(cx, |view, _| view.path_edit.is_some()));
     assert!(is_open(cx, &rig));
     assert!(sheet_has_focus(cx, &rig));
 }
 
 fn command_center_shows(cx: &mut TestAppContext, rig: &Rig) -> bool {
     settle_motion(cx, rig);
-    shows(cx, rig, "command-center")
+    shows_in(cx, rig, Target::Navo, "command-center")
 }
 
 #[gpui_kit::test]
-fn ctrl_comma_closes_the_command_center_and_focuses_settings(cx: &mut TestAppContext) {
+fn ctrl_comma_opens_settings_without_closing_the_command_center(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "ctrl-k");
     assert!(command_center_shows(cx, &rig));
     open(cx, &rig);
-    assert!(!command_center_shows(cx, &rig));
+    assert!(command_center_shows(cx, &rig));
     assert!(is_open(cx, &rig));
     assert!(sheet_has_focus(cx, &rig));
 }
 
 #[gpui_kit::test]
-fn the_command_center_closes_back_into_the_open_settings(cx: &mut TestAppContext) {
+fn ctrl_k_in_navo_opens_the_command_center_and_settings_stays_open(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "down");
     open(cx, &rig);
-    rig.press(cx, "ctrl-k");
+    let settings = rig.settings_window(cx).expect("settings window");
+    rig.press_in(cx, Target::Navo, "ctrl-k");
     assert!(command_center_shows(cx, &rig));
-    rig.press(cx, "escape");
+    assert!(is_open(cx, &rig));
+    assert_eq!(rig.settings_window(cx), Some(settings));
+    rig.press_in(cx, Target::Navo, "escape");
     assert!(!command_center_shows(cx, &rig));
     assert!(is_open(cx, &rig));
-    assert!(sheet_has_focus(cx, &rig));
-    rig.press(cx, "f8");
-    assert!(
-        rig.view
-            .read_with(cx, |view, _| view.browser.pending().is_none())
-    );
+    assert_eq!(rig.settings_window(cx), Some(settings));
 }
 
 #[gpui_kit::test]
@@ -550,18 +580,18 @@ fn the_display_section_groups_the_viewer_parts_and_flips_one(cx: &mut TestAppCon
         label(cx, &rig, "settings-key").as_deref(),
         Some("text.view.line-ends")
     );
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     let change = Change {
         field: Field::TextLineEnds,
         value: Value::Flag(true),
     };
     assert_eq!(last_change(&rig), Some(change));
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     assert_eq!(
         label(cx, &rig, "settings-key").as_deref(),
         Some("text.view.syntax-theme")
     );
-    rig.press(cx, "down");
+    rig.press_in(cx, Target::Settings, "down");
     assert_eq!(
         label(cx, &rig, "settings-group-images and markdown").as_deref(),
         Some("Images and Markdown")
@@ -579,7 +609,8 @@ fn external_terminal_renders_as_a_dropdown_without_overflowing(cx: &mut TestAppC
         shows(cx, &rig, dropdown_id),
         "dropdown trigger should render"
     );
-    cx.update_window(rig.window, |_, window, cx| {
+    let settings = rig.settings_window(cx).expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         let row_bounds = window.find(("settings-row", row)).bounds();
         let trigger_bounds = window.find(dropdown_id).bounds();
@@ -596,7 +627,7 @@ fn external_terminal_renders_as_a_dropdown_without_overflowing(cx: &mut TestAppC
             "dropdown {trigger_bounds:?} overflows row {row_bounds:?}"
         );
     })
-    .expect("window");
+    .expect("settings window");
 }
 
 #[gpui_kit::test]
@@ -606,7 +637,7 @@ fn dropdown_opens_on_click_and_picks_an_option(cx: &mut TestAppContext) {
     go_to(cx, &rig, Field::TerminalProvider);
     let trigger = ("settings-dropdown", Field::TerminalProvider.index());
     let menu = ("settings-dropdown-menu", Field::TerminalProvider.index());
-    rig.click(cx, trigger);
+    rig.click_in(cx, Target::Settings, trigger);
     assert!(shows(cx, &rig, menu));
     for (index, expected) in [
         "System default",
@@ -623,7 +654,7 @@ fn dropdown_opens_on_click_and_picks_an_option(cx: &mut TestAppContext) {
             Some(*expected)
         );
     }
-    rig.click(cx, ("settings-dropdown-option", 2usize));
+    rig.click_in(cx, Target::Settings, ("settings-dropdown-option", 2usize));
     assert!(!shows(cx, &rig, menu));
     assert_eq!(
         last_change(&rig),
@@ -641,16 +672,16 @@ fn dropdown_keyboard_open_arrows_choose_escape_and_left_right(cx: &mut TestAppCo
     open(cx, &rig);
     go_to(cx, &rig, Field::TerminalProvider);
     let menu = ("settings-dropdown-menu", Field::TerminalProvider.index());
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "enter");
     assert!(shows(cx, &rig, menu));
-    rig.press(cx, "escape");
+    rig.press_in(cx, Target::Settings, "escape");
     assert!(!shows(cx, &rig, menu));
     assert!(is_open(cx, &rig));
     assert!(sheet_has_focus(cx, &rig));
-    rig.press(cx, "space");
+    rig.press_in(cx, Target::Settings, "space");
     assert!(shows(cx, &rig, menu));
-    rig.press(cx, "down");
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "down");
+    rig.press_in(cx, Target::Settings, "enter");
     assert!(!shows(cx, &rig, menu));
     assert_eq!(
         last_change(&rig),
@@ -659,7 +690,7 @@ fn dropdown_keyboard_open_arrows_choose_escape_and_left_right(cx: &mut TestAppCo
             value: Value::Pick(1),
         })
     );
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "right");
     assert_eq!(
         last_change(&rig),
         Some(Change {
@@ -667,7 +698,7 @@ fn dropdown_keyboard_open_arrows_choose_escape_and_left_right(cx: &mut TestAppCo
             value: Value::Pick(2),
         })
     );
-    rig.press(cx, "left");
+    rig.press_in(cx, Target::Settings, "left");
     assert_eq!(
         last_change(&rig),
         Some(Change {
@@ -683,15 +714,15 @@ fn switching_pages_dismisses_an_open_dropdown(cx: &mut TestAppContext) {
     open(cx, &rig);
     go_to(cx, &rig, Field::TerminalProvider);
     let menu = ("settings-dropdown-menu", Field::TerminalProvider.index());
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "enter");
     assert!(shows(cx, &rig, menu));
-    rig.press(cx, "ctrl-1");
-    rig.press(cx, "ctrl-7");
+    rig.press_in(cx, Target::Settings, "ctrl-1");
+    rig.press_in(cx, Target::Settings, "ctrl-7");
     assert!(!shows(cx, &rig, menu));
-    rig.press(cx, "enter");
+    rig.press_in(cx, Target::Settings, "enter");
     assert!(shows(cx, &rig, menu));
-    rig.press(cx, "tab");
-    rig.press(cx, "shift-tab");
+    rig.press_in(cx, Target::Settings, "tab");
+    rig.press_in(cx, Target::Settings, "shift-tab");
     assert!(!shows(cx, &rig, menu));
 }
 
@@ -701,7 +732,8 @@ fn short_choices_still_render_as_segments(cx: &mut TestAppContext) {
     open(cx, &rig);
     go_to(cx, &rig, Field::HiddenFiles);
     let row = row_of(Field::HiddenFiles);
-    cx.update_window(rig.window, |_, window, cx| {
+    let settings = rig.settings_window(cx).expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(
             window
@@ -715,5 +747,5 @@ fn short_choices_still_render_as_segments(cx: &mut TestAppContext) {
                 .is_none()
         );
     })
-    .expect("window");
+    .expect("settings window");
 }

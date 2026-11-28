@@ -31,6 +31,7 @@ use crate::settings::{
     Values, child_of, clamped_row, outer_row, section_of,
 };
 use crate::side_sheet::SheetState;
+pub(in crate::window_view) use layer::SettingsSnapshot;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct KeyLine {
@@ -103,6 +104,7 @@ pub(super) struct SettingsPanel {
     data_folder: Option<Location>,
     line_of: FindLine,
     shortcuts: Option<shortcuts::ShortcutsPanel>,
+    failed_shortcut: Option<crate::shortcuts::FailedSave>,
     is_shortcuts: bool,
     search: SearchHooks,
     is_windows: bool,
@@ -176,6 +178,7 @@ impl SettingsPanel {
             data_folder: None,
             line_of,
             shortcuts: None,
+            failed_shortcut: None,
             is_shortcuts: false,
             search: SearchHooks::none(),
             is_windows: cfg!(windows),
@@ -216,6 +219,12 @@ impl SettingsPanel {
 
 impl NavoWindow {
     pub(super) fn toggle_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if super::settings_window::on() {
+            if !self.restart_applying() {
+                self.open_settings(window, cx);
+            }
+            return;
+        }
         if self.viewer.is_some() || self.restart_applying() {
             return;
         }
@@ -227,6 +236,10 @@ impl NavoWindow {
     }
 
     pub(super) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if super::settings_window::on() {
+            self.open_settings_in_window(window, cx);
+            return;
+        }
         let is_busy = self.prompt.is_some()
             || self.browser.pending().is_some()
             || self.is_multi_rename_open();
@@ -244,6 +257,35 @@ impl NavoWindow {
             self.close_preview(cx);
             self.settings.restore_preview = true;
         }
+        self.init_settings_open(cx);
+        self.prepare_find(window, cx);
+        self.settings.sheet.update(cx, |sheet, cx| sheet.open(cx));
+        self.focus_settings(window, cx);
+        cx.notify();
+    }
+
+    /// Opens Settings in its own floating window, or shows and focuses the existing one.
+    fn open_settings_in_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.restart_applying() {
+            return;
+        }
+        let had_window = self.settings.host.is_open();
+        if self.settings.host.show(cx) {
+            return;
+        }
+        if had_window {
+            self.reset_settings_on_close(true, cx);
+        }
+        if self.settings.is_open {
+            return;
+        }
+        self.init_settings_open(cx);
+        self.open_settings_window(window, cx);
+        cx.notify();
+    }
+
+    /// Prepares panel state common to opening Settings in either host mode.
+    fn init_settings_open(&mut self, cx: &mut Context<Self>) {
         self.browser.dialog_opened();
         self.settings.is_open = true;
         self.refresh_git_tools();
@@ -257,14 +299,22 @@ impl NavoWindow {
         if section_of(self.settings.row) == Section::Help {
             self.refresh_updates(cx);
         }
-        self.prepare_find(window, cx);
         self.settings.undo.clear();
         self.settings.notice = None;
         self.settings.status = None;
         self.settings.service_notice = None;
-        self.settings.sheet.update(cx, |sheet, cx| sheet.open(cx));
-        self.focus_settings(window, cx);
-        cx.notify();
+    }
+
+    /// Creates window-bound Settings inputs once the Settings window handle is live.
+    pub(in crate::window_view) fn prepare_settings_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.prepare_find(window, cx);
+        if self.settings.is_shortcuts {
+            self.show_shortcuts(window, cx);
+        }
     }
 
     pub(super) fn open_settings_at(
@@ -276,6 +326,7 @@ impl NavoWindow {
         self.open_settings(window, cx);
         if self.settings.is_open {
             self.select_setting(field.row(), window, cx);
+            cx.notify();
         }
     }
 
@@ -286,17 +337,25 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         let was_window = self.settings.host.is_open();
-        self.reset_settings_on_close(was_window, cx);
-        if was_window {
-            window.activate_window();
+        let use_window = was_window || super::settings_window::on();
+        let was_active = self
+            .settings
+            .host
+            .with_window(cx, |settings, _| settings.is_window_active())
+            .unwrap_or(false);
+        self.reset_settings_on_close(use_window, cx);
+        if use_window {
+            if was_active {
+                window.activate_window();
+            }
             self.settings.host.close(cx);
         } else {
             self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
             if std::mem::take(&mut self.settings.restore_preview) {
                 self.open_preview(window, cx);
             }
-            self.focus_after_settings(window, cx);
         }
+        self.focus_after_settings(window, cx);
         cx.notify();
     }
 
@@ -320,28 +379,46 @@ impl NavoWindow {
         self.settings.selected_diagnostic = None;
         self.settings.updates.reset_rollback_ui();
         if drop_shortcuts {
-            self.settings.shortcuts = None;
-            self.settings.is_shortcuts = false;
+            let failed = self
+                .settings
+                .shortcuts
+                .take()
+                .and_then(|panel| panel.take_failed_save(cx));
+            if failed.is_some() {
+                self.settings.failed_shortcut = failed;
+            }
+            self.settings.is_shortcuts = self.settings.failed_shortcut.is_some();
         } else {
             self.pause_shortcuts(cx);
         }
     }
 
     /// Returns focus to an open compare file diff, else to the focused pane.
-    fn focus_after_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::window_view) fn focus_after_settings(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if !self.host_focus_file(window, cx) {
             self.focus_core_pane(window, cx);
         }
     }
 
     pub(super) fn focus_settings(&self, window: &mut Window, cx: &mut App) {
+        if super::settings_window::on() && !self.settings.host.is_open() {
+            return;
+        }
         let focus = match self.shown_shortcuts() {
             Some(page) => page.read(cx).focus_handle(cx),
             None => self.settings.focus.clone(),
         };
-        self.settings
-            .host
-            .with_window_or(window, cx, |target, cx| target.focus(&focus, cx));
+        let is_own_window = self.settings.host.is_open();
+        self.settings.host.with_window_or(window, cx, |target, cx| {
+            if is_own_window {
+                target.activate_window();
+            }
+            target.focus(&focus, cx);
+        });
     }
 
     pub(super) fn settings_event(

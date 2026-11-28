@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, TestAppContext};
 
-use super::app_menu::{Rig, rig};
+use super::app_menu::{Rig, Target, rig};
 use crate::app_menu::{Item, MenuCommand, index_of};
 use crate::settings::{FIELDS, Section};
 use crate::tokens::ThemeChoice;
@@ -13,7 +13,7 @@ use crate::window_view::tests::{fake, open_options, options_for, two_panes, view
 fn open_help(cx: &mut TestAppContext, rig: &Rig) {
     rig.press(cx, "ctrl-,");
     let last = Section::ALL.len() - 1;
-    rig.click(cx, ("settings-section", last));
+    rig.click_in(cx, Target::Settings, ("settings-section", last));
 }
 
 fn is_open(cx: &mut TestAppContext, rig: &Rig) -> bool {
@@ -26,13 +26,14 @@ fn has_shortcuts(cx: &mut TestAppContext, rig: &Rig) -> bool {
 }
 
 fn label_of(cx: &mut TestAppContext, rig: &Rig, id: &'static str) -> Option<String> {
-    cx.update_window(rig.window, |_, window, cx| {
+    let window = rig.settings_window(cx)?;
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
             .and_then(|found| found.label().map(str::to_owned))
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 #[gpui_kit::test]
@@ -64,7 +65,7 @@ fn help_is_the_last_section_with_both_buttons_and_the_version(cx: &mut TestAppCo
 fn the_user_guide_button_closes_settings_and_opens_the_guide(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_help(cx, &rig);
-    rig.click(cx, "settings-help-guide");
+    rig.click_in(cx, Target::Settings, "settings-help-guide");
     assert!(!is_open(cx, &rig));
     assert!(viewer_open(cx, &rig.view));
     rig.press(cx, "escape");
@@ -76,7 +77,7 @@ fn the_shortcuts_button_shows_the_key_map_page(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_help(cx, &rig);
     assert!(!has_shortcuts(cx, &rig));
-    rig.click(cx, "settings-help-keys");
+    rig.click_in(cx, Target::Settings, "settings-help-keys");
     assert!(is_open(cx, &rig));
     assert!(has_shortcuts(cx, &rig));
 }

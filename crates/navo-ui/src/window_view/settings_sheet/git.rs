@@ -1,5 +1,20 @@
-use crate::settings::{Filter, GitPage};
+use std::sync::Arc;
+
+use crate::git::GitHooks;
+use crate::settings::{Filter, GitPage, Values};
 use crate::window_view::NavoWindow;
+
+/// Builds the Git settings page from the current hooks and values.
+pub(super) fn git_page_for(hooks: Option<&Arc<dyn GitHooks>>, values: &Values) -> GitPage {
+    let Some(hooks) = hooks else {
+        return GitPage::default();
+    };
+    let command = values.git_tool_command();
+    let problem = (values.is_git_other() && !command.trim().is_empty())
+        .then(|| hooks.check_command(command).err())
+        .flatten();
+    GitPage::new(hooks.tools(), problem)
+}
 
 impl NavoWindow {
     /// The find words plus the rows the current values leave out.
@@ -9,17 +24,6 @@ impl NavoWindow {
             .clone()
             .hiding(self.values.hidden_row())
             .folding(self.settings.folds)
-    }
-
-    pub(super) fn git_page(&self) -> GitPage {
-        let Some(hooks) = self.git_badges.hooks() else {
-            return GitPage::default();
-        };
-        let command = self.values.git_tool_command();
-        let problem = (self.values.is_git_other() && !command.trim().is_empty())
-            .then(|| hooks.check_command(command).err())
-            .flatten();
-        GitPage::new(hooks.tools(), problem)
     }
 
     pub(super) fn refresh_git_tools(&self) {

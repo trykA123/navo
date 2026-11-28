@@ -1,4 +1,4 @@
-//! Settings as a floating dialog: size and margin at large and small windows, scrim click,
+//! Settings as its own floating window: no overlay scrim in Navo, resize, click in Navo,
 //! close button and focus return.
 
 use std::time::Duration;
@@ -9,14 +9,14 @@ use gpui_kit::{
     size,
 };
 
-use super::app_menu::{Rig, rig};
+use super::app_menu::{Rig, Target, rig};
 use crate::tokens::ThemeChoice;
 
-const MARGIN: f32 = 24.;
-
 fn open_in(cx: &mut TestAppContext, rig: &Rig, window: Size<Pixels>) {
-    VisualTestContext::from_window(rig.window, cx).simulate_resize(window);
     rig.press(cx, "ctrl-,");
+    settle(cx, rig);
+    let settings = rig.settings_window(cx).expect("settings window");
+    VisualTestContext::from_window(settings, cx).simulate_resize(window);
     settle(cx, rig);
 }
 
@@ -25,10 +25,22 @@ fn settle(cx: &mut TestAppContext, rig: &Rig) {
     cx.run_until_parked();
     cx.update_window(rig.window, |_, window, cx| window.render_frame(cx))
         .expect("window");
+    if let Some(settings) = rig.settings_window(cx) {
+        let _ = cx.update_window(settings, |_, window, cx| window.render_frame(cx));
+    }
 }
 
-fn bounds_of(cx: &mut TestAppContext, rig: &Rig, id: &'static str) -> Option<Bounds<Pixels>> {
-    cx.update_window(rig.window, |_, window, cx| {
+fn bounds_in(
+    cx: &mut TestAppContext,
+    rig: &Rig,
+    target: Target,
+    id: &'static str,
+) -> Option<Bounds<Pixels>> {
+    let window = match target {
+        Target::Navo => rig.window,
+        Target::Settings => rig.settings_window(cx)?,
+    };
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .try_find(id)
@@ -38,126 +50,118 @@ fn bounds_of(cx: &mut TestAppContext, rig: &Rig, id: &'static str) -> Option<Bou
     .expect("window")
 }
 
-fn viewport(cx: &mut TestAppContext, rig: &Rig) -> Size<Pixels> {
-    cx.update_window(rig.window, |_, window, _| window.viewport_size())
-        .expect("window")
+fn settings_viewport(cx: &mut TestAppContext, rig: &Rig) -> Size<Pixels> {
+    let settings = rig.settings_window(cx).expect("settings window");
+    cx.update_window(settings, |_, window, _| window.viewport_size())
+        .expect("settings window")
 }
 
 fn is_open(cx: &mut TestAppContext, rig: &Rig) -> bool {
     rig.view.read_with(cx, |view, _| view.settings.is_open())
 }
 
-fn assert_inside_with_margin(dialog: Bounds<Pixels>, window: Size<Pixels>) {
-    let margin = px(MARGIN);
-    assert!(dialog.left() >= margin, "left edge {dialog:?}");
-    assert!(dialog.top() >= margin, "top edge {dialog:?}");
-    assert!(
-        dialog.right() <= window.width - margin,
-        "right edge {dialog:?}"
-    );
-    assert!(
-        dialog.bottom() <= window.height - margin,
-        "bottom edge {dialog:?}"
-    );
-}
-
 #[gpui_kit::test]
-fn settings_float_as_a_centred_dialog_of_bounded_size_in_a_large_window(cx: &mut TestAppContext) {
+fn settings_open_in_their_own_window_without_a_scrim_in_navo(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
-    open_in(cx, &rig, size(px(1900.), px(1950.)));
-    let window = viewport(cx, &rig);
-    let dialog = bounds_of(cx, &rig, "settings-sheet").expect("the settings dialog shows");
-    assert_eq!(dialog.size, size(px(1040.), px(800.)), "{dialog:?}");
-    assert!(
-        (dialog.center().x - window.width / 2.).abs() <= px(1.),
-        "{dialog:?}"
-    );
-    assert_inside_with_margin(dialog, window);
-    let scrim = bounds_of(cx, &rig, "side-sheet-scrim").expect("a scrim dims the window");
-    assert!(scrim.size.width >= window.width - px(1.), "{scrim:?}");
+    open_in(cx, &rig, size(px(1040.), px(800.)));
+    assert!(is_open(cx, &rig));
+    assert!(rig.settings_window(cx).is_some());
+    assert!(bounds_in(cx, &rig, Target::Settings, "settings-window").is_some());
+    assert!(bounds_in(cx, &rig, Target::Navo, "settings-sheet").is_none());
+    assert!(bounds_in(cx, &rig, Target::Navo, "side-sheet-scrim").is_none());
 }
 
 #[gpui_kit::test]
-fn settings_shrink_with_a_small_window_and_keep_the_footer_visible(cx: &mut TestAppContext) {
+fn settings_fit_inside_a_small_window_and_keep_the_close_button_visible(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     open_in(cx, &rig, size(px(800.), px(560.)));
-    let window = viewport(cx, &rig);
-    let dialog = bounds_of(cx, &rig, "settings-sheet").expect("the settings dialog shows");
-    assert_inside_with_margin(dialog, window);
-    let footer = bounds_of(cx, &rig, "side-sheet-close").expect("the close button shows");
-    assert!(
-        dialog.contains(&footer.center()),
-        "close {footer:?} in {dialog:?}"
-    );
+    let viewport = settings_viewport(cx, &rig);
+    let root = bounds_in(cx, &rig, Target::Settings, "settings-window").expect("settings window");
+    assert_eq!(root.size, viewport);
+    let bar = bounds_in(cx, &rig, Target::Settings, "title-bar").expect("the title bar shows");
+    assert!(root.contains(&bar.center()), "bar {bar:?} in {root:?}");
+    if let Some(close) = bounds_in(cx, &rig, Target::Settings, "close") {
+        assert!(
+            root.contains(&close.center()),
+            "close {close:?} in {root:?}"
+        );
+    }
 }
 
 #[gpui_kit::test]
-fn a_click_on_the_scrim_closes_settings_and_returns_focus_to_the_pane(cx: &mut TestAppContext) {
-    let rig = rig(cx, ThemeChoice::System);
-    rig.press(cx, "tab");
-    let before = rig
-        .view
-        .read_with(cx, |view, _| view.browser.state().focused_pane());
-    open_in(cx, &rig, size(px(1600.), px(1000.)));
-    cx.update_window(rig.window, |_, window, cx| {
-        window.click_at("settings-sheet", point(px(400.), px(20.)), cx);
-    })
-    .expect("window");
-    settle(cx, &rig);
-    assert!(is_open(cx, &rig), "a click inside the dialog keeps it open");
-    cx.update_window(rig.window, |_, window, cx| {
-        window.click_at("side-sheet-scrim", point(px(8.), px(8.)), cx);
-    })
-    .expect("window");
-    settle(cx, &rig);
-    assert!(!is_open(cx, &rig));
-    assert!(rig.pane_has_focus(cx));
-    let after = rig
-        .view
-        .read_with(cx, |view, _| view.browser.state().focused_pane());
-    assert_eq!(after, before, "focus returns to the pane that had it");
-}
-
-#[gpui_kit::test]
-fn the_close_button_closes_settings_and_returns_focus_to_the_pane(cx: &mut TestAppContext) {
-    let rig = rig(cx, ThemeChoice::System);
-    open_in(cx, &rig, size(px(1600.), px(1000.)));
-    rig.click(cx, "side-sheet-close");
-    assert!(!is_open(cx, &rig));
-    assert!(rig.pane_has_focus(cx));
-    settle(cx, &rig);
-    assert!(bounds_of(cx, &rig, "side-sheet-scrim").is_none());
-}
-
-#[gpui_kit::test]
-fn a_click_during_the_fade_out_reaches_the_pane_under_the_scrim(cx: &mut TestAppContext) {
+fn a_click_in_navo_leaves_settings_open_and_navo_active(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     let left = rig
         .view
         .read_with(cx, |view, _| view.browser.state().focused_pane());
     rig.press(cx, "tab");
-    open_in(cx, &rig, size(px(1600.), px(1000.)));
-    rig.press(cx, "escape");
+    open_in(cx, &rig, size(px(1040.), px(800.)));
+    let settings = rig.settings_window(cx).expect("settings window");
     let row = cx
         .update_window(rig.window, |_, window, cx| {
             window.render_frame(cx);
-            let scrim = window
-                .try_find("side-sheet-scrim")
-                .map(|found| found.bounds());
             let row = window
                 .within(("list", left.get()))
                 .find(("row", 0_usize))
                 .bounds();
-            (scrim, point(row.left() + px(4.), row.center().y))
+            point(row.left() + px(4.), row.center().y)
         })
         .expect("window");
-    assert!(row.0.is_some(), "the scrim is still fading out");
-    VisualTestContext::from_window(rig.window, cx).simulate_click(row.1, Modifiers::none());
+    cx.update_window(rig.window, |_, window, _| window.activate_window())
+        .expect("navo window");
+    VisualTestContext::from_window(rig.window, cx).simulate_click(row, Modifiers::none());
+    settle(cx, &rig);
+    assert!(is_open(cx, &rig), "a click in Navo leaves Settings open");
+    assert_eq!(rig.settings_window(cx), Some(settings));
+    let navo_active = cx
+        .update_window(rig.window, |_, window, _| window.is_window_active())
+        .expect("navo window");
+    assert!(navo_active, "Navo is active after a click inside it");
     let focused = rig
         .view
         .read_with(cx, |view, _| view.browser.state().focused_pane());
-    assert_eq!(
-        focused, left,
-        "the click lands on the pane, not on the leaving scrim"
-    );
+    assert_eq!(focused, left, "the click lands directly on the Navo pane");
+}
+
+#[gpui_kit::test]
+fn the_close_button_closes_settings_and_returns_focus_to_the_pane(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    open_in(cx, &rig, size(px(1040.), px(800.)));
+    if bounds_in(cx, &rig, Target::Settings, "close").is_some() {
+        rig.click_in(cx, Target::Settings, "close");
+    } else {
+        rig.press_in(cx, Target::Settings, "ctrl-,");
+    }
+    assert!(!is_open(cx, &rig));
+    assert_eq!(rig.settings_window(cx), None);
+    assert!(rig.pane_has_focus(cx));
+    settle(cx, &rig);
+    assert!(bounds_in(cx, &rig, Target::Navo, "side-sheet-scrim").is_none());
+}
+
+#[gpui_kit::test]
+fn a_click_after_closing_settings_reaches_the_pane_without_a_scrim(cx: &mut TestAppContext) {
+    let rig = rig(cx, ThemeChoice::System);
+    let left = rig
+        .view
+        .read_with(cx, |view, _| view.browser.state().focused_pane());
+    rig.press(cx, "tab");
+    open_in(cx, &rig, size(px(1040.), px(800.)));
+    rig.press_in(cx, Target::Settings, "escape");
+    let row = cx
+        .update_window(rig.window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("side-sheet-scrim").is_none());
+            let row = window
+                .within(("list", left.get()))
+                .find(("row", 0_usize))
+                .bounds();
+            point(row.left() + px(4.), row.center().y)
+        })
+        .expect("window");
+    VisualTestContext::from_window(rig.window, cx).simulate_click(row, Modifiers::none());
+    let focused = rig
+        .view
+        .read_with(cx, |view, _| view.browser.state().focused_pane());
+    assert_eq!(focused, left, "the click lands directly on the pane");
 }

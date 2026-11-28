@@ -477,7 +477,15 @@ fn compare_large_closing_settings_returns_focus_to_the_diff(cx: &mut TestAppCont
     .expect("window");
     settle(cx, &rig.view);
     assert!(rig.view.read_with(cx, |view, _| view.settings.is_open()));
-    rig.press(cx, "escape");
+    let settings = rig
+        .view
+        .read_with(cx, |view, _| view.settings.host.window_handle())
+        .expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("escape", cx);
+    })
+    .expect("settings window");
     settle(cx, &rig.view);
     assert!(!rig.view.read_with(cx, |view, _| view.settings.is_open()));
     assert!(file_focused(cx, &rig), "the diff has focus again");
@@ -515,7 +523,15 @@ fn compare_large_budget_link_works_from_the_keyboard(cx: &mut TestAppContext) {
     rig.press(cx, "enter");
     settle(cx, &rig.view);
     assert!(opened(cx), "Enter opens Settings");
-    rig.press(cx, "escape");
+    let settings = rig
+        .view
+        .read_with(cx, |view, _| view.settings.host.window_handle())
+        .expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("escape", cx);
+    })
+    .expect("settings window");
     settle(cx, &rig.view);
     assert!(!opened(cx), "Escape closes Settings");
     assert!(tab_to_link(cx, &rig), "Tab reaches the link again");

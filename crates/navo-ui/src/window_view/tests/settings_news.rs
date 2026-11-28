@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{AppContext as _, Context, TestAppContext, Window};
 
-use super::app_menu::{Rig, rig};
+use super::app_menu::{Rig, Target, rig};
 use crate::app_menu::QuickSettings;
 use crate::settings::{Change, FIELDS, Field, Values};
 use crate::tokens::{self, Density, ThemeChoice};
@@ -48,18 +48,19 @@ fn applies(cx: &mut TestAppContext, rig: &Rig) -> usize {
 }
 
 fn row_value(cx: &mut TestAppContext, rig: &Rig, field: Field) -> Option<String> {
+    let window = rig.settings_window(cx).expect("settings window");
     let row = FIELDS
         .iter()
         .position(|spec| spec.field == field)
         .expect("row");
-    cx.update_window(rig.window, |_, window, cx| {
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window
             .find(("settings-row", row))
             .value()
             .map(str::to_owned)
     })
-    .expect("window")
+    .expect("settings window")
 }
 
 fn status(cx: &mut TestAppContext, rig: &Rig) -> String {
@@ -112,9 +113,9 @@ fn the_echo_of_a_sheet_change_applies_nothing(cx: &mut TestAppContext) {
     let rig = rig(cx, ThemeChoice::System);
     rig.press(cx, "ctrl-,");
     settle_motion(cx, &rig);
-    rig.press(cx, "down");
-    rig.press(cx, "down");
-    rig.press(cx, "right");
+    rig.press_in(cx, Target::Settings, "down");
+    rig.press_in(cx, Target::Settings, "down");
+    rig.press_in(cx, Target::Settings, "right");
     assert_eq!(density(cx), Density::Comfortable);
     send(cx, &rig, on_disk(Density::Comfortable));
     assert_eq!(applies(cx, &rig), 0);

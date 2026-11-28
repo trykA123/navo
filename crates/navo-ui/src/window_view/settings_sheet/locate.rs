@@ -34,12 +34,27 @@ impl NavoWindow {
             let note = found
                 .filter(|found| found.is_missing)
                 .map(|_| missing_note(key));
+            let line = found.map(|found| found.line);
             let _ = this.update_in(cx, |view, window, cx| {
-                view.view_location(file, window, cx);
-                view.open_viewer_at_line(found.map(|found| found.line), note);
+                view.show_settings_file(file, line, note, window, cx);
             });
         })
         .detach();
+    }
+
+    fn show_settings_file(
+        &mut self,
+        file: Location,
+        line: Option<u64>,
+        note: Option<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings.host.is_open() {
+            window.activate_window();
+        }
+        self.view_location(file, window, cx);
+        self.open_viewer_at_line(line, note);
     }
 
     pub(in crate::window_view) fn locate_after_save(

@@ -259,6 +259,13 @@ fn restart_buttons_offer_the_same_handoff_in_help_and_the_ready_notice(cx: &mut 
         view.update(cx, |view, cx| {
             view.open_settings_at(crate::settings::Field::CheckUpdates, window, cx)
         });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let settings = view
+        .read_with(cx, |view, _| view.settings.host.window_handle())
+        .expect("settings window");
+    cx.update_window(settings, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("settings-update-restart").is_some());
         window.click("settings-update-restart", cx);

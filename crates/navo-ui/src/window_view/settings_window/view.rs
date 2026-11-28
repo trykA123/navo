@@ -5,36 +5,55 @@ use gpui_kit::{Subscription, WeakEntity, WindowHandle};
 use navo_l10n::t;
 
 use super::super::NavoWindow;
-use super::update_navo;
+use super::super::settings_sheet::SettingsSnapshot;
+use super::{SettingsRoute, update_navo};
 use crate::prelude::*;
 use crate::settings::{self, ToggleSettings};
 use crate::title_bar::NavoTitleBar;
 use crate::tokens;
 
-/// Root content view for the floating Settings window; all settings state stays on `NavoWindow`.
+/// Root content view for the floating Settings window; all settings state stays on `NavoWindow`
+/// and is mirrored into `snapshot` outside `render` so drawing this window never reassigns
+/// `NavoWindow`'s tracked GPUI window.
 pub(in crate::window_view) struct SettingsWindow {
     navo: WeakEntity<NavoWindow>,
     main: WindowHandle<NavoWindow>,
+    snapshot: Option<SettingsSnapshot>,
     _watches: Vec<Subscription>,
 }
 
 impl SettingsWindow {
-    /// Builds the Settings view, watching Navo and the theme global for redraws.
+    /// Builds the Settings view, mirroring `NavoWindow` snapshots on notifications and theme updates.
     pub(super) fn new(
         navo: WeakEntity<NavoWindow>,
         main: WindowHandle<NavoWindow>,
+        snapshot: Option<SettingsSnapshot>,
         cx: &mut Context<Self>,
     ) -> Self {
         let mut watches = Vec::new();
         if let Some(entity) = navo.upgrade() {
-            watches.push(cx.observe(&entity, |_, _, cx| cx.notify()));
+            watches.push(cx.observe(&entity, |view, navo, cx| {
+                view.snapshot = Some(navo.read(cx).settings_snapshot());
+                cx.notify();
+            }));
         }
         watches.push(cx.observe_global::<tokens::Theme>(|_, cx| cx.notify()));
         Self {
             navo,
             main,
+            snapshot,
             _watches: watches,
         }
+    }
+
+    /// Replaces the mirrored Settings snapshot and schedules a repaint.
+    pub(super) fn set_snapshot(
+        &mut self,
+        snapshot: Option<SettingsSnapshot>,
+        cx: &mut Context<Self>,
+    ) {
+        self.snapshot = snapshot;
+        cx.notify();
     }
 }
 
@@ -78,15 +97,17 @@ impl Render for SettingsWindow {
             .on_action(cx.listener(|view, _: &ToggleSettings, window, cx| {
                 defer_close(view.main, window.window_handle(), cx);
             }));
-        let Some(navo) = self.navo.upgrade() else {
+        let Some(snapshot) = &self.snapshot else {
             return root;
         };
-        let body = navo.update(cx, |navo, cx| {
-            let on_event = NavoWindow::settings_listener(main, |navo, event, window, cx| {
-                navo.settings_window_event(event, window, cx);
-            });
-            navo.settings_body(on_event, window, cx)
+        let route = SettingsRoute {
+            navo: self.navo.clone(),
+            main: Some(main),
+        };
+        let on_event = NavoWindow::settings_listener(main, |navo, event, window, cx| {
+            navo.settings_window_event(event, window, cx);
         });
+        let body = snapshot.build_body(&route, on_event, &t);
         root.child(
             NavoTitleBar::new(t!("settings-title"))
                 .menu_arrow(false)

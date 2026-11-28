@@ -5,7 +5,7 @@ mod view;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
-use gpui_kit::{WeakEntity, WindowHandle, WindowKind};
+use gpui_kit::{Entity, WeakEntity, WindowHandle, WindowKind};
 
 use super::hand_off::RawWindowHandle;
 use super::{NavoWindow, raw_handle};
@@ -22,6 +22,7 @@ const MIN_H: f32 = 420.0;
 #[derive(Default)]
 pub(in crate::window_view) struct SettingsHost {
     window: Option<WindowHandle<SettingsWindow>>,
+    handle: Option<AnyWindowHandle>,
     main: Option<WindowHandle<NavoWindow>>,
     raw: Option<RawWindowHandle>,
     user_hidden: bool,
@@ -32,11 +33,12 @@ impl SettingsHost {
     /// Records the freshly opened Settings window and marks it shown.
     pub(in crate::window_view) fn open(
         &mut self,
-        window: WindowHandle<SettingsWindow>,
+        handle: AnyWindowHandle,
         main: WindowHandle<NavoWindow>,
         raw: Option<RawWindowHandle>,
     ) {
-        self.window = Some(window);
+        self.window = Some(WindowHandle::<SettingsWindow>::new(handle.window_id()));
+        self.handle = Some(handle);
         self.main = Some(main);
         self.raw = raw;
         self.user_hidden = false;
@@ -90,7 +92,7 @@ impl SettingsHost {
         mut f: impl FnMut(&mut Window, &mut App) -> R,
     ) -> R {
         if let Some(handle) = self.window
-            && fallback.window_handle() != AnyWindowHandle::from(handle)
+            && fallback.window_handle().window_id() != handle.window_id()
             && let Some(result) = self.with_window(cx, |window, cx| f(window, cx))
         {
             return result;
@@ -113,7 +115,7 @@ impl SettingsHost {
 
     /// Returns the live Settings window as an untyped handle, if currently open.
     pub(in crate::window_view) fn window_handle(&self) -> Option<AnyWindowHandle> {
-        self.window.map(|handle| handle.into())
+        self.handle
     }
 
     /// Returns the native raw handle captured when the Settings window opened.
@@ -201,31 +203,23 @@ fn deliver_action(main: WindowHandle<NavoWindow>, f: SettingsActionHandler, cx: 
     }
 }
 
-impl NavoWindow {
-    /// Builds an `on_event` handler that routes one cloned event onto Navo's own window:
-    /// propagation stops synchronously, then the cloned event runs deferred on Navo.
-    pub(in crate::window_view) fn settings_listener<E: Clone + 'static>(
-        main: WindowHandle<NavoWindow>,
-        f: impl Fn(&mut Self, &E, &mut Window, &mut Context<Self>) + 'static,
-    ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
-        let f: SettingsEventHandler<E> = Rc::new(f);
-        move |event: &E, _window: &mut Window, cx: &mut App| {
-            cx.stop_propagation();
-            let event = event.clone();
-            let f = Rc::clone(&f);
-            cx.defer(move |cx| deliver_event(main, event, f, cx));
-        }
-    }
+/// Routing target for Settings actions and key listeners: routes onto `main` when Settings
+/// runs in its own floating window, else runs directly on `navo` in overlay mode.
+#[derive(Clone)]
+pub(in crate::window_view) struct SettingsRoute {
+    pub(in crate::window_view) navo: WeakEntity<NavoWindow>,
+    pub(in crate::window_view) main: Option<WindowHandle<NavoWindow>>,
+}
 
+impl SettingsRoute {
     /// Builds a handler that stops propagation synchronously and routes onto Navo's window
     /// when Settings runs in its own window, else runs directly on the overlay window.
-    pub(in crate::window_view) fn settings_listener_stopping<E: Clone + 'static>(
+    pub(in crate::window_view) fn listener_stopping<E: Clone + 'static>(
         &self,
-        cx: &Context<Self>,
-        f: impl Fn(&mut Self, &E, &mut Window, &mut Context<Self>) + 'static,
+        f: impl Fn(&mut NavoWindow, &E, &mut Window, &mut Context<NavoWindow>) + 'static,
     ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
-        let main = self.settings.host.main();
-        let this = cx.weak_entity();
+        let main = self.main;
+        let this = self.navo.clone();
         let f: SettingsEventHandler<E> = Rc::new(f);
         move |event: &E, window: &mut Window, cx: &mut App| {
             cx.stop_propagation();
@@ -241,13 +235,12 @@ impl NavoWindow {
 
     /// Builds an action or click handler that routes onto Navo's window when Settings runs
     /// in its own window, else runs directly on the overlay window.
-    pub(in crate::window_view) fn settings_action<E: 'static>(
+    pub(in crate::window_view) fn action<E: 'static>(
         &self,
-        cx: &Context<Self>,
-        f: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+        f: impl Fn(&mut NavoWindow, &mut Window, &mut Context<NavoWindow>) + 'static,
     ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
-        let main = self.settings.host.main();
-        let this = cx.weak_entity();
+        let main = self.main;
+        let this = self.navo.clone();
         let f: SettingsActionHandler = Rc::new(f);
         move |_: &E, window: &mut Window, cx: &mut App| {
             let f = Rc::clone(&f);
@@ -256,6 +249,31 @@ impl NavoWindow {
             } else {
                 let _ = this.update(cx, |navo, cx| f(navo, window, cx));
             }
+        }
+    }
+}
+
+impl NavoWindow {
+    /// Returns the active routing target for Settings controls built from this window.
+    pub(in crate::window_view) fn settings_route(&self, cx: &Context<Self>) -> SettingsRoute {
+        SettingsRoute {
+            navo: cx.weak_entity(),
+            main: self.settings.host.main(),
+        }
+    }
+
+    /// Builds an `on_event` handler that routes one cloned event onto Navo's own window:
+    /// propagation stops synchronously, then the cloned event runs deferred on Navo.
+    pub(in crate::window_view) fn settings_listener<E: Clone + 'static>(
+        main: WindowHandle<NavoWindow>,
+        f: impl Fn(&mut Self, &E, &mut Window, &mut Context<Self>) + 'static,
+    ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
+        let f: SettingsEventHandler<E> = Rc::new(f);
+        move |event: &E, _window: &mut Window, cx: &mut App| {
+            cx.stop_propagation();
+            let event = event.clone();
+            let f = Rc::clone(&f);
+            cx.defer(move |cx| deliver_event(main, event, f, cx));
         }
     }
 
@@ -279,20 +297,26 @@ impl NavoWindow {
                 Ok(false) => {}
                 Ok(true) | Err(_) => return,
             }
-            let Some((handle, settings_raw)) = open_the_window(navo.clone(), main, cx) else {
+            let Some((handle, view, settings_raw)) = open_the_window(navo.clone(), main, cx) else {
+                let _ = navo.update(cx, |navo, cx| navo.reset_settings_on_close(true, cx));
                 return;
             };
             if update_navo(&main, cx, |navo, window, cx| {
                 navo.settings.host.open(handle, main, settings_raw);
                 navo.check_settings_owner(settings_raw, navo_raw);
-                navo.prepare_find(window, cx);
-                navo.focus_settings_content(cx);
+                navo.prepare_settings_window(window, cx);
                 cx.notify();
             })
             .is_none()
             {
-                let _ = cx.update_window(handle.into(), |_, window, _| window.remove_window());
+                let _ = cx.update_window(handle, |_, window, _| window.remove_window());
+                return;
             }
+            let snapshot = navo
+                .upgrade()
+                .map(|entity| entity.read(cx).settings_snapshot());
+            view.update(cx, |settings, cx| settings.set_snapshot(snapshot, cx));
+            focus_in_settings(navo, handle, cx);
         });
     }
 
@@ -309,13 +333,21 @@ impl NavoWindow {
     }
 
     /// Clears SettingsHost and window-bound inputs when the Settings window is closing itself.
-    fn on_settings_window_closing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn on_settings_window_closing(
+        &mut self,
+        was_active: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if !self.settings.host.is_open() {
             return;
         }
         self.reset_settings_on_close(true, cx);
-        window.activate_window();
+        if was_active {
+            window.activate_window();
+        }
         self.settings.host.clear();
+        self.focus_after_settings(window, cx);
         cx.notify();
     }
 
@@ -342,37 +374,30 @@ impl NavoWindow {
             tracing::warn!("the settings window owner had to be repaired after open");
         }
     }
-
-    /// Focuses the settings content inside the Settings window, after the open update ends.
-    fn focus_settings_content(&self, cx: &mut Context<Self>) {
-        let this = cx.weak_entity();
-        let settings = self.settings.host.window();
-        cx.defer(move |cx| {
-            if let Some(handle) = settings {
-                focus_in_settings(this, handle, cx);
-            }
-        });
-    }
 }
 
 /// Focuses Navo's settings content inside the given Settings window.
-fn focus_in_settings(
-    this: WeakEntity<NavoWindow>,
-    handle: WindowHandle<SettingsWindow>,
-    cx: &mut App,
-) {
-    let _ = cx.update_window(handle.into(), |_, window, cx| {
+fn focus_in_settings(this: WeakEntity<NavoWindow>, handle: AnyWindowHandle, cx: &mut App) {
+    let _ = cx.update_window(handle, |_, window, cx| {
+        window.activate_window();
         let Some(navo) = this.upgrade() else { return };
         navo.update(cx, |navo, cx| navo.focus_settings(window, cx));
     });
 }
 
-/// Opens the floating Settings window and returns its typed handle and native raw handle.
+/// Opens the floating Settings window and returns its handle, view entity and native raw handle.
 fn open_the_window(
     navo: WeakEntity<NavoWindow>,
     main: WindowHandle<NavoWindow>,
     cx: &mut App,
-) -> Option<(WindowHandle<SettingsWindow>, Option<RawWindowHandle>)> {
+) -> Option<(
+    AnyWindowHandle,
+    Entity<SettingsWindow>,
+    Option<RawWindowHandle>,
+)> {
+    let initial = navo
+        .upgrade()
+        .map(|entity| entity.read(cx).settings_snapshot());
     let options = WindowOptions {
         kind: WindowKind::Floating,
         is_minimizable: false,
@@ -383,10 +408,11 @@ fn open_the_window(
     let mut settings_raw = None;
     let opened = crate::open_window(options, cx, |settings_window, cx| {
         settings_raw = native_raw(settings_window);
-        let view = cx.new(|cx| SettingsWindow::new(navo, main, cx));
-        settings_window.on_window_should_close(cx, move |_, cx| {
+        let view = cx.new(|cx| SettingsWindow::new(navo, main, initial, cx));
+        settings_window.on_window_should_close(cx, move |settings_window, cx| {
+            let was_active = settings_window.is_window_active();
             if update_navo(&main, cx, |navo, window, cx| {
-                navo.on_settings_window_closing(window, cx);
+                navo.on_settings_window_closing(was_active, window, cx);
             })
             .is_none()
             {
@@ -397,10 +423,7 @@ fn open_the_window(
         view
     });
     match opened {
-        Ok((handle, _)) => Some((
-            WindowHandle::<SettingsWindow>::new(handle.window_id()),
-            settings_raw,
-        )),
+        Ok((handle, view)) => Some((handle, view, settings_raw)),
         Err(error) => {
             tracing::warn!(%error, "the settings window did not open");
             None

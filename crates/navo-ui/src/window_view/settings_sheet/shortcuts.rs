@@ -1,7 +1,7 @@
 use gpui_kit::{Focusable, Subscription};
 
 use crate::prelude::*;
-use crate::shortcuts::{ShortcutsEvent, ShortcutsPage};
+use crate::shortcuts::{FailedSave, SaveKeymap, ShortcutsEvent, ShortcutsPage};
 use crate::window_view::{KeymapNews, NavoWindow};
 
 const NO_FILE: &str = "There is no keymap file in this session.";
@@ -9,6 +9,27 @@ const NO_FILE: &str = "There is no keymap file in this session.";
 pub(super) struct ShortcutsPanel {
     page: Entity<ShortcutsPage>,
     _events: Subscription,
+}
+
+impl ShortcutsPanel {
+    pub(super) fn take_failed_save(&self, cx: &mut App) -> Option<FailedSave> {
+        self.page.update(cx, |page, _| page.take_failed_save())
+    }
+}
+
+fn new_shortcuts_page(
+    save: SaveKeymap,
+    problem: Option<SharedString>,
+    failed: Option<FailedSave>,
+    window: &mut Window,
+    cx: &mut Context<ShortcutsPage>,
+) -> ShortcutsPage {
+    let mut page = ShortcutsPage::new(save, window, cx);
+    page.set_problem(problem, cx);
+    if let Some(failed) = failed {
+        page.restore_failed_save(failed, cx);
+    }
+    page
 }
 
 impl NavoWindow {
@@ -30,10 +51,13 @@ impl NavoWindow {
     }
 
     pub(super) fn show_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let page = self.shortcuts_entity(window, cx);
         self.settings.is_shortcuts = true;
         self.settings.edit = None;
         self.settings.notice = None;
+        if super::super::settings_window::on() && !self.settings.host.is_open() {
+            return;
+        }
+        let page = self.shortcuts_entity(window, cx);
         let focus = page.read(cx).focus_handle(cx);
         self.settings
             .host
@@ -50,12 +74,12 @@ impl NavoWindow {
         }
         let save = self.keymap.save.clone();
         let problem = self.keymap.problem.clone();
+        let failed = self.settings.failed_shortcut.take();
         let page = self.settings.host.with_window_or(window, cx, |target, cx| {
-            cx.new(|cx| {
-                let mut page = ShortcutsPage::new(save.clone(), target, cx);
-                page.set_problem(problem.clone(), cx);
-                page
-            })
+            let save = save.clone();
+            let problem = problem.clone();
+            let failed = failed.clone();
+            cx.new(|cx| new_shortcuts_page(save, problem, failed, target, cx))
         });
         let events = cx.subscribe_in(&page, window, |view, _, event, window, cx| {
             view.shortcuts_event(event, window, cx);

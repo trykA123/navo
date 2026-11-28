@@ -651,16 +651,24 @@ fn f4_without_an_editor_asks_once_then_opens_directly(cx: &mut TestAppContext) {
 fn f4_uses_the_editor_set_in_settings(cx: &mut TestAppContext) {
     let (window, view, log) = editor_window(cx, Some("code.exe"));
     press(cx, window, &view, "ctrl-,");
+    let settings = view
+        .read_with(cx, |view, _| view.settings.host.window_handle())
+        .expect("settings window");
     for _ in 0..6 {
-        press(cx, window, &view, "tab");
+        press(cx, settings, &view, "tab");
     }
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "down");
-    press(cx, window, &view, "enter");
-    press(cx, window, &view, "ctrl-a");
-    type_in(cx, window, &view, "vim.exe");
-    press(cx, window, &view, "enter");
-    press(cx, window, &view, "escape");
+    press(cx, settings, &view, "down");
+    press(cx, settings, &view, "down");
+    press(cx, settings, &view, "enter");
+    press(cx, settings, &view, "ctrl-a");
+    type_in(cx, settings, &view, "vim.exe");
+    press(cx, settings, &view, "enter");
+    cx.update_window(settings, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("escape", cx);
+    })
+    .expect("settings window");
+    settle(cx, &view);
     press(cx, window, &view, "down");
     press(cx, window, &view, "f4");
     assert!(!prompt_open(cx, &view));

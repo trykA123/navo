@@ -8,11 +8,12 @@ use crate::settings::{
 };
 use crate::tokens::Theme;
 use crate::window_view::NavoWindow;
+use crate::window_view::settings_window::SettingsRoute;
 
 const PLACEHOLDER: &str = "Find a setting by name, key or help";
 
 pub(super) struct Find {
-    input: Entity<TextFieldState>,
+    pub(super) input: Entity<TextFieldState>,
     _change: Subscription,
 }
 
@@ -131,17 +132,21 @@ impl NavoWindow {
         }
         self.close_settings(window, cx);
     }
+}
 
-    pub(super) fn find_bar(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let find = self.settings.find.as_ref()?;
-        let bar = find_field(t, &find.input)
-            .key_context(FIND_CONTEXT)
-            .on_action(self.settings_action::<ClearFind>(cx, |view, window, cx| {
-                view.escape_settings(window, cx);
-            }))
-            .on_action(self.settings_action::<FindToList>(cx, |view, window, cx| {
-                view.focus_settings(window, cx);
-            }));
-        Some(bar.into_any_element())
-    }
+/// Builds the Settings Find input row with actions routed through `route`.
+pub(super) fn find_bar(
+    route: &SettingsRoute,
+    input: &Entity<TextFieldState>,
+    t: &Theme,
+) -> AnyElement {
+    find_field(t, input)
+        .key_context(FIND_CONTEXT)
+        .on_action(route.action::<ClearFind>(|view, window, cx| {
+            view.escape_settings(window, cx);
+        }))
+        .on_action(route.action::<FindToList>(|view, window, cx| {
+            view.focus_settings(window, cx);
+        }))
+        .into_any_element()
 }
