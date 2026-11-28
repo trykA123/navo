@@ -5,9 +5,11 @@
 )]
 
 use super::test_support::MftFixture;
+use super::volume_io::enumerate_volume;
 use super::{COMPACT_MIN_SLOTS, NtfsIndex};
 use crate::file::{self, Header};
 use crate::heap_probe::{MIB, Measured, Probe};
+use crate::pipe::CancelToken;
 use crate::table::{Flags, NO_PARENT, NameTable};
 use crate::usn::FrnMap;
 
@@ -20,6 +22,10 @@ const FILE_ID_BUDGET: usize = 7;
 const STREAM_SLACK: usize = MIB;
 // Restore checks rebuild per-entry counts beside the table; the old full body copy cost about 61.
 const LOAD_CHECK_BUDGET: usize = 24;
+const REALISTIC_SEED: u64 = 7;
+const REALISTIC_RETAINED_BUDGET: usize = 89;
+const REALISTIC_PEAK_RATIO: f64 = 1.7;
+const REALISTIC_LOAD_TRANSIENT_BUDGET: usize = 8;
 
 fn header() -> Header {
     Header {
@@ -126,6 +132,70 @@ fn loading_holds_only_the_loaded_index() {
     let index_bytes = held(index, &probe);
     report("load", ENTRIES, measured, index_bytes);
     assert!(measured.peak <= index_bytes + ENTRIES as usize * LOAD_CHECK_BUDGET);
+}
+
+#[test]
+fn realistic_first_build_stays_within_d109_budgets() {
+    let mut fixture = MftFixture::realistic(GROWN_ENTRIES, REALISTIC_SEED);
+    let probe = Probe::start();
+    let index = enumerate_volume(&mut fixture, 'C', usize::MAX, &CancelToken::new())
+        .unwrap()
+        .index;
+    let measured = probe.read();
+    let entries = index.table.len();
+    let columns = index.table.column_bytes();
+    let frn_bytes = index.ids.memory_bytes();
+    let retained = held(index, &probe);
+    drop(fixture);
+    let per_entry = retained as f64 / entries as f64;
+    let peak_ratio = measured.peak as f64 / retained as f64;
+    println!(
+        "AM2 realistic first build: peak {} KiB, retained {} KiB, {per_entry:.2} B/entry, peak/retained {peak_ratio:.3} ({entries} entries)",
+        measured.peak >> 10,
+        retained >> 10,
+    );
+    print!("AM2 realistic breakdown:");
+    for (name, bytes) in columns {
+        print!(" {name} {:.2}", bytes as f64 / entries as f64);
+    }
+    println!(" frn {:.2}", frn_bytes as f64 / entries as f64);
+    assert!(
+        retained <= entries * REALISTIC_RETAINED_BUDGET,
+        "realistic first build retained {per_entry:.2} B/entry (budget <= {REALISTIC_RETAINED_BUDGET} B/entry; retained {retained} B for {entries} entries)"
+    );
+    assert!(
+        peak_ratio <= REALISTIC_PEAK_RATIO,
+        "realistic first build peak/retained {peak_ratio:.3} (budget <= {REALISTIC_PEAK_RATIO:.1}; peak {} B, retained {retained} B)",
+        measured.peak
+    );
+}
+
+#[test]
+fn realistic_load_stays_within_transient_budget() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("c-realistic.index");
+    let source = MftFixture::realistic(ENTRIES, REALISTIC_SEED).read().index;
+    save(&path, &source);
+    drop(source);
+    let probe = Probe::start();
+    let loaded = file::load_with_ids(&path).unwrap();
+    let index = NtfsIndex::restore(loaded, 42, 7).unwrap();
+    let measured = probe.read();
+    let entries = index.table.len();
+    let retained = held(index, &probe);
+    let transient = measured.peak.saturating_sub(retained);
+    let transient_per_entry = transient as f64 / entries as f64;
+    println!(
+        "AM2 realistic load: peak {} KiB, retained {} KiB, transient {} KiB, {transient_per_entry:.2} B/entry ({entries} entries)",
+        measured.peak >> 10,
+        retained >> 10,
+        transient >> 10,
+    );
+    assert!(
+        transient <= entries * REALISTIC_LOAD_TRANSIENT_BUDGET,
+        "realistic load transient {transient_per_entry:.2} B/entry (budget <= {REALISTIC_LOAD_TRANSIENT_BUDGET} B/entry; peak {} B, retained {retained} B for {entries} entries)",
+        measured.peak
+    );
 }
 
 const LIVE_SET: u32 = 50_000;

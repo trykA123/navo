@@ -33,6 +33,11 @@ impl Flags {
     pub(super) const fn from_stored(bits: StoredFlags) -> Flags {
         Flags(bits as u16 & !(Self::DELETED as u16))
     }
+
+    /// True when stored flag bits represent a live (non-deleted) folder.
+    pub(crate) const fn is_live_folder(bits: StoredFlags) -> bool {
+        bits & (Self::FOLDER.stored() | Self::DELETED) == Self::FOLDER.stored()
+    }
 }
 
 const _: () = assert!(

@@ -1,11 +1,12 @@
 use std::io::{self, BufWriter, Read, Write};
 
 use super::FileError;
-use crate::table::NameTable;
+use crate::table::{Flags, NameTable, StoredFlags};
 use crate::usn::FrnMap;
 use std::collections::TryReserveError;
 
 const CHUNK: usize = 64 * 1024;
+pub(super) type FolderCounts = Vec<(u32, [u32; 2])>;
 
 /// The snapshot body after the fixed header, written in file order without a full copy in memory.
 pub(super) struct Body<'a> {
@@ -135,6 +136,40 @@ impl<R: Read> CheckedReader<R> {
             Ok(())
         })?;
         Ok(values)
+    }
+
+    /// Streams the per-slot counts section, retaining only live folders in ascending ID order.
+    /// The flag is true when any file or deleted slot carries a non-zero count pair.
+    pub fn folder_counts(
+        &mut self,
+        flags: &[StoredFlags],
+    ) -> Result<(FolderCounts, bool), FileError> {
+        let count = u32::try_from(flags.len()).map_err(|_| FileError::BadLength)?;
+        let folders = flags
+            .iter()
+            .filter(|&&bits| Flags::is_live_folder(bits))
+            .count();
+        let mut counts = Vec::new();
+        counts.try_reserve_exact(folders)?;
+        let mut bad_non_folder = false;
+        let mut id = 0u32;
+        self.each::<8>(count, |[a, b, c, d, e, f, g, h]| {
+            let pair = [
+                u32::from_le_bytes([a, b, c, d]),
+                u32::from_le_bytes([e, f, g, h]),
+            ];
+            let live_folder = flags
+                .get(id as usize)
+                .is_some_and(|&bits| Flags::is_live_folder(bits));
+            if live_folder {
+                counts.push((id, pair));
+            } else if pair != [0, 0] {
+                bad_non_folder = true;
+            }
+            id = id.wrapping_add(1);
+            Ok(())
+        })?;
+        Ok((counts, bad_non_folder))
     }
 
     /// Reads the file-reference map; the flag is true when a reference repeats.

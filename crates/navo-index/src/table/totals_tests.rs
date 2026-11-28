@@ -265,11 +265,11 @@ fn reload(
     let (names, offsets, parents, flags) = t.raw_parts();
     let (mut parents, mut flags) = (parents.to_vec(), flags.to_vec());
     edit(&mut parents, &mut flags);
-    let (bytes, counts) = totals_of(t);
+    let (bytes, _) = totals_of(t);
     NameTable::from_raw_parts(
         names.to_owned(),
         (offsets.to_vec(), parents, flags),
-        (bytes, counts),
+        (bytes, t.sparse_counts()),
     )
 }
 
@@ -286,7 +286,7 @@ fn an_empty_and_an_all_deleted_table_load() {
     let gone = NameTable::from_raw_parts(
         names.to_owned(),
         (offsets.to_vec(), parents.to_vec(), flags),
-        (vec![0; slots], vec![[0; 2]; slots]),
+        (vec![0; slots], vec![]),
     )
     .unwrap();
     assert_eq!((gone.slots(), gone.len()), (t.slots(), 0));

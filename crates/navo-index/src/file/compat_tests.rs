@@ -143,7 +143,7 @@ fn references(root: u32, files: &Files) -> FrnMap {
 
 fn share_offsets(table: NameTable) -> NameTable {
     let (names, offsets, parents, flags) = table.raw_parts();
-    let (sizes, counts) = table.stored_totals();
+    let (sizes, _) = table.stored_totals();
     let mut shared = offsets.to_vec();
     let mut first: HashMap<&str, u32> = HashMap::new();
     for id in 0..table.slots() {
@@ -160,7 +160,7 @@ fn share_offsets(table: NameTable) -> NameTable {
     NameTable::from_raw_parts(
         names.to_owned(),
         (shared, parents.to_vec(), flags.to_vec()),
-        (sizes.to_vec(), counts.collect()),
+        (sizes.to_vec(), table.sparse_counts()),
     )
     .expect("shared offsets keep every stored name valid")
 }

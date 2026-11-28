@@ -158,11 +158,11 @@ mod tests {
         table.rename(file, root, "renamed").unwrap();
 
         let (names, offsets, parents, flags) = table.raw_parts();
-        let (bytes, counts) = table.stored_totals();
+        let (bytes, _) = table.stored_totals();
         let mut loaded = NameTable::from_raw_parts(
             names.to_owned(),
             (offsets.to_vec(), parents.to_vec(), flags.to_vec()),
-            (bytes.to_vec(), counts.collect()),
+            (bytes.to_vec(), table.sparse_counts()),
         )
         .unwrap();
         assert_eq!(loaded.live_names, None);
@@ -190,7 +190,7 @@ mod tests {
         let mut loaded = NameTable::from_raw_parts(
             names.to_owned(),
             (offsets.to_vec(), parents.to_vec(), flags.to_vec()),
-            (t.stored_totals().0.to_vec(), t.stored_totals().1.collect()),
+            (t.stored_totals().0.to_vec(), t.sparse_counts()),
         )
         .unwrap();
         let users = map.get(users).unwrap();

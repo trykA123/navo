@@ -120,18 +120,19 @@ pub fn load_with_ids(path: &Path) -> Result<(Header, NameTable, FrnMap), FileErr
         StoredFlags::try_from(u16::from_le_bytes(bytes)).unwrap_or(StoredFlags::MAX)
     })?;
     let sizes = input.values(lengths.entries, u64::from_le_bytes)?;
-    let counts = input.values(lengths.entries, |[a, b, c, d, e, f, g, h]: [u8; 8]| {
-        [
-            u32::from_le_bytes([a, b, c, d]),
-            u32::from_le_bytes([e, f, g, h]),
-        ]
-    })?;
+    let (counts, bad_non_folder_counts) = input.folder_counts(&flags)?;
     let (ids, repeated) = input.ids(lengths.references)?;
     if input.checksum() != expected_checksum {
         return Err(FileError::BadChecksum);
     }
     header.root = utf8(root)?;
-    let table = NameTable::from_raw_parts(utf8(names)?, (offsets, parents, flags), (sizes, counts))
+    let names = utf8(names)?;
+    if bad_non_folder_counts {
+        return Err(FileError::InvalidData(
+            "invalid name table or subtree totals",
+        ));
+    }
+    let table = NameTable::from_raw_parts(names, (offsets, parents, flags), (sizes, counts))
         .ok_or(FileError::InvalidData(
             "invalid name table or subtree totals",
         ))?;

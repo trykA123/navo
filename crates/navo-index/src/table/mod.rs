@@ -110,13 +110,12 @@ impl NameTable {
     pub(crate) fn from_raw_parts(
         names: String,
         arrays: (Vec<u32>, Vec<u32>, Vec<StoredFlags>),
-        totals: (Vec<u64>, Vec<[u32; 2]>),
+        totals: (Vec<u64>, Vec<(u32, [u32; 2])>),
     ) -> Option<Self> {
         let (offsets, parents, flags) = arrays;
         if offsets.len() != parents.len()
             || offsets.len() != flags.len()
             || offsets.len() != totals.0.len()
-            || offsets.len() != totals.1.len()
             || u32::try_from(offsets.len()).is_err()
             || u32::try_from(names.len()).is_err()
             || (!names.is_empty() && !names.ends_with(NAME_END))

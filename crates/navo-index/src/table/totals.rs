@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Flags, NO_PARENT, NameTable, StoredFlags, TableError};
+use super::{Flags, NO_PARENT, NameTable, TableError};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Totals {
@@ -188,20 +188,43 @@ impl NameTable {
         )
     }
 
-    pub(crate) fn restore_totals(&mut self, bytes: Vec<u64>, counts: Vec<[u32; 2]>) -> bool {
+    pub(crate) fn restore_totals(
+        &mut self,
+        bytes: Vec<u64>,
+        folder_counts: Vec<(u32, [u32; 2])>,
+    ) -> bool {
         self.bytes = bytes;
         // Only live folders get rebuilt, so only their stored sums need keeping for the check.
-        let folders: Vec<u32> = self.counted_folders().collect();
-        let stored: Vec<u64> = folders.iter().map(|&id| self.bytes[id as usize]).collect();
+        let mut stored = Vec::new();
+        if stored.try_reserve_exact(folder_counts.len()).is_err() {
+            return false;
+        }
+        for &(id, _) in &folder_counts {
+            let Some(&value) = self.bytes.get(id as usize) else {
+                return false;
+            };
+            stored.push(value);
+        }
         if !self.rebuild_totals() {
             return false;
         }
-        folders.iter().map(|&id| self.bytes[id as usize]).eq(stored)
-            && (0..self.slots())
-                .map(|id| self.folder_counts(id))
-                .eq(counts)
+        self.counts == folder_counts
+            && folder_counts
+                .iter()
+                .map(|&(id, _)| self.bytes[id as usize])
+                .eq(stored)
     }
 
+    #[cfg(test)]
+    pub(crate) fn sparse_counts(&self) -> Vec<(u32, [u32; 2])> {
+        self.counts
+            .iter()
+            .copied()
+            .filter(|&(id, _)| Flags::is_live_folder(self.flags[id as usize]))
+            .collect()
+    }
+
+    #[cfg(test)]
     fn counted_folders(&self) -> impl Iterator<Item = u32> + '_ {
         self.live_ids()
             .filter(|&id| self.flags[id as usize] & Flags::FOLDER.stored() != 0)
@@ -210,10 +233,11 @@ impl NameTable {
     /// Recomputes folder sums by a post-order walk of the child lists, with no per-slot scratch.
     /// Returns `false` when the lists do not form one tree over every live entry.
     pub(super) fn rebuild_totals(&mut self) -> bool {
-        let live_folder = |bits: &StoredFlags| {
-            bits & (Flags::FOLDER.stored() | Flags::DELETED) == Flags::FOLDER.stored()
-        };
-        let folders = self.flags.iter().filter(|bits| live_folder(bits)).count();
+        let folders = self
+            .flags
+            .iter()
+            .filter(|&&bits| Flags::is_live_folder(bits))
+            .count();
         self.counts.clear();
         if self.counts.try_reserve_exact(folders).is_err() {
             return false;
@@ -221,7 +245,7 @@ impl NameTable {
         self.counts.extend(
             (0u32..)
                 .zip(&self.flags)
-                .filter(|(_, bits)| live_folder(bits))
+                .filter(|&(_, &bits)| Flags::is_live_folder(bits))
                 .map(|(id, _)| (id, [0; 2])),
         );
         for &(id, _) in &self.counts {

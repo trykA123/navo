@@ -518,6 +518,34 @@ fn corrupted_totals_are_refused_even_with_a_valid_checksum() {
     assert!(matches!(load(&path), Err(FileError::InvalidData(_))));
 }
 
+#[test]
+fn non_zero_count_on_non_folder_slot_is_refused_and_checksum_takes_precedence() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("non-folder-count.index");
+    let original = write_fixture(&path);
+    let counts = HEADER_LEN
+        + header().root.len()
+        + table().raw_parts().0.len()
+        + table().slots() as usize * 18;
+    // Slot 2 is a live file ("new.txt"), slot 3 is deleted ("removed.txt").
+    for slot in [2usize, 3] {
+        let at = counts + slot * 8;
+        let mut bytes = original.clone();
+        bytes[at..at + 4].copy_from_slice(&1u32.to_le_bytes());
+        fs::write(&path, &bytes).unwrap();
+        assert!(
+            matches!(load(&path), Err(FileError::BadChecksum)),
+            "slot {slot}: bad checksum must take precedence over non-folder count"
+        );
+        repair_checksum(&mut bytes);
+        fs::write(&path, &bytes).unwrap();
+        assert!(
+            matches!(load(&path), Err(FileError::InvalidData(_))),
+            "slot {slot}: non-zero count on non-folder slot must be refused"
+        );
+    }
+}
+
 const WIDE_REFERENCE: u128 = (1 << 100) | 8;
 const GOLDEN_HEX: &str = concat!(
     "464552524954452d494e4445580000000300efcdab89674523011032547698badcfebc9a78563412",

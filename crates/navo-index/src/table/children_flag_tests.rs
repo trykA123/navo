@@ -320,7 +320,7 @@ fn a_rename_that_gains_the_folder_flag_restores_stored_totals() {
     let (sizes, counts) = table.stored_totals();
     let (sizes, counts) = (sizes.to_vec(), counts.collect::<Vec<_>>());
     let mut restored = table.clone();
-    assert!(restored.restore_totals(sizes.clone(), counts.clone()));
+    assert!(restored.restore_totals(sizes.clone(), table.sparse_counts()));
     assert_eq!(restored.stored_totals().0, sizes);
     assert_eq!(restored.stored_totals().1.collect::<Vec<_>>(), counts);
 }
