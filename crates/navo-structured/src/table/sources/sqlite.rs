@@ -4,7 +4,10 @@ use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
+use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
 use rusqlite::limits::Limit;
 use rusqlite::types::ValueRef;
 use rusqlite::{Connection, ErrorCode, OpenFlags, Rows};
@@ -19,6 +22,12 @@ pub const BLOB_PREVIEW_BYTES: usize = 32;
 
 /// Maximum UTF-8 byte length kept verbatim for a single TEXT cell.
 const MAX_TEXT_CELL_BYTES: usize = 64 * 1024;
+
+/// SQLite VM instruction interval between progress handler ticks.
+const PROGRESS_STEP_INTERVAL: i32 = 10_000;
+
+/// Maximum progress ticks per operation (5,000,000 VM steps).
+const MAX_PROGRESS_TICKS: u32 = 500;
 
 /// Quotes a SQLite identifier with double quotes, doubling embedded `"` characters.
 #[must_use]
@@ -39,21 +48,28 @@ pub fn quote_identifier(name: &str) -> String {
 pub struct SqliteTableSource {
     conn: Connection,
     sheets: Vec<SheetInfo>,
+    progress_ticks: Arc<AtomicU32>,
 }
 
 impl SqliteTableSource {
     /// Opens an existing SQLite database strictly read-only without mutating its bytes.
+    ///
+    /// Falls back to `immutable=1` URI mode when a WAL database lives in an unwritable directory;
+    /// that fallback avoids `-shm` creation and reads checkpointed data only.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, SourceError> {
         let path = path.as_ref();
         verify_sqlite_header(path)?;
-        let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-        let conn = Connection::open_with_flags(path, flags).map_err(classify_sqlite_error)?;
-        conn.set_limit(Limit::SQLITE_LIMIT_ATTACHED, 0)
-            .map_err(classify_sqlite_error)?;
-        conn.execute_batch("PRAGMA query_only = ON;")
-            .map_err(classify_sqlite_error)?;
-        let sheets = load_sheets(&conn)?;
-        Ok(Self { conn, sheets })
+        match open_and_initialize(path) {
+            Ok(source) => Ok(source),
+            Err(err) if should_retry_immutable(&err) => {
+                if let Some(uri) = sqlite_immutable_uri(path) {
+                    open_immutable_uri(&uri).map_err(classify_sqlite_error)
+                } else {
+                    Err(classify_sqlite_error(err))
+                }
+            }
+            Err(err) => Err(classify_sqlite_error(err)),
+        }
     }
 
     /// Returns the sorted list of user tables and views in the database.
@@ -65,6 +81,7 @@ impl SqliteTableSource {
     /// Returns the column names of `sheet`.
     pub fn sheet_columns(&self, sheet: &str) -> Result<Vec<String>, SourceError> {
         self.ensure_sheet(sheet)?;
+        self.reset_progress_budget();
         let sql = format!("SELECT * FROM {} LIMIT 0", quote_identifier(sheet));
         let stmt = self.conn.prepare(&sql).map_err(classify_sqlite_error)?;
         Ok(statement_columns(&stmt))
@@ -73,6 +90,7 @@ impl SqliteTableSource {
     /// Returns the total row count of `sheet`.
     pub fn sheet_row_count(&self, sheet: &str) -> Result<u64, SourceError> {
         self.ensure_sheet(sheet)?;
+        self.reset_progress_budget();
         let sql = format!("SELECT COUNT(*) FROM {}", quote_identifier(sheet));
         let count: i64 = self
             .conn
@@ -90,6 +108,7 @@ impl SqliteTableSource {
     ) -> Result<TablePage, SourceError> {
         self.ensure_sheet(sheet)?;
         let total_rows = self.sheet_row_count(sheet)?;
+        self.reset_progress_budget();
         let sql = format!(
             "SELECT * FROM {} LIMIT ?1 OFFSET ?2",
             quote_identifier(sheet)
@@ -113,6 +132,7 @@ impl SqliteTableSource {
 
     /// Executes a single read-only SQL query and returns at most `max_rows` rows.
     pub fn query_read_only(&self, sql: &str, max_rows: usize) -> Result<QueryResult, SourceError> {
+        self.reset_progress_budget();
         let mut stmt = self.conn.prepare(sql).map_err(classify_sqlite_error)?;
         if !stmt.readonly() {
             return Err(SourceError::ReadOnly {
@@ -134,6 +154,10 @@ impl SqliteTableSource {
         })
     }
 
+    fn reset_progress_budget(&self) {
+        self.progress_ticks.store(0, Ordering::Relaxed);
+    }
+
     fn ensure_sheet(&self, sheet: &str) -> Result<(), SourceError> {
         if self.sheets.iter().any(|info| info.name == sheet) {
             Ok(())
@@ -143,6 +167,107 @@ impl SqliteTableSource {
             })
         }
     }
+
+    #[cfg(test)]
+    pub(super) fn is_query_only_enabled(&mut self) -> bool {
+        let _ = self
+            .conn
+            .authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
+        let enabled = self
+            .conn
+            .query_row("PRAGMA query_only", [], |row| row.get::<_, i64>(0))
+            .map(|value| value != 0)
+            .unwrap_or(false);
+        let _ = install_read_only_authorizer(&mut self.conn);
+        enabled
+    }
+}
+
+fn open_and_initialize(path: &Path) -> Result<SqliteTableSource, rusqlite::Error> {
+    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+    let conn = Connection::open_with_flags(path, flags)?;
+    configure_and_load(conn)
+}
+
+fn open_immutable_uri(uri: &str) -> Result<SqliteTableSource, rusqlite::Error> {
+    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY
+        | OpenFlags::SQLITE_OPEN_NO_MUTEX
+        | OpenFlags::SQLITE_OPEN_URI;
+    let conn = Connection::open_with_flags(uri, flags)?;
+    configure_and_load(conn)
+}
+
+/// Applies read-only limits, `PRAGMA query_only`, progress budget, authorizer, and loads sheets.
+fn configure_and_load(mut conn: Connection) -> Result<SqliteTableSource, rusqlite::Error> {
+    conn.set_limit(Limit::SQLITE_LIMIT_ATTACHED, 0)?;
+    conn.execute_batch("PRAGMA query_only = ON;")?;
+    let progress_ticks = install_progress_handler(&mut conn)?;
+    install_read_only_authorizer(&mut conn)?;
+    progress_ticks.store(0, Ordering::Relaxed);
+    let sheets = load_sheets(&conn)?;
+    Ok(SqliteTableSource {
+        conn,
+        sheets,
+        progress_ticks,
+    })
+}
+
+fn install_progress_handler(conn: &mut Connection) -> Result<Arc<AtomicU32>, rusqlite::Error> {
+    let ticks = Arc::new(AtomicU32::new(0));
+    let counter = Arc::clone(&ticks);
+    conn.progress_handler(
+        PROGRESS_STEP_INTERVAL,
+        Some(move || counter.fetch_add(1, Ordering::Relaxed) >= MAX_PROGRESS_TICKS),
+    )?;
+    Ok(ticks)
+}
+
+/// Restricts SQLite statement compilation to strictly read-only query actions.
+fn install_read_only_authorizer(conn: &mut Connection) -> Result<(), rusqlite::Error> {
+    conn.authorizer(Some(|ctx: AuthContext<'_>| match ctx.action {
+        AuthAction::Select
+        | AuthAction::Read { .. }
+        | AuthAction::Function { .. }
+        | AuthAction::Recursive => Authorization::Allow,
+        _ => Authorization::Deny,
+    }))
+}
+
+fn should_retry_immutable(err: &rusqlite::Error) -> bool {
+    matches!(
+        err,
+        rusqlite::Error::SqliteFailure(ffi, _)
+            if matches!(
+                ffi.code,
+                ErrorCode::ReadOnly | ErrorCode::CannotOpen | ErrorCode::SystemIoFailure
+            )
+    )
+}
+
+/// Builds a percent-encoded `file://` URI with `mode=ro&immutable=1` for read-only WAL fallback.
+///
+/// `immutable=1` avoids creating `-shm` sidecar files in unwritable directories and sees
+/// checkpointed data only.
+fn sqlite_immutable_uri(path: &Path) -> Option<String> {
+    let raw = path.to_str()?;
+    let normalized = raw.replace('\\', "/");
+    let mut uri = String::with_capacity(normalized.len() + 32);
+    if normalized.starts_with('/') {
+        uri.push_str("file://");
+    } else if normalized.as_bytes().get(1) == Some(&b':') {
+        uri.push_str("file:///");
+    } else {
+        uri.push_str("file:");
+    }
+    for byte in normalized.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.' | b'~' | b':') {
+            uri.push(char::from(byte));
+        } else {
+            let _ = write!(uri, "%{byte:02X}");
+        }
+    }
+    uri.push_str("?mode=ro&immutable=1");
+    Some(uri)
 }
 
 /// Collects column names from `stmt`, capped at `MAX_COLUMNS`.
@@ -183,19 +308,17 @@ fn verify_sqlite_header(path: &Path) -> Result<(), SourceError> {
 }
 
 /// Loads sorted user tables and views from `sqlite_master` (excluding internal `sqlite_*` objects).
-fn load_sheets(conn: &Connection) -> Result<Vec<SheetInfo>, SourceError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT name, type FROM sqlite_master \
-             WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' \
-             ORDER BY name",
-        )
-        .map_err(classify_sqlite_error)?;
-    let mut rows = stmt.query([]).map_err(classify_sqlite_error)?;
+fn load_sheets(conn: &Connection) -> Result<Vec<SheetInfo>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT name, type FROM sqlite_master \
+         WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' \
+         ORDER BY name",
+    )?;
+    let mut rows = stmt.query([])?;
     let mut sheets = Vec::new();
-    while let Some(row) = rows.next().map_err(classify_sqlite_error)? {
-        let name: String = row.get(0).map_err(classify_sqlite_error)?;
-        let kind_str: String = row.get(1).map_err(classify_sqlite_error)?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(0)?;
+        let kind_str: String = row.get(1)?;
         let kind = if kind_str == "view" {
             SheetKind::View
         } else {
@@ -273,12 +396,17 @@ fn format_blob(bytes: &[u8]) -> String {
     out
 }
 
-/// Maps `rusqlite::Error` into typed `SourceError` variants for corruption and read-only denials.
+/// Maps `rusqlite::Error` into typed `SourceError` variants for corruption, limits, and denials.
 fn classify_sqlite_error(err: rusqlite::Error) -> SourceError {
     if let rusqlite::Error::SqliteFailure(ref ffi, ref detail) = err {
         let message = detail.clone().unwrap_or_else(|| ffi.to_string());
         match ffi.code {
-            ErrorCode::ReadOnly => return SourceError::ReadOnly { message },
+            ErrorCode::ReadOnly | ErrorCode::AuthorizationForStatementDenied => {
+                return SourceError::ReadOnly { message };
+            }
+            ErrorCode::OperationInterrupted => {
+                return SourceError::QueryLimitExceeded { message };
+            }
             ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt => {
                 return SourceError::Corrupt { message };
             }

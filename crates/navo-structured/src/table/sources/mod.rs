@@ -60,6 +60,8 @@ pub enum SourceError {
     SheetNotFound { name: String },
     #[error("read-only connection rejected write statement: {message}")]
     ReadOnly { message: String },
+    #[error("SQLite query exceeded execution limit: {message}")]
+    QueryLimitExceeded { message: String },
     #[error("SQLite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 }

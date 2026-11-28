@@ -241,3 +241,107 @@ fn rejects_missing_empty_non_sqlite_and_corrupt_files_without_panicking() {
         Err(SourceError::Corrupt { .. } | SourceError::Sqlite(_))
     ));
 }
+
+#[test]
+fn recursive_cte_view_and_query_abort_promptly_with_limit_error() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let dir = TempDir::new().unwrap();
+    let db_path = dir.path().join("loop.sqlite");
+    let conn = Connection::open(&db_path).unwrap();
+    conn.execute_batch(
+        "CREATE VIEW loop_v AS \
+         WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) \
+         SELECT x FROM c;",
+    )
+    .unwrap();
+    drop(conn);
+
+    let (tx, rx) = mpsc::channel();
+    let db_path_clone = db_path.clone();
+    let handle = std::thread::spawn(move || {
+        let source = SqliteTableSource::open(&db_path_clone).unwrap();
+        let page_res = source.read_page("loop_v", 0, 10);
+        let query_res = source.query_read_only(
+            "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) \
+             SELECT count(*) FROM c",
+            10,
+        );
+        let _ = tx.send((page_res, query_res));
+    });
+
+    let (page_res, query_res) = rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("recursive CTE view/query hung instead of aborting promptly");
+    handle.join().unwrap();
+
+    assert!(
+        matches!(page_res, Err(SourceError::QueryLimitExceeded { .. })),
+        "expected QueryLimitExceeded on infinite recursive view, got {page_res:?}"
+    );
+    assert!(
+        matches!(query_res, Err(SourceError::QueryLimitExceeded { .. })),
+        "expected QueryLimitExceeded on infinite recursive query, got {query_res:?}"
+    );
+}
+
+#[test]
+fn pragma_query_only_off_is_rejected_and_guard_stays_on() {
+    let dir = TempDir::new().unwrap();
+    let db_path = create_fixture_db(dir.path());
+    let mut source = SqliteTableSource::open(&db_path).unwrap();
+
+    let res = source.query_read_only("PRAGMA query_only = OFF", 10);
+    assert!(
+        matches!(res, Err(SourceError::ReadOnly { .. })),
+        "expected ReadOnly error for `PRAGMA query_only = OFF`, got {res:?}"
+    );
+    assert!(
+        source.is_query_only_enabled(),
+        "PRAGMA query_only must remain ON after rejected PRAGMA statement"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn opens_wal_database_in_read_only_directory_without_creating_shm() {
+    use std::os::unix::fs::PermissionsExt;
+
+    struct RestoreDirMode<'a>(&'a Path);
+    impl Drop for RestoreDirMode<'_> {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    let dir = TempDir::new().unwrap();
+    let ro_dir = dir.path().join("ro");
+    fs::create_dir(&ro_dir).unwrap();
+    let db_path = ro_dir.join("wal.sqlite");
+
+    let conn = Connection::open(&db_path).unwrap();
+    let mode: String = conn
+        .query_row("PRAGMA journal_mode = WAL;", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(mode.to_ascii_lowercase(), "wal");
+    conn.execute_batch(
+        "CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT);
+         INSERT INTO items (id, label) VALUES (1, 'alpha'), (2, 'beta');
+         PRAGMA wal_checkpoint(TRUNCATE);",
+    )
+    .unwrap();
+    drop(conn);
+
+    fs::set_permissions(&ro_dir, fs::Permissions::from_mode(0o555)).unwrap();
+    let _restore = RestoreDirMode(&ro_dir);
+
+    let source = SqliteTableSource::open(&db_path).unwrap();
+    let page = source.read_page("items", 0, 10).unwrap();
+    assert_eq!(page.total_rows, 2);
+    assert_eq!(page.rows, vec![vec!["1", "alpha"], vec!["2", "beta"]]);
+    assert!(
+        !ro_dir.join("wal.sqlite-shm").exists(),
+        "opening WAL db in read-only dir must not create -shm"
+    );
+}
