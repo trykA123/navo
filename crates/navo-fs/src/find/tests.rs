@@ -1,4 +1,5 @@
 mod archives;
+mod depth;
 mod gitignore;
 mod names;
 

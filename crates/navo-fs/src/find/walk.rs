@@ -31,6 +31,7 @@ struct PendingFolder {
     location: Location,
     relative: String,
     rules: IgnoreRules,
+    depth: u32,
 }
 
 impl PendingFolder {
@@ -39,6 +40,7 @@ impl PendingFolder {
             location,
             relative,
             rules: self.rules.clone(),
+            depth: self.depth.saturating_add(1),
         }
     }
 }
@@ -82,6 +84,7 @@ impl<'a> Walk<'a> {
             location: root.clone(),
             relative: String::new(),
             rules,
+            depth: 0,
         }];
         while let Some(mut folder) = pending.pop() {
             self.check_cancelled()?;
@@ -177,7 +180,11 @@ impl<'a> Walk<'a> {
                 entry.name.to_text()
             )
         };
-        if is_folder && self.filters.folder(&entry) {
+        let depth = self.filters.query.depth;
+        if is_folder
+            && depth.is_none_or(|limit| folder.depth < limit)
+            && self.filters.folder(&entry)
+        {
             self.flush_if_due()?;
             return Ok(Some(folder.child(location, name)));
         }
