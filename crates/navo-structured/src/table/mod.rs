@@ -1,11 +1,16 @@
 mod records;
 mod sniff;
 mod sort;
+pub mod sources;
 mod stream;
 
 pub use records::{ROWS_BYTES, RecordIndex, RowSlice, STRIDE, index_records, read_rows};
 pub use sniff::{Dialect, sniff};
 pub use sort::{SortMemo, is_numeric_column};
+pub use sources::{
+    BLOB_PREVIEW_BYTES, QueryResult, SheetInfo, SheetKind, SourceError, SqliteTableSource,
+    TablePage, quote_identifier,
+};
 
 use crate::ParseError;
 

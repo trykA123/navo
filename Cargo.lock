@@ -6631,10 +6631,12 @@ dependencies = [
  "csv-core",
  "pulldown-cmark",
  "quick-xml 0.42.0",
+ "rusqlite",
  "saphyr-parser",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.21",
  "toml_edit 0.25.19+spec-1.1.0",
 ]
 
