@@ -104,6 +104,9 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(windows)'.dev-dependencies]
+raw-window-handle = "0.6.2"
+
 [dev-dependencies]
 futures = "0.3.34"
 sidewise-host = { path = "../sidewise-host", features = ["test-support"] }

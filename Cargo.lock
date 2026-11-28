@@ -6256,6 +6256,7 @@ dependencies = [
  "navo-store",
  "navo-ui",
  "navo-update",
+ "raw-window-handle",
  "rusqlite",
  "serde",
  "serde_json",

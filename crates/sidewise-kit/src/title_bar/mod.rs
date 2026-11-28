@@ -16,6 +16,7 @@ use gpui_kit::{
     div, px, size, transparent_black,
 };
 
+use crate::primitives::{IconButton, IconName};
 use crate::tokens::{self, Theme};
 
 pub use backdrop::{GradientLayer, system_backdrop};
@@ -23,7 +24,7 @@ pub use brand::BrandMark;
 pub use brand::icon_for as logo;
 pub use search::HeaderSearch;
 
-type CloseHandler = Rc<dyn Fn(&mut Window, &mut App)>;
+type WindowHandler = Rc<dyn Fn(&mut Window, &mut App)>;
 pub(crate) type AppButtonHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
 pub fn window_options(title: impl Into<SharedString>) -> WindowOptions {
@@ -68,7 +69,8 @@ pub struct NavoTitleBar {
     header_inset: Pixels,
     trailing: Vec<AnyElement>,
     is_on_mica: bool,
-    on_close: Option<CloseHandler>,
+    on_close: Option<WindowHandler>,
+    on_minimize: Option<(SharedString, WindowHandler)>,
     app_button: Option<(bool, AppButtonHandler)>,
     /// The mark left of the title; `None` draws Navo's own logo.
     mark: Option<BrandMark>,
@@ -85,6 +87,7 @@ impl NavoTitleBar {
             trailing: Vec::new(),
             is_on_mica: false,
             on_close: None,
+            on_minimize: None,
             app_button: None,
             mark: None,
             menu_arrow: true,
@@ -124,6 +127,17 @@ impl NavoTitleBar {
 
     pub fn on_close(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_close = Some(Rc::new(handler));
+        self
+    }
+
+    /// Draw Navo's own minimise button left of the stock window controls; `label` is its
+    /// tooltip and accessibility label.
+    pub fn on_minimize(
+        mut self,
+        label: impl Into<SharedString>,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_minimize = Some((label.into(), Rc::new(handler)));
         self
     }
 
@@ -207,6 +221,13 @@ impl RenderOnce for NavoTitleBar {
             ))
             .children(centre.map(|item| centre_area(t, item, self.header_inset)))
             .child(header_area(t, items.chain(self.trailing)))
+            .when_some(self.on_minimize, |bar, (label, handler)| {
+                bar.child(held(
+                    IconButton::new("title-bar-minimize", IconName::WindowMinimize, label)
+                        .on_click(move |_, window, cx| handler(window, cx))
+                        .into_any_element(),
+                ))
+            })
             .when_some(self.on_close, |bar, handler| {
                 bar.on_close_window(move |_, window, cx| {
                     handler(window, cx);

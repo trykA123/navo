@@ -74,6 +74,15 @@ fn open_brand(
     mark: Option<BrandMark>,
     menu_arrow: bool,
 ) -> AnyWindowHandle {
+    open_view(cx, move || Shell {
+        closes,
+        mark,
+        menu_arrow,
+    })
+}
+
+/// Opens a WIDTH-wide test window drawing `build`'s view under the light theme.
+fn open_view<V: Render>(cx: &mut TestAppContext, build: impl FnOnce() -> V) -> AnyWindowHandle {
     cx.update(|cx| {
         gpui_kit::init(cx);
         tokens::apply(Mode::Light, cx);
@@ -84,16 +93,36 @@ fn open_brand(
             })),
             ..window_options("Navo")
         };
-        gpui_kit::open_window(options, cx, |_, cx| {
-            cx.new(|_| Shell {
-                closes,
-                mark,
-                menu_arrow,
-            })
-        })
-        .expect("open test window")
-        .0
+        gpui_kit::open_window(options, cx, |_, cx| cx.new(|_| build()))
+            .expect("open test window")
+            .0
     })
+}
+
+/// The bar with the minimise seam: `minimises` counts handler calls, `with_button` draws it.
+struct MinimiseShell {
+    minimises: Rc<Cell<usize>>,
+    with_button: bool,
+}
+
+impl Render for MinimiseShell {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let bar = NavoTitleBar::new("Navo");
+        let bar = if self.with_button {
+            let minimises = self.minimises.clone();
+            bar.on_minimize("Minimise", move |_, _| {
+                minimises.set(minimises.get() + 1);
+            })
+        } else {
+            bar
+        };
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(bar)
+            .child(div().flex_1())
+    }
 }
 
 #[test]
@@ -260,6 +289,61 @@ fn the_title_bar_ends_with_minimise_maximise_and_close(cx: &mut TestAppContext) 
         assert!(minimise.right() <= maximise.left());
         assert!(maximise.right() <= close.left());
         assert_eq!(close.right(), px(WIDTH));
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn on_minimize_draws_a_named_button_that_fires(cx: &mut TestAppContext) {
+    let minimises = Rc::new(Cell::new(0));
+    let window = open_view(cx, {
+        let minimises = minimises.clone();
+        move || MinimiseShell {
+            minimises,
+            with_button: true,
+        }
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let button = window.find("title-bar-minimize");
+        assert!(button.visible());
+        assert_eq!(button.role(), Some(Role::Button));
+        assert_eq!(button.label(), Some("Minimise"));
+        if let Some(close) = window.try_find("close") {
+            assert!(button.bounds().right() <= close.bounds().left());
+        }
+        window.click("title-bar-minimize", cx);
+    })
+    .expect("window");
+    assert_eq!(minimises.get(), 1);
+}
+
+#[gpui_kit::test]
+fn the_minimise_button_carries_its_label_as_a_tooltip(cx: &mut TestAppContext) {
+    let window = open_view(cx, || MinimiseShell {
+        minimises: Rc::default(),
+        with_button: true,
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        // The kit button reads its tooltip as the accessibility description.
+        assert_eq!(
+            window.find("title-bar-minimize").description(),
+            Some("Minimise")
+        );
+    })
+    .expect("window");
+}
+
+#[gpui_kit::test]
+fn without_on_minimize_the_bar_draws_no_minimise_button(cx: &mut TestAppContext) {
+    let window = open_view(cx, || MinimiseShell {
+        minimises: Rc::default(),
+        with_button: false,
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("title-bar-minimize").is_none());
     })
     .expect("window");
 }

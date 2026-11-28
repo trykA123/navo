@@ -24,5 +24,6 @@ One line per patch: the files it changes, what it does, and why.
 - `keyboard.rs`: the keyboard mapper returns bindings unchanged when key equivalents are off. Reason: keymaps stay independent of the keyboard layout, as they were before 0.3.12.
 - `window.rs`, `events.rs`: a `Floating` window is owned by the active window but stays non-modal (no `EnableWindow(false)`, no `WS_EX_APPWINDOW`), and a new `parent_modal` flag limits the destroy-time re-enable and foreground to `Dialog`. Reason: the find results window stays above Navo, hides with it and has no taskbar button (FR21).
 - `window.rs`: RAII guards in `WindowsWindow::open` destroy the new HWND and re-enable a modal `Dialog`'s disabled owner window on any early return before `SetWindowPlacement` succeeds. Reason: a failed dialog open no longer leaves the owner window permanently disabled (FR21b).
+- `window.rs`: `window_controls()` reports `minimize: is_minimizable`. Reason: a window opened without `WS_MINIMIZEBOX` must not draw a stock minimise control whose area only hit-tests as caption (SW8a).
 
 The header of `src/gpui_windows.rs` lists the patches in short form; it does not yet name the pop-up and keyboard patches.

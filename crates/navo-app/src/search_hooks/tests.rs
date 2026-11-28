@@ -221,3 +221,71 @@ fn find_hooks_propagate_database_error_display_text() {
     );
     assert!((hooks.find.saved)().is_empty());
 }
+
+/// Creates a hidden top-level window of the system `STATIC` class for owner tests.
+#[cfg(windows)]
+fn hidden_test_window(name: &str) -> windows_sys::Win32::Foundation::HWND {
+    use std::ptr::{null, null_mut};
+
+    use windows_sys::Win32::UI::WindowsAndMessaging::CreateWindowExW;
+
+    let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+    let name: Vec<u16> = format!("{name}\0").encode_utf16().collect();
+    // SAFETY: STATIC is a registered system class; a null parent and no WS_VISIBLE create a
+    // hidden top-level window owned by this thread, so no message pump or show is needed.
+    unsafe {
+        CreateWindowExW(
+            0,
+            class.as_ptr(),
+            name.as_ptr(),
+            0,
+            0,
+            0,
+            0,
+            0,
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null(),
+        )
+    }
+}
+
+/// The no-DB `find.ensure_owner` hook must still repair `GW_OWNER` between two hidden windows.
+#[cfg(windows)]
+#[test]
+fn without_a_database_the_owner_hook_sets_gw_owner() {
+    use std::num::NonZeroIsize;
+
+    use raw_window_handle::{RawWindowHandle, Win32WindowHandle};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DestroyWindow, GW_OWNER, GWL_STYLE, GetWindow, GetWindowLongPtrW, WS_VISIBLE,
+    };
+
+    let navo = hidden_test_window("navo");
+    let find = hidden_test_window("find");
+    assert!(
+        !navo.is_null() && !find.is_null(),
+        "create hidden test windows"
+    );
+    // SAFETY: both handles are live windows created on this thread.
+    unsafe {
+        assert_eq!(GetWindowLongPtrW(navo, GWL_STYLE) & WS_VISIBLE as isize, 0);
+        assert_eq!(GetWindowLongPtrW(find, GWL_STYLE) & WS_VISIBLE as isize, 0);
+        assert!(GetWindow(find, GW_OWNER).is_null(), "find starts unowned");
+    }
+
+    let raw = |hwnd: windows_sys::Win32::Foundation::HWND| {
+        RawWindowHandle::Win32(Win32WindowHandle::new(
+            NonZeroIsize::new(hwnd as isize).expect("non-null window handle"),
+        ))
+    };
+    let hooks = hooks(None, remembering());
+    assert!((hooks.find.ensure_owner)(raw(find), raw(navo)));
+    // SAFETY: both handles are live windows created on this thread.
+    unsafe {
+        assert_eq!(GetWindow(find, GW_OWNER), navo, "hook sets the owner");
+        DestroyWindow(find);
+        DestroyWindow(navo);
+    }
+}

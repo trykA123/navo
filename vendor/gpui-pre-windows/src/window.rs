@@ -718,6 +718,15 @@ impl PlatformWindow for WindowsWindow {
         self.state.is_maximized()
     }
 
+    fn window_controls(&self) -> WindowControls {
+        // Navo: a window opened without `WS_MINIMIZEBOX` hit-tests the stock minimise
+        // area as caption, so it must not draw a stock minimise control at all.
+        WindowControls {
+            minimize: self.0.is_minimizable,
+            ..WindowControls::default()
+        }
+    }
+
     fn window_bounds(&self) -> WindowBounds {
         self.state.window_bounds()
     }
